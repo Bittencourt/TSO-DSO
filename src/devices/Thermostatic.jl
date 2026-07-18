@@ -38,18 +38,22 @@ system; coefficients are not rescaled here.
 # Fields
 - `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
   it never sees the network object or line parameters — network-agnostic, DEV-05).
-- `α::T` — thermal coupling to the ambient (eq. 3.2).
-- `β::T` — power-to-temperature gain (eq. 3.2).
+- `α::T` — thermal coupling to the ambient (eq. 3.2); `α ≥ 0` required (a negative
+  coupling reverses heat flow — non-physical, WR-02).
+- `β::T` — power-to-temperature gain (eq. 3.2); `β > 0` required so power COOLS via the
+  `−β·p` term (a non-positive β silently flips the sign, WR-02).
 - `Tmin::T`, `Tmax::T` — comfort band (eq. 3.3).
-- `Tin0::T` — initial indoor temperature (state IC for the recursion).
+- `Tin0::T` — initial indoor temperature (state IC for the recursion); `Tmin ≤ Tin0 ≤ Tmax`
+  required (comfort-band IC, WR-02).
 - `Pmin::T`, `Pmax::T` — A/C power bounds.
 - `b::T` — utility curvature, `b > 0` required for concavity (eqs. 3.11/3.14).
 - `Tout::Vector{T}` — ambient-temperature profile parameter (eq. 3.2); its length is
   validated against the horizon `T` at `contribute!` time (it is not known at construction).
 
 Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
-`Tmax < Tmin` (inconsistent comfort band), or when `Pmax < Pmin` (inconsistent power
-bounds).
+`Tmax < Tmin` (inconsistent comfort band), when `Pmax < Pmin` (inconsistent power bounds),
+when `α < 0` or `β ≤ 0` (non-physical recursion signs, WR-02), or when `Tin0` starts
+outside the comfort band `Tmin ≤ Tin0 ≤ Tmax` (comfort-band IC guard, WR-02).
 """
 struct Thermostatic{T<:Real} <: AbstractDevice
     bus::Int
@@ -99,6 +103,41 @@ struct Thermostatic{T<:Real} <: AbstractDevice
                 ArgumentError(
                     "Thermostatic power bounds require Pmax ≥ Pmin; got " *
                     "Pmin=$Pmin, Pmax=$Pmax",
+                ),
+            )
+        end
+        # WR-02 physical-sign guards on the RC/ETP recursion (eq. 3.2)
+        #   Tin[t+1] = Tin[t] + α·(Tout − Tin) − β·p.
+        # α is the ambient-coupling fraction: a NEGATIVE α makes heat flow from cold to hot
+        # (2nd-law violation) and destabilizes the discrete recursion — reject α < 0.
+        if α < zero(T)
+            throw(
+                ArgumentError(
+                    "Thermostatic ambient-coupling α must be ≥ 0 (eq. 3.2); a negative α " *
+                    "reverses heat flow (non-physical); got α=$α",
+                ),
+            )
+        end
+        # β is the power-to-temperature gain entering as −β·p: with β > 0 more A/C power
+        # COOLS (the intended direction). A NON-POSITIVE β silently flips the sign so power
+        # would heat (or do nothing), inverting the whole comfort model — reject β ≤ 0.
+        if β <= zero(T)
+            throw(
+                ArgumentError(
+                    "Thermostatic power-to-temperature gain β must be > 0 so that power " *
+                    "COOLS in eq. 3.2 (−β·p); a non-positive β silently flips the sign; " *
+                    "got β=$β",
+                ),
+            )
+        end
+        # Initial-condition guard (mirrors PVBattery's soc0 IC): the state IC Tin[1] = Tin0
+        # must start INSIDE the comfort band, else the band constraint (3.3) makes the very
+        # first step infeasible for a cryptic reason. Reject up front.
+        if !(Tmin <= Tin0 <= Tmax)
+            throw(
+                ArgumentError(
+                    "Thermostatic initial temperature must satisfy Tmin ≤ Tin0 ≤ Tmax " *
+                    "(eq. 3.3 comfort-band IC); got Tmin=$Tmin, Tin0=$Tin0, Tmax=$Tmax",
                 ),
             )
         end
