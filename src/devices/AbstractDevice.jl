@@ -33,7 +33,12 @@ A device method `contribute!(dev::AbstractDevice, ctx::ModelContext; T::Int)`:
    load is a NEGATIVE injection (`-p`), matching the toy-DC sign convention; and
 3. ADDS its concave-quadratic utility into the welfare objective via
    [`add_to_objective!`](@ref) (a `QuadExpr`, so curvature is retained — utility must
-   NOT be routed through the affine residual, which would drop the quadratic term).
+   NOT be routed through the affine residual, which would drop the quadratic term); and
+4. RETURNS its own per-device decision-variable container (e.g. the served-power vector
+   `p`). This is the device return contract (IN-02): unlike an `AbstractPowerFlow`
+   `contribute!` method (which returns `ctx`), a device returns its variables so the
+   assembly can stash them (`ctx.meta[:device_vars]`) for post-solve inspection. Every
+   concrete device method MUST honor this — assembly relies on it.
 
 # Network decoupling (success criterion 2)
 
