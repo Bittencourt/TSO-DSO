@@ -85,6 +85,16 @@ contributes its branch/voltage terms into one shared nodal-balance expression by
 accumulation, never overwriting. Returns the updated accumulator.
 """
 function add_to_residual!(ctx::ModelContext, name::Symbol, expr)
+    # WR-04: a scalar accumulation must not silently collide with an INDEXED one of the
+    # same name. If `name` already holds a `Matrix{AffExpr}`, adding a scalar `AffExpr`
+    # would either error obscurely or (worse) corrupt the per-bus/time balance — reject
+    # the accumulator-kind mismatch loudly instead.
+    if haskey(ctx.residuals, name) && ctx.residuals[name] isa Matrix{AffExpr}
+        error(
+            "residual :$name already holds an indexed matrix accumulator; " *
+            "refusing to add a scalar contribution to it",
+        )
+    end
     ctx.residuals[name] =
         haskey(ctx.residuals, name) ? ctx.residuals[name] + expr : convert(AffExpr, expr)
     return ctx.residuals[name]
@@ -105,6 +115,16 @@ fails loudly (it belongs in [`add_to_objective!`](@ref) instead). Returns the up
 `(i, t)` cell.
 """
 function add_to_residual!(ctx::ModelContext, name::Symbol, i::Int, t::Int, expr)
+    # WR-04: refuse to silently overwrite a pre-existing SCALAR accumulator of the same
+    # name. Previously a non-matrix value under `name` was discarded (a fresh 0×0 matrix
+    # replaced it), losing the scalar contribution without warning — exactly the kind of
+    # silent balance corruption this seam must never allow.
+    if haskey(ctx.residuals, name) && !(ctx.residuals[name] isa Matrix{AffExpr})
+        error(
+            "residual :$name already holds a scalar accumulator; " *
+            "refusing to convert it to an indexed matrix",
+        )
+    end
     M =
         (haskey(ctx.residuals, name) && ctx.residuals[name] isa Matrix{AffExpr}) ?
         ctx.residuals[name]::Matrix{AffExpr} : Matrix{AffExpr}(undef, 0, 0)
