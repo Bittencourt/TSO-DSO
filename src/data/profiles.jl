@@ -92,3 +92,123 @@ function markov_path(P::AbstractMatrix, s0::Int, steps::Int, rng::StableRNGs.Ran
 end
 
 export markov_path
+
+# --- Default state→value tables and transition matrices (documented, overridable) ---
+#
+# These defaults describe a small, well-mixing 3-state chain for each series so the
+# generated profiles are non-trivial and reproducible. All magnitudes are in per-unit
+# (RESEARCH Pitfall 4 / threat T-03-05): demand lives in a [0.3, 0.9] pu band; PV maps
+# an irradiance state in [0.2, 1.0] pu through a diurnal daylight envelope, so night
+# hours are ~0 and the peak stays ≤ 1 pu. Callers may override every matrix/table.
+
+const _DEFAULT_DEMAND_TRANSITION = [
+    0.6 0.3 0.1
+    0.2 0.6 0.2
+    0.1 0.3 0.6
+]
+const _DEFAULT_DEMAND_VALUES = [0.3, 0.6, 0.9]     # low / medium / high load (pu)
+
+const _DEFAULT_PV_TRANSITION = [
+    0.5 0.3 0.2
+    0.2 0.5 0.3
+    0.2 0.3 0.5
+]
+const _DEFAULT_PV_VALUES = [0.2, 0.6, 1.0]         # cloudy / partly / clear irradiance (pu)
+
+"""
+    _pv_diurnal_envelope(T::Int) -> Vector{Float64}
+
+A deterministic daylight envelope over the `T`-step horizon: zero outside a daytime
+window (roughly the middle half of the day) and a smooth half-sine bell peaking at solar
+noon. Multiplying a non-negative irradiance state by this non-negative envelope keeps PV
+output non-negative (threat T-03-05) and makes night hours ≈ 0, matching the thesis §2.8
+convention of aggregating a sub-daily pattern to the hourly optimization resolution.
+"""
+function _pv_diurnal_envelope(T::Int)
+    env = zeros(Float64, T)
+    @inbounds for t in 1:T
+        frac = (t - 0.5) / T                 # midpoint of step t within the day, in (0, 1)
+        if 0.25 <= frac <= 0.75              # daylight window ≈ 06:00–18:00
+            env[t] = sinpi((frac - 0.25) / 0.5)  # 0 at the window edges, 1 at solar noon
+        end
+    end
+    return env
+end
+
+"""
+    generate_profiles(; seed::Integer, T::Int=24,
+                       P_demand=_DEFAULT_DEMAND_TRANSITION, demand_values=_DEFAULT_DEMAND_VALUES,
+                       P_pv=_DEFAULT_PV_TRANSITION, pv_values=_DEFAULT_PV_VALUES,
+                       s0_demand::Int=1, s0_pv::Int=1) -> NamedTuple
+
+Generate seeded, reproducible hourly inelastic-demand and PV profiles of length `T`
+(default `T=24`) as a `NamedTuple` `(; demand, pv)` of per-unit vectors (DATA-04, thesis
+§2.8). Both series are produced PURELY — no JuMP, no decision variables — and enter the
+welfare solve only as parameters (Assumption A4).
+
+A single `StableRNGs.LehmerRNG(seed)` is created ONCE and threaded through [`markov_path`](@ref)
+for both chains, so the whole result is deterministic in `seed`: two calls with the same
+`seed` (and same arguments) return `==` vectors bit-for-bit (INFRA-04, threat T-03-03),
+while a different `seed` produces a different profile. The RNG is never the global RNG /
+`Random.seed!` — that stream is not stable across Julia versions (RESEARCH Anti-Patterns).
+
+`demand` maps the demand state path through `demand_values` (per-unit load levels). `pv`
+maps the PV state path through `pv_values` (per-unit irradiance levels) and scales it by a
+diurnal daylight envelope, so PV is non-negative and ≈ 0 at night (threat T-03-05).
+
+Throws `ArgumentError` when `T < 1`, when a `*_values` table length does not match its
+transition matrix, or when any value table has a negative entry (a negative magnitude
+would silently enter the solve — threat T-03-05). Matrix/range validation is delegated to
+[`markov_path`](@ref).
+"""
+function generate_profiles(;
+    seed::Integer,
+    T::Int=24,
+    P_demand::AbstractMatrix=_DEFAULT_DEMAND_TRANSITION,
+    demand_values::AbstractVector=_DEFAULT_DEMAND_VALUES,
+    P_pv::AbstractMatrix=_DEFAULT_PV_TRANSITION,
+    pv_values::AbstractVector=_DEFAULT_PV_VALUES,
+    s0_demand::Int=1,
+    s0_pv::Int=1,
+)
+    if T < 1
+        throw(ArgumentError("generate_profiles: T must be ≥ 1; got $T"))
+    end
+    if length(demand_values) != size(P_demand, 1)
+        throw(
+            ArgumentError(
+                "generate_profiles: demand_values length $(length(demand_values)) must match " *
+                "P_demand states $(size(P_demand, 1))",
+            ),
+        )
+    end
+    if length(pv_values) != size(P_pv, 1)
+        throw(
+            ArgumentError(
+                "generate_profiles: pv_values length $(length(pv_values)) must match " *
+                "P_pv states $(size(P_pv, 1))",
+            ),
+        )
+    end
+    if any(<(0), demand_values)
+        throw(ArgumentError("generate_profiles: demand_values must be non-negative (threat T-03-05)"))
+    end
+    if any(<(0), pv_values)
+        throw(ArgumentError("generate_profiles: pv_values must be non-negative (threat T-03-05)"))
+    end
+
+    # Seed ONCE, thread the SAME rng through both walks — this is what makes the full
+    # returned NamedTuple deterministic in `seed` (INFRA-04). markov_path validates each
+    # matrix (square + row-stochastic) and the initial states.
+    rng = StableRNGs.LehmerRNG(seed)
+    demand_states = markov_path(P_demand, s0_demand, T, rng)
+    pv_states = markov_path(P_pv, s0_pv, T, rng)
+
+    demand = [float(demand_values[s]) for s in demand_states]
+    envelope = _pv_diurnal_envelope(T)
+    pv = [float(pv_values[s]) * envelope[t] for (t, s) in enumerate(pv_states)]
+
+    return (; demand, pv)
+end
+
+export generate_profiles
