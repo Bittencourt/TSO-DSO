@@ -42,4 +42,11 @@
     #     stored frontier index and the frontier flag must never silently differ.
     mismatch_buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
     @test_throws ArgumentError TSODSO.assert_radial(mismatch_buses, ok_branches, 2)
+
+    # (5) Positional convention violated (WR-03): valid tree + one root, but the
+    #     bus ids do not equal their 1-based positions. Incidence/adjacency index
+    #     by position, so this must be rejected loudly rather than silently
+    #     indexing inconsistently with `bus.id`.
+    mislabeled_buses = [TSODSO.Bus(2, 0.95, 1.05, true), TSODSO.Bus(3, 0.95, 1.05, false)]
+    @test_throws ArgumentError TSODSO.assert_radial(mislabeled_buses, ok_branches, 1)
 end

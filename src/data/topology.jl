@@ -23,9 +23,10 @@ tree, throwing a clear `ArgumentError` otherwise. Checks, in order:
 
   1. `length(branches) == length(buses) - 1` (edge-count theorem);
   2. `root` is a valid bus index;
-  3. every bus is reachable from `root` via BFS (connectivity);
-  4. exactly one bus has `is_root == true`;
-  5. the `root` index points at that single `is_root`-flagged bus.
+  3. every `bus.id` equals its 1-based position (indexing convention);
+  4. every bus is reachable from `root` via BFS (connectivity);
+  5. exactly one bus has `is_root == true`;
+  6. the `root` index points at that single `is_root`-flagged bus.
 
 Returns the `N × B` sparse node-branch incidence matrix (`+1` at each branch's
 `from` node, `-1` at its `to` node).
@@ -41,6 +42,14 @@ function assert_radial(buses, branches, root)
     1 ≤ root ≤ N || throw(ArgumentError(
         "Feeder root $root is out of range 1:$N."))
 
+    # (3) Positional convention (WR-03): every `bus.id` MUST equal its 1-based
+    #     position. All incidence/adjacency indexing is BY POSITION, and the
+    #     framework assumes `bus.id` equals that position — a mislabeled or
+    #     reordered `buses` would index inconsistently with `bus.id` the moment
+    #     any later layer indexes by id, with no error (a silent-wrong hazard).
+    all(i -> buses[i].id == i, eachindex(buses)) || throw(ArgumentError(
+        "Bus ids must equal their 1-based position in `buses`."))
+
     # Sparse node-branch incidence: +1 at `from`, -1 at `to`.
     Irow = Int[]
     Jcol = Int[]
@@ -51,7 +60,7 @@ function assert_radial(buses, branches, root)
     end
     A = sparse(Irow, Jcol, Vval, N, B)
 
-    # (3) Connectivity: BFS from root over an undirected adjacency list.
+    # (4) Connectivity: BFS from root over an undirected adjacency list.
     #     connected ∧ (B == N-1) ⟺ tree, so no cycle detection is needed.
     adj = [Int[] for _ in 1:N]
     for br in branches
@@ -76,12 +85,12 @@ function assert_radial(buses, branches, root)
         "Non-radial feeder: graph is disconnected from root $root " *
         "($reached/$N buses reachable)."))
 
-    # (4) Exactly one designated frontier (root) bus.
+    # (5) Exactly one designated frontier (root) bus.
     nroots = count(b -> b.is_root, buses)
     nroots == 1 || throw(ArgumentError(
         "Feeder must have exactly one frontier (root) bus, got $nroots."))
 
-    # (5) The `root` index and the `is_root` flag must AGREE: the single flagged
+    # (6) The `root` index and the `is_root` flag must AGREE: the single flagged
     #     bus must be the one at position `root`. Otherwise the stored frontier
     #     index and the frontier flag silently disagree — a silent-wrong hazard
     #     for any layer that reads `feeder.root` in one place and scans `is_root`
