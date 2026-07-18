@@ -70,6 +70,19 @@ struct Interruptible{T<:Real} <: AbstractDevice
 end
 
 """
+    Interruptible(bus, Pmin, Pmax, a, b)
+
+Convenience outer constructor (IN-01): `PROMOTE`s `Pmin`, `Pmax`, `a`, `b` to a common
+`Real` type before delegating to the inner constructor, so a natural mixed-type call like
+`Interruptible(2, 0, 5.0, 4.0, 1.0)` (an integer `0`) just works instead of throwing a
+confusing `MethodError`. `bus` is converted to `Int`. When all four already share a type
+the inner constructor is strictly more specific and is selected directly (no promotion,
+no recursion).
+"""
+Interruptible(bus::Integer, Pmin::Real, Pmax::Real, a::Real, b::Real) =
+    Interruptible(Int(bus), promote(Pmin, Pmax, a, b)...)
+
+"""
     contribute!(d::Interruptible, ctx::ModelContext; T::Int=1)
 
 Contribute the interruptible load into the shared model context over the horizon

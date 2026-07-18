@@ -93,3 +93,30 @@ end
     @test ctx.residuals[:nodal_balance] isa AffExpr
     @test isequal_canonical(ctx.residuals[:nodal_balance], zero(AffExpr))
 end
+
+# Seam: core/ModelContext.jl — WR-04. Mixing a SCALAR and an INDEXED accumulator on the
+# same residual name must fail loudly (either direction), never silently overwrite/lose a
+# contribution. Distinct names for the two kinds keep working.
+@testitem "context: scalar/indexed accumulator-kind collision throws both ways (WR-04)" tags = [:context] begin
+    using TSODSO, JuMP
+
+    model = Model(TSODSO.select_optimizer(TSODSO.LP()))
+    @variable(model, p >= 0)
+
+    # Indexed-then-scalar on the same name: the scalar add must refuse (not corrupt).
+    ctx1 = TSODSO.ModelContext(model)
+    TSODSO.add_to_residual!(ctx1, :R, 1, 1, 1.0 * p)
+    @test_throws ErrorException TSODSO.add_to_residual!(ctx1, :R, 1.0 * p)
+
+    # Scalar-then-indexed on the same name: the indexed add must refuse (not discard).
+    ctx2 = TSODSO.ModelContext(model)
+    TSODSO.add_to_residual!(ctx2, :R, 1.0 * p)
+    @test_throws ErrorException TSODSO.add_to_residual!(ctx2, :R, 1, 1, 1.0 * p)
+
+    # Distinct names for the two kinds still coexist cleanly.
+    ctx3 = TSODSO.ModelContext(model)
+    TSODSO.add_to_residual!(ctx3, :scalar_name, 1.0 * p)
+    TSODSO.add_to_residual!(ctx3, :indexed_name, 1, 1, 2.0 * p)
+    @test ctx3.residuals[:scalar_name] isa AffExpr
+    @test ctx3.residuals[:indexed_name] isa Matrix{AffExpr}
+end
