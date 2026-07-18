@@ -88,11 +88,11 @@ end
         end
     end
 
-    # Energy-window budget (3.4-3.5): exactly one equality constraint beyond bounds.
-    n_eq =
-        num_constraints(model, AffExpr, MOI.EqualTo{Float64}) +
-        num_constraints(model, VariableRef, MOI.EqualTo{Float64})
-    @test n_eq == 1
+    # Energy-window budget (WR-01, thesis eq. 3.4): it is an INEQUALITY upper bound
+    # `Σ p ≤ E`, NOT a hard equality — exactly one affine LessThan constraint beyond the
+    # variable bounds, and NO affine equality (the earlier `== E` pin is gone).
+    @test num_constraints(model, AffExpr, MOI.LessThan{Float64}) == 1
+    @test num_constraints(model, AffExpr, MOI.EqualTo{Float64}) == 0
 
     # Aggregator-as-writer: the device wrote NOTHING to the residual or the objective.
     @test isempty(ctx.residuals)
@@ -121,6 +121,42 @@ end
     # Outside the window: zero draw (3.5, p = 0 outside T_{h,d}).
     @test isapprox(value(p[1]), 0.0; atol = 1e-6)
     @test isapprox(value(p[T]), 0.0; atol = 1e-6)
+end
+
+@testitem "deferrable: b shapes the price-responsive allocation (WR-01, thesis 3.4/3.12)" tags = [
+    :deferrable,
+] begin
+    using TSODSO, JuMP
+
+    T = 5
+    t_start, t_end, E, Pmax = 2, 4, 6.0, 5.0
+    price = 2.0   # linear cost per unit consumed — a stand-in for the network price
+
+    # Maximize (soft target − priced consumption). Closed form of the total over the window:
+    #   f(S) = −(b/2)(S−E)² − price·S  ⇒  argmax S* = E − price/b   (clamped to [0, E]).
+    # This is only possible because the budget is now the INEQUALITY Σ p ≤ E (WR-01): under
+    # the old hard equality Σ p == E the total was pinned to E and `b` could not move it.
+    function solve_total(b)
+        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        ctx = TSODSO.ModelContext(model)
+        d = TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b)
+        out = TSODSO.contribute!(d, ctx; T = T)
+        S = sum(out.vars.p[t] for t in t_start:t_end)
+        @objective(model, Max, out.utility - price * S)
+        TSODSO.assert_solved!(model; dual = false)
+        return value(S)
+    end
+
+    S_small = solve_total(1.0)   # weak insistence: S* = 6 − 2/1 = 4.0
+    S_large = solve_total(8.0)   # strong insistence: S* = 6 − 2/8 = 5.75
+
+    # b is a LIVE parameter: under the SAME price a larger curvature pulls the total closer
+    # to the target E. Both back off BELOW E (the load is genuinely price-responsive now).
+    @test S_small < E - 1e-6
+    @test S_large < E - 1e-6
+    @test S_large > S_small + 1e-3
+    @test isapprox(S_small, E - price / 1.0; atol = 1e-4)
+    @test isapprox(S_large, E - price / 8.0; atol = 1e-4)
 end
 
 @testitem "deferrable: contribute! validates the window fits the horizon (DEV-02)" tags = [
