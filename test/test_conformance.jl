@@ -56,26 +56,35 @@ end
     @test isdefined(TSODSO, :ConvexBranchFlow)
 
     if isdefined(TSODSO, :ConvexBranchFlow)
-        # A small lossy radial feeder + one minimal aggregator — the SAME shape a DC or
-        # LinDistFlow solve would take; ONLY the `pf` argument changes to the SOCP cone.
+        # A small lossy radial feeder + ONE minimal aggregator, built ONCE and reused for
+        # all three formulations — the SAME shape a DC or LinDistFlow solve would take.
         feeder = Feeder(
             [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
             [Branch(1, 2, 0.01, 0.02, 10.0)],
             1,
         )
         defer = Deferrable(2, 1, 1, 0.5, 1.0, 0.5)
-        agg = Aggregator(2, 0.9, [defer], [0.1])
+        agg = Aggregator(2, 0.9, [defer], [0.1])   # ONE device, unaware of the formulation
 
-        pf = TSODSO.ConvexBranchFlow()
-        _ctx, obj, dadp = solve_welfare(
-            feeder, pf, [agg];
-            T = 1, λ₀ = [2.0],
-            optimizer = select_optimizer(problem_class(pf)),
-        )
+        # DC ↔ LinDistFlow ↔ SOCP: call solve_welfare THREE times differing ONLY in the `pf`
+        # argument (the solver factory is derived from `problem_class(pf)` — QP() for DC/LDF,
+        # SOCP() for the cone — so no model names a solver either). Neither `agg` nor
+        # `solve_welfare` is edited between calls: the third formulation drops into the
+        # residual seam by dispatch alone, no `if formulation ==` branch anywhere.
+        for pf in
+            (TSODSO.DCPowerFlow(), TSODSO.LinDistFlow(), TSODSO.ConvexBranchFlow())
+            _ctx, obj, dadp = solve_welfare(
+                feeder, pf, [agg];
+                T = 1, λ₀ = [2.0],
+                optimizer = select_optimizer(problem_class(pf)),
+            )
 
-        # The zero-edit swap to the SOCP formulation still solves and yields a finite price.
-        @test isfinite(obj)
-        @test length(dadp) == 1
-        @test all(isfinite, dadp)
+            # The zero-edit swap must still solve and expose a finite, priced length-T dual.
+            # (The three objectives are NOT required equal — SOCP carries the losses DC/LDF
+            # drop; success criterion 4 is only that the SWAP is a pure dispatch.)
+            @test isfinite(obj)
+            @test length(dadp) == 1
+            @test all(isfinite, dadp)
+        end
     end
 end
