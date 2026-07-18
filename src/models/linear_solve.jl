@@ -59,6 +59,18 @@ function solve_linear(
     ctx.meta[:feeder] = feeder
     ctx.meta[:T] = T
 
+    Np = length(feeder.buses)
+
+    # CR-01: every device must sit on a real feeder bus. A device at `bus > Np` grows
+    # `:Rp` beyond the balance-closure loop (rows `1:Np`), so its `−p` injection is never
+    # pinned to zero and silently vanishes from the network balance — the solver then
+    # manufactures welfare from power sourced nowhere (verified: welfare 10.0 vs 2.0). For
+    # a bench whose value IS trustworthy prices this must fail loudly, not solve wrong.
+    for (k, d) in enumerate(devices)
+        1 <= d.bus <= Np ||
+            throw(ArgumentError("device[$k] bus=$(d.bus) is outside feeder buses 1:$Np"))
+    end
+
     # Formulation: subtract branch/voltage terms into :Rp (and :Rq for LinDistFlow).
     contribute!(pf, ctx, feeder; T = T)
     # Devices: add signed injection into :Rp + concave utility into ctx.meta[:objective].
@@ -77,10 +89,19 @@ function solve_linear(
     # the formulation type. :Rp is always populated; :Rq only when the chosen
     # formulation wrote it (LinDistFlow), detected via haskey. Swapping DC↔LinDistFlow
     # changes which residuals exist, and this same loop closes both (criterion 4).
-    Np = length(feeder.buses)
+    # CR-01: assert no residual row escaped the feeder before pinning it. If `:Rp` is any
+    # bigger than `(Np, T)` an index slipped past the bus range and the closure loop below
+    # would leave that row unpinned (a free injection) — fail loudly instead of solving a
+    # silently-wrong optimum.
+    size(ctx.residuals[:Rp]) == (Np, T) || error(
+        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($Np, $T) — an index escaped the feeder",
+    )
     @constraint(model, balance_p[j = 1:Np, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
     register_constraint!(ctx, :balance_p, balance_p)          # dual = λ_j (DADP)
     if haskey(ctx.residuals, :Rq)                             # registry contents, NOT a flag
+        size(ctx.residuals[:Rq]) == (Np, T) || error(
+            "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($Np, $T) — an index escaped the feeder",
+        )
         @constraint(model, balance_q[j = 1:Np, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
         register_constraint!(ctx, :balance_q, balance_q)
     end
