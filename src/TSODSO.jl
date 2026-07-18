@@ -21,6 +21,9 @@ include("data/topology.jl")
 # --- Seeded profile generator (owned by plan 03-02, DATA-04) ---
 include("data/profiles.jl")
 
+# --- Modified IEEE 13-node feeder fixture (owned by plan 04-03, DATA-03) ---
+include("data/ieee13.jl")
+
 # --- Solver abstraction (owned by plan 01-03, INFRA-02) ---
 include("solver/ProblemClass.jl")
 include("solver/factory.jl")
@@ -35,6 +38,14 @@ include("powerflow/AbstractPowerFlow.jl")
 # --- Power-flow formulations (owned by plan 02-02, PF-02) ---
 include("powerflow/DCPowerFlow.jl")
 include("powerflow/LinDistFlow.jl")
+
+# --- SOCP Convex Branch Flow formulation (owned by plan 04-02, PF-03) ---
+include("powerflow/ConvexBranchFlow.jl")
+
+# --- Power-flow → problem-class routing trait (owned by plan 04-01, INFRA-02 / PF-03) ---
+# Included AFTER the powerflow formulations (needs `AbstractPowerFlow`) and after
+# solver/ProblemClass.jl (needs `QP`): it maps a formulation to its solver problem class.
+include("solver/problem_class_trait.jl")
 
 # --- Devices (owned by plan 02-03, DEV-03) ---
 include("devices/AbstractDevice.jl")
@@ -54,5 +65,11 @@ include("models/linear_solve.jl")
 
 # --- GLB-CVX centralized social-welfare solve (owned by plan 03-05, OPT-01) ---
 include("models/welfare_solve.jl")
+
+# --- SOCP relaxation exactness gate (owned by plan 04-05, PF-04) ---
+include("models/exactness.jl")
+
+# --- operational_oracle + SEAM-01 extension stubs (owned by plan 04-04, OPT-03 / SEAM-01) ---
+include("models/oracle.jl")
 
 end # module TSODSO
