@@ -53,8 +53,8 @@ single-period centralized solve) before any complexity is added.
   5. All electrical and monetary quantities pass magnitude-sanity assertions under one documented per-unit system, converted once at ingestion.
 **Plans**: 4 plans
 - [x] 01-01-PLAN.md — Package scaffold + committed Manifest/[compat] + Wave 0 failing TestItems harness (INFRA-01)
-- [ ] 01-02-PLAN.md — Immutable per-unit feeder data model + radial validation + magnitude tripwires (DATA-01, DATA-02, INFRA-05)
-- [ ] 01-03-PLAN.md — Solver factory (select_optimizer) + weakdep exts + status discipline + ModelContext residual seam (INFRA-02, INFRA-03, PF-01)
+- [x] 01-02-PLAN.md — Immutable per-unit feeder data model + radial validation + magnitude tripwires (DATA-01, DATA-02, INFRA-05)
+- [x] 01-03-PLAN.md — Solver factory (select_optimizer) + weakdep exts + status discipline + ModelContext residual seam (INFRA-02, INFRA-03, PF-01)
 - [ ] 01-04-PLAN.md — End-to-end toy DC single-node solve through all seams + Literate reproducibility page (INFRA-02, INFRA-03, PF-01)
 
 ### Phase 2: Linear Branch-Flow Residual Seam
@@ -175,7 +175,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Plumbing & Solver Abstraction | 1/4 | In Progress|  |
+| 1. Plumbing & Solver Abstraction | 3/4 | In Progress|  |
 | 2. Linear Branch-Flow Residual Seam | 0/TBD | Not started | - |
 | 3. Prosumer Device Library & Social-Welfare Solve | 0/TBD | Not started | - |
 | 4. Convex Branch-Flow Correctness Milestone | 0/TBD | Not started | - |
