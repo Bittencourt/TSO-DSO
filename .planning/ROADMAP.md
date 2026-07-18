@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Plumbing & Solver Abstraction** - Data model, `ModelContext`, `select_optimizer`, toy DC single-node solve (rung 0) (completed 2026-07-18)
 - [x] **Phase 2: Linear Branch-Flow Residual Seam** - LinDistFlow + one flexible load, centralized; nodal-balance dual appears (rung 1) (completed 2026-07-18)
-- [ ] **Phase 3: Prosumer Device Library & Social-Welfare Solve** - All devices + aggregator + `GLB-CVX` on linear flow, centralized (rung 2a)
+- [x] **Phase 3: Prosumer Device Library & Social-Welfare Solve** - All devices + aggregator + `GLB-CVX` on linear flow, centralized (rung 2a) (completed 2026-07-18)
 - [ ] **Phase 4: Convex Branch-Flow Correctness Milestone** - SOCP + LinDistFlow exactness + IEEE 13 + `operational_oracle` seam (rung 2b)
 - [ ] **Phase 5: Distribution Pricing — DADP & DLMP Decomposition** - Nodal-balance dual prices, four-way decomposition, welfare accounting (rung 3)
 - [ ] **Phase 6: ADMM Decomposition Core** - `AGR-OPT`/`DSO-OPT` + dual ascent, build-once, cross-validated vs centralized (rung 4a)
@@ -92,7 +92,7 @@ multi-device welfare solve at linear fidelity, before SOCP complexity.
 - [x] 03-02-PLAN.md — Seeded first-order Markov profile generator (markov_path + generate_profiles, reproducible) (DATA-04)
 - [x] 03-03-PLAN.md — Thermostatic + Deferrable devices (temporal coupling + concave utility, aggregatable-device contract) (DEV-01, DEV-02)
 - [x] 03-04-PLAN.md — PV+battery device: SOC/PV-limit, no binaries, numeric p_ch·p_dch<τ (App. C) (DEV-04)
-- [ ] 03-05-PLAN.md — Aggregator roll-up + GLB-CVX solve_welfare + q_import reactive-root fix + battery complementarity (DEV-05, OPT-01, DEV-04)
+- [x] 03-05-PLAN.md — Aggregator roll-up + GLB-CVX solve_welfare + q_import reactive-root fix + battery complementarity (DEV-05, OPT-01, DEV-04)
 
 ### Phase 4: Convex Branch-Flow Correctness Milestone
 **Goal**: The "if all else fails, this must work" core — the SOCP Convex Branch Flow formulation *with
@@ -186,7 +186,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Plumbing & Solver Abstraction | 4/4 | Complete   | 2026-07-18 |
 | 2. Linear Branch-Flow Residual Seam | 4/4 | Complete   | 2026-07-18 |
-| 3. Prosumer Device Library & Social-Welfare Solve | 4/5 | In Progress|  |
+| 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
 | 4. Convex Branch-Flow Correctness Milestone | 0/TBD | Not started | - |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 0/TBD | Not started | - |
 | 6. ADMM Decomposition Core | 0/TBD | Not started | - |
