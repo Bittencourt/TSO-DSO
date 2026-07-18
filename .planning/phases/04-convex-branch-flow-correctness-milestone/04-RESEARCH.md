@@ -520,7 +520,9 @@ set_parameter_value(soc0, new_state)        # re-set between horizons, then opti
 locked. A1–A3 in particular gate whether OPT-02/OPT-03 can *reproduce* the thesis or must pin a
 self-consistent golden value.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED: Q1 (exact thesis reproduction) → pin a computed golden as the primary anchor + assert 1.0493 as an approximate `|V|=sqrt(v)` cross-check within tolerance, with a blocking human-verify checkpoint (04-06); Q2 (interior thermal limits) → 99.0 pu sentinel honoring the strict assert_magnitudes band (04-03); Q3 (PMD oracle) → DEFER (Ipopt cross-check + thesis ground truth suffice).
 
 1. **Can the thesis ground-truth numbers (`v₉[16] ≈ 1.0493`, welfare `$1819`) be reproduced exactly?**
    - What we know: the feeder topology/limits (Table 4.1), voltage bounds, head-branch limit, battery
