@@ -175,3 +175,39 @@ end
     d = TSODSO.Deferrable(3, 2, 6, 6.0, 5.0, 1.0)
     @test_throws ArgumentError TSODSO.contribute!(d, ctx; T = 4)
 end
+
+@testitem "deferrable: E_min must-complete floor binds under high price (DEV-02, thesis 3.4)" tags = [
+    :deferrable,
+] begin
+    using TSODSO, JuMP
+
+    T = 5
+    t_start, t_end, E, Pmax = 2, 4, 6.0, 5.0
+    price = 10.0   # a high price: the purely-elastic optimum would drive the total toward 0
+    b = 1.0
+    E_min = 3.0    # must-complete floor: an EV-like task that HAS to charge ≥ 3.0
+
+    # Elastic optimum (E_min = 0): S* = clamp(E − price/b, 0, E) = clamp(6 − 10, 0, 6) = 0.
+    function solve_total(; E_min)
+        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        ctx = TSODSO.ModelContext(model)
+        d = TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b; E_min = E_min)
+        out = TSODSO.contribute!(d, ctx; T = T)
+        S = sum(out.vars.p[t] for t in t_start:t_end)
+        @objective(model, Max, out.utility - price * S)
+        TSODSO.assert_solved!(model; dual = false)
+        return value(S)
+    end
+
+    # With no floor the high price collapses consumption to ~0 (purely elastic).
+    @test isapprox(solve_total(; E_min = 0.0), 0.0; atol = 1e-4)
+    # With the floor the load MUST consume at least E_min despite the high price — the floor
+    # binds exactly (it would otherwise consume less).
+    @test isapprox(solve_total(; E_min = E_min), E_min; atol = 1e-4)
+
+    # Guard: a floor above the budget is rejected at construction (0 ≤ E_min ≤ E).
+    @test_throws ArgumentError TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b; E_min = 7.0)
+    @test_throws ArgumentError TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b; E_min = -1.0)
+    # Default E_min is 0 (backward-compatible elastic load).
+    @test TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b).E_min == 0.0
+end
