@@ -89,9 +89,9 @@ multi-device welfare solve at linear fidelity, before SOCP complexity.
   4. Seeded first-order Markov-chain demand and PV profiles generate reproducibly (same seed → identical profiles) and feed the solve.
 **Plans**: 5 plans
 - [x] 03-01-PLAN.md — StableRNGs dep + re-resolved manifests (1.10/1.11/1.12) + include-graph stubs + RED @testitem harness + T=24 fixture (DATA-04)
-- [ ] 03-02-PLAN.md — Seeded first-order Markov profile generator (markov_path + generate_profiles, reproducible) (DATA-04)
-- [ ] 03-03-PLAN.md — Thermostatic + Deferrable devices (temporal coupling + concave utility, aggregatable-device contract) (DEV-01, DEV-02)
-- [ ] 03-04-PLAN.md — PV+battery device: SOC/PV-limit, no binaries, numeric p_ch·p_dch<τ (App. C) (DEV-04)
+- [x] 03-02-PLAN.md — Seeded first-order Markov profile generator (markov_path + generate_profiles, reproducible) (DATA-04)
+- [x] 03-03-PLAN.md — Thermostatic + Deferrable devices (temporal coupling + concave utility, aggregatable-device contract) (DEV-01, DEV-02)
+- [x] 03-04-PLAN.md — PV+battery device: SOC/PV-limit, no binaries, numeric p_ch·p_dch<τ (App. C) (DEV-04)
 - [ ] 03-05-PLAN.md — Aggregator roll-up + GLB-CVX solve_welfare + q_import reactive-root fix + battery complementarity (DEV-05, OPT-01, DEV-04)
 
 ### Phase 4: Convex Branch-Flow Correctness Milestone
@@ -186,7 +186,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Plumbing & Solver Abstraction | 4/4 | Complete   | 2026-07-18 |
 | 2. Linear Branch-Flow Residual Seam | 4/4 | Complete   | 2026-07-18 |
-| 3. Prosumer Device Library & Social-Welfare Solve | 1/5 | In Progress|  |
+| 3. Prosumer Device Library & Social-Welfare Solve | 4/5 | In Progress|  |
 | 4. Convex Branch-Flow Correctness Milestone | 0/TBD | Not started | - |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 0/TBD | Not started | - |
 | 6. ADMM Decomposition Core | 0/TBD | Not started | - |
