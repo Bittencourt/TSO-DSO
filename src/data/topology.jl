@@ -8,7 +8,9 @@
 # Validation runs at `Feeder` construction (see data/Feeder.jl) and a non-tree
 # feeder raises a clear `ArgumentError`. No Graphs.jl dependency: connectivity is
 # a ~15-line BFS over a hand-built adjacency list (RESEARCH "Don't Hand-Roll").
-# The sparse node-branch incidence is returned for reuse by the model layer.
+# The sparse node-branch incidence is returned as a convenience for callers that
+# want it; the `Feeder` constructor uses `assert_radial` for validation only and
+# does not store `A` (a later layer that needs incidence recomputes or caches it).
 #
 # Convention (Phase 1): bus `id` equals its 1-based position in `buses`, matching
 # the thesis fixtures; the incidence/adjacency are indexed by that position.
@@ -49,6 +51,15 @@ function assert_radial(buses, branches, root)
     #     any later layer indexes by id, with no error (a silent-wrong hazard).
     all(i -> buses[i].id == i, eachindex(buses)) || throw(ArgumentError(
         "Bus ids must equal their 1-based position in `buses`."))
+
+    # Branch endpoints must reference real buses (IN-02). Checked explicitly here
+    # so an out-of-range endpoint gives a clear domain message instead of the
+    # cryptic "row index out of range" that `SparseArrays.sparse` would raise
+    # below (both are ArgumentError, so the exception-type contract is unchanged).
+    for (b, br) in enumerate(branches)
+        (1 ≤ br.from ≤ N && 1 ≤ br.to ≤ N) || throw(ArgumentError(
+            "Branch $b endpoints ($(br.from)->$(br.to)) out of range 1:$N."))
+    end
 
     # Sparse node-branch incidence: +1 at `from`, -1 at `to`.
     Irow = Int[]
