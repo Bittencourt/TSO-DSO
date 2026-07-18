@@ -586,22 +586,25 @@ Not applicable — Phase 1 is greenfield scaffolding (no rename/refactor/migrati
 | A4 | `S_base`/`V_base` per-unit base choice is a single-level balanced base | Pattern 5 | Thesis may specify particular bases; confirm at data-fixture phase (DATA-03, Phase 4) |
 | A5 | GitHub is the CI/host and `manifest=true` desired | Scaffold | Low — matches repo; confirm handle/host at plan time |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Final package name.**
    - Known: CLAUDE.md never fixes it; repo dir is `TSO-DSO`.
    - Unclear: exact module identifier (must be a valid Julia identifier — no hyphen).
    - Recommendation: `TSODSO` or `TransactiveGridOpt`; planner confirms with user before `t("...")`.
+   - **RESOLVED:** Package/module = `TSODSO` (planner discretion, recorded in SKELETON.md and all plan frontmatter). Non-blocking, renameable.
 
 2. **Does the toy DC need a nontrivial nodal balance, or is single-node sufficient for rung 0?**
    - Known: success criteria say "single-node, single-period."
    - Unclear: whether a 2-node DC would better exercise the incidence/residual seam without over-scoping.
    - Recommendation: keep strictly single-node for rung 0 (Phase 2 adds the branch-flow residual on a real feeder); but still route the balance through `ctx.residuals` so the seam is exercised.
+   - **RESOLVED:** Rung 0 is strictly single-node; the balance is still routed through `ModelContext` residuals so the seam is exercised (plan 01-04 T1).
 
 3. **Per-unit base values for the toy.**
    - Known: convention is `S_base` MVA, `V_base` kV.
    - Unclear: specific numbers (defer to thesis fixtures in Phase 4).
    - Recommendation: pick documented placeholders (e.g., `S_base=1.0 MVA`, `V_base=4.16 kV` matching IEEE-13) and note they will be superseded by real fixtures.
+   - **RESOLVED:** Placeholder base `S_base=1.0 MVA`, `V_base=4.16 kV`, documented in `src/units/PerUnit.jl`; superseded by real fixtures in Phase 4.
 
 ## Environment Availability
 

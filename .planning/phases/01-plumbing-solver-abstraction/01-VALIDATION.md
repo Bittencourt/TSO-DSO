@@ -38,13 +38,12 @@ created: 2026-07-18
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 1-01-01 | 01 | 0 | INFRA-01 | — | N/A | integration | `julia --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.status()'` | ❌ W0 | ⬜ pending |
-| 1-01-02 | 01 | 1 | DATA-01, DATA-02 | — | Per-unit convert-once; magnitude assertions | unit | `@run_package_tests filter=ti->occursin("perunit", ti.name)` | ❌ W0 | ⬜ pending |
-| 1-01-03 | 01 | 1 | PF-01 | — | Radial feeder validation; non-tree raises | unit | `@run_package_tests filter=ti->occursin("feeder", ti.name)` | ❌ W0 | ⬜ pending |
-| 1-01-04 | 01 | 1 | INFRA-02 | — | Solver factory; no model names a solver | unit | `@run_package_tests filter=ti->occursin("solver", ti.name)` | ❌ W0 | ⬜ pending |
-| 1-01-05 | 01 | 1 | INFRA-05 | — | ModelContext + residual registry seam | unit | `@run_package_tests filter=ti->occursin("context", ti.name)` | ❌ W0 | ⬜ pending |
-| 1-01-06 | 01 | 2 | INFRA-03 | — | assert OPTIMAL / is_solved_and_feasible; fail loudly | unit | `@run_package_tests filter=ti->occursin("status", ti.name)` | ❌ W0 | ⬜ pending |
-| 1-01-07 | 01 | 2 | INFRA-02, INFRA-03 | — | Toy DC single-node solve returns objective | integration | `@run_package_tests filter=ti->occursin("toy", ti.name)` | ❌ W0 | ⬜ pending |
+| 1-01-T1 | 01-01 | 1 | INFRA-01 | — | N/A | integration | `julia --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.status()'` | ❌ W0 | ⬜ pending |
+| 1-02-T1 | 01-02 | 2 | INFRA-05 | T-01-03 | Per-unit convert-once; magnitude assertions (live constructor path) | unit | `@run_package_tests filter=ti->occursin("perunit", ti.name)` | ❌ W0 | ⬜ pending |
+| 1-02-T2 | 01-02 | 2 | DATA-01, DATA-02 | T-01-02 | Radial feeder validation; non-tree raises | unit | `@run_package_tests filter=ti->(occursin("feeder", ti.name) || occursin("topology", ti.name))` | ❌ W0 | ⬜ pending |
+| 1-03-T1 | 01-03 | 2 | INFRA-02 | — | Solver factory; no model names a solver | unit | `@run_package_tests filter=ti->occursin("factory", ti.name)` | ❌ W0 | ⬜ pending |
+| 1-03-T2 | 01-03 | 2 | INFRA-03, PF-01 | — | assert_solved!/no-slack + ModelContext residual registry seam | unit | `@run_package_tests filter=ti->(occursin("status", ti.name) || occursin("context", ti.name))` | ❌ W0 | ⬜ pending |
+| 1-04-T1 | 01-04 | 3 | INFRA-02, INFRA-03, PF-01 | — | Toy DC single-node solve returns objective + dual | integration | `@run_package_tests filter=ti->occursin("toy", ti.name)` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
