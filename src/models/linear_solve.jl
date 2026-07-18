@@ -115,6 +115,18 @@ function solve_linear(
         size(ctx.residuals[:Rq]) == (Np, T) || error(
             "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($Np, $T) — an index escaped the feeder",
         )
+        # WR-03 INVARIANT (Phase-2 scope, deliberately NOT a reactive implementation):
+        # unlike :Rp, this assembly injects NO reactive frontier source at the root. Pinning
+        # :Rq at every bus therefore forces Q ≡ 0 across the feeder. That is CORRECT here
+        # only because no Phase-2 device injects reactive power (Interruptible carries no
+        # reactive term), so :Rq holds branch-flow Q variables ALONE and the root reactive
+        # balance `−Σ Q_out == 0` is satisfiable by Q ≡ 0. This is an ASSEMBLY-level seam
+        # gap, distinct from the accepted "reactive-load deferred" device note: the moment a
+        # reactive load/source lands (Phase 3), closing :Rq here becomes infeasible (or
+        # silently zeroes the reactive draw) UNLESS a free-sign `q_import[t]` frontier
+        # variable is injected at `feeder.root` BEFORE this closure, mirroring `p_import` and
+        # stashed under `ctx.meta[:q_import]`. Do not add a reactive load in Phase 2 without
+        # also adding that frontier source.
         @constraint(model, balance_q[j = 1:Np, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
         register_constraint!(ctx, :balance_q, balance_q)
     end
