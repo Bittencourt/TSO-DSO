@@ -379,7 +379,9 @@ See Patterns 1–4 above for the four verified, thesis-traced code templates (th
 | A5 | The utility constant `c` (3.11/3.12) may be dropped from the argmax (affects only absolute welfare, not the optimizer) | Pattern 1 | Low — include `c` only if matching absolute thesis welfare numbers; document the choice. |
 | A6 | `PVBattery` charging draws only from PV (`p_ch ≤ P_pv`), not from grid | Pattern 3 | Low — traced to 3.7. If grid-charging is later wanted it is a model variant. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED and adopted by the plans: Q1 → aggregator-as-writer (Aggregator is sole :Rp/:Rq writer; devices return `(;vars,p_inject,utility)`); Q2 → keep pin-every-bus balance closure (passive-bus residual enforces branch continuity). See plans 03-03/03-04 (aggregatable devices) and 03-05 (Aggregator + solve_welfare).
 
 1. **Aggregator vs device residual-writing (the one real design fork).**
    - What we know: DEV-05 says "the aggregator, not the device, is what the network sees"; thesis 3.21–3.23 are aggregator-level. The existing `Interruptible` self-injects `−p` into `:Rp` and holds `bus::Int`.
