@@ -35,6 +35,13 @@ end
     @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 10.0, 9.0, Ppv) # λ_med > λ_max
     @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 0.5, 9.0, Ppv)  # λ_med < λ_min
 
+    # CR-01: a NON-STRICT ordering (any equality) is rejected — equality zeroes a utility
+    # curvature and admits SOC-draining p_ch·p_dch > 0 co-optima, breaking the App. C
+    # no-binary guarantee. Only STRICT λ_min < λ_med < λ_max is admissible.
+    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 4.0, 4.0, 9.0, Ppv)  # λ_min == λ_med
+    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 9.0, 9.0, Ppv)  # λ_med == λ_max
+    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 4.0, 4.0, 4.0, Ppv)  # all equal
+
     # η OUTSIDE (0, 1] — a physical round-trip efficiency (eq. 3.6).
     @test_throws ArgumentError TSODSO.PVBattery(2, 1.5, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)  # η > 1
     @test_throws ArgumentError TSODSO.PVBattery(2, 0.0, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)  # η ≤ 0
