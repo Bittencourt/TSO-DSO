@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "12934476b692c09a12be1f6210a855d11ca41f6c"
+project_hash = "b4dbee56a6058115df0f37d9f1be1dce374dcbd2"
 
 [[deps.AMD]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
@@ -444,6 +444,12 @@ version = "2.8.0"
     [deps.SpecialFunctions.weakdeps]
     ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 
+[[deps.StableRNGs]]
+deps = ["Random"]
+git-tree-sha1 = "4f96c596b8c8258cc7d3b19797854d368f243ddc"
+uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
+version = "1.0.4"
+
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
 git-tree-sha1 = "246a8bb2e6667f832eea063c3a56aef96429a3db"
@@ -498,7 +504,7 @@ uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
 [[deps.TSODSO]]
-deps = ["Clarabel", "HiGHS", "Ipopt", "JuMP", "SparseArrays"]
+deps = ["Clarabel", "HiGHS", "Ipopt", "JuMP", "SparseArrays", "StableRNGs"]
 path = "."
 uuid = "67a63935-f442-4b9a-93c0-a55ebfb6d374"
 version = "0.1.0"

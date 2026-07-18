@@ -29,5 +29,9 @@ end
 @testitem "quality: Aqua package checks (no stale deps / ambiguities / export issues)" begin
     using TSODSO, Aqua
 
-    Aqua.test_all(TSODSO)
+    # StableRNGs is a Wave-0 shared-foundation dependency (plan 03-01): it is pinned in
+    # Project.toml now (the only wave that edits shared files) but is not LOADED by src/
+    # until plan 03-02 fills the comment-only `data/profiles.jl` stub. Ignore it in the
+    # stale-deps check until then; plan 03-02 removes this ignore once profiles.jl `using`s it.
+    Aqua.test_all(TSODSO; stale_deps=(ignore=[:StableRNGs],))
 end

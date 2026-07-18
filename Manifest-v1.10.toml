@@ -2,7 +2,7 @@
 
 julia_version = "1.10.11"
 manifest_format = "2.0"
-project_hash = "06e461fe9a2debeb1f993e044223b9ec2b07241d"
+project_hash = "1532e806fb70b8b8ab1bce1d508921199f00fb33"
 
 [[deps.AMD]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
@@ -426,6 +426,12 @@ version = "2.8.0"
 
     [deps.SpecialFunctions.weakdeps]
     ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+
+[[deps.StableRNGs]]
+deps = ["Random"]
+git-tree-sha1 = "4f96c596b8c8258cc7d3b19797854d368f243ddc"
+uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
+version = "1.0.4"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
