@@ -38,3 +38,44 @@
     @test obj_dc ≈ expected_obj atol = 1e-6
     @test obj_ldf ≈ expected_obj atol = 1e-6
 end
+
+# Seam: the SOCP arm of the interchange contract (PF-03, criterion 4). RED @testitem
+# (Wave 1) turned green by plan 04-02: the SAME solve call swapped to `ConvexBranchFlow()`
+# must still solve and expose a finite DADP — the third formulation drops into the residual
+# seam by dispatch alone, no `if formulation ==` branch. The item name contains
+# "conformance" so `occursin("conformance", ti.name)` selects it; the behavioral block sits
+# behind an `isdefined` guard so it goes live once ConvexBranchFlow lands (while RED the
+# sole failing assertion is the missing-symbol check). The existing DC↔LinDistFlow item
+# above is left UNCHANGED.
+@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (crit 4, SOCP arm)" tags = [:conformance] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # RED until plan 04-02 defines the SOCP Convex Branch Flow formulation.
+    @test isdefined(TSODSO, :ConvexBranchFlow)
+
+    if isdefined(TSODSO, :ConvexBranchFlow)
+        # A small lossy radial feeder + one minimal aggregator — the SAME shape a DC or
+        # LinDistFlow solve would take; ONLY the `pf` argument changes to the SOCP cone.
+        feeder = Feeder(
+            [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+            [Branch(1, 2, 0.01, 0.02, 10.0)],
+            1,
+        )
+        defer = Deferrable(2, 1, 1, 0.5, 1.0, 0.5)
+        agg = Aggregator(2, 0.9, [defer], [0.1])
+
+        pf = TSODSO.ConvexBranchFlow()
+        _ctx, obj, dadp = solve_welfare(
+            feeder, pf, [agg];
+            T = 1, λ₀ = [2.0],
+            optimizer = select_optimizer(problem_class(pf)),
+        )
+
+        # The zero-edit swap to the SOCP formulation still solves and yields a finite price.
+        @test isfinite(obj)
+        @test length(dadp) == 1
+        @test all(isfinite, dadp)
+    end
+end
