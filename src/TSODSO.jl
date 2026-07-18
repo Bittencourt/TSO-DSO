@@ -18,6 +18,9 @@ include("units/PerUnit.jl")
 include("data/Feeder.jl")
 include("data/topology.jl")
 
+# --- Seeded profile generator (owned by plan 03-02, DATA-04) ---
+include("data/profiles.jl")
+
 # --- Solver abstraction (owned by plan 01-03, INFRA-02) ---
 include("solver/ProblemClass.jl")
 include("solver/factory.jl")
@@ -37,8 +40,19 @@ include("powerflow/LinDistFlow.jl")
 include("devices/AbstractDevice.jl")
 include("devices/Interruptible.jl")
 
+# --- Concrete prosumer devices (owned by plans 03-03 / 03-04) ---
+include("devices/Thermostatic.jl")   # DEV-01
+include("devices/Deferrable.jl")     # DEV-02
+include("devices/PVBattery.jl")      # DEV-04
+
+# --- Aggregator roll-up: the network-facing residual writer (plan 03-05, DEV-05) ---
+include("devices/Aggregator.jl")
+
 # --- Models (owned by plan 01-04 rung 0 / plan 02-04 rung 1 integration) ---
 include("models/toy_dc.jl")
 include("models/linear_solve.jl")
+
+# --- GLB-CVX centralized social-welfare solve (owned by plan 03-05, OPT-01) ---
+include("models/welfare_solve.jl")
 
 end # module TSODSO
