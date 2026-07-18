@@ -18,8 +18,9 @@
     @test TSODSO.assert_magnitudes_voltage(1.0) === nothing
     @test TSODSO.assert_magnitudes_voltage(0.95) === nothing
 
-    # Magnitude-sanity assertions must FIRE (loud AssertionError tripwire) on
-    # out-of-band voltages — both too low (SI leaked in) and too high.
-    @test_throws AssertionError TSODSO.assert_magnitudes_voltage(0.1)
-    @test_throws AssertionError TSODSO.assert_magnitudes_voltage(1.5)
+    # Magnitude-sanity checks must FIRE (loud ArgumentError tripwire — an
+    # explicit throw, not @assert, so it survives `-O`/`--check-bounds=no`) on
+    # out-of-band voltages — both too low (SI leaked in) and too high (WR-02).
+    @test_throws ArgumentError TSODSO.assert_magnitudes_voltage(0.1)
+    @test_throws ArgumentError TSODSO.assert_magnitudes_voltage(1.5)
 end

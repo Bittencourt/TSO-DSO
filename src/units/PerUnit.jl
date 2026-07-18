@@ -2,8 +2,10 @@
 #
 # Per-unit system (INFRA-05). One documented per-unit base; SI inputs are
 # converted to per-unit ONCE at ingestion (before any struct is constructed),
-# then magnitude-sanity `@assert` tripwires guard against SI/pu mixing
-# (RESEARCH Pattern 5, Pitfall 5). These bands are deliberately loud sanity
+# then magnitude-sanity tripwires (explicit `throw(ArgumentError(...))`, NOT
+# `@assert`, so they are never elided under `-O`/`--check-bounds=no`) guard
+# against SI/pu mixing (RESEARCH Pattern 5, Pitfall 5). These bands are
+# deliberately loud sanity
 # checks, not physics — an Ω value where pu is expected, or a voltage bound
 # outside [0.8, 1.2], fails immediately instead of producing a plausible-wrong
 # result downstream.
@@ -53,14 +55,16 @@ const PRICE_MAX = 1.0e4          # $/MWh monetary sanity bound (prices kept in S
     assert_magnitudes_voltage(v)
 
 Assert a single per-unit voltage magnitude lies in the sanity band
-`[0.8, 1.2]`. Throws `AssertionError` otherwise — a value far outside this band
+`[0.8, 1.2]`. Throws `ArgumentError` otherwise — a value far outside this band
 almost always means an SI quantity leaked in where a per-unit value was expected.
+
+Uses an explicit `throw` (not `@assert`) so the tripwire is never elided under
+`-O`/`--check-bounds=no`, matching `topology.jl`'s convention (WR-02).
 """
 function assert_magnitudes_voltage(v)
-    @assert VOLTAGE_PU_MIN ≤ v ≤ VOLTAGE_PU_MAX (
+    VOLTAGE_PU_MIN ≤ v ≤ VOLTAGE_PU_MAX || throw(ArgumentError(
         "voltage $v pu out of per-unit sanity band [$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] " *
-        "— check SI/pu conversion at ingestion"
-    )
+        "— check SI/pu conversion at ingestion"))
     return nothing
 end
 
@@ -70,32 +74,31 @@ end
 Loud magnitude tripwires over a constructed feeder (INFRA-05). Verifies every
 bus voltage bound is in `[0.8, 1.2]` and ordered, every branch per-unit impedance
 is `0 ≤ r,x < 5`, and every branch apparent-power limit is `0 < smax < 100`.
-Throws `AssertionError` (naming the offending bus/branch) on any out-of-band
+Throws `ArgumentError` (naming the offending bus/branch) on any out-of-band
 quantity.
+
+Uses explicit `throw`s (not `@assert`) so the tripwires are never elided under
+`-O`/`--check-bounds=no`, matching `topology.jl`'s convention (WR-02).
 
 Untyped on purpose: `Feeder` is defined in `data/Feeder.jl`, which is included
 *after* this file, so this method is duck-typed and resolved at call time.
 """
 function assert_magnitudes(feeder)
     for bus in feeder.buses
-        @assert VOLTAGE_PU_MIN ≤ bus.vmin ≤ bus.vmax ≤ VOLTAGE_PU_MAX (
+        VOLTAGE_PU_MIN ≤ bus.vmin ≤ bus.vmax ≤ VOLTAGE_PU_MAX || throw(ArgumentError(
             "voltage bounds [$(bus.vmin), $(bus.vmax)] out of per-unit band " *
-            "[$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] (or unordered) at bus $(bus.id)"
-        )
+            "[$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] (or unordered) at bus $(bus.id)"))
     end
     for br in feeder.branches
-        @assert 0 ≤ br.r < IMPEDANCE_PU_MAX (
+        0 ≤ br.r < IMPEDANCE_PU_MAX || throw(ArgumentError(
             "per-unit resistance $(br.r) implausible on branch $(br.from)->$(br.to) " *
-            "(expected 0 ≤ r < $(IMPEDANCE_PU_MAX); is it in Ω?)"
-        )
-        @assert 0 ≤ br.x < IMPEDANCE_PU_MAX (
+            "(expected 0 ≤ r < $(IMPEDANCE_PU_MAX); is it in Ω?)"))
+        0 ≤ br.x < IMPEDANCE_PU_MAX || throw(ArgumentError(
             "per-unit reactance $(br.x) implausible on branch $(br.from)->$(br.to) " *
-            "(expected 0 ≤ x < $(IMPEDANCE_PU_MAX); is it in Ω?)"
-        )
-        @assert 0 < br.smax < SMAX_PU_MAX (
+            "(expected 0 ≤ x < $(IMPEDANCE_PU_MAX); is it in Ω?)"))
+        0 < br.smax < SMAX_PU_MAX || throw(ArgumentError(
             "per-unit power limit $(br.smax) out of band on branch $(br.from)->$(br.to) " *
-            "(expected 0 < smax < $(SMAX_PU_MAX))"
-        )
+            "(expected 0 < smax < $(SMAX_PU_MAX))"))
     end
     return nothing
 end
