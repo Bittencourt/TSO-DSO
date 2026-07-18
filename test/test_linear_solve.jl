@@ -85,3 +85,24 @@ end
         λ₀ = [2.0],
     )
 end
+
+# Seam: models/linear_solve.jl — WR-02. A λ₀ whose length disagrees with T must fail at
+# the boundary with a clear message, not silently work only at T=1 (scalar) or BoundsError
+# deep in objective assembly (short vector).
+@testitem "linear: λ₀ length mismatch against T throws (WR-02)" tags = [:linear] begin
+    using TSODSO, JuMP
+
+    buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
+    branches = [TSODSO.Branch(1, 2, 0.01, 0.01, 10.0)]
+    feeder = TSODSO.Feeder(buses, branches, 1)
+    load = TSODSO.Interruptible(2, 0.0, 5.0, 4.0, 1.0)
+
+    # T = 2 but a single-element λ₀: length mismatch must throw up front.
+    @test_throws ArgumentError TSODSO.solve_linear(
+        feeder,
+        TSODSO.LinDistFlow(),
+        [load];
+        T = 2,
+        λ₀ = [2.0],
+    )
+end

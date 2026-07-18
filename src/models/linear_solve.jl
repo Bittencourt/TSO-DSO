@@ -61,6 +61,12 @@ function solve_linear(
     isempty(devices) &&
         throw(ArgumentError("solve_linear needs at least one device (the priced load)"))
 
+    # WR-02: λ₀ is consumed as `λ₀[t]` for t = 1:T. A shorter vector `BoundsError`s deep in
+    # objective assembly; a SCALAR λ₀ silently "works" only at T=1 and breaks for T>1. For
+    # a reproducible bench a shape mismatch must fail at the boundary with a clear message.
+    length(λ₀) == T ||
+        throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+
     model = Model(select_optimizer(QP()))   # concave-quad utility ⇒ QP factory backend (INFRA-02)
     ctx = ModelContext(model)
     ctx.meta[:feeder] = feeder
