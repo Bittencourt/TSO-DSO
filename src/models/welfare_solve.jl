@@ -6,10 +6,12 @@
 # Generalizes `linear_solve.jl` to a multi-aggregator centralized welfare
 # maximization over the Phase-2 LinDistFlow model at horizon T=24 (thesis eq.
 # 3.38). Assembles each aggregator's :Rp/:Rq injections and utility, adds a
-# non-negative priced frontier import p_import[t] and a FREE-SIGN reactive frontier
-# q_import[t] at feeder.root (the WR-03 fix -- without it, pinning :Rq at every bus
-# with reactive load present is infeasible), closes the nodal-balance residuals to
-# zero, and maximizes welfare = sum(aggregator utility) - sum_t lambda0[t]*p_import[t]
+# non-negative priced frontier import p_import[t] and -- only when the formulation
+# provides a reactive channel (WR-03) -- a FREE-SIGN reactive frontier q_import[t] at
+# feeder.root (without it, pinning :Rq at every bus with reactive load present is
+# infeasible; a DC active-only run has no reactive channel, so aggregator reactive
+# terms are left unclosed), closes the nodal-balance residuals to zero, and
+# maximizes welfare = sum(aggregator utility) - sum_t lambda0[t]*p_import[t]
 # as a convex QP via `select_optimizer(QP())` (no model names a concrete solver).
 # Gated on OPTIMAL via `assert_solved!`, then runs the mandatory post-solve battery
 # complementarity check (p_ch*p_dch < tau, App. C). Because every device utility is
@@ -37,15 +39,18 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
    `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`) and each aggregator `contribute!`
    its net active/reactive injections into `:Rp`/`:Rq` plus its summed utility into
    `ctx.meta[:objective]`;
-4. injects a priced active frontier import `p_import[t] ≥ 0` AND — the WR-03 FIX — a
-   FREE-SIGN reactive frontier import `q_import[t]` (no lower bound) at `feeder.root`,
-   stashed under `ctx.meta[:p_import]`/`ctx.meta[:q_import]`, BOTH BEFORE closing the
-   residuals. Without the free-sign `q_import`, pinning `:Rq` at every bus with a
-   reactive load present is INFEASIBLE (or silently zeroes the reactive draw) — the
-   MEM/substation supplies reactive power at the frontier (RESEARCH Pitfall 2);
-5. closes EVERY residual present — `:Rp` always, `:Rq` only when
-   `haskey(ctx.residuals, :Rq)`. This keys off the registry CONTENTS, not a formulation
-   flag, so swapping DC↔LinDistFlow changes only which residuals exist. Both closures are
+4. injects a priced active frontier import `p_import[t] ≥ 0` at `feeder.root` (stashed
+   under `ctx.meta[:p_import]`) and — ONLY when the formulation provides a reactive channel
+   (WR-03) — a FREE-SIGN reactive frontier import `q_import[t]` (no lower bound, stashed
+   under `ctx.meta[:q_import]`), BOTH BEFORE closing the residuals. Without the free-sign
+   `q_import`, pinning `:Rq` at every bus with a reactive load present is INFEASIBLE (or
+   silently zeroes the reactive draw) — the MEM/substation supplies reactive power at the
+   frontier (RESEARCH Pitfall 2);
+5. closes `:Rp` always and `:Rq` only when the POWER-FLOW FORMULATION provides a reactive
+   channel — captured as `reactive = haskey(ctx.residuals, :Rq)` RIGHT AFTER the
+   formulation contributes and BEFORE any aggregator writes (WR-03). This keys off the
+   formulation's capability, not a formulation flag: LinDistFlow closes `:Rq`; a DC
+   (active-only) run leaves any aggregator reactive terms unclosed. Both closures are
    registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
 6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
 7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
@@ -97,32 +102,54 @@ function solve_welfare(
 
     # Formulation: branch/voltage terms into :Rp (and :Rq for LinDistFlow).
     contribute!(pf, ctx, feeder; T = T)
+
+    # WR-03: whether a REACTIVE channel exists is decided by the POWER-FLOW FORMULATION,
+    # not by the aggregators. Capture it HERE — right after the formulation contributes but
+    # BEFORE any aggregator writes — so it reflects the formulation's capability alone:
+    # LinDistFlow allocates :Rq (reactive modeled); DCPowerFlow is active-only and never
+    # does. Keying off this (rather than off `haskey(ctx.residuals, :Rq)` after the
+    # aggregators have run) is what makes the DC↔LinDistFlow interchange sound: an
+    # aggregator ALWAYS emits its reactive term, but on a DC network there is no reactive
+    # channel to balance it, so those terms are simply not assembled (a DC study models
+    # active power only). Without this, a DCPowerFlow + reactive-aggregator run pinned :Rq
+    # to zero at every non-root load bus and was INFEASIBLE. This is a data-driven seam —
+    # no `if formulation ==` branching.
+    reactive = haskey(ctx.residuals, :Rq)
+
     # Aggregators: net active/reactive injections into :Rp/:Rq + summed utility into
-    # ctx.meta[:objective]. Each aggregator is the sole :Rp/:Rq writer at its bus.
+    # ctx.meta[:objective]. Each aggregator is the sole :Rp/:Rq writer at its bus. (On a DC
+    # run the aggregators still write :Rq, but it is left unclosed below — active-only.)
     for agg in aggregators
         contribute!(agg, ctx; T = T)
     end
 
     # Frontier imports at the root, injected BEFORE closing the residuals. p_import is
-    # priced and non-negative (active draw from the MEM); q_import is FREE-SIGN (the WR-03
-    # fix) so the reactive load closes feasibly instead of forcing Q ≡ 0.
+    # priced and non-negative (active draw from the MEM). q_import is FREE-SIGN so the
+    # reactive load closes feasibly instead of forcing Q ≡ 0 — added ONLY when the
+    # formulation provides a reactive channel (WR-03; a DC run has no reactive balance).
     @variable(model, p_import[t = 1:T] >= 0)         # priced active frontier import
-    @variable(model, q_import[t = 1:T])              # WR-03 FIX: free-sign reactive import
     for t in 1:T
         add_to_residual!(ctx, :Rp, feeder.root, t, p_import[t])
-        add_to_residual!(ctx, :Rq, feeder.root, t, q_import[t])
     end
     ctx.meta[:p_import] = p_import
-    ctx.meta[:q_import] = q_import
+    if reactive
+        @variable(model, q_import[t = 1:T])          # free-sign reactive frontier import
+        for t in 1:T
+            add_to_residual!(ctx, :Rq, feeder.root, t, q_import[t])
+        end
+        ctx.meta[:q_import] = q_import
+    end
 
-    # Close EVERY residual present — DATA-DRIVEN on registry CONTENTS, never a formulation
-    # flag. :Rp is always populated; :Rq only when the formulation/aggregators wrote it.
+    # Close the residuals. :Rp is always populated and always closed. :Rq is closed ONLY
+    # when the FORMULATION provides a reactive channel (`reactive`) — DATA-DRIVEN on the
+    # formulation's capability, never a formulation flag. On a DC run any aggregator :Rq
+    # terms remain unclosed (reactive is out of scope for an active-only model).
     size(ctx.residuals[:Rp]) == (Np, T) || error(
         "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($Np, $T) — an index escaped the feeder",
     )
     @constraint(model, balance_p[j = 1:Np, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
     register_constraint!(ctx, :balance_p, balance_p)          # dual = λ_j (DADP)
-    if haskey(ctx.residuals, :Rq)
+    if reactive
         size(ctx.residuals[:Rq]) == (Np, T) || error(
             "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($Np, $T) — an index escaped the feeder",
         )

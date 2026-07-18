@@ -26,7 +26,8 @@ it schedules continuous charge `p_ch[t] ≥ 0`, discharge `p_dch[t] ≥ 0`, and
 state-of-charge `soc[t]`, subject to (thesis eqs. 3.6-3.9):
 
     soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (3.6)
-    0 ≤ p_ch[t] ≤ Ppv[t]                                    # PV-limited charge (3.7, A6)
+    0 ≤ pv_used[t] ≤ Ppv[t]                                 # curtailable PV (WR-04)
+    0 ≤ p_ch[t] ≤ pv_used[t]                                # PV-limited charge (3.7, A6)
     0 ≤ p_ch[t], p_dch[t] ≤ Pmax                            # power bounds (3.8)
     Emin ≤ soc[t] ≤ Emax ;  soc[1] = soc0                   # SOC band + IC (3.9)
 
@@ -42,14 +43,17 @@ coefficients are the App. C parametrization (eqs. 3.15-3.20):
 
 There is **no** binary and **no** `p_ch·p_dch == 0` complementarity constraint — adding
 one would break QP convexity and destroy the duals Phase-5 pricing relies on. Instead,
-with `λ_min ≤ λ_med ≤ λ_max` the marginal charge benefit
+with the **strict** ordering `λ_min < λ_med < λ_max` the marginal charge benefit
 `∂U_ch/∂p_ch = λ_med − b_ch·p_ch ≤ λ_med` never exceeds the marginal discharge cost
 `∂C_dch/∂p_dch = λ_med + b_dch·p_dch ≥ λ_med`, so any round-trip through the battery is
-(weakly) non-improving and, with round-trip efficiency `η² < 1`, strictly wasteful. Hence
-the optimum has `p_ch[t]·p_dch[t] = 0` for every `t` **without** any complementarity
-constraint. Because correctness rests entirely on this parametrization (the
-`λ_min ≤ λ_med ≤ λ_max` inner-constructor guard is the load-bearing invariant), it is a
-HARD requirement to VERIFY it numerically after every solve:
+non-improving and, with round-trip efficiency `η² < 1`, strictly wasteful. Hence the
+optimum has `p_ch[t]·p_dch[t] = 0` for every `t` **without** any complementarity
+constraint. The ordering must be STRICT (CR-01): a non-strict ordering zeroes a utility
+curvature (`b_ch` or `b_dch = 0`), which flattens the dominance to a tie and admits
+SOC-draining `p_ch·p_dch > 0` co-optima that break the post-solve check. Because
+correctness rests entirely on this parametrization (the strict `λ_min < λ_med < λ_max`
+inner-constructor guard is the load-bearing invariant), it is a HARD requirement to VERIFY
+it numerically after every solve:
 `value(p_ch[t])·value(p_dch[t]) < τ` (RESEARCH Pitfall 1, threat T-03-09).
 
 # Aggregatable-device contract (LOCKED: aggregator-as-writer)
@@ -68,13 +72,16 @@ writer and the utility roll-up point.
 - `Pmax::T`    — charge/discharge power bound (3.8), `Pmax > 0`.
 - `Emin::T`, `Emax::T` — SOC band (3.9).
 - `soc0::T`    — initial state of charge, `Emin ≤ soc0 ≤ Emax` (3.9 IC).
-- `λ_min::T`, `λ_med::T`, `λ_max::T` — App. C price triple; `λ_min ≤ λ_med ≤ λ_max` is the
-  sufficient condition for `p_ch·p_dch = 0` (the load-bearing guard, threat T-03-09).
-- `Ppv::Vector{T}` — per-step PV-availability profile (pu power); `p_ch[t] ≤ Ppv[t]` (3.7,
-  Assumption A6: the battery charges from PV only, not the grid). Must have `length ≥ T`.
+- `λ_min::T`, `λ_med::T`, `λ_max::T` — App. C price triple; the **strict** ordering
+  `λ_min < λ_med < λ_max` is the sufficient condition for `p_ch·p_dch = 0` (the
+  load-bearing guard, threat T-03-09; strictness is required — see CR-01 note above).
+- `Ppv::Vector{T}` — per-step PV-availability profile (pu power); the used PV satisfies
+  `0 ≤ pv_used[t] ≤ Ppv[t]` (curtailable, WR-04) and the charge draws from it
+  `p_ch[t] ≤ pv_used[t]` (3.7, Assumption A6: the battery charges from PV only, not the
+  grid). Must have `length ≥ T`.
 
-Construction throws `ArgumentError` unless `λ_min ≤ λ_med ≤ λ_max` (App. C guard),
-`Pmax > 0`, `η ∈ (0,1]`, and `Emin ≤ soc0 ≤ Emax`.
+Construction throws `ArgumentError` unless `λ_min < λ_med < λ_max` (strict App. C guard,
+CR-01), `Pmax > 0`, `η ∈ (0,1]`, and `Emin ≤ soc0 ≤ Emax`.
 """
 struct PVBattery{T<:Real} <: AbstractDevice
     bus::Int
@@ -102,16 +109,22 @@ struct PVBattery{T<:Real} <: AbstractDevice
         λ_max::T,
         Ppv::Vector{T},
     ) where {T<:Real}
-        # App. C sufficient condition (the load-bearing guard, threat T-03-09): with the
-        # price triple ordered, the charge-utility marginal (≤ λ_med) never beats the
-        # discharge-cost marginal (≥ λ_med), so p_ch·p_dch = 0 holds at the optimum with
-        # NO binary/complementarity constraint. Reject LOUDLY otherwise (project
-        # convention: throw, never @assert — @assert can be elided under -O).
-        if !(λ_min <= λ_med <= λ_max)
+        # App. C sufficient condition (the load-bearing guard, threat T-03-09): the
+        # ordering must be STRICT (λ_min < λ_med < λ_max). CR-01: a non-strict ordering
+        # (any equality) collapses a utility curvature to zero (b_ch or b_dch = 0), which
+        # with η² < 1 admits SOC-draining co-optima where the charge-utility marginal
+        # (≤ λ_med) exactly TIES the discharge-cost marginal (≥ λ_med), so p_ch·p_dch > 0
+        # can occur at an optimum and the mandatory post-solve p_ch·p_dch < τ check breaks.
+        # Only the STRICT ordering makes simultaneous charge/discharge STRICTLY dominated
+        # (hence p_ch·p_dch = 0 with NO binary/complementarity constraint). Reject LOUDLY
+        # otherwise (project convention: throw, never @assert — @assert elides under -O).
+        if !(λ_min < λ_med < λ_max)
             throw(
                 ArgumentError(
-                    "PVBattery requires λ_min ≤ λ_med ≤ λ_max (App. C no-binary sufficient " *
-                    "condition, pp. 166-168); got λ_min=$λ_min, λ_med=$λ_med, λ_max=$λ_max",
+                    "PVBattery requires STRICT λ_min < λ_med < λ_max (App. C no-binary " *
+                    "sufficient condition, pp. 166-168; a non-strict ordering zeroes a " *
+                    "utility curvature and admits p_ch·p_dch > 0 co-optima); got " *
+                    "λ_min=$λ_min, λ_med=$λ_med, λ_max=$λ_max",
                 ),
             )
         end
@@ -202,17 +215,19 @@ constraints on `ctx.model` but writes NOTHING to `ctx.residuals` and calls NO
 `add_to_objective!`. Instead it RETURNS `(; vars, p_inject, utility)` for the `Aggregator`
 (DEV-05) to roll up.
 
-It creates continuous `0 ≤ p_ch[t], p_dch[t] ≤ Pmax` and `Emin ≤ soc[t] ≤ Emax` — and
-**no** binary/integer variable — then adds the SOC recursion (3.6), the PV-limited charge
-`p_ch[t] ≤ Ppv[t]` (3.7, requires `length(Ppv) ≥ T`), the SOC band + IC `soc[1] == soc0`
-(3.9), and the App. C utility (3.15-3.20). It adds NO `p_ch·p_dch == 0` constraint —
-App. C (pp. 166-168) makes it unnecessary; the caller MUST verify `p_ch·p_dch < τ`
-numerically post-solve.
+It creates continuous `0 ≤ p_ch[t], p_dch[t] ≤ Pmax`, `Emin ≤ soc[t] ≤ Emax`, and the
+curtailable PV `0 ≤ pv_used[t] ≤ Ppv[t]` (WR-04) — and **no** binary/integer variable —
+then adds the SOC recursion (3.6), the PV-limited charge `p_ch[t] ≤ pv_used[t]` (3.7,
+charge from non-curtailed PV, requires `length(Ppv) ≥ T`), the SOC band + IC
+`soc[1] == soc0` (3.9), and the App. C utility (3.15-3.20). It adds NO `p_ch·p_dch == 0`
+constraint — App. C (pp. 166-168) makes it unnecessary; the caller MUST verify
+`p_ch·p_dch < τ` numerically post-solve.
 
-Returns `(; vars = (; p_ch, p_dch, soc), p_inject, utility)` where
-`p_inject[t] = Ppv[t] − p_ch[t] + p_dch[t]` (PV export − charge draw + discharge) is a
-`Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex discharge
-cost).
+Returns `(; vars = (; p_ch, p_dch, soc, pv_used), p_inject, utility)` where
+`p_inject[t] = pv_used[t] − p_ch[t] + p_dch[t]` (used-PV export − charge draw + discharge)
+is a `Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex
+discharge cost). The `pv_used` curtailment (WR-04) lets surplus PV be dumped rather than
+forcing a high-PV scenario infeasible (there is no export sink at the priced frontier).
 """
 function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     length(d.Ppv) >= T || throw(
@@ -227,6 +242,12 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)   # (3.8)
     p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)  # (3.8)
     soc = @variable(m, [t = 1:T], lower_bound = d.Emin, upper_bound = d.Emax) # (3.9)
+    # WR-04 PV curtailment: the amount of the available PV `Ppv[t]` actually used (exported
+    # or charged), `0 ≤ pv_used[t] ≤ Ppv[t]`. Without this, PV was a fixed MUST-TAKE
+    # injection `Ppv[t]` with no curtailment and no export sink, so a high-PV/surplus
+    # scenario (the frontier import is non-negative, i.e. no export) went INFEASIBLE with no
+    # recourse. Curtailment lets the surplus be dumped instead (thesis-consistent).
+    pv_used = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Ppv[t])
 
     @constraint(m, soc[1] == d.soc0)                                          # (3.9 IC)
     if T > 1
@@ -237,12 +258,14 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
             soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
         )
     end
-    # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid).
-    @constraint(m, [t = 1:T], p_ch[t] <= d.Ppv[t])
+    # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid). WR-04:
+    # the battery charges from the NON-curtailed PV, so the bound is `pv_used` (≤ Ppv[t]),
+    # keeping the charge-from-PV-only invariant while allowing surplus PV to be curtailed.
+    @constraint(m, [t = 1:T], p_ch[t] <= pv_used[t])
 
     # App. C utility parametrization (3.15-3.20): concave charge utility, convex discharge
-    # cost. b_ch, b_dch ≥ 0 follow from λ_min ≤ λ_med ≤ λ_max (constructor guard); the
-    # strict ordering makes them > 0 and the p_ch·p_dch = 0 dominance strict.
+    # cost. The STRICT λ_min < λ_med < λ_max constructor guard (CR-01) makes b_ch, b_dch > 0,
+    # so the p_ch·p_dch = 0 dominance is strict (no tie/co-optima).
     a_ch = d.λ_med
     b_ch = (d.λ_med - d.λ_min) / d.Pmax                                       # (3.17-3.18)
     a_dch = d.λ_med
@@ -258,11 +281,12 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
         )
     )
 
-    # Signed active injection at the device's bus (for the Aggregator's :Rp): PV export is
-    # positive, the charge draw is a withdrawal (−p_ch), discharge is a source (+p_dch).
-    p_inject = [d.Ppv[t] - p_ch[t] + p_dch[t] for t in 1:T]
+    # Signed active injection at the device's bus (for the Aggregator's :Rp): the USED
+    # (non-curtailed) PV export is positive (WR-04), the charge draw is a withdrawal
+    # (−p_ch), discharge is a source (+p_dch).
+    p_inject = [pv_used[t] - p_ch[t] + p_dch[t] for t in 1:T]
 
-    return (; vars = (; p_ch, p_dch, soc), p_inject, utility)
+    return (; vars = (; p_ch, p_dch, soc, pv_used), p_inject, utility)
 end
 
 export PVBattery

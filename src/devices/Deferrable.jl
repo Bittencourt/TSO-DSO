@@ -19,28 +19,35 @@ using JuMP
 """
     Deferrable{T<:Real} <: AbstractDevice
 
-A deferrable / shiftable flexible load (DEV-02): a task (washer, EV charge) that must draw
-a fixed energy budget `E` somewhere inside a contiguous time window `[t_start, t_end]`,
+A deferrable / shiftable flexible load (DEV-02): a task (washer, EV charge) that draws up
+to an energy budget `E` somewhere inside a contiguous time window `[t_start, t_end]`,
 drawing zero outside it (thesis eqs. 3.4–3.5)
 
-    Σ_{t ∈ [t_start, t_end]} p[t] == E ,    0 ≤ p[t] ≤ Pmax  (t in window),  p[t] = 0 (else)
+    Σ_{t ∈ [t_start, t_end]} p[t] ≤ E ,    0 ≤ p[t] ≤ Pmax  (t in window),  p[t] = 0 (else)
 
 and derives the concave-quadratic utility (eq. 3.12, constant `c` dropped — RESEARCH A5)
 
     U(p) = − (b/2)·( Σ_{t ∈ window} p[t] − E )²                             (3.12)
 
-The strictly-positive curvature `b > 0` keeps `U` concave, so the assembled welfare stays
-a convex QP. On the feasible set the budget equality is met exactly, so this utility is a
-soft target consistent with 3.12 (with `E` in the role of the thesis `E_max`); a pure
-deferrable load is indifferent to *when* it runs so long as the budget is met inside the
-window, which this captures. All quantities are in the single model per-unit system.
+The budget is an INEQUALITY upper bound (thesis eq. 3.4 `E_min ≤ Σ p ≤ E_max`, here with
+`E` in the role of `E_max` and `E_min = 0`), NOT a hard equality (WR-01). This is what
+makes the utility a LIVE soft target: `U` peaks at `Σ p = E` and penalizes consuming less,
+so the load reaches the budget when energy is cheap but backs off (Σ p < E) when the
+network price is high. The strictly-positive curvature `b > 0` keeps `U` concave (welfare
+stays a convex QP) AND sets how strongly the load insists on reaching `E` versus saving
+money — with the earlier hard equality `Σ p == E`, `U ≡ 0` on the feasible set and `b` was
+a dead parameter. A deferrable load is indifferent to *when* it runs within the window (the
+utility depends only on the total), which this still captures. All quantities are in the
+single model per-unit system.
 
 # Fields
 - `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
   it never sees the network object — network-agnostic, DEV-05).
 - `t_start::Int`, `t_end::Int` — inclusive window bounds (eq. 3.5 `T_{h,d}`); require
   `1 ≤ t_start ≤ t_end`.
-- `E::T` — energy budget over the window (eq. 3.4); require `0 ≤ E ≤ Pmax·(t_end−t_start+1)`.
+- `E::T` — energy-budget target over the window (thesis `E_max`, eq. 3.4); the total draw
+  satisfies `Σ p ≤ E` and the utility peaks at `Σ p = E`; require
+  `0 ≤ E ≤ Pmax·(t_end−t_start+1)`.
 - `Pmax::T` — per-hour power bound (eq. 3.5).
 - `b::T` — utility curvature, `b > 0` required for concavity (eq. 3.12).
 
@@ -124,8 +131,10 @@ conforming to the Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer, DE
    fits the horizon (`t_end ≤ T`, throwing `ArgumentError` otherwise — the
    temporal-infeasibility guard, threat T-03-07);
 2. adds the energy-within-window budget coupling constraint
-   `Σ_{t ∈ [t_start,t_end]} p[t] == E` (eqs. 3.4–3.5) — the inter-temporal coupling; and
-3. builds the concave-quadratic utility `− (b/2)·(Σ p[t] − E)²` (eq. 3.12) as a `QuadExpr`.
+   `Σ_{t ∈ [t_start,t_end]} p[t] ≤ E` (thesis eq. 3.4, an inequality upper bound — WR-01,
+   NOT an equality) — the inter-temporal coupling; and
+3. builds the concave-quadratic utility `− (b/2)·(Σ p[t] − E)²` (eq. 3.12) as a `QuadExpr`,
+   a LIVE soft target at `E` now that the budget above is an inequality.
 
 It then RETURNS `(; vars = (; p), p_inject, utility)` where `p_inject[t] = −p[t]` is the
 signed ACTIVE injection (a consumed load is a NEGATIVE injection, matching the
@@ -154,11 +163,20 @@ function contribute!(d::Deferrable, ctx::ModelContext; T::Int)
         upper_bound = (d.t_start <= t <= d.t_end ? d.Pmax : 0.0),
     )
 
-    # Energy-within-window budget (thesis eqs. 3.4–3.5) — the inter-temporal coupling.
-    @constraint(m, sum(p[t] for t in d.t_start:d.t_end) == d.E)
+    # Energy-within-window budget (thesis eq. 3.4) — the inter-temporal coupling. WR-01: it
+    # is an INEQUALITY UPPER bound `Σ p ≤ E` (E in the role of the thesis `E_max`, with the
+    # `E_min` lower bound taken as 0), NOT a hard equality. The earlier `Σ p == E` pinned
+    # the total, so the soft utility below was identically 0 on the feasible set and `b` was
+    # a DEAD parameter. With the inequality the load can consume LESS than E when prices are
+    # high, and the utility (which peaks at Σ p = E) makes that trade-off — so `b` genuinely
+    # shapes the solution (eq. 3.12).
+    @constraint(m, sum(p[t] for t in d.t_start:d.t_end) <= d.E)
 
-    # Concave-quadratic utility (eq. 3.12, constant c dropped — RESEARCH A5). The negative
-    # semidefinite quadratic form keeps it concave; built as a QuadExpr so curvature holds.
+    # Concave-quadratic utility (eq. 3.12, constant c dropped — RESEARCH A5): a soft target
+    # at `E` (thesis `E_max`). The negative semidefinite quadratic form keeps it concave;
+    # built as a QuadExpr so curvature holds. Because the budget above is now an inequality,
+    # this term is a LIVE preference (0 only when the load actually reaches Σ p = E), so `b`
+    # trades reaching the target against the price the network charges for consumption.
     utility = -(d.b / 2) * (sum(p[t] for t in d.t_start:d.t_end) - d.E)^2
 
     # Signed ACTIVE injection: a deferrable task is a load ⇒ NEGATIVE injection −p

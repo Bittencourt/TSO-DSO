@@ -37,6 +37,19 @@ end
     # Power-bound inconsistency (Pmax < Pmin) rejected.
     @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 22.0, 5.0, 0.0, 1.0, Tout)
 
+    # WR-02 physical-sign guards on the recursion (eq. 3.2 Tin[t+1]=Tin[t]+α(Tout−Tin)−β·p):
+    #   α ≥ 0 (a negative ambient coupling reverses heat flow — non-physical).
+    @test_throws ArgumentError TSODSO.Thermostatic(3, -0.2, 0.5, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, Tout)
+    #   β > 0 so power COOLS via −β·p (β ≤ 0 silently flips the sign so power would heat).
+    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, -0.5, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, Tout) # β < 0
+    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.0, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, Tout)  # β == 0
+
+    # WR-02 comfort-band IC guard (mirrors PVBattery soc0): Tin0 must start inside [Tmin,Tmax].
+    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 19.0, 0.0, 5.0, 1.0, Tout) # Tin0 < Tmin
+    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 25.0, 0.0, 5.0, 1.0, Tout) # Tin0 > Tmax
+    # A boundary Tin0 exactly on the band edge is admissible (closed band).
+    @test TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 20.0, 0.0, 5.0, 1.0, Tout) isa TSODSO.Thermostatic
+
     # IN-01 promotion: a mixed-type call (integer among Float64s) promotes rather than MethodError.
     mixed = TSODSO.Thermostatic(3, 0, 0.5, 20.0, 24.0, 22.0, 0, 5.0, 1.0, Tout)
     @test mixed isa TSODSO.Thermostatic{Float64}
