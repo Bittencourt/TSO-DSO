@@ -7,6 +7,9 @@
 /docs/build/
 /docs/site/
 
+# Literate-generated markdown (regenerated from docs/literate/*.jl by docs/make.jl)
+/docs/src/generated/
+
 # Coverage artifacts
 *.jl.cov
 *.jl.*.cov
