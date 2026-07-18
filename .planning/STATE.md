@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: ROADMAP.md + STATE.md written; REQUIREMENTS.md traceability updated (35/35 v1 requirements mapped)
-last_updated: "2026-07-18T15:50:41.589Z"
-last_activity: 2026-07-18 -- Phase 01 execution started
+last_updated: "2026-07-18T18:26:21.275Z"
+last_activity: 2026-07-18 -- Phase 02 execution started
 progress:
   total_phases: 9
-  completed_phases: 0
-  total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 8
+  completed_plans: 4
+  percent: 11
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 01 — plumbing-solver-abstraction
+**Current focus:** Phase 02 — linear-branch-flow-residual-seam
 
 ## Current Position
 
-Phase: 01 (plumbing-solver-abstraction) — EXECUTING
+Phase: 02 (linear-branch-flow-residual-seam) — EXECUTING
 Plan: 1 of 4
-Status: Executing Phase 01
-Last activity: 2026-07-18 -- Phase 01 execution started
+Status: Executing Phase 02
+Last activity: 2026-07-18 -- Phase 02 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
