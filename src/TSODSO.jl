@@ -29,7 +29,16 @@ include("core/status.jl")
 # --- Power-flow interface (owned by plan 01-03, PF-01) ---
 include("powerflow/AbstractPowerFlow.jl")
 
-# --- Models (owned by plan 01-04, rung 0 integration) ---
+# --- Power-flow formulations (owned by plan 02-02, PF-02) ---
+include("powerflow/DCPowerFlow.jl")
+include("powerflow/LinDistFlow.jl")
+
+# --- Devices (owned by plan 02-03, DEV-03) ---
+include("devices/AbstractDevice.jl")
+include("devices/Interruptible.jl")
+
+# --- Models (owned by plan 01-04 rung 0 / plan 02-04 rung 1 integration) ---
 include("models/toy_dc.jl")
+include("models/linear_solve.jl")
 
 end # module TSODSO
