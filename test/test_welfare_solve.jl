@@ -126,3 +126,41 @@ end
         @test value(v.p_ch[t]) * value(v.p_dch[t]) < 1e-6
     end
 end
+
+@testitem "welfare: high-PV surplus is curtailed rather than infeasible (WR-04, DEV-04)" tags = [
+    :welfare,
+    :battery,
+] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    T = 3
+    # A 2-bus radial feeder: root/MEM frontier (bus 1) + one load bus (bus 2).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+
+    Pdc = fill(0.1, T)          # small inelastic load
+    λ₀ = fill(40.0, T)
+    Ppv = fill(100.0, T)        # MASSIVE PV — far beyond load or battery/storage capacity
+
+    # STRICT λ ordering (CR-01) for the no-binary guarantee; tiny Pmax/SOC so the battery
+    # cannot soak up the surplus — the ONLY recourse is PV curtailment.
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
+    agg = Aggregator(2, 0.9, [batt], Pdc)
+
+    # WR-04: PV is curtailable, so the surplus is dumped rather than forcing the
+    # (export-less, p_import ≥ 0) root balance INFEASIBLE. Without pv_used this solve had no
+    # recourse for the surplus and failed.
+    ctx, obj, _dadp = solve_welfare(feeder, LinDistFlow(), [agg]; T = T, λ₀ = λ₀)
+    @test isfinite(obj)
+
+    # The curtailment variable exists and BINDS: used PV is well below the available Ppv.
+    battery_vars = ctx.meta[:agg_device_vars][2][1]
+    @test haskey(battery_vars, :pv_used)
+    @test all(t -> value(battery_vars.pv_used[t]) <= Ppv[t] + 1e-6, 1:T)
+    @test any(t -> value(battery_vars.pv_used[t]) < Ppv[t] - 1e-3, 1:T)
+end

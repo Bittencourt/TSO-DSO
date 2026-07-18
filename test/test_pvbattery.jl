@@ -112,7 +112,11 @@ end
     # Adding a binary or complementarity constraint would break QP convexity + Phase-5
     # pricing. RESEARCH §Anti-Patterns forbids it — assert it never happened.
     vars = all_variables(model)
-    @test length(vars) == 3T                        # p_ch, p_dch, soc only
+    @test length(vars) == 4T                        # p_ch, p_dch, soc, pv_used (WR-04)
     @test count(is_binary, vars) == 0
     @test count(is_integer, vars) == 0
+
+    # WR-04: the curtailment variable exists and is available for surplus PV to be dumped.
+    @test haskey(res.vars, :pv_used)
+    @test length(res.vars.pv_used) == T
 end

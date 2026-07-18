@@ -26,7 +26,8 @@ it schedules continuous charge `p_ch[t] ≥ 0`, discharge `p_dch[t] ≥ 0`, and
 state-of-charge `soc[t]`, subject to (thesis eqs. 3.6-3.9):
 
     soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (3.6)
-    0 ≤ p_ch[t] ≤ Ppv[t]                                    # PV-limited charge (3.7, A6)
+    0 ≤ pv_used[t] ≤ Ppv[t]                                 # curtailable PV (WR-04)
+    0 ≤ p_ch[t] ≤ pv_used[t]                                # PV-limited charge (3.7, A6)
     0 ≤ p_ch[t], p_dch[t] ≤ Pmax                            # power bounds (3.8)
     Emin ≤ soc[t] ≤ Emax ;  soc[1] = soc0                   # SOC band + IC (3.9)
 
@@ -74,8 +75,10 @@ writer and the utility roll-up point.
 - `λ_min::T`, `λ_med::T`, `λ_max::T` — App. C price triple; the **strict** ordering
   `λ_min < λ_med < λ_max` is the sufficient condition for `p_ch·p_dch = 0` (the
   load-bearing guard, threat T-03-09; strictness is required — see CR-01 note above).
-- `Ppv::Vector{T}` — per-step PV-availability profile (pu power); `p_ch[t] ≤ Ppv[t]` (3.7,
-  Assumption A6: the battery charges from PV only, not the grid). Must have `length ≥ T`.
+- `Ppv::Vector{T}` — per-step PV-availability profile (pu power); the used PV satisfies
+  `0 ≤ pv_used[t] ≤ Ppv[t]` (curtailable, WR-04) and the charge draws from it
+  `p_ch[t] ≤ pv_used[t]` (3.7, Assumption A6: the battery charges from PV only, not the
+  grid). Must have `length ≥ T`.
 
 Construction throws `ArgumentError` unless `λ_min < λ_med < λ_max` (strict App. C guard,
 CR-01), `Pmax > 0`, `η ∈ (0,1]`, and `Emin ≤ soc0 ≤ Emax`.
@@ -212,17 +215,19 @@ constraints on `ctx.model` but writes NOTHING to `ctx.residuals` and calls NO
 `add_to_objective!`. Instead it RETURNS `(; vars, p_inject, utility)` for the `Aggregator`
 (DEV-05) to roll up.
 
-It creates continuous `0 ≤ p_ch[t], p_dch[t] ≤ Pmax` and `Emin ≤ soc[t] ≤ Emax` — and
-**no** binary/integer variable — then adds the SOC recursion (3.6), the PV-limited charge
-`p_ch[t] ≤ Ppv[t]` (3.7, requires `length(Ppv) ≥ T`), the SOC band + IC `soc[1] == soc0`
-(3.9), and the App. C utility (3.15-3.20). It adds NO `p_ch·p_dch == 0` constraint —
-App. C (pp. 166-168) makes it unnecessary; the caller MUST verify `p_ch·p_dch < τ`
-numerically post-solve.
+It creates continuous `0 ≤ p_ch[t], p_dch[t] ≤ Pmax`, `Emin ≤ soc[t] ≤ Emax`, and the
+curtailable PV `0 ≤ pv_used[t] ≤ Ppv[t]` (WR-04) — and **no** binary/integer variable —
+then adds the SOC recursion (3.6), the PV-limited charge `p_ch[t] ≤ pv_used[t]` (3.7,
+charge from non-curtailed PV, requires `length(Ppv) ≥ T`), the SOC band + IC
+`soc[1] == soc0` (3.9), and the App. C utility (3.15-3.20). It adds NO `p_ch·p_dch == 0`
+constraint — App. C (pp. 166-168) makes it unnecessary; the caller MUST verify
+`p_ch·p_dch < τ` numerically post-solve.
 
-Returns `(; vars = (; p_ch, p_dch, soc), p_inject, utility)` where
-`p_inject[t] = Ppv[t] − p_ch[t] + p_dch[t]` (PV export − charge draw + discharge) is a
-`Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex discharge
-cost).
+Returns `(; vars = (; p_ch, p_dch, soc, pv_used), p_inject, utility)` where
+`p_inject[t] = pv_used[t] − p_ch[t] + p_dch[t]` (used-PV export − charge draw + discharge)
+is a `Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex
+discharge cost). The `pv_used` curtailment (WR-04) lets surplus PV be dumped rather than
+forcing a high-PV scenario infeasible (there is no export sink at the priced frontier).
 """
 function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     length(d.Ppv) >= T || throw(
@@ -237,6 +242,12 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)   # (3.8)
     p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)  # (3.8)
     soc = @variable(m, [t = 1:T], lower_bound = d.Emin, upper_bound = d.Emax) # (3.9)
+    # WR-04 PV curtailment: the amount of the available PV `Ppv[t]` actually used (exported
+    # or charged), `0 ≤ pv_used[t] ≤ Ppv[t]`. Without this, PV was a fixed MUST-TAKE
+    # injection `Ppv[t]` with no curtailment and no export sink, so a high-PV/surplus
+    # scenario (the frontier import is non-negative, i.e. no export) went INFEASIBLE with no
+    # recourse. Curtailment lets the surplus be dumped instead (thesis-consistent).
+    pv_used = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Ppv[t])
 
     @constraint(m, soc[1] == d.soc0)                                          # (3.9 IC)
     if T > 1
@@ -247,8 +258,10 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
             soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
         )
     end
-    # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid).
-    @constraint(m, [t = 1:T], p_ch[t] <= d.Ppv[t])
+    # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid). WR-04:
+    # the battery charges from the NON-curtailed PV, so the bound is `pv_used` (≤ Ppv[t]),
+    # keeping the charge-from-PV-only invariant while allowing surplus PV to be curtailed.
+    @constraint(m, [t = 1:T], p_ch[t] <= pv_used[t])
 
     # App. C utility parametrization (3.15-3.20): concave charge utility, convex discharge
     # cost. The STRICT λ_min < λ_med < λ_max constructor guard (CR-01) makes b_ch, b_dch > 0,
@@ -268,11 +281,12 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
         )
     )
 
-    # Signed active injection at the device's bus (for the Aggregator's :Rp): PV export is
-    # positive, the charge draw is a withdrawal (−p_ch), discharge is a source (+p_dch).
-    p_inject = [d.Ppv[t] - p_ch[t] + p_dch[t] for t in 1:T]
+    # Signed active injection at the device's bus (for the Aggregator's :Rp): the USED
+    # (non-curtailed) PV export is positive (WR-04), the charge draw is a withdrawal
+    # (−p_ch), discharge is a source (+p_dch).
+    p_inject = [pv_used[t] - p_ch[t] + p_dch[t] for t in 1:T]
 
-    return (; vars = (; p_ch, p_dch, soc), p_inject, utility)
+    return (; vars = (; p_ch, p_dch, soc, pv_used), p_inject, utility)
 end
 
 export PVBattery
