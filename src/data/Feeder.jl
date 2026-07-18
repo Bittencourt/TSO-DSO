@@ -80,9 +80,9 @@ both construction invariants before returning:
   * `assert_radial(buses, branches, root)` — radial tree (DATA-02); and
   * `assert_magnitudes(feeder)` — per-unit magnitude sanity (INFRA-05).
 
-Throws `ArgumentError` on a non-tree feeder and `AssertionError` on out-of-band
-magnitudes. Both fire on this live path, so any downstream consumer (e.g. the
-walking-skeleton solve) inherits validated data for free.
+Throws `ArgumentError` on a non-tree feeder and (also `ArgumentError`) on
+out-of-band magnitudes. Both fire on this live path, so any downstream consumer
+(e.g. the walking-skeleton solve) inherits validated data for free.
 """
 Feeder(buses::Vector{Bus{T}}, branches::Vector{Branch{T}}, root::Integer) where {T<:Real} =
     Feeder{T}(buses, branches, Int(root))

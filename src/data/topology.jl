@@ -8,7 +8,9 @@
 # Validation runs at `Feeder` construction (see data/Feeder.jl) and a non-tree
 # feeder raises a clear `ArgumentError`. No Graphs.jl dependency: connectivity is
 # a ~15-line BFS over a hand-built adjacency list (RESEARCH "Don't Hand-Roll").
-# The sparse node-branch incidence is returned for reuse by the model layer.
+# The sparse node-branch incidence is returned as a convenience for callers that
+# want it; the `Feeder` constructor uses `assert_radial` for validation only and
+# does not store `A` (a later layer that needs incidence recomputes or caches it).
 #
 # Convention (Phase 1): bus `id` equals its 1-based position in `buses`, matching
 # the thesis fixtures; the incidence/adjacency are indexed by that position.
@@ -23,11 +25,13 @@ tree, throwing a clear `ArgumentError` otherwise. Checks, in order:
 
   1. `length(branches) == length(buses) - 1` (edge-count theorem);
   2. `root` is a valid bus index;
-  3. every bus is reachable from `root` via BFS (connectivity);
-  4. exactly one bus has `is_root == true`.
+  3. every `bus.id` equals its 1-based position (indexing convention);
+  4. every bus is reachable from `root` via BFS (connectivity);
+  5. exactly one bus has `is_root == true`;
+  6. the `root` index points at that single `is_root`-flagged bus.
 
 Returns the `N × B` sparse node-branch incidence matrix (`+1` at each branch's
-`from` node, `-1` at its `to` node) for reuse by the model layer.
+`from` node, `-1` at its `to` node).
 """
 function assert_radial(buses, branches, root)
     N, B = length(buses), length(branches)
@@ -40,6 +44,23 @@ function assert_radial(buses, branches, root)
     1 ≤ root ≤ N || throw(ArgumentError(
         "Feeder root $root is out of range 1:$N."))
 
+    # (3) Positional convention (WR-03): every `bus.id` MUST equal its 1-based
+    #     position. All incidence/adjacency indexing is BY POSITION, and the
+    #     framework assumes `bus.id` equals that position — a mislabeled or
+    #     reordered `buses` would index inconsistently with `bus.id` the moment
+    #     any later layer indexes by id, with no error (a silent-wrong hazard).
+    all(i -> buses[i].id == i, eachindex(buses)) || throw(ArgumentError(
+        "Bus ids must equal their 1-based position in `buses`."))
+
+    # Branch endpoints must reference real buses (IN-02). Checked explicitly here
+    # so an out-of-range endpoint gives a clear domain message instead of the
+    # cryptic "row index out of range" that `SparseArrays.sparse` would raise
+    # below (both are ArgumentError, so the exception-type contract is unchanged).
+    for (b, br) in enumerate(branches)
+        (1 ≤ br.from ≤ N && 1 ≤ br.to ≤ N) || throw(ArgumentError(
+            "Branch $b endpoints ($(br.from)->$(br.to)) out of range 1:$N."))
+    end
+
     # Sparse node-branch incidence: +1 at `from`, -1 at `to`.
     Irow = Int[]
     Jcol = Int[]
@@ -50,7 +71,7 @@ function assert_radial(buses, branches, root)
     end
     A = sparse(Irow, Jcol, Vval, N, B)
 
-    # (3) Connectivity: BFS from root over an undirected adjacency list.
+    # (4) Connectivity: BFS from root over an undirected adjacency list.
     #     connected ∧ (B == N-1) ⟺ tree, so no cycle detection is needed.
     adj = [Int[] for _ in 1:N]
     for br in branches
@@ -75,10 +96,18 @@ function assert_radial(buses, branches, root)
         "Non-radial feeder: graph is disconnected from root $root " *
         "($reached/$N buses reachable)."))
 
-    # (4) Exactly one designated frontier (root) bus.
+    # (5) Exactly one designated frontier (root) bus.
     nroots = count(b -> b.is_root, buses)
     nroots == 1 || throw(ArgumentError(
         "Feeder must have exactly one frontier (root) bus, got $nroots."))
+
+    # (6) The `root` index and the `is_root` flag must AGREE: the single flagged
+    #     bus must be the one at position `root`. Otherwise the stored frontier
+    #     index and the frontier flag silently disagree — a silent-wrong hazard
+    #     for any layer that reads `feeder.root` in one place and scans `is_root`
+    #     in another (WR-01).
+    buses[root].is_root || throw(ArgumentError(
+        "Feeder root index $root does not point to the is_root-flagged bus."))
 
     return A
 end

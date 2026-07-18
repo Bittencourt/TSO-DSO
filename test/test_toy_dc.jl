@@ -11,8 +11,16 @@
     ctx, obj, λ = TSODSO.solve_toy_dc(feeder)
 
     @test is_solved_and_feasible(ctx.model; allow_local = false)
-    @test isfinite(obj)
-    @test isfinite(λ)                       # nodal-balance dual (future DADP)
+
+    # Pin the KNOWN closed-form optimum, not just finiteness (WR-04): welfare is
+    # `3·p_load - 1·p_import` with `p_load` capped at 1.0 and the nodal balance
+    # forcing `p_import == p_load`, so the optimum is p_load = p_import = 1.0,
+    # giving obj = 3·1 - 1·1 = 2.0 and dual(balance) = +1.0 (marginal import
+    # cost). This catches a regression in the objective coefficients, the
+    # balance-residual sign, or the dual extraction — all of which would still
+    # return finite numbers and pass a bare `isfinite` check.
+    @test obj ≈ 2.0 atol = 1e-8            # welfare at p_load = p_import = 1.0
+    @test λ ≈ 1.0 atol = 1e-8              # nodal-balance dual (future DADP)
     @test haskey(ctx.residuals, :nodal_balance)   # residual seam exercised (PF-01)
 end
 
