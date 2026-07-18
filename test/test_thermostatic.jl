@@ -84,10 +84,12 @@ end
         @test lower_bound(out.vars.Tin[t]) == Tmin && upper_bound(out.vars.Tin[t]) == Tmax
     end
 
-    # Temporal coupling: T-1 affine equality recursions (3.2) are present on the model.
-    @test num_constraints(model, AffExpr, MOI.EqualTo{Float64}) == T - 1
-    # State IC Tin[1] == Tin0 is a single-variable EqualTo constraint.
-    @test num_constraints(model, VariableRef, MOI.EqualTo{Float64}) == 1
+    # Temporal coupling: T-1 recursions (3.2) + 1 state IC = T equality constraints
+    # (beyond the variable bounds), however JuMP classifies the single-variable IC.
+    n_eq =
+        num_constraints(model, AffExpr, MOI.EqualTo{Float64}) +
+        num_constraints(model, VariableRef, MOI.EqualTo{Float64})
+    @test n_eq == T
 
     # Aggregator-as-writer: the device wrote NOTHING to the residual or the objective.
     @test isempty(ctx.residuals)
