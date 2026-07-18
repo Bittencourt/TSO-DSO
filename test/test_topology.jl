@@ -1,16 +1,39 @@
-# Seam: data/topology.jl (DATA-02). RED until plan 01-02 fills the stub.
+# Seam: data/topology.jl (DATA-02). Driven green by plan 01-02.
 @testitem "topology: non-radial feeder raises a clear error; valid tree passes (DATA-02)" begin
     using TSODSO
 
     # Valid tree: 2 buses, 1 branch (edges == nodes - 1, connected, one root).
     ok_buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
     ok_branches = [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0)]
-    @test TSODSO.assert_radial(ok_buses, ok_branches, 1) !== nothing
+    A = TSODSO.assert_radial(ok_buses, ok_branches, 1)
+    @test A !== nothing
+    @test size(A) == (2, 1)   # node-branch incidence: N buses × B branches
 
-    # Non-radial: 2 buses but 2 branches (a self-loop cycle) → must throw ArgumentError.
-    bad_branches = [
+    # (1) Wrong branch count: 2 buses but 2 branches → must throw ArgumentError.
+    bad_count = [
         TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
         TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
     ]
-    @test_throws ArgumentError TSODSO.assert_radial(ok_buses, bad_branches, 1)
+    @test_throws ArgumentError TSODSO.assert_radial(ok_buses, bad_count, 1)
+
+    # (2) Disconnected: 3 buses, 2 branches (correct edge count) but bus 3 is
+    #     unreachable from the root — parallel edge between 1 and 2 wastes a branch.
+    disc_buses = [
+        TSODSO.Bus(1, 0.95, 1.05, true),
+        TSODSO.Bus(2, 0.95, 1.05, false),
+        TSODSO.Bus(3, 0.95, 1.05, false),
+    ]
+    disc_branches = [
+        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
+        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
+    ]
+    @test_throws ArgumentError TSODSO.assert_radial(disc_buses, disc_branches, 1)
+
+    # (3a) Zero roots: a valid tree topology but no bus flagged is_root.
+    noroot_buses = [TSODSO.Bus(1, 0.95, 1.05, false), TSODSO.Bus(2, 0.95, 1.05, false)]
+    @test_throws ArgumentError TSODSO.assert_radial(noroot_buses, ok_branches, 1)
+
+    # (3b) Two roots: a valid tree topology but two buses flagged is_root.
+    tworoot_buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, true)]
+    @test_throws ArgumentError TSODSO.assert_radial(tworoot_buses, ok_branches, 1)
 end
