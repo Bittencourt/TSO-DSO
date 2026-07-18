@@ -71,8 +71,8 @@ nodal-balance dual appears from a centralized linear solve.
   4. Swapping DC↔LinDistFlow requires no change to device or assembly code.
 **Plans**: 4 plans
 - [x] 02-01-PLAN.md — Residual-seam foundation: indexed :Rp/:Rq + add_to_objective! QuadExpr accumulator, Phase-2 include scaffolding (PF-02, DEV-03)
-- [ ] 02-02-PLAN.md — DC + LinDistFlow linear formulations via dispatched contribute! (PF-02)
-- [ ] 02-03-PLAN.md — AbstractDevice contract + Interruptible/elastic load, network-agnostic (DEV-03)
+- [x] 02-02-PLAN.md — DC + LinDistFlow linear formulations via dispatched contribute! (PF-02)
+- [x] 02-03-PLAN.md — AbstractDevice contract + Interruptible/elastic load, network-agnostic (DEV-03)
 - [ ] 02-04-PLAN.md — Centralized solve_linear: first nodal-balance dual + DC↔LinDistFlow conformance + analytic 2-bus price (PF-02, DEV-03)
 
 ### Phase 3: Prosumer Device Library & Social-Welfare Solve
@@ -180,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Plumbing & Solver Abstraction | 4/4 | Complete   | 2026-07-18 |
-| 2. Linear Branch-Flow Residual Seam | 1/4 | In Progress|  |
+| 2. Linear Branch-Flow Residual Seam | 3/4 | In Progress|  |
 | 3. Prosumer Device Library & Social-Welfare Solve | 0/TBD | Not started | - |
 | 4. Convex Branch-Flow Correctness Milestone | 0/TBD | Not started | - |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 0/TBD | Not started | - |
