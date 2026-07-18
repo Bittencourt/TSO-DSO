@@ -77,3 +77,52 @@ end
     )
     @test isapprox(obj, obj2; rtol = 1e-4, atol = 1e-4)
 end
+
+@testitem "welfare: DC + reactive aggregator solves active-only (WR-03, DEV-05)" tags = [:welfare] setup = [Phase3Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    T = Phase3Fixtures.T
+    feeder = Phase3Fixtures.small_radial_feeder()
+    Tout = Phase3Fixtures.Tout
+    Pdc = Phase3Fixtures.Pdc
+    λ₀ = Phase3Fixtures.λ₀
+    φ = 0.9                                    # φ < 1 ⇒ the aggregator emits a reactive term
+
+    prof = generate_profiles(seed = 20260718, T = T)
+    function make_agg(bus)
+        therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+        defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
+        batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, prof.pv)
+        return Aggregator(bus, φ, [therm, defer, batt], Pdc)
+    end
+    aggs = [make_agg(2), make_agg(3)]          # reactive aggregators on NON-root load buses
+
+    # WR-03: DCPowerFlow provides NO reactive channel, yet the aggregators still emit their
+    # reactive term into :Rq. Previously balance_q was pinned to zero at every non-root
+    # reactive bus ⇒ INFEASIBLE. Now the reactive channel is keyed off the FORMULATION, so a
+    # DC study models active power only and SOLVES (the DC↔LinDistFlow interchange holds).
+    ctx, obj, dadp = solve_welfare(feeder, DCPowerFlow(), aggs; T = T, λ₀ = λ₀)
+
+    @test isfinite(obj)
+    @test abs(obj) < 1e6
+    @test length(dadp) == T
+    @test all(isfinite, dadp)
+
+    # Active-only: no reactive frontier import created and no reactive balance registered,
+    # while the active balance IS closed and priced.
+    @test !haskey(ctx.meta, :q_import)
+    @test !haskey(ctx.constraints, :balance_q)
+    @test haskey(ctx.constraints, :balance_p)
+
+    # App. C battery complementarity still enforced under the DC formulation.
+    @test haskey(ctx.meta, :agg_device_vars)
+    batteries = [
+        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for v in varlist if
+        haskey(v, :p_ch) && haskey(v, :p_dch)
+    ]
+    @test length(batteries) == 2
+    for v in batteries, t in 1:T
+        @test value(v.p_ch[t]) * value(v.p_dch[t]) < 1e-6
+    end
+end
