@@ -10,8 +10,155 @@
 # q_import[t] at feeder.root (the WR-03 fix -- without it, pinning :Rq at every bus
 # with reactive load present is infeasible), closes the nodal-balance residuals to
 # zero, and maximizes welfare = sum(aggregator utility) - sum_t lambda0[t]*p_import[t]
-# as a convex QP via `select_optimizer(QP())` (Clarabel; no model names a solver).
+# as a convex QP via `select_optimizer(QP())` (no model names a concrete solver).
 # Gated on OPTIMAL via `assert_solved!`, then runs the mandatory post-solve battery
 # complementarity check (p_ch*p_dch < tau, App. C). Because every device utility is
 # concave and the LinDistFlow constraints are affine, the local optimum is global.
-# Declares its own `export`s when plan 03-05 fills it; comment-only stub until then.
+
+using JuMP
+
+"""
+    solve_welfare(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
+                  T::Int = 24, λ₀, optimizer = select_optimizer(QP()),
+                  allow_local::Bool = false, τ::Real = 1e-6)
+        -> (ctx::ModelContext, objective::Float64, dadp::Vector{Float64})
+
+Build and solve the GLB-CVX centralized social-welfare problem (thesis eq. 3.38) over
+`feeder`, a swappable `AbstractPowerFlow`, and a vector of [`Aggregator`](@ref)s. This
+GENERALIZES [`solve_linear`](@ref) from a single device list to multiple aggregators at
+horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
+
+1. builds `Model(optimizer)` — `optimizer` defaults to the `QP()` factory backend
+   (concave device utility ⇒ convex QP; accurate conic duals — prices ARE duals); this
+   file NEVER names a concrete solver (INFRA-02). Cross-solver checks pass a different
+   factory (e.g. `select_optimizer(NLP())`) plus `allow_local = true`;
+2. wraps it in a [`ModelContext`](@ref); stashes `feeder`/`T`;
+3. lets the power-flow formulation `contribute!` its branch/voltage terms into
+   `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`) and each aggregator `contribute!`
+   its net active/reactive injections into `:Rp`/`:Rq` plus its summed utility into
+   `ctx.meta[:objective]`;
+4. injects a priced active frontier import `p_import[t] ≥ 0` AND — the WR-03 FIX — a
+   FREE-SIGN reactive frontier import `q_import[t]` (no lower bound) at `feeder.root`,
+   stashed under `ctx.meta[:p_import]`/`ctx.meta[:q_import]`, BOTH BEFORE closing the
+   residuals. Without the free-sign `q_import`, pinning `:Rq` at every bus with a
+   reactive load present is INFEASIBLE (or silently zeroes the reactive draw) — the
+   MEM/substation supplies reactive power at the frontier (RESEARCH Pitfall 2);
+5. closes EVERY residual present — `:Rp` always, `:Rq` only when
+   `haskey(ctx.residuals, :Rq)`. This keys off the registry CONTENTS, not a formulation
+   flag, so swapping DC↔LinDistFlow changes only which residuals exist. Both closures are
+   registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
+6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
+7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
+   (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is trusted;
+8. runs the MANDATORY App. C post-solve battery complementarity check: for every battery
+   stashed under `ctx.meta[:agg_device_vars]`, asserts `value(p_ch[t])·value(p_dch[t]) < τ`
+   for all `t`, throwing loudly on violation (RESEARCH Pitfall 1, threat T-03-13).
+
+Returns `(ctx, objective_value, dadp)` where `dadp = dual.(balance_p[bus, :])` at the
+FIRST aggregator's bus (the distribution price / DADP over the horizon).
+
+Throws `ArgumentError` on empty `aggregators`, `length(λ₀) != T`, or an aggregator bus
+outside `1:length(feeder.buses)` — the boundary guards that keep a shape mismatch from
+becoming a cryptic deep crash or a silently-wrong optimum (RESEARCH Pitfall 4).
+"""
+function solve_welfare(
+    feeder,
+    pf::AbstractPowerFlow,
+    aggregators::AbstractVector{<:Aggregator};
+    T::Int = 24,
+    λ₀,
+    optimizer = select_optimizer(QP()),
+    allow_local::Bool = false,
+    τ::Real = 1e-6,
+)
+    # Boundary guards (RESEARCH Pitfall 4): empty aggregators ⇒ no priced load / no
+    # objective; a λ₀ shape mismatch ⇒ BoundsError deep in objective assembly. Fail here.
+    isempty(aggregators) &&
+        throw(ArgumentError("solve_welfare needs at least one aggregator"))
+    length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+
+    model = Model(optimizer)                 # QP() factory by default; never names a solver
+    ctx = ModelContext(model)
+    ctx.meta[:feeder] = feeder
+    ctx.meta[:T] = T
+
+    Np = length(feeder.buses)
+
+    # Every aggregator must sit on a real feeder bus, else its injection grows :Rp beyond
+    # the balance-closure range and vanishes from the network balance (welfare from
+    # nowhere) — fail loudly, mirroring solve_linear's CR-01 device guard.
+    for (k, agg) in enumerate(aggregators)
+        1 <= agg.bus <= Np || throw(
+            ArgumentError(
+                "aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$Np",
+            ),
+        )
+    end
+
+    # Formulation: branch/voltage terms into :Rp (and :Rq for LinDistFlow).
+    contribute!(pf, ctx, feeder; T = T)
+    # Aggregators: net active/reactive injections into :Rp/:Rq + summed utility into
+    # ctx.meta[:objective]. Each aggregator is the sole :Rp/:Rq writer at its bus.
+    for agg in aggregators
+        contribute!(agg, ctx; T = T)
+    end
+
+    # Frontier imports at the root, injected BEFORE closing the residuals. p_import is
+    # priced and non-negative (active draw from the MEM); q_import is FREE-SIGN (the WR-03
+    # fix) so the reactive load closes feasibly instead of forcing Q ≡ 0.
+    @variable(model, p_import[t = 1:T] >= 0)         # priced active frontier import
+    @variable(model, q_import[t = 1:T])              # WR-03 FIX: free-sign reactive import
+    for t in 1:T
+        add_to_residual!(ctx, :Rp, feeder.root, t, p_import[t])
+        add_to_residual!(ctx, :Rq, feeder.root, t, q_import[t])
+    end
+    ctx.meta[:p_import] = p_import
+    ctx.meta[:q_import] = q_import
+
+    # Close EVERY residual present — DATA-DRIVEN on registry CONTENTS, never a formulation
+    # flag. :Rp is always populated; :Rq only when the formulation/aggregators wrote it.
+    size(ctx.residuals[:Rp]) == (Np, T) || error(
+        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($Np, $T) — an index escaped the feeder",
+    )
+    @constraint(model, balance_p[j = 1:Np, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
+    register_constraint!(ctx, :balance_p, balance_p)          # dual = λ_j (DADP)
+    if haskey(ctx.residuals, :Rq)
+        size(ctx.residuals[:Rq]) == (Np, T) || error(
+            "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($Np, $T) — an index escaped the feeder",
+        )
+        @constraint(model, balance_q[j = 1:Np, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
+        register_constraint!(ctx, :balance_q, balance_q)
+    end
+
+    # GLB-CVX welfare (thesis eq. 3.38): Σ aggregator utility − λ₀ᵀ·p_import.
+    welfare = ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
+    @objective(model, Max, welfare)
+
+    # OPTIMAL gate: never read a dual (price) before a trusted solve (threat T-03-14).
+    assert_solved!(model; dual = true, allow_local = allow_local)
+
+    # App. C MANDATORY post-solve battery complementarity (RESEARCH Pitfall 1, threat
+    # T-03-13): with λ_min ≤ λ_med ≤ λ_max there is no binary/complementarity constraint,
+    # so p_ch·p_dch = 0 must be VERIFIED numerically at the welfare optimum.
+    if haskey(ctx.meta, :agg_device_vars)
+        for (bus, varlist) in ctx.meta[:agg_device_vars]
+            for v in varlist
+                (haskey(v, :p_ch) && haskey(v, :p_dch)) || continue   # a battery
+                for t in 1:T
+                    prod = value(v.p_ch[t]) * value(v.p_dch[t])
+                    prod < τ || error(
+                        "Battery complementarity violated at bus $bus, t=$t: " *
+                        "p_ch·p_dch = $prod ≥ τ=$τ (App. C, threat T-03-13)",
+                    )
+                end
+            end
+        end
+    end
+
+    # DADP = dual of the ACTIVE balance at the first aggregator's bus over the horizon.
+    priced = aggregators[1].bus
+    dadp = dual.(balance_p[priced, :])
+    return ctx, objective_value(model), dadp
+end
+
+export solve_welfare
