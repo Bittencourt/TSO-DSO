@@ -36,4 +36,10 @@
     # (3b) Two roots: a valid tree topology but two buses flagged is_root.
     tworoot_buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, true)]
     @test_throws ArgumentError TSODSO.assert_radial(tworoot_buses, ok_branches, 1)
+
+    # (4) Root index / is_root flag DISAGREE: exactly one root bus, valid tree,
+    #     but the `root` argument points at the non-flagged bus (WR-01). The
+    #     stored frontier index and the frontier flag must never silently differ.
+    mismatch_buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
+    @test_throws ArgumentError TSODSO.assert_radial(mismatch_buses, ok_branches, 2)
 end

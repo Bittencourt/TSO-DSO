@@ -24,10 +24,11 @@ tree, throwing a clear `ArgumentError` otherwise. Checks, in order:
   1. `length(branches) == length(buses) - 1` (edge-count theorem);
   2. `root` is a valid bus index;
   3. every bus is reachable from `root` via BFS (connectivity);
-  4. exactly one bus has `is_root == true`.
+  4. exactly one bus has `is_root == true`;
+  5. the `root` index points at that single `is_root`-flagged bus.
 
 Returns the `N × B` sparse node-branch incidence matrix (`+1` at each branch's
-`from` node, `-1` at its `to` node) for reuse by the model layer.
+`from` node, `-1` at its `to` node).
 """
 function assert_radial(buses, branches, root)
     N, B = length(buses), length(branches)
@@ -79,6 +80,14 @@ function assert_radial(buses, branches, root)
     nroots = count(b -> b.is_root, buses)
     nroots == 1 || throw(ArgumentError(
         "Feeder must have exactly one frontier (root) bus, got $nroots."))
+
+    # (5) The `root` index and the `is_root` flag must AGREE: the single flagged
+    #     bus must be the one at position `root`. Otherwise the stored frontier
+    #     index and the frontier flag silently disagree — a silent-wrong hazard
+    #     for any layer that reads `feeder.root` in one place and scans `is_root`
+    #     in another (WR-01).
+    buses[root].is_root || throw(ArgumentError(
+        "Feeder root index $root does not point to the is_root-flagged bus."))
 
     return A
 end
