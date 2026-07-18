@@ -1,6 +1,6 @@
 # Seam: models/toy_dc.jl — the rung-0 end-to-end integration. RED until plan 01-04.
 @testitem "toy: rung0 DC single-node solves OPTIMAL and returns objective + dual (INFRA-02/03, PF-01)" tags = [:rung0] begin
-    using TSODSO
+    using TSODSO, JuMP   # JuMP for `is_solved_and_feasible` (matches test_factory.jl / test_status.jl)
 
     # A trivial single-node feeder routed through the full keystone:
     #   per-unit data → immutable Feeder → factory → ModelContext residual → assert_solved!
