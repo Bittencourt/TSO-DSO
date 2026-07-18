@@ -16,6 +16,11 @@
 
     # Inconsistent bounds are also rejected.
     @test_throws ArgumentError TSODSO.Interruptible(2, 5.0, 0.0, 4.0, 1.0)
+
+    # IN-01: a mixed-type call (integer 0 among Float64s) promotes rather than MethodError.
+    mixed = TSODSO.Interruptible(2, 0, 5.0, 4.0, 1.0)
+    @test mixed isa TSODSO.Interruptible{Float64}
+    @test mixed.Pmin === 0.0
 end
 
 @testitem "device: Interruptible contributes a bounded var, a signed :Rp injection, and a concave QuadExpr utility — with NO feeder (DEV-03)" tags = [:device] begin
