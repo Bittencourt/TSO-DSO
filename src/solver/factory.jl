@@ -3,17 +3,79 @@
 # SEAM: the single solver factory (INFRA-02).
 # OWNER: plan 01-03.
 #
-# When filled, this is the ONLY core file that names concrete solvers. It will
-# provide `select_optimizer(::ProblemClass)` returning a JuMP-ready optimizer
-# factory (`optimizer_with_attributes(...)`): HiGHS for LP/MILP, Clarabel for
-# QP/SOCP, Ipopt for NLP. Model files never name a solver — they call
-# `Model(select_optimizer(LP()))`. Commercial solvers (Gurobi/MosekTools) are
-# added ONLY via the weakdep package extensions in ext/. Declares its own exports.
+# This is the ONLY core file (besides the ext/* package extensions) that names
+# concrete solvers. `select_optimizer(::ProblemClass)` returns a JuMP-ready
+# optimizer factory (`optimizer_with_attributes(...)`). Model files never name a
+# solver — they call `Model(select_optimizer(LP()))`. Commercial solvers
+# (Gurobi/MosekTools) are reachable ONLY via the weakdep package extensions in
+# ext/, which add `commercial_optimizer` methods.
 #
-# RESEARCH Pitfall 1 correction to the CLAUDE.md perf note:
+# RESEARCH Pitfall 1 correction to the CLAUDE.md perf note (VERIFIED 2026-07-18):
 #   Clarabel is a `copy_to`-only solver (`supports_incremental_interface == false`).
 #   `direct_model(Clarabel.Optimizer())` ERRORS. Use a standard `Model(...)`
 #   (auto-wrapped in a CachingOptimizer) for anything Clarabel-backed. Reserve
-#   `direct_model` for HiGHS-backed hot loops only.
-#
-# Intentionally empty in plan 01-01: the package must precompile with this stub.
+#   `direct_model` for HiGHS-backed hot loops only. Do NOT call
+#   `direct_model` with any Clarabel-backed factory returned here.
+
+using JuMP
+import HiGHS
+import Clarabel
+import Ipopt
+
+"""
+    select_optimizer(pc::ProblemClass)
+
+Return a JuMP-ready optimizer factory (from `optimizer_with_attributes`) for the
+given problem class `pc`. Dispatched by singleton type — there is no `if class ==`
+branching — so weakdep extensions can extend the commercial path independently.
+
+Open-source defaults:
+- `LP`   → HiGHS (presolve on)
+- `MILP` → HiGHS
+- `QP`   → Clarabel (native quadratic objective)
+- `SOCP` → Clarabel (tight duality-gap tolerances for accurate duals / prices)
+- `NLP`  → Ipopt
+
+A model file uses this as `Model(select_optimizer(LP()))` and never names a solver.
+"""
+select_optimizer(::LP) = optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "on")
+
+select_optimizer(::MILP) = optimizer_with_attributes(HiGHS.Optimizer)
+
+select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose" => false)
+
+# Tight gap tolerances: transactive prices ARE the duals, so accurate conic duals
+# matter. Clarabel's `tol_gap_abs`/`tol_gap_rel` default to 1e-8; set explicitly.
+select_optimizer(::SOCP) = optimizer_with_attributes(
+    Clarabel.Optimizer,
+    "verbose" => false,
+    "tol_gap_abs" => 1e-8,
+    "tol_gap_rel" => 1e-8,
+)
+
+select_optimizer(::NLP) = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
+
+"""
+    commercial_optimizer(choice, pc::ProblemClass)
+
+Return a JuMP-ready optimizer factory for a commercial solver selected by `choice`
+(a [`GurobiChoice`](@ref) or [`MosekChoice`](@ref) marker) for problem class `pc`.
+
+This fallback method ERRORS by design: commercial backends are opt-in and are
+wired in only by the `TSODSOGurobiExt` / `TSODSOMosekExt` package extensions,
+which add methods for the concrete marker types. To enable one, `import Gurobi`
+(or `import MosekTools`) in your environment before calling.
+"""
+function commercial_optimizer(choice, pc::ProblemClass)
+    error(
+        """
+        No commercial optimizer is available for choice $(choice) and problem class $(pc).
+        Commercial solvers are opt-in weakdep extensions and are never hard dependencies.
+        To enable one, load the solver in your environment, e.g.:
+            import Gurobi      # enables commercial_optimizer(GurobiChoice(), pc)
+            import MosekTools  # enables commercial_optimizer(MosekChoice(), pc)
+        """,
+    )
+end
+
+export select_optimizer, commercial_optimizer
