@@ -54,6 +54,13 @@ function solve_linear(
     T::Int = 1,
     λ₀,
 )
+    # WR-01: an empty `devices` has no priced load — `ctx.meta[:objective]` is never
+    # created (bare `KeyError` at welfare assembly) and `devices[1].bus` would
+    # `BoundsError`. The rung-1 model is defined around at least the priced load, so
+    # reject the empty case up front with a clear message instead of a cryptic crash.
+    isempty(devices) &&
+        throw(ArgumentError("solve_linear needs at least one device (the priced load)"))
+
     model = Model(select_optimizer(QP()))   # concave-quad utility ⇒ QP factory backend (INFRA-02)
     ctx = ModelContext(model)
     ctx.meta[:feeder] = feeder

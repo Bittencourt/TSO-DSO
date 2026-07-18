@@ -66,3 +66,22 @@ end
     @test obj ≈ 2.0 atol = 1e-6                        # NOT the phantom-inflated 10.0
     @test dadp[1] ≈ 2.0 atol = 1e-6                    # DADP == λ₀
 end
+
+# Seam: models/linear_solve.jl — WR-01. An empty `devices` vector previously produced a
+# bare `KeyError` on `ctx.meta[:objective]` (and a `BoundsError` on `devices[1]`). It must
+# reject with a clear message instead.
+@testitem "linear: empty devices vector throws a clear error (WR-01)" tags = [:linear] begin
+    using TSODSO, JuMP
+
+    buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
+    branches = [TSODSO.Branch(1, 2, 0.01, 0.01, 10.0)]
+    feeder = TSODSO.Feeder(buses, branches, 1)
+
+    @test_throws ArgumentError TSODSO.solve_linear(
+        feeder,
+        TSODSO.LinDistFlow(),
+        TSODSO.Interruptible{Float64}[];
+        T = 1,
+        λ₀ = [2.0],
+    )
+end
