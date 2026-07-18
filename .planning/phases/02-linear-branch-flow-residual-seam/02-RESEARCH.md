@@ -423,7 +423,9 @@ The same fixture solved with `TSODSO.DCPowerFlow()` (drop the branch, or keep â€
 
 **These are the decisions the planner (and, if needed, a discuss-phase) should confirm.** None contradict CLAUDE.md or CONTEXT.md; all are anchored to thesis equations + the Phase-1 seam.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three resolved and adopted by the plans: Q1 objective storage â†’ `ctx.meta[:objective]` (02-01); Q2 single QP solve, no separate LP path (02-04); Q3 reactive-under-DC out of scope, device active-only (02-03/02-04).
 
 1. **Exact objective-accumulator storage location.**
    - What we know: a `QuadExpr` accumulator is required; `ModelContext` fields are fixed (`constraints`, `residuals`, `meta`).

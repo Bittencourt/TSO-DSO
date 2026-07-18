@@ -2,7 +2,7 @@
 phase: 2
 slug: linear-branch-flow-residual-seam
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-18
 ---
