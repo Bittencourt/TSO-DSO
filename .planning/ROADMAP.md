@@ -108,7 +108,7 @@ extension stubs in place so the planning layer is additive later.
   3. The centralized monolithic solve reproduces the thesis DADP/voltage numbers (e.g. `v₉[16] ≈ 1.0493`) as ground truth, with the nodal active-balance dual available.
   4. `operational_oracle(z) → (cost, π)` returns the frontier coupling dual, and the SEAM-01 extension interfaces exist as stubs: multi-scenario objective hook, rolling-horizon parameter, meshed-formulation slot, and the coupling-flow interface (`z↔p_ag`, `λ_j↔π_s`) with an explicit leader/follower role parameter.
 **Plans**: 6 plans
-- [ ] 04-01-PLAN.md — Foundation: include-graph wiring + problem_class(QP) trait + SOCP→Clarabel confirm + RED @testitem harness + Phase4Fixtures (PF-03, PF-04, OPT-02, OPT-03, DATA-03, SEAM-01)
+- [x] 04-01-PLAN.md — Foundation: include-graph wiring + problem_class(QP) trait + SOCP→Clarabel confirm + RED @testitem harness + Phase4Fixtures (PF-03, PF-04, OPT-02, OPT-03, DATA-03, SEAM-01)
 - [ ] 04-02-PLAN.md — ConvexBranchFlow SOCP formulation + LinDistFlow exactness copy (v̂, rotated cone, eqs 3.31-3.45); DC↔LinDistFlow↔SOCP interchange (PF-03)
 - [ ] 04-03-PLAN.md — Modified IEEE-13 feeder built-in fixture from thesis Table 4.1 (DATA-03)
 - [ ] 04-04-PLAN.md — operational_oracle(z)→(cost,π) + SEAM-01 extension stubs (OPT-03, SEAM-01)
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Plumbing & Solver Abstraction | 4/4 | Complete   | 2026-07-18 |
 | 2. Linear Branch-Flow Residual Seam | 4/4 | Complete   | 2026-07-18 |
 | 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
-| 4. Convex Branch-Flow Correctness Milestone | 0/6 | Planned | - |
+| 4. Convex Branch-Flow Correctness Milestone | 1/6 | In Progress|  |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 0/TBD | Not started | - |
 | 6. ADMM Decomposition Core | 0/TBD | Not started | - |
 | 7. ADMM Convergence & Scale | 0/TBD | Not started | - |
