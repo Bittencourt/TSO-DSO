@@ -1,0 +1,18 @@
+# Julia package .gitignore
+#
+# NOTE (INFRA-01 / RESEARCH Pitfall 3): Manifest.toml is intentionally COMMITTED
+# for reproducible clean-checkout resolution. Do NOT add Manifest.toml here.
+
+# Documenter build output
+/docs/build/
+/docs/site/
+
+# Coverage artifacts
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+/lcov.info
+
+# Local scratch / editor
+*.swp
+.DS_Store
