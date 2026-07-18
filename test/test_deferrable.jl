@@ -116,8 +116,14 @@ end
     TSODSO.assert_solved!(model; dual = false)
 
     p = out.vars.p
-    # Energy budget (3.4): Σ over the window == E.
-    @test isapprox(sum(value(p[t]) for t in t_start:t_end), E; atol = 1e-5)
+    S = sum(value(p[t]) for t in t_start:t_end)
+    # Energy budget (WR-01, thesis eq. 3.4): the total NEVER exceeds the E upper bound.
+    @test S <= E + 1e-6
+    # With utility ALONE as the objective the soft target (eq. 3.12, peak at Σ p = E) is
+    # reached. It is a FLAT maximum at the constraint boundary, so an interior-point QP
+    # lands a hair inside (~3e-4) rather than exactly on it — a loose tolerance, not the
+    # exact-equality of the old hard-budget pin.
+    @test isapprox(S, E; atol = 1e-2)
     # Outside the window: zero draw (3.5, p = 0 outside T_{h,d}).
     @test isapprox(value(p[1]), 0.0; atol = 1e-6)
     @test isapprox(value(p[T]), 0.0; atol = 1e-6)
