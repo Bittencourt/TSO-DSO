@@ -70,7 +70,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 4]: Re-verify Clarabel API specifics (quadratic-objective attributes, `Parameter` surface, `direct_model`) at phase start — flagged as an unverified gap in research.
+- [Phase 4]: ~~Re-verify Clarabel API specifics~~ RESOLVED (Phase-4 research, 2026-07-18): RotatedSecondOrderCone form `[0.5l, v, P, Q] in RotatedSecondOrderCone()`, Clarabel handles SOCP+quadratic natively, `Parameter` API confirmed, Clarabel copy_to-only (no direct_model). No factory change needed.
 - [Phase 7]: Adaptive-ρ / dual-residual tuning on the SOCP subproblem is partial-research; may warrant `--research-phase`.
 
 ## Deferred Items
