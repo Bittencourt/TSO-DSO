@@ -72,4 +72,13 @@ include("models/exactness.jl")
 # --- operational_oracle + SEAM-01 extension stubs (owned by plan 04-04, OPT-03 / SEAM-01) ---
 include("models/oracle.jl")
 
+# --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
+# Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
+# ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
+# is filled by exactly one Wave-2 plan, which declares its own exports.
+include("pricing/dlmp.jl")      # DLMP extraction + four-way decomposition (plan 05-02, PRICE-02)
+include("pricing/fit.jl")       # flat feed-in-tariff baseline (plan 05-03, PRICE-04)
+include("pricing/checks.jl")    # economic-direction price checks (plan 05-04, PRICE-05)
+include("pricing/welfare.jl")   # social = prosumer + DSO surplus split (plan 05-05, PRICE-03)
+
 end # module TSODSO
