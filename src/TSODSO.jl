@@ -81,4 +81,17 @@ include("pricing/fit.jl")       # flat feed-in-tariff baseline (plan 05-03, PRIC
 include("pricing/checks.jl")    # economic-direction price checks (plan 05-04, PRICE-05)
 include("pricing/welfare.jl")   # social = prosumer + DSO surplus split (plan 05-05, PRICE-03)
 
+# --- ADMM decomposition core: AGR-OPT / DSO-OPT subproblems + the dual-ascent loop ---
+# Wired (plan 06-01, this plan is the SOLE owner of this shared edit) AFTER the pricing seams
+# — ADMM is ORCHESTRATION over the already-validated Phase-1–5 builders (RESEARCH Pattern 4):
+# it consumes the solved-ctx / `extract_dlmp` seams and reuses device / `ConvexBranchFlow`
+# `contribute!` verbatim, so NO Phase-5 source file is modified. Dependency order: residuals
+# (pure data) → AgrOpt → DsoOpt → solve_admm (the loop consumes the other three). Each seam
+# file declares its own exports; residuals.jl is filled by this plan, the other three by
+# Waves 2–3, so those waves never touch TSODSO.jl.
+include("admm/residuals.jl")    # AdmmResiduals primal/dual residual ledger (plan 06-01, ADMM-01)
+include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (plan 06-02, ADMM-01, thesis 3.46)
+include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (plan 06-03, ADMM-01, thesis 3.47)
+include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation (plan 06-04, ADMM-01/03/04)
+
 end # module TSODSO
