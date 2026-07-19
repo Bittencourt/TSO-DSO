@@ -12,14 +12,17 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 
 [weakdeps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Gurobi = "2e9cd046-0924-5485-92f1-d5272153d98b"
 MosekTools = "1ec41992-ff65-5c91-ac43-2df89e9693a4"
 
 [extensions]
 TSODSOGurobiExt = "Gurobi"
+TSODSOMakieExt = "CairoMakie"
 TSODSOMosekExt = "MosekTools"
 
 [compat]
+CairoMakie = "0.15"
 Clarabel = "0.11.1"
 Gurobi = "1.9"
 HiGHS = "1.24.1"

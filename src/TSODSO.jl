@@ -24,6 +24,10 @@ include("data/profiles.jl")
 # --- Modified IEEE 13-node feeder fixture (owned by plan 04-03, DATA-03) ---
 include("data/ieee13.jl")
 
+# --- Modified IEEE 123-node feeder fixture (owned by plan 07-02, DATA-03 scale target) ---
+# STUB seam wired here by plan 07-01 (after ieee13.jl in the data block); filled by 07-02.
+include("data/ieee123.jl")
+
 # --- Solver abstraction (owned by plan 01-03, INFRA-02) ---
 include("solver/ProblemClass.jl")
 include("solver/factory.jl")
@@ -93,5 +97,12 @@ include("admm/residuals.jl")    # AdmmResiduals primal/dual residual ledger (pla
 include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (plan 06-02, ADMM-01, thesis 3.46)
 include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (plan 06-03, ADMM-01, thesis 3.47)
 include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation (plan 06-04, ADMM-01/03/04)
+
+# --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
+# Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
+# ledger. The core declares only method-less generic functions + exports (NO CairoMakie
+# import); the CairoMakie-backed methods live in the TSODSOMakieExt weakdep extension
+# (plan 07-06), so `using TSODSO` stays plot-free (threat T-07-01).
+include("diagnostics/plots.jl")
 
 end # module TSODSO
