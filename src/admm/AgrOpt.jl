@@ -21,8 +21,8 @@
 # the shifted penalty target: coeff = −λ_j[t] − ρ·c_j[t]. Each ADMM iteration mutates only that
 # scalar via `set_objective_coefficient(model, pag_j[t], −λ_j[t] − ρ·c_j[t])` (one call per
 # hour) — NO JuMP rebuild. λ_j is a plain `Float64`, NEVER a JuMP `Parameter` (a `λ·pag`
-# Parameter×variable term is an indefinite bilinear that Clarabel rejects — RESEARCH Pitfall 1).
-# Solver via `select_optimizer(QP())` (INFRA-02, never names a concrete solver); every solve is
+# Parameter×variable term is an indefinite bilinear the convex conic backend rejects — RESEARCH
+# Pitfall 1). Solver via `select_optimizer(QP())` (INFRA-02, never names a concrete solver); solves are
 # gated on `assert_solved!(...; dual=true)` (INFRA-03); the App. C battery-complementarity check
 # (`assert_battery_complementarity!`) runs after each solve — the batteries live in AGR-OPT now.
 
@@ -36,7 +36,7 @@ BUILD-ONCE JuMP QP wrapping one [`Aggregator`](@ref)'s device roll-up, re-solved
 iteration by a single `set_objective_coefficient` update on the coupling variable (ADMM-03).
 
 # Fields
-- `model::Model` — the JuMP QP (Clarabel via `select_optimizer(QP())`), built ONCE.
+- `model::Model` — the JuMP QP (backend chosen by `select_optimizer(QP())`), built ONCE.
 - `ctx::ModelContext` — the model context the aggregator/device `contribute!` wrote into; its
   `ctx.meta[:objective]` holds the aggregator utility `U_ag` (a `QuadExpr`) and
   `ctx.meta[:agg_device_vars]` the battery vars for the App. C complementarity check.
@@ -120,7 +120,7 @@ objective coefficient of the coupling variable `pag_j[t]` to `−λ_j[t] − ρ�
 plus the shifted-penalty term (expanding `−(ρ/2)(pag+c)²` leaves `−ρ·c` on the linear part; the
 FIXED `−ρ/2` quadratic self-term built by [`build_agr_opt`](@ref) is untouched). `λ_j` is a
 plain `Float64` vector, NEVER a JuMP `Parameter` (a `λ·pag` Parameter×variable term is an
-indefinite bilinear Clarabel rejects — RESEARCH Pitfall 1).
+indefinite bilinear the convex conic backend rejects — RESEARCH Pitfall 1).
 
 After the coefficient update it:
 - gates the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before reading any
