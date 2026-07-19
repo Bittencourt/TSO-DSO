@@ -1,7 +1,7 @@
 name = "TSODSO"
 uuid = "67a63935-f442-4b9a-93c0-a55ebfb6d374"
-authors = ["Pedro Bittencourt <pedro.bittencourt@tyrenergia.com.br>"]
 version = "0.1.0"
+authors = ["Pedro Bittencourt <pedro.bittencourt@tyrenergia.com.br>"]
 
 [deps]
 Clarabel = "61c947e1-3e6d-4ee4-985a-eec8c727bd6e"
