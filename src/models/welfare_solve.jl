@@ -109,6 +109,21 @@ function solve_welfare(
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
 
     model = Model(optimizer)                 # QP() factory by default; never names a solver
+
+    # Cross-solver enablement (RESEARCH Pitfall 4): register the OPT-IN
+    # RotatedSecondOrderCone / SecondOrderCone → nonconvex-quadratic bridges so a smooth-NLP
+    # backend (Ipopt, via `select_optimizer(NLP())` + `allow_local = true`) can INDEPENDENTLY
+    # re-solve the SOCP ConvexBranchFlow model as a cross-check. These bridges are DORMANT for
+    # the primary Clarabel path (Clarabel supports both cone sets natively, so the
+    # LazyBridgeOptimizer never reformulates) — they only activate when the chosen backend
+    # cannot take the cone directly, reformulating `l·v ≥ P²+Q²` into the smooth quadratic
+    # constraint Ipopt handles. They are no-ops for the cone-free DC/LinDistFlow (QP) paths.
+    # Registered here (not in the factory) because bridges attach to the JuMP `Model`, not the
+    # optimizer attributes, and this file is the sole model builder (INFRA-02 preserved: still
+    # no concrete solver named).
+    JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.RSOCtoNonConvexQuadBridge)
+    JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
+
     ctx = ModelContext(model)
     ctx.meta[:feeder] = feeder
     ctx.meta[:T] = T

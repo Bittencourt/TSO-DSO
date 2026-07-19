@@ -24,7 +24,8 @@ using JuMP
                        aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int = 24,
                        z = nothing, role::Symbol = :follower,
-                       objective_hook::Function = identity, horizon_state = nothing)
+                       objective_hook::Function = identity, horizon_state = nothing,
+                       allow_export::Bool = false)
         -> (; cost, π, dadp, ctx)
 
 Run the centralized GLB-CVX operational solve as an **oracle** the deferred planning
@@ -43,6 +44,13 @@ layer can query, returning a `NamedTuple`:
 The solve routes to the right open-source solver by
 `select_optimizer(problem_class(pf))` — a `ConvexBranchFlow` oracle solves as SOCP, a
 `LinDistFlow`/DC oracle as QP — so this wrapper NEVER names a concrete solver (INFRA-02).
+
+`allow_export` (default `false`) is passed straight through to [`solve_welfare`](@ref): with
+`false` the frontier import is IMPORT-ONLY (`p_import ≥ 0`), with `true` it becomes a
+free-sign net exchange that lets a high-PV feeder EXPORT its reverse-flow surplus to the
+MEM. Priced export is the SOC-exactness enabler in the over-voltage / reverse-flow regime
+(PF-04), so a congestion-driven over-voltage ground-truth solve (thesis Fig 4.4) requires
+`allow_export = true` to stay both feasible and exact.
 
 # SEAM-01 extension interfaces (INERT stubs — accepted, typed, and documented, but with
 # NO Phase-4 behavior; each names the v2 requirement that makes it concrete). These exist
@@ -85,6 +93,7 @@ function operational_oracle(
     role::Symbol = :follower,
     objective_hook::Function = identity,
     horizon_state = nothing,
+    allow_export::Bool = false,
 )
     # SEAM-01 coupling role guard: the planning layer only knows :leader / :follower
     # (PSR: distributor = leader). Reject anything else up front so a typo can never
@@ -117,6 +126,7 @@ function operational_oracle(
         T = T,
         λ₀ = λ₀,
         optimizer = select_optimizer(problem_class(pf)),
+        allow_export = allow_export,
     )
 
     π = _coupling_dual(ctx, z)

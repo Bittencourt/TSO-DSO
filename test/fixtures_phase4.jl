@@ -167,6 +167,59 @@
         ]
     end
 
+    # --- Ground-truth calibration (OPT-02/OPT-03, RESEARCH Open Q1 / Assumptions A2–A3) ---
+    #
+    # The head-branch thermal limit S_max,(0,1) = 6.86 MVA ⇒ 0.0686 pu on the 100 MVA base,
+    # while EVERY device / demand magnitude in this module is O(0.1..1) pu (a normalized
+    # per-node SHAPE, not a residential magnitude). The full-magnitude `build_ieee13_aggregators`
+    # therefore draws ≈6.3 pu at the peak hour — ~90× the head limit — so the congestion-
+    # constrained GLB-CVX solve is INFEASIBLE. That is the figure-bound-input gap flagged in
+    # RESEARCH Open Q1 (the thesis MEM/temperature profiles and per-house device
+    # parametrization are only PLOTTED) and the house-count inconsistency A3 (784 houses /
+    # 112-per-node ⇒ a residential feeder is a small fraction of the 100 MVA base).
+    #
+    # `GROUND_LOAD_SCALE` / `GROUND_PV_SCALE` rescale the seeded SHAPES to a physically
+    # sensible residential magnitude so the feeder is (a) FEASIBLE under the 0.0686 pu head
+    # limit and (b) CONGESTION-DRIVEN AT THE HEAD (the thesis regime): at the chosen scale the
+    # head branch binds at its EXPORT limit (|P₀|≈0.067 < 0.0686 pu) at the afternoon PV peak,
+    # driving a genuine over-voltage on the long node-9 lateral (thesis Fig 4.4, `v₉[16]`).
+    # PV is scaled ABOVE load (`0.03` vs `0.005`) so the surplus reverse-flows to the frontier —
+    # the exact over-voltage / reverse-power regime the LinDistFlow exactness copy targets, and
+    # the reason the ground solve needs `allow_export = true` (priced export keeps the SOC cone
+    # tight/exact; PF-04). These are a DOCUMENTED CALIBRATION, not the thesis inputs — the
+    # ground-truth regression pins the resulting COMPUTED golden (a reproducibility anchor) and
+    # cross-checks the thesis `v₉[16] ≈ 1.0493` as an APPROXIMATE magnitude, per Open Q1.
+    const GROUND_LOAD_SCALE = 0.005
+    const GROUND_PV_SCALE = 0.03
+
+    """
+        build_ieee13_ground_aggregators(feeder; seed=20260718) -> Vector{<:Aggregator}
+
+    The modified IEEE-13 aggregators calibrated for the OPT-02/OPT-03 GROUND-TRUTH solve:
+    one aggregator per non-root bus, identical SHAPE to [`build_ieee13_aggregators`](@ref) but
+    rescaled to a residential magnitude (`GROUND_LOAD_SCALE` demand / battery, `GROUND_PV_SCALE`
+    PV) so the head-branch-congested GLB-CVX solve is FEASIBLE and lands in the thesis
+    congestion-driven over-voltage regime (`v₉[16]`, thesis Fig 4.4). Seeded and reproducible
+    (threat T-04-06); takes the feeder as an argument (never calls `ieee13_modified` at load
+    time, threat T-04-08). Requires `allow_export = true` at the solve (the PV surplus exports
+    to the MEM; priced export is the SOC-exactness enabler, PF-04).
+    """
+    function build_ieee13_ground_aggregators(feeder; seed::Integer = 20260718)
+        N = length(feeder.buses)
+        return [
+            _house_aggregator(
+                feeder, bus;
+                seed = seed, φ = 0.90,
+                load_scale = GROUND_LOAD_SCALE,
+                pv_scale = GROUND_PV_SCALE,
+                batt_pmax = 0.5 * GROUND_LOAD_SCALE,   # battery scaled WITH the load magnitude
+                batt_emax = 2.0 * GROUND_LOAD_SCALE,
+                batt_soc0 = 1.0 * GROUND_LOAD_SCALE,
+            ) for bus in 2:N
+        ]
+    end
+
     export T, mem_price_profile, temperature_profile,
-        build_ieee13_aggregators, high_pv_feeder, build_high_pv_aggregators
+        build_ieee13_aggregators, high_pv_feeder, build_high_pv_aggregators,
+        build_ieee13_ground_aggregators, GROUND_LOAD_SCALE, GROUND_PV_SCALE
 end
