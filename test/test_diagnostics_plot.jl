@@ -72,3 +72,48 @@ end
     @test isnan(res.price_gap_trace[3])
     @test res.primal_trace[3] == 0.05        # the primal/dual magnitudes are still recorded
 end
+
+# --- WITH-CairoMakie path (plan 07-06): the ext method lights up and returns a Figure -------
+#
+# This item exercises the OTHER half of the isolation contract: WITH CairoMakie loaded, the
+# TSODSOMakieExt weakdep extension activates and `plot_convergence` / `plot_price_convergence`
+# gain an `AdmmResiduals` method that returns a `Makie.Figure`.
+#
+# It runs the check in a SEPARATE Julia PROCESS (`import CairoMakie` in a child) — never in the
+# headless core test process — because package loading is PROCESS-GLOBAL: importing CairoMakie
+# here would activate the ext for the whole worker and break the "core stays plot-free" sibling
+# item above (threat T-07-17). If CairoMakie is not installed in the active environment (it is a
+# weakdep, not a hard dep — the headless/CI case), the item is SKIPPED-with-message, not failed,
+# so the core suite stays green and plot-free. The FIGURE AESTHETICS are the manual-only check
+# (07-VALIDATION): run `import CairoMakie; using TSODSO`, then
+# `save("conv.pdf", plot_convergence(res))` / `save("price.pdf", plot_price_convergence(res))`.
+@testitem "diagnostics plot: ext returns a Makie Figure when CairoMakie is loaded (plot, makie)" begin
+    using TSODSO
+
+    if Base.find_package("CairoMakie") === nothing
+        @info "CairoMakie not installed (weakdep) — SKIPPING the with-CairoMakie Figure check; " *
+              "the headless core suite stays plot-free. Aesthetics are the manual-only 07-VALIDATION check."
+        # skipped-with-message: the with-CairoMakie ext-method path is exercised only where
+        # CairoMakie is present (a separate, non-headless environment).
+        @test_skip Base.find_package("CairoMakie") !== nothing
+    else
+        proj = dirname(Base.active_project())
+        code = raw"""
+        import CairoMakie
+        using TSODSO
+        res = AdmmResiduals(2, 4)
+        record!(res, 1, 0.5, 0.3, 5.0, 1e-4, 2e-4, 0.9)
+        record!(res, 2, 0.2, 0.1, 10.0, 1e-4, 2e-4, 0.4)
+        # WITH CairoMakie loaded the ext activates: the generics now HAVE an AdmmResiduals method.
+        @assert hasmethod(TSODSO.plot_convergence, Tuple{AdmmResiduals})
+        @assert hasmethod(TSODSO.plot_price_convergence, Tuple{AdmmResiduals})
+        f1 = TSODSO.plot_convergence(res)
+        f2 = TSODSO.plot_price_convergence(res)
+        @assert f1 isa CairoMakie.Makie.Figure "plot_convergence must return a Makie Figure"
+        @assert f2 isa CairoMakie.Makie.Figure "plot_price_convergence must return a Makie Figure"
+        println("MAKIE_EXT_OK")
+        """
+        out = read(`$(Base.julia_cmd()) --project=$proj -e $code`, String)
+        @test occursin("MAKIE_EXT_OK", out)
+    end
+end
