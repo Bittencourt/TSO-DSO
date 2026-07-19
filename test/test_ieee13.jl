@@ -156,3 +156,65 @@ end
     )
     @test isapprox(res.cost, obj2; rtol = 1e-3, atol = 1e-3)
 end
+
+@testitem "ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check (OPT-02/OPT-03)" tags = [
+    :ieee13,
+    :ground,
+] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    # ── PINNED COMPUTED GOLDEN (primary reproducibility anchor) ─────────────────────────
+    # These constants were captured from the FIRST trusted solve (OPTIMAL + exact +
+    # Clarabel≈Ipopt) on the documented ground-truth calibration. They are the ground truth
+    # every later rung is validated against; a live solve must reproduce them to ~1e-4, which
+    # catches numerical drift (a solver bump, a formulation regression, a fixture change).
+    # They are COMPUTED values, NOT the thesis figures — the thesis inputs are figure-bound
+    # (Open Q1); the thesis `v₉[16] ≈ 1.0493` is a separate APPROXIMATE cross-check below.
+    #
+    # `v` is the SQUARED voltage ⇒ |V₉[16]| = sqrt(v[10, 16]); node 9 → struct index 10; the
+    # welfare has a documented (large) gap to the thesis social-welfare $1819 because the
+    # MEM/temperature profiles and house counts are figure-bound (A2/A3).
+    const GOLDEN_V9_16 = 1.0436080536       # |V₉[16]| = sqrt(v[10,16]); v[10,16]² ≈ 1.0891178
+    const GOLDEN_WELFARE = -4823.1598620624 # GLB-CVX welfare optimum (computed; ≠ thesis $1819)
+    const GOLDEN_DADP16 = 1.4024313925      # first-aggregator DADP at hour 16
+    const GOLDEN_SUM_DADP = 96.7166853441   # Σ_t DADP — a horizon-wide summary of the price vector
+    const THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude (Open Q1 / A1) — cross-check only
+
+    feeder = TSODSO.ieee13_modified()
+    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+
+    res = operational_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = 24, allow_export = true)
+    ctx = res.ctx
+
+    # |V₉[16]| — sqrt because `v` is |V|² (A1); struct index 10 = thesis node 9, t = 16.
+    v9_16 = sqrt(value(ctx.meta[:pf_vars].v[10, 16]))
+
+    # ── HARD regression assertions on the COMPUTED golden (~1e-4 anchor) ────────────────
+    @test isapprox(v9_16, GOLDEN_V9_16; atol = 1e-4)
+    @test isapprox(res.cost, GOLDEN_WELFARE; rtol = 1e-4)
+    @test isapprox(res.dadp[16], GOLDEN_DADP16; atol = 1e-3)
+    @test isapprox(sum(res.dadp), GOLDEN_SUM_DADP; rtol = 1e-4)
+
+    # ── APPROXIMATE thesis cross-check — NON-FAILING (plan-checker W#2) ──────────────────
+    # Emit the exact gap to the thesis magnitude ALWAYS (visible in the test log), so a
+    # figure-bound profile difference is observable without ever reddening the suite.
+    gap = abs(v9_16 - THESIS_V9_16)
+    @info "ieee13 ground: thesis v₉[16] cross-check (Assumption A1)" v9_16 = v9_16 thesis =
+        THESIS_V9_16 gap = gap note = "gap is expected & documented (Open Q1: inputs figure-bound)"
+
+    # A `broken` @test NEVER fails the suite: it reports Broken when the tight tolerance is
+    # unmet and Pass when it is met (here gap ≈ 0.0057 < 1e-2, so it passes). This gives a
+    # suite-visible marker of the approximate match WITHOUT a spurious red from a figure-bound
+    # input difference. Only the COMPUTED golden above uses tight HARD assertions.
+    @test gap < 1e-2 broken = (gap >= 1e-2)
+
+    # Generous PHYSICAL-BAND sanity ceiling that cannot spuriously fail: voltage is capped at
+    # vmax = 1.05 pu and the thesis over-voltage magnitude is ≈ 1.05, so a correct |V₉[16]|
+    # sits within a small band of 1.0493. 0.06 is deliberately loose (it would tolerate a
+    # figure-bound profile difference) — the tight MAGNITUDE reading is pinned by the HARD
+    # golden assertion above (`v9_16 ≈ GOLDEN_V9_16`, atol 1e-4); this line only guards
+    # against a gross regression (a mis-scaled price or an out-of-band voltage).
+    @test gap < 0.06
+end
