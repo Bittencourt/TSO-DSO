@@ -309,4 +309,39 @@ function solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false, str
     )
 end
 
-export DsoOpt, build_dso_opt, solve_dso!
+"""
+    set_rho!(dso::DsoOpt, ρ::Real) -> DsoOpt
+
+Mutate the FIXED quadratic penalty weight of the built-ONCE DSO-OPT in place when the adaptive-ρ
+loop (07-04) changes ρ — WITHOUT rebuilding the JuMP model (ADMM-04 build-once preserved,
+RESEARCH Pattern 1). DSO-OPT is `Min λ₀ᵀp_import + (ρ/2)·Σ_{j,t} pag_dso[j,t]²`, so the diagonal
+quadratic coefficient of every `pag_dso[j,t]²` is `+0.5ρ` (Min objective — MIRROR of the AGR-OPT
+`−0.5ρ`). Flatten the `pag` coupling container to a `Vector{VariableRef}` and set them all in one
+BATCH call:
+
+    set_objective_coefficient(dso.model, v, v, fill(0.5ρ, length(v)))
+
+The 4-arg (quadratic) `set_objective_coefficient(model, x, x, c)` sets the coefficient of `x²`
+to `c` directly (JuMP 1.30.1 absorbs the MOI `0.5·xᵀQx` canonicalization — VERIFIED, RESEARCH
+Pattern 1 / objective.jl:629,712). The mutation is stored in the `CachingOptimizer` and re-applied
+on the next `optimize!`, identical mechanism to the LINEAR `set_objective_coefficient` update
+[`solve_dso!`](@ref) already runs each iteration — so `num_variables`/`num_constraints` are
+INVARIANT (no rebuild) and a mutate-then-solve is EQUIVALENT to a fresh build at the new ρ.
+
+CONTRACT for the caller (07-04): call `set_rho!` ONLY when ρ actually changed and in LOCKSTEP
+with the linear coefficient update `−λ[j][t] − ρ·a[j][t]` (same ρ — Pitfall 1: penalty ρ and
+ascent ρ must not diverge). Never model ρ (or λ) as a JuMP `Parameter`. Keep ρ strictly POSITIVE
+(convexity guard, Pitfall 6: ρ > 0 ⇒ DSO stays convex-Min); the adaptive policy clamps
+ρ ∈ `[ρ_min, ρ_max]`. Returns `dso`.
+"""
+function set_rho!(dso::DsoOpt, ρ::Real)
+    # Flatten the pag_dso DenseAxisArray (j over load_nodes × t) to a flat Vector{VariableRef}
+    # by indexing over its KNOWN axes — `collect` on a Vector-axis DenseAxisArray is unsupported.
+    v = VariableRef[dso.pag[j, t] for j in dso.load_nodes for t in 1:dso.T]
+    # Diagonal quadratic coeff of every pag_dso[j,t]² set to +0.5ρ (Min objective, penalty added).
+    # BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    set_objective_coefficient(dso.model, v, v, fill(0.5 * ρ, length(v)))
+    return dso
+end
+
+export DsoOpt, build_dso_opt, solve_dso!, set_rho!

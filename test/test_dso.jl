@@ -211,3 +211,48 @@ end
     @test num_variables(dso.model) == nv0
     @test num_constraints(dso.model; count_variable_in_set_constraints = true) == nc0
 end
+
+@testitem "dso: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:dso, :phase7] begin
+    using TSODSO
+    using JuMP: num_variables, num_constraints
+
+    # RED until Task 1 (this plan) adds set_rho!.
+    @test isdefined(TSODSO, :set_rho!)
+
+    if isdefined(TSODSO, :set_rho!)
+        feeder = Phase6Fixtures.two_bus_feeder()
+        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        Th = Phase6Fixtures.T
+        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        ρ0 = Phase6Fixtures.RHO_2BUS
+        ρ1 = 2.5 * ρ0                       # a genuine ρ change
+
+        # MUTATE path: build at ρ0, set_rho!(dso, ρ1) — NO rebuild — then solve at ρ1.
+        dso_mut = build_dso_opt(feeder, aggs, Th; ρ = ρ0, λ₀ = λ₀)
+        ln = dso_mut.load_nodes
+        λ = Dict(j => fill(0.05, Th) for j in ln)
+        a = Dict(j => fill(0.02, Th) for j in ln)
+
+        nv0 = num_variables(dso_mut.model)
+        nc0 = num_constraints(dso_mut.model; count_variable_in_set_constraints = true)
+        set_rho!(dso_mut, ρ1)
+        # Build-once (ADMM-04): a ρ change mutates ONLY objective coefficients — shape invariant.
+        @test num_variables(dso_mut.model) == nv0
+        @test num_constraints(dso_mut.model; count_variable_in_set_constraints = true) == nc0
+        res_mut = solve_dso!(dso_mut, λ, a, ρ1)
+
+        # FRESH path: build directly at ρ1, solve the SAME coupling price/target.
+        dso_fresh = build_dso_opt(feeder, aggs, Th; ρ = ρ1, λ₀ = λ₀)
+        res_fresh = solve_dso!(dso_fresh, λ, a, ρ1)
+
+        # Equivalence proof: the in-place quadratic mutation reproduces a fresh build at ρ1.
+        # (pag_dso is a Vector-axis DenseAxisArray — index over its axes rather than `collect`.)
+        pag_mut = Float64[res_mut.pag_dso[j, t] for j in ln, t in 1:Th]
+        pag_fresh = Float64[res_fresh.pag_dso[j, t] for j in ln, t in 1:Th]
+        @test isapprox(pag_mut, pag_fresh; atol = 1e-6, rtol = 1e-5)
+        @test isapprox(collect(res_mut.p_import), collect(res_fresh.p_import); atol = 1e-6, rtol = 1e-5)
+    end
+end
