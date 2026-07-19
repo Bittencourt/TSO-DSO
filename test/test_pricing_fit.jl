@@ -87,3 +87,69 @@ end
     # Import cost strictly below export revenue below … the thesis German-FIT calibration.
     @test TSODSO.FIT_λ_SELF < TSODSO.FIT_λ_IMPORT < TSODSO.FIT_λ_EXPORT
 end
+
+@testitem "fit: fit_baseline solves OPTIMAL with a finite magnitude-sane social welfare" setup =
+    [FitFixtures] tags = [:fit] begin
+    using TSODSO
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+    aggs = FitFixtures.aggregators(seed = 20260718)
+
+    res = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T)
+
+    @test isfinite(res.social_fit)
+    @test res.social_fit == res.welfare        # `welfare` is the alias the harness reads
+    @test isfinite(res.prosumer_surplus)
+    # Efficiency ratio social_DADP / social_fit is finite and positive (a self-contained
+    # cross-check; the authoritative +25% headline ≈ 1.25 is computed by 05-05).
+    @test isfinite(res.ratio)
+    @test res.ratio > 0
+    @test length(res.fit_flows) == length(aggs)
+end
+
+@testitem "fit: fit_baseline is reproducible bit-for-bit under a fixed seed (T-05-09)" setup =
+    [FitFixtures] tags = [:fit] begin
+    using TSODSO
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+
+    res1 = fit_baseline(feeder, ConvexBranchFlow(), FitFixtures.aggregators(seed = 4242); T = T)
+    res2 = fit_baseline(feeder, ConvexBranchFlow(), FitFixtures.aggregators(seed = 4242); T = T)
+
+    # Same seed ⇒ identical baseline (deterministic solve over identical seeded profiles).
+    @test res1.social_fit == res2.social_fit
+    @test res1.prosumer_surplus == res2.prosumer_surplus
+
+    # A different seed generally yields a different baseline (guards against a constant stub).
+    res3 = fit_baseline(feeder, ConvexBranchFlow(), FitFixtures.aggregators(seed = 9999); T = T)
+    @test res3.social_fit != res1.social_fit
+end
+
+@testitem "fit: the FIT AC-PF does NOT enforce the voltage limit (relaxed baseline ctx)" setup =
+    [FitFixtures] tags = [:fit] begin
+    using TSODSO
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+    aggs = FitFixtures.aggregators(seed = 20260718)
+
+    res = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T)
+
+    # The baseline ctx is marked as the FIT counterfactual, structurally distinct from a
+    # DADP welfare ctx (no battery, voltage limit relaxed — Assumption A4 / Open Q3).
+    @test res.ctx.meta[:fit_baseline] === true
+
+    # The AC-PF ran on a voltage-RELAXED feeder: the original tight band [0.95, 1.05] is
+    # widened to the per-unit sanity band [0.8, 1.2], so 3.35 does not bind (not enforced).
+    relaxed = res.ctx.meta[:feeder]
+    for b in relaxed.buses
+        b.is_root && continue
+        @test b.vmin == 0.8
+        @test b.vmax == 1.2
+    end
+
+    # The solve is OPTIMAL and registered its nodal balance like a normal solve.
+    @test haskey(res.ctx.constraints, :balance_p)
+end
