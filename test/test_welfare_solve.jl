@@ -164,3 +164,54 @@ end
     @test all(t -> value(battery_vars.pv_used[t]) <= Ppv[t] + 1e-6, 1:T)
     @test any(t -> value(battery_vars.pv_used[t]) < Ppv[t] - 1e-3, 1:T)
 end
+
+@testitem "welfare: battery complementarity is a base-free relative test (WR-02)" tags = [
+    :welfare,
+    :battery,
+] begin
+    using TSODSO, JuMP
+
+    @test isdefined(TSODSO, :assert_battery_complementarity!)
+
+    # Build a solved ModelContext holding ONE battery whose p_ch/p_dch are fixed to chosen
+    # values, so the complementarity gate can be exercised in isolation (no full welfare solve).
+    function ctx_with_battery(pmax, pch, pdch)
+        T = length(pch)
+        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        # Keep the upper_bound = Pmax intact (the gate recovers the rated power from it, as in
+        # the real PVBattery where p_ch/p_dch are UNFIXED decision variables): pin the values
+        # with equality constraints rather than `fix`, which would delete the bound.
+        p_ch = @variable(model, [t = 1:T], lower_bound = 0.0, upper_bound = pmax)
+        p_dch = @variable(model, [t = 1:T], lower_bound = 0.0, upper_bound = pmax)
+        @constraint(model, [t = 1:T], p_ch[t] == pch[t])
+        @constraint(model, [t = 1:T], p_dch[t] == pdch[t])
+        @objective(model, Max, 0)
+        optimize!(model)
+        ctx = TSODSO.ModelContext(model)
+        ctx.meta[:T] = T
+        store = get!(ctx.meta, :agg_device_vars, Dict{Int,Vector{Any}}())
+        store[2] = Any[(; p_ch, p_dch)]
+        return ctx
+    end
+
+    # --- Base-independence: a genuine simultaneous charge/discharge is caught even when its
+    # ABSOLUTE product is tiny. On a small-Pmax (≈large-base) battery, p_ch = p_dch = 5e-4
+    # gives product 2.5e-7 — comfortably under the OLD absolute τ = 1e-4 (silently accepted) —
+    # yet both legs are 50% of the 1e-3 rated power, so the RELATIVE gate REFUSES it.
+    ctx_small = ctx_with_battery(1.0e-3, fill(5.0e-4, 3), fill(5.0e-4, 3))
+    @test 5.0e-4 * 5.0e-4 < 1e-4                     # the old absolute gate would have passed it
+    @test_throws Exception assert_battery_complementarity!(ctx_small; τ = 1e-3)
+
+    # --- A genuinely large co-activation (10% of a 0.5 pu rating on each leg) is caught.
+    ctx_big = ctx_with_battery(0.5, fill(0.05, 3), fill(0.05, 3))
+    @test_throws Exception assert_battery_complementarity!(ctx_big; τ = 1e-3)
+
+    # --- Solver-noise co-activation passes: one leg genuinely charges, the other carries only
+    # a tiny numerical residual, so the product is negligible relative to Pmax².
+    ctx_noise = ctx_with_battery(0.1, fill(1.0e-3, 3), fill(8.0e-6, 3))
+    @test assert_battery_complementarity!(ctx_noise; τ = 1e-3) === nothing
+
+    # --- Clean complementarity (one leg exactly zero) always passes.
+    ctx_clean = ctx_with_battery(0.5, [0.3, 0.0, 0.2], [0.0, 0.25, 0.0])
+    @test assert_battery_complementarity!(ctx_clean; τ = 1e-3) === nothing
+end
