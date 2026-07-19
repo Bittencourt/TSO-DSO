@@ -71,6 +71,20 @@ end
     @test any(v -> haskey(v, :p_ch) && haskey(v, :p_dch), ctx.meta[:agg_device_vars][bus])
 end
 
+@testitem "aggregator: reactive_factor helper single-sources tan(acos φ) (IN-01)" tags = [:aggregator] begin
+    using TSODSO
+
+    # The single-sourced reactive-draw factor (IN-01) equals tan(arccos φ) = sqrt(1−φ²)/φ,
+    # reused verbatim by the aggregator roll-up and both ADMM subproblems.
+    @test isdefined(TSODSO, :reactive_factor)
+    for φ in (0.85, 0.9, 0.95, 1.0)
+        @test isapprox(reactive_factor(φ), tan(acos(φ)); atol = 1e-12)
+        @test isapprox(reactive_factor(φ), sqrt(1 - φ^2) / φ; atol = 1e-12)
+    end
+    # Unity power factor draws zero reactive.
+    @test reactive_factor(1.0) == 0.0
+end
+
 @testitem "aggregator: constructor + horizon guards (DEV-05)" tags = [:aggregator] begin
     using TSODSO
     using JuMP

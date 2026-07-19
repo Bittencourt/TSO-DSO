@@ -99,7 +99,7 @@ function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
     register_constraint!(ctx, :agr_coupling, coupling)
 
     # (4) Constant net reactive injection (thesis 3.23; DERs active-only, A3) for the μ update.
-    tanφ = sqrt(1 - agg.φ^2) / agg.φ
+    tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced (IN-01)
     qag = Float64[-agg.Pdc[t] * tanφ for t in 1:T]
 
     # (5) Objective: aggregator utility − FIXED (ρ/2)·Σ pag² penalty (built ONCE). The linear

@@ -17,6 +17,17 @@
 using JuMP
 
 """
+    reactive_factor(φ::Real) -> Real
+
+The reactive-draw factor `tan(arccos φ) = sqrt(1 − φ²)/φ` for a load power factor
+`φ ∈ (0, 1]` (thesis eq. 3.23). Single-sourced here (IN-01) and reused by the aggregator
+roll-up and BOTH ADMM subproblems (AGR-OPT, DSO-OPT), so the net reactive injection
+`q = −P_dc·tan(arccos φ)` is derived in exactly one place. `Aggregator` (included before the
+ADMM subproblems) is the shared home reachable from all three call sites.
+"""
+reactive_factor(φ::Real) = sqrt(1 - φ^2) / φ
+
+"""
     Aggregator{Tp<:Real,D<:AbstractVector{<:AbstractDevice}} <: AbstractDevice
 
 An aggregator of prosumer devices at one distribution bus (DEV-05): the SOLE
@@ -132,7 +143,7 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
         )
     end
 
-    tanφ = sqrt(1 - agg.φ^2) / agg.φ            # tan(arccos φ) (thesis eq. 3.23)
+    tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis eq. 3.23)
 
     # Accumulate the member devices' active injections and utilities (device-agnostic).
     p_inject = AffExpr[zero(AffExpr) for _ in 1:T]
@@ -165,4 +176,4 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     return (; vars = device_vars, p_inject, utility)
 end
 
-export Aggregator
+export Aggregator, reactive_factor
