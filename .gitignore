@@ -3,6 +3,10 @@
 # NOTE (INFRA-01 / RESEARCH Pitfall 3): Manifest.toml is intentionally COMMITTED
 # for reproducible clean-checkout resolution. Do NOT add Manifest.toml here.
 
+# Per-run experiment artifacts (JLD2 via DrWatson datadir/tagsave) — binary, non-diffable
+# (RESEARCH 08 Pitfall 3). The diff-friendly, committed counterpart is results/ (CSV summaries).
+/data/
+
 # Documenter build output
 /docs/build/
 /docs/site/
