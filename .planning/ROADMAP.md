@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Prosumer Device Library & Social-Welfare Solve** - All devices + aggregator + `GLB-CVX` on linear flow, centralized (rung 2a) (completed 2026-07-18)
 - [x] **Phase 4: Convex Branch-Flow Correctness Milestone** - SOCP + LinDistFlow exactness + IEEE 13 + `operational_oracle` seam (rung 2b) (completed 2026-07-19)
 - [x] **Phase 5: Distribution Pricing — DADP & DLMP Decomposition** - Nodal-balance dual prices, four-way decomposition, welfare accounting (rung 3) (completed 2026-07-19)
-- [ ] **Phase 6: ADMM Decomposition Core** - `AGR-OPT`/`DSO-OPT` + dual ascent, build-once, cross-validated vs centralized (rung 4a)
+- [x] **Phase 6: ADMM Decomposition Core** - `AGR-OPT`/`DSO-OPT` + dual ascent, build-once, cross-validated vs centralized (rung 4a) (completed 2026-07-19)
 - [ ] **Phase 7: ADMM Convergence & Scale** - Primal+dual stopping, adaptive ρ, diagnostics, IEEE 123-node voltage case (rung 4b)
 - [ ] **Phase 8: Experiment Harness & Reproducibility** - Declarative scenarios, sweeps, bit-for-bit reproducible runs
 - [ ] **Phase 9: Documentation & Regression Acceptance Gate** - Literate per-model math docs, pinned regression fixtures, v1 acceptance gate
@@ -149,7 +149,7 @@ recovers the centralized optimum and duals on every fixture small enough to solv
 - [x] 06-01-PLAN.md — Foundation: src/admm include-graph wiring + AdmmResiduals struct + 2-bus dual-sign fixture + RED cross-validation/build-once harness (ADMM-01)
 - [x] 06-02-PLAN.md — AGR-OPT per-node QP built once, reusing Aggregator.contribute!; set_objective_coefficient re-solve + App. C battery gate (ADMM-01, ADMM-03)
 - [x] 06-03-PLAN.md — DSO-OPT whole-network SOCP built once, reusing ConvexBranchFlow.contribute!; coefficient re-solve + PF-04 exactness on convergence (ADMM-01, ADMM-03)
-- [ ] 06-04-PLAN.md — solve_admm dual-ascent loop (build-once, fail-loud cap) + cross-validation vs centralized welfare+DADP on 2-bus and IEEE-13 (ADMM-01, ADMM-03, ADMM-04)
+- [x] 06-04-PLAN.md — solve_admm dual-ascent loop (build-once, fail-loud cap) + cross-validation vs centralized welfare+DADP on 2-bus and IEEE-13 (ADMM-01, ADMM-03, ADMM-04)
 
 ### Phase 7: ADMM Convergence & Scale
 **Goal**: Harden ADMM convergence and scale it to the IEEE 123-node voltage case — correct primal+dual
@@ -162,8 +162,14 @@ diagnostics — so the decomposition is trustworthy on the research-target regim
   1. ADMM stops on **both** primal and dual residuals with per-unit-normalized adaptive ρ (no hard-coded scale-specific penalty); hitting the iteration cap fails loudly rather than returning the last iterate.
   2. Convergence diagnostics (residual traces, iteration count, price convergence) are reported and plottable.
   3. The IEEE 123-node voltage-constrained case converges in ~tens of iterations with `λ_j → DADP` and the exactness invariant holding at the converged point.
-**Plans**: TBD
-**Research flag**: adaptive-ρ / dual-residual tuning on the SOCP subproblem is finickier than QP-only ADMM (SUMMARY.md research flags) — consider `--research-phase` at planning.
+**Plans**: 6 plans
+- [ ] 07-01-PLAN.md — Foundation: CairoMakie weakdep + re-resolved manifests + diagnostics/plot + ieee123 seams wired into TSODSO.jl + extended AdmmResiduals ledger + RED @testitem harness (ADMM-02, ADMM-05)
+- [ ] 07-02-PLAN.md — IEEE-123 radial per-unit fixture from thesis App. E (relabel + radialize + SparseArrays), validated by construction (ADMM-02)
+- [ ] 07-03-PLAN.md — Subproblem set_rho! quadratic-coefficient updaters (build-once preserved) + DSO-OPT transit-node relaxation (ADMM-02)
+- [ ] 07-04-PLAN.md — solve_admm: correct Boyd z-block dual residual + per-unit two-residual stopping + residual-balancing adaptive ρ (clamp/freeze), Phase-6 crossval regression intact (ADMM-02)
+- [ ] 07-05-PLAN.md — IEEE-123 ADMM convergence run (~tens iters, λ→DADP, PF-04 exact at convergence) + Phase-6 regression + full-suite gate (ADMM-02)
+- [ ] 07-06-PLAN.md — CairoMakie plotting extension (TSODSOMakieExt, return a Figure) + weakdep isolation test (core solve stays plot-free) (ADMM-05)
+**Research flag** (RESOLVED at planning): adaptive-ρ on the SOCP subproblem is handled by the VERIFIED in-place quadratic-coefficient update `set_objective_coefficient(m,x,x,ρ)` (no rebuild) — see 07-RESEARCH.md Pattern 1; no `--research-phase` needed.
 
 ### Phase 8: Experiment Harness & Reproducibility
 **Goal**: Make experiments first-class — a researcher declares a scenario, runs it end-to-end with either
@@ -204,7 +210,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
 | 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 5/5 | Complete   | 2026-07-19 |
-| 6. ADMM Decomposition Core | 3/4 | In Progress|  |
+| 6. ADMM Decomposition Core | 4/4 | Complete   | 2026-07-19 |
 | 7. ADMM Convergence & Scale | 0/TBD | Not started | - |
 | 8. Experiment Harness & Reproducibility | 0/TBD | Not started | - |
 | 9. Documentation & Regression Acceptance Gate | 0/TBD | Not started | - |
