@@ -170,6 +170,16 @@ end
             feeder, ConvexBranchFlow(), aggs;
             T = Th, λ₀ = λ₀, ρ = ρ, maxiter = -3, tol = tol, allow_export = true,
         )
+
+        # (f) A DEGENERATE horizon T = 0 (with a length-0 λ₀ that would otherwise pass the shape
+        # guard) is an INVALID problem: the coupling-entry count p = length(load_nodes)·T == 0, so
+        # ε_pri = ε_dual = 0 and every residual sum is 0, making `converged` trivially true on
+        # iteration 1 — a NONSENSICAL "converged" result for an empty problem. This must throw a
+        # CLEAR boundary ArgumentError up front (IN-03), NOT silently report a degenerate optimum.
+        @test_throws ArgumentError solve_admm(
+            feeder, ConvexBranchFlow(), aggs;
+            T = 0, λ₀ = Float64[], ρ = ρ, maxiter = maxiter, tol = tol, allow_export = true,
+        )
     end
 end
 
@@ -216,5 +226,52 @@ end
         # share the same shape (the loop mutates only the coupling coefficient, never rebuilds).
         agr_ref = build_agr_opt(aggs[1], Th; ρ = ρ)
         @test num_variables(agr_ref.model) >= 1                     # a real per-node QP was built once
+    end
+end
+
+@testitem "admm: final published primal certified — active-balance no hidden slack (crossval)" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:admm] begin
+    using TSODSO
+    using JuMP: value
+
+    # WR-01 / INFRA-03: the FINAL consolidation DSO-OPT solve tolerates the conic backend's BENIGN
+    # ALMOST_OPTIMAL / NEARLY_FEASIBLE LABEL (an interior-point gap artefact under the ρ-penalty),
+    # but its PRIMAL is PUBLISHED (it feeds the reported `welfare` and the PF-04 exactness gate). So
+    # `solve_admm` guards that primal with a runtime PHYSICAL certificate INDEPENDENT of the solver
+    # label: the ACTIVE nodal balance (`:balance_p`, thesis 3.31 — the constraint feeding
+    # `p_import`→`welfare` and whose dual is the DADP) must carry NO hidden slack. A genuinely
+    # near-INFEASIBLE final primal would show active-balance slack and be REFUSED loudly. The
+    # observable signal here: after a converged `solve_admm`, recomputing the active-balance residual
+    # of the returned DSO-OPT context from the solved variables is ≈ 0 to tight tolerance — the exact
+    # quantity `assert_no_slack` gates inside the loop. (`:balance_q`, the inelastic constant
+    # reactive-draw closure, legitimately carries the conic solver's NEARLY_FEASIBLE slack and is NOT
+    # published/load-bearing, so it is intentionally NOT asserted — see solve_admm's final block.)
+    @test isdefined(TSODSO, :solve_admm)
+
+    if isdefined(TSODSO, :solve_admm)
+        feeder = Phase6Fixtures.two_bus_feeder()
+        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        Th = Phase6Fixtures.T
+        λ₀ = Phase6Fixtures.two_bus_lambda0()
+
+        res = solve_admm(
+            feeder, ConvexBranchFlow(), aggs;
+            T = Th, λ₀ = λ₀, ρ = Phase6Fixtures.RHO_2BUS, maxiter = 200, allow_export = true,
+        )
+
+        # The active nodal balance of the PUBLISHED converged primal is satisfied with no hidden
+        # slack — the WR-01 runtime certificate. `assert_no_slack` (the same gate solve_admm runs)
+        # recomputes each residual from the solved variables and returns `lhs − rhs`; RE-running it
+        # here on the returned context must not throw and must be ≈ 0.
+        balance_p = res.dso_ctx.constraints[:balance_p]
+        max_slack = maximum(
+            abs(assert_no_slack(res.dso_ctx.model, balance_p[j, t]; atol = 1e-6))
+            for j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
+        )
+        @test max_slack <= 1e-6                    # active balance is machine-exact at the optimum
+        @test isfinite(res.welfare)               # welfare derived from the certified primal
+        @test res.exact_maxgap < 1e-3             # PF-04 certificate from the certified primal
     end
 end

@@ -59,7 +59,10 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
   guarded at build time); the `j` axis of `pag`.
 - `T::Int` — the day-ahead horizon (thesis A1).
 - `feeder` — the network the SOCP is built on.
-- `ρ::Float64` — the FIXED ADMM penalty weight (the `0.5·ρ·pag²` quadratic term, built once).
+- `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): under adaptive ρ the
+  LIVE penalty lives ONLY in the model's quadratic objective coefficients (mutated by
+  [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
+  holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
 - `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
 """
 struct DsoOpt{P,PI,F}

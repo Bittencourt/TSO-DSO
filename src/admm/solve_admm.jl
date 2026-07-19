@@ -130,6 +130,11 @@ function solve_admm(
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
+    # A degenerate horizon (T = 0, with a length-0 λ₀ that would pass the shape guard below) makes
+    # the coupling-entry count p = length(load_nodes)·T == 0, so ε_pri = ε_dual = 0 AND every
+    # residual sum is 0 — `converged` then returns true on iteration 1 and the loop reports a
+    # NONSENSICAL "converged" result for an empty problem (IN-03). Reject it up front.
+    T >= 1 || throw(ArgumentError("solve_admm needs T ≥ 1 (got T=$T)"))
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
     # A non-positive iteration budget never enters the loop, so the residual trace stays empty and
     # the fail-loud cap below would itself throw an opaque BoundsError on `last(...)` (WR-01). Reject
@@ -215,7 +220,9 @@ function solve_admm(
         # (2) DSO-OPT: coeff −λ_j − ρ·a_j (thesis 3.47). Mid-loop iterates are legitimately
         # inexact, so the PF-04 gate is NOT run here (check_exact = false; RESEARCH Pitfall 3),
         # and the mid-loop solve tolerates a NEARLY_FEASIBLE primal (strict = false; the DSO dual
-        # is never read — the price is the outer multiplier λ). The final solve below is STRICT.
+        # is never read — the price is the outer multiplier λ). The final solve below likewise
+        # tolerates the benign ALMOST_OPTIMAL label but adds PHYSICAL published-primal certificates
+        # (PF-04 exactness + the WR-01 active-balance no-slack gate — see the final block).
         dres = solve_dso!(dso, λ, a, ρf; check_exact = false, strict = false)
         pag_dso = dres.pag_dso
         p_import = dres.p_import
@@ -343,15 +350,22 @@ function solve_admm(
     #     1e-6 under-tolerances the converged point at IEEE-13 scale).
     #   • DSO-OPT with check_exact = true: the PF-04 SOC exactness gate (assert_socp_exact!).
     #
-    # `strict = false` on BOTH: the ADMM subproblem DUALS are never the published price (the DADP
-    # is the outer multiplier λ, cross-validated against the centralized optimum), so requiring
-    # the interior-point backend to hit its centralized-grade 1e-8 gap EXACTLY at the converged
-    # point is a brittle, non-load-bearing condition (under the ρ-penalty Clarabel intermittently
-    # stops at ALMOST_OPTIMAL / NEARLY_FEASIBLE). The load-bearing certificate of the converged
-    # PRIMAL is the pair of PHYSICAL gates run here — the base-free PF-04 SOC exactness check
-    # (`rtol = 1e-4`) and the relative App. C battery complementarity check — which are strictly
-    # stronger than the solver's OPTIMAL/ALMOST label. This mirrors the mid-loop treatment; the
-    # ONLY difference between mid-loop and final is that the final pass RUNS these physical gates.
+    # `strict = false` on BOTH tolerates the conic backend's BENIGN solver LABEL: under the converged
+    # ρ-penalty Clarabel intermittently stops at ALMOST_OPTIMAL / NEARLY_FEASIBLE — an interior-point
+    # gap artefact at the true optimum, NOT a physical infeasibility, and the ADMM subproblem DUALS
+    # are never the published price (the DADP is the outer multiplier λ, cross-validated against the
+    # centralized optimum). Requiring the STRICT solver label here is brittle: it spuriously rejects
+    # the genuinely-converged IEEE-13 / IEEE-123 optima (verified — they stop ALMOST_OPTIMAL).
+    #
+    # WR-01 / INFRA-03: because THIS primal is PUBLISHED (the reported `welfare`
+    # Σ value(U_ag) − λ₀ᵀvalue(p_import), and the PF-04 exactness certificate), the "no near-feasible
+    # result is ever published" contract is enforced by PHYSICAL gates that are INDEPENDENT of the
+    # solver's OPTIMAL/ALMOST label — strictly stronger than that label — rather than by tolerating a
+    # near-infeasible primal silently: (1) the PF-04 SOC exactness gate (`assert_socp_exact!`, rtol
+    # 1e-4); (2) the App. C battery complementarity gate; and (3) the ACTIVE nodal-balance no-slack
+    # certificate added AFTER the final solve below (`assert_no_slack` on `:balance_p`). A genuinely
+    # near-INFEASIBLE final primal fails LOUDLY on those gates at runtime; only the benign solver
+    # LABEL is tolerated.
     for j in load_nodes
         r = solve_agr!(
             agr_by_bus[j], λ[j], c[j], ρf; check_battery = true, τ_batt = 1e-3, strict = false,
@@ -362,6 +376,28 @@ function solve_admm(
     dres_final = solve_dso!(dso, λ, a, ρf; check_exact = true, strict = false)
     p_import = dres_final.p_import
     exact_maxgap = dres_final.exact_maxgap
+
+    # WR-01 PUBLISHED-PRIMAL CERTIFICATE (INFRA-03). The final DSO solve tolerates the conic
+    # backend's BENIGN `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE` LABEL (under the converged ρ-penalty
+    # Clarabel intermittently stops just shy of its centralized-grade gap — a solver-label artefact,
+    # not a physical infeasibility). But `welfare` (Σ value(U_ag) − λ₀ᵀvalue(p_import)) is PUBLISHED
+    # from THIS primal, so relying on the solver's OPTIMAL/ALMOST label alone would let a genuinely
+    # near-infeasible primal flow silently into the reported price. Add a PHYSICAL runtime gate that
+    # is INDEPENDENT of the solver label: recompute the ACTIVE nodal-balance residual (`:balance_p`,
+    # thesis 3.31 — the constraint whose primal feeds `p_import`→`welfare` and whose dual is the
+    # DADP) from the solved variables and FAIL LOUDLY if any entry carries hidden slack. The active
+    # balance is closed by the FREE `p_import`/`pag_dso` variables, so a genuinely converged primal
+    # satisfies it to machine precision (empirically ≈0); a near-INFEASIBLE final primal would show
+    # slack here and is refused — the loud runtime signal WR-01 requires, strictly stronger than the
+    # `allow_almost` solver label. `:balance_q` (the INELASTIC constant reactive-draw closure — NOT a
+    # published/load-bearing quantity; the DADP and welfare are ACTIVE) legitimately carries the
+    # conic solver's NEARLY_FEASIBLE reactive slack under the ρ-penalty, so it is intentionally not
+    # gated here — gating it would spuriously reject a genuinely-converged transactive optimum.
+    let balance_p = dso.ctx.constraints[:balance_p]
+        for j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
+            assert_no_slack(dso.model, balance_p[j, t]; atol = 1e-6)
+        end
+    end
 
     # ---- Welfare recomputed from PRIMALS (Σ U_ag − λ₀ᵀp_import — NOT the penalized objective) --
     welfare = sum(util[j] for j in load_nodes) - sum(λ₀[t] * p_import[t] for t in 1:T)

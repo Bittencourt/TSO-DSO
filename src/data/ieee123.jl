@@ -210,7 +210,9 @@ end
     ieee123_modified() -> Feeder{Float64}
 
 Build the modified IEEE 123-node voltage-constrained test feeder (thesis Case B, App. E) as an
-immutable, radial-validated, per-unit `Feeder` on the `IEEE123_BASE` (100 MVA / 4.16 kV).
+immutable, radial-validated, per-unit `Feeder` on the `IEEE123_BASE` (1 MVA / 4.16 kV — the
+Phase-7 feeder-scale base chosen for SOC cone-slack robustness, matching `IEEE123_BASE` and the
+file header; NOT a 100 MVA transmission base).
 
 # Topology (123 buses, 122 radial branches)
 

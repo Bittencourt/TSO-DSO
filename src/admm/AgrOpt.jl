@@ -44,10 +44,16 @@ iteration by a single `set_objective_coefficient` update on the coupling variabl
   to `Σ_d p_inject_d[t] − Pdc[t]` (thesis 3.22). Its linear objective coefficient is the
   per-iteration ADMM handle.
 - `qag::Vector{Float64}` — the CONSTANT net reactive injection `−Pdc[t]·tan(arccos φ)` (thesis
-  3.23; DERs are active-only, A3), exposed for the reactive dual (`μ`) update.
+  3.23; DERs are active-only, A3). PLACEHOLDER for a FUTURE reactive-consensus (`μ` dual-ascent)
+  extension — no reactive dual update exists yet (the DSO closes reactive with a constant draw and
+  a free `q_import`), so this field is currently NOT read by `solve_admm` (IN-02). Kept as the
+  documented seam for that extension; do not treat it as a live consensus quantity.
 - `T::Int` — the day-ahead horizon.
 - `bus::Int` — the aggregator's distribution bus.
-- `ρ::Float64` — the ADMM penalty / dual-step weight fixed into the quadratic term at build.
+- `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): the LIVE penalty
+  under adaptive ρ lives ONLY in the model's quadratic objective coefficients (mutated by
+  [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
+  holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
 """
 struct AgrOpt
     model::Model
