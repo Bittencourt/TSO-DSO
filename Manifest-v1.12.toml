@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "b4dbee56a6058115df0f37d9f1be1dce374dcbd2"
+project_hash = "b68196328344953cc2d4702e6295d11258202db0"
 
 [[deps.AMD]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
@@ -511,9 +511,11 @@ version = "0.1.0"
 
     [deps.TSODSO.extensions]
     TSODSOGurobiExt = "Gurobi"
+    TSODSOMakieExt = "CairoMakie"
     TSODSOMosekExt = "MosekTools"
 
     [deps.TSODSO.weakdeps]
+    CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
     Gurobi = "2e9cd046-0924-5485-92f1-d5272153d98b"
     MosekTools = "1ec41992-ff65-5c91-ac43-2df89e9693a4"
 
