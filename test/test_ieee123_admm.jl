@@ -29,14 +29,25 @@
 
     if isdefined(TSODSO, :ieee123_modified) && isdefined(TSODSO, :set_rho!)
         feeder = ieee123_modified()
+        N = length(feeder.buses)
         Th = Phase7Fixtures.T
         λ₀ = Phase7Fixtures.ieee123_lambda0()
 
-        # one seeded aggregator per LOAD node; the transit (junction) buses carry zero injection.
+        # One seeded aggregator per LOAD node (the 85 spot-load buses); the ~37 junction buses
+        # carry NO aggregator and are handled as zero-injection TRANSIT nodes by the DSO-OPT
+        # relaxation (plan 07-03, RESEARCH Pitfall 5). That the whole run below does NOT throw at
+        # build_dso_opt IS the transit-handling certificate; assert the split is real up front.
         aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)
         load_buses = [a.bus for a in aggs]
+        @test length(load_buses) == 85                          # thesis Case-B spot-load count
+        @test length(load_buses) < N - 1                        # ⇒ genuine transit buses exist (~37)
 
         # Centralized ground truth: the monolithic SOCP welfare + its DADP duals (ADMM-03 oracle).
+        # CONVERGENCE-CHECK METHOD (RESEARCH A5): the CENTRALIZED CROSS-VALIDATION path is taken —
+        # the ~123-bus × 24 h SOCP solves monolithically in Clarabel in seconds on the feeder-scale
+        # base, so λ_j → DADP is certified DIRECTLY against `extract_dlmp` (the strongest gate,
+        # T-07-14), NOT the weaker residual+exactness+price-sanity fallback. The exactness gate
+        # (PF-04) and the PRICE-04 economic-direction sanity below are ADDITIONAL certificates.
         ctx_c, obj_c, _ = solve_welfare(
             feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
         )
@@ -44,7 +55,9 @@
             vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses),
         )
 
-        # ADMM with the SAME per-unit adaptive-ρ config (scale-invariant, ADMM-02).
+        # ADMM with the SAME per-unit adaptive-ρ config as 2-bus / IEEE-13 (scale-invariant, no
+        # per-fixture penalty, ADMM-02). Converges in TENS of iterations on the voltage-constrained
+        # 123-node case (plan 07-05: ~17 iters at RHO0 = 5 with the shared clamped/frozen schedule).
         res = solve_admm(
             feeder, ConvexBranchFlow(), aggs;
             T = Th, λ₀ = λ₀, ρ = Phase7Fixtures.RHO0,
@@ -55,8 +68,18 @@
         )
 
         @test res.iters < 300                                   # converged before the fail-loud cap
+        @test res.iters <= 100                                  # ~TENS of iters (loose bound, Pitfall 6)
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)         # welfare match (ADMM-04)
         @test res.exact_maxgap < 1e-3                           # PF-04 exact on the converged DSO-OPT
         @test isapprox(res.λ, dlmp_c; atol = 1e-2, rtol = 1e-3) # DADP → centralized price (λ_j → DADP)
+
+        # PRICE-04 economic-direction sanity (an ADDITIONAL certificate beyond the cross-validation):
+        # every recovered DADP is a strictly-positive marginal cost of consumption, and the
+        # feeder-average DADP tracks the wholesale λ₀ SHAPE — higher at the evening demand peak
+        # (h18, λ₀ = 9.0) than in the overnight trough (h3, λ₀ = 3.6). A wrong-signed or
+        # shape-inverted price would be a physical red flag even if the norm-gap happened to pass.
+        @test all(>(0), res.λ)
+        avg_dadp = vec(sum(res.λ; dims = 1) ./ size(res.λ, 1))
+        @test avg_dadp[18] > avg_dadp[3]
     end
 end
