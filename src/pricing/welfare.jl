@@ -32,19 +32,28 @@ Split the solved GLB-CVX welfare (thesis eq. 3.38) into **prosumer** and **DSO**
 Reads only stashed primals/duals — **no re-solve**. The three quantities (thesis page 98):
 
 - `social`   = `objective_value(ctx.model)` — the GLB-CVX social welfare (3.38);
-- `prosumer` = `Σ_j U_agⱼ − Σ_j Σ_t λ_j[t]·p_agⱼ[t]` — the AGR-OPT value (3.46), where
+- `prosumer` = `Σ_j U_agⱼ + Σ_j Σ_t λ_j[t]·p_agⱼ[t]` — the AGR-OPT value (3.46), where
   `Σ_j U_agⱼ = value(ctx.meta[:objective])` and the price-transfer term prices each
-  aggregator's net injection `p_agⱼ[t]` (`ctx.meta[:agg_net]`, plan 05-01) at the DADP
-  `λ_j[t] = extract_dlmp(ctx)`;
-- `dso`      = `Σ_j Σ_t λ_j[t]·p_agⱼ[t] − Σ_t λ₀[t]·p_import[t]` — the −DSO-OPT value (3.47):
-  DADP revenue from prosumers minus the MEM purchase cost at the frontier.
+  aggregator's net INJECTION `p_agⱼ[t]` (`net = p_inject − Pdc`, `ctx.meta[:agg_net]`, plan
+  05-01) at the DADP `λ_j[t] = extract_dlmp(ctx)`. The transfer is **added** (not subtracted):
+  a net-EXPORTER (net>0) at a positive λ EARNS `λ·net`, an importer PAYS it — thesis 3.46
+  prices net DEMAND (= −net injection), so with the net-injection stash the sign flips to `+`;
+- `dso`      = `−Σ_j Σ_t λ_j[t]·p_agⱼ[t] − Σ_t λ₀[t]·p_import[t]` — the −DSO-OPT value (3.47):
+  the DSO's MEM revenue at the frontier minus what it pays prosumers for their net injection
+  (it collects the DLMP−wholesale spread).
 
-The `Σ_j λ_j·p_agⱼ` **price-transfer cancels** between `prosumer` and `dso`, leaving
-`Σ_j U_agⱼ − Σ_t λ₀[t]·p_import[t]` = the GLB-CVX objective (3.38). So the identity is the
-load-bearing correctness gate: a sign error or dropped term in ONE settlement breaks the
-cancellation and throws (mirroring `assert_socp_exact!`'s relative-tolerance style). The
-`_transfer_flip` hook is a SELF-TEST that deliberately mis-signs the transfer in the DSO
-settlement only — proving the assertion is non-vacuous (threat T-05-03).
+The `Σ_j λ_j·p_agⱼ` **price-transfer cancels** between `prosumer` (`+transfer`) and `dso`
+(`−transfer`), leaving `Σ_j U_agⱼ − Σ_t λ₀[t]·p_import[t]` = the GLB-CVX objective (3.38).
+
+**The `social == prosumer + dso` identity is ALGEBRAICALLY VACUOUS for the surplus-SPLIT sign**
+(WR-01): the transfer cancels for EITHER sign convention, so the sum-identity alone CANNOT
+catch a flipped single-settlement transfer — that is a *dual*-consistency / dropped-term gate
+(it fires on a term present in one settlement but not the other), NOT a split-sign gate. The
+INDIVIDUAL surplus signs/values are what pin the economics (exporter earns, importer pays); the
+`test/test_pricing_welfare.jl` suite asserts those directly. The `_transfer_flip` hook is a
+SELF-TEST that mis-signs the transfer in the DSO settlement ONLY (breaking the cancellation by
+introducing an asymmetry) so the sum-identity assertion fires — proving THAT assertion is
+non-vacuous for its actual purpose (a one-sided term error; threat T-05-03).
 
 `λ₀` (the MEM/wholesale price) defaults to the root DADP `extract_dlmp(ctx)[root, t]` — the
 thesis "energy component = dual(balance_p[root,t])"; at the priced-frontier optimum it equals
@@ -115,11 +124,21 @@ function welfare_accounting(
 
     util = value(ctx.meta[:objective])                # Σ_j U_agⱼ (total prosumer utility)
 
-    prosumer = util - transfer                        # AGR-OPT value (3.46)
-    # −DSO-OPT value (3.47). `_transfer_flip` mis-signs the transfer in the DSO settlement
-    # ONLY (a broken cancellation) so the identity assertion below fires — the non-vacuous
-    # self-test (threat T-05-03); it is NOT part of the physical accounting.
-    dso = (_transfer_flip ? -transfer : transfer) - mem_cost
+    # AGR-OPT value (3.46). `transfer = Σⱼ Σₜ λⱼ·netⱼ` where `net = p_inject − Pdc` is the net
+    # INJECTION (net>0 ⇒ export). Thesis 3.46 prices the aggregator's net DEMAND (= −net
+    # injection): an aggregator that net-EXPORTS at a positive DADP λ EARNS `λ·net`, an
+    # importer PAYS it. So the transfer is ADDED to the prosumer surplus (exporter earns), NOT
+    # subtracted — subtracting conflated the 3.22 net-injection sign with the 3.46 net-demand
+    # cost term (CR-01; 05-RESEARCH:213-217).
+    prosumer = util + transfer
+    # −DSO-OPT value (3.47): the DSO collects the DLMP−wholesale spread — its MEM revenue
+    # (`−mem_cost`, positive when the feeder net-exports to the market) MINUS what it pays the
+    # prosumers for their net injection (`transfer`). Mirror-image of the prosumer side so the
+    # `Σⱼλⱼ·netⱼ` transfer cancels and `prosumer + dso == util − mem_cost == social`.
+    # `_transfer_flip` mis-signs the transfer in the DSO settlement ONLY (a broken cancellation)
+    # so the identity assertion below fires — the non-vacuous self-test (threat T-05-03); it is
+    # NOT part of the physical accounting.
+    dso = (_transfer_flip ? transfer : -transfer) - mem_cost
 
     social = objective_value(ctx.model)               # GLB-CVX optimum (3.38)
 

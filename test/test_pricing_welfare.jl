@@ -123,6 +123,113 @@ end
     @test_throws ErrorException welfare_accounting(ctx; T = T, _transfer_flip = true)
 end
 
+# ---------------------------------------------------------------------------------------------
+# Task 1b (05-05 / WR-01): INDIVIDUAL surplus-sign correctness — the split's economics.
+#
+# The `social == prosumer + dso` sum-identity is ALGEBRAICALLY VACUOUS for the surplus-SPLIT
+# sign: the `Σⱼλⱼ·netⱼ` price-transfer cancels for EITHER sign, so the sum alone canNOT catch a
+# flipped single-settlement transfer (that is why CR-01 — a sign-inverted split — shipped green
+# under the sum-identity test above). These tests assert the INDIVIDUAL surplus signs/values
+# against independently-computed expectations, which DO fire on the CR-01 sign flip:
+#   - a net-EXPORTER earns λ·net  ⇒  prosumer = util + transfer  (NOT util − transfer),
+#     prosumer > 0, 0 ≤ dso < social;
+#   - a net-IMPORTER pays λ·net   ⇒  prosumer = util + transfer < util, dso ≥ 0.
+# Under the pre-fix (buggy) `prosumer = util − transfer` the exporter's prosumer surplus was a
+# large NEGATIVE and dso EXCEEDED social — both caught here, neither caught by the sum-identity.
+# ---------------------------------------------------------------------------------------------
+@testitem "welfare surplus accounting: net-EXPORTER earns — individual surplus signs (WR-01/PRICE-03)" tags = [
+    :welfare,
+    :surplus,
+] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # Same net-exporting 2-bus fixture as the sum-identity test (PV+battery, small load): the
+    # aggregator net-INJECTS at every hour, so at a positive DADP it EARNS the price-transfer.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    ctx, obj, _dadp = solve_welfare(
+        feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true,
+    )
+
+    acct = welfare_accounting(ctx; T = T)
+
+    # Independently recompute the utility + price-transfer from the ctx stash (the split's inputs).
+    util = value(ctx.meta[:objective])
+    λ = extract_dlmp(ctx)
+    transfer = sum(λ[e.bus, t] * value(e.net[t]) for e in ctx.meta[:agg_net] for t in 1:T)
+
+    # This aggregator net-EXPORTS (net injection > 0 every hour) at a positive DADP transfer.
+    @test all(value(e.net[t]) > 0 for e in ctx.meta[:agg_net] for t in 1:T)
+    @test transfer > 0
+
+    # DIRECTION (the CR-01 gate the sum-identity misses): the exporter EARNS the transfer, so
+    # prosumer = util + transfer. The pre-fix bug computed util − transfer — assert it is NOT that.
+    @test isapprox(acct.prosumer, util + transfer; rtol = 1e-6, atol = 1e-6)
+    @test !isapprox(acct.prosumer, util - transfer; rtol = 1e-3, atol = 1e-3)
+
+    # Individual surplus SIGNS/VALUES against independently-derived expectations (reviewer refs
+    # prosumer ≈ +65.60, dso ≈ +0.39; sum = social ≈ 65.99). A net-exporter's prosumer surplus
+    # is positive; the DSO's spread is non-negative and CANNOT exceed the whole social welfare.
+    @test acct.prosumer > 0
+    @test isapprox(acct.prosumer, 65.594; atol = 0.1)
+    @test acct.dso >= 0
+    @test acct.dso < acct.social
+    @test isapprox(acct.dso, 0.397; atol = 0.05)
+end
+
+@testitem "welfare surplus accounting: net-IMPORTER pays — individual surplus signs (WR-01/PRICE-03)" tags = [
+    :welfare,
+    :surplus,
+] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # Net-IMPORTING 2-bus fixture: high inflexible demand (Pdc) and NO PV, so the aggregator
+    # net-DRAWS every hour and must PAY the price-transfer (mirror image of the exporter case).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.10, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.0, T))
+    agg = Aggregator(2, 0.9, [batt], fill(1.5, T))
+    ctx, obj, _dadp = solve_welfare(
+        feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true,
+    )
+
+    acct = welfare_accounting(ctx; T = T)
+
+    util = value(ctx.meta[:objective])
+    λ = extract_dlmp(ctx)
+    transfer = sum(λ[e.bus, t] * value(e.net[t]) for e in ctx.meta[:agg_net] for t in 1:T)
+
+    # This aggregator net-IMPORTS (net injection < 0 every hour): transfer is negative.
+    @test all(value(e.net[t]) < 0 for e in ctx.meta[:agg_net] for t in 1:T)
+    @test transfer < 0
+
+    # DIRECTION: the importer PAYS, so prosumer = util + transfer < util. The pre-fix bug
+    # (util − transfer) would have shown the importer's surplus ABOVE its utility (earning) —
+    # assert the corrected sign and that the surplus reflects the PAYMENT.
+    @test isapprox(acct.prosumer, util + transfer; rtol = 1e-6, atol = 1e-6)
+    @test acct.prosumer < util
+    @test !isapprox(acct.prosumer, util - transfer; rtol = 1e-3, atol = 1e-3)
+
+    # The DSO collects the (positive) DLMP−wholesale spread from the importing prosumer.
+    @test acct.dso >= 0
+    # Sum-identity still holds (the transfer cancels regardless — vacuous for the split sign).
+    @test isapprox(acct.prosumer + acct.dso, acct.social; rtol = 1e-4, atol = 1e-4)
+end
+
 @testitem "welfare surplus accounting: IEEE-13 ground solve — social == prosumer + dso == objective (PRICE-03)" tags = [
     :welfare,
     :surplus,
