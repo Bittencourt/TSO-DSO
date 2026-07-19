@@ -166,9 +166,24 @@ function solve_welfare(
     # Aggregators: net active/reactive injections into :Rp/:Rq + summed utility into
     # ctx.meta[:objective]. Each aggregator is the sole :Rp/:Rq writer at its bus. (On a DC
     # run the aggregators still write :Rq, but it is left unclosed below — active-only.)
-    for agg in aggregators
-        contribute!(agg, ctx; T = T)
+    #
+    # PRICE-03 (05-01): PURELY ADDITIVE surplus stash. Capture each `contribute!` return
+    # (previously discarded) and record, per aggregator, its NET active injection
+    # `net[t] = p_inject[t] − Pdc[t]` (EXACTLY the expression written to :Rp at agg.bus, thesis
+    # 3.22) plus the returned `utility` QuadExpr. Under a solved ctx the welfare accounting
+    # (plan 05-05) splits social = prosumer + DSO surplus: the prosumer surplus is
+    # `Σ_j U_agⱼ − Σ_j Σ_t λ_j[t]·net_j[t]` (thesis eqs. 3.46/3.47), where the price-transfer
+    # term needs the per-aggregator net injection `p_agⱼ[t]` (= net[t] here) and `Σ_j U_agⱼ`
+    # remains sourced from `value(ctx.meta[:objective])`. Recording it does NOT alter the
+    # residual writes, the objective, the balance registration, the exactness gate, the battery
+    # check, or the returned tuple.
+    agg_net = Vector{NamedTuple}(undef, length(aggregators))
+    for (k, agg) in enumerate(aggregators)
+        res = contribute!(agg, ctx; T = T)
+        net = [res.p_inject[t] - agg.Pdc[t] for t in 1:T]   # net active injection p_agⱼ[t] (3.22)
+        agg_net[k] = (; bus = agg.bus, net = net, utility = res.utility)
     end
+    ctx.meta[:agg_net] = agg_net
 
     # Frontier imports at the root, injected BEFORE closing the residuals. p_import is
     # priced and non-negative (active draw from the MEM). q_import is FREE-SIGN so the

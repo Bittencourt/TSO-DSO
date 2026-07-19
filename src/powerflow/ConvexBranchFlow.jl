@@ -150,6 +150,10 @@ function contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
         cone[b = 1:nB, t = 1:T],
         [0.5 * l[b, t], v[B[b].from, t], P[b, t], Q[b, t]] in RotatedSecondOrderCone()
     )
+    # PRICE-02 (05-01): register the rotated cone (3.39) so its dual is recoverable for the
+    # DLMP loss/voltage split (decompose_dlmp, plan 05-02). PURELY ADDITIVE — the handle is
+    # the SAME container already built above; nothing about the feasible set changes.
+    register_constraint!(ctx, :cone, cone)   # dual feeds the loss/voltage DLMP component (3.39)
 
     # TRUE voltage drop (thesis 3.33): v_j = v_i − 2(rP + xQ) + (r²+x²)·l. Unlike
     # LinDistFlow (l→0), the loss-current term (r²+x²)·l is retained.
@@ -160,6 +164,9 @@ function contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
         v[B[b].from, t] - 2 * (B[b].r * P[b, t] + B[b].x * Q[b, t]) +
         (B[b].r^2 + B[b].x^2) * l[b, t]
     )
+    # PRICE-02 (05-01): register the true voltage drop (3.33) — its dual β feeds the
+    # loss+voltage DLMP component. PURELY ADDITIVE (same container, unchanged math).
+    register_constraint!(ctx, :vdrop, vdrop)   # dual β feeds loss+voltage DLMP component (3.33)
 
     # Exactness-copy voltage drop (thesis 3.43): substitute P̂ = P + r·l, Q̂ = Q + x·l into
     # the copy recursion ⇒ v̂_j = v̂_i − 2{ r(P + r·l) + x(Q + x·l) }. Written purely in the
@@ -175,15 +182,29 @@ function contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
             B[b].x * (Q[b, t] + B[b].x * l[b, t])
         )
     )
+    # PRICE-02 (05-01): register the exactness-copy drop (3.43) — its dual feeds the
+    # exactness-copy contribution to the DLMP split. Pitfall 2: omitting this registration
+    # leaves a residual in the four-way sum-to-nodal-price identity. PURELY ADDITIVE.
+    register_constraint!(ctx, :cpydrop, cpydrop)   # dual feeds the exactness-copy DLMP term (3.43)
 
     # Forward apparent-power limit (thesis 3.36): P²+Q² ≤ S²max ⟺ ‖(P,Q)‖₂ ≤ smax, added
     # ONLY where a genuine limit exists (RESEARCH Open Q2 / Assumption A7). Branches with the
     # `_SMAX_NO_LIMIT` sentinel (interior, unconstrained) get NO cone — the case is
     # congestion-driven at the head branch alone.
-    for (b, br) in enumerate(B), t in 1:T
-        br.smax < _SMAX_NO_LIMIT || continue
-        @constraint(m, [br.smax, P[b, t], Q[b, t]] in SecondOrderCone())
-    end
+    #
+    # PRICE-02 (05-01): built as a NAMED, BRANCH-INDEXED sparse container (keyed by branch
+    # index b and time t) via the SAME `B[b].smax < _SMAX_NO_LIMIT` filter predicate the prior
+    # anonymous loop used — so the feasible set is BYTE-IDENTICAL (only genuinely-limited
+    # branches, i.e. the head branch, get a cone). The container is keyed by BRANCH INDEX b
+    # (WARNING-2, plan 05-01) — NOT an (b,br) tuple — so `decompose_dlmp` (plan 05-02) can index
+    # the congestion dual ν by branch on the root→j tree path. Its dual is the congestion
+    # component of the DLMP.
+    @constraint(
+        m,
+        smax[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
+        [B[b].smax, P[b, t], Q[b, t]] in SecondOrderCone()
+    )
+    register_constraint!(ctx, :smax, smax)   # dual ν = congestion DLMP component (3.36)
 
     # Per-bus active (3.31) and reactive (3.32) balances: inflow − outflow, accumulated into
     # the shared :Rp / :Rq via the indexed seam. The incoming branch (i,j) contributes
