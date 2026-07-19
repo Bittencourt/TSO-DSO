@@ -393,7 +393,9 @@ assert_socp_exact!(dso_ctx)                   # PF-04 gate on the CONVERGED DSO 
 
 **If any assumption proves false, the failure mode is a *thrown gate* or a *failing cross-validation test*, not a silently-wrong published price** — the phase's invariants are fail-loud by construction.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED: (1) ρ/ε per fixture → documented `ρ` keyword with `RHO_2BUS`/`ρ_ieee13` defaults, empirical sweep logged as a Manual-Only verification in 06-VALIDATION.md (adaptive-ρ is Phase 7); (2) AGR-OPT solver under re-solve → Clarabel default (copy_to-only, warm-start no-op; HiGHS fallback if re-copy dominates); (3) thesis 3.47 printed sign → NOT copied literally; the AGR-OPT/DSO-OPT signs are derived from one augmented Lagrangian and pinned by the 2-bus dual-sign regression, which is the authority.
 
 1. **Exact ρ (and ε) per fixture.**
    - What we know: ρ is both penalty and dual step; thesis used ρ=1000, ε=5e-5, ~28 iters at its scale.
