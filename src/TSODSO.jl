@@ -105,4 +105,20 @@ include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validatio
 # (plan 07-06), so `using TSODSO` stays plot-free (threat T-07-01).
 include("diagnostics/plots.jl")
 
+# --- Experiment harness: declarative Scenario -> swappable-strategy run -> sweep+provenance ---
+# Wired (plan 08-01, this plan is the SOLE owner of this shared edit) AFTER admm/ and
+# diagnostics/ — the harness is ORCHESTRATION over the already-validated Phase 1-7 builders
+# (RESEARCH Summary / Architectural Responsibility Map): run_scenario calls solve_welfare,
+# solve_admm, and extract_dlmp; nothing here modifies a Phase 1-7 source file. Dependency
+# order: Scenario (primitive selectors) -> materialize (selectors+seed -> feeder/λ₀/aggs) ->
+# run (strategy dispatch -> ScenarioResult) -> store (per-run @tagsave provenance) -> sweep
+# (dict_list expansion + diff-friendly CSV collation, consumes store's run_and_store). Each
+# seam is a comment-only STUB in this plan, filled file-disjointly by exactly one later plan
+# (08-02 Scenario+materialize, 08-03 run, 08-04 store+sweep), so Waves 2-4 never touch this file.
+include("experiments/Scenario.jl")      # primitive-selector Scenario struct (plan 08-02, EXP-01)
+include("experiments/materialize.jl")   # sub_seed + build_feeder/price/population (plan 08-02, INFRA-04)
+include("experiments/run.jl")           # ScenarioResult + run_scenario dispatch (plan 08-03, EXP-01/INFRA-04)
+include("experiments/store.jl")         # run_and_store @tagsave provenance (plan 08-04, INFRA-04)
+include("experiments/sweep.jl")         # run_sweep + collate_summary diff-friendly CSV (plan 08-04, EXP-02)
+
 end # module TSODSO
