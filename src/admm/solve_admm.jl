@@ -82,9 +82,10 @@ matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged
 `exact_maxgap` the certified SOC cone residual (PF-04).
 
 # Throws
-- `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, or more than one aggregator per
-  load node (the 1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus
-  netflow splitting is a Phase-7 generalization).
+- `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, a non-positive `maxiter`
+  (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
+  1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus netflow
+  splitting is a Phase-7 generalization).
 - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence — the fail-loud cap that
   refuses to return a non-consensus iterate (RESEARCH Pitfall 2).
 """
@@ -102,6 +103,11 @@ function solve_admm(
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+    # A non-positive iteration budget never enters the loop, so the residual trace stays empty and
+    # the fail-loud cap below would itself throw an opaque BoundsError on `last(...)` (WR-01). Reject
+    # it here with a CLEAR message instead — maxiter ≥ 1 is the minimum to even attempt consensus.
+    maxiter >= 1 ||
+        throw(ArgumentError("solve_admm needs maxiter ≥ 1 (got maxiter=$maxiter)"))
     allow_export || throw(
         ArgumentError(
             "solve_admm requires allow_export=true (the free-sign priced frontier is the " *
