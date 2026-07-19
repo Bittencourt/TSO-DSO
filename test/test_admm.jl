@@ -157,6 +157,19 @@ end
             feeder, ConvexBranchFlow(), aggs;
             T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 1, tol = 1e-12, allow_export = true,
         )
+
+        # (e) A non-positive maxiter is an INVALID budget: the loop never runs, so the residual
+        # trace stays empty. This must throw a CLEAR boundary ArgumentError (WR-01), NOT the opaque
+        # BoundsError the fail-loud cap's `last(residuals.primal_trace)` would raise on an empty
+        # trace (the guard failing itself). maxiter = 0 AND a negative maxiter both reject up front.
+        @test_throws ArgumentError solve_admm(
+            feeder, ConvexBranchFlow(), aggs;
+            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 0, tol = tol, allow_export = true,
+        )
+        @test_throws ArgumentError solve_admm(
+            feeder, ConvexBranchFlow(), aggs;
+            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = -3, tol = tol, allow_export = true,
+        )
     end
 end
 

@@ -99,7 +99,7 @@ function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
     register_constraint!(ctx, :agr_coupling, coupling)
 
     # (4) Constant net reactive injection (thesis 3.23; DERs active-only, A3) for the μ update.
-    tanφ = sqrt(1 - agg.φ^2) / agg.φ
+    tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced (IN-01)
     qag = Float64[-agg.Pdc[t] * tanφ for t in 1:T]
 
     # (5) Objective: aggregator utility − FIXED (ρ/2)·Σ pag² penalty (built ONCE). The linear
@@ -112,7 +112,7 @@ end
 
 """
     solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real;
-               check_battery::Bool = true, τ_batt::Real = 1e-6)
+               check_battery::Bool = true, τ_batt::Real = 1e-6, strict::Bool = true)
         -> (; pag::Vector{Float64}, utility::Float64)
 
 Re-solve the AGR-OPT subproblem for one ADMM iteration (RESEARCH Pattern 3, thesis 3.46)
@@ -140,6 +140,15 @@ converged re-solve — where it also uses the interior-point `τ_batt` (Clarabel
 co-activates the optimal face more, so the QP-tight `1e-6` under-tolerances the converged point
 at scale; `1e-3` matches the `problem_class`-aware SOCP-path τ in `solve_welfare`). Default
 `(check_battery = true, τ_batt = 1e-6)` preserves the plan-06-02 standalone behavior.
+
+`strict` — the [`assert_solved!`](@ref) mode (mirrors [`solve_dso!`](@ref)). `strict = true` (the
+default, and ALWAYS used on the final/converged re-solve) requires a fully OPTIMAL, dual-feasible
+point via `assert_solved!(agr.model; dual = true)`. `strict = false` is the MID-LOOP mode: the
+AGR-OPT subproblem's DUALS are never the priced quantity (the transactive price is the outer
+multiplier `λ`, not an AGR dual), so an `ALMOST_OPTIMAL` / `NEARLY_FEASIBLE` primal — the backend
+stopping just shy of its centralized-grade gap under the ρ-penalty — is acceptable at an
+intermediate iterate (the residual loop self-corrects; RESEARCH Pitfall 2/4). `solve_admm` passes
+`strict = false` on every mid-loop re-solve and keeps the default `strict = true` on the final one.
 
 Returns `(; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))`: the solved net
 active injection over the horizon and the aggregator utility `U_ag` value (the un-penalized

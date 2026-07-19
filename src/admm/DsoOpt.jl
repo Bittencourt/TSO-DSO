@@ -164,7 +164,7 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
                 "(thesis 3.22/3.23)",
             ),
         )
-        tanφ = sqrt(1 - agg.φ^2) / agg.φ            # tan(arccos φ) (thesis 3.23)
+        tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced (IN-01)
         q = q_draw[agg.bus]
         for t in 1:T
             q[t] += -agg.Pdc[t] * tanφ
