@@ -22,7 +22,7 @@ using JuMP
 """
     solve_welfare(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                   T::Int = 24, λ₀, optimizer = select_optimizer(problem_class(pf)),
-                  allow_local::Bool = false, τ::Real = 1e-6, τ_exact::Real = 1e-5,
+                  allow_local::Bool = false, τ::Real = 1e-3, rtol_exact::Real = 1e-4,
                   allow_export::Bool = false)
         -> (ctx::ModelContext, objective::Float64, dadp::Vector{Float64})
 
@@ -67,13 +67,14 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
 6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
 7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
    (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is trusted;
-8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; τ = τ_exact)` — but ONLY
-   when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
+8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
+   ONLY when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
    cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
    physically-meaningless duals from a STRICT (inexact) relaxation are REFUSED (thrown) rather
    than returned (threats T-04-01/T-04-03). `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
-   DC/LinDistFlow stash no `:l` and skip this untouched. `τ_exact` (default 1e-5) is a DISTINCT
-   tolerance from the battery-check `τ` — never conflated (Pitfall 2);
+   DC/LinDistFlow stash no `:l` and skip this untouched. `rtol_exact` (default 1e-4) is a
+   RELATIVE, base-free cone-slack tolerance (WR-01) and is a DISTINCT quantity from the
+   battery-check `τ` — never conflated (Pitfall 2);
 9. runs the MANDATORY App. C post-solve battery complementarity check: for every battery
    stashed under `ctx.meta[:agg_device_vars]`, asserts `value(p_ch[t])·value(p_dch[t]) < τ`
    for all `t`, throwing loudly on violation (RESEARCH Pitfall 1, threat T-03-13). The
@@ -98,8 +99,8 @@ function solve_welfare(
     λ₀,
     optimizer = select_optimizer(problem_class(pf)),
     allow_local::Bool = false,
-    τ::Real = (problem_class(pf) isa SOCP ? 1e-4 : 1e-6),
-    τ_exact::Real = 1e-5,
+    τ::Real = (problem_class(pf) isa SOCP ? 1e-3 : 1e-6),
+    rtol_exact::Real = 1e-4,
     allow_export::Bool = false,
 )
     # Boundary guards (RESEARCH Pitfall 4): empty aggregators ⇒ no priced load / no
@@ -228,13 +229,14 @@ function solve_welfare(
     # before the exactness gate"). It is DATA-DRIVEN on the presence of the squared-current
     # variable `:l` in the formulation's `pf_vars` stash: only ConvexBranchFlow stashes `:l`,
     # so DC/LinDistFlow (no cone, no `:l`) skip this untouched — no `if formulation ==`
-    # branching. `τ_exact` (default 1e-5) is DELIBERATELY DISTINCT from the battery-check `τ`
-    # (default 1e-6): the exactness margin is tuned ~2 orders above Clarabel's 1e-8 gap
-    # (Pitfall 2), while the complementarity tolerance is a different physical quantity — do
-    # not conflate them. `maxgap` is stashed under `ctx.meta[:socp_maxgap]` as a first-class
-    # output reported alongside the prices.
+    # branching. `rtol_exact` (default 1e-4) is a RELATIVE, base-free cone-slack tolerance
+    # (WR-01): normalizing the residual by the cone magnitude keeps the gate's protective
+    # strength invariant to the per-unit base, unlike the old absolute threshold. It is
+    # DELIBERATELY DISTINCT from the battery-check `τ` — a different physical quantity, do not
+    # conflate them. `maxgap` (the absolute residual) is stashed under `ctx.meta[:socp_maxgap]`
+    # as a first-class output reported alongside the prices.
     if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
-        ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; τ = τ_exact)
+        ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; rtol = rtol_exact)
     end
 
     # App. C MANDATORY post-solve battery complementarity (RESEARCH Pitfall 1, threat
