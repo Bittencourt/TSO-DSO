@@ -110,4 +110,48 @@ function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
     return AgrOpt(model, ctx, collect(pag), qag, T, agg.bus, Float64(ρ))
 end
 
-export AgrOpt, build_agr_opt
+"""
+    solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real)
+        -> (; pag::Vector{Float64}, utility::Float64)
+
+Re-solve the AGR-OPT subproblem for one ADMM iteration (RESEARCH Pattern 3, thesis 3.46)
+WITHOUT rebuilding the JuMP model (ADMM-03). For each hour `t` it updates ONLY the linear
+objective coefficient of the coupling variable `pag_j[t]` to `−λ_j[t] − ρ·c_j[t]` — the price
+plus the shifted-penalty term (expanding `−(ρ/2)(pag+c)²` leaves `−ρ·c` on the linear part; the
+FIXED `−ρ/2` quadratic self-term built by [`build_agr_opt`](@ref) is untouched). `λ_j` is a
+plain `Float64` vector, NEVER a JuMP `Parameter` (a `λ·pag` Parameter×variable term is an
+indefinite bilinear Clarabel rejects — RESEARCH Pitfall 1).
+
+After the coefficient update it:
+- gates the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before reading any
+  value; and
+- runs the MANDATORY App. C battery-complementarity check
+  [`assert_battery_complementarity!`](@ref)`(agr.ctx; τ = 1e-6, T = agr.T)` — the batteries live
+  in AGR-OPT now, so a degenerate simultaneous charge/discharge is caught here (threat T-06-10).
+
+Returns `(; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))`: the solved net
+active injection over the horizon and the aggregator utility `U_ag` value (the un-penalized
+welfare term the ADMM loop recombines for reporting). Throws `ArgumentError` on a `λ_j`/`c_j`
+length mismatch — the boundary guard against a silently-wrong coefficient update.
+"""
+function solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real)
+    length(λ_j) == agr.T ||
+        throw(ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"))
+    length(c_j) == agr.T ||
+        throw(ArgumentError("solve_agr!: c_j has length $(length(c_j)), expected T=$(agr.T)"))
+
+    # Build-once re-solve (ADMM-03): one scalar coefficient update per hour — no JuMP rebuild.
+    for t in 1:agr.T
+        set_objective_coefficient(agr.model, agr.pag[t], -λ_j[t] - ρ * c_j[t])
+    end
+
+    # INFRA-03 gate before any value()/dual() read.
+    assert_solved!(agr.model; dual = true)
+
+    # App. C battery complementarity (τ = 1e-6 on the tight QP path) — batteries live here now.
+    assert_battery_complementarity!(agr.ctx; τ = 1e-6, T = agr.T)
+
+    return (; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))
+end
+
+export AgrOpt, build_agr_opt, solve_agr!
