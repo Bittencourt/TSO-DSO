@@ -145,7 +145,11 @@ recovers the centralized optimum and duals on every fixture small enough to solv
   1. ADMM solves the operational problem via per-node `AGR-OPT` + per-hour `DSO-OPT` subproblems with dual ascent, reusing the exact same device/power-flow builders as the centralized solve.
   2. Subproblems are built once and re-solved via parameter/coefficient updates + warm starts — no per-iteration JuMP model rebuild.
   3. An automated cross-validation test asserts ADMM welfare and duals match the centralized optimum within tolerance on every fixture small enough to solve monolithically.
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 06-01-PLAN.md — Foundation: src/admm include-graph wiring + AdmmResiduals struct + 2-bus dual-sign fixture + RED cross-validation/build-once harness (ADMM-01)
+- [ ] 06-02-PLAN.md — AGR-OPT per-node QP built once, reusing Aggregator.contribute!; set_objective_coefficient re-solve + App. C battery gate (ADMM-01, ADMM-03)
+- [ ] 06-03-PLAN.md — DSO-OPT whole-network SOCP built once, reusing ConvexBranchFlow.contribute!; coefficient re-solve + PF-04 exactness on convergence (ADMM-01, ADMM-03)
+- [ ] 06-04-PLAN.md — solve_admm dual-ascent loop (build-once, fail-loud cap) + cross-validation vs centralized welfare+DADP on 2-bus and IEEE-13 (ADMM-01, ADMM-03, ADMM-04)
 
 ### Phase 7: ADMM Convergence & Scale
 **Goal**: Harden ADMM convergence and scale it to the IEEE 123-node voltage case — correct primal+dual
@@ -200,7 +204,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
 | 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 5/5 | Complete   | 2026-07-19 |
-| 6. ADMM Decomposition Core | 0/TBD | Not started | - |
+| 6. ADMM Decomposition Core | 0/4 | Not started | - |
 | 7. ADMM Convergence & Scale | 0/TBD | Not started | - |
 | 8. Experiment Harness & Reproducibility | 0/TBD | Not started | - |
 | 9. Documentation & Regression Acceptance Gate | 0/TBD | Not started | - |
