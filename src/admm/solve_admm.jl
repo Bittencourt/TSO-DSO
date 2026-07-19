@@ -54,7 +54,9 @@ using JuMP
 """
     solve_admm(feeder, pf::ConvexBranchFlow, aggregators;
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
-               ε_abs::Real = 1e-4, ε_rel::Real = 1e-3, allow_export::Bool = true)
+               ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
+               τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
+               allow_export::Bool = true)
         -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
@@ -77,9 +79,22 @@ duals of the nodal balance (RESEARCH Pattern 5).
    a ρ change), refresh the netflow target `c_j = −pag_dso_j`, and snapshot `pag_dso_prev = pag_dso`.
    Stop when [`converged`](@ref)`(residuals, ε_pri, ε_dual)` — BOTH `‖r‖ ≤ ε_pri` AND `‖s‖ ≤ ε_dual`
    (a primal-only stop is the textbook false-convergence bug).
+   After the step, ADAPT ρ by residual balancing (RESEARCH Pattern 4, Boyd §3.4.1): `ρ ← τ·ρ` if
+   the primal lags (`‖r‖ > μ‖s‖`), `ρ ← ρ/τ` if the dual lags (`‖s‖ > μ‖r‖`), clamped to
+   `[ρ_min, ρ_max]`; on an actual change call [`set_rho!`](@ref) on the DSO-OPT and every AGR-OPT so
+   the quadratic penalty tracks ρ WITHOUT a rebuild (build-once preserved). ρ FREEZES once both
+   residuals fall within `10×` their thresholds (Boyd's fixed-ρ convergence tail).
 3. On convergence: a FINAL [`solve_dso!`](@ref)`(...; check_exact = true)` runs the PF-04 gate
    [`assert_socp_exact!`](@ref) (`exact_maxgap`); recompute `welfare = Σ_j value(U_ag,j) − Σ_t
    λ₀[t]·value(p_import[t])` from PRIMALS; set `dadp = λ`.
+
+# Adaptive ρ (RESEARCH Pattern 4 — the Phase-7 upgrade of the Phase-6 fixed ρ)
+The `ρ` keyword is now the INITIAL penalty ρ₀ (all Phase-6 call sites keep working). ρ then adapts
+by per-unit residual balancing (`τ`, `μ`) and is clamped to `[ρ_min, ρ_max]`, so the SAME
+`(ε_abs, ε_rel, τ, μ, ρ_min, ρ_max)` converge the 2-bus, IEEE-13 AND IEEE-123 cases WITHOUT any
+hard-coded scale-specific penalty (per-unit scale-invariance, ADMM-02). λ is the UNSCALED physical
+price and is NEVER rescaled on a ρ change. The `tol` keyword is RETAINED for call-site
+compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_rel`).
 
 # Returns
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)` where `λ == dadp` is the
@@ -107,6 +122,10 @@ function solve_admm(
     tol::Real = 1e-5,
     ε_abs::Real = 1e-4,
     ε_rel::Real = 1e-3,
+    τ::Real = 2.0,
+    μ::Real = 10.0,
+    ρ_min::Real = 1e-2,
+    ρ_max::Real = 1e4,
     allow_export::Bool = true,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
@@ -171,6 +190,13 @@ function solve_admm(
     util = Dict{Int,Float64}(j => 0.0 for j in load_nodes)                      # U_ag per node (primal welfare)
     p_import = zeros(Float64, T)                                                # frontier exchange (primal welfare)
     exact_maxgap = nothing
+
+    # ---- Adaptive-ρ state (RESEARCH Pattern 4, Boyd §3.4.1). `ρf` is the LIVE penalty/dual-step
+    # (initialized to the ρ₀ keyword). `ρ_frozen` latches TRUE once both residuals fall within ~10×
+    # tolerance, after which ρ is held fixed (Boyd's convergence theory assumes ρ eventually
+    # constant — prevents late-stage oscillation stalling the tail). τ/μ are the residual-balancing
+    # multiplier/band; [ρ_min, ρ_max] clamp the penalty (SOCP-conditioning + proximal meaningfulness).
+    ρ_frozen = false
 
     converged_flag = false
     for k in 1:maxiter
@@ -248,6 +274,50 @@ function solve_admm(
                 pag_dso_prev[j][t] = pag_dso[j, t]
                 λ[j][t] += ρf * (a[j][t] - pag_dso[j, t])
                 c[j][t] = -pag_dso[j, t]
+            end
+        end
+
+        # (5) RESIDUAL-BALANCING ADAPTIVE ρ (Boyd §3.4.1 eq. 3.13, RESEARCH Pattern 4). Once BOTH
+        # residuals are within ~10× tolerance, FREEZE (latch) — Boyd's convergence theory assumes ρ
+        # eventually fixed, and freezing stops late-stage ρ oscillation from stalling the tail.
+        #
+        # BALANCE ON ε-NORMALIZED RESIDUALS (r̂ = ‖r‖/ε_pri, ŝ = ‖s‖/ε_dual), NOT the raw ‖r‖/‖s‖:
+        # here ε_pri (∝ the tiny per-unit injection magnitude) and ε_dual (∝ ‖λ‖, the O(1–10) price)
+        # differ by ~50×, so a RAW ‖r‖-vs-μ‖s‖ comparison is apples-to-oranges — it reads "balanced"
+        # while the primal is 60× its tolerance and the dual only 3×, leaving ρ stuck at a value too
+        # small to regularize the DSO SOCP (Clarabel NUMERICAL_ERROR by iter 3 on IEEE-13). Comparing
+        # each residual to its OWN threshold makes the balancing dimensionless and self-consistent
+        # with the freeze/stop tests (which already use r/ε_pri, s/ε_dual), so the SAME (τ, μ, ρ_min,
+        # ρ_max) climb ρ from ρ₀ to a well-conditioned value on the 2-bus, IEEE-13 AND IEEE-123
+        # (per-unit scale-invariance, ADMM-02). This is the standard scaled-residual balancing form.
+        #
+        # ρ ← τ·ρ if the primal lags (r̂ > μ·ŝ ⇒ penalize consensus harder), ρ ← ρ/τ if the dual lags
+        # (ŝ > μ·r̂ ⇒ relax the penalty), clamped to [ρ_min, ρ_max]. On an ACTUAL change call set_rho!
+        # on the DSO-OPT and every AGR-OPT so the QUADRATIC penalty matches the new ρ WITHOUT a
+        # rebuild (build-once preserved, ADMM-04) — in lockstep with the linear/ascent ρf (Pitfall 1:
+        # penalty ρ and ascent ρ must never diverge). λ is NOT rescaled (unscaled physical price;
+        # Pattern 4). ρ > 0 always (clamp ⇒ convexity kept).
+        if !ρ_frozen
+            r̂ = r_norm / ε_pri
+            ŝ = s_norm / ε_dual
+            if r̂ <= 10 && ŝ <= 10
+                ρ_frozen = true
+            else
+                ρ_new = if r̂ > μ * ŝ
+                    τ * ρf
+                elseif ŝ > μ * r̂
+                    ρf / τ
+                else
+                    ρf
+                end
+                ρ_new = clamp(ρ_new, ρ_min, ρ_max)
+                if ρ_new != ρf
+                    ρf = ρ_new
+                    set_rho!(dso, ρf)
+                    for j in load_nodes
+                        set_rho!(agr_by_bus[j], ρf)
+                    end
+                end
             end
         end
     end
