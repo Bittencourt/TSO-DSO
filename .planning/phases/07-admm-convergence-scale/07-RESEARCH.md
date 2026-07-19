@@ -663,7 +663,9 @@ end
 | A5 | The monolithic IEEE-123 SOCP (`solve_welfare`) still solves in Clarabel for cross-validation | convergence expectation | Low-Medium — ~123 buses × 24h + devices is well within IPM range; if it ever OOMs, the fallback gate is residuals→0 + PF-04 exactness + PRICE-04 economic-direction sanity. |
 | A6 | ~85 load nodes ⇒ ~37 transit buses (thesis Case B says "85 load nodes") | Pitfall 5 | Low — the exact transit count falls out of the fixture; the guard relaxation handles any number. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED and adopted by the plans: (1) IEEE-123 root/MEM terminal → the no-parent terminal (150), fixed in 07-02; (2) seeded per-node aggregators for the load nodes (exact thesis device params deferred to Phase-9 regression) → 07-01/07-05; (3) 2-norm stopping with ∞-norm kept as a diagnostic → 07-04.
 
 1. **Which thesis terminal is the MEM frontier / root on IEEE-123?**
    - What we know: App. E lists (150,149) and (149,1) as the first branches; the standard IEEE-123
