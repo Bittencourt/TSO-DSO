@@ -25,6 +25,13 @@ using TSODSO, CairoMakie
 # (`== iters`), so a single x-range serves every series.
 _iters_axis(res::TSODSO.AdmmResiduals) = 1:(res.iters)
 
+# log10-axis guard (IN-04): the residual / price-gap traces are stored `abs(...)` / `ρ·r_norm`,
+# so a value of EXACTLY 0.0 (e.g. `price_gap = ρ·r_norm` when `r_norm` hits 0, or a residual that
+# converges to exactly zero) maps to `log10(0) = -Inf`, which Makie rejects/drops — silently
+# breaking the thesis-grade figure. Clamp each plotted series to a small positive floor (`eps()`)
+# so a converged-to-zero trace degrades gracefully to the axis floor instead of crashing the plot.
+_logsafe(trace) = max.(trace, eps())
+
 """
     TSODSO.plot_convergence(res::AdmmResiduals; filename = nothing) -> Makie.Figure
 
@@ -44,10 +51,10 @@ function TSODSO.plot_convergence(res::TSODSO.AdmmResiduals; filename = nothing)
         yscale = log10,
         title = "ADMM convergence: primal ‖r‖ & dual ‖s‖ vs iteration",
     )
-    lines!(ax, xs, res.primal_trace; label = "‖r‖ primal", color = :dodgerblue)
-    lines!(ax, xs, res.dual_trace; label = "‖s‖ dual", color = :crimson)
-    lines!(ax, xs, res.eps_pri_trace; label = "ε_pri", color = :dodgerblue, linestyle = :dash)
-    lines!(ax, xs, res.eps_dual_trace; label = "ε_dual", color = :crimson, linestyle = :dash)
+    lines!(ax, xs, _logsafe(res.primal_trace); label = "‖r‖ primal", color = :dodgerblue)
+    lines!(ax, xs, _logsafe(res.dual_trace); label = "‖s‖ dual", color = :crimson)
+    lines!(ax, xs, _logsafe(res.eps_pri_trace); label = "ε_pri", color = :dodgerblue, linestyle = :dash)
+    lines!(ax, xs, _logsafe(res.eps_dual_trace); label = "ε_dual", color = :crimson, linestyle = :dash)
     axislegend(ax; position = :rt)
     filename === nothing || save(filename, fig)
     return fig
@@ -84,7 +91,7 @@ function TSODSO.plot_price_convergence(res::TSODSO.AdmmResiduals; filename = not
     hidexdecorations!(axρ)
     linkxaxes!(ax, axρ)
 
-    lgap = lines!(ax, xs, res.price_gap_trace; color = :purple)
+    lgap = lines!(ax, xs, _logsafe(res.price_gap_trace); color = :purple)
     lrho = lines!(axρ, xs, res.rho_trace; color = :seagreen, linestyle = :dot)
     axislegend(ax, [lgap, lrho], ["‖Δλ‖ price gap", "ρ (penalty)"]; position = :rt)
     filename === nothing || save(filename, fig)
