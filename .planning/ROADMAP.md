@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Plumbing & Solver Abstraction** - Data model, `ModelContext`, `select_optimizer`, toy DC single-node solve (rung 0) (completed 2026-07-18)
 - [x] **Phase 2: Linear Branch-Flow Residual Seam** - LinDistFlow + one flexible load, centralized; nodal-balance dual appears (rung 1) (completed 2026-07-18)
 - [x] **Phase 3: Prosumer Device Library & Social-Welfare Solve** - All devices + aggregator + `GLB-CVX` on linear flow, centralized (rung 2a) (completed 2026-07-18)
-- [ ] **Phase 4: Convex Branch-Flow Correctness Milestone** - SOCP + LinDistFlow exactness + IEEE 13 + `operational_oracle` seam (rung 2b)
+- [x] **Phase 4: Convex Branch-Flow Correctness Milestone** - SOCP + LinDistFlow exactness + IEEE 13 + `operational_oracle` seam (rung 2b) (completed 2026-07-19)
 - [ ] **Phase 5: Distribution Pricing — DADP & DLMP Decomposition** - Nodal-balance dual prices, four-way decomposition, welfare accounting (rung 3)
 - [ ] **Phase 6: ADMM Decomposition Core** - `AGR-OPT`/`DSO-OPT` + dual ascent, build-once, cross-validated vs centralized (rung 4a)
 - [ ] **Phase 7: ADMM Convergence & Scale** - Primal+dual stopping, adaptive ρ, diagnostics, IEEE 123-node voltage case (rung 4b)
@@ -113,7 +113,7 @@ extension stubs in place so the planning layer is additive later.
 - [x] 04-03-PLAN.md — Modified IEEE-13 feeder built-in fixture from thesis Table 4.1 (DATA-03)
 - [x] 04-04-PLAN.md — operational_oracle(z)→(cost,π) + SEAM-01 extension stubs (OPT-03, SEAM-01)
 - [x] 04-05-PLAN.md — PF-04 exactness invariant assert_socp_exact! (price-refusal gate) hooked into welfare_solve + SOCP trait routing + high-PV fixture (PF-04)
-- [ ] 04-06-PLAN.md — Full GLB-CVX SOCP solve on IEEE-13 + pinned-golden regression + thesis v₉[16] cross-check + cross-solver check (OPT-02, OPT-03)
+- [x] 04-06-PLAN.md — Full GLB-CVX SOCP solve on IEEE-13 + pinned-golden regression + thesis v₉[16] cross-check + cross-solver check (OPT-02, OPT-03)
 
 ### Phase 5: Distribution Pricing — DADP & DLMP Decomposition
 **Goal**: Extract and validate the day-ahead dynamic price as the dual of the nodal active-power balance,
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Plumbing & Solver Abstraction | 4/4 | Complete   | 2026-07-18 |
 | 2. Linear Branch-Flow Residual Seam | 4/4 | Complete   | 2026-07-18 |
 | 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
-| 4. Convex Branch-Flow Correctness Milestone | 5/6 | In Progress|  |
+| 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 0/TBD | Not started | - |
 | 6. ADMM Decomposition Core | 0/TBD | Not started | - |
 | 7. ADMM Convergence & Scale | 0/TBD | Not started | - |

@@ -72,6 +72,7 @@ None yet.
 
 - [Phase 4]: ~~Re-verify Clarabel API specifics~~ RESOLVED (Phase-4 research, 2026-07-18): RotatedSecondOrderCone form `[0.5l, v, P, Q] in RotatedSecondOrderCone()`, Clarabel handles SOCP+quadratic natively, `Parameter` API confirmed, Clarabel copy_to-only (no direct_model). No factory change needed.
 - [Phase 7]: Adaptive-ρ / dual-residual tuning on the SOCP subproblem is partial-research; may warrant `--research-phase`.
+- [Phase 4 follow-up — welfare gap]: The IEEE-13 ground-truth solve reproduces the thesis VOLTAGE well (v₉[16]=1.0436 vs 1.0493, 0.5%; A1 confirmed = |V| magnitude, node 9=struct index 10) but the WELFARE (−4823) differs from the thesis +$1819 because the MEM price / temperature profiles / house-counts are figure-bound (not recoverable from the thesis figures). A COMPUTED GOLDEN is pinned as the regression anchor (accepted by researcher 2026-07-18). TODO (later reconciliation pass): digitize thesis figures ~4.2/4.5 to recover the exact MEM/load/PV inputs and close the welfare gap; then re-pin the golden and tighten the thesis cross-check.
 
 ## Deferred Items
 
