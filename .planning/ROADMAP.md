@@ -163,7 +163,7 @@ diagnostics — so the decomposition is trustworthy on the research-target regim
   2. Convergence diagnostics (residual traces, iteration count, price convergence) are reported and plottable.
   3. The IEEE 123-node voltage-constrained case converges in ~tens of iterations with `λ_j → DADP` and the exactness invariant holding at the converged point.
 **Plans**: 6 plans
-- [ ] 07-01-PLAN.md — Foundation: CairoMakie weakdep + re-resolved manifests + diagnostics/plot + ieee123 seams wired into TSODSO.jl + extended AdmmResiduals ledger + RED @testitem harness (ADMM-02, ADMM-05)
+- [x] 07-01-PLAN.md — Foundation: CairoMakie weakdep + re-resolved manifests + diagnostics/plot + ieee123 seams wired into TSODSO.jl + extended AdmmResiduals ledger + RED @testitem harness (ADMM-02, ADMM-05)
 - [ ] 07-02-PLAN.md — IEEE-123 radial per-unit fixture from thesis App. E (relabel + radialize + SparseArrays), validated by construction (ADMM-02)
 - [ ] 07-03-PLAN.md — Subproblem set_rho! quadratic-coefficient updaters (build-once preserved) + DSO-OPT transit-node relaxation (ADMM-02)
 - [ ] 07-04-PLAN.md — solve_admm: correct Boyd z-block dual residual + per-unit two-residual stopping + residual-balancing adaptive ρ (clamp/freeze), Phase-6 crossval regression intact (ADMM-02)
@@ -211,7 +211,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 5/5 | Complete   | 2026-07-19 |
 | 6. ADMM Decomposition Core | 4/4 | Complete   | 2026-07-19 |
-| 7. ADMM Convergence & Scale | 0/TBD | Not started | - |
+| 7. ADMM Convergence & Scale | 1/6 | In Progress|  |
 | 8. Experiment Harness & Reproducibility | 0/TBD | Not started | - |
 | 9. Documentation & Regression Acceptance Gate | 0/TBD | Not started | - |
 
