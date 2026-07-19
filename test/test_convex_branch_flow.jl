@@ -81,3 +81,53 @@ end
     @test model isa Model
     @test occursin("Clarabel", string(solver_name(model)))
 end
+
+# PRICE-02 (05-01): the four branch-flow constraint duals the DLMP decomposition consumes
+# (voltage-drop 3.33, copy-drop 3.43, rotated cone 3.39, apparent-power limit 3.36) must be
+# recoverable BY NAME from a solved ctx. This item builds `contribute!` on a lossy radial
+# feeder and asserts each handle is registered under ctx.constraints. The `:smax` container is
+# BRANCH-INDEXED (keyed by branch index b, time t) with the SAME `smax < _SMAX_NO_LIMIT` filter
+# as before, so only genuinely-limited branches carry a cone (feasible set byte-identical).
+@testitem "socp: contribute! registers the branch-flow duals for DLMP (:vdrop/:cpydrop/:cone/:smax) (PRICE-02)" tags = [
+    :socp,
+] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # A 3-bus radial feeder: branch 1 carries a genuine apparent-power limit (smax=0.05, so
+    # `smax < _SMAX_NO_LIMIT`) so the `:smax` container is non-empty; branch 2 is at the
+    # no-limit sentinel so it gets NO apparent-power cone (byte-identical to the prior loop).
+    feeder = Feeder(
+        [
+            Bus(1, 0.95, 1.05, true),
+            Bus(2, 0.95, 1.05, false),
+            Bus(3, 0.95, 1.05, false),
+        ],
+        [
+            Branch(1, 2, 0.01, 0.02, 0.05),
+            Branch(2, 3, 0.01, 0.02, TSODSO._SMAX_NO_LIMIT),
+        ],
+        1,
+    )
+
+    @test isdefined(TSODSO, :ConvexBranchFlow)
+
+    if isdefined(TSODSO, :ConvexBranchFlow)
+        model = Model()
+        ctx = TSODSO.ModelContext(model)
+        TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 2)
+
+        for k in (:vdrop, :cpydrop, :cone, :smax)
+            @test haskey(ctx.constraints, k)
+        end
+
+        # `:smax` is a sparse branch-indexed container: only the genuinely-limited branch 1
+        # has entries (branch 2 is at the sentinel), keyed by (branch index, t).
+        smax = ctx.constraints[:smax]
+        @test length(smax) == 2                    # branch 1 at t=1,2 only
+        @test haskey(smax.data, (1, 1))
+        @test haskey(smax.data, (1, 2))
+        @test !haskey(smax.data, (2, 1))           # sentinel branch gets NO apparent-power cone
+    end
+end
