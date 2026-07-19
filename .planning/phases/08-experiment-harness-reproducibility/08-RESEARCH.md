@@ -536,7 +536,9 @@ wrong tool for this existing package (use `@quickactivate` instead).
 | A4 | `collect_results` adds an absolute `:path` column that must be dropped for diff-friendliness | Pattern 3 / Pitfall 3 | Low — verified behavior; if column name differs, the `select(intersect(...))` guard tolerates it. |
 | A5 | `ScenarioResult` normalizes ADMM `dadp` (already node×T) and centralized `extract_dlmp(ctx)[load_buses,:]` to the same shape | Pattern 1 | Low — solve_admm docstring explicitly states this match; verified from source. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED and adopted by the plans: Q1 (exact `==` vs isapprox for the repro gate) → primary gate is same-process `==` on single-thread Clarabel, isapprox rtol 1e-8 for cross-process (08-03); Q2 (population sub-seed) → the `:population` sub-seed is plumbed regardless for future stochastic populations (08-02).
 
 1. **Exact `==` vs. tight `isapprox` for the reproducibility gate.**
    - What we know: within one process on the Clarabel single-threaded path, same-seed runs are
