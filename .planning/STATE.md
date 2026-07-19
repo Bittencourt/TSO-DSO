@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: ROADMAP.md + STATE.md written; REQUIREMENTS.md traceability updated (35/35 v1 requirements mapped)
-last_updated: "2026-07-19T07:13:19.911Z"
-last_activity: 2026-07-19 -- Phase 07 execution started
+stopped_at: Plan 08-01 committed (b23c2d9) + summary written; experiment-harness foundation done, RED harness green-able by waves 08-02..04
+last_updated: "2026-07-19T23:45:00.000Z"
+last_activity: 2026-07-19 -- Plan 08-01 complete (foundation + RED harness); stale worktree removed
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 34
-  completed_plans: 28
-  percent: 67
+  completed_phases: 7
+  total_plans: 38
+  completed_plans: 35
+  percent: 80
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 07 — admm-convergence-scale
+**Current focus:** Phase 08 — experiment-harness-reproducibility
 
 ## Current Position
 
-Phase: 07 (admm-convergence-scale) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 07
-Last activity: 2026-07-19 -- Phase 07 execution started
+Phase: 08 (experiment-harness-reproducibility) — EXECUTING
+Plan: 1 of 4 COMPLETE — next: 08-02 (Scenario + materialize)
+Status: Executing Phase 08
+Last activity: 2026-07-19 -- Plan 08-01 complete (foundation + RED harness); stale worktree removed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -92,6 +92,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-18
-Stopped at: ROADMAP.md + STATE.md written; REQUIREMENTS.md traceability updated (35/35 v1 requirements mapped)
+Last session: 2026-07-19
+Stopped at: Plan 08-01 complete — foundation (DrWatson/CSV/DataFrames deps, re-resolved manifests, two-tier storage) + include-graph stubs + RED @testitem harness committed (639baa2, b23c2d9); 08-01-SUMMARY written; stale agent worktree removed. Next: execute 08-02 (Scenario + materialize).
 Resume file: None
