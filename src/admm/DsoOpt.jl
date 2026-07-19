@@ -247,7 +247,7 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
 end
 
 """
-    solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false)
+    solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false, strict::Bool = true)
         -> (; pag_dso, p_import, exact_maxgap)
 
 Re-solve the built-ONCE `DSO-OPT` (thesis eq. 3.47) for one ADMM iteration by mutating ONLY
@@ -275,15 +275,25 @@ Returns `(; pag_dso, p_import, exact_maxgap)` — the solved coupling values `va
 the frontier exchange `value.(dso.p_import)`, and the certified cone residual (`nothing` until
 a `check_exact = true` solve stashes it).
 """
-function solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false)
+function solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false, strict::Bool = true)
     # ADMM-03 build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]
     # (one scalar call per (j,t)); the ρ/2 quadratic penalty built in build_dso_opt is fixed.
     for j in dso.load_nodes, t in 1:dso.T
         set_objective_coefficient(dso.model, dso.pag[j, t], -λ[j][t] - ρ * a[j][t])
     end
 
-    # INFRA-03: never trust a dual (price) before a trusted primal solve.
-    assert_solved!(dso.model; dual = true)
+    # INFRA-03: never trust a dual (price) before a trusted primal solve. `strict = true` (the
+    # default, and ALWAYS used on the final/converged solve) requires a fully OPTIMAL, dual-
+    # feasible point. `strict = false` is the MID-LOOP mode: the DSO subproblem's DUALS are never
+    # read in ADMM (the transactive price is the outer multiplier λ, not `dual(balance_p)`), so an
+    # ALMOST_OPTIMAL / NEARLY_FEASIBLE primal — the interior-point backend stopping just shy of its
+    # centralized-grade gap under the ρ-penalty — is acceptable at an intermediate iterate (the
+    # residual loop self-corrects; RESEARCH Pitfall 2/4). The converged solve is still STRICT.
+    if strict
+        assert_solved!(dso.model; dual = true)
+    else
+        assert_solved!(dso.model; dual = false, allow_almost = true)
+    end
 
     # PF-04 EXACTNESS GATE — CONVERGENCE ONLY (RESEARCH Pitfall 3). Runs strictly AFTER
     # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.

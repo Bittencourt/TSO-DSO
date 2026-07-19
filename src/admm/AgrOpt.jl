@@ -111,7 +111,8 @@ function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
 end
 
 """
-    solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real)
+    solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real;
+               check_battery::Bool = true, τ_batt::Real = 1e-6)
         -> (; pag::Vector{Float64}, utility::Float64)
 
 Re-solve the AGR-OPT subproblem for one ADMM iteration (RESEARCH Pattern 3, thesis 3.46)
@@ -125,16 +126,35 @@ indefinite bilinear the convex conic backend rejects — RESEARCH Pitfall 1).
 After the coefficient update it:
 - gates the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before reading any
   value; and
-- runs the MANDATORY App. C battery-complementarity check
-  [`assert_battery_complementarity!`](@ref)`(agr.ctx; τ = 1e-6, T = agr.T)` — the batteries live
+- runs the App. C battery-complementarity check
+  [`assert_battery_complementarity!`](@ref)`(agr.ctx; τ = τ_batt, T = agr.T)` — the batteries live
   in AGR-OPT now, so a degenerate simultaneous charge/discharge is caught here (threat T-06-10).
+
+`check_battery` / `τ_batt` — the App. C complementarity is a property of the CORRECTLY-PRICED
+optimum, NOT of an arbitrary intermediate ADMM iterate. Mid-loop the coupling price `λ_j` is
+still being found, so the battery legitimately co-activates at an off-consensus price — exactly
+as the SOC relaxation is legitimately inexact mid-loop (RESEARCH Pitfall 3, why `solve_dso!`
+gates its exactness check behind `check_exact`). `solve_admm` therefore passes
+`check_battery = false` on the mid-loop re-solves and `check_battery = true` on the FINAL,
+converged re-solve — where it also uses the interior-point `τ_batt` (Clarabel is an IPM that
+co-activates the optimal face more, so the QP-tight `1e-6` under-tolerances the converged point
+at scale; `1e-3` matches the `problem_class`-aware SOCP-path τ in `solve_welfare`). Default
+`(check_battery = true, τ_batt = 1e-6)` preserves the plan-06-02 standalone behavior.
 
 Returns `(; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))`: the solved net
 active injection over the horizon and the aggregator utility `U_ag` value (the un-penalized
 welfare term the ADMM loop recombines for reporting). Throws `ArgumentError` on a `λ_j`/`c_j`
 length mismatch — the boundary guard against a silently-wrong coefficient update.
 """
-function solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real)
+function solve_agr!(
+    agr::AgrOpt,
+    λ_j::AbstractVector,
+    c_j::AbstractVector,
+    ρ::Real;
+    check_battery::Bool = true,
+    τ_batt::Real = 1e-6,
+    strict::Bool = true,
+)
     length(λ_j) == agr.T ||
         throw(ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"))
     length(c_j) == agr.T ||
@@ -145,11 +165,21 @@ function solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::
         set_objective_coefficient(agr.model, agr.pag[t], -λ_j[t] - ρ * c_j[t])
     end
 
-    # INFRA-03 gate before any value()/dual() read.
-    assert_solved!(agr.model; dual = true)
+    # INFRA-03 gate before any value()/dual() read. `strict = true` (default, and always on the
+    # final/converged solve) requires a fully OPTIMAL point; `strict = false` is the MID-LOOP mode
+    # (the AGR dual is not the priced quantity, so an ALMOST_OPTIMAL / NEARLY_FEASIBLE primal at an
+    # intermediate iterate is acceptable — the residual loop self-corrects; RESEARCH Pitfall 2/4).
+    if strict
+        assert_solved!(agr.model; dual = true)
+    else
+        assert_solved!(agr.model; dual = false, allow_almost = true)
+    end
 
-    # App. C battery complementarity (τ = 1e-6 on the tight QP path) — batteries live here now.
-    assert_battery_complementarity!(agr.ctx; τ = 1e-6, T = agr.T)
+    # App. C battery complementarity — CONVERGENCE-ONLY under ADMM (see docstring): mid-loop
+    # iterates are legitimately off-consensus, so `solve_admm` gates this behind check_battery.
+    if check_battery
+        assert_battery_complementarity!(agr.ctx; τ = τ_batt, T = agr.T)
+    end
 
     return (; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))
 end

@@ -13,7 +13,8 @@
 using JuMP
 
 """
-    assert_solved!(model::Model; dual::Bool = true, allow_local::Bool = false)
+    assert_solved!(model::Model; dual::Bool = true, allow_local::Bool = false,
+                   allow_almost::Bool = false)
 
 Optimize `model` and assert the result is trustworthy. This is the single INFRA-03
 choke point: it calls `optimize!` then `is_solved_and_feasible(model; dual, allow_local)`
@@ -24,10 +25,35 @@ and, on failure, raises loudly with the full status diagnostics
 core, where a local point is not acceptable (Pitfall 2). Pass `allow_local=true`
 only on a deliberately nonconvex experiment rung. `dual=true` additionally requires
 a feasible dual point (prices are duals). Returns `model` on success.
+
+`allow_almost=false` (the default) rejects `ALMOST_OPTIMAL` / `NEARLY_FEASIBLE_POINT`.
+Pass `allow_almost=true` ONLY for an intermediate re-solve whose DUALS are NOT read and
+whose PRIMAL only needs to be near-feasible — e.g. a mid-loop ADMM subproblem, where the
+interior-point conic backend may stop just shy of its (deliberately tight, centralized-grade)
+gap tolerance under the ρ-penalty, and the outer residual loop self-corrects (RESEARCH
+Pitfall 2/4). It accepts `termination_status ∈ {OPTIMAL, ALMOST_OPTIMAL}` with
+`primal_status ∈ {FEASIBLE_POINT, NEARLY_FEASIBLE_POINT}`. The FINAL/converged solve must
+still use the STRICT gate (`allow_almost=false`) so no near-feasible price is ever published.
 """
-function assert_solved!(model::Model; dual::Bool = true, allow_local::Bool = false)
+function assert_solved!(
+    model::Model;
+    dual::Bool = true,
+    allow_local::Bool = false,
+    allow_almost::Bool = false,
+)
     optimize!(model)
-    if !is_solved_and_feasible(model; dual = dual, allow_local = allow_local)
+    ok = is_solved_and_feasible(model; dual = dual, allow_local = allow_local)
+    if !ok && allow_almost
+        ts = termination_status(model)
+        ps = primal_status(model)
+        # Primal-only near-feasibility (duals intentionally NOT required here — the caller
+        # reads only the primal at this intermediate solve). NEARLY_* covers the interior-point
+        # "stopped just short of the tight gap" case that is benign for an ADMM inner solve.
+        ok =
+            (ts == MOI.OPTIMAL || ts == MOI.ALMOST_OPTIMAL) &&
+            (ps == MOI.FEASIBLE_POINT || ps == MOI.NEARLY_FEASIBLE_POINT)
+    end
+    if !ok
         error(
             """
             Solve failed — refusing to trust results:
