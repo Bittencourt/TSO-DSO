@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Linear Branch-Flow Residual Seam** - LinDistFlow + one flexible load, centralized; nodal-balance dual appears (rung 1) (completed 2026-07-18)
 - [x] **Phase 3: Prosumer Device Library & Social-Welfare Solve** - All devices + aggregator + `GLB-CVX` on linear flow, centralized (rung 2a) (completed 2026-07-18)
 - [x] **Phase 4: Convex Branch-Flow Correctness Milestone** - SOCP + LinDistFlow exactness + IEEE 13 + `operational_oracle` seam (rung 2b) (completed 2026-07-19)
-- [ ] **Phase 5: Distribution Pricing — DADP & DLMP Decomposition** - Nodal-balance dual prices, four-way decomposition, welfare accounting (rung 3)
+- [x] **Phase 5: Distribution Pricing — DADP & DLMP Decomposition** - Nodal-balance dual prices, four-way decomposition, welfare accounting (rung 3) (completed 2026-07-19)
 - [ ] **Phase 6: ADMM Decomposition Core** - `AGR-OPT`/`DSO-OPT` + dual ascent, build-once, cross-validated vs centralized (rung 4a)
 - [ ] **Phase 7: ADMM Convergence & Scale** - Primal+dual stopping, adaptive ρ, diagnostics, IEEE 123-node voltage case (rung 4b)
 - [ ] **Phase 8: Experiment Harness & Reproducibility** - Declarative scenarios, sweeps, bit-for-bit reproducible runs
@@ -132,7 +132,7 @@ headline research result — a small, cheap phase depending only on rung-2 duals
 - [x] 05-02-PLAN.md — extract_dlmp (per-node/hour DADP, 2-bus sign) + decompose_dlmp (energy/loss/congestion/voltage, sum-to-price assertion) (PRICE-01, PRICE-02)
 - [x] 05-03-PLAN.md — fit_baseline: FIT-OPT (3.24-3.28, no battery) + AC-PF counterfactual, the one genuine new solve (PRICE-03)
 - [x] 05-04-PLAN.md — economic_direction_checks: DADP < λ₀ at PV glut, > λ₀ at congestion (PRICE-04)
-- [ ] 05-05-PLAN.md — welfare_accounting: social/DSO/prosumer surplus identity + computed FIT +25% ratio with non-failing thesis cross-check (PRICE-03)
+- [x] 05-05-PLAN.md — welfare_accounting: social/DSO/prosumer surplus identity + computed FIT +25% ratio with non-failing thesis cross-check (PRICE-03)
 
 ### Phase 6: ADMM Decomposition Core
 **Goal**: Add the ADMM solve strategy as pure orchestration over the already-validated rung-2 builders —
@@ -199,7 +199,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Linear Branch-Flow Residual Seam | 4/4 | Complete   | 2026-07-18 |
 | 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
 | 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
-| 5. Distribution Pricing — DADP & DLMP Decomposition | 4/5 | In Progress|  |
+| 5. Distribution Pricing — DADP & DLMP Decomposition | 5/5 | Complete   | 2026-07-19 |
 | 6. ADMM Decomposition Core | 0/TBD | Not started | - |
 | 7. ADMM Convergence & Scale | 0/TBD | Not started | - |
 | 8. Experiment Harness & Reproducibility | 0/TBD | Not started | - |
