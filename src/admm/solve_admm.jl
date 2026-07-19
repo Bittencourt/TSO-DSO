@@ -35,10 +35,14 @@
 # copy_to-only, so the per-iteration re-copy still happens and warm starts are a no-op — RESEARCH
 # Pitfall 4; the ADMM-03 win is eliminating the JuMP-side REBUILD, not solver warm starts.)
 #
-# STOPPING / FAIL-LOUD (RESEARCH Pitfall 2): stop on the PRIMAL residual max_{j,t}|R_{p,j}| ≤ tol;
-# hitting `maxiter` WITHOUT convergence THROWS loudly (naming iters/maxiter/worst residual) —
-# NEVER returns the last iterate silently. The centralized cross-validation (ADMM-04) is the true
-# false-convergence net.
+# STOPPING / FAIL-LOUD (RESEARCH Pattern 2/3 / Pitfall 2): stop on BOTH the Boyd 2-norm PRIMAL
+# residual ‖r‖₂ = ‖a − pag_dso‖₂ ≤ ε_pri AND the z-block DUAL residual ‖s‖₂ = ρ·‖Δ(pag_dso)‖₂ ≤
+# ε_dual, with per-unit-normalized thresholds ε_pri = √p·ε_abs + ε_rel·max(‖a‖,‖pag_dso‖) / ε_dual
+# = √p·ε_abs + ε_rel·‖λ‖ (p = n = n_load_nodes·T). A primal-only stop is the textbook
+# false-convergence bug — the dual side (the price has stopped moving) is MANDATORY. Hitting
+# `maxiter` WITHOUT both residuals below threshold THROWS loudly (naming ‖r‖/ε_pri/‖s‖/ε_dual) —
+# NEVER returns the last iterate silently. The centralized cross-validation (ADMM-04) is the
+# outer false-convergence net.
 #
 # CONVERGENCE OUTPUTS: at convergence a FINAL DSO solve runs the PF-04 exactness gate
 # (`solve_dso!(...; check_exact=true)` → `assert_socp_exact!`), welfare is recomputed from PRIMAL
@@ -50,6 +54,8 @@ using JuMP
 """
     solve_admm(feeder, pf::ConvexBranchFlow, aggregators;
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
+               ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
+               τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
                allow_export::Bool = true)
         -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)
 
@@ -66,13 +72,29 @@ duals of the nodal balance (RESEARCH Pattern 5).
    target `c_j` and the AGR-consensus target `a_j` to zeros, and an [`AdmmResiduals`](@ref).
 2. Iterate `k = 1:maxiter`: solve each [`solve_agr!`](@ref) with coeff `−λ_j − ρ·c_j` collecting
    `a_j = pag_j`; solve [`solve_dso!`](@ref) with coeff `−λ_j − ρ·a_j` (mid-loop `check_exact =
-   false`) collecting `pag_dso_j`; compute the primal residual `R_{p,j} = a_j − pag_dso_j` and a
-   dual-residual diagnostic `ρ·Δa`; [`record!`](@ref) both; take the dual step
-   `λ_j ← λ_j + ρ·R_{p,j}` and refresh the netflow target `c_j = −pag_dso_j`. Stop when
-   [`converged`](@ref)`(residuals, tol)` (primal residual ≤ `tol`).
+   false`) collecting `pag_dso_j`; compute the Boyd PRIMAL residual `‖r‖₂ = ‖a − pag_dso‖₂` and the
+   z-block DUAL residual `‖s‖₂ = ρ·‖pag_dso − pag_dso_prev‖₂` (RESEARCH Pattern 2), the per-unit
+   thresholds `ε_pri`/`ε_dual` (Pattern 3), and the price move `‖Δλ‖₂`; [`record!`](@ref) the
+   extended trace tuple; take the UNSCALED dual step `λ_j ← λ_j + ρ·R_{p,j}` (λ is NEVER rescaled on
+   a ρ change), refresh the netflow target `c_j = −pag_dso_j`, and snapshot `pag_dso_prev = pag_dso`.
+   Stop when [`converged`](@ref)`(residuals, ε_pri, ε_dual)` — BOTH `‖r‖ ≤ ε_pri` AND `‖s‖ ≤ ε_dual`
+   (a primal-only stop is the textbook false-convergence bug).
+   After the step, ADAPT ρ by residual balancing (RESEARCH Pattern 4, Boyd §3.4.1): `ρ ← τ·ρ` if
+   the primal lags (`‖r‖ > μ‖s‖`), `ρ ← ρ/τ` if the dual lags (`‖s‖ > μ‖r‖`), clamped to
+   `[ρ_min, ρ_max]`; on an actual change call [`set_rho!`](@ref) on the DSO-OPT and every AGR-OPT so
+   the quadratic penalty tracks ρ WITHOUT a rebuild (build-once preserved). ρ FREEZES once both
+   residuals fall within `10×` their thresholds (Boyd's fixed-ρ convergence tail).
 3. On convergence: a FINAL [`solve_dso!`](@ref)`(...; check_exact = true)` runs the PF-04 gate
    [`assert_socp_exact!`](@ref) (`exact_maxgap`); recompute `welfare = Σ_j value(U_ag,j) − Σ_t
    λ₀[t]·value(p_import[t])` from PRIMALS; set `dadp = λ`.
+
+# Adaptive ρ (RESEARCH Pattern 4 — the Phase-7 upgrade of the Phase-6 fixed ρ)
+The `ρ` keyword is now the INITIAL penalty ρ₀ (all Phase-6 call sites keep working). ρ then adapts
+by per-unit residual balancing (`τ`, `μ`) and is clamped to `[ρ_min, ρ_max]`, so the SAME
+`(ε_abs, ε_rel, τ, μ, ρ_min, ρ_max)` converge the 2-bus, IEEE-13 AND IEEE-123 cases WITHOUT any
+hard-coded scale-specific penalty (per-unit scale-invariance, ADMM-02). λ is the UNSCALED physical
+price and is NEVER rescaled on a ρ change. The `tol` keyword is RETAINED for call-site
+compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_rel`).
 
 # Returns
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)` where `λ == dadp` is the
@@ -98,6 +120,12 @@ function solve_admm(
     ρ::Real,
     maxiter::Int = 200,
     tol::Real = 1e-5,
+    ε_abs::Real = 1e-4,
+    ε_rel::Real = 1e-3,
+    τ::Real = 2.0,
+    μ::Real = 10.0,
+    ρ_min::Real = 1e-2,
+    ρ_max::Real = 1e4,
     allow_export::Bool = true,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
@@ -154,10 +182,21 @@ function solve_admm(
     λ = Dict{Int,Vector{Float64}}(j => Float64[-λ₀[t] for t in 1:T] for j in load_nodes)
     c = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # netflow target for AGR
     a = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # pag target for DSO
-    a_prev = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
+    # Boyd z-block dual residual s = ρ·‖Δ(pag_dso)‖₂ tracks the CONSENSUS (second-updated) block —
+    # store the previous iterate's pag_dso EXACTLY as Phase 6 stored `a_prev` for its ρ·Δa
+    # diagnostic. Initialized to zeros ⇒ iteration 1's s = ρ·‖pag_dso¹‖₂ is large (so a 1-iteration
+    # budget cannot false-converge; RESEARCH Pattern 2 / Pitfall 2).
+    pag_dso_prev = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
     util = Dict{Int,Float64}(j => 0.0 for j in load_nodes)                      # U_ag per node (primal welfare)
     p_import = zeros(Float64, T)                                                # frontier exchange (primal welfare)
     exact_maxgap = nothing
+
+    # ---- Adaptive-ρ state (RESEARCH Pattern 4, Boyd §3.4.1). `ρf` is the LIVE penalty/dual-step
+    # (initialized to the ρ₀ keyword). `ρ_frozen` latches TRUE once both residuals fall within ~10×
+    # tolerance, after which ρ is held fixed (Boyd's convergence theory assumes ρ eventually
+    # constant — prevents late-stage oscillation stalling the tail). τ/μ are the residual-balancing
+    # multiplier/band; [ρ_min, ρ_max] clamp the penalty (SOCP-conditioning + proximal meaningfulness).
+    ρ_frozen = false
 
     converged_flag = false
     for k in 1:maxiter
@@ -181,30 +220,104 @@ function solve_admm(
         pag_dso = dres.pag_dso
         p_import = dres.p_import
 
-        # (3) Primal residual R_{p,j}[t] = a_j[t] − pag_dso_j[t] (consensus violation → 0), and
-        # the dual-residual diagnostic ρ·Δa (tracked in Phase 6; the hard dual-residual stop is
-        # Phase 7). The centralized cross-validation is Phase 6's true false-convergence net.
-        primal_maxabs = 0.0
-        dual_maxabs = 0.0
+        # (3) BOYD TWO-RESIDUAL diagnostics (RESEARCH Pattern 2 / 3; thesis App. B.30–B.32, the
+        # UNSCALED form). PRIMAL residual r = ‖a − pag_dso‖₂ (the 2-norm of the consensus violation,
+        # → 0 ⇔ the two blocks agree). DUAL residual s = ρ·‖pag_dso − pag_dso_prev‖₂ (the z-block
+        # change — the SECOND-updated consensus block; → 0 ⇔ the price has stopped moving, i.e.
+        # optimality). This REPLACES the Phase-6 ρ·Δa x-block diagnostic (the wrong block, a textbook
+        # false-convergence bug). Both use the 2-norm over the flattened (j,t) coupling entries so
+        # they match the √p·ε_abs per-unit tolerance scaling.
+        sq_r = 0.0        # Σ (a − pag_dso)²        → ‖r‖₂
+        sq_ds = 0.0       # Σ (Δ pag_dso)²          → ‖s‖₂ / ρ
+        sq_a = 0.0        # Σ a²                    → ‖a‖₂
+        sq_pd = 0.0       # Σ pag_dso²              → ‖pag_dso‖₂
+        sq_λ = 0.0        # Σ λ²                    → ‖λ‖₂
         for j in load_nodes, t in 1:T
             rp = a[j][t] - pag_dso[j, t]
-            primal_maxabs = max(primal_maxabs, abs(rp))
-            dual_maxabs = max(dual_maxabs, ρf * abs(a[j][t] - a_prev[j][t]))
+            dz = pag_dso[j, t] - pag_dso_prev[j][t]
+            sq_r += rp^2
+            sq_ds += dz^2
+            sq_a += a[j][t]^2
+            sq_pd += pag_dso[j, t]^2
+            sq_λ += λ[j][t]^2
         end
-        record!(residuals, k, primal_maxabs, dual_maxabs)
+        r_norm = sqrt(sq_r)
+        s_norm = ρf * sqrt(sq_ds)
 
-        if converged(residuals, tol)
+        # (4) PER-UNIT stopping thresholds (Boyd §3.3.1 eq. 3.12, RESEARCH Pattern 3). p = n =
+        # n_load_nodes·T is the coupling-entry count; the √p·ε_abs floor is dimensionless-in-pu and
+        # the ε_rel·‖·‖ term makes the threshold a fixed fraction of the iterate magnitude, so the
+        # SAME (ε_abs, ε_rel) transfer unchanged across the 2-bus / IEEE-13 / IEEE-123 scales
+        # (per-unit scale-invariance — the "no hard-coded scale-specific penalty" requirement).
+        p = length(load_nodes) * T
+        ε_pri = sqrt(p) * ε_abs + ε_rel * max(sqrt(sq_a), sqrt(sq_pd))
+        ε_dual = sqrt(p) * ε_abs + ε_rel * sqrt(sq_λ)
+        # price_gap = ‖Δλ‖₂ of the pending UNSCALED dual step λ ← λ + ρ·r (== ρ·‖r‖₂, since Δλ = ρ·r):
+        # the per-iteration price-convergence trajectory (ADMM-05 plot diagnostic).
+        price_gap = ρf * r_norm
+
+        record!(residuals, k, r_norm, s_norm, ρf, ε_pri, ε_dual, price_gap)
+
+        # STOP iff BOTH ‖r‖₂ ≤ ε_pri AND ‖s‖₂ ≤ ε_dual (RESEARCH Pattern 2 / Pitfall 2). A
+        # primal-satisfied-but-dual-unsatisfied iterate does NOT stop — the false-convergence net.
+        if converged(residuals, ε_pri, ε_dual)
             converged_flag = true
             break
         end
 
-        # Dual ascent λ_j ← λ_j + ρ·R_{p,j} and refresh the netflow target c_j = −pag_dso_j (the
-        # network injection carries the OPPOSITE sign of the coupling variable — see file header).
+        # Dual ascent λ_j ← λ_j + ρ·R_{p,j} (UNSCALED — λ is the physical price, NOT rescaled on a ρ
+        # change; RESEARCH Pattern 4) and refresh the netflow target c_j = −pag_dso_j (the network
+        # injection carries the OPPOSITE sign of the coupling variable — see file header). Snapshot
+        # pag_dso into pag_dso_prev for the NEXT iteration's z-block dual residual.
         for j in load_nodes
-            a_prev[j] = copy(a[j])
             for t in 1:T
+                pag_dso_prev[j][t] = pag_dso[j, t]
                 λ[j][t] += ρf * (a[j][t] - pag_dso[j, t])
                 c[j][t] = -pag_dso[j, t]
+            end
+        end
+
+        # (5) RESIDUAL-BALANCING ADAPTIVE ρ (Boyd §3.4.1 eq. 3.13, RESEARCH Pattern 4). Once BOTH
+        # residuals are within ~10× tolerance, FREEZE (latch) — Boyd's convergence theory assumes ρ
+        # eventually fixed, and freezing stops late-stage ρ oscillation from stalling the tail.
+        #
+        # BALANCE ON ε-NORMALIZED RESIDUALS (r̂ = ‖r‖/ε_pri, ŝ = ‖s‖/ε_dual), NOT the raw ‖r‖/‖s‖:
+        # here ε_pri (∝ the tiny per-unit injection magnitude) and ε_dual (∝ ‖λ‖, the O(1–10) price)
+        # differ by ~50×, so a RAW ‖r‖-vs-μ‖s‖ comparison is apples-to-oranges — it reads "balanced"
+        # while the primal is 60× its tolerance and the dual only 3×, leaving ρ stuck at a value too
+        # small to regularize the DSO SOCP (Clarabel NUMERICAL_ERROR by iter 3 on IEEE-13). Comparing
+        # each residual to its OWN threshold makes the balancing dimensionless and self-consistent
+        # with the freeze/stop tests (which already use r/ε_pri, s/ε_dual), so the SAME (τ, μ, ρ_min,
+        # ρ_max) climb ρ from ρ₀ to a well-conditioned value on the 2-bus, IEEE-13 AND IEEE-123
+        # (per-unit scale-invariance, ADMM-02). This is the standard scaled-residual balancing form.
+        #
+        # ρ ← τ·ρ if the primal lags (r̂ > μ·ŝ ⇒ penalize consensus harder), ρ ← ρ/τ if the dual lags
+        # (ŝ > μ·r̂ ⇒ relax the penalty), clamped to [ρ_min, ρ_max]. On an ACTUAL change call set_rho!
+        # on the DSO-OPT and every AGR-OPT so the QUADRATIC penalty matches the new ρ WITHOUT a
+        # rebuild (build-once preserved, ADMM-04) — in lockstep with the linear/ascent ρf (Pitfall 1:
+        # penalty ρ and ascent ρ must never diverge). λ is NOT rescaled (unscaled physical price;
+        # Pattern 4). ρ > 0 always (clamp ⇒ convexity kept).
+        if !ρ_frozen
+            r̂ = r_norm / ε_pri
+            ŝ = s_norm / ε_dual
+            if r̂ <= 10 && ŝ <= 10
+                ρ_frozen = true
+            else
+                ρ_new = if r̂ > μ * ŝ
+                    τ * ρf
+                elseif ŝ > μ * r̂
+                    ρf / τ
+                else
+                    ρf
+                end
+                ρ_new = clamp(ρ_new, ρ_min, ρ_max)
+                if ρ_new != ρf
+                    ρf = ρ_new
+                    set_rho!(dso, ρf)
+                    for j in load_nodes
+                        set_rho!(agr_by_bus[j], ρf)
+                    end
+                end
             end
         end
     end
@@ -212,10 +325,12 @@ function solve_admm(
     # ---- FAIL LOUD on the maxiter cap (RESEARCH Pitfall 2) — never return a non-consensus point.
     converged_flag || throw(
         ErrorException(
-            "solve_admm FAILED to converge: hit maxiter=$maxiter without the primal residual " *
-            "reaching tol=$tol (worst |R_p| = $(last(residuals.primal_trace)); ρ=$ρf). Retune ρ " *
-            "or raise maxiter — the last iterate is NOT a consensus optimum and is refused " *
-            "(thesis §2.6; RESEARCH Pitfall 2).",
+            "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
+            "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
+            "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
+            "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$ρf). Retune the adaptive-ρ config " *
+            "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
+            "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).",
         ),
     )
 
