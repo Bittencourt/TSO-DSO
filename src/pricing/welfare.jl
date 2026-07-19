@@ -15,3 +15,141 @@
 # Consumes ONLY the additive `ctx.meta[:agg_net]` stash + the registered `:balance_p` dual —
 # no change to `solve_welfare`. DISTINCT from the Phase-3 operational solve
 # (models/welfare_solve.jl): this is post-solve ACCOUNTING, not the optimization.
+
+using JuMP
+
+"""
+    welfare_accounting(ctx::ModelContext; T = ctx.meta[:T], λ₀ = nothing,
+                       baseline = nothing, rtol = 1e-4, atol = 1e-4,
+                       _transfer_flip = false)
+        -> (; social, dso, prosumer[, ratio])
+
+Split the solved GLB-CVX welfare (thesis eq. 3.38) into **prosumer** and **DSO** surplus
+(PRICE-03), asserting the exact accounting identity
+
+    social  ==  prosumer + dso  ==  objective_value(ctx.model)      (within a relative tol)
+
+Reads only stashed primals/duals — **no re-solve**. The three quantities (thesis page 98):
+
+- `social`   = `objective_value(ctx.model)` — the GLB-CVX social welfare (3.38);
+- `prosumer` = `Σ_j U_agⱼ − Σ_j Σ_t λ_j[t]·p_agⱼ[t]` — the AGR-OPT value (3.46), where
+  `Σ_j U_agⱼ = value(ctx.meta[:objective])` and the price-transfer term prices each
+  aggregator's net injection `p_agⱼ[t]` (`ctx.meta[:agg_net]`, plan 05-01) at the DADP
+  `λ_j[t] = extract_dlmp(ctx)`;
+- `dso`      = `Σ_j Σ_t λ_j[t]·p_agⱼ[t] − Σ_t λ₀[t]·p_import[t]` — the −DSO-OPT value (3.47):
+  DADP revenue from prosumers minus the MEM purchase cost at the frontier.
+
+The `Σ_j λ_j·p_agⱼ` **price-transfer cancels** between `prosumer` and `dso`, leaving
+`Σ_j U_agⱼ − Σ_t λ₀[t]·p_import[t]` = the GLB-CVX objective (3.38). So the identity is the
+load-bearing correctness gate: a sign error or dropped term in ONE settlement breaks the
+cancellation and throws (mirroring `assert_socp_exact!`'s relative-tolerance style). The
+`_transfer_flip` hook is a SELF-TEST that deliberately mis-signs the transfer in the DSO
+settlement only — proving the assertion is non-vacuous (threat T-05-03).
+
+`λ₀` (the MEM/wholesale price) defaults to the root DADP `extract_dlmp(ctx)[root, t]` — the
+thesis "energy component = dual(balance_p[root,t])"; at the priced-frontier optimum it equals
+the true λ₀ by KKT, and using it keeps the identity a genuine dual-consistency check. Pass an
+explicit `λ₀` to use the wholesale profile directly.
+
+When `baseline` is a solved FIT context (from [`fit_baseline`](@ref), plan 05-03) the result
+additionally carries `ratio = social / baseline.social_fit` — the headline +25%-social-welfare
+number (thesis Case A ≈ 1.25), reported as a COMPUTED ratio (see the test's pinned golden +
+non-failing thesis cross-check).
+
+Throws (never `@assert`) on a missing stash, a non-finite / out-of-band surplus (Pitfall 5),
+or a violated surplus identity — reporting the mismatch magnitude so a sign/term bug is
+localizable. Inherits the PF-04 exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP
+ctx is refused).
+"""
+function welfare_accounting(
+    ctx::ModelContext;
+    T::Int = ctx.meta[:T],
+    λ₀ = nothing,
+    baseline = nothing,
+    rtol::Real = 1e-4,
+    atol::Real = 1e-4,
+    _transfer_flip::Bool = false,
+)
+    for key in (:agg_net, :objective, :p_import, :feeder)
+        haskey(ctx.meta, key) || throw(
+            ArgumentError(
+                "welfare_accounting: ctx.meta is missing :$key — this is not a solved " *
+                "solve_welfare ModelContext carrying the plan 05-01 surplus stash " *
+                "(thesis 3.38/3.46/3.47).",
+            ),
+        )
+    end
+
+    feeder = ctx.meta[:feeder]
+    root = feeder.root
+
+    # Per-node DADP λ_j[t] (runs the PF-04 exactness gate; refuses an ungated SOCP ctx).
+    λ = extract_dlmp(ctx)                              # (N, Tfull) matrix
+    Tfull = size(λ, 2)
+    T <= Tfull || throw(
+        ArgumentError("welfare_accounting: T=$T exceeds the solved horizon Tfull=$Tfull"),
+    )
+
+    # MEM/wholesale price λ₀[t]: use the passed profile, else recover the ENERGY component
+    # from the root DADP (thesis energy = dual(balance_p[root,t]); = λ₀ at the priced optimum).
+    λ0 = λ₀ === nothing ? Float64[λ[root, t] for t in 1:T] : Float64[float(λ₀[t]) for t in 1:T]
+    length(λ0) >= T || throw(
+        ArgumentError("welfare_accounting: λ₀ has length $(length(λ0)) < T=$T"),
+    )
+
+    # Priced-frontier import p_import[t] (free-sign with allow_export) and its MEM cost.
+    pimp = value.(ctx.meta[:p_import])
+    mem_cost = sum(λ0[t] * pimp[t] for t in 1:T)      # Σ_t λ₀[t]·p_import[t]
+
+    # Price-transfer Σ_j Σ_t λ_j[t]·p_agⱼ[t] (thesis 3.46/3.47) — the term that cancels.
+    transfer = 0.0
+    for entry in ctx.meta[:agg_net]
+        b = entry.bus
+        (1 <= b <= size(λ, 1)) || throw(
+            ArgumentError("welfare_accounting: aggregator bus=$b outside 1:$(size(λ, 1))"),
+        )
+        for t in 1:T
+            transfer += λ[b, t] * value(entry.net[t])
+        end
+    end
+
+    util = value(ctx.meta[:objective])                # Σ_j U_agⱼ (total prosumer utility)
+
+    prosumer = util - transfer                        # AGR-OPT value (3.46)
+    # −DSO-OPT value (3.47). `_transfer_flip` mis-signs the transfer in the DSO settlement
+    # ONLY (a broken cancellation) so the identity assertion below fires — the non-vacuous
+    # self-test (threat T-05-03); it is NOT part of the physical accounting.
+    dso = (_transfer_flip ? -transfer : transfer) - mem_cost
+
+    social = objective_value(ctx.model)               # GLB-CVX optimum (3.38)
+
+    # Magnitude-sanity guard (Pitfall 5 / threat T-05-05): finite and within the per-unit band
+    # (¢$/kWh-consistent prices × horizon × buses) — a clean power-of-ten unit slip fails here.
+    Np = length(feeder.buses)
+    band = PRICE_MAX * (Np + 1) * T
+    for (nm, v) in ((:social, social), (:prosumer, prosumer), (:dso, dso))
+        isfinite(v) || error("welfare_accounting: $nm surplus is non-finite ($v)")
+        abs(v) < band || error(
+            "welfare_accounting: $nm=$v out of magnitude-sanity band ±$band " *
+            "(¢\$/kWh-consistent, thesis 3.38; possible unit slip — Pitfall 5)",
+        )
+    end
+
+    # HARD surplus identity (thesis 3.38/3.46/3.47; threat T-05-03): social == prosumer + dso.
+    # `social` is `objective_value` by definition, so this equivalently asserts
+    # `prosumer + dso ≈ objective_value(ctx.model)`. Relative tolerance (scale-free, mirroring
+    # assert_socp_exact!). The THROW is load-bearing — the `_transfer_flip` self-test fires it.
+    resid = abs((prosumer + dso) - social)
+    tol = atol + rtol * max(abs(social), abs(prosumer) + abs(dso))
+    resid <= tol || error(
+        "welfare_accounting: surplus identity VIOLATED — |(prosumer+dso) − social| = $resid " *
+        "exceeds tol=$tol (prosumer=$prosumer, dso=$dso, social=$social). The Σⱼλⱼ·p_agⱼ " *
+        "price-transfer did NOT cancel: a mis-signed or dropped term in the AGR-OPT (3.46) / " *
+        "DSO-OPT (3.47) settlement (Open Q2: if it fails by a loss-sized amount, add the " *
+        "documented −r·l loss term and re-derive; thesis 3.38/3.46/3.47; threat T-05-03).",
+    )
+
+    return (; social, dso, prosumer)
+end
+
+export welfare_accounting
