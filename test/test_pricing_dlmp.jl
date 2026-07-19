@@ -115,3 +115,133 @@ end
         @test isapprox(M[feeder.root, t], λ₀[t]; atol = 1e-3)
     end
 end
+
+@testitem "dlmp: decompose_dlmp four components SUM to the DADP on IEEE-13 (congestion binds, PRICE-02)" tags = [
+    :dlmp,
+] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    feeder = ieee13_modified()
+    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+    ctx, _obj, _dadp = solve_welfare(
+        feeder, ConvexBranchFlow(), aggs;
+        T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true,
+    )
+
+    d = decompose_dlmp(ctx)
+    total = extract_dlmp(ctx)
+    N, T = size(total)
+
+    # Every field is an (N, T) matrix.
+    for f in (d.energy, d.loss, d.congestion, d.voltage, d.total)
+        @test size(f) == (N, T)
+    end
+
+    # THE HARD sum-to-nodal-price net (Success Criterion #2): the four INDEPENDENTLY
+    # reconstructed components sum to the DADP elementwise, and `total` IS the DADP.
+    @test all(
+        isapprox(
+            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            total[j, t];
+            atol = 1e-6,
+            rtol = 1e-6,
+        ) for j in 1:N, t in 1:T
+    )
+    @test d.total ≈ total
+
+    # The energy component is the root MEM price at EVERY node (≈ λ₀), same across space.
+    for j in 1:N, t in 1:T
+        @test isapprox(d.energy[j, t], λ₀[t]; atol = 1e-3)
+    end
+
+    # The modified IEEE-13 is congestion-driven at the head branch: the congestion component is
+    # genuinely NONZERO at the PV-peak hours where S_max,(0,1) binds (not a spurious zero).
+    @test any(abs(d.congestion[j, t]) > 1e-2 for j in 1:N, t in 1:T)
+end
+
+@testitem "dlmp: decompose_dlmp SUM holds and voltage is engaged on the high-PV over-voltage solve (PRICE-02)" tags = [
+    :dlmp,
+] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    feeder = Phase4Fixtures.high_pv_feeder()
+    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+    ctx, _obj, _dadp = solve_welfare(
+        feeder, ConvexBranchFlow(), aggs;
+        T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true,
+    )
+
+    d = decompose_dlmp(ctx)
+    total = extract_dlmp(ctx)
+    N, T = size(total)
+
+    # Sum-to-nodal-price holds in the over-voltage / reverse-flow regime too.
+    @test all(
+        isapprox(
+            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            total[j, t];
+            atol = 1e-6,
+            rtol = 1e-6,
+        ) for j in 1:N, t in 1:T
+    )
+    @test d.total ≈ total
+
+    # No thermal limit exists on this fixture (99.0 sentinel), so congestion is identically 0 …
+    @test all(iszero, d.congestion)
+    # … while the voltage-drop component is ENGAGED (nonzero) as the back-feed lifts voltage.
+    @test any(abs(d.voltage[j, t]) > 1e-8 for j in 1:N, t in 1:T)
+end
+
+@testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus (PRICE-02)" tags = [
+    :dlmp,
+] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # Lossless, uncongested (smax ≫ flow), in-bound (voltage un-binding) 2-bus: only the ENERGY
+    # component survives — congestion ≈ 0, voltage ≈ 0, and the total ≈ energy ≈ λ₀.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 1e-6, 1e-6, 10.0)],
+        1,
+    )
+    T = 3
+    λ₀ = fill(40.0, T)
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    ctx, _obj, _dadp =
+        solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
+
+    d = decompose_dlmp(ctx)
+    total = extract_dlmp(ctx)
+    N, _ = size(total)
+
+    @test all(
+        isapprox(
+            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            total[j, t];
+            atol = 1e-6,
+            rtol = 1e-6,
+        ) for j in 1:N, t in 1:T
+    )
+    for t in 1:T
+        @test isapprox(d.congestion[2, t], 0.0; atol = 1e-4)   # uncongested ⇒ ≈ 0
+        @test isapprox(d.voltage[2, t], 0.0; atol = 1e-4)      # in-bound ⇒ ≈ 0
+        @test isapprox(d.energy[2, t], λ₀[t]; atol = 1e-6)     # energy = root MEM price
+        @test isapprox(d.total[2, t], λ₀[t]; atol = 1e-2)      # total ≈ energy (energy-only)
+        @test d.total[2, t] > 0                                # positive marginal cost
+    end
+
+    # The per-bus keyword form returns length-T component vectors (module-API harness contract).
+    dv = decompose_dlmp(ctx; bus = 2, T = T)
+    @test dv.energy isa Vector{Float64}
+    @test length(dv.total) == T
+    for t in 1:T
+        @test dv.energy[t] + dv.loss[t] + dv.voltage[t] + dv.congestion[t] ≈ dv.total[t]
+    end
+end
