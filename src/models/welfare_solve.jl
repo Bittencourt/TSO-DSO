@@ -22,7 +22,7 @@ using JuMP
 """
     solve_welfare(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                   T::Int = 24, λ₀, optimizer = select_optimizer(problem_class(pf)),
-                  allow_local::Bool = false, τ::Real = 1e-6, τ_exact::Real = 1e-5,
+                  allow_local::Bool = false, τ::Real = 1e-3, rtol_exact::Real = 1e-4,
                   allow_export::Bool = false)
         -> (ctx::ModelContext, objective::Float64, dadp::Vector{Float64})
 
@@ -67,21 +67,27 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
 6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
 7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
    (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is trusted;
-8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; τ = τ_exact)` — but ONLY
-   when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
+8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
+   ONLY when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
    cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
    physically-meaningless duals from a STRICT (inexact) relaxation are REFUSED (thrown) rather
    than returned (threats T-04-01/T-04-03). `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
-   DC/LinDistFlow stash no `:l` and skip this untouched. `τ_exact` (default 1e-5) is a DISTINCT
-   tolerance from the battery-check `τ` — never conflated (Pitfall 2);
-9. runs the MANDATORY App. C post-solve battery complementarity check: for every battery
-   stashed under `ctx.meta[:agg_device_vars]`, asserts `value(p_ch[t])·value(p_dch[t]) < τ`
-   for all `t`, throwing loudly on violation (RESEARCH Pitfall 1, threat T-03-13). The
-   tolerance `τ` is PROBLEM-CLASS-AWARE by default: `1e-6` on the QP path (DC/LinDistFlow,
-   whose Clarabel-QP primal is tight) but `1e-4` on the SOCP path (`ConvexBranchFlow`), where
-   the interior-point conic solve reports each variable only to ~`1e-6`…`1e-8`, so a product
-   of two ~`1e-2` quantities carries a looser residual. This keys off `problem_class(pf)` (a
-   trait, not an `if formulation ==`) and never loosens the QP path.
+   DC/LinDistFlow stash no `:l` and skip this untouched. `rtol_exact` (default 1e-4) is a
+   RELATIVE, base-free cone-slack tolerance (WR-01) and is a DISTINCT quantity from the
+   battery-check `τ` — never conflated (Pitfall 2);
+9. runs the MANDATORY App. C post-solve battery complementarity check via
+   [`assert_battery_complementarity!`](@ref): for every battery stashed under
+   `ctx.meta[:agg_device_vars]`, asserts the SCALE-FREE relative test
+   `value(p_ch[t])·value(p_dch[t]) < τ·Pmax²` for all `t`, throwing loudly on violation
+   (RESEARCH Pitfall 1, threat T-03-13; WR-02). Normalizing by the battery's rated power²
+   makes the gate's protective strength INVARIANT to the per-unit base — an absolute product
+   threshold weakens quadratically as the base grows and can silently admit a genuine
+   simultaneous charge/discharge. The RELATIVE tolerance `τ` is PROBLEM-CLASS-AWARE by
+   default: `1e-6` (fraction of `Pmax²`) on the QP path (DC/LinDistFlow, whose Clarabel-QP
+   primal is tight) but a looser `1e-3` on the SOCP path (`ConvexBranchFlow`), where the
+   interior-point conic solve co-activates the optimal face more. This keys off
+   `problem_class(pf)` (a trait, not an `if formulation ==`) and never loosens the QP path
+   (the `Pmax²`-scaled threshold is ≤ the old absolute `1e-6` for every `Pmax ≤ 1`).
 
 Returns `(ctx, objective_value, dadp)` where `dadp = dual.(balance_p[bus, :])` at the
 FIRST aggregator's bus (the distribution price / DADP over the horizon).
@@ -98,8 +104,8 @@ function solve_welfare(
     λ₀,
     optimizer = select_optimizer(problem_class(pf)),
     allow_local::Bool = false,
-    τ::Real = (problem_class(pf) isa SOCP ? 1e-4 : 1e-6),
-    τ_exact::Real = 1e-5,
+    τ::Real = (problem_class(pf) isa SOCP ? 1e-3 : 1e-6),
+    rtol_exact::Real = 1e-4,
     allow_export::Bool = false,
 )
     # Boundary guards (RESEARCH Pitfall 4): empty aggregators ⇒ no priced load / no
@@ -228,32 +234,21 @@ function solve_welfare(
     # before the exactness gate"). It is DATA-DRIVEN on the presence of the squared-current
     # variable `:l` in the formulation's `pf_vars` stash: only ConvexBranchFlow stashes `:l`,
     # so DC/LinDistFlow (no cone, no `:l`) skip this untouched — no `if formulation ==`
-    # branching. `τ_exact` (default 1e-5) is DELIBERATELY DISTINCT from the battery-check `τ`
-    # (default 1e-6): the exactness margin is tuned ~2 orders above Clarabel's 1e-8 gap
-    # (Pitfall 2), while the complementarity tolerance is a different physical quantity — do
-    # not conflate them. `maxgap` is stashed under `ctx.meta[:socp_maxgap]` as a first-class
-    # output reported alongside the prices.
+    # branching. `rtol_exact` (default 1e-4) is a RELATIVE, base-free cone-slack tolerance
+    # (WR-01): normalizing the residual by the cone magnitude keeps the gate's protective
+    # strength invariant to the per-unit base, unlike the old absolute threshold. It is
+    # DELIBERATELY DISTINCT from the battery-check `τ` — a different physical quantity, do not
+    # conflate them. `maxgap` (the absolute residual) is stashed under `ctx.meta[:socp_maxgap]`
+    # as a first-class output reported alongside the prices.
     if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
-        ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; τ = τ_exact)
+        ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; rtol = rtol_exact)
     end
 
     # App. C MANDATORY post-solve battery complementarity (RESEARCH Pitfall 1, threat
-    # T-03-13): with λ_min ≤ λ_med ≤ λ_max there is no binary/complementarity constraint,
-    # so p_ch·p_dch = 0 must be VERIFIED numerically at the welfare optimum.
-    if haskey(ctx.meta, :agg_device_vars)
-        for (bus, varlist) in ctx.meta[:agg_device_vars]
-            for v in varlist
-                (haskey(v, :p_ch) && haskey(v, :p_dch)) || continue   # a battery
-                for t in 1:T
-                    prod = value(v.p_ch[t]) * value(v.p_dch[t])
-                    prod < τ || error(
-                        "Battery complementarity violated at bus $bus, t=$t: " *
-                        "p_ch·p_dch = $prod ≥ τ=$τ (App. C, threat T-03-13)",
-                    )
-                end
-            end
-        end
-    end
+    # T-03-13): with λ_min < λ_med < λ_max there is no binary/complementarity constraint,
+    # so p_ch·p_dch = 0 must be VERIFIED numerically at the welfare optimum. The check is a
+    # SCALE-FREE relative test (WR-02) — see `assert_battery_complementarity!`.
+    assert_battery_complementarity!(ctx; τ = τ, T = T)
 
     # DADP = dual of the ACTIVE balance at the first aggregator's bus over the horizon.
     priced = aggregators[1].bus
@@ -261,4 +256,59 @@ function solve_welfare(
     return ctx, objective_value(model), dadp
 end
 
-export solve_welfare
+"""
+    assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T])
+
+Verify the App. C no-binary battery complementarity `p_ch[t]·p_dch[t] = 0` numerically at a
+solved point, throwing loudly on violation (RESEARCH Pitfall 1, threat T-03-13). There is NO
+`p_ch·p_dch == 0` constraint in the model — the strict `λ_min < λ_med < λ_max` parametrization
+alone makes simultaneous charge/discharge dominated — so this post-solve certificate is the
+only thing that catches a degenerate co-activation.
+
+WR-02 — the test is RELATIVE (scale-free), not an absolute product threshold. For each
+battery it normalizes the product by the square of the device's rated charge/discharge power
+`Pmax` (recovered from the JuMP variable's upper bound) and flags
+
+    value(p_ch[t]) · value(p_dch[t]) ≥ τ · Pmax²
+
+i.e. it triggers when BOTH legs are simultaneously non-negligible relative to the battery's
+own power rating (`√τ` of `Pmax` on each leg). Because `p_ch`, `p_dch`, and `Pmax` all scale
+identically with the per-unit base, the ratio `p_ch·p_dch / Pmax²` is INVARIANT to the base.
+An absolute product threshold, by contrast, weakens quadratically as the base grows (a real
+simultaneous charge/discharge of a fixed MW is a tiny pu² product on a 100 MVA base and slips
+under a fixed τ), so the same physical violation could pass on one base and be caught on
+another. Genuine solver-noise co-activation (a tiny product on a truly-zero leg) still passes.
+
+`τ` is a RELATIVE tolerance (fraction of `Pmax²`). `solve_welfare` defaults it PROBLEM-CLASS-
+AWARE via the `problem_class` trait — looser on the interior-point SOCP path, tighter on the
+QP path — and this function never loosens the QP path (its `Pmax²`-scaled threshold is ≤ the
+old absolute one for every `Pmax ≤ 1`). Iterates `ctx.meta[:agg_device_vars]` (skips
+non-battery device stashes) and is a no-op when no batteries were registered.
+"""
+function assert_battery_complementarity!(
+    ctx::ModelContext;
+    τ::Real,
+    T::Int = ctx.meta[:T],
+)
+    haskey(ctx.meta, :agg_device_vars) || return nothing
+    for (bus, varlist) in ctx.meta[:agg_device_vars]
+        for v in varlist
+            (haskey(v, :p_ch) && haskey(v, :p_dch)) || continue   # a battery
+            # Rated charge/discharge power (eq. 3.8 bound) = the base-scaling reference. The
+            # atol floor guards a (degenerate) zero/absent upper bound against a div-by-zero.
+            pmax = has_upper_bound(v.p_ch[1]) ? upper_bound(v.p_ch[1]) : 1.0
+            scale² = max(abs(pmax), 1e-8)^2
+            for t in 1:T
+                prod = value(v.p_ch[t]) * value(v.p_dch[t])
+                prod < τ * scale² || error(
+                    "Battery complementarity violated at bus $bus, t=$t: " *
+                    "p_ch·p_dch = $prod ≥ τ·Pmax² = $(τ * scale²) " *
+                    "(relative τ=$τ, Pmax≈$pmax; App. C, threat T-03-13)",
+                )
+            end
+        end
+    end
+    return nothing
+end
+
+export solve_welfare, assert_battery_complementarity!

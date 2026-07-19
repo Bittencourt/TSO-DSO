@@ -59,11 +59,12 @@ MEM. Priced export is the SOC-exactness enabler in the over-voltage / reverse-fl
 
 1. **Coupling-flow interface** (`z`, `role`, returned `π`) → PLAN-01/02 (Phase 8/9).
    `z` is the coupling-flow setpoint (frontier import target; `z↔p_ag`). `nothing` ⇒ the
-   frontier import is FREE and `π` is the frontier-node DADP. A non-`nothing` `z` is
-   DOCUMENTED to pin the frontier import, but the pin is **not** wired into
-   `solve_welfare` in Phase 4 — `_coupling_dual` returns the frontier DADP as the proxy
-   and flags the pin as the PLAN-01/02 extension point (see `_coupling_dual`). `role`
-   (`:leader` | `:follower`) is the explicit Stackelberg role (PSR: the distributor is the
+   frontier import is FREE and `π` is the frontier-node DADP. A non-`nothing` `z` would pin
+   the frontier import, but that pin is **not** wired into `solve_welfare` in Phase 4, so
+   passing a non-`nothing` `z` FAILS LOUDLY (`_coupling_dual` throws an `ArgumentError`)
+   rather than silently returning an UNPINNED proxy dual (WR-03; threat T-04-13: NO silent
+   partial pinning — a wrong coupling price must never reach the planning game unflagged).
+   `role` (`:leader` | `:follower`) is the explicit Stackelberg role (PSR: the distributor is the
    `:leader`); it is validated but does not alter the solve.
 2. **Multi-scenario objective hook** (`objective_hook::Function = identity`) →
    STOCH-01/02 (v2). Reserved to compose the per-scenario welfare into the extensive-form
@@ -145,11 +146,12 @@ the TSO↔DSO boundary (`λ_j ↔ π_s`, PSR note).
 
 - `z === nothing` — the frontier import is FREE; `π` is the frontier-node DADP (the dual
   of the root balance). This is the Phase-4 behavior.
-- `z !== nothing` — DOCUMENTED to pin the frontier import to `z`. The pin is **not** wired
-  into `solve_welfare` in Phase 4 (that is the PLAN-01/02 extension: add a coupling
-  constraint `p_import == z` and return ITS dual). Here we return the frontier DADP as the
-  proxy so the interface is exercisable, and flag the pin as the extension point — NO
-  silent partial pinning (threat T-04-13).
+- `z !== nothing` — would pin the frontier import to `z`, but that pin is **not** wired into
+  `solve_welfare` in Phase 4 (it is the PLAN-01/02 extension: add a coupling constraint
+  `p_import == z` and return ITS dual). Rather than silently returning the UNPINNED frontier
+  DADP as a proxy — which a planning caller would mistake for a genuine pinned coupling price
+  — this THROWS an `ArgumentError` naming the extension point (WR-03; threat T-04-13: NO
+  silent partial pinning). This mirrors the loud `role` guard in `operational_oracle`.
 
 Reads the constraint handle registered by `solve_welfare` as `:balance_p` (a
 `bus × time` array); requires a solve that passed `assert_solved!(...; dual = true)`.
@@ -161,11 +163,20 @@ function _coupling_dual(ctx::ModelContext, z)
 
     if z !== nothing
         # SEAM-01 z-pin (PLAN-01/02 extension point): pinning `p_import == z` and reading
-        # that pin's dual is NOT implemented in Phase 4 — returning the frontier DADP as
-        # the documented proxy so the coupling interface is callable without pretending
-        # the planning coupling is wired (threat T-04-13).
-        @debug "operational_oracle: z-pin (frontier import = z) is a PLAN-01/02 (Phase " *
-               "8/9) extension point; returning the frontier DADP as the proxy π"
+        # that pin's dual is NOT implemented in Phase 4. Returning the UNPINNED frontier DADP
+        # as a proxy behind a `@debug` (disabled by default) would hand a planning caller a
+        # WRONG coupling price with zero visible signal (WR-03). Fail LOUDLY instead — a wrong
+        # π fed into the Phase 8/9 Stackelberg loop is exactly the silent-wrong hazard this
+        # module forbids (threat T-04-13: NO silent partial pinning), and this matches the
+        # loud `role` guard in `operational_oracle`.
+        throw(
+            ArgumentError(
+                "operational_oracle: z-pin (frontier import p_import == z) is a PLAN-01/02 " *
+                "(Phase 8/9) extension point and is NOT wired into solve_welfare in Phase 4; " *
+                "pass z = nothing (the coupling dual would otherwise be an UNPINNED proxy, " *
+                "not a genuine pinned coupling price — SEAM-01 / PSR planning note, WR-03)",
+            ),
+        )
     end
 
     # π = dual of the ACTIVE balance at the FRONTIER (root) over the horizon — the

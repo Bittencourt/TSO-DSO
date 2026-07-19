@@ -96,3 +96,36 @@ end
         λ₀ = λ₀, T = T, role = :bystander,
     )
 end
+
+@testitem "oracle: a non-nothing z-pin fails LOUDLY, never a silent proxy dual (WR-03/SEAM-01)" tags = [
+    :oracle,
+] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    T = 24
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    defer = Deferrable(2, 1, T, 1.0, 0.5, 0.5)
+    agg = Aggregator(2, 0.9, [defer], fill(0.1, T))
+    λ₀ = fill(2.0, T)
+
+    # WR-03: the z-pin (frontier import == z) is a PLAN-01/02 (Phase 8/9) extension that is NOT
+    # wired into solve_welfare in Phase 4. Passing a non-nothing z must THROW (not silently
+    # return the UNPINNED frontier DADP as a proxy behind a disabled @debug), so a future
+    # planning caller can never mistake an unpinned proxy for a genuine pinned coupling price
+    # (threat T-04-13: NO silent partial pinning).
+    @test_throws ArgumentError operational_oracle(
+        feeder, LinDistFlow(), [agg];
+        λ₀ = λ₀, T = T, z = fill(0.05, T),
+    )
+
+    # The free-coupling (z = nothing) path still returns a finite frontier coupling dual —
+    # the loud guard did not break the supported Phase-4 behavior.
+    res = operational_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, z = nothing)
+    @test length(res.π) == T
+    @test all(isfinite, res.π)
+end
