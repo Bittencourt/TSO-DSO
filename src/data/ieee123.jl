@@ -41,11 +41,20 @@ using SparseArrays
     IEEE123_BASE
 
 The single documented per-unit base for the modified IEEE-123 fixture (thesis Case B):
-`S_base = 100 MVA`, `V_base = 4.16 kV`. The head-branch apparent-power limit is the only SI
-quantity converted here (once, at ingestion) through `to_pu_power`; the branch r/x are supplied
-already in per-unit (thesis App. E convention — no SI→pu step).
+`S_base = 1 MVA`, `V_base = 4.16 kV`. A FEEDER-SCALE apparent-power base (the feeder's own
+order of magnitude, not the 100 MVA transmission base) is chosen deliberately so the
+distribution quantities (nodal injections, branch flows, the SOC cone `l·v ≈ P²+Q²`) land at
+`O(0.1–1)` pu instead of `O(1e-3)` pu. At the transmission-scale 100 MVA base every 4.16 kV
+distribution quantity is `~1e-3` pu, which sits at the numerical noise floor of BOTH the PF-04
+exactness gate (its `atol = 1e-6` cone-slack floor becomes comparable to the cone itself) and
+Clarabel's conditioning under the ADMM ρ-penalty — making convergence + exactness fragile at
+scale (plan 07-05 finding). The feeder-scale base keeps the cone magnitude several orders above
+the exactness floor (robustly exact) and the SOCP well-conditioned (ADMM converges in tens of
+iterations). The head-branch apparent-power limit is the only SI quantity converted here (once,
+at ingestion) through `to_pu_power`; the branch r/x are supplied already in per-unit
+(representative — see the DATA PROVENANCE note above).
 """
-const IEEE123_BASE = PerUnitBase(100.0, 4.16)
+const IEEE123_BASE = PerUnitBase(1.0, 4.16)
 
 "Thesis terminal chosen as the MEM/substation frontier (root); RESEARCH Open-Q1: the no-parent node."
 const IEEE123_ROOT_TERMINAL = 150
@@ -55,10 +64,16 @@ const IEEE123_HEAD_SMAX_MVA = 3.8
 
 # Representative per-unit impedances (see DATA PROVENANCE note). `x = r/2` mirrors the ieee13
 # fixture's X/R convention. Switch/regulator segments are near-ideal (tiny, strictly-positive pu).
-const IEEE123_LINE_R = 0.03
-const IEEE123_LINE_X = 0.015
-const IEEE123_SWITCH_R = 0.002
-const IEEE123_SWITCH_X = 0.001
+# CALIBRATION (plan 07-05): sized on the feeder-scale 1 MVA base so the cumulative per-lateral
+# drop keeps the solved voltages inside the Case-B band `V∈[0.9,1.1]` while still binding it
+# (under-voltage on the long load laterals, over-voltage under midday PV reverse flow) — a
+# genuinely voltage-constrained scale case, not a slack one. The per-unit magnitudes remain
+# in-band (strictly positive, tripwire-passing); numerical fidelity is not this fixture's gate
+# (T-07-05) — the load-bearing net is the centralized-SOCP cross-validation at plan 07-05.
+const IEEE123_LINE_R = 0.005
+const IEEE123_LINE_X = 0.0025
+const IEEE123_SWITCH_R = 0.0003
+const IEEE123_SWITCH_X = 0.00015
 
 # Radial branch set in ORIGINAL IEEE-123 terminal labels: (parent_terminal, child_terminal). Each
 # non-root terminal appears EXACTLY ONCE as a child, so this is a spanning tree rooted at 150 by
@@ -215,8 +230,11 @@ non-root buses are TRANSIT (zero-injection) junctions handled by plan 07-03's DS
 
   * Every bus has the thesis Case-B voltage band `vmin = 0.9`, `vmax = 1.1` pu (looser than the
     congestion-driven ieee13 case).
-  * The **head branch** (frontier terminal `150 → 149`) carries the single binding thermal limit
-    `S_max = 3.8 MVA ⇒ 0.038 pu`, converted once via `to_pu_power` on `IEEE123_BASE`.
+  * The **head branch** (frontier terminal `150 → 149`) carries the thermal limit
+    `S_max = 3.8 MVA ⇒ 3.8 pu` on the 1 MVA feeder-scale base, converted once via `to_pu_power`
+    on `IEEE123_BASE`. At the plan-07-05 population the ACTIVE binding constraint is the voltage
+    band (the long laterals hit `≈0.92` under load and `≈1.04` under PV reverse flow) rather than
+    this head limit, so the case exercises the branch-flow / voltage physics, not just a scalar cap.
   * All interior branches use the `SMAX_NO_LIMIT = 99.0` pu sentinel (effectively unconstrained,
     strictly inside the `0 < smax < 100` band).
   * Branch r/x are representative in-band per-unit values (see the DATA PROVENANCE note at the top
@@ -232,8 +250,8 @@ function ieee123_modified()
 
     buses = [Bus(i, vmin, vmax, i == 1) for i in 1:N]   # index 1 = terminal 150 (frontier/root)
 
-    # SI→pu ONCE at ingestion: head-branch limit 3.8 MVA on the 100 MVA base ⇒ 0.038 pu.
-    s_head = to_pu_power(IEEE123_HEAD_SMAX_MVA, IEEE123_BASE)   # == 0.038 pu
+    # SI→pu ONCE at ingestion: head-branch limit 3.8 MVA on the 1 MVA feeder-scale base ⇒ 3.8 pu.
+    s_head = to_pu_power(IEEE123_HEAD_SMAX_MVA, IEEE123_BASE)   # == 3.8 pu
     s_int = SMAX_NO_LIMIT                                       # 99.0 pu sentinel (interior)
 
     branches = Branch{Float64}[]
