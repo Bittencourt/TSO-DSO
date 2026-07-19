@@ -128,7 +128,7 @@ headline research result — a small, cheap phase depending only on rung-2 duals
   3. Welfare accounting splits into social / DSO / prosumer surplus with a FIT baseline, reproducing the +25%-social-welfare headline.
   4. Economic-direction checks pass: the price falls below wholesale at PV glut and rises above it at congestion.
 **Plans**: 5 plans
-- [ ] 05-01-PLAN.md — Foundation: register ConvexBranchFlow branch-flow duals (:vdrop/:cpydrop/:cone/:smax) + per-aggregator :agg_net stash + src/pricing include graph + RED harness (PRICE-02, PRICE-03)
+- [x] 05-01-PLAN.md — Foundation: register ConvexBranchFlow branch-flow duals (:vdrop/:cpydrop/:cone/:smax) + per-aggregator :agg_net stash + src/pricing include graph + RED harness (PRICE-02, PRICE-03)
 - [ ] 05-02-PLAN.md — extract_dlmp (per-node/hour DADP, 2-bus sign) + decompose_dlmp (energy/loss/congestion/voltage, sum-to-price assertion) (PRICE-01, PRICE-02)
 - [ ] 05-03-PLAN.md — fit_baseline: FIT-OPT (3.24-3.28, no battery) + AC-PF counterfactual, the one genuine new solve (PRICE-03)
 - [ ] 05-04-PLAN.md — economic_direction_checks: DADP < λ₀ at PV glut, > λ₀ at congestion (PRICE-04)
@@ -199,7 +199,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Linear Branch-Flow Residual Seam | 4/4 | Complete   | 2026-07-18 |
 | 3. Prosumer Device Library & Social-Welfare Solve | 5/5 | Complete   | 2026-07-18 |
 | 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
-| 5. Distribution Pricing — DADP & DLMP Decomposition | 0/5 | Planned | - |
+| 5. Distribution Pricing — DADP & DLMP Decomposition | 1/5 | In Progress|  |
 | 6. ADMM Decomposition Core | 0/TBD | Not started | - |
 | 7. ADMM Convergence & Scale | 0/TBD | Not started | - |
 | 8. Experiment Harness & Reproducibility | 0/TBD | Not started | - |
