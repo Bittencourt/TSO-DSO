@@ -246,4 +246,57 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
     )
 end
 
-export DsoOpt, build_dso_opt
+"""
+    solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false)
+        -> (; pag_dso, p_import, exact_maxgap)
+
+Re-solve the built-ONCE `DSO-OPT` (thesis eq. 3.47) for one ADMM iteration by mutating ONLY
+the LINEAR objective coefficient of each coupling variable `pag_dso[j,t]` — no JuMP rebuild
+(ADMM-03, RESEARCH Pattern 3 / Pitfall 6). For each load node `j` and time `t` it calls
+
+    set_objective_coefficient(dso.model, dso.pag[j,t], −λ[j][t] − ρ·a[j][t])
+
+(the FIXED `0.5·ρ·pag²` quadratic penalty from `build_dso_opt` is left UNTOUCHED), then gates
+the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before any dual is read.
+
+`λ` and `a` are indexable by the load-node bus id, each yielding a length-`T` price / target
+profile (`λ[j][t]`, `a[j][t]`): `λ` is the current DADP estimate, `a` the AGR-OPT consensus
+target. λ_j is a plain scalar coefficient, NEVER a JuMP `Parameter` (an indefinite bilinear
+`λ·pag` the conic backend rejects; RESEARCH Pitfall 1).
+
+`check_exact` is the CONVERGENCE flag. When `true` (only the final, converged solve — mid-loop
+iterates are legitimately inexact and would throw, RESEARCH Pitfall 3) it runs the PF-04
+exactness gate [`assert_socp_exact!`](@ref)`(dso.ctx)`, stashing the returned `maxgap` under
+`dso.ctx.meta[:socp_maxgap]`; a STRICT (inexact) cone means `l` is a fictitious over-current
+and the recovered prices are physically meaningless, so the gate THROWS and prices are refused.
+When `false` the gate is NOT run.
+
+Returns `(; pag_dso, p_import, exact_maxgap)` — the solved coupling values `value.(dso.pag)`,
+the frontier exchange `value.(dso.p_import)`, and the certified cone residual (`nothing` until
+a `check_exact = true` solve stashes it).
+"""
+function solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false)
+    # ADMM-03 build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]
+    # (one scalar call per (j,t)); the ρ/2 quadratic penalty built in build_dso_opt is fixed.
+    for j in dso.load_nodes, t in 1:dso.T
+        set_objective_coefficient(dso.model, dso.pag[j, t], -λ[j][t] - ρ * a[j][t])
+    end
+
+    # INFRA-03: never trust a dual (price) before a trusted primal solve.
+    assert_solved!(dso.model; dual = true)
+
+    # PF-04 EXACTNESS GATE — CONVERGENCE ONLY (RESEARCH Pitfall 3). Runs strictly AFTER
+    # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.
+    # Mid-loop iterates skip this — they are legitimately inexact and would throw spuriously.
+    if check_exact
+        dso.ctx.meta[:socp_maxgap] = assert_socp_exact!(dso.ctx)
+    end
+
+    return (;
+        pag_dso = value.(dso.pag),
+        p_import = value.(dso.p_import),
+        exact_maxgap = get(dso.ctx.meta, :socp_maxgap, nothing),
+    )
+end
+
+export DsoOpt, build_dso_opt, solve_dso!

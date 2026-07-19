@@ -112,3 +112,102 @@ end
     feeder3 = Feeder(buses3, branches3, 1)
     @test_throws ArgumentError build_dso_opt(feeder3, aggs, Th; ρ = ρ, λ₀ = λ₀)
 end
+
+@testitem "dso: solve_dso! zero-price OPTIMAL returns pag_dso/p_import of right shape" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:dso] begin
+    using TSODSO
+    using JuMP
+
+    @test isdefined(TSODSO, :solve_dso!)
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+
+    # Zero coupling price + zero AGR target ⇒ the fixed ρ/2 penalty pins pag_dso near 0.
+    λ = Dict(j => zeros(Th) for j in dso.load_nodes)
+    a = Dict(j => zeros(Th) for j in dso.load_nodes)
+
+    res = solve_dso!(dso, λ, a, ρ)   # check_exact defaults to false (mid-loop)
+
+    @test size(res.pag_dso) == (length(dso.load_nodes), Th)
+    @test length(res.p_import) == Th
+    @test all(isfinite, res.pag_dso)
+    @test all(isfinite, res.p_import)
+    @test res.exact_maxgap === nothing   # gate not run mid-loop
+end
+
+@testitem "dso: solve_dso! check_exact passes PF-04 gate on 2-bus and IEEE-13 (exact)" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:dso] begin
+    using TSODSO
+    using JuMP
+
+    # --- 2-bus dual-sign anchor ---
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+    λ = Dict(j => zeros(Th) for j in dso.load_nodes)
+    a = Dict(j => zeros(Th) for j in dso.load_nodes)
+
+    res = solve_dso!(dso, λ, a, ρ; check_exact = true)   # convergence call
+    @test res.exact_maxgap !== nothing
+    @test res.exact_maxgap < 1e-3                          # PF-04: SOC cone tight (exact)
+    @test haskey(dso.ctx.meta, :socp_maxgap)
+
+    # --- IEEE-13 ground fixture (allow_export semantics; reactive closure exercised) ---
+    feeder13 = ieee13_modified()
+    aggs13 = Phase4Fixtures.build_ieee13_ground_aggregators(feeder13)
+    T13 = Phase4Fixtures.T
+    λ₀13 = Phase4Fixtures.mem_price_profile()
+
+    dso13 = build_dso_opt(feeder13, aggs13, T13; ρ = ρ, λ₀ = λ₀13)
+    λ13 = Dict(j => zeros(T13) for j in dso13.load_nodes)
+    a13 = Dict(j => zeros(T13) for j in dso13.load_nodes)
+
+    res13 = solve_dso!(dso13, λ13, a13, ρ; check_exact = true)
+    @test res13.exact_maxgap < 1e-3                        # PF-04 exact on the radial feeder
+end
+
+@testitem "dso: build-once — num_variables/num_constraints unchanged across re-solves (resolve)" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:dso] begin
+    using TSODSO
+    using JuMP: num_variables, num_constraints
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+
+    nv0 = num_variables(dso.model)
+    nc0 = num_constraints(dso.model; count_variable_in_set_constraints = true)
+
+    # Two re-solves with DIFFERENT coupling prices/targets — only coefficients mutate.
+    λ1 = Dict(j => fill(0.10, Th) for j in dso.load_nodes)
+    a1 = Dict(j => fill(0.02, Th) for j in dso.load_nodes)
+    solve_dso!(dso, λ1, a1, ρ)
+
+    λ2 = Dict(j => fill(-0.05, Th) for j in dso.load_nodes)
+    a2 = Dict(j => fill(0.03, Th) for j in dso.load_nodes)
+    solve_dso!(dso, λ2, a2, ρ)
+
+    # ADMM-03: the model shape is INVARIANT across re-solves (no rebuild).
+    @test num_variables(dso.model) == nv0
+    @test num_constraints(dso.model; count_variable_in_set_constraints = true) == nc0
+end
