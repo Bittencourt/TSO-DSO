@@ -90,16 +90,38 @@ end
         λ₀ = Phase4Fixtures.mem_price_profile()
 
         pf = TSODSO.ConvexBranchFlow()
+        # `allow_export = true`: a real feeder SELLS its reverse-flow PV surplus to the MEM at
+        # λ₀. That priced export sink is the SOC-exactness enabler — it makes welfare strictly
+        # decreasing in the loss current `l`, so the cone stays tight in the over-voltage
+        # regime (import-only would leave losses-vs-curtailment welfare-equivalent → slack
+        # cone → refused prices). solve_welfare runs the PF-04 gate internally BEFORE the dual
+        # read; reaching this line at all means prices were NOT refused.
         ctx, obj, dadp = solve_welfare(
             feeder, pf, aggs;
             T = Phase4Fixtures.T, λ₀ = λ₀,
             optimizer = select_optimizer(problem_class(pf)),
+            allow_export = true,
         )
 
         # The over-voltage / reverse-flow regime is exactly where the SOC relaxation can go
-        # strict; the exactness copy (3.43/3.45) must keep it exact so prices are trustworthy.
+        # strict; the exactness copy (3.43/3.45) keeps it exact so prices are trustworthy.
+        # solve_welfare already gated on this and stashed the gap; re-assert externally too.
+        @test haskey(ctx.meta, :socp_maxgap)
         maxgap = TSODSO.assert_socp_exact!(ctx; τ = 1e-5)
         @test maxgap < 1e-5
+        @test ctx.meta[:socp_maxgap] < 1e-5
         @test all(isfinite, dadp)
+
+        # This is a GENUINE over-voltage / reverse-flow regime, not a trivial no-flow case:
+        # at least one bus voltage exceeds nominal (v > 1.0² ⇒ over-voltage) and at least one
+        # branch carries reverse power flow (P < 0 ⇒ PV back-feed toward the root).
+        pv = ctx.meta[:pf_vars]
+        N = length(feeder.buses)
+        B = length(feeder.branches)
+        @test any(value(pv.v[j, t]) > 1.0 + 1e-4 for j in 1:N, t in 1:Phase4Fixtures.T)
+        @test any(value(pv.P[b, t]) < -1e-3 for b in 1:B, t in 1:Phase4Fixtures.T)
+        # ...and every bus stays within the squared-voltage cap (over-voltage, not a violation).
+        vmax2 = maximum(feeder.buses[j].vmax^2 for j in 1:N)
+        @test all(value(pv.v[j, t]) <= vmax2 + 1e-6 for j in 1:N, t in 1:Phase4Fixtures.T)
     end
 end

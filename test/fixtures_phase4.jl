@@ -136,10 +136,23 @@
     """
         build_high_pv_aggregators(feeder; seed=20260406) -> Vector{<:Aggregator}
 
-    Aggregators for the [`high_pv_feeder`](@ref): MASSIVE seeded PV back-feed (`pv_scale`
-    ≫ 1) with a tiny battery (can't soak the surplus) and a small load, driving the network
-    toward the UPPER voltage bound under reverse flow. Fixed default seed ⇒ reproducible
-    (threat T-04-06).
+    Aggregators for the [`high_pv_feeder`](@ref): a seeded PV back-feed that exceeds the small
+    local load, so the surplus REVERSE-FLOWS toward the root and pushes the bus voltages ABOVE
+    nominal (over-voltage). Calibrated to the EXACT over-voltage regime the PF-04 gate targets:
+    with the priced frontier export (`solve_welfare(...; allow_export = true)`) the surplus is
+    sold to the MEM rather than dissipated, so the SOC relaxation stays TIGHT — voltage climbs
+    to ≈`1.04` pu (genuine over-voltage / reverse power flow) while remaining strictly BELOW the
+    `1.05` cap, which is precisely the regime in which the LinDistFlow exactness copy keeps
+    `l·v = P²+Q²` (thesis over-voltage result, e.g. `v ≈ 1.049` pu, is an EXACT SOCP outcome).
+
+    Calibration note (why `pv_scale = 0.5`, not `≫ 1`): exactness of the DistFlow SOC
+    relaxation holds under reverse flow so long as the UPPER voltage bound does not STRICTLY
+    bind. An over-scaled back-feed pins voltage at `V²max` (the bound binds), which is the one
+    regime where SOC exactness genuinely fails — the solver then dumps surplus into a fictitious
+    loss current `l` (`l·v > P²+Q²`) and the PF-04 gate correctly REFUSES the resulting prices.
+    `pv_scale = 0.5` (against the seeded PV shape, a small `load_scale = 0.2`, and a tiny
+    battery) lands the peak at ≈`1.04` pu — clear over-voltage with headroom below the cap.
+    Fixed default seed ⇒ reproducible (threat T-04-06).
     """
     function build_high_pv_aggregators(feeder; seed::Integer = 20260406)
         N = length(feeder.buses)
@@ -147,8 +160,8 @@
             _house_aggregator(
                 feeder, bus;
                 seed = seed, φ = 0.95,
-                pv_scale = 50.0,      # huge PV export ⇒ reverse flow / over-voltage stress
-                load_scale = 0.2,     # small load ⇒ nowhere for the surplus to go locally
+                pv_scale = 0.5,       # PV > load ⇒ reverse flow / over-voltage (≈1.04 pu), EXACT
+                load_scale = 0.2,     # small load ⇒ the surplus must leave via the frontier
                 batt_pmax = 0.1, batt_emax = 0.2, batt_soc0 = 0.1,   # tiny storage headroom
             ) for bus in 2:N
         ]
