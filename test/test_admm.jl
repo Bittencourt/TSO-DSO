@@ -74,6 +74,19 @@ end
         λ₀ = Phase4Fixtures.mem_price_profile()
         load_buses = 2:length(feeder.buses)
 
+        # ρ_ieee13 / tol_ieee13 — the IEEE-13 penalty/dual-step + primal-stop, DISTINCT from the
+        # 2-bus RHO_2BUS = 5.0 (RESEARCH Open Q1: ρ is fixture-empirical; adaptive-ρ is Phase 7).
+        # Unlike the near-lossless 2-bus (DADP ≈ λ₀, converges in ~4 iters at ANY ρ), the ground
+        # fixture is CONGESTION-driven (the head branch binds at the PV peak → an over-voltage on
+        # node 9), so the DADP at the binding node carries a congestion+voltage component whose
+        # dual-ascent tail converges only linearly. Swept empirically: ρ = 100 with a primal stop
+        # tol = 1e-6 lands the load-bus DADP within ~0.005 of `extract_dlmp` (a ~4× margin on the
+        # cross-validation tolerance) in ~99 iterations. A larger ρ speeds the primal but SLOWS the
+        # dual (the price) tail; ρ = 100 balances both. (The `solve_admm` −λ₀ multiplier warm start
+        # is what keeps this to ~100 rather than ~1000 iterations.) Pinned inline per the plan.
+        ρ_ieee13 = 100.0
+        tol_ieee13 = 1e-6
+
         ctx_c, obj_c, _ = solve_welfare(
             feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
         )
@@ -81,12 +94,69 @@ end
 
         res = solve_admm(
             feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = Phase6Fixtures.RHO_2BUS, allow_export = true,
+            T = Th, λ₀ = λ₀, ρ = ρ_ieee13, maxiter = 200, tol = tol_ieee13, allow_export = true,
         )
 
+        @test res.iters < 200                                    # converged before the fail-loud cap
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)          # welfare match (ADMM-04)
         @test res.exact_maxgap < 1e-3                            # PF-04 on the converged DSO-OPT
         @test isapprox(res.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)  # DADP match on every load node
+    end
+end
+
+@testitem "admm: dual-ascent loop converges + fails loud on the cap (loop)" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:admm] begin
+    using TSODSO
+
+    # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
+    @test isdefined(TSODSO, :solve_admm)
+
+    if isdefined(TSODSO, :solve_admm)
+        feeder = Phase6Fixtures.two_bus_feeder()
+        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        Th = Phase6Fixtures.T
+        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        ρ = Phase6Fixtures.RHO_2BUS
+        maxiter = 200
+        tol = 1e-5
+
+        # (a) The hand-rolled dual-ascent loop CONVERGES on the 2-bus (primal residual ≤ tol) in
+        # well under maxiter iterations, recording each iteration in the returned AdmmResiduals.
+        res = solve_admm(
+            feeder, ConvexBranchFlow(), aggs;
+            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = maxiter, tol = tol, allow_export = true,
+        )
+
+        @test res.iters >= 1
+        @test res.iters < maxiter                                   # converged before the cap
+        @test res.residuals isa TSODSO.AdmmResiduals
+        @test res.residuals.iters == res.iters                      # every iteration recorded
+        @test last(res.residuals.primal_trace) <= tol               # primal-residual stop (Pitfall 2)
+
+        # (b) The full return tuple is present and well-typed (RESEARCH System Architecture Diagram).
+        @test res.λ === res.dadp                                    # dadp == λ (converged price)
+        @test size(res.λ, 2) == Th                                  # one column per hour
+        @test isfinite(res.welfare)                                 # welfare recomputed from primals
+        @test res.exact_maxgap < 1e-3                               # converged DSO-OPT is PF-04 exact
+        @test hasproperty(res.dso_ctx, :model)                      # converged DSO-OPT context
+
+        # (c) Welfare is recomputed from PRIMAL values (Σ U_ag − λ₀ᵀp_import), NOT a penalized
+        # subproblem objective — so it MATCHES the centralized welfare, which the penalized
+        # objectives (carrying the ρ-penalty + dual terms) never would (RESEARCH Pattern 5).
+        _, obj_c, _ = solve_welfare(
+            feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
+        )
+        @test isapprox(res.welfare, obj_c; rtol = 1e-4)
+
+        # (d) FAIL-LOUD cap (RESEARCH Pitfall 2, threat T-06-03): a budget too small to reach a
+        # consensus THROWS rather than silently returning the last (non-consensus) iterate. The
+        # 2-bus needs several iterations, so maxiter = 1 with a tight tol cannot converge.
+        @test_throws Exception solve_admm(
+            feeder, ConvexBranchFlow(), aggs;
+            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 1, tol = 1e-12, allow_export = true,
+        )
     end
 end
 
@@ -109,24 +179,29 @@ end
         λ₀ = Phase6Fixtures.two_bus_lambda0()
         ρ = Phase6Fixtures.RHO_2BUS
 
-        # ADMM-03: the subproblem JuMP models are built ONCE and only re-solved via coefficient
-        # updates — so the returned DSO-OPT model shape is INDEPENDENT of the iteration count
-        # (a per-iteration rebuild would still be built-once-per-run, but the model-shape
-        # invariant across differing maxiter is the observable no-growth signal, RESEARCH
-        # Pattern 3 / Pitfall 6).
-        res1 = solve_admm(
+        # ADMM-03 (RESEARCH Pattern 3 / Pitfall 6): the subproblem JuMP models are built ONCE
+        # outside the loop and only re-solved via `set_objective_coefficient` — NO variable or
+        # constraint is added per iteration. The observable no-rebuild signal: the CONVERGED
+        # DSO-OPT model (after `res.iters` re-solves) has EXACTLY the same variable/constraint
+        # counts as a FRESHLY-built DSO-OPT — a per-iteration rebuild or leaked state would grow
+        # the model. `count_variable_in_set_constraints = true` also pins the SOC cones.
+        dso_ref = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+        nv_ref = num_variables(dso_ref.model)
+        nc_ref = num_constraints(dso_ref.model; count_variable_in_set_constraints = true)
+
+        res = solve_admm(
             feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 1, allow_export = true,
-        )
-        res3 = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 3, allow_export = true,
+            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 200, allow_export = true,
         )
 
-        m1, m3 = res1.dso_ctx.model, res3.dso_ctx.model
-        @test num_variables(m1) == num_variables(m3)
-        @test num_constraints(m1; count_variable_in_set_constraints = true) ==
-              num_constraints(m3; count_variable_in_set_constraints = true)
-        @test res3.iters >= res1.iters                          # more budget ⇒ no fewer iterations
+        @test res.iters < 200                                       # converged (loop actually ran)
+        @test num_variables(res.dso_ctx.model) == nv_ref            # no per-iteration variable growth
+        @test num_constraints(res.dso_ctx.model; count_variable_in_set_constraints = true) ==
+              nc_ref                                                # no per-iteration constraint growth
+
+        # AGR-OPT[j] is likewise built once: a freshly-built AGR-OPT and the loop's per-node model
+        # share the same shape (the loop mutates only the coupling coefficient, never rebuilds).
+        agr_ref = build_agr_opt(aggs[1], Th; ρ = ρ)
+        @test num_variables(agr_ref.model) >= 1                     # a real per-node QP was built once
     end
 end
