@@ -111,10 +111,15 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
    (ADMM-03). λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
    bilinear `λ·pag` the conic backend rejects; RESEARCH Pitfall 1).
 
-Load nodes are the aggregator buses (the root carries no aggregator). Throws `ArgumentError`
-on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside `1:length(feeder.buses)`,
-an aggregator ON the root, or a non-root TRANSIT bus with no aggregator (its `:Rp`/`:Rq` would
-be unclosed and the SOCP under-determined — the guard that keeps Phase-7 scale-up sound).
+Load nodes are the aggregator buses (the root carries no aggregator). A non-root bus WITHOUT an
+aggregator is admitted as a physically-valid ZERO-INJECTION TRANSIT node (plan 07-03, RESEARCH
+Pitfall 5): it carries no coupling variable and no reactive draw, and its `:Rp`/`:Rq` is pinned to
+zero via `balance_p`/`balance_q` (closed at all `N` buses) — the correct zero-injection closure
+that lets IEEE-123 (~37 junction buses) build. `load_nodes` (the ADMM coupling axis) is thereby
+DECOUPLED from "all non-root buses" (the balance-closure axis); on the 2-bus / IEEE-13 fixtures
+every non-root bus is a load node, so both axes coincide and the model is unchanged. Throws
+`ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
+`1:length(feeder.buses)`, or an aggregator ON the root (genuinely invalid inputs still fail loud).
 """
 function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
     # Boundary guards (mirror solve_welfare): fail here, not deep in objective assembly.
@@ -138,21 +143,19 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
         )
     end
 
-    # TRANSIT-NODE GUARD (plan-checker WARNING-2): DSO-OPT currently requires EVERY non-root
-    # bus to carry an aggregator, else that bus's :Rp/:Rq is closed with no coupling/draw term
-    # (its net injection pinned to zero) — an under-determined transit node that silently
-    # distorts the network state. Fail loudly; guards Phase-7 scale-up to true transit feeders.
+    # TRANSIT-NODE RELAXATION (plan 07-03, RESEARCH Pitfall 5): DECOUPLE the ADMM coupling axis
+    # (`load_nodes` = aggregator buses) from the balance-closure axis (all non-root buses). A
+    # non-root bus WITHOUT an aggregator is a physically-valid ZERO-INJECTION TRANSIT node (a
+    # junction / lateral tap): it carries NO coupling variable and NO reactive draw, so its
+    # :Rp/:Rq residual is exactly the branch-flow residual, which `balance_p`/`balance_q` (closed
+    # at ALL N buses below) pins to zero — the correct zero-injection closure, NOT an
+    # under-determined node. Only genuinely invalid buses fail loud: an aggregator out of range or
+    # ON the root (both guarded above). IEEE-123 has ~37 transit buses; the 2-bus / IEEE-13
+    # fixtures have NONE (every non-root bus is a load node ⇒ transit_nodes == Int[]), so those
+    # cases are byte-for-byte unaffected — same load_nodes, same model shape.
     agg_buses = Set(agg.bus for agg in aggregators)
-    for j in 1:N
-        j == root && continue
-        j in agg_buses || throw(
-            ArgumentError(
-                "non-root bus $j carries no aggregator; DSO-OPT requires every non-root bus " *
-                "to be a load node (its :Rp/:Rq would be unclosed — plan-checker WARNING-2)",
-            ),
-        )
-    end
     load_nodes = sort!(collect(agg_buses))
+    transit_nodes = Int[j for j in 1:N if j != root && !(j in agg_buses)]
 
     # Per-load-node CONSTANT reactive draw q_ag_j[t] = Σ_{agg@j} −Pdc[t]·tan(acos φ) (thesis
     # 3.23). Summed over any aggregators sharing a bus; the temporal guard mirrors Aggregator.
@@ -207,6 +210,18 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
     # parameter (no μ dual-ascent — reactive is not a consensus quantity).
     for j in load_nodes, t in 1:T
         add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+    end
+
+    # (4b') TRANSIT-NODE ZERO INJECTION (RESEARCH Pitfall 5): each non-root, non-load bus is a
+    # physical zero-injection junction — inject a pinned 0 into its :Rp/:Rq so `balance_p`/
+    # `balance_q` (below, at all N buses) close it as a zero-injection node rather than leaving
+    # it out of the coupling. A documentary no-op on feeders with no transit bus (2-bus/IEEE-13:
+    # transit_nodes == Int[]), so their model is unchanged. NO coupling variable / reactive draw
+    # is added here — transit buses have no aggregator, so they are absent from `load_nodes`,
+    # `pag_dso`, and `q_draw`, keeping the ADMM coupling axis untouched.
+    for j in transit_nodes, t in 1:T
+        add_to_residual!(ctx, :Rp, j, t, 0.0)
+        add_to_residual!(ctx, :Rq, j, t, 0.0)
     end
 
     # (4c) Close BOTH balances at ALL buses (root + every load node). Registered so the DADP
@@ -309,4 +324,39 @@ function solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false, str
     )
 end
 
-export DsoOpt, build_dso_opt, solve_dso!
+"""
+    set_rho!(dso::DsoOpt, ρ::Real) -> DsoOpt
+
+Mutate the FIXED quadratic penalty weight of the built-ONCE DSO-OPT in place when the adaptive-ρ
+loop (07-04) changes ρ — WITHOUT rebuilding the JuMP model (ADMM-04 build-once preserved,
+RESEARCH Pattern 1). DSO-OPT is `Min λ₀ᵀp_import + (ρ/2)·Σ_{j,t} pag_dso[j,t]²`, so the diagonal
+quadratic coefficient of every `pag_dso[j,t]²` is `+0.5ρ` (Min objective — MIRROR of the AGR-OPT
+`−0.5ρ`). Flatten the `pag` coupling container to a `Vector{VariableRef}` and set them all in one
+BATCH call:
+
+    set_objective_coefficient(dso.model, v, v, fill(0.5ρ, length(v)))
+
+The 4-arg (quadratic) `set_objective_coefficient(model, x, x, c)` sets the coefficient of `x²`
+to `c` directly (JuMP 1.30.1 absorbs the MOI `0.5·xᵀQx` canonicalization — VERIFIED, RESEARCH
+Pattern 1 / objective.jl:629,712). The mutation is stored in the `CachingOptimizer` and re-applied
+on the next `optimize!`, identical mechanism to the LINEAR `set_objective_coefficient` update
+[`solve_dso!`](@ref) already runs each iteration — so `num_variables`/`num_constraints` are
+INVARIANT (no rebuild) and a mutate-then-solve is EQUIVALENT to a fresh build at the new ρ.
+
+CONTRACT for the caller (07-04): call `set_rho!` ONLY when ρ actually changed and in LOCKSTEP
+with the linear coefficient update `−λ[j][t] − ρ·a[j][t]` (same ρ — Pitfall 1: penalty ρ and
+ascent ρ must not diverge). Never model ρ (or λ) as a JuMP `Parameter`. Keep ρ strictly POSITIVE
+(convexity guard, Pitfall 6: ρ > 0 ⇒ DSO stays convex-Min); the adaptive policy clamps
+ρ ∈ `[ρ_min, ρ_max]`. Returns `dso`.
+"""
+function set_rho!(dso::DsoOpt, ρ::Real)
+    # Flatten the pag_dso DenseAxisArray (j over load_nodes × t) to a flat Vector{VariableRef}
+    # by indexing over its KNOWN axes — `collect` on a Vector-axis DenseAxisArray is unsupported.
+    v = VariableRef[dso.pag[j, t] for j in dso.load_nodes for t in 1:dso.T]
+    # Diagonal quadratic coeff of every pag_dso[j,t]² set to +0.5ρ (Min objective, penalty added).
+    # BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    set_objective_coefficient(dso.model, v, v, fill(0.5 * ρ, length(v)))
+    return dso
+end
+
+export DsoOpt, build_dso_opt, solve_dso!, set_rho!

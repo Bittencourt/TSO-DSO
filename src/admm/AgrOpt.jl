@@ -193,4 +193,35 @@ function solve_agr!(
     return (; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))
 end
 
-export AgrOpt, build_agr_opt, solve_agr!
+"""
+    set_rho!(agr::AgrOpt, ρ::Real) -> AgrOpt
+
+Mutate the FIXED quadratic penalty weight of the built-ONCE AGR-OPT in place when the adaptive-ρ
+loop (07-04) changes ρ — WITHOUT rebuilding the JuMP model (ADMM-04 build-once preserved,
+RESEARCH Pattern 1). AGR-OPT is `Max U_ag − (ρ/2)·Σ_t pag[t]²`, so the diagonal quadratic
+coefficient of every `pag[t]²` is `−0.5ρ`. One BATCH call sets them all:
+
+    set_objective_coefficient(agr.model, agr.pag, agr.pag, fill(-0.5ρ, agr.T))
+
+The 4-arg (quadratic) `set_objective_coefficient(model, x, x, c)` sets the coefficient of `x²`
+to `c` directly (JuMP 1.30.1 absorbs the MOI `0.5·xᵀQx` canonicalization — VERIFIED, RESEARCH
+Pattern 1 / objective.jl:629,712). The mutation is stored in the `CachingOptimizer` and re-applied
+on the next `optimize!`, identical mechanism to the LINEAR `set_objective_coefficient` update
+[`solve_agr!`](@ref) already runs each iteration — so `num_variables`/`num_constraints` are
+INVARIANT (no rebuild) and a mutate-then-solve is EQUIVALENT to a fresh build at the new ρ.
+
+CONTRACT for the caller (07-04): call `set_rho!` ONLY on iterations where ρ actually changed
+(guard `ρ_new != ρ_old`), and in LOCKSTEP with the linear coefficient update — the linear term
+`−λ_j[t] − ρ·c_j[t]` carries the SAME ρ (Pitfall 1: the penalty ρ and the ascent ρ must not
+diverge). Never model ρ (or λ) as a JuMP `Parameter`. Keep ρ strictly POSITIVE (convexity guard,
+Pitfall 6: ρ > 0 ⇒ AGR stays concave-Max); the adaptive policy clamps ρ ∈ `[ρ_min, ρ_max]`.
+Returns `agr`.
+"""
+function set_rho!(agr::AgrOpt, ρ::Real)
+    # Diagonal quadratic coeff of every pag[t]² set to −0.5ρ (Max objective, penalty subtracted).
+    # BATCH form — one MOI modification list for all T hours; no rebuild (RESEARCH Pattern 1).
+    set_objective_coefficient(agr.model, agr.pag, agr.pag, fill(-0.5 * ρ, agr.T))
+    return agr
+end
+
+export AgrOpt, build_agr_opt, solve_agr!, set_rho!

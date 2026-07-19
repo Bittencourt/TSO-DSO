@@ -143,3 +143,45 @@ end
         @test !isapprox(collect(lo.pag), collect(hi.pag); atol = 1e-6)
     end
 end
+
+@testitem "agr: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup = [
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:admm, :phase7] begin
+    using TSODSO
+    using JuMP: num_variables, num_constraints
+
+    # RED until Task 1 (this plan) adds set_rho!.
+    @test isdefined(TSODSO, :set_rho!)
+
+    if isdefined(TSODSO, :set_rho!)
+        feeder = Phase6Fixtures.two_bus_feeder()
+        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        agg = aggs[1]
+        Th = Phase6Fixtures.T
+        ρ0 = Phase6Fixtures.RHO_2BUS
+        ρ1 = 3.7 * ρ0                       # a genuine ρ change (τ-like ratchet)
+
+        # A FIXED (λ_j, c_j) exercised on both paths so any difference is the ρ mutation alone.
+        λj = fill(0.8, Th)
+        cj = fill(0.15, Th)
+
+        # MUTATE path: build at ρ0, set_rho!(agr, ρ1) — NO rebuild — then solve at ρ1.
+        agr_mut = build_agr_opt(agg, Th; ρ = ρ0)
+        nv0 = num_variables(agr_mut.model)
+        nc0 = num_constraints(agr_mut.model; count_variable_in_set_constraints = true)
+        set_rho!(agr_mut, ρ1)
+        # Build-once (ADMM-04): a ρ change mutates ONLY objective coefficients — shape invariant.
+        @test num_variables(agr_mut.model) == nv0
+        @test num_constraints(agr_mut.model; count_variable_in_set_constraints = true) == nc0
+        out_mut = solve_agr!(agr_mut, λj, cj, ρ1; check_battery = false, strict = false)
+
+        # FRESH path: build directly at ρ1, solve the SAME coefficients.
+        agr_fresh = build_agr_opt(agg, Th; ρ = ρ1)
+        out_fresh = solve_agr!(agr_fresh, λj, cj, ρ1; check_battery = false, strict = false)
+
+        # Equivalence proof: the in-place quadratic mutation reproduces a fresh build at ρ1.
+        @test isapprox(collect(out_mut.pag), collect(out_fresh.pag); atol = 1e-6, rtol = 1e-5)
+        @test isapprox(out_mut.utility, out_fresh.utility; atol = 1e-6, rtol = 1e-5)
+    end
+end
