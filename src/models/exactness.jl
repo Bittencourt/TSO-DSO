@@ -20,7 +20,7 @@
 using JuMP
 
 """
-    assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1e-8)
+    assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1e-6)
         -> maxgap::Float64
 
 Certify that the SOC branch-flow relaxation is EXACT at the solved point, and REFUSE
@@ -34,21 +34,27 @@ After a trusted solve, for every branch `b` (from-bus `feeder.branches[b].from`)
     rhs   = value(P[b,t])² + value(Q[b,t])²              # P² + Q²
     gap   = |lhs − rhs|
 
-and compares it to a RELATIVE threshold scaled by the cone magnitude (WR-01):
+and compares it to an isapprox-style COMBINED threshold (WR-01):
 
     gap ≤ atol + rtol · max(|lhs|, |rhs|)
 
-tracking `maxrel = maxₜ,ᵦ gap / (atol + max(|lhs|, |rhs|))`. If any branch violates the
-bound it raises a loud `error(...)` naming the worst relative gap and REFUSING prices
-(thesis 3.43–3.45; PF-04); otherwise it returns `maxgap = maxₜ,ᵦ gap` — the absolute cone
-residual — as a FIRST-CLASS output reported alongside the prices.
+tracking `maxratio = maxₜ,ᵦ gap / (atol + rtol·max(|lhs|, |rhs|))`. If any branch violates the
+bound (`maxratio > 1`) it raises a loud `error(...)` and REFUSES prices (thesis 3.43–3.45;
+PF-04); otherwise it returns `maxgap = maxₜ,ᵦ gap` — the absolute cone residual — as a
+FIRST-CLASS output reported alongside the prices.
 
-Why RELATIVE (WR-01): the cone residual `l·v − (P²+Q²)` is in per-unit², so its magnitude
-scales with the per-unit base. An ABSOLUTE tolerance therefore accepts a larger fractional
-cone slack on a big base (e.g. the 100 MVA IEEE-13 fixture, where `l·v ≈ 5e-3` pu²) than on
-a small one — the SAME physical inexactness could pass on one base and be refused on another.
-Normalizing by the cone magnitude makes the verdict depend on the physics, not the base. The
-small `atol` floor guards near-zero (no-flow) branches against a divide-by-tiny blow-up.
+Why the `rtol` term (WR-01): the cone residual `l·v − (P²+Q²)` is in per-unit², so its
+magnitude scales with the per-unit base. A PURELY ABSOLUTE tolerance therefore accepts a larger
+FRACTIONAL cone slack on a big base (e.g. the 100 MVA IEEE-13 fixture, where a load-bearing
+`l·v ≈ 5e-3` pu²) than on a small one — the SAME physical inexactness could pass on one base and
+be refused on another. The `rtol·max(|lhs|,|rhs|)` term makes the verdict a fixed FRACTION of
+the cone magnitude, hence invariant to the base.
+
+Why the `atol` term: on a near-zero-flow branch both sides are ~0 and a pure ratio would blow
+up on meaningless rounding noise (a genuinely exact solve can show a per-branch residual ~1e-8
+where the cone magnitude is also ~1e-7, i.e. a spurious ~10% "relative" slack). The absolute
+`atol` floor (default 1e-6, an order below the legacy absolute τ = 1e-5) lets such numerically-
+zero branches count as exact while never masking a genuine strict cone on a load-bearing branch.
 
 Why this gate exists (RESEARCH Pattern 4 / Pitfall 1): a strict cone at the optimum means the
 squared current `l` is a fictitious over-current and the recovered DADP duals are physically
@@ -69,25 +75,32 @@ Reads `ctx.meta[:pf_vars]` (the `(; v, v̂, P, Q, l)` stash), `ctx.meta[:feeder]
 `ctx.meta[:T]`. Uses an explicit `error(...)` (never `@assert`, which is elided under `-O`), per
 project convention (`src/core/status.jl`).
 """
-function assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1e-8)
+function assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1e-6)
     pv = ctx.meta[:pf_vars]
     feeder = ctx.meta[:feeder]
     T = ctx.meta[:T]
 
     maxgap = 0.0        # absolute cone residual (first-class reported output)
-    maxrel = 0.0        # worst RELATIVE cone slack (the scale-free gate quantity, WR-01)
+    maxratio = 0.0      # worst gap / (atol + rtol·magnitude) — ≤ 1 iff every branch is exact
     for (b, br) in enumerate(feeder.branches), t in 1:T
         lhs = value(pv.l[b, t]) * value(pv.v[br.from, t])   # l·v_from  (thesis 3.39 RHS side)
         rhs = value(pv.P[b, t])^2 + value(pv.Q[b, t])^2      # P² + Q²
         gap = abs(lhs - rhs)
-        scale = atol + max(abs(lhs), abs(rhs))               # base-free normalizer + atol floor
+        # isapprox-style COMBINED bound (WR-01): a branch is exact iff
+        # gap ≤ atol + rtol·max(|lhs|,|rhs|). The rtol term is the SCALE-FREE part (a fixed
+        # FRACTION of the cone magnitude, so the verdict is invariant to the per-unit base);
+        # the atol term is an ABSOLUTE floor so a numerically-zero (near-no-flow) branch — where
+        # both sides are ~0 and a pure ratio would blow up on meaningless rounding noise — is
+        # judged exact. atol (default 1e-6) sits an order below the legacy absolute τ = 1e-5,
+        # so it never masks a genuine strict cone on a load-bearing branch.
+        tol = atol + rtol * max(abs(lhs), abs(rhs))
         maxgap = max(maxgap, gap)
-        maxrel = max(maxrel, gap / scale)
+        maxratio = max(maxratio, gap / tol)
     end
 
-    maxrel < rtol || error(
-        "SOCP relaxation INEXACT: max relative cone slack=$maxrel ≥ rtol=$rtol " *
-        "(max abs |l·v−(P²+Q²)|=$maxgap; atol=$atol) — " *
+    maxratio <= 1 || error(
+        "SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=$maxratio > 1 " *
+        "(rtol=$rtol, atol=$atol; max abs |l·v−(P²+Q²)|=$maxgap) — " *
         "prices REFUSED (thesis 3.43-3.45; PF-04)",
     )
     return maxgap
