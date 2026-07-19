@@ -88,7 +88,8 @@ end
     @test any(t -> abs(value(q_import[t])) > 1e-8, 1:Th)
 end
 
-@testitem "dso: build_dso_opt guards — empty aggs, λ₀ shape, transit node, root aggregator" setup = [
+@testitem "dso: build_dso_opt guards — empty aggs, λ₀ shape, root aggregator, out-of-range" setup = [
+    Phase7Fixtures,
     Phase6Fixtures,
     Phase4Fixtures,
 ] tags = [:dso] begin
@@ -105,12 +106,63 @@ end
     # λ₀ shape mismatch.
     @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀[1:(Th-1)])
 
-    # Transit node: a 3-bus radial feeder with an aggregator only on bus 2 leaves bus 3
-    # unclosed — the guard must reject it.
+    # GENUINELY-invalid buses STILL fail loud — the transit relaxation (plan 07-03 / Pitfall 5)
+    # only admits VALID zero-injection nodes, never a mislocated aggregator.
     buses3 = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
     branches3 = [Branch(1, 2, 1e-3, 1e-3, SMAX_NO_LIMIT), Branch(2, 3, 1e-3, 1e-3, SMAX_NO_LIMIT)]
     feeder3 = Feeder(buses3, branches3, 1)
-    @test_throws ArgumentError build_dso_opt(feeder3, aggs, Th; ρ = ρ, λ₀ = λ₀)
+
+    # Aggregator ON the root bus — the frontier carries no aggregator (thesis 3.47) → fail loud.
+    root_agg = Phase7Fixtures.build_ieee123_aggregators(feeder3; load_buses = [1])
+    @test_throws ArgumentError build_dso_opt(feeder3, root_agg, Th; ρ = ρ, λ₀ = λ₀)
+
+    # Aggregator on a bus OUTSIDE 1:N (bus 3 fed to the 2-bus feeder, N=2) → fail loud.
+    oob_agg = Phase7Fixtures.build_ieee123_aggregators(feeder3; load_buses = [3])
+    @test_throws ArgumentError build_dso_opt(feeder, oob_agg, Th; ρ = ρ, λ₀ = λ₀)
+
+    # A genuine TRANSIT bus (aggregator only on bus 2, bus 3 zero-injection) is now ADMITTED
+    # (Pitfall 5 relaxation) — build succeeds and the coupling axis excludes the transit node.
+    dso3 = build_dso_opt(feeder3, aggs, Th; ρ = ρ, λ₀ = λ₀)
+    @test dso3.load_nodes == [2]                       # coupling axis = aggregator buses only
+    @test haskey(dso3.ctx.constraints, :balance_p)     # balance still closed at all N buses
+    @test haskey(dso3.ctx.constraints, :balance_q)
+end
+
+@testitem "dso: transit zero-injection bus admitted, balance closes, solves OPTIMAL (transit, dso)" setup = [
+    Phase7Fixtures,
+    Phase6Fixtures,
+    Phase4Fixtures,
+] tags = [:dso, :phase7] begin
+    using TSODSO
+    using JuMP
+
+    # SMALL SYNTHETIC feeder (NOT ieee123_modified — that is a parallel-wave stub at 07-03 time):
+    # root(1) → transit(2, NO aggregator) → load(3, aggregator). Bus 2 is a genuine zero-injection
+    # junction the Phase-6 guard rejected; plan 07-03 admits it (RESEARCH Pitfall 5).
+    buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.9, 1.1, false), Bus(3, 0.9, 1.1, false)]
+    branches = [Branch(1, 2, 0.02, 0.02, SMAX_NO_LIMIT), Branch(2, 3, 0.02, 0.02, SMAX_NO_LIMIT)]
+    feeder = Feeder(buses, branches, 1)
+
+    aggs = Phase7Fixtures.build_ieee123_aggregators(feeder; load_buses = [3])   # ONLY bus 3
+    Th = Phase7Fixtures.T
+    λ₀ = Phase7Fixtures.ieee123_lambda0()
+    ρ = Phase7Fixtures.RHO0
+
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+
+    # Coupling axis DECOUPLED from the balance-closure axis: only the aggregator bus 3 is a load
+    # node; bus 2 is a transit node absent from the coupling.
+    @test dso.load_nodes == [3]
+    @test size(dso.pag) == (1, Th)
+
+    # Balance registered at ALL N buses (root + transit + load), so the SOCP is well-determined.
+    @test haskey(dso.ctx.constraints, :balance_p)
+    @test haskey(dso.ctx.constraints, :balance_q)
+    @test size(dso.ctx.residuals[:Rp]) == (length(feeder.buses), Th)
+
+    # The zero-injection transit closure is NOT under-determined: a clean OPTIMAL solve proves it.
+    assert_solved!(dso.model; dual = true)
+    @test isfinite(objective_value(dso.model))
 end
 
 @testitem "dso: solve_dso! zero-price OPTIMAL returns pag_dso/p_import of right shape" setup = [
