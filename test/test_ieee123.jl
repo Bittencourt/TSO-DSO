@@ -62,3 +62,55 @@ end
         end
     end
 end
+
+@testitem "ieee123: relabel map + substation root spot-check (ieee123)" tags = [:phase7] begin
+    using TSODSO
+
+    # RED until Wave 2 (plan 07-02 fills the fixture + its documented relabel map).
+    @test isdefined(TSODSO, :ieee123_modified)
+    @test isdefined(TSODSO, :ieee123_relabel_map)
+
+    if isdefined(TSODSO, :ieee123_modified) && isdefined(TSODSO, :ieee123_relabel_map)
+        feeder = ieee123_modified()
+        N = length(feeder.buses)
+        remap = ieee123_relabel_map()
+
+        # the map is a bijection thesis_terminal -> 1..N (one struct index per terminal).
+        @test length(remap) == N
+        @test sort(collect(values(remap))) == collect(1:N)
+
+        # the substation/frontier terminal 150 is struct index 1, and IS feeder.root (Open-Q1).
+        @test remap[TSODSO.IEEE123_ROOT_TERMINAL] == 1
+        @test feeder.root == remap[TSODSO.IEEE123_ROOT_TERMINAL]
+
+        # documented spot-checks: smallest non-root terminal -> 2; a known high terminal -> N.
+        @test remap[1] == 2
+        @test remap[450] == N
+    end
+end
+
+@testitem "ieee123: transit (zero-injection) bus count (ieee123)" tags = [:phase7] begin
+    using TSODSO
+
+    # RED until Wave 2 (plan 07-02 exposes the load/transit split).
+    @test isdefined(TSODSO, :ieee123_modified)
+    @test isdefined(TSODSO, :ieee123_load_nodes)
+
+    if isdefined(TSODSO, :ieee123_modified) && isdefined(TSODSO, :ieee123_load_nodes)
+        feeder = ieee123_modified()
+        N = length(feeder.buses)
+        load_nodes = ieee123_load_nodes()
+
+        # load nodes are distinct, non-root, in range (the aggregator-coupling axis).
+        @test allunique(load_nodes)
+        @test all(j -> 2 <= j <= N, load_nodes)
+        @test !(feeder.root in load_nodes)
+
+        # thesis Case B ships 85 spot-load nodes; the rest of the non-root buses are TRANSIT.
+        @test length(load_nodes) == 85
+
+        # the fixture genuinely exercises the transit path plan 07-03 relaxes: > 0 transit buses.
+        transit = N - 1 - length(load_nodes)
+        @test transit > 0
+    end
+end
