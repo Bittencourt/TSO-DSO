@@ -90,7 +90,8 @@ AND — for a SOCP formulation — the PF-04 exactness certificate. This functio
 
 With `bus === nothing` (default) it returns the full `(N_buses, T)` DADP matrix
 `dual.(ctx.constraints[:balance_p])`. Passing `bus` returns that bus's length-`T` price
-vector (`T` defaults to the full horizon; a shorter `T` truncates the leading hours).
+vector (`T` defaults to the full horizon; a shorter `T` keeps the leading hours `1:T` and
+truncates the trailing ones).
 """
 function extract_dlmp(ctx::ModelContext; bus = nothing, T = nothing)
     _assert_priceable(ctx)
