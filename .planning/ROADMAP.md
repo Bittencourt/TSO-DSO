@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Convex Branch-Flow Correctness Milestone** - SOCP + LinDistFlow exactness + IEEE 13 + `operational_oracle` seam (rung 2b) (completed 2026-07-19)
 - [x] **Phase 5: Distribution Pricing — DADP & DLMP Decomposition** - Nodal-balance dual prices, four-way decomposition, welfare accounting (rung 3) (completed 2026-07-19)
 - [x] **Phase 6: ADMM Decomposition Core** - `AGR-OPT`/`DSO-OPT` + dual ascent, build-once, cross-validated vs centralized (rung 4a) (completed 2026-07-19)
-- [ ] **Phase 7: ADMM Convergence & Scale** - Primal+dual stopping, adaptive ρ, diagnostics, IEEE 123-node voltage case (rung 4b)
+- [x] **Phase 7: ADMM Convergence & Scale** - Primal+dual stopping, adaptive ρ, diagnostics, IEEE 123-node voltage case (rung 4b) (completed 2026-07-19)
 - [ ] **Phase 8: Experiment Harness & Reproducibility** - Declarative scenarios, sweeps, bit-for-bit reproducible runs
 - [ ] **Phase 9: Documentation & Regression Acceptance Gate** - Literate per-model math docs, pinned regression fixtures, v1 acceptance gate
 
@@ -167,7 +167,7 @@ diagnostics — so the decomposition is trustworthy on the research-target regim
 - [x] 07-02-PLAN.md — IEEE-123 radial per-unit fixture from thesis App. E (relabel + radialize + SparseArrays), validated by construction (ADMM-02)
 - [x] 07-03-PLAN.md — Subproblem set_rho! quadratic-coefficient updaters (build-once preserved) + DSO-OPT transit-node relaxation (ADMM-02)
 - [x] 07-04-PLAN.md — solve_admm: correct Boyd z-block dual residual + per-unit two-residual stopping + residual-balancing adaptive ρ (clamp/freeze), Phase-6 crossval regression intact (ADMM-02)
-- [ ] 07-05-PLAN.md — IEEE-123 ADMM convergence run (~tens iters, λ→DADP, PF-04 exact at convergence) + Phase-6 regression + full-suite gate (ADMM-02)
+- [x] 07-05-PLAN.md — IEEE-123 ADMM convergence run (~tens iters, λ→DADP, PF-04 exact at convergence) + Phase-6 regression + full-suite gate (ADMM-02)
 - [x] 07-06-PLAN.md — CairoMakie plotting extension (TSODSOMakieExt, return a Figure) + weakdep isolation test (core solve stays plot-free) (ADMM-05)
 **Research flag** (RESOLVED at planning): adaptive-ρ on the SOCP subproblem is handled by the VERIFIED in-place quadratic-coefficient update `set_objective_coefficient(m,x,x,ρ)` (no rebuild) — see 07-RESEARCH.md Pattern 1; no `--research-phase` needed.
 
@@ -211,7 +211,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Convex Branch-Flow Correctness Milestone | 6/6 | Complete   | 2026-07-19 |
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 5/5 | Complete   | 2026-07-19 |
 | 6. ADMM Decomposition Core | 4/4 | Complete   | 2026-07-19 |
-| 7. ADMM Convergence & Scale | 5/6 | In Progress|  |
+| 7. ADMM Convergence & Scale | 6/6 | Complete   | 2026-07-19 |
 | 8. Experiment Harness & Reproducibility | 0/TBD | Not started | - |
 | 9. Documentation & Regression Acceptance Gate | 0/TBD | Not started | - |
 
