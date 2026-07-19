@@ -23,12 +23,16 @@ using JuMP
 
 # No-limit sentinel for the apparent-power constraint (RESEARCH Open Q2, Assumption A7):
 # non-head branches carry no binding thermal limit in the thesis. The IEEE-13 fixture
-# (plan 04-03) encodes "no real limit" as a `smax = 99.0` pu sentinel (just under the
-# strict `0 < smax < 100` `assert_magnitudes` band). Branches at/above this sentinel get
-# NO apparent-power cone (only branches with a genuine limit — e.g. the head branch
+# (plan 04-03) encodes "no real limit" as this sentinel (just under the strict
+# `0 < smax < 100` `assert_magnitudes` band). Branches at/above this sentinel get NO
+# apparent-power cone (only branches with a genuine limit — e.g. the head branch
 # `S_max,(0,1) = 0.0686` pu — are constrained), so the case stays congestion-driven at the
 # head rather than over-constrained by fictitious interior limits.
-const _SMAX_NO_LIMIT = 99.0
+#
+# IN-01: sourced from the single canonical `SMAX_NO_LIMIT` in units/PerUnit.jl (the fixture
+# references the SAME constant), so the "interior-unconstrained" sentinel has one source of
+# truth instead of a bare `99.0` literal duplicated across modules.
+const _SMAX_NO_LIMIT = SMAX_NO_LIMIT
 
 """
     ConvexBranchFlow <: AbstractPowerFlow

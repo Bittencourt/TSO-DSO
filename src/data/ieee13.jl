@@ -3,14 +3,19 @@
 # SEAM: modified IEEE 13-node feeder built-in fixture (DATA-03).
 # OWNER: plan 04-03.
 #
+# NAMING (IN-02): "IEEE 13-node" is the HISTORICAL name of the source test feeder, NOT a bus
+# count. The MODIFIED thesis case collapses it to 11 buses (root MEM node 0 + 10 load nodes)
+# and 10 radial branches — see the node→index table below. Read "13-node" as the lineage of
+# the fixture, not its size.
+#
 # Ships the modified IEEE 13-node distribution feeder from the thesis (Table 4.1 +
 # Figure 4.1, base 100 MVA / 13.2 kV) as an immutable, JuMP-free `Feeder`: 11 buses
 # (index 1 = thesis node 0 = MEM frontier / root, indices 2..11 = the 10 aggregator
 # load nodes) and 10 radial branches with their per-unit r/x and the head-branch
 # apparent-power limit `S_max,(0,1) = 6.86 MVA ⇒ 0.0686 pu`. Interior branches carry no
-# binding thermal limit in the thesis (congestion-driven at the head), so they use a
-# 99.0 pu sentinel that honours the STRICT `0 < smax < 100` magnitude band in
-# units/PerUnit.jl (RESEARCH Open Q2). Construction runs `assert_radial` +
+# binding thermal limit in the thesis (congestion-driven at the head), so they use the
+# canonical `SMAX_NO_LIMIT` pu sentinel that honours the STRICT `0 < smax < 100` magnitude
+# band in units/PerUnit.jl (RESEARCH Open Q2). Construction runs `assert_radial` +
 # `assert_magnitudes`, so an invalid feeder can never be returned (DATA-03).
 
 """
@@ -32,11 +37,17 @@ congestion-driven at the head branch only (Assumption A4 / Open Q2). We therefor
 mark interior branches as effectively unconstrained with a large sentinel that is
 STRICTLY below the `SMAX_PU_MAX = 100.0` magnitude tripwire in units/PerUnit.jl.
 
+IN-01: this is an ALIAS of the canonical `SMAX_NO_LIMIT` (units/PerUnit.jl) — the SAME
+constant the `ConvexBranchFlow` formulation checks against when deciding to drop a branch's
+power cone. Sourcing both from one definition removes the fragile "two independent `99.0`
+literals must stay equal" coupling (a test asserts the alias holds).
+
 NOTE: the RESEARCH code sketch used `100.0`, which FAILS the strict `0 < smax < 100`
-band at `Feeder` construction. `99.0` is the largest round value that both passes the
-tripwire and stays far above any physical interior flow, so only the head branch binds.
+band at `Feeder` construction. `SMAX_NO_LIMIT = 99.0` is the largest round value that both
+passes the tripwire and stays far above any physical interior flow, so only the head branch
+binds.
 """
-const IEEE13_INTERIOR_SMAX = 99.0
+const IEEE13_INTERIOR_SMAX = SMAX_NO_LIMIT
 
 """
     ieee13_modified() -> Feeder{Float64}

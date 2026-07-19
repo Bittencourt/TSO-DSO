@@ -51,6 +51,13 @@ end
     @test all(br -> br.smax == 99.0, interior)
     @test all(br -> 0 < br.smax < 100.0, feeder.branches)
 
+    # IN-01: the interior sentinel is SINGLE-SOURCED. The fixture alias, the formulation's
+    # internal constant, and the canonical `SMAX_NO_LIMIT` must all be the SAME value — this
+    # is the equality that the two previously-duplicated `99.0` literals silently relied on.
+    @test TSODSO.IEEE13_INTERIOR_SMAX === TSODSO.SMAX_NO_LIMIT
+    @test TSODSO._SMAX_NO_LIMIT === TSODSO.SMAX_NO_LIMIT
+    @test all(br -> br.smax == TSODSO.SMAX_NO_LIMIT, interior)
+
     # Topology spot-checks under the node k → struct index k+1 shift:
     #   branch 1: thesis (0,1) → index (1,2), r 0.310
     @test (feeder.branches[1].from, feeder.branches[1].to) == (1, 2)
