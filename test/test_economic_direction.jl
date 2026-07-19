@@ -47,11 +47,9 @@ end
     # (thesis Fig 4.5, node 9 @ 15:00 < MEM). Read balance_p directly here too.
     Λ = dual.(ctx.constraints[:balance_p])
     Np = size(Λ, 1)
-    below = Inf
-    for j in 1:Np, t in 1:Phase4Fixtures.T
-        j == feeder.root && continue
-        below = min(below, Λ[j, t] - λ₀[t])
-    end
+    below = minimum(
+        Λ[j, t] - λ₀[t] for j in 1:Np for t in 1:Phase4Fixtures.T if j != feeder.root
+    )
     @test below < -1e-6
 end
 
@@ -78,11 +76,9 @@ end
     # (thesis Fig 4.6, node 9 @ 22:00 > MEM — the evening head-branch import congestion window).
     Λ = dual.(ctx.constraints[:balance_p])
     Np = size(Λ, 1)
-    above = -Inf
-    for j in 1:Np, t in 1:Phase4Fixtures.T
-        j == feeder.root && continue
-        above = max(above, Λ[j, t] - λ₀[t])
-    end
+    above = maximum(
+        Λ[j, t] - λ₀[t] for j in 1:Np for t in 1:Phase4Fixtures.T if j != feeder.root
+    )
     @test above > 1e-6
 end
 
