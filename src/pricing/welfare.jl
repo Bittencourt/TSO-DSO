@@ -149,7 +149,39 @@ function welfare_accounting(
         "documented −r·l loss term and re-derive; thesis 3.38/3.46/3.47; threat T-05-03).",
     )
 
-    return (; social, dso, prosumer)
+    # +25% headline (thesis Case A, page 98): with a solved FIT baseline (05-03) report the
+    # COMPUTED ratio social_DADP / social_FIT (≈ 1.25). The ABSOLUTE welfare is figure-bound
+    # (RESEARCH Pitfall 4; STATE Phase-4 caveat), so only the RATIO is a trustworthy claim —
+    # pinned as a golden by the test, with the thesis ~1.25 a NON-FAILING cross-check. German-
+    # FIT prices λ_import=6.6 / λ_export=9.6 / λ_self=5.6 ¢$/kWh (thesis page 93, fit.jl).
+    baseline === nothing && return (; social, dso, prosumer)
+    return (; social, dso, prosumer, ratio = _fit_ratio(social, baseline))
+end
+
+"""
+    _fit_ratio(social_dadp, baseline) -> Float64
+
+The +25%-social-welfare headline as a COMPUTED ratio `social_DADP / social_FIT` (thesis Case A
+≈ 1.25), where `baseline` is the solved FIT context from [`fit_baseline`](@ref) (plan 05-03,
+carrying `social_fit`). Throws (never `@assert`) on a degenerate (≈0) or non-finite baseline so
+a mis-specified counterfactual fails loudly instead of silently skewing the headline
+(threat T-05-04).
+"""
+function _fit_ratio(social_dadp::Real, baseline)
+    hasproperty(baseline, :social_fit) || throw(
+        ArgumentError(
+            "welfare_accounting: `baseline` has no `social_fit` field — pass a solved FIT " *
+            "context from fit_baseline(...) (plan 05-03, thesis 3.24-3.28).",
+        ),
+    )
+    social_fit = baseline.social_fit
+    (isfinite(social_fit) && abs(social_fit) > eps(Float64)) || error(
+        "welfare_accounting: FIT baseline social_fit=$social_fit is non-finite or ≈0 — cannot " *
+        "form the +25% ratio (degenerate baseline; threat T-05-04).",
+    )
+    ratio = social_dadp / social_fit
+    isfinite(ratio) || error("welfare_accounting: +25% ratio is non-finite ($ratio)")
+    return ratio
 end
 
 export welfare_accounting
