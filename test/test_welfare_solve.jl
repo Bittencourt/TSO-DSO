@@ -215,3 +215,50 @@ end
     ctx_clean = ctx_with_battery(0.5, [0.3, 0.0, 0.2], [0.0, 0.25, 0.0])
     @test assert_battery_complementarity!(ctx_clean; τ = 1e-3) === nothing
 end
+
+# PRICE-03 (05-01): the per-aggregator net-injection + utility stash the welfare-accounting
+# surplus split (plan 05-05) consumes. A solved welfare ctx must carry `ctx.meta[:agg_net]` —
+# one entry per aggregator, each a NamedTuple with `bus`, a length-T `net` (= p_inject − Pdc,
+# the price-transfer term p_agⱼ), and the aggregator `utility`. Name contains "welfare" and
+# "surplus" so either `occursin` filter selects it.
+@testitem "welfare surplus: solve_welfare stashes per-aggregator net injection + utility (PRICE-03)" tags = [
+    :welfare,
+    :surplus,
+] setup = [Phase3Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    T = Phase3Fixtures.T                       # 24
+    feeder = Phase3Fixtures.small_radial_feeder()
+    Tout = Phase3Fixtures.Tout
+    Pdc = Phase3Fixtures.Pdc
+    λ₀ = Phase3Fixtures.λ₀
+    φ = 0.9
+
+    prof = generate_profiles(seed = 20260718, T = T)
+    function make_agg(bus)
+        therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+        defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
+        batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, prof.pv)
+        return Aggregator(bus, φ, [therm, defer, batt], Pdc)
+    end
+    aggs = [make_agg(2), make_agg(3)]
+
+    ctx, _obj, _dadp = solve_welfare(feeder, LinDistFlow(), aggs; T = T, λ₀ = λ₀)
+
+    # One :agg_net record per aggregator, in aggregator order.
+    @test haskey(ctx.meta, :agg_net)
+    agg_net = ctx.meta[:agg_net]
+    @test length(agg_net) == length(aggs)
+
+    for (k, rec) in enumerate(agg_net)
+        @test rec.bus == aggs[k].bus            # bus carried per aggregator
+        @test length(rec.net) == T              # net injection is the length-T price-transfer term
+        # `net[t]` is affine in the decision variables (p_inject − Pdc), evaluable post-solve.
+        @test all(t -> isfinite(value(rec.net[t])), 1:T)
+        @test rec.utility isa JuMP.QuadExpr     # concave utility retained for the surplus split
+    end
+
+    # The total-utility source is UNCHANGED: Σ_j U_agⱼ is still value(ctx.meta[:objective]).
+    @test haskey(ctx.meta, :objective)
+end
