@@ -33,6 +33,7 @@
     # residential magnitude so the head-branch-congested GLB-CVX solve is feasible and lands
     # in the thesis congestion-driven over-voltage regime).
     GOLDEN_WELFARE = -4823.1598620624 # GLB-CVX welfare optimum (computed; test_ieee13.jl)
+    GOLDEN_V9_16 = 1.0436080536       # |V₉[16]| computed golden (test_ieee13.jl); HARD regression anchor
     THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude — non-failing cross-check only
 
     feeder = TSODSO.ieee13_modified()
@@ -71,9 +72,14 @@
     # (observed: max |Δ| ≈ 0.0166 > atol = 1e-2 here, while the norm-based check still holds).
     @test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)     # recovered DADP match (aggregate, not per-entry)
 
-    # ── NON-FAILING thesis cross-check (never a hard failure — mirrors test_ieee13.jl).
+    # ── HARD regression assertion on the COMPUTED golden (09-REVIEW WR-03: restores the
+    # per-node voltage golden that test_ieee13.jl hard-asserts, so THIS file also catches a
+    # voltage-drop/sign regression that welfare + ADMM cross-validation alone would not).
     # A1: `v` is the SQUARED voltage ⇒ |V₉[16]| = sqrt(v[10,16]); node 9 → struct index 10.
     v9_16 = sqrt(value(ctx.meta[:pf_vars].v[10, 16]))
+    @test isapprox(v9_16, GOLDEN_V9_16; atol = 1e-4)             # existing golden (test_ieee13.jl)
+
+    # ── NON-FAILING thesis cross-check (never a hard failure — mirrors test_ieee13.jl).
     gap = abs(v9_16 - THESIS_V9_16)
     @info "acceptance ieee13: thesis v₉[16] cross-check (Assumption A1)" v9_16 = v9_16 thesis =
         THESIS_V9_16 gap = gap note = "gap is expected & documented (Open Q1: inputs figure-bound)"
