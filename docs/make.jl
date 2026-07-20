@@ -46,10 +46,16 @@ makedocs(;
             "Rung 5: ADMM Decomposition" => "generated/admm.md",
         ],
     ],
-    # Tightened from :none (Phase 1) to :exports (Phase 9 EXP-03): fail the build
-    # on undocumented PUBLIC-API (exported) symbols, cross-version-safe on the 1.10
-    # LTS floor (RESEARCH Pitfall 4). `warnonly` still covers residual gaps so the
-    # build stays green while surfacing them.
+    # Tightened from :none (Phase 1) to :exports (Phase 9 EXP-03): check undocumented
+    # PUBLIC-API (exported) symbols and broken `@ref`s, cross-version-safe on the 1.10
+    # LTS floor (RESEARCH Pitfall 4). NOTE: `:missing_docs` and `:cross_references` are
+    # BOTH in `warnonly` below, so this check is currently non-fatal — it SURFACES
+    # undocumented exports and unresolved `@ref`s as build warnings but does NOT fail
+    # the build on them (locked CONTEXT.md decision: "keep `warnonly` for the remainder
+    # so the build stays green while surfacing missing docs"). There is a real, tracked
+    # backlog of ~104 undocumented exported symbols today (see 09-REVIEW.md CR-01);
+    # documenting them all and dropping `:missing_docs`/`:cross_references` from
+    # `warnonly` (making this a true hard-fail gate) is deferred, not done here.
     checkdocs = :exports,
     warnonly = [:missing_docs, :cross_references],
 )
