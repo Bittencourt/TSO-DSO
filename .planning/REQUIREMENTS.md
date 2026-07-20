@@ -93,7 +93,7 @@ Requirements for the operational transactive-energy layer + its extension seams.
 
 - [x] **EXP-01**: Researcher can define a scenario declaratively (feeder + devices + price profile +
       config) and run it end-to-end with either solve strategy.
-- [ ] **EXP-02**: Parameter sweeps over scenarios run and store results in a flat, versioned,
+- [x] **EXP-02**: Parameter sweeps over scenarios run and store results in a flat, versioned,
       diff-friendly format.
 - [ ] **EXP-03**: Every model has literate, reproducible documentation stating its math (equation
       references), assumptions, and validation, built via Documenter + Literate.
@@ -178,7 +178,7 @@ Populated during roadmap creation. All v1 requirements map to exactly one phase 
 | ADMM-02 | Phase 7 | Pending |
 | ADMM-05 | Phase 7 | Pending |
 | EXP-01 | Phase 8 | Complete |
-| EXP-02 | Phase 8 | Pending |
+| EXP-02 | Phase 8 | Complete |
 | INFRA-04 | Phase 8 | Complete |
 | EXP-03 | Phase 9 | Pending |
 | EXP-04 | Phase 9 | Pending |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 08-03 complete — ScenarioResult + run_scenario :centralized/:admm dispatch committed (a5c7a9b, d1ef249); Scenario default rho bumped 1.0->100.0 (Rule 1 deviation, matches test_admm.jl ieee13 rho); 08-03-SUMMARY written; full Pkg.test() confirms EXP-01/INFRA-04 target testitems green, only 08-04-owned RED items (EXP-02 sweep, INFRA-04 provenance tagsave) + pre-existing Aqua/broken gaps remain. Next: execute 08-04 (store + sweep)."
-last_updated: "2026-07-20T00:45:29.480Z"
+stopped_at: "Plan 08-04 complete — run_and_store (@tagsave provenance: gitcommit+julia_version+seed) + run_sweep/collate_summary (dict_list -> diff-friendly byte-stable CSV) + scripts/run_scenario.jl + scripts/sweep.jl committed (d834ac3, f9eeaf6); four Rule-1 deviations fixed (wload/collect_results String-key round-trip, DrWatson.collect_results precompile race, @tagsave gitpath under Pkg.test()); full Pkg.test() 1922 pass/0 fail/2 pre-existing broken. Phase 08 (experiment-harness-reproducibility) COMPLETE."
+last_updated: "2026-07-20T01:30:52.499Z"
 last_activity: 2026-07-20
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 38
-  completed_plans: 37
-  percent: 78
+  completed_plans: 38
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 08 (experiment-harness-reproducibility) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-07-20
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [██████████] 97%
 *Updated after each plan completion*
 | Phase 08 P02 | 35min | 2 tasks | 2 files |
 | Phase 08 P03 | 35min | 2 tasks | 2 files |
+| Phase 08 P04 | 40min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Scenario price/population valid-selector sets are narrow ({:mem}/{:default} only), matching exactly the build_price/build_population branches materialize.jl implements.
 - [Phase 08]: build_population dispatches residential-magnitude scale constants by feeder bus count (123 vs else) since the two shipped feeders sit on drastically different per-unit bases (1 MVA vs 100 MVA).
 - [Phase 08]: Scenario's default ADMM rho bumped from 1.0 to 100.0 (matches test_admm.jl's empirically-validated ieee13 penalty) — run_scenario(:admm) end-to-end on the default scenario hit a Clarabel NUMERICAL_ERROR at the too-small starting rho before adaptive-rho could rescue it (Rule 1 bug fix, 08-03)
+- [Phase 08]: DrWatson/JLD2 always round-trip dict keys as String (wload never returns Symbol keys) — fixed the INFRA-04 provenance testitem's key-type assertions and collect_results black_list override accordingly (Rule 1, 08-04)
+- [Phase 08]: @tagsave's default gitpath=projectdir() resolves to Pkg.test()'s sandbox (not a git repo); run_and_store pins gitpath=pkgdir(@__MODULE__) so :gitcommit is stamped reliably under both plain runs and Pkg.test() (Rule 1, 08-04)
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-20T00:45:29.458Z
-Stopped at: Plan 08-03 complete — ScenarioResult + run_scenario :centralized/:admm dispatch committed (a5c7a9b, d1ef249); Scenario default rho bumped 1.0->100.0 (Rule 1 deviation, matches test_admm.jl ieee13 rho); 08-03-SUMMARY written; full Pkg.test() confirms EXP-01/INFRA-04 target testitems green, only 08-04-owned RED items (EXP-02 sweep, INFRA-04 provenance tagsave) + pre-existing Aqua/broken gaps remain. Next: execute 08-04 (store + sweep).
+Last session: 2026-07-20T01:30:52.470Z
+Stopped at: Plan 08-04 complete — run_and_store (@tagsave provenance: gitcommit+julia_version+seed) + run_sweep/collate_summary (dict_list -> diff-friendly byte-stable CSV) + scripts/run_scenario.jl + scripts/sweep.jl committed (d834ac3, f9eeaf6); four Rule-1 deviations fixed (wload/collect_results String-key round-trip, DrWatson.collect_results precompile race, @tagsave gitpath under Pkg.test()); full Pkg.test() 1922 pass/0 fail/2 pre-existing broken. Phase 08 (experiment-harness-reproducibility) COMPLETE.
 Resume file: None
