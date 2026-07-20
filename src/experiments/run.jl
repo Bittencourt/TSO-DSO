@@ -92,7 +92,9 @@ function run_scenario(s::Scenario)
         feeder = build_feeder(s.feeder)
         profiles = generate_profiles(; seed = sub_seed(s.seed, :profiles), T = s.T)
         λ₀ = build_price(s.price, s.T, profiles)
-        aggs = build_population(s.population, feeder, profiles, sub_seed(s.seed, :population))
+        aggs = build_population(
+            s.population, feeder, s.feeder, profiles, sub_seed(s.seed, :population),
+        )
         pf = ConvexBranchFlow()
 
         # --- 2. DISPATCH on s.strategy, normalized to a common (welfare, dadp, exact_maxgap,

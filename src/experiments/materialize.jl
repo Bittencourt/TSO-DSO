@@ -118,16 +118,22 @@ const _TEMPERATURE_PROFILE_24H = Float64[
 _temperature_profile(T::Int) = Float64[_TEMPERATURE_PROFILE_24H[mod1(t, 24)] for t in 1:T]
 
 """
-    _load_buses(feeder) -> Vector{Int}
+    _load_buses(feeder, feeder_sym::Symbol) -> Vector{Int}
 
-The (struct-index) load buses of `feeder` (topology-only, feeder-agnostic): the modified
-IEEE-123 fixture has a documented load/transit split (`ieee123_load_nodes`, 85 spot-load
-buses vs. ~37 zero-injection transit junctions handled by the DSO-OPT relaxation), so that
-split is used when `feeder`'s bus count matches it; otherwise (ieee13 and any other radial
-fixture) every non-root bus is a load bus, mirroring `fixtures_phase4.build_ieee13_aggregators`.
+The (struct-index) load buses of `feeder` (topology-only): the modified IEEE-123 fixture has a
+documented load/transit split (`ieee123_load_nodes`, 85 spot-load buses vs. ~37 zero-injection
+transit junctions handled by the DSO-OPT relaxation), so that split is used when
+`feeder_sym === :ieee123`; otherwise (`:ieee13` and any other radial fixture) every non-root
+bus is a load bus, mirroring `fixtures_phase4.build_ieee13_aggregators`.
+
+WR-03 fix: dispatches on the ALREADY-KNOWN, already-validated `Scenario.feeder::Symbol`
+selector rather than re-deriving "is this ieee123" from `length(feeder.buses)` — the previous
+bus-count heuristic would silently mis-scale for any future feeder fixture that happens to
+share IEEE-123's bus count (no `ArgumentError`, no warning, just a quietly wrong load/transit
+split).
 """
-function _load_buses(feeder)
-    if length(feeder.buses) == length(ieee123_relabel_map())
+function _load_buses(feeder, feeder_sym::Symbol)
+    if feeder_sym === :ieee123
         return ieee123_load_nodes()
     end
     return [b.id for b in feeder.buses if !b.is_root]
@@ -166,18 +172,23 @@ function _default_house(
 end
 
 """
-    build_population(sym::Symbol, feeder, profiles, seed::Integer) -> Vector{<:Aggregator}
+    build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, seed::Integer) -> Vector{<:Aggregator}
 
 Materialize the aggregator population named by `sym`. `:default` returns one seeded
 residential `Aggregator` per real load bus of `feeder` ([`_load_buses`](@ref)), rescaled to
-the feeder's own per-unit base (`_IEEE13_*`/`_IEEE123_*` residential scales). `T` is read from
-`length(profiles.demand)` (the caller's own `generate_profiles(; T = s.T)` draw), so this stays
-consistent with the Scenario's horizon without taking `T` as a separate argument. Deterministic
-in `seed`: two calls with the SAME `seed` return structurally identical aggregators (same
-per-bus profile draws); a DIFFERENT seed changes every house. Throws `ArgumentError` on any
-other selector.
+the feeder's own per-unit base (`_IEEE13_*`/`_IEEE123_*` residential scales, selected by
+`feeder_sym`). `T` is read from `length(profiles.demand)` (the caller's own
+`generate_profiles(; T = s.T)` draw), so this stays consistent with the Scenario's horizon
+without taking `T` as a separate argument. Deterministic in `seed`: two calls with the SAME
+`seed` return structurally identical aggregators (same per-bus profile draws); a DIFFERENT seed
+changes every house. Throws `ArgumentError` on any other selector.
+
+WR-03 fix: `feeder_sym` (the caller's already-validated `Scenario.feeder` selector) now
+disambiguates the IEEE-13 vs IEEE-123 residential scale directly, instead of re-deriving it
+from `length(feeder.buses) == length(ieee123_relabel_map())` — a structural coincidence that a
+future feeder fixture sharing IEEE-123's bus count would silently, wrongly match.
 """
-function build_population(sym::Symbol, feeder, profiles, seed::Integer)
+function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, seed::Integer)
     if sym !== :default
         throw(
             ArgumentError(
@@ -186,11 +197,10 @@ function build_population(sym::Symbol, feeder, profiles, seed::Integer)
         )
     end
 
-    buses = _load_buses(feeder)
+    buses = _load_buses(feeder, feeder_sym)
     T = length(profiles.demand)
-    N = length(feeder.buses)
 
-    load_scale, pv_scale, dev_scale = if N == length(ieee123_relabel_map())
+    load_scale, pv_scale, dev_scale = if feeder_sym === :ieee123
         (_IEEE123_LOAD_SCALE, _IEEE123_PV_SCALE, _IEEE123_DEV_SCALE)
     else
         (_IEEE13_LOAD_SCALE, _IEEE13_PV_SCALE, _IEEE13_DEV_SCALE)
