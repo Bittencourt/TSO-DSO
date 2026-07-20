@@ -50,12 +50,14 @@ makedocs(;
     # PUBLIC-API (exported) symbols and broken `@ref`s, cross-version-safe on the 1.10
     # LTS floor (RESEARCH Pitfall 4). NOTE: `:missing_docs` and `:cross_references` are
     # BOTH in `warnonly` below, so this check is currently non-fatal — it SURFACES
-    # undocumented exports and unresolved `@ref`s as build warnings but does NOT fail
+    # docstrings-not-in-manual and unresolved `@ref`s as build warnings but does NOT fail
     # the build on them (locked CONTEXT.md decision: "keep `warnonly` for the remainder
-    # so the build stays green while surfacing missing docs"). There is a real, tracked
-    # backlog of ~104 undocumented exported symbols today (see 09-REVIEW.md CR-01);
-    # documenting them all and dropping `:missing_docs`/`:cross_references` from
-    # `warnonly` (making this a true hard-fail gate) is deferred, not done here.
+    # so the build stays green while surfacing missing docs"). Documenter currently reports
+    # ~104 exported-symbol docstrings that EXIST in `src/` but are not yet wired into the
+    # rendered manual via `@docs`/`@autodocs` blocks (NOT 104 undocumented symbols — the
+    # docstrings are written; they just aren't surfaced on a page). Adding those blocks and
+    # then dropping `:missing_docs`/`:cross_references` from `warnonly` (making this a true
+    # hard-fail gate) is the tracked follow-up, deferred, not done here.
     checkdocs = :exports,
     warnonly = [:missing_docs, :cross_references],
 )
