@@ -20,10 +20,12 @@
 # `run_scenario` is PATH-FREE — it returns a `ScenarioResult`, never writes a file (persistence
 # is a separate seam, 08-04's `store.jl`).
 #
-# THIS TASK (Task 1): the `ScenarioResult` record + the `:centralized` branch (end-to-end
-# slice + the INFRA-04 same-seed reproducibility gate). The `:admm` branch + the terminal
-# strategy guard land in Task 2 — until then, any non-`:centralized` strategy falls through to
-# a TEMPORARY `error` (not faked as a real dispatch) rather than silently doing nothing.
+# Task 1 landed the `ScenarioResult` record + the `:centralized` branch (end-to-end slice +
+# the INFRA-04 same-seed reproducibility gate). THIS TASK (Task 2) adds the `:admm` branch
+# (dispatching to `solve_admm`, whose `dadp` is ALREADY node×T — RESEARCH A5 — matching the
+# `:centralized` shape) and the terminal `else` strategy guard (throws `ArgumentError` naming
+# the two valid strategies; threat T-08-08). No solver is named anywhere in this file
+# (INFRA-02) — `solve_admm`/`solve_welfare` route through `select_optimizer` internally.
 
 """
     ScenarioResult
@@ -70,9 +72,11 @@ DISPATCH on `s.strategy`:
 
 - `:centralized` -> [`solve_welfare`](@ref) + [`extract_dlmp`](@ref), normalized to the
   sorted-load-bus node×T shape; `iters`/`final_r`/`final_s` are `missing` (no ADMM iteration).
-- `:admm` -> [`solve_admm`](@ref) (Task 2 — NOT YET implemented in this commit).
-- any other selector -> throws (Task 2 lands the final `ArgumentError` guard; a `Scenario`
-  itself already guards unknown strategies at construction — 08-02).
+- `:admm` -> [`solve_admm`](@ref); `dadp` is ALREADY node×T (RESEARCH A5) and `iters`/
+  `final_r`/`final_s` are populated from the converged residual trace.
+- any other selector -> throws `ArgumentError` naming the two valid strategies (a `Scenario`
+  itself already guards this at construction — 08-02 — so this is defensive-in-depth, threat
+  T-08-08).
 
 PATH-FREE (INFRA-04 Pitfall 6): returns a `ScenarioResult`, never writes to disk — persistence
 is [`run_and_store`](@ref) (08-04). Because the seed is threaded end-to-end via `sub_seed`
@@ -109,13 +113,30 @@ function run_scenario(s::Scenario)
                 final_r = missing,
                 final_s = missing,
             )
+        elseif s.strategy === :admm
+            r = solve_admm(
+                feeder, pf, aggs;
+                T = s.T, λ₀ = λ₀, ρ = s.ρ, maxiter = s.maxiter,
+                ε_abs = s.ε_abs, ε_rel = s.ε_rel, τ = s.τ_ratio, μ = s.μ,
+                allow_export = s.allow_export,
+            )
+            result = (;
+                welfare = Float64(r.welfare),
+                dadp = Matrix{Float64}(r.dadp),               # already node×T (RESEARCH A5)
+                exact_maxgap = Float64(r.exact_maxgap),
+                iters = Int(r.iters),
+                final_r = Float64(last(r.residuals.primal_trace)),
+                final_s = Float64(last(r.residuals.dual_trace)),
+            )
         else
-            # TEMPORARY (Task 1 only): the :admm branch + the terminal ArgumentError guard land
-            # in Task 2. Do not fake either here — fail loudly instead.
+            # Terminal strategy guard (threat T-08-08): a Scenario already validates its own
+            # `strategy` field at construction (08-02), so this branch is DEFENSIVE-IN-DEPTH —
+            # it never fires via a normally-constructed Scenario, but keeps run_scenario safe
+            # if ever called against a hand-built/mutated selector.
             throw(
-                ErrorException(
-                    "run_scenario: strategy $(repr(s.strategy)) not yet implemented in this " *
-                    "commit (Task 2 adds :admm + the terminal strategy guard)",
+                ArgumentError(
+                    "run_scenario: unknown strategy $(repr(s.strategy)); expected " *
+                    ":centralized or :admm",
                 ),
             )
         end

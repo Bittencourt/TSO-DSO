@@ -53,9 +53,16 @@ than re-discovering it at a call site.
   `build_price`).
 - `allow_export::Bool = true` — whether the frontier allows priced export (PF-04 exactness
   enabler under PV back-feed).
-- `ρ::Float64 = 1.0`, `ε_abs::Float64 = 1e-4`, `ε_rel::Float64 = 1e-3`, `maxiter::Int = 200`,
+- `ρ::Float64 = 100.0`, `ε_abs::Float64 = 1e-4`, `ε_rel::Float64 = 1e-3`, `maxiter::Int = 200`,
   `τ_ratio::Float64 = 2.0`, `μ::Float64 = 10.0` — ADMM-only knobs, kept in the one flat schema
   so the `:centralized` branch simply ignores them (no separate strategy-specific struct).
+  `ρ`'s default (100.0) is the empirically-validated initial penalty for the default
+  `:ieee13` feeder + `:default` population (matching `test_admm.jl`'s `ρ_ieee13`, RESEARCH):
+  starting the Phase-7 adaptive-ρ loop at `ρ₀ = 1.0` numerically errors on this congested
+  default population before residual balancing can climb it to a well-conditioned value
+  (08-03 deviation — RULE 1, discovered exercising `run_scenario(:admm)` end-to-end for the
+  first time). Adaptive ρ still self-tunes per scenario from THIS starting point; a
+  hand-tuned `Scenario(; ρ = …)` override remains available for other feeders/populations.
 
 Construction throws `ArgumentError` when `feeder`/`strategy`/`price`/`population` is not one
 of the named valid selectors above, or when `T < 1`, `seed < 1`, or `maxiter < 1` (a Scenario
@@ -70,7 +77,7 @@ Base.@kwdef struct Scenario
     population::Symbol = :default
     price::Symbol = :mem
     allow_export::Bool = true
-    ρ::Float64 = 1.0
+    ρ::Float64 = 100.0
     ε_abs::Float64 = 1e-4
     ε_rel::Float64 = 1e-3
     maxiter::Int = 200
