@@ -204,7 +204,7 @@ matching centralized.
 - [x] 09-01-PLAN.md — LinDistFlow + Convex Branch-Flow/exactness literate pages (rungs 1-3)
 - [x] 09-02-PLAN.md — Prosumer devices/GLB-CVX + DADP/DLMP decomposition literate pages (rungs 2a/4)
 - [x] 09-03-PLAN.md — Consolidated SC3 acceptance gate (IEEE-13 + IEEE-123) + FIT regression golden
-- [ ] 09-04-PLAN.md — ADMM literate page (rung 5) + docs/make.jl full build wiring (checkdocs, deploydocs, CairoMakie)
+- [x] 09-04-PLAN.md — ADMM literate page (rung 5) + docs/make.jl full build wiring (checkdocs, deploydocs, CairoMakie)
 - [ ] 09-05-PLAN.md — Docs CI job + deploydocs repo-slug human-verify checkpoint
 
 ## Progress
@@ -222,7 +222,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 6. ADMM Decomposition Core | 4/4 | Complete   | 2026-07-19 |
 | 7. ADMM Convergence & Scale | 6/6 | Complete   | 2026-07-19 |
 | 8. Experiment Harness & Reproducibility | 4/4 | Complete   | 2026-07-20 |
-| 9. Documentation & Regression Acceptance Gate | 3/5 | In Progress|  |
+| 9. Documentation & Regression Acceptance Gate | 4/5 | In Progress|  |
 
 ## Research Flags
 

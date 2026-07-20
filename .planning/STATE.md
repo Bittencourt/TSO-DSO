@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 08-04 complete — run_and_store (@tagsave provenance: gitcommit+julia_version+seed) + run_sweep/collate_summary (dict_list -> diff-friendly byte-stable CSV) + scripts/run_scenario.jl + scripts/sweep.jl committed (d834ac3, f9eeaf6); four Rule-1 deviations fixed (wload/collect_results String-key round-trip, DrWatson.collect_results precompile race, @tagsave gitpath under Pkg.test()); full Pkg.test() 1922 pass/0 fail/2 pre-existing broken. Phase 08 (experiment-harness-reproducibility) COMPLETE."
-last_updated: "2026-07-20T11:24:04.792Z"
-last_activity: 2026-07-20 -- Phase 09 execution started
+stopped_at: "Plan 09-04 complete — ADMM literate page (rung 5, thesis 3.46/3.47) cross-validated against solve_welfare + docs/make.jl fully wired (all 6 pages, checkdocs=:exports, CI-gated deploydocs, re-resolved docs/Manifest.toml with CairoMakie); full docs build verified exit 0 with the convergence figure actually rendering (7893c66, 375c2d2)."
+last_updated: "2026-07-20T12:44:06.794Z"
+last_activity: 2026-07-20
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 43
-  completed_plans: 38
-  percent: 88
+  completed_plans: 42
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 09 (documentation-regression-acceptance-gate) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 09
-Last activity: 2026-07-20 -- Phase 09 execution started
+Plan: 5 of 5
+Status: Ready to execute
+Last activity: 2026-07-20
 
-Progress: [██████████] 100%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [██████████] 100%
 | Phase 08 P02 | 35min | 2 tasks | 2 files |
 | Phase 08 P03 | 35min | 2 tasks | 2 files |
 | Phase 08 P04 | 40min | 2 tasks | 5 files |
+| Phase 09 P04 | 35min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Scenario's default ADMM rho bumped from 1.0 to 100.0 (matches test_admm.jl's empirically-validated ieee13 penalty) — run_scenario(:admm) end-to-end on the default scenario hit a Clarabel NUMERICAL_ERROR at the too-small starting rho before adaptive-rho could rescue it (Rule 1 bug fix, 08-03)
 - [Phase 08]: DrWatson/JLD2 always round-trip dict keys as String (wload never returns Symbol keys) — fixed the INFRA-04 provenance testitem's key-type assertions and collect_results black_list override accordingly (Rule 1, 08-04)
 - [Phase 08]: @tagsave's default gitpath=projectdir() resolves to Pkg.test()'s sandbox (not a git repo); run_and_store pins gitpath=pkgdir(@__MODULE__) so :gitcommit is stamped reliably under both plain runs and Pkg.test() (Rule 1, 08-04)
+- [Phase 09]: Removed pricing_dlmp.jl's unused using JuMP import rather than adding JuMP to docs/Project.toml — no JuMP symbol was actually referenced (Rule 1 fix, 09-04)
+- [Phase 09]: docs/Project.toml hard-depends on CairoMakie (0.15) for docs-only figure rendering, guarded per-page with Base.find_package; root Project.toml weakdeps/extensions untouched (09-04)
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-20T01:30:52.470Z
-Stopped at: Plan 08-04 complete — run_and_store (@tagsave provenance: gitcommit+julia_version+seed) + run_sweep/collate_summary (dict_list -> diff-friendly byte-stable CSV) + scripts/run_scenario.jl + scripts/sweep.jl committed (d834ac3, f9eeaf6); four Rule-1 deviations fixed (wload/collect_results String-key round-trip, DrWatson.collect_results precompile race, @tagsave gitpath under Pkg.test()); full Pkg.test() 1922 pass/0 fail/2 pre-existing broken. Phase 08 (experiment-harness-reproducibility) COMPLETE.
+Last session: 2026-07-20T12:44:06.771Z
+Stopped at: Plan 09-04 complete — ADMM literate page (rung 5, thesis 3.46/3.47) cross-validated against solve_welfare + docs/make.jl fully wired (all 6 pages, checkdocs=:exports, CI-gated deploydocs, re-resolved docs/Manifest.toml with CairoMakie); full docs build verified exit 0 with the convergence figure actually rendering (7893c66, 375c2d2).
 Resume file: None

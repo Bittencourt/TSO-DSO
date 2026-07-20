@@ -95,7 +95,7 @@ Requirements for the operational transactive-energy layer + its extension seams.
       config) and run it end-to-end with either solve strategy.
 - [x] **EXP-02**: Parameter sweeps over scenarios run and store results in a flat, versioned,
       diff-friendly format.
-- [ ] **EXP-03**: Every model has literate, reproducible documentation stating its math (equation
+- [x] **EXP-03**: Every model has literate, reproducible documentation stating its math (equation
       references), assumptions, and validation, built via Documenter + Literate.
 - [ ] **EXP-04**: Regression fixtures pin reference results (IEEE 13/123, FIT comparison) so numerical drift is caught.
 - [ ] **SEAM-01**: Extension interfaces exist as stubs/hooks in v1 — multi-scenario objective hook,
@@ -180,7 +180,7 @@ Populated during roadmap creation. All v1 requirements map to exactly one phase 
 | EXP-01 | Phase 8 | Complete |
 | EXP-02 | Phase 8 | Complete |
 | INFRA-04 | Phase 8 | Complete |
-| EXP-03 | Phase 9 | Pending |
+| EXP-03 | Phase 9 | Complete |
 | EXP-04 | Phase 9 | Pending |
 
 **Coverage:**
