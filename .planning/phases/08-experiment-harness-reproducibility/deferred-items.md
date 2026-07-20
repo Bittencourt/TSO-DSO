@@ -34,3 +34,19 @@ fixed.
   (1 `@test_broken`, Phase 7) — both surfaced in the same full-suite run as pre-existing, already
   `@test_broken`-marked items (not new failures; the full-suite summary reports them under
   "Broken", not "Fail"). Untouched by this plan; no action needed.
+
+## WR-02 — sub_seed cross-version hash stability (code-review deferral, needs researcher)
+
+- **Source:** 08-REVIEW.md finding WR-02 (Warning), raised during Phase-8 code review.
+- **Issue:** `sub_seed` in `src/experiments/materialize.jl` derives per-component seeds via
+  `Base.hash`, whose docstring explicitly disclaims cross-process/cross-Julia-version stability.
+  Empirically stable TODAY across Julia 1.10/1.11/1.12, but not a guaranteed contract — a
+  long-term risk for the INFRA-04 bit-for-bit reproducibility requirement.
+- **Why deferred:** the mechanical fix (SplitMix64/FNV-1a stable hash) was attempted and rolled
+  back — it changed derived sub-seeds enough to trip a hard battery-complementarity numerical
+  assertion (`τ·Pmax²`) on the pinned fixture (seed=7, T=24, IEEE-13, ADMM ρ=100.0) in BOTH the
+  `:centralized` and `:admm` paths. A safe fix requires re-validating/re-tuning the ρ/τ numerical
+  defaults against the new seed derivation — a research decision, not a mechanical code-review fix.
+- **Action (later, researcher):** choose a stable seed-derivation scheme, then re-tune/re-pin the
+  ADMM ρ and battery τ defaults and the golden fixtures against it. Until then the current
+  `Base.hash` derivation stands (documented, empirically reproducible on supported Julia versions).
