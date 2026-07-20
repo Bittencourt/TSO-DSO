@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Plan 08-02 complete — Scenario (primitive selectors, validated, savename-able) + materialize.jl (sub_seed/build_feeder/build_price/build_population) committed (12fc47e, ddd1f25); 08-02-SUMMARY written; full Pkg.test() confirms only expected RED items + a pre-existing (08-01) Aqua stale-deps gap (logged in deferred-items.md, resolves in 08-04). Next: execute 08-03 (run_scenario + ScenarioResult)."
-last_updated: "2026-07-20T00:11:18.445Z"
+stopped_at: "Plan 08-03 complete — ScenarioResult + run_scenario :centralized/:admm dispatch committed (a5c7a9b, d1ef249); Scenario default rho bumped 1.0->100.0 (Rule 1 deviation, matches test_admm.jl ieee13 rho); 08-03-SUMMARY written; full Pkg.test() confirms EXP-01/INFRA-04 target testitems green, only 08-04-owned RED items (EXP-02 sweep, INFRA-04 provenance tagsave) + pre-existing Aqua/broken gaps remain. Next: execute 08-04 (store + sweep)."
+last_updated: "2026-07-20T00:45:29.480Z"
 last_activity: 2026-07-20
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 38
-  completed_plans: 36
+  completed_plans: 37
   percent: 78
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 08 (experiment-harness-reproducibility) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-07-20
 
-Progress: [██████████] 95%
+Progress: [██████████] 97%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [██████████] 95%
 
 *Updated after each plan completion*
 | Phase 08 P02 | 35min | 2 tasks | 2 files |
+| Phase 08 P03 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,7 @@ Recent decisions affecting current work:
 - [Phase 08]: Base.@kwdef struct + hand-written positional inner constructor combine cleanly for a validated, keyword-defaulted Scenario (verified in REPL before adopting the pattern).
 - [Phase 08]: Scenario price/population valid-selector sets are narrow ({:mem}/{:default} only), matching exactly the build_price/build_population branches materialize.jl implements.
 - [Phase 08]: build_population dispatches residential-magnitude scale constants by feeder bus count (123 vs else) since the two shipped feeders sit on drastically different per-unit bases (1 MVA vs 100 MVA).
+- [Phase 08]: Scenario's default ADMM rho bumped from 1.0 to 100.0 (matches test_admm.jl's empirically-validated ieee13 penalty) — run_scenario(:admm) end-to-end on the default scenario hit a Clarabel NUMERICAL_ERROR at the too-small starting rho before adaptive-rho could rescue it (Rule 1 bug fix, 08-03)
 
 ### Pending Todos
 
@@ -96,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-20T00:11:18.419Z
-Stopped at: Plan 08-02 complete — Scenario (primitive selectors, validated, savename-able) + materialize.jl (sub_seed/build_feeder/build_price/build_population) committed (12fc47e, ddd1f25); 08-02-SUMMARY written; full Pkg.test() confirms only expected RED items + a pre-existing (08-01) Aqua stale-deps gap (logged in deferred-items.md, resolves in 08-04). Next: execute 08-03 (run_scenario + ScenarioResult).
+Last session: 2026-07-20T00:45:29.458Z
+Stopped at: Plan 08-03 complete — ScenarioResult + run_scenario :centralized/:admm dispatch committed (a5c7a9b, d1ef249); Scenario default rho bumped 1.0->100.0 (Rule 1 deviation, matches test_admm.jl ieee13 rho); 08-03-SUMMARY written; full Pkg.test() confirms EXP-01/INFRA-04 target testitems green, only 08-04-owned RED items (EXP-02 sweep, INFRA-04 provenance tagsave) + pre-existing Aqua/broken gaps remain. Next: execute 08-04 (store + sweep).
 Resume file: None
