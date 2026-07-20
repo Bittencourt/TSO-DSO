@@ -59,6 +59,7 @@
     )
     load_buses = sort([a.bus for a in aggs])
     dlmp_c = reduce(vcat, (extract_dlmp(ctx; bus = b, T = 24)' for b in load_buses))
+    @test admm.exact_maxgap < 1e-3                                # PF-04 exact on the ADMM-converged DSO-OPT
     @test isapprox(admm.welfare, res.cost; rtol = 1e-4)          # ADMM ≈ centralized welfare
     @test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)     # recovered DADP match
 
