@@ -550,7 +550,7 @@ explicitly scoped as "Claude's Discretion" in CONTEXT.md and are cheap to adjust
 
 ## Open Questions
 
-1. **Exact `docs/Project.toml` treatment of CairoMakie**
+1. **Exact `docs/Project.toml` treatment of CairoMakie** (RESOLVED)
    - What we know: root `Project.toml` keeps CairoMakie as a `[weakdeps]` extension
      target; `docs/Project.toml` is a wholly separate environment.
    - What's unclear: whether the researcher wants `docs/Project.toml` to hard-depend on
@@ -563,7 +563,13 @@ explicitly scoped as "Claude's Discretion" in CONTEXT.md and are cheap to adjust
      as defensive belt-and-suspenders — cheap insurance, matches an existing test
      pattern, and future-proofs against someone stripping the docs Manifest.
 
-2. **Repo URL for `deploydocs`**
+   - RESOLVED: CONTEXT.md locked the `[deps]`-with-guard approach described above.
+     Plan 09-04 Task 1 implements it: `CairoMakie` is added to `docs/Project.toml`
+     `[deps]`/`[compat]` AND `docs/Manifest.toml` is re-resolved (`Pkg.resolve()`) and
+     committed in the same task, so `Base.find_package("CairoMakie")` actually succeeds
+     under `--project=docs` rather than silently no-opping on a stale Manifest.
+
+2. **Repo URL for `deploydocs`** (RESOLVED)
    - What we know: `docs/make.jl` currently sets `remotes = nothing` specifically
      because Documenter cannot infer a remote in this checkout state (documented
      Phase-1 rationale).
@@ -573,6 +579,11 @@ explicitly scoped as "Claude's Discretion" in CONTEXT.md and are cheap to adjust
      clearly marked placeholder) for the `deploydocs(repo = "github.com/<ORG>/<REPO>.git")`
      string; this is a one-line fill-in the researcher can confirm at execution time,
      not a design decision.
+
+   - RESOLVED: plan 09-04 Task 2 wires `deploydocs(; repo = "github.com/PLACEHOLDER-ORG/PLACEHOLDER-REPO.git")`
+     behind the `CI` env-var gate with a clearly-commented placeholder slug; plan 09-05
+     Task 2 is the blocking `checkpoint:human-verify` where the researcher confirms/updates
+     the real org/repo slug before any real CI deploy.
 
 ## Environment Availability
 
