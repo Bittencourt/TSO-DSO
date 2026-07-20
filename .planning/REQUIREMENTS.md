@@ -20,7 +20,7 @@ Requirements for the operational transactive-energy layer + its extension seams.
       factory; no model file names a concrete solver (HiGHS/Clarabel/Ipopt default; Gurobi/Mosek opt-in behind it).
 - [ ] **INFRA-03**: Every solve asserts `termination_status == OPTIMAL` (with tight duality gap for conic)
       and fails loudly on non-optimal status or hidden constraint slack.
-- [ ] **INFRA-04**: Experiments are reproducible — random data generation is seeded and logged; a run
+- [x] **INFRA-04**: Experiments are reproducible — random data generation is seeded and logged; a run
       records its inputs, config, and environment so results regenerate bit-for-bit.
 - [ ] **INFRA-05**: One consistent per-unit system; all external data is converted once at ingestion,
       with magnitude-sanity assertions guarding unit/scale mistakes.
@@ -91,7 +91,7 @@ Requirements for the operational transactive-energy layer + its extension seams.
 
 ### Experiments, Docs & Extension Seams
 
-- [ ] **EXP-01**: Researcher can define a scenario declaratively (feeder + devices + price profile +
+- [x] **EXP-01**: Researcher can define a scenario declaratively (feeder + devices + price profile +
       config) and run it end-to-end with either solve strategy.
 - [ ] **EXP-02**: Parameter sweeps over scenarios run and store results in a flat, versioned,
       diff-friendly format.
@@ -177,9 +177,9 @@ Populated during roadmap creation. All v1 requirements map to exactly one phase 
 | ADMM-04 | Phase 6 | Pending |
 | ADMM-02 | Phase 7 | Pending |
 | ADMM-05 | Phase 7 | Pending |
-| EXP-01 | Phase 8 | Pending |
+| EXP-01 | Phase 8 | Complete |
 | EXP-02 | Phase 8 | Pending |
-| INFRA-04 | Phase 8 | Pending |
+| INFRA-04 | Phase 8 | Complete |
 | EXP-03 | Phase 9 | Pending |
 | EXP-04 | Phase 9 | Pending |
 

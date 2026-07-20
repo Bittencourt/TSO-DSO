@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 08-01 committed (b23c2d9) + summary written; experiment-harness foundation done, RED harness green-able by waves 08-02..04
-last_updated: "2026-07-19T23:45:00.000Z"
-last_activity: 2026-07-19 -- Plan 08-01 complete (foundation + RED harness); stale worktree removed
+stopped_at: "Plan 08-02 complete — Scenario (primitive selectors, validated, savename-able) + materialize.jl (sub_seed/build_feeder/build_price/build_population) committed (12fc47e, ddd1f25); 08-02-SUMMARY written; full Pkg.test() confirms only expected RED items + a pre-existing (08-01) Aqua stale-deps gap (logged in deferred-items.md, resolves in 08-04). Next: execute 08-03 (run_scenario + ScenarioResult)."
+last_updated: "2026-07-20T00:11:18.445Z"
+last_activity: 2026-07-20
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 38
-  completed_plans: 35
-  percent: 80
+  completed_plans: 36
+  percent: 78
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 ## Current Position
 
 Phase: 08 (experiment-harness-reproducibility) — EXECUTING
-Plan: 1 of 4 COMPLETE — next: 08-02 (Scenario + materialize)
-Status: Executing Phase 08
-Last activity: 2026-07-19 -- Plan 08-01 complete (foundation + RED harness); stale worktree removed
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-07-20
 
-Progress: [███░░░░░░░] 25%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [███░░░░░░░] 25%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 08 P02 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - Roadmap: Abstraction ladder rungs 0-5 map directly to phases; each phase is a runnable/validated end-to-end solve at increasing fidelity (mvp mode).
 - Roadmap: Centralized SOCP (Phase 4) is the ground truth ADMM (Phases 6-7) is validated against; pricing (Phase 5) sits between to de-risk duals early.
 - Roadmap: `operational_oracle(z)→(cost,π)` seam + SEAM-01 stubs land at the SOCP correctness milestone (Phase 4) so the deferred planning layer is additive, not a rewrite.
+- [Phase 08]: Base.@kwdef struct + hand-written positional inner constructor combine cleanly for a validated, keyword-defaulted Scenario (verified in REPL before adopting the pattern).
+- [Phase 08]: Scenario price/population valid-selector sets are narrow ({:mem}/{:default} only), matching exactly the build_price/build_population branches materialize.jl implements.
+- [Phase 08]: build_population dispatches residential-magnitude scale constants by feeder bus count (123 vs else) since the two shipped feeders sit on drastically different per-unit bases (1 MVA vs 100 MVA).
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-19
-Stopped at: Plan 08-01 complete — foundation (DrWatson/CSV/DataFrames deps, re-resolved manifests, two-tier storage) + include-graph stubs + RED @testitem harness committed (639baa2, b23c2d9); 08-01-SUMMARY written; stale agent worktree removed. Next: execute 08-02 (Scenario + materialize).
+Last session: 2026-07-20T00:11:18.419Z
+Stopped at: Plan 08-02 complete — Scenario (primitive selectors, validated, savename-able) + materialize.jl (sub_seed/build_feeder/build_price/build_population) committed (12fc47e, ddd1f25); 08-02-SUMMARY written; full Pkg.test() confirms only expected RED items + a pre-existing (08-01) Aqua stale-deps gap (logged in deferred-items.md, resolves in 08-04). Next: execute 08-03 (run_scenario + ScenarioResult).
 Resume file: None

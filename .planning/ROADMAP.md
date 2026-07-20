@@ -183,8 +183,8 @@ regenerate bit-for-bit on the open-source solver path.
   2. Parameter sweeps over scenarios run and store results in a flat, versioned, diff-friendly format.
   3. Every run records its inputs, config, and environment (seed logged) so results regenerate bit-for-bit on the open-source (Clarabel/HiGHS/Ipopt) solver path.
 **Plans**: 4 plans
-- [ ] 08-01-PLAN.md — Foundation: DrWatson/CSV/DataFrames hard [deps] + re-resolved manifests (1.10/1.11/1.12) + src/experiments/ include-graph stubs + two-tier storage dirs + RED @testitem harness (EXP-01, EXP-02, INFRA-04)
-- [ ] 08-02-PLAN.md — Immutable primitive-selector Scenario (savename-able, validated) + deterministic materialize (sub_seed/build_feeder/build_price/build_population, StableRNGs sub-seeds) (EXP-01, INFRA-04)
+- [x] 08-01-PLAN.md — Foundation: DrWatson/CSV/DataFrames hard [deps] + re-resolved manifests (1.10/1.11/1.12) + src/experiments/ include-graph stubs + two-tier storage dirs + RED @testitem harness (EXP-01, EXP-02, INFRA-04)
+- [x] 08-02-PLAN.md — Immutable primitive-selector Scenario (savename-able, validated) + deterministic materialize (sub_seed/build_feeder/build_price/build_population, StableRNGs sub-seeds) (EXP-01, INFRA-04)
 - [ ] 08-03-PLAN.md — run_scenario strategy dispatch (:centralized/:admm) + node×T ScenarioResult + the INFRA-04 same-seed bit-for-bit reproducibility gate (EXP-01, INFRA-04)
 - [ ] 08-04-PLAN.md — run_sweep (dict_list) + two-tier storage (gitignored JLD2 + diff-friendly sorted CSV) + @tagsave provenance (git commit + VERSION + seed) + @quickactivate scripts (EXP-02, INFRA-04)
 
@@ -216,7 +216,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Distribution Pricing — DADP & DLMP Decomposition | 5/5 | Complete   | 2026-07-19 |
 | 6. ADMM Decomposition Core | 4/4 | Complete   | 2026-07-19 |
 | 7. ADMM Convergence & Scale | 6/6 | Complete   | 2026-07-19 |
-| 8. Experiment Harness & Reproducibility | 0/4 | Not started | - |
+| 8. Experiment Harness & Reproducibility | 2/4 | In Progress|  |
 | 9. Documentation & Regression Acceptance Gate | 0/TBD | Not started | - |
 
 ## Research Flags
