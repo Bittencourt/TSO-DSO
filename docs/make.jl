@@ -55,9 +55,14 @@ makedocs(;
 )
 
 # Deploy only from CI (never from a local/worktree checkout — Pitfall 5 / the same
-# `remotes = nothing` rationale above). The repo slug below is a PLACEHOLDER — it
-# must be confirmed against the real GitHub org/repo before this ever runs in CI
-# (see plan 09-05 Task 2, the human-verify checkpoint that confirms/updates it).
+# `remotes = nothing` rationale above).
+#
+# TODO(deploydocs repo slug): the slug below is a PLACEHOLDER, kept intentionally
+# per researcher decision on plan 09-05's human-verify checkpoint (this checkout has
+# no git remote configured, so the real org/repo could not be discovered locally).
+# It is gated on `CI == "true"`, so it is inert until this workflow actually runs in
+# GitHub Actions. It MUST be replaced with the real `github.com/ORG/REPO` slug (and
+# DOCUMENTER_KEY/GITHUB_TOKEN wiring confirmed) before the first real gh-pages deploy.
 if get(ENV, "CI", nothing) == "true"
     deploydocs(; repo = "github.com/PLACEHOLDER-ORG/PLACEHOLDER-REPO.git")
 end
