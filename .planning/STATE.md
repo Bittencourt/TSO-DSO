@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 08 complete (4/4) — ready to discuss Phase 9
-last_updated: 2026-07-20T02:48:53.208Z
-last_activity: 2026-07-20
+status: executing
+stopped_at: "Plan 08-04 complete — run_and_store (@tagsave provenance: gitcommit+julia_version+seed) + run_sweep/collate_summary (dict_list -> diff-friendly byte-stable CSV) + scripts/run_scenario.jl + scripts/sweep.jl committed (d834ac3, f9eeaf6); four Rule-1 deviations fixed (wload/collect_results String-key round-trip, DrWatson.collect_results precompile race, @tagsave gitpath under Pkg.test()); full Pkg.test() 1922 pass/0 fail/2 pre-existing broken. Phase 08 (experiment-harness-reproducibility) COMPLETE."
+last_updated: "2026-07-20T11:24:04.792Z"
+last_activity: 2026-07-20 -- Phase 09 execution started
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 38
+  total_plans: 43
   completed_plans: 38
-  percent: 89
+  percent: 88
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 9 — documentation & regression acceptance gate
+**Current focus:** Phase 09 — documentation-regression-acceptance-gate
 
 ## Current Position
 
-Phase: 9
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-20
+Phase: 09 (documentation-regression-acceptance-gate) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 09
+Last activity: 2026-07-20 -- Phase 09 execution started
 
 Progress: [██████████] 100%
 
