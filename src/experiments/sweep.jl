@@ -57,8 +57,17 @@ All THREE diff-friendly rules are mandatory:
    still columns of `missing`, since they were populated as `missing` per-run — the intersect
    guard exists for robustness against any future column-set drift, not for these expected
    columns).
-2. **Deterministic row order** — `sort!` by the scenario key columns
-   `[:feeder, :strategy, :seed]`.
+2. **Deterministic row order** — `sort!` by EVERY `Scenario` selector column present in `df`
+   (`[:feeder, :strategy, :seed, :T, :name, :price, :population, :allow_export, :ρ, :ε_abs,
+   :ε_rel, :maxiter, :τ_ratio, :μ]`, intersected with `present`). WR-04 fix: sorting by only
+   `[:feeder, :strategy, :seed]` left `:T`/`:name`/`:price`/`:population`/the ADMM knobs
+   unsorted, so any sweep holding `(feeder, strategy, seed)` fixed while varying one of those
+   (e.g. an ADMM-knob sensitivity sweep, or a multi-horizon `T` sweep) produced tied sort keys
+   whose row order then fell back to `collect_results`' `readdir`-derived scan order — not
+   guaranteed stable across filesystems/OSes/re-runs, silently breaking the "byte-identical, no
+   git churn" guarantee for exactly the sweep shapes this harness targets. Sorting by every
+   selector column removes every possible tie (two rows tie here only if their `Scenario`s are
+   themselves selector-identical, i.e. re-runs of the literal same scenario).
 3. **Drop the machine-local `:path` column** — `collect_results` adds an absolute,
    non-reproducible path; keeping it would make every collation on a different checkout
    churn the committed CSV. `:gitcommit` IS kept (it is the provenance anchor, not a
@@ -83,7 +92,14 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
     present = Symbol.(names(df))
     df = select(df, intersect(keep, present))   # RULE 1: fixed, explicit column order
 
-    sort!(df, [:feeder, :strategy, :seed])      # RULE 2: deterministic row order
+    # RULE 2: deterministic row order — sort by every Scenario selector column present (WR-04
+    # fix), not just [:feeder, :strategy, :seed], so no sweep shape can tie on the sort key and
+    # fall back to a non-deterministic filesystem scan order.
+    selector_cols = [
+        :feeder, :strategy, :seed, :T, :name,
+        :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ,
+    ]
+    sort!(df, intersect(selector_cols, present))
 
     # RULE 3: :path is never in `keep`, so `select` above already dropped it.
     CSV.write(csvpath, df)
