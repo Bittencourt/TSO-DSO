@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Plan 09-05 complete — docs CI job wired (dedicated job, docs-env instantiate, single pinned Julia 1.11), deploydocs repo-slug checkpoint resolved (placeholder kept per researcher decision). Phase 09 closed — all 5 plans complete.
-last_updated: "2026-07-20T22:03:10.726Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 09 was final phase)
+last_updated: 2026-07-20T23:31:28.054Z
 last_activity: 2026-07-20
 progress:
   total_phases: 9
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-18)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 09 — documentation-regression-acceptance-gate
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 09 (documentation-regression-acceptance-gate) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
+Phase: 09
+Plan: Not started
+Status: Milestone complete
 Last activity: 2026-07-20
 
 Progress: [██████████] 100%
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 9
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -45,6 +45,7 @@ Progress: [██████████] 100%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 08 | 4 | - | - |
+| 09 | 5 | - | - |
 
 **Recent Trend:**
 
