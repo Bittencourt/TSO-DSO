@@ -66,3 +66,25 @@ jobs:
               @error "Some files were not formatted. Run JuliaFormatter.format(\".\") locally."
               exit(1)
           end
+
+  docs:
+    name: Documentation build (Documenter + Literate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      # Explicit docs-env instantiate: docs/Manifest.toml (re-resolved in plan 09-04
+      # to include CairoMakie) must be installed here — the `format` job above has no
+      # instantiate step because it never loads project code, but `docs` builds a real
+      # Documenter site with CairoMakie figures, so this step is required (T-09-05).
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: docs
+      - name: Build docs
+        run: julia --project=docs docs/make.jl
+        env:
+          CI: 'true'
