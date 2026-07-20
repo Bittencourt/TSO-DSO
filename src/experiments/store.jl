@@ -22,35 +22,31 @@
 # hermetic (RESEARCH Pitfall 6) — `run_scenario` itself stays path-free; persistence lives only
 # here. The per-run JLD2 is NEVER committed (data/ is gitignored, 08-01).
 
-using DrWatson: @tagsave, datadir, savename
+using DrWatson: @tagsave, datadir, savename, struct2dict
 
 """
     result_to_dict(res::ScenarioResult) -> Dict{Symbol,Any}
 
-Build the Symbol-keyed provenance dict that [`run_and_store`](@ref) `@tagsave`s: the scalar
-result fields (`welfare`, `exact_maxgap`, `iters`, `final_r`, `final_s`), the array `dadp`, the
-scenario's own selectors (`name`, `feeder`, `strategy`, `seed`, `T`, `price`, `population`) so
-the artifact is self-describing without re-loading the `Scenario`, and
-`:julia_version => string(VERSION)` (the Manifest-gap workaround, RESEARCH Pitfall 2).
+Build the Symbol-keyed provenance dict that [`run_and_store`](@ref) `@tagsave`s: EVERY
+`Scenario` selector (`struct2dict(s)` — `name`, `feeder`, `strategy`, `seed`, `T`, `population`,
+`price`, `allow_export`, `ρ`, `ε_abs`, `ε_rel`, `maxiter`, `τ_ratio`, `μ`) so the artifact is
+self-describing without re-loading the `Scenario` (CR-02 fix: a hand-picked field subset
+previously omitted the ADMM knobs and `allow_export`, silently breaking this exact guarantee
+for any non-default `:admm` run), the scalar result fields (`welfare`, `exact_maxgap`, `iters`,
+`final_r`, `final_s`), the array `dadp`, and `:julia_version => string(VERSION)` (the
+Manifest-gap workaround, RESEARCH Pitfall 2).
 """
 function result_to_dict(res::ScenarioResult)
     s = res.scenario
-    return Dict{Symbol,Any}(
-        :name => s.name,
-        :feeder => s.feeder,
-        :strategy => s.strategy,
-        :seed => s.seed,
-        :T => s.T,
-        :price => s.price,
-        :population => s.population,
-        :welfare => res.welfare,
-        :dadp => res.dadp,
-        :exact_maxgap => res.exact_maxgap,
-        :iters => res.iters,
-        :final_r => res.final_r,
-        :final_s => res.final_s,
-        :julia_version => string(VERSION),
-    )
+    d = struct2dict(s)   # ALL Scenario selectors (CR-02) — never a hand-picked subset
+    d[:welfare] = res.welfare
+    d[:dadp] = res.dadp
+    d[:exact_maxgap] = res.exact_maxgap
+    d[:iters] = res.iters
+    d[:final_r] = res.final_r
+    d[:final_s] = res.final_s
+    d[:julia_version] = string(VERSION)
+    return d
 end
 
 """

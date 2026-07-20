@@ -47,11 +47,16 @@ Collate every per-run JLD2 artifact under `dir` (written by [`run_and_store`](@r
 All THREE diff-friendly rules are mandatory:
 
 1. **Fixed column order** — an EXPLICIT `select` on
-   `[:name, :feeder, :strategy, :seed, :T, :welfare, :exact_maxgap, :iters, :final_r,
-   :final_s, :gitcommit]`, intersected with the columns actually present (tolerant of a
-   `:centralized`-only sweep where `:iters`/`:final_r`/`:final_s` are still columns of
-   `missing`, since they were populated as `missing` per-run — the intersect guard exists
-   for robustness against any future column-set drift, not for these expected columns).
+   `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :ρ, :ε_abs,
+   :ε_rel, :maxiter, :τ_ratio, :μ, :welfare, :exact_maxgap, :iters, :final_r, :final_s,
+   :gitcommit]` (CR-02 fix: the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
+   now kept alongside the result columns, so the collated CSV — like the per-run JLD2, since
+   `result_to_dict` persists `struct2dict(s)` — is self-describing without re-loading the
+   `Scenario` even for a non-default `:admm` sweep), intersected with the columns actually
+   present (tolerant of a `:centralized`-only sweep where `:iters`/`:final_r`/`:final_s` are
+   still columns of `missing`, since they were populated as `missing` per-run — the intersect
+   guard exists for robustness against any future column-set drift, not for these expected
+   columns).
 2. **Deterministic row order** — `sort!` by the scenario key columns
    `[:feeder, :strategy, :seed]`.
 3. **Drop the machine-local `:path` column** — `collect_results` adds an absolute,
@@ -72,6 +77,7 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
 
     keep = [
         :name, :feeder, :strategy, :seed, :T,
+        :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ,
         :welfare, :exact_maxgap, :iters, :final_r, :final_s, :gitcommit,
     ]
     present = Symbol.(names(df))
