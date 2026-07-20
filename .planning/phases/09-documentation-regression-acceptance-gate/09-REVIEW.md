@@ -2,264 +2,175 @@
 phase: 09-documentation-regression-acceptance-gate
 reviewed: 2026-07-20T00:00:00Z
 depth: standard
-files_reviewed: 9
+files_reviewed: 3
 files_reviewed_list:
   - test/test_acceptance.jl
   - test/test_pricing_fit.jl
   - docs/make.jl
-  - docs/literate/lindistflow.jl
-  - docs/literate/convex_branch_flow.jl
-  - docs/literate/prosumer_welfare.jl
-  - docs/literate/pricing_dlmp.jl
-  - docs/literate/admm.jl
-  - .github/workflows/CI.yml
 findings:
-  critical: 2
-  warning: 5
-  info: 1
-  total: 8
-status: issues_found
+  critical: 0
+  warning: 0
+  info: 2
+  total: 2
+status: resolved
+resolution:
+  fixed: [CR-01, CR-02, WR-01, WR-02, WR-03, "iter2-comment-scope"]
+  deferred: [WR-04, WR-05]
+  note: "Both blockers fixed. iter2 comment-scope warning fixed (docstrings exist but aren't wired into @docs/@autodocs — not 104 undocumented symbols). WR-04 (JuliaFormatter on docs/) deferred: mechanical reformat detaches inline equation-comments from device args, harming the CLAUDE.md 'equations beside code' requirement — needs a deliberate hand pass. WR-05 (deploydocs placeholder) is a settled user decision (keep placeholder + TODO). Info items are traceability notes only. Suite: 1946 pass / 0 fail / 2 broken; docs build exits 0."
 ---
 
 # Phase 9: Code Review Report
 
 **Reviewed:** 2026-07-20T00:00:00Z
 **Depth:** standard
-**Files Reviewed:** 9
+**Files Reviewed:** 3
 **Status:** issues_found
 
 ## Summary
 
-I read all nine files, cross-referenced them against the actual `src/` APIs they call
-(`solve_admm`, `extract_dlmp`, `decompose_dlmp`, `welfare_accounting`, `fit_baseline`,
-`generate_profiles`, device constructors), and **actually executed** the Julia code rather
-than trusting the code comments:
+This is iteration 2 of the fix→re-review loop. Scope is the three files touched by the fixer:
+`test/test_acceptance.jl`, `test/test_pricing_fit.jl`, `docs/make.jl`. I did not re-review
+`docs/literate/*.jl` or `.github/workflows/CI.yml` (out of this iteration's file scope; WR-04/
+WR-05 from iteration 1 concern those files and were explicitly deferred, not re-checked here).
 
-- Ran every `docs/literate/*.jl` page directly (`julia --project=. docs/literate/<page>.jl`)
-  — all six execute successfully.
-- Ran `julia --project=docs docs/make.jl` end-to-end (twice, to double-check the exit code)
-  — **the build exits 0**, but emits 104 "docstrings not included in the manual" warnings and
-  ~15 "Cannot resolve `@ref`" warnings hitting essentially every symbol referenced by every
-  generated literate page (`ConvexBranchFlow`, `solve_welfare`, `LinDistFlow`, `Thermostatic`,
-  `Deferrable`, `PVBattery`, `Aggregator`, `extract_dlmp`, `decompose_dlmp`,
-  `welfare_accounting`, `solve_admm`, `assert_socp_exact!`, ...). This directly contradicts the
-  file's own comment claiming the `checkdocs = :exports` change will "fail the build on
-  undocumented PUBLIC-API symbols" — see CR-01.
-- Reconstructed and ran the IEEE-13 acceptance scenario standalone (bypassing the
-  `@testitem`/`TestItemRunner` sandbox) to confirm the pinned golden reproduces
-  (`res.cost == -4823.1598620624`, `ctx.meta[:socp_maxgap] = 3.25e-8`,
-  `admm.exact_maxgap = 9.17e-10`, `admm.iters = 42`) and that the reused tolerances are not
-  currently failing. In the process I found that `admm.exact_maxgap` is computed but never
-  asserted for the IEEE-13 acceptance item — see CR-02.
-- Reconstructed and ran the FIT regression golden standalone; `res.ratio` reproduces
-  `0.6428101637491034` bit-for-bit against the pinned `FIT_RATIO_GOLDEN`. That golden is
-  correctly pinned and will not silently skip.
+I did not take the fixer's claims on faith. I instantiated the project (`Project.toml` +
+`test/Project.toml`), **actually ran** the two test files end-to-end via
+`TestItemRunner.@run_package_tests` with a name filter (82/82 tests pass, including both
+acceptance items and all six FIT items), independently recomputed `v₉[16]` for the IEEE-13
+acceptance item standalone and confirmed it matches the pinned `GOLDEN_V9_16` to ~1e-11, and
+**actually ran** `julia --project=docs docs/make.jl` to completion and inspected its warning
+output line-by-line against `src/` docstrings.
 
-The core numerics (golden values, ADMM≈centralized welfare, DADP cross-validation) are sound
-and currently pass. The two BLOCKER-tier findings are about the acceptance/doc **gates not
-actually gating what they claim to gate** — both are provable, not speculative — plus several
-WARNING-tier gaps in test-selection documentation, tolerance semantics, and CI coverage.
+**Verified as correctly fixed:**
+- **CR-02** — `test/test_acceptance.jl:66` now asserts `@test admm.exact_maxgap < 1e-3` on the
+  IEEE-13 item, with the identical tolerance and field as the IEEE-123 sibling
+  (`test_acceptance.jl:122`, `test_ieee123_admm.jl:73`). Confirmed non-vacuous: the assertion
+  ran and passed against a real computed `admm.exact_maxgap` in the actual test run (not a
+  literal `true` or an unreachable branch).
+- **WR-03** — `test/test_acceptance.jl:80` restores `@test isapprox(v9_16, GOLDEN_V9_16; atol =
+  1e-4)` as a genuine hard (non-`broken`) assertion. `GOLDEN_V9_16 = 1.0436080536` (line 36)
+  matches `test_ieee13.jl:185`'s `const GOLDEN_V9_16 = 1.0436080536` exactly (same computed
+  digits). I independently recomputed `v9_16` for this exact scenario standalone and got
+  `1.0436080535989598` — matches to ~1e-11, well inside the `atol = 1e-4` gate. Not
+  tautological: this is a distinct assertion from the immediately-following non-failing
+  `@test gap < 1e-2 broken = (gap >= 1e-2)` thesis cross-check, and it can genuinely fail if a
+  future regression moves the computed voltage.
+- **WR-01** — the added notes (`test_acceptance.jl:68-73`, `:123-124`) correctly describe
+  Julia's `AbstractArray` `isapprox` as norm-based
+  (`norm(x-y) <= max(atol, rtol*max(norm(x),norm(y)))`), not elementwise — this matches Base
+  Julia's actual implementation.
+- **WR-02** — the corrected comments (`test_acceptance.jl:12-15`, `test_pricing_fit.jl:6-9`)
+  accurately state that `test/runtests.jl`'s `@run_package_tests` passes no `filter` keyword, so
+  tags are metadata only. Confirmed against the actual `test/runtests.jl` (`@run_package_tests`
+  with zero arguments).
 
-## Critical Issues
+**Not (fully) verified as fixed — see WR-01 below:** the `docs/make.jl` `checkdocs` comment
+(originally CR-01) was corrected for behavior (it no longer claims the build "fails" — it now
+correctly says `warnonly` makes the check non-fatal, which I confirmed by running the doc build:
+exit code 0, with the "104 docstrings..." warning routed through the `:missing_docs` category
+that is indeed in `warnonly`). However, the corrected comment introduces a new factual
+inaccuracy in its characterization of *what* those 104 items are: it calls them "undocumented
+exported symbols," but Documenter's own warning text — and my direct inspection of a sample of
+the 104 listed bindings in `src/` — shows most of them **do** have docstrings; the actual gap is
+that those docstrings aren't spliced into the rendered manual via `@docs`/`@autodocs` blocks.
+This is a materially different, smaller remediation task than "write 104 docstrings." See WR-01.
 
-### CR-01: `checkdocs = :exports` is neutralized by `warnonly`, so the docs build never fails on undocumented/broken API references
+No reproducibility hazards were introduced by any of the applied fixes: all pinned goldens
+reproduce bit-for-bit/to-tolerance, and no new nondeterminism (unseeded RNG, wall-clock, etc.)
+was added.
 
-**File:** `docs/make.jl:49-55`
-**Issue:** The comment explicitly states the intent: "Tightened from `:none` (Phase 1) to
-`:exports` (Phase 9 EXP-03): fail the build on undocumented PUBLIC-API (exported) symbols."
-But the very next lines put `:missing_docs` (and `:cross_references`) into `warnonly`:
+## Warnings
+
+### WR-01: `docs/make.jl`'s corrected `checkdocs` comment still mischaracterizes the 104-item backlog as "undocumented exported symbols" — it is actually "documented but not linked into the manual"
+
+**File:** `docs/make.jl:49-58`
+**Issue:** The comment (as fixed this iteration) reads:
 
 ```julia
+# Tightened from :none (Phase 1) to :exports (Phase 9 EXP-03): check undocumented
+# PUBLIC-API (exported) symbols and broken `@ref`s, ...
+# ... it SURFACES undocumented exports and unresolved `@ref`s as build warnings ...
+# ... There is a real, tracked backlog of ~104 undocumented exported symbols today
+# (see 09-REVIEW.md CR-01); documenting them all and dropping `:missing_docs`/
+# `:cross_references` from `warnonly` ... is deferred, not done here.
 checkdocs = :exports,
 warnonly = [:missing_docs, :cross_references],
 ```
 
-`warnonly` demotes exactly the checks that `checkdocs` is supposed to enforce from hard errors
-to warnings — so `checkdocs = :exports` is a complete no-op for build-failure purposes. I
-verified this empirically by running `julia --project=docs docs/make.jl` to completion:
+I ran `julia --project=docs docs/make.jl` to completion. The actual warning text (verbatim, via
+`~/.julia/packages/Documenter/.../src/docchecks.jl:missingdocs`) is:
 
-- **104 exported/public docstrings are not included in the manual** (`Warning: 104 docstrings
-  not included in the manual`), including exactly the symbols the six new literate pages exist
-  to document: `ConvexBranchFlow`, `LinDistFlow`, `solve_welfare`, `solve_admm`, `extract_dlmp`,
-  `decompose_dlmp`, `welfare_accounting`, `fit_baseline`, `Aggregator`, `Thermostatic`,
-  `Deferrable`, `PVBattery`, `Bus`, `Branch`, `Feeder`, `assert_socp_exact!`, etc.
-- Every single `[`Xxx`](@ref)` cross-reference in every generated page fails to resolve
-  ("Cannot resolve `@ref` for ... No docstring found in doc for binding `TSODSO.Xxx`"), for
-  ALL SIX generated model pages (`toy_dc`, `lindistflow`, `convex_branch_flow`,
-  `prosumer_welfare`, `pricing_dlmp`, `admm`).
-- The process still exits `0`.
-
-So this "EXP-03 tightening" cannot ever turn CI red for a missing docstring or a broken `@ref`
-on an exported symbol — the exact regression this phase was supposed to introduce a gate for.
-Any future contributor who adds an exported function with no docstring, or renames a
-documented function without updating a literate page's `@ref`, gets a silent green build.
-
-**Fix:** Either (a) actually write the missing docstrings for the currently-undocumented
-exports (or add `@docs`/`@autodocs` blocks so they're "included in the manual") and drop
-`:missing_docs`/`:cross_references` from `warnonly` so the check is real, or (b) if the
-existing 104-symbol gap is intentionally deferred to a later plan, do not claim in the comment
-that this change "fails the build" — state plainly that it is warn-only for now, and track the
-104-symbol backlog explicitly (e.g. a `# TODO(docs-backlog)` with a tracking issue) so the
-"tightened" framing isn't misleading to future maintainers/reviewers.
-
-### CR-02: The IEEE-13 acceptance item never asserts ADMM's PF-04 exactness certificate — the acceptance gate's "exact relaxation for BOTH cases" claim is only checked on the centralized path for IEEE-13
-
-**File:** `test/test_acceptance.jl:20-72`
-**Issue:** The file header claims this is "the single consolidated end-to-end proof that BOTH
-headline cases ... reproduce exact SOC relaxation, recovered DADP, and ADMM ≈ centralized
-welfare." For the IEEE-123 item (lines 74-109) this is true — it asserts
-`res.exact_maxgap < 1e-3` on the ADMM-converged DSO-OPT (line 107). For the IEEE-13 item,
-however, only the **centralized** solve's exactness is asserted:
-
-```julia
-@test ctx.meta[:socp_maxgap] < 1e-5                          # PF-04 exact relaxation (centralized only)
-...
-admm = solve_admm(feeder, ConvexBranchFlow(), aggs; T = 24, λ₀ = λ₀, ρ = 100.0, allow_export = true)
-...
-@test isapprox(admm.welfare, res.cost; rtol = 1e-4)          # ADMM ≈ centralized welfare
-@test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)     # recovered DADP match
+```
+Warning: 104 docstrings not included in the manual:
+    TSODSO.Bus
+    TSODSO.Feeder
+    TSODSO.AbstractPowerFlow
+    TSODSO.MILP
+    ... (104 total)
+These are docstrings in the checked modules (configured with the modules keyword)
+that are not included in canonical @docs or @autodocs blocks.
 ```
 
-`solve_admm` returns `admm.exact_maxgap` (the PF-04 gate on the ADMM-converged DSO-OPT,
-`src/admm/solve_admm.jl:104,378`), but the IEEE-13 acceptance item never reads or asserts it.
-I confirmed by running the scenario standalone that `admm.exact_maxgap = 9.17e-10` today (so
-the check would currently pass) — but nothing in this file would catch a future regression
-that made the ADMM-side relaxation inexact for IEEE-13 while welfare/DADP still happened to
-land within the (fairly loose — see WR-02) cross-validation tolerance. This is precisely the
-"exact relaxation... for BOTH headline cases" guarantee the file's own header advertises, and
-it silently doesn't hold for the ADMM path on IEEE-13.
+This is `Documenter.missingdocs`, which checks whether docstrings that **exist** in the checked
+modules are reachable from an `@docs`/`@autodocs` block somewhere in the rendered manual — it is
+not a "does this symbol have a docstring at all" check. I spot-checked several of the 104 listed
+bindings directly in `src/` and confirmed they have docstrings today: `Bus` (`src/data/Feeder.jl:18-23`,
+`"""Bus{T<:Real} ... """`), `Branch`, `Feeder`, `AbstractPowerFlow`
+(`src/powerflow/AbstractPowerFlow.jl:16-21`), `MILP` (`src/solver/ProblemClass.jl:26-27`,
+`"Mixed-integer linear program. Default backend: HiGHS."`), `GurobiChoice`, `MosekChoice`,
+`plot_convergence` — all have docstrings. So the comment's framing ("undocumented exported
+symbols"; "documenting them all ... is deferred") is factually wrong for the great majority of
+the 104: the actual deferred work is adding `@docs`/`@autodocs` blocks to `docs/src/*.md` (or a
+new API-reference page) so the existing docstrings get spliced into the built manual — a
+narrower, cheaper task than writing ~104 new docstrings from scratch. A future contributor
+reading this comment and picking up the "deferred" work would likely start writing docstrings
+that already exist, rather than wiring up the missing `@docs`/`@autodocs` blocks that are the
+real gap.
 
-**Fix:** Add the missing certificate check to the IEEE-13 item, symmetric with IEEE-123:
-
-```julia
-@test admm.exact_maxgap < 1e-3   # PF-04 exact on the ADMM-converged DSO-OPT (IEEE-13)
-```
-
-(Also consider adding `@test admm.iters < 200` for symmetry with `test_admm.jl`'s existing
-IEEE-13 crossval item and the IEEE-123 acceptance item — currently omitted here too; low
-severity since `solve_admm` fails loudly on non-convergence regardless, but the omission means
-this file doesn't itself document/verify the iteration budget the way its sibling does.)
-
-## Warnings
-
-### WR-01: DADP recovery check is a matrix (Frobenius-norm) `isapprox`, not elementwise — a single entry can exceed the stated `atol` and still "pass"
-
-**File:** `test/test_acceptance.jl:63`, `test/test_acceptance.jl:108`
-**Issue:** `@test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)` compares two
-`(n_load_nodes, T)` matrices. Julia's `isapprox` for `AbstractArray` args is norm-based
-(`norm(x - y) <= max(atol, rtol * max(norm(x), norm(y)))`), not elementwise. I verified this
-empirically on the live IEEE-13 acceptance scenario: `maximum(abs.(admm.λ .- dlmp_c))` is
-`0.0166` — i.e. **larger** than the nominal `atol = 1e-2` — yet `isapprox(admm.λ, dlmp_c; atol
-= 1e-2, rtol = 1e-3)` still evaluates to `true`, because the aggregate norm over all 240
-(bus, hour) entries is dominated by `rtol * norm(dlmp_c)`. So the tolerance actually enforced
-is much looser, per-entry, than `atol = 1e-2` suggests to a reader — a single bus/hour DADP
-could drift further than that and the "recovered DADP match" assertion would still pass. This
-convention is inherited from `test_admm.jl`/`test_ieee123_admm.jl` (not introduced by this
-phase), but since this file is billed as the authoritative acceptance gate, it's worth
-tightening or at minimum documenting that the check is an aggregate, not a per-node/hour, bound.
-**Fix:** If a true per-entry guarantee is wanted, assert
-`maximum(abs.(admm.λ .- dlmp_c)) < atol_per_entry` explicitly instead of (or in addition to)
-the whole-matrix `isapprox`.
-
-### WR-02: Comments claim a tag/name-based `Pkg.test(; test_args=...)` selection mechanism that does not exist in this repo's `test/runtests.jl`
-
-**File:** `test/test_acceptance.jl:11-12`, `test/test_pricing_fit.jl:6`
-**Issue:** `test_acceptance.jl` states: "Item names are tagged `:acceptance` so
-`Pkg.test(; test_args=["acceptance"])` selects exactly these two testitems." `test_pricing_fit.jl`
-similarly states: "Every `@testitem` name contains 'fit' so `occursin("fit", ti.name)` selects
-it." I checked `test/runtests.jl`:
+**Fix:** Reword to match what Documenter is actually reporting, e.g.:
 
 ```julia
-using TestItemRunner
-@run_package_tests
+# ... `checkdocs = :exports` also runs Documenter's missingdocs check: docstrings that EXIST in
+# the checked modules but are not reachable from any @docs/@autodocs block in the rendered
+# manual are reported (routed through :missing_docs, hence non-fatal via warnonly below).
+# ~104 such docstrings exist today (most exported types/functions already have a docstring in
+# src/; they are simply not yet spliced into any docs/src/*.md page via @docs/@autodocs).
+# Wiring up an API-reference page (or per-model @docs blocks) to close this gap, and then
+# dropping :missing_docs/:cross_references from warnonly, is deferred, not done here.
 ```
-
-`TestItemRunner.@run_package_tests` only filters test items if a `filter = ...` keyword is
-passed to the macro **at this call site** (verified against the installed
-`TestItemRunner.jl` source: `run_tests(path; filter=nothing, ...)`, and the macro only forwards
-`filter`/`verbose` kwargs literally written in the `@run_package_tests` invocation). It does
-**not** read `ARGS`/`test_args` at runtime. Since `runtests.jl` passes no `filter` argument,
-`Pkg.test(; test_args=["acceptance"])` runs the **entire** test suite — the described
-"selects exactly these two testitems" / "selects it" behavior does not exist today. This is
-not a correctness bug (nothing is skipped — the whole suite, including these items, always
-runs), but it's a misleading claim in the file's own documentation that could send a future
-contributor down a dead end trying to get a fast, targeted acceptance-only run.
-**Fix:** Either wire an actual `ARGS`-driven filter into `test/runtests.jl` (e.g.
-`@run_package_tests filter = ti -> isempty(ARGS) || any(a -> a in string.(ti.tags) || occursin(a, ti.name), ARGS)`)
-so the documented invocation genuinely works, or correct the comments to state that tags are
-currently just organizational/documentation metadata, not an active filter.
-
-### WR-03: Acceptance file drops the hard per-node/per-hour DADP goldens and keeps only a tautological "broken" cross-check for `v₉[16]`
-
-**File:** `test/test_acceptance.jl:32-33,65-71`
-**Issue:** `test_ieee13.jl`'s ground golden test hard-asserts four pinned goldens
-(`GOLDEN_V9_16`, `GOLDEN_WELFARE`, `GOLDEN_DADP16`, `GOLDEN_SUM_DADP`); the acceptance file
-keeps only `GOLDEN_WELFARE`. In place of the hard `GOLDEN_V9_16` check it keeps only the
-non-failing thesis cross-check:
-
-```julia
-gap = abs(v9_16 - THESIS_V9_16)
-@test gap < 1e-2 broken = (gap >= 1e-2)
-```
-
-This construction is tautological by design: `broken` is set to exactly the negation of the
-tested condition, so this `@test` can **never fail** regardless of `gap` — it always reports
-either Pass (when `gap < 1e-2`) or Broken (when it isn't), never Fail. This mirrors an
-existing, well-commented idiom already present in `test_ieee13.jl` (so it isn't new to this
-phase), and the intent (a non-failing informational cross-check against a figure-bound thesis
-value) is legitimate and well documented — but propagating a tautological assertion into the
-file explicitly billed as "the single consolidated end-to-end proof" without also keeping a
-hard, tight, single-value voltage regression check (as `test_ieee13.jl` does via
-`GOLDEN_V9_16`) is a real reduction in what this specific file certifies. A regression that
-moves `v₉[16]` (e.g. a voltage-drop sign error) without moving total welfare outside `rtol =
-1e-4` would not be caught by this file's assertions.
-**Fix:** Either restore a hard `@test isapprox(v9_16, GOLDEN_V9_16; atol = 1e-4)` alongside the
-non-failing thesis cross-check, or explicitly note in the header that per-node golden coverage
-is intentionally left to `test_ieee13.jl` and this file only certifies welfare + ADMM
-cross-validation (a narrower, but honestly stated, scope).
-
-### WR-04: JuliaFormatter CI job does not check `docs/` — the new literate pages and `docs/make.jl` are unformatted-checked
-
-**File:** `.github/workflows/CI.yml:65`
-**Issue:** The `format` job runs `format(["src", "ext", "test"]; verbose = true)`. Phase 9
-adds `docs/make.jl` and five new files under `docs/literate/`, none of which fall under any of
-those three paths, so they are never subject to the `.JuliaFormatter.toml`-pinned style check
-this project otherwise enforces in CI.
-**Fix:** Add `"docs"` to the `format(...)` call's path list (Literate source files are plain
-Julia and format fine under JuliaFormatter).
-
-### WR-05: `deploydocs` runs unconditionally whenever `CI == "true"`, pointed at a placeholder repo slug, with no `DOCUMENTER_KEY`/`GITHUB_TOKEN` wired in the docs CI job
-
-**File:** `docs/make.jl:60-68`, `.github/workflows/CI.yml:70-91`
-**Issue:** This is already self-flagged with a `TODO(deploydocs repo slug)` comment
-acknowledging the placeholder must be replaced "before the first real gh-pages deploy," so I'm
-not raising it as a new defect — but flagging it as a WARNING for completeness since the
-`docs` CI job as currently written has no `GITHUB_TOKEN`/`DOCUMENTER_KEY` env var at all. In
-real GitHub Actions CI (`CI=true` will be set), `deploydocs` will execute this branch; because
-the placeholder org/repo will not match the actual `GITHUB_REPOSITORY`, Documenter's
-repo-slug-mismatch check should make it skip pushing rather than error — but this has not been
-exercised, and the missing auth secret means even a corrected slug would not be able to deploy
-yet. Tracked already by the author's TODO; call out here so it isn't lost.
-**Fix:** Before enabling real deploys: replace the placeholder slug, add
-`DOCUMENTER_KEY` (or configure the `GITHUB_TOKEN`-based deploy key flow) as a job env var in
-`.github/workflows/CI.yml`'s `docs` job, and do a dry run on a real fork to confirm the
-skip-vs-deploy branch behaves as expected.
 
 ## Info
 
-### IN-01: Manual verification results (for the record)
+### IN-01: Live verification results (for the record, not a defect)
 
-Confirmed via direct execution (not part of any defect, recorded for traceability):
-- All six `docs/literate/*.jl` pages execute standalone without error.
-- `julia --project=docs docs/make.jl` completes with exit code 0 (see CR-01 for what that
-  masks).
-- The IEEE-13 acceptance scenario, reconstructed and run standalone, reproduces
-  `GOLDEN_WELFARE = -4823.1598620624` exactly, `ctx.meta[:socp_maxgap] = 3.25e-8`,
-  `admm.exact_maxgap = 9.17e-10`, `admm.iters = 42`, and the DADP cross-check passes (see WR-01
-  for the caveat on what "passes" means here).
-- `test/test_pricing_fit.jl`'s `FIT_RATIO_GOLDEN = 0.6428101637491034` reproduces bit-for-bit
-  when the fixture is reconstructed and re-run standalone — this golden is correctly pinned and
-  will not silently skip or drift.
+Recorded for traceability of this iteration's re-review:
+- `julia --project=test -e 'using TestItemRunner; @run_package_tests filter = ti ->
+  occursin("test_acceptance.jl", ti.filename) || occursin("test_pricing_fit.jl", ti.filename)'`
+  → **82/82 pass**, ~1m22s, no failures/errors/broken (the `broken = (gap >= 1e-2)` thesis
+  cross-check item reported Pass, gap ≈ 0.00569).
+- Standalone recomputation of the IEEE-13 acceptance scenario's `v₉[16]` reproduces
+  `1.0436080535989598`, matching `GOLDEN_V9_16 = 1.0436080536` to ~1e-11.
+- `julia --project=docs docs/make.jl` completes with exit code 0; the only `:missing_docs`
+  warning is the "104 docstrings not included in the manual" one addressed in WR-01, plus ~15
+  `Cannot resolve @ref` warnings for the same underlying reason (docstring exists but isn't
+  spliced into the page it's referenced from) — both categories are in `warnonly` and do not
+  fail the build, consistent with the (corrected) comment's behavioral claim.
+
+### IN-02: Fixer comments hard-reference specific finding IDs in this mutable review document (`09-REVIEW.md CR-01`, `09-REVIEW WR-01/02/03`)
+
+**File:** `docs/make.jl:56`, `test/test_acceptance.jl:12,68,75`, `test/test_pricing_fit.jl:6`
+**Issue:** Several source comments cite specific finding IDs from this review
+(e.g. `# NOTE (09-REVIEW WR-01): ...`, `(see 09-REVIEW.md CR-01)`). This iteration overwrote the
+review with fresh IDs (this file no longer has a `CR-01` or a `WR-01` about the same topics as
+iteration 1 — e.g. iteration 1's `CR-01` is now referenced from `make.jl` but this iteration's
+`CR-01` slot is unused and the docstring-backlog topic is now `WR-01` here). If review IDs are
+renumbered or the finding is later marked resolved and removed, these source comments become
+stale/orphaned cross-references pointing at content that no longer exists at that ID. This is
+low-severity (informational/traceability comments only, no behavior depends on them) but worth
+noting: prefer citing a stable artifact (a `CONTEXT.md` decision, a GitHub issue, or a plan ID)
+rather than a specific finding ID in a document that gets overwritten every review iteration.
+**Fix:** Not required to act on now; consider migrating these cross-references to a stable
+tracking mechanism (issue/TODO tag) if the docstring-backlog work is picked up later.
 
 ---
 
