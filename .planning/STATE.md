@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Plan 09-04 complete — ADMM literate page (rung 5, thesis 3.46/3.47) cross-validated against solve_welfare + docs/make.jl fully wired (all 6 pages, checkdocs=:exports, CI-gated deploydocs, re-resolved docs/Manifest.toml with CairoMakie); full docs build verified exit 0 with the convergence figure actually rendering (7893c66, 375c2d2)."
-last_updated: "2026-07-20T12:44:06.794Z"
+status: verifying
+stopped_at: Plan 09-05 complete — docs CI job wired (dedicated job, docs-env instantiate, single pinned Julia 1.11), deploydocs repo-slug checkpoint resolved (placeholder kept per researcher decision). Phase 09 closed — all 5 plans complete.
+last_updated: "2026-07-20T22:03:10.726Z"
 last_activity: 2026-07-20
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 43
-  completed_plans: 42
-  percent: 89
+  completed_plans: 43
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 Phase: 09 (documentation-regression-acceptance-gate) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-20
 
-Progress: [██████████] 98%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 98%
 | Phase 08 P03 | 35min | 2 tasks | 2 files |
 | Phase 08 P04 | 40min | 2 tasks | 5 files |
 | Phase 09 P04 | 35min | 2 tasks | 6 files |
+| Phase 09 P05 | 15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 08]: @tagsave's default gitpath=projectdir() resolves to Pkg.test()'s sandbox (not a git repo); run_and_store pins gitpath=pkgdir(@__MODULE__) so :gitcommit is stamped reliably under both plain runs and Pkg.test() (Rule 1, 08-04)
 - [Phase 09]: Removed pricing_dlmp.jl's unused using JuMP import rather than adding JuMP to docs/Project.toml — no JuMP symbol was actually referenced (Rule 1 fix, 09-04)
 - [Phase 09]: docs/Project.toml hard-depends on CairoMakie (0.15) for docs-only figure rendering, guarded per-page with Base.find_package; root Project.toml weakdeps/extensions untouched (09-04)
+- [Phase 09]: docs CI job pinned to single Julia 1.11 (mirrors format job), not added as a 1.10/1.11/1.12 matrix leg — docs content is Julia-version-invariant (09-05)
+- [Phase 09]: deploydocs repo-slug placeholder kept as-is per researcher decision on the Task 2 human-verify checkpoint (no git remote in this checkout); comment now documents it as a resolved decision with a pre-deploy TODO (09-05)
 
 ### Pending Todos
 
@@ -104,6 +107,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-20T12:44:06.771Z
-Stopped at: Plan 09-04 complete — ADMM literate page (rung 5, thesis 3.46/3.47) cross-validated against solve_welfare + docs/make.jl fully wired (all 6 pages, checkdocs=:exports, CI-gated deploydocs, re-resolved docs/Manifest.toml with CairoMakie); full docs build verified exit 0 with the convergence figure actually rendering (7893c66, 375c2d2).
+Last session: 2026-07-20T22:03:10.700Z
+Stopped at: Plan 09-05 complete — docs CI job wired (dedicated job, docs-env instantiate, single pinned Julia 1.11), deploydocs repo-slug checkpoint resolved (placeholder kept per researcher decision). Phase 09 closed — all 5 plans complete.
 Resume file: None
