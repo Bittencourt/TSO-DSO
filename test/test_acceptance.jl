@@ -8,8 +8,11 @@
 # `test/test_ieee13.jl` (IEEE-13 "ground" @testitems, plan 04-06) and
 # `test/test_ieee123_admm.jl` (plan 07-05), and it REUSES their already-pinned goldens and
 # tolerances verbatim (CONTEXT.md lock: never invent new/looser acceptance-specific
-# thresholds). Item names are tagged `:acceptance` so `Pkg.test(; test_args=["acceptance"])`
-# selects exactly these two testitems.
+# thresholds). Item names are tagged `:acceptance` for organizational/documentation purposes
+# (NOTE 09-REVIEW WR-02: `test/runtests.jl`'s `@run_package_tests` call passes no `filter`
+# keyword, so `Pkg.test(; test_args=["acceptance"])` does NOT select a subset today — it
+# runs the entire suite, including these two testitems; tags are metadata only, not yet an
+# active runtime filter).
 #
 # Consolidates (without duplicating):
 #   - test/test_ieee13.jl  — "ieee13 ground: pinned computed golden regression" @testitem

@@ -3,7 +3,10 @@
 # Seam: pricing/fit.jl (PRICE-03, the FIT baseline half). The thesis-faithful FIT-OPT
 # (3.24-3.28) + plain AC-PF counterfactual `fit_baseline`, driven GREEN by plan 05-03.
 #
-# Every @testitem name contains "fit" so `occursin("fit", ti.name)` selects it. These
+# Every @testitem name contains "fit" (NOTE 09-REVIEW WR-02: this is documentation/
+# organizational metadata only — `test/runtests.jl`'s `@run_package_tests` passes no
+# `filter` keyword, so there is no active `occursin("fit", ti.name)`-based selection
+# mechanism wired up today; running `Pkg.test()` always runs the entire suite). These
 # items are the plan's own richer contract (the flow-split identities, the FIT social
 # welfare, seeded reproducibility, and the "voltage limit NOT enforced" structural
 # distinction) — complementary to the coarse Wave-1 RED harness in test/test_fit.jl.
