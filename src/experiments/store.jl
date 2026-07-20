@@ -5,8 +5,11 @@
 #
 # `run_and_store(s::Scenario; dir)` calls `run_scenario(s)` (08-03, PATH-FREE), builds a
 # Symbol-keyed provenance dict via `result_to_dict`, and `@tagsave`s it to a per-run JLD2
-# named `savename(s, "jld2")` under `dir`. `@tagsave` stamps the saved dict with `:gitcommit`
-# (+ `:gitpatch` on a dirty tree, since `storepatch = true`) and `:script`.
+# named `savename(s, "jld2"; digits = 10)` under `dir` (CR-01 fix: `digits = 10` avoids
+# DrWatson's lossy default float rounding colliding two distinguishable ADMM-knob Scenarios;
+# `safe = true` additionally routes through `safesave` so any residual collision appends
+# `_1`/`_2`... rather than silently overwriting). `@tagsave` stamps the saved dict with
+# `:gitcommit` (+ `:gitpatch` on a dirty tree, since `storepatch = true`) and `:script`.
 #
 # NOTE (RESEARCH Pitfall 2 — the CLAUDE.md imprecision corrected by research): `@tagsave`
 # stamps the git COMMIT, not the Manifest. It does NOT embed `Project.toml`/`Manifest.toml`
@@ -54,14 +57,26 @@ end
     run_and_store(s::Scenario; dir::AbstractString = datadir("sims")) -> ScenarioResult
 
 Run `s` via [`run_scenario`](@ref) and `@tagsave` a per-run provenance dict to a JLD2 file
-named `savename(s, "jld2")` under `dir` (default `datadir("sims")`, gitignored). The saved
-dict carries every field from [`result_to_dict`](@ref) PLUS `:gitcommit` (+ `:gitpatch` on a
-dirty tree) and `:script`, stamped by `@tagsave` itself (`storepatch = true`).
+named `savename(s, "jld2"; digits = 10)` under `dir` (default `datadir("sims")`, gitignored).
+The saved dict carries every field from [`result_to_dict`](@ref) PLUS `:gitcommit` (+
+`:gitpatch` on a dirty tree) and `:script`, stamped by `@tagsave` itself (`storepatch = true`).
 
 Takes `dir` as an EXPLICIT keyword so tests can pass `mktempdir()` and stay hermetic
 (RESEARCH Pitfall 6) — never rely on `datadir()` resolving under the test environment.
 Returns the `ScenarioResult` (the same in-memory value `run_scenario` produced); the JLD2
 write is a side effect, never re-loaded by this function.
+
+NOTE (CR-01 fix): `savename`'s DEFAULT float formatting rounds `AbstractFloat` fields to
+`sigdigits = 3`, which can collapse two `Scenario`s differing only in a sub-percent ADMM float
+knob (`ρ`/`ε_abs`/`ε_rel`/`τ_ratio`/`μ`) onto the IDENTICAL filename — verified directly
+against this repo's pinned DrWatson (2.19.1): `ρ = 100.1/100.2/100.4` all produced
+`"...ρ=100.0..."` under the bare default. `digits = 10` makes the float component of the
+filename round-trip losslessly (no more collisions from display rounding), **and** `safe =
+true` is passed so `@tagsave` routes through `safesave` (appends `_1`, `_2`, ... instead of
+silently overwriting) as defense-in-depth against any RESIDUAL collision (e.g. two Scenarios
+that are truly float-identical to 10 digits but differ in a field `default_allowed` excludes).
+Together these close the "silently overwrites a prior run's JLD2" data-loss risk this function
+previously had.
 
 NOTE (Rule 1 fix, 08-04): `@tagsave`'s `gitpath` keyword defaults to `DrWatson.projectdir()`,
 which resolves from the CURRENTLY ACTIVE project — under `Pkg.test()` that is a temporary
@@ -76,8 +91,8 @@ function run_and_store(s::Scenario; dir::AbstractString = datadir("sims"))
     res = run_scenario(s)
     dict = result_to_dict(res)
     @tagsave(
-        joinpath(dir, savename(s, "jld2")), dict;
-        storepatch = true, gitpath = pkgdir(@__MODULE__),
+        joinpath(dir, savename(s, "jld2"; digits = 10)), dict;
+        storepatch = true, gitpath = pkgdir(@__MODULE__), safe = true,
     )
     return res
 end

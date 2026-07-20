@@ -177,7 +177,10 @@ end
             s = TSODSO.Scenario(; kw..., strategy = :centralized)
             TSODSO.run_and_store(s; dir = dir)
 
-            f = joinpath(dir, savename(s, "jld2"))
+            # CR-01 fix: `run_and_store` now saves under `savename(s, "jld2"; digits = 10)`
+            # (lossless float formatting, avoids DrWatson's lossy default sigdigits=3
+            # rounding colliding two distinguishable ADMM-knob Scenarios onto one filename).
+            f = joinpath(dir, savename(s, "jld2"; digits = 10))
             @test isfile(f)
 
             # NOTE (Rule 1 fix, 08-04): `wload` on a `.jld2` always round-trips through

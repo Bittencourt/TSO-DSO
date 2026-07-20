@@ -7,9 +7,14 @@
 # built `Feeder`/`Vector{Aggregator}`/`λ₀::Vector` — so `savename(s)` (DrWatson) works with
 # ZERO `DrWatson.default_allowed` overloading (RESEARCH Pitfall 1): every field already sits
 # inside DrWatson's `default_allowed = (Real, String, SubString, Symbol, TimeType)` filter,
-# so nothing is silently dropped from the generated filename and two Scenarios differing in
-# any selector never collide. The heavy objects are materialized later, deterministically,
-# by `src/experiments/materialize.jl` from these selectors + the master `seed`.
+# so nothing is silently DROPPED from the generated filename. NOTE (CR-01 fix): `savename`'s
+# DEFAULT float formatting still rounds `AbstractFloat` fields to `sigdigits = 3`, so two
+# `Scenario`s differing only in a sub-percent ADMM float knob (`ρ`/`ε_abs`/`ε_rel`/`τ_ratio`/`μ`)
+# CAN produce an identical default `savename` — every on-disk-storage call site (`store.jl`)
+# MUST pass `digits = 10` (lossless round-trip) and `safe = true` (never overwrite) to avoid a
+# silent JLD2 collision; do not rely on the bare `savename(s, "jld2")` string as a uniqueness
+# key. The heavy objects are materialized later, deterministically, by
+# `src/experiments/materialize.jl` from these selectors + the master `seed`.
 #
 # Validation is a CONSTRUCTION invariant (mirrors `Thermostatic`/`PVBattery`/`Aggregator`):
 # an explicit inner constructor `throw`s `ArgumentError` (never `@assert`, threat T-03-04
@@ -37,6 +42,13 @@ a PRIMITIVE selector — `Symbol`/`Int`/`Float64`/`Bool`/`String` — never a co
 makes `savename`, hashing, diffing, and bit-for-bit reproducibility (INFRA-04) fall out for
 free with ZERO `DrWatson.default_allowed` overloading: assert that invariant here rather
 than re-discovering it at a call site.
+
+NOTE (CR-01 fix — corrects a prior false claim): this does NOT imply two `Scenario`s
+differing only in a `Float64` field produce distinct default `savename`s — DrWatson's default
+`sigdigits = 3` float rounding can collapse sub-percent-different ADMM knobs (`ρ`/`ε_abs`/
+`ε_rel`/`τ_ratio`/`μ`) onto the identical string. Any code path that uses `savename(s, ...)` as
+an on-disk uniqueness key (`run_and_store`, `store.jl`) MUST use `digits = 10` (lossless) and
+`safe = true` (never silently overwrite on a residual collision).
 
 # Fields
 - `name::String` — human label; also a `savename` component.
