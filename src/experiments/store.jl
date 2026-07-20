@@ -62,11 +62,23 @@ Takes `dir` as an EXPLICIT keyword so tests can pass `mktempdir()` and stay herm
 (RESEARCH Pitfall 6) — never rely on `datadir()` resolving under the test environment.
 Returns the `ScenarioResult` (the same in-memory value `run_scenario` produced); the JLD2
 write is a side effect, never re-loaded by this function.
+
+NOTE (Rule 1 fix, 08-04): `@tagsave`'s `gitpath` keyword defaults to `DrWatson.projectdir()`,
+which resolves from the CURRENTLY ACTIVE project — under `Pkg.test()` that is a temporary
+sandbox directory Pkg generates for the test run, NOT this package's actual git checkout, so
+`gitdescribe` silently finds "not a Git repository" and `:gitcommit` is never stamped
+(discovered running this plan's own INFRA-04 provenance testitem through `Pkg.test()`).
+`gitpath` is pinned here to `pkgdir(@__MODULE__)` — the actual on-disk source directory of the
+`TSODSO` package (always the real git checkout, however the file is dev-installed/sandboxed)
+— so `:gitcommit` is stamped reliably both in a plain REPL/script run AND under `Pkg.test()`.
 """
 function run_and_store(s::Scenario; dir::AbstractString = datadir("sims"))
     res = run_scenario(s)
     dict = result_to_dict(res)
-    @tagsave(joinpath(dir, savename(s, "jld2")), dict; storepatch = true)
+    @tagsave(
+        joinpath(dir, savename(s, "jld2")), dict;
+        storepatch = true, gitpath = pkgdir(@__MODULE__),
+    )
     return res
 end
 
