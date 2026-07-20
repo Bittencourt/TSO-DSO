@@ -164,6 +164,47 @@ end
     end
 end
 
+# WR-05 fix: the same-seed/seed-sensitivity INFRA-04 gates above only ever exercised the
+# :centralized strategy; :admm is the iterative, floating-point-order-sensitive path
+# (adaptive-ρ residual comparisons, iteration-count-dependent convergence checks) and is
+# exactly where non-determinism is most likely to leak in. run.jl's own docstring asserts
+# bit-for-bit identity holds for :admm too, but nothing verified it. Mirror both gates here.
+@testitem "INFRA-04 same-seed repro admm" setup = [Phase8Fixtures] begin
+    using TSODSO
+
+    @test isdefined(TSODSO, :Scenario)
+    @test isdefined(TSODSO, :run_scenario)
+
+    if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
+        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        s = TSODSO.Scenario(; kw..., strategy = :admm)
+        r1 = TSODSO.run_scenario(s)
+        r2 = TSODSO.run_scenario(s)
+
+        @test r1.welfare == r2.welfare
+        @test r1.dadp == r2.dadp
+        @test r1.exact_maxgap == r2.exact_maxgap
+        @test r1.iters == r2.iters
+        @test r1.final_r == r2.final_r
+        @test r1.final_s == r2.final_s
+    end
+end
+
+@testitem "INFRA-04 seed sensitivity admm" setup = [Phase8Fixtures] begin
+    using TSODSO
+
+    @test isdefined(TSODSO, :Scenario)
+    @test isdefined(TSODSO, :run_scenario)
+
+    if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
+        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        r1 = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :admm, seed = 7))
+        r2 = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :admm, seed = 8))
+
+        @test r1.dadp != r2.dadp   # a DIFFERENT seed must change the profile-driven result
+    end
+end
+
 @testitem "INFRA-04 provenance tagsave" setup = [Phase8Fixtures] begin
     using TSODSO
     using DrWatson: wload, savename
