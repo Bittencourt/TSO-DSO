@@ -180,11 +180,21 @@ end
             f = joinpath(dir, savename(s, "jld2"))
             @test isfile(f)
 
+            # NOTE (Rule 1 fix, 08-04): `wload` on a `.jld2` always round-trips through
+            # JLD2's generic `FileIO.save`/`load`, which stores every dict key as a JLD2
+            # variable NAME (a `String`) regardless of the in-memory key type passed to
+            # `@tagsave` — verified live against DrWatson 2.19.1 / JLD2 0.6.5: a
+            # `Dict{Symbol,Any}` tagsaved and reloaded comes back `Dict{String,Any}` with
+            # string keys ("gitcommit", "julia_version", "seed"), never `Symbol` keys. The
+            # original `haskey(dict, :gitcommit)`-style (Symbol) assertions here could never
+            # pass against any real `wload` result. Assert String keys instead — the
+            # provenance intent (gitcommit + julia_version + seed survive the tagsave/wload
+            # round-trip) is unchanged.
             dict = wload(f)
-            @test haskey(dict, :gitcommit)
-            @test haskey(dict, :julia_version)
-            @test dict[:julia_version] == string(VERSION)
-            @test haskey(dict, :seed)
+            @test haskey(dict, "gitcommit")
+            @test haskey(dict, "julia_version")
+            @test dict["julia_version"] == string(VERSION)
+            @test haskey(dict, "seed")
         end
     end
 end
