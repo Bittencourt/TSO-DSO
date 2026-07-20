@@ -200,7 +200,12 @@ matching centralized.
   1. Every model has literate, reproducible documentation stating its math (equation references), assumptions, and validation, built via Documenter + Literate.
   2. Regression fixtures pin reference results (IEEE 13/123, FIT comparison) so numerical drift is caught automatically.
   3. The v1 acceptance gate passes end-to-end: IEEE 13-node congestion + IEEE 123-node voltage reproduced with exact relaxation, recovered DADP, and ADMM matching the centralized optimum.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 09-01-PLAN.md — LinDistFlow + Convex Branch-Flow/exactness literate pages (rungs 1-3)
+- [ ] 09-02-PLAN.md — Prosumer devices/GLB-CVX + DADP/DLMP decomposition literate pages (rungs 2a/4)
+- [ ] 09-03-PLAN.md — Consolidated SC3 acceptance gate (IEEE-13 + IEEE-123) + FIT regression golden
+- [ ] 09-04-PLAN.md — ADMM literate page (rung 5) + docs/make.jl full build wiring (checkdocs, deploydocs, CairoMakie)
+- [ ] 09-05-PLAN.md — Docs CI job + deploydocs repo-slug human-verify checkpoint
 
 ## Progress
 
