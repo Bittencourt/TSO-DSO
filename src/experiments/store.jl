@@ -25,6 +25,18 @@
 using DrWatson: @tagsave, datadir, savename, struct2dict
 
 """
+    scenario_filename(s::Scenario) -> String
+
+Single source of truth for the JLD2 filename [`run_and_store`](@ref) saves `s` under:
+`savename(s, "jld2"; digits = 10)` (CR-01 fix — see [`run_and_store`](@ref) for why
+`digits = 10` is required). Any caller that needs to know/print/reconstruct the path
+`run_and_store` will use (e.g. `scripts/run_scenario.jl`) MUST call this helper instead of
+re-deriving its own `savename(s, "jld2")` call — a second, independently-maintained call site
+is exactly how WR-06 (printed path silently diverging from the actual saved file) happened.
+"""
+scenario_filename(s::Scenario) = savename(s, "jld2"; digits = 10)
+
+"""
     result_to_dict(res::ScenarioResult) -> Dict{Symbol,Any}
 
 Build the Symbol-keyed provenance dict that [`run_and_store`](@ref) `@tagsave`s: EVERY
@@ -87,10 +99,10 @@ function run_and_store(s::Scenario; dir::AbstractString = datadir("sims"))
     res = run_scenario(s)
     dict = result_to_dict(res)
     @tagsave(
-        joinpath(dir, savename(s, "jld2"; digits = 10)), dict;
+        joinpath(dir, scenario_filename(s)), dict;
         storepatch = true, gitpath = pkgdir(@__MODULE__), safe = true,
     )
     return res
 end
 
-export run_and_store
+export run_and_store, scenario_filename
