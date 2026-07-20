@@ -61,7 +61,12 @@
     dlmp_c = reduce(vcat, (extract_dlmp(ctx; bus = b, T = 24)' for b in load_buses))
     @test admm.exact_maxgap < 1e-3                                # PF-04 exact on the ADMM-converged DSO-OPT
     @test isapprox(admm.welfare, res.cost; rtol = 1e-4)          # ADMM ≈ centralized welfare
-    @test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)     # recovered DADP match
+    # NOTE (09-REVIEW WR-01): `isapprox` on `AbstractArray` args is norm-based
+    # (`norm(x-y) <= max(atol, rtol*max(norm(x),norm(y)))`), NOT elementwise — this is an
+    # AGGREGATE bound over all (bus, hour) entries, not a per-entry `atol = 1e-2` guarantee.
+    # A single bus/hour DADP can differ by more than `atol` and this assertion still passes
+    # (observed: max |Δ| ≈ 0.0166 > atol = 1e-2 here, while the norm-based check still holds).
+    @test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)     # recovered DADP match (aggregate, not per-entry)
 
     # ── NON-FAILING thesis cross-check (never a hard failure — mirrors test_ieee13.jl).
     # A1: `v` is the SQUARED voltage ⇒ |V₉[16]| = sqrt(v[10,16]); node 9 → struct index 10.
@@ -106,5 +111,7 @@ end
     @test res.iters <= 100                                  # ~tens of iters (loose bound)
     @test isapprox(res.welfare, obj_c; rtol = 1e-4)         # welfare match (ADMM-04)
     @test res.exact_maxgap < 1e-3                           # PF-04 exact on the converged DSO-OPT
-    @test isapprox(res.λ, dlmp_c; atol = 1e-2, rtol = 1e-3) # DADP → centralized price (λ_j → DADP)
+    # NOTE (09-REVIEW WR-01): norm-based `isapprox` over the whole matrix, NOT a per-entry
+    # bound — see the IEEE-13 item above for the elementwise-vs-aggregate caveat.
+    @test isapprox(res.λ, dlmp_c; atol = 1e-2, rtol = 1e-3) # DADP → centralized price (λ_j → DADP), aggregate
 end
