@@ -69,7 +69,6 @@
 
 using TSODSO
 using TSODSO: Bus, Branch, Feeder
-using JuMP
 
 # ## Building a small radial feeder with two aggregators
 #
