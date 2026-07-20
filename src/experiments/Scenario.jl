@@ -156,6 +156,23 @@ Base.@kwdef struct Scenario
         if maxiter < 1
             throw(ArgumentError("Scenario: maxiter must be ≥ 1 (ADMM iteration cap); got maxiter=$maxiter"))
         end
+        # WR-01 fix: the ADMM float knobs were previously unvalidated, contradicting this same
+        # constructor's own "checked LOUDLY" claim — a non-positive ρ/ε_abs/ε_rel/τ_ratio/μ
+        # constructed silently and only failed (or silently misbehaved) much later, deep inside
+        # solve_admm.
+        if ρ <= 0
+            throw(ArgumentError("Scenario: ρ must be > 0 (ADMM penalty); got ρ=$ρ"))
+        end
+        if ε_abs <= 0 || ε_rel <= 0
+            throw(
+                ArgumentError(
+                    "Scenario: ε_abs/ε_rel must be > 0; got ε_abs=$ε_abs, ε_rel=$ε_rel",
+                ),
+            )
+        end
+        if τ_ratio <= 0 || μ <= 0
+            throw(ArgumentError("Scenario: τ_ratio/μ must be > 0; got τ_ratio=$τ_ratio, μ=$μ"))
+        end
         return new(
             name, feeder, strategy, seed, T, population, price, allow_export,
             ρ, ε_abs, ε_rel, maxiter, τ_ratio, μ,
