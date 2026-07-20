@@ -153,3 +153,33 @@ end
     # The solve is OPTIMAL and registered its nodal balance like a normal solve.
     @test haskey(res.ctx.constraints, :balance_p)
 end
+
+# ---------------------------------------------------------------------------------------------
+# EXP-04 regression golden: FIT-vs-DADP ratio on this file's OWN small `FitFixtures` scenario.
+#
+# DISTINCT from and ADDITIVE to `test/test_pricing_welfare.jl`'s `RATIO_GOLDEN` (which pins the
+# ratio on the larger IEEE-13 ground scenario) — this pins `fit_baseline`'s own self-contained
+# efficiency indicator `res.ratio = social_dadp / social_fit` (computed internally by
+# `fit_baseline`, per its docstring) on the small 3-bus fixture this file already owns, giving
+# EXP-04 a FIT-focused regression independent of the IEEE-13 fixture. `FIT_RATIO_GOLDEN` was
+# captured from the FIRST trusted solve on the fixed seed (20260718) — the same "first trusted
+# solve" convention every other golden in this codebase follows (cf. test/test_ieee13.jl's
+# header comment). Deterministic under the fixed seed (the "reproducible bit-for-bit" @testitem
+# above already proves this).
+# ---------------------------------------------------------------------------------------------
+@testitem "fit: FIT-vs-DADP ratio regression golden (EXP-04)" setup = [FitFixtures] tags = [
+    :fit,
+] begin
+    using TSODSO
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+    aggs = FitFixtures.aggregators(seed = 20260718)
+
+    res = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T)
+
+    # PRIMARY reproducibility anchor: the COMPUTED ratio pinned as a golden (tight rtol),
+    # captured from the first trusted solve on this fixture's fixed seed.
+    FIT_RATIO_GOLDEN = 0.6428101637491034
+    @test isapprox(res.ratio, FIT_RATIO_GOLDEN; rtol = 1e-4)
+end
