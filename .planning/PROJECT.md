@@ -23,31 +23,24 @@ correct, validated optimization models that are easy to extend for research.
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Convex operational model: branch-flow (DistFlow/SOCP) power flow with voltage & congestion limits,
+      LinDistFlow exactness constraints, validated exact on radial test feeders — v1.0
+- ✓ Prosumer device models (thermostatic, deferrable, interruptible, PV+battery — no binaries) with
+      concave quadratic utility/cost — v1.0
+- ✓ Aggregator aggregation of prosumer devices into nodal net power + utility — v1.0
+- ✓ Social-welfare maximization (`GLB-CVX`): Σ aggregator utility − wholesale purchase — v1.0
+- ✓ Two selectable solve strategies — centralized monolithic **and** ADMM (`AGR-OPT`/`DSO-OPT`, DADP as
+      duals, convergence diagnostics), cross-validated on IEEE 13 + 123 — v1.0
+- ✓ DADP/DLMP extraction + 4-way decomposition (energy/loss/congestion/voltage) — v1.0
+- ✓ Scenario & network data layer + IEEE 13/123 radial fixtures — v1.0
+- ✓ Abstraction ladder (toy DC → SOCP/multi-period/ADMM) with stable interfaces per rung — v1.0
+- ✓ Open-source solver integration behind `select_optimizer` (HiGHS/Ipopt/Clarabel; Gurobi/Mosek fallback) — v1.0
+- ✓ Rich per-model documentation (Documenter + Literate, math+assumptions+validation) + reproducible experiment scripts — v1.0
+- ✓ Extension seams (SEAM-01) for stochastic / MPC-RTP / meshed+4Q-BESS / Stackelberg-Nash — delivered as inert stubs — v1.0
 
 ### Active
 
-- [ ] Convex operational model: branch-flow (DistFlow/SOCP) distribution power flow with voltage &
-      congestion limits, LinDistFlow exactness constraints, validated exact on radial test feeders.
-- [ ] Prosumer device models: thermostatic, programmable/deferrable, interruptible flexible loads,
-      and PV+battery (BESS), with quadratic concave utility / cost preference functions.
-- [ ] Aggregator aggregation of prosumer devices into nodal net power + utility.
-- [ ] Social-welfare maximization (`GLB-OPT`/`GLB-CVX`): Σ aggregator utility − wholesale purchase.
-- [ ] Two selectable solve strategies for the operational problem: (a) monolithic centralized solve;
-      (b) ADMM decomposition (`AGR-OPT` per node + `DSO-OPT` per hour) recovering nodal prices (DADP)
-      as duals, with convergence diagnostics.
-- [ ] Distribution nodal price (DADP/DLMP) extraction and decomposition (energy/loss/congestion/volt).
-- [ ] Scenario & network data layer: define feeders, devices, price profiles; ship IEEE-style radial
-      test feeders as fixtures for validation.
-- [ ] Abstraction ladder: minimal toy models (small bus count, single period, DC/linear) up to full
-      AC-SOCP / multi-period / ADMM — same interfaces at each rung.
-- [ ] Open-source solver integration first: HiGHS (LP/MILP), Ipopt (NLP), a conic/SOCP solver
-      (Clarabel/SCS); Gurobi only as a commercial fallback behind a common interface.
-- [ ] Rich per-step documentation: every model's math, assumptions, and validation documented
-      alongside the code; reproducible experiment scripts.
-- [ ] Extension seams designed in from the start for: stochastic uncertainty (PV/demand), MPC /
-      rolling-horizon / real-time pricing, meshed networks + four-quadrant BESS, and TSO–DSO
-      Stackelberg–Nash planning coupling (Benders / diagonalization) with real-data flex valuation.
+(v2 milestone not yet scoped — see Current State "Next milestone" and `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -82,6 +75,30 @@ correct, validated optimization models that are easy to extend for research.
   don't reflect real costs, prosumer proliferation causing congestion & voltage issues, need for
   dynamic tariff signals coordinating many devices without compromising network security.
 
+## Current State
+
+**Shipped v1.0 "Operational Transactive-Energy Core" (2026-07-20)** — 9 phases, 43 plans, 83 tasks.
+
+The operational transactive-energy layer is complete and validated end-to-end:
+- **Solver abstraction** (`select_optimizer(::ProblemClass)`; Clarabel/HiGHS/Ipopt default, Gurobi/Mosek weakdep-gated), `assert_solved!` fail-loud status gate, `ModelContext` residual registry.
+- **Power flow** via one swappable residual seam: DC, LinDistFlow, and SOCP Convex Branch Flow with the LinDistFlow exactness copy — relaxation validated exact on radial fixtures.
+- **Prosumer device library** (thermostatic, deferrable, interruptible, PV+battery — no binaries) + aggregator roll-up + `GLB-CVX` social-welfare centralized solve + `operational_oracle(z)→(cost,π)`.
+- **Pricing**: DADP/DLMP as the dual of the nodal active-power balance, 4-way DLMP decomposition, welfare/surplus accounting + FIT baseline, economic-direction checks.
+- **ADMM** decomposition (AGR-OPT / DSO-OPT, adaptive ρ, primal+dual residual stop, build-once/re-solve) validated against the centralized optimum on IEEE 13 (congestion) + 123 (voltage).
+- **Reproducibility**: declarative `Scenario` + `run_scenario`/`run_sweep`, seeded/bit-for-bit, provenance-stamped storage (DrWatson).
+- **Docs & gate**: literate per-model math pages (Documenter + Literate, `@example`-executed), an end-to-end regression acceptance gate, and pinned regression fixtures.
+
+**Health:** 1946 tests pass / 0 fail / 2 documented-broken (thesis-figure cross-checks); docs build green.
+
+**Known deferred tech debt** (accepted; see `milestones/v1.0-MILESTONE-AUDIT.md`): thesis welfare-headline
+figure digitization (Phase 4/5), IEEE-123 exact App. E impedances (Phase 7), `sub_seed` cross-version
+hash stability (Phase 8), docstring `@docs` manual wiring + JuliaFormatter-on-`docs/` (Phase 9),
+`deploydocs` repo-slug placeholder.
+
+**Next milestone (v2 candidates):** the four declared research axes — stochastic optimization, MPC /
+real-time pricing, meshed networks + 4Q-BESS, and the Stackelberg-Nash TSO–DSO planning game (Benders +
+diagonalization). Each will need dedicated research and its own milestone.
+
 ## Constraints
 
 - **Tech stack**: Julia + JuMP for optimization modeling — the natural ecosystem for research-grade
@@ -101,12 +118,12 @@ correct, validated optimization models that are easy to extend for research.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| v1 targets the **operational layer** first (transactive pricing / dynamic pricing) | It is the validated core of the framework and the foundation the planning layer sits on | — Pending |
-| **Abstraction ladder** (toy → full AC/ADMM) rather than replicate-then-extend | Prioritizes clean, extensible architecture; validation grows with complexity | — Pending |
-| Support **both** centralized (monolithic) **and** ADMM decomposition, selectable per experiment | Centralized = clarity/small cases; ADMM = scale + matches thesis & yields prices as duals | — Pending |
-| Julia + **JuMP** with a **solver-abstraction** layer | Research-grade modeling, swappable open-source solvers, Gurobi only as fallback | — Pending |
-| Operational layer built as **convex SOCP + ADMM**, *not* MPEC | Matches the actual thesis math; MPEC/bilevel tooling is reserved for the planning layer | — Pending |
-| Design **extension seams** for stochastic / MPC-RTP / meshed+4Q-BESS / TSO-DSO Stackelberg-Nash | All four are declared PhD research directions; scaffolding must not preclude them | — Pending |
+| v1 targets the **operational layer** first (transactive pricing / dynamic pricing) | It is the validated core of the framework and the foundation the planning layer sits on | ✓ Good — v1.0 delivered the full operational layer, all 35 requirements verified |
+| **Abstraction ladder** (toy → full AC/ADMM) rather than replicate-then-extend | Prioritizes clean, extensible architecture; validation grows with complexity | ✓ Good — rungs 0–5 each shipped a runnable, validated end-to-end solve |
+| Support **both** centralized (monolithic) **and** ADMM decomposition, selectable per experiment | Centralized = clarity/small cases; ADMM = scale + matches thesis & yields prices as duals | ✓ Good — ADMM cross-validated against centralized on IEEE 13 + 123 (welfare rtol 1e-4) |
+| Julia + **JuMP** with a **solver-abstraction** layer | Research-grade modeling, swappable open-source solvers, Gurobi only as fallback | ✓ Good — `select_optimizer(::ProblemClass)` factory; no model names a solver; Gurobi/Mosek weakdep-gated |
+| Operational layer built as **convex SOCP + ADMM**, *not* MPEC | Matches the actual thesis math; MPEC/bilevel tooling is reserved for the planning layer | ✓ Good — SOCP Convex Branch Flow with validated exactness; DADP = dual of nodal balance |
+| Design **extension seams** for stochastic / MPC-RTP / meshed+4Q-BESS / TSO-DSO Stackelberg-Nash | All four are declared PhD research directions; scaffolding must not preclude them | ✓ Good — SEAM-01 stubs (multi-scenario hook, rolling-horizon param, meshed slot, coupling-flow z↔p_ag/λ_j↔π_s + leader/follower role) delivered inert in Phase 4 |
 
 ## Evolution
 
@@ -126,4 +143,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-18 after initialization*
+*Last updated: 2026-07-20 after v1.0 milestone*

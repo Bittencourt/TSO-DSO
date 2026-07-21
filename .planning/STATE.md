@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Milestone complete (Phase 09 was final phase)
-last_updated: 2026-07-20T23:31:28.054Z
-last_activity: 2026-07-20
+status: Awaiting next milestone
+stopped_at: Plan 09-05 complete — docs CI job wired (dedicated job, docs-env instantiate, single pinned Julia 1.11), deploydocs repo-slug checkpoint resolved (placeholder kept per researcher decision). Phase 09 closed — all 5 plans complete.
+last_updated: "2026-07-20T23:59:17.316Z"
+last_activity: 2026-07-20 — Milestone v1.0 completed and archived
 progress:
   total_phases: 9
   completed_phases: 9
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-18)
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-07-20
-
-Progress: [██████████] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-20 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -111,3 +109,7 @@ Items acknowledged and carried forward from previous milestone close:
 Last session: 2026-07-20T22:03:10.700Z
 Stopped at: Plan 09-05 complete — docs CI job wired (dedicated job, docs-env instantiate, single pinned Julia 1.11), deploydocs repo-slug checkpoint resolved (placeholder kept per researcher decision). Phase 09 closed — all 5 plans complete.
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
