@@ -65,12 +65,10 @@ makedocs(;
 # Deploy only from CI (never from a local/worktree checkout — Pitfall 5 / the same
 # `remotes = nothing` rationale above).
 #
-# TODO(deploydocs repo slug): the slug below is a PLACEHOLDER, kept intentionally
-# per researcher decision on plan 09-05's human-verify checkpoint (this checkout has
-# no git remote configured, so the real org/repo could not be discovered locally).
-# It is gated on `CI == "true"`, so it is inert until this workflow actually runs in
-# GitHub Actions. It MUST be replaced with the real `github.com/ORG/REPO` slug (and
-# DOCUMENTER_KEY/GITHUB_TOKEN wiring confirmed) before the first real gh-pages deploy.
+# Gated on `CI == "true"`, so it is inert locally and only runs in GitHub Actions.
+# For the first gh-pages deploy to succeed, wire a deploy credential in CI — either a
+# `DOCUMENTER_KEY` SSH deploy key (recommended) or `GITHUB_TOKEN` (needs Pages enabled
+# + workflow `permissions: contents: write`). `devbranch` matches the repo default branch.
 if get(ENV, "CI", nothing) == "true"
-    deploydocs(; repo = "github.com/PLACEHOLDER-ORG/PLACEHOLDER-REPO.git")
+    deploydocs(; repo = "github.com/Bittencourt/TSO-DSO.git", devbranch = "main")
 end
