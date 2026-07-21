@@ -23,3 +23,6 @@
 # Local scratch / editor
 *.swp
 .DS_Store
+
+# Third-party copyrighted reference material (thesis/paper/PSR PDFs) — kept local, not redistributed
+/docs/references/
