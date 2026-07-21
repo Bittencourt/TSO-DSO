@@ -88,3 +88,8 @@ jobs:
         run: julia --project=docs docs/make.jl
         env:
           CI: 'true'
+          # deploydocs() authenticates the gh-pages push with the SSH deploy key
+          # stored as the DOCUMENTER_KEY repo secret (public half = the read-write
+          # deploy key). GITHUB_TOKEN lets Documenter manage PR-preview deploys/cleanup.
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
