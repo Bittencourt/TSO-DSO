@@ -106,6 +106,7 @@ include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validatio
 # verbatim. NO Phase 4-9 source file is modified (D-03/D-11). Phase 10-02's
 # `planning/subproblem.jl` and Phase 13's `planning/coupling.jl` will join this directory.
 include("planning/retry.jl")        # solve_with_retry! wraps assert_solved! (plan 10-01, D-08/D-09)
+include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoint (plan 10-01, D-10)
 
 # --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
 # Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
