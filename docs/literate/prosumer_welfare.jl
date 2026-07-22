@@ -126,11 +126,11 @@ therm = Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)   # eq
 
 defer = Deferrable(2, 1, 4, 0.5, 0.3, 0.5)          # eqs 3.4-3.5, energy window over the full horizon
 
-batt = PVBattery(
-    2, 0.95, 1.0, 0.3, 0.0, 1.0, 0.5,               # bus, η, Δt, Pmax, Emin, Emax, soc0
-    1.0, 2.0, 3.0,                                   # STRICT λ_min < λ_med < λ_max (App. C)
-    profiles.pv,                                     # eqs 3.6-3.9
-)
+# Positional arguments (kept as a standalone label so it survives auto-formatting):
+#   bus, η, Δt, Pmax, Emin, Emax, soc0,   then   λ_min < λ_med < λ_max (STRICT, App. C),   then   pv
+# The three λ values must be strictly increasing (App. C guarantees no simultaneous
+# charge/discharge without binaries); `profiles.pv` supplies the eqs 3.6-3.9 PV cap.
+batt = PVBattery(2, 0.95, 1.0, 0.3, 0.0, 1.0, 0.5, 1.0, 2.0, 3.0, profiles.pv)
 
 agg = Aggregator(2, 0.9, [therm, defer, batt], profiles.demand)   # eqs 3.21-3.23
 
@@ -141,7 +141,8 @@ agg = Aggregator(2, 0.9, [therm, defer, batt], profiles.demand)   # eqs 3.21-3.2
 # hour can sell surplus to the MEM rather than dissipating it.
 
 λ₀ = fill(6.0, T)
-ctx, objective, dadp = solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
+ctx, objective, dadp =
+    solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
 
 # The optimal social welfare (summed device utility minus the priced frontier import):
 

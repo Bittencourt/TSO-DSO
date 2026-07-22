@@ -93,7 +93,12 @@ agg3 = Aggregator(3, 0.9, [batt3], fill(0.2, T))
 
 λ₀ = fill(40.0, T)
 ctx, objective, dadp = solve_welfare(
-    feeder, ConvexBranchFlow(), [agg2, agg3]; T = T, λ₀ = λ₀, allow_export = true,
+    feeder,
+    ConvexBranchFlow(),
+    [agg2, agg3];
+    T = T,
+    λ₀ = λ₀,
+    allow_export = true,
 )
 
 # ## Extracting the DADP and its four-way decomposition
@@ -108,7 +113,12 @@ dlmp = extract_dlmp(ctx)
 # the validation that no term was dropped or mis-signed:
 
 decomp = decompose_dlmp(ctx)
-(energy = sum(decomp.energy), loss = sum(decomp.loss), congestion = sum(decomp.congestion), voltage = sum(decomp.voltage))
+(
+    energy = sum(decomp.energy),
+    loss = sum(decomp.loss),
+    congestion = sum(decomp.congestion),
+    voltage = sum(decomp.voltage),
+)
 
 # ## Welfare accounting — the surplus split
 #

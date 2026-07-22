@@ -62,7 +62,10 @@ jobs:
           Pkg.add(PackageSpec(name = "JuliaFormatter", version = "2"))
           using JuliaFormatter
           # Uses the committed .JuliaFormatter.toml to freeze v2 style (Pitfall 4).
-          if !format(["src", "ext", "test"]; verbose = true)
+          # `docs` is now in scope (Phase-9 WR-04 follow-up): the literate pages are
+          # formatter-clean, with positional-arg label comments lifted to standalone
+          # lines so auto-formatting cannot detach them from the code they annotate.
+          if !format(["src", "ext", "test", "docs"]; verbose = true)
               @error "Some files were not formatted. Run JuliaFormatter.format(\".\") locally."
               exit(1)
           end

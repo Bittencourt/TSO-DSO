@@ -69,14 +69,8 @@ agg = Aggregator(2, 0.95, [device], [0.2])       # bus, φ, devices, Pdc
 # certificate. `allow_export = true` gives the feeder a priced export sink for
 # reverse-flow surplus — the exactness enabler for the over-voltage regime.
 
-ctx, objective, dadp = solve_welfare(
-    feeder,
-    ConvexBranchFlow(),
-    [agg];
-    T = 1,
-    λ₀ = [1.0],
-    allow_export = true,
-)
+ctx, objective, dadp =
+    solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = 1, λ₀ = [1.0], allow_export = true)
 
 # ## Validation
 #

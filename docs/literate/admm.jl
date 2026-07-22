@@ -77,11 +77,22 @@ agg3 = Aggregator(3, 0.9, [batt3], fill(0.2, T))
 # duals in either solve path.
 
 ctx_c, obj_c, dadp_c = solve_welfare(
-    feeder, ConvexBranchFlow(), [agg2, agg3]; T = T, λ₀ = λ₀, allow_export = true,
+    feeder,
+    ConvexBranchFlow(),
+    [agg2, agg3];
+    T = T,
+    λ₀ = λ₀,
+    allow_export = true,
 )
 
 admm = solve_admm(
-    feeder, ConvexBranchFlow(), [agg2, agg3]; T = T, λ₀ = λ₀, ρ = 5.0, allow_export = true,
+    feeder,
+    ConvexBranchFlow(),
+    [agg2, agg3];
+    T = T,
+    λ₀ = λ₀,
+    ρ = 5.0,
+    allow_export = true,
 )
 
 # ## Validation — ADMM ≈ centralized (ADMM-04)

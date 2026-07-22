@@ -18,11 +18,16 @@ const GENERATED_DIR = joinpath(@__DIR__, "src", "generated")
 # during `makedocs` (the non-deprecated replacement for the old `documenter = true`
 # kwarg — RESEARCH Pitfall 1; migrated here for the existing `toy_dc.jl` call too).
 for src in (
-    "toy_dc.jl", "lindistflow.jl", "convex_branch_flow.jl",
-    "prosumer_welfare.jl", "pricing_dlmp.jl", "admm.jl",
+    "toy_dc.jl",
+    "lindistflow.jl",
+    "convex_branch_flow.jl",
+    "prosumer_welfare.jl",
+    "pricing_dlmp.jl",
+    "admm.jl",
 )
     Literate.markdown(
-        joinpath(LITERATE_DIR, src), GENERATED_DIR;
+        joinpath(LITERATE_DIR, src),
+        GENERATED_DIR;
         flavor = Literate.DocumenterFlavor(),
     )
 end
@@ -31,7 +36,15 @@ makedocs(;
     sitename = "TSODSO",
     modules = [TSODSO],
     authors = "Pedro Bittencourt",
-    format = Documenter.HTML(; prettyurls = get(ENV, "CI", nothing) == "true"),
+    format = Documenter.HTML(;
+        prettyurls = get(ENV, "CI", nothing) == "true",
+        # The consolidated `api.md` (full @autodocs of the ~100-symbol public API on one
+        # page) exceeds Documenter's default 200 KiB per-page HTML size_threshold. Raise
+        # the hard limit (and the warn threshold) so the single API-reference page builds;
+        # all other pages are well under this.
+        size_threshold = 600 * 1024,
+        size_threshold_warn = 400 * 1024,
+    ),
     # No repo source links: the build must succeed in a bare/worktree checkout
     # where Documenter cannot infer a remote. Re-enable when deploying from CI.
     remotes = nothing,
@@ -45,21 +58,17 @@ makedocs(;
             "Rung 4: DADP/DLMP Pricing" => "generated/pricing_dlmp.md",
             "Rung 5: ADMM Decomposition" => "generated/admm.md",
         ],
+        "API Reference" => "api.md",
     ],
-    # Tightened from :none (Phase 1) to :exports (Phase 9 EXP-03): check undocumented
-    # PUBLIC-API (exported) symbols and broken `@ref`s, cross-version-safe on the 1.10
-    # LTS floor (RESEARCH Pitfall 4). NOTE: `:missing_docs` and `:cross_references` are
-    # BOTH in `warnonly` below, so this check is currently non-fatal — it SURFACES
-    # docstrings-not-in-manual and unresolved `@ref`s as build warnings but does NOT fail
-    # the build on them (locked CONTEXT.md decision: "keep `warnonly` for the remainder
-    # so the build stays green while surfacing missing docs"). Documenter currently reports
-    # ~104 exported-symbol docstrings that EXIST in `src/` but are not yet wired into the
-    # rendered manual via `@docs`/`@autodocs` blocks (NOT 104 undocumented symbols — the
-    # docstrings are written; they just aren't surfaced on a page). Adding those blocks and
-    # then dropping `:missing_docs`/`:cross_references` from `warnonly` (making this a true
-    # hard-fail gate) is the tracked follow-up, deferred, not done here.
+    # `checkdocs = :exports`: verify every EXPORTED public-API symbol has a docstring that
+    # is surfaced somewhere in the manual. The `api.md` page wires the full module docstring
+    # set in via `@autodocs` blocks, so exported docstrings now appear in the rendered docs.
+    # `:missing_docs` is NO LONGER in `warnonly` — an undocumented/unsurfaced EXPORTED symbol
+    # now FAILS the build (the tracked Phase-9 follow-up, completed here). `:cross_references`
+    # stays in `warnonly` (broken `@ref`s remain non-fatal, cross-version-safe on the 1.10 LTS
+    # floor per RESEARCH Pitfall 4) so an unrelated stray link doesn't break the docs deploy.
     checkdocs = :exports,
-    warnonly = [:missing_docs, :cross_references],
+    warnonly = [:cross_references],
 )
 
 # Deploy only from CI (never from a local/worktree checkout — Pitfall 5 / the same
