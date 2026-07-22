@@ -107,11 +107,24 @@ empirically and certified by a tiny BilevelJuMP MPEC cross-check — not left as
 
   5. The BilevelJuMP certification case is retained in the test suite as a permanent, fast
      regression (not a one-off validation run).
-**Plans**: TBD
+**Plans**: 3 plans
 **Research note**: HIGH — SUMMARY.md flags this phase for a focused research pass on BilevelJuMP's
 exact mode API surface (`BigMMode`/`StrongDualityMode` construction, Fortuny-Amat bound
 requirements) and the empirical leader/follower semantic resolution before coding the
 certification case. Consider `/gsd:plan-phase 11 --research-phase`.
+
+Plans:
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — FollowerLP (build_follower/solve_follower!, genuine HiGHS Farkas certificates) + BendersMaster (build_master, add_optimality_cut!/add_feasibility_cut!/solve_master!, bounded epigraphs, persistent cut rows), wave 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-02-PLAN.md — solve_stackelberg!: build-once Benders orchestration over PlanningOracle/FollowerLP/BendersMaster, UB/LB gap convergence, per-iteration checkpointing, fail-loud maxiter, wave 2, depends on 11-01
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 11-03-PLAN.md — BilevelJuMP certification: BigMMode + StrongDualityMode vs. hand enumeration vs. the production Benders answer, permanent [:planning] regression (PLAN-07/PVAL-01), wave 3, depends on 11-02
 
 ### Phase 12: Cut-Store & Benders Master Robustness Hardening
 
@@ -214,7 +227,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 8. Experiment Harness & Reproducibility | v1.0 | 4/4 | Complete | 2026-07-20 |
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
-| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 0/TBD | Not started | - |
+| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 0/3 | Planned | - |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/TBD | Not started | - |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
