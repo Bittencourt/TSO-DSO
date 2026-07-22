@@ -51,9 +51,10 @@ end
 """
     resume_from_checkpoint(dir::AbstractString = datadir("planning_checkpoints"))
 
-Return `nothing` if `dir` contains no `.jld2` checkpoint files, otherwise `wload` the
-HIGHEST-numbered file (lexicographic sort on the zero-padded `iter_NNNNN.jld2` name is
-numerically correct) and return `(; iteration, state)` — a `NamedTuple` built from the
+Return `nothing` if `dir` contains no CANONICAL `iter_NNNNN.jld2` checkpoint files,
+otherwise `wload` the HIGHEST-numbered one (lexicographic sort on the zero-padded
+`iter_NNNNN.jld2` name is numerically correct) and return `(; iteration, state)` — a
+`NamedTuple` built from the
 `wload`ed dict's STRING keys (`"iteration"`, `"state"`; the `wload`/JLD2 round-trip always
 returns `Dict{String,Any}`, never `Dict{Symbol,Any}`, regardless of the in-memory key type
 `@tagsave` originally received — verified in `test/test_experiments.jl`'s "INFRA-04
@@ -64,10 +65,27 @@ possibly-partial write from a crashed iteration — as the one the caller must r
 deliberately NO "skip if already the highest" shortcut: only strictly lower-numbered
 checkpoints are ever treated as complete/skippable, and that decision belongs to the
 (future) Benders-loop caller, not this primitive.
+
+The scan is RESTRICTED to canonical `iter_NNNNN.jld2` names (CR-02). `safe = true` in
+[`checkpoint_iteration!`](@ref) routes through DrWatson's `safesave`, which — on a
+re-save of the same iteration (the crash-redo workflow this primitive exists for) —
+renames the EXISTING file to `iter_NNNNN_#1.jld2` and writes the NEW data to the
+canonical name. Because `'_'` sorts after `'.'`, a naive all-`.jld2` sort put the STALE
+backup last and silently resumed the pre-redo state (with multiple redos, the OLDEST).
+Backups (`iter_NNNNN_#k.jld2`) and foreign `.jld2` files are therefore EXCLUDED: the
+canonical file always holds the freshest save for its iteration.
 """
 function resume_from_checkpoint(dir::AbstractString = datadir("planning_checkpoints"))
     isdir(dir) || return nothing
-    files = sort(filter(f -> endswith(f, ".jld2"), readdir(dir; join = true)))
+    # CR-02: canonical names ONLY — never DrWatson safesave backups (iter_NNNNN_#k.jld2,
+    # which hold STALE pre-redo state yet sort lexicographically AFTER the fresh canonical
+    # file), never foreign .jld2 files (which would raise KeyError("iteration")).
+    files = sort(
+        filter(
+            f -> occursin(r"^iter_\d{5}\.jld2$", basename(f)),
+            readdir(dir; join = true),
+        ),
+    )
     isempty(files) && return nothing
     dict = wload(files[end])
     return (; iteration = dict["iteration"], state = dict["state"])

@@ -40,3 +40,54 @@ end
         @test TSODSO.resume_from_checkpoint(dir) === nothing
     end
 end
+
+@testitem "planning checkpoint: re-saving the same iteration resumes the FRESH state, never the safesave backup (CR-02)" tags = [
+    :planning,
+] setup = [Phase8Fixtures] begin
+    using TSODSO
+
+    # The exact crash-redo workflow this primitive exists for: crash during iteration 2,
+    # resume, REDO iteration 2, checkpoint it again. `safe = true` routes through
+    # DrWatson's safesave: the FIRST save is renamed to iter_00002_#1.jld2 and the NEW
+    # state is written to the canonical iter_00002.jld2. Because '_' (0x5F) sorts after
+    # '.' (0x2E), a naive all-.jld2 lexicographic sort put the STALE backup last — the
+    # second resume then silently loaded the pre-redo state while reporting the correct
+    # iteration number.
+    Phase8Fixtures.with_tempdir() do dir
+        TSODSO.checkpoint_iteration!((; z = [1.0], cost = 1.0), 2; dir = dir)
+        TSODSO.checkpoint_iteration!((; z = [9.0], cost = 9.0), 2; dir = dir)
+
+        # safesave preserved the first save as a backup (T-10-02: never silently
+        # overwrite) ...
+        @test isfile(joinpath(dir, "iter_00002_#1.jld2"))
+
+        # ... but resume must return the SECOND (fresh) state from the canonical file.
+        resumed = TSODSO.resume_from_checkpoint(dir)
+        @test resumed.iteration == 2
+        @test resumed.state.z == [9.0]
+        @test resumed.state.cost == 9.0
+    end
+
+    # Three saves of the same iteration: _#2 (the OLDEST state) sorts after _#1 — the
+    # canonical file must still win.
+    Phase8Fixtures.with_tempdir() do dir
+        TSODSO.checkpoint_iteration!((; z = [1.0], cost = 1.0), 3; dir = dir)
+        TSODSO.checkpoint_iteration!((; z = [2.0], cost = 2.0), 3; dir = dir)
+        TSODSO.checkpoint_iteration!((; z = [3.0], cost = 3.0), 3; dir = dir)
+
+        resumed = TSODSO.resume_from_checkpoint(dir)
+        @test resumed.state.z == [3.0]
+        @test resumed.state.cost == 3.0
+    end
+
+    # A foreign .jld2 file that sorts last must be IGNORED (previously it was wloaded and
+    # raised KeyError("iteration") — an undiagnosable crash instead of a resume).
+    Phase8Fixtures.with_tempdir() do dir
+        TSODSO.checkpoint_iteration!((; z = [1.0], cost = 1.0), 1; dir = dir)
+        touch(joinpath(dir, "zzz_foreign.jld2"))
+
+        resumed = TSODSO.resume_from_checkpoint(dir)
+        @test resumed.iteration == 1
+        @test resumed.state.z == [1.0]
+    end
+end
