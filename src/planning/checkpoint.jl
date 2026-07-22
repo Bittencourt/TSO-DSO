@@ -28,6 +28,13 @@ written. The file is named `iter_NNNNN.jld2` (5-digit zero-padded, e.g. `iter_00
 so a lexicographic sort of filenames is also numerically correct
 ([`resume_from_checkpoint`](@ref) relies on this).
 
+`iter` MUST be in `0:99999` — the HARD limit of the 5-digit zero-padded filename
+contract — else `ArgumentError` is thrown (WR-03). A negative value would produce a
+malformed name (`lpad(-3, 5, '0')` pads the string `"-3"`), and a value > 99999 would
+produce `iter_100000.jld2`, which sorts lexicographically BEFORE `iter_99999.jld2` and
+would make [`resume_from_checkpoint`](@ref) silently resume from the wrong (lower)
+iteration.
+
 `dir` is an EXPLICIT keyword (default `datadir("planning_checkpoints")`) so tests pass
 `mktempdir()` and stay hermetic — mirrors `run_and_store`'s discipline.
 """
@@ -36,6 +43,14 @@ function checkpoint_iteration!(
     iter::Int;
     dir::AbstractString = datadir("planning_checkpoints"),
 )
+    # WR-03: enforce the 5-digit zero-padded filename contract. Outside 0:99999 the name
+    # is malformed (negative) or sorts lexicographically BEFORE lower iterations
+    # (> 99999), silently breaking resume_from_checkpoint's highest-numbered invariant.
+    0 <= iter <= 99999 || throw(
+        ArgumentError(
+            "iter must be in 0:99999 (5-digit zero-padded filename contract), got $iter",
+        ),
+    )
     mkpath(dir)
     path = joinpath(dir, "iter_$(lpad(iter, 5, '0')).jld2")
     @tagsave(
