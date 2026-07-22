@@ -28,7 +28,7 @@ documented, every layer swappable.
 - [ ] **PLAN-05**: A hand-rolled Benders master (continuous LP/QP) accumulates **both optimality and feasibility
       cuts** as persistent constraint rows (no per-iteration rebuild), with the strict `assert_solved!` gate on
       every cut-producing solve (never ADMM's mid-loop tolerance).
-- [ ] **PLAN-06**: A single-distributor Stackelberg equilibrium solves end-to-end via the Benders loop with
+- [x] **PLAN-06**: A single-distributor Stackelberg equilibrium solves end-to-end via the Benders loop with
       upper/lower-bound gap convergence detection.
 - [ ] **PLAN-07**: The leader/follower role assignment and coupling-dual sign convention are resolved empirically
       (against PLAN-VALID-01) and encoded as a tested invariant, not a code comment.
@@ -85,7 +85,7 @@ documented, every layer swappable.
 | PLAN-03 | Phase 10 | Complete |
 | PLAN-04 | Phase 11 | Pending |
 | PLAN-05 | Phase 11 | Pending |
-| PLAN-06 | Phase 11 | Pending |
+| PLAN-06 | Phase 11 | Complete |
 | PLAN-07 | Phase 11 | Pending |
 | NASH-01 | Phase 13 | Pending |
 | NASH-02 | Phase 13 | Pending |
