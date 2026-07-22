@@ -98,6 +98,13 @@ IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/2
 
 ## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
 
+**Progress:** Phase 10 complete (2026-07-22) — Oracle Coupling Wiring & Resilience. The planning
+layer's foundation is live: `build_planning_oracle`/`solve_planning_oracle!` (build-once,
+`Parameter`-pinned `p_import == z` coupling with per-scenario dual `π_s` via documented
+duration-weighted reconciliation), `solve_with_retry!` (bounded 4-rung Clarabel-conditioning
+ladder), and `checkpoint_iteration!`/`resume_from_checkpoint` (JLD2 + git provenance).
+2004 tests pass / 0 fail; phase code review clean after 8 fixes.
+
 **Goal:** Add the thesis's planning layer — a bilevel TSO–DSO investment equilibrium where
 distributor-leaders choose flexibility investment / import profiles against a transmission-reinforcement
 follower, reaching a Nash equilibrium across multiple distributors via Gauss-Seidel diagonalization.
@@ -158,4 +165,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-22 — v2.0 milestone started*
+*Last updated: 2026-07-22 — v2.0 Phase 10 complete*
