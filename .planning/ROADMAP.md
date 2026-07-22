@@ -227,7 +227,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 8. Experiment Harness & Reproducibility | v1.0 | 4/4 | Complete | 2026-07-20 |
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
-| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete   | 2026-07-22 |
+| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete    | 2026-07-22 |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/TBD | Not started | - |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |

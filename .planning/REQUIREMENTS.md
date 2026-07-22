@@ -23,9 +23,9 @@ documented, every layer swappable.
       interconnection dual `π_s` (time-aggregation + sign convention), validated against a hand-computed toy case.
 - [x] **PLAN-03**: Oracle solves inside the Benders loop are wrapped in bounded retry + checkpointing so the
       intermittent Clarabel `NUMERICAL_ERROR` (amplified by repeated re-solves) cannot silently corrupt or abort a run.
-- [ ] **PLAN-04**: A transmission-reinforcement follower LP `α(z)` exposes the coupling dual `π_s` and provides
+- [x] **PLAN-04**: A transmission-reinforcement follower LP `α(z)` exposes the coupling dual `π_s` and provides
       an infeasibility/Farkas certificate path for infeasible candidate `z`.
-- [ ] **PLAN-05**: A hand-rolled Benders master (continuous LP/QP) accumulates **both optimality and feasibility
+- [x] **PLAN-05**: A hand-rolled Benders master (continuous LP/QP) accumulates **both optimality and feasibility
       cuts** as persistent constraint rows (no per-iteration rebuild), with the strict `assert_solved!` gate on
       every cut-producing solve (never ADMM's mid-loop tolerance).
 - [x] **PLAN-06**: A single-distributor Stackelberg equilibrium solves end-to-end via the Benders loop with
@@ -83,8 +83,8 @@ documented, every layer swappable.
 | PLAN-01 | Phase 10 | Complete |
 | PLAN-02 | Phase 10 | Complete |
 | PLAN-03 | Phase 10 | Complete |
-| PLAN-04 | Phase 11 | Pending |
-| PLAN-05 | Phase 11 | Pending |
+| PLAN-04 | Phase 11 | Complete |
+| PLAN-05 | Phase 11 | Complete |
 | PLAN-06 | Phase 11 | Complete |
 | PLAN-07 | Phase 11 | Complete |
 | NASH-01 | Phase 13 | Pending |

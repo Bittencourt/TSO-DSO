@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
-status: executing
-stopped_at: Phase 10 context gathered
-last_updated: "2026-07-22T20:20:59.567Z"
+status: ready_to_plan
+stopped_at: Phase 11 complete (3/3) — ready to discuss Phase 12
+last_updated: 2026-07-22T23:39:32.525Z
 last_activity: 2026-07-22 -- Phase 11 execution started
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 5
   percent: 20
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 11 — Single-Distributor Stackelberg-Benders (Certified)
+**Current focus:** Phase 12 — cut store & benders master robustness hardening
 
 ## Current Position
 
-Phase: 11 (Single-Distributor Stackelberg-Benders (Certified)) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 11
-Last activity: 2026-07-22 -- Phase 11 execution started
+Phase: 12
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-22
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 45 (v1.0 total; 0 in v2.0)
+- Total plans completed: 48 (v1.0 total; 0 in v2.0)
 - Average duration: —
 - Total execution time: 0 hours (v2.0)
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | 09 | 5 | - | - |
 | 10-14 (v2.0) | TBD | - | - |
 | 10 | 2 | - | - |
+| 11 | 3 | - | - |
 
 **Recent Trend:**
 
