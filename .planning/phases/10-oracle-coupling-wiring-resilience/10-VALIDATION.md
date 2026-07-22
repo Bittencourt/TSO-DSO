@@ -1,8 +1,8 @@
 ---
 phase: 10
 slug: oracle-coupling-wiring-resilience
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-22
 ---
@@ -19,7 +19,7 @@ created: 2026-07-22
 |----------|-------|
 | **Framework** | Julia `Test` stdlib + TestItems/TestItemRunner (per project stack) |
 | **Config file** | `test/runtests.jl` (existing) |
-| **Quick run command** | `julia --project=. -e 'using TestItemRunner; @run_package_tests filter=ti->occursin("planning", ti.name)'` |
+| **Quick run command** | `julia --project=. test/test_planning_oracle.jl` (single-file, planning-scoped) |
 | **Full suite command** | `julia --project=. -e 'using Pkg; Pkg.test()'` |
 | **Estimated runtime** | ~60–180 seconds (solver-backed SOCP solves dominate) |
 
@@ -40,9 +40,10 @@ created: 2026-07-22
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 10-01-* | 01 | 1 | PLAN-01 | — | N/A | unit/integration | `julia --project=. test/planning/test_planning_oracle.jl` | ❌ W0 | ⬜ pending |
-| 10-02-* | 02 | 2 | PLAN-02 | — | N/A | unit (toy-case invariant) | `julia --project=. test/planning/test_dual_reconciliation.jl` | ❌ W0 | ⬜ pending |
-| 10-03-* | 03 | 2 | PLAN-03 | — | N/A | unit (injected NUMERICAL_ERROR) | `julia --project=. test/planning/test_oracle_resilience.jl` | ❌ W0 | ⬜ pending |
+| 10-02-01 | 02 | 2 | PLAN-01 | — | N/A | unit/integration | `julia --project=. test/test_planning_oracle.jl` | ❌ W0 | ⬜ pending |
+| 10-02-02 | 02 | 2 | PLAN-02 | — | N/A | unit (toy-case sign invariant) | `julia --project=. test/test_planning_oracle.jl` | ❌ W0 | ⬜ pending |
+| 10-01-01 | 01 | 1 | PLAN-03 | — | N/A | unit (injected NUMERICAL_ERROR) | `julia --project=. test/test_planning_retry.jl` | ❌ W0 | ⬜ pending |
+| 10-01-02 | 01 | 1 | PLAN-03 | — | N/A | unit (checkpoint round-trip) | `julia --project=. test/test_planning_checkpoint.jl` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,10 +51,10 @@ created: 2026-07-22
 
 ## Wave 0 Requirements
 
-- [ ] `test/planning/test_planning_oracle.jl` — build-once oracle solve, pinned `p_import[t]==z[t]`, `dual.(pin)` returned (PLAN-01)
-- [ ] `test/planning/test_dual_reconciliation.jl` — hand-computed toy case pinning the `π[t]` sign invariant + duration-weighted `π_s` (PLAN-02)
-- [ ] `test/planning/test_oracle_resilience.jl` — injected/observed `NUMERICAL_ERROR` survives bounded retry; budget exhaustion raises loudly (PLAN-03)
-- [ ] `test/planning/` directory + inclusion in `test/runtests.jl`
+- [ ] `test/test_planning_oracle.jl` — build-once oracle solve, pinned `p_import[t]==z[t]`, `dual.(pin)` returned, `π`/`π_s` reconciliation + toy-case sign invariant (PLAN-01, PLAN-02)
+- [ ] `test/test_planning_retry.jl` — injected/observed `NUMERICAL_ERROR` survives bounded retry; budget exhaustion raises loudly (PLAN-03)
+- [ ] `test/test_planning_checkpoint.jl` — DrWatson `@tagsave` per-iteration checkpoint round-trip (PLAN-03)
+- [ ] New test files included in `test/runtests.jl`
 
 *Existing IEEE-13 fixtures and solver factory cover the model-build infrastructure; only planning-layer test files are new.*
 
@@ -71,11 +72,11 @@ created: 2026-07-22
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 180s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 180s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-22
