@@ -204,4 +204,60 @@ function build_planning_oracle(
     )
 end
 
-export PlanningOracle, build_planning_oracle
+"""
+    solve_planning_oracle!(o::PlanningOracle, z_trial::AbstractVector{<:Real};
+                          max_attempts::Int = 4, Δt::Real = 1.0)
+        -> (; cost, π, π_s, dadp, ctx)
+
+Re-solve the built-ONCE [`PlanningOracle`](@ref) `o` at the coupling-flow trial
+`z_trial` (D-01/D-11: `set_parameter_value.` only, NEVER a rebuild) via
+[`solve_with_retry!`](@ref) (plan 10-01, D-08) — the SOLE entry point; this function
+NEVER calls `assert_solved!` directly.
+
+Returns a `NamedTuple`:
+
+  - `cost` — the welfare optimum at this trial (`objective_value(o.model)`);
+  - `π`    — the length-T dual of the pin `p_import[t] == z[t]` (`dual.(o.pin)`), the
+    EXACT Benders-cut gradient (D-05); its raw-dual sign convention is pinned by a
+    hand-derived toy-case monotonicity invariant (D-06; 10-RESEARCH.md Pitfall 1), not
+    an assumed docstring formula: `π` is monotonically NON-DECREASING in `z_trial`,
+    crossing zero at the network's own unconstrained free-import optimum;
+  - `π_s`  — the DURATION-WEIGHTED reconciliation `Σ_t Δt·π[t]` (D-07, default
+    `Δt = 1.0`, matching the framework's hourly rate today and correct-by-construction
+    for a future non-uniform `Δt`). REPORTING-ONLY (D-04): never fed back into the
+    optimization, computed purely for interpretation;
+  - `dadp` — the distribution price at the first aggregator's bus
+    (`dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])`), mirroring
+    `solve_welfare`'s `priced = aggregators[1].bus` convention;
+  - `ctx`  — the solved [`ModelContext`](@ref), so a caller can read any other dual.
+
+Throws `ArgumentError` when `length(z_trial) != o.T` (T-10-06: a shape mismatch must
+fail loudly before `set_parameter_value.` — never silently truncate/pad the trial).
+"""
+function solve_planning_oracle!(
+    o::PlanningOracle,
+    z_trial::AbstractVector{<:Real};
+    max_attempts::Int = 4,
+    Δt::Real = 1.0,
+)
+    length(z_trial) == o.T || throw(
+        ArgumentError(
+            "z_trial has length $(length(z_trial)), expected T=$(o.T)",
+        ),
+    )
+
+    set_parameter_value.(o.z, z_trial)   # D-01/D-11: mutate the Parameter, no rebuild
+
+    # D-08: solve_with_retry! is the SOLE entry point — never assert_solved! directly.
+    # Its STRICT gate (dual = true) ensures π is read only after a trusted solve (T-10-05).
+    solve_with_retry!(o.model; max_attempts = max_attempts, dual = true)
+
+    π = dual.(o.pin)                                    # length-T pin dual (D-01/D-05)
+    π_s = sum(Δt * π[t] for t in 1:o.T)                 # D-07 duration-weighted, reporting-only (D-04)
+    dadp = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])
+    cost = objective_value(o.model)
+
+    return (; cost, π, π_s, dadp, ctx = o.ctx)
+end
+
+export PlanningOracle, build_planning_oracle, solve_planning_oracle!
