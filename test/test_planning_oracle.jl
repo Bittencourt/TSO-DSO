@@ -263,3 +263,54 @@ end
     @test num_variables(o.model) == nv0
     @test num_constraints(o.model; count_variable_in_set_constraints = true) == nc0
 end
+
+@testitem "planning oracle: ConvexBranchFlow solve runs the PF-04 exactness gate and stashes socp_maxgap (CR-03)" tags =
+    [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO
+    using JuMP: value
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    T = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+
+    # FEASIBLE z_trial (see file-header note), derived under the SAME formulation the
+    # oracle is built on: the network's own unconstrained free-import optimum via the
+    # UNMODIFIED free path. `allow_export = true` mirrors the ADMM 2-bus cross-validation
+    # item — the free-sign frontier is the exact shape build_planning_oracle builds, and
+    # the priced frontier is the SOC-exactness enabler that keeps the FREE solve exact
+    # (PF-04), so its optimum is a known-exact pin point.
+    free = operational_oracle(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = T,
+        z = nothing,
+        allow_export = true,
+    )
+    zstar = value.(free.ctx.meta[:p_import])
+
+    o = build_planning_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+
+    # The SOCP arm of the CR-03 gate is ARMED on this oracle: ConvexBranchFlow stashed the
+    # squared-current `:l` under `ctx.meta[:pf_vars]` (the exact haskey chain
+    # solve_planning_oracle! branches on), and no exactness certificate exists yet.
+    @test haskey(o.ctx.meta, :pf_vars)
+    @test haskey(o.ctx.meta[:pf_vars], :l)
+    @test !haskey(o.ctx.meta, :socp_maxgap)
+
+    res = solve_planning_oracle!(o, zstar)
+
+    # The gate RAN (assert_socp_exact! stashed its maxgap certificate — this key is
+    # written NOWHERE else on the oracle path) and PASSED (pinning z at the free optimum
+    # reproduces the exact free solution, so the cone stays tight and π is returned
+    # rather than refused). Mirrors test_exactness.jl's exact-point maxgap bound.
+    @test haskey(res.ctx.meta, :socp_maxgap)
+    @test res.ctx.meta[:socp_maxgap] isa Float64
+    @test res.ctx.meta[:socp_maxgap] < 1e-5
+    @test length(res.π) == T
+    @test all(isfinite, res.π)
+    @test length(res.dadp) == T
+    @test all(isfinite, res.dadp)
+end
