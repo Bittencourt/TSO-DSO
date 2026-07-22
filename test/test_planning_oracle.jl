@@ -74,3 +74,106 @@ end
     @test num_variables(o.model) == nv0
     @test num_constraints(o.model; count_variable_in_set_constraints = true) == nc0
 end
+
+@testitem "planning oracle: solve_planning_oracle! returns (cost, π, π_s, dadp, ctx) NamedTuple shape" tags =
+    [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    T = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+
+    o = build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)
+    res = solve_planning_oracle!(o, zeros(T))
+
+    @test res isa NamedTuple
+    @test keys(res) == (:cost, :π, :π_s, :dadp, :ctx)
+    @test length(res.π) == T
+    @test all(isfinite, res.π)
+    @test res.π_s ≈ sum(res.π)
+    @test length(res.dadp) == T
+    @test all(isfinite, res.dadp)
+end
+
+@testitem "planning oracle: dual-sign toy-case regression — π monotonically non-decreasing in z, zero at the unconstrained optimum (D-06)" tags =
+    [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO
+    using JuMP: value
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    T = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+
+    # The network's OWN unconstrained free-import optimum, via the UNMODIFIED free path
+    # (z = nothing, allow_export = true — the same free-sign frontier shape
+    # build_planning_oracle builds). This is the toy-case anchor, NOT an assumed docstring
+    # formula (10-RESEARCH.md Pitfall 1).
+    free = operational_oracle(
+        feeder,
+        LinDistFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = T,
+        z = nothing,
+        allow_export = true,
+    )
+    zstar = value.(free.ctx.meta[:p_import])
+
+    o = build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)
+
+    res_star = solve_planning_oracle!(o, zstar)
+    @test all(abs.(res_star.π) .< 1e-4)
+
+    res_minus = solve_planning_oracle!(o, zstar .- 0.01)
+    @test all(res_minus.π .<= 1e-6)
+
+    res_plus = solve_planning_oracle!(o, zstar .+ 0.01)
+    @test all(res_plus.π .>= -1e-6)
+
+    # Elementwise monotonicity: π(z) is NON-DECREASING in z (the empirically-verified
+    # negated-Max-dual convention, D-06) — this operationalizes 10-RESEARCH.md Pitfall 1 on
+    # the REAL 2-bus fixture, not an assumed docstring formula.
+    @test all(res_plus.π .>= res_star.π .- 1e-6) && all(res_star.π .>= res_minus.π .- 1e-6)
+end
+
+@testitem "planning oracle: free-path parity — operational_oracle's z !== nothing guard is untouched (D-03)" tags =
+    [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    T = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+
+    @test_throws ArgumentError operational_oracle(
+        feeder,
+        LinDistFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = T,
+        z = fill(0.05, T),
+    )
+end
+
+@testitem "planning oracle: solve_planning_oracle! re-solve is build-once (num_variables/num_constraints invariant)" tags =
+    [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO
+    using JuMP: num_variables, num_constraints
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    T = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+
+    o = build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)
+    nv0 = num_variables(o.model)
+    nc0 = num_constraints(o.model; count_variable_in_set_constraints = true)
+
+    solve_planning_oracle!(o, fill(0.01, T))
+    solve_planning_oracle!(o, fill(-0.02, T))
+
+    @test num_variables(o.model) == nv0
+    @test num_constraints(o.model; count_variable_in_set_constraints = true) == nc0
+end
