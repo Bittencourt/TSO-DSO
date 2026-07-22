@@ -21,7 +21,7 @@ documented, every layer swappable.
       superseding the current `ArgumentError` SEAM-01 stub; `operational_oracle`/`solve_welfare` are unmodified.
 - [x] **PLAN-02**: Coupling-dual reconciliation maps the hourly distribution dual `λ_j` to the per-scenario
       interconnection dual `π_s` (time-aggregation + sign convention), validated against a hand-computed toy case.
-- [ ] **PLAN-03**: Oracle solves inside the Benders loop are wrapped in bounded retry + checkpointing so the
+- [x] **PLAN-03**: Oracle solves inside the Benders loop are wrapped in bounded retry + checkpointing so the
       intermittent Clarabel `NUMERICAL_ERROR` (amplified by repeated re-solves) cannot silently corrupt or abort a run.
 - [ ] **PLAN-04**: A transmission-reinforcement follower LP `α(z)` exposes the coupling dual `π_s` and provides
       an infeasibility/Farkas certificate path for infeasible candidate `z`.
@@ -82,7 +82,7 @@ documented, every layer swappable.
 |-------------|-------|--------|
 | PLAN-01 | Phase 10 | Complete |
 | PLAN-02 | Phase 10 | Complete |
-| PLAN-03 | Phase 10 | Pending |
+| PLAN-03 | Phase 10 | Complete |
 | PLAN-04 | Phase 11 | Pending |
 | PLAN-05 | Phase 11 | Pending |
 | PLAN-06 | Phase 11 | Pending |

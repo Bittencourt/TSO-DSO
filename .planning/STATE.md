@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
-status: executing
-stopped_at: Phase 10 context gathered
-last_updated: "2026-07-22T15:41:54.677Z"
+status: ready_to_plan
+stopped_at: Phase 10 complete (2/2) — ready to discuss Phase 11
+last_updated: 2026-07-22T19:17:11.158Z
 last_activity: 2026-07-22 -- Phase 10 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 10 — Oracle Coupling Wiring & Resilience
+**Current focus:** Phase 11 — single distributor stackelberg benders (certified)
 
 ## Current Position
 
-Phase: 10 (Oracle Coupling Wiring & Resilience) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 10
-Last activity: 2026-07-22 -- Phase 10 execution started
+Phase: 11
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-22
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 43 (v1.0 total; 0 in v2.0)
+- Total plans completed: 45 (v1.0 total; 0 in v2.0)
 - Average duration: —
 - Total execution time: 0 hours (v2.0)
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 |-------|-------|-------|----------|
 | 09 | 5 | - | - |
 | 10-14 (v2.0) | TBD | - | - |
+| 10 | 2 | - | - |
 
 **Recent Trend:**
 
