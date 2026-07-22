@@ -166,3 +166,62 @@ end
     r_bigm = BilevelCertFixture.build_toy_bilevel_bigm()
     @test termination_status(r_bigm.model) == MOI.OTHER_ERROR
 end
+
+@testitem "planning certification: solve_stackelberg! (Benders) agrees with the certified BilevelJuMP answer and hand enumeration — PVAL-01 permanent invariant" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, BilevelCertFixture] begin
+    using TSODSO, BilevelJuMP, JuMP
+
+    # THE SAME toy instance as 11-02-PLAN.md's own convergence test
+    # (test_planning_benders.jl) and as BilevelCertFixture's BilevelJuMP model.
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    λ₀ = [4.0]
+    follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
+
+    result = mktempdir() do dir
+        solve_stackelberg!(
+            feeder,
+            LinDistFlow(),
+            [agg];
+            λ₀ = λ₀,
+            T = 1,
+            follower_kwargs = follower_kwargs,
+            master_kwargs = master_kwargs,
+            tol = 1e-6,
+            max_iter = 100,
+            checkpoint_dir = dir,
+        )
+    end
+
+    @test result.gap <= 1e-6
+
+    # Cross-check against BOTH independent, successfully-solving BilevelJuMP
+    # reformulations built on the IDENTICAL toy instance (StrongDualityMode +
+    # ProductMode — see BilevelCertFixture / this file's header DEVIATION note
+    # for why BigMMode+HiGHS is excluded from this comparison).
+    r_sd = BilevelCertFixture.build_toy_bilevel(BilevelJuMP.StrongDualityMode())
+    r_prod = BilevelCertFixture.build_toy_bilevel(BilevelJuMP.ProductMode(1e-9))
+
+    @test isapprox(result.y, value(r_sd.y_inv); atol = 1e-3)
+    @test isapprox(result.z[1], value(r_sd.z); atol = 1e-3)
+    @test isapprox(result.y, value(r_prod.y_inv); atol = 1e-3)
+    @test isapprox(result.z[1], value(r_prod.z); atol = 1e-3)
+
+    # Total leader cost: `result.UB` at convergence IS
+    # `master.c_y * y + follower_cost - oracle_cost` (benders.jl's own UB
+    # formula, re-derived nowhere else here — reused directly since gap<=tol
+    # certifies UB≈LB≈the converged total). Compared against BOTH BilevelJuMP
+    # reformulations' `objective_value` AND the hand-enumerated total.
+    @test isapprox(result.UB, objective_value(r_sd.model); atol = 1e-3)
+    @test isapprox(result.UB, objective_value(r_prod.model); atol = 1e-3)
+    @test isapprox(result.UB, BilevelCertFixture.OBJ_HAND; atol = 1e-3)
+
+    # PVAL-01 — retained forever, never a one-off validation script: the
+    # leader/follower role assignment and coupling-dual sign convention
+    # (plans 11-01/11-02, consumed as-is here) are certified against the
+    # independent BilevelJuMP MPEC reduction. NO SIGN FLIP was required — all
+    # three answers (StrongDualityMode, ProductMode, Benders) agree with the
+    # hand-enumerated optimum without any change to follower.jl/benders.jl.
+end
