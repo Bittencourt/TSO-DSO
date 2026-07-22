@@ -134,10 +134,12 @@ for the oracle's own `cost_k = -oracle_res.cost`, `grad_k = oracle_res.π` sign
 convention documented in this plan's `<sign_convention>` block; the follower's
 `cost_k = follower_res.cost`, `grad_k = follower_res.π_s` is used as-is).
 
-Throws `ArgumentError` if `epigraph` is anything other than `:op`/`:x`, or if
-`length(grad_k) != master.T` or `length(z_k) != master.T` — a malformed cut
+Throws `ArgumentError` if `epigraph` is anything other than `:op`/`:x`, if
+`length(grad_k) != master.T` or `length(z_k) != master.T`, or if `cost_k`,
+any `grad_k[t]`, or any `z_k[t]` is non-finite (NaN/Inf) — a malformed cut
 triple must fail loudly BEFORE corrupting the master's persistent constraint
-set (T-11-03).
+set (T-11-03/WR-03: a NaN/Inf row appended to the build-once model is
+unremovable and silently poisons every later solve).
 
 Logs `(; kind = :optimality, epigraph, cost_k, grad_k, z_k)` to `master.cuts` and
 returns `master`.
@@ -156,6 +158,15 @@ function add_optimality_cut!(
         throw(ArgumentError("grad_k has length $(length(grad_k)), expected T=$(master.T)"))
     length(z_k) == master.T ||
         throw(ArgumentError("z_k has length $(length(z_k)), expected T=$(master.T)"))
+    # WR-03: finiteness guard — a NaN/Inf cut row would permanently poison the
+    # build-once master (rows are never removed); fail loudly BEFORE @constraint.
+    isfinite(cost_k) ||
+        throw(ArgumentError("add_optimality_cut!: cost_k must be finite, got $cost_k"))
+    all(isfinite, grad_k) || throw(
+        ArgumentError("add_optimality_cut!: grad_k contains a non-finite entry: $grad_k"),
+    )
+    all(isfinite, z_k) ||
+        throw(ArgumentError("add_optimality_cut!: z_k contains a non-finite entry: $z_k"))
 
     α = epigraph === :op ? master.α_op : master.α_x
     @constraint(
@@ -188,8 +199,9 @@ rebuild — from the follower's own genuine HiGHS Farkas certificate
 v_k + Σ_t u_k[t] * (z[t] - z_k[t]) <= 0
 ```
 
-Throws `ArgumentError` if `length(u_k) != master.T` or `length(z_k) != master.T`
-(T-11-03).
+Throws `ArgumentError` if `length(u_k) != master.T` or `length(z_k) != master.T`,
+or if `v_k`, any `u_k[t]`, or any `z_k[t]` is non-finite (NaN/Inf)
+(T-11-03/WR-03).
 
 Logs `(; kind = :feasibility, v_k, u_k, z_k)` to `master.cuts` and returns
 `master`.
@@ -204,6 +216,14 @@ function add_feasibility_cut!(
         throw(ArgumentError("u_k has length $(length(u_k)), expected T=$(master.T)"))
     length(z_k) == master.T ||
         throw(ArgumentError("z_k has length $(length(z_k)), expected T=$(master.T)"))
+    # WR-03: finiteness guard — mirror add_optimality_cut!'s own discipline; a
+    # NaN/Inf feasibility row is just as unremovable and just as poisonous.
+    isfinite(v_k) ||
+        throw(ArgumentError("add_feasibility_cut!: v_k must be finite, got $v_k"))
+    all(isfinite, u_k) ||
+        throw(ArgumentError("add_feasibility_cut!: u_k contains a non-finite entry: $u_k"))
+    all(isfinite, z_k) ||
+        throw(ArgumentError("add_feasibility_cut!: z_k contains a non-finite entry: $z_k"))
 
     @constraint(
         master.model,

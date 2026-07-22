@@ -150,7 +150,9 @@ Two mutually exclusive, exhaustively-checked branches:
     GENUINE HiGHS Farkas/dual ray, never a penalized-slack heuristic): returns
     `(; feasible = false, v, u)` where `v = dual_objective_value(f.model)` and
     `u = dual.(f.coupling)` (the certificate vector, restricted to the coupling
-    rows) — both `isfinite`.
+    rows) — both `isfinite`, ENFORCED in production (WR-03): a non-finite
+    certificate raises loudly here instead of poisoning the master's
+    persistent cut set downstream.
 
 Any OTHER outcome (neither a trusted solve nor a genuine certificate) raises
 loudly, naming `termination_status`/`dual_status` — this function refuses to
@@ -177,11 +179,17 @@ function solve_follower!(f::FollowerLP, z_trial::AbstractVector{<:Real})
     elseif dual_status(f.model) == MOI.INFEASIBILITY_CERTIFICATE
         # GENUINE HiGHS Farkas/dual ray — never a penalized-slack "always feasible"
         # shortcut (PLAN-04 success criterion 1, T-11-01).
-        return (;
-            feasible = false,
-            v = dual_objective_value(f.model),
-            u = dual.(f.coupling),
+        v = dual_objective_value(f.model)
+        u = dual.(f.coupling)
+        # WR-03: ENFORCE the documented "both isfinite" certificate guarantee here,
+        # in production — the Benders loop feeds (v, u) straight into
+        # add_feasibility_cut!, and a NaN/Inf certificate would otherwise only be
+        # caught by the master's own guard with a less diagnosable error.
+        isfinite(v) && all(isfinite, u) || error(
+            "solve_follower!: HiGHS returned a non-finite Farkas certificate " *
+            "(v=$v, u=$u) — refusing to emit a feasibility cut from it",
         )
+        return (; feasible = false, v, u)
     else
         error(
             """

@@ -106,6 +106,26 @@ end
     @test_throws ArgumentError add_feasibility_cut!(master, 3.0, [1.0], [1.0, 1.0])
 end
 
+@testitem "planning master: finiteness guards — NaN/Inf cut inputs are rejected loudly BEFORE touching the model (WR-03)" tags =
+    [:planning] begin
+    using TSODSO
+    using JuMP: num_constraints
+
+    master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
+    nc0 = num_constraints(master.model; count_variable_in_set_constraints = true)
+
+    @test_throws ArgumentError add_optimality_cut!(master, :op, NaN, [2.0], [1.0])
+    @test_throws ArgumentError add_optimality_cut!(master, :op, 5.0, [Inf], [1.0])
+    @test_throws ArgumentError add_optimality_cut!(master, :op, 5.0, [2.0], [NaN])
+    @test_throws ArgumentError add_feasibility_cut!(master, Inf, [1.0], [1.0])
+    @test_throws ArgumentError add_feasibility_cut!(master, 3.0, [NaN], [1.0])
+    @test_throws ArgumentError add_feasibility_cut!(master, 3.0, [1.0], [-Inf])
+
+    # The persistent master must be UNTOUCHED — no row appended, no cut logged.
+    @test num_constraints(master.model; count_variable_in_set_constraints = true) == nc0
+    @test isempty(master.cuts)
+end
+
 @testitem "planning master: cut-validity structural check — the solved point never violates a known cut" tags =
     [:planning] begin
     using TSODSO
