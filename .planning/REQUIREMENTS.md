@@ -80,21 +80,22 @@ documented, every layer swappable.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAN-01 | TBD | Pending |
-| PLAN-02 | TBD | Pending |
-| PLAN-03 | TBD | Pending |
-| PLAN-04 | TBD | Pending |
-| PLAN-05 | TBD | Pending |
-| PLAN-06 | TBD | Pending |
-| PLAN-07 | TBD | Pending |
-| NASH-01 | TBD | Pending |
-| NASH-02 | TBD | Pending |
-| NASH-03 | TBD | Pending |
-| NASH-04 | TBD | Pending |
-| PVAL-01 | TBD | Pending |
-| PVAL-02 | TBD | Pending |
-| PVAL-03 | TBD | Pending |
-| PVAL-04 | TBD | Pending |
+| PLAN-01 | Phase 10 | Pending |
+| PLAN-02 | Phase 10 | Pending |
+| PLAN-03 | Phase 10 | Pending |
+| PLAN-04 | Phase 11 | Pending |
+| PLAN-05 | Phase 11 | Pending |
+| PLAN-06 | Phase 11 | Pending |
+| PLAN-07 | Phase 11 | Pending |
+| NASH-01 | Phase 13 | Pending |
+| NASH-02 | Phase 13 | Pending |
+| NASH-03 | Phase 13 | Pending |
+| NASH-04 | Phase 13 | Pending |
+| PVAL-01 | Phase 11 | Pending |
+| PVAL-02 | Phase 14 | Pending |
+| PVAL-03 | Phase 14 | Pending |
+| PVAL-04 | Phase 14 | Pending |
 
-**Coverage:** 15 v2.0 requirements across 3 categories (Oracle-Coupling/Benders, Nash, Validation/Docs).
-Phase mapping filled by the roadmapper.
+**Coverage:** 15/15 v2.0 requirements mapped ✓ across 5 phases (10-14). Phase 12 (Cut-Store &
+Benders Master Robustness Hardening) hardens PLAN-05/PLAN-06 at scale and intentionally owns no
+new requirement IDs. See `.planning/ROADMAP.md` for full phase details and success criteria.

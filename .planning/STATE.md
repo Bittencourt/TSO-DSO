@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-07-22T13:02:10.521Z"
 last_activity: 2026-07-22
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,32 +17,34 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-18)
+See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Milestone complete
+**Current focus:** v2.0 Phase 10 — Oracle Coupling Wiring & Resilience
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-22 — Milestone v2.0 started
+Phase: 10 of 14 (Oracle Coupling Wiring & Resilience) — first phase of v2.0
+Plan: — (roadmap just created; ready to plan)
+Status: Ready to plan
+Last activity: 2026-07-22 — v2.0 ROADMAP.md created (Phases 10-14), REQUIREMENTS.md traceability filled
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 9
+- Total plans completed: 43 (v1.0 total; 0 in v2.0)
 - Average duration: —
-- Total execution time: 0 hours
+- Total execution time: 0 hours (v2.0)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 08 | 4 | - | - |
 | 09 | 5 | - | - |
+| 10-14 (v2.0) | TBD | - | - |
 
 **Recent Trend:**
 
@@ -50,11 +52,6 @@ Last activity: 2026-07-22 — Milestone v2.0 started
 - Trend: —
 
 *Updated after each plan completion*
-| Phase 08 P02 | 35min | 2 tasks | 2 files |
-| Phase 08 P03 | 35min | 2 tasks | 2 files |
-| Phase 08 P04 | 40min | 2 tasks | 5 files |
-| Phase 09 P04 | 35min | 2 tasks | 6 files |
-| Phase 09 P05 | 15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -63,19 +60,18 @@ Last activity: 2026-07-22 — Milestone v2.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Roadmap: Abstraction ladder rungs 0-5 map directly to phases; each phase is a runnable/validated end-to-end solve at increasing fidelity (mvp mode).
-- Roadmap: Centralized SOCP (Phase 4) is the ground truth ADMM (Phases 6-7) is validated against; pricing (Phase 5) sits between to de-risk duals early.
-- Roadmap: `operational_oracle(z)→(cost,π)` seam + SEAM-01 stubs land at the SOCP correctness milestone (Phase 4) so the deferred planning layer is additive, not a rewrite.
-- [Phase 08]: Base.@kwdef struct + hand-written positional inner constructor combine cleanly for a validated, keyword-defaulted Scenario (verified in REPL before adopting the pattern).
-- [Phase 08]: Scenario price/population valid-selector sets are narrow ({:mem}/{:default} only), matching exactly the build_price/build_population branches materialize.jl implements.
-- [Phase 08]: build_population dispatches residential-magnitude scale constants by feeder bus count (123 vs else) since the two shipped feeders sit on drastically different per-unit bases (1 MVA vs 100 MVA).
-- [Phase 08]: Scenario's default ADMM rho bumped from 1.0 to 100.0 (matches test_admm.jl's empirically-validated ieee13 penalty) — run_scenario(:admm) end-to-end on the default scenario hit a Clarabel NUMERICAL_ERROR at the too-small starting rho before adaptive-rho could rescue it (Rule 1 bug fix, 08-03)
-- [Phase 08]: DrWatson/JLD2 always round-trip dict keys as String (wload never returns Symbol keys) — fixed the INFRA-04 provenance testitem's key-type assertions and collect_results black_list override accordingly (Rule 1, 08-04)
-- [Phase 08]: @tagsave's default gitpath=projectdir() resolves to Pkg.test()'s sandbox (not a git repo); run_and_store pins gitpath=pkgdir(@__MODULE__) so :gitcommit is stamped reliably under both plain runs and Pkg.test() (Rule 1, 08-04)
-- [Phase 09]: Removed pricing_dlmp.jl's unused using JuMP import rather than adding JuMP to docs/Project.toml — no JuMP symbol was actually referenced (Rule 1 fix, 09-04)
-- [Phase 09]: docs/Project.toml hard-depends on CairoMakie (0.15) for docs-only figure rendering, guarded per-page with Base.find_package; root Project.toml weakdeps/extensions untouched (09-04)
-- [Phase 09]: docs CI job pinned to single Julia 1.11 (mirrors format job), not added as a 1.10/1.11/1.12 matrix leg — docs content is Julia-version-invariant (09-05)
-- [Phase 09]: deploydocs repo-slug placeholder kept as-is per researcher decision on the Task 2 human-verify checkpoint (no git remote in this checkout); comment now documents it as a resolved decision with a pre-deploy TODO (09-05)
+- Roadmap (v2.0): Phase 10 splits PLAN-01/02/03 (oracle-coupling wiring + retry/checkpoint
+  resilience) out as its own phase BEFORE the full Benders loop, proven before Benders depends on it.
+- Roadmap (v2.0): Phase 11 carries the BilevelJuMP leader/follower certification gate (PLAN-07,
+  PVAL-01) alongside the Benders master/follower work (PLAN-04/05/06) — gate stays in the phase
+  that assigns leader/follower roles, per research SUMMARY.md.
+- Roadmap (v2.0): Phase 12 (cut-store/master hardening) intentionally owns no new requirement
+  IDs — it deepens PLAN-05/PLAN-06 at scale before Phase 13 nests a second (Nash) outer loop.
+- Roadmap (v2.0): `src/planning/coupling.jl` (NASH-01) is sequenced at Phase 13, not earlier — a
+  genuinely new shared-transmission model that only becomes necessary once distributors need
+  something shared to iterate on.
+- Roadmap (v2.0): Phases 11 and 13 flagged for `--research-phase` (BilevelJuMP mode API +
+  leader/follower resolution; Gauss-Seidel diagonalization convergence + coupling.jl design).
 
 ### Pending Todos
 
@@ -83,34 +79,44 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 4]: ~~Re-verify Clarabel API specifics~~ RESOLVED (Phase-4 research, 2026-07-18): RotatedSecondOrderCone form `[0.5l, v, P, Q] in RotatedSecondOrderCone()`, Clarabel handles SOCP+quadratic natively, `Parameter` API confirmed, Clarabel copy_to-only (no direct_model). No factory change needed.
-- [Phase 7]: Adaptive-ρ / dual-residual tuning on the SOCP subproblem is partial-research; may warrant `--research-phase`.
-- [Phase 4 follow-up — welfare gap]: The IEEE-13 ground-truth solve reproduces the thesis VOLTAGE well (v₉[16]=1.0436 vs 1.0493, 0.5%; A1 confirmed = |V| magnitude, node 9=struct index 10) but the WELFARE (−4823) differs from the thesis +$1819 because the MEM price / temperature profiles / house-counts are figure-bound (not recoverable from the thesis figures). A COMPUTED GOLDEN is pinned as the regression anchor (accepted by researcher 2026-07-18). TODO (later reconciliation pass): digitize thesis figures ~4.2/4.5 to recover the exact MEM/load/PV inputs and close the welfare gap; then re-pin the golden and tighten the thesis cross-check.
-- [Phase 5 follow-up — +25% headline (SAME root cause as above)]: The DLMP extraction, four-way decomposition (KKT identity certified to ~1e-15), the surplus identity (social=prosumer+DSO=objective, rtol 1e-6 lossless / 1e-4 IEEE-13), the FIT baseline, and the economic-direction checks (DADP<λ₀ glut, >λ₀ congestion) all PASS. But the +25% social-welfare headline is NOT quantitatively reproduced: the computed ratio is ≈1.0 (social_DADP=−4821.96 vs social_FIT=−4822.08) because absolute welfare is NEGATIVE in the ¢$/kWh calibration (demand cost dominates utility), so the ratio of two negatives inverts. Dynamic pricing DOES improve welfare directionally (social_DADP > social_FIT). The computed ratio is pinned as the golden; thesis 1.25 is a NON-FAILING broken cross-check. TODO: same figure-digitization pass (recover the thesis's positive-welfare calibration) will restore the +25% quantitative match. Accepted by researcher 2026-07-18 ("flag for follow-up").
-
-- [Phase 7 follow-up — IEEE-123 impedances]: The IEEE-123 fixture (`src/data/ieee123.jl`) ships the canonical IEEE-123 radial TOPOLOGY (123 buses, relabeled, radialized, 85 load / 37 transit) but with REPRESENTATIVE in-band per-unit impedances at a 1 MVA feeder-scale base (a DATA PROVENANCE note is atop the file), NOT the thesis App. E exact per-terminal r/x — those numbers are not vendored in the repo (no thesis PDF; THEORY-thesis.md has only Case-B params). ADMM converges on it in ~17 iters (adaptive ρ, welfare gap 1.2e-6, |λ−DADP|~0.003 pu, PF-04 exact 1e-9, voltage-binding) — the CONVERGENCE & SCALE goal is met. Numerical insight: the SOC exactness robustness hinges on the per-unit base (cone-slack ratio ~1e-7 at 1 MVA vs ~1 at 100 MVA). TODO (Phase-9 regression / later): transcribe the thesis App. E impedance table (or the public IEEE-123 test-feeder data) into the branch table without touching topology/relabel/tests, for a true thesis-numeric IEEE-123 reproduction.
-
-- [Phase 7 deferred manual check — CairoMakie figures]: Phase-7 verification is 3/3 must-haves PASSED; the only open item is a pre-declared VISUAL-ONLY check — the CairoMakie convergence figures (`plot_convergence`, `plot_price_convergence` in `ext/TSODSOMakieExt.jl`). CairoMakie is a `[weakdeps]` NOT installed in the current env, so the runtime Figure render is skipped-with-message and the plot functions are verified structurally only (weakdep-gated, return a Makie Figure). RESOLVED (2026-07-22): the CI docs build (Julia 1.12) installs CairoMakie in the docs env and renders the convergence figure into the published site during `makedocs`; the Phase-9 verifier visually inspected the rendered PNG. Manual eyeball satisfied via the live docs.
-
-- [CI flaky — IEEE-13 ADMM `NUMERICAL_ERROR`, VERSION-INDEPENDENT] (2026-07-22): the `test`-matrix intermittently fails the IEEE-13 ADMM cross-validation (`test/test_admm.jl`) + acceptance testitems with Clarabel `termination_status = NUMERICAL_ERROR` (caught correctly by `assert_solved!` in `src/core/status.jl` — the gate refuses to trust the result). Observed on **both Julia 1.11 (run 29795039318) and Julia 1.12 (run 29916582852)** on separate runs, and each version has ALSO passed on other runs — so this is a genuinely INTERMITTENT, version-INDEPENDENT flake that can hit any matrix leg (~per-run chance), NOT a hard or 1.11-specific break. Root cause is the documented cone-slack numerical sensitivity of that IEEE-13 ADMM solve (per-unit-base dependent — see the IEEE-123 impedance note above). Consequence: CI test matrix will be red on a fraction of pushes until addressed. NOT fixed — flagged for a deliberate numerical-robustness pass (candidate levers: Clarabel tolerance/`equilibrate`/`max_iter` settings, per-unit base, or a bounded solve-retry in the ADMM subproblem that re-solves on NUMERICAL_ERROR before giving up). Does not block the docs deploy or the milestone; ~1944/1946 pass on an affected run (only the 2 IEEE-13 ADMM items error).
+- [v2.0 Phase 10 target]: CI-flaky, version-independent, intermittent Clarabel `NUMERICAL_ERROR`
+  on the IEEE-13 ADMM solve (root cause: cone-slack numerical sensitivity, per-unit-base
+  dependent; never fixed in v1.0) is expected to be AMPLIFIED once the oracle is re-solved inside
+  a Benders × scenario × distributor × diagonalization nest. PLAN-03 (Phase 10) makes bounded
+  retry + checkpointing a day-one co-requirement; measure empirical failure rate on the planning
+  layer's own fixtures, don't assume v1's rate holds.
+- [v2.0, no general guarantee]: Gauss-Seidel Nash diagonalization (Phase 13) has no general
+  uniqueness/convergence guarantee — every reported equilibrium must carry a multi-seed/
+  multi-order probe (NASH-04); never present one run as "the" equilibrium.
+- [v2.0, source ambiguity]: The PSR N1-N2 note is self-flagged MEDIUM confidence and internally
+  inconsistent on leader/follower labeling and integer-cut correctness. Phase 11's BilevelJuMP
+  certification gate (PLAN-07) resolves this empirically — do not re-resolve by re-reading
+  THEORY-papers.md.
+- [carried from v1.0]: thesis welfare-headline figure digitization, IEEE-123 exact App. E
+  impedances, `sub_seed` cross-version hash stability — unaffected by v2.0 scope, see
+  `milestones/v1.0-MILESTONE-AUDIT.md`.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and carried forward, now refined by v2.0 REQUIREMENTS.md:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| v2 extension | Stochastic PV/demand (STOCH-01/02) | Deferred to future milestone | Roadmap creation |
-| v2 extension | MPC / rolling-horizon RTP (MPC-01/02) | Deferred to future milestone | Roadmap creation |
-| v2 extension | Meshed networks + 4Q-BESS (MESH-01/02) | Deferred to future milestone | Roadmap creation |
-| v2 extension | Stackelberg-Nash planning game (PLAN-01…04) | Deferred to future milestone | Roadmap creation |
+| v2.x+ extension | Stochastic PV/demand (`PLAN-STOCH-01`) | Deferred to future milestone | v2.0 requirements definition |
+| v2.x+ extension | MPC / rolling-horizon RTP | Deferred to future milestone | Roadmap creation (v1.0) |
+| v2.x+ extension | Meshed networks + 4Q-BESS | Deferred to future milestone | Roadmap creation (v1.0) |
+| v2.x+ extension | Integer/discrete investment (`PLAN-INT-01`) | Deferred — v2.0 continuous-only, enforced by PVAL-04 | v2.0 requirements definition |
+| v2.x+ extension | Real-data flexibility-aggregator valuation (`PLAN-RT-01`) | Deferred to future milestone | v2.0 requirements definition |
+| v2.x+ extension | MCP/VI recast (`PLAN-MCP-01`) | Deferred — only if diagonalization proves unreliable | v2.0 requirements definition |
 
 ## Session Continuity
 
-Last session: 2026-07-20T22:03:10.700Z
-Stopped at: Plan 09-05 complete — docs CI job wired (dedicated job, docs-env instantiate, single pinned Julia 1.11), deploydocs repo-slug checkpoint resolved (placeholder kept per researcher decision). Phase 09 closed — all 5 plans complete.
+Last session: 2026-07-22T13:02:10.521Z
+Stopped at: v2.0 ROADMAP.md written (Phases 10-14, 15/15 requirements mapped), STATE.md
+reinitialized for v2.0, REQUIREMENTS.md traceability table filled. Ready for `/gsd:plan-phase 10`.
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan the first v2.0 phase: `/gsd:plan-phase 10`
+- Phases 11 and 13 are flagged for a research pass — consider `--research-phase` when reaching them.
