@@ -71,6 +71,17 @@
         @test isapprox(result.y, 0.7; atol = 1e-3)
         @test isapprox(result.z[1], 0.7; atol = 1e-3)
 
+        # CR-01 incumbent regression: the RETURNED (y, z) must be the point CERTIFIED by
+        # UB — its true cost c_y*y + φ_x(z) - W(z), recomputed by re-solving both
+        # subproblems at the returned z, equals result.UB. Returning the last master
+        # iterate instead of the incumbent breaks this identity by an amount NOT bounded
+        # by tol.
+        f_res = solve_follower!(result.follower, result.z)
+        @test f_res.feasible
+        o_res = solve_planning_oracle!(result.oracle, result.z)
+        true_cost = result.master.c_y * result.y + f_res.cost - o_res.cost
+        @test isapprox(true_cost, result.UB; atol = 1e-6)
+
         checkpoint_files = filter(
             f -> occursin(r"^iter_\d{5}\.jld2$", basename(f)),
             readdir(dir; join = true),

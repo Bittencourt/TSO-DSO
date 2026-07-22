@@ -69,10 +69,16 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
       + Else: append the oracle's `:op` optimality cut (`cost_k = -oracle_res.cost`,
         `grad_k = oracle_res.π`, the plan-11-01-derived sign convention) and the
         follower's `:x` optimality cut (`cost_k = follower_res.cost`,
-        `grad_k = follower_res.π_s`, used as-is); update
-        `UB = min(UB, master.c_y * lb_res.y + follower_res.cost - oracle_res.cost)`;
-        compute `gap = (UB - lb_res.LB) / max(1, abs(UB))`; checkpoint with
-        `feasible = true`; if `gap <= tol`, return the converged result.
+        `grad_k = follower_res.π_s`, used as-is); compute the iterate's TRUE cost
+        `cost_k = master.c_y * lb_res.y + follower_res.cost - oracle_res.cost`; if
+        `cost_k < UB`, update the INCUMBENT `UB = cost_k`, `y_best = lb_res.y`,
+        `z_best = copy(lb_res.z)` — the `(y, z)` pair that ACHIEVED the running-minimum
+        `UB` is stored, never just the bound (CR-01: convergence can trigger at an
+        iterate whose own cuts have not yet tightened the master, so the LAST iterate
+        is not certified by `UB`; the incumbent is); compute
+        `gap = (UB - lb_res.LB) / max(1, abs(UB))`; checkpoint with
+        `feasible = true`; if `gap <= tol`, return the converged result at the
+        INCUMBENT `(y_best, z_best)`.
  4. If `max_iter` is exhausted without `gap <= tol`, raise a loud `ErrorException` naming
     the exhausted iteration count and the last observed gap (D-10) — never silently return
     a non-converged result.
@@ -80,8 +86,10 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 # Returns
 
 On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master)` where
-`y = lb_res.y` (the leader's converged investment), `z = lb_res.z` (the converged coupling
-flow), `UB`/`LB` are the converged upper/lower bounds, `gap` is the converged relative gap,
+`y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so the
+returned point's true cost equals `UB` and the `gap ≤ tol` certificate applies to it,
+CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
+upper/lower bounds, `gap` is the converged relative gap,
 `iters` is the convergence iteration count, and `oracle`/`follower`/`master` are the
 build-once subproblem handles (for further inspection by the caller/certification gate,
 plan 11-03).
@@ -119,6 +127,12 @@ function solve_stackelberg!(
     master = build_master(; master_kwargs..., T = T)
 
     UB = Inf
+    # CR-01: the INCUMBENT — the (y, z) iterate that achieved the running-minimum UB.
+    # Convergence (LB rising to meet an OLDER iterate's UB) must return THIS pair, never
+    # the current iterate, whose own cuts may not yet bound it: the excess of the last
+    # iterate's true cost over UB is NOT bounded by tol.
+    y_best = NaN
+    z_best = fill(NaN, T)
     gap = NaN
     for k in 1:max_iter
         lb_res = solve_master!(master)
@@ -144,7 +158,14 @@ function solve_stackelberg!(
         # Follower's :x cut — used exactly as solve_follower! returns it.
         add_optimality_cut!(master, :x, follower_res.cost, follower_res.π_s, lb_res.z)
 
-        UB = min(UB, master.c_y * lb_res.y + follower_res.cost - oracle_res.cost)
+        # CR-01: track the incumbent, not just the bound — store the (y, z) pair that
+        # achieved the running-minimum UB so the converged return is the certified point.
+        cost_k = master.c_y * lb_res.y + follower_res.cost - oracle_res.cost
+        if cost_k < UB
+            UB = cost_k
+            y_best = lb_res.y
+            z_best = copy(lb_res.z)
+        end
         gap = (UB - lb_res.LB) / max(1, abs(UB))
 
         checkpoint_iteration!(
@@ -154,9 +175,12 @@ function solve_stackelberg!(
         )
 
         if gap <= tol
+            # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
+            # and LB <= optimum, so the returned point is certified within tol; the
+            # current iterate (lb_res.y, lb_res.z) carries no such guarantee.
             return (;
-                y = lb_res.y,
-                z = lb_res.z,
+                y = y_best,
+                z = z_best,
                 UB,
                 LB = lb_res.LB,
                 gap,
