@@ -75,7 +75,7 @@ Clarabel `NUMERICAL_ERROR` — all before any Benders code depends on these seam
 Plans:
 **Wave 1**
 
-- [ ] 10-01-PLAN.md — resilience primitives: solve_with_retry! (escalating Clarabel-conditioning retry around assert_solved!) + checkpoint_iteration!/resume_from_checkpoint (DrWatson @tagsave round-trip), wave 1
+- [x] 10-01-PLAN.md — resilience primitives: solve_with_retry! (escalating Clarabel-conditioning retry around assert_solved!) + checkpoint_iteration!/resume_from_checkpoint (DrWatson @tagsave round-trip), wave 1
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -213,7 +213,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 7. ADMM Convergence & Scale | v1.0 | 6/6 | Complete | 2026-07-19 |
 | 8. Experiment Harness & Reproducibility | v1.0 | 4/4 | Complete | 2026-07-20 |
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
-| 10. Oracle Coupling Wiring & Resilience | v2.0 | 0/2 | Planned | - |
+| 10. Oracle Coupling Wiring & Resilience | v2.0 | 1/2 | In Progress|  |
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 0/TBD | Not started | - |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/TBD | Not started | - |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
