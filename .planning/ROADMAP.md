@@ -40,7 +40,7 @@ Gauss-Seidel diagonalization. Continuous investment variables only; hand-rolled 
 diagonalization; BilevelJuMP as a small-case validation oracle only (never the production solver).
 
 - [x] **Phase 10: Oracle Coupling Wiring & Resilience** - Wire the real z-pin coupling constraint/dual, reconcile the dual convention, and make repeated oracle solves resilient before any Benders code depends on them (completed 2026-07-22)
-- [ ] **Phase 11: Single-Distributor Stackelberg-Benders (Certified)** - A hand-rolled Benders loop solves a single distributor's leader/follower equilibrium end-to-end, with the leader/follower semantics resolved and certified by a tiny BilevelJuMP MPEC cross-check
+- [x] **Phase 11: Single-Distributor Stackelberg-Benders (Certified)** - A hand-rolled Benders loop solves a single distributor's leader/follower equilibrium end-to-end, with the leader/follower semantics resolved and certified by a tiny BilevelJuMP MPEC cross-check (completed 2026-07-22)
 - [ ] **Phase 12: Cut-Store & Benders Master Robustness Hardening** - Harden the Benders cut store, gap diagnostics, and retry/checkpoint mechanics at realistic iteration counts before nesting a second (Nash) outer loop
 - [ ] **Phase 13: Nash Diagonalization & Shared-Transmission Coupling** - Multiple distributors reach a Gauss-Seidel Nash fixed point over a genuinely new shared transmission-reinforcement coupling model, with honest non-uniqueness reporting
 - [ ] **Phase 14: Validation-Oracle Regression Hardening & Docs** - One-off validation runs become permanent pinned regressions; planning math is literate-documented; an automated guard enforces continuous-only scope
@@ -124,7 +124,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 11-03-PLAN.md — BilevelJuMP certification: BigMMode + StrongDualityMode vs. hand enumeration vs. the production Benders answer, permanent [:planning] regression (PLAN-07/PVAL-01), wave 3, depends on 11-02
+- [x] 11-03-PLAN.md — BilevelJuMP certification: BigMMode + StrongDualityMode vs. hand enumeration vs. the production Benders answer, permanent [:planning] regression (PLAN-07/PVAL-01), wave 3, depends on 11-02
 
 ### Phase 12: Cut-Store & Benders Master Robustness Hardening
 
@@ -227,7 +227,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 8. Experiment Harness & Reproducibility | v1.0 | 4/4 | Complete | 2026-07-20 |
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
-| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 2/3 | In Progress|  |
+| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete   | 2026-07-22 |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/TBD | Not started | - |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
