@@ -39,7 +39,7 @@ transmission-reinforcement follower, reaching a Nash equilibrium across multiple
 Gauss-Seidel diagonalization. Continuous investment variables only; hand-rolled Benders +
 diagonalization; BilevelJuMP as a small-case validation oracle only (never the production solver).
 
-- [ ] **Phase 10: Oracle Coupling Wiring & Resilience** - Wire the real z-pin coupling constraint/dual, reconcile the dual convention, and make repeated oracle solves resilient before any Benders code depends on them
+- [x] **Phase 10: Oracle Coupling Wiring & Resilience** - Wire the real z-pin coupling constraint/dual, reconcile the dual convention, and make repeated oracle solves resilient before any Benders code depends on them (completed 2026-07-22)
 - [ ] **Phase 11: Single-Distributor Stackelberg-Benders (Certified)** - A hand-rolled Benders loop solves a single distributor's leader/follower equilibrium end-to-end, with the leader/follower semantics resolved and certified by a tiny BilevelJuMP MPEC cross-check
 - [ ] **Phase 12: Cut-Store & Benders Master Robustness Hardening** - Harden the Benders cut store, gap diagnostics, and retry/checkpoint mechanics at realistic iteration counts before nesting a second (Nash) outer loop
 - [ ] **Phase 13: Nash Diagonalization & Shared-Transmission Coupling** - Multiple distributors reach a Gauss-Seidel Nash fixed point over a genuinely new shared transmission-reinforcement coupling model, with honest non-uniqueness reporting
@@ -79,7 +79,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 10-02-PLAN.md — PlanningOracle: build_planning_oracle (build-once, Parameter-pinned p_import==z coupling) + solve_planning_oracle! (retry-wrapped re-solve, pi/pi_s reconciliation, dual-sign toy-case regression), wave 2, depends on 10-01
+- [x] 10-02-PLAN.md — PlanningOracle: build_planning_oracle (build-once, Parameter-pinned p_import==z coupling) + solve_planning_oracle! (retry-wrapped re-solve, pi/pi_s reconciliation, dual-sign toy-case regression), wave 2, depends on 10-01
 
 ### Phase 11: Single-Distributor Stackelberg-Benders (Certified)
 
@@ -213,7 +213,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 7. ADMM Convergence & Scale | v1.0 | 6/6 | Complete | 2026-07-19 |
 | 8. Experiment Harness & Reproducibility | v1.0 | 4/4 | Complete | 2026-07-20 |
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
-| 10. Oracle Coupling Wiring & Resilience | v2.0 | 1/2 | In Progress|  |
+| 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete   | 2026-07-22 |
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 0/TBD | Not started | - |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/TBD | Not started | - |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
