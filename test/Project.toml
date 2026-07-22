@@ -16,12 +16,17 @@ TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
 # NEW [compat] block (this file previously had none — plan 11-03 introduces it
 # deliberately, per CONTEXT.md's supply-chain-integrity guidance: pin an EXACT
 # version for the new test-only BilevelJuMP dependency, never a floating range).
+# The "= X.Y.Z" equality specifier is REQUIRED for that intent: a bare "X.Y.Z"
+# is a caret specifier under Julia compat semantics (it floats to any
+# compatible newer release on Pkg.update()), which would contradict this
+# comment (WR-02). Exactness also underpins follower.jl's verified-on-this-
+# HiGHS-build Farkas-ray behavior (WR-05).
 # HiGHS/Ipopt are pinned to match the root Project.toml's own compat entries
 # (they are the SAME solver packages already used project-wide — HiGHS/Ipopt were
 # not previously DIRECT test-environment dependencies, only transitive via TSODSO
 # itself; plan 11-03 makes them direct so test/test_planning_certification.jl can
 # `using HiGHS, Ipopt` for BilevelJuMP's bare-constructor requirement, Pitfall B3).
 [compat]
-BilevelJuMP = "0.6.3"
-HiGHS = "1.24.1"
-Ipopt = "1.15.0"
+BilevelJuMP = "= 0.6.3"
+HiGHS = "= 1.24.1"
+Ipopt = "= 1.15.0"
