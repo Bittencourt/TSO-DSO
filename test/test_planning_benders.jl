@@ -90,6 +90,56 @@
     end
 end
 
+@testitem "planning benders: feasibility-cut branch — an undeliverable master trial routes to a Farkas cut and the loop still converges (WR-04)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    λ₀ = [4.0]
+    # Deliverable capacity SHRUNK to corridor_cap * x_inv_max = 2.0 * 0.25 = 0.5 —
+    # BELOW both the unconstrained optimum z* = 0.7 (see file header) and the master's
+    # early cut-driven trials, so the Benders loop MUST pass through at least one
+    # follower-infeasible trial z_k > 0.5 and recover via the production feasibility-cut
+    # branch (WR-04: previously structurally unreachable in every end-to-end test).
+    follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 0.25, c_inv = 1.0, c_op = [0.5])
+    master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
+
+    mktempdir() do dir
+        result = solve_stackelberg!(
+            feeder,
+            LinDistFlow(),
+            [agg];
+            λ₀ = λ₀,
+            T = 1,
+            follower_kwargs = follower_kwargs,
+            master_kwargs = master_kwargs,
+            tol = 1e-6,
+            max_iter = 100,
+            checkpoint_dir = dir,
+        )
+
+        # The production feasibility-cut branch actually ran: at least one appended cut
+        # is a Farkas feasibility cut (not merely the unit-tested appender in isolation).
+        @test any(c -> c.kind == :feasibility, result.master.cuts)
+
+        # The loop still converges, to the BOUNDARY optimum: total(z) = 0.5z^2 - 0.7z is
+        # decreasing on [0, 0.7], so the deliverable cap z = 0.5 binds and y* = z* = 0.5.
+        @test result.gap <= 1e-6
+        @test isapprox(result.y, 0.5; atol = 1e-3)
+        @test isapprox(result.z[1], 0.5; atol = 1e-3)
+
+        # Checkpoint invariant holds ACROSS feasibility iterations too (T-11-06 interplay):
+        # checkpoint_iteration! fires exactly once per iteration on BOTH branches.
+        checkpoint_files = filter(
+            f -> occursin(r"^iter_\d{5}\.jld2$", basename(f)),
+            readdir(dir; join = true),
+        )
+        @test length(checkpoint_files) == result.iters
+    end
+end
+
 @testitem "planning benders: max_iter=1 raises loudly (ErrorException, 'exhausted'), never returns a non-converged result" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
