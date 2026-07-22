@@ -30,7 +30,7 @@ documented, every layer swappable.
       every cut-producing solve (never ADMM's mid-loop tolerance).
 - [x] **PLAN-06**: A single-distributor Stackelberg equilibrium solves end-to-end via the Benders loop with
       upper/lower-bound gap convergence detection.
-- [ ] **PLAN-07**: The leader/follower role assignment and coupling-dual sign convention are resolved empirically
+- [x] **PLAN-07**: The leader/follower role assignment and coupling-dual sign convention are resolved empirically
       (against PLAN-VALID-01) and encoded as a tested invariant, not a code comment.
 
 ### Nash Equilibrium (Multiple Distributors)
@@ -46,7 +46,7 @@ documented, every layer swappable.
 
 ### Validation, Reproducibility & Docs
 
-- [ ] **PVAL-01**: A tiny-instance BilevelJuMP single-level reduction (open-source `BigMMode`/`StrongDualityMode`)
+- [x] **PVAL-01**: A tiny-instance BilevelJuMP single-level reduction (open-source `BigMMode`/`StrongDualityMode`)
       certifies the planning equilibrium and is retained as a permanent, fast regression test.
 - [ ] **PVAL-02**: Canonical single- and multi-distributor fixtures are pinned as computed goldens, gated by
       BilevelJuMP agreement and diagonalization convergence (no external numerical reference exists).
@@ -86,12 +86,12 @@ documented, every layer swappable.
 | PLAN-04 | Phase 11 | Pending |
 | PLAN-05 | Phase 11 | Pending |
 | PLAN-06 | Phase 11 | Complete |
-| PLAN-07 | Phase 11 | Pending |
+| PLAN-07 | Phase 11 | Complete |
 | NASH-01 | Phase 13 | Pending |
 | NASH-02 | Phase 13 | Pending |
 | NASH-03 | Phase 13 | Pending |
 | NASH-04 | Phase 13 | Pending |
-| PVAL-01 | Phase 11 | Pending |
+| PVAL-01 | Phase 11 | Complete |
 | PVAL-02 | Phase 14 | Pending |
 | PVAL-03 | Phase 14 | Pending |
 | PVAL-04 | Phase 14 | Pending |
