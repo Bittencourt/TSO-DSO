@@ -179,6 +179,19 @@ function solve_follower!(f::FollowerLP, z_trial::AbstractVector{<:Real})
     elseif dual_status(f.model) == MOI.INFEASIBILITY_CERTIFICATE
         # GENUINE HiGHS Farkas/dual ray — never a penalized-slack "always feasible"
         # shortcut (PLAN-04 success criterion 1, T-11-01).
+        #
+        # WR-05 SOLVER-VERSION NOTE: certificate availability with the factory's
+        # `presolve => "on"` (src/solver/factory.jl, INFRA-02) is a HiGHS
+        # implementation detail, not an API contract — historically HiGHS withholds
+        # the dual ray unless simplex ran on the un-presolved LP. This branch is
+        # VERIFIED to receive MOI.INFEASIBILITY_CERTIFICATE for both infeasible
+        # regimes of this LP against the EXACT-pinned HiGHS 1.24.1
+        # (test/Project.toml `HiGHS = "= 1.24.1"`, WR-02). If a HiGHS upgrade ever
+        # lands here as the loud `else`-branch error instead, apply the documented
+        # fallback (11-RESEARCH.md Pitfall F1): set the follower-model-local
+        # attribute `set_optimizer_attribute(model, "presolve", "off")` in
+        # `build_follower` — cost-free at this LP's scale and safe (never touches
+        # any other model's presolve).
         v = dual_objective_value(f.model)
         u = dual.(f.coupling)
         # WR-03: ENFORCE the documented "both isfinite" certificate guarantee here,
