@@ -64,6 +64,13 @@ predictable, every rung ≥ 2 restates a COMPLETE attribute set covering everyth
 lower rung touches (e.g. rung 4 restates `equilibrate_max_iter => 50` from rung 3), so
 within one call no rung runs with a leftover from a lower rung it does not itself state.
 
+Rungs ≥ 2 set CLARABEL-SPECIFIC raw attributes (this wrapper never falls back to another
+solver, D-09). The wrapper itself is solver-generic API: on a non-Clarabel backend (e.g.
+HiGHS, Ipopt) that rejects an escalation attribute, the rejection is converted into the
+same loud 4-line diagnostic `error(...)` — naming the backend and the offending
+attribute — rather than propagating as a raw, undiagnosed unknown-option exception
+(WR-02). Attempt 1 applies no attributes, so any backend can use the single-attempt path.
+
 If a retryable status is hit and attempts remain, `@warn`s with the attempt number and
 `raw_status(model)`, then escalates to the next rung. If the status is NOT in
 `RETRYABLE_STATUSES` (e.g. genuine `MOI.INFEASIBLE`) it raises immediately on attempt 1 —
@@ -111,7 +118,25 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
     n_attempts = min(max_attempts, length(ladder))
     for (attempt, settings) in enumerate(ladder[1:n_attempts])
         for (k, v) in settings
-            set_optimizer_attribute(model, k, v)      # post-build attribute change; no rebuild
+            # WR-02: rungs ≥ 2 set Clarabel-specific raw attributes, but this wrapper is
+            # exported as solver-generic API. A foreign backend (HiGHS, Ipopt, ...) that
+            # rejects the attribute must produce the D-10 loud diagnostic — naming the
+            # backend and the offending attribute — not a raw, undiagnosed unknown-option
+            # exception mid-escalation. (Escalation only runs after attempt 1 solved and
+            # failed retryably, so the model statuses below are queryable.)
+            try
+                set_optimizer_attribute(model, k, v)  # post-build attribute change; no rebuild
+            catch attr_err
+                error("""
+                      solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
+                      but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
+                      Rungs ≥ 2 REQUIRE a Clarabel backend (D-09: never a cross-solver fallback) — refusing to continue:
+                        termination_status : $(termination_status(model))
+                        primal_status      : $(primal_status(model))
+                        dual_status        : $(dual_status(model))
+                        raw_status         : $(raw_status(model))
+                      """)
+            end
         end
         try
             return assert_solved!(model; dual = dual)
