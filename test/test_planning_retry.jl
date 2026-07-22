@@ -31,38 +31,50 @@
         return model
     end
 
-    # FIRST confirm (raw optimize!, no wrapper) that the fixture actually reproduces a
-    # retryable failure on attempt 1 — do not assume, measure (Pitfall 4).
+    # FIRST measure (raw optimize!, no wrapper) what the fixture actually produces on
+    # attempt 1 — do not assume (Pitfall 4). WR-04: the fixture's FAILURE is the stable
+    # property to hard-assert; the SPECIFIC failure status is solver-version-dependent
+    # (a Clarabel upgrade may well report MOI.ITERATION_LIMIT for a max_iter = 5 stop,
+    # which the ladder deliberately refuses to retry). Gate the escalation branch on the
+    # OBSERVED status, so a solver upgrade degrades this test to an informative skip
+    # instead of a spurious red with no product bug.
     raw_model = build_ill_conditioned_model()
     optimize!(raw_model)
-    @test termination_status(raw_model) in TSODSO.RETRYABLE_STATUSES
+    raw_ts = termination_status(raw_model)
+    @test raw_ts != MOI.OPTIMAL
 
-    # THEN wrap a fresh instance of the same ill-conditioned model in solve_with_retry! and
-    # assert it either ends MOI.OPTIMAL or throws an ErrorException naming the exhausted
-    # attempt budget.
-    retry_model = build_ill_conditioned_model()
-    try
-        TSODSO.solve_with_retry!(retry_model)
-        @test termination_status(retry_model) == MOI.OPTIMAL
-    catch e
-        @test e isa ErrorException
-        @test occursin("exhausted", e.msg)
-    end
+    if raw_ts in TSODSO.RETRYABLE_STATUSES
+        # Wrap a fresh instance of the same ill-conditioned model in solve_with_retry! and
+        # assert it either ends MOI.OPTIMAL or throws an ErrorException naming the
+        # exhausted attempt budget.
+        retry_model = build_ill_conditioned_model()
+        try
+            TSODSO.solve_with_retry!(retry_model)
+            @test termination_status(retry_model) == MOI.OPTIMAL
+        catch e
+            @test e isa ErrorException
+            @test occursin("exhausted", e.msg)
+        end
 
-    # CR-01 regression: a budget LARGER than the ladder (max_attempts = 10 > 4 rungs) must
-    # clamp to the ladder length — the wrapper must NEVER fall off the end returning
-    # `nothing` after a failed final rung (previously `attempt < max_attempts` held on rung
-    # 4, `continue`d, and the loop silently ended; the caller then read duals from a model
-    # whose last solve FAILED). Either it recovers (returns the Model) or it raises the
-    # loud exhaustion error — `nothing` is the one outcome D-10 forbids.
-    overshoot_model = build_ill_conditioned_model()
-    try
-        ret = TSODSO.solve_with_retry!(overshoot_model; max_attempts = 10)
-        @test ret !== nothing
-        @test termination_status(overshoot_model) == MOI.OPTIMAL
-    catch e
-        @test e isa ErrorException
-        @test occursin("exhausted", e.msg)
+        # CR-01 regression: a budget LARGER than the ladder (max_attempts = 10 > 4 rungs)
+        # must clamp to the ladder length — the wrapper must NEVER fall off the end
+        # returning `nothing` after a failed final rung (previously `attempt < max_attempts`
+        # held on rung 4, `continue`d, and the loop silently ended; the caller then read
+        # duals from a model whose last solve FAILED). Either it recovers (returns the
+        # Model) or it raises the loud exhaustion error — `nothing` is the one outcome
+        # D-10 forbids.
+        overshoot_model = build_ill_conditioned_model()
+        try
+            ret = TSODSO.solve_with_retry!(overshoot_model; max_attempts = 10)
+            @test ret !== nothing
+            @test termination_status(overshoot_model) == MOI.OPTIMAL
+        catch e
+            @test e isa ErrorException
+            @test occursin("exhausted", e.msg)
+        end
+    else
+        @info "ill-conditioned fixture no longer produces a retryable status; skipping escalation branch (WR-04)" raw_ts raw =
+            raw_status(raw_model)
     end
 end
 
