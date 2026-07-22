@@ -268,11 +268,8 @@ function solve_planning_oracle!(
     rtol_exact::Real = 1e-4,
     τ::Real = (get(o.ctx.meta, :problem_class, nothing) isa SOCP ? 1e-3 : 1e-6),
 )
-    length(z_trial) == o.T || throw(
-        ArgumentError(
-            "z_trial has length $(length(z_trial)), expected T=$(o.T)",
-        ),
-    )
+    length(z_trial) == o.T ||
+        throw(ArgumentError("z_trial has length $(length(z_trial)), expected T=$(o.T)"))
 
     set_parameter_value.(o.z, z_trial)   # D-01/D-11: mutate the Parameter, no rebuild
 

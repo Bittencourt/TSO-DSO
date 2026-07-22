@@ -5,9 +5,8 @@
 #      or raises loudly naming the exhausted attempt count;
 #   2. a genuinely infeasible model is NEVER retried — it raises immediately on attempt 1.
 
-@testitem "planning retry: recoverable NUMERICAL_ERROR-class failure escalates" tags = [
-    :planning,
-] begin
+@testitem "planning retry: recoverable NUMERICAL_ERROR-class failure escalates" tags =
+    [:planning] begin
     using TSODSO, JuMP
 
     # Deliberately ill-conditioned SOCP: alternating cone-component coefficient magnitudes
@@ -78,9 +77,8 @@
     end
 end
 
-@testitem "planning retry: max_attempts < 1 raises ArgumentError before any solve (CR-01)" tags = [
-    :planning,
-] begin
+@testitem "planning retry: max_attempts < 1 raises ArgumentError before any solve (CR-01)" tags =
+    [:planning] begin
     using TSODSO, JuMP
 
     # max_attempts <= 0 previously made the ladder slice empty: the loop never ran,
@@ -96,9 +94,8 @@ end
     @test termination_status(trivial) == MOI.OPTIMIZE_NOT_CALLED
 end
 
-@testitem "planning retry: genuine INFEASIBLE never retried, raises on attempt 1" tags = [
-    :planning,
-] begin
+@testitem "planning retry: genuine INFEASIBLE never retried, raises on attempt 1" tags =
+    [:planning] begin
     using TSODSO, JuMP
 
     # Mirrors test_status.jl's `bad` model: infeasible against y >= 0.

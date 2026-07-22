@@ -46,12 +46,11 @@ The escalation ladder has 4 rungs (`max_attempts` caps how many are actually tri
 `max_attempts < 1` throws `ArgumentError` up front, and any value beyond the ladder
 length is CLAMPED to it — the effective budget is `min(max_attempts, 4)`):
 
-1. no attribute changes (as-built on the FIRST call ever made on the model — see the
-   stickiness contract below)
-2. `static_regularization_constant => 1e-6`
-3. adds `iterative_refinement_max_iter => 100, equilibrate_max_iter => 50`
-4. `static_regularization_constant => 1e-5, dynamic_regularization_eps => 1e-11,
-   iterative_refinement_max_iter => 200, equilibrate_max_iter => 50` (last resort)
+ 1. no attribute changes (as-built on the FIRST call ever made on the model — see the
+    stickiness contract below)
+ 2. `static_regularization_constant => 1e-6`
+ 3. adds `iterative_refinement_max_iter => 100, equilibrate_max_iter => 50`
+ 4. `static_regularization_constant => 1e-5, dynamic_regularization_eps => 1e-11, iterative_refinement_max_iter => 200, equilibrate_max_iter => 50` (last resort)
 
 Escalated attributes are STICKY — a deliberate, explicit contract (WR-01):
 `set_optimizer_attribute` mutates the model PERMANENTLY and this function never restores
@@ -87,8 +86,7 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
     # CR-01 guard: max_attempts <= 0 would make the ladder slice empty, skip the loop
     # entirely, and silently return `nothing` without EVER calling optimize! — the exact
     # silent-skip outcome D-10 forbids. Fail loudly before touching the model.
-    max_attempts >= 1 ||
-        throw(ArgumentError("max_attempts must be ≥ 1, got $max_attempts"))
+    max_attempts >= 1 || throw(ArgumentError("max_attempts must be ≥ 1, got $max_attempts"))
     # WR-01: escalation is STICKY across calls (attributes persist on the model; see
     # docstring contract). Every rung ≥ 2 is therefore a COMPLETE attribute set restating
     # everything any lower rung touches, so within one call no rung runs with an unstated
@@ -127,15 +125,17 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
             try
                 set_optimizer_attribute(model, k, v)  # post-build attribute change; no rebuild
             catch attr_err
-                error("""
-                      solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
-                      but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
-                      Rungs ≥ 2 REQUIRE a Clarabel backend (D-09: never a cross-solver fallback) — refusing to continue:
-                        termination_status : $(termination_status(model))
-                        primal_status      : $(primal_status(model))
-                        dual_status        : $(dual_status(model))
-                        raw_status         : $(raw_status(model))
-                      """)
+                error(
+                    """
+                    solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
+                    but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
+                    Rungs ≥ 2 REQUIRE a Clarabel backend (D-09: never a cross-solver fallback) — refusing to continue:
+                      termination_status : $(termination_status(model))
+                      primal_status      : $(primal_status(model))
+                      dual_status        : $(dual_status(model))
+                      raw_status         : $(raw_status(model))
+                    """,
+                )
             end
         end
         try
@@ -149,13 +149,15 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
                 continue
             end
             # non-retryable status, OR budget exhausted: RAISE LOUDLY with full diagnostics (D-10)
-            error("""
-                  solve_with_retry!: exhausted $attempt attempt(s) — refusing to trust results:
-                    termination_status : $(ts)
-                    primal_status      : $(primal_status(model))
-                    dual_status        : $(dual_status(model))
-                    raw_status         : $(raw_status(model))
-                  """)
+            error(
+                """
+                solve_with_retry!: exhausted $attempt attempt(s) — refusing to trust results:
+                  termination_status : $(ts)
+                  primal_status      : $(primal_status(model))
+                  dual_status        : $(dual_status(model))
+                  raw_status         : $(raw_status(model))
+                """,
+            )
         end
     end
 end

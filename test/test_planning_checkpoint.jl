@@ -22,9 +22,8 @@
     end
 end
 
-@testitem "planning checkpoint: highest-numbered checkpoint always redone" tags = [
-    :planning,
-] setup = [Phase8Fixtures] begin
+@testitem "planning checkpoint: highest-numbered checkpoint always redone" tags =
+    [:planning] setup = [Phase8Fixtures] begin
     using TSODSO
 
     Phase8Fixtures.with_tempdir() do dir
@@ -41,17 +40,24 @@ end
     end
 end
 
-@testitem "planning checkpoint: iter outside 0:99999 raises ArgumentError (WR-03 filename contract)" tags = [
-    :planning,
-] setup = [Phase8Fixtures] begin
+@testitem "planning checkpoint: iter outside 0:99999 raises ArgumentError (WR-03 filename contract)" tags =
+    [:planning] setup = [Phase8Fixtures] begin
     using TSODSO
 
     Phase8Fixtures.with_tempdir() do dir
         # Negative: lpad(-3, 5, '0') pads the STRING "-3" into a malformed, nonsensically
         # sorting name. Over the width: iter_100000.jld2 sorts lexicographically BEFORE
         # iter_99999.jld2, silently resuming the wrong (lower) iteration.
-        @test_throws ArgumentError TSODSO.checkpoint_iteration!((; z = [1.0]), -3; dir = dir)
-        @test_throws ArgumentError TSODSO.checkpoint_iteration!((; z = [1.0]), 100000; dir = dir)
+        @test_throws ArgumentError TSODSO.checkpoint_iteration!(
+            (; z = [1.0]),
+            -3;
+            dir = dir,
+        )
+        @test_throws ArgumentError TSODSO.checkpoint_iteration!(
+            (; z = [1.0]),
+            100000;
+            dir = dir,
+        )
 
         # The boundary values themselves are valid.
         TSODSO.checkpoint_iteration!((; z = [0.0]), 0; dir = dir)
@@ -61,9 +67,8 @@ end
     end
 end
 
-@testitem "planning checkpoint: re-saving the same iteration resumes the FRESH state, never the safesave backup (CR-02)" tags = [
-    :planning,
-] setup = [Phase8Fixtures] begin
+@testitem "planning checkpoint: re-saving the same iteration resumes the FRESH state, never the safesave backup (CR-02)" tags =
+    [:planning] setup = [Phase8Fixtures] begin
     using TSODSO
 
     # The exact crash-redo workflow this primitive exists for: crash during iteration 2,
