@@ -40,7 +40,7 @@ correct, validated optimization models that are easy to extend for research.
 
 ### Active
 
-(v2 milestone not yet scoped — see Current State "Next milestone" and `/gsd:new-milestone`)
+v2.0 requirements are being defined — see "Current Milestone: v2.0" below and `.planning/REQUIREMENTS.md`.
 
 ### Out of Scope
 
@@ -92,12 +92,27 @@ The operational transactive-energy layer is complete and validated end-to-end:
 
 **Known deferred tech debt** (accepted; see `milestones/v1.0-MILESTONE-AUDIT.md`): thesis welfare-headline
 figure digitization (Phase 4/5), IEEE-123 exact App. E impedances (Phase 7), `sub_seed` cross-version
-hash stability (Phase 8), docstring `@docs` manual wiring + JuliaFormatter-on-`docs/` (Phase 9),
-`deploydocs` repo-slug placeholder.
+hash stability (Phase 8), and an intermittent version-independent Clarabel `NUMERICAL_ERROR` on the
+IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/22):* published docs site
+(`DOCUMENTER_KEY` + Pages), docstring `@docs` manual wiring, JuliaFormatter-on-`docs/`, `deploydocs` slug.
 
-**Next milestone (v2 candidates):** the four declared research axes — stochastic optimization, MPC /
-real-time pricing, meshed networks + 4Q-BESS, and the Stackelberg-Nash TSO–DSO planning game (Benders +
-diagonalization). Each will need dedicated research and its own milestone.
+## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
+
+**Goal:** Add the thesis's planning layer — a bilevel TSO–DSO investment equilibrium where
+distributor-leaders choose flexibility investment / import profiles against a transmission-reinforcement
+follower, reaching a Nash equilibrium across multiple distributors via Gauss-Seidel diagonalization.
+
+**Target scope:**
+- **Multiple distributors → Nash** (Gauss-Seidel diagonalization; each solves its own bilevel vs shared transmission)
+- **Continuous investment variables first** — convex Benders master (LP/QP); discrete/integer expansion (binary-expansion + integer/Lagrangian cuts) deferred to a later milestone
+- **Hand-rolled Benders + diagonalization** (per CLAUDE.md); **BilevelJuMP as a small-case validation oracle only**, never the production solver
+- **Reuses v1's `operational_oracle(z)→(cost,π)`** as the lower level — the coupling seam (`z↔p_ag`, `λ_j↔π_s`, leader/follower role) shipped as SEAM-01 stubs in v1
+
+**Key context / risks:** Source (PSR N1–N2 note) is MEDIUM-confidence; the author flagged
+**leader/follower-role inconsistency** and **integer-cut correctness** as open concerns. Mitigation:
+research-first, continuous-before-integer, single-bilevel-before-Nash sequencing, and BilevelJuMP
+KKT/SOS1/Fortuny-Amat cross-validation on tiny instances. Coupling variable = N1↔N2 interconnection
+flow; linking price = interconnection dual ≈ DLMP.
 
 ## Constraints
 
@@ -143,4 +158,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-20 after v1.0 milestone*
+*Last updated: 2026-07-22 — v2.0 milestone started*
