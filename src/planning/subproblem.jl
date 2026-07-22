@@ -139,6 +139,11 @@ function build_planning_oracle(
     ctx = ModelContext(model)
     ctx.meta[:feeder] = feeder
     ctx.meta[:T] = T
+    # CR-03: stash the formulation's problem class so solve_planning_oracle! can default
+    # its battery-complementarity τ PROBLEM-CLASS-AWARE (looser 1e-3 on the interior-point
+    # SOCP path, tighter 1e-6 on the QP path) — mirroring solve_welfare's τ default —
+    # without carrying `pf` itself in the struct.
+    ctx.meta[:problem_class] = problem_class(pf)
 
     # VERBATIM power-flow builder reuse.
     contribute!(pf, ctx, feeder; T = T)
@@ -207,13 +212,33 @@ end
 
 """
     solve_planning_oracle!(o::PlanningOracle, z_trial::AbstractVector{<:Real};
-                          max_attempts::Int = 4, Δt::Real = 1.0)
+                          max_attempts::Int = 4, Δt::Real = 1.0,
+                          rtol_exact::Real = 1e-4,
+                          τ::Real = (SOCP path ? 1e-3 : 1e-6))
         -> (; cost, π, π_s, dadp, ctx)
 
 Re-solve the built-ONCE [`PlanningOracle`](@ref) `o` at the coupling-flow trial
 `z_trial` (D-01/D-11: `set_parameter_value.` only, NEVER a rebuild) via
-[`solve_with_retry!`](@ref) (plan 10-01, D-08) — the SOLE solve entry point; this
-function never gates the solve any other way.
+[`solve_with_retry!`](@ref) (plan 10-01, D-08) — the SOLE solve entry point — then run
+the SAME two mandatory post-solve trust gates as [`solve_welfare`](@ref), the model this
+oracle mirrors, strictly BEFORE any dual is read (CR-03):
+
+ 1. the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(o.ctx; rtol = rtol_exact)` —
+    DATA-DRIVEN on the squared-current `:l` stash in `o.ctx.meta[:pf_vars]` (only
+    `ConvexBranchFlow` stashes `:l`; DC/LinDistFlow skip untouched). The pin
+    `p_import[t] == z[t]` REMOVES the priced-export degree of freedom that
+    `solve_welfare` identifies as the SOC-exactness ENABLER, so an off-optimal `z_trial`
+    is exactly the regime where the cone can go slack — a physically-meaningless `π`
+    (the Benders-cut gradient) from an inexact relaxation is REFUSED (thrown), never
+    returned (threats T-04-01/T-04-03). `maxgap` is stashed under
+    `o.ctx.meta[:socp_maxgap]`;
+ 2. the App. C MANDATORY battery complementarity check
+    [`assert_battery_complementarity!`](@ref)`(o.ctx; τ, T = o.T)` — degenerate
+    `p_ch·p_dch` co-activation is MORE likely at a pinned off-optimal `z` than at the
+    free welfare optimum (threat T-03-13). `τ` defaults PROBLEM-CLASS-AWARE from the
+    `problem_class(pf)` stashed at build time (`1e-3` on the SOCP path, `1e-6` on the
+    QP path), mirroring `solve_welfare`'s default; it is a DISTINCT quantity from
+    `rtol_exact` — never conflated.
 
 Returns a `NamedTuple`:
 
@@ -240,6 +265,8 @@ function solve_planning_oracle!(
     z_trial::AbstractVector{<:Real};
     max_attempts::Int = 4,
     Δt::Real = 1.0,
+    rtol_exact::Real = 1e-4,
+    τ::Real = (get(o.ctx.meta, :problem_class, nothing) isa SOCP ? 1e-3 : 1e-6),
 )
     length(z_trial) == o.T || throw(
         ArgumentError(
@@ -252,6 +279,23 @@ function solve_planning_oracle!(
     # D-08: solve_with_retry! is the SOLE solve entry point (its internal STRICT gate,
     # dual = true, ensures π is read only after a trusted solve — T-10-05).
     solve_with_retry!(o.model; max_attempts = max_attempts, dual = true)
+
+    # CR-03 / PF-04 EXACTNESS GATE (mirrors solve_welfare, threats T-04-01/T-04-03): MUST
+    # run AFTER the trusted solve and BEFORE any dual is read, so a physically-meaningless
+    # π from a STRICT (inexact) SOC relaxation is REFUSED (thrown) rather than returned as
+    # a Benders-cut gradient into the entire Phase-11 planning loop. DATA-DRIVEN on the
+    # `:l` stash: only ConvexBranchFlow stashes `:l`, so DC/LinDistFlow skip untouched.
+    # The pin removes the priced-export SOC-exactness enabler, making this gate MORE
+    # load-bearing at an off-optimal z_trial than in the free welfare solve, not less.
+    if haskey(o.ctx.meta, :pf_vars) && haskey(o.ctx.meta[:pf_vars], :l)
+        o.ctx.meta[:socp_maxgap] = assert_socp_exact!(o.ctx; rtol = rtol_exact)
+    end
+
+    # CR-03 / App. C MANDATORY battery complementarity at the PINNED point (mirrors
+    # solve_welfare, threat T-03-13): degenerate p_ch·p_dch co-activation is MORE likely
+    # at a pinned off-optimal z than at the free optimum. Data-driven no-op when no
+    # batteries were registered under ctx.meta[:agg_device_vars].
+    assert_battery_complementarity!(o.ctx; τ = τ, T = o.T)
 
     π = dual.(o.pin)                                    # length-T pin dual (D-01/D-05)
     π_s = sum(Δt * π[t] for t in 1:o.T)                 # D-07 duration-weighted, reporting-only (D-04)
