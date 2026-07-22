@@ -98,6 +98,15 @@ include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (plan 06-02,
 include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (plan 06-03, ADMM-01, thesis 3.47)
 include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation (plan 06-04, ADMM-01/03/04)
 
+# --- Planning-layer resilience primitives: escalating retry + iteration checkpointing ---
+# Wired (plan 10-01, this plan is the SOLE owner of this shared edit) AFTER admm/ and
+# models/oracle.jl — ORCHESTRATION over the already-validated welfare/ADMM builders
+# (RESEARCH Pattern 4): `solve_with_retry!` wraps `assert_solved!` (INFRA-03) verbatim, and
+# `checkpoint_iteration!`/`resume_from_checkpoint` reuse `store.jl`'s `@tagsave` idiom
+# verbatim. NO Phase 4-9 source file is modified (D-03/D-11). Phase 10-02's
+# `planning/subproblem.jl` and Phase 13's `planning/coupling.jl` will join this directory.
+include("planning/retry.jl")        # solve_with_retry! wraps assert_solved! (plan 10-01, D-08/D-09)
+
 # --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
 # Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
 # ledger. The core declares only method-less generic functions + exports (NO CairoMakie

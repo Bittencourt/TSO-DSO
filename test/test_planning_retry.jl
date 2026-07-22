@@ -66,12 +66,6 @@ end
     @constraint(bad, y <= -1)
     @objective(bad, Min, y)
 
-    err = nothing
-    try
-        TSODSO.solve_with_retry!(bad)
-    catch e
-        err = e
-    end
-    @test err isa ErrorException
-    @test occursin("exhausted 1 attempt", err.msg)
+    result = @test_throws ErrorException TSODSO.solve_with_retry!(bad)
+    @test occursin("exhausted 1 attempt", result.value.msg)
 end
