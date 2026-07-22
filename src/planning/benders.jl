@@ -59,14 +59,20 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
     `master = build_master(; master_kwargs..., T = T)`. No `build_*`/`Model(` call appears
     anywhere inside the `for k in 1:max_iter` loop below.
  3. Iterate `k = 1:max_iter`: `lb_res = solve_master!(master)` (the Benders lower bound and
-    trial `z_k`); `oracle_res = solve_planning_oracle!(oracle, lb_res.z)`;
-    `follower_res = solve_follower!(follower, lb_res.z)` (DIRECT call — never
-    `solve_with_retry!`-wrapped, per plan 11-01's follower contract).
+    trial `z_k`); `follower_res = solve_follower!(follower, lb_res.z)` (DIRECT call — never
+    `solve_with_retry!`-wrapped, per plan 11-01's follower contract) — the follower's
+    feasibility check runs BEFORE any oracle solve (WR-01): an undeliverable trial `z_k`
+    (the master's box allows `z` up to `y_max`, beyond `corridor_cap * x_inv_max`) is
+    routed to the feasibility-cut branch instead of reaching the oracle, whose
+    exactness/complementarity gates can throw at extreme pinned `z`.
       + If `!follower_res.feasible`: append a feasibility cut
         (`add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)`),
         checkpoint with `gap = NaN` and `feasible = false`, then `continue` — a
-        feasibility cut NEVER updates `UB` (T-11-06).
-      + Else: append the oracle's `:op` optimality cut (`cost_k = -oracle_res.cost`,
+        feasibility cut NEVER updates `UB` (T-11-06); the oracle is NEVER solved on
+        this branch.
+      + Else: `oracle_res = solve_planning_oracle!(oracle, lb_res.z)` — only a
+        follower-deliverable `z_k` ever reaches the oracle;
+        then append the oracle's `:op` optimality cut (`cost_k = -oracle_res.cost`,
         `grad_k = oracle_res.π`, the plan-11-01-derived sign convention) and the
         follower's `:x` optimality cut (`cost_k = follower_res.cost`,
         `grad_k = follower_res.π_s`, used as-is); compute the iterate's TRUE cost
@@ -136,7 +142,13 @@ function solve_stackelberg!(
     gap = NaN
     for k in 1:max_iter
         lb_res = solve_master!(master)
-        oracle_res = solve_planning_oracle!(oracle, lb_res.z)
+        # WR-01: the follower's feasibility check runs FIRST — before any oracle solve.
+        # The master's box allows z up to y_max, beyond the follower's deliverable
+        # capacity (corridor_cap * x_inv_max); at such extreme trial z the oracle's own
+        # exactness/complementarity gates can throw (subproblem.jl CR-03), crashing the
+        # loop at the exact moment a feasibility cut was the designed recovery. Routing
+        # infeasible extremes to the feasibility-cut branch below also avoids a wasted
+        # oracle solve per infeasible iteration.
         # DIRECT call — NEVER solve_with_retry!-wrapped (plan 11-01's follower contract):
         # the infeasible branch must be OBSERVED on the un-retried solve, or the Farkas
         # certificate is unreachable.
@@ -151,6 +163,9 @@ function solve_stackelberg!(
             )
             continue   # T-11-06: a feasibility cut NEVER updates UB
         end
+
+        # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
+        oracle_res = solve_planning_oracle!(oracle, lb_res.z)
 
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
