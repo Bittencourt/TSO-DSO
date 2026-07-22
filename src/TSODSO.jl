@@ -107,10 +107,17 @@ include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validatio
 # `planning/subproblem.jl` (below) and Phase 13's `planning/coupling.jl` join this
 # directory. `planning/subproblem.jl` MUST load AFTER `retry.jl` (its
 # `solve_planning_oracle!` calls `solve_with_retry!`, D-08) — hence its position as the
-# THIRD line of this block, after `retry.jl` and `checkpoint.jl`.
+# THIRD line of this block, after `retry.jl` and `checkpoint.jl`. `planning/follower.jl`
+# (plan 11-01, PLAN-04) has NO load-time dependency on `subproblem.jl` (it is a wholly
+# separate LP with its own `FollowerLP` struct) but is positioned FOURTH, immediately
+# after `subproblem.jl`, purely for diff stability as the planning/ block grows.
+# `planning/master.jl` (plan 11-01, PLAN-05) is positioned FIFTH, after `follower.jl` —
+# plan 11-02's `benders.jl` will need both `follower.jl` and `master.jl` loaded first.
 include("planning/retry.jl")        # solve_with_retry! wraps assert_solved! (plan 10-01, D-08/D-09)
 include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoint (plan 10-01, D-10)
 include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (plan 10-02, PLAN-01/02)
+include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs (plan 11-01, PLAN-04)
+include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)
 
 # --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
 # Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
