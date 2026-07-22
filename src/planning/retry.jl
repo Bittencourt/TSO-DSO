@@ -46,11 +46,23 @@ The escalation ladder has 4 rungs (`max_attempts` caps how many are actually tri
 `max_attempts < 1` throws `ArgumentError` up front, and any value beyond the ladder
 length is CLAMPED to it — the effective budget is `min(max_attempts, 4)`):
 
-1. as-built (no attribute changes)
+1. no attribute changes (as-built on the FIRST call ever made on the model — see the
+   stickiness contract below)
 2. `static_regularization_constant => 1e-6`
 3. adds `iterative_refinement_max_iter => 100, equilibrate_max_iter => 50`
 4. `static_regularization_constant => 1e-5, dynamic_regularization_eps => 1e-11,
-   iterative_refinement_max_iter => 200` (last resort)
+   iterative_refinement_max_iter => 200, equilibrate_max_iter => 50` (last resort)
+
+Escalated attributes are STICKY — a deliberate, explicit contract (WR-01):
+`set_optimizer_attribute` mutates the model PERMANENTLY and this function never restores
+pre-call values. Once a call escalates to rung `k`, every LATER `solve_with_retry!` call
+on the same model starts its rung 1 from the rung-`k` conditioning. For a build-once
+model re-solved many times (the [`PlanningOracle`](@ref) inside a Benders loop) this is
+intentional: a conditioning regime that was needed once is assumed needed again, rather
+than re-failing and re-warning on every subsequent iteration. To keep the combinations
+predictable, every rung ≥ 2 restates a COMPLETE attribute set covering everything any
+lower rung touches (e.g. rung 4 restates `equilibrate_max_iter => 50` from rung 3), so
+within one call no rung runs with a leftover from a lower rung it does not itself state.
 
 If a retryable status is hit and attempts remain, `@warn`s with the attempt number and
 `raw_status(model)`, then escalates to the next rung. If the status is NOT in
@@ -70,8 +82,12 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
     # silent-skip outcome D-10 forbids. Fail loudly before touching the model.
     max_attempts >= 1 ||
         throw(ArgumentError("max_attempts must be ≥ 1, got $max_attempts"))
+    # WR-01: escalation is STICKY across calls (attributes persist on the model; see
+    # docstring contract). Every rung ≥ 2 is therefore a COMPLETE attribute set restating
+    # everything any lower rung touches, so within one call no rung runs with an unstated
+    # leftover from a lower rung.
     ladder = [
-        Dict(),                                                     # attempt 1: as-built
+        Dict(),                                                     # attempt 1: no changes (as-built on first-ever call)
         Dict("static_regularization_constant" => 1e-6),             # attempt 2: relax static reg
         Dict(
             "static_regularization_constant" => 1e-6,
@@ -82,6 +98,7 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
             "static_regularization_constant" => 1e-5,
             "dynamic_regularization_eps" => 1e-11,
             "iterative_refinement_max_iter" => 200,
+            "equilibrate_max_iter" => 50,                            # restated from rung 3 (complete set)
         ),                                                           # attempt 4: last resort
     ]
     # CR-01: the retry decision below MUST be ladder-aware (`attempt < n_attempts`, the
