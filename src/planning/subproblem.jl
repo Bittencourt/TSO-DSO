@@ -10,8 +10,9 @@
 # `p_import[t] == z[t]` as a named `pin[t]` constraint (D-01), reusing
 # `contribute!(pf, ctx, feeder; T)` / `contribute!(agg, ctx; T)` verbatim (the SAME
 # builders `solve_welfare`/`build_dso_opt` already use). `solve_planning_oracle!`
-# re-solves it via `solve_with_retry!` (plan 10-01, D-08) — NEVER `assert_solved!`
-# directly — and returns the pin's dual `π` (the length-T Benders-cut gradient, D-05)
+# re-solves it via `solve_with_retry!` (plan 10-01, D-08) — the retry wrapper is the SOLE
+# solve entry point, never called around directly — and returns the pin's dual `π` (the
+# length-T Benders-cut gradient, D-05)
 # plus its duration-weighted reconciliation `π_s` (D-07), a reporting-only scalar never
 # fed back into the optimization (D-04). The raw-dual sign convention is pinned by a
 # hand-derived toy-case monotonicity invariant (D-06), NOT assumed from the docstring
@@ -211,8 +212,8 @@ end
 
 Re-solve the built-ONCE [`PlanningOracle`](@ref) `o` at the coupling-flow trial
 `z_trial` (D-01/D-11: `set_parameter_value.` only, NEVER a rebuild) via
-[`solve_with_retry!`](@ref) (plan 10-01, D-08) — the SOLE entry point; this function
-NEVER calls `assert_solved!` directly.
+[`solve_with_retry!`](@ref) (plan 10-01, D-08) — the SOLE solve entry point; this
+function never gates the solve any other way.
 
 Returns a `NamedTuple`:
 
@@ -248,8 +249,8 @@ function solve_planning_oracle!(
 
     set_parameter_value.(o.z, z_trial)   # D-01/D-11: mutate the Parameter, no rebuild
 
-    # D-08: solve_with_retry! is the SOLE entry point — never assert_solved! directly.
-    # Its STRICT gate (dual = true) ensures π is read only after a trusted solve (T-10-05).
+    # D-08: solve_with_retry! is the SOLE solve entry point (its internal STRICT gate,
+    # dual = true, ensures π is read only after a trusted solve — T-10-05).
     solve_with_retry!(o.model; max_attempts = max_attempts, dual = true)
 
     π = dual.(o.pin)                                    # length-T pin dual (D-01/D-05)
