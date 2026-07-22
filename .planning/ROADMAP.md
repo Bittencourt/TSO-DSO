@@ -120,7 +120,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 11-02-PLAN.md — solve_stackelberg!: build-once Benders orchestration over PlanningOracle/FollowerLP/BendersMaster, UB/LB gap convergence, per-iteration checkpointing, fail-loud maxiter, wave 2, depends on 11-01
+- [x] 11-02-PLAN.md — solve_stackelberg!: build-once Benders orchestration over PlanningOracle/FollowerLP/BendersMaster, UB/LB gap convergence, per-iteration checkpointing, fail-loud maxiter, wave 2, depends on 11-01
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -227,7 +227,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 8. Experiment Harness & Reproducibility | v1.0 | 4/4 | Complete | 2026-07-20 |
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
-| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 1/3 | In Progress|  |
+| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 2/3 | In Progress|  |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/TBD | Not started | - |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
