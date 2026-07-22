@@ -79,8 +79,12 @@ invariant.
 - Convergence: **relative gap `(UB−LB)/max(1,|UB|) ≤ tol` (default 1e-6)**, documented formula,
   plus an iteration cap that **raises loudly** on exhaustion (never silent — Phase 10 D-10).
 - **Every cut-producing solve** (oracle, follower, master) goes through `solve_with_retry!` and the
-  strict `assert_solved!(...; allow_almost=false)` gate; `checkpoint_iteration!` fires per Benders
-  iteration exactly as designed in Phase 10 D-10.
+  strict `assert_solved!(...; allow_almost=false)` gate — **amended**: the follower's own
+  infeasible branch is a documented, scoped exception (see CONTEXT.md's "Amendment (revision 1)"
+  note) since `RETRYABLE_STATUSES` deliberately never includes `MOI.INFEASIBLE`/
+  `MOI.INFEASIBILITY_CERTIFICATE`, and retrying would silently discard the Farkas certificate
+  PLAN-04 requires; `checkpoint_iteration!` fires per Benders iteration exactly as designed in
+  Phase 10 D-10.
 - Code organization: new files **`src/planning/follower.jl`, `src/planning/master.jl`,
   `src/planning/benders.jl`**, mirroring the established `build_*` / `solve_*!` build-once naming
   used by `subproblem.jl` and the ADMM modules.
@@ -359,6 +363,9 @@ directly against `is_solved_and_feasible`/`dual_status`, not routed through the 
 wrapper. `solve_with_retry!` remains the right tool for the master's and oracle's cut-producing
 solves, which are never expected to be infeasible by construction (the master always has at least
 the origin as a feasible point; the oracle's feasibility depends on the fixture — see Pitfall O1).
+This is the exact divergence formalized in CONTEXT.md's "Amendment (revision 1)" note: the
+follower's infeasible branch is a scoped exclusion from the otherwise-universal
+`solve_with_retry!` gate, not a weakening of it.
 
 ### Pattern 4: BilevelJuMP certification — both `Upper()`/`Lower()` and `DualOf`
 
@@ -617,7 +624,7 @@ end
 document are `[VERIFIED]`/`[CITED]` against directly-fetched sources (Julia General registry,
 `joaquimg.github.io/BilevelJuMP.jl`, `jump.dev/JuMP.jl`, local `Pkg.status()`), not `[ASSUMED]`.
 
-## Open Questions
+## Open Questions (RESOLVED — empirically, by design)
 
 1. **Which subproblem(s) feed the master's epigraph, and in what combination?**
    - What we know: CONTEXT.md locks the optimality-cut FORM (`α ≥ cost^k + Σ_t π[t]·(z[t]−z^k[t])`,
@@ -630,6 +637,12 @@ document are `[VERIFIED]`/`[CITED]` against directly-fetched sources (Julia Gene
      style) — it is the more standard, more testable structure, and is trivially convertible to a
      single summed-cut form later if the certification prefers that reading. Let the BilevelJuMP
      certification (success criterion 4) be the actual tie-breaker, exactly as CONTEXT.md mandates.
+   - **Resolved:** implemented as the multi-cut epigraph (two separate epigraph terms, `α_op` for
+     the oracle's cut and `α_x` for the follower's cut) in 11-01-PLAN.md Task 2
+     (`build_master`/`add_optimality_cut!(master, :op/:x, ...)`), wired together in
+     11-02-PLAN.md Task 1's `solve_stackelberg!` loop. The certification test in 11-03-PLAN.md
+     cross-checks the resulting equilibrium against the independent BilevelJuMP/hand-enumeration
+     answer, per the recommendation above.
 
 2. **Does the certification's `BigMMode` instance need per-variable bound hints, or does a single global `M` suffice?**
    - What we know: `set_primal_upper_bound_hint`/`set_dual_upper_bound_hint` exist for refinement.
@@ -637,6 +650,11 @@ document are `[VERIFIED]`/`[CITED]` against directly-fetched sources (Julia Gene
      that a single conservative global `M` avoids Pitfall B1 entirely.
    - Recommendation: start with a single derived `M`; only reach for per-variable hints if
      `BigMMode` and `StrongDualityMode` disagree (Pitfall B1's own warning sign).
+   - **Resolved:** implemented as a single derived global `M` (`primal_big_M = dual_big_M = 20.0`,
+     a documented conservative multiple of the instance's own known primal/dual scales) in
+     11-03-PLAN.md Task 1, with a documented widen-to-`100.0` fallback if `BigMMode` and
+     `StrongDualityMode` disagree — per-variable bound hints were not needed; the recommendation's
+     "start simple" path held on this tiny instance.
 
 ## Environment Availability
 
@@ -664,8 +682,8 @@ installed because adding them IS part of this phase's scope (test-only `Pkg.add`
 |----------|-------|
 | Framework | `TestItemRunner.jl` (`@testitem`/`@testmodule`, `@run_package_tests` in `test/runtests.jl`) |
 | Config file | `test/Project.toml` (test-only deps; this phase adds `BilevelJuMP = "0.6.3"` to `[compat]`) |
-| Quick run command | `julia --project=. -e 'import Pkg; Pkg.test(test_args=["--tags", "planning"])'` (mirrors the project's documented deviation: `TestItemRunner.runtests(filter=...)` does not exist as a standalone entry point — every prior phase SUMMARY records this) |
-| Full suite command | `julia --project=. -e 'import Pkg; Pkg.test()'` (the authoritative gate used in every prior phase's RED/GREEN commits) |
+| Quick run command | `julia --project=. -e 'using TestItemRunner; @run_package_tests filter=ti->(:planning in ti.tags)'` (the `:planning`-tag-filtered fast run used as each task's own `<verify><automated>` — see VALIDATION.md) |
+| Full suite command | `julia --project=. -e 'import Pkg; Pkg.test()'` (the authoritative gate used in every prior phase's RED/GREEN commits; run at wave boundaries and the phase gate, not per task) |
 
 ### Phase Requirements → Test Map
 

@@ -54,6 +54,21 @@ stochastic scenarios (v2.x).
   `src/planning/benders.jl`**, mirroring the established `build_*` / `solve_*!` build-once
   naming used by `subproblem.jl` and the ADMM modules.
 
+### Amendment (revision 1) — scoped exclusion: the follower's infeasible branch bypasses `solve_with_retry!`
+- The decision above ("Every cut-producing solve... goes through `solve_with_retry!`") is
+  **amended** to exclude the follower LP's own infeasible branch. `src/planning/retry.jl`'s
+  `RETRYABLE_STATUSES` deliberately never includes `MOI.INFEASIBLE`/
+  `MOI.INFEASIBILITY_CERTIFICATE` — retrying a genuine infeasibility would silently discard the
+  Farkas certificate PLAN-04's own success criterion requires (a Farkas ray only exists on the
+  *un-retried*, directly-observed infeasible solve). `solve_follower!`'s infeasible branch must
+  therefore call `optimize!`/read `dual_status` **directly**, never through `solve_with_retry!`.
+  The master's and the oracle's own cut-producing solves remain fully gated by
+  `solve_with_retry!`/strict `assert_solved!(...; allow_almost=false)` exactly as originally
+  decided above — this amendment narrows scope to the follower's infeasible branch only, it does
+  not weaken the gate anywhere else. Reasoned in 11-RESEARCH.md's Pattern 3 / Anti-Patterns
+  section; implemented in 11-01-PLAN.md Task 1 (`solve_follower!`) and consumed as-is by
+  11-02-PLAN.md Task 1 (`solve_stackelberg!`'s direct, unwrapped `solve_follower!` call).
+
 ### BilevelJuMP certification gate (PLAN-07, PVAL-01)
 - Certification uses **both `BigMMode` and `StrongDualityMode`** on a tiny leader/follower
   instance, cross-checked against a **hand-worked enumeration** of the same toy case — three

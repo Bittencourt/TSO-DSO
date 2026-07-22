@@ -40,12 +40,20 @@ created: 2026-07-22
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 11-01-01 | 01 | 1 | PLAN-04 | — | N/A | testitem | quick `:planning` run (`test_planning_follower.jl`) | ❌ W0 | ⬜ pending |
-| 11-01-02 | 01 | 1 | PLAN-05 | — | N/A | testitem | quick `:planning` run (`test_planning_master.jl`) | ❌ W0 | ⬜ pending |
-| 11-02-01 | 02 | 2 | PLAN-06 | — | N/A | testitem | quick `:planning` run (`test_planning_benders.jl`) | ❌ W0 | ⬜ pending |
-| 11-03-01 | 03 | 3 | PLAN-07, PVAL-01 | — | N/A | testitem | quick `:planning` run (`test_bilevel_certification.jl`) | ❌ W0 | ⬜ pending |
+| 11-01-01 | 01 | 1 | PLAN-04 | — | N/A | testitem | quick name-filtered run (`test_planning_follower.jl`) | ❌ W0 | ⬜ pending |
+| 11-01-02 | 01 | 1 | PLAN-05 | — | N/A | testitem | quick `:planning`-tag run (`test_planning_master.jl`) | ❌ W0 | ⬜ pending |
+| 11-02-01 | 02 | 2 | PLAN-06 | — | N/A | testitem | quick name-filtered run (`test_planning_benders.jl`, Task 1) | ❌ W0 | ⬜ pending |
+| 11-02-02 | 02 | 2 | PLAN-06 | — | N/A | testitem | quick `:planning`-tag run (`test_planning_benders.jl`, Task 2) | ❌ W0 | ⬜ pending |
+| 11-03-01 | 03 | 3 | PLAN-07, PVAL-01 | — | N/A | testitem | quick name-filtered run (`test_planning_certification.jl`, Task 1) | ❌ W0 | ⬜ pending |
+| 11-03-02 | 03 | 3 | PLAN-07, PVAL-01 | — | N/A | testitem | quick `:planning`-tag run (`test_planning_certification.jl`, Task 2) | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+*Note (revision 1): each plan's SECOND task now verifies via the fast `:planning`-tag-filtered
+TestItemRunner command (`@run_package_tests filter=ti->(:planning in ti.tags)`, ~60s) rather than
+the full `Pkg.test()` suite (~8-9 min) — the full suite still runs at every wave boundary per the
+Sampling Rate above, so zero-regression coverage is unchanged, but per-task feedback latency now
+meets the < 120s target.*
 
 ---
 
@@ -54,7 +62,7 @@ created: 2026-07-22
 - [ ] `test/test_planning_follower.jl` — follower LP `α(z)` duals + Farkas certificate items (PLAN-04)
 - [ ] `test/test_planning_master.jl` — persistent cut-row accumulation, no-rebuild invariance (PLAN-05)
 - [ ] `test/test_planning_benders.jl` — end-to-end convergence gap items (PLAN-06)
-- [ ] `test/test_bilevel_certification.jl` — BilevelJuMP BigM/StrongDuality vs hand enumeration vs Benders (PLAN-07, PVAL-01)
+- [ ] `test/test_planning_certification.jl` — BilevelJuMP BigM/StrongDuality vs hand enumeration vs Benders (PLAN-07, PVAL-01)
 - [ ] `test/Project.toml` — add BilevelJuMP (test-only dependency) + Ipopt if StrongDualityMode needs NLP
 
 *Existing infrastructure (TestItemRunner, Phase6Fixtures, ToyElasticDevice) covers fixture needs; new files follow `test_planning_*.jl` conventions. Note the sanctioned INFRA-02 exception: the BilevelJuMP certification item must import solvers directly (BilevelModel requires a bare optimizer constructor) — document the exception in the test file header.*
