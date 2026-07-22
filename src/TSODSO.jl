@@ -104,9 +104,13 @@ include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validatio
 # (RESEARCH Pattern 4): `solve_with_retry!` wraps `assert_solved!` (INFRA-03) verbatim, and
 # `checkpoint_iteration!`/`resume_from_checkpoint` reuse `store.jl`'s `@tagsave` idiom
 # verbatim. NO Phase 4-9 source file is modified (D-03/D-11). Phase 10-02's
-# `planning/subproblem.jl` and Phase 13's `planning/coupling.jl` will join this directory.
+# `planning/subproblem.jl` (below) and Phase 13's `planning/coupling.jl` join this
+# directory. `planning/subproblem.jl` MUST load AFTER `retry.jl` (its
+# `solve_planning_oracle!` calls `solve_with_retry!`, D-08) — hence its position as the
+# THIRD line of this block, after `retry.jl` and `checkpoint.jl`.
 include("planning/retry.jl")        # solve_with_retry! wraps assert_solved! (plan 10-01, D-08/D-09)
 include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoint (plan 10-01, D-10)
+include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (plan 10-02, PLAN-01/02)
 
 # --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
 # Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
