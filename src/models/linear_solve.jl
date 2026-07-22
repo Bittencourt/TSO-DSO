@@ -23,24 +23,24 @@ distribution price. This generalizes `solve_toy_dc` to a real multi-bus feeder, 
 swappable `AbstractPowerFlow`, and a vector of `AbstractDevice`s that all meet ONLY at
 the shared nodal-balance residual:
 
-1. build `Model(select_optimizer(QP()))` — the concave-quadratic device utility makes the
-   welfare a QP, routed by problem class to the accurate-dual conic backend (prices ARE
-   duals); this file NEVER names a concrete solver (INFRA-02);
-2. wrap it in a [`ModelContext`](@ref); stash `feeder`/`T` in `ctx.meta`;
-3. let the power-flow formulation `contribute!` its branch/voltage terms into
-   `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`), and each device `contribute!` its
-   signed injection into `:Rp` plus its concave utility into `ctx.meta[:objective]` — the
-   device variables are stashed under `ctx.meta[:device_vars]`;
-4. inject a frontier import `p_import[t] ≥ 0` at `feeder.root` (`+p_import`, mirroring the
-   toy-DC convention) so the root balance closes; it is priced at `λ₀`;
-5. close EVERY residual present — `:Rp` always, `:Rq` only when `haskey(ctx.residuals, :Rq)`.
-   This keys off the residual registry's CONTENTS, not a formulation flag: there is NO
-   branching on the formulation type, so swapping DC↔LinDistFlow changes only which
-   residuals exist and this loop handles both unchanged (success criterion 4). Both closures are
-   registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
-6. maximize welfare `Σ utility − λ₀ᵀ·p_import` (thesis eq. 3.38 shape);
-7. solve through [`assert_solved!`](@ref)`(...; dual = true, allow_local = false)` — the
-   dual is read ONLY after this OPTIMAL gate (Pitfall 5, threat T-02-05).
+ 1. build `Model(select_optimizer(QP()))` — the concave-quadratic device utility makes the
+    welfare a QP, routed by problem class to the accurate-dual conic backend (prices ARE
+    duals); this file NEVER names a concrete solver (INFRA-02);
+ 2. wrap it in a [`ModelContext`](@ref); stash `feeder`/`T` in `ctx.meta`;
+ 3. let the power-flow formulation `contribute!` its branch/voltage terms into
+    `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`), and each device `contribute!` its
+    signed injection into `:Rp` plus its concave utility into `ctx.meta[:objective]` — the
+    device variables are stashed under `ctx.meta[:device_vars]`;
+ 4. inject a frontier import `p_import[t] ≥ 0` at `feeder.root` (`+p_import`, mirroring the
+    toy-DC convention) so the root balance closes; it is priced at `λ₀`;
+ 5. close EVERY residual present — `:Rp` always, `:Rq` only when `haskey(ctx.residuals, :Rq)`.
+    This keys off the residual registry's CONTENTS, not a formulation flag: there is NO
+    branching on the formulation type, so swapping DC↔LinDistFlow changes only which
+    residuals exist and this loop handles both unchanged (success criterion 4). Both closures are
+    registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
+ 6. maximize welfare `Σ utility − λ₀ᵀ·p_import` (thesis eq. 3.38 shape);
+ 7. solve through [`assert_solved!`](@ref)`(...; dual = true, allow_local = false)` — the
+    dual is read ONLY after this OPTIMAL gate (Pitfall 5, threat T-02-05).
 
 The returned `dadp` is the dual of the ACTIVE balance `:balance_p` at the FIRST device's
 bus (the priced load bus) over the horizon — the first distribution price (DADP). Its
@@ -64,8 +64,7 @@ function solve_linear(
     # WR-02: λ₀ is consumed as `λ₀[t]` for t = 1:T. A shorter vector `BoundsError`s deep in
     # objective assembly; a SCALAR λ₀ silently "works" only at T=1 and breaks for T>1. For
     # a reproducible bench a shape mismatch must fail at the boundary with a clear message.
-    length(λ₀) == T ||
-        throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+    length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
 
     model = Model(select_optimizer(QP()))   # concave-quad utility ⇒ QP factory backend (INFRA-02)
     ctx = ModelContext(model)

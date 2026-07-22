@@ -8,7 +8,8 @@
 # The item names contain "powerflow" / "lindistflow" so the occursin filters match.
 
 # --- Task 1: DCPowerFlow (active-only) ------------------------------------------------
-@testitem "powerflow: DCPowerFlow contributes active-only :Rp per-bus residual by dispatch (PF-02)" tags = [:powerflow] begin
+@testitem "powerflow: DCPowerFlow contributes active-only :Rp per-bus residual by dispatch (PF-02)" tags =
+    [:powerflow] begin
     using TSODSO, JuMP
 
     # 3-bus radial feeder: 1 (root) — 2 — 3.
@@ -17,7 +18,8 @@
         TSODSO.Bus(2, 0.95, 1.05, false),
         TSODSO.Bus(3, 0.95, 1.05, false),
     ]
-    branches = [TSODSO.Branch(1, 2, 0.01, 0.01, 10.0), TSODSO.Branch(2, 3, 0.01, 0.01, 10.0)]
+    branches =
+        [TSODSO.Branch(1, 2, 0.01, 0.01, 10.0), TSODSO.Branch(2, 3, 0.01, 0.01, 10.0)]
     feeder = TSODSO.Feeder(buses, branches, 1)
 
     ctx = TSODSO.ModelContext(Model(TSODSO.select_optimizer(TSODSO.LP())))
@@ -36,7 +38,8 @@
     @test isequal_canonical(ctx.residuals[:Rp][3, 1], 1.0 * P[2, 1])       # leaf: +inflow
 end
 
-@testitem "powerflow: DCPowerFlow indexes over the horizon T (per-bus, per-time) (PF-02)" tags = [:powerflow] begin
+@testitem "powerflow: DCPowerFlow indexes over the horizon T (per-bus, per-time) (PF-02)" tags =
+    [:powerflow] begin
     using TSODSO, JuMP
 
     buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
@@ -52,7 +55,8 @@ end
 end
 
 # --- Task 2: LinDistFlow (loss-less branch flow + squared voltage) --------------------
-@testitem "lindistflow: LinDistFlow contributes :Rp+:Rq, squared-voltage bounds, root fix, 3.43 drop (PF-02)" tags = [:lindistflow] begin
+@testitem "lindistflow: LinDistFlow contributes :Rp+:Rq, squared-voltage bounds, root fix, 3.43 drop (PF-02)" tags =
+    [:lindistflow] begin
     using TSODSO, JuMP
 
     # 3-bus radial feeder: 1 (root) — 2 — 3.
@@ -61,7 +65,8 @@ end
         TSODSO.Bus(2, 0.92, 1.08, false),
         TSODSO.Bus(3, 0.93, 1.07, false),
     ]
-    branches = [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0), TSODSO.Branch(2, 3, 0.03, 0.04, 10.0)]
+    branches =
+        [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0), TSODSO.Branch(2, 3, 0.03, 0.04, 10.0)]
     feeder = TSODSO.Feeder(buses, branches, 1)
 
     ctx = TSODSO.ModelContext(Model(TSODSO.select_optimizer(TSODSO.LP())))
@@ -96,7 +101,8 @@ end
     @test length(ctx.model[:vdrop]) == length(branches) * 1
 end
 
-@testitem "lindistflow: 2-bus loss-less identity p_import == p_load (PF-02)" tags = [:lindistflow] begin
+@testitem "lindistflow: 2-bus loss-less identity p_import == p_load (PF-02)" tags =
+    [:lindistflow] begin
     using TSODSO, JuMP
 
     # 2-bus radial: node 1 = frontier/root (v fixed 1.0), node 2 = load. LinDistFlow is

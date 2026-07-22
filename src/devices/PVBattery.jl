@@ -64,26 +64,27 @@ RETURNS `(; vars, p_inject, utility)`; the `Aggregator` (DEV-05) is the sole `:R
 writer and the utility roll-up point.
 
 # Fields
-- `bus::Int`   — the bus id the device sits at (the ONLY topology handle it holds; it never
-  sees the network object or line parameters).
-- `η::T`       — round-trip charge/discharge efficiency, `η ∈ (0,1]` (3.6). `η² < 1` for a
-  real battery drives the strict energy-waste half of the App. C argument.
-- `Δt::T`      — time-step length (h) for the SOC recursion (3.6).
-- `Pmax::T`    — charge/discharge power bound (3.8), `Pmax > 0`.
-- `Emin::T`, `Emax::T` — SOC band (3.9).
-- `soc0::T`    — initial state of charge, `Emin ≤ soc0 ≤ Emax` (3.9 IC).
-- `λ_min::T`, `λ_med::T`, `λ_max::T` — App. C price triple; the **strict** ordering
-  `λ_min < λ_med < λ_max` is the sufficient condition for `p_ch·p_dch = 0` (the
-  load-bearing guard, threat T-03-09; strictness is required — see CR-01 note above).
-- `Ppv::Vector{T}` — per-step PV-availability profile (pu power); the used PV satisfies
-  `0 ≤ pv_used[t] ≤ Ppv[t]` (curtailable, WR-04) and the charge draws from it
-  `p_ch[t] ≤ pv_used[t]` (3.7, Assumption A6: the battery charges from PV only, not the
-  grid). Must have `length ≥ T`.
+
+  - `bus::Int`   — the bus id the device sits at (the ONLY topology handle it holds; it never
+    sees the network object or line parameters).
+  - `η::T`       — round-trip charge/discharge efficiency, `η ∈ (0,1]` (3.6). `η² < 1` for a
+    real battery drives the strict energy-waste half of the App. C argument.
+  - `Δt::T`      — time-step length (h) for the SOC recursion (3.6).
+  - `Pmax::T`    — charge/discharge power bound (3.8), `Pmax > 0`.
+  - `Emin::T`, `Emax::T` — SOC band (3.9).
+  - `soc0::T`    — initial state of charge, `Emin ≤ soc0 ≤ Emax` (3.9 IC).
+  - `λ_min::T`, `λ_med::T`, `λ_max::T` — App. C price triple; the **strict** ordering
+    `λ_min < λ_med < λ_max` is the sufficient condition for `p_ch·p_dch = 0` (the
+    load-bearing guard, threat T-03-09; strictness is required — see CR-01 note above).
+  - `Ppv::Vector{T}` — per-step PV-availability profile (pu power); the used PV satisfies
+    `0 ≤ pv_used[t] ≤ Ppv[t]` (curtailable, WR-04) and the charge draws from it
+    `p_ch[t] ≤ pv_used[t]` (3.7, Assumption A6: the battery charges from PV only, not the
+    grid). Must have `length ≥ T`.
 
 Construction throws `ArgumentError` unless `λ_min < λ_med < λ_max` (strict App. C guard,
 CR-01), `Pmax > 0`, `η ∈ (0,1]`, and `Emin ≤ soc0 ≤ Emax`.
 """
-struct PVBattery{T<:Real} <: AbstractDevice
+struct PVBattery{T <: Real} <: AbstractDevice
     bus::Int
     η::T
     Δt::T
@@ -108,7 +109,7 @@ struct PVBattery{T<:Real} <: AbstractDevice
         λ_med::T,
         λ_max::T,
         Ppv::Vector{T},
-    ) where {T<:Real}
+    ) where {T <: Real}
         # App. C sufficient condition (the load-bearing guard, threat T-03-09): the
         # ordering must be STRICT (λ_min < λ_med < λ_max). CR-01: a non-strict ordering
         # (any equality) collapses a utility curvature to zero (b_ch or b_dch = 0), which

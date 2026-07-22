@@ -33,16 +33,16 @@ using JuMP
 
 Mutable container coupling a JuMP `model` with three named registries:
 
-- `constraints::Dict{Symbol,Any}` — constraint handles for later `dual()` / DADP access.
-- `residuals::Dict{Symbol,Any}`   — `AffExpr` accumulators; the shared nodal-balance
-  seam that power-flow formulations contribute into (PF-01/PF-02). Contributions ADD,
-  never overwrite, so there is no `if formulation ==` branching anywhere. A residual
-  is either a SCALAR `AffExpr` (Phase-1 rung-0 seam) or an INDEXED `Matrix{AffExpr}`
-  (Phase-2 per-bus/time seam) — the physical balance is affine, so the value type is
-  always `AffExpr`.
-- `meta::Dict{Symbol,Any}`        — per-unit base, feeder handle, other config, and the
-  quadratic welfare objective under `:objective` (a `QuadExpr`, see
-  [`add_to_objective!`](@ref)).
+  - `constraints::Dict{Symbol,Any}` — constraint handles for later `dual()` / DADP access.
+  - `residuals::Dict{Symbol,Any}`   — `AffExpr` accumulators; the shared nodal-balance
+    seam that power-flow formulations contribute into (PF-01/PF-02). Contributions ADD,
+    never overwrite, so there is no `if formulation ==` branching anywhere. A residual
+    is either a SCALAR `AffExpr` (Phase-1 rung-0 seam) or an INDEXED `Matrix{AffExpr}`
+    (Phase-2 per-bus/time seam) — the physical balance is affine, so the value type is
+    always `AffExpr`.
+  - `meta::Dict{Symbol,Any}`        — per-unit base, feeder handle, other config, and the
+    quadratic welfare objective under `:objective` (a `QuadExpr`, see
+    [`add_to_objective!`](@ref)).
 
 Construct with [`ModelContext(model)`](@ref); populate via
 [`register_constraint!`](@ref), [`add_to_residual!`](@ref) (affine residual), and
@@ -50,9 +50,9 @@ Construct with [`ModelContext(model)`](@ref); populate via
 """
 mutable struct ModelContext
     model::Model
-    constraints::Dict{Symbol,Any}
-    residuals::Dict{Symbol,Any}
-    meta::Dict{Symbol,Any}
+    constraints::Dict{Symbol, Any}
+    residuals::Dict{Symbol, Any}
+    meta::Dict{Symbol, Any}
 end
 
 """
@@ -62,7 +62,7 @@ Construct a `ModelContext` wrapping `model` with empty constraint, residual, and
 meta registries.
 """
 ModelContext(model::Model) =
-    ModelContext(model, Dict{Symbol,Any}(), Dict{Symbol,Any}(), Dict{Symbol,Any}())
+    ModelContext(model, Dict{Symbol, Any}(), Dict{Symbol, Any}(), Dict{Symbol, Any}())
 
 """
     register_constraint!(ctx::ModelContext, name::Symbol, cref)

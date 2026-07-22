@@ -19,10 +19,8 @@
 #   - the loop stops iff BOTH ‖r‖ ≤ ε_pri AND ‖s‖ ≤ ε_dual (two-residual `converged`), so the
 #     converged ledger satisfies the two-residual predicate at its final iterate.
 
-@testitem "admm dualresid: z-block dual residual + two-residual stop (dualresid, admm)" setup = [
-    Phase7Fixtures,
-    Phase6Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "admm dualresid: z-block dual residual + two-residual stop (dualresid, admm)" setup =
+    [Phase7Fixtures, Phase6Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
 
     # RED until Wave 3 (plan 07-04 dual-residual correction lands with the 07-03 set_rho! seam).
@@ -35,9 +33,14 @@
         λ₀ = Phase6Fixtures.two_bus_lambda0()
 
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = Phase7Fixtures.RHO0,
-            ε_abs = Phase7Fixtures.EPS_ABS, ε_rel = Phase7Fixtures.EPS_REL,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = Phase7Fixtures.RHO0,
+            ε_abs = Phase7Fixtures.EPS_ABS,
+            ε_rel = Phase7Fixtures.EPS_REL,
             allow_export = true,
         )
         led = res.residuals
@@ -57,9 +60,8 @@
     end
 end
 
-@testitem "admm dualresid: ledger two-residual converged predicate (dualresid, resid)" setup = [
-    Phase7Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "admm dualresid: ledger two-residual converged predicate (dualresid, resid)" setup =
+    [Phase7Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
 
     # This item exercises the JuMP-free ledger contract directly (GREEN once plan 07-01 Task 2

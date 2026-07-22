@@ -79,8 +79,7 @@ NOTE (CR-01 fix): `savename`'s DEFAULT float formatting rounds `AbstractFloat` f
 knob (`ρ`/`ε_abs`/`ε_rel`/`τ_ratio`/`μ`) onto the IDENTICAL filename — verified directly
 against this repo's pinned DrWatson (2.19.1): `ρ = 100.1/100.2/100.4` all produced
 `"...ρ=100.0..."` under the bare default. `digits = 10` makes the float component of the
-filename round-trip losslessly (no more collisions from display rounding), **and** `safe =
-true` is passed so `@tagsave` routes through `safesave` (appends `_1`, `_2`, ... instead of
+filename round-trip losslessly (no more collisions from display rounding), **and** `safe = true` is passed so `@tagsave` routes through `safesave` (appends `_1`, `_2`, ... instead of
 silently overwriting) as defense-in-depth against any RESIDUAL collision (e.g. two Scenarios
 that are truly float-identical to 10 digits but differ in a field `default_allowed` excludes).
 Together these close the "silently overwrites a prior run's JLD2" data-loss risk this function
@@ -99,8 +98,11 @@ function run_and_store(s::Scenario; dir::AbstractString = datadir("sims"))
     res = run_scenario(s)
     dict = result_to_dict(res)
     @tagsave(
-        joinpath(dir, scenario_filename(s)), dict;
-        storepatch = true, gitpath = pkgdir(@__MODULE__), safe = true,
+        joinpath(dir, scenario_filename(s)),
+        dict;
+        storepatch = true,
+        gitpath = pkgdir(@__MODULE__),
+        safe = true,
     )
     return res
 end

@@ -9,20 +9,16 @@
 # While RED the sole failing assertion is a missing-symbol `isdefined` check; behavioral
 # asserts sit behind the `isdefined` guard so they go live once 05-05 lands.
 
-@testitem "welfare surplus accounting: welfare_accounting is defined (PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] begin
+@testitem "welfare surplus accounting: welfare_accounting is defined (PRICE-03)" tags =
+    [:welfare, :surplus] begin
     using TSODSO
 
     # RED until plan 05-05 defines the surplus split.
     @test isdefined(TSODSO, :welfare_accounting)
 end
 
-@testitem "welfare surplus accounting: prosumer + DSO surplus sums to social welfare (PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] begin
+@testitem "welfare surplus accounting: prosumer + DSO surplus sums to social welfare (PRICE-03)" tags =
+    [:welfare, :surplus] begin
     using TSODSO
 
     # RED until plan 05-05 defines the accounting; the surplus-identity assertion goes live once
@@ -40,8 +36,14 @@ end
         T = 3
         batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
         agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-        ctx, obj, _dadp =
-            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true)
+        ctx, obj, _dadp = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            T = T,
+            λ₀ = fill(40.0, T),
+            allow_export = true,
+        )
 
         acct = welfare_accounting(ctx; T = T)
         # Surplus identity: prosumer + DSO surplus == social welfare (the optimization optimum).
@@ -59,10 +61,8 @@ end
 # there a loss remainder?) and then on the lossy IEEE-13 ground solve.
 # ---------------------------------------------------------------------------------------------
 
-@testitem "welfare surplus accounting: near-lossless 2-bus identity + finite magnitude-sane surpluses (PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] begin
+@testitem "welfare surplus accounting: near-lossless 2-bus identity + finite magnitude-sane surpluses (PRICE-03)" tags =
+    [:welfare, :surplus] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -78,7 +78,12 @@ end
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
     ctx, obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = fill(40.0, T),
+        allow_export = true,
     )
 
     acct = welfare_accounting(ctx; T = T)
@@ -94,10 +99,8 @@ end
     @test isfinite(acct.social)
 end
 
-@testitem "welfare surplus accounting: sign-flipped price-transfer makes the identity THROW — non-vacuous (PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] begin
+@testitem "welfare surplus accounting: sign-flipped price-transfer makes the identity THROW — non-vacuous (PRICE-03)" tags =
+    [:welfare, :surplus] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -110,7 +113,12 @@ end
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
     ctx, _obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = fill(40.0, T),
+        allow_export = true,
     )
 
     # Correct input: the identity holds and welfare_accounting returns cleanly.
@@ -137,10 +145,8 @@ end
 # Under the pre-fix (buggy) `prosumer = util − transfer` the exporter's prosumer surplus was a
 # large NEGATIVE and dso EXCEEDED social — both caught here, neither caught by the sum-identity.
 # ---------------------------------------------------------------------------------------------
-@testitem "welfare surplus accounting: net-EXPORTER earns — individual surplus signs (WR-01/PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] begin
+@testitem "welfare surplus accounting: net-EXPORTER earns — individual surplus signs (WR-01/PRICE-03)" tags =
+    [:welfare, :surplus] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -156,7 +162,12 @@ end
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
     ctx, obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = fill(40.0, T),
+        allow_export = true,
     )
 
     acct = welfare_accounting(ctx; T = T)
@@ -185,10 +196,8 @@ end
     @test isapprox(acct.dso, 0.397; atol = 0.05)
 end
 
-@testitem "welfare surplus accounting: net-IMPORTER pays — individual surplus signs (WR-01/PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] begin
+@testitem "welfare surplus accounting: net-IMPORTER pays — individual surplus signs (WR-01/PRICE-03)" tags =
+    [:welfare, :surplus] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -204,7 +213,12 @@ end
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.0, T))
     agg = Aggregator(2, 0.9, [batt], fill(1.5, T))
     ctx, obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = fill(40.0, T),
+        allow_export = true,
     )
 
     acct = welfare_accounting(ctx; T = T)
@@ -230,10 +244,8 @@ end
     @test isapprox(acct.prosumer + acct.dso, acct.social; rtol = 1e-4, atol = 1e-4)
 end
 
-@testitem "welfare surplus accounting: IEEE-13 ground solve — social == prosumer + dso == objective (PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] setup = [Phase4Fixtures] begin
+@testitem "welfare surplus accounting: IEEE-13 ground solve — social == prosumer + dso == objective (PRICE-03)" tags =
+    [:welfare, :surplus] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -242,8 +254,12 @@ end
     λ₀ = Phase4Fixtures.mem_price_profile()
 
     ctx, obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs;
-        T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
     )
 
     acct = welfare_accounting(ctx; T = Phase4Fixtures.T)
@@ -272,9 +288,8 @@ end
 # is a trustworthy claim. German-FIT prices: λ_import=6.6, λ_export=9.6, λ_self=5.6 ¢$/kWh
 # (thesis page 93, `FIT_λ_*` constants in fit.jl).
 # ---------------------------------------------------------------------------------------------
-@testitem "welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check (PRICE-03)" setup = [
-    Phase4Fixtures,
-] tags = [:welfare, :surplus] begin
+@testitem "welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check (PRICE-03)" setup =
+    [Phase4Fixtures] tags = [:welfare, :surplus] begin
     using TSODSO
     using TSODSO: Branch, Feeder
     using JuMP
@@ -291,8 +306,8 @@ end
     # DADP welfare is solved on the SAME network so social_DADP and social_FIT are comparable.
     base_feeder = ieee13_modified()
     brs = [
-        b == 1 ? Branch(br.from, br.to, br.r, br.x, 99.0) : br
-        for (b, br) in enumerate(base_feeder.branches)
+        b == 1 ? Branch(br.from, br.to, br.r, br.x, 99.0) : br for
+        (b, br) in enumerate(base_feeder.branches)
     ]
     feeder = Feeder(base_feeder.buses, brs, base_feeder.root)
     aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
@@ -303,7 +318,12 @@ end
 
     relaxed = base.ctx.meta[:feeder]
     ctx, obj, _dadp = solve_welfare(
-        relaxed, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀, allow_export = true,
+        relaxed,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
     )
 
     acct = welfare_accounting(ctx; T = T, λ₀ = λ₀, baseline = base)
@@ -333,6 +353,7 @@ end
     # gap is figure-bound, so `broken` records it without failing; only the band above and the
     # golden fire on a real bug.
     gap = abs(acct.ratio - 1.25)
-    @info "welfare: +25% headline ratio vs thesis 1.25 (figure-bound cross-check)" ratio = acct.ratio gap = gap
+    @info "welfare: +25% headline ratio vs thesis 1.25 (figure-bound cross-check)" ratio =
+        acct.ratio gap = gap
     @test (gap < 0.1) broken = (gap >= 0.1)
 end

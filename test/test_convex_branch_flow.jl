@@ -7,7 +7,8 @@
 # assertion is a missing-symbol `isdefined` check (never a runner crash); the behavioral
 # asserts sit behind an `isdefined` guard so they go live automatically once 04-02 lands.
 
-@testitem "socp: ConvexBranchFlow is a defined AbstractPowerFlow subtype (PF-03)" tags = [:socp] begin
+@testitem "socp: ConvexBranchFlow is a defined AbstractPowerFlow subtype (PF-03)" tags =
+    [:socp] begin
     using TSODSO
 
     # RED until plan 04-02 defines the SOCP formulation.
@@ -18,7 +19,8 @@
     end
 end
 
-@testitem "socp: ConvexBranchFlow routes to the SOCP problem class (PF-03 / INFRA-02)" tags = [:socp] begin
+@testitem "socp: ConvexBranchFlow routes to the SOCP problem class (PF-03 / INFRA-02)" tags =
+    [:socp] begin
     using TSODSO
 
     # The generic trait already returns QP() for DC/LinDistFlow (plan 04-01); plan 04-02
@@ -31,7 +33,8 @@ end
     end
 end
 
-@testitem "socp: contribute! stashes pf_vars with the SOC/exactness variables (PF-03)" tags = [:socp] begin
+@testitem "socp: contribute! stashes pf_vars with the SOC/exactness variables (PF-03)" tags =
+    [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -69,7 +72,8 @@ end
 # check depend on (src/solver/factory.jl, plan 01-03). This item documents that Phase-4
 # required NO change to the solver factory — the pre-existing `select_optimizer(SOCP())`
 # suffices. Name contains "socp" so `occursin("socp", ti.name)` selects it.
-@testitem "socp: SOCP() routes to a Clarabel factory with tight gap (INFRA-02)" tags = [:socp] begin
+@testitem "socp: SOCP() routes to a Clarabel factory with tight gap (INFRA-02)" tags =
+    [:socp] begin
     using TSODSO
     using JuMP
 
@@ -88,9 +92,8 @@ end
 # feeder and asserts each handle is registered under ctx.constraints. The `:smax` container is
 # BRANCH-INDEXED (keyed by branch index b, time t) with the SAME `smax < _SMAX_NO_LIMIT` filter
 # as before, so only genuinely-limited branches carry a cone (feasible set byte-identical).
-@testitem "socp: contribute! registers the branch-flow duals for DLMP (:vdrop/:cpydrop/:cone/:smax) (PRICE-02)" tags = [
-    :socp,
-] begin
+@testitem "socp: contribute! registers the branch-flow duals for DLMP (:vdrop/:cpydrop/:cone/:smax) (PRICE-02)" tags =
+    [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -99,15 +102,8 @@ end
     # `smax < _SMAX_NO_LIMIT`) so the `:smax` container is non-empty; branch 2 is at the
     # no-limit sentinel so it gets NO apparent-power cone (byte-identical to the prior loop).
     feeder = Feeder(
-        [
-            Bus(1, 0.95, 1.05, true),
-            Bus(2, 0.95, 1.05, false),
-            Bus(3, 0.95, 1.05, false),
-        ],
-        [
-            Branch(1, 2, 0.01, 0.02, 0.05),
-            Branch(2, 3, 0.01, 0.02, TSODSO._SMAX_NO_LIMIT),
-        ],
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 0.05), Branch(2, 3, 0.01, 0.02, TSODSO._SMAX_NO_LIMIT)],
         1,
     )
 

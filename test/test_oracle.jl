@@ -9,9 +9,8 @@
 # build their feeder/aggregator inline (no Phase4Fixtures / SOCP coupling), keeping this
 # Wave-2 test independent of 04-02/04-03. Ground-truth numbers are 04-06's job, not here.
 
-@testitem "oracle: operational_oracle returns (cost, π, dadp, ctx) with finite prices (OPT-03/SEAM-01)" tags = [
-    :oracle,
-] begin
+@testitem "oracle: operational_oracle returns (cost, π, dadp, ctx) with finite prices (OPT-03/SEAM-01)" tags =
+    [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -31,8 +30,11 @@
     # Exercise EVERY SEAM-01 stub kwarg (z coupling flow, leader/follower role,
     # multi-scenario objective hook, rolling-horizon initial state) on a LinDistFlow solve.
     res = operational_oracle(
-        feeder, LinDistFlow(), [agg];
-        λ₀ = λ₀, T = T,
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
         z = nothing,
         role = :follower,
         objective_hook = identity,
@@ -55,9 +57,8 @@
     @test all(isfinite, res.dadp)
 end
 
-@testitem "oracle: SEAM-01 stub kwargs are inert — :leader role returns the same shape (SEAM-01)" tags = [
-    :oracle,
-] begin
+@testitem "oracle: SEAM-01 stub kwargs are inert — :leader role returns the same shape (SEAM-01)" tags =
+    [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -75,8 +76,11 @@ end
     # other three SEAM-01 stubs must SUCCEED and return the identical (; cost, π, dadp, ctx)
     # shape — the stubs are inert in Phase 4 (no partial planning behavior, threat T-04-13).
     res = operational_oracle(
-        feeder, LinDistFlow(), [agg];
-        λ₀ = λ₀, T = T,
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
         z = nothing,
         role = :leader,
         objective_hook = identity,
@@ -92,14 +96,17 @@ end
 
     # An unknown role is rejected loudly (fail-fast; the role is a real, typed seam).
     @test_throws ArgumentError operational_oracle(
-        feeder, LinDistFlow(), [agg];
-        λ₀ = λ₀, T = T, role = :bystander,
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+        role = :bystander,
     )
 end
 
-@testitem "oracle: a non-nothing z-pin fails LOUDLY, never a silent proxy dual (WR-03/SEAM-01)" tags = [
-    :oracle,
-] begin
+@testitem "oracle: a non-nothing z-pin fails LOUDLY, never a silent proxy dual (WR-03/SEAM-01)" tags =
+    [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -119,8 +126,12 @@ end
     # planning caller can never mistake an unpinned proxy for a genuine pinned coupling price
     # (threat T-04-13: NO silent partial pinning).
     @test_throws ArgumentError operational_oracle(
-        feeder, LinDistFlow(), [agg];
-        λ₀ = λ₀, T = T, z = fill(0.05, T),
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+        z = fill(0.05, T),
     )
 
     # The free-coupling (z = nothing) path still returns a finite frontier coupling dual —

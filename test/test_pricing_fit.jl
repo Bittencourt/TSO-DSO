@@ -27,14 +27,13 @@
             Bus(2, 0.95, 1.05, false),
             Bus(3, 0.95, 1.05, false),
         ]
-        branches = [
-            Branch(1, 2, 0.02, 0.03, 10.0),
-            Branch(2, 3, 0.02, 0.03, 10.0),
-        ]
+        branches = [Branch(1, 2, 0.02, 0.03, 10.0), Branch(2, 3, 0.02, 0.03, 10.0)]
         return Feeder(buses, branches, 1)
     end
 
-    "Aggregators built deterministically from a seed (PV + a deferrable load + a battery)."
+    """
+    Aggregators built deterministically from a seed (PV + a deferrable load + a battery).
+    """
     function aggregators(; seed::Integer)
         aggs = TSODSO.Aggregator[]
         for bus in 2:3
@@ -118,15 +117,30 @@ end
     T = FitFixtures.T
     feeder = FitFixtures.feeder()
 
-    res1 = fit_baseline(feeder, ConvexBranchFlow(), FitFixtures.aggregators(seed = 4242); T = T)
-    res2 = fit_baseline(feeder, ConvexBranchFlow(), FitFixtures.aggregators(seed = 4242); T = T)
+    res1 = fit_baseline(
+        feeder,
+        ConvexBranchFlow(),
+        FitFixtures.aggregators(seed = 4242);
+        T = T,
+    )
+    res2 = fit_baseline(
+        feeder,
+        ConvexBranchFlow(),
+        FitFixtures.aggregators(seed = 4242);
+        T = T,
+    )
 
     # Same seed ⇒ identical baseline (deterministic solve over identical seeded profiles).
     @test res1.social_fit == res2.social_fit
     @test res1.prosumer_surplus == res2.prosumer_surplus
 
     # A different seed generally yields a different baseline (guards against a constant stub).
-    res3 = fit_baseline(feeder, ConvexBranchFlow(), FitFixtures.aggregators(seed = 9999); T = T)
+    res3 = fit_baseline(
+        feeder,
+        ConvexBranchFlow(),
+        FitFixtures.aggregators(seed = 9999);
+        T = T,
+    )
     @test res3.social_fit != res1.social_fit
 end
 
@@ -170,9 +184,8 @@ end
 # header comment). Deterministic under the fixed seed (the "reproducible bit-for-bit" @testitem
 # above already proves this).
 # ---------------------------------------------------------------------------------------------
-@testitem "fit: FIT-vs-DADP ratio regression golden (EXP-04)" setup = [FitFixtures] tags = [
-    :fit,
-] begin
+@testitem "fit: FIT-vs-DADP ratio regression golden (EXP-04)" setup = [FitFixtures] tags =
+    [:fit] begin
     using TSODSO
 
     T = FitFixtures.T

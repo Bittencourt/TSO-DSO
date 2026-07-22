@@ -62,9 +62,9 @@ Bus `id` equals its 1-based position, so **thesis node `k` maps to struct index 
 reference for the ground-truth regression (plan 04-06), e.g. thesis node 9 = struct
 index 10:
 
-| thesis node | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
-|-------------|---|---|---|---|---|---|---|---|---|---|----|
-| struct index| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |10 | 11 |
+| thesis node  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9  | 10 |
+|:------------ |:- |:- |:- |:- |:- |:- |:- |:- |:- |:-- |:-- |
+| struct index | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 |
 
 Branches (thesis `from,to` — `r[pu]`, `x[pu]`), shifted `k → k+1` on construction:
 
@@ -76,10 +76,10 @@ Branches (thesis `from,to` — `r[pu]`, `x[pu]`), shifted `k → k+1` on constru
 
 # Magnitudes
 
-  * Every bus has voltage bounds `vmin = 0.95`, `vmax = 1.05` pu.
-  * The **head branch** (thesis `0→1`, struct index `1→2`) carries the single binding
+  - Every bus has voltage bounds `vmin = 0.95`, `vmax = 1.05` pu.
+  - The **head branch** (thesis `0→1`, struct index `1→2`) carries the single binding
     thermal limit `S_max = 6.86 MVA ⇒ 0.0686 pu` (converted once via `to_pu_power`).
-  * Interior branches use the `IEEE13_INTERIOR_SMAX = 99.0` pu sentinel — effectively
+  - Interior branches use the `IEEE13_INTERIOR_SMAX = 99.0` pu sentinel — effectively
     unconstrained, and strictly inside the magnitude band (Assumption A4 / Open Q2).
 
 `Feeder(buses, branches, 1)` runs `assert_radial` (DATA-02) and `assert_magnitudes`

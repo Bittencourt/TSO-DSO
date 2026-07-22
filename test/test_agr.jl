@@ -15,10 +15,8 @@
 # orchestration, not a re-implementation — and is built ONCE (num_variables/num_constraints
 # invariant across re-solves; only `set_objective_coefficient` mutates it).
 
-@testitem "agr: build_agr_opt builds per-node QP, solves OPTIMAL at zero price (agr)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "agr: build_agr_opt builds per-node QP, solves OPTIMAL at zero price (agr)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP
 
@@ -52,10 +50,8 @@
     end
 end
 
-@testitem "agr: solve_agr! coefficient-update re-solve returns pag + utility (agr)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "agr: solve_agr! coefficient-update re-solve returns pag + utility (agr)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP
 
@@ -81,10 +77,8 @@ end
     end
 end
 
-@testitem "agr: build-once — num_variables/num_constraints stable across re-solves (resolve)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "agr: build-once — num_variables/num_constraints stable across re-solves (resolve)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -118,10 +112,8 @@ end
     end
 end
 
-@testitem "agr: price coefficient actually shifts the net injection (agr)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "agr: price coefficient actually shifts the net injection (agr)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Task 2 adds solve_agr!.
@@ -144,10 +136,8 @@ end
     end
 end
 
-@testitem "agr: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "agr: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -173,7 +163,8 @@ end
         set_rho!(agr_mut, ρ1)
         # Build-once (ADMM-04): a ρ change mutates ONLY objective coefficients — shape invariant.
         @test num_variables(agr_mut.model) == nv0
-        @test num_constraints(agr_mut.model; count_variable_in_set_constraints = true) == nc0
+        @test num_constraints(agr_mut.model; count_variable_in_set_constraints = true) ==
+              nc0
         out_mut = solve_agr!(agr_mut, λj, cj, ρ1; check_battery = false, strict = false)
 
         # FRESH path: build directly at ρ1, solve the SAME coefficients.
@@ -181,7 +172,12 @@ end
         out_fresh = solve_agr!(agr_fresh, λj, cj, ρ1; check_battery = false, strict = false)
 
         # Equivalence proof: the in-place quadratic mutation reproduces a fresh build at ρ1.
-        @test isapprox(collect(out_mut.pag), collect(out_fresh.pag); atol = 1e-6, rtol = 1e-5)
+        @test isapprox(
+            collect(out_mut.pag),
+            collect(out_fresh.pag);
+            atol = 1e-6,
+            rtol = 1e-5,
+        )
         @test isapprox(out_mut.utility, out_fresh.utility; atol = 1e-6, rtol = 1e-5)
     end
 end

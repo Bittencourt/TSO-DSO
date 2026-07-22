@@ -39,12 +39,13 @@ struct LinDistFlow <: AbstractPowerFlow end
 Write the loss-less LinDistFlow branch/voltage terms into the shared residuals.
 
 Creates, on `ctx.model`:
-- `v[j,t]` — squared voltage magnitude `|V_j|²` (thesis 3.33 variable), with the root
-  fixed at `1.0` and every other bus bounded by the SQUARED magnitude limits
-  `vmin²`/`vmax²` (thesis 3.45; Pitfall 1 — square the magnitude bounds);
-- `P[b,t]`, `Q[b,t]` — branch active/reactive flows (parent→child), `t = 1:T`;
-- `vdrop[b,t]` — the loss-less voltage-drop constraint
-  `v[br.to,t] == v[br.from,t] − 2·(r·P[b,t] + x·Q[b,t])` (thesis 3.43, l→0).
+
+  - `v[j,t]` — squared voltage magnitude `|V_j|²` (thesis 3.33 variable), with the root
+    fixed at `1.0` and every other bus bounded by the SQUARED magnitude limits
+    `vmin²`/`vmax²` (thesis 3.45; Pitfall 1 — square the magnitude bounds);
+  - `P[b,t]`, `Q[b,t]` — branch active/reactive flows (parent→child), `t = 1:T`;
+  - `vdrop[b,t]` — the loss-less voltage-drop constraint
+    `v[br.to,t] == v[br.from,t] − 2·(r·P[b,t] + x·Q[b,t])` (thesis 3.43, l→0).
 
 Then accumulates the per-bus active balance (inflow − outflow of `P`) into
 `ctx.residuals[:Rp]` (thesis 3.31, loss-less) and the reactive balance (inflow −

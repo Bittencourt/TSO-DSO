@@ -31,16 +31,16 @@ Split the solved GLB-CVX welfare (thesis eq. 3.38) into **prosumer** and **DSO**
 
 Reads only stashed primals/duals — **no re-solve**. The three quantities (thesis page 98):
 
-- `social`   = `objective_value(ctx.model)` — the GLB-CVX social welfare (3.38);
-- `prosumer` = `Σ_j U_agⱼ + Σ_j Σ_t λ_j[t]·p_agⱼ[t]` — the AGR-OPT value (3.46), where
-  `Σ_j U_agⱼ = value(ctx.meta[:objective])` and the price-transfer term prices each
-  aggregator's net INJECTION `p_agⱼ[t]` (`net = p_inject − Pdc`, `ctx.meta[:agg_net]`, plan
-  05-01) at the DADP `λ_j[t] = extract_dlmp(ctx)`. The transfer is **added** (not subtracted):
-  a net-EXPORTER (net>0) at a positive λ EARNS `λ·net`, an importer PAYS it — thesis 3.46
-  prices net DEMAND (= −net injection), so with the net-injection stash the sign flips to `+`;
-- `dso`      = `−Σ_j Σ_t λ_j[t]·p_agⱼ[t] − Σ_t λ₀[t]·p_import[t]` — the −DSO-OPT value (3.47):
-  the DSO's MEM revenue at the frontier minus what it pays prosumers for their net injection
-  (it collects the DLMP−wholesale spread).
+  - `social`   = `objective_value(ctx.model)` — the GLB-CVX social welfare (3.38);
+  - `prosumer` = `Σ_j U_agⱼ + Σ_j Σ_t λ_j[t]·p_agⱼ[t]` — the AGR-OPT value (3.46), where
+    `Σ_j U_agⱼ = value(ctx.meta[:objective])` and the price-transfer term prices each
+    aggregator's net INJECTION `p_agⱼ[t]` (`net = p_inject − Pdc`, `ctx.meta[:agg_net]`, plan
+    05-01) at the DADP `λ_j[t] = extract_dlmp(ctx)`. The transfer is **added** (not subtracted):
+    a net-EXPORTER (net>0) at a positive λ EARNS `λ·net`, an importer PAYS it — thesis 3.46
+    prices net DEMAND (= −net injection), so with the net-injection stash the sign flips to `+`;
+  - `dso`      = `−Σ_j Σ_t λ_j[t]·p_agⱼ[t] − Σ_t λ₀[t]·p_import[t]` — the −DSO-OPT value (3.47):
+    the DSO's MEM revenue at the frontier minus what it pays prosumers for their net injection
+    (it collects the DLMP−wholesale spread).
 
 The `Σ_j λ_j·p_agⱼ` **price-transfer cancels** between `prosumer` (`+transfer`) and `dso`
 (`−transfer`), leaving `Σ_j U_agⱼ − Σ_t λ₀[t]·p_import[t]` = the GLB-CVX objective (3.38).
@@ -101,10 +101,11 @@ function welfare_accounting(
 
     # MEM/wholesale price λ₀[t]: use the passed profile, else recover the ENERGY component
     # from the root DADP (thesis energy = dual(balance_p[root,t]); = λ₀ at the priced optimum).
-    λ0 = λ₀ === nothing ? Float64[λ[root, t] for t in 1:T] : Float64[float(λ₀[t]) for t in 1:T]
-    length(λ0) >= T || throw(
-        ArgumentError("welfare_accounting: λ₀ has length $(length(λ0)) < T=$T"),
-    )
+    λ0 =
+        λ₀ === nothing ? Float64[λ[root, t] for t in 1:T] :
+        Float64[float(λ₀[t]) for t in 1:T]
+    length(λ0) >= T ||
+        throw(ArgumentError("welfare_accounting: λ₀ has length $(length(λ0)) < T=$T"))
 
     # Priced-frontier import p_import[t] (free-sign with allow_export) and its MEM cost.
     pimp = value.(ctx.meta[:p_import])

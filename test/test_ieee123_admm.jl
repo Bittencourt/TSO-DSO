@@ -17,9 +17,8 @@
 #   - the recovered price `λ_j → DADP` matches `extract_dlmp` on the centralized SOCP (ADMM-03),
 #     and the converged DSO-OPT is PF-04 exact (`exact_maxgap` small) at the binding-voltage point.
 
-@testitem "ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval)" setup = [
-    Phase7Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval)" setup =
+    [Phase7Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
 
     # RED until Waves 2–4 (fixture 07-02, adaptive-ρ/transit 07-03, two-residual stop 07-04,
@@ -49,22 +48,33 @@
         # T-07-14), NOT the weaker residual+exactness+price-sanity fallback. The exactness gate
         # (PF-04) and the PRICE-04 economic-direction sanity below are ADDITIONAL certificates.
         ctx_c, obj_c, _ = solve_welfare(
-            feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            allow_export = true,
         )
-        dlmp_c = reduce(
-            vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses),
-        )
+        dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
         # ADMM with the SAME per-unit adaptive-ρ config as 2-bus / IEEE-13 (scale-invariant, no
         # per-fixture penalty, ADMM-02). Converges in TENS of iterations on the voltage-constrained
         # 123-node case (plan 07-05: ~17 iters at RHO0 = 5 with the shared clamped/frozen schedule).
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = Phase7Fixtures.RHO0,
-            ε_abs = Phase7Fixtures.EPS_ABS, ε_rel = Phase7Fixtures.EPS_REL,
-            τ = Phase7Fixtures.TAU, μ = Phase7Fixtures.MU,
-            ρ_min = Phase7Fixtures.RHO_MIN, ρ_max = Phase7Fixtures.RHO_MAX,
-            maxiter = 300, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = Phase7Fixtures.RHO0,
+            ε_abs = Phase7Fixtures.EPS_ABS,
+            ε_rel = Phase7Fixtures.EPS_REL,
+            τ = Phase7Fixtures.TAU,
+            μ = Phase7Fixtures.MU,
+            ρ_min = Phase7Fixtures.RHO_MIN,
+            ρ_max = Phase7Fixtures.RHO_MAX,
+            maxiter = 300,
+            allow_export = true,
         )
 
         @test res.iters < 300                                   # converged before the fail-loud cap

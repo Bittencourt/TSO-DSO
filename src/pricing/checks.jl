@@ -32,12 +32,12 @@ INVERTED price from a dual-sign or attribution bug — which the additive checks
 
 Two canonical regimes (thesis Fig 4.5 / 4.6, node 9):
 
-  * `:pv_glut`     — at a PV-glut / reverse-flow / over-voltage window the DADP falls BELOW
-                     wholesale (`min_{j,t}(λ_j[t] − λ₀[t]) < −tol`); local generation is worth
-                     LESS than the wholesale reference (Fig 4.5, node 9 @ 15:00 < MEM).
-  * `:congestion`  — at a head-branch congestion window the DADP rises ABOVE wholesale
-                     (`max_{j,t}(λ_j[t] − λ₀[t]) > tol`); constrained delivery makes local
-                     power worth MORE than the reference (Fig 4.6, node 9 @ 22:00 > MEM).
+  - `:pv_glut`     — at a PV-glut / reverse-flow / over-voltage window the DADP falls BELOW
+    wholesale (`min_{j,t}(λ_j[t] − λ₀[t]) < −tol`); local generation is worth
+    LESS than the wholesale reference (Fig 4.5, node 9 @ 15:00 < MEM).
+  - `:congestion`  — at a head-branch congestion window the DADP rises ABOVE wholesale
+    (`max_{j,t}(λ_j[t] − λ₀[t]) > tol`); constrained delivery makes local
+    power worth MORE than the reference (Fig 4.6, node 9 @ 22:00 > MEM).
 
 The DADP is read DIRECTLY as `dual.(ctx.constraints[:balance_p])` (a `bus × time` matrix — the
 same primitive `extract_dlmp` uses), keeping this module INDEPENDENT of `dlmp.jl` for parallel
@@ -46,17 +46,18 @@ the horizon lands AT the regime-active hours without hard-coding them (non-vacuo
 extremum must exceed `tol` in the expected direction).
 
 # Arguments / keywords
-- `λ₀::AbstractVector` — the length-`T` wholesale price reference.
-- `regime::Symbol = :auto` — `:pv_glut` asserts the below-wholesale relation and THROWS an
-  `ArgumentError` on a backwards signal; `:congestion` asserts the above-wholesale relation
-  and throws on a backwards signal; `:auto` only reports the observed directions (no throw).
-- `bus::Union{Nothing,Integer} = nothing` — restrict the scan to one bus; default scans every
-  NON-root bus (the frontier/root DADP just tracks `λ₀`).
-- `dadp = nothing` — optional DADP override (a `Vector` single-bus series or a `bus × time`
-  `Matrix`); when supplied it REPLACES the `:balance_p` read. Used to prove non-vacuity (feed a
-  sign-flipped DADP and watch the check throw); the default path always reads `:balance_p`.
-- `T::Integer = ctx.meta[:T]` — horizon; `length(λ₀) == T` is a loud shape guard (T-05-11).
-- `tol::Real = 1e-6` — strict-inequality slack separating a genuine excursion from dual noise.
+
+  - `λ₀::AbstractVector` — the length-`T` wholesale price reference.
+  - `regime::Symbol = :auto` — `:pv_glut` asserts the below-wholesale relation and THROWS an
+    `ArgumentError` on a backwards signal; `:congestion` asserts the above-wholesale relation
+    and throws on a backwards signal; `:auto` only reports the observed directions (no throw).
+  - `bus::Union{Nothing,Integer} = nothing` — restrict the scan to one bus; default scans every
+    NON-root bus (the frontier/root DADP just tracks `λ₀`).
+  - `dadp = nothing` — optional DADP override (a `Vector` single-bus series or a `bus × time`
+    `Matrix`); when supplied it REPLACES the `:balance_p` read. Used to prove non-vacuity (feed a
+    sign-flipped DADP and watch the check throw); the default path always reads `:balance_p`.
+  - `T::Integer = ctx.meta[:T]` — horizon; `length(λ₀) == T` is a loud shape guard (T-05-11).
+  - `tol::Real = 1e-6` — strict-inequality slack separating a genuine excursion from dual noise.
 
 Returns `(; pv_glut_ok, congestion_ok)` — whether a strict below-/above-wholesale excursion
 was observed. THROWS `ArgumentError` (never `@assert`, which `-O` can elide) on a horizon shape
@@ -68,8 +69,8 @@ function economic_direction_checks(
     ctx::ModelContext;
     λ₀::AbstractVector,
     regime::Symbol = :auto,
-    bus::Union{Nothing,Integer} = nothing,
-    dadp::Union{Nothing,AbstractVecOrMat} = nothing,
+    bus::Union{Nothing, Integer} = nothing,
+    dadp::Union{Nothing, AbstractVecOrMat} = nothing,
     T::Integer = ctx.meta[:T],
     tol::Real = 1e-6,
 )
@@ -123,7 +124,9 @@ function economic_direction_checks(
     root = (dadp === nothing && feeder !== nothing) ? feeder.root : 0
     buses = bus === nothing ? [j for j in 1:Np if j != root] : [Int(bus)]
     isempty(buses) && throw(
-        ArgumentError("economic_direction_checks: no buses to inspect (bus=$bus, Np=$Np, root=$root)"),
+        ArgumentError(
+            "economic_direction_checks: no buses to inspect (bus=$bus, Np=$Np, root=$root)",
+        ),
     )
 
     # Extremal per-hour deviation λ_j[t] − λ₀[t] over the scanned buses/hours. The MOST NEGATIVE

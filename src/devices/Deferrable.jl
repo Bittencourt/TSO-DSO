@@ -43,24 +43,25 @@ indifferent to *when* it runs within the window (the utility depends only on the
 which this still captures. All quantities are in the single model per-unit system.
 
 # Fields
-- `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
-  it never sees the network object — network-agnostic, DEV-05).
-- `t_start::Int`, `t_end::Int` — inclusive window bounds (eq. 3.5 `T_{h,d}`); require
-  `1 ≤ t_start ≤ t_end`.
-- `E::T` — upper energy-budget target over the window (thesis `E_max`, eq. 3.4); the total
-  draw satisfies `Σ p ≤ E` and the utility peaks at `Σ p = E`; require
-  `0 ≤ E ≤ Pmax·(t_end−t_start+1)`.
-- `Pmax::T` — per-hour power bound (eq. 3.5).
-- `b::T` — utility curvature, `b > 0` required for concavity (eq. 3.12).
-- `E_min::T` — must-complete energy floor (thesis `E_min`, eq. 3.4); keyword, default `0`;
-  the total draw satisfies `Σ p ≥ E_min`; require `0 ≤ E_min ≤ E`.
+
+  - `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
+    it never sees the network object — network-agnostic, DEV-05).
+  - `t_start::Int`, `t_end::Int` — inclusive window bounds (eq. 3.5 `T_{h,d}`); require
+    `1 ≤ t_start ≤ t_end`.
+  - `E::T` — upper energy-budget target over the window (thesis `E_max`, eq. 3.4); the total
+    draw satisfies `Σ p ≤ E` and the utility peaks at `Σ p = E`; require
+    `0 ≤ E ≤ Pmax·(t_end−t_start+1)`.
+  - `Pmax::T` — per-hour power bound (eq. 3.5).
+  - `b::T` — utility curvature, `b > 0` required for concavity (eq. 3.12).
+  - `E_min::T` — must-complete energy floor (thesis `E_min`, eq. 3.4); keyword, default `0`;
+    the total draw satisfies `Σ p ≥ E_min`; require `0 ≤ E_min ≤ E`.
 
 Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
 the window is inconsistent (`t_start < 1` or `t_end < t_start`), when the energy budget is
 infeasible/negative (`E < 0` or `E > Pmax·window_length`) — the temporal-infeasibility
 guard, threat T-03-07 — or when the floor is out of band (`E_min < 0` or `E_min > E`).
 """
-struct Deferrable{T<:Real} <: AbstractDevice
+struct Deferrable{T <: Real} <: AbstractDevice
     bus::Int
     t_start::Int
     t_end::Int
@@ -77,7 +78,7 @@ struct Deferrable{T<:Real} <: AbstractDevice
         Pmax::T,
         b::T;
         E_min::T = zero(T),
-    ) where {T<:Real}
+    ) where {T <: Real}
         # Concavity guard (thesis eq. 3.12, b > 0): a non-positive curvature makes the
         # utility convex → welfare maximization unbounded/non-convex. Threat T-03-06.
         if b <= zero(T)
@@ -153,16 +154,15 @@ end
 Contribute the deferrable load into the shared model context over the horizon `t = 1:T`,
 conforming to the Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer, DEV-05). It:
 
-1. creates a per-hour power variable `0 ≤ p[t] ≤ Pmax` inside the window and `p[t] = 0`
-   outside it (bounds pinned to zero — eq. 3.5) on `ctx.model`, validating that the window
-   fits the horizon (`t_end ≤ T`, throwing `ArgumentError` otherwise — the
-   temporal-infeasibility guard, threat T-03-07);
-2. adds the energy-within-window budget BAND coupling `E_min ≤ Σ_{t ∈ [t_start,t_end]} p[t]
-   ≤ E` (thesis eq. 3.4; upper bound an inequality — WR-01, NOT an equality; lower bound
-   `E_min` added only when `E_min > 0`, the must-complete floor) — the inter-temporal
-   coupling; and
-3. builds the concave-quadratic utility `− (b/2)·(Σ p[t] − E)²` (eq. 3.12) as a `QuadExpr`,
-   a LIVE soft target at `E` now that the budget above is an inequality.
+ 1. creates a per-hour power variable `0 ≤ p[t] ≤ Pmax` inside the window and `p[t] = 0`
+    outside it (bounds pinned to zero — eq. 3.5) on `ctx.model`, validating that the window
+    fits the horizon (`t_end ≤ T`, throwing `ArgumentError` otherwise — the
+    temporal-infeasibility guard, threat T-03-07);
+ 2. adds the energy-within-window budget BAND coupling `E_min ≤ Σ_{t ∈ [t_start,t_end]} p[t] ≤ E` (thesis eq. 3.4; upper bound an inequality — WR-01, NOT an equality; lower bound
+    `E_min` added only when `E_min > 0`, the must-complete floor) — the inter-temporal
+    coupling; and
+ 3. builds the concave-quadratic utility `− (b/2)·(Σ p[t] − E)²` (eq. 3.12) as a `QuadExpr`,
+    a LIVE soft target at `E` now that the budget above is an inequality.
 
 It then RETURNS `(; vars = (; p), p_inject, utility)` where `p_inject[t] = −p[t]` is the
 signed ACTIVE injection (a consumed load is a NEGATIVE injection, matching the

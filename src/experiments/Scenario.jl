@@ -21,16 +21,24 @@
 # convention) on any unknown feeder/strategy/price/population selector or out-of-range
 # T/seed/maxiter, so a `Scenario` can never silently underdetermine a run (threat T-08-05).
 
-"Valid `feeder` selectors a `Scenario` may name (dispatch target: `build_feeder`, materialize.jl)."
+"""
+Valid `feeder` selectors a `Scenario` may name (dispatch target: `build_feeder`, materialize.jl).
+"""
 const SCENARIO_VALID_FEEDERS = (:ieee13, :ieee123)
 
-"Valid `strategy` selectors a `Scenario` may name (dispatch target: `run_scenario`, plan 08-03)."
+"""
+Valid `strategy` selectors a `Scenario` may name (dispatch target: `run_scenario`, plan 08-03).
+"""
 const SCENARIO_VALID_STRATEGIES = (:centralized, :admm)
 
-"Valid `price` selectors a `Scenario` may name (dispatch target: `build_price`, materialize.jl)."
+"""
+Valid `price` selectors a `Scenario` may name (dispatch target: `build_price`, materialize.jl).
+"""
 const SCENARIO_VALID_PRICES = (:mem,)
 
-"Valid `population` selectors a `Scenario` may name (dispatch target: `build_population`, materialize.jl)."
+"""
+Valid `population` selectors a `Scenario` may name (dispatch target: `build_population`, materialize.jl).
+"""
 const SCENARIO_VALID_POPULATIONS = (:default,)
 
 """
@@ -51,30 +59,31 @@ an on-disk uniqueness key (`run_and_store`, `store.jl`) MUST use `digits = 10` (
 `safe = true` (never silently overwrite on a residual collision).
 
 # Fields
-- `name::String` — human label; also a `savename` component.
-- `feeder::Symbol = :ieee13` — feeder selector, one of `$(SCENARIO_VALID_FEEDERS)` (dispatches
-  `build_feeder`, NEVER a live `Feeder`).
-- `strategy::Symbol = :centralized` — solve-strategy selector, one of
-  `$(SCENARIO_VALID_STRATEGIES)` (dispatches `run_scenario`, plan 08-03).
-- `seed::Int = 1` — master seed; `run_scenario` derives independent deterministic sub-seeds
-  from it via `sub_seed` (never touches the global RNG, RESEARCH Pitfall 5).
-- `T::Int = 24` — day-ahead horizon length (hours).
-- `population::Symbol = :default` — population selector, one of
-  `$(SCENARIO_VALID_POPULATIONS)` (dispatches `build_population`).
-- `price::Symbol = :mem` — price selector, one of `$(SCENARIO_VALID_PRICES)` (dispatches
-  `build_price`).
-- `allow_export::Bool = true` — whether the frontier allows priced export (PF-04 exactness
-  enabler under PV back-feed).
-- `ρ::Float64 = 100.0`, `ε_abs::Float64 = 1e-4`, `ε_rel::Float64 = 1e-3`, `maxiter::Int = 200`,
-  `τ_ratio::Float64 = 2.0`, `μ::Float64 = 10.0` — ADMM-only knobs, kept in the one flat schema
-  so the `:centralized` branch simply ignores them (no separate strategy-specific struct).
-  `ρ`'s default (100.0) is the empirically-validated initial penalty for the default
-  `:ieee13` feeder + `:default` population (matching `test_admm.jl`'s `ρ_ieee13`, RESEARCH):
-  starting the Phase-7 adaptive-ρ loop at `ρ₀ = 1.0` numerically errors on this congested
-  default population before residual balancing can climb it to a well-conditioned value
-  (08-03 deviation — RULE 1, discovered exercising `run_scenario(:admm)` end-to-end for the
-  first time). Adaptive ρ still self-tunes per scenario from THIS starting point; a
-  hand-tuned `Scenario(; ρ = …)` override remains available for other feeders/populations.
+
+  - `name::String` — human label; also a `savename` component.
+  - `feeder::Symbol = :ieee13` — feeder selector, one of `$(SCENARIO_VALID_FEEDERS)` (dispatches
+    `build_feeder`, NEVER a live `Feeder`).
+  - `strategy::Symbol = :centralized` — solve-strategy selector, one of
+    `$(SCENARIO_VALID_STRATEGIES)` (dispatches `run_scenario`, plan 08-03).
+  - `seed::Int = 1` — master seed; `run_scenario` derives independent deterministic sub-seeds
+    from it via `sub_seed` (never touches the global RNG, RESEARCH Pitfall 5).
+  - `T::Int = 24` — day-ahead horizon length (hours).
+  - `population::Symbol = :default` — population selector, one of
+    `$(SCENARIO_VALID_POPULATIONS)` (dispatches `build_population`).
+  - `price::Symbol = :mem` — price selector, one of `$(SCENARIO_VALID_PRICES)` (dispatches
+    `build_price`).
+  - `allow_export::Bool = true` — whether the frontier allows priced export (PF-04 exactness
+    enabler under PV back-feed).
+  - `ρ::Float64 = 100.0`, `ε_abs::Float64 = 1e-4`, `ε_rel::Float64 = 1e-3`, `maxiter::Int = 200`,
+    `τ_ratio::Float64 = 2.0`, `μ::Float64 = 10.0` — ADMM-only knobs, kept in the one flat schema
+    so the `:centralized` branch simply ignores them (no separate strategy-specific struct).
+    `ρ`'s default (100.0) is the empirically-validated initial penalty for the default
+    `:ieee13` feeder + `:default` population (matching `test_admm.jl`'s `ρ_ieee13`, RESEARCH):
+    starting the Phase-7 adaptive-ρ loop at `ρ₀ = 1.0` numerically errors on this congested
+    default population before residual balancing can climb it to a well-conditioned value
+    (08-03 deviation — RULE 1, discovered exercising `run_scenario(:admm)` end-to-end for the
+    first time). Adaptive ρ still self-tunes per scenario from THIS starting point; a
+    hand-tuned `Scenario(; ρ = …)` override remains available for other feeders/populations.
 
 Construction throws `ArgumentError` when `feeder`/`strategy`/`price`/`population` is not one
 of the named valid selectors above, or when `T < 1`, `seed < 1`, or `maxiter < 1` (a Scenario
@@ -151,10 +160,18 @@ Base.@kwdef struct Scenario
             throw(ArgumentError("Scenario: T must be ≥ 1 (day-ahead horizon); got T=$T"))
         end
         if seed < 1
-            throw(ArgumentError("Scenario: seed must be ≥ 1 (a sane master-seed range); got seed=$seed"))
+            throw(
+                ArgumentError(
+                    "Scenario: seed must be ≥ 1 (a sane master-seed range); got seed=$seed",
+                ),
+            )
         end
         if maxiter < 1
-            throw(ArgumentError("Scenario: maxiter must be ≥ 1 (ADMM iteration cap); got maxiter=$maxiter"))
+            throw(
+                ArgumentError(
+                    "Scenario: maxiter must be ≥ 1 (ADMM iteration cap); got maxiter=$maxiter",
+                ),
+            )
         end
         # WR-01 fix: the ADMM float knobs were previously unvalidated, contradicting this same
         # constructor's own "checked LOUDLY" claim — a non-positive ρ/ε_abs/ε_rel/τ_ratio/μ
@@ -171,11 +188,27 @@ Base.@kwdef struct Scenario
             )
         end
         if τ_ratio <= 0 || μ <= 0
-            throw(ArgumentError("Scenario: τ_ratio/μ must be > 0; got τ_ratio=$τ_ratio, μ=$μ"))
+            throw(
+                ArgumentError(
+                    "Scenario: τ_ratio/μ must be > 0; got τ_ratio=$τ_ratio, μ=$μ",
+                ),
+            )
         end
         return new(
-            name, feeder, strategy, seed, T, population, price, allow_export,
-            ρ, ε_abs, ε_rel, maxiter, τ_ratio, μ,
+            name,
+            feeder,
+            strategy,
+            seed,
+            T,
+            population,
+            price,
+            allow_export,
+            ρ,
+            ε_abs,
+            ε_rel,
+            maxiter,
+            τ_ratio,
+            μ,
         )
     end
 end

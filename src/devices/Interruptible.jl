@@ -28,23 +28,24 @@ so maximizing welfare stays a convex QP. All quantities are in per-unit / model 
 rescaled here.
 
 # Fields
-- `bus::Int`  — the bus id the load withdraws at (the ONLY topology handle a device
-  holds; it never sees the network object or line parameters — success criterion 2).
-- `Pmin::T`, `Pmax::T` — served-power bounds (eqs. 3.13–3.14 flexibility limits).
-- `a::T` — linear marginal-utility intercept (eq. 3.13).
-- `b::T` — quadratic curvature, `b > 0` required for concavity (eq. 3.14).
+
+  - `bus::Int`  — the bus id the load withdraws at (the ONLY topology handle a device
+    holds; it never sees the network object or line parameters — success criterion 2).
+  - `Pmin::T`, `Pmax::T` — served-power bounds (eqs. 3.13–3.14 flexibility limits).
+  - `a::T` — linear marginal-utility intercept (eq. 3.13).
+  - `b::T` — quadratic curvature, `b > 0` required for concavity (eq. 3.14).
 
 Construction throws `ArgumentError` when `b ≤ 0` (curvature guard, threat T-02-02) or
 when `Pmax < Pmin` (inconsistent bounds).
 """
-struct Interruptible{T<:Real} <: AbstractDevice
+struct Interruptible{T <: Real} <: AbstractDevice
     bus::Int
     Pmin::T
     Pmax::T
     a::T
     b::T
 
-    function Interruptible(bus::Int, Pmin::T, Pmax::T, a::T, b::T) where {T<:Real}
+    function Interruptible(bus::Int, Pmin::T, Pmax::T, a::T, b::T) where {T <: Real}
         # Concavity guard (thesis eq. 3.14, b > 0): a non-positive curvature would make
         # the utility convex → welfare maximization unbounded/non-convex → garbage or
         # solver failure. Reject LOUDLY (project convention: throw, never @assert, since
@@ -88,19 +89,19 @@ Interruptible(bus::Integer, Pmin::Real, Pmax::Real, a::Real, b::Real) =
 Contribute the interruptible load into the shared model context over the horizon
 `t = 1:T`, meeting the network ONLY at the affine `:Rp` residual seam:
 
-1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` on `ctx.model`;
-2. ADDS a NEGATIVE injection `−p[t]` into `ctx.residuals[:Rp]` at cell `(d.bus, t)` via
-   the indexed `add_to_residual!` — a consumed load is a withdrawal, i.e. it REDUCES the
-   net injection (sign matches the toy-DC convention; threat T-02-01); and
-3. ADDS the concave utility `Σ_t ( a·p[t] − (b/2)·p[t]² )` (eq. 3.10) into the welfare
-   objective via [`add_to_objective!`](@ref). The utility flows to the QuadExpr
-   objective accumulator — NOT the affine residual — so its curvature is retained
-   (threat T-02-02, RESEARCH Pitfall 3).
+ 1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` on `ctx.model`;
+ 2. ADDS a NEGATIVE injection `−p[t]` into `ctx.residuals[:Rp]` at cell `(d.bus, t)` via
+    the indexed `add_to_residual!` — a consumed load is a withdrawal, i.e. it REDUCES the
+    net injection (sign matches the toy-DC convention; threat T-02-01); and
+ 3. ADDS the concave utility `Σ_t ( a·p[t] − (b/2)·p[t]² )` (eq. 3.10) into the welfare
+    objective via [`add_to_objective!`](@ref). The utility flows to the QuadExpr
+    objective accumulator — NOT the affine residual — so its curvature is retained
+    (threat T-02-02, RESEARCH Pitfall 3).
 
 The device references only `d.bus` and `T`; it never touches the network topology, so the
 DC / LinDistFlow power-flow swap leaves this code untouched (success criterion 2).
 """
-function contribute!(d::Interruptible, ctx::ModelContext; T::Int=1)
+function contribute!(d::Interruptible, ctx::ModelContext; T::Int = 1)
     m = ctx.model
     # Bounded served-power variable per time step (eqs. 3.13–3.14 flexibility limits).
     p = @variable(m, [t = 1:T], lower_bound = d.Pmin, upper_bound = d.Pmax)

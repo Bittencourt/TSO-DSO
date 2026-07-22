@@ -45,27 +45,28 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
 `:balance_q` duals), and the handles the ADMM loop mutates or reads between iterations:
 
 # Fields
-- `model::Model` — the SOCP model, built once (`select_optimizer(SOCP())`); re-solved via
-  `set_objective_coefficient` only (ADMM-03, never rebuilt).
-- `ctx::ModelContext` — the shared context; `ctx.meta[:pf_vars]` carries `:l` (the SOC cone is
-  present), `ctx.meta[:feeder]`/`[:T]` feed the PF-04 exactness gate, and `:socp_maxgap` is
-  stashed after a `check_exact` solve.
-- `pag` — the ACTIVE coupling container `pag[j,t]` (`j` over the load nodes, `t` over `1:T`),
-  each pinned by `:Rp[j] + pag[j,t] == 0`. The SOLE variable per `(j,t)` whose linear
-  objective coefficient the ADMM loop updates.
-- `p_import` — the FREE-SIGN active frontier exchange `p_import[t]` at `feeder.root` (>0 buy,
-  <0 sell surplus to the MEM at λ₀); priced export is the SOC-exactness enabler (PF-04).
-- `load_nodes::Vector{Int}` — the non-root buses carrying an aggregator (== every non-root bus,
-  guarded at build time); the `j` axis of `pag`.
-- `T::Int` — the day-ahead horizon (thesis A1).
-- `feeder` — the network the SOCP is built on.
-- `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): under adaptive ρ the
-  LIVE penalty lives ONLY in the model's quadratic objective coefficients (mutated by
-  [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
-  holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
-- `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
+
+  - `model::Model` — the SOCP model, built once (`select_optimizer(SOCP())`); re-solved via
+    `set_objective_coefficient` only (ADMM-03, never rebuilt).
+  - `ctx::ModelContext` — the shared context; `ctx.meta[:pf_vars]` carries `:l` (the SOC cone is
+    present), `ctx.meta[:feeder]`/`[:T]` feed the PF-04 exactness gate, and `:socp_maxgap` is
+    stashed after a `check_exact` solve.
+  - `pag` — the ACTIVE coupling container `pag[j,t]` (`j` over the load nodes, `t` over `1:T`),
+    each pinned by `:Rp[j] + pag[j,t] == 0`. The SOLE variable per `(j,t)` whose linear
+    objective coefficient the ADMM loop updates.
+  - `p_import` — the FREE-SIGN active frontier exchange `p_import[t]` at `feeder.root` (>0 buy,
+    <0 sell surplus to the MEM at λ₀); priced export is the SOC-exactness enabler (PF-04).
+  - `load_nodes::Vector{Int}` — the non-root buses carrying an aggregator (== every non-root bus,
+    guarded at build time); the `j` axis of `pag`.
+  - `T::Int` — the day-ahead horizon (thesis A1).
+  - `feeder` — the network the SOCP is built on.
+  - `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): under adaptive ρ the
+    LIVE penalty lives ONLY in the model's quadratic objective coefficients (mutated by
+    [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
+    holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
+  - `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
 """
-struct DsoOpt{P,PI,F}
+struct DsoOpt{P, PI, F}
     model::Model
     ctx::ModelContext
     pag::P
@@ -86,33 +87,32 @@ Build the whole-network `DSO-OPT` SOCP (thesis eq. 3.47) ONCE, reusing the valid
 explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. Steps
 (RESEARCH Pattern 4):
 
-1. `model = Model(select_optimizer(SOCP()))` (INFRA-02 — never names a concrete solver);
-   register the `RSOCtoNonConvexQuad` / `SOCtoNonConvexQuad` cross-solver bridges exactly as
-   `solve_welfare`; wrap in a [`ModelContext`](@ref); stash `ctx.meta[:feeder]` / `[:T]` for
-   the PF-04 gate.
-2. `contribute!(ConvexBranchFlow(), ctx, feeder; T)` — VERBATIM reuse: builds `P, Q, v, v̂,
-   l ≥ 0`, the rotated SOC cone (3.39), the true voltage drop (3.33), the exactness copy
-   (3.43), the apparent-power limit (3.36, only where a real limit binds), accumulates
-   `:Rp` (3.31) / `:Rq` (3.32), and stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)`.
-3. Add the FREE-SIGN priced frontier `p_import[t]` (active, 3.31) and `q_import[t]` (reactive,
-   3.32) at `feeder.root`, injected into `:Rp[root]` / `:Rq[root]` (mirrors
-   `solve_welfare(...; allow_export = true)`). Priced export makes the objective strictly
-   decreasing in the loss current `l`, keeping the SOC cone TIGHT (exact) under reverse flow
-   (PF-04, RESEARCH Pitfall 3).
-4. Close BOTH balances (mirroring the centralized SOCP so ADMM welfare + duals match on
-   IEEE-13):
-   - ACTIVE: for each load node `j` introduce `pag_dso[j,t]` and inject it into `:Rp[j]`;
-     `p_import` already closes the root. Pin `:Rp[j,t] == 0` at all buses, register
-     `:balance_p` (its dual is the DADP λ_j).
-   - REACTIVE: inject each load node's CONSTANT reactive draw `−Pdc·tan(acos φ)` (thesis 3.23,
-     inelastic per A3) into `:Rq[j]`, `q_import` supplies the root; pin `:Rq[j,t] == 0` at all
-     buses, register `:balance_q`. This is a FIXED constant (no μ dual-ascent — reactive is
-     not a consensus quantity).
-5. `@objective(model, Min, Σ_t λ₀[t]·p_import[t] + 0.5·ρ·Σ_{j,t} pag_dso[j,t]²)` — the FIXED
-   ρ-penalty built ONCE. Each ADMM iteration mutates only the LINEAR coefficient of each
-   `pag_dso[j,t]` via `set_objective_coefficient` (see [`solve_dso!`](@ref)) — no rebuild
-   (ADMM-03). λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
-   bilinear `λ·pag` the conic backend rejects; RESEARCH Pitfall 1).
+ 1. `model = Model(select_optimizer(SOCP()))` (INFRA-02 — never names a concrete solver);
+    register the `RSOCtoNonConvexQuad` / `SOCtoNonConvexQuad` cross-solver bridges exactly as
+    `solve_welfare`; wrap in a [`ModelContext`](@ref); stash `ctx.meta[:feeder]` / `[:T]` for
+    the PF-04 gate.
+ 2. `contribute!(ConvexBranchFlow(), ctx, feeder; T)` — VERBATIM reuse: builds `P, Q, v, v̂, l ≥ 0`, the rotated SOC cone (3.39), the true voltage drop (3.33), the exactness copy
+    (3.43), the apparent-power limit (3.36, only where a real limit binds), accumulates
+    `:Rp` (3.31) / `:Rq` (3.32), and stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)`.
+ 3. Add the FREE-SIGN priced frontier `p_import[t]` (active, 3.31) and `q_import[t]` (reactive,
+    3.32) at `feeder.root`, injected into `:Rp[root]` / `:Rq[root]` (mirrors
+    `solve_welfare(...; allow_export = true)`). Priced export makes the objective strictly
+    decreasing in the loss current `l`, keeping the SOC cone TIGHT (exact) under reverse flow
+    (PF-04, RESEARCH Pitfall 3).
+ 4. Close BOTH balances (mirroring the centralized SOCP so ADMM welfare + duals match on
+    IEEE-13):
+      + ACTIVE: for each load node `j` introduce `pag_dso[j,t]` and inject it into `:Rp[j]`;
+        `p_import` already closes the root. Pin `:Rp[j,t] == 0` at all buses, register
+        `:balance_p` (its dual is the DADP λ_j).
+      + REACTIVE: inject each load node's CONSTANT reactive draw `−Pdc·tan(acos φ)` (thesis 3.23,
+        inelastic per A3) into `:Rq[j]`, `q_import` supplies the root; pin `:Rq[j,t] == 0` at all
+        buses, register `:balance_q`. This is a FIXED constant (no μ dual-ascent — reactive is
+        not a consensus quantity).
+ 5. `@objective(model, Min, Σ_t λ₀[t]·p_import[t] + 0.5·ρ·Σ_{j,t} pag_dso[j,t]²)` — the FIXED
+    ρ-penalty built ONCE. Each ADMM iteration mutates only the LINEAR coefficient of each
+    `pag_dso[j,t]` via `set_objective_coefficient` (see [`solve_dso!`](@ref)) — no rebuild
+    (ADMM-03). λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
+    bilinear `λ·pag` the conic backend rejects; RESEARCH Pitfall 1).
 
 Load nodes are the aggregator buses (the root carries no aggregator). A non-root bus WITHOUT an
 aggregator is admitted as a physically-valid ZERO-INJECTION TRANSIT node (plan 07-03, RESEARCH
@@ -162,7 +162,7 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
 
     # Per-load-node CONSTANT reactive draw q_ag_j[t] = Σ_{agg@j} −Pdc[t]·tan(acos φ) (thesis
     # 3.23). Summed over any aggregators sharing a bus; the temporal guard mirrors Aggregator.
-    q_draw = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
+    q_draw = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
     for agg in aggregators
         length(agg.Pdc) >= T || throw(
             ArgumentError(
@@ -293,7 +293,14 @@ Returns `(; pag_dso, p_import, exact_maxgap)` — the solved coupling values `va
 the frontier exchange `value.(dso.p_import)`, and the certified cone residual (`nothing` until
 a `check_exact = true` solve stashes it).
 """
-function solve_dso!(dso::DsoOpt, λ, a, ρ::Real; check_exact::Bool = false, strict::Bool = true)
+function solve_dso!(
+    dso::DsoOpt,
+    λ,
+    a,
+    ρ::Real;
+    check_exact::Bool = false,
+    strict::Bool = true,
+)
     # ADMM-03 build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]
     # (one scalar call per (j,t)); the ρ/2 quadratic penalty built in build_dso_opt is fixed.
     for j in dso.load_nodes, t in 1:dso.T

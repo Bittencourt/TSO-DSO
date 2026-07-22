@@ -31,15 +31,15 @@ using JuMP
 Run the centralized GLB-CVX operational solve as an **oracle** the deferred planning
 layer can query, returning a `NamedTuple`:
 
-- `cost`  — the welfare optimum (`objective_value`, thesis eq. 3.38);
-- `π`     — the **frontier coupling dual**: the dual of the active nodal balance
-  `:balance_p` at `feeder.root` over the horizon (`_coupling_dual(ctx, z)`). This is the
-  interconnection price the planning game equates across the TSO↔DSO boundary
-  (`λ_j ↔ π_s` in the PSR note); it is DISTINCT from `dadp`, which `solve_welfare`
-  reports at the FIRST aggregator's bus;
-- `dadp`  — the distribution price at the first aggregator's bus (passed through from
-  `solve_welfare`), a length-`T` vector;
-- `ctx`   — the solved [`ModelContext`](@ref), so a caller can read any other dual.
+  - `cost`  — the welfare optimum (`objective_value`, thesis eq. 3.38);
+  - `π`     — the **frontier coupling dual**: the dual of the active nodal balance
+    `:balance_p` at `feeder.root` over the horizon (`_coupling_dual(ctx, z)`). This is the
+    interconnection price the planning game equates across the TSO↔DSO boundary
+    (`λ_j ↔ π_s` in the PSR note); it is DISTINCT from `dadp`, which `solve_welfare`
+    reports at the FIRST aggregator's bus;
+  - `dadp`  — the distribution price at the first aggregator's bus (passed through from
+    `solve_welfare`), a length-`T` vector;
+  - `ctx`   — the solved [`ModelContext`](@ref), so a caller can read any other dual.
 
 The solve routes to the right open-source solver by
 `select_optimizer(problem_class(pf))` — a `ConvexBranchFlow` oracle solves as SOCP, a
@@ -53,32 +53,35 @@ MEM. Priced export is the SOC-exactness enabler in the over-voltage / reverse-fl
 `allow_export = true` to stay both feasible and exact.
 
 # SEAM-01 extension interfaces (INERT stubs — accepted, typed, and documented, but with
+
 # NO Phase-4 behavior; each names the v2 requirement that makes it concrete). These exist
+
 # so the planning layer is purely additive later; passing them here does not change the
+
 # Phase-4 result (threat T-04-13: no silent partial behavior).
 
-1. **Coupling-flow interface** (`z`, `role`, returned `π`) → PLAN-01/02 (Phase 8/9).
-   `z` is the coupling-flow setpoint (frontier import target; `z↔p_ag`). `nothing` ⇒ the
-   frontier import is FREE and `π` is the frontier-node DADP. A non-`nothing` `z` would pin
-   the frontier import, but that pin is **not** wired into `solve_welfare` in Phase 4, so
-   passing a non-`nothing` `z` FAILS LOUDLY (`_coupling_dual` throws an `ArgumentError`)
-   rather than silently returning an UNPINNED proxy dual (WR-03; threat T-04-13: NO silent
-   partial pinning — a wrong coupling price must never reach the planning game unflagged).
-   `role` (`:leader` | `:follower`) is the explicit Stackelberg role (PSR: the distributor is the
-   `:leader`); it is validated but does not alter the solve.
-2. **Multi-scenario objective hook** (`objective_hook::Function = identity`) →
-   STOCH-01/02 (v2). Reserved to compose the per-scenario welfare into the extensive-form
-   objective. In Phase 4 it is accepted but NOT applied (`identity` is the single-scenario
-   composition); wiring it into assembly is the stochastic-extension point.
-3. **Rolling-horizon parameter** (`horizon_state = nothing`) → MPC-01/02 (v2). Reserved
-   for the receding-horizon initial state (battery `soc0` / forecast). The concrete form
-   is a JuMP `Parameter` re-settable without a rebuild:
-   `@variable(m, s0 in Parameter(v)); set_parameter_value(s0, x)` (RESEARCH Pattern 6,
-   verified). In Phase 4 it is accepted but ignored (no state is threaded).
-4. **Meshed-formulation slot** → MESH-01 (v2). The `pf::AbstractPowerFlow` argument IS the
-   seam: a future `MeshedFlow <: AbstractPowerFlow` plugs in here and would bypass the
-   `assert_radial` invariant that `Feeder` construction enforces for the radial v1. No
-   meshed formulation exists in Phase 4; the slot is the abstract-type argument itself.
+ 1. **Coupling-flow interface** (`z`, `role`, returned `π`) → PLAN-01/02 (Phase 8/9).
+    `z` is the coupling-flow setpoint (frontier import target; `z↔p_ag`). `nothing` ⇒ the
+    frontier import is FREE and `π` is the frontier-node DADP. A non-`nothing` `z` would pin
+    the frontier import, but that pin is **not** wired into `solve_welfare` in Phase 4, so
+    passing a non-`nothing` `z` FAILS LOUDLY (`_coupling_dual` throws an `ArgumentError`)
+    rather than silently returning an UNPINNED proxy dual (WR-03; threat T-04-13: NO silent
+    partial pinning — a wrong coupling price must never reach the planning game unflagged).
+    `role` (`:leader` | `:follower`) is the explicit Stackelberg role (PSR: the distributor is the
+    `:leader`); it is validated but does not alter the solve.
+ 2. **Multi-scenario objective hook** (`objective_hook::Function = identity`) →
+    STOCH-01/02 (v2). Reserved to compose the per-scenario welfare into the extensive-form
+    objective. In Phase 4 it is accepted but NOT applied (`identity` is the single-scenario
+    composition); wiring it into assembly is the stochastic-extension point.
+ 3. **Rolling-horizon parameter** (`horizon_state = nothing`) → MPC-01/02 (v2). Reserved
+    for the receding-horizon initial state (battery `soc0` / forecast). The concrete form
+    is a JuMP `Parameter` re-settable without a rebuild:
+    `@variable(m, s0 in Parameter(v)); set_parameter_value(s0, x)` (RESEARCH Pattern 6,
+    verified). In Phase 4 it is accepted but ignored (no state is threaded).
+ 4. **Meshed-formulation slot** → MESH-01 (v2). The `pf::AbstractPowerFlow` argument IS the
+    seam: a future `MeshedFlow <: AbstractPowerFlow` plugs in here and would bypass the
+    `assert_radial` invariant that `Feeder` construction enforces for the radial v1. No
+    meshed formulation exists in Phase 4; the slot is the abstract-type argument itself.
 
 Throws `ArgumentError` on an unknown `role` (project convention: fail loudly, never
 `@assert`). All other guards (empty aggregators, `λ₀`/`T` shape, aggregator bus range)
@@ -144,14 +147,14 @@ the TSO↔DSO boundary (`λ_j ↔ π_s`, PSR note).
 
 `z` is the SEAM-01 coupling-flow setpoint (`z↔p_ag`):
 
-- `z === nothing` — the frontier import is FREE; `π` is the frontier-node DADP (the dual
-  of the root balance). This is the Phase-4 behavior.
-- `z !== nothing` — would pin the frontier import to `z`, but that pin is **not** wired into
-  `solve_welfare` in Phase 4 (it is the PLAN-01/02 extension: add a coupling constraint
-  `p_import == z` and return ITS dual). Rather than silently returning the UNPINNED frontier
-  DADP as a proxy — which a planning caller would mistake for a genuine pinned coupling price
-  — this THROWS an `ArgumentError` naming the extension point (WR-03; threat T-04-13: NO
-  silent partial pinning). This mirrors the loud `role` guard in `operational_oracle`.
+  - `z === nothing` — the frontier import is FREE; `π` is the frontier-node DADP (the dual
+    of the root balance). This is the Phase-4 behavior.
+  - `z !== nothing` — would pin the frontier import to `z`, but that pin is **not** wired into
+    `solve_welfare` in Phase 4 (it is the PLAN-01/02 extension: add a coupling constraint
+    `p_import == z` and return ITS dual). Rather than silently returning the UNPINNED frontier
+    DADP as a proxy — which a planning caller would mistake for a genuine pinned coupling price
+    — this THROWS an `ArgumentError` naming the extension point (WR-03; threat T-04-13: NO
+    silent partial pinning). This mirrors the loud `role` guard in `operational_oracle`.
 
 Reads the constraint handle registered by `solve_welfare` as `:balance_p` (a
 `bus × time` array); requires a solve that passed `assert_solved!(...; dual = true)`.

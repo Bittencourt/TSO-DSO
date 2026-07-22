@@ -47,17 +47,17 @@ code (there is no `if formulation ==` branching anywhere).
 
 Thesis equations implemented (all traced in [`contribute!`](@ref)):
 
-  * 3.31 — per-bus active balance, now WITH the `−r·l` loss term (affine in `l`);
-  * 3.32 — per-bus reactive balance, now WITH the `−x·l` loss term (affine in `l`);
-  * 3.33 — TRUE voltage drop `v_j = v_i − 2(rP+xQ) + (r²+x²)·l` (the loss-current term
+  - 3.31 — per-bus active balance, now WITH the `−r·l` loss term (affine in `l`);
+  - 3.32 — per-bus reactive balance, now WITH the `−x·l` loss term (affine in `l`);
+  - 3.33 — TRUE voltage drop `v_j = v_i − 2(rP+xQ) + (r²+x²)·l` (the loss-current term
     `+(r²+x²)·l` that `LinDistFlow` drops);
-  * 3.36 — forward apparent-power limit `P² + Q² ≤ S²max` (only where a real limit exists,
+  - 3.36 — forward apparent-power limit `P² + Q² ≤ S²max` (only where a real limit exists,
     see `_SMAX_NO_LIMIT`);
-  * 3.39 — the SOC relaxation `l_ij·v_i ≥ P² + Q²`, written as a rotated second-order cone
+  - 3.39 — the SOC relaxation `l_ij·v_i ≥ P² + Q²`, written as a rotated second-order cone
     `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()` (‖x‖² ≤ 2·t·u ⇒ P²+Q² ≤ 2·(0.5l)·v = l·v);
-  * 3.43 — the exactness-copy voltage drop `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}`, written
+  - 3.43 — the exactness-copy voltage drop `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}`, written
     purely in the ORIGINAL `P, Q, l` plus the single new copy `v̂` (no separate `P̂/Q̂`);
-  * 3.45 — squared-magnitude voltage bounds `V²min ≤ v, v̂ ≤ V²max` on BOTH `v` and `v̂`.
+  - 3.45 — squared-magnitude voltage bounds `V²min ≤ v, v̂ ≤ V²max` on BOTH `v` and `v̂`.
 
 Differences from [`LinDistFlow`](@ref) (which is this model with `l → 0`): adds the squared
 current `l[b,t] ≥ 0` and the exactness copy `v̂[j,t]`; the rotated SOC cone (3.39); the loss
@@ -83,25 +83,27 @@ the shared residuals, mirroring [`contribute!(::LinDistFlow, …)`](@ref) with t
 listed on [`ConvexBranchFlow`](@ref).
 
 Creates, on `ctx.model`:
-- `v[j,t]`  — squared voltage magnitude `|V_j|²` (thesis 3.33 variable);
-- `v̂[j,t]`  — the exactness-copy squared voltage (thesis 3.43/3.45), one per bus per time
-  (NOT a separate flow network — only `v̂`, per RESEARCH Pattern 2);
-- `P[b,t]`, `Q[b,t]` — branch active/reactive flows (parent→child), `t = 1:T`;
-- `l[b,t] ≥ 0` — squared branch current (thesis 3.34 variable), lower-bounded at 0 so the
-  rotated cone's `t,u ≥ 0` requirement holds.
+
+  - `v[j,t]`  — squared voltage magnitude `|V_j|²` (thesis 3.33 variable);
+  - `v̂[j,t]`  — the exactness-copy squared voltage (thesis 3.43/3.45), one per bus per time
+    (NOT a separate flow network — only `v̂`, per RESEARCH Pattern 2);
+  - `P[b,t]`, `Q[b,t]` — branch active/reactive flows (parent→child), `t = 1:T`;
+  - `l[b,t] ≥ 0` — squared branch current (thesis 3.34 variable), lower-bounded at 0 so the
+    rotated cone's `t,u ≥ 0` requirement holds.
 
 The root squared voltage AND its copy are fixed at the reference `1.0` (= 1.0²); every
 non-root bus bounds BOTH `v` and `v̂` by `vmin²`/`vmax²` (thesis 3.45 — the bounds that
 force exactness; Pitfall 1: SQUARE the pu magnitude bounds).
 
 Per branch/time it adds:
-- the rotated SOC cone `[0.5·l, v[from], P, Q] ∈ RotatedSecondOrderCone()` ⇒
-  `l·v ≥ P²+Q²` (thesis 3.39; the `0.5` factor is MANDATORY — dropping it silently doubles
-  the allowed current, RESEARCH Anti-Pattern);
-- the true voltage drop `v[to] == v[from] − 2(rP+xQ) + (r²+x²)·l` (thesis 3.33);
-- the copy drop `v̂[to] == v̂[from] − 2{r(P+rl) + x(Q+xl)}` (thesis 3.43, `P̂/Q̂` expanded);
-- where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward apparent-power cone
-  `‖(P,Q)‖₂ ≤ smax` ⇒ `P²+Q² ≤ S²max` (thesis 3.36).
+
+  - the rotated SOC cone `[0.5·l, v[from], P, Q] ∈ RotatedSecondOrderCone()` ⇒
+    `l·v ≥ P²+Q²` (thesis 3.39; the `0.5` factor is MANDATORY — dropping it silently doubles
+    the allowed current, RESEARCH Anti-Pattern);
+  - the true voltage drop `v[to] == v[from] − 2(rP+xQ) + (r²+x²)·l` (thesis 3.33);
+  - the copy drop `v̂[to] == v̂[from] − 2{r(P+rl) + x(Q+xl)}` (thesis 3.43, `P̂/Q̂` expanded);
+  - where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward apparent-power cone
+    `‖(P,Q)‖₂ ≤ smax` ⇒ `P²+Q² ≤ S²max` (thesis 3.36).
 
 Then accumulates the per-bus active balance into `ctx.residuals[:Rp]` (thesis 3.31) and the
 reactive balance into `:Rq` (thesis 3.32) via the INDEXED `add_to_residual!`. The incoming
@@ -177,10 +179,7 @@ function contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
         cpydrop[b = 1:nB, t = 1:T],
         v̂[B[b].to, t] ==
         v̂[B[b].from, t] -
-        2 * (
-            B[b].r * (P[b, t] + B[b].r * l[b, t]) +
-            B[b].x * (Q[b, t] + B[b].x * l[b, t])
-        )
+        2 * (B[b].r * (P[b, t] + B[b].r * l[b, t]) + B[b].x * (Q[b, t] + B[b].x * l[b, t]))
     )
     # PRICE-02 (05-01): register the exactness-copy drop (3.43) — its dual feeds the
     # exactness-copy contribution to the DLMP split. Pitfall 2: omitting this registration

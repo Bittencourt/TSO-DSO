@@ -45,12 +45,13 @@ generation source) but DROP the battery storage, and reuse every OTHER (flexible
 device by driving its `contribute!` on `ctx.model`.
 
 Returns, over `t = 1:T`:
-- `Ppv::Vector{Float64}`      — summed PV availability of the aggregator's PVBatteries
-  (a fixed parameter; the battery's charge/discharge/SOC dynamics are omitted, A4);
-- `consumption::Vector{AffExpr}` — the flexible-load draw `Σ_dev (−p_inject_dev)` (each
-  flexible device injects a NEGATIVE active power, so `−p_inject` is its consumption);
-- `utility::QuadExpr`         — the summed concave device utility of the flexible loads;
-- `flex_vars::Vector`         — the flexible-device variable stashes (for inspection).
+
+  - `Ppv::Vector{Float64}`      — summed PV availability of the aggregator's PVBatteries
+    (a fixed parameter; the battery's charge/discharge/SOC dynamics are omitted, A4);
+  - `consumption::Vector{AffExpr}` — the flexible-load draw `Σ_dev (−p_inject_dev)` (each
+    flexible device injects a NEGATIVE active power, so `−p_inject` is its consumption);
+  - `utility::QuadExpr`         — the summed concave device utility of the flexible loads;
+  - `flex_vars::Vector`         — the flexible-device variable stashes (for inspection).
 
 A PVBattery contributes ONLY its `Ppv` here — `contribute!` is deliberately NOT called on
 it, so no storage variable/constraint enters the FIT-OPT (the thesis FIT prosumer has PV +
@@ -161,14 +162,21 @@ function _fit_opt_solve(
         @constraint(model, [t = 1:T], self[t] + exp[t] == pv_flex.Ppv[t])  # (3.27)
 
         # Prosumer FIT surplus (thesis 3.24): device utility + FIT settlement.
-        fit_money = sum(
-            λ_self * self[t] + λ_export * exp[t] - λ_import * imp[t] for t in 1:T
-        )
+        fit_money =
+            sum(λ_self * self[t] + λ_export * exp[t] - λ_import * imp[t] for t in 1:T)
         surplus += pv_flex.utility + fit_money
         total_utility += pv_flex.utility
 
-        built[k] = (; bus = agg.bus, φ = agg.φ, Pdc = agg.Pdc, Ppv = pv_flex.Ppv,
-            p_h, self, imp, exp)
+        built[k] = (;
+            bus = agg.bus,
+            φ = agg.φ,
+            Pdc = agg.Pdc,
+            Ppv = pv_flex.Ppv,
+            p_h,
+            self,
+            imp,
+            exp,
+        )
     end
 
     @objective(model, Max, surplus)
@@ -184,8 +192,17 @@ function _fit_opt_solve(
         exp_v = value.(b.exp)
         p_h_v = [value(b.p_h[t]) for t in 1:T]
         net = exp_v .- imp_v                        # net grid injection = Ppv − p_h (3.22)
-        return (; bus = b.bus, φ = b.φ, Pdc = b.Pdc, Ppv = b.Ppv,
-            p_h = p_h_v, self = self_v, imp = imp_v, exp = exp_v, net)
+        return (;
+            bus = b.bus,
+            φ = b.φ,
+            Pdc = b.Pdc,
+            Ppv = b.Ppv,
+            p_h = p_h_v,
+            self = self_v,
+            imp = imp_v,
+            exp = exp_v,
+            net,
+        )
     end
 
     return (;
@@ -227,20 +244,21 @@ routes through `select_optimizer(problem_class(pf))` (INFRA-02, no concrete solv
 is gated on `assert_solved!`.
 
 Returns a `NamedTuple`:
-- `ctx`              — the solved FIT AC-PF `ModelContext` (the baseline ctx; structurally
-  DISTINCT from the DADP welfare ctx — no battery, voltage limit relaxed);
-- `social_fit`       — the FIT SOCIAL WELFARE: `Σ_j U_flex,j − Σ_t λ₀[t]·p_import[t]` (the
-  same welfare functional as the DADP solve, thesis eq. 3.38, evaluated on the FIT schedule;
-  the internal FIT transfers cancel in social welfare, leaving utility minus the true MEM
-  cost of the imported net energy + losses). This is the DENOMINATOR of the +25% headline
-  ratio the welfare-accounting plan (05-05) reports;
-- `welfare`          — alias of `social_fit`;
-- `ratio`            — an efficiency indicator `social_DADP / social_fit`, where `social_DADP`
-  is the dynamic-pricing optimum from `solve_welfare` on the SAME scenario (thesis Case A ≈
-  1.25). The AUTHORITATIVE +25% ratio is (re)computed by 05-05 against the real DADP ctx;
-  this is the self-contained cross-check the FIT baseline reports;
-- `prosumer_surplus` — the FIT-OPT objective (Σ prosumer FIT surplus, thesis 3.24);
-- `fit_flows`        — per-aggregator numeric FIT schedule (`Ppv, p_h, self, imp, exp, net`).
+
+  - `ctx`              — the solved FIT AC-PF `ModelContext` (the baseline ctx; structurally
+    DISTINCT from the DADP welfare ctx — no battery, voltage limit relaxed);
+  - `social_fit`       — the FIT SOCIAL WELFARE: `Σ_j U_flex,j − Σ_t λ₀[t]·p_import[t]` (the
+    same welfare functional as the DADP solve, thesis eq. 3.38, evaluated on the FIT schedule;
+    the internal FIT transfers cancel in social welfare, leaving utility minus the true MEM
+    cost of the imported net energy + losses). This is the DENOMINATOR of the +25% headline
+    ratio the welfare-accounting plan (05-05) reports;
+  - `welfare`          — alias of `social_fit`;
+  - `ratio`            — an efficiency indicator `social_DADP / social_fit`, where `social_DADP`
+    is the dynamic-pricing optimum from `solve_welfare` on the SAME scenario (thesis Case A ≈
+    1.25). The AUTHORITATIVE +25% ratio is (re)computed by 05-05 against the real DADP ctx;
+    this is the self-contained cross-check the FIT baseline reports;
+  - `prosumer_surplus` — the FIT-OPT objective (Σ prosumer FIT surplus, thesis 3.24);
+  - `fit_flows`        — per-aggregator numeric FIT schedule (`Ppv, p_h, self, imp, exp, net`).
 
 Reproducibility (INFRA-04, threat T-05-09): the whole computation is DETERMINISTIC in its
 inputs; when the `aggregators` are built from seeded `generate_profiles(seed=…)`, two calls
@@ -266,7 +284,7 @@ function fit_baseline(
         throw(ArgumentError("fit_baseline needs at least one aggregator (thesis 3.24)"))
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
     seed === nothing || @debug "fit_baseline: profiles are seeded upstream by the caller " *
-                               "(generate_profiles(seed=$seed)); the FIT solve is deterministic"
+           "(generate_profiles(seed=$seed)); the FIT solve is deterministic"
 
     # (1) Per-prosumer FIT-OPT schedule (thesis 3.24-3.28) — the solver is chosen by the
     # formulation's problem class, never named (INFRA-02).
@@ -298,9 +316,8 @@ function fit_baseline(
     # Fix each aggregator's FIT net injection at its bus (3.22) and its power-factor reactive
     # draw (3.23) — both NUMERIC constants from the FIT-OPT solve.
     for a in fa.per_agg
-        1 <= a.bus <= Np || throw(
-            ArgumentError("aggregator bus=$(a.bus) outside feeder buses 1:$Np"),
-        )
+        1 <= a.bus <= Np ||
+            throw(ArgumentError("aggregator bus=$(a.bus) outside feeder buses 1:$Np"))
         tanφ = sqrt(1 - a.φ^2) / a.φ            # tan(arccos φ) (thesis 3.23)
         for t in 1:T
             add_to_residual!(ctx, :Rp, a.bus, t, a.net[t])          # net active (3.22)
@@ -363,8 +380,8 @@ function fit_baseline(
     # the reference always stays feasible (a tighter DADP voltage limit could make the heavy-
     # load reference infeasible). The AUTHORITATIVE +25% ratio is recomputed by 05-05 against
     # the real DADP ctx; this is the FIT baseline's self-contained cross-check.
-    _, social_dadp, _ = solve_welfare(relaxed, pf, aggregators; T = T, λ₀ = λ₀,
-        allow_export = true)
+    _, social_dadp, _ =
+        solve_welfare(relaxed, pf, aggregators; T = T, λ₀ = λ₀, allow_export = true)
     abs(social_fit) > eps(Float64) || error(
         "fit_baseline: social_fit≈0 — cannot form the efficiency ratio (degenerate baseline)",
     )

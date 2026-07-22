@@ -20,10 +20,8 @@
 #   - a genuine TRANSIT bus (non-root, no aggregator) is accepted by `build_dso_opt` (zero
 #     injection pinned) rather than throwing the Phase-6 guard (RESEARCH Pitfall 5).
 
-@testitem "admm adaptive rho: set_rho! in-place quad-coeff, build-once invariant (adaptive, rho)" setup = [
-    Phase7Fixtures,
-    Phase6Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "admm adaptive rho: set_rho! in-place quad-coeff, build-once invariant (adaptive, rho)" setup =
+    [Phase7Fixtures, Phase6Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -53,11 +51,8 @@
     end
 end
 
-@testitem "admm adaptive rho: scale-invariant convergence 2-bus AND ieee13 (adaptive, rho)" setup = [
-    Phase7Fixtures,
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "admm adaptive rho: scale-invariant convergence 2-bus AND ieee13 (adaptive, rho)" setup =
+    [Phase7Fixtures, Phase6Fixtures, Phase4Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
 
     # RED until Wave 3 (adaptive-ρ policy, plan 07-04, guarded by the 07-03 set_rho! seam).
@@ -67,38 +62,54 @@ end
         # SAME per-unit config on both scales (no hard-coded scale-specific penalty, ADMM-02).
         cfg = (
             ρ = Phase7Fixtures.RHO0,
-            ε_abs = Phase7Fixtures.EPS_ABS, ε_rel = Phase7Fixtures.EPS_REL,
-            τ = Phase7Fixtures.TAU, μ = Phase7Fixtures.MU,
-            ρ_min = Phase7Fixtures.RHO_MIN, ρ_max = Phase7Fixtures.RHO_MAX,
+            ε_abs = Phase7Fixtures.EPS_ABS,
+            ε_rel = Phase7Fixtures.EPS_REL,
+            τ = Phase7Fixtures.TAU,
+            μ = Phase7Fixtures.MU,
+            ρ_min = Phase7Fixtures.RHO_MIN,
+            ρ_max = Phase7Fixtures.RHO_MAX,
         )
 
         # 2-bus
         f2 = Phase6Fixtures.two_bus_feeder()
         a2 = Phase6Fixtures.build_two_bus_aggregators(f2)
         r2 = solve_admm(
-            f2, ConvexBranchFlow(), a2;
-            T = Phase6Fixtures.T, λ₀ = Phase6Fixtures.two_bus_lambda0(),
-            maxiter = 500, allow_export = true, cfg...,
+            f2,
+            ConvexBranchFlow(),
+            a2;
+            T = Phase6Fixtures.T,
+            λ₀ = Phase6Fixtures.two_bus_lambda0(),
+            maxiter = 500,
+            allow_export = true,
+            cfg...,
         )
         @test r2.iters < 500
-        @test converged(r2.residuals, last(r2.residuals.eps_pri_trace), last(r2.residuals.eps_dual_trace))
+        @test converged(
+            r2.residuals,
+            last(r2.residuals.eps_pri_trace),
+            last(r2.residuals.eps_dual_trace),
+        )
 
         # IEEE-13 (congestion-driven) — SAME cfg must also converge (scale invariance).
         f13 = ieee13_modified()
         a13 = Phase4Fixtures.build_ieee13_ground_aggregators(f13)
         r13 = solve_admm(
-            f13, ConvexBranchFlow(), a13;
-            T = Phase4Fixtures.T, λ₀ = Phase4Fixtures.mem_price_profile(),
-            maxiter = 500, allow_export = true, cfg...,
+            f13,
+            ConvexBranchFlow(),
+            a13;
+            T = Phase4Fixtures.T,
+            λ₀ = Phase4Fixtures.mem_price_profile(),
+            maxiter = 500,
+            allow_export = true,
+            cfg...,
         )
         @test r13.iters < 500
         @test r13.exact_maxgap < 1e-3
     end
 end
 
-@testitem "admm transit dso: zero-injection non-load bus accepted (transit, dso)" setup = [
-    Phase7Fixtures,
-] tags = [:admm, :phase7] begin
+@testitem "admm transit dso: zero-injection non-load bus accepted (transit, dso)" setup =
+    [Phase7Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
 
     # RED until Wave 2/3 (plan 07-03 relaxes the DSO-OPT transit-node guard). The observable

@@ -8,7 +8,8 @@
 # moment `assert_socp_exact!` lands; the high-PV item additionally needs ConvexBranchFlow
 # (04-02) and the shared Phase4Fixtures high-PV feeder.
 
-@testitem "exact: assert_socp_exact! throws on an inexact relaxation, refusing prices (PF-04)" tags = [:exact] begin
+@testitem "exact: assert_socp_exact! throws on an inexact relaxation, refusing prices (PF-04)" tags =
+    [:exact] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -24,12 +25,18 @@
         )
         T, N, B = 1, 2, 1
         model = Model(select_optimizer(SOCP()))
-        @variable(model, v[1:N, 1:T]);  @variable(model, v̂[1:N, 1:T])
-        @variable(model, P[1:B, 1:T]);  @variable(model, Q[1:B, 1:T]);  @variable(model, l[1:B, 1:T])
+        @variable(model, v[1:N, 1:T]);
+        @variable(model, v̂[1:N, 1:T])
+        @variable(model, P[1:B, 1:T]);
+        @variable(model, Q[1:B, 1:T]);
+        @variable(model, l[1:B, 1:T])
         # A GROSSLY inexact point: l·v_from = 1·1 = 1 ≫ P²+Q² = 0  ⇒  gap = 1, and the
         # RELATIVE cone slack gap/max(|lhs|,|rhs|) ≈ 1 ≫ rtol (WR-01: scale-free gate).
-        fix.(v, 1.0; force = true);  fix.(v̂, 1.0; force = true)
-        fix.(P, 0.0; force = true);  fix.(Q, 0.0; force = true);  fix.(l, 1.0; force = true)
+        fix.(v, 1.0; force = true);
+        fix.(v̂, 1.0; force = true)
+        fix.(P, 0.0; force = true);
+        fix.(Q, 0.0; force = true);
+        fix.(l, 1.0; force = true)
         @objective(model, Max, 0)
         optimize!(model)
 
@@ -42,7 +49,8 @@
     end
 end
 
-@testitem "exact: assert_socp_exact! passes and reports maxgap on an exact point (PF-04)" tags = [:exact] begin
+@testitem "exact: assert_socp_exact! passes and reports maxgap on an exact point (PF-04)" tags =
+    [:exact] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -57,11 +65,17 @@ end
         )
         T, N, B = 1, 2, 1
         model = Model(select_optimizer(SOCP()))
-        @variable(model, v[1:N, 1:T]);  @variable(model, v̂[1:N, 1:T])
-        @variable(model, P[1:B, 1:T]);  @variable(model, Q[1:B, 1:T]);  @variable(model, l[1:B, 1:T])
+        @variable(model, v[1:N, 1:T]);
+        @variable(model, v̂[1:N, 1:T])
+        @variable(model, P[1:B, 1:T]);
+        @variable(model, Q[1:B, 1:T]);
+        @variable(model, l[1:B, 1:T])
         # An EXACT point: l = 0, P = Q = 0, v = 1 ⇒ gap = 0·1 − 0 = 0 < τ (no throw).
-        fix.(v, 1.0; force = true);  fix.(v̂, 1.0; force = true)
-        fix.(P, 0.0; force = true);  fix.(Q, 0.0; force = true);  fix.(l, 0.0; force = true)
+        fix.(v, 1.0; force = true);
+        fix.(v̂, 1.0; force = true)
+        fix.(P, 0.0; force = true);
+        fix.(Q, 0.0; force = true);
+        fix.(l, 0.0; force = true)
         @objective(model, Max, 0)
         optimize!(model)
 
@@ -75,9 +89,8 @@ end
     end
 end
 
-@testitem "exact: relative gate refuses a base-shrunk cone slack an absolute τ would accept (WR-01)" tags = [
-    :exact,
-] begin
+@testitem "exact: relative gate refuses a base-shrunk cone slack an absolute τ would accept (WR-01)" tags =
+    [:exact] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -92,15 +105,21 @@ end
         )
         T, N, B = 1, 2, 1
         model = Model(select_optimizer(SOCP()))
-        @variable(model, v[1:N, 1:T]);  @variable(model, v̂[1:N, 1:T])
-        @variable(model, P[1:B, 1:T]);  @variable(model, Q[1:B, 1:T]);  @variable(model, l[1:B, 1:T])
+        @variable(model, v[1:N, 1:T]);
+        @variable(model, v̂[1:N, 1:T])
+        @variable(model, P[1:B, 1:T]);
+        @variable(model, Q[1:B, 1:T]);
+        @variable(model, l[1:B, 1:T])
         # A SMALL-MAGNITUDE strict cone: l·v_from = 5e-6·1 = 5e-6 ≫ P²+Q² = 0. The ABSOLUTE
         # cone residual is 5e-6 — BELOW the legacy absolute τ = 1e-5, so the old gate would
         # have SILENTLY ACCEPTED this fictitious over-current (the scale-dependence hazard on a
         # large per-unit base). The RELATIVE slack, however, is ≈ 1 (the cone is fully strict),
         # so the WR-01 gate correctly REFUSES prices regardless of the magnitude.
-        fix.(v, 1.0; force = true);  fix.(v̂, 1.0; force = true)
-        fix.(P, 0.0; force = true);  fix.(Q, 0.0; force = true);  fix.(l, 5.0e-6; force = true)
+        fix.(v, 1.0; force = true);
+        fix.(v̂, 1.0; force = true)
+        fix.(P, 0.0; force = true);
+        fix.(Q, 0.0; force = true);
+        fix.(l, 5.0e-6; force = true)
         @objective(model, Max, 0)
         optimize!(model)
 
@@ -116,9 +135,8 @@ end
     end
 end
 
-@testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags = [
-    :exact,
-] setup = [Phase4Fixtures] begin
+@testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags =
+    [:exact] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -139,8 +157,11 @@ end
         # cone → refused prices). solve_welfare runs the PF-04 gate internally BEFORE the dual
         # read; reaching this line at all means prices were NOT refused.
         ctx, obj, dadp = solve_welfare(
-            feeder, pf, aggs;
-            T = Phase4Fixtures.T, λ₀ = λ₀,
+            feeder,
+            pf,
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
             optimizer = select_optimizer(problem_class(pf)),
             allow_export = true,
         )

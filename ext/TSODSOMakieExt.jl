@@ -53,8 +53,22 @@ function TSODSO.plot_convergence(res::TSODSO.AdmmResiduals; filename = nothing)
     )
     lines!(ax, xs, _logsafe(res.primal_trace); label = "‖r‖ primal", color = :dodgerblue)
     lines!(ax, xs, _logsafe(res.dual_trace); label = "‖s‖ dual", color = :crimson)
-    lines!(ax, xs, _logsafe(res.eps_pri_trace); label = "ε_pri", color = :dodgerblue, linestyle = :dash)
-    lines!(ax, xs, _logsafe(res.eps_dual_trace); label = "ε_dual", color = :crimson, linestyle = :dash)
+    lines!(
+        ax,
+        xs,
+        _logsafe(res.eps_pri_trace);
+        label = "ε_pri",
+        color = :dodgerblue,
+        linestyle = :dash,
+    )
+    lines!(
+        ax,
+        xs,
+        _logsafe(res.eps_dual_trace);
+        label = "ε_dual",
+        color = :crimson,
+        linestyle = :dash,
+    )
     axislegend(ax; position = :rt)
     filename === nothing || save(filename, fig)
     return fig

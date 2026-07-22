@@ -31,63 +31,63 @@ Build and solve the GLB-CVX centralized social-welfare problem (thesis eq. 3.38)
 GENERALIZES [`solve_linear`](@ref) from a single device list to multiple aggregators at
 horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
 
-1. builds `Model(optimizer)` — `optimizer` defaults to `select_optimizer(problem_class(pf))`,
-   so the solver factory is chosen BY FORMULATION TRAIT (RESEARCH Pattern 5): DC/LinDistFlow
-   route to the `QP()` backend, while `ConvexBranchFlow` routes to the tight-gap `SOCP()`
-   backend (`tol_gap_abs/rel = 1e-8`, which the DADP accuracy and exactness check depend on).
-   Both are Clarabel, and this file NEVER names a concrete solver (INFRA-02, no
-   `if formulation ==` branch). Cross-solver checks pass a different factory (e.g.
-   `select_optimizer(NLP())`) plus `allow_local = true`;
-2. wraps it in a [`ModelContext`](@ref); stashes `feeder`/`T`;
-3. lets the power-flow formulation `contribute!` its branch/voltage terms into
-   `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`) and each aggregator `contribute!`
-   its net active/reactive injections into `:Rp`/`:Rq` plus its summed utility into
-   `ctx.meta[:objective]`;
-4. injects a priced active frontier exchange `p_import[t]` at `feeder.root` (stashed
-   under `ctx.meta[:p_import]`). By default it is IMPORT-ONLY (`p_import ≥ 0`, buy from the
-   MEM). With `allow_export = true` it is FREE-SIGN (`>0` buy, `<0` sell surplus to the MEM
-   at the same λ₀) — the physically-complete transmission frontier that lets a high-PV feeder
-   export its reverse-flow surplus. Priced export is the SOC-EXACTNESS enabler (PF-04): it
-   makes the welfare objective strictly decreasing in the loss current `l` (every unit of `l`
-   costs export revenue), so the SOC cone `l·v ≥ P²+Q²` stays TIGHT in the over-voltage /
-   reverse-flow regime instead of going slack (inexact). Import-only leaves losses-vs-
-   curtailment welfare-equivalent, breaking that condition. It also adds — ONLY when the
-   formulation provides a reactive channel
-   (WR-03) — a FREE-SIGN reactive frontier import `q_import[t]` (no lower bound, stashed
-   under `ctx.meta[:q_import]`), BOTH BEFORE closing the residuals. Without the free-sign
-   `q_import`, pinning `:Rq` at every bus with a reactive load present is INFEASIBLE (or
-   silently zeroes the reactive draw) — the MEM/substation supplies reactive power at the
-   frontier (RESEARCH Pitfall 2);
-5. closes `:Rp` always and `:Rq` only when the POWER-FLOW FORMULATION provides a reactive
-   channel — captured as `reactive = haskey(ctx.residuals, :Rq)` RIGHT AFTER the
-   formulation contributes and BEFORE any aggregator writes (WR-03). This keys off the
-   formulation's capability, not a formulation flag: LinDistFlow closes `:Rq`; a DC
-   (active-only) run leaves any aggregator reactive terms unclosed. Both closures are
-   registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
-6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
-7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
-   (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is trusted;
-8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
-   ONLY when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
-   cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
-   physically-meaningless duals from a STRICT (inexact) relaxation are REFUSED (thrown) rather
-   than returned (threats T-04-01/T-04-03). `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
-   DC/LinDistFlow stash no `:l` and skip this untouched. `rtol_exact` (default 1e-4) is a
-   RELATIVE, base-free cone-slack tolerance (WR-01) and is a DISTINCT quantity from the
-   battery-check `τ` — never conflated (Pitfall 2);
-9. runs the MANDATORY App. C post-solve battery complementarity check via
-   [`assert_battery_complementarity!`](@ref): for every battery stashed under
-   `ctx.meta[:agg_device_vars]`, asserts the SCALE-FREE relative test
-   `value(p_ch[t])·value(p_dch[t]) < τ·Pmax²` for all `t`, throwing loudly on violation
-   (RESEARCH Pitfall 1, threat T-03-13; WR-02). Normalizing by the battery's rated power²
-   makes the gate's protective strength INVARIANT to the per-unit base — an absolute product
-   threshold weakens quadratically as the base grows and can silently admit a genuine
-   simultaneous charge/discharge. The RELATIVE tolerance `τ` is PROBLEM-CLASS-AWARE by
-   default: `1e-6` (fraction of `Pmax²`) on the QP path (DC/LinDistFlow, whose Clarabel-QP
-   primal is tight) but a looser `1e-3` on the SOCP path (`ConvexBranchFlow`), where the
-   interior-point conic solve co-activates the optimal face more. This keys off
-   `problem_class(pf)` (a trait, not an `if formulation ==`) and never loosens the QP path
-   (the `Pmax²`-scaled threshold is ≤ the old absolute `1e-6` for every `Pmax ≤ 1`).
+ 1. builds `Model(optimizer)` — `optimizer` defaults to `select_optimizer(problem_class(pf))`,
+    so the solver factory is chosen BY FORMULATION TRAIT (RESEARCH Pattern 5): DC/LinDistFlow
+    route to the `QP()` backend, while `ConvexBranchFlow` routes to the tight-gap `SOCP()`
+    backend (`tol_gap_abs/rel = 1e-8`, which the DADP accuracy and exactness check depend on).
+    Both are Clarabel, and this file NEVER names a concrete solver (INFRA-02, no
+    `if formulation ==` branch). Cross-solver checks pass a different factory (e.g.
+    `select_optimizer(NLP())`) plus `allow_local = true`;
+ 2. wraps it in a [`ModelContext`](@ref); stashes `feeder`/`T`;
+ 3. lets the power-flow formulation `contribute!` its branch/voltage terms into
+    `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`) and each aggregator `contribute!`
+    its net active/reactive injections into `:Rp`/`:Rq` plus its summed utility into
+    `ctx.meta[:objective]`;
+ 4. injects a priced active frontier exchange `p_import[t]` at `feeder.root` (stashed
+    under `ctx.meta[:p_import]`). By default it is IMPORT-ONLY (`p_import ≥ 0`, buy from the
+    MEM). With `allow_export = true` it is FREE-SIGN (`>0` buy, `<0` sell surplus to the MEM
+    at the same λ₀) — the physically-complete transmission frontier that lets a high-PV feeder
+    export its reverse-flow surplus. Priced export is the SOC-EXACTNESS enabler (PF-04): it
+    makes the welfare objective strictly decreasing in the loss current `l` (every unit of `l`
+    costs export revenue), so the SOC cone `l·v ≥ P²+Q²` stays TIGHT in the over-voltage /
+    reverse-flow regime instead of going slack (inexact). Import-only leaves losses-vs-
+    curtailment welfare-equivalent, breaking that condition. It also adds — ONLY when the
+    formulation provides a reactive channel
+    (WR-03) — a FREE-SIGN reactive frontier import `q_import[t]` (no lower bound, stashed
+    under `ctx.meta[:q_import]`), BOTH BEFORE closing the residuals. Without the free-sign
+    `q_import`, pinning `:Rq` at every bus with a reactive load present is INFEASIBLE (or
+    silently zeroes the reactive draw) — the MEM/substation supplies reactive power at the
+    frontier (RESEARCH Pitfall 2);
+ 5. closes `:Rp` always and `:Rq` only when the POWER-FLOW FORMULATION provides a reactive
+    channel — captured as `reactive = haskey(ctx.residuals, :Rq)` RIGHT AFTER the
+    formulation contributes and BEFORE any aggregator writes (WR-03). This keys off the
+    formulation's capability, not a formulation flag: LinDistFlow closes `:Rq`; a DC
+    (active-only) run leaves any aggregator reactive terms unclosed. Both closures are
+    registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
+ 6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
+ 7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
+    (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is trusted;
+ 8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
+    ONLY when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
+    cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
+    physically-meaningless duals from a STRICT (inexact) relaxation are REFUSED (thrown) rather
+    than returned (threats T-04-01/T-04-03). `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
+    DC/LinDistFlow stash no `:l` and skip this untouched. `rtol_exact` (default 1e-4) is a
+    RELATIVE, base-free cone-slack tolerance (WR-01) and is a DISTINCT quantity from the
+    battery-check `τ` — never conflated (Pitfall 2);
+ 9. runs the MANDATORY App. C post-solve battery complementarity check via
+    [`assert_battery_complementarity!`](@ref): for every battery stashed under
+    `ctx.meta[:agg_device_vars]`, asserts the SCALE-FREE relative test
+    `value(p_ch[t])·value(p_dch[t]) < τ·Pmax²` for all `t`, throwing loudly on violation
+    (RESEARCH Pitfall 1, threat T-03-13; WR-02). Normalizing by the battery's rated power²
+    makes the gate's protective strength INVARIANT to the per-unit base — an absolute product
+    threshold weakens quadratically as the base grows and can silently admit a genuine
+    simultaneous charge/discharge. The RELATIVE tolerance `τ` is PROBLEM-CLASS-AWARE by
+    default: `1e-6` (fraction of `Pmax²`) on the QP path (DC/LinDistFlow, whose Clarabel-QP
+    primal is tight) but a looser `1e-3` on the SOCP path (`ConvexBranchFlow`), where the
+    interior-point conic solve co-activates the optimal face more. This keys off
+    `problem_class(pf)` (a trait, not an `if formulation ==`) and never loosens the QP path
+    (the `Pmax²`-scaled threshold is ≤ the old absolute `1e-6` for every `Pmax ≤ 1`).
 
 Returns `(ctx, objective_value, dadp)` where `dadp = dual.(balance_p[bus, :])` at the
 FIRST aggregator's bus (the distribution price / DADP over the horizon).
@@ -141,9 +141,7 @@ function solve_welfare(
     # nowhere) — fail loudly, mirroring solve_linear's CR-01 device guard.
     for (k, agg) in enumerate(aggregators)
         1 <= agg.bus <= Np || throw(
-            ArgumentError(
-                "aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$Np",
-            ),
+            ArgumentError("aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$Np"),
         )
     end
 
@@ -300,11 +298,7 @@ QP path — and this function never loosens the QP path (its `Pmax²`-scaled thr
 old absolute one for every `Pmax ≤ 1`). Iterates `ctx.meta[:agg_device_vars]` (skips
 non-battery device stashes) and is a no-op when no batteries were registered.
 """
-function assert_battery_complementarity!(
-    ctx::ModelContext;
-    τ::Real,
-    T::Int = ctx.meta[:T],
-)
+function assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T])
     haskey(ctx.meta, :agg_device_vars) || return nothing
     for (bus, varlist) in ctx.meta[:agg_device_vars]
         for v in varlist

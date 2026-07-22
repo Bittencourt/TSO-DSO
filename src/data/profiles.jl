@@ -37,20 +37,30 @@ global RNG / `Random.seed!` here: the stdlib stream is not stable across Julia m
 (RESEARCH Anti-Patterns).
 
 # Arguments
-- `P::AbstractMatrix` — square, row-stochastic transition matrix (each row sums to 1).
-- `s0::Int` — initial state, a valid row index `1 ≤ s0 ≤ size(P, 1)`.
-- `steps::Int` — number of states to emit (`≥ 1`); the returned path has this length.
-- `rng::AbstractRNG` — an explicit RNG; seed a `StableRNGs.LehmerRNG(seed)` for reproducibility.
+
+  - `P::AbstractMatrix` — square, row-stochastic transition matrix (each row sums to 1).
+  - `s0::Int` — initial state, a valid row index `1 ≤ s0 ≤ size(P, 1)`.
+  - `steps::Int` — number of states to emit (`≥ 1`); the returned path has this length.
+  - `rng::AbstractRNG` — an explicit RNG; seed a `StableRNGs.LehmerRNG(seed)` for reproducibility.
 
 Throws `ArgumentError` (project convention: throw LOUDLY, never `@assert`, which `-O` can
 elide — threat T-03-04) when `P` is not square, when any row does not sum to 1 within
 tolerance, when `s0` is out of range, or when `steps < 1`.
 """
-function markov_path(P::AbstractMatrix, s0::Int, steps::Int, rng::StableRNGs.Random.AbstractRNG)
+function markov_path(
+    P::AbstractMatrix,
+    s0::Int,
+    steps::Int,
+    rng::StableRNGs.Random.AbstractRNG,
+)
     # --- Validate the transition matrix and walk parameters LOUDLY (threat T-03-04) ---
     n, m = size(P)
     if n != m
-        throw(ArgumentError("markov_path: transition matrix P must be square; got size $(size(P))"))
+        throw(
+            ArgumentError(
+                "markov_path: transition matrix P must be square; got size $(size(P))",
+            ),
+        )
     end
     if !(1 <= s0 <= n)
         throw(ArgumentError("markov_path: initial state s0=$s0 is out of range 1:$n"))
@@ -61,7 +71,7 @@ function markov_path(P::AbstractMatrix, s0::Int, steps::Int, rng::StableRNGs.Ran
     rowsum_tol = 1e-8
     for s in axes(P, 1)
         rs = sum(@view P[s, :])
-        if !isapprox(rs, one(rs); atol=rowsum_tol)
+        if !isapprox(rs, one(rs); atol = rowsum_tol)
             throw(
                 ArgumentError(
                     "markov_path: row $s of P must be row-stochastic (sum to 1 ±$rowsum_tol); " *
@@ -163,13 +173,13 @@ would silently enter the solve — threat T-03-05). Matrix/range validation is d
 """
 function generate_profiles(;
     seed::Integer,
-    T::Int=24,
-    P_demand::AbstractMatrix=_DEFAULT_DEMAND_TRANSITION,
-    demand_values::AbstractVector=_DEFAULT_DEMAND_VALUES,
-    P_pv::AbstractMatrix=_DEFAULT_PV_TRANSITION,
-    pv_values::AbstractVector=_DEFAULT_PV_VALUES,
-    s0_demand::Int=1,
-    s0_pv::Int=1,
+    T::Int = 24,
+    P_demand::AbstractMatrix = _DEFAULT_DEMAND_TRANSITION,
+    demand_values::AbstractVector = _DEFAULT_DEMAND_VALUES,
+    P_pv::AbstractMatrix = _DEFAULT_PV_TRANSITION,
+    pv_values::AbstractVector = _DEFAULT_PV_VALUES,
+    s0_demand::Int = 1,
+    s0_pv::Int = 1,
 )
     if T < 1
         throw(ArgumentError("generate_profiles: T must be ≥ 1; got $T"))
@@ -191,10 +201,18 @@ function generate_profiles(;
         )
     end
     if any(<(0), demand_values)
-        throw(ArgumentError("generate_profiles: demand_values must be non-negative (threat T-03-05)"))
+        throw(
+            ArgumentError(
+                "generate_profiles: demand_values must be non-negative (threat T-03-05)",
+            ),
+        )
     end
     if any(<(0), pv_values)
-        throw(ArgumentError("generate_profiles: pv_values must be non-negative (threat T-03-05)"))
+        throw(
+            ArgumentError(
+                "generate_profiles: pv_values must be non-negative (threat T-03-05)",
+            ),
+        )
     end
 
     # Seed ONCE, thread the SAME rng through both walks — this is what makes the full

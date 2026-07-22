@@ -21,7 +21,6 @@
 # fixture wants.
 
 @testmodule Phase8Fixtures begin
-
     """
         minimal_scenario_kwargs() -> NamedTuple
 

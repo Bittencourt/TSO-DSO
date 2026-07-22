@@ -6,7 +6,8 @@
 # the nodal-balance dual at the load bus (the DADP) equals the frontier price λ₀. Both
 # expectations are DERIVED from the fixture coefficients in the test body (crit 3, WR-04),
 # never a hard-coded magic number, and the dual sign is asserted positive (Pitfall 2).
-@testitem "linear: 2-bus loss-less first price DADP=λ₀ and p*=(a−λ₀)/b (crit 3, price)" tags = [:linear] begin
+@testitem "linear: 2-bus loss-less first price DADP=λ₀ and p*=(a−λ₀)/b (crit 3, price)" tags =
+    [:linear] begin
     using TSODSO, JuMP
 
     # 2-bus radial loss-less fixture: node 1 = frontier/root (v fixed 1.0),
@@ -40,7 +41,8 @@ end
 # silently dropped from the nodal balance (its `−p` injection never gets pinned to zero),
 # manufacturing welfare from power sourced nowhere. Assembly must reject it LOUDLY. This
 # also re-confirms a fully valid solve still recovers welfare 2.0 / DADP 2.0.
-@testitem "linear: out-of-range device bus throws; valid solve still gives welfare/DADP (CR-01)" tags = [:linear] begin
+@testitem "linear: out-of-range device bus throws; valid solve still gives welfare/DADP (CR-01)" tags =
+    [:linear] begin
     using TSODSO, JuMP
 
     buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]

@@ -21,7 +21,7 @@
 A feeder bus. `id` is its 1-based index; `vmin`/`vmax` are per-unit voltage
 bounds; `is_root` flags the single MEM/substation frontier (root) bus.
 """
-struct Bus{T<:Real}
+struct Bus{T <: Real}
     id::Int
     vmin::T
     vmax::T
@@ -34,7 +34,7 @@ end
 A feeder branch from bus `from` to bus `to`, with per-unit resistance `r`,
 reactance `x`, and apparent-power limit `smax`.
 """
-struct Branch{T<:Real}
+struct Branch{T <: Real}
     from::Int
     to::Int
     r::T
@@ -54,7 +54,7 @@ Validation lives in the INNER constructor deliberately: defining an inner
 constructor suppresses Julia's auto-generated (non-validating) constructors, so
 there is no way to bypass the checks (and no method-overwriting at precompile).
 """
-struct Feeder{T<:Real}
+struct Feeder{T <: Real}
     buses::Vector{Bus{T}}
     branches::Vector{Branch{T}}
     root::Int
@@ -63,7 +63,7 @@ struct Feeder{T<:Real}
         buses::Vector{Bus{T}},
         branches::Vector{Branch{T}},
         root::Int,
-    ) where {T<:Real}
+    ) where {T <: Real}
         feeder = new{T}(buses, branches, root)
         assert_radial(feeder.buses, feeder.branches, feeder.root)  # DATA-02 topology invariant
         assert_magnitudes(feeder)                                  # INFRA-05 magnitude invariant
@@ -77,14 +77,17 @@ end
 Construct a feeder, inferring `T` from the bus/branch element type and enforcing
 both construction invariants before returning:
 
-  * `assert_radial(buses, branches, root)` — radial tree (DATA-02); and
-  * `assert_magnitudes(feeder)` — per-unit magnitude sanity (INFRA-05).
+  - `assert_radial(buses, branches, root)` — radial tree (DATA-02); and
+  - `assert_magnitudes(feeder)` — per-unit magnitude sanity (INFRA-05).
 
 Throws `ArgumentError` on a non-tree feeder and (also `ArgumentError`) on
 out-of-band magnitudes. Both fire on this live path, so any downstream consumer
 (e.g. the walking-skeleton solve) inherits validated data for free.
 """
-Feeder(buses::Vector{Bus{T}}, branches::Vector{Branch{T}}, root::Integer) where {T<:Real} =
-    Feeder{T}(buses, branches, Int(root))
+Feeder(
+    buses::Vector{Bus{T}},
+    branches::Vector{Branch{T}},
+    root::Integer,
+) where {T <: Real} = Feeder{T}(buses, branches, Int(root))
 
 export Bus, Branch, Feeder

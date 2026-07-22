@@ -43,10 +43,30 @@
     """
     function mem_price_profile()
         return Float64[
-            3.8, 3.7, 3.6, 3.6, 3.7, 4.0,   # 00–05 overnight trough
-            4.8, 5.8, 6.5, 6.2, 5.9, 5.7,   # 06–11 morning ramp → midday shoulder
-            5.6, 5.8, 6.0, 6.8, 8.2, 9.0,   # 12–17 afternoon rise → evening peak
-            8.6, 7.4, 6.2, 5.2, 4.4, 4.0,   # 18–23 evening decline
+            3.8,
+            3.7,
+            3.6,
+            3.6,
+            3.7,
+            4.0,   # 00–05 overnight trough
+            4.8,
+            5.8,
+            6.5,
+            6.2,
+            5.9,
+            5.7,   # 06–11 morning ramp → midday shoulder
+            5.6,
+            5.8,
+            6.0,
+            6.8,
+            8.2,
+            9.0,   # 12–17 afternoon rise → evening peak
+            8.6,
+            7.4,
+            6.2,
+            5.2,
+            4.4,
+            4.0,   # 18–23 evening decline
         ]
     end
 
@@ -59,10 +79,30 @@
     """
     function temperature_profile()
         return Float64[
-            19, 18, 17, 16, 16, 17,   # 00–05 cooling to a dawn minimum
-            19, 21, 23, 26, 28, 30,   # 06–11 morning warm-up
-            31, 32, 32, 31, 29, 27,   # 12–17 afternoon peak → decline
-            25, 23, 22, 21, 20, 19,   # 18–23 evening cool-down
+            19,
+            18,
+            17,
+            16,
+            16,
+            17,   # 00–05 cooling to a dawn minimum
+            19,
+            21,
+            23,
+            26,
+            28,
+            30,   # 06–11 morning warm-up
+            31,
+            32,
+            32,
+            31,
+            29,
+            27,   # 12–17 afternoon peak → decline
+            25,
+            23,
+            22,
+            21,
+            20,
+            19,   # 18–23 evening cool-down
         ]
     end
 
@@ -76,7 +116,8 @@
     PV back-feed or shrink the load without changing the seeded SHAPE.
     """
     function _house_aggregator(
-        feeder, bus;
+        feeder,
+        bus;
         seed::Integer,
         φ::Real,
         pv_scale::Real = 1.0,
@@ -89,11 +130,31 @@
         Ppv = Float64[pv_scale * p for p in prof.pv]
         Pdc = Float64[load_scale * d for d in prof.demand]
 
-        therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, temperature_profile())
+        therm = Thermostatic(
+            bus,
+            0.2,
+            0.05,
+            15.0,
+            30.0,
+            22.0,
+            0.0,
+            1.0,
+            0.5,
+            temperature_profile(),
+        )
         defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
         batt = PVBattery(
-            bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
-            BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv,
+            bus,
+            0.95,
+            1.0,
+            batt_pmax,
+            0.0,
+            batt_emax,
+            batt_soc0,
+            BATT_λ_MIN,
+            BATT_λ_MED,
+            BATT_λ_MAX,
+            Ppv,
         )
         return Aggregator(bus, φ, [therm, defer, batt], Pdc)
     end
@@ -158,11 +219,15 @@
         N = length(feeder.buses)
         return [
             _house_aggregator(
-                feeder, bus;
-                seed = seed, φ = 0.95,
+                feeder,
+                bus;
+                seed = seed,
+                φ = 0.95,
                 pv_scale = 0.5,       # PV > load ⇒ reverse flow / over-voltage (≈1.04 pu), EXACT
                 load_scale = 0.2,     # small load ⇒ the surplus must leave via the frontier
-                batt_pmax = 0.1, batt_emax = 0.2, batt_soc0 = 0.1,   # tiny storage headroom
+                batt_pmax = 0.1,
+                batt_emax = 0.2,
+                batt_soc0 = 0.1,   # tiny storage headroom
             ) for bus in 2:N
         ]
     end
@@ -208,8 +273,10 @@
         N = length(feeder.buses)
         return [
             _house_aggregator(
-                feeder, bus;
-                seed = seed, φ = 0.90,
+                feeder,
+                bus;
+                seed = seed,
+                φ = 0.90,
                 load_scale = GROUND_LOAD_SCALE,
                 pv_scale = GROUND_PV_SCALE,
                 batt_pmax = 0.5 * GROUND_LOAD_SCALE,   # battery scaled WITH the load magnitude
@@ -219,7 +286,13 @@
         ]
     end
 
-    export T, mem_price_profile, temperature_profile,
-        build_ieee13_aggregators, high_pv_feeder, build_high_pv_aggregators,
-        build_ieee13_ground_aggregators, GROUND_LOAD_SCALE, GROUND_PV_SCALE
+    export T,
+        mem_price_profile,
+        temperature_profile,
+        build_ieee13_aggregators,
+        high_pv_feeder,
+        build_high_pv_aggregators,
+        build_ieee13_ground_aggregators,
+        GROUND_LOAD_SCALE,
+        GROUND_PV_SCALE
 end

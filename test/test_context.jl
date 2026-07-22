@@ -18,7 +18,8 @@
 end
 
 # Seam: core/ModelContext.jl indexed residual accumulator (PF-02). Owned by plan 02-01.
-@testitem "context: indexed add_to_residual! accumulates per (bus,t) as AffExpr (PF-02)" tags = [:context] begin
+@testitem "context: indexed add_to_residual! accumulates per (bus,t) as AffExpr (PF-02)" tags =
+    [:context] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))
@@ -35,7 +36,8 @@ end
     @test ctx.residuals[:Rp] isa Matrix{AffExpr}
 end
 
-@testitem "context: indexed add_to_residual! grows the matrix with no feeder present (PF-02)" tags = [:context] begin
+@testitem "context: indexed add_to_residual! grows the matrix with no feeder present (PF-02)" tags =
+    [:context] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))
@@ -57,7 +59,8 @@ end
     @test ctx.residuals[:Rp] isa Matrix{AffExpr}
 end
 
-@testitem "context: add_to_objective! accumulates a QuadExpr and retains curvature (PF-02)" tags = [:context] begin
+@testitem "context: add_to_objective! accumulates a QuadExpr and retains curvature (PF-02)" tags =
+    [:context] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))
@@ -79,7 +82,8 @@ end
     @test isequal_canonical(ctx.meta[:objective], 2 * (a * p - (b / 2) * p^2))
 end
 
-@testitem "context: scalar add_to_residual! backward-compat preserved (PF-01)" tags = [:context] begin
+@testitem "context: scalar add_to_residual! backward-compat preserved (PF-01)" tags =
+    [:context] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))
@@ -97,7 +101,8 @@ end
 # Seam: core/ModelContext.jl — WR-04. Mixing a SCALAR and an INDEXED accumulator on the
 # same residual name must fail loudly (either direction), never silently overwrite/lose a
 # contribution. Distinct names for the two kinds keep working.
-@testitem "context: scalar/indexed accumulator-kind collision throws both ways (WR-04)" tags = [:context] begin
+@testitem "context: scalar/indexed accumulator-kind collision throws both ways (WR-04)" tags =
+    [:context] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))

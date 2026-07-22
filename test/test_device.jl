@@ -4,7 +4,8 @@
 # constructed and contributes with NO `Feeder` ever built. The name contains "device"
 # so the `occursin("device", ti.name)` runner filter selects them.
 
-@testitem "device: Interruptible rejects a non-concave utility (b <= 0) at construction (DEV-03)" tags = [:device] begin
+@testitem "device: Interruptible rejects a non-concave utility (b <= 0) at construction (DEV-03)" tags =
+    [:device] begin
     using TSODSO
 
     # b > 0 keeps the utility a·p − (b/2)p² concave (thesis 3.14) → convex QP welfare.
@@ -23,7 +24,8 @@
     @test mixed.Pmin === 0.0
 end
 
-@testitem "device: Interruptible contributes a bounded var, a signed :Rp injection, and a concave QuadExpr utility — with NO feeder (DEV-03)" tags = [:device] begin
+@testitem "device: Interruptible contributes a bounded var, a signed :Rp injection, and a concave QuadExpr utility — with NO feeder (DEV-03)" tags =
+    [:device] begin
     using TSODSO, JuMP
 
     # A bare context: QP model, NO feeder anywhere. The device is network-agnostic.

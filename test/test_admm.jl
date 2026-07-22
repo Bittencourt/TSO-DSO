@@ -22,10 +22,8 @@
 #   the load buses (the load-bearing DADP cross-validation, ADMM-04), and the subproblem JuMP
 #   models are built ONCE (ADMM-03 — model shape is iteration-count-independent).
 
-@testitem "admm: cross-validation 2-bus welfare + DADP sign (crossval)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "admm: cross-validation 2-bus welfare + DADP sign (crossval)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
@@ -40,14 +38,24 @@
 
         # Centralized ground truth (Phase 4/5): the monolithic SOCP welfare + its DADP duals.
         ctx_c, obj_c, _ = solve_welfare(
-            feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            allow_export = true,
         )
         dlmp_c = extract_dlmp(ctx_c; bus = load_bus, T = Th)
 
         # ADMM must recover the SAME welfare AND the SAME duals to tolerance.
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = Phase6Fixtures.RHO_2BUS, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = Phase6Fixtures.RHO_2BUS,
+            allow_export = true,
         )
 
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)          # welfare match (ADMM-04)
@@ -56,10 +64,8 @@
     end
 end
 
-@testitem "admm: cross-validation ieee13 welfare + DADP (crossval, ieee13)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "admm: cross-validation ieee13 welfare + DADP (crossval, ieee13)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
@@ -88,13 +94,25 @@ end
         tol_ieee13 = 1e-6
 
         ctx_c, obj_c, _ = solve_welfare(
-            feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            allow_export = true,
         )
         dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ_ieee13, maxiter = 200, tol = tol_ieee13, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ_ieee13,
+            maxiter = 200,
+            tol = tol_ieee13,
+            allow_export = true,
         )
 
         @test res.iters < 200                                    # converged before the fail-loud cap
@@ -104,10 +122,8 @@ end
     end
 end
 
-@testitem "admm: dual-ascent loop converges + fails loud on the cap (loop)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "admm: dual-ascent loop converges + fails loud on the cap (loop)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
@@ -125,8 +141,15 @@ end
         # (a) The hand-rolled dual-ascent loop CONVERGES on the 2-bus (primal residual ≤ tol) in
         # well under maxiter iterations, recording each iteration in the returned AdmmResiduals.
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = maxiter, tol = tol, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = maxiter,
+            tol = tol,
+            allow_export = true,
         )
 
         @test res.iters >= 1
@@ -146,7 +169,12 @@ end
         # subproblem objective — so it MATCHES the centralized welfare, which the penalized
         # objectives (carrying the ρ-penalty + dual terms) never would (RESEARCH Pattern 5).
         _, obj_c, _ = solve_welfare(
-            feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            allow_export = true,
         )
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)
 
@@ -154,8 +182,15 @@ end
         # consensus THROWS rather than silently returning the last (non-consensus) iterate. The
         # 2-bus needs several iterations, so maxiter = 1 with a tight tol cannot converge.
         @test_throws Exception solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 1, tol = 1e-12, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = 1,
+            tol = 1e-12,
+            allow_export = true,
         )
 
         # (e) A non-positive maxiter is an INVALID budget: the loop never runs, so the residual
@@ -163,12 +198,26 @@ end
         # BoundsError the fail-loud cap's `last(residuals.primal_trace)` would raise on an empty
         # trace (the guard failing itself). maxiter = 0 AND a negative maxiter both reject up front.
         @test_throws ArgumentError solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 0, tol = tol, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = 0,
+            tol = tol,
+            allow_export = true,
         )
         @test_throws ArgumentError solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = -3, tol = tol, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = -3,
+            tol = tol,
+            allow_export = true,
         )
 
         # (f) A DEGENERATE horizon T = 0 (with a length-0 λ₀ that would otherwise pass the shape
@@ -177,16 +226,21 @@ end
         # iteration 1 — a NONSENSICAL "converged" result for an empty problem. This must throw a
         # CLEAR boundary ArgumentError up front (IN-03), NOT silently report a degenerate optimum.
         @test_throws ArgumentError solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = 0, λ₀ = Float64[], ρ = ρ, maxiter = maxiter, tol = tol, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = 0,
+            λ₀ = Float64[],
+            ρ = ρ,
+            maxiter = maxiter,
+            tol = tol,
+            allow_export = true,
         )
     end
 end
 
-@testitem "admm: build-once subproblems, no per-iteration rebuild (resolve)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "admm: build-once subproblems, no per-iteration rebuild (resolve)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -213,14 +267,22 @@ end
         nc_ref = num_constraints(dso_ref.model; count_variable_in_set_constraints = true)
 
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 200, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = 200,
+            allow_export = true,
         )
 
         @test res.iters < 200                                       # converged (loop actually ran)
         @test num_variables(res.dso_ctx.model) == nv_ref            # no per-iteration variable growth
-        @test num_constraints(res.dso_ctx.model; count_variable_in_set_constraints = true) ==
-              nc_ref                                                # no per-iteration constraint growth
+        @test num_constraints(
+            res.dso_ctx.model;
+            count_variable_in_set_constraints = true,
+        ) == nc_ref                                                # no per-iteration constraint growth
 
         # AGR-OPT[j] is likewise built once: a freshly-built AGR-OPT and the loop's per-node model
         # share the same shape (the loop mutates only the coupling coefficient, never rebuilds).
@@ -229,10 +291,8 @@ end
     end
 end
 
-@testitem "admm: final published primal certified — active-balance no hidden slack (crossval)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:admm] begin
+@testitem "admm: final published primal certified — active-balance no hidden slack (crossval)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP: value
 
@@ -257,8 +317,14 @@ end
         λ₀ = Phase6Fixtures.two_bus_lambda0()
 
         res = solve_admm(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Th, λ₀ = λ₀, ρ = Phase6Fixtures.RHO_2BUS, maxiter = 200, allow_export = true,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = Phase6Fixtures.RHO_2BUS,
+            maxiter = 200,
+            allow_export = true,
         )
 
         # The active nodal balance of the PUBLISHED converged primal is satisfied with no hidden
@@ -267,8 +333,8 @@ end
         # here on the returned context must not throw and must be ≈ 0.
         balance_p = res.dso_ctx.constraints[:balance_p]
         max_slack = maximum(
-            abs(assert_no_slack(res.dso_ctx.model, balance_p[j, t]; atol = 1e-6))
-            for j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
+            abs(assert_no_slack(res.dso_ctx.model, balance_p[j, t]; atol = 1e-6)) for
+            j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
         )
         @test max_slack <= 1e-6                    # active balance is machine-exact at the optimum
         @test isfinite(res.welfare)               # welfare derived from the certified primal

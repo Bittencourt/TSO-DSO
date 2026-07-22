@@ -55,10 +55,30 @@
     """
     function temperature_profile()
         return Float64[
-            19, 18, 17, 16, 16, 17,   # 00–05 cooling to a dawn minimum
-            19, 21, 23, 26, 28, 30,   # 06–11 morning warm-up
-            31, 32, 32, 31, 29, 27,   # 12–17 afternoon peak → decline
-            25, 23, 22, 21, 20, 19,   # 18–23 evening cool-down
+            19,
+            18,
+            17,
+            16,
+            16,
+            17,   # 00–05 cooling to a dawn minimum
+            19,
+            21,
+            23,
+            26,
+            28,
+            30,   # 06–11 morning warm-up
+            31,
+            32,
+            32,
+            31,
+            29,
+            27,   # 12–17 afternoon peak → decline
+            25,
+            23,
+            22,
+            21,
+            20,
+            19,   # 18–23 evening cool-down
         ]
     end
 
@@ -107,16 +127,46 @@
         Ppv = Float64[PV_SCALE_2BUS * p for p in prof.pv]
         Pdc = Float64[LOAD_SCALE_2BUS * d for d in prof.demand]
 
-        therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, temperature_profile())
+        therm = Thermostatic(
+            bus,
+            0.2,
+            0.05,
+            15.0,
+            30.0,
+            22.0,
+            0.0,
+            1.0,
+            0.5,
+            temperature_profile(),
+        )
         defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
         batt = PVBattery(
-            bus, 0.95, 1.0, 0.1, 0.0, 0.2, 0.1,
-            BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv,
+            bus,
+            0.95,
+            1.0,
+            0.1,
+            0.0,
+            0.2,
+            0.1,
+            BATT_λ_MIN,
+            BATT_λ_MED,
+            BATT_λ_MAX,
+            Ppv,
         )
         return [Aggregator(bus, 0.90, [therm, defer, batt], Pdc)]
     end
 
-    export T, BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX,
-        SEED_2BUS, LOAD_SCALE_2BUS, PV_SCALE_2BUS, LAMBDA0_2BUS, RHO_2BUS,
-        temperature_profile, two_bus_lambda0, two_bus_feeder, build_two_bus_aggregators
+    export T,
+        BATT_λ_MIN,
+        BATT_λ_MED,
+        BATT_λ_MAX,
+        SEED_2BUS,
+        LOAD_SCALE_2BUS,
+        PV_SCALE_2BUS,
+        LAMBDA0_2BUS,
+        RHO_2BUS,
+        temperature_profile,
+        two_bus_lambda0,
+        two_bus_feeder,
+        build_two_bus_aggregators
 end

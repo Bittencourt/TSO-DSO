@@ -10,10 +10,8 @@
     @test size(A) == (2, 1)   # node-branch incidence: N buses × B branches
 
     # (1) Wrong branch count: 2 buses but 2 branches → must throw ArgumentError.
-    bad_count = [
-        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
-        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
-    ]
+    bad_count =
+        [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0), TSODSO.Branch(1, 2, 0.01, 0.02, 10.0)]
     @test_throws ArgumentError TSODSO.assert_radial(ok_buses, bad_count, 1)
 
     # (2) Disconnected: 3 buses, 2 branches (correct edge count) but bus 3 is
@@ -23,10 +21,8 @@
         TSODSO.Bus(2, 0.95, 1.05, false),
         TSODSO.Bus(3, 0.95, 1.05, false),
     ]
-    disc_branches = [
-        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
-        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
-    ]
+    disc_branches =
+        [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0), TSODSO.Branch(1, 2, 0.01, 0.02, 10.0)]
     @test_throws ArgumentError TSODSO.assert_radial(disc_buses, disc_branches, 1)
 
     # (3a) Zero roots: a valid tree topology but no bus flagged is_root.

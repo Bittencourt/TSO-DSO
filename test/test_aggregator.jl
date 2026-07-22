@@ -13,7 +13,8 @@
     @test isdefined(TSODSO, :Aggregator)
 end
 
-@testitem "aggregator: sole :Rp/:Rq writer at its bus (DEV-05, eqs. 3.21-3.23)" tags = [:aggregator] begin
+@testitem "aggregator: sole :Rp/:Rq writer at its bus (DEV-05, eqs. 3.21-3.23)" tags =
+    [:aggregator] begin
     using TSODSO
     using JuMP
 
@@ -71,7 +72,8 @@ end
     @test any(v -> haskey(v, :p_ch) && haskey(v, :p_dch), ctx.meta[:agg_device_vars][bus])
 end
 
-@testitem "aggregator: reactive_factor helper single-sources tan(acos φ) (IN-01)" tags = [:aggregator] begin
+@testitem "aggregator: reactive_factor helper single-sources tan(acos φ) (IN-01)" tags =
+    [:aggregator] begin
     using TSODSO
 
     # The single-sourced reactive-draw factor (IN-01) equals tan(arccos φ) = sqrt(1−φ²)/φ,

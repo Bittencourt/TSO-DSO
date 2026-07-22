@@ -157,8 +157,10 @@ end
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
         kw = Phase8Fixtures.minimal_scenario_kwargs()
-        r1 = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized, seed = 7))
-        r2 = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized, seed = 8))
+        r1 =
+            TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized, seed = 7))
+        r2 =
+            TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized, seed = 8))
 
         @test r1.dadp != r2.dadp   # a DIFFERENT seed must change the profile-driven result
     end

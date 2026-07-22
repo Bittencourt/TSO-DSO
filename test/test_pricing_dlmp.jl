@@ -17,9 +17,8 @@
 #     AND the high-PV over-voltage solve (voltage engaged); congestion/voltage ≈ 0 on the
 #     uncongested in-bound 2-bus.
 
-@testitem "dlmp: extract_dlmp on a lossless 2-bus is positive and ≈ λ₀ (energy-only, PRICE-01)" tags = [
-    :dlmp,
-] begin
+@testitem "dlmp: extract_dlmp on a lossless 2-bus is positive and ≈ λ₀ (energy-only, PRICE-01)" tags =
+    [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -36,8 +35,14 @@
     λ₀ = fill(40.0, T)
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-    ctx, _obj, _dadp =
-        solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
+    ctx, _obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
 
     M = extract_dlmp(ctx)
     @test size(M) == (2, T)
@@ -51,9 +56,8 @@
     @test extract_dlmp(ctx; bus = 2, T = T) ≈ M[2, :]
 end
 
-@testitem "dlmp: extract_dlmp REFUSES an ungated SOCP ctx (PF-04 gate, PRICE-01)" tags = [
-    :dlmp,
-] begin
+@testitem "dlmp: extract_dlmp REFUSES an ungated SOCP ctx (PF-04 gate, PRICE-01)" tags =
+    [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -93,9 +97,8 @@ end
     @test TSODSO._assert_priceable(ctx2) === nothing
 end
 
-@testitem "dlmp: extract_dlmp returns the (N,T) DADP matrix on the IEEE-13 ground solve (PRICE-01)" tags = [
-    :dlmp,
-] setup = [Phase4Fixtures] begin
+@testitem "dlmp: extract_dlmp returns the (N,T) DADP matrix on the IEEE-13 ground solve (PRICE-01)" tags =
+    [:dlmp] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -103,8 +106,12 @@ end
     aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
     λ₀ = Phase4Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs;
-        T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
     )
 
     M = extract_dlmp(ctx)
@@ -116,9 +123,8 @@ end
     end
 end
 
-@testitem "dlmp: decompose_dlmp four components SUM to the DADP on IEEE-13 (congestion binds, PRICE-02)" tags = [
-    :dlmp,
-] setup = [Phase4Fixtures] begin
+@testitem "dlmp: decompose_dlmp four components SUM to the DADP on IEEE-13 (congestion binds, PRICE-02)" tags =
+    [:dlmp] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -126,8 +132,12 @@ end
     aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
     λ₀ = Phase4Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs;
-        T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
     )
 
     d = decompose_dlmp(ctx)
@@ -161,9 +171,8 @@ end
     @test any(abs(d.congestion[j, t]) > 1e-2 for j in 1:N, t in 1:T)
 end
 
-@testitem "dlmp: decompose_dlmp SUM holds and voltage is engaged on the high-PV over-voltage solve (PRICE-02)" tags = [
-    :dlmp,
-] setup = [Phase4Fixtures] begin
+@testitem "dlmp: decompose_dlmp SUM holds and voltage is engaged on the high-PV over-voltage solve (PRICE-02)" tags =
+    [:dlmp] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -171,8 +180,12 @@ end
     aggs = Phase4Fixtures.build_high_pv_aggregators(feeder)
     λ₀ = Phase4Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs;
-        T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
     )
 
     d = decompose_dlmp(ctx)
@@ -196,9 +209,8 @@ end
     @test any(abs(d.voltage[j, t]) > 1e-8 for j in 1:N, t in 1:T)
 end
 
-@testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus (PRICE-02)" tags = [
-    :dlmp,
-] begin
+@testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus (PRICE-02)" tags =
+    [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -214,8 +226,14 @@ end
     λ₀ = fill(40.0, T)
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-    ctx, _obj, _dadp =
-        solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
+    ctx, _obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
 
     d = decompose_dlmp(ctx)
     total = extract_dlmp(ctx)

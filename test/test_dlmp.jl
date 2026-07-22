@@ -8,9 +8,8 @@
 # assertion is a missing-symbol `isdefined` check (never a runner crash); behavioral asserts
 # sit behind the `isdefined` guard so they go live automatically once 05-02 lands.
 
-@testitem "dlmp: extract_dlmp is defined and returns a per-hour price vector (PRICE-02)" tags = [
-    :dlmp,
-] begin
+@testitem "dlmp: extract_dlmp is defined and returns a per-hour price vector (PRICE-02)" tags =
+    [:dlmp] begin
     using TSODSO
 
     # RED until plan 05-02 defines the DLMP extractor.
@@ -29,8 +28,14 @@
         T = 3
         batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
         agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-        ctx, _obj, _dadp =
-            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true)
+        ctx, _obj, _dadp = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            T = T,
+            λ₀ = fill(40.0, T),
+            allow_export = true,
+        )
 
         λ = extract_dlmp(ctx; bus = agg.bus, T = T)
         @test length(λ) == T
@@ -38,9 +43,7 @@
     end
 end
 
-@testitem "dlmp: decompose_dlmp components sum to the nodal price (PRICE-02)" tags = [
-    :dlmp,
-] begin
+@testitem "dlmp: decompose_dlmp components sum to the nodal price (PRICE-02)" tags = [:dlmp] begin
     using TSODSO
 
     # RED until plan 05-02 defines the four-way decomposition.
@@ -58,8 +61,14 @@ end
         T = 3
         batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
         agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-        ctx, _obj, _dadp =
-            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = fill(40.0, T), allow_export = true)
+        ctx, _obj, _dadp = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            T = T,
+            λ₀ = fill(40.0, T),
+            allow_export = true,
+        )
 
         comps = decompose_dlmp(ctx; bus = agg.bus, T = T)
         λ = extract_dlmp(ctx; bus = agg.bus, T = T)

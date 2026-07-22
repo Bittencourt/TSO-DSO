@@ -15,10 +15,8 @@
 #     updates ONLY the linear coefficient of each `pag[j,t]` (set_objective_coefficient) and,
 #     on convergence (check_exact=true), runs the PF-04 exactness gate.
 
-@testitem "dso: build_dso_opt builds whole-network SOCP, reuses ConvexBranchFlow (2-bus)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso] begin
+@testitem "dso: build_dso_opt builds whole-network SOCP, reuses ConvexBranchFlow (2-bus)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
@@ -57,10 +55,8 @@
     @test isfinite(objective_value(dso.model))
 end
 
-@testitem "dso: build_dso_opt on IEEE-13 solves OPTIMAL — reactive closure feasible (ieee13)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso] begin
+@testitem "dso: build_dso_opt on IEEE-13 solves OPTIMAL — reactive closure feasible (ieee13)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
@@ -88,11 +84,8 @@ end
     @test any(t -> abs(value(q_import[t])) > 1e-8, 1:Th)
 end
 
-@testitem "dso: build_dso_opt guards — empty aggs, λ₀ shape, root aggregator, out-of-range" setup = [
-    Phase7Fixtures,
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso] begin
+@testitem "dso: build_dso_opt guards — empty aggs, λ₀ shape, root aggregator, out-of-range" setup =
+    [Phase7Fixtures, Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
     using TSODSO
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -104,12 +97,14 @@ end
     # Empty aggregators.
     @test_throws ArgumentError build_dso_opt(feeder, typeof(aggs)(), Th; ρ = ρ, λ₀ = λ₀)
     # λ₀ shape mismatch.
-    @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀[1:(Th-1)])
+    @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀[1:(Th - 1)])
 
     # GENUINELY-invalid buses STILL fail loud — the transit relaxation (plan 07-03 / Pitfall 5)
     # only admits VALID zero-injection nodes, never a mislocated aggregator.
-    buses3 = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
-    branches3 = [Branch(1, 2, 1e-3, 1e-3, SMAX_NO_LIMIT), Branch(2, 3, 1e-3, 1e-3, SMAX_NO_LIMIT)]
+    buses3 =
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
+    branches3 =
+        [Branch(1, 2, 1e-3, 1e-3, SMAX_NO_LIMIT), Branch(2, 3, 1e-3, 1e-3, SMAX_NO_LIMIT)]
     feeder3 = Feeder(buses3, branches3, 1)
 
     # Aggregator ON the root bus — the frontier carries no aggregator (thesis 3.47) → fail loud.
@@ -128,11 +123,8 @@ end
     @test haskey(dso3.ctx.constraints, :balance_q)
 end
 
-@testitem "dso: transit zero-injection bus admitted, balance closes, solves OPTIMAL (transit, dso)" setup = [
-    Phase7Fixtures,
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso, :phase7] begin
+@testitem "dso: transit zero-injection bus admitted, balance closes, solves OPTIMAL (transit, dso)" setup =
+    [Phase7Fixtures, Phase6Fixtures, Phase4Fixtures] tags = [:dso, :phase7] begin
     using TSODSO
     using JuMP
 
@@ -140,7 +132,8 @@ end
     # root(1) → transit(2, NO aggregator) → load(3, aggregator). Bus 2 is a genuine zero-injection
     # junction the Phase-6 guard rejected; plan 07-03 admits it (RESEARCH Pitfall 5).
     buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.9, 1.1, false), Bus(3, 0.9, 1.1, false)]
-    branches = [Branch(1, 2, 0.02, 0.02, SMAX_NO_LIMIT), Branch(2, 3, 0.02, 0.02, SMAX_NO_LIMIT)]
+    branches =
+        [Branch(1, 2, 0.02, 0.02, SMAX_NO_LIMIT), Branch(2, 3, 0.02, 0.02, SMAX_NO_LIMIT)]
     feeder = Feeder(buses, branches, 1)
 
     aggs = Phase7Fixtures.build_ieee123_aggregators(feeder; load_buses = [3])   # ONLY bus 3
@@ -165,10 +158,8 @@ end
     @test isfinite(objective_value(dso.model))
 end
 
-@testitem "dso: solve_dso! zero-price OPTIMAL returns pag_dso/p_import of right shape" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso] begin
+@testitem "dso: solve_dso! zero-price OPTIMAL returns pag_dso/p_import of right shape" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
@@ -195,10 +186,8 @@ end
     @test res.exact_maxgap === nothing   # gate not run mid-loop
 end
 
-@testitem "dso: solve_dso! check_exact passes PF-04 gate on 2-bus and IEEE-13 (exact)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso] begin
+@testitem "dso: solve_dso! check_exact passes PF-04 gate on 2-bus and IEEE-13 (exact)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
@@ -232,10 +221,8 @@ end
     @test res13.exact_maxgap < 1e-3                        # PF-04 exact on the radial feeder
 end
 
-@testitem "dso: build-once — num_variables/num_constraints unchanged across re-solves (resolve)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso] begin
+@testitem "dso: build-once — num_variables/num_constraints unchanged across re-solves (resolve)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -264,10 +251,8 @@ end
     @test num_constraints(dso.model; count_variable_in_set_constraints = true) == nc0
 end
 
-@testitem "dso: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup = [
-    Phase6Fixtures,
-    Phase4Fixtures,
-] tags = [:dso, :phase7] begin
+@testitem "dso: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso, :phase7] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -293,7 +278,8 @@ end
         set_rho!(dso_mut, ρ1)
         # Build-once (ADMM-04): a ρ change mutates ONLY objective coefficients — shape invariant.
         @test num_variables(dso_mut.model) == nv0
-        @test num_constraints(dso_mut.model; count_variable_in_set_constraints = true) == nc0
+        @test num_constraints(dso_mut.model; count_variable_in_set_constraints = true) ==
+              nc0
         res_mut = solve_dso!(dso_mut, λ, a, ρ1)
 
         # FRESH path: build directly at ρ1, solve the SAME coupling price/target.
@@ -305,6 +291,11 @@ end
         pag_mut = Float64[res_mut.pag_dso[j, t] for j in ln, t in 1:Th]
         pag_fresh = Float64[res_fresh.pag_dso[j, t] for j in ln, t in 1:Th]
         @test isapprox(pag_mut, pag_fresh; atol = 1e-6, rtol = 1e-5)
-        @test isapprox(collect(res_mut.p_import), collect(res_fresh.p_import); atol = 1e-6, rtol = 1e-5)
+        @test isapprox(
+            collect(res_mut.p_import),
+            collect(res_fresh.p_import);
+            atol = 1e-6,
+            rtol = 1e-5,
+        )
     end
 end

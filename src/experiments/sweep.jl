@@ -46,37 +46,34 @@ Collate every per-run JLD2 artifact under `dir` (written by [`run_and_store`](@r
 [`run_sweep`](@ref)) into ONE diff-friendly, committed CSV at `csvpath` (RESEARCH §Pattern 3).
 All THREE diff-friendly rules are mandatory:
 
-1. **Fixed column order** — an EXPLICIT `select` on
-   `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :ρ, :ε_abs,
-   :ε_rel, :maxiter, :τ_ratio, :μ, :welfare, :exact_maxgap, :iters, :final_r, :final_s,
-   :gitcommit]` (CR-02 fix: the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
-   now kept alongside the result columns, so the collated CSV — like the per-run JLD2, since
-   `result_to_dict` persists `struct2dict(s)` — is self-describing without re-loading the
-   `Scenario` even for a non-default `:admm` sweep), intersected with the columns actually
-   present (tolerant of a `:centralized`-only sweep where `:iters`/`:final_r`/`:final_s` are
-   still columns of `missing`, since they were populated as `missing` per-run — the intersect
-   guard exists for robustness against any future column-set drift, not for these expected
-   columns).
-2. **Deterministic row order** — `sort!` by EVERY `Scenario` selector column present in `df`
-   (`[:feeder, :strategy, :seed, :T, :name, :price, :population, :allow_export, :ρ, :ε_abs,
-   :ε_rel, :maxiter, :τ_ratio, :μ]`, intersected with `present`). WR-04 fix: sorting by only
-   `[:feeder, :strategy, :seed]` left `:T`/`:name`/`:price`/`:population`/the ADMM knobs
-   unsorted, so any sweep holding `(feeder, strategy, seed)` fixed while varying one of those
-   (e.g. an ADMM-knob sensitivity sweep, or a multi-horizon `T` sweep) produced tied sort keys
-   whose row order then fell back to `collect_results`' `readdir`-derived scan order — not
-   guaranteed stable across filesystems/OSes/re-runs, silently breaking the "byte-identical, no
-   git churn" guarantee for exactly the sweep shapes this harness targets. Sorting by every
-   selector column removes every possible tie (two rows tie here only if their `Scenario`s are
-   themselves selector-identical, i.e. re-runs of the literal same scenario).
-3. **Drop the machine-local `:path` column** — `collect_results` adds an absolute,
-   non-reproducible path; keeping it would make every collation on a different checkout
-   churn the committed CSV. `:gitcommit` IS kept (it is the provenance anchor, not a
-   machine-local path) — `collect_results`' OWN default `black_list` excludes `:gitcommit`
-   alongside `:gitpatch`/`:script`, so it is explicitly restored here by overriding
-   `black_list` to only `["gitpatch", "script"]` (verified live: `collect_results`'
-   `to_data_row` keys its `black_list` by the ACTUAL on-disk key type — `String`, since
-   JLD2/FileIO always round-trips dict keys as strings, RESEARCH-adjacent to Pitfall 2 —
-   so the override must be `String`, not `Symbol`, entries).
+ 1. **Fixed column order** — an EXPLICIT `select` on
+    `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ, :welfare, :exact_maxgap, :iters, :final_r, :final_s, :gitcommit]` (CR-02 fix: the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
+    now kept alongside the result columns, so the collated CSV — like the per-run JLD2, since
+    `result_to_dict` persists `struct2dict(s)` — is self-describing without re-loading the
+    `Scenario` even for a non-default `:admm` sweep), intersected with the columns actually
+    present (tolerant of a `:centralized`-only sweep where `:iters`/`:final_r`/`:final_s` are
+    still columns of `missing`, since they were populated as `missing` per-run — the intersect
+    guard exists for robustness against any future column-set drift, not for these expected
+    columns).
+ 2. **Deterministic row order** — `sort!` by EVERY `Scenario` selector column present in `df`
+    (`[:feeder, :strategy, :seed, :T, :name, :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ]`, intersected with `present`). WR-04 fix: sorting by only
+    `[:feeder, :strategy, :seed]` left `:T`/`:name`/`:price`/`:population`/the ADMM knobs
+    unsorted, so any sweep holding `(feeder, strategy, seed)` fixed while varying one of those
+    (e.g. an ADMM-knob sensitivity sweep, or a multi-horizon `T` sweep) produced tied sort keys
+    whose row order then fell back to `collect_results`' `readdir`-derived scan order — not
+    guaranteed stable across filesystems/OSes/re-runs, silently breaking the "byte-identical, no
+    git churn" guarantee for exactly the sweep shapes this harness targets. Sorting by every
+    selector column removes every possible tie (two rows tie here only if their `Scenario`s are
+    themselves selector-identical, i.e. re-runs of the literal same scenario).
+ 3. **Drop the machine-local `:path` column** — `collect_results` adds an absolute,
+    non-reproducible path; keeping it would make every collation on a different checkout
+    churn the committed CSV. `:gitcommit` IS kept (it is the provenance anchor, not a
+    machine-local path) — `collect_results`' OWN default `black_list` excludes `:gitcommit`
+    alongside `:gitpatch`/`:script`, so it is explicitly restored here by overriding
+    `black_list` to only `["gitpatch", "script"]` (verified live: `collect_results`'
+    `to_data_row` keys its `black_list` by the ACTUAL on-disk key type — `String`, since
+    JLD2/FileIO always round-trips dict keys as strings, RESEARCH-adjacent to Pitfall 2 —
+    so the override must be `String`, not `Symbol`, entries).
 
 Two `collate_summary` calls over the SAME run directory produce byte-identical CSV files
 (no git churn) because all three rules are deterministic given the same on-disk artifacts.
@@ -85,9 +82,26 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
     df = DrWatson.collect_results(dir; black_list = ["gitpatch", "script"])
 
     keep = [
-        :name, :feeder, :strategy, :seed, :T,
-        :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ,
-        :welfare, :exact_maxgap, :iters, :final_r, :final_s, :gitcommit,
+        :name,
+        :feeder,
+        :strategy,
+        :seed,
+        :T,
+        :price,
+        :population,
+        :allow_export,
+        :ρ,
+        :ε_abs,
+        :ε_rel,
+        :maxiter,
+        :τ_ratio,
+        :μ,
+        :welfare,
+        :exact_maxgap,
+        :iters,
+        :final_r,
+        :final_s,
+        :gitcommit,
     ]
     present = Symbol.(names(df))
     df = select(df, intersect(keep, present))   # RULE 1: fixed, explicit column order
@@ -96,8 +110,20 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
     # fix), not just [:feeder, :strategy, :seed], so no sweep shape can tie on the sort key and
     # fall back to a non-deterministic filesystem scan order.
     selector_cols = [
-        :feeder, :strategy, :seed, :T, :name,
-        :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ,
+        :feeder,
+        :strategy,
+        :seed,
+        :T,
+        :name,
+        :price,
+        :population,
+        :allow_export,
+        :ρ,
+        :ε_abs,
+        :ε_rel,
+        :maxiter,
+        :τ_ratio,
+        :μ,
     ]
     sort!(df, intersect(selector_cols, present))
 

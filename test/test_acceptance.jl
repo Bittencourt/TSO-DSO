@@ -20,9 +20,8 @@
 #   - test/test_ieee123_admm.jl — the ADMM end-to-end convergence + DADP cross-validation
 #     contract (res.iters, res.welfare, res.exact_maxgap, res.λ vs centralized DLMP).
 
-@testitem "acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3)" tags = [
-    :acceptance,
-] setup = [Phase4Fixtures] begin
+@testitem "acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
+    [:acceptance] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -42,7 +41,12 @@
 
     # ── Centralized GLB-CVX SOCP solve through the oracle (exact relaxation + recovered DADP).
     res = operational_oracle(
-        feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = 24, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = 24,
+        allow_export = true,
     )
     ctx = res.ctx
 
@@ -58,8 +62,13 @@
     # test_ieee123_admm.jl / the IEEE-123 acceptance item below) rather than the dimensionally
     # mismatched single-bus `res.dadp` — reusing the SAME tolerances (atol/rtol), never new ones.
     admm = solve_admm(
-        feeder, ConvexBranchFlow(), aggs;
-        T = 24, λ₀ = λ₀, ρ = 100.0, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = 24,
+        λ₀ = λ₀,
+        ρ = 100.0,
+        allow_export = true,
     )
     load_buses = sort([a.bus for a in aggs])
     dlmp_c = reduce(vcat, (extract_dlmp(ctx; bus = b, T = 24)' for b in load_buses))
@@ -86,9 +95,8 @@
     @test gap < 1e-2 broken = (gap >= 1e-2)
 end
 
-@testitem "acceptance: IEEE-123 voltage — exact relaxation + DADP + ADMM≈centralized (SC3)" tags = [
-    :acceptance,
-] setup = [Phase7Fixtures] begin
+@testitem "acceptance: IEEE-123 voltage — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
+    [:acceptance] setup = [Phase7Fixtures] begin
     using TSODSO
 
     feeder = ieee123_modified()
@@ -100,19 +108,32 @@ end
     # ── Centralized ground truth: monolithic SOCP welfare + its DADP duals (ADMM-03 oracle),
     # identical to test_ieee123_admm.jl's cross-validation path.
     ctx_c, obj_c, _ = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        allow_export = true,
     )
     dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
     # ── ADMM with the SAME per-unit adaptive-ρ config as the smaller feeders (scale-invariant,
     # ADMM-02) — REUSING the identical Phase7Fixtures config constants, never retuned.
     res = solve_admm(
-        feeder, ConvexBranchFlow(), aggs;
-        T = Th, λ₀ = λ₀, ρ = Phase7Fixtures.RHO0,
-        ε_abs = Phase7Fixtures.EPS_ABS, ε_rel = Phase7Fixtures.EPS_REL,
-        τ = Phase7Fixtures.TAU, μ = Phase7Fixtures.MU,
-        ρ_min = Phase7Fixtures.RHO_MIN, ρ_max = Phase7Fixtures.RHO_MAX,
-        maxiter = 300, allow_export = true,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = Phase7Fixtures.RHO0,
+        ε_abs = Phase7Fixtures.EPS_ABS,
+        ε_rel = Phase7Fixtures.EPS_REL,
+        τ = Phase7Fixtures.TAU,
+        μ = Phase7Fixtures.MU,
+        ρ_min = Phase7Fixtures.RHO_MIN,
+        ρ_max = Phase7Fixtures.RHO_MAX,
+        maxiter = 300,
+        allow_export = true,
     )
 
     # ── Five contract lines reused verbatim from test_ieee123_admm.jl (no new/looser tolerance).

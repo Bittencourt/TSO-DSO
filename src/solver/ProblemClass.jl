@@ -20,19 +20,29 @@ request a solver by problem class only — they never name a concrete solver
 """
 abstract type ProblemClass end
 
-"Linear program. Default backend: HiGHS. The toy DC walking skeleton lives here."
+"""
+Linear program. Default backend: HiGHS. The toy DC walking skeleton lives here.
+"""
 struct LP <: ProblemClass end
 
-"Mixed-integer linear program. Default backend: HiGHS."
+"""
+Mixed-integer linear program. Default backend: HiGHS.
+"""
 struct MILP <: ProblemClass end
 
-"Convex quadratic program. Default backend: Clarabel (native quadratic objective)."
+"""
+Convex quadratic program. Default backend: Clarabel (native quadratic objective).
+"""
 struct QP <: ProblemClass end
 
-"Second-order cone program. Default backend: Clarabel (tight duality-gap tolerances)."
+"""
+Second-order cone program. Default backend: Clarabel (tight duality-gap tolerances).
+"""
 struct SOCP <: ProblemClass end
 
-"General smooth nonlinear program. Default backend: Ipopt."
+"""
+General smooth nonlinear program. Default backend: Ipopt.
+"""
 struct NLP <: ProblemClass end
 
 """

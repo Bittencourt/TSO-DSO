@@ -23,17 +23,17 @@ using JuMP
 Build and solve the rung-0 toy DC problem for `feeder`, exercising the full
 walking-skeleton spine:
 
-1. build `Model(select_optimizer(LP()))` — the solver is chosen by problem class
-   only (INFRA-02); no concrete solver is named here;
-2. wrap it in a [`ModelContext`](@ref) and stash the `feeder` in `ctx.meta`;
-3. add a trivial servable load `p_load` and frontier import `p_import` (per-unit);
-4. write the nodal balance `p_import - p_load` into the shared residual registry
-   via [`add_to_residual!`](@ref) (`:nodal_balance`, the PF-01 seam) and pin it to
-   zero with an equality constraint registered under `:balance`
-   (via [`register_constraint!`](@ref)) so its dual is recoverable;
-5. maximise the toy welfare `3·p_load - 1·p_import`;
-6. solve through [`assert_solved!`](@ref)`(...; dual = true, allow_local = false)`
-   (INFRA-03) — the function returns only on a trustworthy optimal+feasible solve.
+ 1. build `Model(select_optimizer(LP()))` — the solver is chosen by problem class
+    only (INFRA-02); no concrete solver is named here;
+ 2. wrap it in a [`ModelContext`](@ref) and stash the `feeder` in `ctx.meta`;
+ 3. add a trivial servable load `p_load` and frontier import `p_import` (per-unit);
+ 4. write the nodal balance `p_import - p_load` into the shared residual registry
+    via [`add_to_residual!`](@ref) (`:nodal_balance`, the PF-01 seam) and pin it to
+    zero with an equality constraint registered under `:balance`
+    (via [`register_constraint!`](@ref)) so its dual is recoverable;
+ 5. maximise the toy welfare `3·p_load - 1·p_import`;
+ 6. solve through [`assert_solved!`](@ref)`(...; dual = true, allow_local = false)`
+    (INFRA-03) — the function returns only on a trustworthy optimal+feasible solve.
 
 Returns the populated `ctx`, the optimal `objective_value`, and `dual(balance)` —
 the nodal-balance dual that becomes the distribution price (DADP) in later phases.

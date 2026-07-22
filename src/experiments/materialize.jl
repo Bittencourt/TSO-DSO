@@ -55,10 +55,30 @@ end
 # this is the SOURCE OF TRUTH the fixtures were originally digitized from. Positive and well
 # within `PerUnit.PRICE_MAX`.
 const _MEM_PRICE_PROFILE_24H = Float64[
-    3.8, 3.7, 3.6, 3.6, 3.7, 4.0,   # 00–05 overnight trough
-    4.8, 5.8, 6.5, 6.2, 5.9, 5.7,   # 06–11 morning ramp → midday shoulder
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0,   # 12–17 afternoon rise → evening peak
-    8.6, 7.4, 6.2, 5.2, 4.4, 4.0,   # 18–23 evening decline
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,   # 00–05 overnight trough
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,   # 06–11 morning ramp → midday shoulder
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,   # 12–17 afternoon rise → evening peak
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,   # 18–23 evening decline
 ]
 
 """
@@ -75,7 +95,11 @@ function build_price(sym::Symbol, T::Int, profiles)
         base = _MEM_PRICE_PROFILE_24H
         return Float64[base[mod1(t, length(base))] for t in 1:T]
     else
-        throw(ArgumentError("build_price: unknown price selector $(repr(sym)); expected :mem"))
+        throw(
+            ArgumentError(
+                "build_price: unknown price selector $(repr(sym)); expected :mem",
+            ),
+        )
     end
 end
 
@@ -108,13 +132,35 @@ const _IEEE123_DEV_SCALE = 0.05
 # SAME digitized shape as the Phase4/7 fixtures (thesis Fig 4.2). Cyclically repeated to any
 # horizon `T` (see `_temperature_profile`), matching the `_MEM_PRICE_PROFILE_24H` convention.
 const _TEMPERATURE_PROFILE_24H = Float64[
-    19, 18, 17, 16, 16, 17,   # 00–05 cooling to a dawn minimum
-    19, 21, 23, 26, 28, 30,   # 06–11 morning warm-up
-    31, 32, 32, 31, 29, 27,   # 12–17 afternoon peak → decline
-    25, 23, 22, 21, 20, 19,   # 18–23 evening cool-down
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,   # 00–05 cooling to a dawn minimum
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,   # 06–11 morning warm-up
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,   # 12–17 afternoon peak → decline
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,   # 18–23 evening cool-down
 ]
 
-"`_temperature_profile(T) -> Vector{Float64}` — the pinned ambient shape, cycled to length `T`."
+"""
+`_temperature_profile(T) -> Vector{Float64}` — the pinned ambient shape, cycled to length `T`.
+"""
 _temperature_profile(T::Int) = Float64[_TEMPERATURE_PROFILE_24H[mod1(t, 24)] for t in 1:T]
 
 """
@@ -152,21 +198,47 @@ population is deterministic in `seed` (a global-RNG leak would break this, RESEA
 `generate_profiles` itself threads a fresh `StableRNGs.LehmerRNG`, never `Random.seed!`).
 """
 function _default_house(
-    bus::Int, profiles, seed::Integer, T::Int;
-    φ::Real, load_scale::Real, pv_scale::Real, dev_scale::Real,
-    batt_pmax::Real, batt_emax::Real, batt_soc0::Real,
+    bus::Int,
+    profiles,
+    seed::Integer,
+    T::Int;
+    φ::Real,
+    load_scale::Real,
+    pv_scale::Real,
+    dev_scale::Real,
+    batt_pmax::Real,
+    batt_emax::Real,
+    batt_soc0::Real,
 )
     prof = generate_profiles(; seed = seed + bus, T = T)   # per-bus, deterministic in `seed`
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
 
     therm = Thermostatic(
-        bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, _temperature_profile(T),
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        _temperature_profile(T),
     )
     defer = Deferrable(bus, min(8, T), min(16, T), 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
     batt = PVBattery(
-        bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
-        _DEFAULT_BATT_λ_MIN, _DEFAULT_BATT_λ_MED, _DEFAULT_BATT_λ_MAX, Ppv,
+        bus,
+        0.95,
+        1.0,
+        batt_pmax,
+        0.0,
+        batt_emax,
+        batt_soc0,
+        _DEFAULT_BATT_λ_MIN,
+        _DEFAULT_BATT_λ_MED,
+        _DEFAULT_BATT_λ_MAX,
+        Ppv,
     )
     return Aggregator(bus, φ, [therm, defer, batt], Pdc)
 end
@@ -208,9 +280,17 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
 
     return [
         _default_house(
-            bus, profiles, seed, T;
-            φ = 0.90, load_scale = load_scale, pv_scale = pv_scale, dev_scale = dev_scale,
-            batt_pmax = 0.5 * load_scale, batt_emax = 2.0 * load_scale, batt_soc0 = 1.0 * load_scale,
+            bus,
+            profiles,
+            seed,
+            T;
+            φ = 0.90,
+            load_scale = load_scale,
+            pv_scale = pv_scale,
+            dev_scale = dev_scale,
+            batt_pmax = 0.5 * load_scale,
+            batt_emax = 2.0 * load_scale,
+            batt_soc0 = 1.0 * load_scale,
         ) for bus in buses
     ]
 end

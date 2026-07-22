@@ -36,21 +36,22 @@ A mutable, JuMP-free ledger of an ADMM run's per-iteration residuals + adaptive-
 per-unit-tolerance / price-convergence traces (RESEARCH Pattern 5).
 
 Fields:
-- `N::Int`, `T::Int` — the coupling shape (bus count × horizon) the run was sized for; kept
-  for diagnostics/plotting context.
-- `primal_trace::Vector{Float64}` — the primal residual `‖r‖` per recorded iteration
-  (Phase 6: worst `|R_{p,j}[t]|`; Phase 7: the Boyd 2-norm ‖a − pag_dso‖₂).
-- `dual_trace::Vector{Float64}` — the DUAL residual per recorded iteration. Phase 7 stores
-  the Boyd z-block value ‖s‖ = ρ·‖Δ(pag_dso)‖₂ (RESEARCH Pattern 2 — the correction of the
-  Phase-6 ρ·Δa diagnostic).
-- `rho_trace::Vector{Float64}` — the penalty ρ in force at each iteration (shows the
-  adaptive-ρ schedule, RESEARCH Pattern 4).
-- `eps_pri_trace::Vector{Float64}` — the primal stopping threshold ε_pri per iteration (the
-  per-unit threshold line for convergence plots, RESEARCH Pattern 3).
-- `eps_dual_trace::Vector{Float64}` — the dual stopping threshold ε_dual per iteration.
-- `price_gap_trace::Vector{Float64}` — the price move `‖λ^{k} − λ^{k−1}‖₂` (or the gap to
-  the centralized DADP when known), i.e. the price-convergence trajectory (ADMM-05).
-- `iters::Int` — the number of recorded iterations (`== length(primal_trace) == …`).
+
+  - `N::Int`, `T::Int` — the coupling shape (bus count × horizon) the run was sized for; kept
+    for diagnostics/plotting context.
+  - `primal_trace::Vector{Float64}` — the primal residual `‖r‖` per recorded iteration
+    (Phase 6: worst `|R_{p,j}[t]|`; Phase 7: the Boyd 2-norm ‖a − pag_dso‖₂).
+  - `dual_trace::Vector{Float64}` — the DUAL residual per recorded iteration. Phase 7 stores
+    the Boyd z-block value ‖s‖ = ρ·‖Δ(pag_dso)‖₂ (RESEARCH Pattern 2 — the correction of the
+    Phase-6 ρ·Δa diagnostic).
+  - `rho_trace::Vector{Float64}` — the penalty ρ in force at each iteration (shows the
+    adaptive-ρ schedule, RESEARCH Pattern 4).
+  - `eps_pri_trace::Vector{Float64}` — the primal stopping threshold ε_pri per iteration (the
+    per-unit threshold line for convergence plots, RESEARCH Pattern 3).
+  - `eps_dual_trace::Vector{Float64}` — the dual stopping threshold ε_dual per iteration.
+  - `price_gap_trace::Vector{Float64}` — the price move `‖λ^{k} − λ^{k−1}‖₂` (or the gap to
+    the centralized DADP when known), i.e. the price-convergence trajectory (ADMM-05).
+  - `iters::Int` — the number of recorded iterations (`== length(primal_trace) == …`).
 
 All six traces are kept EQUAL LENGTH (`== iters`): the EXTENDED [`record!`](@ref) pushes a
 value to every trace; the RETAINED Phase-6 4-arg [`record!`](@ref) NaN-pads the four new
@@ -77,8 +78,17 @@ end
 Construct an EMPTY residual ledger sized (for reporting) to an `N`-bus, `T`-hour coupling:
 every trace empty and `iters == 0`. Records are appended via [`record!`](@ref).
 """
-AdmmResiduals(N::Integer, T::Integer) =
-    AdmmResiduals(Int(N), Int(T), Float64[], Float64[], Float64[], Float64[], Float64[], Float64[], 0)
+AdmmResiduals(N::Integer, T::Integer) = AdmmResiduals(
+    Int(N),
+    Int(T),
+    Float64[],
+    Float64[],
+    Float64[],
+    Float64[],
+    Float64[],
+    Float64[],
+    0,
+)
 
 """
     AdmmResiduals() -> AdmmResiduals

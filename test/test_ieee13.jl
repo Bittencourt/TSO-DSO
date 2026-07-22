@@ -12,9 +12,8 @@
 # filter selects them; they consume the Phase4Fixtures ground-truth calibration and run
 # the full centralized SOCP solve through `operational_oracle`.
 
-@testitem "ieee13: ieee13_modified constructs radial — 11 buses, 10 branches, root at index 1 (DATA-03)" tags = [
-    :ieee13,
-] begin
+@testitem "ieee13: ieee13_modified constructs radial — 11 buses, 10 branches, root at index 1 (DATA-03)" tags =
+    [:ieee13] begin
     using TSODSO
 
     @test isdefined(TSODSO, :ieee13_modified)
@@ -28,9 +27,8 @@
     @test eltype(feeder.branches) == TSODSO.Branch{Float64}   # per-unit Float64 fixture
 end
 
-@testitem "ieee13: fixture magnitudes & topology match thesis Table 4.1 (DATA-03)" tags = [
-    :ieee13,
-] begin
+@testitem "ieee13: fixture magnitudes & topology match thesis Table 4.1 (DATA-03)" tags =
+    [:ieee13] begin
     using TSODSO
 
     feeder = TSODSO.ieee13_modified()
@@ -109,10 +107,8 @@ end
 # leaves losses-vs-curtailment welfare-equivalent (cone can go slack / inexact) and here is
 # INFEASIBLE (the root cannot absorb the reverse flow).
 
-@testitem "ieee13 ground: GLB-CVX SOCP solve is OPTIMAL, exact, cross-solver-consistent (OPT-02/OPT-03)" tags = [
-    :ieee13,
-    :ground,
-] setup = [Phase4Fixtures] begin
+@testitem "ieee13 ground: GLB-CVX SOCP solve is OPTIMAL, exact, cross-solver-consistent (OPT-02/OPT-03)" tags =
+    [:ieee13, :ground] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -125,7 +121,14 @@ end
     # problem_class trait ⇒ Clarabel; allow_export lets the PV surplus reach the MEM so the
     # cone stays exact — see header). The oracle RETURNED, so `solve_welfare` passed
     # `assert_solved!` (OPTIMAL) AND the PF-04 exactness gate (else it would have thrown).
-    res = operational_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = 24, allow_export = true)
+    res = operational_oracle(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = 24,
+        allow_export = true,
+    )
     ctx = res.ctx
 
     # Welfare is finite and within a magnitude sanity bound (catches a unit/scale blowup).
@@ -155,8 +158,11 @@ end
     # solve_welfare) lets Ipopt take the cone. A doubled current from a bad cone scaling would
     # surface as an objective DISAGREEMENT here.
     _ctx2, obj2, _dadp2 = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs;
-        T = 24, λ₀ = λ₀,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = 24,
+        λ₀ = λ₀,
         optimizer = select_optimizer(NLP()),
         allow_local = true,
         allow_export = true,
@@ -164,10 +170,8 @@ end
     @test isapprox(res.cost, obj2; rtol = 1e-3, atol = 1e-3)
 end
 
-@testitem "ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check (OPT-02/OPT-03)" tags = [
-    :ieee13,
-    :ground,
-] setup = [Phase4Fixtures] begin
+@testitem "ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check (OPT-02/OPT-03)" tags =
+    [:ieee13, :ground] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -192,7 +196,14 @@ end
     aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
     λ₀ = Phase4Fixtures.mem_price_profile()
 
-    res = operational_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = 24, allow_export = true)
+    res = operational_oracle(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = 24,
+        allow_export = true,
+    )
     ctx = res.ctx
 
     # |V₉[16]| — sqrt because `v` is |V|² (A1); struct index 10 = thesis node 9, t = 16.

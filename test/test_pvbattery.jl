@@ -10,7 +10,8 @@
 # standalone convex-QP solve. Every item name contains "battery" so
 # `occursin("battery", ti.name)` selects it.
 
-@testitem "battery: PVBattery device type exists over the T=24 fixture (DEV-04)" tags = [:battery] setup = [Phase3Fixtures] begin
+@testitem "battery: PVBattery device type exists over the T=24 fixture (DEV-04)" tags =
+    [:battery] setup = [Phase3Fixtures] begin
     using TSODSO
 
     # The shared fixture is healthy (exercises setup wiring): a valid 3-bus feeder + T=24 PV profile.
@@ -22,7 +23,8 @@
     @test isdefined(TSODSO, :PVBattery)
 end
 
-@testitem "battery: PVBattery constructor guards reject the App. C / physics violations (DEV-04)" tags = [:battery] begin
+@testitem "battery: PVBattery constructor guards reject the App. C / physics violations (DEV-04)" tags =
+    [:battery] begin
     using TSODSO
 
     # A valid parameterization with a STRICT λ ordering (so the App. C dominance is strict).
@@ -32,26 +34,146 @@ end
     @test good() isa TSODSO.PVBattery{Float64}
 
     # λ_med OUTSIDE [λ_min, λ_max] — the load-bearing App. C guard (threat T-03-09).
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 10.0, 9.0, Ppv) # λ_med > λ_max
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 0.5, 9.0, Ppv)  # λ_med < λ_min
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        10.0,
+        9.0,
+        Ppv,
+    ) # λ_med > λ_max
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        0.5,
+        9.0,
+        Ppv,
+    )  # λ_med < λ_min
 
     # CR-01: a NON-STRICT ordering (any equality) is rejected — equality zeroes a utility
     # curvature and admits SOC-draining p_ch·p_dch > 0 co-optima, breaking the App. C
     # no-binary guarantee. Only STRICT λ_min < λ_med < λ_max is admissible.
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 4.0, 4.0, 9.0, Ppv)  # λ_min == λ_med
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 9.0, 9.0, Ppv)  # λ_med == λ_max
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 4.0, 4.0, 4.0, Ppv)  # all equal
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        4.0,
+        4.0,
+        9.0,
+        Ppv,
+    )  # λ_min == λ_med
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        9.0,
+        9.0,
+        Ppv,
+    )  # λ_med == λ_max
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        4.0,
+        4.0,
+        4.0,
+        Ppv,
+    )  # all equal
 
     # η OUTSIDE (0, 1] — a physical round-trip efficiency (eq. 3.6).
-    @test_throws ArgumentError TSODSO.PVBattery(2, 1.5, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)  # η > 1
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.0, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)  # η ≤ 0
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        1.5,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
+        Ppv,
+    )  # η > 1
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.0,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
+        Ppv,
+    )  # η ≤ 0
 
     # soc0 OUTSIDE [Emin, Emax] — the SOC-band IC (eq. 3.9).
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 100.0, 1.0, 4.0, 9.0, Ppv) # soc0 > Emax
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, -1.0, 1.0, 4.0, 9.0, Ppv)  # soc0 < Emin
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        100.0,
+        1.0,
+        4.0,
+        9.0,
+        Ppv,
+    ) # soc0 > Emax
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        -1.0,
+        1.0,
+        4.0,
+        9.0,
+        Ppv,
+    )  # soc0 < Emin
 
     # Pmax must be > 0 (eq. 3.8; it also divides the utility curvatures 3.17-3.20).
-    @test_throws ArgumentError TSODSO.PVBattery(2, 0.95, 1.0, 0.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)
+    @test_throws ArgumentError TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        0.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
+        Ppv,
+    )
 
     # IN-01: a mixed-type call (a Float64 η among integer args, Int-eltype Ppv) promotes
     # to a common Float64 rather than MethodError.
@@ -60,7 +182,8 @@ end
     @test mixed.Pmax === 5.0
 end
 
-@testitem "battery: standalone convex-QP solve holds p_ch·p_dch < τ with ZERO binaries (App. C, DEV-04)" tags = [:battery] begin
+@testitem "battery: standalone convex-QP solve holds p_ch·p_dch < τ with ZERO binaries (App. C, DEV-04)" tags =
+    [:battery] begin
     using TSODSO, JuMP
 
     # --- A bare battery-only convex QP, NO feeder anywhere (device is network-agnostic) ---

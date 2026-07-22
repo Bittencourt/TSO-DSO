@@ -24,24 +24,32 @@
 System per-unit base. `S_base` is the apparent-power base in MVA, `V_base` the
 voltage base in kV. Derived bases:
 
-  * `Z_base = V_base^2 / S_base`            (Ω)
-  * `I_base = S_base / (√3 · V_base)`       (kA, three-phase)
+  - `Z_base = V_base^2 / S_base`            (Ω)
+  - `I_base = S_base / (√3 · V_base)`       (kA, three-phase)
 """
-struct PerUnitBase{T<:Real}
+struct PerUnitBase{T <: Real}
     S_base::T   # MVA
     V_base::T   # kV
 end
 
-"Impedance base (Ω) for a per-unit system: `V_base^2 / S_base`."
+"""
+Impedance base (Ω) for a per-unit system: `V_base^2 / S_base`.
+"""
 Z_base(b::PerUnitBase) = b.V_base^2 / b.S_base
 
-"Current base (kA, three-phase) for a per-unit system: `S_base / (√3 · V_base)`."
+"""
+Current base (kA, three-phase) for a per-unit system: `S_base / (√3 · V_base)`.
+"""
 I_base(b::PerUnitBase) = b.S_base / (sqrt(3) * b.V_base)
 
-"Convert an active/apparent power in MW/MVA to per-unit (÷ `S_base`). Ingestion only."
+"""
+Convert an active/apparent power in MW/MVA to per-unit (÷ `S_base`). Ingestion only.
+"""
 to_pu_power(x_MW, b::PerUnitBase) = x_MW / b.S_base
 
-"Convert an impedance in Ω to per-unit (÷ `Z_base`). Ingestion only."
+"""
+Convert an impedance in Ω to per-unit (÷ `Z_base`). Ingestion only.
+"""
 to_pu_impedance(z_Ω, b::PerUnitBase) = z_Ω / Z_base(b)
 
 # --- Magnitude-sanity bands (heuristic tripwires, RESEARCH Assumption A2) ---
@@ -71,9 +79,12 @@ Uses an explicit `throw` (not `@assert`) so the tripwire is never elided under
 `-O`/`--check-bounds=no`, matching `topology.jl`'s convention (WR-02).
 """
 function assert_magnitudes_voltage(v)
-    VOLTAGE_PU_MIN ≤ v ≤ VOLTAGE_PU_MAX || throw(ArgumentError(
-        "voltage $v pu out of per-unit sanity band [$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] " *
-        "— check SI/pu conversion at ingestion"))
+    VOLTAGE_PU_MIN ≤ v ≤ VOLTAGE_PU_MAX || throw(
+        ArgumentError(
+            "voltage $v pu out of per-unit sanity band [$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] " *
+            "— check SI/pu conversion at ingestion",
+        ),
+    )
     return nothing
 end
 
@@ -94,23 +105,41 @@ Untyped on purpose: `Feeder` is defined in `data/Feeder.jl`, which is included
 """
 function assert_magnitudes(feeder)
     for bus in feeder.buses
-        VOLTAGE_PU_MIN ≤ bus.vmin ≤ bus.vmax ≤ VOLTAGE_PU_MAX || throw(ArgumentError(
-            "voltage bounds [$(bus.vmin), $(bus.vmax)] out of per-unit band " *
-            "[$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] (or unordered) at bus $(bus.id)"))
+        VOLTAGE_PU_MIN ≤ bus.vmin ≤ bus.vmax ≤ VOLTAGE_PU_MAX || throw(
+            ArgumentError(
+                "voltage bounds [$(bus.vmin), $(bus.vmax)] out of per-unit band " *
+                "[$(VOLTAGE_PU_MIN), $(VOLTAGE_PU_MAX)] (or unordered) at bus $(bus.id)",
+            ),
+        )
     end
     for br in feeder.branches
-        0 ≤ br.r < IMPEDANCE_PU_MAX || throw(ArgumentError(
-            "per-unit resistance $(br.r) implausible on branch $(br.from)->$(br.to) " *
-            "(expected 0 ≤ r < $(IMPEDANCE_PU_MAX); is it in Ω?)"))
-        0 ≤ br.x < IMPEDANCE_PU_MAX || throw(ArgumentError(
-            "per-unit reactance $(br.x) implausible on branch $(br.from)->$(br.to) " *
-            "(expected 0 ≤ x < $(IMPEDANCE_PU_MAX); is it in Ω?)"))
-        0 < br.smax < SMAX_PU_MAX || throw(ArgumentError(
-            "per-unit power limit $(br.smax) out of band on branch $(br.from)->$(br.to) " *
-            "(expected 0 < smax < $(SMAX_PU_MAX))"))
+        0 ≤ br.r < IMPEDANCE_PU_MAX || throw(
+            ArgumentError(
+                "per-unit resistance $(br.r) implausible on branch $(br.from)->$(br.to) " *
+                "(expected 0 ≤ r < $(IMPEDANCE_PU_MAX); is it in Ω?)",
+            ),
+        )
+        0 ≤ br.x < IMPEDANCE_PU_MAX || throw(
+            ArgumentError(
+                "per-unit reactance $(br.x) implausible on branch $(br.from)->$(br.to) " *
+                "(expected 0 ≤ x < $(IMPEDANCE_PU_MAX); is it in Ω?)",
+            ),
+        )
+        0 < br.smax < SMAX_PU_MAX || throw(
+            ArgumentError(
+                "per-unit power limit $(br.smax) out of band on branch $(br.from)->$(br.to) " *
+                "(expected 0 < smax < $(SMAX_PU_MAX))",
+            ),
+        )
     end
     return nothing
 end
 
-export PerUnitBase, Z_base, I_base, to_pu_power, to_pu_impedance,
-    assert_magnitudes, assert_magnitudes_voltage, SMAX_NO_LIMIT
+export PerUnitBase,
+    Z_base,
+    I_base,
+    to_pu_power,
+    to_pu_impedance,
+    assert_magnitudes,
+    assert_magnitudes_voltage,
+    SMAX_NO_LIMIT

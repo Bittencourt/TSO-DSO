@@ -36,24 +36,25 @@ BUILD-ONCE JuMP QP wrapping one [`Aggregator`](@ref)'s device roll-up, re-solved
 iteration by a single `set_objective_coefficient` update on the coupling variable (ADMM-03).
 
 # Fields
-- `model::Model` — the JuMP QP (backend chosen by `select_optimizer(QP())`), built ONCE.
-- `ctx::ModelContext` — the model context the aggregator/device `contribute!` wrote into; its
-  `ctx.meta[:objective]` holds the aggregator utility `U_ag` (a `QuadExpr`) and
-  `ctx.meta[:agg_device_vars]` the battery vars for the App. C complementarity check.
-- `pag::Vector{VariableRef}` — the coupling variable `pag_j[t]` (net active injection), pinned
-  to `Σ_d p_inject_d[t] − Pdc[t]` (thesis 3.22). Its linear objective coefficient is the
-  per-iteration ADMM handle.
-- `qag::Vector{Float64}` — the CONSTANT net reactive injection `−Pdc[t]·tan(arccos φ)` (thesis
-  3.23; DERs are active-only, A3). PLACEHOLDER for a FUTURE reactive-consensus (`μ` dual-ascent)
-  extension — no reactive dual update exists yet (the DSO closes reactive with a constant draw and
-  a free `q_import`), so this field is currently NOT read by `solve_admm` (IN-02). Kept as the
-  documented seam for that extension; do not treat it as a live consensus quantity.
-- `T::Int` — the day-ahead horizon.
-- `bus::Int` — the aggregator's distribution bus.
-- `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): the LIVE penalty
-  under adaptive ρ lives ONLY in the model's quadratic objective coefficients (mutated by
-  [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
-  holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
+
+  - `model::Model` — the JuMP QP (backend chosen by `select_optimizer(QP())`), built ONCE.
+  - `ctx::ModelContext` — the model context the aggregator/device `contribute!` wrote into; its
+    `ctx.meta[:objective]` holds the aggregator utility `U_ag` (a `QuadExpr`) and
+    `ctx.meta[:agg_device_vars]` the battery vars for the App. C complementarity check.
+  - `pag::Vector{VariableRef}` — the coupling variable `pag_j[t]` (net active injection), pinned
+    to `Σ_d p_inject_d[t] − Pdc[t]` (thesis 3.22). Its linear objective coefficient is the
+    per-iteration ADMM handle.
+  - `qag::Vector{Float64}` — the CONSTANT net reactive injection `−Pdc[t]·tan(arccos φ)` (thesis
+    3.23; DERs are active-only, A3). PLACEHOLDER for a FUTURE reactive-consensus (`μ` dual-ascent)
+    extension — no reactive dual update exists yet (the DSO closes reactive with a constant draw and
+    a free `q_import`), so this field is currently NOT read by `solve_admm` (IN-02). Kept as the
+    documented seam for that extension; do not treat it as a live consensus quantity.
+  - `T::Int` — the day-ahead horizon.
+  - `bus::Int` — the aggregator's distribution bus.
+  - `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): the LIVE penalty
+    under adaptive ρ lives ONLY in the model's quadratic objective coefficients (mutated by
+    [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
+    holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
 """
 struct AgrOpt
     model::Model
@@ -71,19 +72,19 @@ end
 Build the AGR-OPT per-node subproblem for aggregator `agg` over horizon `T` (thesis eq. 3.46),
 ONCE, following RESEARCH Pattern 4 (option a — reuse `Aggregator.contribute!` verbatim):
 
-1. `model = Model(select_optimizer(QP()))`; `ctx = ModelContext(model)`; stash `T` (INFRA-02).
-2. Reuse the aggregator roll-up: `res = contribute!(agg, ctx; T)` drives each device once and
-   sums their `p_inject` / `utility` (thesis 3.21–3.22). It also writes `:Rp`/`:Rq` and stashes
-   the battery vars — the stray residual writes are HARMLESS here (AGR-OPT never closes them),
-   and the battery stash is exactly what the App. C check consumes post-solve.
-3. Create the coupling variable `pag[t]` and pin it to the net active injection
-   `pag[t] == res.p_inject[t] − agg.Pdc[t]` (thesis 3.22).
-4. Expose the CONSTANT reactive injection `qag[t] = −Pdc[t]·tan(arccos φ)` (thesis 3.23) for the
-   μ update — there is no reactive DER decision, so it is a fixed vector, not a variable.
-5. Set `@objective(model, Max, U_ag − (ρ/2)·Σ_t pag[t]²)` — the FIXED quadratic ρ-penalty part,
-   built ONCE. The linear price+penalty-shift coefficient on `pag[t]` starts at zero and is
-   updated per iteration by [`solve_agr!`](@ref) via `set_objective_coefficient` (never a
-   JuMP `Parameter` for the price — RESEARCH Pitfall 1).
+ 1. `model = Model(select_optimizer(QP()))`; `ctx = ModelContext(model)`; stash `T` (INFRA-02).
+ 2. Reuse the aggregator roll-up: `res = contribute!(agg, ctx; T)` drives each device once and
+    sums their `p_inject` / `utility` (thesis 3.21–3.22). It also writes `:Rp`/`:Rq` and stashes
+    the battery vars — the stray residual writes are HARMLESS here (AGR-OPT never closes them),
+    and the battery stash is exactly what the App. C check consumes post-solve.
+ 3. Create the coupling variable `pag[t]` and pin it to the net active injection
+    `pag[t] == res.p_inject[t] − agg.Pdc[t]` (thesis 3.22).
+ 4. Expose the CONSTANT reactive injection `qag[t] = −Pdc[t]·tan(arccos φ)` (thesis 3.23) for the
+    μ update — there is no reactive DER decision, so it is a fixed vector, not a variable.
+ 5. Set `@objective(model, Max, U_ag − (ρ/2)·Σ_t pag[t]²)` — the FIXED quadratic ρ-penalty part,
+    built ONCE. The linear price+penalty-shift coefficient on `pag[t]` starts at zero and is
+    updated per iteration by [`solve_agr!`](@ref) via `set_objective_coefficient` (never a
+    JuMP `Parameter` for the price — RESEARCH Pitfall 1).
 
 Returns an [`AgrOpt`](@ref). No concrete solver is named (INFRA-02); the model is well-posed and
 solves OPTIMAL at the default zero price.
@@ -130,11 +131,12 @@ plain `Float64` vector, NEVER a JuMP `Parameter` (a `λ·pag` Parameter×variabl
 indefinite bilinear the convex conic backend rejects — RESEARCH Pitfall 1).
 
 After the coefficient update it:
-- gates the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before reading any
-  value; and
-- runs the App. C battery-complementarity check
-  [`assert_battery_complementarity!`](@ref)`(agr.ctx; τ = τ_batt, T = agr.T)` — the batteries live
-  in AGR-OPT now, so a degenerate simultaneous charge/discharge is caught here (threat T-06-10).
+
+  - gates the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before reading any
+    value; and
+  - runs the App. C battery-complementarity check
+    [`assert_battery_complementarity!`](@ref)`(agr.ctx; τ = τ_batt, T = agr.T)` — the batteries live
+    in AGR-OPT now, so a degenerate simultaneous charge/discharge is caught here (threat T-06-10).
 
 `check_battery` / `τ_batt` — the App. C complementarity is a property of the CORRECTLY-PRICED
 optimum, NOT of an arbitrary intermediate ADMM iterate. Mid-loop the coupling price `λ_j` is
@@ -170,10 +172,12 @@ function solve_agr!(
     τ_batt::Real = 1e-6,
     strict::Bool = true,
 )
-    length(λ_j) == agr.T ||
-        throw(ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"))
-    length(c_j) == agr.T ||
-        throw(ArgumentError("solve_agr!: c_j has length $(length(c_j)), expected T=$(agr.T)"))
+    length(λ_j) == agr.T || throw(
+        ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"),
+    )
+    length(c_j) == agr.T || throw(
+        ArgumentError("solve_agr!: c_j has length $(length(c_j)), expected T=$(agr.T)"),
+    )
 
     # Build-once re-solve (ADMM-03): one scalar coefficient update per hour — no JuMP rebuild.
     for t in 1:agr.T

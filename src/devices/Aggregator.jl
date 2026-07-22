@@ -43,18 +43,19 @@ inelastic-demand active draw `P_dc` (thesis eq. 3.23); the DERs (PV/battery) are
 active-only (Assumption A3), so only the inelastic load contributes reactive.
 
 # Fields
-- `bus::Int` — the distribution bus the aggregator sits at. The aggregator SUPPLIES
-  this bus to the network; its member devices need not (and do not) reference it —
-  they are fully network-agnostic.
-- `φ::Tp` — load power factor, `φ ∈ (0, 1]` (thesis eq. 3.23; typically 0.85-0.95).
-- `devices::D` — the member `AbstractDevice`s (aggregatable variant: each returns its
-  `(; vars, p_inject, utility)` terms from `contribute!`).
-- `Pdc::Vector{Tp}` — the inelastic-demand parameter profile in per-unit power (A4);
-  its length is validated against the horizon `T` at `contribute!` time.
+
+  - `bus::Int` — the distribution bus the aggregator sits at. The aggregator SUPPLIES
+    this bus to the network; its member devices need not (and do not) reference it —
+    they are fully network-agnostic.
+  - `φ::Tp` — load power factor, `φ ∈ (0, 1]` (thesis eq. 3.23; typically 0.85-0.95).
+  - `devices::D` — the member `AbstractDevice`s (aggregatable variant: each returns its
+    `(; vars, p_inject, utility)` terms from `contribute!`).
+  - `Pdc::Vector{Tp}` — the inelastic-demand parameter profile in per-unit power (A4);
+    its length is validated against the horizon `T` at `contribute!` time.
 
 Construction throws `ArgumentError` when `φ ∉ (0, 1]` or when `devices` is empty.
 """
-struct Aggregator{Tp<:Real,D<:AbstractVector{<:AbstractDevice}} <: AbstractDevice
+struct Aggregator{Tp <: Real, D <: AbstractVector{<:AbstractDevice}} <: AbstractDevice
     bus::Int
     φ::Tp
     devices::D
@@ -65,7 +66,7 @@ struct Aggregator{Tp<:Real,D<:AbstractVector{<:AbstractDevice}} <: AbstractDevic
         φ::Tp,
         devices::D,
         Pdc::Vector{Tp},
-    ) where {Tp<:Real,D<:AbstractVector{<:AbstractDevice}}
+    ) where {Tp <: Real, D <: AbstractVector{<:AbstractDevice}}
         # Power-factor guard (thesis eq. 3.23): φ ∈ (0,1] keeps tan(arccos φ) real and
         # finite. Reject LOUDLY (project convention: throw, never @assert).
         if !(zero(Tp) < φ <= one(Tp))
@@ -86,7 +87,7 @@ struct Aggregator{Tp<:Real,D<:AbstractVector{<:AbstractDevice}} <: AbstractDevic
                 ),
             )
         end
-        return new{Tp,D}(bus, φ, devices, Pdc)
+        return new{Tp, D}(bus, φ, devices, Pdc)
     end
 end
 
@@ -116,17 +117,17 @@ end
 Roll the aggregator's member devices into the single nodal quantities the network sees
 (thesis eqs. 3.21-3.23), as the SOLE :Rp/:Rq writer at `agg.bus`. It:
 
-1. drives each member device once (`res = contribute!(d, ctx; T)`), summing their
-   `res.p_inject` into one net active vector and their `res.utility` into one QuadExpr,
-   and collecting their `res.vars` (validating `length(Pdc) ≥ T` first — the
-   temporal-consistency guard);
-2. injects, per `t`, ONE net active `Σ_d p_inject_d[t] − P_dc[t]` into `:Rp` (3.22;
-   inelastic demand is a negative parameter injection, A4) and ONE net reactive
-   `− P_dc[t]·tan(arccos φ)` into `:Rq` (3.23; DERs active-only, A3) at `agg.bus`;
-3. adds the summed device utility to `ctx.meta[:objective]` via `add_to_objective!`
-   (3.21, kept a `QuadExpr` so curvature is retained); and
-4. stashes the collected device vars under `ctx.meta[:agg_device_vars]` keyed by bus,
-   so the assembly can run the post-solve battery-complementarity check.
+ 1. drives each member device once (`res = contribute!(d, ctx; T)`), summing their
+    `res.p_inject` into one net active vector and their `res.utility` into one QuadExpr,
+    and collecting their `res.vars` (validating `length(Pdc) ≥ T` first — the
+    temporal-consistency guard);
+ 2. injects, per `t`, ONE net active `Σ_d p_inject_d[t] − P_dc[t]` into `:Rp` (3.22;
+    inelastic demand is a negative parameter injection, A4) and ONE net reactive
+    `− P_dc[t]·tan(arccos φ)` into `:Rq` (3.23; DERs active-only, A3) at `agg.bus`;
+ 3. adds the summed device utility to `ctx.meta[:objective]` via `add_to_objective!`
+    (3.21, kept a `QuadExpr` so curvature is retained); and
+ 4. stashes the collected device vars under `ctx.meta[:agg_device_vars]` keyed by bus,
+    so the assembly can run the post-solve battery-complementarity check.
 
 The member devices themselves write NOTHING to the residual/objective — the aggregator
 is the sole network-facing writer. Returns `(; vars, p_inject, utility)` (the aggregate
@@ -170,7 +171,7 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     add_to_objective!(ctx, utility)
 
     # Stash device vars keyed by bus for the post-solve p_ch·p_dch < τ battery check.
-    store = get!(ctx.meta, :agg_device_vars, Dict{Int,Vector{Any}}())
+    store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
     append!(get!(store, agg.bus, Vector{Any}()), device_vars)
 
     return (; vars = device_vars, p_inject, utility)

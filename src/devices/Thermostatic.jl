@@ -36,26 +36,27 @@ assembled welfare stays a convex QP. All quantities are in the single model per-
 system; coefficients are not rescaled here.
 
 # Fields
-- `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
-  it never sees the network object or line parameters — network-agnostic, DEV-05).
-- `α::T` — thermal coupling to the ambient (eq. 3.2); `α ≥ 0` required (a negative
-  coupling reverses heat flow — non-physical, WR-02).
-- `β::T` — power-to-temperature gain (eq. 3.2); `β > 0` required so power COOLS via the
-  `−β·p` term (a non-positive β silently flips the sign, WR-02).
-- `Tmin::T`, `Tmax::T` — comfort band (eq. 3.3).
-- `Tin0::T` — initial indoor temperature (state IC for the recursion); `Tmin ≤ Tin0 ≤ Tmax`
-  required (comfort-band IC, WR-02).
-- `Pmin::T`, `Pmax::T` — A/C power bounds.
-- `b::T` — utility curvature, `b > 0` required for concavity (eqs. 3.11/3.14).
-- `Tout::Vector{T}` — ambient-temperature profile parameter (eq. 3.2); its length is
-  validated against the horizon `T` at `contribute!` time (it is not known at construction).
+
+  - `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
+    it never sees the network object or line parameters — network-agnostic, DEV-05).
+  - `α::T` — thermal coupling to the ambient (eq. 3.2); `α ≥ 0` required (a negative
+    coupling reverses heat flow — non-physical, WR-02).
+  - `β::T` — power-to-temperature gain (eq. 3.2); `β > 0` required so power COOLS via the
+    `−β·p` term (a non-positive β silently flips the sign, WR-02).
+  - `Tmin::T`, `Tmax::T` — comfort band (eq. 3.3).
+  - `Tin0::T` — initial indoor temperature (state IC for the recursion); `Tmin ≤ Tin0 ≤ Tmax`
+    required (comfort-band IC, WR-02).
+  - `Pmin::T`, `Pmax::T` — A/C power bounds.
+  - `b::T` — utility curvature, `b > 0` required for concavity (eqs. 3.11/3.14).
+  - `Tout::Vector{T}` — ambient-temperature profile parameter (eq. 3.2); its length is
+    validated against the horizon `T` at `contribute!` time (it is not known at construction).
 
 Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
 `Tmax < Tmin` (inconsistent comfort band), when `Pmax < Pmin` (inconsistent power bounds),
 when `α < 0` or `β ≤ 0` (non-physical recursion signs, WR-02), or when `Tin0` starts
 outside the comfort band `Tmin ≤ Tin0 ≤ Tmax` (comfort-band IC guard, WR-02).
 """
-struct Thermostatic{T<:Real} <: AbstractDevice
+struct Thermostatic{T <: Real} <: AbstractDevice
     bus::Int
     α::T
     β::T
@@ -78,7 +79,7 @@ struct Thermostatic{T<:Real} <: AbstractDevice
         Pmax::T,
         b::T,
         Tout::Vector{T},
-    ) where {T<:Real}
+    ) where {T <: Real}
         # Concavity guard (thesis eqs. 3.11/3.14, b > 0): a non-positive curvature makes
         # the comfort utility convex → welfare maximization unbounded/non-convex. Reject
         # LOUDLY (project convention: throw, never @assert). Threat T-03-06.
@@ -199,14 +200,14 @@ Contribute the thermostatic load into the shared model context over the horizon
 `t = 1:T`, conforming to the Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer,
 DEV-05). It:
 
-1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` and a bounded
-   indoor-temperature state `Tmin ≤ Tin[t] ≤ Tmax` (comfort band, eq. 3.3) on `ctx.model`;
-2. fixes the state IC `Tin[1] == Tin0` and adds the RC/ETP temperature recursion (eq. 3.2)
-   `Tin[t+1] == Tin[t] + α·(Tout[t] − Tin[t]) − β·p[t]` for `t = 1:T-1` (validating
-   `length(Tout) ≥ T`, throwing `ArgumentError` otherwise — the temporal-infeasibility
-   guard, threat T-03-07); and
-3. builds the concave comfort utility `− (b/2)·Σ_t (Tin[t] − Tmin)²` (eq. 3.11) as a
-   `QuadExpr`.
+ 1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` and a bounded
+    indoor-temperature state `Tmin ≤ Tin[t] ≤ Tmax` (comfort band, eq. 3.3) on `ctx.model`;
+ 2. fixes the state IC `Tin[1] == Tin0` and adds the RC/ETP temperature recursion (eq. 3.2)
+    `Tin[t+1] == Tin[t] + α·(Tout[t] − Tin[t]) − β·p[t]` for `t = 1:T-1` (validating
+    `length(Tout) ≥ T`, throwing `ArgumentError` otherwise — the temporal-infeasibility
+    guard, threat T-03-07); and
+ 3. builds the concave comfort utility `− (b/2)·Σ_t (Tin[t] − Tmin)²` (eq. 3.11) as a
+    `QuadExpr`.
 
 It then RETURNS `(; vars = (; p, Tin), p_inject, utility)` where `p_inject[t] = −p[t]` is
 the signed ACTIVE injection (a consumed load is a NEGATIVE injection, matching the
@@ -234,7 +235,11 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
 
     # State IC + RC/ETP recursion (thesis eq. 3.2) — the inter-temporal coupling.
     @constraint(m, Tin[1] == d.Tin0)
-    @constraint(m, [t = 1:T-1], Tin[t+1] == Tin[t] + d.α * (d.Tout[t] - Tin[t]) - d.β * p[t])
+    @constraint(
+        m,
+        [t = 1:(T - 1)],
+        Tin[t + 1] == Tin[t] + d.α * (d.Tout[t] - Tin[t]) - d.β * p[t]
+    )
 
     # Concave comfort utility (eq. 3.11, constant c dropped — RESEARCH A5). Curvature
     # −(b/2) ≤ 0 keeps it concave; built as a QuadExpr so the curvature is retained.

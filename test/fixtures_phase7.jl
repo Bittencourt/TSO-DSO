@@ -75,10 +75,30 @@
     """
     function temperature_profile()
         return Float64[
-            19, 18, 17, 16, 16, 17,   # 00–05 cooling to a dawn minimum
-            19, 21, 23, 26, 28, 30,   # 06–11 morning warm-up
-            31, 32, 32, 31, 29, 27,   # 12–17 afternoon peak → decline
-            25, 23, 22, 21, 20, 19,   # 18–23 evening cool-down
+            19,
+            18,
+            17,
+            16,
+            16,
+            17,   # 00–05 cooling to a dawn minimum
+            19,
+            21,
+            23,
+            26,
+            28,
+            30,   # 06–11 morning warm-up
+            31,
+            32,
+            32,
+            31,
+            29,
+            27,   # 12–17 afternoon peak → decline
+            25,
+            23,
+            22,
+            21,
+            20,
+            19,   # 18–23 evening cool-down
         ]
     end
 
@@ -92,10 +112,30 @@
     """
     function ieee123_lambda0()
         return Float64[
-            3.8, 3.7, 3.6, 3.6, 3.7, 4.0,   # 00–05 overnight trough
-            4.8, 5.8, 6.5, 6.2, 5.9, 5.7,   # 06–11 morning ramp → midday shoulder
-            5.6, 5.8, 6.0, 6.8, 8.2, 9.0,   # 12–17 afternoon rise → evening peak
-            8.6, 7.4, 6.2, 5.2, 4.4, 4.0,   # 18–23 evening decline
+            3.8,
+            3.7,
+            3.6,
+            3.6,
+            3.7,
+            4.0,   # 00–05 overnight trough
+            4.8,
+            5.8,
+            6.5,
+            6.2,
+            5.9,
+            5.7,   # 06–11 morning ramp → midday shoulder
+            5.6,
+            5.8,
+            6.0,
+            6.8,
+            8.2,
+            9.0,   # 12–17 afternoon rise → evening peak
+            8.6,
+            7.4,
+            6.2,
+            5.2,
+            4.4,
+            4.0,   # 18–23 evening decline
         ]
     end
 
@@ -108,7 +148,8 @@
     battery uses the App. C price triple (strict `λ_min < λ_med < λ_max`).
     """
     function _house_aggregator(
-        feeder, bus;
+        feeder,
+        bus;
         seed::Integer,
         φ::Real,
         pv_scale::Real = 1.0,
@@ -127,12 +168,30 @@
         # it the O(1) pu default ratings would let a single house's flexible demand dominate the
         # whole feeder at the feeder-scale base. Battery ratings scale with `load_scale` (below).
         therm = Thermostatic(
-            bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, temperature_profile(),
+            bus,
+            0.2,
+            0.05,
+            15.0,
+            30.0,
+            22.0,
+            0.0,
+            1.0 * dev_scale,
+            0.5,
+            temperature_profile(),
         )
         defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
         batt = PVBattery(
-            bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
-            BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv,
+            bus,
+            0.95,
+            1.0,
+            batt_pmax,
+            0.0,
+            batt_emax,
+            batt_soc0,
+            BATT_λ_MIN,
+            BATT_λ_MED,
+            BATT_λ_MAX,
+            Ppv,
         )
         return Aggregator(bus, φ, [therm, defer, batt], Pdc)
     end
@@ -155,13 +214,17 @@
     the solve (priced export keeps the SOC relaxation exact, PF-04).
     """
     function build_ieee123_aggregators(
-        feeder; seed::Integer = SEED_IEEE123, load_buses = nothing,
+        feeder;
+        seed::Integer = SEED_IEEE123,
+        load_buses = nothing,
     )
         buses = load_buses === nothing ? ieee123_load_nodes() : load_buses
         return [
             _house_aggregator(
-                feeder, bus;
-                seed = seed, φ = 0.90,
+                feeder,
+                bus;
+                seed = seed,
+                φ = 0.90,
                 load_scale = LOAD_SCALE_IEEE123,
                 pv_scale = PV_SCALE_IEEE123,
                 dev_scale = DEV_SCALE_IEEE123,
@@ -172,8 +235,23 @@
         ]
     end
 
-    export T, BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX,
-        EPS_ABS, EPS_REL, TAU, MU, RHO_MIN, RHO_MAX, RHO0,
-        SEED_IEEE123, LOAD_SCALE_IEEE123, PV_SCALE_IEEE123, DEV_SCALE_IEEE123,
-        temperature_profile, ieee123_lambda0, _house_aggregator, build_ieee123_aggregators
+    export T,
+        BATT_λ_MIN,
+        BATT_λ_MED,
+        BATT_λ_MAX,
+        EPS_ABS,
+        EPS_REL,
+        TAU,
+        MU,
+        RHO_MIN,
+        RHO_MAX,
+        RHO0,
+        SEED_IEEE123,
+        LOAD_SCALE_IEEE123,
+        PV_SCALE_IEEE123,
+        DEV_SCALE_IEEE123,
+        temperature_profile,
+        ieee123_lambda0,
+        _house_aggregator,
+        build_ieee123_aggregators
 end

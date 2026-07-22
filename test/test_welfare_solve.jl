@@ -6,7 +6,8 @@
 # App. C battery-complementarity check (p_ch·p_dch < τ). The name contains "welfare" so
 # `occursin("welfare", ti.name)` selects it.
 
-@testitem "welfare: solve_welfare + fixture health exist (OPT-01)" tags = [:welfare] setup = [Phase3Fixtures] begin
+@testitem "welfare: solve_welfare + fixture health exist (OPT-01)" tags = [:welfare] setup =
+    [Phase3Fixtures] begin
     using TSODSO
 
     # The shared fixture is healthy (exercises setup wiring): valid feeder + T=24 data.
@@ -17,7 +18,8 @@
     @test isdefined(TSODSO, :solve_welfare)
 end
 
-@testitem "welfare: end-to-end GLB-CVX optimum, reactive balance, battery complementarity (OPT-01, DEV-04)" tags = [:welfare] setup = [Phase3Fixtures] begin
+@testitem "welfare: end-to-end GLB-CVX optimum, reactive balance, battery complementarity (OPT-01, DEV-04)" tags =
+    [:welfare] setup = [Phase3Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -58,8 +60,8 @@ end
     # App. C: every battery honors p_ch·p_dch < τ at the FULL welfare optimum.
     @test haskey(ctx.meta, :agg_device_vars)
     batteries = [
-        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for v in varlist if
-        haskey(v, :p_ch) && haskey(v, :p_dch)
+        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for
+        v in varlist if haskey(v, :p_ch) && haskey(v, :p_dch)
     ]
     @test length(batteries) == 2                # both aggregators' batteries are checked
     for v in batteries, t in 1:T
@@ -70,15 +72,19 @@ end
     # Re-solve the SAME assembly through the NLP factory (allow_local for Ipopt's
     # LOCALLY_SOLVED status on this convex problem) and check the welfare matches.
     _ctx2, obj2, _dadp2 = solve_welfare(
-        feeder, LinDistFlow(), aggs;
-        T = T, λ₀ = λ₀,
+        feeder,
+        LinDistFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ₀,
         optimizer = select_optimizer(NLP()),
         allow_local = true,
     )
     @test isapprox(obj, obj2; rtol = 1e-4, atol = 1e-4)
 end
 
-@testitem "welfare: DC + reactive aggregator solves active-only (WR-03, DEV-05)" tags = [:welfare] setup = [Phase3Fixtures] begin
+@testitem "welfare: DC + reactive aggregator solves active-only (WR-03, DEV-05)" tags =
+    [:welfare] setup = [Phase3Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -118,8 +124,8 @@ end
     # App. C battery complementarity still enforced under the DC formulation.
     @test haskey(ctx.meta, :agg_device_vars)
     batteries = [
-        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for v in varlist if
-        haskey(v, :p_ch) && haskey(v, :p_dch)
+        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for
+        v in varlist if haskey(v, :p_ch) && haskey(v, :p_dch)
     ]
     @test length(batteries) == 2
     for v in batteries, t in 1:T
@@ -127,10 +133,8 @@ end
     end
 end
 
-@testitem "welfare: high-PV surplus is curtailed rather than infeasible (WR-04, DEV-04)" tags = [
-    :welfare,
-    :battery,
-] begin
+@testitem "welfare: high-PV surplus is curtailed rather than infeasible (WR-04, DEV-04)" tags =
+    [:welfare, :battery] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -165,10 +169,8 @@ end
     @test any(t -> value(battery_vars.pv_used[t]) < Ppv[t] - 1e-3, 1:T)
 end
 
-@testitem "welfare: battery complementarity is a base-free relative test (WR-02)" tags = [
-    :welfare,
-    :battery,
-] begin
+@testitem "welfare: battery complementarity is a base-free relative test (WR-02)" tags =
+    [:welfare, :battery] begin
     using TSODSO, JuMP
 
     @test isdefined(TSODSO, :assert_battery_complementarity!)
@@ -189,7 +191,7 @@ end
         optimize!(model)
         ctx = TSODSO.ModelContext(model)
         ctx.meta[:T] = T
-        store = get!(ctx.meta, :agg_device_vars, Dict{Int,Vector{Any}}())
+        store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
         store[2] = Any[(; p_ch, p_dch)]
         return ctx
     end
@@ -221,10 +223,8 @@ end
 # one entry per aggregator, each a NamedTuple with `bus`, a length-T `net` (= p_inject − Pdc,
 # the price-transfer term p_agⱼ), and the aggregator `utility`. Name contains "welfare" and
 # "surplus" so either `occursin` filter selects it.
-@testitem "welfare surplus: solve_welfare stashes per-aggregator net injection + utility (PRICE-03)" tags = [
-    :welfare,
-    :surplus,
-] setup = [Phase3Fixtures] begin
+@testitem "welfare surplus: solve_welfare stashes per-aggregator net injection + utility (PRICE-03)" tags =
+    [:welfare, :surplus] setup = [Phase3Fixtures] begin
     using TSODSO
     using JuMP
 

@@ -6,9 +6,8 @@
 # "fit" so `occursin("fit", ti.name)` selects it. While RED the sole failing assertion is a
 # missing-symbol `isdefined` check; the behavioral asserts sit behind the `isdefined` guard.
 
-@testitem "fit: fit_baseline is defined and returns a finite baseline welfare (PRICE-04)" tags = [
-    :fit,
-] begin
+@testitem "fit: fit_baseline is defined and returns a finite baseline welfare (PRICE-04)" tags =
+    [:fit] begin
     using TSODSO
 
     # RED until plan 05-03 defines the FIT baseline.
@@ -31,9 +30,8 @@
     end
 end
 
-@testitem "fit: the DLMP-vs-FIT efficiency ratio is a finite positive scalar (PRICE-04)" tags = [
-    :fit,
-] begin
+@testitem "fit: the DLMP-vs-FIT efficiency ratio is a finite positive scalar (PRICE-04)" tags =
+    [:fit] begin
     using TSODSO
 
     # RED until plan 05-03 exposes the efficiency ratio.

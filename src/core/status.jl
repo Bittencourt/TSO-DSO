@@ -54,15 +54,13 @@ function assert_solved!(
             (ps == MOI.FEASIBLE_POINT || ps == MOI.NEARLY_FEASIBLE_POINT)
     end
     if !ok
-        error(
-            """
-            Solve failed — refusing to trust results:
-              termination_status : $(termination_status(model))
-              primal_status      : $(primal_status(model))
-              dual_status        : $(dual_status(model))
-              raw_status         : $(raw_status(model))
-            """,
-        )
+        error("""
+              Solve failed — refusing to trust results:
+                termination_status : $(termination_status(model))
+                primal_status      : $(primal_status(model))
+                dual_status        : $(dual_status(model))
+                raw_status         : $(raw_status(model))
+              """)
     end
     return model
 end
@@ -84,15 +82,13 @@ function assert_no_slack(model::Model, cref; atol::Real = 1e-6)
     rhs = MOI.constant(obj.set)           # RHS for EqualTo / scalar sets
     residual = lhs - rhs
     if abs(residual) > atol
-        error(
-            """
-            Hidden constraint slack detected — refusing to trust results:
-              constraint : $(cref)
-              lhs(value) : $(lhs)
-              rhs        : $(rhs)
-              residual   : $(residual)  (atol = $(atol))
-            """,
-        )
+        error("""
+              Hidden constraint slack detected — refusing to trust results:
+                constraint : $(cref)
+                lhs(value) : $(lhs)
+                rhs        : $(rhs)
+                residual   : $(residual)  (atol = $(atol))
+              """)
     end
     return residual
 end

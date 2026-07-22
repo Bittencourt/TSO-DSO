@@ -35,32 +35,33 @@ The normalized, comparable outcome of [`run_scenario`](@ref) — the SAME schema
 strategies and across sweep runs (EXP-02).
 
 # Fields
-- `scenario::Scenario` — the input spec this result was produced from (provenance).
-- `welfare::Float64` — the social-welfare objective (thesis eq. 3.38) at the converged/solved
-  optimum.
-- `dadp::Matrix{Float64}` — the day-ahead dynamic price, normalized to `(n_load_nodes, T)`
-  with rows in ASCENDING load-bus order — the SAME shape for `:centralized`
-  (`extract_dlmp(ctx)[load_buses, :]`) and `:admm` (already node×T, RESEARCH A5), making the
-  two strategies' DADP directly comparable.
-- `exact_maxgap::Float64` — the PF-04 SOC-cone exactness certificate (`ctx.meta[:socp_maxgap]`
-  for `:centralized`, `r.exact_maxgap` for `:admm`).
-- `iters::Union{Missing,Int}` — ADMM iteration count; `missing` for `:centralized` (no
-  iteration — a single monolithic solve).
-- `final_r::Union{Missing,Float64}`, `final_s::Union{Missing,Float64}` — the FINAL ADMM
-  primal/dual residual norms (`last(residuals.primal_trace)`/`last(residuals.dual_trace)`);
-  `missing` for `:centralized`.
-- `elapsed::Float64` — wall-clock seconds for the full materialize+solve (`@elapsed`).
-  NON-REPRODUCIBLE: recorded for reporting only, NEVER compared in a reproducibility/equality
-  check (RESEARCH Anti-Pattern; threat T-08-07).
+
+  - `scenario::Scenario` — the input spec this result was produced from (provenance).
+  - `welfare::Float64` — the social-welfare objective (thesis eq. 3.38) at the converged/solved
+    optimum.
+  - `dadp::Matrix{Float64}` — the day-ahead dynamic price, normalized to `(n_load_nodes, T)`
+    with rows in ASCENDING load-bus order — the SAME shape for `:centralized`
+    (`extract_dlmp(ctx)[load_buses, :]`) and `:admm` (already node×T, RESEARCH A5), making the
+    two strategies' DADP directly comparable.
+  - `exact_maxgap::Float64` — the PF-04 SOC-cone exactness certificate (`ctx.meta[:socp_maxgap]`
+    for `:centralized`, `r.exact_maxgap` for `:admm`).
+  - `iters::Union{Missing,Int}` — ADMM iteration count; `missing` for `:centralized` (no
+    iteration — a single monolithic solve).
+  - `final_r::Union{Missing,Float64}`, `final_s::Union{Missing,Float64}` — the FINAL ADMM
+    primal/dual residual norms (`last(residuals.primal_trace)`/`last(residuals.dual_trace)`);
+    `missing` for `:centralized`.
+  - `elapsed::Float64` — wall-clock seconds for the full materialize+solve (`@elapsed`).
+    NON-REPRODUCIBLE: recorded for reporting only, NEVER compared in a reproducibility/equality
+    check (RESEARCH Anti-Pattern; threat T-08-07).
 """
 struct ScenarioResult
     scenario::Scenario
     welfare::Float64
     dadp::Matrix{Float64}
     exact_maxgap::Float64
-    iters::Union{Missing,Int}
-    final_r::Union{Missing,Float64}
-    final_s::Union{Missing,Float64}
+    iters::Union{Missing, Int}
+    final_r::Union{Missing, Float64}
+    final_s::Union{Missing, Float64}
     elapsed::Float64
 end
 
@@ -70,13 +71,13 @@ end
 Materialize the heavy Phase 1-7 objects from `s`'s primitive selectors + master seed, then
 DISPATCH on `s.strategy`:
 
-- `:centralized` -> [`solve_welfare`](@ref) + [`extract_dlmp`](@ref), normalized to the
-  sorted-load-bus node×T shape; `iters`/`final_r`/`final_s` are `missing` (no ADMM iteration).
-- `:admm` -> [`solve_admm`](@ref); `dadp` is ALREADY node×T (RESEARCH A5) and `iters`/
-  `final_r`/`final_s` are populated from the converged residual trace.
-- any other selector -> throws `ArgumentError` naming the two valid strategies (a `Scenario`
-  itself already guards this at construction — 08-02 — so this is defensive-in-depth, threat
-  T-08-08).
+  - `:centralized` -> [`solve_welfare`](@ref) + [`extract_dlmp`](@ref), normalized to the
+    sorted-load-bus node×T shape; `iters`/`final_r`/`final_s` are `missing` (no ADMM iteration).
+  - `:admm` -> [`solve_admm`](@ref); `dadp` is ALREADY node×T (RESEARCH A5) and `iters`/
+    `final_r`/`final_s` are populated from the converged residual trace.
+  - any other selector -> throws `ArgumentError` naming the two valid strategies (a `Scenario`
+    itself already guards this at construction — 08-02 — so this is defensive-in-depth, threat
+    T-08-08).
 
 PATH-FREE (INFRA-04 Pitfall 6): returns a `ScenarioResult`, never writes to disk — persistence
 is [`run_and_store`](@ref) (08-04). Because the seed is threaded end-to-end via `sub_seed`
@@ -93,7 +94,11 @@ function run_scenario(s::Scenario)
         profiles = generate_profiles(; seed = sub_seed(s.seed, :profiles), T = s.T)
         λ₀ = build_price(s.price, s.T, profiles)
         aggs = build_population(
-            s.population, feeder, s.feeder, profiles, sub_seed(s.seed, :population),
+            s.population,
+            feeder,
+            s.feeder,
+            profiles,
+            sub_seed(s.seed, :population),
         )
         pf = ConvexBranchFlow()
 
@@ -101,7 +106,12 @@ function run_scenario(s::Scenario)
         # iters, final_r, final_s) shape (EXP-01 / RESEARCH Pattern 1 / threat T-08-09). --------
         if s.strategy === :centralized
             ctx, welfare, _ = solve_welfare(
-                feeder, pf, aggs; T = s.T, λ₀ = λ₀, allow_export = s.allow_export,
+                feeder,
+                pf,
+                aggs;
+                T = s.T,
+                λ₀ = λ₀,
+                allow_export = s.allow_export,
             )
             load_buses = sort!([a.bus for a in aggs])
             dadp = extract_dlmp(ctx)[load_buses, :]           # normalize to sorted node×T
@@ -117,9 +127,17 @@ function run_scenario(s::Scenario)
             )
         elseif s.strategy === :admm
             r = solve_admm(
-                feeder, pf, aggs;
-                T = s.T, λ₀ = λ₀, ρ = s.ρ, maxiter = s.maxiter,
-                ε_abs = s.ε_abs, ε_rel = s.ε_rel, τ = s.τ_ratio, μ = s.μ,
+                feeder,
+                pf,
+                aggs;
+                T = s.T,
+                λ₀ = λ₀,
+                ρ = s.ρ,
+                maxiter = s.maxiter,
+                ε_abs = s.ε_abs,
+                ε_rel = s.ε_rel,
+                τ = s.τ_ratio,
+                μ = s.μ,
                 allow_export = s.allow_export,
             )
             result = (;
@@ -145,8 +163,14 @@ function run_scenario(s::Scenario)
     end
 
     return ScenarioResult(
-        s, result.welfare, result.dadp, result.exact_maxgap,
-        result.iters, result.final_r, result.final_s, elapsed,
+        s,
+        result.welfare,
+        result.dadp,
+        result.exact_maxgap,
+        result.iters,
+        result.final_r,
+        result.final_s,
+        elapsed,
     )
 end
 

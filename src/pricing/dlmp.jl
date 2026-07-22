@@ -109,7 +109,7 @@ end
 # (RESEARCH "Don't Hand-Roll"). Returns the branch indices on the unique path, root-first.
 # ---------------------------------------------------------------------------------------------
 function _path_branches(feeder, j::Int)
-    child_branch = Dict{Int,Int}()
+    child_branch = Dict{Int, Int}()
     for (b, br) in enumerate(feeder.branches)
         child_branch[br.to] = b
     end
@@ -129,7 +129,7 @@ end
 
 # P-slot of the apparent-power SOC dual (thesis 3.36), or 0.0 where the branch carries no
 # binding limit (its (b,t) key is absent from the sparse `:smax` container — RESEARCH A5).
-function _smax_P(smax, keyset::Set{Tuple{Int,Int}}, b::Int, t::Int)
+function _smax_P(smax, keyset::Set{Tuple{Int, Int}}, b::Int, t::Int)
     (b, t) in keyset || return 0.0
     return dual(smax[b, t])[2]      # SecondOrderCone dual [smax, P, Q]; slot 2 = P
 end
@@ -147,12 +147,13 @@ tolerance assertion checks `energy + loss + congestion + voltage ≈ total` per 
 missing term is localizable (RESEARCH Pitfall 2; threat T-05-02).
 
 Components (each summed over the unique radial path root→j; derivation in the file header):
-- `energy`     = `dual(:balance_p[root, t])`     — the MEM price, SAME at every node (≈ λ₀);
-- `loss`       = `Σ_path −dual(:cone[b,t])[3]`   — SOC/DistFlow marginal loss (thesis 3.39);
-- `congestion` = `Σ_path −dual(:smax[b,t])[2]`   — thermal congestion (3.36; 0 off the head);
-- `voltage`    = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — voltage-drop propagation of
-                  the v/v̂ bound pressure (thesis 3.33/3.43; 0 with unengaged voltage headroom);
-- `total`      = `extract_dlmp(ctx)`             — the reference DADP.
+
+  - `energy`     = `dual(:balance_p[root, t])`     — the MEM price, SAME at every node (≈ λ₀);
+  - `loss`       = `Σ_path −dual(:cone[b,t])[3]`   — SOC/DistFlow marginal loss (thesis 3.39);
+  - `congestion` = `Σ_path −dual(:smax[b,t])[2]`   — thermal congestion (3.36; 0 off the head);
+  - `voltage`    = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — voltage-drop propagation of
+    the v/v̂ bound pressure (thesis 3.33/3.43; 0 with unengaged voltage headroom);
+  - `total`      = `extract_dlmp(ctx)`             — the reference DADP.
 
 Inherits the PF-04 exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP ctx is
 refused). Requires the SOCP branch-flow handles registered by plan 05-01 (`:cone`, `:vdrop`,
@@ -188,7 +189,7 @@ function decompose_dlmp(
     vdrop = ctx.constraints[:vdrop]
     cpydrop = ctx.constraints[:cpydrop]
     smax = ctx.constraints[:smax]
-    smaxkeys = Set{Tuple{Int,Int}}(Tuple(k) for k in eachindex(smax))
+    smaxkeys = Set{Tuple{Int, Int}}(Tuple(k) for k in eachindex(smax))
 
     total = extract_dlmp(ctx)                          # (N, Tfull) reference DADP (re-runs gate)
     energy = Matrix{Float64}(undef, N, Tfull)

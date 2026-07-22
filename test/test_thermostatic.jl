@@ -15,9 +15,8 @@
     @test TSODSO.Thermostatic <: TSODSO.AbstractDevice
 end
 
-@testitem "thermostatic: rejects non-concave utility and inconsistent bounds (DEV-01)" tags = [
-    :thermostatic,
-] begin
+@testitem "thermostatic: rejects non-concave utility and inconsistent bounds (DEV-01)" tags =
+    [:thermostatic] begin
     using TSODSO
 
     Tout = fill(30.0, 24)
@@ -28,27 +27,127 @@ end
     @test d isa TSODSO.Thermostatic{Float64}
 
     # Concavity guard (thesis 3.11/3.14): b ≤ 0 flips curvature → rejected loudly.
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 22.0, 0.0, 5.0, 0.0, Tout)
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 22.0, 0.0, 5.0, -1.0, Tout)
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.5,
+        20.0,
+        24.0,
+        22.0,
+        0.0,
+        5.0,
+        0.0,
+        Tout,
+    )
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.5,
+        20.0,
+        24.0,
+        22.0,
+        0.0,
+        5.0,
+        -1.0,
+        Tout,
+    )
 
     # Comfort band inconsistency (Tmax < Tmin) rejected.
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 24.0, 20.0, 22.0, 0.0, 5.0, 1.0, Tout)
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.5,
+        24.0,
+        20.0,
+        22.0,
+        0.0,
+        5.0,
+        1.0,
+        Tout,
+    )
 
     # Power-bound inconsistency (Pmax < Pmin) rejected.
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 22.0, 5.0, 0.0, 1.0, Tout)
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.5,
+        20.0,
+        24.0,
+        22.0,
+        5.0,
+        0.0,
+        1.0,
+        Tout,
+    )
 
     # WR-02 physical-sign guards on the recursion (eq. 3.2 Tin[t+1]=Tin[t]+α(Tout−Tin)−β·p):
     #   α ≥ 0 (a negative ambient coupling reverses heat flow — non-physical).
-    @test_throws ArgumentError TSODSO.Thermostatic(3, -0.2, 0.5, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, Tout)
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        -0.2,
+        0.5,
+        20.0,
+        24.0,
+        22.0,
+        0.0,
+        5.0,
+        1.0,
+        Tout,
+    )
     #   β > 0 so power COOLS via −β·p (β ≤ 0 silently flips the sign so power would heat).
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, -0.5, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, Tout) # β < 0
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.0, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, Tout)  # β == 0
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        -0.5,
+        20.0,
+        24.0,
+        22.0,
+        0.0,
+        5.0,
+        1.0,
+        Tout,
+    ) # β < 0
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.0,
+        20.0,
+        24.0,
+        22.0,
+        0.0,
+        5.0,
+        1.0,
+        Tout,
+    )  # β == 0
 
     # WR-02 comfort-band IC guard (mirrors PVBattery soc0): Tin0 must start inside [Tmin,Tmax].
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 19.0, 0.0, 5.0, 1.0, Tout) # Tin0 < Tmin
-    @test_throws ArgumentError TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 25.0, 0.0, 5.0, 1.0, Tout) # Tin0 > Tmax
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.5,
+        20.0,
+        24.0,
+        19.0,
+        0.0,
+        5.0,
+        1.0,
+        Tout,
+    ) # Tin0 < Tmin
+    @test_throws ArgumentError TSODSO.Thermostatic(
+        3,
+        0.2,
+        0.5,
+        20.0,
+        24.0,
+        25.0,
+        0.0,
+        5.0,
+        1.0,
+        Tout,
+    ) # Tin0 > Tmax
     # A boundary Tin0 exactly on the band edge is admissible (closed band).
-    @test TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 20.0, 0.0, 5.0, 1.0, Tout) isa TSODSO.Thermostatic
+    @test TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 20.0, 0.0, 5.0, 1.0, Tout) isa
+          TSODSO.Thermostatic
 
     # IN-01 promotion: a mixed-type call (integer among Float64s) promotes rather than MethodError.
     mixed = TSODSO.Thermostatic(3, 0, 0.5, 20.0, 24.0, 22.0, 0, 5.0, 1.0, Tout)
@@ -56,9 +155,8 @@ end
     @test mixed.Pmin === 0.0
 end
 
-@testitem "thermostatic: aggregatable contribute! returns terms, writes NOTHING, holds no feeder (DEV-01)" tags = [
-    :thermostatic,
-] begin
+@testitem "thermostatic: aggregatable contribute! returns terms, writes NOTHING, holds no feeder (DEV-01)" tags =
+    [:thermostatic] begin
     using TSODSO, JuMP
 
     # A bare context: NO feeder anywhere — the device is network-agnostic.
@@ -109,9 +207,8 @@ end
     @test !haskey(ctx.meta, :objective)
 end
 
-@testitem "thermostatic: recursion 3.2 and IC hold at the solved optimum (DEV-01)" tags = [
-    :thermostatic,
-] begin
+@testitem "thermostatic: recursion 3.2 and IC hold at the solved optimum (DEV-01)" tags =
+    [:thermostatic] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
@@ -132,15 +229,14 @@ end
     # IC: Tin[1] == Tin0.
     @test isapprox(value(Tin[1]), Tin0; atol = 1e-6)
     # Recursion (3.2): Tin[t+1] == Tin[t] + α(Tout[t] − Tin[t]) − β·p[t].
-    for t in 1:T-1
+    for t in 1:(T - 1)
         expected = value(Tin[t]) + α * (Tout[t] - value(Tin[t])) - β * value(p[t])
-        @test isapprox(value(Tin[t+1]), expected; atol = 1e-5)
+        @test isapprox(value(Tin[t + 1]), expected; atol = 1e-5)
     end
 end
 
-@testitem "thermostatic: contribute! validates the ambient profile length (DEV-01)" tags = [
-    :thermostatic,
-] begin
+@testitem "thermostatic: contribute! validates the ambient profile length (DEV-01)" tags =
+    [:thermostatic] begin
     using TSODSO, JuMP
 
     ctx = TSODSO.ModelContext(Model())

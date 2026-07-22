@@ -56,10 +56,14 @@ at ingestion) through `to_pu_power`; the branch r/x are supplied already in per-
 """
 const IEEE123_BASE = PerUnitBase(1.0, 4.16)
 
-"Thesis terminal chosen as the MEM/substation frontier (root); RESEARCH Open-Q1: the no-parent node."
+"""
+Thesis terminal chosen as the MEM/substation frontier (root); RESEARCH Open-Q1: the no-parent node.
+"""
 const IEEE123_ROOT_TERMINAL = 150
 
-"Head-branch (substation/frontier) apparent-power limit, thesis Case B `S_max,01 = 3.8 MVA`."
+"""
+Head-branch (substation/frontier) apparent-power limit, thesis Case B `S_max,01 = 3.8 MVA`.
+"""
 const IEEE123_HEAD_SMAX_MVA = 3.8
 
 # Representative per-unit impedances (see DATA PROVENANCE note). `x = r/2` mirrors the ieee13
@@ -80,69 +84,225 @@ const IEEE123_SWITCH_X = 0.00015
 # construction (the four normally-open tie switches are omitted → `edges == N − 1`). The closed
 # switch/regulator segments are listed in `IEEE123_SWITCH_EDGES` and get the near-ideal impedance.
 const IEEE123_EDGES = [
-    (150, 149), (149, 1),
-    (1, 2), (1, 3), (1, 7),
-    (3, 4), (3, 5), (5, 6),
+    (150, 149),
+    (149, 1),
+    (1, 2),
+    (1, 3),
+    (1, 7),
+    (3, 4),
+    (3, 5),
+    (5, 6),
     (7, 8),
-    (8, 12), (8, 9), (8, 13),
-    (9, 14), (14, 10), (14, 11),
-    (13, 34), (13, 18), (13, 152), (152, 52),
-    (34, 15), (15, 16), (15, 17),
-    (18, 19), (18, 21), (18, 135), (135, 35),
+    (8, 12),
+    (8, 9),
+    (8, 13),
+    (9, 14),
+    (14, 10),
+    (14, 11),
+    (13, 34),
+    (13, 18),
+    (13, 152),
+    (152, 52),
+    (34, 15),
+    (15, 16),
+    (15, 17),
+    (18, 19),
+    (18, 21),
+    (18, 135),
+    (135, 35),
     (19, 20),
-    (21, 22), (21, 23),
-    (23, 24), (23, 25),
-    (25, 26), (25, 28),
-    (26, 27), (26, 31), (27, 33),
-    (28, 29), (29, 30),
+    (21, 22),
+    (21, 23),
+    (23, 24),
+    (23, 25),
+    (25, 26),
+    (25, 28),
+    (26, 27),
+    (26, 31),
+    (27, 33),
+    (28, 29),
+    (29, 30),
     (31, 32),
-    (35, 36), (35, 40),
-    (36, 37), (36, 38), (38, 39),
-    (40, 41), (40, 42),
-    (42, 43), (42, 44),
-    (44, 45), (44, 47), (45, 46),
-    (47, 48), (47, 49), (49, 50), (50, 51), (51, 151),
-    (52, 53), (53, 54), (54, 55), (54, 57), (55, 56),
-    (57, 58), (57, 60), (58, 59),
-    (60, 61), (60, 62), (60, 160), (160, 67),
-    (62, 63), (63, 64), (64, 65), (65, 66),
-    (67, 68), (67, 72), (67, 97),
-    (68, 69), (69, 70), (70, 71),
-    (72, 73), (72, 76), (73, 74), (74, 75),
-    (76, 77), (76, 86),
-    (77, 78), (78, 79), (78, 80),
-    (80, 81), (81, 82), (81, 84), (82, 83), (84, 85),
-    (86, 87), (87, 88), (87, 89),
-    (89, 90), (89, 91),
-    (91, 92), (91, 93), (93, 94), (93, 95), (95, 96),
-    (97, 98), (97, 197), (197, 101),
-    (98, 99), (99, 100), (100, 450),
-    (101, 102), (101, 105),
-    (102, 103), (103, 104),
-    (105, 106), (105, 108), (106, 107),
-    (108, 109), (108, 300),
-    (109, 110), (110, 111), (110, 112),
-    (112, 113), (113, 114),
+    (35, 36),
+    (35, 40),
+    (36, 37),
+    (36, 38),
+    (38, 39),
+    (40, 41),
+    (40, 42),
+    (42, 43),
+    (42, 44),
+    (44, 45),
+    (44, 47),
+    (45, 46),
+    (47, 48),
+    (47, 49),
+    (49, 50),
+    (50, 51),
+    (51, 151),
+    (52, 53),
+    (53, 54),
+    (54, 55),
+    (54, 57),
+    (55, 56),
+    (57, 58),
+    (57, 60),
+    (58, 59),
+    (60, 61),
+    (60, 62),
+    (60, 160),
+    (160, 67),
+    (62, 63),
+    (63, 64),
+    (64, 65),
+    (65, 66),
+    (67, 68),
+    (67, 72),
+    (67, 97),
+    (68, 69),
+    (69, 70),
+    (70, 71),
+    (72, 73),
+    (72, 76),
+    (73, 74),
+    (74, 75),
+    (76, 77),
+    (76, 86),
+    (77, 78),
+    (78, 79),
+    (78, 80),
+    (80, 81),
+    (81, 82),
+    (81, 84),
+    (82, 83),
+    (84, 85),
+    (86, 87),
+    (87, 88),
+    (87, 89),
+    (89, 90),
+    (89, 91),
+    (91, 92),
+    (91, 93),
+    (93, 94),
+    (93, 95),
+    (95, 96),
+    (97, 98),
+    (97, 197),
+    (197, 101),
+    (98, 99),
+    (99, 100),
+    (100, 450),
+    (101, 102),
+    (101, 105),
+    (102, 103),
+    (103, 104),
+    (105, 106),
+    (105, 108),
+    (106, 107),
+    (108, 109),
+    (108, 300),
+    (109, 110),
+    (110, 111),
+    (110, 112),
+    (112, 113),
+    (113, 114),
 ]
 
-"Closed switch/regulator segments (near-ideal impedance); the tie switches are excluded entirely."
-const IEEE123_SWITCH_EDGES =
-    Set([(150, 149), (13, 152), (18, 135), (60, 160), (97, 197)])
+"""
+Closed switch/regulator segments (near-ideal impedance); the tie switches are excluded entirely.
+"""
+const IEEE123_SWITCH_EDGES = Set([(150, 149), (13, 152), (18, 135), (60, 160), (97, 197)])
 
 # Spot-load terminals of the modified IEEE-123 (thesis Case B: "85 load nodes"). Every OTHER
 # non-root terminal is a TRANSIT (zero-injection) junction bus — the path plan 07-03's DSO-OPT
 # relaxation must handle (RESEARCH Pitfall 5). This is the topological load/transit split, NOT
 # the aggregator population (that stays in the test/population layer, RESEARCH Open-Q2).
 const IEEE123_LOAD_TERMINALS = [
-    1, 2, 4, 5, 6, 7, 9, 10, 11, 12,
-    16, 17, 19, 20, 22, 24, 28, 29, 30, 31,
-    32, 33, 34, 35, 37, 38, 39, 41, 42, 43,
-    45, 46, 47, 48, 49, 50, 51, 52, 53, 55,
-    56, 58, 59, 60, 62, 63, 64, 65, 66, 68,
-    69, 70, 71, 73, 74, 75, 76, 77, 79, 80,
-    82, 83, 84, 85, 86, 87, 88, 90, 92, 94,
-    95, 96, 98, 99, 100, 102, 103, 104, 106, 107,
-    109, 111, 112, 113, 114,
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    16,
+    17,
+    19,
+    20,
+    22,
+    24,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    37,
+    38,
+    39,
+    41,
+    42,
+    43,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    55,
+    56,
+    58,
+    59,
+    60,
+    62,
+    63,
+    64,
+    65,
+    66,
+    68,
+    69,
+    70,
+    71,
+    73,
+    74,
+    75,
+    76,
+    77,
+    79,
+    80,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    90,
+    92,
+    94,
+    95,
+    96,
+    98,
+    99,
+    100,
+    102,
+    103,
+    104,
+    106,
+    107,
+    109,
+    111,
+    112,
+    113,
+    114,
 ]
 
 """
@@ -151,22 +311,22 @@ const IEEE123_LOAD_TERMINALS = [
 The documented `thesis_terminal → 1..N` relabeling that makes `bus.id == 1-based position`
 (the framework indexing convention; RESEARCH Pitfall 4). The rule is deterministic:
 
-  * the root frontier terminal (`IEEE123_ROOT_TERMINAL == 150`) maps to struct index `1`;
-  * every OTHER terminal maps to `1 + its rank` in ASCENDING numeric order.
+  - the root frontier terminal (`IEEE123_ROOT_TERMINAL == 150`) maps to struct index `1`;
+  - every OTHER terminal maps to `1 + its rank` in ASCENDING numeric order.
 
 So with the present terminal set (`1..114` plus the switch/regulator terminals
 `135, 149, 151, 152, 160, 197, 300, 450`), the map is, e.g.:
 
-| thesis terminal | 150 |  1 |  2 | … | 114 | 135 | 149 | 151 | 152 | 160 | 197 | 300 | 450 |
-|-----------------|-----|----|----|---|-----|-----|-----|-----|-----|-----|-----|-----|-----|
-| struct index    |  1  |  2 |  3 | … | 115 | 116 | 117 | 118 | 119 | 120 | 121 | 122 | 123 |
+| thesis terminal | 150 | 1 | 2 | … | 114 | 135 | 149 | 151 | 152 | 160 | 197 | 300 | 450 |
+|:--------------- |:--- |:- |:- |:- |:--- |:--- |:--- |:--- |:--- |:--- |:--- |:--- |:--- |
+| struct index    | 1   | 2 | 3 | … | 115 | 116 | 117 | 118 | 119 | 120 | 121 | 122 | 123 |
 
 (analogous to ieee13.jl's `k → k+1` shift, but a full dictionary for the non-contiguous labels).
 """
 function ieee123_relabel_map()
     terminals = sort!(unique!(reduce(vcat, [[p, c] for (p, c) in IEEE123_EDGES])))
     non_root = filter(!=(IEEE123_ROOT_TERMINAL), terminals)
-    remap = Dict{Int,Int}(IEEE123_ROOT_TERMINAL => 1)
+    remap = Dict{Int, Int}(IEEE123_ROOT_TERMINAL => 1)
     for (rank, term) in enumerate(non_root)
         remap[term] = rank + 1
     end
@@ -195,14 +355,23 @@ end
 # guards the RELABEL step before the data reaches the constructor.
 function _ieee123_assert_incidence(branches, N)
     B = length(branches)
-    Irow = Int[]; Jcol = Int[]; Vval = Int[]
+    Irow = Int[];
+    Jcol = Int[];
+    Vval = Int[]
     for (b, br) in enumerate(branches)
-        push!(Irow, br.from); push!(Jcol, b); push!(Vval, +1)
-        push!(Irow, br.to);   push!(Jcol, b); push!(Vval, -1)
+        push!(Irow, br.from);
+        push!(Jcol, b);
+        push!(Vval, +1)
+        push!(Irow, br.to);
+        push!(Jcol, b);
+        push!(Vval, -1)
     end
     A = sparse(Irow, Jcol, Vval, N, B)
-    (nnz(A) == 2B && all(iszero, sum(A; dims = 1))) || throw(ArgumentError(
-        "IEEE-123 incidence malformed: a branch has a self-loop or a duplicated endpoint."))
+    (nnz(A) == 2B && all(iszero, sum(A; dims = 1))) || throw(
+        ArgumentError(
+            "IEEE-123 incidence malformed: a branch has a self-loop or a duplicated endpoint.",
+        ),
+    )
     return A
 end
 
@@ -230,16 +399,16 @@ non-root buses are TRANSIT (zero-injection) junctions handled by plan 07-03's DS
 
 # Magnitudes
 
-  * Every bus has the thesis Case-B voltage band `vmin = 0.9`, `vmax = 1.1` pu (looser than the
+  - Every bus has the thesis Case-B voltage band `vmin = 0.9`, `vmax = 1.1` pu (looser than the
     congestion-driven ieee13 case).
-  * The **head branch** (frontier terminal `150 → 149`) carries the thermal limit
+  - The **head branch** (frontier terminal `150 → 149`) carries the thermal limit
     `S_max = 3.8 MVA ⇒ 3.8 pu` on the 1 MVA feeder-scale base, converted once via `to_pu_power`
     on `IEEE123_BASE`. At the plan-07-05 population the ACTIVE binding constraint is the voltage
     band (the long laterals hit `≈0.92` under load and `≈1.04` under PV reverse flow) rather than
     this head limit, so the case exercises the branch-flow / voltage physics, not just a scalar cap.
-  * All interior branches use the `SMAX_NO_LIMIT = 99.0` pu sentinel (effectively unconstrained,
+  - All interior branches use the `SMAX_NO_LIMIT = 99.0` pu sentinel (effectively unconstrained,
     strictly inside the `0 < smax < 100` band).
-  * Branch r/x are representative in-band per-unit values (see the DATA PROVENANCE note at the top
+  - Branch r/x are representative in-band per-unit values (see the DATA PROVENANCE note at the top
     of this file) — line vs switch class, `x = r/2`.
 
 `Feeder(buses, branches, root)` runs `assert_radial` (DATA-02) and `assert_magnitudes` (INFRA-05)
@@ -269,7 +438,9 @@ function ieee123_modified()
     return Feeder(buses, branches, 1)          # assert_radial + assert_magnitudes run here
 end
 
-"Alias for `ieee123_modified` (RESEARCH fixture skeleton naming)."
+"""
+Alias for `ieee123_modified` (RESEARCH fixture skeleton naming).
+"""
 build_ieee123() = ieee123_modified()
 
 export ieee123_modified, build_ieee123, ieee123_load_nodes, ieee123_relabel_map

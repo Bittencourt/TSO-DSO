@@ -8,7 +8,8 @@
 # edited between them. This proves the device is unaware of which formulation is active and
 # that the assembly's `haskey(ctx.residuals, :Rq)` is a data-driven test of registry
 # CONTENTS (LinDistFlow populates :Rq, DC does not), NOT branching on the formulation type.
-@testitem "conformance: DC↔LinDistFlow swap yields identical price/objective, zero edit (crit 4)" tags = [:conformance] begin
+@testitem "conformance: DC↔LinDistFlow swap yields identical price/objective, zero edit (crit 4)" tags =
+    [:conformance] begin
     using TSODSO, JuMP
 
     # Shared 2-bus loss-less fixture and a SINGLE device — constructed once, reused for both.
@@ -47,7 +48,8 @@ end
 # behind an `isdefined` guard so it goes live once ConvexBranchFlow lands (while RED the
 # sole failing assertion is the missing-symbol check). The existing DC↔LinDistFlow item
 # above is left UNCHANGED.
-@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (crit 4, SOCP arm)" tags = [:conformance] begin
+@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (crit 4, SOCP arm)" tags =
+    [:conformance] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -71,11 +73,13 @@ end
         # SOCP() for the cone — so no model names a solver either). Neither `agg` nor
         # `solve_welfare` is edited between calls: the third formulation drops into the
         # residual seam by dispatch alone, no `if formulation ==` branch anywhere.
-        for pf in
-            (TSODSO.DCPowerFlow(), TSODSO.LinDistFlow(), TSODSO.ConvexBranchFlow())
+        for pf in (TSODSO.DCPowerFlow(), TSODSO.LinDistFlow(), TSODSO.ConvexBranchFlow())
             _ctx, obj, dadp = solve_welfare(
-                feeder, pf, [agg];
-                T = 1, λ₀ = [2.0],
+                feeder,
+                pf,
+                [agg];
+                T = 1,
+                λ₀ = [2.0],
                 optimizer = select_optimizer(problem_class(pf)),
             )
 

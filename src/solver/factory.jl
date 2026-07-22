@@ -30,11 +30,12 @@ given problem class `pc`. Dispatched by singleton type — there is no `if class
 branching — so weakdep extensions can extend the commercial path independently.
 
 Open-source defaults:
-- `LP`   → HiGHS (presolve on)
-- `MILP` → HiGHS
-- `QP`   → Clarabel (native quadratic objective)
-- `SOCP` → Clarabel (tight duality-gap tolerances for accurate duals / prices)
-- `NLP`  → Ipopt
+
+  - `LP`   → HiGHS (presolve on)
+  - `MILP` → HiGHS
+  - `QP`   → Clarabel (native quadratic objective)
+  - `SOCP` → Clarabel (tight duality-gap tolerances for accurate duals / prices)
+  - `NLP`  → Ipopt
 
 A model file uses this as `Model(select_optimizer(LP()))` and never names a solver.
 """

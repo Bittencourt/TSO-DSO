@@ -15,9 +15,8 @@
     @test TSODSO.Deferrable <: TSODSO.AbstractDevice
 end
 
-@testitem "deferrable: rejects non-concave utility and infeasible/inconsistent window (DEV-02)" tags = [
-    :deferrable,
-] begin
+@testitem "deferrable: rejects non-concave utility and infeasible/inconsistent window (DEV-02)" tags =
+    [:deferrable] begin
     using TSODSO
 
     # A valid device (window t=2..4, budget E=6 ≤ Pmax·3 = 15) is an AbstractDevice.
@@ -45,9 +44,8 @@ end
     @test mixed.E === 6.0
 end
 
-@testitem "deferrable: aggregatable contribute! returns terms, writes NOTHING, holds no feeder (DEV-02)" tags = [
-    :deferrable,
-] begin
+@testitem "deferrable: aggregatable contribute! returns terms, writes NOTHING, holds no feeder (DEV-02)" tags =
+    [:deferrable] begin
     using TSODSO, JuMP
 
     # A bare context: NO feeder anywhere — the device is network-agnostic.
@@ -99,9 +97,8 @@ end
     @test !haskey(ctx.meta, :objective)
 end
 
-@testitem "deferrable: energy-window budget 3.4 binds at the solved optimum (DEV-02)" tags = [
-    :deferrable,
-] begin
+@testitem "deferrable: energy-window budget 3.4 binds at the solved optimum (DEV-02)" tags =
+    [:deferrable] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
@@ -129,9 +126,8 @@ end
     @test isapprox(value(p[T]), 0.0; atol = 1e-6)
 end
 
-@testitem "deferrable: b shapes the price-responsive allocation (WR-01, thesis 3.4/3.12)" tags = [
-    :deferrable,
-] begin
+@testitem "deferrable: b shapes the price-responsive allocation (WR-01, thesis 3.4/3.12)" tags =
+    [:deferrable] begin
     using TSODSO, JuMP
 
     T = 5
@@ -165,9 +161,8 @@ end
     @test isapprox(S_large, E - price / 8.0; atol = 1e-4)
 end
 
-@testitem "deferrable: contribute! validates the window fits the horizon (DEV-02)" tags = [
-    :deferrable,
-] begin
+@testitem "deferrable: contribute! validates the window fits the horizon (DEV-02)" tags =
+    [:deferrable] begin
     using TSODSO, JuMP
 
     ctx = TSODSO.ModelContext(Model())
@@ -176,9 +171,8 @@ end
     @test_throws ArgumentError TSODSO.contribute!(d, ctx; T = 4)
 end
 
-@testitem "deferrable: E_min must-complete floor binds under high price (DEV-02, thesis 3.4)" tags = [
-    :deferrable,
-] begin
+@testitem "deferrable: E_min must-complete floor binds under high price (DEV-02, thesis 3.4)" tags =
+    [:deferrable] begin
     using TSODSO, JuMP
 
     T = 5
@@ -207,7 +201,15 @@ end
 
     # Guard: a floor above the budget is rejected at construction (0 ≤ E_min ≤ E).
     @test_throws ArgumentError TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b; E_min = 7.0)
-    @test_throws ArgumentError TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b; E_min = -1.0)
+    @test_throws ArgumentError TSODSO.Deferrable(
+        3,
+        t_start,
+        t_end,
+        E,
+        Pmax,
+        b;
+        E_min = -1.0,
+    )
     # Default E_min is 0 (backward-compatible elastic load).
     @test TSODSO.Deferrable(3, t_start, t_end, E, Pmax, b).E_min == 0.0
 end

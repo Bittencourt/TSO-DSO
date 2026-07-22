@@ -66,29 +66,29 @@ optimum — the load-bearing correctness gate (ADMM-04), since the transactive p
 duals of the nodal balance (RESEARCH Pattern 5).
 
 # Algorithm (RESEARCH System Architecture Diagram)
-1. BUILD ONCE (outside the loop): one [`build_agr_opt`](@ref) per aggregator and one
-   [`build_dso_opt`](@ref); initialize the coupling price `λ_j` (per load node) to `λ₀` (a
-   physical warm start — the DADP is `λ₀` plus small loss/congestion/voltage terms), the netflow
-   target `c_j` and the AGR-consensus target `a_j` to zeros, and an [`AdmmResiduals`](@ref).
-2. Iterate `k = 1:maxiter`: solve each [`solve_agr!`](@ref) with coeff `−λ_j − ρ·c_j` collecting
-   `a_j = pag_j`; solve [`solve_dso!`](@ref) with coeff `−λ_j − ρ·a_j` (mid-loop `check_exact =
-   false`) collecting `pag_dso_j`; compute the Boyd PRIMAL residual `‖r‖₂ = ‖a − pag_dso‖₂` and the
-   z-block DUAL residual `‖s‖₂ = ρ·‖pag_dso − pag_dso_prev‖₂` (RESEARCH Pattern 2), the per-unit
-   thresholds `ε_pri`/`ε_dual` (Pattern 3), and the price move `‖Δλ‖₂`; [`record!`](@ref) the
-   extended trace tuple; take the UNSCALED dual step `λ_j ← λ_j + ρ·R_{p,j}` (λ is NEVER rescaled on
-   a ρ change), refresh the netflow target `c_j = −pag_dso_j`, and snapshot `pag_dso_prev = pag_dso`.
-   Stop when [`converged`](@ref)`(residuals, ε_pri, ε_dual)` — BOTH `‖r‖ ≤ ε_pri` AND `‖s‖ ≤ ε_dual`
-   (a primal-only stop is the textbook false-convergence bug).
-   After the step, ADAPT ρ by residual balancing (RESEARCH Pattern 4, Boyd §3.4.1): `ρ ← τ·ρ` if
-   the primal lags (`‖r‖ > μ‖s‖`), `ρ ← ρ/τ` if the dual lags (`‖s‖ > μ‖r‖`), clamped to
-   `[ρ_min, ρ_max]`; on an actual change call [`set_rho!`](@ref) on the DSO-OPT and every AGR-OPT so
-   the quadratic penalty tracks ρ WITHOUT a rebuild (build-once preserved). ρ FREEZES once both
-   residuals fall within `10×` their thresholds (Boyd's fixed-ρ convergence tail).
-3. On convergence: a FINAL [`solve_dso!`](@ref)`(...; check_exact = true)` runs the PF-04 gate
-   [`assert_socp_exact!`](@ref) (`exact_maxgap`); recompute `welfare = Σ_j value(U_ag,j) − Σ_t
-   λ₀[t]·value(p_import[t])` from PRIMALS; set `dadp = λ`.
+
+ 1. BUILD ONCE (outside the loop): one [`build_agr_opt`](@ref) per aggregator and one
+    [`build_dso_opt`](@ref); initialize the coupling price `λ_j` (per load node) to `λ₀` (a
+    physical warm start — the DADP is `λ₀` plus small loss/congestion/voltage terms), the netflow
+    target `c_j` and the AGR-consensus target `a_j` to zeros, and an [`AdmmResiduals`](@ref).
+ 2. Iterate `k = 1:maxiter`: solve each [`solve_agr!`](@ref) with coeff `−λ_j − ρ·c_j` collecting
+    `a_j = pag_j`; solve [`solve_dso!`](@ref) with coeff `−λ_j − ρ·a_j` (mid-loop `check_exact = false`) collecting `pag_dso_j`; compute the Boyd PRIMAL residual `‖r‖₂ = ‖a − pag_dso‖₂` and the
+    z-block DUAL residual `‖s‖₂ = ρ·‖pag_dso − pag_dso_prev‖₂` (RESEARCH Pattern 2), the per-unit
+    thresholds `ε_pri`/`ε_dual` (Pattern 3), and the price move `‖Δλ‖₂`; [`record!`](@ref) the
+    extended trace tuple; take the UNSCALED dual step `λ_j ← λ_j + ρ·R_{p,j}` (λ is NEVER rescaled on
+    a ρ change), refresh the netflow target `c_j = −pag_dso_j`, and snapshot `pag_dso_prev = pag_dso`.
+    Stop when [`converged`](@ref)`(residuals, ε_pri, ε_dual)` — BOTH `‖r‖ ≤ ε_pri` AND `‖s‖ ≤ ε_dual`
+    (a primal-only stop is the textbook false-convergence bug).
+    After the step, ADAPT ρ by residual balancing (RESEARCH Pattern 4, Boyd §3.4.1): `ρ ← τ·ρ` if
+    the primal lags (`‖r‖ > μ‖s‖`), `ρ ← ρ/τ` if the dual lags (`‖s‖ > μ‖r‖`), clamped to
+    `[ρ_min, ρ_max]`; on an actual change call [`set_rho!`](@ref) on the DSO-OPT and every AGR-OPT so
+    the quadratic penalty tracks ρ WITHOUT a rebuild (build-once preserved). ρ FREEZES once both
+    residuals fall within `10×` their thresholds (Boyd's fixed-ρ convergence tail).
+ 3. On convergence: a FINAL [`solve_dso!`](@ref)`(...; check_exact = true)` runs the PF-04 gate
+    [`assert_socp_exact!`](@ref) (`exact_maxgap`); recompute `welfare = Σ_j value(U_ag,j) − Σ_t λ₀[t]·value(p_import[t])` from PRIMALS; set `dadp = λ`.
 
 # Adaptive ρ (RESEARCH Pattern 4 — the Phase-7 upgrade of the Phase-6 fixed ρ)
+
 The `ρ` keyword is now the INITIAL penalty ρ₀ (all Phase-6 call sites keep working). ρ then adapts
 by per-unit residual balancing (`τ`, `μ`) and is clamped to `[ρ_min, ρ_max]`, so the SAME
 `(ε_abs, ε_rel, τ, μ, ρ_min, ρ_max)` converge the 2-bus, IEEE-13 AND IEEE-123 cases WITHOUT any
@@ -97,6 +97,7 @@ price and is NEVER rescaled on a ρ change. The `tol` keyword is RETAINED for ca
 compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_rel`).
 
 # Returns
+
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)` where `λ == dadp` is the
 `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus order,
 matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
@@ -104,12 +105,13 @@ matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged
 `exact_maxgap` the certified SOC cone residual (PF-04).
 
 # Throws
-- `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, a non-positive `maxiter`
-  (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
-  1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus netflow
-  splitting is a Phase-7 generalization).
-- A loud `ErrorException` if `maxiter` is reached WITHOUT convergence — the fail-loud cap that
-  refuses to return a non-consensus iterate (RESEARCH Pitfall 2).
+
+  - `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, a non-positive `maxiter`
+    (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
+    1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus netflow
+    splitting is a Phase-7 generalization).
+  - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence — the fail-loud cap that
+    refuses to return a non-consensus iterate (RESEARCH Pitfall 2).
 """
 function solve_admm(
     feeder,
@@ -167,10 +169,11 @@ function solve_admm(
             "coupling is a Phase-7 extension",
         ),
     )
-    agr_by_bus = Dict{Int,AgrOpt}()
+    agr_by_bus = Dict{Int, AgrOpt}()
     for agg in aggregators
-        haskey(agr_by_bus, agg.bus) &&
-            throw(ArgumentError("two aggregators share bus $(agg.bus); solve_admm assumes 1:1"))
+        haskey(agr_by_bus, agg.bus) && throw(
+            ArgumentError("two aggregators share bus $(agg.bus); solve_admm assumes 1:1"),
+        )
         agr_by_bus[agg.bus] = build_agr_opt(agg, T; ρ = ρf)
     end
 
@@ -184,15 +187,15 @@ function solve_admm(
     # the internal multiplier RIGHT NEXT to the solution; warm-starting at `+λ₀` (its negation)
     # would place it a distance `≈2·λ₀` away and make dual ascent crawl across the whole gap
     # (empirically ~100+ iters on the congested IEEE-13), whereas `−λ₀` converges the DADP in ~10.
-    λ = Dict{Int,Vector{Float64}}(j => Float64[-λ₀[t] for t in 1:T] for j in load_nodes)
-    c = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # netflow target for AGR
-    a = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # pag target for DSO
+    λ = Dict{Int, Vector{Float64}}(j => Float64[-λ₀[t] for t in 1:T] for j in load_nodes)
+    c = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # netflow target for AGR
+    a = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # pag target for DSO
     # Boyd z-block dual residual s = ρ·‖Δ(pag_dso)‖₂ tracks the CONSENSUS (second-updated) block —
     # store the previous iterate's pag_dso EXACTLY as Phase 6 stored `a_prev` for its ρ·Δa
     # diagnostic. Initialized to zeros ⇒ iteration 1's s = ρ·‖pag_dso¹‖₂ is large (so a 1-iteration
     # budget cannot false-converge; RESEARCH Pattern 2 / Pitfall 2).
-    pag_dso_prev = Dict{Int,Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    util = Dict{Int,Float64}(j => 0.0 for j in load_nodes)                      # U_ag per node (primal welfare)
+    pag_dso_prev = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
+    util = Dict{Int, Float64}(j => 0.0 for j in load_nodes)                      # U_ag per node (primal welfare)
     p_import = zeros(Float64, T)                                                # frontier exchange (primal welfare)
     exact_maxgap = nothing
 
@@ -212,7 +215,14 @@ function solve_admm(
         # the DSO exactness gate is deferred to convergence (RESEARCH Pitfall 3). The gate is run
         # on the final converged re-solve below.
         for j in load_nodes
-            r = solve_agr!(agr_by_bus[j], λ[j], c[j], ρf; check_battery = false, strict = false)
+            r = solve_agr!(
+                agr_by_bus[j],
+                λ[j],
+                c[j],
+                ρf;
+                check_battery = false,
+                strict = false,
+            )
             a[j] = r.pag
             util[j] = r.utility
         end
@@ -368,7 +378,13 @@ function solve_admm(
     # LABEL is tolerated.
     for j in load_nodes
         r = solve_agr!(
-            agr_by_bus[j], λ[j], c[j], ρf; check_battery = true, τ_batt = 1e-3, strict = false,
+            agr_by_bus[j],
+            λ[j],
+            c[j],
+            ρf;
+            check_battery = true,
+            τ_batt = 1e-3,
+            strict = false,
         )
         a[j] = r.pag
         util[j] = r.utility

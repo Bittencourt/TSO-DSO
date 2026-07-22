@@ -30,23 +30,28 @@
             Bus(2, 0.95, 1.05, false),   # load bus
             Bus(3, 0.95, 1.05, false),   # load bus
         ]
-        branches = [
-            Branch(1, 2, 0.01, 0.02, 10.0),
-            Branch(2, 3, 0.01, 0.02, 10.0),
-        ]
+        branches = [Branch(1, 2, 0.01, 0.02, 10.0), Branch(2, 3, 0.01, 0.02, 10.0)]
         return Feeder(buses, branches, 1)
     end
 
-    "Ambient-temperature profile (°C), length T — drives the thermostatic recursion (3.2)."
+    """
+    Ambient-temperature profile (°C), length T — drives the thermostatic recursion (3.2).
+    """
     const Tout = Float64[20 + 5 * sinpi((t - 1) / 12) for t in 1:T]
 
-    "Inelastic (fixed) demand profile in per-unit power, length T — enters :Rp as a parameter."
+    """
+    Inelastic (fixed) demand profile in per-unit power, length T — enters :Rp as a parameter.
+    """
     const Pdc = Float64[0.3 + 0.1 * cospi((t - 1) / 12) for t in 1:T]
 
-    "PV availability profile in per-unit power, length T — daylight bump, zero at night."
+    """
+    PV availability profile in per-unit power, length T — daylight bump, zero at night.
+    """
     const Ppv = Float64[max(0.0, sinpi((t - 6) / 12)) * 0.4 for t in 1:T]
 
-    "Hourly wholesale/MEM price λ₀ (\$/MWh-equivalent), length T — the priced frontier import."
+    """
+    Hourly wholesale/MEM price λ₀ (\$/MWh-equivalent), length T — the priced frontier import.
+    """
     const λ₀ = Float64[40 + 15 * sinpi((t - 8) / 12) for t in 1:T]
 
     export small_radial_feeder, T, Tout, Pdc, Ppv, λ₀

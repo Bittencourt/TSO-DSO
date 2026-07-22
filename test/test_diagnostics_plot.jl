@@ -44,8 +44,12 @@ end
 
     # the six traces the plots consume exist and start empty (RESEARCH Pattern 5).
     for tr in (
-        res.primal_trace, res.dual_trace, res.rho_trace,
-        res.eps_pri_trace, res.eps_dual_trace, res.price_gap_trace,
+        res.primal_trace,
+        res.dual_trace,
+        res.rho_trace,
+        res.eps_pri_trace,
+        res.eps_dual_trace,
+        res.price_gap_trace,
     )
         @test tr isa Vector{Float64}
         @test isempty(tr)
@@ -56,8 +60,12 @@ end
     record!(res, 2, 0.2, 0.1, 10.0, 1e-4, 2e-4, 0.4)
     @test res.iters == 2
     for tr in (
-        res.primal_trace, res.dual_trace, res.rho_trace,
-        res.eps_pri_trace, res.eps_dual_trace, res.price_gap_trace,
+        res.primal_trace,
+        res.dual_trace,
+        res.rho_trace,
+        res.eps_pri_trace,
+        res.eps_dual_trace,
+        res.price_gap_trace,
     )
         @test length(tr) == res.iters
     end
