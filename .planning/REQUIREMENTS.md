@@ -1,0 +1,100 @@
+# Requirements: TSO-DSO Integration Optimization Framework (Julia)
+
+**Defined:** 2026-07-22
+**Milestone:** v2.0 — Stackelberg-Nash TSO–DSO Planning Game
+**Core Value:** A researcher can express a scenario and model variant declaratively, run it end-to-end
+with an open-source solver, and get trustworthy, reproducible results and prices — every assumption
+documented, every layer swappable.
+
+> v2.0 adds the **planning layer** on top of the shipped v1.0 operational core: a bilevel Stackelberg
+> distributor-investment game solved by hand-rolled Benders decomposition over the existing
+> `operational_oracle`, extended to a **Nash equilibrium across multiple distributors** via Gauss-Seidel
+> diagonalization. **Continuous investment variables only** this milestone. See `.planning/research/SUMMARY.md`
+> for the unanimous four-phase build order this requirement set is derived from.
+
+## v2 Requirements
+
+### Oracle Coupling & Benders Core
+
+- [ ] **PLAN-01**: The `operational_oracle` coupling-flow pin is wired live — a build-once subproblem
+      adds the real `p_import == z` coupling constraint (`z` as a JuMP `Parameter`) and returns its dual,
+      superseding the current `ArgumentError` SEAM-01 stub; `operational_oracle`/`solve_welfare` are unmodified.
+- [ ] **PLAN-02**: Coupling-dual reconciliation maps the hourly distribution dual `λ_j` to the per-scenario
+      interconnection dual `π_s` (time-aggregation + sign convention), validated against a hand-computed toy case.
+- [ ] **PLAN-03**: Oracle solves inside the Benders loop are wrapped in bounded retry + checkpointing so the
+      intermittent Clarabel `NUMERICAL_ERROR` (amplified by repeated re-solves) cannot silently corrupt or abort a run.
+- [ ] **PLAN-04**: A transmission-reinforcement follower LP `α(z)` exposes the coupling dual `π_s` and provides
+      an infeasibility/Farkas certificate path for infeasible candidate `z`.
+- [ ] **PLAN-05**: A hand-rolled Benders master (continuous LP/QP) accumulates **both optimality and feasibility
+      cuts** as persistent constraint rows (no per-iteration rebuild), with the strict `assert_solved!` gate on
+      every cut-producing solve (never ADMM's mid-loop tolerance).
+- [ ] **PLAN-06**: A single-distributor Stackelberg equilibrium solves end-to-end via the Benders loop with
+      upper/lower-bound gap convergence detection.
+- [ ] **PLAN-07**: The leader/follower role assignment and coupling-dual sign convention are resolved empirically
+      (against PLAN-VALID-01) and encoded as a tested invariant, not a code comment.
+
+### Nash Equilibrium (Multiple Distributors)
+
+- [ ] **NASH-01**: A shared transmission-reinforcement coupling model (`src/planning/coupling.jl`) links the
+      distributors, giving the diagonalization loop a shared signal to iterate on.
+- [ ] **NASH-02**: Gauss-Seidel diagonalization across N distributors converges to a fixed point, each
+      distributor's Benders solve treated as an atomic best-response.
+- [ ] **NASH-03**: Two-level convergence diagnostics (inner Benders UB/LB gap + outer Nash residual) are reported
+      and plottable.
+- [ ] **NASH-04**: Nash convergence is probed across multiple seeds and sweep orders; results report "a converged
+      equilibrium" with the observed spread, never "the" equilibrium (non-uniqueness honesty).
+
+### Validation, Reproducibility & Docs
+
+- [ ] **PVAL-01**: A tiny-instance BilevelJuMP single-level reduction (open-source `BigMMode`/`StrongDualityMode`)
+      certifies the planning equilibrium and is retained as a permanent, fast regression test.
+- [ ] **PVAL-02**: Canonical single- and multi-distributor fixtures are pinned as computed goldens, gated by
+      BilevelJuMP agreement and diagonalization convergence (no external numerical reference exists).
+- [ ] **PVAL-03**: Literate Documenter documentation maps the planning math (PSR problem numbers, coupling seam,
+      the interpretive leader/follower choice) to the code, `@example`-executed.
+- [ ] **PVAL-04**: An automated no-binaries guard on every planning-layer subproblem builder enforces the
+      continuous-only scope of this milestone.
+
+## Future Requirements (deferred — later milestone)
+
+- **PLAN-INT-01**: Integer/discrete investment via binary-expansion of the coupling flow + Lagrangian /
+  integer-L-shaped cuts (MILP master). Deferred: materially harder; the author flagged integer-cut correctness.
+- **PLAN-RT-01**: Real-data flexibility-aggregator valuation (Octopus/PSR collaboration angle).
+- **PLAN-MCP-01**: MCP/VI recast of the equilibrium via PATHSolver/Complementarity.jl — only if Gauss-Seidel
+  diagonalization proves unreliable.
+- **PLAN-STOCH-01**: Multistage stochastic (SDDiP-style) treatment of the planning game.
+
+## Out of Scope (v2.0)
+
+- **Integer/binary investment variables** — v2.0 is continuous-only; keeps the Benders master convex (LP/QP)
+  and cuts valid via strong duality. Enforced by PVAL-04.
+- **Simultaneous MCP/variational-inequality equilibrium** — v2.0 uses sequential Gauss-Seidel diagonalization
+  over independent Benders solves, not a monolithic complementarity system.
+- **Decomposition mega-frameworks** (Coluna/StructJuMP) — hand-rolled per CLAUDE.md.
+- **BilevelJuMP as the production solver** — validation oracle on tiny instances only; single-level MPEC
+  reductions do not scale to the multi-distributor × Benders-iteration structure.
+- **New numerical thesis reference for the planning game** — the PSR source has no numerical case; v2.0 pins
+  project-generated first-correct-run goldens, cross-checked by BilevelJuMP.
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| PLAN-01 | TBD | Pending |
+| PLAN-02 | TBD | Pending |
+| PLAN-03 | TBD | Pending |
+| PLAN-04 | TBD | Pending |
+| PLAN-05 | TBD | Pending |
+| PLAN-06 | TBD | Pending |
+| PLAN-07 | TBD | Pending |
+| NASH-01 | TBD | Pending |
+| NASH-02 | TBD | Pending |
+| NASH-03 | TBD | Pending |
+| NASH-04 | TBD | Pending |
+| PVAL-01 | TBD | Pending |
+| PVAL-02 | TBD | Pending |
+| PVAL-03 | TBD | Pending |
+| PVAL-04 | TBD | Pending |
+
+**Coverage:** 15 v2.0 requirements across 3 categories (Oracle-Coupling/Benders, Nash, Validation/Docs).
+Phase mapping filled by the roadmapper.
