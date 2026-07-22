@@ -120,3 +120,8 @@ None — no external service configuration required.
 - `solve_with_retry!` and `checkpoint_iteration!`/`resume_from_checkpoint` are both independently proven (11 new passing assertions) and exported from `TSODSO`, ready for plan 10-02 to wire into `solve_planning_oracle!`.
 - Full regression suite confirmed healthy: 1957 passed / 0 failed / 2 documented-broken (unchanged from the v1.0 baseline plus this plan's 11 new assertions) — no Phase 1-9 source file was modified, per D-03/D-11.
 - No blockers for plan 10-02.
+
+## Self-Check: PASSED
+
+- All created files verified present on disk: `src/planning/retry.jl`, `src/planning/checkpoint.jl`, `test/test_planning_retry.jl`, `test/test_planning_checkpoint.jl`, this SUMMARY.md.
+- All referenced commit hashes verified present in `git log`: `e129958`, `ecee1d1`, `b18c314`, `d372aae`, `35fd483`.
