@@ -98,12 +98,18 @@ IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/2
 
 ## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
 
-**Progress:** Phase 10 complete (2026-07-22) — Oracle Coupling Wiring & Resilience. The planning
-layer's foundation is live: `build_planning_oracle`/`solve_planning_oracle!` (build-once,
-`Parameter`-pinned `p_import == z` coupling with per-scenario dual `π_s` via documented
-duration-weighted reconciliation), `solve_with_retry!` (bounded 4-rung Clarabel-conditioning
-ladder), and `checkpoint_iteration!`/`resume_from_checkpoint` (JLD2 + git provenance).
-2004 tests pass / 0 fail; phase code review clean after 8 fixes.
+**Progress:** Phases 10–11 complete (2026-07-22).
+- Phase 10 — Oracle Coupling Wiring & Resilience: `build_planning_oracle`/`solve_planning_oracle!`
+  (build-once, `Parameter`-pinned `p_import == z` coupling, per-scenario dual `π_s`),
+  `solve_with_retry!` (bounded Clarabel-conditioning ladder), `checkpoint_iteration!`/resume.
+- Phase 11 — Single-Distributor Stackelberg-Benders (Certified): `FollowerLP` (genuine HiGHS
+  Farkas certificates), `BendersMaster` (build-once, persistent optimality + feasibility cut
+  rows, incumbent-tracked UB), `solve_stackelberg!` (end-to-end convergence, rel-gap 1e-6,
+  per-iteration checkpointing). **Leader/follower role + coupling-dual sign convention
+  empirically certified**: StrongDualityMode, ProductMode, hand enumeration, and the production
+  Benders loop independently agree (y*=z*=0.7, cost −0.245) — permanent `[:planning]` regression;
+  BigMMode+HiGHS MIQP incapacity pinned as an asserted negative regression. 4039 tests pass /
+  0 fail; phase code review clean after 6 fixes.
 
 **Goal:** Add the thesis's planning layer — a bilevel TSO–DSO investment equilibrium where
 distributor-leaders choose flexibility investment / import profiles against a transmission-reinforcement
@@ -165,4 +171,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-22 — v2.0 Phase 10 complete*
+*Last updated: 2026-07-22 — v2.0 Phase 11 complete*
