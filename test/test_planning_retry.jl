@@ -8,24 +8,19 @@
 @testitem "planning retry: recoverable NUMERICAL_ERROR-class failure escalates" tags = [
     :planning,
 ] begin
-    using TSODSO, JuMP, Clarabel
+    using TSODSO, JuMP
 
     # Deliberately ill-conditioned SOCP: alternating cone-component coefficient magnitudes
     # spread by 1e16 (>= 1e6, mirroring the project's documented per-unit-base cone-slack
     # numerical sensitivity, STATE.md carried blocker) combined with a tight `max_iter` (the
     # ladder in `solve_with_retry!` never touches `max_iter`, so this fixture reproduces a
     # retryable failure on EVERY attempt — empirically verified this session, 10-RESEARCH.md
-    # Pitfall 4: measure, do not guess).
+    # Pitfall 4: measure, do not guess). Built via `TSODSO.select_optimizer(TSODSO.SOCP())`
+    # (INFRA-02 — never name a solver outside the factory), then `max_iter` tightened via
+    # `set_optimizer_attribute` post-build, exactly the idiom `solve_with_retry!` itself uses.
     function build_ill_conditioned_model(; scale = 1e8, max_iter = 5)
-        model = Model(
-            optimizer_with_attributes(
-                Clarabel.Optimizer,
-                "verbose" => false,
-                "tol_gap_abs" => 1e-8,
-                "tol_gap_rel" => 1e-8,
-                "max_iter" => max_iter,
-            ),
-        )
+        model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+        set_optimizer_attribute(model, "max_iter", max_iter)
         n = 20
         @variable(model, x[1:n])
         @variable(model, t)
