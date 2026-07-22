@@ -42,7 +42,9 @@ a status in [`RETRYABLE_STATUSES`](@ref). Never rebuilds the model (`num_variabl
 `num_constraints` are unchanged — only `set_optimizer_attribute` calls are issued) and
 never falls back to a different solver (D-09).
 
-The escalation ladder has 4 rungs (`max_attempts` caps how many are actually tried):
+The escalation ladder has 4 rungs (`max_attempts` caps how many are actually tried;
+`max_attempts < 1` throws `ArgumentError` up front, and any value beyond the ladder
+length is CLAMPED to it — the effective budget is `min(max_attempts, 4)`):
 
 1. as-built (no attribute changes)
 2. `static_regularization_constant => 1e-6`
@@ -56,9 +58,18 @@ If a retryable status is hit and attempts remain, `@warn`s with the attempt numb
 no escalation is ever applied to a real modeling failure. If the budget is exhausted, it
 raises a final loud `error(...)` reusing `assert_solved!`'s exact diagnostic format
 (`termination_status`, `primal_status`, `dual_status`, `raw_status`) plus the exhausted
-attempt count (D-10: raise loudly, never silent-corrupt, never silent-skip).
+attempt count (D-10: raise loudly, never silent-corrupt, never silent-skip). The retry
+decision is LADDER-aware (`attempt < min(max_attempts, 4)`), so the final AVAILABLE rung
+always terminates in either `return assert_solved!(...)` or the loud `error(...)` —
+this function can NEVER fall off the end returning `nothing` after a failed solve
+(CR-01: that would let a caller silently read duals from an untrusted model).
 """
 function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = true)
+    # CR-01 guard: max_attempts <= 0 would make the ladder slice empty, skip the loop
+    # entirely, and silently return `nothing` without EVER calling optimize! — the exact
+    # silent-skip outcome D-10 forbids. Fail loudly before touching the model.
+    max_attempts >= 1 ||
+        throw(ArgumentError("max_attempts must be ≥ 1, got $max_attempts"))
     ladder = [
         Dict(),                                                     # attempt 1: as-built
         Dict("static_regularization_constant" => 1e-6),             # attempt 2: relax static reg
@@ -73,7 +84,15 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
             "iterative_refinement_max_iter" => 200,
         ),                                                           # attempt 4: last resort
     ]
-    for (attempt, settings) in enumerate(ladder[1:min(max_attempts, length(ladder))])
+    # CR-01: the retry decision below MUST be ladder-aware (`attempt < n_attempts`, the
+    # number of rungs actually AVAILABLE), never budget-aware (`attempt < max_attempts`).
+    # With a budget larger than the ladder (e.g. max_attempts = 5), a retryable failure on
+    # the last rung would satisfy `4 < 5`, `continue`, end the loop, and fall off the end
+    # returning `nothing` — no error, no exhaustion warning — and the caller would read
+    # duals from a model whose last solve FAILED. Ladder-aware, the final available rung
+    # always terminates in `return assert_solved!(...)` or the loud `error(...)`.
+    n_attempts = min(max_attempts, length(ladder))
+    for (attempt, settings) in enumerate(ladder[1:n_attempts])
         for (k, v) in settings
             set_optimizer_attribute(model, k, v)      # post-build attribute change; no rebuild
         end
@@ -82,7 +101,7 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
         catch e
             e isa ErrorException || rethrow()
             ts = termination_status(model)
-            if ts in RETRYABLE_STATUSES && attempt < max_attempts
+            if ts in RETRYABLE_STATUSES && attempt < n_attempts
                 @warn "solve_with_retry!: attempt $attempt failed ($ts); escalating conditioning" raw =
                     raw_status(model)
                 continue

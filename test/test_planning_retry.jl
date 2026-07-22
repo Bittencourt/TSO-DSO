@@ -48,6 +48,40 @@
         @test e isa ErrorException
         @test occursin("exhausted", e.msg)
     end
+
+    # CR-01 regression: a budget LARGER than the ladder (max_attempts = 10 > 4 rungs) must
+    # clamp to the ladder length — the wrapper must NEVER fall off the end returning
+    # `nothing` after a failed final rung (previously `attempt < max_attempts` held on rung
+    # 4, `continue`d, and the loop silently ended; the caller then read duals from a model
+    # whose last solve FAILED). Either it recovers (returns the Model) or it raises the
+    # loud exhaustion error — `nothing` is the one outcome D-10 forbids.
+    overshoot_model = build_ill_conditioned_model()
+    try
+        ret = TSODSO.solve_with_retry!(overshoot_model; max_attempts = 10)
+        @test ret !== nothing
+        @test termination_status(overshoot_model) == MOI.OPTIMAL
+    catch e
+        @test e isa ErrorException
+        @test occursin("exhausted", e.msg)
+    end
+end
+
+@testitem "planning retry: max_attempts < 1 raises ArgumentError before any solve (CR-01)" tags = [
+    :planning,
+] begin
+    using TSODSO, JuMP
+
+    # max_attempts <= 0 previously made the ladder slice empty: the loop never ran,
+    # optimize! was never called, and the function silently returned `nothing` — the
+    # silent-skip outcome D-10 forbids. It must now fail loudly BEFORE touching the model.
+    trivial = Model(TSODSO.select_optimizer(TSODSO.LP()))
+    @variable(trivial, x >= 0)
+    @objective(trivial, Min, x)
+
+    @test_throws ArgumentError TSODSO.solve_with_retry!(trivial; max_attempts = 0)
+    @test_throws ArgumentError TSODSO.solve_with_retry!(trivial; max_attempts = -3)
+    # The guard fires before any optimize! — the model is untouched.
+    @test termination_status(trivial) == MOI.OPTIMIZE_NOT_CALLED
 end
 
 @testitem "planning retry: genuine INFEASIBLE never retried, raises on attempt 1" tags = [
