@@ -71,6 +71,21 @@
             @test e isa ErrorException
             @test occursin("exhausted", e.msg)
         end
+
+        # plan 12-01: attempts_out regression — the GENUINE attempt count the wrapper's
+        # own ladder reached, never an assumed/log-scraped estimate. Mirrors the
+        # existing try/catch idiom above (WR-04: a solver upgrade degrades this to an
+        # informative skip, never a spurious red).
+        attempts_model = build_ill_conditioned_model()
+        attempts_ref = Ref(0)
+        try
+            TSODSO.solve_with_retry!(attempts_model; attempts_out = attempts_ref)
+            @test termination_status(attempts_model) == MOI.OPTIMAL
+            @test attempts_ref[] >= 2
+        catch e
+            @test e isa ErrorException
+            @test occursin("exhausted", e.msg)
+        end
     else
         @info "ill-conditioned fixture no longer produces a retryable status; skipping escalation branch (WR-04)" raw_ts raw =
             raw_status(raw_model)
@@ -92,6 +107,22 @@ end
     @test_throws ArgumentError TSODSO.solve_with_retry!(trivial; max_attempts = -3)
     # The guard fires before any optimize! — the model is untouched.
     @test termination_status(trivial) == MOI.OPTIMIZE_NOT_CALLED
+end
+
+@testitem "planning retry: attempts_out reports 1 on a clean first-attempt solve (no retry)" tags =
+    [:planning] begin
+    using TSODSO, JuMP
+
+    # Baseline: a well-posed LP solves on attempt 1 every time, so attempts_out must
+    # report exactly 1, never left at its caller-supplied initial value by accident.
+    trivial = Model(TSODSO.select_optimizer(TSODSO.LP()))
+    @variable(trivial, x >= 0)
+    @objective(trivial, Min, x)
+
+    attempts_ref = Ref(0)
+    TSODSO.solve_with_retry!(trivial; attempts_out = attempts_ref)
+    @test termination_status(trivial) == MOI.OPTIMAL
+    @test attempts_ref[] == 1
 end
 
 @testitem "planning retry: genuine INFEASIBLE never retried, raises on attempt 1" tags =

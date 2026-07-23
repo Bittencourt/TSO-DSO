@@ -214,7 +214,8 @@ end
     solve_planning_oracle!(o::PlanningOracle, z_trial::AbstractVector{<:Real};
                           max_attempts::Int = 4, Δt::Real = 1.0,
                           rtol_exact::Real = 1e-4,
-                          τ::Real = (SOCP path ? 1e-3 : 1e-6))
+                          τ::Real = (SOCP path ? 1e-3 : 1e-6),
+                          attempts_out::Union{Nothing,Ref{Int}} = nothing)
         -> (; cost, π, π_s, dadp, ctx)
 
 Re-solve the built-ONCE [`PlanningOracle`](@ref) `o` at the coupling-flow trial
@@ -259,6 +260,9 @@ Returns a `NamedTuple`:
 
 Throws `ArgumentError` when `length(z_trial) != o.T` (T-10-06: a shape mismatch must
 fail loudly before `set_parameter_value.` — never silently truncate/pad the trial).
+
+`attempts_out` is forwarded UNCHANGED to `solve_with_retry!` (plan 12-01, additive —
+defaults to `nothing`, a pure no-op for every pre-existing call site).
 """
 function solve_planning_oracle!(
     o::PlanningOracle,
@@ -267,6 +271,7 @@ function solve_planning_oracle!(
     Δt::Real = 1.0,
     rtol_exact::Real = 1e-4,
     τ::Real = (get(o.ctx.meta, :problem_class, nothing) isa SOCP ? 1e-3 : 1e-6),
+    attempts_out::Union{Nothing, Ref{Int}} = nothing,
 )
     length(z_trial) == o.T ||
         throw(ArgumentError("z_trial has length $(length(z_trial)), expected T=$(o.T)"))
@@ -275,7 +280,12 @@ function solve_planning_oracle!(
 
     # D-08: solve_with_retry! is the SOLE solve entry point (its internal STRICT gate,
     # dual = true, ensures π is read only after a trusted solve — T-10-05).
-    solve_with_retry!(o.model; max_attempts = max_attempts, dual = true)
+    solve_with_retry!(
+        o.model;
+        max_attempts = max_attempts,
+        dual = true,
+        attempts_out = attempts_out,
+    )
 
     # CR-03 / PF-04 EXACTNESS GATE (mirrors solve_welfare, threats T-04-01/T-04-03): MUST
     # run AFTER the trusted solve and BEFORE any dual is read, so a physically-meaningless

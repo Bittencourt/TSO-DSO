@@ -91,20 +91,25 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 
 # Returns
 
-On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master)` where
+On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace)` where
 `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so the
 returned point's true cost equals `UB` and the `gap ≤ tol` certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
 upper/lower bounds, `gap` is the converged relative gap,
-`iters` is the convergence iteration count, and `oracle`/`follower`/`master` are the
+`iters` is the convergence iteration count, `oracle`/`follower`/`master` are the
 build-once subproblem handles (for further inspection by the caller/certification gate,
-plan 11-03).
+plan 11-03), and `trace::BendersTrace` (plan 12-01, additive) is the per-iteration
+convergence ledger — one row per iteration on both the feasibility-cut and
+optimality-cut branches, including the GENUINE per-iteration retry count and both
+retry-gated subproblems' termination statuses (never a log-scrape estimate).
 
 # Throws
 
-  - `ArgumentError` on `T < 1`, `max_iter < 1`, or `length(λ₀) != T` — before any build call.
-  - `ErrorException` if `max_iter` is exhausted without converging, naming the last observed
-    gap and the tolerance (D-10) — refuses to silently return a non-converged result.
+  - `ArgumentError` on `T < 1`, `max_iter < 1`, `length(λ₀) != T`, a non-finite/non-positive
+    `tol`, or `max_iter > 99_999` — before any build call (IN-02/IN-03).
+  - `ErrorException` if `max_iter` is exhausted without converging, naming the trace's
+    last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
+    return a non-converged result.
 """
 function solve_stackelberg!(
     feeder,
@@ -124,6 +129,21 @@ function solve_stackelberg!(
         ArgumentError("solve_stackelberg! needs max_iter >= 1 (got max_iter=$max_iter)"),
     )
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+    # IN-02 (plan 12-01): a NaN/negative tol silently guarantees exhaustion (every
+    # gap <= tol comparison is false for NaN) — fail-loud is preserved but the
+    # diagnosis is misleading; guard it here alongside the other boundary checks.
+    isfinite(tol) && tol > 0 ||
+        throw(ArgumentError("solve_stackelberg! needs tol to be finite and > 0 (got tol=$tol)"))
+    # IN-03 (plan 12-01): checkpoint_iteration! enforces iter ∈ 0:99999 (5-digit
+    # zero-padded filename contract, src/planning/checkpoint.jl) — fail HERE, not
+    # deep inside checkpoint_iteration! after 99,999 wasted iterations.
+    max_iter <= 99_999 || throw(
+        ArgumentError(
+            "solve_stackelberg! needs max_iter <= 99_999 (checkpoint_iteration!'s " *
+            "5-digit zero-padded filename contract, src/planning/checkpoint.jl), got " *
+            "max_iter=$max_iter",
+        ),
+    )
 
     # ---- BUILD ONCE: the oracle/follower/master subproblems are constructed OUTSIDE the
     # loop. No `build_*`/`Model(` call appears below this point — the loop only re-solves
@@ -140,8 +160,16 @@ function solve_stackelberg!(
     y_best = NaN
     z_best = fill(NaN, T)
     gap = NaN
+    # plan 12-01: the purpose-built Benders convergence ledger (roadmap criterion 2) —
+    # built alongside the other accumulator state, immediately before the loop.
+    trace = BendersTrace()
     for k in 1:max_iter
-        lb_res = solve_master!(master)
+        t_iter0 = time()
+        # The Ref solve_master! overwrites with the actual attempt count via its new
+        # attempts_out keyword (plan 12-01); Ref(1) is a safe initial value in case a
+        # future call site ever omits the keyword, though this call site always passes it.
+        master_attempts = Ref(1)
+        lb_res = solve_master!(master; attempts_out = master_attempts)
         # WR-01: the follower's feasibility check runs FIRST — before any oracle solve.
         # The master's box allows z up to y_max, beyond the follower's deliverable
         # capacity (corridor_cap * x_inv_max); at such extreme trial z the oracle's own
@@ -161,11 +189,27 @@ function solve_stackelberg!(
                 k;
                 dir = checkpoint_dir,
             )
+            # plan 12-01: feasibility-branch trace row. oracle_status defaults to the
+            # :not_solved sentinel because the oracle is never reached on this branch
+            # (WR-01 ordering); retry_count is the master's NET retries this iteration
+            # (the only retry-gated solve that ran on this branch).
+            push!(trace, k;
+                LB = lb_res.LB,
+                UB = UB,
+                gap = NaN,
+                cut_type = :feasibility,
+                n_cuts = length(master.cuts),
+                master_status = Symbol(termination_status(master.model)),
+                oracle_status = :not_solved,
+                retry_count = master_attempts[] - 1,
+                solve_time = time() - t_iter0,
+            )
             continue   # T-11-06: a feasibility cut NEVER updates UB
         end
 
         # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
-        oracle_res = solve_planning_oracle!(oracle, lb_res.z)
+        oracle_attempts = Ref(1)
+        oracle_res = solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
 
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
@@ -188,6 +232,21 @@ function solve_stackelberg!(
             k;
             dir = checkpoint_dir,
         )
+        # plan 12-01: optimality-branch trace row. retry_count sums BOTH retry-gated
+        # solves' net retries this iteration (master's and the oracle's), since both
+        # actually ran; oracle_status records the oracle's own genuine termination
+        # status (never the :not_solved sentinel on this branch).
+        push!(trace, k;
+            LB = lb_res.LB,
+            UB = UB,
+            gap = gap,
+            cut_type = :optimality,
+            n_cuts = length(master.cuts),
+            master_status = Symbol(termination_status(master.model)),
+            oracle_status = Symbol(termination_status(oracle.model)),
+            retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
+            solve_time = time() - t_iter0,
+        )
 
         if gap <= tol
             # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
@@ -203,13 +262,23 @@ function solve_stackelberg!(
                 oracle,
                 follower,
                 master,
+                trace,
             )
         end
     end
 
+    # IN-01 (plan 12-01): read the exhaustion diagnostic from the TRACE's last recorded
+    # row, never a loop-local variable that can be stale/NaN if the final iterations
+    # were all feasibility branches — every iteration pushes exactly one trace row on
+    # either branch, so trace.iters == max_iter and last(...) is always well-defined here.
+    last_LB = last(trace.LB_trace)
+    last_UB = last(trace.UB_trace)
+    last_gap = last(trace.gap_trace)
     error(
         "solve_stackelberg!: exhausted $max_iter iteration(s) without converging " *
-        "(last gap=$gap, tol=$tol) — refusing to silently return a non-converged result",
+        "(last recorded LB=$last_LB, UB=$last_UB, gap=$last_gap [gap may be NaN if the " *
+        "final iteration was a feasibility cut], tol=$tol) — refusing to silently " *
+        "return a non-converged result",
     )
 end
 
