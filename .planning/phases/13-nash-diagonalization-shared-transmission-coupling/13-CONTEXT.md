@@ -34,6 +34,15 @@ validation oracles (Phase 14).
 - **API shape:** `SharedTransmission` struct in `src/planning/coupling.jl` — build-once,
   per-distributor views, `update_coupling!` called after each atomic best-response.
 - **Test scale:** N=2 baseline (hand-checkable equilibrium) + N=3 probe.
+- **Investment ownership (user decision, post-research):** **per-distributor shares** — each
+  distributor `i` owns its reinforcement investment `x_inv[i]` and pays its own cost;
+  effective corridor capacity is `corridor_cap · Σᵢ x_inv[i]` (or the model's equivalent
+  aggregate form). NOT one jointly-owned equal-split investment. Rationale: resolves the
+  N-distributor cost-allocation ambiguity the PSR single-distributor source leaves open
+  (research Open Question 2) in favor of the game-theoretically cleaner ownership model —
+  each distributor's best response prices only its own investment; the shared object is the
+  aggregate capacity, not the cost split. Document the departure from the equal-split default
+  in coupling.jl's docstring for thesis traceability.
 
 ### Diagonalization loop mechanics (NASH-02/03)
 - **Convergence metric:** outer Nash residual = max over distributors of
