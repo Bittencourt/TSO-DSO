@@ -242,7 +242,8 @@ function add_feasibility_cut!(
 end
 
 """
-    solve_master!(master::BendersMaster; max_attempts::Int = 4) -> NamedTuple
+    solve_master!(master::BendersMaster; max_attempts::Int = 4,
+                 attempts_out::Union{Nothing,Ref{Int}} = nothing) -> NamedTuple
 
 Re-solve the built-ONCE [`BendersMaster`](@ref) via `solve_with_retry!` (D-08) —
 NEVER the SOLE INFRA-03 choke point directly — so every cut-producing solve on
@@ -251,14 +252,26 @@ contract (never `allow_almost=true`). The very first (zero-cut) solve returns
 `MOI.OPTIMAL`, never `MOI.DUAL_INFEASIBLE`, because `build_master` already
 declared finite epigraph lower bounds (Pitfall M1).
 
+`attempts_out` is forwarded UNCHANGED to `solve_with_retry!` (plan 12-01, additive —
+defaults to `nothing`, a pure no-op for every pre-existing call site).
+
 Returns `(; y, z, LB)` where `y = value(master.y_inv)`, `z = value.(master.z)`,
 and `LB = objective_value(master.model)` (the Benders lower bound at this
 iteration).
 """
-function solve_master!(master::BendersMaster; max_attempts::Int = 4)
+function solve_master!(
+    master::BendersMaster;
+    max_attempts::Int = 4,
+    attempts_out::Union{Nothing, Ref{Int}} = nothing,
+)
     # D-08: solve_with_retry! is the SOLE solve entry point on the master, mirroring
     # the oracle's own discipline — NEVER the INFRA-03 choke point called directly.
-    solve_with_retry!(master.model; max_attempts = max_attempts, dual = true)
+    solve_with_retry!(
+        master.model;
+        max_attempts = max_attempts,
+        dual = true,
+        attempts_out = attempts_out,
+    )
 
     return (;
         y = value(master.y_inv),

@@ -119,6 +119,7 @@ include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validatio
 # `solve_master!`/`checkpoint_iteration!` at call time.
 include("planning/retry.jl")        # solve_with_retry! wraps assert_solved! (plan 10-01, D-08/D-09)
 include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoint (plan 10-01, D-10)
+include("planning/trace.jl")        # BendersTrace convergence ledger (plan 12-01, roadmap criterion 2; zero load-time deps, no JuMP)
 include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (plan 10-02, PLAN-01/02)
 include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs (plan 11-01, PLAN-04)
 include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)

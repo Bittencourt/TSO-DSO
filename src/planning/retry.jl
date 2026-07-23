@@ -33,7 +33,8 @@ real modeling/master-side bug).
 const RETRYABLE_STATUSES = (MOI.NUMERICAL_ERROR, MOI.SLOW_PROGRESS, MOI.ALMOST_OPTIMAL)
 
 """
-    solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = true) -> Model
+    solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = true,
+                      attempts_out::Union{Nothing,Ref{Int}} = nothing) -> Model
 
 Solve `model` via [`assert_solved!`](@ref) (STRICT gate — never `allow_almost = true`,
 per D-06/CLAUDE.md "duals only from a STRICT solve"), retrying with progressively
@@ -81,8 +82,19 @@ decision is LADDER-aware (`attempt < min(max_attempts, 4)`), so the final AVAILA
 always terminates in either `return assert_solved!(...)` or the loud `error(...)` —
 this function can NEVER fall off the end returning `nothing` after a failed solve
 (CR-01: that would let a caller silently read duals from an untrusted model).
+
+When `attempts_out` is a `Ref{Int}`, it is set to the attempt number (1-indexed) on
+which the solve succeeded — never touched on the exhaustion/non-retryable-error path,
+since that path never returns. Defaults to `nothing` (a pure no-op) so every existing
+call site that omits this keyword compiles and behaves IDENTICALLY to before this
+keyword existed (plan 12-01, plan-checker blocker fix revision 1).
 """
-function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = true)
+function solve_with_retry!(
+    model::Model;
+    max_attempts::Int = 4,
+    dual::Bool = true,
+    attempts_out::Union{Nothing, Ref{Int}} = nothing,
+)
     # CR-01 guard: max_attempts <= 0 would make the ladder slice empty, skip the loop
     # entirely, and silently return `nothing` without EVER calling optimize! — the exact
     # silent-skip outcome D-10 forbids. Fail loudly before touching the model.
@@ -139,7 +151,9 @@ function solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = tru
             end
         end
         try
-            return assert_solved!(model; dual = dual)
+            result = assert_solved!(model; dual = dual)
+            attempts_out === nothing || (attempts_out[] = attempt)
+            return result
         catch e
             e isa ErrorException || rethrow()
             ts = termination_status(model)
