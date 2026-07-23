@@ -165,12 +165,21 @@ function solve_stackelberg!(
     # built alongside the other accumulator state, immediately before the loop.
     trace = BendersTrace()
     for k in 1:max_iter
-        t_iter0 = time()
+        # WR-01/IN-04 (phase 12 review): solve_time_trace records ONLY the wall-clock
+        # seconds spent inside this iteration's solve calls (master + follower, plus
+        # the oracle on the optimality branch) — NEVER checkpoint_iteration!'s JLD2
+        # write + git provenance shell-outs, which on the toy fixtures dominate
+        # whole-iteration wall time by orders of magnitude. Each solve is bracketed
+        # with the MONOTONIC clock (time_ns), immune to the NTP steps that could make
+        # a time()-based span negative and trip push!'s solve_time >= 0 guard mid-run.
+        t_solve = 0.0
         # The Ref solve_master! overwrites with the actual attempt count via its new
         # attempts_out keyword (plan 12-01); Ref(1) is a safe initial value in case a
         # future call site ever omits the keyword, though this call site always passes it.
         master_attempts = Ref(1)
+        t0_ns = time_ns()
         lb_res = solve_master!(master; attempts_out = master_attempts)
+        t_solve += (time_ns() - t0_ns) / 1.0e9
         # CR-01 (phase 12 review): capture the master's GENUINE post-solve termination
         # status HERE — before solve_follower! and before any add_*_cut! call. The
         # master is a CACHING-mode model, and JuMP's add_constraint sets
@@ -188,7 +197,9 @@ function solve_stackelberg!(
         # DIRECT call — NEVER solve_with_retry!-wrapped (plan 11-01's follower contract):
         # the infeasible branch must be OBSERVED on the un-retried solve, or the Farkas
         # certificate is unreachable.
+        t0_ns = time_ns()
         follower_res = solve_follower!(follower, lb_res.z)
+        t_solve += (time_ns() - t0_ns) / 1.0e9
 
         if !follower_res.feasible
             add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)
@@ -214,15 +225,17 @@ function solve_stackelberg!(
                 master_status = master_status_k,
                 oracle_status = :not_solved,
                 retry_count = master_attempts[] - 1,
-                solve_time = time() - t_iter0,
+                solve_time = t_solve,
             )
             continue   # T-11-06: a feasibility cut NEVER updates UB
         end
 
         # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
         oracle_attempts = Ref(1)
+        t0_ns = time_ns()
         oracle_res =
             solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
+        t_solve += (time_ns() - t0_ns) / 1.0e9
 
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
@@ -264,7 +277,7 @@ function solve_stackelberg!(
             master_status = master_status_k,
             oracle_status = Symbol(termination_status(oracle.model)),
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
-            solve_time = time() - t_iter0,
+            solve_time = t_solve,
         )
 
         if gap <= tol

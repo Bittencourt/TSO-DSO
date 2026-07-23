@@ -74,8 +74,11 @@ Fields:
     (master-only on the feasibility branch; master + oracle on the optimality branch),
     sourced from `solve_with_retry!`'s own `attempts_out` mechanism (see file header) —
     never an assumed/log-scraped estimate. `0` is the normal, no-retry case.
-  - `solve_time_trace::Vector{Float64}` — wall-clock seconds spent solving this
-    iteration's subproblem(s) (non-negative, finite).
+  - `solve_time_trace::Vector{Float64}` — monotonic-clock (`time_ns`) wall seconds
+    spent inside this iteration's solve calls ONLY (master + follower, plus the
+    oracle on an optimality-branch row); cut appends, `checkpoint_iteration!`'s
+    JLD2/git-provenance I/O, and trace bookkeeping are EXCLUDED (WR-01, phase 12
+    review). Non-negative, finite.
   - `iters::Int` — the number of recorded rows (`== length(gap_trace) == …`).
 
 Construct empty via [`BendersTrace()`](@ref); append one row with [`push!`](@ref)
@@ -169,8 +172,9 @@ function Base.push!(
     solve_time::Real,
 )
     _assert_sequential_trace(trace, k)
-    cut_type in (:optimality, :feasibility) ||
-        throw(ArgumentError("push!: cut_type must be :optimality or :feasibility, got $cut_type"))
+    cut_type in (:optimality, :feasibility) || throw(
+        ArgumentError("push!: cut_type must be :optimality or :feasibility, got $cut_type"),
+    )
     # LB is always a real LP objective value — no legitimate non-finite state, unlike
     # UB/gap (see docstring: UB=Inf pre-first-optimality-iteration and gap=NaN on every
     # feasibility-branch row are legitimate sentinels, deliberately NOT guarded here).
@@ -211,11 +215,9 @@ end
 """
     trace_summary(trace::BendersTrace) -> NamedTuple
 
-Summarize `trace` as `(; iters, final_LB, final_UB, final_gap, max_cuts,
-total_retries)`. On an empty trace, returns `iters = 0` and all others as `NaN`/`0`
+Summarize `trace` as `(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries)`. On an empty trace, returns `iters = 0` and all others as `NaN`/`0`
 sentinels. Otherwise `final_LB`/`final_UB`/`final_gap` are the LAST recorded row's
-values, `max_cuts = maximum(trace.n_cuts_trace)`, and `total_retries =
-sum(trace.retry_count_trace)` — the EMPIRICAL retry count (plan-checker blocker fix,
+values, `max_cuts = maximum(trace.n_cuts_trace)`, and `total_retries = sum(trace.retry_count_trace)` — the EMPIRICAL retry count (plan-checker blocker fix,
 revision 1): a plain, always-computed sum over the per-iteration column, never an
 aggregate log-scrape estimate.
 """
