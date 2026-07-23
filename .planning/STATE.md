@@ -93,6 +93,20 @@ None yet.
   retry + checkpointing a day-one co-requirement; measure empirical failure rate on the planning
   layer's own fixtures, don't assume v1's rate holds.
 
+- [v2.0 Phase 12 measured]: the Phase-10 blocker above was measured, not assumed, in this
+  phase's load test (`test/test_planning_hardening.jl`) — `solve_with_retry!` escalated 0
+  time(s) across 66 Benders iterations on the planning-layer toy fixture (a 0% escalation
+  rate), sourced from `BendersTrace.retry_count_trace` (plan 12-01's `attempts_out` mechanism)
+  and cross-checked exactly against an independently captured `@warn` count from the same run;
+  the run converged without ever exhausting the 4-rung retry budget or losing a checkpoint. The
+  default `max_attempts=4` budget appears sufficient at this scale — the toy fixture's tiny
+  per-period LPs never hit Clarabel's/HiGHS's numerical-conditioning edge cases at T=8, so no
+  empirical evidence yet exists to justify tuning the retry budget; the amplification concern
+  the Phase-10 blocker names is specifically about the IEEE-13 ADMM oracle's cone-slack
+  sensitivity, which this toy-fixture load test intentionally does not exercise (CONTEXT.md's
+  explicit prohibition on using the full SOCP oracle here) — re-measure on a real feeder-scale
+  planning fixture if/when one is introduced.
+
 - [v2.0, no general guarantee]: Gauss-Seidel Nash diagonalization (Phase 13) has no general
   uniqueness/convergence guarantee — every reported equilibrium must carry a multi-seed/
   multi-order probe (NASH-04); never present one run as "the" equilibrium.
