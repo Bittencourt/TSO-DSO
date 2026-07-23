@@ -193,11 +193,30 @@ reporting.
 
   5. No planning-layer subproblem introduces a binary/integer variable.
 
-**Plans**: TBD
+**Plans**: 3 plans
 **Research note**: MEDIUM — SUMMARY.md flags this phase for Gauss-Seidel/diagonalization
 convergence theory for multi-leader-multi-follower games (general literature, no project-specific
 numerical case exists) and treats the `coupling.jl` model design itself as a genuine research
 decision, not a lookup. Consider `/gsd:plan-phase 13 --research-phase`.
+
+Plans:
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — SharedTransmission (build_shared_transmission, activate_distributor!,
+      update_coupling!, write_back!, DistributorView + solve_follower! method), per-distributor
+      x_inv[i] ownership over one pooled capacity row, wave 1 (NASH-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 13-02-PLAN.md — solve_stackelberg!'s additive `follower` keyword, NashTrace, run_nash!
+      (outer Gauss-Seidel loop, nested-tolerance guard, damping escape hatch), plot_nash_convergence
+      (CairoMakie ext), wave 2, depends on 13-01 (NASH-02, NASH-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 13-03-PLAN.md — run_nash_probe (>=3 seeds x 2 sweep orders gating probe, max-pairwise-distance
+      spread reporting, structural "a converged equilibrium" language), N=2 + N=3 fixtures, wave 3,
+      depends on 13-02 (NASH-04)
 
 ### Phase 14: Validation-Oracle Regression Hardening & Docs
 
@@ -244,7 +263,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete    | 2026-07-22 |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 2/2 | Complete    | 2026-07-23 |
-| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
+| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/3 | Not started | - |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
 
 ## Research Flags
