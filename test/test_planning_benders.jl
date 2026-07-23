@@ -102,6 +102,14 @@
         # The LAST row is :optimality (per the assertion above), so the oracle was
         # solved and its status recorded, never the sentinel.
         @test result.trace.oracle_status_trace[end] != :not_solved
+        # CR-01/WR-02 regression (phase 12 review): master_status_trace must record
+        # the GENUINE post-solve termination status, captured BEFORE any add_*_cut!
+        # dirties the CACHING-mode master model — a dirty model short-circuits
+        # termination_status to :OPTIMIZE_NOT_CALLED, turning the ledger column into
+        # a constant sentinel. On this clean converging run every master solve (and
+        # the final oracle solve) is genuinely :OPTIMAL.
+        @test all(==(:OPTIMAL), result.trace.master_status_trace)
+        @test result.trace.oracle_status_trace[end] == :OPTIMAL
     end
 end
 

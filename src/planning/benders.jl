@@ -132,8 +132,9 @@ function solve_stackelberg!(
     # IN-02 (plan 12-01): a NaN/negative tol silently guarantees exhaustion (every
     # gap <= tol comparison is false for NaN) — fail-loud is preserved but the
     # diagnosis is misleading; guard it here alongside the other boundary checks.
-    isfinite(tol) && tol > 0 ||
-        throw(ArgumentError("solve_stackelberg! needs tol to be finite and > 0 (got tol=$tol)"))
+    isfinite(tol) && tol > 0 || throw(
+        ArgumentError("solve_stackelberg! needs tol to be finite and > 0 (got tol=$tol)"),
+    )
     # IN-03 (plan 12-01): checkpoint_iteration! enforces iter ∈ 0:99999 (5-digit
     # zero-padded filename contract, src/planning/checkpoint.jl) — fail HERE, not
     # deep inside checkpoint_iteration! after 99,999 wasted iterations.
@@ -170,6 +171,13 @@ function solve_stackelberg!(
         # future call site ever omits the keyword, though this call site always passes it.
         master_attempts = Ref(1)
         lb_res = solve_master!(master; attempts_out = master_attempts)
+        # CR-01 (phase 12 review): capture the master's GENUINE post-solve termination
+        # status HERE — before solve_follower! and before any add_*_cut! call. The
+        # master is a CACHING-mode model, and JuMP's add_constraint sets
+        # is_model_dirty = true, after which termination_status short-circuits to the
+        # :OPTIMIZE_NOT_CALLED sentinel; querying at the trace-push sites (after the
+        # cut appends) would record that sentinel on every row of every run.
+        master_status_k = Symbol(termination_status(master.model))
         # WR-01: the follower's feasibility check runs FIRST — before any oracle solve.
         # The master's box allows z up to y_max, beyond the follower's deliverable
         # capacity (corridor_cap * x_inv_max); at such extreme trial z the oracle's own
@@ -193,13 +201,17 @@ function solve_stackelberg!(
             # :not_solved sentinel because the oracle is never reached on this branch
             # (WR-01 ordering); retry_count is the master's NET retries this iteration
             # (the only retry-gated solve that ran on this branch).
-            push!(trace, k;
+            push!(
+                trace,
+                k;
                 LB = lb_res.LB,
                 UB = UB,
                 gap = NaN,
                 cut_type = :feasibility,
                 n_cuts = length(master.cuts),
-                master_status = Symbol(termination_status(master.model)),
+                # CR-01: the status captured immediately after solve_master!, before
+                # add_feasibility_cut! dirtied the model.
+                master_status = master_status_k,
                 oracle_status = :not_solved,
                 retry_count = master_attempts[] - 1,
                 solve_time = time() - t_iter0,
@@ -209,7 +221,8 @@ function solve_stackelberg!(
 
         # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
         oracle_attempts = Ref(1)
-        oracle_res = solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
+        oracle_res =
+            solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
 
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
@@ -236,13 +249,19 @@ function solve_stackelberg!(
         # solves' net retries this iteration (master's and the oracle's), since both
         # actually ran; oracle_status records the oracle's own genuine termination
         # status (never the :not_solved sentinel on this branch).
-        push!(trace, k;
+        push!(
+            trace,
+            k;
             LB = lb_res.LB,
             UB = UB,
             gap = gap,
             cut_type = :optimality,
             n_cuts = length(master.cuts),
-            master_status = Symbol(termination_status(master.model)),
+            # CR-01: the status captured immediately after solve_master!, before the
+            # add_optimality_cut! calls dirtied the model. oracle.model is NOT dirtied
+            # between its solve and this query (only master.model receives cuts), so
+            # its status is queried directly here.
+            master_status = master_status_k,
             oracle_status = Symbol(termination_status(oracle.model)),
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
             solve_time = time() - t_iter0,
