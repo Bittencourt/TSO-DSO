@@ -154,7 +154,7 @@ phase (100% coverage of the 15 v2.0 requirements is preserved via the Traceabili
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — BendersTrace convergence/cut-store ledger (JuMP-free, structurally distinct
+- [x] 12-01-PLAN.md — BendersTrace convergence/cut-store ledger (JuMP-free, structurally distinct
       from AdmmResiduals) wired into solve_stackelberg! on both loop branches, closing IN-01/IN-02/
       IN-03/IN-06 from 11-REVIEW.md, plus degenerate feasibility-cut edge-case tests
       (near-boundary z, near-zero deliverable capacity, repeated Farkas cuts), wave 1
@@ -243,7 +243,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 9. Documentation & Regression Acceptance Gate | v1.0 | 5/5 | Complete | 2026-07-20 |
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete    | 2026-07-22 |
-| 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 0/2 | Not started | - |
+| 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 1/2 | In Progress|  |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 0/TBD | Not started | - |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
 

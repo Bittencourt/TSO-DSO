@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
 status: executing
 stopped_at: Phase 10 context gathered
-last_updated: "2026-07-23T00:39:30.369Z"
-last_activity: 2026-07-23 -- Phase 12 planning complete
+last_updated: "2026-07-23T00:39:46.329Z"
+last_activity: 2026-07-23 -- Phase 12 execution started
 progress:
   total_phases: 5
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 12 — cut store & benders master robustness hardening
+**Current focus:** Phase 12 — Cut-Store & Benders Master Robustness Hardening
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-23 -- Phase 12 planning complete
+Phase: 12 (Cut-Store & Benders Master Robustness Hardening) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 12
+Last activity: 2026-07-23 -- Phase 12 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
