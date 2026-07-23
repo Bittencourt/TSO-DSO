@@ -40,9 +40,10 @@ created: 2026-07-22
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 12-01-01 | 01 | 1 | PLAN-06 (deepen) | — | N/A | testitem | quick `:planning` run (`BendersTrace` items) | ❌ W0 | ⬜ pending |
-| 12-01-02 | 01 | 1 | PLAN-05 (deepen) | — | N/A | testitem | quick `:planning` run (edge-case items, `test_planning_hardening.jl`) | ❌ W0 | ⬜ pending |
-| 12-02-01 | 02 | 2 | PLAN-05/06 (deepen) | — | N/A | testitem | quick run (load-test item, `test_planning_hardening.jl`) | ❌ W0 | ⬜ pending |
+| 12-01-01 | 01 | 1 | PLAN-06 (deepen) | T-12-01..T-12-04 | N/A | testitem | `@run_package_tests filter=ti->occursin("planning",ti.name)&&occursin("benders",ti.name)` (`BendersTrace` wiring + IN-01/02/03/06 regressions in `test_planning_benders.jl`) | ❌ W0 | ⬜ pending |
+| 12-01-02 | 01 | 1 | PLAN-05 (deepen) | T-12-01, T-12-02 | N/A | testitem | `@run_package_tests filter=ti->(:planning in ti.tags)` (edge-case items, `test_planning_hardening.jl`) | ❌ W0 | ⬜ pending |
+| 12-02-01 | 02 | 2 | PLAN-05/06 (deepen) | T-12-06, T-12-07 | N/A | testitem | `@run_package_tests filter=ti->occursin("planning",ti.name)&&occursin("hardening",ti.name)` (load-test item, `test_planning_hardening.jl`) | ❌ W0 | ⬜ pending |
+| 12-02-02 | 02 | 2 | — (doc only) | T-12-08 | N/A | grep | `grep -c "Phase 12 measured" .planning/STATE.md` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
