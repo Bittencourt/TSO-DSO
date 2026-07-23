@@ -87,6 +87,21 @@
             readdir(dir; join = true),
         )
         @test length(checkpoint_files) == result.iters
+
+        # plan 12-01: BendersTrace assertions — structurally distinct from
+        # AdmmResiduals (single relative-gap scalar), including the GENUINE
+        # per-iteration retry_count and both retry-gated subproblems' statuses.
+        @test result.trace isa TSODSO.BendersTrace
+        @test result.trace.iters == result.iters
+        @test length(result.trace.gap_trace) == result.iters
+        @test result.trace.cut_type_trace[end] == :optimality
+        @test TSODSO.is_converged(result.trace, 1e-6)
+        @test result.trace.n_cuts_trace[end] == length(result.master.cuts)
+        @test length(result.trace.retry_count_trace) == result.iters
+        @test all(result.trace.retry_count_trace .>= 0)
+        # The LAST row is :optimality (per the assertion above), so the oracle was
+        # solved and its status recorded, never the sentinel.
+        @test result.trace.oracle_status_trace[end] != :not_solved
     end
 end
 
@@ -137,7 +152,65 @@ end
             readdir(dir; join = true),
         )
         @test length(checkpoint_files) == result.iters
+
+        # plan 12-01: BendersTrace assertions on the feasibility-branch fixture —
+        # matching the existing production feasibility-cut assertion above.
+        @test count(==(:feasibility), result.trace.cut_type_trace) >= 1
+        # Cut-store growth is monotone non-decreasing, never shrinks.
+        @test all(diff(result.trace.n_cuts_trace) .>= 0)
+        # A feasibility-branch row's oracle_status is exactly the sentinel — the
+        # oracle was never reached on that iteration.
+        k_feas = findfirst(==(:feasibility), result.trace.cut_type_trace)
+        @test result.trace.oracle_status_trace[k_feas] == :not_solved
+        @test all(result.trace.retry_count_trace .>= 0)
     end
+end
+
+@testitem "planning benders: tol/max_iter boundary guards reject NaN/negative tol and max_iter > 99_999 before any build call (IN-02/IN-03)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    λ₀ = [4.0]
+    follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
+
+    # Cheap: the guards fire before any build_* call, so no solver is ever invoked.
+    @test_throws ArgumentError solve_stackelberg!(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = 1,
+        follower_kwargs = follower_kwargs,
+        master_kwargs = master_kwargs,
+        tol = NaN,
+        max_iter = 100,
+    )
+    @test_throws ArgumentError solve_stackelberg!(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = 1,
+        follower_kwargs = follower_kwargs,
+        master_kwargs = master_kwargs,
+        tol = -1.0,
+        max_iter = 100,
+    )
+    @test_throws ArgumentError solve_stackelberg!(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = 1,
+        follower_kwargs = follower_kwargs,
+        master_kwargs = master_kwargs,
+        tol = 1e-6,
+        max_iter = 100_000,
+    )
 end
 
 @testitem "planning benders: max_iter=1 raises loudly (ErrorException, 'exhausted'), never returns a non-converged result" tags =
@@ -171,5 +244,8 @@ end
         end
         @test err isa ErrorException
         @test occursin("exhausted", err.msg)
+        # IN-01 (plan 12-01): the message now sources from the trace, not a stale
+        # loop-local gap.
+        @test occursin("last recorded LB", err.msg)
     end
 end

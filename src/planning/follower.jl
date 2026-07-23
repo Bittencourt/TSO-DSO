@@ -150,9 +150,11 @@ Two mutually exclusive, exhaustively-checked branches:
     GENUINE HiGHS Farkas/dual ray, never a penalized-slack heuristic): returns
     `(; feasible = false, v, u)` where `v = dual_objective_value(f.model)` and
     `u = dual.(f.coupling)` (the certificate vector, restricted to the coupling
-    rows) — both `isfinite`, ENFORCED in production (WR-03): a non-finite
-    certificate raises loudly here instead of poisoning the master's
-    persistent cut set downstream.
+    rows) — both `isfinite` AND `v > 0`, ENFORCED in production (WR-03/IN-06): a
+    non-finite OR non-positive certificate raises loudly here instead of
+    poisoning the master's persistent cut set downstream with a vacuous cut
+    that would fail to exclude `z_k` (a feasibility cut
+    `v + Σ u*(z - z_k) <= 0` only excludes `z_k` when `v > 0`).
 
 Any OTHER outcome (neither a trusted solve nor a genuine certificate) raises
 loudly, naming `termination_status`/`dual_status` — this function refuses to
