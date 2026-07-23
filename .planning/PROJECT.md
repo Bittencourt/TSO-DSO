@@ -98,7 +98,12 @@ IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/2
 
 ## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
 
-**Progress:** Phases 10–11 complete (2026-07-22).
+**Progress:** Phases 10–12 complete (2026-07-23).
+- Phase 12 — Cut-Store & Benders Master Robustness Hardening: purpose-built `BendersTrace`
+  per-iteration convergence ledger (retry counts, master/oracle statuses, solve-only timing),
+  degenerate feasibility-cut edge cases proven safe, 66-iteration load test with retry +
+  checkpoint active (measured 0 Clarabel escalations on planning fixtures), cut-store growth
+  instrumented (unbounded accumulation retained). 4097 tests pass / 0 fail; review clean.
 - Phase 10 — Oracle Coupling Wiring & Resilience: `build_planning_oracle`/`solve_planning_oracle!`
   (build-once, `Parameter`-pinned `p_import == z` coupling, per-scenario dual `π_s`),
   `solve_with_retry!` (bounded Clarabel-conditioning ladder), `checkpoint_iteration!`/resume.
@@ -171,4 +176,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-22 — v2.0 Phase 11 complete*
+*Last updated: 2026-07-23 — v2.0 Phase 12 complete*
