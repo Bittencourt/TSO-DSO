@@ -148,3 +148,141 @@ end
     end
     @test all(diff(LBs) .>= -1e-9)
 end
+
+# --------------------------------------------------------------------------------
+# Task 1 (revision 1): load test — >=50-iteration Benders run, retry/checkpoint
+# machinery active, empirical retry-rate measurement.
+#
+# FIXTURE-SHAPE DEVIATION (documented per 12-CONTEXT.md's own explicit Claude's
+# Discretion: "Load-test fixture parameterization (how to force slow convergence:
+# tolerance, fixture shape)"): the plan's own <interfaces> block instructs reuse of
+# test_planning_benders.jl's T=1 literals VERBATIM and to force >=50 iterations by
+# TIGHTENING `tol` alone. EMPIRICALLY MEASURED this session (never assumed): on the
+# literal T=1 fixture, the master's cutting-plane gap trajectory hits a HARD,
+# bit-exact floor of ~4.8995e-8 after only 16 iterations and NEVER moves again, no
+# matter how many further iterations run (verified out to 300) — because a T=1
+# scalar quadratic welfare curve is captured near-exactly by very few tangent-line
+# Benders cuts (superlinear Kelley-cutting-plane convergence in one dimension).
+# Every `tol` above that floor converges in exactly 16 iterations; every `tol`
+# below it never converges at all (200-iteration run exhausts with the IDENTICAL
+# stuck gap). There is NO `tol` value that yields `result.iters in 50:100` while
+# still genuinely CONVERGING on the literal T=1 fixture — tightening tol cannot
+# satisfy this task's own `result.iters >= 50` + "run still CONVERGES, never
+# exhausts" requirement simultaneously.
+#
+# FIX (the ONE fixture-shape change, everything else verbatim): raise the horizon
+# from `T=1` to `T=8` — a genuinely higher-dimensional cutting-plane problem needs
+# more supporting hyperplanes to pin down the epigraph in all 8 dimensions,
+# empirically verified to land `result.iters` at 66 (comfortably inside 50:100,
+# comfortably below `max_iter=200`) at the STANDARD `tol=1e-6` (no tolerance
+# tightening needed at all). Every OTHER literal is reused verbatim, just broadcast
+# to length T=8 (never a new numeric value): `dev`/`agg` unchanged (a=6.0, b=1.0,
+# Pmax=10.0, bus=2, φ=0.9), `λ₀ = fill(4.0, 8)` (same scalar 4.0), `follower_kwargs`
+# unchanged (`corridor_cap=2.0`, `x_inv_max=2.0`, `c_inv=1.0`) except
+# `c_op = fill(0.5, 8)` (same scalar 0.5), `master_kwargs` unchanged
+# (`c_y=0.3`, `y_max=8.0`, `α_x_lb=0.0`) EXCEPT `α_op_lb`, which MUST be loosened
+# from `-5.0` to `-50.0` — this is a CORRECTNESS requirement at T=8 scale, not a
+# convergence-speed tweak: empirically verified that `α_op_lb=-5.0` at T=8 silently
+# clips the epigraph and converges to a WRONG answer (`y=0.34`, cost=-3.36) that is
+# NOT the true optimum, whereas `α_op_lb <= -50.0` all agree on the same converged
+# answer (`y=z=1.4`, cost=-7.84 for every t), independently confirmed by hand
+# re-deriving the T=8 closed form: with all periods symmetric (same λ₀, same
+# device, one-time (not per-period) investment costs `c_y`/`c_inv`),
+# `total(z) = z*(c_y + c_inv/corridor_cap + T*c_op - 2T) + 0.5*T*z^2` (the T=1
+# fixture's own `total(z) = 0.5z² - 0.7z` shape, re-derived for the one-time- vs
+# per-period-cost split at T periods) `= 4.0*z² - 11.2*z`, whose first-order
+# condition gives `z* = 11.2/8 = 1.4` and `total(1.4) = -7.84` — EXACTLY the
+# numbers the production Benders loop converges to. Still the cheap toy
+# `two_bus_feeder()` + `LinDistFlow()` oracle throughout (never the full modified
+# 123-node-class SOCP oracle, per CONTEXT.md's explicit prohibition) — 8 tiny
+# per-period LPs/QP, not a large solve.
+#
+# RUNTIME NOTE (Claude's Discretion, `[:slow]` tag): measured ~33s wall-clock for
+# this ONE item (66 Benders iterations x 3 small subproblem solves each, each
+# printing HiGHS's default verbose solver log) — comfortably pushes the file's
+# total `:planning` quick-run past the ~2-minute budget alongside the other three
+# edge-case items in this file, so this item carries the extra `:slow` tag,
+# mirroring `test_ieee123_admm.jl`'s `[:admm, :phase7]` two-tag precedent.
+@testitem "planning hardening: load test — >=50 Benders iterations, retry + checkpoint machinery active, empirical retry-rate measurement" tags =
+    [:planning, :slow] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using DrWatson: wload
+    using Test: collect_test_logs
+    using Logging: Warn
+
+    # T=8 (NOT the T=1 verbatim literal — see file-header deviation note above):
+    # the only fixture-shape change needed to force a genuinely-converging
+    # >=50-iteration run on the cheap toy oracle. Every OTHER literal is the SAME
+    # value as test_planning_benders.jl's own fixture, merely broadcast to T=8
+    # (never a new numeric constant) — except `α_op_lb`, loosened from -5.0 to
+    # -50.0, a CORRECTNESS requirement at this scale (see header note).
+    T = 8
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
+    λ₀ = fill(4.0, T)
+    follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = fill(0.5, T))
+    master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -50.0, α_x_lb = 0.0)
+    tol = 1e-6   # the project's own STANDARD tolerance — no tightening needed at T=8
+
+    mktempdir() do dir
+        logs, result = collect_test_logs(; min_level = Warn) do
+            TSODSO.solve_stackelberg!(
+                feeder,
+                LinDistFlow(),
+                [agg];
+                λ₀ = λ₀,
+                T = T,
+                follower_kwargs = follower_kwargs,
+                master_kwargs = master_kwargs,
+                tol = tol,
+                max_iter = 200,
+                checkpoint_dir = dir,
+            )
+        end
+
+        # --- empirical retry-rate measurement (STATE.md "measure, don't assume" blocker) ---
+        # AUTHORITATIVE source: BendersTrace.retry_count_trace (plan 12-01's
+        # attempts_out mechanism) — never a log-scrape estimate.
+        total_retries_from_trace = sum(result.trace.retry_count_trace)
+        # INDEPENDENT witness: every solve_with_retry! escalation @warn captured
+        # for the SAME run, counted (never hardcoded).
+        n_retry_warnings =
+            count(l -> occursin("solve_with_retry!: attempt", l.message), logs)
+        @info "planning hardening load test: empirical retry rate" total_retries_from_trace n_retry_warnings result.iters
+        # The cross-check (plan-checker blocker fix, revision 1): the per-iteration
+        # trace and the independently captured log stream must agree EXACTLY.
+        @test total_retries_from_trace == n_retry_warnings
+        @test total_retries_from_trace >= 0
+        @test all(result.trace.retry_count_trace .>= 0)
+
+        # --- convergence + iteration-count bound (never exhausts) ---
+        @test result.gap <= tol
+        @test result.iters >= 50
+        @test result.iters < 200   # converged comfortably before the fail-loud cap
+
+        # --- cut-store growth instrumentation ---
+        @test all(diff(result.trace.n_cuts_trace) .>= 0)
+        @test result.trace.n_cuts_trace[end] == length(result.master.cuts)
+
+        # --- checkpoint round-trip at scale (T-12-07): mid/high iteration k_check ---
+        k_check = min(50, result.iters)
+        path_check = joinpath(dir, "iter_$(lpad(k_check, 5, '0')).jld2")
+        @test isfile(path_check)
+        dict_check = wload(path_check)
+        @test dict_check["state"].LB == result.trace.LB_trace[k_check]
+        @test dict_check["state"].UB == result.trace.UB_trace[k_check]
+        # gap=NaN on a feasibility-branch row is a legitimate sentinel — isequal
+        # compares NaN === NaN as true, unlike ==.
+        @test isequal(dict_check["state"].gap, result.trace.gap_trace[k_check])
+
+        resumed = TSODSO.resume_from_checkpoint(dir)
+        @test resumed.iteration == result.iters
+
+        checkpoint_files = filter(
+            f -> occursin(r"^iter_\d{5}\.jld2$", basename(f)),
+            readdir(dir; join = true),
+        )
+        @test length(checkpoint_files) == result.iters
+    end
+end
