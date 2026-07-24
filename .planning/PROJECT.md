@@ -98,7 +98,16 @@ IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/2
 
 ## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
 
-**Progress:** Phases 10–12 complete (2026-07-23).
+**Progress:** Phases 10–13 complete (2026-07-24).
+- Phase 13 — Nash Diagonalization & Shared-Transmission Coupling: `SharedTransmission` pooled
+  N2-corridor coupling model (`coupling.jl`, per-distributor `x_inv[i]` ownership over one shared
+  capacity row, build-once/`Parameter`-pinned, `DistributorView` atomic best-response),
+  `run_nash!` outer Gauss-Seidel loop with nested-tolerance guard + damping + `NashTrace`
+  two-level ledger, `plot_nash_convergence` (CairoMakie ext), and `run_nash_probe` — the NASH-04
+  honesty gate: ≥3 seeds × 2 sweep orders, max-pairwise-distance spread, structural
+  "**a** converged equilibrium" reporting. Verification 5/5; code review clean after a 3-iteration
+  fix loop (6 fixes, incl. CR-01 seed-liveness making the multi-seed dimension genuinely live,
+  proven by a distinct-equilibria regression: cold `[0.6,0.6]` vs hot-seed `[0.7,0.0]`).
 - Phase 12 — Cut-Store & Benders Master Robustness Hardening: purpose-built `BendersTrace`
   per-iteration convergence ledger (retry counts, master/oracle statuses, solve-only timing),
   degenerate feasibility-cut edge cases proven safe, 66-iteration load test with retry +
@@ -176,4 +185,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-23 — v2.0 Phase 12 complete*
+*Last updated: 2026-07-24 — v2.0 Phase 13 complete*
