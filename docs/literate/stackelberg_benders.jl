@@ -1,0 +1,124 @@
+# # Rung 6 — Stackelberg-Benders (Planning)
+#
+# This page is the PVAL-03 literate proof for the planning layer's single-distributor
+# Stackelberg equilibrium (PLAN-04/PLAN-05/PLAN-06/PLAN-07/PVAL-01): it executes the real
+# [`solve_stackelberg!`](@ref) hand-rolled Benders loop end-to-end during the Documenter
+# build, on a toy instance ECONOMICALLY EQUIVALENT to the one Phase 11's permanent
+# certification regression uses, so the numbers below are a genuinely solved answer —
+# never a hardcoded literal copied from a goldens/test file (mirrors the `admm.jl`/
+# `pricing_dlmp.jl` reproducibility-proof pattern, threat T-14-05).
+#
+# ## The PSR problem-number map — planning-layer symbols
+#
+# The bilevel game the leader/follower/master triple below solves, mapped to the PSR
+# N1–N2 note's own problem numbers and this project's `src/planning/` code symbols:
+#
+#   - **Follower LP** `α(z)` (transmission-reinforcement investment, given a trial
+#     coupling flow `z`) — [`build_follower`](@ref) constructs it ONCE;
+#     [`solve_follower!`](@ref) re-solves it at each Benders trial.
+#   - **Benders master** (the leader's epigraph relaxation over `y`, accumulating
+#     optimality/feasibility cuts from both the follower and the operational oracle) —
+#     [`build_master`](@ref) constructs it ONCE; [`add_optimality_cut!`](@ref)/
+#     [`add_feasibility_cut!`](@ref) append cuts; [`solve_master!`](@ref) re-solves it.
+#   - **The outer Benders loop** tying the two together against the REUSED v1
+#     operational welfare oracle — [`solve_stackelberg!`](@ref) (the entrypoint this
+#     page calls live below).
+#
+# ## The coupling seam — z ↔ p_import/p_ag, λ_j ↔ π_s
+#
+# | Planning-layer symbol | Operational-layer symbol | Where it lives |
+# |:-----------------------|:--------------------------|:----------------|
+# | `z` (the Benders trial coupling flow) | `p_import` at the oracle's frontier / the aggregator's own net import `p_ag` | `PlanningOracle`'s `pin[t]: p_import[t] == z[t]` ([`build_planning_oracle`](@ref)); the follower's own `coupling[t]: x_op[t] == z[t]` ([`build_follower`](@ref)) |
+# | `λ_j[t] ↔ π_s` (the coupling-constraint dual) | the DADP/DLMP the v1 operational layer already reports | the oracle's `pin` dual (`oracle_res.π`, the optimality-cut gradient) and the follower's own `coupling` dual (`follower_res.π_s`) |
+#
+# ## The Phase 11 empirical certification story (narrated, not re-executed)
+#
+# The leader/follower role assignment and the coupling-dual sign convention used by
+# [`solve_stackelberg!`](@ref) are NOT assumed — they were independently CERTIFIED in
+# `test/test_planning_certification.jl` (a permanent `[:planning]` regression, retained
+# forever) against an INDEPENDENT `BilevelJuMP` MPEC reduction of the SAME toy instance
+# reused (in economically-equivalent form) below. Two structurally-different
+# reformulations — `BilevelJuMP.StrongDualityMode` (strong-duality equality) and
+# `BilevelJuMP.ProductMode` (epsilon-relaxed bilinear-product complementarity) — agree
+# with EACH OTHER and with a hand-worked enumeration (`y* = z* = 0.7`, total cost
+# `-0.245`); a `BilevelJuMP.BigMMode` + HiGHS attempt is retained ONLY as a documented,
+# asserted NEGATIVE regression (its Big-M reformulation combined with this instance's
+# quadratic upper-level term produces a genuine MIQP that HiGHS categorically cannot
+# solve, at ANY Big-M bound). `solve_stackelberg!` (the production Benders loop) agrees
+# with BOTH successfully-solving reformulations and the hand enumeration — NO sign flip
+# was ever required in `follower.jl`/`benders.jl`.
+#
+# This page deliberately does **NOT** re-execute that certification live: it imports
+# only `TSODSO` (no `using BilevelJuMP`, `using HiGHS`, or `using Ipopt` anywhere in this
+# file) so the published docs site never depends on a validation-oracle-only, test-only
+# package — see `test/test_planning_certification.jl` for the full certification proof.
+
+using TSODSO
+using TSODSO: Bus, Branch, Feeder
+
+# ## Building a toy instance economically equivalent to the certified fixture
+#
+# `test/test_planning_certification.jl`'s own toy fixture uses a test-only
+# `ToyElasticDevice` (utility `U(p) = a·p − (b/2)·p²`, `a=6.0`, `b=1.0`, `Pmax=10.0`) at
+# bus 2 of a near-lossless 2-bus feeder — a test-only struct not reachable from `docs/`
+# without adding a new dependency. The PUBLIC `Deferrable` device's own utility (thesis
+# eq. 3.12) is `U(p) = −(b/2)·(p − E)²`, which expands to `b·E·p − (b/2)·p²` (dropping the
+# constant `-(b/2)E²` term, RESEARCH A5) — algebraically IDENTICAL to `a·p − (b/2)·p²`
+# whenever `a = b·E`. Setting `E = 6.0`, `b = 1.0` (so `a = b·E = 6.0`, matching the
+# certified fixture's own `a`) with a single-hour window `[1,1]` (`T = 1`) reproduces the
+# SAME economics as the certified fixture using ONLY public `TSODSO` API.
+
+buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)]
+branches = [Branch(1, 2, 1e-3, 1e-3, SMAX_NO_LIMIT)]
+feeder = Feeder(buses, branches, 1)
+
+T = 1
+dev = Deferrable(2, 1, 1, 6.0, 10.0, 1.0)
+agg = Aggregator(2, 0.9, [dev], fill(0.0, T))
+
+λ₀ = [4.0]
+follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
+
+# ## Solving the Stackelberg equilibrium live
+#
+# `checkpoint_dir` must be writable — `mktempdir()` gives every doc build a fresh,
+# disposable checkpoint directory. `solve_stackelberg!` builds the oracle/follower/master
+# ONCE, then iterates the Benders loop to the documented relative UB/LB gap tolerance.
+
+checkpoint_dir = mktempdir()
+result = solve_stackelberg!(
+    feeder,
+    LinDistFlow(),
+    [agg];
+    λ₀ = λ₀,
+    T = T,
+    follower_kwargs = follower_kwargs,
+    master_kwargs = master_kwargs,
+    tol = 1e-6,
+    max_iter = 100,
+    checkpoint_dir = checkpoint_dir,
+)
+
+# ## Validation — a genuinely converged Benders gap
+#
+# The converged relative UB/LB gap (never a hardcoded tolerance echo — the loop's own
+# termination criterion):
+
+result.gap
+
+# The leader's converged flexibility investment `y`:
+
+result.y
+
+# The converged coupling flow `z` — economically, this instance reproduces the SAME
+# ballpark as the certified fixture's own hand-enumerated `z* = 0.7` (see the
+# certification narrative above), since the underlying economics are identical by
+# construction; the exact digits below come from THIS live solve, not copied from
+# `test_planning_certification.jl`:
+
+result.z
+
+# The converged upper bound (leader's total cost at the incumbent):
+
+result.UB

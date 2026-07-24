@@ -24,6 +24,8 @@ for src in (
     "prosumer_welfare.jl",
     "pricing_dlmp.jl",
     "admm.jl",
+    "stackelberg_benders.jl",   # NEW: Rung 6
+    "nash_diagonalization.jl",  # NEW: Rung 7
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -57,6 +59,10 @@ makedocs(;
             "Rung 3: Devices + GLB-CVX" => "generated/prosumer_welfare.md",
             "Rung 4: DADP/DLMP Pricing" => "generated/pricing_dlmp.md",
             "Rung 5: ADMM Decomposition" => "generated/admm.md",
+        ],
+        "Planning" => [
+            "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",
+            "Rung 7: Nash Diagonalization & Shared Corridor" => "generated/nash_diagonalization.md",
         ],
         "API Reference" => "api.md",
     ],
