@@ -234,6 +234,9 @@ end
     @test upper_bound(shared.x_inv[1]) == 0.3
 end
 
+# NOTE: consolidated coverage of all 4 planning-layer builders now also lives in
+# test/test_planning_noninteger.jl; this SharedTransmission-only check is kept as
+# redundant post-build coverage (harmless, not removed).
 @testitem "planning coupling: PVAL-04 continuous-only regression — no binary/integer variable anywhere in the shared model" tags =
     [:planning] begin
     using TSODSO

@@ -317,6 +317,10 @@ end
     # Revision 1, checker-added: PVAL-04 continuous-only companion check — run_nash!'s
     # own write-back/activate cycle never introduces a binary/integer variable into the
     # shared model it mutates.
+    # NOTE: consolidated coverage of all 4 planning-layer builders now also lives in
+    # test/test_planning_noninteger.jl; this check additionally covers the
+    # POST-run_nash!-mutation state (a genuinely different code path than a fresh
+    # build), so it is kept, not removed.
     @test all(v -> !is_binary(v) && !is_integer(v), all_variables(shared.model))
 end
 
