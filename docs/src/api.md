@@ -108,3 +108,21 @@ Modules = [TSODSO]
 Pages = ["experiments/Scenario.jl", "experiments/materialize.jl", "experiments/run.jl", "experiments/store.jl", "experiments/sweep.jl"]
 Order = [:type, :function]
 ```
+
+## Planning Layer
+
+```@autodocs
+Modules = [TSODSO]
+Pages = [
+    "planning/retry.jl",
+    "planning/checkpoint.jl",
+    "planning/trace.jl",
+    "planning/subproblem.jl",
+    "planning/follower.jl",
+    "planning/master.jl",
+    "planning/benders.jl",
+    "planning/coupling.jl",
+    "planning/nash.jl",
+]
+Order = [:type, :constant, :function]
+```
