@@ -43,7 +43,8 @@ using DrWatson: datadir
     solve_stackelberg!(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int, follower_kwargs::NamedTuple, master_kwargs::NamedTuple,
                        tol::Real = 1e-6, max_iter::Int = 100,
-                       checkpoint_dir::AbstractString = datadir("planning_checkpoints"))
+                       checkpoint_dir::AbstractString = datadir("planning_checkpoints"),
+                       follower = nothing)
         -> NamedTuple
 
 Solve the single-distributor Stackelberg equilibrium (flexibility-investment leader vs.
@@ -55,9 +56,22 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 
  1. Boundary guards (mirror `solve_admm`): `T >= 1`, `max_iter >= 1`, `length(λ₀) == T`,
     each `ArgumentError` BEFORE any build call.
- 2. BUILD ONCE, outside the loop: `oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)`, `follower = build_follower(; follower_kwargs..., T = T)`,
+ 2. BUILD ONCE, outside the loop: `oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)`,
+    `follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower`,
     `master = build_master(; master_kwargs..., T = T)`. No `build_*`/`Model(` call appears
     anywhere inside the `for k in 1:max_iter` loop below.
+
+    **`follower` keyword (plan 13-02, additive/non-breaking — mirrors the
+    `attempts_out::Union{Nothing,Ref{Int}}` precedent in `master.jl`/`retry.jl`):**
+    defaults to `nothing`, in which case behavior is BYTE-IDENTICAL to every Phase 11/12
+    call site (a fresh `FollowerLP` is built from `follower_kwargs` exactly as before). When
+    a caller (Phase 13's `run_nash!`) instead supplies a pre-built per-distributor view
+    object (e.g. `coupling.jl`'s `DistributorView`, duck-typed via its own
+    `solve_follower!(view, z_trial)` method), that object is used DIRECTLY in place of a
+    freshly-built `FollowerLP` — no follower is built by this function at all in that case.
+    Supplying BOTH a non-`nothing` `follower` AND a non-empty `follower_kwargs`
+    simultaneously is rejected with an `ArgumentError` (ambiguous — which one wins is never
+    silently decided).
  3. Iterate `k = 1:max_iter`: `lb_res = solve_master!(master)` (the Benders lower bound and
     trial `z_k`); `follower_res = solve_follower!(follower, lb_res.z)` (DIRECT call — never
     `solve_with_retry!`-wrapped, per plan 11-01's follower contract) — the follower's
@@ -106,7 +120,8 @@ retry-gated subproblems' termination statuses (never a log-scrape estimate).
 # Throws
 
   - `ArgumentError` on `T < 1`, `max_iter < 1`, `length(λ₀) != T`, a non-finite/non-positive
-    `tol`, or `max_iter > 99_999` — before any build call (IN-02/IN-03).
+    `tol`, `max_iter > 99_999`, or a non-`nothing` `follower` supplied together with a
+    non-empty `follower_kwargs` (plan 13-02) — before any build call (IN-02/IN-03).
   - `ErrorException` if `max_iter` is exhausted without converging, naming the trace's
     last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
     return a non-converged result.
@@ -122,6 +137,7 @@ function solve_stackelberg!(
     tol::Real = 1e-6,
     max_iter::Int = 100,
     checkpoint_dir::AbstractString = datadir("planning_checkpoints"),
+    follower = nothing,
 )
     # ---- Boundary guards (mirror solve_admm): fail here, not deep in the loop ----------------
     T >= 1 || throw(ArgumentError("solve_stackelberg! needs T >= 1 (got T=$T)"))
@@ -145,12 +161,21 @@ function solve_stackelberg!(
             "max_iter=$max_iter",
         ),
     )
+    # plan 13-02: the additive `follower` keyword and `follower_kwargs` are mutually
+    # exclusive — supplying both would silently pick one and discard the other; fail
+    # loudly instead, before any build call.
+    follower === nothing || isempty(follower_kwargs) || throw(
+        ArgumentError(
+            "solve_stackelberg!: supply either follower_kwargs or follower, not both " *
+            "(got follower=$follower, follower_kwargs=$follower_kwargs)",
+        ),
+    )
 
     # ---- BUILD ONCE: the oracle/follower/master subproblems are constructed OUTSIDE the
     # loop. No `build_*`/`Model(` call appears below this point — the loop only re-solves
     # via `solve_planning_oracle!`/`solve_follower!`/`solve_master!` and appends cut rows.
     oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)
-    follower = build_follower(; follower_kwargs..., T = T)
+    follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower
     master = build_master(; master_kwargs..., T = T)
 
     UB = Inf
