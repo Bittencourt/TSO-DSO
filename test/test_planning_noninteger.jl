@@ -15,9 +15,12 @@
 # covers the POST-run_nash!-mutation state, a genuinely different code path than a fresh
 # build.
 #
-# Tripwire: a source-scan over src/planning/*.jl collects every `function build_\w+(`
-# definition and asserts the found set equals this registry's key set — so a future new
-# builder file/function cannot silently ship without this guard (T-14-04, Repudiation).
+# Tripwire (hardened per Phase 14 review WR-01): a RECURSIVE source-scan over src/planning/
+# collects every long- OR short-form `build_\w+` definition (docstring lines excluded),
+# unioned with a syntax-independent semantic channel (every EXPORTED `build_*` symbol not on
+# the documented operational-layer allowlist), and asserts the found set equals this
+# registry's key set — so a future new builder file/function cannot silently ship without
+# this guard (T-14-04, Repudiation).
 
 @testitem "planning PVAL-04: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
@@ -69,14 +72,53 @@
 
     # Source-scan tripwire (T-14-04): a future new build_* function under src/planning/
     # cannot silently skip this registry — the found-set must equal the registry's keys.
+    #
+    # Hardened (Phase 14 review WR-01) against the silent false-negative shapes of the
+    # original single-regex `readdir` scan:
+    #   1. SHORT-FORM definitions (`build_x(...) = ...`) — the `function` keyword is now
+    #      optional in the regex.
+    #   2. INDENTED definitions (inside `module`/`if`/`@static` blocks) — leading
+    #      whitespace is now allowed.
+    #   3. SUBDIRECTORIES — `walkdir` replaces the non-recursive `readdir`.
+    #   4. Builders landing OUTSIDE src/planning/ — a second, syntax-independent semantic
+    #      channel below unions in every EXPORTED `build_*` symbol not on the documented
+    #      operational-layer allowlist.
+    # Docstring interiors are skipped via triple-quote state tracking: docstring signature
+    # conventions (`    build_follower(; T::Int, ...`) and docstring prose lines beginning
+    # with a `build_*(` call (e.g. nash.jl's run_nash_probe algorithm text) would otherwise
+    # false-positive under the widened regex. Any REMAINING false positive (a bare
+    # `build_*(...)` call statement opening a non-docstring line) fails the set equality
+    # LOUDLY — the correct polarity for a tripwire.
     planning_dir = joinpath(pkgdir(TSODSO), "src", "planning")
     found = Set{String}()
-    for f in readdir(planning_dir; join = true)
-        endswith(f, ".jl") || continue
-        for line in eachline(f)
-            m = match(r"^function (build_\w+)\(", line)
+    for (root, _, files) in walkdir(planning_dir), fname in files
+        endswith(fname, ".jl") || continue
+        in_docstring = false
+        for line in eachline(joinpath(root, fname))
+            if isodd(count("\"\"\"", line))
+                in_docstring = !in_docstring
+                continue
+            end
+            in_docstring && continue
+            m = match(r"^\s*(?:function\s+)?(build_\w+)\s*\(", line)
             m !== nothing && push!(found, m.captures[1])
         end
     end
+
+    # Semantic channel (syntax-independent): every EXPORTED `build_*` symbol must be
+    # either a planning-registry key or on this documented operational-layer allowlist —
+    # so a NEW exported builder anywhere in the package, regardless of definition syntax
+    # or file location, must land in one of the two, loudly. (A new OPERATIONAL builder
+    # failing here is a deliberate, loud prompt to extend this allowlist consciously.)
+    operational_builders = Set([
+        "build_agr_opt",     # admm/AgrOpt.jl — ADMM aggregator subproblem
+        "build_dso_opt",     # admm/DsoOpt.jl — ADMM DSO subproblem
+        "build_ieee123",     # data/ieee123.jl — feeder fixture constructor
+        "build_feeder",      # experiments/materialize.jl — scenario materializer
+        "build_price",       # experiments/materialize.jl — scenario materializer
+        "build_population",  # experiments/materialize.jl — scenario materializer
+    ])
+    exported_builders = Set(filter(n -> startswith(n, "build_"), string.(names(TSODSO))))
+    union!(found, setdiff(exported_builders, operational_builders))
     @test found == Set(keys(registry))
 end
