@@ -571,3 +571,208 @@ end
         @test occursin("NASH_MAKIE_EXT_OK", out)
     end
 end
+
+# --- Task 1 (plan 13-03): run_nash_probe — multi-seed/multi-order gate + honest spread
+# reporting (NASH-04). Reuses the same N=2 symmetric toy fixture as testitems 5-9 above
+# (build_shared_transmission N=2, T=1, corridor_cap=2.0, x_inv_max=[0.3,0.3],
+# c_inv=[1.0,1.0], c_op=[[0.5],[0.5]]; each distributor's own operational side identical
+# to the Phase-11 toy fixture) plus a genuinely new N=3 corridor extension for the
+# probe-only (no closed-form hand-check required, per CONTEXT.md's own
+# N=2-hand-checkable/N=3-probe-only scope split).
+
+@testitem "planning nash: N=2 gating probe — 3 seeds x 2 orders all converge, structural 'a converged equilibrium' language" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    build_shared = () -> build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+
+    # Hand-picked per 13-RESEARCH.md Pattern 4: a cold start, a symmetric-capacity-split
+    # guess (the hand-checked equilibrium's own candidate ballpark), and an asymmetric
+    # start favoring distributor 1.
+    seeds = (;
+        zero = zeros(2, 1),
+        saturating = fill(2.0 * (0.3 + 0.3) / 2, 2, 1),
+        skewed = [0.5; 0.1;;],
+    )
+    orders = (:forward, :reverse)
+
+    result = run_nash_probe(
+        specs,
+        build_shared;
+        seeds = seeds,
+        orders = orders,
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+
+    @test result.n_runs == 6
+    @test all(r -> r.result.converged, result.runs)
+    @test occursin("a converged equilibrium", result.summary)
+    @test !occursin("the equilibrium", result.summary)
+    @test result.spread.z_spread >= 0.0 && isfinite(result.spread.z_spread)
+    @test result.spread.x_inv_spread >= 0.0 && isfinite(result.spread.x_inv_spread)
+    @test result.spread.cost_spread >= 0.0 && isfinite(result.spread.cost_spread)
+end
+
+@testitem "planning nash: N=3 probe converges (no closed-form hand-check required, per CONTEXT.md's N=2-hand-checkable/N=3-probe-only scope)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec, spec]
+
+    build_shared = () -> build_shared_transmission(;
+        N = 3,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3, 0.3],
+        c_inv = [1.0, 1.0, 1.0],
+        c_op = [[0.5], [0.5], [0.5]],
+    )
+
+    seeds = (;
+        zero = zeros(3, 1),
+        saturating = fill(2.0 * (0.3 + 0.3 + 0.3) / 3, 3, 1),
+        skewed = [0.5; 0.1; 0.3;;],
+    )
+    orders = (:forward, :reverse)
+
+    result = run_nash_probe(
+        specs,
+        build_shared;
+        seeds = seeds,
+        orders = orders,
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+
+    @test result.n_runs == 6
+    @test all(r -> r.result.converged, result.runs)
+    @test occursin("a converged equilibrium", result.summary)
+    @test !occursin("the equilibrium", result.summary)
+end
+
+@testitem "planning nash: run_nash_probe propagates a non-converging probe run, never swallows it" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    build_shared = () -> build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    seeds = (;
+        zero = zeros(2, 1),
+        saturating = fill(2.0 * (0.3 + 0.3) / 2, 2, 1),
+        skewed = [0.5; 0.1;;],
+    )
+    orders = (:forward, :reverse)
+
+    # Deliberately too tight a max_sweeps for ONE probe combination to converge within
+    # — must raise ErrorException, propagated from the underlying run_nash!, never
+    # caught/swallowed by run_nash_probe.
+    @test_throws ErrorException run_nash_probe(
+        specs,
+        build_shared;
+        seeds = seeds,
+        orders = orders,
+        tol_outer = 1e-4,
+        max_sweeps = 1,
+        checkpoint_dir = mktempdir(),
+    )
+end
+
+@testitem "planning nash: run_nash_probe guards reject fewer than 3 seeds or fewer than 2 orders" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    build_shared = () -> build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+
+    # Only 2 seeds — violates the >= 3 seeds minimum.
+    seeds_too_few = (; zero = zeros(2, 1), skewed = [0.5; 0.1;;])
+    @test_throws ArgumentError run_nash_probe(
+        specs,
+        build_shared;
+        seeds = seeds_too_few,
+        orders = (:forward, :reverse),
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+
+    # Only 1 order — violates the >= 2 orders minimum.
+    seeds_ok = (;
+        zero = zeros(2, 1),
+        saturating = fill(2.0 * (0.3 + 0.3) / 2, 2, 1),
+        skewed = [0.5; 0.1;;],
+    )
+    @test_throws ArgumentError run_nash_probe(
+        specs,
+        build_shared;
+        seeds = seeds_ok,
+        orders = (:forward,),
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+end
