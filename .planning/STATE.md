@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
-status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-07-24T01:02:08.590Z"
+status: ready_to_plan
+stopped_at: Phase 13 complete (3/3) — ready to discuss Phase 14
+last_updated: 2026-07-24T04:34:14.107Z
 last_activity: 2026-07-24 -- Phase 13 execution started
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 10
   percent: 60
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 13 — nash-diagonalization-shared-transmission-coupling
+**Current focus:** Phase 14 — validation oracle regression hardening & docs
 
 ## Current Position
 
-Phase: 13 (nash-diagonalization-shared-transmission-coupling) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 13
-Last activity: 2026-07-24 -- Phase 13 execution started
+Phase: 14
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-24
 
 Progress: [██████████] 100%
 
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 50 (v1.0 total; 0 in v2.0)
+- Total plans completed: 53 (v1.0 total; 0 in v2.0)
 - Average duration: —
 - Total execution time: 0 hours (v2.0)
 
@@ -50,6 +50,7 @@ Progress: [██████████] 100%
 | 11 | 3 | - | - |
 | Phase 12 P02 | 65min | 2 tasks | 2 files |
 | 12 | 2 | - | - |
+| 13 | 3 | - | - |
 
 **Recent Trend:**
 
