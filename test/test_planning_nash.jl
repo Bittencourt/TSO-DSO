@@ -893,6 +893,61 @@ end
     @test isapprox(result_hot.x_inv, [0.05, 0.3]; atol = 1e-3)
     @test maximum(abs.(result_cold.z .- result_hot.z)) > 0.05
 
+    # Run C (WR-05): differs from run B ONLY in z0 — the SAME explicit x_inv0 — so any
+    # trajectory/equilibrium fork between B and C can come ONLY from the z-Parameter
+    # half of the seed commit (`set_parameter_value.(shared.z[j,:], z0[j,:])` inside
+    # run_nash!'s pre-sweep write_back! loop), the exact dimension run_nash_probe
+    # varies. NOTE a hot-z0 run with the DERIVED x_inv0 default cannot pin this: with
+    # T = 1 the minimal derived investment x_inv0[j] = z0[j]/corridor_cap makes a
+    # pinned neighbor's seeded consumption and seeded headroom cancel EXACTLY in the
+    # pooled capacity row (z_1 + z0_2 <= cap*(x_1 + z0_2/cap)  ⇔  z_1 <= cap*x_1), so
+    # every derived-default seed yields the cold run's sweep-1 feasible set whether or
+    # not the z commit is live, and residuals differ only via the Julia-side z_prev —
+    # which never touches the model. An explicit x_inv0 with NON-minimal support is
+    # what breaks the cancellation.
+    #
+    # Here distributor 2's seeded flow 0.6 consumes ALL the pooled headroom its seeded
+    # investment provides (corridor_cap * 0.3 = 0.6), so distributor 1's sweep-1
+    # best-response collapses back to z_1 <= 2*x_inv_1: BR (z, x_inv) = (0.6, 0.3),
+    # residual max(|0.6 - 0|, 0.3) = 0.6 — vs run B's 0.7, where the same pinned 0.3
+    # is UNCONSUMED headroom and lets distributor 1 reach its unconstrained optimum
+    # 0.7. If a refactor dropped (or reordered around) the z-Parameter commit while
+    # keeping the investment pinning, distributor 1 would see z_2 = 0 at pins
+    # [_, 0.3] and run C would replay run B EXACTLY — sweep-1 residual 0.7 and
+    # free-riding equilibrium [0.7, 0.0] — so BOTH assertion families below fail
+    # loudly on precisely that partial-CR-01 recurrence. (Full deletion of the seed
+    # loop is already pinned by run B's own assertions above.)
+    result_hotz = run_nash!(
+        build_toy_specs(),
+        build_toy_shared();
+        z0 = [0.0; 0.6;;],
+        x_inv0 = [0.0, 0.3],
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+    @test result_hotz.converged
+    @test result_hotz.trace.sweep_trace[1] == 1
+    @test result_hotz.trace.distributor_trace[1] == 1
+
+    # EXACT sweep-1 residual values, not mere pairwise inequality: 0.6 is reachable
+    # only when distributor 1's first best-response genuinely sees z_2 = 0.6 inside
+    # the shared model (dead z commit ⇒ 0.7 here, identical to run B).
+    @test isapprox(result_hot.trace.nash_residual_trace[1], 0.7; atol = 1e-3)
+    @test isapprox(result_hotz.trace.nash_residual_trace[1], 0.6; atol = 1e-3)
+    @test !isapprox(
+        result_hot.trace.nash_residual_trace[1],
+        result_hotz.trace.nash_residual_trace[1];
+        atol = 1e-3,
+    )
+
+    # ...and the reached equilibria fork on z0 ALONE: run B (z0 = 0) free-rides to
+    # [0.7, 0.0]; run C (z0 = [0, 0.6], same x_inv0) settles on the symmetric
+    # [0.6, 0.6] — the z-Parameter seed dimension is live end-to-end.
+    @test isapprox(result_hotz.z, [0.6, 0.6]; atol = 1e-3)
+    @test isapprox(result_hotz.x_inv, [0.3, 0.3]; atol = 1e-3)
+    @test maximum(abs.(result_hot.z .- result_hotz.z)) > 0.05
+
     # Seed-consistency guards: an over-ceiling x_inv0 entry and a capacity-infeasible
     # (z0, x_inv0) pair must both fail loudly BEFORE any solve.
     @test_throws ArgumentError run_nash!(
