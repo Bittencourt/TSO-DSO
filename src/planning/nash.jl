@@ -572,6 +572,18 @@ function run_nash!(
             # freedom is already pinned; HiGHS presolves it away) and leaves `shared`
             # in a genuinely solved state consistent with the returned equilibrium.
             optimize!(shared.model)
+            # WR-03: fail-loud solve discipline (project-wide — every other solve in
+            # this codebase is gated). A fully-pinned model can still terminate
+            # non-OPTIMAL on tolerance-level inconsistency between the pinned z
+            # Parameters and the pinned x_inv bounds; returning `converged = true`
+            # over an untrusted solver state would poison every subsequent
+            # value()/dual() query far from the cause.
+            is_solved_and_feasible(shared.model) || error(
+                "run_nash!: final consistency re-solve of the fully-pinned shared " *
+                "model failed (termination_status=" *
+                "$(termination_status(shared.model))) — the converged state is " *
+                "not mutually feasible",
+            )
             return (;
                 z = copy(z_prev),
                 x_inv = copy(x_inv_prev),
