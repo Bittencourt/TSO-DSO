@@ -477,3 +477,188 @@ function run_nash!(
 end
 
 export run_nash!
+
+# --- run_nash_probe — multi-seed/multi-order gate + honest spread reporting (NASH-04,
+# plan 13-03 Task 1) ---
+#
+# THIS IS THE HONESTY GATE THE ENTIRE PHASE EXISTS TO IMPLEMENT (STATE.md's own carried
+# blocker — Gauss-Seidel Nash diagonalization has NO general uniqueness/convergence
+# guarantee): `run_nash_probe` repeats `run_nash!` across a hand-picked matrix of
+# initial-`z` seeds x sweep orders, asserts EVERY combination converges (a phase-gating
+# regression — a single non-converging probe run must fail loudly, never a soft
+# warning), and reports the observed equilibrium SPREAD across runs — never averaging,
+# collapsing, or silently presenting one run as "the" equilibrium.
+#
+# FRESH `SharedTransmission` PER (seed, order) COMBINATION, BY CONSTRUCTION: per this
+# file's own `run_nash!` docstring/header, `activate_distributor!`/`write_back!`
+# DESTRUCTIVELY mutate a `SharedTransmission`'s variable bounds/Parameters. Reusing ONE
+# `shared` object across multiple probe runs would silently carry state (pinned bounds,
+# parameter values) from one run into the next, corrupting the "independent probe run"
+# premise this function's own gating contract depends on. `build_shared` is therefore a
+# ZERO-ARGUMENT FACTORY, called ONCE per (seed, order) pair — never a pre-built instance
+# passed in and reused.
+#
+# NO try/catch AROUND run_nash!, BY DESIGN (T-13-10): a non-converging probe run's
+# `ErrorException` (raised internally by `run_nash!` on `max_sweeps` exhaustion) must
+# propagate directly out of `run_nash_probe` to the caller — this is the gating
+# regression NASH-04's own success criterion requires, not a defect to be caught and
+# summarized away as "mostly converged".
+
+"""
+    run_nash_probe(specs::AbstractVector{<:NamedTuple}, build_shared::Function;
+                   seeds::NamedTuple, orders::Tuple = (:forward, :reverse),
+                   tol_outer::Real = 1e-4, max_sweeps::Int = 50,
+                   checkpoint_dir::AbstractString = datadir("nash_probe_checkpoints")) ->
+    NamedTuple
+
+Probe `run_nash!`'s Gauss-Seidel diagonalization across every `(seed, order)` combination
+in the seed/order matrix (NASH-04), asserting EVERY combination converges (a phase-gating
+regression — see this section's header) and reporting the observed equilibrium spread —
+structurally as "a converged equilibrium (never "the equilibrium"), since Gauss-Seidel
+diagonalization carries no general uniqueness guarantee (STATE.md's own carried blocker).
+
+`build_shared` is a ZERO-ARGUMENT closure/function returning a FRESH `SharedTransmission`
+(e.g. `() -> build_shared_transmission(; N=2, T=1, ...)`), called ONCE per `(seed, order)`
+combination — NEVER reused across combinations. `activate_distributor!`/`write_back!`
+(this file's own `run_nash!`, `coupling.jl` plan 13-01) mutate a `SharedTransmission`
+DESTRUCTIVELY; reusing one `shared` instance across probe runs would silently leak state
+from one run into the next, corrupting the "independent probe run" premise this
+function's own gating contract depends on.
+
+# Boundary guards (before any `run_nash!` call)
+
+  - `length(seeds) >= 3` — CONTEXT.md's locked "≥3 seeds" minimum.
+  - `length(orders) >= 2` — CONTEXT.md's locked "2 sweep orders" minimum.
+  - every entry of `orders` `in (:forward, :reverse)`.
+
+# Algorithm
+
+For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in `orders`
+(`length(seeds) * length(orders) >= 6` combinations): build a FRESH `shared_run =
+build_shared()`, call `run_nash!(specs, shared_run; z0 = seed_z0, tol_outer, max_sweeps,
+order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
+`try`/`catch` around the call (see this section's header; a non-converging run's
+`ErrorException` propagates directly out of this function, by design). Collect `(; seed =
+seed_name, order, result)` for every combination.
+
+After every combination converges (by construction — any non-convergence already
+propagated and exited this function before this point is reached), compute the pairwise
+spread over all `n_runs = length(seeds) * length(orders)` collected runs as the MAXIMUM
+pairwise distance across every unordered pair (all `binomial(n_runs, 2)` combinations) —
+NEVER a mean/variance or other statistical summary that could understate an outlier run
+(13-RESEARCH.md Pattern 4's own explicit rationale):
+
+  - `z_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.z .-
+    runs[b].result.z))`.
+  - `x_inv_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.x_inv .-
+    runs[b].result.x_inv))`.
+  - `cost_spread`: maximum over all pairs of `abs(sum(runs[a].result.UB) -
+    sum(runs[b].result.UB))` (system-level total cost = the sum of every distributor's
+    own converged `UB`, already returned by `run_nash!`).
+
+# Returns
+
+`(; runs, spread, summary, n_runs)` where `runs` is the full `Vector` of every individual
+`(; seed, order, result)` combination (NEVER averaged/collapsed — retained so a caller can
+inspect any individual run), `spread::NamedTuple` is `(; z_spread, x_inv_spread,
+cost_spread)`, `summary::String` contains the literal substring `"a converged
+equilibrium"` and NEVER the literal substring `"the equilibrium"` (constructed so this is
+true BY CONSTRUCTION — no variable is ever interpolated immediately adjacent to the word
+"the" directly before "equilibrium"), and `n_runs` is the total probe-run count.
+
+Callers presenting equilibrium results to a human MUST use `summary` (or construct an
+equally honest string reporting spread across every run) — never pick `runs[1]` (or any
+other single run) and label it definitive. This is NASH-04's own "never present one run as
+canonical" mandate, discharged here in code (T-13-08).
+
+# Throws
+
+  - `ArgumentError` if `length(seeds) < 3`, `length(orders) < 2`, or any `orders` entry is
+    not `:forward`/`:reverse` — before any `run_nash!` call.
+  - `ErrorException`, propagated UNCAUGHT from the underlying `run_nash!` call, if ANY
+    `(seed, order)` combination fails to converge within `max_sweeps` (T-13-10 — never
+    swallowed or summarized as "mostly converged").
+"""
+function run_nash_probe(
+    specs::AbstractVector{<:NamedTuple},
+    build_shared::Function;
+    seeds::NamedTuple,
+    orders::Tuple = (:forward, :reverse),
+    tol_outer::Real = 1e-4,
+    max_sweeps::Int = 50,
+    checkpoint_dir::AbstractString = datadir("nash_probe_checkpoints"),
+)
+    # ---- Boundary guards (mirror run_nash!'s own guards-before-solve discipline):
+    # fail here, not deep inside the probe matrix. --------------------------------
+    length(seeds) >= 3 || throw(
+        ArgumentError(
+            "run_nash_probe: seeds must contain >= 3 entries (CONTEXT.md's locked " *
+            "minimum), got $(length(seeds))",
+        ),
+    )
+    length(orders) >= 2 || throw(
+        ArgumentError(
+            "run_nash_probe: orders must contain >= 2 entries (CONTEXT.md's locked " *
+            "minimum), got $(length(orders))",
+        ),
+    )
+    for order in orders
+        order in (:forward, :reverse) || throw(
+            ArgumentError(
+                "run_nash_probe: every orders entry must be :forward or :reverse, got $order",
+            ),
+        )
+    end
+
+    # ---- Enumerate every (seed, order) combination — each against a FRESH
+    # SharedTransmission (see this section's header: never reuse one across runs). ----
+    runs = Vector{NamedTuple}()
+    for (seed_name, seed_z0) in pairs(seeds)
+        for order in orders
+            shared_run = build_shared()
+            # Deliberately NOT wrapped in a try/rescue block here, BY DESIGN (T-13-10):
+            # a non-converging run's ErrorException propagates directly out of
+            # run_nash_probe.
+            result = run_nash!(
+                specs,
+                shared_run;
+                z0 = seed_z0,
+                tol_outer = tol_outer,
+                max_sweeps = max_sweeps,
+                order = order,
+                checkpoint_dir = joinpath(checkpoint_dir, "$(seed_name)_$(order)"),
+            )
+            push!(runs, (; seed = seed_name, order, result))
+        end
+    end
+
+    # ---- Every combination converged (by construction) — compute the max-pairwise-
+    # distance spread across ALL runs, never a statistical summary. ------------------
+    n_runs = length(runs)
+    z_spread = maximum(
+        maximum(abs.(runs[a].result.z .- runs[b].result.z)) for a in 1:n_runs,
+        b in 1:n_runs if a < b
+    )
+    x_inv_spread = maximum(
+        maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv)) for a in 1:n_runs,
+        b in 1:n_runs if a < b
+    )
+    cost_spread = maximum(
+        abs(sum(runs[a].result.UB) - sum(runs[b].result.UB)) for a in 1:n_runs,
+        b in 1:n_runs if a < b
+    )
+    spread = (; z_spread, x_inv_spread, cost_spread)
+
+    # ---- Structural summary string: "a converged equilibrium" MUST appear, "the
+    # equilibrium" MUST NEVER appear — true BY CONSTRUCTION (no variable interpolated
+    # immediately adjacent to "the equilibrium"). -------------------------------------
+    summary =
+        "a converged equilibrium (spread: z=$(round(spread.z_spread; sigdigits = 3)), " *
+        "x_inv=$(round(spread.x_inv_spread; sigdigits = 3)), " *
+        "cost=$(round(spread.cost_spread; sigdigits = 3))) across $(n_runs) probe run(s) " *
+        "($(length(seeds)) seed(s) x $(length(orders)) order(s))"
+
+    return (; runs, spread, summary, n_runs)
+end
+
+export run_nash_probe
