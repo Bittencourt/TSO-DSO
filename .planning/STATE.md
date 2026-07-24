@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
-status: milestone_complete
-stopped_at: Milestone complete (Phase 14 was final phase)
-last_updated: 2026-07-24T11:28:48.230Z
-last_activity: 2026-07-24 -- Phase 14 execution started
+status: Awaiting next milestone
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-07-24T11:41:15.626Z"
+last_activity: 2026-07-24 — Milestone v2.0 completed and archived
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 13
   completed_plans: 13
-  percent: 80
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-07-24
-
-Progress: [██████████] 100%
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-24 — Milestone v2.0 completed and archived
 
 ## Performance Metrics
 
@@ -149,5 +147,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan the first v2.0 phase: `/gsd:plan-phase 10`
-- Phases 11 and 13 are flagged for a research pass — consider `--research-phase` when reaching them.
+- Start the next milestone with /gsd-new-milestone

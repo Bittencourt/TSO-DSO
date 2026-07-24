@@ -64,6 +64,68 @@
 
 ---
 
+## Milestone: v2.0 — Stackelberg-Nash TSO-DSO Planning Game
+
+**Shipped:** 2026-07-24
+**Phases:** 5 (10–14) | **Plans:** 13
+
+### What Was Built
+The thesis's planning layer as rungs 6–7: a build-once, Parameter-pinned planning oracle with
+retry/checkpoint resilience (Phase 10); a hand-rolled single-distributor Stackelberg-Benders loop
+certified 4-ways against BilevelJuMP MPEC reductions (Phase 11); cut-store + trace hardening at
+realistic iteration counts (Phase 12); SharedTransmission N-distributor corridor coupling with
+Gauss-Seidel Nash diagonalization and a multi-seed/multi-order honesty probe (Phase 13); and
+permanent regression infrastructure — pinned goldens, no-binaries guard + tripwire, two live
+literate docs pages (Phase 14).
+
+### What Worked
+- Certify-before-build sequencing: resolving the leader/follower semantics and dual-sign convention
+  empirically (Phase 11) before the Nash loop consumed them eliminated an entire class of
+  wrong-direction rework in Phases 13–14.
+- The review→fix→re-review loop (capped at 3 iterations) caught a phase-defining defect: CR-01 in
+  Phase 13 found the multi-seed probe was structurally vacuous (z0 never seeded model state) even
+  though all tests passed — plan-conformant code, design-level gap.
+- Verifiers that execute rather than read: the Phase 14 verifier injected a fake builder to prove
+  the tripwire actually trips; the integration checker ran 332 planning tests empirically.
+
+### What Was Inefficient
+- Stale executor worktrees from earlier sessions polluted `@run_package_tests` discovery, costing a
+  23-minute confounded test run and an attribution investigation mid-phase-13. Root cause: bare
+  TestItemRunner discovery scans `.claude/worktrees/`; fix: explicit-path/name-filter runs from
+  scratch envs, now standard executor guidance.
+- The user-local Project.toml drift (CairoMakie weakdep→hard dep) made the only "failure" in every
+  main-checkout suite run a known false alarm that had to be re-attributed each gate.
+- Background long-running gates (test suite, docs build) were killed twice by the environment and
+  had to be re-run — sequential foreground-with-timeout proved more reliable for the docs build.
+
+### Patterns Established
+- Gate-then-golden regression ordering (assert the validity gate before the pinned value).
+- Registry + source-scan tripwire for scope guards (no new builder can silently skip the
+  no-binaries check).
+- Structural honesty language in code: "a converged equilibrium (spread: …)", never "the".
+- Fresh cut store per Nash best-response until a cut-validity argument exists (instrumented, not
+  silently retained).
+
+### Key Lessons
+1. Tests passing ≠ mechanism live: the seed-liveness CR-01 showed a gating probe can be green while
+   structurally unable to detect what it gates — add liveness regressions (two runs differing only
+   in the probed dimension must produce different trajectories).
+2. Docs are code: the Documenter build was silently red (33 orphaned docstrings) for two phases
+   because nothing gated it; Phase 14 made `checkdocs=:exports` + build-exit-0 a tracked anchor.
+3. Algebraic-substitution claims in docs need the constant terms reconciled explicitly (the
+   Deferrable +18 offset would have shipped a wrong objective narrative to the thesis).
+
+### Cost Observations
+- Model mix: orchestration on the main-loop model; all executor/researcher/planner/reviewer/
+  verifier/fixer subagents on Sonnet.
+- Parallelism: Phase 14 ran all 3 plans concurrently in isolated worktrees (zero file overlap);
+  Phase 13's dependent waves ran sequentially.
+- Notable: full-suite wall clock ~9 min/run at every wave boundary + verification — still the
+  right spend for a correctness-first bench; targeted TestItemRunner filtered runs (1–3 min)
+  carried most per-task verification.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -71,14 +133,18 @@
 | Milestone | Phases | Key Change |
 |-----------|--------|------------|
 | v1.0 | 9 | Established the GSD abstraction-ladder + residual-seam workflow; introduced VALIDATION.md (Nyquist) in Phase 9 |
+| v2.0 | 5 | Autonomous phase pipeline (smart discuss → plan → parallel worktree execute → review/fix loop → verify); certify-before-build for ambiguous game semantics; execution-based (not read-only) verification |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Broken (documented) | Notes |
 |-----------|-------|---------------------|-------|
 | v1.0 | 1946 pass / 0 fail | 2 | 2 broken = non-failing thesis-figure cross-checks; docs build green |
+| v2.0 | 2276 pass / 0 fail* | 3 | 3 broken = CairoMakie-weakdep skips; *1 local-only Aqua failure from user-local uncommitted Project.toml drift (committed state clean); docs build green incl. 2 new planning pages |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. (v1.0) Lock reusable seams against real math before generalizing.
 2. (v1.0) Pin computed goldens + keep literature numbers as non-failing cross-checks when inputs aren't reproducible.
+3. (v1.0→v2.0, confirmed) Adversarial re-review after fixes keeps catching what executor self-checks miss — in v2.0 it caught a structurally-vacuous gating probe (CR-01) and a wrong docs equivalence claim.
+4. (v2.0) Green tests don't prove a mechanism is live — pair every gate with a liveness regression that varies only the gated dimension.

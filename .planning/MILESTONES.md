@@ -1,5 +1,27 @@
 # Milestones
 
+## v2.0 Stackelberg-Nash TSO-DSO Planning Game (Shipped: 2026-07-24)
+
+**Phases completed:** 5 phases, 13 plans, 25 tasks
+
+**Key accomplishments:**
+
+- `solve_with_retry!` (4-rung escalating Clarabel-conditioning ladder around `assert_solved!`) and `checkpoint_iteration!`/`resume_from_checkpoint` (JLD2 per-iteration checkpoint, always redoing the highest-numbered iteration) — both proven independently before Phase 11's Benders loop consumes them.
+- A build-once `PlanningOracle` subproblem with a genuine JuMP `Parameter`-typed `z[t]` and a named `p_import[t] == z[t]` pin, re-solved via the plan-10-01 retry wrapper, returning the length-T Benders-cut gradient `π` and its duration-weighted `π_s` -- the raw-dual sign convention pinned by a hand-derived toy-case monotonicity invariant on a purpose-built smooth fixture (since the project's own richer 2-bus aggregator has active device bounds that make the redundant dual split ill-conditioned exactly at the unconstrained optimum).
+- Genuinely new transmission-reinforcement follower LP returning real HiGHS Farkas/dual-ray certificates on infeasibility, plus a build-once multi-cut Benders master with a documented finite epigraph lower bound — both independently unit-tested ahead of plan 11-02's outer loop.
+- `solve_stackelberg!` — a build-once hand-rolled Benders loop wiring the Phase-10 `PlanningOracle`, plan 11-01's `FollowerLP`, and `BendersMaster` into an end-to-end single-distributor Stackelberg equilibrium, converging to a documented UB/LB relative-gap tolerance (1e-6) on the Phase-11 toy fixture, matching a re-derived (corrected) analytic optimum.
+- Independent BilevelJuMP MPEC certification (StrongDualityMode + ProductMode, cross-checked against a hand-worked enumeration) empirically CONFIRMS the leader/follower role assignment and coupling-dual sign convention chosen in plans 11-01/11-02 — no code changes required — while documenting, as a permanent regression, that BigMMode+HiGHS cannot solve this instance (a genuine MIQP solver-capability gap, not a bound-tuning issue).
+- BendersTrace convergence ledger with a genuine per-iteration retry count (via a new `solve_with_retry!` `attempts_out` keyword) and both retry-gated subproblems' statuses, wired into `solve_stackelberg!`; closes IN-01/IN-02/IN-03/IN-06 from Phase 11's review; three degenerate feasibility-cut edge cases proven not to corrupt the persistent cut store.
+- Load-test `@testitem` forcing a genuinely-converging 66-iteration Benders run (T=8 toy fixture) with retry/checkpoint machinery fully active; empirical `solve_with_retry!` escalation rate (0% on this fixture) measured from `BendersTrace.retry_count_trace` and cross-checked against captured `@warn` logs, closing the STATE.md "measure, don't assume" blocker.
+- `SharedTransmission` — a build-once N-distributor JuMP model with per-distributor investment ownership and one pooled, genuinely-binding transmission capacity row, validated in isolation via an asymmetric N=2 fixture that discriminates a broken bound-pin.
+- `run_nash!` outer Gauss-Seidel diagonalization loop over N distributors' atomic `solve_stackelberg!` best-responses against a shared transmission corridor, with a nested-tolerance guard, a two-level `NashTrace` convergence ledger, and a CairoMakie twin-axis convergence plot — proven convergent on a hand-checked, genuinely congested N=2 fixture (z=[0.6,0.6], x_inv=[0.3,0.3]).
+- `run_nash_probe` — the phase's own honesty gate: repeats `run_nash!` across a >=3-seed x >=2-order matrix (>=6 independent runs, each against a fresh `SharedTransmission`), asserts EVERY run converges (a phase-gating regression, never a soft warning), and reports the observed max-pairwise-distance spread via a structurally "a converged equilibrium (never "the equilibrium")" summary string.
+- Extracted the N=1 BilevelJuMP-certified Stackelberg equilibrium and N=2 hand-checked Nash equilibrium into a dedicated `PlanningFixtures` goldens module and a gate-then-golden regression file, plus a newly-bounded (not just non-negative) N=2 probe spread check.
+- Registry-based `@testitem` builds all four planning-layer subproblem models (oracle, follower, master, shared-transmission) and asserts zero binary/integer variables, backed by a source-scan tripwire so a future new builder can't silently skip the check.
+- Task 1 — `docs/src/api.md` Planning Layer section.
+
+---
+
 ## v1.0 Operational Transactive-Energy Core (Shipped: 2026-07-20)
 
 **Phases completed:** 9 phases, 43 plans, 83 tasks

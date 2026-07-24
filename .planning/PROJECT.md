@@ -37,10 +37,21 @@ correct, validated optimization models that are easy to extend for research.
 - ✓ Open-source solver integration behind `select_optimizer` (HiGHS/Ipopt/Clarabel; Gurobi/Mosek fallback) — v1.0
 - ✓ Rich per-model documentation (Documenter + Literate, math+assumptions+validation) + reproducible experiment scripts — v1.0
 - ✓ Extension seams (SEAM-01) for stochastic / MPC-RTP / meshed+4Q-BESS / Stackelberg-Nash — delivered as inert stubs — v1.0
+- ✓ Planning oracle coupling (`p_import == z` Parameter pin, per-scenario dual `π_s`) with
+      retry/checkpoint resilience (PLAN-01..03) — v2.0
+- ✓ Single-distributor Stackelberg-Benders, hand-rolled, certified against BilevelJuMP MPEC
+      reductions (leader/follower role + dual sign empirically pinned) (PLAN-04..07, PVAL-01) — v2.0
+- ✓ Nash via Gauss-Seidel diagonalization over a shared transmission corridor
+      (`SharedTransmission`, `run_nash!`, nested tolerances, two-level `NashTrace`,
+      multi-seed/multi-order `run_nash_probe` honesty gate) (NASH-01..04) — v2.0
+- ✓ Planning-layer permanent regressions: pinned computed goldens, no-binaries guard + tripwire,
+      literate planning docs (Rung 6/7) (PVAL-02..04) — v2.0
 
 ### Active
 
-v2.0 requirements are being defined — see "Current Milestone: v2.0" below and `.planning/REQUIREMENTS.md`.
+v3.0 requirements not yet defined — run `/gsd:new-milestone` to scope the next milestone
+(candidate axes: discrete/integer investment expansion, stochastic scenarios, MPC/rolling
+horizon, meshed + 4Q-BESS).
 
 ### Out of Scope
 
@@ -96,9 +107,14 @@ hash stability (Phase 8), and an intermittent version-independent Clarabel `NUME
 IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/22):* published docs site
 (`DOCUMENTER_KEY` + Pages), docstring `@docs` manual wiring, JuliaFormatter-on-`docs/`, `deploydocs` slug.
 
-## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
+## Shipped Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game (2026-07-24)
 
-**Progress:** All phases 10–14 complete (2026-07-24) — milestone ready for audit/close.
+**Shipped 2026-07-24** — 5 phases, 13 plans, 25 tasks, +24,760 LOC. Audit passed 15/15
+requirements, 10/10 integration seams, 2276 tests pass (health baseline; the only failing check
+on a dirty local checkout is the user-local CairoMakie Project.toml drift — see v2.0 audit).
+Next milestone not yet scoped — run `/gsd:new-milestone`.
+
+**Progress:** All phases 10–14 complete (2026-07-24).
 - Phase 14 — Validation-Oracle Regression Hardening & Docs: planning goldens pinned
   (`test/fixtures_planning.jl` + gate-then-golden `test_planning_goldens.jl` — N=1 certified
   equilibrium and N=2 Nash equilibrium, probe spread bounded), consolidated 4-builder
@@ -174,7 +190,12 @@ flow; linking price = interconnection dual ≈ DLMP.
 | Support **both** centralized (monolithic) **and** ADMM decomposition, selectable per experiment | Centralized = clarity/small cases; ADMM = scale + matches thesis & yields prices as duals | ✓ Good — ADMM cross-validated against centralized on IEEE 13 + 123 (welfare rtol 1e-4) |
 | Julia + **JuMP** with a **solver-abstraction** layer | Research-grade modeling, swappable open-source solvers, Gurobi only as fallback | ✓ Good — `select_optimizer(::ProblemClass)` factory; no model names a solver; Gurobi/Mosek weakdep-gated |
 | Operational layer built as **convex SOCP + ADMM**, *not* MPEC | Matches the actual thesis math; MPEC/bilevel tooling is reserved for the planning layer | ✓ Good — SOCP Convex Branch Flow with validated exactness; DADP = dual of nodal balance |
-| Design **extension seams** for stochastic / MPC-RTP / meshed+4Q-BESS / TSO-DSO Stackelberg-Nash | All four are declared PhD research directions; scaffolding must not preclude them | ✓ Good — SEAM-01 stubs (multi-scenario hook, rolling-horizon param, meshed slot, coupling-flow z↔p_ag/λ_j↔π_s + leader/follower role) delivered inert in Phase 4 |
+| Design **extension seams** for stochastic / MPC-RTP / meshed+4Q-BESS / TSO-DSO Stackelberg-Nash | All four are declared PhD research directions; scaffolding must not preclude them | ✓ Good — SEAM-01 stubs (multi-scenario hook, rolling-horizon param, meshed slot, coupling-flow z↔p_ag/λ_j↔π_s + leader/follower role) delivered inert in Phase 4; the Stackelberg-Nash seam was consumed live in v2.0 with zero seam rework |
+| **Hand-rolled Benders + Gauss-Seidel diagonalization**, BilevelJuMP as validation oracle only | Matches thesis method; MPEC single-level blowup scales poorly and diverges from decomposition intent | ✓ Good — v2.0 production loop is hand-rolled; BilevelJuMP certified the tiny case (4-way agreement) and stays a `[:planning]` regression |
+| **Per-distributor investment ownership** over one pooled corridor capacity row (vs equal-split joint investment) | Resolves the N-distributor cost-allocation ambiguity the PSR source leaves open; game-theoretically cleaner best-response pricing | ✓ Good — v2.0 `SharedTransmission`; departure from equal-split documented in coupling.jl for thesis traceability |
+| **Continuous-only planning scope**, enforced by an automated no-binaries guard | Convex Benders masters first; integer expansion deferred until Lagrangian/integer-L-shaped cuts milestone | ✓ Good — PVAL-04 guard + tripwire negative-tested; lift consciously when the integer milestone opens |
+| **Fresh cut store per Nash best-response** (no cut reuse across sweeps) | Cuts computed at old z_{-i} are generally invalid once neighbors move; correctness-first | ✓ Good — rebuild cost instrumented in trace; cut-reuse deferred until a validity argument exists |
+| **"A converged equilibrium" reporting language** (never "the equilibrium"), encoded in code | Diagonalization has no uniqueness guarantee; honesty gate is structural, not prose convention | ✓ Good — run_nash_probe multi-seed/multi-order spread reporting; carried into Rung 7 docs |
 
 ## Evolution
 
@@ -194,4 +215,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-24 — v2.0 Phase 14 complete (all v2.0 phases done)*
+*Last updated: 2026-07-24 after v2.0 milestone*
