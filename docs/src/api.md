@@ -19,7 +19,7 @@ TSODSO
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["solver/ProblemClass.jl", "solver/problem_class_trait.jl", "solver/factory.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Core: Model Context & Status
@@ -27,7 +27,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["core/ModelContext.jl", "core/status.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Units
@@ -35,7 +35,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["units/PerUnit.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Network Data Model
@@ -43,7 +43,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["data/Feeder.jl", "data/topology.jl", "data/ieee13.jl", "data/ieee123.jl", "data/profiles.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Prosumer Devices & Aggregator
@@ -58,7 +58,7 @@ Pages = [
     "devices/PVBattery.jl",
     "devices/Aggregator.jl",
 ]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Power-Flow Formulations
@@ -66,7 +66,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Models & Centralized Solve
@@ -74,7 +74,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Pricing & Welfare Accounting
@@ -82,7 +82,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["pricing/dlmp.jl", "pricing/welfare.jl", "pricing/fit.jl", "pricing/checks.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## ADMM Decomposition
@@ -90,7 +90,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/residuals.jl", "admm/solve_admm.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Diagnostics
@@ -98,7 +98,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["diagnostics/plots.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Experiment Harness
@@ -106,7 +106,7 @@ Order = [:type, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["experiments/Scenario.jl", "experiments/materialize.jl", "experiments/run.jl", "experiments/store.jl", "experiments/sweep.jl"]
-Order = [:type, :function]
+Order = [:type, :constant, :function]
 ```
 
 ## Planning Layer

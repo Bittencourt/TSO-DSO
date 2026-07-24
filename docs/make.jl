@@ -66,13 +66,18 @@ makedocs(;
         ],
         "API Reference" => "api.md",
     ],
-    # `checkdocs = :exports`: verify every EXPORTED public-API symbol has a docstring that
-    # is surfaced somewhere in the manual. The `api.md` page wires the full module docstring
+    # `checkdocs = :exports`: verify every DOCUMENTED exported symbol's docstring is
+    # surfaced somewhere in the manual. The `api.md` page wires the full module docstring
     # set in via `@autodocs` blocks, so exported docstrings now appear in the rendered docs.
-    # `:missing_docs` is NO LONGER in `warnonly` — an undocumented/unsurfaced EXPORTED symbol
-    # now FAILS the build (the tracked Phase-9 follow-up, completed here). `:cross_references`
-    # stays in `warnonly` (broken `@ref`s remain non-fatal, cross-version-safe on the 1.10 LTS
-    # floor per RESEARCH Pitfall 4) so an unrelated stray link doesn't break the docs deploy.
+    # `:missing_docs` is NO LONGER in `warnonly` — a documented-but-UNSURFACED exported
+    # symbol now FAILS the build (the tracked Phase-9 follow-up, completed here). KNOWN
+    # LIMIT (Phase 14 review WR-02): an exported symbol with NO docstring at all passes
+    # `checkdocs` silently — docstring EXISTENCE is enforced by review convention, not by
+    # this build gate; and every `api.md` `@autodocs` block must keep `:constant` in its
+    # `Order`, or the first docstring added to an exported constant in that section turns
+    # into a delayed build failure here. `:cross_references` stays in `warnonly` (broken
+    # `@ref`s remain non-fatal, cross-version-safe on the 1.10 LTS floor per RESEARCH
+    # Pitfall 4) so an unrelated stray link doesn't break the docs deploy.
     checkdocs = :exports,
     warnonly = [:cross_references],
 )

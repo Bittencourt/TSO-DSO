@@ -59,13 +59,17 @@ const IMPEDANCE_PU_MAX = 5.0     # per-unit r, x expected well below this
 const SMAX_PU_MAX = 100.0        # per-unit apparent-power limit upper sanity bound
 const PRICE_MAX = 1.0e4          # $/MWh monetary sanity bound (prices kept in SI)
 
-# IN-01: canonical "interior branch carries no binding thermal limit" sentinel. A branch
-# tagged with this apparent-power limit gets NO power cone in the SOCP formulation (it is
-# effectively unconstrained). It must sit STRICTLY inside the `0 < smax < SMAX_PU_MAX` band
-# that `assert_magnitudes` enforces, so it is deliberately just below `SMAX_PU_MAX`. This is
-# the SINGLE SOURCE OF TRUTH: both the fixture (`ieee13.jl`) and the formulation
-# (`ConvexBranchFlow.jl`) reference it rather than re-declaring a bare `99.0` literal, so the
-# implicit "these two 99.0s must stay equal" coupling can never silently drift.
+"""
+    SMAX_NO_LIMIT
+
+Canonical "interior branch carries no binding thermal limit" sentinel (IN-01). A branch
+tagged with this apparent-power limit gets NO power cone in the SOCP formulation (it is
+effectively unconstrained). It must sit STRICTLY inside the `0 < smax < SMAX_PU_MAX` band
+that [`assert_magnitudes`](@ref) enforces, so it is deliberately just below `SMAX_PU_MAX`.
+This is the SINGLE SOURCE OF TRUTH: both the fixture (`ieee13.jl`) and the formulation
+(`ConvexBranchFlow.jl`) reference it rather than re-declaring a bare `99.0` literal, so
+the implicit "these two 99.0s must stay equal" coupling can never silently drift.
+"""
 const SMAX_NO_LIMIT = 99.0
 
 """
