@@ -242,7 +242,20 @@ regression starting in Phase 11)
 
   4. The BilevelJuMP certification case (PVAL-01) remains green in the permanent regression suite,
      wired into the same CI gate as the new goldens.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 14-01-PLAN.md — PlanningFixtures goldens module (test/fixtures_planning.jl) + gate-then-golden
+      regression (test/test_planning_goldens.jl): N=1 certified equilibrium, N=2 Nash equilibrium,
+      N=2 probe spread bound, wave 1 (PVAL-02)
+- [ ] 14-02-PLAN.md — consolidated 4-builder no-binaries guard + source-scan tripwire
+      (test/test_planning_noninteger.jl), cross-referencing the two existing partial checks,
+      wave 1 (PVAL-04)
+- [ ] 14-03-PLAN.md — docs/src/api.md Planning Layer @autodocs fix (turns the currently-RED docs
+      build green) + Rung 6/Rung 7 literate pages (stackelberg_benders.jl, nash_diagonalization.jl)
+      + docs/make.jl wiring, wave 1 (PVAL-03)
 
 ## Progress
 
@@ -264,7 +277,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete    | 2026-07-22 |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 2/2 | Complete    | 2026-07-23 |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 3/3 | Complete    | 2026-07-24 |
-| 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
+| 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/3 | Planned | - |
 
 ## Research Flags
 
