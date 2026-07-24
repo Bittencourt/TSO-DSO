@@ -69,6 +69,41 @@
     @test summary.max_benders_iters == 5
     @test summary.total_benders_retries == 1
     @test summary.total_cuts_rebuilt == 7
+
+    # WR-04 regressions: an invalid sweep width throws (a caller bug, never a soft
+    # false)...
+    @test_throws ArgumentError TSODSO.is_converged(trace, 1e-4, 0)
+    @test_throws ArgumentError TSODSO.is_converged(trace, 1e-4, -1)
+    # ...and a MID-SWEEP ledger (sweep 2 has only 1 of its 2 rows) is never reported
+    # converged — the window is selected by sweep index, so the tiny sweep-2 residual
+    # below can never be mixed with sweep-1 rows into a fake "last N rows" window
+    # (before the fix, the trailing-2-rows window [0.02, 1e-9] reported true at
+    # tol = 0.05 mid-sweep).
+    push!(
+        trace,
+        2,
+        1;
+        nash_residual = 1e-9,
+        benders_iters = 3,
+        benders_gap = 1e-8,
+        benders_retries = 0,
+        cuts_rebuilt = 2,
+        order = :forward,
+    )
+    @test TSODSO.is_converged(trace, 0.05, 2) == false
+    # Once sweep 2 completes, its own (all-tiny) residuals report converged.
+    push!(
+        trace,
+        2,
+        2;
+        nash_residual = 2e-9,
+        benders_iters = 3,
+        benders_gap = 1e-8,
+        benders_retries = 0,
+        cuts_rebuilt = 2,
+        order = :forward,
+    )
+    @test TSODSO.is_converged(trace, 1e-6, 2) == true
 end
 
 @testitem "planning nash: NashTrace push! guards reject bad order/negative counts" tags =

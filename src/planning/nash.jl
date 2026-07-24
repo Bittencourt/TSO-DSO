@@ -177,16 +177,28 @@ end
 """
     is_converged(trace::NashTrace, tol_outer::Real, N::Int) -> Bool
 
-`true` iff at least one full sweep (`N` rows) has been recorded AND the most recently
-completed sweep's own worst-distributor residual is `<= tol_outer`:
-`maximum(trace.nash_residual_trace[(end - N + 1):end]) <= tol_outer`. Returns `false`
-on `trace.iters < N` (not even one full sweep recorded yet) — empty-ledger-safe, never
-throws, mirroring `BendersTrace`'s own `is_converged` empty-ledger-false contract
-(`trace.jl`).
+`true` iff the MOST RECENT sweep in the ledger is COMPLETE (exactly `N` rows carry the
+last recorded sweep index) AND that sweep's own worst-distributor residual is
+`<= tol_outer`. The window is selected BY SWEEP INDEX (`trace.sweep_trace .==
+last(trace.sweep_trace)`), never by trailing row count — so a mid-sweep call (e.g.
+1.5 sweeps recorded, a legitimate state for an external consumer of this exported
+generic) can never mix sweep-`k` and sweep-`k-1` residuals into one window; it simply
+returns `false` until the sweep completes. Returns `false` on an empty ledger
+(`trace.iters == 0`) — empty-ledger-safe, mirroring `BendersTrace`'s own
+`is_converged` empty-ledger-false contract (`trace.jl`). Throws `ArgumentError` on
+`N < 1` (an invalid sweep width is a caller bug, never a soft `false`).
+
+This method is THE one convergence definition for the outer Gauss-Seidel loop:
+`run_nash!` calls it directly (WR-04) rather than re-implementing the window
+arithmetic inline, so the exported method and the loop's actual convergence test can
+never drift apart.
 """
 function is_converged(trace::NashTrace, tol_outer::Real, N::Int)
-    trace.iters < N && return false
-    return maximum(trace.nash_residual_trace[(end - N + 1):end]) <= tol_outer
+    N >= 1 || throw(ArgumentError("is_converged: N must be >= 1, got $N"))
+    trace.iters == 0 && return false
+    mask = trace.sweep_trace .== last(trace.sweep_trace)
+    count(mask) == N || return false
+    return maximum(trace.nash_residual_trace[mask]) <= tol_outer
 end
 
 """
@@ -329,9 +341,11 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
     subdirectory (never colliding with each distributor's own inner Benders checkpoints,
     already nested under `sweep_k/distributor_i`).
 
-After each sweep completes, if the sweep's own worst-distributor residual (the most
-recently pushed `shared.N` trace rows) is `<= tol_outer`, returns `(; z, x_inv, UB,
-converged = true, sweeps, outer_residual, trace, shared, order)`.
+After each sweep completes, convergence is decided by `is_converged(trace, tol_outer,
+shared.N)` — THE one convergence definition (WR-04), never an inline re-implementation
+— i.e. the just-completed sweep's own worst-distributor residual is `<= tol_outer`; on
+convergence returns `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace,
+shared, order)`.
 
 If `max_sweeps` is exhausted without converging, raises a loud `ErrorException` naming
 the exhausted sweep count and the LAST recorded `nash_residual` (read from the trace,
@@ -560,8 +574,14 @@ function run_nash!(
             )
         end
 
-        outer_residual_k = maximum(trace.nash_residual_trace[(end - shared.N + 1):end])
-        if outer_residual_k <= tol_outer
+        # WR-04: is_converged(trace, ...) is THE one convergence definition — never
+        # re-implement its window arithmetic inline, or the exported method and the
+        # loop's actual convergence test drift independently. The sweep just
+        # completed, so the trailing shared.N rows below ARE exactly is_converged's
+        # own by-sweep-index window (reporting only).
+        if is_converged(trace, tol_outer, shared.N)
+            outer_residual_k =
+                maximum(trace.nash_residual_trace[(end - shared.N + 1):end])
             # Final re-solve (load-bearing, do NOT skip): the LAST distributor's own
             # write_back! (bound-pinning x_inv[i]) dirties shared.model's solved status
             # (JuMP's CachingOptimizer marks a model unsolved after ANY bound/Parameter
