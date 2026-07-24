@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
 status: executing
 stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-07-24T00:10:15.922Z"
+last_updated: "2026-07-24T01:02:08.590Z"
 last_activity: 2026-07-24 -- Phase 13 execution started
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 60
 ---
 
@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 13 — Nash Diagonalization & Shared-Transmission Coupling
+**Current focus:** Phase 13 — nash-diagonalization-shared-transmission-coupling
 
 ## Current Position
 
-Phase: 13 (Nash Diagonalization & Shared-Transmission Coupling) — EXECUTING
+Phase: 13 (nash-diagonalization-shared-transmission-coupling) — EXECUTING
 Plan: 1 of 3
 Status: Executing Phase 13
 Last activity: 2026-07-24 -- Phase 13 execution started

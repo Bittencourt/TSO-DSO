@@ -208,7 +208,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 13-02-PLAN.md — solve_stackelberg!'s additive `follower` keyword, NashTrace, run_nash!
+- [x] 13-02-PLAN.md — solve_stackelberg!'s additive `follower` keyword, NashTrace, run_nash!
       (outer Gauss-Seidel loop, nested-tolerance guard, damping escape hatch), plot_nash_convergence
       (CairoMakie ext), wave 2, depends on 13-01 (NASH-02, NASH-03)
 
@@ -263,7 +263,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete    | 2026-07-22 |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 2/2 | Complete    | 2026-07-23 |
-| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 1/3 | In Progress|  |
+| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 2/3 | In Progress|  |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
 
 ## Research Flags
