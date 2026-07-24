@@ -317,11 +317,13 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
  4. Compute this distributor's own Nash residual: `max(‖z_i^(k+1) - z_i^(k)‖∞,
     |Δx_inv_i|)`.
  5. Compute the (possibly damped) write-back value `z_i_new` (`ω == 1.0` recovers plain
-    undamped Gauss-Seidel, the locked default; `ω < 1` damps toward the PREVIOUS `z_i`,
-    documented caveat: the written-back `x_inv[i]` is still the UNDAMPED best-response's
-    own optimal investment for the UNDAMPED `result_i.z` — acceptable because this
-    phase's own fixtures use the default `ω = 1.0`).
- 6. `write_back!(shared, i, z_i_new, x_inv_i_converged)` — fires IMMEDIATELY, Gauss-Seidel
+    undamped Gauss-Seidel, the locked default; `ω < 1` damps toward the PREVIOUS `z_i`).
+    With `ω < 1` the follower is RE-SOLVED at the damped `z_i_new` and the MATCHING
+    investment is committed — never the undamped best-response's own `x_inv`, whose
+    pairing with a damped (possibly larger) committed flow could exceed the pooled
+    pinned capacity and render the shared model globally infeasible for the next
+    distributor (one extra cheap LP re-solve, only when damping is active).
+ 6. `write_back!(shared, i, z_i_new, x_inv_i_committed)` — fires IMMEDIATELY, Gauss-Seidel
     timing (this file's header).
  7. `push!(trace, k, i; ...)` and a checkpoint under a SEPARATE `"outer"` checkpoint
     subdirectory (never colliding with each distributor's own inner Benders checkpoints,
@@ -508,9 +510,30 @@ function run_nash!(
             z_i_new =
                 ω == 1.0 ? result_i.z : (1 - ω) .* z_prev[i, :] .+ ω .* result_i.z
 
-            write_back!(shared, i, z_i_new, x_inv_i_converged)
+            # WR-02: with ω < 1 the damped z_i_new differs from the undamped
+            # result_i.z that x_inv_i_converged was solved for — committing the
+            # inconsistent pair (z damped, x_inv undamped) can exceed the pooled
+            # pinned capacity whenever damping moves z upward, rendering the shared
+            # model globally infeasible for the NEXT distributor (whose Benders loop
+            # would then grind through feasibility cuts two files away from the
+            # cause). Re-solve the follower at the ACTUAL committed flow and pin the
+            # MATCHING investment — one extra cheap LP solve, only when damping is
+            # active.
+            if ω == 1.0
+                x_inv_i_committed = x_inv_i_converged
+            else
+                f_damped = solve_follower!(result_i.follower, z_i_new)
+                f_damped.feasible || error(
+                    "run_nash!: damped write-back flow z_i_new is undeliverable " *
+                    "for distributor $i (ω=$ω) — refusing to commit an infeasible " *
+                    "(z, x_inv) pair to the shared model",
+                )
+                x_inv_i_committed = value(shared.x_inv[i])
+            end
+
+            write_back!(shared, i, z_i_new, x_inv_i_committed)
             z_prev[i, :] = z_i_new
-            x_inv_prev[i] = x_inv_i_converged
+            x_inv_prev[i] = x_inv_i_committed
             ub_prev[i] = result_i.UB
 
             push!(
@@ -529,7 +552,7 @@ function run_nash!(
                     k,
                     i,
                     z_i = z_i_new,
-                    x_inv_i = x_inv_i_converged,
+                    x_inv_i = x_inv_i_committed,
                     nash_residual = residual_i,
                 ),
                 (k - 1) * shared.N + findfirst(==(i), sweep_order);
