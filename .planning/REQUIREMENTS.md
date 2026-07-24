@@ -37,9 +37,9 @@ documented, every layer swappable.
 
 - [ ] **NASH-01**: A shared transmission-reinforcement coupling model (`src/planning/coupling.jl`) links the
       distributors, giving the diagonalization loop a shared signal to iterate on.
-- [ ] **NASH-02**: Gauss-Seidel diagonalization across N distributors converges to a fixed point, each
+- [x] **NASH-02**: Gauss-Seidel diagonalization across N distributors converges to a fixed point, each
       distributor's Benders solve treated as an atomic best-response.
-- [ ] **NASH-03**: Two-level convergence diagnostics (inner Benders UB/LB gap + outer Nash residual) are reported
+- [x] **NASH-03**: Two-level convergence diagnostics (inner Benders UB/LB gap + outer Nash residual) are reported
       and plottable.
 - [ ] **NASH-04**: Nash convergence is probed across multiple seeds and sweep orders; results report "a converged
       equilibrium" with the observed spread, never "the" equilibrium (non-uniqueness honesty).
@@ -88,8 +88,8 @@ documented, every layer swappable.
 | PLAN-06 | Phase 11 | Complete |
 | PLAN-07 | Phase 11 | Complete |
 | NASH-01 | Phase 13 | Pending |
-| NASH-02 | Phase 13 | Pending |
-| NASH-03 | Phase 13 | Pending |
+| NASH-02 | Phase 13 | Complete |
+| NASH-03 | Phase 13 | Complete |
 | NASH-04 | Phase 13 | Pending |
 | PVAL-01 | Phase 11 | Complete |
 | PVAL-02 | Phase 14 | Pending |

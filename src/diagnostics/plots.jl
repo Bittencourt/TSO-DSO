@@ -34,4 +34,19 @@ only the core package loaded this generic function has NO applicable method.
 """
 function plot_price_convergence end
 
-export plot_convergence, plot_price_convergence
+"""
+    plot_nash_convergence(trace::NashTrace; filename=nothing)
+
+Plot the TWO-LEVEL Nash diagonalization convergence trace (NASH-03, plan 13-02): the
+OUTER per-sweep max Nash residual (log-scaled left axis, one point per completed
+sweep — the worst-distributor residual within that sweep) overlaid with the INNER
+per-distributor Benders best-response gap trajectory (right axis, one series per
+distributor) from a [`NashTrace`](@ref). **Requires CairoMakie to be loaded** — the
+method lives in the `TSODSOMakieExt` package extension (plan 13-02, mirroring plan
+07-06's own `plot_price_convergence` twin-axis idiom); with only the core package
+loaded this generic function has NO applicable method (a deliberate MethodError,
+keeping the core solve + headless CI plot-free, threat T-07-01 parity).
+"""
+function plot_nash_convergence end
+
+export plot_convergence, plot_price_convergence, plot_nash_convergence
