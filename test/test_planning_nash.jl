@@ -520,3 +520,54 @@ end
     @test result.converged
     @test isapprox(result.z, [0.6, 0.6]; atol = 1e-2)
 end
+
+# --- Task 3: plot_nash_convergence — core stub + CairoMakie extension method --------
+#
+# Mirrors test_diagnostics_plot.jl's own separate-process CairoMakie idiom EXACTLY
+# (skip-with-message when CairoMakie is not installed — a weakdep, not a hard test
+# dependency — so the headless core suite stays green and plot-free).
+
+@testitem "planning nash: plot_nash_convergence core stays plot-free, ext returns a Makie Figure when CairoMakie is loaded (plot, makie, nash)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # Companion assertion (mirrors test_diagnostics_plot.jl's own headless-branch
+    # checks for plot_convergence/plot_price_convergence): the core symbol is ALWAYS
+    # exported, but carries NO method and never pulls in CairoMakie/Makie.
+    @test isdefined(TSODSO, :plot_nash_convergence)
+    @test isempty(methods(TSODSO.plot_nash_convergence))
+    loaded = string.(collect(keys(Base.loaded_modules)))
+    @test !any(m -> occursin("CairoMakie", m), loaded)
+    @test !any(m -> occursin("Makie", m), loaded)
+
+    trace = TSODSO.NashTrace()
+    @test_throws MethodError TSODSO.plot_nash_convergence(trace)
+
+    if Base.find_package("CairoMakie") === nothing
+        @info "CairoMakie not installed (weakdep) — SKIPPING the with-CairoMakie Figure check; " *
+              "the headless core suite stays plot-free."
+        @test_skip Base.find_package("CairoMakie") !== nothing
+    else
+        proj = dirname(Base.active_project())
+        code = raw"""
+        import CairoMakie
+        using TSODSO
+        trace = TSODSO.NashTrace()
+        push!(trace, 1, 1; nash_residual=0.2, benders_iters=4, benders_gap=1e-7,
+              benders_retries=0, cuts_rebuilt=3, order=:forward)
+        push!(trace, 1, 2; nash_residual=0.15, benders_iters=5, benders_gap=1e-7,
+              benders_retries=0, cuts_rebuilt=3, order=:forward)
+        push!(trace, 2, 1; nash_residual=0.05, benders_iters=3, benders_gap=1e-8,
+              benders_retries=0, cuts_rebuilt=3, order=:forward)
+        push!(trace, 2, 2; nash_residual=0.02, benders_iters=3, benders_gap=1e-8,
+              benders_retries=0, cuts_rebuilt=3, order=:forward)
+        # WITH CairoMakie loaded the ext activates: the generic now HAS a NashTrace method.
+        @assert hasmethod(TSODSO.plot_nash_convergence, Tuple{TSODSO.NashTrace})
+        f = TSODSO.plot_nash_convergence(trace)
+        @assert f isa CairoMakie.Makie.Figure "plot_nash_convergence must return a Makie Figure"
+        println("NASH_MAKIE_EXT_OK")
+        """
+        out = read(`$(Base.julia_cmd()) --project=$proj -e $code`, String)
+        @test occursin("NASH_MAKIE_EXT_OK", out)
+    end
+end

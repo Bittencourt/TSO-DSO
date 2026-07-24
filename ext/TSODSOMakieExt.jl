@@ -112,4 +112,66 @@ function TSODSO.plot_price_convergence(res::TSODSO.AdmmResiduals; filename = not
     return fig
 end
 
+"""
+    TSODSO.plot_nash_convergence(trace::TSODSO.NashTrace; filename = nothing) -> Makie.Figure
+
+Plot the TWO-LEVEL Nash diagonalization convergence trace (NASH-03, plan 13-02): the
+OUTER per-sweep max Nash residual (log-scaled left axis) — one point per completed
+sweep `k`, `maximum(trace.nash_residual_trace[trace.sweep_trace .== k])`, the
+worst-distributor residual within that sweep — overlaid with the INNER per-distributor
+Benders best-response gap trajectory (twin right axis, one `scatterlines!` series per
+distinct distributor index in `trace.distributor_trace`), mirroring
+`plot_price_convergence`'s own twin-axis idiom (this file) verbatim. Reads ONLY the
+JuMP-free `NashTrace` ledger. If `filename` is given the figure is `save`d. Returns the
+`Figure`.
+"""
+function TSODSO.plot_nash_convergence(trace::TSODSO.NashTrace; filename = nothing)
+    sweeps = sort(unique(trace.sweep_trace))
+    outer_residual =
+        [maximum(trace.nash_residual_trace[trace.sweep_trace .== k]) for k in sweeps]
+
+    fig = Figure()
+    ax = Axis(
+        fig[1, 1];
+        xlabel = "Nash sweep k",
+        ylabel = "outer Nash residual (per-unit)",
+        yscale = log10,
+        title = "Nash diagonalization convergence: outer residual & inner Benders gap vs sweep",
+    )
+    axgap = Axis(
+        fig[1, 1];
+        ylabel = "inner Benders gap (per-unit)",
+        yaxisposition = :right,
+        ylabelcolor = :seagreen,
+        yticklabelcolor = :seagreen,
+    )
+    hidespines!(axgap)
+    hidexdecorations!(axgap)
+    linkxaxes!(ax, axgap)
+
+    lresid = lines!(ax, sweeps, _logsafe(outer_residual); color = :purple)
+    # `Any[]` (not a type-inferred `[lresid]`, which would infer `Vector{Lines}` from
+    # its first element and then reject a later `push!` of a `ScatterLines` plot
+    # object): the legend entries below mix `lines!`/`scatterlines!` plot types.
+    plotted = Any[lresid]
+    labels = ["outer residual"]
+    palette = [:seagreen, :orange, :teal]
+    distributors = sort(unique(trace.distributor_trace))
+    for (idx, d) in enumerate(distributors)
+        mask = trace.distributor_trace .== d
+        color = palette[mod1(idx, length(palette))]
+        lgap = scatterlines!(
+            axgap,
+            trace.sweep_trace[mask],
+            trace.benders_gap_trace[mask];
+            color = color,
+        )
+        push!(plotted, lgap)
+        push!(labels, "distributor $d inner gap")
+    end
+    axislegend(ax, plotted, labels; position = :rt)
+    filename === nothing || save(filename, fig)
+    return fig
+end
+
 end # module TSODSOMakieExt
