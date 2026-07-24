@@ -21,6 +21,7 @@ provides:
   - "docs/make.jl wiring for both new pages"
 affects:
   - published docs site navigation (new Planning pages subsection)
+requirements-completed: [PVAL-03]
 tech-stack:
   added: []
   patterns:
