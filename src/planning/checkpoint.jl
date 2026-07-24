@@ -53,9 +53,14 @@ function checkpoint_iteration!(
     )
     mkpath(dir)
     path = joinpath(dir, "iter_$(lpad(iter, 5, '0')).jld2")
+    # STRING keys, deliberately (Phase 14 review WR-03): JLD2 stores string keys anyway
+    # (the wload round-trip always returns Dict{String,Any} — see resume_from_checkpoint's
+    # docstring) and warns "you passed a key as a symbol instead of a string" on EVERY
+    # save when handed Symbol keys — repeated noise in test logs and in the Documenter
+    # build output of the planning literate pages. Silenced at the root here.
     @tagsave(
         path,
-        Dict(:iteration => iter, :state => state);
+        Dict("iteration" => iter, "state" => state);
         storepatch = true,
         gitpath = pkgdir(@__MODULE__),
         safe = true,

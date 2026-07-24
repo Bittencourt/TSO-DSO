@@ -22,6 +22,13 @@ import HiGHS
 import Clarabel
 import Ipopt
 
+# `output_flag => false` (LP/MILP below): silence HiGHS's per-solve console log, matching
+# the factory's existing convention for Clarabel (`verbose => false`) and Ipopt
+# (`print_level => 0`). Previously the one unsilenced backend — its raw "Objective value
+# ... HiGHS run time" blocks leaked into test logs and into the Documenter-executed
+# planning literate pages (Phase 14 review WR-03). Nothing in src/ or test/ depends on
+# HiGHS console output. (Comment deliberately sits ABOVE the docstring: a comment BETWEEN
+# a docstring and its definition detaches the docstring — verified on Julia 1.12.)
 """
     select_optimizer(pc::ProblemClass)
 
@@ -39,9 +46,11 @@ Open-source defaults:
 
 A model file uses this as `Model(select_optimizer(LP()))` and never names a solver.
 """
-select_optimizer(::LP) = optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "on")
+select_optimizer(::LP) =
+    optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "on", "output_flag" => false)
 
-select_optimizer(::MILP) = optimizer_with_attributes(HiGHS.Optimizer)
+select_optimizer(::MILP) =
+    optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
 
 select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose" => false)
 
