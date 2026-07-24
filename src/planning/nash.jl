@@ -260,7 +260,7 @@ export NashTrace
 
 """
     run_nash!(specs::AbstractVector{<:NamedTuple}, shared::SharedTransmission;
-              z0::AbstractMatrix{<:Real}, tol_outer::Real = 1e-4,
+              z0::AbstractMatrix{<:Real}, x_inv0 = nothing, tol_outer::Real = 1e-4,
               max_sweeps::Int = 50, order::Symbol = :forward, ω::Real = 1.0,
               checkpoint_dir::AbstractString = datadir("nash_checkpoints")) -> NamedTuple
 
@@ -276,11 +276,33 @@ split), and OPTIONALLY `tol` (default `1e-6`) and `max_iter` (default `100`) via
 
 Boundary guards BEFORE any solve call (mirrors `solve_stackelberg!`'s own
 guards-before-build discipline, each a distinct `ArgumentError`): `length(specs) ==
-shared.N`; `size(z0) == (shared.N, shared.T)`; `order in (:forward, :reverse)`;
-`max_sweeps >= 1`; `0 < ω <= 1`; `isfinite(tol_outer) && tol_outer > 0`; and the
-NESTED-TOLERANCE guard — for every `spec`, `get(spec, :tol, 1e-6) < tol_outer`, naming
-the offending distributor index, its own `tol`, and `tol_outer` (13-CONTEXT.md locked,
-13-RESEARCH.md Pitfall 2).
+shared.N`; `size(z0) == (shared.N, shared.T)`; `z0` entrywise finite and `>= 0`
+(`x_op >= 0` plus the coupling equality makes a negative seeded flow structurally
+infeasible); `order in (:forward, :reverse)`; `max_sweeps >= 1`; `0 < ω <= 1`;
+`isfinite(tol_outer) && tol_outer > 0`; the NESTED-TOLERANCE guard — for every `spec`,
+`get(spec, :tol, 1e-6) < tol_outer`, naming the offending distributor index, its own
+`tol`, and `tol_outer` (13-CONTEXT.md locked, 13-RESEARCH.md Pitfall 2); and the
+SEED-CONSISTENCY guards below.
+
+SEEDING THE GAME STATE (CR-01 — load-bearing for NASH-04's multi-seed probe): BEFORE
+the first sweep, the seed is COMMITTED into the shared model's own state via
+`write_back!(shared, j, z0[j,:], x_inv0[j])` for every distributor `j` — every `z`
+Parameter set to its seeded flow AND every `x_inv[j]` bound-pinned at a consistent
+seeded investment — so the FIRST best-response of every run genuinely plays against
+the seed, never the build-time all-zeros default. Without this, `z0` would only
+initialize the residual baseline `z_prev`, every run's first best-response would face
+the identical all-zeros state, and the returned equilibrium would be bitwise identical
+across seeds — rendering `run_nash_probe`'s seed dimension (NASH-04's honesty gate)
+structurally vacuous. `x_inv0` (optional length-`shared.N` vector) supplies the seeded
+investments; when omitted (`nothing`, the default) each entry is derived as the
+MINIMAL exactly-supporting investment `maximum(z0[j,:]) / shared.corridor_cap`.
+Seed-consistency guards (each a distinct `ArgumentError`, before any solve):
+`length(x_inv0) == shared.N`; `x_inv0` entrywise finite; `0 <= x_inv0[j] <=
+shared.x_inv_max[j]` (per-distributor ceiling — pass an explicit `x_inv0` to spread a
+hot seed's support across other distributors' investment instead); and per-`t`
+capacity feasibility of the seeded state, `sum(z0[:,t]) <= corridor_cap *
+sum(x_inv0)` — otherwise the first best-response would be globally infeasible at the
+seed.
 
 For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1:N` if
 `order === :forward`, `N:-1:1` if `:reverse`):
@@ -334,6 +356,7 @@ function run_nash!(
     specs::AbstractVector{<:NamedTuple},
     shared::SharedTransmission;
     z0::AbstractMatrix{<:Real},
+    x_inv0::Union{Nothing,AbstractVector{<:Real}} = nothing,
     tol_outer::Real = 1e-4,
     max_sweeps::Int = 50,
     order::Symbol = :forward,
@@ -374,11 +397,72 @@ function run_nash!(
         )
     end
 
+    # ---- SEED-CONSISTENCY guards (CR-01): the seed is about to be COMMITTED into the
+    # shared model's own state (below), so it must be a feasible corridor state —
+    # fail here, loudly, never as an opaque solver failure inside sweep 1. ----------
+    all(isfinite, z0) || throw(ArgumentError("run_nash!: z0 must be entrywise finite"))
+    all(>=(0), z0) || throw(
+        ArgumentError(
+            "run_nash!: z0 must be entrywise >= 0 — x_op >= 0 plus the coupling " *
+            "equality makes a negative seeded flow structurally infeasible",
+        ),
+    )
+    x_inv0_vec = if x_inv0 === nothing
+        # Default: the MINIMAL per-distributor investment that exactly supports its
+        # own seeded flow (z0[j,t] <= corridor_cap * x_inv0[j] for every t).
+        [maximum(z0[j, :]) / shared.corridor_cap for j in 1:shared.N]
+    else
+        length(x_inv0) == shared.N || throw(
+            ArgumentError(
+                "run_nash!: length(x_inv0)=$(length(x_inv0)) must equal " *
+                "shared.N=$(shared.N)",
+            ),
+        )
+        all(isfinite, x_inv0) ||
+            throw(ArgumentError("run_nash!: x_inv0 must be entrywise finite"))
+        Float64.(collect(x_inv0))
+    end
+    for j in 1:shared.N
+        0.0 <= x_inv0_vec[j] <= shared.x_inv_max[j] + 1e-9 || throw(
+            ArgumentError(
+                "run_nash!: seeded investment x_inv0[$j]=$(x_inv0_vec[j]) violates " *
+                "0 <= x_inv0[$j] <= x_inv_max[$j]=$(shared.x_inv_max[j]) — the " *
+                "seeded state must respect distributor $j's own investment ceiling " *
+                "(pass an explicit `x_inv0` to spread a hot seed's support across " *
+                "other distributors' investment instead)",
+            ),
+        )
+        x_inv0_vec[j] = min(x_inv0_vec[j], shared.x_inv_max[j])
+    end
+    for t in 1:shared.T
+        sum(z0[j, t] for j in 1:shared.N) <=
+        shared.corridor_cap * sum(x_inv0_vec) + 1e-9 || throw(
+            ArgumentError(
+                "run_nash!: seeded state is capacity-infeasible at t=$t: " *
+                "sum(z0[:,$t])=$(sum(z0[:, t])) exceeds corridor_cap * sum(x_inv0)" *
+                "=$(shared.corridor_cap * sum(x_inv0_vec)) — the first " *
+                "best-response would be globally infeasible at this seed",
+            ),
+        )
+    end
+
     z_prev = Matrix{Float64}(z0)
-    x_inv_prev = zeros(shared.N)
+    x_inv_prev = copy(x_inv0_vec)
     trace = NashTrace()
     ub_prev = fill(NaN, shared.N)
     sweep_order = order === :forward ? (1:(shared.N)) : (shared.N:-1:1)
+
+    # ---- CR-01 (load-bearing, do NOT skip): commit the seed into the shared model's
+    # OWN state — every distributor's z Parameter AND a consistent bound-pinned x_inv
+    # — so the first best-response of the sweep genuinely plays against the seed, not
+    # the build-time all-zeros default. Without this write, the multi-seed dimension
+    # of run_nash_probe (NASH-04) is structurally vacuous: every run's trajectory —
+    # and returned equilibrium — would be identical regardless of seed.
+    # `activate_distributor!` unpins each distributor in turn inside the sweep,
+    # exactly as for any later committed state. ---------------------------------------
+    for j in 1:shared.N
+        write_back!(shared, j, z0[j, :], x_inv0_vec[j])
+    end
 
     for k in 1:max_sweeps
         for i in sweep_order
@@ -524,6 +608,13 @@ combination — NEVER reused across combinations. `activate_distributor!`/`write
 DESTRUCTIVELY; reusing one `shared` instance across probe runs would silently leak state
 from one run into the next, corrupting the "independent probe run" premise this
 function's own gating contract depends on.
+
+Every seed GENUINELY initializes the shared game state (CR-01): `run_nash!` commits each
+seed's `z0` — plus the minimal exactly-supporting per-distributor investment — into the
+fresh `SharedTransmission` BEFORE its first sweep, so distinct seeds genuinely produce
+distinct sweep-1 states. The seed dimension of this probe matrix is live (a
+seed-dependent equilibrium IS detectable in the reported spread), never a mere
+residual-baseline relabel.
 
 # Boundary guards (before any `run_nash!` call)
 

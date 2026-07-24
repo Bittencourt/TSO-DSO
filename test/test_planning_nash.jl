@@ -776,3 +776,102 @@ end
         checkpoint_dir = mktempdir(),
     )
 end
+
+@testitem "planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria (CR-01 regression, NASH-04 seed-liveness)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    build_toy_shared() = build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    build_toy_specs() = begin
+        dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+        agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+        spec = (;
+            feeder = Phase6Fixtures.two_bus_feeder(),
+            pf = LinDistFlow(),
+            aggregators = [agg],
+            λ₀ = [4.0],
+            master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+        )
+        [spec, spec]
+    end
+
+    # Run A: cold seed (z0 = 0, derived x_inv0 = 0) — the hand-checked SYMMETRIC
+    # congested equilibrium (testitem 5): z = [0.6, 0.6].
+    result_cold = run_nash!(
+        build_toy_specs(),
+        build_toy_shared();
+        z0 = zeros(2, 1),
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+
+    # Run B: SAME z0 but a hot asymmetric investment seed — distributor 2's seeded
+    # x_inv = 0.3 gives distributor 1 free pooled headroom in sweep 1 (z_1 <=
+    # 2*(x_inv_1 + 0.3)), so distributor 1's FIRST best-response reaches its
+    # unconstrained optimum z_1 = 0.7 (needing only x_inv_1 = 0.05), and the run
+    # settles on the genuinely DIFFERENT asymmetric equilibrium z ≈ [0.7, 0.0]
+    # (distributor 2 is then forced to hold x_inv_2 = 0.3 just to keep distributor
+    # 1's pinned 0.7 deliverable, leaving z_2 <= 0 — the free-riding structure).
+    # BEFORE the CR-01 fix the seed never entered the shared model's state, so this
+    # run was bitwise identical to run A — this regression pins seed-liveness and
+    # can never regress silently.
+    result_hot = run_nash!(
+        build_toy_specs(),
+        build_toy_shared();
+        z0 = zeros(2, 1),
+        x_inv0 = [0.0, 0.3],
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+
+    @test result_cold.converged
+    @test result_hot.converged
+
+    # Distinct sweep-1 trajectories: the FIRST trace row is distributor 1's own
+    # sweep-1 best-response in both runs (forward order), and it must see the seed —
+    # cold: residual = max(|0.6 - 0|, 0.3) = 0.6; hot: max(|0.7 - 0|, 0.05) = 0.7.
+    @test result_cold.trace.sweep_trace[1] == 1
+    @test result_hot.trace.sweep_trace[1] == 1
+    @test result_cold.trace.distributor_trace[1] == 1
+    @test result_hot.trace.distributor_trace[1] == 1
+    @test !isapprox(
+        result_cold.trace.nash_residual_trace[1],
+        result_hot.trace.nash_residual_trace[1];
+        atol = 1e-3,
+    )
+
+    # ...and the CONVERGED equilibria themselves differ — the seed dimension of the
+    # probe matrix is live (a seed-dependent equilibrium IS detectable), exactly what
+    # NASH-04's honesty gate exists to guarantee.
+    @test isapprox(result_cold.z, [0.6, 0.6]; atol = 1e-3)
+    @test isapprox(result_cold.x_inv, [0.3, 0.3]; atol = 1e-3)
+    @test isapprox(result_hot.z, [0.7, 0.0]; atol = 1e-3)
+    @test isapprox(result_hot.x_inv, [0.05, 0.3]; atol = 1e-3)
+    @test maximum(abs.(result_cold.z .- result_hot.z)) > 0.05
+
+    # Seed-consistency guards: an over-ceiling x_inv0 entry and a capacity-infeasible
+    # (z0, x_inv0) pair must both fail loudly BEFORE any solve.
+    @test_throws ArgumentError run_nash!(
+        build_toy_specs(),
+        build_toy_shared();
+        z0 = zeros(2, 1),
+        x_inv0 = [0.0, 0.4],   # > x_inv_max[2] = 0.3
+        checkpoint_dir = mktempdir(),
+    )
+    @test_throws ArgumentError run_nash!(
+        build_toy_specs(),
+        build_toy_shared();
+        z0 = fill(0.7, 2, 1),  # seeded flow sum 1.4 ...
+        x_inv0 = [0.1, 0.1],   # ... but pooled seeded capacity only 2*(0.2) = 0.4
+        checkpoint_dir = mktempdir(),
+    )
+end
