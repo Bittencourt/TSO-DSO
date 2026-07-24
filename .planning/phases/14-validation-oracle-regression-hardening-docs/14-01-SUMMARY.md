@@ -96,3 +96,12 @@ None - no external service configuration required.
 ---
 *Phase: 14-validation-oracle-regression-hardening-docs*
 *Completed: 2026-07-24*
+
+## Self-Check: PASSED
+
+- FOUND: test/fixtures_planning.jl
+- FOUND: test/test_planning_goldens.jl
+- FOUND: .planning/phases/14-validation-oracle-regression-hardening-docs/14-01-SUMMARY.md
+- FOUND: 9cd714d (test(14-01): add PlanningFixtures goldens module)
+- FOUND: 2611567 (test(14-01): add gate-then-golden regression)
+- FOUND: 08f2c7e (docs(14-01): complete plan)
