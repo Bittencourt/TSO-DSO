@@ -98,7 +98,16 @@ IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/2
 
 ## Current Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game
 
-**Progress:** Phases 10–13 complete (2026-07-24).
+**Progress:** All phases 10–14 complete (2026-07-24) — milestone ready for audit/close.
+- Phase 14 — Validation-Oracle Regression Hardening & Docs: planning goldens pinned
+  (`test/fixtures_planning.jl` + gate-then-golden `test_planning_goldens.jl` — N=1 certified
+  equilibrium and N=2 Nash equilibrium, probe spread bounded), consolidated 4-builder
+  no-binaries guard + source/export tripwire (`test_planning_noninteger.jl`, negative-tested),
+  and the Documenter build fixed red→green with a Planning Layer @autodocs section plus two
+  live-executed literate rung pages (Rung 6 Stackelberg–Benders narrating the BilevelJuMP
+  certification; Rung 7 Nash diagonalization, "a converged equilibrium" language).
+  Verification 4/4; review clean after 4 fixes (incl. Deferrable +18 objective-offset
+  reconciliation in docs).
 - Phase 13 — Nash Diagonalization & Shared-Transmission Coupling: `SharedTransmission` pooled
   N2-corridor coupling model (`coupling.jl`, per-distributor `x_inv[i]` ownership over one shared
   capacity row, build-once/`Parameter`-pinned, `DistributorView` atomic best-response),
@@ -185,4 +194,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-24 — v2.0 Phase 13 complete*
+*Last updated: 2026-07-24 — v2.0 Phase 14 complete (all v2.0 phases done)*
