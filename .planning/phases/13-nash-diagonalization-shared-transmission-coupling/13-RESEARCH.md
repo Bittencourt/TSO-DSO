@@ -286,7 +286,17 @@ capacity constraint couples them additively (a genuinely "aggregative" structure
 player only cares about the AGGREGATE of the others, not their individual identities).
 
 **Design (this session's own derivation, not from a published source — flagged `[ASSUMED]`
-for the cost-allocation convention specifically):**
+for the cost-allocation convention specifically; see Revision 1 note below — the
+cost-allocation convention this sketch shows is SUPERSEDED by CONTEXT.md's locked
+per-distributor-ownership decision):**
+
+> **Revision 1 note (plan-checker pass, 2026-07-23):** the `cost_share` sketch below (one
+> shared scalar `x_inv` with an equal-split cost vector) is the ORIGINAL research sketch and
+> is now superseded — see Open Questions #2 (RESOLVED) below. `coupling.jl` (13-01-PLAN.md)
+> implements the per-distributor-ownership model instead: `x_inv::Vector{VariableRef}` of
+> length `N`, one investment variable per distributor, each paying its own `c_inv[i]*x_inv[i]`.
+> The sketch is retained here unmodified for research traceability (what was considered and
+> why it changed), not as the implemented design.
 
 ```julia
 # src/planning/coupling.jl (sketch — exact field names are Claude's Discretion per CONTEXT.md)
@@ -436,6 +446,13 @@ preemptively add an `ω` keyword the phase's own fixtures never exercise (YAGNI,
 with this project's "measure, don't guess" convention already established in Phase 12's
 retry-budget finding).
 
+> **Revision 1 note (plan-checker pass, 2026-07-23):** 13-02-PLAN.md ultimately DOES add the
+> `ω` keyword (default `1.0`, i.e. plain Gauss-Seidel, `0 < ω <= 1` guarded) rather than
+> deferring it — this is a deliberate, documented deviation from this Pattern's own YAGNI
+> recommendation, made because the keyword doubles as Open Question #1's damping escape
+> hatch and is directly exercised by 13-02's own testitem 9 (`ω=0.5` still converges). See
+> Open Questions #1 (RESOLVED).
+
 ### Pattern 3: `NashTrace` — mirror `BendersTrace`'s shape, document the divergence
 
 **What:** A JuMP-free, purpose-built convergence ledger for the outer loop, following
@@ -451,7 +468,7 @@ mutable struct NashTrace
     sweep_trace::Vector{Int}              # outer sweep index k
     distributor_trace::Vector{Int}        # which i was solved this row (Gauss-Seidel: one row
                                             # per (k, i) pair, not one row per sweep — mirrors
-                                            # BendersTrace's one-row-per-solve-event granularity)
+                                            # BendersTrace's own one-row-per-solve-event granularity)
     nash_residual_trace::Vector{Float64}   # ‖z_i^(k+1) - z_i^(k)‖∞ (this distributor's own
                                             # move) — NaN until distributor i has a k-1 row to
                                             # diff against (legitimate sentinel, BendersTrace
@@ -572,6 +589,12 @@ symmetric fixture, or forward/reverse order probes disagree by more than numeric
 SYMMETRIC fixture (where they should agree by symmetry) — this is often traceable to an
 accidental Jacobi timing bug rather than genuine non-uniqueness.
 
+> **Revision 1 note (plan-checker pass, 2026-07-23):** 13-02-PLAN.md Task 2 now includes BOTH
+> regressions this Pitfall recommends: the forward/reverse agreement test (testitem 7) AND a
+> DIRECT intra-sweep timing check (testitem 7b) that inspects the shared model's own
+> parameter state mid-sweep, rather than relying solely on the indirect forward/reverse
+> agreement signal.
+
 ### Pitfall 2: Nested-tolerance violation silently producing a "converged" but wrong answer
 **What goes wrong:** `tol_inner >= tol_outer` (or close to it) lets the outer residual test
 pass purely because the INNER Benders solve's own approximation error happens to make two
@@ -623,6 +646,12 @@ the plan-checker or a discuss-phase pass could flag for explicit user confirmati
 Phase 14 writes it into the literate docs as settled math.
 **Warning signs:** a docstring or later PVAL-03 literate doc states the cost-split convention
 as fact with no "why this convention, not another" caveat.
+
+> **Revision 1 note (plan-checker pass, 2026-07-23):** superseded — see Open Questions #2
+> (RESOLVED). CONTEXT.md's per-distributor-ownership decision resolves this Pitfall
+> entirely for this phase (no cost-allocation convention is smuggled in — each distributor
+> pays only its own `c_inv[i]*x_inv[i]`, a genuinely unambiguous allocation). Retained here
+> for traceability of what was flagged and how it was resolved.
 
 ## Code Examples
 
@@ -677,15 +706,19 @@ reuse validated lower layers" architectural preference (CLAUDE.md §5).
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Shared corridor investment cost is split EQUALLY among the `N` distributors (`c_inv/N` default) in the absence of a PSR-source N-distributor convention. | Architecture Patterns, Pattern 1 (`cost_share` field) | If the "real" intended convention is marginal-cost-based or single-payer, the fixture's hand-checked equilibrium numbers (and any thesis-traceability claim in Phase 14's literate docs) would need re-deriving; low risk to CORRECTNESS of the Benders/Nash machinery itself (any fixed, documented cost-share vector works mechanically), but real risk to THEORY-FIDELITY claims. Flagged for explicit confirmation before Phase 14 writes it into literate docs as settled math (Pitfall 4). |
+| A1 | Shared corridor investment cost is split EQUALLY among the `N` distributors (`c_inv/N` default) in the absence of a PSR-source N-distributor convention. | Architecture Patterns, Pattern 1 (`cost_share` field) | **SUPERSEDED (Revision 1, 2026-07-23):** resolved by CONTEXT.md's locked per-distributor-ownership decision — see Open Questions #2 (RESOLVED). Each distributor pays only its own `c_inv[i]*x_inv[i]`; no equal-split allocation is implemented. Retained here for traceability. |
 | A2 | The game has aggregative structure (payoffs depend on others only through Σz_{-i}) but NO established potential-function structure, given asymmetric per-distributor cost data. | Architecture Patterns, Pattern 2 | If a potential function DOES exist for this specific LP/QP structure (not ruled out, merely not established here), the project would be foregoing a stronger convergence-guarantee claim it could legitimately make — a missed opportunity, not a correctness risk, since the probe-based honesty approach (NASH-04) remains valid regardless. |
 | A3 | "Seed" in the multi-seed probe means hand-picked initial `z^(0)` profiles, not `StableRNGs`-drawn random draws. | Architecture Patterns, Pattern 4 | If the planner/user intended genuinely randomized seeds (closer to a Monte-Carlo robustness check), the hand-picked design under-samples the initial-condition space; low risk since CONTEXT.md leaves this to Claude's Discretion explicitly, and hand-picked seeds are strictly easier to audit/hand-check. |
-| A4 | Damping/relaxation (`ω`-parameter) is NOT implemented this phase — plain Gauss-Seidel (`ω=1`) only, per CONTEXT.md's "no partial/inexact passes" framing. | Architecture Patterns, Pattern 2 | If the N=3 probe cycles or diverges, the phase's plan may need an amendment (or the checkpoint's own escape-hatch language) to add damping mid-execution rather than having it pre-built; low risk given the recommended congested-but-tractable N=2/N=3 fixture design, but worth flagging as an Open Question. |
+| A4 | Damping/relaxation (`ω`-parameter) is NOT implemented this phase — plain Gauss-Seidel (`ω=1`) only, per CONTEXT.md's "no partial/inexact passes" framing. | Architecture Patterns, Pattern 2 | **Superseded (Revision 1):** 13-02-PLAN.md DOES implement the `ω` keyword (default `1.0`) as Open Question #1's damping escape hatch, deviating from this row's original recommendation — see Pattern 2's Revision 1 note. |
 
 ## Open Questions
 
-1. **Does the recommended N=2/N=3 fixture actually exhibit convergence, or does it land in
-   the non-unique/cycling regime Hu & Ralph document?**
+> **Revision 1 note (plan-checker pass, 2026-07-23):** Both open questions below are now
+> **(RESOLVED)** — annotated inline. Neither blocks planning; both resolutions are load-bearing
+> decisions already reflected in CONTEXT.md and the three PLAN.md files.
+
+1. **(RESOLVED)** Does the recommended N=2/N=3 fixture actually exhibit convergence, or does
+   it land in the non-unique/cycling regime Hu & Ralph document?
    - What we know: congestion (a binding shared capacity) is what CREATES non-uniqueness risk
      in the closest published analog; symmetric distributor data (per CONTEXT.md's own
      "symmetric distributors → symmetric equilibrium" framing) is what makes a hand-checkable
@@ -701,11 +734,21 @@ reuse validated lower layers" architectural preference (CLAUDE.md §5).
      converge within the locked max-sweep cap, congestion/asymmetry must be dialed back and
      re-measured" escape hatch into the plan, exactly like Phase 12's T=1→T=8 fixture
      escalation and Phase 11/12's own toy-fixture-optimum re-derivation precedent.
+   - **Resolution (Revision 1):** mitigated two ways, both now load-bearing in 13-02-PLAN.md:
+     (a) the `ω` damping/relaxation escape hatch is built into `run_nash!` (keyword `ω::Real =
+     1.0`, `0 < ω <= 1`, guarded before any solve) as an available remedy if the N=2/N=3
+     fixtures ever exhibit cycling — tested directly (testitem 9, `ω=0.5` still converges); and
+     (b) 13-02 Task 2's action text now explicitly documents the re-tuning contingency this
+     Open Question recommended: if the measured N=2 equilibrium does not land on the
+     hand-derived target `z≈[0.6,0.6]`, the congestion/asymmetry parameters are re-derived and
+     re-measured — mirroring the Phase 12 T=1→T=8 fixture-escalation precedent (Rule-1
+     deviation with documented derivation), never a silent tolerance loosening.
 
-2. **Is `Σᵢ x_op[i,t] <= corridor_cap * x_inv` (aggregate-flow-limited-by-one-shared-investment)
-   the right physical model, versus each distributor investing in and owning its own SHARE of
-   the corridor (`x_op[i,t] <= corridor_cap * x_inv[i]`, `x_inv[i]` per-distributor, with only
-   the DELIVERY constraint shared)?**
+2. **(RESOLVED)** Is `Σᵢ x_op[i,t] <= corridor_cap * x_inv`
+   (aggregate-flow-limited-by-one-shared-investment) the right physical model, versus each
+   distributor investing in and owning its own SHARE of the corridor (`x_op[i,t] <=
+   corridor_cap * x_inv[i]`, `x_inv[i]` per-distributor, with only the DELIVERY constraint
+   shared)?
    - What we know: CONTEXT.md's own language ("aggregate loading of the others enters its
      follower's RHS") is consistent with either model — both put `Σ_{j≠i} z_j` into
      distributor `i`'s effective RHS.
@@ -720,6 +763,15 @@ reuse validated lower layers" architectural preference (CLAUDE.md §5).
      (Pitfall 3's failure mode) unless the per-share investment costs are ALSO cross-coupled,
      which adds complexity without a clear benefit. Flag for discuss-phase / plan-checker
      confirmation given both are locked-decision-compatible.
+   - **Resolution:** resolved by CONTEXT.md's dated (2026-07-23) per-distributor-ownership
+     amendment, which OVERRIDES this question's own tentative one-shared-investment
+     recommendation (and Pattern 1's equal-split `cost_share` sketch, and Assumptions Log A1's
+     equal-split default): each distributor `i` owns `x_inv[i]` and pays `c_inv[i]*x_inv[i]`
+     individually; the genuinely SHARED object is the pooled AGGREGATE capacity row
+     (`corridor_cap * Σᵢ x_inv[i]`), not a single jointly-owned `x_inv` scalar. This is
+     implemented in `13-01-PLAN.md` Task 1 (`SharedTransmission.x_inv::Vector{VariableRef}`,
+     length `N`) and documented as a deliberate departure from this section's sketch directly
+     in `coupling.jl`'s own docstring, per CONTEXT.md's own traceability requirement.
 
 ## Environment Availability
 
@@ -848,4 +900,12 @@ Architecture Patterns above) rather than adopt any web/API-oriented ASVS control
 decades-old and not fast-moving; the in-repo interfaces this research depends on
 (`solve_stackelberg!`, `BendersTrace`, `checkpoint_iteration!`) are locked by Phase 11/12's own
 "keep call sites unchanged" discipline and are not expected to shift before Phase 13 executes).
-</content>
+
+---
+
+## Revision 1 Log (plan-checker pass, 2026-07-23)
+
+Addressed plan-checker warnings against the three PLAN.md files of this phase (0 blockers,
+6 warnings). This RESEARCH.md received only the annotations above (Open Questions marked
+RESOLVED, superseded sketches/assumptions flagged inline) — no re-research was performed.
+See `13-01-PLAN.md`, `13-02-PLAN.md` for the corresponding fixture/test/documentation changes.
