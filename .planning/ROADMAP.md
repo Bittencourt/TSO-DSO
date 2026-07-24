@@ -42,7 +42,7 @@ diagonalization; BilevelJuMP as a small-case validation oracle only (never the p
 - [x] **Phase 10: Oracle Coupling Wiring & Resilience** - Wire the real z-pin coupling constraint/dual, reconcile the dual convention, and make repeated oracle solves resilient before any Benders code depends on them (completed 2026-07-22)
 - [x] **Phase 11: Single-Distributor Stackelberg-Benders (Certified)** - A hand-rolled Benders loop solves a single distributor's leader/follower equilibrium end-to-end, with the leader/follower semantics resolved and certified by a tiny BilevelJuMP MPEC cross-check (completed 2026-07-22)
 - [x] **Phase 12: Cut-Store & Benders Master Robustness Hardening** - Harden the Benders cut store, gap diagnostics, and retry/checkpoint mechanics at realistic iteration counts before nesting a second (Nash) outer loop (completed 2026-07-23)
-- [ ] **Phase 13: Nash Diagonalization & Shared-Transmission Coupling** - Multiple distributors reach a Gauss-Seidel Nash fixed point over a genuinely new shared transmission-reinforcement coupling model, with honest non-uniqueness reporting
+- [x] **Phase 13: Nash Diagonalization & Shared-Transmission Coupling** - Multiple distributors reach a Gauss-Seidel Nash fixed point over a genuinely new shared transmission-reinforcement coupling model, with honest non-uniqueness reporting (completed 2026-07-24)
 - [ ] **Phase 14: Validation-Oracle Regression Hardening & Docs** - One-off validation runs become permanent pinned regressions; planning math is literate-documented; an automated guard enforces continuous-only scope
 
 ## Phase Details
@@ -214,7 +214,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13-03-PLAN.md — run_nash_probe (>=3 seeds x 2 sweep orders gating probe, max-pairwise-distance
+- [x] 13-03-PLAN.md — run_nash_probe (>=3 seeds x 2 sweep orders gating probe, max-pairwise-distance
       spread reporting, structural "a converged equilibrium" language), N=2 + N=3 fixtures, wave 3,
       depends on 13-02 (NASH-04)
 
@@ -263,7 +263,7 @@ Phases execute in numeric order: 10 → 11 → 12 → 13 → 14
 | 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete    | 2026-07-22 |
 | 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete    | 2026-07-22 |
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 2/2 | Complete    | 2026-07-23 |
-| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 2/3 | In Progress|  |
+| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 3/3 | Complete   | 2026-07-24 |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 0/TBD | Not started | - |
 
 ## Research Flags
