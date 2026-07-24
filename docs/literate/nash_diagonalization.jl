@@ -69,8 +69,12 @@ using TSODSO: Bus, Branch, Feeder
 # distributor solves its own operational welfare oracle over an IDENTICAL feeder/
 # aggregator pair — only the shared corridor couples them). The device is the SAME
 # public `Deferrable` substitute for the certified fixture's test-only elastic device
-# used on Rung 6 (`E=6.0`, `b=1.0` — algebraically identical to `a=6.0`, `b=1.0` since
-# `a = b·E`).
+# used on Rung 6 (`E=6.0`, `b=1.0` — equivalent to the elastic device's `a=6.0`,
+# `b=1.0` since `a = b·E`, UP TO the additive constant `−(b/2)·E²` that `Deferrable`'s
+# squared utility form KEEPS: the equilibrium point and all prices/duals are identical,
+# only objective-level quantities carry a constant `+18` shift — see the Rung 6 page's
+# reconciliation of its displayed `UB`. This page displays no objective-level
+# quantities, so no number below carries that offset).
 
 buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)]
 branches = [Branch(1, 2, 1e-3, 1e-3, SMAX_NO_LIMIT)]

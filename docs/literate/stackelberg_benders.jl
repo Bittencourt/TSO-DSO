@@ -62,11 +62,21 @@ using TSODSO: Bus, Branch, Feeder
 # `ToyElasticDevice` (utility `U(p) = a·p − (b/2)·p²`, `a=6.0`, `b=1.0`, `Pmax=10.0`) at
 # bus 2 of a near-lossless 2-bus feeder — a test-only struct not reachable from `docs/`
 # without adding a new dependency. The PUBLIC `Deferrable` device's own utility (thesis
-# eq. 3.12) is `U(p) = −(b/2)·(p − E)²`, which expands to `b·E·p − (b/2)·p²` (dropping the
-# constant `-(b/2)E²` term, RESEARCH A5) — algebraically IDENTICAL to `a·p − (b/2)·p²`
-# whenever `a = b·E`. Setting `E = 6.0`, `b = 1.0` (so `a = b·E = 6.0`, matching the
-# certified fixture's own `a`) with a single-hour window `[1,1]` (`T = 1`) reproduces the
-# SAME economics as the certified fixture using ONLY public `TSODSO` API.
+# eq. 3.12) is `U(p) = −(b/2)·(p − E)²`, which expands to `b·E·p − (b/2)·p² − (b/2)·E²` —
+# the elastic device's `a·p − (b/2)·p²` shape whenever `a = b·E`, PLUS the constant
+# `−(b/2)·E²`. `Deferrable`'s IMPLEMENTED utility KEEPS that constant — it is inherent in
+# the squared form (`Deferrable.jl` builds `-(b/2)*(Σp − E)^2` verbatim; RESEARCH A5 only
+# sanctions dropping eq. 3.12's separate additive constant `c`, NOT this expansion term).
+# Setting `E = 6.0`, `b = 1.0` (so `a = b·E = 6.0`, matching the certified fixture's own
+# `a`) with a single-hour window `[1,1]` (`T = 1`) therefore reproduces the certified
+# fixture's economics UP TO AN ADDITIVE CONSTANT `(b/2)·E² = 18` on the leader's total
+# cost: the equilibrium point (`y*`, `z*`) and every price/dual are IDENTICAL (an additive
+# constant never moves an argmax), but every OBJECTIVE-LEVEL quantity on this page is
+# shifted by `+18` relative to the certified fixture — expect `UB ≈ −0.245 + 18 = 17.755`
+# below, NOT the certified fixture's own `−0.245`. (The offset also inflates `|UB|` inside
+# `solve_stackelberg!`'s relative-gap normalizer `max(1, |UB|)`, so the SAME `tol = 1e-6`
+# stops this instance a few 1e-3 short of the certified `z* = 0.7` — see the `z` note
+# below.) All of this uses ONLY public `TSODSO` API.
 
 buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)]
 branches = [Branch(1, 2, 1e-3, 1e-3, SMAX_NO_LIMIT)]
@@ -113,12 +123,22 @@ result.y
 
 # The converged coupling flow `z` — economically, this instance reproduces the SAME
 # ballpark as the certified fixture's own hand-enumerated `z* = 0.7` (see the
-# certification narrative above), since the underlying economics are identical by
-# construction; the exact digits below come from THIS live solve, not copied from
-# `test_planning_certification.jl`:
+# certification narrative above): the underlying economics are identical by construction
+# UP TO the `+18` additive constant discussed above, and that constant's inflation of
+# `|UB|` in the relative-gap normalizer `max(1, |UB|)` is exactly why the converged `z`
+# here sits a few 1e-3 from `0.7` rather than matching it to solver precision (the same
+# `tol = 1e-6` is effectively ~17.8× looser on this instance's gap). The exact digits
+# below come from THIS live solve, not copied from `test_planning_certification.jl`:
 
 result.z
 
-# The converged upper bound (leader's total cost at the incumbent):
+# The converged upper bound — the leader's total cost at the incumbent FOR THIS
+# instance's `Deferrable` utility, i.e. the certified fixture's hand-enumerated `−0.245`
+# SHIFTED by the kept constant `(b/2)·E² = 18` (expect `≈ 17.755`, NOT `−0.245`):
 
 result.UB
+
+# The offset-corrected leader cost — subtracting the `(b/2)·E²` constant makes it
+# directly comparable to the certified fixture's own hand-enumerated total cost `−0.245`:
+
+result.UB - 0.5 * 1.0 * 6.0^2
