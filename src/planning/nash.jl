@@ -487,6 +487,17 @@ function run_nash!(
             # actually solved against the shared model — this re-solve makes
             # value(shared.x_inv[i]) correspond to the incumbent result_i.z.
             f_res = solve_follower!(result_i.follower, result_i.z)
+            # WR-01: solve_follower!(::DistributorView, ...) has a documented
+            # three-way contract and can return (; feasible = false, v, u) WITHOUT
+            # raising. Left unchecked, the infeasible branch would let the next line
+            # read value(...) off a solver state with no primal result (an opaque
+            # OptimizeNotCalled/no-result error far from the cause) and write_back!
+            # would then pin garbage. Fail loudly at the seam instead.
+            f_res.feasible || error(
+                "run_nash!: CR-01 parity re-solve at incumbent z for distributor " *
+                "$i returned infeasible — the shared model's committed state is " *
+                "inconsistent with this distributor's own incumbent best-response",
+            )
             x_inv_i_converged = value(shared.x_inv[i])
 
             residual_i = max(
