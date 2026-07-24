@@ -4,8 +4,8 @@ milestone: v2.0
 milestone_name: Stackelberg-Nash TSO-DSO Planning Game
 status: executing
 stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-07-24T09:33:53.526Z"
-last_activity: 2026-07-24 -- Phase 14 planning complete
+last_updated: "2026-07-24T09:34:20.612Z"
+last_activity: 2026-07-24 -- Phase 14 execution started
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 14 — validation oracle regression hardening & docs
+**Current focus:** Phase 14 — validation-oracle-regression-hardening-docs
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-24 -- Phase 14 planning complete
+Phase: 14 (validation-oracle-regression-hardening-docs) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 14
+Last activity: 2026-07-24 -- Phase 14 execution started
 
 Progress: [██████████] 100%
 
