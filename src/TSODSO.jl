@@ -124,6 +124,7 @@ include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (pl
 include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs (plan 11-01, PLAN-04)
 include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)
 include("planning/benders.jl")      # solve_stackelberg! outer Benders loop (plan 11-02, PLAN-06)
+include("planning/coupling.jl")     # SharedTransmission per-distributor views (plan 13-01, NASH-01)
 
 # --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
 # Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
