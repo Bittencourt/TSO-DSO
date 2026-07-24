@@ -1,8 +1,8 @@
 ---
 phase: 14
 slug: validation-oracle-regression-hardening-docs
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-24
 ---
@@ -40,9 +40,9 @@ created: 2026-07-24
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 14-01-* | 01 | 1 | PVAL-02 | — | N/A | regression | `TestItemRunner.run_tests(["test/test_planning_goldens.jl"])` | ❌ W0 | ⬜ pending |
-| 14-01-* | 01 | 1 | PVAL-04 | — | N/A | guard | `TestItemRunner.run_tests(["test/test_planning_no_binaries.jl"])` (or goldens file if co-located) | ❌ W0 | ⬜ pending |
-| 14-02-* | 02 | 2 | PVAL-03 | — | N/A | docs build | `julia --project=docs docs/make.jl` exits 0 (checkdocs=:exports strict) | ✅ (build exists, currently RED) | ⬜ pending |
+| 14-01-01/02 | 01 | 1 | PVAL-02 | — | N/A | regression | `TestItemRunner.run_tests(["test/test_planning_goldens.jl"])` from scratch dev-linked env | ❌ W0 | ⬜ pending |
+| 14-02-01/02 | 02 | 1 | PVAL-04 | — | N/A | guard | `TestItemRunner.run_tests(["test/test_planning_noninteger.jl"])` + filtered coupling/nash re-run | ❌ W0 | ⬜ pending |
+| 14-03-01..03 | 03 | 1 | PVAL-03 | — | N/A | docs build | `julia --project=docs docs/make.jl` exits 0 (checkdocs=:exports strict) | ✅ (build exists, currently RED) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -72,11 +72,11 @@ tasks, not pre-work:
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 600s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (new test files are task deliverables; docs build is the red→green anchor)
+- [x] No watch-mode flags
+- [x] Feedback latency < 600s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-07-24 (plan-checker Dimension 8 pass — no blocking Nyquist issues in task-level verify blocks)

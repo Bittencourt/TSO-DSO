@@ -492,9 +492,12 @@ hardening.
 
 **If empty:** N/A — see table above; both entries are low-to-medium risk and explicitly flagged.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should Rung 6's docs page execute BilevelJuMP live, or only narrate it?**
+   - RESOLVED: narrate only — encoded as a locked decision in 14-03-PLAN.md (BilevelJuMP
+     certification story appears as prose citing test/test_planning_certification.jl; no new
+     docs dependency; not open for re-litigation by the executor).
    - What we know: CONTEXT.md requires the certification STORY to appear; it does not say "executed
      live". `docs/Project.toml` today has zero BilevelJuMP/HiGHS/Ipopt-as-docs-deps; adding them
      means a new docs/Manifest.toml resolve (Julia 1.12.5-pinned) and a slower, Ipopt-MPEC-solving
@@ -512,6 +515,8 @@ hardening.
      existing Phase 13 test, never pinned to an exact value today.
    - What's unclear: how numerically stable the exact spread value is across HiGHS versions/BLAS
      versions on this tiny toy fixture (the CI matrix runs Julia 1.10/1.11/1.12).
+   - RESOLVED: pin a loose upper bound — encoded in 14-01-PLAN.md (probe-spread golden asserts
+     an empirically-derived loose upper bound, with rationale comment).
    - Recommendation: pin a LOOSE UPPER BOUND on the spread (e.g. `z_spread < 0.05`) rather than an
      exact value with a tight tolerance — the equilibrium POINT (`z=[0.6,0.6]`) is the hand-derived,
      stable quantity; the spread across seeds/orders is inherently a solver-numerics-sensitive
