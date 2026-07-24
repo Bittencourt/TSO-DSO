@@ -48,11 +48,11 @@ documented, every layer swappable.
 
 - [x] **PVAL-01**: A tiny-instance BilevelJuMP single-level reduction (open-source `BigMMode`/`StrongDualityMode`)
       certifies the planning equilibrium and is retained as a permanent, fast regression test.
-- [ ] **PVAL-02**: Canonical single- and multi-distributor fixtures are pinned as computed goldens, gated by
+- [x] **PVAL-02**: Canonical single- and multi-distributor fixtures are pinned as computed goldens, gated by
       BilevelJuMP agreement and diagonalization convergence (no external numerical reference exists).
-- [ ] **PVAL-03**: Literate Documenter documentation maps the planning math (PSR problem numbers, coupling seam,
+- [x] **PVAL-03**: Literate Documenter documentation maps the planning math (PSR problem numbers, coupling seam,
       the interpretive leader/follower choice) to the code, `@example`-executed.
-- [ ] **PVAL-04**: An automated no-binaries guard on every planning-layer subproblem builder enforces the
+- [x] **PVAL-04**: An automated no-binaries guard on every planning-layer subproblem builder enforces the
       continuous-only scope of this milestone.
 
 ## Future Requirements (deferred — later milestone)
@@ -92,9 +92,9 @@ documented, every layer swappable.
 | NASH-03 | Phase 13 | Complete |
 | NASH-04 | Phase 13 | Complete |
 | PVAL-01 | Phase 11 | Complete |
-| PVAL-02 | Phase 14 | Pending |
-| PVAL-03 | Phase 14 | Pending |
-| PVAL-04 | Phase 14 | Pending |
+| PVAL-02 | Phase 14 | Complete |
+| PVAL-03 | Phase 14 | Complete |
+| PVAL-04 | Phase 14 | Complete |
 
 **Coverage:** 15/15 v2.0 requirements mapped ✓ across 5 phases (10-14). Phase 12 (Cut-Store &
 Benders Master Robustness Hardening) hardens PLAN-05/PLAN-06 at scale and intentionally owns no
