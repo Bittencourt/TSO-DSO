@@ -3,6 +3,7 @@
 [![CI](https://github.com/Bittencourt/TSO-DSO/actions/workflows/CI.yml/badge.svg)](https://github.com/Bittencourt/TSO-DSO/actions/workflows/CI.yml)
 [![Docs: stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://bittencourt.github.io/TSO-DSO/stable/)
 [![Docs: dev](https://img.shields.io/badge/docs-dev-lightblue.svg)](https://bittencourt.github.io/TSO-DSO/dev/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A **Julia + JuMP research framework** for experimenting with a TSO–DSO integration
 optimization theory built on transactive energy, dynamic distribution pricing, and
@@ -178,3 +179,7 @@ exported symbol fails the build.
 This repository ports the *theory*, not the original MATLAB+CVX code, and documents every
 departure (e.g., per-distributor investment ownership over the pooled corridor) where the
 sources leave choices open.
+
+## License
+
+[MIT](LICENSE)
