@@ -37,7 +37,12 @@ reverse flow) surfaces as a first-class, citable finding rather than a tuned-awa
      tolerance is touched.
   4. A high-PV/reverse-flow stress fixture exercises the exactness boundary, and the result — exact
      or genuinely inexact — is documented in a literate rung page beside the thesis equations.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — ACPowerFlow peer formulation + wiring + BLOCKING 2-bus angle-recovery gate (EXACT-01)
+- [ ] 15-02-PLAN.md — assert_ac_exact! per-hour report, report-don't-throw contract (EXACT-02, EXACT-03)
+- [ ] 15-03-PLAN.md — high-PV stress fixture + literate rung page (EXACT-04)
 
 ### Phase 16: Reactive-Power (μ) Consensus
 **Goal**: The ADMM operational layer carries a genuine reactive-power balance and a citable reactive
@@ -154,7 +159,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 2/2 | Complete | 2026-07-23 |
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 3/3 | Complete | 2026-07-24 |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 3/3 | Complete | 2026-07-24 |
-| 15. AC-Exactness Oracle | v2.1 | 0/? | Not started | - |
+| 15. AC-Exactness Oracle | v2.1 | 0/3 | Planned | - |
 | 16. Reactive-Power (μ) Consensus | v2.1 | 0/? | Not started | - |
 | 17. Real IEEE-123 Impedances | v2.1 | 0/? | Not started | - |
 | 18. Directional Thesis Reproduction | v2.1 | 0/? | Not started | - |
