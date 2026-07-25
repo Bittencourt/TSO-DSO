@@ -1,534 +1,636 @@
 # Architecture Research
 
-**Domain:** v2.0 planning-layer integration — hand-rolled Benders + Gauss–Seidel diagonalization for a Stackelberg–Nash TSO–DSO investment game, built on top of the shipped v1.0 operational transactive-energy core (JuMP/Clarabel/HiGHS, SEAM-01 coupling stubs).
-**Researched:** 2026-07-22
-**Confidence:** MEDIUM-HIGH on the integration mechanics (grounded in the actual v1 source: `src/models/oracle.jl`, `src/admm/*`, `src/core/*`); MEDIUM on the exact leader/follower semantic mapping (the PSR source note itself is author-flagged as inconsistent on this point — see "Open Question" below, which this document deliberately does NOT resolve by invention).
+**Domain:** v2.1 Validation & Reproduction — hardening the operational transactive-energy core
+of an existing Julia+JuMP framework with four validation capabilities (AC-OPF oracle, reactive
+ADMM consensus, real IEEE-123 impedances, directional thesis reproduction). Built on top of the
+shipped v1.0 operational core and v2.0 planning layer.
+**Researched:** 2026-07-25
+**Confidence:** HIGH (all four capabilities map onto existing, well-documented seams; verified
+against the actual source files, not assumed)
 
----
+## Summary Verdict
 
-## Guiding principle: the planning layer is additive, not a refactor
+All four v2.1 capabilities integrate as **additive extensions of existing seams**, not
+restructuring:
 
-v1 was built oracle-shaped on purpose. `src/models/oracle.jl`'s header states the coupling
-seam (`z ↔ p_ag`, `λ_j ↔ π_s`) exists specifically "so the deferred Stackelberg-Nash planning
-layer (Phase 8/9) will consume WITHOUT a rewrite." The v1 ADMM layer (`src/admm/`) already
-proved the pattern this milestone must repeat: **never call the monolithic one-shot solve
-(`solve_welfare`/`operational_oracle`) inside a hot loop.** `DsoOpt.jl`/`AgrOpt.jl` do NOT call
-`solve_welfare` per ADMM iteration — they reuse its underlying builders (`contribute!` on the
-power-flow formulation and on each aggregator) to build a JuMP model **once**, then mutate a
-handful of coefficients and re-solve. The Benders subproblem must follow the identical
-discipline: build once, reuse the SAME `contribute!` builders, expose the coupling flow as a
-**JuMP `Parameter`** (not a rebuild), and read the coupling dual off the balance constraint the
-same way the DADP is already read. This is the single architectural decision that makes v2.0
-additive: **zero modifications to `src/models/oracle.jl` or `src/models/welfare_solve.jl`.**
+| # | Capability | Integration seam | New `ProblemClass`? | Feature-flag needed? |
+|---|------------|-------------------|----------------------|------------------------|
+| a | AC-OPF oracle | `AbstractPowerFlow` contract + `solve_welfare`'s existing `allow_local`/formulation-agnostic path | No — reuses `NLP()` | No — new formulation, purely additive |
+| b | Reactive μ consensus | `DsoOpt`/`AgrOpt`/`solve_admm`/`residuals.jl` build-once seam | N/A | **Yes** — `reactive_consensus::Bool` kwarg, default preserving old behavior |
+| c | Real IEEE-123 impedances | `src/data/ieee123.jl` data table, offline PMD script (never a runtime dep) | N/A | Transitional toggle, then goldens re-pinned |
+| d | Directional thesis reproduction | `docs/literate/*.jl` rung + `test/fixtures_*.jl` golden pattern (same as Rung 6/7, PVAL-02) | N/A | No |
 
----
+No change is required to `ModelContext.jl`, `ProblemClass.jl`, `solver/factory.jl` (Ipopt
+already wired as the `NLP()` default), or the DC/LinDistFlow/ConvexBranchFlow formulation files.
+This is the strongest evidence the v1.0/v2.0 architecture is fit-for-purpose: the seams built
+then absorb all four v2.1 capabilities without a rewrite.
 
-## (1) The oracle interface: what v1 exposes, what is missing, what to add
+## Standard Architecture (current, as verified from source)
 
-### What `operational_oracle` already gives you (verified in `src/models/oracle.jl`)
-
-```julia
-operational_oracle(feeder, pf, aggregators; λ₀, T=24, z=nothing, role=:follower,
-                    objective_hook=identity, horizon_state=nothing, allow_export=false)
-    -> (; cost, π, dadp, ctx)
-```
-
-- `cost` = the GLB-CVX welfare optimum (`objective_value`).
-- `π` = `_coupling_dual(ctx, z)` — currently **only implemented for `z === nothing`**: the
-  free-frontier DADP at `feeder.root` (`dual.(ctx.constraints[:balance_p][root, :])`).
-- For `z !== nothing` it **throws `ArgumentError`** by design (threat T-04-13, "no silent
-  partial pinning") — this is the exact SEAM-01 extension point named in the docstring
-  ("PLAN-01/02 (Phase 8/9) extension point... NOT wired into `solve_welfare` in Phase 4").
-- `role` is validated (`:leader`/`:follower`) but inert; `objective_hook`/`horizon_state` are
-  typed-but-inert stubs for the stochastic/MPC axes, irrelevant to v2.0.
-
-**Verdict: the v1 stub's *signature* is the right contract and needs no change. The
-*implementation* behind `z` is genuinely missing and must be added — but NOT by editing
-`oracle.jl` or `welfare_solve.jl`.** Making `p_import` a real Parameter-pinned coupling
-variable inside `solve_welfare` would touch a file exercised by 1946 existing tests for no
-reason; the ADMM precedent (`DsoOpt.jl` reusing `contribute!` instead of calling
-`solve_welfare`) shows the correct move is a **new, purpose-built build-once subproblem** that
-reuses the same underlying builders.
-
-### The extension: `src/planning/subproblem.jl` (new, mirrors `DsoOpt.jl`)
-
-```julia
-struct OracleProblem{Z, F}
-    model::Model
-    ctx::ModelContext
-    z::Z                 # z[t] :: VariableRef, each `in Parameter(0.0)` — the coupling flow
-    feeder::F
-    T::Int
-end
-
-function build_oracle_problem(feeder, pf::AbstractPowerFlow, aggregators; λ₀, T::Int = 24)
-    model = Model(select_optimizer(problem_class(pf)))       # INFRA-02, never names a solver
-    ctx = ModelContext(model)
-    ctx.meta[:feeder] = feeder; ctx.meta[:T] = T
-
-    contribute!(pf, ctx, feeder; T)                          # VERBATIM reuse (as DsoOpt.jl does)
-    for agg in aggregators
-        contribute!(agg, ctx; T)                              # VERBATIM reuse — sums U_ag, :Rp/:Rq
-    end
-
-    @variable(model, z[t = 1:T] in Parameter(0.0))            # the coupling flow z (thesis z_y,s)
-    add_to_residual!(ctx, :Rp, feeder.root, t, z[t])           # for each t: injects z at the frontier
-    close_balance!(ctx)                                        # :Rp==0 ∀(j,t) → register :balance_p
-
-    @objective(model, Max, ctx.meta[:objective] - sum(λ₀[t]*z[t] for t in 1:T))
-    return OracleProblem(model, ctx, collect(z), feeder, T)
-end
-
-function solve_oracle!(op::OracleProblem, z_trial::AbstractVector{<:Real})
-    set_parameter_value.(op.z, z_trial)                        # cheap re-solve (no rebuild)
-    assert_solved!(op.model; dual = true)                      # STRICT — see Anti-Pattern below
-    cost = objective_value(op.model)
-    π = dual.(op.ctx.constraints[:balance_p][op.feeder.root, :])
-    return (; cost, π)
-end
-```
-
-This is a **genuine JuMP `Parameter`** on the coupling flow itself (CLAUDE.md's prescribed
-idiom — `@variable(m, x in Parameter(v)); set_parameter_value(x, v)`), not the price-as-`Float64`
-workaround ADMM uses for `λ_j` (that workaround exists only because `λ·pag` would be an
-indefinite bilinear in a `Max` objective; here `λ₀ᵀ·z` with `z` as a `Parameter` and `λ₀` a
-constant vector is affine — no bilinear risk). Because `z` now closes the frontier balance
-directly (replacing `solve_welfare`'s free `p_import` variable), `π` falls out of the **same**
-`:balance_p` dual read `_coupling_dual` already performs — no new dual-extraction machinery,
-same registry (`ctx.constraints`), same `assert_solved!` gate, same fail-loud discipline.
-
-**Do the v1 stubs suffice?** The *signature/contract* — yes. The *executable z-pin* — no,
-and it should NOT be retrofitted into `operational_oracle`/`solve_welfare`; it should be a new,
-additive, build-once sibling that reuses the same `contribute!` seam. `operational_oracle`
-itself is untouched and remains useful as a one-shot reference/cross-check call (e.g., the
-free-import welfare baseline, or an occasional whole-model sanity re-solve outside the hot
-Benders loop).
-
----
-
-## (2) Module layout: `src/planning/` mirroring `src/admm/`
-
-`src/admm/` splits cleanly into: a pure-data ledger (`residuals.jl`), two build-once JuMP
-wrappers (`AgrOpt.jl`, `DsoOpt.jl`), and one orchestrator with zero JuMP-building logic of its
-own (`solve_admm.jl`). `src/planning/` repeats that shape one level up:
+### System Overview
 
 ```
-src/planning/
-├── subproblem.jl     # OracleProblem: build-once Parameter-z wrapper (mirrors DsoOpt.jl)
-├── cuts.jl            # BendersCutStore: pure data, NO JuMP (mirrors residuals.jl)
-├── master.jl          # BendersMaster: plain JuMP LP/QP over (y_inv, z, α); add_cut!
-├── benders.jl          # solve_benders: single-distributor outer loop (mirrors solve_admm.jl)
-├── diagnostics.jl      # BendersResiduals: UB/LB gap ledger, pure data (mirrors residuals.jl)
-├── coupling.jl         # shared N2/transmission-reinforcement stand-in — SEE OPEN QUESTION below
-├── diagonalize.jl       # Gauss-Seidel Nash sweep over Vector{DistributorState}
-└── validation.jl        # BilevelJuMP small-instance cross-check (weakdep-gated)
+┌───────────────────────────────────────────────────────────────────────────┐
+│  data/  (JuMP-free, PMD-free)                                             │
+│  Feeder/Bus/Branch structs ← ieee13.jl / ieee123.jl / topology.jl         │
+├───────────────────────────────────────────────────────────────────────────┤
+│  powerflow/  (AbstractPowerFlow contract — dispatch, no if-formulation==) │
+│  DCPowerFlow │ LinDistFlow │ ConvexBranchFlow(SOCP)  →  contribute!(ctx)  │
+├───────────────────────────────────────────────────────────────────────────┤
+│  core/ModelContext  — residuals[:Rp]/[:Rq] (affine), meta[:objective]     │
+│                       (quadratic), constraints (for later dual() reads)   │
+├───────────────────────────────────────────────────────────────────────────┤
+│  models/  — welfare_solve.jl (GLB-CVX centralized) │ exactness.jl (PF-04) │
+│             oracle.jl (operational_oracle, planning coupling seam)        │
+├───────────────────────────────────────────────────────────────────────────┤
+│  admm/  — AgrOpt (per-node QP) │ DsoOpt (whole-net SOCP) │ solve_admm     │
+│           (build-once, Parameter-free coefficient re-solve, adaptive ρ)   │
+├───────────────────────────────────────────────────────────────────────────┤
+│  pricing/ — dlmp.jl / fit.jl / checks.jl / welfare.jl                     │
+│  planning/ — retry/checkpoint/subproblem/follower/master/benders/coupling │
+│              /nash (Stackelberg-Benders + Gauss-Seidel diagonalization)   │
+├───────────────────────────────────────────────────────────────────────────┤
+│  solver/ — ProblemClass (LP/MILP/QP/SOCP/NLP) → factory.jl select_optimizer│
+│            (Clarabel/HiGHS/Ipopt; Gurobi/Mosek weakdep-gated)             │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-Wired into `src/TSODSO.jl` **after** `admm/` (needs `ModelContext`, `assert_solved!`,
-`select_optimizer`/`problem_class`, and the `contribute!` builders already established) and
-**after** `models/oracle.jl` (the documented v1 contract these files fulfill):
+### Component Responsibilities
 
-```julia
-include("planning/cuts.jl")          # pure data — no deps beyond Base
-include("planning/diagnostics.jl")   # pure data — mirrors admm/residuals.jl
-include("planning/subproblem.jl")    # OracleProblem — needs ModelContext, contribute!, select_optimizer
-include("planning/coupling.jl")      # shared reinforcement stand-in (new model, no v1 mirror)
-include("planning/master.jl")        # BendersMaster — needs select_optimizer, assert_solved!
-include("planning/benders.jl")       # solve_benders — orchestrates subproblem+master+cuts
-include("planning/diagonalize.jl")   # Gauss-Seidel sweep over solve_benders calls
-include("planning/validation.jl")    # BilevelJuMP oracle — weakdep-gated, see (4)
+| Component | Responsibility | Relevant to v2.1 |
+|-----------|-----------------|-------------------|
+| `AbstractPowerFlow` | Contract: `contribute!` writes per-bus/time branch/voltage terms into `ctx.residuals[:Rp]`/`[:Rq]` | (a) — the new `ACPowerFlow` is a peer subtype, zero contract changes |
+| `ModelContext` | Residual/constraint/meta registries; the "no `if formulation==`" seam | Untouched by all four capabilities |
+| `exactness.jl` | SOCP relaxation cone-gap gate, `assert_socp_exact!` | (a) stays untouched — a NEW sibling gate is added instead |
+| `welfare_solve.jl` | Formulation-agnostic centralized solve (`solve_welfare`), already supports `allow_local`, alternate `optimizer` | (a) reused verbatim — this is why the AC oracle is "free" |
+| `AgrOpt`/`DsoOpt`/`solve_admm` | Build-once, coefficient-mutate ADMM decomposition; `qag` placeholder already exists but unread | (b) — the target of the reactive-consensus wiring |
+| `residuals.jl` | JuMP-free `AdmmResiduals` ledger; established precedent of NaN-padded backward-compatible `record!` overloads across the Phase-6→7 transition | (b) — reused pattern for the new q-residual traces |
+| `data/ieee123.jl` | Topology + per-unit magnitudes; explicitly documents its R/X as "representative, not thesis-verbatim" | (c) — the target of the impedance-source swap |
+| `docs/literate/*.jl` + `test/fixtures_*.jl` | Established "literate rung + gate-then-golden regression" pattern (Rung 6/7, PVAL-02) | (d) — reused verbatim for the reproduction rung |
+
+## Recommended Approach Per Capability
+
+### (a) AC-OPF Oracle
+
+**Where it lives:** a new `AbstractPowerFlow` concrete subtype, `src/powerflow/ACPowerFlow.jl` —
+**not** a standalone `src/models/` module. Rationale: the contract (`contribute!` writing
+`P,Q` into `:Rp`/`:Rq`) is exactly what an AC branch-flow formulation needs, and reusing it means
+the oracle is a genuine drop-in swap for `ConvexBranchFlow`, callable through the *existing*
+`solve_welfare(feeder, pf, aggregators; ...)` entrypoint with zero changes to that file.
+
+**Why "true AC" and not "same relaxation, different solver":** the codebase already re-solves the
+*relaxed* SOCP model through Ipopt via the `RSOCtoNonConvexQuadBridge`/`SOCtoNonConvexQuadBridge`
+registered in both `welfare_solve.jl` and `DsoOpt.jl` — this is the "current toy-point +
+same-relaxation self-check" the milestone explicitly wants replaced. That bridge only changes
+*which solver* enforces the same *inequality* cone (`l·v ≥ P²+Q²`); it does not certify AC
+exactness independently. A genuine oracle must enforce the **equality** `l[b,t]*v[from,t] ==
+P[b,t]^2 + Q[b,t]^2` (thesis 3.34 in its unrelaxed form) — a nonconvex quadratic *equality*, not
+an inequality cone. `ACPowerFlow.contribute!` should mirror `ConvexBranchFlow.contribute!`
+variable-for-variable (`v`, `P`, `Q`, `l`) but:
+  - drop the exactness-copy `v̂` entirely (no relaxation to force tight — nothing to copy against);
+  - replace the rotated-SOC `@constraint(... in RotatedSecondOrderCone())` with a nonconvex
+    equality `l[b,t]*v[from,t] == P[b,t]^2 + Q[b,t]^2`;
+  - keep the true voltage drop (3.33) and apparent-power limit (3.36) verbatim;
+  - stash `ctx.meta[:pf_vars] = (; v, P, Q, l)` (same key names as `ConvexBranchFlow`, minus `v̂`)
+    so a comparison function can index both solutions identically.
+
+**Is it a new `ProblemClass`?** No. Add `problem_class(::ACPowerFlow) = NLP()` **inside
+`ACPowerFlow.jl` itself** (mirroring `ConvexBranchFlow.jl`'s own `problem_class(::ConvexBranchFlow)
+= SOCP()` defined at that file's end) — `solver/problem_class_trait.jl` is untouched. `NLP()`
+already resolves to Ipopt via `select_optimizer` (`solver/factory.jl`), so no solver wiring
+changes are needed.
+
+**Feeding `exactness.jl`:** do **not** modify `exactness.jl` — its single responsibility is the
+SOCP relaxation's own cone-gap gate and should stay that way. Add a **new sibling file**,
+`src/models/ac_oracle.jl`, containing:
+  - `solve_ac_oracle(feeder, aggregators; T, λ₀, allow_export)` — a thin wrapper that calls
+    `solve_welfare(feeder, ACPowerFlow(), aggregators; λ₀, T, allow_export, optimizer =
+    select_optimizer(NLP()), allow_local = true)`. Because `solve_welfare` is already
+    formulation-agnostic (dispatches `contribute!` and `problem_class` by trait), this "just
+    works" with **zero changes to `welfare_solve.jl`**. Note: `solve_welfare`'s existing
+    exactness-gate line (`haskey(ctx.meta[:pf_vars], :l)`) will also fire for the AC solve and
+    call `assert_socp_exact!` — harmlessly, since the AC model enforces the cone as an equality
+    by construction, so the reported gap is ≈0 (a free, incidental self-consistency check, not a
+    bug).
+  - `assert_ac_exact!(ctx_socp::ModelContext, ctx_ac::ModelContext; rtol=1e-3, atol=1e-6) ->
+    (; obj_gap, v_gap, p_gap, q_gap)` — the actual v2.1 certification gate. Same feeder/T on
+    both sides guarantees identical indexing; compares `value.(v)`, `value.(P)`, `value.(Q)`,
+    `objective_value` pointwise with the **same isapprox-style combined `atol + rtol·magnitude`
+    convention** `assert_socp_exact!` already established (scale-free, base-invariant — reuse the
+    idiom, do not invent a new tolerance philosophy). THROWS on violation (fail-loud, matching
+    project convention), returns the gap NamedTuple on success as a first-class reported output.
+
+**New vs Modified:**
+- NEW: `src/powerflow/ACPowerFlow.jl`
+- NEW: `src/models/ac_oracle.jl`
+- NEW: `test/test_ac_powerflow.jl` (contribute!-level unit tests, mirrors `test_convex_branch_flow.jl`)
+- NEW: `test/test_ac_oracle.jl` (welfare-solve + `assert_ac_exact!` certification tests)
+- NEW: `docs/literate/ac_oracle.jl` (a Rung — narrates independent AC certification)
+- MODIFIED: `src/TSODSO.jl` (2 new `include`s: `powerflow/ACPowerFlow.jl` right after
+  `powerflow/ConvexBranchFlow.jl`; `models/ac_oracle.jl` right after `models/exactness.jl`)
+- MODIFIED: `docs/make.jl` (add the new literate source + a page entry)
+- UNCHANGED: `src/models/exactness.jl`, `src/models/welfare_solve.jl`, `src/core/ModelContext.jl`,
+  `src/solver/ProblemClass.jl`, `src/solver/factory.jl`, `src/solver/problem_class_trait.jl`
+
+### (b) Reactive-Power μ Consensus
+
+**Current state (verified from source):** `AgrOpt.qag::Vector{Float64}` is already computed
+(`-Pdc[t]*tanφ`, thesis 3.23) but is a plain constant field, explicitly documented as "currently
+NOT read by `solve_admm`" — a real placeholder, not a stub function. `DsoOpt` independently
+computes the *same* constant (`q_draw`) and injects it directly into `:Rq[j]`; reactive balance
+is closed by a **free** `q_import` at the root. Because both sides already compute the identical
+deterministic constant, the reactive balance is *physically* consistent today — what's missing is
+an actual **priced** reactive coupling variable and its own dual `μ_j[t]`, so a reactive DLMP
+component becomes a first-class ADMM output (this is what "restoring voltage/DLMP credibility"
+means — today reactive power is unpriced in the decomposed path).
+
+**Design — mirror the active pag/λ split exactly, but keep it feature-flagged:**
+  - `build_dso_opt(feeder, aggregators, T; ρ, λ₀, reactive_consensus::Bool=false)` — new keyword.
+    When `false` (default), **byte-identical** to today: `q_draw` injected as a constant.
+    When `true`: introduce `@variable(model, qag_dso[j=load_nodes, t=1:T])`, inject it into `:Rq[j]`
+    instead of the constant, and add the mirror penalty term `+(μ/2)Σ(qag_dso - b_j)²` to the
+    objective (μ reuses the SAME adaptive ρ schedule as the active block — do not introduce a
+    second tunable penalty surface unless conditioning demands it later). `solve_dso!` gains
+    `μ`, `b` args (mirroring `λ`, `a`) that, when `reactive_consensus` is on, set
+    `set_objective_coefficient(dso.model, dso.qag_dso[j,t], -μ[j][t] - ρ*b[j][t])` per iteration
+    — same mechanism as the active coefficient update, no new machinery invented.
+  - `AgrOpt` needs **no structural change** — `agr.qag` is already the AGR-side target (a fixed
+    constant per node, since DERs stay active-only per A3/thesis; 4Q-BESS is explicitly deferred).
+    `solve_admm` reads `agr.qag` directly as the consensus target `b_j` each iteration (it never
+    moves, since there is no reactive decision on the AGR side yet) — this is intentionally
+    degenerate (μ converges quickly because the AGR-side target is fixed), but it exercises the
+    *same* consensus/price machinery that a future 4Q-BESS extension would need to make `qag` a
+    genuine decision variable. Update `AgrOpt.jl`'s docstring to remove the "placeholder, not
+    read" language once wired (the only edit that file needs).
+  - `solve_admm(... ; reactive_consensus::Bool=false)` — new keyword, threaded to
+    `build_dso_opt`. When `true`: add μ state (`Dict{Int,Vector{Float64}}`, warm-started
+    analogously to λ), compute the reactive primal residual `r_q = b_j - qag_dso_j` and a
+    reactive dual residual `s_q` (Boyd z-block, same 2-norm form as the active block), extend the
+    **stop criterion** to require the q-residuals within their own `ε_pri_q`/`ε_dual_q` **in
+    addition to** the existing active-block stop (AND, never OR — a false-convergence bug on
+    either block is still a false-convergence bug), and dual-ascent `μ_j ← μ_j + ρ·r_q`. Return a
+    new `μ`/`dvdp` (day-ahead VAR price) field in the result NamedTuple, purely additive.
+  - `residuals.jl` (`AdmmResiduals`): add new traces (`primal_q_trace`, `dual_q_trace`,
+    `mu_trace`, `eps_pri_q_trace`, `eps_dual_q_trace`) and a **new, wider `record!` overload**
+    that appends to all of them, following the *exact* precedent already in this file (the
+    Phase-6→7 transition kept the old 4-arg `record!` and NaN-padded the new Phase-7 traces so
+    old call sites kept compiling). Do the same here: keep the current 8-arg `record!` working
+    (NaN-pad the 5 new q-traces) and add a new ~13-arg overload for the reactive-consensus path.
+    `converged(...)` similarly grows a new overload that additionally checks the q-residuals; the
+    existing 2-arg/3-arg forms stay untouched.
+
+**Feature-flag vs unconditional — recommendation: feature-flag, default `false`.** This is the
+only one of the four capabilities that structurally changes an already-shipped, cross-validated
+build path (`DsoOpt`'s `:Rq` closure). The codebase's own convention (the Phase-6→7 adaptive-ρ
+upgrade, the `record!` 4-arg/8-arg coexistence) is to add new behavior *behind* an explicit
+opt-in during the transition, then flip the default once goldens are re-validated at every scale
+(2-bus, IEEE-13, IEEE-123) — do the same here rather than risk silently perturbing the existing
+IEEE-13/123 ADMM cross-validation regressions.
+
+**New vs Modified:**
+- MODIFIED: `src/admm/DsoOpt.jl` (new kwarg, new `qag_dso` variable + objective term when
+  `reactive_consensus=true`; old path byte-identical when `false`)
+- MODIFIED: `src/admm/AgrOpt.jl` (docstring only — `qag` field goes from "placeholder, unread" to
+  "read as the reactive consensus target")
+- MODIFIED: `src/admm/solve_admm.jl` (new kwarg, μ state, q-residual block, extended stop
+  criterion, new return field)
+- MODIFIED: `src/admm/residuals.jl` (new trace fields + new backward-compatible `record!`/
+  `converged` overloads)
+- NEW: `test/test_admm_reactive.jl` (mirrors the one-file-per-ADMM-feature convention already
+  visible in `test_admm_adaptive.jl`, `test_admm_dualresid.jl`)
+- Validation-only (not a core-code change): a test-level cross-check that the converged μ matches
+  `dual(balance_q)` from the centralized `solve_welfare` on the same feeder — analogous to how λ
+  is already cross-validated against `dual(balance_p)`. `pricing/dlmp.jl` itself is **not**
+  modified — out of scope for this milestone (no new research axis).
+
+### (c) Real IEEE-123 Impedances
+
+**Where the OpenDSS-parse pipeline lives: an offline, one-time data-prep script — never a
+runtime dependency.** This directly matches the codebase's already-stated policy (CLAUDE.md:
+"PMD as data-parsing and cross-validation oracle only," never built into the operational core)
+and the existing precedent of ad-hoc `scripts/*.jl` files at the repo root (`scripts/
+benders_toy.jl`, `scripts/thesis_caseA.jl` already present in the working tree). `PowerModels
+Distribution` must **not** enter `Project.toml`'s `[deps]` — it would make every downstream user
+of `TSODSO` pull in PMD's dependency tree just to load a feeder fixture, and would violate
+"feeder structs JuMP-free."
+
+**Recommended data flow (four stages):**
+
+```
+[public IEEE-123 OpenDSS files]
+        |  (PMD.parse_file, offline, one-time)
+        v
+[scripts/ieee123_opendss_reduce.jl]   -- own throwaway env (`scripts/Project.toml` w/ PMD),
+        |   documented positive-sequence reduction     NOT the package env
+        |   (3-phase Z matrix -> single r,x per segment; re-based to IEEE123_BASE)
+        v
+[src/data/ieee123_impedances.jl]      -- committed, PURE-DATA, JuMP-free, PMD-free
+        |   const Dict{Tuple{Int,Int},Float64} keyed by ORIGINAL (pre-relabel) terminal pairs
+        v
+[src/data/ieee123.jl]                 -- ieee123_modified() looks up real r/x by (p,c) edge
+        |
+        v
+[Feeder{Float64}]                     -- unchanged struct, unchanged topology/relabeling/
+                                          load-split logic; only the r/x SOURCE changes
 ```
 
-Each file "declares its own `export`s per the include-graph convention" exactly as the
-`admm/` block's comment in `TSODSO.jl` documents — no shared-edit-surface files beyond the one
-line appended to the top module.
+  1. `scripts/ieee123_opendss_reduce.jl` — a standalone script (its own small `Project.toml` or a
+     `Pkg.activate(temp=true)` block pulling in `PowerModelsDistribution` transiently) that parses
+     the public IEEE-123 OpenDSS test-feeder files, performs the documented positive-sequence
+     reduction (the standard sequence-component / Kron-style collapse of each line's 3-phase
+     impedance matrix to one effective positive-sequence `r,x`), converts to the framework's
+     `IEEE123_BASE` (1 MVA / 4.16 kV — **not** PMD's own internal per-unit base; re-basing must be
+     explicit: `z_pu_new = z_pu_pmd * (Sbase_pmd/Sbase_framework) * (Vbase_framework/Vbase_pmd)²`
+     or equivalent from raw Ω), and prints/writes a Julia `const` table. Run once by the
+     researcher; not part of `Pkg.test()`, not part of CI, not re-executed automatically —
+     documented in the script's own header (mirroring the DATA PROVENANCE comment convention
+     already used at the top of `ieee123.jl`).
+  2. `src/data/ieee123_impedances.jl` (NEW) — the **vendored, committed** output: plain
+     `const IEEE123_REAL_R::Dict{Tuple{Int,Int},Float64}`, `const IEEE123_REAL_X::Dict{Tuple{Int,Int},
+     Float64}` keyed by the **original, pre-relabel** `IEEE123_EDGES` terminal pairs (so it slots
+     in before the `ieee123_relabel_map()` step, keeping the relabeling logic untouched). Zero
+     runtime dependencies — a pure data file, included in `TSODSO.jl` immediately **before**
+     `data/ieee123.jl` (mirrors how `ieee123.jl` is itself positioned after `ieee13.jl`).
+  3. `src/data/ieee123.jl` (MODIFIED) — `ieee123_modified()`'s per-edge loop changes from
+     `r = is_switch ? IEEE123_SWITCH_R : IEEE123_LINE_R` to a lookup `IEEE123_REAL_R[(p,c)]` /
+     `IEEE123_REAL_X[(p,c)]`, erroring loudly (fail-loud, matching `_ieee123_assert_incidence`'s
+     convention) on any edge missing from the table — a transcription tripwire exactly like the
+     existing incidence self-check. Topology (`IEEE123_EDGES`, `IEEE123_SWITCH_EDGES`,
+     `IEEE123_LOAD_TERMINALS`, `ieee123_relabel_map`) is **completely untouched** — this is a
+     surgical, single-responsibility swap of the impedance *source*, not a topology change.
+  4. Retain the OLD representative constants (`IEEE123_LINE_R/X`, `IEEE123_SWITCH_R/X`) in the
+     file, but demote them to a clearly-marked fallback path behind a keyword,
+     `ieee123_modified(; real_impedances::Bool=true)`, defaulting to the NEW real data. This lets
+     any *existing* pinned golden in `test_ieee123.jl`/`test_ieee123_admm.jl` that was computed
+     against the synthetic numbers still be reachable (`real_impedances=false`) for one
+     transitional phase while those goldens are deliberately re-derived and re-pinned against
+     the real-impedance case — do not carry two parallel impedance sets forever; this milestone's
+     explicit purpose is the replacement.
 
-**New vs. modified, explicit:**
+**Known risk to flag for the roadmap (do not silently absorb):** the synthetic R/X in
+`ieee123.jl` were **hand-tuned** (per its own DATA PROVENANCE comment) specifically so the
+Case-B population keeps the feeder genuinely voltage-constrained (binds `[0.9, 1.1]` pu under
+load and PV reverse-flow) and so the SOC cone stays numerically well-conditioned for Clarabel
+under the ADMM ρ-penalty. Swapping in real impedances can shift both properties — the case may
+become voltage-slack (no longer exercising the exactness copy meaningfully) or push Clarabel
+conditioning differently. **Re-tuning the aggregator/PV population (not the impedances) may be
+required** to preserve a genuinely-binding, well-conditioned test case; this should be an explicit
+task/checkpoint in whichever phase implements (c), not an assumed side-effect.
 
-| File | New / Modified | Notes |
-|------|-----------------|-------|
-| `src/planning/*.jl` (all 8) | **NEW** | Entire subtree; zero v1 files touched. |
-| `src/models/oracle.jl` | **UNMODIFIED** | Remains the documented one-shot contract; not called from the hot Benders loop. |
-| `src/models/welfare_solve.jl` | **UNMODIFIED** | `contribute!` builders reused verbatim, exactly as `DsoOpt.jl` already does. |
-| `src/admm/*.jl` | **UNMODIFIED** | No coupling between the ADMM outer loop and the planning outer loop; both are independent `AbstractSolveStrategy`-adjacent orchestrators sitting above the same builder layer. |
-| `src/TSODSO.jl` | **MODIFIED (append-only)** | 8 new `include(...)` lines in the established comment-block convention. |
+**New vs Modified:**
+- NEW: `scripts/ieee123_opendss_reduce.jl` (offline, own env, not part of package/CI)
+- NEW: `src/data/ieee123_impedances.jl` (committed pure-data table)
+- MODIFIED: `src/data/ieee123.jl` (impedance lookup swap + transitional fallback keyword)
+- MODIFIED: `src/TSODSO.jl` (1 new include, positioned immediately before `data/ieee123.jl`)
+- MODIFIED (re-pin, not restructure): `test/test_ieee123.jl`, `test/test_ieee123_admm.jl` (any
+  goldens computed against the old synthetic magnitudes)
+- POSSIBLY MODIFIED: `test/fixtures_phase7.jl` (IEEE-123 population/PV-profile tuning, if the
+  voltage-binding risk above materializes)
+- UNCHANGED: `src/data/Feeder.jl`, `src/data/topology.jl`, `src/units/PerUnit.jl` (no dependency
+  or constraint on how `r`/`x` are sourced — the JuMP-free, PMD-free contract is preserved by
+  construction since only a `Dict` lookup changes)
 
----
+### (d) Directional Thesis Reproduction
 
-## (3) Data flow: single-distributor Benders, then Gauss–Seidel diagonalization
+**Where it lives — reuse the exact Rung-6/7 + PVAL-02 pattern already shipped in v2.0**, not a
+new mechanism:
+  - a literate rung page, `docs/literate/thesis_reproduction.jl`, narrating: build the (now
+    real-impedance) IEEE-123 feeder with a Case-B-like PV/demand population, run the centralized
+    `solve_welfare` (and/or `solve_admm`) welfare-maximizing solve, compute the welfare gain
+    against the flat-tariff FIT baseline (`pricing/fit.jl` — already shipped, unmodified), and
+    report the gain's **sign** and **order of magnitude** against the thesis's directional claim
+    — explicitly *not* the exact +$1,819/+25% figure (Appendix E is IP-blocked; this is a stated,
+    accepted milestone constraint, not a gap to paper over).
+  - a dedicated fixtures module, `test/fixtures_thesis_repro.jl` (mirrors `test/
+    fixtures_planning.jl`'s `PlanningFixtures` pattern exactly): pinned constants such as
+    `const THESIS_GAIN_SIGN = 1` and a **band**, not a point value —
+    `const THESIS_GAIN_ORDER_MAG_LO`, `..._HI` — computed once (ideally via `DrWatson`
+    `@tagsave`-stamped provenance, consistent with the project's reproducibility convention) and
+    committed.
+  - `test/test_thesis_reproduction.jl` — one `@testitem` tagged e.g. `[:thesis_repro]`, following
+    the **gate-then-golden** ordering convention established by `test_planning_goldens.jl`: first
+    assert the run's *own* correctness gates hold (`assert_solved!`, `assert_socp_exact!`/
+    `assert_ac_exact!` if the AC oracle is wired by then, ADMM convergence if ADMM is used), THEN
+    assert `sign(gain) == THESIS_GAIN_SIGN` and `lo <= gain <= hi` — a wide directional band, the
+    intentional relaxation of the tight `atol=1e-3` point-golden style used for the planning-layer
+    goldens (those had an authoritative hand-computed/BilevelJuMP-certified point value available;
+    this one deliberately does not, per the milestone's own stretch-goal framing).
+  - The already-present (untracked) `scripts/thesis_caseA.jl` is almost certainly the researcher's
+    exploratory prototype for exactly this — the recommended path is to **promote/refactor** it
+    into the literate rung + golden test once (b) and (c) land, rather than write the reproduction
+    from scratch.
 
-### Single-distributor Benders (thesis Problem 4 / eq. 4a–4f)
+**Dependency, not independence:** unlike (a), this capability is **not** independently sequenced.
+PROJECT.md is explicit that reactive-power consensus is needed to restore "a meaningful AC
+comparison," and the thesis Case B result is voltage-driven — a directional reproduction run on
+synthetic impedances or without reactive pricing would not credibly track the thesis's claimed
+mechanism. (d) should be the **last** of the four to land.
+
+**New vs Modified:**
+- NEW: `docs/literate/thesis_reproduction.jl`
+- NEW: `test/fixtures_thesis_repro.jl`
+- NEW: `test/test_thesis_reproduction.jl`
+- MODIFIED: `docs/make.jl` (new literate source + page)
+- MODIFIED (promoted, not from scratch): `scripts/thesis_caseA.jl` → folded into the literate rung
+- UNCHANGED: `pricing/fit.jl`, `pricing/welfare.jl`, `experiments/*` (the harness already supports
+  declarative `Scenario`/`run_scenario` — reuse it to materialize the reproduction case rather
+  than hand-rolling a new runner)
+
+## Recommended Project Structure (delta only — additions to the existing tree)
 
 ```
-BendersMaster (JuMP LP/QP; NOT a ModelContext — no power-flow, no residual registry needed)
-  vars:  y_inv, y_inv,flex  (continuous flexibility investment, v2.0 scope — no binaries)
-         z[t]               (trial import/coupling profile — free variable in the MASTER)
-         α                  (epigraph: anticipated operational cost as a function of z)
-  obj:   min  c_y,inv·y_inv + c_y,inv,flex·y_inv,flex + α
-  cons:  investment bounds (1d); flexibility-feasibility coupling (1i-analog on z vs y_inv,flex)
-         α ≥ w^k + π^k · (z − z^k)   for k = 1..K   (Benders cuts, appended by BendersCutStore)
+src/
+├── powerflow/
+│   └── ACPowerFlow.jl              # NEW (a) — true nonconvex AC branch-flow, AbstractPowerFlow
+├── models/
+│   └── ac_oracle.jl                # NEW (a) — solve_ac_oracle + assert_ac_exact!
+├── admm/
+│   ├── DsoOpt.jl                   # MODIFIED (b) — reactive_consensus kwarg, qag_dso coupling var
+│   ├── AgrOpt.jl                   # MODIFIED (b) — docstring only (qag now consumed)
+│   ├── solve_admm.jl               # MODIFIED (b) — μ state, q-residuals, extended stop criterion
+│   └── residuals.jl                # MODIFIED (b) — new traces + backward-compatible overloads
+├── data/
+│   ├── ieee123_impedances.jl       # NEW (c) — committed real-impedance lookup table
+│   └── ieee123.jl                  # MODIFIED (c) — impedance-source swap, topology untouched
+└── TSODSO.jl                       # MODIFIED (a,b,c) — 3 new includes, no restructuring
 
-solve_benders loop (mirrors solve_admm.jl's shape):
-  1. BUILD ONCE: `sub = build_oracle_problem(feeder, pf, aggregators; λ₀, T)`
-                 `master = build_benders_master(...)`
-  2. for k in 1:maxiter
-       (z_k, y_inv_k, α_k) = solve!(master)                     # LP/QP, assert_solved!(strict)
-       (cost_k, π_k) = solve_oracle!(sub, z_k)                   # SOCP/QP, assert_solved!(strict)
-       add_cut!(cutstore, w = cost_k, π = π_k, z_at = z_k)       # pure-data append
-       add_cut_constraint!(master, cutstore, k)                  # ONE new @constraint on α
-       gap = α_k - cost_k                                        # UB−LB-style Benders gap
-       record!(residuals, k, gap)                                 # pure-data ledger (mirrors AdmmResiduals)
-       converged(residuals, ε) && break
-  3. FAIL LOUD if maxiter reached without gap ≤ ε (mirrors solve_admm.jl's maxiter ErrorException)
+scripts/
+├── ieee123_opendss_reduce.jl       # NEW (c) — offline PMD-parse + positive-sequence reduction
+└── thesis_caseA.jl                 # MODIFIED (d) — promoted into the literate rung
+
+docs/
+├── literate/
+│   ├── ac_oracle.jl                # NEW (a)
+│   └── thesis_reproduction.jl      # NEW (d)
+└── make.jl                         # MODIFIED (a,d) — 2 new literate sources + pages
+
+test/
+├── test_ac_powerflow.jl            # NEW (a)
+├── test_ac_oracle.jl               # NEW (a)
+├── test_admm_reactive.jl           # NEW (b)
+├── test_ieee123.jl                 # MODIFIED (c) — re-pinned goldens
+├── test_ieee123_admm.jl            # MODIFIED (c) — re-pinned goldens
+├── fixtures_phase7.jl              # POSSIBLY MODIFIED (c) — population re-tuning if needed
+├── fixtures_thesis_repro.jl        # NEW (d)
+└── test_thesis_reproduction.jl     # NEW (d)
 ```
 
-The **cut store is pure data**, no JuMP, exactly like `AdmmResiduals` — it holds
-`Vector{(w::Float64, π::Vector{Float64}, z_at::Vector{Float64})}` triples; `master.jl` is the
-ONLY file that turns a stored triple into a JuMP `@constraint`. This separation is what let
-`residuals.jl` be reused unmodified across Phase 6→7 in the ADMM case, and buys the same thing
-here: the cut *bookkeeping* (used for convergence plots, regression fixtures, and the
-validation cross-check in (4)) never depends on a live JuMP model.
+### Structure Rationale
 
-### Gauss–Seidel diagonalization over multiple distributors
-
-```
-DistributorState  (one per distributor i)
-  feeder_i, aggregators_i, λ₀_i    — this distributor's own network/data (independent SOCP)
-  sub_i::OracleProblem              — built once
-  master_i::BendersMaster           — built once, cuts accumulate over the WHOLE run (not reset
-                                       per sweep — a later sweep's master keeps prior cuts as a
-                                       warm, still-valid outer approximation, since a valid
-                                       Benders cut for fixed z_{-i} remains valid — only NEW cuts
-                                       reflecting the current z_{-i} need to be added)
-  z_i::Vector{Float64}              — this distributor's current equilibrium import trajectory
-
-diagonalize(distributors::Vector{DistributorState}; maxsweeps, tol)
-  for sweep in 1:maxsweeps
-    for i in 1:N
-      shared = coupling_state(distributors, i)      # OTHERS' fixed z_{-i} → shared reinforcement signal
-      z_i_new, _ = solve_benders(distributors[i]; shared)   # inner Benders loop to full convergence
-      Δ_i = norm(z_i_new - distributors[i].z_i)
-      distributors[i].z_i = z_i_new
-    end
-    record_sweep!(diag_residuals, sweep, maximum(Δ_i for i in 1:N))
-    converged(diag_residuals, tol) && return (; z_eq = [d.z_i for d in distributors], sweep)
-  end
-  error("diagonalize: FAILED to reach a fixed point in maxsweeps=$maxsweeps sweeps ...")  # fail loud
-```
-
-This is the direct Julia rendering of the thesis's own description: *"each optimizes taking
-others' equilibrium flows as fixed... solved by Gauss–Seidel diagonalization — optimize each
-distributor in turn, fixing others' flows, iterate to convergence."* The fixed-point residual
-ledger (`diag_residuals`) is a second, small pure-data struct in `diagnostics.jl`, following
-the exact same `record!`/`converged` idiom as `AdmmResiduals` (sequential-k fail-loud guard,
-non-negative magnitude traces) — reuse the *pattern*, not the *type* (the shapes differ: ADMM
-tracks per-iteration primal/dual norms, diagonalization tracks per-sweep max-Δz across
-distributors).
-
-### Open question this data flow surfaces (do not resolve by invention — flag for Phase 1)
-
-The thesis note states Nash coupling arises because *"cut coefficients `w_i^k, π_i^k` depend on
-others' reinforcements"* — i.e., distributor `i`'s Benders subproblem must somehow see a signal
-from distributors `j≠i`. But `OracleProblem` as built above is **electrically local to
-distributor `i`'s own feeder** — it has no notion of other distributors or of shared N2
-transmission capacity at all. Nothing in v1 (`operational_oracle`, `contribute!`, `ModelContext`)
-carries a cross-distributor coupling term. **A genuinely new small model is needed** —
-`src/planning/coupling.jl` — representing the shared N2/transmission-reinforcement cost as a
-function of the *vector* of distributors' import profiles (thesis eq. 2, `α({z_{y,s}})`,
-parameterized by `x_inv`/`x_op` on the transmission side), returning both its own value and a
-per-distributor marginal (`∂α/∂z_i`) to fold into `coupling_state(...)` above. **Without this
-component the diagonalization loop has literally nothing shared to iterate on** — each
-distributor's Benders problem would converge independently and "Nash" would be vacuous.
-
-This is exactly the ambiguity the source material itself flags (`THEORY-papers.md`: *"the note
-labels leader/follower inconsistently once,"* PROJECT.md: *"leader/follower-role inconsistency
-and integer-cut correctness ... open concerns"*). Two readings are both defensible from the
-text and this document does not adjudicate between them:
-
-- **Reading A** — `operational_oracle`'s `(cost, π)` proxies the *transmission follower's*
-  value function directly (the "Natural architecture" paragraph in `THEORY-papers.md` literally
-  says the operational engine "plays the role of Paper 2's second-level subproblem"), and
-  `coupling.jl` only needs to translate *aggregate* import volatility into a shared capacity
-  signal — no separate cost model, just a shared capacity/price adjustment layered on `λ₀`.
-- **Reading B** — `operational_oracle` represents the *distributor's own* day-ahead recourse
-  (a two-stage invest-then-operate decomposition), and the transmission reinforcement cost
-  `α({z_y,s})` is a genuinely separate, small LP (`coupling.jl` builds and solves it) whose dual
-  is the real `π_s`, with the DADP (`operational_oracle`'s `π`) playing no role in the Nash
-  coupling at all.
-
-**Recommendation:** resolve this empirically, not by further reading of an already-flagged
-MEDIUM-confidence source — build the tiny single-distributor BilevelJuMP MPEC first (see (4))
-and check which reading reproduces its investment/import decision. This is a Phase-1
-correctness gate, not a Phase-3 (diagonalization) one, precisely because the ambiguity lives at
-the single-Stackelberg level already, before any Nash coupling is introduced.
-
----
-
-## (4) Where BilevelJuMP plugs in: a parallel path, tiny instances only
-
-`src/planning/validation.jl` is a **weakdep-gated, parallel** path — never called from
-`solve_benders`/`diagonalize`, only from tests/experiments on deliberately tiny fixtures (2–3
-bus toy feeder, 1–2 scenarios, few hours), mirroring how Gurobi/Mosek are reachable only through
-package extensions (`ext/TSODSOGurobiExt`-style) so `using TSODSO` never hard-depends on
-BilevelJuMP/PATHSolver.
-
-```julia
-function validate_single_distributor(tiny_spec)
-    # (a) hand-rolled path: this project's own Benders loop
-    benders_result = solve_benders(tiny_spec)
-
-    # (b) independent path: BilevelJuMP's KKT/SOS1/Fortuny-Amat single-level reduction
-    #     solving the SAME leader (investment+import) vs follower (reinforcement) MPEC
-    #     as ONE compact JuMP model — no decomposition, no diagonalization.
-    bilevel_result = solve_bilevel_reference(tiny_spec)   # BilevelJuMP.jl, tiny instance only
-
-    return (; benders_result, bilevel_result,
-              match = isapprox(benders_result.obj, bilevel_result.obj; rtol=1e-4))
-end
-```
-
-Two uses, in priority order:
-
-1. **Phase 1, first thing built** — pin down the Reading-A-vs-Reading-B ambiguity from (3) by
-   comparing what the tiny hand-built MPEC actually computes for `y_inv`/`z`/`α` against each
-   candidate wiring of `operational_oracle`/`coupling.jl`, BEFORE committing to the production
-   Benders subproblem's exact semantics.
-2. **Ongoing regression net** — once semantics are pinned, keep `validate_single_distributor`
-   as a permanent tiny-fixture test (mirrors `test_admm_vs_central.jl`'s role for the
-   operational layer): any future change to `subproblem.jl`/`master.jl` must keep matching the
-   independent MPEC solve on the same toy case.
-
-BilevelJuMP is **not** extended to the multi-distributor Nash case in v2.0 — its single-level
-MPEC reduction does not scale to a genuine game among several leaders (per CLAUDE.md: *"Single-
-level MPEC reductions blow up and diverge from the thesis's Benders/diagonalization method"*) —
-so it validates rung 1 only, never the diagonalization loop.
-
----
+- Every new file lands in an **existing directory** (`powerflow/`, `models/`, `admm/`, `data/`,
+  `docs/literate/`, `test/`) — there is no new top-level module or directory, matching "fit
+  existing seams, not restructure."
+- `ACPowerFlow.jl` sits beside `ConvexBranchFlow.jl` because it is a peer formulation under the
+  same `AbstractPowerFlow` contract — not a "validation-only" side module — so it can be reused
+  anywhere a `pf::AbstractPowerFlow` is accepted (e.g. a future direct AC solve of IEEE-13).
+- `ac_oracle.jl` sits beside `exactness.jl`/`oracle.jl` because it is the same *kind* of thing
+  (a post-solve certification gate / oracle wrapper), keeping the `models/` directory's existing
+  organizing principle (one file per validation concern) intact.
+- The OpenDSS pipeline is a `scripts/` one-off, never a `src/` runtime path — this is the
+  strongest guarantee that "feeder structs stay JuMP-free / PMD-free" cannot regress: PMD simply
+  never appears in `Project.toml`.
 
 ## Architectural Patterns
 
-### Pattern 1: Build-once oracle with a genuine JuMP `Parameter` for the coupling flow
+### Pattern 1: Formulation-as-peer-subtype (already established, reused for (a))
 
-**What:** `z[t] in Parameter(0.0)`, reused across every Benders iteration via
-`set_parameter_value.(op.z, z_trial)`; the coupling dual `π` is read off the SAME `:balance_p`
-registry the DADP already uses.
-**When:** Any time a decomposition needs a "re-solve at a new exogenous value of a variable
-that WAS a free decision variable in the monolithic model." Contrast with ADMM's `λ_j`
-(a price coefficient, kept as a plain `Float64` because it multiplies a variable — a
-`Parameter×variable` product is an indefinite bilinear a conic solver rejects). Here `z` closes
-an equality residual and appears linearly in the objective (`λ₀ᵀz`, both affine in a
-`Parameter`) — no bilinear risk, so the textbook `Parameter` idiom applies directly.
-**Trade-offs:** One extra JuMP variable class to learn (`Parameter`), but eliminates a full
-SOCP rebuild per Benders iteration — the single biggest performance lever available, and the
-one CLAUDE.md explicitly calls out ("Rebuilding JuMP models each ADMM/Benders iteration" is in
-the "What NOT to Use" table).
+**What:** A new physics formulation is added by writing one more `AbstractPowerFlow` subtype +
+`contribute!` method + `problem_class` method — never by branching inside `solve_welfare` or
+`ModelContext`.
+**When to use:** Any new power-flow model (AC-OPF here; a future unbalanced/meshed formulation
+later).
+**Trade-off:** Requires the new formulation to fit the `(v,v̂,P,Q,l)`-shaped variable convention
+and the affine `:Rp`/`:Rq` residual seam; a formulation whose balance is inherently non-affine
+(there is none currently, and AC-OPF's balance stays affine — only the cone becomes an equality)
+would need a documented exception.
 
-### Pattern 2: Pure-data cut store, JuMP-free
+```julia
+struct ACPowerFlow <: AbstractPowerFlow end
+function contribute!(::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
+    # same v, P, Q, l as ConvexBranchFlow, no v̂; true drop unchanged;
+    # cone becomes an EQUALITY: l[b,t]*v[from,t] == P[b,t]^2 + Q[b,t]^2
+end
+problem_class(::ACPowerFlow) = NLP()
+```
 
-**What:** `BendersCutStore` holds `(w, π, z_at)` triples as plain arrays; `master.jl` is the
-sole consumer that turns a triple into a `@constraint`. Mirrors `AdmmResiduals`.
-**When:** Any accumulating diagnostic/decision record that must be inspectable, testable, and
-plottable without a live JuMP model (regression fixtures, convergence plots via the existing
-`TSODSOMakieExt` weakdep extension pattern).
-**Trade-offs:** A tiny indirection (append to the store, then separately render the cut) buys
-the same benefit `residuals.jl` already proved: the ledger survives independent of solver
-backend and is trivially unit-testable.
+### Pattern 2: Feature-flagged structural change with a compatibility overload (reused for (b))
 
-### Pattern 3: Strict solve-gating on every cut-producing solve — no `allow_almost`
+**What:** When a change touches an already-shipped, cross-validated build path, add a keyword
+defaulting to the OLD behavior, and — if a data structure needs new fields — add a NEW overload
+of the mutating function that appends to the new fields, keeping the OLD overload/arity
+compiling unmodified (the project's own precedent: Phase-6→7 `record!` 4-arg → 8-arg).
+**When to use:** `DsoOpt`/`solve_admm`/`residuals.jl` changes for reactive consensus.
+**Trade-off:** Two code paths temporarily coexist (more surface area) in exchange for zero
+regression risk on already-cross-validated IEEE-13/123 goldens; retire the flag once goldens are
+re-validated at the new default.
 
-**What:** Every `solve_oracle!` call whose `(cost, π)` will be baked into a **permanent**
-Benders cut MUST use `assert_solved!(model; dual = true)` with the STRICT default
-(`allow_almost = false`), never the ADMM mid-loop relaxation (`allow_almost = true,
-strict = false`).
-**When:** Always, for every Benders subproblem solve. The master, too, should read `α`/`z`
-only after a strict solve.
-**Trade-offs / why this differs from ADMM:** ADMM's mid-loop tolerance is safe because the
-residual loop **self-corrects** — an inexact intermediate iterate just costs an extra
-iteration. A Benders cut is **added to the master and never removed**; an inexact `π` from an
-`ALMOST_OPTIMAL`/`NEARLY_FEASIBLE` solve can silently insert an invalid (not a genuine
-subgradient) cut that permanently miscuts the true optimum out of the master's feasible region,
-with no self-correction mechanism. This is the single most important divergence from the
-`src/admm/` pattern to carry into the planning layer, and it belongs in the phase's own
-pitfalls note.
+### Pattern 3: Offline data-prep script → committed pure-data file (new pattern, for (c))
 
-### Pattern 4: Gauss–Seidel diagonalization as sequential full-convergence Benders calls
+**What:** A heavyweight, one-time transformation (OpenDSS parse + positive-sequence reduction via
+PMD) runs in its own throwaway environment and its **output** — not the tool — is vendored as a
+plain, dependency-free `const` table in `src/data/`.
+**When to use:** Any future "import real-world data via a heavyweight parser" need (e.g. a later
+IEEE-8500 or real DSO feeder) — this is the reusable template, not a one-off hack.
+**Trade-off:** The prep script itself is unmaintained/unrun in CI (acceptable — it's provenance,
+not a build step); a data update requires manually re-running the script and re-committing the
+generated file, which is a deliberate, reviewable step, not automatic drift.
 
-**What:** `diagonalize` treats each distributor's Benders solve as an atomic, fully-converged
-inner call; only after distributor `i`'s Benders loop reaches its own `ε` does the sweep move
-to `i+1`. No interleaving of Benders iterations across distributors.
-**When:** Matches the thesis's own description ("optimize each distributor in turn, fixing
-others' flows, iterate to convergence") and is the simplest, most debuggable composition —
-each `solve_benders` call is independently testable (Pattern-1-level unit tests) with no
-cross-distributor state leaking into it except through the explicit `shared` argument.
-**Trade-offs:** More total inner iterations than a jointly-interleaved scheme, but keeps the
-outer Nash loop's state machine trivial (`Vector{DistributorState}` + one scalar per-sweep
-`Δz`) and testable in isolation from Benders-loop internals — appropriate for a
-correctness-first research bench per CLAUDE.md's stated priorities.
+### Pattern 4: Literate rung + gate-then-golden regression (already established, reused for (d))
 
----
+**What:** A new experiment/reproduction gets a `docs/literate/*.jl` narrated page (executed live
+by `Documenter`/`Literate`, so numbers can't drift from `src/`) plus a dedicated
+`test/fixtures_*.jl` constants module and a `@testitem` that asserts the run's own correctness
+gates BEFORE comparing to the pinned golden.
+**When to use:** Any milestone-closing reproduction/validation result (this is exactly the
+PVAL-02 pattern from v2.0's Rung 6/7).
+**Trade-off:** None significant — this is the established, working convention; deviating from it
+(e.g. a bare `@test` without the fixtures-module + gate-then-golden structure) would be the
+anti-pattern here.
 
 ## Data Flow
 
-### Coupling-flow direction (build-time → solve-time)
+### (a) AC-OPF Oracle Flow
 
 ```
-Scenario/feeder data (per distributor)
-        │
-        ▼
-build_oracle_problem(feeder, pf, aggregators; λ₀, T)     ── ONCE ──
-        │  reuses contribute!(pf, ctx, feeder) + contribute!(agg, ctx) VERBATIM
-        │  z[t] in Parameter(0.0) replaces solve_welfare's free p_import
-        ▼
-OracleProblem{z, ctx}  ─────────────────────────────────────────────┐
-        │                                                            │ solve_oracle!(op, z_trial)
-        ▼                                                            │  → set_parameter_value.(z, z_trial)
-BendersMaster (y_inv, z, α) ── solve! ──► z_k, y_inv_k ──────────────┘  → assert_solved!(strict)
-        ▲                                                              → (cost_k, π_k)
-        │  add_cut!(w=cost_k, π=π_k, z_at=z_k)
-        └── BendersCutStore (pure data) ── render cut ──► @constraint(master, α ≥ w^k + π^k'(z-z^k))
+feeder, aggregators, λ₀
+        |
+        v
+solve_welfare(feeder, ConvexBranchFlow(), aggregators; allow_export=true)  -> ctx_socp (unchanged)
+solve_ac_oracle(feeder, aggregators; λ₀, allow_export)
+        |  solve_welfare(feeder, ACPowerFlow(), aggregators; optimizer=NLP(), allow_local=true)
+        v  -> ctx_ac
+assert_ac_exact!(ctx_socp, ctx_ac; rtol, atol) -> (; obj_gap, v_gap, p_gap, q_gap)  [THROWS on fail]
 ```
 
-### Diagonalization direction (sweep over distributors)
+### (b) Reactive Consensus Flow (mirrors the existing active-block flow exactly)
 
 ```
-Vector{DistributorState}  (each: feeder_i, sub_i, master_i, cutstore_i, z_i)
-        │
-        ▼
-for sweep in 1:maxsweeps
-    for i in 1:N
-        shared_i = coupling_state(others' z)          ── src/planning/coupling.jl (NEW model, see Open Q)
-        z_i ← solve_benders(distributor_i; shared_i)   ── full inner convergence, Pattern 3/4
-    Δ = max_i ‖z_i^{sweep} − z_i^{sweep−1}‖
-    record_sweep!(diag_residuals, sweep, Δ)
-    converged(diag_residuals, tol) ⇒ return z_eq
+solve_admm(...; reactive_consensus=true)
+  per iteration k:
+    solve_agr!(...)              -> a[j] (active), b[j] = agr.qag (reactive target, FIXED)
+    solve_dso!(...; μ, b)        -> pag_dso[j,t] (active), qag_dso[j,t] (reactive, NEW)
+    r_p = a - pag_dso;  r_q = b - qag_dso
+    λ <- λ + ρ·r_p   (existing)   μ <- μ + ρ·r_q   (NEW, same mechanism)
+  stop iff (‖r_p‖≤ε_pri ∧ ‖s_p‖≤ε_dual) ∧ (‖r_q‖≤ε_pri_q ∧ ‖s_q‖≤ε_dual_q)   [AND, not OR]
 ```
 
----
+### (c) Real-Impedance Data Flow
 
-## Scaling Considerations
+```
+public IEEE-123 OpenDSS files
+    |  scripts/ieee123_opendss_reduce.jl (offline, PMD, own env)
+    |  positive-sequence reduction + re-base to IEEE123_BASE
+    v
+src/data/ieee123_impedances.jl (committed const Dict, JuMP-free, PMD-free)
+    |
+    v
+src/data/ieee123.jl: ieee123_modified() looks up (p,c) -> (r,x)
+    |
+    v
+Feeder{Float64}  (topology/relabeling/load-split UNCHANGED)
+```
 
-| Scale | Architecture response |
-|-------|------------------------|
-| Single distributor, tiny toy feeder (2–3 bus), Benders correctness only | `solve_benders` alone; cross-validate every run against `validation.jl`'s BilevelJuMP MPEC (Pattern 3/4 unnecessary at this size — correctness is the only goal). |
-| Single distributor, IEEE-13-scale feeder | `OracleProblem` reuses the SAME validated `ConvexBranchFlow`/aggregator builders at full scale (no planning-specific scaling concern here — it inherits whatever `solve_welfare`/ADMM already validated); the Benders-specific cost is purely in cut-count growth (mitigate: cut aggregation / cut selection once cut counts exceed a few dozen — not needed for v2.0's continuous-only scope). |
-| 2–3 distributors, Gauss–Seidel Nash | The `coupling.jl` shared-reinforcement model (Open Question in (3)) becomes load-bearing; validate the fixed point is a genuine Nash equilibrium (no distributor can unilaterally improve given others fixed) on a toy 2-distributor case before scaling. |
-| Many distributors / integer investment (both explicitly OUT of v2.0 scope) | Binary-expansion + Lagrangian/integer-L-shaped cuts (thesis "integer case") — a LATER milestone; do not let the continuous-only `master.jl` design preclude adding a MILP variant of the same file later (keep `master.jl`'s public API — `add_cut!`, `solve!` — agnostic to whether `y_inv` is continuous or binary-expanded). |
+### (d) Directional Reproduction Flow
 
-**First likely bottleneck:** none at v2.0's stated scope (single-then-multi distributor,
-continuous investment, toy-to-IEEE-13-scale feeders) — this milestone is about correctness of
-a NEW decomposition axis, not throughput. Do not pre-optimize (CLAUDE.md's explicit
-clarity-over-performance priority applies with even more force here than in v1, since the
-model semantics themselves are still MEDIUM confidence).
+```
+ieee123_modified()  [real impedances, from (c)]
+    |
+    v
+solve_admm(...; reactive_consensus=true)  [from (b)]  OR  solve_welfare(..., allow_export=true)
+    |
+    v
+welfare  vs.  flat-tariff FIT baseline (pricing/fit.jl, unmodified)
+    |
+    v
+gain = welfare - fit_baseline
+    |
+    v
+test_thesis_reproduction.jl: gate (assert_solved!/assert_socp_exact!) THEN
+  sign(gain) == THESIS_GAIN_SIGN  ∧  lo ≤ gain ≤ hi   (directional band, not point golden)
+```
 
----
+## Scaling / Validation Considerations
+
+| Concern | 2-bus / IEEE-13 (existing) | IEEE-123 synthetic (existing) | IEEE-123 real (new, (c)) |
+|---------|---------------------------|-------------------------------|----------------------------|
+| SOC cone conditioning | Validated exact, Clarabel converges in tens of iters | Tuned so the cone stays exact | **Must re-verify** — real R/X may loosen or tighten the cone; re-tune population if needed |
+| Voltage-band bindingness | N/A (13-node is congestion-driven) | Hand-tuned to bind `[0.9,1.1]` | **Must re-verify** — real R/X changes lateral voltage drop; may need population re-tuning |
+| ADMM convergence (adaptive ρ) | Cross-validated | Cross-validated | Re-run the existing adaptive-ρ schedule; flag if `ρ_min`/`ρ_max`/`τ`/`μ` need retuning |
+| AC-vs-SOCP exactness gap | Cheap to certify (small case) | N/A until (c) lands | The primary target case for `assert_ac_exact!` — this is where AC-OPF nonconvexity/local-optima risk (Ipopt) is most likely to bite; consider multiple Ipopt starts as a scale mitigation |
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Rebuilding the operational SOCP every Benders iteration
+### Anti-Pattern 1: Re-solving the SOCP relaxation through Ipopt and calling it "AC certification"
 
-**What people do:** Call `operational_oracle(feeder, pf, aggregators; z=z_trial, ...)` (or a
-freshly-`Model(...)`-built equivalent) inside the Benders `for k in 1:maxiter` loop.
-**Why it's wrong:** Rebuilds the full `ConvexBranchFlow` + all-devices SOCP from scratch every
-iteration — the exact "dominant, avoidable performance sink" CLAUDE.md calls out for both ADMM
-and Benders. It also silently defeats the whole point of the SEAM-01 stub (built to make the
-planning layer ADDITIVE, not a rebuild-heavy afterthought).
-**Instead:** `build_oracle_problem` once per distributor; `solve_oracle!` mutates the `z`
-`Parameter` and re-solves (Pattern 1).
+**What people do:** Reuse the existing `RSOCtoNonConvexQuadBridge` cross-solver path (already
+wired for a different purpose — solver-choice cross-validation of the *same* relaxed model) as
+if it were an independent AC-OPF oracle.
+**Why it's wrong:** It only changes the solver, not the physics — the cone stays a *relaxed
+inequality*, so it cannot detect a case where the SOCP relaxation itself is inexact. This is
+explicitly the deficiency PROJECT.md calls out ("current toy-point + same-relaxation self-check").
+**Instead:** A genuinely separate `ACPowerFlow` formulation enforcing the cone as an *equality*.
 
-### Anti-Pattern 2: Reusing ADMM's `allow_almost=true` tolerance for cut-producing solves
+### Anti-Pattern 2: Making PowerModelsDistribution a `Project.toml` dependency
 
-**What people do:** Copy `solve_agr!`/`solve_dso!`'s `strict=false` convenience into the
-Benders subproblem solve, reasoning "it's an iterative loop, so a near-feasible point is fine."
-**Why it's wrong:** ADMM's mid-loop tolerance is safe because of self-correction (the next
-iteration corrects an inexact one). A Benders cut is a PERMANENT addition to the master's
-feasible region for `α` — an inexact `π` from a near-feasible solve can insert an invalid cut
-with no later correction, silently corrupting every subsequent master solve (Pattern 3).
-**Instead:** Every solve whose `(cost, π)` becomes a cut uses the STRICT `assert_solved!`
-default (`dual=true`, `allow_almost=false`).
+**What people do:** `import PowerModelsDistribution` directly inside `src/data/ieee123.jl` (or
+anywhere in `src/`) to "just parse OpenDSS at load time."
+**Why it's wrong:** Violates the explicit CLAUDE.md policy (PMD is a data/validation *oracle*,
+never a core dependency), pulls PMD's entire dependency tree into every downstream user's
+environment, and risks non-reproducible builds if the OpenDSS source files move/change upstream.
+**Instead:** Offline script → committed pure-data `const` table (Pattern 3 above).
 
-### Anti-Pattern 3: Inventing a resolution to the leader/follower semantic ambiguity in code comments
+### Anti-Pattern 3: Unconditionally flipping the reactive-consensus default before re-validating goldens
 
-**What people do:** Pick one of Reading A / Reading B from (3) and hard-code it into
-`coupling.jl`/`subproblem.jl` without an independent check, because "the PSR note basically
-says X."
-**Why it's wrong:** The source is explicitly author-flagged as inconsistent on exactly this
-point (`THEORY-papers.md`, PROJECT.md's own risk list). Silently picking a reading bakes an
-unverified assumption into the one place (the coupling semantics) where the whole planning
-layer's correctness lives.
-**Instead:** Build the tiny BilevelJuMP MPEC FIRST (Pattern in (4)) and let the two independent
-solves agree or disagree — resolve empirically, then document the resolution with a comment
-citing the specific tiny-case evidence, not the note alone.
+**What people do:** Land the `reactive_consensus` machinery and immediately make it the only
+path (remove the flag), assuming "it's strictly more correct."
+**Why it's wrong:** `DsoOpt`'s `:Rq` closure is part of the already-cross-validated IEEE-13/123
+ADMM regression baseline (welfare/DADP matching the centralized optimum). Flipping unconditionally
+risks a silent, un-reviewed perturbation of numbers the test suite currently pins.
+**Instead:** Feature-flag first (default off), re-validate every affected golden explicitly, flip
+the default in a clearly-labeled follow-up commit/plan.
 
-### Anti-Pattern 4: Coupling the diagonalization loop to Benders-loop internals
+### Anti-Pattern 4: Chasing the exact thesis figure
 
-**What people do:** Have `diagonalize.jl` reach into `distributor_i.master.model` directly to
-tweak constraints mid-sweep, or interleave partial Benders iterations across distributors for
-"efficiency."
-**Why it's wrong:** Breaks the clean state-machine boundary (Pattern 4) that makes each
-`solve_benders` call independently testable; reproduces the exact "separate constraint code
-for centralized vs ADMM" anti-pattern v1's own ARCHITECTURE.md warned against, one level up.
-**Instead:** `diagonalize` only ever calls the public `solve_benders(distributor; shared)`
-entry point and reads back `z_i`; all Benders-internal state stays inside `benders.jl`/
-`master.jl`.
-
----
+**What people do:** Try to reverse-engineer or approximate the thesis's exact +$1,819/+25%
+headline from public data, treating a close numeric match as the success criterion.
+**Why it's wrong:** The source Appendix E data is IP-blocked (CONICET repository); any numeric
+match against public-data substitutes would be coincidental, not a genuine reproduction, and
+risks a false sense of validated correctness.
+**Instead:** Pin a **directional** band (sign + rough order of magnitude) per PROJECT.md's own
+explicit scope decision; treat exact-figure reproduction as a stretch goal contingent on
+obtaining Appendix E, never as a required regression gate.
 
 ## Integration Points
 
-### External libraries
-
-| Library | Role | Notes |
-|---------|------|-------|
-| **JuMP.jl `Parameter`** | The coupling-flow mechanism | Already the CLAUDE.md-prescribed idiom; used here for `z`, not `λ`/`ρ` (those stay `Float64` per the ADMM bilinear lesson). |
-| **HiGHS.jl** | `BendersMaster`'s LP/QP backend | `select_optimizer(LP())`/`select_optimizer(QP())`, same factory v1 already has — no new solver wiring needed for the continuous-investment v2.0 scope. |
-| **Clarabel.jl** | `OracleProblem`'s SOCP backend | `select_optimizer(problem_class(pf))`, identical to `operational_oracle`'s own routing — zero new solver code. |
-| **BilevelJuMP.jl (+ PATHSolver as its dependency for some reformulations)** | `validation.jl` only | Weakdep-gated (mirrors the existing Gurobi/Mosek extension pattern); never on the production Benders/diagonalization path. |
-
-### Internal boundaries
+### Internal Boundaries
 
 | Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `planning/subproblem.jl` ↔ `models/welfare_solve.jl`, `powerflow/*`, `devices/*` | Calls the SAME `contribute!` builder functions those files already export | Zero modification to any of them — identical reuse discipline to `admm/DsoOpt.jl`. |
-| `planning/subproblem.jl` ↔ `models/oracle.jl` | **None at the hot-loop level** | `operational_oracle` remains a separate, unmodified one-shot entry point; not called by `solve_benders`. |
-| `planning/master.jl` ↔ `planning/cuts.jl` | Reads pure-data triples, renders `@constraint` | Mirrors `admm/solve_admm.jl` ↔ `admm/residuals.jl`. |
-| `planning/benders.jl` ↔ `planning/subproblem.jl` + `planning/master.jl` | Orchestration only, no JuMP building of its own | Mirrors `admm/solve_admm.jl`'s role over `AgrOpt`/`DsoOpt`. |
-| `planning/diagonalize.jl` ↔ `planning/benders.jl` | Calls `solve_benders(distributor; shared)` as an atomic black box | Anti-Pattern 4 boundary. |
-| `planning/diagonalize.jl` ↔ `planning/coupling.jl` | Reads/updates the shared reinforcement signal between sweeps | The genuinely NEW model — no v1 analog. |
-| `planning/validation.jl` ↔ everything else | Read-only comparison, tiny fixtures only, weakdep-gated | Never imported by `benders.jl`/`diagonalize.jl`. |
-| `core/status.jl` (`assert_solved!`) ↔ every planning solve | Same single choke point v1 established | Pattern 3 requires STRICT mode specifically for cut-producing solves. |
+|----------|----------------|-------|
+| `ACPowerFlow` ↔ `ModelContext` | `contribute!` writes `:Rp`/`:Rq` via `add_to_residual!`, stashes `pf_vars` in `meta` | Identical contract to `ConvexBranchFlow`; zero `ModelContext.jl` changes |
+| `ac_oracle.jl` ↔ `welfare_solve.jl` | Calls `solve_welfare(feeder, ACPowerFlow(), ...)` unchanged | `solve_welfare` is already formulation/solver-agnostic; no modification needed |
+| `ac_oracle.jl` ↔ `exactness.jl` | None (deliberately) — `assert_ac_exact!` is a new, separate gate | Keeps `assert_socp_exact!`'s single responsibility (SOCP-only cone gap) intact |
+| `DsoOpt`/`AgrOpt` ↔ `solve_admm` | New `μ`/`b` params threaded through `solve_dso!`/read from `agr.qag`, mirroring `λ`/`a` | Purely additive when `reactive_consensus=true`; no seam change, same mechanism reused |
+| `residuals.jl` ↔ `solve_admm` | New trace fields + new `record!`/`converged` overloads | Backward-compatible via the project's established NaN-pad-old-overload convention |
+| `ieee123_impedances.jl` ↔ `ieee123.jl` | Plain `Dict` lookup keyed by original terminal pairs | No JuMP, no PMD, no runtime I/O — a pure compile-time constant table |
+| `scripts/ieee123_opendss_reduce.jl` ↔ package | None at runtime — output is committed, script is never `include`d by `TSODSO.jl` | The only place PMD is even imported, and it's outside the package boundary |
+| `thesis_reproduction.jl` ↔ `experiments/*` | Uses `Scenario`/`run_scenario` (existing declarative harness) to materialize the case | Avoids hand-rolling a new runner; reuses `run.jl`/`materialize.jl` verbatim |
 
----
+## Build Order & Phase Mapping (dependency-aware)
+
+**Dependency graph:**
+
+```
+(a) AC-OPF Oracle           - independent (touches powerflow/, models/ only)
+(b) Reactive μ Consensus     - independent (touches admm/ only)
+(c) Real IEEE-123 Impedances - independent (touches data/, scripts/ only), but its OWN
+                                validation (voltage-binding, SOC conditioning) benefits from
+                                (a) and (b) being available to certify the real-data case
+(d) Directional Reproduction - DEPENDS on (b) + (c); optionally consumes (a) for an extra
+                                AC-certification badge on the reproduction run
+```
+
+**Recommended 4-phase mapping** (independent code changes first, convergent validation last):
+
+1. **Phase 1 — AC-OPF Oracle.** Fully independent; can be developed and tested against existing
+   2-bus/IEEE-13/synthetic-IEEE-123 fixtures immediately. No blocking dependency on 2/3/4.
+2. **Phase 2 — Reactive μ-Consensus in ADMM.** Independent of Phase 1's files (admm/ vs
+   powerflow+models/); can in principle run in parallel, but sequenced second because it is the
+   most invasive change to an already-shipped path (feature-flagged) and its own goldens should
+   be re-validated before Phase 3/4 build on top of it.
+3. **Phase 3 — Real IEEE-123 Impedances.** Code-independent of 1/2, but its *validation* (is the
+   real-data case still voltage-binding? is the SOC cone still exact? is ADMM still
+   well-conditioned?) should exercise the Phase 1 AC oracle and Phase 2 reactive consensus on the
+   new topology as part of this phase's own acceptance criteria — this is where the "does the
+   real feeder actually need population re-tuning" risk gets resolved.
+4. **Phase 4 — Directional Thesis Reproduction.** Strictly depends on Phase 2 (reactive pricing
+   for DLMP/voltage credibility) and Phase 3 (real, standard data) both landing; optionally
+   reports an AC-certification badge from Phase 1. Promote the existing exploratory
+   `scripts/thesis_caseA.jl` into the literate rung + golden test here.
+
+This ordering also matches the milestone framing in `.planning/PROJECT.md` — "real impedances +
+reactive power likely precede meaningful thesis reproduction; AC oracle is independent" — and
+keeps each phase's regression surface isolated (Phase 1 cannot break Phase 2's admm/ tests and
+vice versa; only Phase 4 depends on both).
 
 ## Sources
 
-- `src/models/oracle.jl` (read in full) — the exact v1 SEAM-01 contract, the `z`/`role`
-  stub semantics, the documented "fails loudly rather than a silent partial pin" design intent.
-  HIGH confidence (primary source, current repo state).
-- `src/admm/solve_admm.jl`, `src/admm/AgrOpt.jl`, `src/admm/DsoOpt.jl`, `src/admm/residuals.jl`
-  (read in full) — the hand-rolled build-once/re-solve/pure-data-ledger pattern this milestone
-  must repeat; the `strict`/`allow_almost` solve-gating distinction that motivates Anti-Pattern 2.
-  HIGH confidence (primary source).
-- `src/core/ModelContext.jl`, `src/core/status.jl`, `src/solver/ProblemClass.jl`,
-  `src/solver/factory.jl` (read in full) — `register_constraint!`/`add_to_residual!` registry
-  API, `assert_solved!`/`assert_no_slack` gating, `select_optimizer`/`problem_class` dispatch.
-  HIGH confidence (primary source).
-- `.planning/research/THEORY-papers.md` — Paper 2 (PSR N1–N2 note) problem formulations
-  (1)/(2)/(4)/(7)/(8)/(9), the Benders cut form (4f), the diagonalization description, and the
-  explicitly author-flagged leader/follower labeling inconsistency this document deliberately
-  does not resolve by invention. MEDIUM confidence (the source itself is MEDIUM confidence,
-  per the project's own research).
-- `.planning/PROJECT.md` (Current Milestone v2.0 section) — locked v2.0 scope (continuous
-  investment first, hand-rolled Benders + diagonalization, BilevelJuMP validation-only), and
-  the project's own named risk ("leader/follower-role inconsistency ... open concerns").
-  HIGH confidence (primary source, current repo state).
-- `CLAUDE.md` (project root) — the `Parameter`/warm-start idiom, the "never rebuild inside the
-  loop" anti-pattern, the BilevelJuMP-as-oracle-only decision, the hand-rolled-over-framework
-  decomposition stance. HIGH confidence (primary source, current repo state).
-- `.planning/research/v1.0/ARCHITECTURE.md` — the v1 architecture this milestone extends;
-  confirms `planning/` was reserved and stubbed from Phase 4 onward, and that ADMM/planning are
-  meant to be independent orchestrators over the same builder layer. HIGH confidence (primary
-  source, prior milestone's research).
+- Direct inspection of the current v2.1 codebase (HIGH confidence — these are the actual files,
+  not summarized from documentation): `src/powerflow/AbstractPowerFlow.jl`,
+  `src/powerflow/ConvexBranchFlow.jl`, `src/models/exactness.jl`, `src/models/welfare_solve.jl`,
+  `src/admm/AgrOpt.jl`, `src/admm/DsoOpt.jl`, `src/admm/solve_admm.jl`, `src/admm/residuals.jl`,
+  `src/data/ieee123.jl`, `src/data/Feeder.jl`, `src/core/ModelContext.jl`,
+  `src/solver/ProblemClass.jl`, `src/solver/factory.jl`, `src/TSODSO.jl`, `docs/make.jl`,
+  `test/test_planning_goldens.jl`, `test/test_exactness.jl`, `Project.toml`.
+- `.planning/PROJECT.md` (v2.1 milestone scope, deferred-features list, key decisions log) — HIGH
+  confidence, primary source for milestone intent and constraints.
+- Project `CLAUDE.md` (tech-stack constraints: PMD-as-oracle-only policy, JuMP-vs-Convex.jl
+  rationale, hand-rolled-decomposition rationale) — HIGH confidence, explicit project policy.
+- MEDIUM confidence, flagged for roadmap attention: the exact reactive-consensus tolerance
+  scheme (whether μ needs its own ρ_q or can safely reuse the active-block ρ) and whether the
+  IEEE-123 aggregator/PV population will need re-tuning once real impedances land — both are
+  judgment calls based on the documented tuning rationale in `ieee123.jl`, not verified against a
+  live re-solve (no real impedance data exists yet to test against).
 
 ---
-*Architecture research for: v2.0 Stackelberg–Nash TSO–DSO planning-layer integration*
-*Researched: 2026-07-22*
+*Architecture research for: TSO-DSO v2.1 Validation & Reproduction milestone*
+*Researched: 2026-07-25*

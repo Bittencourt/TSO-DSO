@@ -1,122 +1,113 @@
 # Stack Research
 
-**Domain:** Hand-rolled Benders decomposition + Gauss-Seidel diagonalization planning layer (Stackelberg-Nash TSO–DSO investment equilibrium), Julia + JuMP, wrapping the existing v1.0 `operational_oracle`.
-**Researched:** 2026-07-22
-**Confidence:** HIGH (all versions re-verified live against the Julia General registry today; BilevelJuMP mode/solver-support matrix re-verified against its own docs today; ecosystem-fit judgments MEDIUM-HIGH, consistent with and sharpening CLAUDE.md's existing LOCKED decisions)
+**Domain:** Julia/JuMP TSO-DSO optimization framework — v2.1 "Validation & Reproduction" milestone
+(AC-OPF oracle, ADMM reactive consensus, real IEEE-123 impedance ingestion, directional thesis
+reproduction)
+**Researched:** 2026-07-25
+**Confidence:** HIGH (versions verified against Julia General registry `Versions.toml`/`Deps.toml`;
+PMD/OpenDSS API behavior verified against official PowerModelsDistribution docs)
+
+This is a **delta** stack document: it only covers what changes for v2.1. Everything already in
+`Project.toml` (JuMP 1.30.1, Clarabel 0.11.1, HiGHS 1.24.1, **Ipopt 1.15.0**, CSV, DataFrames,
+CairoMakie, DrWatson, SparseArrays, StableRNGs) is unchanged and re-used as-is. Prior milestone
+stack rationale (v1.0/v2.0) lives in `CLAUDE.md`'s Technology Stack section and the archived
+`.planning/research/v1.0/` notes.
 
 ## Recommended Stack
 
-### Core Technologies
-
-**No new core solver technology is needed.** v2.0's planning layer is CONTINUOUS-only (LP/QP master, LP/QP/SOCP subproblems) and reuses v1's `select_optimizer(::ProblemClass)` factory unchanged:
+### Core Technologies (no new main-dep additions)
 
 | Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **JuMP** | **1.31.0** (up from 1.30.1 four days ago; compat `"1.30.1"` in `Project.toml` already permits it) | Algebraic modeling for master + follower subproblems | v1.31.0 is nonlinear-expression/error-message/doc polish only (no breaking changes to `Parameter`, `dual()`, `SecondOrderCone`, or constraint-handle semantics) — safe to bump the installed version; no code changes required. Re-verified via GitHub release notes 2026-07-22. |
-| **HiGHS** | **1.24.1** (unchanged) | Benders **master** problem (leader: `y_inv`, `y_inv,flex`, `y_op,s`, `α`, continuous LP with growing Benders-cut rows) via `select_optimizer(LP())` | The master (eq. 4a–4f in the PSR note) is a pure LP for v2.0 — no binaries until integer expansion lands. `select_optimizer(LP())` already exists in `src/solver/factory.jl` and needs no new `ProblemClass`. |
-| **Clarabel** | **0.11.1** (unchanged) | Follower subproblem: N2 transmission-reinforcement LP/QP (eq. 2a–2e) and the reused N1 `operational_oracle` SOCP | Same factory dispatch already used by the operational layer (`select_optimizer(SOCP())` / `select_optimizer(QP())`); the follower's coupling dual `π_s` (eq. 2e) is read exactly like `_coupling_dual` already reads `:balance_p` — same `dual(constraint_handle)` pattern, no new library. |
-| **Ipopt** | **1.15.0** (unchanged) | Only invoked if the BilevelJuMP validation oracle uses `StrongDualityMode`/`ProductMode` (see below) | Already wired via `select_optimizer(NLP())`; no new dependency. |
+|------------|---------|---------|------------------|
+| **Ipopt** | **1.15.0** (already a main dep — unchanged, confirmed still current) | Nonconvex NLP backend for the new AC-OPF oracle rung | Already wired behind `select_optimizer`; no version bump needed. It is *sufficient on its own* to solve a hand-rolled nonconvex AC bus-injection power-flow model — the missing piece for v2.1 target (a) is a **formulation**, not a solver. |
+| **LinearAlgebra** (stdlib) | Julia-bundled | Fortescue/symmetrical-component (positive-sequence) reduction of 3×3 phase impedance matrices | The reduction is a fixed 3×3 unitary similarity transform (`A = [1 1 1; 1 a² a; 1 a a²]`, `a = exp(2πi/3)`) applied to a `Z_abc` matrix — nothing more than a change of basis. This is ~15 lines of code, not a library problem. **No package exists or is needed for this** (verified by search — no hit surfaced a Julia "Fortescue transform"/"symmetrical components" utility; only power-systems theory references and non-Julia tools appeared). Hand-roll it in `src/data/`, documented as a numbered helper (`fortescue_reduce(Zabc) -> (Z0, Z1, Z2)`), keeping only `Z1`. |
 
-### Supporting Libraries — NEW for v2.0
+### Supporting Libraries (new optional/weak dependency)
 
 | Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| **BilevelJuMP.jl** | **0.6.3** (current; last release 2026-03-13, 356 commits, actively maintained — re-verified today) | **Small-case validation oracle only.** Reformulate a tiny single-distributor leader-follower instance as a compact single-level problem and check its optimum against the hand-rolled Benders loop. | Add as a **test-only** dependency (see Installation) — never imported by production planning code. Use on toy 2–5-node instances only (see solver-mode caveat below). |
-| **Dualization.jl** | **0.3.5** (current) | Transitive dep of BilevelJuMP — builds the follower's dual/KKT problem for `StrongDualityMode`. | Pulled in automatically by BilevelJuMP; do not depend on it directly. |
+|---------|---------|---------|--------------|
+| **PowerModelsDistribution.jl (PMD)** | **0.16.0** (confirmed latest published — no 0.16.1/0.17 exists yet) | Parse the real public OpenDSS IEEE-123 case (`IEEE123Master.dss` + `IEEELineCodes.DSS`) into a structured Julia dict, for one-time/occasional impedance ingestion only | **Add it now — this is exactly the milestone CLAUDE.md already earmarked PMD for** ("Data-import oracle — PMD parses OpenDSS"). `PowerModelsDistribution.parse_file("IEEE123Master.dss")` natively follows the file's internal `Redirect`/`Compile` directives (so `IEEELineCodes.DSS`, load files, etc. load automatically — no manual multi-file wiring) and returns the `ENGINEERING` dict with `eng["line"]` (per-segment `linecode` reference + `length`) and `eng["linecode"]` (`rs`/`xs` 3×3 Ω/length matrices). **Do not call `transform_data_model`/`eng2math`** — that produces PMD's own per-unit multiconductor MATHEMATICAL bus/branch model, a second, PMD-flavored per-unit convention layered on top of data this milestone only needs as raw Ω. Instead walk `eng["line"]`/`eng["linecode"]` directly, multiply `rs`/`xs` by segment length to get Ω, then apply the hand-rolled Fortescue reduction (above) to collapse each 3×3 (or 2×2/1×1, for single/two-phase laterals) matrix to a scalar positive-sequence `(r,x)` pair per branch, expressed in the framework's own `IEEE123_BASE` per-unit convention. |
 
-### Supporting Libraries — deliberately NOT added for v2.0 (kept "on the shelf")
+### Development Tools (unchanged)
 
-| Library | Version (for when it's revisited) | Why deferred |
-|---------|-------|--------------|
-| **PATHSolver.jl** | 1.7.9 (current) | Only needed if a future variant is recast as a genuine mixed-complementarity/VI equilibrium. v2.0's Nash equilibrium is solved by **Gauss-Seidel diagonalization** (a fixed-point outer loop over independent per-distributor Benders solves), not a monolithic complementarity system — no MCP formulation exists to hand PATH. |
-| **Complementarity.jl** | 0.9.0 (current) | Same reasoning as PATHSolver — it is the JuMP-side modeling layer for exactly that MCP recast. Not needed while diagonalization is fixed-point, not simultaneous. |
-| **DualDecomposition.jl** | 0.3.4 (current) | Targets Lagrangian dual decomposition of **stochastic MIPs** (Argonne). v2.0 has neither stochastic scenarios in the planning layer nor integer investment yet. Revisit only if/when a stochastic-scenario or integer-Lagrangian-cut planning milestone opens (both explicitly deferred per PROJECT.md). |
-| **Coluna.jl / StructJuMP** | 0.8.2 / 0.3.2 | CLAUDE.md already declined these for v1; nothing about the v2.0 continuous-Benders scope changes that call — they impose annotation/structure that fights a hand-rolled, thesis-traceable decomposition. Do not reconsider unless scale genuinely forces it (integer-expansion milestone at the earliest). |
-| **InfiniteOpt.jl** | 0.6.3 (current) | Targets the stochastic/MPC continuous-time-and-uncertainty extension axis, orthogonal to the planning layer's investment-equilibrium structure. Not in v2.0 scope. |
-
-### Development Tools
-
-No new dev tools. Reuse v1's `TestItemRunner` / `Aqua` / `JET` / `Documenter` + `Literate` / `JuliaFormatter` unchanged (see `.planning/research/v1.0/STACK.md`). The Benders/diagonalization outer loop and its convergence diagnostics should follow the same `@testitem`-per-rung idiom already used for ADMM (Phase 6/7).
+No new dev-tool additions for v2.1. Existing TestItems/TestItemRunner, JuliaFormatter, Documenter+Literate, Aqua, JET all carry over unchanged; the new AC-OPF rung and the PMD-ingestion extension each get their own `@testitem`s and (per the "rich documentation" constraint) a Literate page.
 
 ## Installation
 
 ```julia
 # In the project environment (activate the repo, then):
-import Pkg
 
-# Nothing new in the main Project.toml — v2.0 planning code depends ONLY on
-# JuMP + the existing select_optimizer(LP()/QP()/SOCP()) factory already shipped.
+# (a) AC-OPF oracle — NO new package. Ipopt is already a main dep.
+#     New code: a 4th `AbstractPowerFlow` concrete type (e.g. `TrueACPowerFlow`) in
+#     src/powerflow/, dispatched exactly like DCPowerFlow/LinDistFlow/ConvexBranchFlow,
+#     solved via select_optimizer(NLP()) (add an `NLP` problem-class trait if not already present).
 
-# BilevelJuMP is a VALIDATION-ORACLE, test-only dependency (mirrors how CairoMakie/
-# Gurobi/MosekTools are kept out of the hard [deps] via weakdeps/extensions):
-Pkg.activate("test")
-Pkg.add(["BilevelJuMP"])   # pulls in Dualization + Reexport transitively
+# (b)/(c) Real IEEE-123 impedance ingestion — PMD as a WEAKDEP + package extension
+#     (mirrors the existing Gurobi/Mosek/CairoMakie weakdep+ext pattern already in Project.toml).
+Pkg.add(Pkg.PackageSpec(name = "PowerModelsDistribution", version = "0.16.0"))  # dev-only / weakdep
+
+# Project.toml additions (weakdeps + extensions section, NOT [deps]):
+# [weakdeps]
+# PowerModelsDistribution = "d7431456-977f-11e9-2de3-97ff7677985e"
+# [extensions]
+# TSODSOOpenDSSExt = "PowerModelsDistribution"
+# [compat]
+# PowerModelsDistribution = "0.16"
 ```
-
-Add `BilevelJuMP = "0.6.3"` to `test/Project.toml`'s `[compat]`, matching the existing pattern where `Aqua`/`JET`/`TestItemRunner` live in `test/Project.toml` and never touch the shipped package's `[deps]`. Do **not** add BilevelJuMP, PATHSolver, Complementarity, or DualDecomposition to the root `Project.toml` — none are production dependencies of the planning layer.
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| Hand-rolled Benders + Gauss-Seidel diagonalization | BilevelJuMP as the *production* solver | Never for v2.0 — CLAUDE.md explicitly declines this; MPEC single-level blowup diverges from the thesis's decomposition intent and scales poorly past toy cases. |
-| BilevelJuMP `BigMMode` (HiGHS) or `StrongDualityMode`/`ProductMode` (Ipopt) as the validation oracle's default modes | `SOS1Mode` / `IndicatorMode` | Only if Gurobi is licensed — **HiGHS.jl does not implement `MOI.SOS1` or `MOI.Indicator` constraint types** (re-verified today against HiGHS.jl's supported-constraints list), so those two BilevelJuMP modes are open-source-solver-incompatible today. `BigMMode` only needs binary variables (HiGHS-native) and `StrongDualityMode`/`ProductMode` only need an NLP solver (Ipopt, already wired) — prefer these two for the open-source-first validation oracle. |
-| `select_optimizer(LP())` for the Benders master | `select_optimizer(MILP())` | Only once integer/binary-expansion investment lands (explicitly deferred milestone) — v2.0's master has no binary/integer variables. |
-| Gauss-Seidel diagonalization (fixed-point outer loop) | PATHSolver/Complementarity.jl (simultaneous MCP) | Only if a future milestone deliberately recasts the multi-distributor Nash game as one simultaneous complementarity system rather than sequential per-distributor Benders solves. |
+|--------------|-------------|--------------------------|
+| Hand-rolled nonconvex AC bus-injection formulation in JuMP + Ipopt (new `AbstractPowerFlow` rung) | `PowerModels.jl` `ACPPowerModel` (single-phase-equivalent polar AC-OPF) or PMD's `ACPUPowerModel` as the oracle | If the team ever wants a *published, independently-audited* formulation rather than an in-house one for the "true AC" reference. Feasible today since PMD 0.16 **no longer hard-depends on PowerModels.jl** (dropped after PMD 0.10 — confirmed via registry `Deps.toml`), so pulling in `PowerModels.jl` would be a second, separate, deliberate addition, not a PMD transitive freebie. Rejected as the *default* choice here because PowerModels'/PMD's bus/generator/branch data model doesn't map cleanly onto this project's custom prosumer/aggregator net injections (the same argument CLAUDE.md already uses against building the SOCP core on PMD/PM) — you'd spend the effort translating solved net nodal injections into a synthetic generator-per-bus dict instead of writing ~40 lines of polar power-balance equations directly against the existing `Feeder` struct, with byte-identical topology/impedance data (zero mapping seam, zero risk of a silent unit/convention mismatch between the SOCP and AC oracle). |
+| PMD data-import path (`eng["line"]`/`eng["linecode"]`, no `transform_data_model`) | PMD's full `transform_data_model` → MATHEMATICAL per-unit dict | If a future milestone needs PMD's own multiconductor per-unit OPF machinery (e.g., a genuine unbalanced 3-phase extension) rather than just raw Ω impedances to reduce by hand. Out of scope for v2.1 (project stays balanced positive-sequence). |
+| PMD as a **weakdep + extension** | PMD as a **main dependency** | Never, for this milestone — PMD ingestion is a one-time/occasional data-regeneration step, not something 99% of `using TSODSO` sessions touch. A main dep would force every researcher (and CI matrix run) to precompile PMD's dependency chain even when doing pure operational/planning-layer work with no OpenDSS involvement. |
+| PMD as a **weakdep + extension** | PMD confined to a **standalone script with its own nested `Project.toml`**, fully decoupled from the package manifest | Viable and lower-friction (matches the `scripts/` DrWatson convention already in this repo, e.g. `scripts/thesis_caseA.jl`). Prefer the weakdep+extension over this **only if** the ingestion should be a live, checked, re-derivable regression (a test that re-parses the DSS files and asserts the committed `IEEE123_BRANCH_DATA` still matches, catching silent drift) — that fits the project's reproducibility/traceability mandate better than an unchecked one-off script. If that regression isn't valued, the standalone-script route is simpler and keeps `Project.toml` untouched entirely; either is defensible, but the weakdep route keeps the ingestion logic living *inside* the documented, tested package per CLAUDE.md's "every model assumption documented" constraint. |
+| Fortescue reduction hand-rolled with stdlib `LinearAlgebra` | Any third-party "symmetrical components" package | None found in the Julia ecosystem (verified by search — only power-systems-theory references and non-Julia tools surfaced). Do not add a dependency for a fixed 3×3 matrix transform. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| **BilevelJuMP as the production planning solver** | (Restated from CLAUDE.md/v1 STACK — still correct for v2.0.) Single-level MPEC reductions blow up and diverge from the thesis's Benders/diagonalization method; BilevelJuMP's own MIP-mode mechanics (`BigMMode`, binary complementarity indicators) don't scale to realistic multi-distributor, multi-scenario planning instances the way a hand-rolled Benders cut loop does. | Hand-rolled Benders + Gauss-Seidel diagonalization |
-| **BilevelJuMP's `SOS1Mode`/`IndicatorMode` without a licensed MIP solver** | HiGHS.jl (the open-source default) does not support `MOI.SOS1`/`MOI.Indicator` constraint sets — re-verified today. Silently falling back to these modes with HiGHS would error at solve time, not model-build time. | `BigMMode` (HiGHS) or `StrongDualityMode`/`ProductMode` (Ipopt) for the open-source validation path; reserve `SOS1Mode`/`IndicatorMode` for a licensed-Gurobi validation run only. |
-| **PATHSolver.jl / Complementarity.jl for v2.0** | No genuine MCP/VI formulation exists yet — the Nash equilibrium here is a sequential fixed-point (Gauss-Seidel diagonalization over independent Benders solves), not a simultaneous complementarity system. Adding these now is premature machinery with no consumer. | Hand-rolled diagonalization outer loop (plain Julia `while` loop calling per-distributor Benders solves) |
-| **DualDecomposition.jl for v2.0** | Targets Lagrangian decomposition of **stochastic MIPs**; v2.0 has neither stochastic scenarios nor integers in the planning layer. | Hand-rolled Benders; revisit only at the stochastic-scenario or integer-Lagrangian-cut milestone |
-| **Coluna.jl / StructJuMP for v2.0** | Already declined in CLAUDE.md/v1 STACK for the same structural reasons; the continuous-Benders v2.0 scope does not change that calculus. | Hand-rolled decomposition with JuMP `@constraint` cut accumulation |
-| **Rebuilding the follower JuMP model each Gauss-Seidel/Benders iteration** | Same performance pitfall CLAUDE.md flags for ADMM — the follower subproblem (and the reused `operational_oracle` SOCP) should be built once per distributor and re-solved with updated coupling-flow trial points, not rebuilt. Note: unlike ADMM's `Parameter`-based re-solve, Benders **master** growth is via genuinely NEW constraint rows (cuts) each iteration — that structural growth is expected and is not the anti-pattern; the anti-pattern is rebuilding the **follower/subproblem** model instead of re-solving it with a new RHS/trial point. | Build the follower model once; re-solve with updated trial coupling flow (RHS or `Parameter`); accumulate Benders cuts as new `@constraint` rows in the persistent master model. |
-| **Adding BilevelJuMP/PATHSolver/Complementarity/DualDecomposition to the root `Project.toml`** | None are production runtime dependencies; only BilevelJuMP is even a validation tool, and only for tests. Padding the hard `[deps]` breaks the "no bespoke dependency the framework doesn't need" and "must remain removable" ethos already enforced for Gurobi/Mosek via `[weakdeps]`. | BilevelJuMP in `test/Project.toml` only, exactly like `Aqua`/`JET`/`TestItemRunner` |
+|-------|-----|--------------|
+| Building the AC-OPF oracle **on top of PowerModels.jl or PowerModelsDistribution's `ACPPowerModel`/`ACPUPowerModel` formulations** | Same data-model mismatch CLAUDE.md already flags for the SOCP core: PowerModels'/PMD's generator/bus/branch templates don't map onto this project's aggregator-driven net nodal injections; more translation overhead than value for an oracle whose whole point is per-branch/per-bus traceability to thesis equations 3.31–3.39. | Hand-rolled nonconvex polar (or rectangular) AC power-flow equations as a new `AbstractPowerFlow` rung, solved via the already-wired Ipopt, on the SAME `Feeder`/`Branch`/`Bus` structs the SOCP model already uses. |
+| Adding PMD to `[deps]` (main dependency) | Bloats precompile/install for every researcher and CI job; PMD ingestion is occasional, not part of the live runtime API surface. | `[weakdeps]` + a package extension (`TSODSOOpenDSSExt`), exactly mirroring the existing `TSODSOGurobiExt`/`TSODSOMosekExt`/`TSODSOMakieExt` pattern already in `Project.toml`. |
+| Calling PMD's `transform_data_model`/`eng2math` for this milestone | Produces PMD's own per-unit multiconductor MATHEMATICAL model — a second, foreign per-unit convention layered on top of data this milestone only needs as raw Ω impedances. | Read `eng["line"]`/`eng["linecode"]` directly from the `ENGINEERING` dict `parse_file` already returns; do the Ω→pu conversion once, in the framework's own `PerUnitBase` (`IEEE123_BASE`), exactly as `ieee123.jl` already does for the head-branch `S_max`. |
+| Assuming PMD still transitively pulls in `PowerModels.jl`/`Memento` | **Outdated** — verified against the registry: PMD dropped `PowerModels` and `Memento` as dependencies after version 0.10 (now uses stdlib `Logging`/`LoggingExtras` instead of `Memento`). Current PMD 0.16 deps are `InfrastructureModels`, `JuMP`, `CSV`, `PolyhedralRelaxations`, `FilePaths`, `Glob`, `SpecialFunctions`, `Graphs`, `JSON`, `LoggingExtras` + stdlibs (`LinearAlgebra`, `Dates`, `Logging`, `SparseArrays`, `Statistics`). | Treat PMD 0.16 as a moderate — not enormous — transitive footprint; still a weakdep, but the "it drags in the whole PowerModels ecosystem" fear from older PMD versions no longer applies. |
+| Modeling the reactive-power (μ) ADMM consensus as anything other than a mirror of the existing active-power (λ) consensus pattern | `AgrOpt.jl`'s `qag` field is explicitly documented as a placeholder for exactly this extension (`AgrOpt.jl:48`, "no reactive dual update exists yet... kept as the documented seam"); a bespoke reactive-consensus mechanism would diverge from the thesis's symmetric λ/μ dual-ascent structure (eq. 3.46) and from the ADMM-03 build-once/re-solve discipline already proven for `pag`. | Mirror `pag`/`λ_j` exactly: promote `qag` from a constant vector to a genuine coupling variable pinned the same way `pag` is pinned (thesis 3.22/3.23 symmetry), add a `μ_j` dual-ascent update alongside the existing `λ_j ← λ_j + ρ·R_{p,j}` in `solve_admm.jl`, and reuse `set_objective_coefficient`/`set_rho!` verbatim for the new quadratic/linear reactive terms — **no new package required**, this is pure orchestration-layer work already scoped by the existing ADMM machinery. |
 
 ## Stack Patterns by Variant
 
-**Benders master (leader, per distributor):**
-- `Model(select_optimizer(LP()))`, built once per distributor; continuous `y_inv`, `y_inv,flex`, `y_op,s`, epigraph `α`.
-- Each outer iteration: solve → get trial `z_{y,s}^k` (import profile) → call the follower → receive `(w^k, π_s^k)` → add ONE new `@constraint(master, α >= w^k + sum(π_s^k .* (z_y .- z_y^k)))` (persistent model, growing row count — this is normal Benders growth, not the rebuild anti-pattern).
+**AC-exactness certification (v2.1 target 1):**
+- Fix the SOCP-solved (or ADMM-converged) net nodal active/reactive injections `p_inject[j,t]`, `q_inject[j,t]` as constants (or JuMP `Parameter`s, for repeated re-solves) on a NEW `TrueACPowerFlow <: AbstractPowerFlow` rung.
+- Write the standard nonconvex bus-injection AC power-flow equations directly against the existing `Feeder`/`Branch` structs (variables: voltage magnitude `|V_j|` and angle `θ_j`, or rectangular `(e_j,f_j)`; branch flow via the admittance `y = 1/(r+jx)`). `Ipopt` via `select_optimizer(NLP())` (extend the existing solver-selection trait with an `NLP()` problem class if not already present) solves it directly — no cone, no relaxation.
+- Compare voltages/branch flows to the SOCP solution; report the deviation alongside the existing `assert_socp_exact!` cone-gap as a second, independent correctness signal.
+- Optionally, ALSO run PMD's `ACPPowerModel`/plain OPF on a no-DER baseline (as CLAUDE.md's existing "Cross-validation" bullet already suggested) as a cheap secondary smoke-check — not the primary certification path, and would require the separate `PowerModels.jl` addition discussed above (not recommended as a default for v2.1).
 
-**Follower (transmission reinforcement, N2), continuous v2.0:**
-- `Model(select_optimizer(LP()))` (or `QP()` if `c_x,op` is quadratic) built once; RHS/trial-point (`z_{y,s}` from the current master iterate) updated via `set_normalized_rhs` or a JuMP `Parameter` and re-solved — same idiom as v1's ADMM subproblems.
-- Read `π_s = dual(coupling_constraint[s])` directly — same `dual(handle)` pattern as `_coupling_dual` in `src/models/oracle.jl`.
+**Reactive-power (μ) ADMM consensus (v2.1 target 2):**
+- No new package. Pure extension of `src/admm/AgrOpt.jl` + `DsoOpt.jl` + `solve_admm.jl`, mirroring the existing active-power pattern (see "What NOT to Use" row above).
 
-**N1 operation (distributor's own operational layer):**
-- Reuse `operational_oracle(feeder, pf, aggregators; z, role = :leader, ...)` UNCHANGED as the lower-level solve, once the (currently-stubbed, `ArgumentError`-guarded) `z`-pin extension (PLAN-01/02) is implemented: add the coupling constraint `p_import == z` to `solve_welfare`, and have `_coupling_dual` read ITS dual instead of throwing. This is an architecture task inside the existing model file, not a new library.
+**Real IEEE-123 impedances (v2.1 target 3):**
+- `PowerModelsDistribution.parse_file` (weakdep+extension) → walk `eng["line"]`/`eng["linecode"]` → per-segment Ω `rs`/`xs` (length-scaled) → hand-rolled Fortescue reduction (`LinearAlgebra`, stdlib) → scalar positive-sequence `(r,x)` per branch → feed into `IEEE123_BRANCH_DATA` in the framework's existing `IEEE123_BASE` per-unit convention. Regenerate as a **committed artifact** (e.g. `data/ieee123_impedances.jl` or `.csv`) so `src/data/ieee123.jl` never needs PMD loaded at ordinary runtime — only the (optional, weakdep-gated) regeneration/regression path does.
 
-**Multiple distributors → Nash:**
-- Plain Julia outer `while` loop (Gauss-Seidel diagonalization): for each distributor `i` in turn, re-solve its Benders leader problem holding `{z_{j,y,s}}_{j≠i}` fixed at their latest values; track a small convergence-residual struct (mirrors the ADMM residual-tracking pattern already in the codebase) and plot with CairoMakie (already in stack).
-
-**Validation oracle (tiny instances only):**
-- Build the SAME 2–5-node leader-follower instance in `BilevelJuMP` (`Upper`/`Lower` model blocks), reformulate with `BigMMode` (HiGHS) as the open-source-first default, cross-check against the hand-rolled Benders answer; use `StrongDualityMode`/`ProductMode` (Ipopt) as a second independent check when big-M sensitivity is a concern. Reserve `SOS1Mode`/`IndicatorMode` for an optional Gurobi-licensed run.
+**Directional thesis reproduction (v2.1 target 4):**
+- No stack changes — this is a scenario/goldens exercise on the already-existing `Scenario`/`run_scenario` + DrWatson `tagsave` machinery, using the newly-real IEEE-123 data as input.
 
 ## Version Compatibility
 
 | Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| JuMP 1.31.0 | MOI (Pkg-resolved) | Bump from 1.30.1 is additive/polish only (nonlinear-expression handling, error messages, docs); `Project.toml` compat `"1.30.1"` already admits it — no compat-bound edit needed, just `Pkg.up JuMP`. |
-| BilevelJuMP 0.6.3 | JuMP 1.x, Dualization 0.3.5, Reexport | `Dualization` is pulled in transitively for `StrongDualityMode`; do not add it directly. |
-| BilevelJuMP `BigMMode` | Any MIP solver with binary-variable support | HiGHS satisfies this — no licensed solver required. |
-| BilevelJuMP `StrongDualityMode` / `ProductMode` | Any NLP solver (or MIP for binary-expansion products) | Ipopt satisfies this — already wired via `select_optimizer(NLP())`. |
-| BilevelJuMP `SOS1Mode` / `IndicatorMode` | A MIP solver implementing `MOI.SOS1`/`MOI.Indicator` | **HiGHS.jl does NOT implement these MOI constraint sets** (re-verified 2026-07-22 against HiGHS.jl's README supported-constraints list) — these two modes require Gurobi/CPLEX/SCIP/Xpress. Gate behind the existing `GurobiChoice`/weakdep extension if ever used. |
-| HiGHS 1.24.1 (`select_optimizer(LP())`) | Julia ≥ 1.10 | Already the Benders-master solver of record; no change from v1. |
-| PATHSolver 1.7.9 / Complementarity 0.9.0 / DualDecomposition 0.3.4 | — | Confirmed current on the registry today; not added — kept on the shelf per "What NOT to Use" above. |
+|---------|------------------|-------|
+| PowerModelsDistribution 0.16.0 | JuMP ≥ 1.23.2 (project has 1.30.1) | Confirmed via registry `Compat.toml`: `["0.16-0"] JuMP = "1.23.2-1"` — no conflict with the project's pinned JuMP 1.30.1. |
+| PowerModelsDistribution 0.16.0 | Julia ≥ 1.10 | No native binary deps beyond its own Julia-package tree; consistent with the project's Julia 1.10 LTS floor. |
+| PowerModelsDistribution 0.16.0 | **Does NOT depend on PowerModels.jl or Memento** | Verified via registry `Deps.toml`: `PowerModels`/`Memento` deps only existed for PMD `0-0.10`; dropped since. Adding PMD 0.16 as a weakdep does *not* transitively install `PowerModels.jl`. |
+| Ipopt 1.15.0 | JuMP 1.30.1, Julia ≥ 1.10 | Unchanged from the existing project stack; confirmed still the latest published Ipopt.jl release (registry `Versions.toml` — no 1.16.x published as of 2026-07-25). |
 
 ## Sources
 
-- **Julia General registry `Versions.toml`** (raw.githubusercontent.com/JuliaRegistries/General), fetched 2026-07-22 — HIGH confidence: JuMP bumped **1.30.1 → 1.31.0** since the v1.0 STACK snapshot (2026-07-18); BilevelJuMP 0.6.3, PATHSolver 1.7.9, Complementarity 0.9.0, DualDecomposition 0.3.4, ParametricOptInterface 0.15.3, HiGHS 1.24.1, Clarabel 0.11.1, Ipopt 1.15.0, SCS 2.6.4, MathOptInterface 1.51.2, Dualization 0.3.5 all **unchanged and current**.
-- **GitHub `jump-dev/JuMP.jl` release notes for v1.31.0**, fetched 2026-07-22 — HIGH confidence: nonlinear-expression/error-message/doc changes only, no breaking API changes affecting `Parameter`, `dual()`, or cone constraints.
-- **`joaquimg/BilevelJuMP.jl` GitHub repo + docs (`tutorials/modes/`)**, fetched 2026-07-22 — HIGH confidence: current version 0.6.3 (2026-03-13, actively maintained, 356 commits); confirmed mode roster `SOS1Mode`, `IndicatorMode`, `BigMMode`, `ProductMode`, `StrongDualityMode`, `MixedMode` and their solver requirements.
-- **`jump-dev/HiGHS.jl` README (supported MOI constraint types)**, fetched 2026-07-22 — HIGH confidence: HiGHS.jl supports affine (in)equalities, bounds, integer/binary, semicontinuous/semiinteger — **does NOT** support `MOI.SOS1` or `MOI.Indicator`, which rules out BilevelJuMP's `SOS1Mode`/`IndicatorMode` on the open-source-only path.
-- **Julia General registry `Deps.toml`/`Package.toml` for BilevelJuMP**, fetched 2026-07-22 — HIGH confidence: hard deps are `Dualization`, `JuMP`, `LinearAlgebra`, `MathOptInterface`, `Reexport` — no hard dependency on PATHSolver (confirms PATHSolver is only needed for the user's own downstream MCP choice, not by BilevelJuMP itself).
-- **Codebase** — `src/solver/ProblemClass.jl`, `src/solver/factory.jl`, `src/models/oracle.jl` (`operational_oracle`/`_coupling_dual`), `Project.toml`, `test/Project.toml` — read 2026-07-22 to confirm the existing `select_optimizer(::ProblemClass)` factory already covers every solver class v2.0's continuous Benders master/subproblems need, and to confirm the SEAM-01 z-pin stub is the concrete integration point for the follower coupling dual.
-- **`.planning/PROJECT.md`, `CLAUDE.md`, `.planning/research/THEORY-papers.md` (Paper 2 / PSR N1–N2 note), `.planning/research/v1.0/STACK.md`** — project context and LOCKED v2.0 scope (continuous-before-integer, hand-rolled Benders + diagonalization, BilevelJuMP as validation-oracle-only).
+- **Julia General registry** (`raw.githubusercontent.com/JuliaRegistries/General`) `Versions.toml`/`Deps.toml`/`Compat.toml` for `PowerModelsDistribution`, `PowerModels`, `InfrastructureModels`, `Ipopt`, `JuMP`, `Graphs`, `PolyhedralRelaxations`, `FilePaths`, `Glob`, `JSON`, `LoggingExtras`, `SpecialFunctions` — fetched 2026-07-25, HIGH confidence on all version numbers and dependency-graph claims (PMD 0.16.0 latest, dropped `PowerModels`/`Memento` deps after 0.10; Ipopt 1.15.0 still latest).
+- **PowerModelsDistribution official docs** (`lanl-ansi.github.io/PowerModelsDistribution.jl/stable/manual/quickguide.html`, `.../dev/reference/data_models.html`) — HIGH confidence on `parse_file`/`transform_data_model` behavior, `ENGINEERING` `line`/`linecode` `rs`/`xs` fields, `apply_kron_reduction!`/`kron_reduce_implicit_neutrals!` (neutral-conductor Kron reduction — distinct from, and NOT a substitute for, the Fortescue positive-sequence reduction this milestone needs), and available formulations (`ACPUPowerModel`, `SDPUBFPowerModel`).
+- **WebSearch** (multiple queries) confirming OpenDSS's `Redirect`/`Compile` multi-file convention is natively followed by PMD's parser (MEDIUM confidence, community/docs-derived, not a single authoritative doc page quoted verbatim) and confirming no Julia package implements a generic Fortescue/symmetrical-components transform (an absence-of-evidence claim, flagged honestly as needing validation at implementation time, but corroborated by the triviality of the math — a fixed 3×3 unitary matrix, not something requiring a package).
+- **Project context** — `CLAUDE.md` Technology Stack section (existing PMD-as-oracle policy, solver-abstraction/weakdep-extension precedent via Gurobi/Mosek/CairoMakie), `.planning/PROJECT.md` (v2.1 milestone scope), `src/models/exactness.jl`, `src/powerflow/ConvexBranchFlow.jl`, `src/admm/AgrOpt.jl`, `src/data/ieee123.jl` (current implementation state, confirming the μ/`qag` placeholder and the synthetic-impedance provenance note this milestone replaces).
 
 ---
-*Stack research for: Julia (JuMP) Stackelberg-Nash TSO-DSO planning layer — hand-rolled Benders + Gauss-Seidel diagonalization, v2.0*
-*Researched: 2026-07-22*
+*Stack research for: TSO-DSO Integration Optimization Framework — v2.1 Validation & Reproduction*
+*Researched: 2026-07-25*

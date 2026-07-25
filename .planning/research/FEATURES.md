@@ -1,279 +1,469 @@
-# Feature Research — v2.0 Stackelberg-Nash TSO–DSO Planning Layer
+# Feature Research
 
-**Domain:** Bilevel (Stackelberg) investment-equilibrium research bench — distributor(s)-as-leader
-vs transmission-reinforcement-as-follower, multiple distributors reconciled to a Nash equilibrium
-by Gauss-Seidel diagonalization; solved by hand-rolled Benders decomposition; **continuous
-investment variables only** (integer/binary-expansion deferred).
-**Researched:** 2026-07-22
-**Confidence:** MEDIUM-HIGH — primary source (`THEORY-papers.md`, the PSR N1–N2 note) is itself
-flagged MEDIUM confidence by the prior research pass (leader/follower labeling stated
-inconsistently, no numerical case); this pass adds HIGH-confidence ecosystem grounding
-(BilevelJuMP.jl documented capabilities, Gauss-Seidel/diagonalization literature for
-multi-leader-multi-follower games) and reads the actual shipped v1 seam (`src/models/oracle.jl`)
-to ground what is genuinely new vs already scaffolded.
+**Domain:** Power-systems optimization validation — SOCP/AC-OPF exactness certification, ADMM
+reactive-power consensus, three-phase→positive-sequence network reduction, and directional
+reproduction of a published transactive-energy result. (Milestone v2.1 "Validation & Reproduction")
+**Researched:** 2026-07-25
+**Confidence:** MEDIUM-HIGH (exactness-condition literature and DLMP decomposition are HIGH
+confidence, well-cited results; the positive-sequence reduction recipe is HIGH confidence and
+already verified numerically in this repo's memory notes; the "directional reproduction" norms are
+MEDIUM confidence — a methodological convention rather than a single citable theorem)
 
-> **Framing note.** This is a *subsequent-milestone* feature landscape — it covers ONLY the new
-> planning-layer capabilities layered on top of the already-shipped v1.0 operational core
-> (SOCP branch-flow, ADMM, DADP/DLMP, `operational_oracle(z)→(cost,π)`). "Table stakes" here means
-> *what a credible research implementation of a Stackelberg-Nash expansion-planning game must have*
-> to produce a trustworthy, reproducible equilibrium — not general bilevel-optimization tooling
-> breadth. Continuous-vs-integer is a hard scope line for v2.0: everything below assumes **LP/QP**
-> masters and subproblems; binary-expansion + Lagrangian cuts are explicitly out of scope and are
-> called out wherever relevant.
-
----
+> **Framing note.** This is a *subsequent-milestone* feature landscape — it supersedes the v2.0
+> FEATURES.md previously at this path (planning-layer Stackelberg-Nash research, now shipped). It
+> covers ONLY the four v2.1 validation/hardening capabilities layered on top of the already-shipped
+> v1.0 operational core and v2.0 planning layer. "Table stakes" here means *what a credible
+> validation claim in the power-systems SOCP/ADMM/DLMP literature requires* — not general
+> feature-completeness of a product.
 
 ## Feature Landscape
 
-### Table Stakes (A v2.0 planning-layer implementation is incomplete without these)
+Each of the four v2.1 target capabilities is treated as its own "feature" with its own
+table-stakes / differentiators / anti-features split, because they are four largely independent
+validation seams (see Feature Dependencies below for what little coupling exists).
 
-| Feature | Why Expected | Complexity | Notes / Dependencies |
-|---------|--------------|------------|----------------------|
-| **Wire the SEAM-01 `z`-pin into `solve_welfare`** (add the coupling constraint `p_import == z` at the feeder root, return *its* dual) | This is the concrete, already-scaffolded v1→v2 unlock. `src/models/oracle.jl`'s `_coupling_dual` currently **throws `ArgumentError`** on any non-`nothing` `z` (WR-03/threat T-04-13, by design) — v1 deliberately shipped this as a loud stub, not a silent proxy. v2.0's very first task is to make this pin real. | MEDIUM | Depends on: v1's `:balance_p` constraint registry, `assert_solved!(...; dual=true)` gate. The existing `test_oracle.jl` test asserting the throw must be superseded/updated once the pin lands — do this deliberately, not as a silent regression. |
-| **Leader (distributor) investment master problem** — continuous flexibility investment `y_inv`, `y_inv,flex`, import-profile decisions `z_{y,s}` per scenario `s` (PSR problem 4) | This *is* the first Stackelberg level; without it there is no investment decision to optimize | MEDIUM-HIGH | LP/QP in JuMP (HiGHS or Clarabel). Objective: `c_y,inv·y_inv + c_y,inv,flex·y_inv,flex + (1/S)Σ_s c_y,op·y_op,s + α`, `α` bounded below by accumulated Benders cuts (4f). |
-| **Transmission-reinforcement follower subproblem `α({z_{y,s}})`** (PSR problem 2) — a NEW, small parametric LP: `min c_x,inv·x_inv + (1/S)Σ_s c_x,op·x_op,s` s.t. invest/op linking + demand balance + coupling `z_x=z_y` | This is the second Stackelberg level. It is **not** the distribution operational engine — it is a simple capacity-investment LP on the transmission/interconnection side, genuinely new for v2.0 | MEDIUM | Much simpler than the SOCP branch-flow core (no network physics — a capacity/flow LP). Must expose the coupling dual `π_s` (dual of `(2e)`) — the marginal cost of a unit of interconnection flow. |
-| **Reconcile `operational_oracle` with the Benders lower level** — the leader's own operating cost `y_op,s` (and the achievable import profile `z`) is generated by re-running `operational_oracle` at a given flexibility-investment level; its returned frontier coupling dual `π` is the project's chosen stand-in for `π_s` (per `THEORY-papers.md`'s "natural architecture": *the operational SOCP/ADMM engine plays the role of the second-level subproblem*) | Reuses the entire v1 operational core rather than duplicating it; this is the payoff of the SEAM-01 investment | MEDIUM | **This is an interpretive architecture choice, not a given** — the PSR note's own variable labeling is internally inconsistent (`x` is labeled "N1" in one place, described as "transmission reinforcement" — normally N2 — elsewhere). Treat as an explicit, documented Key Decision; do not silently pick a reading. |
-| **Hand-rolled Benders cut accumulation** — `α ≥ w^k + (1/S)Σ_s π_s^k·(z_{y,s} − z_{y,s}^k)` (4f), `w^k = α(z^k)`, growing via `@constraint` additions each iteration | The literal mechanism the PSR note specifies; matches CLAUDE.md's decided approach (no Coluna/StructJuMP) | MEDIUM | Directly reuses the v1 pattern of "build once, mutate via `Parameter`s, re-solve" already established for ADMM — same idiom, new loop. |
-| **Benders feasibility cuts** (in addition to optimality cuts) | The PSR note only states the optimality cut (4f); it is silent on what happens when a candidate `z^k` makes the follower subproblem **infeasible** (e.g. import level exceeds any achievable reinforcement given box bounds `A·x_inv≤b`). A research-grade Benders loop must handle this or it will crash/stall on realistic bounded instances | MEDIUM-HIGH | Standard Benders theory (feasibility cut from an infeasibility/Farkas certificate) — this is a **gap the source doesn't cover**, so it is table stakes *added by* this project, not lifted from the note. |
-| **Benders inner-loop convergence detection** (UB/LB gap `\|UB-LB\|≤ε`, or `α^k` within tolerance of `w^k`) | Without a stopping rule the loop either never terminates or terminates on an unconverged, wrong equilibrium | LOW-MEDIUM | Mirrors v1's ADMM residual-tolerance pattern (`ρ`, `ε=5e-5` there); needs its own tolerance calibrated for the Benders gap, not reused verbatim. |
-| **Single-distributor Stackelberg equilibrium as the validated base rung** | PROJECT.md's own risk mitigation: "single-bilevel-before-Nash sequencing." A 1-distributor case is also a degenerate, cheap regression check for the N-distributor diagonalization (it must reduce to a fixed point in one sweep) | LOW (given the pieces above) | Prerequisite gate before enabling the diagonalization outer loop; first place bugs in the Benders loop itself surface, isolated from Nash-game complexity. |
-| **Gauss-Seidel diagonalization outer loop** — for N distributors: fix all-but-one distributor's import/reinforcement footprint, best-respond (solve that distributor's full Benders bilevel), advance to the next, repeat sweeps until a fixed point | This *is* how the PSR note (and the broader multi-leader-multi-follower-game literature) reaches the Nash equilibrium among distributors sharing a transmission system — no other method is specified or implied | HIGH | Nests: outer diagonalization sweep × inner Benders loop × inner-inner follower re-solves. Confirmed as the standard/idiomatic method for this game class (Gauss-Seidel ≡ "diagonalization" in the EPEC/MLMF literature — MEDIUM confidence, WebSearch-verified against academic sources, see Sources). |
-| **Fixed-point / Nash convergence detection** — track max change in each distributor's `z_i` (or investment vector) across a full sweep; stop when below tolerance; report sweep count | Needed to know when the game has settled, and to bound runaway sweeps | MEDIUM | Must **not** silently overclaim: general multi-leader-multi-follower games have **no general existence/uniqueness guarantee** (confirmed via literature search — existence results are restricted to special classes). Report "a converged fixed point after N sweeps," never "the unique equilibrium," unless a supplementary uniqueness argument is separately made. |
-| **BilevelJuMP validation oracle on tiny instances** — reformulate the SAME small leader-follower LP as a single-level MPEC (KKT/SOS1/Fortuny-Amat/strong-duality reduction) via `BilevelJuMP.jl`, solve independently, cross-check against the hand-rolled Benders answer | CLAUDE.md's explicit decision: BilevelJuMP is a *validation oracle only*, never the production solver. It is the independent second method that catches a wrong Benders implementation | MEDIUM | BilevelJuMP.jl (HIGH confidence, verified via arXiv/INFORMS paper + docs): supports `SOS1Mode`, `IndicatorMode`, `FortunyAmatMcCarlMode` reformulations, needs a MIP-capable solver (HiGHS suffices for these small linear cases) and finite bounds on all primal/dual variables for the Fortuny-Amat mode. |
-| **Two-level convergence diagnostics** (inner Benders gap trace + outer diagonalization/Nash residual trace, per distributor) | Debugging a nested iterative equilibrium solver is materially harder than debugging ADMM; without instrumentation, a stalled or oscillating diagonalization is invisible | MEDIUM | Direct extension of v1's ADMM residual-diagnostics differentiator to two nested loops; reuse the existing residual-struct + CairoMakie plotting idiom. |
-| **Canonical small fixture(s) pinned as regression golden** (N=1 and N=2-distributor toy instances) | The PSR note has **no numerical case** (explicitly noted MEDIUM-confidence source) — there is no external reference to validate against, so the project must generate and pin its own first-correct-run golden, exactly as v1 did for IEEE-13 (`test_ieee13.jl`'s "COMPUTED golden" pattern) | MEDIUM | Gate: BilevelJuMP cross-check passes AND the diagonalization converges on the toy case before pinning. |
-| **Literate documentation mapping PSR problem numbers (1,2,4,7,8,9) to code** | Hard project requirement (per CLAUDE.md/PROJECT.md); doubly important here because the source itself is ambiguous — the docs must state the interpretive choices made (leader/follower reading, operational_oracle-as-follower-stand-in) explicitly, not bury them | MEDIUM | Continues v1's Documenter+Literate equation-traceability pattern into the planning layer. |
-| **Declarative scenario extension for planning parameters** (distributor count, flexibility/reinforcement cost coefficients, scenario count `S`) | Reuses v1's `Scenario`/`run_scenario` differentiator; the planning game's sensitivity questions (how does cost ratio flexibility-vs-reinforcement shift the equilibrium?) need the same sweep infrastructure | MEDIUM | Direct extension, not a new subsystem — depends on v1's scenario layer already existing. |
+---
 
-### Differentiators (What sets this planning-layer bench apart)
+### Capability A — AC-OPF-vs-SOCP Exactness Certification
 
-| Feature | Value Proposition | Complexity | Notes / Dependencies |
-|---------|-------------------|------------|----------------------|
-| **Both optimality AND feasibility Benders cuts**, when the source only documents optimality cuts | Robustness beyond the PSR note's stated scope — a research bench that only implements what's written will crash on realistic bounded instances; handling this correctly is itself a small research contribution | MEDIUM-HIGH | Depends on: follower subproblem exposing infeasibility certificates (dual ray) alongside the optimal dual. |
-| **Independent MPEC cross-validation via BilevelJuMP** on every new canonical fixture, not just once | Most planning-game papers do *not* independently validate their decomposition against a compact single-level reformulation; doing so on tiny instances is a rare correctness-rigor differentiator for a thesis-grade bench | MEDIUM | Only tractable at small scale (few scenarios, few distributors) — this is precisely why it's a *validation oracle*, not the production path (CLAUDE.md). |
-| **Two-level (Benders + diagonalization) convergence diagnostics with plots** | Extends v1's ADMM-diagnostics differentiator into the harder nested-equilibrium setting; makes a genuinely hard-to-debug solve legible | MEDIUM | Depends on residual-tracking pattern from v1; CairoMakie for publication-grade convergence figures. |
-| **The coupling seam (`z↔p_ag`, `λ_j↔π_s`, `role∈{:leader,:follower}`) made *live*, not just validated** | v1 shipped this as an inert, typed stub specifically so v2 could be *purely additive* (no rewrite). Making it live — and keeping the same signature — is the direct payoff of that architectural investment and worth documenting as such | MEDIUM | The `role` symbol already exists and is validated in `operational_oracle`; v2.0 is the first place it actually changes solver behavior (leader gets investment variables, follower doesn't). |
-| **Explicit, documented resolution of the leader/follower labeling ambiguity** | The source (PSR note) is internally inconsistent on this point (flagged in `THEORY-papers.md` and `PROJECT.md`'s own risk list); resolving it transparently — with the reasoning recorded — is more valuable to a thesis than silently picking a reading | LOW-MEDIUM (as documentation) | Feeds directly into the "reconcile `operational_oracle`..." table-stakes row above. |
-| **Traceability to PSR problem numbers inline** (1, 2, 4, 7, 8, 9) | Continues v1's equation-number traceability differentiator (thesis eq. 3.x) into the second source document; makes the planning layer auditable against its origin note | MEDIUM | Direct extension of an already-proven documentation pattern. |
-| **Scenario-indexed expectation `(1/S)Σ_s` built in from the start (two-stage only)** | Creates a clean on-ramp to the *already-deferred* stochastic-extension milestone without redesigning the planning layer later | LOW-MEDIUM | Do NOT build multistage SDDiP now (anti-feature below) — just keep the scenario index first-class. |
-| **Honest non-uniqueness reporting** (convergence ≠ uniqueness) | Most applied papers in this space implicitly present "the" equilibrium found; a research bench that reports the sweep trajectory and flags the theoretical absence of a general uniqueness guarantee is more defensible in a thesis committee setting | LOW | Documentation/reporting discipline, not new modeling machinery. |
+**What "good" looks like, standard procedure:**
 
-### Anti-Features (Attractive but wrong for CONTINUOUS v2.0)
+The distribution SOCP relaxation ships with two theoretical bodies of sufficient-exactness
+results for *radial* (tree) networks:
+
+- **Farivar & Low, "Branch Flow Model: Relaxations and Convexification — Part I/II," IEEE Trans.
+  Power Systems 28(3), 2013.** Establishes the branch-flow model itself and proves that for a
+  **radial** network the SOC relaxation (thesis eq. 3.39, `l ≥ (P²+Q²)/v`) is exact **provided
+  there is no binding upper bound on nodal power injections/withdrawals** (i.e., loads/DER are not
+  artificially capped in a way that would want to "round-trip" through the slack `l` variable) —
+  physically, the relaxation is tight whenever the true optimum wants to draw the minimum current
+  needed to serve the injection, which is the generic case in a welfare-maximizing dispatch. HIGH
+  confidence (canonical, ~2000+ citations).
+- **Gan, Li, Topcu & Low, "Exact Convex Relaxation of Optimal Power Flow in Radial Networks," IEEE
+  Trans. Automatic Control 60(1):72–87, 2015 (arXiv:1311.7170).** Sharpens the above: gives an
+  a-priori-checkable sufficient condition (after a small, provably-inconsequential enlargement of
+  the feasible set) and **empirically verifies it holds on the IEEE 13-, 34-, 37- and 123-bus test
+  feeders** — i.e., the exact same fixture family this project already uses. MEDIUM-HIGH
+  confidence on the precise theorem statement (verify wording against the paper before citing a
+  numbered theorem in a thesis chapter; HIGH confidence on the headline claim "holds on
+  IEEE-13/34/37/123").
+
+**Practical takeaway for this project:** the LinDistFlow exactness-copy trick (thesis 3.43–3.45,
+already implemented in `src/models/exactness.jl`) is the project's own construction for *forcing*
+tightness rather than relying on the Farivar-Low/Gan-et-al. natural-exactness argument — which is
+the right engineering choice (defensive, not fragile), but the validation milestone should still
+show the natural-exactness literature applies to the fixture family (radial, standard IEEE feeders)
+so a reader trusts the result is not a numerical accident.
+
+**Standard certification quantities and comparison procedure (what the literature and standard
+practice actually compare):**
+
+1. **Internal cone-tightness (already implemented, keep):** `gap = |l·v − (P²+Q²)|` per branch/hour
+   against a scale-free `atol + rtol·max(|·|)` bound. This shows the relaxation is *self-consistent*
+   but does **not** by itself certify the recovered point solves the true nonconvex AC-OPF — it can
+   be tight and still be wrong if, e.g., the exactness-copy voltage bound (3.45) itself biased the
+   solution away from the true optimum.
+2. **External oracle comparison (the missing piece, table stakes for v2.1):** solve the *same*
+   scenario as a genuine nonconvex AC-OPF — the un-relaxed power-flow equations (3.29–3.34 with
+   3.34 as an **equality**, not the SOC relaxation) in polar or rectangular form — via **Ipopt**
+   (already available per milestone context), and compare:
+   - **Objective value gap** (SOCP welfare vs. AC-OPF welfare at its own optimum): report as a
+     signed relative gap; a genuinely exact relaxation gives `gap ≈ 0` to numerical tolerance
+     (SOCP is a valid relaxation, so `AC-OPF welfare ≤ SOCP welfare`; exactness means equality).
+   - **Voltage vector deviation**: `max_{j,t} |v_SOCP[j,t] − v_AC[j,t]|` in pu — this is the check
+     that actually matters physically (a tight cone with a voltage mismatch would mean the
+     exactness-copy is producing a *different*, merely-feasible AC point, not *the* AC optimum).
+   - **Branch flow deviation** `max |P_SOCP − P_AC|`, `max |Q_SOCP − Q_AC|`.
+   - Optionally, **loss deviation** (`Σ r·l` vs. true AC losses) — a natural single scalar summary.
+3. **Two complementary check modes seen in the literature and worth distinguishing explicitly in
+   the report** (this distinction is what makes the report *rigorous* rather than hand-wavy):
+   - **Feasibility check** ("does the SOCP point lie in the true AC feasible set?"): fix the SOCP's
+     optimal `(p_ag, q_ag)` injections and run a plain AC power-flow solve (not an OPF — no
+     re-optimization) to get the true `V, P, Q`; compare against the SOCP variables. This isolates
+     *whether the recovered dispatch is physically realizable*, independent of optimality.
+   - **Optimality check** ("does the SOCP objective match the true AC-OPF optimum?"): solve the
+     full nonconvex AC-OPF independently (Ipopt, multiple warm starts) and compare objectives and
+     primal points. This is the stronger, headline claim and is what Gan-Li-Topcu-Low's own
+     numerical sections do on the IEEE test feeders.
+4. **Ipopt-specific pitfall, must be mitigated:** nonconvex AC-OPF is **not** guaranteed a global
+   optimum from Ipopt — a local-optimum artifact could masquerade as a "relaxation gap." Standard
+   mitigation: **multi-start** (several initializations, including a flat-start and the SOCP
+   solution itself as a warm start — the SOCP point is a natural starting guess precisely *because*
+   it should already be near-global if exactness holds) and report the **best** (lowest-cost/
+   highest-welfare) AC-OPF solve found, not an arbitrary one.
+5. **Defensible tolerance:** match the order already established in this codebase's own cone gate
+   (`rtol = 1e-4`, scale-free) — a relative objective gap and max-voltage-deviation both at
+   `O(1e-4)` is standard practice for "negligible optimality gap, relaxation certified exact on
+   this instance"; anything above `O(1e-2)` should be reported as a **genuine relaxation gap**, not
+   waved away as numerical noise.
+6. **Reporting rigor ("exact" vs. "gap", how to state it defensibly):** report BOTH numbers side by
+   side — the internal cone residual (existing PF-04 gate) and the external AC-OPF gap (objective
+   %, max |ΔV|, max |ΔP|, max |ΔQ|) — and explicitly state which theoretical result (radial +
+   Farivar-Low / Gan-Li-Topcu-Low) the instance falls under, vs. an instance-level empirical
+   check only. Never claim "exact" from the cone residual alone; the AC-OPF cross-check is what
+   licenses the word "certified."
+
+**Table stakes:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Independent nonconvex AC-OPF model (Ipopt, same feeder/scenario, `l=(P²+Q²)/v` as equality) | Without it, "exact" is only ever self-referential (relaxation vs. itself) | MEDIUM | Reuses existing constraint definitions (3.29–3.34) from `ConvexBranchFlow.jl`; swap the SOC inequality for the nonconvex equality and solve with Ipopt via `select_optimizer` |
+| Objective-value + voltage + flow comparison report (SOCP vs. AC-OPF) at a defensible tolerance | Standard practice in the exactness literature (Gan-Li-Topcu-Low's own validation) | LOW-MEDIUM | Mostly numeric post-processing once both solves exist |
+| Multi-start Ipopt (≥2–3 initializations incl. SOCP warm start) | Guards against reporting a false gap that's actually an Ipopt local optimum | LOW | Cheap insurance; a documented, known NLP pitfall |
+| Written methodology note citing Farivar-Low / Gan-Li-Topcu-Low and stating which case applies | "Citable" is the milestone's own bar (thesis/paper-grade); avoids an unsupported "exact" claim | LOW | Docs-only; pairs naturally with the existing Literate rung-page style |
+
+**Differentiators:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|--------------------|------------|-------|
+| A-priori exactness-condition checker (Gan-Li-Topcu-Low style, e.g. verifying the voltage upper bound is not binding at the AC optimum) that auto-classifies "provably exact" vs. "empirically exact" | Moves from case-by-case empirical checks to a structural argument citable independent of the solved instance | MEDIUM-HIGH | Requires precisely nailing down the paper's checkable condition; verify against the source PDF before implementing |
+| Stress sweep to find (and report) a genuine relaxation gap (e.g., high-PV reverse flow on IEEE-123, deliberately tightened voltage band) | Demonstrates understanding of the boundary of exactness, not just the easy case — strong thesis-defense material | MEDIUM | Reuses the existing IEEE-123 voltage-constrained fixture; needs a scenario knob for PV penetration |
+| Gap-vs-stress plot (CairoMakie) — relaxation/AC gap as a function of PV penetration or voltage-band tightness | Publication-quality, single figure that tells the whole exactness story | LOW-MEDIUM | Straight-forward given the sweep above; matches existing `DrWatson`/sweep infrastructure |
+
+**Anti-features:**
 
 | Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **Binary-expansion of `z` + Lagrangian/integer-L-shaped cuts** (PSR problems 8–9, SDDiP-style) | It's in the same source note; "just do the whole thing" | LOCKED out of v2.0 scope by PROJECT.md; the cut representation is only exact for binary/continuous LP subproblems — integer cuts are a materially harder, separate research problem (flagged MEDIUM confidence, "approximate in flow granularity Δ") that should not be built before the continuous game is validated | Ship continuous LP/QP now; defer binary-expansion to a dedicated later milestone once the continuous Benders+diagonalization loop is trusted |
-| **BilevelJuMP as the production solver for the full multi-distributor Nash game** | It already does KKT/MPEC reformulation — "why hand-roll Benders at all?" | Single-level MPEC blow-up does not scale to multiple distributors × scenarios × Benders iterations, and diverges from the thesis's decomposition intent (CLAUDE.md, explicit decision) | Validation oracle only, on tiny instances |
-| **Jacobi (simultaneous) best-response updates** instead of Gauss-Seidel (sequential) diagonalization | Looks parallelizable — "update everyone at once, it'll be faster" | Gauss-Seidel/diagonalization is the standard, better-behaved method for multi-leader-multi-follower games in the literature; naive simultaneous updates are known to be less reliable for this game class | Sequential Gauss-Seidel sweeps (fix others, best-respond, advance) as the primary method; only consider Jacobi as a documented experimental variant, never the default |
-| **Recasting the equilibrium as a general MCP/VI** (PATHSolver/Complementarity.jl) for v2.0 | "It's the mathematically cleaner way to state a Nash equilibrium" | CLAUDE.md reserves this for a genuinely different *future* variant explicitly posed as an MCP; premature here — it would duplicate the Benders+diagonalization effort without matching the thesis's stated method | Keep PATHSolver/Complementarity.jl on the shelf; revisit only if diagonalization proves unreliable in practice |
-| **Full multistage stochastic (SDDiP) treatment** of scenarios | The note cites Zou–Ahmed–Sun 2019 SDDiP as a reference | That citation is specifically in service of the (deferred) *integer* cut machinery, not the continuous v2.0 scope; multistage adds a whole further axis of complexity unrelated to the locked v2.0 goal | Simple two-stage scenario expectation `(1/S)Σ_s`, matching the note's actual problem-1 formulation |
-| **A full transmission-side AC-OPF / SOCP branch-flow follower** | "Model the transmission system with the same rigor as the distribution SOCP core" | The PSR note's follower is a simple capacity-investment LP (`F_x·x_op=d_x`, `x_op≤M_x·x_inv`), not a network-physics problem; building a second full power-flow model on the transmission side is scope explosion the source doesn't ask for and the project charter doesn't require | A small parametric LP for `α(z)`; reserve any transmission network detail for a genuinely separate future milestone if ever needed |
-| **Silently hard-coding one reading of the leader/follower labeling** | "Just pick one and move on, it's ambiguous either way" | The ambiguity is a flagged, real risk (PROJECT.md); silently resolving it forecloses the option to correct course later and could invalidate the entire planning-layer interpretation if wrong | Make the choice an explicit, documented, reversible Key Decision (same discipline as the `role` typed-symbol guard already in `operational_oracle`) |
-| **Claiming a proven, unique Nash equilibrium** | "We converged, so it must be *the* equilibrium" | Multi-leader-multi-follower / EPEC-class games have no general existence/uniqueness theorem; overclaiming here is a correctness/credibility risk in a thesis | Report a converged fixed point with full convergence diagnostics; explicitly flag non-uniqueness as a known theoretical limitation, not a bug |
+|---------|----------------|------------------|-------------|
+| Building a from-scratch nonconvex AC power-flow *solver* (Newton-Raphson, forward-backward sweep) | Feels more "from first principles" | Ipopt is already an available, validated NLP solver in the stack; writing a bespoke solver is scope creep against the project's explicit "clarity over premature optimization" constraint | JuMP nonconvex model + Ipopt, reusing the `ConvexBranchFlow.jl` constraint blocks with the SOC relaxed to equality |
+| General-purpose formal verification of Gan-Li-Topcu-Low's conditions across arbitrary radial topologies | Sounds rigorous | Over-engineering for a validation milestone whose fixtures are two fixed, known feeders (IEEE 13/123) — this is a paper-worthy contribution in its own right, not a v2.1 checkbox | Instance-level empirical certification (per-fixture, per-scenario) documented against the cited theorems |
+| Chasing exactness on meshed topologies | "More general is better" | Explicitly out of scope (thesis + fixtures are radial-only; meshed is a deferred research axis per PROJECT.md) | Stay radial; flag meshed exactness as a future-axis note only |
+
+---
+
+### Capability B — Reactive-Power (Q) Consensus in ADMM
+
+**How the reactive dual is standardly written, and what changes:** in a Lagrangian/ADMM
+decomposition of a branch-flow OPF, the standard symmetric treatment mirrors the active-power split
+exactly: a dual `μ_j[t]` on the nodal reactive-balance residual `R_{q,j}[t]` (thesis eq. 3.32),
+with an augmented-Lagrangian quadratic penalty `(ρ/2)‖R_{q,j}‖²` alongside the active-power term —
+this is precisely thesis eq. 3.47 as written (`DSO-OPT` carries **both** `λ_j·R_p` and `μ_j·R_q`
+penalty terms). Consensus/dual-decomposition literature (general ADMM-for-OPF surveys) treats `P`
+and `Q` balance identically: both are "copies" of a shared coupling quantity reconciled by a price
+(dual) that converges to the marginal value of relaxing that balance.
+
+The subtlety specific to this project (per the existing `AgrOpt.jl` docstrings): the thesis's own
+DER model is **active-power only** (assumption A3, thesis eq. 3.23 — `q_ag_j` is a *known constant*
+`−Pdc·tan(arccos φ)`, not an aggregator decision variable). This means:
+
+- There is genuinely **no** degree of freedom on the aggregator side for `μ_j` to move — AGR-OPT's
+  objective (thesis 3.46) correctly has **no** `μ`/`R_q` term at all; only DSO-OPT (3.47) carries
+  `μ_j·R_q`. This is not a bug to "fix" by inventing an AGR-side reactive decision (that would
+  reopen the explicitly-deferred 4Q-BESS/volt-var research axis).
+- Given `q_ag_j` is DSO-OPT's own *known parameter* once AGR-OPT reports it, the reactive nodal
+  balance `R_{q,j}=0` is really an **internal** equality constraint of DSO-OPT alone (every term in
+  it — `Q_{i,j}`, `x·l_{i,j}`, `q_ag_j`, downstream `Q_{j,m}`) is either a DSO-OPT variable or a
+  constant fed in from AGR-OPT's last solve. Standard SOCP/QP duality gives `μ_j = dual(R_{q,j})`
+  "for free" the moment this is written as a genuine equality constraint inside DSO-OPT — **no
+  separate ADMM outer-loop dual-ascent is required for Q** under the active-only DER assumption;
+  what is required is that the constraint be a **real, per-node equality** (not the current
+  free-`q_import` slack workaround that only balances reactive power in aggregate at the
+  substation, decoupling it from the true per-node physics of eq. 3.32).
+- What adding a genuine per-node `R_{q,j}=0` changes for **DLMP**: the standard DLMP-decomposition
+  literature (e.g., Bhattacharya et al., "Distribution Locational Marginal Pricing for Congestion
+  Management and Voltage Support," IEEE Trans. Smart Grid 2018) splits the nodal price into
+  active-power, **reactive-power**, congestion, voltage-support, and loss components — with the
+  reactive-power component being exactly this `μ_j` (the shadow price of the nodal VAR balance).
+  Restoring a genuine per-node `μ_j` therefore (a) makes the existing 4-way DLMP decomposition
+  (`src/pricing/dlmp.jl`) more physically grounded — today its "voltage" term must indirectly
+  absorb reactive-balance effects that should properly load onto a distinct reactive-price term —
+  and (b) gives the project a citable, standard 5th price component (`Q-DLMP`) to report, matching
+  the DLMP literature's own convention rather than an ad hoc quantity.
+
+**Table stakes:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Genuine per-node reactive balance `R_{q,j}[t]=0` as a real DSO-OPT equality (thesis 3.32), replacing the free-`q_import` aggregate slack | Matches the thesis equation as written; today's slack only enforces reactive balance in aggregate, not per-node | LOW-MEDIUM | Localized to `DsoOpt.jl`; `q_ag_j` is already computed by `AgrOpt.jl` (the constant `qag` field already exists, documented as an unread placeholder) |
+| Report `μ_j[t] = dual(R_{q,j})` as a first-class quantity, mirroring how `λ_j` is already surfaced | The reactive shadow price is the standard "Q-DLMP" component in the DLMP literature | LOW | Direct `dual()` read once the constraint is real; no new solve loop needed |
+| Convergence/consistency check: `R_{q,j}[t] ≈ 0` at the converged ADMM point (mirrors the existing `R_p` check) | Symmetric correctness gate to the existing active-balance residual check | LOW | Same pattern as the existing ADMM residual diagnostics (`src/admm/residuals.jl`) |
+| Regression: adding the real Q balance must NOT change the active-power welfare optimum (since `q_ag` is still a fixed parameter — only pricing/bookkeeping changes) | Cheap, high-value correctness check; a change here would signal an accidental coupling bug | LOW | Compare pre/post welfare on the pinned goldens |
+| DLMP decomposition extended with the reactive-price (`μ_j`) as a distinct, citable component | Matches standard DLMP literature convention (5-component split) rather than an ad hoc "voltage" catch-all | MEDIUM | Touches `src/pricing/dlmp.jl`'s existing derivation; must re-verify the additive decomposition still telescopes exactly (same discipline as the existing 4-way check) |
+
+**Differentiators:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|--------------------|------------|-------|
+| A genuine cross-subproblem ADMM dual-ascent loop on `μ_j` (only meaningful once AGR-OPT has an actual reactive decision variable, e.g., power-factor control within `[0.85,0.95]`) | Would make the reactive price a live consensus quantity rather than a free dual read | HIGH | This *is* the deferred 4Q-BESS/volt-var research axis — flag as a stretch/future item, not v2.1 MVP |
+| Reactive-price sensitivity plot (μ_j vs. voltage-band tightness) showing μ rising as voltage constraints bind | Physically intuitive validation that μ tracks the right thing | LOW-MEDIUM | Cheap once μ is real; reuses IEEE-123 voltage-constrained fixture |
+
+**Anti-features:**
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|----------------|------------------|-------------|
+| Full 4-quadrant inverter / volt-var control as part of this validation milestone | "While we're touching Q, let's make it live" | Explicitly deferred (meshed+4Q-BESS research axis, PROJECT.md Out of Scope); scope creep against a *validation* milestone | Keep DERs active-only (thesis A3); ship the real per-node balance + μ dual read only |
+| Inventing a nonstandard ad hoc "voltage price" formula not grounded in a real dual | Might seem to "solve" the DLMP-decomposition ambiguity faster | Not citable, undermines the "trustworthy, documented" bar the milestone exists for | Use the standard nodal-reactive-balance-dual (`μ_j`) as in Bhattacharya et al. and the general DLMP literature |
+
+---
+
+### Capability C — Positive-Sequence Reduction (IEEE-123 real impedances)
+
+**Standard method (textbook, HIGH confidence — Kersting, *Distribution System Modeling and
+Analysis*; Fortescue symmetrical-component theory):** given a line segment's 3×3 phase-impedance
+matrix `Z_abc` (self on the diagonal, mutual off-diagonal, from Carson's equations / OpenDSS
+linecode data), the exact symmetrical-component transform is `Z_012 = A⁻¹ Z_abc A` with
+`A = [[1,1,1],[1,a²,a],[1,a,a²]]`, `a = e^{j120°}`. For a **perfectly transposed/balanced** line
+(`Zaa=Zbb=Zcc`, all mutuals equal), this collapses cleanly to scalars: `Z+ = Zs − Zm`,
+`Z0 = Zs + 2·Zm`. Real distribution linecodes (including IEEE-123's) are **not** transposed, so the
+exact transform produces a full 3×3 sequence matrix with nonzero sequence-coupling off-diagonals —
+"the positive-sequence impedance" is then not rigorously a single scalar. The standard engineering
+**approximation** (used by OpenDSS-style "balanced-equivalent" line-code reduction and confirmed by
+this project's own prior research note) treats the line *as if* transposed by **averaging** the
+diagonal and off-diagonal terms before applying the same formula:
+
+```
+R1 = mean(diag(R_abc)) − mean(offdiag(R_abc))
+X1 = mean(diag(X_abc)) − mean(offdiag(X_abc))
+```
+
+This is exactly the recipe already validated in this repo's memory note
+(`ieee123-real-impedances-source.md`: verified on linecode.1 → `R1≈0.05797, X1≈0.11876 Ω/unit`,
+sensible order of magnitude) against the public GitHub-hosted OpenDSS IEEE-123 dataset
+(`tshort/OpenDSS` `123Bus/IEEELineCodes.DSS` + `IEEE123Master.dss`). The recommended execution path
+— parse via **PowerModelsDistribution** (oracle-only, per CLAUDE.md's own stack decision), extract
+per-branch 3×3 series impedance, apply the reduction, vendor a clean fixture — sidesteps the
+IEEE-123 file's own documented length/unit ambiguities.
+
+**Caveats that make this approximate (must be documented, not silently absorbed):**
+
+1. **Untransposed asymmetry is discarded.** The averaging step assumes away the real geometric
+   asymmetry of the conductor spacing; error scales with how far `Z_abc` is from its balanced form.
+2. **Single/two-phase laterals have no rigorous positive-sequence equivalent at all.** A large
+   fraction of IEEE-123's laterals are single-phase spurs — collapsing them into a balanced
+   positive-sequence branch is an additional modeling assumption (project's own stated "balanced
+   positive-sequence" scope), not a mathematical identity; must be flagged, not hidden.
+3. **Sequence-coupling terms (positive↔negative↔zero interaction on an asymmetric line) are
+   dropped** — valid to first order for short distribution feeders but not exact.
+4. **Per-phase voltage unbalance cannot be recovered** from a positive-sequence single-phase power
+   flow — this is fundamentally a balanced-feeder surrogate, and should be presented as such.
+5. Charging capacitance / neutral-return effects differ between the true 3-phase network and the
+   positive-sequence equivalent; secondary for a feeder this short, worth a one-line caveat only.
+
+**Table stakes:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Documented Fortescue-averaging reduction (`R1/X1` formula above) applied per real OpenDSS IEEE-123 linecode, replacing the current synthetic representative r/x | This is the milestone's explicit deliverable; the formula is already verified in this repo's own memory note | LOW-MEDIUM | Recipe and public data source already identified; mostly a data-engineering + vendoring task |
+| PMD-parse of the public OpenDSS `.dss` files as an oracle-only data source (never the production power-flow model) | Matches the project's own CLAUDE.md stack decision ("PMD as data-parsing and cross-validation oracle") | MEDIUM | New (weak) dependency on PowerModelsDistribution for parsing; verify it resolves cleanly under the current `Manifest.toml` |
+| Written caveat (mirroring the existing DATA PROVENANCE note style already in `ieee123.jl`) enumerating the approximation's error sources | Consistent with the codebase's existing rigor/documentation convention; prevents silently overclaiming fidelity | LOW | Docs-only |
+| Quantitative cross-check: same topology/real impedances run through PMD's own unbalanced power-flow oracle vs. the positive-sequence-reduced SOCP solve; report max voltage-magnitude / loss deviation | Turns "we did a reduction" into "we measured how wrong the reduction is" — a defensible, citable fidelity number | MEDIUM | Needs a real (not synthetic) 3-phase load allocation to run the PMD oracle meaningfully |
+
+**Differentiators:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|--------------------|------------|-------|
+| Explicit list/flag of which real segments are single/two-phase laterals (where the approximation is weakest) | Tells future researchers exactly where to look if results look suspicious | LOW | Cheap given the per-segment reduction already computes per-linecode phase counts |
+| Per-segment asymmetry metric (`‖Z_abc − balanced(Z_abc)‖ / ‖Z_abc‖`) reported alongside the reduction | Quantifies, rather than just asserts, which lines are most approximated | LOW-MEDIUM | Nice-to-have scalar; easy given the matrices are already parsed |
+
+**Anti-features:**
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|----------------|------------------|-------------|
+| Full unbalanced three-phase OPF as the production model | "Since we're parsing 3-phase data anyway..." | Explicitly out of scope (PROJECT.md: "Unbalanced three-phase / phase-detailed modeling... balanced positive-sequence" is the v1+ scope); would silently expand the whole framework's modeling axis mid-validation-milestone | Keep PMD strictly as a data/cross-validation **oracle**; production model stays balanced positive-sequence SOCP |
+| Deriving negative/zero-sequence impedances or fault-level analysis | "The transform gives us these for free" | Irrelevant to OPF/pricing validation; scope creep with no consumer in this project | Skip; only `Z+` (and by extension R1/X1) is needed |
+| Attempting to individually model single-phase laterals with their true phase | Feels "more correct" | Contradicts the project's own stated balanced-equivalent scope; half-modeling 3-phase creates an inconsistent hybrid model | Treat every branch as balanced-equivalent per the stated scope; document it as a limitation instead |
+
+---
+
+### Capability D — Directional Reproduction of the Published Welfare/DLMP Result
+
+**What a credible "we reproduce the direction/structure" claim looks like** when the exact source
+data is unavailable (this project's specific blocker: thesis Appendix E lives behind an
+IP-blocked CONICET repository). This maps closely to a recognized distinction in computational
+research reproducibility — the ACM Artifact Review and Badging terminology separates
+**"Reproduced"** (independently obtained data/means, same qualitative conclusions) from
+**"Replicated"** (same result from the original artifact/data) — MEDIUM confidence attribution
+(well-known convention in CS/systems venues; power-systems methods papers follow an analogous,
+less formally badged, norm when a predecessor's exact dataset is unavailable). A credible
+"Reproduced, not Replicated" claim in this domain typically has these ingredients:
+
+1. **Explicit, prominent framing up front:** state plainly that this reproduces the *qualitative
+   direction and mechanism* of the published result, not the exact figures, and *why*
+   (data-source constraint), before presenting any numbers — never let a reader infer exact-figure
+   reproduction occurred.
+2. **Sign checks, not magnitude matches, as the primary evidence:** e.g., DADP-based social welfare
+   exceeds FIT-based welfare (the thesis's headline `+25%` is a *sign*, not a digit, claim at its
+   core); DSO surplus moves loss→gain; prosumer surplus decreases under DADP relative to FIT (the
+   thesis's own regressive-to-prosumer / net-positive-to-total story) — each of these is a
+   **sign** on a delta, independently checkable on different input data.
+3. **Magnitude BAND rather than a point estimate:** state a plausible range grounded in the same
+   underlying mechanism (congestion/voltage relief monetized by dynamic pricing) — e.g., "welfare
+   improves by a double-digit percentage, bracketing the thesis's own +25%" — rather than asserting
+   a specific percentage as if it were expected to match.
+4. **Qualitative curve-SHAPE reproduction as the most convincing single artifact:** the
+   characteristic DADP-vs-hour signature (below wholesale during midday PV surplus, above wholesale
+   during evening peak) is reproducible on *any* reasonably parameterized dataset if the mechanism
+   is correctly implemented — this is standard practice in transactive-energy/dynamic-pricing
+   papers as the qualitative "sanity" figure, independent of the exact source numbers, and is
+   already partially supported by this project's existing `pricing/checks.jl` "economic-direction
+   checks."
+5. **Sensitivity-DIRECTION reproduction:** the thesis runs its own sensitivity cases (battery×1.5,
+   PV×1.5, willingness-to-pay×1.5, alt. MEM profile); reproducing the **direction** of each (e.g.,
+   more battery capacity ⇒ more welfare gain) on independently generated data is a strong,
+   defensible claim precisely because it does not depend on matching the thesis's absolute numbers.
+6. **A pinned regression on sign + band, not exact equality** — extending this codebase's existing
+   "computed goldens" and "a converged equilibrium" honesty-gate conventions (already used for the
+   planning layer, PVAL-02..04 / NASH-04) to the operational-layer welfare comparison: assert the
+   sign of the DADP-vs-FIT welfare delta and a magnitude band, fail loud if a future change flips
+   the sign or exits the band — never assert exact equality to a digitized or otherwise
+   uncertain reference number.
+7. **Explicit data-provenance statement**: point to the actual data differences driving the
+   inability to match exactly (public IEEE-123 impedances vs. thesis App. E; a regenerated
+   demand/PV Markov-chain population vs. the thesis's UK Time-Use Survey + Loughborough irradiance
+   data) — this project already states this correctly in PROJECT.md and
+   `memory/ieee123-real-impedances-source.md`; the validation milestone should carry that framing
+   into the actual reported artifact, not just internal docs.
+
+**Table stakes:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| "Reproduced, not Replicated" framing stated explicitly in the docs/report before any numbers | Prevents an unsupported exact-match claim; matches recognized reproducibility conventions | LOW | Docs-only, but must precede the numeric artifact, not follow it |
+| Sign check: DADP welfare > FIT welfare on the same (real or synthetic) feeder/data | The thesis's own core claim, checkable independent of magnitude | LOW | Reuses existing `pricing/welfare.jl` + `pricing/fit.jl` machinery |
+| Pinned golden regression asserting sign + a magnitude BAND (not exact value) for the welfare delta | Extends the codebase's own existing honesty-gate pattern; the correct rigor level given data constraints | LOW-MEDIUM | Direct analogue of the existing PVAL-02..04 / NASH-04 pattern, applied to the operational layer |
+| Qualitative DADP-vs-hour plot reproducing the midday-dip / evening-peak shape (vs. wholesale price) | The most convincing single "we got the mechanism right" artifact | LOW | CairoMakie plot; data already available post-solve |
+
+**Differentiators:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|--------------------|------------|-------|
+| Directional reproduction of the thesis's own sensitivity sweep (battery×1.5, PV×1.5, willingness×1.5, alt. MEM profile) | A materially stronger reproduction claim — five independent directional checks instead of one | MEDIUM | Reuses existing `experiments/sweep.jl`; needs the sensitivity scenarios defined |
+| Side-by-side overlay figure (thesis-digitized curve, if the Appendix E gate is ever cleared, vs. this project's curve, normalized) | Nice bridge artifact if/when the CONICET data becomes available | LOW (contingent) | Explicitly a **stretch goal** per PROJECT.md — gated on obtaining Appendix E, not a v2.1 commitment |
+
+**Anti-features:**
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|----------------|------------------|-------------|
+| Chasing the exact `+$1,819 / +25%` headline via parameter back-fitting to the thesis's number | Feels like the "real" reproduction | With genuinely different input data (public vs. App. E impedances, regenerated vs. original demand data) this is curve-fitting to a single number, not validation — it would actively undermine the "trustworthy, documented" bar the milestone exists to establish | Report sign + band; state the data-provenance limitation explicitly (already the project's own documented position) |
+| Treating a digitized thesis figure (from a low-resolution PDF) as a numeric golden for a tight quantitative regression | Seems like "real" ground truth | Digitization error is itself a noise source; committing a tight regression to it manufactures false precision | Use a digitized figure only as a qualitative visual reference (a plot overlay), never as a numeric assertion target |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[SEAM-01 z-pin wired into solve_welfare]  (v1 → v2 unlock; currently a loud ArgumentError stub)
-    └──requires──> [nodal coupling constraint p_import == z registered + its dual exposed]
-    └──enables──> [genuine coupling dual π (project's chosen stand-in for π_s)]
+Capability A (AC-OPF exactness oracle)
+    — independent of B, C, D; only needs the existing Ipopt wiring + ConvexBranchFlow.jl constraints
 
-[Transmission-reinforcement follower α(z)]  (NEW small LP, not the distribution SOCP core)
-    └──requires──> [coupling dual π_s extraction, incl. infeasibility/Farkas certificate]
-    └──enables──> [Benders optimality cuts]  AND  [Benders feasibility cuts]
+Capability B (Reactive-power Q consensus)
+    — independent of A, C, D; localized to admm/DsoOpt.jl + pricing/dlmp.jl
+    ──synergizes with──> A (once Q balance is real, A's AC-OPF cross-check can also validate Q,
+                            not just P — do B before/alongside A if sequencing matters)
 
-[operational_oracle reused for leader's own operating cost / achievable z]
-    └──requires──> [explicit, documented leader/follower-labeling resolution]  (Key Decision)
+Capability C (Positive-sequence reduction, real IEEE-123 impedances)
+    └──requires──> PMD-parse of public OpenDSS IEEE-123 data (external data acquisition step)
+    ──feeds into──> Capability D (Case B / IEEE-123 reproduction wants real, not synthetic, impedances)
 
-[Leader (distributor) investment master, problem 4]
-    └──requires──> [operational_oracle output]  +  [follower's Benders cuts]
-    └──enables──> [single-distributor Stackelberg equilibrium]      (validated base rung)
-
-[single-distributor Stackelberg equilibrium]
-    └──enables──> [Gauss-Seidel diagonalization across N distributors]
-                       └──requires──> [fixed-point / Nash convergence detection]
-                       └──produces──> [a converged equilibrium, NOT a proven-unique one]
-
-[Benders optimality cuts] ──needs-companion──> [Benders feasibility cuts]
-    (PSR note documents only the former; project must add the latter for robustness)
-
-[Two-level convergence diagnostics] ──depends-on──> [both inner-Benders and outer-diagonalization
-                                                       loops being instrumented]
-
-[BilevelJuMP KKT/SOS1/FA reformulation] ──validates──> [hand-rolled Benders, tiny instances only]
-    ✕ NEVER ──implements──> [production multi-distributor Nash solve]   (anti-dependency, by design)
-
-[Canonical N=1 / N=2 fixtures]  (no external reference exists — first correct run IS the golden)
-    └──gated-by──> [BilevelJuMP cross-check passing]
-    └──gated-by──> [diagonalization converged]
-
-[Continuous LP/QP master + subproblems, v2.0]
-    └──is-prerequisite-for──> [binary-expansion + Lagrangian cuts]   (DEFERRED, later milestone)
-    └──is-prerequisite-for──> [full multistage stochastic scenarios] (DEFERRED, not this milestone)
+Capability D (Directional reproduction)
+    └──requires (for the IEEE-123 / voltage-constrained case)──> Capability C
+    └──benefits from (not strictly required)──> Capability B (a real reactive price strengthens
+                                                    the voltage-driven reproduction story)
+    (Capability D's IEEE-13 / congestion-driven case does NOT require C or B)
 ```
 
 ### Dependency Notes
 
-- **Everything downstream of the `z`-pin depends on it being wired first.** Until `solve_welfare`
-  actually honors a pinned frontier import, `operational_oracle`'s `π` for any `z ≠ nothing` is
-  undefined behavior (currently: a loud exception, by design) — so this is the literal first
-  implementation step of v2.0, not an incidental detail.
-- **The follower subproblem is new, not a repurposing of the distribution OPF.** Conflating "the
-  operational problem as the lower level" (milestone framing) with "the transmission-reinforcement
-  follower" (PSR paper 2's actual second level) is an easy mistake — they are two different
-  subproblems that both feed the Benders loop, and the mapping between them is itself a Key
-  Decision the project must record, not assume.
-- **Single-distributor-first is both a scope-risk mitigation and a testing strategy:** it isolates
-  Benders-loop bugs from Gauss-Seidel-loop bugs before the two are nested.
-- **Feasibility cuts are a genuine gap-fill, not busywork:** the source note only shows the
-  optimality-cut path; a bench that omits feasibility cuts will simply crash or silently return
-  garbage the first time a candidate `z^k` is infeasible for the follower — which will happen on
-  any bounded, realistic instance.
-- **BilevelJuMP's role is strictly validation, never production**, and this is enforced by scale:
-  it is only tractable on the tiny fixtures used for cross-checking, which is exactly the role
-  CLAUDE.md assigns it.
-- **Continuous-first is a hard prerequisite for integer**, not just a sequencing preference — the
-  PSR note itself states the LP/continuous cut representation is exact while the integer one is
-  approximate and needs separate (SDDiP-style) machinery; validating the former is a precondition
-  for trusting the latter later.
-
----
+- **A is the most self-contained** — it only touches the existing `ConvexBranchFlow.jl` constraint
+  set plus the already-available Ipopt solver; no dependency on the other three. Good candidate to
+  sequence first or in parallel.
+- **B is likewise self-contained** — localized to `admm/DsoOpt.jl` (real per-node Q balance) and
+  `pricing/dlmp.jl` (the new μ-based price component); no data-acquisition dependency. Doing B
+  before/alongside A means A's AC-OPF cross-check can also confirm the reactive flows/voltages,
+  strengthening both.
+- **C requires external data acquisition** (the public GitHub OpenDSS IEEE-123 files) and a new
+  (weak, oracle-only) dependency on PowerModelsDistribution for parsing — the highest
+  external-dependency risk of the four, but the reduction recipe itself is already verified
+  numerically in this repo's own memory note.
+- **D depends on C** for the IEEE-123/voltage-constrained reproduction (the milestone explicitly
+  wants "real, standard data"), but the IEEE-13/congestion-driven reproduction can proceed
+  independently. Sequence C before D's IEEE-123 leg; D's IEEE-13 leg can run any time.
 
 ## MVP Definition
 
-### Launch With (v2.0 — continuous Stackelberg-Nash planning layer)
+### Launch With (v2.1, all four table-stakes rows above)
 
-- [ ] **Wire the SEAM-01 `z`-pin** into `solve_welfare` (real coupling constraint + dual) — the
-      concrete unlock; supersede the current `ArgumentError`-on-non-`nothing`-`z` test deliberately.
-- [ ] **Transmission-reinforcement follower LP** `α(z)` with coupling dual `π_s` (incl. an
-      infeasibility certificate path) — new, small, capacity-investment model.
-- [ ] **Documented resolution** of the leader/follower-labeling ambiguity and the
-      `operational_oracle`-as-lower-level mapping (a recorded Key Decision, not a silent choice).
-- [ ] **Leader (distributor) investment master** (continuous `y_inv`, `y_inv,flex`, `z_{y,s}`) with
-      accumulated Benders cuts.
-- [ ] **Benders loop**: optimality cuts (4f) **and** feasibility cuts, UB/LB convergence gap.
-- [ ] **Single-distributor Stackelberg equilibrium**, validated first, as a regression rung.
-- [ ] **Gauss-Seidel diagonalization** across N≥2 distributors with fixed-point convergence
-      detection (honest non-uniqueness reporting).
-- [ ] **BilevelJuMP validation oracle** (KKT/SOS1/Fortuny-Amat) on tiny instances, cross-checked
-      against the hand-rolled Benders answer.
-- [ ] **Two-level convergence diagnostics** (inner Benders + outer diagonalization/Nash residual).
-- [ ] **Canonical N=1/N=2 fixtures** pinned as the first-correct-run golden (no external reference
-      exists — gated by the BilevelJuMP cross-check passing).
-- [ ] **Literate docs** mapping PSR problem numbers (1,2,4,7,8,9) to code, including the
-      interpretive choices made explicit.
+- [ ] AC-OPF oracle (Ipopt, multi-start) + objective/voltage/flow gap report alongside the existing
+      cone-tightness gate — why essential: without it, "exact" is a self-referential claim
+- [ ] Genuine per-node reactive balance (`R_{q,j}=0`) + reported `μ_j` reactive price — why
+      essential: restores physical grounding of the voltage/DLMP story; today's free-`q_import`
+      slack decouples reactive balance from the per-node physics
+- [ ] Real IEEE-123 impedances via the verified Fortescue-averaging reduction on public OpenDSS
+      data, plus a PMD-oracle fidelity cross-check — why essential: the milestone's explicit
+      deliverable; synthetic impedances cannot be cited
+- [ ] Directional welfare/DLMP reproduction (sign + band pinned regression + DADP-shape plot) with
+      explicit "Reproduced, not Replicated" framing — why essential: gives the thesis a citable,
+      honest reproduction claim without requiring data that is not obtainable
 
-### Add After Validation (v2.x)
+### Add After Validation (v2.1.x / stretch within v2.1)
 
-- [ ] **Interconnection-price decomposition** (flexibility-value vs reinforcement-marginal-cost
-      components of `π_s`) — trigger: once the base equilibrium is validated; natural extension of
-      v1's DLMP-decomposition differentiator.
-- [ ] **Sensitivity sweeps** over flexibility-cost/reinforcement-cost ratios, distributor count —
-      trigger: base case solid, reusing the v1 scenario/sweep layer.
-- [ ] **Cut-strengthening / acceleration** (multi-cut Benders, Magnanti-Wong-style normalization) —
-      trigger: measured slow convergence on larger instances, not speculative.
+- [ ] Stress sweep finding a genuine relaxation gap (Capability A differentiator) — trigger: once
+      the baseline AC-OPF oracle is solid and time remains to explore the boundary
+- [ ] Sensitivity-direction reproduction (battery/PV/willingness sweeps, Capability D
+      differentiator) — trigger: once the single-scenario directional reproduction is pinned
 
-### Future Consideration (later milestone — integer expansion, NOT v2.0)
+### Future Consideration (later milestone)
 
-- [ ] **Binary-expansion of `z` + Lagrangian/integer-L-shaped cuts** (PSR problems 8–9, SDDiP-style
-      references) — defer: continuous game must be validated and trusted first; this is a
-      materially harder, separate research problem per the source's own caveats.
-- [ ] **MCP/VI recast** (PATHSolver/Complementarity.jl) — defer: only if Gauss-Seidel diagonalization
-      proves unreliable in practice; not needed for a first working equilibrium.
-- [ ] **Full multistage stochastic (SDDiP)** treatment — defer: v2.0 uses simple two-stage scenario
-      expectation only; multistage is orthogonal to the locked v2.0 scope.
-
----
+- [ ] Live μ ADMM consensus loop requiring an actual AGR-side reactive decision — defer until the
+      4Q-BESS/volt-var research axis opens (explicitly out of scope for v2.1)
+- [ ] A-priori exactness-condition auto-checker (Gan-Li-Topcu-Low style) — defer; a paper-worthy
+      contribution in its own right, not a v2.1 checkbox
+- [ ] Thesis-figure digitized overlay — explicitly gated on obtaining Appendix E (stretch goal per
+      PROJECT.md, not a commitment)
 
 ## Feature Prioritization Matrix
 
-| Feature | Research Value | Implementation Cost | Priority |
-|---------|-----------------|---------------------|----------|
-| Wire SEAM-01 `z`-pin into `solve_welfare` | HIGH | MEDIUM | P1 |
-| Transmission-reinforcement follower LP `α(z)` | HIGH | MEDIUM | P1 |
-| Leader/follower-labeling resolution (Key Decision) | HIGH | LOW-MEDIUM | P1 |
-| Leader (distributor) investment master | HIGH | MEDIUM-HIGH | P1 |
-| Benders optimality + feasibility cuts | HIGH | MEDIUM-HIGH | P1 |
-| Benders inner-loop convergence detection | HIGH | LOW-MEDIUM | P1 |
-| Single-distributor Stackelberg base rung | HIGH | LOW | P1 |
-| Gauss-Seidel diagonalization (N distributors) | HIGH | HIGH | P1 |
-| Nash fixed-point convergence detection + honest non-uniqueness reporting | HIGH | MEDIUM | P1 |
-| BilevelJuMP validation oracle (tiny instances) | HIGH | MEDIUM | P1 |
-| Two-level convergence diagnostics | MEDIUM-HIGH | MEDIUM | P1 |
-| Canonical N=1/N=2 regression fixtures | HIGH | MEDIUM | P1 |
-| Literate docs (PSR problem-number traceability) | HIGH | MEDIUM | P1 |
-| Declarative scenario extension for planning params | MEDIUM | MEDIUM | P2 |
-| Interconnection-price decomposition | MEDIUM-HIGH | MEDIUM-HIGH | P2 |
-| Sensitivity sweeps (cost ratios, distributor count) | MEDIUM | MEDIUM | P2 |
-| Cut-strengthening / acceleration | MEDIUM | MEDIUM | P3 (only if measured need) |
-| Binary-expansion + Lagrangian cuts | HIGH (later) | HIGH | P3 (deferred milestone) |
-| MCP/VI recast (PATHSolver) | LOW (for v2.0) | HIGH | P3 (only if needed) |
-| Full multistage stochastic (SDDiP) | LOW (for v2.0) | HIGH | P3 (out of scope) |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|----------------------|----------|
+| AC-OPF oracle + gap report (A) | HIGH | MEDIUM | P1 |
+| Multi-start Ipopt guard (A) | HIGH | LOW | P1 |
+| Real per-node Q balance + μ price (B) | HIGH | LOW-MEDIUM | P1 |
+| DLMP 5-way decomposition incl. Q-price (B) | MEDIUM-HIGH | MEDIUM | P1 |
+| Fortescue-averaged real IEEE-123 impedances (C) | HIGH | MEDIUM | P1 |
+| PMD-oracle fidelity cross-check (C) | MEDIUM-HIGH | MEDIUM | P1 |
+| Directional sign+band pinned regression (D) | HIGH | LOW-MEDIUM | P1 |
+| DADP-shape qualitative plot (D) | MEDIUM | LOW | P1 |
+| Stress sweep / gap-vs-PV-penetration plot (A) | MEDIUM | MEDIUM | P2 |
+| Sensitivity-direction reproduction (D) | MEDIUM | MEDIUM | P2 |
+| Per-segment asymmetry metric (C) | LOW-MEDIUM | LOW | P3 |
+| A-priori exactness-condition checker (A) | MEDIUM | HIGH | P3 |
+| Live μ consensus / AGR-side Q decision (B) | LOW (for v2.1) | HIGH | Out of scope this milestone |
 
-**Priority key:** P1 = required for the v2.0 continuous planning milestone · P2 = add once the
-core equilibrium is validated · P3 = later milestone / only-if-needed.
-
----
-
-## Competitor / Reference-Tooling Analysis
-
-Not "competitors" in a product sense — the surrounding Julia bilevel/equilibrium tooling this
-project deliberately does **not** adopt as its production method, per CLAUDE.md's already-made
-decisions. Included to make the "why hand-roll" reasoning explicit for the roadmap.
-
-| Capability | BilevelJuMP.jl (general bilevel→single-level) | PATHSolver.jl/Complementarity.jl (MCP/VI) | Coluna.jl (Dantzig-Wolfe/Benders framework) | Our Approach (v2.0) |
-|---|---|---|---|---|
-| Single leader-follower LP/QP, small scale | **Yes** — KKT/SOS1/Indicator/Fortuny-Amat modes, HIGH confidence (docs + INFORMS paper) | Possible via MCP recast, but a heavier reformulation for a simple case | Not its focus (column-generation/branch-price-and-cut oriented) | Used strictly as a **validation oracle** on tiny fixtures |
-| Multiple distributors → Nash/EPEC | Not designed for this — would require a full EPEC/MPEC-of-MPECs blow-up | Possible in principle (VI formulation of an EPEC) but a materially different research direction than the thesis's method | Not designed for game-theoretic equilibria | **Gauss-Seidel diagonalization**, the standard method for this game class in the MLMF literature |
-| Scales to realistic instance sizes (multiple distributors × scenarios × Benders iterations) | **No** — single-level MPEC reformulations blow up combinatorially with SOS1/big-M constraints | Scales differently (VI solvers can be efficient) but is a different modeling paradigm, not adopted here | Yes, by design, but imposes its own annotation/structure model | **Hand-rolled Benders + diagonalization** keeps exact control over cut generation and the coupling dual, matching the thesis's decomposition intent |
-| Matches the thesis's actual solution method | No (compact reformulation, not decomposition) | No (different equilibrium concept, complementarity-based) | No (general-purpose framework, not the thesis's specific split) | **Yes** — this is the entire point of building it hand-rolled |
-| Independent correctness cross-check | **Yes** — this is exactly its value here | Not used for this purpose in v2.0 | Not used for this purpose | Adopted as the differentiator: cross-check every canonical fixture |
-
-**Takeaway:** the general Julia bilevel/equilibrium ecosystem already solves compact single-level
-reformulations (BilevelJuMP) and complementarity/VI systems (PATH) well — but neither is built to
-*decompose* a large-scale Stackelberg-Nash investment game the way this project's thesis method
-requires. The right adoption is narrow and precise: **BilevelJuMP as an independent correctness
-oracle on toy instances**, everything else hand-rolled to match the PSR note's Benders +
-diagonalization method exactly.
-
----
+**Priority key:**
+- P1: Must have — this is the concrete, citable "done" standard for v2.1
+- P2: Should have, add when time remains within v2.1
+- P3: Nice to have, defer to a future milestone
 
 ## Sources
 
-- **Primary theory (MEDIUM confidence, self-flagged ambiguous):** `.planning/research/THEORY-papers.md`
-  (PSR internal note "Reforços interconexões N1-N2 via Stackelberg + Nash" — no numerical case,
-  leader/follower labeling stated inconsistently once, per the note's own extraction).
-- **Project scope/decisions (HIGH confidence — these are locked project decisions, not research
-  claims):** `.planning/PROJECT.md` (Current Milestone v2.0 section, Key Decisions), `CLAUDE.md`
-  (Deep-Dive Decision 4: bilevel/equilibrium tooling; Decision 5: decomposition tooling).
-- **Shipped v1 seam (HIGH confidence — read directly from source):** `src/models/oracle.jl`
-  (`operational_oracle`, `_coupling_dual`; the SEAM-01 `z`/`role`/`objective_hook`/`horizon_state`
-  stubs and their documented inert-in-v1 behavior), `test/test_oracle.jl` (the WR-03 test asserting
-  the current loud-failure behavior on a non-`nothing` `z`-pin).
-- **v1 feature baseline (HIGH confidence):** `.planning/research/v1.0/FEATURES.md` (operational-layer
-  table stakes/differentiators/anti-features this milestone builds on top of).
-- **BilevelJuMP.jl capabilities (HIGH confidence, WebSearch-verified against official
-  docs/paper):** [BilevelJuMP.jl: Modeling and Solving Bilevel Optimization in Julia (arXiv
-  2205.02307)](https://arxiv.org/pdf/2205.02307); [BilevelJuMP.jl Manual](https://docs.juliahub.com/BilevelJuMP/IKUgG/0.4.2/manual/);
-  [BilevelJuMP.jl: Modeling and Solving Bilevel Optimization Problems in Julia (INFORMS Journal on
-  Computing)](https://dl.acm.org/doi/abs/10.1287/ijoc.2022.0135) — confirms `SOS1Mode`,
-  `IndicatorMode`, `FortunyAmatMcCarlMode` reformulation options and their solver requirements.
-- **Gauss-Seidel/diagonalization for multi-leader-multi-follower games (MEDIUM-HIGH confidence,
-  WebSearch-verified against academic sources):** [A Gauss-Seidel method for solving
-  multi-leader-multi-follower games (arXiv 2404.02605)](https://arxiv.org/html/2404.02605);
-  [Existence, Uniqueness, and Computation of Robust Nash Equilibria in a Class of
-  Multi-Leader-Follower Games (SIAM J. Optimization)](https://epubs.siam.org/doi/10.1137/120863873)
-  — confirms Gauss-Seidel/diagonalization is the standard iterative method for this game class, and
-  that general existence/uniqueness results remain restricted to special cases (grounds the
-  "honest non-uniqueness reporting" differentiator/anti-feature pairing above).
-- **Benders decomposition in transmission/distribution expansion planning (MEDIUM confidence,
-  general grounding, not the specific PSR method):** search results on Benders decomposition for
-  transmission/storage expansion planning (ScienceDirect, arXiv) confirm feasibility-cut handling
-  is a standard, expected part of any production-grade Benders loop — grounding the
-  "feasibility cuts" table-stakes row as a real gap-fill rather than a speculative addition.
+- Farivar, M. & Low, S.H., "Branch Flow Model: Relaxations and Convexification — Part I / Part II,"
+  IEEE Transactions on Power Systems, 28(3), 2013. HIGH confidence (canonical, widely cited).
+  https://arxiv.org/pdf/1204.4865 ; https://smart.caltech.edu/papers/relaxconvex2parts.pdf
+- Gan, L., Li, N., Topcu, U. & Low, S.H., "Exact Convex Relaxation of Optimal Power Flow in Radial
+  Networks," IEEE Transactions on Automatic Control, 60(1):72–87, 2015. MEDIUM-HIGH confidence on
+  precise theorem wording (verify against the paper before citing a numbered theorem); HIGH
+  confidence on the headline applicability to IEEE 13/34/37/123-bus feeders.
+  https://arxiv.org/abs/1311.7170 ; https://arxiv.org/pdf/1311.7170
+- Bhattacharya, S. et al., "Distribution Locational Marginal Pricing (DLMP) for Congestion
+  Management and Voltage Support," IEEE Transactions on Smart Grid, 2018 (OSTI/IEEE Xplore) — 5-way
+  DLMP decomposition including a distinct reactive-power price component. MEDIUM-HIGH confidence
+  (WebSearch-verified summary; recommend reading the full paper before citing a specific formula).
+  https://www.osti.gov/biblio/1488555 ; https://ieeexplore.ieee.org/document/8089425/
+- ADMM/dual-decomposition-for-OPF general pattern (consensus variables, Lagrangian multiplier as
+  price) — MEDIUM confidence, general survey-level WebSearch corroboration, consistent with the
+  thesis's own eq. 3.46–3.47 structure already extracted in `THEORY-thesis.md`.
+- Kersting, W.H., *Distribution System Modeling and Analysis* — symmetrical-component /
+  positive-sequence reduction of an unbalanced line-impedance matrix. HIGH confidence (standard
+  textbook method); the specific averaging recipe used here is already independently verified
+  numerically in this repository's own prior research
+  (`memory/ieee123-real-impedances-source.md`, linecode.1 → R1≈0.05797, X1≈0.11876 Ω/unit).
+- ACM Artifact Review and Badging terminology ("Reproduced" vs. "Replicated") — MEDIUM confidence
+  attribution as the closest formal analogue to the "directional reproduction" convention used
+  here; power-systems methods papers follow an informal version of the same norm.
+- Project-internal sources consulted: `.planning/PROJECT.md`, `.planning/research/THEORY-thesis.md`
+  (thesis equations 3.2–3.47, case data), `src/models/exactness.jl` (existing PF-04 cone-tightness
+  gate), `src/admm/AgrOpt.jl` (documented μ/Q placeholder), `src/pricing/dlmp.jl` (existing 4-way
+  DLMP decomposition derivation), `src/data/ieee123.jl` (existing synthetic-impedance provenance
+  note), `memory/ieee123-real-impedances-source.md` (verified public-data reduction recipe).
 
 ---
-*Feature research for: v2.0 Stackelberg-Nash TSO–DSO planning layer (continuous investment)*
-*Researched: 2026-07-22*
+*Feature research for: TSO-DSO Integration Optimization Framework — v2.1 Validation & Reproduction*
+*Researched: 2026-07-25*
