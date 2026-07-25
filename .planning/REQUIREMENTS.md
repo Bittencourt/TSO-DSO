@@ -86,8 +86,20 @@ Make a defensible reproduction claim on real, standard data.
 
 ## Traceability
 
-_(Filled by the roadmapper — every REQ-ID maps to exactly one phase.)_
-
 | REQ-ID | Phase |
 |--------|-------|
-| _pending roadmap_ | — |
+| EXACT-01 | Phase 15 |
+| EXACT-02 | Phase 15 |
+| EXACT-03 | Phase 15 |
+| EXACT-04 | Phase 15 |
+| REACT-01 | Phase 16 |
+| REACT-02 | Phase 16 |
+| REACT-03 | Phase 16 |
+| IMPED-01 | Phase 17 |
+| IMPED-02 | Phase 17 |
+| IMPED-03 | Phase 17 |
+| REPRO-01 | Phase 18 |
+| REPRO-02 | Phase 18 |
+
+**Coverage:** 12/12 v2.1 requirements mapped. No orphans.
+</content>

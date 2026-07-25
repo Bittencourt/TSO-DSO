@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
 status: planning
-last_updated: "2026-07-25T22:45:17.862Z"
+last_updated: "2026-07-25T23:10:00.000Z"
 last_activity: 2026-07-25
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,35 +20,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Milestone complete
+**Current focus:** v2.1 Validation & Reproduction — roadmap created (Phases 15-18), awaiting phase planning
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 15 (AC-Exactness Oracle) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-25 — Milestone v2.1 started
+Status: Roadmap created and approved-pending; ready for `/gsd:plan-phase 15`
+Last activity: 2026-07-25 — ROADMAP.md (Phases 15-18) + REQUIREMENTS.md traceability written for v2.1
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 56 (v1.0 total; 0 in v2.0)
+- Total plans completed: 56 (v1.0: 43, v2.0: 13)
 - Average duration: —
-- Total execution time: 0 hours (v2.0)
+- Total execution time: 0 hours (v2.1)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 09 | 5 | - | - |
-| 10-14 (v2.0) | TBD | - | - |
+| 10-14 (v2.0) | 13 | - | - |
 | 10 | 2 | - | - |
 | 11 | 3 | - | - |
 | Phase 12 P02 | 65min | 2 tasks | 2 files |
 | 12 | 2 | - | - |
 | 13 | 3 | - | - |
 | 14 | 3 | - | - |
+| 15-18 (v2.1) | TBD | - | - |
 
 **Recent Trend:**
 
@@ -63,6 +64,31 @@ Last activity: 2026-07-25 — Milestone v2.1 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- Roadmap (v2.1): Phases derived 1:1 from the research SUMMARY.md's dependency-ordered 4-phase
+  structure — Phase 15 (AC-exactness oracle) and Phase 16 (reactive-μ consensus) are code-independent
+  of each other, sequenced 15-then-16 because Phase 16 is the more invasive change to an
+  already-shipped/cross-validated ADMM path and its goldens need re-validation before Phases 17-18
+  build on `admm/`.
+
+- Roadmap (v2.1): Phase 17 (real IEEE-123 impedances) is code-independent of Phases 15/16 (touches
+  only `scripts/`+`src/data/`) but its *validation* (still voltage-binding? still SOC-exact?)
+  benefits from Phase 15's AC oracle and Phase 16's reactive pricing existing — not a hard build
+  dependency, a validation-quality one.
+
+- Roadmap (v2.1): Phase 18 (directional thesis reproduction) is the only phase with a genuine
+  hard dependency — strictly depends on Phase 16 (reactive pricing) + Phase 17 (real impedances)
+  both landing, since the thesis's voltage-driven Case B result is not credible on synthetic
+  impedances or without priced reactive power.
+
+- Roadmap (v2.1): Phase 16's success criteria lead with the `mu` naming-collision resolution
+  (reactive dual vs. the existing adaptive-ρ `mu::Real=10.0` in `Scenario`'s golden-hash schema) as
+  its own criterion, per research SUMMARY.md's "first design decision" flag — must be resolved
+  before any `AgrOpt`/`DsoOpt` code change.
+
+- Roadmap (v2.1): Phase 15's design explicitly ALLOWS a genuine high-PV/reverse-flow inexactness
+  finding as a first-class documented result (per-hour/per-branch gap table, never a single
+  pass/fail) — not something to tolerance-adjust away.
 
 - Roadmap (v2.0): Phase 10 splits PLAN-01/02/03 (oracle-coupling wiring + retry/checkpoint
   resilience) out as its own phase BEFORE the full Benders loop, proven before Benders depends on it.
@@ -90,12 +116,32 @@ None yet.
 
 ### Blockers/Concerns
 
+- [v2.1 Phase 16 research flag]: whether reactive consensus needs its own `rho_q` or can share the
+  active block's `rho` for joint (p,q) residual balancing is an open judgment call (MEDIUM
+  confidence per research SUMMARY.md ARCHITECTURE) — resolve empirically during Phase 16, not by
+  assumption.
+
+- [v2.1 Phase 15 research flag]: the angle-recovery formula for the AC oracle on a radial network
+  (SOCP is magnitude-only; AC oracle needs real voltage phasors) is genuinely new math for this
+  codebase — validate on a trivial 2-bus fixture before trusting it on IEEE-13/123.
+
+- [v2.1 Phase 17 research flag]: PMD `ENGINEERING` dict traversal specifics (`eng["line"]`/
+  `eng["linecode"]` field shapes, `Redirect`/`Compile` directive following) and the classic
+  feet-vs-miles IEEE-123 OpenDSS unit trap were verified against docs, not a live parse — verify by
+  actually running the parse early in Phase 17.
+
+- [v2.1 Phase 17 unresolved]: whether the real-impedance IEEE-123 case remains voltage-binding after
+  the impedance swap is unverified (no real impedance data exists yet) — Phase 17's acceptance
+  criteria must include an explicit binding-constraint check and be prepared to re-tune the
+  aggregator/PV population if the property doesn't transfer.
+
 - [v2.0 Phase 10 target]: CI-flaky, version-independent, intermittent Clarabel `NUMERICAL_ERROR`
   on the IEEE-13 ADMM solve (root cause: cone-slack numerical sensitivity, per-unit-base
   dependent; never fixed in v1.0) is expected to be AMPLIFIED once the oracle is re-solved inside
   a Benders × scenario × distributor × diagonalization nest. PLAN-03 (Phase 10) makes bounded
   retry + checkpointing a day-one co-requirement; measure empirical failure rate on the planning
-  layer's own fixtures, don't assume v1's rate holds.
+  layer's own fixtures, don't assume v1's rate holds. v2.1 Phase 16 must also re-measure this
+  flake's rate under Q-consensus rather than assuming v1.0's rate transfers.
 
 - [v2.0 Phase 12 measured]: the Phase-10 blocker above was measured, not assumed, in this
   phase's load test (`test/test_planning_hardening.jl`) — `solve_with_retry!` escalated 0
@@ -120,13 +166,14 @@ None yet.
   certification gate (PLAN-07) resolves this empirically — do not re-resolve by re-reading
   THEORY-papers.md.
 
-- [carried from v1.0]: thesis welfare-headline figure digitization, IEEE-123 exact App. E
-  impedances, `sub_seed` cross-version hash stability — unaffected by v2.0 scope, see
-  `milestones/v1.0-MILESTONE-AUDIT.md`.
+- [carried from v1.0]: thesis welfare-headline figure digitization and `sub_seed` cross-version
+  hash stability remain deferred, unaffected by v2.1 scope; IEEE-123 exact App. E impedances is now
+  ACTIVE as v2.1 Phase 17 (real public-data impedances, not App. E — see PROJECT.md v2.1 Key
+  context). See `milestones/v1.0-MILESTONE-AUDIT.md`.
 
 ## Deferred Items
 
-Items acknowledged and carried forward, now refined by v2.0 REQUIREMENTS.md:
+Items acknowledged and carried forward, now refined by v2.1 REQUIREMENTS.md:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
@@ -136,14 +183,16 @@ Items acknowledged and carried forward, now refined by v2.0 REQUIREMENTS.md:
 | v2.x+ extension | Integer/discrete investment (`PLAN-INT-01`) | Deferred — v2.0 continuous-only, enforced by PVAL-04 | v2.0 requirements definition |
 | v2.x+ extension | Real-data flexibility-aggregator valuation (`PLAN-RT-01`) | Deferred to future milestone | v2.0 requirements definition |
 | v2.x+ extension | MCP/VI recast (`PLAN-MCP-01`) | Deferred — only if diagonalization proves unreliable | v2.0 requirements definition |
+| v2.1+ extension | Exact-figure thesis reproduction (`REPRO-STRETCH-01`) | Deferred — contingent on IP-blocked thesis Appendix E | v2.1 requirements definition |
+| v2.1+ extension | Live cross-subproblem reactive dual-ascent loop (4Q-BESS/volt-var) | Deferred alongside meshed+4Q-BESS | v2.1 requirements definition |
 
 ## Session Continuity
 
-Last session: 2026-07-23T02:02:30.797Z
-Stopped at: Completed 12-02-PLAN.md
-reinitialized for v2.0, REQUIREMENTS.md traceability table filled. Ready for `/gsd:plan-phase 10`.
+Last session: 2026-07-25T23:10:00.000Z
+Stopped at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Review/approve the v2.1 roadmap (Phases 15-18), then start with `/gsd:plan-phase 15`
+</content>
