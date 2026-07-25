@@ -117,7 +117,8 @@ end
 Construct an EMPTY two-level convergence ledger: every trace field `isempty` and
 `iters == 0`. Rows are appended via [`push!`](@ref).
 """
-NashTrace() = NashTrace(Int[], Int[], Float64[], Int[], Float64[], Int[], Int[], Symbol[], 0)
+NashTrace() =
+    NashTrace(Int[], Int[], Float64[], Int[], Float64[], Int[], Int[], Symbol[], 0)
 
 """
     push!(trace::NashTrace, k::Integer, i::Integer; nash_residual, benders_iters,
@@ -179,8 +180,7 @@ end
 
 `true` iff the MOST RECENT sweep in the ledger is COMPLETE (exactly `N` rows carry the
 last recorded sweep index) AND that sweep's own worst-distributor residual is
-`<= tol_outer`. The window is selected BY SWEEP INDEX (`trace.sweep_trace .==
-last(trace.sweep_trace)`), never by trailing row count — so a mid-sweep call (e.g.
+`<= tol_outer`. The window is selected BY SWEEP INDEX (`trace.sweep_trace .== last(trace.sweep_trace)`), never by trailing row count — so a mid-sweep call (e.g.
 1.5 sweeps recorded, a legitimate state for an external consumer of this exported
 generic) can never mix sweep-`k` and sweep-`k-1` residuals into one window; it simply
 returns `false` until the sweep completes. Returns `false` on an empty ledger
@@ -204,14 +204,11 @@ end
 """
     trace_summary(trace::NashTrace) -> NamedTuple
 
-Summarize `trace` as `(; iters, final_sweep, final_residual, max_benders_iters,
-total_benders_retries, total_cuts_rebuilt)`. On an empty trace (`trace.iters == 0`),
-returns `(; iters = 0, final_sweep = 0, final_residual = NaN, max_benders_iters = 0,
-total_benders_retries = 0, total_cuts_rebuilt = 0)` — empty-ledger-safe, never throws,
+Summarize `trace` as `(; iters, final_sweep, final_residual, max_benders_iters, total_benders_retries, total_cuts_rebuilt)`. On an empty trace (`trace.iters == 0`),
+returns `(; iters = 0, final_sweep = 0, final_residual = NaN, max_benders_iters = 0, total_benders_retries = 0, total_cuts_rebuilt = 0)` — empty-ledger-safe, never throws,
 mirroring `BendersTrace.trace_summary`'s own sentinel contract (`trace.jl`).
 Otherwise `final_sweep`/`final_residual` are the LAST recorded row's own values,
-`max_benders_iters = maximum(trace.benders_iters_trace)`, `total_benders_retries =
-sum(trace.benders_retries_trace)`, `total_cuts_rebuilt = sum(trace.cuts_rebuilt_trace)`
+`max_benders_iters = maximum(trace.benders_iters_trace)`, `total_benders_retries = sum(trace.benders_retries_trace)`, `total_cuts_rebuilt = sum(trace.cuts_rebuilt_trace)`
 — plain, always-computed sums/maxima over the per-row columns, never a log-scrape
 estimate (mirrors `BendersTrace.trace_summary`'s own `total_retries` discipline).
 """
@@ -287,8 +284,7 @@ split), and OPTIONALLY `tol` (default `1e-6`) and `max_iter` (default `100`) via
 # Algorithm
 
 Boundary guards BEFORE any solve call (mirrors `solve_stackelberg!`'s own
-guards-before-build discipline, each a distinct `ArgumentError`): `length(specs) ==
-shared.N`; `size(z0) == (shared.N, shared.T)`; `z0` entrywise finite and `>= 0`
+guards-before-build discipline, each a distinct `ArgumentError`): `length(specs) == shared.N`; `size(z0) == (shared.N, shared.T)`; `z0` entrywise finite and `>= 0`
 (`x_op >= 0` plus the coupling equality makes a negative seeded flow structurally
 infeasible); `order in (:forward, :reverse)`; `max_sweeps >= 1`; `0 < ω <= 1`;
 `isfinite(tol_outer) && tol_outer > 0`; the NESTED-TOLERANCE guard — for every `spec`,
@@ -309,25 +305,21 @@ structurally vacuous. `x_inv0` (optional length-`shared.N` vector) supplies the 
 investments; when omitted (`nothing`, the default) each entry is derived as the
 MINIMAL exactly-supporting investment `maximum(z0[j,:]) / shared.corridor_cap`.
 Seed-consistency guards (each a distinct `ArgumentError`, before any solve):
-`length(x_inv0) == shared.N`; `x_inv0` entrywise finite; `0 <= x_inv0[j] <=
-shared.x_inv_max[j]` (per-distributor ceiling — pass an explicit `x_inv0` to spread a
+`length(x_inv0) == shared.N`; `x_inv0` entrywise finite; `0 <= x_inv0[j] <= shared.x_inv_max[j]` (per-distributor ceiling — pass an explicit `x_inv0` to spread a
 hot seed's support across other distributors' investment instead); and per-`t`
-capacity feasibility of the seeded state, `sum(z0[:,t]) <= corridor_cap *
-sum(x_inv0)` — otherwise the first best-response would be globally infeasible at the
+capacity feasibility of the seeded state, `sum(z0[:,t]) <= corridor_cap * sum(x_inv0)` — otherwise the first best-response would be globally infeasible at the
 seed.
 
 For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1:N` if
 `order === :forward`, `N:-1:1` if `:reverse`):
 
  1. `activate_distributor!(shared, i)` — restore `i`'s own investment freedom.
- 2. `solve_stackelberg!(...; follower = DistributorView(shared, i), follower_kwargs =
-    NamedTuple())` — a FRESH oracle/follower/master triple built from scratch inside
+ 2. `solve_stackelberg!(...; follower = DistributorView(shared, i), follower_kwargs = NamedTuple())` — a FRESH oracle/follower/master triple built from scratch inside
     `solve_stackelberg!` (fresh cut store BY CONSTRUCTION, see this file's header).
  3. CR-01 parity re-solve (`solve_follower!(result_i.follower, result_i.z)`), then read
     `x_inv_i_converged = value(shared.x_inv[i])` — see this file's header for why this
     re-solve is load-bearing.
- 4. Compute this distributor's own Nash residual: `max(‖z_i^(k+1) - z_i^(k)‖∞,
-    |Δx_inv_i|)`.
+ 4. |Δx_inv_i|)`.
  5. Compute the (possibly damped) write-back value `z_i_new` (`ω == 1.0` recovers plain
     undamped Gauss-Seidel, the locked default; `ω < 1` damps toward the PREVIOUS `z_i`).
     With `ω < 1` the follower is RE-SOLVED at the damped `z_i_new` and the MATCHING
@@ -341,11 +333,9 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
     subdirectory (never colliding with each distributor's own inner Benders checkpoints,
     already nested under `sweep_k/distributor_i`).
 
-After each sweep completes, convergence is decided by `is_converged(trace, tol_outer,
-shared.N)` — THE one convergence definition (WR-04), never an inline re-implementation
+After each sweep completes, convergence is decided by `is_converged(trace, tol_outer, shared.N)` — THE one convergence definition (WR-04), never an inline re-implementation
 — i.e. the just-completed sweep's own worst-distributor residual is `<= tol_outer`; on
-convergence returns `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace,
-shared, order)`.
+convergence returns `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace, shared, order)`.
 
 If `max_sweeps` is exhausted without converging, raises a loud `ErrorException` naming
 the exhausted sweep count and the LAST recorded `nash_residual` (read from the trace,
@@ -359,8 +349,7 @@ never a stale loop-local) — never silently returns a non-converged result.
 
 # Returns
 
-On convergence, `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace,
-shared, order)` where `z::Matrix{Float64}` is `shared.N × shared.T` (each row `i` the
+On convergence, `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace, shared, order)` where `z::Matrix{Float64}` is `shared.N × shared.T` (each row `i` the
 converged coupling flow `z_i`), `x_inv::Vector{Float64}` and `UB::Vector{Float64}` are
 length-`shared.N` (each distributor's own converged investment and best-response
 incumbent upper bound), `sweeps` is the converged sweep count, `outer_residual` is that
@@ -372,7 +361,7 @@ function run_nash!(
     specs::AbstractVector{<:NamedTuple},
     shared::SharedTransmission;
     z0::AbstractMatrix{<:Real},
-    x_inv0::Union{Nothing,AbstractVector{<:Real}} = nothing,
+    x_inv0::Union{Nothing, AbstractVector{<:Real}} = nothing,
     tol_outer::Real = 1e-4,
     max_sweeps::Int = 50,
     order::Symbol = :forward,
@@ -397,9 +386,8 @@ function run_nash!(
     max_sweeps >= 1 ||
         throw(ArgumentError("run_nash!: max_sweeps must be >= 1, got $max_sweeps"))
     0 < ω <= 1 || throw(ArgumentError("run_nash!: ω must satisfy 0 < ω <= 1, got $ω"))
-    isfinite(tol_outer) && tol_outer > 0 || throw(
-        ArgumentError("run_nash!: tol_outer must be finite and > 0, got $tol_outer"),
-    )
+    isfinite(tol_outer) && tol_outer > 0 ||
+        throw(ArgumentError("run_nash!: tol_outer must be finite and > 0, got $tol_outer"))
     # NESTED-TOLERANCE guard (13-CONTEXT.md locked, 13-RESEARCH.md Pitfall 2): every
     # distributor's own inner tol must be STRICTLY TIGHTER than the outer tolerance —
     # otherwise the outer residual test could "converge" on inner-solve noise.
@@ -451,15 +439,15 @@ function run_nash!(
         x_inv0_vec[j] = min(x_inv0_vec[j], shared.x_inv_max[j])
     end
     for t in 1:shared.T
-        sum(z0[j, t] for j in 1:shared.N) <=
-        shared.corridor_cap * sum(x_inv0_vec) + 1e-9 || throw(
-            ArgumentError(
-                "run_nash!: seeded state is capacity-infeasible at t=$t: " *
-                "sum(z0[:,$t])=$(sum(z0[:, t])) exceeds corridor_cap * sum(x_inv0)" *
-                "=$(shared.corridor_cap * sum(x_inv0_vec)) — the first " *
-                "best-response would be globally infeasible at this seed",
-            ),
-        )
+        sum(z0[j, t] for j in 1:shared.N) <= shared.corridor_cap * sum(x_inv0_vec) + 1e-9 ||
+            throw(
+                ArgumentError(
+                    "run_nash!: seeded state is capacity-infeasible at t=$t: " *
+                    "sum(z0[:,$t])=$(sum(z0[:, t])) exceeds corridor_cap * sum(x_inv0)" *
+                    "=$(shared.corridor_cap * sum(x_inv0_vec)) — the first " *
+                    "best-response would be globally infeasible at this seed",
+                ),
+            )
     end
 
     z_prev = Matrix{Float64}(z0)
@@ -521,8 +509,7 @@ function run_nash!(
                 abs(x_inv_i_converged - x_inv_prev[i]),
             )
 
-            z_i_new =
-                ω == 1.0 ? result_i.z : (1 - ω) .* z_prev[i, :] .+ ω .* result_i.z
+            z_i_new = ω == 1.0 ? result_i.z : (1 - ω) .* z_prev[i, :] .+ ω .* result_i.z
 
             # WR-02: with ω < 1 the damped z_i_new differs from the undamped
             # result_i.z that x_inv_i_converged was solved for — committing the
@@ -580,8 +567,7 @@ function run_nash!(
         # completed, so the trailing shared.N rows below ARE exactly is_converged's
         # own by-sweep-index window (reporting only).
         if is_converged(trace, tol_outer, shared.N)
-            outer_residual_k =
-                maximum(trace.nash_residual_trace[(end - shared.N + 1):end])
+            outer_residual_k = maximum(trace.nash_residual_trace[(end - shared.N + 1):end])
             # Final re-solve (load-bearing, do NOT skip): the LAST distributor's own
             # write_back! (bound-pinning x_inv[i]) dirties shared.model's solved status
             # (JuMP's CachingOptimizer marks a model unsolved after ANY bound/Parameter
@@ -691,12 +677,9 @@ residual-baseline relabel.
 # Algorithm
 
 For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in `orders`
-(`length(seeds) * length(orders) >= 6` combinations): build a FRESH `shared_run =
-build_shared()`, call `run_nash!(specs, shared_run; z0 = seed_z0, tol_outer, max_sweeps,
-order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
+(`length(seeds) * length(orders) >= 6` combinations): build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = seed_z0, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
 `try`/`catch` around the call (see this section's header; a non-converging run's
-`ErrorException` propagates directly out of this function, by design). Collect `(; seed =
-seed_name, order, result)` for every combination.
+`ErrorException` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination.
 
 After every combination converges (by construction — any non-convergence already
 propagated and exited this function before this point is reached), compute the pairwise
@@ -705,21 +688,16 @@ pairwise distance across every unordered pair (all `binomial(n_runs, 2)` combina
 NEVER a mean/variance or other statistical summary that could understate an outlier run
 (13-RESEARCH.md Pattern 4's own explicit rationale):
 
-  - `z_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.z .-
-    runs[b].result.z))`.
-  - `x_inv_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.x_inv .-
-    runs[b].result.x_inv))`.
-  - `cost_spread`: maximum over all pairs of `abs(sum(runs[a].result.UB) -
-    sum(runs[b].result.UB))` (system-level total cost = the sum of every distributor's
+  - `z_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.z .- runs[b].result.z))`.
+  - `x_inv_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv))`.
+  - `cost_spread`: maximum over all pairs of `abs(sum(runs[a].result.UB) - sum(runs[b].result.UB))` (system-level total cost = the sum of every distributor's
     own converged `UB`, already returned by `run_nash!`).
 
 # Returns
 
 `(; runs, spread, summary, n_runs)` where `runs` is the full `Vector` of every individual
 `(; seed, order, result)` combination (NEVER averaged/collapsed — retained so a caller can
-inspect any individual run), `spread::NamedTuple` is `(; z_spread, x_inv_spread,
-cost_spread)`, `summary::String` contains the literal substring `"a converged
-equilibrium"` and NEVER the literal substring `"the equilibrium"` (constructed so this is
+inspect any individual run), `spread::NamedTuple` is `(; z_spread, x_inv_spread, cost_spread)`, `summary::String` contains the literal substring `"a converged equilibrium"` and NEVER the literal substring `"the equilibrium"` (constructed so this is
 true BY CONSTRUCTION — no variable is ever interpolated immediately adjacent to the word
 "the" directly before "equilibrium"), and `n_runs` is the total probe-run count.
 
@@ -793,16 +771,16 @@ function run_nash_probe(
     # distance spread across ALL runs, never a statistical summary. ------------------
     n_runs = length(runs)
     z_spread = maximum(
-        maximum(abs.(runs[a].result.z .- runs[b].result.z)) for a in 1:n_runs,
-        b in 1:n_runs if a < b
+        maximum(abs.(runs[a].result.z .- runs[b].result.z)) for
+        a in 1:n_runs, b in 1:n_runs if a < b
     )
     x_inv_spread = maximum(
-        maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv)) for a in 1:n_runs,
-        b in 1:n_runs if a < b
+        maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv)) for
+        a in 1:n_runs, b in 1:n_runs if a < b
     )
     cost_spread = maximum(
-        abs(sum(runs[a].result.UB) - sum(runs[b].result.UB)) for a in 1:n_runs,
-        b in 1:n_runs if a < b
+        abs(sum(runs[a].result.UB) - sum(runs[b].result.UB)) for
+        a in 1:n_runs, b in 1:n_runs if a < b
     )
     spread = (; z_spread, x_inv_spread, cost_spread)
 

@@ -181,32 +181,29 @@ function build_shared_transmission(;
 )
     # Boundary guards FIRST — fail here, not deep in objective assembly.
     N >= 2 || throw(
-        ArgumentError("build_shared_transmission needs N >= 2 (nothing to share), got N=$N"),
+        ArgumentError(
+            "build_shared_transmission needs N >= 2 (nothing to share), got N=$N",
+        ),
     )
     T >= 1 || throw(ArgumentError("build_shared_transmission needs T >= 1, got T=$T"))
     corridor_cap > 0 || throw(
-        ArgumentError("build_shared_transmission needs corridor_cap > 0, got $corridor_cap"),
-    )
-    length(x_inv_max) == N || throw(
         ArgumentError(
-            "x_inv_max has length $(length(x_inv_max)), expected N=$N",
+            "build_shared_transmission needs corridor_cap > 0, got $corridor_cap",
         ),
     )
+    length(x_inv_max) == N ||
+        throw(ArgumentError("x_inv_max has length $(length(x_inv_max)), expected N=$N"))
     for i in 1:N
-        x_inv_max[i] > 0 || throw(
-            ArgumentError("x_inv_max[$i] must be > 0, got $(x_inv_max[i])"),
-        )
+        x_inv_max[i] > 0 ||
+            throw(ArgumentError("x_inv_max[$i] must be > 0, got $(x_inv_max[i])"))
     end
     length(c_inv) == N ||
         throw(ArgumentError("c_inv has length $(length(c_inv)), expected N=$N"))
     length(c_op) == N ||
         throw(ArgumentError("c_op has length $(length(c_op)), expected N=$N"))
     for i in 1:N
-        length(c_op[i]) == T || throw(
-            ArgumentError(
-                "c_op[$i] has length $(length(c_op[i])), expected T=$T",
-            ),
-        )
+        length(c_op[i]) == T ||
+            throw(ArgumentError("c_op[$i] has length $(length(c_op[i])), expected T=$T"))
     end
 
     model = Model(select_optimizer(LP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
@@ -280,10 +277,13 @@ stays free throughout (already unpinned by [`activate_distributor!`](@ref)).
 Sets ONLY `shared.z[i,:]` via `set_parameter_value.` — NEVER a rebuild,
 NEVER touching `x_inv[i]`'s bounds or any other distributor's row `j != i`.
 
-Throws `ArgumentError` when `i` is out of range or `length(z_i_trial) !=
-shared.T`.
+Throws `ArgumentError` when `i` is out of range or `length(z_i_trial) != shared.T`.
 """
-function update_coupling!(shared::SharedTransmission, i::Int, z_i_trial::AbstractVector{<:Real})
+function update_coupling!(
+    shared::SharedTransmission,
+    i::Int,
+    z_i_trial::AbstractVector{<:Real},
+)
     1 <= i <= shared.N ||
         throw(ArgumentError("update_coupling!: i=$i out of range 1:$(shared.N)"))
     length(z_i_trial) == shared.T || throw(
@@ -303,8 +303,7 @@ end
 Called ONCE by `nash.jl`, AFTER distributor `i`'s atomic best-response
 converges: freezes BOTH distributor `i`'s converged flow
 (`set_parameter_value.(shared.z[i,:], z_i_converged)`) AND its converged
-investment (`set_lower_bound`/`set_upper_bound(shared.x_inv[i],
-x_inv_i_converged)`) at a single point, so the NEXT distributor in the sweep
+investment (`set_lower_bound`/`set_upper_bound(shared.x_inv[i], x_inv_i_converged)`) at a single point, so the NEXT distributor in the sweep
 (or `i` itself, next sweep) reads the true committed state and cannot
 silently move it — this is the correctness argument this file's header
 (the objective-comment on `build_shared_transmission`) requires: without
@@ -312,8 +311,7 @@ this bound-pin, a later-activated distributor could use distributor `i`'s
 uncosted-to-it, still-free `x_inv[i]` headroom to relax the pooled
 `capacity` row for free.
 
-Throws `ArgumentError` when `i` is out of range or `length(z_i_converged) !=
-shared.T`.
+Throws `ArgumentError` when `i` is out of range or `length(z_i_converged) != shared.T`.
 """
 function write_back!(
     shared::SharedTransmission,
@@ -339,8 +337,7 @@ end
 
 Thin per-distributor handle passed as `solve_stackelberg!`'s new `follower`
 argument (plan 13-02): pairs the one shared model with the specific
-distributor `i` whose own row [`solve_follower!`](@ref)`(::DistributorView,
-...)` should drive and read.
+distributor `i` whose own row [`solve_follower!`](@ref)`(::DistributorView, ...)` should drive and read.
 
 # Fields
 
@@ -369,13 +366,11 @@ Two mutually exclusive, exhaustively-checked branches:
     deliberately NOT `objective_value(shared.model)` (which would include
     every OTHER, currently-fixed distributor's constant cost contribution
     and pollute the hand-checkable per-distributor cost/incumbent tracking
-    `solve_stackelberg!`'s CR-01 discipline depends on) — and `π_s =
-    dual.(shared.coupling[i,:])` (length-T, restricted to distributor `i`'s
+    `solve_stackelberg!`'s CR-01 discipline depends on) — and `π_s = dual.(shared.coupling[i,:])` (length-T, restricted to distributor `i`'s
     own rows).
   - INFEASIBLE (`dual_status(shared.model) == MOI.INFEASIBILITY_CERTIFICATE`,
     a GENUINE HiGHS Farkas/dual ray): returns `(; feasible = false, v, u)`
-    where `v = dual_objective_value(shared.model)` and `u =
-    dual.(shared.coupling[i,:])` (restricted to distributor `i`'s own rows
+    where `v = dual_objective_value(shared.model)` and `u = dual.(shared.coupling[i,:])` (restricted to distributor `i`'s own rows
     only) — both ENFORCED `isfinite` AND `v > 0` in production (WR-03/IN-06
     parity with `follower.jl`): a non-finite or non-positive certificate
     raises loudly here instead of poisoning a downstream Benders master's

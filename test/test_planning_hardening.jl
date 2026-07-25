@@ -221,7 +221,8 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
     λ₀ = fill(4.0, T)
-    follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = fill(0.5, T))
+    follower_kwargs =
+        (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = fill(0.5, T))
     master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -50.0, α_x_lb = 0.0)
     tol = 1e-6   # the project's own STANDARD tolerance — no tightening needed at T=8
 

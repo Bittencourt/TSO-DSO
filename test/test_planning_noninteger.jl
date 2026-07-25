@@ -35,7 +35,8 @@
 
     registry = Dict{String, Function}(
         "build_planning_oracle" =>
-            () -> build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = [4.0], T = 1).model,
+            () ->
+                build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = [4.0], T = 1).model,
         "build_follower" =>
             () -> build_follower(;
                 T = 1,
@@ -45,7 +46,13 @@
                 c_op = [0.5],
             ).model,
         "build_master" =>
-            () -> build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0).model,
+            () -> build_master(;
+                T = 1,
+                c_y = 0.3,
+                y_max = 8.0,
+                α_op_lb = -5.0,
+                α_x_lb = 0.0,
+            ).model,
         "build_shared_transmission" =>
             () -> build_shared_transmission(;
                 N = 2,

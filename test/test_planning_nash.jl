@@ -634,14 +634,15 @@ end
     )
     specs = [spec, spec]
 
-    build_shared = () -> build_shared_transmission(;
-        N = 2,
-        T = 1,
-        corridor_cap = 2.0,
-        x_inv_max = [0.3, 0.3],
-        c_inv = [1.0, 1.0],
-        c_op = [[0.5], [0.5]],
-    )
+    build_shared =
+        () -> build_shared_transmission(;
+            N = 2,
+            T = 1,
+            corridor_cap = 2.0,
+            x_inv_max = [0.3, 0.3],
+            c_inv = [1.0, 1.0],
+            c_op = [[0.5], [0.5]],
+        )
 
     # Hand-picked per 13-RESEARCH.md Pattern 4: a cold start, a symmetric-capacity-split
     # guess (the hand-checked equilibrium's own candidate ballpark), and an asymmetric
@@ -687,14 +688,15 @@ end
     )
     specs = [spec, spec, spec]
 
-    build_shared = () -> build_shared_transmission(;
-        N = 3,
-        T = 1,
-        corridor_cap = 2.0,
-        x_inv_max = [0.3, 0.3, 0.3],
-        c_inv = [1.0, 1.0, 1.0],
-        c_op = [[0.5], [0.5], [0.5]],
-    )
+    build_shared =
+        () -> build_shared_transmission(;
+            N = 3,
+            T = 1,
+            corridor_cap = 2.0,
+            x_inv_max = [0.3, 0.3, 0.3],
+            c_inv = [1.0, 1.0, 1.0],
+            c_op = [[0.5], [0.5], [0.5]],
+        )
 
     seeds = (;
         zero = zeros(3, 1),
@@ -734,14 +736,15 @@ end
     )
     specs = [spec, spec]
 
-    build_shared = () -> build_shared_transmission(;
-        N = 2,
-        T = 1,
-        corridor_cap = 2.0,
-        x_inv_max = [0.3, 0.3],
-        c_inv = [1.0, 1.0],
-        c_op = [[0.5], [0.5]],
-    )
+    build_shared =
+        () -> build_shared_transmission(;
+            N = 2,
+            T = 1,
+            corridor_cap = 2.0,
+            x_inv_max = [0.3, 0.3],
+            c_inv = [1.0, 1.0],
+            c_op = [[0.5], [0.5]],
+        )
     seeds = (;
         zero = zeros(2, 1),
         saturating = fill(2.0 * (0.3 + 0.3) / 2, 2, 1),
@@ -778,14 +781,15 @@ end
     )
     specs = [spec, spec]
 
-    build_shared = () -> build_shared_transmission(;
-        N = 2,
-        T = 1,
-        corridor_cap = 2.0,
-        x_inv_max = [0.3, 0.3],
-        c_inv = [1.0, 1.0],
-        c_op = [[0.5], [0.5]],
-    )
+    build_shared =
+        () -> build_shared_transmission(;
+            N = 2,
+            T = 1,
+            corridor_cap = 2.0,
+            x_inv_max = [0.3, 0.3],
+            c_inv = [1.0, 1.0],
+            c_op = [[0.5], [0.5]],
+        )
 
     # Only 2 seeds — violates the >= 3 seeds minimum.
     seeds_too_few = (; zero = zeros(2, 1), skewed = [0.5; 0.1;;])

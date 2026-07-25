@@ -56,6 +56,7 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 
  1. Boundary guards (mirror `solve_admm`): `T >= 1`, `max_iter >= 1`, `length(λ₀) == T`,
     each `ArgumentError` BEFORE any build call.
+
  2. BUILD ONCE, outside the loop: `oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)`,
     `follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower`,
     `master = build_master(; master_kwargs..., T = T)`. No `build_*`/`Model(` call appears
@@ -72,6 +73,7 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
     Supplying BOTH a non-`nothing` `follower` AND a non-empty `follower_kwargs`
     simultaneously is rejected with an `ArgumentError` (ambiguous — which one wins is never
     silently decided).
+
  3. Iterate `k = 1:max_iter`: `lb_res = solve_master!(master)` (the Benders lower bound and
     trial `z_k`); `follower_res = solve_follower!(follower, lb_res.z)` (DIRECT call — never
     `solve_with_retry!`-wrapped, per plan 11-01's follower contract) — the follower's
@@ -79,6 +81,7 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
     (the master's box allows `z` up to `y_max`, beyond `corridor_cap * x_inv_max`) is
     routed to the feasibility-cut branch instead of reaching the oracle, whose
     exactness/complementarity gates can throw at extreme pinned `z`.
+
       + If `!follower_res.feasible`: append a feasibility cut
         (`add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)`),
         checkpoint with `gap = NaN` and `feasible = false`, then `continue` — a
@@ -99,6 +102,7 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
         `gap = (UB - lb_res.LB) / max(1, abs(UB))`; checkpoint with
         `feasible = true`; if `gap <= tol`, return the converged result at the
         INCUMBENT `(y_best, z_best)`.
+
  4. If `max_iter` is exhausted without `gap <= tol`, raise a loud `ErrorException` naming
     the exhausted iteration count and the last observed gap (D-10) — never silently return
     a non-converged result.
@@ -164,12 +168,14 @@ function solve_stackelberg!(
     # plan 13-02: the additive `follower` keyword and `follower_kwargs` are mutually
     # exclusive — supplying both would silently pick one and discard the other; fail
     # loudly instead, before any build call.
-    follower === nothing || isempty(follower_kwargs) || throw(
-        ArgumentError(
-            "solve_stackelberg!: supply either follower_kwargs or follower, not both " *
-            "(got follower=$follower, follower_kwargs=$follower_kwargs)",
-        ),
-    )
+    follower === nothing ||
+        isempty(follower_kwargs) ||
+        throw(
+            ArgumentError(
+                "solve_stackelberg!: supply either follower_kwargs or follower, not both " *
+                "(got follower=$follower, follower_kwargs=$follower_kwargs)",
+            ),
+        )
 
     # ---- BUILD ONCE: the oracle/follower/master subproblems are constructed OUTSIDE the
     # loop. No `build_*`/`Model(` call appears below this point — the loop only re-solves

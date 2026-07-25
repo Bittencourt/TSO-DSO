@@ -111,14 +111,15 @@ end
     )
     specs = [spec, spec]
 
-    build_shared = () -> build_shared_transmission(;
-        N = 2,
-        T = 1,
-        corridor_cap = 2.0,
-        x_inv_max = [0.3, 0.3],
-        c_inv = [1.0, 1.0],
-        c_op = [[0.5], [0.5]],
-    )
+    build_shared =
+        () -> build_shared_transmission(;
+            N = 2,
+            T = 1,
+            corridor_cap = 2.0,
+            x_inv_max = [0.3, 0.3],
+            c_inv = [1.0, 1.0],
+            c_op = [[0.5], [0.5]],
+        )
 
     # Hand-picked per 13-RESEARCH.md Pattern 4 (identical to test_planning_nash.jl's own
     # probe fixture): a cold start, a symmetric-capacity-split guess, and an asymmetric

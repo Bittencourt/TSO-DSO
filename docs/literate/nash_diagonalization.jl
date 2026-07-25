@@ -141,14 +141,15 @@ result.x_inv
 # `run_nash_probe` repeats the SAME fixture from a cold start, a saturating start, and a
 # skewed start, in both `:forward` and `:reverse` sweep order:
 
-build_shared = () -> build_shared_transmission(;
-    N = 2,
-    T = 1,
-    corridor_cap = 2.0,
-    x_inv_max = [0.3, 0.3],
-    c_inv = [1.0, 1.0],
-    c_op = [[0.5], [0.5]],
-)
+build_shared =
+    () -> build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
 seeds = (;
     zero = zeros(2, 1),
     saturating = fill(2.0 * (0.3 + 0.3) / 2, 2, 1),
