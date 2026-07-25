@@ -19,6 +19,30 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
+## Current Milestone: v2.1 Validation & Reproduction
+
+**Goal:** Harden the framework's core correctness claims so every downstream extension — and the
+thesis itself — rests on validated, citable ground. No new research axis; this milestone deepens
+trust in what already exists.
+
+**Target features:**
+- **AC-exactness oracle** — wire Ipopt AC-OPF as an independent nonconvex oracle and certify the SOCP
+  Convex Branch Flow solution matches true AC to tolerance on the radial fixtures (replacing the
+  current toy-point + same-relaxation self-check).
+- **Reactive-power consensus** — implement the μ dual-ascent placeholder (`AgrOpt.jl`) so DERs carry
+  reactive power, restoring voltage/DLMP credibility and enabling a meaningful AC comparison.
+- **Real IEEE-123 impedances** — replace the synthetic representative values in `ieee123.jl` using the
+  public OpenDSS IEEE-123 dataset via PMD-parse + a documented positive-sequence reduction.
+- **Directional thesis reproduction** — reproduce the *structure* of the thesis welfare result (gain
+  sign and rough magnitude) with real, standard data, pinned as goldens; exact-figure reproduction is
+  a stretch goal contingent on obtaining thesis Appendix E.
+
+**Key context / decisions:** Discrete/integer investment, stochastic, MPC/rolling-horizon, and
+meshed+4Q-BESS are deliberately deferred to later thrusts. Exact reproduction of the thesis
++$1,819/+25% headline is *not* a hard requirement — the source Appendix E lives behind an IP-blocked
+CONICET repository, so v2.1 uses public IEEE-123 data + a documented reduction instead (see
+`memory/ieee123-real-impedances-source.md`).
+
 ## Requirements
 
 ### Validated
@@ -49,9 +73,11 @@ correct, validated optimization models that are easy to extend for research.
 
 ### Active
 
-v3.0 requirements not yet defined — run `/gsd:new-milestone` to scope the next milestone
-(candidate axes: discrete/integer investment expansion, stochastic scenarios, MPC/rolling
-horizon, meshed + 4Q-BESS).
+**v2.1 Validation & Reproduction** (requirements defined in `.planning/REQUIREMENTS.md`):
+- AC-exactness certification of the SOCP branch-flow model against an independent Ipopt AC-OPF oracle
+- Reactive-power (μ) consensus in the ADMM operational layer
+- Real IEEE-123 impedances from public OpenDSS data via positive-sequence reduction
+- Directional reproduction of the thesis welfare result on real data (exact-figure = stretch)
 
 ### Out of Scope
 
@@ -215,4 +241,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-24 after v2.0 milestone*
+*Last updated: 2026-07-25 — v2.1 Validation & Reproduction milestone started*
