@@ -1,27 +1,31 @@
 # TSODSO
 
-Walking-skeleton chassis for the **TSO–DSO Integration Optimization Framework** — a
-Julia + JuMP research bench for transactive-energy / dynamic distribution pricing and
-Stackelberg–Nash TSO–DSO investment equilibria.
+The **TSO–DSO Integration Optimization Framework** — a Julia + JuMP research bench for
+transactive-energy / dynamic distribution pricing and Stackelberg–Nash TSO–DSO investment
+equilibria.
 
-Phase 1 stands up the architectural spine: a JuMP-free immutable feeder data model, a
-solver factory keyed on a `ProblemClass` type (no model ever names a concrete solver),
-a solve-status discipline choke point, a per-unit system, and a shared nodal-balance
-residual registry — all proven end-to-end on a toy single-node DC solve.
+Two shipped layers:
+
+- **v1.0 — Operational layer** (rungs 0–5): convex branch-flow social-welfare maximization
+  over a 24h horizon, with the day-ahead dynamic price (DADP/DLMP) emerging as the dual of
+  the nodal active-power balance, solved centrally and by hand-rolled ADMM.
+- **v2.0 — Planning layer** (rungs 6–7): the bilevel TSO–DSO investment game — distributor
+  leaders choosing flexibility investment / import profiles against a transmission-reinforcement
+  follower, solved by hand-rolled Benders decomposition, extended to a multi-distributor Nash
+  equilibrium via Gauss-Seidel diagonalization over a shared transmission corridor.
 
 ## Reproducibility pipeline
 
-The [Rung 0: Toy DC](generated/toy_dc.md) page executes the real `solve_toy_dc`
-during the documentation build, so the documented results cannot drift from the code.
-It is the first proof that every seam connects.
+Every model page below executes its real `src/` entrypoint during the documentation build, so
+every rendered number, price, and equilibrium is a genuine solve — never a placeholder — and the
+documented results cannot drift from the code.
 
 ## Model Documentation
 
-Phase 9 (EXP-03) extends the reproducibility pipeline to every rung of the
-abstraction ladder — each page below executes its real `src/` entrypoint during
-the Documenter build, so every rendered number and price is a genuine solve, never
-a placeholder:
+**Operational layer (v1.0):**
 
+- [Rung 0: Toy DC](generated/toy_dc.md) — the architectural spine proven end-to-end on a
+  toy single-node DC solve.
 - [Rung 1-2: LinDistFlow](generated/lindistflow.md) — the linear branch-flow
   assembly and the residual-seam contract (thesis 3.31-3.33, 3.43).
 - [Rung 3: SOCP + Exactness](generated/convex_branch_flow.md) — the convex
@@ -33,3 +37,25 @@ a placeholder:
 - [Rung 5: ADMM Decomposition](generated/admm.md) — the hand-rolled 2-block
   dual-ascent decomposition, cross-validated against the centralized solve
   (thesis 3.46-3.47).
+
+**Planning layer (v2.0):**
+
+- [Rung 6: Stackelberg–Benders (planning)](generated/stackelberg_benders.md) — the
+  single-distributor leader/follower investment equilibrium: build-once planning oracle with the
+  `p_import == z` coupling pin and its dual `π_s`, the transmission-reinforcement follower LP with
+  genuine Farkas certificates, and the hand-rolled Benders loop — with the interpretive
+  leader/follower choice and coupling-dual sign convention certified 4-ways against BilevelJuMP
+  MPEC reductions.
+- [Rung 7: Nash Diagonalization & Shared Corridor](generated/nash_diagonalization.md) — the
+  multi-distributor game: per-distributor investment ownership over one pooled corridor capacity,
+  `run_nash!` Gauss-Seidel diagonalization with strictly nested inner/outer tolerances, two-level
+  convergence diagnostics, and the multi-seed / multi-order probe that reports "**a** converged
+  equilibrium (spread: …)" — never "the" equilibrium.
+
+## Validation & regression posture
+
+The planning layer ships with permanent regression infrastructure: the BilevelJuMP certification
+case, pinned computed goldens for the canonical N=1 and N=2 fixtures (gated by certification
+agreement and diagonalization convergence respectively), and an automated no-binaries guard that
+fails the test suite if any planning-layer subproblem builder introduces a binary/integer
+variable — enforcing the milestone's continuous-only scope structurally, not by convention.
