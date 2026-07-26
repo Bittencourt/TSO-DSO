@@ -26,3 +26,17 @@
 
 # Third-party copyrighted reference material (thesis/paper/PSR PDFs) — kept local, not redistributed
 /docs/references/
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+
+# Knowledge-graph tooling caches (regenerable via /graphify and /gsd:graphify)
+/graphify-out/
+/.planning/graphs/
+
+# Generated figures (regenerable from scripts/*.jl) — keep results/ for diff-friendly .txt/.csv summaries
+/results/**/*.pdf
+/results/**/*.png
+/results/**/*.svg
+
+# Authored writeups: track the Typst source, ignore the compiled PDF (regenerable via `typst compile`)
+/docs/writeups/*.pdf
