@@ -126,6 +126,66 @@ literate docs pages (Phase 14).
 
 ---
 
+## Milestone: v2.1 — Validation & Reproduction
+
+**Shipped:** 2026-07-26
+**Phases:** 4 | **Plans:** 14 | **Tasks:** 27
+
+### What Was Built
+An independent nonconvex AC-OPF oracle (`ACPowerFlow` + `assert_ac_exact!`) certifying the SOCP
+relaxation per-hour; a certified reactive DLMP component (`reactive_consensus`/`qag_dso`/
+`extract_reactive_dlmp`, byte-identical default path); real positive-sequence IEEE-123 impedances from
+public OpenDSS data via a dependency-free Fortescue parser; and a directional ("directional,
+public-data") thesis reproduction pinned on the DSO-surplus sign flip. Two honest scientific findings:
+the SOCP relaxation is genuinely inexact under high-PV reverse flow (found twice, independently), and
+the thesis +25% welfare magnitude does not transfer to real data (only the sign flip does).
+
+### What Worked
+- **Honest-finding-as-deliverable** is now a first-class pattern: EXACT-04 (SOCP inexactness), IMPED-03
+  (asymmetric voltage-binding), and REPRO (sign-flip-yes / magnitude-no) all shipped a *negative or
+  caveated* result as the deliverable rather than tuning it away — and the three cross-validate each
+  other (all trace to the same overvoltage/exactness knife-edge).
+- **Pipelining planning during execution**: Phase 16/17 planning ran (as background research/plan/check
+  agents) while Phase 15 executed — the whole pipeline stayed busy despite one long Julia execution.
+- **Adversarial plan-check kept paying off**: caught the Phase-15 `docs/src/api.md` `@autodocs` gap that
+  would have failed `checkdocs=:exports` at build time; later phases pre-empted the same trap.
+- **Measurement-before-golden** (Phase 18) prevented pinning a fragile band — the ±2–5% sweep exposed the
+  knife-edge before the golden was set.
+
+### What Was Inefficient
+- **Executor-stall on the long full suite**: Phase 15 and 17 executors launched `Pkg.test()` detached and
+  ended their turn before it finished, leaving VERIFICATION.md unwritten — required manual finalize +
+  a separate goal-backward verifier pass. Fix applied mid-milestone: instruct executors to run the full
+  suite foreground/polled-to-completion (Phase 16/18 did this cleanly).
+- **Waiter self-match bug**: a `pgrep -f "Pkg; Pkg.test"` liveness loop matched its own command line and
+  spun forever; switched to PID-based `kill -0` waits.
+- **Makie precompile** (~13 min) dominated the first full-suite wall clock; subsequent runs were fast
+  (cached) — but it made the first execution look stuck.
+- **Doc-sync drift**: several executors finished the work but didn't tick ROADMAP/REQUIREMENTS checkboxes
+  (Phase 17 especially) — reconciled at milestone close.
+
+### Patterns Established
+- Report-don't-throw certification (`assert_ac_exact!`) for anything that can legitimately find a gap.
+- Pin thesis/economic goldens on sign-safe quantities (surplus sign flip), never ratios of possibly-
+  negative aggregates.
+- Never invoke `@run_package_tests` via `julia -e` (picks up stale sibling worktrees) — use
+  `test/runtests.jl` or explicit-path `run_tests`.
+
+### Key Lessons
+1. A genuine negative/boundary result, honestly framed, is a stronger deliverable than a tuned-green pass —
+   and independent phases hitting the same boundary is corroboration, not coincidence.
+2. Long external processes the harness can't track (detached `Pkg.test()`) must be polled to completion by
+   PID inside the same turn, or the finalize step silently gets skipped.
+
+### Cost Observations
+- Model mix: orchestration on Opus (1M context, main loop); all research/plan/check/execute/verify
+  subagents on Sonnet.
+- Sessions: 1 long background session (plan+execute+verify all four phases, then archive).
+- Notable: pipelining planning during execution hid most of the one long (~80 min) Julia execution;
+  full-suite wall clock ~13 min first run (Makie precompile), ~3–5 min cached thereafter.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -134,6 +194,7 @@ literate docs pages (Phase 14).
 |-----------|--------|------------|
 | v1.0 | 9 | Established the GSD abstraction-ladder + residual-seam workflow; introduced VALIDATION.md (Nyquist) in Phase 9 |
 | v2.0 | 5 | Autonomous phase pipeline (smart discuss → plan → parallel worktree execute → review/fix loop → verify); certify-before-build for ambiguous game semantics; execution-based (not read-only) verification |
+| v2.1 | 4 | Fully background autonomous run (plan+execute+verify all 4 phases in one session); pipelined planning during execution; honest-finding-as-deliverable; manual verifier finalize when executors stalled on the long suite |
 
 ### Cumulative Quality
 
@@ -141,6 +202,7 @@ literate docs pages (Phase 14).
 |-----------|-------|---------------------|-------|
 | v1.0 | 1946 pass / 0 fail | 2 | 2 broken = non-failing thesis-figure cross-checks; docs build green |
 | v2.0 | 2276 pass / 0 fail* | 3 | 3 broken = CairoMakie-weakdep skips; *1 local-only Aqua failure from user-local uncommitted Project.toml drift (committed state clean); docs build green incl. 2 new planning pages |
+| v2.1 | 2348 pass / 2 fail* | 3 | *2 fail = pre-existing user-local CairoMakie/Makie Project.toml drift (Aqua stale-deps + persistent-tasks), not regressions; +72 tests over v2.0; docs build green incl. 3 new pages (ac_oracle, ieee123_impedances, thesis_reproduction ×2) |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -148,3 +210,5 @@ literate docs pages (Phase 14).
 2. (v1.0) Pin computed goldens + keep literature numbers as non-failing cross-checks when inputs aren't reproducible.
 3. (v1.0→v2.0, confirmed) Adversarial re-review after fixes keeps catching what executor self-checks miss — in v2.0 it caught a structurally-vacuous gating probe (CR-01) and a wrong docs equivalence claim.
 4. (v2.0) Green tests don't prove a mechanism is live — pair every gate with a liveness regression that varies only the gated dimension.
+5. (v2.1) An honestly-framed negative/boundary result is a stronger deliverable than a tuned-green pass — and independent phases hitting the same boundary (SOCP overvoltage inexactness on IEEE-13 and real IEEE-123) is corroboration.
+6. (v2.1) Pin economic goldens on sign-safe quantities (surplus sign flip), never ratios of possibly-negative aggregates — and poll detached long-running processes to completion by PID within the turn, or the finalize step silently gets skipped.

@@ -4,126 +4,14 @@
 
 - ✅ **v1.0 Operational Transactive-Energy Core** — Phases 1–9 (shipped 2026-07-20)
 - ✅ **v2.0 Stackelberg-Nash TSO–DSO Planning Game** — Phases 10–14 (shipped 2026-07-24)
-- 🧪 **v2.1 Validation & Reproduction** — Phases 15–18 (all complete + verified 2026-07-26; pending user review, not yet archived)
+- ✅ **v2.1 Validation & Reproduction** — Phases 15–18 (shipped 2026-07-26)
 
 Full phase details, decisions, and per-phase artifacts for shipped milestones are archived in
-[`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md) and
-[`milestones/v2.0-ROADMAP.md`](milestones/v2.0-ROADMAP.md).
+[`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md),
+[`milestones/v2.0-ROADMAP.md`](milestones/v2.0-ROADMAP.md), and
+[`milestones/v2.1-ROADMAP.md`](milestones/v2.1-ROADMAP.md).
 
 ## Phases
-
-- [x] **Phase 15: AC-Exactness Oracle** - Certify the SOCP branch-flow relaxation against an independent nonconvex AC-OPF oracle, allowing a genuine inexactness to surface as a documented finding
-- [x] **Phase 16: Reactive-Power (μ) Consensus** - DSO-OPT enforces a genuine per-node reactive balance and yields a citable reactive nodal price, without regressing the active-only ADMM path
-- [x] **Phase 17: Real IEEE-123 Impedances** - Replace synthetic IEEE-123 impedances with real, positive-sequence values reduced from public OpenDSS data
-- [x] **Phase 18: Directional Thesis Reproduction** - Reproduce the sign and magnitude-band of the thesis welfare result on real data, framed as directional/public-data
-
-## Phase Details
-
-### Phase 15: AC-Exactness Oracle
-**Goal**: A researcher can certify that the SOCP Convex Branch Flow relaxation matches true nonconvex
-AC-OPF to a documented tolerance on radial fixtures — replacing today's toy-point + same-relaxation
-self-check with an independent oracle — and a genuine relaxation gap (if one exists under high-PV
-reverse flow) surfaces as a first-class, citable finding rather than a tuned-away test failure.
-**Depends on**: Nothing (independent of Phases 16–18; builds on v1.0's `powerflow/` and `models/` seams)
-**Requirements**: EXACT-01, EXACT-02, EXACT-03, EXACT-04
-**Success Criteria** (what must be TRUE):
-  1. Researcher can solve a true nonconvex AC-OPF via a new `ACPowerFlow <: AbstractPowerFlow` peer
-     subtype (Ipopt, nonconvex SOC equality) at the *same* loads/PV operating point as an existing
-     SOCP solve, dispatched through the existing `solve_welfare` entrypoint unchanged.
-  2. `assert_ac_exact!` (peer to `assert_socp_exact!`) reports objective gap, max voltage deviation,
-     and max branch-flow deviation using a scale-free `atol + rtol·magnitude` tolerance.
-  3. The exactness check reports **per-hour/per-scenario** gaps in a table, never a single pass/fail
-     boolean, so a genuine gap is investigated (reverse-flow/voltage-binding state) before any
-     tolerance is touched.
-  4. A high-PV/reverse-flow stress fixture exercises the exactness boundary, and the result — exact
-     or genuinely inexact — is documented in a literate rung page beside the thesis equations.
-**Plans**: 3 plans
-
-Plans:
-- [x] 15-01-PLAN.md — ACPowerFlow peer formulation + wiring + BLOCKING 2-bus angle-recovery gate (EXACT-01)
-- [x] 15-02-PLAN.md — assert_ac_exact! per-hour report, report-don't-throw contract (EXACT-02, EXACT-03)
-- [x] 15-03-PLAN.md — high-PV stress fixture + literate rung page (EXACT-04)
-
-### Phase 16: Reactive-Power (μ) Consensus
-**Goal**: The ADMM operational layer carries a genuine reactive-power balance and a citable reactive
-nodal price, closing the `AgrOpt.jl` placeholder, without regressing the already-shipped,
-cross-validated active-only ADMM path.
-**Depends on**: Nothing code-wise (touches only `src/admm/`, independent of Phase 15's `powerflow/`+
-`models/` files); sequenced second because it is the most invasive change to an already-shipped path —
-its goldens must be re-validated before Phases 17–18 build on top of it.
-**Requirements**: REACT-01, REACT-02, REACT-03
-**Success Criteria** (what must be TRUE):
-  1. The `mu` naming collision (new reactive dual vs. the existing adaptive-ρ scalar `mu::Real=10.0`
-     in `Scenario`'s golden-hash schema) is resolved — a distinct code identifier chosen and every
-     existing `mu` usage grepped — *before* any `AgrOpt`/`DsoOpt` code changes land.
-  2. With the new `reactive_consensus::Bool=false` kwarg at its default, the existing active-only
-     ADMM path is byte-identical to pre-milestone behavior (pinned goldens pass unchanged).
-  3. With `reactive_consensus=true`, DSO-OPT's per-node reactive-power balance is a genuine equality
-     constraint (replacing the free reactive-import slack) in both the centralized and ADMM solves.
-  4. A reactive nodal price (dual of the reactive balance) is extracted and appears as a documented,
-     citable 5th component in the DLMP decomposition (`pricing/dlmp.jl`).
-**Plans**: 4 plans
-
-Plans:
-- [x] 16-01-PLAN.md — mu/mu naming-collision grep-audit (BLOCKING) + RED @testitem harness (test_admm_reactive.jl)
-- [x] 16-02-PLAN.md — qag_dso coupling variable + reactive_consensus kwarg + :balance_q assert_no_slack certificate
-- [x] 16-03-PLAN.md — extract_reactive_dlmp + decompose_dlmp reactive field + 2-bus reactive-price pin
-- [x] 16-04-PLAN.md — Clarabel flake-rate re-measurement (IEEE-13/123, N>=20) + rho/rho_q finding
-
-### Phase 17: Real IEEE-123 Impedances
-**Goal**: `ieee123.jl`'s topology is driven by real, standard, citable positive-sequence impedances
-reduced from the public OpenDSS IEEE-123 dataset, and the case remains meaningful (voltage-binding)
-for its intended purpose.
-**Depends on**: Nothing code-wise (touches only `scripts/` + `src/data/`); its own *validation*
-benefits from Phase 15's AC-exactness oracle and Phase 16's reactive pricing being available to
-certify the real-data case, but does not require them to build.
-**Requirements**: IMPED-01, IMPED-02, IMPED-03
-**Success Criteria** (what must be TRUE):
-  1. An offline, reproducible script parses the public OpenDSS IEEE-123 case
-     (`IEEE123Master.dss` + `IEEELineCodes.DSS`) and reduces 3-phase line-code matrices to
-     positive-sequence R1/X1 per segment via a documented Fortescue-averaging reduction, with PMD
-     kept out of `Project.toml`'s runtime `[deps]` (weakdep + extension or throwaway env only).
-  2. `ieee123.jl` consumes the committed real positive-sequence impedances as a pure-data `const`
-     table in place of synthetic values (topology untouched), with reduction assumptions and
-     caveats (transposition, single-phase laterals, regulators/caps/switches handling) documented.
-  3. The real-impedance IEEE-123 case is verified to remain meaningful for its purpose
-     (voltage-binding) — PV/aggregator population re-tuned and documented if required to restore it.
-  4. Prior synthetic-fixture goldens are preserved as an independent parallel regression, or
-     consciously re-pinned with an explicit before/after invariant-comparison rationale (voltage
-     binding, exactness margin, iteration count).
-**Plans**: 4 plans
-
-Plans:
-- [x] 17-01-PLAN.md — vendor OpenDSS .dss fixtures + dependency-free regex parser + Fortescue reduction --verify self-check (IMPED-01)
-- [x] 17-02-PLAN.md — generate committed per-segment Ω const table + swap ieee123.jl ingestion + test_ieee123.jl spot-check (IMPED-02)
-- [ ] 17-03-PLAN.md — numeric voltage-binding @testitem + ADMM behavioral-bound re-verification + population re-tune if needed (IMPED-03)
-- [ ] 17-04-PLAN.md — literate reduction doc page + docs/make.jl registration (IMPED-01, IMPED-02)
-
-### Phase 18: Directional Thesis Reproduction
-**Goal**: A defensible, literate reproduction of the *direction and magnitude-band* of the thesis
-welfare/surplus result on real, public data — explicitly framed as "directional, public-data,"
-never an exact-figure claim.
-**Depends on**: Phase 16 (reactive pricing needed for voltage/DLMP credibility) and Phase 17 (real
-impedances) — strictly; the thesis's voltage-driven Case B result is not credible on synthetic
-impedances or without priced reactive power. Optionally consumes Phase 15's AC-certification badge.
-**Requirements**: REPRO-01, REPRO-02
-**Success Criteria** (what must be TRUE):
-  1. A literate rung/doc page (promoted from `scripts/thesis_caseA.jl`) plus a gate-then-golden test
-     reproduces the sign and a pinned magnitude-band of the thesis welfare/surplus result on real
-     IEEE-123 data with reactive pricing and real impedances both active — never a point value.
-  2. Every citation of the reproduction number carries the fixed "directional, public-data"
-     qualifier phrase.
-  3. A consolidated assumptions/reduction doc page enumerates the full chain that produces the
-     reported numbers (units resolution, reduction fidelity, component omissions, aggregator
-     population, PV scenario).
-  4. Repeated-run stability is checked and documented *before* the golden band is pinned, guarding
-     against pinning transient Clarabel numerical noise as a permanent regression.
-**Plans**: 3 plans
-
-Plans:
-- [x] 18-01-PLAN.md — repro_stability_check.jl: N>=20 flake-rate + ±2-5% population-scale sensitivity sweep, committed findings.txt (REPRO-02, BLOCKING before golden is pinned)
-- [x] 18-02-PLAN.md — test/test_thesis_repro.jl: gate-then-golden DSO-surplus sign-flip + band on real-impedance IEEE-123, IEEE-13 secondary cross-check (REPRO-01)
-- [x] 18-03-PLAN.md — scripts/thesis_case123_repro.jl promoted to 2 literate pages (reproduction + assumptions) + docs/make.jl registration (REPRO-01, REPRO-02)
 
 <details>
 <summary>✅ v1.0 Operational Transactive-Energy Core (Phases 1–9) — SHIPPED 2026-07-20</summary>
@@ -166,20 +54,40 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 
 </details>
 
+<details>
+<summary>✅ v2.1 Validation & Reproduction (Phases 15–18) — SHIPPED 2026-07-26</summary>
+
+- [x] Phase 15: AC-Exactness Oracle (3/3 plans) — completed 2026-07-26
+- [x] Phase 16: Reactive-Power (μ) Consensus (4/4 plans) — completed 2026-07-26
+- [x] Phase 17: Real IEEE-123 Impedances (4/4 plans) — completed 2026-07-26
+- [x] Phase 18: Directional Thesis Reproduction (3/3 plans) — completed 2026-07-26
+
+Delivered: the framework's validation & reproduction layer — an independent nonconvex AC-OPF oracle
+(`ACPowerFlow` + `assert_ac_exact!`, Ipopt, true equality `l·v==P²+Q²`) that certifies the SOCP
+relaxation per-hour and surfaces a **genuine high-PV/reverse-flow inexactness as a first-class citable
+finding** (`pv_scale=1.2`, gap≈10.4) rather than tuning it away; a genuine reactive-power balance with a
+**certified, citable reactive DLMP component** (`reactive_consensus` flag + `qag_dso` pinned coupling +
+`assert_no_slack` on `:balance_q`, byte-identical default path); **real positive-sequence IEEE-123
+impedances** reduced from public OpenDSS data via a dependency-free Fortescue parser (PMD kept out of
+runtime `[deps]`), with an honest **asymmetric voltage-binding** finding (lower band transfers, upper
+overvoltage band sits on the SOCP-inexactness knife-edge); and a defensible **directional, public-data**
+thesis reproduction — the **DSO-surplus sign flip reproduces** (FIT −196.22 → DADP +3.73, prosumer
+decreases) while the **+25% welfare magnitude does NOT** (~+0.045%), stated plainly, with a
+measurement-before-golden stability harness. Audit: 12/12 requirements, 6/6 integration seams. 2348
+tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` drift, not regressions).
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–9 (archived) | v1.0 | 43/43 | Complete | 2026-07-20 |
-| 10. Oracle Coupling Wiring & Resilience | v2.0 | 2/2 | Complete | 2026-07-22 |
-| 11. Single-Distributor Stackelberg-Benders (Certified) | v2.0 | 3/3 | Complete | 2026-07-22 |
-| 12. Cut-Store & Benders Master Robustness Hardening | v2.0 | 2/2 | Complete | 2026-07-23 |
-| 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 3/3 | Complete | 2026-07-24 |
-| 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 3/3 | Complete | 2026-07-24 |
-| 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
-| 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete    | 2026-07-26 |
-| 17. Real IEEE-123 Impedances | v2.1 | 4/4 | Complete   | 2026-07-26 |
-| 18. Directional Thesis Reproduction | v2.1 | 3/3 | Complete    | 2026-07-26 |
+| 10–14 (archived) | v2.0 | 13/13 | Complete | 2026-07-24 |
+| 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete | 2026-07-26 |
+| 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete | 2026-07-26 |
+| 17. Real IEEE-123 Impedances | v2.1 | 4/4 | Complete | 2026-07-26 |
+| 18. Directional Thesis Reproduction | v2.1 | 3/3 | Complete | 2026-07-26 |
 
 ## Deferred / Future-Milestone Notes
 
@@ -194,8 +102,13 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
   thesis A3 (DERs are active-only).
 - **Exact-figure thesis reproduction** (`REPRO-STRETCH-01`, the +$1,819/+25% headline): deferred,
   contingent on obtaining thesis Appendix E (currently behind an IP-blocked CONICET repository).
-  v2.1's Phase 18 commits only to a directional (sign + band) reproduction.
-- **Deferred tech debt**: see `milestones/v1.0-MILESTONE-AUDIT.md` and
-  `milestones/v2.0-MILESTONE-AUDIT.md` (Info-severity review findings, user-local
-  Project.toml/Manifest CairoMakie drift, Clarabel NUMERICAL_ERROR root cause).
-</content>
+  v2.1's Phase 18 delivered only a directional (sign + band) reproduction — and found the +25%
+  welfare magnitude does not transfer to real public data (only the DSO-surplus sign flip does).
+- **v2.1 overvoltage / SOCP-exactness knife-edge**: on real IEEE-123 impedances the upper voltage
+  band (PV overvoltage, the thesis's voltage-driven regime) cannot be pushed toward ~1.05 while the
+  SOCP relaxation stays exact — any future work needing that regime must use Phase 15's AC oracle
+  or a different relaxation. See `milestones/v2.1-MILESTONE-AUDIT.md`.
+- **Deferred tech debt**: see `milestones/v1.0-MILESTONE-AUDIT.md`, `milestones/v2.0-MILESTONE-AUDIT.md`,
+  and `milestones/v2.1-MILESTONE-AUDIT.md` (unflipped Nyquist flags, ROADMAP "reactive pricing"
+  wording, the `julia -e '@run_package_tests'` sibling-worktree gotcha, user-local Project.toml/Manifest
+  CairoMakie drift, Clarabel NUMERICAL_ERROR root cause).

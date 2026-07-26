@@ -19,29 +19,44 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
-## Current Milestone: v2.1 Validation & Reproduction
+## Current Milestone: (next not yet scoped)
 
-**Goal:** Harden the framework's core correctness claims so every downstream extension — and the
-thesis itself — rests on validated, citable ground. No new research axis; this milestone deepens
-trust in what already exists.
+v2.1 shipped 2026-07-26. Next milestone not yet scoped — run `/gsd:new-milestone` to define it
+(candidate thrusts in Deferred Notes / research axes below: overvoltage-capable relaxation, stochastic,
+MPC/RTP, meshed+4Q-BESS, exact-figure reproduction if thesis App. E is obtained).
 
-**Target features:**
-- **AC-exactness oracle** — wire Ipopt AC-OPF as an independent nonconvex oracle and certify the SOCP
-  Convex Branch Flow solution matches true AC to tolerance on the radial fixtures (replacing the
-  current toy-point + same-relaxation self-check).
-- **Reactive-power consensus** — implement the μ dual-ascent placeholder (`AgrOpt.jl`) so DERs carry
-  reactive power, restoring voltage/DLMP credibility and enabling a meaningful AC comparison.
-- **Real IEEE-123 impedances** — replace the synthetic representative values in `ieee123.jl` using the
-  public OpenDSS IEEE-123 dataset via PMD-parse + a documented positive-sequence reduction.
-- **Directional thesis reproduction** — reproduce the *structure* of the thesis welfare result (gain
-  sign and rough magnitude) with real, standard data, pinned as goldens; exact-figure reproduction is
-  a stretch goal contingent on obtaining thesis Appendix E.
+## Shipped Milestone: v2.1 Validation & Reproduction (2026-07-26)
 
-**Key context / decisions:** Discrete/integer investment, stochastic, MPC/rolling-horizon, and
-meshed+4Q-BESS are deliberately deferred to later thrusts. Exact reproduction of the thesis
-+$1,819/+25% headline is *not* a hard requirement — the source Appendix E lives behind an IP-blocked
-CONICET repository, so v2.1 uses public IEEE-123 data + a documented reduction instead (see
-`memory/ieee123-real-impedances-source.md`).
+**Shipped 2026-07-26** — 4 phases, 14 plans, 27 tasks. Audit passed **12/12 requirements, 6/6
+integration seams**; 2348 tests pass (the only 2 failures are pre-existing Aqua/CairoMakie
+`Project.toml` drift, not regressions). Goal: harden the framework's core correctness claims so every
+downstream extension — and the thesis itself — rests on validated, citable ground. No new research axis.
+
+**Delivered:**
+- **AC-exactness oracle** — `ACPowerFlow <: AbstractPowerFlow` (Ipopt, true nonconvex equality
+  `l·v==P²+Q²`) dispatched through the unchanged `solve_welfare`; `assert_ac_exact!` certifies the SOCP
+  solution per-hour (report-don't-throw); `recover_voltage_angles` (Baran–Wu BFS) validated on a 2-bus
+  closed form.
+- **Reactive-power consensus** — `reactive_consensus::Bool=false` kwarg (default byte-identical);
+  `qag_dso` pinned coupling variable; `assert_no_slack` certificate on `:balance_q`; `extract_reactive_dlmp`
+  adds a certified, citable reactive component to the DLMP decomposition (never summed into the active total).
+- **Real IEEE-123 impedances** — dependency-free OpenDSS regex parser + Fortescue positive-sequence
+  reduction (PMD kept out of runtime `[deps]`); real per-segment `const` table; topology untouched.
+- **Directional thesis reproduction** — gate-then-golden on the DSO-surplus sign flip + two live literate
+  pages, framed "directional, public-data," with a measurement-before-golden stability harness.
+
+**Two headline scientific findings (both honest, both cross-cutting):**
+1. **The radial SOCP relaxation is genuinely INEXACT under high-PV reverse flow** — found by the AC
+   oracle on IEEE-13 (`pv_scale=1.2`, gap≈10.4, voltage pinned at V²max) and independently re-hit on
+   real IEEE-123 (upper/overvoltage band cannot reach ~1.05 while exact). Surfaced as a citable finding,
+   not tuned away.
+2. **Thesis reproduction is DIRECTIONAL only** — the DSO-surplus sign flip reproduces on real public
+   data (FIT −196.22 → DADP +3.73; prosumer surplus decreases), but the headline +25% welfare magnitude
+   does **not** (~+0.045%), and the sign flip is knife-edge-fragile (fails a ±2–5% population sweep).
+   The exact +$1,819/+25% figure remains deferred (needs thesis App. E).
+
+See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
+`memory/v2.1-socp-inexactness-and-thesis-repro.md`.
 
 ## Requirements
 
@@ -70,14 +85,19 @@ CONICET repository, so v2.1 uses public IEEE-123 data + a documented reduction i
       multi-seed/multi-order `run_nash_probe` honesty gate) (NASH-01..04) — v2.0
 - ✓ Planning-layer permanent regressions: pinned computed goldens, no-binaries guard + tripwire,
       literate planning docs (Rung 6/7) (PVAL-02..04) — v2.0
+- ✓ AC-exactness certification vs. an independent Ipopt AC-OPF oracle (`ACPowerFlow`, `assert_ac_exact!`
+      per-hour report) — found + documented a genuine high-PV/reverse-flow SOCP inexactness (EXACT-01..04) — v2.1
+- ✓ Reactive-power (μ) consensus: certified, citable reactive DLMP component off `:balance_q`, with a
+      byte-identical default path (`reactive_consensus`, `qag_dso`, `extract_reactive_dlmp`) (REACT-01..03) — v2.1
+- ✓ Real IEEE-123 impedances from public OpenDSS data via a dependency-free Fortescue reduction (no PMD
+      runtime dep); honest asymmetric voltage-binding characterization (IMPED-01..03) — v2.1
+- ✓ Directional ("directional, public-data") thesis reproduction — DSO-surplus sign flip reproduces on
+      real data; the +25% welfare-ratio magnitude does not (REPRO-01..02) — v2.1
 
 ### Active
 
-**v2.1 Validation & Reproduction** (requirements defined in `.planning/REQUIREMENTS.md`):
-- AC-exactness certification of the SOCP branch-flow model against an independent Ipopt AC-OPF oracle
-- Reactive-power (μ) consensus in the ADMM operational layer
-- Real IEEE-123 impedances from public OpenDSS data via positive-sequence reduction
-- Directional reproduction of the thesis welfare result on real data (exact-figure = stretch)
+*(Next milestone not yet scoped — run `/gsd:new-milestone`. Deferred/candidate thrusts are in the
+Deferred Notes below and the research axes under Context.)*
 
 ### Out of Scope
 
@@ -222,6 +242,10 @@ flow; linking price = interconnection dual ≈ DLMP.
 | **Continuous-only planning scope**, enforced by an automated no-binaries guard | Convex Benders masters first; integer expansion deferred until Lagrangian/integer-L-shaped cuts milestone | ✓ Good — PVAL-04 guard + tripwire negative-tested; lift consciously when the integer milestone opens |
 | **Fresh cut store per Nash best-response** (no cut reuse across sweeps) | Cuts computed at old z_{-i} are generally invalid once neighbors move; correctness-first | ✓ Good — rebuild cost instrumented in trace; cut-reuse deferred until a validity argument exists |
 | **"A converged equilibrium" reporting language** (never "the equilibrium"), encoded in code | Diagonalization has no uniqueness guarantee; honesty gate is structural, not prose convention | ✓ Good — run_nash_probe multi-seed/multi-order spread reporting; carried into Rung 7 docs |
+| **AC oracle is a genuinely independent nonconvex peer** (`ACPowerFlow`, true equality `l·v==P²+Q²`), and `assert_ac_exact!` **reports per-hour, never throws** on a numeric gap | An oracle that re-solved the same relaxed cone would prove nothing; a genuine inexactness is the milestone's most valuable finding, not a defect to suppress | ✓ Good — v2.1; the high-PV SOCP inexactness surfaced as a citable finding (EXACT-04), reproduced again on real IEEE-123 |
+| **Reactive dual read "for free" off a certified `:balance_q`** — no live μ dual-ascent loop | Thesis A3 makes DERs active-only, so `qag_dso` is a fixed constant; a one-shot certified dual suffices and avoids over-building | ✓ Good — v2.1; `assert_no_slack` gate makes the reactive DLMP trustworthy; `Scenario.jl` golden-hash untouched |
+| **Real IEEE-123 impedances via a dependency-free regex parser** (PMD dropped entirely, not weakdep) | The `.dss` files are simple; a ~50-line parser satisfies "PMD out of runtime deps" trivially and is more reproducible | ✓ Good — v2.1; zero new deps; linecode.1 sanity-pinned (R1≈0.05797) |
+| **Thesis golden pinned on the DSO-surplus SIGN FLIP, not the welfare ratio** | The aggregate `welfare_dadp/welfare_fit` ratio sign-inverts on negative welfare; the surplus sign flip is the thesis's own framing and is sign-safe | ✓ Good — v2.1; honest directional-only result — +25% magnitude does not transfer (~+0.045%), stated plainly |
 
 ## Evolution
 
@@ -241,4 +265,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-25 — v2.1 Validation & Reproduction milestone started*
+*Last updated: 2026-07-26 — after v2.1 Validation & Reproduction milestone (shipped)*

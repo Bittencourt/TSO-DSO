@@ -66,5 +66,8 @@
   "features": {},
   "resolve_model_ids": "omit",
   "mode": "interactive",
-  "granularity": "fine"
+  "granularity": "fine",
+  "graphify": {
+    "enabled": true
+  }
 }

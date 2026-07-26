@@ -1,5 +1,26 @@
 # Milestones
 
+## v2.1 Validation & Reproduction (Shipped: 2026-07-26)
+
+**Phases completed:** 4 phases, 14 plans, 27 tasks
+
+**Key accomplishments:**
+
+- ACPowerFlow — a genuinely independent nonconvex AC-OPF peer (true equality l·v==P²+Q² via Ipopt) dispatched through the unchanged solve_welfare, plus recover_voltage_angles validated against a hand-derived 2-bus closed-form phasor
+- assert_ac_exact! certifies the SOCP relaxation against the AC oracle per-hour on objective/voltage/branch-flow gaps using the scale-free atol+rtol·magnitude idiom, returning an inspectable Vector{NamedTuple} report and throwing ONLY on a structural T mismatch — never on a genuine numeric gap
+- At pv_scale=1.2 the SOC relaxation goes GENUINELY INEXACT over the high-PV afternoon window (voltage pinned at V²max, reverse flow), surfaced by assert_ac_exact! as a positive 10-inexact-hour finding, guarded against a local-optimum artifact by a two-start Ipopt comparison, and documented in a live-executed literate rung page citing Farivar & Low (2013) / Gan et al. (2015)
+- Re-confirmed the mu/mu/MU naming-collision grep-audit live against the current tree, pinned three distinct reactive-power identifiers (qag_dso / reactive / mu_q), and scaffolded a 3-item RED @testitem harness (test/test_admm_reactive.jl) pinning the REACT-01/02/03 contract for plans 16-02/16-03 to turn green.
+- Promoted the ADMM `DSO-OPT`'s per-load-node reactive draw from a hand-summed `Float64` constant to a genuine, pinned JuMP coupling variable `qag_dso[j,t]`, gated behind a `reactive_consensus::Bool=false` kwarg (default preserves today's behavior byte-for-byte), and added the `assert_no_slack` certificate on `:balance_q` so its dual becomes trustworthy/publishable whenever the flag is on.
+- Added `extract_reactive_dlmp` (mirroring `extract_dlmp`'s shape/PF-04 gate exactly) and a new `reactive` field on `decompose_dlmp`'s NamedTuple, reading the dual of the now-certified `:balance_q` (Plan 16-02) as a documented, citable 5th DLMP component that is never summed into the existing 4-term active-price total.
+- Measured the Clarabel NUMERICAL_ERROR-class flake rate of `solve_admm` under `reactive_consensus ∈ {false, true}` on IEEE-13 (N=20: 55% false / 15% true) and IEEE-123 (N=20: 5% false / 5% true), and recorded the rho vs rho_q (Open Question 1) finding grounded in Plan 16-02's hard-equality-pinned `qag_dso` mechanism.
+- Task 1 — Vendored upstream OpenDSS fixture files
+- Does the IEEE-123 case remain voltage-binding once real impedances replace the synthetic uniform R=0.005/X=0.0025?
+- Measured (not assumed) that the thesis-mirroring DSO-surplus sign flip holds at the exact Phase-17-retuned IEEE-123 population point but breaks down under any ±2-5% population-scale perturbation, because the SOCP-exactness gate itself throws near that boundary — an honest negative robustness result that Plan 18-02's golden band and Plan 18-03's assumptions page must both carry forward.
+- Wrote and green-lit `test/test_thesis_repro.jl`'s primary IEEE-123 real-impedance `@testitem` (5 hard gates: SOCP exactness, DADP DSO-surplus > 0, FIT DSO-surplus < 0, prosumer surplus decrease, and the DSO-surplus magnitude pinned in [0.0, 5.58855710237937] sourced verbatim from Plan 18-01's committed findings) plus a secondary non-gated IEEE-13 qualitative cross-check — full suite gained exactly the 6 new test items with zero new failures.
+- Promoted the phase's IEEE-123 real-impedance DADP-vs-FIT reproduction to a live-executed Documenter/Literate page (numbers cross-checked bit-for-bit against Plan 18-01's committed findings: DADP dso=+3.725705, FIT dso=-196.216447) and wrote a consolidated assumptions/reduction page that states plainly, without softening, that the thesis's +25% welfare-ratio magnitude does not transfer to real public data while the DSO-surplus sign flip does — completing ROADMAP Phase 18 success criteria 1-3.
+
+---
+
 ## v2.0 Stackelberg-Nash TSO-DSO Planning Game (Shipped: 2026-07-24)
 
 **Phases completed:** 5 phases, 13 plans, 25 tasks

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
-status: milestone_complete
-stopped_at: Milestone complete (Phase 18 was final phase)
-last_updated: 2026-07-26T11:06:14.986Z
-last_activity: 2026-07-26
+status: Awaiting next milestone
+stopped_at: Phase 18 complete -- all 3 plans (18-01, 18-02, 18-03) executed; v2.1 Validation & Reproduction milestone target features all delivered.
+last_updated: "2026-07-26T14:08:50.738Z"
+last_activity: 2026-07-26 — Milestone v2.1 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 18
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-07-26
+Phase: Milestone v2.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-26 — Milestone v2.1 completed and archived
 
 ## Performance Metrics
 
@@ -204,6 +204,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Review/approve the v2.1 roadmap (Phases 15-18), then start with `/gsd:plan-phase 15`
-
-</content>
+- Start the next milestone with /gsd-new-milestone
