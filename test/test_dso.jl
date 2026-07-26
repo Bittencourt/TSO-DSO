@@ -14,6 +14,12 @@
 #   solve_dso!(dso, λ, a, ρ; check_exact) -> (; pag_dso, p_import, exact_maxgap)
 #     updates ONLY the linear coefficient of each `pag[j,t]` (set_objective_coefficient) and,
 #     on convergence (check_exact=true), runs the PF-04 exactness gate.
+#
+#   build_dso_opt(feeder, aggregators, T; ρ, λ₀, reactive_consensus::Bool = false) (Phase 16,
+#     REACT-01): at the DEFAULT `false`, byte-identical to today (no `ctx.meta[:qag_dso]` key).
+#     At `true`, promotes the per-load-node CONSTANT reactive draw to a genuine, PINNED JuMP
+#     coupling variable `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`, shape
+#     `(length(load_nodes), T)`); `:balance_q` remains registered either way.
 
 @testitem "dso: build_dso_opt builds whole-network SOCP, reuses ConvexBranchFlow (2-bus)" setup =
     [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
@@ -298,4 +304,44 @@ end
             rtol = 1e-5,
         )
     end
+end
+
+@testitem "dso: reactive_consensus=true pins qag_dso coupling variable, zero-price primal-equivalent to default (reactive)" setup =
+    [Phase6Fixtures, Phase4Fixtures] tags = [:dso, :reactive] begin
+    using TSODSO
+    using JuMP
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    # DEFAULT path: no qag_dso stashed (REACT-03 non-regression, re-pinned here too).
+    dso_default = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+    @test !haskey(dso_default.ctx.meta, :qag_dso)
+
+    # reactive_consensus = true: genuine pinned coupling variable, right shape, :balance_q intact.
+    dso_reactive = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true)
+    @test haskey(dso_reactive.ctx.meta, :qag_dso)
+    qag_dso = dso_reactive.ctx.meta[:qag_dso]
+    @test size(qag_dso) == (length(dso_reactive.load_nodes), Th)
+    @test haskey(dso_reactive.ctx.constraints, :balance_q)
+
+    # Zero-price solve on BOTH: the pin makes reactive_consensus=true physically EQUIVALENT to
+    # the default path (proof the pin serves the true reactive demand exactly, not approximately).
+    assert_solved!(dso_default.model; dual = true)
+    assert_solved!(dso_reactive.model; dual = true)
+    @test isapprox(
+        objective_value(dso_default.model),
+        objective_value(dso_reactive.model);
+        atol = 1e-8,
+    )
+    q_import_default = dso_default.ctx.meta[:q_import]
+    q_import_reactive = dso_reactive.ctx.meta[:q_import]
+    @test isapprox(
+        Float64[value(q_import_default[t]) for t in 1:Th],
+        Float64[value(q_import_reactive[t]) for t in 1:Th];
+        atol = 1e-8,
+    )
 end
