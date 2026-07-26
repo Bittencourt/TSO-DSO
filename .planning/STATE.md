@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
 status: executing
-stopped_at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
-last_updated: "2026-07-26T05:17:53.979Z"
-last_activity: 2026-07-26 -- Phase 17 execution started
+stopped_at: Phase 18 Plan 01 (repro_stability_check) complete -- findings committed before any golden band pinned.
+last_updated: "2026-07-26T09:27:10.042Z"
+last_activity: 2026-07-26
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 11
-  completed_plans: 7
-  percent: 50
+  completed_phases: 3
+  total_plans: 14
+  completed_plans: 12
+  percent: 75
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 17 — real-ieee123-impedances
+**Current focus:** Phase 18 — directional-thesis-reproduction
 
 ## Current Position
 
-Phase: 17 (real-ieee123-impedances) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 17
-Last activity: 2026-07-26 -- Phase 17 execution started
+Phase: 18 (directional-thesis-reproduction) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-07-26
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Last activity: 2026-07-26 -- Phase 17 execution started
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 18 P01 | 45min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,7 @@ Recent decisions affecting current work:
 
 - [Phase 12]: Plan 02 load-test fixture raised T from 1 to 8 (Claude's Discretion over fixture shape, 12-CONTEXT.md): the literal T=1 fixture's Benders gap floors at a fixed numerical point after 16 iterations regardless of tol, never reaching >=50 genuinely-converging iterations.
 - [Phase 12]: Plan 02: alpha_op_lb loosened from -5.0 to -50.0 for the T=8 load-test fixture -- a correctness requirement at that scale (verified against a hand-derived closed form z*=1.4, cost=-7.84), not merely a convergence-speed tweak.
+- [Phase 18]: Phase 18 Plan 01: RECOMMENDED BAND (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937) is derived from only the exact Phase-17-retuned population point (delta=0.0) -- the +/-2%/+/-5% sweep points all fail the SOCP-exactness gate outright (sign_flip_survives=false), so the DSO-surplus sign flip is confirmed at that single point but NOT confirmed to be population-scale-robust.
 
 ### Pending Todos
 
@@ -190,8 +192,8 @@ Items acknowledged and carried forward, now refined by v2.1 REQUIREMENTS.md:
 
 ## Session Continuity
 
-Last session: 2026-07-25T23:10:00.000Z
-Stopped at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
+Last session: 2026-07-26T09:27:09.780Z
+Stopped at: Phase 18 Plan 01 (repro_stability_check) complete -- findings committed before any golden band pinned.
 Resume file: None
 
 ## Operator Next Steps

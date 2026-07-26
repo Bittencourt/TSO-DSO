@@ -60,7 +60,7 @@ Make a defensible reproduction claim on real, standard data.
 - [ ] **REPRO-01**: A literate rung/doc page + gate-then-golden test reproduces the **direction and
       magnitude-band** of the thesis welfare/surplus result on real data (sign + band, not the exact
       figure), carrying a fixed "directional, public-data" qualifier phrase.
-- [ ] **REPRO-02**: A consolidated **assumptions/reduction doc page** documents what makes the numbers
+- [x] **REPRO-02**: A consolidated **assumptions/reduction doc page** documents what makes the numbers
       what they are; repeated-run stability is checked before any new golden is pinned (guarding against
       pinning transient Clarabel numerical noise).
 
