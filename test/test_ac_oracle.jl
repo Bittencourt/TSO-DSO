@@ -155,8 +155,88 @@ end
         ctx2 = fixed_ctx(2)
 
         @test_throws Exception TSODSO.assert_ac_exact!(ctx1, ctx2; rtol = 1e-4)
-        # Any test asserting @test_throws on a HIGH-PV/inexact fixture (as opposed to this
+        # Any test asserting a throw on a HIGH-PV/inexact fixture (as opposed to this
         # structural-mismatch fixture) is a signal the design has drifted toward the wrong shape —
         # see plan 15-03's stress test, which is a POSITIVE (non-throwing) assertion.
+    end
+end
+
+@testitem "ac_oracle: high-PV stress fixture surfaces the genuine SOCP/AC exactness finding at the exactness boundary (EXACT-04)" tags = [:ac_oracle] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+    import Ipopt
+
+    @test isdefined(TSODSO, :assert_ac_exact!)
+    @test isdefined(TSODSO, :ACPowerFlow)
+
+    if isdefined(TSODSO, :assert_ac_exact!) && isdefined(TSODSO, :ACPowerFlow)
+        feeder = Phase4Fixtures.high_pv_feeder()
+        # pv_scale = 1.2 is the EMPIRICALLY-FOUND value (RESEARCH Open Question 1's 1.0–2.0 range)
+        # that pins bus voltage at V²max and drives the SOC relaxation genuinely INEXACT while the
+        # true nonconvex AC-OPF stays feasible — see the ## Finding below. It is hard-coded (no
+        # search loop) so the committed test is deterministic and reproducible.
+        aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+        λ₀ = Phase4Fixtures.mem_price_profile()
+
+        # SOCP solve with rtol_exact = 1.0: a DELIBERATE, documented diagnostic override of
+        # solve_welfare's OWN internal PF-04 gate (assert_socp_exact!), so the loose-relaxation
+        # solution is RETURNED for comparison instead of refused. It changes ZERO code in
+        # welfare_solve.jl. The milestone's ACTUAL exactness verdict comes from assert_ac_exact!'s
+        # own standard rtol = 1e-4 below, NEVER from this loosened internal gate.
+        ctx_socp, cost_socp, _ = solve_welfare(
+            feeder, ConvexBranchFlow(), aggs;
+            T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true, rtol_exact = 1.0,
+        )
+
+        # True nonconvex AC-OPF, default Ipopt attributes (select_optimizer(NLP())).
+        ctx_ac, cost_ac, _ = solve_welfare(
+            feeder, ACPowerFlow(), aggs;
+            T = Phase4Fixtures.T, λ₀ = λ₀, allow_local = true, allow_export = true,
+        )
+        # SECOND AC start with a different Ipopt interior-point strategy — genuine
+        # solver-trajectory diversity WITHOUT touching solve_welfare's signature (the local-optimum
+        # guard, Pitfall 2).
+        ctx_ac2, cost_ac2, _ = solve_welfare(
+            feeder, ACPowerFlow(), aggs;
+            T = Phase4Fixtures.T, λ₀ = λ₀, allow_local = true, allow_export = true,
+            optimizer = optimizer_with_attributes(
+                Ipopt.Optimizer, "print_level" => 0, "mu_strategy" => "adaptive",
+            ),
+        )
+        # Local-optimum guard (Pitfall 2): if this ever fails on a future solver upgrade it flags a
+        # LOCAL-OPTIMUM finding distinct from an exactness finding, and must NOT be conflated with
+        # the assert_ac_exact! comparison below.
+        @test isapprox(cost_ac, cost_ac2; rtol = 1e-3, atol = 1e-3)
+
+        report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
+
+        # The POSITIVE, EXPECTED finding: at the exactness boundary the SOCP relaxation genuinely
+        # disagrees with the true AC-OPF at one or more hours. This is a per-hour REPORT, never a
+        # thrown error — a genuine relaxation gap is the milestone's finding, not a defect.
+        inexact_hours = [row.t for row in report.hours if !row.exact]
+        @test !isempty(inexact_hours)
+
+        # Diagnose the disagreement (Pitfall 4): it must be INVESTIGATED, not merely asserted
+        # non-empty. For AT LEAST ONE inexact hour, either a bus voltage is pinned at/near V²max OR
+        # a branch carries reverse (PV back-feed) flow — the voltage-binding / reverse-flow regime
+        # where SOC exactness is documented to fail (Farivar & Low 2013; Gan, Li, Topcu & Low 2015).
+        # The EARLIEST inexact hour can instead be an inter-hour-coupling artifact (the battery /
+        # deferrable dispatch shifts in response to the peak-hour inexactness), so the diagnostic
+        # scans the whole inexact window rather than only its first hour.
+        pv_socp = ctx_socp.meta[:pf_vars]
+        N = length(feeder.buses)
+        B = length(feeder.branches)
+        diagnosed = any(inexact_hours) do t★
+            voltage_bound_hit =
+                any(value(pv_socp.v[j, t★]) >= feeder.buses[j].vmax^2 - 1e-3 for j in 1:N)
+            reverse_flow = any(value(pv_socp.P[b, t★]) < 0 for b in 1:B)
+            voltage_bound_hit || reverse_flow
+        end
+        @test diagnosed
+    # DOCUMENTED FINDING (EXACT-04): at pv_scale = 1.2 the SOC relaxation goes genuinely INEXACT
+    # over the high-PV afternoon window (hours 6–15), with bus voltage pinned at V²max = 1.1025
+    # and reverse (PV back-feed) branch flow — the documented SOC exactness-failure regime. The
+    # two independent AC starts agree (no local-optimum artifact), so the gap is a relaxation
+    # property, not solver noise. Narrated in docs/literate/ac_oracle.jl.
     end
 end

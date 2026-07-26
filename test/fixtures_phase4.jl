@@ -214,8 +214,12 @@
     `pv_scale = 0.5` (against the seeded PV shape, a small `load_scale = 0.2`, and a tiny
     battery) lands the peak at ≈`1.04` pu — clear over-voltage with headroom below the cap.
     Fixed default seed ⇒ reproducible (threat T-04-06).
+
+    The `pv_scale` kwarg defaults to `0.5` (the documented ≈1.04 pu EXACT regime,
+    `test_exactness.jl`'s own high-PV case); a caller-supplied `pv_scale ≫ 0.5` pins voltage at
+    `V²max` — the one regime where SOC exactness genuinely fails (EXACT-04, plan 15-03).
     """
-    function build_high_pv_aggregators(feeder; seed::Integer = 20260406)
+    function build_high_pv_aggregators(feeder; seed::Integer = 20260406, pv_scale::Real = 0.5)
         N = length(feeder.buses)
         return [
             _house_aggregator(
@@ -223,7 +227,7 @@
                 bus;
                 seed = seed,
                 φ = 0.95,
-                pv_scale = 0.5,       # PV > load ⇒ reverse flow / over-voltage (≈1.04 pu), EXACT
+                pv_scale = pv_scale,  # caller-tunable; default 0.5 = the documented EXACT regime
                 load_scale = 0.2,     # small load ⇒ the surplus must leave via the frontier
                 batt_pmax = 0.1,
                 batt_emax = 0.2,
