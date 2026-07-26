@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Operational Transactive-Energy Core** — Phases 1–9 (shipped 2026-07-20)
 - ✅ **v2.0 Stackelberg-Nash TSO–DSO Planning Game** — Phases 10–14 (shipped 2026-07-24)
-- 🚧 **v2.1 Validation & Reproduction** — Phases 15–18 (in progress, started 2026-07-25)
+- 🧪 **v2.1 Validation & Reproduction** — Phases 15–18 (all complete + verified 2026-07-26; pending user review, not yet archived)
 
 Full phase details, decisions, and per-phase artifacts for shipped milestones are archived in
 [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md) and
@@ -12,10 +12,10 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 
 ## Phases
 
-- [ ] **Phase 15: AC-Exactness Oracle** - Certify the SOCP branch-flow relaxation against an independent nonconvex AC-OPF oracle, allowing a genuine inexactness to surface as a documented finding
-- [ ] **Phase 16: Reactive-Power (μ) Consensus** - DSO-OPT enforces a genuine per-node reactive balance and yields a citable reactive nodal price, without regressing the active-only ADMM path
-- [ ] **Phase 17: Real IEEE-123 Impedances** - Replace synthetic IEEE-123 impedances with real, positive-sequence values reduced from public OpenDSS data
-- [ ] **Phase 18: Directional Thesis Reproduction** - Reproduce the sign and magnitude-band of the thesis welfare result on real data, framed as directional/public-data
+- [x] **Phase 15: AC-Exactness Oracle** - Certify the SOCP branch-flow relaxation against an independent nonconvex AC-OPF oracle, allowing a genuine inexactness to surface as a documented finding
+- [x] **Phase 16: Reactive-Power (μ) Consensus** - DSO-OPT enforces a genuine per-node reactive balance and yields a citable reactive nodal price, without regressing the active-only ADMM path
+- [x] **Phase 17: Real IEEE-123 Impedances** - Replace synthetic IEEE-123 impedances with real, positive-sequence values reduced from public OpenDSS data
+- [x] **Phase 18: Directional Thesis Reproduction** - Reproduce the sign and magnitude-band of the thesis welfare result on real data, framed as directional/public-data
 
 ## Phase Details
 
@@ -178,7 +178,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 3/3 | Complete | 2026-07-24 |
 | 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
 | 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete    | 2026-07-26 |
-| 17. Real IEEE-123 Impedances | v2.1 | 2/4 | In Progress|  |
+| 17. Real IEEE-123 Impedances | v2.1 | 4/4 | Complete   | 2026-07-26 |
 | 18. Directional Thesis Reproduction | v2.1 | 3/3 | Complete    | 2026-07-26 |
 
 ## Deferred / Future-Milestone Notes
