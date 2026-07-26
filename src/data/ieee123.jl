@@ -19,16 +19,16 @@
 #     (54-94, 151-300, 250-251, 450-451) OPEN so the graph is a clean tree (RESEARCH Pitfall 4,
 #     Assumption A2). This structure is the load-bearing content the fixture must ship.
 #
-#   * PER-UNIT R/X MAGNITUDES are REPRESENTATIVE, not the thesis App. E verbatim numbers: the
-#     thesis PDF (App. E "Datos del alimentador de 123 nodos", p.170) is not vendored in this
-#     repository, so the exact per-terminal per-unit r/x table cannot be transcribed here. We
-#     assign in-band, strictly-positive representative per-unit impedances (line vs switch class,
-#     x = r/2 mirroring the ieee13 convention) that PASS the magnitude tripwires and let the
-#     radial fixture construct. Numerical fidelity of the impedances is NOT this plan's
-#     correctness gate: per the phase threat model (T-07-05) the load-bearing net is the
-#     centralized-SOCP cross-validation at plan 07-05 (a gross magnitude error still trips
-#     `assert_magnitudes` at construction). When the thesis App. E numbers become available they
-#     drop into `IEEE123_BRANCH_DATA` without touching topology, relabeling, or the tests.
+#   * PER-UNIT R/X MAGNITUDES are REAL (plan 17-02, IMPED-02), not the earlier representative
+#     placeholder: non-switch branch impedances are now sourced from the public IEEE-123 OpenDSS
+#     test-case data (positive-sequence Fortescue-reduced R1/X1 × segment length, in Ohms),
+#     reduced by `scripts/reduce_ieee123_impedances.jl` into the generated, committed
+#     `src/data/ieee123_impedances.jl` (see that file's own provenance header for source URL and
+#     fetch date). The Ω→pu conversion happens ONCE at ingestion here, via `to_pu_impedance`
+#     (`src/units/PerUnit.jl:53`) — never inside the reduction script. Switch/regulator segments
+#     (`IEEE123_SWITCH_EDGES`) intentionally keep their existing near-ideal synthetic value
+#     (RESEARCH Assumption A2), not a real one. Numerical fidelity beyond the magnitude tripwires
+#     is still cross-validated at the centralized-SOCP level (T-07-05's load-bearing net).
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 #
 # The ~37 non-load junction (transit / zero-injection) buses this fixture exposes via
@@ -36,6 +36,8 @@
 # RESEARCH Pitfall 5), NOT here — this file only ships the topology and the load/transit split.
 
 using SparseArrays
+
+include("ieee123_impedances.jl")
 
 """
     IEEE123_BASE
@@ -66,16 +68,14 @@ Head-branch (substation/frontier) apparent-power limit, thesis Case B `S_max,01 
 """
 const IEEE123_HEAD_SMAX_MVA = 3.8
 
-# Representative per-unit impedances (see DATA PROVENANCE note). `x = r/2` mirrors the ieee13
-# fixture's X/R convention. Switch/regulator segments are near-ideal (tiny, strictly-positive pu).
-# CALIBRATION (plan 07-05): sized on the feeder-scale 1 MVA base so the cumulative per-lateral
-# drop keeps the solved voltages inside the Case-B band `V∈[0.9,1.1]` while still binding it
-# (under-voltage on the long load laterals, over-voltage under midday PV reverse flow) — a
-# genuinely voltage-constrained scale case, not a slack one. The per-unit magnitudes remain
-# in-band (strictly positive, tripwire-passing); numerical fidelity is not this fixture's gate
-# (T-07-05) — the load-bearing net is the centralized-SOCP cross-validation at plan 07-05.
-const IEEE123_LINE_R = 0.005
-const IEEE123_LINE_X = 0.0025
+# Switch/regulator segments keep their near-ideal (tiny, strictly-positive pu) synthetic value
+# (RESEARCH Assumption A2) — real data is not used here since these are near-ideal by design, not
+# ordinary line segments. Non-switch branch impedances now come from `IEEE123_BRANCH_RX_OHMS`
+# (`ieee123_impedances.jl`, included above), converted Ω→pu at ingestion in `ieee123_modified()`
+# (plan 17-02, IMPED-02). CALIBRATION (plan 07-05): the feeder-scale 1 MVA base keeps the solved
+# voltages inside the Case-B band `V∈[0.9,1.1]` while still binding it (under-voltage on the long
+# load laterals, over-voltage under midday PV reverse flow) — a genuinely voltage-constrained
+# scale case, not a slack one.
 const IEEE123_SWITCH_R = 0.0003
 const IEEE123_SWITCH_X = 0.00015
 
@@ -408,8 +408,10 @@ non-root buses are TRANSIT (zero-injection) junctions handled by plan 07-03's DS
     this head limit, so the case exercises the branch-flow / voltage physics, not just a scalar cap.
   - All interior branches use the `SMAX_NO_LIMIT = 99.0` pu sentinel (effectively unconstrained,
     strictly inside the `0 < smax < 100` band).
-  - Branch r/x are representative in-band per-unit values (see the DATA PROVENANCE note at the top
-    of this file) — line vs switch class, `x = r/2`.
+  - Non-switch branch r/x are REAL per-segment impedances (plan 17-02, IMPED-02), sourced from
+    the public IEEE-123 OpenDSS test-case data and converted Ω→pu via `to_pu_impedance` (see
+    `IEEE123_BRANCH_RX_OHMS` / the DATA PROVENANCE note at the top of this file). Switch/regulator
+    segments keep their near-ideal synthetic value (`IEEE123_SWITCH_R`/`IEEE123_SWITCH_X`).
 
 `Feeder(buses, branches, root)` runs `assert_radial` (DATA-02) and `assert_magnitudes` (INFRA-05)
 before returning, so an invalid feeder can never exist (DATA-03).
@@ -428,8 +430,12 @@ function ieee123_modified()
     branches = Branch{Float64}[]
     for (p, c) in IEEE123_EDGES
         is_switch = (p, c) in IEEE123_SWITCH_EDGES
-        r = is_switch ? IEEE123_SWITCH_R : IEEE123_LINE_R
-        x = is_switch ? IEEE123_SWITCH_X : IEEE123_LINE_X
+        if is_switch
+            r, x = IEEE123_SWITCH_R, IEEE123_SWITCH_X   # near-ideal regulator/switch segments unchanged
+        else
+            r_Ω, x_Ω = IEEE123_BRANCH_RX_OHMS[(p, c)]
+            r, x = to_pu_impedance(r_Ω, IEEE123_BASE), to_pu_impedance(x_Ω, IEEE123_BASE)
+        end
         smax = p == IEEE123_ROOT_TERMINAL ? s_head : s_int   # only the frontier branch binds
         push!(branches, Branch(remap[p], remap[c], r, x, smax))
     end

@@ -114,3 +114,27 @@ end
         @test transit > 0
     end
 end
+
+@testitem "ieee123: pinned real-impedance spot-check on branch (149,1) (ieee123)" tags = [:phase7] begin
+    using TSODSO
+
+    # Real per-segment Ω→pu impedance ingestion (plan 17-02, IMPED-02): branch (149,1)
+    # (LineCode=1, Length=0.4) must convert via to_pu_impedance on IEEE123_BASE, not the
+    # retired uniform synthetic scalar.
+    @test isdefined(TSODSO, :ieee123_modified)
+
+    if isdefined(TSODSO, :ieee123_modified)
+        feeder = ieee123_modified()
+        remap = ieee123_relabel_map()
+
+        from_idx = remap[149]
+        to_idx = remap[1]
+        br = only(filter(b -> b.from == from_idx && b.to == to_idx, feeder.branches))
+
+        expected_r = TSODSO.to_pu_impedance(0.057967 * 0.4, TSODSO.IEEE123_BASE)
+        expected_x = TSODSO.to_pu_impedance(0.118756 * 0.4, TSODSO.IEEE123_BASE)
+
+        @test isapprox(br.r, expected_r; atol = 1e-6)
+        @test isapprox(br.x, expected_x; atol = 1e-6)
+    end
+end
