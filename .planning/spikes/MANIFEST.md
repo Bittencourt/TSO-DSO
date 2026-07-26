@@ -44,12 +44,22 @@ Design decisions that emerged while spiking. Non-negotiable for the real build.
 | 001 | relaxation-validity-map | standard | Given a (pv_scale × load_scale × vmax) grid on the high-PV fixture, when the free cone-gap detector classifies each point, then the exact/inexact boundary renders as a map and both EXACT-04 controls reproduce | ✓ VALIDATED<br>*(findings 2 & 3 later shown substrate-specific by 002)* | socp, exactness, relaxation, parameter-sweep, figure, validity-envelope |
 | 002 | ieee123-validity-map | standard | Given the 001 method on real IEEE-123 OpenDSS impedances, when the detector classifies a (pv × load × vmax) grid, then the boundary renders as a map | ⚠ PARTIAL — no boundary exists; flags are solver noise. Yielded a **method defect** instead | socp, exactness, ieee123, real-impedances, null-result, tolerance, solver-noise |
 
-**Headline across both:** the free cone-gap detector is sound in principle but **not usable at default
-tolerance on a 122-branch feeder**. On real IEEE-123 impedances there is no overvoltage (bound never
-active, `vpeak ≤ 1.016` against caps ≥ 1.05) and therefore no structural inexactness in the swept
-region — the 3-bus mechanism does not transfer. Spike 002 Finding 4 raises a live question about
-whether v2.1's documented "knife-edge fragility" is itself a tolerance artifact; that is untested and
-gates v3.0 scoping.
+| 003 | phase18-fragility-tolerance | standard | Given Phase 18-01's ±2-5% sweep re-run at tightened solver tolerance with the gate armed, when failures are attributed per-call, then we learn whether the recorded fragility is artifact or physical | ✓ VALIDATED — **overturns a shipped v2.1 finding** | tolerance, phase18, thesis-reproduction, correction, fit-baseline, misattribution |
+
+**Headline across all three.** The free cone-gap detector is sound in principle but **not usable at
+default tolerance on a 122-branch feeder** — its `atol = 1e-6` sits at Clarabel's noise floor there. On
+real IEEE-123 impedances there is no overvoltage at all (bound never active, `vpeak ≤ 1.016` vs caps
+≥ 1.05), so the 3-bus mechanism does not transfer.
+
+Spike 003 then closed the question spike 002 raised, and the answer is a **correction to shipped work**:
+v2.1's `sign_flip_survives: false` is wrong. `solve_welfare`'s gate failures are purely numerical (0/5
+throw at `tol_gap=1e-10`, unchanged optima), `dadp_dso` is positive and monotone across the whole ±5%
+band, and the sign flip **survives δ=−0.05**. Two of the four recorded failures were `fit_baseline`,
+misattributed to `solve_welfare` by a combined try/catch.
+
+**Blocking `src/` defect:** `fit_baseline` (`src/pricing/fit.jl:271`) has no `optimizer` kwarg, so its
+exactness gate cannot be tolerance-conditioned and 3 of 5 points remain unmeasurable. Adding it —
+mirroring `solve_welfare` — is the one change that makes population robustness answerable.
 
 ### Deferred (decomposed, then dropped as out of scope)
 

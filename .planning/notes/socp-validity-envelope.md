@@ -239,19 +239,40 @@ WIDE → v3.1 remediation milestone. NARROW → document the envelope, move to t
 of where the sweep bounds were chosen, and a reviewer can move those bounds. Reachability at a
 standard voltage band is grid-choice independent.
 
-### 🛑 PREREQUISITE (spike 002) — the gate's premise may not hold
+### 🛑 PREREQUISITE — RESOLVED by spike 003: THE GATE'S PREMISE DOES NOT HOLD
 
-Before this gate means anything, one cheap test must run: **re-run the Phase 18-01 ±2–5% population
-sweep at `tol_gap = 1e-10`** and check whether the SOCP-exactness gate still throws.
+The test is done. See `.planning/spikes/003-phase18-fragility-tolerance/README.md`.
 
-Phase 18-01 attributed the sign-flip fragility to "the SOCP-exactness gate itself throw[ing] near that
-boundary." Spike 002 showed that on IEEE-123 at *default* tolerance the shipped `assert_socp_exact!`
-(`rtol=1e-4`, `atol=1e-6`, throws) fires on ~half of swept operating points **spuriously**. If the
-Phase 18-01 throwing is that same artifact, the documented "knife-edge fragility" is a tolerance
-artifact rather than a physical boundary — and the gate below is testing for a region that does not
-exist on real impedances.
+**Phase 18-01's fragility is not a physical boundary.** Re-running the identical ±2–5% sweep with the
+shipped gate armed and only the *solver* tolerance tightened:
 
-Untested. Cheap. **Do it before v3.0 scoping treats the fragility as physical.**
+- `solve_welfare`'s SOCP gate: **2/5 threw at default → 0/5 at `tol_gap = 1e-10`**, at optima agreeing
+  to 6–7 significant figures. Purely numerical.
+- `dadp_dso` across the band: **2.7098 → 3.2775 → 3.7257 → 4.1639 → 4.8074** — strictly positive,
+  smooth, **monotone**. No knife edge in this quantity at all.
+- **The sign flip survives δ = −0.05** (`dadp_dso = +2.71`, `fit_dso = −182.96`), a point the committed
+  findings record as failing outright.
+- 2 of the 4 recorded failures were **`fit_baseline`**, misattributed to `solve_welfare` because
+  Phase 18-01 wrapped three solves in one try/catch. Ratios bit-identical to 16 digits — nothing flaky.
+
+**Consequences for this milestone.** The overvoltage/binding-cap mechanism this brief is built on does
+not occur on real IEEE-123 impedances (spike 002: bound never active), and the fragility that motivated
+mapping its boundary was a tolerance artifact (spike 003). **The premise of the pre-registered gate
+below — that there is a reachable inexact region to bound — is not supported on real public data.**
+
+v3.0 should be re-scoped around what the spikes actually surfaced, which is a *measurement-hygiene*
+problem, not a relaxation-theory problem:
+
+1. Per-feeder solver-noise-floor calibration before any residual-based classification.
+2. An `optimizer` kwarg on `fit_baseline` (`src/pricing/fit.jl:271`) — the blocking defect leaving 3/5
+   sweep points unmeasurable.
+3. Correcting the shipped `sign_flip_survives: false` claim in findings.txt, 18-01-SUMMARY.md, and the
+   published assumptions literate page.
+4. Re-deriving Plan 18-02's golden band, whose `1.5 × max|dso|` rule now implies 7.211 against a pinned
+   5.5886 (not currently failing, but rule and value disagree).
+
+The 3-bus overvoltage inexactness (EXACT-04) remains real and reproducible — it is a property of that
+stress fixture, not of real feeders at these scales.
 
 ### ⚠️ TWO DEFECTS IN THIS GATE — resolve before it is honoured
 
