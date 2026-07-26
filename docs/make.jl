@@ -29,6 +29,7 @@ for src in (
     "nash_diagonalization.jl",  # NEW: Rung 7
     "ieee123_impedances.jl",    # NEW: real IEEE-123 impedance reduction (IMPED-01/02)
     "thesis_reproduction_ieee123.jl",  # NEW: thesis reproduction — IEEE-123 real-impedance DSO-surplus sign flip (REPRO-01)
+    "thesis_reproduction_assumptions.jl",  # NEW: thesis reproduction assumptions/reduction chain (REPRO-02)
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -65,6 +66,7 @@ makedocs(;
             "Rung 5: ADMM Decomposition" => "generated/admm.md",
             "IEEE-123 Real Impedances" => "generated/ieee123_impedances.md",
             "Thesis Reproduction — IEEE-123" => "generated/thesis_reproduction_ieee123.md",
+            "Thesis Reproduction — Assumptions" => "generated/thesis_reproduction_assumptions.md",
         ],
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",
