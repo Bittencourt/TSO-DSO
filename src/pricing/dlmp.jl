@@ -5,7 +5,7 @@
 #
 # Pure convex-duality POST-PROCESSING over a solved `ModelContext` from
 # `solve_welfare(feeder, ConvexBranchFlow(), aggs; allow_export=true)`. Reads duals only;
-# builds and solves nothing (no model here names a solver). Two public functions:
+# builds and solves nothing (no model here names a solver). Three public functions:
 #
 #   * `extract_dlmp(ctx)`    — the day-ahead dynamic price / DLMP: the dual of the nodal
 #     ACTIVE-power balance (thesis eq. 3.31), per node per hour. Positive = marginal cost of
@@ -14,13 +14,22 @@
 #     certificate `ctx.meta[:socp_maxgap]` — because a strict SOC relaxation makes `l` a
 #     fictitious over-current and the recovered duals physically meaningless (PF-04).
 #
+#   * `extract_reactive_dlmp(ctx)` — the reactive nodal price (REACT-02): the dual of the
+#     nodal REACTIVE-power balance `:balance_q` (thesis eq. 3.23's network closure), per node
+#     per hour. Mirrors `extract_dlmp`'s shape/gate exactly, plus a presence guard since a
+#     DC/active-only formulation never registers `:balance_q`. This is a SEPARATE price
+#     signal from the active DADP — never summed into it.
+#
 #   * `decompose_dlmp(ctx)`  — the four-way DLMP split into energy + loss + congestion +
-#     voltage that provably SUMS to the nodal price. The thesis gives the split only
-#     qualitatively (Fig 4.5/4.6), so each component is reconstructed INDEPENDENTLY from a
-#     DISTINCT registered dual (RESEARCH strategy B — loss is NOT the leftover) and a HARD
+#     voltage that provably SUMS to the nodal price, PLUS the reactive price as a 5th,
+#     UN-summed field (`reactive`). The thesis gives the active split only qualitatively
+#     (Fig 4.5/4.6), so each component is reconstructed INDEPENDENTLY from a DISTINCT
+#     registered dual (RESEARCH strategy B — loss is NOT the leftover) and a HARD
 #     relative-tolerance assertion checks `energy+loss+congestion+voltage ≈ dual(balance_p)`
 #     per node/hour, throwing with the worst per-node residual so a dropped term is
-#     localizable (RESEARCH Pitfall 2).
+#     localizable (RESEARCH Pitfall 2). `reactive` is documented and citable but is NOT part
+#     of this 4-term active-price reconstruction (REACT-02; distinct component, distinct unit
+#     of account).
 #
 # Decomposition derivation (KKT stationarity of the branch active flow P_b, empirically
 # certified to machine precision on the 2-bus / IEEE-13 / high-PV solves). For branch
@@ -103,6 +112,45 @@ function extract_dlmp(ctx::ModelContext; bus = nothing, T = nothing)
     return M[bus, 1:Tsel]
 end
 
+"""
+    extract_reactive_dlmp(ctx; bus = nothing, T = nothing) -> Matrix{Float64} | Vector{Float64}
+
+The reactive nodal price (REACT-02) — the dual of the nodal REACTIVE-power balance
+`:balance_q` (thesis eq. 3.23's network closure), per node per hour. A SEPARATE price
+signal from [`extract_dlmp`](@ref)'s active DADP — never summed into it, never folded into
+`decompose_dlmp`'s `total`.
+
+Requires a `ctx` from `solve_welfare(...)`, gated by the SAME `_assert_priceable` PF-04
+exactness certificate `extract_dlmp` requires (this function REFUSES prices on an ungated
+SOCP ctx exactly like `extract_dlmp`). Additionally throws `ArgumentError` (never `KeyError`)
+if `ctx` has no registered `:balance_q` — a DC/active-only formulation (e.g. `DCPowerFlow`)
+never carries a reactive channel (thesis A3 note in `welfare_solve.jl`), so no reactive price
+exists to extract.
+
+With `bus === nothing` (default) it returns the full `(N_buses, T)` reactive-price matrix
+`dual.(ctx.constraints[:balance_q])`. Passing `bus` returns that bus's length-`T` price
+vector (`T` defaults to the full horizon; a shorter `T` keeps the leading hours `1:T` and
+truncates the trailing ones). The root's price is expected to be DEGENERATE (≈0): the
+root's `q_import` is a free-sign, zero-objective-coefficient frontier variable, so its own
+KKT stationarity condition forces `dual(:balance_q[root,t]) ≡ 0` (RESEARCH "Free slack,
+precisely located" — no reactive energy market exists at the substation in this model).
+"""
+function extract_reactive_dlmp(ctx::ModelContext; bus = nothing, T = nothing)
+    _assert_priceable(ctx)
+    haskey(ctx.constraints, :balance_q) || throw(
+        ArgumentError(
+            "extract_reactive_dlmp: ctx has no :balance_q -- this formulation has no " *
+            "reactive channel (e.g. DCPowerFlow); no reactive price exists to extract",
+        ),
+    )
+    bq = ctx.constraints[:balance_q]          # bus × time ConstraintRef array (thesis 3.23)
+    N, Tfull = size(bq)
+    M = Float64[dual(bq[j, t]) for j in 1:N, t in 1:Tfull]
+    bus === nothing && return M
+    Tsel = T === nothing ? Tfull : Int(T)
+    return M[bus, 1:Tsel]
+end
+
 # ---------------------------------------------------------------------------------------------
 # Radial path root→j: walk the tree's parent pointers (feeder.branches are parent→child, N−1
 # of them on a validated radial feeder — DATA-02 `assert_radial`). No graph library needed
@@ -136,15 +184,18 @@ end
 
 """
     decompose_dlmp(ctx; bus = nothing, T = nothing, rtol = 1e-5, atol = 1e-7)
-        -> NamedTuple(energy, loss, congestion, voltage, total)
+        -> NamedTuple(energy, loss, congestion, voltage, reactive, total)
 
-Four-way DLMP decomposition (PRICE-02): split the nodal price into **energy + loss +
-congestion + voltage** components that provably SUM to the DADP. Each component is
-reconstructed INDEPENDENTLY from a DISTINCT registered dual (RESEARCH strategy B — loss is
-NOT the leftover, so a dropped congestion/voltage term cannot hide), then a HARD relative-
-tolerance assertion checks `energy + loss + congestion + voltage ≈ total` per node/hour and
-`total ≈ extract_dlmp(ctx)`, throwing (never `@assert`) with the worst per-node residual so a
-missing term is localizable (RESEARCH Pitfall 2; threat T-05-02).
+Four-way DLMP decomposition (PRICE-02): split the nodal ACTIVE price into **energy + loss +
+congestion + voltage** components that provably SUM to the DADP, PLUS a 5th, UN-summed
+`reactive` field (REACT-02). Each active component is reconstructed INDEPENDENTLY from a
+DISTINCT registered dual (RESEARCH strategy B — loss is NOT the leftover, so a dropped
+congestion/voltage term cannot hide), then a HARD relative-tolerance assertion checks
+`energy + loss + congestion + voltage ≈ total` per node/hour and `total ≈ extract_dlmp(ctx)`,
+throwing (never `@assert`) with the worst per-node residual so a missing term is localizable
+(RESEARCH Pitfall 2; threat T-05-02). This 4-term reconstruction and its assertion are
+UNCHANGED by the `reactive` field — `reactive` is a SEPARATE price signal (the dual of
+`:balance_q`), never folded into `total` or the sum-to-price check.
 
 Components (each summed over the unique radial path root→j; derivation in the file header):
 
@@ -153,11 +204,18 @@ Components (each summed over the unique radial path root→j; derivation in the 
   - `congestion` = `Σ_path −dual(:smax[b,t])[2]`   — thermal congestion (3.36; 0 off the head);
   - `voltage`    = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — voltage-drop propagation of
     the v/v̂ bound pressure (thesis 3.33/3.43; 0 with unengaged voltage headroom);
-  - `total`      = `extract_dlmp(ctx)`             — the reference DADP.
+  - `reactive`   = `extract_reactive_dlmp(ctx)`    — the reactive nodal price (REACT-02;
+    `dual(:balance_q[j,t])`), a documented, citable 5th component, DISTINCT from and NEVER
+    summed into `total`;
+  - `total`      = `extract_dlmp(ctx)`             — the reference DADP (active price only).
 
 Inherits the PF-04 exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP ctx is
 refused). Requires the SOCP branch-flow handles registered by plan 05-01 (`:cone`, `:vdrop`,
-`:cpydrop`, `:smax`); throws a clear `ArgumentError` on a formulation that lacks them.
+`:cpydrop`, `:smax`); throws a clear `ArgumentError` on a formulation that lacks them. Since
+these handles are `ConvexBranchFlow`-only, any ctx that reaches `decompose_dlmp` always also
+carries `:balance_q` (registered unconditionally on that formulation), so `reactive` needs no
+additional presence guard here (the guard lives in the standalone `extract_reactive_dlmp` for
+direct/DC-only callers).
 
 With `bus === nothing` (default) every field is an `(N_buses, T)` matrix; passing `bus`
 returns that bus's length-`T` component vectors.
@@ -248,7 +306,9 @@ function decompose_dlmp(
         "mis-signed (RESEARCH Pitfall 2; thesis 3.31/3.33/3.36/3.39/3.43; threat T-05-02).",
     )
 
-    bus === nothing && return (; energy, loss, congestion, voltage, total)
+    reactive = extract_reactive_dlmp(ctx)               # (N, Tfull) reactive price (REACT-02)
+
+    bus === nothing && return (; energy, loss, congestion, voltage, reactive, total)
     Tsel = T === nothing ? Tfull : Int(T)
     rows = 1:Tsel
     return (;
@@ -256,8 +316,9 @@ function decompose_dlmp(
         loss = loss[bus, rows],
         congestion = congestion[bus, rows],
         voltage = voltage[bus, rows],
+        reactive = reactive[bus, rows],
         total = total[bus, rows],
     )
 end
 
-export extract_dlmp, decompose_dlmp
+export extract_dlmp, extract_reactive_dlmp, decompose_dlmp
