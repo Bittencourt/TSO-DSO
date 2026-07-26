@@ -1,0 +1,19 @@
+Phase 16 Reactive-Power Consensus — Clarabel Flake-Rate Measurement
+Measured: 2026-07-26 01:34:57 UTC-local
+Repeats per cell: N = 20 (80 solves total)
+
+=== Measured NUMERICAL_ERROR-class flake rates ===
+Fixture      reactive_consensus            N    fails     rate
+IEEE-13      false                        20       11    0.550
+IEEE-13      true                         20        3    0.150
+IEEE-123     false                        20        1    0.050
+IEEE-123     true                         20        1    0.050
+
+=== Finding 1: Clarabel flake rate under reactive_consensus=true ===
+IEEE-13:  baseline (reactive_consensus=false) rate = 0.55 (11/20); Q-consensus (reactive_consensus=true) rate = 0.15 (3/20).
+IEEE-123: baseline (reactive_consensus=false) rate = 0.05 (1/20); Q-consensus (reactive_consensus=true) rate = 0.05 (1/20).
+Delta (true - false): IEEE-13 = -0.4; IEEE-123 = 0.0. This is a citable phase finding, not a pass/fail gate (16-RESEARCH.md Pitfall 5 / Open Question 2) — the number itself is the deliverable, reported here neither silently accepted nor silently "fixed."
+
+=== Finding 2: rho vs rho_q (Open Question 1) ===
+Plan 16-02's shipped mechanism pins `qag_dso[j,t]` via a HARD EQUALITY (`:qag_pin`, `qag_dso[j,t] == q_draw[j][t]`) with NO quadratic rho-penalty term of its own (16-RESEARCH Assumption A1/A3: the pinned target `b_j = agr.qag[j][t]` never moves — AgrOpt.qag is a fixed constant, per thesis A3 DERs-are-active-only, so there is no genuine reactive DER decision to iterate on). Consequently the question "shared rho vs a distinct rho_q" DOES NOT APPLY to the actual shipped mechanism: there is no rho-penalty weight of any kind on the reactive coupling constraint to tune, shared or distinct. This is recorded as the finding rather than re-derived from scratch, per 16-RESEARCH.md's own resolution of Open Question 1 against the Plan 16-02 SUMMARY.
+The measured deltas are small (<= 0.05) on both fixtures — no evidence the degenerate-target assumption (A1/A3) fails to hold at this scale. No follow-up rho_q escalation (16-RESEARCH.md Pattern 3) is warranted from this measurement.
