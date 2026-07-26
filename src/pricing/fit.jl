@@ -231,7 +231,8 @@ end
 
 """
     fit_baseline(feeder, pf, aggregators; T=24, λ_fit=FIT_λ_IMPORT, λ₀=fill(λ_fit, T),
-                 λ_import=FIT_λ_IMPORT, λ_export=FIT_λ_EXPORT, λ_self=FIT_λ_SELF, seed=nothing)
+                 λ_import=FIT_λ_IMPORT, λ_export=FIT_λ_EXPORT, λ_self=FIT_λ_SELF,
+                 optimizer=select_optimizer(problem_class(pf)), seed=nothing)
         -> (; ctx, social_fit, welfare, ratio, prosumer_surplus, fit_flows)
 
 The FIT (feed-in-tariff) baseline counterfactual (PRICE-03) — the ONE new solve of Phase 5.
@@ -239,9 +240,24 @@ It (1) solves the per-prosumer FIT-OPT schedule (thesis eqs. 3.24-3.28) under th
 German-FIT prices with PV + flexible loads and NO battery (Assumption A4), (2) aggregates
 each prosumer's net injection to its nodal bus (thesis eqs. 3.22-3.23), and (3) evaluates a
 plain AC power flow — reusing `ConvexBranchFlow` on a voltage-RELAXED feeder so the voltage
-limit (3.35) is NOT enforced (the thesis FIT "AC-PF" step, RESEARCH Open Q3). Every solve
-routes through `select_optimizer(problem_class(pf))` (INFRA-02, no concrete solver named) and
-is gated on `assert_solved!`.
+limit (3.35) is NOT enforced (the thesis FIT "AC-PF" step, RESEARCH Open Q3).
+
+Every solve routes through the `optimizer` keyword, which DEFAULTS to
+`select_optimizer(problem_class(pf))` — so INFRA-02 holds (no concrete solver is ever named here,
+and the default is the factory), while a caller may supply a differently-CONDITIONED factory for
+the same problem class. All three internal solves honour it: the per-prosumer FIT-OPT, the FIT
+AC-PF, and the nested `solve_welfare` that forms the efficiency `ratio`. Every solve is gated on
+`assert_solved!`.
+
+Why the kwarg exists (spike 003, `.planning/spikes/003-phase18-fragility-tolerance/`): the nested
+`solve_welfare` carries its own PF-04 exactness gate (`assert_socp_exact!`), whose `atol = 1e-6`
+sits at Clarabel's achievable cone residual on a large feeder at the default `tol_gap = 1e-8`.
+Without a way to tighten the solver, that gate can refuse prices for purely numerical reasons and
+the caller has no recourse. Passing e.g.
+`optimizer_with_attributes(Clarabel.Optimizer, "tol_gap_abs" => 1e-10, "tol_gap_rel" => 1e-10)`
+converges the cone properly at an unchanged optimum. Note the FIT AC-PF step itself calls only
+`assert_solved!` (never `assert_socp_exact!`), so it is the NESTED `solve_welfare` that this
+mainly matters for.
 
 Returns a `NamedTuple`:
 
@@ -278,6 +294,11 @@ function fit_baseline(
     λ_import::Real = FIT_λ_IMPORT,
     λ_export::Real = FIT_λ_EXPORT,
     λ_self::Real = FIT_λ_SELF,
+    # Defaults to the SAME factory expression each internal site used before this kwarg
+    # existed, so the default path is byte-for-byte unchanged (INFRA-02: still no concrete
+    # solver named here). A caller may pass a differently-conditioned factory — see the
+    # docstring for why (spike 003: the nested solve_welfare's PF-04 gate).
+    optimizer = select_optimizer(problem_class(pf)),
     seed = nothing,
 )
     isempty(aggregators) &&
@@ -286,21 +307,21 @@ function fit_baseline(
     seed === nothing || @debug "fit_baseline: profiles are seeded upstream by the caller " *
            "(generate_profiles(seed=$seed)); the FIT solve is deterministic"
 
-    # (1) Per-prosumer FIT-OPT schedule (thesis 3.24-3.28) — the solver is chosen by the
-    # formulation's problem class, never named (INFRA-02).
+    # (1) Per-prosumer FIT-OPT schedule (thesis 3.24-3.28) — SITE 1 of 3. The solver comes from
+    # the `optimizer` kwarg, which defaults to the problem-class factory (INFRA-02).
     fa = _fit_opt_solve(
         aggregators;
         T = T,
         λ_import = λ_import,
         λ_export = λ_export,
         λ_self = λ_self,
-        optimizer = select_optimizer(problem_class(pf)),
+        optimizer = optimizer,
     )
 
     # (2)+(3) Aggregate the net injections (3.22-3.23) and evaluate a plain AC power flow on
     # the voltage-RELAXED feeder (3.35 NOT enforced — RESEARCH Open Q3).
     relaxed = _relax_voltage(feeder)
-    model = Model(select_optimizer(problem_class(pf)))
+    model = Model(optimizer)                 # SITE 2 of 3 — the FIT AC-PF
     ctx = ModelContext(model)
     ctx.meta[:feeder] = relaxed
     ctx.meta[:T] = T
@@ -380,8 +401,18 @@ function fit_baseline(
     # the reference always stays feasible (a tighter DADP voltage limit could make the heavy-
     # load reference infeasible). The AUTHORITATIVE +25% ratio is recomputed by 05-05 against
     # the real DADP ctx; this is the FIT baseline's self-contained cross-check.
-    _, social_dadp, _ =
-        solve_welfare(relaxed, pf, aggregators; T = T, λ₀ = λ₀, allow_export = true)
+    # SITE 3 of 3 — and the one the `optimizer` kwarg mainly exists for: THIS solve carries its own
+    # PF-04 exactness gate (assert_socp_exact!), which is what refuses prices on numerical grounds
+    # when the solver is under-converged on a large feeder (spike 003).
+    _, social_dadp, _ = solve_welfare(
+        relaxed,
+        pf,
+        aggregators;
+        T = T,
+        λ₀ = λ₀,
+        optimizer = optimizer,
+        allow_export = true,
+    )
     abs(social_fit) > eps(Float64) || error(
         "fit_baseline: social_fit≈0 — cannot form the efficiency ratio (degenerate baseline)",
     )

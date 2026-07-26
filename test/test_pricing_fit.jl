@@ -199,3 +199,114 @@ end
     FIT_RATIO_GOLDEN = 0.6428101637491034
     @test isapprox(res.ratio, FIT_RATIO_GOLDEN; rtol = 1e-4)
 end
+
+# ---------------------------------------------------------------------------------------------
+# Quick task 260726-mo7 — the `optimizer` kwarg (spike 003).
+#
+# `fit_baseline` runs THREE internal solves: the per-prosumer FIT-OPT, the FIT AC-PF, and the
+# nested `solve_welfare` that forms the efficiency ratio. Before this kwarg each hardcoded
+# `select_optimizer(problem_class(pf))`, so a caller could not condition the solver — and the
+# nested solve_welfare's PF-04 gate (assert_socp_exact!) could refuse prices for purely numerical
+# reasons with no recourse (spike 003: atol=1e-6 sits at Clarabel's cone residual on a large
+# feeder at the default tol_gap=1e-8).
+# ---------------------------------------------------------------------------------------------
+@testitem "fit: the optimizer kwarg defaults byte-identically to the problem-class factory" setup =
+    [FitFixtures] tags = [:fit] begin
+    using TSODSO
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+    pf = ConvexBranchFlow()
+
+    implicit = fit_baseline(feeder, pf, FitFixtures.aggregators(seed = 20260718); T = T)
+    explicit = fit_baseline(
+        feeder,
+        pf,
+        FitFixtures.aggregators(seed = 20260718);
+        T = T,
+        optimizer = TSODSO.select_optimizer(TSODSO.problem_class(pf)),
+    )
+
+    # The default expression IS the factory call every site used before the kwarg existed, so
+    # omitting it must be indistinguishable from passing it (no behaviour change for any caller).
+    @test implicit.social_fit == explicit.social_fit
+    @test implicit.ratio == explicit.ratio
+    @test implicit.prosumer_surplus == explicit.prosumer_surplus
+end
+
+@testitem "fit: a caller-supplied optimizer is actually consumed by the internal solves" setup =
+    [FitFixtures] tags = [:fit] begin
+    using TSODSO
+    using JuMP
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+    pf = ConvexBranchFlow()
+
+    # NO solver is named here: the constructor is taken from the project's own factory and only
+    # re-parameterized, so this test keeps working if the factory ever swaps backends (INFRA-02).
+    base = TSODSO.select_optimizer(TSODSO.problem_class(pf))
+    # One interior-point iteration cannot reach optimality, so `assert_solved!` must refuse. Were
+    # the kwarg silently ignored, this would SOLVE — the throw is what proves the caller's
+    # optimizer reaches a real solve rather than being dropped on the floor.
+    crippled =
+        optimizer_with_attributes(base.optimizer_constructor, base.params..., "max_iter" => 1)
+
+    @test_throws Exception fit_baseline(
+        feeder,
+        pf,
+        FitFixtures.aggregators(seed = 20260718);
+        T = T,
+        optimizer = crippled,
+    )
+end
+
+@testitem "fit: tightening solver tolerance preserves the optimum (spike 003 use case)" setup =
+    [FitFixtures] tags = [:fit] begin
+    using TSODSO
+    using JuMP
+
+    T = FitFixtures.T
+    feeder = FitFixtures.feeder()
+    pf = ConvexBranchFlow()
+
+    # Attribute names mirror src/solver/factory.jl's own SOCP tolerances — no NEW solver coupling
+    # is introduced, and the constructor still comes from the factory rather than being named.
+    base = TSODSO.select_optimizer(TSODSO.problem_class(pf))
+
+    loose = fit_baseline(feeder, pf, FitFixtures.aggregators(seed = 20260718); T = T)
+    tight = fit_baseline(
+        feeder,
+        pf,
+        FitFixtures.aggregators(seed = 20260718);
+        T = T,
+        optimizer = optimizer_with_attributes(
+            base.optimizer_constructor,
+            base.params...,
+            "tol_gap_abs" => 1e-10,
+            "tol_gap_rel" => 1e-10,
+        ),
+    )
+
+    # Tightening convergence must NOT move the optimum — it only shrinks residuals. This is the
+    # property spike 003 relied on to show the Phase 18-01 exactness failures were numerical.
+    @test isapprox(tight.social_fit, loose.social_fit; rtol = 1e-6)
+    @test isapprox(tight.ratio, loose.ratio; rtol = 1e-6)
+end
+
+@testitem "fit: source tripwire — no solver factory is hardcoded inside fit_baseline" tags =
+    [:fit] begin
+    using TSODSO
+
+    src = read(joinpath(dirname(pathof(TSODSO)), "pricing", "fit.jl"), String)
+    idx = findfirst("function fit_baseline(", src)
+    @test idx !== nothing
+    body = src[first(idx):end]
+
+    # EXACTLY ONE `select_optimizer(` may appear in the function: the kwarg default. Any second
+    # occurrence means a solve site hardcodes the factory again and silently ignores the caller's
+    # optimizer — the precise regression this kwarg exists to prevent. A future new solve site
+    # added inside fit_baseline trips this immediately.
+    @test count(_ -> true, eachmatch(r"select_optimizer\(", body)) == 1
+    @test occursin("optimizer = select_optimizer(problem_class(pf))", body)
+end
