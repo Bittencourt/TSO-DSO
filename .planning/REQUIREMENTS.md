@@ -24,7 +24,7 @@ replacing today's toy-point + same-relaxation self-check.
 - [x] **EXACT-03**: The exactness check reports **per-hour / per-scenario** gaps (not one pass/fail)
       and is structured so a genuine relaxation gap surfaces as a first-class, documented finding —
       not a spurious test failure.
-- [ ] **EXACT-04**: A high-PV / reverse-flow stress fixture exercises the exactness boundary and
+- [x] **EXACT-04**: A high-PV / reverse-flow stress fixture exercises the exactness boundary and
       documents where (and whether) the SOCP relaxation goes inexact for this framework's target regimes.
 
 ### Reactive-Power Consensus (`REACT`)
