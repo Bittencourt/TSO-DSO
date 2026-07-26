@@ -18,13 +18,16 @@
 # the fixed "directional, public-data" qualifier so a reader never mistakes this directional
 # reproduction for an exact-figure claim (18-PATTERNS.md).
 #
-# Plan 18-01 additionally measured (scripts/repro_stability_check.jl,
-# results/repro_stability_check/findings.txt) that this sign flip is confirmed ONLY at the exact
-# Phase-17-retuned population point (delta=0.0) — a +/-2-5% population-scale perturbation makes
-# the SOCP relaxation go genuinely inexact (`assert_socp_exact!` throws) before the sign flip can
-# even be evaluated (`sign_flip_survives: false`). This script runs ONLY at that exact pinned
-# point; it does not re-run the sweep (see `scripts/repro_stability_check.jl` for that
-# measurement, and `docs/literate/thesis_reproduction_assumptions.jl` for the full caveat).
+# CORRECTED 2026-07-26: Plan 18-01 reported (scripts/repro_stability_check.jl,
+# results/repro_stability_check/findings.txt) that this sign flip was confirmed ONLY at the exact
+# Phase-17-retuned population point, because a +/-2-5% perturbation made `assert_socp_exact!`
+# throw (`sign_flip_survives: false`). THAT IS REFUTED — the throws were solver under-convergence
+# at the default tol_gap=1e-8, not a physical exactness boundary. Re-measured at tol_gap=1e-10 all
+# 5 swept points solve and ALL show the sign flip, with both surpluses monotone in population
+# scale. See docs/literate/thesis_reproduction_assumptions.jl Section 8 and
+# .planning/spikes/003-phase18-fragility-tolerance/.
+#
+# This script still runs ONLY at the exact pinned point and does not re-run the sweep.
 #
 # Run:
 #     julia --project=. scripts/thesis_case123_repro.jl
@@ -265,8 +268,9 @@ println(
     "  This mirrors the thesis's own Case A framing (\"DSO surplus -\$2829 -> +\$439\") — the ",
     "sign of the redistribution, not its magnitude, is the reproducible claim on this real, ",
     "public-data feeder (see docs/literate/thesis_reproduction_assumptions.jl for the full ",
-    "caveat chain, including 18-01's honest sign_flip_survives=false population-scale-",
-    "sensitivity finding).",
+    "caveat chain). The sign flip is ALSO population-scale robust: 18-01's original ",
+    "sign_flip_survives=false was a solver-tolerance artifact; at tol_gap=1e-10 all 5 swept ",
+    "+/-2-5% points solve and all show the flip (corrected 2026-07-26).",
 )
 
 # SECONDARY, fragile: the aggregate welfare delta (never the ratio — Pitfall 1). Reported thin,
