@@ -142,3 +142,13 @@ None — this plan ships a fully functional, verified parser; no placeholder/stu
 None — the threat model's two `mitigate` items (T-17-01 vendored-provenance, T-17-02 parser
 self-check tripwires) are both directly implemented as specified; no new surface introduced
 beyond what the threat model already anticipated.
+
+## Self-Check: PASSED
+
+- FOUND: scripts/data/IEEE123Master.dss
+- FOUND: scripts/data/IEEELineCodes.DSS
+- FOUND: scripts/reduce_ieee123_impedances.jl
+- FOUND: .planning/phases/17-real-ieee123-impedances/17-01-SUMMARY.md
+- FOUND commit: 7532a31 (feat(17-01): vendor upstream OpenDSS IEEE-123 fixture files)
+- FOUND commit: d709b22 (feat(17-01): dependency-free regex parser + Fortescue reduction + --verify)
+- FOUND commit: 6a4974d (docs(17-01): add plan execution summary)
