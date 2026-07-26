@@ -104,3 +104,11 @@ None - no external service configuration required.
 ---
 *Phase: 16-reactive-power-consensus*
 *Completed: 2026-07-26*
+
+## Self-Check: PASSED
+
+- FOUND: src/pricing/dlmp.jl
+- FOUND: test/test_pricing_dlmp.jl
+- FOUND: .planning/phases/16-reactive-power-consensus/16-03-SUMMARY.md
+- FOUND: commit e734565 (feat(16-03): add extract_reactive_dlmp + decompose_dlmp reactive field (REACT-02))
+- FOUND: commit 9af6cc2 (test(16-03): hand-verified 2-bus reactive-price sanity pin + degeneracy/finite checks (REACT-02))
