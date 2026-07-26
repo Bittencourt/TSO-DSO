@@ -51,20 +51,48 @@
     const RHO_MAX = 1e4         # ρ clamp ceiling (stops the penalty Hessian ill-conditioning)
     const RHO0 = 5.0            # starting penalty (O(1)–O(10) at the 100 MVA-base pu scale)
 
-    # IEEE-123 population scaling (StableRNGs seed + magnitude scales). Sized (plan 07-05) on the
-    # FEEDER-SCALE 1 MVA base (src/data/ieee123.jl) to keep the VOLTAGE-CONSTRAINED (V∈[0.9,1.1])
-    # case FEASIBLE and genuinely VOLTAGE-BINDING (RESEARCH Open Q2): PV above load so the midday
-    # surplus reverse-flows and the long laterals approach the upper voltage band (`≈1.04`), while
-    # the evening load pulls the far ends down toward the lower band (`≈0.92`) — the regime the
-    # LinDistFlow exactness copy targets. At these O(1e-2) pu house scales the solved cone
-    # magnitude sits several orders above the PF-04 `atol` floor, so exactness is ROBUST at scale
-    # (converged `exact_maxgap ~ 1e-9`), unlike the numerically-fragile 100 MVA-base sizing.
-    # `DEV_SCALE_IEEE123` shrinks the (otherwise O(1) pu) flexible thermostatic/deferrable ratings
-    # to the same residential order as the inelastic load, so no single house dominates the feeder.
+    # IEEE-123 population scaling (StableRNGs seed + magnitude scales). Originally sized (plan
+    # 07-05) on the FEEDER-SCALE 1 MVA base (src/data/ieee123.jl) to keep the VOLTAGE-CONSTRAINED
+    # (V∈[0.9,1.1]) case FEASIBLE and genuinely VOLTAGE-BINDING (RESEARCH Open Q2) against the
+    # SYNTHETIC uniform placeholder impedances (`IEEE123_LINE_R=0.005`/`IEEE123_LINE_X=0.0025`).
+    #
+    # RE-TUNED (IMPED-03, Plan 17-03): after Plan 17-02 swapped in real, Fortescue-reduced
+    # per-segment impedances, the ORIGINAL triple (`LOAD_SCALE=0.03`, `PV_SCALE=0.06`,
+    # `DEV_SCALE=0.05`) broke the centralized `solve_welfare` SOCP-exactness gate outright
+    # (`assert_socp_exact!` threw: worst gap ratio 1.378 > 1 — see 17-02-SUMMARY.md), because the
+    # real network's reverse-flow/high-PV sensitivity is qualitatively different from the uniform
+    # synthetic placeholder (the SAME phenomenon Phase 15's EXACT-04 high-PV stress finding
+    # documents on the IEEE-13 fixture, here hit unintentionally rather than as a deliberate stress
+    # test). An exhaustive population-scale search (this plan; see 17-03-SUMMARY.md for the full
+    # sweep) found the achievable regime is genuinely ASYMMETRIC on the real feeder: the LOWER
+    # voltage band (drop toward 0.9) transfers reasonably well under load-scaling, but the UPPER
+    # band (rise toward 1.1) does not — any population scale that pushes the solved max
+    # meaningfully above ~1.02-1.03 pu drives the SOC relaxation genuinely inexact before reaching
+    # 1.08, the SAME high-PV/reverse-flow exactness boundary as Phase 15's finding.
+    #
+    # BEFORE -> AFTER (this re-tune):
+    #   LOAD_SCALE_IEEE123 : 0.03  -> 0.05
+    #   PV_SCALE_IEEE123   : 0.06  -> 0.12
+    #   DEV_SCALE_IEEE123  : 0.05  -> 0.05*(0.05/0.03) ≈ 0.0833  (ratio to LOAD_SCALE held fixed)
+    # Broken bound (before, at the OLD triple): centralized `solve_welfare`'s `assert_socp_exact!`
+    #   threw (worst gap ratio 1.378 > 1) — the SOCP exactness precondition of every downstream
+    #   ADMM/DADP bound, so `test_ieee123_admm.jl`'s crossval item errored outright rather than
+    #   merely failing an assertion.
+    # After the re-tune, ALL existing behavioral bounds pass cleanly (re-verified this plan):
+    #   `res.iters < 300`, `res.iters <= 100`, `isapprox(res.welfare, obj_c; rtol=1e-4)`,
+    #   `res.exact_maxgap < 1e-3`, `isapprox(res.λ, dlmp_c; atol=1e-2, rtol=1e-3)` — plus the
+    #   NEW voltage-binding margin item (vmin_solved ≈ 0.9487, vmax_solved ≈ 1.0105, both observed
+    #   this session; see `test_ieee123_admm.jl`'s widened thresholds and their own rationale).
+    # At these O(1e-2) pu house scales the solved cone magnitude sits several orders above the
+    # PF-04 `atol` floor, so exactness is ROBUST at scale, unlike the numerically-fragile 100 MVA-
+    # base sizing. `DEV_SCALE_IEEE123` shrinks the (otherwise O(1) pu) flexible thermostatic/
+    # deferrable ratings to the same residential order as the inelastic load, so no single house
+    # dominates the feeder; its ratio to `LOAD_SCALE_IEEE123` is held fixed at the original 5/3
+    # across this re-tune (not independently re-derived).
     const SEED_IEEE123 = 20260719
-    const LOAD_SCALE_IEEE123 = 0.03
-    const PV_SCALE_IEEE123 = 0.06
-    const DEV_SCALE_IEEE123 = 0.05
+    const LOAD_SCALE_IEEE123 = 0.05
+    const PV_SCALE_IEEE123 = 0.12
+    const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)
 
     """
         temperature_profile() -> Vector{Float64}
