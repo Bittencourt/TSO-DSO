@@ -122,7 +122,7 @@ impedances or without priced reactive power. Optionally consumes Phase 15's AC-c
 
 Plans:
 - [x] 18-01-PLAN.md — repro_stability_check.jl: N>=20 flake-rate + ±2-5% population-scale sensitivity sweep, committed findings.txt (REPRO-02, BLOCKING before golden is pinned)
-- [ ] 18-02-PLAN.md — test/test_thesis_repro.jl: gate-then-golden DSO-surplus sign-flip + band on real-impedance IEEE-123, IEEE-13 secondary cross-check (REPRO-01)
+- [x] 18-02-PLAN.md — test/test_thesis_repro.jl: gate-then-golden DSO-surplus sign-flip + band on real-impedance IEEE-123, IEEE-13 secondary cross-check (REPRO-01)
 - [ ] 18-03-PLAN.md — scripts/thesis_case123_repro.jl promoted to 2 literate pages (reproduction + assumptions) + docs/make.jl registration (REPRO-01, REPRO-02)
 
 <details>
@@ -179,7 +179,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
 | 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete    | 2026-07-26 |
 | 17. Real IEEE-123 Impedances | v2.1 | 2/4 | In Progress|  |
-| 18. Directional Thesis Reproduction | v2.1 | 1/3 | In Progress|  |
+| 18. Directional Thesis Reproduction | v2.1 | 2/3 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 

@@ -4,13 +4,13 @@ milestone: v2.1
 milestone_name: Validation & Reproduction
 status: executing
 stopped_at: Phase 18 Plan 01 (repro_stability_check) complete -- findings committed before any golden band pinned.
-last_updated: "2026-07-26T09:27:10.042Z"
+last_updated: "2026-07-26T10:03:35.915Z"
 last_activity: 2026-07-26
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 18 (directional-thesis-reproduction) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-26
 
@@ -60,6 +60,7 @@ Last activity: 2026-07-26
 
 *Updated after each plan completion*
 | Phase 18 P01 | 45min | 2 tasks | 2 files |
+| Phase 18 P02 | 35min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,7 @@ Recent decisions affecting current work:
 - [Phase 12]: Plan 02 load-test fixture raised T from 1 to 8 (Claude's Discretion over fixture shape, 12-CONTEXT.md): the literal T=1 fixture's Benders gap floors at a fixed numerical point after 16 iterations regardless of tol, never reaching >=50 genuinely-converging iterations.
 - [Phase 12]: Plan 02: alpha_op_lb loosened from -5.0 to -50.0 for the T=8 load-test fixture -- a correctness requirement at that scale (verified against a hand-derived closed form z*=1.4, cost=-7.84), not merely a convergence-speed tweak.
 - [Phase 18]: Phase 18 Plan 01: RECOMMENDED BAND (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937) is derived from only the exact Phase-17-retuned population point (delta=0.0) -- the +/-2%/+/-5% sweep points all fail the SOCP-exactness gate outright (sign_flip_survives=false), so the DSO-surplus sign flip is confirmed at that single point but NOT confirmed to be population-scale-robust.
+- [Phase 18]: REPRO-01 gate-then-golden test pins the DSO-surplus sign flip + magnitude band (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937), never the aggregate welfare ratio, band sourced verbatim from Plan 18-01's committed findings.txt
 
 ### Pending Todos
 
@@ -192,7 +194,7 @@ Items acknowledged and carried forward, now refined by v2.1 REQUIREMENTS.md:
 
 ## Session Continuity
 
-Last session: 2026-07-26T09:27:09.780Z
+Last session: 2026-07-26T10:00:59.748Z
 Stopped at: Phase 18 Plan 01 (repro_stability_check) complete -- findings committed before any golden band pinned.
 Resume file: None
 

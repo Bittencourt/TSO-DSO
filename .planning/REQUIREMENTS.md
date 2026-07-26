@@ -57,7 +57,7 @@ Replace synthetic IEEE-123 impedances with real, standard, citable data.
 ### Directional Thesis Reproduction (`REPRO`)
 Make a defensible reproduction claim on real, standard data.
 
-- [ ] **REPRO-01**: A literate rung/doc page + gate-then-golden test reproduces the **direction and
+- [x] **REPRO-01**: A literate rung/doc page + gate-then-golden test reproduces the **direction and
       magnitude-band** of the thesis welfare/surplus result on real data (sign + band, not the exact
       figure), carrying a fixed "directional, public-data" qualifier phrase.
 - [x] **REPRO-02**: A consolidated **assumptions/reduction doc page** documents what makes the numbers
