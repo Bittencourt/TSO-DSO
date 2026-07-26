@@ -59,22 +59,44 @@ SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.3781586234547918 > 1
 ```
 
 It **passed** at the session-start commit (`1812d38`, verified in a throwaway worktree outside the
-repo tree), so it was a real regression introduced during the session.
+repo tree), which looked like a regression introduced during the session.
 
-**Cause: my own `Pkg.develop(path=".")`**, used to run the fit tests earlier via
-`julia --project=test`. That re-resolved the **pinned** test environment — `test/Manifest.toml`
-(1232 lines) and `test/Project.toml` (14 lines), both clean at session start. Shifted solver numerics
-were enough to push a gate sitting near the noise floor over its threshold.
+### First diagnosis — WRONG
 
-CLAUDE.md pins those files precisely so results are reproducible; mutating them as a side effect of
-running tests defeated that. **Reverted with `git checkout -- test/Project.toml test/Manifest.toml`.**
+I blamed my own `Pkg.develop(path=".")` for re-resolving the pinned test environment, then "confirmed"
+it by restoring the manifests **and** switching to `Pkg.test()` in one step, and attributing the pass
+to the restore. Two changes, one conclusion — not a discriminating test.
 
-**Consequence:** every "tests pass" reported earlier in this session was measured under a mutated
-environment and did not stand as stated. Re-verified below under the pinned environment.
+### Actual cause — the `-e` invocation, pre-existing and already documented
 
-**Correct invocation:** `julia --project=. -e 'import Pkg; Pkg.test()'` — builds a temp env from the
-pinned manifest and mutates nothing. Note `@run_package_tests` discovers **zero** items without the
-`develop` call, which is exactly why the wrong path was tempting.
+Re-running the `-e` form against a **clean** environment reproduces the failure bit-for-bit
+(`1.3781586234547918`). So the environment was never implicated.
+
+This is the known TestItemRunner hazard: in a `julia -e '...'` string there is no real
+`__source__.file`, so TestItemRunner resolves the package/test root via cwd and its `joinpath(…,"..")`
+walk picks up the **stale sibling worktree**
+`/home/pedro/programming/TSO-DSO.worktrees/pdf-documentation-thesis-results/`, whose fixtures still
+carry the pre-Phase-17-retune `LOAD_SCALE_IEEE123 = 0.03`. That population point yields exactly gap
+ratio **1.378**. It was diagnosed in a prior session and recorded in project memory — **which I did
+not read before diagnosing.**
+
+**New detail worth recording:** filtering on `ti.filename` for `.worktrees` does **not** protect you.
+The erroring item is reported under the *main* path (`TSO-DSO/test/test_thesis_repro.jl:33`) because
+the contamination is in **setup-module / fixture** resolution, not the item's filename. Only a real
+entrypoint file is immune.
+
+### The separate, real mistake
+
+`Pkg.develop(path=".")` genuinely **did** mutate the pinned test environment —
+`test/Manifest.toml` (1232 lines) and `test/Project.toml` (14 lines), both clean at session start.
+CLAUDE.md pins those for reproducibility. Reverted with
+`git checkout -- test/Project.toml test/Manifest.toml`. It did **not** cause the REPRO-01 error, and
+the verification below ran under the restored environment, so nothing rests on the mutated state.
+
+**Correct invocation:** `julia --project=. -e 'import Pkg; Pkg.test()'` — real `test/runtests.jl`
+entrypoint, immune to the sibling-worktree walk, builds a temp env from the pinned manifest, mutates
+nothing. The trap: `@run_package_tests` discovers **zero** items via `--project=test` without the
+`develop` call, so the hazardous invocation is the one that appears to work.
 
 ## Verification (pinned environment, `Pkg.test()`)
 
@@ -92,6 +114,12 @@ The single failure: Aqua "Stale dependencies" —
 So: **`src/pricing/fit.jl` is clean, no regression**, and the golden gate does pass — which makes the
 claim written into both corrected artifacts ("`test_thesis_repro.jl` does not break, 4.8074 < 5.5886")
 accurate as stated.
+
+**Coincidence worth noting, since it nearly misled the whole diagnosis:** the spurious sibling-worktree
+failure ratio (**1.378**, gap 1.54e-6) sits in exactly the same numeric band as the genuine noise-floor
+artifacts this session characterized (ratios 1.10–4.76, gaps 1.5e-6–5.1e-6). Two unrelated defects
+producing indistinguishable symptoms — which is precisely why the tolerance ladder and the
+`-e`-invocation check are both needed, and why "the number looks like noise" is not a diagnosis.
 
 ## Still owed (unchanged, tracked in STATE.md)
 

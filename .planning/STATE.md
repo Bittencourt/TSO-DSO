@@ -207,14 +207,24 @@ None yet.
   and value disagree); (5) ⬜ OWED split `repro_stability_check.jl`'s try/catch per stage and thread
   the new `optimizer` kwarg. Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`.
 
-- [environment hazard, cost a false regression signal 2026-07-26]: **never run the test suite via
-  `julia --project=test -e 'import Pkg; Pkg.develop(path="."); ...'`.** That re-resolves the PINNED
-  test environment (rewrote `test/Manifest.toml` 1232 lines + `test/Project.toml` 14 lines), and the
-  resulting numeric shift was enough to push `test_thesis_repro.jl`'s REPRO-01 gate over its
-  exactness threshold — a regression that looked like a code defect and was not. Use
-  `julia --project=. -e 'import Pkg; Pkg.test()'`, which builds a temp env from the pinned manifest.
-  The trap is that `@run_package_tests` discovers **zero** items without the `develop` call, so the
-  wrong invocation is the one that appears to work.
+- [test-invocation hazard, cost a misdiagnosis 2026-07-26]: **never run the suite via
+  `julia --project=test -e '... @run_package_tests ...'`.** Two distinct problems, both real:
+  **(a) sibling-worktree contamination (this is what bites).** In a `-e` string there is no real
+  `__source__.file`, so TestItemRunner resolves the package/test root via cwd and its
+  `joinpath(…,"..")` walk picks up
+  `/home/pedro/programming/TSO-DSO.worktrees/pdf-documentation-thesis-results/`, whose fixtures carry
+  the pre-Phase-17-retune `LOAD_SCALE_IEEE123 = 0.03`. That yields a spurious REPRO-01
+  `assert_socp_exact!` failure at gap ratio **1.378** / gap 1.54e-6. **Filtering `ti.filename` on
+  `.worktrees` does NOT help** — the item reports under the *main* path because the contamination is in
+  setup-module/fixture resolution. Reproduced bit-for-bit against a clean env.
+  **(b) `Pkg.develop(path=".")` mutates the PINNED test env** (rewrote `test/Manifest.toml` 1232 lines
+  + `test/Project.toml` 14 lines). Separate bug; did NOT cause (a).
+  **Use `julia --project=. -e 'import Pkg; Pkg.test()'`** — real `test/runtests.jl` entrypoint, immune
+  to the walk, temp env from the pinned manifest, mutates nothing. Verified good state:
+  **2358 pass / 1 fail / 3 broken**, the single failure being the known-false Aqua CairoMakie
+  stale-deps from the root `Project.toml` drift.
+  ⚠️ The 1.378 ratio is in the SAME band as the genuine noise-floor artifacts above (1.10–4.76) — two
+  unrelated defects with indistinguishable symptoms. "The number looks like noise" is not a diagnosis.
 
 - [measurement hygiene, project-wide]: residual-based classification must be calibrated against the
   **solver noise floor per feeder**. The WR-01 `atol + rtol·magnitude` idiom scales with quantity
