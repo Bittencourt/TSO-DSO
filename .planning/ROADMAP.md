@@ -179,7 +179,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
 | 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete    | 2026-07-26 |
 | 17. Real IEEE-123 Impedances | v2.1 | 2/4 | In Progress|  |
-| 18. Directional Thesis Reproduction | v2.1 | 3/3 | Complete   | 2026-07-26 |
+| 18. Directional Thesis Reproduction | v2.1 | 3/3 | Complete    | 2026-07-26 |
 
 ## Deferred / Future-Milestone Notes
 
