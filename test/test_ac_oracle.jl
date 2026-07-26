@@ -34,7 +34,11 @@
         #   V₂ = V₁ − (r+jx)·I₁₂ = 0.998 − 0.0015im. abs2(V₂) = 0.998² + 0.0015² = 0.99600625
         #   (self-consistent with v[2,1]). angle(V₂) ≈ −0.0015003 rad, matching the small-angle
         #   identity θ₂ ≈ −(x·P − r·Q) = −(0.02·0.1 − 0.01·0.05) = −0.0015.
-        model = Model()
+        # An attached optimizer is required for `value(...)` to resolve the fixed variables
+        # (mirrors test_exactness.jl's fixed-value construction). Everything is fixed and the
+        # objective is 0, so a trivial LP solve suffices — recover_voltage_angles is pure
+        # post-processing over the resulting values, no cone involved.
+        model = Model(select_optimizer(LP()))
         @variable(model, v[1:N, 1:T])
         @variable(model, P[1:B, 1:T])
         @variable(model, Q[1:B, 1:T])

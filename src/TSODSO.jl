@@ -81,6 +81,13 @@ include("models/exactness.jl")
 # --- operational_oracle + SEAM-01 extension stubs (owned by plan 04-04, OPT-03 / SEAM-01) ---
 include("models/oracle.jl")
 
+# --- AC-exactness oracle post-processing (owned by plan 15-01/15-02, EXACT-01/02/03) ---
+# Sits beside models/exactness.jl: reads ModelContext.meta[:pf_vars] populated by BOTH the SOCP
+# (ConvexBranchFlow) and AC (ACPowerFlow) solves. recover_voltage_angles (15-01) recovers true
+# voltage phasors; assert_ac_exact! (15-02) certifies the SOCP relaxation per-hour against the AC
+# oracle. Included after models/oracle.jl and before the pricing/ block.
+include("models/ac_oracle.jl")
+
 # --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
 # Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
 # ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
