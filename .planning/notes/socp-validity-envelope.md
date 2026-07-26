@@ -88,6 +88,21 @@ milestone's opening question, not its premise.
 
 ## Method — corrected
 
+> ⚠️ **THIRD-PASS CORRECTION (spike 002).** Tier 1 as written below is **not usable at default solver
+> tolerance on a large feeder.** On real IEEE-123 (122 branches) Clarabel's cone residual at the default
+> `tol_gap = 1e-8` is ~1e-6–5e-6 — the same size as the classifier's own `atol = 1e-6` — so 23 of 48
+> swept points were flagged inexact by **noise**. Proven by tolerance ladder: worst ratio 4.76 → 0.0029
+> at an identical optimum when `tol_gap` → 1e-10.
+>
+> WR-01 scales the threshold with quantity *magnitude*; it does **not** scale with solver *accuracy*, and
+> accuracy degrades with problem size. Tier 1 therefore needs a step this brief never specified:
+> **calibrate the solver noise floor per feeder and classify against that**, not against a fixed `rtol`.
+> Naively tightening tolerance is not the fix — 2 of 3 discriminated points then fail `ALMOST_OPTIMAL`.
+>
+> Also from spike 002: on real IEEE-123 impedances the voltage upper bound is **never active**
+> (`vpeak ≤ 1.016` vs caps ≥ 1.05), so the overvoltage mechanism the whole milestone is premised on does
+> **not occur there**. See `.planning/spikes/002-ieee123-validity-map/README.md`.
+
 ### Tier 1: the cone gap itself (dense grid, free)
 
 `src/models/exactness.jl:8` already computes, per branch and hour:
@@ -223,6 +238,20 @@ WIDE → v3.1 remediation milestone. NARROW → document the envelope, move to t
 **Why reachability and not grid-volume fraction.** "12% of swept points are inexact" is an artifact
 of where the sweep bounds were chosen, and a reviewer can move those bounds. Reachability at a
 standard voltage band is grid-choice independent.
+
+### 🛑 PREREQUISITE (spike 002) — the gate's premise may not hold
+
+Before this gate means anything, one cheap test must run: **re-run the Phase 18-01 ±2–5% population
+sweep at `tol_gap = 1e-10`** and check whether the SOCP-exactness gate still throws.
+
+Phase 18-01 attributed the sign-flip fragility to "the SOCP-exactness gate itself throw[ing] near that
+boundary." Spike 002 showed that on IEEE-123 at *default* tolerance the shipped `assert_socp_exact!`
+(`rtol=1e-4`, `atol=1e-6`, throws) fires on ~half of swept operating points **spuriously**. If the
+Phase 18-01 throwing is that same artifact, the documented "knife-edge fragility" is a tolerance
+artifact rather than a physical boundary — and the gate below is testing for a region that does not
+exist on real impedances.
+
+Untested. Cheap. **Do it before v3.0 scoping treats the fragility as physical.**
 
 ### ⚠️ TWO DEFECTS IN THIS GATE — resolve before it is honoured
 

@@ -43,6 +43,16 @@ Splitting compute from plotting matters: sweeps cost minutes, figure iteration s
 - **Scale-free thresholds only** — the house WR-01 `atol + rtol·max(|lhs|,|rhs|)` idiom.
 - **Report absolute and relative**, never relative alone (welfare and per-unit quantities can straddle
   zero or sit on wildly different MVA bases).
+- **Run a tolerance ladder before believing any residual-based classification.** Re-solve flagged points
+  at progressively tighter solver tolerances: a structural property PERSISTS, numerical noise SHRINKS.
+  Spike 002 saw a "worst case" ratio of 4.76 collapse to 0.0029 at an identical optimum when `tol_gap`
+  went 1e-8 → 1e-10. Ship the ladder alongside the sweep, not after someone doubts the result.
+- **Sanity-check for spatial structure.** A physical mechanism produces a connected region, monotone in
+  its driving parameter. Salt-and-pepper scatter — or a flag at the *lowest* value of the driving axis —
+  is noise. This is free to check and would have caught spike 002's artifact before the tolerance ladder.
+- **Watch for sensitivity to inactive constraints.** If moving a bound that is not active changes a
+  measured quantity, the quantity is tracking solver trajectory, not the optimum. A cheap, decisive
+  noise test that fell out of spike 002 by accident.
 
 ## Tools & Libraries
 
