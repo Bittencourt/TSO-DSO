@@ -28,7 +28,13 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: Milestone v2.1 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-07-26 — Milestone v2.1 completed and archived
+Last activity: 2026-07-26 — Completed quick task 260726-mo7: Add optimizer kwarg to fit_baseline
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260726-mo7 | Add optimizer kwarg to fit_baseline | 2026-07-26 | c099ee6 | [260726-mo7-add-optimizer-kwarg-to-fit-baseline](./quick/260726-mo7-add-optimizer-kwarg-to-fit-baseline/) |
 
 ## Performance Metrics
 
@@ -180,6 +186,28 @@ None yet.
   hash stability remain deferred, unaffected by v2.1 scope; IEEE-123 exact App. E impedances is now
   ACTIVE as v2.1 Phase 17 (real public-data impedances, not App. E — see PROJECT.md v2.1 Key
   context). See `milestones/v1.0-MILESTONE-AUDIT.md`.
+
+- [v2.1 Phase 18 REFUTED — corrections owed]: the recorded `sign_flip_survives: false` is **wrong**.
+  Spikes 002/003 plus quick task 260726-mo7 showed the ±2-5% "population-scale fragility" was a
+  solver-tolerance artifact: `assert_socp_exact!`'s `atol = 1e-6` sits at Clarabel's achievable cone
+  residual on the 122-branch IEEE-123 feeder at the default `tol_gap = 1e-8`. At `tol_gap = 1e-10`
+  the sweep solves **5/5** and the DSO-surplus sign flip holds at **every** point, with both
+  surpluses monotone (`dadp_dso` 2.71→4.81, `fit_dso` −183→−210). Two of the four recorded failures
+  were also **misattributed** — they were `fit_baseline`, not `solve_welfare`, because
+  `scripts/repro_stability_check.jl` wraps three solves in one try/catch.
+  **Corrections owed:** (1) `results/repro_stability_check/findings.txt`;
+  (2) `milestones/v2.1-phases/18-directional-thesis-reproduction/18-01-SUMMARY.md`; (3) the published
+  assumptions literate page; (4) Plan 18-02's golden band — its `1.5 × max|dso|` rule now implies
+  **7.211** vs the pinned **5.5886** (`test_thesis_repro.jl` still passes, but rule and value
+  disagree); (5) split `repro_stability_check.jl`'s try/catch per stage and thread the new
+  `optimizer` kwarg. Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`.
+
+- [measurement hygiene, project-wide]: residual-based classification must be calibrated against the
+  **solver noise floor per feeder**. The WR-01 `atol + rtol·magnitude` idiom scales with quantity
+  magnitude but NOT with solver accuracy, and accuracy degrades with problem size. On IEEE-123 at
+  default tolerance this produced a **48% false-positive** inexactness rate
+  (`.planning/spikes/002-ieee123-validity-map/`). A cone-gap ratio near 1 is not evidence — the
+  3-bus structural gaps were 1e3-1e4.
 
 ## Deferred Items
 

@@ -116,7 +116,10 @@ for (name, tol) in SETTINGS
         # SEPARATE try/catch — fit_baseline cannot be tightened, so its failure is its own fact.
         if gate == "PASSED"
             try
-                fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+                # Quick task 260726-mo7 added the `optimizer` kwarg, so the FIT counterfactual
+                # can now be conditioned exactly like solve_welfare (previously impossible).
+                fb = fit_baseline(feeder, ConvexBranchFlow(), aggs;
+                    T = T, λ₀ = λ0, optimizer = opt)
                 fitdso = fb.social_fit - fb.prosumer_surplus
             catch e
                 err = "fit_baseline: " * replace(first(sprint(showerror, e), 90), '\n' => " | ")

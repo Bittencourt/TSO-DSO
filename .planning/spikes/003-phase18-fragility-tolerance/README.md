@@ -117,27 +117,46 @@ at those points.
 at `δ = −0.02, +0.02, +0.05` are untestable — they persist bit-identically in both runs for that reason
 alone, not because they are physical.
 
-Whether they are *also* numerical is **unknown**. It is plausible: same feeder, same default tolerance,
-same noise-floor mechanism that spike 002 proved for `solve_welfare`, and the failures are non-monotone
-in δ (fails at ±0.02 and +0.05, succeeds at −0.05 and 0.0) with ratios 1.10–3.73 sitting in exactly the
-band spike 002 identified as noise.
+Whether they are *also* numerical was **unknown at the time of writing**. It looked plausible: same
+feeder, same default tolerance, same noise-floor mechanism spike 002 proved for `solve_welfare`, and
+the failures non-monotone in δ with ratios 1.10–3.73 sitting in the band spike 002 identified as noise.
 
-**Adding an `optimizer` kwarg to `fit_baseline`, mirroring `solve_welfare`, is the single change that
-would make the population-robustness question answerable.** Small, mechanical, and it unblocks a
-published claim.
+### ✅ RESOLVED — quick task 260726-mo7 (commit `c099ee6`)
+
+The `optimizer` kwarg was added to `fit_baseline` and threaded to all three of its solve sites. Re-run
+with it (`run-after-kwarg.log`):
+
+```
+default 1e-8  : 2/5 gate THREW   1/5 show the sign flip     ← unchanged (default is byte-identical)
+tight   1e-10 : 0/5 gate THREW   5/5 show the sign flip
+
+delta    socp_maxgap    dadp_dso      fit_dso    flip
+-0.05    3.505e-08      2.709838     -182.9611   YES
+-0.02    1.900e-08      3.277535     -190.8755   YES   ← was unmeasurable
+ 0.00    1.162e-08      3.725742     -196.2165   YES
++0.02    4.610e-08      4.163925     -201.6167   YES   ← was unmeasurable
++0.05    1.342e-08      4.807417     -209.9950   YES   ← was unmeasurable
+```
+
+**`fit_baseline`'s failures were also numerical.** Both surpluses are monotone across the band
+(`dadp_dso` 2.71 → 4.81, `fit_dso` −183 → −210) — no boundary anywhere.
+
+So the correction below is **stronger than this README first stated**: `sign_flip_survives: false` is
+not merely misattributed and partly unmeasurable, it is **refuted outright**. The sign flip holds at
+all five swept points. Phase 18-01's headline negative robustness result was a tolerance artifact end
+to end.
 
 ## The correction that is owed
 
-`sign_flip_survives: false` should read, on this evidence:
+**Updated after 260726-mo7.** `sign_flip_survives: false` should read:
 
-> Survives at δ = −0.05 and 0.00 (measured: `dadp_dso > 0`, `fit_dso < 0`).
-> **Unmeasurable** at δ = −0.02, +0.02, +0.05 — blocked by `fit_baseline`'s exactness gate, which
-> cannot be tolerance-conditioned. `dadp_dso` is strictly positive and monotone across the whole band.
+> **Survives at all five swept points** (δ = −0.05, −0.02, 0.00, +0.02, +0.05): `dadp_dso > 0` and
+> `fit_dso < 0` throughout, both monotone in population scale. The recorded failures were solver
+> under-convergence at the default `tol_gap = 1e-8`, not a physical exactness boundary; at
+> `tol_gap = 1e-10` all five solve. No evidence of population-scale fragility remains in this band.
 
-"Does not survive perturbation in either direction" and "survives at −5%, unmeasurable elsewhere" are
-materially different claims. The first is in `results/repro_stability_check/findings.txt`, in
-18-01-SUMMARY.md, and — per 18-03 — in the published assumptions literate page. **All three need
-correcting, not annotating.**
+That claim appears in `results/repro_stability_check/findings.txt`, in 18-01-SUMMARY.md, and — per
+18-03 — in the published assumptions literate page. **All three need correcting, not annotating.**
 
 Downstream check needed: Plan 18-02's golden band (`DSO_BAND_HI = 5.58855710237937`) was derived as
 `1.5 × max|dso|` over "successfully solved points" — which was 1 point. With 5 points now solving, the

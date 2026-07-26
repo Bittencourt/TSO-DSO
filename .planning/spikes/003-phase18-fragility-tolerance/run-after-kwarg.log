@@ -1,0 +1,35 @@
+========================================================================================================
+Phase 18-01 fragility — tolerance artifact or physical boundary?
+Gate left ARMED (default rtol_exact = 1e-4). Only the SOLVER tolerance changes.
+========================================================================================================
+
+--- default 1e-8  --------------------------------------------------------------------------------
+delta    gate         socp_maxgap       dadp_dso        fit_dso   sign flip?
+-0.05    THREW                  —              —              —   —
+         ↳ SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=2.685423204302964 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=3.1002992519901795e-6) — 
+-0.02    PASSED         1.810e-07       3.277536              —   —
+         ↳ fit_baseline: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=3.227073440795618 > 1 (rtol=0.0001, 
+0.0      PASSED         3.060e-07       3.725705      -196.2164   YES
+0.02     THREW                  —              —              —   —
+         ↳ SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.1425393613288473 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=1.5814624036991631e-6) —
+0.05     PASSED         1.215e-06       4.807424              —   —
+         ↳ fit_baseline: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.1002062714021996 > 1 (rtol=0.0001,
+
+--- tight   1e-10 --------------------------------------------------------------------------------
+delta    gate         socp_maxgap       dadp_dso        fit_dso   sign flip?
+-0.05    PASSED         3.505e-08       2.709838      -182.9611   YES
+-0.02    PASSED         1.900e-08       3.277535      -190.8755   YES
+0.0      PASSED         1.162e-08       3.725742      -196.2165   YES
+0.02     PASSED         4.610e-08       4.163925      -201.6167   YES
+0.05     PASSED         1.342e-08       4.807417      -209.9950   YES
+
+========================================================================================================
+EQUIVALENCE CONTROL — delta=0 @ default must match committed findings.txt
+  dso         : got 3.725705   expected 3.725705   MATCH ✓
+  socp_maxgap : got 3.060e-07   expected 3.060e-07  MATCH ✓
+
+========================================================================================================
+VERDICT
+  default 1e-8  : 2/5 gate THREW   1/5 show the sign flip
+  tight   1e-10 : 0/5 gate THREW   5/5 show the sign flip
+========================================================================================================
