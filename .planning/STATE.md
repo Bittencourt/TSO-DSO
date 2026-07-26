@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
-status: planning
-last_updated: "2026-07-25T23:10:00.000Z"
-last_activity: 2026-07-25
+status: executing
+stopped_at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
+last_updated: "2026-07-26T00:30:04.541Z"
+last_activity: 2026-07-26
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** v2.1 Validation & Reproduction — roadmap created (Phases 15-18), awaiting phase planning
+**Current focus:** Phase 15 — ac-exactness-oracle
 
 ## Current Position
 
-Phase: 15 (AC-Exactness Oracle) — not started
-Plan: —
-Status: Roadmap created and approved-pending; ready for `/gsd:plan-phase 15`
-Last activity: 2026-07-25 — ROADMAP.md (Phases 15-18) + REQUIREMENTS.md traceability written for v2.1
+Phase: 15 (ac-exactness-oracle) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-07-26
 
 ## Performance Metrics
 
@@ -195,4 +196,5 @@ Resume file: None
 ## Operator Next Steps
 
 - Review/approve the v2.1 roadmap (Phases 15-18), then start with `/gsd:plan-phase 15`
+
 </content>
