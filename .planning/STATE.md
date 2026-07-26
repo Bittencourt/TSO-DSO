@@ -35,7 +35,8 @@ Last activity: 2026-07-26 — Completed quick task 260726-mo7: Add optimizer kwa
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260726-mo7 | Add optimizer kwarg to fit_baseline | 2026-07-26 | c099ee6 | [260726-mo7-add-optimizer-kwarg-to-fit-baseline](./quick/260726-mo7-add-optimizer-kwarg-to-fit-baseline/) |
-| 260726-n7l | Correct the refuted sign_flip_survives claim in findings.txt and 18-01-SUMMARY | 2026-07-26 | (this commit) | [260726-n7l-correct-the-refuted-sign-flip-survives-c](./quick/260726-n7l-correct-the-refuted-sign-flip-survives-c/) |
+| 260726-n7l | Correct the refuted sign_flip_survives claim in findings.txt and 18-01-SUMMARY | 2026-07-26 | b251f55 | [260726-n7l-correct-the-refuted-sign-flip-survives-c](./quick/260726-n7l-correct-the-refuted-sign-flip-survives-c/) |
+| 260726-plf | Correct the 18-03 assumptions page — Section 8 refuted, Phase-17 re-tune premise undermined | 2026-07-26 | (this commit) | [260726-plf-correct-the-18-03-assumptions-page-secti](./quick/260726-plf-correct-the-18-03-assumptions-page-secti/) |
 
 ## Performance Metrics
 
@@ -122,10 +123,10 @@ Recent decisions affecting current work:
 
 - [Phase 12]: Plan 02 load-test fixture raised T from 1 to 8 (Claude's Discretion over fixture shape, 12-CONTEXT.md): the literal T=1 fixture's Benders gap floors at a fixed numerical point after 16 iterations regardless of tol, never reaching >=50 genuinely-converging iterations.
 - [Phase 12]: Plan 02: alpha_op_lb loosened from -5.0 to -50.0 for the T=8 load-test fixture -- a correctness requirement at that scale (verified against a hand-derived closed form z*=1.4, cost=-7.84), not merely a convergence-speed tweak.
-- [Phase 18]: Phase 18 Plan 01: RECOMMENDED BAND (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937) is derived from only the exact Phase-17-retuned population point (delta=0.0) -- the +/-2%/+/-5% sweep points all fail the SOCP-exactness gate outright (sign_flip_survives=false), so the DSO-surplus sign flip is confirmed at that single point but NOT confirmed to be population-scale-robust.
+- [Phase 18, CORRECTED 2026-07-26]: ~~RECOMMENDED BAND derived from only the exact retuned point; the +/-2%/+/-5% sweep points all fail the SOCP-exactness gate outright (sign_flip_survives=false), so the sign flip is NOT confirmed population-scale-robust.~~ REFUTED: those failures were solver under-convergence at the default tol_gap=1e-8. At 1e-10 all 5 points solve and ALL show the sign flip, both surpluses monotone. The band still passes (max|dso|=4.807417 < 5.5886) but its own `1.5 x max|dso|` rule now implies 7.211. See the Phase 18 blocker below.
 - [Phase 18]: REPRO-01 gate-then-golden test pins the DSO-surplus sign flip + magnitude band (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937), never the aggregate welfare ratio, band sourced verbatim from Plan 18-01's committed findings.txt
 - [Phase 18]: Plan 03: every reproduction number carries the "directional, public-data" qualifier via a per-file cite_repro(x) helper (executed code only, never inside Literate prose comments); the aggregate welfare ratio is never computed as the primary claim (Pitfall 1).
-- [Phase 18]: Plan 03: the assumptions page states plainly that the thesis's +25% welfare-ratio magnitude does not transfer to real public IEEE-123 data (measured ~+0.045%), while the DSO-surplus sign flip is the robust signal; Plan 18-01's sign_flip_survives=false sweep finding is carried forward verbatim.
+- [Phase 18]: Plan 03: the assumptions page states plainly that the thesis's +25% welfare-ratio magnitude does not transfer to real public IEEE-123 data (measured ~+0.045%), while the DSO-surplus sign flip is the robust signal. **[CORRECTED 2026-07-26]** The page no longer carries Plan 18-01's `sign_flip_survives=false` finding — Section 8 was rewritten to "Yes, at all five swept points" (quick task 260726-plf). The +25%-does-not-transfer statement is UNAFFECTED and still correct.
 
 ### Pending Todos
 
@@ -200,12 +201,25 @@ None yet.
   prepended (quick task 260726-n7l); NOTE the file is **generated** by
   `scripts/repro_stability_check.jl:343`, so the banner is lost on any re-run until (5) lands;
   (2) ✅ DONE `milestones/v2.1-phases/18-directional-thesis-reproduction/18-01-SUMMARY.md` — banner +
-  8 inline annotations + `## Correction` section; (3) ⬜ **OWED, HIGHEST PRIORITY** the published
-  18-03 assumptions literate page still carries the false fragility caveat — it is the reader-facing
-  artifact; (4) ⬜ OWED Plan 18-02's golden band — its `1.5 × max|dso|` rule now implies **7.211** vs
+  8 inline annotations + `## Correction` section; (3) ✅ DONE the published 18-03 assumptions page
+  (`docs/literate/thesis_reproduction_assumptions.jl` + regenerated `.md`) — Section 8 rewritten to
+  "Yes, at all five swept points" (quick task 260726-plf); (4) ⬜ OWED Plan 18-02's golden band — its `1.5 × max|dso|` rule now implies **7.211** vs
   the pinned **5.5886** (`test_thesis_repro.jl` passes — verified 6/6 under the pinned env — but rule
   and value disagree); (5) ⬜ OWED split `repro_stability_check.jl`'s try/catch per stage and thread
   the new `optimizer` kwarg. Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`.
+
+- [v2.1 Phase 17 premise REFUTED 2026-07-26]: the page-documented justification for the Phase-17
+  population re-tune (`0.03/0.06/0.05 -> 0.05/0.12/0.0833`) — that the original synthetic-impedance
+  triple "broke solve_welfare's SOCP-exactness gate outright on the real network, worst gap ratio
+  1.378 > 1" — is a **solver-tolerance artifact**. Tested directly: the original triple on the REAL
+  feeder throws at default `tol_gap=1e-8` (ratio 1.3781586234547918) and **PASSES at 1e-10**
+  (`socp_maxgap=1.673e-08`, `vpeak=1.00198`, `dso=+0.662750` — still positive). The re-tune was NOT
+  necessary for exactness. The re-tuned point remains valid and nothing downstream is wrong; but
+  Sections 5/7 of the assumptions page (the "asymmetric achievable regime / upper band limited by
+  inexactness" rationale) rest on the same default-tolerance evidence and are now flagged
+  *evidence undermined, needs re-measurement at tight tolerance*. Phase 17's full search space was NOT
+  re-swept — the lower-band bind (`vmin≈0.9487`) is real physics and unaffected. **OWED: re-measure
+  Phase 17's population-scale search at tight tolerance.**
 
 - [test-invocation hazard, cost a misdiagnosis 2026-07-26]: **never run the suite via
   `julia --project=test -e '... @run_package_tests ...'`.** Two distinct problems, both real:

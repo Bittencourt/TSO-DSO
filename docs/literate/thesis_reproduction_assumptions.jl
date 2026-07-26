@@ -47,6 +47,19 @@ cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 # swapped in real impedances, because the ORIGINAL synthetic-impedance triple broke
 # `solve_welfare`'s SOCP-exactness gate outright on the real network (`assert_socp_exact!`
 # threw — worst gap ratio 1.378 > 1). The re-tune:
+#
+# !!! warning "CORRECTED 2026-07-26 — that 1.378 failure was a solver-tolerance artifact"
+#     The re-tune was **not necessary for exactness**. Re-tested directly: the ORIGINAL triple
+#     (`0.03 / 0.06 / 0.05`) on the REAL-impedance feeder throws at the default `tol_gap = 1e-8`
+#     with exactly ratio `1.3781586234547918`, and **solves cleanly at `tol_gap = 1e-10`** —
+#     `socp_maxgap = 1.673e-08`, `vpeak = 1.00198` pu, `dso = +0.662750` (still positive, i.e. the
+#     sign flip's DADP side survives there too). `atol = 1e-6` sits at Clarabel's achievable cone
+#     residual on this 122-branch feeder, so the "broke the gate outright" reading is not
+#     supported — see Section 8.
+#
+#     The re-tuned point below remains a perfectly valid operating point and nothing downstream
+#     of it is wrong; it simply was not *required*, and the asymmetry rationale in Sections 5 and
+#     7 rests on the same default-tolerance evidence (see the warnings there).
 
 const LOAD_SCALE_IEEE123 = 0.05    # was 0.03 (synthetic-impedance point)
 const PV_SCALE_IEEE123 = 0.12      # was 0.06
@@ -58,6 +71,21 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # population scale pushing the solved max meaningfully above ~1.02-1.03 pu drives the SOC
 # relaxation genuinely inexact before reaching 1.08 pu (the same high-PV/reverse-flow
 # exactness boundary Phase 15's EXACT-04 finding documents on the IEEE-13 fixture).
+#
+# !!! warning "CORRECTED 2026-07-26 — the upper-band half of this claim needs re-measuring"
+#     Phase 17's search ran at the default `tol_gap = 1e-8`, where "drives the SOC relaxation
+#     genuinely inexact" is **not distinguishable from solver noise** on this feeder (`atol = 1e-6`
+#     sits at Clarabel's achievable cone residual — Section 8). Two specific problems:
+#
+#     * the datum anchoring this paragraph (ratio 1.378 at the `0.03` point) is **refuted** — it
+#       solves cleanly at `tol_gap = 1e-10`; and
+#     * an independent sweep found the voltage **upper bound is never active at all** on this
+#       feeder across a 5.5× PV range (`vpeak` 0.9997-1.016 pu against caps 1.05-1.10), so there
+#       is no observed upper-band binding to be asymmetric about.
+#
+#     Phase 17's full search space was **not** re-swept, so this is recorded as *evidence
+#     undermined, needs re-measurement at tight tolerance* — not as refuted. The **lower**-band
+#     claim (`vmin_solved ≈ 0.9487` pu, load-driven) is real physics and is unaffected.
 #
 # ## 5. The PV scenario
 #
@@ -100,20 +128,64 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # upper side. Any future re-tune of this population must re-verify this asymmetry, not assume it
 # holds at a different scale.
 #
+# !!! warning "CORRECTED 2026-07-26 — same caveat as Section 5"
+#     "Pushing the population scale up … drives the SOC relaxation inexact before the bound is even
+#     reached" was measured at the default `tol_gap = 1e-8`, which cannot distinguish a relaxation
+#     gap from solver under-convergence on this feeder (Section 8). The observed
+#     `vmax_solved ≈ 1.0105` pu is a real measurement and stands; the **inference** that inexactness
+#     limits the upper band does not, pending re-measurement at tight tolerance. The lower-band
+#     binding (`vmin_solved ≈ 0.9487` pu) is unaffected.
+#
 # ## 8. Plan 18-01's stability/sensitivity sweep — does the sign flip survive population-scale
 #    perturbation?
 #
-# **No — not confirmed.** `scripts/repro_stability_check.jl` (Plan 18-01) swept
-# `LOAD_SCALE_IEEE123`/`PV_SCALE_IEEE123`/`DEV_SCALE_IEEE123` by ±2%/±5% around the exact
-# retuned point and found `sign_flip_survives: false` — ALL FOUR non-zero perturbation points
-# FAILED OUTRIGHT (`assert_socp_exact!` threw, worst gap/tol ratios 1.10–3.23), exactly the
-# near-boundary knife-edge risk this page's Section 7 documents. The DSO-surplus sign flip is
-# therefore confirmed **only at the exact Phase-17-retuned population point (directional,
-# public-data)**, NOT across a ±2-5% neighborhood — the golden magnitude band
-# (`DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937`) pinned in `test/test_thesis_repro.jl` is
-# derived from that single successfully-solved point only, per
-# `results/repro_stability_check/findings.txt`'s own explicit flag. Any future population
-# re-tune MUST re-run `scripts/repro_stability_check.jl` before trusting that band again.
+# **Yes — at all five swept points.** (This section was CORRECTED on 2026-07-26; the original
+# verdict, quoted at the end, was wrong.)
+#
+# Re-measured with the shipped exactness gate still ARMED (default `rtol_exact = 1e-4`), changing
+# only the SOLVER tolerance to `tol_gap = 1e-10`:
+#
+# | δ | socp_maxgap | dadp_dso | fit_dso | sign flip |
+# |---|---|---|---|---|
+# | −0.05 | 3.505e-08 | +2.709838 | −182.9611 | yes |
+# | −0.02 | 1.900e-08 | +3.277535 | −190.8755 | yes |
+# | 0.00 | 1.162e-08 | +3.725742 | −196.2165 | yes |
+# | +0.02 | 4.610e-08 | +4.163925 | −201.6167 | yes |
+# | +0.05 | 1.342e-08 | +4.807417 | −209.9950 | yes |
+#
+# 5/5 solve; the DSO-surplus sign flip holds at every point; both surpluses are **monotone** in
+# population scale (`dadp_dso` +2.71 → +4.81, `fit_dso` −183 → −210, directional, public-data).
+# There is no boundary, no discontinuity and no knife edge in this neighbourhood.
+#
+# **Why the original sweep concluded otherwise — the failures were NUMERICAL.**
+# `assert_socp_exact!`'s `atol = 1e-6` sits AT Clarabel's achievable cone residual on this
+# 122-branch feeder at the default `tol_gap = 1e-8`. Tightening shrinks the residual one to two
+# orders of magnitude while the optimum is UNCHANGED (`dadp_dso` agrees to 6-7 significant
+# figures) — a structural relaxation gap is a property of the optimum and cannot behave that way.
+# Independently, on real IEEE-123 impedances the voltage upper bound is **never active** across a
+# 5.5× PV range (`vpeak ≤ 1.016` pu against caps ≥ 1.05), so the high-PV/reverse-flow mechanism
+# that drives genuine SOC inexactness on the IEEE-13 stress fixture does not occur here at all.
+#
+# Two of the four originally-recorded failures were also **misattributed**: they were
+# `fit_baseline`, not `solve_welfare`, because `scripts/repro_stability_check.jl` wraps three
+# solves in one `try/catch`. Nothing was flaky — Clarabel is deterministic and the ratios
+# reproduce bit-for-bit; only the attribution was inferred.
+#
+# The golden magnitude band (`DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937`) pinned in
+# `test/test_thesis_repro.jl` still PASSES (max observed `|dso| = 4.807417 < 5.5886`), but it was
+# derived as `1.5 × max|dso|` over the then-single solved point; with five solving that rule now
+# implies 7.211, so band and rule disagree and the band should be re-derived deliberately.
+#
+# ~~ORIGINAL (WRONG) VERDICT: "No — not confirmed … `sign_flip_survives: false` — ALL FOUR
+# non-zero perturbation points FAILED OUTRIGHT … the DSO-surplus sign flip is therefore confirmed
+# only at the exact Phase-17-retuned population point, NOT across a ±2-5% neighborhood."~~
+#
+# Evidence: `.planning/spikes/003-phase18-fragility-tolerance/` (README + `run.log` before /
+# `run-after-kwarg.log` after), `.planning/spikes/002-ieee123-validity-map/` (the noise-floor
+# proof), commit `c099ee6` (the `optimizer` kwarg on `fit_baseline` that made the FIT
+# counterfactual conditionable at all). A future population re-tune should still re-run
+# `scripts/repro_stability_check.jl` — but that script must first be fixed to split its
+# three-solve `try/catch` and to thread the `optimizer` kwarg.
 #
 # ## Live-checked constants
 #
