@@ -1,3 +1,76 @@
+################################################################################
+!!! CORRECTION — 2026-07-26 — THE VERDICT BELOW IS SUPERSEDED AND WRONG !!!
+################################################################################
+
+The "Population-scale sensitivity sweep" section below reports `sign_flip_survives: false`
+and four FAILED points. THAT CONCLUSION IS REFUTED. The raw numbers are accurate as a record
+of what DEFAULT-tolerance solving produced; the VERDICT and the ATTRIBUTION were wrong.
+
+WHAT IS ACTUALLY TRUE (re-measured with the shipped exactness gate still ARMED, changing
+only the SOLVER tolerance to tol_gap = 1e-10):
+
+  delta    socp_maxgap    dadp_dso        fit_dso     sign flip?
+  -0.050   3.505e-08      2.709838      -182.9611     YES
+  -0.020   1.900e-08      3.277535      -190.8755     YES
+   0.000   1.162e-08      3.725742      -196.2165     YES
+  +0.020   4.610e-08      4.163925      -201.6167     YES
+  +0.050   1.342e-08      4.807417      -209.9950     YES
+
+  => 5/5 points solve. The DSO-surplus sign flip HOLDS AT EVERY SWEPT POINT.
+  => Both surpluses are MONOTONE in population scale (dadp_dso 2.71 -> 4.81,
+     fit_dso -183 -> -210). There is no boundary, no discontinuity, no knife edge.
+  => sign_flip_survives: TRUE across the whole +/-5% band.
+
+CAUSE — the failures were NUMERICAL, not physical:
+  assert_socp_exact!'s atol = 1e-6 sits AT Clarabel's achievable cone residual on this
+  122-branch feeder at the default tol_gap = 1e-8. Tightening to 1e-10 shrinks the residual
+  1-2 orders of magnitude while the optimum is UNCHANGED (dadp_dso agrees to 6-7 significant
+  figures). A structural relaxation gap is a property of the optimum and cannot do that.
+  Independently: on IEEE-123 the voltage upper bound is NEVER active (vpeak <= 1.016 vs caps
+  >= 1.05), so the overvoltage mechanism that drives genuine SOC inexactness does not occur
+  here at all.
+
+MISATTRIBUTION — 2 of the 4 failures were the WRONG FUNCTION:
+  The "Failed-point error detail" below is read as solve_welfare's gate throwing at all four
+  points. It was not. Per-stage re-running shows (ratios bit-identical to 16 digits):
+    delta=-0.05  solve_welfare   ratio 2.685423204302964   <- correct as recorded
+    delta=-0.02  fit_baseline    ratio 3.227073440795618   <- NOT solve_welfare
+    delta=+0.02  solve_welfare   ratio 1.1425393613288473  <- correct as recorded
+    delta=+0.05  fit_baseline    ratio 1.1002062714021996  <- NOT solve_welfare
+  Cause: scripts/repro_stability_check.jl wraps solve_welfare + welfare_accounting +
+  fit_baseline in ONE try/catch, so a FAILED row cannot say which call threw. Nothing was
+  flaky — Clarabel is deterministic; the attribution was simply inferred.
+
+NOTE ON THE RECOMMENDED BAND BELOW (still owed, NOT corrected here):
+  DSO_BAND_HI = 5.58855710237937 was derived as 1.5 * max|dso| over the successfully-solved
+  points — which was 1 point. With 5 solving, max|dso| = 4.807417, so the rule now implies
+  7.211. test/test_thesis_repro.jl does NOT break (4.8074 < 5.5886), but the derivation rule
+  and the pinned value disagree and should be re-derived deliberately.
+
+!!! THIS FILE IS GENERATED (scripts/repro_stability_check.jl:343) !!!
+  Re-running that script OVERWRITES this correction block. Before regenerating, the script
+  itself must be fixed: (a) split the three-solve try/catch per stage so failures are
+  attributed correctly, and (b) thread the `optimizer` kwarg (added to fit_baseline in commit
+  c099ee6) so the sweep can run at a chosen tolerance. Until then this correction lives in
+  git history and in the evidence below.
+
+EVIDENCE:
+  .planning/spikes/003-phase18-fragility-tolerance/README.md           (the investigation)
+  .planning/spikes/003-phase18-fragility-tolerance/run.log             (before the kwarg)
+  .planning/spikes/003-phase18-fragility-tolerance/run-after-kwarg.log (after — 5/5)
+  .planning/spikes/002-ieee123-validity-map/README.md                  (the noise-floor proof)
+  commit c099ee6                                                       (fit_baseline optimizer kwarg)
+
+Equivalence control: the re-measurement reproduces this file's delta=0 row bit-for-bit
+(dso = 3.725705, socp_maxgap = 3.060e-07), so the comparison above is valid and the
+default-tolerance record below is faithfully reproduced, not merely resembled.
+
+################################################################################
+ORIGINAL REPORT BELOW — the DEFAULT-tolerance (tol_gap = 1e-8) measurement, preserved
+verbatim as the record of what was believed on 2026-07-26 06:21. Read its verdict and its
+failed-point attribution as SUPERSEDED by the correction above.
+################################################################################
+
 Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)
 Measured: 2026-07-26 06:21:32 UTC-local
 Fixture: ieee123_modified() (real Phase-17 impedances), seed=20260719

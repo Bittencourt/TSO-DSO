@@ -35,6 +35,7 @@ Last activity: 2026-07-26 — Completed quick task 260726-mo7: Add optimizer kwa
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260726-mo7 | Add optimizer kwarg to fit_baseline | 2026-07-26 | c099ee6 | [260726-mo7-add-optimizer-kwarg-to-fit-baseline](./quick/260726-mo7-add-optimizer-kwarg-to-fit-baseline/) |
+| 260726-n7l | Correct the refuted sign_flip_survives claim in findings.txt and 18-01-SUMMARY | 2026-07-26 | (this commit) | [260726-n7l-correct-the-refuted-sign-flip-survives-c](./quick/260726-n7l-correct-the-refuted-sign-flip-survives-c/) |
 
 ## Performance Metrics
 
@@ -195,12 +196,25 @@ None yet.
   surpluses monotone (`dadp_dso` 2.71→4.81, `fit_dso` −183→−210). Two of the four recorded failures
   were also **misattributed** — they were `fit_baseline`, not `solve_welfare`, because
   `scripts/repro_stability_check.jl` wraps three solves in one try/catch.
-  **Corrections owed:** (1) `results/repro_stability_check/findings.txt`;
-  (2) `milestones/v2.1-phases/18-directional-thesis-reproduction/18-01-SUMMARY.md`; (3) the published
-  assumptions literate page; (4) Plan 18-02's golden band — its `1.5 × max|dso|` rule now implies
-  **7.211** vs the pinned **5.5886** (`test_thesis_repro.jl` still passes, but rule and value
-  disagree); (5) split `repro_stability_check.jl`'s try/catch per stage and thread the new
-  `optimizer` kwarg. Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`.
+  **Corrections:** (1) ✅ DONE `results/repro_stability_check/findings.txt` — `!!! CORRECTION` banner
+  prepended (quick task 260726-n7l); NOTE the file is **generated** by
+  `scripts/repro_stability_check.jl:343`, so the banner is lost on any re-run until (5) lands;
+  (2) ✅ DONE `milestones/v2.1-phases/18-directional-thesis-reproduction/18-01-SUMMARY.md` — banner +
+  8 inline annotations + `## Correction` section; (3) ⬜ **OWED, HIGHEST PRIORITY** the published
+  18-03 assumptions literate page still carries the false fragility caveat — it is the reader-facing
+  artifact; (4) ⬜ OWED Plan 18-02's golden band — its `1.5 × max|dso|` rule now implies **7.211** vs
+  the pinned **5.5886** (`test_thesis_repro.jl` passes — verified 6/6 under the pinned env — but rule
+  and value disagree); (5) ⬜ OWED split `repro_stability_check.jl`'s try/catch per stage and thread
+  the new `optimizer` kwarg. Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`.
+
+- [environment hazard, cost a false regression signal 2026-07-26]: **never run the test suite via
+  `julia --project=test -e 'import Pkg; Pkg.develop(path="."); ...'`.** That re-resolves the PINNED
+  test environment (rewrote `test/Manifest.toml` 1232 lines + `test/Project.toml` 14 lines), and the
+  resulting numeric shift was enough to push `test_thesis_repro.jl`'s REPRO-01 gate over its
+  exactness threshold — a regression that looked like a code defect and was not. Use
+  `julia --project=. -e 'import Pkg; Pkg.test()'`, which builds a temp env from the pinned manifest.
+  The trap is that `@run_package_tests` discovers **zero** items without the `develop` call, so the
+  wrong invocation is the one that appears to work.
 
 - [measurement hygiene, project-wide]: residual-based classification must be calibrated against the
   **solver noise floor per feeder**. The WR-01 `atol + rtol·magnitude` idiom scales with quantity
