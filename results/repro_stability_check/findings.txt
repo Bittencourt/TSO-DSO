@@ -1,0 +1,34 @@
+Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)
+Measured: 2026-07-26 06:21:32 UTC-local
+Fixture: ieee123_modified() (real Phase-17 impedances), seed=20260719
+Retuned point: LOAD_SCALE_IEEE123=0.05, PV_SCALE_IEEE123=0.12, DEV_SCALE_IEEE123=0.08333333333333334
+
+=== Flake rate ===
+N_REPEATS = 20
+failures = 0
+rate = 0.0000
+This is a citable phase finding, not a pass/fail gate (mirrors scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, reported here neither silently accepted nor silently "fixed."
+
+=== Population-scale sensitivity sweep ===
+delta               dso        fit_dso       prosumer   fit_prosumer    socp_maxgap
+-0.050           FAILED         FAILED         FAILED         FAILED         FAILED
+-0.020           FAILED         FAILED         FAILED         FAILED         FAILED
+0.000          3.725705    -196.216447  -41039.129322  -40857.497070      3.060e-07
+0.020            FAILED         FAILED         FAILED         FAILED         FAILED
+0.050            FAILED         FAILED         FAILED         FAILED         FAILED
+
+Failed-point error detail:
+  δ=-0.05: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=2.685423204302964 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=3.1002992519901795e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
+  δ=-0.02: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=3.227073440795618 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=3.566551124656314e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
+  δ=0.02: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.1425393613288473 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=1.5814624036991631e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
+  δ=0.05: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.1002062714021996 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=1.6386412609037393e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
+
+sign_flip_survives: false
+HONEST NEGATIVE RESULT: the sweep point(s) delta=[-0.050, -0.020, 0.020, 0.050] FAILED OUTRIGHT — solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this is reported as-is — the sweep range was NOT narrowed and the failing point was NOT omitted to force a passing appearance. Plan 18-03 must carry this forward as an assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-robust in the direction(s) that go inexact; the golden band below is derived ONLY from the points that solved successfully and should be read with that caveat attached.
+
+=== RECOMMENDED BAND ===
+NOTE: at least one sweep point FAILED (see above) — the band below is derived ONLY from the 1/5 points that solved successfully (the exact retuned point delta=0.0 is one of them); it does NOT certify robustness across the failed direction(s).
+Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the SUCCESSFULLY-SOLVED swept points — a 50% safety-margin multiplier above the largest observed magnitude among the points that actually solved, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being so wide it stops meaning anything.
+DSO_BAND_LO = 0.000000
+DSO_BAND_HI = 5.588557
+RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937

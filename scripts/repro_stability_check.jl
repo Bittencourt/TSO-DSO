@@ -240,6 +240,14 @@ For each `δ`, rebuilds the IEEE-123 population at `load_scale = LOAD_SCALE_IEEE
 `solve_welfare` + `welfare_accounting` + `fit_baseline` UNMODIFIED, and records the DADP/FIT
 DSO-surplus split. This is a genuinely NEW measurement (18-RESEARCH.md Pitfall 4 / Open
 Question 1) — not previously run anywhere in the repo.
+
+Each point is wrapped in a `try/catch` (Rule-1 fix, discovered live: at `δ=-0.05` the SOCP
+relaxation genuinely goes INEXACT — `assert_socp_exact!` throws — exactly the near-boundary
+risk 18-RESEARCH.md's Pitfall 4 documented as a live possibility, not a hypothetical). A
+failing point is recorded as `(; δ, failed=true, error_msg)` rather than crashing the whole
+sweep — an uncaught exception here would silently produce ZERO findings, which is a worse
+honesty failure than reporting the point as failed. `sign_flip_survives` (computed by the
+caller) treats any failed point as a non-survival, per the honest-measurement mandate.
 """
 function sweep_population_scale(feeder; deltas = (-0.05, -0.02, 0.0, 0.02, 0.05))
     λ0 = ieee123_lambda0()
@@ -255,22 +263,47 @@ function sweep_population_scale(feeder; deltas = (-0.05, -0.02, 0.0, 0.02, 0.05)
             pv_scale = pv_scale,
             dev_scale = dev_scale,
         )
-        ctx, welfare_dadp, _ =
-            solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0, allow_export = true)
-        acct = welfare_accounting(ctx; T = T)
-        fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
-        fit_dso = fb.social_fit - fb.prosumer_surplus
-        push!(
-            results,
-            (;
-                δ = δ,
-                dso = acct.dso,
-                fit_dso = fit_dso,
-                prosumer = acct.prosumer,
-                fit_prosumer = fb.prosumer_surplus,
-                socp_maxgap = ctx.meta[:socp_maxgap],
-            ),
-        )
+        try
+            ctx, welfare_dadp, _ = solve_welfare(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = T,
+                λ₀ = λ0,
+                allow_export = true,
+            )
+            acct = welfare_accounting(ctx; T = T)
+            fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+            fit_dso = fb.social_fit - fb.prosumer_surplus
+            push!(
+                results,
+                (;
+                    δ = δ,
+                    failed = false,
+                    dso = acct.dso,
+                    fit_dso = fit_dso,
+                    prosumer = acct.prosumer,
+                    fit_prosumer = fb.prosumer_surplus,
+                    socp_maxgap = ctx.meta[:socp_maxgap],
+                    error_msg = "",
+                ),
+            )
+        catch e
+            @warn "sweep point failed" δ exception = (e, catch_backtrace())
+            push!(
+                results,
+                (;
+                    δ = δ,
+                    failed = true,
+                    dso = NaN,
+                    fit_dso = NaN,
+                    prosumer = NaN,
+                    fit_prosumer = NaN,
+                    socp_maxgap = NaN,
+                    error_msg = sprint(showerror, e),
+                ),
+            )
+        end
     end
     return results
 end
@@ -291,10 +324,15 @@ flake_rate = failures / N_REPEATS
 println("Running population-scale sensitivity sweep (5 points)...")
 results = sweep_population_scale(feeder)
 
-sign_flip_survives = all(r -> r.dso > 0 && r.fit_dso < 0 && r.prosumer < r.fit_prosumer, results)
+any_failed = any(r -> r.failed, results)
+sign_flip_survives =
+    !any_failed &&
+    all(r -> r.dso > 0 && r.fit_dso < 0 && r.prosumer < r.fit_prosumer, results)
 
 dso_band_lo = 0.0
-dso_band_hi = 1.5 * maximum(abs(r.dso) for r in results)
+successful = filter(r -> !r.failed, results)
+dso_band_hi =
+    isempty(successful) ? NaN : 1.5 * maximum(abs(r.dso) for r in successful)
 
 @printf("\nFlake rate: %d/%d = %.3f\n", failures, N_REPEATS, flake_rate)
 println("sign_flip_survives: ", sign_flip_survives)
@@ -336,16 +374,27 @@ open(report_path, "w") do io
         "socp_maxgap"
     )
     for r in results
-        @printf(
-            io,
-            "%-8.3f %14.6f %14.6f %14.6f %14.6f %14.3e\n",
-            r.δ,
-            r.dso,
-            r.fit_dso,
-            r.prosumer,
-            r.fit_prosumer,
-            r.socp_maxgap
-        )
+        if r.failed
+            @printf(io, "%-8.3f %14s %14s %14s %14s %14s\n", r.δ, "FAILED", "FAILED", "FAILED", "FAILED", "FAILED")
+        else
+            @printf(
+                io,
+                "%-8.3f %14.6f %14.6f %14.6f %14.6f %14.3e\n",
+                r.δ,
+                r.dso,
+                r.fit_dso,
+                r.prosumer,
+                r.fit_prosumer,
+                r.socp_maxgap
+            )
+        end
+    end
+    if any_failed
+        println(io)
+        println(io, "Failed-point error detail:")
+        for r in results
+            r.failed && println(io, "  δ=$(r.δ): ", r.error_msg)
+        end
     end
     println(io)
     println(io, "sign_flip_survives: ", sign_flip_survives)
@@ -357,6 +406,21 @@ open(report_path, "w") do io
             "decrease (DADP prosumer < FIT prosumer) hold at EVERY swept point (delta in ",
             "[$swept_deltas]). This is the robustness evidence 18-RESEARCH.md's Open ",
             "Question 1 / Pitfall 4 required before pinning a golden magnitude band.",
+        )
+    elseif any_failed
+        failed_deltas = join([@sprintf("%.3f", r.δ) for r in results if r.failed], ", ")
+        println(
+            io,
+            "HONEST NEGATIVE RESULT: the sweep point(s) delta=[$failed_deltas] FAILED OUTRIGHT — ",
+            "solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning ",
+            "a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's ",
+            "Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine ",
+            "asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this ",
+            "is reported as-is — the sweep range was NOT narrowed and the failing point was NOT ",
+            "omitted to force a passing appearance. Plan 18-03 must carry this forward as an ",
+            "assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-",
+            "robust in the direction(s) that go inexact; the golden band below is derived ONLY from ",
+            "the points that solved successfully and should be read with that caveat attached.",
         )
     else
         println(
@@ -371,13 +435,22 @@ open(report_path, "w") do io
     end
     println(io)
     println(io, "=== RECOMMENDED BAND ===")
+    if any_failed
+        println(
+            io,
+            "NOTE: at least one sweep point FAILED (see above) — the band below is derived ONLY ",
+            "from the $(length(successful))/$(length(results)) points that solved successfully ",
+            "(the exact retuned point delta=0.0 is one of them); it does NOT certify robustness ",
+            "across the failed direction(s).",
+        )
+    end
     println(
         io,
         "Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the ",
-        "sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over all swept points — a 50% safety-margin ",
-        "multiplier above the largest observed magnitude across the sensitivity sweep, so the ",
-        "pinned golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without ",
-        "being so wide it stops meaning anything.",
+        "sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the SUCCESSFULLY-SOLVED swept points — ",
+        "a 50% safety-margin multiplier above the largest observed magnitude among the points that ",
+        "actually solved, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level ",
+        "numerical drift without being so wide it stops meaning anything.",
     )
     @printf(io, "DSO_BAND_LO = %.6f\n", dso_band_lo)
     @printf(io, "DSO_BAND_HI = %.6f\n", dso_band_hi)
