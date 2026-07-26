@@ -120,3 +120,14 @@ None - no external service configuration required.
 ---
 *Phase: 16-reactive-power-consensus*
 *Completed: 2026-07-26*
+
+## Self-Check: PASSED
+
+- FOUND: src/admm/DsoOpt.jl
+- FOUND: src/admm/solve_admm.jl
+- FOUND: test/test_dso.jl
+- FOUND: test/test_admm_reactive.jl
+- FOUND: .planning/phases/16-reactive-power-consensus/16-02-SUMMARY.md
+- FOUND: commit d33f0bd (feat(16-02): promote reactive draw to pinned qag_dso coupling variable)
+- FOUND: commit 5d69795 (feat(16-02): thread reactive_consensus through solve_admm + certify :balance_q)
+- FOUND: commit dc99a0a (docs(16-02): complete DSO-OPT reactive-power consensus plan)
