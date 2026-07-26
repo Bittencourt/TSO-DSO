@@ -15,9 +15,16 @@
 #     hand-derived closed-form phasor on the trivial 2-bus fixture (test/test_ac_oracle.jl) —
 #     a BLOCKING analytic gate — BEFORE any later plan trusts it on a larger feeder.
 #
-# (plan 15-02 adds `assert_ac_exact!` — the per-hour SOCP-vs-AC certification — to this file.)
+#   - `assert_ac_exact!(ctx_socp, ctx_ac)` (plan 15-02) — the per-hour SOCP-vs-AC certification.
+#     It is the peer to `assert_socp_exact!` (models/exactness.jl) with the SAME
+#     `atol + rtol·magnitude` scale-free tolerance philosophy (WR-01) but the OPPOSITE
+#     failure-mode contract: it compares TWO independently-trusted solved contexts and NEVER
+#     raises on a numerical disagreement (EXACT-03) — a genuine per-hour gap is this milestone's
+#     most valuable finding, not a defect to refuse. It raises ONLY on a STRUCTURAL mismatch
+#     (differing horizon `T`, missing `pf_vars` keys).
 #
-# Convention: uses `error(...)`, never `@assert` (elided under -O), per src/core/status.jl.
+# Convention: uses explicit `error` calls, never `@assert` (elided under -O), per
+# src/core/status.jl.
 
 using JuMP
 
@@ -103,4 +110,81 @@ function recover_voltage_angles(ctx::ModelContext)
     return Vphasor
 end
 
-export recover_voltage_angles
+"""
+    assert_ac_exact!(ctx_socp::ModelContext, ctx_ac::ModelContext;
+                     rtol::Real = 1e-4, atol::Real = 1e-6) -> (; obj_gap, hours)
+
+Certify the SOC branch-flow relaxation EXACT by comparing a solved [`ConvexBranchFlow`](@ref)
+`ModelContext` (`ctx_socp`) against a solved [`ACPowerFlow`](@ref) `ModelContext` (`ctx_ac`) —
+both built from the IDENTICAL problem data and each independently re-optimized (the LOCKED
+"same operating point" contract) — on per-hour objective, voltage, and branch-flow gaps.
+
+This is a NEW sibling to [`assert_socp_exact!`](@ref) (models/exactness.jl): it reuses the SAME
+scale-free `atol + rtol·magnitude` tolerance philosophy (WR-01), but has the OPPOSITE
+failure-mode contract. `assert_socp_exact!` THROWS to refuse physically-meaningless prices from
+a single strict cone; `assert_ac_exact!` compares TWO independently-trusted solves and MUST
+NEVER raise on a genuine numerical disagreement (EXACT-03) — a relaxation gap is the milestone's
+most valuable possible finding, to be INVESTIGATED (reverse-flow / voltage-binding state), not
+suppressed. The ONLY exception path here is a STRUCTURAL mismatch (differing horizon `T`) — a
+signal the two contexts are not the same operating point, which makes any "gap" uninformative.
+
+Returns `(; obj_gap, hours)`, NEVER a bare `Bool`:
+
+  - `obj_gap = objective_value(ctx_socp.model) − objective_value(ctx_ac.model)` — the welfare gap
+    between the relaxed and the true nonconvex optimum;
+  - `hours::Vector{NamedTuple}` — one row `(; t, vgap, pgap, qgap, exact)` per hour, where
+    `vgap`/`pgap`/`qgap` are the max-over-buses/branches absolute SOCP−AC gaps in squared
+    voltage / active / reactive branch flow, and `exact = vgap ≤ atol + rtol·vmag && pgap ≤
+    atol + rtol·pmag` uses the SAME combined scale-free bound `assert_socp_exact!` uses (applied
+    per-hour across the two contexts instead of per-branch within one), NEVER a purely absolute
+    threshold. Inspect `hours` to locate and diagnose a genuine per-hour gap; it never collapses
+    to a single pass/fail boolean.
+
+Reads `ctx_socp.meta[:pf_vars]`/`[:feeder]`/`[:T]` and `ctx_ac.meta[:pf_vars]`/`[:T]` — the
+`(; v, P, Q, l)` (AC) and `(; v, v̂, P, Q, l)` (SOCP) stashes share the `v`/`P`/`Q` field names
+this indexes. Uses an explicit `error` call (never `@assert`) for the `T`-mismatch guard, per
+`src/core/status.jl`.
+"""
+function assert_ac_exact!(
+    ctx_socp::ModelContext,
+    ctx_ac::ModelContext;
+    rtol::Real = 1e-4,
+    atol::Real = 1e-6,
+)
+    # The ONLY exception path: a STRUCTURAL mismatch. A differing horizon T means the two solves
+    # are not the same operating point, so any per-hour "gap" would be meaningless — refuse that
+    # (EXACT-03: a NUMERIC disagreement, by contrast, is reported, never raised).
+    T = ctx_socp.meta[:T]
+    T == ctx_ac.meta[:T] || error(
+        "assert_ac_exact!: T mismatch ($T vs $(ctx_ac.meta[:T])) — " *
+        "the two solves are not the same operating point",
+    )
+
+    feeder = ctx_socp.meta[:feeder]
+    pv_s = ctx_socp.meta[:pf_vars]
+    pv_a = ctx_ac.meta[:pf_vars]
+    N = length(feeder.buses)
+    nB = length(feeder.branches)
+
+    rows = NamedTuple[]
+    for t in 1:T
+        # Max-over-buses/branches absolute SOCP−AC gaps.
+        vgap = maximum(abs(value(pv_s.v[j, t]) - value(pv_a.v[j, t])) for j in 1:N)
+        pgap = maximum(abs(value(pv_s.P[b, t]) - value(pv_a.P[b, t])) for b in 1:nB)
+        qgap = maximum(abs(value(pv_s.Q[b, t]) - value(pv_a.Q[b, t])) for b in 1:nB)
+        # SCALE-FREE reference magnitudes (WR-01), taken from the SOCP side.
+        vmag = maximum(abs(value(pv_s.v[j, t])) for j in 1:N)
+        pmag = maximum(abs(value(pv_s.P[b, t])) for b in 1:nB)
+        # The SAME combined bound assert_socp_exact! uses — atol floor + rtol·magnitude — applied
+        # per-hour across the two contexts. NEVER a purely absolute threshold.
+        exact = vgap <= atol + rtol * vmag && pgap <= atol + rtol * pmag
+        push!(rows, (; t, vgap, pgap, qgap, exact))
+    end
+
+    # Welfare gap between the relaxed (SOCP) and the true nonconvex (AC) optimum. NO error/throw
+    # anywhere below the T-mismatch guard — a per-hour gap surfaces in `rows`, never as a raise.
+    obj_gap = objective_value(ctx_socp.model) - objective_value(ctx_ac.model)
+    return (; obj_gap, hours = rows)
+end
+
+export recover_voltage_angles, assert_ac_exact!
