@@ -31,11 +31,11 @@ replacing today's toy-point + same-relaxation self-check.
 Restore a genuine reactive-power balance and a citable reactive price, closing the `AgrOpt.jl`
 placeholder.
 
-- [ ] **REACT-01**: The DSO-OPT per-node **reactive-power balance is a genuine equality constraint**
+- [x] **REACT-01**: The DSO-OPT per-node **reactive-power balance is a genuine equality constraint**
       (replacing today's free reactive-import slack), enforced in both the centralized and ADMM solves.
-- [ ] **REACT-02**: A reactive nodal price `μ_j` (dual of the reactive balance) is extracted and
+- [x] **REACT-02**: A reactive nodal price `μ_j` (dual of the reactive balance) is extracted and
       contributes a documented reactive/voltage component to the DLMP decomposition in `pricing/dlmp.jl`.
-- [ ] **REACT-03**: Reactive consensus rolls out **without regressing the existing active-only
+- [x] **REACT-03**: Reactive consensus rolls out **without regressing the existing active-only
       cross-validated ADMM path** (feature-flagged/additive), with the `μ`-symbol naming collision
       (reactive dual vs. the existing adaptive-ρ band) resolved as the first design decision.
 

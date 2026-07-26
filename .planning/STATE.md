@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
-status: executing
-stopped_at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
-last_updated: "2026-07-26T02:23:14.783Z"
+status: ready_to_plan
+stopped_at: Phase 16 complete (4/4) — ready to discuss Phase 17
+last_updated: 2026-07-26T05:15:34.216Z
 last_activity: 2026-07-26 -- Phase 16 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 11
-  completed_plans: 3
+  completed_plans: 7
   percent: 25
 ---
 
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 16 — reactive-power-consensus
+**Current focus:** Phase 17 — real ieee123 impedances
 
 ## Current Position
 
-Phase: 16 (reactive-power-consensus) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 16
-Last activity: 2026-07-26 -- Phase 16 execution started
+Phase: 17
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-26
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 56 (v1.0: 43, v2.0: 13)
+- Total plans completed: 60 (v1.0: 43, v2.0: 13)
 - Average duration: —
 - Total execution time: 0 hours (v2.1)
 
@@ -51,6 +51,7 @@ Last activity: 2026-07-26 -- Phase 16 execution started
 | 13 | 3 | - | - |
 | 14 | 3 | - | - |
 | 15-18 (v2.1) | TBD | - | - |
+| 16 | 4 | - | - |
 
 **Recent Trend:**
 
