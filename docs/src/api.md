@@ -65,7 +65,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl"]
+Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl", "powerflow/ACPowerFlow.jl"]
 Order = [:type, :constant, :function]
 ```
 
@@ -73,7 +73,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl"]
+Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl"]
 Order = [:type, :constant, :function]
 ```
 

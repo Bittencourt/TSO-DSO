@@ -21,6 +21,7 @@ for src in (
     "toy_dc.jl",
     "lindistflow.jl",
     "convex_branch_flow.jl",
+    "ac_oracle.jl",             # NEW: Rung 3 AC-exactness oracle (EXACT-04)
     "prosumer_welfare.jl",
     "pricing_dlmp.jl",
     "admm.jl",
@@ -56,6 +57,7 @@ makedocs(;
             "Rung 0: Toy DC" => "generated/toy_dc.md",
             "Rung 1-2: LinDistFlow" => "generated/lindistflow.md",
             "Rung 3: SOCP + Exactness" => "generated/convex_branch_flow.md",
+            "Rung 3: AC-Exactness Oracle" => "generated/ac_oracle.md",
             "Rung 3: Devices + GLB-CVX" => "generated/prosumer_welfare.md",
             "Rung 4: DADP/DLMP Pricing" => "generated/pricing_dlmp.md",
             "Rung 5: ADMM Decomposition" => "generated/admm.md",
