@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
-status: executing
-stopped_at: Phase 18 Plan 01 (repro_stability_check) complete -- findings committed before any golden band pinned.
-last_updated: "2026-07-26T10:03:35.915Z"
+status: verifying
+stopped_at: Phase 18 complete -- all 3 plans (18-01, 18-02, 18-03) executed; v2.1 Validation & Reproduction milestone target features all delivered.
+last_updated: "2026-07-26T10:33:59.635Z"
 last_activity: 2026-07-26
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 14
-  completed_plans: 13
-  percent: 75
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 Phase: 18 (directional-thesis-reproduction) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-26
 
 ## Performance Metrics
@@ -61,6 +61,7 @@ Last activity: 2026-07-26
 *Updated after each plan completion*
 | Phase 18 P01 | 45min | 2 tasks | 2 files |
 | Phase 18 P02 | 35min | 2 tasks | 1 files |
+| Phase 18 P03 | 55min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase 12]: Plan 02: alpha_op_lb loosened from -5.0 to -50.0 for the T=8 load-test fixture -- a correctness requirement at that scale (verified against a hand-derived closed form z*=1.4, cost=-7.84), not merely a convergence-speed tweak.
 - [Phase 18]: Phase 18 Plan 01: RECOMMENDED BAND (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937) is derived from only the exact Phase-17-retuned population point (delta=0.0) -- the +/-2%/+/-5% sweep points all fail the SOCP-exactness gate outright (sign_flip_survives=false), so the DSO-surplus sign flip is confirmed at that single point but NOT confirmed to be population-scale-robust.
 - [Phase 18]: REPRO-01 gate-then-golden test pins the DSO-surplus sign flip + magnitude band (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937), never the aggregate welfare ratio, band sourced verbatim from Plan 18-01's committed findings.txt
+- [Phase 18]: Plan 03: every reproduction number carries the "directional, public-data" qualifier via a per-file cite_repro(x) helper (executed code only, never inside Literate prose comments); the aggregate welfare ratio is never computed as the primary claim (Pitfall 1).
+- [Phase 18]: Plan 03: the assumptions page states plainly that the thesis's +25% welfare-ratio magnitude does not transfer to real public IEEE-123 data (measured ~+0.045%), while the DSO-surplus sign flip is the robust signal; Plan 18-01's sign_flip_survives=false sweep finding is carried forward verbatim.
 
 ### Pending Todos
 
@@ -194,8 +197,8 @@ Items acknowledged and carried forward, now refined by v2.1 REQUIREMENTS.md:
 
 ## Session Continuity
 
-Last session: 2026-07-26T10:00:59.748Z
-Stopped at: Phase 18 Plan 01 (repro_stability_check) complete -- findings committed before any golden band pinned.
+Last session: 2026-07-26T10:33:59.608Z
+Stopped at: Phase 18 complete -- all 3 plans (18-01, 18-02, 18-03) executed; v2.1 Validation & Reproduction milestone target features all delivered.
 Resume file: None
 
 ## Operator Next Steps
