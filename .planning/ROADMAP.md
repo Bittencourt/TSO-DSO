@@ -94,7 +94,7 @@ certify the real-data case, but does not require them to build.
 **Plans**: 4 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — vendor OpenDSS .dss fixtures + dependency-free regex parser + Fortescue reduction --verify self-check (IMPED-01)
+- [x] 17-01-PLAN.md — vendor OpenDSS .dss fixtures + dependency-free regex parser + Fortescue reduction --verify self-check (IMPED-01)
 - [ ] 17-02-PLAN.md — generate committed per-segment Ω const table + swap ieee123.jl ingestion + test_ieee123.jl spot-check (IMPED-02)
 - [ ] 17-03-PLAN.md — numeric voltage-binding @testitem + ADMM behavioral-bound re-verification + population re-tune if needed (IMPED-03)
 - [ ] 17-04-PLAN.md — literate reduction doc page + docs/make.jl registration (IMPED-01, IMPED-02)
@@ -173,7 +173,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 3/3 | Complete | 2026-07-24 |
 | 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
 | 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete    | 2026-07-26 |
-| 17. Real IEEE-123 Impedances | v2.1 | 0/4 | Planned | - |
+| 17. Real IEEE-123 Impedances | v2.1 | 1/4 | In Progress|  |
 | 18. Directional Thesis Reproduction | v2.1 | 0/? | Not started | - |
 
 ## Deferred / Future-Milestone Notes

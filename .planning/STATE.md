@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
-status: ready_to_plan
-stopped_at: Phase 16 complete (4/4) — ready to discuss Phase 17
-last_updated: 2026-07-26T05:15:34.216Z
-last_activity: 2026-07-26 -- Phase 16 execution started
+status: executing
+stopped_at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
+last_updated: "2026-07-26T05:17:53.979Z"
+last_activity: 2026-07-26 -- Phase 17 execution started
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
   completed_plans: 7
-  percent: 25
+  percent: 50
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 17 — real ieee123 impedances
+**Current focus:** Phase 17 — real-ieee123-impedances
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-26
+Phase: 17 (real-ieee123-impedances) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 17
+Last activity: 2026-07-26 -- Phase 17 execution started
 
 ## Performance Metrics
 
