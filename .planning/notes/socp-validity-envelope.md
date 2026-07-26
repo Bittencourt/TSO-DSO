@@ -130,27 +130,79 @@ inflated `l` attractive to the optimizer has NOT been derived here. The characte
 Farivar–Low / Gan et al. conditions above is a recollection needing a source check. Pin the exact
 condition before the interpretive claim goes anywhere near a paper.
 
-### Tier 2: AC oracle (few points, different question)
+### Tier 2: bound-and-report (certified welfare-optimality gap)
 
-Because tier 1 finds the region for free, the AC oracle is **no longer needed to locate it**. Its
-job narrows to: *where the cone is slack, how wrong are the prices and the dispatch?* — welfare
-error magnitude and implementability of the SOCP optimum. Far fewer points than a boundary-hunting
-subsample.
+Because tier 1 finds the region for free, the AC oracle is **no longer needed to locate it**. Its job
+narrows to quantifying *how much welfare is at stake* where the cone is slack — as a **certified
+optimality gap**, not as an exactness verdict.
 
-**Cost caveat:** this is not one Ipopt solve per point. v2.1 needed a two-start comparison to rule
-out a local-optimum artifact on a *single* point, so budget ≥2× — and some points will return
-**inconclusive** rather than exact/inexact. Any precision/recall framing needs a cell for that;
-neither draft of this brief had one.
+`solve_welfare` **maximizes** `Σ utility − λ₀ᵀ·p_import` (`src/models/welfare_solve.jl:67`), and the
+SOCP relaxes the feasible set (`l·v ≥ P²+Q²` ⊇ `l·v == P²+Q²`). Larger feasible set + maximization ⇒
+
+```
+SOCP value  ≥  true global AC optimum  ≥  any AC-feasible point's value
+    (upper bound)                              (lower bound)
+```
+
+`assert_ac_exact!` already computes the quantity: `obj_gap = objective_value(socp) −
+objective_value(ac)` (`src/models/ac_oracle.jl:186`).
+
+**Why this is the right FIRST measurement — the property that makes it unique here.** The certified
+gap is valid **whether or not Ipopt found the global optimum.** A worse local optimum yields a
+*looser* bound, never an invalid one; more starts only tighten it.
+
+Every other measurement in this brief is contaminated by local optima — that is exactly why v2.1
+needed a two-start guard on a single point, and why a precision/recall framing needs an
+**inconclusive** cell. Bound-and-report is the only measurement in this space with **no
+local-optimum caveat.** Do it first for that reason, not merely because it is cheap.
+
+#### Four design decisions
+
+1. **Normalization.** Welfare is `utility − import cost` and can sit near or across zero, so a bare
+   relative gap `|ub−lb|/|lb|` is unsafe. Use the house WR-01 idiom
+   (`atol + rtol·max(|ub|,|lb|)`) and report absolute **and** relative — never relative alone. Same
+   trap `src/models/exactness.jl:48-55` already documents for cone slack on a 100 MVA base.
+2. **AC feasibility must be verified, not assumed.** Ipopt's `LOCALLY_SOLVED` is not a feasibility
+   certificate at publication tolerance. Check max violation on the true equality and the voltage
+   bounds explicitly — an infeasible "lower bound" point makes the gap meaningless in the direction
+   that matters.
+3. **Multi-start is a pure win.** Best-of-N AC starts as the lower bound; no interpretive difficulty,
+   unlike the exactness verdict.
+4. **Do NOT weaken the PF-04 throw.** `assert_socp_exact!` refusing to price is a deliberate design
+   choice. Add the gap as a *reported* quantity (mirroring how `assert_ac_exact!` reports rather than
+   raises) so callers opt in. The ad-hoc version of this already exists — `rtol_exact = 1.0` at
+   `test/test_ac_oracle.jl:181-187` — so this formalizes an existing pattern rather than inventing
+   one.
+
+#### What it buys, and what it does NOT
+
+Buys: every result carries a certified welfare-optimality bound; the hard refusal inside the region
+becomes a quantified caveat ("prices returned, welfare within X of global"); no new dependency.
+
+**Does not buy:** any statement about whether the *prices* mean anything. A tight welfare gap with
+meaningless prices is entirely possible — welfare is a scalar, prices are the duals. See
+[[prices-as-duals-lapse]]; that question stays open.
+
+#### How the two tiers compose
+
+Cone gap (free, dense) says **where** to suspect. Bound-and-report (1..N AC solves, sparse) says
+**how much welfare is at stake** there. They are complementary, not competing — a cleaner structure
+than the precision/recall framing in the first draft of this brief.
 
 ## Deliverables
 
-- `socp_gap_report` — non-throwing cone-gap accessor, so sweeps record instead of aborting
-- The opening-question answer: do cone slackness and the Phase 18-01 fragility coincide?
-- 3D envelope over the axes above (free tier) + a publication figure (CairoMakie)
-- Binding-set diagnostic as the **interpretive** layer tying the region to the literature conditions
-- AC-oracle magnitude study on a small point set: how wrong are prices where the cone is slack
-- Every experiment result stamped inside/outside the envelope
-- The theoretical claim written up — see [[prices-as-duals-lapse]]
+Ordered by dependency. The first two are spike-sized and gate everything after them.
+
+1. **Certified welfare-optimality gap** (`welfare_bounds`) — bound-and-report per tier 2. No
+   local-optimum caveat, no new dependency; ships independently of the rest of this brief.
+   **Chosen as the first move.**
+2. `socp_gap_report` — non-throwing cone-gap accessor, so sweeps record instead of aborting
+3. The opening-question answer: do cone slackness and the Phase 18-01 fragility coincide?
+4. Resolve the [[export-tightness-claim-contradiction]] — a live inconsistency in shipped code
+5. 3D envelope over the axes above (free tier) + a publication figure (CairoMakie)
+6. Binding-set diagnostic as the **interpretive** layer tying the region to the literature conditions
+7. Every experiment result stamped inside/outside the envelope, with its certified gap
+8. The theoretical claim written up — see [[prices-as-duals-lapse]], contingent on the prior-art check
 
 ## Pre-registered decision gate
 

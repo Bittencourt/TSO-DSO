@@ -77,10 +77,17 @@ conditions — not as a detector.
 **Blocks:** [[../notes/prices-as-duals-lapse]] — the interpretive claim cannot be written without it
 **Status:** open — needs a literature source check, not a re-derivation from memory
 
-The v3.0 brief asserts that the Farivar & Low (2013) / Gan et al. (2015) sufficient conditions turn
-on (a) upper voltage bounds not binding and (b) objective monotonicity in branch flow. **That
-characterization is an unverified recollection** and was written into the brief with more confidence
-than it earned.
+**PARTIALLY ANSWERED — the codebase already states the mechanism, and states it incompletely.**
+`src/models/welfare_solve.jl:50-54` gives the objective-monotonicity condition explicitly and claims
+priced export secures it. EXACT-04 ran with `allow_export = true` and was inexact anyway, so the claim
+is refuted as stated. See [[../notes/export-tightness-claim-contradiction]] — resolving that
+contradiction *is* resolving most of this question, and it includes a testable (undecided) hypothesis
+for the missing term.
+
+The v3.0 brief asserted that the Farivar & Low (2013) / Gan et al. (2015) sufficient conditions turn
+on (a) upper voltage bounds not binding and (b) objective monotonicity in branch flow. Item (b) is now
+confirmed present in the codebase's own reasoning; the precise form of both, and which one actually
+fails here, remain open.
 
 What actually needs pinning down before any interpretive claim is publishable:
 
