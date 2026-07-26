@@ -42,14 +42,14 @@ placeholder.
 ### Real IEEE-123 Impedances (`IMPED`)
 Replace synthetic IEEE-123 impedances with real, standard, citable data.
 
-- [ ] **IMPED-01**: An **offline, reproducible script** parses the public OpenDSS IEEE-123 case
+- [x] **IMPED-01**: An **offline, reproducible script** parses the public OpenDSS IEEE-123 case
       (`IEEE123Master.dss` + `IEEELineCodes.DSS`) and reduces the 3-phase line-code matrices to
       positive-sequence R₁/X₁ per segment (documented Fortescue-averaging reduction), with **PMD kept
       out of the runtime dependency graph** (throwaway env or weakdep+extension only).
-- [ ] **IMPED-02**: `ieee123.jl` consumes the committed real positive-sequence impedances (a pure-data
+- [x] **IMPED-02**: `ieee123.jl` consumes the committed real positive-sequence impedances (a pure-data
       `const` table) in place of synthetic values, topology untouched, with the reduction assumptions
       and caveats (transposition, single-phase laterals, regulators/caps/switches handling) documented.
-- [ ] **IMPED-03**: The real-impedance IEEE-123 case remains **meaningful for its purpose**
+- [x] **IMPED-03**: The real-impedance IEEE-123 case remains **meaningful for its purpose**
       (voltage-binding) — verified; PV/aggregator population re-tuned and documented if required.
       Prior synthetic-fixture goldens are preserved as an independent regression or consciously re-pinned
       with a before/after rationale.
