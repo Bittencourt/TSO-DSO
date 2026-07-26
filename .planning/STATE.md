@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Validation & Reproduction
-status: verifying
+status: executing
 stopped_at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
-last_updated: "2026-07-26T01:25:40.906Z"
-last_activity: 2026-07-26
+last_updated: "2026-07-26T02:23:14.783Z"
+last_activity: 2026-07-26 -- Phase 16 execution started
 progress:
   total_phases: 4
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 15 — ac-exactness-oracle
+**Current focus:** Phase 16 — reactive-power-consensus
 
 ## Current Position
 
-Phase: 15 (ac-exactness-oracle) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-07-26
+Phase: 16 (reactive-power-consensus) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 16
+Last activity: 2026-07-26 -- Phase 16 execution started
 
 ## Performance Metrics
 

@@ -65,7 +65,7 @@ its goldens must be re-validated before Phases 17–18 build on top of it.
 **Plans**: 4 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — mu/mu naming-collision grep-audit (BLOCKING) + RED @testitem harness (test_admm_reactive.jl)
+- [x] 16-01-PLAN.md — mu/mu naming-collision grep-audit (BLOCKING) + RED @testitem harness (test_admm_reactive.jl)
 - [ ] 16-02-PLAN.md — qag_dso coupling variable + reactive_consensus kwarg + :balance_q assert_no_slack certificate
 - [ ] 16-03-PLAN.md — extract_reactive_dlmp + decompose_dlmp reactive field + 2-bus reactive-price pin
 - [ ] 16-04-PLAN.md — Clarabel flake-rate re-measurement (IEEE-13/123, N>=20) + rho/rho_q finding
@@ -172,7 +172,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 13. Nash Diagonalization & Shared-Transmission Coupling | v2.0 | 3/3 | Complete | 2026-07-24 |
 | 14. Validation-Oracle Regression Hardening & Docs | v2.0 | 3/3 | Complete | 2026-07-24 |
 | 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
-| 16. Reactive-Power (μ) Consensus | v2.1 | 0/4 | Planned | - |
+| 16. Reactive-Power (μ) Consensus | v2.1 | 1/4 | In Progress|  |
 | 17. Real IEEE-123 Impedances | v2.1 | 0/4 | Planned | - |
 | 18. Directional Thesis Reproduction | v2.1 | 0/? | Not started | - |
 
