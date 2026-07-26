@@ -76,7 +76,7 @@
 # boolean, mirroring `test_admm_adaptive.jl`'s `isdefined(TSODSO, :set_rho!)` RED gate but
 # adapted for a KEYWORD-argument addition (kwargs are invisible to `isdefined`/dispatch).
 #
-# CONTRACT pinned here (Task 2 turns this header into the actual @testitem harness below):
+# CONTRACT pinned here:
 #   (1) RED  -- `build_dso_opt` does NOT yet accept `reactive_consensus`; once it does
 #       (plan 16-02), `qag_dso` must exist as a genuine JuMP coupling-variable container shaped
 #       `(length(load_nodes), T)`, reachable via `ctx.meta[:qag_dso]`.
@@ -87,3 +87,91 @@
 #   (3) RED  -- after a converged `solve_admm(...; reactive_consensus = true)`, `assert_no_slack`
 #       on every entry of `dso_ctx.constraints[:balance_q]` must NOT throw (REACT-02's
 #       positive-path certificate proof, mirroring `test_admm.jl`'s `:balance_p` re-check item).
+
+@testitem "admm reactive: build_dso_opt reactive_consensus kwarg absent today, qag_dso coupling variable pinned once landed (reactive)" setup =
+    [Phase6Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+
+    # RED probe: does build_dso_opt accept the reactive_consensus kwarg yet? Non-crashing --
+    # the 3-arg hasmethod kwarg form never calls the function, so this cannot throw even though
+    # the kwarg does not exist.
+    has_kwarg = hasmethod(build_dso_opt, Tuple{Any, typeof(aggs), Int}, (:reactive_consensus,))
+    @test !has_kwarg   # RED until plan 16-02 lands the kwarg
+
+    if has_kwarg
+        Th = Phase6Fixtures.T
+        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        ρ = Phase6Fixtures.RHO_2BUS
+
+        dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true)
+        @test haskey(dso.ctx.constraints, :balance_q)
+        @test haskey(dso.ctx.meta, :qag_dso)
+        qag_dso = dso.ctx.meta[:qag_dso]
+        @test size(qag_dso) == (length(dso.load_nodes), Th)
+    end
+end
+
+@testitem "admm reactive: default reactive_consensus omitted is byte-identical to today (reactive)" setup =
+    [Phase6Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    # POSITIVE regression -- passes NOW (no RED gate) and MUST stay green after plan 16-02/16-03
+    # land: the DEFAULT path (reactive_consensus never passed) is UNCHANGED (REACT-03's core
+    # non-regression guarantee, re-checked at every future plan's commit).
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
+    @test dso.load_nodes == [2]
+    @test haskey(dso.ctx.constraints, :balance_q)
+    @test !haskey(dso.ctx.meta, :qag_dso)   # no reactive coupling variable stashed on the default path
+end
+
+@testitem "admm reactive: converged reactive_consensus=true certifies :balance_q has no hidden slack (reactive)" setup =
+    [Phase6Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+
+    # RED probe, same gate discipline as item (1) -- solve_admm's reactive_consensus kwarg.
+    has_kwarg =
+        hasmethod(solve_admm, Tuple{Any, ConvexBranchFlow, typeof(aggs)}, (:reactive_consensus,))
+    @test !has_kwarg   # RED until plan 16-02 lands the kwarg
+
+    if has_kwarg
+        Th = Phase6Fixtures.T
+        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        ρ = Phase6Fixtures.RHO_2BUS
+
+        res = solve_admm(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = 200,
+            allow_export = true,
+            reactive_consensus = true,
+        )
+
+        # REACT-02's positive-path certificate: re-running assert_no_slack on the PUBLISHED
+        # converged :balance_q (mirrors test_admm.jl's :balance_p re-check item) must NOT throw
+        # and must be machine-exact -- the gate that makes dual(:balance_q) trustworthy enough
+        # to cite as a DLMP-Q component, despite the final DSO-OPT solve's lenient strict=false
+        # label (16-RESEARCH.md Pitfall 1).
+        balance_q = res.dso_ctx.constraints[:balance_q]
+        max_slack = maximum(
+            abs(assert_no_slack(res.dso_ctx.model, balance_q[j, t]; atol = 1e-6)) for
+            j in 1:size(balance_q, 1), t in 1:size(balance_q, 2)
+        )
+        @test max_slack <= 1e-6   # REACT-02: certified :balance_q, no hidden slack
+    end
+end
