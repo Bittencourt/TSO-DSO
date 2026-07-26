@@ -7,23 +7,34 @@ status: claim — needs the v3.0 envelope to bound it
 
 # The prices-as-duals justification lapses under SOCP inexactness
 
-## The claim
+## The claim — corrected framing
 
-The framework's entire transactive-pricing story rests on prices being **duals of a convex
-program**. That is what makes a DADP/DLMP a meaningful market signal rather than an arbitrary
-multiplier: strong duality on a convex social-welfare problem gives the multiplier its
-interpretation as a marginal price supporting a globally optimal allocation.
+⚠️ **An earlier draft of this note stated the claim incorrectly.** It said the multipliers "lose
+their dual interpretation" and invoked a failure of strong duality. That is wrong for the SOCP and a
+referee who knows conic duality would catch it immediately. The corrected version:
 
-When the SOC relaxation is **inexact**, the convex program whose duals we read is no longer the
-physical problem. The AC oracle still produces multipliers, but they are duals of a *nonconvex local
-optimum* — no strong duality, no global-optimality support, so the "prices are duals" justification
-does not transfer.
+**The SOCP is convex. Strong duality holds (under Slater). Its duals are perfectly valid prices.**
+What fails is *which problem they price*. At an inexact point `l·v > P²+Q²`, the relaxed optimum is
+not implementable on the physical network, so:
 
-So the honest statement is stronger than the v2.1 finding as currently written:
+> The multipliers are **exact prices for a fictitious network**, and the gap between that network and
+> the real one is unpriced.
 
-> It is not merely that the relaxation is loose in the high-PV reverse-flow region. It is that **the
-> theoretical basis for the prices themselves lapses there** — and that region is precisely the
-> operating regime that motivates transactive distribution pricing.
+That is a different and sharper statement than "the duals lose meaning." The distinction matters
+because it locates the failure precisely: not in the duality theory, but in the physical fidelity of
+the primal being priced.
+
+The **nonconvex-local-optimum** argument does apply — but to the AC oracle's multipliers, not the
+SOCP's. Those are KKT multipliers at a local optimum: no global-optimality support, so they cannot
+carry a market-clearing interpretation either. So neither solve yields a defensible market price
+inside the region, but *for two different reasons*, and conflating them weakens the claim.
+
+Framed honestly, and still stronger than the v2.1 finding as currently written:
+
+> It is not merely that the relaxation is loose in the high-PV reverse-flow region. It is that in that
+> region **the SOCP prices a network that is not the physical one, while the AC alternative offers
+> only local multipliers** — so there is no defensible market-clearing price on offer. And that region
+> is precisely the operating regime that motivates transactive distribution pricing.
 
 ## Why this matters for the thesis
 
@@ -41,12 +52,17 @@ So the honest statement is stronger than the v2.1 finding as currently written:
 
 1. **The envelope** — the claim is qualitative until the region is mapped. See
    [[socp-validity-envelope]].
-2. **A precise statement of which condition fails.** "Prices lapse" needs to name the step: is it
-   strong duality, the exactness of the relaxation, or the monotonicity assumption behind the
-   sufficient conditions? These are distinct and should not be blurred.
+2. **A precise statement of which condition fails** — now tracked as
+   [[../research/questions.md — Q2]]. It is *not* strong duality (see corrected framing above). The
+   candidates are relaxation exactness, the monotonicity assumption behind the classical sufficient
+   conditions, or something specific to this model's concave prosumer utilities and battery/deferrable
+   devices — which are **not** the plain loss-minimising objective the classical conditions assume.
+   That last possibility is both the most likely to be novel and the most likely to be got wrong by
+   analogy.
 3. **Literature positioning.** Farivar & Low (2013) and Gan et al. (2015) establish exactness
    conditions; the pricing-interpretation consequence of *violating* them is the part to check for
-   prior art before claiming novelty.
+   prior art before claiming novelty. **Do this check early** — it is cheap, and it determines whether
+   this note is a contribution or a rediscovery. Do not invest in the write-up first.
 4. **An honest note on what the AC duals still are.** They are not worthless — they are local
    marginal values. The claim should say what they can and cannot support, not dismiss them.
 

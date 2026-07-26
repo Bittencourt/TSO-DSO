@@ -27,10 +27,21 @@ cannot become a judgment made while looking at the preferred answer. Compare the
 "measure, don't assume" blocker. If the rule needs changing, change it *and say so in writing* —
 do not quietly reinterpret it.
 
-**One caveat that can legitimately reopen the gate:** if the v3.0 recall measurement shows the free
-binding-set predicate misses inexact points (poor recall), the dense sweep undercounts the region
-and a NARROW verdict may be an artifact. That is a *measurement* objection, not a preference, and it
-is the only admissible reason to re-run the gate.
+**Caveats that can legitimately reopen the gate** — all measurement objections, not preferences:
+
+1. **The free detector misses invalid points.** If Q1(3) finds points with a *tight* cone but
+   measurable AC disagreement, the dense sweep undercounts the region and a NARROW verdict is an
+   artifact. See [[../research/questions.md — Q1]].
+2. **The gate's own units are unresolved.** `pv_scale ≤ 1.0` is not stated in physical units and has
+   two conflicting meanings in the tree — this gate CANNOT be honoured until that is fixed. See the
+   two flagged defects in [[socp-validity-envelope]] § Pre-registered decision gate.
+3. **The population window may be mis-specified.** `[0.98, 1.02]` sits at the inner edge of the
+   ±2–5% band where fragility was actually measured. If it stays this narrow, the gate can read NARROW
+   while the documented fragility is untouched.
+
+Defects 2 and 3 mean the gate as written is **not yet honourable**. Fix them before the sweep runs,
+not after — the whole point of pre-registration is lost if the rule is repaired once the answer is
+visible.
 
 ## What germination would mean
 
