@@ -97,9 +97,12 @@
 
     # RED probe: does build_dso_opt accept the reactive_consensus kwarg yet? Non-crashing --
     # the 3-arg hasmethod kwarg form never calls the function, so this cannot throw even though
-    # the kwarg does not exist.
+    # the kwarg does not exist. POSITIVE assertion (mirrors the `isdefined(TSODSO, :set_rho!)`
+    # idiom in test_dso.jl) -- RED (fails) before plan 16-02 lands the kwarg, GREEN (passes)
+    # permanently afterward; a negated assertion here would flip to a permanent failure once the
+    # kwarg exists, which is not the intended terminal state (Rule 1 bugfix, plan 16-02).
     has_kwarg = hasmethod(build_dso_opt, Tuple{Any, typeof(aggs), Int}, (:reactive_consensus,))
-    @test !has_kwarg   # RED until plan 16-02 lands the kwarg
+    @test has_kwarg   # RED until plan 16-02 lands the kwarg; GREEN and permanent afterward
 
     if has_kwarg
         Th = Phase6Fixtures.T
@@ -141,9 +144,11 @@ end
     aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
 
     # RED probe, same gate discipline as item (1) -- solve_admm's reactive_consensus kwarg.
+    # POSITIVE assertion (see item (1)'s comment) -- RED before plan 16-02, GREEN permanently
+    # afterward.
     has_kwarg =
         hasmethod(solve_admm, Tuple{Any, ConvexBranchFlow, typeof(aggs)}, (:reactive_consensus,))
-    @test !has_kwarg   # RED until plan 16-02 lands the kwarg
+    @test has_kwarg   # RED until plan 16-02 lands the kwarg; GREEN and permanent afterward
 
     if has_kwarg
         Th = Phase6Fixtures.T

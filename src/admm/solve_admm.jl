@@ -56,7 +56,7 @@ using JuMP
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
-               allow_export::Bool = true)
+               allow_export::Bool = true, reactive_consensus::Bool = false)
         -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
@@ -96,6 +96,18 @@ hard-coded scale-specific penalty (per-unit scale-invariance, ADMM-02). λ is th
 price and is NEVER rescaled on a ρ change. The `tol` keyword is RETAINED for call-site
 compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_rel`).
 
+# Reactive consensus (Phase 16, REACT-01/02 — `reactive_consensus::Bool = false`)
+
+Threaded straight into [`build_dso_opt`](@ref). At the DEFAULT `false`, byte-identical to
+pre-Phase-16 behavior (REACT-03): the per-load-node reactive draw stays the constant `q_draw`
+and NO extra certificate runs. At `true`, `build_dso_opt` promotes it to the pinned coupling
+variable `qag_dso[j,t]` (`ctx.meta[:qag_dso]`), and after the final consolidation solve this
+function additionally certifies `:balance_q` via [`assert_no_slack`](@ref) — mirroring the
+`:balance_p` certificate — so its dual becomes trustworthy/publishable (e.g. as a reactive DLMP
+component). This is a ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3:
+`qag_dso` is pinned to a fixed target that never moves, so convergence speed is materially
+unaffected).
+
 # Returns
 
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)` where `λ == dadp` is the
@@ -129,6 +141,7 @@ function solve_admm(
     ρ_min::Real = 1e-2,
     ρ_max::Real = 1e4,
     allow_export::Bool = true,
+    reactive_consensus::Bool = false,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
@@ -156,7 +169,14 @@ function solve_admm(
     # One AGR-OPT per aggregator (thesis 3.46); the whole-network DSO-OPT (thesis 3.47). No
     # `Model(`/`build_*` call appears below this point — the loop only re-solves via coefficient
     # updates, so num_variables/num_constraints stay fixed (RESEARCH Pattern 3 / Pitfall 6).
-    dso = build_dso_opt(feeder, aggregators, T; ρ = ρf, λ₀ = λ₀)
+    dso = build_dso_opt(
+        feeder,
+        aggregators,
+        T;
+        ρ = ρf,
+        λ₀ = λ₀,
+        reactive_consensus = reactive_consensus,
+    )
     load_nodes = dso.load_nodes                       # ascending non-root aggregator buses
 
     # This Phase-6 loop assumes a 1:1 node↔aggregator coupling (both cross-validation fixtures
@@ -412,6 +432,21 @@ function solve_admm(
     let balance_p = dso.ctx.constraints[:balance_p]
         for j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
             assert_no_slack(dso.model, balance_p[j, t]; atol = 1e-6)
+        end
+    end
+
+    # REACT-02 (Phase 16): `:balance_q` is now ALSO certified, but ONLY when
+    # `reactive_consensus = true` — the reactive draw at each load node is then the genuine,
+    # PINNED coupling variable `qag_dso[j,t]` (not a hand-summed constant), so its dual becomes a
+    # PUBLISHABLE reactive price component and deserves the SAME no-slack certificate as
+    # `:balance_p`, mirrored exactly. At the DEFAULT `reactive_consensus = false`, `:balance_q`
+    # remains the INELASTIC constant closure described above — intentionally NOT gated, NOT
+    # published/load-bearing, UNCHANGED from pre-Phase-16 behavior (REACT-03 non-regression).
+    if reactive_consensus
+        let balance_q = dso.ctx.constraints[:balance_q]
+            for j in 1:size(balance_q, 1), t in 1:size(balance_q, 2)
+                assert_no_slack(dso.model, balance_q[j, t]; atol = 1e-6)
+            end
         end
     end
 

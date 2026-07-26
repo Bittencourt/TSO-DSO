@@ -33,6 +33,14 @@
 # draw `−Pdc·tan(acos φ)` (thesis 3.23, inelastic per A3 — NOT a consensus quantity, so no μ
 # dual-ascent) into :Rq; a free-sign `q_import` at the root supplies it; then :Rq is pinned to
 # zero at ALL nodes and registered as :balance_q.
+#
+# REACT-01 (Phase 16, `reactive_consensus::Bool = false` kwarg, default OFF): when `true`, the
+# per-load-node CONSTANT `q_draw[j][t]` injected above is instead promoted to a genuine JuMP
+# coupling variable `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), PINNED to the same fixed
+# target via an explicit equality `qag_dso[j,t] == q_draw[j][t]` (registered `:qag_pin`) — this
+# is a ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3: `AgrOpt.qag`/
+# `q_draw` never moves, so no ρ-penalty is needed). The DEFAULT (`false`) path is
+# BYTE-IDENTICAL to today (REACT-03); `:balance_q`'s own registration is UNCHANGED either way.
 
 using JuMP
 
@@ -79,7 +87,8 @@ struct DsoOpt{P, PI, F}
 end
 
 """
-    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀) -> DsoOpt
+    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus::Bool = false)
+        -> DsoOpt
 
 Build the whole-network `DSO-OPT` SOCP (thesis eq. 3.47) ONCE, reusing the validated
 [`ConvexBranchFlow`](@ref) branch-flow builder verbatim and mirroring the centralized
@@ -107,7 +116,10 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
       + REACTIVE: inject each load node's CONSTANT reactive draw `−Pdc·tan(acos φ)` (thesis 3.23,
         inelastic per A3) into `:Rq[j]`, `q_import` supplies the root; pin `:Rq[j,t] == 0` at all
         buses, register `:balance_q`. This is a FIXED constant (no μ dual-ascent — reactive is
-        not a consensus quantity).
+        not a consensus quantity). REACT-01 (`reactive_consensus = true`): promote this constant
+        to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to the same fixed target via
+        the registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — still a one-shot
+        certified dual read, NOT a live consensus ascent (Assumption A1/A3).
  5. `@objective(model, Min, Σ_t λ₀[t]·p_import[t] + 0.5·ρ·Σ_{j,t} pag_dso[j,t]²)` — the FIXED
     ρ-penalty built ONCE. Each ADMM iteration mutates only the LINEAR coefficient of each
     `pag_dso[j,t]` via `set_objective_coefficient` (see [`solve_dso!`](@ref)) — no rebuild
@@ -123,8 +135,15 @@ DECOUPLED from "all non-root buses" (the balance-closure axis); on the 2-bus / I
 every non-root bus is a load node, so both axes coincide and the model is unchanged. Throws
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
 `1:length(feeder.buses)`, or an aggregator ON the root (genuinely invalid inputs still fail loud).
+
+`reactive_consensus::Bool = false` (REACT-01): at the default `false`, step 4's reactive
+injection is the byte-identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]` key exists).
+When `true`, the constant is promoted to a genuine JuMP coupling variable `qag_dso[j,t]`
+(stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a new registered equality
+`:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual read, NOT a live
+consensus ascent (thesis A3: `q_draw` never moves, so no new ρ-penalty/residual is needed).
 """
-function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
+function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus::Bool = false)
     # Boundary guards (mirror solve_welfare): fail here, not deep in objective assembly.
     isempty(aggregators) &&
         throw(ArgumentError("build_dso_opt needs at least one aggregator"))
@@ -209,10 +228,28 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀)
         add_to_residual!(ctx, :Rp, j, t, pag_dso[j, t])
     end
 
-    # (4b) REACTIVE load-node CONSTANT draw (thesis 3.23), injected into :Rq[j]. A fixed
-    # parameter (no μ dual-ascent — reactive is not a consensus quantity).
-    for j in load_nodes, t in 1:T
-        add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+    # (4b) REACTIVE load-node closure (thesis 3.23). A fixed parameter (no μ dual-ascent —
+    # reactive is not a consensus quantity). DEFAULT (reactive_consensus = false): inject the
+    # CONSTANT draw directly, byte-identical to pre-REACT-01 behavior. REACT-01
+    # (reactive_consensus = true): promote it to a genuine JuMP coupling variable `qag_dso[j,t]`,
+    # PINNED to the SAME fixed target via the registered equality `:qag_pin` — a one-shot
+    # certified dual read, NOT a live consensus ascent (Assumption A1/A3: q_draw never moves).
+    if reactive_consensus
+        @variable(model, qag_dso[j = load_nodes, t = 1:T])
+        for j in load_nodes, t in 1:T
+            add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
+        end
+        @constraint(
+            model,
+            qag_pin[j = load_nodes, t = 1:T],
+            qag_dso[j, t] == q_draw[j][t]
+        )
+        register_constraint!(ctx, :qag_pin, qag_pin)
+        ctx.meta[:qag_dso] = qag_dso
+    else
+        for j in load_nodes, t in 1:T
+            add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+        end
     end
 
     # (4b') TRANSIT-NODE ZERO INJECTION (RESEARCH Pitfall 5): each non-root, non-load bus is a
