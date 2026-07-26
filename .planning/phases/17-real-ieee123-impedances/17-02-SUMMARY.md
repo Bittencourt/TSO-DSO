@@ -89,6 +89,16 @@ None — plan executed exactly as written. The one addition beyond the plan's li
 - `src/data/ieee123_impedances.jl` + the real-data ingestion path are ready for Plan 17-03 to build on.
 - Plan 17-03 (voltage-binding margin + ADMM behavioral-bounds re-verification) has an immediate, concrete first task: `test/test_ieee123_admm.jl`'s existing crossval item currently fails (SOCP relaxation inexact, worst gap ratio 1.38) on the real-impedance feeder — this is precisely the condition Plan 17-03's Task 2 is scoped to diagnose and, if needed, remediate via `test/fixtures_phase7.jl`'s `LOAD_SCALE_IEEE123`/`PV_SCALE_IEEE123`/`DEV_SCALE_IEEE123` re-tune (never the impedance/topology files).
 
+## Self-Check: PASSED
+
+- FOUND: src/data/ieee123_impedances.jl
+- FOUND: src/data/ieee123.jl
+- FOUND: test/test_ieee123.jl
+- FOUND: .planning/phases/17-real-ieee123-impedances/17-02-SUMMARY.md
+- FOUND commit: 37d534d (feat(17-02): generate per-segment IEEE-123 Ω impedance table)
+- FOUND commit: ecb2571 (feat(17-02): wire ieee123.jl to real per-segment Ω→pu impedances)
+- FOUND commit: 9559677 (docs(17-02): complete real IEEE-123 impedance ingestion plan)
+
 ---
 *Phase: 17-real-ieee123-impedances*
 *Completed: 2026-07-26*
