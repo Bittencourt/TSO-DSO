@@ -1,0 +1,23 @@
+SOC-relaxation applicability sweep — real IEEE-123 OpenDSS positive-sequence impedances, Phase-17-retuned population
+Detector: cone residual |l·v − (P²+Q²)| vs atol=1e-6 + rtol=1e-4·magnitude
+NO AC/Ipopt oracle involved. rtol_exact neutralized so inexact solves are
+returned for classification rather than refused by the PF-04 gate.
+
+  exact        25
+  inexact      23
+  guard        6
+
+ratio range (solved): 0.05475 .. 4.76
+vpeak range:          0.99969 .. 1.01581
+voltage upper bound EVER active: false
+reverse flow at every solved point: true
+
+max ratio among EXACT:   0.7356
+min ratio among INEXACT: 1.088
+(a wide empty band between these two means the boundary is
+ insensitive to where the threshold is placed; a narrow one means
+ the classification is threshold-dependent — see the tolerance ladder)
+
+CAVEAT: atol=1e-6 sits at Clarabel's achievable cone residual on a large
+feeder at the default tol_gap=1e-8. A ratio near 1 is NOT evidence — verify
+with --tol-ladder before reporting any point as genuinely inexact.
