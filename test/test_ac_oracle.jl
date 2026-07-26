@@ -70,8 +70,93 @@ end
 @testitem "ac_oracle: assert_ac_exact! is defined (RED-guard for plan 15-02)" tags = [:ac_oracle] begin
     using TSODSO
 
-    # Intentionally RED until plan 15-02 defines assert_ac_exact! alongside recover_voltage_angles
-    # in this same file — so the Wave-0 gap is visible and the `ac_oracle` filter already
-    # discovers this file.
+    # GREEN once plan 15-02 defines assert_ac_exact! alongside recover_voltage_angles in this
+    # same file.
     @test isdefined(TSODSO, :assert_ac_exact!)
+end
+
+@testitem "ac_oracle: assert_ac_exact! reports all-exact on a KNOWN-exact 2-bus solve, never throws, never resolves to a Bool (EXACT-02/EXACT-03)" tags = [:ac_oracle] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    @test isdefined(TSODSO, :assert_ac_exact!)
+    @test isdefined(TSODSO, :ACPowerFlow)
+
+    if isdefined(TSODSO, :assert_ac_exact!) && isdefined(TSODSO, :ACPowerFlow)
+        # The 2-bus + single-Deferrable-aggregator fixture (docs/literate/convex_branch_flow.jl).
+        buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)]
+        branches = [Branch(1, 2, 0.01, 0.02, 10.0)]
+        feeder = Feeder(buses, branches, 1)
+        device = Deferrable(2, 1, 1, 0.5, 1.0, 1.0)
+        agg = Aggregator(2, 0.95, [device], [0.2])
+
+        # BOTH contexts from the SAME feeder/agg/λ₀/T/allow_export local variables (Pitfall 3
+        # guard: identical problem data, each independently re-optimized).
+        ctx_socp, cost_socp, _ =
+            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = 1, λ₀ = [1.0], allow_export = true)
+        ctx_ac, cost_ac, _ = solve_welfare(
+            feeder, ACPowerFlow(), [agg]; T = 1, λ₀ = [1.0], allow_local = true, allow_export = true,
+        )
+
+        report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
+
+        # The report is a per-hour NamedTuple, NEVER a bare Bool (EXACT-03 — a gap must surface
+        # as an inspectable finding, not collapse to pass/fail).
+        @test report isa NamedTuple
+        @test report.hours isa Vector
+        @test !(report isa Bool)
+        @test !(report.hours isa Bool)
+        @test length(report.hours) == 1
+        # A genuinely exact 2-bus case: every hour exact, both solvers on essentially the same
+        # optimum. assert_ac_exact! did NOT throw to reach this line.
+        @test all(row.exact for row in report.hours)
+        @test isapprox(report.obj_gap, 0.0; atol = 1e-3)
+    end
+end
+
+@testitem "ac_oracle: assert_ac_exact! throws ONLY on a structural T mismatch, never on a numeric gap (EXACT-03 divergence from assert_socp_exact!)" tags = [:ac_oracle] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    @test isdefined(TSODSO, :assert_ac_exact!)
+
+    if isdefined(TSODSO, :assert_ac_exact!)
+        feeder = Feeder(
+            [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+            [Branch(1, 2, 0.01, 0.02, 10.0)],
+            1,
+        )
+        N, B = 2, 1
+
+        # Two minimal fixed-value contexts on the 2-bus fixture (mirrors test_exactness.jl's
+        # fixed-value construction) differing ONLY in horizon T — one T=1, one T=2. This is a
+        # STRUCTURAL mismatch: the two solves are not the same operating point, the one case
+        # assert_ac_exact! is allowed to refuse.
+        function fixed_ctx(T)
+            m = Model(select_optimizer(LP()))
+            @variable(m, v[1:N, 1:T])
+            @variable(m, P[1:B, 1:T])
+            @variable(m, Q[1:B, 1:T])
+            @variable(m, l[1:B, 1:T])
+            fix.(v, 1.0; force = true)
+            fix.(P, 0.0; force = true)
+            fix.(Q, 0.0; force = true)
+            fix.(l, 0.0; force = true)
+            @objective(m, Max, 0)
+            optimize!(m)
+            ctx = TSODSO.ModelContext(m)
+            ctx.meta[:feeder] = feeder
+            ctx.meta[:T] = T
+            ctx.meta[:pf_vars] = (; v, P, Q, l)
+            return ctx
+        end
+        ctx1 = fixed_ctx(1)
+        ctx2 = fixed_ctx(2)
+
+        @test_throws Exception TSODSO.assert_ac_exact!(ctx1, ctx2; rtol = 1e-4)
+        # Any test asserting @test_throws on a HIGH-PV/inexact fixture (as opposed to this
+        # structural-mismatch fixture) is a signal the design has drifted toward the wrong shape —
+        # see plan 15-03's stress test, which is a POSITIVE (non-throwing) assertion.
+    end
 end
