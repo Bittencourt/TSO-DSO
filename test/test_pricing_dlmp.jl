@@ -161,6 +161,13 @@ end
     )
     @test d.total ≈ total
 
+    # PARALLEL, non-summed finite-check on `d.reactive` (REACT-02): a SEPARATE price signal
+    # from the 4-term active reconstruction above — checked for finiteness only, deliberately
+    # NOT folded into the sum-to-nodal-price assertion (which stays exactly 4-term).
+    for f in (d.energy, d.loss, d.congestion, d.voltage, d.reactive)
+        @test all(isfinite, f)
+    end
+
     # The energy component is the root MEM price at EVERY node (≈ λ₀), same across space.
     for j in 1:N, t in 1:T
         @test isapprox(d.energy[j, t], λ₀[t]; atol = 1e-3)
@@ -262,4 +269,68 @@ end
     for t in 1:T
         @test dv.energy[t] + dv.loss[t] + dv.voltage[t] + dv.congestion[t] ≈ dv.total[t]
     end
+end
+
+@testitem "dlmp: reactive price is degenerate at the root and finite/economically-consistent at a load bus on a lossy 2-bus (REACT-02)" tags =
+    [:dlmp] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # Lossy 2-bus radial fixture (r=0.01, x=0.02), the SAME shape used by
+    # test_ac_oracle.jl's angle-recovery validation gate — a genuinely lossy branch is what
+    # makes the load-bus reactive price analytically non-trivial (unlike the near-lossless
+    # r=x=1e-6 fixture used by this file's other 2-bus items).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    λ₀ = fill(40.0, T)
+    Pdc = fill(0.1, T)
+    φ0 = 0.9   # non-degenerate power factor: reactive_factor(0.9) > 0, so tanφ > 0
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, φ0, [batt], Pdc)
+
+    ctx, obj0, _dadp =
+        solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
+    d = decompose_dlmp(ctx)
+
+    # (a) The root's reactive price is DEGENERATE (≈0): the free-sign, zero-objective-
+    # coefficient `q_import`'s own KKT stationarity forces its dual to exactly zero (RESEARCH
+    # "Free slack, precisely located").
+    for t in 1:T
+        @test isapprox(d.reactive[1, t], 0.0; atol = 1e-6)
+    end
+
+    # (b) The load bus's reactive price is a FINITE, non-degenerate, reproducible number.
+    for t in 1:T
+        @test isfinite(d.reactive[2, t])
+    end
+
+    # Finite-difference economic-consistency pin (RESEARCH Pitfall 6/7 discipline — a
+    # hand-computed sanity check, not a further closed-form KKT re-derivation of the reactive
+    # price itself, per Assumption A1's minimal one-shot-price scope): perturb the SAME
+    # aggregator's power factor by a small δ, re-solve, and confirm the welfare objective's
+    # change matches Σ_t d.reactive[2, t] * (q1[t] - q0[t]) to first order, where q0/q1 are the
+    # aggregator's reactive-demand values before/after the perturbation computed via the SAME
+    # `reactive_factor` formula the production code path uses (src/devices/Aggregator.jl).
+    δ = 1e-4
+    agg_perturbed = Aggregator(2, φ0 + δ, [batt], Pdc)
+    _ctx1, obj1, _ = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg_perturbed];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+
+    q0 = -Pdc .* reactive_factor(φ0)
+    q1 = -Pdc .* reactive_factor(φ0 + δ)
+    predicted_Δobj = sum(d.reactive[2, t] * (q1[t] - q0[t]) for t in 1:T)
+    actual_Δobj = obj1 - obj0
+
+    @test isapprox(predicted_Δobj, actual_Δobj; atol = 1e-8, rtol = 5e-2)
 end
