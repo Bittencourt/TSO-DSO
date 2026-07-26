@@ -4,13 +4,13 @@ milestone: v2.1
 milestone_name: Validation & Reproduction
 status: executing
 stopped_at: ROADMAP.md (Phases 15-18) + REQUIREMENTS.md Traceability written for v2.1.
-last_updated: "2026-07-26T00:30:04.541Z"
+last_updated: "2026-07-26T00:37:19.686Z"
 last_activity: 2026-07-26
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 15 (ac-exactness-oracle) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-07-26
 

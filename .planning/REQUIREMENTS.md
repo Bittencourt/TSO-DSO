@@ -18,10 +18,10 @@ replacing today's toy-point + same-relaxation self-check.
 - [x] **EXACT-01**: Researcher can solve a true nonconvex AC-OPF on a radial fixture via a new
       `ACPowerFlow <: AbstractPowerFlow` peer subtype (Ipopt), enforcing the branch-flow SOC as a
       nonconvex **equality**, at the same operating point (loads/PV) as the SOCP solve.
-- [ ] **EXACT-02**: Framework certifies exactness via `assert_ac_exact!` (peer to `assert_socp_exact!`)
+- [x] **EXACT-02**: Framework certifies exactness via `assert_ac_exact!` (peer to `assert_socp_exact!`)
       by comparing the SOCP solution to the AC oracle on objective gap, max voltage deviation, and max
       branch-flow deviation, using a scale-free `atol + rtol·magnitude` tolerance.
-- [ ] **EXACT-03**: The exactness check reports **per-hour / per-scenario** gaps (not one pass/fail)
+- [x] **EXACT-03**: The exactness check reports **per-hour / per-scenario** gaps (not one pass/fail)
       and is structured so a genuine relaxation gap surfaces as a first-class, documented finding —
       not a spurious test failure.
 - [ ] **EXACT-04**: A high-PV / reverse-flow stress fixture exercises the exactness boundary and
