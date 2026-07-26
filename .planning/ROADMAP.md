@@ -118,7 +118,12 @@ impedances or without priced reactive power. Optionally consumes Phase 15's AC-c
      population, PV scenario).
   4. Repeated-run stability is checked and documented *before* the golden band is pinned, guarding
      against pinning transient Clarabel numerical noise as a permanent regression.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — repro_stability_check.jl: N>=20 flake-rate + ±2-5% population-scale sensitivity sweep, committed findings.txt (REPRO-02, BLOCKING before golden is pinned)
+- [ ] 18-02-PLAN.md — test/test_thesis_repro.jl: gate-then-golden DSO-surplus sign-flip + band on real-impedance IEEE-123, IEEE-13 secondary cross-check (REPRO-01)
+- [ ] 18-03-PLAN.md — scripts/thesis_case123_repro.jl promoted to 2 literate pages (reproduction + assumptions) + docs/make.jl registration (REPRO-01, REPRO-02)
 
 <details>
 <summary>✅ v1.0 Operational Transactive-Energy Core (Phases 1–9) — SHIPPED 2026-07-20</summary>
@@ -174,7 +179,7 @@ planning docs pages. Audit: 15/15 requirements, 10/10 integration seams. 2276 te
 | 15. AC-Exactness Oracle | v2.1 | 3/3 | Complete   | 2026-07-26 |
 | 16. Reactive-Power (μ) Consensus | v2.1 | 4/4 | Complete    | 2026-07-26 |
 | 17. Real IEEE-123 Impedances | v2.1 | 2/4 | In Progress|  |
-| 18. Directional Thesis Reproduction | v2.1 | 0/? | Not started | - |
+| 18. Directional Thesis Reproduction | v2.1 | 0/3 | Not started | - |
 
 ## Deferred / Future-Milestone Notes
 
