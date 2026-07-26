@@ -107,3 +107,11 @@ None - no external service configuration required.
 ---
 *Phase: 16-reactive-power-consensus*
 *Completed: 2026-07-26*
+
+## Self-Check: PASSED
+
+- FOUND: scripts/reactive_flake_rate.jl
+- FOUND: results/reactive_flake_rate/flake_rate_findings.txt
+- FOUND: .planning/phases/16-reactive-power-consensus/16-04-SUMMARY.md
+- FOUND: commit f44e5ed (feat(16-04): measure Clarabel flake rate + rho/rho_q finding under reactive_consensus)
+- FOUND: commit 05c2d8f (docs(16-04): complete reactive flake-rate measurement plan)
