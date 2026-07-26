@@ -120,12 +120,31 @@ gate and classified externally, so the two aren't identical paths. The test is c
 re-run the Phase 18-01 ±2-5% population sweep at `tol_gap = 1e-10` and see whether the gate still
 throws. **This should be done before any v3.0 scoping treats the fragility as physical.**
 
-### Finding 5 — tightening tolerance is not a free fix
+### Finding 5 — tightening tolerance is not a free fix ⟵ **CORRECTED, was my error**
 
-Only 1 of the 3 discriminated points reached `1e-10`. The other two return `ALMOST_OPTIMAL`, which
+~~Only 1 of the 3 discriminated points reached `1e-10`. The other two return `ALMOST_OPTIMAL`, which
 `assert_solved!` correctly refuses. So "just tighten the solver" trades false-positive inexactness for
-outright solve failures. A per-feeder **noise-floor calibration** (solve a known-benign point at
-several tolerances, take the residual spread, classify against *that*) is the more promising route.
+outright solve failures.~~
+
+**[CORRECTED 2026-07-26, quick task 260726-pta]** That was an artifact of **my ladder also tightening
+`tol_feas`**, not a property of the problem. Tightening only `tol_gap_abs`/`tol_gap_rel`:
+
+| point | ratio @ `1e-8` | ratio @ `1e-10` | factor |
+|---|---|---|---|
+| `vmax=1.05, load=1.05, pv=0.7` | 4.7604 | 0.0028505 | 1670× |
+| `vmax=1.10, load=0.95, pv=0.4` | 4.0931 | 0.0030026 | 1363× |
+
+Both converge and both collapse, at objectives agreeing to 7 significant figures. The second point is
+the one this README recorded as un-tightenable. So the discriminated count is **2/2, not 1/3**, and
+Finding 2's conclusion is on firmer evidence than stated — the "argued by analogy" caveat in the
+Honest Limits below is correspondingly weaker.
+
+Practical rule: tighten the **gap** tolerances; leave feasibility alone. Per-feeder **noise-floor
+calibration** (solve a known-benign point across a tolerance ladder, classify against the observed
+spread) remains the right structural fix.
+
+Published as `docs/literate/socp_applicability.jl`; re-runnable via
+`julia --project=. scripts/socp_applicability_sweep.jl ieee123 --tol-ladder`.
 
 ## Investigation Trail
 
