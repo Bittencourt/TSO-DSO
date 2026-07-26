@@ -46,6 +46,11 @@ include("powerflow/LinDistFlow.jl")
 # --- SOCP Convex Branch Flow formulation (owned by plan 04-02, PF-03) ---
 include("powerflow/ConvexBranchFlow.jl")
 
+# --- Independent nonconvex AC-OPF oracle (peer formulation, owned by plan 15-01, EXACT-01) ---
+# Included immediately after ConvexBranchFlow.jl (it references the `_SMAX_NO_LIMIT` const that
+# file defines) and before problem_class_trait.jl; it adds `problem_class(::ACPowerFlow) = NLP()`.
+include("powerflow/ACPowerFlow.jl")
+
 # --- Power-flow → problem-class routing trait (owned by plan 04-01, INFRA-02 / PF-03) ---
 # Included AFTER the powerflow formulations (needs `AbstractPowerFlow`) and after
 # solver/ProblemClass.jl (needs `QP`): it maps a formulation to its solver problem class.
