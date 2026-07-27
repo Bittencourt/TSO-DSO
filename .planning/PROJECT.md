@@ -19,11 +19,31 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
-## Current Milestone: (next not yet scoped)
+## Current Milestone: v3.0 Research Extension Rungs
 
-v2.1 shipped 2026-07-26. Next milestone not yet scoped — run `/gsd:new-milestone` to define it
-(candidate thrusts in Deferred Notes / research axes below: overvoltage-capable relaxation, stochastic,
-MPC/RTP, meshed+4Q-BESS, exact-figure reproduction if thesis App. E is obtained).
+**Goal:** Extend the validated two-layer framework along all five deferred research axes — each
+shipped as a minimal validated ladder rung (core capability + validation + literate doc), deferring
+deep parameter studies and paper-grade experiments to later milestones.
+
+**Target features:**
+- **Overvoltage-capable relaxation** — a pricing-capable formulation for the high-PV overvoltage
+  regime where the SOCP relaxation is provably inexact (the v2.1 knife-edge finding), so the
+  framework can price the thesis's own motivating scenario instead of refusing.
+- **MPC / rolling-horizon / RTP** — closed-loop receding-horizon operation over the stateful devices
+  (SOC, temperature) via the SEAM-01 rolling-horizon stub, with rolling re-computed DADPs as a
+  real-time price signal, benchmarked against the perfect-foresight day-ahead solve.
+- **Stochastic PV/demand uncertainty** — scenario-based extensive-form welfare solve via the SEAM-01
+  multi-scenario hook (seeded Markov scenario trees), with stochastic DADP semantics documented.
+- **Meshed networks + 4Q-BESS** — meshed formulation slot filled with its own relaxation/exactness
+  treatment (the radial exactness proof does not carry over), four-quadrant BESS with a genuine
+  reactive decision variable, unlocking the live reactive dual-ascent deferred in v2.1.
+- **Discrete/integer investment expansion** — binary-expansion + integer/Lagrangian cuts in the
+  planning Benders layer, consciously lifting the PVAL-04 no-binaries guard (guard becomes scoped,
+  not deleted).
+
+**Scope discipline:** all five axes are must-haves; depth is capped at "minimal validated rung" per
+axis. Known interdependency: overvoltage-capable relaxation and meshed+4Q-BESS both touch the
+relaxation/exactness machinery — sequencing decided in the roadmap.
 
 ## Shipped Milestone: v2.1 Validation & Reproduction (2026-07-26)
 
@@ -96,8 +116,18 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ### Active
 
-*(Next milestone not yet scoped — run `/gsd:new-milestone`. Deferred/candidate thrusts are in the
-Deferred Notes below and the research axes under Context.)*
+*(v3.0 Research Extension Rungs — REQ-IDs defined in `.planning/REQUIREMENTS.md`)*
+
+- Overvoltage-capable relaxation: price the high-PV overvoltage regime the SOCP relaxation
+  provably cannot (v2.1 EXACT-04 finding), with its own validity certificate.
+- MPC / rolling-horizon / RTP: closed-loop receding-horizon solve over stateful devices with
+  rolling DADPs, benchmarked against perfect foresight.
+- Stochastic PV/demand uncertainty: scenario-based extensive-form welfare solve with stochastic
+  DADP semantics.
+- Meshed + 4Q-BESS: meshed formulation with its own relaxation/exactness treatment; 4Q-BESS
+  reactive decision variable + live reactive dual-ascent.
+- Discrete/integer investment expansion: binary-expansion + integer/Lagrangian cuts; PVAL-04
+  no-binaries guard consciously scoped down, not deleted.
 
 ### Out of Scope
 
@@ -265,4 +295,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-26 — after v2.1 Validation & Reproduction milestone (shipped)*
+*Last updated: 2026-07-26 — v3.0 Research Extension Rungs milestone started*

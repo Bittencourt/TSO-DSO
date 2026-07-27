@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Validation & Reproduction
-status: Awaiting next milestone
-stopped_at: Phase 18 complete -- all 3 plans (18-01, 18-02, 18-03) executed; v2.1 Validation & Reproduction milestone target features all delivered.
-last_updated: "2026-07-26T14:08:50.738Z"
-last_activity: 2026-07-26 — Milestone v2.1 completed and archived
+milestone: v3.0
+milestone_name: Research Extension Rungs
+status: planning
+last_updated: "2026-07-27T00:10:08.401Z"
+last_activity: 2026-07-27
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: Milestone v2.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-26 — Completed quick task 260726-mo7: Add optimizer kwarg to fit_baseline
+Status: Defining requirements
+Last activity: 2026-07-27 — Milestone v3.0 started
 
 ### Quick Tasks Completed
 
@@ -233,6 +232,7 @@ None yet.
   `.worktrees` does NOT help** — the item reports under the *main* path because the contamination is in
   setup-module/fixture resolution. Reproduced bit-for-bit against a clean env.
   **(b) `Pkg.develop(path=".")` mutates the PINNED test env** (rewrote `test/Manifest.toml` 1232 lines
+
   + `test/Project.toml` 14 lines). Separate bug; did NOT cause (a).
   **Use `julia --project=. -e 'import Pkg; Pkg.test()'`** — real `test/runtests.jl` entrypoint, immune
   to the walk, temp env from the pinned manifest, mutates nothing. Verified good state:
@@ -265,7 +265,7 @@ Items acknowledged and carried forward, now refined by v2.1 REQUIREMENTS.md:
 
 ## Session Continuity
 
-Last session: 2026-07-26T10:33:59.608Z
+Last session: 2026-07-26T23:23:40.597Z
 Stopped at: Phase 18 complete -- all 3 plans (18-01, 18-02, 18-03) executed; v2.1 Validation & Reproduction milestone target features all delivered.
 Resume file: None
 
