@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>SOC Relaxation Applicability · TSODSO</title><meta name="title" content="SOC Relaxation Applicability · TSODSO"/><meta property="og:title" content="SOC Relaxation Applicability · TSODSO"/><meta property="twitter:title" content="SOC Relaxation Applicability · TSODSO"/><meta name="description" content="Documentation for TSODSO."/><meta property="og:description" content="Documentation for TSODSO."/><meta property="twitter:description" content="Documentation for TSODSO."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">TSODSO</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Models</span><ul><li><a class="tocitem" href="../toy_dc/">Rung 0: Toy DC</a></li><li><a class="tocitem" href="../lindistflow/">Rung 1-2: LinDistFlow</a></li><li><a class="tocitem" href="../convex_branch_flow/">Rung 3: SOCP + Exactness</a></li><li><a class="tocitem" href="../ac_oracle/">Rung 3: AC-Exactness Oracle</a></li><li><a class="tocitem" href="../prosumer_welfare/">Rung 3: Devices + GLB-CVX</a></li><li><a class="tocitem" href="../pricing_dlmp/">Rung 4: DADP/DLMP Pricing</a></li><li><a class="tocitem" href="../admm/">Rung 5: ADMM Decomposition</a></li><li><a class="tocitem" href="../ieee123_impedances/">IEEE-123 Real Impedances</a></li><li><a class="tocitem" href="../thesis_reproduction_ieee123/">Thesis Reproduction — IEEE-123</a></li><li><a class="tocitem" href="../thesis_reproduction_assumptions/">Thesis Reproduction — Assumptions</a></li><li class="is-active"><a class="tocitem" href>SOC Relaxation Applicability</a><ul class="internal"><li><a class="tocitem" href="#The-detector-is-free"><span>The detector is free</span></a></li><li><a class="tocitem" href="#Substrate-A-—-the-3-bus-high-PV-stress-fixture-(computed-live)"><span>Substrate A — the 3-bus high-PV stress fixture (computed live)</span></a></li><li><a class="tocitem" href="#Substrate-B-—-real-IEEE-123-impedances-(precomputed)"><span>Substrate B — real IEEE-123 impedances (precomputed)</span></a></li><li><a class="tocitem" href="#What-does-not-generalize-—-the-point-of-showing-two-substrates"><span>What does not generalize — the point of showing two substrates</span></a></li><li><a class="tocitem" href="#Reproducing-this"><span>Reproducing this</span></a></li></ul></li></ul></li><li><span class="tocitem">Planning</span><ul><li><a class="tocitem" href="../stackelberg_benders/">Rung 6: Stackelberg-Benders</a></li><li><a class="tocitem" href="../nash_diagonalization/">Rung 7: Nash Diagonalization &amp; Shared Corridor</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Models</a></li><li class="is-active"><a href>SOC Relaxation Applicability</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>SOC Relaxation Applicability</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="SOC-Relaxation-Applicability-—-where-the-branch-flow-relaxation-is-exact"><a class="docs-heading-anchor" href="#SOC-Relaxation-Applicability-—-where-the-branch-flow-relaxation-is-exact">SOC Relaxation Applicability — where the branch-flow relaxation is exact</a><a id="SOC-Relaxation-Applicability-—-where-the-branch-flow-relaxation-is-exact-1"></a><a class="docs-heading-anchor-permalink" href="#SOC-Relaxation-Applicability-—-where-the-branch-flow-relaxation-is-exact" title="Permalink"></a></h1><p>The operational layer prices a <strong>convex</strong> social-welfare problem: the SOC branch-flow relaxation replaces the physical equality <code>l·v = P² + Q²</code> with the cone <code>l·v ≥ P² + Q²</code>. Prices are the duals of that convex program. So a reader is entitled to ask: <strong>where does the relaxation actually hold, and how would you know if it didn&#39;t?</strong></p><p>This page answers both, and reports one result honestly negative and one that flatly refuses to generalize between feeders.</p><h2 id="The-detector-is-free"><a class="docs-heading-anchor" href="#The-detector-is-free">The detector is free</a><a id="The-detector-is-free-1"></a><a class="docs-heading-anchor-permalink" href="#The-detector-is-free" title="Permalink"></a></h2><p><a href="../../api/#TSODSO.assert_socp_exact!-Tuple{ModelContext}"><code>assert_socp_exact!</code></a> (<code>src/models/exactness.jl</code>) already computes, per branch and hour,</p><p class="math-container">\[\mathrm{gap}[b,t] = \bigl|\, l_{b,t}\, v_{i(b),t} - (P_{b,t}^2 + Q_{b,t}^2) \,\bigr|\]</p><p>against the scale-free bound <code>atol + rtol·max(|l·v|, |P²+Q²|)</code>. It costs <strong>nothing</strong> beyond the SOCP solve that already happened — no AC/Ipopt oracle is involved anywhere on this page. Define <code>ratio = gap / bound</code>; <code>ratio ≤ 1</code> is the exactness classification.</p><p>Two diagnostics come free alongside it and make a map <em>interpretable</em> rather than merely colourful: whether the <strong>upper voltage bound is active</strong> (<code>v[j,t] ≈ vmax²</code> — a plain JuMP variable bound, so <code>reduced_cost</code> is available too) and whether <strong>reverse flow</strong> occurs (<code>P[b,t] &lt; 0</code>). The classical exactness conditions (Farivar &amp; Low 2013; Gan et al. 2015) turn on exactly those.</p><pre><code class="language-julia hljs">using TSODSO
+# `TSODSO.JuMP` rather than `using JuMP`: the docs environment pins a deliberately minimal
+# dependency set, and JuMP is already loaded as a dependency of TSODSO — so this reaches `value`
+# and `optimizer_with_attributes` without adding a dep and re-resolving `docs/Manifest.toml`
+# (which CI requires to stay in Julia-version lockstep).
+using TSODSO.JuMP
+using Printf
+
+const T = 24</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">24</code></pre><p>Digitized profiles, byte-identical to <code>test/fixtures_phase4.jl</code> / <code>fixtures_phase7.jl</code>.</p><pre><code class="language-julia hljs">const TEMP = Float64[
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
+]
+const PRICE = Float64[
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
+]
+
+function cone_stats(ctx, feeder; atol = 1e-6, rtol = 1e-4)
+    pf = ctx.meta[:pf_vars]
+    maxgap = maxratio = 0.0
+    n_at_vmax = 0
+    min_P, vpeak = Inf, 0.0
+    for t in 1:T
+        for (b, br) in enumerate(feeder.branches)
+            lhs = value(pf.l[b, t]) * value(pf.v[br.from, t])
+            rhs = value(pf.P[b, t])^2 + value(pf.Q[b, t])^2
+            g = abs(lhs - rhs)
+            maxgap = max(maxgap, g)
+            maxratio = max(maxratio, g / (atol + rtol * max(abs(lhs), abs(rhs))))
+            min_P = min(min_P, value(pf.P[b, t]))
+        end
+        for bus in feeder.buses
+            bus.is_root &amp;&amp; continue
+            v = value(pf.v[bus.id, t])
+            vpeak = max(vpeak, sqrt(max(v, 0.0)))
+            v &gt;= bus.vmax^2 - 1e-7 &amp;&amp; (n_at_vmax += 1)
+        end
+    end
+    return (; maxgap, maxratio, n_at_vmax, min_P, vpeak)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">cone_stats (generic function with 1 method)</code></pre><h2 id="Substrate-A-—-the-3-bus-high-PV-stress-fixture-(computed-live)"><a class="docs-heading-anchor" href="#Substrate-A-—-the-3-bus-high-PV-stress-fixture-(computed-live)">Substrate A — the 3-bus high-PV stress fixture (computed live)</a><a id="Substrate-A-—-the-3-bus-high-PV-stress-fixture-(computed-live)-1"></a><a class="docs-heading-anchor-permalink" href="#Substrate-A-—-the-3-bus-high-PV-stress-fixture-(computed-live)" title="Permalink"></a></h2><p>A purpose-built fixture (<code>test/fixtures_phase4.jl</code>): low-impedance <code>r = x = 0.05</code> branches and a tight voltage band, so PV back-feed swings voltage fast and the overvoltage/reverse-flow mechanism that breaks exactness can actually fire. Everything below runs at documentation build time.</p><pre><code class="language-julia hljs">feeder_3bus(; vmax = 1.05) = Feeder(
+    [Bus(1, 0.95, vmax, true), Bus(2, 0.95, vmax, false), Bus(3, 0.95, vmax, false)],
+    [Branch(1, 2, 0.05, 0.05, 99.0), Branch(2, 3, 0.05, 0.05, 99.0)],
+    1,
+)
+
+function house_3bus(bus; pv_scale, load_scale)
+    prof = generate_profiles(seed = 20260406 + bus, T = T)
+    return Aggregator(
+        bus,
+        0.95,
+        [
+            Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, TEMP),
+            Deferrable(bus, 8, 16, 1.0, 0.5, 0.5),
+            PVBattery(
+                bus,
+                0.95,
+                1.0,
+                0.1,
+                0.0,
+                0.2,
+                0.1,
+                3.8,
+                6.2,
+                8.9,
+                Float64[pv_scale * p for p in prof.pv],
+            ),
+        ],
+        Float64[load_scale * d for d in prof.demand],
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">house_3bus (generic function with 1 method)</code></pre><p><code>rtol_exact = 1e6</code> neutralizes <code>solve_welfare</code>&#39;s own PF-04 gate so an inexact solve is <strong>returned</strong> for classification instead of refused — the diagnostic-override pattern already used in <code>test/test_ac_oracle.jl</code>. It changes no <code>src/</code> code and weakens nothing for any other caller. Non-solved points are split by cause: <code>infeasible</code> is legitimate white space (the feeder cannot serve that operating point inside its voltage band), a tripped model guard is genuinely <strong>unmeasured</strong>. Neither is ever silently dropped.</p><pre><code class="language-julia hljs">function sweep_3bus(pvs, lds, vms)
+    rows = NamedTuple[]
+    for vmax in vms, ls in lds, ps in pvs
+        f = feeder_3bus(; vmax = vmax)
+        aggs = [house_3bus(b; pv_scale = ps, load_scale = ls) for b in 2:3]
+        push!(
+            rows,
+            try
+                ctx, _, _ = solve_welfare(
+                    f,
+                    ConvexBranchFlow(),
+                    aggs;
+                    T = T,
+                    λ₀ = PRICE,
+                    allow_export = true,
+                    rtol_exact = 1e6,
+                )
+                s = cone_stats(ctx, f)
+                (;
+                    vmax,
+                    load = ls,
+                    pv = ps,
+                    ratio = s.maxratio,
+                    atvmax = s.n_at_vmax,
+                    vpeak = s.vpeak,
+                    minP = s.min_P,
+                    class = s.maxratio &lt;= 1 ? &quot;exact&quot; : &quot;inexact&quot;,
+                )
+            catch err
+                msg = sprint(showerror, err)
+                (;
+                    vmax,
+                    load = ls,
+                    pv = ps,
+                    ratio = NaN,
+                    atvmax = -1,
+                    vpeak = NaN,
+                    minP = NaN,
+                    class = occursin(&quot;INFEASIBLE&quot;, msg) ? &quot;infeasible&quot; :
+                            occursin(&quot;complementarity&quot;, msg) ? &quot;guard&quot; : &quot;solver&quot;,
+                )
+            end,
+        )
+    end
+    return rows
+end
+
+PV_3BUS = [0.3, 0.5, 0.7, 0.9, 1.0, 1.1, 1.2, 1.4, 1.6, 2.0]
+LOAD_3BUS = [0.10, 0.15, 0.20, 0.30, 0.40]
+VMAX_3BUS = [1.05, 1.075, 1.10]
+
+rows_3bus = sweep_3bus(PV_3BUS, LOAD_3BUS, VMAX_3BUS)
+
+for cls in (&quot;exact&quot;, &quot;inexact&quot;, &quot;infeasible&quot;, &quot;guard&quot;)
+    n = count(r -&gt; r.class == cls, rows_3bus)
+    n &gt; 0 &amp;&amp; @printf(&quot;%-11s %3d\n&quot;, cls, n)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">exact        43
+inexact      66
+infeasible   30
+guard        11</code></pre><h3 id="The-controls-that-make-this-map-trustworthy"><a class="docs-heading-anchor" href="#The-controls-that-make-this-map-trustworthy">The controls that make this map trustworthy</a><a id="The-controls-that-make-this-map-trustworthy-1"></a><a class="docs-heading-anchor-permalink" href="#The-controls-that-make-this-map-trustworthy" title="Permalink"></a></h3><p>A sweep that reports &quot;everything is exact&quot; is worthless unless it can also reproduce a point already <strong>known</strong> to be inexact — otherwise that outcome is indistinguishable from a fixture in which the mechanism cannot fire. (An earlier attempt at this map swept a network whose impedances are too low to move voltage; it returned 111/111 exact and was pure artifact.) Both EXACT-04 control points are therefore asserted live:</p><pre><code class="language-julia hljs">ctl(rs, ps, ls, vm) = only(filter(r -&gt; r.pv == ps &amp;&amp; r.load == ls &amp;&amp; r.vmax == vm, rs))
+c_exact = ctl(rows_3bus, 0.5, 0.20, 1.05)
+c_inexact = ctl(rows_3bus, 1.2, 0.20, 1.05)
+
+@assert c_exact.class == &quot;exact&quot;
+@assert c_inexact.class == &quot;inexact&quot;
+@printf(
+    &quot;pv=0.5 -&gt; %s (ratio %.4g, vpeak %.5f)\npv=1.2 -&gt; %s (ratio %.4g, vpeak %.5f)\n&quot;,
+    c_exact.class,
+    c_exact.ratio,
+    c_exact.vpeak,
+    c_inexact.class,
+    c_inexact.ratio,
+    c_inexact.vpeak
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">pv=0.5 -&gt; exact (ratio 0.002732, vpeak 1.03986)
+pv=1.2 -&gt; inexact (ratio 9609, vpeak 1.05000)</code></pre><p><code>vpeak ≈ 1.04</code> at the exact control independently matches the fixture&#39;s own documented &quot;≈1.04 pu, clear over-voltage with headroom below the cap&quot; calibration note.</p><h3 id="The-boundary,-quantified"><a class="docs-heading-anchor" href="#The-boundary,-quantified">The boundary, quantified</a><a id="The-boundary,-quantified-1"></a><a class="docs-heading-anchor-permalink" href="#The-boundary,-quantified" title="Permalink"></a></h3><p>Largest <code>pv_scale</code> still exact, per <code>(vmax, load)</code>:</p><pre><code class="language-julia hljs">print(&quot;load  &quot;, join([@sprintf(&quot;vmax=%-7s&quot;, v) for v in VMAX_3BUS]), &quot;\n&quot;)
+for ls in LOAD_3BUS
+    print(@sprintf(&quot;%-6s&quot;, ls))
+    for vm in VMAX_3BUS
+        ok = filter(r -&gt; r.vmax == vm &amp;&amp; r.load == ls &amp;&amp; r.class == &quot;exact&quot;, rows_3bus)
+        print(@sprintf(&quot;%-12s&quot;, isempty(ok) ? &quot;—&quot; : string(maximum(r.pv for r in ok))))
+    end
+    println()
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">load  vmax=1.05   vmax=1.075  vmax=1.1
+0.1   0.5         0.7         1.0
+0.15  0.5         0.7         1.0
+0.2   0.5         0.7         1.0
+0.3   0.7         0.9         1.1
+0.4   —           —           —</code></pre><p><strong>Voltage headroom is the first-order control; load is second-order.</strong> Each <code>+0.025</code> pu of headroom buys roughly <code>+0.2</code> of <code>pv_scale</code>, near-linearly, while load moves the boundary by at most one grid step across its whole swept range. The <code>load = 0.40</code> row is infeasible throughout — the fixture simply cannot serve that load inside <code>vmin = 0.95</code>, which is white space, not a measurement.</p><h3 id="Is-the-inexactness-real?-The-tolerance-ladder"><a class="docs-heading-anchor" href="#Is-the-inexactness-real?-The-tolerance-ladder">Is the inexactness real? The tolerance ladder</a><a id="Is-the-inexactness-real?-The-tolerance-ladder-1"></a><a class="docs-heading-anchor-permalink" href="#Is-the-inexactness-real?-The-tolerance-ladder" title="Permalink"></a></h3><p>This is the check that separates a relaxation gap from solver under-convergence, and it is the most important methodological point on this page. <strong>A structural gap is a property of the optimum and must PERSIST as the solver tolerance tightens. A numerical residual SHRINKS.</strong></p><p>Run on the known-inexact control point, going through the solver factory so no backend is named:</p><pre><code class="language-julia hljs">base_opt = select_optimizer(SOCP())
+for tol in (nothing, 1e-10)
+    opt =
+        tol === nothing ? base_opt :
+        optimizer_with_attributes(
+            base_opt.optimizer_constructor,
+            base_opt.params...,
+            &quot;tol_gap_abs&quot; =&gt; tol,
+            &quot;tol_gap_rel&quot; =&gt; tol,
+        )
+    f = feeder_3bus(; vmax = 1.05)
+    aggs = [house_3bus(b; pv_scale = 1.2, load_scale = 0.20) for b in 2:3]
+    ctx, obj, _ = solve_welfare(
+        f,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = PRICE,
+        optimizer = opt,
+        allow_export = true,
+        rtol_exact = 1e6,
+    )
+    s = cone_stats(ctx, f)
+    @printf(
+        &quot;tol_gap=%-7s ratio=%-11.5g maxgap=%-10.4g obj=%.6f\n&quot;,
+        tol === nothing ? &quot;1e-8*&quot; : string(tol),
+        s.maxratio,
+        s.maxgap,
+        obj
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">tol_gap=1e-8*   ratio=9608.6      maxgap=10.44      obj=-922.071589
+tol_gap=1.0e-10 ratio=9608.6      maxgap=10.44      obj=-922.071588</code></pre><p>The ratio does not budge: this gap is <strong>structural</strong>, and the classification is safe. Keep that number in mind — the IEEE-123 section below runs the identical ladder and gets the opposite answer.</p><h3 id="Figure-—-the-3-bus-applicability-map"><a class="docs-heading-anchor" href="#Figure-—-the-3-bus-applicability-map">Figure — the 3-bus applicability map</a><a id="Figure-—-the-3-bus-applicability-map-1"></a><a class="docs-heading-anchor-permalink" href="#Figure-—-the-3-bus-applicability-map" title="Permalink"></a></h3><pre><code class="language-julia hljs">if Base.find_package(&quot;CairoMakie&quot;) !== nothing
+    using CairoMakie
+    CairoMakie.activate!(type = &quot;png&quot;)
+
+    code = Dict(&quot;exact&quot; =&gt; 1, &quot;inexact&quot; =&gt; 2, &quot;guard&quot; =&gt; 3, &quot;infeasible&quot; =&gt; 4)
+    colors = [
+        RGBf(0.13, 0.55, 0.49),
+        RGBf(0.78, 0.15, 0.20),
+        RGBf(0.95, 0.71, 0.25),
+        RGBf(0.88, 0.88, 0.90),
+    ]
+
+    fig = Figure(size = (1000, 380), backgroundcolor = :white)
+    Label(
+        fig[0, 1:3],
+        &quot;Where the SOC relaxation is exact — 3-bus high-PV stress fixture&quot;,
+        fontsize = 17,
+        font = :bold,
+    )
+    for (k, vm) in enumerate(VMAX_3BUS)
+        ax = Axis(
+            fig[1, k];
+            title = &quot;vmax = $vm&quot;,
+            xlabel = &quot;pv_scale&quot;,
+            ylabel = k == 1 ? &quot;load_scale&quot; : &quot;&quot;,
+            xticks = (1:length(PV_3BUS), string.(PV_3BUS)),
+            yticks = (1:length(LOAD_3BUS), string.(LOAD_3BUS)),
+            xticklabelsize = 10,
+            yticklabelsize = 10,
+            xgridvisible = false,
+            ygridvisible = false,
+        )
+        Z = [Float64(code[ctl(rows_3bus, p, l, vm).class]) for p in PV_3BUS, l in LOAD_3BUS]
+        heatmap!(
+            ax,
+            1:length(PV_3BUS),
+            1:length(LOAD_3BUS),
+            Z;
+            colormap = cgrad(colors, 4, categorical = true),
+            colorrange = (0.5, 4.5),
+        )
+        # A dot marks the free diagnostic: upper voltage bound ACTIVE at &gt;=1 (bus,hour).
+        for (i, p) in enumerate(PV_3BUS), (j, l) in enumerate(LOAD_3BUS)
+            ctl(rows_3bus, p, l, vm).atvmax &gt;= 1 &amp;&amp; scatter!(
+                ax,
+                [i],
+                [j];
+                markersize = 5,
+                color = (:white, 0.85),
+                strokecolor = :black,
+                strokewidth = 0.6,
+            )
+        end
+        vm == 1.05 &amp;&amp; scatter!(
+            ax,
+            [findfirst(==(0.5), PV_3BUS), findfirst(==(1.2), PV_3BUS)],
+            fill(findfirst(==(0.20), LOAD_3BUS), 2);
+            marker = :star5,
+            markersize = 15,
+            color = :white,
+            strokecolor = :black,
+            strokewidth = 1.2,
+        )
+        xlims!(ax, 0.5, length(PV_3BUS) + 0.5)
+        ylims!(ax, 0.5, length(LOAD_3BUS) + 0.5)
+    end
+    Legend(
+        fig[2, 1:3],
+        [PolyElement(color = c) for c in colors] ∪ [
+            MarkerElement(
+                marker = :circle,
+                markersize = 6,
+                color = (:white, 0.85),
+                strokecolor = :black,
+                strokewidth = 0.6,
+            ),
+            MarkerElement(
+                marker = :star5,
+                markersize = 12,
+                color = :white,
+                strokecolor = :black,
+                strokewidth = 1.1,
+            ),
+        ],
+        [
+            &quot;exact&quot;,
+            &quot;INEXACT&quot;,
+            &quot;guard tripped (unmeasured)&quot;,
+            &quot;infeasible (unserveable)&quot;,
+            &quot;voltage bound active&quot;,
+            &quot;EXACT-04 control&quot;,
+        ];
+        orientation = :horizontal,
+        framevisible = false,
+        labelsize = 11,
+    )
+    rowgap!(fig.layout, 4)
+    fig
+end</code></pre><img src="86613c8c.png" alt="Example block output"/><h2 id="Substrate-B-—-real-IEEE-123-impedances-(precomputed)"><a class="docs-heading-anchor" href="#Substrate-B-—-real-IEEE-123-impedances-(precomputed)">Substrate B — real IEEE-123 impedances (precomputed)</a><a id="Substrate-B-—-real-IEEE-123-impedances-(precomputed)-1"></a><a class="docs-heading-anchor-permalink" href="#Substrate-B-—-real-IEEE-123-impedances-(precomputed)" title="Permalink"></a></h2><div class="admonition is-info" id="This-map-is-precomputed,-and-deliberately-so-d070246823511259"><header class="admonition-header">This map is precomputed, and deliberately so<a class="admonition-anchor" href="#This-map-is-precomputed,-and-deliberately-so-d070246823511259" title="Permalink"></a></header><div class="admonition-body"><p>The IEEE-123 sweep costs <strong>~68 s per solve</strong> (123 buses, 122 branches, 85 load nodes, T=24), so 54 points take ~16 minutes — more than the documentation CI job&#39;s entire 30-minute budget. It is therefore <strong>loaded from committed data</strong>, not solved here. Regenerate with:</p><pre><code class="nohighlight hljs">julia --project=. scripts/socp_applicability_sweep.jl ieee123 --tol-ladder</code></pre><p>which writes <code>results/socp_applicability/ieee123_sweep.csv</code> — the exact file read below. Everything in Substrate A above, by contrast, was solved live at build time.</p></div></div><p>Axes are multipliers on the Phase-17-retuned population point (<code>load 0.05 / pv 0.12</code>, seed <code>20260719</code>) — the point the thesis-reproduction pages use.</p><p>Parsed with <code>Base</code> only: the docs environment pins a minimal dependency set, and a numeric table we generate ourselves does not justify adding <code>CSV</code>/<code>DataFrames</code> to it and re-resolving <code>docs/Manifest.toml</code> (which CI requires to stay in Julia-version lockstep).</p><pre><code class="language-julia hljs">function read_sweep_csv(path)
+    lines = readlines(path)
+    header = split(first(lines), &#39;,&#39;)
+    idx = Dict(strip(h) =&gt; i for (i, h) in enumerate(header))
+    num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+    return map(lines[2:end]) do ln
+        f = split(ln, &#39;,&#39;)
+        (;
+            vmax = num(f[idx[&quot;vmax&quot;]]),
+            load = num(f[idx[&quot;load&quot;]]),
+            pv = num(f[idx[&quot;pv&quot;]]),
+            ratio = num(f[idx[&quot;maxratio&quot;]]),
+            atvmax = num(f[idx[&quot;n_at_vmax&quot;]]),
+            vpeak = num(f[idx[&quot;vpeak&quot;]]),
+            minP = num(f[idx[&quot;min_branch_P&quot;]]),
+            class = strip(f[idx[&quot;class&quot;]]),
+        )
+    end
+end
+
+rows_123 = read_sweep_csv(
+    joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;socp_applicability&quot;, &quot;ieee123_sweep.csv&quot;),
+)
+
+for cls in (&quot;exact&quot;, &quot;inexact&quot;, &quot;infeasible&quot;, &quot;guard&quot;)
+    n = count(r -&gt; r.class == cls, rows_123)
+    n &gt; 0 &amp;&amp; @printf(&quot;%-11s %3d\n&quot;, cls, n)
+end
+
+solved_123 = filter(r -&gt; isfinite(r.ratio), rows_123)
+@printf(
+    &quot;\nratio range      : %.4g .. %.4g\n&quot;,
+    minimum(r.ratio for r in solved_123),
+    maximum(r.ratio for r in solved_123)
+)
+@printf(
+    &quot;vpeak range      : %.5f .. %.5f\n&quot;,
+    minimum(r.vpeak for r in solved_123),
+    maximum(r.vpeak for r in solved_123)
+)
+@printf(&quot;bound EVER active: %s\n&quot;, any(r.atvmax &gt;= 1 for r in solved_123))
+@printf(&quot;reverse flow everywhere: %s\n&quot;, all(r.minP &lt; 0 for r in solved_123))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">exact        25
+inexact      23
+guard         6
+
+ratio range      : 0.05475 .. 4.76
+vpeak range      : 0.99969 .. 1.01581
+bound EVER active: false
+reverse flow everywhere: true</code></pre><h3 id="The-two-findings,-and-they-are-not-what-Substrate-A-suggests"><a class="docs-heading-anchor" href="#The-two-findings,-and-they-are-not-what-Substrate-A-suggests">The two findings, and they are not what Substrate A suggests</a><a id="The-two-findings,-and-they-are-not-what-Substrate-A-suggests-1"></a><a class="docs-heading-anchor-permalink" href="#The-two-findings,-and-they-are-not-what-Substrate-A-suggests" title="Permalink"></a></h3><p><strong>1. There is no overvoltage at all.</strong> The voltage upper bound is <em>never</em> active at any solved point, across a 5.5× PV range, with <code>vpeak</code> spanning roughly 0.9997–1.016 pu against caps of 1.05–1.10. Real IEEE-123 impedances (<code>r ∈ [0.0003, 0.0102]</code>, <code>x ∈ [0.00015, 0.0103]</code>) are 5–35× <em>lower</em> than the 3-bus fixture&#39;s uniform 0.05, so back-feed barely moves voltage. <strong>The mechanism that drives inexactness on Substrate A cannot fire here.</strong></p><p><strong>2. Reverse flow alone does not predict inexactness.</strong> It is present at <em>every</em> solved point, including every exact one. Reverse flow is the setting; the binding voltage cap is the cause.</p><h3 id="The-noise-floor-—-why-half-these-points-flag-spuriously"><a class="docs-heading-anchor" href="#The-noise-floor-—-why-half-these-points-flag-spuriously">The noise floor — why ~half these points flag spuriously</a><a id="The-noise-floor-—-why-half-these-points-flag-spuriously-1"></a><a class="docs-heading-anchor-permalink" href="#The-noise-floor-—-why-half-these-points-flag-spuriously" title="Permalink"></a></h3><div class="admonition is-warning" id="A-cone-gap-ratio-near-1-is-not-evidence-bac92180d59f0004"><header class="admonition-header">A cone-gap ratio near 1 is not evidence<a class="admonition-anchor" href="#A-cone-gap-ratio-near-1-is-not-evidence-bac92180d59f0004" title="Permalink"></a></header><div class="admonition-body"><p>The flagged points on this feeder sit at ratios of roughly 1.1–4.8. Compare Substrate A, where genuine structural inexactness gives <strong>1e3–1e4</strong>. That is a three-order-of-magnitude difference in the <em>strength of the evidence</em>, not just the value.</p><p>Running the identical tolerance ladder on two flagged IEEE-123 points:</p><table><tr><th style="text-align: right">point</th><th style="text-align: right">ratio @ <code>1e-8</code></th><th style="text-align: right">ratio @ <code>1e-10</code></th><th style="text-align: right">factor</th><th style="text-align: right">objective</th></tr><tr><td style="text-align: right"><code>vmax=1.05, load=1.05, pv=0.7</code></td><td style="text-align: right"><strong>4.7604</strong></td><td style="text-align: right"><strong>0.0028505</strong></td><td style="text-align: right">1670×</td><td style="text-align: right">−41141.352214 → −41141.352140</td></tr><tr><td style="text-align: right"><code>vmax=1.10, load=0.95, pv=0.4</code></td><td style="text-align: right"><strong>4.0931</strong></td><td style="text-align: right"><strong>0.0030026</strong></td><td style="text-align: right">1363×</td><td style="text-align: right">−41198.298561 → −41198.298487</td></tr></table><p>Both <strong>collapse by three orders of magnitude</strong> at an <em>identical optimum</em> (objectives agreeing to 7 significant figures) — the exact opposite of Substrate A, where the ratio did not move at all. These flags are interior-point convergence artifacts, not relaxation gaps. Note the second point is at the <strong>lowest PV multiplier swept</strong>, which no physical relaxation-gap mechanism would produce.</p><p>Another free tell, visible in the summary above: the exact/inexact band on this feeder is <code>0.7356 … 1.088</code> — a factor of <strong>1.5</strong>, straddling the threshold continuously. On Substrate A it is <code>0.024 … 8.448</code>, a factor of <strong>350</strong> with nothing inside. A narrow band means the boundary&#39;s position is decided by where the threshold was put; a wide one means it isn&#39;t.</p><p><strong>Mechanism:</strong> the classifier&#39;s <code>atol = 1e-6</code> sits <em>at</em> Clarabel&#39;s achievable cone residual on a 122-branch problem at the default <code>tol_gap = 1e-8</code>. The WR-01 idiom scales the threshold with quantity <em>magnitude</em> but <strong>not</strong> with solver <em>accuracy</em>, and accuracy degrades with problem size.</p><p>Tighten the <strong>gap</strong> tolerances (<code>tol_gap_abs</code>/<code>tol_gap_rel</code>) to discriminate. Tightening <code>tol_feas</code> alongside them is counter-productive: it drives some of these points to <code>ALMOST_OPTIMAL</code>, which <code>assert_solved!</code> correctly refuses — an earlier version of this investigation drew the wrong conclusion (&quot;tightening is not a free fix&quot;) from exactly that mistake.</p><p><strong>Practical rule:</strong> on any feeder of this size, calibrate the solver noise floor first (solve a benign point across a tolerance ladder, take the residual spread) and classify against <em>that</em>, not against a fixed <code>rtol</code>. Two further free sanity checks: flags forming a connected region monotone in the driving parameter suggest physics, while salt-and-pepper scatter suggests noise; and if moving an <em>inactive</em> constraint bound changes the measured residual, the measurement is tracking solver trajectory rather than the optimum.</p></div></div><p>So the honest IEEE-123 statement is <strong>&quot;no <em>structural</em> inexactness was found in the swept region&quot;</strong> — not &quot;the relaxation is exact here&quot;. Establishing exactness would require the AC oracle or reliably converged tight solves; neither is claimed on this page.</p><h3 id="Figure-—-the-IEEE-123-map"><a class="docs-heading-anchor" href="#Figure-—-the-IEEE-123-map">Figure — the IEEE-123 map</a><a id="Figure-—-the-IEEE-123-map-1"></a><a class="docs-heading-anchor-permalink" href="#Figure-—-the-IEEE-123-map" title="Permalink"></a></h3><pre><code class="language-julia hljs">if Base.find_package(&quot;CairoMakie&quot;) !== nothing
+    pv123 = sort(unique(r.pv for r in rows_123))
+    ld123 = sort(unique(r.load for r in rows_123))
+    vm123 = sort(unique(r.vmax for r in rows_123))
+    code2 = Dict(&quot;exact&quot; =&gt; 1, &quot;inexact&quot; =&gt; 2, &quot;guard&quot; =&gt; 3, &quot;infeasible&quot; =&gt; 4)
+    colors2 = [
+        RGBf(0.13, 0.55, 0.49),
+        RGBf(0.78, 0.15, 0.20),
+        RGBf(0.95, 0.71, 0.25),
+        RGBf(0.88, 0.88, 0.90),
+    ]
+    cell(vm, p, l) = begin
+        h = filter(r -&gt; r.vmax == vm &amp;&amp; r.pv == p &amp;&amp; r.load == l, rows_123)
+        isempty(h) ? nothing : only(h)
+    end
+
+    fig123 = Figure(size = (1000, 360), backgroundcolor = :white)
+    Label(
+        fig123[0, 1:3],
+        &quot;Real IEEE-123 impedances — no structural inexactness found&quot;,
+        fontsize = 17,
+        font = :bold,
+    )
+    Label(
+        fig123[1, 1:3],
+        &quot;red cells are SOLVER NOISE, not relaxation gaps (tol_gap 1e-8→1e-10 collapses the worst ratio 4.76→0.0029 at an identical optimum)&quot;,
+        fontsize = 10.5,
+        color = :gray35,
+    )
+    for (k, vm) in enumerate(vm123)
+        ax = Axis(
+            fig123[2, k];
+            title = &quot;vmax = $vm&quot;,
+            xlabel = &quot;pv multiplier&quot;,
+            ylabel = k == 1 ? &quot;load multiplier&quot; : &quot;&quot;,
+            xticks = (1:length(pv123), string.(pv123)),
+            yticks = (1:length(ld123), string.(ld123)),
+            xticklabelsize = 10,
+            yticklabelsize = 10,
+            xgridvisible = false,
+            ygridvisible = false,
+        )
+        Z = [
+            (c = cell(vm, p, l); c === nothing ? NaN : Float64(code2[c.class])) for
+            p in pv123, l in ld123
+        ]
+        heatmap!(
+            ax,
+            1:length(pv123),
+            1:length(ld123),
+            Z;
+            colormap = cgrad(colors2, 4, categorical = true),
+            colorrange = (0.5, 4.5),
+            nan_color = RGBf(1, 1, 1),
+        )
+        # The thesis-reproduction anchor sits at (pv×1.0, load×1.0) on the 1.10 panel.
+        if vm == 1.10
+            i, j = findfirst(==(1.0), pv123), findfirst(==(1.0), ld123)
+            i === nothing ||
+                j === nothing ||
+                scatter!(
+                    ax,
+                    [i],
+                    [j];
+                    marker = :star5,
+                    markersize = 16,
+                    color = :white,
+                    strokecolor = :black,
+                    strokewidth = 1.2,
+                )
+        end
+        xlims!(ax, 0.5, length(pv123) + 0.5)
+        ylims!(ax, 0.5, length(ld123) + 0.5)
+    end
+    Label(
+        fig123[3, 1:3],
+        &quot;No dots: the voltage upper bound is never active at ANY point (vpeak ≤ 1.016 pu vs caps ≥ 1.05). ★ = thesis-reproduction point.&quot;,
+        fontsize = 10,
+        color = :gray40,
+    )
+    rowgap!(fig123.layout, 4)
+    fig123
+end</code></pre><img src="c26c06c6.png" alt="Example block output"/><h2 id="What-does-not-generalize-—-the-point-of-showing-two-substrates"><a class="docs-heading-anchor" href="#What-does-not-generalize-—-the-point-of-showing-two-substrates">What does not generalize — the point of showing two substrates</a><a id="What-does-not-generalize-—-the-point-of-showing-two-substrates-1"></a><a class="docs-heading-anchor-permalink" href="#What-does-not-generalize-—-the-point-of-showing-two-substrates" title="Permalink"></a></h2><p>Two findings that looked like properties of the <em>method</em> on Substrate A turned out to be properties of that <em>fixture</em>:</p><table><tr><th style="text-align: right">claim on the 3-bus fixture</th><th style="text-align: right">on real IEEE-123</th></tr><tr><td style="text-align: right">&quot;bound active&quot; predicts inexactness with <strong>zero</strong> false negatives (recall 66/66)</td><td style="text-align: right">fails — points flag with the bound inactive, because the flags are not structural</td></tr><tr><td style="text-align: right">the transition is a <strong>cliff</strong>: a ~350× empty band (max exact ratio 0.024, min inexact 8.45)</td><td style="text-align: right">no cliff — everything lies in 0.055–4.8, straddling the threshold continuously</td></tr></table><p>Reporting either as a general property, on the strength of one synthetic fixture, would have been wrong. The transferable results are the <strong>method</strong> (free detector, controls, tolerance ladder, failure-class separation) and the <strong>caveat</strong> (calibrate the noise floor per feeder) — not the boundary values.</p><h2 id="Reproducing-this"><a class="docs-heading-anchor" href="#Reproducing-this">Reproducing this</a><a id="Reproducing-this-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducing-this" title="Permalink"></a></h2><pre><code class="nohighlight hljs">julia --project=. scripts/socp_applicability_sweep.jl highpv --tol-ladder   # ~70 s, live above
+julia --project=. scripts/socp_applicability_sweep.jl ieee123 --tol-ladder  # ~16 min</code></pre><p>Outputs land in <code>results/socp_applicability/</code> as CSV plus a findings summary. The script asserts and prints its controls on every run; a drifted control is a warning, never a silent pass.</p><p>Full investigation trails, including the inert-fixture false start and the per-stage failure attribution work, are in <code>.planning/spikes/001-relaxation-validity-map/</code>, <code>.../002-ieee123-validity-map/</code> and <code>.../003-phase18-fragility-tolerance/</code>.</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../thesis_reproduction_assumptions/">« Thesis Reproduction — Assumptions</a><a class="docs-footer-nextpage" href="../stackelberg_benders/">Rung 6: Stackelberg-Benders »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Monday 27 July 2026 01:07">Monday 27 July 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
