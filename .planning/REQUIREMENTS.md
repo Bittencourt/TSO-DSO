@@ -163,34 +163,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OVR-01 | TBD | Pending |
-| OVR-02 | TBD | Pending |
-| OVR-03 | TBD | Pending |
-| OVR-04 | TBD | Pending |
-| MPC-01 | TBD | Pending |
-| MPC-02 | TBD | Pending |
-| MPC-03 | TBD | Pending |
-| MPC-04 | TBD | Pending |
-| STOCH-01 | TBD | Pending |
-| STOCH-02 | TBD | Pending |
-| STOCH-03 | TBD | Pending |
-| STOCH-04 | TBD | Pending |
-| MESH-01 | TBD | Pending |
-| MESH-02 | TBD | Pending |
-| MESH-03 | TBD | Pending |
-| MESH-04 | TBD | Pending |
-| MESH-05 | TBD | Pending |
-| MESH-06 | TBD | Pending |
-| INT-01 | TBD | Pending |
-| INT-02 | TBD | Pending |
-| INT-03 | TBD | Pending |
-| INT-04 | TBD | Pending |
+| OVR-01 | Phase 20 | Pending |
+| OVR-02 | Phase 20 | Pending |
+| OVR-03 | Phase 20 | Pending |
+| OVR-04 | Phase 20 | Pending |
+| MPC-01 | Phase 21 | Pending |
+| MPC-02 | Phase 21 | Pending |
+| MPC-03 | Phase 21 | Pending |
+| MPC-04 | Phase 21 | Pending |
+| STOCH-01 | Phase 22 | Pending |
+| STOCH-02 | Phase 22 | Pending |
+| STOCH-03 | Phase 22 | Pending |
+| STOCH-04 | Phase 22 | Pending |
+| MESH-01 | Phase 23 | Pending |
+| MESH-02 | Phase 23 | Pending |
+| MESH-03 | Phase 23 | Pending |
+| MESH-04 | Phase 19 | Pending |
+| MESH-05 | Phase 19 | Pending |
+| MESH-06 | Phase 23 | Pending |
+| INT-01 | Phase 24 | Pending |
+| INT-02 | Phase 24 | Pending |
+| INT-03 | Phase 24 | Pending |
+| INT-04 | Phase 24 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 22 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 22 ⚠️ (expected — roadmap not yet created)
+- Mapped to phases: 22/22 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-26*
-*Last updated: 2026-07-26 after initial definition*
+*Last updated: 2026-07-27 — roadmap created, all 22 requirements mapped to Phases 19-24*
