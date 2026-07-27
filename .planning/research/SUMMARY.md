@@ -1,357 +1,158 @@
 # Project Research Summary
 
-**Project:** TSO-DSO Integration Optimization Framework (Julia) — v2.1 "Validation & Reproduction"
-**Domain:** Hardening milestone for a Julia/JuMP power-systems transactive-energy research bench
-(SOCP branch-flow + ADMM operational core, already shipped in v1.0/v2.0) — NOT a new research axis
-**Researched:** 2026-07-25
-**Confidence:** HIGH — all four researchers converge strongly and verified claims directly against
-source files (`src/models/exactness.jl`, `src/admm/AgrOpt.jl`/`DsoOpt.jl`/`solve_admm.jl`,
-`src/data/ieee123.jl`, `src/solver/factory.jl`) rather than assuming architecture.
+**Project:** TSO-DSO Integration Optimization Framework — Milestone v3.0 "Research Extension Rungs"
+**Domain:** Brownfield extension of a validated Julia/JuMP power-systems optimization research bench (convex branch-flow OPF + transactive pricing + Stackelberg-Nash planning) with five new research axes
+**Researched:** 2026-07-26
+**Confidence:** HIGH (architecture, pitfalls — grounded directly in this repo's code) / MEDIUM-HIGH (stack — live registry + GitHub verification, but architectural "no new package" calls reasoned by analogy) / MEDIUM-HIGH (features — canonical literature verified, some single-source)
 
 ## Executive Summary
 
-This is a validation milestone, not a feature milestone: all four target capabilities — an
-independent AC-OPF exactness oracle, a reactive-power (μ) ADMM consensus, real IEEE-123 impedances,
-and a directional thesis reproduction — slot into **existing, already-proven architectural seams**
-with **zero new main dependencies**. The AC-OPF oracle is a peer `AbstractPowerFlow` subtype reusing
-the already-wired Ipopt/`NLP()` solver path; the reactive consensus is a feature-flagged mirror of
-the existing active-power λ/ADMM machinery; the real impedances are an offline PMD-parse (weakdep,
-never a runtime dependency) feeding a committed pure-data table; the reproduction reuses the
-established literate-rung + gate-then-golden pattern from v2.0. All four researchers independently
-reached this "additive extension, not restructuring" conclusion — the strongest signal that the
-v1.0/v2.0 architecture is fit-for-purpose.
+v3.0 is not a new product but five independent "research extension rungs" bolted onto an already-shipped, validated operational (ADMM/SOCP) and planning (Benders/Nash) core. The unifying finding across all four research files is that **this milestone is almost entirely new code on the existing solver factory and orchestration idioms, not a new stack or a new architecture**. Four of five axes (overvoltage relaxation, MPC/rolling-horizon, stochastic scenarios, 4Q-BESS) need zero new Julia packages — Clarabel already exposes the PSD cone for any SDP-tightening need, and the project's own build-once/`Parameter`-re-solve idiom (proven in ADMM and Benders) is the correct chassis for MPC windows and stochastic subproblems alike. InfiniteOpt.jl, StochasticPrograms.jl, Juniper/Pavito, and BranchFlowModel.jl were all evaluated and explicitly rejected — mostly for the same "hides the per-constraint dual" reason that ruled out Convex.jl in the original stack decision, since DADPs-as-duals is the project's core deliverable. Only axis 5 (integer investment expansion) is structurally heavy: it introduces a genuinely new master-problem class (MILP) and a weaker cut theory (Laporte-Louveaux integer L-shaped), the highest-complexity and highest-risk piece of the milestone.
 
-The recommended approach is dependency-ordered, not effort-ordered: (a) the AC-OPF oracle and (b)
-the reactive-μ consensus are both structurally independent and can be built/tested in isolation
-against existing fixtures; (c) real IEEE-123 impedances is a self-contained data-engineering task
-whose *validation* benefits from (a) and (b) being available; (d) directional reproduction strictly
-depends on (b)+(c) landing first, since the thesis's voltage-driven Case B result needs both real
-data and priced reactive power to be a credible mechanism check. This ordering — independent code
-changes first, convergent validation last — is both PROJECT.md's own stated sequencing intuition and
-the architecture/pitfalls researchers' independently-derived recommendation.
+The recommended approach, synthesized from the architecture and feature research, is additive orchestration: every axis should ship as a new sibling module/type/builder that calls the existing, byte-for-byte-unmodified `contribute!`/`solve_welfare`/`solve_admm`/Benders machinery, exactly the precedent set by every prior milestone (ADMM Phase 6, planning Phase 10-14). The two axes that touch shared, schema-fragile machinery — Scenario.jl (axes 2 & 3) and the SOCP exactness/relaxation gate (axes 1 & 4) — should be sequenced deliberately so the first mover establishes a reusable pattern (a non-radial exactness certificate; a `Scenario` schema convention) that the second reuses rather than re-derives independently.
 
-The key risk this milestone must manage is epistemic, not technical: a "failing" validation check
-(an AC-vs-SOCP gap, a slack voltage constraint, a wrong-sign reproduction) is not automatically a
-bug — the SOCP relaxation is *known* from the literature to go genuinely inexact under high-PV
-reverse flow, and this milestone's own instrumentation could surface that as a real, citable finding
-rather than something to tolerance-adjust away. A second, concrete risk is a naming collision: the
-reactive dual `μ_j[t]` this milestone introduces collides with an *already load-bearing* scalar
-`μ::Real=10.0` (the adaptive-ρ residual-balancing band) that is part of `Scenario`'s golden-hash
-schema — this must be resolved as literally the first design decision of the reactive-consensus
-phase, before any code is written, or it risks silently corrupting existing reproducibility guarantees.
+The dominant risk across all five axes, repeated with textbook regularity in the pitfalls research, is **certificate/gate laundering**: reusing an existing tuned tolerance, guard, or convergence check for a genuinely different mathematical regime instead of deriving a new one — this is called out explicitly for the overvoltage relaxation (Pitfall 1), the meshed angle-consistency gap (Pitfall 14), the 4Q-BESS complementarity proof (Pitfall 16), the two-block ADMM stopping rule (Pitfall 17), and the PVAL-04 no-binaries guard scoping (Pitfall 22). Mitigation is consistent everywhere: every new capability needs its own, independently-derived and independently-named certificate/gate, cross-validated against the existing AC-OPF oracle or brute-force enumeration, never against a loosened copy of an existing gate. Axis 5 additionally needs a small-instance validation oracle check (BilevelJuMP's KKT modes may not extend to integer variables — a fallback to brute-force enumeration is the documented Plan B).
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new main dependencies for the entire milestone. Ipopt (already a main dep) is sufficient for the
-AC-OPF oracle — the missing piece is a *formulation* (a new `AbstractPowerFlow` subtype), not a
-solver. The Fortescue/positive-sequence reduction is ~15 lines of `LinearAlgebra` stdlib code (no
-package exists or is needed). PowerModelsDistribution (PMD) 0.16.0 is added as a **weakdep + package
-extension only** (mirroring the existing Gurobi/Mosek/CairoMakie pattern) — confirmed it no longer
-transitively pulls in PowerModels.jl/Memento (dropped after PMD 0.10), and confirmed compatible with
-the project's pinned JuMP 1.30.1. PMD is used strictly as an offline parsing oracle for the raw
-OpenDSS `.dss` files (`eng["line"]`/`eng["linecode"]`, never `transform_data_model`) — never a
-runtime/`[deps]` dependency, so ordinary `using TSODSO` sessions and CI never touch it.
+No `Project.toml` changes are recommended for v3.0 — this is a pure additive-code milestone on the existing three-solver factory (Clarabel/HiGHS/Ipopt, Gurobi/Mosek behind weakdeps). The single most load-bearing new fact this research pass surfaced is that **Clarabel already natively supports the PSD cone** (`PSDTriangleConeT` with chordal decomposition), which forecloses any need for a dedicated SDP solver even if overvoltage-tightening or meshed-network work eventually wants an SDP-style relaxation.
 
-**Core technologies:**
-- **Ipopt 1.15.0** (existing main dep): nonconvex NLP backend for the new AC-OPF oracle — no version
-  bump, no new wiring, `NLP()` already resolves to it via `select_optimizer`.
-- **LinearAlgebra (stdlib)**: hand-rolled Fortescue reduction (`A = [1 1 1; 1 a^2 a; 1 a a^2]`,
-  `a = e^{j120deg}`) collapsing 3x3 phase-impedance matrices to positive-sequence scalars — no
-  third-party package exists or is warranted.
-- **PowerModelsDistribution 0.16.0** (new weakdep + extension, `TSODSOOpenDSSExt`): parses the public
-  IEEE-123 OpenDSS files, following `Redirect`/`Compile` directives natively; output is vendored as
-  a committed, PMD-free, JuMP-free `const Dict` — PMD is never imported inside `src/` at runtime.
+**Core technologies (all unchanged, confirmed still-current 2026-07-26):**
+- **Clarabel 0.11.1** — conic backend for overvoltage-tightened SOCP, meshed bus-injection SOCP, 4Q-BESS's reactive capability cone, and any future PSD-tightened relaxation — no new solver package needed for any of these.
+- **HiGHS 1.24.1** — Benders master with binary-expansion integer investment variables (axis 5); already a full LP/MILP solver, so no MINLP solver (Juniper/Pavito) is needed since Benders keeps integers confined to the master.
+- **Ipopt 1.15.0** — unchanged nonconvex AC-OPF oracle, reused as the correctness backstop for overvoltage-tightened relaxations (not itself the pricing formulation — local KKT duals are not certified global prices).
+- **JuMP 1.30.1** — `Parameter`s for rolling-horizon state and scenario-indexed variables; the same idiom that already powers ADMM and Benders re-solves.
+
+**Evaluated and explicitly rejected (not maintenance failures, mostly architectural):** InfiniteOpt.jl (dual-access indirection through its transcription layer — same reason Convex.jl was rejected originally), StochasticPrograms.jl (dead upstream since 2022), Juniper.jl/Pavito.jl (solve monolithic MINLP; Benders avoids ever forming one), BranchFlowModel.jl and PowerModels.jl as runtime/test deps (niche or "more overriding than building," same argument that rejected PowerModelsDistribution.jl originally — read as literature reference only).
 
 ### Expected Features
 
-The FEATURES researcher frames "table stakes" here as *what a citable validation claim in the SOCP/
-AC-OPF/DLMP/reproducibility literature requires*, not general product completeness. All four
-capabilities have a well-established literature basis (Farivar-Low, Gan-Li-Topcu-Low for SOCP
-exactness on IEEE-13/34/37/123; Bhattacharya et al. for the 5-way DLMP decomposition including a
-reactive-price component; ACM Artifact Review's "Reproduced vs. Replicated" distinction for the
-directional-reproduction framing).
+Each axis's "feature" is a research capability (a formulation + a validation certificate), not a UI feature. The literature converges on a clear, right-sized "minimal validated rung" per axis, distinct from deeper differentiators that should be explicitly deferred.
 
-**Must have (table stakes):**
-- Independent nonconvex AC-OPF oracle (Ipopt, multi-start, same feeder/dispatch snapshot as the
-  SOCP) + objective/voltage/flow gap report alongside the existing cone-tightness gate.
-- Genuine per-node reactive balance `R_{q,j}[t]=0` as a real DSO-OPT equality (replacing the free
-  `q_import` aggregate slack), yielding `mu_j = dual(R_{q,j})` "for free" and a citable Q-DLMP.
-- Real IEEE-123 impedances via the verified Fortescue-averaging reduction on public OpenDSS data,
-  cross-checked against a PMD oracle fidelity measure.
-- Directional welfare/DLMP reproduction: sign + magnitude-BAND pinned regression (never exact
-  equality to a digitized figure) with explicit "Reproduced, not Replicated" framing stated before
-  any numbers.
+**Must have (table stakes) per axis:**
+- **Axis 1 (overvoltage):** restriction/feasible-set-shrink (Gan-Low style) as the primary mechanism, certified against the existing AC-oracle (`assert_ac_exact!`) on the known EXACT-04 high-PV scenario.
+- **Axis 2 (MPC):** deterministic receding-horizon re-solve loop, hard terminal-SOC constraint, closed-loop-vs-open-loop (perfect-foresight) benchmark.
+- **Axis 3 (stochastic):** small fixed seeded scenario set (3-5) via the existing Markov generator, extensive-form solve, per-scenario DADP as primary output with probability-weighted expectation as a derived summary, one out-of-sample check.
+- **Axis 4 (meshed + 4Q-BESS):** plain SOCP meshed relaxation + Gan/Low angle-recoverability a-posteriori check as the validity gate; 4Q-BESS apparent-power cone with `q_bess` wired into the existing v2.1 reactive-dual path.
+- **Axis 5 (integer investment):** binary-expansion investment (per the PSR note) + Laporte-Louveaux integer optimality cuts on the existing `BendersMaster`; PVAL-04 guard narrowed (not deleted).
 
-**Should have (differentiators):**
-- Stress sweep deliberately hunting a genuine relaxation gap (high-PV reverse flow on IEEE-123) —
-  this is the single most valuable finding the milestone could produce, not a nice-to-have.
-- Reactive-price sensitivity plot (mu_j vs. voltage-band tightness).
-- Directional reproduction of the thesis's own sensitivity sweep (battery x1.5, PV x1.5, willingness x1.5).
+**Should have (differentiators, natural v3.1+ follow-ons):** QC/convex-hull/SDP tightening for meshed exactness; phase-shifter meshed convexification; formal scenario-reduction algorithms (fast-forward/k-means); economic-MPC terminal value functions.
 
-**Defer (v2+):**
-- A live cross-subproblem mu ADMM dual-ascent loop requiring an actual AGR-side reactive decision
-  variable (4Q-BESS/volt-var) — this is the deferred meshed+4Q-BESS research axis, explicitly out of
-  scope; today's mu is a free dual read because AGR-side Q is fixed, not a live consensus quantity.
-- A-priori exactness-condition auto-checker (Gan-Li-Topcu-Low style) — paper-worthy in its own right.
-- Thesis-figure digitized overlay — gated on obtaining the IP-blocked Appendix E, stretch only.
+**Defer/anti-features:** full economic-MPC terminal value function or robust/tube-MPC (overkill for a minimal rung); distributionally-robust/chance-constrained stochastic reformulations; a literal IEEE 1547 Volt-VAR droop-curve controller (wrong framing for an optimization-first project — the optimal `q_bess(v)` relationship already subsumes it); full branch-and-Benders-cut/lazy-constraint MILP integration (explicitly declined project-wide per CLAUDE.md's anti-mega-framework stance).
 
 ### Architecture Approach
 
-All four capabilities integrate as **additive extensions of existing seams**, confirmed by direct
-source inspection, with no change required to `ModelContext.jl`, `ProblemClass.jl`,
-`solver/factory.jl`, or the DC/LinDistFlow/ConvexBranchFlow formulation files.
+The existing codebase is a single-ownership include graph (`experiments` → `admm`/`planning` → `models` → `pricing`/`devices`/`powerflow` → `core`/`data`) with one dominant, already-proven convention: **additive orchestration over unmodified builders**. Every prior layered feature (ADMM, planning) was built as a new sibling module reusing `contribute!`/`solve_welfare` verbatim rather than editing the validated builder it reuses, and "build-once + `Parameter`-pin + re-solve" is already the house style for every outer loop (`AgrOpt`/`DsoOpt`, `PlanningOracle`, `FollowerLP`, `SharedTransmission`). New axes should default to the same pattern; unfilled extension points must fail loudly (`ArgumentError`), never silently no-op.
 
-**Major components:**
-1. **`ACPowerFlow <: AbstractPowerFlow`** (new, `src/powerflow/`) — mirrors `ConvexBranchFlow`
-   variable-for-variable but replaces the relaxed SOC inequality with the true nonconvex equality
-   `l*v == P^2+Q^2`; dispatches through the *existing* `solve_welfare` entrypoint unchanged; a new
-   sibling file `src/models/ac_oracle.jl` holds `assert_ac_exact!` as an independent gate alongside
-   (not inside) `exactness.jl`.
-2. **`DsoOpt`/`AgrOpt`/`solve_admm` reactive extension** (modified, `src/admm/`) — a
-   `reactive_consensus::Bool=false` kwarg threading a real `qag_dso[j,t]` coupling variable and a
-   `mu_j[t]` dual-ascent block through the same build-once/coefficient-mutate ADMM loop already used
-   for the active block; `AgrOpt.qag` (already computed, documented as unread) becomes the consensus
-   target `b_j`. Stop criterion becomes AND (both p- and q-blocks converged), never OR.
-3. **Offline PMD-parse to committed pure-data pipeline** (new, `scripts/` + `src/data/`) — a
-   throwaway-env script (`scripts/ieee123_opendss_reduce.jl`) parses OpenDSS once, applies the
-   Fortescue reduction, and writes a committed `const Dict` (`src/data/ieee123_impedances.jl`)
-   consumed by `ieee123.jl`'s existing topology/relabeling logic unchanged — PMD never enters
-   `Project.toml`'s `[deps]`.
-4. **Literate rung + gate-then-golden reproduction** (new, `docs/literate/` + `test/`) — reuses the
-   exact Rung-6/7 / PVAL-02 pattern: gate on the run's own correctness checks first, THEN assert
-   sign + a wide magnitude band (never exact equality) against pinned constants.
+**Major components/integration points per axis:**
+1. **Axis 1** — a new `AbstractPowerFlow` sibling (e.g. `OvervoltageBranchFlow`) plus a companion, separately-derived exactness certificate beside (not inside) `models/exactness.jl`; `ConvexBranchFlow.jl` stays untouched as the baseline.
+2. **Axis 2** — a new `src/mpc/` `RollingWindowOracle` (mirrors `PlanningOracle`'s shape) plus a targeted, minimal, byte-identical-default `Parameter`-ization of `PVBattery.jl`/`Thermostatic.jl`'s initial-condition constraint — the SEAM-01 `horizon_state` stub is expected to stay inert, matching the precedent that the `z`-stub was never filled either.
+3. **Axis 3** — a new `src/stochastic/extensive_form.jl` builder calling `contribute!` once per scenario into one shared `ModelContext` — the `objective_hook` stub is architecturally insufficient for a genuine extensive form (needs shared first-stage variables, not post-hoc composition), so expect a new sibling builder here too.
+4. **Axis 4** — split into two independent sub-problems: (a) meshed topology needs a new parallel `MeshedFeeder` struct (Feeder's inner constructor cannot be relaxed) plus a genuinely new non-radial branch-flow formulation; (b) 4Q-BESS is a smaller, independent lift — a new `AbstractDevice` + an additive `q_inject` accumulator in `Aggregator.contribute!` + promoting the existing one-shot `qag_dso` dual to a live μ-ascent step in `solve_admm.jl`.
+5. **Axis 5** — extends `planning/master.jl`'s `BendersMaster` with binary/integer variables and a new `add_integer_cut!` sibling function; the PVAL-04 no-binaries test registry must be split (a new, separate positive-check entry for the lifted builder), never loosened globally.
+
+**Shared cross-cutting risk:** `experiments/Scenario.jl` is a schema-fragile, all-fields-positional struct whose `savename`/provenance dict changes shape whenever a field is added — axes 2 and 3 both need new fields and should be done together, in one reviewed diff, to halve the review surface on this file.
 
 ### Critical Pitfalls
 
-1. **A genuine SOCP inexactness (high-PV reverse flow) gets tolerance-adjusted away instead of
-   investigated** — the single most damaging failure mode, because it discards the milestone's most
-   scientifically valuable possible finding. Avoid by treating disagreement as a candidate genuine
-   inexactness first (check reverse-flow/voltage-binding state) and reporting a per-hour/per-branch
-   table, never a single pass/fail boolean.
-2. **The `mu` naming collision**: the new reactive-consensus dual `mu_j[t]` and the *already
-   load-bearing* adaptive-rho scalar `mu::Real=10.0` (threaded through `solve_admm`'s kwargs AND
-   `Scenario`'s golden-hash-serialized schema) are two completely different objects that both want
-   the same Greek letter. Must be the first design decision of the reactive-consensus phase — grep
-   every existing `mu` usage and pick a distinct code identifier before any new field is added.
-3. **AC-OPF comparison artifacts masquerading as relaxation failures**: Ipopt local-optimum
-   convergence, mismatched problem data between the SOCP and AC models, unit/per-unit mismatches, or
-   angle-recovery bugs can all produce a false "inexact" verdict. Avoid via: same feeder/aggregator/
-   dispatch snapshot on both sides (never re-sampled), multi-start Ipopt with SOCP warm start, and
-   validating angle recovery on a trivial 2-bus fixture first.
-4. **Adding Q-consensus silently breaks the already-shipped active-only regression**: a second
-   consensus dual changes DSO-OPT's cone structure and may compound the project's own documented,
-   accepted, intermittent Clarabel `NUMERICAL_ERROR` flake. Gate behind a feature flag defaulting to
-   the old behavior; prove the active-only path byte-identical with the flag off before touching any
-   Q-consensus fixture; empirically re-measure the flake rate under Q-consensus rather than assuming
-   v1.0's rate transfers.
-5. **Silent golden re-pinning masks real regressions**: swapping synthetic to real IEEE-123
-   impedances changes every downstream pinned number; "re-pin to whatever comes out" cannot
-   distinguish "real data is legitimately different" from a units bug (feet-vs-miles, a ~1000x or
-   ~5280x silent global rescale is the classic IEEE-123 OpenDSS trap), a reduction error, or an
-   omitted regulator/capacitor silently un-tightening the deliberately-tuned voltage-binding case.
-   Require a before/after invariant comparison (voltage-binding, exactness margin, iteration count)
-   and keep the old synthetic goldens as an independent parallel regression.
-
-## Cross-Cutting Decisions (surfaced across all four researchers)
-
-- **AC oracle is designed to ALLOW a genuine inexactness finding.** All four researchers agree this
-  is a feature of the design, not a risk to eliminate — the high-PV/reverse-flow stress fixture and
-  per-hour/per-branch gap reporting are gating deliverables specifically so a real relaxation gap
-  can surface and be documented as a milestone finding (bounding where operational-layer prices can
-  be trusted), rather than engineered away by tolerance-tuning.
-- **`qag`/naming resolution is a phase-1 design gate, not implementation detail.** FEATURES argues a
-  full live mu dual-ascent loop may be unnecessary at all (DERs are active-only per thesis A3 — making
-  the reactive balance a genuine per-node equality yields `mu_j = dual(R_{q,j})` "for free" without a
-  separate outer-loop dual-ascent). ARCHITECTURE and PITFALLS agree the `mu` naming collision with the
-  existing adaptive-rho band must be resolved before any code lands. Rollout must be behind a feature
-  flag (default off) to protect the cross-validated active-only regression.
-- **IEEE-123 pipeline: offline script to committed pure-data file, PMD never in `Project.toml`.** All
-  four researchers independently converge on this exact shape: `scripts/ieee123_opendss_reduce.jl`
-  (own throwaway env) to `src/data/ieee123_impedances.jl` (committed `const Dict`, PMD-free, JuMP-free)
-  to `ieee123.jl`'s existing lookup, topology untouched. Risk flagged by ARCHITECTURE and PITFALLS
-  alike: real impedances may loosen or tighten the SOC cone / shift the voltage-binding property the
-  synthetic fixture was hand-tuned for — population/PV re-tuning may be required as part of this
-  phase's own acceptance criteria, not an assumed side effect.
-- **Directional reproduction reuses the v2.0 literate-rung + gate-then-golden pattern verbatim**, with
-  a wide sign+magnitude-band assertion (never exact equality to the thesis's `+$1,819/+25%` — Appendix
-  E is IP-blocked). Exact-figure overlay is an explicit, contingent stretch goal only.
-- **Dependency-aware build order maps directly to 4 phases**, converging across ARCHITECTURE and
-  PROJECT.md's own stated intuition:
-  1. AC-OPF oracle — fully independent (touches `powerflow/`, `models/` only).
-  2. Reactive mu-consensus — independent code-wise (touches `admm/` only) but most invasive to an
-     already-shipped path; sequenced second so its goldens are re-validated before Phase 3/4 build on it.
-  3. Real IEEE-123 impedances — independent data-engineering, but its *validation* (still
-     voltage-binding? still SOC-exact? still well-conditioned?) benefits from Phases 1 and 2 existing.
-  4. Directional reproduction — strictly depends on Phases 2+3 landing (voltage-driven Case B needs
-     both real data and priced reactive power to be a credible mechanism check); optionally reports
-     an AC-certification badge from Phase 1.
+1. **Certificate/gate laundering (Pitfalls 1, 14, 16, 17, 22)** — reusing an existing tuned tolerance, guard, or convergence check for a genuinely new regime (overvoltage relaxation, meshed angle-consistency, 4Q-BESS complementarity, two-block ADMM stopping, PVAL-04 scoping) instead of deriving a new one. Avoid by requiring a new, separately-named, independently-derived certificate/gate for every new formulation, cross-validated against the AC-OPF oracle or brute-force enumeration — never against a loosened copy of an existing gate.
+2. **Rebuild-in-loop anti-pattern (Pitfall 8, and the shared Performance Traps table)** — wiring `horizon_state`/stochastic subproblems by rebuilding the JuMP model each iteration instead of `Parameter`-threading. Avoid by extending the existing build-once/`Parameter` idiom (already proven for ADMM/Benders) rather than calling `solve_welfare` fresh inside a per-window/per-scenario loop.
+3. **Structural gap mistaken for a tunable knife-edge (Pitfall 15)** — treating the meshed SOC-relaxation gap like the v2.1 EXACT-04 knife-edge (sweep and fix) when meshed non-exactness has no equivalent proof and may be genuinely structural. Avoid by checking the literature first; the honest deliverable may be a reported structural gap with a validity boundary, not a fixed/exact relaxation.
+4. **Silent partial wiring of shared seams (Pitfall 13, 18)** — filling a stub (`objective_hook`, `assert_radial`, `reactive_consensus`) in only one of its consumers, or loosening a shared invariant globally instead of adding a new, parallel, scoped path. Avoid by enumerating every consumer explicitly and failing loudly on any left unwired; add new types/kwargs rather than mutating shared invariants.
+5. **Weaker convergence theory understated (Pitfalls 19, 20, 23)** — integer L-shaped cuts are structurally weaker than continuous Benders cuts and standard optimality-cut construction can be invalid once the recourse response to `z` is discontinuous; BilevelJuMP's KKT validation oracle may not extend to integer variables. Avoid by re-measuring iteration counts before inheriting `max_iter=100`, and falling back to brute-force enumeration for small-instance validation if BilevelJuMP's modes don't apply.
 
 ## Implications for Roadmap
 
-### Phase 1: AC-OPF Exactness Oracle
-**Rationale:** Fully self-contained (new `ACPowerFlow` subtype + `ac_oracle.jl`; reuses the existing
-Ipopt/`NLP()` wiring and `solve_welfare` entrypoint unchanged); no dependency on the other three
-capabilities; can be developed and tested against existing 2-bus/IEEE-13/synthetic-IEEE-123 fixtures
-immediately.
-**Delivers:** A new `AbstractPowerFlow` peer subtype enforcing the true nonconvex AC equality;
-`assert_ac_exact!` gate reporting objective/voltage/flow gaps alongside the existing cone-tightness
-check; a deliberate high-PV/reverse-flow stress fixture designed to allow (not suppress) a genuine
-inexactness finding; a literate rung page.
-**Addresses:** AC-OPF oracle table stakes (FEATURES Capability A) — independent oracle, multi-start
-Ipopt guard, objective/voltage/flow comparison report, written methodology note.
-**Avoids:** Pitfall 1 (comparison artifacts masquerading as relaxation failures — same-snapshot
-contract, angle-recovery validation on a trivial fixture, multi-start) and Pitfall 2 (genuine
-inexactness tolerance-adjusted away — per-hour/per-branch reporting, investigate before touching tolerances).
+Based on combined research (architecture's dependency-driven build order + pitfalls' sequencing flags + features' MVP scoping), the suggested phase structure follows the architecture research's explicit build-order recommendation, which resolves risk-sharing between axis 1/4a and schema-sharing between axis 2/3:
 
-### Phase 2: Reactive-Power (mu) Consensus in ADMM
-**Rationale:** Independent of Phase 1's files (`admm/` vs `powerflow/`+`models/`); sequenced second
-because it is the most invasive change to an already-shipped, cross-validated build path — its own
-goldens must be re-validated before Phases 3/4 build on top of it. The naming-collision decision and
-feature-flag design must happen first, before any `AgrOpt`/`DsoOpt` code changes.
-**Delivers:** A `reactive_consensus::Bool=false` kwarg (default preserving old behavior byte-for-byte)
-introducing a genuine per-node `R_{q,j}=0` equality, a distinctly-named reactive dual (NOT `mu`, which
-collides with the existing adaptive-rho band), and `mu_j[t]`/`dual(R_{q,j})` as a first-class reported
-Q-price, extending the existing 4-way DLMP decomposition to 5-way.
-**Implements:** ARCHITECTURE's "feature-flagged structural change with a compatibility overload"
-pattern (mirroring the project's own Phase-6-to-7 `record!` precedent).
-**Uses:** No stack changes — pure orchestration extension of `src/admm/AgrOpt.jl`, `DsoOpt.jl`,
-`solve_admm.jl`, `residuals.jl`.
-**Avoids:** Pitfall 3 (naming collision — resolve first, before code), Pitfall 4 (Q-consensus
-degrading convergence + breaking the active-only regression — feature-flag, prove byte-identical
-with flag off, re-derive joint residual balancing, pin the reactive DLMP on a from-scratch 2-bus toy
-case), and Pitfall 5 (Clarabel `NUMERICAL_ERROR` amplification — empirically re-measure, don't assume).
+### Phase 1: 4Q-BESS + Live Reactive Dual-Ascent (Axis 4b)
+**Rationale:** No dependency on anything else in the milestone; reuses the v2.1 `reactive_consensus`/`qag_dso` scaffolding almost as-is (promote one-shot to live ascent) plus one new additive device file. Lowest risk, fastest to ship, and establishes the "new device + widened Aggregator contract" pattern that axis 2's device work can reference.
+**Delivers:** `FourQuadBESS` device with apparent-power cone; live μ-dual-ascent in `solve_admm.jl`; re-derived/reinstated complementarity check for the P-Q coupled feasible region.
+**Addresses:** Axis 4's 4Q-BESS table stakes from FEATURES.md.
+**Avoids:** Pitfall 16 (P-Q complementarity gap) and Pitfall 17 (joint two-block stopping rule) — both require re-derivation, not inheritance.
 
-### Phase 3: Real IEEE-123 Impedances
-**Rationale:** Code-independent of Phases 1/2 (touches `data/`, `scripts/` only), but its own
-validation (is the case still voltage-binding? still SOC-exact? still well-conditioned?) benefits
-from Phases 1 and 2's instrumentation being available to certify the real-data case on the new topology.
-**Delivers:** An offline PMD-parse script (weakdep+extension, never a runtime dep) producing a
-committed, pure-data impedance table via the verified Fortescue-averaging reduction; explicit
-per-component-type modeling decisions for regulators/capacitors/switches; a binding-voltage-constraint
-acceptance test; before/after invariant comparison for any golden re-pin, with old synthetic goldens
-kept as an independent parallel regression.
-**Uses:** PowerModelsDistribution 0.16.0 as a weakdep+extension (`TSODSOOpenDSSExt`); stdlib
-`LinearAlgebra` for the Fortescue reduction.
-**Addresses:** FEATURES Capability C table stakes (documented reduction, PMD-oracle-only parsing,
-written caveat enumerating approximation error sources, quantitative fidelity cross-check).
-**Avoids:** Pitfall 6 (length/units ambiguity — silent global rescale; PMD-parse + published-reference
-cross-check), Pitfall 7 (per-linecode reduction validity — fidelity metric per linecode, not just one
-verified case), Pitfall 8 (regulators/capacitors silently un-tightening the voltage-binding case —
-explicit decisions + acceptance test), and Pitfall 9 (silent golden re-pin masking a regression).
+### Phase 2: Overvoltage-Capable Relaxation (Axis 1)
+**Rationale:** Independent of the Scenario-schema work; produces a reusable "non-radial exactness certificate" pattern that axis 4a (meshed) should reuse rather than re-derive — sequence before axis 4a for that reason.
+**Delivers:** New `AbstractPowerFlow` sibling with restriction/feasible-set-shrink tightening; new, separately-derived exactness certificate; documented throw-vs-report gate-polarity decision.
+**Uses:** Clarabel (existing), `ACPowerFlow`/`assert_ac_exact!` as the certifying peer (existing).
+**Implements:** New formulation file beside `ConvexBranchFlow.jl`/`models/exactness.jl`, both left untouched.
+**Avoids:** Pitfall 1 (tolerance laundering), Pitfall 2 (single-local-solution AC pricing), Pitfall 3 (penalty contaminating the DADP dual), Pitfall 4 (default-path regression / gate-polarity).
 
-### Phase 4: Directional Thesis Reproduction
-**Rationale:** Strictly depends on Phase 2 (reactive pricing needed for DLMP/voltage credibility) and
-Phase 3 (real, standard data) both landing — the thesis's voltage-driven Case B result is not
-credible on synthetic impedances or without priced reactive power. Optionally consumes Phase 1 for an
-AC-certification badge on the reproduction run. Last phase by design.
-**Delivers:** A literate reproduction rung (promoted from the existing exploratory
-`scripts/thesis_caseA.jl`), a dedicated fixtures module with a pinned sign + magnitude BAND (never a
-point value), a gate-then-golden test asserting the run's own correctness gates before the directional
-check, and a single consolidated "reproduction assumptions" doc page enumerating the full chain
-(units resolution, reduction fidelity, component omissions, aggregator population, PV scenario).
-**Addresses:** FEATURES Capability D table stakes — "Reproduced, not Replicated" framing stated
-before any numbers, sign check, pinned band regression, qualitative DADP-shape plot.
-**Avoids:** Pitfall 10 (overclaiming / undocumented assumption chain — fixed qualifier phrase +
-consolidated doc page, everywhere the number is cited) and Pitfall 11 (pinning transient Clarabel-flake
-jitter as a golden — repeated-run stability check before committing).
+### Phase 3: MPC/Rolling-Horizon + Stochastic Uncertainty (Axes 2 + 3, combined)
+**Rationale:** Both axes require the identical three-touch-point `Scenario.jl` schema extension (fields + positional constructor + validation) — doing them together means one reviewed diff to the schema-fragile file instead of two, and lets axis 3 reuse axis 2's `Parameter`-pinned window-oracle convention directly if the extensive form is decomposed.
+**Delivers:** `PVBattery`/`Thermostatic` `Parameter`-ized initial conditions; `RollingWindowOracle` + rolling-horizon outer loop with terminal-SOC constraint and closed-loop-vs-day-ahead benchmark; extensive-form stochastic builder with per-scenario DADP semantics and out-of-sample validation; new `Scenario` fields for both axes added together.
+**Addresses:** Axis 2 and Axis 3 table stakes from FEATURES.md.
+**Avoids:** Pitfall 5 (terminal-SOC myopia and the T-window-scoped no-binaries re-check), Pitfall 6/7 (unfair MPC-vs-day-ahead benchmark framing, price-discontinuity misattribution), Pitfall 8/9 (rebuild-in-loop, overvoltage-interaction with no defined fallback — sequence axis 1 before this phase for that reason too), Pitfall 10 (per-scenario dual scaling), Pitfall 11 (Clarabel/SCS scenario-count ceiling), Pitfall 12 (fragile single-seed golden), Pitfall 13 (Scenario/savename collision, objective_hook partial wiring).
+
+### Phase 4: Meshed Networks (Axis 4a)
+**Rationale:** Sequenced after axis 1 (reuses its relaxation-certificate pattern) and after axis 4b ships (so the 4Q-BESS device already exists for a meshed+4Q-BESS combined validation rung). Highest architecture-plus-math risk in the milestone — schedule so its research/validation overrun does not block the other axes.
+**Delivers:** New parallel `MeshedFeeder` struct (with `assert_connected`, not `assert_radial`); new non-radial branch-flow SOCP formulation with an explicit angle-consistency/loop check as the validity gate.
+**Implements:** `data/MeshedFeeder.jl`, a new `MeshedFlow <: AbstractPowerFlow` (the SEAM-01-anticipated model-layer swap), leaving `Feeder.jl`/`topology.jl`/`ConvexBranchFlow.jl` untouched.
+**Avoids:** Pitfall 14 (missing loop/angle constraint — the most dangerous silent failure mode in the milestone, since the existing per-branch gate would not catch it), Pitfall 15 (structural gap mistaken for tunable knife-edge).
+
+### Phase 5: Discrete/Integer Investment Expansion (Axis 5)
+**Rationale:** Fully independent of axes 1-4 (touches only `planning/`) — can in principle be parallelized against any of them from a code-conflict standpoint, but is ordered last because it is flagged as the single highest algorithmic-risk item in the milestone (integer-cut correctness), giving the most time to resolve cut-correctness concerns and keeping the earlier, lower-risk axes' validated rungs unblocked.
+**Delivers:** Binary-expansion investment variables in `BendersMaster`; Laporte-Louveaux integer optimality cuts (`add_integer_cut!`); scoped, non-global PVAL-04 guard lift (new registry entry, shared mechanism untouched); small-instance validation against brute-force enumeration (BilevelJuMP mode-compatibility checked first, not assumed).
+**Avoids:** Pitfall 19 (invalid standard cuts if the subproblem becomes discontinuous in `z`), Pitfall 20 (inherited `max_iter`/checkpoint cadence understating real cost), Pitfall 21 (HiGHS lazy-constraint/callback mixing with the external-loop design — explicitly deferred), Pitfall 22 (PVAL-04 guard loosened globally instead of scoped), Pitfall 23 (BilevelJuMP validation assumed to extend to integers without checking).
 
 ### Phase Ordering Rationale
 
-- **Dependency graph, not effort, drives the order.** Phases 1 and 2 are code-independent of each
-  other and of 3/4, so they could in principle run in parallel — sequenced 1-then-2 here because
-  Phase 2 is the more invasive change (touches an already-shipped, cross-validated path) and its own
-  goldens need re-validation before anything else builds on `admm/`.
-- **Phase 3 is data-engineering, gated on Phase 1/2 existing for its OWN validation**, not for its
-  code — the real-data fixture's acceptance criteria (still voltage-binding? still SOC-exact?) is
-  most rigorously checked using the Phase 1 AC oracle and Phase 2 reactive pricing.
-- **Phase 4 is strictly last** — it is the only phase with a genuine code/data dependency on prior
-  phases (needs real impedances from 3 and reactive pricing from 2 for the reproduction to
-  credibly track the thesis's voltage-driven mechanism).
-- **Every phase's own acceptance criteria must include the cross-cutting Pitfall 12 checklist**
-  (positive-mechanism test — not just "it runs"; full `docs/make.jl` build checked, not just
-  `Pkg.test()`; constant/offset reconciliation for any new algebraic doc narration) — this is a
-  standing item across all four phases, not owned by any single one.
+- **Axis 4b before axis 1/4a:** lowest risk, ships fastest, and establishes the device-extension pattern the rest of the milestone can reference — a low-risk warm-up that de-risks nothing structurally but builds team/pattern confidence.
+- **Axis 1 before axis 4a:** both touch the SOCP relaxation/exactness-certification machinery (flagged as an explicit interdependency in PROJECT.md); axis 1 produces a reusable non-radial certificate pattern axis 4a should reuse rather than re-derive independently — avoids inventing two divergent certification strategies.
+- **Axes 2 and 3 together:** both require the identical `Scenario.jl` three-touch-point schema extension; combining halves the review surface on the single most schema-fragile file in the codebase.
+- **Axis 1 before axis 2/3 (not just before axis 4a):** MPC rolling windows can legitimately drift into the same high-PV overvoltage regime axis 1 addresses, and PROJECT.md's interdependency note doesn't currently extend to MPC — resolving axis 1 first means the rolling-horizon loop has a defined fallback when a window hits the exactness gate mid-simulation, rather than an undefined catch-and-continue.
+- **Axis 5 last:** structurally independent of axes 1-4 (touches only the planning layer), but carries the highest algorithmic risk (integer-cut correctness, weaker convergence theory) — ordering it last means the other four validated rungs are not blocked waiting on the riskiest piece.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 1 (AC-OPF oracle):** the angle-recovery formula for the radial network (SOCP is
-  magnitude-only; the AC oracle needs real voltage phasors) needs to be worked out and validated on
-  a trivial fixture before trusting it on IEEE-13/123 — this is genuinely new math for the codebase.
-- **Phase 3 (real IEEE-123 impedances):** the PMD `ENGINEERING` dict traversal (`eng["line"]`/
-  `eng["linecode"]`), the exact length/units convention resolution, and per-component-type
-  (regulator/capacitor/switch) handling decisions are all new integration surface with a
-  well-documented but non-trivial community trap (the classic feet-vs-miles rescale).
-- **Phase 2 (reactive consensus):** whether a shared `rho` is adequate for the joint (p,q) residual
-  balancing, or whether a distinct `rho_q` is needed, is a genuine open judgment call (MEDIUM
-  confidence per ARCHITECTURE) that should be empirically resolved, not assumed.
+Needs deeper research during planning (`--research-phase`):
+- **Phase 2 (Overvoltage relaxation):** the actual convexification mechanism (tightened SOC vs. McCormick valid inequalities vs. PSD-style tightening) is unresolved model-math, not an architecture question — flagged explicitly in ARCHITECTURE.md as needing its own theory research pass before a plan is written.
+- **Phase 4 (Meshed networks):** the non-radial branch-flow formulation (signed incidence over a cycle basis, or bus-injection/line-flow with loop constraints) is new model-math with the same "needs its own research pass" flag; also carries literature-check risk on whether meshed SOC relaxations are expected to be structurally inexact (Pitfall 15).
+- **Phase 5 (Integer investment):** integer L-shaped cut derivation and BilevelJuMP mode-compatibility for integer variables are both open, project-flagged algorithmic-correctness concerns (CLAUDE.md itself names "integer-cut correctness" as an open concern) — the highest-complexity axis in the milestone.
 
-Phases with standard, well-documented patterns (skip research-phase):
-- **Phase 4 (directional reproduction):** reuses the v2.0 literate-rung + gate-then-golden pattern
-  verbatim (Rung 6/7, PVAL-02) — no new mechanism, just applying an established convention to a new case.
+Phases with standard, well-documented patterns (can skip a dedicated research-phase):
+- **Phase 1 (4Q-BESS):** apparent-power capability cone and reactive dual-ascent are both direct, well-precedented extensions of existing machinery (the SOC idiom already used for branch limits; the existing λ-ascent pattern) — the only genuinely new derivation needed is the P-Q complementarity re-proof, which is a focused, scoped task, not open-ended research.
+- **Phase 3 (MPC/stochastic):** the re-solve mechanism (`Parameter` + `set_parameter_value`) is already verified and documented in-repo ("RESEARCH Pattern 6, verified"); the extensive-form scenario pattern is a textbook two-stage stochastic program with no open model-math questions — the work here is orchestration and schema plumbing, not novel formulation research.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All version numbers verified against Julia General registry `Versions.toml`/`Deps.toml`/`Compat.toml`; PMD's dropped `PowerModels`/`Memento` deps confirmed directly. Zero new main deps to track. |
-| Features | MEDIUM-HIGH | SOCP exactness theory and DLMP decomposition are HIGH confidence (canonical, well-cited literature: Farivar-Low, Gan-Li-Topcu-Low, Bhattacharya et al.). The positive-sequence reduction recipe is HIGH confidence, already numerically verified in this repo's own memory notes. The "directional reproduction" convention is MEDIUM confidence — a methodological norm, not a single citable theorem. |
-| Architecture | HIGH | All four capabilities verified against actual source files (not summarized from docs); the "additive extension, not restructuring" conclusion is independently corroborated by direct code inspection across all researchers. |
-| Pitfalls | HIGH (project-specific) / MEDIUM (domain-general) | HIGH confidence on the project's own code contracts (read directly: `exactness.jl`, `solve_admm.jl`, `AgrOpt.jl`, `DsoOpt.jl`, `ieee123.jl`, `factory.jl`) and the documented, accepted Clarabel flake. MEDIUM on IEEE-123 length/units ambiguity and reduction fidelity — public community knowledge, not independently re-verified against the live dataset this session. |
+| Stack | HIGH on versions/maintenance activity (live registry + GitHub API verification, 2026-07-26); MEDIUM-HIGH on "no new package" architectural calls (reasoned by re-applying documented precedents, not independently re-litigated per axis) |
+| Features | MEDIUM-HIGH (canonical papers — Farivar & Low, Gan/Li/Topcu/Low, Laporte & Louveaux — verified and cross-checked across multiple sources; some axis-specific claims, e.g. convex-hull relaxation and BESS capability-curve sources, rest on a single source) |
+| Architecture | HIGH (every claim grounded in direct code reads with file:line citations; forward-looking model-math choices for axes 1/4/5 explicitly flagged as needing a dedicated research pass, not claimed as settled) |
+| Pitfalls | MEDIUM-HIGH (codebase-specific integration pitfalls are HIGH confidence, read directly from code and the project's own retrospective; general decomposition/optimization theory pitfalls — integer L-shaped weakness, meshed non-exactness, two-block ADMM — are MEDIUM, standard literature results not independently re-verified against a specific paper this session) |
 
-**Overall confidence:** HIGH — this is an unusually well-converged research set: all four
-researchers independently arrived at the same "additive extension of existing seams" architectural
-conclusion, the same 4-phase dependency ordering, and flagged the same cross-cutting risks (the `mu`
-naming collision, the genuine-vs-artifact inexactness distinction, silent golden re-pinning).
+**Overall confidence:** HIGH on architecture/integration mechanics and stack decisions; MEDIUM-HIGH on domain feature/pitfall theory. The milestone's biggest genuine unknowns are model-math, not tooling or architecture — this is explicitly and consistently flagged across all four research files for axes 1, 4a, and 5.
 
 ### Gaps to Address
 
-- **PMD `ENGINEERING` dict traversal specifics** (exact `eng["line"]`/`eng["linecode"]` field
-  shapes, `Redirect`/`Compile` directive following) were verified against official docs, not
-  against a live parse this session — treat as MEDIUM confidence, verify by actually running the
-  parse early in Phase 3.
-- **Whether reactive consensus needs its own `rho_q` or can share the active block's `rho`** is an open
-  judgment call (ARCHITECTURE flags MEDIUM confidence) — resolve empirically in Phase 2, not by
-  assumption.
-- **Whether the real-impedance IEEE-123 case remains voltage-binding** after the impedance swap is
-  unverified (no real impedance data exists yet to test against) — Phase 3's acceptance criteria
-  must include an explicit binding-constraint check and be prepared to re-tune the aggregator/PV
-  population if the property doesn't transfer.
-- **Exact theorem wording for Gan-Li-Topcu-Low's checkable exactness condition** should be verified
-  against the source PDF before citing a numbered theorem in any thesis-chapter-grade writeup
-  (FEATURES flags this as MEDIUM-HIGH, not HIGH, confidence).
+- **Axis 1's exact convexification mechanism** (restriction vs. valid inequalities vs. PSD tightening) is not chosen — flag Phase 2 for a dedicated model-math research pass before planning constraints.
+- **Axis 4a's non-radial formulation** (cycle-basis signed incidence vs. bus-injection/line-flow with loop constraints) is not chosen — flag Phase 4 for the same reason; also unresolved whether the meshed test fixture will show a structural gap requiring an "honest gap" deliverable instead of an exact relaxation.
+- **Axis 5's cut theory** — whether standard Benders optimality cuts remain valid at the chosen binary-expansion granularity, and whether BilevelJuMP's KKT/SOS1/Fortuny-Amat modes support any mixed-integer follower at all — are both open questions the research explicitly could not resolve without implementation-time verification (check HiGHS/BilevelJuMP docs directly at Phase 5 start).
+- **Scenario-count ceiling for Clarabel on the stochastic extensive form (Axis 3)** — no empirical measurement exists yet; must be established on IEEE-13/123 fixtures before scaling scenario count, per Pitfall 11.
+- **PROJECT.md's overvoltage/meshed interdependency note does not yet mention MPC** — Pitfall 9 flags that a rolling-horizon window can also drift into the same exactness-gate territory; the roadmap should extend the documented interdependency to include Phase 3 (MPC) alongside Phase 2/4.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Julia General registry `Versions.toml`/`Deps.toml`/`Compat.toml` (JuMP 1.30.1, Ipopt 1.15.0,
-  PowerModelsDistribution 0.16.0 and its dependency graph) — fetched 2026-07-25.
-- Direct source inspection: `src/models/exactness.jl`, `src/models/welfare_solve.jl`,
-  `src/admm/AgrOpt.jl`, `src/admm/DsoOpt.jl`, `src/admm/solve_admm.jl`, `src/admm/residuals.jl`,
-  `src/data/ieee123.jl`, `src/experiments/Scenario.jl`, `src/solver/factory.jl`,
-  `src/solver/ProblemClass.jl`, `src/TSODSO.jl`, `docs/make.jl`, `.planning/STATE.md`,
-  `.planning/PROJECT.md`.
-- PowerModelsDistribution official docs (`parse_file`/`transform_data_model` behavior,
-  `ENGINEERING` `line`/`linecode` fields) — HIGH confidence.
+- Direct code reads across the repository (file:line citations in ARCHITECTURE.md and PITFALLS.md): `src/models/oracle.jl`, `src/models/exactness.jl`, `src/models/welfare_solve.jl`, `src/admm/solve_admm.jl`, `src/admm/DsoOpt.jl`, `src/devices/PVBattery.jl`, `src/devices/Aggregator.jl`, `src/devices/AbstractDevice.jl`, `src/planning/benders.jl`, `src/planning/master.jl`, `src/planning/subproblem.jl`, `src/planning/follower.jl`, `src/planning/coupling.jl`, `src/data/Feeder.jl`, `src/data/topology.jl`, `src/powerflow/ConvexBranchFlow.jl`, `src/powerflow/ACPowerFlow.jl`, `src/experiments/Scenario.jl`, `src/experiments/store.jl`, `test/test_planning_noninteger.jl`, `test/test_experiments.jl`.
+- Julia General registry `Versions.toml` + GitHub API commit/release timestamps + package `Project.toml` `[compat]` sections, all fetched 2026-07-26 — verified all package version and maintenance-activity claims.
+- Clarabel.jl official docs/README (clarabel.org, github.com/oxfordcontrol/Clarabel.jl) — native PSD-cone support, the load-bearing stack finding.
+- `.planning/PROJECT.md`, `.planning/RETROSPECTIVE.md`, `CLAUDE.md` — v3.0 scope, prior Key Decisions, cross-milestone lessons (gate-then-golden ordering, "tests passing ≠ mechanism live," measurement-before-golden).
 
 ### Secondary (MEDIUM-HIGH confidence)
-- Farivar, M. & Low, S.H., "Branch Flow Model: Relaxations and Convexification," IEEE Trans. Power
-  Systems 28(3), 2013 — canonical SOCP exactness theory.
-- Gan, Li, Topcu & Low, "Exact Convex Relaxation of Optimal Power Flow in Radial Networks," IEEE
-  Trans. Automatic Control 60(1), 2015 — empirically verifies IEEE 13/34/37/123-bus feeders.
-- Bhattacharya et al., "Distribution Locational Marginal Pricing for Congestion Management and
-  Voltage Support," IEEE Trans. Smart Grid 2018 — 5-way DLMP decomposition including reactive price.
-- `memory/ieee123-real-impedances-source.md` (project's own prior research) — Fortescue-averaging
-  recipe already numerically verified on linecode.1.
+- Farivar & Low, *"Branch Flow Model: Relaxations and Convexification"* (2013, arXiv:1204.4865); Gan, Li, Topcu & Low, *"Exact Convex Relaxation of Optimal Power Flow in Radial Networks"* (arXiv:1311.7170); Gan & Low, *"Exact Convex Relaxation of OPF in Tree Networks"* (arXiv:1208.4076) — canonical, cross-verified radial/meshed exactness theory.
+- Laporte & Louveaux, *"The integer L-shaped method for stochastic integer programs with complete recourse"* (Operations Research Letters, 1993) — canonical integer Benders citation.
+- InfiniteOpt.jl official docs (`guide/result.md`, `guide/transcribe.md`) + GitHub discussion #338 — dual-access indirection and warm-start-immaturity findings driving the InfiniteOpt rejection.
 
-### Tertiary (MEDIUM confidence)
-- ACM Artifact Review and Badging terminology ("Reproduced" vs. "Replicated") — closest formal
-  analogue for the directional-reproduction framing, not a power-systems-specific standard.
-- IEEE-123/OpenDSS community knowledge on the length/units ambiguity — well-documented community
-  trap, not independently re-verified against the live dataset this session.
+### Tertiary (LOW-MEDIUM confidence, single source or not independently re-verified)
+- "Convex Hull of the Quadratic Branch AC Power Flow Equations..." (arXiv:1701.07146) — single source.
+- Angulo, Ahmed & Dey (2016) integer L-shaped enhancement — cited by name only via secondary sources, not directly fetched.
+- General decomposition/optimization theory claims (integer L-shaped weakness, meshed non-exactness structure, two-block ADMM joint stopping criteria) flagged in PITFALLS.md as standard results not independently re-verified against a specific paper this session — recommend a targeted literature check at Phase 4/5 start if HIGH confidence is wanted before implementation.
 
 ---
-*Research completed: 2026-07-25*
+*Research completed: 2026-07-26*
 *Ready for roadmap: yes*

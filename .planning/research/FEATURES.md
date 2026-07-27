@@ -1,469 +1,491 @@
 # Feature Research
 
-**Domain:** Power-systems optimization validation — SOCP/AC-OPF exactness certification, ADMM
-reactive-power consensus, three-phase→positive-sequence network reduction, and directional
-reproduction of a published transactive-energy result. (Milestone v2.1 "Validation & Reproduction")
-**Researched:** 2026-07-25
-**Confidence:** MEDIUM-HIGH (exactness-condition literature and DLMP decomposition are HIGH
-confidence, well-cited results; the positive-sequence reduction recipe is HIGH confidence and
-already verified numerically in this repo's memory notes; the "directional reproduction" norms are
-MEDIUM confidence — a methodological convention rather than a single citable theorem)
+**Domain:** Power-systems optimization research bench — five new research axes on a validated
+convex branch-flow TSO–DSO transactive-pricing framework (JuMP/Julia)
+**Researched:** 2026-07-26
+**Confidence:** MEDIUM-HIGH (canonical papers verified via search; several axes cross-checked
+against multiple independent sources; some Julia-ecosystem specifics remain MEDIUM)
 
-> **Framing note.** This is a *subsequent-milestone* feature landscape — it supersedes the v2.0
-> FEATURES.md previously at this path (planning-layer Stackelberg-Nash research, now shipped). It
-> covers ONLY the four v2.1 validation/hardening capabilities layered on top of the already-shipped
-> v1.0 operational core and v2.0 planning layer. "Table stakes" here means *what a credible
-> validation claim in the power-systems SOCP/ADMM/DLMP literature requires* — not general
-> feature-completeness of a product.
+> **Framing note.** This is a *subsequent-milestone* feature landscape for v3.0 "Research
+> Extension Rungs" — it supersedes the v2.1 FEATURES.md previously at this path (AC-exactness
+> certification / reactive consensus / IEEE-123 impedances / directional reproduction, now
+> shipped). It covers ONLY the five v3.0 research axes layered on top of the already-shipped
+> v1.0 operational core, v2.0 planning layer, and v2.1 validation hardening.
 
-## Feature Landscape
+## Context: what "feature" means here
 
-Each of the four v2.1 target capabilities is treated as its own "feature" with its own
-table-stakes / differentiators / anti-features split, because they are four largely independent
-validation seams (see Feature Dependencies below for what little coupling exists).
+This is not a consumer product — "features" are **research capabilities** (a formulation, a
+solve strategy, a validation certificate). Table stakes = what the power-systems-optimization
+literature treats as the minimum correct/citable version of each capability. Differentiators =
+what would make this bench notable vs. a bare textbook implementation. Anti-features = scope
+traps that look like "the real thing" but are wrong-sized for a "minimal validated rung."
 
 ---
 
-### Capability A — AC-OPF-vs-SOCP Exactness Certification
+## Axis 1 — Overvoltage-Capable Relaxation (high-PV reverse-flow SOCP inexactness)
 
-**What "good" looks like, standard procedure:**
+### Background (what the literature says the failure mode is)
 
-The distribution SOCP relaxation ships with two theoretical bodies of sufficient-exactness
-results for *radial* (tree) networks:
+Farivar & Low's branch-flow model (Farivar & Low, *"Branch Flow Model: Relaxations and
+Convexification,"* IEEE Trans. Power Systems, 2013, arXiv:1204.4865) proves the SOC relaxation
+of `l_ij = (P_ij²+Q_ij²)/v_i` is **exact for radial networks provided there is no upper bound on
+voltage** (or, more precisely, no upper voltage bound binding) — the LinDistFlow-copy trick this
+project already uses (thesis eq. 3.43–3.45) is exactly this "no-upper-voltage-bound-on-the-relaxed-copy"
+device. Gan, Li, Topcu & Low (*"Exact Convex Relaxation of Optimal Power Flow in Radial
+Networks,"* arXiv:1311.7170 / IEEE TAC 2015) sharpen this: exactness for radial networks holds
+under an a-priori-checkable condition tied to **no reverse real power flow** and a
+resistance/reactance-ratio monotonicity condition moving away from the substation. High-PV
+reverse flow is *precisely* the condition this project's own v2.1 AC-oracle found violated
+(EXACT-04: gap≈10.4, voltage pinned at `V²max`) — this is not a novel failure, it is the textbook
+edge case the literature already names. **HIGH confidence**, multiple independent sources agree.
 
-- **Farivar & Low, "Branch Flow Model: Relaxations and Convexification — Part I/II," IEEE Trans.
-  Power Systems 28(3), 2013.** Establishes the branch-flow model itself and proves that for a
-  **radial** network the SOC relaxation (thesis eq. 3.39, `l ≥ (P²+Q²)/v`) is exact **provided
-  there is no binding upper bound on nodal power injections/withdrawals** (i.e., loads/DER are not
-  artificially capped in a way that would want to "round-trip" through the slack `l` variable) —
-  physically, the relaxation is tight whenever the true optimum wants to draw the minimum current
-  needed to serve the injection, which is the generic case in a welfare-maximizing dispatch. HIGH
-  confidence (canonical, ~2000+ citations).
-- **Gan, Li, Topcu & Low, "Exact Convex Relaxation of Optimal Power Flow in Radial Networks," IEEE
-  Trans. Automatic Control 60(1):72–87, 2015 (arXiv:1311.7170).** Sharpens the above: gives an
-  a-priori-checkable sufficient condition (after a small, provably-inconsequential enlargement of
-  the feasible set) and **empirically verifies it holds on the IEEE 13-, 34-, 37- and 123-bus test
-  feeders** — i.e., the exact same fixture family this project already uses. MEDIUM-HIGH
-  confidence on the precise theorem statement (verify wording against the paper before citing a
-  numbered theorem in a thesis chapter; HIGH confidence on the headline claim "holds on
-  IEEE-13/34/37/123").
+### Standard responses in the literature (ranked by fit for a "minimal validated rung")
 
-**Practical takeaway for this project:** the LinDistFlow exactness-copy trick (thesis 3.43–3.45,
-already implemented in `src/models/exactness.jl`) is the project's own construction for *forcing*
-tightness rather than relying on the Farivar-Low/Gan-et-al. natural-exactness argument — which is
-the right engineering choice (defensive, not fragile), but the validation milestone should still
-show the natural-exactness literature applies to the fixture family (radial, standard IEEE feeders)
-so a reader trusts the result is not a numerical accident.
+| Approach | What it does | Fit for this project |
+|----------|--------------|----------------------|
+| **QC / strengthened SOCP with valid inequalities (cutting planes)** | Add valid cuts (e.g. tightened `S_max` cone bounds, McCormick-style envelope tightening) to shrink the relaxation gap without abandoning conic solvers | Table stakes candidate — cheap, keeps Clarabel, keeps duals-as-prices intact. Multiple ScienceDirect/arXiv sources ("cutting planes based relaxed OPF," "properties of convex OPF based on power-loss relaxation") treat this as the standard first response for active distribution systems with DG |
+| **Convex-hull relaxation of the branch-flow quadratic constraint** | Replace the SOC relaxation with the actual convex hull of the (nonconvex) `l=(P²+Q²)/v` equation over the box `[v_min,v_max]` (arXiv:1701.07146, "Convex Hull of the Quadratic Branch AC Power Flow Equations…") | Differentiator — theoretically tighter, still conic-representable, but adds real modeling complexity for a "minimal rung"; good v3.1+ follow-on |
+| **Sequential convex approximation / convex-concave procedure (penalized SOCP)** | Iteratively re-linearize the nonconvex gap term and penalize it in the objective, re-solving a sequence of SOCPs (SCA/CCP is the standard nonconvex-QCQP recipe) | MEDIUM fit — recovers near-AC-feasible points but loses the clean "price = dual of one convex QP" story; convergence to only a local optimum, and duals from the last SCA iterate are heuristic, not certified LP/SOCP duals |
+| **Direct nonconvex AC-OPF pricing with local-solution caveats** | Solve the true nonconvex AC-OPF (already available in this repo as `ACPowerFlow`/Ipopt) and read `dual()` off its equality constraints as a *local* DADP | Table-stakes fallback — the project already has the AC oracle; the "new" work is *documenting the caveat* (local-optimum, no global-optimality certificate, KKT multiplier ≠ market-clearing price in general) rather than building new machinery |
+| **Restriction (shrink the feasible set to force exactness)** | Tighten the *relaxed* problem's own bounds (e.g. Gan/Low's "shrinking the feasible set slightly") so the SOCP's optimum is provably AC-feasible, at the cost of a (small, bounded) loss of true optimality | Table stakes — directly matches the "shrink feasible set" device Gan & Low prove for radial networks; cheapest to implement given the existing LinDistFlow-copy scaffolding, and preserves the pricing-as-duals story exactly |
 
-**Standard certification quantities and comparison procedure (what the literature and standard
-practice actually compare):**
+**Recommended minimal rung:** combine **restriction** (tighten `V²max`/reverse-flow-aware bound
+on the relaxed copy, in the spirit of Gan & Low's a-priori-checkable condition) as the primary
+mechanism, with the **existing AC-oracle as the certifying peer** (already built in v2.1) rather
+than the CCP/SCA route — this keeps the pricing semantics convex-dual and citable, and reuses
+`assert_ac_exact!` as the acceptance gate for the new regime instead of building a second oracle.
+Document the **direct nonconvex fallback** (Ipopt AC-OPF dual, with explicit local-optimum
+caveat) as the honest last resort when even the restricted SOCP cannot certify exactness — this
+mirrors the project's existing "report, don't throw" philosophy (EXACT-01..04).
 
-1. **Internal cone-tightness (already implemented, keep):** `gap = |l·v − (P²+Q²)|` per branch/hour
-   against a scale-free `atol + rtol·max(|·|)` bound. This shows the relaxation is *self-consistent*
-   but does **not** by itself certify the recovered point solves the true nonconvex AC-OPF — it can
-   be tight and still be wrong if, e.g., the exactness-copy voltage bound (3.45) itself biased the
-   solution away from the true optimum.
-2. **External oracle comparison (the missing piece, table stakes for v2.1):** solve the *same*
-   scenario as a genuine nonconvex AC-OPF — the un-relaxed power-flow equations (3.29–3.34 with
-   3.34 as an **equality**, not the SOC relaxation) in polar or rectangular form — via **Ipopt**
-   (already available per milestone context), and compare:
-   - **Objective value gap** (SOCP welfare vs. AC-OPF welfare at its own optimum): report as a
-     signed relative gap; a genuinely exact relaxation gives `gap ≈ 0` to numerical tolerance
-     (SOCP is a valid relaxation, so `AC-OPF welfare ≤ SOCP welfare`; exactness means equality).
-   - **Voltage vector deviation**: `max_{j,t} |v_SOCP[j,t] − v_AC[j,t]|` in pu — this is the check
-     that actually matters physically (a tight cone with a voltage mismatch would mean the
-     exactness-copy is producing a *different*, merely-feasible AC point, not *the* AC optimum).
-   - **Branch flow deviation** `max |P_SOCP − P_AC|`, `max |Q_SOCP − Q_AC|`.
-   - Optionally, **loss deviation** (`Σ r·l` vs. true AC losses) — a natural single scalar summary.
-3. **Two complementary check modes seen in the literature and worth distinguishing explicitly in
-   the report** (this distinction is what makes the report *rigorous* rather than hand-wavy):
-   - **Feasibility check** ("does the SOCP point lie in the true AC feasible set?"): fix the SOCP's
-     optimal `(p_ag, q_ag)` injections and run a plain AC power-flow solve (not an OPF — no
-     re-optimization) to get the true `V, P, Q`; compare against the SOCP variables. This isolates
-     *whether the recovered dispatch is physically realizable*, independent of optimality.
-   - **Optimality check** ("does the SOCP objective match the true AC-OPF optimum?"): solve the
-     full nonconvex AC-OPF independently (Ipopt, multiple warm starts) and compare objectives and
-     primal points. This is the stronger, headline claim and is what Gan-Li-Topcu-Low's own
-     numerical sections do on the IEEE test feeders.
-4. **Ipopt-specific pitfall, must be mitigated:** nonconvex AC-OPF is **not** guaranteed a global
-   optimum from Ipopt — a local-optimum artifact could masquerade as a "relaxation gap." Standard
-   mitigation: **multi-start** (several initializations, including a flat-start and the SOCP
-   solution itself as a warm start — the SOCP point is a natural starting guess precisely *because*
-   it should already be near-global if exactness holds) and report the **best** (lowest-cost/
-   highest-welfare) AC-OPF solve found, not an arbitrary one.
-5. **Defensible tolerance:** match the order already established in this codebase's own cone gate
-   (`rtol = 1e-4`, scale-free) — a relative objective gap and max-voltage-deviation both at
-   `O(1e-4)` is standard practice for "negligible optimality gap, relaxation certified exact on
-   this instance"; anything above `O(1e-2)` should be reported as a **genuine relaxation gap**, not
-   waved away as numerical noise.
-6. **Reporting rigor ("exact" vs. "gap", how to state it defensibly):** report BOTH numbers side by
-   side — the internal cone residual (existing PF-04 gate) and the external AC-OPF gap (objective
-   %, max |ΔV|, max |ΔP|, max |ΔQ|) — and explicitly state which theoretical result (radial +
-   Farivar-Low / Gan-Li-Topcu-Low) the instance falls under, vs. an instance-level empirical
-   check only. Never claim "exact" from the cone residual alone; the AC-OPF cross-check is what
-   licenses the word "certified."
+### Complexity: MEDIUM. Reuses `AbstractPowerFlow`/`ACPowerFlow`/`assert_ac_exact!` (no new
+solver dependency); the new work is bound-tightening logic + a new certificate, not a new solver
+integration.
 
-**Table stakes:**
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Independent nonconvex AC-OPF model (Ipopt, same feeder/scenario, `l=(P²+Q²)/v` as equality) | Without it, "exact" is only ever self-referential (relaxation vs. itself) | MEDIUM | Reuses existing constraint definitions (3.29–3.34) from `ConvexBranchFlow.jl`; swap the SOC inequality for the nonconvex equality and solve with Ipopt via `select_optimizer` |
-| Objective-value + voltage + flow comparison report (SOCP vs. AC-OPF) at a defensible tolerance | Standard practice in the exactness literature (Gan-Li-Topcu-Low's own validation) | LOW-MEDIUM | Mostly numeric post-processing once both solves exist |
-| Multi-start Ipopt (≥2–3 initializations incl. SOCP warm start) | Guards against reporting a false gap that's actually an Ipopt local optimum | LOW | Cheap insurance; a documented, known NLP pitfall |
-| Written methodology note citing Farivar-Low / Gan-Li-Topcu-Low and stating which case applies | "Citable" is the milestone's own bar (thesis/paper-grade); avoids an unsupported "exact" claim | LOW | Docs-only; pairs naturally with the existing Literate rung-page style |
-
-**Differentiators:**
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|--------------------|------------|-------|
-| A-priori exactness-condition checker (Gan-Li-Topcu-Low style, e.g. verifying the voltage upper bound is not binding at the AC optimum) that auto-classifies "provably exact" vs. "empirically exact" | Moves from case-by-case empirical checks to a structural argument citable independent of the solved instance | MEDIUM-HIGH | Requires precisely nailing down the paper's checkable condition; verify against the source PDF before implementing |
-| Stress sweep to find (and report) a genuine relaxation gap (e.g., high-PV reverse flow on IEEE-123, deliberately tightened voltage band) | Demonstrates understanding of the boundary of exactness, not just the easy case — strong thesis-defense material | MEDIUM | Reuses the existing IEEE-123 voltage-constrained fixture; needs a scenario knob for PV penetration |
-| Gap-vs-stress plot (CairoMakie) — relaxation/AC gap as a function of PV penetration or voltage-band tightness | Publication-quality, single figure that tells the whole exactness story | LOW-MEDIUM | Straight-forward given the sweep above; matches existing `DrWatson`/sweep infrastructure |
-
-**Anti-features:**
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|----------------|------------------|-------------|
-| Building a from-scratch nonconvex AC power-flow *solver* (Newton-Raphson, forward-backward sweep) | Feels more "from first principles" | Ipopt is already an available, validated NLP solver in the stack; writing a bespoke solver is scope creep against the project's explicit "clarity over premature optimization" constraint | JuMP nonconvex model + Ipopt, reusing the `ConvexBranchFlow.jl` constraint blocks with the SOC relaxed to equality |
-| General-purpose formal verification of Gan-Li-Topcu-Low's conditions across arbitrary radial topologies | Sounds rigorous | Over-engineering for a validation milestone whose fixtures are two fixed, known feeders (IEEE 13/123) — this is a paper-worthy contribution in its own right, not a v2.1 checkbox | Instance-level empirical certification (per-fixture, per-scenario) documented against the cited theorems |
-| Chasing exactness on meshed topologies | "More general is better" | Explicitly out of scope (thesis + fixtures are radial-only; meshed is a deferred research axis per PROJECT.md) | Stay radial; flag meshed exactness as a future-axis note only |
+### Dependency
+Directly extends `models/exactness.jl` and the AC-oracle machinery from v2.1 (EXACT-01..04).
+No SEAM-01 stub currently targets this axis by name — it is a refinement of the existing
+`pf::AbstractPowerFlow` dispatch point, not the meshed slot (that is axis 4, see below), and
+should NOT be conflated with it even though both touch "the relaxation machinery" (flagged as
+an explicit interdependency in PROJECT.md).
 
 ---
 
-### Capability B — Reactive-Power (Q) Consensus in ADMM
+## Axis 2 — MPC / Rolling-Horizon / Real-Time Pricing
 
-**How the reactive dual is standardly written, and what changes:** in a Lagrangian/ADMM
-decomposition of a branch-flow OPF, the standard symmetric treatment mirrors the active-power split
-exactly: a dual `μ_j[t]` on the nodal reactive-balance residual `R_{q,j}[t]` (thesis eq. 3.32),
-with an augmented-Lagrangian quadratic penalty `(ρ/2)‖R_{q,j}‖²` alongside the active-power term —
-this is precisely thesis eq. 3.47 as written (`DSO-OPT` carries **both** `λ_j·R_p` and `μ_j·R_q`
-penalty terms). Consensus/dual-decomposition literature (general ADMM-for-OPF surveys) treats `P`
-and `Q` balance identically: both are "copies" of a shared coupling quantity reconciled by a price
-(dual) that converges to the marginal value of relaxing that balance.
+### Standard ingredients (cross-checked across MPC-for-microgrid/EV-charging literature)
 
-The subtlety specific to this project (per the existing `AgrOpt.jl` docstrings): the thesis's own
-DER model is **active-power only** (assumption A3, thesis eq. 3.23 — `q_ag_j` is a *known constant*
-`−Pdc·tan(arccos φ)`, not an aggregator decision variable). This means:
+| Ingredient | Standard treatment | Notes |
+|------------|--------------------|-------|
+| **Terminal state constraint / terminal value** | Either (a) a hard terminal-SOC target (e.g. "battery ends the horizon at ≥ SOC₀" or at a scenario-specific target) or (b) a terminal *value function* (economic MPC with a terminal cost approximating "value of stored energy beyond the horizon") | Literature on EV/BESS MPC (MDPI 2024 "EV Charging Control... MPC," arXiv:2012.14624 "Deferrable Load Scheduling under Demand Charge: Block MPC") consistently flags that omitting a terminal condition causes end-of-horizon myopic battery dump/hoarding — a known artifact, not a subtle one |
+| **Forecast-error model** | Perfect-foresight-over-shrinking-horizon is the simplest (deterministic re-solve each step with updated forecast); stochastic/robust variants replace point forecasts with scenario trees or error bounds | For a "minimal validated rung," deterministic re-solve with a synthetic forecast-error injection (perturb the known ground truth by a bounded noise process at each rolling step) is standard and cheap — matches this project's existing seeded-Markov data generation pattern (thesis §2.8) |
+| **Closed-loop vs. open-loop benchmarking** | Standard practice: report the *closed-loop* trajectory (what actually happens under receding-horizon re-solves with realized, not forecast, disturbances) against the *open-loop*/perfect-foresight day-ahead optimum as the ceiling | This project already states this explicit benchmark target in PROJECT.md ("benchmarked against the perfect-foresight day-ahead solve") — matches literature norm exactly |
+| **Rolling price-consistency metrics** | Track (i) price volatility/jump magnitude between consecutive re-solves, (ii) cumulative deviation of realized rolling DADP path from the day-ahead DADP path, (iii) welfare/cost gap vs. perfect foresight | No single canonical metric name in the literature; report as a small metrics struct (residual style, matching this project's existing ADMM-residual/BendersTrace conventions) |
 
-- There is genuinely **no** degree of freedom on the aggregator side for `μ_j` to move — AGR-OPT's
-  objective (thesis 3.46) correctly has **no** `μ`/`R_q` term at all; only DSO-OPT (3.47) carries
-  `μ_j·R_q`. This is not a bug to "fix" by inventing an AGR-side reactive decision (that would
-  reopen the explicitly-deferred 4Q-BESS/volt-var research axis).
-- Given `q_ag_j` is DSO-OPT's own *known parameter* once AGR-OPT reports it, the reactive nodal
-  balance `R_{q,j}=0` is really an **internal** equality constraint of DSO-OPT alone (every term in
-  it — `Q_{i,j}`, `x·l_{i,j}`, `q_ag_j`, downstream `Q_{j,m}`) is either a DSO-OPT variable or a
-  constant fed in from AGR-OPT's last solve. Standard SOCP/QP duality gives `μ_j = dual(R_{q,j})`
-  "for free" the moment this is written as a genuine equality constraint inside DSO-OPT — **no
-  separate ADMM outer-loop dual-ascent is required for Q** under the active-only DER assumption;
-  what is required is that the constraint be a **real, per-node equality** (not the current
-  free-`q_import` slack workaround that only balances reactive power in aggregate at the
-  substation, decoupling it from the true per-node physics of eq. 3.32).
-- What adding a genuine per-node `R_{q,j}=0` changes for **DLMP**: the standard DLMP-decomposition
-  literature (e.g., Bhattacharya et al., "Distribution Locational Marginal Pricing for Congestion
-  Management and Voltage Support," IEEE Trans. Smart Grid 2018) splits the nodal price into
-  active-power, **reactive-power**, congestion, voltage-support, and loss components — with the
-  reactive-power component being exactly this `μ_j` (the shadow price of the nodal VAR balance).
-  Restoring a genuine per-node `μ_j` therefore (a) makes the existing 4-way DLMP decomposition
-  (`src/pricing/dlmp.jl`) more physically grounded — today its "voltage" term must indirectly
-  absorb reactive-balance effects that should properly load onto a distinct reactive-price term —
-  and (b) gives the project a citable, standard 5th price component (`Q-DLMP`) to report, matching
-  the DLMP literature's own convention rather than an ad hoc quantity.
+### Table stakes vs differentiators
 
-**Table stakes:**
+- **Table stakes:** deterministic receding-horizon re-solve loop; terminal SOC handling (even a
+  simple terminal-target constraint, not a full value function); closed-loop-vs-open-loop
+  comparison table/plot.
+- **Differentiator:** rolling re-computed DADP as an actual re-priced signal at each step (not
+  just re-dispatch) — this is the "real-time pricing" framing the milestone specifically wants,
+  and is a genuine extension beyond a bare MPC re-dispatch loop.
+- **Anti-feature:** a full economic-MPC terminal *value function* (dynamic-programming-derived
+  terminal cost) or a robust/tube-MPC formulation — both are standard in the control literature
+  but are overkill for "minimal validated rung"; a hard terminal-SOC target is the right-sized
+  substitute. Defer value-function terminal costs to a later milestone if closed-loop
+  performance is found lacking.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Genuine per-node reactive balance `R_{q,j}[t]=0` as a real DSO-OPT equality (thesis 3.32), replacing the free-`q_import` aggregate slack | Matches the thesis equation as written; today's slack only enforces reactive balance in aggregate, not per-node | LOW-MEDIUM | Localized to `DsoOpt.jl`; `q_ag_j` is already computed by `AgrOpt.jl` (the constant `qag` field already exists, documented as an unread placeholder) |
-| Report `μ_j[t] = dual(R_{q,j})` as a first-class quantity, mirroring how `λ_j` is already surfaced | The reactive shadow price is the standard "Q-DLMP" component in the DLMP literature | LOW | Direct `dual()` read once the constraint is real; no new solve loop needed |
-| Convergence/consistency check: `R_{q,j}[t] ≈ 0` at the converged ADMM point (mirrors the existing `R_p` check) | Symmetric correctness gate to the existing active-balance residual check | LOW | Same pattern as the existing ADMM residual diagnostics (`src/admm/residuals.jl`) |
-| Regression: adding the real Q balance must NOT change the active-power welfare optimum (since `q_ag` is still a fixed parameter — only pricing/bookkeeping changes) | Cheap, high-value correctness check; a change here would signal an accidental coupling bug | LOW | Compare pre/post welfare on the pinned goldens |
-| DLMP decomposition extended with the reactive-price (`μ_j`) as a distinct, citable component | Matches standard DLMP literature convention (5-component split) rather than an ad hoc "voltage" catch-all | MEDIUM | Touches `src/pricing/dlmp.jl`'s existing derivation; must re-verify the additive decomposition still telescopes exactly (same discipline as the existing 4-way check) |
+### Complexity: MEDIUM. The mechanism (JuMP `Parameter` re-solve without rebuild) is **already
+verified in this codebase's own research notes** — `horizon_state = nothing` in
+`operational_oracle` is explicitly documented as reserved for exactly `@variable(m, s0 in
+Parameter(v)); set_parameter_value(s0, x)` (oracle.jl, "RESEARCH Pattern 6, verified"). The new
+work is the *outer rolling loop* + terminal-condition constraint + benchmarking harness, not the
+re-solve mechanism itself.
 
-**Differentiators:**
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|--------------------|------------|-------|
-| A genuine cross-subproblem ADMM dual-ascent loop on `μ_j` (only meaningful once AGR-OPT has an actual reactive decision variable, e.g., power-factor control within `[0.85,0.95]`) | Would make the reactive price a live consensus quantity rather than a free dual read | HIGH | This *is* the deferred 4Q-BESS/volt-var research axis — flag as a stretch/future item, not v2.1 MVP |
-| Reactive-price sensitivity plot (μ_j vs. voltage-band tightness) showing μ rising as voltage constraints bind | Physically intuitive validation that μ tracks the right thing | LOW-MEDIUM | Cheap once μ is real; reuses IEEE-123 voltage-constrained fixture |
-
-**Anti-features:**
-
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|----------------|------------------|-------------|
-| Full 4-quadrant inverter / volt-var control as part of this validation milestone | "While we're touching Q, let's make it live" | Explicitly deferred (meshed+4Q-BESS research axis, PROJECT.md Out of Scope); scope creep against a *validation* milestone | Keep DERs active-only (thesis A3); ship the real per-node balance + μ dual read only |
-| Inventing a nonstandard ad hoc "voltage price" formula not grounded in a real dual | Might seem to "solve" the DLMP-decomposition ambiguity faster | Not citable, undermines the "trustworthy, documented" bar the milestone exists for | Use the standard nodal-reactive-balance-dual (`μ_j`) as in Bhattacharya et al. and the general DLMP literature |
+### Dependency
+Directly consumes the **SEAM-01 `horizon_state` stub** in `operational_oracle`
+(`src/models/oracle.jl`) — this is the named, already-scaffolded hook (`MPC-01/02` in the code
+comments). No new seam needs to be invented; the milestone's job is to make this stub load-bearing.
 
 ---
 
-### Capability C — Positive-Sequence Reduction (IEEE-123 real impedances)
+## Axis 3 — Stochastic PV/Demand Uncertainty (scenario-based extensive form)
 
-**Standard method (textbook, HIGH confidence — Kersting, *Distribution System Modeling and
-Analysis*; Fortescue symmetrical-component theory):** given a line segment's 3×3 phase-impedance
-matrix `Z_abc` (self on the diagonal, mutual off-diagonal, from Carson's equations / OpenDSS
-linecode data), the exact symmetrical-component transform is `Z_012 = A⁻¹ Z_abc A` with
-`A = [[1,1,1],[1,a²,a],[1,a,a²]]`, `a = e^{j120°}`. For a **perfectly transposed/balanced** line
-(`Zaa=Zbb=Zcc`, all mutuals equal), this collapses cleanly to scalars: `Z+ = Zs − Zm`,
-`Z0 = Zs + 2·Zm`. Real distribution linecodes (including IEEE-123's) are **not** transposed, so the
-exact transform produces a full 3×3 sequence matrix with nonzero sequence-coupling off-diagonals —
-"the positive-sequence impedance" is then not rigorously a single scalar. The standard engineering
-**approximation** (used by OpenDSS-style "balanced-equivalent" line-code reduction and confirmed by
-this project's own prior research note) treats the line *as if* transposed by **averaging** the
-diagonal and off-diagonal terms before applying the same formula:
+### Standard formulation
 
-```
-R1 = mean(diag(R_abc)) − mean(offdiag(R_abc))
-X1 = mean(diag(X_abc)) − mean(offdiag(X_abc))
-```
+Two-stage (or multi-stage) stochastic programming extensive form: build one large welfare
+problem over all scenarios `s∈S` with probabilities `π_s`, first-stage (here-and-now) decisions
+shared across scenarios, second-stage (wait-and-see) recourse decisions indexed by scenario,
+objective = `Σ_s π_s · welfare_s(...)`. This is the textbook approach and is exactly what the
+milestone specifies ("scenario-based extensive form first"). Confirmed as the standard DLMP
+pattern in recent literature (ScienceDirect "e-Carsharing siting... DLMP-based under demand
+uncertainty" — explicit two-stage stochastic DLMP model with scenario-based demand uncertainty).
 
-This is exactly the recipe already validated in this repo's memory note
-(`ieee123-real-impedances-source.md`: verified on linecode.1 → `R1≈0.05797, X1≈0.11876 Ω/unit`,
-sensible order of magnitude) against the public GitHub-hosted OpenDSS IEEE-123 dataset
-(`tshort/OpenDSS` `123Bus/IEEELineCodes.DSS` + `IEEE123Master.dss`). The recommended execution path
-— parse via **PowerModelsDistribution** (oracle-only, per CLAUDE.md's own stack decision), extract
-per-branch 3×3 series impedance, apply the reduction, vendor a clean fixture — sidesteps the
-IEEE-123 file's own documented length/unit ambiguities.
+### Scenario generation & reduction
 
-**Caveats that make this approximate (must be documented, not silently absorbed):**
+- **Generation:** the thesis's own data layer already uses first-order Markov chains for
+  occupancy/PV/demand (thesis §2.8) — the natural, in-repo-consistent generator for scenario
+  *trees*, not just i.i.d. draws. A recent paper (ScienceDirect 2023, "Stochastic optimization
+  and Markov chain-based scenario generation for exploiting flexibilities of an active
+  distribution network") confirms Markov-chain scenario generation is standard practice for
+  exactly this PV/demand setting — directly reusable, not a new technique to import.
+- **Reduction:** literature standard is fast-forward/backward reduction or k-means clustering to
+  collapse a large sampled set down to a tractable few representative scenarios with adjusted
+  probabilities (examples found: 1000→7 scenarios via fast-forward reduction; 3000→20 via
+  k-means). For a "minimal validated rung," a **small, fixed, seeded scenario count** (e.g. 3–5
+  scenarios, no formal reduction algorithm) is the right-sized table stake; a full scenario-
+  reduction algorithm (fast-forward/k-means) is a differentiator to defer.
 
-1. **Untransposed asymmetry is discarded.** The averaging step assumes away the real geometric
-   asymmetry of the conductor spacing; error scales with how far `Z_abc` is from its balanced form.
-2. **Single/two-phase laterals have no rigorous positive-sequence equivalent at all.** A large
-   fraction of IEEE-123's laterals are single-phase spurs — collapsing them into a balanced
-   positive-sequence branch is an additional modeling assumption (project's own stated "balanced
-   positive-sequence" scope), not a mathematical identity; must be flagged, not hidden.
-3. **Sequence-coupling terms (positive↔negative↔zero interaction on an asymmetric line) are
-   dropped** — valid to first order for short distribution feeders but not exact.
-4. **Per-phase voltage unbalance cannot be recovered** from a positive-sequence single-phase power
-   flow — this is fundamentally a balanced-feeder surrogate, and should be presented as such.
-5. Charging capacitance / neutral-return effects differ between the true 3-phase network and the
-   positive-sequence equivalent; secondary for a feeder this short, worth a one-line caveat only.
+### Stochastic DLMP/price semantics — the key modeling decision
 
-**Table stakes:**
+Two legitimate semantics exist in the literature, and they answer different questions:
+1. **Expected/scenario-weighted dual** — the dual of the extensive-form nodal balance constraint
+   *as written* (if the balance constraint is scenario-indexed, its dual is a genuine per-scenario
+   price; if scenarios share a single first-stage balance row, the dual is a probability-weighted
+   expected price). Confirmed practice: "DLMPs... obtained by the dual variables of constraints"
+   and "the LMP is equal to the weighted dual variable of the nodal power balance constraint" in
+   stochastic security-constrained unit commitment — i.e., **weighted/expected duals are the
+   standard semantics when the balance constraint itself is aggregated across scenarios.**
+2. **Per-scenario dual** — if the model keeps a *separate* balance constraint per scenario (as an
+   extensive form naturally does for second-stage recourse variables), each scenario gets its own
+   genuine dual/DADP; these can differ substantially across scenarios (e.g. a low-PV scenario
+   prices congestion, a high-PV scenario prices overvoltage/curtailment).
+This project should document **per-scenario DADPs as the primary output** (since each scenario's
+balance constraint is genuinely distinct in an extensive form with scenario-indexed recourse), and
+report the probability-weighted expectation as a derived summary statistic, not the other way
+around — this preserves the existing "price = dual of the nodal balance" framing exactly, just
+applied per-scenario, rather than inventing a new "expected-price" primitive that has no single
+well-defined constraint behind it.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Documented Fortescue-averaging reduction (`R1/X1` formula above) applied per real OpenDSS IEEE-123 linecode, replacing the current synthetic representative r/x | This is the milestone's explicit deliverable; the formula is already verified in this repo's own memory note | LOW-MEDIUM | Recipe and public data source already identified; mostly a data-engineering + vendoring task |
-| PMD-parse of the public OpenDSS `.dss` files as an oracle-only data source (never the production power-flow model) | Matches the project's own CLAUDE.md stack decision ("PMD as data-parsing and cross-validation oracle") | MEDIUM | New (weak) dependency on PowerModelsDistribution for parsing; verify it resolves cleanly under the current `Manifest.toml` |
-| Written caveat (mirroring the existing DATA PROVENANCE note style already in `ieee123.jl`) enumerating the approximation's error sources | Consistent with the codebase's existing rigor/documentation convention; prevents silently overclaiming fidelity | LOW | Docs-only |
-| Quantitative cross-check: same topology/real impedances run through PMD's own unbalanced power-flow oracle vs. the positive-sequence-reduced SOCP solve; report max voltage-magnitude / loss deviation | Turns "we did a reduction" into "we measured how wrong the reduction is" — a defensible, citable fidelity number | MEDIUM | Needs a real (not synthetic) 3-phase load allocation to run the PMD oracle meaningfully |
+### Out-of-sample validation
 
-**Differentiators:**
+Standard practice (confirmed pattern across the stochastic-OPF literature): evaluate the
+extensive-form solution's *first-stage* decisions against a held-out set of scenarios **not**
+used in the optimization (an out-of-sample test), reporting the realized cost/welfare gap vs. the
+in-sample expected value — this is the stochastic-programming analogue of this project's existing
+train/test discipline (e.g. the AC-oracle-as-independent-peer pattern) and should be reused as the
+validation gate for this axis.
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|--------------------|------------|-------|
-| Explicit list/flag of which real segments are single/two-phase laterals (where the approximation is weakest) | Tells future researchers exactly where to look if results look suspicious | LOW | Cheap given the per-segment reduction already computes per-linecode phase counts |
-| Per-segment asymmetry metric (`‖Z_abc − balanced(Z_abc)‖ / ‖Z_abc‖`) reported alongside the reduction | Quantifies, rather than just asserts, which lines are most approximated | LOW-MEDIUM | Nice-to-have scalar; easy given the matrices are already parsed |
+### Complexity: MEDIUM. Building the extensive form itself is mechanical (replicate the existing
+single-scenario JuMP model S times, share first-stage variables) — the genuine complexity is
+(a) deciding and documenting the per-scenario-vs-expected DADP semantics honestly, and (b) an
+out-of-sample validation harness.
 
-**Anti-features:**
+### Dependency
+Directly consumes the **SEAM-01 `objective_hook` stub** (`src/models/oracle.jl`,
+`STOCH-01/02` in code comments) — reserved exactly for "compose the per-scenario welfare into
+the extensive-form objective." This is the named hook to make load-bearing for this axis.
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|----------------|------------------|-------------|
-| Full unbalanced three-phase OPF as the production model | "Since we're parsing 3-phase data anyway..." | Explicitly out of scope (PROJECT.md: "Unbalanced three-phase / phase-detailed modeling... balanced positive-sequence" is the v1+ scope); would silently expand the whole framework's modeling axis mid-validation-milestone | Keep PMD strictly as a data/cross-validation **oracle**; production model stays balanced positive-sequence SOCP |
-| Deriving negative/zero-sequence impedances or fault-level analysis | "The transform gives us these for free" | Irrelevant to OPF/pricing validation; scope creep with no consumer in this project | Skip; only `Z+` (and by extension R1/X1) is needed |
-| Attempting to individually model single-phase laterals with their true phase | Feels "more correct" | Contradicts the project's own stated balanced-equivalent scope; half-modeling 3-phase creates an inconsistent hybrid model | Treat every branch as balanced-equivalent per the stated scope; document it as a limitation instead |
+### Anti-feature
+Full Sample Average Approximation (SAA) convergence studies, distributionally-robust
+formulations, or chance-constrained reformulations — all standard *deeper* stochastic-programming
+techniques, but explicitly out of scope for a "minimal validated rung" (these are natural v3.1+
+follow-ons once the extensive form and its semantics are validated).
 
 ---
 
-### Capability D — Directional Reproduction of the Published Welfare/DLMP Result
+## Axis 4 — Meshed Networks + 4Q-BESS
 
-**What a credible "we reproduce the direction/structure" claim looks like** when the exact source
-data is unavailable (this project's specific blocker: thesis Appendix E lives behind an
-IP-blocked CONICET repository). This maps closely to a recognized distinction in computational
-research reproducibility — the ACM Artifact Review and Badging terminology separates
-**"Reproduced"** (independently obtained data/means, same qualitative conclusions) from
-**"Replicated"** (same result from the original artifact/data) — MEDIUM confidence attribution
-(well-known convention in CS/systems venues; power-systems methods papers follow an analogous,
-less formally badged, norm when a predecessor's exact dataset is unavailable). A credible
-"Reproduced, not Replicated" claim in this domain typically has these ingredients:
+### Meshed branch-flow exactness — the angle-recovery obstruction
 
-1. **Explicit, prominent framing up front:** state plainly that this reproduces the *qualitative
-   direction and mechanism* of the published result, not the exact figures, and *why*
-   (data-source constraint), before presenting any numbers — never let a reader infer exact-figure
-   reproduction occurred.
-2. **Sign checks, not magnitude matches, as the primary evidence:** e.g., DADP-based social welfare
-   exceeds FIT-based welfare (the thesis's headline `+25%` is a *sign*, not a digit, claim at its
-   core); DSO surplus moves loss→gain; prosumer surplus decreases under DADP relative to FIT (the
-   thesis's own regressive-to-prosumer / net-positive-to-total story) — each of these is a
-   **sign** on a delta, independently checkable on different input data.
-3. **Magnitude BAND rather than a point estimate:** state a plausible range grounded in the same
-   underlying mechanism (congestion/voltage relief monetized by dynamic pricing) — e.g., "welfare
-   improves by a double-digit percentage, bracketing the thesis's own +25%" — rather than asserting
-   a specific percentage as if it were expected to match.
-4. **Qualitative curve-SHAPE reproduction as the most convincing single artifact:** the
-   characteristic DADP-vs-hour signature (below wholesale during midday PV surplus, above wholesale
-   during evening peak) is reproducible on *any* reasonably parameterized dataset if the mechanism
-   is correctly implemented — this is standard practice in transactive-energy/dynamic-pricing
-   papers as the qualitative "sanity" figure, independent of the exact source numbers, and is
-   already partially supported by this project's existing `pricing/checks.jl` "economic-direction
-   checks."
-5. **Sensitivity-DIRECTION reproduction:** the thesis runs its own sensitivity cases (battery×1.5,
-   PV×1.5, willingness-to-pay×1.5, alt. MEM profile); reproducing the **direction** of each (e.g.,
-   more battery capacity ⇒ more welfare gain) on independently generated data is a strong,
-   defensible claim precisely because it does not depend on matching the thesis's absolute numbers.
-6. **A pinned regression on sign + band, not exact equality** — extending this codebase's existing
-   "computed goldens" and "a converged equilibrium" honesty-gate conventions (already used for the
-   planning layer, PVAL-02..04 / NASH-04) to the operational-layer welfare comparison: assert the
-   sign of the DADP-vs-FIT welfare delta and a magnitude band, fail loud if a future change flips
-   the sign or exits the band — never assert exact equality to a digitized or otherwise
-   uncertain reference number.
-7. **Explicit data-provenance statement**: point to the actual data differences driving the
-   inability to match exactly (public IEEE-123 impedances vs. thesis App. E; a regenerated
-   demand/PV Markov-chain population vs. the thesis's UK Time-Use Survey + Loughborough irradiance
-   data) — this project already states this correctly in PROJECT.md and
-   `memory/ieee123-real-impedances-source.md`; the validation milestone should carry that framing
-   into the actual reported artifact, not just internal docs.
+Farivar & Low (2013) and Gan/Li/Topcu/Low prove a specific, important asymmetry: for **radial**
+networks, both the angle-elimination step and the SOC relaxation are exact together. For
+**meshed** networks, **the SOC/conic relaxation itself remains exact, but the angle-recovery step
+is not guaranteed** — a relaxed solution can be power-flow-feasible in `(v,l,P,Q)` space yet have
+no consistent voltage-angle assignment across a cycle (the classic "angle relaxation" gap). Their
+fix: check a simple a-posteriori condition on whether the relaxed solution is angle-recoverable;
+if not, either (a) accept the SOCP as a valid *lower bound* without a physically-realizable angle
+solution, or (b) **add phase-shifters** at a spanning-tree-complement set of lines to convexify
+the meshed network exactly (their proposed convexification route). This is the single most
+citable, HIGH-confidence fact for this axis — confirmed independently across three separate
+Farivar/Low/Gan sources.
 
-**Table stakes:**
+**Practical alternatives for a "minimal validated rung"** (beyond full phase-shifter
+convexification, which is a heavier structural change):
+- **QC (quadratic convex) relaxation** — tighter than plain SOCP, still conic-representable,
+  commonly used as a meshed-network alternative in the OPF-relaxation literature when angle
+  recovery matters.
+- **SDP relaxation** — provably at least as tight as SOCP for meshed networks (SOCP is a
+  projection/relaxation of the SDP relaxation), standard in the meshed-OPF-relaxation literature,
+  but heavier (larger PSD cone, slower solves) — a differentiator/defer candidate, not a table
+  stake, unless the SOCP+angle-check is shown to actually fail on the project's own meshed test
+  fixture.
+- **Post-hoc feasible-solution recovery** — several papers (e.g. "Recover Feasible Solutions for
+  SOCP Relaxation of OPF Problems in Mesh Networks") describe local-search/perturbation recovery
+  of a true AC-feasible point from a relaxed meshed solution when the direct relaxation is
+  inexact — a reasonable fallback matching this project's existing "AC oracle as certifying peer"
+  pattern (reuse `ACPowerFlow` again, exactly as in axis 1) rather than importing a new recovery
+  algorithm.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| "Reproduced, not Replicated" framing stated explicitly in the docs/report before any numbers | Prevents an unsupported exact-match claim; matches recognized reproducibility conventions | LOW | Docs-only, but must precede the numeric artifact, not follow it |
-| Sign check: DADP welfare > FIT welfare on the same (real or synthetic) feeder/data | The thesis's own core claim, checkable independent of magnitude | LOW | Reuses existing `pricing/welfare.jl` + `pricing/fit.jl` machinery |
-| Pinned golden regression asserting sign + a magnitude BAND (not exact value) for the welfare delta | Extends the codebase's own existing honesty-gate pattern; the correct rigor level given data constraints | LOW-MEDIUM | Direct analogue of the existing PVAL-02..04 / NASH-04 pattern, applied to the operational layer |
-| Qualitative DADP-vs-hour plot reproducing the midday-dip / evening-peak shape (vs. wholesale price) | The most convincing single "we got the mechanism right" artifact | LOW | CairoMakie plot; data already available post-solve |
+**Recommended minimal rung:** implement plain SOCP for the meshed case (the conic relaxation
+itself needs no new mathematics beyond dropping the radial-only exactness copy), add the
+angle-recoverability a-posteriori check from Gan/Low as the *validity certificate* for this rung
+(this is the natural meshed-specific counterpart to the existing `assert_ac_exact!`), and treat
+QC/SDP tightening and phase-shifter convexification explicitly as deferred differentiators.
 
-**Differentiators:**
+### Four-quadrant BESS
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|--------------------|------------|-------|
-| Directional reproduction of the thesis's own sensitivity sweep (battery×1.5, PV×1.5, willingness×1.5, alt. MEM profile) | A materially stronger reproduction claim — five independent directional checks instead of one | MEDIUM | Reuses existing `experiments/sweep.jl`; needs the sensitivity scenarios defined |
-| Side-by-side overlay figure (thesis-digitized curve, if the Appendix E gate is ever cleared, vs. this project's curve, normalized) | Nice bridge artifact if/when the CONICET data becomes available | LOW (contingent) | Explicitly a **stretch goal** per PROJECT.md — gated on obtaining Appendix E, not a v2.1 commitment |
+Confirmed standard treatment across multiple sources (ScienceDirect "Optimal provision of
+concurrent primary frequency and local voltage control from a BESS considering variable
+capability curves"; ScienceDirect "Optimal active and reactive power scheduling for
+inverter-integrated PV and BESS"): a 4Q-BESS is modeled with an **inverter apparent-power
+capability constraint** `p² + q² ≤ S_max²` (a second-order cone, directly composable with the
+project's existing SOCP machinery — no new cone type needed) plus **independent sign-free `p`
+and `q` decision variables** (vs. this project's current thesis-faithful active-only battery,
+thesis A3). This is a *strict superset* of the current battery model: table stakes = add `q_bess`
+as a genuine decision variable inside the existing per-inverter `S_max` cone; the differentiator
+is wiring `q_bess` into the **already-existing-but-inert reactive dual-ascent** path
+(`reactive_consensus`/`qag_dso`/`extract_reactive_dlmp` from v2.1) so that it becomes *live*
+(the reactive price actually moves in response to a live decision variable) rather than the v2.1
+one-shot certified-but-fixed dual.
 
-**Anti-features:**
+### Volt-VAR
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|----------------|------------------|-------------|
-| Chasing the exact `+$1,819 / +25%` headline via parameter back-fitting to the thesis's number | Feels like the "real" reproduction | With genuinely different input data (public vs. App. E impedances, regenerated vs. original demand data) this is curve-fitting to a single number, not validation — it would actively undermine the "trustworthy, documented" bar the milestone exists to establish | Report sign + band; state the data-provenance limitation explicitly (already the project's own documented position) |
-| Treating a digitized thesis figure (from a low-resolution PDF) as a numeric golden for a tight quantitative regression | Seems like "real" ground truth | Digitization error is itself a noise source; committing a tight regression to it manufactures false precision | Use a digitized figure only as a qualitative visual reference (a plot overlay), never as a numeric assertion target |
+IEEE 1547-style Volt-VAR droop control (reactive power set as a function of local voltage) is the
+standard *industry* control law, but it is a **decentralized heuristic control rule**, not an
+optimization-native primitive — confirmed by multiple sources ("IEEE 1547 standard mandates
+Volt-VAR mode..."; "Optimal Design of Volt/VAR Control Rules of Inverters using Deep Learning").
+For this project's optimization-first framing, the correct analogue is **not** to hand-code a
+droop curve, but to let the SOCP/QP jointly optimize `q_bess` subject to the capability cone and
+voltage limits — the optimization *subsumes* Volt-VAR as a special (myopic, non-optimal) case.
+**Anti-feature: do not implement a literal IEEE 1547 Volt-VAR droop-curve controller** — it would
+be an out-of-place decentralized-heuristic detour inside an optimization-first framework; if a
+"Volt-VAR-like" behavior is wanted for comparison, derive it as a *post-hoc characterization* of
+the optimal `q_bess(v)` relationship the SOCP already produces, not a separately-coded control law.
+
+### Complexity: MEDIUM-HIGH. Meshed formulation itself is a moderate lift (new topology, new
+exactness certificate, breaks the `assert_radial` invariant deliberately); 4Q-BESS is a smaller,
+well-understood addition (one more SOC constraint, one more decision variable) that unlocks
+already-built v2.1 reactive machinery.
+
+### Dependency
+Meshed formulation consumes the **SEAM-01 meshed-formulation slot** — explicitly named in
+`src/models/oracle.jl` as "the `pf::AbstractPowerFlow` argument IS the seam: a future
+`MeshedFlow <: AbstractPowerFlow` plugs in here and would bypass the `assert_radial` invariant."
+4Q-BESS's live reactive dual-ascent consumes the **v2.1 `reactive_consensus`/`qag_dso` machinery**
+(REACT-01..03) — this is not a SEAM-01 stub but an existing, shippable feature being switched
+from "fixed constant" to "live decision variable." **Flagged interdependency (per PROJECT.md):**
+both axis 1 (overvoltage relaxation) and this axis touch "the relaxation/exactness machinery" —
+sequence axis 1 before or alongside axis 4 so the meshed exactness certificate can reuse whatever
+generalized restriction/AC-oracle-certification pattern axis 1 establishes, rather than inventing
+two independent certification mechanisms.
+
+---
+
+## Axis 5 — Discrete/Integer Investment Expansion
+
+### Standard method: Laporte–Louveaux integer L-shaped
+
+Laporte & Louveaux (*"The integer L-shaped method for stochastic integer programs with complete
+recourse,"* Operations Research Letters, 1993) is the canonical generalization of Benders/L-shaped
+decomposition to problems with **integer first-stage (here: investment) variables**: the master
+problem is a MILP over the integer investment variables with (i) standard LP-relaxation Benders
+optimality/feasibility cuts when needed, and (ii) a genuine **integer optimality cut** (a
+no-good-style cut using the fact the first-stage variables are bounded integers, so a finite
+big-M-free cut can certify "no better solution exists with this integer assignment") whenever the
+LP relaxation's cuts are insufficient to close the gap at an integer-feasible master solution.
+Confirmed across multiple sources; modern refinements exist (Angulo et al. 2016 "alternating
+between linear and mixed-integer subproblems," and a 2025 arXiv paper on "non-supporting no-good
+optimality cuts") but the 1993 Laporte–Louveaux method is the correct **table-stakes** citation
+and starting point for a minimal rung — the refinements are legitimate differentiators/defer
+candidates, not required for validity.
+
+### Binary expansion
+
+The PROJECT.md/thesis source (PSR N1–N2 note) already specifies **binary-expansion** as the
+mechanism for integer investment sizes (i.e., represent a bounded integer investment level as a
+sum of binary "block" variables, `x = Σ_k 2^k b_k` or a unary/SOS1 block expansion depending on
+whether the discrete levels are naturally ordered blocks) — this is a standard MILP modeling
+device, not novel; the genuine new work is wiring the **integer** L-shaped cuts (not just LP
+Benders cuts) around this now-discrete master.
+
+### No-good cuts vs. optimality cuts — what's actually needed here
+
+A "no-good cut" (`Σ_{k: x̂_k=1} x_k + Σ_{k: x̂_k=0}(1-x_k) ≤ n-1`) merely excludes a *specific*
+previously-tried integer assignment — it proves nothing about optimality, only that that exact
+point won't be revisited (useful as a cheap anti-cycling safety net, weak as a convergence
+driver). The Laporte–Louveaux **integer optimality cut** is strictly stronger — it uses the
+subproblem's optimal value at the incumbent integer point to cut off *all* points that cannot beat
+that value, not merely the one point itself. **Recommendation: implement the genuine
+Laporte–Louveaux integer optimality cut as the primary convergence mechanism; keep a plain
+no-good cut only as a cheap defensive fallback/anti-stall guard**, not as the convergence
+argument — conflating the two would leave the algorithm technically running but without a
+real finite-convergence proof behind it.
+
+### What convergence guarantees are lost / kept vs. the current continuous Benders
+
+| Property | Continuous Benders (current, v2.0) | Integer L-shaped (new, v3.0 axis 5) |
+|----------|-------------------------------------|----------------------------------------|
+| Finite convergence | Yes — standard LP Benders converges in finitely many cuts to the *global* LP optimum | Yes, but weaker: Laporte–Louveaux integer L-shaped is finitely convergent to the **global MILP optimum** only under "complete recourse" and boundedness of the integer first stage — genuinely finite, but typically far more iterations/branch nodes than the continuous case, and each integer-optimality-cut iteration requires solving an integer (not LP) subproblem, which is itself NP-hard in general |
+| Cut tightness | LP duality gives exact supporting hyperplanes everywhere | Integer optimality cuts are valid but generally **not** tight/supporting everywhere off the incumbent — more cuts are needed for the same gap closure |
+| Master problem class | LP/QP (HiGHS/Clarabel, polynomial) | MILP (HiGHS MIP, worst-case exponential) — the master itself becomes the bottleneck, not just cut generation |
+| Existing no-binaries guard (PVAL-04) | Enforced (no integers anywhere in planning) | **Consciously scoped down, not deleted** (per PROJECT.md) — becomes "no undeclared/unexpected integers outside the axis-5 investment block," a narrower guard, not a blanket ban |
+| Nash/diagonalization compatibility | Gauss-Seidel diagonalization assumes each distributor solves a well-behaved (continuous) best-response | With integer investments, best-response becomes a MILP per distributor per sweep — diagonalization still mechanically works (solve, fix, move to next), but the "a converged equilibrium" honesty-gate language (already adopted in v2.0) becomes *even more* essential, since integer best-response equilibria have weaker existence/uniqueness theory than continuous Nash — do not claim existence, only report empirically |
+
+### Complexity: HIGH. This is the heaviest of the five axes: new master problem class (MILP),
+new cut type (integer optimality cuts, not a drop-in extension of the existing LP Benders cut
+code), and a probable interaction with the Nash diagonalization loop's convergence story.
+
+### Dependency
+Directly extends the existing hand-rolled `BendersMaster`/cut-store machinery from v2.0
+(PLAN-04..07) — this is not a SEAM-01 stub but a planned **scoping-down** of the existing
+**PVAL-04 no-binaries guard**, explicitly called out in PROJECT.md ("PVAL-04 no-binaries guard
+consciously scoped down, not deleted"). Recommend sequencing this axis **last** among the five
+(or at minimum, after axis 4/Nash-adjacent work settles) since it is the only axis touching the
+planning layer rather than the operational layer, and its correctness depends on the continuous
+Benders baseline (PVAL-02..04 pinned goldens) remaining a stable regression to diff against.
+
+### Anti-feature
+Full branch-and-Benders-cut (lazy-constraint callback integration with HiGHS/Gurobi) or a
+general Dantzig-Wolfe/Coluna-style framework — both are legitimate *scaling* upgrades once the
+integer L-shaped method is validated, but are explicitly declined project-wide per CLAUDE.md
+("No decomposition mega-framework... they impose structure that fights a research bench") and
+are out of scope for a minimal rung.
 
 ---
 
 ## Feature Dependencies
 
 ```
-Capability A (AC-OPF exactness oracle)
-    — independent of B, C, D; only needs the existing Ipopt wiring + ConvexBranchFlow.jl constraints
+[Axis 1: Overvoltage-capable relaxation]
+    └──extends──> src/models/exactness.jl + ACPowerFlow (v2.1 EXACT-01..04)
+    └──shares-machinery-with──> [Axis 4: Meshed relaxation/exactness]  (flagged interdependency,
+                                  PROJECT.md — sequence together, don't invent two certificates)
 
-Capability B (Reactive-power Q consensus)
-    — independent of A, C, D; localized to admm/DsoOpt.jl + pricing/dlmp.jl
-    ──synergizes with──> A (once Q balance is real, A's AC-OPF cross-check can also validate Q,
-                            not just P — do B before/alongside A if sequencing matters)
+[Axis 2: MPC / rolling-horizon / RTP]
+    └──requires──> SEAM-01 `horizon_state` stub (operational_oracle, MPC-01/02)
+    └──requires──> JuMP Parameter re-solve pattern (already verified in oracle.jl comments)
 
-Capability C (Positive-sequence reduction, real IEEE-123 impedances)
-    └──requires──> PMD-parse of public OpenDSS IEEE-123 data (external data acquisition step)
-    ──feeds into──> Capability D (Case B / IEEE-123 reproduction wants real, not synthetic, impedances)
+[Axis 3: Stochastic PV/demand uncertainty]
+    └──requires──> SEAM-01 `objective_hook` stub (operational_oracle, STOCH-01/02)
+    └──requires──> existing Markov-chain data-generation layer (thesis §2.8, reused not replaced)
 
-Capability D (Directional reproduction)
-    └──requires (for the IEEE-123 / voltage-constrained case)──> Capability C
-    └──benefits from (not strictly required)──> Capability B (a real reactive price strengthens
-                                                    the voltage-driven reproduction story)
-    (Capability D's IEEE-13 / congestion-driven case does NOT require C or B)
+[Axis 4: Meshed networks + 4Q-BESS]
+    └──requires──> SEAM-01 meshed-formulation slot (`pf::AbstractPowerFlow` dispatch point)
+    └──requires──> v2.1 reactive-consensus machinery (REACT-01..03: qag_dso, extract_reactive_dlmp)
+                       to go from "fixed dual" to "live decision variable"
+    └──breaks──> `assert_radial` invariant (Feeder construction) — intentional, scoped to MeshedFlow only
+
+[Axis 5: Discrete/integer investment expansion]
+    └──requires──> v2.0 continuous Benders baseline (BendersMaster, PLAN-04..07) as the regression
+                       to diff against
+    └──scopes-down──> PVAL-04 no-binaries guard (guard narrowed, not deleted)
+    └──interacts-with──> Nash diagonalization (NASH-01..04) — best-response becomes MILP; honesty-gate
+                       language ("a converged equilibrium") becomes load-bearing, not just prose
 ```
 
 ### Dependency Notes
 
-- **A is the most self-contained** — it only touches the existing `ConvexBranchFlow.jl` constraint
-  set plus the already-available Ipopt solver; no dependency on the other three. Good candidate to
-  sequence first or in parallel.
-- **B is likewise self-contained** — localized to `admm/DsoOpt.jl` (real per-node Q balance) and
-  `pricing/dlmp.jl` (the new μ-based price component); no data-acquisition dependency. Doing B
-  before/alongside A means A's AC-OPF cross-check can also confirm the reactive flows/voltages,
-  strengthening both.
-- **C requires external data acquisition** (the public GitHub OpenDSS IEEE-123 files) and a new
-  (weak, oracle-only) dependency on PowerModelsDistribution for parsing — the highest
-  external-dependency risk of the four, but the reduction recipe itself is already verified
-  numerically in this repo's own memory note.
-- **D depends on C** for the IEEE-123/voltage-constrained reproduction (the milestone explicitly
-  wants "real, standard data"), but the IEEE-13/congestion-driven reproduction can proceed
-  independently. Sequence C before D's IEEE-123 leg; D's IEEE-13 leg can run any time.
+- **Axis 2 and Axis 3 are the cheapest/lowest-risk** — both consume SEAM-01 stubs that are
+  already typed, documented, and load-bearing-ready (`horizon_state`, `objective_hook`); neither
+  touches the relaxation/exactness machinery or the planning layer.
+- **Axis 1 and Axis 4 share risk** — both touch the SOCP relaxation/exactness certification
+  machinery. The roadmap should decide whether to do axis 1 first (establishing a general
+  restriction/AC-oracle-certification pattern) and have axis 4 reuse it, or genuinely parallelize
+  them with an explicit reconciliation step.
+- **Axis 5 is the highest-risk/highest-complexity and structurally independent of axes 1–4** — it
+  touches only the planning layer (Benders/Nash), not the operational SOCP/branch-flow machinery.
+  It can be sequenced last without blocking the other four, and should be, given its HIGH
+  complexity rating and interaction with the Nash equilibrium-existence honesty framing.
 
-## MVP Definition
+## MVP Definition (per-axis "minimal validated rung")
 
-### Launch With (v2.1, all four table-stakes rows above)
+### Launch With (v3.0) — one minimal rung per axis, all five required per PROJECT.md
 
-- [ ] AC-OPF oracle (Ipopt, multi-start) + objective/voltage/flow gap report alongside the existing
-      cone-tightness gate — why essential: without it, "exact" is a self-referential claim
-- [ ] Genuine per-node reactive balance (`R_{q,j}=0`) + reported `μ_j` reactive price — why
-      essential: restores physical grounding of the voltage/DLMP story; today's free-`q_import`
-      slack decouples reactive balance from the per-node physics
-- [ ] Real IEEE-123 impedances via the verified Fortescue-averaging reduction on public OpenDSS
-      data, plus a PMD-oracle fidelity cross-check — why essential: the milestone's explicit
-      deliverable; synthetic impedances cannot be cited
-- [ ] Directional welfare/DLMP reproduction (sign + band pinned regression + DADP-shape plot) with
-      explicit "Reproduced, not Replicated" framing — why essential: gives the thesis a citable,
-      honest reproduction claim without requiring data that is not obtainable
+- [ ] **Axis 1:** restricted/tightened SOCP (Gan-Low-style feasible-set shrink) + reuse of
+      `assert_ac_exact!` as the certifying gate on the known EXACT-04 high-PV scenario — must
+      actually price that scenario, not merely refuse it
+- [ ] **Axis 2:** deterministic receding-horizon re-solve loop over `horizon_state`, hard
+      terminal-SOC constraint, closed-loop-vs-perfect-foresight benchmark table
+- [ ] **Axis 3:** small fixed seeded scenario set (3–5 scenarios) via existing Markov generator,
+      extensive-form solve via `objective_hook`, per-scenario DADP as primary output +
+      probability-weighted expectation as derived summary, one out-of-sample check
+- [ ] **Axis 4:** plain SOCP meshed relaxation (drop LinDistFlow-copy, no phase-shifter
+      convexification) + Gan/Low angle-recoverability a-posteriori check as the validity gate;
+      4Q-BESS apparent-power cone + `q_bess` wired into the existing v2.1 reactive-dual path
+- [ ] **Axis 5:** binary-expansion investment (per PSR note) + Laporte–Louveaux integer
+      optimality cuts on top of the existing `BendersMaster`; PVAL-04 guard narrowed and
+      re-tested as a scoped-not-deleted regression
 
-### Add After Validation (v2.1.x / stretch within v2.1)
+### Add After Validation (v3.1+)
 
-- [ ] Stress sweep finding a genuine relaxation gap (Capability A differentiator) — trigger: once
-      the baseline AC-OPF oracle is solid and time remains to explore the boundary
-- [ ] Sensitivity-direction reproduction (battery/PV/willingness sweeps, Capability D
-      differentiator) — trigger: once the single-scenario directional reproduction is pinned
+- [ ] QC/SDP tightening for meshed exactness — if plain-SOCP+angle-check proves insufficient
+- [ ] Phase-shifter convexification for meshed networks — if the angle-recovery gap is material
+- [ ] Formal scenario-reduction algorithm (fast-forward/k-means) — if fixed small scenario counts
+      prove insufficient for credible uncertainty coverage
+- [ ] Economic-MPC terminal value function (vs. hard terminal-SOC target) — if closed-loop
+      performance is found materially worse than open-loop under the simple terminal constraint
+- [ ] Angulo et al. (2016) / non-supporting no-good-cut refinements to integer L-shaped — if plain
+      Laporte–Louveaux proves too slow on the project's planning fixtures
 
-### Future Consideration (later milestone)
+### Future Consideration (v4+)
 
-- [ ] Live μ ADMM consensus loop requiring an actual AGR-side reactive decision — defer until the
-      4Q-BESS/volt-var research axis opens (explicitly out of scope for v2.1)
-- [ ] A-priori exactness-condition auto-checker (Gan-Li-Topcu-Low style) — defer; a paper-worthy
-      contribution in its own right, not a v2.1 checkbox
-- [ ] Thesis-figure digitized overlay — explicitly gated on obtaining Appendix E (stretch goal per
-      PROJECT.md, not a commitment)
+- [ ] Distributionally-robust / chance-constrained stochastic reformulations (axis 3)
+- [ ] Full branch-and-Benders-cut / lazy-constraint MILP integration (axis 5) — explicitly
+      declined per CLAUDE.md's anti-mega-framework stance unless scaling genuinely demands it
+- [ ] Literal IEEE 1547 Volt-VAR droop-curve controller (axis 4) — anti-feature; only revisit if a
+      reviewer/collaborator specifically needs a decentralized-control comparison baseline
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|----------------------|----------|
-| AC-OPF oracle + gap report (A) | HIGH | MEDIUM | P1 |
-| Multi-start Ipopt guard (A) | HIGH | LOW | P1 |
-| Real per-node Q balance + μ price (B) | HIGH | LOW-MEDIUM | P1 |
-| DLMP 5-way decomposition incl. Q-price (B) | MEDIUM-HIGH | MEDIUM | P1 |
-| Fortescue-averaged real IEEE-123 impedances (C) | HIGH | MEDIUM | P1 |
-| PMD-oracle fidelity cross-check (C) | MEDIUM-HIGH | MEDIUM | P1 |
-| Directional sign+band pinned regression (D) | HIGH | LOW-MEDIUM | P1 |
-| DADP-shape qualitative plot (D) | MEDIUM | LOW | P1 |
-| Stress sweep / gap-vs-PV-penetration plot (A) | MEDIUM | MEDIUM | P2 |
-| Sensitivity-direction reproduction (D) | MEDIUM | MEDIUM | P2 |
-| Per-segment asymmetry metric (C) | LOW-MEDIUM | LOW | P3 |
-| A-priori exactness-condition checker (A) | MEDIUM | HIGH | P3 |
-| Live μ consensus / AGR-side Q decision (B) | LOW (for v2.1) | HIGH | Out of scope this milestone |
+| Feature | User Value (research/thesis value) | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Axis 1 restricted-SOCP + AC-oracle certification | HIGH (prices the thesis's own motivating scenario) | MEDIUM | P1 |
+| Axis 2 receding-horizon + terminal SOC + benchmark | MEDIUM-HIGH | MEDIUM | P1 |
+| Axis 3 extensive-form + per-scenario DADP | MEDIUM-HIGH | MEDIUM | P1 |
+| Axis 4 meshed SOCP + angle check | HIGH (new topology class) | MEDIUM-HIGH | P1 |
+| Axis 4 4Q-BESS + live reactive dual-ascent | HIGH (unlocks deferred v2.1 item) | LOW-MEDIUM | P1 |
+| Axis 5 binary-expansion + integer L-shaped | HIGH (completes thesis's planning-layer scope) | HIGH | P1 |
+| QC/SDP meshed tightening | MEDIUM | HIGH | P3 |
+| Formal scenario reduction algorithm | LOW-MEDIUM | MEDIUM | P3 |
+| Economic-MPC terminal value function | LOW-MEDIUM | HIGH | P3 |
+| Phase-shifter meshed convexification | MEDIUM | HIGH | P3 |
 
-**Priority key:**
-- P1: Must have — this is the concrete, citable "done" standard for v2.1
-- P2: Should have, add when time remains within v2.1
-- P3: Nice to have, defer to a future milestone
+**Priority key:** P1 = required for v3.0 (all five axes are must-haves per PROJECT.md); P3 =
+explicit v3.1+/v4+ deferrals.
 
 ## Sources
 
-- Farivar, M. & Low, S.H., "Branch Flow Model: Relaxations and Convexification — Part I / Part II,"
-  IEEE Transactions on Power Systems, 28(3), 2013. HIGH confidence (canonical, widely cited).
-  https://arxiv.org/pdf/1204.4865 ; https://smart.caltech.edu/papers/relaxconvex2parts.pdf
-- Gan, L., Li, N., Topcu, U. & Low, S.H., "Exact Convex Relaxation of Optimal Power Flow in Radial
-  Networks," IEEE Transactions on Automatic Control, 60(1):72–87, 2015. MEDIUM-HIGH confidence on
-  precise theorem wording (verify against the paper before citing a numbered theorem); HIGH
-  confidence on the headline applicability to IEEE 13/34/37/123-bus feeders.
-  https://arxiv.org/abs/1311.7170 ; https://arxiv.org/pdf/1311.7170
-- Bhattacharya, S. et al., "Distribution Locational Marginal Pricing (DLMP) for Congestion
-  Management and Voltage Support," IEEE Transactions on Smart Grid, 2018 (OSTI/IEEE Xplore) — 5-way
-  DLMP decomposition including a distinct reactive-power price component. MEDIUM-HIGH confidence
-  (WebSearch-verified summary; recommend reading the full paper before citing a specific formula).
-  https://www.osti.gov/biblio/1488555 ; https://ieeexplore.ieee.org/document/8089425/
-- ADMM/dual-decomposition-for-OPF general pattern (consensus variables, Lagrangian multiplier as
-  price) — MEDIUM confidence, general survey-level WebSearch corroboration, consistent with the
-  thesis's own eq. 3.46–3.47 structure already extracted in `THEORY-thesis.md`.
-- Kersting, W.H., *Distribution System Modeling and Analysis* — symmetrical-component /
-  positive-sequence reduction of an unbalanced line-impedance matrix. HIGH confidence (standard
-  textbook method); the specific averaging recipe used here is already independently verified
-  numerically in this repository's own prior research
-  (`memory/ieee123-real-impedances-source.md`, linecode.1 → R1≈0.05797, X1≈0.11876 Ω/unit).
-- ACM Artifact Review and Badging terminology ("Reproduced" vs. "Replicated") — MEDIUM confidence
-  attribution as the closest formal analogue to the "directional reproduction" convention used
-  here; power-systems methods papers follow an informal version of the same norm.
-- Project-internal sources consulted: `.planning/PROJECT.md`, `.planning/research/THEORY-thesis.md`
-  (thesis equations 3.2–3.47, case data), `src/models/exactness.jl` (existing PF-04 cone-tightness
-  gate), `src/admm/AgrOpt.jl` (documented μ/Q placeholder), `src/pricing/dlmp.jl` (existing 4-way
-  DLMP decomposition derivation), `src/data/ieee123.jl` (existing synthetic-impedance provenance
-  note), `memory/ieee123-real-impedances-source.md` (verified public-data reduction recipe).
+- Farivar & Low, *"Branch Flow Model: Relaxations and Convexification"* (Parts I & II), IEEE
+  Trans. Power Systems, 2013 — https://arxiv.org/pdf/1204.4865 (HIGH confidence, canonical)
+- Gan, Li, Topcu & Low, *"Exact Convex Relaxation of Optimal Power Flow in Radial Networks,"*
+  arXiv:1311.7170 (IEEE TAC 2015) — HIGH confidence, canonical
+- Gan & Low, *"Exact Convex Relaxation of OPF in Tree Networks,"* arXiv:1208.4076 — HIGH confidence
+- "Convex Hull of the Quadratic Branch AC Power Flow Equations..." arXiv:1701.07146 — MEDIUM
+  confidence (single source)
+- "Recover Feasible Solutions for SOCP Relaxation of OPF Problems in Mesh Networks" (ResearchGate)
+  — MEDIUM confidence
+- "Cutting planes based relaxed optimal power flow in active distribution systems" (ResearchGate)
+  — MEDIUM confidence
+- Laporte & Louveaux, *"The integer L-shaped method for stochastic integer programs with complete
+  recourse,"* Operations Research Letters 13(3), 1993 — https://www.sciencedirect.com/science/article/abs/pii/016763779390002X
+  (HIGH confidence, canonical; verified via Semantic Scholar + ScienceDirect abstract cross-check)
+- Angulo, Ahmed & Dey (2016) integer L-shaped enhancement (referenced via secondary sources) —
+  MEDIUM confidence (not directly fetched, cited by name only)
+- arXiv:2511.06340, "Integer L-Shaped Method with Non-Supporting No-Good Optimality Cuts" (2025) —
+  MEDIUM confidence, single source, confirms no-good-cut vs. optimality-cut distinction is an
+  active research area
+- ScienceDirect, "Optimal provision of concurrent primary frequency and local voltage control from
+  a BESS considering variable capability curves" (arXiv:1910.04052 companion) — MEDIUM-HIGH
+  confidence, cross-checked across two related papers
+- ScienceDirect, "Optimal active and reactive power scheduling for inverter-integrated PV and BESS
+  under inverter current constraints" — MEDIUM confidence
+- IEEE 1547 Volt-VAR mode references (multiple secondary sources: arXiv:2210.12805, arXiv:2211.09557,
+  industry blog) — MEDIUM confidence on standard's scope; HIGH confidence Volt-VAR is a
+  decentralized droop control, not an optimization primitive (consistent across all sources)
+- ScienceDirect, "e-Carsharing siting and sizing DLMP-based under demand uncertainty" — MEDIUM
+  confidence, single source for two-stage stochastic DLMP framing
+- ScienceDirect (2023), "Stochastic optimization and Markov chain-based scenario generation for
+  exploiting flexibilities of an active distribution network" — MEDIUM-HIGH confidence, directly
+  confirms Markov-chain scenario generation (already this project's own data-gen approach) is
+  standard practice
+- General MPC-for-microgrid/EV-charging sources (MDPI 2024 EV-MPC, arXiv:2012.14624 Block-MPC,
+  arXiv:1606.06682 Plug-and-Play MPC) — MEDIUM confidence, consistent terminal-condition/
+  closed-loop-benchmarking pattern across all three
+- Project-internal: `.planning/PROJECT.md`, `.planning/research/THEORY-thesis.md`,
+  `src/models/oracle.jl` (SEAM-01 stub definitions, HIGH confidence — primary source, own codebase)
 
 ---
-*Feature research for: TSO-DSO Integration Optimization Framework — v2.1 Validation & Reproduction*
-*Researched: 2026-07-25*
+*Feature research for: TSO-DSO v3.0 Research Extension Rungs (five research axes)*
+*Researched: 2026-07-26*

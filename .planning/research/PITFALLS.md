@@ -1,972 +1,919 @@
-# Pitfalls Research — v2.1 Validation & Reproduction
+# Pitfalls Research
 
-**Domain:** Hardening an existing convex-optimization research bench with four validation
-capabilities layered onto the shipped v1.0 operational core (SOCP Convex Branch Flow + LinDistFlow
-exactness, active-only ADMM, synthetic IEEE-13/123 fixtures) and the shipped v2.0 planning layer:
-(a) an independent Ipopt AC-OPF exactness oracle, (b) reactive-power `μ` consensus in ADMM, (c) real
-IEEE-123 impedances via OpenDSS parse + positive-sequence reduction, (d) directional thesis
-reproduction on real data.
-**Researched:** 2026-07-25
-**Confidence:** HIGH on the project's own code contracts (read directly: `src/models/exactness.jl`,
-`src/admm/solve_admm.jl`, `src/admm/AgrOpt.jl`, `src/admm/DsoOpt.jl`, `src/data/ieee123.jl`,
-`src/solver/factory.jl`, `src/experiments/Scenario.jl`) and on the documented, accepted Clarabel
-`NUMERICAL_ERROR` flake (`.planning/STATE.md`). MEDIUM-HIGH on SOCP exactness / reverse-flow theory
-(established literature, consistent with v1.0's own PITFALLS.md). MEDIUM on the IEEE-123
-length/units ambiguity and positive-sequence reduction fidelity (public OpenDSS community knowledge
-+ the project's own `ieee123-real-impedances-source` memory note, not independently re-verified
-against the live dataset this session).
+**Domain:** v3.0 "Research Extension Rungs" — adding overvoltage-capable relaxation, MPC/rolling-horizon/RTP,
+stochastic PV/demand uncertainty, meshed networks + 4Q-BESS, and integer investment expansion to an
+existing, validated Julia/JuMP TSO-DSO transactive-energy optimization framework.
+**Researched:** 2026-07-26
+**Confidence:** MEDIUM-HIGH — grounded directly in this repo's code (`src/models/exactness.jl`,
+`src/models/oracle.jl`, `src/admm/solve_admm.jl`, `src/admm/DsoOpt.jl`, `src/devices/PVBattery.jl`,
+`src/planning/benders.jl`, `test/test_planning_noninteger.jl`, `src/experiments/Scenario.jl`,
+`src/experiments/store.jl`) and the project's own documented v1.0–v2.1 lessons
+(`.planning/RETROSPECTIVE.md`, `.planning/PROJECT.md`). Domain-optimization pitfalls (Benders with
+integer recourse, meshed SOC-relaxation structural gap, ADMM two-block dual ascent) are standard
+results in the convex-optimization/decomposition literature (MEDIUM confidence on the general
+theory — not independently re-verified against a specific paper this session; HIGH confidence on
+how they interact with THIS codebase's specific mechanisms, which were read directly).
 
-> This milestone's defining hazard is different from v1.0/v2.0's: it is not "build a new convex
-> model" but "build an INDEPENDENT SECOND WAY to check the first one, and don't let the checker
-> itself become the thing that's wrong." Every pitfall below is oriented at that risk. The single
-> most important interpretive stance for this milestone: **a validation check that FAILS is not
-> automatically a bug** — for the AC-OPF oracle and the real-impedance fixture especially, a
-> "failing" exactness/reproduction check may be the CORRECT, physically-honest answer (the SOCP
-> relaxation genuinely going inexact under high-PV reverse flow is the textbook failure regime this
-> project's own v1.0 PITFALLS.md already flagged as the interesting one). Treat every "it doesn't
-> match" result as requiring a diagnosis, not a tolerance bump.
-
----
+This file organizes pitfalls by the five v3.0 research axes. Each axis covers a DOMAIN pitfall
+(a mistake in the optimization theory/economics itself) and an INTEGRATION pitfall (a mistake in
+how the new capability plugs into this system's existing certificates, guards, and goldens).
 
 ## Critical Pitfalls
 
-### Pitfall 1: AC-OPF "inexactness" verdict is actually a comparison artifact, not a relaxation failure
+### Axis 1: Overvoltage-capable relaxation
+
+#### Pitfall 1: A new formulation quietly reuses `assert_socp_exact!`'s tuned tolerance as its own certificate
 
 **What goes wrong:**
-`assert_socp_exact!` (PF-04) already certifies the SOC relaxation is tight in the *scale-free*
-sense (`gap ≤ atol + rtol·max(|lhs|,|rhs|)`, per-branch, per-hour). The new AC-OPF oracle adds a
-**second, independent** notion of exactness — "does the SOCP optimum match a genuine nonconvex
-AC-OPF optimum" — solved on a structurally different JuMP model (Ipopt `NLP()`, polar or
-rectangular voltage variables, no `l`/relaxed-cone variables at all). Four ways this comparison can
-report "INEXACT" when the SOCP is actually fine:
-1. **Ipopt converges to a different local optimum.** AC-OPF is nonconvex; Ipopt's interior-point
-   method finds a KKT point, not necessarily the global optimum the SOCP's convex relaxation
-   bounds. A locally-optimal-but-globally-suboptimal AC point can differ from the SOCP solution
-   even when the SOCP is exact — the comparison is then measuring Ipopt's initialization
-   sensitivity, not the relaxation.
-2. **Mismatched problem data between the two models.** If the AC-OPF oracle is built from a
-   separately-assembled feeder/aggregator/load snapshot (rather than literally reusing the SAME
-   `feeder`, `aggregators`, and per-hour dispatch the SOCP solved), any drift in load, PV profile,
-   `λ₀`, or `allow_export` setting makes the two models solve **different problems** that happen to
-   look similar — a mismatch is then guaranteed and uninformative.
-3. **Unit/per-unit base mismatch (v1.0 Pitfall 3, transplanted across a model-family boundary).**
-   The SOCP model works in the project's per-unit convention (`v = V²`, `IEEE123_BASE = (1 MVA,
-   4.16 kV)`, thesis 3.3x numbering). An independently-built Ipopt AC-OPF model is a natural place
-   to accidentally reintroduce SI units, a different `S_base`, or `v = V` instead of `v = V²` — a
-   clean factor-of-`V_base²` or `S_base` error that makes the comparison look like a gross
-   exactness failure when it is a units bug in the ORACLE, not the model under test.
-4. **Angle recovery / no-angle comparison on radial nets.** The SOCP branch-flow model (thesis
-   3.31–3.45) never introduces a voltage angle `θ` — it is a magnitude-only convex relaxation. The
-   AC-OPF oracle, to be a genuine independent check, needs real `(P,Q)`-consistent voltage phasors;
-   on a radial network the angle is recoverable from the branch power flows and impedances
-   (a well-defined but non-trivial reconstruction), and a sign error or omitted reactance term in
-   that recovery silently corrupts the comparison even though both underlying solves are correct.
+The overvoltage rung ships a new formulation (tightened relaxation, exact reformulation, or a
+recovery/rounding step) for the regime where `assert_socp_exact!` currently — correctly — throws
+(EXACT-04: gap≈10.4 on IEEE-13 `pv_scale=1.2`, real IEEE-123 upper band). The new formulation is
+declared "exact" either by (a) reusing the existing `rtol=1e-4`/`atol=1e-6` gate unmodified, or (b)
+loosening those constants until the SAME gate stops throwing on the SAME EXACT-04 fixture — neither
+is a certificate that the new mechanism actually closes the gap; it's tuning the detector, not
+fixing the defect.
 
 **Why it happens:**
-- The AC-OPF oracle is new code with no existing invariant to lean on (unlike PF-04, which the SOCP
-  path already has); it is tempting to build it quickly from "whatever data is at hand" rather than
-  literally threading the SOCP's own solved `feeder`/`aggregators`/hour-`t` snapshot through.
-- Ipopt local-optimum risk is easy to forget precisely because the SOCP side of the project is
-  *always* globally optimal (convex) — there is no local-optimum instinct built up from the rest of
-  the codebase.
-- The angle-free SOCP formulation is a deliberate simplification (thesis choice); an AC-OPF oracle
-  is the FIRST place in this codebase angles become load-bearing, so there is no existing
-  convention or test to reuse.
+`assert_socp_exact!`'s tolerance was derived and empirically validated for the RADIAL LinDistFlow
+exactness copy (thesis 3.43–3.45) — a specific mechanism that makes the cone tight. A genuinely
+different overvoltage-capable mechanism needs its own derivation of why the cone should be tight
+under it, and its own tolerance re-derivation; reusing the existing constant is the path of least
+resistance under time pressure.
 
 **How to avoid:**
-- Build the AC-OPF oracle to consume the **exact same** `Feeder`, `Aggregator` population, `λ₀`,
-  and per-hour dispatch snapshot the SOCP solved — never a re-derived or re-sampled instance. Make
-  this a type-level contract (the oracle function signature takes the already-solved SOCP `ctx`
-  or its primal values as fixed data, not a fresh scenario).
-- Multi-start Ipopt from several initializations (including a warm start AT the SOCP solution
-  itself) and report the best; if different starts converge to different objectives, that is
-  itself a finding to surface (nonconvexity bites), not silently averaged away.
-- Adopt one shared per-unit convention module for both models; assert magnitude bands
-  (`v ∈ [0.81, 1.21]` etc., mirroring v1.0 Pitfall 3) on the AC-OPF oracle's own solved values
-  before ever comparing them to the SOCP's.
-- Write down the angle-recovery formula explicitly (as a `docs/literate` page, thesis-equation-style)
-  and validate it FIRST on a 2-bus, no-PV, no-congestion fixture where the AC and SOCP solutions are
-  known analytically to agree — before trusting it on IEEE-13/123.
-- Choose the comparison tolerance deliberately and document why: it is NOT the same quantity as
-  PF-04's scale-free cone-slack `rtol` — decide whether "match" means objective value, voltage
-  magnitude, or branch flow agreement, at what tolerance, and write it down once rather than tuning
-  it per fixture until "it passes."
+- Require a NEW, separate certificate function (e.g. `assert_overvoltage_exact!`) with its own
+  documented derivation of why the new mechanism drives the cone tight — do not silently repurpose
+  `assert_socp_exact!`'s constants.
+- Cross-validate the new formulation against the INDEPENDENT nonconvex AC oracle (`ACPowerFlow`,
+  `assert_ac_exact!`) on the EXACT EXACT-04 fixture (IEEE-13 `pv_scale=1.2`, real IEEE-123 upper
+  band) — the oracle exists specifically so a new relaxation is not validated only against itself.
+- Never treat "the old gate stopped throwing" as evidence; treat "the AC oracle agrees" as evidence.
 
 **Warning signs:**
-- AC-OPF objective value that changes materially between Ipopt runs from different starting points
-  on the SAME data — a local-optimum red flag, not an exactness verdict.
-- A reported mismatch that disappears when you re-derive the AC-OPF model's per-unit conversions
-  by hand — a units bug, not a relaxation failure.
-- Angle-recovery values that don't satisfy the basic radial power-flow identity
-  (`θ_child ≈ θ_parent − (approximately) X·P/V² + R·Q/V²` for small angle differences) even on an
-  easy, uncongested fixture.
+- A PR/plan that touches `exactness.jl`'s `rtol`/`atol` defaults in the same commit that claims
+  overvoltage capability.
+- A new formulation validated only by re-running `assert_socp_exact!`, with no `assert_ac_exact!`
+  cross-check on the EXACT-04 fixtures.
 
-**Phase to address:** AC-exactness oracle phase — data-sharing contract (same feeder/aggregators/
-dispatch snapshot) and angle-recovery validation on a trivial 2-bus fixture are GATING acceptance
-criteria before the oracle is ever run against IEEE-13/123.
+**Phase to address:** Overvoltage-capable relaxation phase (gate design must precede or ship
+alongside the formulation, per the project's gate-then-golden convention).
 
 ---
 
-### Pitfall 2: A genuinely inexact SOCP relaxation under high-PV / reverse-flow is mistaken for an oracle bug (and "fixed" by loosening tolerance)
+#### Pitfall 2: Pricing off a single local AC-OPF solution with no multi-start evidence
 
 **What goes wrong:**
-v1.0's own PITFALLS.md (Pitfall 1) already names the failure regime precisely: SOCP branch-flow
-exactness is a THEOREM under specific conditions (no reverse flow, upper voltage bound non-binding)
-that Gan–Low/Farivar–Low establish, and it can genuinely FAIL under high DER penetration,
-**reverse power flow**, and **binding upper voltage limits** — exactly the over-voltage / high-PV
-regime this project's own IEEE-123 Case B targets. Once the AC-OPF oracle exists, there are now TWO
-plausible readings of a disagreement between AC and SOCP on a high-PV hour:
-1. **The SOCP relaxation is genuinely inexact at that hour** (the correct, scientifically
-   interesting finding — this is the exact regime the exactness theory predicts trouble in).
-2. **The comparison itself is broken** (Pitfall 1).
-
-Treating every disagreement as case (2) and iterating on the oracle/tolerances until the check
-"passes" would silently discard the single most scientifically important finding this milestone
-could produce: **a documented case where the SOCP is provably inexact**, which is valuable
-information (it bounds when the project's operational-layer prices can be trusted), not a defect to
-engineer away.
+If the overvoltage rung falls back to (or cross-validates against) the Ipopt AC oracle for pricing
+in the regime the SOCP legitimately cannot certify, a SINGLE local Ipopt solve is used as "the"
+ground truth. AC-OPF is nonconvex; Ipopt returns a local stationary point, which may not be global
+in the overvoltage/reverse-flow regime specifically (voltage pinned at bounds — exactly where
+multiple local optima are most likely).
 
 **Why it happens:**
-- The natural framing of "AC-OPF certifies SOCP exactness" implicitly assumes the certification
-  will pass; a milestone scoped around "certifying exactness" creates pressure to make the checks
-  green rather than to honestly report where they are red.
-- PF-04 (`assert_socp_exact!`) already passes on all of v1.0's shipped fixtures at their CURRENT
-  (comparatively modest) PV penetration — there is no existing case in the test suite where the
-  relaxation is known to fail, so a first AC-OPF disagreement has no local precedent to distinguish
-  "genuinely inexact" from "comparison bug."
-- Loosening a tolerance is a one-line fix that makes a CI/test go green; diagnosing whether an
-  inexactness is real requires actually inspecting the reverse-flow/voltage-binding state at that
-  hour, which is more work.
+The existing `ACPowerFlow`/`assert_ac_exact!` machinery already runs a single Ipopt solve
+per-hour as an oracle; extending it to also be a PRICING source (not just a certification source)
+without adding multi-start is the natural, minimal-effort path.
 
 **How to avoid:**
-- Before touching any tolerance, check the PHYSICAL diagnostic v1.0's own Pitfall 1 already names:
-  is there reverse (net-injection) power flow at any bus at the disagreeing hour, and is the upper
-  voltage bound (`v ≤ 1.1²` etc.) binding or near-binding? If yes to either, treat the disagreement
-  as a candidate GENUINE inexactness, not an oracle bug, and investigate the AC/SOCP gap's
-  magnitude and direction (does AC show a *tighter* — lower-loss/lower-voltage — feasible region
-  than the relaxed SOC cone predicts, as theory predicts?).
-- Build (or extend) the existing "known-hard fixture" the v1.0 PITFALLS.md called for (high-PV,
-  over-voltage) as a DELIBERATE stress case in this milestone, and expect — document, don't
-  suppress — a nonzero exactness gap there if physics predicts one.
-- Report the AC-vs-SOCP comparison as a per-hour, per-branch table (mirroring PF-04's own
-  `maxgap`/`maxratio` reporting), not a single pass/fail boolean — a milestone deliverable that
-  says "exact on N of T hours, inexact at hours {h1,h2} under reverse flow, magnitude X" is
-  strictly more valuable and more honest than a single green checkmark.
-- If a genuine inexactness is found, this is a MILESTONE FINDING to write up (which downstream
-  DLMPs are and are not trustworthy), not a bug ticket against the SOCP model or the oracle.
+- Multi-start Ipopt from several distinct initial voltage guesses on any AC-derived price used for
+  publication; report spread, not a point estimate.
+- Apply the project's own honesty-gate pattern (`run_nash_probe`'s "a converged equilibrium, never
+  the" language) here: "an AC-consistent price (spread: …)", never "the AC price."
 
 **Warning signs:**
-- A "fix" that only changes a tolerance number, with no accompanying investigation of reverse-flow/
-  voltage-binding state at the disagreeing hour.
-- Every disagreement getting resolved by adjusting the AC-OPF oracle, never by concluding "the SOCP
-  is inexact here."
-- A milestone report that claims "100% certified exact" with no high-PV stress case ever exercised.
+- A price reported from a single Ipopt call with no seed/initial-point variation, especially near a
+  voltage bound.
 
-**Phase to address:** AC-exactness oracle phase — the high-PV/reverse-flow stress fixture and the
-per-hour reporting format are gating deliverables; the phase's acceptance criteria must explicitly
-allow (and require investigating, not suppressing) a genuine inexactness finding.
+**Phase to address:** Overvoltage-capable relaxation phase.
 
 ---
 
-### Pitfall 3: The new reactive-consensus dual `μ_j[t]` collides — in name and in mental model — with the EXISTING adaptive-ρ band parameter `μ`
+#### Pitfall 3: A stabilizing penalty term contaminates the dual that becomes the price
 
 **What goes wrong:**
-`solve_admm`'s keyword signature already has a live, load-bearing parameter named `μ::Real = 10.0`
-(the Boyd §3.4.1 residual-BALANCING band: `ρ ← τ·ρ` if `r̂ > μ·ŝ`, `ρ ← ρ/τ` if `ŝ > μ·r̂`), and it
-is threaded all the way through `Scenario`'s flat, golden-hashed schema (`μ::Float64 = 10.0`,
-serialized into `savename`/provenance strings and pinned into experiment result filenames). The
-project's OWN docstring (`AgrOpt.jl`) names the future reactive-consensus dual **the same Greek
-letter** — "PLACEHOLDER for a FUTURE reactive-consensus (`μ` dual-ascent) extension." These are two
-COMPLETELY DIFFERENT mathematical objects (a scalar per-run tuning knob vs. a per-node-per-hour
-Lagrange multiplier vector), and implementing the second under the same name/field as the first is
-a landmine:
-- If `μ_j[t]` (the reactive dual, a `Dict{Int,Vector{Float64}}` analogous to `λ`) is introduced as a
-  same-named field or kwarg alongside the existing scalar `μ` (the ρ-band), any code, doc, or
-  `Scenario` reader that assumes "the `μ` field" means the ρ-band silently reads/writes the wrong
-  quantity.
-- `Scenario`'s `μ::Float64` is already part of the reproducibility-hash surface (`savename`) — if
-  the reactive dual needs its own scenario-level knob (e.g. an initial value or a separate penalty),
-  reusing the `μ` name or field risks EITHER silently overloading the existing golden-hash key
-  (breaking bit-for-bit reproducibility of every EXISTING pinned experiment that references `μ`) OR
-  requiring a rename that itself breaks every existing golden filename/hash.
+A tempting way to make the overvoltage regime "well-behaved" is adding a penalty/regularization
+term (e.g., a soft voltage-violation penalty, or a proximal term near the knife-edge) to the
+objective or to the balance constraint. Since DADP is defined as `dual(:balance_p)`, ANY penalty
+term that touches the balance constraint or is folded into the objective in a way that shifts its
+shadow price silently changes what "price" means — the researcher ships a number that is part
+physical marginal cost, part tuning artifact, with no visible flag.
 
 **Why it happens:**
-- Both concepts are conventionally "the second dual-ish symbol" in ADMM literature (Boyd's ρ-tuning
-  band is often called `μ` in one textbook section; the reactive consensus multiplier is `μ_j` by
-  direct analogy to `λ_j` in the project's own thesis-notation convention) — the SAME name is a
-  reasonable, independently-arrived-at choice from two different contexts, which is exactly how
-  naming collisions happen without anyone intending one.
-- The `AgrOpt.jl` docstring already primed the "reactive dual = μ" association months before this
-  milestone, making it the path of least resistance to reuse literally, without checking whether the
-  name is already taken elsewhere in the same call stack.
+Penalty terms are the standard numerical trick to tame a hard nonconvex/knife-edge region; it is
+easy to add one without tracing its effect through to the specific dual that downstream code reads
+as a price.
 
 **How to avoid:**
-- Before writing any reactive-consensus code, `grep` the full existing usage of the bare identifier
-  `μ` (kwargs, struct fields, `Scenario` schema, `savename`/`sweep.jl`/`store.jl` provenance keys) —
-  already enumerated above — and pick a DISTINCT name for the reactive dual (e.g. `μ_j` as a
-  variable name is fine in math/docstrings, but the CODE identifier should be unambiguous, e.g.
-  `μq`/`mu_q`/`reactive_dual`, never a bare `μ` that could be confused with the existing kwarg).
-- If the reactive-consensus milestone needs its OWN scenario-level tuning knob (a separate penalty
-  weight, initial value, or convergence band for the Q-consensus), add it as a NEW, distinctly-named
-  `Scenario` field — never overload the existing `μ::Float64` — and treat any resulting golden-hash
-  filename change as an explicit, reviewed, DOCUMENTED reproducibility-breaking change (v1.0/v2.0
-  goldens referencing the old schema must be preserved or explicitly re-pinned, not silently
-  invalidated).
-- Add a one-line assertion/test that the existing ρ-band `μ` kwarg and any new reactive quantity
-  are never the same Julia binding/field — a cheap regression against exactly this collision.
+- Any new penalty term must be checked against which constraint's dual is later read as DADP/DLMP.
+- If the penalty structurally cannot avoid touching that dual, it must be decomposed and disclosed
+  as its own named component — mirroring `extract_reactive_dlmp`'s explicit rule: "a certified,
+  citable... component, never summed into the active total."
+- Prefer penalties on AUXILIARY constraints/variables that do not intersect `:balance_p`.
 
 **Warning signs:**
-- A PR/diff that adds a `μ` field to `AgrOpt`/`DsoOpt`/`solve_admm` without first checking whether
-  `μ` already means something in that same call stack.
-- `Scenario` golden hashes/filenames changing for EXISTING (non-reactive) experiments as a
-  side-effect of the reactive-consensus work — a sign the shared `μ` schema field was touched.
-- Code review comments asking "wait, which `μ` is this?" — the collision made visible late.
+- A new objective term or constraint added in the same formulation that also defines `:balance_p`,
+  with no explicit accounting of its effect on `dual(:balance_p)`.
 
-**Phase to address:** Reactive-power consensus phase, as the FIRST design decision (before any
-`AgrOpt`/`DsoOpt` code changes) — pick and document the distinct identifier, and audit/guard the
-`Scenario` schema boundary, before the loop or the golden-hash keys are touched.
+**Phase to address:** Overvoltage-capable relaxation phase.
 
 ---
 
-### Pitfall 4: Adding a second (Q) consensus dual degrades ADMM convergence and silently breaks the existing active-only regression baseline
+#### Pitfall 4: Byte-identical default path breaks, or gate-then-golden ordering is inverted
 
 **What goes wrong:**
-`solve_admm` currently closes the network's reactive balance with a FIXED constant per load node
-(`qag_j = −Pdc·tan(acos φ)`, no decision variable, no dual) and a free-sign `q_import` at the root —
-by design, "reactive is not a consensus quantity" (verbatim comment in both `AgrOpt.jl` and
-`DsoOpt.jl`). Making `Q` a genuine per-node decision with its own consensus dual `μ_j[t]` changes the
-STRUCTURE of both subproblems (AGR-OPT gains a Q decision variable and its own coupling constraint;
-DSO-OPT's `:Rq[j]` closure changes from "constant draw" to "free coupling variable `qag_dso_j[t]`"),
-which is a strictly bigger and more coupled ADMM problem than the one every existing convergence
-tuning (`ε_abs=1e-4, ε_rel=1e-3, τ=2.0, μ=10.0, ρ_min=1e-2, ρ_max=1e4`) was ever validated against.
-Concretely:
-1. **A single shared `ρ` now penalizes two physically different consensus residuals** (`R_{p,j}`
-   in MW-ish units, `R_{q,j}` in MVAr-ish units) — if their natural scales differ (plausible, since
-   real/reactive flows are rarely numerically identical even in per-unit), one consensus block can
-   dominate the OTHER in the residual-balancing adaptive-ρ logic (the exact "apples vs oranges"
-   trap `solve_admm`'s own header comment already diagnosed and fixed for the p-vs-λ scale mismatch
-   — the same fix (ε-normalized balancing) needs to be RE-DERIVED for a joint (p,q) residual, not
-   assumed to transfer automatically).
-2. **The existing active-only IEEE-13/123 cross-validation (ADMM-04)** — the load-bearing "ADMM
-   matches centralized" regression — is validated against the CURRENT constant-Q model. Wiring in a
-   Q decision variable changes the centralized model too (if the "same" welfare problem is to stay
-   comparable), so this regression must be re-derived and re-validated, not silently left pointing
-   at stale expectations while the underlying model changed.
-3. **Reactive DLMP is a genuinely new, previously-nonexistent price component.** Unlike the active
-   DADP (already cross-validated against a hand-solved 2-bus case, per v1.0 Pitfall 7's own
-   prevention), there is NO existing sign/magnitude convention for a reactive price in this
-   codebase — it must be pinned from scratch with the same rigor (hand-computed toy case, economic
-   direction checks) before being trusted as a "reactive DLMP," not assumed correct because it
-   compiles and the loop converges.
+Two integration failure modes: (a) threading the new formulation through `solve_welfare`/
+`operational_oracle` changes ANY numeric output on the EXISTING default (no-overvoltage-flag) path,
+silently invalidating pinned v1.0/v2.0/v2.1 regression goldens; (b) the new overvoltage certificate
+is implemented as report-don't-throw (like `assert_ac_exact!`) when its actual job is a HARD gate
+(like `assert_socp_exact!`/PF-04) — since its whole purpose is letting the framework price a case it
+previously refused, getting the throw/report polarity backwards either re-refuses legitimately
+priceable cases or publishes prices with no certificate at all.
 
 **Why it happens:**
-- The existing 2-block ADMM split (AGR-OPT/DSO-OPT) is well-tuned and well-understood for the
-  ACTIVE-only consensus; "just add a parallel `μ` block" reads as a small, symmetric extension of
-  code that already exists, inviting a copy-paste that doesn't re-derive the scale/balancing
-  implications of doubling the coupling dimension.
-- The constant-Q closure was a DELIBERATE simplification (device model A3: "DERs active-only");
-  removing it is not a parameter tweak, it is lifting a standing modeling assumption that several
-  other invariants (the exactness gate's `:balance_q` NEARLY_FEASIBLE tolerance noted in
-  `solve_admm`'s own final-block comment, the App. C battery complementarity check) were written
-  around.
+The codebase has TWO existing certificate patterns (hard-throw PF-04 vs. report-don't-throw
+`assert_ac_exact!`) and it is easy to copy the wrong one for a capability whose entire point is
+being a NEW hard pricing gate, not a diagnostic report.
 
 **How to avoid:**
-- Treat the joint (active+reactive) residual-balancing as a NEW derivation, not a transplant:
-  either scale the two consensus blocks into comparable units before combining them into one `ρ`
-  decision, or — more robustly — give reactive consensus its OWN penalty `ρ_q` (distinctly named,
-  per Pitfall 3) with its own adaptive-balancing derivation, and explicitly test whether a single
-  shared `ρ` is even adequate before assuming it is.
-- **Gate this phase on the existing active-only regression continuing to pass UNCHANGED** when
-  reactive consensus is DISABLED (a feature flag / dispatch path, not a hard rewrite) — the safest
-  sequencing is additive: keep the constant-Q path as the default/tested baseline, and add the
-  Q-consensus path as an opt-in variant validated on its own fixtures, so the shipped active-only
-  golden never silently changes behavior underneath it.
-- Pin the reactive DLMP's sign/magnitude on a hand-computed 2-bus toy case with a NON-ZERO,
-  analytically-known reactive requirement (mirroring exactly how v1.0 Pitfall 7 pinned the active
-  DADP) BEFORE trusting it on IEEE-13/123 — this is a new, from-scratch invariant, not an inherited
-  one.
-- Re-validate ADMM-04 (ADMM optimum == centralized optimum) against a centralized model that ALSO
-  now has the Q decision variable — comparing a Q-consensus ADMM run against the OLD constant-Q
-  centralized model is comparing two different underlying problems and will show a spurious
-  "mismatch."
+- Add a default-path regression test asserting the new kwarg/dispatch path is OFF by default and
+  every existing golden is untouched, before adding the new formulation's own tests.
+- Explicitly decide and document: is the new overvoltage certificate throw-refusing (like PF-04) or
+  report-only (like `assert_ac_exact!`)? Given its job is to REPLACE a refusal with a price, it
+  should be throw-refusing — get this decision on record before implementation.
 
 **Warning signs:**
-- Iteration counts far above the existing ~10-100 baseline once Q consensus is enabled, or
-  oscillation that wasn't present in the active-only path.
-- The active-only (Q-consensus disabled) regression suite showing ANY numeric change after this
-  phase's changes land — a sign the "additive" boundary was not actually respected.
-- A reactive DLMP whose sign flips between runs, or that is never checked against a hand-solved
-  case at all.
+- Any existing pinned test's numeric golden changes when the new axis's default (off) path is
+  exercised.
 
-**Phase to address:** Reactive-power consensus phase — additive/flagged rollout, joint-residual
-re-derivation, and a from-scratch 2-bus reactive-price pin are gating acceptance criteria; the
-existing active-only regression must be proven byte-identical with Q-consensus disabled before any
-Q-consensus fixture is exercised.
+**Phase to address:** Overvoltage-capable relaxation phase.
 
 ---
 
-### Pitfall 5: Reactive consensus amplifies the KNOWN Clarabel `NUMERICAL_ERROR` flake — and this milestone is exactly the wrong place to assume v1.0's failure rate still holds
+### Axis 2: MPC / rolling-horizon / RTP
+
+#### Pitfall 5: Terminal-SOC myopia silently invalidates the PVBattery no-binaries argument
 
 **What goes wrong:**
-`.planning/STATE.md` documents an ACCEPTED, unresolved, intermittent, version-independent Clarabel
-`NUMERICAL_ERROR` on the IEEE-13 ADMM solve, root-caused to per-unit-base-dependent cone-slack
-sensitivity — correctly caught by `assert_solved!` (never silently trusted) but never fixed. Adding
-Q as a genuine decision variable to DSO-OPT's SOCP changes the cone geometry that flake lives in:
-1. **More decision variables sharing the same SOC cone** (`P,Q` both now potentially free/decided at
-   every load node, not just `P`) plausibly moves the solved point CLOSER to the cone boundary more
-   often — the same mechanism v2.0's own Pitfall 5 flagged for Benders trial points pushing the
-   pinned SOCP toward reverse-flow/over-voltage/near-boundary regimes, here triggered by a genuinely
-   richer feasible region rather than an external pin.
-2. **A second consensus dual `μ_j[t]` (see Pitfall 3/4) multiplies the same combinatorial exposure
-   v2.0's Pitfall 5 already named for the planning layer** — but for the OPERATIONAL ADMM loop
-   instead: more iterations may be needed for a two-consensus-block loop to converge, and EACH
-   iteration's DSO-OPT re-solve is now a genuinely harder-conditioned SOCP (Q free instead of
-   constant) — so the flake's per-solve probability may rise AND the number of solves per
-   experiment may rise, compounding in the same way v2.0 Pitfall 5 already analyzed for Benders×
-   scenario×distributor loops.
-3. **This is measurable, not assumable.** v2.0's own Phase-12 finding (`.planning/STATE.md`) showed
-   0% escalation on a toy fixture that deliberately did NOT exercise the full SOCP oracle — i.e.
-   even THAT milestone's own measurement explicitly does not cover this flake's real trigger
-   (per-unit-base-dependent cone-slack sensitivity on the genuine IEEE-13/123 SOCP). Assuming the
-   flake rate is unchanged (or even "probably fine because it was rare in v1.0") under a materially
-   different, more-coupled SOCP subproblem repeats the exact mistake v2.0's Pitfall 5 called out.
+A rolling window with no terminal cost/constraint drains batteries (and distorts thermostatic
+setpoints) at every window edge, because the optimizer has zero visibility beyond the horizon.
+Separately and more dangerously: `PVBattery.jl`'s entire justification for omitting a
+`p_ch·p_dch == 0` constraint is a FULL-horizon strict-cost-ordering argument
+(`λ_min < λ_med < λ_max` makes simultaneous charge/discharge strictly dominated) that was proven
+for the ORIGINAL T=24 basis. Chopping the horizon into short rolling windows can reweight the
+marginal utility trade-off near a window's tail and reintroduce simultaneous charge/discharge that
+the no-binaries proof never covered at short T.
 
 **Why it happens:**
-- The flake was accepted as low-priority in v1.0 because it was rare and non-blocking for a
-  milestone that solved the SOCP subproblem far less densely; that risk calculus does not
-  automatically transfer to a milestone that (a) changes the SOCP's own decision-variable
-  structure and (b) may need more ADMM iterations for two-consensus convergence.
-- Retry/robustness code (`solve_with_retry!`-style bounded ladders, already proven useful in the
-  PLANNING layer per v2.0) has no equivalent yet wired into the OPERATIONAL `solve_admm` loop —
-  it currently fails loud via `ErrorException` on `maxiter`, but does not retry an individual
-  `NUMERICAL_ERROR` `solve_dso!`/`solve_agr!` call the way the planning oracle does.
+MPC rolling-horizon is a well-known myopia trap in general; what's specific to THIS system is that
+the no-binaries guarantee is a PROOF tied to a specific horizon length, not a universal property of
+the device model — extending to arbitrary `T_window` silently steps outside the proof's domain.
 
 **How to avoid:**
-- Before enabling reactive consensus broadly, EMPIRICALLY re-measure the Clarabel
-  `NUMERICAL_ERROR` rate on the IEEE-13/123 fixtures WITH Q-consensus enabled — do not reuse the
-  v1.0 rate or the v2.0 Phase-12 toy-fixture measurement (both explicitly do not cover this trigger).
-- Reuse the planning layer's already-proven pattern (`src/planning/retry.jl`, `solve_with_retry!`)
-  as a template for a bounded, logged retry ladder around `solve_dso!`/`solve_agr!` inside
-  `solve_admm` if the re-measured rate justifies it — this is the SAME lesson v2.0 Pitfall 5 already
-  learned for the planning layer, now due for the operational layer too.
-- Revisit the "candidate levers, not yet applied" STATE.md already names (Clarabel
-  tolerance/`equilibrate`/`max_iter` settings, per-unit base) as part of THIS phase's own scope — the
-  reactive-consensus phase is a natural forcing function to finally spend that deferred numerical-
-  robustness pass, since it is the first work to genuinely change the cone's conditioning since the
-  flake was first observed.
-- Never silently catch a `NUMERICAL_ERROR`/`ALMOST_*` status and substitute a stale iterate without
-  flagging it in the returned residual trace — the same discipline v2.0 Pitfall 5 already
-  established for the planning oracle applies here.
+- Add an explicit terminal-SOC target or cost term (or shrink the horizon at the simulation's true
+  end) so the window's optimum reflects value beyond its edge.
+- Re-run the existing `p_ch[t]·p_dch[t] < τ` post-solve check (already implemented in
+  `Aggregator.jl`) as a HARD gate specifically at the rolling `T_window` used, not only at T=24 —
+  do not assume the docstring's proof transfers untested to a shorter window.
 
 **Warning signs:**
-- IEEE-13/123 ADMM runs with Q-consensus enabled failing (via the existing fail-loud `maxiter`
-  path) more often than the active-only baseline on the same fixtures.
-- A retry/robustness mechanism added to the planning layer but never ported back to
-  `solve_admm`, despite the operational loop now sharing the same conditioning risk.
-- Empirical failure-rate measurement skipped entirely because "v1.0 said it was rare."
+- Batteries showing SOC at `Emin`/`Emax` at every window boundary in a simulated run.
+- The post-solve `p_ch·p_dch` check silently not re-run per rolling window (only run once at the
+  end of the whole simulation).
 
-**Phase to address:** Reactive-power consensus phase — empirical re-measurement of the
-`NUMERICAL_ERROR` rate under Q-consensus, and a decision on whether/how to port retry robustness
-into `solve_admm`, are gating deliverables, not a follow-on hardening pass.
+**Phase to address:** MPC / rolling-horizon / RTP phase.
 
 ---
 
-### Pitfall 6: The IEEE-123 OpenDSS length/units ambiguity silently rescales every real impedance
+#### Pitfall 6: Comparing closed-loop MPC cost to open-loop day-ahead as if they share an information set
 
 **What goes wrong:**
-The IEEE-123 OpenDSS master file (`IEEE123Master.dss`) is FAMOUS in the power-systems community for
-a length/units ambiguity the file's own comments warn about: line lengths are given in a unit
-(historically feet, sometimes miles depending on the released variant/vintage) that must be matched
-against the linecode's own `R1/X1` (or full 3×3 `Rmatrix`/`Xmatrix`) units-per-length convention
-(Ω/mile vs Ω/1000ft vs Ω/km) in `IEEELineCodes.DSS`. Getting this ONE conversion wrong scales
-**every branch impedance in the entire feeder by the same constant factor** (feet-vs-miles ⇒ ~5280×,
-feet-vs-1000ft ⇒ 1000×) — a globally-consistent, internally-plausible-looking but wrong dataset:
-voltage drops, losses, and the SOC exactness margin all shift together, so nothing looks obviously
-broken (unlike a single-branch transcription error, which a topology tripwire like
-`_ieee123_assert_incidence` would never catch, because incidence is unaffected by impedance scale).
+The natural benchmark is the existing perfect-foresight centralized solve (`solve_welfare`/
+`operational_oracle` over the full 24h). But that solve sees the ENTIRE horizon's forecast with
+zero error; MPC only sees each window's forecast. Reporting "MPC costs X% more than day-ahead" as
+a comparable finding, without framing it as a value-of-information gap, risks manufacturing an
+inflated, uncited percentage — the same class of error the project already had to correct once
+(the thesis's own +25% welfare figure, which REPRO-01/02 showed does not reproduce; see
+`.planning/research/` and `memory/v2.1-socp-inexactness-and-thesis-repro.md`).
 
 **Why it happens:**
-- This is a documented, well-known trap in the OpenDSS/PowerModelsDistribution community — not a
-  project-specific mistake, but new to THIS project since v1.0/v2.0 never parsed real OpenDSS length
-  data (the synthetic `ieee123.jl` fixture hand-assigned representative in-band pu values with no
-  length/linecode ingestion at all).
-- A uniform rescaling is qualitatively "safe-looking": voltages stay in a plausible band, the SOC
-  cone may still even certify exact (rescaling every branch by the same factor does not obviously
-  break the physics-level relative relationships a quick eyeball check would catch).
+It is the obvious, cheapest benchmark to compute; the information-set mismatch is easy to overlook
+when both numbers come from the "same" scenario data.
 
 **How to avoid:**
-- Follow the project's own memory note (`ieee123-real-impedances-source.md`) recommendation
-  literally: use PowerModelsDistribution to PARSE the `.dss` files (the "PMD as data oracle"
-  pattern CLAUDE.md already prescribes) rather than hand-parsing lengths/units — PMD has already
-  solved this exact ambiguity for the canonical IEEE-123 release.
-- After parsing, sanity-check the RESULT against a known, independently-published reference
-  quantity for the IEEE-123 feeder (e.g. a published total feeder loss, head-branch current, or
-  voltage-profile figure at nominal load) — a 1000× or 5280× units error will show up immediately
-  as a grossly wrong loss/voltage-drop magnitude against any published reference, even though the
-  internally-consistent rescaled dataset alone would not self-reveal the bug.
-- Keep the existing per-unit magnitude tripwire (`assert_magnitudes`, INFRA-05) as a FIRST filter,
-  but do not treat "passes the tripwire" as "units are correct" — the tripwire is a strictly-in-band
-  sanity check, not a units-correctness certificate, and a uniform 1000× rescale of a
-  strictly-in-band fixture can still land in-band on the wrong side of correct.
-- Document the resolved length/units convention explicitly in the new fixture's provenance
-  comment (mirroring `ieee123.jl`'s existing DATA PROVENANCE NOTE style) so the choice is traceable
-  and re-checkable, not buried in a one-off parsing script.
+- Explicitly frame any MPC-vs-day-ahead cost gap as "value of perfect information," not
+  "MPC underperformance" — match the project's REPRO-01/02 honesty-framing precedent.
+- If a fair apples-to-apples comparison is wanted, feed the day-ahead solve the SAME rolling
+  forecast information (i.e., also handicap it), or report both numbers with the information-set
+  difference stated up front in the same sentence as the percentage.
 
 **Warning signs:**
-- Solved voltage drops / losses on the real-impedance fixture that are implausibly small or large
-  relative to any independently-published IEEE-123 reference figure.
-- The SOC exactness margin or ADMM iteration count on the real-impedance fixture changing by an
-  exact, suspicious factor of ~1000 or ~5280 relative to the synthetic fixture's behavior.
-- No independent published-reference cross-check ever performed — only internal self-consistency
-  checks (magnitude tripwire, topology incidence) run against the new dataset.
+- A headline percentage gap between MPC and day-ahead cost with no accompanying statement of what
+  forecast information each solve had access to.
 
-**Phase to address:** Real IEEE-123 impedances phase — PMD-parse (not hand-parse) + an independent
-published-reference magnitude cross-check are gating deliverables before the new impedances replace
-the synthetic ones anywhere in the test suite.
+**Phase to address:** MPC / rolling-horizon / RTP phase.
 
 ---
 
-### Pitfall 7: The positive-sequence reduction (mean-diag minus mean-offdiag) is applied uncritically to segments where the transposition assumption doesn't hold
+#### Pitfall 7: Window-boundary price discontinuities misread as a real-time-pricing volatility finding
 
 **What goes wrong:**
-The project's own bridging recipe (`ieee123-real-impedances-source.md`) — `R1 = mean(diag R) −
-mean(offdiag R)`, `X1 = mean(diag X) − mean(offdiag X)` per linecode — is the STANDARD positive-
-sequence reduction for a **transposed** (or symmetric/balanced) three-phase line, where the
-diagonal self-impedances are equal and the off-diagonal mutual-couplings are equal across all three
-phase pairs. Real IEEE-123 linecodes are NOT uniformly transposed: some segments are genuinely
-untransposed or asymmetric (unequal phase spacing on the pole, single- and two-phase laterals with
-smaller, non-square impedance matrices), and applying the mean-diag/mean-offdiag formula there
-produces a positive-sequence value that is a plausible-looking NUMBER with no error thrown, but a
-poor approximation of the segment's true positive-sequence behavior — an averaging error that is
-invisible unless deliberately checked, because the resulting `R1/X1` still passes every existing
-in-band magnitude tripwire.
+DADPs recomputed fresh each rolling window will show jumps at window boundaries purely from (a)
+new forecast information arriving, (b) Clarabel returning a slightly different optimum across
+near-identical adjacent-window re-solves (numerical noise), or (c) ADMM convergence tolerance
+slack if the operational solve is decomposed. Reporting these jumps as evidence of "real-time price
+volatility" without first isolating forecast-driven changes from solver/decomposition noise
+misattributes a numerical artifact as an economic finding.
 
 **Why it happens:**
-- The reduction formula is correct FOR THE CASE it was verified on (the project's own memory note
-  reports it verified on "linecode.1"); generalizing it to all ~12 linecodes without re-checking the
-  transposition/symmetry assumption per linecode is the natural but unjustified extrapolation.
-- Single- and two-phase lateral segments (very common on IEEE-123, which is deliberately a
-  partially-unbalanced feeder in its native form) don't even have a full 3×3 matrix to average in
-  the same way — a naive application of the same formula to a smaller matrix silently changes what
-  "mean(offdiag)" means without flagging it.
-- The balanced-positive-sequence modeling choice (project-wide, per `CLAUDE.md`) is exactly what
-  makes this reduction TEMPTING to apply blindly everywhere — the destination format (single
-  `R1,X1` per branch) is uniform even when the source data's fidelity to that assumption is not.
+The rolling re-solve pipeline naturally produces a jagged price series; distinguishing "real"
+volatility from noise requires an extra analysis step that's easy to skip once a plot "looks
+interesting."
 
 **How to avoid:**
-- Per-linecode (not once, globally), check the actual matrix symmetry/near-diagonal-equality before
-  trusting the mean-diag/mean-offdiag reduction — report, for each linecode, how far the 3×3 R/X
-  matrix is from a symmetric/transposed form (e.g. the spread across the three diagonal entries and
-  across the three off-diagonal entries) as an explicit reduction-quality metric, not just the
-  reduced `R1,X1` number.
-- For single-/two-phase laterals, use the linecode's OWN native (smaller) matrix reduction rather
-  than force-fitting the 3-phase formula — document the distinct handling explicitly (this is
-  exactly the kind of "documented reduction/assumption" the project's own core value statement
-  requires).
-- Cross-check the reduced positive-sequence feeder's overall behavior (voltage profile shape,
-  loss magnitude) against the SAME independently-published reference used for Pitfall 6's units
-  check — a poor reduction, like a units error, tends to show up as a magnitude/shape discrepancy
-  against ground truth even when it passes internal self-consistency checks.
-- Treat the reduction quality metric as a FIRST-CLASS documented output of the ingestion pipeline
-  (a per-linecode "reduction fidelity" table in the new fixture's provenance comment), not a
-  one-off REPL sanity check discarded after use.
+- Before reporting any price-discontinuity finding, re-solve the SAME window twice (identical
+  inputs) and quantify solver-repeat noise as a baseline; only jumps exceeding that baseline are
+  candidate real volatility.
+- If ADMM is used for the rolling solves, also separate ADMM-convergence-tolerance-driven jitter
+  from genuine forecast-driven price movement.
 
 **Warning signs:**
-- A per-linecode reduction that was verified on only one representative linecode ("linecode.1") and
-  never checked on the others before shipping.
-- Single-/two-phase laterals reduced via the SAME 3-phase averaging formula without adjustment.
-- No documented reduction-quality/fidelity metric anywhere near the shipped fixture — only the
-  final `R1,X1` numbers, with no record of how well the transposition assumption actually held.
+- A volatility claim with no repeat-solve noise floor established first.
 
-**Phase to address:** Real IEEE-123 impedances phase — per-linecode reduction-fidelity reporting
-(not just the reduced numbers) is a gating deliverable, verified against the SAME published
-reference cross-check as Pitfall 6.
+**Phase to address:** MPC / rolling-horizon / RTP phase.
 
 ---
 
-### Pitfall 8: Regulators, capacitors, and switches in the real dataset don't map onto the existing radial positive-sequence `Feeder`/branch model — and their omission can silently un-tighten the deliberately-tuned voltage-binding scenario
+#### Pitfall 8: `horizon_state` gets wired in a way that violates build-once/`Parameter`-re-solve
 
 **What goes wrong:**
-The EXISTING synthetic `ieee123.jl` fixture already documents (in its own header) that it was
-CALIBRATED — its representative `IEEE123_LINE_R/X` and `IEEE123_SWITCH_R/X` values were deliberately
-sized so the Case-B feeder is "genuinely voltage-constrained... under-voltage on the long load
-laterals, over-voltage under midday PV reverse flow" (plan-07-05 finding), a load-bearing property
-the whole voltage-constrained test case exists to exercise. The REAL IEEE-123 OpenDSS dataset
-contains components this project's radial `Feeder`/`Branch` model has no representation for at all:
-**voltage regulators** (which actively adjust voltage magnitude along their segment — not a passive
-series impedance), **shunt capacitor banks** (reactive power injection at specific buses, not a
-branch quantity), and **switches** (already handled as near-ideal impedance branches in the
-synthetic fixture, but the real dataset's actual switch states/positions must be read correctly).
-Two distinct silent failure modes:
-1. **Naively treating a regulator as a passive impedance branch** (the same simplification already
-   used for switches) discards its actual voltage-boosting behavior — this can materially change
-   whether the long laterals still hit the under-voltage bound, potentially making the "genuinely
-   voltage-constrained" property the synthetic fixture was deliberately tuned for SILENTLY STOP
-   HOLDING on the real-data fixture, with no error — the model still solves, the SOC cone may still
-   even certify exact, but the case has quietly become an unconstrained (uninteresting) one.
-2. **Ignoring shunt capacitor banks entirely** (no injection modeled) shifts the reactive balance at
-   those buses, changing voltage profiles in a way that, again, can move the case away from the
-   voltage-binding regime the fixture is supposed to exercise — without any test failing, because
-   nothing in the existing test suite asserts "the voltage bound is actually binding," only that the
-   model solves and the SOC relaxation is exact.
+`operational_oracle`'s `horizon_state` kwarg is currently an INERT stub (`oracle.jl` lines
+112–121: accepted, `@debug`-logged, never applied). Wiring it live for real rolling-horizon state
+(battery `soc0`, thermostatic initial temperature) the naive way — rebuilding the JuMP model each
+rolling step with a new initial condition baked into the constraint RHS — reintroduces exactly the
+"rebuilding JuMP models each iteration" anti-pattern the project's own stack doc explicitly forbids
+(and which `solve_admm`'s build-once/`Parameter` design was built to avoid for the ADMM outer loop).
 
 **Why it happens:**
-- The project's balanced-positive-sequence, radial-branch-flow modeling choice is explicit,
-  deliberate, and correct for the framework's scope (per CLAUDE.md) — but it was designed against a
-  HAND-CALIBRATED synthetic dataset with no regulators/capacitors in the first place; the real
-  OpenDSS dataset is the first time these components need an explicit "how do we represent this, or
-  do we omit it and document why" decision.
-- Silently dropping unsupported components is the path of least resistance (the parser can simply
-  skip element types it doesn't recognize) and produces a feeder that still radially validates
-  (`assert_radial`) and still passes magnitude tripwires — nothing in the existing validation
-  machinery is positioned to catch "a physically-meaningful component was dropped."
+Passing a new initial condition through a fresh `solve_welfare` call per window is the simplest
+code to write; the build-once discipline requires deliberately keeping ONE built model and mutating
+`soc0`/initial-temperature via a JuMP `Parameter` + `set_parameter_value`, which takes more upfront
+design.
 
 **How to avoid:**
-- Before ingestion, enumerate every non-line element in the real IEEE-123 `.dss` files (regulators,
-  capacitors, switches, any transformers) and make an EXPLICIT, documented decision per element
-  type: model it (even approximately, e.g. a capacitor as a fixed reactive injection at its bus,
-  matching the project's existing constant-reactive-draw convention), or omit it with a written
-  rationale — never a silent drop.
-- Add an explicit acceptance test that the real-data fixture's voltage bound is ACTUALLY BINDING
-  under the intended stress scenario (e.g. assert some bus hits within a documented margin of
-  `vmin`/`vmax` under the designed load/PV profile) — this directly catches the "case became
-  accidentally slack" failure mode that no existing test currently checks for.
-- If regulators are omitted (a defensible v2.1 scope choice given the project's explicit v1
-  balanced-positive-sequence, no-regulator-model scope), state this explicitly in the new fixture's
-  provenance note (mirroring the existing DATA PROVENANCE NOTE convention in `ieee123.jl`) and flag
-  it as a documented limitation on how faithfully the real-data fixture represents the true IEEE-123
-  feeder's voltage behavior — not a silent simplification discovered only by a careful reader of the
-  parsing code.
-- Cross-check the omission's practical impact by comparing the real-data fixture's voltage profile
-  (with regulators/capacitors omitted) against a PMD-parsed AC power-flow solve on the FULL dataset
-  (regulators/capacitors included) — if the two disagree materially, the omission is not innocuous
-  and must be reconsidered or the fixture's stress scenario re-tuned.
+- Thread `horizon_state` as a JuMP `Parameter` on the initial-condition constraints
+  (`soc[1] == soc0`, thermostatic initial temp), matching the project's own cited recipe
+  (`@variable(m, s0 in Parameter(v)); set_parameter_value(s0, x)` — already named in the
+  `oracle.jl` docstring as "RESEARCH Pattern 6, verified").
+- Build the operational model ONCE across the whole rolling simulation; each window is a
+  `set_parameter_value` + re-solve, not a `solve_welfare(...)` rebuild.
 
 **Warning signs:**
-- The real-impedance fixture solves cleanly with NO binding voltage constraint anywhere, despite
-  the synthetic fixture's documented voltage-binding design intent.
-- No enumeration/documentation anywhere of which OpenDSS element types were modeled vs. silently
-  skipped during ingestion.
-- No cross-check against a full (regulator/capacitor-inclusive) reference solve.
+- A rolling-horizon implementation that calls `solve_welfare`/`build_dso_opt`/`build_agr_opt`
+  inside the per-window loop.
 
-**Phase to address:** Real IEEE-123 impedances phase — explicit per-component-type modeling
-decisions (documented, not silent) and a binding-voltage-constraint acceptance test are gating
-deliverables.
+**Phase to address:** MPC / rolling-horizon / RTP phase.
 
 ---
 
-### Pitfall 9: Swapping synthetic → real IEEE-123 impedances silently changes every pinned IEEE-123-based golden, and re-baselining without re-verifying invariants masks a real regression as "just numbers changed"
+#### Pitfall 9: A rolling window drifts into overvoltage-inexact territory with no defined fallback
 
 **What goes wrong:**
-The synthetic `ieee123.jl` fixture is not an isolated artifact — it feeds the shipped v1.0
-ADMM-vs-centralized cross-validation, DLMP decomposition checks, and (per v2.0) any planning-layer
-regression that happens to use IEEE-123-scale data, plus whatever bit-for-bit goldens this project's
-"reproducibility is a hard requirement" stance has already pinned against it. Replacing
-`IEEE123_LINE_R/X`/`IEEE123_SWITCH_R/X` (or the whole edge/impedance ingestion path) with real
-values changes EVERY downstream number derived from that fixture — welfare, DADPs, exactness
-margins, ADMM iteration counts. The dangerous failure mode is not that numbers change (they are
-SUPPOSED to, real data differs from synthetic placeholders) but that the natural response —
-"re-run and re-pin the goldens to the new numbers" — can paper over a genuine regression introduced
-elsewhere in this same milestone (a units bug from Pitfall 6, a reduction error from Pitfall 7, an
-omitted regulator from Pitfall 8) by simply accepting whatever new numbers come out as the new
-truth, with no independent check that the NEW numbers are actually more correct than the OLD ones,
-merely that they are DIFFERENT.
+If a rolling window's pinned initial SOC pushes the network state near the high-PV reverse-flow
+knife-edge, the per-window solve can legitimately hit `assert_socp_exact!`'s throw (PF-04) mid
+-simulation. Sequencing MPC before the overvoltage-capable relaxation axis ships means a rolling
+simulation has no defined behavior when this happens (abort the whole run? skip the window? use a
+stale price?) — a silent catch-and-continue would ship an incorrect price with no certificate,
+exactly the failure mode PF-04 exists to prevent.
 
 **Why it happens:**
-- "Re-pin the golden to the new run's output" is the standard, usually-correct move for an
-  intentional behavior change (this project's own DrWatson-based golden workflow is built around
-  exactly this pattern) — but it is agnostic to WHY the numbers changed, and cannot by itself
-  distinguish "real data is legitimately different" from "a units/reduction/omission bug in this
-  milestone's own new ingestion code."
-- The invariants that WOULD catch such a bug (SOC exactness gap, ADMM convergence, voltage-binding)
-  are checked at goldenING time, not necessarily RE-verified as "still meaningfully exercising the
-  same physical regime" — a case that used to be voltage-constrained can become slack (Pitfall 8)
-  and still "pass" every existing gate (solves, SOC exact, ADMM converges) while testing something
-  materially less interesting than before.
+PROJECT.md itself flags this dependency ("Known interdependency: overvoltage-capable relaxation
+and meshed+4Q-BESS both touch the relaxation/exactness machinery — sequencing decided in the
+roadmap") but does not extend the same interdependency note to MPC, which also touches the same
+exactness gate every time it re-solves.
 
 **How to avoid:**
-- Before re-pinning any IEEE-123-based golden, explicitly re-verify the qualitative invariants the
-  ORIGINAL golden was designed to exercise (voltage-binding for Case B, SOC-exactness margin in a
-  comparable range, ADMM converging in a comparable iteration-count order of magnitude) — a
-  re-pinned golden whose UNDERLYING PHYSICAL REGIME silently changed (e.g. from voltage-binding to
-  slack) should be flagged and investigated, not casually accepted as "the new correct answer."
-- Keep the OLD synthetic-fixture goldens in the test suite ALONGSIDE the new real-data ones (do not
-  delete/replace) for at least this milestone — the synthetic fixture remains a valid, fast,
-  hand-calibrated regression target for the ADMM/exactness MACHINERY itself, independent of whether
-  its impedances are "real"; only the real-data fixture's OWN new goldens should be freshly pinned.
-- Require, as part of code review for this phase, an explicit before/after comparison table (SOC
-  exactness margin, ADMM iteration count, whether voltage bounds bind) alongside any golden re-pin —
-  not just "tests pass with new numbers."
-- Apply the same "looks done but isn't" discipline v2.0's own PITFALLS.md already established for
-  cut-validity/BilevelJuMP certification: a re-pinned golden with no accompanying investigation of
-  WHY the numbers moved is a red flag, not a completed task.
+- Decide window-level failure handling explicitly (hard-abort the simulation with a named error is
+  the safe default, matching PF-04's existing throw-refuse polarity) — do not silently skip or
+  interpolate a window's price.
+- Prefer sequencing the overvoltage-capable relaxation phase BEFORE (or concurrently gated with)
+  the MPC phase if rolling scenarios are expected to visit the reverse-flow regime.
 
 **Warning signs:**
-- A commit that changes pinned IEEE-123 golden values with a message like "update goldens for real
-  impedances" and no accompanying note on whether the qualitative regime (voltage-binding, exactness
-  margin, iteration count) is still comparable.
-- The synthetic-fixture goldens deleted/replaced rather than kept as an independent regression.
-- No before/after invariant comparison in the PR/review for this phase.
+- A rolling-horizon test suite that never exercises a high-PV scenario (so the interaction is
+  never tested), or one that catches the exactness error silently inside the per-window loop.
 
-**Phase to address:** Real IEEE-123 impedances phase — the before/after invariant comparison is a
-gating review checklist item for any golden re-pin; keeping the synthetic-fixture goldens as a
-parallel, undisturbed regression is a phase-scoping decision made explicit up front.
+**Phase to address:** MPC / rolling-horizon / RTP phase — sequencing decision, cross-referenced
+with Overvoltage-capable relaxation phase.
 
 ---
 
-### Pitfall 10: Directional thesis reproduction overclaims exactness, or under-documents exactly which assumptions make the reported number what it is
+### Axis 3: Stochastic PV/demand uncertainty
+
+#### Pitfall 10: Misreading a scenario-weighted constraint's dual as a plain per-scenario DADP
 
 **What goes wrong:**
-v2.1's own scope is explicit and honest: exact reproduction of the thesis's `+$1,819/+25%` headline
-is NOT a hard requirement (the source Appendix E is IP-blocked; public IEEE-123 data + a documented
-reduction is used instead), and only DIRECTIONAL agreement (welfare-gain SIGN and rough magnitude)
-is targeted. Two ways this honest scope can erode in execution:
-1. **Overclaiming in the writeup.** A directional match (right sign, plausible order of magnitude)
-   gets informally described — in a docstring, a thesis chapter draft, a commit message, or a
-   figure caption — as "reproducing" or "validating" the thesis result, without the qualifier that
-   the underlying feeder data, reduction, aggregator population, and PV penetration are NOT the
-   thesis's own App. E values. A reader (including a future co-author or thesis committee member)
-   encountering the unqualified claim has no way to know the exact-figure caveat exists unless they
-   dig into this milestone's own scope notes.
-2. **Under-documenting the assumption stack that produces the reported number.** The reported
-   welfare gain is a function of (at minimum): the real-impedance reduction choice (Pitfall 7), the
-   length/units resolution (Pitfall 6), which OpenDSS components were modeled vs. omitted
-   (Pitfall 8), the aggregator population and device-parameter assignment overlaid on the real
-   topology (a NEW ingestion step this milestone introduces, distinct from the thesis's own
-   assumed population), and the PV penetration scenario chosen to produce a "gain." If these choices
-   live only in code (not in a citable, versioned documentation page), the number is not
-   REPRODUCIBLE in the scientific sense even though it is bit-for-bit pinned as a golden — a
-   collaborator cannot tell what would need to change to get a materially different number.
+In an extensive-form stochastic formulation, a balance constraint of the form
+`Σ_s prob_s · balance_s = 0` (or per-scenario balance constraints coupled by a shared first-stage
+decision) yields duals that are inherently PROBABILITY-SCALED — `dual(balance_s)` in that setting
+is generally `prob_s × (marginal value)`, not directly the same object as the current
+single-scenario `dadp = dual(balance_p)`. Treating a per-scenario dual as directly comparable to,
+or summable with, the existing 4-way DLMP decomposition (energy/loss/congestion/voltage) without
+re-deriving what a "stochastic DADP" means economically would misreport the price.
 
 **Why it happens:**
-- "Directional reproduction" is a nuanced scope statement that is easy to compress, informally, back
-  down to "reproduction" in day-to-day discussion, docstrings, and quick summaries — the qualifier
-  is the first casualty of brevity.
-- The assumption stack is genuinely large (spanning three OTHER pitfalls in this same document —
-  6, 7, 8) and each individual choice was made in a different phase/file; nothing forces them to be
-  assembled into one place that documents "here is the full chain of assumptions behind this number."
+The codebase's whole pricing story rests on "duals = prices" via a SINGLE-scenario formulation;
+extensive-form scenario weighting is a structurally different constraint shape, and it is easy to
+keep reading `dual(...)` the same way out of habit.
 
 **How to avoid:**
-- Every artifact (docstring, golden test name/comment, docs page, thesis-chapter draft prose) that
-  reports the welfare-gain figure MUST carry the qualifier explicitly: "directional reproduction on
-  public IEEE-123 data with a documented positive-sequence reduction; NOT the thesis App. E exact
-  figures" — make this a fixed, copy-pasted phrase (or a single cross-referenced doc anchor) rather
-  than something re-worded (and potentially softened) each time it's mentioned.
-- Write ONE consolidated "reproduction assumptions" doc page (Documenter, matching the project's own
-  literate-docs convention) that enumerates the full assumption chain behind the reported number:
-  data source + length/units resolution, reduction method + fidelity metric, component-omission
-  decisions, aggregator population source, PV penetration scenario — cross-referenced from wherever
-  the number itself is reported, so a reader is always one click from the full provenance.
-- Treat "is the sign/direction right, and is the assumption chain fully documented" as the actual
-  MILESTONE-LEVEL acceptance criterion — not "does the number look close to +$1,819" (a criterion
-  that, taken alone, invites exactly the overclaiming this pitfall describes).
-- If/when the CONICET Appendix E becomes available later (a stretch goal explicitly out of THIS
-  milestone's scope), treat exact-figure reproduction as its own SEPARATE, later deliverable with
-  its own separate documentation — never quietly merge "directional" and "exact" claims into one
-  reported number as more data becomes available piecemeal.
+- Explicitly derive, in the phase's own documentation, what the stochastic DADP IS (e.g.,
+  `dual(balance_s) / prob_s` as the per-scenario marginal value, or a probability-weighted
+  first-stage price as "the" DADP with per-scenario duals reported as a separate decomposition
+  component) before shipping any number.
+- Apply the same never-silently-summed discipline REACT-01/02 established for the reactive DLMP
+  component: a stochastic/per-scenario price component must be its own named, citable quantity,
+  never folded unlabeled into the existing decomposition.
 
 **Warning signs:**
-- Any docstring, commit message, or docs page using the unqualified word "reproduces"/"validates"
-  the thesis figure without the directional/public-data qualifier attached in the same sentence.
-- The welfare-gain number reported with no cross-reference to a single page documenting its full
-  assumption chain.
-- A thesis-chapter draft or paper submission citing this milestone's number without the same
-  qualifier the milestone's own README/PROJECT.md scope statement already uses.
+- Code that reads `dual(balance_s)` directly into a `dlmp`-shaped output with no probability
+  rescaling or explicit documentation of the scaling convention chosen.
 
-**Phase to address:** Directional thesis reproduction phase — the consolidated assumptions doc page
-and the fixed qualifier phrase are gating deliverables, checked at the SAME acceptance gate as the
-welfare-gain sign/magnitude check itself, not as an afterthought once the number "looks right."
+**Phase to address:** Stochastic PV/demand uncertainty phase.
 
 ---
 
-### Pitfall 11: Bit-for-bit goldens pin transient numerical noise from the very Clarabel flake this project already knows about
+#### Pitfall 11: Scenario-count explosion collides with Clarabel's IPM memory ceiling, and SCS gets reached for silently
 
 **What goes wrong:**
-This project's reproducibility discipline (seeded, pinned `Manifest.toml`, bit-for-bit goldens) is a
-hard requirement — but it assumes the underlying computation is DETERMINISTIC given the same seed
-and environment. The known, accepted, intermittent Clarabel `NUMERICAL_ERROR` flake
-(`.planning/STATE.md`) is EXACTLY the kind of non-determinism (a "fraction of pushes" failure mode,
-root-caused to per-unit-base-dependent cone-slack sensitivity) that can also manifest as
-SUB-THRESHOLD numerical jitter even when it doesn't cross the hard-failure line — i.e., a solve that
-"succeeds" but lands at a slightly different point run-to-run near a conditioning edge case. Both new
-data sources in this milestone (the real IEEE-123 impedances, which per Pitfalls 6-8 may shift the
-feeder's conditioning in an unmeasured direction, and the reactive-consensus ADMM path, which per
-Pitfall 5 is a documented candidate for INCREASED flake exposure) are plausible new places for this
-jitter to surface. Pinning a bit-for-bit golden from a SINGLE run, before the new pipeline's
-run-to-run stability has been explicitly checked, risks freezing an artifact of that one run
-(a particular near-boundary numerical outcome) as "the" reproducible answer — a later re-run
-(same seed, same Manifest, different machine/BLAS/solver-internal nondeterminism) could then FAIL
-the golden not because anything is wrong, but because the golden itself was never actually stable.
+A naive scenario-tree extensive form multiplies the per-hour SOCP cone set by the scenario count
+inside a SINGLE monolithic build. Clarabel (the default, and the ONLY solver trusted for final
+DADP/exactness per this project's own stack doc) is an interior-point method whose whole
+"first-order fallback" (SCS) exists precisely for when a monolithic SOCP outgrows IPM memory. A
+natural but explicitly-forbidden move under time pressure is switching the stochastic rung to SCS
+"to make it fit," without registering that SCS's lower-accuracy duals are called out by name in
+this project's own stack research as unacceptable for "final DADP/exactness certification."
 
 **Why it happens:**
-- "Reproducible" and "deterministic" are easy to conflate; the project's OWN reproducibility
-  machinery (seeds, pinned Manifest) handles the INPUT side of determinism but cannot, by itself,
-  guarantee a numerically-fragile SOLVE is deterministic across machines/BLAS versions/solver
-  internal thread counts — exactly the axis STATE.md's own flake report already flags as
-  "version-independent" (i.e., NOT fully explained by the pinned Manifest alone).
-- Pinning a golden immediately after a pipeline first produces a plausible-looking number is the
-  natural, fast path to a "done" checkbox; explicitly re-running the SAME pinned scenario multiple
-  times before committing the golden is easy to skip under time pressure.
+SCS is already in the `Project.toml`/stack as a fallback; reaching for it when Clarabel chokes on
+scenario count is the path of least resistance, and the accuracy caveat is easy to forget once the
+model "solves."
 
 **How to avoid:**
-- Before pinning any NEW golden introduced by this milestone (AC-OPF comparison numbers, reactive
-  DLMP values, real-impedance-fixture welfare/exactness numbers, the directional reproduction
-  headline figure), re-run the SAME scenario multiple times (same seed, same Manifest) and confirm
-  bit-for-bit (or, where genuine solver nondeterminism is expected, tolerance-bound) stability BEFORE
-  committing the golden — not after a single successful run.
-- Where a new fixture's conditioning is plausibly closer to the known flake's trigger (per Pitfalls
-  5 and 6-8), treat "does this fixture solve deterministically and away from the numerical edge" as
-  its own explicit acceptance check, separate from "does the fixture produce the RIGHT answer."
-- If a genuinely fragile near-boundary case is discovered while pinning a new golden, prefer FIXING
-  the underlying conditioning (the STATE.md-documented "candidate levers, not yet applied") over
-  simply re-running until a lucky, stable-looking result appears to pin — a golden pinned by luck on
-  a fragile case is a ticking regression-suite time bomb.
-- Document, alongside any new golden, whether it was verified stable across N repeated runs (and N),
-  mirroring the rigor the project already applies to the planning layer's `BendersTrace`/retry
-  instrumentation.
+- Establish an explicit scenario-count ceiling (measured empirically on IEEE-13/123) below which
+  Clarabel stays authoritative for the shipped finding.
+- If SCS is used at all above that ceiling, confine it explicitly to scale/feasibility scouting —
+  never to the published stochastic-DADP finding, matching the stack doc's own rule verbatim.
+- Prefer scenario-tree reduction (fewer, well-chosen scenarios) or a Benders/L-shaped decomposition
+  of the stochastic recourse over brute-force monolithic scaling, if the ceiling is hit early.
 
 **Warning signs:**
-- A new golden pinned from a single run, with no repeated-run stability check recorded anywhere.
-- A previously-passing golden starting to fail intermittently on CI (not deterministically) after
-  this milestone's changes land — the textbook symptom of having pinned an unstable numerical point.
-- New fixtures (real IEEE-123, reactive-consensus) never explicitly checked against the STATE.md
-  flake's known trigger conditions before their goldens are committed.
+- A stochastic experiment that silently swaps `select_optimizer` to SCS once scenario count grows,
+  with no accompanying accuracy caveat in the reported result.
 
-**Phase to address:** All four v2.1 workstreams, at golden-pinning time specifically — a repeated-
-run stability check is a gating step before any NEW golden from this milestone is committed, called
-out explicitly in each phase's acceptance criteria (not assumed as "the reproducibility
-infrastructure already handles this").
+**Phase to address:** Stochastic PV/demand uncertainty phase.
 
 ---
 
-### Pitfall 12: This milestone's own retrospective lessons (green tests ≠ live mechanism, docs-build silently red, undocumented constant-term offsets) get re-learned the hard way instead of applied proactively
+#### Pitfall 12: Pinning a stochastic golden on a single lucky scenario draw
 
 **What goes wrong:**
-This project has ALREADY paid for three specific lessons in its own history, each directly
-transplantable to v2.1's four workstreams, and each easy to re-forget because the NEW code is new:
-1. **"Green tests ≠ live mechanism."** v2.0's own `operational_oracle` `role` kwarg was
-   "validated but currently inert" for an entire milestone boundary before becoming load-bearing —
-   passing type/validation checks gave false confidence that it was doing something. The DIRECT
-   v2.1 analogue: the reactive `qag` field in `AgrOpt` is ALREADY documented, verbatim, as a
-   "PLACEHOLDER... currently NOT read by `solve_admm`" — exactly the same "exists, validates,
-   does nothing yet" shape. A test suite that merely checks "the reactive consensus code runs and
-   converges" without confirming the μ dual ACTUALLY changes the solved Q allocation relative to
-   the constant-draw baseline (e.g., under a scenario where the optimal Q clearly differs from the
-   constant heuristic) would be green while the mechanism is still inert — the same trap, recurring.
-2. **"Docs build silently red."** v2.0's own Documenter build went red and stayed unnoticed across
-   at least one phase boundary before Phase 14 fixed it. Four NEW literate/doc pages are plausible
-   outputs of this milestone (AC-OPF exactness certification writeup, reactive-consensus math,
-   real-IEEE-123 provenance, directional-reproduction assumptions per Pitfall 10) — each is a new
-   opportunity for a `@example`-executed docs page to silently stop building (e.g., an AC-OPF
-   NLP solve inside a doc example that becomes flaky per Pitfall 11, or a new module that isn't
-   wired into `@autodocs`) without anyone noticing until a later phase's audit.
-3. **"Algebraic doc claims need constant-term reconciliation."** v2.0's Phase 14 review caught a
-   docs page whose algebraic welfare claim was off by a constant offset (the "Deferrable +18
-   objective-offset reconciliation" fix, per PROJECT.md's own phase log) — a documentation page that
-   states an equation/relationship without re-deriving or checking its constant/offset terms against
-   the actual code. This milestone introduces at least two new places for exactly this class of bug:
-   any doc page comparing the AC-OPF objective to the SOCP welfare objective (Pitfall 1's comparison,
-   now narrated in prose) and any doc page describing the reactive-consensus augmented Lagrangian
-   (mirroring the EXISTING, already-corrected sign-derivation care in `solve_admm.jl`'s own header,
-   which must be re-derived, not copy-pasted, for the Q-block).
+The project's hard invariant is seeded, bit-for-bit reproducible generation. A seeded Markov
+scenario-tree generator IS reproducible in principle — but if the golden regression is pinned on
+whichever specific (seed, scenario-count) combination happened to converge cleanly during
+development, that is exactly the "measurement-before-golden" trap Phase 18 was built to close (the
+±2–5% population sweep that exposed the SOCP knife-edge BEFORE pinning REPRO's golden).
 
 **Why it happens:**
-- Each lesson was learned once, in a DIFFERENT phase/module than where it will recur (`operational_oracle`'s inertness in v2.0 vs. `AgrOpt`'s `qag` inertness in v2.1; the Documenter build in v2.0's planning docs vs. this milestone's four new doc pages; the Deferrable objective-offset in v2.0's planning welfare accounting vs. this milestone's AC-OPF/reactive objective narration) — nothing mechanically forces a "have we seen this shape before" check across milestone boundaries.
-- Retrospective lessons live in prose (PROJECT.md's phase log, milestone audits) rather than as an
-  automated gate; applying them requires someone to actually remember and re-read them at the start
-  of a new phase, which is exactly the kind of discipline that erodes under normal project momentum.
+The first seed/scenario-count that "just works" is tempting to pin immediately; a sweep across
+seeds/scenario-counts to check the finding is stable takes extra effort that's easy to skip once a
+single run looks clean.
 
 **How to avoid:**
-- At the start of EACH of the four v2.1 phases, explicitly check: is there an existing "documented
-  placeholder, not yet load-bearing" field in the code this phase is about to make load-bearing
-  (the `qag`/`role`-shaped pattern)? Write a test that positively demonstrates the NEW mechanism
-  changes behavior relative to the OLD placeholder default, not merely that the code runs.
-- Add the Documenter build (full `docs/make.jl`, not just `Pkg.test()`) as an EXPLICIT, checked step
-  in this milestone's own phase-completion criteria, for every phase that adds or touches a literate
-  doc page — do not rely on a later, separate "docs hardening" phase to catch a red build, per the
-  v2.0 lesson.
-- For every new doc page that narrates an algebraic/objective relationship (AC-OPF vs. SOCP
-  objective; the reactive augmented Lagrangian derivation), require an explicit constant/offset-term
-  reconciliation step in code review — the SAME discipline `solve_admm.jl`'s own header comment
-  already demonstrates for the ACTIVE block's sign derivation ("NOT the thesis-3.47 printed sign...
-  derived from the single MAX augmented Lagrangian") should be re-derived, in the same rigor, for
-  the reactive block's own doc narration, not assumed to mirror it by symmetry.
+- Sweep the stochastic golden candidate across multiple seeds and scenario counts BEFORE pinning,
+  exactly matching the Phase 18 measurement-before-golden pattern.
+- Pin the golden on a SIGN-SAFE or otherwise robust quantity (mirroring the "never ratios of
+  possibly-negative aggregates" rule already established for REPRO-01/02), not a fragile point
+  value that could flip sign or diverge across nearby seeds.
 
 **Warning signs:**
-- A reactive-consensus test suite that never asserts the solved Q differs from the constant-draw
-  heuristic under a scenario designed to make them differ.
-- A CI or local `docs/make.jl` run skipped ("tests pass, that's the gate") anywhere in this
-  milestone's phase completion checklist.
-- A new doc page's algebraic claim reviewed only for "does this look like the existing derivation
-  style," not "does this specific constant/offset term actually check out against the code."
+- A stochastic regression test with a single hard-coded seed and no accompanying sweep test/
+  discussion of stability across seeds.
 
-**Phase to address:** All four v2.1 phases, as a standing cross-cutting checklist item (not owned by
-a single phase) — each phase's own completion/verification step should explicitly re-apply these
-three named lessons, referencing this pitfall by name in the phase's acceptance checklist.
+**Phase to address:** Stochastic PV/demand uncertainty phase.
+
+---
+
+#### Pitfall 13: `Scenario`/`savename` collisions from new stochastic fields, and `objective_hook` wired into only one of three consumers
+
+**What goes wrong:**
+Two integration failures: (a) adding scenario-tree fields (scenario count, branching, seed) to the
+`Scenario` struct changes its default `savename`; per the CR-01 fix already documented in
+`Scenario.jl` ("differing only in a Float64 field produce distinct default savenames... do NOT
+rely on the bare savename(s,...) string as a uniqueness guarantee"), a new float-valued stochastic
+field must go through the SAME `digits`-aware convention (`scenario_filename`'s `digits = 10`) or
+it reintroduces the exact collision class that fix closed. (b) `operational_oracle`'s
+`objective_hook` is currently consumed ONLY by the centralized `solve_welfare` path; wiring a real
+multi-scenario hook into JUST the centralized solve while leaving `solve_admm`'s AGR-OPT/DSO-OPT
+split and the planning oracle's Benders wrapper silently still single-scenario is the "no silent
+partial behavior" failure (T-04-13) the SEAM-01 docstring explicitly warns against.
+
+**Why it happens:**
+The `Scenario` struct and `objective_hook` are both single, shared seams touched by multiple
+consumers; it is easy to update the one consumer being actively worked on and assume the others
+"just inherit" the change.
+
+**How to avoid:**
+- Route any new stochastic `Scenario` field through `scenario_filename`'s existing `digits=10`
+  convention; add a regression test asserting two scenarios differing only in the new field
+  produce distinct savenames.
+- Explicitly enumerate all THREE consumers of the welfare/objective machinery (centralized
+  `solve_welfare`, ADMM `AGR-OPT`/`DSO-OPT`, planning `operational_oracle`/Benders) and either wire
+  the hook into all three or fail loudly (ArgumentError, matching the existing `role`/`z`-pin
+  guard style) on any caller that assumes it's live in an unwired consumer.
+
+**Warning signs:**
+- A new `Scenario` field with no `savename`-collision regression test.
+- `objective_hook` wired into `solve_welfare` but `solve_admm`/planning tests never exercising a
+  non-identity hook.
+
+**Phase to address:** Stochastic PV/demand uncertainty phase.
+
+---
+
+### Axis 4: Meshed networks + 4Q-BESS
+
+#### Pitfall 14: Reusing Baran-Wu variables in a mesh without an angle-consistency (loop) constraint
+
+**What goes wrong:**
+The `pf::AbstractPowerFlow` slot IS the documented seam for a future `MeshedFlow` (per
+`oracle.jl`'s own docstring: "a future `MeshedFlow <: AbstractPowerFlow` plugs in here... no
+meshed formulation exists"). A meshed feeder has LOOPS, and the Baran-Wu/branch-flow variables
+`(v, l, P, Q)` alone are insufficient around a loop — an angle-consistency constraint (or an
+equivalent loop-flow constraint) is required, or the relaxation is under-constrained: it can return
+`OPTIMAL` and pass `assert_socp_exact!` PER BRANCH while corresponding to NO physically realizable
+AC solution, because the branch-flow cone check has no way to see a global loop-consistency
+violation. This is a more dangerous silent failure mode than the overvoltage gap, because the
+EXISTING gate would not catch it at all.
+
+**Why it happens:**
+The branch-flow variable set is radial-topology-complete by construction (a tree has no loops to be
+inconsistent around); reusing the same variables/constraints for a mesh without adding the missing
+loop constraint is the natural (and wrong) first attempt.
+
+**How to avoid:**
+- Add an explicit angle-consistency (or loop-flow) constraint for every fundamental cycle in the
+  meshed topology before claiming the formulation is complete.
+- Cross-validate any meshed solve against the independent AC oracle (`ACPowerFlow`) specifically
+  checking that recovered angles are loop-consistent, not just that each branch's cone is tight.
+- Do NOT reuse `assert_radial`'s construction-time guard as evidence of correctness for a mesh —
+  it is the OPPOSITE invariant (it asserts the feeder has no loops).
+
+**Warning signs:**
+- A `MeshedFlow` implementation that reuses the exact same `(v, l, P, Q)` variable/constraint set
+  as `ConvexBranchFlow` with no additional loop constraint.
+- `assert_socp_exact!` passing on a meshed case with no independent angle-consistency check.
+
+**Phase to address:** Meshed networks + 4Q-BESS phase.
+
+---
+
+#### Pitfall 15: Treating the meshed SOC-relaxation gap as a tunable knife-edge instead of a structural gap
+
+**What goes wrong:**
+The LinDistFlow exactness-copy trick that makes the RADIAL SOCP relaxation exact (thesis 3.43–3.45)
+is a tree-topology-specific mechanism (EXACT-04 already showed even the radial case can go inexact
+under reverse flow, but when it IS exact, radial topology is why). On a mesh, there is no
+equivalent proof; the gap is expected to be structural, not a tunable artifact. The tempting-but-
+wrong move: treat a meshed exactness gap exactly like EXACT-04 was treated — sweep parameters,
+characterize a "knife-edge," and look for a fix — when the honest framing is "SOC relaxation is not
+expected to be exact here at all," and the deliverable should be a genuinely different validity
+story (SDP tightening, an accepted/reported gap, or restricting meshed test cases to configurations
+where the gap is provably small).
+
+**Why it happens:**
+The project's own successful pattern from v2.1 (characterize a knife-edge via a sweep, ship the
+honest finding) is a strong, recently-reinforced habit; applying it reflexively to a DIFFERENT
+mathematical situation (structural non-exactness vs. a knife-edge) risks spending the whole rung
+chasing a fix that cannot exist.
+
+**How to avoid:**
+- Before any sweep/tuning effort, establish (from the literature or a first-principles argument)
+  whether the meshed case is EXPECTED to have a structural gap; if so, the "minimal validated rung"
+  deliverable is an honest structural-gap finding (with a clear validity boundary), not a
+  fixed/exact relaxation.
+- If a tighter (e.g., SDP) relaxation is attempted instead, it needs its OWN exactness
+  argument/certificate — see Pitfall 1's pattern, applied to the meshed case.
+
+**Warning signs:**
+- A meshed-rung plan whose acceptance criterion is "the relaxation is exact" with no prior
+  literature check on whether meshed SOC relaxations are exact in general (they are not, in
+  general).
+
+**Phase to address:** Meshed networks + 4Q-BESS phase.
+
+---
+
+#### Pitfall 16: 4Q-BESS's P-Q coupling invalidates the existing no-binaries complementarity trick
+
+**What goes wrong:**
+`PVBattery.jl`'s entire justification for omitting a `p_ch·p_dch == 0` constraint is a ONE
+-DIMENSIONAL, active-power-only strict-cost-ordering argument: `λ_min < λ_med < λ_max` makes
+simultaneous charge/discharge strictly dominated in the ACTIVE-power objective alone (the docstring
+is explicit: "Only the STRICT ordering makes simultaneous charge/discharge STRICTLY dominated").
+Adding a genuine reactive decision variable (an apparent-power cap `P² + Q² ≤ S_max²`, or separate
+`Q_ch`/`Q_dch`) breaks the scalar-tradeoff premise: with a coupled P-Q feasible region, there can
+exist reactive-power-driven co-optima where simultaneous P-charge/discharge is NOT strictly
+dominated even though the ACTIVE-only inequality still holds. Inheriting the 2D device's proof
+unchanged for the 4Q device is a silent correctness gap — a co-optimum the post-solve check was
+built to catch could reappear with a different economic mechanism than the one the proof rules out.
+
+**Why it happens:**
+The 4Q-BESS device is naturally implemented as an EXTENSION of `PVBattery` (same SOC dynamics, same
+utility shape, plus a reactive dimension); it is easy to inherit the "no complementarity constraint
+needed" conclusion along with the code, without re-checking that the PREMISE (one-dimensional
+marginal tradeoff) still holds.
+
+**How to avoid:**
+- Re-derive the no-binaries argument explicitly for the P-Q coupled feasible region before
+  shipping the 4Q device without a complementarity constraint.
+- At minimum, reinstate the existing post-solve `p_ch·p_dch < τ` check (already implemented in
+  `Aggregator.jl`) as a HARD, always-run gate for the 4Q device specifically — do not assume the
+  2D device's construction-time strict-ordering REJECT check (which validates `λ_min<λ_med<λ_max`)
+  suffices for the new device without its own analogous construction-time check.
+- If the re-derivation shows the strict-dominance argument does NOT hold with reactive power,
+  either add an explicit complementarity constraint (accepting the "no binaries" guard does not
+  cover this specific device) or find and prove a different sufficient condition.
+
+**Warning signs:**
+- A 4Q-BESS device that subclasses/copies `PVBattery`'s docstring claim verbatim with no new
+  derivation for the P-Q coupled case.
+- The post-solve battery-complementarity check (`Aggregator.jl`) never invoked for the new device
+  type in tests.
+
+**Phase to address:** Meshed networks + 4Q-BESS phase.
+
+---
+
+#### Pitfall 17: Live reactive dual-ascent convergence is not covered by the existing (single-block) Boyd residual theory
+
+**What goes wrong:**
+Today, `reactive_consensus=true` PINS `qag_dso` to a fixed constant target and reads ONE certified
+dual off `:balance_q` — explicitly documented as "a ONE-SHOT certified dual read, NOT a live μ
+dual-ascent loop" (`solve_admm.jl`, `DsoOpt.jl`). `solve_admm`'s stopping rule (Boyd primal + dual
+2-norm residuals, adaptive ρ via `τ`/`μ`-ratio bounds) is derived and implemented for a SINGLE
+coupling variable `λ_j` (active power). Making the reactive coupling genuinely LIVE (a second
+dual-ascent variable `μ_j`) means two coupled price updates per iteration; naively copying the
+existing residual/ρ logic for a second block risks either non-convergence or a FALSE-CONVERGENCE
+read — one residual pair (active) satisfies its threshold while the other (reactive) is still
+moving, and an independent per-block stopping check would report "converged" anyway.
+
+**Why it happens:**
+The existing ADMM loop's single-block structure is well-tested and easy to extend mechanically
+(add a second `λ`-shaped variable with the same ρ/τ/μ constants) without re-deriving the JOINT
+stopping criterion that a genuinely two-block ADMM requires.
+
+**How to avoid:**
+- Re-derive the stopping rule as a JOINT residual norm across BOTH `λ` (active) and the new `μ`
+  (reactive) — e.g., a stacked primal/dual residual vector — not two independently-checked scalar
+  pairs that can trip "converged" while one channel still moves.
+- Re-validate the adaptive-ρ residual-balancing logic (`τ`, `μ`-ratio) explicitly for the
+  two-block case; the single-block tuning that works on IEEE-13/123 is not guaranteed to transfer.
+- Add a liveness regression (per the project's own v2.0 CR-01 lesson: "tests passing ≠ mechanism
+  live") proving two runs differing ONLY in the reactive coupling target converge to genuinely
+  different λ/μ trajectories — not just that the loop terminates.
+
+**Warning signs:**
+- A live reactive dual-ascent implementation whose convergence check is two independent
+  `≤ε`-comparisons on `λ`-residuals and `μ`-residuals with no joint/stacked norm.
+- No liveness regression analogous to NASH-04's multi-seed probe for the new reactive dimension.
+
+**Phase to address:** Meshed networks + 4Q-BESS phase.
+
+---
+
+#### Pitfall 18: `assert_radial` loosened globally instead of a parallel meshed feeder type; reactive-consensus default path broken; device-check registry gap
+
+**What goes wrong:**
+Three integration failures bundled: (a) `assert_radial` is a construction-time invariant that
+protects EVERY existing radial rung; a meshed feeder needs a NEW, explicitly-meshed feeder
+type/flag — loosening or removing `assert_radial` globally so a meshed feeder can be constructed
+would silently stop protecting the radial rungs too. (b) Live reactive dual-ascent must be layered
+as ITS OWN opt-in (on top of, not replacing, `reactive_consensus=true`'s existing pinned behavior)
+so every pre-v3.0 regression golden (which never touches `qag_dso`) stays byte-identical. (c) A new
+4Q-BESS device type must be registered wherever the post-solve `p_ch·p_dch<τ` check enumerates
+device types to inspect — otherwise the check silently only ever loops over old 2D `PVBattery`
+instances and never runs on the new device (a silent coverage gap, not a caught failure) — the same
+class of risk the PVAL-04 registry+tripwire was purpose-built to catch for planning builders, but
+with no analogous registry yet on the device side.
+
+**Why it happens:**
+Each of these three seams (radial guard, reactive-consensus default, device-check enumeration) is a
+single shared invariant with multiple implicit consumers; extending it for the meshed/4Q rung is
+easy to do in a way that "works for the new case" while quietly breaking or bypassing protection
+for the old ones.
+
+**How to avoid:**
+- Add a NEW meshed feeder constructor/type that `assert_radial` explicitly does NOT apply to,
+  leaving `assert_radial` fully intact and still enforced on the default/radial feeder path.
+- Gate live reactive dual-ascent behind its own kwarg (e.g., `reactive_dual_ascent::Bool=false`)
+  layered on top of `reactive_consensus=true`, never replacing the existing pinned mechanism.
+- Build an explicit device-type registry (mirroring PVAL-04's registry+tripwire pattern) that the
+  post-solve battery-complementarity check must cover, with a test asserting a new device type
+  cannot silently ship uncovered.
+
+**Warning signs:**
+- `assert_radial`'s call sites reduced or a bypass flag added to the EXISTING `Feeder` constructor
+  (rather than a new type).
+- Any pre-v3.0 regression golden's numeric value changes when `reactive_consensus=true` (already
+  shipped) is exercised after the live-dual-ascent change lands.
+- No test that deliberately builds an aggregator with the new 4Q device and asserts the
+  complementarity check actually runs against it.
+
+**Phase to address:** Meshed networks + 4Q-BESS phase.
+
+---
+
+### Axis 5: Integer investment expansion
+
+#### Pitfall 19: Standard Benders cuts (as implemented) are invalid once the recourse subproblem's response to `z` is non-convex/discontinuous
+
+**What goes wrong:**
+`benders.jl`'s `add_optimality_cut!`/`add_feasibility_cut!` construct a linear supporting
+hyperplane from a continuous dual gradient (`cost_k`, `grad_k` — `oracle_res.π`/
+`follower_res.π_s`), which is valid ONLY because the follower/oracle subproblem is currently
+convex (LP/QP/SOCP) in the coupling variable `z`. Binary-expansion investment can make the
+follower's or oracle's OWN response to `z` discontinuous at an investment threshold (a step change
+in feasible operating range) — at that point the existing gradient-based cut construction can
+silently produce an INVALID (non-supporting) cut that cuts off the true optimum, with no visible
+error (the master still solves to `OPTIMAL`, just to the WRONG bound).
+
+**Why it happens:**
+The existing Benders machinery (Phase 10–13, empirically certified against BilevelJuMP on the
+CONTINUOUS case) is directly reusable code — same `add_optimality_cut!` signature, same sign
+convention — making it tempting to just start feeding it binary-expansion-derived duals without
+checking that the underlying convexity assumption the cut construction relies on still holds.
+
+**How to avoid:**
+- Before reusing `add_optimality_cut!`/`add_feasibility_cut!` verbatim, verify the subproblem
+  remains convex/differentiable in `z` at the specific binary-expansion granularity chosen — if
+  not, switch to integer L-shaped cuts (a weaker but VALID cut form specifically designed for
+  MILP-recourse subproblems), not the existing LP-dual-gradient cut.
+- Add a small-instance validation (BilevelJuMP or hand/brute-force enumeration, see Pitfall 21)
+  checking the integer Benders loop's converged answer against an independent ground truth BEFORE
+  trusting the production loop on larger instances — mirroring the Phase 11 certify-before-build
+  sequencing that worked well for the continuous case.
+
+**Warning signs:**
+- An integer-investment Benders run that "converges" (UB/LB gap closes) but disagrees with a
+  brute-force enumeration on a tiny instance.
+- Cut construction code reused unchanged from `benders.jl` with no new check on subproblem
+  convexity/continuity in `z`.
+
+**Phase to address:** Integer investment expansion phase.
+
+---
+
+#### Pitfall 20: Integer L-shaped cuts are structurally weaker — reusing the continuous loop's `max_iter`/retry defaults understates the real cost
+
+**What goes wrong:**
+Integer L-shaped cuts are a well-known WEAKER cut form than continuous Benders optimality cuts
+(they can require many more iterations, sometimes a number growing with problem size, to close the
+gap) — this is a structural property, not a tuning shortfall. The existing continuous Benders loop
+was load-tested at 66 iterations (Phase 12) with `max_iter=100` and a specific checkpoint/retry
+cadence; silently reusing those defaults for the integer variant risks either premature "iteration
+cap exhausted" failures (the loop's own fail-loud design, correctly triggering, but on an
+under-provisioned cap) or an ACTUAL problem with unbounded cut-store growth (already an accepted,
+"instrumented, unbounded accumulation retained" debt at continuous-Benders iteration counts) that
+becomes materially worse at 10–100x more iterations.
+
+**Why it happens:**
+`max_iter=100`, the checkpoint cadence, and the retry ladder are all already-tuned, working
+constants; reusing them for a "similar-looking" loop is the natural default, and the weaker-cut
+property is a theoretical fact easy to under-weight against a working continuous baseline.
+
+**How to avoid:**
+- Re-characterize expected iteration count for integer L-shaped cuts on the project's own toy/
+  IEEE-13-scale planning instances BEFORE picking a `max_iter` default — do not inherit 100
+  unchanged.
+- Re-examine whether the existing cut-store growth debt (accepted for continuous Benders) is still
+  acceptable at the higher iteration counts integer L-shaped cuts are expected to need; if not,
+  address cut-store pruning as part of this phase rather than carrying the debt forward unexamined.
+
+**Warning signs:**
+- The integer Benders phase ships with the SAME `max_iter=100`/checkpoint cadence as the
+  continuous case with no measurement of how many iterations the integer loop actually needs.
+
+**Phase to address:** Integer investment expansion phase.
+
+---
+
+#### Pitfall 21: HiGHS lazy-constraint/callback cuts mixed with the existing external outer-loop design
+
+**What goes wrong:**
+The planning master is already HiGHS-solved and the existing pattern (`add_optimality_cut!`/
+`add_feasibility_cut!` appending `@constraint` rows to a persistent JuMP model, then re-solving to
+optimality each Benders iteration) is a straightforward, PROVEN external-loop design that also
+works for integer L-shaped cuts (they're linear rows too). A tempting alternative — HiGHS's native
+lazy-constraint/callback mechanism, injecting cuts DURING a single branch-and-bound tree to avoid
+re-solving the whole MILP from scratch each iteration — is a genuinely different JuMP/MOI
+integration path. Mixing the two designs (partial callback-based injection, partial external-loop
+cut accumulation) without committing to one is a likely integration trap, and HiGHS's/JuMP's lazy-
+constraint callback support and semantics should be verified explicitly rather than assumed
+available, before committing engineering effort to that path.
+
+**Why it happens:**
+CLAUDE.md itself flags this as a possible LATER upgrade ("optionally lazy-constraint callbacks via
+HiGHS/Gurobi for branch-and-Benders-cut later"), which can be misread as "available now" under
+schedule pressure, especially once integer variables make the external-loop's per-iteration
+full-MILP re-solve look expensive.
+
+**How to avoid:**
+- For the v3.0 "minimal validated rung," keep the EXISTING external Benders/L-shaped outer loop
+  (matches the proven, hand-rolled precedent and the project's stated no-heavyweight-framework
+  policy) — explicitly defer callback-based lazy cuts to a later milestone, per CLAUDE.md's own
+  "later" framing.
+- If callback-based cuts are attempted anyway, verify HiGHS's JuMP lazy-constraint API surface via
+  Context7/official docs FIRST (do not assume feature parity with Gurobi's callback API), and do
+  not mix it with the external-loop cut-accumulation pattern in the same subproblem.
+
+**Warning signs:**
+- A plan that references HiGHS lazy constraints without a prior doc-verification step, or a
+  codebase with BOTH an external cut-accumulation loop and a partial callback registration for the
+  same master problem.
+
+**Phase to address:** Integer investment expansion phase.
+
+---
+
+#### Pitfall 22: The PVAL-04 guard lift accidentally loosens the OPERATIONAL-layer no-binaries protection too
+
+**What goes wrong:**
+PVAL-04's actual mechanism (`test/test_planning_noninteger.jl`) is a REGISTRY of the four planning
+builders (`build_planning_oracle`, `build_follower`, `build_master`, `build_shared_transmission`)
+plus a source-scan tripwire that unions in "every EXPORTED `build_*` symbol not on the documented
+`operational_builders` allowlist." A "scoped, not deleted" lift (per PROJECT.md's own stated
+intent) means removing/modifying the CHECK for the SPECIFIC planning builder(s) that now legitimately
+carry integer variables — but a plausible mistake is instead loosening the shared tripwire mechanism
+itself (e.g., widening `operational_builders`, or replacing the per-builder `isempty(offenders)`
+assertion with a single global on/off flag), which would silently stop checking OTHER builders —
+including operational-layer builders (`build_agr_opt`, `build_dso_opt`, `build_ieee123`, etc.) —
+for accidental binaries too.
+
+**Why it happens:**
+The registry+tripwire is a single shared test file covering ALL builders; the path of least
+resistance when "the guard needs to allow binaries now" is to touch the shared mechanism rather
+than carve out a scoped exception for exactly the one or two builders that need it.
+
+**How to avoid:**
+- The lift must ADD a new, still-active assertion for the newly-integer planning builder(s) — an
+  INVERTED/positive check (e.g., "the expansion builder DOES introduce the expected integer
+  variables, and ONLY the expected ones") — while the zero-binaries assertion for every OTHER
+  builder (the remaining continuous planning builders AND every operational-layer builder in the
+  allowlist) must keep passing completely unmodified in the same test run.
+- Do not touch `operational_builders` or the shared `isempty(offenders)` loop structure as part of
+  this lift; add a SEPARATE, explicitly-named registry entry/test for the now-integer builder(s).
+- Re-run the FULL existing `test_planning_noninteger.jl` unmodified against the post-lift codebase
+  and confirm every non-lifted builder still reports zero binaries — this is the acceptance test
+  for "scoped, not deleted."
+
+**Warning signs:**
+- A diff to `test_planning_noninteger.jl` that removes/loosens the shared `for (name, build) in
+  registry` loop or the `operational_builders` allowlist, rather than adding a new, separate
+  registry/assertion for the lifted builder(s).
+- Any operational-layer builder (`build_agr_opt`, `build_dso_opt`) newly able to introduce a binary
+  variable without a NEW test failing.
+
+**Phase to address:** Integer investment expansion phase.
+
+---
+
+#### Pitfall 23: BilevelJuMP's continuous-case validation-oracle role does not automatically extend to integer investments
+
+**What goes wrong:**
+The Phase 11 4-way agreement (StrongDualityMode, ProductMode, hand enumeration, production Benders)
+that empirically certified the continuous leader/follower sign convention relies on
+BilevelJuMP's KKT/SOS1/Fortuny-Amat single-level reductions, which in turn rely on the follower's
+LP being convex/continuous with clean strong duality. An integer leader/follower reformulation may
+have NO valid KKT reduction at all (KKT requires differentiability/convexity assumptions integer
+variables break) — reusing the "certify via BilevelJuMP" pattern unchanged for the integer case is
+not guaranteed to be meaningful, and the codebase has ALREADY documented a related capacity limit
+("BigMMode+HiGHS MIQP incapacity pinned as an asserted negative regression").
+
+**Why it happens:**
+The Phase 11 validation pattern worked well and is a strong, recent precedent; assuming it
+generalizes to "any" Stackelberg variant, including an integer one, is a natural but unverified
+extrapolation.
+
+**How to avoid:**
+- Explicitly check which BilevelJuMP reduction modes (if any) are valid for a MIQP/mixed-integer
+  follower BEFORE relying on it as the integer rung's validation oracle; the existing pinned
+  BigMMode+HiGHS MIQP-incapacity regression is a strong hint this path is already partially closed.
+- If BilevelJuMP cannot serve as the validation oracle for the integer case, use the ALREADY-
+  precedented fallback from Phase 11 itself: hand/brute-force enumeration over the (small) discrete
+  investment grid on a tiny instance, cross-checked against the production integer Benders loop.
+
+**Warning signs:**
+- An integer-expansion phase plan that assumes BilevelJuMP validation "just works" without first
+  checking mode compatibility with integer variables, given the project's own pinned MIQP-
+  incapacity regression.
+
+**Phase to address:** Integer investment expansion phase.
 
 ---
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Build the AC-OPF oracle from a freshly-sampled/re-derived scenario instead of the SOCP's own solved snapshot | Faster to stand up independently | Guaranteed, uninformative "mismatch" (Pitfall 1) | Never for the certification path; fine for an unrelated exploratory Ipopt script |
-| Loosen the AC-vs-SOCP comparison tolerance when a high-PV hour disagrees | Makes the check green fast | Discards the milestone's most scientifically interesting finding (Pitfall 2) | Never without first checking reverse-flow/voltage-binding state |
-| Reuse the bare identifier `μ` for the reactive-consensus dual | Matches existing docstring language | Collides with the live adaptive-ρ `μ` kwarg and the `Scenario` golden-hash schema (Pitfall 3) | Never in code identifiers; fine in prose/math notation only, with an unambiguous code name |
-| Share one `ρ` across active and reactive consensus blocks without re-deriving the balancing | Less new code | Scale-mismatched residual balancing, degraded convergence (Pitfall 4) | Only after empirically confirming the two blocks' natural residual scales are comparable |
-| Skip re-measuring the Clarabel `NUMERICAL_ERROR` rate under Q-consensus | Faster to ship the happy path | Combinatorial exposure repeats v2.0's own already-learned lesson (Pitfall 5) | Never — this is a gating measurement, not an optional one |
-| Hand-parse OpenDSS lengths/units instead of using PMD | Feels lower-dependency | Silent global impedance rescale (Pitfall 6) | Never — PMD is already the project's own prescribed data oracle for exactly this |
-| Apply the mean-diag/mean-offdiag reduction to every linecode without a per-linecode fidelity check | Simpler pipeline | Silent averaging error on untransposed/asymmetric segments (Pitfall 7) | Never for shipped fixtures; fine for a first rough-draft exploration |
-| Silently drop regulators/capacitors during ingestion | Simpler parser, faster to a working feeder | Case may silently stop being voltage-binding (Pitfall 8) | Only with an explicit, documented decision AND a binding-constraint acceptance test |
-| Re-pin IEEE-123 goldens to whatever the new real-data run produces, with no invariant comparison | Fast "done" checkbox | Masks a units/reduction/omission bug as "the new correct answer" (Pitfall 9) | Never without an explicit before/after invariant table |
-| Describe the directional reproduction number as "reproducing the thesis" in prose/docstrings | Sounds like a stronger result | Overclaiming; undermines the project's own documented-assumptions core value (Pitfall 10) | Never — always attach the directional/public-data qualifier |
-| Pin a new golden from the first successful run | Fast | Freezes transient numerical jitter from the known Clarabel flake as "the" answer (Pitfall 11) | Never without a repeated-run stability check first |
+|----------|-------------------|-----------------|------------------|
+| Reusing `assert_socp_exact!`'s `rtol`/`atol` unmodified for the overvoltage-capable formulation | Zero new gate code | Silently certifies a formulation the tolerance was never derived for | Never — always re-derive or add a new gate |
+| Copying `PVBattery`'s no-binaries docstring claim onto the 4Q-BESS device without re-derivation | Fast device-model reuse | A silent P-Q co-optimum the complementarity check can no longer catch | Never for the shipped rung; acceptable only as a throwaway spike explicitly labeled unverified |
+| Rebuilding the operational JuMP model each rolling-horizon window instead of `Parameter`-threading `horizon_state` | Simpler per-window code | Reintroduces the rebuild-in-loop anti-pattern; breaks the project's stated build-once discipline | Acceptable only for a first correctness spike on a toy 2-bus fixture, never for the shipped MPC rung |
+| Reusing the continuous Benders `max_iter=100`/checkpoint cadence for integer L-shaped cuts | No new tuning work | Premature iteration-cap failures or unbounded cut-store growth at higher iteration counts | Never for the shipped rung; acceptable only for an initial toy-instance smoke test |
+| Widening the PVAL-04 `operational_builders` allowlist or touching the shared tripwire loop to "make room" for the lifted planning builder | Fast unblock | Silently stops checking operational-layer builders for binaries too | Never |
+| Pinning a stochastic golden on the first seed/scenario-count that converges cleanly | Fast test-green | Fragile golden, may not represent a stable finding (Phase-18 style knife-edge risk) | Never — always sweep first |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
-|--------------|-----------------|-------------------|
-| Ipopt (`NLP()`, AC-OPF oracle) | Treating it as a drop-in "ground truth" the way Clarabel is treated for the convex core | Multi-start, check for local-optimum sensitivity, and validate the angle-recovery/units bridge on a trivial fixture first (Pitfall 1) |
-| `AgrOpt`/`DsoOpt` reactive fields (`qag`) | Assuming the documented "PLACEHOLDER... currently NOT read" field just needs to be "turned on" | Confirm (as done here, by direct code read) that it is currently inert; making it load-bearing is new modeling work, not a flag flip |
-| `solve_admm`'s `μ` kwarg / `Scenario`'s `μ` field | Reusing the name for the new reactive-consensus dual | Distinct identifier for the reactive dual; audit the `Scenario` golden-hash schema boundary first (Pitfall 3) |
-| PowerModelsDistribution (OpenDSS parse) | Hand-rolling the length/units/reduction logic instead of using PMD as the prescribed data oracle | Parse via PMD (CLAUDE.md's own "PMD as data oracle" pattern), then apply/verify the positive-sequence reduction on PMD's output |
-| Existing IEEE-123-based goldens | Re-pinning them to new real-data numbers with no investigation of why the numbers moved | Explicit before/after invariant comparison (voltage-binding, exactness margin, iteration count) as a gating review step (Pitfall 9) |
-| Documenter (`docs/make.jl`) | Assuming `Pkg.test()` passing implies the docs build is still green | Run the full docs build explicitly as a phase-completion gate for every phase touching a literate page (Pitfall 12) |
+|--------------|------------------|--------------------|
+| `assert_socp_exact!` (PF-04 gate) | Loosening its tolerance to accommodate a new formulation instead of adding a new, separately-derived certificate | New certificate function per new formulation; cross-validate against `ACPowerFlow`, never against the same relaxed cone |
+| `operational_oracle`'s SEAM-01 stubs (`objective_hook`, `horizon_state`, `role`/`z`) | Wiring a stub live in only ONE of its three consumers (centralized/ADMM/planning) | Enumerate all consumers explicitly; fail loudly (ArgumentError) on any unwired consumer, matching the existing `role`/`z`-pin guard style |
+| `solve_admm`'s build-once/`Parameter` discipline | Rebuilding AGR-OPT/DSO-OPT (or a new MPC/stochastic model) inside a per-iteration or per-window loop | Build once outside the loop; mutate via `Parameter`/`set_objective_coefficient`/`set_rho!`; re-solve only |
+| PVAL-04 registry + source-scan tripwire (`test_planning_noninteger.jl`) | Loosening the shared mechanism (allowlist, loop) to accommodate the integer builder | Add a new, separate positive-check registry entry for the lifted builder; leave the shared zero-binaries loop untouched for everyone else |
+| `Scenario`/`savename` (`Scenario.jl`, `store.jl`) | Adding new stochastic/rolling-horizon fields without the `digits=10`-aware convention | Route new float-valued fields through `scenario_filename`'s existing convention; add a collision regression test |
+| `assert_radial` (Feeder construction-time guard) | Loosening/removing it globally to allow a meshed feeder | Add a NEW meshed feeder type/constructor that `assert_radial` does not apply to; leave the radial guard fully intact |
+| `reactive_consensus` pinned default (REACT-01/02) | Replacing the pinned one-shot mechanism with live dual-ascent under the SAME flag | Add a new, separate opt-in kwarg for live reactive dual-ascent, layered on top of the existing pinned mechanism |
+| Aggregator post-solve `p_ch·p_dch<τ` check | New 4Q-BESS device type not registered in whatever enumerates device types for the check | Build an explicit device-type registry (PVAL-04-style) the check must cover; test that a new device type cannot silently ship uncovered |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Multi-start Ipopt from many initializations per AC-OPF comparison hour | Wall-clock dominated by redundant NLP solves across 24h × many fixtures | Warm-start one run from the SOCP solution itself as the primary attempt; reserve multi-start for hours that already disagree | Full 24h × IEEE-123 comparison sweep |
-| Two-consensus-block ADMM (λ, μ) needing more iterations to jointly converge | Iteration count rising well past the existing ~10-100 baseline | Re-derive joint residual balancing (Pitfall 4) rather than inheriting the active-only tuning | Any Q-consensus fixture at IEEE-13/123 scale |
-| Re-running Clarabel-flake-prone SOCP solves many times for golden-stability checks (Pitfall 11) | Golden-pinning step itself becomes slow | Bound the repeated-run count to what's needed for confidence (e.g. 5-10 reruns), not an unbounded loop | Any new fixture near the known conditioning edge case |
-| PMD-based OpenDSS parsing of the full unbalanced IEEE-123 dataset on every test run | Slow test suite if re-parsed from raw `.dss` each time | Parse once, vendor the reduced positive-sequence fixture as a clean Julia data file (mirroring the existing `ieee123.jl` pattern), re-parse only when re-deriving | Every CI run, if parsing isn't cached/vendored |
-
-## Security Mistakes
-
-Maps to research integrity/reproducibility, as in v1.0/v2.0.
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Reporting an AC-OPF "exactness certified" result without disclosing which hours (if any) showed genuine disagreement | A thesis/paper claim of "certified exact" that quietly omits a known-inexact regime | Report the full per-hour/per-branch comparison table (Pitfall 2), not a single pass/fail headline |
-| Reporting the directional welfare-gain figure without the public-data/reduction qualifier | Overclaims thesis reproduction to a reader who can't see the assumption chain | Fixed qualifier phrase + consolidated assumptions doc page, cross-referenced everywhere the number appears (Pitfall 10) |
-| Pinning a golden from an unstable, single run near the known Clarabel conditioning edge | A "reproducible" result that isn't actually stable across reruns/machines | Repeated-run stability check before pinning any new golden (Pitfall 11) |
-| Silently dropping regulators/capacitors during real-data ingestion with no documentation | A feeder that quietly no longer represents the physical scenario it claims to (voltage-binding case becomes slack) | Explicit, documented per-component-type modeling decision (Pitfall 8) |
-
-## UX Pitfalls
-
-"Users" = the PhD researcher and collaborators extending/reading this validation layer.
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|------------------|
-| AC-OPF comparison reports only "exact"/"inexact", no per-hour/per-branch detail | Can't tell a comparison bug from a genuine high-PV inexactness | Surface the full gap table as a first-class output (mirrors PF-04's own `maxgap` precedent) |
-| Reactive DLMP reported with no sign/economic-direction sanity check documented anywhere | Researcher can't tell if the reactive price is trustworthy | Hand-computed 2-bus toy-case pin, treated with the same rigor as the existing active DADP pin |
-| Real-IEEE-123 fixture's provenance (units resolution, reduction fidelity, component omissions) buried in a parsing script, not in the fixture's own docstring | Future reader can't tell what's real vs. approximated without reading a throwaway script | Mirror the existing `ieee123.jl` DATA PROVENANCE NOTE convention for every ingestion decision |
-| Directional-reproduction number reported without a single, discoverable page explaining its full assumption chain | Collaborator/committee member can't audit what would need to change for a different number | One consolidated, cross-referenced "reproduction assumptions" doc page (Pitfall 10) |
+|------|----------|-------------|-----------------|
+| Monolithic scenario-tree SOCP on Clarabel | Solve times/memory growing steeply with scenario count; eventual Clarabel OOM or excessive wall-clock | Establish an empirical scenario-count ceiling on IEEE-13/123 before scaling; consider Benders/L-shaped decomposition of the recourse instead of a bigger monolithic build | Somewhere past a few dozen scenarios on IEEE-123-scale cones, depending on machine memory — measure, don't assume |
+| Rebuilding the operational model per rolling-horizon window | Wall-clock scaling linearly (or worse) with simulation length; JuMP model construction dominating profile | `Parameter`-thread `horizon_state`; build once, re-solve per window | Any simulation longer than a handful of windows makes the rebuild cost visible |
+| Integer L-shaped cut-store growth at 10-100x the continuous iteration count | Master solve time growing per-iteration as the row count balloons | Re-examine the existing "unbounded accumulation retained" debt; add pruning/aggregation if iteration counts are materially higher than the continuous case | Once iteration counts exceed the continuous case's already-tested ~66-iteration scale by an order of magnitude |
+| Live two-block ADMM (active + reactive dual ascent) with unretuned ρ/τ/μ | Slower or non-convergence relative to the single-block case at the same feeder scale | Re-tune/re-derive the joint stopping rule and ρ-adaptation explicitly for two blocks before scaling to IEEE-123 | Any feeder scale beyond the toy 2-bus fixture where the joint dynamics were first checked |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **AC-OPF oracle wired:** Ipopt solves and returns a comparison — but does it consume the SOCP's OWN solved feeder/aggregator/dispatch snapshot, not a freshly-sampled one (Pitfall 1)?
-- [ ] **Exactness "certified":** the milestone reports a pass — but was a genuine high-PV/reverse-flow stress fixture actually exercised, and was any disagreement there investigated (not tolerance-adjusted) before concluding "certified" (Pitfall 2)?
-- [ ] **Reactive consensus added:** `μ` dual-ascent code exists and converges — but is it under a NAME distinct from the existing adaptive-ρ `μ` kwarg and `Scenario` field (Pitfall 3)?
-- [ ] **Reactive consensus "works":** loop converges on IEEE-13/123 — but does the EXISTING active-only regression still pass byte-identically with Q-consensus disabled (Pitfall 4)?
-- [ ] **Reactive DLMP reported:** a number comes out — but was it pinned against a hand-computed 2-bus toy case, the same rigor as the active DADP (Pitfall 4)?
-- [ ] **Clarabel robustness:** the reactive-consensus fixtures run — but was the `NUMERICAL_ERROR` rate actually re-measured under Q-consensus, not assumed from v1.0/v2.0 (Pitfall 5)?
-- [ ] **Real IEEE-123 impedances ingested:** the parser runs and produces plausible numbers — but was the length/units convention resolved via PMD and cross-checked against a published reference, not just internally self-consistent (Pitfall 6)?
-- [ ] **Positive-sequence reduction applied:** `R1/X1` values exist per linecode — but was a reduction-fidelity metric checked per linecode, not just verified once on "linecode.1" (Pitfall 7)?
-- [ ] **Regulators/capacitors/switches handled:** the real-data feeder builds and validates — but is there an explicit, documented decision per component type, and does the intended voltage-binding scenario ACTUALLY bind (Pitfall 8)?
-- [ ] **IEEE-123 goldens updated:** tests pass with new numbers — but was a before/after invariant comparison (voltage-binding, exactness margin, iteration count) done, and are the OLD synthetic-fixture goldens kept as an independent regression (Pitfall 9)?
-- [ ] **Directional reproduction claimed:** a welfare-gain sign/magnitude is reported — but is the public-data/reduction qualifier attached everywhere the number appears, with a consolidated assumptions doc page (Pitfall 10)?
-- [ ] **New goldens pinned:** a bit-for-bit value is committed — but was run-to-run stability actually checked (not pinned from a single run), especially for fixtures near the known Clarabel conditioning edge (Pitfall 11)?
-- [ ] **Docs build:** literate pages added/edited for this milestone — but was the FULL `docs/make.jl` build actually run and checked green, not just `Pkg.test()` (Pitfall 12)?
+- [ ] **Overvoltage-capable relaxation:** Often missing a NEW, independently-derived exactness
+      certificate — verify it is not just the existing `assert_socp_exact!` tolerance loosened, and
+      that it cross-validates against `ACPowerFlow` on the EXACT-04 fixtures (IEEE-13 `pv_scale=1.2`,
+      real IEEE-123 upper band).
+- [ ] **MPC / rolling-horizon:** Often missing a terminal-SOC/temperature term and a re-run of the
+      `p_ch·p_dch<τ` complementarity check AT THE ACTUAL ROLLING WINDOW LENGTH — verify a battery
+      is not silently drained at every window edge and the no-binaries proof still holds at
+      `T_window`.
+- [ ] **Stochastic uncertainty:** Often missing an explicit derivation of what the "stochastic
+      DADP" actually is (probability-scaled dual vs. re-scaled marginal value) — verify it is
+      documented as its own citable component, never silently summed into the existing DLMP
+      decomposition.
+- [ ] **Meshed networks:** Often missing an angle-consistency/loop constraint — verify
+      `assert_socp_exact!` (or its meshed analogue) is checked ALONGSIDE an explicit loop-
+      consistency check, not per-branch alone.
+- [ ] **4Q-BESS:** Often missing a re-derived (or reinstated) complementarity check for the P-Q
+      coupled feasible region — verify the post-solve `p_ch·p_dch<τ` check actually runs against
+      the new device type, not just the old 2D `PVBattery`.
+- [ ] **Integer investment expansion:** Often missing a small-instance independent validation
+      (BilevelJuMP-mode-compatible or brute-force enumeration) BEFORE trusting the production
+      integer Benders loop at scale — verify the guard lift is scoped (PVAL-04 registry entry
+      added, not the shared mechanism loosened) and every non-lifted builder still asserts zero
+      binaries in the same test run.
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|-----------------|
-| AC-OPF comparison built against mismatched/re-sampled data | MEDIUM | Rewire the oracle to consume the SOCP's own solved snapshot; discard and re-run all prior comparison results (they compared different problems) |
-| A genuine SOCP inexactness was tolerance-adjusted away instead of investigated | MEDIUM-HIGH | Revert the tolerance change; re-run the stress fixture; write up the genuine inexactness finding as a documented limitation, not a bug fix |
-| `μ` naming collision discovered late (Scenario golden hashes already affected) | MEDIUM-HIGH | Rename the reactive quantity; regenerate any Scenario-hash-affected goldens; audit every call site that read the ambiguous `μ` |
-| Q-consensus broke the existing active-only regression | MEDIUM | Gate Q-consensus behind an explicit flag/dispatch path if not already; re-verify the active-only path is untouched; re-derive joint residual balancing before re-enabling |
-| Clarabel flake rate under Q-consensus never measured, discovered via CI flakiness later | MEDIUM | Add the retry ladder (mirroring `src/planning/retry.jl`) retroactively; re-measure; consider revisiting per-unit base / tolerance levers |
-| IEEE-123 length/units error discovered after goldens pinned | MEDIUM-HIGH | Re-parse via PMD with the correct convention; discard and re-derive every downstream golden that depended on the mis-scaled impedances |
-| Positive-sequence reduction found invalid on some linecodes after shipping | MEDIUM | Re-derive per-linecode fidelity metrics; re-reduce the affected linecodes with the native (possibly non-3-phase) matrix; re-verify against the published reference |
-| Regulators/capacitors omitted, case found to be silently slack | MEDIUM-HIGH | Add the omitted component's approximate model (or explicitly re-tune the stress scenario); re-verify the binding-constraint acceptance test; re-pin affected goldens |
-| Directional reproduction number found to be overclaimed in existing docs/prose | LOW | Add the qualifier retroactively everywhere the number is cited; write the consolidated assumptions page if missing |
-| An unstable golden (pinned from one run) starts failing intermittently on CI | LOW-MEDIUM | Re-run repeatedly to characterize the instability; either fix the underlying conditioning or re-pin with an explicit tolerance band, never re-pin blindly to make CI green again |
+|---------|----------------|------------------|
+| Overvoltage rung ships with a loosened `assert_socp_exact!` tolerance masquerading as a new certificate | MEDIUM | Revert the tolerance change; add a genuinely new, separately-named certificate function; re-run `assert_ac_exact!` cross-validation on EXACT-04 fixtures before re-shipping |
+| A regression golden silently changes on the default (flag-off) path after a new axis lands | LOW-MEDIUM | Bisect the change to the specific commit; add an explicit default-path regression test; restore byte-identical behavior before continuing the feature |
+| Meshed formulation passes `assert_socp_exact!` per-branch but has no loop-consistency check | HIGH | Requires adding the missing angle/loop constraint to the formulation itself (not just a test) and re-validating against the AC oracle from scratch — treat any previously-reported meshed "exact" result as unverified until this lands |
+| 4Q-BESS ships without a re-derived complementarity check and a later co-optimum is found | MEDIUM | Reinstate the post-solve `p_ch·p_dch<τ` hard check for the device; audit any published prices/results that used the device before the check existed |
+| PVAL-04 guard lift accidentally loosens operational-builder protection | LOW | Revert to a scoped, per-builder registry entry for only the lifted planning builder; re-run the full unmodified `test_planning_noninteger.jl` to confirm every other builder still reports zero binaries |
+| Stochastic golden pinned on a fragile single-seed draw later shown unstable | MEDIUM | Re-run the Phase-18-style sweep across seeds/scenario counts; re-pin on a sign-safe, sweep-validated quantity; document the walked-back finding honestly (matching the project's honest-finding-as-deliverable ethic) |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
-|---------|-------------------|----------------|
-| 1. AC-OPF comparison mismatch (local optima, data drift, units, angle recovery) | AC-exactness oracle phase | Oracle consumes the SOCP's own solved snapshot; angle-recovery validated on a trivial 2-bus fixture first; multi-start Ipopt sensitivity checked |
-| 2. Genuine SOCP inexactness mistaken for oracle bug | AC-exactness oracle phase | High-PV/reverse-flow stress fixture exercised; per-hour/per-branch gap table reported; any disagreement investigated for reverse-flow/voltage-binding state before any tolerance change |
-| 3. `μ` naming collision (reactive dual vs. adaptive-ρ band) | Reactive-power consensus phase (first design decision) | Distinct code identifier chosen and grepped-clean; `Scenario` schema boundary audited before any field is added |
-| 4. Q-consensus convergence degradation + active-only regression break | Reactive-power consensus phase | Active-only regression proven byte-identical with Q-consensus disabled; joint residual balancing re-derived; reactive DLMP pinned on a from-scratch 2-bus toy case |
-| 5. Clarabel `NUMERICAL_ERROR` amplification under Q-consensus | Reactive-power consensus phase | Empirical failure-rate re-measurement under Q-consensus fixtures; retry-ladder ported from the planning layer if the rate justifies it |
-| 6. IEEE-123 length/units ambiguity | Real IEEE-123 impedances phase | PMD-based parse (not hand-parse); cross-check against an independently-published reference magnitude |
-| 7. Positive-sequence reduction validity per linecode | Real IEEE-123 impedances phase | Per-linecode reduction-fidelity metric reported, not just verified on one representative linecode |
-| 8. Regulators/capacitors/switches unmapped, case silently un-tightened | Real IEEE-123 impedances phase | Explicit documented decision per component type; binding-voltage-constraint acceptance test added |
-| 9. Silent golden re-pin masking a real regression | Real IEEE-123 impedances phase | Before/after invariant comparison table required for any golden re-pin; synthetic-fixture goldens kept as an independent regression |
-| 10. Directional reproduction overclaiming / undocumented assumptions | Directional thesis reproduction phase | Fixed qualifier phrase used everywhere; consolidated assumptions doc page cross-referenced from the reported number |
-| 11. Goldens pinning transient Clarabel-flake noise | All four phases, at golden-pinning time | Repeated-run stability check required before any new golden from this milestone is committed |
-| 12. Retrospective lessons (inert mechanism, docs-build-red, constant-offset) re-learned instead of applied | All four phases, cross-cutting | Positive-mechanism test (not just "it runs"); full `docs/make.jl` build checked per phase; constant/offset reconciliation required for any new algebraic doc narration |
+|---------|--------------------|----------------|
+| 1–4 (overvoltage certificate, multi-start AC pricing, penalty contamination, default-path/gate-ordering) | Overvoltage-capable relaxation phase | New certificate cross-validated against `ACPowerFlow` on EXACT-04 fixtures; default-path regression test green; throw-vs-report polarity explicitly decided and documented |
+| 5–9 (terminal-SOC myopia, unfair benchmark, price-discontinuity misread, `horizon_state` build-once, overvoltage interaction) | MPC / rolling-horizon / RTP phase | Terminal-SOC test at `T_window`; explicit value-of-information framing in any cost-gap finding; repeat-solve noise floor established before any volatility claim; `Parameter`-threading verified (no rebuild-in-loop); explicit sequencing decision recorded vs. Overvoltage phase |
+| 10–13 (per-scenario dual scaling, Clarabel/SCS ceiling, golden stability, `Scenario`/`objective_hook` wiring) | Stochastic PV/demand uncertainty phase | Stochastic-DADP derivation documented and cited; scenario-count ceiling measured and enforced; golden pinned only after a seed/scenario-count sweep; `savename` collision test added; all three `objective_hook` consumers enumerated |
+| 14–18 (loop/angle constraint, structural-gap framing, 4Q complementarity, two-block dual ascent, guard-scoping) | Meshed networks + 4Q-BESS phase | Explicit loop-consistency check alongside cone check; meshed-gap framing checked against literature before any tuning attempt; complementarity check re-derived/reinstated for 4Q device with a registry test; joint (not independent) two-block stopping-rule liveness regression; `assert_radial`/`reactive_consensus` defaults verified untouched by regression |
+| 19–23 (invalid standard cuts, weaker integer L-shaped convergence, HiGHS callback mixing, PVAL-04 scoped lift, BilevelJuMP mode compatibility) | Integer investment expansion phase | Small-instance independent validation (BilevelJuMP-mode-compatible or brute-force) before trusting production loop; `max_iter`/checkpoint cadence re-measured, not inherited; explicit lazy-constraint-vs-external-loop decision recorded; full unmodified `test_planning_noninteger.jl` green with a new, separate registry entry for the lifted builder(s) |
 
 ## Sources
 
-- `src/models/exactness.jl` (read directly, 2026-07-25) — HIGH confidence: `assert_socp_exact!`'s
-  actual scale-free `rtol`/`atol` combined-tolerance contract, and its explicit statement that a
-  strict cone at the optimum is a physically-meaningful PF-04 refusal, not a solver error.
-- `src/admm/solve_admm.jl`, `src/admm/AgrOpt.jl`, `src/admm/DsoOpt.jl` (read directly, 2026-07-25) —
-  HIGH confidence: the EXISTING `μ::Real = 10.0` adaptive-ρ band kwarg (threaded through
-  `solve_admm`'s signature and derived from Boyd §3.4.1 residual balancing), and the CONFIRMED
-  currently-inert `qag` reactive placeholder field with its own docstring naming a future `μ`
-  dual-ascent extension — the direct evidentiary basis for Pitfall 3.
-- `src/experiments/Scenario.jl` (grepped directly, 2026-07-25) — HIGH confidence: `μ::Float64 = 10.0`
-  is part of the flat, `savename`-serialized, golden-hash-relevant `Scenario` schema (also threaded
-  through `sweep.jl`/`store.jl`), confirming Pitfall 3's reproducibility-breakage risk is concrete,
-  not hypothetical.
-- `src/data/ieee123.jl` (read directly, 2026-07-25) — HIGH confidence: the synthetic fixture's own
-  DATA PROVENANCE NOTE, the plan-07-05 calibration finding ("genuinely voltage-constrained... under-
-  voltage on the long load laterals, over-voltage under midday PV reverse flow"), and the
-  representative (not App.-E-verbatim) impedance values this milestone will replace — the direct
-  basis for Pitfalls 8 and 9.
-- `src/solver/factory.jl`, `src/solver/ProblemClass.jl` (read directly, 2026-07-25) — HIGH
-  confidence: `NLP()` already dispatches to Ipopt via `select_optimizer`, confirming the AC-OPF
-  oracle has a ready-made, un-hacked solver-abstraction seam to build on.
-- `~/.claude/projects/.../memory/ieee123-real-impedances-source.md` (read directly, 2026-07-25) —
-  MEDIUM-HIGH confidence: the project's own prior research on the public OpenDSS IEEE-123 source,
-  the PMD-as-data-oracle execution path, the mean-diag/mean-offdiag reduction recipe (verified only
-  on "linecode.1"), and the explicit caveat that exact thesis-figure reproduction requires the
-  IP-blocked Appendix E — direct basis for Pitfalls 6, 7, 10.
-- `.planning/STATE.md` (read directly, 2026-07-25) — HIGH confidence: the accepted, unresolved,
-  version-independent, intermittent Clarabel `NUMERICAL_ERROR` flake (root-caused to per-unit-base-
-  dependent cone-slack sensitivity) and the v2.0 Phase-12 measurement explicitly NOT covering the
-  full-SOCP-oracle trigger this milestone's reactive-consensus and real-impedance work newly
-  exercises — direct basis for Pitfalls 5 and 11.
-- `.planning/PROJECT.md` (read directly, 2026-07-25) — HIGH confidence: the v2.1 milestone scope
-  statement (directional reproduction, not exact-figure requirement; the four target features)
-  and the v2.0 Phase 14 retrospective note ("Deferrable +18 objective-offset reconciliation in
-  docs") — direct basis for Pitfalls 10 and 12.
-- `.planning/research/v1.0/PITFALLS.md` — HIGH confidence carry-over basis for Pitfall 1 (SOCP
-  exactness theory, reverse-flow/over-voltage failure regime), Pitfall 3 (unit/per-unit scaling),
-  Pitfall 4 (solver status discipline), and Pitfall 7 (dual sign conventions) — this milestone's
-  Pitfalls 1-2 and 6 directly extend that document's own named failure modes across a new
-  model-family boundary (AC-OPF) and a new data-ingestion boundary (real OpenDSS parse).
-- `.planning/research/PITFALLS.md` (the prior, v2.0 planning-layer pitfalls research, now
-  superseded as the live file by this document but preserved in git history) — HIGH confidence
-  carry-over basis for the "cut-validity"/"looks-done-but-isn't" discipline pattern this document's
-  Pitfall 9 and the cross-cutting Pitfall 12 checklist explicitly reapply, and for the precedent of
-  measuring (not assuming) the Clarabel `NUMERICAL_ERROR` rate under new call patterns (Pitfall 5).
-- Standard SOCP branch-flow exactness literature (Farivar-Low, Gan-Low-Topcu — exactness fails under
-  reverse flow / binding upper voltage) and IEEE-123 / OpenDSS community knowledge (the length/units
-  ambiguity is a well-documented community trap, not project-specific) — MEDIUM confidence, general
-  domain knowledge not independently re-verified against the live OpenDSS dataset this session;
-  flagged for direct verification once the real `.dss` files are actually parsed in the
-  implementation phase.
+- `/home/pedro/programming/TSO-DSO/src/models/exactness.jl` — `assert_socp_exact!` (PF-04 gate) implementation and documented tolerance derivation.
+- `/home/pedro/programming/TSO-DSO/src/models/oracle.jl` — `operational_oracle` + SEAM-01 extension stubs (`objective_hook`, `horizon_state`, `role`/`z`-pin, meshed slot), read directly for the exact inert-stub behavior and documented extension points.
+- `/home/pedro/programming/TSO-DSO/src/admm/solve_admm.jl`, `src/admm/DsoOpt.jl` — build-once/`Parameter`-re-solve ADMM design, Boyd two-residual stopping rule, and the pinned (not live) `reactive_consensus`/`qag_dso` mechanism.
+- `/home/pedro/programming/TSO-DSO/src/devices/PVBattery.jl` — the documented active-power-only strict-cost-ordering argument for omitting a `p_ch·p_dch==0` complementarity constraint.
+- `/home/pedro/programming/TSO-DSO/src/planning/benders.jl` — Benders cut construction (`add_optimality_cut!`/`add_feasibility_cut!`), sign-convention provenance, and the fail-loud follower/oracle solve-gating pattern.
+- `/home/pedro/programming/TSO-DSO/test/test_planning_noninteger.jl` — PVAL-04 no-binaries registry + source-scan tripwire mechanism, read directly for the exact scoping to reason about a correct guard lift.
+- `/home/pedro/programming/TSO-DSO/src/experiments/Scenario.jl`, `src/experiments/store.jl` — `savename`/`scenario_filename` collision-avoidance convention (`digits=10`, CR-01 fix).
+- `/home/pedro/programming/TSO-DSO/.planning/PROJECT.md` — v3.0 milestone scope, the five target axes, and the explicitly-flagged overvoltage/meshed relaxation-machinery interdependency.
+- `/home/pedro/programming/TSO-DSO/.planning/RETROSPECTIVE.md` — cross-milestone lessons this file directly builds on: gate-then-golden ordering, honest-finding-as-deliverable, "tests passing ≠ mechanism live" (CR-01), sign-safe economic goldens, measurement-before-golden (Phase 18).
+- General decomposition/optimization theory (Benders with integer recourse requiring integer L-shaped cuts; meshed AC/SOC relaxations lacking the radial exactness proof; ADMM two-block joint stopping criteria) — MEDIUM confidence, standard results not re-verified against a specific paper this session; flagged for a targeted literature check at phase-start if the roadmap wants HIGH confidence before implementation.
 
 ---
-*Pitfalls research for: v2.1 Validation & Reproduction milestone (AC-OPF exactness oracle,
-reactive-power ADMM consensus, real IEEE-123 impedances, directional thesis reproduction) — a
-Julia/JuMP TSO-DSO convex-optimization research bench where duals ARE the product.*
-*Researched: 2026-07-25*
+*Pitfalls research for: v3.0 Research Extension Rungs (TSO-DSO Integration Optimization Framework)*
+*Researched: 2026-07-26*
