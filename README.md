@@ -18,7 +18,7 @@ for model adaptations and novel research extensions.
 > run it end-to-end with open-source solvers, and get trustworthy, reproducible results
 > and prices — with every model assumption documented and every layer swappable.
 
-## The two layers
+## The layers
 
 ### ⚡ Operational layer (v1.0) — day-ahead dynamic distribution pricing
 
@@ -60,6 +60,24 @@ via Gauss-Seidel diagonalization** over a shared transmission corridor.
   equilibrium. The never-"the" rule is encoded in code, not prose.
 - Continuous-only scope is **enforced by an automated no-binaries guard** over every
   planning-layer subproblem builder (registry + tripwire, negative-tested).
+
+### 🔬 Validation & reproduction (v2.1) — hardening both layers
+
+Every downstream extension rests on validated, citable ground:
+
+- **AC-exactness oracle**: an independent nonconvex AC-OPF peer (`ACPowerFlow`, Ipopt,
+  true equality `l·v = P² + Q²`) certifies the SOCP relaxation per-hour
+  (`assert_ac_exact!`, report-don't-throw). It surfaced a **genuine high-PV/reverse-flow
+  inexactness** of the SOC relaxation as a first-class, citable finding.
+- **Certified reactive DLMP**: a genuine per-node reactive balance behind a
+  `reactive_consensus` flag (byte-identical default path), whose certified dual is a
+  documented 5th DLMP component — never summed into the active-price total.
+- **Real IEEE-123 impedances**: positive-sequence R₁/X₁ reduced from the public OpenDSS
+  case via a dependency-free Fortescue parser (no PMD runtime dependency).
+- **Directional thesis reproduction**: the thesis's DSO-surplus **sign flip reproduces**
+  on real public data; the +25% welfare-ratio magnitude does **not** — stated plainly,
+  always with the "directional, public-data" qualifier, pinned only on sign-safe
+  quantities.
 
 ## Quickstart
 
@@ -108,9 +126,14 @@ to the thesis/PSR equations it encodes:
 | 0 | Toy DC | architectural spine, solver factory, duals |
 | 1–2 | LinDistFlow | thesis 3.31–3.33, 3.43 |
 | 3 | SOCP + Exactness | thesis 3.39, 3.43–3.45 |
+| 3 | AC-Exactness Oracle | Farivar & Low (2013), Gan et al. (2015); nonconvex AC peer |
 | 3 | Devices + GLB-CVX | thesis 3.2–3.23, 3.38 |
 | 4 | DADP/DLMP Pricing | thesis 3.31, 3.46–3.47 |
 | 5 | ADMM Decomposition | thesis 3.46–3.47 |
+| — | IEEE-123 Real Impedances | public OpenDSS case, Fortescue reduction |
+| — | Thesis Reproduction — IEEE-123 | thesis Case B, directional/public-data |
+| — | Thesis Reproduction — Assumptions | full assumption/reduction chain |
+| — | SOC Relaxation Applicability | measured exactness-boundary maps |
 | 6 | Stackelberg–Benders (planning) | PSR N1–N2 note; BilevelJuMP certification |
 | 7 | Nash Diagonalization & Shared Corridor | PSR N1–N2 note, multi-distributor |
 
@@ -148,8 +171,9 @@ src/
   experiments/  declarative Scenario / run_scenario / sweeps / DrWatson storage
   diagnostics/  plotting stubs (CairoMakie via package extension)
 ext/            CairoMakie / Gurobi / Mosek package extensions
-docs/           Documenter + Literate sources (the rung ladder)
-test/           ~2,280 tests: unit, golden regressions, acceptance gates, guards
+docs/           Documenter + Literate sources (the rung ladder) + Typst writeups
+scripts/        authored analysis & reproduction scripts (offline, seeded)
+test/           ~2,350 tests: unit, golden regressions, acceptance gates, guards
 ```
 
 ## Testing & regression posture
@@ -166,7 +190,8 @@ exported symbol fails the build.
 |-----------|-------|--------|
 | v1.0 Operational Transactive-Energy Core | rungs 0–5, DADP/DLMP, ADMM | ✅ shipped 2026-07-20 |
 | v2.0 Stackelberg-Nash TSO–DSO Planning Game | rungs 6–7, Benders + Nash | ✅ shipped 2026-07-24 |
-| Future axes | integer investment expansion, stochastic scenarios, MPC/rolling horizon, meshed + 4Q-BESS | 📋 not yet scoped |
+| v2.1 Validation & Reproduction | AC oracle, reactive DLMP, real IEEE-123 impedances, directional thesis reproduction | ✅ shipped 2026-07-26 |
+| v3.0 Research Extension Rungs | overvoltage-capable relaxation, MPC/rolling-horizon/RTP, stochastic scenarios, meshed + 4Q-BESS, integer investment expansion | 📋 scoped 2026-07-26 (Phases 19–24) |
 
 ## Theory sources
 
