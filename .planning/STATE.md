@@ -3,14 +3,9 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Research Extension Rungs
 status: planning
-last_updated: "2026-07-27T00:40:20.000Z"
-last_activity: 2026-07-27
-progress:
-  total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+stopped_at: Completed quick task 260726-vn2 (quarantine flaky IEEE-13 ADMM tests with bounded retry) - 2/2 tasks done, both flaky solve_admm calls wrapped
+last_updated: "2026-07-27T02:06:10.298Z"
+last_activity: 2026-07-27 — quick task 260726-vn2 quarantined the two flaky IEEE-13 solve_admm test items with a bounded test-only retry
 ---
 
 # Project State
@@ -27,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: 19 of 24 (4Q-BESS + Live Reactive Dual-Ascent)
 Plan: — of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-07-27 — ROADMAP.md created (Phases 19-24), all 22 v3.0 requirements mapped, REQUIREMENTS.md traceability updated
+Last activity: 2026-07-27 — quick task 260726-vn2 quarantined the two flaky IEEE-13 solve_admm test items with a bounded test-only retry
 
 ### Quick Tasks Completed
 
@@ -37,6 +32,7 @@ Last activity: 2026-07-27 — ROADMAP.md created (Phases 19-24), all 22 v3.0 req
 | 260726-n7l | Correct the refuted sign_flip_survives claim in findings.txt and 18-01-SUMMARY | 2026-07-26 | b251f55 | [260726-n7l-correct-the-refuted-sign-flip-survives-c](./quick/260726-n7l-correct-the-refuted-sign-flip-survives-c/) |
 | 260726-plf | Correct the 18-03 assumptions page — Section 8 refuted, Phase-17 re-tune premise undermined | 2026-07-26 | 2ac0089 | [260726-plf-correct-the-18-03-assumptions-page-secti](./quick/260726-plf-correct-the-18-03-assumptions-page-secti/) |
 | 260726-pta | Publish the SOCP applicability maps + sweep experiments on the Documenter site | 2026-07-26 | (this commit) | [260726-pta-publish-the-socp-applicability-maps-and-](./quick/260726-pta-publish-the-socp-applicability-maps-and-/) |
+| 260726-vn2 | Quarantine flaky IEEE-13 ADMM tests with a bounded solve retry | 2026-07-27 | e015529 | [260726-vn2-quarantine-flaky-ieee-13-admm-tests-with](./quick/260726-vn2-quarantine-flaky-ieee-13-admm-tests-with/) |
 
 ## Performance Metrics
 
@@ -79,20 +75,24 @@ Recent decisions affecting current work:
   dual-ascent (MESH-04/05, dependency-free, lowest risk) first; Phase 23 ships the meshed topology/
   formulation/certificate (MESH-01/02/03) plus the combined literate page (MESH-06) later, after
   Phase 20 (Overvoltage) establishes the reusable restriction/certificate pattern it reuses.
+
 - Roadmap (v3.0): Phase 20 (Overvoltage) is sequenced before Phase 21 (MPC) — not just before Phase 23
   — because a rolling-horizon window can legitimately drift into the same high-PV overvoltage regime;
   resolving Phase 20 first gives MPC a defined fallback instead of an undefined catch-and-continue.
+
 - Roadmap (v3.0): MPC (Phase 21) and Stochastic (Phase 22) are kept as two separate, tightly
   sequenced phases (not merged into one) per the "fine" granularity setting — but their identical
   `Scenario.jl` schema-extension blast radius means both axes' schema diffs should land as one
   coordinated, tightly-reviewed pair rather than two independently-reviewed changes to the same
   schema-fragile, golden-hash-bearing file.
+
 - Roadmap (v3.0): Phase 24 (Integer investment expansion) is sequenced last — structurally
   independent of Phases 19-23 (touches only `src/planning/`) but carries the highest algorithmic
   risk in the milestone (integer-cut correctness, weaker Laporte-Louveaux convergence theory);
   ordering it last keeps the other four validated rungs unblocked while its correctness concerns
   are resolved. Its correctness argument depends on the v2.0 continuous Benders baseline
   (PVAL-02..04 goldens) staying stable to diff against.
+
 - Roadmap (v3.0): All 22 v3.0 REQ-IDs mapped 1:1 to exactly one of Phases 19-24 — full coverage,
   no orphans. See REQUIREMENTS.md Traceability table.
 
@@ -117,19 +117,23 @@ None yet.
   McCormick valid inequalities vs. PSD-style tightening) is unresolved model-math, not an architecture
   question — flagged in research SUMMARY.md as needing its own theory research pass before planning
   constraints.
+
 - [v3.0 Phase 23 research flag]: the non-radial branch-flow formulation (signed incidence over a
   cycle basis, or bus-injection/line-flow with loop constraints) is new model-math with the same
   "needs its own research pass" flag; also unresolved whether the meshed test fixture will show a
   structural gap requiring an "honest gap" deliverable instead of an exact relaxation (Pitfall 15:
   don't mistake a structural gap for a tunable knife-edge).
+
 - [v3.0 Phase 24 research flag]: whether standard Benders optimality cuts remain valid at the chosen
   binary-expansion granularity, and whether BilevelJuMP's KKT/SOS1/Fortuny-Amat modes support any
   mixed-integer follower at all, are both open questions the research explicitly could not resolve
   without implementation-time verification — check HiGHS/BilevelJuMP docs directly at Phase 24 start;
   fall back to brute-force enumeration for small-instance validation if BilevelJuMP's modes don't apply.
+
 - [v3.0 Phase 22 flag]: no empirical measurement yet exists of Clarabel's scenario-count ceiling on
   the stochastic extensive form — must be established on IEEE-13/123 fixtures before scaling scenario
   count (Pitfall 11).
+
 - [v3.0 cross-cutting standing bar]: every new mathematical regime in this milestone gets its OWN new
   certificate/gate — never a reused tolerance ("certificate laundering" is the dominant risk flagged
   across Phases 19/20/23/24 in research PITFALLS.md). Byte-identical default paths when new flags are
@@ -196,8 +200,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-27T00:40:20.000Z
-Stopped at: ROADMAP.md created for v3.0 (Phases 19-24), all 22 requirements mapped 1:1 with 100% coverage validated; REQUIREMENTS.md traceability updated; STATE.md refreshed.
+Last session: 2026-07-27T02:06:10.263Z
+Stopped at: Completed quick task 260726-vn2 (quarantine flaky IEEE-13 ADMM tests with bounded retry) - 2/2 tasks done, both flaky solve_admm calls wrapped
 Resume file: None
 
 ## Operator Next Steps
