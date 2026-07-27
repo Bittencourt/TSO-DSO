@@ -21,7 +21,7 @@
 #     contract (res.iters, res.welfare, res.exact_maxgap, res.λ vs centralized DLMP).
 
 @testitem "acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
-    [:acceptance] setup = [Phase4Fixtures] begin
+    [:acceptance] setup = [Phase4Fixtures, AdmmRetryFixtures] begin
     using TSODSO
     using JuMP
 
@@ -61,15 +61,17 @@
     # Build the SAME-shape centralized cross-check via `extract_dlmp` (identical pattern to
     # test_ieee123_admm.jl / the IEEE-123 acceptance item below) rather than the dimensionally
     # mismatched single-bus `res.dadp` — reusing the SAME tolerances (atol/rtol), never new ones.
-    admm = solve_admm(
-        feeder,
-        ConvexBranchFlow(),
-        aggs;
-        T = 24,
-        λ₀ = λ₀,
-        ρ = 100.0,
-        allow_export = true,
-    )
+    admm = AdmmRetryFixtures.retry_flaky_admm_solve(; label = "acceptance ieee13") do
+        solve_admm(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = 24,
+            λ₀ = λ₀,
+            ρ = 100.0,
+            allow_export = true,
+        )
+    end
     load_buses = sort([a.bus for a in aggs])
     dlmp_c = reduce(vcat, (extract_dlmp(ctx; bus = b, T = 24)' for b in load_buses))
     @test admm.exact_maxgap < 1e-3                                # PF-04 exact on the ADMM-converged DSO-OPT
