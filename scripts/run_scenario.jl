@@ -13,13 +13,7 @@ using TSODSO
 
 # Edit these selectors to declare a scenario, then run:
 #     julia --project=. scripts/run_scenario.jl
-s = Scenario(
-    name = "demo",
-    feeder = :ieee13,
-    strategy = :admm,
-    seed = 42,
-    T = 24,
-)
+s = Scenario(name = "demo", feeder = :ieee13, strategy = :admm, seed = 42, T = 24)
 
 res = TSODSO.run_and_store(s)   # dir defaults to datadir("sims") (gitignored)
 

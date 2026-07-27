@@ -82,7 +82,8 @@ end
     [:thesis_repro] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP: value, Model, @variable, @constraint, @objective, optimize!
-    import TSODSO: Bus, Branch, SMAX_NO_LIMIT, ModelContext, register_constraint!, add_to_residual!
+    import TSODSO:
+        Bus, Branch, SMAX_NO_LIMIT, ModelContext, register_constraint!, add_to_residual!
 
     feeder = TSODSO.ieee13_modified()
     aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
@@ -111,7 +112,10 @@ end
     function _fit_ieee13(feeder, aggs, Th, λ₀)
         try
             fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀)
-            return (; fit_prosumer = fb.prosumer_surplus, fit_dso = fb.social_fit - fb.prosumer_surplus)
+            return (;
+                fit_prosumer = fb.prosumer_surplus,
+                fit_dso = fb.social_fit - fb.prosumer_surplus,
+            )
         catch e
             @info "thesis_repro (IEEE-13, secondary): fit_baseline infeasible as expected (Pitfall 2); " *
                   "falling back to the manual S_max-relaxed FIT solve" exception = e
@@ -123,7 +127,10 @@ end
             )
             fit_feeder = Feeder(
                 [Bus(b.id, 0.8, 1.2, b.is_root) for b in feeder.buses],
-                [Branch(br.from, br.to, br.r, br.x, SMAX_NO_LIMIT) for br in feeder.branches],
+                [
+                    Branch(br.from, br.to, br.r, br.x, SMAX_NO_LIMIT) for
+                    br in feeder.branches
+                ],
                 feeder.root,
             )
             _fit_model = Model(select_optimizer(problem_class(ConvexBranchFlow())))
@@ -145,8 +152,16 @@ end
                 add_to_residual!(_fit_ctx, :Rp, fit_feeder.root, t, _fit_pimp[t])
                 add_to_residual!(_fit_ctx, :Rq, fit_feeder.root, t, _fit_qimp[t])
             end
-            @constraint(_fit_model, _fit_bp[j = 1:_Np, t = 1:Th], _fit_ctx.residuals[:Rp][j, t] == 0)
-            @constraint(_fit_model, _fit_bq[j = 1:_Np, t = 1:Th], _fit_ctx.residuals[:Rq][j, t] == 0)
+            @constraint(
+                _fit_model,
+                _fit_bp[j = 1:_Np, t = 1:Th],
+                _fit_ctx.residuals[:Rp][j, t] == 0
+            )
+            @constraint(
+                _fit_model,
+                _fit_bq[j = 1:_Np, t = 1:Th],
+                _fit_ctx.residuals[:Rq][j, t] == 0
+            )
             register_constraint!(_fit_ctx, :balance_p, _fit_bp)
             @objective(_fit_model, Max, -sum(λ₀[t] * _fit_pimp[t] for t in 1:Th))
             optimize!(_fit_model)

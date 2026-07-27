@@ -38,12 +38,56 @@ using TSODSO
 const T = 24
 
 mem_price = Float64[
-    3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0,
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
 ]
 temperature = Float64[
-    19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19,
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
 ]
 
 buses = [
@@ -80,13 +124,23 @@ end;
 # share the IDENTICAL `feeder` / `aggs` / `λ₀` / `T` / `allow_export`.
 
 ctx_socp, cost_socp, _ = solve_welfare(
-    feeder, ConvexBranchFlow(), aggs;
-    T = T, λ₀ = mem_price, allow_export = true, rtol_exact = 1.0,
+    feeder,
+    ConvexBranchFlow(),
+    aggs;
+    T = T,
+    λ₀ = mem_price,
+    allow_export = true,
+    rtol_exact = 1.0,
 )
 
 ctx_ac, cost_ac, _ = solve_welfare(
-    feeder, ACPowerFlow(), aggs;
-    T = T, λ₀ = mem_price, allow_local = true, allow_export = true,
+    feeder,
+    ACPowerFlow(),
+    aggs;
+    T = T,
+    λ₀ = mem_price,
+    allow_local = true,
+    allow_export = true,
 )
 
 # ## The exactness report

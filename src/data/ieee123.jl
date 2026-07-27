@@ -355,15 +355,15 @@ end
 # guards the RELABEL step before the data reaches the constructor.
 function _ieee123_assert_incidence(branches, N)
     B = length(branches)
-    Irow = Int[];
-    Jcol = Int[];
+    Irow = Int[]
+    Jcol = Int[]
     Vval = Int[]
     for (b, br) in enumerate(branches)
-        push!(Irow, br.from);
-        push!(Jcol, b);
+        push!(Irow, br.from)
+        push!(Jcol, b)
         push!(Vval, +1)
-        push!(Irow, br.to);
-        push!(Jcol, b);
+        push!(Irow, br.to)
+        push!(Jcol, b)
         push!(Vval, -1)
     end
     A = sparse(Irow, Jcol, Vval, N, B)

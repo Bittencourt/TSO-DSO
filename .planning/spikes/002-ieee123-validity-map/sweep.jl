@@ -26,10 +26,58 @@ using CSV, DataFrames
 
 const T = 24
 
-const TEMP = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
-const PRICE = Float64[3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0]
+const TEMP = Float64[
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
+]
+const PRICE = Float64[
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
+]
 
 # Phase-17-retuned baseline — docs/literate/thesis_reproduction_ieee123.jl:49-52.
 const SEED = 20260719
@@ -45,8 +93,17 @@ function house(bus; pv_scale, load_scale, dev_scale)
     therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, TEMP)
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
     # Battery sized off load_scale, as the literate page does.
-    batt = PVBattery(bus, 0.95, 1.0, 0.5 * load_scale, 0.0, 2.0 * load_scale,
-        1.0 * load_scale, BATT_λ..., Ppv)
+    batt = PVBattery(
+        bus,
+        0.95,
+        1.0,
+        0.5 * load_scale,
+        0.0,
+        2.0 * load_scale,
+        1.0 * load_scale,
+        BATT_λ...,
+        Ppv,
+    )
     return Aggregator(bus, 0.90, [therm, defer, batt], Pdc)   # φ = 0.90 on IEEE-123
 end
 
@@ -89,7 +146,8 @@ function main()
     base = ieee123_modified()
     nodes = ieee123_load_nodes()
     @info "IEEE-123 (real OpenDSS positive-sequence impedances)" nbus = length(base.buses) nbranch =
-        length(base.branches) nload = length(nodes) r_range = extrema(b.r for b in base.branches)
+        length(base.branches) nload = length(nodes) r_range =
+        extrema(b.r for b in base.branches)
 
     rows = NamedTuple[]
     total = length(VMAXES) * length(LOAD_MULTS) * length(PV_MULTS)
@@ -99,35 +157,84 @@ function main()
         i += 1
         feeder = with_vmax(base, vmax)
         ls = BASE_LOAD * lm
-        aggs = [house(bus; pv_scale = BASE_PV * pm, load_scale = ls, dev_scale = BASE_DEV)
-                for bus in nodes]
+        aggs = [
+            house(bus; pv_scale = BASE_PV * pm, load_scale = ls, dev_scale = BASE_DEV)
+            for bus in nodes
+        ]
         t0 = time()
         row = try
-            ctx, obj, _ = solve_welfare(feeder, ConvexBranchFlow(), aggs;
-                T = T, λ₀ = PRICE, allow_export = true, rtol_exact = 1e6)
+            ctx, obj, _ = solve_welfare(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = T,
+                λ₀ = PRICE,
+                allow_export = true,
+                rtol_exact = 1e6,
+            )
             s = cone_stats(ctx, feeder)
-            (; vmax, load_mult = lm, pv_mult = pm, status = "SOLVED", objective = obj,
-                maxgap = s.maxgap, maxratio = s.maxratio, n_at_vmax = s.n_at_vmax,
-                min_branch_P = s.min_P, vpeak = s.vpeak, exact = s.maxratio <= 1.0,
-                class = s.maxratio <= 1.0 ? "exact" : "inexact", secs = time() - t0,
-                fail_reason = "")
+            (;
+                vmax,
+                load_mult = lm,
+                pv_mult = pm,
+                status = "SOLVED",
+                objective = obj,
+                maxgap = s.maxgap,
+                maxratio = s.maxratio,
+                n_at_vmax = s.n_at_vmax,
+                min_branch_P = s.min_P,
+                vpeak = s.vpeak,
+                exact = s.maxratio <= 1.0,
+                class = s.maxratio <= 1.0 ? "exact" : "inexact",
+                secs = time() - t0,
+                fail_reason = "",
+            )
         catch err
             msg = sprint(showerror, err)
-            cls = occursin("INFEASIBLE", msg) ? "infeasible" :
-                  occursin("complementarity", msg) ? "guard" : "solver"
-            (; vmax, load_mult = lm, pv_mult = pm,
-                status = "FAILED:" * string(nameof(typeof(err))), objective = NaN,
-                maxgap = NaN, maxratio = NaN, n_at_vmax = -1, min_branch_P = NaN,
-                vpeak = NaN, exact = missing, class = cls, secs = time() - t0,
-                fail_reason = replace(first(msg, 200), '\n' => " | "))
+            cls =
+                occursin("INFEASIBLE", msg) ? "infeasible" :
+                occursin("complementarity", msg) ? "guard" : "solver"
+            (;
+                vmax,
+                load_mult = lm,
+                pv_mult = pm,
+                status = "FAILED:" * string(nameof(typeof(err))),
+                objective = NaN,
+                maxgap = NaN,
+                maxratio = NaN,
+                n_at_vmax = -1,
+                min_branch_P = NaN,
+                vpeak = NaN,
+                exact = missing,
+                class = cls,
+                secs = time() - t0,
+                fail_reason = replace(first(msg, 200), '\n' => " | "),
+            )
         end
         push!(rows, row)
         fmt(x) = x isa Float64 && isfinite(x) ? string(round(x; sigdigits = 4)) : "—"
-        println(rpad("[$i/$total]", 9), " vmax=", rpad(vmax, 6), " load×", rpad(lm, 5),
-            " pv×", rpad(pm, 4), " → ", rpad(row.class, 11),
-            " ratio=", rpad(fmt(row.maxratio), 11), " atVmax=", rpad(row.n_at_vmax, 5),
-            " vpeak=", rpad(fmt(row.vpeak), 7), " minP=", rpad(fmt(row.min_branch_P), 10),
-            " (", round(row.secs; digits = 1), "s)")
+        println(
+            rpad("[$i/$total]", 9),
+            " vmax=",
+            rpad(vmax, 6),
+            " load×",
+            rpad(lm, 5),
+            " pv×",
+            rpad(pm, 4),
+            " → ",
+            rpad(row.class, 11),
+            " ratio=",
+            rpad(fmt(row.maxratio), 11),
+            " atVmax=",
+            rpad(row.n_at_vmax, 5),
+            " vpeak=",
+            rpad(fmt(row.vpeak), 7),
+            " minP=",
+            rpad(fmt(row.min_branch_P), 10),
+            " (",
+            round(row.secs; digits = 1),
+            "s)",
+        )
         flush(stdout)
         # Checkpoint after every point — a 1-hour sweep must not lose everything to one crash.
         CSV.write(joinpath(@__DIR__, "sweep.csv"), DataFrame(rows))
@@ -136,20 +243,25 @@ function main()
     df = DataFrame(rows)
     CSV.write(joinpath(@__DIR__, "sweep.csv"), df)
 
-    anchor = only(filter(r -> r.pv_mult == 1.0 && r.load_mult == 1.0 && r.vmax == 1.10,
-        eachrow(df)))
+    anchor = only(
+        filter(r -> r.pv_mult == 1.0 && r.load_mult == 1.0 && r.vmax == 1.10, eachrow(df)),
+    )
     println("\n", "="^88)
     for g in groupby(df, :class)
         println(rpad(g.class[1], 12), nrow(g))
     end
     println("-"^88)
     println("POSITIVE CONTROL — thesis-reproduction point (pv×1.0, load×1.0, vmax=1.10):")
-    println("  expect EXACT   got ", anchor.exact === true ? "EXACT ✓" :
-                                     "$(anchor.exact) ✗  [$(anchor.status)]",
-        "   ratio=", anchor.maxratio isa Float64 && isfinite(anchor.maxratio) ?
-                     round(anchor.maxratio; sigdigits = 4) : "—",
-        "  vpeak=", anchor.vpeak isa Float64 && isfinite(anchor.vpeak) ?
-                    round(anchor.vpeak; sigdigits = 5) : "—")
+    println(
+        "  expect EXACT   got ",
+        anchor.exact === true ? "EXACT ✓" : "$(anchor.exact) ✗  [$(anchor.status)]",
+        "   ratio=",
+        anchor.maxratio isa Float64 && isfinite(anchor.maxratio) ?
+        round(anchor.maxratio; sigdigits = 4) : "—",
+        "  vpeak=",
+        anchor.vpeak isa Float64 && isfinite(anchor.vpeak) ?
+        round(anchor.vpeak; sigdigits = 5) : "—",
+    )
     println("-"^88)
     println("total wall time: ", round((time() - t_start) / 60; digits = 1), " min")
     println("="^88)

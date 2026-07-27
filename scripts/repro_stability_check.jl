@@ -147,7 +147,18 @@ function _house_aggregator(
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
 
-    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, temperature_profile())
+    therm = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        temperature_profile(),
+    )
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
     batt = PVBattery(
         bus,
@@ -218,12 +229,20 @@ function count_failures(feeder, aggs, λ₀; n_repeats::Int = 20, seed_offset::I
         jitter = 1e-9 * (i + seed_offset)
         λ₀_i = λ₀ .+ jitter
         try
-            ctx, _, _ = solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀_i, allow_export = true)
+            ctx, _, _ = solve_welfare(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = T,
+                λ₀ = λ₀_i,
+                allow_export = true,
+            )
             welfare_accounting(ctx; T = T)
             fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀_i)
         catch e
             failures += 1
-            @warn "stability measurement failed" repeat = i exception = (e, catch_backtrace())
+            @warn "stability measurement failed" repeat = i exception =
+                (e, catch_backtrace())
         end
     end
     return failures
@@ -256,7 +275,9 @@ function sweep_population_scale(feeder; deltas = (-0.05, -0.02, 0.0, 0.02, 0.05)
         load_scale = LOAD_SCALE_IEEE123 * (1 + δ)
         pv_scale = PV_SCALE_IEEE123 * (1 + δ)
         dev_scale = DEV_SCALE_IEEE123 * (1 + δ)
-        println("  δ=$δ: load_scale=$load_scale, pv_scale=$pv_scale, dev_scale=$dev_scale ...")
+        println(
+            "  δ=$δ: load_scale=$load_scale, pv_scale=$pv_scale, dev_scale=$dev_scale ...",
+        )
         aggs = build_ieee123_aggregators(
             feeder;
             load_scale = load_scale,
@@ -312,12 +333,16 @@ end
 
 const N_REPEATS = 20
 
-println("Building IEEE-123 population at the Phase-17-retuned point (seed=$SEED_IEEE123)...")
+println(
+    "Building IEEE-123 population at the Phase-17-retuned point (seed=$SEED_IEEE123)...",
+)
 feeder = ieee123_modified()
 aggs = build_ieee123_aggregators(feeder)
 λ0 = ieee123_lambda0()
 
-println("Running discrete flake-rate measurement ($N_REPEATS repeats) at the retuned point...")
+println(
+    "Running discrete flake-rate measurement ($N_REPEATS repeats) at the retuned point...",
+)
 failures = count_failures(feeder, aggs, λ0; n_repeats = N_REPEATS)
 flake_rate = failures / N_REPEATS
 
@@ -331,8 +356,7 @@ sign_flip_survives =
 
 dso_band_lo = 0.0
 successful = filter(r -> !r.failed, results)
-dso_band_hi =
-    isempty(successful) ? NaN : 1.5 * maximum(abs(r.dso) for r in successful)
+dso_band_hi = isempty(successful) ? NaN : 1.5 * maximum(abs(r.dso) for r in successful)
 
 @printf("\nFlake rate: %d/%d = %.3f\n", failures, N_REPEATS, flake_rate)
 println("sign_flip_survives: ", sign_flip_survives)
@@ -342,9 +366,15 @@ println("sign_flip_survives: ", sign_flip_survives)
 
 report_path = joinpath(OUT, "findings.txt")
 open(report_path, "w") do io
-    println(io, "Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)")
+    println(
+        io,
+        "Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)",
+    )
     println(io, "Measured: ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), " UTC-local")
-    println(io, "Fixture: ieee123_modified() (real Phase-17 impedances), seed=$SEED_IEEE123")
+    println(
+        io,
+        "Fixture: ieee123_modified() (real Phase-17 impedances), seed=$SEED_IEEE123",
+    )
     println(
         io,
         "Retuned point: LOAD_SCALE_IEEE123=$LOAD_SCALE_IEEE123, PV_SCALE_IEEE123=$PV_SCALE_IEEE123, ",
@@ -375,7 +405,16 @@ open(report_path, "w") do io
     )
     for r in results
         if r.failed
-            @printf(io, "%-8.3f %14s %14s %14s %14s %14s\n", r.δ, "FAILED", "FAILED", "FAILED", "FAILED", "FAILED")
+            @printf(
+                io,
+                "%-8.3f %14s %14s %14s %14s %14s\n",
+                r.δ,
+                "FAILED",
+                "FAILED",
+                "FAILED",
+                "FAILED",
+                "FAILED"
+            )
         else
             @printf(
                 io,

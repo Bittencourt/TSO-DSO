@@ -322,7 +322,8 @@ end
     @test !haskey(dso_default.ctx.meta, :qag_dso)
 
     # reactive_consensus = true: genuine pinned coupling variable, right shape, :balance_q intact.
-    dso_reactive = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true)
+    dso_reactive =
+        build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true)
     @test haskey(dso_reactive.ctx.meta, :qag_dso)
     qag_dso = dso_reactive.ctx.meta[:qag_dso]
     @test size(qag_dso) == (length(dso_reactive.load_nodes), Th)

@@ -191,7 +191,18 @@ function _house_aggregator(
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
 
-    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, temperature_profile())
+    therm = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        temperature_profile(),
+    )
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
     batt = PVBattery(
         bus,
@@ -324,18 +335,40 @@ aggs123 = build_ieee123_aggregators(feeder123)
 λ0_123 = ieee123_lambda0()
 
 println("Running IEEE-13, reactive_consensus=false ($N_REPEATS repeats)...")
-fail_13_false = count_failures(feeder13, aggs13, λ0_13; reactive_consensus = false, n_repeats = N_REPEATS)
+fail_13_false = count_failures(
+    feeder13,
+    aggs13,
+    λ0_13;
+    reactive_consensus = false,
+    n_repeats = N_REPEATS,
+)
 
 println("Running IEEE-13, reactive_consensus=true ($N_REPEATS repeats)...")
-fail_13_true = count_failures(feeder13, aggs13, λ0_13; reactive_consensus = true, n_repeats = N_REPEATS)
+fail_13_true = count_failures(
+    feeder13,
+    aggs13,
+    λ0_13;
+    reactive_consensus = true,
+    n_repeats = N_REPEATS,
+)
 
 println("Running IEEE-123, reactive_consensus=false ($N_REPEATS repeats)...")
-fail_123_false =
-    count_failures(feeder123, aggs123, λ0_123; reactive_consensus = false, n_repeats = N_REPEATS)
+fail_123_false = count_failures(
+    feeder123,
+    aggs123,
+    λ0_123;
+    reactive_consensus = false,
+    n_repeats = N_REPEATS,
+)
 
 println("Running IEEE-123, reactive_consensus=true ($N_REPEATS repeats)...")
-fail_123_true =
-    count_failures(feeder123, aggs123, λ0_123; reactive_consensus = true, n_repeats = N_REPEATS)
+fail_123_true = count_failures(
+    feeder123,
+    aggs123,
+    λ0_123;
+    reactive_consensus = true,
+    n_repeats = N_REPEATS,
+)
 
 rate_13_false = fail_13_false / N_REPEATS
 rate_13_true = fail_13_true / N_REPEATS
@@ -352,8 +385,22 @@ rate_123_true = fail_123_true / N_REPEATS
     "fails",
     "rate"
 )
-@printf("%-12s %-22s %8d %8d %8.3f\n", "IEEE-13", "false", N_REPEATS, fail_13_false, rate_13_false)
-@printf("%-12s %-22s %8d %8d %8.3f\n", "IEEE-13", "true", N_REPEATS, fail_13_true, rate_13_true)
+@printf(
+    "%-12s %-22s %8d %8d %8.3f\n",
+    "IEEE-13",
+    "false",
+    N_REPEATS,
+    fail_13_false,
+    rate_13_false
+)
+@printf(
+    "%-12s %-22s %8d %8d %8.3f\n",
+    "IEEE-13",
+    "true",
+    N_REPEATS,
+    fail_13_true,
+    rate_13_true
+)
 @printf(
     "%-12s %-22s %8d %8d %8.3f\n",
     "IEEE-123",
@@ -378,9 +425,33 @@ open(report_path, "w") do io
     println(io, "Repeats per cell: N = $N_REPEATS (80 solves total)")
     println(io)
     println(io, "=== Measured NUMERICAL_ERROR-class flake rates ===")
-    @printf(io, "%-12s %-22s %8s %8s %8s\n", "Fixture", "reactive_consensus", "N", "fails", "rate")
-    @printf(io, "%-12s %-22s %8d %8d %8.3f\n", "IEEE-13", "false", N_REPEATS, fail_13_false, rate_13_false)
-    @printf(io, "%-12s %-22s %8d %8d %8.3f\n", "IEEE-13", "true", N_REPEATS, fail_13_true, rate_13_true)
+    @printf(
+        io,
+        "%-12s %-22s %8s %8s %8s\n",
+        "Fixture",
+        "reactive_consensus",
+        "N",
+        "fails",
+        "rate"
+    )
+    @printf(
+        io,
+        "%-12s %-22s %8d %8d %8.3f\n",
+        "IEEE-13",
+        "false",
+        N_REPEATS,
+        fail_13_false,
+        rate_13_false
+    )
+    @printf(
+        io,
+        "%-12s %-22s %8d %8d %8.3f\n",
+        "IEEE-13",
+        "true",
+        N_REPEATS,
+        fail_13_true,
+        rate_13_true
+    )
     @printf(
         io,
         "%-12s %-22s %8d %8d %8.3f\n",

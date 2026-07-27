@@ -97,8 +97,7 @@ function recover_voltage_angles(ctx::ModelContext)
                 # (from -> to) direction; flip the sign when traversing it backwards so S always
                 # points i -> j.
                 S =
-                    bsigned > 0 ?
-                    Complex(value(pv.P[b, t]), value(pv.Q[b, t])) :
+                    bsigned > 0 ? Complex(value(pv.P[b, t]), value(pv.Q[b, t])) :
                     -Complex(value(pv.P[b, t]), value(pv.Q[b, t]))
                 # Baran–Wu downstream phasor: V_j = V_i − z · conj(S)/conj(V_i).
                 Vphasor[j, t] = Vphasor[i, t] - z * conj(S) / conj(Vphasor[i, t])
@@ -134,8 +133,7 @@ Returns `(; obj_gap, hours)`, NEVER a bare `Bool`:
     between the relaxed and the true nonconvex optimum;
   - `hours::Vector{NamedTuple}` — one row `(; t, vgap, pgap, qgap, exact)` per hour, where
     `vgap`/`pgap`/`qgap` are the max-over-buses/branches absolute SOCP−AC gaps in squared
-    voltage / active / reactive branch flow, and `exact = vgap ≤ atol + rtol·vmag && pgap ≤
-    atol + rtol·pmag` uses the SAME combined scale-free bound `assert_socp_exact!` uses (applied
+    voltage / active / reactive branch flow, and `exact = vgap ≤ atol + rtol·vmag && pgap ≤ atol + rtol·pmag` uses the SAME combined scale-free bound `assert_socp_exact!` uses (applied
     per-hour across the two contexts instead of per-branch within one), NEVER a purely absolute
     threshold. Inspect `hours` to locate and diagnose a genuine per-hour gap; it never collapses
     to a single pass/fail boolean.

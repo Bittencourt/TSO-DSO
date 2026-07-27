@@ -143,7 +143,14 @@ When `true`, the constant is promoted to a genuine JuMP coupling variable `qag_d
 `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual read, NOT a live
 consensus ascent (thesis A3: `q_draw` never moves, so no new ρ-penalty/residual is needed).
 """
-function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus::Bool = false)
+function build_dso_opt(
+    feeder,
+    aggregators,
+    T::Int;
+    ρ::Real,
+    λ₀,
+    reactive_consensus::Bool = false,
+)
     # Boundary guards (mirror solve_welfare): fail here, not deep in objective assembly.
     isempty(aggregators) &&
         throw(ArgumentError("build_dso_opt needs at least one aggregator"))
@@ -239,11 +246,7 @@ function build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_co
         for j in load_nodes, t in 1:T
             add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
         end
-        @constraint(
-            model,
-            qag_pin[j = load_nodes, t = 1:T],
-            qag_dso[j, t] == q_draw[j][t]
-        )
+        @constraint(model, qag_pin[j = load_nodes, t = 1:T], qag_dso[j, t] == q_draw[j][t])
         register_constraint!(ctx, :qag_pin, qag_pin)
         ctx.meta[:qag_dso] = qag_dso
     else

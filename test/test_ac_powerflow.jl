@@ -8,7 +8,8 @@
 # assertion is a missing-symbol `isdefined` check (never a runner crash); the behavioral
 # asserts sit behind an `isdefined` guard so they go live automatically once 15-01 Task 2 lands.
 
-@testitem "ac_powerflow: ACPowerFlow is a defined AbstractPowerFlow subtype (EXACT-01)" tags = [:ac_powerflow] begin
+@testitem "ac_powerflow: ACPowerFlow is a defined AbstractPowerFlow subtype (EXACT-01)" tags =
+    [:ac_powerflow] begin
     using TSODSO
 
     # RED until plan 15-01 Task 2 defines the AC-OPF peer formulation.
@@ -19,7 +20,8 @@
     end
 end
 
-@testitem "ac_powerflow: ACPowerFlow routes to the NLP problem class (EXACT-01 / INFRA-02)" tags = [:ac_powerflow] begin
+@testitem "ac_powerflow: ACPowerFlow routes to the NLP problem class (EXACT-01 / INFRA-02)" tags =
+    [:ac_powerflow] begin
     using TSODSO
 
     # The generic trait returns QP() for DC/LinDistFlow (plan 04-01); ConvexBranchFlow adds
@@ -32,7 +34,8 @@ end
     end
 end
 
-@testitem "ac_powerflow: contribute! stashes pf_vars WITHOUT the exactness copy v̂ (EXACT-01)" tags = [:ac_powerflow] begin
+@testitem "ac_powerflow: contribute! stashes pf_vars WITHOUT the exactness copy v̂ (EXACT-01)" tags =
+    [:ac_powerflow] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP

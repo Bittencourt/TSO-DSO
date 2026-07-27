@@ -52,40 +52,128 @@ const PV_SCALE_IEEE123 = 0.12
 const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)
 
 function _temperature_profile()
-    return Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-        31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
+    return Float64[
+        19,
+        18,
+        17,
+        16,
+        16,
+        17,
+        19,
+        21,
+        23,
+        26,
+        28,
+        30,
+        31,
+        32,
+        32,
+        31,
+        29,
+        27,
+        25,
+        23,
+        22,
+        21,
+        20,
+        19,
+    ]
 end
 
 function _ieee123_lambda0()
-    return Float64[3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-        5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0]
+    return Float64[
+        3.8,
+        3.7,
+        3.6,
+        3.6,
+        3.7,
+        4.0,
+        4.8,
+        5.8,
+        6.5,
+        6.2,
+        5.9,
+        5.7,
+        5.6,
+        5.8,
+        6.0,
+        6.8,
+        8.2,
+        9.0,
+        8.6,
+        7.4,
+        6.2,
+        5.2,
+        4.4,
+        4.0,
+    ]
 end
 
-function _house_aggregator(feeder, bus; seed, φ, pv_scale = 1.0, load_scale = 1.0, dev_scale = 1.0,
-    batt_pmax = 0.5, batt_emax = 2.0, batt_soc0 = 1.0)
+function _house_aggregator(
+    feeder,
+    bus;
+    seed,
+    φ,
+    pv_scale = 1.0,
+    load_scale = 1.0,
+    dev_scale = 1.0,
+    batt_pmax = 0.5,
+    batt_emax = 2.0,
+    batt_soc0 = 1.0,
+)
     prof = generate_profiles(seed = seed + bus, T = T)
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
-    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, _temperature_profile())
+    therm = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        _temperature_profile(),
+    )
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
-    batt = PVBattery(bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
-        BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv)
+    batt = PVBattery(
+        bus,
+        0.95,
+        1.0,
+        batt_pmax,
+        0.0,
+        batt_emax,
+        batt_soc0,
+        BATT_λ_MIN,
+        BATT_λ_MED,
+        BATT_λ_MAX,
+        Ppv,
+    )
     return Aggregator(bus, φ, [therm, defer, batt], Pdc)
 end
 
 feeder = ieee123_modified()
 aggs = [
-    _house_aggregator(feeder, bus; seed = SEED_IEEE123, φ = 0.90,
-        load_scale = LOAD_SCALE_IEEE123, pv_scale = PV_SCALE_IEEE123, dev_scale = DEV_SCALE_IEEE123,
-        batt_pmax = 0.5 * LOAD_SCALE_IEEE123, batt_emax = 2.0 * LOAD_SCALE_IEEE123,
-        batt_soc0 = 1.0 * LOAD_SCALE_IEEE123)
-    for bus in ieee123_load_nodes()
+    _house_aggregator(
+        feeder,
+        bus;
+        seed = SEED_IEEE123,
+        φ = 0.90,
+        load_scale = LOAD_SCALE_IEEE123,
+        pv_scale = PV_SCALE_IEEE123,
+        dev_scale = DEV_SCALE_IEEE123,
+        batt_pmax = 0.5 * LOAD_SCALE_IEEE123,
+        batt_emax = 2.0 * LOAD_SCALE_IEEE123,
+        batt_soc0 = 1.0 * LOAD_SCALE_IEEE123,
+    ) for bus in ieee123_load_nodes()
 ]
 λ₀ = _ieee123_lambda0()
 
 # The DADP welfare optimum (GLB-CVX SOCP, thesis eq. 3.38) — a live, gated solve:
 
-ctx, welfare_dadp, _ = solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀, allow_export = true)
+ctx, welfare_dadp, _ =
+    solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀, allow_export = true)
 acct = welfare_accounting(ctx; T = T)
 
 # The FIT counterfactual (German feed-in tariff, thesis eqs 3.24-3.28) — confirmed feasible on
@@ -122,4 +210,9 @@ println("mean reactive DLMP = ", cite_repro(round(mean_reactive_dlmp; digits = 6
 # checkable against the numbers printed above, all still carrying the
 # "directional, public-data" qualifier:
 
-(dso = acct.dso, fit_dso = fit_dso, prosumer = acct.prosumer, fit_prosumer = fb.prosumer_surplus)
+(
+    dso = acct.dso,
+    fit_dso = fit_dso,
+    prosumer = acct.prosumer,
+    fit_prosumer = fb.prosumer_surplus,
+)

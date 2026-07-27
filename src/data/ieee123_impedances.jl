@@ -14,7 +14,7 @@
 # Keyed by ORIGINAL IEEE-123 terminal pairs (pre-relabel), matching IEEE123_EDGES exactly
 # (src/data/ieee123.jl). NO length-unit conversion applied (OpenDSS Units= unspecified
 # means no-op) — do NOT introduce a feet/miles/kft scale factor here.
-const IEEE123_BRANCH_RX_OHMS = Dict{Tuple{Int,Int}, Tuple{Float64,Float64}}(
+const IEEE123_BRANCH_RX_OHMS = Dict{Tuple{Int, Int}, Tuple{Float64, Float64}}(
     (1, 2) => (0.0440549242, 0.044661458274999996),   # LineCode=10, Length=0.175
     (1, 3) => (0.062935606, 0.06380208325),   # LineCode=11, Length=0.25
     (1, 7) => (0.0173901515, 0.03562689400000001),   # LineCode=1, Length=0.3

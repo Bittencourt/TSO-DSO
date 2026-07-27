@@ -22,10 +22,58 @@ using JuMP
 using Clarabel
 
 const T = 24
-const TEMP = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
-const PRICE = Float64[3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0]
+const TEMP = Float64[
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
+]
+const PRICE = Float64[
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
+]
 const SEED = 20260719
 const BASE_LOAD = 0.05
 const BASE_PV = 0.12
@@ -38,13 +86,22 @@ function house(bus; pv_scale, load_scale, dev_scale)
     Pdc = Float64[load_scale * d for d in prof.demand]
     therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, TEMP)
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
-    batt = PVBattery(bus, 0.95, 1.0, 0.5 * load_scale, 0.0, 2.0 * load_scale,
-        1.0 * load_scale, BATT_λ..., Ppv)
+    batt = PVBattery(
+        bus,
+        0.95,
+        1.0,
+        0.5 * load_scale,
+        0.0,
+        2.0 * load_scale,
+        1.0 * load_scale,
+        BATT_λ...,
+        Ppv,
+    )
     return Aggregator(bus, 0.90, [therm, defer, batt], Pdc)
 end
 
-with_vmax(f, vmax) = Feeder([Bus(b.id, b.vmin, vmax, b.is_root) for b in f.buses],
-    f.branches, f.root)
+with_vmax(f, vmax) =
+    Feeder([Bus(b.id, b.vmin, vmax, b.is_root) for b in f.buses], f.branches, f.root)
 
 function cone_stats(ctx, feeder; atol = 1e-6, rtol = 1e-4)
     pf = ctx.meta[:pf_vars]
@@ -91,24 +148,58 @@ println("  numerical noise ⇒ ratio SHRINKS  (artifact of convergence)")
 println("="^94)
 
 for p in POINTS
-    println("\n", p.label, "  —  vmax=", p.vmax, " load×", p.lm, " pv×", p.pm,
-        "   (sweep reported ratio = ", p.was, ")")
+    println(
+        "\n",
+        p.label,
+        "  —  vmax=",
+        p.vmax,
+        " load×",
+        p.lm,
+        " pv×",
+        p.pm,
+        "   (sweep reported ratio = ",
+        p.was,
+        ")",
+    )
     feeder = with_vmax(base, p.vmax)
-    aggs = [house(bus; pv_scale = BASE_PV * p.pm, load_scale = BASE_LOAD * p.lm,
-        dev_scale = BASE_DEV) for bus in nodes]
+    aggs = [
+        house(
+            bus;
+            pv_scale = BASE_PV * p.pm,
+            load_scale = BASE_LOAD * p.lm,
+            dev_scale = BASE_DEV,
+        ) for bus in nodes
+    ]
     for (name, tol, feas) in LADDER
         attrs = Any["verbose" => false, "tol_gap_abs" => tol, "tol_gap_rel" => tol]
         feas === nothing || push!(attrs, "tol_feas" => feas)
         opt = optimizer_with_attributes(Clarabel.Optimizer, attrs...)
         try
-            ctx, obj, _ = solve_welfare(feeder, ConvexBranchFlow(), aggs;
-                T = T, λ₀ = PRICE, optimizer = opt, allow_export = true, rtol_exact = 1e6)
+            ctx, obj, _ = solve_welfare(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = T,
+                λ₀ = PRICE,
+                optimizer = opt,
+                allow_export = true,
+                rtol_exact = 1e6,
+            )
             s = cone_stats(ctx, feeder)
-            println("    ", name, " → ratio=", rpad(round(s.maxratio; sigdigits = 5), 12),
-                " maxgap=", rpad(round(s.maxgap; sigdigits = 4), 12),
-                " vpeak=", rpad(round(s.vpeak; sigdigits = 6), 10),
-                " obj=", round(obj; digits = 5),
-                "   ", s.maxratio <= 1.0 ? "EXACT" : "inexact")
+            println(
+                "    ",
+                name,
+                " → ratio=",
+                rpad(round(s.maxratio; sigdigits = 5), 12),
+                " maxgap=",
+                rpad(round(s.maxgap; sigdigits = 4), 12),
+                " vpeak=",
+                rpad(round(s.vpeak; sigdigits = 6), 10),
+                " obj=",
+                round(obj; digits = 5),
+                "   ",
+                s.maxratio <= 1.0 ? "EXACT" : "inexact",
+            )
         catch err
             println("    ", name, " → FAILED: ", first(sprint(showerror, err), 90))
         end

@@ -219,7 +219,11 @@
     `test_exactness.jl`'s own high-PV case); a caller-supplied `pv_scale ≫ 0.5` pins voltage at
     `V²max` — the one regime where SOC exactness genuinely fails (EXACT-04, plan 15-03).
     """
-    function build_high_pv_aggregators(feeder; seed::Integer = 20260406, pv_scale::Real = 0.5)
+    function build_high_pv_aggregators(
+        feeder;
+        seed::Integer = 20260406,
+        pv_scale::Real = 0.5,
+    )
         N = length(feeder.buses)
         return [
             _house_aggregator(

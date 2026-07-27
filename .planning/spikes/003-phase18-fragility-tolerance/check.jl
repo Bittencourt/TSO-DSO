@@ -45,32 +45,124 @@ const LOAD_SCALE_IEEE123 = 0.05
 const PV_SCALE_IEEE123 = 0.12
 const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)
 
-temperature_profile() = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
-ieee123_lambda0() = Float64[3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0]
+temperature_profile() = Float64[
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
+]
+ieee123_lambda0() = Float64[
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
+]
 
-function _house_aggregator(feeder, bus; seed::Integer, φ::Real, pv_scale::Real = 1.0,
-    load_scale::Real = 1.0, dev_scale::Real = 1.0, batt_pmax::Real = 0.5,
-    batt_emax::Real = 2.0, batt_soc0::Real = 1.0)
+function _house_aggregator(
+    feeder,
+    bus;
+    seed::Integer,
+    φ::Real,
+    pv_scale::Real = 1.0,
+    load_scale::Real = 1.0,
+    dev_scale::Real = 1.0,
+    batt_pmax::Real = 0.5,
+    batt_emax::Real = 2.0,
+    batt_soc0::Real = 1.0,
+)
     prof = generate_profiles(seed = seed + bus, T = T)
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
-    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5,
-        temperature_profile())
+    therm = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        temperature_profile(),
+    )
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
-    batt = PVBattery(bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
-        BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv)
+    batt = PVBattery(
+        bus,
+        0.95,
+        1.0,
+        batt_pmax,
+        0.0,
+        batt_emax,
+        batt_soc0,
+        BATT_λ_MIN,
+        BATT_λ_MED,
+        BATT_λ_MAX,
+        Ppv,
+    )
     return Aggregator(bus, φ, [therm, defer, batt], Pdc)
 end
 
-function build_ieee123_aggregators(feeder; seed::Integer = SEED_IEEE123,
-    load_scale::Real = LOAD_SCALE_IEEE123, pv_scale::Real = PV_SCALE_IEEE123,
-    dev_scale::Real = DEV_SCALE_IEEE123)
-    return [_house_aggregator(feeder, bus; seed = seed, φ = 0.90, load_scale = load_scale,
-                pv_scale = pv_scale, dev_scale = dev_scale, batt_pmax = 0.5 * load_scale,
-                batt_emax = 2.0 * load_scale, batt_soc0 = 1.0 * load_scale)
-            for bus in ieee123_load_nodes()]
+function build_ieee123_aggregators(
+    feeder;
+    seed::Integer = SEED_IEEE123,
+    load_scale::Real = LOAD_SCALE_IEEE123,
+    pv_scale::Real = PV_SCALE_IEEE123,
+    dev_scale::Real = DEV_SCALE_IEEE123,
+)
+    return [
+        _house_aggregator(
+            feeder,
+            bus;
+            seed = seed,
+            φ = 0.90,
+            load_scale = load_scale,
+            pv_scale = pv_scale,
+            dev_scale = dev_scale,
+            batt_pmax = 0.5 * load_scale,
+            batt_emax = 2.0 * load_scale,
+            batt_soc0 = 1.0 * load_scale,
+        ) for bus in ieee123_load_nodes()
+    ]
 end
 
 const DELTAS = (-0.05, -0.02, 0.0, 0.02, 0.05)
@@ -89,23 +181,48 @@ println("Gate left ARMED (default rtol_exact = 1e-4). Only the SOLVER tolerance 
 println("="^104)
 
 for (name, tol) in SETTINGS
-    opt = tol === nothing ? select_optimizer(SOCP()) :
-          optimizer_with_attributes(Clarabel.Optimizer, "verbose" => false,
-        "tol_gap_abs" => tol, "tol_gap_rel" => tol)
+    opt =
+        tol === nothing ? select_optimizer(SOCP()) :
+        optimizer_with_attributes(
+            Clarabel.Optimizer,
+            "verbose" => false,
+            "tol_gap_abs" => tol,
+            "tol_gap_rel" => tol,
+        )
     println("\n--- ", name, " ", "-"^80)
-    @printf("%-8s %-9s %14s %14s %14s   %s\n", "delta", "gate", "socp_maxgap", "dadp_dso",
-        "fit_dso", "sign flip?")
+    @printf(
+        "%-8s %-9s %14s %14s %14s   %s\n",
+        "delta",
+        "gate",
+        "socp_maxgap",
+        "dadp_dso",
+        "fit_dso",
+        "sign flip?"
+    )
     for δ in DELTAS
-        aggs = build_ieee123_aggregators(feeder;
+        aggs = build_ieee123_aggregators(
+            feeder;
             load_scale = LOAD_SCALE_IEEE123 * (1 + δ),
             pv_scale = PV_SCALE_IEEE123 * (1 + δ),
-            dev_scale = DEV_SCALE_IEEE123 * (1 + δ))
+            dev_scale = DEV_SCALE_IEEE123 * (1 + δ),
+        )
 
-        gate = "?"; gap = NaN; dso = NaN; fitdso = NaN; err = ""
+        gate = "?"
+        gap = NaN
+        dso = NaN
+        fitdso = NaN
+        err = ""
         ctx = nothing
         try
-            ctx, _, _ = solve_welfare(feeder, ConvexBranchFlow(), aggs;
-                T = T, λ₀ = λ0, optimizer = opt, allow_export = true)   # gate ARMED
+            ctx, _, _ = solve_welfare(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = T,
+                λ₀ = λ0,
+                optimizer = opt,
+                allow_export = true,
+            )   # gate ARMED
             gate = "PASSED"
             gap = ctx.meta[:socp_maxgap]
             dso = welfare_accounting(ctx; T = T).dso
@@ -118,18 +235,32 @@ for (name, tol) in SETTINGS
             try
                 # Quick task 260726-mo7 added the `optimizer` kwarg, so the FIT counterfactual
                 # can now be conditioned exactly like solve_welfare (previously impossible).
-                fb = fit_baseline(feeder, ConvexBranchFlow(), aggs;
-                    T = T, λ₀ = λ0, optimizer = opt)
+                fb = fit_baseline(
+                    feeder,
+                    ConvexBranchFlow(),
+                    aggs;
+                    T = T,
+                    λ₀ = λ0,
+                    optimizer = opt,
+                )
                 fitdso = fb.social_fit - fb.prosumer_surplus
             catch e
-                err = "fit_baseline: " * replace(first(sprint(showerror, e), 90), '\n' => " | ")
+                err =
+                    "fit_baseline: " *
+                    replace(first(sprint(showerror, e), 90), '\n' => " | ")
             end
         end
-        flip = (!isnan(dso) && !isnan(fitdso)) ? (dso > 0 && fitdso < 0 ? "YES" : "no") : "—"
-        @printf("%-8s %-9s %14s %14s %14s   %s\n", string(δ), gate,
+        flip =
+            (!isnan(dso) && !isnan(fitdso)) ? (dso > 0 && fitdso < 0 ? "YES" : "no") : "—"
+        @printf(
+            "%-8s %-9s %14s %14s %14s   %s\n",
+            string(δ),
+            gate,
             isnan(gap) ? "—" : @sprintf("%.3e", gap),
             isnan(dso) ? "—" : @sprintf("%.6f", dso),
-            isnan(fitdso) ? "—" : @sprintf("%.4f", fitdso), flip)
+            isnan(fitdso) ? "—" : @sprintf("%.4f", fitdso),
+            flip
+        )
         isempty(err) || println("         ↳ ", err)
         push!(rows, (; setting = name, δ, gate, gap, dso, fitdso, flip, err))
         flush(stdout)
@@ -140,10 +271,16 @@ end
 ctl = only(filter(r -> r.setting == SETTINGS[1][1] && r.δ == 0.0, rows))
 println("\n", "="^104)
 println("EQUIVALENCE CONTROL — delta=0 @ default must match committed findings.txt")
-@printf("  dso         : got %.6f   expected 3.725705   %s\n", ctl.dso,
-    abs(ctl.dso - 3.725705) < 1e-5 ? "MATCH ✓" : "DRIFT ✗")
-@printf("  socp_maxgap : got %.3e   expected 3.060e-07  %s\n", ctl.gap,
-    abs(ctl.gap - 3.060e-7) < 5e-9 ? "MATCH ✓" : "DRIFT ✗")
+@printf(
+    "  dso         : got %.6f   expected 3.725705   %s\n",
+    ctl.dso,
+    abs(ctl.dso - 3.725705) < 1e-5 ? "MATCH ✓" : "DRIFT ✗"
+)
+@printf(
+    "  socp_maxgap : got %.3e   expected 3.060e-07  %s\n",
+    ctl.gap,
+    abs(ctl.gap - 3.060e-7) < 5e-9 ? "MATCH ✓" : "DRIFT ✗"
+)
 
 println("\n", "="^104)
 println("VERDICT")

@@ -26,10 +26,58 @@ using CSV, DataFrames
 const T = 24
 
 # Both profiles verified identical to Phase4Fixtures.temperature_profile() / mem_price_profile().
-const TEMP = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
-const PRICE = Float64[3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0]
+const TEMP = Float64[
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
+]
+const PRICE = Float64[
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
+]
 
 const SEED = 20260406            # Phase4Fixtures default — reproducible (threat T-04-06)
 const BATT_λ = (3.8, 6.2, 8.9)
@@ -91,35 +139,80 @@ function main()
     for vmax in VMAXES, ls in LOAD_SCALES, ps in PV_SCALES
         i += 1
         feeder = high_pv_feeder(; vmax = vmax)
-        aggs = [house(bus; pv_scale = ps, load_scale = ls) for bus in 2:length(feeder.buses)]
+        aggs =
+            [house(bus; pv_scale = ps, load_scale = ls) for bus in 2:length(feeder.buses)]
         row = try
-            ctx, obj, _ = solve_welfare(feeder, ConvexBranchFlow(), aggs;
-                T = T, λ₀ = PRICE, allow_export = true, rtol_exact = 1e6)
+            ctx, obj, _ = solve_welfare(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = T,
+                λ₀ = PRICE,
+                allow_export = true,
+                rtol_exact = 1e6,
+            )
             s = cone_stats(ctx, feeder)
-            (; vmax, load_scale = ls, pv_scale = ps, status = "SOLVED", objective = obj,
-                maxgap = s.maxgap, maxratio = s.maxratio, n_at_vmax = s.n_at_vmax,
-                min_branch_P = s.min_P, vpeak = s.vpeak, exact = s.maxratio <= 1.0,
-                class = s.maxratio <= 1.0 ? "exact" : "inexact", fail_reason = "")
+            (;
+                vmax,
+                load_scale = ls,
+                pv_scale = ps,
+                status = "SOLVED",
+                objective = obj,
+                maxgap = s.maxgap,
+                maxratio = s.maxratio,
+                n_at_vmax = s.n_at_vmax,
+                min_branch_P = s.min_P,
+                vpeak = s.vpeak,
+                exact = s.maxratio <= 1.0,
+                class = s.maxratio <= 1.0 ? "exact" : "inexact",
+                fail_reason = "",
+            )
         catch err
             # Non-solved points are NEVER silently dropped or merged into one colour. They split
             # into physically distinct classes: INFEASIBLE is legitimate white space (the feeder
             # cannot serve this operating point inside the voltage band); a guard trip is a
             # genuinely UNMEASURED point and must read as such on the map.
             msg = sprint(showerror, err)
-            cls = occursin("INFEASIBLE", msg) ? "infeasible" :
-                  occursin("complementarity", msg) ? "guard" : "solver"
-            (; vmax, load_scale = ls, pv_scale = ps,
-                status = "FAILED:" * string(nameof(typeof(err))), objective = NaN,
-                maxgap = NaN, maxratio = NaN, n_at_vmax = -1, min_branch_P = NaN,
-                vpeak = NaN, exact = missing, class = cls,
-                fail_reason = replace(first(msg, 160), '\n' => " | "))
+            cls =
+                occursin("INFEASIBLE", msg) ? "infeasible" :
+                occursin("complementarity", msg) ? "guard" : "solver"
+            (;
+                vmax,
+                load_scale = ls,
+                pv_scale = ps,
+                status = "FAILED:" * string(nameof(typeof(err))),
+                objective = NaN,
+                maxgap = NaN,
+                maxratio = NaN,
+                n_at_vmax = -1,
+                min_branch_P = NaN,
+                vpeak = NaN,
+                exact = missing,
+                class = cls,
+                fail_reason = replace(first(msg, 160), '\n' => " | "),
+            )
         end
         push!(rows, row)
         fmt(x) = x isa Float64 && isfinite(x) ? string(round(x; sigdigits = 4)) : "—"
-        println(rpad("[$i/$total]", 10), " vmax=", rpad(vmax, 6), " load=", rpad(ls, 5),
-            " pv=", rpad(ps, 4), " → ", rpad(row.status, 22),
-            " ratio=", rpad(fmt(row.maxratio), 11), " atVmax=", rpad(row.n_at_vmax, 4),
-            " vpeak=", rpad(fmt(row.vpeak), 7), " minP=", fmt(row.min_branch_P))
+        println(
+            rpad("[$i/$total]", 10),
+            " vmax=",
+            rpad(vmax, 6),
+            " load=",
+            rpad(ls, 5),
+            " pv=",
+            rpad(ps, 4),
+            " → ",
+            rpad(row.status, 22),
+            " ratio=",
+            rpad(fmt(row.maxratio), 11),
+            " atVmax=",
+            rpad(row.n_at_vmax, 4),
+            " vpeak=",
+            rpad(fmt(row.vpeak), 7),
+            " minP=",
+            fmt(row.min_branch_P),
+        )
     end
 
     df = DataFrame(rows)
@@ -127,8 +220,9 @@ function main()
     CSV.write(out, df)
 
     # ── Controls ─────────────────────────────────────────────────────────────────────────
-    ctl(ps, ls, vm) = only(filter(r -> r.pv_scale == ps && r.load_scale == ls && r.vmax == vm,
-        eachrow(df)))
+    ctl(ps, ls, vm) = only(
+        filter(r -> r.pv_scale == ps && r.load_scale == ls && r.vmax == vm, eachrow(df)),
+    )
     c_exact = ctl(0.5, 0.20, 1.05)
     c_inexact = ctl(1.2, 0.20, 1.05)
 
@@ -137,17 +231,28 @@ function main()
     ninexact = count(x -> x === false, df.exact)
 
     println("\n", "="^78)
-    println("solved:   $nsolved / $total     exact: $nexact   inexact: $ninexact   failed: $(total - nsolved)")
+    println(
+        "solved:   $nsolved / $total     exact: $nexact   inexact: $ninexact   failed: $(total - nsolved)",
+    )
     println("-"^78)
     println("CONTROLS (must reproduce EXACT-04 or the map is void):")
-    println("  pv=0.5 load=0.2 vmax=1.05  expect EXACT    got ",
+    println(
+        "  pv=0.5 load=0.2 vmax=1.05  expect EXACT    got ",
         c_exact.exact === true ? "EXACT ✓" : "$(c_exact.exact) ✗   [$(c_exact.status)]",
-        "   ratio=", round(c_exact.maxratio; sigdigits = 4), " vpeak=",
-        round(c_exact.vpeak; sigdigits = 5))
-    println("  pv=1.2 load=0.2 vmax=1.05  expect INEXACT  got ",
-        c_inexact.exact === false ? "INEXACT ✓" : "$(c_inexact.exact) ✗   [$(c_inexact.status)]",
-        " ratio=", round(c_inexact.maxratio; sigdigits = 4), " vpeak=",
-        round(c_inexact.vpeak; sigdigits = 5))
+        "   ratio=",
+        round(c_exact.maxratio; sigdigits = 4),
+        " vpeak=",
+        round(c_exact.vpeak; sigdigits = 5),
+    )
+    println(
+        "  pv=1.2 load=0.2 vmax=1.05  expect INEXACT  got ",
+        c_inexact.exact === false ? "INEXACT ✓" :
+        "$(c_inexact.exact) ✗   [$(c_inexact.status)]",
+        " ratio=",
+        round(c_inexact.maxratio; sigdigits = 4),
+        " vpeak=",
+        round(c_inexact.vpeak; sigdigits = 5),
+    )
     println("-"^78)
     println("csv:      $out")
     println("="^78)

@@ -9,7 +9,8 @@
 # asserts sit behind an `isdefined` guard so they go live automatically; the assert_ac_exact!
 # RED-guard is intentionally red until plan 15-02.
 
-@testitem "ac_oracle: recover_voltage_angles matches the hand-derived 2-bus closed-form phasor (EXACT-01, angle-recovery validation gate)" tags = [:ac_oracle] begin
+@testitem "ac_oracle: recover_voltage_angles matches the hand-derived 2-bus closed-form phasor (EXACT-01, angle-recovery validation gate)" tags =
+    [:ac_oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -67,7 +68,8 @@
     end
 end
 
-@testitem "ac_oracle: assert_ac_exact! is defined (RED-guard for plan 15-02)" tags = [:ac_oracle] begin
+@testitem "ac_oracle: assert_ac_exact! is defined (RED-guard for plan 15-02)" tags =
+    [:ac_oracle] begin
     using TSODSO
 
     # GREEN once plan 15-02 defines assert_ac_exact! alongside recover_voltage_angles in this
@@ -75,7 +77,8 @@ end
     @test isdefined(TSODSO, :assert_ac_exact!)
 end
 
-@testitem "ac_oracle: assert_ac_exact! reports all-exact on a KNOWN-exact 2-bus solve, never throws, never resolves to a Bool (EXACT-02/EXACT-03)" tags = [:ac_oracle] begin
+@testitem "ac_oracle: assert_ac_exact! reports all-exact on a KNOWN-exact 2-bus solve, never throws, never resolves to a Bool (EXACT-02/EXACT-03)" tags =
+    [:ac_oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -92,10 +95,22 @@ end
 
         # BOTH contexts from the SAME feeder/agg/λ₀/T/allow_export local variables (Pitfall 3
         # guard: identical problem data, each independently re-optimized).
-        ctx_socp, cost_socp, _ =
-            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = 1, λ₀ = [1.0], allow_export = true)
+        ctx_socp, cost_socp, _ = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            T = 1,
+            λ₀ = [1.0],
+            allow_export = true,
+        )
         ctx_ac, cost_ac, _ = solve_welfare(
-            feeder, ACPowerFlow(), [agg]; T = 1, λ₀ = [1.0], allow_local = true, allow_export = true,
+            feeder,
+            ACPowerFlow(),
+            [agg];
+            T = 1,
+            λ₀ = [1.0],
+            allow_local = true,
+            allow_export = true,
         )
 
         report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
@@ -114,7 +129,8 @@ end
     end
 end
 
-@testitem "ac_oracle: assert_ac_exact! throws ONLY on a structural T mismatch, never on a numeric gap (EXACT-03 divergence from assert_socp_exact!)" tags = [:ac_oracle] begin
+@testitem "ac_oracle: assert_ac_exact! throws ONLY on a structural T mismatch, never on a numeric gap (EXACT-03 divergence from assert_socp_exact!)" tags =
+    [:ac_oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -161,7 +177,8 @@ end
     end
 end
 
-@testitem "ac_oracle: high-PV stress fixture surfaces the genuine SOCP/AC exactness finding at the exactness boundary (EXACT-04)" tags = [:ac_oracle] setup = [Phase4Fixtures] begin
+@testitem "ac_oracle: high-PV stress fixture surfaces the genuine SOCP/AC exactness finding at the exactness boundary (EXACT-04)" tags =
+    [:ac_oracle] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
     import Ipopt
@@ -184,23 +201,40 @@ end
         # welfare_solve.jl. The milestone's ACTUAL exactness verdict comes from assert_ac_exact!'s
         # own standard rtol = 1e-4 below, NEVER from this loosened internal gate.
         ctx_socp, cost_socp, _ = solve_welfare(
-            feeder, ConvexBranchFlow(), aggs;
-            T = Phase4Fixtures.T, λ₀ = λ₀, allow_export = true, rtol_exact = 1.0,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            allow_export = true,
+            rtol_exact = 1.0,
         )
 
         # True nonconvex AC-OPF, default Ipopt attributes (select_optimizer(NLP())).
         ctx_ac, cost_ac, _ = solve_welfare(
-            feeder, ACPowerFlow(), aggs;
-            T = Phase4Fixtures.T, λ₀ = λ₀, allow_local = true, allow_export = true,
+            feeder,
+            ACPowerFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            allow_local = true,
+            allow_export = true,
         )
         # SECOND AC start with a different Ipopt interior-point strategy — genuine
         # solver-trajectory diversity WITHOUT touching solve_welfare's signature (the local-optimum
         # guard, Pitfall 2).
         ctx_ac2, cost_ac2, _ = solve_welfare(
-            feeder, ACPowerFlow(), aggs;
-            T = Phase4Fixtures.T, λ₀ = λ₀, allow_local = true, allow_export = true,
+            feeder,
+            ACPowerFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            allow_local = true,
+            allow_export = true,
             optimizer = optimizer_with_attributes(
-                Ipopt.Optimizer, "print_level" => 0, "mu_strategy" => "adaptive",
+                Ipopt.Optimizer,
+                "print_level" => 0,
+                "mu_strategy" => "adaptive",
             ),
         )
         # Local-optimum guard (Pitfall 2): if this ever fails on a future solver upgrade it flags a
@@ -227,16 +261,17 @@ end
         N = length(feeder.buses)
         B = length(feeder.branches)
         diagnosed = any(inexact_hours) do t★
-            voltage_bound_hit =
-                any(value(pv_socp.v[j, t★]) >= feeder.buses[j].vmax^2 - 1e-3 for j in 1:N)
+            voltage_bound_hit = any(
+                value(pv_socp.v[j, t★]) >= feeder.buses[j].vmax^2 - 1e-3 for j in 1:N
+            )
             reverse_flow = any(value(pv_socp.P[b, t★]) < 0 for b in 1:B)
             voltage_bound_hit || reverse_flow
         end
         @test diagnosed
-    # DOCUMENTED FINDING (EXACT-04): at pv_scale = 1.2 the SOC relaxation goes genuinely INEXACT
-    # over the high-PV afternoon window (hours 6–15), with bus voltage pinned at V²max = 1.1025
-    # and reverse (PV back-feed) branch flow — the documented SOC exactness-failure regime. The
-    # two independent AC starts agree (no local-optimum artifact), so the gap is a relaxation
-    # property, not solver noise. Narrated in docs/literate/ac_oracle.jl.
+        # DOCUMENTED FINDING (EXACT-04): at pv_scale = 1.2 the SOC relaxation goes genuinely INEXACT
+        # over the high-PV afternoon window (hours 6–15), with bus voltage pinned at V²max = 1.1025
+        # and reverse (PV back-feed) branch flow — the documented SOC exactness-failure regime. The
+        # two independent AC starts agree (no local-optimum artifact), so the gap is a relaxation
+        # property, not solver noise. Narrated in docs/literate/ac_oracle.jl.
     end
 end

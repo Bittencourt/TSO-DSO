@@ -293,8 +293,14 @@ end
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, φ0, [batt], Pdc)
 
-    ctx, obj0, _dadp =
-        solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ₀, allow_export = true)
+    ctx, obj0, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
     d = decompose_dlmp(ctx)
 
     # (a) The root's reactive price is DEGENERATE (≈0): the free-sign, zero-objective-

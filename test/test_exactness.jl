@@ -25,17 +25,17 @@
         )
         T, N, B = 1, 2, 1
         model = Model(select_optimizer(SOCP()))
-        @variable(model, v[1:N, 1:T]);
+        @variable(model, v[1:N, 1:T])
         @variable(model, v̂[1:N, 1:T])
-        @variable(model, P[1:B, 1:T]);
-        @variable(model, Q[1:B, 1:T]);
+        @variable(model, P[1:B, 1:T])
+        @variable(model, Q[1:B, 1:T])
         @variable(model, l[1:B, 1:T])
         # A GROSSLY inexact point: l·v_from = 1·1 = 1 ≫ P²+Q² = 0  ⇒  gap = 1, and the
         # RELATIVE cone slack gap/max(|lhs|,|rhs|) ≈ 1 ≫ rtol (WR-01: scale-free gate).
-        fix.(v, 1.0; force = true);
+        fix.(v, 1.0; force = true)
         fix.(v̂, 1.0; force = true)
-        fix.(P, 0.0; force = true);
-        fix.(Q, 0.0; force = true);
+        fix.(P, 0.0; force = true)
+        fix.(Q, 0.0; force = true)
         fix.(l, 1.0; force = true)
         @objective(model, Max, 0)
         optimize!(model)
@@ -65,16 +65,16 @@ end
         )
         T, N, B = 1, 2, 1
         model = Model(select_optimizer(SOCP()))
-        @variable(model, v[1:N, 1:T]);
+        @variable(model, v[1:N, 1:T])
         @variable(model, v̂[1:N, 1:T])
-        @variable(model, P[1:B, 1:T]);
-        @variable(model, Q[1:B, 1:T]);
+        @variable(model, P[1:B, 1:T])
+        @variable(model, Q[1:B, 1:T])
         @variable(model, l[1:B, 1:T])
         # An EXACT point: l = 0, P = Q = 0, v = 1 ⇒ gap = 0·1 − 0 = 0 < τ (no throw).
-        fix.(v, 1.0; force = true);
+        fix.(v, 1.0; force = true)
         fix.(v̂, 1.0; force = true)
-        fix.(P, 0.0; force = true);
-        fix.(Q, 0.0; force = true);
+        fix.(P, 0.0; force = true)
+        fix.(Q, 0.0; force = true)
         fix.(l, 0.0; force = true)
         @objective(model, Max, 0)
         optimize!(model)
@@ -105,20 +105,20 @@ end
         )
         T, N, B = 1, 2, 1
         model = Model(select_optimizer(SOCP()))
-        @variable(model, v[1:N, 1:T]);
+        @variable(model, v[1:N, 1:T])
         @variable(model, v̂[1:N, 1:T])
-        @variable(model, P[1:B, 1:T]);
-        @variable(model, Q[1:B, 1:T]);
+        @variable(model, P[1:B, 1:T])
+        @variable(model, Q[1:B, 1:T])
         @variable(model, l[1:B, 1:T])
         # A SMALL-MAGNITUDE strict cone: l·v_from = 5e-6·1 = 5e-6 ≫ P²+Q² = 0. The ABSOLUTE
         # cone residual is 5e-6 — BELOW the legacy absolute τ = 1e-5, so the old gate would
         # have SILENTLY ACCEPTED this fictitious over-current (the scale-dependence hazard on a
         # large per-unit base). The RELATIVE slack, however, is ≈ 1 (the cone is fully strict),
         # so the WR-01 gate correctly REFUSES prices regardless of the magnitude.
-        fix.(v, 1.0; force = true);
+        fix.(v, 1.0; force = true)
         fix.(v̂, 1.0; force = true)
-        fix.(P, 0.0; force = true);
-        fix.(Q, 0.0; force = true);
+        fix.(P, 0.0; force = true)
+        fix.(Q, 0.0; force = true)
         fix.(l, 5.0e-6; force = true)
         @objective(model, Max, 0)
         optimize!(model)

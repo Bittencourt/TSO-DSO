@@ -36,10 +36,58 @@ using Printf
 const T = 24
 
 # Digitized profiles, byte-identical to `test/fixtures_phase4.jl` / `fixtures_phase7.jl`.
-const TEMP = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
-const PRICE = Float64[3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0]
+const TEMP = Float64[
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
+]
+const PRICE = Float64[
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
+]
 
 function cone_stats(ctx, feeder; atol = 1e-6, rtol = 1e-4)
     pf = ctx.meta[:pf_vars]
@@ -79,12 +127,28 @@ feeder_3bus(; vmax = 1.05) = Feeder(
 
 function house_3bus(bus; pv_scale, load_scale)
     prof = generate_profiles(seed = 20260406 + bus, T = T)
-    return Aggregator(bus, 0.95,
-        [Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, TEMP),
+    return Aggregator(
+        bus,
+        0.95,
+        [
+            Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, TEMP),
             Deferrable(bus, 8, 16, 1.0, 0.5, 0.5),
-            PVBattery(bus, 0.95, 1.0, 0.1, 0.0, 0.2, 0.1, 3.8, 6.2, 8.9,
-                Float64[pv_scale * p for p in prof.pv])],
-        Float64[load_scale * d for d in prof.demand])
+            PVBattery(
+                bus,
+                0.95,
+                1.0,
+                0.1,
+                0.0,
+                0.2,
+                0.1,
+                3.8,
+                6.2,
+                8.9,
+                Float64[pv_scale * p for p in prof.pv],
+            ),
+        ],
+        Float64[load_scale * d for d in prof.demand],
+    )
 end
 
 # `rtol_exact = 1e6` neutralizes `solve_welfare`'s own PF-04 gate so an inexact solve is **returned**
@@ -99,19 +163,44 @@ function sweep_3bus(pvs, lds, vms)
     for vmax in vms, ls in lds, ps in pvs
         f = feeder_3bus(; vmax = vmax)
         aggs = [house_3bus(b; pv_scale = ps, load_scale = ls) for b in 2:3]
-        push!(rows, try
-            ctx, _, _ = solve_welfare(f, ConvexBranchFlow(), aggs;
-                T = T, λ₀ = PRICE, allow_export = true, rtol_exact = 1e6)
-            s = cone_stats(ctx, f)
-            (; vmax, load = ls, pv = ps, ratio = s.maxratio, atvmax = s.n_at_vmax,
-                vpeak = s.vpeak, minP = s.min_P,
-                class = s.maxratio <= 1 ? "exact" : "inexact")
-        catch err
-            msg = sprint(showerror, err)
-            (; vmax, load = ls, pv = ps, ratio = NaN, atvmax = -1, vpeak = NaN, minP = NaN,
-                class = occursin("INFEASIBLE", msg) ? "infeasible" :
-                        occursin("complementarity", msg) ? "guard" : "solver")
-        end)
+        push!(
+            rows,
+            try
+                ctx, _, _ = solve_welfare(
+                    f,
+                    ConvexBranchFlow(),
+                    aggs;
+                    T = T,
+                    λ₀ = PRICE,
+                    allow_export = true,
+                    rtol_exact = 1e6,
+                )
+                s = cone_stats(ctx, f)
+                (;
+                    vmax,
+                    load = ls,
+                    pv = ps,
+                    ratio = s.maxratio,
+                    atvmax = s.n_at_vmax,
+                    vpeak = s.vpeak,
+                    minP = s.min_P,
+                    class = s.maxratio <= 1 ? "exact" : "inexact",
+                )
+            catch err
+                msg = sprint(showerror, err)
+                (;
+                    vmax,
+                    load = ls,
+                    pv = ps,
+                    ratio = NaN,
+                    atvmax = -1,
+                    vpeak = NaN,
+                    minP = NaN,
+                    class = occursin("INFEASIBLE", msg) ? "infeasible" :
+                            occursin("complementarity", msg) ? "guard" : "solver",
+                )
+            end,
+        )
     end
     return rows
 end
@@ -141,9 +230,15 @@ c_inexact = ctl(rows_3bus, 1.2, 0.20, 1.05)
 
 @assert c_exact.class == "exact"
 @assert c_inexact.class == "inexact"
-@printf("pv=0.5 -> %s (ratio %.4g, vpeak %.5f)\npv=1.2 -> %s (ratio %.4g, vpeak %.5f)\n",
-    c_exact.class, c_exact.ratio, c_exact.vpeak,
-    c_inexact.class, c_inexact.ratio, c_inexact.vpeak)
+@printf(
+    "pv=0.5 -> %s (ratio %.4g, vpeak %.5f)\npv=1.2 -> %s (ratio %.4g, vpeak %.5f)\n",
+    c_exact.class,
+    c_exact.ratio,
+    c_exact.vpeak,
+    c_inexact.class,
+    c_inexact.ratio,
+    c_inexact.vpeak
+)
 
 # `vpeak ≈ 1.04` at the exact control independently matches the fixture's own documented
 # "≈1.04 pu, clear over-voltage with headroom below the cap" calibration note.
@@ -177,16 +272,34 @@ end
 
 base_opt = select_optimizer(SOCP())
 for tol in (nothing, 1e-10)
-    opt = tol === nothing ? base_opt :
-          optimizer_with_attributes(base_opt.optimizer_constructor, base_opt.params...,
-        "tol_gap_abs" => tol, "tol_gap_rel" => tol)
+    opt =
+        tol === nothing ? base_opt :
+        optimizer_with_attributes(
+            base_opt.optimizer_constructor,
+            base_opt.params...,
+            "tol_gap_abs" => tol,
+            "tol_gap_rel" => tol,
+        )
     f = feeder_3bus(; vmax = 1.05)
     aggs = [house_3bus(b; pv_scale = 1.2, load_scale = 0.20) for b in 2:3]
-    ctx, obj, _ = solve_welfare(f, ConvexBranchFlow(), aggs;
-        T = T, λ₀ = PRICE, optimizer = opt, allow_export = true, rtol_exact = 1e6)
+    ctx, obj, _ = solve_welfare(
+        f,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = PRICE,
+        optimizer = opt,
+        allow_export = true,
+        rtol_exact = 1e6,
+    )
     s = cone_stats(ctx, f)
-    @printf("tol_gap=%-7s ratio=%-11.5g maxgap=%-10.4g obj=%.6f\n",
-        tol === nothing ? "1e-8*" : string(tol), s.maxratio, s.maxgap, obj)
+    @printf(
+        "tol_gap=%-7s ratio=%-11.5g maxgap=%-10.4g obj=%.6f\n",
+        tol === nothing ? "1e-8*" : string(tol),
+        s.maxratio,
+        s.maxgap,
+        obj
+    )
 end
 
 # The ratio does not budge: this gap is **structural**, and the classification is safe. Keep that
@@ -199,45 +312,97 @@ if Base.find_package("CairoMakie") !== nothing
     CairoMakie.activate!(type = "png")
 
     code = Dict("exact" => 1, "inexact" => 2, "guard" => 3, "infeasible" => 4)
-    colors = [RGBf(0.13, 0.55, 0.49), RGBf(0.78, 0.15, 0.20),
-        RGBf(0.95, 0.71, 0.25), RGBf(0.88, 0.88, 0.90)]
+    colors = [
+        RGBf(0.13, 0.55, 0.49),
+        RGBf(0.78, 0.15, 0.20),
+        RGBf(0.95, 0.71, 0.25),
+        RGBf(0.88, 0.88, 0.90),
+    ]
 
     fig = Figure(size = (1000, 380), backgroundcolor = :white)
-    Label(fig[0, 1:3], "Where the SOC relaxation is exact — 3-bus high-PV stress fixture",
-        fontsize = 17, font = :bold)
+    Label(
+        fig[0, 1:3],
+        "Where the SOC relaxation is exact — 3-bus high-PV stress fixture",
+        fontsize = 17,
+        font = :bold,
+    )
     for (k, vm) in enumerate(VMAX_3BUS)
-        ax = Axis(fig[1, k]; title = "vmax = $vm", xlabel = "pv_scale",
+        ax = Axis(
+            fig[1, k];
+            title = "vmax = $vm",
+            xlabel = "pv_scale",
             ylabel = k == 1 ? "load_scale" : "",
             xticks = (1:length(PV_3BUS), string.(PV_3BUS)),
             yticks = (1:length(LOAD_3BUS), string.(LOAD_3BUS)),
-            xticklabelsize = 10, yticklabelsize = 10,
-            xgridvisible = false, ygridvisible = false)
+            xticklabelsize = 10,
+            yticklabelsize = 10,
+            xgridvisible = false,
+            ygridvisible = false,
+        )
         Z = [Float64(code[ctl(rows_3bus, p, l, vm).class]) for p in PV_3BUS, l in LOAD_3BUS]
-        heatmap!(ax, 1:length(PV_3BUS), 1:length(LOAD_3BUS), Z;
-            colormap = cgrad(colors, 4, categorical = true), colorrange = (0.5, 4.5))
+        heatmap!(
+            ax,
+            1:length(PV_3BUS),
+            1:length(LOAD_3BUS),
+            Z;
+            colormap = cgrad(colors, 4, categorical = true),
+            colorrange = (0.5, 4.5),
+        )
         ## A dot marks the free diagnostic: upper voltage bound ACTIVE at >=1 (bus,hour).
         for (i, p) in enumerate(PV_3BUS), (j, l) in enumerate(LOAD_3BUS)
-            ctl(rows_3bus, p, l, vm).atvmax >= 1 && scatter!(ax, [i], [j];
-                markersize = 5, color = (:white, 0.85), strokecolor = :black,
-                strokewidth = 0.6)
+            ctl(rows_3bus, p, l, vm).atvmax >= 1 && scatter!(
+                ax,
+                [i],
+                [j];
+                markersize = 5,
+                color = (:white, 0.85),
+                strokecolor = :black,
+                strokewidth = 0.6,
+            )
         end
-        vm == 1.05 && scatter!(ax,
+        vm == 1.05 && scatter!(
+            ax,
             [findfirst(==(0.5), PV_3BUS), findfirst(==(1.2), PV_3BUS)],
             fill(findfirst(==(0.20), LOAD_3BUS), 2);
-            marker = :star5, markersize = 15, color = :white,
-            strokecolor = :black, strokewidth = 1.2)
+            marker = :star5,
+            markersize = 15,
+            color = :white,
+            strokecolor = :black,
+            strokewidth = 1.2,
+        )
         xlims!(ax, 0.5, length(PV_3BUS) + 0.5)
         ylims!(ax, 0.5, length(LOAD_3BUS) + 0.5)
     end
-    Legend(fig[2, 1:3],
-        [PolyElement(color = c) for c in colors] ∪
-        [MarkerElement(marker = :circle, markersize = 6, color = (:white, 0.85),
-            strokecolor = :black, strokewidth = 0.6),
-            MarkerElement(marker = :star5, markersize = 12, color = :white,
-                strokecolor = :black, strokewidth = 1.1)],
-        ["exact", "INEXACT", "guard tripped (unmeasured)", "infeasible (unserveable)",
-            "voltage bound active", "EXACT-04 control"];
-        orientation = :horizontal, framevisible = false, labelsize = 11)
+    Legend(
+        fig[2, 1:3],
+        [PolyElement(color = c) for c in colors] ∪ [
+            MarkerElement(
+                marker = :circle,
+                markersize = 6,
+                color = (:white, 0.85),
+                strokecolor = :black,
+                strokewidth = 0.6,
+            ),
+            MarkerElement(
+                marker = :star5,
+                markersize = 12,
+                color = :white,
+                strokecolor = :black,
+                strokewidth = 1.1,
+            ),
+        ],
+        [
+            "exact",
+            "INEXACT",
+            "guard tripped (unmeasured)",
+            "infeasible (unserveable)",
+            "voltage bound active",
+            "EXACT-04 control",
+        ];
+        orientation = :horizontal,
+        framevisible = false,
+        labelsize = 11,
+    )
     rowgap!(fig.layout, 4)
     fig
 end
@@ -268,10 +433,16 @@ function read_sweep_csv(path)
     num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
     return map(lines[2:end]) do ln
         f = split(ln, ',')
-        (; vmax = num(f[idx["vmax"]]), load = num(f[idx["load"]]), pv = num(f[idx["pv"]]),
-            ratio = num(f[idx["maxratio"]]), atvmax = num(f[idx["n_at_vmax"]]),
-            vpeak = num(f[idx["vpeak"]]), minP = num(f[idx["min_branch_P"]]),
-            class = strip(f[idx["class"]]))
+        (;
+            vmax = num(f[idx["vmax"]]),
+            load = num(f[idx["load"]]),
+            pv = num(f[idx["pv"]]),
+            ratio = num(f[idx["maxratio"]]),
+            atvmax = num(f[idx["n_at_vmax"]]),
+            vpeak = num(f[idx["vpeak"]]),
+            minP = num(f[idx["min_branch_P"]]),
+            class = strip(f[idx["class"]]),
+        )
     end
 end
 
@@ -285,10 +456,16 @@ for cls in ("exact", "inexact", "infeasible", "guard")
 end
 
 solved_123 = filter(r -> isfinite(r.ratio), rows_123)
-@printf("\nratio range      : %.4g .. %.4g\n", minimum(r.ratio for r in solved_123),
-    maximum(r.ratio for r in solved_123))
-@printf("vpeak range      : %.5f .. %.5f\n", minimum(r.vpeak for r in solved_123),
-    maximum(r.vpeak for r in solved_123))
+@printf(
+    "\nratio range      : %.4g .. %.4g\n",
+    minimum(r.ratio for r in solved_123),
+    maximum(r.ratio for r in solved_123)
+)
+@printf(
+    "vpeak range      : %.5f .. %.5f\n",
+    minimum(r.vpeak for r in solved_123),
+    maximum(r.vpeak for r in solved_123)
+)
 @printf("bound EVER active: %s\n", any(r.atvmax >= 1 for r in solved_123))
 @printf("reverse flow everywhere: %s\n", all(r.minP < 0 for r in solved_123))
 
@@ -356,44 +533,81 @@ if Base.find_package("CairoMakie") !== nothing
     ld123 = sort(unique(r.load for r in rows_123))
     vm123 = sort(unique(r.vmax for r in rows_123))
     code2 = Dict("exact" => 1, "inexact" => 2, "guard" => 3, "infeasible" => 4)
-    colors2 = [RGBf(0.13, 0.55, 0.49), RGBf(0.78, 0.15, 0.20),
-        RGBf(0.95, 0.71, 0.25), RGBf(0.88, 0.88, 0.90)]
+    colors2 = [
+        RGBf(0.13, 0.55, 0.49),
+        RGBf(0.78, 0.15, 0.20),
+        RGBf(0.95, 0.71, 0.25),
+        RGBf(0.88, 0.88, 0.90),
+    ]
     cell(vm, p, l) = begin
         h = filter(r -> r.vmax == vm && r.pv == p && r.load == l, rows_123)
         isempty(h) ? nothing : only(h)
     end
 
     fig123 = Figure(size = (1000, 360), backgroundcolor = :white)
-    Label(fig123[0, 1:3],
+    Label(
+        fig123[0, 1:3],
         "Real IEEE-123 impedances — no structural inexactness found",
-        fontsize = 17, font = :bold)
-    Label(fig123[1, 1:3],
+        fontsize = 17,
+        font = :bold,
+    )
+    Label(
+        fig123[1, 1:3],
         "red cells are SOLVER NOISE, not relaxation gaps (tol_gap 1e-8→1e-10 collapses the worst ratio 4.76→0.0029 at an identical optimum)",
-        fontsize = 10.5, color = :gray35)
+        fontsize = 10.5,
+        color = :gray35,
+    )
     for (k, vm) in enumerate(vm123)
-        ax = Axis(fig123[2, k]; title = "vmax = $vm", xlabel = "pv multiplier",
+        ax = Axis(
+            fig123[2, k];
+            title = "vmax = $vm",
+            xlabel = "pv multiplier",
             ylabel = k == 1 ? "load multiplier" : "",
             xticks = (1:length(pv123), string.(pv123)),
             yticks = (1:length(ld123), string.(ld123)),
-            xticklabelsize = 10, yticklabelsize = 10,
-            xgridvisible = false, ygridvisible = false)
-        Z = [(c = cell(vm, p, l); c === nothing ? NaN : Float64(code2[c.class]))
-             for p in pv123, l in ld123]
-        heatmap!(ax, 1:length(pv123), 1:length(ld123), Z;
-            colormap = cgrad(colors2, 4, categorical = true), colorrange = (0.5, 4.5),
-            nan_color = RGBf(1, 1, 1))
+            xticklabelsize = 10,
+            yticklabelsize = 10,
+            xgridvisible = false,
+            ygridvisible = false,
+        )
+        Z = [
+            (c = cell(vm, p, l); c === nothing ? NaN : Float64(code2[c.class])) for
+            p in pv123, l in ld123
+        ]
+        heatmap!(
+            ax,
+            1:length(pv123),
+            1:length(ld123),
+            Z;
+            colormap = cgrad(colors2, 4, categorical = true),
+            colorrange = (0.5, 4.5),
+            nan_color = RGBf(1, 1, 1),
+        )
         ## The thesis-reproduction anchor sits at (pv×1.0, load×1.0) on the 1.10 panel.
         if vm == 1.10
             i, j = findfirst(==(1.0), pv123), findfirst(==(1.0), ld123)
-            i === nothing || j === nothing || scatter!(ax, [i], [j]; marker = :star5,
-                markersize = 16, color = :white, strokecolor = :black, strokewidth = 1.2)
+            i === nothing ||
+                j === nothing ||
+                scatter!(
+                    ax,
+                    [i],
+                    [j];
+                    marker = :star5,
+                    markersize = 16,
+                    color = :white,
+                    strokecolor = :black,
+                    strokewidth = 1.2,
+                )
         end
         xlims!(ax, 0.5, length(pv123) + 0.5)
         ylims!(ax, 0.5, length(ld123) + 0.5)
     end
-    Label(fig123[3, 1:3],
+    Label(
+        fig123[3, 1:3],
         "No dots: the voltage upper bound is never active at ANY point (vpeak ≤ 1.016 pu vs caps ≥ 1.05). ★ = thesis-reproduction point.",
-        fontsize = 10, color = :gray40)
+        fontsize = 10,
+        color = :gray40,
+    )
     rowgap!(fig123.layout, 4)
     fig123
 end

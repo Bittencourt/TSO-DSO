@@ -47,7 +47,8 @@ using JuMP: value
 const OUT = projectdir("results", "thesis_case123_repro")
 mkpath(OUT)
 
-saveboth(name, fig) = (save(joinpath(OUT, "$name.pdf"), fig); save(joinpath(OUT, "$name.png"), fig))
+saveboth(name, fig) =
+    (save(joinpath(OUT, "$name.pdf"), fig); save(joinpath(OUT, "$name.png"), fig))
 
 # -------------------------------------------------------------------------------------------
 # The "directional, public-data" qualifier — the ONE new convention this phase introduces.
@@ -148,7 +149,18 @@ function _house_aggregator(
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
 
-    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, temperature_profile())
+    therm = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        temperature_profile(),
+    )
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
     batt = PVBattery(
         bus,
@@ -222,7 +234,11 @@ fit_dso = fb.social_fit - fb.prosumer_surplus
 # threaded into this centralized solve_welfare seam).
 d = decompose_dlmp(ctx)
 
-println("  SOCP exactness   = ", cite_repro(round(maxgap; sigdigits = 2)), " (certified exact)")
+println(
+    "  SOCP exactness   = ",
+    cite_repro(round(maxgap; sigdigits = 2)),
+    " (certified exact)",
+)
 println(
     "  DADP DSO surplus = ",
     cite_repro(round(acct.dso; digits = 6)),
@@ -306,7 +322,14 @@ let
         title = "prosumer vs DSO surplus split",
     )
     barplot!(axS, [1], [fb.prosumer_surplus]; color = :dodgerblue, label = "prosumer")
-    barplot!(axS, [1], [fit_dso]; offset = [fb.prosumer_surplus], color = :orange, label = "DSO")
+    barplot!(
+        axS,
+        [1],
+        [fit_dso];
+        offset = [fb.prosumer_surplus],
+        color = :orange,
+        label = "DSO",
+    )
     barplot!(axS, [2], [acct.prosumer]; color = :dodgerblue)
     barplot!(axS, [2], [acct.dso]; offset = [acct.prosumer], color = :orange)
     hlines!(axS, [0]; color = :grey, linewidth = 0.5)
@@ -344,4 +367,8 @@ println("All figures written to: ", OUT)
 @assert acct.dso > 0.0 && fit_dso < 0.0 "DSO-surplus sign flip did not hold ($(cite_repro("")))"
 @assert acct.prosumer < fb.prosumer_surplus "prosumer-surplus decrease did not hold ($(cite_repro("")))"
 
-println("\nRESULT: DSO-surplus sign flip + prosumer-surplus decrease both confirmed ", cite_repro(""), ".")
+println(
+    "\nRESULT: DSO-surplus sign flip + prosumer-surplus decrease both confirmed ",
+    cite_repro(""),
+    ".",
+)

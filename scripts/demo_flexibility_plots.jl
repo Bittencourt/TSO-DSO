@@ -42,14 +42,14 @@ mkpath(OUT)
 # `flex` knob so a researcher can dial aggregator flexibility up/down).
 # -------------------------------------------------------------------------------------------
 const FEEDER_SYM = :ieee13
-const T          = 24                 # day-ahead horizon (hours)
-const SEED       = 42                 # master seed (threaded per-bus via generate_profiles)
-const PF         = ConvexBranchFlow() # SOCP branch-flow (gives physically meaningful DLMPs)
+const T = 24                 # day-ahead horizon (hours)
+const SEED = 42                 # master seed (threaded per-bus via generate_profiles)
+const PF = ConvexBranchFlow() # SOCP branch-flow (gives physically meaningful DLMPs)
 
 # IEEE-13 (100 MVA base) residential magnitude scales — SAME values as the `:default`
 # population (src/experiments/materialize.jl `_IEEE13_*`), so `flex = 1.0` reproduces it.
 const LOAD_SCALE = 0.005              # inelastic demand magnitude (pu)
-const PV_SCALE   = 0.03               # rooftop PV magnitude (pu)
+const PV_SCALE = 0.03               # rooftop PV magnitude (pu)
 const BATT_λ_MIN = 3.8                # App. C battery price triple (¢$/kWh-consistent)
 const BATT_λ_MED = 6.2
 const BATT_λ_MAX = 8.9
@@ -57,10 +57,30 @@ const BATT_λ_MAX = 8.9
 # The 24h ambient-temperature profile (°C) feeding the thermostatic `Tout` — the SAME digitized
 # shape as the project default (thesis Fig 4.2). Inlined here so the script is self-contained.
 const TEMPERATURE_24H = Float64[
-    19, 18, 17, 16, 16, 17,   # 00–05 dawn minimum
-    19, 21, 23, 26, 28, 30,   # 06–11 morning warm-up
-    31, 32, 32, 31, 29, 27,   # 12–17 afternoon peak
-    25, 23, 22, 21, 20, 19,   # 18–23 evening cool-down
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,   # 00–05 dawn minimum
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,   # 06–11 morning warm-up
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,   # 12–17 afternoon peak
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,   # 18–23 evening cool-down
 ]
 temperature_profile(T::Int) = Float64[TEMPERATURE_24H[mod1(t, 24)] for t in 1:T]
 
@@ -84,9 +104,18 @@ token-negligible battery (Pmax ∝ 1e-4, far too small to time-shift any load) s
 is non-empty. This is the "rooftop PV + dumb demand, nothing to shift" prosumer — the lower
 bound of the flexibility sweep.
 """
-function flexibility_population(feeder, master_seed::Integer, T::Int; flex::Real, φ::Real = 0.90)
-    flex >= 0 ||
-        throw(ArgumentError("flex must be ≥ 0 (0 = no flexibility / inelastic demand); got flex=$flex"))
+function flexibility_population(
+    feeder,
+    master_seed::Integer,
+    T::Int;
+    flex::Real,
+    φ::Real = 0.90,
+)
+    flex >= 0 || throw(
+        ArgumentError(
+            "flex must be ≥ 0 (0 = no flexibility / inelastic demand); got flex=$flex",
+        ),
+    )
     Tout = temperature_profile(T)
     buses = [b.id for b in feeder.buses if !b.is_root]
     no_flex = iszero(flex)            # flex = 0 → pure inelastic demand (PV + dumb load)
@@ -94,8 +123,8 @@ function flexibility_population(feeder, master_seed::Integer, T::Int; flex::Real
     for bus in buses
         # Per-bus deterministic profile draw (same idiom as the `:default` population).
         prof = generate_profiles(; seed = master_seed + bus, T = T)
-        Pdc  = LOAD_SCALE .* prof.demand
-        Ppv  = PV_SCALE   .* prof.pv
+        Pdc = LOAD_SCALE .* prof.demand
+        Ppv = PV_SCALE .* prof.pv
 
         if no_flex
             # NO FLEXIBILITY: passive PV generation + inelastic demand, nothing meaningfully
@@ -109,20 +138,25 @@ function flexibility_population(feeder, master_seed::Integer, T::Int; flex::Real
             ε = 1e-2
             therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * ε, 0.5, Tout)
             defer = Deferrable(bus, min(8, T), min(16, T), 1.0 * ε, 0.5 * ε, 0.5)
-            batt  = PVBattery(
-                bus, 0.95, 1.0,
+            batt = PVBattery(
+                bus,
+                0.95,
+                1.0,
                 0.5 * LOAD_SCALE * ε,            # Pmax ~ 1% of default → negligible shifting
                 0.0,
                 2.0 * LOAD_SCALE * ε,            # Emax ~ 1% of default → negligible storage
                 1.0 * LOAD_SCALE * ε,
-                BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX,
+                BATT_λ_MIN,
+                BATT_λ_MED,
+                BATT_λ_MAX,
                 Ppv,
             )
             push!(aggs, Aggregator(bus, φ, [therm, defer, batt], Pdc))
         else
-            therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * flex, 0.5, Tout)
+            therm =
+                Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * flex, 0.5, Tout)
             defer = Deferrable(bus, min(8, T), min(16, T), 1.0 * flex, 0.5 * flex, 0.5)
-            batt  = PVBattery(
+            batt = PVBattery(
                 bus,
                 0.95,                         # round-trip efficiency η
                 1.0,                          # Δt (h)
@@ -130,7 +164,9 @@ function flexibility_population(feeder, master_seed::Integer, T::Int; flex::Real
                 0.0,                          # Emin
                 2.0 * LOAD_SCALE * flex,      # Emax (storage energy)
                 1.0 * LOAD_SCALE * flex,      # soc0
-                BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX,
+                BATT_λ_MIN,
+                BATT_λ_MED,
+                BATT_λ_MAX,
                 Ppv,
             )
             push!(aggs, Aggregator(bus, φ, [therm, defer, batt], Pdc))
@@ -152,8 +188,8 @@ println("  flex levels = $(FLEX_LEVELS)")
 println("=" ^ 70)
 
 feeder = build_feeder(FEEDER_SYM)
-λ₀     = build_price(:mem, T, nothing)          # the MEM/wholesale price (TSO signal)
-hours  = 0:(T - 1)                              # 00:00 .. 23:00 axis
+λ₀ = build_price(:mem, T, nothing)          # the MEM/wholesale price (TSO signal)
+hours = 0:(T - 1)                              # 00:00 .. 23:00 axis
 load_buses = sort!([b.id for b in feeder.buses if !b.is_root])
 
 records = []  # one NamedTuple per flex level
@@ -173,23 +209,33 @@ for flex in FLEX_LEVELS
         # meaningfully (the default SOCP τ is 1e-3).
         τ = 5e-3,
     )
-    acct   = welfare_accounting(ctx; T = T)
-    dadp   = extract_dlmp(ctx)[load_buses, :]   # (n_load, T) — DADP at aggregator buses
+    acct = welfare_accounting(ctx; T = T)
+    dadp = extract_dlmp(ctx)[load_buses, :]   # (n_load, T) — DADP at aggregator buses
     decomp = decompose_dlmp(ctx)                # (; energy, loss, congestion, voltage, total)
-    pimp   = Float64[value.(ctx.meta[:p_import])...]   # frontier exchange (TSO↔DSO), length T
+    pimp = Float64[value.(ctx.meta[:p_import])...]   # frontier exchange (TSO↔DSO), length T
 
-    push!(records, (;
-        flex           = flex,
-        welfare        = welfare,
-        prosumer       = acct.prosumer,
-        dso            = acct.dso,
-        dadp           = dadp,
-        decomp         = decomp,
-        p_import       = pimp,
-        exact_maxgap   = ctx.meta[:socp_maxgap],
-    ))
-    @printf("  flex=%4.2f  welfare=%9.4f  prosumer=%9.4f  dso=%8.4f  exact_gap=%.2e  peak_DADP=%.3f\n",
-        flex, welfare, acct.prosumer, acct.dso, ctx.meta[:socp_maxgap], maximum(dadp))
+    push!(
+        records,
+        (;
+            flex = flex,
+            welfare = welfare,
+            prosumer = acct.prosumer,
+            dso = acct.dso,
+            dadp = dadp,
+            decomp = decomp,
+            p_import = pimp,
+            exact_maxgap = ctx.meta[:socp_maxgap],
+        ),
+    )
+    @printf(
+        "  flex=%4.2f  welfare=%9.4f  prosumer=%9.4f  dso=%8.4f  exact_gap=%.2e  peak_DADP=%.3f\n",
+        flex,
+        welfare,
+        acct.prosumer,
+        acct.dso,
+        ctx.meta[:socp_maxgap],
+        maximum(dadp)
+    )
 end
 
 # Index of the baseline (flex = 1.0) record — used as the reference case in several plots.
@@ -210,17 +256,25 @@ try
         feeder,
         PF,
         flexibility_population(feeder, SEED, T; flex = 1.0);
-        T       = T,
-        λ₀      = λ₀,
-        ρ       = 100.0,        # validated initial penalty for the IEEE-13 default population
+        T = T,
+        λ₀ = λ₀,
+        ρ = 100.0,        # validated initial penalty for the IEEE-13 default population
         maxiter = 300,
         allow_export = true,
     )
-    println("  ADMM converged in $(admm.iters) iters; welfare=$(round(admm.welfare; digits=4))  ",
-            "(centralized baseline: ", round(records[baseline_idx].welfare; digits = 4), ")")
+    println(
+        "  ADMM converged in $(admm.iters) iters; welfare=$(round(admm.welfare; digits=4))  ",
+        "(centralized baseline: ",
+        round(records[baseline_idx].welfare; digits = 4),
+        ")",
+    )
 catch e
-    println("  ⚠ ADMM solve did not pass the App. C battery complementarity gate at this flex —")
-    println("    skipping the two convergence plots (the flexibility-sweep figures are unaffected).")
+    println(
+        "  ⚠ ADMM solve did not pass the App. C battery complementarity gate at this flex —",
+    )
+    println(
+        "    skipping the two convergence plots (the flexibility-sweep figures are unaffected).",
+    )
     println("    reason: ", sprint(showerror, e))
 end
 
@@ -230,79 +284,133 @@ end
 # A perceptually-ordered color ramp across the flex sweep (dark = low flex, bright = high flex).
 flex_colors = cgrad(:viridis, length(FLEX_LEVELS); categorical = true)
 
-saveboth(name, fig) = (save(joinpath(OUT, "$name.pdf"), fig); save(joinpath(OUT, "$name.png"), fig))
+saveboth(name, fig) =
+    (save(joinpath(OUT, "$name.pdf"), fig); save(joinpath(OUT, "$name.png"), fig))
 
 # === (3a) Summary 2×2 ============================================================
 let
     fig = Figure(; size = (1000, 760))
-    st  = fig[0, 1:2] = Label(fig,
-        "TSO→DSO→aggregators day-ahead scenario — effect of aggregator flexibility (IEEE-13, T=$T)",
-        fontsize = 16, font = :bold)
+    st =
+        fig[0, 1:2] = Label(
+            fig,
+            "TSO→DSO→aggregators day-ahead scenario — effect of aggregator flexibility (IEEE-13, T=$T)",
+            fontsize = 16,
+            font = :bold,
+        )
 
     # (a) Social welfare vs flex. The objective Σ U_ag − λ₀ᵀp_import is dominated by the
     # (negative) MEM import cost on this 100 MVA base, so welfare is large-negative and the
     # differences across flex are small in relative terms — but the trend and magnitude are
     # the honest picture. Annotate the actual signed change, not a misleading "gain".
-    axW = Axis(fig[1, 1];
+    axW = Axis(
+        fig[1, 1];
         xlabel = "flexibility scale `flex`",
         ylabel = "social welfare (per-unit)",
-        title  = "(a) Social welfare vs aggregator flexibility",
-        titlealign = :left)
+        title = "(a) Social welfare vs aggregator flexibility",
+        titlealign = :left,
+    )
     welfare_vals = [r.welfare for r in records]
     w0 = first(welfare_vals)
     lines!(axW, FLEX_LEVELS, welfare_vals; color = :dodgerblue, linewidth = 2)
     scatter!(axW, FLEX_LEVELS, welfare_vals; color = :dodgerblue, markersize = 10)
     Δ_pct = 100 * (welfare_vals[end] - w0) / abs(w0)
-    text!(axW, FLEX_LEVELS[end], welfare_vals[end];
+    text!(
+        axW,
+        FLEX_LEVELS[end],
+        welfare_vals[end];
         text = "  Δ = $(round(Δ_pct; digits = 2))% vs flex=$(first(FLEX_LEVELS))",
-        align = (:right, Δ_pct >= 0 ? (:bottom) : (:top)), fontsize = 11, color = :dimgrey)
+        align = (:right, Δ_pct >= 0 ? (:bottom) : (:top)),
+        fontsize = 11,
+        color = :dimgrey,
+    )
     axW.xticks = FLEX_LEVELS
 
     # (b) Surplus split (stacked: prosumer + DSO) vs flex
-    axS = Axis(fig[1, 2];
+    axS = Axis(
+        fig[1, 2];
         xlabel = "flexibility scale `flex`",
         ylabel = "surplus (per-unit)",
-        title  = "(b) Prosumer vs DSO surplus split",
-        titlealign = :left)
+        title = "(b) Prosumer vs DSO surplus split",
+        titlealign = :left,
+    )
     prosumer_vals = [r.prosumer for r in records]
-    dso_vals      = [r.dso      for r in records]
-    barplot!(axS, 1:length(FLEX_LEVELS), prosumer_vals;
-        color = :seagreen, label = "prosumer")
-    barplot!(axS, 1:length(FLEX_LEVELS), dso_vals;
-        offset = prosumer_vals, color = :indianred, label = "DSO")
+    dso_vals = [r.dso for r in records]
+    barplot!(
+        axS,
+        1:length(FLEX_LEVELS),
+        prosumer_vals;
+        color = :seagreen,
+        label = "prosumer",
+    )
+    barplot!(
+        axS,
+        1:length(FLEX_LEVELS),
+        dso_vals;
+        offset = prosumer_vals,
+        color = :indianred,
+        label = "DSO",
+    )
     axS.xticks = (1:length(FLEX_LEVELS), string.(FLEX_LEVELS))
     axislegend(axS; position = :lt)
 
     # (c) Frontier exchange (TSO↔DSO net flow) over the day, one curve per flex
-    axF = Axis(fig[2, 1];
+    axF = Axis(
+        fig[2, 1];
         xlabel = "hour of day",
         ylabel = "frontier exchange p_import (per-unit)",
-        title  = "(c) TSO↔DSO exchange: flexibility peak-shaves & reshapes",
-        titlealign = :left)
+        title = "(c) TSO↔DSO exchange: flexibility peak-shaves & reshapes",
+        titlealign = :left,
+    )
     for (i, r) in enumerate(records)
-        lines!(axF, hours, r.p_import;
-            color = flex_colors[i], linewidth = 1.8,
-            label = "flex=$(r.flex)")
+        lines!(
+            axF,
+            hours,
+            r.p_import;
+            color = flex_colors[i],
+            linewidth = 1.8,
+            label = "flex=$(r.flex)",
+        )
     end
     axF.xticks = 0:3:23
     axislegend(axF; position = :rt, framevisible = false)
 
     # (d) Mean DADP (over load nodes) ± spread over the day, baseline vs highest flex
-    axP = Axis(fig[2, 2];
+    axP = Axis(
+        fig[2, 2];
         xlabel = "hour of day",
         ylabel = "DADP (per-unit)",
-        title  = "(d) Day-ahead dynamic price: flexibility flattens the peak",
-        titlealign = :left)
-    for (idx, label_txt) in ((1, "low flex ($(FLEX_LEVELS[1]))"), (baseline_idx, "baseline (1.0)"), (lastindex(FLEX_LEVELS), "high flex ($(FLEX_LEVELS[end]))"))
+        title = "(d) Day-ahead dynamic price: flexibility flattens the peak",
+        titlealign = :left,
+    )
+    for (idx, label_txt) in (
+        (1, "low flex ($(FLEX_LEVELS[1]))"),
+        (baseline_idx, "baseline (1.0)"),
+        (lastindex(FLEX_LEVELS), "high flex ($(FLEX_LEVELS[end]))"),
+    )
         r = records[idx]
         mean_dadp = vec(mean(r.dadp; dims = 1))
-        lo        = vec(minimum(r.dadp; dims = 1))
-        hi        = vec(maximum(r.dadp; dims = 1))
+        lo = vec(minimum(r.dadp; dims = 1))
+        hi = vec(maximum(r.dadp; dims = 1))
         band!(axP, hours, lo, hi; color = (flex_colors[idx], 0.2))
-        lines!(axP, hours, mean_dadp; color = flex_colors[idx], linewidth = 2, label = label_txt)
+        lines!(
+            axP,
+            hours,
+            mean_dadp;
+            color = flex_colors[idx],
+            linewidth = 2,
+            label = label_txt,
+        )
     end
     # overlay the MEM wholesale price λ₀ for reference (the TSO signal)
-    lines!(axP, hours, λ₀; color = :black, linestyle = :dash, linewidth = 1.5, label = "MEM λ₀")
+    lines!(
+        axP,
+        hours,
+        λ₀;
+        color = :black,
+        linestyle = :dash,
+        linewidth = 1.5,
+        label = "MEM λ₀",
+    )
     axP.xticks = 0:3:23
     axislegend(axP; position = :rt, framevisible = false)
 
@@ -314,24 +422,43 @@ end
 # (the decomposition fields are (N, T) matrices; average over the load-bus rows for a clean stack)
 let
     r = records[baseline_idx]
-    energy     = vec(mean(r.decomp.energy[load_buses, :];     dims = 1))
-    loss       = vec(mean(r.decomp.loss[load_buses, :];       dims = 1))
+    energy = vec(mean(r.decomp.energy[load_buses, :]; dims = 1))
+    loss = vec(mean(r.decomp.loss[load_buses, :]; dims = 1))
     congestion = vec(mean(r.decomp.congestion[load_buses, :]; dims = 1))
-    voltage    = vec(mean(r.decomp.voltage[load_buses, :];    dims = 1))
+    voltage = vec(mean(r.decomp.voltage[load_buses, :]; dims = 1))
 
     fig = Figure(; size = (900, 500))
-    fig[0, 1] = Label(fig,
+    fig[0, 1] = Label(
+        fig,
         "DLMP four-way decomposition (baseline flex=1.0, averaged over aggregator buses)";
-        fontsize = 15, font = :bold)
-    ax = Axis(fig[1, 1];
+        fontsize = 15,
+        font = :bold,
+    )
+    ax = Axis(
+        fig[1, 1];
         xlabel = "hour of day",
         ylabel = "price component (per-unit)",
-        title  = "energy + loss + congestion + voltage = DADP")
+        title = "energy + loss + congestion + voltage = DADP",
+    )
     # stack from the bottom: energy → loss → congestion → voltage
-    barplot!(ax, hours .+ 1, energy;     color = :steelblue,  label = "energy")
-    barplot!(ax, hours .+ 1, loss;       offset = energy,     color = :orange,    label = "loss")
-    barplot!(ax, hours .+ 1, congestion; offset = energy .+ loss,             color = :crimson,   label = "congestion")
-    barplot!(ax, hours .+ 1, voltage;    offset = energy .+ loss .+ congestion, color = :purple,   label = "voltage")
+    barplot!(ax, hours .+ 1, energy; color = :steelblue, label = "energy")
+    barplot!(ax, hours .+ 1, loss; offset = energy, color = :orange, label = "loss")
+    barplot!(
+        ax,
+        hours .+ 1,
+        congestion;
+        offset = energy .+ loss,
+        color = :crimson,
+        label = "congestion",
+    )
+    barplot!(
+        ax,
+        hours .+ 1,
+        voltage;
+        offset = energy .+ loss .+ congestion,
+        color = :purple,
+        label = "voltage",
+    )
     # overlay the total DADP (mean over nodes) as a line to confirm the stack sums to it
     mean_total = vec(mean(r.dadp; dims = 1))
     lines!(ax, hours .+ 1, mean_total; color = :black, linewidth = 2, label = "DADP (mean)")
@@ -345,16 +472,22 @@ end
 let
     r = records[baseline_idx]
     fig = Figure(; size = (850, 460))
-    fig[0, 1] = Label(fig, "Day-ahead dynamic price (DADP) — aggregator buses × hour (baseline flex=1.0)";
-        fontsize = 15, font = :bold)
+    fig[0, 1] = Label(
+        fig,
+        "Day-ahead dynamic price (DADP) — aggregator buses × hour (baseline flex=1.0)";
+        fontsize = 15,
+        font = :bold,
+    )
     n_load = length(load_buses)
-    ax = Axis(fig[1, 1];
+    ax = Axis(
+        fig[1, 1];
         xlabel = "hour of day",
         ylabel = "aggregator bus",
         yreversed = true,
         # cells are labeled by their (hour, bus); ticks sit at cell centers.
         xticks = (collect(1:T) .- 0.5, string.(hours)),
-        yticks = (collect(1:n_load) .- 0.5, string.(load_buses)))
+        yticks = (collect(1:n_load) .- 0.5, string.(load_buses)),
+    )
     # This CairoMakie build requires EDGE vectors (length = dim+1) for non-interpolated heatmaps,
     # and indexes matrix[xi, yi] at (x[xi], y[yi]) — so the matrix must be (length(x)-1, length(y)-1)
     # = (T, n_load). r.dadp is (n_load, T), hence the transpose; x = hour-edges, y = bus-edges.
@@ -367,15 +500,28 @@ end
 # === (3d) Congestion relief — nodal price spread vs flex =========================
 let
     fig = Figure(; size = (900, 460))
-    fig[0, 1] = Label(fig, "Nodal price spread (max−min DADP across aggregator buses)";
-        fontsize = 15, font = :bold)
-    ax = Axis(fig[1, 1];
+    fig[0, 1] = Label(
+        fig,
+        "Nodal price spread (max−min DADP across aggregator buses)";
+        fontsize = 15,
+        font = :bold,
+    )
+    ax = Axis(
+        fig[1, 1];
         xlabel = "hour of day",
         ylabel = "nodal price spread (per-unit)",
-        title  = "more flexibility → flatter network → less congestion")
+        title = "more flexibility → flatter network → less congestion",
+    )
     for (i, r) in enumerate(records)
         spread = vec(maximum(r.dadp; dims = 1) .- minimum(r.dadp; dims = 1))
-        lines!(ax, hours, spread; color = flex_colors[i], linewidth = 1.8, label = "flex=$(r.flex)")
+        lines!(
+            ax,
+            hours,
+            spread;
+            color = flex_colors[i],
+            linewidth = 1.8,
+            label = "flex=$(r.flex)",
+        )
     end
     ax.xticks = 0:3:23
     axislegend(ax; position = :rt, framevisible = false)

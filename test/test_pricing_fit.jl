@@ -249,8 +249,11 @@ end
     # One interior-point iteration cannot reach optimality, so `assert_solved!` must refuse. Were
     # the kwarg silently ignored, this would SOLVE — the throw is what proves the caller's
     # optimizer reaches a real solve rather than being dropped on the floor.
-    crippled =
-        optimizer_with_attributes(base.optimizer_constructor, base.params..., "max_iter" => 1)
+    crippled = optimizer_with_attributes(
+        base.optimizer_constructor,
+        base.params...,
+        "max_iter" => 1,
+    )
 
     @test_throws Exception fit_baseline(
         feeder,

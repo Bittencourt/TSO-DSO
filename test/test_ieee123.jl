@@ -115,7 +115,8 @@ end
     end
 end
 
-@testitem "ieee123: pinned real-impedance spot-check on branch (149,1) (ieee123)" tags = [:phase7] begin
+@testitem "ieee123: pinned real-impedance spot-check on branch (149,1) (ieee123)" tags =
+    [:phase7] begin
     using TSODSO
 
     # Real per-segment Ω→pu impedance ingestion (plan 17-02, IMPED-02): branch (149,1)

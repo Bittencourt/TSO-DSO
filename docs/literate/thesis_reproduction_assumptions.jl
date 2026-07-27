@@ -204,9 +204,18 @@ n_load_nodes = length(ieee123_load_nodes())
 @assert DEV_SCALE_IEEE123 ≈ 0.05 * (0.05 / 0.03)
 
 println("live-checked load-node count = ", cite_repro(n_load_nodes))
-println("live-checked population re-tune = ", cite_repro(
-    (LOAD_SCALE_IEEE123, PV_SCALE_IEEE123, round(DEV_SCALE_IEEE123; digits = 4)),
-))
+println(
+    "live-checked population re-tune = ",
+    cite_repro((
+        LOAD_SCALE_IEEE123,
+        PV_SCALE_IEEE123,
+        round(DEV_SCALE_IEEE123; digits = 4),
+    ),),
+)
 
-(n_load_nodes = n_load_nodes, LOAD_SCALE_IEEE123 = LOAD_SCALE_IEEE123,
-    PV_SCALE_IEEE123 = PV_SCALE_IEEE123, DEV_SCALE_IEEE123 = DEV_SCALE_IEEE123)
+(
+    n_load_nodes = n_load_nodes,
+    LOAD_SCALE_IEEE123 = LOAD_SCALE_IEEE123,
+    PV_SCALE_IEEE123 = PV_SCALE_IEEE123,
+    DEV_SCALE_IEEE123 = DEV_SCALE_IEEE123,
+)
