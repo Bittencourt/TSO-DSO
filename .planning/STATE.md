@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Research Extension Rungs
 status: planning
-stopped_at: Completed quick task 260726-vn2 (quarantine flaky IEEE-13 ADMM tests with bounded retry) - 2/2 tasks done, both flaky solve_admm calls wrapped
-last_updated: "2026-07-27T02:06:10.298Z"
-last_activity: 2026-07-27 — quick task 260726-vn2 quarantined the two flaky IEEE-13 solve_admm test items with a bounded test-only retry
+stopped_at: Completed quick task 260728-co0 (PSR N1-N2 note vs Stackelberg planning-layer writeup) - 2/2 tasks done, docs/writeups/stackelberg_vs_psr_n1n2.typ authored and registered
+last_updated: "2026-07-28T12:24:12.560Z"
+last_activity: 2026-07-28 — quick task 260728-co0 authored the term-by-term PSR N1-N2 note ↔ src/planning/ mapping writeup
 ---
 
 # Project State
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: 19 of 24 (4Q-BESS + Live Reactive Dual-Ascent)
 Plan: — of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-07-27 — quick task 260726-vn2 quarantined the two flaky IEEE-13 solve_admm test items with a bounded test-only retry
+Last activity: 2026-07-28 — quick task 260728-co0 authored the term-by-term PSR N1-N2 note ↔ src/planning/ mapping writeup
 
 ### Quick Tasks Completed
 
@@ -33,6 +33,7 @@ Last activity: 2026-07-27 — quick task 260726-vn2 quarantined the two flaky IE
 | 260726-plf | Correct the 18-03 assumptions page — Section 8 refuted, Phase-17 re-tune premise undermined | 2026-07-26 | 2ac0089 | [260726-plf-correct-the-18-03-assumptions-page-secti](./quick/260726-plf-correct-the-18-03-assumptions-page-secti/) |
 | 260726-pta | Publish the SOCP applicability maps + sweep experiments on the Documenter site | 2026-07-26 | (this commit) | [260726-pta-publish-the-socp-applicability-maps-and-](./quick/260726-pta-publish-the-socp-applicability-maps-and-/) |
 | 260726-vn2 | Quarantine flaky IEEE-13 ADMM tests with a bounded solve retry | 2026-07-27 | e015529 | [260726-vn2-quarantine-flaky-ieee-13-admm-tests-with](./quick/260726-vn2-quarantine-flaky-ieee-13-admm-tests-with/) |
+| 260728-co0 | Author the Stackelberg vs PSR N1-N2 note term-by-term mapping writeup | 2026-07-28 | 6b8b166 | [260728-co0-create-a-typst-writeup-like-thesis-casea](./quick/260728-co0-create-a-typst-writeup-like-thesis-casea/) |
 
 ## Performance Metrics
 
@@ -69,6 +70,13 @@ Last activity: 2026-07-27 — quick task 260726-vn2 quarantined the two flaky IE
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- Quick task 260728-co0: found and documented that `THEORY-papers.md`'s N1/N2-to-side paraphrase
+  was reversed relative to the PSR primary source (correct reading: N1 = transmission, N2 =
+  distributor) — the primary PDF and the `src/planning/` implementation are mutually consistent;
+  only the digest's introductory prose had the labels backwards. Documented in
+  `docs/writeups/stackelberg_vs_psr_n1n2.typ`'s game-structure section rather than silently
+  picking a reading.
 
 - Roadmap (v3.0): Phases derived from the 5 research axes but the MESH axis is SPLIT across two
   phases per the flagged PROJECT.md interdependency — Phase 19 ships 4Q-BESS device + live reactive
@@ -200,8 +208,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-27T02:06:10.263Z
-Stopped at: Completed quick task 260726-vn2 (quarantine flaky IEEE-13 ADMM tests with bounded retry) - 2/2 tasks done, both flaky solve_admm calls wrapped
+Last session: 2026-07-28T12:24:12.536Z
+Stopped at: Completed quick task 260728-co0 (PSR N1-N2 note vs Stackelberg planning-layer writeup) - 2/2 tasks done, docs/writeups/stackelberg_vs_psr_n1n2.typ authored and registered
 Resume file: None
 
 ## Operator Next Steps
