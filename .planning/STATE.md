@@ -34,6 +34,7 @@ Last activity: 2026-07-28 — quick task 260728-co0 authored the term-by-term PS
 | 260726-pta | Publish the SOCP applicability maps + sweep experiments on the Documenter site | 2026-07-26 | (this commit) | [260726-pta-publish-the-socp-applicability-maps-and-](./quick/260726-pta-publish-the-socp-applicability-maps-and-/) |
 | 260726-vn2 | Quarantine flaky IEEE-13 ADMM tests with a bounded solve retry | 2026-07-27 | e015529 | [260726-vn2-quarantine-flaky-ieee-13-admm-tests-with](./quick/260726-vn2-quarantine-flaky-ieee-13-admm-tests-with/) |
 | 260728-co0 | Author the Stackelberg vs PSR N1-N2 note term-by-term mapping writeup | 2026-07-28 | 6b8b166 | [260728-co0-create-a-typst-writeup-like-thesis-casea](./quick/260728-co0-create-a-typst-writeup-like-thesis-casea/) |
+| 260728-fast | Fix scrambled table rendering in stackelberg_vs_psr_n1n2.typ (auto-width Etiqueta column collapsed the fr columns to zero width) | 2026-07-28 | — | — |
 
 ## Performance Metrics
 

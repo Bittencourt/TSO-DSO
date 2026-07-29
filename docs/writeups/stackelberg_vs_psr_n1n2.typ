@@ -18,6 +18,11 @@
 #show heading.where(level: 1): it => v(0.8em) + it
 #show heading.where(level: 2): it => v(0.4em) + it
 
+// Tabelas: nunca usar `auto` em colunas de texto longo — uma coluna `auto`
+// larga colapsa as colunas `fr` a largura zero (texto sobreposto/embaralhado).
+#show table: set text(size: 9pt)
+#set table(inset: 5pt)
+
 #align(center)[
   #text(size: 20pt, weight: "bold")[Nota PSR N1-N2 ↔ Camada de Planejamento Implementada]
   #v(0.3em)
@@ -120,8 +125,8 @@ $ alpha_"op"(z) = -max [ sum_j U_(a g_j) - sum_t lambda_0 [t] dot.c p_"import"[t
 == Problema (1) — formulação integrada, uma distribuidora
 
 #table(
-  columns: (auto, 1.6fr, 1.6fr, auto),
-  align: (center, left, left, center),
+  columns: (auto, 1.2fr, 1.4fr, 0.8fr),
+  align: (center, left, left, left),
   stroke: 0.4pt + gray,
   [*Eq.*], [*Significado (PSR)*], [*Construtor Julia*], [*Etiqueta*],
   [(1a)], [$A x_"inv" <= b$ — restrições genéricas de investimento em N1 (transmissão).], [`follower.jl`: `0 <= x_inv <= x_inv_max` (`build_follower`).], [Equivalente],
@@ -139,8 +144,8 @@ $ alpha_"op"(z) = -max [ sum_j U_(a g_j) - sum_t lambda_0 [t] dot.c p_"import"[t
 == Problema (2) — subproblema do seguidor (N1/transmissão), parametrizado por $z_"y,s"$
 
 #table(
-  columns: (auto, 1.6fr, 1.6fr, auto),
-  align: (center, left, left, center),
+  columns: (auto, 1.2fr, 1.4fr, 0.8fr),
+  align: (center, left, left, left),
   stroke: 0.4pt + gray,
   [*Eq.*], [*Significado (PSR)*], [*Construtor Julia*], [*Etiqueta*],
   [(2a)], [$A x_"inv" <= b$.], [`follower.jl`: `0 <= x_inv <= x_inv_max`.], [Equivalente],
@@ -153,8 +158,8 @@ $ alpha_"op"(z) = -max [ sum_j U_(a g_j) - sum_t lambda_0 [t] dot.c p_"import"[t
 == Problema (4) — mestre do líder (N2/distribuidora), com cortes de Benders
 
 #table(
-  columns: (auto, 1.6fr, 1.6fr, auto),
-  align: (center, left, left, center),
+  columns: (auto, 1.2fr, 1.4fr, 0.8fr),
+  align: (center, left, left, left),
   stroke: 0.4pt + gray,
   [*Eq.*], [*Significado (PSR)*], [*Construtor Julia*], [*Etiqueta*],
   [(4a)], [$B y_"inv" <= h$.], [`master.jl`: `0 <= y_inv <= y_max`.], [Equivalente],
@@ -170,8 +175,8 @@ $ alpha_"op"(z) = -max [ sum_j U_(a g_j) - sum_t lambda_0 [t] dot.c p_"import"[t
 A nota PSR trata o caso em que $x_"inv"$, $x_"op,s"$ (e o fluxo de interligação, via expansão binária) são variáveis inteiras (Seção 4), formando um MIP (problema 8) resolvido por relaxação Lagrangeana das restrições de cópia (problema 9), com multiplicadores obtidos por maximização do Lagrangeano — a máquina de Stochastic Dual Dynamic Integer Programming / cortes L-shaped inteiros (Zou-Ahmed-Sun 2019; Bansal-Küçükyavuz 2025).
 
 #table(
-  columns: (auto, 1.8fr, auto),
-  align: (center, left, center),
+  columns: (auto, 2fr, 0.8fr),
+  align: (center, left, left),
   stroke: 0.4pt + gray,
   [*Eq.*], [*Conteúdo (PSR)*], [*Etiqueta*],
   [(8a)–(8c)], [Restrições de investimento/operação/balanço de N1, herdadas de (1a)–(1c), agora com $x_"inv"$, $x_"op,s"$ possivelmente inteiros.], [Não implementado (`INT-STRETCH`)],
@@ -202,8 +207,8 @@ Isso é um *acréscimo deliberado* de robustez sobre a nota PSR (que assume impl
 Problema (7) da nota PSR: para $I$ distribuidoras, cada uma resolve seu próprio problema (6) (a distribuidora $i$ como função das injeções fixas das outras, ${z_(j,y,s), j != i}$), e o equilíbrio de Nash é o conjunto de decisões em que nenhuma distribuidora pode melhorar sua função de custo dado o que as outras fazem — "calculado através de um processo de diagonalização em que cada distribuidora é otimizada fixando os fluxos das outras distribuidoras calculadas na última vez que foram otimizadas" (nota PSR, p. 8).
 
 #table(
-  columns: (auto, 1.6fr, 1.6fr, auto),
-  align: (center, left, left, center),
+  columns: (auto, 1.2fr, 1.4fr, 0.8fr),
+  align: (center, left, left, left),
   stroke: 0.4pt + gray,
   [*Eq.*], [*Significado (PSR)*], [*Construtor Julia*], [*Etiqueta*],
   [(7a)–(7e)], [Restrições de investimento/operação/acoplamento/flexibilidade da distribuidora $i$ (mesma forma de (6a)–(6e), herdadas de (1d)–(1i)).], [`coupling.jl`: `SharedTransmission` — `x_inv[i]`, `x_op[i,t]`, `coupling[i,t]: x_op[i,t] == z[i,t]` (uma linha independentemente dualizável por distribuidor por hora).], [Equivalente],
