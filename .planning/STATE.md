@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: 19 of 24 (4Q-BESS + Live Reactive Dual-Ascent)
 Plan: — of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-07-28 — quick task 260728-co0 authored the term-by-term PSR N1-N2 note ↔ src/planning/ mapping writeup
+Last activity: 2026-08-07 — quick task 260806-ujj built the PV-boom showcase case study + self-contained HTML report
 
 ### Quick Tasks Completed
 
@@ -35,6 +35,7 @@ Last activity: 2026-07-28 — quick task 260728-co0 authored the term-by-term PS
 | 260726-vn2 | Quarantine flaky IEEE-13 ADMM tests with a bounded solve retry | 2026-07-27 | e015529 | [260726-vn2-quarantine-flaky-ieee-13-admm-tests-with](./quick/260726-vn2-quarantine-flaky-ieee-13-admm-tests-with/) |
 | 260728-co0 | Author the Stackelberg vs PSR N1-N2 note term-by-term mapping writeup | 2026-07-28 | 6b8b166 | [260728-co0-create-a-typst-writeup-like-thesis-casea](./quick/260728-co0-create-a-typst-writeup-like-thesis-casea/) |
 | 260728-fast | Fix scrambled table rendering in stackelberg_vs_psr_n1n2.typ (auto-width Etiqueta column collapsed the fr columns to zero width) | 2026-07-28 | — | — |
+| 260806-ujj | Showcase example app: PV-boom case study (scripts/pv_boom_case_study.jl) + self-contained HTML report (scripts/pv_boom_report.jl) | 2026-08-07 | 96688aa | [260806-ujj-showcase-example-app-pv-boom-case-study-](./quick/260806-ujj-showcase-example-app-pv-boom-case-study-/) |
 
 ## Performance Metrics
 
