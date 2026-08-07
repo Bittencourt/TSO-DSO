@@ -230,7 +230,7 @@ notation_table_html = """
 architecture_diagram_html = """
 <section id="architecture">
 <h2 id="architecture-h">Architecture: operational and planning layers</h2>
-<svg viewBox="0 0 900 480" role="img" aria-labelledby="arch-svg-title arch-svg-desc" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 900 480" role="img" aria-labelledby="arch-svg-title arch-svg-desc">
 <title id="arch-svg-title">Two-layer architecture diagram</title>
 <desc id="arch-svg-desc">Operational layer on the left (prosumer devices to aggregator to DSO network, emitting DADP prices); planning layer on the right (two distributor-leaders to a shared transmission corridor to a transmission-reinforcement follower); a thin cross-layer arrow shows the PV-boom case study's own local_price to c_op calibration link.</desc>
 <defs>
