@@ -37,6 +37,7 @@
 /results/**/*.pdf
 /results/**/*.png
 /results/**/*.svg
+/results/**/*.html
 
 # Authored writeups: track the Typst source, ignore the compiled PDF (regenerable via `typst compile`)
 /docs/writeups/*.pdf
