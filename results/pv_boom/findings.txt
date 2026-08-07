@@ -1,0 +1,30 @@
+PV-BOOM CASE STUDY — findings
+================================================================================
+
+Part A — PV-penetration operational sweep (IEEE-13, T=24)
+--------------------------------------------------------------------------------
+  pv_mult=0.00  welfare=-4830.132496  exact_maxgap=1.696e-09
+  pv_mult=0.50  welfare=-4826.027700  exact_maxgap=1.617e-09
+  pv_mult=1.00  welfare=-4823.308518  exact_maxgap=2.150e-08
+  pv_mult=1.50  welfare=-4822.041726  exact_maxgap=7.342e-09
+  pv_mult=2.00  welfare=-4821.028193  exact_maxgap=1.121e-08
+  pv_mult=2.50  welfare=-4820.081072  exact_maxgap=7.428e-09
+
+Declarative Scenario/run_scenario cross-check @ pv_mult=1.0: welfare_match=true, dadp_match=true
+
+ADMM cross-check @ pv_mult=1.0 (ρ=100.0): welfare_centralized=-4823.308518 welfare_admm=-4823.312033 relative_gap=7.288e-07 dadp_maxgap=6.373e-02 iters=42
+
+Part A2 — the documented EXACT-04 finding, reproduced
+--------------------------------------------------------------------------------
+On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, vmax=1.05, r=x=0.05 branches — test/fixtures_phase4.jl high_pv_feeder / build_high_pv_aggregators), the SOC branch-flow relaxation is genuinely INEXACT (EXACT-04) at 10/24 hours: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15].
+obj_gap (SOCP welfare - AC welfare) = 8.700808e-01
+socp_maxgap (PF-04, loosened rtol_exact=1.0 diagnostic)   = 1.043774e+01
+This is the ONE documented diagnostic-override reproduction this case study showcases (EXACT-04) — never re-derived or re-tuned from the certified fixture.
+
+Part B — planning-layer Stackelberg-Nash investment response
+--------------------------------------------------------------------------------
+Two IEEE-13-scale distributors — 'baseline' (pv_mult=0.7) and 'boom' (pv_mult=2.5) — built via the SAME pv_boom_population/BASE_SEED methodology as Part A, sliced to the afternoon PV-peak sub-horizon hours 13:18 — play a Gauss-Seidel Stackelberg-Nash investment game over a shared transmission-reinforcement corridor (run_nash!).
+DEVIATION (structural, not a tuning knob): the plan's own suggested baseline pv_mult=0.0 is UNCONDITIONALLY infeasible under solve_stackelberg!'s Benders design — its very first trial is always z=0 (no cuts yet), and a zero-PV network has no way to self-balance with zero frontier import; this raises a hard INFEASIBLE error before any feasibility cut can even be attempted (only the follower's shell corridor LP gates feasibility pre-oracle, never the oracle itself). Verified pv_mult ∈ {0.0, 0.3, 0.5} all fail this way; pv_mult >= 0.7 is feasible. baseline=0.7 was substituted to keep the 'low PV vs PV boom' contrast playable without touching src/.
+Converged: true  (sweeps=1)
+Converged investment x_inv (baseline, boom) = [0.0, 0.0]
+HONEST FINDING: the two distributors' converged investments did NOT differentiate at this calibration — reported as-is, not forced apart.
