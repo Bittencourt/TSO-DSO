@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: 19 of 24 (4Q-BESS + Live Reactive Dual-Ascent)
 Plan: — of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-08-07 — quick task 260807-7nz rewrote the PV-boom report into an educational MathML walkthrough
+Last activity: 2026-08-07 — quick task 260807-bv8 built the review-hardened PV-boom report v2 (for external Codex review)
 
 ### Quick Tasks Completed
 
@@ -37,6 +37,7 @@ Last activity: 2026-08-07 — quick task 260807-7nz rewrote the PV-boom report i
 | 260728-fast | Fix scrambled table rendering in stackelberg_vs_psr_n1n2.typ (auto-width Etiqueta column collapsed the fr columns to zero width) | 2026-07-28 | — | — |
 | 260806-ujj | Showcase example app: PV-boom case study (scripts/pv_boom_case_study.jl) + self-contained HTML report (scripts/pv_boom_report.jl) | 2026-08-07 | 96688aa | [260806-ujj-showcase-example-app-pv-boom-case-study-](./quick/260806-ujj-showcase-example-app-pv-boom-case-study-/) |
 | 260807-7nz | Rewrite PV-boom HTML report as rich educational walkthrough (MathML equations, model/experiment/results narrative) | 2026-08-07 | 7d41053 | [260807-7nz-rewrite-pv-boom-html-report-as-rich-educ](./quick/260807-7nz-rewrite-pv-boom-html-report-as-rich-educ/) |
+| 260807-bv8 | PV-boom report v2 (scripts/pv_boom_report_v2.jl): review-hardened — source citations, provenance tags, notation table, SVG architecture diagram, limitations section; v1 kept byte-identical | 2026-08-07 | f7487fa | [260807-bv8-pv-boom-report-v2-review-hardened-educat](./quick/260807-bv8-pv-boom-report-v2-review-hardened-educat/) |
 
 ## Performance Metrics
 
