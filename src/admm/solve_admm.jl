@@ -173,6 +173,12 @@ price (WR-03, phase-19 review).
     (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
     1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus netflow
     splitting is a Phase-7 generalization).
+  - `ArgumentError` (via [`build_dso_opt`](@ref) — WR-04, phase-19 review) when any aggregator
+    carries a `q_inject`-bearing device (`FourQuadBESS`) while `reactive_consensus` is NOT
+    `:live`: under `OFF`/`CERTIFIED` the DSO reactive closure is the inelastic `−Pdc·tanφ` draw
+    alone, so the device's reactive decision would be silently dropped from the network model
+    (and, under `CERTIFIED`, the certified `dual(:balance_q)` would be priced against a closure
+    that no longer matches the centralized model's). Pass `reactive_consensus = :live`.
   - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence — the fail-loud cap that
     refuses to return a non-consensus iterate (RESEARCH Pitfall 2).
 """

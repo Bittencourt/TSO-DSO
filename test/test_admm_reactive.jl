@@ -292,6 +292,49 @@ end
     # not an oversight -- the liveness item below covers q_devices' OWN behavior separately.
 end
 
+@testitem "admm reactive: OFF/CERTIFIED with a q_inject-carrying device fails loud instead of silently dropping it (WR-04) (reactive)" setup =
+    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    # WR-04 (phase-19 code review): under OFF/CERTIFIED, build_dso_opt composes its reactive
+    # closure target from −Pdc·tanφ ALONE — a FourQuadBESS's q_inject never reaches the DSO
+    # network model (silently diverging from the centralized model, whose Aggregator DOES
+    # write −Pdc·tanφ + q_inject into :Rq). The combination is new and undefined, so it must
+    # fail LOUD, directing the caller to :live.
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase19Fixtures.build_two_bus_aggregators_4q(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    # The guard's home seam: build_dso_opt, in all three non-LIVE spellings.
+    @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)   # OFF (default)
+    @test_throws ArgumentError build_dso_opt(
+        feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = :certified,
+    )
+    @test_throws ArgumentError build_dso_opt(
+        feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true,   # Bool back-compat → CERTIFIED
+    )
+
+    # solve_admm inherits the guard via its build_dso_opt call — no 4Q-bearing run can slip
+    # into a mode whose published duals would diverge from the centralized model.
+    @test_throws ArgumentError solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ,
+        allow_export = true,
+        reactive_consensus = :certified,
+        maxiter = 500,
+    )
+
+    # LIVE behavior unchanged: the same aggregator set still builds (qag coupling block live).
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = :live)
+    @test dso.qag !== nothing
+end
+
 @testitem "admm reactive: :live μ sign convention pinned against centralized dual(:balance_q) on REAL impedance (reactive, live)" setup =
     [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
     using TSODSO

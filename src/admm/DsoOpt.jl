@@ -139,7 +139,11 @@ that lets IEEE-123 (~37 junction buses) build. `load_nodes` (the ADMM coupling a
 DECOUPLED from "all non-root buses" (the balance-closure axis); on the 2-bus / IEEE-13 fixtures
 every non-root bus is a load node, so both axes coincide and the model is unchanged. Throws
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
-`1:length(feeder.buses)`, or an aggregator ON the root (genuinely invalid inputs still fail loud).
+`1:length(feeder.buses)`, an aggregator ON the root, or — WR-04, phase-19 review — a
+`q_inject`-carrying device (`FourQuadBESS`) combined with `reactive_consensus != :live` (under
+`OFF`/`CERTIFIED` the reactive closure is the inelastic `−Pdc·tanφ` draw alone, so the device's
+reactive decision would be silently dropped from the network model — genuinely invalid inputs
+still fail loud).
 
 `reactive_consensus` (D-12, MESH-05): a 3-state mode normalized via
 [`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
@@ -194,6 +198,39 @@ function build_dso_opt(
                 "no aggregator in DSO-OPT (thesis 3.47)",
             ),
         )
+    end
+
+    # WR-04 (phase-19 code review): under OFF/CERTIFIED this model's reactive closure target
+    # `q_draw[j][t]` is composed from the INELASTIC `−Pdc·tanφ` term ALONE (thesis 3.23, below),
+    # so a DEVICE-carried reactive decision (the widened D-09 `q_inject` contract — today only
+    # `FourQuadBESS`) would be silently DROPPED from the network model, while the centralized
+    # model's `Aggregator.contribute!` DOES write `−Pdc·tanφ + q_inject` into `:Rq` — a silent
+    # semantic divergence. Under CERTIFIED that divergence would additionally be laundered
+    # through the `:balance_q` no-slack certificate into a PUBLISHED reactive dual priced
+    # against the wrong closure. The combination is new and undefined (pre-Phase-19 no device
+    # carried `q_inject`), so it fails LOUD (project convention), directing the caller to
+    # `:live` — the only mode whose coupling target (`qag_live == qag + q_inject`, AgrOpt.jl)
+    # includes the device's reactive decision. The `dv isa FourQuadBESS` probe matches the sole
+    # `q_inject`-implementing device today; a future `q_inject`-carrying device must extend
+    # this guard (or the probe should move to a contract-level trait).
+    if mode != LIVE
+        for (k, agg) in enumerate(aggregators)
+            if hasproperty(agg, :devices) && any(dv -> dv isa FourQuadBESS, agg.devices)
+                throw(
+                    ArgumentError(
+                        "build_dso_opt: aggregator[$k] (bus $(agg.bus)) carries a " *
+                        "FourQuadBESS — a device-level reactive decision (q_inject, D-09) — " *
+                        "but reactive_consensus normalizes to $(mode), not LIVE. Under " *
+                        "OFF/CERTIFIED the DSO reactive closure is the inelastic −Pdc·tanφ " *
+                        "draw alone, so the device's q_inject would be silently dropped " *
+                        "from the network model (and under CERTIFIED the published " *
+                        "dual(:balance_q) would be priced against a closure that no longer " *
+                        "matches the centralized model's). Pass reactive_consensus = :live " *
+                        "(WR-04, phase-19 review).",
+                    ),
+                )
+            end
+        end
     end
 
     # TRANSIT-NODE RELAXATION (plan 07-03, RESEARCH Pitfall 5): DECOUPLE the ADMM coupling axis
