@@ -171,7 +171,11 @@ end
 
 """
     solve_agr!(agr::AgrOpt, λ_j::AbstractVector, c_j::AbstractVector, ρ::Real;
-               check_battery::Bool = true, τ_batt::Real = 1e-6, strict::Bool = true)
+               μ_j::Union{Nothing,AbstractVector} = nothing,
+               d_j::Union{Nothing,AbstractVector} = nothing,
+               ρ_q::Union{Nothing,Real} = nothing,
+               check_battery::Bool = true, τ_batt::Real = 1e-6, strict::Bool = true,
+               check_4q::Bool = false, rtol_4q::Real = 1e-6, atol_4q::Real = 1e-6)
         -> (; pag::Vector{Float64}, utility::Float64)
 
 Re-solve the AGR-OPT subproblem for one ADMM iteration (RESEARCH Pattern 3, thesis 3.46)
@@ -182,13 +186,27 @@ FIXED `−ρ/2` quadratic self-term built by [`build_agr_opt`](@ref) is untouche
 plain `Float64` vector, NEVER a JuMP `Parameter` (a `λ·pag` Parameter×variable term is an
 indefinite bilinear the convex conic backend rejects — RESEARCH Pitfall 1).
 
-After the coefficient update it:
+`μ_j`/`d_j`/`ρ_q` (MESH-05, NEW — the reactive analogs of `λ_j`/`c_j`/`ρ`): when `μ_j !==
+nothing`, in the SAME loop as the `pag[t]` update, `qag_live[t]`'s linear objective coefficient
+is set to `−μ_j[t] − ρ_q·d_j[t]`, mirroring the active-power update exactly. `agr.qag_live ===
+nothing` (an `OFF`/`CERTIFIED`-built `AgrOpt`) while `μ_j !== nothing` is a CALLER ERROR — it
+throws `ArgumentError` rather than silently no-op-ing (which could mask a caller forgetting to
+build with `reactive_mode = :live`). `μ_j`/`d_j` are length-guarded against `agr.T` exactly like
+`λ_j`/`c_j`. When `μ_j === nothing` (the default), the `qag_live` coefficient is left untouched —
+every existing call site's behavior is preserved verbatim.
+
+After the coefficient update(s) it:
 
   - gates the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before reading any
-    value; and
+    value;
   - runs the App. C battery-complementarity check
     [`assert_battery_complementarity!`](@ref)`(agr.ctx; τ = τ_batt, T = agr.T)` — the batteries live
-    in AGR-OPT now, so a degenerate simultaneous charge/discharge is caught here (threat T-06-10).
+    in AGR-OPT now, so a degenerate simultaneous charge/discharge is caught here (threat T-06-10);
+    and
+  - (NEW, MESH-04/MESH-05) when `check_4q = true`, in the SAME post-solve block, runs
+    [`assert_4q_complementarity!`](@ref)`(agr.ctx; rtol = rtol_4q, atol = atol_4q, T = agr.T)` —
+    the 4Q-BESS peer certificate (plan 19-05), passed through with the SAME measured defaults
+    that plan pinned (never invented anew here).
 
 `check_battery` / `τ_batt` — the App. C complementarity is a property of the CORRECTLY-PRICED
 optimum, NOT of an arbitrary intermediate ADMM iterate. Mid-loop the coupling price `λ_j` is
@@ -199,7 +217,8 @@ gates its exactness check behind `check_exact`). `solve_admm` therefore passes
 converged re-solve — where it also uses the interior-point `τ_batt` (Clarabel is an IPM that
 co-activates the optimal face more, so the QP-tight `1e-6` under-tolerances the converged point
 at scale; `1e-3` matches the `problem_class`-aware SOCP-path τ in `solve_welfare`). Default
-`(check_battery = true, τ_batt = 1e-6)` preserves the plan-06-02 standalone behavior.
+`(check_battery = true, τ_batt = 1e-6)` preserves the plan-06-02 standalone behavior. `check_4q`
+follows the SAME convergence-only discipline (mid-loop iterates are legitimately off-consensus).
 
 `strict` — the [`assert_solved!`](@ref) mode (mirrors [`solve_dso!`](@ref)). `strict = true` (the
 default, and ALWAYS used on the final/converged re-solve) requires a fully OPTIMAL, dual-feasible
@@ -212,17 +231,23 @@ intermediate iterate (the residual loop self-corrects; RESEARCH Pitfall 2/4). `s
 
 Returns `(; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))`: the solved net
 active injection over the horizon and the aggregator utility `U_ag` value (the un-penalized
-welfare term the ADMM loop recombines for reporting). Throws `ArgumentError` on a `λ_j`/`c_j`
-length mismatch — the boundary guard against a silently-wrong coefficient update.
+welfare term the ADMM loop recombines for reporting). Throws `ArgumentError` on a `λ_j`/`c_j` or
+`μ_j`/`d_j` length mismatch — the boundary guard against a silently-wrong coefficient update.
 """
 function solve_agr!(
     agr::AgrOpt,
     λ_j::AbstractVector,
     c_j::AbstractVector,
     ρ::Real;
+    μ_j::Union{Nothing, AbstractVector} = nothing,
+    d_j::Union{Nothing, AbstractVector} = nothing,
+    ρ_q::Union{Nothing, Real} = nothing,
     check_battery::Bool = true,
     τ_batt::Real = 1e-6,
     strict::Bool = true,
+    check_4q::Bool = false,
+    rtol_4q::Real = 1e-6,
+    atol_4q::Real = 1e-6,
 )
     length(λ_j) == agr.T || throw(
         ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"),
@@ -231,9 +256,34 @@ function solve_agr!(
         ArgumentError("solve_agr!: c_j has length $(length(c_j)), expected T=$(agr.T)"),
     )
 
+    # NEW (MESH-05): μ_j supplied but this AgrOpt has no live reactive coupling block ⇒ a caller
+    # error (fail loud — never a silent no-op that could mask a caller forgetting to build with
+    # reactive_mode = :live).
+    if μ_j !== nothing
+        agr.qag_live !== nothing || throw(
+            ArgumentError(
+                "solve_agr!: μ_j supplied but this AgrOpt was built without " *
+                "reactive_mode=:live",
+            ),
+        )
+        length(μ_j) == agr.T || throw(
+            ArgumentError("solve_agr!: μ_j has length $(length(μ_j)), expected T=$(agr.T)"),
+        )
+        d_j === nothing && throw(ArgumentError("solve_agr!: μ_j supplied without d_j"))
+        length(d_j) == agr.T || throw(
+            ArgumentError("solve_agr!: d_j has length $(length(d_j)), expected T=$(agr.T)"),
+        )
+        ρ_q === nothing && throw(ArgumentError("solve_agr!: μ_j supplied without ρ_q"))
+    end
+
     # Build-once re-solve (ADMM-03): one scalar coefficient update per hour — no JuMP rebuild.
+    # The qag_live update (when μ_j !== nothing) lives in the SAME loop as pag's, mirroring the
+    # active-power update exactly — never a second loop.
     for t in 1:agr.T
         set_objective_coefficient(agr.model, agr.pag[t], -λ_j[t] - ρ * c_j[t])
+        if μ_j !== nothing
+            set_objective_coefficient(agr.model, agr.qag_live[t], -μ_j[t] - ρ_q * d_j[t])
+        end
     end
 
     # INFRA-03 gate before any value()/dual() read. `strict = true` (default, and always on the
@@ -250,6 +300,13 @@ function solve_agr!(
     # iterates are legitimately off-consensus, so `solve_admm` gates this behind check_battery.
     if check_battery
         assert_battery_complementarity!(agr.ctx; τ = τ_batt, T = agr.T)
+    end
+
+    # NEW (MESH-04/MESH-05): the 4Q-BESS peer certificate, SAME post-solve block, SAME
+    # convergence-only discipline as check_battery — gated behind check_4q so mid-loop,
+    # off-consensus iterates never spuriously throw.
+    if check_4q
+        assert_4q_complementarity!(agr.ctx; rtol = rtol_4q, atol = atol_4q, T = agr.T)
     end
 
     return (; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))
@@ -286,4 +343,41 @@ function set_rho!(agr::AgrOpt, ρ::Real)
     return agr
 end
 
-export AgrOpt, build_agr_opt, solve_agr!, set_rho!
+"""
+    set_rho_q!(agr::AgrOpt, ρ_q::Real) -> AgrOpt
+
+Mutate the FIXED quadratic penalty weight of the built-ONCE LIVE reactive coupling block in
+place — the exact [`set_rho!`](@ref) PEER for the `qag_live` block (MESH-05, mirroring
+[`DsoOpt`](@ref)'s [`set_rho_q!`](@ref) at AGR-OPT scale; plan 19-07's outer μ-dual-ascent loop
+adapts `ρ_q` independently of `ρ`). AGR-OPT under `LIVE` carries an ADDITIONAL
+`Max ... − (ρ_q/2)·Σ_t qag_live[t]²` term (see [`build_agr_opt`](@ref)'s objective assembly), so
+the diagonal quadratic coefficient of every `qag_live[t]²` is `−0.5ρ_q`. One BATCH call sets them
+all, mirroring `set_rho!`'s exact flatten-then-one-call shape:
+
+    set_objective_coefficient(agr.model, agr.qag_live, agr.qag_live, fill(-0.5ρ_q, agr.T))
+
+`num_variables`/`num_constraints` are INVARIANT (no rebuild) — a mutate-then-solve is EQUIVALENT
+to a fresh build at the new `ρ_q` (identical mechanism to `set_rho!`).
+
+Throws `ArgumentError` if `agr.qag_live === nothing` — calling this on an `OFF`/`CERTIFIED`-built
+`AgrOpt` (no live reactive coupling block exists) is a caller error, fail loud rather than
+silently no-op. Returns `agr`.
+
+Note: `DsoOpt.jl` also exports a `set_rho_q!` for its own type — Julia dispatches on the
+argument type (`AgrOpt` vs `DsoOpt`), so both exports coexisting is correct method-table
+behavior, not a naming collision.
+"""
+function set_rho_q!(agr::AgrOpt, ρ_q::Real)
+    agr.qag_live !== nothing || throw(
+        ArgumentError(
+            "set_rho_q!: this AgrOpt was built without a live reactive coupling block " *
+            "(reactive_mode != :live); nothing to update",
+        ),
+    )
+    # Diagonal quadratic coeff of every qag_live[t]² set to −0.5ρ_q (Max objective, penalty
+    # subtracted). BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    set_objective_coefficient(agr.model, agr.qag_live, agr.qag_live, fill(-0.5 * ρ_q, agr.T))
+    return agr
+end
+
+export AgrOpt, build_agr_opt, solve_agr!, set_rho!, set_rho_q!
