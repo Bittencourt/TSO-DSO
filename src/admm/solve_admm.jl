@@ -56,8 +56,8 @@ using JuMP
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
-               allow_export::Bool = true, reactive_consensus::Bool = false)
-        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)
+               allow_export::Bool = true, reactive_consensus = false, ρ_q::Real = ρ)
+        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, μ, q_devices)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
 eqs. 3.46/3.47), the Phase-6 DECOMPOSED counterpart of the centralized [`solve_welfare`](@ref).
@@ -108,13 +108,58 @@ component). This is a ONE-SHOT certified dual read, NOT a live μ dual-ascent lo
 `qag_dso` is pinned to a fixed target that never moves, so convergence speed is materially
 unaffected).
 
+# Live reactive dual-ascent (Phase 19, MESH-05 — `reactive_consensus = :live`, `ρ_q::Real = ρ`)
+
+`reactive_consensus` now accepts a 3-state [`ReactiveMode`](@ref) (via
+[`normalize_reactive_mode`](@ref) — `Bool`/`Symbol`/`ReactiveMode` all accepted; `false → OFF`,
+`true → CERTIFIED`, back-compat preserved byte-identically for both). The NEW `LIVE` state
+(`:live`) makes `qag_dso[j,t]` a genuinely OPEN coupling variable — unpinned, unlike
+`CERTIFIED` — and drives it with a SECOND, jointly-converging dual-ascent block on the SAME
+outer loop, in EXACT mirror of the ACTIVE `λ`/`pag_dso` machinery above:
+
+  - A reactive coupling multiplier `μ` (NEVER named bare `μ`/`mu`/`MU` internally — that
+    identifier is the adaptive-ρ residual-balancing imbalance band, `μ::Real = 10.0` above; the
+    internal state uses the distinct name `μq`) is dual-ascended alongside `λ`, with its OWN
+    penalty weight `ρ_q` (defaults to tracking `ρ`, adapted independently thereafter).
+  - JOINT STACKED STOPPING RULE (Boyd §3.3's multi-block caveat; RESEARCH Pitfall 17): the primal/
+    dual residuals and per-unit thresholds are computed as ONE stacked norm over BOTH the active
+    (`λ`/`pag_dso`) and reactive (`μ`/`qag_dso`) coupling axes, feeding a SINGLE
+    [`record!`](@ref)/[`converged`](@ref) call — NEVER two independent per-block checks (a
+    textbook false-convergence bug on a two-block ADMM). `ρ` and `ρ_q` adapt INDEPENDENTLY of
+    each other (each block balances its OWN normalized residuals), since a shared ρ would be
+    badly scaled for the typically much-smaller reactive channel.
+  - SIGN CONVENTION (empirically verified this plan, on a 2-bus + `FourQuadBESS` fixture with
+    REAL — non-near-lossless — impedance, mirroring EXACTLY how `λ`'s sign was originally pinned
+    above): the internal `μq` converges to the NEGATED `dual(:balance_q[j])` — the SAME
+    relationship `λ` has to `dual(:balance_p[j])` — consistent with the P↔Q structural symmetry
+    of the single augmented Lagrangian (the reactive block is built by the IDENTICAL
+    AGR-fixes-target / DSO-renames-coupling-variable construction, merely on the `Rq`/`qag_dso`
+    axis). The reported `μ` (see Returns) is therefore the NEGATED internal `μq`, mirroring
+    `λ_mat = -λ` exactly.
+  - The final consolidation block ALSO wires the NEW 4Q complementarity certificate
+    ([`assert_4q_complementarity!`](@ref) via `solve_agr!`'s `check_4q` kwarg) for any aggregator
+    whose devices genuinely include a `FourQuadBESS` — INDEPENDENT of `reactive_consensus`, since
+    the App. C-style `p_ch·p_dch ≈ 0` property is a property of the DEVICE, not of whether its
+    reactive coupling happens to be pinned or live.
+  - CROSS-VALIDATION SCOPE (D-03): comparing a `LIVE` run against the centralized [`solve_welfare`](@ref)
+    compares welfare, `λ`, AND `μ` — but NEVER an individual `FourQuadBESS`'s `q` trajectory. When
+    the reactive nodal dual `μ ≈ 0` (a near-lossless/uncongested reactive channel, an HONEST
+    feature of the model, not a bug), a device's own P-Q split inside its apparent-power cone can
+    be non-unique/degenerate — pinning a non-unique quantity would be meaningless.
+
 # Returns
 
-`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap)` where `λ == dadp` is the
-`(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus order,
-matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
+`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, μ, q_devices)` where `λ == dadp` is
+the `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus
+order, matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
 [`ModelContext`](@ref) (its `.model` shape is iteration-count-independent — ADMM-03), and
-`exact_maxgap` the certified SOC cone residual (PF-04).
+`exact_maxgap` the certified SOC cone residual (PF-04). `μ`/`q_devices` are STABLE keys, ALWAYS
+present in the returned `NamedTuple` (Claude's Discretion, MESH-05 D-11): under `OFF`/`CERTIFIED`
+both are `nothing` (mirrors this file's own `exact_maxgap` convention — always a key, `nothing`
+until populated); under `LIVE`, `μ` is the `(n_load_nodes, T)` converged reactive-price matrix
+(SAME ascending-bus-order convention as `λ_mat`, sign-corrected per the empirical finding above)
+and `q_devices::Dict{Int,Vector{Float64}}` holds each `FourQuadBESS`'s converged length-`T` `q`
+trajectory, keyed by bus.
 
 # Throws
 
@@ -318,13 +363,17 @@ function solve_admm(
         # (PF-04 exactness + the WR-01 active-balance no-slack gate — see the final block).
         #
         # UNDER LIVE ONLY (MESH-05): `solve_dso!` (plan 19-03's shipped signature — confirmed, not
-        # assumed) does NOT accept a μq/d/ρ_q kwarg; `DsoOpt.qag` is a public field, so THIS outer
+        # assumed) does NOT accept a μq/b/ρ_q kwarg; `DsoOpt.qag` is a public field, so THIS outer
         # loop drives `qag_dso[j,t]`'s linear objective coefficient directly via
         # `set_objective_coefficient`, mirroring `solve_dso!`'s own internal `pag_dso` update
-        # exactly, BEFORE calling `solve_dso!` so the same solve picks up both coefficient updates.
+        # exactly (`-λ[j][t] - ρ*a[j][t]` uses `a` — AGR's OWN solved pag value — NEVER `c`, the
+        # AGR-side netflow target; the reactive mirror is therefore `-μq[j][t] - ρ_q*b[j][t]`,
+        # using `b` — AGR's OWN solved qag_live value — NEVER `d`, the reactive netflow target fed
+        # into `solve_agr!`'s `d_j` instead), BEFORE calling `solve_dso!` so the same solve picks
+        # up both coefficient updates.
         if mode == LIVE
             for j in load_nodes, t in 1:T
-                set_objective_coefficient(dso.model, dso.qag[j, t], -μq[j][t] - ρ_qf * d[j][t])
+                set_objective_coefficient(dso.model, dso.qag[j, t], -μq[j][t] - ρ_qf * b[j][t])
             end
         end
         dres = solve_dso!(dso, λ, a, ρf; check_exact = false, strict = false)
@@ -554,18 +603,58 @@ function solve_admm(
     # certificate added AFTER the final solve below (`assert_no_slack` on `:balance_p`). A genuinely
     # near-INFEASIBLE final primal fails LOUDLY on those gates at runtime; only the benign solver
     # LABEL is tolerated.
+    #
+    # MESH-05 (Task 2, D-11): whether the aggregator at each load node carries an ACTUAL
+    # `FourQuadBESS` device — the correct `check_4q` discriminator. NOT
+    # `agr_by_bus[j].qag_live !== nothing`: plan 19-06 ties `qag_live` to `mode == LIVE` ALONE
+    # (declared for EVERY aggregator under LIVE, regardless of device composition — re-derived
+    # against 19-06's actual shipped semantics, per this plan's own warning against assuming
+    # `qag_live !== nothing` is sufficient). INDEPENDENT of `mode`: the App. C-style
+    # `p_ch·p_dch ≈ 0` property is a property of the DEVICE's own charge/discharge behavior,
+    # checkable whenever a `FourQuadBESS` is present, whether or not its reactive coupling is
+    # pinned (`CERTIFIED`) or genuinely live (`LIVE`).
+    has_4q_by_bus = Dict{Int, Bool}(
+        agg.bus => any(dv -> dv isa FourQuadBESS, agg.devices) for agg in aggregators
+    )
     for j in load_nodes
-        r = solve_agr!(
-            agr_by_bus[j],
-            λ[j],
-            c[j],
-            ρf;
-            check_battery = true,
-            τ_batt = 1e-3,
-            strict = false,
-        )
+        r = if mode == LIVE
+            solve_agr!(
+                agr_by_bus[j],
+                λ[j],
+                c[j],
+                ρf;
+                μ_j = μq[j],
+                d_j = d[j],
+                ρ_q = ρ_qf,
+                check_battery = true,
+                τ_batt = 1e-3,
+                strict = false,
+                check_4q = has_4q_by_bus[j],
+            )
+        else
+            solve_agr!(
+                agr_by_bus[j],
+                λ[j],
+                c[j],
+                ρf;
+                check_battery = true,
+                τ_batt = 1e-3,
+                strict = false,
+                check_4q = has_4q_by_bus[j],
+            )
+        end
         a[j] = r.pag
         util[j] = r.utility
+    end
+    # UNDER LIVE ONLY (MESH-05): re-assert `qag_dso`'s linear coefficient one final time (mirrors
+    # the mid-loop discipline exactly, `-μq[j][t] - ρ_q*b[j][t]` — `b`, NEVER `d`, see the
+    # mid-loop comment above) BEFORE the final `solve_dso!` — a no-op numerically (μq/b are
+    # unchanged since the last mid-loop iteration) but keeps this final solve's coefficient state
+    # explicit/self-contained, mirroring how λ[j]/c[j] are also explicitly re-passed above.
+    if mode == LIVE
+        for j in load_nodes, t in 1:T
+            set_objective_coefficient(dso.model, dso.qag[j, t], -μq[j][t] - ρ_qf * b[j][t])
+        end
     end
     dres_final = solve_dso!(dso, λ, a, ρf; check_exact = true, strict = false)
     p_import = dres_final.p_import
@@ -631,6 +720,49 @@ function solve_admm(
     # coefficient updates and the (welfare-exact) convergence above.
     λ_mat = reduce(vcat, (permutedims(-λ[j]) for j in load_nodes))
 
+    # ---- MESH-05 (D-11): μ / q_devices as FIRST-CLASS PEERS of λ/dadp under LIVE. Stable
+    # return-tuple SHAPE (Claude's Discretion, per the plan's "pick ONE approach" instruction):
+    # the KEYS `μ`/`q_devices` are ALWAYS present, `nothing` under OFF/CERTIFIED — mirrors this
+    # file's own existing convention for `exact_maxgap` (always a key, `nothing` until a
+    # `check_exact = true` solve stashes a value). This is documented here, not a partial/optional
+    # NamedTuple shape.
+    μ_mat = nothing
+    q_devices = nothing
+    if mode == LIVE
+        # SIGN CONVENTION (Task 1's empirical finding, mirroring the λ/dual(:balance_p) derivation
+        # above VERBATIM with P↔Q substituted): the internal `μq[j]` converges to the NEGATED
+        # `dual(:balance_q[j])` — verified on a 2-bus + `FourQuadBESS` fixture with REAL (non-
+        # near-lossless) impedance, where the internal `μq` and `dual(:balance_q)` land with
+        # OPPOSITE signs at consensus (the SAME relationship `λ` already has to
+        # `dual(:balance_p)`), consistent with the P↔Q structural symmetry of the SINGLE augmented
+        # Lagrangian this file's header comment derives `λ`'s sign from (the reactive block is
+        # built by the identical AGR-fixes-target / DSO-renames-coupling-variable construction,
+        # merely on the `Rq`/`qag_dso` axis instead of `Rp`/`pag_dso`). SAME `reduce(vcat,
+        # permutedims(...))` idiom, SAME ascending-bus order as `λ_mat`.
+        #
+        # D-03 DEGENERACY NOTE: on a near-lossless/uncongested reactive channel the nodal reactive
+        # dual μ can converge to ≈0 (no genuine reactive network cost to price) — this is an
+        # HONEST feature of the model, not a bug: cross-validation against the centralized solve
+        # (below/at the call site) compares welfare, λ, AND μ, but NEVER a `FourQuadBESS`'s
+        # individual `q` trajectory, since a near-zero μ makes that device's own P-Q split
+        # non-unique/degenerate (many `(p,q)` splits inside the apparent-power cone are equally
+        # optimal at a ≈0 reactive price) — pinning a non-unique quantity would be meaningless.
+        μ_mat = reduce(vcat, (permutedims(-μq[j]) for j in load_nodes))
+
+        # Extract each `FourQuadBESS`'s converged `q[t]` trajectory from
+        # `ctx.meta[:agg_device_vars]` (the SAME stash `assert_4q_complementarity!` iterates),
+        # selected by the SAME `:p_ch`/`:p_dch`/`:q` triple the certificate uses — mirrors its own
+        # selection condition exactly, never a looser/different check.
+        q_devices = Dict{Int, Vector{Float64}}()
+        for j in load_nodes
+            for v in agr_by_bus[j].ctx.meta[:agg_device_vars][j]
+                if haskey(v, :p_ch) && haskey(v, :p_dch) && haskey(v, :q)
+                    q_devices[j] = Float64[value(v.q[t]) for t in 1:T]
+                end
+            end
+        end
+    end
+
     return (;
         welfare = welfare,
         dadp = λ_mat,
@@ -639,6 +771,8 @@ function solve_admm(
         residuals = residuals,
         dso_ctx = dso.ctx,
         exact_maxgap = exact_maxgap,
+        μ = μ_mat,
+        q_devices = q_devices,
     )
 end
 
