@@ -24,6 +24,7 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 ## Phase Details
 
 ### Phase 19: 4Q-BESS + Live Reactive Dual-Ascent
+
 **Goal**: A researcher can model a battery with genuine four-quadrant (P,Q) capability and observe a
 live-converging reactive nodal price out of ADMM — not just the one-shot certified dual v2.1 shipped —
 without touching the byte-identical default (no-4Q-BESS, no-dual-ascent) path.
@@ -33,31 +34,53 @@ pattern the meshed phase (23) references, and because Phase 23's combined litera
 device and dual-ascent step to already exist.
 **Requirements**: MESH-04, MESH-05
 **Success Criteria** (what must be TRUE):
+
   1. Researcher can instantiate a `FourQuadBESS` device exposing sign-free active and reactive
      decision variables inside an inverter apparent-power cone `p² + q² ≤ S²max`, flowing
      device → aggregator → the `:Rq` residual.
+
   2. The no-binaries complementarity property (`p_ch·p_dch = 0` at the optimum) is re-derived for the
      4Q case or replaced by a hard post-solve numeric check — never silently inherited from the
      active-only battery.
+
   3. Researcher can enable a live reactive μ-dual-ascent step (on `:balance_q`, using the
      `qag_dso`/`reactive_consensus` scaffolding) that converges inside `solve_admm` on a fixture with
      `FourQuadBESS` present, cross-validated against the centralized solve, under its own two-block
      convergence/stopping treatment (not the single-block Boyd rule as-is).
+
   4. With no `FourQuadBESS` device present and the dual-ascent step disabled, ADMM and centralized
      welfare results are byte-identical to pre-milestone behavior.
 **Plans:** 8 plans (6 waves)
 
 Plans:
+**Wave 1**
+
 - [ ] 19-01-PLAN.md — Wire seam stubs (FourQuadBESS.jl, complementarity_4q.jl, ReactiveMode.jl) into TSODSO.jl + capture pre-Phase-19 byte-identity baseline
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 19-02-PLAN.md — FourQuadBESS device: struct/constructors/guards, contribute! (SOC recursion + apparent-power cone + q_inject), complementarity re-derivation docstring
 - [ ] 19-03-PLAN.md — DsoOpt reactive_consensus promoted to 3-state (OFF/CERTIFIED/LIVE), LIVE unpins qag_dso with its own ρ_q penalty + set_rho_q!
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 19-04-PLAN.md — Aggregator.contribute! widened to roll up optional q_inject additively into :Rq, byte-identical when absent
 - [ ] 19-05-PLAN.md — assert_4q_complementarity! certificate (own measured tolerance, throw-by-default + report kwarg), disambiguated from assert_battery_complementarity!
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 19-06-PLAN.md — AgrOpt live qag_live coupling variable + ρ_q penalty, solve_agr! μ/d update + check_4q wiring
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 19-07-PLAN.md — solve_admm joint (λ,μ) stacked dual-ascent, μ/q_devices results surface, final-block certificate wiring
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 19-08-PLAN.md — Phase19Fixtures, measured cross-validation tolerances, liveness regression, IEEE-13 quarantined evidence, final byte-identity gate
 
 ### Phase 20: Overvoltage-Capable Relaxation
+
 **Goal**: A researcher can price the high-PV overvoltage regime that v2.1's AC oracle proved the plain
 SOCP relaxation cannot solve exactly (EXACT-04, IEEE-13 `pv_scale=1.2`), keeping the "prices are duals
 of one convex problem" story intact via a feasible-set restriction rather than a heuristic penalty.
@@ -68,23 +91,28 @@ drift into this same overvoltage regime — resolving it first gives the rolling
 fallback instead of an undefined catch-and-continue.
 **Requirements**: OVR-01, OVR-02, OVR-03, OVR-04
 **Success Criteria** (what must be TRUE):
+
   1. Researcher can solve the exact EXACT-04 stress fixture (IEEE-13, `pv_scale=1.2`) via a restricted
      SOCP (Gan–Low-style feasible-set tightening, e.g. reverse-flow-aware `V²max` shrink) dispatched
      as a formulation/config variant through the existing `solve_welfare` path, at the operating point
      where the unrestricted relaxation was proven genuinely inexact.
+
   2. The restriction carries its own new validity certificate (peer to `assert_socp_exact!`/
      `assert_ac_exact!`, never a reused tolerance): the restricted solution is certified AC-feasible
      via the existing AC oracle, and the certificate reports the optimality loss vs. the unrestricted
      (inexact) SOCP bound.
+
   3. Researcher can read DADP prices in the previously-refused regime as genuine convex duals of the
      restricted problem, with a documented nonconvex-AC-dual fallback (Ipopt local duals, explicit
      local-optimum / not-market-clearing caveat, multi-start evidence) reported — never thrown — when
      even the restricted SOCP cannot certify.
+
   4. A live-executed literate rung page documents the restriction mechanism, its measured
      optimality-loss, and the fallback semantics beside the Gan & Low condition it implements.
 **Plans**: TBD
 
 ### Phase 21: MPC / Rolling-Horizon / Real-Time Pricing
+
 **Goal**: A researcher can run a closed-loop receding-horizon solve over the stateful devices (battery
 SOC, thermostatic temperature), with rolling re-computed DADPs published as a real-time price signal,
 and see the closed loop honestly benchmarked against the perfect-foresight day-ahead optimum.
@@ -95,22 +123,27 @@ land as one coordinated, tightly-reviewed pair of diffs to halve the review surf
 schema-fragile, golden-hash-bearing file.
 **Requirements**: MPC-01, MPC-02, MPC-03, MPC-04
 **Success Criteria** (what must be TRUE):
+
   1. Researcher can run a deterministic receding-horizon closed-loop solve where, at each step, a
      window `[t, t+H]` problem is initialized from the measured device state (battery SOC,
      thermostatic temperature) via JuMP `Parameter` injection — built once and re-solved per step,
      never rebuilt.
+
   2. A hard terminal-SOC condition prevents end-of-horizon myopic battery dump/hoarding, demonstrated
      by a regression showing the artifact present when the condition is disabled and absent when it
      is enabled.
+
   3. The rolling re-computed DADP is published per step as an RTP signal, with price-consistency
      metrics (step-to-step price jumps, cumulative deviation from the day-ahead DADP path) recorded
      in a new trace struct following the `AdmmResiduals`/`BendersTrace` convention.
+
   4. The closed-loop trajectory is benchmarked against the perfect-foresight day-ahead optimum under
      seeded synthetic forecast error (bounded perturbation of the known ground truth), on an
      information-set-fair comparison, in a live-executed literate rung page.
 **Plans**: TBD
 
 ### Phase 22: Stochastic PV/Demand Uncertainty
+
 **Goal**: A researcher can solve a two-stage extensive-form welfare problem over a small seeded
 scenario set, with per-scenario DADPs as the primary, honestly-documented price output rather than an
 unconstrained "expected price."
@@ -119,23 +152,28 @@ reuse Phase 21's `Parameter`-pinned window-oracle convention directly if the ext
 decomposed); both phases' schema diffs to `experiments/Scenario.jl` are reviewed as one coordinated pair.
 **Requirements**: STOCH-01, STOCH-02, STOCH-03, STOCH-04
 **Success Criteria** (what must be TRUE):
+
   1. Researcher can solve a two-stage extensive-form welfare problem over a small fixed set of seeded
      Markov scenarios (3–5, explicit probabilities, generated by the existing seeded Markov data
      layer) with shared first-stage decisions and per-scenario recourse, solved by Clarabel within
      measured capacity.
+
   2. Per-scenario DADPs (the dual of each scenario's own nodal balance, PF-04-gated per scenario) are
      the primary price output; the probability-weighted expectation is reported only as a derived
      summary statistic — documented as such, never presented as an unconstrained "expected price"
      primitive.
+
   3. An out-of-sample validation harness evaluates the extensive-form first-stage decisions against
      held-out scenarios not used in the optimization, reporting the realized-vs-in-sample welfare
      gap, with goldens pinned only after repeated-run stability is checked (v2.1
      measurement-before-golden pattern).
+
   4. A live-executed literate rung page documents the extensive form, the per-scenario price
      semantics decision, and the out-of-sample result.
 **Plans**: TBD
 
 ### Phase 23: Meshed Networks
+
 **Goal**: The SEAM-01 meshed-formulation slot gets its own non-radial branch-flow formulation and its
 own validity treatment (angle-recoverability, not the radial per-branch gate), combined with Phase 19's
 live reactive price into one literate rung page.
@@ -148,23 +186,28 @@ meshed+4Q-BESS. Highest architecture-plus-math risk in the milestone; scheduled 
 research/validation overrun does not block the other axes.
 **Requirements**: MESH-01, MESH-02, MESH-03, MESH-06
 **Success Criteria** (what must be TRUE):
+
   1. A `MeshedFeeder` data type (loop-carrying topology, at least one committed meshed fixture) exists
      alongside the radial `Feeder`, with the radial constructor invariant (`assert_radial`) left
      completely untouched.
+
   2. Researcher can solve the meshed SOCP branch-flow problem via a `MeshedFlow <: AbstractPowerFlow`
      (or equivalent) through the SEAM-01 `pf` dispatch seam, with cycle/loop consistency handled
      explicitly — never the radial Baran–Wu variables alone.
+
   3. The meshed rung's own new angle-recoverability a-posteriori certificate (Gan–Low condition) is
      the validity gate: recoverable cases are certified with recovered angles; unrecoverable cases
      report the SOCP value as a valid lower bound with the inexactness stated as a first-class
      finding (report-don't-throw) — never the per-branch `assert_socp_exact!` alone, which is
      structurally blind to loop inconsistency.
+
   4. A live-executed literate rung page documents the meshed formulation, the angle-recoverability
      certificate, and the live reactive price from Phase 19 together (no literal IEEE-1547 Volt-VAR
      droop controller — optimal `q(v)` behavior characterized post-hoc if wanted).
 **Plans**: TBD
 
 ### Phase 24: Discrete/Integer Investment Expansion
+
 **Goal**: The single-distributor planning Benders loop supports genuine binary-expansion integer
 investment, converging on real Laporte–Louveaux integer optimality cuts, with the PVAL-04 no-binaries
 guard consciously scoped rather than deleted.
@@ -176,16 +219,20 @@ weaker convergence theory), giving the most time to resolve cut-correctness conc
 earlier, lower-risk axes' validated rungs unblocked.
 **Requirements**: INT-01, INT-02, INT-03, INT-04
 **Success Criteria** (what must be TRUE):
+
   1. Researcher can configure the planning master with binary-expansion integer investment (bounded
      integer levels as binary blocks), solved as a HiGHS MILP behind the existing `select_optimizer`
      factory (new/extended `ProblemClass` as needed), single-distributor Stackelberg scope.
+
   2. Convergence is driven by genuine Laporte–Louveaux integer optimality cuts (LP Benders cuts
      retained where valid; plain no-good cuts only as a documented anti-stall fallback, never the
      convergence argument), with iteration behavior re-measured on this problem class — not inherited
      from the continuous Benders defaults.
+
   3. The integer loop is certified on a tiny instance against an independent oracle (exhaustive
      enumeration of the discrete investment lattice, and/or a BilevelJuMP reduction where
      mode-compatible — checked, not assumed), following the v2.0 certify-before-build precedent.
+
   4. The PVAL-04 no-binaries guard is scoped, not deleted: a registry exemption for the lifted
      builder(s) only, with the full unmodified guard test still green for every non-lifted builder
      (operational layer stays binary-free), and a live-executed literate page documents the guard
@@ -275,40 +322,51 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 
 - **Meshed + 4Q-BESS**: NO LONGER deferred — active this milestone as Phases 19 (4Q-BESS + live
   reactive dual-ascent) and 23 (meshed formulation + angle-recoverability certificate).
+
 - **Discrete/integer investment expansion**: NO LONGER deferred — active this milestone as Phase 24;
   the PVAL-04 no-binaries guard is consciously scoped (not deleted) there.
+
 - **A live cross-subproblem reactive dual-ascent loop** (4Q-BESS/volt-var): NO LONGER deferred —
   active this milestone as Phase 19's μ-ascent step, replacing v2.1 Phase 16's one-shot certified dual.
+
 - **MPC/rolling-horizon RTP** and **stochastic PV/demand uncertainty**: NO LONGER deferred — active
   this milestone as Phases 21 and 22, sequenced together for their shared `Scenario.jl` schema blast
   radius.
+
 - **OVR-STRETCH** (convex-hull relaxation / QC valid-inequality tightening as an alternative to
   restriction, arXiv:1701.07146): still deferred past this milestone's Phase 20 — restriction is the
   chosen v3.0 mechanism; convex-hull/QC tightening is a natural v3.1+ differentiator, not a table-stakes
   requirement.
+
 - **MPC-STRETCH** (economic-MPC terminal value function, robust/tube MPC): still deferred past Phase
   21 — the hard terminal-SOC condition is the minimal-rung mechanism; economic-MPC terminal cost
   functions and robustness are explicitly out of scope for this milestone's rung.
+
 - **STOCH-STRETCH** (formal scenario reduction — fast-forward/k-means, SAA convergence studies,
   distributionally-robust/chance-constrained variants, `DualDecomposition.jl` if scenario counts
   outgrow the extensive form): still deferred past Phase 22 — 3–5 fixed seeded scenarios are the
   minimal-rung scope.
+
 - **MESH-STRETCH** (QC/SDP tightening via Clarabel's native PSD cone, phase-shifter convexification
   per Farivar–Low): still deferred past Phase 23 — contingent on whether the angle-recoverability
   check fails structurally on the committed meshed fixture; only pursued if that gap proves genuine
   and un-avoidable, per the Pitfall-15 "structural gap vs. tunable knife-edge" distinction.
+
 - **INT-STRETCH** (integer **Nash** diagonalization — MILP best-responses across N distributors;
   Angulo et al. 2016 alternating-cut refinements): still deferred past Phase 24 — single-distributor
   integer-cut correctness must be proven first; equilibrium-existence theory is judged too weak to
   stack on unproven cut machinery yet.
+
 - **Exact-figure thesis reproduction** (`REPRO-STRETCH-01`, the +$1,819/+25% headline): still deferred,
   contingent on obtaining thesis Appendix E (currently behind an IP-blocked CONICET repository).
   Unrelated to any v3.0 axis; v2.1's Phase 18 delivered only a directional (sign + band) reproduction.
+
 - **v2.1 overvoltage / SOCP-exactness knife-edge**: the specific finding motivating Phase 20 — on real
   IEEE-123 impedances the upper voltage band (PV overvoltage) cannot be pushed toward ~1.05 while the
   plain SOCP relaxation stays exact. Phase 20 addresses this for IEEE-13's EXACT-04 fixture; whether
   the restriction mechanism also resolves the IEEE-123 real-impedance case is an open question for
   Phase 20 to answer, not assumed.
+
 - **Deferred tech debt**: see `milestones/v1.0-MILESTONE-AUDIT.md`, `milestones/v2.0-MILESTONE-AUDIT.md`,
   and `milestones/v2.1-MILESTONE-AUDIT.md` (unflipped Nyquist flags, ROADMAP "reactive pricing"
   wording, the `julia -e '@run_package_tests'` sibling-worktree gotcha, user-local Project.toml/Manifest
