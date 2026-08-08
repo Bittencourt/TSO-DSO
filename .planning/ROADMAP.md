@@ -116,10 +116,24 @@ fallback instead of an undefined catch-and-continue.
 **Plans:** 5 plans (5 waves)
 
 Plans:
+**Wave 1**
+
 - [ ] 20-01-PLAN.md — v ≥ v̂ sign-relationship spot-check + Gan-Low lossless-shadow-voltage helper + measured ε (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 20-02-PLAN.md — RestrictedBranchFlow formulation (Gan-Low OPF-ε) + default-path regression (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 20-03-PLAN.md — assert_restriction_exact! AC-feasibility + optimality-loss certificate (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 20-04-PLAN.md — ac_dual_fallback_price nonconvex-AC-dual fallback + multi-start evidence (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 20-05-PLAN.md — Literate rung page + full-suite acceptance (Wave 5)
 
 ### Phase 21: MPC / Rolling-Horizon / Real-Time Pricing
