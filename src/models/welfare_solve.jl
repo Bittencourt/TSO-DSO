@@ -297,12 +297,20 @@ AWARE via the `problem_class` trait — looser on the interior-point SOCP path, 
 QP path — and this function never loosens the QP path (its `Pmax²`-scaled threshold is ≤ the
 old absolute one for every `Pmax ≤ 1`). Iterates `ctx.meta[:agg_device_vars]` (skips
 non-battery device stashes) and is a no-op when no batteries were registered.
+
+BATTERY-ACTIVE-POWER-ONLY (MESH-04, T-19-11): this check's loop condition excludes any
+device that ALSO carries a reactive decision variable (`:q`) — such a device (currently
+only `FourQuadBESS`) has its OWN peer certificate,
+[`assert_4q_complementarity!`](@ref) (`complementarity_4q.jl`), with its OWN
+independently-measured tolerance. Excluding `:q`-carrying devices here keeps the two
+checks structurally mutually exclusive over the same `ctx.meta[:agg_device_vars]` stash —
+this one never silently runs against a `FourQuadBESS`'s vars.
 """
 function assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T])
     haskey(ctx.meta, :agg_device_vars) || return nothing
     for (bus, varlist) in ctx.meta[:agg_device_vars]
         for v in varlist
-            (haskey(v, :p_ch) && haskey(v, :p_dch)) || continue   # a battery
+            (haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q)) || continue   # a battery, not a 4Q device
             # Rated charge/discharge power (eq. 3.8 bound) = the base-scaling reference. The
             # atol floor guards a (degenerate) zero/absent upper bound against a div-by-zero.
             pmax = has_upper_bound(v.p_ch[1]) ? upper_bound(v.p_ch[1]) : 1.0

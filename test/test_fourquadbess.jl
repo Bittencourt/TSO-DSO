@@ -208,3 +208,111 @@ end
     @test propertynames(res) == (:vars, :p_inject, :q_inject, :utility)
 end
 
+# Plan 19-05: assert_4q_complementarity! (MESH-04 clause 2) + the OLD
+# assert_battery_complementarity!'s tightened mutual-exclusivity guard. The shared
+# harness below mirrors the plan's standalone-solve pattern: one FourQuadBESS, its OWN
+# ModelContext, SOCP()/Clarabel, and a manually-populated ctx.meta[:agg_device_vars]
+# stash (this fixture bypasses Aggregator on purpose, to isolate the certificate).
+
+@testitem "fourquadbess: assert_4q_complementarity! exists, is exported, callable with only ctx (D-07)" tags =
+    [:fourquadbess, :complementarity] begin
+    using TSODSO, JuMP
+
+    @test isdefined(TSODSO, :assert_4q_complementarity!)
+
+    # Benign, strictly App.-C-dominated fixture: one FourQuadBESS, a POSITIVE in-band
+    # price (no grid-charging incentive) -- App. C dominance clearly holds.
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    ctx.meta[:T] = 3
+    res = TSODSO.contribute!(d, ctx; T = 3)
+    λ_test = 2.5
+    @objective(model, Max, res.utility - λ_test * sum(res.p_inject[t] for t in 1:3))
+    TSODSO.assert_solved!(model; dual = false, allow_local = false)
+
+    store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
+    append!(get!(store, d.bus, Vector{Any}()), [res.vars])
+
+    # Callable with only ctx (defaults present) -- must NOT throw on this benign solve.
+    ratio = TSODSO.assert_4q_complementarity!(ctx)
+    @test ratio isa Float64
+    @test ratio <= 1.0
+
+    # No-op (returns 0.0) when ctx.meta[:agg_device_vars] is absent entirely.
+    model2 = Model()
+    ctx2 = TSODSO.ModelContext(model2)
+    ctx2.meta[:T] = 3
+    @test TSODSO.assert_4q_complementarity!(ctx2) == 0.0
+end
+
+@testitem "fourquadbess: assert_battery_complementarity! silently skips a FourQuadBESS-only stash (T-19-11)" tags =
+    [:fourquadbess, :complementarity] begin
+    using TSODSO, JuMP
+
+    # A DELIBERATELY-violating FourQuadBESS fixture (see the honest-boundary item below
+    # for the mechanism) -- the OLD, PVBattery-shaped check must skip it REGARDLESS of
+    # how badly p_ch/p_dch co-activate, because its tightened loop condition
+    # (!haskey(v,:q)) never even LOOKS at a device carrying a reactive decision.
+    d = TSODSO.FourQuadBESS(2, 0.5, 1.0, 8.0, 8.0, 12.0, 0.0, 1.5, 1.3, 1.0, 4.0, 9.0)
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    ctx.meta[:T] = 2
+    res = TSODSO.contribute!(d, ctx; T = 2)
+    λ_test = 9.0
+    @objective(model, Max, res.utility - λ_test * sum(res.p_inject[t] for t in 1:2))
+    TSODSO.assert_solved!(model; dual = false, allow_local = false)
+
+    store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
+    append!(get!(store, d.bus, Vector{Any}()), [res.vars])
+
+    # Confirm this fixture DOES co-activate (p_ch, p_dch both meaningfully positive) --
+    # otherwise skipping it would prove nothing.
+    @test value(res.vars.p_ch[1]) > 1.0
+    @test value(res.vars.p_dch[1]) > 1.0
+
+    # The OLD check must return nothing (never throw) -- it never even inspects this
+    # device's vars, since haskey(v,:q) makes the tightened loop condition false.
+    @test TSODSO.assert_battery_complementarity!(ctx; τ = 1e-9) === nothing
+end
+
+@testitem "fourquadbess: assert_4q_complementarity! throws on the honest D-08 boundary; report=true neutralizes it" tags =
+    [:fourquadbess, :complementarity] begin
+    using TSODSO, JuMP
+
+    # Deliberately-constructed negative-effective-price + grid-charging fixture (D-08):
+    # a large, in-band-exceeding frontier price rewards grid-charging up to Pch_max
+    # (D-02: no PV-availability limit on charge) while a TIGHT upper SOC band (Emax
+    # only 0.2 above soc0) cannot accommodate that charge without a compensating
+    # discharge -- since η<1 makes VENTING a large charge via a SMALL discharge cheap
+    # (asymmetric round-trip efficiency, the derivation's step 3), the solved optimum
+    # co-activates p_ch AND p_dch at t=1 far beyond any plausible solver noise. Per the
+    # harness's own sign convention (objective = utility - λ_test*Σp_inject, so a unit
+    # of DISCHARGE/injection nets an EFFECTIVE price of -λ_test at the device), the
+    # large positive λ_test here means discharging faces a genuinely NEGATIVE effective
+    # per-unit price at the binding period -- exactly the regime D-08 predicts the
+    # certificate legitimately (not buggily) refuses.
+    d = TSODSO.FourQuadBESS(2, 0.5, 1.0, 8.0, 8.0, 12.0, 0.0, 1.5, 1.3, 1.0, 4.0, 9.0)
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    ctx.meta[:T] = 2
+    res = TSODSO.contribute!(d, ctx; T = 2)
+    λ_test = 9.0
+    @objective(model, Max, res.utility - λ_test * sum(res.p_inject[t] for t in 1:2))
+    TSODSO.assert_solved!(model; dual = false, allow_local = false)
+
+    store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
+    append!(get!(store, d.bus, Vector{Any}()), [res.vars])
+
+    prod1 = value(res.vars.p_ch[1]) * value(res.vars.p_dch[1])
+    @test prod1 > 1.0   # genuine, large co-activation -- not solver noise
+
+    # (b) throws by default (Task 1's measured rtol/atol defaults).
+    @test_throws ErrorException TSODSO.assert_4q_complementarity!(ctx)
+
+    # (c) report = true neutralizes the SAME violating fixture -- no exception, and the
+    # returned diagnostic still names the violation's magnitude (worst ratio > 1).
+    ratio = TSODSO.assert_4q_complementarity!(ctx; report = true)
+    @test ratio > 1.0
+end
+
