@@ -62,6 +62,10 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
   - `pag` — the ACTIVE coupling container `pag[j,t]` (`j` over the load nodes, `t` over `1:T`),
     each pinned by `:Rp[j] + pag[j,t] == 0`. The SOLE variable per `(j,t)` whose linear
     objective coefficient the ADMM loop updates.
+  - `qag` — the REACTIVE coupling container, mirroring `pag`'s shape `(load_nodes, T)`.
+    `nothing` under `OFF`/`CERTIFIED` (no live reactive coupling block exists); under `LIVE`,
+    the SAME `qag_dso` container stashed at `ctx.meta[:qag_dso]`, carrying its own
+    `0.5·ρ_q·qag[j,t]²` quadratic objective penalty, mutated in place by [`set_rho_q!`](@ref).
   - `p_import` — the FREE-SIGN active frontier exchange `p_import[t]` at `feeder.root` (>0 buy,
     <0 sell surplus to the MEM at λ₀); priced export is the SOC-exactness enabler (PF-04).
   - `load_nodes::Vector{Int}` — the non-root buses carrying an aggregator (== every non-root bus,
@@ -74,10 +78,11 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
     holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
   - `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
 """
-struct DsoOpt{P, PI, F}
+struct DsoOpt{P, Q, PI, F}
     model::Model
     ctx::ModelContext
     pag::P
+    qag::Q
     p_import::PI
     load_nodes::Vector{Int}
     T::Int
@@ -87,7 +92,7 @@ struct DsoOpt{P, PI, F}
 end
 
 """
-    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus::Bool = false)
+    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus = false, ρ_q::Real = ρ)
         -> DsoOpt
 
 Build the whole-network `DSO-OPT` SOCP (thesis eq. 3.47) ONCE, reusing the validated
@@ -136,12 +141,28 @@ every non-root bus is a load node, so both axes coincide and the model is unchan
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
 `1:length(feeder.buses)`, or an aggregator ON the root (genuinely invalid inputs still fail loud).
 
-`reactive_consensus::Bool = false` (REACT-01): at the default `false`, step 4's reactive
-injection is the byte-identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]` key exists).
-When `true`, the constant is promoted to a genuine JuMP coupling variable `qag_dso[j,t]`
-(stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a new registered equality
-`:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual read, NOT a live
-consensus ascent (thesis A3: `q_draw` never moves, so no new ρ-penalty/residual is needed).
+`reactive_consensus` (D-12, MESH-05): a 3-state mode normalized via
+[`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
+`true → CERTIFIED`), a `Symbol` (`:off`/`:certified`/`:live`), or a [`ReactiveMode`](@ref)
+directly.
+
+  - `OFF` (default, `false`): step 4's reactive injection is the byte-identical constant
+    `q_draw[j][t]` (no `ctx.meta[:qag_dso]` key exists).
+  - `CERTIFIED` (`true`): the constant is promoted to a genuine JuMP coupling variable
+    `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a
+    registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual
+    read, NOT a live consensus ascent (thesis A3: `q_draw` never moves, so no new
+    ρ-penalty/residual is needed).
+  - `LIVE` (`:live`, NEW — MESH-05): `qag_dso[j,t]` is declared the SAME way as `CERTIFIED`
+    (stashed at `ctx.meta[:qag_dso]`), but NO `:qag_pin` equality is registered — it is left as
+    a genuinely open coupling variable, carrying its own `0.5·ρ_q·Σ qag_dso[j,t]²` quadratic
+    penalty in the objective (see `ρ_q` below), for plan 19-07's outer μ-dual-ascent loop to
+    drive.
+
+`ρ_q::Real = ρ` (MESH-05): the FIXED quadratic penalty weight for the `LIVE` reactive coupling
+block, mirroring `ρ`'s role for the active `pag_dso` block. Defaults to tracking `ρ` unless the
+caller overrides it (plan 19-07 adapts it independently via [`set_rho_q!`](@ref)). Unused
+(never referenced) under `OFF`/`CERTIFIED`.
 """
 function build_dso_opt(
     feeder,
@@ -149,8 +170,11 @@ function build_dso_opt(
     T::Int;
     ρ::Real,
     λ₀,
-    reactive_consensus::Bool = false,
+    reactive_consensus = false,
+    ρ_q::Real = ρ,
 )
+    mode = normalize_reactive_mode(reactive_consensus)
+
     # Boundary guards (mirror solve_welfare): fail here, not deep in objective assembly.
     isempty(aggregators) &&
         throw(ArgumentError("build_dso_opt needs at least one aggregator"))
@@ -235,13 +259,22 @@ function build_dso_opt(
         add_to_residual!(ctx, :Rp, j, t, pag_dso[j, t])
     end
 
-    # (4b) REACTIVE load-node closure (thesis 3.23). A fixed parameter (no μ dual-ascent —
-    # reactive is not a consensus quantity). DEFAULT (reactive_consensus = false): inject the
-    # CONSTANT draw directly, byte-identical to pre-REACT-01 behavior. REACT-01
-    # (reactive_consensus = true): promote it to a genuine JuMP coupling variable `qag_dso[j,t]`,
-    # PINNED to the SAME fixed target via the registered equality `:qag_pin` — a one-shot
-    # certified dual read, NOT a live consensus ascent (Assumption A1/A3: q_draw never moves).
-    if reactive_consensus
+    # (4b) REACTIVE load-node closure (thesis 3.23), 3 EXPLICIT branches keyed on `mode`
+    # (MESH-05, D-12) — never a shared branch with a conditional skip (T-19-06). A fixed
+    # parameter under OFF/CERTIFIED (no μ dual-ascent — reactive is not a consensus quantity
+    # there); a genuinely live coupling variable under LIVE.
+    if mode == OFF
+        # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = false`: inject the CONSTANT
+        # draw directly, no qag_dso variable, no ctx.meta[:qag_dso] key.
+        for j in load_nodes, t in 1:T
+            add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+        end
+    elseif mode == CERTIFIED
+        # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = true` (REACT-01/REACT-03):
+        # promote the constant to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to
+        # the SAME fixed target via the registered equality `:qag_pin` — a one-shot certified
+        # dual read, NOT a live consensus ascent (Assumption A1/A3: q_draw never moves). The
+        # `:qag_pin` registration is UNCONDITIONAL in this branch (T-19-07 — never skip it).
         @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
             add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
@@ -249,10 +282,18 @@ function build_dso_opt(
         @constraint(model, qag_pin[j = load_nodes, t = 1:T], qag_dso[j, t] == q_draw[j][t])
         register_constraint!(ctx, :qag_pin, qag_pin)
         ctx.meta[:qag_dso] = qag_dso
-    else
+    elseif mode == LIVE
+        # NEW (MESH-05): declare qag_dso the SAME way as CERTIFIED (same @variable call, same
+        # :Rq injection, same ctx.meta[:qag_dso] stash), but register NO :qag_pin equality —
+        # qag_dso stays a genuinely OPEN coupling variable, driven by plan 19-07's outer μ
+        # dual-ascent loop and carrying its own ρ_q-scaled quadratic penalty (see (5) below).
+        @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
-            add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+            add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
         end
+        ctx.meta[:qag_dso] = qag_dso
+    else
+        error("unreachable: normalize_reactive_mode returned an unhandled ReactiveMode")
     end
 
     # (4b') TRANSIT-NODE ZERO INJECTION (RESEARCH Pitfall 5): each non-root, non-load bus is a
@@ -284,17 +325,22 @@ function build_dso_opt(
     # (5) FIXED-penalty objective built ONCE (thesis 3.47). The pag_dso variables carry NO
     # linear term yet (default zero coupling price); solve_dso! sets each linear coefficient
     # per iteration via set_objective_coefficient — the ρ/2 quadratic below is never touched.
-    @objective(
-        model,
-        Min,
+    # Under LIVE ONLY, an ADDITIONAL 0.5·ρ_q·Σ qag_dso[j,t]² term is folded into the SAME
+    # accumulator BEFORE the single @objective call, so OFF/CERTIFIED literally never construct
+    # or touch the ρ_q term (byte-identical built objective under those two modes).
+    obj_expr =
         sum(λ₀[t] * p_import[t] for t in 1:T) +
         0.5 * ρ * sum(pag_dso[j, t]^2 for j in load_nodes, t in 1:T)
-    )
+    if mode == LIVE
+        obj_expr += 0.5 * ρ_q * sum(qag_dso[j, t]^2 for j in load_nodes, t in 1:T)
+    end
+    @objective(model, Min, obj_expr)
 
     return DsoOpt(
         model,
         ctx,
         pag_dso,
+        mode == LIVE ? qag_dso : nothing,
         p_import,
         load_nodes,
         T,
@@ -409,4 +455,40 @@ function set_rho!(dso::DsoOpt, ρ::Real)
     return dso
 end
 
-export DsoOpt, build_dso_opt, solve_dso!, set_rho!
+"""
+    set_rho_q!(dso::DsoOpt, ρ_q::Real) -> DsoOpt
+
+Mutate the FIXED quadratic penalty weight of the built-ONCE `LIVE` reactive coupling block in
+place — the exact `set_rho!` PEER for the reactive `qag` block (MESH-05, plan 19-07's outer
+μ-dual-ascent loop adapts `ρ_q` independently of `ρ`). DSO-OPT under `LIVE` carries an
+ADDITIONAL `Min ... + (ρ_q/2)·Σ_{j,t} qag[j,t]²` term (see `build_dso_opt`'s objective
+assembly), so the diagonal quadratic coefficient of every `qag[j,t]²` is `+0.5ρ_q`. Flatten the
+`qag` coupling container to a `Vector{VariableRef}` and set them all in one BATCH call, mirroring
+`set_rho!`'s exact shape:
+
+    set_objective_coefficient(dso.model, v, v, fill(0.5ρ_q, length(v)))
+
+`num_variables`/`num_constraints` are INVARIANT (no rebuild) — a mutate-then-solve is EQUIVALENT
+to a fresh build at the new `ρ_q` (identical mechanism to `set_rho!`).
+
+Throws `ArgumentError` if `dso.qag === nothing` — calling this on an `OFF`/`CERTIFIED`-built
+`DsoOpt` (no live reactive coupling block exists) is a caller error, fail loud rather than
+silently no-op. Returns `dso`.
+"""
+function set_rho_q!(dso::DsoOpt, ρ_q::Real)
+    dso.qag !== nothing || throw(
+        ArgumentError(
+            "set_rho_q!: this DsoOpt was built without a live reactive coupling block " *
+            "(reactive_consensus != :live); nothing to update",
+        ),
+    )
+    # Flatten the qag_dso DenseAxisArray (j over load_nodes × t) to a flat Vector{VariableRef},
+    # mirroring set_rho!'s exact flatten-then-one-call shape.
+    v = VariableRef[dso.qag[j, t] for j in dso.load_nodes for t in 1:dso.T]
+    # Diagonal quadratic coeff of every qag[j,t]² set to +0.5ρ_q (Min objective, penalty added).
+    # BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    set_objective_coefficient(dso.model, v, v, fill(0.5 * ρ_q, length(v)))
+    return dso
+end
+
+export DsoOpt, build_dso_opt, solve_dso!, set_rho!, set_rho_q!
