@@ -64,8 +64,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 19-04-PLAN.md — Aggregator.contribute! widened to roll up optional q_inject additively into :Rq, byte-identical when absent
-- [ ] 19-05-PLAN.md — assert_4q_complementarity! certificate (own measured tolerance, throw-by-default + report kwarg), disambiguated from assert_battery_complementarity!
+- [x] 19-04-PLAN.md — Aggregator.contribute! widened to roll up optional q_inject additively into :Rq, byte-identical when absent
+- [x] 19-05-PLAN.md — assert_4q_complementarity! certificate (own measured tolerance, throw-by-default + report kwarg), disambiguated from assert_battery_complementarity!
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -311,7 +311,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 1–9 (archived) | v1.0 | 43/43 | Complete | 2026-07-20 |
 | 10–14 (archived) | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
-| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 3/8 | In Progress|  |
+| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 5/8 | In Progress|  |
 | 20. Overvoltage-Capable Relaxation | v3.0 | 0/TBD | Not started | - |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 0/TBD | Not started | - |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
