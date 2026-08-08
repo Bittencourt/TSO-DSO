@@ -45,10 +45,18 @@ iteration by a single `set_objective_coefficient` update on the coupling variabl
     to `Σ_d p_inject_d[t] − Pdc[t]` (thesis 3.22). Its linear objective coefficient is the
     per-iteration ADMM handle.
   - `qag::Vector{Float64}` — the CONSTANT net reactive injection `−Pdc[t]·tan(arccos φ)` (thesis
-    3.23; DERs are active-only, A3). PLACEHOLDER for a FUTURE reactive-consensus (`μ` dual-ascent)
-    extension — no reactive dual update exists yet (the DSO closes reactive with a constant draw and
-    a free `q_import`), so this field is currently NOT read by `solve_admm` (IN-02). Kept as the
-    documented seam for that extension; do not treat it as a live consensus quantity.
+    3.23; DERs are active-only, A3). Kept UNCONDITIONALLY, in every `reactive_mode`, as the fixed
+    inelastic-demand component of the aggregator's total reactive injection. Under Phase 19 LIVE
+    mode (MESH-05) the genuine, live consensus quantity lives in the new `qag_live` field below —
+    this field itself is NEVER a live consensus variable; it is NOT read by `solve_admm` (IN-02)
+    outside of composing `qag_live`'s pinning target.
+  - `qag_live::Union{Nothing,Vector{VariableRef}}` — the LIVE reactive coupling variable
+    `qag_live[t]` (MESH-05), mirroring `pag`'s coupling shape exactly: `nothing` under `OFF`/
+    `CERTIFIED` (no live reactive coupling block exists, byte-identical to pre-Phase-19), or a
+    genuine `Vector{VariableRef}` of length `T` under `LIVE`, PINNED via an equality constraint to
+    the aggregator's total reactive injection `qag[t] + res.q_inject[t]` and carrying its own
+    `ρ_q`-scaled quadratic objective penalty. Its linear objective coefficient is the per-iteration
+    `μ`-dual-ascent handle for [`solve_agr!`](@ref), exactly as `pag`'s is for `λ`.
   - `T::Int` — the day-ahead horizon.
   - `bus::Int` — the aggregator's distribution bus.
   - `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): the LIVE penalty
@@ -61,35 +69,59 @@ struct AgrOpt
     ctx::ModelContext
     pag::Vector{VariableRef}
     qag::Vector{Float64}
+    qag_live::Union{Nothing, Vector{VariableRef}}
     T::Int
     bus::Int
     ρ::Float64
 end
 
 """
-    build_agr_opt(agg::Aggregator, T::Int; ρ::Real) -> AgrOpt
+    build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = false, ρ_q::Real = ρ) -> AgrOpt
 
 Build the AGR-OPT per-node subproblem for aggregator `agg` over horizon `T` (thesis eq. 3.46),
 ONCE, following RESEARCH Pattern 4 (option a — reuse `Aggregator.contribute!` verbatim):
 
  1. `model = Model(select_optimizer(QP()))`; `ctx = ModelContext(model)`; stash `T` (INFRA-02).
  2. Reuse the aggregator roll-up: `res = contribute!(agg, ctx; T)` drives each device once and
-    sums their `p_inject` / `utility` (thesis 3.21–3.22). It also writes `:Rp`/`:Rq` and stashes
-    the battery vars — the stray residual writes are HARMLESS here (AGR-OPT never closes them),
-    and the battery stash is exactly what the App. C check consumes post-solve.
+    sums their `p_inject` / `utility` (thesis 3.21–3.22) and, since plan 19-04, its total device
+    reactive injection `res.q_inject` (`zero(AffExpr)` per `t` when no member device carries an
+    optional `q_inject`, MESH-04 D-09). It also writes `:Rp`/`:Rq` and stashes the battery vars —
+    the stray residual writes are HARMLESS here (AGR-OPT never closes them), and the battery
+    stash is exactly what the App. C check consumes post-solve.
  3. Create the coupling variable `pag[t]` and pin it to the net active injection
     `pag[t] == res.p_inject[t] − agg.Pdc[t]` (thesis 3.22).
  4. Expose the CONSTANT reactive injection `qag[t] = −Pdc[t]·tan(arccos φ)` (thesis 3.23) for the
-    μ update — there is no reactive DER decision, so it is a fixed vector, not a variable.
- 5. Set `@objective(model, Max, U_ag − (ρ/2)·Σ_t pag[t]²)` — the FIXED quadratic ρ-penalty part,
-    built ONCE. The linear price+penalty-shift coefficient on `pag[t]` starts at zero and is
-    updated per iteration by [`solve_agr!`](@ref) via `set_objective_coefficient` (never a
-    JuMP `Parameter` for the price — RESEARCH Pitfall 1).
+    μ update — computed UNCONDITIONALLY, in every `reactive_mode` (never gated), since it is
+    also the fixed component `qag_live` pins to under `LIVE`.
+ 5. `reactive_mode` (MESH-05, mirrors [`build_dso_opt`](@ref)'s `reactive_consensus`): normalized
+    via [`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
+    `true → CERTIFIED`), a `Symbol` (`:off`/`:certified`/`:live`), or a [`ReactiveMode`](@ref)
+    directly.
+      + `OFF`/`CERTIFIED` (default): BYTE-IDENTICAL to pre-Phase-19 — no `qag_live` variable is
+        declared, `agr.qag_live === nothing`, the objective is unchanged.
+      + `LIVE` (NEW — MESH-05): a genuine coupling variable `qag_live[t]` is declared and PINNED,
+        mirroring `pag`'s `coupling` constraint exactly, to the aggregator's TOTAL reactive
+        injection `qag[t] + res.q_inject[t]` (the same quantity `Aggregator.contribute!` writes
+        into `:Rq` — thesis 3.23 plus the D-10 additive device term). It carries its own
+        `ρ_q`-scaled quadratic penalty in the objective, folded into the SAME accumulator as
+        `pag`'s penalty before the single `@objective` call (so `OFF`/`CERTIFIED` never construct
+        or touch it).
+ 6. Set `@objective(model, Max, U_ag − (ρ/2)·Σ_t pag[t]² [− (ρ_q/2)·Σ_t qag_live[t]² under LIVE])`
+    — the FIXED quadratic ρ-penalty part(s), built ONCE. The linear price+penalty-shift
+    coefficient on `pag[t]` (and, under `LIVE`, `qag_live[t]`) starts at zero and is updated per
+    iteration by [`solve_agr!`](@ref) via `set_objective_coefficient` (never a JuMP `Parameter`
+    for the price — RESEARCH Pitfall 1).
+
+`ρ_q::Real = ρ` (MESH-05): the FIXED quadratic penalty weight for the `LIVE` reactive coupling
+block, mirroring `ρ`'s role for the active `pag` block and [`build_dso_opt`](@ref)'s `ρ_q`
+default. Unused (never referenced) under `OFF`/`CERTIFIED`.
 
 Returns an [`AgrOpt`](@ref). No concrete solver is named (INFRA-02); the model is well-posed and
 solves OPTIMAL at the default zero price.
 """
-function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
+function build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = false, ρ_q::Real = ρ)
+    mode = normalize_reactive_mode(reactive_mode)
+
     # (1) One QP model per node, chosen by problem class only (INFRA-02 — never names a solver).
     model = Model(select_optimizer(QP()))
     ctx = ModelContext(model)
@@ -98,6 +130,8 @@ function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
     # (2) Reuse the aggregator/device builders VERBATIM (RESEARCH Pattern 4, option a). This
     # populates ctx.meta[:objective] (U_ag, a QuadExpr) and ctx.meta[:agg_device_vars] (the
     # battery vars for the App. C check). Its :Rp/:Rq writes are never closed here (harmless).
+    # `res.q_inject` (plan 19-04) is the summed OPTIONAL device reactive injection, zero when no
+    # member device carries it — the LIVE branch below adds it to `qag` for the pinning target.
     res = contribute!(agg, ctx; T = T)
 
     # (3) Coupling variable pag_j[t] pinned to the net active injection (thesis 3.22).
@@ -105,16 +139,34 @@ function build_agr_opt(agg::Aggregator, T::Int; ρ::Real)
     @constraint(model, coupling[t = 1:T], pag[t] == res.p_inject[t] - agg.Pdc[t])
     register_constraint!(ctx, :agr_coupling, coupling)
 
-    # (4) Constant net reactive injection (thesis 3.23; DERs active-only, A3) for the μ update.
+    # (4) Constant net reactive injection (thesis 3.23; DERs active-only, A3), UNCONDITIONAL and
+    # UNCHANGED across every reactive_mode — also the fixed component of the LIVE pinning target.
     tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced (IN-01)
     qag = Float64[-agg.Pdc[t] * tanφ for t in 1:T]
 
-    # (5) Objective: aggregator utility − FIXED (ρ/2)·Σ pag² penalty (built ONCE). The linear
-    # price+penalty-shift coefficient on pag[t] is applied per iteration in solve_agr! via
-    # set_objective_coefficient — so the quadratic term here is the only ρ-penalty built once.
-    @objective(model, Max, ctx.meta[:objective] - 0.5 * ρ * sum(pag[t]^2 for t in 1:T))
+    # (5)/(6) Objective accumulator: aggregator utility − FIXED (ρ/2)·Σ pag² penalty, built ONCE.
+    # Under LIVE ONLY, declare + pin qag_live and fold its (ρ_q/2)·Σ qag_live² penalty into the
+    # SAME accumulator BEFORE the single @objective call — OFF/CERTIFIED never construct or touch
+    # it (byte-identical built objective under those two modes).
+    obj_expr = ctx.meta[:objective] - 0.5 * ρ * sum(pag[t]^2 for t in 1:T)
+    qag_live = nothing
+    if mode == LIVE
+        # NEW (MESH-05): qag_live[t] genuinely PINNED to the aggregator's TOTAL reactive
+        # injection, mirroring pag's coupling constraint exactly. `qag[t] + res.q_inject[t]` is
+        # precisely the expression Aggregator.contribute! writes into :Rq (thesis 3.23 + D-10).
+        @variable(model, qag_live_var[1:T])
+        @constraint(
+            model,
+            qag_coupling[t = 1:T],
+            qag_live_var[t] == qag[t] + res.q_inject[t]
+        )
+        register_constraint!(ctx, :agr_qag_coupling, qag_coupling)
+        obj_expr -= 0.5 * ρ_q * sum(qag_live_var[t]^2 for t in 1:T)
+        qag_live = collect(qag_live_var)
+    end
+    @objective(model, Max, obj_expr)
 
-    return AgrOpt(model, ctx, collect(pag), qag, T, agg.bus, Float64(ρ))
+    return AgrOpt(model, ctx, collect(pag), qag, qag_live, T, agg.bus, Float64(ρ))
 end
 
 """
