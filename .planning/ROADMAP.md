@@ -55,7 +55,7 @@ device and dual-ascent step to already exist.
 Plans:
 **Wave 1**
 
-- [ ] 19-01-PLAN.md — Wire seam stubs (FourQuadBESS.jl, complementarity_4q.jl, ReactiveMode.jl) into TSODSO.jl + capture pre-Phase-19 byte-identity baseline
+- [x] 19-01-PLAN.md — Wire seam stubs (FourQuadBESS.jl, complementarity_4q.jl, ReactiveMode.jl) into TSODSO.jl + capture pre-Phase-19 byte-identity baseline
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -311,7 +311,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 1–9 (archived) | v1.0 | 43/43 | Complete | 2026-07-20 |
 | 10–14 (archived) | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
-| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 0/TBD | Not started | - |
+| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 1/8 | In Progress|  |
 | 20. Overvoltage-Capable Relaxation | v3.0 | 0/TBD | Not started | - |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 0/TBD | Not started | - |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
