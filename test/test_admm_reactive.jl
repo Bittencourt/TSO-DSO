@@ -294,7 +294,15 @@ end
 @testitem "admm reactive: :live mechanism is genuinely live -- a differing input yields differing μ/q_devices, never a static no-op (reactive, live)" setup =
     [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
     using TSODSO
-    using LinearAlgebra: norm
+
+    # LinearAlgebra is NOT a declared test/[deps] entry anywhere in this project (grep-verified;
+    # no other test file imports it) -- a per-testitem sandbox module resolves `using X` against
+    # the isolated TestItemRunner test environment, so `using LinearAlgebra: norm` throws
+    # `Package LinearAlgebra not found in current path` there even though it resolved fine in an
+    # ad-hoc `--project=.` script. A plain Base-only 2-norm avoids adding a new test dependency
+    # for one helper function (Rule 1/3 fix — a blocking issue caused directly by this task's own
+    # new test code).
+    norm(x) = sqrt(sum(abs2, x))
 
     feeder = Phase6Fixtures.two_bus_feeder()
     Th = Phase6Fixtures.T
