@@ -94,3 +94,106 @@ end
     # D-03's "measured, not searched" requirement), with a citation back to this test item.
     @test ε_measured > 0.0
 end
+
+@testitem "restricted_branch_flow: RestrictedBranchFlow solves EXACT-04 through solve_welfare at PF-04's DEFAULT tolerance (OVR-01, free validation signal)" tags =
+    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    feeder = Phase4Fixtures.high_pv_feeder()
+    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+
+    # Deliberately WITHOUT any rtol_exact override — the DEFAULT 1e-4 is what
+    # assert_socp_exact! uses internally. This call must NOT throw — if it does, the
+    # restriction did not close the gap and the plan has failed at the most basic level.
+    #
+    # ESCALATION NOTE (see 20-02-SUMMARY.md): the SIMPLER OPF-ε special case (shrink v's own
+    # bound by a single measured scalar ε) was tried FIRST and empirically found NOT to close
+    # this gap at any feasible ε on this fixture (reverse-flow-driven residual, not
+    # voltage-pinning-driven). RestrictedBranchFlow now implements the FULLER Gan-Low OPF-m
+    # mechanism (direct v̂_GL(s) ≤ v̄ constraint, Theorem 2) by default (ε=0.0), which DOES
+    # close the gap here — see the measured socp_maxgap below.
+    ctx, cost, dadp = solve_welfare(
+        feeder,
+        RestrictedBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+
+    # RESEARCH.md's prediction: the residual should collapse from EXACT-04's documented
+    # ≈10.4 to the benign-feeder scale ~1e-7; 1e-5 is a safe order-of-magnitude gate, not a
+    # tight pin. Measured (OPF-m): ≈2.08e-8.
+    @info "RestrictedBranchFlow socp_maxgap on EXACT-04" ctx.meta[:socp_maxgap]
+    @test ctx.meta[:socp_maxgap] < 1e-5
+
+    # D-08 provenance stash from Task 1.
+    @test ctx.meta[:formulation] == :RestrictedBranchFlow
+    @test ctx.meta[:restriction_ε] >= 0.0
+end
+
+@testitem "restricted_branch_flow: plain ConvexBranchFlow on EXACT-04 is UNCHANGED by RestrictedBranchFlow's existence (default-path regression)" tags =
+    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+    import Ipopt
+
+    # Deliberate duplication (not a call into test_ac_oracle.jl) so that a future accidental
+    # edit to ConvexBranchFlow.jl's bound-setting loop — the one Task 1's anti-pattern warning
+    # protects — is caught by TWO independent test files, not one.
+    feeder = Phase4Fixtures.high_pv_feeder()
+    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+
+    ctx_socp, cost_socp, _ = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+        rtol_exact = 1.0,
+    )
+
+    ctx_ac, cost_ac, _ = solve_welfare(
+        feeder,
+        ACPowerFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_local = true,
+        allow_export = true,
+    )
+    ctx_ac2, cost_ac2, _ = solve_welfare(
+        feeder,
+        ACPowerFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_local = true,
+        allow_export = true,
+        optimizer = optimizer_with_attributes(
+            Ipopt.Optimizer,
+            "print_level" => 0,
+            "mu_strategy" => "adaptive",
+        ),
+    )
+    @test isapprox(cost_ac, cost_ac2; rtol = 1e-3, atol = 1e-3)
+
+    report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
+    inexact_hours = [row.t for row in report.hours if !row.exact]
+    @test !isempty(inexact_hours)
+
+    pv_socp = ctx_socp.meta[:pf_vars]
+    N = length(feeder.buses)
+    B = length(feeder.branches)
+    diagnosed = any(inexact_hours) do t★
+        voltage_bound_hit =
+            any(value(pv_socp.v[j, t★]) >= feeder.buses[j].vmax^2 - 1e-3 for j in 1:N)
+        reverse_flow = any(value(pv_socp.P[b, t★]) < 0 for b in 1:B)
+        voltage_bound_hit || reverse_flow
+    end
+    @test diagnosed
+end
