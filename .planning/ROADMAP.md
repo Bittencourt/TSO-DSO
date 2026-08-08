@@ -59,8 +59,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 19-02-PLAN.md — FourQuadBESS device: struct/constructors/guards, contribute! (SOC recursion + apparent-power cone + q_inject), complementarity re-derivation docstring
-- [ ] 19-03-PLAN.md — DsoOpt reactive_consensus promoted to 3-state (OFF/CERTIFIED/LIVE), LIVE unpins qag_dso with its own ρ_q penalty + set_rho_q!
+- [x] 19-02-PLAN.md — FourQuadBESS device: struct/constructors/guards, contribute! (SOC recursion + apparent-power cone + q_inject), complementarity re-derivation docstring
+- [x] 19-03-PLAN.md — DsoOpt reactive_consensus promoted to 3-state (OFF/CERTIFIED/LIVE), LIVE unpins qag_dso with its own ρ_q penalty + set_rho_q!
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -311,7 +311,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 1–9 (archived) | v1.0 | 43/43 | Complete | 2026-07-20 |
 | 10–14 (archived) | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
-| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 1/8 | In Progress|  |
+| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 3/8 | In Progress|  |
 | 20. Overvoltage-Capable Relaxation | v3.0 | 0/TBD | Not started | - |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 0/TBD | Not started | - |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
