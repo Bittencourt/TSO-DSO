@@ -28,8 +28,9 @@ state-of-charge `soc[t]`, and a sign-free reactive decision `q[t]`, subject to:
     Emin ≤ soc[t] ≤ Emax ;  soc[1] = soc0                   # SOC band + IC (mirrors PVBattery 3.9)
     (p_dch[t] − p_ch[t])² + q[t]² ≤ Smax²                   # apparent-power cone (D-03/D-04)
 
-Unlike `PVBattery`, there is **no** `pv_used`/`Ppv` field and **no** PV-limited-charge bound
-(D-01/D-02): this device may import from the grid to charge, capped only by `Pch_max`. Its
+Unlike `PVBattery`, there is **no** curtailable-PV-availability field and **no**
+PV-limited-charge bound (D-01/D-02): this device may import from the grid to charge, capped
+only by `Pch_max`. Its
 preference is the same App. C-shaped concave charge utility minus convex discharge cost, but
 with the INDEPENDENT `Pch_max`/`Pdch_max` as the curvature denominators (instead of one shared
 `Pmax`):
@@ -60,9 +61,10 @@ Derivation Skeleton," re-derived below in four steps):
     `λ_min < λ_med < λ_max` ordering: this internal, fixed-net-`p` dominance argument is
     load-bearing here too, unchanged in form.
  2. **The genuinely new failure mode is D-02's removal of the PV-limited-charge bound**, not
-    the reactive cone directly. Without `PVBattery`'s `p_ch[t] ≤ pv_used[t]` bound (Assumption
-    A6, deliberately not inherited), `p_ch` is driven by the GRID price rather than only by
-    available PV — which reopens whether this device's OWN internal indifference price
+    the reactive cone directly. Without `PVBattery`'s charge-from-available-PV-only bound
+    (Assumption A6, deliberately not inherited), `p_ch` is driven by the GRID price rather
+    than only by available PV — which reopens whether this device's OWN internal indifference
+    price
     `λ_med` can be strictly ordered against the EXTERNAL effective nodal price it actually
     faces (the ADMM dual `λ_j[t]`, or `dual(:balance_p[j,t])` centrally), not just against its
     own internal `λ_min/λ_max` triple.
@@ -251,6 +253,87 @@ function FourQuadBESS(
         T(λ_med),
         T(λ_max),
     )
+end
+
+"""
+    contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
+
+Contribute the 4Q battery into the shared model context over `t = 1:T`, following the
+AGGREGATABLE-device contract (mirrors `PVBattery.contribute!`'s shape, minus the PV
+coupling — D-01/D-02): it builds its own variables and temporal-coupling constraints on
+`ctx.model` but writes NOTHING to `ctx.residuals` and calls NO `add_to_objective!`.
+Instead it RETURNS `(; vars, p_inject, q_inject, utility)` for the `Aggregator` (DEV-05)
+to roll up, via D-09's widened optional-`q_inject` contract.
+
+It creates continuous `0 ≤ p_ch[t] ≤ Pch_max`, `0 ≤ p_dch[t] ≤ Pdch_max` (INDEPENDENT
+caps, D-04), `Emin ≤ soc[t] ≤ Emax`, and a FREE (unbounded) `q[t]` (D-03: no cost/utility
+term on reactive power) — and **no** binary/integer variable, and **no** curtailable-PV
+coupling anywhere (D-01/D-02: this device may charge from the
+grid, capped only by `Pch_max`). It adds the SOC recursion + IC (mirrors `PVBattery`'s
+eq. 3.6/3.9), the App. C-shaped utility (with `Pch_max`/`Pdch_max` as the INDEPENDENT
+curvature denominators — no `q` term anywhere, D-03), and ONE apparent-power second-order
+cone constraint per `t` tying `Smax`, the net active expression `p_dch[t] − p_ch[t]`, and
+`q[t]` together (D-03/D-04). Mirroring `PVBattery`'s
+device-level constraints, this cone is NOT registered via `register_constraint!` — only
+network-level `ConvexBranchFlow` constraints are registered (see PATTERNS.md).
+
+Returns `(; vars = (; p_ch, p_dch, soc, q), p_inject, q_inject, utility)` where
+`p_inject[t] == p_dch[t] − p_ch[t]` (a `Vector{AffExpr}`) and `q_inject === vars.q` (the
+SAME `Vector{VariableRef}` object, D-09) — the FIRST aggregatable device to carry a
+`q_inject` field; see `AbstractDevice.jl`'s widened Variant-2 contract note.
+"""
+function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
+    m = ctx.model
+
+    # Continuous decision variables ONLY — NO binary/integer (App. C keeps this a QP/SOCP).
+    p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pch_max)   # (D-02/D-04)
+    p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pdch_max) # (D-04)
+    soc = @variable(m, [t = 1:T], lower_bound = d.Emin, upper_bound = d.Emax)
+    # q is sign-free and carries NO bound — the apparent-power cone below is its only
+    # restriction (D-03: no cost/utility term on reactive power anywhere).
+    q = @variable(m, [t = 1:T])
+
+    @constraint(m, soc[1] == d.soc0)
+    if T > 1
+        # SOC dynamics with round-trip efficiency (mirrors PVBattery eq. 3.6): η·p_ch in,
+        # p_dch/η out (η² < 1).
+        @constraint(
+            m,
+            [t = 1:(T - 1)],
+            soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
+        )
+    end
+
+    # Net active injection at the device (discharge is a source, charge a withdrawal) — the
+    # quantity that enters the apparent-power cone alongside q (D-03/D-04).
+    p_net = @expression(m, [t = 1:T], p_dch[t] - p_ch[t])
+
+    # Apparent-power cone (D-03/D-04): p²+q²≤Smax² ⟺ ‖(p_net,q)‖₂ ≤ Smax — the SAME idiom
+    # already shipped in `ConvexBranchFlow.jl`'s per-branch `smax` limit. Un-registered
+    # (device-level, mirrors PVBattery's un-registered constraints — only network-level
+    # ConvexBranchFlow constraints are registered).
+    @constraint(m, cone[t = 1:T], [d.Smax, p_net[t], q[t]] in SecondOrderCone())
+
+    # App. C-shaped utility (concave charge benefit, convex discharge cost), but with the
+    # INDEPENDENT Pch_max/Pdch_max as the curvature denominators (D-04). NO `q` term
+    # anywhere (D-03) — q's only role is inside the cone above.
+    a_ch = d.λ_med
+    b_ch = (d.λ_med - d.λ_min) / d.Pch_max
+    a_dch = d.λ_med
+    b_dch = (d.λ_max - d.λ_med) / d.Pdch_max
+
+    utility = @expression(
+        m,
+        sum(
+            a_ch * p_ch[t] - (b_ch / 2) * p_ch[t]^2 - a_dch * p_dch[t] -
+            (b_dch / 2) * p_dch[t]^2 for t in 1:T
+        )
+    )
+
+    # Signed active injection at the device's bus for the Aggregator's :Rp: net p (D-04).
+    p_inject = [p_dch[t] - p_ch[t] for t in 1:T]
+
+    return (; vars = (; p_ch, p_dch, soc, q), p_inject, q_inject = q, utility)
 end
 
 export FourQuadBESS

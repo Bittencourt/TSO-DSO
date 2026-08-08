@@ -64,6 +64,21 @@ the residual NOR the objective:
 
 An aggregatable device need not even hold a bus — the aggregator supplies it.
 
+### Widened contract: optional `q_inject` field (MESH-04, D-09)
+
+A device with a genuine reactive decision variable — today, only [`FourQuadBESS`](@ref) —
+MAY additionally include a `q_inject::Vector{AffExpr}` field in its returned NamedTuple:
+`(; vars, p_inject, q_inject, utility)`. This is the device's own signed reactive
+injection per time step, meant to be summed into the aggregator's net reactive injection
+alongside the load-power-factor term (eq. 3.23).
+
+A device WITHOUT a genuine reactive decision — every PRE-EXISTING device
+([`Thermostatic`](@ref), [`Deferrable`](@ref), [`PVBattery`](@ref)) — simply OMITS the
+`q_inject` key; the [`Aggregator`](@ref) checks for its presence via `hasproperty` before
+summing it, so omitting it is a complete, correct, zero-effort contract for every existing
+device. Consequently, **no existing device file needs to change** for this widening: the
+default path (no `q_inject` key present) is byte-identical to the pre-MESH-04 contract.
+
 # Network decoupling (success criterion 2)
 
 A device is NEVER passed the network object. It is constructed with only its bus id and
