@@ -45,7 +45,17 @@ device and dual-ascent step to already exist.
      convergence/stopping treatment (not the single-block Boyd rule as-is).
   4. With no `FourQuadBESS` device present and the dual-ascent step disabled, ADMM and centralized
      welfare results are byte-identical to pre-milestone behavior.
-**Plans**: TBD
+**Plans:** 8 plans (6 waves)
+
+Plans:
+- [ ] 19-01-PLAN.md — Wire seam stubs (FourQuadBESS.jl, complementarity_4q.jl, ReactiveMode.jl) into TSODSO.jl + capture pre-Phase-19 byte-identity baseline
+- [ ] 19-02-PLAN.md — FourQuadBESS device: struct/constructors/guards, contribute! (SOC recursion + apparent-power cone + q_inject), complementarity re-derivation docstring
+- [ ] 19-03-PLAN.md — DsoOpt reactive_consensus promoted to 3-state (OFF/CERTIFIED/LIVE), LIVE unpins qag_dso with its own ρ_q penalty + set_rho_q!
+- [ ] 19-04-PLAN.md — Aggregator.contribute! widened to roll up optional q_inject additively into :Rq, byte-identical when absent
+- [ ] 19-05-PLAN.md — assert_4q_complementarity! certificate (own measured tolerance, throw-by-default + report kwarg), disambiguated from assert_battery_complementarity!
+- [ ] 19-06-PLAN.md — AgrOpt live qag_live coupling variable + ρ_q penalty, solve_agr! μ/d update + check_4q wiring
+- [ ] 19-07-PLAN.md — solve_admm joint (λ,μ) stacked dual-ascent, μ/q_devices results surface, final-block certificate wiring
+- [ ] 19-08-PLAN.md — Phase19Fixtures, measured cross-validation tolerances, liveness regression, IEEE-13 quarantined evidence, final byte-identity gate
 
 ### Phase 20: Overvoltage-Capable Relaxation
 **Goal**: A researcher can price the high-PV overvoltage regime that v2.1's AC oracle proved the plain
