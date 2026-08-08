@@ -664,7 +664,8 @@ end
 
 ## Open Questions
 
-1. **Should `Aggregator`'s roll-up read `q_inject` via `hasproperty` (duck typing) or should
+1. **(RESOLVED — plan 19-04 adopts `hasproperty` duck typing exactly as recommended below.)
+   Should `Aggregator`'s roll-up read `q_inject` via `hasproperty` (duck typing) or should
    `AbstractDevice`'s contract formally declare an optional-field convention (e.g. a trait
    function `has_reactive(::Type{<:AbstractDevice}) = false`, overridden by `FourQuadBESS`)?**
    - What we know: `hasproperty` on a `NamedTuple` is a zero-cost, idiomatic Julia check and
@@ -678,7 +679,9 @@ end
      The planner should pick one and apply it consistently at the ONE call site
      (`Aggregator.contribute!`) — this is a small implementation decision, not a research gap.
 
-2. **Does the small radial fixture (`test/fixtures_phase3.jl`'s 3-bus `small_radial_feeder`) need
+2. **(RESOLVED — plan 19-08 creates the dedicated `Phase19Fixtures` module exactly as
+   recommended below, reusing `small_radial_feeder()` verbatim for topology.)
+   Does the small radial fixture (`test/fixtures_phase3.jl`'s 3-bus `small_radial_feeder`) need
    a NEW fixture variant with a `FourQuadBESS` aggregator member, or does the existing fixture's
    aggregator wiring already support swapping in a new device type without change?**
    - What we know: `small_radial_feeder()` builds the network only; `Aggregator`/device wiring is
@@ -692,7 +695,10 @@ end
      `@testmodule` (e.g. `Phase19Fixtures`) for the `FourQuadBESS`-bearing aggregator/parameter
      set, mirroring the existing `Phase3Fixtures`/`Phase4Fixtures` convention.
 
-3. **Where exactly should the μ/q-first-class results surface (D-11) live in the ADMM return
+3. **(RESOLVED: deferred to empirical verification in plan 19-07 Task 1 — the μ-sign/identity
+   question cannot be resolved on paper before the code runs; the plan assigns the empirical
+   check as its first action, mirroring how the λ sign convention was originally pinned.)
+   Where exactly should the μ/q-first-class results surface (D-11) live in the ADMM return
    tuple — added fields on `solve_admm`'s existing NamedTuple return, or a new peer extraction
    function (an ADMM-side `extract_reactive_dlmp` analogue) operating on the returned `dso_ctx`?**
    - What we know: the centralized path already has `extract_reactive_dlmp(ctx)` operating on a
