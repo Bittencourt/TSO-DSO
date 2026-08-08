@@ -87,6 +87,63 @@ end
     @test reactive_factor(1.0) == 0.0
 end
 
+@testitem "aggregator: q_inject byte-identity (no 4Q) + FourQuadBESS summation (MESH-04, D-09/D-10)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    T = 6
+    bus = 2
+    φ = 0.9
+    Pdc = fill(0.3, T)
+    Tout = fill(25.0, T)
+    Ppv = fill(0.2, T)
+
+    # (a) BYTE-IDENTITY: a FRESH Thermostatic + PVBattery aggregator (mirrors the
+    # existing "sole :Rp/:Rq writer" fixture exactly) — no member device carries
+    # q_inject, so :Rq must stay a pure constant AND res.q_inject must be zero per t.
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+    batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
+
+    agg_no4q = Aggregator(bus, φ, [therm, batt], Pdc)
+    ctx_no4q = ModelContext(Model())
+    res_no4q = contribute!(agg_no4q, ctx_no4q; T = T)
+    Rq_no4q = ctx_no4q.residuals[:Rq]
+
+    tanφ = sqrt(1 - φ^2) / φ
+    for t in 1:T
+        @test isapprox(Rq_no4q[bus, t].constant, -Pdc[t] * tanφ; atol = 1e-9)
+        @test isempty(Rq_no4q[bus, t].terms)
+        @test res_no4q.q_inject[t] == zero(AffExpr)
+    end
+
+    # (b) SUMMATION: a SECOND aggregator at the SAME bus with the SAME Thermostatic plus
+    # a FourQuadBESS (valid asymmetric Pch_max/Pdch_max/Smax/η/λ triple) — proving the
+    # roll-up genuinely wires the device's own q[t] variable into :Rq and into the
+    # returned q_inject total (CR-01: tests passing != mechanism live).
+    bess = FourQuadBESS(bus, 0.95, 1.0, 0.3, 0.3, 0.4, 0.0, 1.0, 0.5, 1.0, 2.0, 3.0)
+
+    agg_4q = Aggregator(bus, φ, [therm, bess], Pdc)
+    ctx_4q = ModelContext(Model())
+    res_4q = contribute!(agg_4q, ctx_4q; T = T)
+    Rq_4q = ctx_4q.residuals[:Rq]
+
+    q_var = res_4q.vars[2].q     # the FourQuadBESS's own q[t] VariableRef vector, per
+                                  # contribute!'s (; vars = device_vars, ...) stash order
+    for t in 1:T
+        # Rq now carries a non-empty terms entry equal to the device's q[t] with
+        # coefficient 1.0, ON TOP OF the same untouched -Pdc[t]*tanφ constant (D-10).
+        @test isapprox(Rq_4q[bus, t].constant, -Pdc[t] * tanφ; atol = 1e-9)
+        @test !isempty(Rq_4q[bus, t].terms)
+        @test isapprox(get(Rq_4q[bus, t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
+
+        # res.q_inject is an AffExpr REFERENCING that same q[t] variable, not a numeric
+        # constant — the load-bearing "genuinely wired" assertion (T-19-09).
+        @test res_4q.q_inject[t] isa AffExpr
+        @test isapprox(get(res_4q.q_inject[t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
+    end
+end
+
 @testitem "aggregator: constructor + horizon guards (DEV-05)" tags = [:aggregator] begin
     using TSODSO
     using JuMP
