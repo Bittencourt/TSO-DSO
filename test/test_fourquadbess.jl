@@ -112,3 +112,99 @@ end
         2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 4.0, 4.0, 4.0,
     )  # all equal
 end
+
+@testitem "fourquadbess: contribute! creates the expected variables + bounds (D-01/D-02/D-04)" tags =
+    [:fourquadbess] begin
+    using TSODSO, JuMP
+
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 3
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    p_ch, p_dch, soc, q = res.vars.p_ch, res.vars.p_dch, res.vars.soc, res.vars.q
+    @test length(p_ch) == T
+    @test length(p_dch) == T
+    @test length(soc) == T
+    @test length(q) == T
+    for t in 1:T
+        @test lower_bound(p_ch[t]) == 0.0
+        @test upper_bound(p_ch[t]) == d.Pch_max
+        @test lower_bound(p_dch[t]) == 0.0
+        @test upper_bound(p_dch[t]) == d.Pdch_max
+        @test lower_bound(soc[t]) == d.Emin
+        @test upper_bound(soc[t]) == d.Emax
+        # q is FREE inside the cone (D-03): no explicit variable bound.
+        @test !has_lower_bound(q[t])
+        @test !has_upper_bound(q[t])
+    end
+end
+
+@testitem "fourquadbess: contribute! has NO pv_used/Ppv coupling anywhere (D-01/D-02)" tags =
+    [:fourquadbess] begin
+    using TSODSO
+
+    # D-01/D-02: no PV coupling anywhere in the source file (grep-verified, mirrors the
+    # plan's acceptance criterion — checked here so it is a live regression, not just a
+    # one-time human grep).
+    src_path = joinpath(dirname(dirname(pathof(TSODSO))), "src", "devices", "FourQuadBESS.jl")
+    src = read(src_path, String)
+    @test !occursin("pv_used", src)
+    @test !occursin("Ppv", src)
+end
+
+@testitem "fourquadbess: contribute! ties Smax/net-p/q into a SecondOrderCone (D-03/D-04)" tags =
+    [:fourquadbess] begin
+    using TSODSO, JuMP
+
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 2
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    cone_constraints = [
+        c for c in all_constraints(model; include_variable_in_set_constraints = false) if
+        constraint_object(c).set isa MOI.SecondOrderCone
+    ]
+    @test length(cone_constraints) == T
+end
+
+@testitem "fourquadbess: contribute! SOC recursion + IC hold (mirrors PVBattery 3.6/3.9)" tags =
+    [:fourquadbess] begin
+    using TSODSO, JuMP
+
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    T = 3
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    @objective(model, Max, res.utility)
+    TSODSO.assert_solved!(model; dual = false, allow_local = false)
+
+    soc = res.vars.soc
+    @test isapprox(value(soc[1]), d.soc0; atol = 1e-6)
+end
+
+@testitem "fourquadbess: contribute! returns the widened contract with q_inject (D-09)" tags =
+    [:fourquadbess] begin
+    using TSODSO, JuMP
+
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 2
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    @test isempty(ctx.residuals)
+    @test !haskey(ctx.meta, :objective)
+    @test res.utility isa QuadExpr
+    @test length(res.p_inject) == T
+    @test all(x -> x isa AffExpr, res.p_inject)
+    @test res.q_inject === res.vars.q               # same object, D-09
+    @test propertynames(res) == (:vars, :p_inject, :q_inject, :utility)
+end
+
