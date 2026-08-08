@@ -45,6 +45,7 @@ Design decisions that emerged while spiking. Non-negotiable for the real build.
 | 002 | ieee123-validity-map | standard | Given the 001 method on real IEEE-123 OpenDSS impedances, when the detector classifies a (pv × load × vmax) grid, then the boundary renders as a map | ⚠ PARTIAL — no boundary exists; flags are solver noise. Yielded a **method defect** instead | socp, exactness, ieee123, real-impedances, null-result, tolerance, solver-noise |
 
 | 003 | phase18-fragility-tolerance | standard | Given Phase 18-01's ±2-5% sweep re-run at tightened solver tolerance with the gate armed, when failures are attributed per-call, then we learn whether the recorded fragility is artifact or physical | ✓ VALIDATED — **overturns a shipped v2.1 finding** | tolerance, phase18, thesis-reproduction, correction, fit-baseline, misattribution |
+| 004 | ovr-fallback-multistart | standard | Given the EXACT-04 fixture's nonconvex-AC-dual fallback re-solved from 5 distinct seeded Ipopt starts, when costs/dadps are compared pairwise, then no local-optimum artifact is masking a genuinely unstable fallback price | ✓ VALIDATED — all 5 variants agree to ~1e-7 (`max_cost_spread=3.84e-7`) | ovr, ac-dual-fallback, multi-start, ipopt |
 
 **Headline across all three.** The free cone-gap detector is sound in principle but **not usable at
 default tolerance on a 122-branch feeder** — its `atol = 1e-6` sits at Clarabel's noise floor there. On

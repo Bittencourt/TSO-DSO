@@ -351,3 +351,90 @@ end
     # (this certificate's own ac_feasible check), never STRUCTURAL mismatches upstream.
     @test_throws Exception assert_restriction_exact!(ctx1, ctx2; report = true)
 end
+
+# --- Plan 20-04: ac_dual_fallback_price (OVR-03 nonconvex-AC-dual fallback) ---
+#
+# ORCHESTRATOR-NOTE ADAPTATION (documented in 20-04-SUMMARY.md's Deviations section): the
+# plan's own Task 2 action text checks
+# `assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)` BEFORE calling the
+# fallback, to "demonstrate the trigger discipline." On the EXACT-04 fixture (pv_scale =
+# 1.2), `RestrictedBranchFlow`'s OWN cone certifies `ac_feasible = true` (plan 20-03's
+# orchestrator-revised semantics) — so reading `ctx_restricted`'s cert here never actually
+# FAILS, and "demonstrating trigger discipline" against an always-passing cert alone would
+# be vacuous. This item demonstrates BOTH sides genuinely: (a) the PASSING case on
+# `ctx_restricted` (the real reason the fallback is NOT needed for EXACT-04 itself), and (b)
+# a GENUINELY FAILING case using an UNRESTRICTED `ConvexBranchFlow` context on the SAME
+# fixture (`rtol_exact = 1.0` neutralizes PF-04 so the cone-INEXACT solution is returned
+# rather than refused — the SAME synthetic-violation pattern plan 20-03's testitem 5 uses),
+# where `cert_failing.ac_feasible == false` / `price_provenance.status == :cert_failed` is
+# the genuine D-09 trigger condition a real caller must gate the fallback on.
+# `ac_dual_fallback_price` itself is then called UNCONDITIONALLY (per the plan's own action
+# text) because THIS item exercises the fallback's OWN mechanics in isolation.
+@testitem "restricted_branch_flow: ac_dual_fallback_price triggers only after an observed certificate failure, carries price_status, and 2-seed agreement (D-09/D-10/D-11 CI subset)" tags =
+    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    feeder = Phase4Fixtures.high_pv_feeder()
+    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+
+    ctx_restricted, cost_restricted, _ = solve_welfare(
+        feeder,
+        RestrictedBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    ctx_ac, cost_ac, _ = solve_welfare(
+        feeder,
+        ACPowerFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_local = true,
+        allow_export = true,
+    )
+
+    # (a) The PASSING case (plan 20-03's revised semantics): D-09 does NOT actually require
+    # the fallback on EXACT-04's RestrictedBranchFlow solve itself.
+    cert = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
+    @test cert.ac_feasible == true
+
+    # (b) A GENUINELY FAILING case (mirrors plan 20-03's testitem 5's synthetic violation):
+    # the unrestricted ConvexBranchFlow context, cone-inexact at rtol_exact = 1.0.
+    ctx_unrestricted, cost_unrestricted, _ = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+        rtol_exact = 1.0,
+    )
+    cert_failing = assert_restriction_exact!(ctx_unrestricted, ctx_ac; report = true)
+    @test cert_failing.ac_feasible == false
+    @test ctx_unrestricted.meta[:price_provenance].status == :cert_failed
+
+    # D-09: the fallback below is called REGARDLESS of `cert.ac_feasible` here ONLY because
+    # this test exercises the fallback's OWN mechanics in isolation — a real caller must gate
+    # this call on `cert.ac_feasible == false`, exactly as (b) above documents.
+    result = ac_dual_fallback_price(
+        feeder,
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+        n_seeds = 2,
+    )
+    @test result.price_status == :local_ac_dual
+    @test result isa NamedTuple
+    @test isapprox(
+        result.agreement_report.costs[1],
+        result.agreement_report.costs[2];
+        rtol = 1e-3,
+        atol = 1e-3,
+    )
+    @test all(isfinite, result.dadp)
+end
