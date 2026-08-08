@@ -56,6 +56,7 @@ Pages = [
     "devices/Deferrable.jl",
     "devices/Interruptible.jl",
     "devices/PVBattery.jl",
+    "devices/FourQuadBESS.jl",
     "devices/Aggregator.jl",
 ]
 Order = [:type, :constant, :function]
@@ -65,7 +66,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl", "powerflow/ACPowerFlow.jl"]
+Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl", "powerflow/ACPowerFlow.jl", "powerflow/RestrictedBranchFlow.jl"]
 Order = [:type, :constant, :function]
 ```
 
@@ -73,7 +74,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl"]
+Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl", "models/restriction_exactness.jl", "models/ac_dual_fallback.jl", "models/complementarity_4q.jl"]
 Order = [:type, :constant, :function]
 ```
 
@@ -89,7 +90,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/residuals.jl", "admm/solve_admm.jl"]
+Pages = ["admm/ReactiveMode.jl", "admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/residuals.jl", "admm/solve_admm.jl"]
 Order = [:type, :constant, :function]
 ```
 
