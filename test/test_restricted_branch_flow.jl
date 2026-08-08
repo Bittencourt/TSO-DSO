@@ -200,21 +200,27 @@ end
 
 # --- Plan 20-03: assert_restriction_exact! (OVR-02 headline validity gate) ---
 #
-# DEVIATION FROM PLAN TEXT (documented in 20-03-SUMMARY.md, "Deviations from Plan"):
-# the plan's Task 2 predicted `report.ac_feasible == true` on the FULL EXACT-04 fixture
-# (pv_scale = 1.2). Measurement (2026-08-08) found the OPPOSITE, honest verdict: OPF-m's
-# added `v̂_GL(s) ≤ v̄` constraint (Lemma 1: v ≤ v̂_GL(s) always, so it is a genuine
-# feasible-set RESTRICTION, D-01) ACTIVELY BINDS during EXACT-04's high-PV window (hours
-# 9-12, 14-15 — confirmed below via a large nonzero dual on
-# `ctx.constraints[:opfm_shadow_voltage]`), so the restricted optimum genuinely diverges
-# from the independently-solved AC optimum there — `ac_feasible = false`, with a
+# ORCHESTRATOR-REVISED SEMANTICS (documented in 20-03-SUMMARY.md's "## Addendum
+# (orchestrator revision)" section): the FIRST implementation of `assert_restriction_exact!`
+# defined `ac_feasible` as "the restricted dispatch MATCHES the independently-solved
+# AC-optimal dispatch," which forces `optimality_loss ≈ 0` whenever `ac_feasible = true` —
+# internally incoherent with D-05's "certify AC-feasibility AND report optimality loss in
+# ONE call" (the loss clause only has meaning for a feasible-but-suboptimal point).
+# `assert_restriction_exact!` NOW certifies PHYSICAL AC-feasibility of the restricted
+# solution itself (the SAME per-branch, per-hour cone-tightness residual
+# `assert_socp_exact!` gates, with THIS certificate's OWN measured `cone_rtol`/`cone_atol`)
+# and DEMOTES the AC-oracle dispatch-match comparison to a separate diagnostic field,
+# `matches_ac_optimum`. On the FULL EXACT-04 fixture (`pv_scale = 1.2`): the restricted
+# solution's OWN cone is tight (`ac_feasible = true`, reproducing plan 20-02's
+# `socp_maxgap = 2.08e-8`), but OPF-m's added `v̂_GL(s) ≤ v̄` constraint (Lemma 1: v ≤
+# v̂_GL(s) always, so it is a genuine feasible-set RESTRICTION, D-01) ACTIVELY BINDS during
+# EXACT-04's high-PV window (hours 9-12, 14-15 — confirmed below via a large nonzero dual on
+# `ctx.constraints[:opfm_shadow_voltage]`), so the restricted optimum genuinely diverges from
+# the independently-solved AC optimum there — `matches_ac_optimum = false`, with a
 # substantial NEGATIVE `optimality_loss`. This is the EXPECTED, PROVABLE consequence of a
-# genuine restriction whose bound actively excludes the true AC optimum — NOT a bug, and
-# NOT a mis-measured tolerance (the SAME certificate reports `ac_feasible = true`-shaped
-# clean-hour behavior at every OTHER hour; see restriction_exactness.jl's docstring). The
-# assertions below test the ACTUAL, causally-diagnosed behavior rather than the plan's
-# unverified prediction.
-@testitem "restricted_branch_flow: assert_restriction_exact! reports the genuine restriction-induced optimality loss + AC-infeasibility on the binding EXACT-04 window (D-05, adapted finding)" tags =
+# genuine restriction whose bound actively excludes the true AC optimum — NOT a bug. The
+# assertions below test this revised, causally-diagnosed behavior.
+@testitem "restricted_branch_flow: assert_restriction_exact! certifies PHYSICAL AC-feasibility while reporting the genuine restriction-induced optimality loss + dispatch-mismatch on the binding EXACT-04 window (D-05, revised semantics)" tags =
     [:restricted_branch_flow] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
@@ -259,36 +265,46 @@ end
     opfm_duals = [abs(dual(c)) for c in ctx_restricted.constraints[:opfm_shadow_voltage]]
     @test maximum(opfm_duals) > 1.0   # genuinely ACTIVE, not numerical noise (~1e-7 off-bind)
 
-    # report = true: this call must NOT throw even though ac_feasible will be false (D-06 —
-    # the caller inspects the diagnostic rather than being refused it).
+    # Default (report = false): must NOT throw — the restricted solution's OWN cone is
+    # tight, so it IS certified physically AC-feasible even though it will NOT match the AC
+    # optimum (D-05's coherence fix: a feasible-but-suboptimal point can still certify).
     report = assert_restriction_exact!(
         ctx_restricted,
         ctx_ac;
         unrestricted_cost = cost_unrestricted,
-        report = true,
     )
-    @info "assert_restriction_exact! on EXACT-04 (documented restriction-binding finding)" report.ac_feasible report.optimality_loss
+    @info "assert_restriction_exact! on EXACT-04 (revised semantics: physical feasibility + dispatch-mismatch diagnostic)" report.ac_feasible report.matches_ac_optimum report.optimality_loss
 
     @test report isa NamedTuple
     @test !(report isa Bool)
-    # The measured, honest verdict: NOT AC-feasible (the restriction genuinely diverges from
-    # the true AC optimum during the binding window) — see the module-level comment above.
-    @test report.ac_feasible == false
+    # Certification gate: the restricted solution's OWN cone is tight — a genuine AC
+    # operating point, independent of whether it is globally optimal.
+    @test report.ac_feasible == true
+    # Diagnostic: the restricted dispatch does NOT match the true AC optimum during the
+    # binding window — the honest finding this certificate now correctly demotes to a
+    # separate field rather than using it as the certification gate.
+    @test report.matches_ac_optimum == false
     # D-05: optimality_loss is a NAMED field, always populated when unrestricted_cost is
     # supplied, and — since RestrictedBranchFlow's feasible set is a genuine SUBSET of the
     # unrestricted SOCP relaxation's — must be <= 0 (restricted welfare can never exceed the
     # unrestricted bound).
     @test report.optimality_loss !== nothing
     @test report.optimality_loss <= 1e-6
-    # T-20-08: the provenance marker reflects the ACTUAL (failed) verdict, never a stale
-    # :certified_convex_dual left over from a different call.
-    @test ctx_restricted.meta[:price_provenance].status == :cert_failed
+    # T-20-08: the provenance marker reflects the PHYSICAL-feasibility verdict (ac_feasible),
+    # never the matches_ac_optimum diagnostic.
+    @test ctx_restricted.meta[:price_provenance].status == :certified_convex_dual
     @test ctx_restricted.meta[:price_provenance].formulation == :RestrictedBranchFlow
     @test ctx_restricted.meta[:price_provenance].certificate == :assert_restriction_exact!
 
-    # Default (report = false) on the SAME contexts must THROW (D-06's default polarity) —
-    # confirms the report=true call above did not silently mutate the underlying verdict.
-    @test_throws Exception assert_restriction_exact!(ctx_restricted, ctx_ac; unrestricted_cost = cost_unrestricted)
+    # Synthetic violation of the NEW physical-feasibility gate: an UNRESTRICTED
+    # ConvexBranchFlow context on this SAME fixture (rtol_exact = 1.0 neutralizes PF-04 so
+    # the genuinely cone-INEXACT solution is returned rather than refused) must FAIL
+    # ac_feasible — confirming the certificate now actually gates cone-tightness rather than
+    # trivially passing any solved context.
+    report_unrestricted = assert_restriction_exact!(ctx_unrestricted, ctx_ac; report = true)
+    @test report_unrestricted.ac_feasible == false
+    @test ctx_unrestricted.meta[:price_provenance].status == :cert_failed
+    @test_throws Exception assert_restriction_exact!(ctx_unrestricted, ctx_ac)
 end
 
 @testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch (D-06)" tags =
