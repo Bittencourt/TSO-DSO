@@ -22,27 +22,18 @@
 # including this one, is eval'd as a child of the SAME shared parent, so a sibling reference
 # resolves once that sibling has ALREADY been `ensure_evaled`).
 #
-# CONE-NAME-COLLISION WORKAROUND (deferred-items.md, plan 19-07's finding): calling the
-# CENTRALIZED `solve_welfare(feeder, ConvexBranchFlow(), aggregators)` directly on a
-# `FourQuadBESS`-bearing `aggregators` throws `"An object of name cone is already attached to
-# this model"` — `ConvexBranchFlow.contribute!` registers the network's rotated SOC cone under
-# the bare JuMP container name `:cone`, and `FourQuadBESS.contribute!` ALSO registers its
-# device-level apparent-power cone under `:cone`, on the SAME shared `ctx.model`. The
-# deferred-item's suggested fix (renaming one of the two registrations) touches
-# `src/devices/FourQuadBESS.jl` / `src/powerflow/ConvexBranchFlow.jl`, both OUT OF this plan's
-# `files_modified` scope. `centralized_welfare_4q` below is a TEST-ONLY, file-scope-safe
-# workaround: it reproduces `solve_welfare`'s exact step sequence (thesis eq. 3.38) using ONLY
-# `solve_welfare`'s own PUBLIC seams (`contribute!`, `add_to_residual!`, `register_constraint!`,
-# `assert_solved!`, `assert_socp_exact!`, `assert_battery_complementarity!`), inserting ONE extra
-# line — `JuMP.unregister(model, :cone)` — between the network's `contribute!` call and the
-# aggregators' `contribute!` loop. `JuMP.unregister` is JuMP's OWN sanctioned fix for this exact
-# error (its error message literally suggests it): it only clears the `model[:cone]` OBJECT-
-# DICTIONARY symbol-lookup entry the network's `@constraint(m, cone[...], ...)` macro call just
-# claimed — the actual constraints already added to `model`, and the handle already stashed in
-# `ctx.constraints[:cone]` via `register_constraint!` (used by nothing downstream in THIS
-# fixture's centralized comparison), are completely untouched. This is NOT a modification of
-# `src/` — it is calling a public JuMP function from test code between two calls to existing
-# public `TSODSO` functions.
+# CONE-NAME-COLLISION: RESOLVED AT SOURCE (WR-01, phase-19 code review; originally
+# deferred-items.md / plan 19-07's finding). `FourQuadBESS.contribute!`'s device-level
+# apparent-power cone is now ANONYMOUS (it claims no JuMP object-dictionary name), so a
+# `FourQuadBESS`-bearing aggregator set composes directly with `ConvexBranchFlow`'s named
+# network `:cone` in ONE shared model — the former test-only `JuMP.unregister(model, :cone)`
+# workaround this file carried is retired. `centralized_welfare_4q` below is KEPT (unchanged
+# in behavior): it reproduces `solve_welfare`'s exact step sequence (thesis eq. 3.38) using
+# ONLY `solve_welfare`'s own PUBLIC seams (`contribute!`, `add_to_residual!`,
+# `register_constraint!`, `assert_solved!`, `assert_socp_exact!`,
+# `assert_battery_complementarity!`), and the phase's D-14 measured cross-validation
+# tolerances below were pinned against THIS exact replica — swapping it for a direct
+# `solve_welfare` call would invalidate that measurement provenance for zero test value.
 #
 # MEASUREMENT-BEFORE-GOLDEN (D-14, threat T-19-18): the welfare/λ/μ cross-validation tolerances
 # Task 2 pins were MEASURED on this exact fixture (`build_two_bus_aggregators_4q` at its
@@ -173,12 +164,12 @@
             -> (ctx, objective, balance_p, balance_q_or_nothing)
 
     A TEST-ONLY replica of [`solve_welfare`](@ref)'s exact step sequence (thesis eq. 3.38),
-    written entirely against `solve_welfare`'s own PUBLIC seams, for the ONE case
-    `solve_welfare` itself cannot run directly today: a `FourQuadBESS`-bearing `aggregators`
-    passed to `ConvexBranchFlow` (the `:cone` name collision — see this file's header comment).
-    `JuMP.unregister(model, :cone)` is inserted between the network's `contribute!` and the
-    aggregators' `contribute!` loop — JuMP's OWN sanctioned fix for this exact error, touching
-    NO `src/` file. Every other step mirrors `solve_welfare` verbatim: the free-sign frontier
+    written entirely against `solve_welfare`'s own PUBLIC seams. Originally required because a
+    `FourQuadBESS`-bearing `aggregators` crashed `solve_welfare` on the `:cone` name collision;
+    that collision is FIXED at source (WR-01 — the device cone is anonymous now), and this
+    replica is KEPT because the phase's D-14 measured cross-validation tolerances were pinned
+    against it (see this file's header comment). Every step mirrors `solve_welfare` verbatim:
+    the free-sign frontier
     `p_import`/`q_import` (added ONLY when the formulation provides a reactive channel, WR-03),
     closing `:balance_p`/`:balance_q`, `assert_solved!` before any dual read, the PF-04
     `assert_socp_exact!` gate (data-driven on `:l`'s presence, BEFORE any dual read), and the
@@ -221,13 +212,6 @@
         end
 
         contribute!(pf, ctx, feeder; T = T)
-
-        # WORKAROUND (this file's header comment): free the `:cone` object-dictionary entry the
-        # network just claimed so a FourQuadBESS device's OWN `@constraint(m, cone[...], ...)`
-        # registration (below, inside the aggregator loop) does not collide. Only the JuMP
-        # symbol-lookup entry is cleared — the constraints already added to `model`, and
-        # `ctx.constraints[:cone]` (unused by this centralized comparison), are untouched.
-        JuMP.unregister(model, :cone)
 
         reactive = haskey(ctx.residuals, :Rq)
 

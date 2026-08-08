@@ -275,7 +275,11 @@ curvature denominators — no `q` term anywhere, D-03), and ONE apparent-power s
 cone constraint per `t` tying `Smax`, the net active expression `p_dch[t] − p_ch[t]`, and
 `q[t]` together (D-03/D-04). Mirroring `PVBattery`'s
 device-level constraints, this cone is NOT registered via `register_constraint!` — only
-network-level `ConvexBranchFlow` constraints are registered (see PATTERNS.md).
+network-level `ConvexBranchFlow` constraints are registered (see PATTERNS.md) — and it is
+ANONYMOUS (WR-01, phase-19 review): it claims NO JuMP object-dictionary name, so any number
+of `FourQuadBESS` devices compose in one shared model alongside `ConvexBranchFlow`'s own
+named network `:cone` (the previous named `cone[t = 1:T]` container crashed both cases with
+`"An object of name cone is already attached to this model"`).
 
 Returns `(; vars = (; p_ch, p_dch, soc, q), p_inject, q_inject, utility)` where
 `p_inject[t] == p_dch[t] − p_ch[t]` (a `Vector{AffExpr}`) and `q_inject === vars.q` (the
@@ -311,8 +315,12 @@ function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
     # Apparent-power cone (D-03/D-04): p²+q²≤Smax² ⟺ ‖(p_net,q)‖₂ ≤ Smax — the SAME idiom
     # already shipped in `ConvexBranchFlow.jl`'s per-branch `smax` limit. Un-registered
     # (device-level, mirrors PVBattery's un-registered constraints — only network-level
-    # ConvexBranchFlow constraints are registered).
-    @constraint(m, cone[t = 1:T], [d.Smax, p_net[t], q[t]] in SecondOrderCone())
+    # ConvexBranchFlow constraints are registered) and ANONYMOUS (WR-01, phase-19 review):
+    # a NAMED `cone[t = 1:T]` container claims the JuMP object-dictionary symbol `:cone` on
+    # the SHARED model, colliding both with `ConvexBranchFlow.contribute!`'s network cone
+    # (any centralized `solve_welfare` with a 4Q device) and with a SECOND `FourQuadBESS`
+    # in the same model — anonymity is exactly why multiple `PVBattery` instances compose.
+    @constraint(m, [t = 1:T], [d.Smax, p_net[t], q[t]] in SecondOrderCone())
 
     # App. C-shaped utility (concave charge benefit, convex discharge cost), but with the
     # INDEPENDENT Pch_max/Pdch_max as the curvature denominators (D-04). NO `q` term

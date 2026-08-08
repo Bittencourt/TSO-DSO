@@ -7,6 +7,13 @@ Out-of-scope discoveries logged during plan execution, per the executor's scope-
 
 ### `:cone` name collision between `ConvexBranchFlow` and `FourQuadBESS` in a SHARED model
 
+> **RESOLVED (2026-08-08, phase-19 code-review fix WR-01):** `FourQuadBESS.contribute!`'s
+> device-level cone is now ANONYMOUS (`@constraint(m, [t = 1:T], ...)` — the `PVBattery`
+> idiom), so it claims no object-dictionary name and composes with `ConvexBranchFlow`'s
+> named network `:cone` AND with a second `FourQuadBESS` in the same model. The test-only
+> `JuMP.unregister(model, :cone)` workaround in `test/fixtures_phase19.jl` is retired;
+> `solve_welfare` now runs directly on 4Q-bearing aggregators.
+
 - **Found during:** Task 2 verification — attempting to cross-validate a `solve_admm(...;
   reactive_consensus = :live)` run against the centralized `solve_welfare` for a
   `FourQuadBESS`-bearing aggregator.
