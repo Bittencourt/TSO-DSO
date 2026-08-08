@@ -82,8 +82,11 @@ Plans:
 ### Phase 20: Overvoltage-Capable Relaxation
 
 **Goal**: A researcher can price the high-PV overvoltage regime that v2.1's AC oracle proved the plain
-SOCP relaxation cannot solve exactly (EXACT-04, IEEE-13 `pv_scale=1.2`), keeping the "prices are duals
-of one convex problem" story intact via a feasible-set restriction rather than a heuristic penalty.
+SOCP relaxation cannot solve exactly (EXACT-04, the `Phase4Fixtures.high_pv_feeder()` stress
+fixture at `pv_scale=1.2` — corrected here from the "IEEE-13" shorthand used elsewhere in this
+project; it is a purpose-built 3-bus radial fixture, not the 13-bus IEEE test feeder), keeping the
+"prices are duals of one convex problem" story intact via a feasible-set restriction rather than a
+heuristic penalty.
 **Depends on**: Nothing code-wise (independent of Phase 19); sequenced second because it produces a
 reusable non-radial-adjacent "restriction + AC-certified validity certificate" pattern that Phase 23
 (Meshed) reuses rather than re-deriving, and because Phase 21 (MPC)'s rolling windows can legitimately
@@ -92,8 +95,9 @@ fallback instead of an undefined catch-and-continue.
 **Requirements**: OVR-01, OVR-02, OVR-03, OVR-04
 **Success Criteria** (what must be TRUE):
 
-  1. Researcher can solve the exact EXACT-04 stress fixture (IEEE-13, `pv_scale=1.2`) via a restricted
-     SOCP (Gan–Low-style feasible-set tightening, e.g. reverse-flow-aware `V²max` shrink) dispatched
+  1. Researcher can solve the exact EXACT-04 stress fixture (the high-PV `Phase4Fixtures` fixture,
+     `pv_scale=1.2`) via a restricted SOCP (Gan–Low-style feasible-set tightening, e.g.
+     reverse-flow-aware `V²max` shrink) dispatched
      as a formulation/config variant through the existing `solve_welfare` path, at the operating point
      where the unrestricted relaxation was proven genuinely inexact.
 
@@ -109,7 +113,14 @@ fallback instead of an undefined catch-and-continue.
 
   4. A live-executed literate rung page documents the restriction mechanism, its measured
      optimality-loss, and the fallback semantics beside the Gan & Low condition it implements.
-**Plans**: TBD
+**Plans:** 5 plans (5 waves)
+
+Plans:
+- [ ] 20-01-PLAN.md — v ≥ v̂ sign-relationship spot-check + Gan-Low lossless-shadow-voltage helper + measured ε (Wave 1)
+- [ ] 20-02-PLAN.md — RestrictedBranchFlow formulation (Gan-Low OPF-ε) + default-path regression (Wave 2)
+- [ ] 20-03-PLAN.md — assert_restriction_exact! AC-feasibility + optimality-loss certificate (Wave 3)
+- [ ] 20-04-PLAN.md — ac_dual_fallback_price nonconvex-AC-dual fallback + multi-start evidence (Wave 4)
+- [ ] 20-05-PLAN.md — Literate rung page + full-suite acceptance (Wave 5)
 
 ### Phase 21: MPC / Rolling-Horizon / Real-Time Pricing
 
