@@ -1,8 +1,10 @@
 # src/models/ac_oracle.jl
 #
-# SEAM: AC-exactness oracle post-processing (EXACT-01/02/03).
+# SEAM: AC-exactness oracle post-processing (EXACT-01/02/03); OVR-01/OVR-03 modification-gap
+# measurement (plan 20-01).
 # OWNER: plan 15-01 (recover_voltage_angles); plan 15-02 (assert_ac_exact!, added to this
-#        same file next).
+#        same file next); plan 20-01 (recover_lossfree_shadow_voltage, OVR-01/OVR-03
+#        modification-gap measurement).
 #
 # A NEW sibling to models/exactness.jl (NOT a modification of it). This file holds the pure
 # post-processing over an already-solved branch-flow point — no new JuMP variable, no solver
@@ -110,6 +112,124 @@ function recover_voltage_angles(ctx::ModelContext)
 end
 
 """
+    recover_lossfree_shadow_voltage(ctx::ModelContext) -> Matrix{Float64}
+
+Compute Gan, Li, Topcu & Low's (2015) loss-free "shadow" squared voltage `v̂_GL(s)`
+(Definition 3 / eq. (18) of *"Exact Convex Relaxation of Optimal Power Flow in Radial
+Networks,"* IEEE TAC 60(1):72–87) from an already-solved branch-flow `ModelContext`, and this
+project's `.planning/phases/20-overvoltage-capable-relaxation/20-RESEARCH.md` "Measuring ε"
+section.
+
+Pure POST-PROCESSING over an already-solved `(v, P, Q, l)` point — it creates no JuMP
+variable and invokes no solver, and writes nothing back to `ctx`. It reads
+`ctx.meta[:feeder]`, `ctx.meta[:T]`, and `ctx.meta[:pf_vars]` only. Returns an `(N, T)`
+`Matrix{Float64}` (`N = length(ctx.meta[:feeder].buses)`, `T = ctx.meta[:T]`).
+
+`v̂_GL(s)` is the squared voltage that WOULD result from the same power injections `s` if
+every branch's loss current `ℓ ≡ 0` (i.e. the lossless LinDistFlow voltage for the SAME
+dispatch). Lemma 1 (Gan-Low 2015) proves `v ≤ v̂_GL(s)` always — the loss-free shadow is
+always an UPPER bound on the true voltage — the OPPOSITE sign relationship from this
+project's EXISTING thesis exactness copy `v̂` (thesis 3.43/3.45), which is a LOWER-bound
+shadow (`v ≥ v̂`, spot-checked in `test/test_restricted_branch_flow.jl`'s first `@testitem`).
+These are two genuinely DISTINCT mechanisms; do not conflate them.
+
+Method (unrolling the branch-flow recursion against THIS project's actual `:Rp`/`:Rq`
+balance convention — loss charged at the child, `pin[j] − pout[j] = −inj[j]` — rather than
+RESEARCH.md's "Measuring ε" pseudo-code literally, which stated the accumulated-loss sign
+backwards relative to that convention; corrected here and re-derived from the balance
+equations directly, then validated by the Lemma-1 sanity check below): build a ROOTED
+parent/child tree via one BFS traversal from `feeder.root`. For each time `t`: (1) a
+REVERSE-BFS loss accumulation — for bus `i`, `LossIncl[i] :=` the branch entering `i`'s own
+`r·ℓ` PLUS the total `r·ℓ` accumulated over `i`'s entire downstream subtree (i.e. the closed
+subtree rooted at `i`, INCLUSIVE of the branch feeding it) — and the `x`-analog; (2) a forward
+recursion from the root — `v̂_GL[root] = v[root]`, and for each non-root bus `i` fed by its
+tree parent via branch `b` (impedance `r,x`), the loss-free flow equals the actual flow MINUS
+that closed-subtree loss: `P̌ = P[b] − LossInclR[i]`, `Q̌ = Q[b] − LossInclX[i]`, and
+`v̂_GL[i] = v̂_GL[parent] − 2·(r·P̌ + x·Q̌)` (the lossless LinDistFlow drop, thesis-adjacent to
+3.33 with the `+(r²+x²)·ℓ` term removed by construction). Unrolling the balance recursion
+`P[b*] = Σ_{m∈children(j)} P[m] + r_{b*}·ℓ_{b*} − inj[j]` (this project's convention, byte-
+identical for the lossless model with the SAME injections `inj[j]`) confirms `P[b*] − P̌[b*]`
+telescopes to exactly the total loss in the CLOSED subtree rooted at `j` (the branch entering
+`j` plus everything strictly below it) — hence the minus sign and the inclusive accumulation.
+
+Validation (threat T-20-02): a sign or accumulation bug here would silently produce a wrong
+`ε`. `test/test_restricted_branch_flow.jl`'s second `@testitem` sanity-checks Lemma 1
+(`v̂_GL ≥ v` everywhere) numerically on a solved `ACPowerFlow` context BEFORE trusting the
+measured `ε` for anything downstream.
+"""
+function recover_lossfree_shadow_voltage(ctx::ModelContext)
+    feeder = ctx.meta[:feeder]
+    T = ctx.meta[:T]
+    pv = ctx.meta[:pf_vars]
+    N = length(feeder.buses)
+
+    # Rooted parent/child tree via one BFS traversal from feeder.root. Unlike
+    # recover_voltage_angles's signed BIDIRECTIONAL adjacency (immediate neighbors only), this
+    # function needs to walk each bus's SUBTREE, so it keeps an explicit ROOTED tree: BFS visit
+    # `order` (root first), `children_of[i]` (tree children of bus i), and `branch_of_child[c]`
+    # (the branch connecting child c to its tree parent).
+    children = [Tuple{Int, Int}[] for _ in 1:N]
+    for (b, br) in enumerate(feeder.branches)
+        push!(children[br.from], (br.to, b))
+        push!(children[br.to], (br.from, -b))
+    end
+
+    order = Int[feeder.root]
+    children_of = [Int[] for _ in 1:N]
+    branch_of_child = Dict{Int, Int}()
+    visited = falses(N)
+    visited[feeder.root] = true
+    queue = [feeder.root]
+    while !isempty(queue)
+        i = popfirst!(queue)
+        for (j, bsigned) in children[i]
+            visited[j] && continue
+            visited[j] = true
+            push!(children_of[i], j)
+            branch_of_child[j] = abs(bsigned)
+            push!(order, j)
+            push!(queue, j)
+        end
+    end
+
+    v̂_GL = Matrix{Float64}(undef, N, T)
+    for t in 1:T
+        # (1) Reverse-BFS loss accumulation: LossInclR[i]/LossInclX[i] := total r·ℓ / x·ℓ over
+        # the CLOSED subtree rooted at i — the branch feeding i from its parent (own_r/own_x
+        # below) PLUS everything strictly downstream (the recursive sum over children_of[i]).
+        # The root has no feeding branch, so LossInclR/X[root] stays 0.
+        LossInclR = zeros(N)
+        LossInclX = zeros(N)
+        for i in reverse(order)
+            if i != feeder.root
+                b_own = branch_of_child[i]
+                br_own = feeder.branches[b_own]
+                LossInclR[i] += br_own.r * value(pv.l[b_own, t])
+                LossInclX[i] += br_own.x * value(pv.l[b_own, t])
+            end
+            for c in children_of[i]
+                LossInclR[i] += LossInclR[c]
+                LossInclX[i] += LossInclX[c]
+            end
+        end
+
+        # (2) Forward recursion from the root: the loss-free flow on the branch feeding bus i
+        # equals the actual flow MINUS the total loss in i's own closed subtree (see docstring
+        # derivation).
+        v̂_GL[feeder.root, t] = value(pv.v[feeder.root, t])
+        for i in order
+            i == feeder.root && continue
+            b = branch_of_child[i]
+            br = feeder.branches[b]
+            P̌ = value(pv.P[b, t]) - LossInclR[i]
+            Q̌ = value(pv.Q[b, t]) - LossInclX[i]
+            v̂_GL[i, t] = v̂_GL[br.from, t] - 2 * (br.r * P̌ + br.x * Q̌)
+        end
+    end
+    return v̂_GL
+end
+
+"""
     assert_ac_exact!(ctx_socp::ModelContext, ctx_ac::ModelContext;
                      rtol::Real = 1e-4, atol::Real = 1e-6) -> (; obj_gap, hours)
 
@@ -185,4 +305,4 @@ function assert_ac_exact!(
     return (; obj_gap, hours = rows)
 end
 
-export recover_voltage_angles, assert_ac_exact!
+export recover_lossfree_shadow_voltage, recover_voltage_angles, assert_ac_exact!
