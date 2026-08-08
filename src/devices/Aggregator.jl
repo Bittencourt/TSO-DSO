@@ -120,18 +120,26 @@ Roll the aggregator's member devices into the single nodal quantities the networ
  1. drives each member device once (`res = contribute!(d, ctx; T)`), summing their
     `res.p_inject` into one net active vector and their `res.utility` into one QuadExpr,
     and collecting their `res.vars` (validating `length(Pdc) ≥ T` first — the
-    temporal-consistency guard);
+    temporal-consistency guard). If a member device ALSO carries an optional `q_inject`
+    field (MESH-04, D-09 — today, only `FourQuadBESS`), its per-`t` reactive injection is
+    additionally summed into a `q_inject` accumulator via a `hasproperty` guard; a device
+    lacking the field contributes zero, so this accumulator is byte-identical to `zero`
+    when no such device is present;
  2. injects, per `t`, ONE net active `Σ_d p_inject_d[t] − P_dc[t]` into `:Rp` (3.22;
     inelastic demand is a negative parameter injection, A4) and ONE net reactive
-    `− P_dc[t]·tan(arccos φ)` into `:Rq` (3.23; DERs active-only, A3) at `agg.bus`;
+    `− P_dc[t]·tan(arccos φ) + Σ_d q_inject_d[t]` into `:Rq` (3.23 plus the D-10 additive
+    device `q_inject` term; DERs are active-only by default, A3, unless a device opts in
+    via `q_inject`) at `agg.bus`;
  3. adds the summed device utility to `ctx.meta[:objective]` via `add_to_objective!`
     (3.21, kept a `QuadExpr` so curvature is retained); and
  4. stashes the collected device vars under `ctx.meta[:agg_device_vars]` keyed by bus,
     so the assembly can run the post-solve battery-complementarity check.
 
 The member devices themselves write NOTHING to the residual/objective — the aggregator
-is the sole network-facing writer. Returns `(; vars, p_inject, utility)` (the aggregate
-device vars, the net active injection vector, and the summed utility).
+is the sole network-facing writer. Returns `(; vars, p_inject, q_inject, utility)` (the
+aggregate device vars, the net active injection vector, the net device-reactive-injection
+vector — `zero(AffExpr)` per `t` when no member device carries `q_inject`, MESH-04 D-09 —
+and the summed utility).
 """
 function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     # Temporal-consistency guard: the net active injection reads P_dc[t] for t = 1:T.
@@ -147,7 +155,10 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis eq. 3.23)
 
     # Accumulate the member devices' active injections and utilities (device-agnostic).
+    # q_inject (MESH-04, D-09) accumulates the OPTIONAL device reactive injection — absent
+    # means zero, so this stays zero(AffExpr) per t when no member device carries it.
     p_inject = AffExpr[zero(AffExpr) for _ in 1:T]
+    q_inject = AffExpr[zero(AffExpr) for _ in 1:T]
     utility = zero(QuadExpr)
     device_vars = Any[]
     for d in agg.devices
@@ -155,16 +166,23 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
         for t in 1:T
             p_inject[t] += res.p_inject[t]
         end
+        if hasproperty(res, :q_inject)
+            for t in 1:T
+                q_inject[t] += res.q_inject[t]
+            end
+        end
         utility += res.utility
         push!(device_vars, res.vars)
     end
 
     # ONE net active + ONE net reactive injection per (bus, t) — the aggregator is the
     # sole :Rp/:Rq writer (DEV-05). :Rp carries the DER/flexible-load injections minus
-    # the inelastic demand; :Rq is purely the power-factor reactive of that demand (A3).
+    # the inelastic demand; :Rq is the power-factor reactive of that demand (A3) PLUS
+    # the additive device q_inject sum (MESH-04, D-10 — purely additive on top of the
+    # untouched inelastic term; byte-identical to (3.23) alone when q_inject is zero).
     for t in 1:T
-        add_to_residual!(ctx, :Rp, agg.bus, t, p_inject[t] - agg.Pdc[t])   # (3.22)
-        add_to_residual!(ctx, :Rq, agg.bus, t, -agg.Pdc[t] * tanφ)         # (3.23)
+        add_to_residual!(ctx, :Rp, agg.bus, t, p_inject[t] - agg.Pdc[t])            # (3.22)
+        add_to_residual!(ctx, :Rq, agg.bus, t, -agg.Pdc[t] * tanφ + q_inject[t])    # (3.23) + D-10
     end
 
     # Σ U (thesis eq. 3.21) into the QuadExpr welfare accumulator.
@@ -174,7 +192,7 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
     append!(get!(store, agg.bus, Vector{Any}()), device_vars)
 
-    return (; vars = device_vars, p_inject, utility)
+    return (; vars = device_vars, p_inject, q_inject, utility)
 end
 
 export Aggregator, reactive_factor
