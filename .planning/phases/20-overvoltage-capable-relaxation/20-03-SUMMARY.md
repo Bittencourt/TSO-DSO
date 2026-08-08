@@ -249,6 +249,106 @@ exactly; no new network endpoint, auth path, file access, or schema change was i
 - Full-suite run: **2536 passed / 0 failed / 3 pre-existing broken / 2539 total** — FOUND
   (log tail: `Package | 2536 3 2539 15m27.0s`).
 
+## Addendum (orchestrator revision)
+
+**Date:** 2026-08-08 (same day, targeted revision pass after this plan's initial merge).
+
+**What changed and why (D-05 coherence):** the implementation above defined `ac_feasible`
+as "the restricted dispatch MATCHES the independently-solved AC-optimal dispatch" — i.e.
+`assert_restriction_exact!` literally required `all(row.exact for row in
+assert_ac_exact!(ctx_restricted, ctx_ac).hours)`. Under that definition,
+`ac_feasible = true` forces `optimality_loss ≈ 0` by construction: a restricted point can
+only pass certification if it happens to reproduce the AC-optimal dispatch exactly, which
+makes D-05's contract — "**one** certificate that certifies AC-feasibility **and** reports
+the optimality loss vs the unrestricted bound" — internally incoherent. The `optimality_loss`
+field only has meaning for a point that is feasible but NOT optimal; the original predicate
+structurally excluded that case from ever certifying.
+
+`assert_restriction_exact!` was revised to certify PHYSICAL AC-feasibility of the restricted
+solution itself, rather than dispatch-match with the independently-solved AC optimum:
+
+- **New certification gate (`ac_feasible`):** the SAME per-branch, per-hour cone-equality
+  residual `assert_socp_exact!` gates — `gap[b,t] = |value(l[b,t])·value(v[from_b,t]) −
+  (value(P[b,t])² + value(Q[b,t])²)|` — computed directly on `ctx_restricted` (reimplemented
+  inline rather than delegating to `assert_socp_exact!`, so this certificate owns its own
+  throw/report decision), against a SCALE-FREE bound `gap ≤ cone_atol + cone_rtol·max(|l·v|,
+  |P²+Q²|)`. A tight cone at a solved branch-flow point IS, by the model's own physics, a
+  genuine AC operating point (Gan-Low Theorem 2) — this is now the correctness bar the
+  certificate enforces, independent of global optimality.
+- **New tolerances (`cone_rtol = 5e-4`, `cone_atol = 2e-7`):** freshly measured on
+  `ctx_restricted`'s own cone residual on the EXACT-04 fixture (never copied from
+  `assert_socp_exact!`'s `1e-4`/`1e-6` defaults, per D-07/T-20-07). The measured floor
+  reproduces plan 20-02's finding EXACTLY: absolute floor `2.08e-8`, relative floor
+  `5.08e-5` (both at branch `b=2`, hour `t=19`) — confirming this certificate's independent
+  cone computation agrees with `assert_socp_exact!`'s internal one. Defaults are set ~10×
+  above that floor, mirroring the existing sizing discipline; at these defaults the
+  worst-branch-hour ratio on EXACT-04 is `≈0.051` (well inside the `≤1` pass bound).
+- **Demoted diagnostic (`matches_ac_optimum`, NEW field):** the original dispatch-match
+  check (`assert_ac_exact!(ctx_restricted, ctx_ac; rtol, atol)`, unchanged `rtol = 1e-3,
+  atol = 2e-5` — a genuinely different quantity from the new cone tolerances, kept as-is
+  since it was already honestly measured) is retained VERBATIM as a diagnostic field rather
+  than the certification gate. The full per-hour `hours` report and `obj_gap` are still
+  always returned.
+- **`price_provenance.status`** is now keyed on the new `ac_feasible` (physical-feasibility)
+  verdict, never on `matches_ac_optimum` — `:certified_convex_dual` iff the cone-tightness
+  predicate passes, `:cert_failed` otherwise.
+
+**Revised verdict on EXACT-04 (full fixture, `pv_scale = 1.2`):**
+`assert_restriction_exact!(ctx_restricted, ctx_ac; unrestricted_cost = cost_unrestricted)`
+now returns **`ac_feasible = true`** (the restricted solution's own cone is tight — a
+genuine branch-flow point), **`matches_ac_optimum = false`** (hours 7–15 still diverge from
+the independently-solved AC optimum, unchanged finding), and **`optimality_loss ≈ -1.4326`**
+(unchanged magnitude/sign: `cost_restricted − cost_unrestricted`, negative because
+`RestrictedBranchFlow`'s feasible set is a genuine subset of the unrestricted relaxation's,
+D-01). The prior implementation's honest empirical finding — OPF-m's `v̂_GL(s) ≤ v̄`
+constraint genuinely and causally binds during the high-PV window, confirmed via nonzero
+`:opfm_shadow_voltage` duals up to `-24.18` — is unchanged and fully preserved, just now
+correctly reported as a `matches_ac_optimum = false` diagnostic rather than an
+`ac_feasible = false` certification failure. `assert_socp_exact!` (PF-04) still independently
+certifies the same cone exact (`socp_maxgap = 2.08e-8`, plan 20-02) — this revision makes
+`assert_restriction_exact!` agree with that finding instead of contradicting it.
+
+**Additional test coverage added:** a synthetic-violation check in the fifth `@testitem` —
+an UNRESTRICTED `ConvexBranchFlow` context solved on the same EXACT-04 fixture with
+`rtol_exact = 1.0` (neutralizing PF-04 so the genuinely cone-INEXACT solution is returned
+rather than refused) is passed to the revised `assert_restriction_exact!` and correctly
+fails the new `ac_feasible` gate (`report = true` returns `ac_feasible = false`,
+`price_provenance.status = :cert_failed`; the default `report = false` call throws) —
+confirming the certificate actually gates cone-tightness rather than trivially passing any
+solved context. The sixth `@testitem` (structural T-mismatch throw/report polarity) is
+unaffected by the semantic change and was left unmodified; both its assertions were
+independently re-verified to still hold under the revised implementation.
+
+**Verification:**
+- Standalone `Test.jl` script (`--project=.`) exercising the positive path (EXACT-04
+  restricted solve, `ac_feasible = true`, `matches_ac_optimum = false`, `optimality_loss ≈
+  -1.4326`), the synthetic violation (unrestricted inexact context, `ac_feasible = false`),
+  and the structural T-mismatch guard (throws unconditionally under both `report = false`
+  and `report = true`): **all assertions PASSED**.
+- Full suite (`julia --project=. -e 'import Pkg; Pkg.test()'`, background, 12m21.1s):
+  **2539 passed / 0 failed / 3 pre-existing broken / 2542 total** — reconciles exactly
+  against this plan's original 2536/0/3/2539 baseline plus the 3 new synthetic-violation
+  `@test` assertions this revision added. Zero regressions; the same 3 pre-existing broken
+  items are unchanged (`test_ac_oracle.jl` and the rest of `test_restricted_branch_flow.jl`
+  remain green in the same run).
+
+**Files modified (this revision):**
+- `src/models/restriction_exactness.jl` — certification predicate, tolerance parameters,
+  docstring, and header comment rewritten; commit `512aa9d`
+  (`fix(20-03): certify physical AC-feasibility instead of dispatch-match`).
+- `test/test_restricted_branch_flow.jl` — fifth `@testitem`'s assertions and module-level
+  comment updated to the revised semantics, plus the new synthetic-violation check; commit
+  `59f49fd` (`fix(20-03): adapt certificate tests to physical-feasibility semantics`).
+
+**Impact:** D-05's contract is now internally coherent — the certificate can certify a
+feasible-but-suboptimal restricted point (the common, expected case whenever OPF-m's
+restriction genuinely binds) while still reporting exactly how far that point's welfare and
+dispatch diverge from the unrestricted bound and the true AC optimum, respectively. Plans
+20-04 (AC-dual fallback) and 20-05 (literate page) should cite `ac_feasible` (physical
+feasibility) as the fallback trigger per D-09, and `matches_ac_optimum`/`optimality_loss` as
+the two separate quantitative findings to narrate — not the reverse.
+
 ---
 *Phase: 20-overvoltage-capable-relaxation*
 *Completed: 2026-08-08*
+*Revised: 2026-08-08 (orchestrator targeted-revision pass — see Addendum above)*
