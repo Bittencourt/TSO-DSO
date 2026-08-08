@@ -62,6 +62,10 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
   - `pag` — the ACTIVE coupling container `pag[j,t]` (`j` over the load nodes, `t` over `1:T`),
     each pinned by `:Rp[j] + pag[j,t] == 0`. The SOLE variable per `(j,t)` whose linear
     objective coefficient the ADMM loop updates.
+  - `qag` — the REACTIVE coupling container, mirroring `pag`'s shape `(load_nodes, T)`.
+    `nothing` under `OFF`/`CERTIFIED` (no live reactive coupling block exists); under `LIVE`,
+    the SAME `qag_dso` container stashed at `ctx.meta[:qag_dso]`, carrying its own
+    `0.5·ρ_q·qag[j,t]²` quadratic objective penalty, mutated in place by [`set_rho_q!`](@ref).
   - `p_import` — the FREE-SIGN active frontier exchange `p_import[t]` at `feeder.root` (>0 buy,
     <0 sell surplus to the MEM at λ₀); priced export is the SOC-exactness enabler (PF-04).
   - `load_nodes::Vector{Int}` — the non-root buses carrying an aggregator (== every non-root bus,
@@ -74,10 +78,11 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
     holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
   - `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
 """
-struct DsoOpt{P, PI, F}
+struct DsoOpt{P, Q, PI, F}
     model::Model
     ctx::ModelContext
     pag::P
+    qag::Q
     p_import::PI
     load_nodes::Vector{Int}
     T::Int
@@ -320,17 +325,22 @@ function build_dso_opt(
     # (5) FIXED-penalty objective built ONCE (thesis 3.47). The pag_dso variables carry NO
     # linear term yet (default zero coupling price); solve_dso! sets each linear coefficient
     # per iteration via set_objective_coefficient — the ρ/2 quadratic below is never touched.
-    @objective(
-        model,
-        Min,
+    # Under LIVE ONLY, an ADDITIONAL 0.5·ρ_q·Σ qag_dso[j,t]² term is folded into the SAME
+    # accumulator BEFORE the single @objective call, so OFF/CERTIFIED literally never construct
+    # or touch the ρ_q term (byte-identical built objective under those two modes).
+    obj_expr =
         sum(λ₀[t] * p_import[t] for t in 1:T) +
         0.5 * ρ * sum(pag_dso[j, t]^2 for j in load_nodes, t in 1:T)
-    )
+    if mode == LIVE
+        obj_expr += 0.5 * ρ_q * sum(qag_dso[j, t]^2 for j in load_nodes, t in 1:T)
+    end
+    @objective(model, Min, obj_expr)
 
     return DsoOpt(
         model,
         ctx,
         pag_dso,
+        mode == LIVE ? qag_dso : nothing,
         p_import,
         load_nodes,
         T,
@@ -445,4 +455,40 @@ function set_rho!(dso::DsoOpt, ρ::Real)
     return dso
 end
 
-export DsoOpt, build_dso_opt, solve_dso!, set_rho!
+"""
+    set_rho_q!(dso::DsoOpt, ρ_q::Real) -> DsoOpt
+
+Mutate the FIXED quadratic penalty weight of the built-ONCE `LIVE` reactive coupling block in
+place — the exact `set_rho!` PEER for the reactive `qag` block (MESH-05, plan 19-07's outer
+μ-dual-ascent loop adapts `ρ_q` independently of `ρ`). DSO-OPT under `LIVE` carries an
+ADDITIONAL `Min ... + (ρ_q/2)·Σ_{j,t} qag[j,t]²` term (see `build_dso_opt`'s objective
+assembly), so the diagonal quadratic coefficient of every `qag[j,t]²` is `+0.5ρ_q`. Flatten the
+`qag` coupling container to a `Vector{VariableRef}` and set them all in one BATCH call, mirroring
+`set_rho!`'s exact shape:
+
+    set_objective_coefficient(dso.model, v, v, fill(0.5ρ_q, length(v)))
+
+`num_variables`/`num_constraints` are INVARIANT (no rebuild) — a mutate-then-solve is EQUIVALENT
+to a fresh build at the new `ρ_q` (identical mechanism to `set_rho!`).
+
+Throws `ArgumentError` if `dso.qag === nothing` — calling this on an `OFF`/`CERTIFIED`-built
+`DsoOpt` (no live reactive coupling block exists) is a caller error, fail loud rather than
+silently no-op. Returns `dso`.
+"""
+function set_rho_q!(dso::DsoOpt, ρ_q::Real)
+    dso.qag !== nothing || throw(
+        ArgumentError(
+            "set_rho_q!: this DsoOpt was built without a live reactive coupling block " *
+            "(reactive_consensus != :live); nothing to update",
+        ),
+    )
+    # Flatten the qag_dso DenseAxisArray (j over load_nodes × t) to a flat Vector{VariableRef},
+    # mirroring set_rho!'s exact flatten-then-one-call shape.
+    v = VariableRef[dso.qag[j, t] for j in dso.load_nodes for t in 1:dso.T]
+    # Diagonal quadratic coeff of every qag[j,t]² set to +0.5ρ_q (Min objective, penalty added).
+    # BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    set_objective_coefficient(dso.model, v, v, fill(0.5 * ρ_q, length(v)))
+    return dso
+end
+
+export DsoOpt, build_dso_opt, solve_dso!, set_rho!, set_rho_q!
