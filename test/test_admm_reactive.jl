@@ -184,3 +184,183 @@ end
         @test max_slack <= 1e-6   # REACT-02: certified :balance_q, no hidden slack
     end
 end
+
+# ==============================================================================================
+# Phase 19 (MESH-04/MESH-05, plan 19-08 Task 2): the phase acceptance-gate items for the LIVE
+# reactive dual-ascent mechanism (`reactive_consensus = :live`), on the primary, CI-gated
+# `Phase19Fixtures`-built 2-bus + FourQuadBESS fixture (D-13: NEVER IEEE-13 for this gate --
+# IEEE-13 4Q-BESS supporting evidence is a SEPARATE, quarantined item in
+# test/test_ieee123_admm.jl). `setup = [Phase6Fixtures, Phase19Fixtures]` in THIS ORDER on every
+# item below -- `Phase19Fixtures`'s own `using ..Phase6Fixtures` (see fixtures_phase19.jl's
+# header) requires `Phase6Fixtures` to already be `ensure_evaled` first.
+#
+# Every item name below contains "live" (independently filterable) AND "reactive" (so the
+# existing `occursin("reactive", ti.name)` quick-run filter, 16-VALIDATION.md, continues to
+# select the FULL reactive-consensus family: OFF/CERTIFIED items above, LIVE items here).
+# ==============================================================================================
+
+@testitem "admm reactive: :live mode converges on the 4Q-BESS fixture without hitting the fail-loud cap (reactive, live)" setup =
+    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase19Fixtures.build_two_bus_aggregators_4q(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    # `solve_admm` THROWS loudly on the maxiter cap (never returns a non-consensus iterate) --
+    # simply reaching this line without an exception IS the convergence proof.
+    res = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ,
+        allow_export = true,
+        reactive_consensus = :live,
+        maxiter = 500,
+    )
+
+    @test res.iters < 500          # converged strictly before the fail-loud cap
+    # D-11 stable-key contract: LIVE ALWAYS populates μ/q_devices (never `nothing`, unlike
+    # OFF/CERTIFIED).
+    @test res.μ !== nothing
+    @test res.q_devices !== nothing
+    @test haskey(res.q_devices, 2)               # bus 2's FourQuadBESS trajectory is present
+    @test length(res.q_devices[2]) == Th
+end
+
+@testitem "admm reactive: :live welfare/λ/μ cross-validated against centralized solve_welfare, each own measured tolerance (reactive, live)" setup =
+    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+    using JuMP: dual
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase19Fixtures.build_two_bus_aggregators_4q(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    # Centralized ground truth via the file-scope-safe `:cone`-collision workaround (see
+    # fixtures_phase19.jl's header -- solve_welfare itself cannot run directly on a
+    # FourQuadBESS-bearing aggregator today).
+    ctx_c, obj_c, balance_p_c, balance_q_c = Phase19Fixtures.centralized_welfare_4q(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    λ_c = dual.(balance_p_c[2, :])
+    μ_c = balance_q_c === nothing ? zeros(Th) : dual.(balance_q_c[2, :])
+
+    res = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ,
+        allow_export = true,
+        reactive_consensus = :live,
+        maxiter = 500,
+    )
+
+    # D-14 measurement-before-golden (T-19-18): each tolerance below was MEASURED independently
+    # on THIS exact fixture across a 5-seed sweep (see fixtures_phase19.jl's header docstring
+    # for the full table) -- NEVER one shared constant across welfare/λ/μ.
+    #   welfare : atol = 1e-4   (measured max |Δwelfare| = 2.368e-5, ≈4.2x margin)
+    @test isapprox(res.welfare, obj_c; atol = 1e-4)
+    #   λ       : atol = 5e-5   (measured max |Δλ|₂       = 1.519e-5, ≈3.3x margin)
+    @test isapprox(vec(res.λ), λ_c; atol = 5e-5)
+    #   μ       : atol = 1e-7   (measured max |Δμ|₂       = 1.610e-8, ≈6.2x margin) --
+    #             DELIBERATELY ABSOLUTE, never relative: μ itself is ≈0 on this near-lossless,
+    #             uncongested fixture (D-03's honest degeneracy note, confirmed empirically in
+    #             Task 1's measurement -- both the centralized dual(:balance_q) and the LIVE
+    #             internal μq converge to ≈1e-8, an honest "no genuine reactive network cost to
+    #             price here" feature, not a bug).
+    @test isapprox(vec(res.μ), μ_c; atol = 1e-7)
+
+    # D-03 CROSS-VALIDATION SCOPE: q trajectories are DELIBERATELY excluded from this gate --
+    # when μ ≈ 0 (as measured here) a FourQuadBESS's own P-Q split inside its apparent-power
+    # cone is non-unique/degenerate (many (p,q) splits are equally optimal at a ≈0 reactive
+    # price); pinning a non-unique quantity would be meaningless. This omission is intentional,
+    # not an oversight -- the liveness item below covers q_devices' OWN behavior separately.
+end
+
+@testitem "admm reactive: :live mechanism is genuinely live -- a differing input yields differing μ/q_devices, never a static no-op (reactive, live)" setup =
+    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    # LinearAlgebra is NOT a declared test/[deps] entry anywhere in this project (grep-verified;
+    # no other test file imports it) -- a per-testitem sandbox module resolves `using X` against
+    # the isolated TestItemRunner test environment, so `using LinearAlgebra: norm` throws
+    # `Package LinearAlgebra not found in current path` there even though it resolved fine in an
+    # ad-hoc `--project=.` script. A plain Base-only 2-norm avoids adding a new test dependency
+    # for one helper function (Rule 1/3 fix — a blocking issue caused directly by this task's own
+    # new test code).
+    norm(x) = sqrt(sum(abs2, x))
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    # The ONLY difference between the two runs: the seed feeding
+    # `build_two_bus_aggregators_4q`'s `generate_profiles` draw (CR-01's own suggested
+    # perturbation family) -- a genuinely different demand/PV profile shifts the aggregator's
+    # net reactive injection (the `qag_live` PINNING target, `qag_live == qag + q_inject`), so a
+    # live mechanism MUST respond even though μ itself stays near-degenerate on this fixture
+    # (see the cross-validation item above).
+    aggs1 =
+        Phase19Fixtures.build_two_bus_aggregators_4q(feeder; seed = Phase6Fixtures.SEED_2BUS)
+    aggs2 = Phase19Fixtures.build_two_bus_aggregators_4q(
+        feeder;
+        seed = Phase6Fixtures.SEED_2BUS + 1,
+    )
+
+    res1 = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs1;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ,
+        allow_export = true,
+        reactive_consensus = :live,
+        maxiter = 500,
+    )
+    res2 = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs2;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ,
+        allow_export = true,
+        reactive_consensus = :live,
+        maxiter = 500,
+    )
+
+    # T-19-19 liveness guard: stack μ AND q_devices[2] into ONE comparison vector per run. The
+    # STACKED vector is what must genuinely differ -- μ's OWN subvector legitimately stays near
+    # its ≈1e-8 degenerate floor on this fixture (D-03), so gating on μ alone would be a
+    # meaningless/flaky check; q_devices[2] is where the seed-driven signal actually shows up
+    # (measured ≈0.016 apart for adjacent seeds -- see below), which is exactly what a live,
+    # input-reactive mechanism should produce.
+    stacked1 = vcat(vec(res1.μ), res1.q_devices[2])
+    stacked2 = vcat(vec(res2.μ), res2.q_devices[2])
+
+    # Measured floor (this task's own sanity check, verified this session): two IDENTICAL-seed
+    # runs (aggs2 built with `seed = Phase6Fixtures.SEED_2BUS`, matching aggs1) reproduce
+    # BIT-FOR-BIT (norm diff == 0.0 exactly), correctly FAILING both assertions below -- i.e.
+    # this liveness gate is NOT vacuously true. That check was reverted immediately after
+    # confirming the expected failure; the committed code below always uses the two DISTINCT
+    # seeds above. 1e-3 sits comfortably below the measured ≈0.016 seed-to-seed signal and
+    # comfortably above the exact-0.0 identical-seed floor.
+    @test !isapprox(stacked1, stacked2; atol = 1e-3)
+    @test norm(stacked1 .- stacked2) > 1e-3
+end
