@@ -10,7 +10,8 @@
 # distinguishing `:q` key (a `PVBattery`'s vars never carry `:q` and are never touched
 # here; `welfare_solve.jl`'s OLD check is symmetrically tightened to skip anything WITH
 # `:q`). Its `rtol`/`atol` defaults are MEASURED against this device's own Clarabel-solved
-# noise floor on a benign fixture (D-07) — never copied from `assert_battery_complementarity!`'s
+# noise floor at the COMMITTED production fixtures' per-unit scales (D-07; re-measured
+# for review finding CR-01) — never copied from `assert_battery_complementarity!`'s
 # `Pmax²`-scaled constant (certificate-laundering guard, T-19-10). Throws by default
 # (`error`, never `@assert`); a `report = true` kwarg neutralizes the throw into a `@warn`
 # without any other `src/` edit (D-06), so the honest negative-price + grid-charging
@@ -20,7 +21,7 @@
 using JuMP
 
 """
-    assert_4q_complementarity!(ctx::ModelContext; rtol::Real = 1e-6, atol::Real = 1e-6,
+    assert_4q_complementarity!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1e-8,
                                 T::Int = ctx.meta[:T], report::Bool = false)
         -> maxratio::Float64
 
@@ -59,41 +60,59 @@ so a caller can inspect HOW badly a fixture violated the certificate without an 
 Is a no-op (`maxratio` stays `0.0`) when `ctx.meta[:agg_device_vars]` is absent or contains
 no 4Q device.
 
-# Tolerance provenance (D-07, T-19-10 — measurement, not a copy)
+# Tolerance provenance (D-07, T-19-10 — measurement, not a copy; RE-MEASURED for CR-01)
 
 `assert_battery_complementarity!`'s relative tolerance `τ` (`1e-6` QP-path / `1e-3` SOCP-
 path, scaled by `PVBattery`'s `Pmax²`) is a DIFFERENT device's constant, calibrated against
 a DIFFERENT device's numerical behavior — reusing it here would be certificate-laundering
 (the v3.0 standing bar: every new mathematical regime earns its OWN measured tolerance).
-This function's `rtol`/`atol` defaults were instead measured directly against a benign,
-strictly-App.-C-dominated `FourQuadBESS` fixture (one device, standalone `ModelContext`,
-`SOCP()`/Clarabel, `@objective(m, Max, res.utility - λ_test*sum(res.p_inject))` with a
-POSITIVE in-band `λ_test` swept across 5 representative values spanning the device's own
-`λ_min..λ_max` band — no grid-charging incentive, no negative price). The observed
-Clarabel-solved `p_ch[t]·p_dch[t]` noise floor at that benign optimum, on a device with
-`Pch_max=4, Pdch_max=5` (`scale² = 25`):
+This function's `rtol`/`atol` defaults are measured against the Clarabel-solved
+`p_ch[t]·p_dch[t]` noise floor at PRODUCTION-FIXTURE per-unit scales (the phase-19 code
+review's CR-01: the ORIGINAL defaults `rtol = atol = 1e-6` were measured only on a benign
+standalone device with `Pch_max=4, Pdch_max=5` — where the relative term `rtol·scale² =
+2.5e-5` dominates — so at the committed per-unit fixtures, `scale² = 4e-4` (2-bus 0.02 pu)
+and `scale² = 6.25e-6` (IEEE-13 0.0025 pu), the flat `atol = 1e-6` floor dominated by up to
+~5 orders of magnitude and legs of ~40% of the device rating on each side would have passed
+the certificate silently).
 
-    λ_test=1.5  max|p_ch·p_dch| ≈ 2.53e-9   (relative to scale²: ≈ 1.01e-10)
-    λ_test=2.5  max|p_ch·p_dch| ≈ 1.82e-9   (relative to scale²: ≈ 7.28e-11)
-    λ_test=4.0  max|p_ch·p_dch| ≈ 9.67e-10  (relative to scale²: ≈ 3.87e-11)
-    λ_test=6.0  max|p_ch·p_dch| ≈ 5.09e-10  (relative to scale²: ≈ 2.04e-11)
-    λ_test=8.5  max|p_ch·p_dch| ≈ 2.91e-10  (relative to scale²: ≈ 1.16e-11)
+Re-measured noise floors (2026-08-08, CR-01 fix): the centralized 2-bus + 4Q committed
+fixture (`ConvexBranchFlow`, `T = 24`, `λ₀ = 4.0`, seeds `20260719/20260721/20260723`),
+solved at three device scales sharing the committed fixture's own `Smax/Emax/soc0`-to-
+`Pch_max` ratios:
 
-i.e. the absolute noise floor sits ≤ ~2.6e-9 and the scale-relative noise floor sits
-≤ ~1.1e-10 across the swept band. The chosen defaults `atol = 1e-6` and `rtol = 1e-6`
-clear these with ~3 orders of margin (`atol`) and ~3-4 orders of margin (`rtol` on
-`scale²`) respectively (mirrors `assert_socp_exact!`'s "an order below/above the measured
-floor" sizing discipline) while remaining independent of, and TIGHTER than,
-`assert_battery_complementarity!`'s SOCP-path `τ = 1e-3` — this certificate is not a
-loosened copy of that one.
+    scale = 0.1    pu  max p_ch·p_dch ≈ 4.2e-8 .. 6.3e-8   (rel to scale²: 4.2e-6 .. 6.3e-6)
+    scale = 0.02   pu  max p_ch·p_dch ≈ 1.2e-9 .. 1.8e-9   (rel to scale²: 2.9e-6 .. 4.4e-6)
+    scale = 0.0025 pu  max p_ch·p_dch ≈ 1.9e-10 .. 6.2e-10 (rel to scale²: 3.1e-5 .. 9.9e-5)
+
+i.e. the IPM noise floor at a realistic (network-priced, near-indifference) optimum has a
+SCALE-RELATIVE component ≤ ~6.3e-6·scale² (dominant at scales ≥ 0.02 pu) plus an ABSOLUTE
+component ≤ ~6.2e-10 (dominant at the 0.0025 pu scale, where the relative floor rises to
+~1e-4·scale²). The chosen defaults size EACH term ~an order above its OWN measured floor
+(mirrors `assert_socp_exact!`'s sizing discipline):
+
+  - `rtol = 1e-4` — ≈16× above the measured relative floor (6.3e-6), and 10× TIGHTER than
+    `assert_battery_complementarity!`'s SOCP-path `τ = 1e-3` on the scale-relative term
+    (this certificate is not a loosened copy of that one);
+  - `atol = 1e-8` — ≈16× above the measured absolute floor (6.2e-10), 100× tighter than the
+    pre-CR-01 `1e-6`, and now a genuine small-scale noise guard rather than the dominant
+    term: at the committed fixture scales the certificate flags simultaneous legs above
+    ~1–4% of the device rating (vs ~40% pre-CR-01).
+
+(The ORIGINAL benign standalone-device sweep — `@objective(m, Max, res.utility -
+λ_test*sum(res.p_inject))`, positive in-band `λ_test`, `scale² = 25` — observed floors of
+≤ ~2.6e-9 absolute / ≤ ~1.1e-10 relative; that regime is strictly App.-C-dominated with both
+legs pinned hard to one face, and UNDER-estimates the noise at a realistic network optimum
+where the effective price sits near the device's indifference point and BOTH legs are
+interior-near-zero — which is why the defaults are calibrated against the production-fixture
+measurement above instead.)
 
 Reads `ctx.meta[:agg_device_vars]` and `ctx.meta[:T]`. Uses an explicit `error(...)` (never
 `@assert`, elided under `-O`), per project convention (`src/core/status.jl`).
 """
 function assert_4q_complementarity!(
     ctx::ModelContext;
-    rtol::Real = 1e-6,
-    atol::Real = 1e-6,
+    rtol::Real = 1e-4,
+    atol::Real = 1e-8,
     T::Int = ctx.meta[:T],
     report::Bool = false,
 )

@@ -175,7 +175,7 @@ end
                d_j::Union{Nothing,AbstractVector} = nothing,
                ρ_q::Union{Nothing,Real} = nothing,
                check_battery::Bool = true, τ_batt::Real = 1e-6, strict::Bool = true,
-               check_4q::Bool = false, rtol_4q::Real = 1e-6, atol_4q::Real = 1e-6)
+               check_4q::Bool = false, rtol_4q::Real = 1e-4, atol_4q::Real = 1e-8)
         -> (; pag::Vector{Float64}, utility::Float64)
 
 Re-solve the AGR-OPT subproblem for one ADMM iteration (RESEARCH Pattern 3, thesis 3.46)
@@ -246,8 +246,8 @@ function solve_agr!(
     τ_batt::Real = 1e-6,
     strict::Bool = true,
     check_4q::Bool = false,
-    rtol_4q::Real = 1e-6,
-    atol_4q::Real = 1e-6,
+    rtol_4q::Real = 1e-4,
+    atol_4q::Real = 1e-8,
 )
     length(λ_j) == agr.T || throw(
         ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"),

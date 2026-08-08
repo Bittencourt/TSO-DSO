@@ -276,6 +276,49 @@ end
     @test TSODSO.assert_battery_complementarity!(ctx; τ = 1e-9) === nothing
 end
 
+@testitem "fourquadbess: assert_4q_complementarity! defaults are scale-aware at per-unit device scale (CR-01)" tags =
+    [:fourquadbess, :complementarity] begin
+    using TSODSO, JuMP
+
+    # CR-01 regression (phase-19 code review): the ORIGINAL flat `atol = 1e-6` floor dominated
+    # the `atol + rtol·scale²` tolerance at the committed per-unit fixture scales (scale² = 4e-4
+    # on the 2-bus fixture, 6.25e-6 on the IEEE-13 one), so simultaneous legs of up to ~40% of
+    # an IEEE-13-scale device's rating slid under the certificate. The re-measured defaults
+    # (rtol = 1e-4, atol = 1e-8 — see the certificate's tolerance-provenance docstring) must
+    # FLAG exactly those escapes while still clearing the measured production noise floor.
+    #
+    # Harness: pin p_ch/p_dch at a chosen leg magnitude via EQUALITY CONSTRAINTS — never
+    # `fix(...; force = true)`, which DELETES the variable bounds the certificate recovers the
+    # device scale from (`upper_bound(v.p_ch[1])`).
+    function pinned_ctx(pmax, leg)
+        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        ctx = TSODSO.ModelContext(model)
+        T = 2
+        ctx.meta[:T] = T
+        p_ch = @variable(model, [t = 1:T], lower_bound = 0.0, upper_bound = pmax)
+        p_dch = @variable(model, [t = 1:T], lower_bound = 0.0, upper_bound = pmax)
+        q = @variable(model, [t = 1:T])
+        @constraint(model, [t = 1:T], p_ch[t] == leg)
+        @constraint(model, [t = 1:T], p_dch[t] == leg)
+        @constraint(model, [t = 1:T], q[t] == 0.0)
+        @objective(model, Max, 0.0)
+        TSODSO.assert_solved!(model; dual = false, allow_local = false)
+        store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
+        append!(get!(store, 2, Vector{Any}()), [(; p_ch, p_dch, q)])
+        return ctx
+    end
+
+    # (a) IEEE-13 device scale (Pch_max = 0.0025), legs at 40% of rating — the review's cited
+    #     escape (product 1e-6 vs old tol ≈ 1e-6, ratio ≈ 1): now ratio ≈ 94, must THROW.
+    @test_throws ErrorException TSODSO.assert_4q_complementarity!(pinned_ctx(0.0025, 1e-3))
+    # (b) 2-bus device scale (Pch_max = 0.02), legs at 5% of rating — the review's other cited
+    #     escape: now ratio ≈ 20, must THROW.
+    @test_throws ErrorException TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-3))
+    # (c) the measured production noise-floor magnitude still PASSES: per-leg ~1e-5 at the
+    #     2-bus scale (product ~1e-10, below the atol = 1e-8 machine-noise guard).
+    @test TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-5)) <= 1.0
+end
+
 @testitem "fourquadbess: assert_4q_complementarity! throws on the honest D-08 boundary; report=true neutralizes it" tags =
     [:fourquadbess, :complementarity] begin
     using TSODSO, JuMP
