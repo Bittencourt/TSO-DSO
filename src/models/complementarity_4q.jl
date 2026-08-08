@@ -106,6 +106,14 @@ where the effective price sits near the device's indifference point and BOTH leg
 interior-near-zero — which is why the defaults are calibrated against the production-fixture
 measurement above instead.)
 
+CALL-SITE NOTE — ADMM final consolidation: these defaults are sized for CENTRALIZED (strict,
+un-penalized) solves. `solve_admm`'s final consolidation re-solve — converged prices, the
+ρ-penalty still in the AGR objective, `strict = false` — co-activates the optimal face harder
+(measured: a DETERMINISTIC ≈1.41e-8 product on the IEEE-13 4Q fixture, ≈2.3e-3·scale²), so
+that call site passes the interior-point-loosened `rtol_4q = 1e-3, atol_4q = 1e-7` explicitly,
+mirroring exactly how `assert_battery_complementarity!` gets `τ_batt = 1e-3` there instead of
+its QP-tight `1e-6` default (see `solve_admm.jl`'s consolidation comment).
+
 Reads `ctx.meta[:agg_device_vars]` and `ctx.meta[:T]`. Uses an explicit `error(...)` (never
 `@assert`, elided under `-O`), per project convention (`src/core/status.jl`).
 """

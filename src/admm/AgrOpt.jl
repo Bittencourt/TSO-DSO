@@ -205,8 +205,11 @@ After the coefficient update(s) it:
     and
   - (NEW, MESH-04/MESH-05) when `check_4q = true`, in the SAME post-solve block, runs
     [`assert_4q_complementarity!`](@ref)`(agr.ctx; rtol = rtol_4q, atol = atol_4q, T = agr.T)` —
-    the 4Q-BESS peer certificate (plan 19-05), passed through with the SAME measured defaults
-    that plan pinned (never invented anew here).
+    the 4Q-BESS peer certificate (plan 19-05). The `rtol_4q`/`atol_4q` DEFAULTS mirror the
+    certificate's own measured centralized-path defaults; `solve_admm`'s FINAL consolidation
+    passes the interior-point-loosened `rtol_4q = 1e-3, atol_4q = 1e-7` instead (the exact
+    `τ_batt = 1e-3` discipline — see the τ_batt paragraph below and `solve_admm`'s
+    consolidation comment for the measurement).
 
 `check_battery` / `τ_batt` — the App. C complementarity is a property of the CORRECTLY-PRICED
 optimum, NOT of an arbitrary intermediate ADMM iterate. Mid-loop the coupling price `λ_j` is

@@ -597,6 +597,17 @@ function solve_admm(
     #     priced optimum, with the interior-point τ_batt = 1e-3 (Clarabel is an IPM that
     #     co-activates the optimal face, matching the SOCP-path τ in `solve_welfare`; the QP-tight
     #     1e-6 under-tolerances the converged point at IEEE-13 scale).
+    #   • the 4Q certificate (check_4q, below) runs with the SAME interior-point loosening
+    #     discipline as τ_batt: rtol_4q = 1e-3 / atol_4q = 1e-7 instead of the certificate's
+    #     tight centralized-path defaults (1e-4 / 1e-8). MEASURED (CR-01 follow-up, 2026-08-08):
+    #     at THIS consolidation re-solve — converged prices, ρ-penalty in the objective,
+    #     strict = false — the IEEE-13 4Q fixture's p_ch·p_dch lands DETERMINISTICALLY at
+    #     ≈1.41e-8 (scale = 0.0025, i.e. rel ≈2.3e-3·scale²), an order above the centralized
+    #     noise floor the tight defaults are sized for, for exactly the reason τ_batt is 1e-3
+    #     here and not 1e-6: the IPM co-activates the optimal face harder under the penalty.
+    #     The loosened pair clears that measurement with ≈7.5× margin (tol ≈ 1.06e-7 at the
+    #     0.0025 scale) while still flagging simultaneous legs above ~13% (IEEE-13) / ~3.5%
+    #     (2-bus) of the device rating — versus the ~40% escape CR-01 fixed.
     #   • DSO-OPT with check_exact = true: the PF-04 SOC exactness gate (assert_socp_exact!).
     #
     # `strict = false` on BOTH tolerates the conic backend's BENIGN solver LABEL: under the converged
@@ -642,6 +653,8 @@ function solve_admm(
                 τ_batt = 1e-3,
                 strict = false,
                 check_4q = has_4q_by_bus[j],
+                rtol_4q = 1e-3,
+                atol_4q = 1e-7,
             )
         else
             solve_agr!(
@@ -653,6 +666,8 @@ function solve_admm(
                 τ_batt = 1e-3,
                 strict = false,
                 check_4q = has_4q_by_bus[j],
+                rtol_4q = 1e-3,
+                atol_4q = 1e-7,
             )
         end
         a[j] = r.pag
