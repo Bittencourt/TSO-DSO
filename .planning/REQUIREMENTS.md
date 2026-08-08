@@ -94,12 +94,12 @@ genuine reactive decision variable and make the v2.1 reactive machinery live.
       unrecoverable → the SOCP value is reported as a valid lower bound with the inexactness as a
       first-class finding (report-don't-throw). A new certificate — the per-branch
       `assert_socp_exact!` alone is structurally blind to loop inconsistency.
-- [ ] **MESH-04**: A **4Q-BESS device** exposes sign-free active and reactive decision variables
+- [x] **MESH-04**: A **4Q-BESS device** exposes sign-free active and reactive decision variables
       inside an inverter apparent-power cone `p² + q² ≤ S²max`, flowing device → aggregator →
       `:Rq` residual; the existing no-binaries complementarity argument (`p_ch·p_dch = 0` at the
       optimum) is **re-derived for the 4Q case or replaced by a hard post-solve check** — never
       silently inherited.
-- [ ] **MESH-05**: The v2.1 reactive machinery goes **live**: a reactive dual-ascent step (μ-ascent
+- [x] **MESH-05**: The v2.1 reactive machinery goes **live**: a reactive dual-ascent step (μ-ascent
       on `:balance_q` using the `qag_dso`/`reactive_consensus` scaffolding) converges in the ADMM
       loop on a fixture with 4Q-BESS present, cross-validated against the centralized solve, with
       its own two-block convergence/stopping treatment (not the single-block Boyd rule as-is).
@@ -178,8 +178,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MESH-01 | Phase 23 | Pending |
 | MESH-02 | Phase 23 | Pending |
 | MESH-03 | Phase 23 | Pending |
-| MESH-04 | Phase 19 | Pending |
-| MESH-05 | Phase 19 | Pending |
+| MESH-04 | Phase 19 | Complete |
+| MESH-05 | Phase 19 | Complete |
 | MESH-06 | Phase 23 | Pending |
 | INT-01 | Phase 24 | Pending |
 | INT-02 | Phase 24 | Pending |
