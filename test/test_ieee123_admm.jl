@@ -228,7 +228,7 @@ end
 
     @test res.iters < 300                # converged before the fail-loud cap (observed 101 iters)
     @test res.exact_maxgap < 1e-3        # PF-04 on the converged DSO-OPT
-    @test res.μ !== nothing              # D-11 stable-key contract: LIVE always populates these
+    @test res.mu_q !== nothing           # D-11 stable-key contract: LIVE always populates these (WR-03: audit-reserved mu_q key)
     @test res.q_devices !== nothing
     @test haskey(res.q_devices, target.bus)   # the 4Q-BESS's own converged q trajectory
     @test length(res.q_devices[target.bus]) == Th

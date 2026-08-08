@@ -57,7 +57,7 @@ using JuMP
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
                allow_export::Bool = true, reactive_consensus = false, ρ_q::Real = ρ)
-        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, μ, q_devices)
+        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
 eqs. 3.46/3.47), the Phase-6 DECOMPOSED counterpart of the centralized [`solve_welfare`](@ref).
@@ -134,8 +134,11 @@ outer loop, in EXACT mirror of the ACTIVE `λ`/`pag_dso` machinery above:
     relationship `λ` has to `dual(:balance_p[j])` — consistent with the P↔Q structural symmetry
     of the single augmented Lagrangian (the reactive block is built by the IDENTICAL
     AGR-fixes-target / DSO-renames-coupling-variable construction, merely on the `Rq`/`qag_dso`
-    axis). The reported `μ` (see Returns) is therefore the NEGATED internal `μq`, mirroring
-    `λ_mat = -λ` exactly.
+    axis). The reported `mu_q` (see Returns) is therefore the NEGATED internal `μq`, mirroring
+    `λ_mat = -λ` exactly. (`mu_q` is the return-key handle the phase-16 naming audit RESERVED
+    for exactly this quantity — `test_admm_reactive.jl`'s grep-audit header; a bare-`μ` return
+    key would collide with the `μ::Real = 10.0` adaptive-ρ band kwarg in this very signature,
+    the phase-19 review's WR-03.)
   - The final consolidation block ALSO wires the NEW 4Q complementarity certificate
     ([`assert_4q_complementarity!`](@ref) via `solve_agr!`'s `check_4q` kwarg) for any aggregator
     whose devices genuinely include a `FourQuadBESS` — INDEPENDENT of `reactive_consensus`, since
@@ -149,17 +152,20 @@ outer loop, in EXACT mirror of the ACTIVE `λ`/`pag_dso` machinery above:
 
 # Returns
 
-`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, μ, q_devices)` where `λ == dadp` is
-the `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus
+`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices)` where `λ == dadp`
+is the `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus
 order, matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
 [`ModelContext`](@ref) (its `.model` shape is iteration-count-independent — ADMM-03), and
-`exact_maxgap` the certified SOC cone residual (PF-04). `μ`/`q_devices` are STABLE keys, ALWAYS
+`exact_maxgap` the certified SOC cone residual (PF-04). `mu_q`/`q_devices` are STABLE keys, ALWAYS
 present in the returned `NamedTuple` (Claude's Discretion, MESH-05 D-11): under `OFF`/`CERTIFIED`
 both are `nothing` (mirrors this file's own `exact_maxgap` convention — always a key, `nothing`
-until populated); under `LIVE`, `μ` is the `(n_load_nodes, T)` converged reactive-price matrix
+until populated); under `LIVE`, `mu_q` is the `(n_load_nodes, T)` converged reactive-price matrix
 (SAME ascending-bus-order convention as `λ_mat`, sign-corrected per the empirical finding above)
 and `q_devices::Dict{Int,Vector{Float64}}` holds each `FourQuadBESS`'s converged length-`T` `q`
-trajectory, keyed by bus.
+trajectory, keyed by bus. The key is `mu_q`, NEVER bare `μ`: the same signature carries the
+`μ::Real = 10.0` adaptive-ρ residual-balancing band kwarg, and the phase-16 naming audit
+(`test_admm_reactive.jl`'s header) reserves `mu_q` as THE code handle for the extracted reactive
+price (WR-03, phase-19 review).
 
 # Throws
 
@@ -720,13 +726,16 @@ function solve_admm(
     # coefficient updates and the (welfare-exact) convergence above.
     λ_mat = reduce(vcat, (permutedims(-λ[j]) for j in load_nodes))
 
-    # ---- MESH-05 (D-11): μ / q_devices as FIRST-CLASS PEERS of λ/dadp under LIVE. Stable
+    # ---- MESH-05 (D-11): mu_q / q_devices as FIRST-CLASS PEERS of λ/dadp under LIVE. Stable
     # return-tuple SHAPE (Claude's Discretion, per the plan's "pick ONE approach" instruction):
-    # the KEYS `μ`/`q_devices` are ALWAYS present, `nothing` under OFF/CERTIFIED — mirrors this
+    # the KEYS `mu_q`/`q_devices` are ALWAYS present, `nothing` under OFF/CERTIFIED — mirrors this
     # file's own existing convention for `exact_maxgap` (always a key, `nothing` until a
     # `check_exact = true` solve stashes a value). This is documented here, not a partial/optional
-    # NamedTuple shape.
-    μ_mat = nothing
+    # NamedTuple shape. The key is the audit-reserved `mu_q`, never bare `μ` (WR-03: bare `μ`
+    # would make one identifier mean BOTH the adaptive-ρ band kwarg and the reactive price in
+    # one public signature, and would collide with `Scenario.jl`'s serialized `μ::Float64` band
+    # field if the reactive price is ever threaded into the DrWatson `savename` schema).
+    mu_q_mat = nothing
     q_devices = nothing
     if mode == LIVE
         # SIGN CONVENTION (Task 1's empirical finding, mirroring the λ/dual(:balance_p) derivation
@@ -747,7 +756,7 @@ function solve_admm(
         # individual `q` trajectory, since a near-zero μ makes that device's own P-Q split
         # non-unique/degenerate (many `(p,q)` splits inside the apparent-power cone are equally
         # optimal at a ≈0 reactive price) — pinning a non-unique quantity would be meaningless.
-        μ_mat = reduce(vcat, (permutedims(-μq[j]) for j in load_nodes))
+        mu_q_mat = reduce(vcat, (permutedims(-μq[j]) for j in load_nodes))
 
         # Extract each `FourQuadBESS`'s converged `q[t]` trajectory from
         # `ctx.meta[:agg_device_vars]` (the SAME stash `assert_4q_complementarity!` iterates),
@@ -771,7 +780,7 @@ function solve_admm(
         residuals = residuals,
         dso_ctx = dso.ctx,
         exact_maxgap = exact_maxgap,
-        μ = μ_mat,
+        mu_q = mu_q_mat,
         q_devices = q_devices,
     )
 end

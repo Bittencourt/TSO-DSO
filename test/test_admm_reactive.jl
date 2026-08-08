@@ -224,9 +224,10 @@ end
     )
 
     @test res.iters < 500          # converged strictly before the fail-loud cap
-    # D-11 stable-key contract: LIVE ALWAYS populates μ/q_devices (never `nothing`, unlike
-    # OFF/CERTIFIED).
-    @test res.μ !== nothing
+    # D-11 stable-key contract: LIVE ALWAYS populates mu_q/q_devices (never `nothing`, unlike
+    # OFF/CERTIFIED). The key is the audit-reserved `mu_q` handle (WR-03) -- never bare `μ`,
+    # which remains ONLY the adaptive-ρ band kwarg per this file's header grep audit.
+    @test res.mu_q !== nothing
     @test res.q_devices !== nothing
     @test haskey(res.q_devices, 2)               # bus 2's FourQuadBESS trajectory is present
     @test length(res.q_devices[2]) == Th
@@ -282,7 +283,7 @@ end
     #             Task 1's measurement -- both the centralized dual(:balance_q) and the LIVE
     #             internal μq converge to ≈1e-8, an honest "no genuine reactive network cost to
     #             price here" feature, not a bug).
-    @test isapprox(vec(res.μ), μ_c; atol = 1e-7)
+    @test isapprox(vec(res.mu_q), μ_c; atol = 1e-7)
 
     # D-03 CROSS-VALIDATION SCOPE: q trajectories are DELIBERATELY excluded from this gate --
     # when μ ≈ 0 (as measured here) a FourQuadBESS's own P-Q split inside its apparent-power
@@ -334,7 +335,7 @@ end
         reactive_consensus = :live,
         maxiter = 500,
     )
-    μ_a = vec(res.μ)
+    μ_a = vec(res.mu_q)
 
     # Sign-bearing hours: |μ_c| > 1e-5 (100× the near-lossless fixture's degenerate ≈1e-8
     # floor; measured 13 such hours at the default seed, 2–13 across the 5-seed sweep). The
@@ -413,8 +414,8 @@ end
     # meaningless/flaky check; q_devices[2] is where the seed-driven signal actually shows up
     # (measured ≈0.016 apart for adjacent seeds -- see below), which is exactly what a live,
     # input-reactive mechanism should produce.
-    stacked1 = vcat(vec(res1.μ), res1.q_devices[2])
-    stacked2 = vcat(vec(res2.μ), res2.q_devices[2])
+    stacked1 = vcat(vec(res1.mu_q), res1.q_devices[2])
+    stacked2 = vcat(vec(res2.mu_q), res2.q_devices[2])
 
     # Measured floor (this task's own sanity check, verified this session): two IDENTICAL-seed
     # runs (aggs2 built with `seed = Phase6Fixtures.SEED_2BUS`, matching aggs1) reproduce
