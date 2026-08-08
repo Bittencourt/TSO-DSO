@@ -77,7 +77,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 19-08-PLAN.md — Phase19Fixtures, measured cross-validation tolerances, liveness regression, IEEE-13 quarantined evidence, final byte-identity gate
+- [x] 19-08-PLAN.md — Phase19Fixtures, measured cross-validation tolerances, liveness regression, IEEE-13 quarantined evidence, final byte-identity gate
 
 ### Phase 20: Overvoltage-Capable Relaxation
 
@@ -311,7 +311,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 1–9 (archived) | v1.0 | 43/43 | Complete | 2026-07-20 |
 | 10–14 (archived) | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
-| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 7/8 | In Progress|  |
+| 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 8/8 | Complete   | 2026-08-08 |
 | 20. Overvoltage-Capable Relaxation | v3.0 | 0/TBD | Not started | - |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 0/TBD | Not started | - |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
