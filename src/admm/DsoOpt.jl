@@ -87,7 +87,7 @@ struct DsoOpt{P, PI, F}
 end
 
 """
-    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus::Bool = false)
+    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus = false, ρ_q::Real = ρ)
         -> DsoOpt
 
 Build the whole-network `DSO-OPT` SOCP (thesis eq. 3.47) ONCE, reusing the validated
@@ -136,12 +136,28 @@ every non-root bus is a load node, so both axes coincide and the model is unchan
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
 `1:length(feeder.buses)`, or an aggregator ON the root (genuinely invalid inputs still fail loud).
 
-`reactive_consensus::Bool = false` (REACT-01): at the default `false`, step 4's reactive
-injection is the byte-identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]` key exists).
-When `true`, the constant is promoted to a genuine JuMP coupling variable `qag_dso[j,t]`
-(stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a new registered equality
-`:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual read, NOT a live
-consensus ascent (thesis A3: `q_draw` never moves, so no new ρ-penalty/residual is needed).
+`reactive_consensus` (D-12, MESH-05): a 3-state mode normalized via
+[`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
+`true → CERTIFIED`), a `Symbol` (`:off`/`:certified`/`:live`), or a [`ReactiveMode`](@ref)
+directly.
+
+  - `OFF` (default, `false`): step 4's reactive injection is the byte-identical constant
+    `q_draw[j][t]` (no `ctx.meta[:qag_dso]` key exists).
+  - `CERTIFIED` (`true`): the constant is promoted to a genuine JuMP coupling variable
+    `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a
+    registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual
+    read, NOT a live consensus ascent (thesis A3: `q_draw` never moves, so no new
+    ρ-penalty/residual is needed).
+  - `LIVE` (`:live`, NEW — MESH-05): `qag_dso[j,t]` is declared the SAME way as `CERTIFIED`
+    (stashed at `ctx.meta[:qag_dso]`), but NO `:qag_pin` equality is registered — it is left as
+    a genuinely open coupling variable, carrying its own `0.5·ρ_q·Σ qag_dso[j,t]²` quadratic
+    penalty in the objective (see `ρ_q` below), for plan 19-07's outer μ-dual-ascent loop to
+    drive.
+
+`ρ_q::Real = ρ` (MESH-05): the FIXED quadratic penalty weight for the `LIVE` reactive coupling
+block, mirroring `ρ`'s role for the active `pag_dso` block. Defaults to tracking `ρ` unless the
+caller overrides it (plan 19-07 adapts it independently via [`set_rho_q!`](@ref)). Unused
+(never referenced) under `OFF`/`CERTIFIED`.
 """
 function build_dso_opt(
     feeder,
@@ -149,8 +165,11 @@ function build_dso_opt(
     T::Int;
     ρ::Real,
     λ₀,
-    reactive_consensus::Bool = false,
+    reactive_consensus = false,
+    ρ_q::Real = ρ,
 )
+    mode = normalize_reactive_mode(reactive_consensus)
+
     # Boundary guards (mirror solve_welfare): fail here, not deep in objective assembly.
     isempty(aggregators) &&
         throw(ArgumentError("build_dso_opt needs at least one aggregator"))
@@ -235,13 +254,22 @@ function build_dso_opt(
         add_to_residual!(ctx, :Rp, j, t, pag_dso[j, t])
     end
 
-    # (4b) REACTIVE load-node closure (thesis 3.23). A fixed parameter (no μ dual-ascent —
-    # reactive is not a consensus quantity). DEFAULT (reactive_consensus = false): inject the
-    # CONSTANT draw directly, byte-identical to pre-REACT-01 behavior. REACT-01
-    # (reactive_consensus = true): promote it to a genuine JuMP coupling variable `qag_dso[j,t]`,
-    # PINNED to the SAME fixed target via the registered equality `:qag_pin` — a one-shot
-    # certified dual read, NOT a live consensus ascent (Assumption A1/A3: q_draw never moves).
-    if reactive_consensus
+    # (4b) REACTIVE load-node closure (thesis 3.23), 3 EXPLICIT branches keyed on `mode`
+    # (MESH-05, D-12) — never a shared branch with a conditional skip (T-19-06). A fixed
+    # parameter under OFF/CERTIFIED (no μ dual-ascent — reactive is not a consensus quantity
+    # there); a genuinely live coupling variable under LIVE.
+    if mode == OFF
+        # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = false`: inject the CONSTANT
+        # draw directly, no qag_dso variable, no ctx.meta[:qag_dso] key.
+        for j in load_nodes, t in 1:T
+            add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+        end
+    elseif mode == CERTIFIED
+        # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = true` (REACT-01/REACT-03):
+        # promote the constant to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to
+        # the SAME fixed target via the registered equality `:qag_pin` — a one-shot certified
+        # dual read, NOT a live consensus ascent (Assumption A1/A3: q_draw never moves). The
+        # `:qag_pin` registration is UNCONDITIONAL in this branch (T-19-07 — never skip it).
         @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
             add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
@@ -249,10 +277,18 @@ function build_dso_opt(
         @constraint(model, qag_pin[j = load_nodes, t = 1:T], qag_dso[j, t] == q_draw[j][t])
         register_constraint!(ctx, :qag_pin, qag_pin)
         ctx.meta[:qag_dso] = qag_dso
-    else
+    elseif mode == LIVE
+        # NEW (MESH-05): declare qag_dso the SAME way as CERTIFIED (same @variable call, same
+        # :Rq injection, same ctx.meta[:qag_dso] stash), but register NO :qag_pin equality —
+        # qag_dso stays a genuinely OPEN coupling variable, driven by plan 19-07's outer μ
+        # dual-ascent loop and carrying its own ρ_q-scaled quadratic penalty (see (5) below).
+        @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
-            add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+            add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
         end
+        ctx.meta[:qag_dso] = qag_dso
+    else
+        error("unreachable: normalize_reactive_mode returned an unhandled ReactiveMode")
     end
 
     # (4b') TRANSIT-NODE ZERO INJECTION (RESEARCH Pitfall 5): each non-root, non-load bus is a
