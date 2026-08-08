@@ -26,6 +26,16 @@ findings:
   info: 6
   total: 11
 status: issues_found
+fixes:
+  fixed_at: 2026-08-08
+  scope: critical_warning
+  fixed:
+    CR-01: 8c7b455 + 14ed32e
+    WR-01: b8b0c64
+    WR-02: "3866537"
+    WR-03: e304edb
+    WR-04: d4364ff
+  info_findings: out_of_fix_scope
 ---
 
 # Phase 19: Code Review Report
@@ -57,6 +67,26 @@ key that violates the phase's own grep-audit rule, and a silent semantic mismatc
 ## Critical Issues
 
 ### CR-01: `assert_4q_complementarity!`'s absolute `atol = 1e-6` floor defeats the certificate at per-unit device scale
+
+> **FIXED — commits `8c7b455` + `14ed32e`.** Defaults re-derived by measurement at the
+> committed per-unit scales: `rtol = 1e-4`, `atol = 1e-8` (with `solve_agr!`'s
+> `rtol_4q`/`atol_4q` pass-through defaults updated in lockstep, and a new regression test
+> pinning the review's two cited escapes — 40%-of-rating legs at IEEE-13 scale, 5% at 2-bus
+> scale — as THROWS). Follow-up `14ed32e`: `solve_admm`'s FINAL consolidation re-solve
+> (ρ-penalty, `strict = false`) measures a deterministic ≈1.41e-8 product on the IEEE-13 4Q
+> fixture (≈2.3e-3·scale² — IPM face co-activation under the penalty), so that call site
+> passes the interior-point-loosened `rtol_4q = 1e-3, atol_4q = 1e-7` explicitly, mirroring
+> the existing `τ_batt = 1e-3` discipline at the same call site (7.5× margin; still flags
+> legs above ~13%/3.5% of rating vs the ~40% pre-fix escape).
+> **Deviation from the suggested fix, with measurement:** the literal suggestion
+> (`rtol = 1e-6`, `atol = 1e-12`) would FALSELY REJECT the committed fixtures. The docstring's
+> ≤1.1e-10 relative floor was measured on a strictly-App.-C-dominated standalone device (both
+> legs pinned hard to one face); re-measured at the realistic centralized 2-bus + 4Q network
+> optimum (where the effective price sits near the device's indifference point and both legs
+> are interior-near-zero) the noise floor is ≈1.2–1.8e-9 ABS at scale 0.02 (rel ≈2.9–4.4e-6),
+> ≈4.2–6.3e-8 at scale 0.1 (rel ≈4.2–6.3e-6), and ≈1.9–6.2e-10 at scale 0.0025 (rel up to
+> ≈9.9e-5). The new defaults size each term ≈16× above its own measured floor; full provenance
+> table in the certificate docstring.
 
 **File:** `src/models/complementarity_4q.jl:96,112`
 **Issue:** The violation threshold is `tol = atol + rtol·scale²` with defaults
@@ -104,6 +134,15 @@ indicates `rtol = 1e-6` alone clears it with ~4 orders of margin.
 
 ### WR-01: `FourQuadBESS.contribute!` registers a named `:cone` container — device is non-composable (crashes with the network formulation AND with a second `FourQuadBESS` in the same model)
 
+> **FIXED — commit `b8b0c64`.** Cone made anonymous (the `PVBattery` idiom); the test-only
+> `JuMP.unregister` workaround in `fixtures_phase19.jl` retired (the `centralized_welfare_4q`
+> replica itself is kept — the D-14 measured tolerances were pinned against it); the deferred
+> item marked resolved. Verified: two 4Q devices compose in one model, direct `solve_welfare`
+> on 4Q-bearing aggregators runs green, and the `:live` cross-validation still matches at the
+> pinned tolerances (|ΔW| = 2.19e-5, matching the documented measurement). NOTE: IN-01
+> (last-4Q-per-bus overwrite in `q_devices` extraction) is now REACHABLE and remains open
+> (Info findings were out of fix scope).
+
 **File:** `src/devices/FourQuadBESS.jl:315`
 **Issue:** `@constraint(m, cone[t = 1:T], ...)` claims the JuMP object-dictionary name `:cone`
 on the shared model. Two distinct crash surfaces:
@@ -136,6 +175,14 @@ This also retires the test-only `JuMP.unregister` workaround in `fixtures_phase1
 
 ### WR-02: The μ sign convention is protected by zero committed assertions — a sign flip in `μ_mat` would pass every test
 
+> **FIXED — commit `3866537`.** Committed a real-impedance (`r = x = 0.05`) 2-bus fixture with
+> a BINDING apparent-power cone (`Smax = 0.008` < the ~0.0097 pu peak reactive draw) — real
+> impedance alone is not enough: an interior free-`q` 4Q device drives its own bus's μ → 0 by
+> first-order optimality. New regression item asserts `sign.(res μ) == sign.(dual(:balance_q))`
+> on every `|μ_c| > 1e-5` hour (13 at the default seed; 2–13 across a 5-seed sweep, all
+> agreeing), plus a magnitude discrimination pin: correct orientation max|Δμ| ≤ 5.5e-5 vs
+> flipped ≥ 2.3e-3 (≥42×). Uses the direct `solve_welfare` path unlocked by WR-01.
+
 **File:** `src/admm/solve_admm.jl:750`; `test/test_admm_reactive.jl:285`
 **Issue:** `μ_mat = reduce(vcat, (permutedims(-μq[j]) for j in load_nodes))` publishes the
 negated internal multiplier as the reactive price. The docstring says this sign was "empirically
@@ -155,6 +202,12 @@ pinned.
 
 ### WR-03: Return key `μ` collides with the `μ::Real = 10.0` kwarg in the same `solve_admm` signature, violating the phase's own naming-audit rule
 
+> **FIXED — commit `e304edb`.** Return key renamed to the audit's reserved handle `mu_q`
+> (internal local `μ_mat` → `mu_q_mat`); docstrings and all four test consumers updated
+> (`test_admm_reactive.jl` ×3 + the new WR-02 item, `test_ieee123_admm.jl` ×1). No deprecation
+> alias (none suggested; the only consumers were in-repo tests). Verified LIVE returns the
+> renamed key and OFF/CERTIFIED keep the stable-`nothing` contract.
+
 **File:** `src/admm/solve_admm.jl:186` (kwarg), `src/admm/solve_admm.jl:774` (return)
 **Issue:** `solve_admm(...; μ = 10.0)` — the adaptive-ρ residual-balancing imbalance band —
 now returns a NamedTuple whose `μ` key is the converged *reactive price matrix*. The identifier
@@ -171,6 +224,13 @@ would produce a genuine field collision in the DrWatson `savename` schema.
 (`test_admm_reactive.jl:229,285,354`; `test_ieee123_admm.jl:231`) are the only current consumers.
 
 ### WR-04: `OFF`/`CERTIFIED` modes silently drop a `q_inject`-carrying device's reactive injection from the DSO network model — no guard, diverges from centralized
+
+> **FIXED — commit `d4364ff`.** `build_dso_opt` now throws `ArgumentError` (fail-loud, the
+> stronger of the review's two options) when `mode != LIVE` and any aggregator carries a
+> `FourQuadBESS`, with a message directing the caller to `:live`; `solve_admm` inherits the
+> guard through its `build_dso_opt` call. LIVE behavior and all non-4Q OFF/CERTIFIED paths
+> verified unchanged; regression item added covering all three non-LIVE spellings (default,
+> `:certified`, Bool back-compat `true`).
 
 **File:** `src/admm/DsoOpt.jl:213-228,266-284`; `src/devices/Aggregator.jl:185`
 **Issue:** `Aggregator.contribute!` now writes `−Pdc·tanφ + q_inject` into `:Rq` (the device's
@@ -197,6 +257,10 @@ caller to `:live`, or emit a documented `@warn` that the device's reactive injec
 by the network model under this mode.
 
 ## Info
+
+_Info findings were OUT of the `--fix` scope (critical + warning only) and remain open.
+Note that IN-01 is now REACHABLE (WR-01's composability fix removed the crash that previously
+masked it) — it should be prioritized when Info findings are next triaged._
 
 ### IN-01: `q_devices` extraction silently keeps only the last 4Q device per bus
 
