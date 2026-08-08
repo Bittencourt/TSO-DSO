@@ -164,6 +164,15 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**v3.0 in progress — Phase 19 complete (2026-08-08):** 4Q-BESS + Live Reactive Dual-Ascent
+(MESH-04/MESH-05). `FourQuadBESS` device (apparent-power cone, anonymous constraints), Aggregator
+`q_inject` roll-up, `assert_4q_complementarity!` certificate with measurement-derived tolerances,
+3-state `ReactiveMode` (OFF/CERTIFIED/LIVE), and a jointly-converging (λ, μ_q) two-block dual
+ascent in `solve_admm`, cross-validated against centralized on 2-bus and IEEE-13 fixtures; the
+default no-4Q path stays byte-identical. Verification 4/4; review 1 Critical + 4 Warnings all
+fixed; suite 2513 pass / 0 fail / 3 pre-existing broken. Next: Phase 20 (Overvoltage-Capable
+Relaxation).
+
 **Shipped v1.0 "Operational Transactive-Energy Core" (2026-07-20)** — 9 phases, 43 plans, 83 tasks.
 
 The operational transactive-energy layer is complete and validated end-to-end:
@@ -295,4 +304,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-26 — v3.0 Research Extension Rungs milestone started*
+*Last updated: 2026-08-08 — Phase 19 (4Q-BESS + Live Reactive Dual-Ascent) complete*
