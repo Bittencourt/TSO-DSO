@@ -291,6 +291,68 @@ end
     # not an oversight -- the liveness item below covers q_devices' OWN behavior separately.
 end
 
+@testitem "admm reactive: :live μ sign convention pinned against centralized dual(:balance_q) on REAL impedance (reactive, live)" setup =
+    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+    using JuMP: dual
+
+    # WR-02 (phase-19 code review): `solve_admm` publishes the NEGATED internal `μq` as the
+    # reactive price, but the ONLY committed μ comparison ran on the near-lossless 2-bus
+    # fixture where BOTH sides are ≈ 1e-8 ≪ atol -- a sign flip (or a doubled negation) would
+    # have passed identically. This item pins the sign the way λ's was pinned: on a fixture
+    # where |μ| is MATERIALLY above solver noise. That needs BOTH real impedance AND a BINDING
+    # apparent-power cone (an interior free-q 4Q device drives its own bus's μ → 0 by
+    # first-order optimality regardless of impedance) -- see fixtures_phase19.jl's
+    # REAL_R_2BUS/BESS_SMAX_QBOUND constants-block comment for the fixture derivation and the
+    # 5-seed measurement table (measurement-before-golden, D-14's discipline).
+    feeder = Phase19Fixtures.two_bus_feeder_real_impedance()
+    aggs = Phase19Fixtures.build_two_bus_aggregators_4q_qbound(feeder)
+    Th = Phase6Fixtures.T
+    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    ρ = Phase6Fixtures.RHO_2BUS
+
+    # Centralized ground truth DIRECTLY via solve_welfare -- unlocked by WR-01's anonymous
+    # device cone (no centralized_welfare_4q workaround needed on a new fixture).
+    ctx_c, _, _ = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    μ_c = dual.(ctx_c.constraints[:balance_q][2, :])
+
+    res = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ,
+        allow_export = true,
+        reactive_consensus = :live,
+        maxiter = 500,
+    )
+    μ_a = vec(res.μ)
+
+    # Sign-bearing hours: |μ_c| > 1e-5 (100× the near-lossless fixture's degenerate ≈1e-8
+    # floor; measured 13 such hours at the default seed, 2–13 across the 5-seed sweep). The
+    # count guard keeps this item from ever silently degenerating into the vacuous
+    # near-lossless comparison it exists to fix.
+    big = abs.(μ_c) .> 1e-5
+    @test count(big) >= 5
+    # THE sign pin (mirrors how λ's +λ₀ > 0 anchor pinned the active sign): the published
+    # :live μ agrees in SIGN with the centralized dual(:balance_q) on EVERY hour where μ is
+    # materially nonzero.
+    @test all(sign.(μ_a[big]) .== sign.(μ_c[big]))
+    # Magnitude discrimination (measured: correct orientation max|Δμ| ≤ 5.5e-5 across seeds;
+    # the FLIPPED orientation differs by ≥ 2.3e-3, ≥ 42×). atol = 2e-4 gives ≈4× margin over
+    # the measured max while sitting an order below the flipped-sign gap.
+    @test isapprox(μ_a, μ_c; atol = 2e-4)
+    @test !isapprox(-μ_a, μ_c; atol = 2e-4)
+end
+
 @testitem "admm reactive: :live mechanism is genuinely live -- a differing input yields differing μ/q_devices, never a static no-op (reactive, live)" setup =
     [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
     using TSODSO

@@ -100,6 +100,24 @@
     const BESS_EMAX = 0.08
     const BESS_SOC0 = 0.04
 
+    # μ-SIGN-PINNING fixture constants (WR-02, phase-19 code review). The primary fixture above
+    # is DELIBERATELY near-lossless (`r = x = 1e-3`) and interior (`Smax = 0.03` never binds),
+    # so its reactive dual μ is degenerate ≈ 1e-8 (D-03) — a sign flip in `solve_admm`'s
+    # published reactive price would pass every assertion on it. Pinning the sign needs BOTH:
+    #   - REAL impedance (`r = x = 0.05`, 50× the near-lossless branch) so reactive flow has a
+    #     genuine marginal network cost, AND
+    #   - a BINDING apparent-power cone (`Smax = 0.008` < the ~0.0097 pu peak reactive draw at
+    #     φ = 0.90): a 4Q device whose free `q` sits INTERIOR in its cone drives its own bus's
+    #     μ to ≈ 0 by first-order optimality (q is costless, D-03), regardless of impedance —
+    #     the cone must bind for |μ| to rise above solver noise at the device's bus.
+    # MEASURED (2026-08-08, seeds 20260719..20260723, this exact fixture): 2–13 of 24 hours
+    # carry |μ_c| > 1e-5 (13 at the default seed), sign-agreement between the :live `res` μ and
+    # the centralized `dual(:balance_q)` on EVERY such hour, max|Δμ| ≤ 5.5e-5 while the FLIPPED
+    # sign would differ by ≥ 2.3e-3 (≥ 42×) — ADMM converges in 3 iters, PF-04 maxgap ≤ 1.3e-10.
+    const REAL_R_2BUS = 0.05
+    const REAL_X_2BUS = 0.05
+    const BESS_SMAX_QBOUND = 0.008
+
     """
         build_two_bus_aggregators_4q(feeder; seed=Phase6Fixtures.SEED_2BUS) -> Vector{<:Aggregator}
 
@@ -148,6 +166,91 @@
             BESS_PCH_MAX,
             BESS_PDCH_MAX,
             BESS_SMAX,
+            BESS_EMIN,
+            BESS_EMAX,
+            BESS_SOC0,
+            Phase6Fixtures.BATT_λ_MIN,
+            Phase6Fixtures.BATT_λ_MED,
+            Phase6Fixtures.BATT_λ_MAX,
+        )
+        return [Aggregator(bus, 0.90, AbstractDevice[therm, defer, batt, bess], Pdc)]
+    end
+
+    """
+        two_bus_feeder_real_impedance() -> Feeder
+
+    The WR-02 μ-sign-pinning variant of [`Phase6Fixtures.two_bus_feeder`](@ref): identical
+    2-bus radial topology and voltage band, but with REAL (non-near-lossless) branch impedance
+    `r = x = REAL_R_2BUS = 0.05` (50× the primary fixture's `1e-3`), so the reactive channel
+    carries a genuine, priceable network cost. Built INSIDE the function (never at module load
+    time, threat T-06-01), mirroring `Phase6Fixtures.two_bus_feeder`'s own discipline.
+    """
+    function two_bus_feeder_real_impedance()
+        buses = [
+            Bus(1, 0.95, 1.05, true),    # root / MEM frontier
+            Bus(2, 0.95, 1.05, false),   # the single load bus (the priced node)
+        ]
+        branches = [
+            Branch(1, 2, REAL_R_2BUS, REAL_X_2BUS, SMAX_NO_LIMIT),
+        ]
+        return Feeder(buses, branches, 1)
+    end
+
+    """
+        build_two_bus_aggregators_4q_qbound(feeder; seed=Phase6Fixtures.SEED_2BUS)
+            -> Vector{<:Aggregator}
+
+    The WR-02 μ-sign-pinning aggregator set: mirrors [`build_two_bus_aggregators_4q`](@ref)
+    EXACTLY (same Thermostatic/Deferrable/PVBattery triple, same seeded draw, same
+    `FourQuadBESS` charge/discharge/SOC parameters) EXCEPT the apparent-power cone bound is
+    `BESS_SMAX_QBOUND = 0.008` — deliberately BELOW the aggregator's ~0.0097 pu peak reactive
+    draw at φ = 0.90, so the cone genuinely BINDS and the bus's reactive dual μ rises
+    materially above solver noise (see the constants-block comment above for why an interior
+    cone would drive μ → 0 regardless of impedance). Intended to pair with
+    [`two_bus_feeder_real_impedance`](@ref).
+    """
+    function build_two_bus_aggregators_4q_qbound(
+        feeder;
+        seed::Integer = Phase6Fixtures.SEED_2BUS,
+    )
+        bus = 2
+        prof = generate_profiles(seed = seed + bus, T = Phase6Fixtures.T)
+        Ppv = Float64[Phase6Fixtures.PV_SCALE_2BUS * p for p in prof.pv]
+        Pdc = Float64[Phase6Fixtures.LOAD_SCALE_2BUS * d for d in prof.demand]
+
+        therm = Thermostatic(
+            bus,
+            0.2,
+            0.05,
+            15.0,
+            30.0,
+            22.0,
+            0.0,
+            1.0,
+            0.5,
+            Phase6Fixtures.temperature_profile(),
+        )
+        defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
+        batt = PVBattery(
+            bus,
+            0.95,
+            1.0,
+            0.1,
+            0.0,
+            0.2,
+            0.1,
+            Phase6Fixtures.BATT_λ_MIN,
+            Phase6Fixtures.BATT_λ_MED,
+            Phase6Fixtures.BATT_λ_MAX,
+            Ppv,
+        )
+        bess = FourQuadBESS(
+            bus,
+            0.95,
+            1.0,
+            BESS_PCH_MAX,
+            BESS_PDCH_MAX,
+            BESS_SMAX_QBOUND,
             BESS_EMIN,
             BESS_EMAX,
             BESS_SOC0,
@@ -262,10 +365,15 @@
 
     export build_two_bus_aggregators_4q,
         centralized_welfare_4q,
+        two_bus_feeder_real_impedance,
+        build_two_bus_aggregators_4q_qbound,
         BESS_PCH_MAX,
         BESS_PDCH_MAX,
         BESS_SMAX,
         BESS_EMIN,
         BESS_EMAX,
-        BESS_SOC0
+        BESS_SOC0,
+        REAL_R_2BUS,
+        REAL_X_2BUS,
+        BESS_SMAX_QBOUND
 end
