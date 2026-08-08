@@ -94,6 +94,10 @@ include("models/oracle.jl")
 # oracle. Included after models/oracle.jl and before the pricing/ block.
 include("models/ac_oracle.jl")
 
+# --- Restricted-SOCP AC-feasibility + optimality-loss certificate (owned by plan 20-03, OVR-02) ---
+# Must load AFTER models/ac_oracle.jl: assert_restriction_exact! calls assert_ac_exact! internally.
+include("models/restriction_exactness.jl")
+
 # --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
 # Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
 # ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
