@@ -64,6 +64,7 @@ include("devices/Interruptible.jl")
 include("devices/Thermostatic.jl")   # DEV-01
 include("devices/Deferrable.jl")     # DEV-02
 include("devices/PVBattery.jl")      # DEV-04
+include("devices/FourQuadBESS.jl")   # plan 19-02, MESH-04
 
 # --- Aggregator roll-up: the network-facing residual writer (plan 03-05, DEV-05) ---
 include("devices/Aggregator.jl")
@@ -77,6 +78,7 @@ include("models/welfare_solve.jl")
 
 # --- SOCP relaxation exactness gate (owned by plan 04-05, PF-04) ---
 include("models/exactness.jl")
+include("models/complementarity_4q.jl")   # plan 19-05, MESH-04
 
 # --- operational_oracle + SEAM-01 extension stubs (owned by plan 04-04, OPT-03 / SEAM-01) ---
 include("models/oracle.jl")
@@ -106,6 +108,7 @@ include("pricing/welfare.jl")   # social = prosumer + DSO surplus split (plan 05
 # file declares its own exports; residuals.jl is filled by this plan, the other three by
 # Waves 2–3, so those waves never touch TSODSO.jl.
 include("admm/residuals.jl")    # AdmmResiduals primal/dual residual ledger (plan 06-01, ADMM-01)
+include("admm/ReactiveMode.jl") # OFF/CERTIFIED/LIVE 3-state enum (plan 19-01, MESH-05)
 include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (plan 06-02, ADMM-01, thesis 3.46)
 include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (plan 06-03, ADMM-01, thesis 3.47)
 include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation (plan 06-04, ADMM-01/03/04)
