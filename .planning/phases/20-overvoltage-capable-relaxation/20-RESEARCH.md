@@ -620,8 +620,12 @@ formulation alongside the existing ones.
 
 ## Open Questions
 
-1. **The EXACT-04 fixture is NOT the 13-bus IEEE feeder, despite being called "IEEE-13" throughout
-   CONTEXT.md/STATE.md/REQUIREMENTS.md/an existing test-file comment.**
+1. **(RESOLVED — plan 20-01's `<interfaces>` section instructs all new code/comments to say
+   "the EXACT-04 fixture" / "the high-PV stress fixture", never "IEEE-13"; every subsequent plan
+   (20-02..20-05) follows this convention, and plan 20-05's SUMMARY records the correction for
+   STATE.md's next update.) The EXACT-04 fixture is NOT the 13-bus IEEE feeder, despite being
+   called "IEEE-13" throughout CONTEXT.md/STATE.md/REQUIREMENTS.md/an existing test-file
+   comment.**
    - What we know: `test/fixtures_phase4.jl:184`'s `high_pv_feeder()` is a purpose-built 3-bus
      radial fixture (root + 2 buses, `r=x=0.05` low-impedance branches); `pv_scale=1.2` on THIS
      fixture is the actual, empirically-found EXACT-04 operating point
@@ -638,8 +642,12 @@ formulation alongside the existing ones.
      code/docs rather than perpetuating "IEEE-13," to avoid a future contributor searching for a
      nonexistent 13-node network. Flag this correction to the user/STATE.md once the plan lands.
 
-2. **Whether C1 provably holds on the EXACT-04 fixture has not been numerically computed this
-   session (only analytically argued).**
+2. **(RESOLVED — plan 20-05 Task 1's "The Gan-Low condition" subsection live-computes a
+   citable C1-margin-adjacent measurement on the EXACT-04 fixture's actual parameters, with an
+   explicit honest-fallback narrative if the paper's exact `A₁·u₂` formula cannot be
+   confidently re-derived from RESEARCH.md alone — per the Recommendation below.) Whether C1
+   provably holds on the EXACT-04 fixture has not been numerically computed this session (only
+   analytically argued).**
    - What we know: C1 for this fixture's 2-branch linear-chain topology reduces to a single
      nontrivial 2×2 matrix-vector inequality (`A₁·u₂ > 0`, per the paper's own linear-network
      worked example in their Fig. 5/eq. 7), depending on `r=x=0.05`, `v̲=0.9025` (`=0.95²`), and the
@@ -666,7 +674,7 @@ formulation alongside the existing ones.
 |----------|-------|
 | Framework | TestItems 1.0.0 / TestItemRunner 1.1.5, discovered via `test/runtests.jl` |
 | Config file | `test/runtests.jl` (TestItemRunner entrypoint; no separate config file) |
-| Quick run command | `julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/test_restricted_branch_flow.jl")'` — **CAUTION:** per this project's own binding lesson (STATE.md, "test-invocation hazard"), do NOT run tests via `--project=test`; a direct `include` of one file under `--project=.` is the safe pattern when TestItemRunner's macro-based discovery is not desired for a single quick check |
+| Quick run command | A plain `julia --project=. -e '...'` script using `Test` (NOT TestItemRunner) that inlines the EXACT-04 fixture construction (mirrors `docs/literate/ac_oracle.jl`'s own inline-fixture pattern) and asserts the same behavioral claim as the corresponding `@testitem` — per-task verify commands in 20-01..20-04's PLAN.md files. **CORRECTION (checker revision 1, 2026-08-08):** the previously-documented `include("test/test_restricted_branch_flow.jl")` pattern is BROKEN — TestItemRunner is test-only (`--project=.` cannot resolve it) and even under `--project=test` a bare `include` of `@testitem` blocks executes ZERO tests (they only run via `TestItemRunner.runtests`/`@run_package_tests`). `@testitem` bodies can only be executed via the Full suite command below. |
 | Full suite command | `julia --project=. -e 'import Pkg; Pkg.test()'` (the real `test/runtests.jl` entrypoint; ~12–20 min per this project's documented baseline; run in background) |
 
 ### Phase Requirements → Test Map
