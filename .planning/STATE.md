@@ -4,8 +4,8 @@ milestone: v3.0
 milestone_name: Research Extension Rungs
 status: executing
 stopped_at: Phase 19 context gathered
-last_updated: "2026-08-08T18:44:43.549Z"
-last_activity: 2026-08-08 -- Phase 20 planning complete
+last_updated: "2026-08-08T18:45:12.717Z"
+last_activity: 2026-08-08 -- Phase 20 execution started
 progress:
   total_phases: 6
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 20 — overvoltage capable relaxation
+**Current focus:** Phase 20 — Overvoltage-Capable Relaxation
 
 ## Current Position
 
-Phase: 20
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-08 -- Phase 20 planning complete
+Phase: 20 (Overvoltage-Capable Relaxation) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 20
+Last activity: 2026-08-08 -- Phase 20 execution started
 
 ### Quick Tasks Completed
 
