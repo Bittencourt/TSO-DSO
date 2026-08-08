@@ -151,3 +151,85 @@ end
     @test vmin_solved > 0.9
     @test vmax_solved < 1.1
 end
+
+# Seam: MESH-04/MESH-05 (plan 19-08, Task 3) — IEEE-13 4Q-BESS SUPPORTING evidence only, D-13.
+# The PRIMARY, CI-gated evidence for MESH-05's live-convergence/cross-validation/liveness truths
+# lives on the `Phase19Fixtures` 2-bus fixture in `test/test_admm_reactive.jl` (items whose name
+# contains "live"); THIS item is deliberately NOT part of that primary evidence set and is
+# explicitly documented here as never intended to gate CI on its own. It runs under the SAME
+# bounded-retry quarantine `test_admm.jl`'s existing IEEE-13 flaky item already uses (quick task
+# 260726-vn2 — the documented ~55% baseline single-call Clarabel `NUMERICAL_ERROR`-class flake on
+# this congested `ρ=100` IEEE-13 ground fixture). Item name contains BOTH "ieee13" and "4q" (never
+# matched by the file's own `(ieee123, crossval)`/`(ieee123, phase7)` tags above, so a
+# CI-gating filter selecting on those tags alone never picks this item up).
+@testitem "ieee13 admm 4q-bess: live reactive dual-ascent supporting evidence, quarantined, NOT CI-gating (ieee13, 4q)" setup =
+    [Phase4Fixtures, AdmmRetryFixtures] tags = [:admm, :reactive] begin
+    using TSODSO
+
+    # Reuse the SAME Phase-4 IEEE-13 GROUND fixture `test_admm.jl`'s own flaky crossval item
+    # uses, MODIFIED ADDITIVELY: one `FourQuadBESS` appended to the first non-root bus's
+    # aggregator's device list (mirroring how `test_ieee123_admm.jl`'s own items build their
+    # aggregator set, just with one device added on top — never a fixture-file edit, since
+    # `Phase4Fixtures.jl` is out of this plan's `files_modified` scope).
+    feeder = ieee13_modified()
+    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
+    Th = Phase4Fixtures.T
+    λ₀ = Phase4Fixtures.mem_price_profile()
+
+    target = aggs[1]
+    # Scaled to the SAME residential magnitude as this fixture's own battery
+    # (`batt_pmax=0.5*GROUND_LOAD_SCALE`, `batt_emax=2.0*GROUND_LOAD_SCALE`,
+    # `batt_soc0=1.0*GROUND_LOAD_SCALE`, `GROUND_LOAD_SCALE=0.005`) — empirically verified this
+    # session to converge (101/300 iters) without tripping the D-08 grid-charging boundary
+    # certificate, unlike a `PVBattery`-scale (10x larger) candidate that flipped this bus into a
+    # net-exporter at a negative effective price.
+    bess = FourQuadBESS(
+        target.bus,
+        0.95,
+        1.0,
+        0.0025,
+        0.0025,
+        0.004,
+        0.0,
+        0.01,
+        0.005,
+        Phase4Fixtures.BATT_λ_MIN,
+        Phase4Fixtures.BATT_λ_MED,
+        Phase4Fixtures.BATT_λ_MAX,
+    )
+    aggs[1] = Aggregator(
+        target.bus,
+        target.φ,
+        AbstractDevice[target.devices..., bess],
+        target.Pdc,
+    )
+
+    # SAME `ρ_ieee13 = 100.0`/`tol_ieee13 = 1e-6` this file's sibling `test_admm.jl` crossval item
+    # already pins for this congestion-driven fixture (RESEARCH Open Q1: ρ is fixture-empirical).
+    ρ_ieee13 = 100.0
+    tol_ieee13 = 1e-6
+
+    # AdmmRetryFixtures wrapping (quick task 260726-vn2's exact pattern): retries ONLY on the
+    # documented Clarabel `NUMERICAL_ERROR`-class flake, rethrows anything else immediately.
+    res = AdmmRetryFixtures.retry_flaky_admm_solve(; label = "ieee13 4q-bess live") do
+        solve_admm(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ_ieee13,
+            maxiter = 300,
+            tol = tol_ieee13,
+            allow_export = true,
+            reactive_consensus = :live,
+        )
+    end
+
+    @test res.iters < 300                # converged before the fail-loud cap (observed 101 iters)
+    @test res.exact_maxgap < 1e-3        # PF-04 on the converged DSO-OPT
+    @test res.μ !== nothing              # D-11 stable-key contract: LIVE always populates these
+    @test res.q_devices !== nothing
+    @test haskey(res.q_devices, target.bus)   # the 4Q-BESS's own converged q trajectory
+    @test length(res.q_devices[target.bus]) == Th
+end
