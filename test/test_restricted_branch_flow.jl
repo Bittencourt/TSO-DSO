@@ -197,3 +197,141 @@ end
     end
     @test diagnosed
 end
+
+# --- Plan 20-03: assert_restriction_exact! (OVR-02 headline validity gate) ---
+#
+# DEVIATION FROM PLAN TEXT (documented in 20-03-SUMMARY.md, "Deviations from Plan"):
+# the plan's Task 2 predicted `report.ac_feasible == true` on the FULL EXACT-04 fixture
+# (pv_scale = 1.2). Measurement (2026-08-08) found the OPPOSITE, honest verdict: OPF-m's
+# added `v̂_GL(s) ≤ v̄` constraint (Lemma 1: v ≤ v̂_GL(s) always, so it is a genuine
+# feasible-set RESTRICTION, D-01) ACTIVELY BINDS during EXACT-04's high-PV window (hours
+# 9-12, 14-15 — confirmed below via a large nonzero dual on
+# `ctx.constraints[:opfm_shadow_voltage]`), so the restricted optimum genuinely diverges
+# from the independently-solved AC optimum there — `ac_feasible = false`, with a
+# substantial NEGATIVE `optimality_loss`. This is the EXPECTED, PROVABLE consequence of a
+# genuine restriction whose bound actively excludes the true AC optimum — NOT a bug, and
+# NOT a mis-measured tolerance (the SAME certificate reports `ac_feasible = true`-shaped
+# clean-hour behavior at every OTHER hour; see restriction_exactness.jl's docstring). The
+# assertions below test the ACTUAL, causally-diagnosed behavior rather than the plan's
+# unverified prediction.
+@testitem "restricted_branch_flow: assert_restriction_exact! reports the genuine restriction-induced optimality loss + AC-infeasibility on the binding EXACT-04 window (D-05, adapted finding)" tags =
+    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    feeder = Phase4Fixtures.high_pv_feeder()
+    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+
+    ctx_restricted, cost_restricted, _ = solve_welfare(
+        feeder,
+        RestrictedBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    ctx_ac, cost_ac, _ = solve_welfare(
+        feeder,
+        ACPowerFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_local = true,
+        allow_export = true,
+    )
+    # The unrestricted (inexact) SOCP diagnostic bound (D-05's "optimality loss vs the
+    # unrestricted SOCP bound"), via the SAME rtol_exact = 1.0 override test_ac_oracle.jl's
+    # EXACT-04 item uses.
+    ctx_unrestricted, cost_unrestricted, _ = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+        rtol_exact = 1.0,
+    )
+
+    # Causal diagnosis (mirrors the diagnosed=... pattern above): confirm the restriction
+    # GENUINELY binds somewhere on this fixture — a large nonzero dual on
+    # :opfm_shadow_voltage, not merely a correlated observation.
+    opfm_duals = [abs(dual(c)) for c in ctx_restricted.constraints[:opfm_shadow_voltage]]
+    @test maximum(opfm_duals) > 1.0   # genuinely ACTIVE, not numerical noise (~1e-7 off-bind)
+
+    # report = true: this call must NOT throw even though ac_feasible will be false (D-06 —
+    # the caller inspects the diagnostic rather than being refused it).
+    report = assert_restriction_exact!(
+        ctx_restricted,
+        ctx_ac;
+        unrestricted_cost = cost_unrestricted,
+        report = true,
+    )
+    @info "assert_restriction_exact! on EXACT-04 (documented restriction-binding finding)" report.ac_feasible report.optimality_loss
+
+    @test report isa NamedTuple
+    @test !(report isa Bool)
+    # The measured, honest verdict: NOT AC-feasible (the restriction genuinely diverges from
+    # the true AC optimum during the binding window) — see the module-level comment above.
+    @test report.ac_feasible == false
+    # D-05: optimality_loss is a NAMED field, always populated when unrestricted_cost is
+    # supplied, and — since RestrictedBranchFlow's feasible set is a genuine SUBSET of the
+    # unrestricted SOCP relaxation's — must be <= 0 (restricted welfare can never exceed the
+    # unrestricted bound).
+    @test report.optimality_loss !== nothing
+    @test report.optimality_loss <= 1e-6
+    # T-20-08: the provenance marker reflects the ACTUAL (failed) verdict, never a stale
+    # :certified_convex_dual left over from a different call.
+    @test ctx_restricted.meta[:price_provenance].status == :cert_failed
+    @test ctx_restricted.meta[:price_provenance].formulation == :RestrictedBranchFlow
+    @test ctx_restricted.meta[:price_provenance].certificate == :assert_restriction_exact!
+
+    # Default (report = false) on the SAME contexts must THROW (D-06's default polarity) —
+    # confirms the report=true call above did not silently mutate the underlying verdict.
+    @test_throws Exception assert_restriction_exact!(ctx_restricted, ctx_ac; unrestricted_cost = cost_unrestricted)
+end
+
+@testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch (D-06)" tags =
+    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    feeder2 = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    N2, B2 = 2, 1
+    function fixed_ctx(T)
+        m = Model(select_optimizer(LP()))
+        @variable(m, v[1:N2, 1:T])
+        @variable(m, P[1:B2, 1:T])
+        @variable(m, Q[1:B2, 1:T])
+        @variable(m, l[1:B2, 1:T])
+        fix.(v, 1.0; force = true)
+        fix.(P, 0.0; force = true)
+        fix.(Q, 0.0; force = true)
+        fix.(l, 0.0; force = true)
+        @objective(m, Max, 0)
+        optimize!(m)
+        ctx = TSODSO.ModelContext(m)
+        ctx.meta[:feeder] = feeder2
+        ctx.meta[:T] = T
+        ctx.meta[:pf_vars] = (; v, P, Q, l)
+        return ctx
+    end
+    ctx1 = fixed_ctx(1)
+    ctx2 = fixed_ctx(2)
+
+    # Default (report = false): throws, per D-06.
+    @test_throws Exception assert_restriction_exact!(ctx1, ctx2)
+
+    # report = true on the SAME structural mismatch: assert_ac_exact!'s T-mismatch guard is
+    # a HARD structural error (never neutralized by ITS OWN report contract — it has none;
+    # T-mismatch is unconditional) — read from src/models/ac_oracle.jl: `T == ctx_ac.meta[:T]
+    # || error(...)` runs BEFORE any report/throw branching this file's own
+    # assert_restriction_exact! adds, so the exception propagates through unconditionally.
+    # report=true therefore ALSO throws here — it neutralizes AC-INFEASIBILITY findings
+    # (this certificate's own ac_feasible check), never STRUCTURAL mismatches upstream.
+    @test_throws Exception assert_restriction_exact!(ctx1, ctx2; report = true)
+end
