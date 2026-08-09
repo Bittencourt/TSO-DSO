@@ -179,7 +179,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 21-04-PLAN.md — Scenario.jl D-12 additive fields + nominal-plant state propagation/seeded forecast-error draw + MPC-02 dump/hoard regression
+- [x] 21-04-PLAN.md — Scenario.jl D-12 additive fields + nominal-plant state propagation/seeded forecast-error draw + MPC-02 dump/hoard regression
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -360,7 +360,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 8/8 | Complete    | 2026-08-08 |
 | 20. Overvoltage-Capable Relaxation | v3.0 | 5/5 | Complete    | 2026-08-09 |
-| 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 3/6 | In Progress|  |
+| 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 4/6 | In Progress|  |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
 | 23. Meshed Networks | v3.0 | 0/TBD | Not started | - |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
