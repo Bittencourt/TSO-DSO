@@ -281,10 +281,15 @@ of `FourQuadBESS` devices compose in one shared model alongside `ConvexBranchFlo
 named network `:cone` (the previous named `cone[t = 1:T]` container crashed both cases with
 `"An object of name cone is already attached to this model"`).
 
-Returns `(; vars = (; p_ch, p_dch, soc, q), p_inject, q_inject, utility)` where
+Returns `(; vars = (; p_ch, p_dch, soc, q, soc0), p_inject, q_inject, utility)` where
 `p_inject[t] == p_dch[t] − p_ch[t]` (a `Vector{AffExpr}`) and `q_inject === vars.q` (the
 SAME `Vector{VariableRef}` object, D-09) — the FIRST aggregatable device to carry a
 `q_inject` field; see `AbstractDevice.jl`'s widened Variant-2 contract note.
+
+`soc0` (MPC-01 seam, D-01) is a genuine JuMP `Parameter` handle for the SOC initial
+condition — the IDENTICAL idiom `PVBattery` applies — re-settable via
+`set_parameter_value` without rebuilding the constraint, and defaulting to the exact
+prior literal value `d.soc0` (byte-identical default).
 """
 function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
     m = ctx.model
@@ -297,7 +302,11 @@ function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
     # restriction (D-03: no cost/utility term on reactive power anywhere).
     q = @variable(m, [t = 1:T])
 
-    @constraint(m, soc[1] == d.soc0)
+    # MPC-01 seam (D-01): the SOC initial condition is now a genuine Parameter (soc0), the
+    # IDENTICAL idiom PVBattery applies — re-settable via `set_parameter_value` without
+    # rebuilding the constraint, and defaulting to the exact prior literal value.
+    @variable(m, soc0 in Parameter(d.soc0))
+    @constraint(m, soc[1] == soc0)
     if T > 1
         # SOC dynamics with round-trip efficiency (mirrors PVBattery eq. 3.6): η·p_ch in,
         # p_dch/η out (η² < 1).
@@ -341,7 +350,7 @@ function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
     # Signed active injection at the device's bus for the Aggregator's :Rp: net p (D-04).
     p_inject = [p_dch[t] - p_ch[t] for t in 1:T]
 
-    return (; vars = (; p_ch, p_dch, soc, q), p_inject, q_inject = q, utility)
+    return (; vars = (; p_ch, p_dch, soc, q, soc0), p_inject, q_inject = q, utility)
 end
 
 export FourQuadBESS

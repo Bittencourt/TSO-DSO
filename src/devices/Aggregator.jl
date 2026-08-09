@@ -136,10 +136,19 @@ Roll the aggregator's member devices into the single nodal quantities the networ
     so the assembly can run the post-solve battery-complementarity check.
 
 The member devices themselves write NOTHING to the residual/objective — the aggregator
-is the sole network-facing writer. Returns `(; vars, p_inject, q_inject, utility)` (the
-aggregate device vars, the net active injection vector, the net device-reactive-injection
-vector — `zero(AffExpr)` per `t` when no member device carries `q_inject`, MESH-04 D-09 —
-and the summed utility).
+is the sole network-facing writer. Returns
+`(; vars, p_inject, q_inject, utility, Pdc_param)` (the aggregate device vars, the net
+active injection vector, the net device-reactive-injection vector — `zero(AffExpr)` per
+`t` when no member device carries `q_inject`, MESH-04 D-09 — the summed utility, and the
+new `Pdc_param` handle).
+
+`Pdc_param` (MPC-01 seam, D-08) is a genuine JuMP `Parameter` vector for the per-step
+inelastic-demand profile — a future receding-horizon window slides this per absolute hour
+and layers a seeded demand-forecast perturbation on top (D-08's "PV **and demand** ground
+truth"), re-settable via `set_parameter_value.` without rebuilding either residual write.
+It defaults to the exact prior literal value `agg.Pdc[1:T]` (byte-identical default): the
+`:Rp`/`:Rq` writes below now reference `Pdc_param[t]` in place of the literal `agg.Pdc[t]`
+(the guard above still validates `length(agg.Pdc)` on the ORIGINAL field, unaffected).
 """
 function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     # Temporal-consistency guard: the net active injection reads P_dc[t] for t = 1:T.
@@ -153,6 +162,14 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     end
 
     tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis eq. 3.23)
+
+    # MPC-01 seam (D-08): the inelastic-demand profile is now a genuine per-step Parameter
+    # (Pdc_param), not the literal `agg.Pdc[t]` — re-settable via `set_parameter_value.`
+    # without rebuilding either residual write below, and defaulting to the exact prior
+    # literal value `agg.Pdc[1:T]` (byte-identical default). The length guard above still
+    # validates the ORIGINAL `agg.Pdc` field, unaffected.
+    m = ctx.model
+    @variable(m, Pdc_param[t = 1:T] in Parameter.(agg.Pdc[1:T]))
 
     # Accumulate the member devices' active injections and utilities (device-agnostic).
     # q_inject (MESH-04, D-09) accumulates the OPTIONAL device reactive injection — absent
@@ -181,8 +198,8 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     # the additive device q_inject sum (MESH-04, D-10 — purely additive on top of the
     # untouched inelastic term; byte-identical to (3.23) alone when q_inject is zero).
     for t in 1:T
-        add_to_residual!(ctx, :Rp, agg.bus, t, p_inject[t] - agg.Pdc[t])            # (3.22)
-        add_to_residual!(ctx, :Rq, agg.bus, t, -agg.Pdc[t] * tanφ + q_inject[t])    # (3.23) + D-10
+        add_to_residual!(ctx, :Rp, agg.bus, t, p_inject[t] - Pdc_param[t])          # (3.22)
+        add_to_residual!(ctx, :Rq, agg.bus, t, -Pdc_param[t] * tanφ + q_inject[t])  # (3.23) + D-10
     end
 
     # Σ U (thesis eq. 3.21) into the QuadExpr welfare accumulator.
@@ -192,7 +209,7 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
     append!(get!(store, agg.bus, Vector{Any}()), device_vars)
 
-    return (; vars = device_vars, p_inject, q_inject, utility)
+    return (; vars = device_vars, p_inject, q_inject, utility, Pdc_param)
 end
 
 export Aggregator, reactive_factor
