@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Research Extension Rungs
-status: executing
-stopped_at: Phase 19 context gathered
-last_updated: "2026-08-09T12:31:17.347Z"
+status: ready_to_plan
+stopped_at: Phase 21 complete (6/6) — ready to discuss Phase 22
+last_updated: 2026-08-09T16:36:55.784Z
 last_activity: 2026-08-09 -- Phase 21 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 19
-  completed_plans: 13
+  completed_plans: 19
   percent: 33
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 21 — MPC / Rolling-Horizon / Real-Time Pricing
+**Current focus:** Phase 22 — stochastic pv/demand uncertainty
 
 ## Current Position
 
-Phase: 21 (MPC / Rolling-Horizon / Real-Time Pricing) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 21
-Last activity: 2026-08-09 -- Phase 21 execution started
+Phase: 22
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-09
 
 ### Quick Tasks Completed
 
@@ -49,7 +49,7 @@ Last activity: 2026-08-09 -- Phase 21 execution started
 
 **Velocity:**
 
-- Total plans completed: 83 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 89 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -68,6 +68,7 @@ Last activity: 2026-08-09 -- Phase 21 execution started
 | 24. Discrete/Integer Investment Expansion | TBD | - | - |
 | 19 | 8 | - | - |
 | 20 | 5 | - | - |
+| 21 | 6 | - | - |
 
 **Recent Trend:**
 

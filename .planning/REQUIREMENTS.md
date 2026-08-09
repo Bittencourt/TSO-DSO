@@ -43,19 +43,19 @@ EXACT-04 knife-edge finding), keeping the pricing-as-convex-duals story intact.
 Closed-loop receding-horizon operation over the stateful devices, with rolling DADPs as a
 real-time price signal.
 
-- [ ] **MPC-01**: Researcher can run a **deterministic receding-horizon closed-loop solve**: at
+- [x] **MPC-01**: Researcher can run a **deterministic receding-horizon closed-loop solve**: at
       each step, a window `[t, t+H]` problem is initialized from the measured device state
       (battery SOC, thermostatic temperature) via JuMP `Parameter` injection — making the SEAM-01
       `horizon_state` stub load-bearing (or a sibling orchestrator per the v2.0 PlanningOracle
       precedent) — with build-once/re-solve per step, never a rebuild.
-- [ ] **MPC-02**: A **terminal-SOC condition** (hard terminal target for this rung) prevents
+- [x] **MPC-02**: A **terminal-SOC condition** (hard terminal target for this rung) prevents
       end-of-horizon myopic battery dump/hoarding, with a regression demonstrating the artifact
       is absent (and present when the condition is disabled).
-- [ ] **MPC-03**: The **rolling re-computed DADP** is published per step as an RTP signal, with
+- [x] **MPC-03**: The **rolling re-computed DADP** is published per step as an RTP signal, with
       price-consistency metrics (step-to-step price jumps, cumulative deviation from the
       day-ahead DADP path) recorded in a trace struct following the AdmmResiduals/BendersTrace
       convention.
-- [ ] **MPC-04**: The closed-loop trajectory is **benchmarked against the perfect-foresight
+- [x] **MPC-04**: The closed-loop trajectory is **benchmarked against the perfect-foresight
       day-ahead optimum** under seeded synthetic forecast error (bounded perturbation of the
       known ground truth), on an information-set-fair comparison, in a live-executed literate
       rung page.
@@ -167,10 +167,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OVR-02 | Phase 20 | Complete |
 | OVR-03 | Phase 20 | Complete |
 | OVR-04 | Phase 20 | Complete |
-| MPC-01 | Phase 21 | Pending |
-| MPC-02 | Phase 21 | Pending |
-| MPC-03 | Phase 21 | Pending |
-| MPC-04 | Phase 21 | Pending |
+| MPC-01 | Phase 21 | Complete |
+| MPC-02 | Phase 21 | Complete |
+| MPC-03 | Phase 21 | Complete |
+| MPC-04 | Phase 21 | Complete |
 | STOCH-01 | Phase 22 | Pending |
 | STOCH-02 | Phase 22 | Pending |
 | STOCH-03 | Phase 22 | Pending |
