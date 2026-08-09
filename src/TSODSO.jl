@@ -187,4 +187,11 @@ include("experiments/run.jl")           # ScenarioResult + run_scenario dispatch
 include("experiments/store.jl")         # run_and_store @tagsave provenance (plan 08-04, INFRA-04)
 include("experiments/sweep.jl")         # run_sweep + collate_summary diff-friendly CSV (plan 08-04, EXP-02)
 
+# --- MPC / rolling-horizon / real-time pricing: run_mpc(scenario) closed-loop orchestrator ---
+# Wired LAST (plan 21-05, MPC-01..04) after experiments/sweep.jl: run_mpc is an INDEPENDENT
+# entry point (D-01, Pitfall 7) — it is NOT wired through run_scenario's strategy dispatch,
+# reads Scenario's additive mpc_* fields (plan 21-04) directly, and consumes MpcWindow/
+# MpcTrace (plans 21-02/21-03) plus Phase-20's certificate/fallback ladder.
+include("experiments/mpc_loop.jl")
+
 end # module TSODSO

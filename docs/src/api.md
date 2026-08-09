@@ -98,7 +98,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["models/mpc_trace.jl", "models/mpc_window.jl"]
+Pages = ["models/mpc_trace.jl", "models/mpc_window.jl", "experiments/mpc_loop.jl"]
 Order = [:type, :constant, :function]
 ```
 
