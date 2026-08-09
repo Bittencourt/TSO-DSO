@@ -104,6 +104,10 @@ include("models/restriction_exactness.jl")
 # adjacent for readability. Reuses solve_welfare(..., ACPowerFlow(), ...) verbatim.
 include("models/ac_dual_fallback.jl")
 
+# --- MpcTrace: rolling-horizon price-consistency ledger (owned by plan 21-02, MPC-03) ---
+# JuMP-free, no ordering dependency; placed beside the other models/ files.
+include("models/mpc_trace.jl")
+
 # --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
 # Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
 # ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
