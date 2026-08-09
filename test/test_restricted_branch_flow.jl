@@ -304,6 +304,11 @@ end
     report_unrestricted = assert_restriction_exact!(ctx_unrestricted, ctx_ac; report = true)
     @test report_unrestricted.ac_feasible == false
     @test ctx_unrestricted.meta[:price_provenance].status == :cert_failed
+    # Review WR-01: the provenance formulation is READ from ctx.meta[:formulation] (the
+    # D-08 marker RestrictedBranchFlow.contribute! stashes), never fabricated by the
+    # certificate — a plain ConvexBranchFlow context (which stashes no marker) reports
+    # :unknown, not a false :RestrictedBranchFlow.
+    @test ctx_unrestricted.meta[:price_provenance].formulation == :unknown
     @test_throws Exception assert_restriction_exact!(ctx_unrestricted, ctx_ac)
 end
 

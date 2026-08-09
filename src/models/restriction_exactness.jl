@@ -109,9 +109,19 @@ Stashes the D-08 provenance marker UNCONDITIONALLY, on both the pass and fail pa
 a stale marker from a prior call on a reused `ctx` never survives a later failure,
 T-20-08), keyed on the PHYSICAL-feasibility verdict (never on `matches_ac_optimum`):
 
-    ctx_restricted.meta[:price_provenance] = (; formulation = :RestrictedBranchFlow,
+    ctx_restricted.meta[:price_provenance] = (;
+        formulation = get(ctx_restricted.meta, :formulation, :unknown),
         certificate = :assert_restriction_exact!,
         status = ac_feasible ? :certified_convex_dual : :cert_failed)
+
+The `formulation` field is READ from the `ctx.meta[:formulation]` marker the solved
+formulation's own `contribute!` stashed (`RestrictedBranchFlow.contribute!` writes
+`:RestrictedBranchFlow` there for exactly this purpose) — NEVER hardcoded by this
+certificate (review WR-01): the certificate accepts ANY solved branch-flow context (its own
+tests exercise it on a plain `ConvexBranchFlow` context), and fabricating
+`:RestrictedBranchFlow` provenance for a non-restricted solve would be false provenance. A
+context whose formulation never stashed the marker reports `formulation = :unknown` —
+honest, programmatically distinguishable, never a fabricated name.
 
 If `!ac_feasible`: builds a loud message naming `cone_rtol`/`cone_atol`, the worst per-branch
 cone-residual ratio, and the phase citation ("Gan-Low OPF-m/OPF-ε, Theorem 2; OVR-02"); if
@@ -262,9 +272,13 @@ function assert_restriction_exact!(
     # D-08 provenance, stashed UNCONDITIONALLY on both the pass and fail path (T-20-08: a
     # stale :certified_convex_dual marker must never survive a later failed certification on
     # a reused ctx), keyed on the PHYSICAL-feasibility verdict (ac_feasible), never on the
-    # matches_ac_optimum diagnostic.
+    # matches_ac_optimum diagnostic. The formulation is READ from the D-08 marker the solved
+    # formulation's own contribute! stashed (RestrictedBranchFlow.jl writes
+    # :RestrictedBranchFlow there for exactly this purpose) — never hardcoded here, so a
+    # plain ConvexBranchFlow (or any other) context is never handed fabricated
+    # :RestrictedBranchFlow provenance (review WR-01).
     ctx_restricted.meta[:price_provenance] = (;
-        formulation = :RestrictedBranchFlow,
+        formulation = get(ctx_restricted.meta, :formulation, :unknown),
         certificate = :assert_restriction_exact!,
         status = ac_feasible ? :certified_convex_dual : :cert_failed,
     )
