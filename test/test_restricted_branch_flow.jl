@@ -347,6 +347,17 @@ end
     # Default (report = false): throws, per D-06.
     @test_throws Exception assert_restriction_exact!(ctx1, ctx2)
 
+    # Review WR-02 / T-20-08: a STALE :certified_convex_dual marker from a prior call on a
+    # reused ctx must NOT survive the structural-mismatch throw path (assert_ac_exact!
+    # raises BEFORE the final stash runs) — the certificate scrubs the marker as its first
+    # action, so after the throw the reused ctx carries no marker at all.
+    ctx1.meta[:price_provenance] =
+        (; formulation = :RestrictedBranchFlow,
+            certificate = :assert_restriction_exact!,
+            status = :certified_convex_dual)
+    @test_throws Exception assert_restriction_exact!(ctx1, ctx2)
+    @test !haskey(ctx1.meta, :price_provenance)
+
     # report = true on the SAME structural mismatch: assert_ac_exact!'s T-mismatch guard is
     # a HARD structural error (never neutralized by ITS OWN report contract — it has none;
     # T-mismatch is unconditional) — read from src/models/ac_oracle.jl: `T == ctx_ac.meta[:T]

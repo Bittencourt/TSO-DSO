@@ -105,9 +105,16 @@ generalized to the full per-hour diagnostic, never suppressed.
 is an explicit, documented "not requested" contract, never silently treated as `0.0`,
 T-20-09).
 
-Stashes the D-08 provenance marker UNCONDITIONALLY, on both the pass and fail path (so
-a stale marker from a prior call on a reused `ctx` never survives a later failure,
-T-20-08), keyed on the PHYSICAL-feasibility verdict (never on `matches_ac_optimum`):
+Stashes the D-08 provenance marker UNCONDITIONALLY, on both the pass and fail path — and
+SCRUBS any pre-existing `:price_provenance` marker as its very FIRST action, before any
+call that can throw (review WR-02): the internal `assert_ac_exact!` raises unconditionally
+on a structural `T` mismatch (and `KeyError`s on missing `pf_vars`) BEFORE the final stash
+runs, so without the up-front scrub a stale `:certified_convex_dual` marker from a prior
+call on a reused `ctx` would survive exactly that failure path — the hazard T-20-08 names.
+After a structural-mismatch throw the reused `ctx` therefore carries NO
+`:price_provenance` marker at all (scrubbed, honest), and on every non-throwing path the
+fresh marker is stashed, keyed on the PHYSICAL-feasibility verdict (never on
+`matches_ac_optimum`):
 
     ctx_restricted.meta[:price_provenance] = (;
         formulation = get(ctx_restricted.meta, :formulation, :unknown),
@@ -228,6 +235,13 @@ function assert_restriction_exact!(
     unrestricted_cost::Union{Real, Nothing} = nothing,
     report::Bool = false,
 )
+    # T-20-08 (review WR-02): scrub any stale provenance marker FIRST, before anything that
+    # can throw — the assert_ac_exact! call below raises unconditionally on a structural
+    # T-mismatch (and KeyErrors on missing pf_vars), and on that path the final stash never
+    # runs. Without this scrub, a stale :certified_convex_dual from a prior call on a
+    # reused ctx would survive exactly the failure T-20-08 forbids.
+    delete!(ctx_restricted.meta, :price_provenance)
+
     # --- Certification gate: PHYSICAL AC-feasibility of ctx_restricted itself, via the SAME
     # per-branch, per-hour cone-equality residual assert_socp_exact! gates — but with THIS
     # certificate's OWN, independently-measured cone_rtol/cone_atol (never
