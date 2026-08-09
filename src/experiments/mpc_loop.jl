@@ -74,7 +74,11 @@ A `NamedTuple` `(; trace, day_ahead_welfare, realized_welfare, regret, day_ahead
 steps)`:
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
-    cumulative deviation, and certificate/fallback status (MPC-03).
+    cumulative deviation, and certificate/fallback status (MPC-03). The status is one of
+    `:certified_convex_dual` (first-tier inline cone check passed), `:local_ac_dual`
+    (nonconvex-AC-dual fallback tier), or the TERMINAL `:cert_failed` (every escalation tier
+    failed — the published price for that resolve is the day-ahead reference DADP slice, and
+    each tier's failure reason is `@warn`ed; CR-02's genuinely non-throwing D-04 ladder).
   - `day_ahead_welfare::Float64` — the FULL perfect-foresight day-ahead welfare (`s.T` hours,
     the complete materialized population INCLUDING any `Deferrable` device — see this file's
     header deviation note).
@@ -227,6 +231,7 @@ function run_mpc(s::Scenario)
             t;
             measured_state = measured_state,
             fe = fe,
+            fallback_price = dadp_da,
         )
         cert_status = cert.cert_status
         price_vec = cert.price_vec
@@ -306,7 +311,9 @@ end
 
 """
     _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int;
-                           measured_state, fe)
+                           measured_state, fe, fallback_price = λ₀,
+                           _solve_welfare = solve_welfare,
+                           _ac_dual_fallback_price = ac_dual_fallback_price)
         -> (; cert_status::Symbol, price_vec::Vector{Float64}, cone_maxratio::Float64)
 
 Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check
@@ -337,13 +344,37 @@ On a certified step: `cert_status = :certified_convex_dual`, `price_vec =
 dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
 escalates through Phase-20's OWN ladder (never invents a new tolerance) — a ONE-OFF
 [`RestrictedBranchFlow`](@ref)`()` solve + [`ACPowerFlow`](@ref)`()` cross-solve +
-[`assert_restriction_exact!`](@ref)`(...; report = true)`; if THAT also fails,
+[`assert_restriction_exact!`](@ref)`(...; report = true)`; if THAT does not certify,
 [`ac_dual_fallback_price`](@ref), publishing `cert_status = :local_ac_dual`. Every escalation
 tier solves the window-sliced problem (the ONE documented difference from the main window:
 `solve_welfare` has no terminal-SOC hook, so the optional hard terminal pin (D-06) is absent
-from the escalation problem — an accepted, rare-path approximation). `@warn`s once so a
-researcher running interactively sees the escalation — this function itself NEVER throws
-(D-04).
+from the escalation problem — an accepted, rare-path approximation).
+
+# The never-throw contract (CR-02 — D-04 is now genuine, not aspirational)
+
+Each escalation tier runs inside a `catch` that routes its DOCUMENTED failure modes into the
+returned status instead of propagating out of `run_mpc` mid-loop: `assert_solved!` retry
+exhaustion, `assert_battery_complementarity!`'s legitimate negative-effective-price throw
+(`FourQuadBESS.jl`'s step-3 derivation — the very regime that trips the inline cone check),
+and `assert_ac_exact!`'s structural guards. `InterruptException` is ALWAYS rethrown. The
+restricted-tier `solve_welfare` is called with `rtol_exact = Inf`, neutralizing ITS internal
+`assert_socp_exact!` gate on that one solve only: that gate's `rtol = 1e-4` is STRICTER than
+`assert_restriction_exact!`'s own independently-measured `cone_rtol = 5e-4`, so leaving it
+active would throw out of the ladder in precisely the regime the fallback tier exists for —
+the restricted tier's cone verdict is OWNED by `assert_restriction_exact!(report = true)`.
+
+If BOTH tiers fail, the TERMINAL `cert_status = :cert_failed` (the symbol
+[`MpcTrace`](@ref)/[`any_cert_failed`](@ref) advertise — genuinely producible, WR-04) is
+returned with `price_vec = fallback_price[t:(t+H-1)]` as the documented price policy:
+`run_mpc` passes the day-ahead reference DADP path (`dadp_da`) as `fallback_price`; the
+default is `λ₀` itself (the MEM price) for direct drivers. Each tier's failure reason is
+`@warn`ed (never swallowed silently).
+
+`_solve_welfare`/`_ac_dual_fallback_price` are INTERNAL TEST SEAMS (default to the real
+functions): the terminal `:cert_failed` tier is unreachable on any cheap CI fixture by
+construction (a fixture where BOTH a restricted SOCP and a multi-start NLP genuinely fail is
+not economically buildable in CI), so `test_mpc_loop.jl` injects throwing stand-ins to
+deterministically exercise the catch/ledger paths. Production callers NEVER pass them.
 """
 function _mpc_certify_and_price(
     feeder,
@@ -353,6 +384,9 @@ function _mpc_certify_and_price(
     t::Int;
     measured_state::AbstractDict{Tuple{Int, Symbol}, Float64},
     fe::NamedTuple,
+    fallback_price::AbstractVector{<:Real} = λ₀,
+    _solve_welfare = solve_welfare,
+    _ac_dual_fallback_price = ac_dual_fallback_price,
 )
     pv = o.ctx.meta[:pf_vars]
     cone_maxratio = 0.0
@@ -386,39 +420,96 @@ function _mpc_certify_and_price(
         # is absent from the escalation problem.
         λ₀_window = λ₀[t:(t + o.H - 1)]
         esc_aggs = _mpc_escalation_aggregators(mpc_aggs, t, o.H, fe, measured_state)
-        ctx_restricted, _, _ = solve_welfare(
-            feeder,
-            RestrictedBranchFlow(),
-            esc_aggs;
-            T = o.H,
-            λ₀ = λ₀_window,
-            allow_export = true,
-        )
-        ctx_ac, _, _ = solve_welfare(
-            feeder,
-            ACPowerFlow(),
-            esc_aggs;
-            T = o.H,
-            λ₀ = λ₀_window,
-            allow_local = true,
-            allow_export = true,
-        )
-        report = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
-        if report.ac_feasible
-            cert_status = :certified_convex_dual
-            price_vec = dual.(ctx_restricted.constraints[:balance_p][o.agg_bus, :])
-        else
-            fallback = ac_dual_fallback_price(
+
+        # CR-02 (D-04's ladder is now GENUINELY non-throwing): both escalation tiers run
+        # inside a catch that routes each tier's DOCUMENTED failure modes into the ledger
+        # instead of propagating out of run_mpc mid-loop (losing the trace accumulated so
+        # far). The documented throwers inside a tier: assert_solved! retry exhaustion,
+        # assert_battery_complementarity! (LEGITIMATELY throws in the negative-effective-
+        # price / high-PV regime — exactly the regime that trips the inline cone check,
+        # FourQuadBESS.jl's step-3 derivation), and assert_ac_exact!'s structural guards.
+        # InterruptException is ALWAYS rethrown (a user Ctrl-C is never a certificate
+        # verdict). If BOTH tiers fail, the terminal `:cert_failed` status (the symbol
+        # MpcTrace/any_cert_failed have always advertised) is published with the
+        # caller-supplied `fallback_price` window slice as the price policy — run_mpc passes
+        # the day-ahead reference DADP path; the default is λ₀ itself.
+        cert_status = :cert_failed
+        price_vec = Float64[fallback_price[t + τ - 1] for τ in 1:(o.H)]
+        tier_reasons = String[]
+
+        # Tier 2 — RestrictedBranchFlow solve + AC cross-solve + Phase-20's own certificate.
+        # `rtol_exact = Inf` neutralizes solve_welfare's INTERNAL assert_socp_exact! gate on
+        # the restricted solve ONLY (CR-02 point 1): that gate's rtol = 1e-4 is STRICTER
+        # than assert_restriction_exact!'s own independently-measured cone_rtol = 5e-4, so
+        # leaving it active would throw out of the ladder in precisely the regime the
+        # ac_dual_fallback_price tier exists for — the restricted tier's cone verdict is
+        # OWNED by assert_restriction_exact! (report = true) below, never by the internal
+        # gate.
+        try
+            ctx_restricted, _, _ = _solve_welfare(
                 feeder,
+                RestrictedBranchFlow(),
                 esc_aggs;
                 T = o.H,
                 λ₀ = λ₀_window,
                 allow_export = true,
+                rtol_exact = Inf,
             )
-            cert_status = :local_ac_dual
-            price_vec = fallback.dadp
+            ctx_ac, _, _ = _solve_welfare(
+                feeder,
+                ACPowerFlow(),
+                esc_aggs;
+                T = o.H,
+                λ₀ = λ₀_window,
+                allow_local = true,
+                allow_export = true,
+            )
+            report = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
+            if report.ac_feasible
+                cert_status = :certified_convex_dual
+                price_vec = Vector{Float64}(
+                    dual.(ctx_restricted.constraints[:balance_p][o.agg_bus, :]),
+                )
+            else
+                push!(
+                    tier_reasons,
+                    "restricted tier: ac_feasible = false (the OPF-m restriction did not " *
+                    "restore cone tightness)",
+                )
+            end
+        catch err
+            err isa InterruptException && rethrow()
+            push!(tier_reasons, "restricted tier threw: " * sprint(showerror, err))
         end
-        @warn "run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder" t cone_maxratio cert_status
+
+        # Tier 3 — nonconvex-AC-dual fallback pricer, only reached when tier 2 did not
+        # certify (D-09's trigger discipline: the CALLER invokes the fallback after seeing
+        # the certificate fail).
+        if cert_status === :cert_failed
+            try
+                fallback = _ac_dual_fallback_price(
+                    feeder,
+                    esc_aggs;
+                    T = o.H,
+                    λ₀ = λ₀_window,
+                    allow_export = true,
+                )
+                cert_status = :local_ac_dual
+                price_vec = Vector{Float64}(fallback.dadp)
+            catch err
+                err isa InterruptException && rethrow()
+                push!(tier_reasons, "AC-dual fallback tier threw: " * sprint(showerror, err))
+            end
+        end
+
+        if cert_status === :cert_failed
+            @warn "run_mpc: EVERY escalation tier failed — publishing :cert_failed with the reference fallback price for this window (D-04: never throws mid-loop)" t cone_maxratio cert_status reasons = join(
+                tier_reasons,
+                " | ",
+            )
+        else
+            @warn "run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder" t cone_maxratio cert_status
+        end
     end
 
     return (; cert_status, price_vec = Vector{Float64}(price_vec), cone_maxratio)

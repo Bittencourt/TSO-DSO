@@ -184,6 +184,94 @@ end
     @test prices[1] != prices[4]   # the CR-01 regression: t-window-distinct escalation price
 end
 
+@testitem "mpc_loop: ladder terminal failure publishes :cert_failed with the reference fallback price — NEVER throws (CR-02, D-04, WR-04)" tags =
+    [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+    using JuMP: set_parameter_value, set_objective_coefficient
+
+    # The terminal :cert_failed tier is unreachable on any cheap CI fixture by construction
+    # (a fixture where BOTH the restricted SOCP and the multi-start NLP genuinely fail is not
+    # economically buildable in CI), so this item drives _mpc_certify_and_price's DOCUMENTED
+    # internal test seams (_solve_welfare/_ac_dual_fallback_price) with throwing stand-ins —
+    # deterministically exercising the SAME catch/ledger code paths a genuine tier failure
+    # (assert_solved! retry exhaustion, assert_battery_complementarity!'s legitimate
+    # negative-price throw) takes in production.
+    feeder = Phase21Fixtures.mpc_high_pv_feeder()
+    aggs = Phase21Fixtures.build_mpc_high_pv_aggregators(
+        feeder;
+        pv_scale = Phase21Fixtures.MPC_HIGH_PV_SCALE_MEASURED,
+    )
+    H = Phase21Fixtures.H
+    λ₀ = Phase21Fixtures.mpc_lambda0()
+
+    ms = Dict{Tuple{Int, Symbol}, Float64}()
+    for agg in aggs, d in agg.devices
+        hasproperty(d, :soc0) && (ms[(agg.bus, :soc)] = Float64(d.soc0))
+        hasproperty(d, :Tin0) && (ms[(agg.bus, :Tin)] = Float64(d.Tin0))
+    end
+    fe = (; pv_factor = 1.0, demand_factor = 1.0)
+
+    o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    for agg in aggs
+        varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+        for (d, v) in zip(agg.devices, varlist)
+            haskey(v, :Ppv_param) && set_parameter_value.(v.Ppv_param, d.Ppv[1:H])
+            haskey(v, :Tout_param) && set_parameter_value.(v.Tout_param, d.Tout[1:(H - 1)])
+        end
+    end
+    for handle in o.agg_pdc_handles
+        agg = only(a for a in aggs if a.bus == handle.bus)
+        set_parameter_value.(handle.Pdc_param, agg.Pdc[1:H])
+    end
+    for τ in 1:H
+        set_objective_coefficient(o.model, o.p_import[τ], -λ₀[τ])
+    end
+    solve_mpc_window!(o)
+
+    boom = (args...; kwargs...) -> error("forced tier failure (test seam)")
+    fallback_ref = Float64[2.0 + 0.1 * t for t in eachindex(λ₀)]   # distinguishable slice
+
+    # BOTH tiers fail → the terminal :cert_failed with the fallback_price window slice —
+    # reaching this line at all (no exception propagated) IS the D-04 assertion.
+    result = TSODSO._mpc_certify_and_price(
+        feeder,
+        aggs,
+        o,
+        λ₀,
+        2;
+        measured_state = ms,
+        fe = fe,
+        fallback_price = fallback_ref,
+        _solve_welfare = boom,
+        _ac_dual_fallback_price = boom,
+    )
+    @test result.cone_maxratio > 1                       # pre-condition: escalation triggered
+    @test result.cert_status == :cert_failed
+    @test result.price_vec == fallback_ref[2:(2 + H - 1)]   # the t-sliced reference policy
+
+    # The terminal failure must SURFACE in the ledger: any_cert_failed is no longer
+    # structurally vacuous (WR-04).
+    trace = MpcTrace()
+    record!(trace, 1, result.price_vec[1], 4.0, result.cert_status)
+    @test any_cert_failed(trace)
+
+    # Tier-2 failure alone still lands on the genuine tier-3 pricer (:local_ac_dual): only
+    # the restricted-tier seam throws; ac_dual_fallback_price runs for real.
+    result_t3 = TSODSO._mpc_certify_and_price(
+        feeder,
+        aggs,
+        o,
+        λ₀,
+        2;
+        measured_state = ms,
+        fe = fe,
+        _solve_welfare = boom,
+    )
+    @test result_t3.cert_status == :local_ac_dual
+    @test length(result_t3.price_vec) == H
+    @test all(isfinite, result_t3.price_vec)
+end
+
 @testitem "mpc_loop: mpc_step genuinely strides the resolve cadence — NOT a silently-inert kwarg (D-03, checker revision 1)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
     using TSODSO, Test
