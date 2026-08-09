@@ -51,8 +51,9 @@ include("powerflow/ConvexBranchFlow.jl")
 # file defines) and before problem_class_trait.jl; it adds `problem_class(::ACPowerFlow) = NLP()`.
 include("powerflow/ACPowerFlow.jl")
 
-# --- Gan-Low OPF-ε restricted formulation (owned by plan 20-02, OVR-01) --- included right
-# after ACPowerFlow.jl: it delegates to ConvexBranchFlow.contribute! and must load after it.
+# --- Gan-Low OPF-m restricted formulation, with optional OPF-ε margin (owned by plan
+# 20-02, OVR-01) --- included right after ACPowerFlow.jl: it delegates to
+# ConvexBranchFlow.contribute! and must load after it.
 include("powerflow/RestrictedBranchFlow.jl")
 
 # --- Power-flow → problem-class routing trait (owned by plan 04-01, INFRA-02 / PF-03) ---

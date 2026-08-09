@@ -1,4 +1,4 @@
-# # Rung 3 — Overvoltage-Capable Relaxation: A Gan-Low OPF-ε Restriction
+# # Rung 3 — Overvoltage-Capable Relaxation: A Gan-Low OPF-m Restriction
 #
 # The previous page ("Rung 3: AC-Exactness Oracle") documented a genuine SOC-relaxation
 # inexactness on a high-PV, reverse-flow feeder (EXACT-04): the SOCP relaxation pins a bus
