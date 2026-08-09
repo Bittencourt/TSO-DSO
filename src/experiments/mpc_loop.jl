@@ -69,10 +69,16 @@ loop), then re-solve a build-once [`MpcWindow`](@ref) every `s.mpc_step` real ho
 rebuilding it), dispatching Phase-20's own certificate/fallback ladder on every resolve and
 recording every published hour into an [`MpcTrace`](@ref).
 
-# Guards (before any materialization)
+# Guards
 
-`s.mpc_step > s.mpc_H` throws `ArgumentError` — a resolve cannot hold its plan longer than
-the window it solved.
+Before any materialization: `s.mpc_step > s.mpc_H` throws `ArgumentError` — a resolve cannot
+hold its plan longer than the window it solved.
+
+After the population materializes: with ANY stateful device present (battery SOC /
+thermostatic temperature — every `:default` population), `s.mpc_step > s.mpc_H − 1` throws
+`ArgumentError` (WR-02): the window's `H`-th control carries no modeled state consequence
+(the recursions cover `τ ≤ H−1`), so applying it can push the propagated measured state out
+of its structural band and make the next resolve's IC pin infeasible mid-loop.
 
 # Returns
 
@@ -155,6 +161,31 @@ function run_mpc(s::Scenario)
         Aggregator(agg.bus, agg.φ, filter(d -> !(d isa Deferrable), agg.devices), agg.Pdc) for
         agg in aggs
     ]
+
+    # WR-02: the window's soc/Tin states have length H and the recursions cover τ ≤ H−1, so
+    # the controls at τ = H carry NO modeled state consequence — the optimizer can
+    # discharge/consume freely there (e.g. p_dch[H] limited only by Pmax, not stored
+    # energy). APPLYING that dynamics-uncovered interval (which mpc_step == mpc_H does on
+    # every full resolve) can push the propagated measured state out of its structural band,
+    # making the NEXT window's IC pin infeasible → a cryptic mid-loop solver throw. With any
+    # stateful device present, a resolve may therefore hold its plan at most H−1 hours.
+    # (A hypothetical all-stateless population has no propagated state and keeps the looser
+    # mpc_step ≤ mpc_H guard above.)
+    has_stateful = any(
+        hasproperty(d, :soc0) || hasproperty(d, :Tin0) for agg in mpc_aggs for
+        d in agg.devices
+    )
+    if has_stateful && s.mpc_step > s.mpc_H - 1
+        throw(
+            ArgumentError(
+                "run_mpc: with stateful devices (battery SOC / thermostatic temperature) " *
+                "the step size must satisfy mpc_step ≤ mpc_H − 1 — the window's H-th " *
+                "control carries no modeled state consequence, so applying it can drive " *
+                "the measured state out of bounds and make the next resolve infeasible " *
+                "(got mpc_step=$(s.mpc_step), mpc_H=$(s.mpc_H))",
+            ),
+        )
+    end
 
     # --- 2. ONE-TIME day-ahead perfect-foresight benchmarks (solve_welfare called EXACTLY
     # TWICE, both at T = s.T, NEVER inside the per-resolve loop):

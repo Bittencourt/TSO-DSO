@@ -298,6 +298,13 @@ end
     s_bad = Scenario(; base..., mpc_H = 3, mpc_step = 5)
     @test_throws ArgumentError run_mpc(s_bad)
 
+    # WR-02: with stateful devices (every :default population), mpc_step == mpc_H would
+    # apply the window's dynamics-UNCOVERED H-th control (the recursions cover τ ≤ H−1),
+    # which can drive the propagated measured state out of bounds and crash the NEXT
+    # resolve — rejected loudly up front: mpc_step must be ≤ mpc_H − 1.
+    s_free_lunch = Scenario(; base..., mpc_H = 3, mpc_step = 3)
+    @test_throws ArgumentError run_mpc(s_free_lunch)
+
     @info "mpc_loop mpc_step stride measured difference" r_step1.realized_welfare r_step2.realized_welfare r_step1.regret r_step2.regret r_step1.trace.dadp_trace r_step2.trace.dadp_trace
 
     # LOAD-BEARING assertion (D-03, checker revision 1): mpc_step must produce a genuinely
