@@ -164,7 +164,18 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
-**v3.0 in progress — Phase 19 complete (2026-08-08):** 4Q-BESS + Live Reactive Dual-Ascent
+**v3.0 in progress — Phase 20 complete (2026-08-09):** Overvoltage-Capable Relaxation
+(OVR-01..04). `RestrictedBranchFlow` implements Gan–Low's **OPF-m** shadow-voltage restriction
+(`v̂_GL(s) ≤ v̄`) — cone-exact on the EXACT-04 high-PV fixture (gap 2.08e-8) where the plain SOCP
+was proven inexact; the simpler OPF-ε bound-shrink was **proven insufficient** (full feasible-range
+sweep, reverse-flow-driven residual — kept as a citable negative result). `assert_restriction_exact!`
+certifies physical AC-feasibility + reports optimality loss (≈1.43 vs unrestricted bound;
+`matches_ac_optimum=false` diagnostic — OPF-m provably excludes the AC optimum there);
+`ac_dual_fallback_price` gives factory-routed multi-start Ipopt local duals with structural
+`price_status` on certificate failure. Live literate rung page. Verification 4/4; review 1 Critical
++ 6 Warnings all fixed; suite 2563 pass / 0 fail / 3 pre-existing broken. Next: Phase 21 (MPC).
+
+**v3.0 Phase 19 complete (2026-08-08):** 4Q-BESS + Live Reactive Dual-Ascent
 (MESH-04/MESH-05). `FourQuadBESS` device (apparent-power cone, anonymous constraints), Aggregator
 `q_inject` roll-up, `assert_4q_complementarity!` certificate with measurement-derived tolerances,
 3-state `ReactiveMode` (OFF/CERTIFIED/LIVE), and a jointly-converging (λ, μ_q) two-block dual
@@ -304,4 +315,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-08 — Phase 19 (4Q-BESS + Live Reactive Dual-Ascent) complete*
+*Last updated: 2026-08-09 — Phase 20 (Overvoltage-Capable Relaxation) complete*
