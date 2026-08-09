@@ -25,6 +25,12 @@ findings:
   info: 5
   total: 15
 status: issues_found
+fix_pass:
+  fixed_at: 2026-08-09
+  fixer: Claude (gsd-code-fixer)
+  scope: critical_warning
+  fixed: 10
+  skipped: 5
 ---
 
 # Phase 21: Code Review Report
@@ -61,6 +67,31 @@ ladder has multiple reachable throwing calls despite the explicit "never throws"
 contract, and the regret metric's day-ahead frontier term violates the file's own
 "identical device set" claim — three Critical findings, all in the phase's headline
 correctness/honesty surface.
+
+## Fix Status (2026-08-09, `/gsd:code-review --fix` pass)
+
+All 3 Critical and 7 Warning findings FIXED, each in its own atomic commit, each verified
+with a targeted behavioral regression (not just a syntax check) before committing; the full
+suite was re-run green afterwards. Info findings were OUT of the fix scope
+(`critical_warning`) and remain open, except where noted.
+
+| Finding | Status | Commit | Verification evidence |
+|---------|--------|--------|-----------------------|
+| CR-01 | fixed | `d3937f9` | Escalation now prices the t-window via window-sliced device structs (`_mpc_escalation_aggregators`); regression: under a FLAT λ₀ the escalation prices at t=1 vs t=4 MUST differ (pre-fix they were identical) — `test_mpc_loop.jl`'s new t>1 item, plus slicing unit checks. |
+| CR-02 | fixed | `9b401b7` | Per-tier catch (InterruptException rethrown), `rtol_exact = Inf` on the restricted-tier solve (its cone verdict is owned by `assert_restriction_exact!`), terminal `:cert_failed` + day-ahead-reference fallback price. New seam-driven test forces both tiers to fail and asserts no throw + `:cert_failed` + `any_cert_failed`. |
+| CR-03 | fixed | `b610e30` | Second one-time day-ahead benchmark over `mpc_aggs` (`ctx_da_cmp`) sources BOTH comparison utilities and `p_import`; D-06 terminal targets track the same context. Literate page re-measured: regret flipped from the biased small POSITIVE to −0.0321 (honest shortfall vs the upper bound); narration updated. |
+| WR-01 | fixed (documented) | `834ca3f` | The review's documented-minimum option: forecast-consistent settlement convention (incl. the `pv_factor > 1` A6 caveat and why a small positive regret is possible) documented in the docstring + settlement-line comment. Truth re-settlement is plant-model mismatch beyond forecast error — explicitly deferred (21-CONTEXT `<deferred>`). |
+| WR-02 | fixed | `c5f6351` | `mpc_step ≤ mpc_H − 1` required when any stateful device is present (all-stateless keeps the looser guard); loud `ArgumentError` + stride-test regression. |
+| WR-03 | fixed | `225da01` | `build_mpc_window` throws on `terminal_soc && H == 1` with an explanatory message; `H = 1` without the toggle stays buildable. Tests added. |
+| WR-04 | fixed | `0bca045` | Restricted-tier rescue publishes `:certified_convex_dual_restricted` (distinct provenance); `:cert_failed` reachability landed with CR-02, making `any_cert_failed` genuinely producible. `MpcTrace` docs vocabulary + tests + literate page updated. |
+| WR-05 | fixed | `9a9c061` | `_mpc_assert_state_keying` (factored, directly testable) throws on duplicate aggregator buses and on two same-kind stateful devices per bus; synthetic-violation tests (incl. PVBattery + FourQuadBESS on one bus). |
+| WR-06 | fixed | `0be6037` | `allow_export` threaded into `build_mpc_window` (`p_import ≥ 0` when false, mirroring `solve_welfare`) and all three escalation-tier solves; frontier-structure tests + a no-export end-to-end `run_mpc` (which genuinely escalates through the ladder without throwing — PF-04 behaving as designed). |
+| WR-07 | fixed | `4698ea8` | `s.mpc_H ≤ s.T` guarded at the top of `run_mpc` (kept out of `Scenario`'s constructor deliberately — a constructor bound would break every short-`T` non-MPC Scenario relying on the `mpc_H = 6` default); guard test. |
+| IN-01 | skipped | — | Out of fix scope. Note: CR-01's `_mpc_window_device` DID gain a loud `ArgumentError` fallback method; `_mpc_device_hour_utility`'s docstring signature remains as reviewed. |
+| IN-02 | skipped | — | Out of fix scope (`mean_jump` dilution is documented behavior). |
+| IN-03 | skipped | — | Out of fix scope (non-concrete `MpcWindow` handle-vector fields). |
+| IN-04 | skipped | — | Out of fix scope (`set_parameter_value!` doc typo). |
+| IN-05 | partially addressed | `b610e30` | The regret framing half was rewritten with CR-03 (the "slightly exceeds" claim is gone; the bias is now named on the page); the `max_jump`/`mean_jump` prose was softened to descriptive wording. Formally out of scope. |
 
 ## Critical Issues
 
