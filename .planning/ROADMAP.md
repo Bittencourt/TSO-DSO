@@ -170,8 +170,8 @@ schema-fragile, golden-hash-bearing file.
 Plans:
 **Wave 1**
 
-- [ ] 21-01-PLAN.md — Parameter-widen PVBattery/Thermostatic/FourQuadBESS/Aggregator (soc0/Tin0/Ppv/Tout/Pdc), the SEAM-01 build-once mechanism's prerequisite
-- [ ] 21-02-PLAN.md — MpcTrace ledger (AdmmResiduals/BendersTrace convention) for per-step DADP/jump/cumulative-deviation/certificate-status
+- [x] 21-01-PLAN.md — Parameter-widen PVBattery/Thermostatic/FourQuadBESS/Aggregator (soc0/Tin0/Ppv/Tout/Pdc), the SEAM-01 build-once mechanism's prerequisite
+- [x] 21-02-PLAN.md — MpcTrace ledger (AdmmResiduals/BendersTrace convention) for per-step DADP/jump/cumulative-deviation/certificate-status
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -360,7 +360,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 8/8 | Complete    | 2026-08-08 |
 | 20. Overvoltage-Capable Relaxation | v3.0 | 5/5 | Complete    | 2026-08-09 |
-| 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 0/TBD | Not started | - |
+| 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 2/6 | In Progress|  |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
 | 23. Meshed Networks | v3.0 | 0/TBD | Not started | - |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |

@@ -4,8 +4,8 @@ milestone: v3.0
 milestone_name: Research Extension Rungs
 status: executing
 stopped_at: Phase 19 context gathered
-last_updated: "2026-08-09T12:31:06.091Z"
-last_activity: 2026-08-09 -- Phase 21 planning complete
+last_updated: "2026-08-09T12:31:17.347Z"
+last_activity: 2026-08-09 -- Phase 21 execution started
 progress:
   total_phases: 6
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 21 — mpc / rolling horizon / real time pricing
+**Current focus:** Phase 21 — MPC / Rolling-Horizon / Real-Time Pricing
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-09 -- Phase 21 planning complete
+Phase: 21 (MPC / Rolling-Horizon / Real-Time Pricing) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 21
+Last activity: 2026-08-09 -- Phase 21 execution started
 
 ### Quick Tasks Completed
 
