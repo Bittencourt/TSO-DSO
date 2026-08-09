@@ -250,10 +250,20 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
     # both defaulting to the exact prior literal value. `Tout_param` covers ONLY
     # `t = 1:(T-1)` since the recursion never reads `Tout[T]` (guarded against T == 1: no
     # recursion constraint — and hence no Tout_param — is built in that case, unchanged).
-    @variable(m, Tin0 in Parameter(d.Tin0))
+    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): both Parameters are declared
+    # via the ANONYMOUS form, never a NAMED `@variable(m, Tin0 in Parameter(...))`/
+    # `@variable(m, Tout_param[t=1:(T-1)] in Parameter.(...))` — a named container registers
+    # a symbol in the model's object dictionary, which collides ("An object of name Tin0/
+    # Tout_param is already attached to this model") the moment a SECOND `Thermostatic`
+    # contributes to the SAME model (any population with more than one Thermostatic-bearing
+    # aggregator — the common case, discovered running `run_mpc` against the default
+    # multi-aggregator `:ieee13` population). Anonymous construction (mirrors
+    # `FourQuadBESS`'s own anonymous apparent-power cone, `FourQuadBESS.jl:332`) is
+    # byte-identical in value/behavior — only the registration mechanics differ.
+    Tin0 = @variable(m, set = Parameter(d.Tin0))
     @constraint(m, Tin[1] == Tin0)
     if T > 1
-        @variable(m, Tout_param[t = 1:(T - 1)] in Parameter.(d.Tout[1:(T - 1)]))
+        Tout_param = @variable(m, [t = 1:(T - 1)], set = Parameter(d.Tout[t]))
         @constraint(
             m,
             [t = 1:(T - 1)],

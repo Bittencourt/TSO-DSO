@@ -242,6 +242,24 @@
         ]
     end
 
+    # MEASURED (plan 21-05, Task 2 — "measured, not guessed" discipline): the pv_scale that
+    # reliably trips the inline cone-residual check (rtol=1e-4, atol=1e-6, run_mpc's own
+    # per-resolve formula) on THIS fixture's short H=3 window, sliced from a Tsteps=T=8 PV
+    # draw (`build_mpc_high_pv_aggregators(mpc_high_pv_feeder(); pv_scale, Tsteps = T)`, then
+    # `d.Ppv[1:H]`/`d.Pdc[1:H]` slid into `build_mpc_window(...; H = H)` — the EXACT shape
+    # run_mpc's own window construction uses, NOT a bare `Tsteps = H` draw, which measures a
+    # DIFFERENT problem). Scanned pv_scale ∈ {1.0, 2.0, 2.5, 3.0, 4.0, ..., 1024.0} at a flat
+    # λ₀ = LAMBDA0_MPC, terminal_soc = false: a sharp knife-edge transition (consistent with
+    # this project's own documented SOCP-exactness knife-edge under high-PV reverse flow)
+    # between pv_scale=2.0 (maxratio ≈ 0.0036, comfortably certified) and pv_scale=2.5
+    # (maxratio ≈ 8510, ~8500× over the ratio>1 threshold). `Phase4Fixtures.high_pv_feeder`'s
+    # own reference point (`pv_scale=1.2`) does NOT transfer unchanged to this fixture's
+    # shorter horizon/smaller feeder (measured: pv_scale=1.2 stays comfortably exact here,
+    # maxratio ≈ 0.006 on this fixture) — RE-MEASURED, per this project's own discipline.
+    # pv_scale=3.0 (maxratio ≈ 9157, comfortably past the knife-edge with ample margin) is the
+    # value exported here.
+    const MPC_HIGH_PV_SCALE_MEASURED = 3.0
+
     export T,
         H,
         BATT_λ_MIN,
@@ -251,6 +269,7 @@
         LOAD_SCALE_MPC,
         PV_SCALE_MPC,
         LAMBDA0_MPC,
+        MPC_HIGH_PV_SCALE_MEASURED,
         temperature_profile,
         mpc_lambda0,
         mpc_feeder,

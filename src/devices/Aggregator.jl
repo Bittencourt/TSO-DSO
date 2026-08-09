@@ -169,7 +169,18 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     # literal value `agg.Pdc[1:T]` (byte-identical default). The length guard above still
     # validates the ORIGINAL `agg.Pdc` field, unaffected.
     m = ctx.model
-    @variable(m, Pdc_param[t = 1:T] in Parameter.(agg.Pdc[1:T]))
+    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): anonymous indexed-Parameter
+    # construction, never the NAMED `@variable(m, Pdc_param[t=1:T] in Parameter.(...))` form
+    # — a named container registers the symbol `:Pdc_param` in the model's object dictionary,
+    # which collides ("An object of name Pdc_param is already attached to this model") the
+    # moment a SECOND `Aggregator` contributes to the SAME model — i.e. ANY population with
+    # more than one aggregator, the common case for every existing multi-house
+    # `run_scenario`/`solve_admm` call. Discovered running `run_mpc` against the default
+    # 10-aggregator `:ieee13` population (this bug pre-dates this plan and affects every
+    # multi-aggregator caller, not just MPC). Anonymous construction (mirrors
+    # `FourQuadBESS`'s own anonymous apparent-power cone, `FourQuadBESS.jl:332`) is
+    # byte-identical in value/behavior — only the registration mechanics differ.
+    Pdc_param = @variable(m, [t = 1:T], set = Parameter(agg.Pdc[t]))
 
     # Accumulate the member devices' active injections and utilities (device-agnostic).
     # q_inject (MESH-04, D-09) accumulates the OPTIONAL device reactive injection — absent

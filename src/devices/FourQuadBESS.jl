@@ -305,7 +305,14 @@ function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
     # MPC-01 seam (D-01): the SOC initial condition is now a genuine Parameter (soc0), the
     # IDENTICAL idiom PVBattery applies — re-settable via `set_parameter_value` without
     # rebuilding the constraint, and defaulting to the exact prior literal value.
-    @variable(m, soc0 in Parameter(d.soc0))
+    #
+    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): anonymous scalar Parameter
+    # construction, never the NAMED `@variable(m, soc0 in Parameter(...))` form — a named
+    # container collides ("An object of name soc0 is already attached to this model") the
+    # moment a SECOND `FourQuadBESS` contributes to the SAME model (mirrors the identical
+    # PVBattery/Thermostatic/Aggregator collision this plan's own multi-aggregator
+    # materialization discovered and fixed).
+    soc0 = @variable(m, set = Parameter(d.soc0))
     @constraint(m, soc[1] == soc0)
     if T > 1
         # SOC dynamics with round-trip efficiency (mirrors PVBattery eq. 3.6): η·p_ch in,
