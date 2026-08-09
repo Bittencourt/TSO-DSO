@@ -132,3 +132,12 @@ signature pinned above. No blockers.
 *Phase: 21-mpc-rolling-horizon-real-time-pricing*
 *Plan: 02*
 *Completed: 2026-08-09*
+
+## Self-Check: PASSED
+
+- FOUND: `src/models/mpc_trace.jl`
+- FOUND: `test/test_mpc_trace.jl`
+- FOUND: `.planning/phases/21-mpc-rolling-horizon-real-time-pricing/21-02-SUMMARY.md`
+- FOUND commit: `38a6792` (feat(21-02): add MpcTrace price-consistency ledger)
+- FOUND commit: `84eef0a` (test(21-02): add permanent @testitem coverage for MpcTrace)
+- FOUND commit: `22e54f4` (docs(21-02): complete MpcTrace price-consistency ledger plan)
