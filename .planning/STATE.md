@@ -133,11 +133,6 @@ None yet.
 
 ### Blockers/Concerns
 
-- [v3.0 Phase 20 research flag]: the actual convexification mechanism (tightened SOC restriction vs.
-  McCormick valid inequalities vs. PSD-style tightening) is unresolved model-math, not an architecture
-  question — flagged in research SUMMARY.md as needing its own theory research pass before planning
-  constraints.
-
 - [v3.0 Phase 23 research flag]: the non-radial branch-flow formulation (signed incidence over a
   cycle basis, or bus-injection/line-flow with loop constraints) is new model-math with the same
   "needs its own research pass" flag; also unresolved whether the meshed test fixture will show a

@@ -15,7 +15,7 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 ## Phases
 
 - [x] **Phase 19: 4Q-BESS + Live Reactive Dual-Ascent** - A battery device gets genuine P/Q decision variables inside an apparent-power cone, and the v2.1 reactive-dual scaffolding is promoted to a live, converging μ-ascent step
-- [ ] **Phase 20: Overvoltage-Capable Relaxation** - Price the v2.1 EXACT-04 high-PV overvoltage regime via a restricted SOCP with its own AC-certified validity certificate, establishing the reusable restriction-certificate pattern
+- [x] **Phase 20: Overvoltage-Capable Relaxation** - Price the v2.1 EXACT-04 high-PV overvoltage regime via a restricted SOCP with its own AC-certified validity certificate, establishing the reusable restriction-certificate pattern
 - [ ] **Phase 21: MPC / Rolling-Horizon / Real-Time Pricing** - Closed-loop receding-horizon solves over stateful devices, publishing rolling DADPs as an RTP signal benchmarked against perfect foresight
 - [ ] **Phase 22: Stochastic PV/Demand Uncertainty** - Two-stage extensive-form welfare solve over seeded Markov scenarios, with per-scenario DADPs as the primary price output
 - [ ] **Phase 23: Meshed Networks** - A parallel `MeshedFeeder` + non-radial SOCP formulation with its own angle-recoverability certificate, combined with Phase 19's live reactive price in one literate rung page
