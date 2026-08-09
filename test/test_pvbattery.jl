@@ -235,11 +235,46 @@ end
     # Adding a binary or complementarity constraint would break QP convexity + Phase-5
     # pricing. RESEARCH §Anti-Patterns forbids it — assert it never happened.
     vars = all_variables(model)
-    @test length(vars) == 4T                        # p_ch, p_dch, soc, pv_used (WR-04)
+    # p_ch, p_dch, soc, pv_used (WR-04) = 4T, PLUS the MPC-01 Parameter widening: soc0 (1
+    # Parameter) + Ppv_param (T Parameters) — Parameters ARE VariableRefs in JuMP, counted
+    # here too (5T + 1), even though their DEFAULT solved behavior is byte-identical.
+    @test length(vars) == 5T + 1
     @test count(is_binary, vars) == 0
     @test count(is_integer, vars) == 0
 
     # WR-04: the curtailment variable exists and is available for surplus PV to be dumped.
     @test haskey(res.vars, :pv_used)
     @test length(res.vars.pv_used) == T
+end
+
+@testitem "battery: contribute! widens soc0/Ppv_param to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+    [:battery] begin
+    using TSODSO, JuMP
+
+    # Reuse the SAME literal parameters as the "constructor guards" item's `good()` fixture.
+    Ppv = fill(5.0, 4)
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 4
+    bat = TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)
+    res = TSODSO.contribute!(bat, ctx; T = T)
+
+    # (a) Byte-identical default: every new Parameter's value equals the ORIGINAL literal.
+    @test parameter_value(res.vars.soc0) == 2.0
+    @test all(parameter_value.(res.vars.Ppv_param) .== Ppv)
+
+    # (b) set_parameter_value changes the value with NO new variable/constraint added
+    # (count_variable_in_set_constraints = true — test_planning_oracle.jl's idiom).
+    nv0 = num_variables(model)
+    nc0 = num_constraints(model; count_variable_in_set_constraints = true)
+    set_parameter_value(res.vars.soc0, 0.5)
+    set_parameter_value.(res.vars.Ppv_param, fill(1.0, T))
+    @test parameter_value(res.vars.soc0) == 0.5
+    @test all(parameter_value.(res.vars.Ppv_param) .== 1.0)
+    @test num_variables(model) == nv0
+    @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
+
+    # (c) The old literal-bound code path is genuinely gone: pv_used carries NO upper
+    # bound anymore (the PV limit moved to a Ppv_param-backed constraint, Pitfall 4).
+    @test has_upper_bound(res.vars.pv_used[1]) == false
 end

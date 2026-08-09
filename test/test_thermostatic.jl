@@ -244,3 +244,33 @@ end
     d = TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 22.0, 0.0, 5.0, 1.0, fill(30.0, 3))
     @test_throws ArgumentError TSODSO.contribute!(d, ctx; T = 8)
 end
+
+@testitem "thermostatic: contribute! widens Tin0/Tout_param to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+    [:thermostatic] begin
+    using TSODSO, JuMP
+
+    # Reuse the SAME literal parameters as the "aggregatable contribute!" item's fixture.
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 4
+    Tout = fill(30.0, T)
+    Pmin, Pmax, Tmin, Tmax = 0.0, 5.0, 20.0, 24.0
+    d = TSODSO.Thermostatic(3, 0.2, 0.5, Tmin, Tmax, 22.0, Pmin, Pmax, 1.0, Tout)
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    # (a) Byte-identical default: every new Parameter's value equals the ORIGINAL literal.
+    # Tout_param covers ONLY t = 1:(T-1) — the recursion never reads Tout[T].
+    @test parameter_value(res.vars.Tin0) == 22.0
+    @test all(parameter_value.(res.vars.Tout_param) .== Tout[1:(T - 1)])
+    @test length(res.vars.Tout_param) == T - 1
+
+    # (b) set_parameter_value changes the value with NO new variable/constraint added.
+    nv0 = num_variables(model)
+    nc0 = num_constraints(model; count_variable_in_set_constraints = true)
+    set_parameter_value(res.vars.Tin0, 21.0)
+    set_parameter_value.(res.vars.Tout_param, fill(28.0, T - 1))
+    @test parameter_value(res.vars.Tin0) == 21.0
+    @test all(parameter_value.(res.vars.Tout_param) .== 28.0)
+    @test num_variables(model) == nv0
+    @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
+end

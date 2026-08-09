@@ -55,11 +55,16 @@ end
     end
 
     # Reactive is PURELY the inelastic-demand power-factor term (DERs active-only, A3):
-    # q = −P_dc·tan(arccos φ), a pure constant (no DER reactive variables).
+    # q = −P_dc·tan(arccos φ). MPC-01 (D-08) widened Pdc into a genuine Parameter
+    # (Pdc_param), so this is now an AffExpr TERM referencing Pdc_param[t] with
+    # coefficient −tanφ (constant 0.0) rather than a bare numeric constant — the
+    # byte-identical-default invariant is on the EVALUATED value (Parameter defaults to
+    # the exact prior literal `Pdc[t]`), not on the raw `.constant`/`.terms` shape.
     tanφ = sqrt(1 - φ^2) / φ
     for t in 1:T
-        @test isapprox(Rq[bus, t].constant, -Pdc[t] * tanφ; atol = 1e-9)
-        @test isempty(Rq[bus, t].terms)     # no reactive variables — only the constant
+        @test isapprox(Rq[bus, t].constant, 0.0; atol = 1e-9)
+        @test isapprox(get(Rq[bus, t].terms, res.Pdc_param[t], 0.0), -tanφ; atol = 1e-9)
+        @test isapprox(parameter_value(res.Pdc_param[t]), Pdc[t]; atol = 1e-9)
     end
 
     # The summed device utility reached the QuadExpr welfare accumulator (3.21).
@@ -101,7 +106,12 @@ end
 
     # (a) BYTE-IDENTITY: a FRESH Thermostatic + PVBattery aggregator (mirrors the
     # existing "sole :Rp/:Rq writer" fixture exactly) — no member device carries
-    # q_inject, so :Rq must stay a pure constant AND res.q_inject must be zero per t.
+    # q_inject, so :Rq's device-reactive contribution must be zero per t. MPC-01 (D-08)
+    # widened Pdc into a genuine Parameter (Pdc_param), so the inelastic-demand term is
+    # now an AffExpr TERM referencing Pdc_param[t] (coefficient −tanφ, constant 0.0)
+    # rather than a bare numeric constant — the byte-identical-default invariant is on
+    # the EVALUATED value (Pdc_param defaults to the exact prior literal Pdc[t]), not on
+    # the raw `.constant`/`.terms` shape.
     therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
     batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
 
@@ -112,8 +122,11 @@ end
 
     tanφ = sqrt(1 - φ^2) / φ
     for t in 1:T
-        @test isapprox(Rq_no4q[bus, t].constant, -Pdc[t] * tanφ; atol = 1e-9)
-        @test isempty(Rq_no4q[bus, t].terms)
+        @test isapprox(Rq_no4q[bus, t].constant, 0.0; atol = 1e-9)
+        @test isapprox(
+            get(Rq_no4q[bus, t].terms, res_no4q.Pdc_param[t], 0.0), -tanφ; atol = 1e-9,
+        )
+        @test isapprox(parameter_value(res_no4q.Pdc_param[t]), Pdc[t]; atol = 1e-9)
         @test res_no4q.q_inject[t] == zero(AffExpr)
     end
 
@@ -132,8 +145,11 @@ end
                                   # contribute!'s (; vars = device_vars, ...) stash order
     for t in 1:T
         # Rq now carries a non-empty terms entry equal to the device's q[t] with
-        # coefficient 1.0, ON TOP OF the same untouched -Pdc[t]*tanφ constant (D-10).
-        @test isapprox(Rq_4q[bus, t].constant, -Pdc[t] * tanφ; atol = 1e-9)
+        # coefficient 1.0, ON TOP OF the same untouched Pdc_param[t]*(−tanφ) term (D-10).
+        @test isapprox(Rq_4q[bus, t].constant, 0.0; atol = 1e-9)
+        @test isapprox(
+            get(Rq_4q[bus, t].terms, res_4q.Pdc_param[t], 0.0), -tanφ; atol = 1e-9,
+        )
         @test !isempty(Rq_4q[bus, t].terms)
         @test isapprox(get(Rq_4q[bus, t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
 
@@ -162,4 +178,47 @@ end
     # A Pdc shorter than the requested horizon fails LOUDLY at contribute! time.
     short = Aggregator(2, 0.9, [therm], fill(0.3, T - 1))
     @test_throws ArgumentError contribute!(short, ModelContext(Model()); T = T)
+end
+
+@testitem "aggregator: contribute! widens Pdc to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    # Reuse the SAME literal parameters as the "sole :Rp/:Rq writer" item's fixture.
+    T = 6
+    bus = 2
+    φ = 0.9
+    Pdc = fill(0.3, T)
+    Tout = fill(25.0, T)
+    Ppv = fill(0.2, T)
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+    batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
+    agg = Aggregator(bus, φ, [therm, batt], Pdc)
+
+    model = Model()
+    ctx = ModelContext(model)
+    res = contribute!(agg, ctx; T = T)
+
+    # (a) Byte-identical default: every Pdc_param entry equals the ORIGINAL literal Pdc[t].
+    @test all(parameter_value.(res.Pdc_param) .== Pdc)
+
+    # (b) set_parameter_value changes the value with NO new variable/constraint added
+    # (count_variable_in_set_constraints = true — test_planning_oracle.jl's idiom).
+    nv0 = num_variables(model)
+    nc0 = num_constraints(model; count_variable_in_set_constraints = true)
+    set_parameter_value.(res.Pdc_param, fill(0.6, T))
+    @test all(parameter_value.(res.Pdc_param) .== 0.6)
+    @test num_variables(model) == nv0
+    @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
+
+    # (c) The old literal-constant residual write is genuinely gone: :Rq's inelastic-demand
+    # contribution is now an AffExpr TERM on Pdc_param[t] (constant 0.0), not a bare
+    # numeric constant — the residual write mechanism is genuinely wired to the Parameter.
+    tanφ = sqrt(1 - φ^2) / φ
+    Rq = ctx.residuals[:Rq]
+    for t in 1:T
+        @test isapprox(Rq[bus, t].constant, 0.0; atol = 1e-9)
+        @test isapprox(get(Rq[bus, t].terms, res.Pdc_param[t], 0.0), -tanφ; atol = 1e-9)
+    end
 end
