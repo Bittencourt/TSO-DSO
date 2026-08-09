@@ -179,3 +179,46 @@ end
     short = Aggregator(2, 0.9, [therm], fill(0.3, T - 1))
     @test_throws ArgumentError contribute!(short, ModelContext(Model()); T = T)
 end
+
+@testitem "aggregator: contribute! widens Pdc to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    # Reuse the SAME literal parameters as the "sole :Rp/:Rq writer" item's fixture.
+    T = 6
+    bus = 2
+    φ = 0.9
+    Pdc = fill(0.3, T)
+    Tout = fill(25.0, T)
+    Ppv = fill(0.2, T)
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+    batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
+    agg = Aggregator(bus, φ, [therm, batt], Pdc)
+
+    model = Model()
+    ctx = ModelContext(model)
+    res = contribute!(agg, ctx; T = T)
+
+    # (a) Byte-identical default: every Pdc_param entry equals the ORIGINAL literal Pdc[t].
+    @test all(parameter_value.(res.Pdc_param) .== Pdc)
+
+    # (b) set_parameter_value changes the value with NO new variable/constraint added
+    # (count_variable_in_set_constraints = true — test_planning_oracle.jl's idiom).
+    nv0 = num_variables(model)
+    nc0 = num_constraints(model; count_variable_in_set_constraints = true)
+    set_parameter_value.(res.Pdc_param, fill(0.6, T))
+    @test all(parameter_value.(res.Pdc_param) .== 0.6)
+    @test num_variables(model) == nv0
+    @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
+
+    # (c) The old literal-constant residual write is genuinely gone: :Rq's inelastic-demand
+    # contribution is now an AffExpr TERM on Pdc_param[t] (constant 0.0), not a bare
+    # numeric constant — the residual write mechanism is genuinely wired to the Parameter.
+    tanφ = sqrt(1 - φ^2) / φ
+    Rq = ctx.residuals[:Rq]
+    for t in 1:T
+        @test isapprox(Rq[bus, t].constant, 0.0; atol = 1e-9)
+        @test isapprox(get(Rq[bus, t].terms, res.Pdc_param[t], 0.0), -tanφ; atol = 1e-9)
+    end
+end

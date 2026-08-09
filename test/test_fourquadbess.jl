@@ -208,6 +208,30 @@ end
     @test propertynames(res) == (:vars, :p_inject, :q_inject, :utility)
 end
 
+@testitem "fourquadbess: contribute! widens soc0 to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+    [:fourquadbess] begin
+    using TSODSO, JuMP
+
+    # Reuse the SAME literal parameters as the "contribute! creates the expected
+    # variables + bounds" item's fixture.
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 3
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    # (a) Byte-identical default: soc0's Parameter value equals the ORIGINAL literal.
+    @test parameter_value(res.vars.soc0) == 2.0
+
+    # (b) set_parameter_value changes the value with NO new variable/constraint added.
+    nv0 = num_variables(model)
+    nc0 = num_constraints(model; count_variable_in_set_constraints = true)
+    set_parameter_value(res.vars.soc0, 0.5)
+    @test parameter_value(res.vars.soc0) == 0.5
+    @test num_variables(model) == nv0
+    @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
+end
+
 # Plan 19-05: assert_4q_complementarity! (MESH-04 clause 2) + the OLD
 # assert_battery_complementarity!'s tightened mutual-exclusivity guard. The shared
 # harness below mirrors the plan's standalone-solve pattern: one FourQuadBESS, its OWN
