@@ -45,6 +45,13 @@ Open-source defaults:
   - `NLP`  → Ipopt
 
 A model file uses this as `Model(select_optimizer(LP()))` and never names a solver.
+
+The `NLP` method additionally accepts backend attribute overrides as keyword arguments —
+`select_optimizer(NLP(); mu_strategy = "adaptive")` — layered on top of the factory's own
+base attributes. This is the INFRA-02 seam that lets callers (e.g.
+[`ac_dual_fallback_price`](@ref)'s D-11 multi-start loop, via
+[`nlp_multistart_variants`](@ref)) vary the NLP backend's convergence strategy WITHOUT
+naming the concrete solver outside this file (review WR-04).
 """
 select_optimizer(::LP) =
     optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "on", "output_flag" => false)
@@ -63,7 +70,43 @@ select_optimizer(::SOCP) = optimizer_with_attributes(
     "tol_gap_rel" => 1e-8,
 )
 
-select_optimizer(::NLP) = optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0)
+# Keyword overrides layer ON TOP of the factory base ("print_level" => 0); a duplicate key
+# passed later wins in optimizer_with_attributes, so callers can only ADD/OVERRIDE
+# attributes, never lose the silencing default unless they explicitly override it.
+select_optimizer(::NLP; attrs...) = optimizer_with_attributes(
+    Ipopt.Optimizer,
+    "print_level" => 0,
+    (String(k) => v for (k, v) in pairs(attrs))...,
+)
+
+"""
+    nlp_multistart_variants() -> Vector{<:NamedTuple}
+
+The 5 distinct, DETERMINISTIC NLP-backend convergence-strategy variants used as "seeded
+starts" by [`ac_dual_fallback_price`](@ref)'s D-11 multi-start agreement evidence. Each
+entry is an attribute set to splat into [`select_optimizer`](@ref) —
+`select_optimizer(NLP(); variant...)` — and is documented as its DELTA from the factory's
+NLP base configuration (`print_level = 0` only, i.e. the backend's own defaults otherwise:
+`mu_strategy = "monotone"`, `nlp_scaling_method = "gradient-based"`, `bound_push = 0.01`).
+
+Lives HERE (not in models/ac_dual_fallback.jl) because the attribute vocabulary is
+inherently backend-specific (Ipopt option names): this factory is the ONLY core file that
+names concrete solvers or their option vocabulary (INFRA-02, review WR-04). If the NLP
+backend ever changes, this list changes WITH it in the same file — no model silently pins
+the old solver.
+
+Review WR-03: the previous variant 3, `(; mu_strategy = "monotone")`, was byte-identical to
+variant 1 ("monotone" IS the backend default) — a duplicate "seed" that always agreed with
+seed 1 exactly, silently overstating D-11's multi-start agreement evidence. All 5 variants
+are genuinely distinct solver configurations.
+"""
+nlp_multistart_variants() = [
+    (;),                                              # 1: NLP() factory default (monotone μ)
+    (; mu_strategy = "adaptive"),                     # 2: adaptive μ update
+    (; mu_strategy = "adaptive", bound_push = 1e-4),  # 3: adaptive μ + tighter interior start
+    (; nlp_scaling_method = "none"),                  # 4: unscaled NLP (monotone μ)
+    (; mu_strategy = "adaptive", nlp_scaling_method = "none"),  # 5: adaptive μ, unscaled
+]
 
 """
     commercial_optimizer(choice, pc::ProblemClass)

@@ -23,25 +23,16 @@
 #
 using JuMP
 
-# D-11: "seeded starts" implemented as distinct, DETERMINISTIC Ipopt convergence-strategy
-# variants — the SAME kind of solver-trajectory diversity `test_ac_oracle.jl`'s existing
-# 2-variant guard already uses, extended from 2 to 5 — rather than randomized initial
-# points, because `solve_welfare` has no hook to inject a custom starting point without new
-# solve machinery (which D-01's "Don't Hand-Roll" table forbids).
-# Each variant is documented as its DELTA from the configuration the NLP() factory ships
-# (print_level = 0 only, i.e. Ipopt's own defaults otherwise: mu_strategy = "monotone",
-# nlp_scaling_method = "gradient-based", bound_push = 0.01). Review WR-03: the previous
-# variant 3, `(; mu_strategy = "monotone")`, was byte-identical to variant 1 ("monotone" IS
-# Ipopt's default mu_strategy) — a duplicate "seed" that always agreed with seed 1 exactly,
-# silently overstating D-11's multi-start agreement evidence. All 5 variants below are
-# genuinely distinct solver configurations.
-const _FALLBACK_IPOPT_VARIANTS = [
-    (;),                                              # 1: NLP() factory default (monotone μ)
-    (; mu_strategy = "adaptive"),                     # 2: adaptive μ update
-    (; mu_strategy = "adaptive", bound_push = 1e-4),  # 3: adaptive μ + tighter interior start
-    (; nlp_scaling_method = "none"),                  # 4: unscaled NLP (monotone μ)
-    (; mu_strategy = "adaptive", nlp_scaling_method = "none"),  # 5: adaptive μ, unscaled
-]
+# D-11: "seeded starts" implemented as distinct, DETERMINISTIC NLP-backend
+# convergence-strategy variants — the SAME kind of solver-trajectory diversity
+# `test_ac_oracle.jl`'s existing 2-variant guard already uses, extended from 2 to 5 —
+# rather than randomized initial points, because `solve_welfare` has no hook to inject a
+# custom starting point without new solve machinery (which D-01's "Don't Hand-Roll" table
+# forbids). The variant list itself lives in `nlp_multistart_variants()`
+# (src/solver/factory.jl), and each variant is applied via `select_optimizer(NLP();
+# variant...)`: the attribute vocabulary is inherently backend-specific, and the factory is
+# the ONLY core file that names concrete solvers or their option vocabulary (INFRA-02,
+# review WR-04) — this file names none.
 
 """
     ac_dual_fallback_price(feeder, aggregators::AbstractVector; T::Int, λ₀,
@@ -51,8 +42,10 @@ const _FALLBACK_IPOPT_VARIANTS = [
 The documented nonconvex-AC-dual fallback pricer (OVR-03). Re-solves the SAME problem data
 via the already-existing `ACPowerFlow` oracle (`solve_welfare(feeder, ACPowerFlow(),
 aggregators; allow_local = true, ...)`, ZERO new solve machinery) from `n_seeds` distinct,
-deterministic Ipopt convergence-strategy variants (`_FALLBACK_IPOPT_VARIANTS`), and reports
-multi-start agreement evidence (D-11) alongside the price.
+deterministic NLP-backend convergence-strategy variants ([`nlp_multistart_variants`](@ref),
+each applied through the solver factory as `select_optimizer(NLP(); variant...)` — this
+file names no concrete solver, INFRA-02/review WR-04), and reports multi-start agreement
+evidence (D-11) alongside the price.
 
 **D-10's caveat, stated explicitly:** the returned `dadp` is a LOCAL optimum of a nonconvex
 problem, NOT a market-clearing convex dual — publish it only alongside this caveat and the
@@ -79,7 +72,7 @@ returns them (plus the raw `costs`/`dadps` vectors and `n_seeds`) in `agreement_
 Returns `dadp = dadps[1]`, `cost_ac = costs[1]` — the FIRST seed's result, evidenced (never
 silently overridden) by the agreement report's spreads.
 
-`n_seeds` is bounded `2:length(_FALLBACK_IPOPT_VARIANTS)` by an explicit `ArgumentError`
+`n_seeds` is bounded `2:length(nlp_multistart_variants())` by an explicit `ArgumentError`
 guard (T-20-12 — no silent clamping, so a caller's typo about how much multi-start evidence
 was actually gathered is never masked).
 """
@@ -91,20 +84,18 @@ function ac_dual_fallback_price(
     allow_export::Bool = true,
     n_seeds::Int = 2,
 )
-    2 <= n_seeds <= length(_FALLBACK_IPOPT_VARIANTS) || throw(
-        ArgumentError("n_seeds must be in 2:$(length(_FALLBACK_IPOPT_VARIANTS))"),
-    )
+    variants = nlp_multistart_variants()
+    2 <= n_seeds <= length(variants) ||
+        throw(ArgumentError("n_seeds must be in 2:$(length(variants))"))
 
     costs = Vector{Float64}(undef, n_seeds)
     dadps = Vector{Vector{Float64}}(undef, n_seeds)
 
     for i in 1:n_seeds
-        variant = _FALLBACK_IPOPT_VARIANTS[i]
-        opt = optimizer_with_attributes(
-            Ipopt.Optimizer,
-            "print_level" => 0,
-            (String(k) => v for (k, v) in pairs(variant))...,
-        )
+        # INFRA-02 / review WR-04: the concrete NLP solver (and its option vocabulary) is
+        # named ONLY by the factory — this call layers the variant's attributes on the
+        # factory's own NLP base.
+        opt = select_optimizer(NLP(); variants[i]...)
         _, cost_i, dadp_i = solve_welfare(
             feeder,
             ACPowerFlow(),
