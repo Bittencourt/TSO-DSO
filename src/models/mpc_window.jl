@@ -76,9 +76,11 @@ end
 Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model EXACTLY ONCE
 (MPC-01), mirroring [`build_planning_oracle`](@ref)'s build-once SHAPE:
 
- 1. Boundary guards (mirror `build_planning_oracle`): empty `aggregators`, `H < 1`, or an
-    aggregator bus outside `1:length(feeder.buses)` each throw `ArgumentError` before any
-    model assembly.
+ 1. Boundary guards (mirror `build_planning_oracle`): empty `aggregators`, `H < 1`,
+    `terminal_soc && H == 1` (WR-03: the terminal equality would double-pin `soc[1]` against
+    the IC — infeasible whenever measured state ≠ terminal target; the terminal toggle
+    requires `H ≥ 2`), or an aggregator bus outside `1:length(feeder.buses)` each throw
+    `ArgumentError` before any model assembly.
  2. `model = Model(select_optimizer(problem_class(pf)))` — FORMULATION-GENERIC routing, never
     hardcoding `SOCP()`. Registers the same SOC→nonconvex-quad cross-solver bridges as
     `solve_welfare`/`build_planning_oracle` (dormant on the primary Clarabel path).
@@ -123,6 +125,20 @@ function build_mpc_window(
     isempty(aggregators) &&
         throw(ArgumentError("build_mpc_window needs at least one aggregator"))
     H >= 1 || throw(ArgumentError("build_mpc_window requires H ≥ 1, got H=$H"))
+    # WR-03: with H == 1 the terminal toggle would add BOTH `soc[1] == soc0` (the IC
+    # Parameter) and `soc[H] == terminal_param` on the SAME variable — infeasible at the
+    # first re-solve where the measured state differs from the terminal target. Reject the
+    # configuration loudly at build time instead of a cryptic mid-loop solver failure.
+    if terminal_soc && H == 1
+        throw(
+            ArgumentError(
+                "build_mpc_window: terminal_soc = true requires H ≥ 2 — at H = 1 the " *
+                "terminal equality soc[H] == terminal_param double-pins the SAME variable " *
+                "the initial condition soc[1] == soc0 already pins, which is infeasible " *
+                "whenever the measured state differs from the terminal target (MPC-02, D-06)",
+            ),
+        )
+    end
 
     N = length(feeder.buses)
     for (k, agg) in enumerate(aggregators)
