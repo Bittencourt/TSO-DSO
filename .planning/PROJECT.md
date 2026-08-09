@@ -164,7 +164,19 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
-**v3.0 in progress — Phase 20 complete (2026-08-09):** Overvoltage-Capable Relaxation
+**v3.0 in progress — Phase 21 complete (2026-08-09):** MPC / Rolling-Horizon / Real-Time Pricing
+(MPC-01..04). Build-once `MpcWindow` re-solved per step via JuMP `Parameter` injection (devices
+Parameter-widened, anonymized containers), `run_mpc` closed-loop orchestrator with an
+`mpc_step`-strided loop, hard terminal-SOC (A/B dump/hoard regression at ~35,530× margin),
+`MpcTrace` RTP price-consistency ledger, and a genuinely never-throwing Phase-20 certificate
+escalation ladder (`:certified_convex_dual(_restricted)` / `:cert_failed` provenance). Honest
+regret benchmark vs perfect-foresight day-ahead on the same device set: regret ≈ −0.0321 on the
+T=24 IEEE-13 literate page (Rung 8). Review 3 Critical + 7 Warnings all fixed (escalation window
+bug, reachable throws, benchmark bias). Verification 4/4; suite 2685 pass / 3 pre-existing broken.
+Known documented limits: Deferrable excluded from windows; forecast-consistent settlement.
+Next: Phase 22 (Stochastic PV/Demand Uncertainty).
+
+**v3.0 Phase 20 complete (2026-08-09):** Overvoltage-Capable Relaxation
 (OVR-01..04). `RestrictedBranchFlow` implements Gan–Low's **OPF-m** shadow-voltage restriction
 (`v̂_GL(s) ≤ v̄`) — cone-exact on the EXACT-04 high-PV fixture (gap 2.08e-8) where the plain SOCP
 was proven inexact; the simpler OPF-ε bound-shrink was **proven insufficient** (full feasible-range
@@ -315,4 +327,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-09 — Phase 20 (Overvoltage-Capable Relaxation) complete*
+*Last updated: 2026-08-09 — Phase 21 (MPC / Rolling-Horizon / RTP) complete*
