@@ -89,8 +89,23 @@ steps)`:
     the complete materialized population INCLUDING any `Deferrable` device — see this file's
     header deviation note).
   - `realized_welfare::Float64` — the closed-loop's realized welfare, accumulated hour-by-hour
-    from each applied step's REALIZED controls (D-05), over the Deferrable-excluded `mpc_aggs`
-    device set (see header note) plus the realized frontier cost/revenue.
+    from each applied step's applied controls (D-05), over the Deferrable-excluded `mpc_aggs`
+    device set (see header note) plus the frontier cost/revenue. **WR-01 — settlement is
+    FORECAST-CONSISTENT by construction, not re-settled against the ground truth:** the
+    frontier term charges the window's OWN solved `p_import[τ]` (which balanced the
+    forecast-perturbed PV/demand the optimizer saw), and the device terms read the solved
+    controls as-is. Under nonzero `s.mpc_forecast_error` the TRUE plant's import would differ
+    by the per-hour demand/PV forecast errors, and when `fe.pv_factor > 1` the applied `p_ch`
+    can exceed the TRUE PV availability `d.Ppv[abs_hour]` (Assumption A6 violated on the
+    ground truth). Only the STATE propagation is truth-anchored (`propagate_tin` uses the
+    ground-truth ambient; the SOC recursion has no exogenous profile). Re-settling the
+    frontier and clipping `p_ch` against truth is plant-model mismatch beyond forecast error
+    — explicitly DEFERRED (21-CONTEXT `<deferred>`), so the forecast-consistent convention is
+    documented here rather than silently implied. `regret` compares this number against a
+    perfect-foresight benchmark settled on the unperturbed truth, so under large forecast
+    error a small POSITIVE regret is possible (the realized side is measured under a
+    different — perturbed — settlement), and is an artifact of this documented convention,
+    not a free lunch.
   - `regret::Float64` — `realized_welfare` MINUS the day-ahead welfare RESTRICTED to the SAME
     published `k`-hour decision horizon and the SAME `mpc_aggs` device set (D-11's
     information-set-fair comparison) — NEVER silently extrapolated to the full `s.T` hours the
@@ -302,6 +317,11 @@ function run_mpc(s::Scenario)
                     end
                 end
             end
+            # WR-01: FORECAST-CONSISTENT settlement (documented convention, see the
+            # `realized_welfare` docstring bullet): this charges the window's OWN solved
+            # frontier exchange — the one that balanced the forecast-perturbed profiles the
+            # optimizer saw — never a truth-re-settled import (plant-model mismatch beyond
+            # forecast error is explicitly deferred, 21-CONTEXT).
             realized_welfare -= λ₀[abs_hour] * value(o.p_import[τ_apply])
 
             k += 1
