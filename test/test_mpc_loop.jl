@@ -332,6 +332,12 @@ end
     s_free_lunch = Scenario(; base..., mpc_H = 3, mpc_step = 3)
     @test_throws ArgumentError run_mpc(s_free_lunch)
 
+    # WR-07: the window cannot exceed the day-ahead horizon — a Scenario-level
+    # misconfiguration must throw HERE, not as a cryptic device-level "profile too short"
+    # deep inside build_mpc_window (or a silent zero-resolve run).
+    s_long_window = Scenario(; base..., mpc_H = 12)   # T = 9 < mpc_H = 12
+    @test_throws ArgumentError run_mpc(s_long_window)
+
     @info "mpc_loop mpc_step stride measured difference" r_step1.realized_welfare r_step2.realized_welfare r_step1.regret r_step2.regret r_step1.trace.dadp_trace r_step2.trace.dadp_trace
 
     # LOAD-BEARING assertion (D-03, checker revision 1): mpc_step must produce a genuinely

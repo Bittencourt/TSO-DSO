@@ -71,8 +71,12 @@ recording every published hour into an [`MpcTrace`](@ref).
 
 # Guards
 
-Before any materialization: `s.mpc_step > s.mpc_H` throws `ArgumentError` — a resolve cannot
-hold its plan longer than the window it solved.
+Before any materialization: `s.mpc_H > s.T` throws `ArgumentError` (WR-07 — the window
+cannot exceed the day-ahead horizon; previously this surfaced as a cryptic device-level
+"profile too short" deep inside `build_mpc_window`, or, for a hypothetical
+longer-than-`T`-profile population, a silent zero-resolve `steps = 0` run), and
+`s.mpc_step > s.mpc_H` throws `ArgumentError` — a resolve cannot hold its plan longer than
+the window it solved.
 
 After the population materializes: with ANY stateful device present (battery SOC /
 thermostatic temperature — every `:default` population), `s.mpc_step > s.mpc_H − 1` throws
@@ -138,9 +142,21 @@ same-seed guarantee) — the Clarabel solve path is single-threaded and every ra
 (profiles, population, forecast error) flows through a seeded, independent sub-stream.
 """
 function run_mpc(s::Scenario)
-    # Boundary guard FIRST, before any materialization (mirrors this file's other
-    # boundary-guard idiom, e.g. Scenario.jl's own throw-ArgumentError convention): a resolve
-    # cannot hold its plan longer than the window it solved.
+    # Boundary guards FIRST, before any materialization (mirrors this file's other
+    # boundary-guard idiom, e.g. Scenario.jl's own throw-ArgumentError convention).
+    # WR-07: the window cannot exceed the day-ahead horizon — without this guard the
+    # failure surfaced as a cryptic device-level "profile has length ... < horizon T=..."
+    # deep inside build_mpc_window's contribute! calls (a misleading message for a
+    # Scenario-level misconfiguration), and a hypothetical future population with
+    # longer-than-T profiles would instead run ZERO resolves and silently return steps = 0 /
+    # regret = 0.0, contradicting the documented "steps is ALWAYS s.T - s.mpc_H + 1".
+    s.mpc_H > s.T && throw(
+        ArgumentError(
+            "run_mpc: window length cannot exceed the day-ahead horizon " *
+            "(mpc_H=$(s.mpc_H) > T=$(s.T))",
+        ),
+    )
+    # A resolve cannot hold its plan longer than the window it solved.
     s.mpc_step > s.mpc_H && throw(
         ArgumentError(
             "run_mpc: step size cannot exceed window length H " *
