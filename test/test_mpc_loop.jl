@@ -77,9 +77,19 @@ end
     end
     solve_mpc_window!(o)
 
+    # CR-01: _mpc_certify_and_price now REQUIRES the resolve's measured state + forecast
+    # draw so an escalation prices the SAME window the failed resolve solved. At t = 1 with
+    # the initial device state and no forecast error, these are the devices' own literals.
+    ms = Dict{Tuple{Int, Symbol}, Float64}()
+    for agg in aggs, d in agg.devices
+        hasproperty(d, :soc0) && (ms[(agg.bus, :soc)] = Float64(d.soc0))
+        hasproperty(d, :Tin0) && (ms[(agg.bus, :Tin)] = Float64(d.Tin0))
+    end
+    fe = (; pv_factor = 1.0, demand_factor = 1.0)
+
     # Pre-condition check (reusing Task 2's own verify-script methodology, not just trusting
     # the constant): the measured pv_scale genuinely trips the inline check on THIS solve.
-    result = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1)
+    result = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
 
     @test result.cone_maxratio > 1     # the pre-condition: this call's inline check DID fail
     @test result.cert_status in (:certified_convex_dual, :local_ac_dual)   # escalation resolved it
@@ -90,6 +100,88 @@ end
     # simply reaching this line already demonstrates the never-throw contract; the explicit
     # `@test true` below documents that intent for a human reader.
     @test true   # never threw
+end
+
+@testitem "mpc_loop: escalation at t > 1 prices the CURRENT window — same t-sliced profiles, same measured state, never hours 1..H (CR-01)" tags =
+    [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+    using JuMP: set_parameter_value, set_objective_coefficient
+
+    feeder = Phase21Fixtures.mpc_high_pv_feeder()
+    aggs = Phase21Fixtures.build_mpc_high_pv_aggregators(
+        feeder;
+        pv_scale = Phase21Fixtures.MPC_HIGH_PV_SCALE_MEASURED,
+    )
+    H = Phase21Fixtures.H
+    λ₀ = Phase21Fixtures.mpc_lambda0()   # FLAT λ₀ — load-bearing for the regression below
+
+    ms = Dict{Tuple{Int, Symbol}, Float64}()
+    for agg in aggs, d in agg.devices
+        hasproperty(d, :soc0) && (ms[(agg.bus, :soc)] = Float64(d.soc0))
+        hasproperty(d, :Tin0) && (ms[(agg.bus, :Tin)] = Float64(d.Tin0))
+    end
+    fe = (; pv_factor = 1.0, demand_factor = 1.0)
+
+    # 1. UNIT regression on the window-slicing helper itself: the escalation aggregators must
+    # carry the t-sliced, forecast-perturbed profiles and the measured state as their plain
+    # struct fields (which the fresh escalation model's Parameters DEFAULT to, plan 21-01).
+    fe2 = (; pv_factor = 1.1, demand_factor = 0.9)
+    ms2 = Dict{Tuple{Int, Symbol}, Float64}()
+    for agg in aggs
+        ms2[(agg.bus, :soc)] = 0.001
+        ms2[(agg.bus, :Tin)] = 24.0
+    end
+    esc = TSODSO._mpc_escalation_aggregators(aggs, 3, H, fe2, ms2)
+    batt0 = only(d for d in aggs[1].devices if d isa PVBattery)
+    batt = only(d for d in esc[1].devices if d isa PVBattery)
+    @test batt.Ppv == Float64[batt0.Ppv[3 + τ - 1] * 1.1 for τ in 1:H]   # t-sliced + perturbed
+    @test batt.soc0 == 0.001                                            # measured, not d.soc0
+    therm0 = only(d for d in aggs[1].devices if d isa Thermostatic)
+    therm = only(d for d in esc[1].devices if d isa Thermostatic)
+    @test therm.Tout == Float64[therm0.Tout[3 + τ - 1] for τ in 1:H]    # t-sliced, UNPERTURBED (D-05)
+    @test therm.Tin0 == 24.0                                            # measured, not d.Tin0
+    @test esc[1].Pdc == Float64[aggs[1].Pdc[3 + τ - 1] * 0.9 for τ in 1:H]
+
+    # 2. END-TO-END regression at t > 1: drive the SAME slide-the-window mechanics run_mpc
+    # uses at t = 1 and t = 4 (both MEASURED to trip the inline cone check on this fixture at
+    # pv_scale = 3.0 — ratios ≈ 9432 at both). Under the pre-fix code the escalation ALWAYS
+    # solved hours 1..H with construction-time ICs, so with this FLAT λ₀ its published price
+    # was IDENTICAL at every t; the fixed escalation prices the t-window, so the two prices
+    # MUST differ (the PV slices differ across the two windows).
+    o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    prices = Dict{Int, Vector{Float64}}()
+    for t in (1, 4)
+        for agg in aggs
+            varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+            for (d, v) in zip(agg.devices, varlist)
+                haskey(v, :Ppv_param) && set_parameter_value.(
+                    v.Ppv_param,
+                    Float64[d.Ppv[t + τ - 1] for τ in 1:H],
+                )
+                haskey(v, :Tout_param) && set_parameter_value.(
+                    v.Tout_param,
+                    Float64[d.Tout[t + τ - 1] for τ in 1:(H - 1)],
+                )
+            end
+        end
+        for handle in o.agg_pdc_handles
+            agg = only(a for a in aggs if a.bus == handle.bus)
+            set_parameter_value.(
+                handle.Pdc_param,
+                Float64[agg.Pdc[t + τ - 1] for τ in 1:H],
+            )
+        end
+        for τ in 1:H
+            set_objective_coefficient(o.model, o.p_import[τ], -λ₀[t + τ - 1])
+        end
+        solve_mpc_window!(o)
+        r = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, t; measured_state = ms, fe = fe)
+        @test r.cone_maxratio > 1                              # pre-condition at THIS t
+        @test r.cert_status in (:certified_convex_dual, :local_ac_dual)
+        @test all(isfinite, r.price_vec)
+        prices[t] = r.price_vec
+    end
+    @test prices[1] != prices[4]   # the CR-01 regression: t-window-distinct escalation price
 end
 
 @testitem "mpc_loop: mpc_step genuinely strides the resolve cadence — NOT a silently-inert kwarg (D-03, checker revision 1)" tags =

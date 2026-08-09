@@ -215,8 +215,19 @@ function run_mpc(s::Scenario)
         # D-04's per-resolve, non-throwing certificate check + Phase-20 escalation ladder —
         # factored into a small internal helper (below) so a test can drive it DIRECTLY
         # against a non-Scenario feeder/aggregator pair (e.g. Phase21Fixtures' high-PV
-        # fixture) without duplicating this logic.
-        cert = _mpc_certify_and_price(feeder, mpc_aggs, o, λ₀, t)
+        # fixture) without duplicating this logic. `measured_state`/`fe` are threaded in
+        # (CR-01) so an escalation prices the SAME window [t, t+H-1] under the SAME
+        # propagated state and forecast perturbation this resolve's main window just solved
+        # — never the day's first H hours with construction-time initial conditions.
+        cert = _mpc_certify_and_price(
+            feeder,
+            mpc_aggs,
+            o,
+            λ₀,
+            t;
+            measured_state = measured_state,
+            fe = fe,
+        )
         cert_status = cert.cert_status
         price_vec = cert.price_vec
 
@@ -294,7 +305,8 @@ function run_mpc(s::Scenario)
 end
 
 """
-    _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int)
+    _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int;
+                           measured_state, fe)
         -> (; cert_status::Symbol, price_vec::Vector{Float64}, cone_maxratio::Float64)
 
 Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check
@@ -308,19 +320,40 @@ tolerance — this is the IDENTICAL physical quantity at the IDENTICAL default, 
 certificate; NEVER delegates to the throwing `assert_socp_exact!` itself, and NEVER a bare
 `try`/`catch` around it). `o` MUST already be solved (i.e. [`solve_mpc_window!`](@ref) called)
 at window-local positions `τ = 1:o.H` before calling this. `t` is the resolve's ABSOLUTE start
-hour (used only to slice `λ₀` for the escalation branch and to name the resolve in the `@warn`
-message — never used to index `o`, which is always window-local).
+hour (used to slice `λ₀` AND every device/demand profile for the escalation branch, and to
+name the resolve in the `@warn` message — never used to index `o`, which is always
+window-local).
+
+`measured_state` (the `(bus, kind) => value` dict of propagated SOC/temperature states) and
+`fe` (the resolve's own seeded forecast-error draw, `(; pv_factor, demand_factor)`) are
+REQUIRED keyword arguments (CR-01): an escalation must price the SAME window the failed
+resolve solved — absolute hours `t:(t+H-1)`, the SAME measured initial state, the SAME
+forecast perturbation — so both are threaded from `run_mpc`'s loop into
+[`_mpc_escalation_aggregators`](@ref), which rebuilds window-sliced device structs whose
+plain fields (hence whose fresh-model Parameter DEFAULTS) carry exactly those values. They
+are required (no silent defaults) so a caller can never accidentally price the wrong state.
 
 On a certified step: `cert_status = :certified_convex_dual`, `price_vec =
 dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
 escalates through Phase-20's OWN ladder (never invents a new tolerance) — a ONE-OFF
 [`RestrictedBranchFlow`](@ref)`()` solve + [`ACPowerFlow`](@ref)`()` cross-solve +
 [`assert_restriction_exact!`](@ref)`(...; report = true)`; if THAT also fails,
-[`ac_dual_fallback_price`](@ref), publishing `cert_status = :local_ac_dual`. `@warn`s once so
-a researcher running interactively sees the escalation — this function itself NEVER throws
+[`ac_dual_fallback_price`](@ref), publishing `cert_status = :local_ac_dual`. Every escalation
+tier solves the window-sliced problem (the ONE documented difference from the main window:
+`solve_welfare` has no terminal-SOC hook, so the optional hard terminal pin (D-06) is absent
+from the escalation problem — an accepted, rare-path approximation). `@warn`s once so a
+researcher running interactively sees the escalation — this function itself NEVER throws
 (D-04).
 """
-function _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int)
+function _mpc_certify_and_price(
+    feeder,
+    mpc_aggs,
+    o::MpcWindow,
+    λ₀::AbstractVector{<:Real},
+    t::Int;
+    measured_state::AbstractDict{Tuple{Int, Symbol}, Float64},
+    fe::NamedTuple,
+)
     pv = o.ctx.meta[:pf_vars]
     cone_maxratio = 0.0
     for (b, br) in enumerate(feeder.branches), τ in 1:(o.H)
@@ -340,11 +373,23 @@ function _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractV
         # RestrictedBranchFlow() solve + AC cross-solve + assert_restriction_exact!(report =
         # true); if THAT also fails, ac_dual_fallback_price. `@warn` once so a researcher
         # running interactively sees the escalation — this function itself NEVER throws (D-04).
+        #
+        # CR-01: every tier prices the SAME window this resolve just failed on — absolute
+        # hours t:(t+H-1), the SAME measured state, the SAME forecast-perturbed profile
+        # slices run_mpc fed the main window. `_mpc_escalation_aggregators` rebuilds
+        # window-sliced device structs so each tier's fresh `solve_welfare` model DEFAULTS
+        # its Parameters to exactly those values — never the day's first H hours with
+        # construction-time initial conditions (the wrong-problem bug this replaces).
+        # Escalation is rare by design, so the one-off model builds are an accepted cost
+        # (correctness over cost). The ONE documented difference from the main window:
+        # solve_welfare has no terminal-SOC hook, so the optional hard terminal pin (D-06)
+        # is absent from the escalation problem.
         λ₀_window = λ₀[t:(t + o.H - 1)]
+        esc_aggs = _mpc_escalation_aggregators(mpc_aggs, t, o.H, fe, measured_state)
         ctx_restricted, _, _ = solve_welfare(
             feeder,
             RestrictedBranchFlow(),
-            mpc_aggs;
+            esc_aggs;
             T = o.H,
             λ₀ = λ₀_window,
             allow_export = true,
@@ -352,7 +397,7 @@ function _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractV
         ctx_ac, _, _ = solve_welfare(
             feeder,
             ACPowerFlow(),
-            mpc_aggs;
+            esc_aggs;
             T = o.H,
             λ₀ = λ₀_window,
             allow_local = true,
@@ -365,7 +410,7 @@ function _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractV
         else
             fallback = ac_dual_fallback_price(
                 feeder,
-                mpc_aggs;
+                esc_aggs;
                 T = o.H,
                 λ₀ = λ₀_window,
                 allow_export = true,
@@ -377,6 +422,111 @@ function _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractV
     end
 
     return (; cert_status, price_vec = Vector{Float64}(price_vec), cone_maxratio)
+end
+
+"""
+    _mpc_escalation_aggregators(mpc_aggs, t::Int, H::Int, fe, measured_state)
+        -> Vector{<:Aggregator}
+
+Internal helper (unexported, CR-01): rebuild `mpc_aggs` as WINDOW-SLICED aggregator structs
+whose plain struct fields carry exactly the state the build-once window's Parameters were set
+to at resolve hour `t`: `Pdc = agg.Pdc[t:(t+H-1)] .* fe.demand_factor`, and each device
+re-created via [`_mpc_window_device`](@ref) with its measured SOC/temperature as the initial
+condition and its profiles sliced to the same absolute window (PV forecast-perturbed by
+`fe.pv_factor`; ambient temperature slides UNPERTURBED — D-05, mirroring `run_mpc`'s own
+per-step Parameter writes verbatim). Because every escalation tier builds a FRESH
+`solve_welfare` model whose Parameters DEFAULT to the device structs' own fields
+(byte-identical-default invariant, plan 21-01), feeding these sliced structs makes the
+escalation solve the SAME problem the failed resolve solved (bar the optional terminal-SOC
+pin, documented at the call site). Pure struct construction — no JuMP, no solve.
+"""
+function _mpc_escalation_aggregators(mpc_aggs, t::Int, H::Int, fe, measured_state)
+    return [
+        Aggregator(
+            agg.bus,
+            agg.φ,
+            AbstractDevice[
+                _mpc_window_device(d, agg.bus, t, H, fe, measured_state) for
+                d in agg.devices
+            ],
+            Float64[agg.Pdc[t + τ - 1] * fe.demand_factor for τ in 1:H],
+        ) for agg in mpc_aggs
+    ]
+end
+
+"""
+    _mpc_window_device(d, bus::Int, t::Int, H::Int, fe, measured_state) -> AbstractDevice
+
+Internal helper (unexported, CR-01): re-create device `d` as a window-sliced struct for the
+escalation solve at absolute start hour `t` — initial state from `measured_state[(bus,
+kind)]`, per-hour profiles sliced to `t:(t+H-1)` (PV multiplied by `fe.pv_factor`, ambient
+temperature unperturbed, D-05). The measured state is clamped to the device's own structural
+band (`[Emin, Emax]` / `[Tmin, Tmax]`) purely to absorb solver-tolerance noise in the
+propagated value (|ε| ≲ 1e-8) — a genuinely out-of-band state is prevented upstream by
+`run_mpc`'s stateful-device stride guard (WR-02), so the clamp is never a silent repair of a
+real violation. Methods exist for the three window-hostable stateful/aggregatable device
+types (`PVBattery`, `FourQuadBESS`, `Thermostatic`); any other type throws a loud
+`ArgumentError` (never a cryptic `MethodError`).
+"""
+function _mpc_window_device(d::PVBattery, bus::Int, t::Int, H::Int, fe, measured_state)
+    soc_meas = clamp(measured_state[(bus, :soc)], d.Emin, d.Emax)
+    return PVBattery(
+        d.bus,
+        d.η,
+        d.Δt,
+        d.Pmax,
+        d.Emin,
+        d.Emax,
+        soc_meas,
+        d.λ_min,
+        d.λ_med,
+        d.λ_max,
+        Float64[d.Ppv[t + τ - 1] * fe.pv_factor for τ in 1:H],
+    )
+end
+
+function _mpc_window_device(d::FourQuadBESS, bus::Int, t::Int, H::Int, fe, measured_state)
+    soc_meas = clamp(measured_state[(bus, :soc)], d.Emin, d.Emax)
+    return FourQuadBESS(
+        d.bus,
+        d.η,
+        d.Δt,
+        d.Pch_max,
+        d.Pdch_max,
+        d.Smax,
+        d.Emin,
+        d.Emax,
+        soc_meas,
+        d.λ_min,
+        d.λ_med,
+        d.λ_max,
+    )
+end
+
+function _mpc_window_device(d::Thermostatic, bus::Int, t::Int, H::Int, fe, measured_state)
+    tin_meas = clamp(measured_state[(bus, :Tin)], d.Tmin, d.Tmax)
+    return Thermostatic(
+        d.bus,
+        d.α,
+        d.β,
+        d.Tmin,
+        d.Tmax,
+        tin_meas,
+        d.Pmin,
+        d.Pmax,
+        d.b,
+        Float64[d.Tout[t + τ - 1] for τ in 1:H],
+    )
+end
+
+function _mpc_window_device(d::AbstractDevice, bus::Int, t::Int, H::Int, fe, measured_state)
+    throw(
+        ArgumentError(
+            "_mpc_window_device: unsupported device type $(typeof(d)) at bus $bus — the " *
+            "MPC escalation ladder can window-slice only PVBattery/FourQuadBESS/" *
+            "Thermostatic (the window-hostable stateful device set)",
+        ),
+    )
 end
 
 """
