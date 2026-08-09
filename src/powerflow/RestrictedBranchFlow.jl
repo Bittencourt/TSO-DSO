@@ -99,7 +99,11 @@ OPF-m (`F_{OPF-ε} ⊆ F_{OPF-m}`, paper's Fig. 9) and thus safe to compose (it 
 feasible set further). Defaults to `0.0` (no shrink; OPF-m alone is Theorem-2-sufficient
 given C1). `_EXACT04_MEASURED_ε` remains available as a citable, measured value for a
 researcher who wants extra margin on top of OPF-m — pass
-`RestrictedBranchFlow(; ε = TSODSO._EXACT04_MEASURED_ε)` explicitly.
+`RestrictedBranchFlow(; ε = TSODSO._EXACT04_MEASURED_ε)` explicitly. A NEGATIVE `ε` is
+rejected with an `ArgumentError` at construction — on both the kwarg and positional paths
+(review WR-06 / T-20-12): applied via `set_upper_bound` it would LOOSEN the voltage bound,
+turning D-01's genuine restriction into a relaxation, so a sign-typo'd "measured margin" is
+refused loudly, never silently treated as `ε = 0`.
 
 Caveat (RESEARCH.md Assumptions Log; escalation history above): even OPF-m's exactness
 guarantee is CONDITIONAL on C1 holding for the fixture at hand — C1 is checkable a priori
@@ -109,8 +113,25 @@ empirical verdict on this exact fixture.
 """
 struct RestrictedBranchFlow <: AbstractPowerFlow
     ε::Float64
+
+    # Review WR-06 / T-20-12: validate in the INNER constructor (suppressing the
+    # auto-generated non-validating one) so the positional path RestrictedBranchFlow(x)
+    # is guarded exactly like the kwarg path — no silent handling of invalid input. A
+    # negative ε applied via set_upper_bound would LOOSEN the voltage bound, converting
+    # D-01's "genuine restriction, never a relaxation" contract into a relaxation; the
+    # previous `pf.ε > 0` gate in contribute! silently treated a sign-typo'd margin as
+    # ε = 0 instead of refusing it.
+    function RestrictedBranchFlow(ε::Real)
+        ε >= 0 || throw(
+            ArgumentError(
+                "RestrictedBranchFlow ε must be ≥ 0 (a negative ε would LOOSEN the " *
+                "voltage bound, violating D-01's genuine-restriction contract); got $ε",
+            ),
+        )
+        return new(Float64(ε))
+    end
 end
-RestrictedBranchFlow(; ε::Real = 0.0) = RestrictedBranchFlow(Float64(ε))
+RestrictedBranchFlow(; ε::Real = 0.0) = RestrictedBranchFlow(ε)
 
 """
     contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int=1)

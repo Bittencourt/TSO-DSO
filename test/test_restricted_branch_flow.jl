@@ -455,6 +455,28 @@ end
     @test all(isfinite, result.dadp)
 end
 
+# --- Review WR-06: negative ε is rejected loudly (T-20-12, no silent handling) ---
+#
+# A negative ε applied via set_upper_bound would LOOSEN the voltage bound (a relaxation,
+# violating D-01's genuine-restriction contract); the previous `pf.ε > 0` gate in
+# contribute! silently treated a sign-typo'd margin as ε = 0. Construction now throws an
+# ArgumentError on BOTH the kwarg and positional paths (inner-constructor validation, so
+# the non-validating auto-generated constructor no longer exists).
+@testitem "restricted_branch_flow: WR-06 negative ε throws ArgumentError at construction (kwarg AND positional)" tags =
+    [:restricted_branch_flow] begin
+    using TSODSO
+
+    @test_throws ArgumentError RestrictedBranchFlow(; ε = -0.001)
+    @test_throws ArgumentError RestrictedBranchFlow(-0.001)
+    @test_throws ArgumentError RestrictedBranchFlow(-1)          # non-Float64 Real too
+    # Valid inputs unchanged: default, zero, and a positive measured margin.
+    @test RestrictedBranchFlow().ε == 0.0
+    @test RestrictedBranchFlow(; ε = 0.0).ε == 0.0
+    @test RestrictedBranchFlow(TSODSO._EXACT04_MEASURED_ε).ε ==
+          TSODSO._EXACT04_MEASURED_ε
+    @test RestrictedBranchFlow(; ε = 1 // 100).ε == 0.01         # Real conversion kept
+end
+
 # --- Review CR-01: branch-orientation regression (reversed-stored branch is a LEGAL feeder) ---
 #
 # `assert_radial` (data/topology.jl) validates only tree-ness/connectivity, never orientation:
