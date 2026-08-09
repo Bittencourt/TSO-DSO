@@ -51,6 +51,27 @@
     )
 end
 
+@testitem "mpc_window: allow_export threads to the frontier — import-only lower bound when false, free-sign when true (WR-06)" tags =
+    [:mpc_window] setup = [Phase21Fixtures] begin
+    using TSODSO
+    using JuMP: has_lower_bound, lower_bound
+
+    feeder = Phase21Fixtures.mpc_feeder()
+    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
+    H = Phase21Fixtures.H
+
+    # Default (and explicit true): FREE-SIGN frontier — no lower bound on any p_import[τ].
+    o_free = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H)
+    @test all(!has_lower_bound(o_free.p_import[τ]) for τ in 1:H)
+
+    # allow_export = false: IMPORT-ONLY — p_import[τ] ≥ 0, mirroring solve_welfare's own
+    # kwarg exactly, so a Scenario(allow_export = false) run never benchmarks a no-export
+    # day-ahead optimum against an export-allowed closed loop.
+    o_imp = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, allow_export = false)
+    @test all(has_lower_bound(o_imp.p_import[τ]) for τ in 1:H)
+    @test all(lower_bound(o_imp.p_import[τ]) == 0.0 for τ in 1:H)
+end
+
 @testitem "mpc_window: build-once — num_variables/num_constraints invariant across re-solves at DIFFERENT soc0/Tin0/terminal-target/forecast-slice states (MPC-01)" tags =
     [:mpc_window] setup = [Phase21Fixtures] begin
     using TSODSO

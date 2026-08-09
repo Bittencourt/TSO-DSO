@@ -236,8 +236,18 @@ function run_mpc(s::Scenario)
         v in varlist if haskey(v, :soc)
     )
 
-    # --- 3. Build the window ONCE (MPC-01), against the Deferrable-excluded mpc_aggs. -------
-    o = build_mpc_window(feeder, pf, mpc_aggs; H = s.mpc_H, terminal_soc = s.mpc_terminal_soc)
+    # --- 3. Build the window ONCE (MPC-01), against the Deferrable-excluded mpc_aggs.
+    # allow_export is threaded through (WR-06) so the window honors the SAME export
+    # semantics BOTH day-ahead benchmarks above were solved under — never an export-allowed
+    # closed loop benchmarked against a no-export day-ahead optimum. ------------------------
+    o = build_mpc_window(
+        feeder,
+        pf,
+        mpc_aggs;
+        H = s.mpc_H,
+        terminal_soc = s.mpc_terminal_soc,
+        allow_export = s.allow_export,
+    )
 
     # Strictly sequential published-step counter record! requires (distinct from the
     # absolute hour t, which skips by s.mpc_step between resolves).
@@ -322,6 +332,7 @@ function run_mpc(s::Scenario)
             measured_state = measured_state,
             fe = fe,
             fallback_price = dadp_da,
+            allow_export = s.allow_export,
         )
         cert_status = cert.cert_status
         price_vec = cert.price_vec
@@ -409,10 +420,14 @@ end
 
 """
     _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int;
-                           measured_state, fe, fallback_price = λ₀,
+                           measured_state, fe, fallback_price = λ₀, allow_export = true,
                            _solve_welfare = solve_welfare,
                            _ac_dual_fallback_price = ac_dual_fallback_price)
         -> (; cert_status::Symbol, price_vec::Vector{Float64}, cone_maxratio::Float64)
+
+`allow_export` (WR-06) is threaded into every escalation-tier solve — `run_mpc` passes
+`s.allow_export` so the tiers honor the SAME frontier semantics the main window and both
+day-ahead benchmarks were solved under.
 
 Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check
 (D-04) + Phase-20 escalation ladder, factored out so a test can drive it DIRECTLY against a
@@ -486,6 +501,7 @@ function _mpc_certify_and_price(
     measured_state::AbstractDict{Tuple{Int, Symbol}, Float64},
     fe::NamedTuple,
     fallback_price::AbstractVector{<:Real} = λ₀,
+    allow_export::Bool = true,
     _solve_welfare = solve_welfare,
     _ac_dual_fallback_price = ac_dual_fallback_price,
 )
@@ -547,13 +563,16 @@ function _mpc_certify_and_price(
         # OWNED by assert_restriction_exact! (report = true) below, never by the internal
         # gate.
         try
+            # WR-06: allow_export is threaded from the caller (run_mpc passes
+            # s.allow_export) so every escalation tier honors the SAME frontier semantics
+            # the main window and both day-ahead benchmarks were solved under.
             ctx_restricted, _, _ = _solve_welfare(
                 feeder,
                 RestrictedBranchFlow(),
                 esc_aggs;
                 T = o.H,
                 λ₀ = λ₀_window,
-                allow_export = true,
+                allow_export = allow_export,
                 rtol_exact = Inf,
             )
             ctx_ac, _, _ = _solve_welfare(
@@ -563,7 +582,7 @@ function _mpc_certify_and_price(
                 T = o.H,
                 λ₀ = λ₀_window,
                 allow_local = true,
-                allow_export = true,
+                allow_export = allow_export,
             )
             report = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
             if report.ac_feasible
@@ -597,7 +616,7 @@ function _mpc_certify_and_price(
                     esc_aggs;
                     T = o.H,
                     λ₀ = λ₀_window,
-                    allow_export = true,
+                    allow_export = allow_export,
                 )
                 cert_status = :local_ac_dual
                 price_vec = Vector{Float64}(fallback.dadp)

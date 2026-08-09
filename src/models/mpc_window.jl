@@ -43,10 +43,13 @@ full set of per-step device Parameters plan 21-01 widened) over a FIXED window l
   - `agg_bus::Int` — the first aggregator's bus (`aggregators[1].bus`), mirroring
     `PlanningOracle`'s DADP reporting convention.
   - `feeder::F` — the network the window is built on.
-  - `p_import::Vector{VariableRef}` — the FREE-SIGN frontier active exchange `p_import[τ]` (no
-    lower bound — export stays ALLOWED, D-04); NEVER wrapped in a `Parameter` (Pitfall 2). A
-    caller slides the frontier price `λ₀` via
-    `set_objective_coefficient(o.model, o.p_import[τ], -λ0_window[τ])`.
+  - `p_import::Vector{VariableRef}` — the frontier active exchange `p_import[τ]`: FREE-SIGN
+    (export allowed) when built with `allow_export = true` (the default), IMPORT-ONLY
+    (`p_import[τ] ≥ 0`) when `allow_export = false` — mirroring `solve_welfare`'s own kwarg
+    exactly (WR-06: the window must honor the SAME export semantics the day-ahead benchmark
+    was solved under, else regret compares an export-allowed loop against a no-export
+    benchmark). NEVER wrapped in a `Parameter` (Pitfall 2). A caller slides the frontier
+    price `λ₀` via `set_objective_coefficient(o.model, o.p_import[τ], -λ0_window[τ])`.
   - `ic_handles::Vector{<:NamedTuple}` — one entry per stateful device:
     `(; bus::Int, kind::Symbol, ic_param, terminal_param)`, `kind ∈ (:soc, :Tin)`.
     `terminal_param` is `nothing` unless `kind == :soc && terminal_soc` (D-07: Thermostatic's
@@ -71,7 +74,8 @@ end
 """
     build_mpc_window(feeder, pf::AbstractPowerFlow,
                      aggregators::AbstractVector{<:Aggregator};
-                     H::Int, terminal_soc::Bool = true) -> MpcWindow
+                     H::Int, terminal_soc::Bool = true, allow_export::Bool = true)
+        -> MpcWindow
 
 Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model EXACTLY ONCE
 (MPC-01), mirroring [`build_planning_oracle`](@ref)'s build-once SHAPE:
@@ -85,10 +89,14 @@ Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model E
     hardcoding `SOCP()`. Registers the same SOC→nonconvex-quad cross-solver bridges as
     `solve_welfare`/`build_planning_oracle` (dormant on the primary Clarabel path).
  3. `contribute!(pf, ctx, feeder; T = H)` — VERBATIM reuse of the validated power-flow builder.
- 4. A FREE-SIGN frontier `p_import[τ = 1:H]` at `feeder.root` (no lower bound — export stays
-    ALLOWED, D-04, mirroring `PlanningOracle`'s Open-Question-1 resolution), injected into
-    `:Rp[root]`. `reactive = haskey(ctx.residuals, :Rq)` is captured IMMEDIATELY after, BEFORE
-    any aggregator write (WR-03 ordering); if `reactive`, a FREE-SIGN `q_import[τ=1:H]` too.
+ 4. A frontier `p_import[τ = 1:H]` at `feeder.root`, injected into `:Rp[root]` — FREE-SIGN
+    (export allowed) when `allow_export = true` (the default, mirroring `PlanningOracle`'s
+    Open-Question-1 resolution), IMPORT-ONLY (`≥ 0`) when `allow_export = false`, mirroring
+    `solve_welfare`'s own kwarg exactly (WR-06: a `Scenario(allow_export = false)` run must
+    solve its windows under the SAME no-export frontier its day-ahead benchmark honors).
+    `reactive = haskey(ctx.residuals, :Rq)` is captured IMMEDIATELY after, BEFORE
+    any aggregator write (WR-03 ordering); if `reactive`, a FREE-SIGN `q_import[τ=1:H]` too
+    (free-sign in BOTH cases, exactly as `solve_welfare` builds it).
  5. Each aggregator `contribute!`s its net injection + utility; its returned `Pdc_param`
     (returned at the Aggregator's OWN top level, not nested inside `res.vars`) is captured into
     `agg_pdc_handles`. `ctx.meta[:agg_device_vars]` is populated as a SIDE EFFECT of this SAME
@@ -120,6 +128,7 @@ function build_mpc_window(
     aggregators::AbstractVector{<:Aggregator};
     H::Int,
     terminal_soc::Bool = true,
+    allow_export::Bool = true,
 )
     # Boundary guards (mirror build_planning_oracle): fail here, not deep in model assembly.
     isempty(aggregators) &&
@@ -164,9 +173,15 @@ function build_mpc_window(
     # VERBATIM power-flow builder reuse.
     contribute!(pf, ctx, feeder; T = H)
 
-    # FREE-SIGN frontier active exchange at the root (no lower bound — export stays ALLOWED,
-    # D-04, mirroring PlanningOracle's Open-Question-1 resolution).
-    @variable(model, p_import[τ = 1:H])
+    # Frontier active exchange at the root: FREE-SIGN (export allowed) by default, mirroring
+    # PlanningOracle's Open-Question-1 resolution; IMPORT-ONLY (≥ 0) when allow_export =
+    # false, mirroring solve_welfare's own kwarg exactly (WR-06 — the window honors the SAME
+    # export semantics the day-ahead benchmark was solved under).
+    if allow_export
+        @variable(model, p_import[τ = 1:H])
+    else
+        @variable(model, p_import[τ = 1:H] >= 0)
+    end
     for τ in 1:H
         add_to_residual!(ctx, :Rp, feeder.root, τ, p_import[τ])
     end
