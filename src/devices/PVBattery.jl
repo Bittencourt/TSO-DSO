@@ -263,14 +263,29 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     # `pv_used` is declared with ONLY a lower bound and the PV-limit is enforced by a
     # separate constraint against `Ppv_param`, which defaults to the exact prior literal
     # `d.Ppv[1:T]` (byte-identical default) and is re-settable without rebuilding.
+    #
+    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): declared via the ANONYMOUS
+    # indexed-Parameter form (`@variable(m, [t=1:T], set = Parameter(...))`), never the NAMED
+    # `@variable(m, Ppv_param[t=1:T] in Parameter.(...))` form — a named container registers
+    # the symbol `:Ppv_param` in the model's object dictionary, which collides ("An object of
+    # name Ppv_param is already attached to this model") the moment a SECOND `PVBattery`
+    # contributes to the SAME model (i.e. any population with more than one battery-bearing
+    # aggregator — the common case, discovered running `run_mpc` against the default
+    # multi-aggregator `:ieee13` population). Anonymous construction (mirrors
+    # `FourQuadBESS`'s own anonymous apparent-power cone, `FourQuadBESS.jl:332`) is
+    # byte-identical in value/behavior (verified: `parameter_value.(Ppv_param) ==
+    # d.Ppv[1:T]`), only the registration mechanics differ.
     pv_used = @variable(m, [t = 1:T], lower_bound = 0.0)
-    @variable(m, Ppv_param[t = 1:T] in Parameter.(d.Ppv[1:T]))
+    Ppv_param = @variable(m, [t = 1:T], set = Parameter(d.Ppv[t]))
     @constraint(m, [t = 1:T], pv_used[t] <= Ppv_param[t])
 
     # MPC-01 seam (D-01): the SOC initial condition is now a genuine Parameter (soc0), not
     # a baked-in literal `d.soc0` — re-settable via `set_parameter_value` without rebuilding
     # the constraint, and defaulting to the exact prior literal value.
-    @variable(m, soc0 in Parameter(d.soc0))
+    #
+    # 21-05 deviation (Rule 1, same collision class as Ppv_param above): anonymous scalar
+    # Parameter construction, never the NAMED `@variable(m, soc0 in Parameter(...))` form.
+    soc0 = @variable(m, set = Parameter(d.soc0))
     @constraint(m, soc[1] == soc0)                                            # (3.9 IC)
     if T > 1
         # SOC dynamics with round-trip efficiency (3.6): η·p_ch in, p_dch/η out (η² < 1).
