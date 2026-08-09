@@ -87,7 +87,9 @@ steps)`:
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
     cumulative deviation, and certificate/fallback status (MPC-03). The status is one of
-    `:certified_convex_dual` (first-tier inline cone check passed), `:local_ac_dual`
+    `:certified_convex_dual` (first-tier inline cone check passed),
+    `:certified_convex_dual_restricted` (restricted-tier rescue — the price is the OPF-m
+    RESTRICTED solve's dual, WR-04's distinct provenance), `:local_ac_dual`
     (nonconvex-AC-dual fallback tier), or the TERMINAL `:cert_failed` (every escalation tier
     failed — the published price for that resolve is the day-ahead reference DADP slice, and
     each tier's failure reason is `@warn`ed; CR-02's genuinely non-throwing D-04 ladder).
@@ -430,7 +432,10 @@ On a certified step: `cert_status = :certified_convex_dual`, `price_vec =
 dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
 escalates through Phase-20's OWN ladder (never invents a new tolerance) — a ONE-OFF
 [`RestrictedBranchFlow`](@ref)`()` solve + [`ACPowerFlow`](@ref)`()` cross-solve +
-[`assert_restriction_exact!`](@ref)`(...; report = true)`; if THAT does not certify,
+[`assert_restriction_exact!`](@ref)`(...; report = true)`, publishing `cert_status =
+:certified_convex_dual_restricted` on a rescue (WR-04: a DISTINCT symbol from the first-tier
+`:certified_convex_dual` — the price is the RESTRICTED solve's dual, a genuinely different
+provenance a ledger must be able to tell apart); if THAT does not certify,
 [`ac_dual_fallback_price`](@ref), publishing `cert_status = :local_ac_dual`. Every escalation
 tier solves the window-sliced problem (the ONE documented difference from the main window:
 `solve_welfare` has no terminal-SOC hook, so the optional hard terminal pin (D-06) is absent
@@ -552,7 +557,11 @@ function _mpc_certify_and_price(
             )
             report = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
             if report.ac_feasible
-                cert_status = :certified_convex_dual
+                # WR-04: the restricted-tier rescue carries its OWN provenance symbol —
+                # a price from the OPF-m RESTRICTED solve's dual is a genuinely different
+                # provenance than a first-tier window certification, and a price-provenance
+                # ledger must be able to tell them apart.
+                cert_status = :certified_convex_dual_restricted
                 price_vec = Vector{Float64}(
                     dual.(ctx_restricted.constraints[:balance_p][o.agg_bus, :]),
                 )

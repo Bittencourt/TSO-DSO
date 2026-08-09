@@ -157,12 +157,16 @@ any_cert_failed(r.trace)
 # certifies cleanly at the first (SOC-relaxation) tier — no escalation to the restricted or
 # AC-fallback tiers was needed here. This is a plausible, honest outcome for a moderate fixture,
 # not a claim that the escalation ladder is untested: `test/test_mpc_loop.jl`'s forced-inexact
-# `@testitem` (plan 21-05) drives `Phase21Fixtures`' high-PV fixture (`pv_scale =
-# MPC_HIGH_PV_SCALE_MEASURED = 3.0`, a measured knife-edge value, cone ratio ≈ 9157× over
-# threshold) directly through `_mpc_certify_and_price` and asserts `cert_status ∈
-# (:certified_convex_dual, :local_ac_dual)` — that is where the escalation path is genuinely
-# exercised and proven never to throw, deliberately NOT fabricated as an artificial trigger on
-# this page's own demonstration fixture.
+# `@testitem`s (plan 21-05, extended by the phase's review fixes) drive `Phase21Fixtures`'
+# high-PV fixture (`pv_scale = MPC_HIGH_PV_SCALE_MEASURED = 3.0`, a measured knife-edge value,
+# cone ratio ≈ 9157× over threshold) directly through `_mpc_certify_and_price` — at `t = 1` AND
+# at `t > 1` — and assert `cert_status ∈ (:certified_convex_dual_restricted, :local_ac_dual)`
+# (a restricted-tier rescue carries its own provenance symbol, distinct from a first-tier
+# certification), plus a dedicated item forcing BOTH tiers to fail and asserting the terminal
+# `:cert_failed` status is published with the day-ahead reference fallback price rather than
+# throwing. That is where the escalation ladder is genuinely exercised and proven never to
+# throw, deliberately NOT fabricated as an artificial trigger on this page's own demonstration
+# fixture.
 
 # ## Finding
 #

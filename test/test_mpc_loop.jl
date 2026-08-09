@@ -92,7 +92,9 @@ end
     result = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
 
     @test result.cone_maxratio > 1     # the pre-condition: this call's inline check DID fail
-    @test result.cert_status in (:certified_convex_dual, :local_ac_dual)   # escalation resolved it
+    # escalation resolved it — WR-04: the restricted-tier rescue carries its OWN symbol,
+    # DISTINCT from a first-tier :certified_convex_dual certification.
+    @test result.cert_status in (:certified_convex_dual_restricted, :local_ac_dual)
     @test length(result.price_vec) == H
     @test all(isfinite, result.price_vec)
     # The call above completing (no exception propagated to this point) IS the D-04 assertion
@@ -177,7 +179,7 @@ end
         solve_mpc_window!(o)
         r = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, t; measured_state = ms, fe = fe)
         @test r.cone_maxratio > 1                              # pre-condition at THIS t
-        @test r.cert_status in (:certified_convex_dual, :local_ac_dual)
+        @test r.cert_status in (:certified_convex_dual_restricted, :local_ac_dual)
         @test all(isfinite, r.price_vec)
         prices[t] = r.price_vec
     end
