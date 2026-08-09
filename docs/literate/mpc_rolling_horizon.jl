@@ -55,12 +55,16 @@ s = Scenario(;
 
 # ## Running the full receding-horizon closed loop
 #
-# [`run_mpc`](@ref) materializes the same heavy objects `run_scenario` does, solves the
-# perfect-foresight day-ahead benchmark via `solve_welfare` EXACTLY ONCE (`T = 24` hours,
-# including the `:default` population's `Deferrable` device), builds the receding-horizon
-# [`MpcWindow`](@ref) ONCE, and re-solves it `19` times (once per published hour, since
-# `mpc_step = 1` here), dispatching Phase-20's own non-throwing certificate/fallback ladder on
-# every resolve and recording every published hour into an [`MpcTrace`](@ref).
+# [`run_mpc`](@ref) materializes the same heavy objects `run_scenario` does, solves TWO
+# one-time perfect-foresight day-ahead benchmarks via `solve_welfare` (`T = 24` hours each,
+# both strictly outside the per-step loop): the FULL-population reference — including the
+# `:default` population's `Deferrable` device — that produces `day_ahead_welfare` and the
+# reference DADP path, and the COMPARABLE benchmark over the same Deferrable-excluded device
+# set the closed loop controls, which the regret comparison reads (see section 3). It then
+# builds the receding-horizon [`MpcWindow`](@ref) ONCE, and re-solves it `19` times (once per
+# published hour, since `mpc_step = 1` here), dispatching Phase-20's own non-throwing
+# certificate/fallback ladder on every resolve and recording every published hour into an
+# [`MpcTrace`](@ref).
 
 r = run_mpc(s)
 
@@ -108,14 +112,19 @@ last(r.trace.cum_deviation_trace)
 # the day-ahead perfect-foresight welfare, but — per `src/experiments/mpc_loop.jl`'s own
 # documented contract, mirrored here verbatim rather than re-derived — RESTRICTED to the SAME
 # PUBLISHED `k`-hour decision horizon (`k = steps = 19`, NEVER silently extended to the full
-# `T = 24` hours the day-ahead optimum itself spans) and the SAME Deferrable-excluded device set
-# on both sides of the comparison (the window model structurally cannot host a `Deferrable`
-# device — its energy-budget window is baked against the full day-ahead horizon at construction
-# time, `src/experiments/mpc_loop.jl`'s own header deviation note — so the day-ahead comparison
-# term deliberately excludes it too, an apples-to-apples restriction, not an inflated one-sided
-# benchmark). The perfect-foresight day-ahead optimum is a genuine UPPER BOUND computed on the
-# realized truth; this number is reported exactly as measured on THIS run, never tuned to look
-# small (or large):
+# `T = 24` hours the day-ahead optimum itself spans) and read entirely from a SECOND, dedicated
+# day-ahead benchmark solved over the SAME Deferrable-excluded device set the closed loop
+# actually controls (the window model structurally cannot host a `Deferrable` device — its
+# energy-budget window is baked against the full day-ahead horizon at construction time,
+# `src/experiments/mpc_loop.jl`'s own header deviation note). BOTH the comparison's per-device
+# utilities AND its frontier `p_import` cost come from that comparable benchmark (review CR-03):
+# an earlier revision of this comparison read `p_import` from the FULL-population day-ahead
+# context, charging the day-ahead side the frontier cost of serving Deferrable's consumption
+# while denying it Deferrable's utility — which systematically understated the benchmark and
+# inflated the regret in the MPC's favor (that biased revision measured a small POSITIVE regret
+# on this very fixture). The perfect-foresight day-ahead optimum is a genuine UPPER BOUND
+# computed on the realized truth; this number is reported exactly as measured on THIS run,
+# never tuned to look small (or large):
 
 r.regret
 
@@ -158,11 +167,14 @@ any_cert_failed(r.trace)
 # ## Finding
 #
 # The receding-horizon closed loop publishes a genuinely rolling real-time price signal —
-# `max_jump` and `mean_jump` above are non-trivial, non-flat step-to-step price movements, not a
-# frozen day-ahead path replayed hour by hour — while the measured `regret` quantifies exactly
-# how far the closed loop's realized welfare falls short of (or, as measured on this run,
-# slightly exceeds) the perfect-foresight day-ahead optimum over the SAME published decision
-# horizon. Every certificate on this fixture cleared at the cheapest tier; the escalation ladder
+# `max_jump` and `mean_jump` above describe the step-to-step price movement of THIS run's
+# recomputed trace, not a frozen day-ahead path replayed hour by hour — while the measured
+# `regret` quantifies exactly how far the closed loop's realized welfare falls short of the
+# perfect-foresight day-ahead optimum over the SAME published decision horizon (as measured on
+# this run: a small NEGATIVE regret, the closed loop giving up a little welfare to forecast
+# error and the receding window — the direction theory expects from a genuine upper-bound
+# benchmark; an earlier, biased revision of the comparison reported a small positive value,
+# see the regret section above). Every certificate on this fixture cleared at the cheapest tier; the escalation ladder
 # itself is proven never to throw on a genuinely forced-inexact fixture elsewhere in this phase's
 # test suite (`test/test_mpc_loop.jl`), not on this page. The terminal-equality mechanism (D-06)
 # that keeps the closed loop's battery trajectories information-set-fair against the day-ahead

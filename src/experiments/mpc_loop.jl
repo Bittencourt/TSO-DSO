@@ -7,9 +7,11 @@
 # `run_scenario`/`run.jl`'s `:centralized`/`:admm` `strategy` dispatch (D-01, Pitfall 7);
 # that dispatch stays byte-for-byte untouched. It materializes the SAME heavy objects
 # `run_scenario` does (feeder/profiles/λ₀/aggregators, `src/experiments/materialize.jl`
-# verbatim), solves the perfect-foresight day-ahead benchmark via `solve_welfare` EXACTLY
-# ONCE (never inside the per-resolve loop — that would rebuild a fresh `Model` every step,
-# violating MPC-01's own build-once acceptance bar and CLAUDE.md's hard build-once rule),
+# verbatim), solves TWO one-time perfect-foresight day-ahead benchmarks via `solve_welfare`
+# (the FULL-population reference and the CR-03 comparable benchmark over the
+# Deferrable-excluded `mpc_aggs` — both strictly OUTSIDE the per-resolve loop; re-solving
+# inside it would rebuild a fresh `Model` every step, violating MPC-01's own build-once
+# acceptance bar and CLAUDE.md's hard build-once rule),
 # then drives plan 21-03/21-04's `build_mpc_window`/`solve_mpc_window!`/`propagate_soc`/
 # `propagate_tin`/`draw_forecast_error` through a FIXED-window receding horizon, re-solving
 # every `s.mpc_step` real hours (D-03's step-size kwarg genuinely strides the outer loop's
@@ -32,13 +34,15 @@
 # reasoning one level up: the WINDOW MODEL itself cannot host a `Deferrable`, regardless of
 # which population supplied it). `run_mpc` therefore builds a SEPARATE, Deferrable-excluded
 # aggregator list (`mpc_aggs`) for the window model and every per-step accumulation, while
-# the ONE-TIME day-ahead benchmark still uses the FULL, unfiltered `aggs` (Deferrable
-# genuinely contributes to that one-time, full-day welfare number, `day_ahead_welfare` in
-# the return tuple). `regret`'s day-ahead comparison term is accumulated over the SAME
-# `mpc_aggs` device set (never `aggs`) so both sides of the regret comparison are evaluated
-# over an IDENTICAL device set — an apples-to-apples comparison, not one inflated by a
-# device the closed loop structurally cannot represent. Discovered running this task's own
-# `<verify>` script against the default multi-aggregator `:ieee13` population.
+# the ONE-TIME full-population day-ahead benchmark still uses the FULL, unfiltered `aggs`
+# (Deferrable genuinely contributes to that one-time, full-day welfare number,
+# `day_ahead_welfare` in the return tuple). `regret`'s day-ahead comparison side (CR-03) is
+# read ENTIRELY from a SECOND one-time day-ahead benchmark solved over `mpc_aggs` itself
+# (`ctx_da_cmp`) — utilities AND the frontier `p_import` term — so both sides of the regret
+# comparison are evaluated over an IDENTICAL device set AND an identically-populated
+# dispatch: never a comparison charged the frontier cost of serving a device whose utility
+# it is denied. Discovered running this task's own `<verify>` script against the default
+# multi-aggregator `:ieee13` population; the frontier-term half found by review CR-03.
 #
 # 21-05 DEVIATION (Rule 1 — pre-existing bug, plan 21-01, fixed in `src/devices/PVBattery.jl`
 # / `src/devices/Thermostatic.jl` / `src/devices/FourQuadBESS.jl` / `src/devices/Aggregator.jl`,
@@ -58,10 +62,12 @@ using JuMP
     run_mpc(s::Scenario) -> NamedTuple
 
 Drive the FULL receding-horizon closed loop for `s` (MPC-01..04): materialize the same heavy
-objects [`run_scenario`](@ref) does, solve the perfect-foresight day-ahead benchmark ONCE via
-[`solve_welfare`](@ref), then re-solve a build-once [`MpcWindow`](@ref) every `s.mpc_step`
-real hours (never rebuilding it), dispatching Phase-20's own certificate/fallback ladder on
-every resolve and recording every published hour into an [`MpcTrace`](@ref).
+objects [`run_scenario`](@ref) does, solve the TWO one-time perfect-foresight day-ahead
+benchmarks via [`solve_welfare`](@ref) (the full-population reference and the CR-03
+comparable benchmark over the Deferrable-excluded `mpc_aggs` — both strictly outside the
+loop), then re-solve a build-once [`MpcWindow`](@ref) every `s.mpc_step` real hours (never
+rebuilding it), dispatching Phase-20's own certificate/fallback ladder on every resolve and
+recording every published hour into an [`MpcTrace`](@ref).
 
 # Guards (before any materialization)
 
@@ -88,7 +94,11 @@ steps)`:
   - `regret::Float64` — `realized_welfare` MINUS the day-ahead welfare RESTRICTED to the SAME
     published `k`-hour decision horizon and the SAME `mpc_aggs` device set (D-11's
     information-set-fair comparison) — NEVER silently extrapolated to the full `s.T` hours the
-    day-ahead optimum spans.
+    day-ahead optimum spans. The day-ahead side (utilities AND frontier `p_import` cost) is
+    read from a SECOND one-time benchmark solved over `mpc_aggs` itself (CR-03), never from
+    the full-population context — so the comparison is never charged the frontier cost of a
+    device whose utility it is denied. The terminal-SOC targets (D-06) likewise track THIS
+    comparable benchmark's own optimal SOC trajectory.
   - `day_ahead_dadp::Vector{Float64}` — the full-length (`s.T`) day-ahead reference DADP path.
   - `steps::Int` — the total published-hour count, ALWAYS `s.T - s.mpc_H + 1` regardless of
     `s.mpc_step` (Pitfall 5's fixed-window convention — only the NUMBER OF RESOLVES shrinks as
@@ -131,8 +141,16 @@ function run_mpc(s::Scenario)
         agg in aggs
     ]
 
-    # --- 2. ONE-TIME day-ahead perfect-foresight benchmark (solve_welfare called EXACTLY
-    # ONCE, T = s.T, never inside the per-resolve loop). --------------------------------------
+    # --- 2. ONE-TIME day-ahead perfect-foresight benchmarks (solve_welfare called EXACTLY
+    # TWICE, both at T = s.T, NEVER inside the per-resolve loop):
+    #   (a) the FULL-population benchmark — the separately-reported `day_ahead_welfare` and
+    #       the published day-ahead reference DADP path (Deferrable included);
+    #   (b) the COMPARABLE benchmark over the SAME Deferrable-excluded `mpc_aggs` device set
+    #       the closed loop actually controls (CR-03) — the regret comparison's ONLY source:
+    #       both the per-device utilities AND the frontier `p_import` term are read from THIS
+    #       context, so the day-ahead side of the regret is never charged the frontier cost
+    #       of serving a device (Deferrable) whose utility it is denied, and its whole
+    #       dispatch reflects the SAME population as the closed loop's. ----------------------
     ctx_da, welfare_da, dadp_da = solve_welfare(
         feeder,
         pf,
@@ -141,9 +159,23 @@ function run_mpc(s::Scenario)
         λ₀ = λ₀,
         allow_export = s.allow_export,
     )
+    ctx_da_cmp, _, _ = solve_welfare(
+        feeder,
+        pf,
+        mpc_aggs;
+        T = s.T,
+        λ₀ = λ₀,
+        allow_export = s.allow_export,
+    )
+    # D-06/D-11 coherence (CR-03): the terminal-SOC targets track the COMPARABLE benchmark's
+    # own optimal SOC trajectory — the trajectory regret is measured against — keeping the
+    # terminal pin and the benchmark on the SAME information set (previously sourced from the
+    # full-population context, whose trajectory reflects a population the closed loop
+    # structurally cannot represent).
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:s.T] for
-        (bus, varlist) in ctx_da.meta[:agg_device_vars] for v in varlist if haskey(v, :soc)
+        (bus, varlist) in ctx_da_cmp.meta[:agg_device_vars] for
+        v in varlist if haskey(v, :soc)
     )
 
     # --- 3. Build the window ONCE (MPC-01), against the Deferrable-excluded mpc_aggs. -------
@@ -285,17 +317,20 @@ function run_mpc(s::Scenario)
     # step-count convention, invariant to s.mpc_step) — NEVER silently extrapolated to the
     # full s.T hours the day-ahead optimum spans. Both sides are evaluated via the IDENTICAL
     # per-device utility-formula accumulation over the SAME mpc_aggs device set (Deferrable
-    # excluded from BOTH sides, see this file's header deviation note) on the SAME realized
-    # truth (ctx_da's own solved day-ahead trajectory).
+    # excluded from BOTH sides, see this file's header deviation note) — CR-03: every read
+    # (utilities AND the frontier p_import term) comes from ctx_da_cmp, the day-ahead
+    # benchmark solved over mpc_aggs ITSELF, so the comparison is never charged the frontier
+    # cost of serving a device whose utility it is denied, and its dispatch reflects the
+    # SAME population as the closed loop's.
     day_ahead_comparable_welfare = 0.0
     for τ in 1:k
         for agg in mpc_aggs
-            varlist = ctx_da.meta[:agg_device_vars][agg.bus]
+            varlist = ctx_da_cmp.meta[:agg_device_vars][agg.bus]
             for d in agg.devices
                 day_ahead_comparable_welfare += _mpc_device_hour_utility(d, varlist, τ)
             end
         end
-        day_ahead_comparable_welfare -= λ₀[τ] * value(ctx_da.meta[:p_import][τ])
+        day_ahead_comparable_welfare -= λ₀[τ] * value(ctx_da_cmp.meta[:p_import][τ])
     end
     regret = realized_welfare - day_ahead_comparable_welfare
 
