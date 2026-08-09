@@ -235,7 +235,10 @@ end
     # Adding a binary or complementarity constraint would break QP convexity + Phase-5
     # pricing. RESEARCH §Anti-Patterns forbids it — assert it never happened.
     vars = all_variables(model)
-    @test length(vars) == 4T                        # p_ch, p_dch, soc, pv_used (WR-04)
+    # p_ch, p_dch, soc, pv_used (WR-04) = 4T, PLUS the MPC-01 Parameter widening: soc0 (1
+    # Parameter) + Ppv_param (T Parameters) — Parameters ARE VariableRefs in JuMP, counted
+    # here too (5T + 1), even though their DEFAULT solved behavior is byte-identical.
+    @test length(vars) == 5T + 1
     @test count(is_binary, vars) == 0
     @test count(is_integer, vars) == 0
 

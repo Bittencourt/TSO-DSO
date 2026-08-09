@@ -209,12 +209,21 @@ DEV-05). It:
  3. builds the concave comfort utility `− (b/2)·Σ_t (Tin[t] − Tmin)²` (eq. 3.11) as a
     `QuadExpr`.
 
-It then RETURNS `(; vars = (; p, Tin), p_inject, utility)` where `p_inject[t] = −p[t]` is
-the signed ACTIVE injection (a consumed load is a NEGATIVE injection, matching the
-`Interruptible` sign convention). The device writes NOTHING to `ctx.residuals` and calls
-NO `add_to_objective!`: the Aggregator consumes this tuple and is the sole `:Rp`/`:Rq`
-writer. The device references only `d.bus` (never the network), so the power-flow swap
-leaves this code untouched.
+It then RETURNS `(; vars = (; p, Tin, Tin0, Tout_param), p_inject, utility)` where
+`p_inject[t] = −p[t]` is the signed ACTIVE injection (a consumed load is a NEGATIVE
+injection, matching the `Interruptible` sign convention). The device writes NOTHING to
+`ctx.residuals` and calls NO `add_to_objective!`: the Aggregator consumes this tuple and
+is the sole `:Rp`/`:Rq` writer. The device references only `d.bus` (never the network),
+so the power-flow swap leaves this code untouched.
+
+`Tin0` and `Tout_param` (MPC-01 seam, D-01/D-03) are genuine JuMP `Parameter` handles for
+the temperature initial condition and the per-step ambient-temperature profile (only
+`t = 1:(T-1)` entries — the recursion never reads `Tout[T]`), respectively — a future
+receding-horizon window re-targets them via `set_parameter_value`/`set_parameter_value.`
+WITHOUT rebuilding any constraint. Both default to the EXACT prior literal value
+(`parameter_value(Tin0) == d.Tin0`, `parameter_value.(Tout_param) == d.Tout[1:(T-1)]`), so
+no caller that never calls `set_parameter_value` observes any behavior change
+(byte-identical-default invariant).
 """
 function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
     # Temporal-infeasibility guard (threat T-03-07): the recursion (3.2) reads Tout[t] for
@@ -234,12 +243,25 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
     Tin = @variable(m, [t = 1:T], lower_bound = d.Tmin, upper_bound = d.Tmax)
 
     # State IC + RC/ETP recursion (thesis eq. 3.2) — the inter-temporal coupling.
-    @constraint(m, Tin[1] == d.Tin0)
-    @constraint(
-        m,
-        [t = 1:(T - 1)],
-        Tin[t + 1] == Tin[t] + d.α * (d.Tout[t] - Tin[t]) - d.β * p[t]
-    )
+    #
+    # MPC-01 seam (D-01/D-03): both the temperature IC and the ambient-temperature profile
+    # are now genuine Parameters (Tin0, Tout_param), not baked-in literals — re-settable via
+    # `set_parameter_value`/`set_parameter_value.` without rebuilding either constraint, and
+    # both defaulting to the exact prior literal value. `Tout_param` covers ONLY
+    # `t = 1:(T-1)` since the recursion never reads `Tout[T]` (guarded against T == 1: no
+    # recursion constraint — and hence no Tout_param — is built in that case, unchanged).
+    @variable(m, Tin0 in Parameter(d.Tin0))
+    @constraint(m, Tin[1] == Tin0)
+    if T > 1
+        @variable(m, Tout_param[t = 1:(T - 1)] in Parameter.(d.Tout[1:(T - 1)]))
+        @constraint(
+            m,
+            [t = 1:(T - 1)],
+            Tin[t + 1] == Tin[t] + d.α * (Tout_param[t] - Tin[t]) - d.β * p[t]
+        )
+    else
+        Tout_param = JuMP.VariableRef[]
+    end
 
     # Concave comfort utility (eq. 3.11, constant c dropped — RESEARCH A5). Curvature
     # −(b/2) ≤ 0 keeps it concave; built as a QuadExpr so the curvature is retained.
@@ -249,7 +271,7 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
     # convention). Returned to the aggregator, NOT written to any residual here.
     p_inject = AffExpr[-p[t] for t in 1:T]
 
-    return (; vars = (; p, Tin), p_inject, utility)
+    return (; vars = (; p, Tin, Tin0, Tout_param), p_inject, utility)
 end
 
 export Thermostatic

@@ -224,11 +224,19 @@ charge from non-curtailed PV, requires `length(Ppv) ≥ T`), the SOC band + IC
 constraint — App. C (pp. 166-168) makes it unnecessary; the caller MUST verify
 `p_ch·p_dch < τ` numerically post-solve.
 
-Returns `(; vars = (; p_ch, p_dch, soc, pv_used), p_inject, utility)` where
+Returns `(; vars = (; p_ch, p_dch, soc, pv_used, soc0, Ppv_param), p_inject, utility)` where
 `p_inject[t] = pv_used[t] − p_ch[t] + p_dch[t]` (used-PV export − charge draw + discharge)
 is a `Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex
 discharge cost). The `pv_used` curtailment (WR-04) lets surplus PV be dumped rather than
 forcing a high-PV scenario infeasible (there is no export sink at the priced frontier).
+
+`soc0` and `Ppv_param` (MPC-01 seam, D-01/D-03) are genuine JuMP `Parameter` handles for
+the SOC initial condition and the per-step PV-availability profile, respectively — a
+future receding-horizon window (SEAM-01's `horizon_state` stub) re-targets them via
+`set_parameter_value`/`set_parameter_value.` WITHOUT rebuilding any constraint. Both
+default to the EXACT prior literal value (`parameter_value(soc0) == d.soc0`,
+`parameter_value.(Ppv_param) == d.Ppv[1:T]`), so no caller that never calls
+`set_parameter_value` observes any behavior change (byte-identical-default invariant).
 """
 function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     length(d.Ppv) >= T || throw(
@@ -248,9 +256,22 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     # injection `Ppv[t]` with no curtailment and no export sink, so a high-PV/surplus
     # scenario (the frontier import is non-negative, i.e. no export) went INFEASIBLE with no
     # recourse. Curtailment lets the surplus be dumped instead (thesis-consistent).
-    pv_used = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Ppv[t])
+    #
+    # MPC-01 seam (D-01/D-03): the PV-availability bound is now a genuine per-step
+    # Parameter (Ppv_param), not a literal `upper_bound=`. A Parameter cannot be passed as
+    # an `upper_bound=` kwarg — only as the RHS of a constraint (RESEARCH.md Pitfall 4) — so
+    # `pv_used` is declared with ONLY a lower bound and the PV-limit is enforced by a
+    # separate constraint against `Ppv_param`, which defaults to the exact prior literal
+    # `d.Ppv[1:T]` (byte-identical default) and is re-settable without rebuilding.
+    pv_used = @variable(m, [t = 1:T], lower_bound = 0.0)
+    @variable(m, Ppv_param[t = 1:T] in Parameter.(d.Ppv[1:T]))
+    @constraint(m, [t = 1:T], pv_used[t] <= Ppv_param[t])
 
-    @constraint(m, soc[1] == d.soc0)                                          # (3.9 IC)
+    # MPC-01 seam (D-01): the SOC initial condition is now a genuine Parameter (soc0), not
+    # a baked-in literal `d.soc0` — re-settable via `set_parameter_value` without rebuilding
+    # the constraint, and defaulting to the exact prior literal value.
+    @variable(m, soc0 in Parameter(d.soc0))
+    @constraint(m, soc[1] == soc0)                                            # (3.9 IC)
     if T > 1
         # SOC dynamics with round-trip efficiency (3.6): η·p_ch in, p_dch/η out (η² < 1).
         @constraint(
@@ -287,7 +308,7 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     # (−p_ch), discharge is a source (+p_dch).
     p_inject = [pv_used[t] - p_ch[t] + p_dch[t] for t in 1:T]
 
-    return (; vars = (; p_ch, p_dch, soc, pv_used), p_inject, utility)
+    return (; vars = (; p_ch, p_dch, soc, pv_used, soc0, Ppv_param), p_inject, utility)
 end
 
 export PVBattery
