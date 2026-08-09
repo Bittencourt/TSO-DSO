@@ -94,6 +94,14 @@ Pages = ["admm/ReactiveMode.jl", "admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/resid
 Order = [:type, :constant, :function]
 ```
 
+## MPC / Rolling-Horizon
+
+```@autodocs
+Modules = [TSODSO]
+Pages = ["models/mpc_trace.jl"]
+Order = [:type, :constant, :function]
+```
+
 ## Diagnostics
 
 ```@autodocs
