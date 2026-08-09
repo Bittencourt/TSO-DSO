@@ -84,10 +84,24 @@ an on-disk uniqueness key (`run_and_store`, `store.jl`) MUST use `digits = 10` (
     (08-03 deviation — RULE 1, discovered exercising `run_scenario(:admm)` end-to-end for the
     first time). Adaptive ρ still self-tunes per scenario from THIS starting point; a
     hand-tuned `Scenario(; ρ = …)` override remains available for other feeders/populations.
+  - `mpc_H::Int = 6`, `mpc_step::Int = 1`, `mpc_terminal_soc::Bool = true`,
+    `mpc_forecast_error::Float64 = 0.05` — Phase-21 MPC-only knobs (D-12), additive and kept in
+    the SAME flat schema. `mpc_H` is the receding-horizon window length (6 hours, giving
+    `T - mpc_H + 1 = 19` published steps on the `T = 24` day-ahead default); `mpc_step` is the
+    step size between successive windows (kept `1`, a hook for a future coarser stride);
+    `mpc_terminal_soc` toggles D-06's hard terminal-SOC equality (on by default);
+    `mpc_forecast_error` is D-08's bounded PV/demand perturbation magnitude (±5% by default,
+    a fraction strictly in `[0, 1)`). These four fields are NO-OPS for the `:centralized`/
+    `:admm` strategies — consumed ONLY by the phase's own `run_mpc(scenario)` entry point (plan
+    21-05), NEVER by `run_scenario`'s `strategy` dispatch. Adding them changes every
+    `Scenario`'s `savename` STRING (a documented, accepted cost per RESEARCH.md Pitfall 6's
+    resolution) while preserving every EXISTING numeric golden result, since no
+    `:centralized`/`:admm` code path reads any of the four.
 
 Construction throws `ArgumentError` when `feeder`/`strategy`/`price`/`population` is not one
-of the named valid selectors above, or when `T < 1`, `seed < 1`, or `maxiter < 1` (a Scenario
-must fully determine a runnable, sane experiment — threat T-08-05).
+of the named valid selectors above, or when `T < 1`, `seed < 1`, `maxiter < 1`, `mpc_H < 1`,
+`mpc_step < 1`, or `mpc_forecast_error` is not a bounded fraction in `[0, 1)` (a Scenario must
+fully determine a runnable, sane experiment — threat T-08-05).
 """
 Base.@kwdef struct Scenario
     name::String
@@ -104,6 +118,10 @@ Base.@kwdef struct Scenario
     maxiter::Int = 200
     τ_ratio::Float64 = 2.0
     μ::Float64 = 10.0
+    mpc_H::Int = 6
+    mpc_step::Int = 1
+    mpc_terminal_soc::Bool = true
+    mpc_forecast_error::Float64 = 0.05
 
     function Scenario(
         name::String,
@@ -120,6 +138,10 @@ Base.@kwdef struct Scenario
         maxiter::Int,
         τ_ratio::Float64,
         μ::Float64,
+        mpc_H::Int,
+        mpc_step::Int,
+        mpc_terminal_soc::Bool,
+        mpc_forecast_error::Float64,
     )
         # V5 input validation (threat T-08-05): a Scenario must never silently underdetermine
         # its run. Every selector is checked LOUDLY against its named valid set — throw, never
@@ -194,6 +216,23 @@ Base.@kwdef struct Scenario
                 ),
             )
         end
+        # D-12: Phase-21 MPC-only additive fields — same "checked LOUDLY" convention.
+        if mpc_H < 1
+            throw(ArgumentError("Scenario: window length H must be ≥ 1; got mpc_H=$mpc_H"))
+        end
+        if mpc_step < 1
+            throw(
+                ArgumentError("Scenario: step size must be ≥ 1; got mpc_step=$mpc_step"),
+            )
+        end
+        if !(0 <= mpc_forecast_error < 1)
+            throw(
+                ArgumentError(
+                    "Scenario: mpc_forecast_error must be a bounded fraction in [0, 1); got " *
+                    "mpc_forecast_error=$mpc_forecast_error",
+                ),
+            )
+        end
         return new(
             name,
             feeder,
@@ -209,6 +248,10 @@ Base.@kwdef struct Scenario
             maxiter,
             τ_ratio,
             μ,
+            mpc_H,
+            mpc_step,
+            mpc_terminal_soc,
+            mpc_forecast_error,
         )
     end
 end

@@ -279,4 +279,85 @@ function solve_mpc_window!(
     )
 end
 
+"""
+    propagate_soc(soc::Real, p_ch1::Real, p_dch1::Real, η::Real, Δt::Real) -> Float64
+
+Nominal-plant, JuMP-free re-derivation of the NEXT measured battery SOC (D-05), evaluated
+OUTSIDE the optimizer on the REALIZED (solved) first-interval controls `p_ch1`/`p_dch1` — never
+re-solving anything, a pure arithmetic re-derivation of the SAME SOC recursion `PVBattery`/
+`FourQuadBESS` already encode inside the JuMP model (thesis eq. 3.6):
+
+```
+soc + (η * p_ch1 - p_dch1 / η) * Δt
+```
+
+D-05's "apply each step's first-interval optimal controls to the ground-truth device dynamics"
+reading: this function IS that application, called once per receding-horizon step by the
+(future, plan 21-05) `run_mpc` orchestrator and this plan's own MPC-02 regression.
+"""
+function propagate_soc(soc::Real, p_ch1::Real, p_dch1::Real, η::Real, Δt::Real)
+    return soc + (η * p_ch1 - p_dch1 / η) * Δt
+end
+
+"""
+    propagate_tin(Tin::Real, p1::Real, α::Real, β::Real, Tout_true::Real) -> Float64
+
+Nominal-plant, JuMP-free re-derivation of the NEXT measured indoor temperature (D-05), evaluated
+OUTSIDE the optimizer on the REALIZED (solved) first-interval control `p1`, mirroring the SAME
+RC/ETP recursion `Thermostatic` already encodes inside the JuMP model (thesis eq. 3.2):
+
+```
+Tin + α * (Tout_true - Tin) - β * p1
+```
+
+`Tout_true` MUST be the GROUND-TRUTH ambient value at that absolute hour, never the
+forecast-perturbed slice the window's OWN optimizer saw when choosing `p1` — D-05's "model
+mismatch enters only via forecast error" reading means the physical recursion always uses
+truth; only the optimizer's CHOICE of `p1` was made under a forecast.
+"""
+function propagate_tin(Tin::Real, p1::Real, α::Real, β::Real, Tout_true::Real)
+    return Tin + α * (Tout_true - Tin) - β * p1
+end
+
+"""
+    draw_forecast_error(seed::Integer, t::Integer, magnitude::Real) -> NamedTuple
+
+Seeded, INDEPENDENT bounded multiplicative perturbation of PV and demand (D-08), returning
+`(; pv_factor, demand_factor)`. Throws `ArgumentError` unless `0 <= magnitude < 1` (mirrors
+`Scenario`'s own guard — defensive-in-depth, this function may be called directly).
+
+`magnitude == 0` short-circuits to the deterministic no-op `(; pv_factor = 1.0, demand_factor =
+1.0)` for EVERY `seed`/`t` (avoids a wasted RNG construction on the no-error path). Otherwise,
+derives TWO INDEPENDENT sub-seeds via [`sub_seed`](@ref) with FRESH, per-step tags
+(`:mpc_forecast_pv_<t>`/`:mpc_forecast_demand_<t>`) — never the `:profiles`/`:population` tags
+(Pitfall 5's independent-stream discipline) — constructs a FRESH `StableRNGs.LehmerRNG` from
+each derived seed, and draws `factor = 1.0 + magnitude * (2 * rand(rng) - 1)` from each,
+independently, so the draw is genuinely regenerated per absolute hour `t` (D-08: "regenerated
+per step"). Never reseeds or touches the global/default RNG.
+"""
+function draw_forecast_error(seed::Integer, t::Integer, magnitude::Real)
+    if !(0 <= magnitude < 1)
+        throw(
+            ArgumentError(
+                "draw_forecast_error: magnitude must be a bounded fraction in [0, 1); got " *
+                "magnitude=$magnitude",
+            ),
+        )
+    end
+    if magnitude == 0
+        return (; pv_factor = 1.0, demand_factor = 1.0)
+    end
+
+    seed_pv = sub_seed(seed, Symbol("mpc_forecast_pv_", t))
+    seed_demand = sub_seed(seed, Symbol("mpc_forecast_demand_", t))
+
+    rng_pv = StableRNGs.LehmerRNG(seed_pv)
+    rng_demand = StableRNGs.LehmerRNG(seed_demand)
+
+    pv_factor = 1.0 + magnitude * (2 * rand(rng_pv) - 1)
+    demand_factor = 1.0 + magnitude * (2 * rand(rng_demand) - 1)
+
+    return (; pv_factor, demand_factor)
+end
+
 export MpcWindow, build_mpc_window, solve_mpc_window!
