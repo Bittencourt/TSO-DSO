@@ -179,8 +179,12 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int
         push!(children[br.from], (br.to, b))
         push!(children[br.to], (br.from, -b))
     end
+    # `parent_of[c]` / SIGNED `branch_of_child[c]` (positive = stored parent→child, negative
+    # = stored REVERSED): a stored Branch(from, to, …) need not point parent→child (review
+    # CR-01), exactly as recover_voltage_angles / recover_lossfree_shadow_voltage document.
     order = Int[feeder.root]
     children_of = [Int[] for _ in 1:N]
+    parent_of = Dict{Int, Int}()
     branch_of_child = Dict{Int, Int}()
     visited = falses(N)
     visited[feeder.root] = true
@@ -191,7 +195,8 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int
             visited[j] && continue
             visited[j] = true
             push!(children_of[i], j)
-            branch_of_child[j] = abs(bsigned)
+            parent_of[j] = i
+            branch_of_child[j] = bsigned
             push!(order, j)
             push!(queue, j)
         end
@@ -207,7 +212,8 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int
             accR = zero(AffExpr)
             accX = zero(AffExpr)
             if i != feeder.root
-                b_own = branch_of_child[i]
+                # r·ℓ / x·ℓ are orientation-independent — strip the traversal sign.
+                b_own = abs(branch_of_child[i])
                 br_own = feeder.branches[b_own]
                 accR += br_own.r * pv.l[b_own, t]
                 accX += br_own.x * pv.l[b_own, t]
@@ -221,16 +227,27 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int
         end
 
         # (2) Forward recursion from the root, AFFINE in P, Q, l — byte-identical formula to
-        # recover_lossfree_shadow_voltage's v̂_GL recursion.
+        # recover_lossfree_shadow_voltage's v̂_GL recursion, INCLUDING its orientation
+        # handling (review CR-01): the parent voltage comes from the TREE parent (never
+        # br.from), and for a branch stored REVERSED (bsigned < 0, br.from == i) the
+        # parent-side flow toward i is the branch's receiving end at the parent, negated:
+        # r·ℓ − P (never a bare −P, which would drop the feeding branch's own loss).
         v̂_GL = Dict{Int, AffExpr}()
         v̂_GL[feeder.root] = 1.0 * pv.v[feeder.root, t]
         for i in order
             i == feeder.root && continue
-            b = branch_of_child[i]
+            bsigned = branch_of_child[i]
+            b = abs(bsigned)
             br = feeder.branches[b]
-            P̌ = pv.P[b, t] - LossInclR[i]
-            Q̌ = pv.Q[b, t] - LossInclX[i]
-            v̂_GL[i] = v̂_GL[br.from] - 2 * (br.r * P̌ + br.x * Q̌)
+            Pb =
+                bsigned > 0 ? 1.0 * pv.P[b, t] :
+                br.r * pv.l[b, t] - 1.0 * pv.P[b, t]
+            Qb =
+                bsigned > 0 ? 1.0 * pv.Q[b, t] :
+                br.x * pv.l[b, t] - 1.0 * pv.Q[b, t]
+            P̌ = Pb - LossInclR[i]
+            Q̌ = Qb - LossInclX[i]
+            v̂_GL[i] = v̂_GL[parent_of[i]] - 2 * (br.r * P̌ + br.x * Q̌)
 
             # OPF-m (eq. 11/12): the loss-free shadow must not exceed the EXISTING physical
             # upper bound — forces C2 to hold by construction (Theorem 2).

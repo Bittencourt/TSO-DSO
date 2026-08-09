@@ -152,6 +152,22 @@ identical for the lossless model with the SAME injections `inj[j]`) confirms `P[
 telescopes to exactly the total loss in the CLOSED subtree rooted at `j` (the branch entering
 `j` plus everything strictly below it) — hence the minus sign and the inclusive accumulation.
 
+Branch orientation (review CR-01): a stored `Branch(from, to, …)` need NOT point
+parent→child — `assert_radial` (data/topology.jl) validates only tree-ness, never
+orientation, exactly as the sibling [`recover_voltage_angles`](@ref) documents. The BFS
+therefore keeps each child's TREE PARENT and the SIGNED branch index (positive = the
+branch's own `(from, to)` direction is parent→child, negative = stored REVERSED). The
+parent voltage is always read from the tree parent (never `br.from`), and the flow toward
+the child, measured at the PARENT side in the parent→child sense, is `P[b]` for a
+parent→child-stored branch (its own sending end) but `r·ℓ[b] − P[b]` for a reversed one —
+the branch's RECEIVING end at the parent (`P[b] − r·ℓ[b]`, since this project charges the
+loss at the branch's own `to` end), negated. With that `A[i]` in hand the SAME telescoping
+above holds verbatim (`A[j] = Σ_{m∈children(j)} A[m] + r_{b*}·ℓ_{b*} − inj[j]` for any mix
+of orientations), so `P̌ = A[i] − LossInclR[i]` is uniform. A bare sign flip `−P[b]` alone
+would be off by the feeding branch's own `r·ℓ[b]` — this is verified against a
+byte-identical reversed-orientation re-encoding of the same physical point in
+`test/test_restricted_branch_flow.jl`'s CR-01 regression `@testitem`.
+
 Validation (threat T-20-02): a sign or accumulation bug here would silently produce a wrong
 `ε`. `test/test_restricted_branch_flow.jl`'s second `@testitem` sanity-checks Lemma 1
 (`v̂_GL ≥ v` everywhere) numerically on a solved `ACPowerFlow` context BEFORE trusting the
@@ -166,8 +182,10 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
     # Rooted parent/child tree via one BFS traversal from feeder.root. Unlike
     # recover_voltage_angles's signed BIDIRECTIONAL adjacency (immediate neighbors only), this
     # function needs to walk each bus's SUBTREE, so it keeps an explicit ROOTED tree: BFS visit
-    # `order` (root first), `children_of[i]` (tree children of bus i), and `branch_of_child[c]`
-    # (the branch connecting child c to its tree parent).
+    # `order` (root first), `children_of[i]` (tree children of bus i), `parent_of[c]` (the tree
+    # parent of child c), and `branch_of_child[c]` (the SIGNED index of the branch connecting
+    # child c to its tree parent: positive = stored parent→child, negative = stored REVERSED —
+    # mirroring recover_voltage_angles's signed-index convention, review CR-01).
     children = [Tuple{Int, Int}[] for _ in 1:N]
     for (b, br) in enumerate(feeder.branches)
         push!(children[br.from], (br.to, b))
@@ -176,6 +194,7 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
 
     order = Int[feeder.root]
     children_of = [Int[] for _ in 1:N]
+    parent_of = Dict{Int, Int}()
     branch_of_child = Dict{Int, Int}()
     visited = falses(N)
     visited[feeder.root] = true
@@ -186,7 +205,8 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
             visited[j] && continue
             visited[j] = true
             push!(children_of[i], j)
-            branch_of_child[j] = abs(bsigned)
+            parent_of[j] = i
+            branch_of_child[j] = bsigned
             push!(order, j)
             push!(queue, j)
         end
@@ -202,7 +222,9 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
         LossInclX = zeros(N)
         for i in reverse(order)
             if i != feeder.root
-                b_own = branch_of_child[i]
+                # r·ℓ / x·ℓ are orientation-INDEPENDENT (ℓ is a squared current magnitude),
+                # so the loss accumulation just strips the traversal sign.
+                b_own = abs(branch_of_child[i])
                 br_own = feeder.branches[b_own]
                 LossInclR[i] += br_own.r * value(pv.l[b_own, t])
                 LossInclX[i] += br_own.x * value(pv.l[b_own, t])
@@ -214,16 +236,28 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
         end
 
         # (2) Forward recursion from the root: the loss-free flow on the branch feeding bus i
-        # equals the actual flow MINUS the total loss in i's own closed subtree (see docstring
-        # derivation).
+        # equals the flow toward i (measured at the PARENT side, in the parent→child sense)
+        # MINUS the total loss in i's own closed subtree (see docstring derivation). The
+        # parent voltage is read from the TREE parent, never br.from — a stored branch need
+        # not point parent→child (review CR-01), so for a REVERSED branch (bsigned < 0,
+        # br.from == i) the parent-side flow toward i is the branch's receiving end at the
+        # parent, negated: r·ℓ − P (never a bare −P, which would drop the feeding branch's
+        # own loss).
         v̂_GL[feeder.root, t] = value(pv.v[feeder.root, t])
         for i in order
             i == feeder.root && continue
-            b = branch_of_child[i]
+            bsigned = branch_of_child[i]
+            b = abs(bsigned)
             br = feeder.branches[b]
-            P̌ = value(pv.P[b, t]) - LossInclR[i]
-            Q̌ = value(pv.Q[b, t]) - LossInclX[i]
-            v̂_GL[i, t] = v̂_GL[br.from, t] - 2 * (br.r * P̌ + br.x * Q̌)
+            Pb =
+                bsigned > 0 ? value(pv.P[b, t]) :
+                br.r * value(pv.l[b, t]) - value(pv.P[b, t])
+            Qb =
+                bsigned > 0 ? value(pv.Q[b, t]) :
+                br.x * value(pv.l[b, t]) - value(pv.Q[b, t])
+            P̌ = Pb - LossInclR[i]
+            Q̌ = Qb - LossInclX[i]
+            v̂_GL[i, t] = v̂_GL[parent_of[i], t] - 2 * (br.r * P̌ + br.x * Q̌)
         end
     end
     return v̂_GL

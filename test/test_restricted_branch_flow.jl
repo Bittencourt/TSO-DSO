@@ -438,3 +438,125 @@ end
     )
     @test all(isfinite, result.dadp)
 end
+
+# --- Review CR-01: branch-orientation regression (reversed-stored branch is a LEGAL feeder) ---
+#
+# `assert_radial` (data/topology.jl) validates only tree-ness/connectivity, never orientation:
+# a `Branch(from, to, …)` stored child→parent is a fully legal `Feeder` everywhere else in the
+# framework (`ConvexBranchFlow`'s DistFlow drop/cone/balances are written in the branch's own
+# direction). Review CR-01 found BOTH copies of the Gan-Low shadow recursion — the
+# post-processing `recover_lossfree_shadow_voltage` (src/models/ac_oracle.jl) and the
+# model-build OPF-m constraint loop (`RestrictedBranchFlow.contribute!`) — silently assumed
+# `br.from` is the tree parent: reversed orientation read an UNINITIALIZED parent voltage
+# (post-processing) or crashed with a cryptic `KeyError` (model build), and used the branch's
+# own-direction `P`/`Q` without the reversed-branch correction.
+#
+# This item re-encodes ONE physical operating point two ways — `fwd` stores both branches
+# parent→child; `rev` stores branch 2 REVERSED — and asserts both code paths produce
+# IDENTICAL results (float-roundoff scale, NOT solver scale: the comparison is pure algebra
+# over fixed numbers, so 1e-12 is the honest gate). The reversed re-encoding of the same
+# physical point is: ℓ_rev = ℓ (squared current magnitude is direction-independent),
+# P_rev = −(P_fwd − r·ℓ), Q_rev = −(Q_fwd − x·ℓ) — the branch's own sending end at the child
+# is the negated RECEIVING end of the parent→child encoding (this project charges the loss
+# r·ℓ at the branch's own `to` end, ConvexBranchFlow Pitfall 6). This algebra also
+# discriminates the CORRECT reversed-branch flow (`r·ℓ − P_rev` at the parent side) from the
+# tempting bare sign flip `−P_rev`, which would be off by the feeding branch's own loss.
+@testitem "restricted_branch_flow: CR-01 regression — reversed-orientation branch agrees exactly with parent→child in BOTH shadow-voltage code paths" tags =
+    [:restricted_branch_flow] begin
+    using TSODSO
+    using JuMP
+
+    r, x = 0.05, 0.04
+    buses =
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
+    feeder_fwd =
+        Feeder(buses, [Branch(1, 2, r, x, 99.0), Branch(2, 3, r, x, 99.0)], 1)
+    # Branch 2 stored REVERSED (child 3 → parent 2): legal per assert_radial.
+    feeder_rev =
+        Feeder(buses, [Branch(1, 2, r, x, 99.0), Branch(3, 2, r, x, 99.0)], 1)
+
+    T = 2
+    # Branch × hour, parent→child encoding. Hour 2 carries reverse (negative) flow and both
+    # hours carry nonzero ℓ, so the reversed-branch r·ℓ correction term is genuinely
+    # exercised (a bare −P sign flip would fail the 1e-12 gates below).
+    P_fwd = [0.8 -0.5; 0.4 -0.3]
+    Q_fwd = [0.2 -0.1; 0.1 -0.05]
+    l_fwd = [0.02 0.01; 0.015 0.008]
+    v_fixed = [1.0 1.0; 0.99 1.01; 0.98 1.02]
+
+    # The SAME physical point in the reversed encoding (branch 2 only).
+    P_rev = copy(P_fwd)
+    Q_rev = copy(Q_fwd)
+    l_rev = copy(l_fwd)
+    P_rev[2, :] .= -(P_fwd[2, :] .- r .* l_fwd[2, :])
+    Q_rev[2, :] .= -(Q_fwd[2, :] .- x .* l_fwd[2, :])
+
+    # --- Path 1: recover_lossfree_shadow_voltage (post-processing over a solved point) ---
+    function fixed_ctx(feeder, P, Q, l, v)
+        m = Model(select_optimizer(LP()))
+        @variable(m, vv[1:3, 1:T])
+        @variable(m, PP[1:2, 1:T])
+        @variable(m, QQ[1:2, 1:T])
+        @variable(m, ll[1:2, 1:T])
+        fix.(vv, v; force = true)
+        fix.(PP, P; force = true)
+        fix.(QQ, Q; force = true)
+        fix.(ll, l; force = true)
+        @objective(m, Max, 0)
+        optimize!(m)
+        ctx = TSODSO.ModelContext(m)
+        ctx.meta[:feeder] = feeder
+        ctx.meta[:T] = T
+        ctx.meta[:pf_vars] = (; v = vv, P = PP, Q = QQ, l = ll)
+        return ctx
+    end
+
+    v̂_fwd = TSODSO.recover_lossfree_shadow_voltage(
+        fixed_ctx(feeder_fwd, P_fwd, Q_fwd, l_fwd, v_fixed),
+    )
+    # Pre-fix this read an UNINITIALIZED Matrix{Float64}(undef) entry (silent garbage).
+    v̂_rev = TSODSO.recover_lossfree_shadow_voltage(
+        fixed_ctx(feeder_rev, P_rev, Q_rev, l_rev, v_fixed),
+    )
+    @test maximum(abs.(v̂_fwd .- v̂_rev)) < 1e-12
+
+    # --- Path 2: RestrictedBranchFlow.contribute!'s OPF-m constraint builder ---
+    # Pre-fix, building on feeder_rev crashed with a KeyError (Dict lookup of the
+    # not-yet-computed child voltage). Post-fix it must build, and the OPF-m constraint
+    # functions — evaluated at the two encodings of the SAME physical point — must agree
+    # exactly.
+    function opfm_margins(feeder, P, Q, l, v)
+        ctx = TSODSO.ModelContext(Model())
+        TSODSO.contribute!(RestrictedBranchFlow(), ctx, feeder; T = T)
+        pv = ctx.meta[:pf_vars]
+        val = Dict{VariableRef, Float64}()
+        for j in 1:3, t in 1:T
+            val[pv.v[j, t]] = v[j, t]
+        end
+        for b in 1:2, t in 1:T
+            val[pv.P[b, t]] = P[b, t]
+            val[pv.Q[b, t]] = Q[b, t]
+            val[pv.l[b, t]] = l[b, t]
+        end
+        # Signed constraint margin v̂_GL(s)[i,t] − v̄ᵢ² at the fixed point; both encodings
+        # push constraints in the same (t-outer, BFS-inner) order, so elementwise
+        # comparison is aligned.
+        return [
+            value(xx -> val[xx], constraint_object(c).func) - constraint_object(c).set.upper
+            for c in ctx.constraints[:opfm_shadow_voltage]
+        ]
+    end
+
+    margins_fwd = opfm_margins(feeder_fwd, P_fwd, Q_fwd, l_fwd, v_fixed)
+    margins_rev = opfm_margins(feeder_rev, P_rev, Q_rev, l_rev, v_fixed)
+    @test length(margins_rev) == 2 * T   # one OPF-m row per non-root bus per hour
+    @test maximum(abs.(margins_fwd .- margins_rev)) < 1e-12
+
+    # Cross-path consistency: the model-build margin at the fixed point must equal the
+    # post-processing shadow voltage minus the bound — same math, different phase of use.
+    idx = 0
+    for t in 1:T, i in 2:3
+        idx += 1
+        @test abs(margins_fwd[idx] - (v̂_fwd[i, t] - buses[i].vmax^2)) < 1e-12
+    end
+end
