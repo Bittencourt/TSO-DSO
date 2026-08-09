@@ -186,6 +186,31 @@ end
     @test prices[1] != prices[4]   # the CR-01 regression: t-window-distinct escalation price
 end
 
+@testitem "mpc_loop: (bus, kind) state-keying invariant is asserted LOUDLY — duplicate buses / two same-kind stateful devices per bus throw (WR-05)" tags =
+    [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+
+    feeder = Phase21Fixtures.mpc_feeder()
+    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
+
+    # The valid fixture population passes (one aggregator per bus, one device per state kind).
+    @test TSODSO._mpc_assert_state_keying(aggs) === nothing
+
+    # (a) two aggregators sharing a bus — contribute! APPENDS their varlists into ONE per-bus
+    # vector, so zip(agg.devices, varlist) would mispair devices with variables.
+    dup_bus = [aggs[1], Aggregator(aggs[1].bus, 0.9, aggs[1].devices, aggs[1].Pdc)]
+    @test_throws ArgumentError TSODSO._mpc_assert_state_keying(dup_bus)
+
+    # (b) two SOC-stateful devices on one bus (a PVBattery AND a FourQuadBESS both carry
+    # :soc0) — the (bus, :soc) measured-state key would silently overwrite, and the
+    # `only(vv -> haskey(vv, :soc0))` pairing in the apply loop would throw mid-loop instead
+    # of up front.
+    batt = only(d for d in aggs[1].devices if d isa PVBattery)
+    bess4q = FourQuadBESS(aggs[1].bus, 0.95, 1.0, 0.002, 0.002, 0.003, 0.0, 0.008, 0.004, 3.8, 6.2, 8.9)
+    two_soc = [Aggregator(aggs[1].bus, 0.9, [batt, bess4q], aggs[1].Pdc)]
+    @test_throws ArgumentError TSODSO._mpc_assert_state_keying(two_soc)
+end
+
 @testitem "mpc_loop: ladder terminal failure publishes :cert_failed with the reference fallback price — NEVER throws (CR-02, D-04, WR-04)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
     using TSODSO, Test

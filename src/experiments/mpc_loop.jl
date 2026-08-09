@@ -78,7 +78,12 @@ After the population materializes: with ANY stateful device present (battery SOC
 thermostatic temperature — every `:default` population), `s.mpc_step > s.mpc_H − 1` throws
 `ArgumentError` (WR-02): the window's `H`-th control carries no modeled state consequence
 (the recursions cover `τ ≤ H−1`), so applying it can push the propagated measured state out
-of its structural band and make the next resolve's IC pin infeasible mid-loop.
+of its structural band and make the next resolve's IC pin infeasible mid-loop. Additionally
+(WR-05), aggregator buses must be UNIQUE and each bus may host at most ONE device of each
+state kind (one `:soc0`-carrying, one `:Tin0`-carrying) — the loop's measured-state ledger,
+terminal-target Dict, and device-vars pairing are all keyed by `(bus, kind)`, an invariant
+that was previously silent; a violating population now throws `ArgumentError` instead of
+silently overwriting state or mispairing devices with variables.
 
 # Returns
 
@@ -188,6 +193,11 @@ function run_mpc(s::Scenario)
             ),
         )
     end
+
+    # WR-05: assert the loop's (bus, kind) state-keying invariant LOUDLY (factored into a
+    # helper so a test can drive it against synthetic violating populations directly —
+    # Scenario can only ever name the invariant-satisfying `:default` population today).
+    _mpc_assert_state_keying(mpc_aggs)
 
     # --- 2. ONE-TIME day-ahead perfect-foresight benchmarks (solve_welfare called EXACTLY
     # TWICE, both at T = s.T, NEVER inside the per-resolve loop):
@@ -608,6 +618,52 @@ function _mpc_certify_and_price(
     end
 
     return (; cert_status, price_vec = Vector{Float64}(price_vec), cone_maxratio)
+end
+
+"""
+    _mpc_assert_state_keying(mpc_aggs) -> Nothing
+
+Internal helper (unexported, WR-05): assert the closed loop's `(bus, kind)` state-keying
+invariant LOUDLY. `run_mpc`'s bookkeeping — `measured_state`, the terminal-target `soc_da`
+Dict, the `only(vv ...)` device-vars pairing inside the apply loop, and
+`Aggregator.contribute!`'s per-bus varlist APPEND — silently assumes (a) one aggregator per
+bus and (b) at most ONE device of each state kind (`:soc0`-carrying, `:Tin0`-carrying) per
+bus. The `:default` population satisfies both today, but nothing enforced it — a violating
+population would silently overwrite states or mispair devices with variables (e.g. a
+`PVBattery` AND a `FourQuadBESS` on one bus both carry `:soc0`). Throws `ArgumentError` on a
+violation; returns `nothing` otherwise. Factored out of `run_mpc` so a test can drive it
+against synthetic violating populations directly (Scenario can only name the
+invariant-satisfying `:default` population).
+"""
+function _mpc_assert_state_keying(mpc_aggs)
+    seen_buses = Set{Int}()
+    for agg in mpc_aggs
+        if agg.bus in seen_buses
+            throw(
+                ArgumentError(
+                    "run_mpc: aggregator buses must be UNIQUE — bus $(agg.bus) hosts more " *
+                    "than one aggregator (Aggregator.contribute! APPENDS device varlists " *
+                    "into one per-bus vector, so a shared bus would mispair devices with " *
+                    "variables and overwrite the (bus, kind)-keyed measured state)",
+                ),
+            )
+        end
+        push!(seen_buses, agg.bus)
+        n_soc = count(d -> hasproperty(d, :soc0), agg.devices)
+        n_tin = count(d -> hasproperty(d, :Tin0), agg.devices)
+        if n_soc > 1 || n_tin > 1
+            throw(
+                ArgumentError(
+                    "run_mpc: bus $(agg.bus) hosts $(n_soc) SOC-stateful and $(n_tin) " *
+                    "temperature-stateful devices — the closed loop's measured-state " *
+                    "ledger is keyed by (bus, kind) and supports at most ONE device of " *
+                    "each state kind per bus (e.g. a PVBattery AND a FourQuadBESS on one " *
+                    "bus are not representable)",
+                ),
+            )
+        end
+    end
+    return nothing
 end
 
 """
