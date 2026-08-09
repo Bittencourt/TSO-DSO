@@ -28,12 +28,19 @@ using JuMP
 # 2-variant guard already uses, extended from 2 to 5 — rather than randomized initial
 # points, because `solve_welfare` has no hook to inject a custom starting point without new
 # solve machinery (which D-01's "Don't Hand-Roll" table forbids).
+# Each variant is documented as its DELTA from the configuration the NLP() factory ships
+# (print_level = 0 only, i.e. Ipopt's own defaults otherwise: mu_strategy = "monotone",
+# nlp_scaling_method = "gradient-based", bound_push = 0.01). Review WR-03: the previous
+# variant 3, `(; mu_strategy = "monotone")`, was byte-identical to variant 1 ("monotone" IS
+# Ipopt's default mu_strategy) — a duplicate "seed" that always agreed with seed 1 exactly,
+# silently overstating D-11's multi-start agreement evidence. All 5 variants below are
+# genuinely distinct solver configurations.
 const _FALLBACK_IPOPT_VARIANTS = [
-    (;),                                                        # NLP() factory default
-    (; mu_strategy = "adaptive"),
-    (; mu_strategy = "monotone"),
-    (; nlp_scaling_method = "none"),
-    (; mu_strategy = "adaptive", nlp_scaling_method = "none"),
+    (;),                                              # 1: NLP() factory default (monotone μ)
+    (; mu_strategy = "adaptive"),                     # 2: adaptive μ update
+    (; mu_strategy = "adaptive", bound_push = 1e-4),  # 3: adaptive μ + tighter interior start
+    (; nlp_scaling_method = "none"),                  # 4: unscaled NLP (monotone μ)
+    (; mu_strategy = "adaptive", nlp_scaling_method = "none"),  # 5: adaptive μ, unscaled
 ]
 
 """

@@ -281,7 +281,8 @@ restriction_report.optimality_loss
 # `assert_restriction_exact!` genuinely FAILS its `ac_feasible` gate (D-09) — i.e. when even
 # OPF-m's restricted cone is not tight, so no dual price can be trusted as a genuine AC operating
 # point. It is a second, seeded, nonconvex re-solve of the SAME `ACPowerFlow()` path already
-# used above, from 5 deterministic Ipopt convergence-strategy starts, tagging its result
+# used above, from up to 5 distinct deterministic Ipopt convergence-strategy starts (default
+# `n_seeds = 2`; the CI-gated cheap subset), tagging its result
 # `price_status = :local_ac_dual` and returning a mandatory `agreement_report` comparing the
 # seeds. It is NEVER invoked automatically by `assert_restriction_exact!` or by `solve_welfare`
 # — the CALLER decides whether to route to it, gated on `restriction_report.ac_feasible`.
