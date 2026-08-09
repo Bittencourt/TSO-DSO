@@ -108,6 +108,10 @@ include("models/ac_dual_fallback.jl")
 # JuMP-free, no ordering dependency; placed beside the other models/ files.
 include("models/mpc_trace.jl")
 
+# --- MpcWindow: build-once receding-horizon window model (owned by plan 21-03, MPC-01/02) ---
+# No ordering dependency on mpc_trace.jl (both models/ files, grouped for diff locality).
+include("models/mpc_window.jl")
+
 # --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
 # Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
 # ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
