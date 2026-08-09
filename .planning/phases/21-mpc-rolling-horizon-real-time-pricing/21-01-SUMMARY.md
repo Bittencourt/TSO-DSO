@@ -256,3 +256,14 @@ None - no external service configuration required.
 ---
 *Phase: 21-mpc-rolling-horizon-real-time-pricing*
 *Completed: 2026-08-09*
+
+## Self-Check: PASSED
+
+- All 8 claimed modified files (`src/devices/{PVBattery,Thermostatic,FourQuadBESS,Aggregator}.jl`,
+  `test/test_{pvbattery,thermostatic,fourquadbess,aggregator}.jl`) confirmed present on disk.
+- All 4 claimed commit hashes (`b7a60cb`, `aa90380`, `bacc710`, `18d78b6`) confirmed present
+  in `git log`.
+- All three task-level `<verify>` scripts re-ran successfully (idempotent, side-effect-free)
+  as required by the plan's `<verification>` section.
+- All four new `@testitem`s' bodies re-ran as plain scripts and pass.
+- All acceptance-criteria greps for Tasks 1-3 confirmed passing.
