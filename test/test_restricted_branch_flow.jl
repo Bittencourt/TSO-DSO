@@ -592,9 +592,10 @@ end
 
     # Cross-path consistency: the model-build margin at the fixed point must equal the
     # post-processing shadow voltage minus the bound — same math, different phase of use.
-    idx = 0
-    for t in 1:T, i in 2:3
-        idx += 1
+    # (enumerate over the push order, t-outer/BFS-inner, rather than mutating a top-level
+    # counter: a `idx += 1` at @testitem top level is a soft-scope global and errors under
+    # TestItemRunner's include_string evaluation.)
+    for (idx, (t, i)) in enumerate((t, i) for t in 1:T for i in 2:3)
         @test abs(margins_fwd[idx] - (v̂_fwd[i, t] - buses[i].vmax^2)) < 1e-12
     end
 end
