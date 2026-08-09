@@ -19,6 +19,12 @@ findings:
   info: 5
   total: 12
 status: issues_found
+fixes:
+  fixed_at: 2026-08-08
+  fix_scope: critical_warning
+  fixed: 7
+  skipped: 0
+  info_out_of_scope: 5
 ---
 
 # Phase 20: Code Review Report
@@ -55,6 +61,29 @@ assumption that the codebase's own sibling function documents as NOT guaranteed)
 of contract gaps in the certificate and fallback (fabricated provenance formulation, stale
 provenance surviving a structural throw, a duplicate Ipopt "seed" variant, a hardcoded concrete
 solver outside the factory).
+
+## Fix Status (2026-08-08, `--fix` pass, scope: Critical + Warning)
+
+All 7 in-scope findings fixed, one atomic commit each. Info findings (IN-01..IN-05) are out
+of the fix scope and remain open (IN-05's missing-`import Ipopt` half is subsumed by WR-04's
+fix: `ac_dual_fallback.jl` no longer references `Ipopt` at all).
+
+**Verification:** each fix verified by a targeted direct Julia/Test.jl script under
+`--project=.`; full suite after all fixes: **2563 passed / 0 failed / 3 pre-existing broken**
+(clean-worktree run — the 2 known-false Aqua drift failures exist only on the drifted main
+checkout; baseline 2546/0/3, +17 from the new regression tests, no regressions). Docs build
+green (only pre-existing benign warnings); rendered Rung-3 H1 confirmed "…A Gan-Low OPF-m
+Restriction".
+
+| Finding | Status | Commit | Notes |
+|---------|--------|--------|-------|
+| CR-01 | fixed | `6be860b` (+ `f02e9cf`) | Both recursions now keep tree parent + SIGNED branch index. The reviewer's sketched `sign·P` flip alone would be off by the feeding branch's own `r·ℓ` on a reversed branch (the model's `P[b]` is the child-side SENDING end there); the applied fix uses the exact parent-side flow `r·ℓ − P`. Regression testitem re-encodes one physical point in both orientations and gates both code paths at `1e-12` (byte-level algebra, verified: max deviation `2.2e-16`). Follow-up `f02e9cf` removes a soft-scope `idx` mutation from the testitem (errored under TestItemRunner's module-top-level evaluation; test-only, no src change). |
+| WR-01 | fixed | `b5ac2bd` | `formulation = get(ctx.meta, :formulation, :unknown)`; the D-08 marker `RestrictedBranchFlow.contribute!` stashes is now genuinely consumed. Test locks the `ConvexBranchFlow` context to `:unknown`. |
+| WR-02 | fixed | `c81a5e7` | `delete!(ctx.meta, :price_provenance)` is the certificate's first action; after a structural-mismatch throw the reused ctx carries no marker. T-mismatch testitem extended with a pre-stashed stale marker. |
+| WR-03 | fixed | `cd68bef` | Variant 3 → `(; mu_strategy = "adaptive", bound_push = 1e-4)`; each variant documents its delta from the factory/Ipopt defaults; literate sentence reworded to "up to 5 distinct … (default `n_seeds = 2`)". All 5 verified pairwise-distinct as normalized configurations and solvable. |
+| WR-04 | fixed | `671f7a5` | Took the fuller option: `select_optimizer(NLP(); attrs...)` override seam + `nlp_multistart_variants()` both live in `factory.jl`, so the concrete solver name AND its option vocabulary stay in the one designated file; `ac_dual_fallback.jl` names no solver (grep-verified zero `Ipopt` references). |
+| WR-05 | fixed | `485bb55` | H1 → "…A Gan-Low OPF-m Restriction"; TSODSO.jl comment → "OPF-m …, with optional OPF-ε margin". The honest OPF-ε negative-result narrative in the page body is untouched. |
+| WR-06 | fixed | `5707073` | Validation moved into the INNER constructor (suppresses the auto-generated non-validating one), guarding kwarg AND positional paths with an `ArgumentError` naming the D-01 loosening hazard. Testitem covers both paths. |
 
 ## Narrative Findings (AI reviewer)
 
