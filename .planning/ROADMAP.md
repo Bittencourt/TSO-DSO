@@ -165,7 +165,29 @@ schema-fragile, golden-hash-bearing file.
   4. The closed-loop trajectory is benchmarked against the perfect-foresight day-ahead optimum under
      seeded synthetic forecast error (bounded perturbation of the known ground truth), on an
      information-set-fair comparison, in a live-executed literate rung page.
-**Plans**: TBD
+**Plans:** 6 plans (5 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 21-01-PLAN.md — Parameter-widen PVBattery/Thermostatic/FourQuadBESS/Aggregator (soc0/Tin0/Ppv/Tout/Pdc), the SEAM-01 build-once mechanism's prerequisite
+- [ ] 21-02-PLAN.md — MpcTrace ledger (AdmmResiduals/BendersTrace convention) for per-step DADP/jump/cumulative-deviation/certificate-status
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 21-03-PLAN.md — build_mpc_window/solve_mpc_window! build-once window model + terminal-SOC toggle + Phase21Fixtures CI substrate
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 21-04-PLAN.md — Scenario.jl D-12 additive fields + nominal-plant state propagation/seeded forecast-error draw + MPC-02 dump/hoard regression
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 21-05-PLAN.md — run_mpc closed-loop orchestrator + Phase-20 certificate/fallback escalation ladder + regret benchmark
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 21-06-PLAN.md — Literate rung page (mpc_rolling_horizon.jl) + full-suite acceptance
 
 ### Phase 22: Stochastic PV/Demand Uncertainty
 
