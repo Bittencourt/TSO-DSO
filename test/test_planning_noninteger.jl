@@ -124,6 +124,12 @@
         "build_feeder",      # experiments/materialize.jl — scenario materializer
         "build_price",       # experiments/materialize.jl — scenario materializer
         "build_population",  # experiments/materialize.jl — scenario materializer
+        "build_mpc_window",  # models/mpc_window.jl — Phase-21 receding-horizon window
+                              # builder (MPC-01); an OPERATIONAL-layer builder (build-once
+                              # welfare-shaped window, no binaries/integers by construction,
+                              # same as every other welfare-shaped builder), never a
+                              # planning-layer (Benders/Stackelberg-Nash) builder — consciously
+                              # added here per this file's own documented tripwire contract.
     ])
     exported_builders = Set(filter(n -> startswith(n, "build_"), string.(names(TSODSO))))
     union!(found, setdiff(exported_builders, operational_builders))

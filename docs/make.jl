@@ -35,6 +35,7 @@ for src in (
     # substrate B (real IEEE-123, ~16 min) is loaded from results/socp_applicability/ because
     # it exceeds this job's whole CI timeout. See the page's own note.
     "socp_applicability.jl",
+    "mpc_rolling_horizon.jl",   # NEW: Rung 8 MPC / rolling-horizon RTP closed loop (MPC-01..04)
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -74,6 +75,7 @@ makedocs(;
             "Thesis Reproduction — IEEE-123" => "generated/thesis_reproduction_ieee123.md",
             "Thesis Reproduction — Assumptions" => "generated/thesis_reproduction_assumptions.md",
             "SOC Relaxation Applicability" => "generated/socp_applicability.md",
+            "Rung 8: MPC / Rolling-Horizon RTP" => "generated/mpc_rolling_horizon.md", # from mpc_rolling_horizon.jl
         ],
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",
