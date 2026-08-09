@@ -212,12 +212,13 @@ function run_mpc(s::Scenario)
 
         solve_mpc_window!(o)
 
-        # For NOW (Task 2 completes this), bind price_vec/cert_status unconditionally — Task 2
-        # replaces ONLY this pair of bindings with the genuine non-throwing cone-residual check
-        # + Phase-20 escalation ladder, producing the SAME two names from whichever tier of the
-        # ladder certifies the step. Every line below this point is unchanged by Task 2.
-        cert_status = :certified_convex_dual
-        price_vec = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])
+        # D-04's per-resolve, non-throwing certificate check + Phase-20 escalation ladder —
+        # factored into a small internal helper (below) so a test can drive it DIRECTLY
+        # against a non-Scenario feeder/aggregator pair (e.g. Phase21Fixtures' high-PV
+        # fixture) without duplicating this logic.
+        cert = _mpc_certify_and_price(feeder, mpc_aggs, o, λ₀, t)
+        cert_status = cert.cert_status
+        price_vec = cert.price_vec
 
         # n_apply: the number of REAL hours THIS resolve's plan is held for before the next
         # resolve — capped by the window length itself (cannot apply more intervals than were
@@ -290,6 +291,92 @@ function run_mpc(s::Scenario)
         day_ahead_dadp = Vector{Float64}(dadp_da),
         steps = k,
     )
+end
+
+"""
+    _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int)
+        -> (; cert_status::Symbol, price_vec::Vector{Float64}, cone_maxratio::Float64)
+
+Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check
+(D-04) + Phase-20 escalation ladder, factored out so a test can drive it DIRECTLY against a
+non-`Scenario` `feeder`/`mpc_aggs` pair (e.g. `Phase21Fixtures`' high-PV fixture) without
+duplicating this logic — `run_mpc`'s own loop calls this EXACT function.
+
+An inline REIMPLEMENTATION of [`assert_socp_exact!`](@ref)'s own cone-residual formula, at
+ITS SAME `rtol=1e-4`/`atol=1e-6` defaults (the ONE place this file deliberately copies a
+tolerance — this is the IDENTICAL physical quantity at the IDENTICAL default, not a new
+certificate; NEVER delegates to the throwing `assert_socp_exact!` itself, and NEVER a bare
+`try`/`catch` around it). `o` MUST already be solved (i.e. [`solve_mpc_window!`](@ref) called)
+at window-local positions `τ = 1:o.H` before calling this. `t` is the resolve's ABSOLUTE start
+hour (used only to slice `λ₀` for the escalation branch and to name the resolve in the `@warn`
+message — never used to index `o`, which is always window-local).
+
+On a certified step: `cert_status = :certified_convex_dual`, `price_vec =
+dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
+escalates through Phase-20's OWN ladder (never invents a new tolerance) — a ONE-OFF
+[`RestrictedBranchFlow`](@ref)`()` solve + [`ACPowerFlow`](@ref)`()` cross-solve +
+[`assert_restriction_exact!`](@ref)`(...; report = true)`; if THAT also fails,
+[`ac_dual_fallback_price`](@ref), publishing `cert_status = :local_ac_dual`. `@warn`s once so
+a researcher running interactively sees the escalation — this function itself NEVER throws
+(D-04).
+"""
+function _mpc_certify_and_price(feeder, mpc_aggs, o::MpcWindow, λ₀::AbstractVector{<:Real}, t::Int)
+    pv = o.ctx.meta[:pf_vars]
+    cone_maxratio = 0.0
+    for (b, br) in enumerate(feeder.branches), τ in 1:(o.H)
+        lhs = value(pv.l[b, τ]) * value(pv.v[br.from, τ])
+        rhs = value(pv.P[b, τ])^2 + value(pv.Q[b, τ])^2
+        gap = abs(lhs - rhs)
+        tol = 1e-6 + 1e-4 * max(abs(lhs), abs(rhs))
+        cone_maxratio = max(cone_maxratio, gap / tol)
+    end
+    step_certified = cone_maxratio <= 1     # NEVER throws here (D-04)
+
+    if step_certified
+        cert_status = :certified_convex_dual
+        price_vec = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])
+    else
+        # Escalate through Phase-20's OWN ladder (never invent a new tolerance): a ONE-OFF
+        # RestrictedBranchFlow() solve + AC cross-solve + assert_restriction_exact!(report =
+        # true); if THAT also fails, ac_dual_fallback_price. `@warn` once so a researcher
+        # running interactively sees the escalation — this function itself NEVER throws (D-04).
+        λ₀_window = λ₀[t:(t + o.H - 1)]
+        ctx_restricted, _, _ = solve_welfare(
+            feeder,
+            RestrictedBranchFlow(),
+            mpc_aggs;
+            T = o.H,
+            λ₀ = λ₀_window,
+            allow_export = true,
+        )
+        ctx_ac, _, _ = solve_welfare(
+            feeder,
+            ACPowerFlow(),
+            mpc_aggs;
+            T = o.H,
+            λ₀ = λ₀_window,
+            allow_local = true,
+            allow_export = true,
+        )
+        report = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
+        if report.ac_feasible
+            cert_status = :certified_convex_dual
+            price_vec = dual.(ctx_restricted.constraints[:balance_p][o.agg_bus, :])
+        else
+            fallback = ac_dual_fallback_price(
+                feeder,
+                mpc_aggs;
+                T = o.H,
+                λ₀ = λ₀_window,
+                allow_export = true,
+            )
+            cert_status = :local_ac_dual
+            price_vec = fallback.dadp
+        end
+        @warn "run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder" t cone_maxratio cert_status
+    end
+
+    return (; cert_status, price_vec = Vector{Float64}(price_vec), cone_maxratio)
 end
 
 """
