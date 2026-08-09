@@ -20,7 +20,7 @@ using TSODSO
 
 # ## Building the 24-hour demonstration scenario
 #
-# Unlike every prior rung page ([`restricted_branch_flow.jl`](@ref), `ac_oracle.jl`), which
+# Unlike every prior rung page (`restricted_branch_flow.jl`, `ac_oracle.jl`), which
 # inline a bespoke `Bus`/`Branch`/`Feeder`/`Aggregator` fixture by hand (literate pages never
 # load test-only modules), [`run_mpc`](@ref) has exactly ONE entry point signature:
 # `run_mpc(s::Scenario)` (D-01's "independent sibling orchestrator" — it is NOT wired through
