@@ -337,7 +337,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 10–14 (archived) | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 (archived) | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19. 4Q-BESS + Live Reactive Dual-Ascent | v3.0 | 8/8 | Complete    | 2026-08-08 |
-| 20. Overvoltage-Capable Relaxation | v3.0 | 5/5 | Complete   | 2026-08-09 |
+| 20. Overvoltage-Capable Relaxation | v3.0 | 5/5 | Complete    | 2026-08-09 |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 0/TBD | Not started | - |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 0/TBD | Not started | - |
 | 23. Meshed Networks | v3.0 | 0/TBD | Not started | - |

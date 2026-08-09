@@ -22,20 +22,20 @@ certificate/gate — never a reused tolerance** ("certificate laundering" is the
 Price the high-PV overvoltage regime where the SOC relaxation is provably inexact (the v2.1
 EXACT-04 knife-edge finding), keeping the pricing-as-convex-duals story intact.
 
-- [ ] **OVR-01**: Researcher can solve the high-PV overvoltage regime via a **restricted SOCP**
+- [x] **OVR-01**: Researcher can solve the high-PV overvoltage regime via a **restricted SOCP**
       (Gan–Low-style feasible-set tightening on the relaxed copy — e.g. reverse-flow-aware
       `V²max` bound shrink), dispatched as a formulation/config variant through the existing
       `solve_welfare` path, at the exact operating point where v2.1 documented genuine inexactness
       (IEEE-13 `pv_scale=1.2` stress fixture).
-- [ ] **OVR-02**: The restriction carries its **own validity certificate** (new gate, peer to
+- [x] **OVR-02**: The restriction carries its **own validity certificate** (new gate, peer to
       `assert_socp_exact!`/`assert_ac_exact!`): the restricted solution is certified AC-feasible
       via the existing AC oracle, and the certificate reports the optimality loss vs. the
       unrestricted (inexact) SOCP bound — never a reused tolerance from an existing gate.
-- [ ] **OVR-03**: DADP prices are publishable in the previously-refused regime as genuine convex
+- [x] **OVR-03**: DADP prices are publishable in the previously-refused regime as genuine convex
       duals of the restricted problem, with a documented **nonconvex-AC-dual fallback** (Ipopt
       local duals, explicit local-optimum / not-market-clearing caveat, multi-start evidence)
       when even the restricted SOCP cannot certify — report-don't-throw, mirroring EXACT-03.
-- [ ] **OVR-04**: A live-executed literate rung page documents the restriction mechanism, its
+- [x] **OVR-04**: A live-executed literate rung page documents the restriction mechanism, its
       optimality-loss measurement, and the fallback semantics beside the Gan & Low condition it
       implements.
 
@@ -163,10 +163,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OVR-01 | Phase 20 | Pending |
-| OVR-02 | Phase 20 | Pending |
-| OVR-03 | Phase 20 | Pending |
-| OVR-04 | Phase 20 | Pending |
+| OVR-01 | Phase 20 | Complete |
+| OVR-02 | Phase 20 | Complete |
+| OVR-03 | Phase 20 | Complete |
+| OVR-04 | Phase 20 | Complete |
 | MPC-01 | Phase 21 | Pending |
 | MPC-02 | Phase 21 | Pending |
 | MPC-03 | Phase 21 | Pending |
