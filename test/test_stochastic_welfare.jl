@@ -174,13 +174,24 @@ end
         # WR-06/WR-07: make the documented Pkg.test no-trip flake self-diagnosing — the
         # per-scale outcomes distinguish "solved-and-exact everywhere" (data/environment
         # difference) from "solver failures masked the gate" (convergence class), and the
-        # resolved Clarabel/StableRNGs versions make the sandbox-resolution hypothesis
-        # (see the WR-07 comment above) checkable directly from this failure's own log.
-        import Pkg
-        resolved = sort!([
-            "$(v.name) = $(v.version)" for (u, v) in Pkg.dependencies() if
-            v.name in ("Clarabel", "StableRNGs", "JuMP")
-        ])
+        # resolved solver-stack versions make the sandbox-resolution hypothesis (see the
+        # WR-07 comment above) checkable directly from this failure's own log.
+        # Version introspection via Base.loaded_modules/Base.pkgversion, NOT
+        # `import Pkg`: Pkg is not a declared test dependency and the `Pkg.test()`
+        # sandbox restricts the load path, so `import Pkg` throws
+        # "Package Pkg not found in current path" — measured live when this diagnostics
+        # branch first executed under `Pkg.test()` (2026-08-10 review-fix suite run,
+        # which ALSO re-confirmed the no-trip flake reproduces in the sandbox). The
+        # whole block is exception-guarded: diagnostics must never ERROR the item.
+        resolved = try
+            sort!([
+                "$(k.name) = $(Base.pkgversion(m))" for
+                (k, m) in Base.loaded_modules if
+                k.name in ("Clarabel", "StableRNGs", "JuMP", "MathOptInterface")
+            ])
+        catch err
+            ["<version introspection unavailable: $(sprint(showerror, err))>"]
+        end
         @info "D-06 scan NEVER tripped the PF-04 gate — self-diagnosis follows" resolved outcomes
     end
     @test tripped
