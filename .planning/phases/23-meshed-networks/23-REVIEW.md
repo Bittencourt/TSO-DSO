@@ -22,6 +22,17 @@ findings:
   info: 6
   total: 11
 status: issues_found
+fixes:
+  fixed_at: 2026-08-10
+  scope: critical_warning
+  fixed: 5
+  skipped: 0
+  commits:
+    CR-01: f6190bd
+    CR-02: 85546cc
+    WR-01: 7f1ad76
+    WR-02: ee4e376
+    WR-03: 259f766
 ---
 
 # Phase 23: Code Review Report
@@ -30,6 +41,35 @@ status: issues_found
 **Depth:** standard
 **Files Reviewed:** 12
 **Status:** issues_found
+
+## Fix Status (2026-08-10)
+
+All in-scope findings (2 Critical + 3 Warning) fixed, one atomic commit each:
+
+| Finding | Status | Commit | Note |
+|---------|--------|--------|------|
+| CR-01 | FIXED | `f6190bd` | Backward tree edges now use `−(S_b − z·ℓ_b)`; docstring + traversal comments corrected (IN-01's BFS→DFS mislabel fixed in passing on touched lines). |
+| CR-02 | FIXED | `85546cc` | Bound direction corrected everywhere: the SOCP welfare objective is an UPPER bound on the true AC welfare optimum (`W_SOCP ≥ W_AC`; relaxation maximizes over a superset of the AC-feasible points). |
+| WR-01 | FIXED | `7f1ad76` | Defaults rebalanced to `atol = rtol = 0.01` (combined bound ≈0.02 at the log-midpoint ≈0.0195; balanced ≈3.2×/≈3.0× margins). Verdicts unchanged on both profiles. |
+| WR-02 | FIXED | `ee4e376` | Literate page's four load-bearing claims now guarded with `\|\| error(...)`; wrong "never reaches here" comment fixed. Page verified end-to-end. |
+| WR-03 | FIXED | `259f766` | Reversed-orientation regression added — with a documented deviation from the suggested single-branch flip (see below). |
+
+**WR-03 deviation (single-branch flip is not solver-equivalent):** flipping one stored
+branch on the diamond turns the exactness-copy cycle identity's even 2-2 ε-split into a
+3-1 split, producing a structural ~4e-2 cone gap that `solve_welfare` refuses (the fixture
+header's flipped-triangle mechanism). The committed regression instead uses the FULL
+root-inward reversal (global ε sign flip — the physically-identical re-encoding that
+preserves the identity), which traverses ALL THREE tree edges backward. The same identity
+(`Σ ε_b·|z_b|²·ℓ_b = 0`) makes the chord residual nearly immune to the CR-01 bare-flip bug
+(per-edge `|z|²·ℓ` errors telescope to ≈0 around the cycle), so CR-01's material effect is
+on the RECOVERED PHASOR FIELD (~0.6% voltage error on `:heterogeneous` backward edges — a
+certified output), and the regression asserts phasor-field invariance (`< 1e-8`, measured
+~2e-10 post-fix vs ~5.6e-3 pre-fix on the radial big-impedance probe) rather than the
+review's residual `rtol = 1e-6` (unachievable: the reversal necessarily flips the chord's
+anchor endpoint, a measured ~2% second-order effect on `:heterogeneous`).
+
+Info findings: IN-01 partially fixed in passing (`mesh_angle_certificate.jl` only;
+`mesh_topology.jl` untouched). IN-02–IN-06 remain open (out of fix scope).
 
 ## Summary
 
@@ -69,6 +109,7 @@ an asymmetric 6.4×/1.5× margin split (WR-01).
 
 ### CR-01: Backward-traversed tree edges use a bare sign flip, omitting the branch's own loss term — the Phase-20 CR-01 bug class, replicated into new code where it is material
 
+**Fix status:** FIXED in `f6190bd` (exact suggested correction applied; docstring/comments updated).
 **File:** `src/models/mesh_angle_certificate.jl:199-202` (and the docstring claim at line 64)
 **Issue:** For a tree edge traversed against its stored orientation (`bsigned < 0`), the
 recursion negates the *sending-end* power and divides by the *receiving-end* voltage:
@@ -127,6 +168,7 @@ mesh_angle_certificate.jl:177-182 must be updated.
 
 ### CR-02: Certificate's output contract states the wrong bound direction — the SOCP welfare objective is an UPPER bound on the true AC optimum, not a lower bound
 
+**Fix status:** FIXED in `85546cc` (all four locations; no test asserted the old message text).
 **File:** `src/models/mesh_angle_certificate.jl:52-53, 96-97, 255-256`; `docs/literate/meshed_reactive_price.jl:154-157`
 **Issue:** The docstring (twice), the unrecoverable-path `@warn`/`error` message, and the
 literate page all claim: "`objective_value(ctx.model)` ... remains a valid LOWER BOUND on
@@ -155,6 +197,7 @@ and mirror the correction in the literate page's "Stated plainly (D-10)" paragra
 
 ### WR-01: Tolerance derivation is internally inconsistent with its stated "geometric mean" rationale; the fail-side margin is only 1.5×
 
+**Fix status:** FIXED in `7f1ad76` (option (a): `atol = rtol = 0.01`; verdicts re-verified on both profiles).
 **File:** `src/models/mesh_angle_certificate.jl:135-144` (docstring), `:238` (the bound)
 **Issue:** The docstring says defaults are "centered roughly at the GEOMETRIC MEAN of the
 two measured floors" and that "the combined bound `atol + rtol·scale ≈ 0.04` sits almost
@@ -179,6 +222,7 @@ stability.
 
 ### WR-02: Literate page's load-bearing claims are displayed but never asserted — a regression ships docs that contradict their own output
 
+**Fix status:** FIXED in `ee4e376` (guards on all four claims; comment corrected; page runs end-to-end).
 **File:** `docs/literate/meshed_reactive_price.jl:91-108, 142-157, 183`
 **Issue:** The page's central factual claims are computed live but never enforced:
 (1) `triangle_infeasible` (line 91-104) is displayed, and the prose asserts
@@ -203,6 +247,7 @@ and analogous one-line guards for `r_u.status == :angle_certified`,
 
 ### WR-03: No reversed-orientation regression test for the certificate, despite the codebase's own Phase-20 precedent
 
+**Fix status:** FIXED in `259f766` (full root-inward reversal instead of the suggested single-branch flip — see "Fix Status" section's deviation note; phasor-field invariance is the discriminating assertion).
 **File:** `test/test_mesh_angle_certificate.jl` (coverage gap, whole file)
 **Issue:** Phase-20's CR-01 established the discipline of testing signed-orientation code
 against "a byte-identical reversed-orientation re-encoding of the same physical point"
@@ -220,6 +265,7 @@ agrees within a tight tolerance (e.g. `rtol = 1e-6`), after applying the CR-01 f
 
 ### IN-01: Traversals labeled "BFS" are actually DFS (`pop!` on a `Vector` is LIFO)
 
+**Fix status:** PARTIALLY FIXED in passing in `f6190bd` (`mesh_angle_certificate.jl` relabeled DFS on the CR-01-touched lines; `mesh_topology.jl` untouched, still open).
 **File:** `src/data/mesh_topology.jl:84-105`; `src/models/mesh_angle_certificate.jl:177-207`
 **Issue:** Both files use `queue = [root]; ... u = pop!(queue)` — `pop!` removes from the
 end, making the traversal depth-first, while comments/docstrings say "BFS" throughout
