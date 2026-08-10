@@ -96,16 +96,25 @@ triangle_infeasible = try
         T = T_MESH,
         λ₀ = LAMBDA0_MESH,
     )
-    false   # would mean the derivation above is wrong -- it never reaches here
+    false   # the reached-on-regression path: a solved triangle means the derivation above no longer holds
 catch e
     e isa ErrorException && occursin("INFEASIBLE", sprint(showerror, e))
 end
 
 triangle_infeasible
 
+#-
+
+## Self-checking page (review WR-02): the prose below states this value as fact, so the
+## docs build must FAIL, loudly, if the live claim ever regresses (a solvable triangle, a
+## changed failure message, or a non-ErrorException all land on `false` above).
+triangle_infeasible ||
+    error("Rung 10 doc regression: the odd triangle solved -- the degeneracy derivation no longer holds");
+
 # `triangle_infeasible === true` above confirms, live, that the literal odd-triangle topology
 # genuinely fails to solve (`PRIMAL_INFEASIBLE`) on this delegation path, exactly as derived
-# above. The committed diamond fixture below has no such degeneracy.
+# above — and the guard just executed turns any future regression of that claim into a
+# docs-build failure. The committed diamond fixture below has no such degeneracy.
 
 # ## 1. Solving via MeshedFlow (MESH-02)
 #
@@ -149,6 +158,15 @@ r_h = certify_angle_recoverable!(ctx_h; report = true)
 
 (r_h.status, r_h.recoverable, r_h.worst_residual)
 
+#-
+
+## Self-checking page (review WR-02): the "Stated plainly" paragraph and the Finding section
+## below state both verdicts as fact -- enforce them, never merely display them.
+r_u.status == :angle_certified ||
+    error("Rung 10 doc regression: the :uniform profile no longer certifies (status = $(r_u.status))")
+r_h.status == :angle_unrecoverable ||
+    error("Rung 10 doc regression: the :heterogeneous profile is no longer unrecoverable (status = $(r_h.status))");
+
 # Stated plainly (D-10): `:uniform` is a genuine AC-RECOVERABLE operating point — its full
 # voltage-phasor field (`r_u.angles`) is returned and certified consistent with the diamond's
 # one chord. `:heterogeneous` is NOT — `r_h.angles === nothing`, and `objective_value(ctx_h.model)`
@@ -184,7 +202,13 @@ ctx_bess, obj_bess, dadp_bess = solve_welfare(
 # The angle-recoverability certificate still certifies with the 4Q-BESS present (its presence
 # only adds device-level variables/constraints, never network-level ones — D-03/D-04):
 
-certify_angle_recoverable!(ctx_bess; report = true).status
+bess_status = certify_angle_recoverable!(ctx_bess; report = true).status
+
+#-
+
+## Self-checking page (review WR-02): enforced, not just displayed.
+bess_status == :angle_certified ||
+    error("Rung 10 doc regression: the :uniform + 4Q-BESS solve no longer certifies (status = $bess_status)");
 
 # The reactive DADP at bus 2 is read directly off the meshed network's own `:balance_q`
 # constraint dual — the genuine convex dual of the SOLVED meshed SOCP, no meshed ADMM built
