@@ -75,9 +75,12 @@ select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose"
 # branch — can leave Clarabel's default `tol_gap=1e-8` interior-point iterate measurably
 # short of the SOC cone's true (unique, gradient-driven) tight point for a LOW-probability
 # scenario, tripping the PF-04 exactness gate on a genuinely tiny (not structural) residual.
-# Tightening `tol_gap_abs/rel` resolves it (verified: 5.6e-6 → 5.7e-10 at `1e-12`) because the
-# true optimum IS exactly cone-tight (any slack costs objective value, however marginally) —
-# this is a convergence-precision fix, not a tolerance-weakening of the exactness GATE itself.
+# Tightening `tol_gap_abs/rel` resolves it (verified: 5.6e-6 → 4.8e-8 at the builder's chosen
+# `5e-10`) because the true optimum IS exactly cone-tight (any slack costs objective value,
+# however marginally) — a convergence-precision fix, not a tolerance-weakening of the
+# exactness GATE itself. `build_stochastic_welfare` picked `5e-10` (not a more aggressive
+# `1e-10`) after sweeping BOTH this near-lossless fixture and a separate, more-lossy one and
+# finding `1e-10` alone measurably trips `ALMOST_OPTIMAL` on the lossier feeder.
 select_optimizer(::SOCP; attrs...) = optimizer_with_attributes(
     Clarabel.Optimizer,
     "verbose" => false,
