@@ -4,8 +4,8 @@ milestone: v3.0
 milestone_name: Research Extension Rungs
 status: executing
 stopped_at: Phase 19 context gathered
-last_updated: "2026-08-10T02:07:21.423Z"
-last_activity: 2026-08-10 -- Phase 22 planning complete
+last_updated: "2026-08-10T02:07:22.656Z"
+last_activity: 2026-08-10 -- Phase 22 execution started
 progress:
   total_phases: 6
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 22 — stochastic pv/demand uncertainty
+**Current focus:** Phase 22 — Stochastic PV/Demand Uncertainty
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-10 -- Phase 22 planning complete
+Phase: 22 (Stochastic PV/Demand Uncertainty) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 22
+Last activity: 2026-08-10 -- Phase 22 execution started
 
 ### Quick Tasks Completed
 
