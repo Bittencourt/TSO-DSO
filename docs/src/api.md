@@ -74,7 +74,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl", "models/restriction_exactness.jl", "models/ac_dual_fallback.jl", "models/complementarity_4q.jl"]
+Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl", "models/mesh_angle_certificate.jl", "models/restriction_exactness.jl", "models/ac_dual_fallback.jl", "models/complementarity_4q.jl"]
 Order = [:type, :constant, :function]
 ```
 

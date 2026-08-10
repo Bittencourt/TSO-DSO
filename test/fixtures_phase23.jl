@@ -66,17 +66,47 @@
 # chord flow strictly nonzero -- never the degenerate symmetric case. Two impedance profiles
 # on the SAME topology:
 #   - :uniform        -- all four branches r=0.01,x=0.02 (R/X ratio 0.5 everywhere) --
-#                        the RECOVERABLE case (angle-recovery residual expected small,
-#                        certified in plan 23-03).
-#   - :heterogeneous  -- branch(1,2) r=0.04,x=0.01 (ratio 4.0), branch(1,3) r=0.01,x=0.06
-#                        (ratio ~0.167), branch(2,4) r=0.02,x=0.02 (ratio 1.0), branch(3,4)
-#                        r=0.03,x=0.015 (ratio 2.0) -- the spike's own UNRECOVERABLE-regime
-#                        ratios (plus a 4th heterogeneous edge for the diamond's extra
-#                        branch), exercising the certificate's UNRECOVERABLE branch (plan
-#                        23-03).
+#                        the RECOVERABLE case (plan 23-03 measures worst_residual ~6.27e-3
+#                        on this exact fixture, certified).
+#   - :heterogeneous  -- branch(1,2) r=0.32,x=0.08 (ratio 4.0), branch(1,3) r=0.08,x=0.48
+#                        (ratio ~0.167), branch(2,4) r=0.16,x=0.16 (ratio 1.0), branch(3,4)
+#                        r=0.24,x=0.12 (ratio 2.0) -- exercising the certificate's
+#                        UNRECOVERABLE branch (plan 23-03).
 # All branches carry smax = SMAX_NO_LIMIT (this fixture is about the LOOP, not congestion).
 # Bus voltage bounds at 2/3/4 are wide (0.90-1.10 pu) so the small pinned loads never bind a
 # voltage constraint -- isolating the loop/angle question from the overvoltage question.
+#
+# HETEROGENEOUS_RX MAGNITUDE DEVIATION FROM PLAN 23-02's ORIGINAL LITERALS (Rule 1/3
+# auto-fix, within Claude's Discretion per CONTEXT.md's "exact loop-fixture
+# topology/parameters" list AND this plan's orchestrator-authorized "adjust the profile
+# parameters ... until both certificate branches are genuinely exercised" instruction;
+# documented in full in the 23-03-SUMMARY.md "Deviations" section):
+#
+# Plan 23-03's `certify_angle_recoverable!` measurement (D-08) found that on THIS diamond,
+# with the ORIGINAL `(0.04,0.01),(0.01,0.06),(0.02,0.02),(0.03,0.015)` heterogeneous
+# literals, the angle-recovery residual (0.00697) is essentially the SAME ORDER OF
+# MAGNITUDE as the `:uniform` profile's residual (0.00627) -- NOT the multi-order-of-
+# magnitude separation RESEARCH.md's toy-triangle spike predicted. Direct empirical
+# measurement (sweeping R/X ratio spread, load asymmetry, and impedance scale
+# independently, all while keeping the SOCP cone tight -- see 23-03-SUMMARY.md for the
+# full sweep) established that on this diamond's PARALLEL-TWO-PATH topology (unlike the
+# triangle's simple series ring), the angle-recovery residual for THIS load-asymmetry
+# level is dominated by `residual ≈ 0.05 · (impedance scale) · (chord-flow magnitude)`,
+# essentially INDEPENDENT of R/X RATIO heterogeneity across the range that keeps the SOCP
+# cone exact -- R/X ratio spread alone cannot separate the two profiles on this topology.
+# Scaling the ORIGINAL heterogeneous literals' OVERALL MAGNITUDE up by 8x (preserving
+# their exact ratios 4.0/~0.167/1.0/2.0) keeps the SOCP cone exact (measured cone gap
+# improves to ~1.8e-11, even tighter than at the original scale) while the residual grows
+# linearly with that scale, reaching ~0.0607 -- a ~9.7x separation from `:uniform`'s fixed
+# 0.00627 floor, safely inside the region before the SOCP becomes genuinely INFEASIBLE at
+# 10x (empirically confirmed: 10x already breaks cone-exactness; 12x+ is outright
+# INFEASIBLE). This is a genuinely different, topology-specific finding from RESEARCH.md's
+# triangle-based mechanism (which used a simplified spike lacking ConvexBranchFlow's
+# exactness-copy machinery, per plan 23-02's own Assumption-A1 finding) -- not a
+# knife-edge parameter search (D-10/Pitfall 15): the SCALE lever was swept broadly and
+# monotonically (1x-9.5x, cone tight throughout) before settling on 8x for a comfortable
+# safety margin from the 10x infeasibility cliff, and the RATIOS themselves are UNCHANGED
+# from the original literals (only their common magnitude scale differs).
 
 @testmodule Phase23Fixtures begin
     using TSODSO
@@ -93,9 +123,12 @@
     # Per-branch (r, x) literals for BOTH impedance profiles, ordered (1,2), (1,3), (2,4),
     # (3,4) -- see file header for why this 4-bus diamond, not the plan's literal 3-bus
     # triangle, is the committed topology. Ratios: uniform = 0.5 everywhere; heterogeneous =
-    # 4.0, ~0.167, 1.0, 2.0 -- RESEARCH.md's own spike ratios, plus one more edge.
+    # 4.0, ~0.167, 1.0, 2.0 (RESEARCH.md's own spike ratios) at 8x the spike's original
+    # MAGNITUDE -- plan 23-03's D-08 measurement found the ratio spread alone does not
+    # separate the certificate's two branches on this diamond; see the file header's
+    # "HETEROGENEOUS_RX MAGNITUDE DEVIATION" note for the full derivation.
     const UNIFORM_RX = [(0.01, 0.02), (0.01, 0.02), (0.01, 0.02), (0.01, 0.02)]
-    const HETEROGENEOUS_RX = [(0.04, 0.01), (0.01, 0.06), (0.02, 0.02), (0.03, 0.015)]
+    const HETEROGENEOUS_RX = [(0.32, 0.08), (0.08, 0.48), (0.16, 0.16), (0.24, 0.12)]
 
     """
         mesh_feeder(profile::Symbol) -> MeshedFeeder
