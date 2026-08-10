@@ -110,6 +110,13 @@ include("models/oracle.jl")
 # oracle. Included after models/oracle.jl and before the pricing/ block.
 include("models/ac_oracle.jl")
 
+# --- Angle-recoverability a-posteriori certificate (owned by plan 23-03, MESH-03) --- must
+# load AFTER models/ac_oracle.jl: it generalizes that file's recover_voltage_angles BFS with
+# explicit chord tracking + a per-chord closure-residual check (the loop-consistency
+# mechanism a meshed MeshedFlow context needs, per RESEARCH.md's "silently loop-blind"
+# finding — recover_voltage_angles itself is left byte-unchanged, D-09-adjacent).
+include("models/mesh_angle_certificate.jl")
+
 # --- Restricted-SOCP AC-feasibility + optimality-loss certificate (owned by plan 20-03, OVR-02) ---
 # Must load AFTER models/ac_oracle.jl: assert_restriction_exact! calls assert_ac_exact! internally.
 include("models/restriction_exactness.jl")
