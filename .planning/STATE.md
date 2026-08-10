@@ -135,11 +135,19 @@ None yet.
 
 ### Blockers/Concerns
 
-- [v3.0 Phase 23 research flag]: the non-radial branch-flow formulation (signed incidence over a
-  cycle basis, or bus-injection/line-flow with loop constraints) is new model-math with the same
-  "needs its own research pass" flag; also unresolved whether the meshed test fixture will show a
-  structural gap requiring an "honest gap" deliverable instead of an exact relaxation (Pitfall 15:
-  don't mistake a structural gap for a tunable knife-edge).
+- [v3.0 Phase 23 research flag — RESOLVED 2026-08-10]: `.planning/phases/23-meshed-networks/23-RESEARCH.md`
+  resolves the non-radial formulation question: `ConvexBranchFlow`'s existing KCL/v-drop/cone
+  constraints are ALREADY graph-generic (verified by direct code read, `src/powerflow/ConvexBranchFlow.jl`) —
+  `MeshedFlow` delegates to them near-verbatim (no bus-injection/loop-constraint reformulation
+  needed); explicit "cycle/loop consistency" (MESH-02) is realized as the NEW a-posteriori
+  angle-recoverability certificate (MESH-03), never a hard convex constraint (angle closure is a
+  nonconvex trig identity, cannot be a JuMP constraint on angle-eliminated branch-flow variables —
+  matches Farivar-Low's own BFM treatment). The fixture question is also resolved: a live Julia/
+  Clarabel spike this session shows a clean, 3-order-of-magnitude separation between a
+  uniform-R/X-ratio loop (angle-recoverable, residual ~1e-5) and a heterogeneous-R/X-ratio loop
+  (structurally unrecoverable, residual ~1e-3 to 6e-3) on the SAME small topology — the committed
+  fixture should toggle impedance profile to exercise BOTH certificate branches (Pitfall 15
+  respected: no knife-edge sweep, a qualitative topology choice).
 
 - [v3.0 Phase 24 research flag]: whether standard Benders optimality cuts remain valid at the chosen
   binary-expansion granularity, and whether BilevelJuMP's KKT/SOS1/Fortuny-Amat modes support any
