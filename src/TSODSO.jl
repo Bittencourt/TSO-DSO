@@ -200,4 +200,13 @@ include("experiments/sweep.jl")         # run_sweep + collate_summary diff-frien
 # MpcTrace (plans 21-02/21-03) plus Phase-20's certificate/fallback ladder.
 include("experiments/mpc_loop.jl")
 
+# --- Stochastic PV/demand uncertainty: run_stochastic(scenario) extensive-form + ---
+# out-of-sample orchestrator --- Wired LAST (plan 22-04, STOCH-01..03), after
+# experiments/mpc_loop.jl: run_stochastic is an INDEPENDENT entry point (D-01/D-02),
+# mirroring run_mpc's own positioning — it is NOT wired through run_scenario's strategy
+# dispatch, reads Scenario's additive stoch_* fields (plan 22-01) directly, and consumes
+# build_stochastic_welfare/build_stochastic_oos_harness/solve_stochastic_oos_step!
+# (plans 22-02/22-03).
+include("experiments/run_stochastic.jl")
+
 end # module TSODSO
