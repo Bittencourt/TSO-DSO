@@ -272,7 +272,24 @@ research/validation overrun does not block the other axes.
   4. A live-executed literate rung page documents the meshed formulation, the angle-recoverability
      certificate, and the live reactive price from Phase 19 together (no literal IEEE-1547 Volt-VAR
      droop controller — optimal `q(v)` behavior characterized post-hoc if wanted).
-**Plans**: TBD
+**Plans:** 4 plans (4 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 23-01-PLAN.md — MeshedFeeder + assert_connected data-layer foundation, assert_radial/Feeder byte-unchanged (D-01/D-09)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 23-02-PLAN.md — MeshedFlow delegation formulation + Phase23Fixtures committed loop fixture (uniform/heterogeneous R/X profiles, D-02/D-03/D-10)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 23-03-PLAN.md — certify_angle_recoverable! chord-aware angle-recoverability certificate, tolerances measured fresh on the committed fixture (D-05/D-06/D-07/D-08)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 23-04-PLAN.md — Literate rung page (meshed_reactive_price.jl) combining the certificate with Phase 19's live reactive price + full-suite acceptance
 
 ### Phase 24: Discrete/Integer Investment Expansion
 
