@@ -221,6 +221,50 @@ end
     )
 end
 
+@testitem "stochastic_welfare: WR-09 (phase-22 review) — soc agrees across scenarios post-solve WITHOUT explicit (rank-deficient) soc tie rows" tags =
+    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    using TSODSO
+    using JuMP: value
+
+    # WR-09: the tie loop used to add soc_s[t] == soc_1[t] for every t — rows EXACTLY
+    # linearly dependent on each copy's own soc[1] == soc0 + SOC recursion given the
+    # p_ch/p_dch ties (same η, same soc0 Parameter value), i.e. (S−1)·T redundant
+    # equalities per battery making the equality block rank-deficient (an interior-point
+    # conditioning hazard). The rows are dropped; this item pins the IMPLIED agreement:
+    # the solved soc trajectories of two differently-seeded scenarios must still match.
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+
+    scenario_aggs = [
+        Phase22Fixtures.stoch_scenario_aggregators(
+            feeder,
+            sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, k)),
+        ) for k in 1:3
+    ]
+
+    r = build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        scenario_aggs;
+        probabilities = [0.2, 0.3, 0.5],
+        T = T,
+        λ₀ = λ0,
+    )
+
+    batt_of(ctx) = only(
+        v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :soc0)
+    )
+    b1 = batt_of(r.ctxs[1])
+    for s in 2:3
+        bs = batt_of(r.ctxs[s])
+        @test all(isapprox.(value.(bs.p_ch), value.(b1.p_ch); atol = 1e-6))
+        @test all(isapprox.(value.(bs.p_dch), value.(b1.p_dch); atol = 1e-6))
+        # The load-bearing assertion: soc agreement is IMPLIED, never constrained.
+        @test all(isapprox.(value.(bs.soc), value.(b1.soc); atol = 1e-6))
+    end
+end
+
 @testitem "stochastic_welfare: WR-04 (phase-22 review) — FourQuadBESS reactive dispatch q is nonanticipativity-tied (full first-stage battery schedule)" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO

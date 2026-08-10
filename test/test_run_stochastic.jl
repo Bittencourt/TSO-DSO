@@ -115,7 +115,14 @@ end
     @test r1.oos.welfare_gap == r2.oos.welfare_gap == r3.oos.welfare_gap
 
     # D-11: the golden literal below was pinned ONLY AFTER the stability assertion above
-    # passed in this SAME test run (measured value: -0.025156091170856598, confirmed stable
-    # across 3 fresh calls in this same process before being written here).
-    @test r1.oos.welfare_gap ≈ -0.025156091170856598
+    # passed in this SAME test run.
+    #
+    # RE-PINNED for the WR-09 fix (phase-22 review): dropping the (S−1)·T exactly-
+    # redundant soc tie rows changes Clarabel's constraint matrix (better-conditioned,
+    # same mathematical optimum), shifting the converged iterate within solver tolerance
+    # — the previous golden -0.025156091170856598 moved by ~8e-6 RELATIVE to
+    # -0.02515629356082627. Re-measured per the D-11 measurement-before-golden
+    # discipline: 3 fresh same-process run_stochastic calls, bit-for-bit identical,
+    # BEFORE this literal was written.
+    @test r1.oos.welfare_gap ≈ -0.02515629356082627
 end

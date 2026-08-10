@@ -111,11 +111,16 @@ For each scenario `s in 1:S`:
 AFTER every scenario block is built, nonanticipativity equality constraints tie every
 battery-like device (any device whose `contribute!`-returned `vars` carries `:soc0` — a
 `PVBattery` or `FourQuadBESS`) at bus/index `(bus, idx)` across scenarios:
-`p_ch_s[t] == p_ch_1[t]`, `p_dch_s[t] == p_dch_1[t]`, `soc_s[t] == soc_1[t]`, and — for
-a device carrying a reactive dispatch (`FourQuadBESS`; WR-04 fix, phase-22 review) —
-`q_s[t] == q_1[t]`, for `s = 2:S`, `t = 1:T`: the ENTIRE battery schedule, active AND
-reactive, is first-stage under D-03, never a partial (active-only) tie. `Deferrable` is
-DELIBERATELY excluded from this tie (not first-stage in this builder).
+`p_ch_s[t] == p_ch_1[t]`, `p_dch_s[t] == p_dch_1[t]`, and — for a device carrying a
+reactive dispatch (`FourQuadBESS`; WR-04 fix, phase-22 review) — `q_s[t] == q_1[t]`, for
+`s = 2:S`, `t = 1:T`: the ENTIRE battery schedule, active AND reactive, is first-stage
+under D-03, never a partial (active-only) tie. `soc` is DELIBERATELY NOT tied (WR-09
+fix, phase-22 review): each scenario copy's own `soc[1] == soc0` initial condition plus
+its SOC recursion, together with the `p_ch`/`p_dch` ties, already IMPLY
+`soc_s[t] == soc_1[t]` for every `t` — the former explicit soc rows were exactly
+linearly dependent, and (S−1)·T redundant equalities per battery are a needless
+interior-point conditioning hazard. `Deferrable` is DELIBERATELY excluded from this tie
+(not first-stage in this builder).
 
 The objective is the probability-weighted sum
 `Σ_s probabilities[s]·(ctx_s.meta[:objective] − Σ_t λ₀[t]·p_import_s[t])`. The solve is
@@ -366,7 +371,25 @@ function build_stochastic_welfare(
                 vs = ctxs[s].meta[:agg_device_vars][bus][idx]
                 @constraint(model, [t = 1:T], vs.p_ch[t] == v1.p_ch[t])
                 @constraint(model, [t = 1:T], vs.p_dch[t] == v1.p_dch[t])
-                @constraint(model, [t = 1:T], vs.soc[t] == v1.soc[t])
+                # WR-09 fix (phase-22 review): NO soc tie — it was EXACTLY linearly
+                # dependent on constraints already in the model. Every scenario copy of
+                # the same physical device shares the same η and the same soc0 Parameter
+                # value, and each copy carries its own soc[1] == soc0 initial condition
+                # plus the recursion soc[t+1] = soc[t] + η·p_ch[t] − p_dch[t]/η; given
+                # the p_ch/p_dch ties above, soc_s[t] == soc_1[t] for every t is IMPLIED.
+                # The former (S−1)·T·(#batteries) redundant equality rows made the
+                # equality block rank-deficient — a classic interior-point KKT
+                # conditioning hazard, and a plausible aggravating factor in this phase's
+                # two convergence-precision battles (the tol_gap knife-edge and the
+                # literate page's ALMOST_OPTIMAL probability-vector sensitivity).
+                # Post-solve soc agreement across scenarios is pinned by a regression
+                # testitem (test_stochastic_welfare.jl). NOTE: this implication assumes
+                # what congruent-scenario input means physically — the SAME battery
+                # (same η/soc0) with different exogenous DATA per scenario; the WR-03
+                # guard enforces type congruence, and passing per-scenario batteries
+                # with differing η/soc0 was never meaningful two-stage input (the old
+                # soc tie made it infeasible; now soc would simply follow each copy's
+                # own — still tied — schedule).
                 # WR-04 fix (phase-22 review): a FourQuadBESS's reactive dispatch q is
                 # part of the BATTERY's own day-ahead schedule and therefore first-stage
                 # under D-03 ("battery schedule is first-stage, shared across scenarios")
