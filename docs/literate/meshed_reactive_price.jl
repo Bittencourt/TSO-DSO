@@ -152,9 +152,13 @@ r_h = certify_angle_recoverable!(ctx_h; report = true)
 # Stated plainly (D-10): `:uniform` is a genuine AC-RECOVERABLE operating point — its full
 # voltage-phasor field (`r_u.angles`) is returned and certified consistent with the diamond's
 # one chord. `:heterogeneous` is NOT — `r_h.angles === nothing`, and `objective_value(ctx_h.model)`
-# (`obj_h` above) remains a valid LOWER BOUND on the true AC optimum only, never a certified AC
-# point (Low, arXiv:1405.0814). The `@warn` printed above (not an `error`) is exactly this
-# report-don't-throw contract in action.
+# (`obj_h` above) remains a valid UPPER BOUND on the true AC welfare optimum only, never a
+# certified AC point: `solve_welfare` MAXIMIZES welfare, and the relaxation's feasible set
+# contains every genuine AC operating point, so its maximum can only be ≥ the true AC maximum
+# (`W_SOCP ≥ W_AC` — the welfare-maximization mirror of Low's minimization statement,
+# arXiv:1405.0814, where a relaxation's optimum lower-bounds the true minimum cost). The
+# `@warn` printed above (not an `error`) is exactly this report-don't-throw contract in
+# action.
 
 # ## 3. Live reactive price on the meshed loop (MESH-06/D-04)
 #

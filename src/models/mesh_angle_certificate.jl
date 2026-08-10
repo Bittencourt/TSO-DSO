@@ -49,8 +49,9 @@ handled elsewhere, or a physically-infeasible restricted point are treated as DE
 refuse. Here, "unrecoverable" is not a defect — the SOCP relaxation is provably ALWAYS
 conic-feasible on a mesh (Low, arXiv:1405.0814: "for mesh networks, the conic relaxation is
 always exact but the angle relaxation may not be exact") and an unrecoverable verdict is
-itself the MESH-03 finding: the solved objective remains a valid LOWER BOUND on the true AC
-optimum (D-07), worth reporting, not an error worth aborting a run over. `report::Bool =
+itself the MESH-03 finding: the solved objective remains a valid UPPER BOUND on the true AC
+welfare optimum (D-07; see the Output contract below — review 23 CR-02), worth reporting,
+not an error worth aborting a run over. `report::Bool =
 true` therefore `@warn`s (never throws) on an unrecoverable verdict by default; passing
 `report = false` restores the family's usual throw-by-default contract for a caller that
 wants a hard gate.
@@ -106,7 +107,12 @@ copied for STYLE consistency only; the VALUES below are measured fresh on
 - **Unrecoverable** (`status = :angle_unrecoverable`): `angles === nothing` (this
   certificate's job is ONLY to correctly LABEL the verdict via `status`; it never
   duplicates the objective — a caller reads `objective_value(ctx.model)` itself, which
-  remains a valid LOWER BOUND on the true AC optimum, per Low arXiv:1405.0814).
+  remains a valid UPPER BOUND on the true AC welfare optimum: `solve_welfare` MAXIMIZES
+  welfare, and the relaxation's feasible set CONTAINS every genuine AC operating point, so
+  the maximum over the larger set can only be ≥ the true AC maximum, `W_SOCP ≥ W_AC` — the
+  welfare-maximization mirror of Low's minimization statement (arXiv:1405.0814), where a
+  relaxation's optimum lower-bounds the true minimum cost. Review 23 CR-02: an earlier
+  revision stated "lower bound", the exactly wrong direction for a maximization).
 
 `ctx.meta[:price_provenance]` is stashed UNCONDITIONALLY (both paths), scrubbing any stale
 marker FIRST (mirrors `restriction_exactness.jl`'s T-20-08 discipline — before anything
@@ -276,9 +282,10 @@ function certify_angle_recoverable!(
         msg =
             "Meshed SOCP angle-recovery FAILED (worst_residual=$worst at chord branch " *
             "b=$worst_chord, bus $(chord_br.from)->$(chord_br.to), hour t=$worst_t; " *
-            "atol=$atol, rtol=$rtol, scale=$scale): the SOCP objective is a valid LOWER " *
-            "BOUND only, NOT a certified AC operating point (Gan-Low angle-recovery " *
-            "condition; MESH-03)."
+            "atol=$atol, rtol=$rtol, scale=$scale): the SOCP welfare objective is a valid " *
+            "UPPER BOUND on the true AC welfare optimum only (the relaxation maximizes " *
+            "over a superset of the AC-feasible points, so W_SOCP >= W_AC), NOT a " *
+            "certified AC operating point (Gan-Low angle-recovery condition; MESH-03)."
         report ? (@warn msg) : error(msg)
     end
 
