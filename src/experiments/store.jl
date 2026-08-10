@@ -50,8 +50,7 @@ Single source of truth for the JLD2 filename [`run_and_store`](@ref) saves `s` u
 `savename(s, "jld2"; digits = 10)` (CR-01 fix — see [`run_and_store`](@ref) for why
 `digits = 10` is required), PLUS — phase-22 review WR-02 fix — a `_p<digest>` component
 whenever `s.stoch_probabilities` is non-uniform: `stoch_probabilities` is a
-`Vector{Float64}`, which DrWatson's `default_allowed = (Real, String, SubString, Symbol,
-TimeType)` filter silently DROPS from `savename`, so two `Scenario`s differing ONLY in
+`Vector{Float64}`, which DrWatson's `default_allowed = (Real, String, SubString, Symbol, TimeType)` filter silently DROPS from `savename`, so two `Scenario`s differing ONLY in
 their probability weighting (exactly this phase's own D-04 uniform-vs-non-uniform
 comparison) previously rendered the IDENTICAL filename stem. The digest is a
 deterministic, Julia-version-stable FNV-1a over the vector's raw `Float64` bytes

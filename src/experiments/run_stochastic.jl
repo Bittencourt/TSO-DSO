@@ -53,8 +53,7 @@ held-out scenario `h_index`, converting a GENUINE primal infeasibility into an h
 `(NaN, true)` skip-and-report instead of aborting the whole [`run_stochastic`](@ref) call.
 
 Why infeasibility is a REAL, expected failure mode here (the classic committed-first-stage
-evaluation problem): the in-sample optimal `p_ch[t]` satisfies `p_ch[t] ≤ pv_used_s[t] ≤
-Ppv_s[t]` for every IN-SAMPLE scenario, but a held-out draw whose PV at some hour falls
+evaluation problem): the in-sample optimal `p_ch[t]` satisfies `p_ch[t] ≤ pv_used_s[t] ≤ Ppv_s[t]` for every IN-SAMPLE scenario, but a held-out draw whose PV at some hour falls
 below every in-sample draw makes the pinned equality `p_ch[t] == pin` collide with that
 scenario's own `p_ch[t] ≤ pv_used[t] ≤ Ppv_h[t]` — a genuine `PRIMAL_INFEASIBLE` that
 [`solve_with_retry!`](@ref) correctly refuses to retry. Low-probability on the small-PV CI
@@ -294,8 +293,7 @@ function run_stochastic(s::Scenario)
     # in-sample extensive form's own expected-welfare objective value. When nothing is
     # infeasible — every existing fixture — this is bit-identical to sum(welfare_h)/H. ------
     n_feasible = count(!, infeasible_h)
-    realized_welfare =
-        n_feasible == 0 ? NaN : sum(welfare_h[.!infeasible_h]) / n_feasible
+    realized_welfare = n_feasible == 0 ? NaN : sum(welfare_h[.!infeasible_h]) / n_feasible
     welfare_gap = realized_welfare - r.welfare
 
     return (;
