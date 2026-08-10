@@ -42,7 +42,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["data/Feeder.jl", "data/topology.jl", "data/ieee13.jl", "data/ieee123.jl", "data/profiles.jl"]
+Pages = ["data/Feeder.jl", "data/topology.jl", "data/ieee13.jl", "data/ieee123.jl", "data/profiles.jl", "data/MeshedFeeder.jl", "data/mesh_topology.jl"]
 Order = [:type, :constant, :function]
 ```
 
