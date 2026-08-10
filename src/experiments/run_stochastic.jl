@@ -45,6 +45,43 @@ function _stoch_device_with_field(aggs, bus::Int, field::Symbol)
 end
 
 """
+    _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
+        -> (welfare::Float64, infeasible::Bool)
+
+Internal helper (unexported; WR-05 fix, phase-22 review): re-solve the pinned harness for
+held-out scenario `h_index`, converting a GENUINE primal infeasibility into an honest
+`(NaN, true)` skip-and-report instead of aborting the whole [`run_stochastic`](@ref) call.
+
+Why infeasibility is a REAL, expected failure mode here (the classic committed-first-stage
+evaluation problem): the in-sample optimal `p_ch[t]` satisfies `p_ch[t] ≤ pv_used_s[t] ≤
+Ppv_s[t]` for every IN-SAMPLE scenario, but a held-out draw whose PV at some hour falls
+below every in-sample draw makes the pinned equality `p_ch[t] == pin` collide with that
+scenario's own `p_ch[t] ≤ pv_used[t] ≤ Ppv_h[t]` — a genuine `PRIMAL_INFEASIBLE` that
+[`solve_with_retry!`](@ref) correctly refuses to retry. Low-probability on the small-PV CI
+fixtures, likely under scaled-up PV. Only the infeasibility statuses (`INFEASIBLE`,
+`INFEASIBLE_OR_UNBOUNDED`, `LOCALLY_INFEASIBLE`) are converted — every other solve failure
+(numerical error, unboundedness, exhausted retry ladder) still rethrows LOUDLY, never a
+silent skip.
+"""
+function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
+    try
+        solve_stochastic_oos_step!(h_oos)
+        return objective_value(h_oos.model), false
+    catch e
+        e isa ErrorException || rethrow()
+        ts = termination_status(h_oos.model)
+        ts in (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE) ||
+            rethrow()
+        @warn "run_stochastic: held-out scenario $h_index is INFEASIBLE against the " *
+              "committed first-stage schedule (its PV/demand draw cannot support the " *
+              "pinned p_ch/p_dch at some hour) — recorded as welfare_h = NaN, " *
+              "infeasible_h = true, and EXCLUDED from realized_welfare (WR-05 " *
+              "skip-and-report, never silent)" termination_status = ts
+        return NaN, true
+    end
+end
+
+"""
     run_stochastic(s::Scenario) -> NamedTuple
 
 Drive the FULL two-stage stochastic extensive-form + out-of-sample evaluation for `s`
@@ -61,6 +98,13 @@ Unlike [`run_mpc`](@ref)'s cross-field `mpc_H > T` check, this function needs NO
 guard beyond what [`Scenario`](@ref)'s own constructor already enforces:
 `stoch_S`/`stoch_H_oos`/`stoch_probabilities` are independently bounded at construction
 (D-01/D-04/D-10), with no cross-field interaction to re-check here.
+
+ONE documented runtime failure mode (WR-05 fix, phase-22 review): a held-out draw can be
+genuinely INFEASIBLE against the committed first-stage schedule (the classic
+committed-first-stage evaluation problem — see [`_stoch_solve_held_out!`](@ref)). Such a
+scenario is skipped-and-reported (`welfare_h[h] = NaN`, `infeasible_h[h] = true`, plus a
+`@warn`), never allowed to abort the run and never silently absorbed; every OTHER solve
+failure still rethrows loudly.
 
 # Materialization (seed disjointness, D-01/D-02)
 
@@ -80,12 +124,20 @@ A `NamedTuple` `(; in_sample, oos)`:
     read verbatim off [`build_stochastic_welfare`](@ref)'s own return value: `welfare` is the
     probability-weighted in-sample expected-welfare objective; `dadp`/`expected_dadp` are the
     per-scenario de-scaled DADP and its probability-weighted expectation (D-05/D-07).
-  - `oos::NamedTuple` — `(; welfare_h, realized_welfare, welfare_gap)`: `welfare_h[h]` is the
-    held-out scenario `h`'s realized objective value (the fixed first-stage schedule
-    re-scored against that scenario's own exogenous draw); `realized_welfare` is the
-    uniform-weight average `sum(welfare_h) / s.stoch_H_oos` (Claude's-discretion default);
-    `welfare_gap = realized_welfare - in_sample.welfare` is the D-09 realized-vs-in-sample
-    gap.
+  - `oos::NamedTuple` — `(; welfare_h, infeasible_h, realized_welfare, welfare_gap)`:
+    `welfare_h[h]` is the held-out scenario `h`'s realized objective value (the fixed
+    first-stage schedule re-scored against that scenario's own exogenous draw), or `NaN`
+    when that draw is genuinely INFEASIBLE against the committed schedule (WR-05 fix,
+    phase-22 review — the committed-first-stage evaluation problem: a held-out PV draw
+    below every in-sample draw at some hour collides with the pinned `p_ch`; see
+    [`_stoch_solve_held_out!`](@ref)); `infeasible_h::Vector{Bool}` marks exactly those
+    skipped-and-reported scenarios (a `@warn` is also emitted per skip — never silent);
+    `realized_welfare` is the uniform-weight average over the FEASIBLE held-out scenarios
+    only (`NaN` if every held-out draw is infeasible — an honestly unusable evaluation,
+    never a fabricated number); `welfare_gap = realized_welfare - in_sample.welfare` is
+    the D-09 realized-vs-in-sample gap (also `NaN` in that all-infeasible case). When no
+    held-out draw is infeasible — every existing fixture — `realized_welfare` and
+    `welfare_gap` are BIT-IDENTICAL to the pre-WR-05 definition.
 
 Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-identical
 `in_sample.welfare`/`oos.welfare_gap` (INFRA-04, mirrors [`run_mpc`](@ref)'s own same-seed
@@ -196,8 +248,13 @@ function run_stochastic(s::Scenario)
 
     for pin in h_oos.battery_pins
         batt = only(b for b in in_sample_battery if b.bus == pin.bus)
-        set_parameter_value.(pin.pin_p_ch, batt.p_ch)
-        set_parameter_value.(pin.pin_p_dch, batt.p_dch)
+        # WR-05 nit (phase-22 review): the committed values are raw value.() reads, so
+        # interior-point noise can return p_ch = -1e-12 — pinning that against the
+        # device's own p_ch ≥ 0 bound is a needless infeasibility risk. Free insurance:
+        # clamp the (mathematically nonnegative) active pins at 0. q stays unclamped
+        # (free-sign by construction).
+        set_parameter_value.(pin.pin_p_ch, clamp.(batt.p_ch, 0.0, Inf))
+        set_parameter_value.(pin.pin_p_dch, clamp.(batt.p_dch, 0.0, Inf))
         # WR-04 fix (phase-22 review): pin the committed reactive dispatch too when the
         # device carries one (FourQuadBESS) — q is first-stage under D-03, and the
         # in-sample entry above is guaranteed to carry :q whenever the harness pin does
@@ -206,8 +263,12 @@ function run_stochastic(s::Scenario)
     end
 
     # --- 7. Held-out loop: re-slide every held-out scenario's own PV/demand/ambient data
-    # onto the (never-rebuilt) harness and re-solve. ----------------------------------------
+    # onto the (never-rebuilt) harness and re-solve. A held-out draw that is genuinely
+    # INFEASIBLE against the committed first-stage schedule (WR-05, phase-22 review) is
+    # skipped-and-reported (welfare_h = NaN + infeasible_h mask + @warn), never allowed to
+    # abort the whole run after the expensive extensive-form solve, and never silent. ------
     welfare_h = Vector{Float64}(undef, s.stoch_H_oos)
+    infeasible_h = fill(false, s.stoch_H_oos)
     for h in 1:s.stoch_H_oos
         aggs_h = held_out_aggs[h]
 
@@ -224,14 +285,17 @@ function run_stochastic(s::Scenario)
             set_parameter_value.(pdc.Pdc_param, agg.Pdc[1:s.T])
         end
 
-        solve_stochastic_oos_step!(h_oos)
-        welfare_h[h] = objective_value(h_oos.model)
+        welfare_h[h], infeasible_h[h] = _stoch_solve_held_out!(h_oos, h)
     end
 
     # --- 8. D-09's realized-vs-in-sample welfare gap: uniform-weight average across the
-    # held-out budget (Claude's-discretion default, documented above) minus the in-sample
-    # extensive form's own expected-welfare objective value. --------------------------------
-    realized_welfare = sum(welfare_h) / s.stoch_H_oos
+    # FEASIBLE held-out scenarios (WR-05: an infeasible draw is reported via the
+    # infeasible_h mask + NaN entry, never averaged in and never fabricated) minus the
+    # in-sample extensive form's own expected-welfare objective value. When nothing is
+    # infeasible — every existing fixture — this is bit-identical to sum(welfare_h)/H. ------
+    n_feasible = count(!, infeasible_h)
+    realized_welfare =
+        n_feasible == 0 ? NaN : sum(welfare_h[.!infeasible_h]) / n_feasible
     welfare_gap = realized_welfare - r.welfare
 
     return (;
@@ -242,7 +306,7 @@ function run_stochastic(s::Scenario)
             probabilities = r.probabilities,
             socp_maxgap = r.socp_maxgap,
         ),
-        oos = (; welfare_h, realized_welfare, welfare_gap),
+        oos = (; welfare_h, infeasible_h, realized_welfare, welfare_gap),
     )
 end
 

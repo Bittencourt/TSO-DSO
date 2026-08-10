@@ -45,6 +45,60 @@ end
     @test r1.oos.welfare_gap == r2.oos.welfare_gap
 end
 
+@testitem "run_stochastic: WR-05 (phase-22 review) — an infeasible held-out pin is skipped-and-reported, never run-aborting" tags =
+    [:run_stochastic] setup = [Phase22Fixtures] begin
+    using TSODSO
+    using JuMP: set_parameter_value
+
+    # WR-05: a held-out draw whose PV falls below every in-sample draw at some hour makes
+    # the pinned p_ch collide with p_ch ≤ pv_used ≤ Ppv_h — a genuine PRIMAL_INFEASIBLE
+    # that solve_with_retry! (correctly) refuses to retry. Before this fix that single
+    # unlucky draw aborted the whole run_stochastic call after the expensive extensive-
+    # form solve. _stoch_solve_held_out! now converts EXACTLY the infeasibility statuses
+    # into (NaN, true); everything else still rethrows. This item drives the harness into
+    # the documented deterministic infeasibility (constant pinned p_ch = 0.001 overflows
+    # soc past Emax within one solve on this fixture — see this file-family's own
+    # measured-envelope note in test_stochastic_oos_harness.jl's header) and asserts the
+    # skip-and-report contract, then re-solves FEASIBLY on the same never-rebuilt model.
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(Phase22Fixtures.SEED_STOCH, :wr05_infeasible),
+    )
+    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    pin = only(h.battery_pins)
+
+    # Genuinely infeasible pin: soc0 + 5·η·0.001 = 0.00875 > Emax = 0.008.
+    set_parameter_value.(pin.pin_p_ch, fill(0.001, T))
+    set_parameter_value.(pin.pin_p_dch, zeros(T))
+    w_bad, infeas_bad = TSODSO._stoch_solve_held_out!(h, 1)
+    @test infeas_bad
+    @test isnan(w_bad)
+
+    # The SAME (build-once, never-rebuilt) harness recovers with a feasible pin — the
+    # skip path leaves the model reusable for the remaining held-out scenarios.
+    set_parameter_value.(pin.pin_p_ch, zeros(T))
+    w_ok, infeas_ok = TSODSO._stoch_solve_held_out!(h, 2)
+    @test !infeas_ok
+    @test isfinite(w_ok)
+end
+
+@testitem "run_stochastic: WR-05 (phase-22 review) — oos result carries the infeasible_h mask (all-feasible fixture: all false)" tags =
+    [:run_stochastic] setup = [Phase22Fixtures] begin
+    using TSODSO
+
+    s = Scenario(name = "t", feeder = :ieee13, T = 9, stoch_S = 3, stoch_H_oos = 5)
+    r = run_stochastic(s)
+
+    @test length(r.oos.infeasible_h) == s.stoch_H_oos
+    @test all(.!r.oos.infeasible_h)
+    @test all(isfinite, r.oos.welfare_h)
+    # With nothing infeasible, realized_welfare keeps its pre-WR-05 definition exactly.
+    @test r.oos.realized_welfare == sum(r.oos.welfare_h) / s.stoch_H_oos
+end
+
 @testitem "run_stochastic: D-11 measurement-before-golden — repeated-run stability precedes the pinned literal" tags =
     [:run_stochastic] setup = [Phase22Fixtures] begin
     using TSODSO
