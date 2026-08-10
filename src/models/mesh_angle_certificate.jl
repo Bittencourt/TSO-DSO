@@ -24,7 +24,7 @@
 using JuMP
 
 """
-    certify_angle_recoverable!(ctx::ModelContext; atol::Real = 0.02, rtol::Real = 0.02,
+    certify_angle_recoverable!(ctx::ModelContext; atol::Real = 0.01, rtol::Real = 0.01,
                                 report::Bool = true)
         -> (; recoverable::Bool, worst_residual::Float64, status::Symbol,
              angles::Union{Matrix{ComplexF64},Nothing})
@@ -150,16 +150,23 @@ their exact ratios 4.0/~0.167/1.0/2.0) — the SOCP cone stays exact (even tight
 `~1.8e-11`) throughout that range, up to a genuine INFEASIBILITY cliff at 10×, giving the
 measured `≈9.7×` residual separation with a comfortable safety margin from that cliff.
 
-Defaults are centered roughly at the GEOMETRIC MEAN of the two measured floors (a
-DELIBERATE departure from `assert_4q_complementarity!`'s "~10× the recoverable floor"
-sizing discipline, which here would collide with the `:heterogeneous` floor since the
-measured separation is under 2 orders of magnitude — see above): `atol = 0.02` and
-`rtol = 0.02` (the fixture's phasor `scale ≈ 1.0` per-unit, so the combined bound
-`atol + rtol·scale ≈ 0.04` sits almost exactly between the two measured floors). At these
-defaults the `:uniform` profile certifies with a `≈6.4×` margin (`0.00627 ≪ 0.04`) and the
-`:heterogeneous` profile's `worst_residual` (`≈0.0607`) sits a clean `≈1.5×` ABOVE the
-bound — `recoverable = false`, the honest structural gap (D-10) ships as the deliverable,
-never chased away by further parameter tuning.
+Defaults place the COMBINED decision bound `atol + rtol·scale` at the GEOMETRIC MEAN of
+the two measured floors (a DELIBERATE departure from `assert_4q_complementarity!`'s "~10×
+the recoverable floor" sizing discipline, which here would collide with the
+`:heterogeneous` floor since the measured separation is under 2 orders of magnitude — see
+above): `atol = 0.01` and `rtol = 0.01` (the fixture's phasor `scale ≈ 1.0` per-unit, so
+the combined bound `atol + rtol·scale ≈ 0.02` sits at the log-midpoint
+`√(0.00627·0.0607) ≈ 0.0195` of the two floors). The decision variable is the COMBINED
+bound, never each addend individually — review 23 WR-01 caught an earlier revision that
+centered each `0.02` addend at the geometric mean separately, leaving the combined bound
+at `≈0.04` (2× the log-midpoint) with an asymmetric `≈6.4×`/`≈1.5×` margin split, one
+solver-noise drift away from a silent verdict flip on the thin side. At the corrected
+defaults the margins are BALANCED: the `:uniform` profile certifies `≈3.2×` below the
+bound (`0.00627 ≪ 0.02`) and the `:heterogeneous` profile's `worst_residual` (`≈0.0607`)
+sits `≈3.0×` ABOVE it — either measured floor may drift ~3× (solver version bump, MOI
+bridge change, Clarabel tolerance change) before a committed verdict flips.
+`recoverable = false` on `:heterogeneous` remains the honest structural gap (D-10),
+shipped as the deliverable, never chased away by further parameter tuning.
 
 Reads `ctx.meta[:feeder]`, `ctx.meta[:T]`, `ctx.meta[:pf_vars]` (the `(; v, v̂, P, Q, l)`
 stash `ConvexBranchFlow.contribute!` populates — `MeshedFlow` delegates to it verbatim,
@@ -169,8 +176,8 @@ plan 23-02) — identical inputs to [`recover_voltage_angles`](@ref). Uses an ex
 """
 function certify_angle_recoverable!(
     ctx::ModelContext;
-    atol::Real = 0.02,
-    rtol::Real = 0.02,
+    atol::Real = 0.01,
+    rtol::Real = 0.01,
     report::Bool = true,
 )
     # T-20-08-style discipline (review WR-02): scrub any stale provenance marker FIRST,
