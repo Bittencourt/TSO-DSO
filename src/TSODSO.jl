@@ -18,6 +18,15 @@ include("units/PerUnit.jl")
 include("data/Feeder.jl")
 include("data/topology.jl")
 
+# --- Meshed feeder data model (plan 23-01, MESH-01) --- a SEPARATE struct from
+# `Feeder`, gated by `assert_connected` instead of `assert_radial` (D-01/D-09
+# lock: `Feeder`/`topology.jl` above are byte-unchanged). `mesh_topology.jl`
+# must load BEFORE `MeshedFeeder.jl` (its inner constructor calls
+# `assert_connected` at call time -- world-age resolution, mirroring
+# `Feeder.jl`/`topology.jl`'s own documented ordering note above).
+include("data/mesh_topology.jl")
+include("data/MeshedFeeder.jl")
+
 # --- Seeded profile generator (owned by plan 03-02, DATA-04) ---
 include("data/profiles.jl")
 
