@@ -21,6 +21,10 @@ findings:
   info: 3
   total: 14
 status: issues_found
+fixed_at: 2026-08-10
+fix_scope: critical_warning
+fixed: 11
+fix_status: all_in_scope_fixed
 ---
 
 # Phase 22: Code Review Report
@@ -58,6 +62,44 @@ interior-point fragility the phase spent a solver-tolerance override fighting, a
 test whose catch-all `ErrorException` handling both permits false passes and makes the
 documented `Pkg.test` flake undiagnosable. The central D-05/D-08 pricing math has no
 regression test.
+
+## Fix Status (2026-08-10, `/gsd:code-review --fix` pass)
+
+All 11 in-scope findings (1 Critical + 10 Warnings) fixed, one atomic commit each, every
+fix verified by a targeted direct `--project=.` script before commit. Info findings
+IN-01..IN-03 were OUT of the fix scope and remain open.
+
+| Finding | Status | Commit    | Notes |
+|---------|--------|-----------|-------|
+| CR-01   | fixed  | `8ffef34` | `haskey(v, :Ppv_param)` guard; FourQuadBESS pinned, no PV handle; regression testitem |
+| WR-01   | fixed  | `9263586` | copy-on-construct in the non-empty branch; aliasing regression testitem |
+| WR-02   | fixed  | `2816525` | stable FNV-1a `_p<digest>` in `scenario_filename` (non-uniform only, NAME_MAX-guarded); stale docstring claims corrected |
+| WR-03   | fixed  | `1bcb8b7` | per-aggregator device-count + per-index device-type congruence; clairvoyant-battery case tested |
+| WR-04   | fixed  | `5c4b447` | `q` tied first-stage (D-03); OOS harness `pin_q` + `run_stochastic` pins committed q; PVBattery paths bit-unaffected |
+| WR-05   | fixed  | `061f0cb` | `_stoch_solve_held_out!` skip-and-report (NaN + `infeasible_h` mask + @warn); active pins clamped at 0; documented |
+| WR-06   | fixed  | `077009e` | trip requires `occursin("SOCP relaxation INEXACT", e.msg)`; per-scale outcomes recorded |
+| WR-07   | fixed  | `2cdfbc0` + `de01eb8` | no-trip path logs resolved solver-stack versions; sandbox-resolution diagnosis documented in the test comment (Project/Manifest drift itself is deliberate user-local state, untouched). Follow-up `de01eb8`: the acceptance suite proved the no-trip flake reproduces under `Pkg.test` AND that `import Pkg` is unavailable in the sandbox — introspection now uses `Base.loaded_modules`/`Base.pkgversion`, exception-guarded. A fresh-resolve env was measured resolving JuMP 1.31.1/MOI 1.52.0 vs the root Manifest's 1.30.1/1.51.2 — direct evidence for the resolution-differs mechanism |
+| WR-08   | fixed  | `3fb4f9e` | extensive-form solve routed through `solve_with_retry!(model; dual = true)` (allow_local cross-check path keeps direct `assert_solved!`); caller knob documented |
+| WR-09   | fixed  | `b816392` | redundant soc tie rows dropped (implied by p_ch/p_dch ties + shared soc0); post-solve soc-agreement testitem (~2.4e-15 dev); D-11 golden re-pinned per measurement-before-golden (`-0.02515629356082627`, 3-run stable) |
+| WR-10   | fixed  | `8027c5f` | D-08 S=1 anchor vs `solve_welfare` + D-05 de-scaling probability-invariance testitems |
+| IN-01   | open (out of scope) | — | note: WR-02's NEW digest already uses a stable, padded FNV-1a; the pre-existing `Base.hash` fallback suffix remains |
+| IN-02   | open (out of scope) | — | |
+| IN-03   | open (out of scope) | — | |
+
+Follow-up commit `8a68916` restores JuliaFormatter compliance for the two touched files
+that were formatter-clean before the fixes (`store.jl`, `run_stochastic.jl`).
+
+**Full-suite acceptance (2026-08-10, isolated worktree, committed non-drifted env):**
+`2752 passed / 0 failed / 4 errored / 3 broken` in 11m22s. Reconciliation against the
+phase-22 reference (2708 passed / 1 flaky D-06 fail / 3 pre-existing errored / 3 broken):
+the +44 passes are this fix pass's new regression testitems; 3 of the 4 errors are the
+documented pre-existing intermittent Clarabel `NUMERICAL_ERROR` items in
+`test_experiments.jl` (lines 53/175/196); the 4th was the D-06 no-trip flake REPRODUCING
+under `Pkg.test` and then crashing in the new diagnostics branch's `import Pkg` — fixed
+in `de01eb8` (on a future no-trip the item now FAILS with full per-scale outcomes +
+resolved solver-stack versions, i.e. the reference's known flaky-fail, now
+self-diagnosing instead of silent). No Aqua failures (this run used the committed
+Manifest, not the drifted developer checkout).
 
 ## Critical Issues
 
