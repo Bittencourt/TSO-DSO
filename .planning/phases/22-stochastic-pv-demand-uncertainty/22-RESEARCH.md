@@ -591,23 +591,28 @@ end
      rationale. At S=3–5 the extra variable/constraint count is negligible per the measured
      capacity numbers above.)**
 
-3. **Exact scenario counts (3–5 in-sample, 5–10 held-out) and whether Deferrable joins the
+3. **(RESOLVED — CONTEXT.md Claude's-Discretion grant; planner fixed counts in plans.)
+   Exact scenario counts (3–5 in-sample, 5–10 held-out) and whether Deferrable joins the
    battery in first-stage** — both explicitly left to Claude's discretion in CONTEXT.md; this
    research does not further narrow them. Recommendation: default to 3 in-sample (cheapest CI
    still proving the D-04 non-uniform-probability plumbing) with 5 quarantined for the literate
    demonstration; 5 held-out for CI, 10 quarantined; include Deferrable in first-stage alongside
    the battery only if the chosen small CI fixture's population includes it (Pitfall 3 governs
-   feasibility at small T) — **(still OPEN, left to the planner/implementer per CONTEXT.md's own
-   explicit discretion grant, not resolved by this research)**.
+   feasibility at small T). **(RESOLVED — CONTEXT.md Claude's-Discretion grant; planner fixed
+   counts in plans: `stoch_S=3`/`stoch_H_oos=5` in `Phase22Fixtures` (plan 22-01),
+   `stoch_S=5`/`stoch_H_oos=10` in the literate demonstration (plan 22-05), Deferrable excluded
+   from first-stage entirely — the fixture is Deferrable-free per D-12/Pitfall 3.)**
 
-4. **Will the measured Clarabel capacity/warm-solve-time numbers transfer to the actual, not-yet-
-   built, small CI fixture?**
+4. **(RESOLVED — 22-02-PLAN.md Task 1 measures num_variables/num_constraints for S=1,3,5 as
+   acceptance criteria.) Will the measured Clarabel capacity/warm-solve-time numbers transfer to
+   the actual, not-yet-built, small CI fixture?**
    - What we know: the default 10-aggregator IEEE-13 population handles S=5 comfortably
      (6,980 vars / 13,825 constraints, 0.38s warm).
    - What's unclear: the planner's chosen small fixture will almost certainly be smaller (fewer
      aggregators, per D-12/Phase-4 precedent) — likely even more comfortable, but unmeasured.
-   - **(OPEN — flagged as a Wave-0 measurement gap below; re-measure once the CI fixture exists,
-     per D-11's measurement-before-golden discipline.)**
+   - **(RESOLVED — 22-02-PLAN.md Task 1 measures num_variables/num_constraints for S=1,3,5 as
+     acceptance criteria — its own `<verify>` script prints `num_variables(model)` for S=1,3,5
+     on the actual small CI fixture shape, closing the Wave-0 measurement gap below.)**
 
 ## Environment Availability
 
