@@ -380,3 +380,278 @@ function build_stochastic_welfare(
 end
 
 export build_stochastic_welfare
+
+# D-09's out-of-sample harness (STOCH-03) — a SEPARATE, smaller build-once model than the
+# S-scenario extensive form above.
+#
+# WHY A SEPARATE MODEL, NOT THE IN-SAMPLE ONE (RESEARCH.md Pattern 5): the extensive-form
+# `build_stochastic_welfare` model above ties S in-sample scenarios' battery schedules
+# together via nonanticipativity equality constraints and reads its own S-scenario
+# objective/duals; re-slotting a held-out scenario INTO that same model would either
+# require adding a genuinely (S+1)-th scenario block (rebuilding, defeating build-once) or
+# mutating an existing scenario's data mid-tie (corrupting the in-sample optimum the
+# held-out gap is measured AGAINST). Instead, `StochasticOosHarness` is a wholly separate,
+# single-scenario, `solve_welfare`-shaped model: its network/device layer is built EXACTLY
+# ONCE, and every held-out re-solve only re-targets Parameters (`Ppv_param`/`Pdc_param`/
+# `Tout_param`) plus the caller-supplied in-sample optimum via anonymous per-step PIN
+# Parameters on `p_ch`/`p_dch` — never `soc` itself (App. C dominance already forces
+# `p_ch·p_dch = 0`; pinning `soc` directly would double-constrain the SAME recursion the
+# device's own `soc[1] == soc0` IC + recursion already drives once `p_ch`/`p_dch` are
+# pinned). This mirrors `build_mpc_window`'s own anonymous
+# `@variable(model, base_name = ..., set = Parameter(...))` + `@constraint(model, v.soc[H]
+# == term)` idiom (`src/models/mpc_window.jl`), generalized from a single terminal target
+# to the FULL per-step `p_ch`/`p_dch` trajectory. `solve_stochastic_oos_step!` is a
+# one-line `solve_with_retry!` delegation with `dual = false` — this harness never reports
+# a per-scenario DADP (STOCH-03's scope is the realized welfare only, per this plan's own
+# boundary against STOCH-02's in-sample pricing).
+
+"""
+    StochasticOosHarness{F}
+
+The built-ONCE out-of-sample re-solve harness (STOCH-03, D-09): a SEPARATE, single-scenario,
+`solve_welfare`-shaped model whose first-stage battery controls are Parameter-PINNED to a
+caller-supplied in-sample optimum, and whose PV/demand/ambient inputs re-slide per held-out
+scenario via `set_parameter_value`/`set_parameter_value.` — built EXACTLY ONCE, never
+rebuilt across held-out re-solves.
+
+# Fields
+
+  - `model::Model` — the welfare-shaped harness model, built ONCE via
+    `select_optimizer(problem_class(pf))` (formulation-generic, mirrors [`MpcWindow`](@ref));
+    re-solved via `set_parameter_value`/`set_parameter_value.` + `optimize!` only, never
+    rebuilt.
+  - `ctx::ModelContext` — the shared, single-scenario context.
+  - `agg_bus::Int` — the first aggregator's bus (`aggregators[1].bus`), mirroring
+    `MpcWindow`'s DADP-reporting convention (unused here since `dual = false`, kept for
+    introspection parity).
+  - `feeder::F` — the network the harness is built on.
+  - `p_import::Vector{VariableRef}` — the frontier active exchange `p_import[t]`, NEVER
+    wrapped in a `Parameter` (Pitfall 2) — the objective's `λ₀` term is fixed at build time
+    since this harness's `λ₀` never changes across held-out re-solves (unlike `MpcWindow`'s
+    per-window slide).
+  - `battery_pins::Vector{<:NamedTuple}` — one entry per battery-like device (any device
+    whose returned `vars` carries `:soc0`): `(; bus::Int, pin_p_ch, pin_p_dch)`, the
+    per-step PIN `Parameter`s tying that device's `p_ch[t]`/`p_dch[t]` to the caller-supplied
+    in-sample optimum (`p_ch[t] == pin_p_ch[t]`, `p_dch[t] == pin_p_dch[t]`) — `soc` is
+    NEVER pinned directly.
+  - `ppv_handles::Vector{<:NamedTuple}` — one entry per battery-like device:
+    `(; bus::Int, Ppv_param)`, the device's own PV-availability Parameter (re-slid per
+    held-out scenario).
+  - `tout_handles::Vector{<:NamedTuple}` — one entry per device carrying an ambient-
+    temperature Parameter (`Thermostatic`, and generally any device with `:Tout_param`):
+    `(; bus::Int, Tout_param)`.
+  - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int,
+    Pdc_param)`, the per-step inelastic-demand forecast Parameter (re-slid per held-out
+    scenario).
+"""
+struct StochasticOosHarness{F}
+    model::Model
+    ctx::ModelContext
+    agg_bus::Int
+    feeder::F
+    p_import::Vector{VariableRef}
+    battery_pins::Vector{<:NamedTuple}
+    ppv_handles::Vector{<:NamedTuple}
+    tout_handles::Vector{<:NamedTuple}
+    agg_pdc_handles::Vector{<:NamedTuple}
+end
+
+"""
+    build_stochastic_oos_harness(feeder, pf::AbstractPowerFlow,
+        aggregators::AbstractVector{<:Aggregator};
+        T::Int, λ₀::AbstractVector{<:Real},
+        optimizer = select_optimizer(problem_class(pf)), allow_export::Bool = false)
+        -> StochasticOosHarness
+
+Build the fixed-horizon `[t=1:T]` out-of-sample re-solve harness EXACTLY ONCE (STOCH-03,
+D-09), mirroring [`build_mpc_window`](@ref)'s build-once SHAPE:
+
+ 1. Boundary guards (mirror `build_mpc_window`): empty `aggregators`, `T < 1`,
+    `length(λ₀) != T`, or an aggregator bus outside `1:length(feeder.buses)` each throw
+    `ArgumentError` before any model assembly.
+ 2. `model = Model(select_optimizer(problem_class(pf)))` — formulation-generic, never
+    hardcoding `SOCP()`. Registers the same SOC→nonconvex-quad cross-solver bridges as
+    `solve_welfare`/`build_mpc_window`.
+ 3. `contribute!(pf, ctx, feeder; T)` — VERBATIM reuse of the validated power-flow
+    builder, called EXACTLY ONCE (this harness never re-`contribute!`s, so it never needs
+    `JuMP.unregister`, unlike the S-scenario loop in `build_stochastic_welfare`).
+ 4. A frontier `p_import[t=1:T]` (NAMED form — safe here, this model is built exactly
+    once): free-sign when `allow_export = true`, import-only (`≥ 0`) otherwise; injected
+    into `:Rp[feeder.root]`. `reactive = haskey(ctx.residuals, :Rq)` is captured
+    IMMEDIATELY after step 3, before any aggregator write; when `true`, a free-sign
+    `q_import[t=1:T]` is built the same way.
+ 5. Every aggregator `contribute!`s its own devices; each aggregator's `Pdc_param` handle
+    is captured into `agg_pdc_handles`.
+ 6. The residuals are closed via the NAMED single-build form and registered under
+    `:balance_p`/`:balance_q`.
+ 7. `ctx.meta[:agg_device_vars]` is walked: every battery-like device (`haskey(v,
+    :soc0)` — `PVBattery`/`FourQuadBESS`) gets TWO anonymous per-step PIN `Parameter`s
+    defaulting to the benign literal `0.0` for every `t` (mirrors `build_mpc_window`'s own
+    "the caller ALWAYS calls `set_parameter_value` before the first solve" convention):
+    `pin_p_ch`/`pin_p_dch`, tied via `p_ch[t] == pin_p_ch[t]`/`p_dch[t] == pin_p_dch[t]`
+    (NEVER `soc` directly — Pattern 5's documented choice: App. C dominance already
+    forces `p_ch·p_dch = 0` once `p_ch`/`p_dch` are pinned, so pinning `soc` too would
+    double-constrain the same recursion). Its `Ppv_param` is captured into `ppv_handles`,
+    and its `Tout_param` (if any) into `tout_handles`. Every OTHER device carrying a
+    `Tout_param` (e.g. `Thermostatic`) also gets a `tout_handles` entry.
+ 8. The REAL objective `ctx.meta[:objective] - Σ_t λ₀[t]·p_import[t]` is built at construction
+    time — `λ₀` never changes across held-out re-solves in this harness (unlike
+    `MpcWindow`'s per-window `λ₀` slide), so it is NOT a placeholder.
+
+Returns a [`StochasticOosHarness`](@ref). Re-solve via
+[`solve_stochastic_oos_step!`](@ref) — never rebuild.
+"""
+function build_stochastic_oos_harness(
+    feeder,
+    pf::AbstractPowerFlow,
+    aggregators::AbstractVector{<:Aggregator};
+    T::Int,
+    λ₀::AbstractVector{<:Real},
+    optimizer = select_optimizer(problem_class(pf)),
+    allow_export::Bool = false,
+)
+    # Boundary guards FIRST (mirrors build_mpc_window's own ordering).
+    isempty(aggregators) &&
+        throw(ArgumentError("build_stochastic_oos_harness needs at least one aggregator"))
+    T >= 1 ||
+        throw(ArgumentError("build_stochastic_oos_harness requires T ≥ 1, got T=$T"))
+    length(λ₀) == T ||
+        throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+
+    N = length(feeder.buses)
+    for (k, agg) in enumerate(aggregators)
+        1 <= agg.bus <= N || throw(
+            ArgumentError(
+                "aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$N",
+            ),
+        )
+    end
+
+    # Formulation-generic factory routing (NEVER hardcode SOCP()).
+    model = Model(optimizer)
+
+    # Cross-solver enablement, dormant on the primary Clarabel path (mirrors
+    # build_mpc_window/solve_welfare verbatim).
+    JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.RSOCtoNonConvexQuadBridge)
+    JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
+
+    ctx = ModelContext(model)
+    ctx.meta[:feeder] = feeder
+    ctx.meta[:T] = T
+
+    # VERBATIM power-flow builder reuse — called EXACTLY ONCE (no unregister needed).
+    contribute!(pf, ctx, feeder; T = T)
+
+    # WR-03 ordering: captured IMMEDIATELY after the formulation contributes, before any
+    # aggregator write (mirrors build_mpc_window/solve_welfare).
+    reactive = haskey(ctx.residuals, :Rq)
+
+    # NAMED form is safe here — this model is built exactly once, unlike the anonymous
+    # per-scenario frontier build_stochastic_welfare needs to avoid an S-way name collision.
+    if allow_export
+        @variable(model, p_import[t = 1:T])
+    else
+        @variable(model, p_import[t = 1:T] >= 0)
+    end
+    for t in 1:T
+        add_to_residual!(ctx, :Rp, feeder.root, t, p_import[t])
+    end
+    ctx.meta[:p_import] = p_import
+
+    if reactive
+        @variable(model, q_import[t = 1:T])   # free-sign reactive frontier import
+        for t in 1:T
+            add_to_residual!(ctx, :Rq, feeder.root, t, q_import[t])
+        end
+        ctx.meta[:q_import] = q_import
+    end
+
+    # Aggregators: net active/reactive injections + utility. Capture each aggregator's
+    # Pdc_param handle.
+    agg_pdc_handles = NamedTuple[]
+    for agg in aggregators
+        res = contribute!(agg, ctx; T = T)
+        push!(agg_pdc_handles, (; bus = agg.bus, Pdc_param = res.Pdc_param))
+    end
+
+    # Close :Rp always; :Rq only when the formulation provides a reactive channel — NAMED
+    # single-build form (safe here, this model is built exactly once).
+    size(ctx.residuals[:Rp]) == (N, T) || error(
+        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($N, $T) — an index escaped the feeder",
+    )
+    @constraint(model, balance_p[j = 1:N, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
+    register_constraint!(ctx, :balance_p, balance_p)
+
+    if reactive
+        size(ctx.residuals[:Rq]) == (N, T) || error(
+            "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($N, $T) — an index escaped the feeder",
+        )
+        @constraint(model, balance_q[j = 1:N, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
+        register_constraint!(ctx, :balance_q, balance_q)
+    end
+
+    # Walk ctx.meta[:agg_device_vars] to populate battery_pins/ppv_handles/tout_handles.
+    battery_pins = NamedTuple[]
+    ppv_handles = NamedTuple[]
+    tout_handles = NamedTuple[]
+    if haskey(ctx.meta, :agg_device_vars)
+        for (bus, varlist) in ctx.meta[:agg_device_vars]
+            for v in varlist
+                if haskey(v, :soc0)
+                    # Battery-like device (PVBattery/FourQuadBESS): TWO anonymous per-step
+                    # PIN Parameters, defaulting to the benign literal 0.0 (mirrors
+                    # build_mpc_window's own "always overridden before the first solve"
+                    # convention). soc is NEVER pinned directly (Pattern 5).
+                    pin_p_ch = @variable(model, [t = 1:T], set = Parameter(0.0))
+                    pin_p_dch = @variable(model, [t = 1:T], set = Parameter(0.0))
+                    @constraint(model, [t = 1:T], v.p_ch[t] == pin_p_ch[t])
+                    @constraint(model, [t = 1:T], v.p_dch[t] == pin_p_dch[t])
+                    push!(battery_pins, (; bus, pin_p_ch, pin_p_dch))
+                    push!(ppv_handles, (; bus, Ppv_param = v.Ppv_param))
+                    if haskey(v, :Tout_param)
+                        push!(tout_handles, (; bus, Tout_param = v.Tout_param))
+                    end
+                elseif haskey(v, :Tout_param)
+                    # Thermostatic case: no :soc0, but carries its own ambient Parameter.
+                    push!(tout_handles, (; bus, Tout_param = v.Tout_param))
+                end
+            end
+        end
+    end
+
+    # REAL objective (not a placeholder — λ₀ never changes across held-out re-solves in
+    # this harness, unlike MpcWindow's per-window λ₀ slide).
+    @objective(
+        model,
+        Max,
+        ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
+    )
+
+    return StochasticOosHarness(
+        model,
+        ctx,
+        aggregators[1].bus,
+        feeder,
+        p_import,
+        battery_pins,
+        ppv_handles,
+        tout_handles,
+        agg_pdc_handles,
+    )
+end
+
+"""
+    solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int = 4) -> Model
+
+Re-solve the built-ONCE [`StochasticOosHarness`](@ref) `h` via [`solve_with_retry!`](@ref)
+— a ONE-LINE delegation that NEVER adds a variable or constraint to `h.model`. `dual =
+false`: this harness never reports a per-scenario DADP (STOCH-03's scope is the realized
+welfare only). Callers mutate `h.battery_pins`/`h.ppv_handles`/`h.tout_handles`/
+`h.agg_pdc_handles` via `set_parameter_value`/`set_parameter_value.` BEFORE calling this
+function.
+"""
+function solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int = 4)
+    return solve_with_retry!(h.model; max_attempts = max_attempts, dual = false)
+end
+
+export StochasticOosHarness, build_stochastic_oos_harness, solve_stochastic_oos_step!
