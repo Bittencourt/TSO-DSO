@@ -164,7 +164,19 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
-**v3.0 in progress — Phase 21 complete (2026-08-09):** MPC / Rolling-Horizon / Real-Time Pricing
+**v3.0 in progress — Phase 22 complete (2026-08-10):** Stochastic PV/Demand Uncertainty
+(STOCH-01..04). Two-stage extensive-form welfare (`build_stochastic_welfare`) over 3–5 seeded
+Markov scenarios: nonanticipativity ties on battery p_ch/p_dch (+4Q q; redundant soc ties dropped
+for IPM conditioning), per-scenario PF-04 gates, per-scenario DADPs de-scaled by probability as
+THE price output (expectation only a labeled summary; degenerate S=1 reduction anchored to
+solve_welfare). `StochasticOosHarness` Parameter-pinned out-of-sample evaluation with
+skip-and-report infeasibility handling; `run_stochastic` orchestrator with measurement-before-
+golden welfare gap (−0.02516, 3-run bit-stable). Rung 9 literate page. Review 1 Critical + 10
+Warnings all fixed; D-06 test-sandbox flake ROOT-CAUSED (Pkg.test resolves JuMP 1.31 vs pinned
+1.30 — diagnostics now baked into the test). Verification 4/4; suite 2752 pass / 0 fail / 3
+pre-existing errored / 3 broken. Next: Phase 23 (Meshed Networks).
+
+**v3.0 Phase 21 complete (2026-08-09):** MPC / Rolling-Horizon / Real-Time Pricing
 (MPC-01..04). Build-once `MpcWindow` re-solved per step via JuMP `Parameter` injection (devices
 Parameter-widened, anonymized containers), `run_mpc` closed-loop orchestrator with an
 `mpc_step`-strided loop, hard terminal-SOC (A/B dump/hoard regression at ~35,530× margin),
@@ -327,4 +339,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-09 — Phase 21 (MPC / Rolling-Horizon / RTP) complete*
+*Last updated: 2026-08-10 — Phase 22 (Stochastic PV/Demand Uncertainty) complete*
