@@ -221,6 +221,62 @@ end
     )
 end
 
+@testitem "stochastic_welfare: WR-10 (phase-22 review) — D-08 S=1 anchor against solve_welfare and the D-05 de-scaling property" tags =
+    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    using TSODSO
+
+    # WR-10: the phase's CENTRAL pricing math — the D-05 de-scaling
+    # (dadp[s] = raw dual ./ probabilities[s], no sign flip) and the D-08 degenerate
+    # anchor (S=1 with probabilities=[1.0] reproduces solve_welfare) — was 'empirically
+    # verified' in comments but had NO committed regression test: moving probabilities[s]
+    # inside ctx.meta[:objective], flipping a sign, or breaking the de-scaling
+    # denominator would have silently corrupted every reported price while the whole
+    # suite passed. Both properties are pinned here.
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(Phase22Fixtures.SEED_STOCH, :wr10_anchor),
+    )
+
+    # --- D-08 anchor: the 1-scenario extensive form reproduces the deterministic solve.
+    # (Same model shape and construction order by design; the two default optimizers
+    # differ only in tol_gap — 1e-8 vs the stochastic builder's 5e-10 — so the comparison
+    # is a tight ≈, not ==.)
+    ctx_det, welfare_det, dadp_det =
+        solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    r1 = build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [aggs];
+        probabilities = [1.0],
+        T = T,
+        λ₀ = λ0,
+    )
+    @test isapprox(r1.welfare, welfare_det; rtol = 1e-6)
+    @test all(isapprox.(r1.dadp[1], dadp_det; rtol = 1e-5, atol = 1e-8))
+    # With p = 1 the de-scaling denominator is inert and the expectation collapses.
+    @test r1.dadp[1] == r1.expected_dadp
+
+    # --- D-05 de-scaling property: the SAME scenario data duplicated at weights
+    # [0.3, 0.7] must report (probability-INVARIANT) equal per-scenario prices — the
+    # raw duals ARE p_s-scaled, and dividing by probabilities[s] removes exactly that.
+    r2 = build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [aggs, aggs];
+        probabilities = [0.3, 0.7],
+        T = T,
+        λ₀ = λ0,
+    )
+    @test all(isapprox.(r2.dadp[1], r2.dadp[2]; rtol = 1e-5, atol = 1e-8))
+    # And both agree with the deterministic anchor price for the identical data.
+    @test all(isapprox.(r2.dadp[1], dadp_det; rtol = 1e-4, atol = 1e-7))
+    # The expectation (D-07 derived summary) then equals the common per-scenario price.
+    @test all(isapprox.(r2.expected_dadp, r2.dadp[1]; rtol = 1e-5, atol = 1e-8))
+end
+
 @testitem "stochastic_welfare: WR-09 (phase-22 review) — soc agrees across scenarios post-solve WITHOUT explicit (rank-deficient) soc tie rows" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
