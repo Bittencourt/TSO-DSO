@@ -102,6 +102,14 @@ Pages = ["models/mpc_trace.jl", "models/mpc_window.jl", "experiments/mpc_loop.jl
 Order = [:type, :constant, :function]
 ```
 
+## Stochastic PV/Demand Uncertainty
+
+```@autodocs
+Modules = [TSODSO]
+Pages = ["models/stochastic_welfare.jl"]
+Order = [:type, :constant, :function]
+```
+
 ## Diagnostics
 
 ```@autodocs
