@@ -36,6 +36,7 @@ for src in (
     # it exceeds this job's whole CI timeout. See the page's own note.
     "socp_applicability.jl",
     "mpc_rolling_horizon.jl",   # NEW: Rung 8 MPC / rolling-horizon RTP closed loop (MPC-01..04)
+    "stochastic_pv_demand.jl", # NEW: Rung 9 Stochastic PV/Demand Uncertainty (STOCH-01..04)
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -76,6 +77,7 @@ makedocs(;
             "Thesis Reproduction — Assumptions" => "generated/thesis_reproduction_assumptions.md",
             "SOC Relaxation Applicability" => "generated/socp_applicability.md",
             "Rung 8: MPC / Rolling-Horizon RTP" => "generated/mpc_rolling_horizon.md", # from mpc_rolling_horizon.jl
+            "Rung 9: Stochastic PV/Demand Uncertainty" => "generated/stochastic_pv_demand.md",
         ],
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",

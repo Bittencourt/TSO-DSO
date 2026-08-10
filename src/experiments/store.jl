@@ -33,8 +33,46 @@ Single source of truth for the JLD2 filename [`run_and_store`](@ref) saves `s` u
 `run_and_store` will use (e.g. `scripts/run_scenario.jl`) MUST call this helper instead of
 re-deriving its own `savename(s, "jld2")` call — a second, independently-maintained call site
 is exactly how WR-06 (printed path silently diverging from the actual saved file) happened.
+
+NOTE (Rule 1 fix, plan 22-05 — discovered by this phase's own closing full-suite acceptance
+gate, `test/test_experiments.jl`'s EXP-02/INFRA-04 items): `Scenario.jl`'s "ZERO
+`DrWatson.default_allowed` overloading" design invariant (RESEARCH.md Phase-21 Pitfall 6,
+"a documented, accepted cost") means the bare `savename` STRING grows monotonically as future
+phases add additive fields. Phase 21's `mpc_*` block plus Phase 22's `stoch_*` block, combined
+with `digits = 10`'s multi-byte Greek selector glyphs (`ε_abs`/`ε_rel`/`μ`/`ρ`/`τ_ratio`), have
+now pushed the bare `savename` BASENAME past Linux's `NAME_MAX = 255` BYTES (never
+characters) for EVERY `Scenario`, not just long-`name` ones — verified: even the shortest
+possible `name = "x"` with every OTHER field at its `@kwdef` default renders a 263-BYTE
+basename; `Phase8Fixtures.minimal_scenario_kwargs()`'s own `name = "phase8-fixture"` renders
+276 bytes. Shortening the caller's own descriptive `name` alone can therefore never close this
+gap — this is a structural filename-length ceiling reached by cumulative field growth across
+two phases, not a fixable caller-side choice, and it now applies to essentially every
+`Scenario`, not a rare pathological case. (Flagged here as a real limitation for a future
+phase to address properly — e.g. excluding structurally-inactive `mpc_*`/`stoch_*` fields from
+the name when the OTHER is a no-op for the given `strategy` — rather than papered over.) This
+guard never drops information: every selector field is ALREADY separately stamped inside the
+saved JLD2's own dict by [`result_to_dict`](@ref) (`d = struct2dict(s)`), so a hash-suffixed
+fallback filename loses no self-description at the CONTENT level, only shortens the
+human-skimmable FILENAME.
 """
-scenario_filename(s::Scenario) = savename(s, "jld2"; digits = 10)
+function scenario_filename(s::Scenario)
+    full = savename(s, "jld2"; digits = 10)
+    name_max = 255                    # Linux/most filesystems' hard basename byte ceiling.
+    safesave_buffer = 10              # room for `safesave`'s own `_1`/`_2`/... suffix.
+    hash_suffix_len = 2 + 16 + 5      # "_h" + 16 hex digits + ".jld2".
+    target = name_max - safesave_buffer
+    sizeof(full) <= target && return full
+    # Fallback: a filesystem-safe, human-recognizable STEM (as much of the full descriptive
+    # name as fits the budget, snapped to a valid UTF-8 character boundary via `thisind` so a
+    # multi-byte Greek glyph is never split mid-codepoint) plus a stable content hash of the
+    # COMPLETE (untruncated) descriptive string — so two `Scenario`s that happen to share the
+    # same truncated PREFIX but differ later (e.g. in `stoch_H_oos`/`τ_ratio`) still resolve to
+    # DIFFERENT filenames, never silently colliding on the truncated stem alone.
+    stem_budget = target - hash_suffix_len
+    stem_end = thisind(full, min(sizeof(full), stem_budget))
+    stem = full[1:stem_end]
+    return stem * "_h" * string(hash(full); base = 16) * ".jld2"
+end
 
 """
     result_to_dict(res::ScenarioResult) -> Dict{Symbol,Any}

@@ -209,7 +209,7 @@ end
 
 @testitem "INFRA-04 provenance tagsave" setup = [Phase8Fixtures] begin
     using TSODSO
-    using DrWatson: wload, savename
+    using DrWatson: wload
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_and_store)
@@ -220,10 +220,21 @@ end
             s = TSODSO.Scenario(; kw..., strategy = :centralized)
             TSODSO.run_and_store(s; dir = dir)
 
-            # CR-01 fix: `run_and_store` now saves under `savename(s, "jld2"; digits = 10)`
+            # CR-01 fix: `run_and_store` now saves under `TSODSO.scenario_filename(s)`
             # (lossless float formatting, avoids DrWatson's lossy default sigdigits=3
             # rounding colliding two distinguishable ADMM-knob Scenarios onto one filename).
-            f = joinpath(dir, savename(s, "jld2"; digits = 10))
+            #
+            # Rule 1 fix (plan 22-05, discovered by this phase's own closing acceptance
+            # gate): this item used to re-derive `savename(s, "jld2"; digits = 10)` directly
+            # instead of calling `scenario_filename` — EXACTLY the "second,
+            # independently-maintained call site" `scenario_filename`'s own docstring warns
+            # is how WR-06 happened. It silently diverged once `scenario_filename` grew its
+            # own NAME_MAX-safety fallback (this same plan's `store.jl` fix): the bare
+            # `savename` string this item reconstructed no longer matched the ACTUAL
+            # filename `run_and_store` used, throwing the SAME `ENAMETOOLONG` this plan's
+            # `store.jl` fix was meant to resolve. Calling the single source of truth
+            # directly (as `run_and_store` itself does) fixes it for good.
+            f = joinpath(dir, TSODSO.scenario_filename(s))
             @test isfile(f)
 
             # NOTE (Rule 1 fix, 08-04): `wload` on a `.jld2` always round-trips through
