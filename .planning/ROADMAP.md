@@ -281,7 +281,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 23-02-PLAN.md — MeshedFlow delegation formulation + Phase23Fixtures committed loop fixture (uniform/heterogeneous R/X profiles, D-02/D-03/D-10)
+- [x] 23-02-PLAN.md — MeshedFlow delegation formulation + Phase23Fixtures committed loop fixture (uniform/heterogeneous R/X profiles, D-02/D-03/D-10)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -400,7 +400,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 20. Overvoltage-Capable Relaxation | v3.0 | 5/5 | Complete    | 2026-08-09 |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 6/6 | Complete    | 2026-08-09 |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
-| 23. Meshed Networks | v3.0 | 1/4 | In Progress|  |
+| 23. Meshed Networks | v3.0 | 2/4 | In Progress|  |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
