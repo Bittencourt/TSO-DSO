@@ -129,6 +129,63 @@ end
     @test !all(isapprox.(value.(vbatt.p_ch), valsA; atol = 1e-6))
 end
 
+@testitem "stochastic_oos_harness: CR-01 regression — a FourQuadBESS (no Ppv_param) builds, pins, and solves" tags =
+    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    using TSODSO
+    using JuMP: objective_value
+
+    # CR-01 (phase-22 review): the harness's battery-pin walk selected battery-like
+    # devices by `haskey(v, :soc0)` and then read `v.Ppv_param` UNCONDITIONALLY —
+    # crashing (`type NamedTuple has no field Ppv_param`) on a FourQuadBESS, whose
+    # `contribute!` returns `vars = (; p_ch, p_dch, soc, q, soc0)` with no PV Parameter,
+    # despite the docstring naming FourQuadBESS as supported. This item pins the fix:
+    # a mixed PVBattery + FourQuadBESS aggregator must build, expose ONE pin entry PER
+    # battery-like device but a `ppv_handles` entry ONLY for the PV-carrying PVBattery,
+    # and re-solve cleanly with both batteries pinned at the benign 0.0 default.
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(Phase22Fixtures.SEED_STOCH, :cr01_fourquad),
+    )
+
+    # Same scale family as the fixture's own PVBattery (LOAD_SCALE_STOCH-relative), so
+    # the near-lossless 2-bus solve stays feasible and interior.
+    L = Phase22Fixtures.LOAD_SCALE_STOCH
+    bess = FourQuadBESS(
+        2,                              # bus (the fixture's single load bus)
+        0.95,                           # η
+        1.0,                            # Δt
+        0.1 * L,                        # Pch_max
+        0.1 * L,                        # Pdch_max
+        0.2 * L,                        # Smax
+        0.0,                            # Emin
+        0.4 * L,                        # Emax
+        0.2 * L,                        # soc0
+        Phase22Fixtures.BATT_λ_MIN,
+        Phase22Fixtures.BATT_λ_MED,
+        Phase22Fixtures.BATT_λ_MAX,
+    )
+    agg = TSODSO.Aggregator(
+        2,
+        aggs[1].φ,
+        AbstractDevice[aggs[1].devices..., bess],
+        aggs[1].Pdc,
+    )
+
+    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ0)
+
+    # BOTH battery-like devices are pinned; ONLY the PVBattery carries a PV handle.
+    @test length(h.battery_pins) == 2
+    @test length(h.ppv_handles) == 1
+
+    # End-to-end: the mixed-battery harness genuinely re-solves (pins at the 0.0
+    # default = both batteries idle — always inside the SOC band from any soc0).
+    solve_stochastic_oos_step!(h)
+    @test isfinite(objective_value(h.model))
+end
+
 @testitem "stochastic_oos_harness: build_stochastic_oos_harness boundary guards" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO

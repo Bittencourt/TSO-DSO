@@ -434,9 +434,10 @@ rebuilt across held-out re-solves.
     per-step PIN `Parameter`s tying that device's `p_ch[t]`/`p_dch[t]` to the caller-supplied
     in-sample optimum (`p_ch[t] == pin_p_ch[t]`, `p_dch[t] == pin_p_dch[t]`) — `soc` is
     NEVER pinned directly.
-  - `ppv_handles::Vector{<:NamedTuple}` — one entry per battery-like device:
-    `(; bus::Int, Ppv_param)`, the device's own PV-availability Parameter (re-slid per
-    held-out scenario).
+  - `ppv_handles::Vector{<:NamedTuple}` — one entry per PV-CARRYING battery device
+    (`PVBattery` — CR-01 fix: `FourQuadBESS` carries no `Ppv_param` and gets NO entry
+    here, while still being pinned via `battery_pins`): `(; bus::Int, Ppv_param)`, the
+    device's own PV-availability Parameter (re-slid per held-out scenario).
   - `tout_handles::Vector{<:NamedTuple}` — one entry per device carrying an ambient-
     temperature Parameter (`Thermostatic`, and generally any device with `:Tout_param`):
     `(; bus::Int, Tout_param)`.
@@ -491,9 +492,11 @@ D-09), mirroring [`build_mpc_window`](@ref)'s build-once SHAPE:
     `pin_p_ch`/`pin_p_dch`, tied via `p_ch[t] == pin_p_ch[t]`/`p_dch[t] == pin_p_dch[t]`
     (NEVER `soc` directly — Pattern 5's documented choice: App. C dominance already
     forces `p_ch·p_dch = 0` once `p_ch`/`p_dch` are pinned, so pinning `soc` too would
-    double-constrain the same recursion). Its `Ppv_param` is captured into `ppv_handles`,
-    and its `Tout_param` (if any) into `tout_handles`. Every OTHER device carrying a
-    `Tout_param` (e.g. `Thermostatic`) also gets a `tout_handles` entry.
+    double-constrain the same recursion). Its `Ppv_param` — IF it carries one (CR-01
+    fix: `PVBattery` does; `FourQuadBESS` has no PV Parameter and contributes no entry)
+    — is captured into `ppv_handles`, and its `Tout_param` (if any) into `tout_handles`.
+    Every OTHER device carrying a `Tout_param` (e.g. `Thermostatic`) also gets a
+    `tout_handles` entry.
  8. The REAL objective `ctx.meta[:objective] - Σ_t λ₀[t]·p_import[t]` is built at construction
     time — `λ₀` never changes across held-out re-solves in this harness (unlike
     `MpcWindow`'s per-window `λ₀` slide), so it is NOT a placeholder.
@@ -607,7 +610,18 @@ function build_stochastic_oos_harness(
                     @constraint(model, [t = 1:T], v.p_ch[t] == pin_p_ch[t])
                     @constraint(model, [t = 1:T], v.p_dch[t] == pin_p_dch[t])
                     push!(battery_pins, (; bus, pin_p_ch, pin_p_dch))
-                    push!(ppv_handles, (; bus, Ppv_param = v.Ppv_param))
+                    # CR-01 fix (phase-22 review): only a PV-carrying battery (PVBattery)
+                    # returns a `Ppv_param` handle — `FourQuadBESS.contribute!` returns
+                    # `vars = (; p_ch, p_dch, soc, q, soc0)` with NO PV Parameter at all
+                    # (it grid-charges; there is nothing to re-slide per held-out scenario).
+                    # Reading `v.Ppv_param` unconditionally crashed the harness build with
+                    # `type NamedTuple has no field Ppv_param` on a FourQuadBESS, a device
+                    # this function's own contract names as supported. Guarded, a
+                    # FourQuadBESS still gets its p_ch/p_dch PINNED above — it simply
+                    # contributes no `ppv_handles` entry.
+                    if haskey(v, :Ppv_param)
+                        push!(ppv_handles, (; bus, Ppv_param = v.Ppv_param))
+                    end
                     if haskey(v, :Tout_param)
                         push!(tout_handles, (; bus, Tout_param = v.Tout_param))
                     end
