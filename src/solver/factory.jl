@@ -63,11 +63,30 @@ select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose"
 
 # Tight gap tolerances: transactive prices ARE the duals, so accurate conic duals
 # matter. Clarabel's `tol_gap_abs`/`tol_gap_rel` default to 1e-8; set explicitly.
-select_optimizer(::SOCP) = optimizer_with_attributes(
+#
+# Plan 22-02 (STOCH-01) deviation (Rule 1 — auto-fixed bug): keyword overrides, mirroring
+# the `NLP` method's own established pattern below — layered ON TOP of the `tol_gap_abs/
+# rel = 1e-8` base (a duplicate key passed later wins in `optimizer_with_attributes`, so
+# callers can only ADD/OVERRIDE, never lose the base tightness unless they explicitly
+# override it). `select_optimizer(SOCP())` with NO kwargs stays BYTE-IDENTICAL to the prior
+# behavior. Added because `build_stochastic_welfare`'s probability-weighted extensive-form
+# objective genuinely weakens each scenario's own loss-cost gradient (scaled by that
+# scenario's `probabilities[s]`), which — empirically verified this plan, on a near-lossless
+# branch — can leave Clarabel's default `tol_gap=1e-8` interior-point iterate measurably
+# short of the SOC cone's true (unique, gradient-driven) tight point for a LOW-probability
+# scenario, tripping the PF-04 exactness gate on a genuinely tiny (not structural) residual.
+# Tightening `tol_gap_abs/rel` resolves it (verified: 5.6e-6 → 4.8e-8 at the builder's chosen
+# `5e-10`) because the true optimum IS exactly cone-tight (any slack costs objective value,
+# however marginally) — a convergence-precision fix, not a tolerance-weakening of the
+# exactness GATE itself. `build_stochastic_welfare` picked `5e-10` (not a more aggressive
+# `1e-10`) after sweeping BOTH this near-lossless fixture and a separate, more-lossy one and
+# finding `1e-10` alone measurably trips `ALMOST_OPTIMAL` on the lossier feeder.
+select_optimizer(::SOCP; attrs...) = optimizer_with_attributes(
     Clarabel.Optimizer,
     "verbose" => false,
     "tol_gap_abs" => 1e-8,
     "tol_gap_rel" => 1e-8,
+    (String(k) => v for (k, v) in pairs(attrs))...,
 )
 
 # Keyword overrides layer ON TOP of the factory base ("print_level" => 0); a duplicate key

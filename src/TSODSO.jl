@@ -112,6 +112,12 @@ include("models/mpc_trace.jl")
 # No ordering dependency on mpc_trace.jl (both models/ files, grouped for diff locality).
 include("models/mpc_window.jl")
 
+# --- Stochastic PV/demand two-stage extensive-form welfare builder (owned by plan 22-02, ---
+# STOCH-01/02) --- ORCHESTRATION over already-validated builders (ConvexBranchFlow/
+# ModelContext/exactness.jl/Aggregator/PVBattery, all already loaded above); no
+# ordering dependency beyond those. Placed immediately after mpc_window.jl per the plan.
+include("models/stochastic_welfare.jl")
+
 # --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
 # Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
 # ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
