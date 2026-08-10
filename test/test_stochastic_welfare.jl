@@ -178,6 +178,64 @@ end
     )
 end
 
+@testitem "stochastic_welfare: WR-04 (phase-22 review) — FourQuadBESS reactive dispatch q is nonanticipativity-tied (full first-stage battery schedule)" tags =
+    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    using TSODSO
+    using JuMP: value
+
+    # WR-04: the tie loop constrained p_ch/p_dch/soc only, so a FourQuadBESS's reactive
+    # dispatch q stayed a free per-scenario recourse variable — the "battery schedule is
+    # first-stage, SHARED across scenarios" claim (D-03) held only for the active-power
+    # half of the device. q is now tied too; this item pins it: two scenarios with
+    # genuinely different PV/demand draws must report the IDENTICAL solved q trajectory.
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+    L = Phase22Fixtures.LOAD_SCALE_STOCH
+
+    house(seed) = begin
+        base = Phase22Fixtures.stoch_scenario_aggregators(feeder, seed)
+        bess = FourQuadBESS(
+            2, 0.95, 1.0,
+            0.1 * L, 0.1 * L, 0.2 * L,      # Pch_max, Pdch_max, Smax
+            0.0, 0.4 * L, 0.2 * L,          # Emin, Emax, soc0
+            Phase22Fixtures.BATT_λ_MIN,
+            Phase22Fixtures.BATT_λ_MED,
+            Phase22Fixtures.BATT_λ_MAX,
+        )
+        [TSODSO.Aggregator(
+            2,
+            base[1].φ,
+            AbstractDevice[base[1].devices..., bess],
+            base[1].Pdc,
+        )]
+    end
+
+    s1 = house(sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_a))
+    s2 = house(sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_b))
+
+    r = build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [s1, s2];
+        probabilities = [0.4, 0.6],
+        T = T,
+        λ₀ = λ0,
+    )
+    @test isfinite(r.welfare)
+
+    q_of(ctx) = only(
+        v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q)
+    )
+    v1 = q_of(r.ctxs[1])
+    v2 = q_of(r.ctxs[2])
+
+    # The FULL battery schedule — active AND reactive — is shared across scenarios.
+    @test all(isapprox.(value.(v2.q), value.(v1.q); atol = 1e-6))
+    @test all(isapprox.(value.(v2.p_ch), value.(v1.p_ch); atol = 1e-6))
+    @test all(isapprox.(value.(v2.p_dch), value.(v1.p_dch); atol = 1e-6))
+end
+
 @testitem "stochastic_welfare: WR-03 (phase-22 review) device-composition congruence guard — reordered or missing devices throw ArgumentError, never a silently-untied battery" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO

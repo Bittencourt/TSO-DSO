@@ -111,9 +111,11 @@ For each scenario `s in 1:S`:
 AFTER every scenario block is built, nonanticipativity equality constraints tie every
 battery-like device (any device whose `contribute!`-returned `vars` carries `:soc0` — a
 `PVBattery` or `FourQuadBESS`) at bus/index `(bus, idx)` across scenarios:
-`p_ch_s[t] == p_ch_1[t]`, `p_dch_s[t] == p_dch_1[t]`, `soc_s[t] == soc_1[t]` for
-`s = 2:S`, `t = 1:T` — `Deferrable` is DELIBERATELY excluded from this tie (not
-first-stage in this builder).
+`p_ch_s[t] == p_ch_1[t]`, `p_dch_s[t] == p_dch_1[t]`, `soc_s[t] == soc_1[t]`, and — for
+a device carrying a reactive dispatch (`FourQuadBESS`; WR-04 fix, phase-22 review) —
+`q_s[t] == q_1[t]`, for `s = 2:S`, `t = 1:T`: the ENTIRE battery schedule, active AND
+reactive, is first-stage under D-03, never a partial (active-only) tie. `Deferrable` is
+DELIBERATELY excluded from this tie (not first-stage in this builder).
 
 The objective is the probability-weighted sum
 `Σ_s probabilities[s]·(ctx_s.meta[:objective] − Σ_t λ₀[t]·p_import_s[t])`. After
@@ -357,6 +359,16 @@ function build_stochastic_welfare(
                 @constraint(model, [t = 1:T], vs.p_ch[t] == v1.p_ch[t])
                 @constraint(model, [t = 1:T], vs.p_dch[t] == v1.p_dch[t])
                 @constraint(model, [t = 1:T], vs.soc[t] == v1.soc[t])
+                # WR-04 fix (phase-22 review): a FourQuadBESS's reactive dispatch q is
+                # part of the BATTERY's own day-ahead schedule and therefore first-stage
+                # under D-03 ("battery schedule is first-stage, shared across scenarios")
+                # — leaving it untied made the tie claim true only for the active-power
+                # half of the device, an undocumented partial first-stage. WR-03's
+                # device-TYPE congruence guard guarantees haskey(vs,:q) == haskey(v1,:q)
+                # at every tied index. PVBattery carries no :q and is unaffected.
+                if haskey(v1, :q)
+                    @constraint(model, [t = 1:T], vs.q[t] == v1.q[t])
+                end
             end
         end
     end
@@ -467,7 +479,10 @@ rebuilt across held-out re-solves.
     whose returned `vars` carries `:soc0`): `(; bus::Int, pin_p_ch, pin_p_dch)`, the
     per-step PIN `Parameter`s tying that device's `p_ch[t]`/`p_dch[t]` to the caller-supplied
     in-sample optimum (`p_ch[t] == pin_p_ch[t]`, `p_dch[t] == pin_p_dch[t]`) — `soc` is
-    NEVER pinned directly.
+    NEVER pinned directly. For a device carrying a reactive dispatch (`FourQuadBESS`;
+    WR-04 fix, phase-22 review) the entry additionally carries `pin_q` (`q[t] ==
+    pin_q[t]`): q is first-stage under D-03, so the held-out re-score pins the FULL
+    committed schedule, active AND reactive.
   - `ppv_handles::Vector{<:NamedTuple}` — one entry per PV-CARRYING battery device
     (`PVBattery` — CR-01 fix: `FourQuadBESS` carries no `Ppv_param` and gets NO entry
     here, while still being pinned via `battery_pins`): `(; bus::Int, Ppv_param)`, the
@@ -526,7 +541,10 @@ D-09), mirroring [`build_mpc_window`](@ref)'s build-once SHAPE:
     `pin_p_ch`/`pin_p_dch`, tied via `p_ch[t] == pin_p_ch[t]`/`p_dch[t] == pin_p_dch[t]`
     (NEVER `soc` directly — Pattern 5's documented choice: App. C dominance already
     forces `p_ch·p_dch = 0` once `p_ch`/`p_dch` are pinned, so pinning `soc` too would
-    double-constrain the same recursion). Its `Ppv_param` — IF it carries one (CR-01
+    double-constrain the same recursion). A device carrying a reactive dispatch `q`
+    (`FourQuadBESS`) additionally gets a `pin_q` `Parameter` (`q[t] == pin_q[t]`) —
+    WR-04 fix, phase-22 review: q is first-stage under D-03, so the committed schedule
+    pinned here is the FULL one, active and reactive. Its `Ppv_param` — IF it carries one (CR-01
     fix: `PVBattery` does; `FourQuadBESS` has no PV Parameter and contributes no entry)
     — is captured into `ppv_handles`, and its `Tout_param` (if any) into `tout_handles`.
     Every OTHER device carrying a `Tout_param` (e.g. `Thermostatic`) also gets a
@@ -643,7 +661,20 @@ function build_stochastic_oos_harness(
                     pin_p_dch = @variable(model, [t = 1:T], set = Parameter(0.0))
                     @constraint(model, [t = 1:T], v.p_ch[t] == pin_p_ch[t])
                     @constraint(model, [t = 1:T], v.p_dch[t] == pin_p_dch[t])
-                    push!(battery_pins, (; bus, pin_p_ch, pin_p_dch))
+                    if haskey(v, :q)
+                        # WR-04 fix (phase-22 review): a FourQuadBESS's reactive dispatch
+                        # q is first-stage under D-03 (tied across in-sample scenarios by
+                        # build_stochastic_welfare), so an HONEST out-of-sample re-score
+                        # of the committed schedule must pin q too — leaving it free
+                        # would grant the held-out solve reactive recourse the in-sample
+                        # commitment never had. The 0.0 default (q = 0) is always inside
+                        # the device's own apparent-power cone.
+                        pin_q = @variable(model, [t = 1:T], set = Parameter(0.0))
+                        @constraint(model, [t = 1:T], v.q[t] == pin_q[t])
+                        push!(battery_pins, (; bus, pin_p_ch, pin_p_dch, pin_q))
+                    else
+                        push!(battery_pins, (; bus, pin_p_ch, pin_p_dch))
+                    end
                     # CR-01 fix (phase-22 review): only a PV-carrying battery (PVBattery)
                     # returns a `Ppv_param` handle — `FourQuadBESS.contribute!` returns
                     # `vars = (; p_ch, p_dch, soc, q, soc0)` with NO PV Parameter at all

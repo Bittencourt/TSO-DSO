@@ -139,10 +139,25 @@ function run_stochastic(s::Scenario)
     for (bus, varlist) in r.ctxs[1].meta[:agg_device_vars]
         for v in varlist
             if haskey(v, :soc0)
-                push!(
-                    in_sample_battery,
-                    (; bus, p_ch = value.(v.p_ch), p_dch = value.(v.p_dch)),
-                )
+                # WR-04 fix (phase-22 review): a FourQuadBESS's reactive dispatch q is
+                # first-stage too (tied across scenarios by build_stochastic_welfare),
+                # so the committed schedule read here carries it for pinning below.
+                if haskey(v, :q)
+                    push!(
+                        in_sample_battery,
+                        (;
+                            bus,
+                            p_ch = value.(v.p_ch),
+                            p_dch = value.(v.p_dch),
+                            q = value.(v.q),
+                        ),
+                    )
+                else
+                    push!(
+                        in_sample_battery,
+                        (; bus, p_ch = value.(v.p_ch), p_dch = value.(v.p_dch)),
+                    )
+                end
             end
         end
     end
@@ -183,6 +198,11 @@ function run_stochastic(s::Scenario)
         batt = only(b for b in in_sample_battery if b.bus == pin.bus)
         set_parameter_value.(pin.pin_p_ch, batt.p_ch)
         set_parameter_value.(pin.pin_p_dch, batt.p_dch)
+        # WR-04 fix (phase-22 review): pin the committed reactive dispatch too when the
+        # device carries one (FourQuadBESS) — q is first-stage under D-03, and the
+        # in-sample entry above is guaranteed to carry :q whenever the harness pin does
+        # (both walks key off the same device vars shape).
+        haskey(pin, :pin_q) && set_parameter_value.(pin.pin_q, batt.q)
     end
 
     # --- 7. Held-out loop: re-slide every held-out scenario's own PV/demand/ambient data

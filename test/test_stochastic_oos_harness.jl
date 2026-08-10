@@ -186,6 +186,55 @@ end
     @test isfinite(objective_value(h.model))
 end
 
+@testitem "stochastic_oos_harness: WR-04 (phase-22 review) — FourQuadBESS q is pinned first-stage, never free held-out recourse" tags =
+    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    using TSODSO
+    using JuMP: value, set_parameter_value
+
+    # WR-04: build_stochastic_welfare now ties q across in-sample scenarios (q is part
+    # of the first-stage battery schedule under D-03), so the held-out re-score must PIN
+    # the committed q too — a free q would grant the held-out solve reactive recourse
+    # the in-sample commitment never had. This item pins the harness half of the fix.
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+    L = Phase22Fixtures.LOAD_SCALE_STOCH
+    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_oos),
+    )
+    bess = FourQuadBESS(
+        2, 0.95, 1.0,
+        0.1 * L, 0.1 * L, 0.2 * L,
+        0.0, 0.4 * L, 0.2 * L,
+        Phase22Fixtures.BATT_λ_MIN,
+        Phase22Fixtures.BATT_λ_MED,
+        Phase22Fixtures.BATT_λ_MAX,
+    )
+    agg = TSODSO.Aggregator(
+        2,
+        aggs[1].φ,
+        AbstractDevice[aggs[1].devices..., bess],
+        aggs[1].Pdc,
+    )
+
+    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ0)
+
+    # Exactly the FourQuadBESS pin carries pin_q; the PVBattery pin does not.
+    @test count(p -> haskey(p, :pin_q), h.battery_pins) == 1
+    pin = only(p for p in h.battery_pins if haskey(p, :pin_q))
+
+    # Pin a nonzero committed q (inside the device's own cone: |q| ≤ Smax with p = 0)
+    # and assert the solved q reproduces it — the pin is load-bearing, not vacuous.
+    qvals = fill(0.05 * L, T)
+    set_parameter_value.(pin.pin_q, qvals)
+    solve_stochastic_oos_step!(h)
+    vbess = only(
+        v for (bus, vl) in h.ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q)
+    )
+    @test all(isapprox.(value.(vbess.q), qvals; atol = 1e-6))
+end
+
 @testitem "stochastic_oos_harness: build_stochastic_oos_harness boundary guards" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO
