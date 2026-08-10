@@ -118,8 +118,16 @@ reactive, is first-stage under D-03, never a partial (active-only) tie. `Deferra
 DELIBERATELY excluded from this tie (not first-stage in this builder).
 
 The objective is the probability-weighted sum
-`Σ_s probabilities[s]·(ctx_s.meta[:objective] − Σ_t λ₀[t]·p_import_s[t])`. After
-`assert_solved!(model; dual = true, allow_local)`, the PF-04 exactness gate
+`Σ_s probabilities[s]·(ctx_s.meta[:objective] − Σ_t λ₀[t]·p_import_s[t])`. The solve is
+routed through [`solve_with_retry!`](@ref)`(model; dual = true)` (WR-08 fix, phase-22
+review: the escalating Clarabel-conditioning ladder — attributes-only, build-once
+preserved, STRICT `assert_solved!` gate — because this solve is empirically known to sit
+on a convergence knife-edge: a reasonable probability vector can trip `ALMOST_OPTIMAL`
+under the default `tol_gap_abs/rel = 5e-10`); the deliberately-nonconvex cross-check
+path (`allow_local = true`) keeps a direct `assert_solved!(...; allow_local = true)`
+call. If a solve STILL fails `ALMOST_OPTIMAL` after the ladder, the caller's first knob
+is `optimizer = select_optimizer(SOCP(); tol_gap_abs = ..., tol_gap_rel = ...)` (loosen
+toward the factory's 1e-8 base). After the gated solve, the PF-04 exactness gate
 `assert_socp_exact!` runs ONCE PER SCENARIO (D-06 — never aggregated, never a new
 certificate) whenever that scenario stashed a squared-current `:l`, recording each
 scenario's own `maxgap` into `socp_maxgap`. THEN `assert_battery_complementarity!` runs
@@ -384,8 +392,23 @@ function build_stochastic_welfare(
         )
     )
 
-    # OPTIMAL gate: never read a dual (price) before a trusted solve.
-    assert_solved!(model; dual = true, allow_local = allow_local)
+    # OPTIMAL gate: never read a dual (price) before a trusted solve. WR-08 fix
+    # (phase-22 review): the extensive form is the ONE solve empirically known to sit on
+    # the tol_gap knife-edge in both directions (5e-10 was fixture-tuned on two tiny
+    # feeders, and the phase's own literate page then tripped ALMOST_OPTIMAL on a
+    # perfectly reasonable probability vector at :ieee13/T=9), so it is routed through
+    # solve_with_retry! — the escalating Clarabel-conditioning ladder (Phase 10) built
+    # for exactly this failure shape. The ladder mutates ONLY optimizer attributes
+    # (never a variable/constraint — build-once preserved) and its gate IS
+    # assert_solved! (STRICT, dual = true), so nothing about the trust discipline
+    # weakens. solve_with_retry! deliberately has no allow_local passthrough, so the
+    # deliberately-nonconvex cross-check path (allow_local = true, e.g. an Ipopt
+    # re-solve) keeps the direct assert_solved! call, byte-identical to before.
+    if allow_local
+        assert_solved!(model; dual = true, allow_local = true)
+    else
+        solve_with_retry!(model; dual = true)
+    end
 
     # PF-04 EXACTNESS GATE (D-06): run ONCE PER SCENARIO, never aggregated — one scenario's
     # exactness can never mask another's inexactness. Skips a scenario whose formulation
