@@ -131,10 +131,13 @@ an explicitly-named DERIVED summary (D-07) — never a constraint-backed price p
 
 Throws `ArgumentError` on: empty `scenario_aggs`; `length(probabilities) != S`; any
 non-positive probability; `sum(probabilities)` not `≈ 1` (`atol = 1e-8`); `length(λ₀) !=
-T`; a structural mismatch between `scenario_aggs[s]` and `scenario_aggs[1]` (differing
-device count or differing bus order at any aggregator index — nonanticipativity ties
-would otherwise be mispaired across scenarios); or any aggregator bus outside
-`1:length(feeder.buses)`.
+T`; a structural mismatch between `scenario_aggs[s]` and `scenario_aggs[1]` — differing
+aggregator count, differing bus at any aggregator index, differing DEVICE COUNT within
+any aggregator, or a differing DEVICE TYPE at any device index (WR-03 fix, phase-22
+review: without the per-device check, a reordered/substituted device either crashed
+confusingly mid-tie or — if scenario 1's device at that index is a non-battery while
+scenario s's is a battery — silently left scenario s's battery UNTIED, i.e. clairvoyant
+recourse); or any aggregator bus outside `1:length(feeder.buses)`.
 
 Returns a `NamedTuple` `(; model, ctxs, probabilities, welfare, dadp, expected_dadp,
 socp_maxgap)` where `ctxs::Vector{ModelContext}`, `dadp::Vector{Vector{Float64}}` (one
@@ -215,6 +218,37 @@ function build_stochastic_welfare(
                     "mismatch would mispair nonanticipativity ties across scenarios",
                 ),
             )
+            # WR-03 fix (phase-22 review): DEVICE-COMPOSITION congruence, per this
+            # docstring's own promise. The tie walk below pairs
+            # ctxs[s].meta[:agg_device_vars][bus][idx] blindly against scenario 1's idx,
+            # so a composition mismatch either crashes confusingly (BoundsError /
+            # 'no field p_ch') or — worst — SILENTLY skips a tie: if scenario 1's device
+            # at idx is a non-battery while scenario s's is a battery, the
+            # `haskey(v1, :soc0) || continue` marker never fires and scenario s's battery
+            # becomes a scenario-specific (clairvoyant) recourse variable, quietly
+            # corrupting the two-stage solution, its welfare, and every de-scaled DADP.
+            devs1 = scenario_aggs[1][k].devices
+            devss = scenario_aggs[s][k].devices
+            length(devss) == length(devs1) || throw(
+                ArgumentError(
+                    "scenario_aggs[$s][$k] has $(length(devss)) devices, expected " *
+                    "$(length(devs1)) (device-composition congruence with scenario 1, " *
+                    "required so nonanticipativity ties are never mispaired or " *
+                    "silently skipped)",
+                ),
+            )
+            for i in 1:length(devs1)
+                typeof(devss[i]).name === typeof(devs1[i]).name || throw(
+                    ArgumentError(
+                        "scenario_aggs[$s][$k].devices[$i] is a " *
+                        "$(nameof(typeof(devss[i]))) but scenario_aggs[1][$k]." *
+                        "devices[$i] is a $(nameof(typeof(devs1[i]))) — a " *
+                        "device-composition mismatch (reordered or substituted device) " *
+                        "would mispair the nonanticipativity walk, or silently leave " *
+                        "a battery untied (clairvoyant recourse)",
+                    ),
+                )
+            end
         end
     end
 

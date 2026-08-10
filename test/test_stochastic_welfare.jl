@@ -177,3 +177,71 @@ end
         λ₀ = λ0,
     )
 end
+
+@testitem "stochastic_welfare: WR-03 (phase-22 review) device-composition congruence guard — reordered or missing devices throw ArgumentError, never a silently-untied battery" tags =
+    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    using TSODSO
+
+    feeder = Phase22Fixtures.stoch_feeder()
+    T = Phase22Fixtures.T
+    λ0 = Phase22Fixtures.stoch_lambda0()
+
+    scenario1 = Phase22Fixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, 1)),
+    )
+    base2 = Phase22Fixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, 2)),
+    )
+
+    # The fixture aggregator is [Thermostatic, PVBattery]. REVERSED, scenario 2's device
+    # at index 1 is a battery while scenario 1's is a Thermostatic — before the WR-03 fix
+    # the tie walk's `haskey(v1, :soc0) || continue` marker (keyed to SCENARIO 1) skipped
+    # index 1 entirely, leaving scenario 2's battery SILENTLY UNTIED: a scenario-specific
+    # (clairvoyant) recourse variable quietly corrupting the two-stage welfare and every
+    # de-scaled DADP. The guard must throw a clean ArgumentError at build time instead.
+    reordered = [TSODSO.Aggregator(
+        base2[1].bus,
+        base2[1].φ,
+        reverse(base2[1].devices),
+        base2[1].Pdc,
+    )]
+    @test_throws ArgumentError build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [scenario1, reordered];
+        probabilities = [0.5, 0.5],
+        T = T,
+        λ₀ = λ0,
+    )
+
+    # Device-COUNT mismatch at the same bus (previously a raw BoundsError mid-tie, not
+    # the docstring-promised ArgumentError).
+    fewer = [TSODSO.Aggregator(
+        base2[1].bus,
+        base2[1].φ,
+        base2[1].devices[1:1],
+        base2[1].Pdc,
+    )]
+    @test_throws ArgumentError build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [scenario1, fewer];
+        probabilities = [0.5, 0.5],
+        T = T,
+        λ₀ = λ0,
+    )
+
+    # Congruent compositions (same device count + types, different seeds/data) still
+    # build and solve — the strengthened guard rejects ONLY genuine mismatches.
+    r = build_stochastic_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [scenario1, base2];
+        probabilities = [0.5, 0.5],
+        T = T,
+        λ₀ = λ0,
+    )
+    @test isfinite(r.welfare)
+end
