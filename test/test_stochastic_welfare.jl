@@ -108,18 +108,29 @@ end
     # acceptance gate): a full `julia --project=. -e 'import Pkg; Pkg.test()'` run showed
     # this scan failing to trip at ANY of the original (1.0, 2.0, 4.0, 8.0, 16.0, 32.0)
     # values, while every isolated `--project=.` script re-run of the IDENTICAL logic
-    # reproduced the pv_scale=2.0 trip exactly as measured above — an environment-sensitive
-    # discrepancy between a bare script and the `Pkg.test()`/TestItemRunner sandbox that
-    # could not be root-caused within this plan's own scope (no ENV/global-state mutation
-    # of `generate_profiles`' default tables was found; ruled out as a likely candidate).
-    # This mirrors the project's ALREADY-documented, ALREADY-accepted "long-documented,
-    # version-independent, intermittent Clarabel NUMERICAL_ERROR/SLOW_PROGRESS flake"
-    # (RESEARCH.md Phase-22 Pitfall 6) extended to the EXACTNESS-CERTIFICATION side of the
-    # same solver-sensitivity class, not merely the solve-status side. The range is widened
-    # by two orders of magnitude (up to 1024×, re-verified via a direct `--project=.` run to
-    # trip with a clean `ErrorException` at every value from 2.0 upward) to substantially
-    # reduce — though, consistent with this documented flake class, not provably eliminate —
-    # the chance of a repeat under `Pkg.test()`'s own sandboxed resolution.
+    # reproduced the pv_scale=2.0 trip exactly as measured above.
+    #
+    # WR-07 (phase-22 review) — the diagnosis, stated precisely rather than filed under
+    # the generic flake class: at maxratio ≈ 9688 the pv_scale=2.0 inexactness is
+    # STRUCTURAL (~9700× over the ratio>1 threshold), so NO amount of Clarabel
+    # numerical jitter explains every 2-scenario solve up to 1024× PV terminating
+    # OPTIMAL and certifying exact under `Pkg.test()`. The only mechanisms consistent
+    # with the observed behavior are (a) MATERIALLY DIFFERENT PACKAGE RESOLUTION in the
+    # `Pkg.test()` sandbox — the developer checkout deliberately carries uncommitted
+    # `Project.toml`/`Manifest-v1.12.toml` drift (CairoMakie promoted to a hard dep;
+    # documented user-local state, NOT to be committed or reverted by a fix pass), which
+    # can change the sandbox's resolved Clarabel/StableRNGs and hence either
+    # `generate_profiles`' stream or the solver itself — or (b) an in-process state leak
+    # that the previous catch-all `e isa ErrorException` made IMPOSSIBLE to observe
+    # (any solver failure silently counted as a trip). Reconciling the drifted
+    # Project/Manifest against CI's resolution is the remaining step and is outside a
+    # test-file fix's scope; what THIS file now guarantees (WR-06 + WR-07) is that any
+    # recurrence is SELF-DIAGNOSING: only the PF-04 gate message counts as a trip,
+    # every scale's actual outcome is recorded, and the no-trip path logs the sandbox's
+    # own resolved Clarabel/StableRNGs versions so hypothesis (a) is checkable directly
+    # from the failure log. The scan range stays widened to 1024× (re-verified via a
+    # direct `--project=.` run to trip cleanly at every value from 2.0 upward) as
+    # mitigation-in-depth, not as the explanation.
     tripped = false
     trip_pv_scale = NaN
     outcomes = String[]   # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
@@ -162,8 +173,15 @@ end
     if !tripped
         # WR-06/WR-07: make the documented Pkg.test no-trip flake self-diagnosing — the
         # per-scale outcomes distinguish "solved-and-exact everywhere" (data/environment
-        # difference) from "solver failures masked the gate" (convergence class).
-        @info "D-06 scan NEVER tripped the PF-04 gate — per-scale outcomes follow" outcomes
+        # difference) from "solver failures masked the gate" (convergence class), and the
+        # resolved Clarabel/StableRNGs versions make the sandbox-resolution hypothesis
+        # (see the WR-07 comment above) checkable directly from this failure's own log.
+        import Pkg
+        resolved = sort!([
+            "$(v.name) = $(v.version)" for (u, v) in Pkg.dependencies() if
+            v.name in ("Clarabel", "StableRNGs", "JuMP")
+        ])
+        @info "D-06 scan NEVER tripped the PF-04 gate — self-diagnosis follows" resolved outcomes
     end
     @test tripped
 
