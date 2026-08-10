@@ -306,6 +306,14 @@ Base.@kwdef struct Scenario
                     ),
                 )
             end
+            # Phase-22 review WR-01 fix: defensively COPY the caller's vector before it
+            # reaches `new(...)`. `Scenario` is immutable, but a `Vector{Float64}` field
+            # ALIASED to caller memory lets post-construction mutation (`p[1] = 99.0`)
+            # silently destroy every invariant just validated above — the first (and only)
+            # mutable-aliasing hole in an otherwise all-primitive struct, defeating the
+            # "a Scenario can never silently underdetermine a run" claim (threat T-08-05)
+            # for savename/hashing/reproducibility keyed to the validated value.
+            stoch_probabilities = copy(stoch_probabilities)
         end
         return new(
             name,

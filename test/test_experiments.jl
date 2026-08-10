@@ -207,6 +207,22 @@ end
     end
 end
 
+@testitem "WR-01 (phase-22 review): Scenario copies stoch_probabilities — caller mutation cannot bypass validation" begin
+    using TSODSO
+
+    # WR-01: the inner constructor validated stoch_probabilities then passed the SAME
+    # array to new(...) — an aliasing hole through which a caller could mutate the
+    # validated vector after construction (p[1] = 99.0 ⇒ sum 99.8, every invariant
+    # silently gone while savename/hash/reproducibility stay keyed to the stale check).
+    # The fix copies on construction; this item pins it.
+    p = [0.2, 0.3, 0.5]
+    s = Scenario(name = "wr01-alias", stoch_probabilities = p)   # stoch_S defaults to 3
+    p[1] = 99.0
+    @test s.stoch_probabilities == [0.2, 0.3, 0.5]
+    @test isapprox(sum(s.stoch_probabilities), 1; atol = 1e-8)
+    @test s.stoch_probabilities !== p
+end
+
 @testitem "INFRA-04 provenance tagsave" setup = [Phase8Fixtures] begin
     using TSODSO
     using DrWatson: wload
