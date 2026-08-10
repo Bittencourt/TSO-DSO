@@ -66,7 +66,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl", "powerflow/ACPowerFlow.jl", "powerflow/RestrictedBranchFlow.jl"]
+Pages = ["powerflow/AbstractPowerFlow.jl", "powerflow/DCPowerFlow.jl", "powerflow/LinDistFlow.jl", "powerflow/ConvexBranchFlow.jl", "powerflow/ACPowerFlow.jl", "powerflow/RestrictedBranchFlow.jl", "powerflow/MeshedFlow.jl"]
 Order = [:type, :constant, :function]
 ```
 

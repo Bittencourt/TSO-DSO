@@ -65,6 +65,12 @@ include("powerflow/ACPowerFlow.jl")
 # ConvexBranchFlow.contribute! and must load after it.
 include("powerflow/RestrictedBranchFlow.jl")
 
+# --- Meshed SOCP branch-flow formulation (owned by plan 23-02, MESH-02) --- delegates to
+# ConvexBranchFlow.contribute! (byte-identical constraint set -- ALREADY graph-generic, no
+# new model-time math) and must load after it, mirroring RestrictedBranchFlow.jl's own
+# ordering rationale above.
+include("powerflow/MeshedFlow.jl")
+
 # --- Power-flow → problem-class routing trait (owned by plan 04-01, INFRA-02 / PF-03) ---
 # Included AFTER the powerflow formulations (needs `AbstractPowerFlow`) and after
 # solver/ProblemClass.jl (needs `QP`): it maps a formulation to its solver problem class.
