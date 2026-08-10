@@ -217,7 +217,28 @@ decomposed); both phases' schema diffs to `experiments/Scenario.jl` are reviewed
 
   4. A live-executed literate rung page documents the extensive form, the per-scenario price
      semantics decision, and the out-of-sample result.
-**Plans**: TBD
+**Plans:** 5 plans (5 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 22-01-PLAN.md — Scenario.jl stoch_* additive fields (stoch_S/stoch_probabilities/stoch_H_oos) + Phase22Fixtures small Deferrable-free CI fixture
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 22-02-PLAN.md — build_stochastic_welfare: S-scenario extensive form (JuMP.unregister decoupling, nonanticipativity ties, per-scenario PF-04 gate, de-scaled DADP)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 22-03-PLAN.md — StochasticOosHarness: Parameter-pinned single-scenario build-once out-of-sample model
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 22-04-PLAN.md — run_stochastic(s::Scenario) orchestrator + realized-vs-in-sample welfare gap + measurement-before-golden
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 22-05-PLAN.md — Literate rung page (stochastic_pv_demand.jl) + full-suite acceptance
 
 ### Phase 23: Meshed Networks
 
