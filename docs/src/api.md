@@ -106,7 +106,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["models/stochastic_welfare.jl"]
+Pages = ["models/stochastic_welfare.jl", "experiments/run_stochastic.jl"]
 Order = [:type, :constant, :function]
 ```
 
