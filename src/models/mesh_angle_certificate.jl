@@ -57,21 +57,33 @@ wants a hard gate.
 
 # Algorithm (D-06 — genuine cycle-consistency, never the per-branch cone alone)
 
-Generalizes [`recover_voltage_angles`](@ref)'s BFS (`src/models/ac_oracle.jl:66-112`) with
-EXPLICIT chord tracking, mirroring its signed bidirectional adjacency
-(`children[i]` = list of `(neighbor, ±branch_index)`) and its exact phasor recursion for a
-tree edge `i → j` carrying branch `b` (impedance `z = r+jx`, complex power `S` flowing
-toward `j`, sign-flipped if traversed backwards): `V_j = V_i − z·conj(S)/conj(V_i)`. The ONE
-addition relative to that BFS: the instant a branch `b` is used to reach an unvisited bus,
-`tree_edges[b]` is marked `true`. Any branch never so marked is a **chord** — for the
+Generalizes [`recover_voltage_angles`](@ref)'s traversal (`src/models/ac_oracle.jl:66-112`
+— a DFS, despite that file's "BFS" label: `pop!` on a `Vector` is LIFO; any spanning tree
+suffices, review IN-01) with EXPLICIT chord tracking, mirroring its signed bidirectional
+adjacency (`children[i]` = list of `(neighbor, ±branch_index)`) and its phasor recursion
+for a tree edge `i → j` carrying branch `b` (impedance `z = r+jx`, complex power `S`
+flowing toward `j`): `V_j = V_i − z·conj(S)/conj(V_i)`. A branch traversed WITH its stored
+orientation contributes its own sending-end flow, `S = S_b = P_b + jQ_b` (measured at
+`br.from`). A branch traversed AGAINST its stored orientation (`bsigned < 0`) contributes
+the negated RECEIVING-end flow `S = −(S_b − z·ℓ_b)` — the flow toward the child, measured
+at the parent, which here is the branch's own `to` end where this project charges the loss
+(`ConvexBranchFlow`'s KCL convention). A bare sign flip `−S_b` alone would be off by the
+branch's own `|z|²·ℓ_b/|V|` per backward edge — the Phase-20 CR-01 bug class (see
+[`recover_lossfree_shadow_voltage`](@ref)'s "Branch orientation" note), material on this
+fixture's `:heterogeneous` impedances (`~0.002–0.015`, the same order as the certified
+residuals; review 23 CR-01). NOTE: `recover_voltage_angles` itself still carries the bare
+flip (byte-locked this phase, D-09 — negligible on its lightly-impedanced radial fixtures,
+`~1e-5`; flagged for a follow-up plan rather than silently diverging from its "verbatim"
+claim). The chord-tracking addition: the instant a branch `b` is used to reach an unvisited
+bus, `tree_edges[b]` is marked `true`. Any branch never so marked is a **chord** — for the
 committed `Phase23Fixtures.mesh_feeder` diamond (`nB=4`, `N-1=3`) there is exactly one.
 
 For every chord `b` (endpoints `(from, to)`, impedance `z_b`) and every hour `t`: using the
 chord's OWN solved `(P_b, Q_b)` (never traversal-sign-flipped — this evaluates the branch's
 OWN defining equation, not a tree traversal), predict `V_to,predicted = V_from,tree −
-z_b·conj(S_b)/conj(V_from,tree)` where `V_from,tree` is the phasor the BFS already assigned
-to the chord's `from` bus, and compare to `V_to,tree` (the BFS-assigned phasor at the
-chord's `to` bus — both chord endpoints are on the tree, since the whole graph is
+z_b·conj(S_b)/conj(V_from,tree)` where `V_from,tree` is the phasor the traversal already
+assigned to the chord's `from` bus, and compare to `V_to,tree` (the traversal-assigned
+phasor at the chord's `to` bus — both chord endpoints are on the tree, since the whole graph is
 connected). `residual = |V_to,predicted − V_to,tree|`. This operationalizes Farivar-Low's
 "the implied angle differences sum to zero mod 2π around each cycle" DIRECTLY in the phasor
 domain: a zero residual means the accumulated rotation walking the loop via the tree path
@@ -89,7 +101,7 @@ copied for STYLE consistency only; the VALUES below are measured fresh on
 # Output contract (D-07)
 
 - **Recoverable** (`status = :angle_certified`): `angles` is the full `(N,T)`
-  `Matrix{ComplexF64}` of BFS-recovered voltage phasors, certified consistent with every
+  `Matrix{ComplexF64}` of traversal-recovered voltage phasors, certified consistent with every
   chord. The solved objective is a genuine AC-operating-point value.
 - **Unrecoverable** (`status = :angle_unrecoverable`): `angles === nothing` (this
   certificate's job is ONLY to correctly LABEL the verdict via `status`; it never
@@ -173,13 +185,17 @@ function certify_angle_recoverable!(
         push!(children[br.to], (br.from, -b))
     end
 
-    # Recover phasors along the BFS spanning tree using the IDENTICAL recursion
-    # recover_voltage_angles implements, ADDITIONALLY marking tree_edges[b] = true the
-    # instant branch b is used to reach an unvisited bus -- the ONE new line relative to
-    # ac_oracle.jl's own BFS (RESEARCH's algorithm spec). tree_edges is purely topological
-    # (independent of t, since the traversal order never depends on the solved values), so
-    # re-marking it identically on every t is harmless and keeps this loop a minimal diff
-    # from recover_voltage_angles's own per-t structure.
+    # Recover phasors along a DFS spanning tree (pop! on a Vector is LIFO -- a depth-first
+    # walk, review IN-01; any spanning tree suffices) using recover_voltage_angles's
+    # recursion with TWO deliberate changes relative to ac_oracle.jl:
+    #  (1) chord tracking (RESEARCH's algorithm spec): tree_edges[b] = true is marked the
+    #      instant branch b is used to reach an unvisited bus. tree_edges is purely
+    #      topological (independent of t, since the traversal order never depends on the
+    #      solved values), so re-marking it identically on every t is harmless.
+    #  (2) backward-edge flow correction (review 23 CR-01): a branch traversed AGAINST its
+    #      stored orientation uses the negated RECEIVING-end flow -(S_b - z*l_b), never the
+    #      bare flip -S_b that recover_voltage_angles still carries (byte-locked this
+    #      phase, D-09; flagged for follow-up) -- see the docstring's Algorithm section.
     tree_edges = falses(nB)
     Vphasor = Matrix{ComplexF64}(undef, N, T)
     for t in 1:T
@@ -196,9 +212,17 @@ function certify_angle_recoverable!(
                 tree_edges[b] = true   # chord tracking: the ONE addition vs. ac_oracle.jl
                 br = feeder.branches[b]
                 z = Complex(br.r, br.x)
-                S =
-                    bsigned > 0 ? Complex(value(pv.P[b, t]), value(pv.Q[b, t])) :
-                    -Complex(value(pv.P[b, t]), value(pv.Q[b, t]))
+                S = if bsigned > 0
+                    Complex(value(pv.P[b, t]), value(pv.Q[b, t]))
+                else
+                    # Receiving-end flow at the parent (the loss z·l is charged at the
+                    # branch's own `to` end), negated toward the child: −(S_b − z·l_b).
+                    # A bare sign flip −S_b alone would be off by the branch's own
+                    # |z|²·l_b/|V| — the Phase-20 CR-01 lesson
+                    # (recover_lossfree_shadow_voltage's "Branch orientation" note), here
+                    # in the phasor domain (review 23 CR-01).
+                    -(Complex(value(pv.P[b, t]), value(pv.Q[b, t])) - z * value(pv.l[b, t]))
+                end
                 Vphasor[j, t] = Vphasor[i, t] - z * conj(S) / conj(Vphasor[i, t])
                 visited[j] = true
                 push!(queue, j)
