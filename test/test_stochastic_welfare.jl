@@ -122,10 +122,11 @@ end
     # the chance of a repeat under `Pkg.test()`'s own sandboxed resolution.
     tripped = false
     trip_pv_scale = NaN
+    outcomes = String[]   # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
     for pv_scale in (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
         s2 = house(pv_scale, 302)
         try
-            build_stochastic_welfare(
+            r2 = build_stochastic_welfare(
                 f,
                 ConvexBranchFlow(),
                 [s1, s2];
@@ -133,12 +134,36 @@ end
                 T = T,
                 λ₀ = λ0,
             )
+            push!(
+                outcomes,
+                "pv_scale=$pv_scale: solved + certified exact " *
+                "(socp_maxgap=$(r2.socp_maxgap))",
+            )
         catch e
             e isa ErrorException || rethrow()
-            tripped = true
-            trip_pv_scale = pv_scale
-            break
+            # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
+            # four distinct failures inside build_stochastic_welfare raise a bare
+            # ErrorException (assert_solved! on any non-OPTIMAL status — including the
+            # ALMOST_OPTIMAL this fixture family is demonstrably prone to — the internal
+            # residual-size error, assert_socp_exact!, assert_battery_complementarity!);
+            # the previous catch-all `e isa ErrorException` let a solver convergence
+            # failure set tripped=true and PASS this item without the gate ever firing —
+            # the exact per-scenario-gate-isolation property under test going unverified.
+            # A non-gate ErrorException is RECORDED (not rethrown mid-scan) so the
+            # no-trip failure path below reports what every scale actually did.
+            if occursin("SOCP relaxation INEXACT", e.msg)
+                tripped = true
+                trip_pv_scale = pv_scale
+                break
+            end
+            push!(outcomes, "pv_scale=$pv_scale: NON-GATE ErrorException: $(e.msg)")
         end
+    end
+    if !tripped
+        # WR-06/WR-07: make the documented Pkg.test no-trip flake self-diagnosing — the
+        # per-scale outcomes distinguish "solved-and-exact everywhere" (data/environment
+        # difference) from "solver failures masked the gate" (convergence class).
+        @info "D-06 scan NEVER tripped the PF-04 gate — per-scale outcomes follow" outcomes
     end
     @test tripped
 
