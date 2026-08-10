@@ -5,9 +5,13 @@
 #
 # `Scenario` holds ONLY primitive selectors (Symbol/Int/Float64/Bool/String) — never a
 # built `Feeder`/`Vector{Aggregator}`/`λ₀::Vector` — so `savename(s)` (DrWatson) works with
-# ZERO `DrWatson.default_allowed` overloading (RESEARCH Pitfall 1): every field already sits
-# inside DrWatson's `default_allowed = (Real, String, SubString, Symbol, TimeType)` filter,
-# so nothing is silently DROPPED from the generated filename. NOTE (CR-01 fix): `savename`'s
+# ZERO `DrWatson.default_allowed` overloading (RESEARCH Pitfall 1): every SCALAR field sits
+# inside DrWatson's `default_allowed = (Real, String, SubString, Symbol, TimeType)` filter.
+# ONE documented exception (phase-22 review WR-02): `stoch_probabilities::Vector{Float64}`
+# is NOT in `default_allowed` and IS silently dropped from the bare `savename` string —
+# `scenario_filename` (store.jl) restores filename identity by folding a stable FNV-1a
+# digest of the vector into the name whenever it is non-uniform. Never use a bare
+# `savename(s, ...)` as an on-disk identity key. NOTE (CR-01 fix): `savename`'s
 # DEFAULT float formatting still rounds `AbstractFloat` fields to `sigdigits = 3`, so two
 # `Scenario`s differing only in a sub-percent ADMM float knob (`ρ`/`ε_abs`/`ε_rel`/`τ_ratio`/`μ`)
 # CAN produce an identical default `savename` — every on-disk-storage call site (`store.jl`)
@@ -50,6 +54,15 @@ a PRIMITIVE selector — `Symbol`/`Int`/`Float64`/`Bool`/`String` — never a co
 makes `savename`, hashing, diffing, and bit-for-bit reproducibility (INFRA-04) fall out for
 free with ZERO `DrWatson.default_allowed` overloading: assert that invariant here rather
 than re-discovering it at a call site.
+
+ONE documented exception (phase-22 review WR-02): `stoch_probabilities` is a
+`Vector{Float64}` — the struct's first (and only) non-scalar field — which DrWatson's
+`default_allowed` filter silently DROPS from the bare `savename` string. Two `Scenario`s
+differing only in their probability weighting therefore share a `savename`;
+[`scenario_filename`](@ref) (store.jl) restores on-disk filename identity by folding a
+stable digest of the vector into the name whenever it is non-uniform. The field is also
+defensively COPIED at construction (phase-22 review WR-01) so the validated value can
+never be mutated through the caller's own array after construction.
 
 NOTE (CR-01 fix — corrects a prior false claim): this does NOT imply two `Scenario`s
 differing only in a `Float64` field produce distinct default `savename`s — DrWatson's default

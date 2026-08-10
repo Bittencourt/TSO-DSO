@@ -25,11 +25,42 @@
 using DrWatson: @tagsave, datadir, savename, struct2dict
 
 """
+    _stable_hex64(bytes) -> String
+
+Internal (unexported): a DETERMINISTIC, Julia-version-stable 64-bit FNV-1a digest of a
+byte iterable, rendered as exactly 16 zero-padded lowercase hex characters. Used by
+[`scenario_filename`](@ref) (phase-22 review WR-02) to fold `stoch_probabilities` — a
+`Vector{Float64}` DrWatson's `default_allowed` filter silently DROPS from `savename` —
+back into the filename. Deliberately NOT `Base.hash`, whose value is only stable within
+a single Julia version (this project tests 1.10 LTS and 1.11+), and dependency-free (no
+SHA import; `Project.toml` is untouched).
+"""
+function _stable_hex64(bytes)
+    h = 0xcbf29ce484222325                      # FNV-1a 64-bit offset basis
+    for b in bytes
+        h = (h ⊻ UInt64(b)) * 0x00000100000001b3   # FNV-1a 64-bit prime (wrapping mul)
+    end
+    return string(h; base = 16, pad = 16)
+end
+
+"""
     scenario_filename(s::Scenario) -> String
 
 Single source of truth for the JLD2 filename [`run_and_store`](@ref) saves `s` under:
 `savename(s, "jld2"; digits = 10)` (CR-01 fix — see [`run_and_store`](@ref) for why
-`digits = 10` is required). Any caller that needs to know/print/reconstruct the path
+`digits = 10` is required), PLUS — phase-22 review WR-02 fix — a `_p<digest>` component
+whenever `s.stoch_probabilities` is non-uniform: `stoch_probabilities` is a
+`Vector{Float64}`, which DrWatson's `default_allowed = (Real, String, SubString, Symbol,
+TimeType)` filter silently DROPS from `savename`, so two `Scenario`s differing ONLY in
+their probability weighting (exactly this phase's own D-04 uniform-vs-non-uniform
+comparison) previously rendered the IDENTICAL filename stem. The digest is a
+deterministic, Julia-version-stable FNV-1a over the vector's raw `Float64` bytes
+([`_stable_hex64`](@ref)); the uniform case (all entries equal — including the
+default-uniform sentinel resolution) adds NO component, because a uniform vector is
+already fully determined by the `stoch_S` field the name carries, keeping every
+pre-existing uniform-probability filename byte-identical. The NAME_MAX guard below
+applies AFTER the digest is folded in, so the lengthened name still respects the
+255-byte basename ceiling. Any caller that needs to know/print/reconstruct the path
 `run_and_store` will use (e.g. `scripts/run_scenario.jl`) MUST call this helper instead of
 re-deriving its own `savename(s, "jld2")` call — a second, independently-maintained call site
 is exactly how WR-06 (printed path silently diverging from the actual saved file) happened.
@@ -57,6 +88,15 @@ human-skimmable FILENAME.
 """
 function scenario_filename(s::Scenario)
     full = savename(s, "jld2"; digits = 10)
+    # WR-02 (phase-22 review): fold a stable digest of the savename-DROPPED
+    # `stoch_probabilities` vector into the name whenever it is non-uniform (a uniform
+    # vector is fully determined by the `stoch_S` field already in the name, so uniform
+    # filenames stay byte-identical to before this fix). Raw-Float64-byte digest: no
+    # float-printing round-trip, deterministic across Julia versions (unlike Base.hash).
+    if !allequal(s.stoch_probabilities)
+        digest = _stable_hex64(reinterpret(UInt8, s.stoch_probabilities))
+        full = string(chop(full; tail = 5), "_p", digest, ".jld2")   # 5 = length(".jld2")
+    end
     name_max = 255                    # Linux/most filesystems' hard basename byte ceiling.
     safesave_buffer = 10              # room for `safesave`'s own `_1`/`_2`/... suffix.
     hash_suffix_len = 2 + 16 + 5      # "_h" + 16 hex digits + ".jld2".

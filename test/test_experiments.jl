@@ -223,6 +223,43 @@ end
     @test s.stoch_probabilities !== p
 end
 
+@testitem "WR-02 (phase-22 review): scenario_filename identifies the probability vector" begin
+    using TSODSO
+
+    # WR-02: stoch_probabilities::Vector{Float64} is outside DrWatson's default_allowed
+    # filter and is silently DROPPED from the bare savename, so two Scenarios differing
+    # ONLY in their weighting (this phase's own D-04 uniform-vs-non-uniform comparison)
+    # previously rendered the IDENTICAL filename. scenario_filename now folds a stable
+    # digest of a NON-uniform vector into the name; the uniform case stays byte-identical
+    # to the pre-fix name (uniform is fully determined by the stoch_S field the name
+    # already carries).
+    s_uniform = Scenario(name = "wr02")                                     # default uniform
+    s_uniform_explicit = Scenario(name = "wr02", stoch_probabilities = fill(1 / 3, 3))
+    s_a = Scenario(name = "wr02", stoch_probabilities = [0.2, 0.3, 0.5])
+    s_b = Scenario(name = "wr02", stoch_probabilities = [0.5, 0.3, 0.2])
+
+    fu = TSODSO.scenario_filename(s_uniform)
+    fa = TSODSO.scenario_filename(s_a)
+    fb = TSODSO.scenario_filename(s_b)
+
+    # Non-uniform vectors resolve to filenames DISTINCT from uniform and from each other
+    # (same multiset of probabilities, different order ⇒ different draws-to-weights map).
+    @test fa != fu
+    @test fb != fu
+    @test fa != fb
+
+    # An explicitly-passed uniform vector is the SAME Scenario as the default sentinel
+    # resolution — identical filename, no spurious digest churn.
+    @test TSODSO.scenario_filename(s_uniform_explicit) == fu
+
+    # Determinism + the NAME_MAX guard still holds AFTER the digest is folded in.
+    @test TSODSO.scenario_filename(s_a) == fa
+    for f in (fu, fa, fb)
+        @test sizeof(f) <= 255
+        @test endswith(f, ".jld2")
+    end
+end
+
 @testitem "INFRA-04 provenance tagsave" setup = [Phase8Fixtures] begin
     using TSODSO
     using DrWatson: wload
