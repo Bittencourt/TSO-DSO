@@ -97,11 +97,29 @@ an on-disk uniqueness key (`run_and_store`, `store.jl`) MUST use `digits = 10` (
     `Scenario`'s `savename` STRING (a documented, accepted cost per RESEARCH.md Pitfall 6's
     resolution) while preserving every EXISTING numeric golden result, since no
     `:centralized`/`:admm` code path reads any of the four.
+  - `stoch_S::Int = 3`, `stoch_probabilities::Vector{Float64} = Float64[]`,
+    `stoch_H_oos::Int = 5` — Phase-22 stochastic-only knobs (D-01/D-04/D-10), additive and kept
+    in the SAME flat schema. `stoch_S` is the in-sample scenario count, LOCKED to the band
+    `3 <= stoch_S <= 5` (D-01's "3-5 seeded Markov scenarios"); `stoch_H_oos` is the held-out,
+    out-of-sample scenario budget, LOCKED to the band `5 <= stoch_H_oos <= 10` (D-10).
+    `stoch_probabilities` uses an EMPTY-VECTOR SENTINEL convention (D-04): the literal
+    `@kwdef` default is `Float64[]` (a `@kwdef` field default cannot self-reference the sibling
+    `stoch_S` default), but the inner constructor RESOLVES that sentinel to
+    `fill(1 / stoch_S, stoch_S)` before it ever reaches `new(...)` — a constructed `Scenario`
+    NEVER stores the empty sentinel, only ever a fully-materialized, validated probability
+    vector (uniform-by-default, or the researcher's own explicit non-uniform vector, honored
+    verbatim). These three fields are NO-OPS for the `:centralized`/`:admm`/`run_mpc` code
+    paths — consumed ONLY by the phase's own `run_stochastic(scenario)` entry point (plan
+    22-04). Adding them changes every `Scenario`'s `savename` STRING (the same documented,
+    accepted cost as the `mpc_*` block above) while preserving every EXISTING numeric golden
+    result, since no `:centralized`/`:admm`/`run_mpc` code path reads any of the three.
 
 Construction throws `ArgumentError` when `feeder`/`strategy`/`price`/`population` is not one
 of the named valid selectors above, or when `T < 1`, `seed < 1`, `maxiter < 1`, `mpc_H < 1`,
-`mpc_step < 1`, or `mpc_forecast_error` is not a bounded fraction in `[0, 1)` (a Scenario must
-fully determine a runnable, sane experiment — threat T-08-05).
+`mpc_step < 1`, `mpc_forecast_error` is not a bounded fraction in `[0, 1)`, `stoch_S` is
+outside `[3, 5]`, `stoch_H_oos` is outside `[5, 10]`, or an explicit (non-empty-sentinel)
+`stoch_probabilities` fails length/positivity/sum-to-one validation against `stoch_S` (a
+Scenario must fully determine a runnable, sane experiment — threat T-08-05).
 """
 Base.@kwdef struct Scenario
     name::String
@@ -122,6 +140,9 @@ Base.@kwdef struct Scenario
     mpc_step::Int = 1
     mpc_terminal_soc::Bool = true
     mpc_forecast_error::Float64 = 0.05
+    stoch_S::Int = 3
+    stoch_probabilities::Vector{Float64} = Float64[]
+    stoch_H_oos::Int = 5
 
     function Scenario(
         name::String,
@@ -142,6 +163,9 @@ Base.@kwdef struct Scenario
         mpc_step::Int,
         mpc_terminal_soc::Bool,
         mpc_forecast_error::Float64,
+        stoch_S::Int,
+        stoch_probabilities::Vector{Float64},
+        stoch_H_oos::Int,
     )
         # V5 input validation (threat T-08-05): a Scenario must never silently underdetermine
         # its run. Every selector is checked LOUDLY against its named valid set — throw, never
@@ -233,6 +257,56 @@ Base.@kwdef struct Scenario
                 ),
             )
         end
+        # D-01/D-04/D-10: Phase-22 stochastic-only additive fields — same "checked LOUDLY"
+        # convention as the D-12 MPC block above.
+        if !(3 <= stoch_S <= 5)
+            throw(
+                ArgumentError(
+                    "Scenario: stoch_S (in-sample scenario count) must be in the locked D-01 " *
+                    "band 3 <= stoch_S <= 5; got stoch_S=$stoch_S",
+                ),
+            )
+        end
+        if !(5 <= stoch_H_oos <= 10)
+            throw(
+                ArgumentError(
+                    "Scenario: stoch_H_oos (held-out scenario budget) must be in the locked " *
+                    "D-10 band 5 <= stoch_H_oos <= 10; got stoch_H_oos=$stoch_H_oos",
+                ),
+            )
+        end
+        # D-04: an empty `stoch_probabilities` is the SENTINEL for "materialize default-uniform
+        # at construction time" — never left as the ambiguous empty vector on a constructed
+        # Scenario. A non-empty vector is the researcher's own explicit, non-uniform weighting
+        # and is validated then honored VERBATIM (never silently replaced).
+        if isempty(stoch_probabilities)
+            stoch_probabilities = fill(1 / stoch_S, stoch_S)
+        else
+            if length(stoch_probabilities) != stoch_S
+                throw(
+                    ArgumentError(
+                        "Scenario: stoch_probabilities must have length stoch_S=$stoch_S; " *
+                        "got length $(length(stoch_probabilities))",
+                    ),
+                )
+            end
+            if !all(>(0), stoch_probabilities)
+                throw(
+                    ArgumentError(
+                        "Scenario: every stoch_probabilities entry must be > 0; got " *
+                        "$stoch_probabilities",
+                    ),
+                )
+            end
+            if !isapprox(sum(stoch_probabilities), 1; atol = 1e-8)
+                throw(
+                    ArgumentError(
+                        "Scenario: stoch_probabilities must sum to 1 (atol=1e-8); got sum=" *
+                        "$(sum(stoch_probabilities)) for $stoch_probabilities",
+                    ),
+                )
+            end
+        end
         return new(
             name,
             feeder,
@@ -252,6 +326,9 @@ Base.@kwdef struct Scenario
             mpc_step,
             mpc_terminal_soc,
             mpc_forecast_error,
+            stoch_S,
+            stoch_probabilities,
+            stoch_H_oos,
         )
     end
 end
