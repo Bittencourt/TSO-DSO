@@ -45,6 +45,13 @@ documented results cannot drift from the code.
   dual-ascent decomposition, cross-validated against the centralized solve
   (thesis 3.46-3.47).
 
+**Experiment harness:**
+
+- [The Experiment Harness](generated/experiments.md) — declarative `Scenario`s run
+  end-to-end via `run_scenario`, persisted with DrWatson provenance stamping by
+  `run_and_store`, and fanned out into Cartesian parameter sweeps with `run_sweep` +
+  `collate_summary` — the reproducibility backbone behind every experiment above.
+
 **Validation & reproduction (v2.1):**
 
 - [IEEE-123 Real Impedances](generated/ieee123_impedances.md) — real positive-sequence

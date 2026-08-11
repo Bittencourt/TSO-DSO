@@ -106,6 +106,80 @@ mean_jump(r.trace)
 
 last(r.trace.cum_deviation_trace)
 
+# ## Figure — the rolling published price against the day-ahead path
+#
+# The two price paths and the deviation ledger just displayed, drawn from the SAME
+# already-computed `r` — nothing below re-runs the closed loop. TOP panel: the full 24-hour
+# perfect-foresight day-ahead DADP reference (dashed) with the 19 genuinely PUBLISHED
+# real-time prices overlaid at their absolute hours; the shaded tail marks the hours the
+# fixed-window convention never publishes (`T − mpc_H + 1` through `T` fall inside the final
+# window but after its first interval — Pitfall 5). BOTTOM panel: the per-hour absolute
+# published-vs-day-ahead gap `|λ_RTP[t] − λ_DA[t]|` (bars) under the RUNNING cumulative
+# deviation (line) — the D-10 price-consistency ledger `max_jump`/`mean_jump` summarize as
+# scalars above, shown here hour by hour. Both panels share the price unit; no twin axes.
+# Same guarded-CairoMakie idiom as `admm.jl`/`socp_applicability.jl`; the block's final
+# expression is the `Figure` Documenter renders inline.
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+
+    pub_hours = 1:r.steps
+
+    fig = Figure(size = (860, 620))
+    ax1 = Axis(
+        fig[1, 1];
+        xlabel = "hour t",
+        ylabel = "DADP (price units)",
+        xticks = 2:2:T,
+        title = "Published real-time price vs day-ahead reference (MPC-03)",
+    )
+    vspan!(ax1, r.steps + 0.5, T + 0.5; color = (:gray, 0.10))
+    lines!(
+        ax1,
+        1:T,
+        r.day_ahead_dadp;
+        color = :dodgerblue,
+        linestyle = :dash,
+        label = "day-ahead DADP (perfect foresight, 24 h)",
+    )
+    scatterlines!(
+        ax1,
+        pub_hours,
+        r.trace.dadp_trace;
+        color = :crimson,
+        label = "published RTP (19 rolling resolves)",
+    )
+    axislegend(ax1; position = :lt, labelsize = 11)
+
+    ax2 = Axis(
+        fig[2, 1];
+        xlabel = "published hour t",
+        ylabel = "price deviation (price units)",
+        xticks = 2:2:r.steps,
+        title = "Per-hour |published − day-ahead| and its running cumulative sum (D-10)",
+    )
+    barplot!(
+        ax2,
+        pub_hours,
+        abs.(r.trace.dadp_trace .- r.trace.dadp_da_trace);
+        color = (:teal, 0.6),
+    )
+    lines!(ax2, pub_hours, r.trace.cum_deviation_trace; color = :purple, linewidth = 2)
+    Legend(
+        fig[2, 1],
+        [PolyElement(color = (:teal, 0.6)), LineElement(color = :purple, linewidth = 2)],
+        ["per-hour |Δ|", "cumulative deviation"];
+        tellwidth = false,
+        tellheight = false,
+        halign = :left,
+        valign = :top,
+        margin = (8, 8, 8, 8),
+        framevisible = false,
+        labelsize = 11,
+    )
+    fig
+end
+
 # ## 3. Regret — the measured, information-set-fair benchmark (MPC-04, D-11)
 #
 # **This is the honesty-load-bearing number on this page.** `regret` is `realized_welfare` MINUS

@@ -142,3 +142,62 @@ result.UB
 # directly comparable to the certified fixture's own hand-enumerated total cost `−0.245`:
 
 result.UB - 0.5 * 1.0 * 6.0^2
+
+# ## Benders convergence figure (CairoMakie)
+#
+# The canonical Benders picture, drawn from `result.trace` — the per-iteration
+# [`BendersTrace`](@ref) ledger `solve_stackelberg!` recorded WHILE it ran (plan 12-01,
+# `src/planning/trace.jl`) — so no additional solve happens here; both panels read only
+# the already-recorded, JuMP-free ledger. Left: the incumbent upper bound `UB` and the
+# relaxed master's lower bound `LB` close on each other as cuts accumulate. Right: the
+# relative gap `(UB − LB)/max(1, |UB|)` — the loop's OWN stopping quantity, never a
+# re-derived one — decays below the `tol = 1e-6` passed to `solve_stackelberg!` above,
+# on a log axis. `UB = Inf` (before the first optimality iteration) and `gap = NaN`
+# (every feasibility-branch row) are legitimate trace sentinels, NOT defects (see
+# `BendersTrace`'s docstring) — they are masked out of the plotted series here, never
+# guarded away in the ledger itself. The `max.(·, eps())` floor mirrors the package's
+# own `TSODSOMakieExt` log-axis guard: a gap that converges to exactly `0.0` maps to
+# `log10(0) = -Inf`, which Makie rejects — clamping degrades it gracefully to the axis
+# floor instead of crashing the docs build.
+
+using CairoMakie
+
+trace = result.trace
+ks = trace.iter_trace
+ub_mask = isfinite.(trace.UB_trace)
+gap_mask = .!isnan.(trace.gap_trace)
+
+fig = Figure(size = (900, 380))
+ax_bounds = Axis(
+    fig[1, 1];
+    xlabel = "Benders iteration k",
+    ylabel = "leader objective bound",
+    title = "Benders bounds: incumbent UB & master LB",
+)
+scatterlines!(
+    ax_bounds,
+    ks[ub_mask],
+    trace.UB_trace[ub_mask];
+    label = "UB (incumbent)",
+    color = :crimson,
+)
+scatterlines!(ax_bounds, ks, trace.LB_trace; label = "LB (master)", color = :dodgerblue)
+axislegend(ax_bounds; position = :rb)
+
+ax_gap = Axis(
+    fig[1, 2];
+    xlabel = "Benders iteration k",
+    ylabel = "relative gap (UB − LB) / max(1, |UB|)",
+    yscale = log10,
+    title = "Relative gap vs stopping tolerance",
+)
+scatterlines!(
+    ax_gap,
+    ks[gap_mask],
+    max.(trace.gap_trace[gap_mask], eps());
+    label = "relative gap",
+    color = :purple,
+)
+hlines!(ax_gap, [1e-6]; label = "tol (solve_stackelberg!)", color = :black, linestyle = :dash)
+axislegend(ax_gap; position = :rt)
+fig

@@ -126,3 +126,69 @@ decomp = decompose_dlmp(ctx)
 # again, reaching the displayed NamedTuple below certifies that identity held:
 
 acct = welfare_accounting(ctx; T = T, λ₀ = λ₀)
+
+# ## Figure — the nodal DADP profile and its locational decomposition
+#
+# The thesis's signature output is the price curve over the horizon: the SAME `dlmp` and
+# `decomp` matrices displayed above, drawn rather than tabulated — nothing below re-solves
+# anything. The LEFT panel overlays every bus's DADP `λ_j[t]` (eq. 3.31) against the flat
+# MEM price `λ₀` the frontier faces: the root's dual sits ON `λ₀` (the energy component is
+# the SAME at every node), while each downstream bus is displaced from it by the telescoped
+# per-branch increments — the locational content of the price. On THIS fixture the
+# displacement is DOWNWARD: both aggregators are PV-battery exporters (`allow_export =
+# true`), the feeder runs in reverse flow, and a marginal unit CONSUMED downstream then
+# RELIEVES branch losses — so the marginal-loss component is genuinely NEGATIVE and the
+# leaf bus is the CHEAPEST node, not the dearest (the classic DLMP sign flip under reverse
+# flow; the import-dominated case would lift the leaf above `λ₀` instead). The RIGHT panel
+# stacks exactly those increments at the LEAF bus (the deepest node, hence the largest
+# telescoped sum): the loss (3.39), congestion (3.36), and voltage (3.33/3.43) components
+# of `λ_leaf[t] − λ₀[t]` per hour. On this small unconstrained fixture the congestion and
+# voltage duals are numerically zero (no `smax` or voltage bound binds), so the stack is
+# honestly all (negative) marginal-loss — the same decomposition whose four-way sum-back
+# `decompose_dlmp` hard-asserted above. Same guarded-CairoMakie idiom as `admm.jl` /
+# `socp_applicability.jl`: the block's final expression is the `Figure`, which Documenter
+# renders inline at build time.
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+
+    hours = 1:T
+    nbus = size(dlmp, 1)
+    leaf = nbus                               # bus 3 — the deepest node on this radial chain
+    bus_colors = [:dodgerblue, :crimson, :seagreen]      # fixed identity order, never cycled
+    comp_colors = [:purple, :orange, :teal]              # loss / congestion / voltage
+
+    fig = Figure(size = (980, 400))
+    ax1 = Axis(
+        fig[1, 1];
+        xlabel = "hour t",
+        ylabel = "DADP λ_j[t] (price units)",
+        xticks = hours,
+        title = "Nodal DADP vs hour (dual of balance_p, eq. 3.31)",
+    )
+    lines!(ax1, hours, λ₀; color = :gray, linestyle = :dash, label = "λ₀ (MEM price)")
+    for j in 1:nbus
+        scatterlines!(ax1, hours, dlmp[j, :]; color = bus_colors[j], label = "bus $j")
+    end
+    axislegend(ax1; position = :rb)
+
+    ax2 = Axis(
+        fig[1, 2];
+        xlabel = "hour t",
+        ylabel = "λ_$leaf[t] − λ₀[t] (price units)",
+        xticks = hours,
+        title = "Leaf-bus locational increment, stacked (eq. 3.39/3.36/3.33)",
+    )
+    comps = (decomp.loss, decomp.congestion, decomp.voltage)
+    bar_x = repeat(collect(hours), length(comps))
+    bar_stack = repeat(1:length(comps); inner = T)
+    bar_y = vcat((M[leaf, :] for M in comps)...)
+    barplot!(ax2, bar_x, bar_y; stack = bar_stack, color = comp_colors[bar_stack])
+    Legend(
+        fig[1, 3],
+        [PolyElement(color = c) for c in comp_colors],
+        ["loss (3.39)", "congestion (3.36)", "voltage (3.33/3.43)"];
+        framevisible = false,
+    )
+    fig
+end

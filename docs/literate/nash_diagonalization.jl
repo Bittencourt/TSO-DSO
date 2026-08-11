@@ -133,6 +133,46 @@ result.z
 
 result.x_inv
 
+# ## Convergence figure — the package's OWN exported trace recipe (CairoMakie)
+#
+# `result.trace` is the full two-level [`NashTrace`](@ref) ledger the run above already
+# recorded, and [`plot_nash_convergence`](@ref) is the package's OWN exported CairoMakie
+# recipe for it (`src/diagnostics/plots.jl`, filled by the `TSODSOMakieExt` weakdep
+# extension the moment CairoMakie loads — `docs/Project.toml` hard-depends on it, so the
+# docs build always activates the extension). Reused verbatim, never hand-rolled here,
+# and no additional solve happens: the figure overlays the OUTER per-sweep
+# worst-distributor Nash residual (log-scaled left axis — the `tol_outer` stopping
+# quantity itself) with each distributor's INNER converged Benders best-response gap per
+# sweep (twin right axis), so the two-level convergence story — outer fixed-point
+# residual collapsing while every inner best-response stays tightly solved — is read at
+# a glance.
+
+using CairoMakie
+
+plot_nash_convergence(result.trace)
+
+# ## Converged-investment figure — the per-distributor split
+#
+# The converged per-distributor investments `x_inv` displayed above, as a bar chart
+# against the per-distributor investment ceiling `x_inv_max = 0.3` passed to
+# `build_shared_transmission` (dashed line). Drawn from `result.x_inv` only — no
+# additional solve. On this deliberately symmetric N=2 fixture the equal bars ARE the
+# result: neither distributor's best-response captured an asymmetric share of the one
+# pooled corridor.
+
+fig_inv = Figure(size = (560, 380))
+ax_inv = Axis(
+    fig_inv[1, 1];
+    xlabel = "distributor i",
+    ylabel = "converged investment x_inv[i]",
+    xticks = 1:length(result.x_inv),
+    title = "Converged per-distributor corridor investment",
+)
+barplot!(ax_inv, 1:length(result.x_inv), result.x_inv; color = :dodgerblue)
+hlines!(ax_inv, [0.3]; label = "x_inv_max ceiling", color = :black, linestyle = :dash)
+axislegend(ax_inv; position = :rb)
+fig_inv
+
 # ## NASH-04 — the multi-seed/multi-order honesty probe
 #
 # A single `run_nash!` call above reached ONE converged point from ONE cold start.

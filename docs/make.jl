@@ -38,6 +38,7 @@ for src in (
     "mpc_rolling_horizon.jl",   # NEW: Rung 8 MPC / rolling-horizon RTP closed loop (MPC-01..04)
     "stochastic_pv_demand.jl", # NEW: Rung 9 Stochastic PV/Demand Uncertainty (STOCH-01..04)
     "meshed_reactive_price.jl", # NEW: Rung 10 Meshed Networks + Live Reactive Price (MESH-01..03,06)
+    "experiments.jl",           # NEW: the Phase-8 experiment harness (Scenario / run_scenario / run_and_store / run_sweep)
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -80,6 +81,9 @@ makedocs(;
             "Rung 8: MPC / Rolling-Horizon RTP" => "generated/mpc_rolling_horizon.md", # from mpc_rolling_horizon.jl
             "Rung 9: Stochastic PV/Demand Uncertainty" => "generated/stochastic_pv_demand.md",
             "Rung 10: Meshed Networks + Live Reactive Price" => "generated/meshed_reactive_price.md",
+        ],
+        "Experiments" => [
+            "The Experiment Harness" => "generated/experiments.md",
         ],
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",

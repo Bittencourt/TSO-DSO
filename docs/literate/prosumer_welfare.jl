@@ -158,3 +158,112 @@ dadp
 # the next page's welfare accounting consumes:
 
 length(ctx.meta[:agg_net])
+
+# ## Figure — the scheduled flexibility, device by device
+#
+# Everything below is read off the ALREADY-SOLVED `ctx` — `value.()` on the per-device
+# variable stash `ctx.meta[:agg_device_vars]` (the same seam `assert_battery_complementarity!`
+# and the stochastic/MPC orchestrators consume) — no re-solve. Devices are identified by
+# their STRUCTURAL variable signature (`:Tin` ⇒ thermostatic, `:soc` ⇒ battery, the
+# remainder ⇒ deferrable), never by container order. Three stacked panels, one physical
+# unit each (power / temperature / energy — never a twin axis):
+#
+# 1. **Net active injections (eq. 3.22's summands)** — each device's signed contribution to
+#    `p_ag[t]` (negative = consuming): the thermostatic draw `−p`, the deferrable draw `−p`,
+#    the PV+battery injection `pv_used − p_ch + p_dch`, the FIXED baseline demand `−Pdc`,
+#    and their sum, the aggregator net `p_ag` the network actually sees. On THIS fixture
+#    both flexible LOADS sit flat at zero (the two lines overlap on the axis): the
+#    deferrable's energy budget is a LIVE preference with `E_min = 0` (WR-01), and at
+#    `λ₀ = 6` backing off entirely beats paying for the soft target — the flexibility
+#    story here is carried by the battery discharging against the priced frontier.
+# 2. **Thermostatic state (eqs. 3.2-3.3)** — the indoor temperature `Tin[t]` riding the
+#    ambient `Tout[t]` inside the shaded comfort band `[Tmin, Tmax]`; the comfort utility
+#    (3.11) pulls `Tin` toward `Tmin` exactly as hard as the price lets it.
+# 3. **Battery state of charge (eqs. 3.6/3.9)** — the SOC trajectory between its dashed
+#    `Emin`/`Emax` bounds, the intertemporal storage state coupling the hours.
+#
+# Same guarded-CairoMakie idiom as `admm.jl`/`socp_applicability.jl`; the block's final
+# expression is the `Figure` Documenter renders inline.
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+    using TSODSO.JuMP: value
+
+    varlist = ctx.meta[:agg_device_vars][agg.bus]
+    tvars = only(v for v in varlist if haskey(v, :Tin))
+    bvars = only(v for v in varlist if haskey(v, :soc))
+    dvars = only(v for v in varlist if !haskey(v, :Tin) && !haskey(v, :soc))
+
+    hours = 1:T
+    therm_inj = -value.(tvars.p)                                       # A/C draw (3.2)
+    defer_inj = -value.(dvars.p)                                       # shiftable draw (3.4)
+    batt_inj = value.(bvars.pv_used) .- value.(bvars.p_ch) .+ value.(bvars.p_dch)  # (3.6-3.9)
+    net_inj = value.(ctx.meta[:agg_net][1].net)                        # p_ag (3.22)
+
+    fig = Figure(size = (860, 900))
+    ax1 = Axis(
+        fig[1, 1];
+        xlabel = "hour t",
+        ylabel = "net active injection (p.u.)",
+        xticks = hours,
+        title = "Device schedules at bus $(agg.bus) — signed contributions to p_ag (3.22)",
+    )
+    hlines!(ax1, [0.0]; color = (:black, 0.3), linewidth = 1)
+    scatterlines!(ax1, hours, therm_inj; color = :crimson, label = "thermostatic −p")
+    scatterlines!(ax1, hours, defer_inj; color = :orange, label = "deferrable −p")
+    scatterlines!(ax1, hours, batt_inj; color = :seagreen, label = "PV+battery injection")
+    scatterlines!(
+        ax1,
+        hours,
+        -profiles.demand;
+        color = :gray,
+        linestyle = :dash,
+        label = "baseline −Pdc",
+    )
+    scatterlines!(
+        ax1,
+        hours,
+        net_inj;
+        color = :black,
+        linewidth = 3,
+        label = "aggregator net p_ag",
+    )
+    axislegend(ax1; position = :rb, labelsize = 11)
+
+    ax2 = Axis(
+        fig[2, 1];
+        xlabel = "hour t",
+        ylabel = "temperature (°C)",
+        xticks = hours,
+        title = "Thermostatic state — Tin inside the comfort band (3.2-3.3)",
+    )
+    hspan!(ax2, therm.Tmin, therm.Tmax; color = (:crimson, 0.08))
+    hlines!(
+        ax2,
+        [therm.Tmin, therm.Tmax];
+        color = :crimson,
+        linestyle = :dash,
+        linewidth = 1,
+    )
+    scatterlines!(ax2, hours, therm.Tout; color = :gray, linestyle = :dot, label = "Tout")
+    scatterlines!(ax2, hours, value.(tvars.Tin); color = :crimson, label = "Tin")
+    axislegend(ax2; position = :rb, labelsize = 11)
+
+    ax3 = Axis(
+        fig[3, 1];
+        xlabel = "hour t",
+        ylabel = "stored energy (p.u.·h)",
+        xticks = hours,
+        title = "Battery state of charge (3.6) between its bounds (3.9)",
+    )
+    hlines!(
+        ax3,
+        [batt.Emin, batt.Emax];
+        color = :seagreen,
+        linestyle = :dash,
+        linewidth = 1,
+    )
+    scatterlines!(ax3, hours, value.(bvars.soc); color = :seagreen, label = "soc")
+    axislegend(ax3; position = :rb, labelsize = 11)
+    fig
+end

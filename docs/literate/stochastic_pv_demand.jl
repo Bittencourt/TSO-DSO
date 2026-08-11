@@ -72,6 +72,53 @@ length(r.in_sample.dadp)
 
 # `length(r.in_sample.dadp) == s.stoch_S == 5`, confirmed live above.
 
+# ## Figure — the in-sample PV/demand scenario fan
+#
+# The 5 exogenous draws the extensive form co-optimizes over, regenerated here for display
+# via the SAME exported seeding seam `run_stochastic` itself uses —
+# `generate_profiles(seed = sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)))` — so
+# each curve below is BIT-IDENTICAL to the profile scenario `k` actually saw inside the
+# solve (INFRA-04's determinism is what makes this replay honest), at zero added solve
+# cost. One fixed color per scenario, reused by the DADP figure further down (identity
+# follows the entity across figures); the legend carries each scenario's non-uniform
+# probability weight. Same guarded-CairoMakie idiom as `admm.jl`/`socp_applicability.jl`;
+# the block's final expression is the `Figure` Documenter renders inline.
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+
+    scen_colors = [:dodgerblue, :crimson, :seagreen, :orange, :purple]
+    scen_profiles = [
+        generate_profiles(;
+            seed = sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)),
+            T = T,
+        ) for k in 1:s.stoch_S
+    ]
+
+    fig = Figure(size = (980, 400))
+    axpv = Axis(
+        fig[1, 1];
+        xlabel = "hour t",
+        ylabel = "PV availability (p.u.)",
+        xticks = 1:T,
+        title = "In-sample PV fan (5 seeded Markov draws)",
+    )
+    axdem = Axis(
+        fig[1, 2];
+        xlabel = "hour t",
+        ylabel = "baseline demand (p.u.)",
+        xticks = 1:T,
+        title = "In-sample demand fan",
+    )
+    for k in 1:s.stoch_S
+        lab = "scenario $k (p = $(s.stoch_probabilities[k]))"
+        scatterlines!(axpv, 1:T, scen_profiles[k].pv; color = scen_colors[k], label = lab)
+        scatterlines!(axdem, 1:T, scen_profiles[k].demand; color = scen_colors[k])
+    end
+    Legend(fig[1, 3], axpv; framevisible = false, labelsize = 11)
+    fig
+end
+
 # ## 1. Per-scenario DADPs (PRIMARY output, D-02/D-05)
 #
 # Every prior rung page reports ONE price path. Here, each of the 5 in-sample scenarios keeps
@@ -91,6 +138,66 @@ length(r.in_sample.dadp)
 # scenario-conditionality this model exists to represent.
 
 round.(r.in_sample.expected_dadp; digits = 4)
+
+# ## Figure — the per-scenario DADP fan and its derived expectation
+#
+# Section 1's five PRIMARY price vectors drawn together — the same fixed scenario colors
+# as the profile fan above, so a high-PV draw is visually traceable to its price path —
+# with section 2's probability-weighted expectation overlaid as the dashed black summary
+# curve (LEFT). At the full price scale the five paths nearly coincide (the Finding below
+# calls this fixture's scenario-conditional variation "real but MODEST" — the figure shows
+# exactly that, not a dramatic fan), so the RIGHT panel plots each scenario's DEVIATION
+# from the expectation, `λ_k[t] − E[λ][t]`: identically zero-spread at hour 1 (every
+# scenario's price floor binds the same way off-peak) and genuinely scenario-conditional
+# around the mid-horizon hours — the very structure D-07 warns the derived expectation
+# silently discards. No re-solve: this is `r.in_sample` verbatim.
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+
+    fig = Figure(size = (980, 420))
+    axfan = Axis(
+        fig[1, 1];
+        xlabel = "hour t",
+        ylabel = "DADP (price units)",
+        xticks = 1:T,
+        title = "Per-scenario DADP (PRIMARY, D-05)",
+    )
+    axdev = Axis(
+        fig[1, 2];
+        xlabel = "hour t",
+        ylabel = "λ_k[t] − E[λ][t] (price units)",
+        xticks = 1:T,
+        title = "Deviation from the derived expectation (D-07)",
+    )
+    for k in 1:s.stoch_S
+        scatterlines!(
+            axfan,
+            1:T,
+            r.in_sample.dadp[k];
+            color = scen_colors[k],
+            label = "scenario $k (p = $(s.stoch_probabilities[k]))",
+        )
+        scatterlines!(
+            axdev,
+            1:T,
+            r.in_sample.dadp[k] .- r.in_sample.expected_dadp;
+            color = scen_colors[k],
+        )
+    end
+    lines!(
+        axfan,
+        1:T,
+        r.in_sample.expected_dadp;
+        color = :black,
+        linestyle = :dash,
+        linewidth = 3,
+        label = "expected DADP (derived summary)",
+    )
+    hlines!(axdev, [0.0]; color = :black, linestyle = :dash)
+    Legend(fig[1, 3], axfan; framevisible = false, labelsize = 11)
+    fig
+end
 
 # ## 3. Per-scenario SOCP exactness (D-06, never aggregated)
 #
@@ -123,6 +230,56 @@ r.in_sample.welfare
 #-
 
 r.oos.realized_welfare
+
+# ## Figure — in-sample expectation vs the 10 held-out re-scores
+#
+# The out-of-sample evaluation drawn draw-by-draw: one dot per FEASIBLE held-out scenario's
+# realized welfare (`r.oos.welfare_h` — a draw reported infeasible by WR-05's mask would
+# simply be absent, never plotted as a fabricated point), the solid line their uniform-weight
+# average (`realized_welfare`), and the dashed line the in-sample probability-weighted
+# expectation the gap is measured against. Dots (not zero-anchored bars): the ~539-unit
+# welfare scale would visually flatten the sub-percent draw-to-draw variation that IS the
+# story here. The tiny distance between the two horizontal lines is `welfare_gap` — the
+# honesty-load-bearing number of section 4, seen rather than only stated. No re-solve:
+# this is `r.oos`/`r.in_sample` verbatim.
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+
+    feasible = findall(!, r.oos.infeasible_h)
+
+    fig = Figure(size = (760, 420))
+    ax = Axis(
+        fig[1, 1];
+        xlabel = "held-out draw h",
+        ylabel = "welfare (objective units)",
+        xticks = 1:s.stoch_H_oos,
+        title = "Committed first-stage schedule scored out-of-sample (STOCH-03/D-09)",
+    )
+    hlines!(
+        ax,
+        [r.in_sample.welfare];
+        color = :dodgerblue,
+        linestyle = :dash,
+        label = "in-sample expected welfare",
+    )
+    hlines!(
+        ax,
+        [r.oos.realized_welfare];
+        color = :crimson,
+        label = "OOS realized welfare (mean of dots)",
+    )
+    scatter!(
+        ax,
+        feasible,
+        r.oos.welfare_h[feasible];
+        color = :teal,
+        markersize = 12,
+        label = "held-out draw welfare",
+    )
+    axislegend(ax; position = :rb, labelsize = 11)
+    fig
+end
 
 # ## Finding
 #
