@@ -164,7 +164,20 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
-**v3.0 in progress — Phase 22 complete (2026-08-10):** Stochastic PV/Demand Uncertainty
+**v3.0 in progress — Phase 23 complete (2026-08-10):** Meshed Networks (MESH-01/02/03/06).
+`MeshedFeeder` + `assert_connected` beside the byte-untouched radial layer; `MeshedFlow` as pure
+delegation (ConvexBranchFlow proven graph-generic); `certify_angle_recoverable!` chord-aware
+certificate (report-by-default; recoverable → certified angles, unrecoverable → SOCP welfare as a
+valid **upper** bound). Three honest findings shipped: the 3-bus triangle is degenerate under the
+exactness-copy machinery (fixture = 4-bus diamond, triangle infeasibility demonstrated live on the
+Rung 10 page); impedance magnitude — not R/X-ratio heterogeneity — separates the certificate
+branches (0.00627 vs 0.0607 residuals, ~9.7×); the review caught the bound direction stated
+backwards + a Phase-20-class orientation bug (both fixed, reversed-orientation regression added).
+Review 2 Critical + 3 Warnings all fixed; verification 4/4 + UAT passed; suite 2801 pass / 3
+pre-existing errored / 3 broken. Follow-up flagged: radial `recover_voltage_angles` carries the
+same latent backward-edge defect (byte-locked by D-09, deferred). Next: Phase 24 (final).
+
+**v3.0 Phase 22 complete (2026-08-10):** Stochastic PV/Demand Uncertainty
 (STOCH-01..04). Two-stage extensive-form welfare (`build_stochastic_welfare`) over 3–5 seeded
 Markov scenarios: nonanticipativity ties on battery p_ch/p_dch (+4Q q; redundant soc ties dropped
 for IPM conditioning), per-scenario PF-04 gates, per-scenario DADPs de-scaled by probability as
@@ -339,4 +352,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 — Phase 22 (Stochastic PV/Demand Uncertainty) complete*
+*Last updated: 2026-08-10 — Phase 23 (Meshed Networks) complete*
