@@ -18,7 +18,7 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 - [x] **Phase 20: Overvoltage-Capable Relaxation** - Price the v2.1 EXACT-04 high-PV overvoltage regime via a restricted SOCP with its own AC-certified validity certificate, establishing the reusable restriction-certificate pattern
 - [x] **Phase 21: MPC / Rolling-Horizon / Real-Time Pricing** - Closed-loop receding-horizon solves over stateful devices, publishing rolling DADPs as an RTP signal benchmarked against perfect foresight
 - [x] **Phase 22: Stochastic PV/Demand Uncertainty** - Two-stage extensive-form welfare solve over seeded Markov scenarios, with per-scenario DADPs as the primary price output
-- [ ] **Phase 23: Meshed Networks** - A parallel `MeshedFeeder` + non-radial SOCP formulation with its own angle-recoverability certificate, combined with Phase 19's live reactive price in one literate rung page
+- [x] **Phase 23: Meshed Networks** - A parallel `MeshedFeeder` + non-radial SOCP formulation with its own angle-recoverability certificate, combined with Phase 19's live reactive price in one literate rung page
 - [ ] **Phase 24: Discrete/Integer Investment Expansion** - Binary-expansion integer investment + Laporte–Louveaux integer cuts in the planning Benders master, with the PVAL-04 no-binaries guard consciously scoped
 
 ## Phase Details
@@ -400,7 +400,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 20. Overvoltage-Capable Relaxation | v3.0 | 5/5 | Complete    | 2026-08-09 |
 | 21. MPC / Rolling-Horizon / Real-Time Pricing | v3.0 | 6/6 | Complete    | 2026-08-09 |
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
-| 23. Meshed Networks | v3.0 | 4/4 | Complete   | 2026-08-10 |
+| 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes

@@ -83,13 +83,13 @@ Scenario-based extensive-form welfare solve with honest stochastic price semanti
 Fill the SEAM-01 meshed-formulation slot with its own validity treatment; give the battery a
 genuine reactive decision variable and make the v2.1 reactive machinery live.
 
-- [ ] **MESH-01**: A **`MeshedFeeder` data type** (loop-carrying topology + at least one committed
+- [x] **MESH-01**: A **`MeshedFeeder` data type** (loop-carrying topology + at least one committed
       meshed fixture) exists alongside the radial `Feeder` without weakening the radial
       constructor invariant (`assert_radial` untouched for `Feeder`).
-- [ ] **MESH-02**: Researcher can solve the meshed SOCP branch-flow problem via a
+- [x] **MESH-02**: Researcher can solve the meshed SOCP branch-flow problem via a
       `MeshedFlow <: AbstractPowerFlow` (or equivalent) through the SEAM-01 `pf` dispatch seam,
       with cycle/loop consistency handled explicitly — never the radial Baran–Wu variables alone.
-- [ ] **MESH-03**: The meshed rung's validity gate is the **angle-recoverability a-posteriori
+- [x] **MESH-03**: The meshed rung's validity gate is the **angle-recoverability a-posteriori
       certificate** (Gan–Low condition): recoverable → angles recovered and certified;
       unrecoverable → the SOCP value is reported as a valid lower bound with the inexactness as a
       first-class finding (report-don't-throw). A new certificate — the per-branch
@@ -103,7 +103,7 @@ genuine reactive decision variable and make the v2.1 reactive machinery live.
       on `:balance_q` using the `qag_dso`/`reactive_consensus` scaffolding) converges in the ADMM
       loop on a fixture with 4Q-BESS present, cross-validated against the centralized solve, with
       its own two-block convergence/stopping treatment (not the single-block Boyd rule as-is).
-- [ ] **MESH-06**: A live-executed literate rung page documents the meshed formulation, the
+- [x] **MESH-06**: A live-executed literate rung page documents the meshed formulation, the
       angle-recoverability certificate, and the live reactive price. (Anti-feature honored: no
       literal IEEE-1547 Volt-VAR droop controller — optimal `q(v)` behavior characterized
       post-hoc if wanted.)
@@ -175,12 +175,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STOCH-02 | Phase 22 | Complete |
 | STOCH-03 | Phase 22 | Complete |
 | STOCH-04 | Phase 22 | Complete |
-| MESH-01 | Phase 23 | Pending |
-| MESH-02 | Phase 23 | Pending |
-| MESH-03 | Phase 23 | Pending |
+| MESH-01 | Phase 23 | Complete |
+| MESH-02 | Phase 23 | Complete |
+| MESH-03 | Phase 23 | Complete |
 | MESH-04 | Phase 19 | Complete |
 | MESH-05 | Phase 19 | Complete |
-| MESH-06 | Phase 23 | Pending |
+| MESH-06 | Phase 23 | Complete |
 | INT-01 | Phase 24 | Pending |
 | INT-02 | Phase 24 | Pending |
 | INT-03 | Phase 24 | Pending |
