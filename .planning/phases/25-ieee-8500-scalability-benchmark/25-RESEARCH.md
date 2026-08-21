@@ -725,6 +725,13 @@ to a new scale.
    - Recommendation: the planner should include an early task that measures current docs-build wall
      time, THEN sizes D-18's per-point cap and D-1's grid against the real remaining headroom.
 
+   - **Addressed (plan revision 1, 2026-08-21):** `25-06-PLAN.md` Task 2 now opens with a required
+     step measuring `BASELINE_DOCS_BUILD_MINUTES` (a fresh `julia --project=docs docs/make.jl` run on
+     the pre-change docs set) before choosing the new page's live-slice `time_limit`/`time_limit_s`,
+     and its acceptance criteria require reporting both numbers in the execution notes. The actual
+     measured minutes are only known at execution time — this closes the OPEN QUESTION at the
+     planning level; the numeric answer lands in `25-06-SUMMARY.md`.
+
 3. **Whether a real OpenDSS/opendssdirect cross-check of the transformer reduction (A1) is worth the
    dependency cost**
    - What we know: A1's derivation is grounded in reading OpenDSS's own source code (`Transformer.pas`),
