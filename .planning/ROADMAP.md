@@ -365,7 +365,29 @@ IEEE-13/IEEE-123 fixtures as the baselines it scales *against*, all of which are
   5. SOCP exactness carries its own new gate at this scale (no reuse of the IEEE-13/123 tolerances —
      the standing anti-certificate-laundering rule), and a live-executed literate page documents the
      fixture, its assumptions, and the scaling curve.
-**Plans**: TBD
+**Plans:** 6 plans (5 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 25-01-PLAN.md — Vendor pinned-commit OpenDSS source + dependency-free reduction script (parsing, transformer reduction, dedupe, --verify)
+- [ ] 25-02-PLAN.md — SCS weakdep extension (alternative_optimizer/SCSChoice) + solve_admm time_limit_s wall-clock exit
+
+**Wave 2** *(blocked on Wave 1 completion — 25-03 depends on 25-01)*
+
+- [ ] 25-03-PLAN.md — ieee8500_modified()/ieee8500_mv_modified() fixture builders at S_base=0.5 MVA + construction-invariant tests
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 25-04-PLAN.md — FixedCapacitor q-only device + materialize.jl population/registry wiring (real per-load kW, capacitor Aggregators)
+
+**Wave 4** *(blocked on Waves 1-3 completion — 25-05 depends on 25-02 and 25-04)*
+
+- [ ] 25-05-PLAN.md — Noise-floor calibration + benchmark harness (density sweep x solver x mode) + D-16 deterministic goldens
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 25-06-PLAN.md — Full committed density-sweep results + literate scaling page (docs/literate/ieee8500_scaling.jl)
 
 <details>
 <summary>✅ v1.0 Operational Transactive-Energy Core (Phases 1–9) — SHIPPED 2026-07-20</summary>
@@ -445,7 +467,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
 | 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
-| 25. IEEE-8500 Scale Benchmark | v3.0 | 0/TBD | Not started | - |
+| 25. IEEE-8500 Scale Benchmark | v3.0 | 0/6 | Not started | - |
 
 ## Deferred / Future-Milestone Notes
 

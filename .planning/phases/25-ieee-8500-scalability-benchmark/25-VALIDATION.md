@@ -2,7 +2,7 @@
 phase: 25
 slug: ieee-8500-scalability-benchmark
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-20
 ---
@@ -47,16 +47,26 @@ created: 2026-08-20
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 25-01-xx | 01 | 1 | SCALE-01 | T-25-01 | Vendored source files checksum-match the committed provenance record before parse | unit | `julia scripts/reduce_ieee8500_impedances.jl --verify` | ❌ W0 | ⬜ pending |
-| 25-01-xx | 01 | 1 | SCALE-01 | — | N/A | unit | `julia --project=. test/test_ieee8500.jl` | ❌ W0 | ⬜ pending |
-| 25-02-xx | 02 | 2 | SCALE-02 | T-25-02 | Tripwire verdict is explicit; band never silently widened | unit | `julia --project=. test/test_ieee8500.jl` | ❌ W0 | ⬜ pending |
-| 25-02-xx | 02 | 2 | SCALE-03 | — | N/A | unit | `julia --project=. test/test_ieee8500.jl` | ❌ W0 | ⬜ pending |
-| 25-03-xx | 03 | 3 | SCALE-04 | T-25-03 | Harness cannot hang unbounded (D-18 timeout enforced) | integration | `julia scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick` | ❌ W0 | ⬜ pending |
-| 25-03-xx | 03 | 3 | SCALE-04 | — | N/A | unit | SCS extension load + solve via `alternative_optimizer` | ❌ W0 | ⬜ pending |
-| 25-04-xx | 04 | 4 | SCALE-05 | — | N/A | unit | noise-floor calibration + `assert_socp_exact!` re-certification test | ❌ W0 | ⬜ pending |
+| 25-01-01 | 01 | 1 | SCALE-01 | T-25-01 | Vendored source checksums match the committed provenance record; commit SHA pinned (not `master`) | unit | `sha256sum scripts/data/ieee8500/*` vs `25-DATA-PROVENANCE.md` | ❌ W0 | ⬜ pending |
+| 25-01-02 | 01 | 1 | SCALE-01 | T-25-03 | Parallel-edge dedupe asserts identical then keeps one — never averages | unit | (exercised via Task 3's `--verify`) | ❌ W0 | ⬜ pending |
+| 25-01-03 | 01 | 1 | SCALE-01 | T-25-02 | `--verify` pinned sanity check catches a wrong transformer reduction before commit | unit | `julia scripts/reduce_ieee8500_impedances.jl --verify` | ❌ W0 | ⬜ pending |
+| 25-02-01 | 02 | 1 | SCALE-04 | T-25-05 | SCS UUID/version human-verified against the live registry before any [weakdeps] entry | manual | human checkpoint (registry pages) | ❌ W0 | ⬜ pending |
+| 25-02-02 | 02 | 1 | SCALE-04 | T-25-05 | SCS reachable only via `alternative_optimizer`/`SCSChoice`, never a hard dependency | unit | `julia --project=. -e 'using Pkg; Pkg.test()'` | ❌ W0 | ⬜ pending |
+| 25-02-03 | 02 | 1 | SCALE-04 | T-25-06 | `solve_admm`'s wall-clock budget reports `:budget_exceeded` honestly instead of hanging | unit | `julia --project=. test/test_admm_timeout.jl` | ❌ W0 | ⬜ pending |
+| 25-03-01 | 03 | 2 | SCALE-02 | T-25-07 | Multi-voltage-base per-unit ingestion at S_base=0.5 MVA; Feeder construction invariants pass at scale | unit | `julia --project=. -e '...ieee8500_modified()...'` | ❌ W0 | ⬜ pending |
+| 25-03-02 | 03 | 2 | SCALE-01 | — | N/A | unit | `julia --project=. -e '...ieee8500_mv_modified()...'` | ❌ W0 | ⬜ pending |
+| 25-03-03 | 03 | 2 | SCALE-02 | T-25-07 | Tripwire verdict explicit; corrected transformer pu values pinned, band never silently widened | unit | `julia --project=. test/test_ieee8500.jl` | ❌ W0 | ⬜ pending |
+| 25-04-01 | 04 | 3 | SCALE-03 | — | N/A | unit | `grep` structural checks on FixedCapacitor.jl | ❌ W0 | ⬜ pending |
+| 25-04-02 | 04 | 3 | SCALE-01 | T-25-09 | Real per-load kW drives population magnitude, never a tuned scalar; capacitor buses never add a second :Rq writer | unit | `julia --project=. -e '...build_population(...)...'` | ❌ W0 | ⬜ pending |
+| 25-04-03 | 04 | 3 | SCALE-03 | T-25-10 | DEV-05 sole-`:Rq`-writer invariant preserved; IEEE-13/123 population byte-identical | unit | `julia --project=. test/test_ieee8500.jl` | ❌ W0 | ⬜ pending |
+| 25-05-01 | 05 | 4 | SCALE-05 | T-25-12 | Per-fixture noise floor measured fresh, never reused from IEEE-13/123 | unit | `julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500-mv` | ❌ W0 | ⬜ pending |
+| 25-05-02 | 05 | 4 | SCALE-04 | T-25-11 | Harness cannot hang unbounded (D-18 timeout enforced); every point reported, none dropped | integration | `julia scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick` | ❌ W0 | ⬜ pending |
+| 25-05-03 | 05 | 4 | SCALE-04 | — | N/A | integration | `julia --project=. test/test_benchmark_ieee8500.jl` | ❌ W0 | ⬜ pending |
+| 25-06-01 | 06 | 5 | SCALE-05 | T-25-11 | Headline 4,873-bus point present and its outcome stated honestly, whatever it is | manual + integration | committed CSV + human-read SUMMARY | ❌ W0 | ⬜ pending |
+| 25-06-02 | 06 | 5 | SCALE-05 | T-25-13/T-25-14 | Live slice bounded, never threatens the shared docs-job budget; headline outcome stated in page prose | docs | `julia --project=docs docs/make.jl` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
-*Task IDs are placeholders — the planner assigns real ones and must keep this table in sync.*
+*Task IDs match the real plans (25-01 through 25-06) created by /gsd:plan-phase 25.*
 
 ---
 
