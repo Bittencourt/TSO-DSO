@@ -379,7 +379,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 25-04-PLAN.md — FixedCapacitor q-only device + materialize.jl population/registry wiring (real per-load kW, capacitor Aggregators)
+- [x] 25-04-PLAN.md — FixedCapacitor q-only device + materialize.jl population/registry wiring (real per-load kW, capacitor Aggregators)
 
 **Wave 4** *(blocked on Waves 1-3 completion — 25-05 depends on 25-02 and 25-04)*
 
@@ -467,7 +467,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
 | 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
-| 25. IEEE-8500 Scale Benchmark | v3.0 | 3/6 | In Progress|  |
+| 25. IEEE-8500 Scale Benchmark | v3.0 | 4/6 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 
