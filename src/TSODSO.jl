@@ -90,6 +90,7 @@ include("devices/Thermostatic.jl")   # DEV-01
 include("devices/Deferrable.jl")     # DEV-02
 include("devices/PVBattery.jl")      # DEV-04
 include("devices/FourQuadBESS.jl")   # plan 19-02, MESH-04
+include("devices/FixedCapacitor.jl") # plan 25-04, SCALE-03/D-10 (second q_inject consumer)
 
 # --- Aggregator roll-up: the network-facing residual writer (plan 03-05, DEV-05) ---
 include("devices/Aggregator.jl")
