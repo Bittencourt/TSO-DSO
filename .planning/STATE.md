@@ -4,8 +4,8 @@ milestone: v3.0
 milestone_name: Research Extension Rungs
 status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-08-21T03:08:26.740Z"
-last_activity: 2026-08-21 -- Phase 25 planning complete
+last_updated: "2026-08-21T08:52:11.027Z"
+last_activity: 2026-08-21 -- Phase 25 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 24 — discrete/integer investment expansion (Phase 25, IEEE-8500 scale benchmark, now also queued and independent)
+**Current focus:** Phase 25 — ieee-8500-scalability-benchmark
 
 ## Current Position
 
-Phase: 24
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-21 -- Phase 25 planning complete
+Phase: 25 (ieee-8500-scalability-benchmark) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 25
+Last activity: 2026-08-21 -- Phase 25 execution started
 
 ### Quick Tasks Completed
 

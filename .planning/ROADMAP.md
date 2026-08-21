@@ -370,8 +370,8 @@ IEEE-13/IEEE-123 fixtures as the baselines it scales *against*, all of which are
 Plans:
 **Wave 1**
 
-- [ ] 25-01-PLAN.md — Vendor pinned-commit OpenDSS source + dependency-free reduction script (parsing, transformer reduction, dedupe, --verify)
-- [ ] 25-02-PLAN.md — SCS weakdep extension (alternative_optimizer/SCSChoice) + solve_admm time_limit_s wall-clock exit
+- [x] 25-01-PLAN.md — Vendor pinned-commit OpenDSS source + dependency-free reduction script (parsing, transformer reduction, dedupe, --verify)
+- [x] 25-02-PLAN.md — SCS weakdep extension (alternative_optimizer/SCSChoice) + solve_admm time_limit_s wall-clock exit
 
 **Wave 2** *(blocked on Wave 1 completion — 25-03 depends on 25-01)*
 
@@ -467,7 +467,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
 | 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
-| 25. IEEE-8500 Scale Benchmark | v3.0 | 0/6 | Not started | - |
+| 25. IEEE-8500 Scale Benchmark | v3.0 | 2/6 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 
