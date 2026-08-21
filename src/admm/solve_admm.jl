@@ -56,8 +56,9 @@ using JuMP
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
-               allow_export::Bool = true, reactive_consensus = false, ρ_q::Real = ρ)
-        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices)
+               allow_export::Bool = true, reactive_consensus = false, ρ_q::Real = ρ,
+               time_limit_s::Union{Nothing,Real} = nothing)
+        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, status)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
 eqs. 3.46/3.47), the Phase-6 DECOMPOSED counterpart of the centralized [`solve_welfare`](@ref).
@@ -150,9 +151,26 @@ outer loop, in EXACT mirror of the ACTIVE `λ`/`pag_dso` machinery above:
     feature of the model, not a bug), a device's own P-Q split inside its apparent-power cone can
     be non-unique/degenerate — pinning a non-unique quantity would be meaningless.
 
+# Wall-clock budget (Phase 25, D-18 — `time_limit_s::Union{Nothing,Real} = nothing`)
+
+An OPTIONAL wall-clock budget for the WHOLE consensus loop, checked once per iteration
+immediately AFTER the convergence check and BEFORE the dual-ascent update. The DEFAULT
+`nothing` preserves the pre-existing unbounded behavior BYTE-FOR-BYTE — this is purely
+additive. When a finite `time_limit_s` elapses before convergence, the loop breaks
+HONESTLY: it does NOT throw (unlike the `maxiter` fail-loud cap below, which still fires
+for a genuine non-convergence with NO time budget set) and it does NOT run the final
+consolidation pass (which assumes a converged, certified iterate — meaningless on a
+mid-loop point). Instead it returns EARLY with `status = :budget_exceeded` and
+`welfare = dadp = λ = exact_maxgap = mu_q = nothing`, `q_devices = Dict{Int,Vector{Float64}}()`
+— a `nothing` price is a deliberate signal that no certified transactive price exists yet,
+never a plausible-but-uncertified number silently returned as if it were the DADP.
+
 # Returns
 
-`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices)` where `λ == dadp`
+`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, status)` where
+`status` is `:converged` on the normal path (ADDITIVE new field — every other field is
+UNCHANGED from before this plan) or `:budget_exceeded` on the new early-exit path above
+(see "Wall-clock budget"). `λ == dadp`
 is the `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus
 order, matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
 [`ModelContext`](@ref) (its `.model` shape is iteration-count-independent — ADMM-03), and
@@ -179,8 +197,12 @@ price (WR-03, phase-19 review).
     alone, so the device's reactive decision would be silently dropped from the network model
     (and, under `CERTIFIED`, the certified `dual(:balance_q)` would be priced against a closure
     that no longer matches the centralized model's). Pass `reactive_consensus = :live`.
-  - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence — the fail-loud cap that
-    refuses to return a non-consensus iterate (RESEARCH Pitfall 2).
+  - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence AND WITHOUT the
+    `time_limit_s` wall-clock budget having been exceeded first — the fail-loud cap that
+    refuses to return a non-consensus iterate (RESEARCH Pitfall 2). When `time_limit_s` IS
+    exceeded first, this throw is SKIPPED — the honest `status = :budget_exceeded` return
+    (see "Wall-clock budget" above) replaces it; that path is not itself a genuine
+    non-convergence, so it is not fail-loud.
 """
 function solve_admm(
     feeder,
@@ -200,6 +222,7 @@ function solve_admm(
     allow_export::Bool = true,
     reactive_consensus = false,
     ρ_q::Real = ρ,
+    time_limit_s::Union{Nothing, Real} = nothing,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
@@ -324,6 +347,14 @@ function solve_admm(
     # constant — prevents late-stage oscillation stalling the tail). τ/μ are the residual-balancing
     # multiplier/band; [ρ_min, ρ_max] clamp the penalty (SOCP-conditioning + proximal meaningfulness).
     ρ_frozen = false
+
+    # ---- Wall-clock budget state (Phase 25, D-18). `t0_wall_ns` is the loop-entry timestamp;
+    # `budget_exceeded_flag` mirrors `converged_flag`'s latch shape exactly (checked once per
+    # iteration, right after the convergence check, right before the dual-ascent update). Both
+    # are complete no-ops when `time_limit_s === nothing` (the default) — byte-identical to the
+    # pre-existing unbounded behavior.
+    t0_wall_ns = time_ns()
+    budget_exceeded_flag = false
 
     converged_flag = false
     for k in 1:maxiter
@@ -476,6 +507,16 @@ function solve_admm(
             break
         end
 
+        # ---- Wall-clock budget check (Phase 25, D-18). Placed AFTER the convergence check
+        # (never preempts a genuine consensus on the SAME iteration) and BEFORE the dual-ascent
+        # update below (a mid-loop iterate about to be perturbed further is exactly the point at
+        # which "budget exceeded, stop here honestly" belongs). A complete no-op when
+        # `time_limit_s === nothing` (byte-identical default path).
+        if time_limit_s !== nothing && (time_ns() - t0_wall_ns) / 1.0e9 > time_limit_s
+            budget_exceeded_flag = true
+            break
+        end
+
         # Dual ascent λ_j ← λ_j + ρ·R_{p,j} (UNSCALED — λ is the physical price, NOT rescaled on a ρ
         # change; RESEARCH Pattern 4) and refresh the netflow target c_j = −pag_dso_j (the network
         # injection carries the OPPOSITE sign of the coupling variable — see file header). Snapshot
@@ -579,16 +620,41 @@ function solve_admm(
     end
 
     # ---- FAIL LOUD on the maxiter cap (RESEARCH Pitfall 2) — never return a non-consensus point.
-    converged_flag || throw(
-        ErrorException(
-            "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
-            "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
-            "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
-            "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$ρf). Retune the adaptive-ρ config " *
-            "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
-            "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).",
-        ),
-    )
+    # Phase 25 (D-18): this throw fires ONLY on a genuine non-convergence — i.e. NEITHER converged
+    # NOR an honest wall-clock budget exit. An expired `time_limit_s` is NOT itself a
+    # non-convergence bug; it gets its OWN honest early return (`status = :budget_exceeded`)
+    # below instead of this loud throw.
+    if !converged_flag && !budget_exceeded_flag
+        throw(
+            ErrorException(
+                "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
+                "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
+                "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
+                "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$ρf). Retune the adaptive-ρ config " *
+                "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
+                "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).",
+            ),
+        )
+    elseif budget_exceeded_flag
+        # ---- HONEST early exit on the wall-clock budget (Phase 25, D-18). SKIPS the final
+        # consolidation pass below — it assumes a converged iterate and runs the battery/4Q/
+        # exactness certificates, which are meaningless on a mid-loop, non-consensus point.
+        # `welfare`/`dadp`/`λ`/`exact_maxgap`/`mu_q` are `nothing` BY DESIGN: a `:budget_exceeded`
+        # result never carries a plausible-but-uncertified price — a caller cannot silently
+        # mistake this mid-loop iterate for a certified DADP.
+        return (;
+            welfare = nothing,
+            dadp = nothing,
+            λ = nothing,
+            iters = residuals.iters,
+            residuals = residuals,
+            dso_ctx = dso.ctx,
+            exact_maxgap = nothing,
+            mu_q = nothing,
+            q_devices = Dict{Int, Vector{Float64}}(),
+            status = :budget_exceeded,
+        )
+    end
 
     # ---- Converged: FINAL consolidation pass running BOTH PHYSICAL gates (RESEARCH Pitfall 3 /
     # Pattern 5). The coupling (λ, c, a) is unchanged from the converged iterate, so these re-solves
@@ -803,6 +869,7 @@ function solve_admm(
         exact_maxgap = exact_maxgap,
         mu_q = mu_q_mat,
         q_devices = q_devices,
+        status = :converged,
     )
 end
 
