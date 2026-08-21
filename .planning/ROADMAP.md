@@ -375,7 +375,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion — 25-03 depends on 25-01)*
 
-- [ ] 25-03-PLAN.md — ieee8500_modified()/ieee8500_mv_modified() fixture builders at S_base=0.5 MVA + construction-invariant tests
+- [x] 25-03-PLAN.md — ieee8500_modified()/ieee8500_mv_modified() fixture builders at S_base=0.5 MVA + construction-invariant tests
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -467,7 +467,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
 | 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
-| 25. IEEE-8500 Scale Benchmark | v3.0 | 2/6 | In Progress|  |
+| 25. IEEE-8500 Scale Benchmark | v3.0 | 3/6 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 
