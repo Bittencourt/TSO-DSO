@@ -106,4 +106,47 @@ function assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1
     return maxgap
 end
 
-export assert_socp_exact!
+# Phase 25 (SCALE-05, plan 25-05): calibration-only sibling of `assert_socp_exact!`.
+#
+# `socp_relaxation_gap` is a WHOLLY NEW, ADDITIVE function — `assert_socp_exact!` above is left
+# BYTE-IDENTICAL (must-not-break). It duplicates ONLY the gap-computation loop (the `lhs`/`rhs`/
+# `gap`/`maxgap` lines), with NO throw and NO `rtol`/`atol` classification, so a per-fixture
+# noise-floor calibration (spike-002's method — re-solve a benign point across a tightening
+# `tol_gap_abs`/`tol_gap_rel` ladder and watch where the measured residual stops improving) can
+# measure the SOLVER'S OWN achievable cone residual BEFORE a new fixture's `assert_socp_exact!`
+# `atol` is chosen (anti-certificate-laundering: never reuse IEEE-13/123's tolerance for a new
+# fixture, `scripts/benchmark_ieee8500.jl`'s `--calibrate-noise-floor` mode).
+"""
+    socp_relaxation_gap(ctx::ModelContext) -> Float64
+
+Calibration-only: NEVER use in place of [`assert_socp_exact!`](@ref)'s gate — it does not throw
+and cannot refuse a bad price. Exists so per-fixture noise-floor calibration (spike-002's method)
+can measure the solver's own residual floor across a tolerance ladder BEFORE choosing
+`assert_socp_exact!`'s `atol`/`rtol` for a new fixture (anti-certificate-laundering).
+
+Duplicates `assert_socp_exact!`'s per-branch, per-time gap computation VERBATIM —
+
+    lhs = value(l[b,t]) · value(v[from_b, t])
+    rhs = value(P[b,t])² + value(Q[b,t])²
+    gap = |lhs − rhs|
+
+— but returns the raw absolute cone residual `maxgap = maxₜ,ᵦ gap` directly, WITHOUT comparing
+it to any `atol`/`rtol` bound and WITHOUT throwing on a large value. Reads the same
+`ctx.meta[:pf_vars]`/`ctx.meta[:feeder]`/`ctx.meta[:T]` stash as `assert_socp_exact!`.
+"""
+function socp_relaxation_gap(ctx::ModelContext)
+    pv = ctx.meta[:pf_vars]
+    feeder = ctx.meta[:feeder]
+    T = ctx.meta[:T]
+
+    maxgap = 0.0
+    for (b, br) in enumerate(feeder.branches), t in 1:T
+        lhs = value(pv.l[b, t]) * value(pv.v[br.from, t])
+        rhs = value(pv.P[b, t])^2 + value(pv.Q[b, t])^2
+        gap = abs(lhs - rhs)
+        maxgap = max(maxgap, gap)
+    end
+    return maxgap
+end
+
+export assert_socp_exact!, socp_relaxation_gap
