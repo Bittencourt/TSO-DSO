@@ -29,6 +29,10 @@
 # this table — they are assigned the SAME near-ideal low-impedance treatment as
 # IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time (D-13, Assumption A2 analog);
 # tap changing is not modeled.
+#
+# 5 of the source's 43 switch=y Lines.dss records carry an explicit enabled=False
+# (genuine normally-open tie switches) and are EXCLUDED entirely from this set — the
+# IEEE-123 precedent (normally-open ties stay open so the graph is a clean tree).
 
 const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Float64}}(
     ("190-7361", "M1089120") => (0.008973963591198668, 0.0028914370841719994),
@@ -6061,10 +6065,6 @@ const IEEE8500_REGULATOR_EDGES = Set{Tuple{String, String}}([
     ("190-7361", "regxfmr_190-7361"),
     ("190-8581", "regxfmr_190-8581"),
     ("190-8593", "regxfmr_190-8593"),
-    ("193-103041", "228-1353934-4_INT"),
-    ("193-46661", "228-961799-3_INT"),
-    ("193-48013", "228-979371-2_INT"),
-    ("193-51796", "228-1048090-1_INT"),
     ("D5472341-1_INT", "F739842"),
     ("D5502543-2_INT", "Q14413"),
     ("D5513564-1_INT", "E192201"),
@@ -6083,7 +6083,6 @@ const IEEE8500_REGULATOR_EDGES = Set{Tuple{String, String}}([
     ("D5799561-2_INT", "E193509"),
     ("D5806920-1_INT", "E182726"),
     ("D5835167-6_INT", "Q14414"),
-    ("D5837361-8_INT", "E182745"),
     ("D5860423-3_INT", "Q14733"),
     ("D5861005-2_INT", "Q1301"),
     ("D5865224-1_INT", "F739841"),

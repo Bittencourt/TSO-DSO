@@ -37,6 +37,11 @@ include("data/ieee13.jl")
 # STUB seam wired here by plan 07-01 (after ieee13.jl in the data block); filled by 07-02.
 include("data/ieee123.jl")
 
+# --- IEEE-8500 scale-benchmark feeder fixtures (owned by plan 25-03, SCALE-01/02) ---
+# References IEEE123_SWITCH_R/IEEE123_SWITCH_X (D-13 near-ideal reuse), so must load AFTER
+# ieee123.jl.
+include("data/ieee8500.jl")
+
 # --- Solver abstraction (owned by plan 01-03, INFRA-02) ---
 include("solver/ProblemClass.jl")
 include("solver/factory.jl")

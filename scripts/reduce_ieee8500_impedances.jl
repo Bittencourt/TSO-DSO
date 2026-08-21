@@ -15,10 +15,17 @@
 #   2. The 3-winding center-tap transformer reduction is `R_total=ΣRs[1:3]`,
 #      `X_total=0.5*(Xhl+Xht+Xlt)` — NOT the naive 2-winding `%Rs[1]+%Rs[2]`/bare-`Xhl` placeholder.
 #
-# Regulator/switch segments (voltage regulators + the substation transformer + `switch=y` tie
-# segments in Lines.dss) carry NO real impedance value in the emitted table — they get the SAME
-# near-ideal low-impedance treatment as `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at fixture-build time
-# (D-13, Assumption A2 analog); tap changing is not modeled.
+# Regulator/switch segments (voltage regulators + the substation transformer + the 38 ENABLED
+# `switch=y` tie segments in Lines.dss) carry NO real impedance value in the emitted table — they
+# get the SAME near-ideal low-impedance treatment as `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at
+# fixture-build time (D-13, Assumption A2 analog); tap changing is not modeled. The remaining 5 of
+# 43 `switch=y` records carry an explicit `enabled=False` in the source text — genuine,
+# authoritative normally-open tie switches — and are EXCLUDED from `IEEE8500_REGULATOR_EDGES`
+# entirely, mirroring `ieee123.jl`'s treatment of its 4 normally-open tie switches (kept out of
+# `IEEE123_EDGES` so the graph is a clean tree). Confirmed by direct computation: including all 43
+# switches produces `edges - (buses - 1) == 5` (5 independent cycles); excluding exactly the 5
+# `enabled=False` records yields a fully connected tree over all 4,873 buses with `edges == 4872 ==
+# buses - 1`, matching `assert_radial`'s edge-count theorem exactly.
 #
 # Zero package dependencies (no `using`/`import` statements anywhere in this file): the parser is
 # Base + stdlib PCRE regex only, so `Project.toml [deps]` is untouched by this script.
@@ -232,25 +239,32 @@ struct ImpedanceEdge
 end
 
 """
-    parse_mv_lines(text) -> (Vector{MVLinecodeRef}, Vector{ImpedanceEdge}, Vector{Tuple{String,String}})
+    parse_mv_lines(text) -> (Vector{MVLinecodeRef}, Vector{ImpedanceEdge}, Vector{Tuple{String,String}}, Vector{Tuple{String,String}})
 
 Line-by-line (never a single big cross-field regex, so field ORDER in the source text does not
 matter) parse of every `New Line.*` statement in the vendored `Lines.dss` text, dispatched into
-three buckets:
-  1. `switch=y` tie segments (43 confirmed) — bus pair only, no impedance parsed (D-13: these get
-     the SAME near-ideal treatment as regulators, assigned by the caller).
-  2. `Linecode=<name>` references (2,473 confirmed) — deferred Ω lookup, returned as
+four buckets:
+  1. ENABLED `switch=y` tie segments (38 of 43 confirmed) — bus pair only, no impedance parsed
+     (D-13: these get the SAME near-ideal treatment as regulators, assigned by the caller).
+  2. DISABLED `switch=y` tie segments (5 of 43 confirmed, explicit `enabled=False` in the source
+     text — real, authoritative normally-open ties) — bus pair only, EXCLUDED from the network
+     entirely (the IEEE-123 precedent: normally-open tie switches stay open, so the graph is a
+     clean tree). Without this split the reduction silently treats every switch as closed, which
+     produces `edges != N-1` at `Feeder` construction time (5-cycle over-count) — see plan 25-03's
+     Task 1 deviation note.
+  3. `Linecode=<name>` references (2,473 confirmed) — deferred Ω lookup, returned as
      `MVLinecodeRef`.
-  3. Inline `r1=`/`x1=` records (`HVMV_Sub_connector` + the 9 raw `CAP_*` capacitor-connector
+  4. Inline `r1=`/`x1=` records (`HVMV_Sub_connector` + the 9 raw `CAP_*` capacitor-connector
      jumpers, 3 confirmed collision groups of 3 each) — real Ω computed directly here as
      `ImpedanceEdge`.
-Throws loudly if any `New Line.*` statement matches none of the three shapes (never silently
+Throws loudly if any `New Line.*` statement matches none of the four shapes (never silently
 drops a record).
 """
 function parse_mv_lines(text::AbstractString)
     linecode_recs = MVLinecodeRef[]
     inline_recs = ImpedanceEdge[]
     switch_pairs = Tuple{String, String}[]
+    disabled_switch_pairs = Tuple{String, String}[]
     total_seen = 0
     for raw in split(text, '\n')
         occursin(r"^\s*New\s+Line\."i, raw) || continue
@@ -263,7 +277,11 @@ function parse_mv_lines(text::AbstractString)
         b2 = parse_bus_base(m2.captures[1])
 
         if occursin(r"switch=y"i, raw)
-            push!(switch_pairs, (b1, b2))
+            if occursin(r"enabled=false"i, raw)
+                push!(disabled_switch_pairs, (b1, b2))
+            else
+                push!(switch_pairs, (b1, b2))
+            end
             continue
         end
 
@@ -308,15 +326,19 @@ function parse_mv_lines(text::AbstractString)
         x_ohm = parse(Float64, mx1.captures[1]) * len_km
         push!(inline_recs, ImpedanceEdge(b1, b2, r_ohm, x_ohm))
     end
-    expected = length(linecode_recs) + length(inline_recs) + length(switch_pairs)
+    expected =
+        length(linecode_recs) +
+        length(inline_recs) +
+        length(switch_pairs) +
+        length(disabled_switch_pairs)
     expected == total_seen || throw(
         ArgumentError(
             "internal consistency check failed: saw $total_seen New Line.* statements but only " *
             "classified $expected (linecode=$(length(linecode_recs)), inline=$(length(inline_recs)), " *
-            "switch=$(length(switch_pairs)))",
+            "switch=$(length(switch_pairs)), disabled_switch=$(length(disabled_switch_pairs)))",
         ),
     )
-    return linecode_recs, inline_recs, switch_pairs
+    return linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
@@ -603,13 +625,15 @@ end
 
 Collapse the regulator-bank/substation-transformer pairs (3 raw phase records per bank ->
 1 edge each, VREG2/VREG3/VREG4/FEEDER_REG + the single-record HVMV_Sub substation transformer)
-AND the 43 `switch=y` tie-segment pairs from `Lines.dss` into ONE `Set{Tuple{String,String}}` —
-D-13's "Regulator and switch segments carry the... near-ideal low-impedance treatment (Assumption
-A2 analog)" applies uniformly to both categories, so both land in the same emitted set. A plain
-`Set` naturally collapses the regulator banks' 3 identical-bus-pair phase records to 1 (there is
-no impedance value to compare here — the whole point is that neither category carries a real
-impedance in this table), so no separate assert-identical step is needed, unlike the MV/LV
-dedupe. Self-loops are asserted defensively.
+AND the 38 ENABLED `switch=y` tie-segment pairs from `Lines.dss` into ONE `Set{Tuple{String,String}}`
+— D-13's "Regulator and switch segments carry the... near-ideal low-impedance treatment (Assumption
+A2 analog)" applies uniformly to both categories, so both land in the same emitted set. The caller
+passes only the ENABLED switch pairs (`switch_pairs`, not `disabled_switch_pairs`) — the 5
+`enabled=False` normally-open ties never reach this function, matching `ieee123.jl`'s exclusion of
+its 4 normally-open tie switches. A plain `Set` naturally collapses the regulator banks' 3
+identical-bus-pair phase records to 1 (there is no impedance value to compare here — the whole
+point is that neither category carries a real impedance in this table), so no separate
+assert-identical step is needed, unlike the MV/LV dedupe. Self-loops are asserted defensively.
 """
 function build_regulator_edges(
     reg_pairs::Vector{Tuple{String, String}},
@@ -723,6 +747,19 @@ function emit_output(
         "# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time (D-13, Assumption A2 analog);",
     )
     println(io, "# tap changing is not modeled.")
+    println(io, "#")
+    println(
+        io,
+        "# 5 of the source's 43 switch=y Lines.dss records carry an explicit enabled=False",
+    )
+    println(
+        io,
+        "# (genuine normally-open tie switches) and are EXCLUDED entirely from this set — the",
+    )
+    println(
+        io,
+        "# IEEE-123 precedent (normally-open ties stay open so the graph is a clean tree).",
+    )
     println(io)
     println(
         io,
@@ -842,7 +879,16 @@ function main()
     loadxfmrcodes_text = read(LOADXFMRCODES_DSS, String)
 
     # --- MV: Lines.dss + LineCodes2.DSS ---
-    linecode_recs, inline_recs, switch_pairs = parse_mv_lines(lines_text)
+    linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs = parse_mv_lines(lines_text)
+    length(switch_pairs) == 38 || throw(
+        ArgumentError("expected exactly 38 enabled switch=y ties, got $(length(switch_pairs))"),
+    )
+    length(disabled_switch_pairs) == 5 || throw(
+        ArgumentError(
+            "expected exactly 5 disabled (enabled=False, normally-open) switch=y ties, got " *
+            "$(length(disabled_switch_pairs))",
+        ),
+    )
     mv_codes = sort!(unique(r.linecode for r in linecode_recs))
     mv_linecode_rx = Dict(code => parse_linecode_rx_by_name(linecodes2_text, code) for code in mv_codes)
     mv_edges_raw = ImpedanceEdge[]
