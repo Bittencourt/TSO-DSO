@@ -29,6 +29,7 @@ end
 # nested later in that same block. `Test` is a stdlib, always loadable regardless of environment.
 using Test
 using TSODSO
+using JuMP
 
 @testitem "ieee8500: headline fixture is radial, contiguous, single-root (ieee8500)" tags =
     [:phase25] begin
@@ -144,6 +145,123 @@ end
     @test spread_orders > 3.0
 end
 
+@testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up (plan 25-04)" tags =
+    [:phase25] begin
+    using TSODSO
+
+    profiles = generate_profiles(; seed = 1, T = 24)
+    feeder = TSODSO.ieee8500_modified()
+    pop = build_population(:default, feeder, :ieee8500, profiles, 7)
+
+    @test length(pop) == length(TSODSO.ieee8500_load_nodes()) + 4
+
+    houses = pop[1:(end - 4)]
+    caps = pop[(end - 3):end]
+
+    # Every house aggregator has exactly 3 devices (D-04: Thermostatic + Deferrable +
+    # PVBattery, no device-count axis introduced alongside the density sweep).
+    for h in houses
+        @test length(h.devices) == 3
+        @test count(d -> d isa TSODSO.Thermostatic, h.devices) == 1
+        @test count(d -> d isa TSODSO.Deferrable, h.devices) == 1
+        @test count(d -> d isa TSODSO.PVBattery, h.devices) == 1
+    end
+
+    # The 4 capacitor aggregators (D-12): Pdc == zeros(T), exactly one FixedCapacitor each.
+    T = length(profiles.demand)
+    for c in caps
+        @test c.Pdc == zeros(T)
+        @test length(c.devices) == 1
+        @test c.devices[1] isa TSODSO.FixedCapacitor
+    end
+end
+
+@testitem "ieee8500: FixedCapacitor contribute! + DEV-05 sole-:Rq-writer invariant (plan 25-04)" tags =
+    [:phase25] begin
+    using TSODSO, JuMP
+
+    # Direct unit call: a bare context, no feeder anywhere (network-agnostic device).
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    T = 4
+    q_nom = 0.75
+    d = TSODSO.FixedCapacitor(11, q_nom)
+    out = TSODSO.contribute!(d, ctx; T = T)
+
+    @test out isa NamedTuple
+    @test haskey(out, :vars) && haskey(out, :p_inject) && haskey(out, :q_inject) &&
+          haskey(out, :utility)
+    @test out.vars == NamedTuple()
+    @test length(out.q_inject) == T
+    for t in 1:T
+        @test JuMP.constant(out.q_inject[t]) == q_nom
+        @test isempty(JuMP.linear_terms(out.q_inject[t]))   # a pure constant, no variables
+        @test JuMP.constant(out.p_inject[t]) == 0.0
+        @test isempty(JuMP.linear_terms(out.p_inject[t]))
+    end
+
+    # DEV-05 structural regression (T-25-10): Aggregator must remain the SOLE :Rq writer —
+    # no `add_to_residual!(..., :Rq, ...)` call may exist outside Aggregator.jl.
+    devices_dir = joinpath(dirname(pathof(TSODSO)), "devices")
+    offenders = String[]
+    for f in readdir(devices_dir; join = true)
+        endswith(f, "Aggregator.jl") && continue
+        isfile(f) || continue
+        for line in eachline(f)
+            occursin(r"add_to_residual!.*:Rq", line) && push!(offenders, "$f: $line")
+        end
+    end
+    @test isempty(offenders)
+end
+
+@testitem "ieee8500: build_population(:ieee13) is byte-identical to its pre-plan-25-04 golden (plan 25-04)" tags =
+    [:phase25] begin
+    using TSODSO
+
+    profiles = generate_profiles(; seed = 1, T = 24)
+    pop = build_population(:default, ieee13_modified(), :ieee13, profiles, 42)
+
+    # Golden snapshot measured ONCE against the pre-plan-25-04 build_population output
+    # (before the :ieee8500/:ieee8500_mv branches were added to materialize.jl) — a
+    # regression trap for the must-not-break invariant, not just "still runs without error."
+    golden_bus_phi = [(agg.bus, agg.φ) for agg in pop]
+    @test golden_bus_phi == [(b, 0.90) for b in TSODSO._load_buses(ieee13_modified(), :ieee13)]
+
+    expected_load_scale = 0.005
+    for agg in pop
+        prof = generate_profiles(; seed = 42 + agg.bus, T = 24)
+        expected_pdc = Float64[expected_load_scale * dd for dd in prof.demand]
+        @test agg.Pdc == expected_pdc
+    end
+end
+
+@testitem "ieee8500: build_population(:ieee8500_mv) total-load conservation (plan 25-04)" tags =
+    [:phase25] begin
+    using TSODSO
+
+    profiles = generate_profiles(; seed = 1, T = 24)
+    seed = 7
+    T = 24
+
+    f8500 = TSODSO.ieee8500_modified()
+    pop8500 = build_population(:default, f8500, :ieee8500, profiles, seed)
+    houses8500 = pop8500[1:(end - 4)]
+
+    f8500mv = TSODSO.ieee8500_mv_modified()
+    pop8500mv = build_population(:default, f8500mv, :ieee8500_mv, profiles, seed)
+    housesmv = pop8500mv[1:(end - 4)]
+
+    @test length(pop8500mv) == length(TSODSO.ieee8500_mv_load_buses()) + 4
+
+    # Recovered per-bus kW magnitude: Pdc[t]/prof.demand[t] is constant across t by
+    # construction, so t=1 suffices to recover the fixed real-kW magnitude.
+    recovered(h) = h.Pdc[1] / generate_profiles(; seed = seed + h.bus, T = T).demand[1]
+
+    sum8500 = sum(recovered, houses8500)
+    summv = sum(recovered, housesmv)
+    @test isapprox(sum8500, summv; rtol = 1e-9)
+end
+
 # ─────────────────────────────────────────────────────────────────────────────────────────
 # Standalone plain-script block (VALIDATION.md quick command): replicates assertions
 # (1)-(4) and (6) above as plain @test calls, runnable via `julia --project=. test/test_ieee8500.jl`
@@ -209,6 +327,103 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 "max=$(measured_max_pu) pu, spread=$(spread_orders) orders of magnitude",
             )
             @test spread_orders > 3.0
+        end
+
+        @testset "(7) build_population(:ieee8500) house/capacitor roll-up (plan 25-04)" begin
+            profiles = generate_profiles(; seed = 1, T = 24)
+            feeder = TSODSO.ieee8500_modified()
+            pop = build_population(:default, feeder, :ieee8500, profiles, 7)
+
+            @test length(pop) == length(TSODSO.ieee8500_load_nodes()) + 4
+
+            houses = pop[1:(end - 4)]
+            caps = pop[(end - 3):end]
+
+            for h in houses
+                @test length(h.devices) == 3
+                @test count(d -> d isa TSODSO.Thermostatic, h.devices) == 1
+                @test count(d -> d isa TSODSO.Deferrable, h.devices) == 1
+                @test count(d -> d isa TSODSO.PVBattery, h.devices) == 1
+            end
+
+            T = length(profiles.demand)
+            for c in caps
+                @test c.Pdc == zeros(T)
+                @test length(c.devices) == 1
+                @test c.devices[1] isa TSODSO.FixedCapacitor
+            end
+        end
+
+        @testset "(8) FixedCapacitor contribute! + DEV-05 sole-:Rq-writer invariant (plan 25-04)" begin
+            model = JuMP.Model()
+            ctx = TSODSO.ModelContext(model)
+            T = 4
+            q_nom = 0.75
+            d = TSODSO.FixedCapacitor(11, q_nom)
+            out = TSODSO.contribute!(d, ctx; T = T)
+
+            @test out isa NamedTuple
+            @test haskey(out, :vars) &&
+                  haskey(out, :p_inject) &&
+                  haskey(out, :q_inject) &&
+                  haskey(out, :utility)
+            @test out.vars == NamedTuple()
+            @test length(out.q_inject) == T
+            for t in 1:T
+                @test JuMP.constant(out.q_inject[t]) == q_nom
+                @test isempty(JuMP.linear_terms(out.q_inject[t]))
+                @test JuMP.constant(out.p_inject[t]) == 0.0
+                @test isempty(JuMP.linear_terms(out.p_inject[t]))
+            end
+
+            devices_dir = joinpath(dirname(pathof(TSODSO)), "devices")
+            offenders = String[]
+            for f in readdir(devices_dir; join = true)
+                endswith(f, "Aggregator.jl") && continue
+                isfile(f) || continue
+                for line in eachline(f)
+                    occursin(r"add_to_residual!.*:Rq", line) && push!(offenders, "$f: $line")
+                end
+            end
+            @test isempty(offenders)
+        end
+
+        @testset "(9) build_population(:ieee13) byte-identical golden (plan 25-04)" begin
+            profiles = generate_profiles(; seed = 1, T = 24)
+            pop = build_population(:default, ieee13_modified(), :ieee13, profiles, 42)
+
+            golden_bus_phi = [(agg.bus, agg.φ) for agg in pop]
+            @test golden_bus_phi ==
+                  [(b, 0.90) for b in TSODSO._load_buses(ieee13_modified(), :ieee13)]
+
+            expected_load_scale = 0.005
+            for agg in pop
+                prof = generate_profiles(; seed = 42 + agg.bus, T = 24)
+                expected_pdc = Float64[expected_load_scale * dd for dd in prof.demand]
+                @test agg.Pdc == expected_pdc
+            end
+        end
+
+        @testset "(10) build_population(:ieee8500_mv) total-load conservation (plan 25-04)" begin
+            profiles = generate_profiles(; seed = 1, T = 24)
+            seed = 7
+            T = 24
+
+            f8500 = TSODSO.ieee8500_modified()
+            pop8500 = build_population(:default, f8500, :ieee8500, profiles, seed)
+            houses8500 = pop8500[1:(end - 4)]
+
+            f8500mv = TSODSO.ieee8500_mv_modified()
+            pop8500mv = build_population(:default, f8500mv, :ieee8500_mv, profiles, seed)
+            housesmv = pop8500mv[1:(end - 4)]
+
+            @test length(pop8500mv) == length(TSODSO.ieee8500_mv_load_buses()) + 4
+
+            recovered(h) = h.Pdc[1] / generate_profiles(; seed = seed + h.bus, T = T).demand[1]
+
+            sum8500 = sum(recovered, houses8500)
+            summv = sum(recovered, housesmv)
+            @test isapprox(sum8500, summv; rtol = 1e-9)
         end
     end
 end
