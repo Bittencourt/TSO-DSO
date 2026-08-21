@@ -129,3 +129,11 @@ None — SCS is a pure Julia weakdep with no external service/credential configu
 ---
 *Phase: 25-ieee-8500-scalability-benchmark*
 *Completed: 2026-08-21*
+
+## Self-Check: PASSED
+
+- FOUND: ext/TSODSOSCSExt.jl
+- FOUND: test/test_admm_timeout.jl
+- FOUND: .planning/phases/25-ieee-8500-scalability-benchmark/25-02-SUMMARY.md
+- FOUND commit: 305a57a (Task 2)
+- FOUND commit: 47c683f (Task 3)
