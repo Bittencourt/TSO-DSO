@@ -327,7 +327,7 @@ function extract_termination_status(msg::AbstractString)
 end
 
 """
-    run_centralized_point(feeder, aggs, λ0, atol, time_limit) -> NamedTuple
+    run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon) -> NamedTuple
 
 Solves the CENTRALIZED welfare problem at Clarabel's native `time_limit` (D-18), wrapped in
 try/catch so one bad point never kills the sweep (mirrors `socp_applicability_sweep.jl`). Timing
@@ -340,7 +340,7 @@ inexact point is RETURNED for this harness's OWN `exact_verdict` classification 
 freshly calibrated `atol`) rather than refused. On `TIME_LIMIT` the row is reported as
 `"budget_exceeded"` (D-18 language) rather than the raw MOI status string.
 """
-function run_centralized_point(feeder, aggs, λ0, atol, time_limit)
+function run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon::Int)
     opt = select_optimizer(SOCP(); time_limit = time_limit)
     t0 = time_ns()
     try
@@ -348,7 +348,7 @@ function run_centralized_point(feeder, aggs, λ0, atol, time_limit)
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = T,
+            T = T_horizon,
             λ₀ = λ0,
             optimizer = opt,
             allow_export = true,
@@ -393,20 +393,20 @@ function run_centralized_point(feeder, aggs, λ0, atol, time_limit)
 end
 
 """
-    run_admm_point(feeder, aggs, λ0, ρ0, time_limit) -> NamedTuple
+    run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon) -> NamedTuple
 
 Solves the SAME point via `solve_admm(...; time_limit_s = time_limit)` (plan 25-02's D-18 wall-
 clock exit), wrapped in try/catch (a genuine non-convergence with NO time budget throws loudly,
 per `solve_admm`'s own fail-loud maxiter cap — an honest, reportable outcome, not a harness bug).
-Peak memory is sampled via `Sys.maxrss()` before/after (D-19; no BenchmarkTools dependency, per
-RESEARCH's "Don't Hand-Roll"). NOTE: `Sys.maxrss()` is a MONOTONIC, WHOLE-PROCESS high-water
+Peak memory is sampled via `Sys.maxrss()` before/after (D-19; no new micro-benchmarking
+package dependency added for this, per RESEARCH's "Don't Hand-Roll"). NOTE: `Sys.maxrss()` is a MONOTONIC, WHOLE-PROCESS high-water
 mark, not a per-call current usage — the reported delta is the INCREMENTAL growth in the
 process's peak RSS attributable to (at most) this call; once the process has already peaked on an
 earlier, larger point, a later smaller point's delta legitimately reads ~0. This is the honest
 limitation of the plan's own prescribed "sampled before/after" method, documented here rather than
 silently presented as a precise per-call peak.
 """
-function run_admm_point(feeder, aggs, λ0, ρ0, time_limit)
+function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int)
     t0 = time_ns()
     rss_before = Sys.maxrss()
     result = try
@@ -414,7 +414,7 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit)
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = T,
+            T = T_horizon,
             λ₀ = λ0,
             ρ = ρ0,
             allow_export = true,
@@ -436,7 +436,7 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit)
 end
 
 """
-    run_scs_comparison(feeder, aggs, λ0, dadp_clarabel) -> NamedTuple
+    run_scs_comparison(feeder, aggs, λ0, dadp_clarabel, T_horizon) -> NamedTuple
 
 The D-20/D-21 Clarabel-vs-SCS crossover: solves the SAME centralized point via
 `TSODSO.alternative_optimizer(TSODSO.SCSChoice(), TSODSO.SOCP())` and reports the DADP-drift
@@ -448,7 +448,7 @@ produced a DADP to compare against (a failed/timed-out Clarabel point) — this 
 COMPARISON, not an independent price source, so it has nothing to compare when Clarabel itself
 did not converge.
 """
-function run_scs_comparison(feeder, aggs, λ0, dadp_clarabel)
+function run_scs_comparison(feeder, aggs, λ0, dadp_clarabel, T_horizon::Int)
     dadp_clarabel === nothing &&
         return (; scs_status = "skipped_no_clarabel_dadp", scs_dadp_drift = NaN)
     SCS_AVAILABLE || return (; scs_status = "scs_unavailable", scs_dadp_drift = NaN)
@@ -458,7 +458,7 @@ function run_scs_comparison(feeder, aggs, λ0, dadp_clarabel)
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = T,
+            T = T_horizon,
             λ₀ = λ0,
             optimizer = opt,
             allow_export = true,
@@ -475,6 +475,39 @@ end
 
 const _DEFAULT_DENSITY_GRID = "0.1,0.25,0.5,1.0"   # D-01's illustrative grid (Claude's discretion)
 const _DEFAULT_TIME_LIMIT_S = "120"                # D-18's per-point cap (Claude's discretion)
+# --quick's OWN tighter cap (Claude's discretion, measured 2026-08-21 on a quiet 4-core machine).
+# At the FULL T=24 horizon, ieee8500-mv/density=0.1's CENTRALIZED point alone costs ~76s wall
+# (43s JuMP assembly + 33s solve — assembly is NOT solver-time-limit-bounded, so a smaller
+# `--time-limit` cannot shrink it) and `solve_admm`'s BUILD-ONCE phase (before the wall-clock
+# loop even starts checking `time_limit_s`) alone costs ~13s — together already eating most of
+# the 120s `25-VALIDATION.md` feedback-latency budget before ANY solver iteration, on top of
+# Julia's own package-import/JIT overhead (measured ~40-45s for this harness's dependency set,
+# fixed regardless of problem size). Combined with `T_QUICK` below (which shrinks the DOMINANT
+# network-size cost), a 5s ADMM cap keeps the WHOLE --quick invocation's total WALL time
+# (imports + centralized + ADMM) comfortably under 120s (measured ≈70-80s) while still being
+# long enough to distinguish "hit the cap mid-loop" from "never even reached the loop" (D-18's
+# honest `budget_exceeded` early exit).
+const _QUICK_TIME_LIMIT_S = "5"
+# --quick's OWN tighter horizon (Claude's discretion, measured 2026-08-21 on a quiet 4-core
+# machine): the JuMP model-assembly cost (branch/voltage vars+constraints, `T*n_branches`) and
+# `solve_admm`'s BUILD-ONCE phase (BEFORE the wall-clock loop even starts checking
+# `_QUICK_TIME_LIMIT_S`) are both dominated by NETWORK size at the full `T=24` horizon — NEITHER
+# shrinks by lowering `--time-limit` alone (D-01: network-size cost is separable from AGR-OPT
+# fan-out cost, and neither is separable from T). At `T=24` the centralized point alone measured
+# ~76s wall (43s assembly + 33s solve) on ieee8500-mv/density=0.1, and `solve_admm`'s build phase
+# alone measured ~42s — together already exceeding VALIDATION.md's 120s max-feedback-latency
+# budget BEFORE any solver time. `--quick` uses a SHORTER `T_QUICK`-hour horizon (still passed
+# through the SAME code path as the general sweep — no separate quick-only logic branch) to keep
+# the WHOLE invocation comfortably under 120s; the general (non-quick) sweep keeps the full T=24.
+# T_QUICK=10 (not smaller): _ieee8500_house's Deferrable window is `Deferrable(bus, min(8,T),
+# min(16,T), 1.0, 0.5, 0.5)` (src/experiments/materialize.jl, plan 25-04 — out of THIS plan's
+# <files> scope to change), whose energy-budget guard requires `E=1.0 <= Pmax*window_length =
+# 0.5*(min(16,T)-min(8,T)+1)`. At `T<9` this collapses to `window_length=1` (E=1.0 > 0.5*1,
+# infeasible — discovered live: T_QUICK=4 threw `ArgumentError` at population-construction
+# time, a Rule-1 bug in THIS choice, not in materialize.jl). `T_QUICK=10` gives
+# `window_length=3` (capacity 1.5 ≥ 1.0), the smallest horizon that keeps every :ieee13/:ieee123/
+# :ieee8500/:ieee8500_mv population buildable while still cutting T=24's assembly/build cost.
+const T_QUICK = 10
 const _SWEEP_SEED = 20260821
 
 function parse_kv_flag(args, flag::String, default)
@@ -491,10 +524,14 @@ function run_sweep_mode(args)
     quick = has_flag(args, "--quick")
     fixture_str = parse_kv_flag(args, "--fixture", "ieee8500-mv")
     solver_str = parse_kv_flag(args, "--solver", "both")
-    time_limit = parse(Float64, parse_kv_flag(args, "--time-limit", _DEFAULT_TIME_LIMIT_S))
+    time_limit = parse(
+        Float64,
+        parse_kv_flag(args, "--time-limit", quick ? _QUICK_TIME_LIMIT_S : _DEFAULT_TIME_LIMIT_S),
+    )
     densities = if quick
         # --quick: the EXACT VALIDATION.md-documented CI-affordable single point — the smallest
-        # density on the smallest IEEE-8500 fixture, Clarabel only.
+        # density on the smallest IEEE-8500 fixture, Clarabel only, with the tighter
+        # _QUICK_TIME_LIMIT_S cap above (an explicit --time-limit still overrides it).
         fixture_str = "ieee8500-mv"
         solver_str = "clarabel"
         [minimum(parse(Float64, s) for s in split(_DEFAULT_DENSITY_GRID, ","))]
@@ -513,9 +550,10 @@ function run_sweep_mode(args)
         throw(ArgumentError("unknown --solver $solver_str; expected clarabel, scs, or both"))
     solver_sym = Symbol(solver_str)
 
+    T_horizon = quick ? T_QUICK : T
     feeder = build_feeder(fixture_sym)
-    profiles = generate_profiles(; seed = _SWEEP_SEED, T = T)
-    λ0 = build_price(:mem, T, nothing)
+    profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_horizon)
+    λ0 = build_price(:mem, T_horizon, nothing)
     rng = StableRNGs.LehmerRNG(_SWEEP_SEED)
     atol = EXACTNESS_ATOL[fixture_sym]
 
@@ -535,11 +573,12 @@ function run_sweep_mode(args)
         flush(stdout)
         aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
 
-        cpoint = run_centralized_point(feeder, aggs, λ0, atol, time_limit)
-        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit)   # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty; adaptive-ρ self-corrects thereafter
+        cpoint = run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon)
+        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon)   # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty; adaptive-ρ self-corrects thereafter
 
         scs_row =
-            solver_sym in (:scs, :both) ? run_scs_comparison(feeder, aggs, λ0, cpoint.dadp) :
+            solver_sym in (:scs, :both) ?
+            run_scs_comparison(feeder, aggs, λ0, cpoint.dadp, T_horizon) :
             (; scs_status = "not_requested", scs_dadp_drift = NaN)
 
         combined_err = join(
@@ -551,6 +590,7 @@ function run_sweep_mode(args)
             fixture = fixture_str,
             density = density,
             solver = solver_str,
+            T_horizon = T_horizon,
             n_agg = length(aggs),
             model_vars = cpoint.model_vars,
             model_cons = cpoint.model_cons,
