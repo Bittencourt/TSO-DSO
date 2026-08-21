@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Research Extension Rungs
-status: ready_to_plan
-stopped_at: Phase 23 complete (4/4) — ready to discuss Phase 24
-last_updated: 2026-08-11T01:20:25.099Z
-last_activity: 2026-08-10 -- Phase 23 execution started
+status: planning
+stopped_at: Phase 25 context gathered
+last_updated: "2026-08-21T01:38:16.208Z"
+last_activity: 2026-08-11
 progress:
-  total_phases: 6
-  completed_phases: 4
+  total_phases: 7
+  completed_phases: 5
   total_plans: 28
   completed_plans: 28
-  percent: 67
+  percent: 71
 ---
 
 # Project State
@@ -138,19 +138,23 @@ Recent decisions affecting current work:
   Structurally independent of Phase 24 — either order, or parallel.
 
   Scoping already done at add time (feed this to /gsd-discuss-phase 25, do not re-derive):
+
   - Source data is public and available: `dss-extensions/electricdss-tst`,
     `Version8/Distrib/IEEETestCases/8500-Node/`. The feeder ships its own **balanced load case**
     `Master.dss`, which matches the standing balanced-positive-sequence project scope — no
     unbalanced-to-balanced conversion needed.
+
   - `Master.dss` redirects `LoadXfmrCodes.dss` and comments out `LoadXfmrs.dss` because
     `LoadXfmrCodes.dss` contains BOTH the 9 XfmrCodes AND all 1177 service-transformer instances.
     The balanced case is fully connected: MV `L*` -> center-tap service xfmr -> `X*` LV -> triplex
     -> `SX*` load bus. Do not conclude the secondaries are disconnected.
+
   - Inventory: ~2526 MV line records, 1177 triplex secondaries, 1177 balanced loads (0.208 kV,
     pf 0.97), 1177 service transformers (9 XfmrCode sizes, 5-100 kVA, Xhl~2.04%, %Rs=[0.6 1.2 1.2]),
     4 capacitor banks (3x300 + 400 + 900 kvar), 3 single-phase FEEDER_REG regulators + substation
     115/12.47 kV transformer. Impedances are Ohm matrices in `LineCodes2.DSS` (units=km) —
     Fortescue-reducible by the same method as `scripts/reduce_ieee123_impedances.jl`.
+
   - "8500-node" counts per-phase nodes. After positive-sequence collapse expect **~4.9k buses**, not
     8500. Same IN-02 naming caveat already carried by `ieee13.jl`/`ieee123.jl`.
   - Two known scope risks, both load-bearing for the plan: (a) **no shunt/capacitor support exists
@@ -159,6 +163,7 @@ Recent decisions affecting current work:
     transformer at Xhl=2.04% is ~4.1 pu on a 1 MVA base before %Rs, while 0.001 km MV stubs sit at
     ~1e-5 pu. That ~6-orders-of-magnitude spread, not raw bus count, is the suspected conditioning
     wall, which makes the `S_base` choice a real decision rather than a formality.
+
   - `Feeder`/`Branch` store per-unit only, so multi-voltage-base ingestion needs no core struct
     change — just the right `PerUnitBase` per voltage level at ingestion time.
 
@@ -258,9 +263,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-08T01:07:28.428Z
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-4q-bess-live-reactive-dual-ascent/19-CONTEXT.md
+Last session: 2026-08-21T01:38:16.139Z
+Stopped at: Phase 25 context gathered
+Resume file: .planning/phases/25-ieee-8500-scalability-benchmark/25-CONTEXT.md
 
 ## Operator Next Steps
 
