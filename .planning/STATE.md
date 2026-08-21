@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 24 — discrete/integer investment expansion
+**Current focus:** Phase 24 — discrete/integer investment expansion (Phase 25, IEEE-8500 scale benchmark, now also queued and independent)
 
 ## Current Position
 
@@ -129,6 +129,38 @@ Recent decisions affecting current work:
   hard dependency — strictly depends on Phase 16 (reactive pricing) + Phase 17 (real impedances)
   both landing, since the thesis's voltage-driven Case B result is not credible on synthetic
   impedances or without priced reactive power.
+
+### Roadmap Evolution
+
+- Phase 25 added 2026-08-20: IEEE-8500 Scale Benchmark. Requirements SCALE-01..05 added to
+  REQUIREMENTS.md (v3.0 now 27 requirements, all mapped). User-chosen scope: scalability benchmark
+  (not a pricing case study), **full MV + LV secondary** (not MV-only), landed as a v3.0 phase.
+  Structurally independent of Phase 24 — either order, or parallel.
+
+  Scoping already done at add time (feed this to /gsd-discuss-phase 25, do not re-derive):
+  - Source data is public and available: `dss-extensions/electricdss-tst`,
+    `Version8/Distrib/IEEETestCases/8500-Node/`. The feeder ships its own **balanced load case**
+    `Master.dss`, which matches the standing balanced-positive-sequence project scope — no
+    unbalanced-to-balanced conversion needed.
+  - `Master.dss` redirects `LoadXfmrCodes.dss` and comments out `LoadXfmrs.dss` because
+    `LoadXfmrCodes.dss` contains BOTH the 9 XfmrCodes AND all 1177 service-transformer instances.
+    The balanced case is fully connected: MV `L*` -> center-tap service xfmr -> `X*` LV -> triplex
+    -> `SX*` load bus. Do not conclude the secondaries are disconnected.
+  - Inventory: ~2526 MV line records, 1177 triplex secondaries, 1177 balanced loads (0.208 kV,
+    pf 0.97), 1177 service transformers (9 XfmrCode sizes, 5-100 kVA, Xhl~2.04%, %Rs=[0.6 1.2 1.2]),
+    4 capacitor banks (3x300 + 400 + 900 kvar), 3 single-phase FEEDER_REG regulators + substation
+    115/12.47 kV transformer. Impedances are Ohm matrices in `LineCodes2.DSS` (units=km) —
+    Fortescue-reducible by the same method as `scripts/reduce_ieee123_impedances.jl`.
+  - "8500-node" counts per-phase nodes. After positive-sequence collapse expect **~4.9k buses**, not
+    8500. Same IN-02 naming caveat already carried by `ieee13.jl`/`ieee123.jl`.
+  - Two known scope risks, both load-bearing for the plan: (a) **no shunt/capacitor support exists
+    anywhere in `src/`** — the 4 cap banks need fixed-Q injection or a documented omission;
+    (b) **`IMPEDANCE_PU_MAX = 5.0`** (`src/units/PerUnit.jl:58`) will be crowded — a 5 kVA service
+    transformer at Xhl=2.04% is ~4.1 pu on a 1 MVA base before %Rs, while 0.001 km MV stubs sit at
+    ~1e-5 pu. That ~6-orders-of-magnitude spread, not raw bus count, is the suspected conditioning
+    wall, which makes the `S_base` choice a real decision rather than a formality.
+  - `Feeder`/`Branch` store per-unit only, so multi-voltage-base ingestion needs no core struct
+    change — just the right `PerUnitBase` per voltage level at ingestion time.
 
 ### Pending Todos
 

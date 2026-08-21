@@ -126,6 +126,37 @@ Lift the no-binaries guard consciously; integer investment in the single-distrib
       non-lifted builder (operational layer stays binary-free), and a live-executed literate page
       documenting the guard lift and cut mechanism.
 
+### IEEE-8500 Scale Benchmark (`SCALE`)
+Establish whether the operational pipeline holds at real-utility feeder scale — a ~40x jump over the
+largest fixture shipped to date (IEEE-123) — and characterize the wall when it appears.
+
+- [ ] **SCALE-01**: A committed **IEEE-8500 balanced-load-case fixture** (full MV + LV secondary)
+      is ingested from the vendored public OpenDSS source by a dependency-free reduction script,
+      following the `scripts/reduce_ieee123_impedances.jl` precedent (topology read as text, never
+      re-derived; provenance header with source URL and fetch date; `--verify` self-check mode).
+      Positive-sequence collapse of the phase-tagged nodes is documented, so the fixture's real bus
+      count is stated rather than implied by the historical "8500-node" name (IN-02 naming rule).
+- [ ] **SCALE-02**: **Multi-voltage-base per-unit ingestion** is correct and explicit: the 12.47 kV
+      MV primary, the 0.12/0.208 kV secondary, and the 1177 center-tap service transformers each
+      convert on their own base, with the chosen `S_base` recorded as a load-bearing decision — the
+      5 kVA service transformers land near `IMPEDANCE_PU_MAX = 5.0` while 0.001 km MV stubs sit at
+      ~1e-5 pu, so the tripwire band is either cleared honestly or consciously re-scoped, never
+      silently widened to make the fixture load.
+- [ ] **SCALE-03**: Non-modeled devices are handled by **stated assumption, not silence**: the four
+      capacitor banks (no shunt support exists in `src/`) become fixed reactive injections or a
+      documented omission with its voltage-profile consequence measured; regulators and switches
+      follow the existing IEEE-123 near-ideal low-impedance treatment (Assumption A2).
+- [ ] **SCALE-04**: The **benchmark itself is the deliverable**: centralized SOCP and ADMM/DADP
+      solve time (end-to-end and per-iteration), ADMM iteration count, and peak memory are measured
+      on the committed fixture against the IEEE-13/IEEE-123 baselines, with the Clarabel-vs-SCS
+      crossover point identified rather than assumed. Numbers are reported as measured, including
+      any regime where the pipeline does not converge.
+- [ ] **SCALE-05**: **SOCP exactness is re-certified at scale** with its own gate — the existing
+      IEEE-13/123 tolerances are not reused (the standing anti-certificate-laundering rule). Where
+      exactness or convergence fails, the failure is characterized (conditioning vs. size vs.
+      formulation) rather than tuned away, and a live-executed literate page documents the fixture,
+      the assumptions, and the measured scaling curve.
+
 ---
 
 ## Future Requirements (deferred — later milestone)
@@ -143,6 +174,10 @@ Lift the no-binaries guard consciously; integer investment in the single-distrib
   alternating-cut refinements — defer until measured iteration counts demand them.
 - **REPRO-STRETCH-01**: Exact-figure thesis reproduction (+$1,819 / +25%), still gated on thesis
   Appendix E (IP-blocked CONICET repository). Carried forward from v2.1.
+- **SCALE-STRETCH**: Performance *engineering* driven by the Phase 25 measurements — `direct_model`
+  on the hot subproblems, sparse-aware model assembly, parallel per-node AGR-OPT solves, impedance
+  rescaling/preconditioning. Deliberately deferred: Phase 25 measures and characterizes the wall;
+  optimizing it is separate work and must not be entangled with the benchmark that justifies it.
 
 ## Out of Scope (v3.0)
 
@@ -185,12 +220,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-02 | Phase 24 | Pending |
 | INT-03 | Phase 24 | Pending |
 | INT-04 | Phase 24 | Pending |
+| SCALE-01 | Phase 25 | Pending |
+| SCALE-02 | Phase 25 | Pending |
+| SCALE-03 | Phase 25 | Pending |
+| SCALE-04 | Phase 25 | Pending |
+| SCALE-05 | Phase 25 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 22 total
-- Mapped to phases: 22/22 ✓
+- v3.0 requirements: 27 total
+- Mapped to phases: 27/27 ✓
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-26*
-*Last updated: 2026-07-27 — roadmap created, all 22 requirements mapped to Phases 19-24*
+*Last updated: 2026-08-20 — SCALE-01..05 added (Phase 25, IEEE-8500 scale benchmark); 27 requirements
+mapped to Phases 19-25*

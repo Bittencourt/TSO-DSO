@@ -5,7 +5,7 @@
 - ✅ **v1.0 Operational Transactive-Energy Core** — Phases 1–9 (shipped 2026-07-20)
 - ✅ **v2.0 Stackelberg-Nash TSO–DSO Planning Game** — Phases 10–14 (shipped 2026-07-24)
 - ✅ **v2.1 Validation & Reproduction** — Phases 15–18 (shipped 2026-07-26)
-- 🚧 **v3.0 Research Extension Rungs** — Phases 19–24 (in progress)
+- 🚧 **v3.0 Research Extension Rungs** — Phases 19–25 (in progress)
 
 Full phase details, decisions, and per-phase artifacts for shipped milestones are archived in
 [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md),
@@ -20,6 +20,7 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 - [x] **Phase 22: Stochastic PV/Demand Uncertainty** - Two-stage extensive-form welfare solve over seeded Markov scenarios, with per-scenario DADPs as the primary price output
 - [x] **Phase 23: Meshed Networks** - A parallel `MeshedFeeder` + non-radial SOCP formulation with its own angle-recoverability certificate, combined with Phase 19's live reactive price in one literate rung page
 - [ ] **Phase 24: Discrete/Integer Investment Expansion** - Binary-expansion integer investment + Laporte–Louveaux integer cuts in the planning Benders master, with the PVAL-04 no-binaries guard consciously scoped
+- [ ] **Phase 25: IEEE-8500 Scale Benchmark** - Ingest the public IEEE-8500 balanced-load-case feeder (full MV + LV secondary) as a committed fixture, then measure whether the ADMM/DADP pipeline holds ~40x above IEEE-123 and characterize the wall
 
 ## Phase Details
 
@@ -324,6 +325,48 @@ earlier, lower-risk axes' validated rungs unblocked.
      lift and cut mechanism.
 **Plans**: TBD
 
+### Phase 25: IEEE-8500 Scale Benchmark
+
+**Goal**: A researcher can load a real-utility-scale feeder — the public IEEE-8500 balanced load case,
+full MV primary plus LV secondary — as a committed, provenance-tracked fixture, and get honest measured
+answers about whether the operational pipeline holds ~40x above the largest fixture shipped to date:
+solve time, ADMM iteration count, memory, the Clarabel-vs-SCS crossover, and whether SOCP exactness
+still certifies. Where it does not hold, the wall is *characterized* (conditioning vs. size vs.
+formulation), not tuned away.
+**Depends on**: Nothing in v3.0 — structurally independent of Phase 24 (this phase touches
+`src/data/` + a new reduction script + benchmark harness; Phase 24 touches only `src/planning/`), so
+the two can run in either order or in parallel. It does consume the v1.0 operational core and the
+IEEE-13/IEEE-123 fixtures as the baselines it scales *against*, all of which are shipped and stable.
+**Requirements**: SCALE-01, SCALE-02, SCALE-03, SCALE-04, SCALE-05
+**Success Criteria** (what must be TRUE):
+
+  1. A committed IEEE-8500 fixture exists, generated from vendored public OpenDSS source by a
+     dependency-free reduction script (`Project.toml [deps]` untouched) with a `--verify` mode, a
+     provenance header naming source URL and fetch date, and topology read as text rather than
+     re-derived — the `scripts/reduce_ieee123_impedances.jl` pattern. Its real post-collapse bus
+     count is stated, not implied by the historical "8500-node" name (IN-02).
+
+  2. Multi-voltage-base per-unit ingestion is explicit and correct across the 12.47 kV primary, the
+     0.12/0.208 kV secondary, and the 1177 center-tap service transformers, with the `S_base` choice
+     recorded as a load-bearing decision. The `IMPEDANCE_PU_MAX = 5.0` tripwire is either cleared
+     honestly or consciously re-scoped with reasoning — never silently widened to make the fixture
+     load.
+
+  3. Every device the framework does not model is handled by stated assumption: the four capacitor
+     banks (no shunt support exists in `src/`) become fixed reactive injections or a documented
+     omission whose voltage-profile consequence is measured; regulators/switches keep the existing
+     near-ideal low-impedance treatment (IEEE-123 Assumption A2).
+
+  4. Measured scaling numbers are the deliverable — centralized SOCP and ADMM/DADP wall time
+     (end-to-end and per-iteration), iteration counts, peak memory — reported against the
+     IEEE-13/IEEE-123 baselines, with the Clarabel-vs-SCS crossover identified by measurement.
+     Non-convergent regimes are reported as found, not omitted.
+
+  5. SOCP exactness carries its own new gate at this scale (no reuse of the IEEE-13/123 tolerances —
+     the standing anti-certificate-laundering rule), and a live-executed literate page documents the
+     fixture, its assumptions, and the scaling curve.
+**Plans**: TBD
+
 <details>
 <summary>✅ v1.0 Operational Transactive-Energy Core (Phases 1–9) — SHIPPED 2026-07-20</summary>
 
@@ -402,6 +445,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
 | 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
+| 25. IEEE-8500 Scale Benchmark | v3.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
 
@@ -451,6 +495,14 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
   plain SOCP relaxation stays exact. Phase 20 addresses this for IEEE-13's EXACT-04 fixture; whether
   the restriction mechanism also resolves the IEEE-123 real-impedance case is an open question for
   Phase 20 to answer, not assumed.
+
+- **SCALE-STRETCH** (performance *engineering* driven by Phase 25's measurements — `direct_model` on
+  the hot subproblems, sparse-aware assembly, parallel per-node AGR-OPT solves, impedance
+  rescaling/preconditioning): deliberately deferred past Phase 25. That phase measures and
+  characterizes the wall; optimizing it is separate work and must not be entangled with the benchmark
+  that justifies it. Also deferred: the high-PV DLMP case study *at* 8500 scale (a physics story, not a
+  scaling one) and any unbalanced three-phase use of the source data (standing project scope is
+  balanced positive-sequence — this phase uses the feeder's own **balanced load case** master).
 
 - **Deferred tech debt**: see `milestones/v1.0-MILESTONE-AUDIT.md`, `milestones/v2.0-MILESTONE-AUDIT.md`,
   and `milestones/v2.1-MILESTONE-AUDIT.md` (unflipped Nyquist flags, ROADMAP "reactive pricing"
