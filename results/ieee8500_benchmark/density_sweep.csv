@@ -1,0 +1,2 @@
+fixture,density,solver,T_horizon,n_agg,model_vars,model_cons,termination_status,assembly_time_s,solve_time_s,total_time_s,exact_maxgap,exact_atol_used,exact_verdict,clarabel_tol_gap,admm_status,admm_iters,admm_time_s,admm_peak_rss_delta_mb,scs_status,scs_dadp_drift,scs_eps_abs,error_msg
+ieee8500-mv,0.1,clarabel,10,118,137594,275118,OPTIMAL,30.616257454,13.278548327000001,43.894805781,0.0682928205189981,0.17959156506520202,exact,1.0e-8,budget_exceeded,1,18.010389036,551.86328125,not_requested,NaN,NaN,
