@@ -130,13 +130,13 @@ Lift the no-binaries guard consciously; integer investment in the single-distrib
 Establish whether the operational pipeline holds at real-utility feeder scale — a ~40x jump over the
 largest fixture shipped to date (IEEE-123) — and characterize the wall when it appears.
 
-- [ ] **SCALE-01**: A committed **IEEE-8500 balanced-load-case fixture** (full MV + LV secondary)
+- [x] **SCALE-01**: A committed **IEEE-8500 balanced-load-case fixture** (full MV + LV secondary)
       is ingested from the vendored public OpenDSS source by a dependency-free reduction script,
       following the `scripts/reduce_ieee123_impedances.jl` precedent (topology read as text, never
       re-derived; provenance header with source URL and fetch date; `--verify` self-check mode).
       Positive-sequence collapse of the phase-tagged nodes is documented, so the fixture's real bus
       count is stated rather than implied by the historical "8500-node" name (IN-02 naming rule).
-- [ ] **SCALE-02**: **Multi-voltage-base per-unit ingestion** is correct and explicit: the 12.47 kV
+- [x] **SCALE-02**: **Multi-voltage-base per-unit ingestion** is correct and explicit: the 12.47 kV
       MV primary, the 0.12/0.208 kV secondary, and the 1177 center-tap service transformers each
       convert on their own base, with the chosen `S_base` recorded as a load-bearing decision — the
       5 kVA service transformers land near `IMPEDANCE_PU_MAX = 5.0` while 0.001 km MV stubs sit at
@@ -220,8 +220,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-02 | Phase 24 | Pending |
 | INT-03 | Phase 24 | Pending |
 | INT-04 | Phase 24 | Pending |
-| SCALE-01 | Phase 25 | Pending |
-| SCALE-02 | Phase 25 | Pending |
+| SCALE-01 | Phase 25 | Complete |
+| SCALE-02 | Phase 25 | Complete |
 | SCALE-03 | Phase 25 | Pending |
 | SCALE-04 | Phase 25 | Pending |
 | SCALE-05 | Phase 25 | Pending |
