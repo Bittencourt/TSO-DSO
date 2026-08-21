@@ -150,4 +150,30 @@ function commercial_optimizer(choice, pc::ProblemClass)
     )
 end
 
-export select_optimizer, commercial_optimizer
+"""
+    alternative_optimizer(choice, pc::ProblemClass)
+
+Return a JuMP-ready optimizer factory for an OPEN-SOURCE alternative solver selected
+by `choice` (e.g. an [`SCSChoice`](@ref) marker) for problem class `pc`.
+
+This is a NEW, SEPARATE dispatch point from [`commercial_optimizer`](@ref) (D-20):
+alternative solvers like SCS are opt-in weakdep extensions, exactly like the
+commercial backends, but they are NOT commercial/licensed software, so routing them
+through a function named/documented as "commercial" would be a semantic mismatch.
+
+This fallback method ERRORS by design: alternative backends are opt-in and are wired
+in only by package extensions (e.g. `TSODSOSCSExt`), which add methods for the
+concrete marker types. To enable one, `import SCS` in your environment before calling.
+"""
+function alternative_optimizer(choice, pc::ProblemClass)
+    error(
+        """
+        No alternative optimizer is available for choice $(choice) and problem class $(pc).
+        Alternative solvers are opt-in weakdep extensions and are never hard dependencies.
+        To enable one, load the solver in your environment, e.g.:
+            import SCS # enables alternative_optimizer(SCSChoice(), pc)
+        """,
+    )
+end
+
+export select_optimizer, commercial_optimizer, alternative_optimizer

@@ -65,4 +65,17 @@ Marker type selecting the commercial Mosek backend via
 """
 struct MosekChoice end
 
-export ProblemClass, LP, MILP, QP, SOCP, NLP, GurobiChoice, MosekChoice
+"""
+    SCSChoice
+
+Marker type selecting the open-source, first-order SCS backend via a NEW, SEPARATE
+[`alternative_optimizer`](@ref) function — deliberately NEVER `commercial_optimizer`
+(D-20). Routing an open-source solver through a dispatch named/documented as
+"commercial" would be a semantic mismatch: SCS is opt-in (a weakdep, never a hard
+dependency), but it is not a commercial/licensed backend like Gurobi or Mosek. The
+mapping method is added ONLY by the `TSODSOSCSExt` package extension, which loads
+solely when the user has `SCS` in their environment.
+"""
+struct SCSChoice end
+
+export ProblemClass, LP, MILP, QP, SOCP, NLP, GurobiChoice, MosekChoice, SCSChoice
