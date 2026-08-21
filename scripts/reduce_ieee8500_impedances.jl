@@ -450,3 +450,453 @@ function parse_capacitors(text::AbstractString)
     return caps
 end
 
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# Step 4: 3-winding center-tap service-transformer reduction (D-05 REVISED, Assumption A1)
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+"""
+    XfmrCode
+
+A reduced `XfmrCode` definition: `r_pct`/`x_pct` on the transformer's OWN kVA base (D-09: no
+pu-conversion here), and `kva` (the code's own rating, read from `kVAs=[...]`'s first entry — all
+three windings share the same kVA rating in this fixture).
+"""
+struct XfmrCode
+    r_pct::Float64
+    x_pct::Float64
+    kva::Float64
+end
+
+"""
+    parse_xfmr_codes(text) -> Dict{String,XfmrCode}
+
+Parse `LoadXfmrCodes.dss`'s 9 `New XfmrCode.*` definitions and reduce each via the CONFIRMED
+(post-research) 3-winding balanced center-tap formula:
+`R_total% = %Rs[1]+%Rs[2]+%Rs[3]`, `X_total% = 0.5*(Xhl+Xht+Xlt)` — NOT the superseded
+2-winding placeholder (`%Rs[1]+%Rs[2]`, bare `Xhl`) that under-counted both R and X (Common
+Pitfalls §2). Derived and verified against OpenDSS's own `Transformer.pas` this research session
+— not lifted from a citable published formula (Assumption A1).
+"""
+function parse_xfmr_codes(text::AbstractString)
+    codes = Dict{String, XfmrCode}()
+    for raw in split(text, '\n')
+        occursin(r"^\s*New\s+XfmrCode\."i, raw) || continue
+        mname = match(r"New\s+XfmrCode\.(\S+)"i, raw)
+        mkva = match(r"kVAs=\[\s*([\d.]+)"i, raw)
+        mrs = match(r"%Rs=\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]"i, raw)
+        mxhl = match(r"\bXhl=([\d.]+)"i, raw)
+        mxht = match(r"\bXht=([\d.]+)"i, raw)
+        mxlt = match(r"\bXlt=([\d.]+)"i, raw)
+        (mname === nothing || mkva === nothing || mrs === nothing || mxhl === nothing || mxht === nothing || mxlt === nothing) &&
+            throw(ArgumentError("New XfmrCode statement missing an expected field: $raw"))
+        name = String(mname.captures[1])
+        kva = parse(Float64, mkva.captures[1])
+        rs1, rs2, rs3 = parse.(Float64, (mrs.captures[1], mrs.captures[2], mrs.captures[3]))
+        xhl, xht, xlt = parse.(Float64, (mxhl.captures[1], mxht.captures[1], mxlt.captures[1]))
+        r_total_pct = rs1 + rs2 + rs3
+        x_total_pct = 0.5 * (xhl + xht + xlt)
+        haskey(codes, name) &&
+            throw(ArgumentError("duplicate XfmrCode definition for \"$name\" in $(LOADXFMRCODES_DSS)"))
+        codes[name] = XfmrCode(r_total_pct, x_total_pct, kva)
+    end
+    return codes
+end
+
+"""
+    parse_xfmr_instances(text) -> Vector{Tuple{String,String,String}}
+
+Parse `LoadXfmrCodes.dss`'s 1,177 `New Transformer.* XfmrCode=<code> buses=[<mv> <lv1> <lv2>]`
+instances into `(mv_bus_base, lv_bus_base, code_name)` triples. Asserts the two LV terminals
+(`X<name>.1.0`/`X<name>.0.2`) share the SAME base bus name after phase-stripping — they are the
+two secondary legs of the SAME physical service transformer.
+"""
+function parse_xfmr_instances(text::AbstractString)
+    instances = Tuple{String, String, String}[]
+    for raw in split(text, '\n')
+        occursin(r"^\s*New\s+Transformer\."i, raw) || continue
+        occursin(r"XfmrCode="i, raw) || continue
+        mcode = match(r"XfmrCode=(\S+)"i, raw)
+        mbuses = match(r"buses=\[\s*(\S+)\s+(\S+)\s+(\S+)\s*\]"i, raw)
+        (mcode === nothing || mbuses === nothing) &&
+            throw(ArgumentError("service-transformer New Transformer missing XfmrCode=/buses=: $raw"))
+        mv_base = parse_bus_base(mbuses.captures[1])
+        lv_base1 = parse_bus_base(mbuses.captures[2])
+        lv_base2 = parse_bus_base(mbuses.captures[3])
+        lv_base1 == lv_base2 || throw(
+            ArgumentError(
+                "service transformer's two LV terminals do not share a base bus name: $raw",
+            ),
+        )
+        push!(instances, (mv_base, lv_base1, String(mcode.captures[1])))
+    end
+    return instances
+end
+
+"""
+    build_xfmr_edges(instances, codes) -> Dict{Tuple{String,String}, NamedTuple}
+
+Look up each parsed instance's `XfmrCode` and assemble the final
+`Dict{Tuple{String,String}, NamedTuple{(:r_pct,:x_pct,:code,:kva), ...}}` keyed
+`(mv_bus_base, lv_bus_base)`. Throws loudly on an unknown code reference or a duplicate
+`(mv,lv)` key (expected exactly one service transformer per MV/LV bus pair).
+"""
+function build_xfmr_edges(
+    instances::Vector{Tuple{String, String, String}},
+    codes::Dict{String, XfmrCode},
+)
+    edges = Dict{
+        Tuple{String, String},
+        NamedTuple{(:r_pct, :x_pct, :code, :kva), Tuple{Float64, Float64, String, Float64}},
+    }()
+    for (mv_base, lv_base, code_name) in instances
+        haskey(codes, code_name) || throw(
+            ArgumentError(
+                "service transformer references unknown XfmrCode \"$code_name\" — the " *
+                "referenced-code tripwire should have caught this",
+            ),
+        )
+        key = (mv_base, lv_base)
+        haskey(edges, key) && throw(
+            ArgumentError(
+                "duplicate service-transformer edge $key — expected exactly one transformer " *
+                "per (mv,lv) bus pair",
+            ),
+        )
+        c = codes[code_name]
+        edges[key] = (r_pct = c.r_pct, x_pct = c.x_pct, code = code_name, kva = c.kva)
+    end
+    return edges
+end
+
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# Step 5: Regulators / substation transformer / switch ties -> near-ideal edge set (D-13)
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+"""
+    parse_transformer_bus_pairs(text) -> Vector{Tuple{String,String}}
+
+Parse every `New Transformer.* buses=(<bus1>, <bus2>)` statement (the regulator-bank /
+substation-transformer syntax — DISTINCT from the service-transformer `buses=[<mv> <lv1> <lv2>]`
+syntax handled by `parse_xfmr_instances`) into phase-stripped `(bus1_base, bus2_base)` pairs.
+Works against BOTH `Regulators.dss` (VREG2/VREG3/VREG4, 3 single-phase records each) and
+`Transformers.dss` (`FEEDER_REG`, 3 single-phase records, PLUS the single 3-phase `HVMV_Sub`
+substation transformer record) — same call site, same function, per D-13's "regulator banks plus
+the substation transformer" requirement.
+"""
+function parse_transformer_bus_pairs(text::AbstractString)
+    pairs = Tuple{String, String}[]
+    for raw in split(text, '\n')
+        occursin(r"^\s*New\s+Transformer\."i, raw) || continue
+        occursin(r"buses=\(", raw) || continue
+        m = match(r"buses=\(\s*(\S+?)\s*,\s*(\S+?)\s*\)"i, raw)
+        m === nothing &&
+            throw(ArgumentError("regulator/substation New Transformer missing buses=(...): $raw"))
+        b1 = parse_bus_base(m.captures[1])
+        b2 = parse_bus_base(m.captures[2])
+        push!(pairs, (b1, b2))
+    end
+    return pairs
+end
+
+"""
+    build_regulator_edges(reg_pairs, switch_pairs) -> Set{Tuple{String,String}}
+
+Collapse the regulator-bank/substation-transformer pairs (3 raw phase records per bank ->
+1 edge each, VREG2/VREG3/VREG4/FEEDER_REG + the single-record HVMV_Sub substation transformer)
+AND the 43 `switch=y` tie-segment pairs from `Lines.dss` into ONE `Set{Tuple{String,String}}` —
+D-13's "Regulator and switch segments carry the... near-ideal low-impedance treatment (Assumption
+A2 analog)" applies uniformly to both categories, so both land in the same emitted set. A plain
+`Set` naturally collapses the regulator banks' 3 identical-bus-pair phase records to 1 (there is
+no impedance value to compare here — the whole point is that neither category carries a real
+impedance in this table), so no separate assert-identical step is needed, unlike the MV/LV
+dedupe. Self-loops are asserted defensively.
+"""
+function build_regulator_edges(
+    reg_pairs::Vector{Tuple{String, String}},
+    switch_pairs::Vector{Tuple{String, String}},
+)
+    edges = Set{Tuple{String, String}}()
+    for (b1, b2) in reg_pairs
+        b1 == b2 && throw(
+            ArgumentError("self-loop in regulator/substation-transformer bus pair: ($b1, $b2)"),
+        )
+        push!(edges, canonical_pair(b1, b2))
+    end
+    for (b1, b2) in switch_pairs
+        b1 == b2 && throw(ArgumentError("self-loop in switch=y record: ($b1, $b2)"))
+        push!(edges, canonical_pair(b1, b2))
+    end
+    return edges
+end
+
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# emit_output / verify / main
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+"""
+    emit_output(mv_edges, lv_edges, xfmr_edges, cap_kvar, load_kw, reg_edges, outfile) -> String
+
+Write the committed Julia source file declaring all six generated `const` tables. Returns the
+path written.
+"""
+function emit_output(
+    mv_edges::Dict{Tuple{String, String}, Tuple{Float64, Float64}},
+    lv_edges::Dict{Tuple{String, String}, Tuple{Float64, Float64}},
+    xfmr_edges::Dict{
+        Tuple{String, String},
+        NamedTuple{(:r_pct, :x_pct, :code, :kva), Tuple{Float64, Float64, String, Float64}},
+    },
+    cap_kvar::Dict{String, Float64},
+    load_kw::Dict{String, Float64},
+    reg_edges::Set{Tuple{String, String}},
+    outfile::AbstractString,
+)
+    io = IOBuffer()
+    println(io, "# src/data/ieee8500_impedances.jl")
+    println(io, "#")
+    println(
+        io,
+        "# GENERATED by scripts/reduce_ieee8500_impedances.jl — DO NOT hand-edit; re-run the",
+    )
+    println(io, "# script and re-commit if the upstream .dss files change.")
+    println(io, "#")
+    println(io, "# Source: raw.githubusercontent.com/dss-extensions/electricdss-tst/")
+    println(io, "#         $(PINNED_COMMIT_SHA)/Version8/Distrib/IEEETestCases/8500-Node/")
+    println(
+        io,
+        "#         (Master.dss, LineCodes2.DSS, Lines.dss, Transformers.dss, LoadXfmrCodes.dss,",
+    )
+    println(
+        io,
+        "#         Triplex_Lines.DSS, Triplex_Linecodes.dss, Loads.dss, Capacitors.dss,",
+    )
+    println(
+        io,
+        "#         Regulators.dss), pinned commit fetched and sha256-verified " *
+        "$(FETCH_VERIFIED_DATE)",
+    )
+    println(io, "#         (vendored copies committed at scripts/data/ieee8500/).")
+    println(io, "#")
+    println(
+        io,
+        "# NOTE: Master.dss redirects LineCodes2.DSS (Ohm matrices, Units=km) for MV lines — NOT",
+    )
+    println(io, "# LineCodes.dss (a different, unrelated file bundled in the same upstream repo).")
+    println(io, "#")
+    println(io, "# 3-winding center-tap service-transformer reduction (D-05 REVISED):")
+    println(io, "#     R_total% = %Rs[1] + %Rs[2] + %Rs[3]")
+    println(io, "#     X_total% = 0.5 * (Xhl + Xht + Xlt)")
+    println(
+        io,
+        "# Derived and verified against OpenDSS's own Transformer.pas this research session — not",
+    )
+    println(
+        io,
+        "# a citable published formula (Assumption A1). See 25-RESEARCH.md Architecture Patterns",
+    )
+    println(io, "# §1 for the full star-equivalent-decomposition derivation.")
+    println(io, "#")
+    println(
+        io,
+        "# Values are per-segment SERIES IMPEDANCE IN OHMS (MV/LV branches, positive-sequence",
+    )
+    println(
+        io,
+        "# Fortescue-averaged) or PERCENT ON THE TRANSFORMER'S OWN kVA BASE (transformer edges) —",
+    )
+    println(
+        io,
+        "# NEITHER is per-unit. Converted once at ingestion in ieee8500_modified() via",
+    )
+    println(io, "# to_pu_impedance (D-09) — never inside this reduction script.")
+    println(io, "#")
+    println(
+        io,
+        "# Regulator/switch segments (IEEE8500_REGULATOR_EDGES) carry NO real impedance value in",
+    )
+    println(
+        io,
+        "# this table — they are assigned the SAME near-ideal low-impedance treatment as",
+    )
+    println(
+        io,
+        "# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time (D-13, Assumption A2 analog);",
+    )
+    println(io, "# tap changing is not modeled.")
+    println(io)
+    println(
+        io,
+        "const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Float64}}(",
+    )
+    for key in sort!(collect(keys(mv_edges)))
+        r, x = mv_edges[key]
+        println(io, "    ($(repr(key[1])), $(repr(key[2]))) => ($(r), $(x)),")
+    end
+    println(io, ")")
+    println(io)
+    println(
+        io,
+        "const IEEE8500_LV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Float64}}(",
+    )
+    for key in sort!(collect(keys(lv_edges)))
+        r, x = lv_edges[key]
+        println(io, "    ($(repr(key[1])), $(repr(key[2]))) => ($(r), $(x)),")
+    end
+    println(io, ")")
+    println(io)
+    println(
+        io,
+        "const IEEE8500_XFMR_EDGES = Dict{Tuple{String, String}, " *
+        "NamedTuple{(:r_pct, :x_pct, :code, :kva), Tuple{Float64, Float64, String, Float64}}}(",
+    )
+    for key in sort!(collect(keys(xfmr_edges)))
+        v = xfmr_edges[key]
+        println(
+            io,
+            "    ($(repr(key[1])), $(repr(key[2]))) => (r_pct=$(v.r_pct), x_pct=$(v.x_pct), " *
+            "code=$(repr(v.code)), kva=$(v.kva)),",
+        )
+    end
+    println(io, ")")
+    println(io)
+    println(io, "const IEEE8500_CAPACITOR_KVAR = Dict{String, Float64}(")
+    for key in sort!(collect(keys(cap_kvar)))
+        println(io, "    $(repr(key)) => $(cap_kvar[key]),")
+    end
+    println(io, ")")
+    println(io)
+    println(io, "const IEEE8500_LOAD_KW = Dict{String, Float64}(")
+    for key in sort!(collect(keys(load_kw)))
+        println(io, "    $(repr(key)) => $(load_kw[key]),")
+    end
+    println(io, ")")
+    println(io)
+    println(io, "const IEEE8500_REGULATOR_EDGES = Set{Tuple{String, String}}([")
+    for key in sort!(collect(reg_edges))
+        println(io, "    ($(repr(key[1])), $(repr(key[2]))),")
+    end
+    println(io, "])")
+    write(outfile, String(take!(io)))
+    return outfile
+end
+
+"""
+    verify() -> nothing
+
+Self-check mode (`--verify`): parses `LoadXfmrCodes.dss`'s `XfmrCode` definitions and asserts the
+`CT5` code's reduced `(R_total_pct, X_total_pct)` matches the pinned sanity pair within
+`SANITY_ATOL`, throwing `ArgumentError` otherwise (Common Pitfalls §2 — the whole point of this
+gate is to catch a regression to the superseded, silently-under-counting placeholder formula
+before it ever reaches a fixture, per T-25-02).
+"""
+function verify()
+    loadxfmrcodes_text = read(LOADXFMRCODES_DSS, String)
+    codes = parse_xfmr_codes(loadxfmrcodes_text)
+    length(codes) == 9 ||
+        throw(ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(codes))"))
+
+    haskey(codes, "CT5") ||
+        throw(ArgumentError("expected an XfmrCode named \"CT5\" in $(LOADXFMRCODES_DSS)"))
+    ct5 = codes["CT5"]
+    isapprox(ct5.r_pct, CT5_R_PCT_EXPECTED; atol = SANITY_ATOL) || throw(
+        ArgumentError(
+            "CT5 r_pct sanity check failed: got $(ct5.r_pct), expected ≈$(CT5_R_PCT_EXPECTED) " *
+            "(atol=$(SANITY_ATOL)) — check for a regression to the superseded 2-winding placeholder",
+        ),
+    )
+    isapprox(ct5.x_pct, CT5_X_PCT_EXPECTED; atol = SANITY_ATOL) || throw(
+        ArgumentError(
+            "CT5 x_pct sanity check failed: got $(ct5.x_pct), expected ≈$(CT5_X_PCT_EXPECTED) " *
+            "(atol=$(SANITY_ATOL)) — check for a regression to the superseded 2-winding placeholder",
+        ),
+    )
+
+    println(
+        "PASS: 9 XfmrCodes ingested; CT5 R_total%=$(ct5.r_pct), X_total%=$(ct5.x_pct) " *
+        "(pinned ≈$(CT5_R_PCT_EXPECTED)/≈$(CT5_X_PCT_EXPECTED))",
+    )
+    return nothing
+end
+
+"""
+    main() -> nothing
+
+Default (non-`--verify`) mode: full parse+reduce of all 10 vendored files, dedupe MV/LV parallel
+edges, build the transformer/regulator/switch edge tables, parse loads/capacitors, then emit the
+committed `src/data/ieee8500_impedances.jl`.
+"""
+function main()
+    if ARGS == ["--verify"]
+        verify()
+        return nothing
+    end
+
+    lines_text = read(LINES_DSS, String)
+    linecodes2_text = read(LINECODES2_DSS, String)
+    triplex_lines_text = read(TRIPLEX_LINES_DSS, String)
+    triplex_linecodes_text = read(TRIPLEX_LINECODES_DSS, String)
+    loads_text = read(LOADS_DSS, String)
+    capacitors_text = read(CAPACITORS_DSS, String)
+    regulators_text = read(REGULATORS_DSS, String)
+    transformers_text = read(TRANSFORMERS_DSS, String)
+    loadxfmrcodes_text = read(LOADXFMRCODES_DSS, String)
+
+    # --- MV: Lines.dss + LineCodes2.DSS ---
+    linecode_recs, inline_recs, switch_pairs = parse_mv_lines(lines_text)
+    mv_codes = sort!(unique(r.linecode for r in linecode_recs))
+    mv_linecode_rx = Dict(code => parse_linecode_rx_by_name(linecodes2_text, code) for code in mv_codes)
+    mv_edges_raw = ImpedanceEdge[]
+    for r in linecode_recs
+        R1, X1 = mv_linecode_rx[r.linecode]
+        push!(mv_edges_raw, ImpedanceEdge(r.bus1_base, r.bus2_base, R1 * r.length_km, X1 * r.length_km))
+    end
+    append!(mv_edges_raw, inline_recs)
+    mv_edges = dedupe_edges(mv_edges_raw)
+    assert_no_self_loops(keys(mv_edges), "IEEE8500_MV_BRANCH_RX_OHMS")
+
+    # --- LV: Triplex_Lines.DSS + Triplex_Linecodes.dss (kft base, ft length -> /1000 conversion) ---
+    triplex_recs = parse_triplex_lines(triplex_lines_text)
+    lv_codes = sort!(unique(r[3] for r in triplex_recs))
+    lv_linecode_rx =
+        Dict(code => parse_linecode_rx_by_name(triplex_linecodes_text, code) for code in lv_codes)
+    lv_edges_raw = ImpedanceEdge[]
+    for (b1, b2, code, length_ft) in triplex_recs
+        R1, X1 = lv_linecode_rx[code]
+        length_kft = length_ft / 1000.0
+        push!(lv_edges_raw, ImpedanceEdge(b1, b2, R1 * length_kft, X1 * length_kft))
+    end
+    lv_edges = dedupe_edges(lv_edges_raw)
+    assert_no_self_loops(keys(lv_edges), "IEEE8500_LV_BRANCH_RX_OHMS")
+
+    # --- Service transformers: LoadXfmrCodes.dss (9 codes + 1,177 instances) ---
+    xfmr_codes = parse_xfmr_codes(loadxfmrcodes_text)
+    length(xfmr_codes) == 9 ||
+        throw(ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(xfmr_codes))"))
+    xfmr_instances = parse_xfmr_instances(loadxfmrcodes_text)
+    length(xfmr_instances) == 1177 || throw(
+        ArgumentError(
+            "expected exactly 1177 service-transformer instances, got $(length(xfmr_instances))",
+        ),
+    )
+    xfmr_edges = build_xfmr_edges(xfmr_instances, xfmr_codes)
+
+    # --- Regulators + substation transformer + switch ties (D-13, near-ideal, no real Z here) ---
+    reg_pairs = vcat(
+        parse_transformer_bus_pairs(regulators_text),
+        parse_transformer_bus_pairs(transformers_text),
+    )
+    reg_edges = build_regulator_edges(reg_pairs, switch_pairs)
+
+    # --- Loads + capacitors ---
+    load_kw = parse_loads(loads_text)
+    cap_kvar = parse_capacitors(capacitors_text)
+
+    outfile = emit_output(mv_edges, lv_edges, xfmr_edges, cap_kvar, load_kw, reg_edges, OUT_FILE)
+    println(
+        "Wrote MV=$(length(mv_edges)) LV=$(length(lv_edges)) XFMR=$(length(xfmr_edges)) " *
+        "REG=$(length(reg_edges)) CAP=$(length(cap_kvar)) LOAD=$(length(load_kw)) to $(outfile)",
+    )
+    return nothing
+end
+
+main()
