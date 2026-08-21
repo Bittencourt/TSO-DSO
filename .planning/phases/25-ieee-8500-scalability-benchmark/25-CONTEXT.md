@@ -2,6 +2,11 @@
 
 **Gathered:** 2026-08-20
 **Status:** Ready for planning
+**Revised:** 2026-08-20 (post-research) — **D-05 and D-17 CHANGED.** `25-RESEARCH.md` corrected the
+3-winding center-tap reduction formula, which invalidated D-05's `S_base` basis; and it surfaced a
+measured docs-CI budget conflict that invalidated D-17. Both were re-decided by the user. The
+superseded versions are recorded inline below so the change is auditable — **read the REVISED text,
+not the struck original.**
 
 <domain>
 ## Phase Boundary
@@ -53,12 +58,23 @@ distribution uniformly and therefore **cannot** change the spread; the spread is
   device-count axis on top of a density sweep is combinatorial.
 
 ### Per-Unit Ingestion & Magnitudes (SCALE-02)
-- **D-05:** **`S_base` = 1 MVA**, matching IEEE-13/123. Verified against source data: worst case is a
-  CT5 unit at r=3.60 / x=4.08 pu — inside `IMPEDANCE_PU_MAX = 5.0` at 82% of the limit, and only
-  **8 of 1,177** service transformers are CT5 (modal are CT15 x382 at 41% and CT25 x486 at 25%).
-  10 MVA would trip the band 8x; 0.1 MVA is comfortable at 8% but breaks cross-fixture pu
-  comparability and inflates every `smax` 10x (head branch 27.5 -> 275 pu, blowing
-  `SMAX_PU_MAX = 100`). **The tripwire is cleared honestly — not widened.**
+- **D-05 [REVISED post-research]:** **`S_base` = 0.5 MVA.**
+  ~~SUPERSEDED: `S_base` = 1 MVA, on the basis that the worst-case CT5 unit sat at r=3.60/x=4.08 pu,
+  82% of `IMPEDANCE_PU_MAX = 5.0`.~~ That basis was computed with the **placeholder** transformer
+  reduction (`%Rs[1]+%Rs[2]`, bare `Xhl`) which `25-RESEARCH.md` corrected (see the confirmed formula
+  in `<specifics>`). With the CORRECT formula the CT5 unit is **r=6.00 / x=5.44 pu at 1 MVA — over the
+  limit on both axes (120%)**.
+  Re-decided by the user: **0.5 MVA is the only base that clears BOTH tripwires** —
+  CT5 lands at **r=3.00 / x=2.72 pu (60% of `IMPEDANCE_PU_MAX`)** and the head branch at
+  **55 pu (under `SMAX_PU_MAX = 100`)**. 1 MVA trips the impedance band; 0.25 and 0.1 MVA clear it but
+  trip `SMAX_PU_MAX` on the head branch (110 and 275 pu). **The tripwire is cleared honestly — NOT
+  widened, and no `src/` invariant constant is touched.**
+  Accepted cost: per-unit impedance numbers are no longer directly comparable with the 1 MVA
+  IEEE-13/123 fixtures. Survivable because the benchmark compares **timings, iteration counts and
+  model dimensions**, not impedance magnitudes. State this non-comparability explicitly in the fixture
+  docstring and in the literate page.
+  **Every per-unit figure elsewhere in this document that was derived at 1 MVA must be recomputed at
+  0.5 MVA by the planner — do not copy stale numbers forward.**
 - **D-06:** **Every branch is kept.** The ~9-order impedance spread is REPORTED as a measured
   property of the fixture, not engineered away. A degenerate-stub-merged variant is a **data-driven
   follow-up** only if the measurement shows conditioning is the wall — mitigation up front would
@@ -110,14 +126,30 @@ distribution uniformly and therefore **cannot** change the spread; the spread is
   time is recorded in the results table but NOT asserted.** Chosen over wall-time bands because bands
   loose enough not to flake on shared runners are also loose enough to miss real regressions, and the
   milestone already carries quarantined-flaky-test debt.
-- **D-17:** The literate page is **fully live-executed at docs build** — USER CHOICE, overriding the
-  recommended committed-artifact route. Bounded by D-18 rather than by reducing the grid.
-- **D-18:** Every sweep point is attempted live with a **per-point wall-clock timeout**; a point
-  exceeding the documented cap records a **"budget exceeded" row** instead of hanging the build. This
-  keeps the page genuinely fully live-executed AND bounds the docs build — and a timeout row is itself
-  an honest scaling finding, not a failure. **Open risk stated plainly:** total docs-build time is
-  unknown up front because runtime at this scale is exactly what the phase measures; D-18 is the guard
-  that makes an unbounded choice safe.
+- **D-17 [REVISED post-research]:** The literate page uses **committed results + a live small slice.**
+  ~~SUPERSEDED: fully live-executed at docs build, bounded by D-18's timeout rather than by reducing
+  the grid.~~ Reversed on measured evidence, not preference: `docs/literate/socp_applicability.jl:411`
+  documents that **IEEE-123 costs ~68 s per solve** (123 buses, 85 load nodes, T=24) so 54 points take
+  ~16 min — "more than the documentation CI job's entire 30-minute budget" — and that page therefore
+  **already loads committed data for exactly this reason**. The Phase-25 fixture is ~40x the buses and
+  ~14x the load nodes, and the docs job (`.github/workflows/CI.yml:76`, `timeout-minutes: 30`) is
+  shared by 18 literate pages.
+  So: heavy runs are executed once via the D-14 harness and their results committed; the page reads
+  those and live-executes only a cheap slice. **Follow the `socp_applicability.jl` precedent exactly**,
+  including its explicit admonition block stating which figures are precomputed, why, and the exact
+  regeneration command. Note that page parses its CSV with **`Base` only** — the docs environment pins
+  a minimal dependency set and must NOT gain `CSV`/`DataFrames` (which would force re-resolving
+  `docs/Manifest.toml`, kept in Julia-version lockstep with CI).
+- **D-18 [SCOPE SHIFTED by D-17's revision]:** The **per-point wall-clock timeout still applies**, but
+  it now guards the **harness runs** (D-14) and the page's cheap live slice, rather than being the sole
+  bound on a fully-live docs build. A point exceeding the documented cap records a **"budget exceeded"
+  row** instead of hanging. A timeout row remains an honest scaling finding, not a failure — and it is
+  how a non-convergent 4,873-bus point gets reported rather than stalling the run.
+  Research confirmed the mechanism: **Clarabel exposes a native `time_limit` setting** and returns the
+  standard `MOI.TIME_LIMIT` termination status, so single solves need no fragile async-task wrapper.
+  **Open question for the planner:** `solve_admm`'s outer loop has **no wall-clock exit today** —
+  research offers two viable routes (a `time_limit_s` kwarg on `solve_admm`, or an external bound via
+  an iteration probe). Pick one and justify it; do not leave the ADMM loop unbounded.
 - **D-19:** Metrics recorded per point: wall time **split into JuMP model assembly vs solver time**,
   ADMM iteration count, peak memory, solver termination status, the per-fixture cone-gap noise floor,
   and the exactness verdict. The build/solve split is what attributes cost to assembly vs solver — the
@@ -269,6 +301,28 @@ distribution uniformly and therefore **cannot** change the spread; the spread is
 - `docs/literate/` — the live-executed scaling page.
 - `test/` — fixture invariant tests + D-16 deterministic goldens.
 
+### Research-Confirmed Facts (from 25-RESEARCH.md — do not re-derive)
+- **Parallel-edge collisions are REAL, not hypothetical.** Stripping phase suffixes collapses three
+  confirmed sets of identical single-phase jumpers into duplicate edges (`Q16642`/`Q16642_CAP`,
+  `Q16483`/`Q16483_CAP`, `L2823592`/`L2823592_CAP` — 3 identical records each), plus the 4 regulator
+  banks. Without an explicit **assert-identical-then-dedupe** step the reduction will produce
+  `edges != N-1` and `assert_radial` will throw. **No self-loops** exist (all 2,526 `Lines.dss`
+  records checked).
+- **Clarabel settings that matter:** `tol_gap_abs`, `tol_gap_rel`, `tol_feas`, `tol_infeas_abs/rel`,
+  `equilibrate_min_scaling`/`equilibrate_max_scaling`, and a native `time_limit`. These are the real
+  option names for the spike-002 noise-floor ladder and for D-18.
+- **SCS routing:** mirror `ext/TSODSOGurobiExt.jl` / `ext/TSODSOMosekExt.jl`, but do NOT route SCS
+  through `commercial_optimizer` — SCS is open-source, so that is a semantic mismatch. Research
+  recommends a parallel `alternative_optimizer` / `SCSChoice` dispatch. SCS's tolerance vocabulary
+  (`eps_abs`/`eps_rel`, default 1e-4) is unrelated to Clarabel's (`tol_gap_*`, default 1e-8) — this
+  gap is directly relevant to D-21's DADP-drift diagnostic. The SCS.jl version is tagged `[ASSUMED]`
+  in research; **verify it at plan/execute time.**
+- **`build_population`'s scalar `load_scale` cannot express D-03's real per-bus kW.** This needs a
+  **new per-bus-magnitude code path**, not a parameter tweak. Budget a task for it.
+- **No accidental quadratic blowup found** in `assert_radial`, the DSO-OPT transit-node relaxation, or
+  the vectorized `@constraint` comprehensions — all linear by code inspection. The concrete confirmed
+  scale risk is the **docs CI budget** (see D-17), not algorithmic complexity in these paths.
+
 ### Risks Surfaced During Scouting
 - **~9 orders of per-unit impedance spread** (6.4e-9 → 4.08 pu) — the suspected conditioning wall, and
   NOT fixable by `S_base` (which shifts uniformly). This is the phase's central technical risk.
@@ -293,10 +347,22 @@ distribution uniformly and therefore **cannot** change the spread; the spread is
   → `SX*` load bus.
 - Service-transformer population is 9 XfmrCode sizes: CT15 x382, CT25 x486, CT37 x117, CT10 x112,
   CT50 x48, CT75 x20, CT5 x8, CT250 x3, CT100 x1 — all at `Xhl=2.04%`, `%Rs=[0.6 1.2 1.2]`.
-- The 3-winding center-tap transformer must be reduced to a **single equivalent series impedance** for
-  the balanced positive-sequence single-phase equivalent; state the reduction explicitly (the
-  `%Rs[1] + %Rs[2]` series treatment used for the D-05 numbers is a starting point, not a locked
-  derivation — research should confirm it).
+- **The 3-winding center-tap transformer reduction is now RESOLVED and CONFIRMED** (supersedes the
+  earlier `%Rs[1] + %Rs[2]` / bare-`Xhl` placeholder). For **balanced 240 V loading** the two secondary
+  half-windings are in SERIES, so all three windings carry the same current and the single equivalent
+  series impedance on the transformer's OWN kVA base is:
+
+      R_total = ΣRs[1:3]              = 0.6 + 1.2 + 1.2 = 3.00 %
+      X_total = 0.5·(Xhl + Xht + Xlt) = 0.5·(2.04 + 2.04 + 1.36) = 2.72 %
+
+  Derivation, verified two independent ways (OpenDSS `Transformer.pas` per research, and a
+  from-scratch star-equivalent check): the 3-winding star branches are
+  `X_h = 0.5(Xhl+Xht−Xlt) = 1.36`, `X_l = 0.5(Xhl+Xlt−Xht) = 0.68`, `X_t = 0.5(Xht+Xlt−Xhl) = 0.68`;
+  series loading sums them to `0.5(Xhl+Xht+Xlt) = 2.72`. **Approximated away, and to be stated as
+  assumptions:** the magnetizing branch (`%imag=0.5`), no-load loss (`%noloadloss=.2`), and any
+  imbalance between the two secondary half-windings.
+  Convert to per-unit by scaling with `(S_base_MVA · 1000) / kVA_transformer` — these percentages are
+  on each unit's own winding kVA base, NOT on `S_base`.
 - `Master.dss` redirects `LineCodes2.DSS`, **not** `LineCodes.dss`. Using the wrong one silently
   yields wrong impedances.
 - Still to fetch when vendoring: `Triplex_Linecodes.dss` (required for the LV rung) and optionally
