@@ -35,6 +35,14 @@
 #      `:ieee8500` only, `1e-8` (today's unconditional value, byte-identical) for every other
 #      fixture. The value actually used is always recorded in the CSV's `clarabel_tol_gap`
 #      column.
+#      (2026-08-22 round-2 follow-up, quick task 260822-hld) The SAME per-fixture
+#      `EXACTNESS_ATOL[fixture_sym]` used for the centralized `exact_verdict` is now ALSO
+#      threaded into `run_admm_point`'s `solve_admm(...; atol_exact = ...)` call (the additive
+#      gate-override seam quick task 260822-f0b built) — recorded in the CSV's
+#      `admm_atol_used` column. This is anti-certificate-laundering-SAFE threading (T-25-12):
+#      the value is always a FRESHLY MEASURED noise floor, never a literal chosen to pass a
+#      specific point, and a converged point whose cone gap genuinely exceeds its fixture's
+#      own floor still throws exactly as before.
 #
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee13 --tolerances 1e-6,1e-8
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500-mv
@@ -432,7 +440,7 @@ function run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon::I
 end
 
 """
-    run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon) -> NamedTuple
+    run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon, atol_exact) -> NamedTuple
 
 Solves the SAME point via `solve_admm(...; time_limit_s = time_limit)` (plan 25-02's D-18 wall-
 clock exit), wrapped in try/catch (a genuine non-convergence with NO time budget throws loudly,
@@ -444,8 +452,17 @@ process's peak RSS attributable to (at most) this call; once the process has alr
 earlier, larger point, a later smaller point's delta legitimately reads ~0. This is the honest
 limitation of the plan's own prescribed "sampled before/after" method, documented here rather than
 silently presented as a precise per-call peak.
+
+`atol_exact` (2026-08-22 round-2 follow-up, quick task 260822-hld) is threaded straight through to
+`solve_admm`'s own `atol_exact` kwarg (the additive override seam quick task 260822-f0b built onto
+the FINAL consolidation `assert_socp_exact!` gate only — the mid-loop `check_exact = false` call is
+untouched). The caller ALWAYS passes `EXACTNESS_ATOL[fixture_sym]` — the SAME freshly-measured,
+per-fixture noise floor already used for the centralized point's own `exact_verdict` above — NEVER
+a literal chosen to make a point pass (T-25-12, anti-certificate-laundering): a point whose
+converged cone gap genuinely EXCEEDS its fixture's own measured floor still throws here exactly as
+it does today.
 """
-function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int)
+function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol_exact::Real)
     t0 = time_ns()
     rss_before = Sys.maxrss()
     result = try
@@ -458,6 +475,7 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int)
             ρ = ρ0,
             allow_export = true,
             time_limit_s = time_limit,
+            atol_exact = atol_exact,
         )
         (; admm_status = string(r.status), admm_iters = r.iters, admm_error_msg = "")
     catch err
@@ -665,7 +683,7 @@ function run_sweep_mode(args)
         aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
 
         cpoint = run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon, clarabel_tol)
-        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon)   # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty; adaptive-ρ self-corrects thereafter
+        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon, atol)   # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty; adaptive-ρ self-corrects thereafter; atol: EXACTNESS_ATOL[fixture_sym], see run_admm_point's own docstring (T-25-12)
 
         scs_row =
             solver_sym in (:scs, :both) ?
@@ -693,6 +711,7 @@ function run_sweep_mode(args)
             exact_atol_used = atol,
             exact_verdict = cpoint.exact_verdict,
             clarabel_tol_gap = clarabel_tol,
+            admm_atol_used = atol,
             admm_status = apoint.admm_status,
             admm_iters = apoint.admm_iters,
             admm_time_s = apoint.admm_time_s,
