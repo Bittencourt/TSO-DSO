@@ -42,7 +42,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["data/Feeder.jl", "data/topology.jl", "data/ieee13.jl", "data/ieee123.jl", "data/profiles.jl", "data/MeshedFeeder.jl", "data/mesh_topology.jl"]
+Pages = ["data/Feeder.jl", "data/topology.jl", "data/ieee13.jl", "data/ieee123.jl", "data/ieee8500.jl", "data/profiles.jl", "data/MeshedFeeder.jl", "data/mesh_topology.jl"]
 Order = [:type, :constant, :function]
 ```
 
@@ -57,6 +57,7 @@ Pages = [
     "devices/Interruptible.jl",
     "devices/PVBattery.jl",
     "devices/FourQuadBESS.jl",
+    "devices/FixedCapacitor.jl",
     "devices/Aggregator.jl",
 ]
 Order = [:type, :constant, :function]
