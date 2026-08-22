@@ -67,30 +67,36 @@ const FIXTURE_MAP = Dict(
 # VALIDATED fixture is not this plan's concern. The two NEW IEEE-8500 fixtures get their OWN
 # FRESH measurement below (never inherit the IEEE-13/123 value — anti-certificate-laundering).
 #
-# MEASURED 2026-08-21 via `--calibrate-noise-floor` (full 5-rung ladder [1e-6,1e-7,1e-8,1e-9,
-# 1e-10]), committed at `results/ieee8500_benchmark/noise_floor_calibration.csv`. See that CSV
-# and this plan's SUMMARY.md for the full per-rung trace this floor was derived from.
+# RE-MEASURED 2026-08-21 (phase-25 gap-closure task, after `scripts/reduce_ieee8500_impedances.jl`
+# applied the D-13 near-ideal treatment to the degenerate `HVMV_Sub_48332 -> _HVMV_Sub_LSB` MV
+# busbar-tie connector) via `--calibrate-noise-floor` (full 5-rung ladder [1e-6,1e-7,1e-8,1e-9,
+# 1e-10]), committed at `results/ieee8500_benchmark/noise_floor_calibration.csv`. See that CSV,
+# `.planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md` item 1 (RESOLVED), and
+# this gap-closure task's own `25-07-SUMMARY.md` for the full per-rung trace and before/after.
 #
-# HONEST FINDING (not solver noise in the traditional sense): on BOTH IEEE-8500 fixtures the
-# worst-offending branch at EVERY ladder rung is the SAME real, vendored MV segment
-# `HVMV_Sub_48332 -> _HVMV_Sub_LSB` (`IEEE8500_MV_BRANCH_RX_OHMS[("HVMV_Sub_48332",
-# "_HVMV_Sub_LSB")] = (1e-6 Ω, 1e-5 Ω)`), which converts to a genuinely NEAR-ZERO per-unit
-# impedance (r≈3.2e-9 pu, x≈3.2e-8 pu at S_base=0.5 MVA) — six orders of magnitude smaller than
-# the D-13 near-ideal regulator/switch convention (`IEEE123_SWITCH_R/X` = 3e-4/1.5e-4 pu). The
-# LinDistFlow SOC-exactness argument's cost-gradient (the loss term `r·l` that drives `l` to its
-# tight minimal value at the optimum) is essentially ABSENT on a near-zero-r branch, so this ONE
-# real MV segment's cone residual does NOT shrink as `tol_gap` tightens — the ladder plateaus (or,
-# on the larger headline fixture, immediately fails past the FIRST rung) because the underlying
-# gap is STRUCTURAL/numerically-ill-conditioned, not a shrinking interior-point residual. This
-# measurement is still MEASURED, still FRESH to each fixture — a genuinely NEW per-fixture
-# number, not inherited from any earlier fixture — but the resulting `atol` is large because the fixture's own worst-conditioned real
-# branch genuinely is large, not because of a harness bug. DEFERRED (out of this plan's `<files>`
-# scope — fixing `scripts/reduce_ieee8500_impedances.jl`/`src/data/ieee8500.jl` is NOT listed):
-# whether this specific real near-zero-length connector should receive the SAME D-13 near-ideal
-# treatment already applied to regulators/switches (a documented data-shaping decision, not a
-# calibration-harness fix) is flagged in this plan's SUMMARY.md for follow-up.
-const IEEE8500_MV_EXACT_ATOL = 0.17959156506520202   # measured 2026-08-21, ladder floor at tol=1e-8 (rungs 1e-9/1e-10 failed ALMOST_OPTIMAL)
-const IEEE8500_EXACT_ATOL = 0.565332291115979         # measured 2026-08-21, ladder floor at tol=1e-6 (EVERY tighter rung failed ALMOST_OPTIMAL)
+# WHAT CHANGED FROM THE ORIGINAL (plan 25-05) MEASUREMENT: `HVMV_Sub_48332 -> _HVMV_Sub_LSB`
+# (`IEEE8500_MV_BRANCH_RX_OHMS[("HVMV_Sub_48332", "_HVMV_Sub_LSB")]`) used to carry a literal
+# near-zero Ω value (`1e-6 Ω`/`1e-5 Ω`, `r≈3.2e-9 pu`) that structurally broke the LinDistFlow
+# SOC-exactness gradient — the residual PLATEAUED instead of shrinking as `tol_gap` tightened.
+# `reduce_ieee8500_impedances.jl`'s `reshape_near_zero_mv_edges!` now reassigns that ONE edge's
+# r/x VALUES (same bus pair, same table) to the D-13 near-ideal Ω-equivalent of
+# `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at this fixture's own MV base (`r=0.09330 Ω`,
+# `x=0.04665 Ω`). The re-measured floor now GENUINELY SHRINKS as `tol_gap` tightens (both
+# fixtures improve rung-over-rung before failing `ALMOST_OPTIMAL` at the tightest rungs) —
+# behaving like real numerical noise rather than a structural relaxation failure. `ieee8500-mv`'s
+# floor dropped from `0.1796` (tol=1e-8, plateaued) to `0.0011460` (tol=1e-8, shrinking 27x
+# tighter than the tol=1e-6 rung) — a 157x improvement. `ieee8500`'s floor dropped from `0.5653`
+# (tol=1e-6, EVERY tighter rung failed) to `0.0049691` (tol=1e-7).
+#
+# HONEST CAVEAT (still true after this fix — do NOT read this as "ADMM consolidation now
+# works"): both re-measured floors are still `~1e-3` scale, which STILL exceeds `solve_admm`'s
+# hardcoded final-consolidation `assert_socp_exact!` call's PROJECT DEFAULT `atol=1e-6` (no
+# override parameter exists on `solve_admm` — see deferred-items.md item 3, still OPEN). A
+# genuinely CONVERGED, CONSOLIDATED ADMM point on either IEEE-8500 fixture can still throw at
+# that gate. This fix closes the STRUCTURAL relaxation failure; it does NOT close the numerical
+# gap between the noise floor and the project's existing `1e-6` default gate.
+const IEEE8500_MV_EXACT_ATOL = 0.0011460285861373265   # re-measured 2026-08-21 (post D-13 fix), ladder floor at tol=1e-8 (rungs 1e-9/1e-10 failed ALMOST_OPTIMAL)
+const IEEE8500_EXACT_ATOL = 0.004969145122458496       # re-measured 2026-08-21 (post D-13 fix), ladder floor at tol=1e-7 (rungs 1e-8/1e-9/1e-10 failed ALMOST_OPTIMAL)
 
 const EXACTNESS_ATOL = Dict(
     :ieee13 => 1.0e-6,                    # assert_socp_exact!'s existing project default
