@@ -20,7 +20,7 @@
 #
 #   2. (default) density-sweep mode: `--fixture {ieee13,ieee123,ieee8500-mv,ieee8500}
 #      --density <comma-list> --solver {clarabel,scs,both} --time-limit <seconds>
-#      [--t-horizon <int>] [--quick]`
+#      [--t-horizon <int>] [--clarabel-tol <float>] [--quick]`
 #      Sweeps a (fixture × density × solver) grid, solving EACH point both CENTRALIZED and via
 #      ADMM, and reports EVERY attempted point (including timeouts and non-convergence, D-18) —
 #      never silently dropping one (T-25-11). `--quick` forces the exact CI-affordable single
@@ -29,6 +29,12 @@
 #      BOTH the centralized and ADMM points (recorded in the committed CSV's `T_horizon`
 #      column); absent, behaviour is unchanged (`quick ? T_QUICK : T`). Rejects values below
 #      the floor of 10 (see `T_HORIZON_FLOOR`'s own comment) rather than silently clamping.
+#      `--clarabel-tol <float>` (2026-08-22 follow-up, quick task 260822-f0b) overrides
+#      Clarabel's `tol_gap_abs`/`tol_gap_rel` for the CENTRALIZED point only; absent, behaviour
+#      is `DEFAULT_CLARABEL_TOL_GAP[fixture_sym]` — `1e-7` (a MEASURED, achievable floor) for
+#      `:ieee8500` only, `1e-8` (today's unconditional value, byte-identical) for every other
+#      fixture. The value actually used is always recorded in the CSV's `clarabel_tol_gap`
+#      column.
 #
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee13 --tolerances 1e-6,1e-8
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500-mv
@@ -126,6 +132,23 @@ const DEFAULT_RTOL = 1.0e-4
 # internal convergence criteria, reported ALONGSIDE the drift, not as a shared threshold).
 const CLARABEL_TOL_GAP = 1.0e-8   # src/solver/factory.jl's select_optimizer(SOCP()) default
 const SCS_EPS_ABS_DEFAULT = 1.0e-4   # SCS.jl's own documented default eps_abs (jump-dev/SCS.jl)
+
+# 2026-08-22 follow-up (quick task 260822-f0b, `25-VERIFICATION.md`): the sweep's ONE completed
+# row on the true headline fixture (`:ieee8500`) came back `ALMOST_OPTIMAL` because it solved at
+# the unconditional `CLARABEL_TOL_GAP = 1e-8` above — a tolerance
+# `results/ieee8500_benchmark/noise_floor_calibration.csv` ALREADY measured to fail on `:ieee8500`
+# (`ieee8500, 1e-8 -> NaN`; `ieee8500, 1e-7 -> 0.0049691451`, the last rung that still resolved).
+# `IEEE8500_CLARABEL_TOL_GAP` below is that MEASURED, achievable value — never a guess. The other
+# three fixtures keep reusing `CLARABEL_TOL_GAP` unchanged (byte-identical to today; their own
+# noise-floor ladders never showed a comparable failure at 1e-8).
+const IEEE8500_CLARABEL_TOL_GAP = 1.0e-7   # MEASURED floor (see noise_floor_calibration.csv, ieee8500 row)
+
+const DEFAULT_CLARABEL_TOL_GAP = Dict{Symbol,Float64}(
+    :ieee13 => CLARABEL_TOL_GAP,
+    :ieee123 => CLARABEL_TOL_GAP,
+    :ieee8500_mv => CLARABEL_TOL_GAP,
+    :ieee8500 => IEEE8500_CLARABEL_TOL_GAP,
+)
 
 # SCS is an OPTIONAL weakdep (ext/TSODSOSCSExt.jl, plan 25-02) — NOT installed by default.
 # `Base.find_package` is the standard way to check installability without eagerly importing (and
@@ -337,7 +360,7 @@ function extract_termination_status(msg::AbstractString)
 end
 
 """
-    run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon) -> NamedTuple
+    run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon; clarabel_tol) -> NamedTuple
 
 Solves the CENTRALIZED welfare problem at Clarabel's native `time_limit` (D-18), wrapped in
 try/catch so one bad point never kills the sweep (mirrors `socp_applicability_sweep.jl`). Timing
@@ -349,9 +372,15 @@ the internal PF-04 throw (mirrors `socp_applicability_sweep.jl`) so a genuinely 
 inexact point is RETURNED for this harness's OWN `exact_verdict` classification (against Task 1's
 freshly calibrated `atol`) rather than refused. On `TIME_LIMIT` the row is reported as
 `"budget_exceeded"` (D-18 language) rather than the raw MOI status string.
+
+`clarabel_tol` (2026-08-22 follow-up, quick task 260822-f0b) sets Clarabel's own
+`tol_gap_abs`/`tol_gap_rel` for this centralized solve — caller passes
+`DEFAULT_CLARABEL_TOL_GAP[fixture_sym]` absent an explicit `--clarabel-tol` override (mirrors
+`run_calibrate_mode`'s own `select_optimizer(SOCP(); tol_gap_abs = tol, tol_gap_rel = tol)`
+precedent at line ~230 exactly).
 """
-function run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon::Int)
-    opt = select_optimizer(SOCP(); time_limit = time_limit)
+function run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon::Int, clarabel_tol::Float64)
+    opt = select_optimizer(SOCP(); time_limit = time_limit, tol_gap_abs = clarabel_tol, tol_gap_rel = clarabel_tol)
     t0 = time_ns()
     try
         ctx, _, dadp = solve_welfare(
@@ -593,6 +622,14 @@ function run_sweep_mode(args)
         )
         v
     end
+    # `--clarabel-tol` (2026-08-22 follow-up, quick task 260822-f0b): an explicit CLI override of
+    # Clarabel's `tol_gap_abs`/`tol_gap_rel` for the centralized point, ABSENT of which behaviour
+    # is `DEFAULT_CLARABEL_TOL_GAP[fixture_sym]` — see that Dict's own comment for provenance.
+    clarabel_tol_str = parse_kv_flag(args, "--clarabel-tol", nothing)
+    clarabel_tol =
+        clarabel_tol_str === nothing ? DEFAULT_CLARABEL_TOL_GAP[fixture_sym] :
+        parse(Float64, clarabel_tol_str)
+
     feeder = build_feeder(fixture_sym)
     profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_horizon)
     λ0 = build_price(:mem, T_horizon, nothing)
@@ -615,7 +652,7 @@ function run_sweep_mode(args)
         flush(stdout)
         aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
 
-        cpoint = run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon)
+        cpoint = run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon, clarabel_tol)
         apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon)   # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty; adaptive-ρ self-corrects thereafter
 
         scs_row =
@@ -643,7 +680,7 @@ function run_sweep_mode(args)
             exact_maxgap = cpoint.exact_maxgap,
             exact_atol_used = atol,
             exact_verdict = cpoint.exact_verdict,
-            clarabel_tol_gap = CLARABEL_TOL_GAP,
+            clarabel_tol_gap = clarabel_tol,
             admm_status = apoint.admm_status,
             admm_iters = apoint.admm_iters,
             admm_time_s = apoint.admm_time_s,
