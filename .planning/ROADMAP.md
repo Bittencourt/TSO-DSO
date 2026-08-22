@@ -387,7 +387,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 25-06-PLAN.md — Full committed density-sweep results + literate scaling page (docs/literate/ieee8500_scaling.jl)
+- [x] 25-06-PLAN.md — Full committed density-sweep results + literate scaling page (docs/literate/ieee8500_scaling.jl)
 
 <details>
 <summary>✅ v1.0 Operational Transactive-Energy Core (Phases 1–9) — SHIPPED 2026-07-20</summary>
@@ -467,7 +467,7 @@ tests pass (the only 2 failures are pre-existing Aqua/CairoMakie `Project.toml` 
 | 22. Stochastic PV/Demand Uncertainty | v3.0 | 5/5 | Complete    | 2026-08-10 |
 | 23. Meshed Networks | v3.0 | 4/4 | Complete    | 2026-08-11 |
 | 24. Discrete/Integer Investment Expansion | v3.0 | 0/TBD | Not started | - |
-| 25. IEEE-8500 Scale Benchmark | v3.0 | 5/6 | In Progress|  |
+| 25. IEEE-8500 Scale Benchmark | v3.0 | 7/6 | Complete   | 2026-08-22 |
 
 ## Deferred / Future-Milestone Notes
 
