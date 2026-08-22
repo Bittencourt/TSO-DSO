@@ -81,6 +81,42 @@ IEEE-8500 fixture can still throw at that gate. This fix closes the STRUCTURAL r
 gap between that noise floor and the project's existing `1e-6` default gate — that gap is Item 3's
 concern, still open.
 
+#### Item 1 addendum — SUPERSEDED 2026-08-22 by a bus-merge (quick task 260822-pxb)
+
+The 2026-08-21 value-reassignment fix above (keep the bus pair, reassign `r_ohm`/`x_ohm` to the
+D-13 near-ideal Ω-equivalent) is **superseded**, not deleted — this entry is appended per this
+file's own append-only convention. Direct inspection of the vendored source confirmed
+`HVMV_Sub_connector` (`bus1=_HVMV_Sub_LSB bus2=HVMV_Sub_48332`) is a literal substation busbar
+tie: by definition a single physical node exposed as two named terminals, with no device between
+them at all — unlike a voltage regulator, the substation transformer, or a genuine `switch=y` tie
+(all real physical devices, correctly given the D-13 near-ideal treatment). A bus-MERGE is
+therefore strictly more faithful than assigning ANY impedance value, however small: it removes the
+non-physical element entirely instead of inventing a resistance for it.
+
+`scripts/reduce_ieee8500_impedances.jl`'s `reshape_near_zero_mv_edges!` was renamed
+`merge_near_zero_mv_edges!` and converted from value-reassignment to a merge, reusing the SAME
+generic bus-merge machinery (`compute_bus_degrees`/`resolve_merge_pairs`/`apply_merge!`) this
+quick task also built for 2 unrelated genuine 1-ft real-conductor bus-split segments (see the new
+"Zero-length bus-merge" item below). Detection is still via the SAME `r_ohm < MV_NEAR_ZERO_R_
+THRESHOLD_OHM = 1e-5 Ω` threshold with the same assert-exactly-1 guard. Survivor selection: an
+EXACT degree tie between both endpoints (`_HVMV_Sub_LSB`'s only other connection is the logical
+regulator-bank edge; `HVMV_Sub_48332`'s only other connection is `LN5710794-3` into the rest of
+the feeder — both remaining-degree 1), resolved by the generic resolver's lexicographic tie-break:
+`"HVMV_Sub_48332" < "_HVMV_Sub_LSB"` (`'H'`, ASCII 72, sorts before `'_'`, ASCII 95). The dead
+D-13 constants this reassignment used (`D13_NEAR_IDEAL_R_PU`, `D13_NEAR_IDEAL_X_PU`,
+`D13_NEAR_IDEAL_R_OHM_AT_MV_BASE`, `D13_NEAR_IDEAL_X_OHM_AT_MV_BASE`, `IEEE8500_MV_ZBASE_OHM`,
+`IEEE8500_MV_S_BASE_MVA`, `IEEE8500_MV_V_BASE_KV`) were removed (confirmed via a whole-file grep
+before deletion: none referenced elsewhere).
+
+**Counts changed** (superseding the "unchanged" counts stated in the original 2026-08-21 entry
+above, which described the state AS OF THAT DATE, before this task): combined with the SAME
+task's 2 length-class merges, MV edge count moved `2477 -> 2474`; both fixtures' bus/branch
+counts moved from `4875/4874 -> 4872/4871` (headline) and `2521/2520 -> 2518/2517` (MV-only). The
+D-08 head `smax` invariant (`55.0 pu`, unique branch touching `IEEE8500_ROOT_BUS`) was explicitly
+re-verified and confirmed unbroken on both fixtures (neither merge touches the root or
+`regxfmr_HVMV_Sub_LSB`). See this quick task's `SUMMARY.md` and `25-DATA-PROVENANCE.md` for the
+full before/after record, including the re-measured 3-point SOCP-exactness gap-report table.
+
 ### Item 2 — still OPEN (NOT in scope for this gap-closure task)
 
 **Item 2 (open):** Whether `assert_socp_exact!`/`socp_relaxation_gap` should special-case or

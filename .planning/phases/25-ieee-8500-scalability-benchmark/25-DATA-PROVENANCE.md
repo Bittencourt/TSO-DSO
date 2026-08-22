@@ -98,3 +98,83 @@ A reader reproducing this table from the vendored source with a literal transcri
 DIFFERENT value for `("HVMV_Sub_48332", "_HVMV_Sub_LSB")` than the committed table — this is
 intentional and documented here, in `deferred-items.md`, and in the reduction script's own
 in-code comments (all three locations point back to each other).
+
+## SUPERSEDING deviation: zero-length/near-zero bus MERGE, replacing impedance fabrication (2026-08-22, quick task 260822-pxb)
+
+**This section supersedes the value-reassignment mechanism described immediately above for the
+`HVMV_Sub_connector` edge (append-only — the prose above remains as historical record of the
+2026-08-21 interim fix), and additionally documents 2 NEW merges the 2026-08-21 fix did not
+cover.** As of this quick task, the committed table is NOT a byte-for-byte verbatim transcription
+for THREE edges, all handled by the SAME topological bus-MERGE mechanism (never an impedance
+value assignment):
+
+1. **`LN5473436-1` (`bus1=M1142828 bus2=L2674047`, `length=0.0003048 km`, real linecode
+   `3PH_H-397_ACSR...`)** — EXACTLY 1.000 ft, an exact imperial round-trip fingerprinting an
+   artificial bus-split inserted to attach service transformer `T5260514C`. `M1142828` (remaining
+   degree 0: no other real connection) merges into `L2674047` (remaining degree 1: keeps
+   `LN5473436-2`'s continuation plus the transformer attachment).
+2. **`LN6259981-1` (`bus1=M1009834.2 bus2=L3178969.2`, `length=0.0003048 km`, real linecode
+   `1PH-x4_ACSRx4_ACSR`)** — the fixture's ONLY OTHER exact 1.000-ft real-conductor split
+   (confirmed: exactly 2 records in the whole file carry `length=0.0003048`), attaching
+   `T5355596B`. `M1009834` merges into `L3178969` by the same degree rule.
+3. **`HVMV_Sub_connector` (`bus1=_HVMV_Sub_LSB bus2=HVMV_Sub_48332`)** — the same edge described
+   above, RE-CLASSIFIED: a substation busbar tie is not a physical conductor at all (unlike (1)
+   and (2), which ARE real conductors, just degenerate-length ones), so a merge is even more
+   clearly correct here than for (1)/(2). Detected via the SAME `r_ohm < MV_NEAR_ZERO_R_
+   THRESHOLD_OHM = 1e-5 Ω` threshold as the 2026-08-21 fix. `_HVMV_Sub_LSB` and `HVMV_Sub_48332`
+   are an EXACT degree tie (both remaining degree 1) — the generic resolver's deterministic
+   lexicographic tie-break selects `HVMV_Sub_48332` as survivor (`'H'` sorts before `'_'`).
+
+**Why a merge is more faithful than any impedance value, for all three:** two buses genuinely 1 ft
+apart, or two named terminals of the same substation busbar, are electrically the SAME node.
+Assigning either endpoint an impedance value — however small, however "near-ideal" — invents a
+resistance/reactance that a real 1-ft span of 397_ACSR/x4_ACSR conductor does not have (case 1/2),
+or that a non-physical busbar splice never had at all (case 3). The 2026-08-21 reshape for case 3
+was a reasonable interim stopgap (documented above) but is a strictly less faithful mechanism than
+removing the non-physical edge entirely.
+
+**Mechanism (implemented once, reused for all 3 pairs):** `scripts/reduce_ieee8500_impedances.jl`
+gained a generic, reusable bus-merge pipeline — `compute_bus_degrees` (bus-name -> degree over the
+fully-parsed-but-not-yet-merged topology), `resolve_merge_pairs` (asserts pairwise disjointness;
+survivor = strictly greater remaining degree, lexicographic tie-break on an exact tie), and
+`apply_merge!` (drops the degenerate edge; renames the survivor onto every remaining
+`linecode_recs`/`inline_recs`/`switch_pairs`/`disabled_switch_pairs`/`xfmr_instances`(`mv_base`
+only)/`reg_edges` entry; asserts no self-loop appears post-rename). The length-class pairs
+((1),(2)) are detected via `detect_length_class_merge_pairs` (an exact-length threshold,
+`MV_ZERO_LENGTH_KM = 0.0003048`, asserting exactly 2 matches); the connector ((3)) is detected via
+the renamed `merge_near_zero_mv_edges!` (was `reshape_near_zero_mv_edges!`; same `r_ohm` threshold,
+same assert-exactly-1 guard, now merging instead of reassigning). The now-dead D-13
+value-reassignment constants (`D13_NEAR_IDEAL_R_PU`, `D13_NEAR_IDEAL_X_PU`,
+`D13_NEAR_IDEAL_R_OHM_AT_MV_BASE`, `D13_NEAR_IDEAL_X_OHM_AT_MV_BASE`, `IEEE8500_MV_ZBASE_OHM`,
+`IEEE8500_MV_S_BASE_MVA`, `IEEE8500_MV_V_BASE_KV`) were removed (grepped whole-file first —
+none referenced elsewhere).
+
+**Explicitly NOT merged in this pass ("next tier," no evidence tying them to the measured
+SOCP-exactness failure this task addresses):** the 53 `length=0.001 km` inline `r1=1.0/x1=1.0`
+records (`CAP_*`-style capacitor-jumper/stub markers — a deliberately artificial placeholder
+class, not real short conductor spans, and ~20x MORE resistive than case (1)/(2)'s real 1-ft
+spans); the 5 other short-but-non-round real MV segments (`0.000259836`, `0.000383926`,
+`0.000560638`, `0.000658611`, `0.000731906`, `0.000842188` km); and Item 5's (`deferred-items.md`)
+other 2 SOCP-offender branches (`"M1069310"->"M1069311"`, `"M1108489"->"P829798"`), which are a
+DIFFERENT, uncatalogued near-zero-`r` class not addressed by this task.
+
+**Measured effect on bus/branch counts:** MV edge count moved `2477 -> 2474` (3 fewer real MV
+edges: 2 length-class drops + 1 connector drop). Headline fixture (`ieee8500_modified()`) moved
+`4875/4874 -> 4872/4871` buses/branches; MV-only fixture (`ieee8500_mv_modified()`) moved
+`2521/2520 -> 2518/2517`. Both service transformers (`T5260514C`, `T5355596B`) are confirmed
+reattached to their survivors (`L2674047`, `L3178969`) with load intact (total `IEEE8500_LOAD_KW`
+sum unchanged — no `SX*` load bus is touched by any of the 3 merges). The D-08 head `smax`
+invariant (`≈55.0 pu`, the unique branch touching `IEEE8500_ROOT_BUS = "HVMV_Sub_HSB"`) was
+explicitly re-verified on both fixtures post-merge and confirmed unbroken — neither merge touches
+the root bus or `regxfmr_HVMV_Sub_LSB`. Radiality (`branches == buses - 1`) holds on both fixtures
+(`Feeder`'s own `assert_radial` inner-constructor check), confirming no self-loop or parallel edge
+was silently introduced by any of the 3 merges.
+
+**NON-COMPARABILITY of pre-existing measurement CSVs (a fixture-identity change, not a
+solver/tolerance change):** `results/ieee8500_benchmark/density_sweep_full.csv`,
+`density_sweep.csv`, `noise_floor_calibration.csv`, and every row of
+`results/ieee8500_benchmark/socp_gap_report.csv` predating this quick task were all measured on
+the PRE-merge topology (4875-bus headline / 2521-bus MV-only). They are NOT directly comparable to
+any measurement taken after this task — the underlying network itself changed (3 fewer buses),
+not the solver, tolerance, or model formulation. See this quick task's `SUMMARY.md` for the
+re-measured 3-point `socp_gap_report` before/after table on the NEW (post-merge) topology.

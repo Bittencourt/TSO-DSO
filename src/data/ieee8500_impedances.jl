@@ -46,15 +46,16 @@
 # resolve_merge_pairs/apply_merge!, and 25-DATA-PROVENANCE.md for the full record
 # (including the exact casualty bus names, which by design appear NOWHERE below).
 #
-# NOT A VERBATIM TRANSCRIPTION for ONE MV edge: ("HVMV_Sub_48332", "_HVMV_Sub_LSB")
-# — the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector record) —
-# parses to a genuinely near-zero Ω value (r=1e-6, x=1e-5, a modeling placeholder, not a
-# physical line) that structurally breaks LinDistFlow SOC-exactness. Its r_ohm/x_ohm
-# VALUES below are the D-13 near-ideal Ω-equivalent (IEEE123_SWITCH_R/X converted at this
-# fixture's own MV per-unit base), reassigned by reduce_ieee8500_impedances.jl's
-# reshape_near_zero_mv_edges! (phase-25 gap-closure, 2026-08-21) — see
+# BUS MERGE for the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector
+# record — quick task 260822-pxb, 2026-08-22, SUPERSEDING an earlier D-13 near-ideal
+# value-reassignment): the record parses to a genuinely near-zero Ω value (r=1e-6,
+# x=1e-5, a modeling placeholder for a non-physical busbar tie, not a physical line) that
+# structurally breaks LinDistFlow SOC-exactness, so its 2 named endpoints are MERGED into
+# the single survivor bus "HVMV_Sub_48332" (lexicographic tie-break on an exact degree
+# tie) by reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges! — see
 # .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1 and
-# 25-DATA-PROVENANCE.md for the full before/after record.
+# 25-DATA-PROVENANCE.md for the full before/after record (including the casualty bus
+# name, which by design appears NOWHERE below).
 
 const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Float64}}(
     ("190-7361", "M1089120") => (0.008973963591198668, 0.0028914370841719994),
@@ -192,7 +193,6 @@ const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Fl
     ("F739841", "L0247160") => (0.034207704000000005, 0.0273212052),
     ("F739842", "L0247162") => (0.034207704000000005, 0.0273212052),
     ("F739844", "L0247171") => (0.034207704000000005, 0.0273212052),
-    ("HVMV_Sub_48332", "_HVMV_Sub_LSB") => (0.09330054000000002, 0.04665027000000001),
     ("L2673300", "M1008753") => (0.07984613620296, 0.04382882467524),
     ("L2673300", "M1008758") => (0.0690096321057, 0.038511483991199996),
     ("L2673303", "L2748125") => (0.09033291209436001, 0.05041114394976),
@@ -6123,6 +6123,6 @@ const IEEE8500_REGULATOR_EDGES = Set{Tuple{String, String}}([
     ("D6231996-1_INT", "E206614"),
     ("D6290228-6_INT", "Q16642"),
     ("D6413567-3_INT", "E182724"),
+    ("HVMV_Sub_48332", "regxfmr_HVMV_Sub_LSB"),
     ("HVMV_Sub_HSB", "regxfmr_HVMV_Sub_LSB"),
-    ("_HVMV_Sub_LSB", "regxfmr_HVMV_Sub_LSB"),
 ])
