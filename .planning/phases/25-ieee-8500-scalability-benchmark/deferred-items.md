@@ -105,3 +105,42 @@ network — `src/models/exactness.jl` is NOT in this gap-closure task's authoriz
 **Not a plan-25-05 blocker:** Task 1/2/3's own acceptance criteria do not require a converged
 ADMM consolidation — they require an honestly-reported point (including `budget_exceeded`), which
 this plan delivers. This item is flagged for plan 25-06 (headline results) and beyond.
+
+## Plan 25-06: the memory wall arrives BEFORE the conditioning wall at IEEE-8500 scale
+
+**Found during:** Task 1's full cross-fixture density sweep (`scripts/benchmark_ieee8500.jl`,
+no `--quick`, full `T=24`, `--time-limit 120`, both solvers).
+
+**What was found:** on the shared 15 GiB machine this sweep was measured on, the Linux OOM-killer
+(confirmed via `journalctl -k`, PID + `anon-rss` recorded in each affected row's `error_msg` in
+`results/ieee8500_benchmark/density_sweep_full.csv`) terminated the Julia process outright at 6
+separate points: `ieee8500-mv` density=0.5 and 1.0, and `ieee8500` (headline) density=0.1 (×2
+attempts) and density=1.0. Every kill happened with `anon-rss` between ~7 GiB and ~9.75 GiB, WHILE
+system swap was independently at or near its ~9 GiB ceiling from OTHER, unrelated processes
+(browser tabs, docker, other agent sessions) running concurrently on the same shared machine — so
+these numbers are a measured LOWER BOUND on the point's true memory need, not a clean, isolated
+peak-memory measurement.
+
+**Why this matters:** this wall arrives strictly BEFORE either of `solve_welfare`'s own D-18
+wall-clock timeout or `solve_admm`'s hardcoded final-consolidation `assert_socp_exact!` gate
+(deferred-items.md item 3, above) can ever fire — an OOM-killed point never reaches either
+mechanism. It is a genuinely SEPARATE, size-driven wall from the conditioning wall items 1-3
+document, and — on this measurement machine — arrives FIRST, meaning the conditioning wall's
+practical consequences for ADMM consolidation could not even be re-confirmed at IEEE-8500 scale
+during this plan's own sweep (they were already established independently by plans 25-05/25-07's
+calibration ladder, which uses a much smaller, low-density benign point that does NOT OOM).
+
+**Deferred (out of plan 25-06's `<files>` scope — this plan's authorized files are
+`results/ieee8500_benchmark/density_sweep_full.csv`, `docs/literate/ieee8500_scaling.jl`,
+`docs/make.jl`; reducing the harness's or `solve_welfare`/`solve_admm`'s own memory footprint is
+architectural, out of scope, and machine-dependent to boot):**
+
+**Item 4 (open):** whether a genuinely converged, memory-feasible IEEE-8500 headline point is
+reachable at all without either (a) a larger/dedicated machine, (b) a shorter `T_horizon` (this
+plan's harness already threads `T_horizon` as an explicit parameter — plan 25-05's `T_QUICK`
+precedent could be generalized beyond `--quick`), or (c) a genuine reduction in JuMP model-build
+memory (e.g. sparser variable/constraint construction, `direct_model` for the hot subproblems —
+already a project-wide recommendation in `CLAUDE.md`'s Numerical/Performance guidance, never
+applied at this scale). A future plan wanting a real converged, consolidated IEEE-8500 point needs
+to resolve items 3 AND 4 together — item 3's tolerance gap is moot if item 4's memory wall means
+the point never reaches consolidation in the first place.
