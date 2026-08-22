@@ -9,10 +9,12 @@
 # PER-PHASE nodes on an unbalanced model, NOT a bus count on this framework's balanced
 # positive-sequence convention (the same caveat `ieee13.jl`/`ieee123.jl` already carry). The
 # REAL, MEASURED bus count of the headline fixture after positive-sequence collapse and
-# relabeling is 4,872 (stated here explicitly, never implied by the "8500-node" name); the
-# MV-only control fixture measures 2,518 buses. (Both counts were 4,875/2,521 before quick task
+# relabeling is 4,866 (stated here explicitly, never implied by the "8500-node" name); the
+# MV-only control fixture measures 2,512 buses. (Both counts were 4,875/2,521 before quick task
 # 260822-pxb, 2026-08-22, merged 3 degenerate MV bus pairs — 2 genuine 1-ft real-conductor
-# bus-splits plus the substation busbar-tie connector — into their topological survivors; see
+# bus-splits plus the substation busbar-tie connector — dropping to 4,872/2,518; then quick task
+# 260822-rle, 2026-08-22, WIDENED the same length-class merge to a sub-metre bound, catching 6
+# further real-conductor line-split segments and dropping the counts further to 4,866/2,512; see
 # `src/data/ieee8500_impedances.jl`'s generated-file header and
 # `.planning/phases/25-ieee-8500-scalability-benchmark/25-DATA-PROVENANCE.md` for the full
 # record.) Both counts include 2 small virtual buses (`HVMV_Sub_HSB`, `regxfmr_HVMV_Sub_LSB`)

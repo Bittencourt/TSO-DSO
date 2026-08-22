@@ -39,6 +39,20 @@
 # appears in the generated table (SUPERSEDES an earlier D-13-style value-reassignment for the
 # connector specifically — see deferred-items.md item 1 for the full before/after history).
 #
+# WIDENED (quick task 260822-rle, 2026-08-22): the length-class bus-merge threshold widened from
+# an exact 1.000 ft match to a documented, float-safe sub-metre bound
+# (`MV_SUBMETRE_LENGTH_KM_BOUND`), catching 6 further real-conductor line-split segments beyond
+# the original 2 — `LN5837496-1`, `LN6268990-2`, `LN5486729-1`, `LN5927299-1`, `LN5472394-1`,
+# `LN5865233-1` (see `detect_length_class_merge_pairs`'s own docstring for the full list, lengths,
+# and survivors). This widening was prompted by 260822-pxb's own finding that SOCP-exactness
+# dominance transferred to, rather than resolved by, the original 2-pair merge — the new dominant
+# offender (`M1069310<->M1069311`) turned out to be another sub-metre real-conductor split of the
+# SAME phenomenon class, just below the old threshold. The 53 `length=0.001` km records (43
+# `switch=y` ties + 9 `CAP_*` capacitor-jumper stubs) remain untouched and excluded — a distinct
+# class, structurally unreachable by this detector (see the CAP_-prefix belt-and-braces guard in
+# `detect_length_class_merge_pairs`). SAME generic merge machinery reused throughout
+# (`compute_bus_degrees`/`resolve_merge_pairs`/`apply_merge!` unchanged).
+#
 # Zero package dependencies (no `using`/`import` statements anywhere in this file): the parser is
 # Base + stdlib PCRE regex only, so `Project.toml [deps]` is untouched by this script.
 #
@@ -284,13 +298,17 @@ end
     MVLinecodeRef
 
 One parsed MV `New Line.*` statement that references a `Linecode=<name>` — bus tokens already
-phase-stripped to their base name, length in km (the file's own declared `Units=km`).
+phase-stripped to their base name, length in km (the file's own declared `Units=km`). `name` is
+the record's own `New Line.<name>` identifier (added quick task 260822-rle, 2026-08-22, solely to
+support the `CAP_`-prefix belt-and-braces guard in `detect_length_class_merge_pairs`; renaming
+never touches this field, only the bus endpoints).
 """
 struct MVLinecodeRef
     bus1_base::String
     bus2_base::String
     linecode::String   # lowercased
     length_km::Float64
+    name::String
 end
 
 """
@@ -338,6 +356,10 @@ function parse_mv_lines(text::AbstractString)
     for raw in split(text, '\n')
         occursin(r"^\s*New\s+Line\."i, raw) || continue
         total_seen += 1
+        mname = match(r"New\s+Line\.(\S+)"i, raw)
+        mname === nothing &&
+            throw(ArgumentError("New Line statement missing a record name: $raw"))
+        rec_name = String(mname.captures[1])
         m1 = match(r"[Bb]us1=(\S+)", raw)
         m2 = match(r"[Bb]us2=(\S+)", raw)
         (m1 === nothing || m2 === nothing) &&
@@ -372,6 +394,7 @@ function parse_mv_lines(text::AbstractString)
                     b2,
                     lowercase(String(mlc.captures[1])),
                     parse(Float64, mlen.captures[1]),
+                    rec_name,
                 ),
             )
             continue
@@ -411,8 +434,9 @@ function parse_mv_lines(text::AbstractString)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Zero-length bus-merge (quick task 260822-pxb, 2026-08-22) — REPLACES impedance fabrication with
-# a topological bus MERGE for genuinely degenerate 1-ft real-conductor line splits.
+# Zero-length bus-merge (quick task 260822-pxb, 2026-08-22; WIDENED to sub-metre by quick task
+# 260822-rle, 2026-08-22) — REPLACES impedance fabrication with a topological bus MERGE for
+# genuinely degenerate real-conductor line-split segments.
 # ─────────────────────────────────────────────────────────────────────────────────────────
 #
 # `Lines.dss` contains exactly 2 `New Line.*` records with `length=0.0003048 km` — EXACTLY 1.000
@@ -433,30 +457,100 @@ end
 # `length=0.001 km` inline `r1=1.0/x1=1.0` records (`CAP_*`-style capacitor-jumper/stub markers)
 # are a DIFFERENT class entirely — deliberately artificial placeholder markers, not real short
 # conductor spans — and are explicitly NOT merged in this pass either.
-const MV_ZERO_LENGTH_KM = 0.0003048
+#
+# WIDENED to a sub-metre bound (quick task 260822-rle, 2026-08-22): after the above 2-pair merge,
+# SOCP-exactness dominance transferred to `M1069310<->M1069311` (`LN5486729-1`, 0.560638 m,
+# `-N`-split-suffixed) rather than resolving — direct evidence the exact-1.000-ft threshold was
+# narrower than the phenomenon it targeted. A fresh grep of `Lines.dss` found exactly 8
+# `Linecode=`-referencing MV segments with `length_km < 0.001` km (sub-metre): the original 2
+# (`LN5473436-1`, `LN6259981-1`, both already merged above) plus 6 new ones, 5 of which carry the
+# same `-N` numeric split-suffix corroborating a line-split artifact rather than a naturally short
+# real conductor:
+#   `LN5837496-1`  0.259836 m  `P829798`  <-> `M1108489`
+#   `LN6268990-2`  0.383926 m  `M1047613` <-> `M1047612`
+#   `LN5486729-1`  0.560638 m  `M1069311` <-> `M1069310`  (was dominant offender after pass 1)
+#   `LN5927299-1`  0.658611 m  `M1125974` <-> `L3104796`
+#   `LN5472394-1`  0.731906 m  `M1026709` <-> `M1026708`
+#   `LN5865233-1`  0.842188 m  `L3178971` <-> `M1047744`
+# (7 of the full 8 carry the `-N` split-suffix; `LN5837496-1` does not, but its 0.260 m length and
+# real-linecode reference put it in the same physical class as the others.) The widened bound is a
+# strict `< 1 metre` (`0.001` km), applied with a small float-safety margin (see
+# `MV_SUBMETRE_LENGTH_KM_EPS` below) — NOT a bare `isapprox` match against any single exact value,
+# since the 6 new lengths are not round imperial numbers the way the original 2 were. The 53
+# `length=0.001` km records (43 `switch=y` ties + 9 `CAP_*` capacitor-jumper stubs, both
+# structurally unreachable by this detector — see the CAP_-prefix guard below) remain untouched
+# and excluded, exactly as before.
+const MV_SUBMETRE_LENGTH_KM_BOUND = 0.001      # 1 metre, in km (EXCLUSIVE upper bound)
+# 1 mm float-safety margin at the boundary. A bare `r.length_km < MV_SUBMETRE_LENGTH_KM_BOUND`
+# should already exclude the 53 textually-`length=0.001`-km records (`x < x` is false for
+# identically-parsed floats), since all lengths — in-scope and excluded alike — are parsed via the
+# SAME `parse(Float64, ...)` call in `parse_mv_lines`. The explicit `EPS` margin removes any
+# dependency on that parsing-determinism assumption continuing to hold across a future upstream
+# data refresh (e.g. if a refreshed source ever expresses a length as `0.0010000001` due to a
+# different unit-conversion rounding). `1.0e-6` km (1 mm) is a safe choice because the largest
+# in-scope target length is `0.000842188` km (0.842 m, `LN5865233-1`) and the smallest excluded
+# length is `0.001` km (1.0 m) exactly — a `0.157812` km gap, ~158x the chosen margin, so the
+# margin cannot accidentally pull in an excluded record or push out an in-scope one.
+const MV_SUBMETRE_LENGTH_KM_EPS = 1.0e-6
 
 """
     detect_length_class_merge_pairs(linecode_recs) -> Vector{Tuple{String,String}}
 
 Scan `linecode_recs` (pre-impedance-resolution `MVLinecodeRef`s) for any entry whose `length_km`
-is `MV_ZERO_LENGTH_KM` (1.000 ft) within a tight `atol`; collect the canonical bus pair for each
-match. Throws a loud `ArgumentError` unless EXACTLY 2 match — this fixture's 2 confirmed genuine
-1-ft real-conductor bus-split segments (`LN5473436-1`, `LN6259981-1`) — so a future vendored-data
-refresh that silently widens or shrinks this set fails loudly here instead of being silently
-absorbed into the merge.
+is strictly below `MV_SUBMETRE_LENGTH_KM_BOUND - MV_SUBMETRE_LENGTH_KM_EPS` (sub-metre, with a 1mm
+float-safety margin — widened from the original exact-1.000-ft `isapprox` match, quick task
+260822-rle, 2026-08-22); collect the canonical bus pair for each match.
+
+For every matched record, asserts `!startswith(r.name, "CAP_")` before collecting its pair,
+throwing a loud `ArgumentError` naming the offending record if it ever fires. This is a
+belt-and-braces guard: `CAP_*` capacitor-jumper stubs are currently parsed into `inline_recs`
+(via their inline `r1=`/`x1=` fields), never into `linecode_recs`, so this assertion should never
+trigger today. It exists so that a FUTURE upstream data refresh which reclassifies a `CAP_*` stub
+into a `Linecode=`-referencing record (and therefore into `linecode_recs`) fails LOUDLY here
+instead of silently entering the merge — `CAP_*` stubs are a structurally different class
+(artificial placeholder jumpers with fabricated `r1=1.0/x1=1.0`, ~20x more resistive than any of
+the 8 target segments), not a real short conductor eligible for this treatment.
+
+Throws a loud `ArgumentError` unless EXACTLY 8 match — this fixture's 8 confirmed genuine
+sub-metre real-conductor bus-split segments (2 already known from the prior exact-1.000-ft pass,
+`LN5473436-1`/`LN6259981-1`, plus 6 newly in-scope under the widened bound: `LN5837496-1`,
+`LN6268990-2`, `LN5486729-1`, `LN5927299-1`, `LN5472394-1`, `LN5865233-1`), corroborated by 7 of
+the 8 carrying the same `-N` numeric line-split suffix — so a future vendored-data refresh that
+silently widens or shrinks this set fails loudly here instead of being silently absorbed into the
+merge. If this count mismatches, re-verify the intended physical scope of this treatment (does the
+new/missing record genuinely belong to the same line-split-artifact class, or is it a naturally
+short real conductor / a reclassified CAP_ stub?) before silently widening or shrinking the
+threshold again.
 """
 function detect_length_class_merge_pairs(linecode_recs::Vector{MVLinecodeRef})
     pairs = Tuple{String, String}[]
+    submetre_bound = MV_SUBMETRE_LENGTH_KM_BOUND - MV_SUBMETRE_LENGTH_KM_EPS
     for r in linecode_recs
-        if isapprox(r.length_km, MV_ZERO_LENGTH_KM; atol = 1.0e-9)
+        if r.length_km < submetre_bound
+            startswith(r.name, "CAP_") && throw(
+                ArgumentError(
+                    "belt-and-braces guard fired: sub-metre length-class merge detector matched " *
+                    "a CAP_-prefixed record (\"$(r.name)\", length_km=$(r.length_km)) inside " *
+                    "linecode_recs — CAP_ capacitor-jumper stubs are a structurally different, " *
+                    "deliberately artificial class (fabricated r1=1.0/x1=1.0 impedance) and must " *
+                    "NEVER be merged as if they were a real short conductor. This indicates the " *
+                    "vendored source has changed how CAP_ records are declared (they normally " *
+                    "parse into inline_recs, never linecode_recs) — investigate before proceeding, " *
+                    "do not silently include this record in the merge.",
+                ),
+            )
             push!(pairs, canonical_pair(r.bus1_base, r.bus2_base))
         end
     end
-    length(pairs) == 2 || throw(
+    length(pairs) == 8 || throw(
         ArgumentError(
-            "expected EXACTLY 2 length-class ($(MV_ZERO_LENGTH_KM) km, 1.000 ft) degenerate MV " *
-            "bus-split segments eligible for a merge, got $(length(pairs)): $(pairs) — the " *
-            "vendored source may have changed; re-verify the intended scope of this treatment " *
+            "expected EXACTLY 8 sub-metre (length_km < $(MV_SUBMETRE_LENGTH_KM_BOUND) km, with a " *
+            "$(MV_SUBMETRE_LENGTH_KM_EPS) km float-safety margin) degenerate MV real-conductor " *
+            "bus-split segments eligible for a merge (2 originally-known 1.000-ft exact splits " *
+            "plus 6 newly-in-scope shorter real-conductor splits, 7 of 8 corroborated by a `-N` " *
+            "line-split suffix), got $(length(pairs)): $(pairs) — the vendored source may have " *
+            "changed, or a length that should be excluded (e.g. a switch tie or a CAP_ stub) may " *
+            "have been misclassified; re-verify the intended physical scope of this treatment " *
             "before proceeding, do not silently widen or shrink it",
         ),
     )
@@ -587,7 +681,10 @@ function apply_merge!(
     kept_linecode = MVLinecodeRef[]
     for r in linecode_recs
         canonical_pair(r.bus1_base, r.bus2_base) in drop_set && continue
-        push!(kept_linecode, MVLinecodeRef(rn(r.bus1_base), rn(r.bus2_base), r.linecode, r.length_km))
+        push!(
+            kept_linecode,
+            MVLinecodeRef(rn(r.bus1_base), rn(r.bus2_base), r.linecode, r.length_km, r.name),
+        )
     end
     empty!(linecode_recs)
     append!(linecode_recs, kept_linecode)
