@@ -9,10 +9,14 @@
 # PER-PHASE nodes on an unbalanced model, NOT a bus count on this framework's balanced
 # positive-sequence convention (the same caveat `ieee13.jl`/`ieee123.jl` already carry). The
 # REAL, MEASURED bus count of the headline fixture after positive-sequence collapse and
-# relabeling is 4,875 (stated here explicitly, never implied by the "8500-node" name); the
-# MV-only control fixture measures 2,521 buses. Both counts include 2 small virtual buses
-# (`HVMV_Sub_HSB`, `regxfmr_HVMV_Sub_LSB`) internal to the substation-transformer/regulator
-# chain — see `IEEE8500_ROOT_BUS` below.
+# relabeling is 4,872 (stated here explicitly, never implied by the "8500-node" name); the
+# MV-only control fixture measures 2,518 buses. (Both counts were 4,875/2,521 before quick task
+# 260822-pxb, 2026-08-22, merged 3 degenerate MV bus pairs — 2 genuine 1-ft real-conductor
+# bus-splits plus the substation busbar-tie connector — into their topological survivors; see
+# `src/data/ieee8500_impedances.jl`'s generated-file header and
+# `.planning/phases/25-ieee-8500-scalability-benchmark/25-DATA-PROVENANCE.md` for the full
+# record.) Both counts include 2 small virtual buses (`HVMV_Sub_HSB`, `regxfmr_HVMV_Sub_LSB`)
+# internal to the substation-transformer/regulator chain — see `IEEE8500_ROOT_BUS` below.
 #
 # S_base NON-COMPARABILITY (D-05 REVISED): this fixture is built at `S_base = 0.5 MVA` —
 # NOT the 1 MVA base of the IEEE-13/123 fixtures. 0.5 MVA is the ONLY base that clears BOTH
@@ -294,7 +298,8 @@ end
 """
     ieee8500_mv_modified() -> Feeder{Float64}
 
-Build the MV-only control fixture (D-02): ~2,521 MV buses (measured; see
+Build the MV-only control fixture (D-02): ~2,518 MV buses (measured, post quick task
+260822-pxb's 3-pair bus-merge, 2026-08-22 — was 2,521 before; see
 `ieee8500_mv_relabel_map`), keeping every MV line + regulator/switch edge and EXCLUDING every
 LV (`X*`/`SX*`) bus and every service-transformer edge entirely. `Feeder` itself holds no load
 data, so per-MV-bus load aggregation (D-02's "each load aggregated onto its MV node") is a

@@ -20,6 +20,17 @@
 # `.planning/phases/25-ieee-8500-scalability-benchmark/25-05-SUMMARY.md` for the full 3-run
 # trace. Wall time (`assembly_time_s`/`solve_time_s`/`admm_time_s`/`total_time_s`) is NEVER
 # asserted below (D-16: wall time is recorded in the CSV, but never a golden).
+#
+# SUPERSEDED 2026-08-22 (quick task 260822-pxb — historical entry above preserved, this note is
+# appended, not a replacement): the `ieee8500-mv` fixture's bus/branch count moved (2521/2520 ->
+# 2518/2517) after a 3-pair topological bus-merge replaced impedance fabrication for 2 genuine
+# 1-ft real-conductor bus-splits plus the substation busbar-tie connector (see
+# `src/data/ieee8500_impedances.jl`'s generated-file header and `25-DATA-PROVENANCE.md`). This
+# file's OWN Test 1 (run `--quick` twice in the SAME session, compare directly against each
+# other) re-confirmed stability on the NEW topology: both runs produced IDENTICAL `model_vars`
+# (137444) and `model_cons` (274818) — the golden in Test 2 below is updated to these
+# freshly-measured, stable values. `termination_status` ("OPTIMAL"), `admm_status`
+# ("budget_exceeded"), and `admm_iters` (1) did NOT change and are left untouched.
 
 using Test
 using CSV, DataFrames
@@ -61,12 +72,15 @@ end
     @test r1.admm_status == r2.admm_status
     @test r1.admm_iters == r2.admm_iters
 
-    # Test 2: the golden itself — pinned 2026-08-21 after confirming 3-run stability (this
-    # file's own 2-run check above, PLUS a third run recorded in 25-05-SUMMARY.md). Asserts
-    # ONLY the three deterministic quantities D-16 names (ADMM iteration count, model
-    # variable/constraint dimensions, solver termination status) — NEVER wall time.
-    @test r2.model_vars == 137594
-    @test r2.model_cons == 275118
+    # Test 2: the golden itself — originally pinned 2026-08-21 after confirming 3-run stability
+    # (this file's own 2-run check above, PLUS a third run recorded in 25-05-SUMMARY.md); RE-PINNED
+    # 2026-08-22 (quick task 260822-pxb) after the fixture's bus-merge changed its topology (see
+    # the file-header note above) — re-confirmed stable across this file's own 2-run check on the
+    # NEW topology before updating. Asserts ONLY the three deterministic quantities D-16 names
+    # (ADMM iteration count, model variable/constraint dimensions, solver termination status) —
+    # NEVER wall time.
+    @test r2.model_vars == 137444
+    @test r2.model_cons == 274818
     @test r2.termination_status == "OPTIMAL"
     @test r2.admm_status == "budget_exceeded"
     @test r2.admm_iters == 1
