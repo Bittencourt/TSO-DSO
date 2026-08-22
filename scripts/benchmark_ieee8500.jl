@@ -19,12 +19,16 @@
 #      T-25-12).
 #
 #   2. (default) density-sweep mode: `--fixture {ieee13,ieee123,ieee8500-mv,ieee8500}
-#      --density <comma-list> --solver {clarabel,scs,both} --time-limit <seconds> [--quick]`
+#      --density <comma-list> --solver {clarabel,scs,both} --time-limit <seconds>
+#      [--t-horizon <int>] [--quick]`
 #      Sweeps a (fixture × density × solver) grid, solving EACH point both CENTRALIZED and via
 #      ADMM, and reports EVERY attempted point (including timeouts and non-convergence, D-18) —
 #      never silently dropping one (T-25-11). `--quick` forces the exact CI-affordable single
 #      point this phase's `25-VALIDATION.md` documents: `ieee8500-mv`, the smallest density,
-#      Clarabel only.
+#      Clarabel only. `--t-horizon <int>` (gap-closure task) overrides the horizon used for
+#      BOTH the centralized and ADMM points (recorded in the committed CSV's `T_horizon`
+#      column); absent, behaviour is unchanged (`quick ? T_QUICK : T`). Rejects values below
+#      the floor of 10 (see `T_HORIZON_FLOOR`'s own comment) rather than silently clamping.
 #
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee13 --tolerances 1e-6,1e-8
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500-mv
@@ -516,6 +520,18 @@ const _QUICK_TIME_LIMIT_S = "5"
 const T_QUICK = 10
 const _SWEEP_SEED = 20260821
 
+# Floor for the general (non-quick) sweep's own `--t-horizon` override (gap-closure task,
+# deferred-items.md item 4: "plan 25-05's T_QUICK precedent could be generalized beyond
+# --quick"). REUSES T_QUICK's own already-measured floor rather than re-deriving a separate
+# constant: `_ieee8500_house`'s fixed `Deferrable(bus, min(8,T), min(16,T), 1.0, 0.5, 0.5)`
+# energy-budget guard (`src/experiments/materialize.jl`, plan 25-04 — out of this task's
+# `<files>` scope) requires `E=1.0 <= Pmax*window_length = 0.5*(min(16,T)-min(8,T)+1)`, which
+# collapses to `window_length=1` (infeasible, `E=1.0 > 0.5`) below `T=9` — `T_QUICK=4` threw
+# `ArgumentError` at population-construction time when this was first discovered (25-05-SUMMARY).
+# `T_HORIZON_FLOOR=10` (not 9) matches `T_QUICK`'s own already-validated value exactly, so a
+# `--t-horizon 10` invocation is byte-identical in horizon to `--quick`'s own T_horizon.
+const T_HORIZON_FLOOR = T_QUICK
+
 function parse_kv_flag(args, flag::String, default)
     idx = findfirst(==(flag), args)
     idx === nothing && return default
@@ -556,7 +572,27 @@ function run_sweep_mode(args)
         throw(ArgumentError("unknown --solver $solver_str; expected clarabel, scs, or both"))
     solver_sym = Symbol(solver_str)
 
-    T_horizon = quick ? T_QUICK : T
+    # `--t-horizon` (gap-closure task, deferred-items.md item 4): an explicit CLI override of
+    # the horizon, ABSENT of which behaviour is EXACTLY today's `quick ? T_QUICK : T` (no
+    # existing invocation changes). Rejects (never silently clamps) anything below
+    # `T_HORIZON_FLOOR` — see that constant's own comment for why T=10 is the smallest safe
+    # horizon on these fixtures' `Deferrable` population.
+    t_horizon_str = parse_kv_flag(args, "--t-horizon", nothing)
+    T_horizon = if t_horizon_str === nothing
+        quick ? T_QUICK : T
+    else
+        v = parse(Int, t_horizon_str)
+        v < T_HORIZON_FLOOR && throw(
+            ArgumentError(
+                "--t-horizon=$v is below the safe floor of $T_HORIZON_FLOOR: " *
+                "_ieee8500_house's Deferrable(bus, min(8,T), min(16,T), 1.0, 0.5, 0.5) energy " *
+                "budget requires window_length = min(16,T)-min(8,T)+1 >= 2 (i.e. T >= 9), and " *
+                "T_QUICK=10 is this harness's own already-measured smallest safe value across " *
+                "every fixture — refusing rather than silently clamping",
+            ),
+        )
+        v
+    end
     feeder = build_feeder(fixture_sym)
     profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_horizon)
     λ0 = build_price(:mem, T_horizon, nothing)
