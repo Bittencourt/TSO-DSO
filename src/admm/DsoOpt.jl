@@ -407,10 +407,22 @@ target. λ_j is a plain scalar coefficient, NEVER a JuMP `Parameter` (an indefin
 
 `check_exact` is the CONVERGENCE flag. When `true` (only the final, converged solve — mid-loop
 iterates are legitimately inexact and would throw, RESEARCH Pitfall 3) it runs the PF-04
-exactness gate [`assert_socp_exact!`](@ref)`(dso.ctx)`, stashing the returned `maxgap` under
-`dso.ctx.meta[:socp_maxgap]`; a STRICT (inexact) cone means `l` is a fictitious over-current
-and the recovered prices are physically meaningless, so the gate THROWS and prices are refused.
-When `false` the gate is NOT run.
+exactness gate [`assert_socp_exact!`](@ref)`(dso.ctx; rtol = rtol_exact, atol = atol_exact)`,
+stashing the returned `maxgap` under `dso.ctx.meta[:socp_maxgap]`; a STRICT (inexact) cone means
+`l` is a fictitious over-current and the recovered prices are physically meaningless, so the
+gate THROWS and prices are refused. When `false` the gate is NOT run (and `atol_exact`/
+`rtol_exact` are inert — never consulted).
+
+`atol_exact`/`rtol_exact` (2026-08-22 follow-up, quick task 260822-f0b) are an ADDITIVE override
+seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`1e-6`/`1e-4`)
+are copied VERBATIM from `assert_socp_exact!`'s own current defaults
+(`src/models/exactness.jl:78`), so every existing call site — including this function's own
+mid-loop `check_exact = false` calls, which never reach the branch that consults them — is
+byte-identical. This is a SEAM, not a default weakening (T-25-12, certificate-laundering): never
+use it to make a point classify as exact that would otherwise be inexact under the project's own
+default gate. A caller overriding it is asserting they have their OWN independently measured
+noise floor for the tolerance they pass (mirrors how `scripts/benchmark_ieee8500.jl`'s
+`IEEE8500_MV_EXACT_ATOL`/`IEEE8500_EXACT_ATOL` were derived).
 
 Returns `(; pag_dso, p_import, exact_maxgap)` — the solved coupling values `value.(dso.pag)`,
 the frontier exchange `value.(dso.p_import)`, and the certified cone residual (`nothing` until
@@ -423,6 +435,8 @@ function solve_dso!(
     ρ::Real;
     check_exact::Bool = false,
     strict::Bool = true,
+    atol_exact::Real = 1e-6,
+    rtol_exact::Real = 1e-4,
 )
     # ADMM-03 build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]
     # (one scalar call per (j,t)); the ρ/2 quadratic penalty built in build_dso_opt is fixed.
@@ -447,7 +461,7 @@ function solve_dso!(
     # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.
     # Mid-loop iterates skip this — they are legitimately inexact and would throw spuriously.
     if check_exact
-        dso.ctx.meta[:socp_maxgap] = assert_socp_exact!(dso.ctx)
+        dso.ctx.meta[:socp_maxgap] = assert_socp_exact!(dso.ctx; rtol = rtol_exact, atol = atol_exact)
     end
 
     return (;

@@ -165,6 +165,21 @@ mid-loop point). Instead it returns EARLY with `status = :budget_exceeded` and
 — a `nothing` price is a deliberate signal that no certified transactive price exists yet,
 never a plausible-but-uncertified number silently returned as if it were the DADP.
 
+# Exactness-gate override seam (2026-08-22 follow-up, quick task 260822-f0b —
+`atol_exact::Real = 1e-6, rtol_exact::Real = 1e-4`)
+
+An ADDITIVE override onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs, threaded
+ONLY into the FINAL consolidation [`solve_dso!`](@ref) call (the mid-loop `check_exact = false`
+call never reaches the gate, so there is nothing to thread there). Defaults are copied VERBATIM
+from `assert_socp_exact!`'s own current defaults (`src/models/exactness.jl:78`), matching this
+project's existing `rtol_exact` naming precedent (`solve_welfare`, `stochastic_welfare.jl`,
+`subproblem.jl`) — every existing caller of `solve_admm` is byte-identical at these defaults.
+This is a SEAM, not a default weakening (T-25-12, certificate-laundering): it must never be
+used to manufacture a passing verdict for a point that would otherwise be inexact under the
+project's own default gate. A caller overriding it is asserting they have their OWN
+independently measured noise floor for the tolerance they pass, mirroring how
+`scripts/benchmark_ieee8500.jl`'s `IEEE8500_MV_EXACT_ATOL`/`IEEE8500_EXACT_ATOL` were derived.
+
 # Returns
 
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, status)` where
@@ -223,6 +238,8 @@ function solve_admm(
     reactive_consensus = false,
     ρ_q::Real = ρ,
     time_limit_s::Union{Nothing, Real} = nothing,
+    atol_exact::Real = 1e-6,
+    rtol_exact::Real = 1e-4,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
@@ -749,7 +766,16 @@ function solve_admm(
             set_objective_coefficient(dso.model, dso.qag[j, t], -μq[j][t] - ρ_qf * b[j][t])
         end
     end
-    dres_final = solve_dso!(dso, λ, a, ρf; check_exact = true, strict = false)
+    dres_final = solve_dso!(
+        dso,
+        λ,
+        a,
+        ρf;
+        check_exact = true,
+        strict = false,
+        atol_exact = atol_exact,
+        rtol_exact = rtol_exact,
+    )
     p_import = dres_final.p_import
     exact_maxgap = dres_final.exact_maxgap
 
