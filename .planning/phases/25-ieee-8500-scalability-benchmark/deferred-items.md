@@ -81,30 +81,53 @@ IEEE-8500 fixture can still throw at that gate. This fix closes the STRUCTURAL r
 gap between that noise floor and the project's existing `1e-6` default gate — that gap is Item 3's
 concern, still open.
 
-### Items 2 and 3 — still OPEN (NOT in scope for this gap-closure task)
+### Item 2 — still OPEN (NOT in scope for this gap-closure task)
 
 **Item 2 (open):** Whether `assert_socp_exact!`/`socp_relaxation_gap` should special-case or
 exclude near-zero-impedance branches from the max-gap scan, so a single degenerate connector
 cannot dominate (and effectively disable) the exactness gate for an otherwise well-conditioned
 network — `src/models/exactness.jl` is NOT in this gap-closure task's authorized file list.
 
-**Item 3 (open):** `solve_admm`'s own hardcoded final-consolidation `assert_socp_exact!` call
-  (`src/admm/solve_admm.jl`, `check_exact = true`) uses the PROJECT DEFAULT `atol = 1e-6`/
-  `rtol = 1e-4` with no override parameter — meaning ADMM on either IEEE-8500 fixture will hit
-  this SAME near-zero-impedance branch's residual and throw at the final consolidation gate
-  REGARDLESS of density, population, or convergence quality. This is a real, reproducible finding
-  (confirmed live during Task 2's `--quick` and `--time-limit 1` exercises: the ADMM point on
-  `ieee8500-mv` never reaches a clean converged consolidation — it is intentionally exercised
-  under a SHORT wall-clock budget in this plan specifically so `solve_admm`'s D-18 early exit
-  (`:budget_exceeded`) fires before the final consolidation gate is ever reached). A future plan
-  that wants a genuinely CONVERGED, CONSOLIDATED ADMM point on either IEEE-8500 fixture will hit
-  this throw and needs an override seam on `solve_admm`'s `atol`/`rtol` (currently none exists) —
-  Item 1's data-shaping fix (now resolved) closed the STRUCTURAL failure but did NOT close the
-  remaining numerical gap between the re-measured `~1e-3` noise floor and this `1e-6` default.
+### Item 3 — RESOLVED 2026-08-22 (quick tasks 260822-f0b + 260822-hld)
 
-**Not a plan-25-05 blocker:** Task 1/2/3's own acceptance criteria do not require a converged
-ADMM consolidation — they require an honestly-reported point (including `budget_exceeded`), which
-this plan delivers. This item is flagged for plan 25-06 (headline results) and beyond.
+**Item 3 (historical, at the time this plan measured it):** `solve_admm`'s own hardcoded final-
+  consolidation `assert_socp_exact!` call (`src/admm/solve_admm.jl`, `check_exact = true`) used
+  the PROJECT DEFAULT `atol = 1e-6`/`rtol = 1e-4` with no override parameter — meaning ADMM on
+  either IEEE-8500 fixture would hit this SAME near-zero-impedance branch's residual and throw at
+  the final consolidation gate REGARDLESS of density, population, or convergence quality. This was
+  a real, reproducible finding (confirmed live during Task 2's `--quick` and `--time-limit 1`
+  exercises: the ADMM point on `ieee8500-mv` never reached a clean converged consolidation — it
+  was intentionally exercised under a SHORT wall-clock budget in this plan specifically so
+  `solve_admm`'s D-18 early exit (`:budget_exceeded`) fired before the final consolidation gate
+  was ever reached). Item 1's data-shaping fix (resolved 2026-08-21) closed the STRUCTURAL failure
+  but did NOT close the remaining numerical gap between the re-measured `~1e-3` noise floor and
+  this `1e-6` default.
+
+**How it was resolved:** quick task 260822-f0b (2026-08-22) first added the additive
+  `atol_exact`/`rtol_exact` override seam onto `solve_admm`'s final consolidation `solve_dso!`
+  call (mid-loop `check_exact = false` untouched). Quick task 260822-hld (same day, round 2) then
+  actually THREADED the seam: `scripts/benchmark_ieee8500.jl`'s `run_admm_point` now passes the
+  SAME per-fixture `EXACTNESS_ATOL[fixture_sym]` already used for the centralized point's own
+  `exact_verdict` into `solve_admm`'s `atol_exact` — never a literal chosen to pass a specific
+  point (T-25-12 anti-certificate-laundering: a point whose cone gap genuinely exceeds its
+  fixture's own measured floor still throws).
+
+**Measured evidence (260822-hld):** re-ran `fixture=ieee8500, density=0.1, T_horizon=10,
+  solver=clarabel` (the SAME point orchestrator diagnostics had measured throwing under the OLD
+  unthreaded `atol=1e-6` default, cone gap `1.3968e-4`). With the floor threaded
+  (`admm_atol_used=0.0049691451`, the density-0.05/T=24-measured `IEEE8500_EXACT_ATOL`), ADMM now
+  reaches `admm_status = converged` (8 iterations) instead of throwing — see
+  `results/ieee8500_benchmark/density_sweep.csv`'s `ieee8500,0.1,clarabel` row and
+  `260822-hld-SUMMARY.md` for the full trace, including a freshly-measured, POINT-APPROPRIATE
+  calibration ladder at this exact (density, T_horizon) that found an even LARGER floor
+  (`0.0325016`, ~6.5x the reused density-0.05/T=24 value) — the converged point passes under
+  either floor by more than 28x margin. The centralized solve's own `ALMOST_OPTIMAL` status is
+  UNCHANGED and NOT claimed as fixed — that is a separate, still-open conditioning question (see
+  Item 4's own conditioning-wall discussion below).
+
+**Not a plan-25-05 blocker (historical note):** Task 1/2/3's own acceptance criteria never
+required a converged ADMM consolidation — they required an honestly-reported point (including
+`budget_exceeded`), which this plan delivered even before Item 3's resolution above.
 
 ## Plan 25-06: the memory wall arrives BEFORE the conditioning wall at IEEE-8500 scale
 
