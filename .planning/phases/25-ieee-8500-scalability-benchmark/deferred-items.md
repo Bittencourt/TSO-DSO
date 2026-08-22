@@ -144,3 +144,50 @@ already a project-wide recommendation in `CLAUDE.md`'s Numerical/Performance gui
 applied at this scale). A future plan wanting a real converged, consolidated IEEE-8500 point needs
 to resolve items 3 AND 4 together — item 3's tolerance gap is moot if item 4's memory wall means
 the point never reaches consolidation in the first place.
+
+### Item 4 — PARTIALLY RESOLVED 2026-08-22 (phase-25 gap-closure task 25-08, remedy (b) applied)
+
+The user authorized remedy (b) directly: a new `--t-horizon <int>` CLI flag was added to
+`scripts/benchmark_ieee8500.jl` (generalizing plan 25-05's `T_QUICK` precedent beyond `--quick`,
+exactly as this item anticipated), with a validated floor of 10 (rejects lower, never silently
+clamps — `T_HORIZON_FLOOR = T_QUICK`). The headline `ieee8500_modified()` fixture (4,875 buses /
+4,874 branches) was then re-attempted at `--t-horizon 10` (vs the general sweep's `T=24`),
+density=0.1 (the cheapest grid point), run completely alone on the measurement machine per the
+project's memory-discipline protocol.
+
+**Did the headline fixture fit in memory at a shorter horizon? YES — the memory wall IS closed at
+T=10.** The process completed normally: no SIGKILL, no `journalctl -k` OOM evidence, peak observed
+anon-rss during live monitoring ≈5.9 GB, comfortably below the T=24 OOM range (6.8–9.75 GB)
+documented above. This directly answers remedy (b)'s premise: a shorter horizon DOES let this
+network fit in memory on this machine, at least at the cheapest density.
+
+**But this does NOT mean a real, converged, T=24-equivalent headline result now exists — GAP B is
+only PARTIALLY closed.** At T=10 the centralized (Clarabel) solve reached status `ALMOST_OPTIMAL`
+(`primal_status`/`dual_status` both `NEARLY_FEASIBLE_POINT`), not `OPTIMAL`, and was REFUSED by
+`assert_solved!`'s strict trust policy (no `allow_almost` pass-through exists — the SAME structural
+limitation plan 25-05's calibration ladder hit on `ALMOST_OPTIMAL` rungs, now appearing at real
+headline network scale for the first time; every PRIOR headline attempt was OOM-killed before ever
+reaching a numerical status at all). Because the centralized solve never returned a `ctx`,
+`model_vars`/`model_cons`/`exact_maxgap`/`exact_verdict` could not be populated and
+`IEEE8500_EXACT_ATOL` could not be evaluated — not even a failing verdict. ADMM ran independently
+(its own build succeeded, no OOM) for 6 iterations before hitting the harness's own 120s D-18
+wall-clock budget (`budget_exceeded`) without both residuals converging — it never reached
+`solve_admm`'s hardcoded final-consolidation gate (item 3, still open) because it never got that
+far. Per this task's own instruction, 0.1 did not "succeed comfortably," so no higher density was
+attempted, and no tolerance was widened or retried to manufacture a passing verdict (T-25-12).
+
+**Net effect on this item:** the MEMORY component of item 4 is resolved (a shorter horizon is a
+genuine, sufficient fix for the OOM wall, at least at density=0.1 on this machine) — but a NEW,
+separate CONDITIONING wall (Clarabel not reaching full `OPTIMAL` on this specific network/horizon
+combination) now blocks exactness certification at headline scale, structurally similar to but
+distinct from item 3's `solve_admm` consolidation-gate gap. **A future plan wanting the full T=24
+headline result, or even a T=10 result with a certified exactness verdict, still needs to resolve
+this new conditioning gap** (e.g. an `allow_almost`-style relaxation on the calibration/measurement
+path specifically — never on the production exactness gate — or root-causing which branch(es)
+drive `ALMOST_OPTIMAL` at this scale, mirroring plan 25-07's near-zero-impedance root-cause
+methodology) in addition to items 2 and 3, both still open and untouched by this task.
+
+Full measured evidence and the honestly-labeled `T_HORIZON=10` CSV row (explicitly marked
+non-comparable to every other T=24 row in the same table) are in
+`results/ieee8500_benchmark/density_sweep_full.csv` and this gap-closure task's own
+`25-08-SUMMARY.md`.
