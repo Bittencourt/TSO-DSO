@@ -7,7 +7,8 @@
 # scripts/repro_stability_check.jl's DrWatson scaffold + try/catch-per-point + committed-CSV
 # conventions exactly:
 #
-#   1. `--calibrate-noise-floor --fixture <name> [--tolerances <comma-list>]`
+#   1. `--calibrate-noise-floor --fixture <name> [--tolerances <comma-list>]
+#      [--calibration-density <float>] [--t-horizon <int>]`
 #      Task 1 (SCALE-05): re-solve a SMALL benign (low-density, non-congested) point on the
 #      requested fixture across a tightening `tol_gap_abs=tol_gap_rel` ladder, measuring the
 #      RAW cone residual via `socp_relaxation_gap` (never `assert_socp_exact!`, to avoid
@@ -16,7 +17,13 @@
 #      only chases the solver's own numerical noise, not a real relaxation gap. This is
 #      spike-002's prescribed method (`.planning/spikes/MANIFEST.md`), applied FRESH to each
 #      IEEE-8500 fixture — NEVER reusing IEEE-13/123's tolerance (anti-certificate-laundering,
-#      T-25-12).
+#      T-25-12). `--calibration-density <float>` (2026-08-22 round-2 follow-up, quick task
+#      260822-hld) overrides the ladder point's density; absent, `CALIBRATION_DENSITY = 0.05`
+#      (byte-identical to today). `--t-horizon <int>` overrides the ladder point's horizon, with
+#      the SAME `>= T_HORIZON_FLOOR` validation `run_sweep_mode` enforces; absent, `T = 24`
+#      (byte-identical to today). Both are recorded in the committed CSV's `density`/`t_horizon`
+#      columns — PROVENANCE HONESTY: a floor is never silently implied to have been measured at a
+#      point it was not.
 #
 #   2. (default) density-sweep mode: `--fixture {ieee13,ieee123,ieee8500-mv,ieee8500}
 #      --density <comma-list> --solver {clarabel,scs,both} --time-limit <seconds>
@@ -232,27 +239,41 @@ const CALIBRATION_SEED = 20260821
 const CALIBRATION_DENSITY = 0.05   # "SMALL benign (low-density, non-congested)" per Task 1's action
 
 """
-    run_calibration(fixture_sym, fixture_label, tolerances) -> (rows, floor_tol, floor_gap)
+    run_calibration(fixture_sym, fixture_label, tolerances, density, T_horizon) -> (rows, floor_tol, floor_gap)
 
 Re-solves a SMALL benign point on `fixture_sym` across the given `tol_gap_abs=tol_gap_rel`
 ladder (swept together per spike-002's method), calling `socp_relaxation_gap` (never
 `assert_socp_exact!`) after EACH solve. The floor is the LAST ladder point where the residual
 still improved by MORE THAN 1% over the previous point — tightening further is chasing solver
 noise, not a real gap.
+
+`density`/`T_horizon` (2026-08-22 round-2 follow-up, quick task 260822-hld): the ladder point's
+own density and horizon, now explicit CALLER-supplied parameters rather than the hardcoded
+`CALIBRATION_DENSITY`/module-level `T` — `run_calibrate_mode` passes `CALIBRATION_DENSITY`/`T`
+absent an explicit `--calibration-density`/`--t-horizon` override, so every EXISTING invocation
+is byte-identical. Both are recorded verbatim in the returned rows' `density`/`t_horizon` columns
+— PROVENANCE HONESTY (this quick task's own hard constraint): a floor measured at one
+(density, T_horizon) point must never be silently implied to have been measured at another.
 """
-function run_calibration(fixture_sym::Symbol, fixture_label::String, tolerances::Vector{Float64})
+function run_calibration(
+    fixture_sym::Symbol,
+    fixture_label::String,
+    tolerances::Vector{Float64},
+    density::Real,
+    T_horizon::Int,
+)
     feeder = build_feeder(fixture_sym)
-    profiles = generate_profiles(; seed = CALIBRATION_SEED, T = T)
+    profiles = generate_profiles(; seed = CALIBRATION_SEED, T = T_horizon)
     rng = StableRNGs.LehmerRNG(CALIBRATION_SEED)
     aggs = density_filtered_population(
         feeder,
         fixture_sym,
         profiles,
         CALIBRATION_SEED,
-        CALIBRATION_DENSITY,
+        density,
         rng,
     )
-    λ0 = build_price(:mem, T, nothing)
+    λ0 = build_price(:mem, T_horizon, nothing)
 
     rows = NamedTuple[]
     good_tols = Float64[]
@@ -273,7 +294,7 @@ function run_calibration(fixture_sym::Symbol, fixture_label::String, tolerances:
                 feeder,
                 ConvexBranchFlow(),
                 aggs;
-                T = T,
+                T = T_horizon,
                 λ₀ = λ0,
                 optimizer = opt,
                 allow_export = true,
@@ -285,7 +306,7 @@ function run_calibration(fixture_sym::Symbol, fixture_label::String, tolerances:
                 fixture_label tol = tol exception = (err, catch_backtrace())
             NaN
         end
-        push!(rows, (; fixture = fixture_label, tol = tol, measured_gap = gap))
+        push!(rows, (; fixture = fixture_label, density = density, t_horizon = T_horizon, tol = tol, measured_gap = gap))
         if isfinite(gap)
             push!(good_tols, tol)
             push!(good_gaps, gap)
@@ -325,14 +346,65 @@ function run_calibrate_mode(args)
     tol_str = parse_kv_flag(args, "--tolerances", "1e-6,1e-7,1e-8,1e-9,1e-10")
     tolerances = Float64[parse(Float64, s) for s in split(tol_str, ",")]
 
-    println("Calibrating noise floor for ", fixture_str, " across tolerances ", tolerances, " ...")
-    rows, floor_tol, floor_gap = run_calibration(fixture_sym, fixture_str, tolerances)
+    # `--calibration-density` (2026-08-22 round-2 follow-up, quick task 260822-hld): an explicit
+    # override of the ladder's own "SMALL benign (low-density, non-congested)" point (Task 1's
+    # action text), ABSENT of which behaviour is `CALIBRATION_DENSITY = 0.05` — byte-identical to
+    # every rung already committed in `noise_floor_calibration.csv`.
+    calibration_density_str = parse_kv_flag(args, "--calibration-density", nothing)
+    calibration_density =
+        calibration_density_str === nothing ? CALIBRATION_DENSITY :
+        parse(Float64, calibration_density_str)
+
+    # `--t-horizon` (2026-08-22 round-2 follow-up): calibrate mode now honours the SAME explicit
+    # horizon override `run_sweep_mode` already supports, with the SAME `>= T_HORIZON_FLOOR`
+    # validation (refusing rather than silently clamping — see `T_HORIZON_FLOOR`'s own comment).
+    # Absent, behaviour is the module-level `T = 24` — byte-identical to every rung already
+    # committed in `noise_floor_calibration.csv`.
+    t_horizon_str = parse_kv_flag(args, "--t-horizon", nothing)
+    calibration_t_horizon = if t_horizon_str === nothing
+        T
+    else
+        v = parse(Int, t_horizon_str)
+        v < T_HORIZON_FLOOR && throw(
+            ArgumentError(
+                "--t-horizon=$v is below the safe floor of $T_HORIZON_FLOOR (see " *
+                "T_HORIZON_FLOOR's own comment)",
+            ),
+        )
+        v
+    end
+
+    println(
+        "Calibrating noise floor for ",
+        fixture_str,
+        " (density=",
+        calibration_density,
+        ", T=",
+        calibration_t_horizon,
+        ") across tolerances ",
+        tolerances,
+        " ...",
+    )
+    rows, floor_tol, floor_gap = run_calibration(
+        fixture_sym,
+        fixture_str,
+        tolerances,
+        calibration_density,
+        calibration_t_horizon,
+    )
 
     csv_path = joinpath(OUT, "noise_floor_calibration.csv")
     df_new = DataFrame(rows)
     df_final = if isfile(csv_path)
         df_old = CSV.read(csv_path, DataFrame)
-        vcat(filter(r -> r.fixture != fixture_str, df_old), df_new)
+        # (2026-08-22 round-2 follow-up) key on (fixture, density, t_horizon), not `fixture` alone
+        # — now that a fixture can be calibrated at more than one (density, T_horizon) point, a
+        # bare-fixture key would silently WIPE OUT a prior measurement at a DIFFERENT point
+        # instead of only replacing the one this invocation re-measured (T-25-11 spirit: never
+        # silently drop a previously-measured row).
+        key(r) = (r.fixture, r.density, r.t_horizon)
+        new_keys = Set(key(r) for r in eachrow(df_new))
+        vcat(filter(r -> !(key(r) in new_keys), df_old), df_new)
     else
         df_new
     end
