@@ -750,7 +750,7 @@ version = "1.0.3"
 
 [[deps.TSODSO]]
 deps = ["CSV", "Clarabel", "DataFrames", "DrWatson", "HiGHS", "Ipopt", "JuMP", "SparseArrays", "StableRNGs"]
-path = "/home/pedro/programming/TSO-DSO/.claude/worktrees/agent-a2bfce0266f61807b"
+path = ".."
 uuid = "67a63935-f442-4b9a-93c0-a55ebfb6d374"
 version = "0.1.0"
 
