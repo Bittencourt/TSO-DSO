@@ -178,3 +178,80 @@ the PRE-merge topology (4875-bus headline / 2521-bus MV-only). They are NOT dire
 any measurement taken after this task — the underlying network itself changed (3 fewer buses),
 not the solver, tolerance, or model formulation. See this quick task's `SUMMARY.md` for the
 re-measured 3-point `socp_gap_report` before/after table on the NEW (post-merge) topology.
+
+## FURTHER SUPERSEDING deviation: sub-metre bus-merge WIDENING (2026-08-22, quick task 260822-rle)
+
+**This section further supersedes/extends the section immediately above (append-only — the
+260822-pxb prose above remains as historical record of the 3-pair merge).** The length-class
+merge threshold WIDENED from an exact-1.000-ft match (`MV_ZERO_LENGTH_KM = 0.0003048` km) to a
+documented, float-safe sub-metre bound (`MV_SUBMETRE_LENGTH_KM_BOUND = 0.001` km, i.e. `< 1
+metre`, with a `1.0e-6` km / 1 mm safety margin), catching **6 further** real-conductor
+line-split segments the prior exact-value match did not — the SAME `linecode_recs` detection
+path, the SAME `compute_bus_degrees`/`resolve_merge_pairs`/`apply_merge!` machinery, no second
+code path.
+
+**The 6 newly-merged pairs (casualty -> survivor, remaining degree in parens; the two
+NON-OBVIOUS survivors caused by transformer attachments are flagged):**
+
+| Source line | Length | Casualty (degree) | Survivor (degree) | Notes |
+|---|---|---|---|---|
+| `LN5837496-1` | 0.259836 m | `P829798` (1) | `M1108489` (2) | |
+| `LN6268990-2` | 0.383926 m | `M1047612` (1) | `M1047613` (2) | |
+| `LN5486729-1` | 0.560638 m | `M1069310` (0) | `M1069311` (3) | prior "next tier" flagged offender (deferred-items.md Item 5) |
+| `LN5927299-1` | 0.658611 m | `L3104796` (1, xfmr `T5260569C` mv_base) | `M1125974` (2) | **NON-OBVIOUS**: `T5260569C`'s `mv_base` renamed `L3104796`->`M1125974` |
+| `LN5472394-1` | 0.731906 m | `M1026708` (1) | `M1026709` (2) | |
+| `LN5865233-1` | 0.842188 m | `M1047744` (1) | `L3178971` (2, xfmr `T5338896A` mv_base already here) | **NON-OBVIOUS**: naive length-tie reading suggests the opposite; `T5338896A` already sits on the survivor so the rename is a no-op, not a special case |
+
+All 6 predicted survivors matched the regenerated table's actual output exactly (no tie-break
+needed — all 6 are strict degree differences, unlike the `HVMV_Sub_connector`'s exact tie in
+260822-pxb). `resolve_merge_pairs`'s existing pairwise-disjointness assertion ran over all 8 pairs
+(2 original + 6 new) without throwing, confirming the 16 distinct bus names are genuinely
+pairwise disjoint (no chaining).
+
+**7 of the 8 total matched records carry a `-N` numeric line-split suffix** (all except
+`LN5837496-1`), corroborating the same "line-split artifact" phenomenon class as the original 2,
+not a coincidentally-short natural conductor.
+
+**CAP_-prefix belt-and-braces guard added:** `MVLinecodeRef` gained a `name` field (threading the
+record's own `New Line.<name>` identifier through unchanged by any rename) specifically so
+`detect_length_class_merge_pairs` can assert `!startswith(r.name, "CAP_")` on every matched
+record before collecting its pair. This never fires today (CAP_ stubs parse into `inline_recs`,
+never `linecode_recs`) — it exists purely so a future upstream data refresh reclassifying a CAP_
+stub into a `Linecode=`-referencing record fails loudly here instead of silently entering the
+merge.
+
+**Explicitly NOT merged (unchanged from 260822-pxb, boundary re-verified this task):** the 53
+`length=0.001` km records — 43 `switch=y` tie segments (a different parse bucket, `switch_pairs`/
+`disabled_switch_pairs`, never `linecode_recs`) and 9 `CAP_*` capacitor-jumper stubs (inline
+`r1=1.0/x1=1.0`, `inline_recs`, ~20x more resistive than any of the 8 merged segments) — remain
+entirely untouched. The 1 previously-merged `HVMV_Sub_connector` (detected via the SEPARATE
+`r_ohm`-based `merge_near_zero_mv_edges!`) is unaffected by this widening.
+
+**Measured effect on bus/branch counts:** headline fixture (`ieee8500_modified()`) moved
+`4872/4871 -> 4866/4865` buses/branches; MV-only fixture (`ieee8500_mv_modified()`) moved
+`2518/2517 -> 2512/2511`. This reconciles the plan's own hand-recount ("6 new merges", not the
+task-framing's stated "5") — the measured delta matches the 6-new prediction exactly. Both
+service transformers newly reattached (`T5260569C` -> `M1125974`, `T5338896A` already on
+`L3178971`) confirmed present in the regenerated table with load intact (total `IEEE8500_LOAD_KW`
+sum unchanged at 10773.17 kW — none of the 6 new casualty buses is a load bus). The D-08 head
+`smax` invariant (`≈55.0 pu`, unique branch touching `IEEE8500_ROOT_BUS`) was explicitly
+re-verified on both fixtures post-widening and confirmed unbroken. Radiality holds on both
+fixtures (`Feeder`'s own `assert_radial` inner-constructor check), confirming no self-loop or
+parallel edge was silently introduced.
+
+**SOCP-exactness effect (re-measured, same 3 points, atols UNCHANGED and never re-tuned):** the
+headline `ieee8500,density=0.1,T=10` point — which remained INEXACT after the 260822-pxb pass
+(1.23x over its atol) — now classifies **EXACT** (0.367x of atol), a genuine, non-manufactured
+resolution. Both `ieee8500-mv` points remain EXACT with more margin. The new dominant offender at
+all 3 points is `L2916620<->N1136366` (source line `LN5472390-3`, **length = 4.745 metres** — well
+above this task's sub-metre scope, a genuinely longer real conductor, not another line-split
+artifact). See `deferred-items.md` Item 5's "quick task 260822-rle" outcome sub-entry for the full
+3-column before/after table and honest verdict.
+
+**FURTHER NON-COMPARABILITY of pre-existing measurement CSVs (another fixture-identity change,
+not a solver/tolerance change):** `results/ieee8500_benchmark/density_sweep_full.csv`,
+`density_sweep.csv` (all rows predating this task's re-run of the `--quick` D-16 golden row),
+`noise_floor_calibration.csv`, and every pass-1-and-earlier row of `socp_gap_report.csv` (i.e.
+every row from before this task, including the entire 260822-pxb-era post-3-pair-merge topology)
+were measured on the PRE-this-task topology and are NOT directly comparable to any measurement
+taken after this task.
