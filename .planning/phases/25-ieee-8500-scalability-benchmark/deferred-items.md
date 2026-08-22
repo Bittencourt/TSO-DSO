@@ -81,6 +81,42 @@ IEEE-8500 fixture can still throw at that gate. This fix closes the STRUCTURAL r
 gap between that noise floor and the project's existing `1e-6` default gate — that gap is Item 3's
 concern, still open.
 
+#### Item 1 addendum — SUPERSEDED 2026-08-22 by a bus-merge (quick task 260822-pxb)
+
+The 2026-08-21 value-reassignment fix above (keep the bus pair, reassign `r_ohm`/`x_ohm` to the
+D-13 near-ideal Ω-equivalent) is **superseded**, not deleted — this entry is appended per this
+file's own append-only convention. Direct inspection of the vendored source confirmed
+`HVMV_Sub_connector` (`bus1=_HVMV_Sub_LSB bus2=HVMV_Sub_48332`) is a literal substation busbar
+tie: by definition a single physical node exposed as two named terminals, with no device between
+them at all — unlike a voltage regulator, the substation transformer, or a genuine `switch=y` tie
+(all real physical devices, correctly given the D-13 near-ideal treatment). A bus-MERGE is
+therefore strictly more faithful than assigning ANY impedance value, however small: it removes the
+non-physical element entirely instead of inventing a resistance for it.
+
+`scripts/reduce_ieee8500_impedances.jl`'s `reshape_near_zero_mv_edges!` was renamed
+`merge_near_zero_mv_edges!` and converted from value-reassignment to a merge, reusing the SAME
+generic bus-merge machinery (`compute_bus_degrees`/`resolve_merge_pairs`/`apply_merge!`) this
+quick task also built for 2 unrelated genuine 1-ft real-conductor bus-split segments (see the new
+"Zero-length bus-merge" item below). Detection is still via the SAME `r_ohm < MV_NEAR_ZERO_R_
+THRESHOLD_OHM = 1e-5 Ω` threshold with the same assert-exactly-1 guard. Survivor selection: an
+EXACT degree tie between both endpoints (`_HVMV_Sub_LSB`'s only other connection is the logical
+regulator-bank edge; `HVMV_Sub_48332`'s only other connection is `LN5710794-3` into the rest of
+the feeder — both remaining-degree 1), resolved by the generic resolver's lexicographic tie-break:
+`"HVMV_Sub_48332" < "_HVMV_Sub_LSB"` (`'H'`, ASCII 72, sorts before `'_'`, ASCII 95). The dead
+D-13 constants this reassignment used (`D13_NEAR_IDEAL_R_PU`, `D13_NEAR_IDEAL_X_PU`,
+`D13_NEAR_IDEAL_R_OHM_AT_MV_BASE`, `D13_NEAR_IDEAL_X_OHM_AT_MV_BASE`, `IEEE8500_MV_ZBASE_OHM`,
+`IEEE8500_MV_S_BASE_MVA`, `IEEE8500_MV_V_BASE_KV`) were removed (confirmed via a whole-file grep
+before deletion: none referenced elsewhere).
+
+**Counts changed** (superseding the "unchanged" counts stated in the original 2026-08-21 entry
+above, which described the state AS OF THAT DATE, before this task): combined with the SAME
+task's 2 length-class merges, MV edge count moved `2477 -> 2474`; both fixtures' bus/branch
+counts moved from `4875/4874 -> 4872/4871` (headline) and `2521/2520 -> 2518/2517` (MV-only). The
+D-08 head `smax` invariant (`55.0 pu`, unique branch touching `IEEE8500_ROOT_BUS`) was explicitly
+re-verified and confirmed unbroken on both fixtures (neither merge touches the root or
+`regxfmr_HVMV_Sub_LSB`). See this quick task's `SUMMARY.md` and `25-DATA-PROVENANCE.md` for the
+full before/after record, including the re-measured 3-point SOCP-exactness gap-report table.
+
 ### Item 2 — still OPEN (NOT in scope for this gap-closure task)
 
 **Item 2 (open):** Whether `assert_socp_exact!`/`socp_relaxation_gap` should special-case or
@@ -305,3 +341,61 @@ service-drop/meter connectors can independently carry near-zero real impedance a
 same structural exactness failure. This task does NOT resolve Item 2 or change any gate/tolerance
 default in `src/models/exactness.jl` — `assert_socp_exact!`/`socp_relaxation_gap` remain
 byte-identical.
+
+#### Item 5 outcome — quick task 260822-pxb (2026-08-22): the fingerprint pattern PERSISTS with a NEW dominant branch, worsening not disappearing
+
+Quick task 260822-pxb merged AWAY the exact `"L2674047"->"M1142828"` branch this item identified
+as the dominant offender (it was one of the fixture's genuine 1-ft real-conductor bus-splits —
+see the merge documentation above and in `25-DATA-PROVENANCE.md`). The SAME 3 gap-report points
+were re-measured on the post-merge topology:
+
+| Point | BEFORE dominant branch (r_pu) | BEFORE gap | AFTER dominant branch (r_pu) | AFTER gap |
+|---|---|---|---|---|
+| `ieee8500,density=0.1,T=10,tol=1e-6` | `L2674047->M1142828` (1.542e-7) | 0.0325016 | `M1069310->M1069311` (9.373e-7) | 0.0061304 |
+| `ieee8500-mv,density=0.1,T=24,tol=1e-8` | `L2674047->M1142828` (1.542e-7) | 0.0005781 | `M1069310->M1069311` (9.373e-7) | 0.0003853 |
+| `ieee8500-mv,density=0.25,T=24,tol=1e-8` | `L2674047->M1142828` (1.542e-7) | 0.0037728 | `M1069310->M1069311` (9.373e-7) | 0.0008137 |
+
+**Verdict: the fingerprint pattern PERSISTS, with a NEW dominant branch — `"M1069310"->
+"M1069311"`, one of THIS item's own already-identified "still OPEN" other-2-offenders
+(`r_pu = 9.373e-7`, ~6x larger than the merged-away branch's `1.542e-7` but still 2-3 orders of
+magnitude below the D-13 near-ideal convention `3e-4` pu).** This is NOT a null result — the
+top-1 gap shrank substantially at every point (5.3x at the `ieee8500` T=10 point, 4.6x at
+density=0.25, 1.5x at density=0.1) — but it is also NOT full resolution: the SAME
+"one dominant near-zero-r branch tops every point" structural mechanism this item originally
+diagnosed is still present, just with the offender inherited by the next-most-degenerate branch
+in the cluster this item already flagged. This is exactly the STRUCTURAL, not NUMERICAL, pattern
+this item's own rubric predicted for a genuine near-zero-impedance class rather than an isolated
+one-off.
+
+**Exactness-verdict effect against the fixture's own (pre-merge-calibrated, NOT re-measured by
+this task) `EXACTNESS_ATOL` constants** (`scripts/benchmark_ieee8500.jl`,
+`IEEE8500_EXACT_ATOL=0.0049691451`, `IEEE8500_MV_EXACT_ATOL=0.0011460286` — these are the SAME
+2026-08-21 pre-merge-measured constants; re-calibrating them on the new topology is NOT part of
+this task's scope and is recorded as a further "next tier" item below):
+
+| Point | BEFORE verdict | AFTER verdict |
+|---|---|---|
+| `ieee8500,density=0.1,T=10,tol=1e-6` | INEXACT (0.03250 > 0.004969, 6.5x over) | still INEXACT (0.006130 > 0.004969, 1.2x over) |
+| `ieee8500-mv,density=0.1,T=24,tol=1e-8` | EXACT (0.000578 < 0.001146) | still EXACT (0.000385 < 0.001146, more margin) |
+| `ieee8500-mv,density=0.25,T=24,tol=1e-8` | INEXACT (0.003773 > 0.001146, 3.3x over) | now EXACT (0.000814 < 0.001146) |
+
+One of the 3 points (`ieee8500-mv,density=0.25`) genuinely FLIPS from INEXACT to EXACT against
+the (unchanged) atol — an honest, non-manufactured improvement (no atol or tolerance was
+adjusted to produce this). The `ieee8500,density=0.1,T=10` point remains INEXACT, now by a much
+smaller margin. This does NOT mean `assert_socp_exact!`'s project-default `atol=1e-6` newly
+passes anywhere — none of the 3 AFTER gaps are anywhere close to `1e-6`; the comparison above is
+against this fixture's own separately-calibrated, larger floor, consistent with how Item 1's
+original 2026-08-21 measurement was reported.
+
+**Next tier (recorded, NOT fixed by this task — scope discipline, T-25-12):** `M1069310->
+M1069311` and `M1108489->P829798` (this item's other 2 originally-flagged offenders) remain
+UNMERGED. A quick source-text check (not a full investigation) confirms `M1069311<->M1069310`
+(`LN5486729-1`, `Lines.dss` line 943) is `length=0.000560638 km`, real linecode `3PH_H-2/0_ACSR`
+— one of the 5 "other short-but-non-round real MV segments" this task's own scope explicitly
+excluded (Context, main plan) precisely because it does NOT round-trip to an exact imperial unit
+like the 2 merged 1-ft splits do, so it does NOT match this task's length-based detection
+criterion. It is a real, non-degenerate-length conductor that simply happens to carry a
+naturally small impedance — NOT the same "artificial bus-split marker" class this task's merge
+targeted. Whether it (or `M1108489->P829798`, not checked) warrants a DIFFERENT remedy (a
+different length threshold, or Item 2's still-open near-zero-impedance-exclusion question) is
+left for a future investigation.

@@ -27,13 +27,17 @@
 # `enabled=False` records yields a fully connected tree over all 4,873 buses with `edges == 4872 ==
 # buses - 1`, matching `assert_radial`'s edge-count theorem exactly.
 #
-# One MV segment (`HVMV_Sub_connector`, the substation Low Side Bus busbar tie) parses to a
-# genuinely near-zero Ω value (r=1e-6, x=1e-5 — a modeling placeholder, not a physical line) that
-# structurally breaks LinDistFlow SOC-exactness (see `reshape_near_zero_mv_edges!` below and
-# .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1). It KEEPS its
-# entry in `IEEE8500_MV_BRANCH_RX_OHMS` (same bus pair, same table) but its r/x VALUES are
-# reassigned to the D-13 near-ideal Ω-equivalent — this is a documented, single-edge data-shaping
-# decision, not the same "no real Ω value" mechanism used for regulators/switches below.
+# Three degenerate segments are resolved by a topological BUS-MERGE (quick task 260822-pxb,
+# 2026-08-22 — see `detect_length_class_merge_pairs`/`merge_near_zero_mv_edges!` below and
+# .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1): 2 genuine 1-ft
+# real-conductor bus-split segments (`length=0.0003048 km`, an exact imperial round-trip), and
+# `HVMV_Sub_connector` (the substation Low Side Bus busbar tie, `r_ohm=1e-6` — a modeling
+# placeholder, not a physical line, that structurally breaks LinDistFlow SOC-exactness). Unlike
+# the D-13 near-ideal treatment below (which keeps a bus pair but reassigns its impedance value),
+# a bus-merge REMOVES the degenerate pair entirely: the two buses are collapsed into one survivor
+# (chosen by a remaining-degree rule, lexicographic tie-break), and the casualty bus name never
+# appears in the generated table (SUPERSEDES an earlier D-13-style value-reassignment for the
+# connector specifically — see deferred-items.md item 1 for the full before/after history).
 #
 # Zero package dependencies (no `using`/`import` statements anywhere in this file): the parser is
 # Base + stdlib PCRE regex only, so `Project.toml [deps]` is untouched by this script.
@@ -69,9 +73,9 @@ const CT5_X_PCT_EXPECTED = 2.72
 const SANITY_ATOL = 1.0e-2
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# D-13 near-ideal-branch treatment, extended to a degenerate real MV busbar-tie connector
-# (phase-25 gap-closure, 2026-08-21 — see .planning/phases/25-ieee-8500-scalability-benchmark/
-# deferred-items.md item 1, deferred there by plan 25-05)
+# Substation busbar-tie connector: bus-MERGE treatment (SUPERSEDES the D-13 near-ideal reshape)
+# (phase-25 gap-closure, 2026-08-21, deferred-items.md item 1 — SUPERSEDED 2026-08-22 by quick
+# task 260822-pxb; see 25-DATA-PROVENANCE.md and deferred-items.md item 1 for the full history)
 # ─────────────────────────────────────────────────────────────────────────────────────────
 #
 # `Lines.dss`'s `HVMV_Sub_connector` record (`bus1=_HVMV_Sub_LSB bus2=HVMV_Sub_48332
@@ -79,49 +83,51 @@ const SANITY_ATOL = 1.0e-2
 # PLACEHOLDER for the substation Low Side Bus busbar tie (the source's own `length=0.001` km is
 # its floor/placeholder minimum, not a surveyed physical span), not a real metered line segment.
 #
-# PHYSICAL JUSTIFICATION: a substation busbar tie is not a physical conductor run; treating it as
-# "near-ideal" (small but strictly non-degenerate impedance) is the SAME modeling choice this same
-# script already applies to every voltage-regulator bank, the substation transformer, and the 38
-# enabled `switch=y` tie segments in this fixture (D-13, Assumption A2 analog — see Step 5 below).
+# PHYSICAL JUSTIFICATION: a substation busbar tie is not a physical conductor run at all — by
+# definition it is a single physical node exposed as two named terminals. Unlike a
+# voltage-regulator bank, the substation transformer, or a genuine `switch=y` tie (all of which
+# ARE distinct physical devices, correctly given the near-ideal low-impedance treatment, D-13,
+# Assumption A2 analog — see Step 5 below), the busbar tie has no device between its two named
+# buses at all. A bus-MERGE is therefore STRICTLY MORE FAITHFUL than assigning it ANY impedance
+# value, however small: it removes the non-physical element entirely instead of inventing a
+# resistance for it. (The prior D-13 near-ideal reshape assigned `r=0.09330 Ω`/`x=0.04665 Ω`, a
+# ~93,000x inflation over the literal parsed value — a reasonable interim stopgap, now superseded.)
 #
-# SOC-EXACTNESS GRADIENT ARGUMENT: the LinDistFlow SOC-exactness argument needs a strictly-positive
-# `r·l` loss-cost gradient in the objective to drive the squared-current variable `l` to its tight
-# minimal value at the optimum. At this fixture's own per-unit base (`S_base=0.5 MVA`,
-# `V_base=12.47 kV` — matches `src/data/ieee8500.jl`'s `IEEE8500_MV_BASE`), the literal parsed
-# value is `r≈3.2e-9 pu` — six orders of magnitude below this project's own D-13 near-ideal
-# convention (`IEEE123_SWITCH_R=3e-4 pu`/`IEEE123_SWITCH_X=1.5e-4 pu`, `src/data/ieee123.jl:79-80`).
-# On a branch this close to zero-r the loss gradient is essentially absent, so the SOCP cone
-# residual on THIS one branch does not shrink as solver tolerance tightens (measured before this
-# fix: tol=1e-6 gap=0.4960 -> tol=1e-8 gap=0.1796, STALLING then NaN at tighter rungs) — a
-# STRUCTURAL relaxation failure, not shrinking numerical noise. Reassigning it to the D-13
-# Ω-equivalent below restores a genuine noise floor that shrinks 27x tighter at tol=1e-8 (measured
-# after: 0.03128 -> 0.001141, a 157x improvement at tol=1e-8) and behaves like real numerical
-# noise instead of a structural floor. Full before/after record: deferred-items.md item 1.
+# SOC-EXACTNESS GRADIENT ARGUMENT (why this edge needed special handling at all — unchanged; only
+# the MECHANISM below changed from reassignment to removal): the LinDistFlow SOC-exactness
+# argument needs a strictly-positive `r·l` loss-cost gradient in the objective to drive the
+# squared-current variable `l` to its tight minimal value at the optimum. At this fixture's own
+# per-unit base (`S_base=0.5 MVA`, `V_base=12.47 kV` — matches `src/data/ieee8500.jl`'s
+# `IEEE8500_MV_BASE`), the literal parsed value is `r≈3.2e-9 pu` — six orders of magnitude below
+# this project's own D-13 near-ideal convention (`IEEE123_SWITCH_R=3e-4 pu`/
+# `IEEE123_SWITCH_X=1.5e-4 pu`, `src/data/ieee123.jl:79-80`). On a branch this close to zero-r the
+# loss gradient is essentially absent, so the SOCP cone residual on THIS one branch did not shrink
+# as solver tolerance tightened under the ORIGINAL (pre-fix) parse (measured: tol=1e-6 gap=0.4960
+# -> tol=1e-8 gap=0.1796, STALLING then NaN at tighter rungs) — a STRUCTURAL relaxation failure,
+# not shrinking numerical noise. A bus-merge resolves this MORE completely than the D-13 reshape
+# did: there is no longer any near-zero-r edge at all to contribute a stalling cone residual. Full
+# before/after record: deferred-items.md item 1 (both the original reshape and this superseding
+# merge) and this quick task's SUMMARY.
 #
-# TABLE PLACEMENT: unlike the regulator/switch edge Set (`IEEE8500_REGULATOR_EDGES`, which carries
-# NO real Ω value at all — its members are converted from `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` pu
-# directly at fixture-build time in `ieee8500.jl`), this edge KEEPS its native entry in
-# `IEEE8500_MV_BRANCH_RX_OHMS` — SAME bus pair, SAME table, SAME connectivity. Only its `r_ohm`/
-# `x_ohm` VALUES are reassigned, to the Ω-equivalent of `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at
-# THIS fixture's own MV per-unit base. This keeps the fix entirely inside the already-Ω-valued MV
-# table (no topology change, no new near-ideal category, `IEEE8500_REGULATOR_EDGES` untouched).
-const IEEE8500_MV_S_BASE_MVA = 0.5     # matches src/data/ieee8500.jl's IEEE8500_MV_BASE.S_base
-const IEEE8500_MV_V_BASE_KV = 12.47    # matches src/data/ieee8500.jl's IEEE8500_MV_BASE.V_base
-const IEEE8500_MV_ZBASE_OHM = IEEE8500_MV_V_BASE_KV^2 / IEEE8500_MV_S_BASE_MVA  # ≈311.0018 Ω
-const D13_NEAR_IDEAL_R_PU = 3.0e-4     # matches src/data/ieee123.jl's IEEE123_SWITCH_R verbatim
-const D13_NEAR_IDEAL_X_PU = 1.5e-4     # matches src/data/ieee123.jl's IEEE123_SWITCH_X verbatim
-const D13_NEAR_IDEAL_R_OHM_AT_MV_BASE = D13_NEAR_IDEAL_R_PU * IEEE8500_MV_ZBASE_OHM  # ≈0.09330 Ω
-const D13_NEAR_IDEAL_X_OHM_AT_MV_BASE = D13_NEAR_IDEAL_X_PU * IEEE8500_MV_ZBASE_OHM  # ≈0.04665 Ω
+# MECHANISM: detected via the SAME literal near-zero-`r_ohm` threshold as before
+# (`MV_NEAR_ZERO_R_THRESHOLD_OHM`), then MERGED using the SAME generic bus-merge machinery as the
+# 2 length-class 1-ft real-conductor splits (`resolve_merge_pairs`/`apply_merge!`, see
+# `merge_near_zero_mv_edges!` below) — the degenerate edge disappears entirely rather than
+# surviving with a reassigned value. Survivor: `HVMV_Sub_48332` (an exact degree tie between both
+# endpoints — `_HVMV_Sub_LSB`'s only other connection is the logical regulator-bank edge,
+# `HVMV_Sub_48332`'s only other connection is `LN5710794-3` into the rest of the feeder —
+# resolved by the lexicographic tie-break: `"HVMV_Sub_48332" < "_HVMV_Sub_LSB"`, since `'H'`
+# (ASCII 72) sorts before `'_'` (ASCII 95)).
 
 # Explicit, documented THRESHOLD (never a hardcoded bus-pair name match) so a future upstream data
-# refresh that silently reshapes a DIFFERENT or ADDITIONAL set of branches fails LOUDLY (see
-# `reshape_near_zero_mv_edges!`'s assert-exactly-1 check below) instead of quietly expanding this
+# refresh that silently widens or shrinks this set fails LOUDLY (see
+# `merge_near_zero_mv_edges!`'s assert-exactly-1 check below) instead of quietly expanding this
 # treatment. Picked to isolate exactly the one known degenerate segment with comfortable margin:
 # across every parsed MV/LV branch in this fixture, the next-smallest `r_ohm` value is ≈4.8e-5 Ω
 # (>=4.8x above this threshold) — nothing else in the real vendored data is anywhere close.
 const MV_NEAR_ZERO_R_THRESHOLD_OHM = 1.0e-5
-# (`reshape_near_zero_mv_edges!` itself is defined further below, after the `ImpedanceEdge`
-# struct it operates on — see Step 1.)
+# (`merge_near_zero_mv_edges!` itself is defined further below, after the generic bus-merge
+# machinery it reuses — see the "Zero-length / near-zero bus-merge machinery" section.)
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
 # Bus-name normalization (8500's alphanumeric bus names, unlike 123's integer terminals)
@@ -302,49 +308,6 @@ struct ImpedanceEdge
 end
 
 """
-    reshape_near_zero_mv_edges!(mv_edges_raw) -> Vector{Tuple{String,String}}
-
-Scan `mv_edges_raw` (pre-dedupe `ImpedanceEdge` records) for any entry whose `r_ohm` is below
-`MV_NEAR_ZERO_R_THRESHOLD_OHM`; reassign ITS `r_ohm`/`x_ohm` IN PLACE to
-`D13_NEAR_IDEAL_R_OHM_AT_MV_BASE`/`D13_NEAR_IDEAL_X_OHM_AT_MV_BASE` (same bus pair, same vector
-slot — the edge is never removed or moved to a different table/category) and return the list of
-reshaped bus pairs. Throws loudly unless EXACTLY 1 segment matches — this is a documented,
-single-data-point decision (deferred-items.md item 1), not a general near-zero-branch filtering
-mechanism, so a future vendored-source refresh that changes this set is caught immediately rather
-than silently reshaping a different scope of branches.
-"""
-function reshape_near_zero_mv_edges!(mv_edges_raw::Vector{ImpedanceEdge})
-    reshaped_pairs = Tuple{String, String}[]
-    for i in eachindex(mv_edges_raw)
-        e = mv_edges_raw[i]
-        if e.r_ohm < MV_NEAR_ZERO_R_THRESHOLD_OHM
-            mv_edges_raw[i] = ImpedanceEdge(
-                e.bus1_base,
-                e.bus2_base,
-                D13_NEAR_IDEAL_R_OHM_AT_MV_BASE,
-                D13_NEAR_IDEAL_X_OHM_AT_MV_BASE,
-            )
-            push!(reshaped_pairs, canonical_pair(e.bus1_base, e.bus2_base))
-        end
-    end
-    length(reshaped_pairs) == 1 || throw(
-        ArgumentError(
-            "expected EXACTLY 1 degenerate near-zero-impedance MV segment (r_ohm < " *
-            "$(MV_NEAR_ZERO_R_THRESHOLD_OHM) Ω) eligible for the D-13 near-ideal reshape, got " *
-            "$(length(reshaped_pairs)): $(reshaped_pairs) — the vendored source may have changed; " *
-            "re-verify the intended scope of this treatment (deferred-items.md item 1) before " *
-            "proceeding, do not silently widen it",
-        ),
-    )
-    println(
-        "D-13 near-ideal reshape: $(length(reshaped_pairs)) degenerate MV segment(s) reassigned " *
-        "from a literal near-zero Ω value to (r=$(D13_NEAR_IDEAL_R_OHM_AT_MV_BASE), " *
-        "x=$(D13_NEAR_IDEAL_X_OHM_AT_MV_BASE)) Ω: $(reshaped_pairs)",
-    )
-    return reshaped_pairs
-end
-
-"""
     parse_mv_lines(text) -> (Vector{MVLinecodeRef}, Vector{ImpedanceEdge}, Vector{Tuple{String,String}}, Vector{Tuple{String,String}})
 
 Line-by-line (never a single big cross-field regex, so field ORDER in the source text does not
@@ -445,6 +408,302 @@ function parse_mv_lines(text::AbstractString)
         ),
     )
     return linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs
+end
+
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# Zero-length bus-merge (quick task 260822-pxb, 2026-08-22) — REPLACES impedance fabrication with
+# a topological bus MERGE for genuinely degenerate 1-ft real-conductor line splits.
+# ─────────────────────────────────────────────────────────────────────────────────────────
+#
+# `Lines.dss` contains exactly 2 `New Line.*` records with `length=0.0003048 km` — EXACTLY 1.000
+# ft, an exact imperial round-trip that fingerprints an artificial bus-split marker (both
+# reference REAL linecodes: `3PH_H-397_ACSR...` and `1PH-x4_ACSRx4_ACSR`, i.e. genuine conductor,
+# not a placeholder). Both were created when a longer original line was split to insert a
+# service-transformer attachment bus (`LN5473436-1`/`LN5473436-2`, `LN6259981-1`/`LN6259981-2`).
+# Two buses 1 ft apart are electrically the SAME node: the physically faithful fix is to MERGE
+# the pair (collapse to one bus, reattach the service transformer to the survivor), never to
+# assign either endpoint an impedance value — assigning ANY r/x here would invent resistance a
+# real 1-ft span of 397_ACSR/x4_ACSR does not have.
+#
+# `length_km` (not `r_ohm`) is the detection KEY for this class: it needs no per-linecode lookup,
+# and `0.0003048` km is a suspicious EXACT round number in imperial units, unlike this fixture's
+# other short-but-non-round real MV segments (`0.000259836`, `0.000383926`, `0.000560638`,
+# `0.000658611`, `0.000731906`, `0.000842188` km — no evidence ties these to the measured
+# SOCP-exactness failure this task addresses; left untouched, "next tier"). The 53
+# `length=0.001 km` inline `r1=1.0/x1=1.0` records (`CAP_*`-style capacitor-jumper/stub markers)
+# are a DIFFERENT class entirely — deliberately artificial placeholder markers, not real short
+# conductor spans — and are explicitly NOT merged in this pass either.
+const MV_ZERO_LENGTH_KM = 0.0003048
+
+"""
+    detect_length_class_merge_pairs(linecode_recs) -> Vector{Tuple{String,String}}
+
+Scan `linecode_recs` (pre-impedance-resolution `MVLinecodeRef`s) for any entry whose `length_km`
+is `MV_ZERO_LENGTH_KM` (1.000 ft) within a tight `atol`; collect the canonical bus pair for each
+match. Throws a loud `ArgumentError` unless EXACTLY 2 match — this fixture's 2 confirmed genuine
+1-ft real-conductor bus-split segments (`LN5473436-1`, `LN6259981-1`) — so a future vendored-data
+refresh that silently widens or shrinks this set fails loudly here instead of being silently
+absorbed into the merge.
+"""
+function detect_length_class_merge_pairs(linecode_recs::Vector{MVLinecodeRef})
+    pairs = Tuple{String, String}[]
+    for r in linecode_recs
+        if isapprox(r.length_km, MV_ZERO_LENGTH_KM; atol = 1.0e-9)
+            push!(pairs, canonical_pair(r.bus1_base, r.bus2_base))
+        end
+    end
+    length(pairs) == 2 || throw(
+        ArgumentError(
+            "expected EXACTLY 2 length-class ($(MV_ZERO_LENGTH_KM) km, 1.000 ft) degenerate MV " *
+            "bus-split segments eligible for a merge, got $(length(pairs)): $(pairs) — the " *
+            "vendored source may have changed; re-verify the intended scope of this treatment " *
+            "before proceeding, do not silently widen or shrink it",
+        ),
+    )
+    return pairs
+end
+
+"""
+    compute_bus_degrees(linecode_recs, inline_recs, reg_edges, xfmr_instances) -> Dict{String,Int}
+
+Compute a bus-name -> degree map over the fully-parsed-but-not-yet-merged MV topology: a bus's
+degree is the count of DISTINCT logical connections touching it, from the COMBINED
+`linecode_recs`+`inline_recs` (each already exactly one raw record per physical MV line at this
+fixture's phase-collapse convention — counting these raw records directly is therefore already a
+correct per-physical-edge count, no further dedupe needed for degree purposes), the logical
+regulator/switch edge Set (`reg_edges`, ALREADY phase-deduplicated by `build_regulator_edges` —
+counting its raw 3-per-bank phase records instead would inflate a regulator bank's contribution
+3x relative to an ordinary MV line), and the count of `xfmr_instances` whose `mv_base` equals it
+(each already one raw record per physical service transformer).
+"""
+function compute_bus_degrees(
+    linecode_recs::Vector{MVLinecodeRef},
+    inline_recs::Vector{ImpedanceEdge},
+    reg_edges::Set{Tuple{String, String}},
+    xfmr_instances::Vector{Tuple{String, String, String}},
+)
+    degree = Dict{String, Int}()
+    bump!(name::AbstractString) = (degree[name] = get(degree, name, 0) + 1)
+    for r in linecode_recs
+        bump!(r.bus1_base)
+        bump!(r.bus2_base)
+    end
+    for r in inline_recs
+        bump!(r.bus1_base)
+        bump!(r.bus2_base)
+    end
+    for (a, b) in reg_edges
+        bump!(a)
+        bump!(b)
+    end
+    for (mv_base, _, _) in xfmr_instances
+        bump!(mv_base)
+    end
+    return degree
+end
+
+"""
+    resolve_merge_pairs(pairs, degree) -> Dict{String,String}
+
+Generic merge-pair resolver: given a `Vector{Tuple{String,String}}` of canonical degenerate bus
+pairs and a pre-merge `degree` map (from `compute_bus_degrees`), asserts the pairs are PAIRWISE
+DISJOINT (no bus name appears in more than one pair — throws loudly otherwise; chained/transitive
+merges are explicitly unhandled and out of scope) and, for each pair, computes each endpoint's
+degree MINUS 1 (excluding the pair's own edge/attachment contribution to itself — the degenerate
+edge between the pair already bumped both endpoints' degree by exactly 1 in `compute_bus_degrees`)
+then selects the SURVIVOR as the endpoint with the strictly greater remaining degree; on an exact
+tie, the LEXICOGRAPHICALLY SMALLER bus name survives (Julia's default `String` ordering) — fully
+deterministic, no bus-name special-casing. Returns a `Dict{String,String}` merge map (casualty =>
+survivor).
+"""
+function resolve_merge_pairs(
+    pairs::Vector{Tuple{String, String}},
+    degree::Dict{String, Int},
+)
+    seen = Set{String}()
+    for (a, b) in pairs
+        for name in (a, b)
+            name in seen && throw(
+                ArgumentError(
+                    "bus \"$name\" appears in more than one degenerate merge pair — " *
+                    "chained/transitive merges are unhandled and out of scope for this " *
+                    "reduction script; disjointness violated across pairs: $(pairs)",
+                ),
+            )
+            push!(seen, name)
+        end
+    end
+    merge_map = Dict{String, String}()
+    for (a, b) in pairs
+        da = get(degree, a, 0) - 1
+        db = get(degree, b, 0) - 1
+        survivor, casualty = if da > db
+            (a, b)
+        elseif db > da
+            (b, a)
+        else
+            a < b ? (a, b) : (b, a)
+        end
+        merge_map[casualty] = survivor
+    end
+    return merge_map
+end
+
+"""
+    apply_merge!(linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs, xfmr_instances,
+                 reg_edges, merge_map, drop_pairs) -> nothing
+
+Generic rename-and-drop step applying a merge map (from `resolve_merge_pairs`) to every parsed-but-
+not-yet-impedance-resolved MV structure, mutating each argument in place:
+
+  1. DROP the `linecode_recs`/`inline_recs` entries whose canonical bus pair is in `drop_pairs`
+     entirely (they never reach the impedance-computation loop — this is how the degenerate edges
+     disappear, never via a self-loop).
+  2. Rename `bus1_base`/`bus2_base` on every REMAINING `linecode_recs`/`inline_recs` entry, and
+     both elements of every `switch_pairs`/`disabled_switch_pairs`/`reg_edges` entry, through the
+     merge map (no-op for names absent from the map).
+  3. Rename `mv_base` ONLY (never `lv_base`) on every `xfmr_instances` entry.
+  4. Assert NO entry anywhere has `bus1_base == bus2_base` (or is a self-referential pair) after
+     renaming — throws loudly if one appears (would indicate an undetected pre-existing parallel
+     path this task's disjointness analysis did not anticipate; never silently drop it). A
+     post-rename PARALLEL edge (two distinct records landing on the same bus pair with genuinely
+     different impedance values) is caught downstream, loudly, by the existing `dedupe_edges`
+     assert-identical-or-throw mechanism when `mv_edges_raw`/LV edges are assembled — it never
+     silently averages or arbitrarily picks one value.
+"""
+function apply_merge!(
+    linecode_recs::Vector{MVLinecodeRef},
+    inline_recs::Vector{ImpedanceEdge},
+    switch_pairs::Vector{Tuple{String, String}},
+    disabled_switch_pairs::Vector{Tuple{String, String}},
+    xfmr_instances::Vector{Tuple{String, String, String}},
+    reg_edges::Set{Tuple{String, String}},
+    merge_map::Dict{String, String},
+    drop_pairs::Vector{Tuple{String, String}},
+)
+    rn(name::AbstractString) = get(merge_map, name, name)
+    drop_set = Set(drop_pairs)
+
+    kept_linecode = MVLinecodeRef[]
+    for r in linecode_recs
+        canonical_pair(r.bus1_base, r.bus2_base) in drop_set && continue
+        push!(kept_linecode, MVLinecodeRef(rn(r.bus1_base), rn(r.bus2_base), r.linecode, r.length_km))
+    end
+    empty!(linecode_recs)
+    append!(linecode_recs, kept_linecode)
+
+    kept_inline = ImpedanceEdge[]
+    for r in inline_recs
+        canonical_pair(r.bus1_base, r.bus2_base) in drop_set && continue
+        push!(kept_inline, ImpedanceEdge(rn(r.bus1_base), rn(r.bus2_base), r.r_ohm, r.x_ohm))
+    end
+    empty!(inline_recs)
+    append!(inline_recs, kept_inline)
+
+    for i in eachindex(switch_pairs)
+        a, b = switch_pairs[i]
+        switch_pairs[i] = (rn(a), rn(b))
+    end
+    for i in eachindex(disabled_switch_pairs)
+        a, b = disabled_switch_pairs[i]
+        disabled_switch_pairs[i] = (rn(a), rn(b))
+    end
+    for i in eachindex(xfmr_instances)
+        mv_base, lv_base, code = xfmr_instances[i]
+        xfmr_instances[i] = (rn(mv_base), lv_base, code)
+    end
+
+    renamed_reg_edges = Set{Tuple{String, String}}()
+    for (a, b) in reg_edges
+        push!(renamed_reg_edges, canonical_pair(rn(a), rn(b)))
+    end
+    empty!(reg_edges)
+    union!(reg_edges, renamed_reg_edges)
+
+    for r in linecode_recs
+        r.bus1_base == r.bus2_base && throw(
+            ArgumentError("bus merge introduced a self-loop in linecode_recs at \"$(r.bus1_base)\""),
+        )
+    end
+    for r in inline_recs
+        r.bus1_base == r.bus2_base && throw(
+            ArgumentError("bus merge introduced a self-loop in inline_recs at \"$(r.bus1_base)\""),
+        )
+    end
+    for (a, b) in switch_pairs
+        a == b && throw(ArgumentError("bus merge introduced a self-loop in switch_pairs at \"$a\""))
+    end
+    for (a, b) in disabled_switch_pairs
+        a == b &&
+            throw(ArgumentError("bus merge introduced a self-loop in disabled_switch_pairs at \"$a\""))
+    end
+    for (a, b) in reg_edges
+        a == b && throw(ArgumentError("bus merge introduced a self-loop in reg_edges at \"$a\""))
+    end
+    return nothing
+end
+
+"""
+    merge_near_zero_mv_edges!(linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs,
+                               xfmr_instances, reg_edges, degree) -> Dict{String,String}
+
+SUPERSEDES the prior D-13 near-ideal VALUE-REASSIGNMENT treatment (deferred-items.md item 1,
+2026-08-21) with a bus-MERGE (quick task 260822-pxb, 2026-08-22) — see the file-header comment
+above ("Substation busbar-tie connector: bus-MERGE treatment") for the full physical/
+SOC-exactness-gradient justification, unchanged; only the mechanism changed.
+
+Scans `inline_recs` (already-final-Ω `ImpedanceEdge`s — no separate per-km linecode lookup is
+needed for these, unlike `linecode_recs`, so the near-zero-`r_ohm` threshold can be checked
+directly here) for any entry whose `r_ohm` is below `MV_NEAR_ZERO_R_THRESHOLD_OHM`; throws loudly
+unless EXACTLY 1 segment matches (this fixture's 1 confirmed degenerate segment, the
+`HVMV_Sub_connector` substation busbar tie) — the same single-data-point guarantee the prior
+reshape function enforced. Resolves the survivor via the SAME generic `resolve_merge_pairs` used
+for the length-class splits (reusing the caller-supplied pre-merge `degree` map — valid here
+since neither of this pair's buses overlaps any length-class casualty/survivor) and applies the
+merge via the SAME generic `apply_merge!`, mutating `linecode_recs`/`inline_recs`/`switch_pairs`/
+`disabled_switch_pairs`/`xfmr_instances`/`reg_edges` IN PLACE (including `reg_edges`, since
+`_HVMV_Sub_LSB` is also an endpoint of the logical regulator-bank edge — omitting that rename
+would leave a dangling, un-merged bus reference there).
+"""
+function merge_near_zero_mv_edges!(
+    linecode_recs::Vector{MVLinecodeRef},
+    inline_recs::Vector{ImpedanceEdge},
+    switch_pairs::Vector{Tuple{String, String}},
+    disabled_switch_pairs::Vector{Tuple{String, String}},
+    xfmr_instances::Vector{Tuple{String, String, String}},
+    reg_edges::Set{Tuple{String, String}},
+    degree::Dict{String, Int},
+)
+    pairs = Tuple{String, String}[]
+    for r in inline_recs
+        if r.r_ohm < MV_NEAR_ZERO_R_THRESHOLD_OHM
+            push!(pairs, canonical_pair(r.bus1_base, r.bus2_base))
+        end
+    end
+    length(pairs) == 1 || throw(
+        ArgumentError(
+            "expected EXACTLY 1 degenerate near-zero-impedance MV segment (r_ohm < " *
+            "$(MV_NEAR_ZERO_R_THRESHOLD_OHM) Ω) eligible for a merge, got $(length(pairs)): " *
+            "$(pairs) — the vendored source may have changed; re-verify the intended scope of " *
+            "this treatment (deferred-items.md item 1) before proceeding, do not silently widen it",
+        ),
+    )
+    merge_map = resolve_merge_pairs(pairs, degree)
+    apply_merge!(
+        linecode_recs,
+        inline_recs,
+        switch_pairs,
+        disabled_switch_pairs,
+        xfmr_instances,
+        reg_edges,
+        merge_map,
+        pairs,
+    )
+    println(
+        "Bus merge (near-zero-r connector): $(length(merge_map)) pair(s) merged: " *
+        "$(sort!(collect(merge_map)))",
+    )
+    return merge_map
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
@@ -869,31 +1128,76 @@ function emit_output(
     println(io, "#")
     println(
         io,
-        "# NOT A VERBATIM TRANSCRIPTION for ONE MV edge: (\"HVMV_Sub_48332\", \"_HVMV_Sub_LSB\")",
+        "# BUS MERGE (quick task 260822-pxb, 2026-08-22, REPLACES an earlier impedance-fabrication",
     )
     println(
         io,
-        "# — the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector record) —",
+        "# approach for this class): Lines.dss contains 2 New Line.* records with",
     )
     println(
         io,
-        "# parses to a genuinely near-zero Ω value (r=1e-6, x=1e-5, a modeling placeholder, not a",
+        "# length=0.0003048 km (EXACTLY 1.000 ft) on a REAL linecode-referenced conductor —",
     )
     println(
         io,
-        "# physical line) that structurally breaks LinDistFlow SOC-exactness. Its r_ohm/x_ohm",
+        "# LN5473436-1 (bus2=L2674047, 3PH_H-397_ACSR) and LN6259981-1 (bus2=L3178969,",
     )
     println(
         io,
-        "# VALUES below are the D-13 near-ideal Ω-equivalent (IEEE123_SWITCH_R/X converted at this",
+        "# 1PH-x4_ACSR), each a bus-split inserted to attach a service transformer (T5260514C,",
     )
     println(
         io,
-        "# fixture's own MV per-unit base), reassigned by reduce_ieee8500_impedances.jl's",
+        "# T5355596B respectively) onto a midpoint bus 1 ft from its neighbor. Two buses 1 ft",
     )
     println(
         io,
-        "# reshape_near_zero_mv_edges! (phase-25 gap-closure, 2026-08-21) — see",
+        "# apart are electrically the SAME node, so each pair is MERGED (never given a fabricated",
+    )
+    println(
+        io,
+        "# impedance value) onto the degree-rule survivor named above (L2674047, L3178969) — see",
+    )
+    println(
+        io,
+        "# scripts/reduce_ieee8500_impedances.jl's detect_length_class_merge_pairs/",
+    )
+    println(
+        io,
+        "# resolve_merge_pairs/apply_merge!, and 25-DATA-PROVENANCE.md for the full record",
+    )
+    println(
+        io,
+        "# (including the exact casualty bus names, which by design appear NOWHERE below).",
+    )
+    println(io, "#")
+    println(
+        io,
+        "# BUS MERGE for the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector",
+    )
+    println(
+        io,
+        "# record — quick task 260822-pxb, 2026-08-22, SUPERSEDING an earlier D-13 near-ideal",
+    )
+    println(
+        io,
+        "# value-reassignment): the record parses to a genuinely near-zero Ω value (r=1e-6,",
+    )
+    println(
+        io,
+        "# x=1e-5, a modeling placeholder for a non-physical busbar tie, not a physical line) that",
+    )
+    println(
+        io,
+        "# structurally breaks LinDistFlow SOC-exactness, so its 2 named endpoints are MERGED into",
+    )
+    println(
+        io,
+        "# the single survivor bus \"HVMV_Sub_48332\" (lexicographic tie-break on an exact degree",
+    )
+    println(
+        io,
+        "# tie) by reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges! — see",
     )
     println(
         io,
@@ -901,7 +1205,11 @@ function emit_output(
     )
     println(
         io,
-        "# 25-DATA-PROVENANCE.md for the full before/after record.",
+        "# 25-DATA-PROVENANCE.md for the full before/after record (including the casualty bus",
+    )
+    println(
+        io,
+        "# name, which by design appears NOWHERE below).",
     )
     println(io)
     println(
@@ -1021,7 +1329,9 @@ function main()
     transformers_text = read(TRANSFORMERS_DSS, String)
     loadxfmrcodes_text = read(LOADXFMRCODES_DSS, String)
 
-    # --- MV: Lines.dss + LineCodes2.DSS ---
+    # --- MV: Lines.dss (parse only; impedance resolution deferred until AFTER the length-class
+    #     bus-merge below, per detect_length_class_merge_pairs's own doc: it operates on
+    #     linecode_recs BEFORE any per-km linecode impedance resolution) ---
     linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs = parse_mv_lines(lines_text)
     length(switch_pairs) == 38 || throw(
         ArgumentError("expected exactly 38 enabled switch=y ties, got $(length(switch_pairs))"),
@@ -1032,6 +1342,68 @@ function main()
             "$(length(disabled_switch_pairs))",
         ),
     )
+
+    # --- Service transformers: LoadXfmrCodes.dss (9 codes + 1,177 instances) — parsed EARLY
+    #     (quick task 260822-pxb reordering) so xfmr_instances is available for degree counting
+    #     and merge renaming BEFORE the length-class bus-merge below. ---
+    xfmr_codes = parse_xfmr_codes(loadxfmrcodes_text)
+    length(xfmr_codes) == 9 ||
+        throw(ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(xfmr_codes))"))
+    xfmr_instances = parse_xfmr_instances(loadxfmrcodes_text)
+    length(xfmr_instances) == 1177 || throw(
+        ArgumentError(
+            "expected exactly 1177 service-transformer instances, got $(length(xfmr_instances))",
+        ),
+    )
+
+    # --- Regulators + substation transformer + switch ties (D-13, near-ideal, no real Z here) —
+    #     ALSO parsed EARLY (quick task 260822-pxb reordering) so the LOGICAL (phase-deduplicated)
+    #     reg_edges Set is available for degree counting BEFORE the length-class bus-merge below
+    #     (a 3-phase regulator bank must count once here, not 3x, relative to an ordinary MV line
+    #     record — see compute_bus_degrees's own doc). ---
+    reg_pairs = vcat(
+        parse_transformer_bus_pairs(regulators_text),
+        parse_transformer_bus_pairs(transformers_text),
+    )
+    reg_edges = build_regulator_edges(reg_pairs, switch_pairs)
+
+    # --- Quick task 260822-pxb: length-class zero-length bus-merge (replaces impedance
+    #     fabrication for the 2 genuine 1-ft real-conductor bus-split segments). Mutates
+    #     linecode_recs/inline_recs/switch_pairs/disabled_switch_pairs/xfmr_instances/reg_edges
+    #     IN PLACE before any of them are used further. The SAME pre-merge `degree` map is reused
+    #     below for the connector's near-zero-r merge (valid: neither pair's buses overlap). ---
+    degree = compute_bus_degrees(linecode_recs, inline_recs, reg_edges, xfmr_instances)
+    length_class_pairs = detect_length_class_merge_pairs(linecode_recs)
+    length_class_merge_map = resolve_merge_pairs(length_class_pairs, degree)
+    apply_merge!(
+        linecode_recs,
+        inline_recs,
+        switch_pairs,
+        disabled_switch_pairs,
+        xfmr_instances,
+        reg_edges,
+        length_class_merge_map,
+        length_class_pairs,
+    )
+    println(
+        "Bus merge (length-class): $(length(length_class_merge_map)) pairs merged: " *
+        "$(sort!(collect(length_class_merge_map)))",
+    )
+
+    # --- Quick task 260822-pxb: near-zero-r substation busbar-tie connector bus-merge (SUPERSEDES
+    #     the D-13 near-ideal value-reassignment treatment) — see merge_near_zero_mv_edges!'s own
+    #     doc and the file-header comment above for the full justification. ---
+    merge_near_zero_mv_edges!(
+        linecode_recs,
+        inline_recs,
+        switch_pairs,
+        disabled_switch_pairs,
+        xfmr_instances,
+        reg_edges,
+        degree,
+    )
+
+    # --- MV impedance resolution (surviving linecode_recs, post both bus-merges) + assembly ---
     mv_codes = sort!(unique(r.linecode for r in linecode_recs))
     mv_linecode_rx = Dict(code => parse_linecode_rx_by_name(linecodes2_text, code) for code in mv_codes)
     mv_edges_raw = ImpedanceEdge[]
@@ -1040,7 +1412,6 @@ function main()
         push!(mv_edges_raw, ImpedanceEdge(r.bus1_base, r.bus2_base, R1 * r.length_km, X1 * r.length_km))
     end
     append!(mv_edges_raw, inline_recs)
-    reshape_near_zero_mv_edges!(mv_edges_raw)
     mv_edges = dedupe_edges(mv_edges_raw)
     assert_no_self_loops(keys(mv_edges), "IEEE8500_MV_BRANCH_RX_OHMS")
 
@@ -1058,24 +1429,8 @@ function main()
     lv_edges = dedupe_edges(lv_edges_raw)
     assert_no_self_loops(keys(lv_edges), "IEEE8500_LV_BRANCH_RX_OHMS")
 
-    # --- Service transformers: LoadXfmrCodes.dss (9 codes + 1,177 instances) ---
-    xfmr_codes = parse_xfmr_codes(loadxfmrcodes_text)
-    length(xfmr_codes) == 9 ||
-        throw(ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(xfmr_codes))"))
-    xfmr_instances = parse_xfmr_instances(loadxfmrcodes_text)
-    length(xfmr_instances) == 1177 || throw(
-        ArgumentError(
-            "expected exactly 1177 service-transformer instances, got $(length(xfmr_instances))",
-        ),
-    )
+    # --- Service-transformer edges (xfmr_instances already parsed + merge-renamed above) ---
     xfmr_edges = build_xfmr_edges(xfmr_instances, xfmr_codes)
-
-    # --- Regulators + substation transformer + switch ties (D-13, near-ideal, no real Z here) ---
-    reg_pairs = vcat(
-        parse_transformer_bus_pairs(regulators_text),
-        parse_transformer_bus_pairs(transformers_text),
-    )
-    reg_edges = build_regulator_edges(reg_pairs, switch_pairs)
 
     # --- Loads + capacitors ---
     load_kw = parse_loads(loads_text)

@@ -34,15 +34,28 @@
 # (genuine normally-open tie switches) and are EXCLUDED entirely from this set — the
 # IEEE-123 precedent (normally-open ties stay open so the graph is a clean tree).
 #
-# NOT A VERBATIM TRANSCRIPTION for ONE MV edge: ("HVMV_Sub_48332", "_HVMV_Sub_LSB")
-# — the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector record) —
-# parses to a genuinely near-zero Ω value (r=1e-6, x=1e-5, a modeling placeholder, not a
-# physical line) that structurally breaks LinDistFlow SOC-exactness. Its r_ohm/x_ohm
-# VALUES below are the D-13 near-ideal Ω-equivalent (IEEE123_SWITCH_R/X converted at this
-# fixture's own MV per-unit base), reassigned by reduce_ieee8500_impedances.jl's
-# reshape_near_zero_mv_edges! (phase-25 gap-closure, 2026-08-21) — see
+# BUS MERGE (quick task 260822-pxb, 2026-08-22, REPLACES an earlier impedance-fabrication
+# approach for this class): Lines.dss contains 2 New Line.* records with
+# length=0.0003048 km (EXACTLY 1.000 ft) on a REAL linecode-referenced conductor —
+# LN5473436-1 (bus2=L2674047, 3PH_H-397_ACSR) and LN6259981-1 (bus2=L3178969,
+# 1PH-x4_ACSR), each a bus-split inserted to attach a service transformer (T5260514C,
+# T5355596B respectively) onto a midpoint bus 1 ft from its neighbor. Two buses 1 ft
+# apart are electrically the SAME node, so each pair is MERGED (never given a fabricated
+# impedance value) onto the degree-rule survivor named above (L2674047, L3178969) — see
+# scripts/reduce_ieee8500_impedances.jl's detect_length_class_merge_pairs/
+# resolve_merge_pairs/apply_merge!, and 25-DATA-PROVENANCE.md for the full record
+# (including the exact casualty bus names, which by design appear NOWHERE below).
+#
+# BUS MERGE for the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector
+# record — quick task 260822-pxb, 2026-08-22, SUPERSEDING an earlier D-13 near-ideal
+# value-reassignment): the record parses to a genuinely near-zero Ω value (r=1e-6,
+# x=1e-5, a modeling placeholder for a non-physical busbar tie, not a physical line) that
+# structurally breaks LinDistFlow SOC-exactness, so its 2 named endpoints are MERGED into
+# the single survivor bus "HVMV_Sub_48332" (lexicographic tie-break on an exact degree
+# tie) by reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges! — see
 # .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1 and
-# 25-DATA-PROVENANCE.md for the full before/after record.
+# 25-DATA-PROVENANCE.md for the full before/after record (including the casualty bus
+# name, which by design appears NOWHERE below).
 
 const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Float64}}(
     ("190-7361", "M1089120") => (0.008973963591198668, 0.0028914370841719994),
@@ -180,7 +193,6 @@ const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Fl
     ("F739841", "L0247160") => (0.034207704000000005, 0.0273212052),
     ("F739842", "L0247162") => (0.034207704000000005, 0.0273212052),
     ("F739844", "L0247171") => (0.034207704000000005, 0.0273212052),
-    ("HVMV_Sub_48332", "_HVMV_Sub_LSB") => (0.09330054000000002, 0.04665027000000001),
     ("L2673300", "M1008753") => (0.07984613620296, 0.04382882467524),
     ("L2673300", "M1008758") => (0.0690096321057, 0.038511483991199996),
     ("L2673303", "L2748125") => (0.09033291209436001, 0.05041114394976),
@@ -223,7 +235,7 @@ const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Fl
     ("L2674027", "L2692633") => (0.010682668382785003, 0.024995970981156006),
     ("L2674027", "L3179646") => (0.012175029877908335, 0.028487891097820007),
     ("L2674047", "L2692655") => (0.009576210698600002, 0.022407012569760004),
-    ("L2674047", "M1142828") => (4.7966884000000006e-5, 0.00011223589440000001),
+    ("L2674047", "L3160865") => (0.0205529411024, 0.04809104813184),
     ("L2674051", "N1142108") => (0.08268951298140001, 0.06604293442357),
     ("L2674052", "M1108356") => (0.06998332394880001, 0.05589468250144),
     ("L2684420", "M1047821") => (0.03314842988785, 0.018427979859745),
@@ -1412,7 +1424,6 @@ const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Fl
     ("L3160862", "L3552667") => (0.22345179301800003, 0.17846775946590002),
     ("L3160863", "P829957") => (0.2762320353858, 0.15415392437279998),
     ("L3160864", "M1142826") => (0.10256340115080001, 0.08191592539654),
-    ("L3160865", "M1142828") => (0.0205529411024, 0.04809104813184),
     ("L3160865", "M1142832") => (0.010556443716385, 0.024700622666916),
     ("L3160868", "M1142808") => (0.10303818567660002, 0.08229512902433),
     ("L3160871", "P829975") => (0.02085570654336, 0.01163872613376),
@@ -1425,7 +1436,7 @@ const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Fl
     ("L3177665", "M1047486") => (0.020544109210780002, 0.017150003429988),
     ("L3177881", "N1147860") => (0.0207804192606, 0.01659702442353),
     ("L3177894", "M1010004") => (0.27981885037500004, 0.22348732408125),
-    ("L3178969", "M1009834") => (0.000510436368, 0.000284853888),
+    ("L3178969", "M1009832") => (0.07905430307346001, 0.04411700851536),
     ("L3178971", "M1047744") => (0.0009451875924, 0.00075490784662),
     ("L3178972", "N1144664") => (0.10780163128498, 0.05917404425537),
     ("L3178974", "M1047831") => (0.13461165934476, 0.07512132155616),
@@ -1692,7 +1703,6 @@ const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Fl
     ("M1009807", "M1026824") => (0.28489019551754663, 0.08768672446864),
     ("M1009827", "M1009832") => (0.14593282650024, 0.08143920696384),
     ("M1009827", "M3019248") => (0.171038082303, 0.13660567641764998),
-    ("M1009832", "M1009834") => (0.07905430307346001, 0.04411700851536),
     ("M1009832", "M1009838") => (0.15972918467688, 0.08913839635007999),
     ("M1009838", "M1009843") => (0.14373986425422, 0.08021540344752),
     ("M1009843", "M1009855") => (0.13857047520108, 0.07733057653728),
@@ -6113,6 +6123,6 @@ const IEEE8500_REGULATOR_EDGES = Set{Tuple{String, String}}([
     ("D6231996-1_INT", "E206614"),
     ("D6290228-6_INT", "Q16642"),
     ("D6413567-3_INT", "E182724"),
+    ("HVMV_Sub_48332", "regxfmr_HVMV_Sub_LSB"),
     ("HVMV_Sub_HSB", "regxfmr_HVMV_Sub_LSB"),
-    ("_HVMV_Sub_LSB", "regxfmr_HVMV_Sub_LSB"),
 ])
