@@ -35,6 +35,12 @@ for src in (
     # substrate B (real IEEE-123, ~16 min) is loaded from results/socp_applicability/ because
     # it exceeds this job's whole CI timeout. See the page's own note.
     "socp_applicability.jl",
+    # IEEE-8500 scalability benchmark (phase 25, SCALE-05): a cheap live slice (ieee8500-mv,
+    # lowest density, Clarabel only) + the committed cross-fixture density-sweep curve, following
+    # socp_applicability.jl's own precomputed-results precedent (D-17 REVISED) — the full grid
+    # (including the 4,875-bus headline point) exceeds this job's CI timeout AND, at this scale,
+    # the measurement machine's available RAM; see the page's own note.
+    "ieee8500_scaling.jl",
     "mpc_rolling_horizon.jl",   # NEW: Rung 8 MPC / rolling-horizon RTP closed loop (MPC-01..04)
     "stochastic_pv_demand.jl", # NEW: Rung 9 Stochastic PV/Demand Uncertainty (STOCH-01..04)
     "meshed_reactive_price.jl", # NEW: Rung 10 Meshed Networks + Live Reactive Price (MESH-01..03,06)
@@ -78,6 +84,7 @@ makedocs(;
             "Thesis Reproduction — IEEE-123" => "generated/thesis_reproduction_ieee123.md",
             "Thesis Reproduction — Assumptions" => "generated/thesis_reproduction_assumptions.md",
             "SOC Relaxation Applicability" => "generated/socp_applicability.md",
+            "Scaling to IEEE-8500" => "generated/ieee8500_scaling.md",
             "Rung 8: MPC / Rolling-Horizon RTP" => "generated/mpc_rolling_horizon.md", # from mpc_rolling_horizon.jl
             "Rung 9: Stochastic PV/Demand Uncertainty" => "generated/stochastic_pv_demand.md",
             "Rung 10: Meshed Networks + Live Reactive Price" => "generated/meshed_reactive_price.md",
