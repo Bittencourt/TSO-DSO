@@ -39,12 +39,12 @@ Last activity: 2026-08-21 -- Phase 25 execution started
 | 260726-plf | Correct the 18-03 assumptions page — Section 8 refuted, Phase-17 re-tune premise undermined | 2026-07-26 | 2ac0089 | [260726-plf-correct-the-18-03-assumptions-page-secti](./quick/260726-plf-correct-the-18-03-assumptions-page-secti/) |
 | 260726-pta | Publish the SOCP applicability maps + sweep experiments on the Documenter site | 2026-07-26 | (this commit) | [260726-pta-publish-the-socp-applicability-maps-and-](./quick/260726-pta-publish-the-socp-applicability-maps-and-/) |
 | 260726-vn2 | Quarantine flaky IEEE-13 ADMM tests with a bounded solve retry | 2026-07-27 | e015529 | [260726-vn2-quarantine-flaky-ieee-13-admm-tests-with](./quick/260726-vn2-quarantine-flaky-ieee-13-admm-tests-with/) |
-| 260822-f0b | Phase-25 follow-up — clarabel-tol flag, ADMM exactness-gate override seam, harness time-limit raise | 2026-08-22 | 8673cc1 | [260822-f0b-phase-25-followup-clarabel-tol-flag-admm](./quick/260822-f0b-phase-25-followup-clarabel-tol-flag-admm/) |
 | 260728-co0 | Author the Stackelberg vs PSR N1-N2 note term-by-term mapping writeup | 2026-07-28 | 6b8b166 | [260728-co0-create-a-typst-writeup-like-thesis-casea](./quick/260728-co0-create-a-typst-writeup-like-thesis-casea/) |
 | 260728-fast | Fix scrambled table rendering in stackelberg_vs_psr_n1n2.typ (auto-width Etiqueta column collapsed the fr columns to zero width) | 2026-07-28 | — | — |
 | 260806-ujj | Showcase example app: PV-boom case study (scripts/pv_boom_case_study.jl) + self-contained HTML report (scripts/pv_boom_report.jl) | 2026-08-07 | 96688aa | [260806-ujj-showcase-example-app-pv-boom-case-study-](./quick/260806-ujj-showcase-example-app-pv-boom-case-study-/) |
 | 260807-7nz | Rewrite PV-boom HTML report as rich educational walkthrough (MathML equations, model/experiment/results narrative) | 2026-08-07 | 7d41053 | [260807-7nz-rewrite-pv-boom-html-report-as-rich-educ](./quick/260807-7nz-rewrite-pv-boom-html-report-as-rich-educ/) |
 | 260807-bv8 | PV-boom report v2 (scripts/pv_boom_report_v2.jl): review-hardened — source citations, provenance tags, notation table, SVG architecture diagram, limitations section; v1 kept byte-identical | 2026-08-07 | f7487fa | [260807-bv8-pv-boom-report-v2-review-hardened-educat](./quick/260807-bv8-pv-boom-report-v2-review-hardened-educat/) |
+| 260822-f0b | Phase-25 follow-up — clarabel-tol flag, ADMM exactness-gate override seam, harness time-limit raise | 2026-08-22 | 8673cc1 | [260822-f0b-phase-25-followup-clarabel-tol-flag-admm](./quick/260822-f0b-phase-25-followup-clarabel-tol-flag-admm/) |
 
 ## Performance Metrics
 
