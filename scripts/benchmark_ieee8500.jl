@@ -51,11 +51,26 @@
 #      specific point, and a converged point whose cone gap genuinely exceeds its fixture's
 #      own floor still throws exactly as before.
 #
+#   3. `--gap-report --fixture <name> --density <float> [--t-horizon <int>] [--clarabel-tol <float>]
+#      [--topn <int>]` (quick task 260822-oi7, IEEE-8500 SOCP-inexactness root-cause diagnostic).
+#      CENTRALIZED-ONLY (no ADMM: the cone residual is a property of the centralized solution, and
+#      skipping ADMM also avoids its multi-minute cost). Reuses the SAME seeding/density-filtering/
+#      tolerance machinery as the density-sweep mode above (`FIXTURE_MAP`, `density_filtered_
+#      population`, `DEFAULT_CLARABEL_TOL_GAP`, `T_HORIZON_FLOOR`, `_SWEEP_SEED`) so it describes
+#      THE SAME point the sweep would measure at the same (fixture, density, T_horizon,
+#      clarabel_tol). Calls the new `socp_gap_report` on the resulting `ctx`, joins bus NAMES + D-13
+#      near-ideal-edge membership (IEEE-8500 fixtures only — this script layer, NOT
+#      `src/models/exactness.jl`, which stays fixture-agnostic), and appends to a NEW committed
+#      `results/ieee8500_benchmark/socp_gap_report.csv` tagged with a `point` identifier column
+#      (`fixture|density=...|T=...|tol=...`) so multiple diagnostic runs accumulate comparably in
+#      one file (upsert keyed on `point` — re-running the same point overwrites, not duplicates).
+#
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee13 --tolerances 1e-6,1e-8
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500-mv
 #   julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500
 #   julia scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick
 #   julia scripts/benchmark_ieee8500.jl --fixture ieee13 --density 1.0 --solver clarabel --time-limit 5
+#   julia --project=. scripts/benchmark_ieee8500.jl --gap-report --fixture ieee8500-mv --density 0.1
 #
 # Provenance of the committed CSVs in results/ieee8500_benchmark/:
 # .planning/phases/25-ieee-8500-scalability-benchmark/25-05-SUMMARY.md.
@@ -846,11 +861,116 @@ function run_sweep_mode(args)
     return nothing
 end
 
+# ── Task 2 (quick task 260822-oi7): per-branch SOCP gap diagnostic ─────────────────────────────
+#
+# CENTRALIZED-ONLY (no ADMM — the cone residual is a property of the centralized solution).
+# Reuses `density_filtered_population`/`FIXTURE_MAP`/`_SWEEP_SEED`/`DEFAULT_CLARABEL_TOL_GAP`/
+# `T_HORIZON_FLOOR` so this describes THE SAME point `run_sweep_mode` would measure at the same
+# (fixture, density, T_horizon, clarabel_tol). `rtol_exact = 1e6` neutralizes the internal PF-04
+# throw exactly like `run_centralized_point` does — never `allow_almost` (src/core/status.jl's
+# strict final-solve policy is untouched: a genuinely `ALMOST_OPTIMAL` point still throws here,
+# is reported as an error row's `error_msg`, and is not force-classified).
+function run_gap_report_mode(args)
+    fixture_str = parse_kv_flag(args, "--fixture", nothing)
+    fixture_str === nothing && throw(ArgumentError("--gap-report requires --fixture <name>"))
+    haskey(FIXTURE_MAP, fixture_str) || throw(
+        ArgumentError("unknown --fixture $fixture_str; expected one of $(join(keys(FIXTURE_MAP), ", "))"),
+    )
+    fixture_sym = FIXTURE_MAP[fixture_str]
+
+    density_str = parse_kv_flag(args, "--density", nothing)
+    density_str === nothing && throw(ArgumentError("--gap-report requires --density <float>"))
+    density = parse(Float64, density_str)
+
+    t_horizon_str = parse_kv_flag(args, "--t-horizon", nothing)
+    T_horizon = if t_horizon_str === nothing
+        T
+    else
+        v = parse(Int, t_horizon_str)
+        v < T_HORIZON_FLOOR && throw(
+            ArgumentError("--t-horizon=$v is below the safe floor of $T_HORIZON_FLOOR"),
+        )
+        v
+    end
+
+    clarabel_tol_str = parse_kv_flag(args, "--clarabel-tol", nothing)
+    clarabel_tol = clarabel_tol_str === nothing ? DEFAULT_CLARABEL_TOL_GAP[fixture_sym] :
+                   parse(Float64, clarabel_tol_str)
+
+    topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
+
+    feeder = build_feeder(fixture_sym)
+    profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_horizon)
+    λ0 = build_price(:mem, T_horizon, nothing)
+    rng = StableRNGs.LehmerRNG(_SWEEP_SEED)
+    aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
+
+    opt = select_optimizer(SOCP(); tol_gap_abs = clarabel_tol, tol_gap_rel = clarabel_tol)
+    println("Solving centralized-only ", fixture_str, " density=", density, " T=", T_horizon,
+        " clarabel_tol=", clarabel_tol, " ...")
+    flush(stdout)
+    ctx, _, _ = solve_welfare(
+        feeder, ConvexBranchFlow(), aggs;
+        T = T_horizon, λ₀ = λ0, optimizer = opt, allow_export = true, rtol_exact = 1.0e6,
+    )
+    ts = string(termination_status(ctx.model))
+    println("  termination_status=", ts)
+
+    offenders = socp_gap_report(ctx; topn = topn)
+
+    # Fixture-specific bus-NAME join + D-13 near-ideal membership — script layer only
+    # (exactness.jl stays fixture-agnostic). `missing` for fixtures with no String relabel map.
+    name_of, near_ideal_edges = if fixture_sym === :ieee8500
+        inv = Dict(id => name for (name, id) in ieee8500_relabel_map())
+        (id -> get(inv, id, missing)), TSODSO.IEEE8500_REGULATOR_EDGES
+    elseif fixture_sym === :ieee8500_mv
+        inv = Dict(id => name for (name, id) in ieee8500_mv_relabel_map())
+        (id -> get(inv, id, missing)), TSODSO.IEEE8500_REGULATOR_EDGES
+    else
+        (id -> missing), nothing
+    end
+    is_near_ideal(a, b) = near_ideal_edges === nothing || a === missing || b === missing ?
+                          missing : ((a, b) in near_ideal_edges || (b, a) in near_ideal_edges)
+
+    point_id = "$(fixture_str)|density=$(density)|T=$(T_horizon)|tol=$(clarabel_tol)"
+    rows = NamedTuple[]
+    for (rank, r) in enumerate(offenders)
+        fname, tname = name_of(r.from), name_of(r.to)
+        push!(
+            rows,
+            (;
+                point = point_id, fixture = fixture_str, density = density,
+                t_horizon = T_horizon, clarabel_tol_gap = clarabel_tol,
+                termination_status = ts, rank = rank,
+                b = r.b, from_id = r.from, to_id = r.to, from_name = fname, to_name = tname,
+                r_pu = r.r_pu, x_pu = r.x_pu, l = r.l, v_from = r.v_from, P = r.P, Q = r.Q,
+                t = r.t, gap = r.gap, ratio = r.ratio, reverse_flow = r.reverse_flow,
+                loading = r.loading, is_near_ideal = is_near_ideal(fname, tname),
+            ),
+        )
+    end
+
+    csv_path = joinpath(OUT, "socp_gap_report.csv")
+    df_new = DataFrame(rows)
+    df_final = if isfile(csv_path)
+        df_old = CSV.read(csv_path, DataFrame)
+        new_points = Set(df_new.point)
+        vcat(filter(r -> !(r.point in new_points), df_old), df_new; cols = :union)
+    else
+        df_new
+    end
+    CSV.write(csv_path, df_final)
+    println("wrote ", csv_path, " (", nrow(df_new), " offender rows for point ", point_id, ")")
+    return nothing
+end
+
 # ── Entrypoint ───────────────────────────────────────────────────────────────────────────────────
 
 function main(args)
     if has_flag(args, "--calibrate-noise-floor")
         run_calibrate_mode(args)
+    elseif has_flag(args, "--gap-report")
+        run_gap_report_mode(args)
     else
         run_sweep_mode(args)
     end

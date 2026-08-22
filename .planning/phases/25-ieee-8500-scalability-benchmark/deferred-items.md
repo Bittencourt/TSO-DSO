@@ -214,3 +214,94 @@ Full measured evidence and the honestly-labeled `T_HORIZON=10` CSV row (explicit
 non-comparable to every other T=24 row in the same table) are in
 `results/ieee8500_benchmark/density_sweep_full.csv` and this gap-closure task's own
 `25-08-SUMMARY.md`.
+
+### Item 5 — SOCP inexactness mechanism (quick task 260822-oi7)
+
+**Found during:** a new `socp_gap_report` per-branch/per-time diagnostic (`src/models/exactness.jl`,
+additive, `assert_socp_exact!`/`socp_relaxation_gap` byte-identical) driven via a new `--gap-report`
+mode on `scripts/benchmark_ieee8500.jl`, purpose-built to discriminate WHY the IEEE-8500 SOCP
+relaxation is inexact: structural (D-13 near-ideal modeling convention), physical (reverse flow), or
+numerical (conditioning). Centralized-only (no ADMM), one process at a time, no tolerance/gate
+changed — observe-only. Full offender data committed at
+`results/ieee8500_benchmark/socp_gap_report.csv` (81 lines: 4 points × top-20 offenders + header).
+
+**The 4 measured points** (top-1 `gap` cross-checked against the already-committed
+`density_sweep.csv` `exact_maxgap` at the same fixture/density/T/tol — all 4 reproduce to full
+precision, confirming the new diagnostic computes the identical quantity):
+
+| Point | termination_status | top-1 gap | matches density_sweep.csv? | verdict vs fixture's own atol |
+|---|---|---|---|---|
+| (a) `ieee8500`, density=0.1, T=10, tol=1e-6 | OPTIMAL | 0.0325015512 | yes (3.250155e-2) | INEXACT (atol=0.0049691451) |
+| (b) `ieee8500-mv`, density=0.1, T=24, tol=1e-8 | OPTIMAL | 0.0005781162 | yes (5.781162e-4) | EXACT (atol=0.0011460286) |
+| (c) `ieee8500-mv`, density=0.25, T=24, tol=1e-8 | OPTIMAL | 0.0037728310 | yes (3.772831e-3) | INEXACT (atol=0.0011460286) |
+| (d) `ieee13`, density=1.0, T=24, tol=1e-8 (control) | OPTIMAL | 1.928035e-8 | yes (1.928035e-8) | EXACT (atol=1e-6) |
+
+**Per-point `r_pu` / near-ideal-scale summary (top-20 offenders):**
+
+- (a),(b),(c) (all IEEE-8500-family): **100%** of top-20 offenders sit at `r_pu` on the order of
+  `1e-7` pu — SMALLER than the D-13 near-ideal regulator/switch convention (`IEEE123_SWITCH_R =
+  3e-4` pu) by 3 orders. **None** are flagged `is_near_ideal` (none belong to the 43 catalogued
+  `IEEE8500_REGULATOR_EDGES`) — this is a DIFFERENT, uncatalogued near-zero-impedance class.
+- (b) and (c): **all 20/20** top-offender rows are the literal SAME single branch
+  (`from_id=144, to_id=2047` = `"L2674047" -> "M1142828"`, `r_pu = 1.5423346e-7` pu exactly, at 20
+  distinct hours each).
+- (a): that SAME branch (`144,2047`) accounts for **10/20** rows; the remaining 10 split evenly
+  (5/5) across two OTHER near-zero-`r` branches (`"M1069310"->"M1069311"`, `"M1108489"->"P829798"`)
+  — a small cluster of ~3 extremely-low-`r` branches, not one branch alone, but still 100%
+  concentrated on the near-zero-`r` class.
+- (d) `ieee13` control: **0%** near-ideal-scale; `r_pu` range `[0.15, 0.3]` pu — ordinary MV branch
+  impedances. Confirms the near-zero-`r` pattern is absent on this fully-exact fixture.
+- **Raw impedance provenance** for the dominant branch: `IEEE8500_MV_BRANCH_RX_OHMS[("L2674047",
+  "M1142828")] = (r=4.7966884e-5 Ω, x=1.1223589e-4 Ω)` (`src/data/ieee8500_impedances.jl:226`) — an
+  order larger than the ALREADY-FIXED busbar-tie's original `1e-6 Ω` (Item 1 above), but still ~5-6
+  orders below a typical LV lateral from the SAME source bus (`("L2674047","L2692655") => (0.0096 Ω,
+  0.0224 Ω)`, line 225). Notably `M1142828` also appears as the destination of a SECOND, ordinary-
+  impedance edge from a DIFFERENT source bus (`("L3160865","M1142828") => (0.0206 Ω, 0.0481 Ω)`,
+  line 1415) — consistent with the offending edge being a short duplicate/stub meter-drop connector,
+  structurally analogous to (though a DIFFERENT branch than, and NOT covered by) Item 1's fix.
+
+**`reverse_flow` fraction (top-20 offenders), the PHYSICAL discriminator:** (a) 100% (20/20), (b)
+100% (20/20), (c) 100% (20/20), (d) control 90% (18/20). This fraction is **uniformly high across
+every point, including the fully-exact `ieee13` control and the EXACT `ieee8500-mv` point (b)** —
+it does NOT rise "markedly" on the inexact points relative to the exact ones, failing the rubric's
+own PHYSICAL-favoring criterion. Reverse flow co-occurs with the dominant near-zero-`r` branch but
+does not discriminate exact from inexact.
+
+**Cross-point fingerprint (structural discriminator):** the SAME branch (`144,2047` =
+`"L2674047"->"M1142828"`) dominates or co-dominates the top-20 offender list at ALL THREE
+IEEE-8500-family points — (a), (b), AND (c) — regardless of density (0.1 vs 0.25), horizon (10 vs
+24), or tolerance (1e-6 vs 1e-8). This is the identical FINGERPRINT PATTERN Item 1's already-
+RESOLVED busbar-tie connector showed (one dominant near-zero-impedance branch topping the list at
+every rung/density) — a DIFFERENT branch, not part of the 43 catalogued D-13 edges and not touched
+by that fix.
+
+**(b)-vs-(c) controlled comparison** (same fixture, same `T`, same `tol`, ONLY density changed):
+the offender identity, `r_pu` (`1.5423346e-7` pu, bit-identical), and `reverse_flow` (`true`) are
+**IDENTICAL** between (b) and (c) — the top-1 `gap` simply grew `5.78e-4 -> 3.77e-3` (~6.5x) as
+density rose. **No NEW offender branch appeared at the higher density; the SAME branch simply got
+worse** — the rubric's explicit STRUCTURAL-favoring outcome ("did the SAME branches simply get
+worse?"), not the NUMERICAL-favoring "entirely different offender SET appearing."
+
+**Rubric applied:** STRUCTURAL — top offenders concentrate overwhelmingly on near-D-13-scale (here,
+even smaller than D-13) `r_pu` branches, and the SAME near-zero-`r` branch recurs across every
+IEEE-8500-family point tested, worsening (not being replaced) as network stress (density) rises.
+PHYSICAL is NOT favored — although `reverse_flow` is high at the dominant branch, that fraction is
+equally high on the fully-exact `ieee13` control and the exact `ieee8500-mv` point, so it fails the
+rubric's own "markedly higher on inexact points" test; it reads as a co-occurring correlate (the
+branch likely feeds a PV-heavy downstream node that exports most hours) rather than an independent
+driver. NUMERICAL is NOT favored — offenders are tightly concentrated on a small, identifiable set
+of near-zero-`r` branches, not scattered, and (b)-vs-(c) shows the SAME branch worsening rather than
+a new offender set appearing.
+
+**VERDICT: STRUCTURAL.** The persistent SOCP inexactness on both IEEE-8500 fixtures is driven
+overwhelmingly by a small set of genuinely near-zero-impedance real branches (headlined by
+`"L2674047"->"M1142828"`, `r ≈ 4.8e-5 Ω` / `r_pu ≈ 1.5e-7`) that starve the welfare objective's
+`r·l` loss-cost gradient — the SAME mechanism as Item 1's already-fixed busbar-tie connector, but a
+DIFFERENT, uncatalogued branch (or small cluster of branches) NOT among the 43 `IEEE8500_
+REGULATOR_EDGES` and NOT touched by that fix. This is new evidence that **Item 2 (still OPEN)** —
+whether `exactness.jl` should special-case near-zero-impedance branches — needs to consider a
+BROADER offending class than the officially catalogued D-13 edges: apparently-ordinary vendored LV
+service-drop/meter connectors can independently carry near-zero real impedance and reproduce the
+same structural exactness failure. This task does NOT resolve Item 2 or change any gate/tolerance
+default in `src/models/exactness.jl` — `assert_socp_exact!`/`socp_relaxation_gap` remain
+byte-identical.
