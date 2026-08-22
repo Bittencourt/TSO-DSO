@@ -6,7 +6,7 @@ status: complete
 commits:
   - feb9951 (Task 1 — additive socp_gap_report in src/models/exactness.jl)
   - 024c0c2 (Task 2 — --gap-report diagnostic mode on scripts/benchmark_ieee8500.jl, includes point (d) smoke-test row)
-  - (this commit) (Task 3 — measure points (a)/(b)/(c), analysis, deferred-items.md Item 5, this SUMMARY)
+  - 5e6fcb8 (Task 3 — measure points (a)/(b)/(c), analysis, deferred-items.md Item 5, this SUMMARY)
 ---
 
 # Quick Task 260822-oi7 — Summary
