@@ -149,4 +149,80 @@ function socp_relaxation_gap(ctx::ModelContext)
     return maxgap
 end
 
-export assert_socp_exact!, socp_relaxation_gap
+# Quick task 260822-oi7: diagnostic-only, NON-THROWING sibling built for the IEEE-8500
+# inexactness root-cause investigation. Like `socp_relaxation_gap` above, `assert_socp_exact!`
+# is left BYTE-IDENTICAL — this re-walks the SAME per-branch/per-time gap loop and returns the
+# worst offenders with enough detail to discriminate structural (near-zero `r_pu`) / physical
+# (reverse flow, `P<0`) / numerical (scattered, no pattern) causes, WITHOUT importing any
+# fixture-specific knowledge (bus names, D-13 edge membership) into this file — those joins
+# belong in the calling script (`scripts/benchmark_ieee8500.jl`).
+"""
+    socp_gap_report(ctx::ModelContext; topn::Int = 20, rtol::Real = 1e-4, atol::Real = 1e-6)
+        -> Vector{<:NamedTuple}
+
+Diagnostic-only, NON-THROWING sibling of [`assert_socp_exact!`](@ref) / [`socp_relaxation_gap`](@ref)
+(neither is touched by this addition). Re-walks the SAME per-branch, per-time SOC-cone gap
+computation and returns the `topn` WORST `(branch, time)` rows, sorted by absolute gap descending,
+with enough detail to discriminate the candidate inexactness mechanisms (structural modeling
+convention / physical reverse flow / numerical conditioning) WITHOUT importing any fixture-specific
+knowledge (bus names, D-13 edge membership) — those joins are the CALLER's job.
+
+Each row is a `NamedTuple` with:
+
+  - `b::Int`            — 1-based branch index into `feeder.branches`;
+  - `from::Int`,`to::Int` — the branch's bus IDS (`feeder.branches[b].from/.to`); NOT names —
+    this file stays fixture-agnostic (see `src/data/ieee8500.jl`'s String relabel maps for a
+    name join);
+  - `r_pu::Float64`,`x_pu::Float64` — the branch's per-unit resistance/reactance
+    (`Branch.r`/`.x`) — the STRUCTURAL discriminator: a near-zero `r_pu` (the D-13 near-ideal
+    regulator/switch convention, `IEEE123_SWITCH_R = 3e-4` pu) starves the welfare objective's
+    `r·l` loss-cost gradient that drives the branch's `l` down to the tight SOC-exact value;
+  - `l::Float64`,`v_from::Float64`,`P::Float64`,`Q::Float64` — the solved cone-constraint
+    quantities at branch `b`, time `t`;
+  - `t::Int`            — the timestep;
+  - `gap::Float64`      — `|l·v_from - (P²+Q²)|`, IDENTICAL formula to `assert_socp_exact!`;
+  - `ratio::Float64`    — `gap / (atol + rtol·max(|lhs|,|rhs|))`, the SAME combined WR-01 bound
+    `assert_socp_exact!` uses, so rows are comparable across branches/fixtures/per-unit bases
+    (a `ratio > 1` is exactly what would have thrown);
+  - `reverse_flow::Bool` — `P < 0`, the PHYSICAL discriminator;
+  - `loading::Union{Float64,Missing}` — `sqrt(P²+Q²)/smax`, or `missing` when
+    `br.smax == SMAX_NO_LIMIT` (dividing by the 99.0 pu sentinel would fabricate a meaningless
+    number for an unconstrained interior branch).
+
+Ties in `gap` are broken by `(b,t)` ascending for a deterministic row order. `topn` is clamped to
+the number of `(branch,time)` pairs actually scanned. Reads the same `ctx.meta[:pf_vars]` /
+`ctx.meta[:feeder]` / `ctx.meta[:T]` stash as `assert_socp_exact!`.
+"""
+function socp_gap_report(ctx::ModelContext; topn::Int = 20, rtol::Real = 1e-4, atol::Real = 1e-6)
+    pv = ctx.meta[:pf_vars]
+    feeder = ctx.meta[:feeder]
+    T = ctx.meta[:T]
+
+    rows = NamedTuple[]
+    for (b, br) in enumerate(feeder.branches), t in 1:T
+        l = value(pv.l[b, t])
+        v_from = value(pv.v[br.from, t])
+        P = value(pv.P[b, t])
+        Q = value(pv.Q[b, t])
+        lhs = l * v_from
+        rhs = P^2 + Q^2
+        gap = abs(lhs - rhs)
+        tol = atol + rtol * max(abs(lhs), abs(rhs))
+        loading = br.smax == SMAX_NO_LIMIT ? missing : sqrt(P^2 + Q^2) / br.smax
+        push!(
+            rows,
+            (;
+                b = b, from = br.from, to = br.to,
+                r_pu = br.r, x_pu = br.x,
+                l = l, v_from = v_from, P = P, Q = Q, t = t,
+                gap = gap, ratio = gap / tol,
+                reverse_flow = P < 0.0,
+                loading = loading,
+            ),
+        )
+    end
+    sort!(rows; by = row -> (-row.gap, row.b, row.t))
+    return rows[1:min(topn, length(rows))]
+end
+
+export assert_socp_exact!, socp_relaxation_gap, socp_gap_report
