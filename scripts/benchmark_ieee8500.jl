@@ -513,7 +513,19 @@ function run_scs_comparison(feeder, aggs, λ0, dadp_clarabel, T_horizon::Int)
 end
 
 const _DEFAULT_DENSITY_GRID = "0.1,0.25,0.5,1.0"   # D-01's illustrative grid (Claude's discretion)
-const _DEFAULT_TIME_LIMIT_S = "120"                # D-18's per-point cap (Claude's discretion)
+# 2026-08-22 follow-up (quick task 260822-f0b, `25-VERIFICATION.md`): raised from the original
+# "120" (D-18's original per-point cap). The headline T=10 point hit `budget_exceeded` after
+# only 6 ADMM iterations at ~20s/iteration under the OLD 120s cap — far too short to observe
+# convergence. ADMM elsewhere in this project has been observed converging anywhere from ~4
+# iterations (near-lossless 2-bus/low-density cases) up to the ~55-99 iteration range on
+# congestion-driven fixtures (e.g. the IEEE-13 ground crossval in `test/test_admm.jl`, ~99
+# iterations at ρ=100). At ~20s/iteration, 1200s (20 minutes) covers ~60 iterations of pure
+# solve time with margin left for JuMP assembly/build-once overhead, comfortably spanning the
+# observed range without being open-ended. This ONLY affects invocations that don't pass an
+# explicit `--time-limit`; `_QUICK_TIME_LIMIT_S` below (and everything `--quick`/the D-16
+# goldens depend on) is UNTOUCHED — `run_sweep_mode`'s own `quick ? _QUICK_TIME_LIMIT_S :
+# _DEFAULT_TIME_LIMIT_S` never consults this constant under `--quick`.
+const _DEFAULT_TIME_LIMIT_S = "1200"               # D-18's per-point cap (Claude's discretion)
 # --quick's OWN tighter cap (Claude's discretion, measured 2026-08-21 on a quiet 4-core machine).
 # At the FULL T=24 horizon, ieee8500-mv/density=0.1's CENTRALIZED point alone costs ~76s wall
 # (43s JuMP assembly + 33s solve — assembly is NOT solver-time-limit-bounded, so a smaller
