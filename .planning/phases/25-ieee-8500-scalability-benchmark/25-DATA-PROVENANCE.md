@@ -56,3 +56,45 @@ coordinates are wanted for figures).
 Expect ~4.9k buses after positive-sequence collapse (2526 MV records collapse to ~2.5k MV buses,
 +1177 `X*`, +1177 `SX*`). The "8500-node" name counts per-phase nodes — carry the IN-02 caveat that
 `ieee13.jl` and `ieee123.jl` already carry.
+
+## Deviation from verbatim transcription: one degenerate MV busbar-tie edge (2026-08-21, phase-25 gap closure)
+
+**The committed `src/data/ieee8500_impedances.jl` is NOT a byte-for-byte verbatim transcription of
+the vendored source for ONE edge.** Every other entry in `IEEE8500_MV_BRANCH_RX_OHMS` is computed
+directly from the source `.dss` text with no reinterpretation.
+
+**The exception:** `Lines.dss` line 4, `New Line.HVMV_Sub_connector bus1=_HVMV_Sub_LSB
+bus2=HVMV_Sub_48332 length=0.001 units=km r1=0.001 x1=0.01 ...` — the substation Low Side Bus
+busbar tie. Literal reduction gives `r_ohm=1e-6`, `x_ohm=1e-5` (`length=0.001 km` is the source's
+own placeholder minimum, not a surveyed span — this is a MODELING PLACEHOLDER for a busbar tie,
+not a physical conductor run). At this fixture's own per-unit base (`S_base=0.5 MVA`,
+`V_base=12.47 kV`, `Zbase≈311.0 Ω`), that is `r≈3.2e-9 pu` — six orders of magnitude below this
+project's own D-13 near-ideal convention (`IEEE123_SWITCH_R=3e-4 pu`/`IEEE123_SWITCH_X=1.5e-4 pu`).
+
+**Why this required a fix:** plan 25-05's noise-floor calibration (see `deferred-items.md` item 1)
+found this SAME branch dominates the SOCP cone-residual scan on BOTH IEEE-8500 fixtures at every
+tolerance rung — the LinDistFlow SOC-exactness argument needs a strictly-positive `r·l` loss-cost
+gradient to drive the squared-current variable to its tight value, and a near-zero-`r` branch has
+essentially no such gradient. This is a STRUCTURAL relaxation failure, not numerical noise.
+
+**The fix (this gap-closure task, `scripts/reduce_ieee8500_impedances.jl`'s
+`reshape_near_zero_mv_edges!`):** the ONE MV segment whose parsed `r_ohm < 1e-5 Ω` (an explicit,
+documented threshold, not a bus-pair-name match — a loud assert requires EXACTLY 1 match) has its
+`r_ohm`/`x_ohm` VALUES reassigned, in place, to the D-13 near-ideal Ω-equivalent of
+`IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at THIS fixture's own MV base: `(r=0.09330 Ω, x=0.04665 Ω)`.
+The edge KEEPS its native entry in `IEEE8500_MV_BRANCH_RX_OHMS` (same bus pair, same table, same
+connectivity — `IEEE8500_REGULATOR_EDGES` is untouched, still 43 entries) — this is a physically
+motivated data-shaping decision (busbar ties are not physical lines, and every regulator bank,
+the substation transformer, and 38 switch ties in this same fixture already receive the identical
+near-ideal treatment via a different mechanism), not a numerical hack.
+
+**Measured effect** (see `deferred-items.md` item 1 for the full before/after): the `ieee8500-mv`
+noise-floor calibration went from `tol=1e-6 gap=0.4960 -> tol=1e-8 gap=0.1796` (STALLING, then NaN
+at tighter rungs) to `tol=1e-6 gap=0.03128 -> tol=1e-8 gap=0.001141` (shrinking 27x tighter, a 157x
+improvement at `tol=1e-8`, and now behaving like genuine numerical noise rather than a structural
+floor).
+
+A reader reproducing this table from the vendored source with a literal transcription will get a
+DIFFERENT value for `("HVMV_Sub_48332", "_HVMV_Sub_LSB")` than the committed table — this is
+intentional and documented here, in `deferred-items.md`, and in the reduction script's own
+in-code comments (all three locations point back to each other).
