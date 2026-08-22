@@ -404,7 +404,9 @@ function run_calibrate_mode(args)
         # silently drop a previously-measured row).
         key(r) = (r.fixture, r.density, r.t_horizon)
         new_keys = Set(key(r) for r in eachrow(df_new))
-        vcat(filter(r -> !(key(r) in new_keys), df_old), df_new)
+        # `cols = :union`: same schema-evolution safety as `run_sweep_mode`'s own upsert below —
+        # see that vcat's comment for the full rationale (Rule 1 bug fix).
+        vcat(filter(r -> !(key(r) in new_keys), df_old), df_new; cols = :union)
     else
         df_new
     end
@@ -812,7 +814,15 @@ function run_sweep_mode(args)
         df_old = CSV.read(csv_path, DataFrame)
         key(r) = (r.fixture, r.density, r.solver)
         new_keys = Set(key(r) for r in eachrow(df_new))
-        vcat(filter(r -> !(key(r) in new_keys), df_old), df_new)
+        # `cols = :union` (Rule 1 bug fix, discovered live 2026-08-22 round-2 follow-up): a
+        # SCHEMA-EVOLVING upsert (this task just added `admm_atol_used`; `clarabel_tol_gap` was
+        # added the SAME way by quick task 260822-f0b) otherwise throws `ArgumentError: column(s)
+        # ... are missing` the moment `df_old` (rows written under an OLDER column set) is vcat'd
+        # against `df_new` (this invocation's, under the CURRENT column set) with DataFrames'
+        # default `cols = :setequal`. `:union` fills the missing cells with `missing` instead —
+        # never silently dropping a previously-committed row (T-25-11) just because it predates a
+        # later column addition.
+        vcat(filter(r -> !(key(r) in new_keys), df_old), df_new; cols = :union)
     else
         df_new
     end
