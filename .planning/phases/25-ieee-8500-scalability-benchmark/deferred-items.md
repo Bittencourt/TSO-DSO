@@ -33,6 +33,45 @@ gate. This is documented in-code and here, not silently absorbed.
 **Deferred (out of plan 25-05's `<files>` scope — only `src/models/exactness.jl`,
 `scripts/benchmark_ieee8500.jl`, `test/test_benchmark_ieee8500.jl` are authorized):**
 
+### Item 1 — RESOLVED 2026-08-21 (phase-25 gap-closure task, authorized directly by the user)
+
+`scripts/reduce_ieee8500_impedances.jl`'s `reshape_near_zero_mv_edges!` now detects this ONE
+degenerate MV segment (`("HVMV_Sub_48332", "_HVMV_Sub_LSB")`, the substation Low Side Bus busbar
+tie) via an explicit, documented threshold (`r_ohm < MV_NEAR_ZERO_R_THRESHOLD_OHM = 1e-5 Ω`, with
+a loud assert-exactly-1 check so a future data refresh that changes this set fails fast) and
+reassigns its `r_ohm`/`x_ohm` VALUES in place — same bus pair, same `IEEE8500_MV_BRANCH_RX_OHMS`
+table, same connectivity — to the D-13 near-ideal Ω-equivalent of `IEEE123_SWITCH_R`/
+`IEEE123_SWITCH_X` at this fixture's own MV per-unit base: `(r=0.09330 Ω, x=0.04665 Ω)` (was
+`(1e-6 Ω, 1e-5 Ω)`). `IEEE8500_REGULATOR_EDGES` is untouched (still 43 entries); MV edge count
+(2477), and both fixtures' bus/branch counts (4875/4874, 2521/2520) are unchanged. Full
+data-shaping rationale in `25-DATA-PROVENANCE.md`'s new "Deviation from verbatim transcription"
+section.
+
+**Measured before/after** (both measured via `scripts/benchmark_ieee8500.jl
+--calibrate-noise-floor`, machine confirmed quiet both times):
+
+| Fixture | Rung | Before (measured_gap) | After (measured_gap) |
+|---|---|---|---|
+| `ieee8500-mv` | tol=1e-6 | 0.4960 | 0.03128 |
+| `ieee8500-mv` | tol=1e-8 | 0.1796 (stalling, then NaN at tighter rungs) | 0.001141 (shrinking 27x tighter — genuine noise-like behavior) |
+
+That is a 157x improvement in the measured floor at `tol=1e-8`, AND — more importantly than the
+raw ratio — the residual now SHRINKS as tolerance tightens instead of plateauing, i.e. it now
+behaves like real numerical noise rather than a structural floor. See Task 3 of this gap-closure
+task's `25-07-SUMMARY.md` for the full 5-rung ladder and the re-calibrated
+`IEEE8500_MV_EXACT_ATOL`/`IEEE8500_EXACT_ATOL` constants.
+
+**IMPORTANT HONEST CAVEAT — this fix does NOT make a converged ADMM consolidation work.** Even
+after this fix the floor is still `~1e-3` scale, which STILL exceeds `solve_admm`'s hardcoded
+final-consolidation `assert_socp_exact!` default of `atol=1e-6` (no override parameter exists —
+see Item 3 below, which remains OPEN). A genuinely CONVERGED, CONSOLIDATED ADMM point on either
+IEEE-8500 fixture can still throw at that gate. This fix closes the STRUCTURAL relaxation failure
+(the residual now behaves like noise and shrinks with tolerance) but does NOT close the numerical
+gap between that noise floor and the project's existing `1e-6` default gate — that gap is Item 3's
+concern, still open.
+
+### Items 2 and 3 — still OPEN (NOT in scope for this gap-closure task)**
+
 - Whether `scripts/reduce_ieee8500_impedances.jl` / `src/data/ieee8500.jl` should apply the SAME
   D-13 near-ideal-branch treatment (assign `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` in place of the
   literal near-zero real Ω value) to this specific real connector segment — a documented
