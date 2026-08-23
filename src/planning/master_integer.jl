@@ -365,4 +365,162 @@ function add_feasibility_cut!(
     return master
 end
 
-export BendersMasterInteger, build_master_integer
+"""
+    add_ll_cut!(master::BendersMasterInteger, b_trial::AbstractVector{<:Real},
+               Q_nu::Real, L::Real) -> BendersMasterInteger
+
+Append ONE new persistent Laporte-Louveaux "no-good cut with a value" row to
+`master.model` — NEVER a rebuild — over the RAW binary vector `master.b`
+(24-RESEARCH.md Priority Finding 1 / Pitfall 1: writing this cut over the
+DERIVED `master.y_inv` instead would silently invalidate the whole
+combinatorial argument; this function never reads `master.y_inv`).
+
+**Citation:** G. Laporte and F. V. Louveaux, "The integer L-shaped method for
+stochastic integer programs with complete recourse," *Operations Research
+Letters* 13 (1993), pp. 133-142; also Birge & Louveaux, *Introduction to
+Stochastic Programming*, 2nd ed., Sec. 5.2 ("Binary First-Stage Variables"),
+Springer, 2011.
+
+Given the incumbent trial `b^ν = round.(Int, b_trial)`, its "on" set
+`S^ν = {i : b^ν_i = 1}`, and its EXACT recourse value `Q_nu = Q(b^ν)` (already
+computed by the caller — never estimated here), the cut is
+
+```
+D(b) = Σ_{i∈S^ν} b[i] − Σ_{i∉S^ν} b[i] − |S^ν| + 1
+θ = master.α_op + master.α_x
+θ >= (Q_nu − L) * D(b) + L
+```
+
+**One-sentence property (verified exhaustively, not taken on faith, by this
+plan's own K=4 16-corner unit test):** the cut is TIGHT at `b = b^ν`
+(`D = 1`, reduces to `θ >= Q_nu`) and adds ZERO new information — is IMPLIED
+by the master's own existing `θ >= L` epigraph bound — at every other binary
+corner (`D <= -1`, reduces to `θ >= L - 2k(Q_nu - L) <= L` for Hamming
+distance `k >= 1`).
+
+Throws `ArgumentError` if `length(b_trial) != master.K` or any entry of
+`b_trial` is non-finite (WR-03 discipline, reused verbatim from
+`add_optimality_cut!`/`add_feasibility_cut!`) — a malformed trial must fail
+loudly BEFORE corrupting the build-once master's persistent constraint set.
+
+Logs `(; kind = :ll, b_trial = round.(Int, b_trial), Q_nu, L)` to
+`master.cuts` and returns `master`.
+"""
+function add_ll_cut!(
+    master::BendersMasterInteger,
+    b_trial::AbstractVector{<:Real},
+    Q_nu::Real,
+    L::Real,
+)
+    length(b_trial) == master.K ||
+        throw(ArgumentError("add_ll_cut!: b_trial has length $(length(b_trial)), expected K=$(master.K)"))
+    all(isfinite, b_trial) ||
+        throw(ArgumentError("add_ll_cut!: b_trial contains a non-finite entry: $b_trial"))
+    isfinite(Q_nu) || throw(ArgumentError("add_ll_cut!: Q_nu must be finite, got $Q_nu"))
+    isfinite(L) || throw(ArgumentError("add_ll_cut!: L must be finite, got $L"))
+
+    b_nu = round.(Int, b_trial)
+    K = master.K
+    S = findall(==(1), b_nu)
+    Sc = setdiff(1:K, S)
+    # RAW binaries master.b ONLY — never master.y_inv (Pitfall 1).
+    Dexpr = sum(master.b[i] for i in S; init = 0) -
+            sum(master.b[i] for i in Sc; init = 0) - length(S) + 1
+    θ = master.α_op + master.α_x
+    @constraint(master.model, θ >= (Q_nu - L) * Dexpr + L)
+    push!(master.cuts, (; kind = :ll, b_trial = b_nu, Q_nu, L))
+    return master
+end
+
+"""
+    add_nogood_cut!(master::BendersMasterInteger,
+                    b_trial::AbstractVector{<:Real}) -> BendersMasterInteger
+
+Append ONE new persistent classical (un-weighted) no-good cut row to
+`master.model` — NEVER a rebuild — forbidding exact re-visitation of the
+incumbent trial `b^ν = round.(Int, b_trial)`. D-16's documented anti-stall
+FALLBACK, strictly weaker than [`add_ll_cut!`](@ref) (it pins no objective
+value), which is why a run that needs this cut is attributed `:nogood_assisted`
+rather than presented as clean Laporte-Louveaux convergence.
+
+**Citation:** same source as [`add_ll_cut!`](@ref) (Laporte & Louveaux 1993 /
+Birge & Louveaux 2011 Sec 5.2) — the classical no-good cut this method
+generalizes.
+
+Given `S^ν = {i : b^ν_i = 1}`, the cut is
+
+```
+Σ_{i∈S^ν} (1 - b[i]) + Σ_{i∉S^ν} b[i] >= 1
+```
+
+which is satisfied by every binary vector EXCEPT `b^ν` itself (RAW binaries
+`master.b` only — never `master.y_inv`, same Pitfall 1 discipline as
+`add_ll_cut!`).
+
+Throws `ArgumentError` under the same conditions as [`add_ll_cut!`](@ref)
+(length mismatch against `master.K`, or a non-finite `b_trial` entry).
+
+Logs `(; kind = :nogood, b_trial = round.(Int, b_trial))` to `master.cuts`
+and returns `master`.
+"""
+function add_nogood_cut!(master::BendersMasterInteger, b_trial::AbstractVector{<:Real})
+    length(b_trial) == master.K ||
+        throw(ArgumentError("add_nogood_cut!: b_trial has length $(length(b_trial)), expected K=$(master.K)"))
+    all(isfinite, b_trial) ||
+        throw(ArgumentError("add_nogood_cut!: b_trial contains a non-finite entry: $b_trial"))
+
+    b_nu = round.(Int, b_trial)
+    K = master.K
+    S = findall(==(1), b_nu)
+    Sc = setdiff(1:K, S)
+    @constraint(
+        master.model,
+        sum(1 - master.b[i] for i in S; init = 0) +
+        sum(master.b[i] for i in Sc; init = 0) >= 1
+    )
+    push!(master.cuts, (; kind = :nogood, b_trial = b_nu))
+    return master
+end
+
+"""
+    apply_integer_cuts!(master, lb_res, Q_nu) -> NamedTuple{(:nogood_fired,)}
+
+Dispatched entry point unifying the integer-cut mechanism (plan 24-03) behind
+ONE call site (wired into `solve_stackelberg!` by plan 24-04):
+
+  - `apply_integer_cuts!(::BendersMaster, lb_res, Q_nu)` — a TRUE no-op for the
+    continuous master: touches ZERO fields of `lb_res` (compiles/runs
+    identically regardless of what `lb_res` actually contains), always
+    returns `(; nogood_fired = false)`. A future accidental field access here
+    would surface as a compile-time-visible `MethodError`/`ArgumentError` on
+    the continuous path's OWN test suite, never a silent behavior change
+    (T-24-08).
+  - `apply_integer_cuts!(master::BendersMasterInteger, lb_res, Q_nu)` — the
+    real logic: reads `b_trial = lb_res.b` (the field `solve_master!` already
+    returns, plan 24-01), ALWAYS calls
+    `add_ll_cut!(master, b_trial, Q_nu, master.L)` (24-RESEARCH.md Finding 2:
+    the LL cut coexists with, never replaces, the continuous `:op`/`:x` cuts),
+    then checks whether `key = round.(Int, b_trial)` has already been visited
+    (`master.visited`, D-16's anti-stall bookkeeping) — if so (a detected
+    STALL, not every iteration), ALSO calls `add_nogood_cut!(master, b_trial)`.
+    `key` is recorded into `master.visited` regardless of the stall outcome.
+
+Returns `(; nogood_fired::Bool)` — `true` only on the integer path's stalled
+branch; always `false` on the continuous no-op.
+"""
+apply_integer_cuts!(::BendersMaster, lb_res, Q_nu) = (; nogood_fired = false)
+
+function apply_integer_cuts!(master::BendersMasterInteger, lb_res, Q_nu)
+    b_trial = lb_res.b
+    add_ll_cut!(master, b_trial, Q_nu, master.L)
+    key = round.(Int, b_trial)
+    stalled = key in master.visited
+    push!(master.visited, key)
+    if stalled
+        add_nogood_cut!(master, b_trial)
+    end
+    return (; nogood_fired = stalled)
+end
+
+export BendersMasterInteger,
+    build_master_integer, add_ll_cut!, add_nogood_cut!, apply_integer_cuts!

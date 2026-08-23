@@ -74,6 +74,14 @@ Fields:
     (master-only on the feasibility branch; master + oracle on the optimality branch),
     sourced from `solve_with_retry!`'s own `attempts_out` mechanism (see file header) —
     never an assumed/log-scraped estimate. `0` is the normal, no-retry case.
+  - `nogood_count_trace::Vector{Int}` — Phase 24 (INT-02, D-16, plan 24-03), ADDITIVE:
+    the number of D-16 anti-stall no-good cuts fired at this iteration (`0` on every
+    continuous-path row and on every integer-path row where `apply_integer_cuts!`
+    did NOT detect a stall — see `master_integer.jl`). `push!`'s `nogood_count` keyword
+    defaults to `0` so every PRE-EXISTING `benders.jl` call site (which omits this
+    keyword entirely) keeps compiling and records `0` here, byte-identical to its
+    behavior before this field existed. Never invisible (D-16's "never invisible"
+    requirement) — surfaced via `trace_summary`'s `total_nogoods`.
   - `solve_time_trace::Vector{Float64}` — monotonic-clock (`time_ns`) wall seconds
     spent inside this iteration's solve calls ONLY (master + follower, plus the
     oracle on an optimality-branch row); cut appends, `checkpoint_iteration!`'s
@@ -95,6 +103,7 @@ mutable struct BendersTrace
     master_status_trace::Vector{Symbol}
     oracle_status_trace::Vector{Symbol}
     retry_count_trace::Vector{Int}
+    nogood_count_trace::Vector{Int}
     solve_time_trace::Vector{Float64}
     iters::Int
 end
@@ -115,6 +124,7 @@ BendersTrace() = BendersTrace(
     Symbol[],
     Symbol[],
     Int[],
+    Int[],
     Float64[],
     0,
 )
@@ -131,7 +141,8 @@ end
 
 """
     push!(trace::BendersTrace, k::Integer; LB, UB, gap, cut_type, n_cuts,
-          master_status, oracle_status = :not_solved, retry_count, solve_time)
+          master_status, oracle_status = :not_solved, retry_count,
+          nogood_count::Integer = 0, solve_time)
         -> BendersTrace
 
 Append ONE new row to `trace`, incrementing `trace.iters`. `k` must be the next
@@ -148,6 +159,8 @@ Guards (each a distinct `ArgumentError`, fired BEFORE any field is mutated):
   - `retry_count >= 0` — a count of ACTUAL retries consumed this iteration (see
     `benders.jl`'s instrumentation for exactly how it is computed); `0` is the normal,
     no-retry case, not an edge case to special-case away.
+  - `nogood_count >= 0` (Phase 24, D-16, mirrors `retry_count`'s own guard) — the number
+    of D-16 anti-stall no-good cuts fired at this iteration.
 
 `UB`/`gap` are DELIBERATELY NOT guarded for finiteness: `UB = Inf` (before any
 optimality iteration) and `gap = NaN` (every feasibility-branch row) are legitimate
@@ -155,6 +168,10 @@ sentinel values, not defects to reject. `oracle_status` needs no additional guar
 beyond its `Symbol` type — it is either the sentinel `:not_solved` (feasibility-branch
 default) or a genuine termination-status symbol (optimality branch), mirroring
 `master_status`'s own unvalidated-`Symbol` treatment.
+
+**`nogood_count` is ADDITIVE (Phase 24, plan 24-03): defaults to `0`.** Every
+PRE-EXISTING `benders.jl` call site omits this keyword entirely and keeps compiling,
+recording `0` here — byte-identical to its behavior before this keyword existed.
 
 Returns `trace`.
 """
@@ -169,6 +186,7 @@ function Base.push!(
     master_status::Symbol,
     oracle_status::Symbol = :not_solved,
     retry_count::Integer,
+    nogood_count::Integer = 0,
     solve_time::Real,
 )
     _assert_sequential_trace(trace, k)
@@ -184,6 +202,8 @@ function Base.push!(
     n_cuts >= 0 || throw(ArgumentError("push!: n_cuts must be >= 0, got $n_cuts"))
     retry_count >= 0 ||
         throw(ArgumentError("push!: retry_count must be >= 0, got $retry_count"))
+    nogood_count >= 0 ||
+        throw(ArgumentError("push!: nogood_count must be >= 0, got $nogood_count"))
 
     push!(trace.iter_trace, Int(k))
     push!(trace.LB_trace, float(LB))
@@ -194,6 +214,7 @@ function Base.push!(
     push!(trace.master_status_trace, master_status)
     push!(trace.oracle_status_trace, oracle_status)
     push!(trace.retry_count_trace, Int(retry_count))
+    push!(trace.nogood_count_trace, Int(nogood_count))
     push!(trace.solve_time_trace, float(solve_time))
     trace.iters += 1
     return trace
@@ -215,11 +236,19 @@ end
 """
     trace_summary(trace::BendersTrace) -> NamedTuple
 
-Summarize `trace` as `(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries)`. On an empty trace, returns `iters = 0` and all others as `NaN`/`0`
-sentinels. Otherwise `final_LB`/`final_UB`/`final_gap` are the LAST recorded row's
-values, `max_cuts = maximum(trace.n_cuts_trace)`, and `total_retries = sum(trace.retry_count_trace)` — the EMPIRICAL retry count (plan-checker blocker fix,
-revision 1): a plain, always-computed sum over the per-iteration column, never an
-aggregate log-scrape estimate.
+Summarize `trace` as
+`(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries, total_nogoods)`.
+On an empty trace, returns `iters = 0` and all others as `NaN`/`0` sentinels.
+Otherwise `final_LB`/`final_UB`/`final_gap` are the LAST recorded row's values,
+`max_cuts = maximum(trace.n_cuts_trace)`, `total_retries = sum(trace.retry_count_trace)`
+— the EMPIRICAL retry count (plan-checker blocker fix, revision 1): a plain,
+always-computed sum over the per-iteration column, never an aggregate log-scrape
+estimate — and `total_nogoods = sum(trace.nogood_count_trace)` (Phase 24, D-16,
+plan 24-03, ADDITIVE, mirrors `total_retries`'s own `sum(...)` pattern exactly):
+D-16's "never invisible" requirement for the count of anti-stall no-good cuts fired
+across the whole run. `m > 0` here is informational only — it never fails a run;
+`solve_stackelberg!` (plan 24-04) downgrades its own `converged_via` attribution to
+`:nogood_assisted` when `total_nogoods > 0`.
 """
 function trace_summary(trace::BendersTrace)
     trace.iters == 0 && return (;
@@ -229,6 +258,7 @@ function trace_summary(trace::BendersTrace)
         final_gap = NaN,
         max_cuts = 0,
         total_retries = 0,
+        total_nogoods = 0,
     )
     return (;
         iters = trace.iters,
@@ -237,6 +267,7 @@ function trace_summary(trace::BendersTrace)
         final_gap = last(trace.gap_trace),
         max_cuts = maximum(trace.n_cuts_trace),
         total_retries = sum(trace.retry_count_trace),
+        total_nogoods = sum(trace.nogood_count_trace),
     )
 end
 

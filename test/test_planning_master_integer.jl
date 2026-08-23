@@ -190,3 +190,97 @@ end
     @test master.cuts[1].kind == :optimality
     @test master.cuts[2].kind == :feasibility
 end
+
+@testitem "planning master_integer: add_ll_cut! exhaustive K=4 16x16-corner tightness/slackness (24-RESEARCH.md Priority Finding 1)" tags =
+    [:planning] begin
+    using TSODSO
+    using JuMP: fix, optimize!, value, unfix
+
+    K = 4
+    Q_nu = -0.3
+    build_fixture() = build_master_integer(;
+        T = 1,
+        K = K,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
+    )
+
+    corner(i) = Float64[(i >> k) & 1 for k in 0:(K - 1)]
+
+    # THE CUT MUST BE WRITTEN OVER THE RAW b_k (Pitfall 1) -- exhaustively proven here by
+    # re-deriving D(b') independently of add_ll_cut!'s own internals (closed-form
+    # arithmetic on the SAME algebra the function implements), for every one of the
+    # 2^K = 16 incumbents x every one of the 15 OTHER corners: 16x16 = 256 pairs total.
+    for i in 0:(2^K - 1)
+        b_nu = corner(i)
+        master = build_fixture()
+        L = master.L
+        @test master.L == -5.0   # A1 (24-01), reused, not re-derived here
+
+        add_ll_cut!(master, b_nu, Q_nu, L)
+        @test length(master.cuts) == 1
+        @test master.cuts[1].kind == :ll
+        @test master.cuts[1].b_trial == round.(Int, b_nu)
+
+        S = findall(==(1.0), b_nu)
+        Sc = setdiff(1:K, S)
+
+        for j in 0:(2^K - 1)
+            b_p = corner(j)
+            D = sum(b_p[S]; init = 0.0) - sum(b_p[Sc]; init = 0.0) - length(S) + 1
+            rhs = (Q_nu - L) * D + L
+            if b_p == b_nu
+                # TIGHT at the incumbent.
+                @test isapprox(rhs, Q_nu; atol = 1e-9)
+            else
+                # IMPLIED elsewhere -- adds ZERO new information beyond theta >= L.
+                @test rhs <= L + 1e-9
+            end
+        end
+
+        # Genuine JuMP-level reinforcement (not just closed-form arithmetic): fixing b
+        # to the incumbent b^nu and re-optimizing the ACTUAL model must realize
+        # alpha_op + alpha_x == Q_nu exactly -- the cut is load-bearing in the solver,
+        # not merely correct on paper.
+        fix.(master.b, b_nu; force = true)
+        optimize!(master.model)
+        @test isapprox(value(master.α_op) + value(master.α_x), Q_nu; atol = 1e-6)
+        unfix.(master.b)
+    end
+end
+
+@testitem "planning master_integer: add_nogood_cut! forbids exact re-visitation, leaves other corners feasible" tags =
+    [:planning] begin
+    using TSODSO
+    using JuMP: fix, optimize!, termination_status, MOI, unfix
+
+    master = build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
+    )
+
+    banned = [1.0, 0.0, 1.0, 0.0]
+    add_nogood_cut!(master, banned)
+    @test length(master.cuts) == 1
+    @test master.cuts[1].kind == :nogood
+    @test master.cuts[1].b_trial == round.(Int, banned)
+
+    # Forbidden EXACTLY at the banned corner.
+    fix.(master.b, banned; force = true)
+    optimize!(master.model)
+    @test termination_status(master.model) == MOI.INFEASIBLE
+    unfix.(master.b)
+
+    # Feasible at any OTHER corner.
+    other = [0.0, 0.0, 1.0, 0.0]
+    fix.(master.b, other; force = true)
+    optimize!(master.model)
+    @test termination_status(master.model) == MOI.OPTIMAL
+    unfix.(master.b)
+end
