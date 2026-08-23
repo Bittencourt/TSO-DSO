@@ -45,6 +45,11 @@ Last activity: 2026-08-21 -- Phase 25 execution started
 | 260807-7nz | Rewrite PV-boom HTML report as rich educational walkthrough (MathML equations, model/experiment/results narrative) | 2026-08-07 | 7d41053 | [260807-7nz-rewrite-pv-boom-html-report-as-rich-educ](./quick/260807-7nz-rewrite-pv-boom-html-report-as-rich-educ/) |
 | 260807-bv8 | PV-boom report v2 (scripts/pv_boom_report_v2.jl): review-hardened — source citations, provenance tags, notation table, SVG architecture diagram, limitations section; v1 kept byte-identical | 2026-08-07 | f7487fa | [260807-bv8-pv-boom-report-v2-review-hardened-educat](./quick/260807-bv8-pv-boom-report-v2-review-hardened-educat/) |
 | 260822-f0b | Phase-25 follow-up — clarabel-tol flag, ADMM exactness-gate override seam, harness time-limit raise | 2026-08-22 | 8673cc1 | [260822-f0b-phase-25-followup-clarabel-tol-flag-admm](./quick/260822-f0b-phase-25-followup-clarabel-tol-flag-admm/) |
+| 260822-hld | Thread the ADMM exactness atol seam into the harness + point-appropriate noise-floor calibration | 2026-08-23 | b1e42ef | [260822-hld-phase-25-round2-thread-admm-exactness-at](./quick/260822-hld-phase-25-round2-thread-admm-exactness-at/) |
+| 260822-oi7 | Per-branch SOCP cone-residual diagnostic — pin the IEEE-8500 inexactness mechanism (verdict: STRUCTURAL) | 2026-08-23 | 55c5d39 | [260822-oi7-pin-ieee-8500-socp-inexactness-mechanism](./quick/260822-oi7-pin-ieee-8500-socp-inexactness-mechanism/) |
+| 260822-pxb | Zero-length bus-merge reduction replacing impedance fabrication (3 merges) | 2026-08-23 | eeabcbe | [260822-pxb-ieee-8500-zero-length-bus-merge-replacin](./quick/260822-pxb-ieee-8500-zero-length-bus-merge-replacin/) |
+| 260822-rle | Widen bus-merge threshold to sub-metre (6 more merges) — SOCP exactness recovered on all 3 points | 2026-08-23 | 8e804f7 | [260822-rle-widen-ieee-8500-bus-merge-threshold-to-s](./quick/260822-rle-widen-ieee-8500-bus-merge-threshold-to-s/) |
+| 260822-tyf | Typst academic report: IEEE-8500 SOCP-exactness investigation (pt-BR) | 2026-08-23 | f360b50 | [260822-tyf-typst-academic-report-ieee-8500-socp-exa](./quick/260822-tyf-typst-academic-report-ieee-8500-socp-exa/) |
 
 ## Performance Metrics
 
