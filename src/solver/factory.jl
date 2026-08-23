@@ -56,8 +56,16 @@ naming the concrete solver outside this file (review WR-04).
 select_optimizer(::LP) =
     optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "on", "output_flag" => false)
 
+# Phase 24 (24-RESEARCH.md Priority Finding 4, live-verified against the installed HiGHS
+# 1.24.1): the runtime default `mip_rel_gap = 1e-4` is NOT overridden by `output_flag =>
+# false` alone — a MILP master could report `objective_value` up to 1e-4 RELATIVE short of
+# its own true optimum for the current cut set, silently laundering any later "exact lattice
+# termination" claim built on top of it (D-13). Set explicitly to `0.0`. `MILP()` had ZERO
+# call sites before this phase (confirmed repo-wide), so this changes no existing behavior.
+# Empirically verified (test/test_solver_factory_milp.jl) that `mip_rel_gap => 0.0` does NOT
+# stall branch-and-bound on this project's tiny toy instances.
 select_optimizer(::MILP) =
-    optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false)
+    optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false, "mip_rel_gap" => 0.0)
 
 select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose" => false)
 

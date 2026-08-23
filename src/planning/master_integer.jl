@@ -1,0 +1,223 @@
+# src/planning/master_integer.jl
+#
+# SEAM: build-once binary-expansion MILP Benders master (Phase 24, INT-01).
+# OWNER: plan 24-01.
+#
+# A NEW, COMPLETELY SEPARATE builder alongside the continuous `build_master`
+# (master.jl, D-05) — NOT an `integer=false` flag on the existing builder. The
+# continuous v2.0 path stays byte-identical BY CONSTRUCTION: this file never
+# touches master.jl, so the PVAL-02..04 goldens remain trivially safe to diff
+# against.
+#
+# WHY A NEW STRUCT, NOT `BendersMaster` REUSED (24-RESEARCH.md Priority Finding 1 /
+# Pattern 2): `add_optimality_cut!`/`add_feasibility_cut!` dispatch on the CONCRETE
+# `BendersMaster` type, and that struct has no slot for the raw binary vector `b`
+# the Laporte-Louveaux (LL) cut needs — the LL cut is written directly over the
+# raw 0/1 decision variables, never over the derived continuous expression
+# `y_inv` (Pitfall 1). `BendersMasterInteger` adds that slot; plan 24-02 adds the
+# matching `add_optimality_cut!`/`add_feasibility_cut!` overloads for this type.
+#
+# `L = α_op_lb + α_x_lb` (Pitfall M1's finite epigraph lower bound, reused
+# verbatim per D-08's "reuse the seam" spirit) doubles as the Laporte-Louveaux
+# cut's required global lower bound `L` on the recourse `Q(y_inv)` — pinned once
+# at construction so plan 24-02's cut code never re-derives it.
+
+using JuMP
+
+"""
+    BendersMasterInteger{Y,Z,AOP,AX,B}
+
+The built-ONCE binary-expansion MILP Benders master (Phase 24, INT-01): a
+completely separate sibling of [`BendersMaster`](@ref) (D-05) — the leader's
+own MILP over K raw binary variables `b`, a DERIVED continuous investment
+expression `y_inv` (an `AffExpr` over `b`, D-01), coupling flow `z[t]`, and the
+SAME two epigraph variables `α_op`/`α_x` (Pitfall M1 discipline reused
+unchanged) — with cuts appended as persistent `@constraint` rows, never
+rebuilt, mirroring `BendersMaster`'s own mutate-without-rebuild idiom.
+
+# Fields
+
+  - `model::Model` — the master MILP, built ONCE via
+    `Model(select_optimizer(MILP()))` (INFRA-02); mutated ONLY by appending new
+    `@constraint` rows (cuts), never rebuilt.
+  - `y_inv::Y` — the DERIVED continuous investment expression
+    `(y_max/2^K) * Σ_k 2^(k-1) b_k` (an `AffExpr`, D-01/D-02). Used in
+    constraints/objective exactly like the continuous master's `y_inv`
+    variable; NEVER used to reconstruct the LL cut's `S^ν` (Pitfall 1 — use
+    `b` for that).
+  - `z::Z` — the length-T coupling flow (`0 <= z[t] <= y_inv`), identical box
+    shape to `BendersMaster`.
+  - `α_op::AOP` — the oracle's own epigraph variable (`α_op >= α_op_lb`).
+  - `α_x::AX` — the follower's own epigraph variable (`α_x >= α_x_lb`).
+  - `b::B` — the raw `Vector{VariableRef}` of K binaries. Needed because the
+    Laporte-Louveaux cut (plan 24-02) is written over `b`, never over the
+    derived `y_inv` (24-RESEARCH.md Priority Finding 1 / Pitfall 1).
+  - `K::Int` — the number of binary blocks in the expansion.
+  - `T::Int` — the horizon.
+  - `c_y::Float64` — the leader's flexibility-investment unit cost.
+  - `y_max::Float64` — the nominal investment ceiling. NOTE (D-02): the
+    all-ones corner reaches `y_max*(1 - 2^-K)`, NOT `y_max` itself — see
+    [`build_master_integer`](@ref)'s own docstring for the full lattice
+    derivation.
+  - `L::Float64` — the pinned `α_op_lb + α_x_lb`, stored once at construction
+    so plan 24-02's Laporte-Louveaux cut never has to re-derive the recourse's
+    global lower bound.
+  - `cuts::Vector{Any}` — a bookkeeping log of every cut appended, mirroring
+    `BendersMaster.cuts`'s exact convention.
+  - `visited::Set{Vector{Int}}` — empty at construction. Plan 24-02's
+    anti-stall no-good fallback (D-16) populates this with previously-visited
+    binary corners; declared here so the struct's full field list is fixed in
+    one place.
+"""
+struct BendersMasterInteger{Y, Z, AOP, AX, B}
+    model::Model
+    y_inv::Y
+    z::Z
+    α_op::AOP
+    α_x::AX
+    b::B
+    K::Int
+    T::Int
+    c_y::Float64
+    y_max::Float64
+    L::Float64
+    cuts::Vector{Any}
+    visited::Set{Vector{Int}}
+end
+
+"""
+    build_master_integer(; T::Int, K::Int = 4, c_y::Real, y_max::Real,
+                         α_op_lb::Real, α_x_lb::Real) -> BendersMasterInteger
+
+Build the binary-expansion MILP Benders master EXACTLY ONCE:
+
+ 1. Boundary guards — `T >= 1`, `K >= 1`, `y_max > 0`, `c_y >= 0` — each throws
+    `ArgumentError` naming the offending value, BEFORE any `@variable`/
+    `@objective` assembly (mirrors `build_master`'s own discipline, master.jl).
+ 2. `model = Model(select_optimizer(MILP()))` — INFRA-02, never
+    `Model(HiGHS.Optimizer)` directly.
+ 3. `b[1:K]` binary variables and the DERIVED continuous expression
+    `y_inv = (y_max/2^K) * Σ_k 2^(k-1) b_k` (D-01).
+
+    **D-02 lattice/endpoint artifact — documented here, not "fixed" elsewhere:**
+    dividing by `2^K` (NOT `2^K - 1`) means the reachable investment set is the
+    K=4 default's `{0, y_max/16, 2*y_max/16, ..., 15*y_max/16}` — for
+    `y_max = 8.0` that is `{0, 0.5, 1.0, ..., 7.5}`, a step of `0.5`. The
+    all-ones corner (`b = ones(K)`) reaches `y_max*(1 - 2^-K)`, e.g.
+    `8.0*(1 - 1/16) = 7.5` — **`y_max` itself is never attainable.** This is a
+    deliberate, accepted consequence of the round-step-size convention (D-02),
+    not a bug to be corrected by changing the divisor to `2^K - 1`.
+ 4. `z[1:T]`, `α_op >= α_op_lb`, `α_x >= α_x_lb` — SAME finite-lower-bound-at-
+    build-time discipline as `build_master` (Pitfall M1), reused for the MILP
+    master.
+ 5. `box_lo[t]: z[t] >= 0`, `box_hi[t]: z[t] <= y_inv` — identical box shape to
+    `build_master` (`y_inv` here is an `AffExpr`; JuMP supports this in
+    `@constraint` RHS unchanged).
+ 6. `Min c_y*y_inv + α_op + α_x` — identical objective shape to `build_master`.
+
+Returns a [`BendersMasterInteger`](@ref) with an empty `cuts` log and an empty
+`visited` set, and `L = α_op_lb + α_x_lb` pinned for reuse by plan 24-02's
+Laporte-Louveaux cut.
+"""
+function build_master_integer(;
+    T::Int,
+    K::Int = 4,
+    c_y::Real,
+    y_max::Real,
+    α_op_lb::Real,
+    α_x_lb::Real,
+)
+    # Boundary guards FIRST — fail here, not deep in objective assembly (mirrors
+    # build_master's own discipline, master.jl).
+    T >= 1 || throw(ArgumentError("build_master_integer needs T >= 1, got T=$T"))
+    K >= 1 || throw(ArgumentError("build_master_integer needs K >= 1, got K=$K"))
+    y_max > 0 ||
+        throw(ArgumentError("build_master_integer needs y_max > 0, got $y_max"))
+    c_y >= 0 || throw(ArgumentError("build_master_integer needs c_y >= 0, got $c_y"))
+
+    model = Model(select_optimizer(MILP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
+
+    @variable(model, b[1:K], Bin)
+    # D-01/D-02: divide by 2^K (NOT 2^K - 1) — all-ones reaches y_max*(1-2^-K), never
+    # y_max itself. Documented artifact, not a bug (see docstring above).
+    y_inv = @expression(model, (y_max / 2^K) * sum(2^(k - 1) * b[k] for k in 1:K))
+
+    @variable(model, z[t = 1:T])
+    # Pitfall M1 (reused verbatim from build_master): FINITE epigraph lower bounds
+    # declared AT BUILD TIME — the very first (zero-cut) solve depends on this.
+    @variable(model, α_op >= α_op_lb)
+    @variable(model, α_x >= α_x_lb)
+
+    # Pitfall O1 (reused verbatim from build_master): z is a physically nonnegative
+    # delivered import flow, bounded above by the leader's own (derived) investment.
+    @constraint(model, box_lo[t = 1:T], z[t] >= 0)
+    @constraint(model, box_hi[t = 1:T], z[t] <= y_inv)
+
+    @objective(model, Min, c_y * y_inv + α_op + α_x)
+
+    return BendersMasterInteger(
+        model,
+        y_inv,
+        z,
+        α_op,
+        α_x,
+        b,
+        K,
+        T,
+        Float64(c_y),
+        Float64(y_max),
+        Float64(α_op_lb + α_x_lb),
+        Any[],
+        Set{Vector{Int}}(),
+    )
+end
+
+"""
+    solve_master!(master::BendersMasterInteger; max_attempts::Int = 4,
+                 attempts_out::Union{Nothing,Ref{Int}} = nothing) -> NamedTuple
+
+Re-solve the built-ONCE [`BendersMasterInteger`](@ref) via `solve_with_retry!`
+(D-08) — NEVER the SOLE INFRA-03 choke point directly.
+
+**Deliberate divergence from `solve_master!(::BendersMaster; ...)`'s
+`dual = true` default: this method calls `solve_with_retry!` with
+`dual = false`.** HiGHS/MOI does not report a meaningful dual status for a
+genuine MIP solve — branch-and-bound has no LP dual at the integer solution in
+general — so passing `dual = true` (the continuous master's default) would
+make `is_solved_and_feasible` spuriously fail on every solve of this MILP
+master. This is a deliberate, documented divergence justified by the
+problem-class difference (LP vs. genuine MIP), NOT an accidental relaxation of
+INFRA-03's "strict solve" discipline — exercised by this file's own zero-cut
+first-solve regression test.
+
+Returns `(; y, z, LB, b)` where `y = value(master.y_inv)`,
+`z = value.(master.z)`, `LB = objective_value(master.model)`, and
+`b = value.(master.b)` — the extra `b` field (absent from the continuous
+`solve_master!`'s return) is read ONLY by plan 24-02/24-03's integer-specific
+cut/loop code via duck typing; it never needs to exist on the continuous
+return.
+"""
+function solve_master!(
+    master::BendersMasterInteger;
+    max_attempts::Int = 4,
+    attempts_out::Union{Nothing, Ref{Int}} = nothing,
+)
+    # D-08: solve_with_retry! is the SOLE solve entry point on the master, mirroring
+    # the continuous master's own discipline. dual=false: see docstring above — a
+    # genuine MIP solve has no meaningful LP dual at the integer solution.
+    solve_with_retry!(
+        master.model;
+        max_attempts = max_attempts,
+        dual = false,
+        attempts_out = attempts_out,
+    )
+
+    return (;
+        y = value(master.y_inv),
+        z = value.(master.z),
+        LB = objective_value(master.model),
+        b = value.(master.b),
+    )
+end
+
+export BendersMasterInteger, build_master_integer
