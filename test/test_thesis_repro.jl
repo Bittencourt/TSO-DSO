@@ -17,9 +17,9 @@
 # (and matches the thesis's own Case A framing, "DSO surplus -$2829 -> +$439").
 #
 # GOLDEN BAND PROVENANCE (threat T-18-04): `DSO_BAND_LO`/`DSO_BAND_HI` below are copied
-# VERBATIM from Plan 18-01's committed `results/repro_stability_check/findings.txt`
-# "RECOMMENDED BAND:" line (DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937) — NOT invented in
-# this task, enforced by this plan's `depends_on: ["18-01"]` execution ordering.
+# VERBATIM from the committed `results/repro_stability_check/findings.txt` "RECOMMENDED BAND:"
+# line — NOT invented here. RE-DERIVED by quick task 260823-gea (was DSO_BAND_HI =
+# 5.58855710237937 from Plan 18-01, now 7.211125525764296); see the UPDATE block below for why.
 #
 # The primary item runs at the EXACT Phase-17-retuned point (no population-scale
 # perturbation) where 18-01's own measurement confirms the sign flip HOLDS and the SOCP stays
@@ -40,18 +40,32 @@
 # confirmation (DADP dso>0 AND FIT dso<0) currently holds at only 2 of 5 swept points, not
 # 5 of 5 as `260726-mo7`'s SUMMARY recorded. This is a DIFFERENT numerical issue
 # (solver-convergence-at-extreme-tolerance, not SOCP inexactness) from the one 18-01
-# originally reported, and it means Plan 18-02's golden-band re-derivation (item 4 of
-# STATE.md's Phase 18 corrections-owed bullet) remains OPEN — `DSO_BAND_HI` below is
-# UNCHANGED by 260823-gea, pending a bounded, budgeted re-measurement in a future phase.
+# originally reported.
+#
+# GOLDEN BAND RE-DERIVED (260823-gea, closing item 4 of STATE.md's Phase 18 corrections-owed
+# bullet): the `1.5 x max|dso|` rule ranges over `dso` (the DADP DSO surplus from
+# solve_welfare + welfare_accounting). `fit_baseline`'s nested solve is ORTHOGONAL to `dso` —
+# it produces `fit_dso` for the sign-flip check and nothing the band depends on. The old
+# `repro_stability_check.jl` nevertheless gated the band on all-three-stages success AND
+# discarded `acct.dso` as NaN whenever fit_baseline threw, so the band was gated on, and
+# starved by, a stage irrelevant to it. Both were fixed in 260823-gea; `dso` is now trustworthy
+# at 5/5 swept points (only 2/5 clear all three stages), giving
+# 1.5 x 4.807417 = 7.211125525764296 from a re-run of the FIXED script at
+# REPRO_TOL_GAP=1e-10 (flake rate 13/20 = 0.650, all 13 at fit_baseline, reproduced across
+# 3 runs). Note this coincides with the "7.211" long flagged in STATE.md, but is reached by
+# this decoupling argument -- NOT by the refuted "sweep solves 5/5 everywhere" assumption that
+# figure was originally projected from. The band WIDENS (5.5886 -> 7.2111); the sign gate
+# DSO_BAND_LO = 0.0 and every other assertion here are unchanged.
 
 @testitem "thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip (REPRO-01)" tags =
     [:thesis_repro] setup = [Phase7Fixtures] begin
     using TSODSO
 
-    # ── Pinned magnitude band (thesis 18-01's committed findings.txt "RECOMMENDED BAND:" line
-    # -- DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937 -- copied verbatim, never invented here).
+    # ── Pinned magnitude band (committed findings.txt "RECOMMENDED BAND:" line
+    # -- DSO_BAND_LO=0.0, DSO_BAND_HI=7.211125525764296 -- copied verbatim, never invented
+    # here; re-derived by 260823-gea over the dso-trustworthy points, see header).
     const DSO_BAND_LO = 0.0
-    const DSO_BAND_HI = 5.58855710237937
+    const DSO_BAND_HI = 7.211125525764296
 
     feeder = ieee123_modified()
     aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)

@@ -439,16 +439,24 @@ function sweep_population_scale(
                 ),
             )
         else
+            # A `:fit_baseline` failure happens AFTER solve_welfare + welfare_accounting have
+            # already succeeded, so `acct.dso` / `acct.prosumer` / `ctx.meta[:socp_maxgap]` are
+            # trustworthy for such a point even though `fit_dso` is not. Record them instead of
+            # discarding them as NaN: `fit_baseline`'s nested solve is ORTHOGONAL to the DADP
+            # DSO surplus, and the golden band is derived over `dso` alone (quick task
+            # 260823-gea). Only genuinely-unavailable fields stay NaN.
+            dso_ok = failed_stage == :fit_baseline && acct !== nothing
             push!(
                 results,
                 (;
                     δ = δ,
                     failed_stage = failed_stage,
-                    dso = NaN,
+                    dso = dso_ok ? acct.dso : NaN,
                     fit_dso = NaN,
-                    prosumer = NaN,
+                    prosumer = dso_ok ? acct.prosumer : NaN,
                     fit_prosumer = NaN,
-                    socp_maxgap = NaN,
+                    socp_maxgap =
+                        dso_ok && ctx !== nothing ? ctx.meta[:socp_maxgap] : NaN,
                     error_msg = error_msg,
                 ),
             )
@@ -484,8 +492,14 @@ sign_flip_survives =
     all(r -> r.dso > 0 && r.fit_dso < 0 && r.prosumer < r.fit_prosumer, results)
 
 dso_band_lo = 0.0
+# The band rule is `1.5 * max|dso|`, and `dso` (the DADP DSO surplus) comes from
+# solve_welfare + welfare_accounting. `fit_baseline` is needed for `fit_dso`/the sign-flip
+# check, NOT for `dso` — so gating the band on fit_baseline success would gate it on a stage
+# it does not depend on (quick task 260823-gea). Filter on dso-trustworthiness instead.
 successful = filter(r -> r.failed_stage == :none, results)
-dso_band_hi = isempty(successful) ? NaN : 1.5 * maximum(abs(r.dso) for r in successful)
+dso_trustworthy = filter(r -> r.failed_stage in (:none, :fit_baseline) && !isnan(r.dso), results)
+dso_band_hi =
+    isempty(dso_trustworthy) ? NaN : 1.5 * maximum(abs(r.dso) for r in dso_trustworthy)
 
 @printf("\nFlake rate: %d/%d = %.3f\n", failures, N_REPEATS, flake_rate)
 println("failures_by_stage = ", cf.by_stage)
@@ -613,19 +627,24 @@ open(report_path, "w") do io
     if any_failed
         println(
             io,
-            "NOTE: at least one sweep point FAILED (see above) — the band below is derived ONLY ",
-            "from the $(length(successful))/$(length(results)) points that solved successfully ",
-            "(the exact retuned point delta=0.0 is one of them); it does NOT certify robustness ",
-            "across the failed direction(s).",
+            "NOTE: at least one sweep point FAILED (see above). $(length(successful))/",
+            "$(length(results)) points completed ALL THREE stages. The band below is derived over ",
+            "the $(length(dso_trustworthy))/$(length(results)) points whose `dso` is trustworthy — ",
+            "i.e. those that cleared solve_welfare + welfare_accounting, whether or not ",
+            "fit_baseline's ORTHOGONAL nested solve then converged. It does NOT certify sign-flip ",
+            "robustness across the direction(s) where fit_baseline failed.",
         )
     end
     println(
         io,
         "Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the ",
-        "sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the SUCCESSFULLY-SOLVED swept points — ",
-        "a 50% safety-margin multiplier above the largest observed magnitude among the points that ",
-        "actually solved, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level ",
-        "numerical drift without being so wide it stops meaning anything.",
+        "sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the swept points whose `dso` is ",
+        "TRUSTWORTHY (solve_welfare + welfare_accounting both succeeded) — deliberately NOT gated ",
+        "on fit_baseline, whose nested solve is orthogonal to `dso` and whose failure therefore ",
+        "says nothing about whether a `dso` value is sound (quick task 260823-gea). The 1.5 is a ",
+        "50% safety-margin multiplier above the largest trustworthy magnitude, so the pinned ",
+        "golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being ",
+        "so wide it stops meaning anything.",
     )
     @printf(io, "DSO_BAND_LO = %.6f\n", dso_band_lo)
     @printf(io, "DSO_BAND_HI = %.6f\n", dso_band_hi)

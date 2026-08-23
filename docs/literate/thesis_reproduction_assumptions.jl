@@ -188,19 +188,28 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # solves in one `try/catch`. Nothing was flaky — Clarabel is deterministic and the ratios
 # reproduce bit-for-bit; only the attribution was inferred.
 #
-# The golden magnitude band (`DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937`) pinned in
-# `test/test_thesis_repro.jl` still PASSES (max observed `|dso| = 4.807417 < 5.5886`, from the
-# ONE point — the exact retuned point, `δ=0.0` — this pin was originally derived from). Quick
-# task `260823-gea` attempted to re-derive this band from a fresh 5-point measurement (per the
-# warning box above) but did NOT close it out: since `fit_baseline` only reliably converges at
-# 2 of 5 swept points at `tol_gap=1e-10` today, re-deriving `1.5 × max|dso|` over a genuinely
-# honest, fully-confirmed point set would mean deriving it from 2 points, not 5 — no stronger
-# than the original 1-point derivation this section originally criticized, and arguably weaker
-# evidence than what is already pinned. Rather than pin a number derived from too few points
-# (or fall back to the previously-projected-but-never-measured `7.211`, itself computed from a
-# `max|dso|=4.807417` that assumed 5/5 solving), `260823-gea` left `DSO_BAND_HI` UNCHANGED. The
-# rule-vs-value disagreement flagged by `260726-mo7` therefore remains an OPEN item — see
-# `.planning/STATE.md`'s Phase 18 corrections-owed bullet, item (4).
+# The golden magnitude band was **re-derived and re-pinned** by quick task `260823-gea`:
+# `DSO_BAND_LO=0.0, DSO_BAND_HI=7.211125525764296` in `test/test_thesis_repro.jl`, replacing the
+# original `5.58855710237937` that had been derived from the ONE point (`δ=0.0`) solving at the
+# time. The re-derivation turned on a distinction the old measurement script conflated: the
+# `1.5 × max|dso|` rule ranges over `dso` (the DADP DSO surplus, produced by `solve_welfare` +
+# `welfare_accounting`), whereas `fit_baseline` produces `fit_dso` for the sign-flip check and
+# nothing the band depends on. The script had gated the band on all-three-stages success *and*
+# discarded `acct.dso` as `NaN` whenever `fit_baseline` threw — so the band was both gated on and
+# starved by a stage irrelevant to it. With both fixed, `dso` is trustworthy at **5 of 5** swept
+# points (while only 2/5 clear all three stages), giving `1.5 × 4.807417 = 7.211125525764296`
+# from the fixed script at `REPRO_TOL_GAP=1e-10`. This coincides numerically with the `7.211`
+# previously projected in the planning notes, but is reached by the decoupling argument above —
+# **not** by the refuted "the sweep solves 5/5 everywhere" assumption that figure was originally
+# extrapolated from. The band widens (`5.5886 → 7.2111`); the sign gate `DSO_BAND_LO = 0.0` and
+# every other assertion in that test are unchanged, and the pinned point (`|dso| = 3.7257`) sits
+# inside both the old and new bands, so nothing about the reproduction's verdict moves.
+#
+# The separate `fit_baseline`-convergence finding stands on its own and is NOT closed by this:
+# at `tol_gap=1e-10` its nested solve returns `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5
+# swept points (discrete flake rate 13/20 = 0.650, all 13 at that same stage, reproduced across
+# 3 runs), so the FULL sign-flip confirmation holds at 2 of 5 points, not 5 of 5 as
+# `260726-mo7`'s summary recorded.
 #
 # ~~ORIGINAL (WRONG) VERDICT: "No — not confirmed … `sign_flip_survives: false` — ALL FOUR
 # non-zero perturbation points FAILED OUTRIGHT … the DSO-surplus sign flip is therefore confirmed

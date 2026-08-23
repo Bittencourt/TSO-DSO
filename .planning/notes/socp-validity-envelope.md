@@ -268,18 +268,23 @@ problem, not a relaxation-theory problem:
    sweep points unmeasurable.
 3. Correcting the shipped `sign_flip_survives: false` claim in findings.txt, 18-01-SUMMARY.md, and the
    published assumptions literate page.
-4. Re-deriving Plan 18-02's golden band — STILL OPEN, updated by quick task `260823-gea`: the
-   naive "`1.5 × max|dso|` now implies 7.211" framing assumed all 5 sweep points solve cleanly
-   at `tol_gap=1e-10`. `260823-gea` re-measured (fixed `scripts/repro_stability_check.jl`'s
-   try/catch per stage, 3 consistent re-runs) and found `solve_welfare`'s SOCP-exactness gate
-   does resolve 5/5 at that tolerance, but `fit_baseline`'s own nested solve does NOT — it
-   returns `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5 points, so only 2/5 points fully
-   confirm the sign flip today. Re-deriving the band from 2 points would be no stronger evidence
-   than the original 1-point derivation, so `260823-gea` deliberately left `DSO_BAND_HI`
-   UNCHANGED (still 5.58855710237937) rather than pin a number from too few points or from the
-   never-actually-measured `7.211`. Closing this needs a bounded, budgeted re-measurement in a
-   future phase (see `test/test_thesis_repro.jl`'s header comment and `.planning/STATE.md`'s
-   Phase 18 corrections-owed bullet, item (4), for the full finding).
+4. Re-deriving Plan 18-02's golden band — **CLOSED by quick task `260823-gea`**:
+   `DSO_BAND_HI` re-pinned from `5.58855710237937` to **`7.211125525764296`**. The original
+   "`1.5 × max|dso|` implies 7.211" framing was projected from an assumption that all 5 sweep
+   points solve cleanly at `tol_gap=1e-10` — which `260823-gea` refuted: `solve_welfare`'s
+   SOCP-exactness gate does resolve 5/5, but `fit_baseline`'s own nested solve returns
+   `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5 points (flake rate 13/20 = 0.650, all 13
+   at that stage, reproduced across 3 runs), so only 2/5 points fully confirm the sign flip.
+   The band was nevertheless re-derivable, via a different and stronger argument: the rule ranges
+   over `dso`, produced by `solve_welfare` + `welfare_accounting`, while `fit_baseline` yields
+   only `fit_dso` (needed for the sign-flip check, not for the band). `repro_stability_check.jl`
+   had conflated these — gating the band on all-three-stages success AND discarding `acct.dso`
+   as `NaN` on any `fit_baseline` throw. Both fixed in `260823-gea`; `dso` is trustworthy at 5/5
+   points, so `1.5 × 4.807417 = 7.211125525764296` now comes out of the fixed script's own
+   `RECOMMENDED BAND:` line. Same number as the old projection, sound derivation. The band
+   widens; `DSO_BAND_LO = 0.0` and all other assertions unchanged; the pinned point
+   (`|dso| = 3.7257`) is inside both bands, so no verdict moves. The `fit_baseline`-convergence
+   problem is NOT closed by this and remains a live, separately-tracked numerical finding.
 
 The 3-bus overvoltage inexactness (EXACT-04) remains real and reproducible — it is a property of that
 stress fixture, not of real feeders at these scales.

@@ -1,5 +1,5 @@
 Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)
-Measured: 2026-08-23 12:26:33 UTC-local
+Measured: 2026-08-23 12:41:10 UTC-local
 Fixture: ieee123_modified() (real Phase-17 impedances), seed=20260719
 Retuned point: LOAD_SCALE_IEEE123=0.05, PV_SCALE_IEEE123=0.12, DEV_SCALE_IEEE123=0.08333333333333334
 
@@ -42,8 +42,8 @@ sign_flip_survives: false
 HONEST NEGATIVE RESULT: the sweep point(s) delta=[-0.020, 0.000, 0.050] FAILED OUTRIGHT — solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this is reported as-is — the sweep range was NOT narrowed and the failing point was NOT omitted to force a passing appearance. Plan 18-03 must carry this forward as an assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-robust in the direction(s) that go inexact; the golden band below is derived ONLY from the points that solved successfully and should be read with that caveat attached.
 
 === RECOMMENDED BAND ===
-NOTE: at least one sweep point FAILED (see above) — the band below is derived ONLY from the 2/5 points that solved successfully (the exact retuned point delta=0.0 is one of them); it does NOT certify robustness across the failed direction(s).
-Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the SUCCESSFULLY-SOLVED swept points — a 50% safety-margin multiplier above the largest observed magnitude among the points that actually solved, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being so wide it stops meaning anything.
+NOTE: at least one sweep point FAILED (see above). 2/5 points completed ALL THREE stages. The band below is derived over the 5/5 points whose `dso` is trustworthy — i.e. those that cleared solve_welfare + welfare_accounting, whether or not fit_baseline's ORTHOGONAL nested solve then converged. It does NOT certify sign-flip robustness across the direction(s) where fit_baseline failed.
+Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the swept points whose `dso` is TRUSTWORTHY (solve_welfare + welfare_accounting both succeeded) — deliberately NOT gated on fit_baseline, whose nested solve is orthogonal to `dso` and whose failure therefore says nothing about whether a `dso` value is sound (quick task 260823-gea). The 1.5 is a 50% safety-margin multiplier above the largest trustworthy magnitude, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being so wide it stops meaning anything.
 DSO_BAND_LO = 0.000000
-DSO_BAND_HI = 6.245887
-RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=6.245886767044294
+DSO_BAND_HI = 7.211126
+RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=7.211125525764296

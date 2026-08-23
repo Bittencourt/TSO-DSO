@@ -235,27 +235,26 @@ None yet.
   `solve_welfare`'s SOCP-exactness gate resolves **5/5** — but see (4): the FULL sign-flip
   confirmation does **not** hold at every point, so the original "5/5 everywhere" wording was
   too strong.
-  **Outstanding corrections:** (4) ⬜ STILL OWED — quick task 260823-gea re-measured (fixed script,
-  3 consistent re-runs) and found this does NOT fully reproduce today: `solve_welfare`'s SOCP gate
-  does resolve 5/5 at `tol_gap=1e-10`, but `fit_baseline`'s own nested solve returns
-  `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5 points (a different, convergence-related
-  numerical issue, not SOCP inexactness), so only 2/5 points fully confirm the sign flip today.
-  `DSO_BAND_HI` is left UNCHANGED at **5.5886** pending a deliberate decision (below).
-  **Measured numbers now on record** (`results/repro_stability_check/findings.txt`, 2 independent
-  reproducing runs at `REPRO_TOL_GAP=1e-10`): discrete flake rate **13/20 = 0.650**, all 13 at the
-  `fit_baseline` stage (0 at `solve_welfare`, 0 at `welfare_accounting`); `sign_flip_survives: false`;
-  script-recommended band **`DSO_BAND_HI = 6.245887`** (= 1.5 × 4.163925, over the 2 points passing
-  the script's as-designed all-3-stages filter).
-  **Open design question that decides item (4)** — the band rule is over `dso` (`dadp_dso`), which
-  resolves cleanly at **all 5** points; only `fit_baseline`'s orthogonal nested solve (needed for
-  `fit_dso`/sign-flip, NOT for `dso`) fails at 3/5. So the script's success filter gates the band on
-  a stage the band does not depend on. Decoupling those criteria would use all 5 `dso` values and
-  give **1.5 × 4.807417 = 7.211126** — numerically the long-flagged "7.211", but reached by a
-  defensible route rather than the refuted 5/5-everywhere assumption. NOT implemented or verified.
-  Closing item (4) = choose between the 3-stage-gated **6.245887** and the decoupled **7.211126**,
-  implement the filter change if the latter, and re-pin deliberately. (5) ✅ split `repro_stability_check.jl`'s try/catch per stage and thread the new
-  `optimizer` kwarg — DONE by 260823-gea (commit `f913dbb`). Evidence:
-  `.planning/spikes/003-phase18-fragility-tolerance/`, `.planning/quick/260823-gea-*/`.
+  **Outstanding corrections:** (4) ✅ CLOSED by quick task 260823-gea — golden band re-derived
+  and re-pinned: `DSO_BAND_HI` **5.58855710237937 → 7.211125525764296**. The band rule
+  `1.5 × max|dso|` ranges over `dso` (from `solve_welfare` + `welfare_accounting`), NOT over
+  `fit_baseline`, which yields only `fit_dso` for the sign-flip check. `repro_stability_check.jl`
+  had conflated the two — gating the band on all-three-stages success AND discarding `acct.dso`
+  as NaN on any `fit_baseline` throw. Both fixed; `dso` is trustworthy at **5/5** swept points
+  (2/5 clear all three stages), so the fixed script's own `RECOMMENDED BAND:` line now reads
+  `1.5 × 4.807417 = 7.211125525764296`. Numerically the long-flagged "7.211", but reached by
+  this decoupling argument rather than the refuted "sweep solves 5/5 everywhere" assumption it
+  was originally projected from. Band widens; `DSO_BAND_LO = 0.0` and every other assertion
+  unchanged; pinned point `|dso| = 3.7257` inside both old and new bands, so no verdict moves.
+  (5) ✅ split `repro_stability_check.jl`'s try/catch per stage and thread the new `optimizer`
+  kwarg — DONE by 260823-gea (commit `f913dbb`).
+  **Still live (NOT part of items 4/5):** `fit_baseline`'s nested solve does not converge at
+  `tol_gap=1e-10` — discrete flake rate **13/20 = 0.650**, all 13 at that stage, 0 at
+  `solve_welfare`/`welfare_accounting`, reproduced across 3 runs; `sign_flip_survives: false`,
+  with only 2/5 points fully confirming the flip. This is a solver-convergence issue distinct
+  from SOCP inexactness and wants its own follow-up.
+  Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`,
+  `.planning/quick/260823-gea-*/`, `results/repro_stability_check/findings.txt`.
 
 - [v2.1 Phase 17 premise REFUTED 2026-07-26]: the page-documented justification for the Phase-17
   population re-tune is a solver-tolerance artifact (passes at `tol_gap=1e-10` without the re-tune).
