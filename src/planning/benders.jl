@@ -39,12 +39,35 @@
 using JuMP
 using DrWatson: datadir
 
+# D-13/D-14 (Phase 24, plan 24-04): a NEW, dedicated termination threshold for the
+# lattice-exact `known_optimum` certification fallback — deliberately DISTINCT from the
+# `tol` kwarg's inherited `1e-6` continuous relative-gap tolerance, so it can never be
+# mistaken for "reusing" that tolerance (the standing anti-certificate-laundering bar).
+#
+# EMPIRICALLY MEASURED (2026-08-23) on the D-12 fixture (`Phase6Fixtures.two_bus_feeder()`
+# + `ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)`, single aggregator, λ₀=[4.0],
+# T=1), solving the oracle (Clarabel SOCP) and follower (HiGHS LP) once each at a
+# representative interior trial `z = [1.0]` and reading each solver's OWN certified
+# primal/dual objective gap directly (`abs(objective_value(model) - dual_objective_value(model))`
+# — no second reference solve needed, `dual_objective_value` IS the solver's own bound at
+# the primal solution):
+#   gap_oracle   = 3.957388639008741e-9   (Clarabel SOCP interior-point duality gap)
+#   gap_follower = 0.0                    (HiGHS LP — exact simplex, zero measured gap)
+# `max(gap_oracle, gap_follower) = 3.957388639008741e-9`, which is NOT comfortably below
+# `1e-10` (the 10x-margin-under-1e-9 threshold the measurement protocol calls for) — so a
+# hardcoded `1e-9` would sit BELOW the solver's own achieved precision on this fixture,
+# exactly the failure mode quick task `260823-gea` found in `fit_baseline`. Per the
+# measurement formula `max(1e-9, 10 * max(gap_oracle, gap_follower))`, the constant is set
+# to the measured value below, not a hopeful guess.
+const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
+
 """
     solve_stackelberg!(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int, follower_kwargs::NamedTuple, master_kwargs::NamedTuple,
                        tol::Real = 1e-6, max_iter::Int = 100,
                        checkpoint_dir::AbstractString = datadir("planning_checkpoints"),
-                       follower = nothing)
+                       follower = nothing, master = nothing,
+                       known_optimum::Union{Nothing,Real} = nothing)
         -> NamedTuple
 
 Solve the single-distributor Stackelberg equilibrium (flexibility-investment leader vs.
@@ -59,8 +82,11 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 
  2. BUILD ONCE, outside the loop: `oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)`,
     `follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower`,
-    `master = build_master(; master_kwargs..., T = T)`. No `build_*`/`Model(` call appears
-    anywhere inside the `for k in 1:max_iter` loop below.
+    `master = master === nothing ? build_master(; master_kwargs..., T = T) : master`. No
+    `build_*`/`Model(` call appears anywhere inside this function OTHER THAN these two
+    conditional builder calls, BOTH of which are skippable via injection and BOTH of which
+    still execute strictly BEFORE the `for k in 1:max_iter` loop below — the loop itself
+    never constructs a model.
 
     **`follower` keyword (plan 13-02, additive/non-breaking — mirrors the
     `attempts_out::Union{Nothing,Ref{Int}}` precedent in `master.jl`/`retry.jl`):**
@@ -73,6 +99,22 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
     Supplying BOTH a non-`nothing` `follower` AND a non-empty `follower_kwargs`
     simultaneously is rejected with an `ArgumentError` (ambiguous — which one wins is never
     silently decided).
+
+    **`master` keyword (Phase 24, plan 24-04, additive/non-breaking — D-08, mirrors the
+    `follower` seam immediately above VERBATIM in structure):** defaults to `nothing`, in
+    which case behavior is BYTE-IDENTICAL to every prior call site (a fresh `BendersMaster`
+    is built from `master_kwargs` exactly as before). When a caller instead supplies a
+    pre-built master (e.g. a `BendersMasterInteger` from `build_master_integer`, Phase 24's
+    binary-expansion MILP master), that object is used DIRECTLY in place of a
+    freshly-built `BendersMaster` — no master is built by this function at all in that case.
+    Supplying BOTH a non-`nothing` `master` AND a non-empty `master_kwargs` simultaneously is
+    rejected with an `ArgumentError`, mirroring the `follower`/`follower_kwargs` guard.
+
+    **`known_optimum` keyword (Phase 24, plan 24-04, D-13/D-14):** defaults to `nothing`, in
+    which case the loop's termination gate is unchanged (`gap <= tol`). When a caller
+    supplies a finite value (the enumeration-backed certification harness, plan 24-05), the
+    loop instead terminates on an EXCLUSIVE exact-match test against `known_optimum` (see
+    `converged_now` in the iteration loop below) — never an `||` with `gap <= tol`.
 
  3. Iterate `k = 1:max_iter`: `lb_res = solve_master!(master)` (the Benders lower bound and
     trial `z_k`); `follower_res = solve_follower!(follower, lb_res.z)` (DIRECT call — never
@@ -100,10 +142,14 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
         iterate whose own cuts have not yet tightened the master, so the LAST iterate
         is not certified by `UB`; the incumbent is); compute
         `gap = (UB - lb_res.LB) / max(1, abs(UB))`; checkpoint with
-        `feasible = true`; if `gap <= tol`, return the converged result at the
-        INCUMBENT `(y_best, z_best)`.
+        `feasible = true`; compute
+        `converged_now = known_optimum === nothing ? (gap <= tol) : isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)`
+        — an EXCLUSIVE branch, NEVER an `||` of the two criteria (D-13/D-14: reusing the
+        continuous loop's inherited `tol` on the certified `known_optimum` path would be
+        exactly the "certificate laundering" this mechanism exists to forbid); if
+        `converged_now`, return the converged result at the INCUMBENT `(y_best, z_best)`.
 
- 4. If `max_iter` is exhausted without `gap <= tol`, raise a loud `ErrorException` naming
+ 4. If `max_iter` is exhausted without `converged_now`, raise a loud `ErrorException` naming
     the exhausted iteration count and the last observed gap (D-10) — never silently return
     a non-converged result.
 
@@ -111,10 +157,11 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 
 On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace)` where
 `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so the
-returned point's true cost equals `UB` and the `gap ≤ tol` certificate applies to it,
+returned point's true cost equals `UB` and the convergence certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
-upper/lower bounds, `gap` is the converged relative gap,
-`iters` is the convergence iteration count, `oracle`/`follower`/`master` are the
+upper/lower bounds, `gap` is the converged relative gap (a REPORTING quantity — on the
+`known_optimum`-supplied path, convergence is certified by the exact-match test, not by
+`gap`), `iters` is the convergence iteration count, `oracle`/`follower`/`master` are the
 build-once subproblem handles (for further inspection by the caller/certification gate,
 plan 11-03), and `trace::BendersTrace` (plan 12-01, additive) is the per-iteration
 convergence ledger — one row per iteration on both the feasibility-cut and
@@ -124,8 +171,11 @@ retry-gated subproblems' termination statuses (never a log-scrape estimate).
 # Throws
 
   - `ArgumentError` on `T < 1`, `max_iter < 1`, `length(λ₀) != T`, a non-finite/non-positive
-    `tol`, `max_iter > 99_999`, or a non-`nothing` `follower` supplied together with a
-    non-empty `follower_kwargs` (plan 13-02) — before any build call (IN-02/IN-03).
+    `tol`, `max_iter > 99_999`, a non-`nothing` `follower` supplied together with a
+    non-empty `follower_kwargs` (plan 13-02), a non-`nothing` `master` supplied together
+    with a non-empty `master_kwargs` (Phase 24, plan 24-04, D-08), or a non-`nothing`
+    `known_optimum` that is not finite (Phase 24, plan 24-04, D-13/D-14) — before any build
+    call (IN-02/IN-03).
   - `ErrorException` if `max_iter` is exhausted without converging, naming the trace's
     last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
     return a non-converged result.
@@ -142,6 +192,8 @@ function solve_stackelberg!(
     max_iter::Int = 100,
     checkpoint_dir::AbstractString = datadir("planning_checkpoints"),
     follower = nothing,
+    master = nothing,
+    known_optimum::Union{Nothing, Real} = nothing,
 )
     # ---- Boundary guards (mirror solve_admm): fail here, not deep in the loop ----------------
     T >= 1 || throw(ArgumentError("solve_stackelberg! needs T >= 1 (got T=$T)"))
@@ -176,13 +228,36 @@ function solve_stackelberg!(
                 "(got follower=$follower, follower_kwargs=$follower_kwargs)",
             ),
         )
+    # Phase 24, plan 24-04 (D-08): the additive `master` keyword and `master_kwargs` are
+    # mutually exclusive — mirrors the `follower`/`follower_kwargs` guard immediately above
+    # VERBATIM in structure; supplying both would silently pick one and discard the other.
+    master === nothing ||
+        isempty(master_kwargs) ||
+        throw(
+            ArgumentError(
+                "solve_stackelberg!: supply either master_kwargs or master, not both " *
+                "(got master=$master, master_kwargs=$master_kwargs)",
+            ),
+        )
+    # Phase 24, plan 24-04 (D-13/D-14): a non-nothing known_optimum must be finite — a
+    # NaN/Inf value would make every isapprox(UB, known_optimum; ...) comparison silently
+    # false, guaranteeing max_iter exhaustion with a misleading diagnosis (same rationale
+    # as the tol finiteness guard above).
+    known_optimum === nothing ||
+        isfinite(known_optimum) ||
+        throw(
+            ArgumentError(
+                "solve_stackelberg! needs known_optimum to be finite when supplied, got " *
+                "known_optimum=$known_optimum",
+            ),
+        )
 
     # ---- BUILD ONCE: the oracle/follower/master subproblems are constructed OUTSIDE the
     # loop. No `build_*`/`Model(` call appears below this point — the loop only re-solves
     # via `solve_planning_oracle!`/`solve_follower!`/`solve_master!` and appends cut rows.
     oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)
     follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower
-    master = build_master(; master_kwargs..., T = T)
+    master = master === nothing ? build_master(; master_kwargs..., T = T) : master
 
     UB = Inf
     # CR-01: the INCUMBENT — the (y, z) iterate that achieved the running-minimum UB.
@@ -311,10 +386,21 @@ function solve_stackelberg!(
             solve_time = t_solve,
         )
 
-        if gap <= tol
+        # Phase 24, plan 24-04 (D-13/D-14, plan-checker Blocker 2): an EXCLUSIVE branch,
+        # NEVER an `||` of the two criteria — reusing `tol` on the `known_optimum`-supplied
+        # (certified) path would silently reintroduce the continuous loop's tolerance on
+        # exactly the path this mechanism exists to keep tolerance-free. When
+        # known_optimum === nothing, this reduces EXACTLY to `gap <= tol`, byte-identical
+        # to the pre-Phase-24 behavior.
+        converged_now =
+            known_optimum === nothing ? (gap <= tol) :
+            isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)
+
+        if converged_now
             # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
-            # and LB <= optimum, so the returned point is certified within tol; the
-            # current iterate (lb_res.y, lb_res.z) carries no such guarantee.
+            # (continuous path) or UB matches known_optimum exactly within
+            # KNOWN_OPTIMUM_ATOL (certified path); the current iterate (lb_res.y,
+            # lb_res.z) carries no such guarantee.
             return (;
                 y = y_best,
                 z = z_best,
