@@ -157,6 +157,23 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # population scale (`dadp_dso` +2.71 → +4.81, `fit_dso` −183 → −210, directional, public-data).
 # There is no boundary, no discontinuity and no knife edge in this neighbourhood.
 #
+# !!! warning "CORRECTED 2026-08-23 — `fit_dso` column above does NOT currently reproduce at all 5 points"
+#     Quick task `260823-gea` re-ran this exact measurement (fixed `scripts/repro_stability_check.jl`,
+#     `tol_gap=1e-10`, 3 independent runs, all consistent) to close out the golden-band item below and
+#     found a partial non-reproduction: `solve_welfare`'s SOCP-exactness gate DOES still resolve 5/5
+#     (0/5 THREW, the `dadp_dso` column above is confirmed), but `fit_baseline`'s OWN internal nested
+#     solve — a separate call site, SITE 3 of the `optimizer` threading in `260726-mo7` — now fails
+#     with `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of the 5 points (`δ=-0.02, 0.00, +0.05`),
+#     leaving `fit_dso` (and hence the full sign-flip confirmation) measured at only 2 of 5 points
+#     today. This is a DIFFERENT numerical issue than the one this section originally diagnosed —
+#     solver convergence at an extreme tolerance, not SOCP relaxation inexactness — and it may reflect
+#     environment drift (Clarabel/Julia patch versions) since the `run-after-kwarg.log` this table is
+#     sourced from was captured. The table above is left AS-IS (a historical record of that log), but
+#     should not be read as currently-reproducible in the `fit_dso` column without a fresh re-run.
+#     Closing this out needs a bounded, budgeted re-measurement in a future phase — not attempted here
+#     per this task's own measurement-before-golden discipline (an honest partial result is preferred
+#     over spending unbounded solver time chasing a clean 5/5 or quietly re-trying until one appears).
+#
 # **Why the original sweep concluded otherwise — the failures were NUMERICAL.**
 # `assert_socp_exact!`'s `atol = 1e-6` sits AT Clarabel's achievable cone residual on this
 # 122-branch feeder at the default `tol_gap = 1e-8`. Tightening shrinks the residual one to two
@@ -172,9 +189,18 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # reproduce bit-for-bit; only the attribution was inferred.
 #
 # The golden magnitude band (`DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937`) pinned in
-# `test/test_thesis_repro.jl` still PASSES (max observed `|dso| = 4.807417 < 5.5886`), but it was
-# derived as `1.5 × max|dso|` over the then-single solved point; with five solving that rule now
-# implies 7.211, so band and rule disagree and the band should be re-derived deliberately.
+# `test/test_thesis_repro.jl` still PASSES (max observed `|dso| = 4.807417 < 5.5886`, from the
+# ONE point — the exact retuned point, `δ=0.0` — this pin was originally derived from). Quick
+# task `260823-gea` attempted to re-derive this band from a fresh 5-point measurement (per the
+# warning box above) but did NOT close it out: since `fit_baseline` only reliably converges at
+# 2 of 5 swept points at `tol_gap=1e-10` today, re-deriving `1.5 × max|dso|` over a genuinely
+# honest, fully-confirmed point set would mean deriving it from 2 points, not 5 — no stronger
+# than the original 1-point derivation this section originally criticized, and arguably weaker
+# evidence than what is already pinned. Rather than pin a number derived from too few points
+# (or fall back to the previously-projected-but-never-measured `7.211`, itself computed from a
+# `max|dso|=4.807417` that assumed 5/5 solving), `260823-gea` left `DSO_BAND_HI` UNCHANGED. The
+# rule-vs-value disagreement flagged by `260726-mo7` therefore remains an OPEN item — see
+# `.planning/STATE.md`'s Phase 18 corrections-owed bullet, item (4).
 #
 # ~~ORIGINAL (WRONG) VERDICT: "No — not confirmed … `sign_flip_survives: false` — ALL FOUR
 # non-zero perturbation points FAILED OUTRIGHT … the DSO-surplus sign flip is therefore confirmed
@@ -183,9 +209,11 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # Evidence: `.planning/spikes/003-phase18-fragility-tolerance/` (README + `run.log` before /
 # `run-after-kwarg.log` after), `.planning/spikes/002-ieee123-validity-map/` (the noise-floor
 # proof), commit `c099ee6` (the `optimizer` kwarg on `fit_baseline` that made the FIT
-# counterfactual conditionable at all). A future population re-tune should still re-run
-# `scripts/repro_stability_check.jl` — but that script must first be fixed to split its
-# three-solve `try/catch` and to thread the `optimizer` kwarg.
+# counterfactual conditionable at all). `scripts/repro_stability_check.jl`'s three-solve
+# `try/catch` has now been split per stage and the `optimizer` kwarg threaded through
+# (`260823-gea`), so a future population re-tune (or a future attempt at this golden-band
+# re-derivation, budgeted for the slower tight-tolerance solves) can re-run it directly with no
+# further prerequisite fix.
 #
 # ## Live-checked constants
 #
