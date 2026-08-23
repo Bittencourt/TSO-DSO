@@ -152,3 +152,41 @@ end
     # follower, independent of y_inv — the concrete anchor A1's LL-cut applicability needs.
     @test solve_follower!(follower, [0.0]).feasible
 end
+
+@testitem "planning master_integer: persistent cut-row growth — reused continuous cuts append rows, never columns (RESEARCH.md Finding 2)" tags =
+    [:planning] begin
+    using TSODSO
+    using JuMP: num_variables, num_constraints
+
+    # Mirrors test_planning_master.jl's own "persistent cut-row growth" pattern — the
+    # MILP analog of the continuous regression, exercising the SAME add_optimality_cut!/
+    # add_feasibility_cut! algebra now overloaded for BendersMasterInteger (plan 24-02
+    # Task 1).
+    master = build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
+    )
+
+    nv0 = num_variables(master.model)
+    nc0 = num_constraints(master.model; count_variable_in_set_constraints = true)
+
+    add_optimality_cut!(master, :op, 5.0, [2.0], [1.0])
+    nv1 = num_variables(master.model)
+    nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
+    @test nc1 == nc0 + 1
+    @test nv1 == nv0
+
+    add_feasibility_cut!(master, 3.0, [1.0], [1.0])
+    nv2 = num_variables(master.model)
+    nc2 = num_constraints(master.model; count_variable_in_set_constraints = true)
+    @test nc2 == nc1 + 1
+    @test nv2 == nv0
+
+    @test length(master.cuts) == 2
+    @test master.cuts[1].kind == :optimality
+    @test master.cuts[2].kind == :feasibility
+end

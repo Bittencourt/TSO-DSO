@@ -220,4 +220,149 @@ function solve_master!(
     )
 end
 
+"""
+    add_optimality_cut!(master::BendersMasterInteger, epigraph::Symbol, cost_k::Real,
+                        grad_k::AbstractVector{<:Real},
+                        z_k::AbstractVector{<:Real}) -> BendersMasterInteger
+
+Append ONE new persistent optimality-cut row to `master.model` — NEVER a
+rebuild — reusing the EXACT SAME algebra as `add_optimality_cut!(::BendersMaster, ...)`
+(`master.jl`, PLAN-05):
+
+```
+α >= cost_k + Σ_t grad_k[t] * (z[t] - z_k[t])
+```
+
+where `α` is `master.α_op` if `epigraph === :op` or `master.α_x` if `epigraph === :x`.
+
+**Why this is a plain transcription, not a re-derivation (24-RESEARCH.md Priority
+Finding 2):** `Q(y_inv) = min_{0<=z<=y_inv}[α_op(z)+α_x(z)]` is a partial
+minimization of a jointly-convex function over a jointly-convex, monotonically
+expanding feasible set, hence `Q` is convex (and monotone non-increasing) in the
+*continuous relaxation* of `y_inv`. Because `y_inv` is a *linear* function of the
+binary vector `b` (`y_inv = (y_max/2^K)*Σ 2^(k-1) b_k`), `Q(b)` is convex over
+`[0,1]^K` too, and any subgradient cut on `z` derived at a trial `z_k` is a
+globally valid supporting hyperplane over the ENTIRE continuous relaxation —
+hence valid at every one of the `2^K` binary corners of `b`. This is exactly the
+classical justification behind Geoffrion's Generalized Benders Decomposition
+(GBD, 1972): integer/complicating master variables coupled *linearly* to a
+convex continuous recourse always admit valid cuts from the recourse's
+continuous relaxation. The continuous `:op`/`:x` cuts are therefore REUSED
+unmodified alongside the (plan 24-03) Laporte-Louveaux integer cut, never
+replaced by it.
+
+Throws `ArgumentError` under the SAME conditions as the continuous method
+(bad `epigraph`, length mismatch against `master.T`, or any non-finite
+`cost_k`/`grad_k`/`z_k` entry) — a malformed cut triple must fail loudly BEFORE
+corrupting the master's persistent constraint set (T-11-03/WR-03 discipline,
+reused verbatim).
+
+Logs `(; kind = :optimality, epigraph, cost_k, grad_k, z_k)` to `master.cuts`
+(the SAME NamedTuple shape as `BendersMaster.cuts`, so `master.cuts` is
+filterable by `kind` uniformly across both master types) and returns `master`.
+"""
+function add_optimality_cut!(
+    master::BendersMasterInteger,
+    epigraph::Symbol,
+    cost_k::Real,
+    grad_k::AbstractVector{<:Real},
+    z_k::AbstractVector{<:Real},
+)
+    epigraph in (:op, :x) || throw(
+        ArgumentError("add_optimality_cut!: epigraph must be :op or :x, got $epigraph"),
+    )
+    length(grad_k) == master.T ||
+        throw(ArgumentError("grad_k has length $(length(grad_k)), expected T=$(master.T)"))
+    length(z_k) == master.T ||
+        throw(ArgumentError("z_k has length $(length(z_k)), expected T=$(master.T)"))
+    # WR-03: finiteness guard — a NaN/Inf cut row would permanently poison the
+    # build-once master (rows are never removed); fail loudly BEFORE @constraint.
+    isfinite(cost_k) ||
+        throw(ArgumentError("add_optimality_cut!: cost_k must be finite, got $cost_k"))
+    all(isfinite, grad_k) || throw(
+        ArgumentError("add_optimality_cut!: grad_k contains a non-finite entry: $grad_k"),
+    )
+    all(isfinite, z_k) ||
+        throw(ArgumentError("add_optimality_cut!: z_k contains a non-finite entry: $z_k"))
+
+    α = epigraph === :op ? master.α_op : master.α_x
+    @constraint(
+        master.model,
+        α >= cost_k + sum(grad_k[t] * (master.z[t] - z_k[t]) for t in 1:(master.T))
+    )
+    push!(
+        master.cuts,
+        (;
+            kind = :optimality,
+            epigraph,
+            cost_k,
+            grad_k = Vector{Float64}(grad_k),
+            z_k = Vector{Float64}(z_k),
+        ),
+    )
+    return master
+end
+
+"""
+    add_feasibility_cut!(master::BendersMasterInteger, v_k::Real,
+                         u_k::AbstractVector{<:Real},
+                         z_k::AbstractVector{<:Real}) -> BendersMasterInteger
+
+Append ONE new persistent feasibility-cut row to `master.model` — NEVER a
+rebuild — reusing the EXACT SAME algebra as `add_feasibility_cut!(::BendersMaster, ...)`
+(`master.jl`, PLAN-05), from the follower's own genuine HiGHS Farkas certificate
+`(v_k, u_k)` (see [`solve_follower!`](@ref)):
+
+```
+v_k + Σ_t u_k[t] * (z[t] - z_k[t]) <= 0
+```
+
+**Same 24-RESEARCH.md Priority Finding 2 justification as
+[`add_optimality_cut!`](@ref)(::BendersMasterInteger, ...)** applies here: a
+feasibility cut derived against the follower's continuous recourse remains a
+valid supporting hyperplane over the entire continuous relaxation of `y_inv`,
+hence at every binary corner of `b` — reused unmodified, never re-derived.
+
+Throws `ArgumentError` if `length(u_k) != master.T` or `length(z_k) != master.T`,
+or if `v_k`, any `u_k[t]`, or any `z_k[t]` is non-finite (NaN/Inf)
+(T-11-03/WR-03, reused verbatim).
+
+Logs `(; kind = :feasibility, v_k, u_k, z_k)` to `master.cuts` (the SAME
+NamedTuple shape as `BendersMaster.cuts`) and returns `master`.
+"""
+function add_feasibility_cut!(
+    master::BendersMasterInteger,
+    v_k::Real,
+    u_k::AbstractVector{<:Real},
+    z_k::AbstractVector{<:Real},
+)
+    length(u_k) == master.T ||
+        throw(ArgumentError("u_k has length $(length(u_k)), expected T=$(master.T)"))
+    length(z_k) == master.T ||
+        throw(ArgumentError("z_k has length $(length(z_k)), expected T=$(master.T)"))
+    # WR-03: finiteness guard — mirror add_optimality_cut!'s own discipline; a
+    # NaN/Inf feasibility row is just as unremovable and just as poisonous.
+    isfinite(v_k) ||
+        throw(ArgumentError("add_feasibility_cut!: v_k must be finite, got $v_k"))
+    all(isfinite, u_k) ||
+        throw(ArgumentError("add_feasibility_cut!: u_k contains a non-finite entry: $u_k"))
+    all(isfinite, z_k) ||
+        throw(ArgumentError("add_feasibility_cut!: z_k contains a non-finite entry: $z_k"))
+
+    @constraint(
+        master.model,
+        v_k + sum(u_k[t] * (master.z[t] - z_k[t]) for t in 1:(master.T)) <= 0
+    )
+    push!(
+        master.cuts,
+        (;
+            kind = :feasibility,
+            v_k,
+            u_k = Vector{Float64}(u_k),
+            z_k = Vector{Float64}(z_k),
+        ),
+    )
+    return master
+end
+
 export BendersMasterInteger, build_master_integer
