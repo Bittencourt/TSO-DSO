@@ -194,6 +194,7 @@ include("planning/trace.jl")        # BendersTrace convergence ledger (plan 12-0
 include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (plan 10-02, PLAN-01/02)
 include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs (plan 11-01, PLAN-04)
 include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)
+include("planning/master_integer.jl") # BendersMasterInteger binary-expansion MILP master (plan 24-01, INT-01)
 include("planning/benders.jl")      # solve_stackelberg! outer Benders loop (plan 11-02, PLAN-06)
 include("planning/coupling.jl")     # SharedTransmission per-distributor views (plan 13-01, NASH-01)
 include("planning/nash.jl")         # NashTrace/run_nash! outer Gauss-Seidel loop (plan 13-02, NASH-02/03/04)
