@@ -31,10 +31,28 @@
 # every swept point, this script reports `sign_flip_survives: false` honestly — it never narrows
 # the sweep range, drops the failing point, or otherwise edits itself to force a passing
 # appearance. A negative result is a legitimate, documented outcome.
+#
+# PER-STAGE ATTRIBUTION + `optimizer` KWARG (quick task 260823-gea): the original version of this
+# script wrapped `solve_welfare` -> `welfare_accounting` -> `fit_baseline` in ONE `try/catch` per
+# point, in both `count_failures` and `sweep_population_scale`. Spike 003 found this misattributed
+# 2 of 4 sweep "failures" — they were actually `assert_socp_exact!` throwing inside `solve_welfare`
+# at the default `tol_gap = 1e-8`, not failures of the later stages the single catch-all made them
+# look like. Each function now runs three SEQUENTIAL per-stage `try/catch` blocks (short-circuiting
+# to skip later stages once one fails), so a failure is attributable to exactly one of
+# `solve_welfare`/`welfare_accounting`/`fit_baseline`. Both functions also accept an `optimizer`
+# keyword (mirroring `fit_baseline`/`solve_welfare`'s own "only compute/pass the override when the
+# caller actually gave one" discipline, INFRA-02), driven at the top level by an optional
+# `REPRO_TOL_GAP` environment variable: unset means the script's numeric behavior is BYTE-FOR-BYTE
+# unchanged from before this fix (no `optimizer` kwarg is ever passed downstream); set, it builds a
+# `Clarabel.Optimizer` with `tol_gap_abs`/`tol_gap_rel` pinned to that value (same attribute pair as
+# `.planning/spikes/003-phase18-fragility-tolerance/check.jl`), letting the sweep be re-run at a
+# tightened tolerance (e.g. `REPRO_TOL_GAP=1e-10`) without editing source.
 
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using JuMP
+using Clarabel
 using Printf
 using Dates
 
@@ -53,6 +71,24 @@ const SEED_IEEE123 = 20260719
 const LOAD_SCALE_IEEE123 = 0.05
 const PV_SCALE_IEEE123 = 0.12
 const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ratio to LOAD_SCALE held fixed
+
+# Optional solver-tolerance override (quick task 260823-gea): unset REPRO_TOL_GAP => `nothing` =>
+# every downstream call keeps its own default `optimizer` factory (byte-for-byte unchanged path).
+# Set REPRO_TOL_GAP=<tol> => a Clarabel optimizer pinned to that tol_gap_abs/tol_gap_rel, same
+# attribute pair as spike 003's `check.jl`, threaded into `count_failures`/`sweep_population_scale`.
+const REPRO_OPTIMIZER = let tol_str = get(ENV, "REPRO_TOL_GAP", nothing)
+    if tol_str === nothing
+        nothing
+    else
+        tol = parse(Float64, tol_str)
+        optimizer_with_attributes(
+            Clarabel.Optimizer,
+            "verbose" => false,
+            "tol_gap_abs" => tol,
+            "tol_gap_rel" => tol,
+        )
+    end
+end
 
 """
     temperature_profile() -> Vector{Float64}
@@ -214,20 +250,43 @@ end
 # ---- Part (a): discrete flake-rate measurement -------------------------------------------------
 
 """
-    count_failures(feeder, aggs, λ₀; n_repeats=20, seed_offset=0) -> Int
+    count_failures(feeder, aggs, λ₀; n_repeats=20, seed_offset=0, optimizer=nothing)
+        -> (; failures::Int, by_stage::Dict{Symbol,Int})
 
-Calls `solve_welfare` -> `welfare_accounting` -> `fit_baseline` `n_repeats` times inside a
-`try/catch`, incrementing a failure counter on any caught exception and `@warn`-logging it.
-Mirrors `reactive_flake_rate.jl:273-310`'s `count_failures` exactly, adapted to the DADP/FIT/
-DSO-split seam this phase measures instead of `solve_admm`. Each repeat perturbs λ₀ by a tiny
-(`1e-9`-scale) numerical jitter — enough to perturb the interior-point solver's exact iterate
-path without changing the economically-meaningful problem data.
+Calls `solve_welfare` -> `welfare_accounting` -> `fit_baseline` `n_repeats` times, each stage in
+its OWN `try/catch` (quick task 260823-gea — the original single catch-all misattributed which
+stage actually threw, per spike 003 Finding 1), short-circuiting to skip later stages once one
+fails since they consume the previous stage's output. `by_stage` is zero-initialized for all three
+stage keys so the caller can always report a full breakdown, even when a stage never failed.
+Mirrors `reactive_flake_rate.jl:273-310`'s `count_failures`, adapted to the DADP/FIT/DSO-split
+seam this phase measures instead of `solve_admm`. Each repeat perturbs λ₀ by a tiny (`1e-9`-scale)
+numerical jitter — enough to perturb the interior-point solver's exact iterate path without
+changing the economically-meaningful problem data. `optimizer`, when given, is threaded into every
+`solve_welfare`/`fit_baseline` call (not `welfare_accounting`, which takes no optimizer); when
+`nothing` (the default), no `optimizer` kwarg is passed and the byte-for-byte prior default path
+is preserved.
 """
-function count_failures(feeder, aggs, λ₀; n_repeats::Int = 20, seed_offset::Int = 0)
+function count_failures(
+    feeder,
+    aggs,
+    λ₀;
+    n_repeats::Int = 20,
+    seed_offset::Int = 0,
+    optimizer = nothing,
+)
+    opt_kwargs = optimizer === nothing ? NamedTuple() : (; optimizer)
     failures = 0
+    by_stage = Dict{Symbol,Int}(
+        :solve_welfare => 0,
+        :welfare_accounting => 0,
+        :fit_baseline => 0,
+    )
     for i in 1:n_repeats
         jitter = 1e-9 * (i + seed_offset)
         λ₀_i = λ₀ .+ jitter
+
+        ctx = nothing
+        stage1_ok = true
         try
             ctx, _, _ = solve_welfare(
                 feeder,
@@ -236,22 +295,46 @@ function count_failures(feeder, aggs, λ₀; n_repeats::Int = 20, seed_offset::I
                 T = T,
                 λ₀ = λ₀_i,
                 allow_export = true,
+                opt_kwargs...,
             )
+        catch e
+            stage1_ok = false
+            failures += 1
+            by_stage[:solve_welfare] += 1
+            @warn "stability measurement failed" repeat = i stage = :solve_welfare exception =
+                (e, catch_backtrace())
+        end
+        stage1_ok || continue
+
+        stage2_ok = true
+        try
             welfare_accounting(ctx; T = T)
-            fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀_i)
+        catch e
+            stage2_ok = false
+            failures += 1
+            by_stage[:welfare_accounting] += 1
+            @warn "stability measurement failed" repeat = i stage = :welfare_accounting exception =
+                (e, catch_backtrace())
+        end
+        stage2_ok || continue
+
+        try
+            fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀_i, opt_kwargs...)
         catch e
             failures += 1
-            @warn "stability measurement failed" repeat = i exception =
+            by_stage[:fit_baseline] += 1
+            @warn "stability measurement failed" repeat = i stage = :fit_baseline exception =
                 (e, catch_backtrace())
         end
     end
-    return failures
+    return (; failures, by_stage)
 end
 
 # ---- Part (b): population-scale sensitivity sweep (NEW measurement) ---------------------------
 
 """
-    sweep_population_scale(feeder; deltas=(-0.05, -0.02, 0.0, 0.02, 0.05)) -> Vector{NamedTuple}
+    sweep_population_scale(feeder; deltas=(-0.05, -0.02, 0.0, 0.02, 0.05), optimizer=nothing)
+        -> Vector{NamedTuple}
 
 For each `δ`, rebuilds the IEEE-123 population at `load_scale = LOAD_SCALE_IEEE123*(1+δ)`,
 `pv_scale = PV_SCALE_IEEE123*(1+δ)`, `dev_scale = DEV_SCALE_IEEE123*(1+δ)` (the ratio to
@@ -260,15 +343,25 @@ For each `δ`, rebuilds the IEEE-123 population at `load_scale = LOAD_SCALE_IEEE
 DSO-surplus split. This is a genuinely NEW measurement (18-RESEARCH.md Pitfall 4 / Open
 Question 1) — not previously run anywhere in the repo.
 
-Each point is wrapped in a `try/catch` (Rule-1 fix, discovered live: at `δ=-0.05` the SOCP
-relaxation genuinely goes INEXACT — `assert_socp_exact!` throws — exactly the near-boundary
-risk 18-RESEARCH.md's Pitfall 4 documented as a live possibility, not a hypothetical). A
-failing point is recorded as `(; δ, failed=true, error_msg)` rather than crashing the whole
-sweep — an uncaught exception here would silently produce ZERO findings, which is a worse
-honesty failure than reporting the point as failed. `sign_flip_survives` (computed by the
-caller) treats any failed point as a non-survival, per the honest-measurement mandate.
+Each point runs the three stages SEQUENTIALLY, each in its OWN `try/catch` (quick task
+260823-gea — Rule-1 fix, discovered live: at `δ=-0.05` the SOCP relaxation genuinely goes
+INEXACT — `assert_socp_exact!` throws inside `solve_welfare` — exactly the near-boundary risk
+18-RESEARCH.md's Pitfall 4 documented as a live possibility, not a hypothetical; the original
+single catch-all could not distinguish this from a `welfare_accounting`/`fit_baseline` failure,
+per spike 003 Finding 1). A failing point is recorded as `(; δ, failed_stage, error_msg)` —
+`failed_stage = :none` on full success, else the symbol of the stage that threw — rather than
+crashing the whole sweep; an uncaught exception here would silently produce ZERO findings, which
+is a worse honesty failure than reporting the point as failed. `sign_flip_survives` (computed by
+the caller) treats any `failed_stage != :none` point as a non-survival, per the honest-measurement
+mandate. `optimizer`, when given, is threaded into every `solve_welfare`/`fit_baseline` call (not
+`welfare_accounting`); `nothing` (the default) preserves the byte-for-byte prior default path.
 """
-function sweep_population_scale(feeder; deltas = (-0.05, -0.02, 0.0, 0.02, 0.05))
+function sweep_population_scale(
+    feeder;
+    deltas = (-0.05, -0.02, 0.0, 0.02, 0.05),
+    optimizer = nothing,
+)
+    opt_kwargs = optimizer === nothing ? NamedTuple() : (; optimizer)
     λ0 = ieee123_lambda0()
     results = NamedTuple[]
     for δ in deltas
@@ -284,6 +377,12 @@ function sweep_population_scale(feeder; deltas = (-0.05, -0.02, 0.0, 0.02, 0.05)
             pv_scale = pv_scale,
             dev_scale = dev_scale,
         )
+
+        ctx = nothing
+        acct = nothing
+        failed_stage = :none
+        error_msg = ""
+
         try
             ctx, welfare_dadp, _ = solve_welfare(
                 feeder,
@@ -292,36 +391,65 @@ function sweep_population_scale(feeder; deltas = (-0.05, -0.02, 0.0, 0.02, 0.05)
                 T = T,
                 λ₀ = λ0,
                 allow_export = true,
+                opt_kwargs...,
             )
-            acct = welfare_accounting(ctx; T = T)
-            fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+        catch e
+            failed_stage = :solve_welfare
+            error_msg = sprint(showerror, e)
+            @warn "sweep point failed" δ stage = failed_stage exception =
+                (e, catch_backtrace())
+        end
+
+        if failed_stage == :none
+            try
+                acct = welfare_accounting(ctx; T = T)
+            catch e
+                failed_stage = :welfare_accounting
+                error_msg = sprint(showerror, e)
+                @warn "sweep point failed" δ stage = failed_stage exception =
+                    (e, catch_backtrace())
+            end
+        end
+
+        fb = nothing
+        if failed_stage == :none
+            try
+                fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0, opt_kwargs...)
+            catch e
+                failed_stage = :fit_baseline
+                error_msg = sprint(showerror, e)
+                @warn "sweep point failed" δ stage = failed_stage exception =
+                    (e, catch_backtrace())
+            end
+        end
+
+        if failed_stage == :none
             fit_dso = fb.social_fit - fb.prosumer_surplus
             push!(
                 results,
                 (;
                     δ = δ,
-                    failed = false,
+                    failed_stage = failed_stage,
                     dso = acct.dso,
                     fit_dso = fit_dso,
                     prosumer = acct.prosumer,
                     fit_prosumer = fb.prosumer_surplus,
                     socp_maxgap = ctx.meta[:socp_maxgap],
-                    error_msg = "",
+                    error_msg = error_msg,
                 ),
             )
-        catch e
-            @warn "sweep point failed" δ exception = (e, catch_backtrace())
+        else
             push!(
                 results,
                 (;
                     δ = δ,
-                    failed = true,
+                    failed_stage = failed_stage,
                     dso = NaN,
                     fit_dso = NaN,
                     prosumer = NaN,
                     fit_prosumer = NaN,
                     socp_maxgap = NaN,
-                    error_msg = sprint(showerror, e),
+                    error_msg = error_msg,
                 ),
             )
         end
@@ -343,22 +471,24 @@ aggs = build_ieee123_aggregators(feeder)
 println(
     "Running discrete flake-rate measurement ($N_REPEATS repeats) at the retuned point...",
 )
-failures = count_failures(feeder, aggs, λ0; n_repeats = N_REPEATS)
+cf = count_failures(feeder, aggs, λ0; n_repeats = N_REPEATS, optimizer = REPRO_OPTIMIZER)
+failures = cf.failures
 flake_rate = failures / N_REPEATS
 
 println("Running population-scale sensitivity sweep (5 points)...")
-results = sweep_population_scale(feeder)
+results = sweep_population_scale(feeder; optimizer = REPRO_OPTIMIZER)
 
-any_failed = any(r -> r.failed, results)
+any_failed = any(r -> r.failed_stage != :none, results)
 sign_flip_survives =
     !any_failed &&
     all(r -> r.dso > 0 && r.fit_dso < 0 && r.prosumer < r.fit_prosumer, results)
 
 dso_band_lo = 0.0
-successful = filter(r -> !r.failed, results)
+successful = filter(r -> r.failed_stage == :none, results)
 dso_band_hi = isempty(successful) ? NaN : 1.5 * maximum(abs(r.dso) for r in successful)
 
 @printf("\nFlake rate: %d/%d = %.3f\n", failures, N_REPEATS, flake_rate)
+println("failures_by_stage = ", cf.by_stage)
 println("sign_flip_survives: ", sign_flip_survives)
 @printf("RECOMMENDED BAND: DSO_BAND_LO=%.6f, DSO_BAND_HI=%.6f\n", dso_band_lo, dso_band_hi)
 
@@ -385,11 +515,14 @@ open(report_path, "w") do io
     println(io, "N_REPEATS = $N_REPEATS")
     @printf(io, "failures = %d\n", failures)
     @printf(io, "rate = %.4f\n", flake_rate)
+    println(io, "failures_by_stage = ", cf.by_stage)
     println(
         io,
         "This is a citable phase finding, not a pass/fail gate (mirrors ",
         "scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, ",
-        "reported here neither silently accepted nor silently \"fixed.\"",
+        "reported here neither silently accepted nor silently \"fixed.\" The per-stage breakdown ",
+        "(quick task 260823-gea) makes any future misattribution of WHICH call failed structurally ",
+        "impossible to reintroduce.",
     )
     println(io)
     println(io, "=== Population-scale sensitivity sweep ===")
@@ -404,16 +537,17 @@ open(report_path, "w") do io
         "socp_maxgap"
     )
     for r in results
-        if r.failed
+        if r.failed_stage != :none
+            failed_cell = "FAILED($(r.failed_stage))"
             @printf(
                 io,
                 "%-8.3f %14s %14s %14s %14s %14s\n",
                 r.δ,
-                "FAILED",
-                "FAILED",
-                "FAILED",
-                "FAILED",
-                "FAILED"
+                failed_cell,
+                failed_cell,
+                failed_cell,
+                failed_cell,
+                failed_cell
             )
         else
             @printf(
@@ -432,7 +566,8 @@ open(report_path, "w") do io
         println(io)
         println(io, "Failed-point error detail:")
         for r in results
-            r.failed && println(io, "  δ=$(r.δ): ", r.error_msg)
+            r.failed_stage != :none &&
+                println(io, "  δ=$(r.δ) [$(r.failed_stage)]: ", r.error_msg)
         end
     end
     println(io)
@@ -447,7 +582,8 @@ open(report_path, "w") do io
             "Question 1 / Pitfall 4 required before pinning a golden magnitude band.",
         )
     elseif any_failed
-        failed_deltas = join([@sprintf("%.3f", r.δ) for r in results if r.failed], ", ")
+        failed_deltas =
+            join([@sprintf("%.3f", r.δ) for r in results if r.failed_stage != :none], ", ")
         println(
             io,
             "HONEST NEGATIVE RESULT: the sweep point(s) delta=[$failed_deltas] FAILED OUTRIGHT — ",
