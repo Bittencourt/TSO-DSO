@@ -91,7 +91,7 @@ O MESMO trecho liderou os três pontos do IEEE-8500. Fluxo reverso co-ocorre mas
 
 == Estágio G — verificação na fonte: a redução estava CORRETA
 
-Linha-fonte: `New Line.LN5473436-1 bus1=M1142828 bus2=L2674047 length=0.0003048 units=km Linecode=3PH_H-397_ACSR...`. A resistência de sequência positiva $r_1 = 0,157372$ Ω/km (normal para um condutor 397 ACSR); comprimento `0,0003048 km` = EXATAMENTE 1,000 pé; $r_1 dot.c L = 4,7967 times 10^(-5)$ Ω contra o valor committado `4,797e-5`; `r_pu = 1,5423e-7` contra o valor committado `1,542e-7` — quatro algarismos significativos. NÃO é um bug de *parsing*. `LN5473436-1` e `LN5473436-2` são uma DIVISÃO de uma linha original única, inserindo a barra onde o transformador de serviço `T5260514C` se conecta. O REENQUADRAMENTO: duas barras a um pé de distância SÃO o mesmo nó, então a redução correta é MESCLAR (*merge*) as duas. Aplicar o `r_pu = 3e-4` de D-13 a um condutor real inventaria ~2.000x sua resistência física real só para passar em um portão — corrupção de modelo, não uma correção.
+Linha-fonte: `New Line.LN5473436-1 bus1=M1142828 bus2=L2674047 length=0.0003048 units=km Linecode=3PH_H-397_ACSR...`. A resistência de sequência positiva $r_1 = 0,157372$ Ω/km (normal para um condutor 397 ACSR); comprimento `0,0003048 km` = EXATAMENTE 1,000 pé; $r_1 dot.c L = 4,7967 times 10^(-5)$ Ω contra o valor committado `4,797e-5`; `r_pu = 1,5423e-7` contra o valor committado `1,542e-7` — quatro algarismos significativos. NÃO é um bug de *parsing*. `LN5473436-1` e `LN5473436-2` são uma DIVISÃO de uma linha original única, inserindo a barra onde o transformador de serviço `T5260514C` se conecta. O REENQUADRAMENTO: duas barras a um pé de distância SÃO o mesmo nó, então a redução correta é MESCLAR (*merge*) as duas. Aplicar o `r_pu = 3e-4` de D-13 a um condutor real inventaria \~2.000x sua resistência física real só para passar em um portão — corrupção de modelo, não uma correção.
 
 == Estágio H — redução topológica, em duas passadas
 
@@ -161,7 +161,7 @@ Tudo aditivo; `assert_socp_exact!` permanece byte-idêntico durante toda a inves
 = Itens em aberto
 
 - Os resultados da varredura committados na Fase 25 estão DESATUALIZADOS: esta foi uma mudança de identidade do *fixture*, então `density_sweep_full.csv` e a escada original descrevem o *fixture* pré-*merge* de 4.875 barras e não são comparáveis a nada atual.
-- O verdadeiro ponto-título de ~40x em `T = 24` nunca foi medido; sua real necessidade de memória está apenas limitada inferiormente.
+- O verdadeiro ponto-título de \~40x em `T = 24` nunca foi medido; sua real necessidade de memória está apenas limitada inferiormente.
 - As medições de SCS dependem de uma instalação Julia GLOBAL em vez de um ambiente fixado no repositório — um gap de reprodutibilidade contra a própria regra de manifesto committado do projeto (INFRA-01).
 - Os 53 tocos artificiais de exatamente 1 m permanecem intocados, registrados como o próximo nível.
 - Higiene de certificado precisa de uma regra escrita: `--calibration-density` torna fácil calibrar um piso exatamente no ponto sendo certificado, o que produz uma razão tautológica de 1,000 — o gap e o piso saíram bit-idênticos quando isso foi tentado.
