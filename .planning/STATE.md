@@ -5,7 +5,7 @@ milestone_name: Research Extension Rungs
 status: executing
 stopped_at: Phase 25 context gathered
 last_updated: "2026-08-21T08:52:11.027Z"
-last_activity: 2026-08-21 -- Phase 25 execution started
+last_activity: 2026-08-23 -- Completed quick task 260823-gea: Phase-18 owed corrections (item 5 closed, item 4 left open with measured reason)
 progress:
   total_phases: 7
   completed_phases: 5
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: 25 (ieee-8500-scalability-benchmark) — EXECUTING
 Plan: 1 of 6
 Status: Executing Phase 25
-Last activity: 2026-08-21 -- Phase 25 execution started
+Last activity: 2026-08-23 -- Completed quick task 260823-gea: Phase-18 owed corrections (item 5 closed, item 4 left open with measured reason)
 
 ### Quick Tasks Completed
 
@@ -50,6 +50,7 @@ Last activity: 2026-08-21 -- Phase 25 execution started
 | 260822-pxb | Zero-length bus-merge reduction replacing impedance fabrication (3 merges) | 2026-08-23 | eeabcbe | [260822-pxb-ieee-8500-zero-length-bus-merge-replacin](./quick/260822-pxb-ieee-8500-zero-length-bus-merge-replacin/) |
 | 260822-rle | Widen bus-merge threshold to sub-metre (6 more merges) — SOCP exactness recovered on all 3 points | 2026-08-23 | 8e804f7 | [260822-rle-widen-ieee-8500-bus-merge-threshold-to-s](./quick/260822-rle-widen-ieee-8500-bus-merge-threshold-to-s/) |
 | 260822-tyf | Typst academic report: IEEE-8500 SOCP-exactness investigation (pt-BR) | 2026-08-23 | f360b50 | [260822-tyf-typst-academic-report-ieee-8500-socp-exa](./quick/260822-tyf-typst-academic-report-ieee-8500-socp-exa/) |
+| 260823-gea | Phase-18 owed corrections — per-stage try/catch + optimizer kwarg in repro_stability_check.jl (item 5 CLOSED); golden-band re-derivation left OPEN, fit_baseline hits ALMOST_OPTIMAL at 3/5 points | 2026-08-23 | 56f007f | [260823-gea-close-the-two-owed-v2-1-phase-18-correct](./quick/260823-gea-close-the-two-owed-v2-1-phase-18-correct/) |
 
 ## Performance Metrics
 
@@ -231,11 +232,20 @@ None yet.
   Spikes 002/003 plus quick task 260726-mo7 showed the ±2-5% "population-scale fragility" was a
   solver-tolerance artifact: `assert_socp_exact!`'s `atol = 1e-6` sits at Clarabel's achievable cone
   residual on the 122-branch IEEE-123 feeder at the default `tol_gap = 1e-8`. At `tol_gap = 1e-10`
-  the sweep solves **5/5** and the DSO-surplus sign flip holds at **every** point.
-  **Outstanding corrections:** (4) ⬜ OWED Plan 18-02's golden band — its `1.5 × max|dso|` rule now
-  implies **7.211** vs the pinned **5.5886** (test still passes, but rule and value disagree);
-  (5) ⬜ OWED split `repro_stability_check.jl`'s try/catch per stage and thread the new `optimizer`
-  kwarg. Evidence: `.planning/spikes/003-phase18-fragility-tolerance/`.
+  `solve_welfare`'s SOCP-exactness gate resolves **5/5** — but see (4): the FULL sign-flip
+  confirmation does **not** hold at every point, so the original "5/5 everywhere" wording was
+  too strong.
+  **Outstanding corrections:** (4) ⬜ STILL OWED — quick task 260823-gea re-measured (fixed script,
+  3 consistent re-runs) and found this does NOT fully reproduce today: `solve_welfare`'s SOCP gate
+  does resolve 5/5 at `tol_gap=1e-10`, but `fit_baseline`'s own nested solve returns
+  `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5 points (a different, convergence-related
+  numerical issue, not SOCP inexactness), so only 2/5 points fully confirm the sign flip today —
+  too few to responsibly re-derive `1.5 × max|dso|` (which would be no stronger than the original
+  1-point derivation). `DSO_BAND_HI` is left UNCHANGED at **5.5886**; the never-actually-measured
+  **7.211** projection is not adopted. Closing this needs a bounded, budgeted re-measurement in a
+  future phase. (5) ✅ split `repro_stability_check.jl`'s try/catch per stage and thread the new
+  `optimizer` kwarg — DONE by 260823-gea (commit `f913dbb`). Evidence:
+  `.planning/spikes/003-phase18-fragility-tolerance/`, `.planning/quick/260823-gea-*/`.
 
 - [v2.1 Phase 17 premise REFUTED 2026-07-26]: the page-documented justification for the Phase-17
   population re-tune is a solver-tolerance artifact (passes at `tol_gap=1e-10` without the re-tune).

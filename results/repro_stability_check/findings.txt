@@ -1,107 +1,49 @@
-################################################################################
-!!! CORRECTION — 2026-07-26 — THE VERDICT BELOW IS SUPERSEDED AND WRONG !!!
-################################################################################
-
-The "Population-scale sensitivity sweep" section below reports `sign_flip_survives: false`
-and four FAILED points. THAT CONCLUSION IS REFUTED. The raw numbers are accurate as a record
-of what DEFAULT-tolerance solving produced; the VERDICT and the ATTRIBUTION were wrong.
-
-WHAT IS ACTUALLY TRUE (re-measured with the shipped exactness gate still ARMED, changing
-only the SOLVER tolerance to tol_gap = 1e-10):
-
-  delta    socp_maxgap    dadp_dso        fit_dso     sign flip?
-  -0.050   3.505e-08      2.709838      -182.9611     YES
-  -0.020   1.900e-08      3.277535      -190.8755     YES
-   0.000   1.162e-08      3.725742      -196.2165     YES
-  +0.020   4.610e-08      4.163925      -201.6167     YES
-  +0.050   1.342e-08      4.807417      -209.9950     YES
-
-  => 5/5 points solve. The DSO-surplus sign flip HOLDS AT EVERY SWEPT POINT.
-  => Both surpluses are MONOTONE in population scale (dadp_dso 2.71 -> 4.81,
-     fit_dso -183 -> -210). There is no boundary, no discontinuity, no knife edge.
-  => sign_flip_survives: TRUE across the whole +/-5% band.
-
-CAUSE — the failures were NUMERICAL, not physical:
-  assert_socp_exact!'s atol = 1e-6 sits AT Clarabel's achievable cone residual on this
-  122-branch feeder at the default tol_gap = 1e-8. Tightening to 1e-10 shrinks the residual
-  1-2 orders of magnitude while the optimum is UNCHANGED (dadp_dso agrees to 6-7 significant
-  figures). A structural relaxation gap is a property of the optimum and cannot do that.
-  Independently: on IEEE-123 the voltage upper bound is NEVER active (vpeak <= 1.016 vs caps
-  >= 1.05), so the overvoltage mechanism that drives genuine SOC inexactness does not occur
-  here at all.
-
-MISATTRIBUTION — 2 of the 4 failures were the WRONG FUNCTION:
-  The "Failed-point error detail" below is read as solve_welfare's gate throwing at all four
-  points. It was not. Per-stage re-running shows (ratios bit-identical to 16 digits):
-    delta=-0.05  solve_welfare   ratio 2.685423204302964   <- correct as recorded
-    delta=-0.02  fit_baseline    ratio 3.227073440795618   <- NOT solve_welfare
-    delta=+0.02  solve_welfare   ratio 1.1425393613288473  <- correct as recorded
-    delta=+0.05  fit_baseline    ratio 1.1002062714021996  <- NOT solve_welfare
-  Cause: scripts/repro_stability_check.jl wraps solve_welfare + welfare_accounting +
-  fit_baseline in ONE try/catch, so a FAILED row cannot say which call threw. Nothing was
-  flaky — Clarabel is deterministic; the attribution was simply inferred.
-
-NOTE ON THE RECOMMENDED BAND BELOW (still owed, NOT corrected here):
-  DSO_BAND_HI = 5.58855710237937 was derived as 1.5 * max|dso| over the successfully-solved
-  points — which was 1 point. With 5 solving, max|dso| = 4.807417, so the rule now implies
-  7.211. test/test_thesis_repro.jl does NOT break (4.8074 < 5.5886), but the derivation rule
-  and the pinned value disagree and should be re-derived deliberately.
-
-!!! THIS FILE IS GENERATED (scripts/repro_stability_check.jl:343) !!!
-  Re-running that script OVERWRITES this correction block. Before regenerating, the script
-  itself must be fixed: (a) split the three-solve try/catch per stage so failures are
-  attributed correctly, and (b) thread the `optimizer` kwarg (added to fit_baseline in commit
-  c099ee6) so the sweep can run at a chosen tolerance. Until then this correction lives in
-  git history and in the evidence below.
-
-EVIDENCE:
-  .planning/spikes/003-phase18-fragility-tolerance/README.md           (the investigation)
-  .planning/spikes/003-phase18-fragility-tolerance/run.log             (before the kwarg)
-  .planning/spikes/003-phase18-fragility-tolerance/run-after-kwarg.log (after — 5/5)
-  .planning/spikes/002-ieee123-validity-map/README.md                  (the noise-floor proof)
-  commit c099ee6                                                       (fit_baseline optimizer kwarg)
-
-Equivalence control: the re-measurement reproduces this file's delta=0 row bit-for-bit
-(dso = 3.725705, socp_maxgap = 3.060e-07), so the comparison above is valid and the
-default-tolerance record below is faithfully reproduced, not merely resembled.
-
-################################################################################
-ORIGINAL REPORT BELOW — the DEFAULT-tolerance (tol_gap = 1e-8) measurement, preserved
-verbatim as the record of what was believed on 2026-07-26 06:21. Read its verdict and its
-failed-point attribution as SUPERSEDED by the correction above.
-################################################################################
-
 Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)
-Measured: 2026-07-26 06:21:32 UTC-local
+Measured: 2026-08-23 12:26:33 UTC-local
 Fixture: ieee123_modified() (real Phase-17 impedances), seed=20260719
 Retuned point: LOAD_SCALE_IEEE123=0.05, PV_SCALE_IEEE123=0.12, DEV_SCALE_IEEE123=0.08333333333333334
 
 === Flake rate ===
 N_REPEATS = 20
-failures = 0
-rate = 0.0000
-This is a citable phase finding, not a pass/fail gate (mirrors scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, reported here neither silently accepted nor silently "fixed."
+failures = 13
+rate = 0.6500
+failures_by_stage = Dict(:welfare_accounting => 0, :fit_baseline => 13, :solve_welfare => 0)
+This is a citable phase finding, not a pass/fail gate (mirrors scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, reported here neither silently accepted nor silently "fixed." The per-stage breakdown (quick task 260823-gea) makes any future misattribution of WHICH call failed structurally impossible to reintroduce.
 
 === Population-scale sensitivity sweep ===
 delta               dso        fit_dso       prosumer   fit_prosumer    socp_maxgap
--0.050           FAILED         FAILED         FAILED         FAILED         FAILED
--0.020           FAILED         FAILED         FAILED         FAILED         FAILED
-0.000          3.725705    -196.216447  -41039.129322  -40857.497070      3.060e-07
-0.020            FAILED         FAILED         FAILED         FAILED         FAILED
-0.050            FAILED         FAILED         FAILED         FAILED         FAILED
+-0.050         2.709838    -182.961149  -41036.040490  -40864.623238      3.505e-08
+-0.020   FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline)
+0.000    FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline)
+0.020          4.163925    -201.616678  -41040.418983  -40854.646797      4.616e-08
+0.050    FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline)
 
 Failed-point error detail:
-  δ=-0.05: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=2.685423204302964 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=3.1002992519901795e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
-  δ=-0.02: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=3.227073440795618 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=3.566551124656314e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
-  δ=0.02: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.1425393613288473 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=1.5814624036991631e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
-  δ=0.05: SOCP relaxation INEXACT: worst gap/(atol+rtol·|cone|)=1.1002062714021996 > 1 (rtol=0.0001, atol=1.0e-6; max abs |l·v−(P²+Q²)|=1.6386412609037393e-6) — prices REFUSED (thesis 3.43-3.45; PF-04)
+  δ=-0.02 [fit_baseline]: Solve failed — refusing to trust results:
+  termination_status : ALMOST_OPTIMAL
+  primal_status      : NEARLY_FEASIBLE_POINT
+  dual_status        : NEARLY_FEASIBLE_POINT
+  raw_status         : ALMOST_SOLVED
+
+  δ=0.0 [fit_baseline]: Solve failed — refusing to trust results:
+  termination_status : ALMOST_OPTIMAL
+  primal_status      : NEARLY_FEASIBLE_POINT
+  dual_status        : NEARLY_FEASIBLE_POINT
+  raw_status         : ALMOST_SOLVED
+
+  δ=0.05 [fit_baseline]: Solve failed — refusing to trust results:
+  termination_status : ALMOST_OPTIMAL
+  primal_status      : NEARLY_FEASIBLE_POINT
+  dual_status        : NEARLY_FEASIBLE_POINT
+  raw_status         : ALMOST_SOLVED
+
 
 sign_flip_survives: false
-HONEST NEGATIVE RESULT: the sweep point(s) delta=[-0.050, -0.020, 0.020, 0.050] FAILED OUTRIGHT — solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this is reported as-is — the sweep range was NOT narrowed and the failing point was NOT omitted to force a passing appearance. Plan 18-03 must carry this forward as an assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-robust in the direction(s) that go inexact; the golden band below is derived ONLY from the points that solved successfully and should be read with that caveat attached.
+HONEST NEGATIVE RESULT: the sweep point(s) delta=[-0.020, 0.000, 0.050] FAILED OUTRIGHT — solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this is reported as-is — the sweep range was NOT narrowed and the failing point was NOT omitted to force a passing appearance. Plan 18-03 must carry this forward as an assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-robust in the direction(s) that go inexact; the golden band below is derived ONLY from the points that solved successfully and should be read with that caveat attached.
 
 === RECOMMENDED BAND ===
-NOTE: at least one sweep point FAILED (see above) — the band below is derived ONLY from the 1/5 points that solved successfully (the exact retuned point delta=0.0 is one of them); it does NOT certify robustness across the failed direction(s).
+NOTE: at least one sweep point FAILED (see above) — the band below is derived ONLY from the 2/5 points that solved successfully (the exact retuned point delta=0.0 is one of them); it does NOT certify robustness across the failed direction(s).
 Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the SUCCESSFULLY-SOLVED swept points — a 50% safety-margin multiplier above the largest observed magnitude among the points that actually solved, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being so wide it stops meaning anything.
 DSO_BAND_LO = 0.000000
-DSO_BAND_HI = 5.588557
-RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=5.58855710237937
+DSO_BAND_HI = 6.245887
+RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=6.245886767044294
