@@ -653,7 +653,7 @@ cuts (finding 2).
 | A2 | HiGHS `mip_rel_gap = 0.0` will not stall branch-and-bound on the `K=4` toy fixture. | Priority Finding 4 / Common Pitfalls | If it stalls, a small positive value (e.g. `1e-9`) would need to be substituted with an explicit note that the outer exactness claim then inherits that (negligible but nonzero) slack. Low risk given the instance's tiny size, but unverified by an actual solve this session. |
 | A3 | The GBD-style convexity argument (Priority Finding 2) applies without qualification to the ACTUAL oracle (`α_op`, a LinDistFlow/branch-flow SOCP welfare problem), not just to a generic "convex subproblem." | Priority Finding 2 | If the oracle's SOCP relaxation is not exactly convex in `z` for the fixture in use (e.g. a non-exact relaxation regime — cf. the project's own documented SOCP-inexactness findings on other feeders, MEMORY.md), the continuous-cut-validity argument could weaken. On the D-12 canonical N=1 fixture this is not believed to be an issue (it is a long-validated, tiny, radial, SOCP-exact instance per the existing PVAL-01/PVAL-02 goldens), but the general claim should not be exported to a larger feeder without re-checking exactness there too. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What exactly is the `α_op_lb`/`α_x_lb` derivation, and does it hold over the full `[0,y_max]`
    domain?**
@@ -661,6 +661,13 @@ cuts (finding 2).
      master's first (zero-cut) solve (Pitfall M1, `master.jl`'s own docstring).
    - What's unclear: the exact derivation (this session did not locate/read `11-RESEARCH.md`).
    - Recommendation: a five-minute read before writing the LL cut's `L` — see Assumption A1.
+   - **RESOLVED (planning, plan 24-01 Task 2):** located the archived `11-01-PLAN.md`
+     `<toy_fixture>` derivation (`α_op_lb=-5.0` is a conservative margin below the oracle's
+     UNCONSTRAINED global welfare maximum `2.0`, hence valid for every real `z`, not just an
+     interior sample; `α_x_lb=0.0` is trivially valid). Plan 24-01 Task 2 turns this into an
+     EXECUTED regression sweeping `z in {0,1,2,4,8}` against the real
+     `solve_planning_oracle!`/`solve_follower!` entrypoints, not the closed form alone —
+     Assumption A1 is closed by measurement, not by re-trusting the archived derivation.
 
 2. **(a) vs (b) from Pattern 2 — new struct with duplicated methods, or a one-line abstract
    supertype retrofit?**
@@ -671,6 +678,13 @@ cuts (finding 2).
      *names*, not struct types, so either choice is compatible with D-06/D-07 as written).
    - Recommendation: planner's choice; lean toward (b) (abstract supertype) if it minimizes new
      code, since the two cut-adding functions' bodies would otherwise be near-identical duplicates.
+   - **RESOLVED (planning, plan 24-02):** chose option (a) — a new `BendersMasterInteger` struct
+     (built in plan 24-01) plus overloaded `add_optimality_cut!`/`add_feasibility_cut!` methods
+     (plan 24-02 Task 1) — OVER option (b)'s abstract-supertype retrofit, specifically because
+     `master.jl`/`BendersMaster` is never touched by this phase at all under option (a), which is
+     strictly safer for D-05's "continuous path byte-identical by construction" claim than (b)'s
+     one-line edit to the existing struct declaration. See 24-02-PLAN.md's own `<rationale>`
+     block for the full write-up.
 
 ## Environment Availability
 
