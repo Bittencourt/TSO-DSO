@@ -239,11 +239,21 @@ None yet.
   3 consistent re-runs) and found this does NOT fully reproduce today: `solve_welfare`'s SOCP gate
   does resolve 5/5 at `tol_gap=1e-10`, but `fit_baseline`'s own nested solve returns
   `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5 points (a different, convergence-related
-  numerical issue, not SOCP inexactness), so only 2/5 points fully confirm the sign flip today —
-  too few to responsibly re-derive `1.5 × max|dso|` (which would be no stronger than the original
-  1-point derivation). `DSO_BAND_HI` is left UNCHANGED at **5.5886**; the never-actually-measured
-  **7.211** projection is not adopted. Closing this needs a bounded, budgeted re-measurement in a
-  future phase. (5) ✅ split `repro_stability_check.jl`'s try/catch per stage and thread the new
+  numerical issue, not SOCP inexactness), so only 2/5 points fully confirm the sign flip today.
+  `DSO_BAND_HI` is left UNCHANGED at **5.5886** pending a deliberate decision (below).
+  **Measured numbers now on record** (`results/repro_stability_check/findings.txt`, 2 independent
+  reproducing runs at `REPRO_TOL_GAP=1e-10`): discrete flake rate **13/20 = 0.650**, all 13 at the
+  `fit_baseline` stage (0 at `solve_welfare`, 0 at `welfare_accounting`); `sign_flip_survives: false`;
+  script-recommended band **`DSO_BAND_HI = 6.245887`** (= 1.5 × 4.163925, over the 2 points passing
+  the script's as-designed all-3-stages filter).
+  **Open design question that decides item (4)** — the band rule is over `dso` (`dadp_dso`), which
+  resolves cleanly at **all 5** points; only `fit_baseline`'s orthogonal nested solve (needed for
+  `fit_dso`/sign-flip, NOT for `dso`) fails at 3/5. So the script's success filter gates the band on
+  a stage the band does not depend on. Decoupling those criteria would use all 5 `dso` values and
+  give **1.5 × 4.807417 = 7.211126** — numerically the long-flagged "7.211", but reached by a
+  defensible route rather than the refuted 5/5-everywhere assumption. NOT implemented or verified.
+  Closing item (4) = choose between the 3-stage-gated **6.245887** and the decoupled **7.211126**,
+  implement the filter change if the latter, and re-pin deliberately. (5) ✅ split `repro_stability_check.jl`'s try/catch per stage and thread the new
   `optimizer` kwarg — DONE by 260823-gea (commit `f913dbb`). Evidence:
   `.planning/spikes/003-phase18-fragility-tolerance/`, `.planning/quick/260823-gea-*/`.
 
