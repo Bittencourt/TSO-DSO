@@ -268,8 +268,18 @@ problem, not a relaxation-theory problem:
    sweep points unmeasurable.
 3. Correcting the shipped `sign_flip_survives: false` claim in findings.txt, 18-01-SUMMARY.md, and the
    published assumptions literate page.
-4. Re-deriving Plan 18-02's golden band, whose `1.5 × max|dso|` rule now implies 7.211 against a pinned
-   5.5886 (not currently failing, but rule and value disagree).
+4. Re-deriving Plan 18-02's golden band — STILL OPEN, updated by quick task `260823-gea`: the
+   naive "`1.5 × max|dso|` now implies 7.211" framing assumed all 5 sweep points solve cleanly
+   at `tol_gap=1e-10`. `260823-gea` re-measured (fixed `scripts/repro_stability_check.jl`'s
+   try/catch per stage, 3 consistent re-runs) and found `solve_welfare`'s SOCP-exactness gate
+   does resolve 5/5 at that tolerance, but `fit_baseline`'s own nested solve does NOT — it
+   returns `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5 points, so only 2/5 points fully
+   confirm the sign flip today. Re-deriving the band from 2 points would be no stronger evidence
+   than the original 1-point derivation, so `260823-gea` deliberately left `DSO_BAND_HI`
+   UNCHANGED (still 5.58855710237937) rather than pin a number from too few points or from the
+   never-actually-measured `7.211`. Closing this needs a bounded, budgeted re-measurement in a
+   future phase (see `test/test_thesis_repro.jl`'s header comment and `.planning/STATE.md`'s
+   Phase 18 corrections-owed bullet, item (4), for the full finding).
 
 The 3-bus overvoltage inexactness (EXACT-04) remains real and reproducible — it is a property of that
 stress fixture, not of real feeders at these scales.
