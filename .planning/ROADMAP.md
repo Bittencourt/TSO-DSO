@@ -323,7 +323,32 @@ earlier, lower-risk axes' validated rungs unblocked.
      builder(s) only, with the full unmodified guard test still green for every non-lifted builder
      (operational layer stays binary-free), and a live-executed literate page documents the guard
      lift and cut mechanism.
-**Plans**: TBD
+**Plans:** 6 plans (6 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 24-01-PLAN.md — MILP factory exactness fix (mip_rel_gap=>0.0) + BendersMasterInteger/build_master_integer binary-expansion master + measured L-bound validity
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 24-02-PLAN.md — add_optimality_cut!/add_feasibility_cut! reuse for BendersMasterInteger (Finding 2) + PVAL-04 registry/EXEMPT scoping
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 24-03-PLAN.md — Laporte-Louveaux add_ll_cut!/add_nogood_cut!/apply_integer_cuts! dispatch (exhaustive 16-corner tightness proof) + BendersTrace additive nogood_count column
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 24-04-PLAN.md — solve_stackelberg! master=nothing/known_optimum injection seam + apply_integer_cuts! wiring + nogood_count/converged_via return + end-to-end smoke test
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 24-05-PLAN.md — INT-03 exhaustive-enumeration certification (real production solves) + D-15 per-cut-validity/continuous-baseline certificates + D-11 BilevelJuMP non-blocker documentation
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 24-06-PLAN.md — Literate rung page (integer_investment.jl) + docs/make.jl wiring + full-suite acceptance
 
 ### Phase 25: IEEE-8500 Scale Benchmark
 
