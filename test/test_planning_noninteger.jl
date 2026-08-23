@@ -62,19 +62,59 @@
                 c_inv = [1.0, 1.0],
                 c_op = [[0.5], [0.5]],
             ).model,
+        # Phase 24 (INT-01/INT-04), plan 24-02 Task 2: `build_master_integer` is a
+        # PLANNING-layer builder that is DELIBERATELY, correctly NOT binary-free (the
+        # binary-expansion investment master, D-01/D-05) — the opposite case from
+        # `operational_builders` below (builders that live outside src/planning/ and are
+        # correctly binary-free). It MUST still be registered here (D-07's source-scan
+        # tripwire requires it — omission fails the tripwire loudly), but it is carried on
+        # the explicit `EXEMPT` allowlist immediately below (D-06: a per-builder
+        # carve-out, never a conditional one).
+        "build_master_integer" =>
+            () -> build_master_integer(;
+                T = 1,
+                K = 4,
+                c_y = 0.3,
+                y_max = 8.0,
+                α_op_lb = -5.0,
+                α_x_lb = 0.0,
+            ).model,
     )
+
+    # D-06: the PVAL-04 exemption is a per-builder carve-out, not a conditional one.
+    # D-07: the source-scan tripwire below still discovers "build_master_integer" — this
+    # EXEMPT set only changes what the no-binaries assertion DOES with that registry key,
+    # never whether it is discovered/registered.
+    EXEMPT = Set(["build_master_integer"])
+
+    # Self-verifying allowlist: every name on EXEMPT must actually be a registry key —
+    # if `build_master_integer` were ever renamed/removed from the registry without
+    # updating this list, this assertion catches the drift loudly rather than letting a
+    # stale string silently do nothing.
+    @test EXEMPT ⊆ Set(keys(registry)) ||
+          error("EXEMPT names a builder not present in the registry: $(setdiff(EXEMPT, Set(keys(registry))))")
 
     for (name, build) in registry
         model = build()
         offenders = [v for v in all_variables(model) if is_binary(v) || is_integer(v)]
-        # Deviation (Rule 1 - bug): `@test cond "message"` is not valid Test.jl syntax
-        # (base Test's @test macro does not accept a bare trailing string as a custom
-        # failure message — verified directly against Julia 1.12's Test stdlib). The
-        # fail-loud requirement (name the offending builder AND variables) is instead
-        # satisfied via `|| error(...)`, which Test.jl reports as an "Error During Test"
-        # with the interpolated message printed verbatim.
-        @test isempty(offenders) ||
-              error("builder $(name) introduced binary/integer variable(s): $(offenders)")
+        if name in EXEMPT
+            # T-24-05 (Repudiation) mitigation: this is a VERIFIED statement, not a blind
+            # skip — this builder genuinely introduces binaries on purpose (D-01/D-05). If
+            # it ever stops being integer, this fails loudly rather than silently masking a
+            # regression where build_master_integer accidentally becomes binary-free.
+            @test !isempty(offenders) || error(
+                "EXEMPT builder $(name) unexpectedly introduced ZERO binary/integer variables — the PVAL-04 exemption is now stale/wrong",
+            )
+        else
+            # Deviation (Rule 1 - bug): `@test cond "message"` is not valid Test.jl syntax
+            # (base Test's @test macro does not accept a bare trailing string as a custom
+            # failure message — verified directly against Julia 1.12's Test stdlib). The
+            # fail-loud requirement (name the offending builder AND variables) is instead
+            # satisfied via `|| error(...)`, which Test.jl reports as an "Error During Test"
+            # with the interpolated message printed verbatim.
+            @test isempty(offenders) ||
+                  error("builder $(name) introduced binary/integer variable(s): $(offenders)")
+        end
     end
 
     # Source-scan tripwire (T-14-04): a future new build_* function under src/planning/
