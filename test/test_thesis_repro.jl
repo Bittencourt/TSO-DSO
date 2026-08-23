@@ -24,9 +24,25 @@
 # The primary item runs at the EXACT Phase-17-retuned point (no population-scale
 # perturbation) where 18-01's own measurement confirms the sign flip HOLDS and the SOCP stays
 # exact (`socp_maxgap=3.060e-07`). 18-01's `sign_flip_survives=false` finding concerns ONLY
-# the +-2%/+-5% population-scale sensitivity sweep (all 4 non-zero points FAIL the SOCP-
-# exactness gate outright) — it is NOT a caveat about the exact pinned point, so the primary
-# gates below are hard, not weakened.
+# the +-2%/+-5% population-scale sensitivity sweep — it is NOT a caveat about the exact
+# pinned point, so the primary gates below are hard, not weakened.
+#
+# UPDATE (quick task 260726-mo7 / 260823-gea): 18-01's original claim that "all 4 non-zero
+# points FAIL the SOCP-exactness gate outright" was itself a MISATTRIBUTION — 2 of the 4
+# failures were actually `fit_baseline`'s OWN internal solve throwing, not `solve_welfare`'s
+# gate, an artifact of `repro_stability_check.jl`'s original single try/catch wrapping all
+# three calls (fixed by 260823-gea, which split it per stage). Once `solve_welfare` runs at
+# a tightened `tol_gap=1e-10`, its SOCP-exactness gate resolves cleanly at ALL 5 swept points
+# (0/5 THREW, re-confirmed by 260823-gea, `.planning/spikes/003-phase18-fragility-tolerance/`).
+# However, `fit_baseline`'s OWN nested solve does NOT reliably converge at that same tight
+# tolerance: re-measured by 260823-gea, 3 of 5 points returned `ALMOST_OPTIMAL`/
+# `NEARLY_FEASIBLE_POINT` rather than a trustworthy optimum, so the FULL sign-flip
+# confirmation (DADP dso>0 AND FIT dso<0) currently holds at only 2 of 5 swept points, not
+# 5 of 5 as `260726-mo7`'s SUMMARY recorded. This is a DIFFERENT numerical issue
+# (solver-convergence-at-extreme-tolerance, not SOCP inexactness) from the one 18-01
+# originally reported, and it means Plan 18-02's golden-band re-derivation (item 4 of
+# STATE.md's Phase 18 corrections-owed bullet) remains OPEN — `DSO_BAND_HI` below is
+# UNCHANGED by 260823-gea, pending a bounded, budgeted re-measurement in a future phase.
 
 @testitem "thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip (REPRO-01)" tags =
     [:thesis_repro] setup = [Phase7Fixtures] begin
