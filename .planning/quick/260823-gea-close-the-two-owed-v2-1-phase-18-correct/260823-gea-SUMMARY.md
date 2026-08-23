@@ -174,3 +174,50 @@ None — no new network endpoints, auth paths, file access patterns, or schema c
 - Commit `f913dbb` exists: `git log --oneline --all | grep f913dbb` → found.
 - Commit `36b31a3` exists: `git log --oneline --all | grep 36b31a3` → found.
 - Commit `56f007f` exists: `git log --oneline --all | grep 56f007f` → found.
+
+---
+
+## ADDENDUM — item (4) subsequently CLOSED (same quick task, after user decision)
+
+The body of this summary above records item (4) as deliberately left OPEN. That was correct at
+the time it was written, but the task did not end there. Two background runs completed after the
+executor reported done, and they surfaced a distinction that made the band re-derivable after all.
+The user was presented with the options and chose to decouple and re-pin.
+
+**The distinction.** The band rule `1.5 × max|dso|` ranges over `dso` — the DADP DSO surplus,
+produced by `solve_welfare` + `welfare_accounting`. `fit_baseline` produces `fit_dso`, which the
+sign-flip check needs and the band does not. `scripts/repro_stability_check.jl` conflated them in
+two separate ways:
+
+1. the band's `successful` filter required all three stages to have succeeded, and
+2. the failure branch of `sweep_population_scale` recorded `dso = NaN` whenever `fit_baseline`
+   threw — discarding an `acct.dso` that had already been computed successfully.
+
+So the band was simultaneously *gated on* and *starved by* a stage orthogonal to it.
+
+**Both fixed**, and re-measured with the fixed script at `REPRO_TOL_GAP=1e-10`:
+
+| quantity | value |
+|---|---|
+| `dso`-trustworthy points | **5 of 5** |
+| all-three-stages points | 2 of 5 |
+| `max\|dso\|` | 4.807417 |
+| script `RECOMMENDED BAND:` | **`DSO_BAND_HI = 7.211125525764296`** |
+| previous pin | 5.58855710237937 |
+| flake rate | 13/20 = 0.650, all 13 at `fit_baseline` (reproduced, 3 runs) |
+
+The pinned value was taken from the script's own `RECOMMENDED BAND:` line, not computed by hand —
+measurement-before-golden preserved. It coincides numerically with the `7.211` long flagged in the
+planning notes, but is reached by the decoupling argument above rather than by the refuted
+"the sweep solves 5/5 everywhere" assumption that figure was originally projected from. That
+distinction is the whole substance of the close.
+
+**Verified:** the pinned point `|dso| = 3.7257047351781196` sits inside both the old and the new
+band, so the band widening moves no verdict. `DSO_BAND_LO = 0.0` and every other assertion in
+`test/test_thesis_repro.jl` are unchanged — nothing was weakened to accommodate the new number.
+
+**Still live, NOT closed by this:** `fit_baseline`'s convergence at `tol_gap=1e-10` (13/20 flake
+rate, `sign_flip_survives: false`, 2/5 points fully confirming the flip). A solver-convergence
+issue distinct from SOCP inexactness, deserving its own follow-up.
+
+Commit: `c284a7e`. Both items (4) and (5) are now ✅ in STATE.md.
