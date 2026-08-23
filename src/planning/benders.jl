@@ -142,7 +142,10 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
         iterate whose own cuts have not yet tightened the master, so the LAST iterate
         is not certified by `UB`; the incumbent is); compute
         `gap = (UB - lb_res.LB) / max(1, abs(UB))`; checkpoint with
-        `feasible = true`; compute
+        `feasible = true`; on this branch ALSO call
+        `apply_integer_cuts!(master, lb_res, Q_nu)` (Phase 24, plan 24-04 — a TRUE no-op
+        for `BendersMaster`, real Laporte-Louveaux/no-good logic for
+        `BendersMasterInteger`, `Q_nu = follower_res.cost - oracle_res.cost`); compute
         `converged_now = known_optimum === nothing ? (gap <= tol) : isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)`
         — an EXCLUSIVE branch, NEVER an `||` of the two criteria (D-13/D-14: reusing the
         continuous loop's inherited `tol` on the certified `known_optimum` path would be
@@ -155,18 +158,23 @@ tolerance or raising loudly on iteration-cap exhaustion (D-10).
 
 # Returns
 
-On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace)` where
-`y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so the
-returned point's true cost equals `UB` and the convergence certificate applies to it,
+On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via)`
+where `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so
+the returned point's true cost equals `UB` and the convergence certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
 upper/lower bounds, `gap` is the converged relative gap (a REPORTING quantity — on the
 `known_optimum`-supplied path, convergence is certified by the exact-match test, not by
 `gap`), `iters` is the convergence iteration count, `oracle`/`follower`/`master` are the
 build-once subproblem handles (for further inspection by the caller/certification gate,
-plan 11-03), and `trace::BendersTrace` (plan 12-01, additive) is the per-iteration
+plan 11-03), `trace::BendersTrace` (plan 12-01, additive) is the per-iteration
 convergence ledger — one row per iteration on both the feasibility-cut and
 optimality-cut branches, including the GENUINE per-iteration retry count and both
-retry-gated subproblems' termination statuses (never a log-scrape estimate).
+retry-gated subproblems' termination statuses (never a log-scrape estimate), and
+`nogood_count`/`converged_via` (Phase 24, plan 24-04, D-16, additive) surface the total
+number of no-good anti-stall cuts fired (`nogood_count`, always `0` on the continuous
+path) and the convergence attribution (`converged_via`, `:clean` if `nogood_count == 0`
+else `:nogood_assisted`) — a nonzero `nogood_count` never fails the run, it is reported,
+never silently absorbed.
 
 # Throws
 
@@ -270,6 +278,10 @@ function solve_stackelberg!(
     # plan 12-01: the purpose-built Benders convergence ledger (roadmap criterion 2) —
     # built alongside the other accumulator state, immediately before the loop.
     trace = BendersTrace()
+    # Phase 24, plan 24-04 (D-16): running total of no-good anti-stall cut firings across
+    # the whole run — always 0 on the continuous path (apply_integer_cuts! is a true no-op
+    # for BendersMaster). Surfaced on the returned NamedTuple, never a silent count.
+    nogood_total = 0
     for k in 1:max_iter
         # WR-01/IN-04 (phase 12 review): solve_time_trace records ONLY the wall-clock
         # seconds spent inside this iteration's solve calls (master + follower, plus
@@ -349,6 +361,16 @@ function solve_stackelberg!(
         # Follower's :x cut — used exactly as solve_follower! returns it.
         add_optimality_cut!(master, :x, follower_res.cost, follower_res.π_s, lb_res.z)
 
+        # Phase 24, plan 24-04: apply_integer_cuts! fires generically on the optimality
+        # branch — a TRUE no-op for BendersMaster (touches zero fields of lb_res, always
+        # returns nogood_fired = false), real Laporte-Louveaux (always) + no-good
+        # (on detected stall) logic for BendersMasterInteger (plan 24-03). Q_nu is the
+        # recourse value EXCLUDING the leader's own c_y*y term — exactly cost_k below,
+        # minus that term.
+        Q_nu = follower_res.cost - oracle_res.cost
+        integer_cut_res = apply_integer_cuts!(master, lb_res, Q_nu)
+        integer_cut_res.nogood_fired && (nogood_total += 1)
+
         # CR-01: track the incumbent, not just the bound — store the (y, z) pair that
         # achieved the running-minimum UB so the converged return is the certified point.
         cost_k = master.c_y * lb_res.y + follower_res.cost - oracle_res.cost
@@ -367,7 +389,9 @@ function solve_stackelberg!(
         # plan 12-01: optimality-branch trace row. retry_count sums BOTH retry-gated
         # solves' net retries this iteration (master's and the oracle's), since both
         # actually ran; oracle_status records the oracle's own genuine termination
-        # status (never the :not_solved sentinel on this branch).
+        # status (never the :not_solved sentinel on this branch). nogood_count (Phase 24,
+        # plan 24-04, D-16) records THIS iteration's no-good firing (0 or 1) — always 0 on
+        # the continuous path.
         push!(
             trace,
             k;
@@ -384,6 +408,7 @@ function solve_stackelberg!(
             oracle_status = Symbol(termination_status(oracle.model)),
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
             solve_time = t_solve,
+            nogood_count = integer_cut_res.nogood_fired ? 1 : 0,
         )
 
         # Phase 24, plan 24-04 (D-13/D-14, plan-checker Blocker 2): an EXCLUSIVE branch,
@@ -412,6 +437,11 @@ function solve_stackelberg!(
                 follower,
                 master,
                 trace,
+                # Phase 24, plan 24-04 (D-16): appended AFTER every existing field so
+                # every prior caller destructuring by name is unaffected (NamedTuple
+                # field access is name-based, never position-based).
+                nogood_count = nogood_total,
+                converged_via = nogood_total > 0 ? :nogood_assisted : :clean,
             )
         end
     end
