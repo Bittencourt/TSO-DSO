@@ -89,3 +89,53 @@
 - Added a dedicated `docs` GitHub Actions job (single pinned Julia version, explicit docs-env instantiate via julia-buildpkg@v1) that builds the full Documenter+Literate site with CairoMakie figures on every push/PR, and resolved the deploydocs repo-slug checkpoint by keeping the placeholder per researcher decision.
 
 ---
+
+## v3.0 Research Extension Rungs — shipped 2026-08-24
+
+**Phases 19–25** (7 phases, 43 plans executed against 41 planned + 2 unplanned gap-closure waves).
+Git range `v2.1.1..v3.0`: 453 commits, 291 files, +84,308 / -504. Audit: `gaps_accepted`.
+Known deferred items at close: 3 genuinely open (see STATE.md Deferred Items) — SCALE-STRETCH,
+Phase-18 `fit_baseline` convergence, and the MESH-06 composition advisory. The 16 quick tasks and
+1 verification gap that `audit-open` flagged are documented there as a frontmatter-convention
+artifact and an accepted gap respectively, not open work.
+
+Seven research-extension axes, each shipping as a documented rung with **its own** certificate (the
+milestone's standing bar was that no new mathematical regime may reuse another's tolerance — verified
+clean at audit: `assert_socp_exact!` 1e-4/1e-6, `assert_4q_complementarity!` 1e-4/1e-8,
+`assert_restriction_exact!` 5e-4, `certify_angle_recoverable!` 0.01, plus Phase 25's freshly measured
+per-fixture noise floors).
+
+- **4Q-BESS + live reactive dual-ascent** (MESH-04/05) — genuine P/Q variables in an apparent-power
+  cone; the v2.1 reactive-dual scaffolding promoted to a live converging μ-ascent, gated by a measured
+  cross-validation and a liveness regression that proves the mechanism reacts to its input.
+- **Overvoltage-capable restricted relaxation** (OVR-01..04) — prices the v2.1 EXACT-04 high-PV
+  regime with an AC-certified validity certificate, and ships an honest negative result (OPF-ε)
+  beside the OPF-m success. Established the restriction-certificate pattern Phase 23 reuses.
+- **MPC / rolling-horizon RTP** (MPC-01..04) — closed-loop receding-horizon solves over stateful
+  devices publishing rolling DADPs, benchmarked against perfect foresight. Genuinely reuses Phase
+  20's escalation ladder — the milestone's standout real cross-phase wire.
+- **Stochastic PV/demand** (STOCH-01..04) — two-stage extensive form over seeded Markov scenarios,
+  per-scenario DADPs as the primary price output, never-aggregated per-scenario exactness gate.
+- **Meshed networks** (MESH-01/02/03/06) — non-radial SOCP whose angle-recoverability certificate
+  exercises BOTH verdicts on one committed 4-bus diamond fixture.
+- **Discrete/integer investment** (INT-01..04) — binary-expansion investment with genuine
+  Laporte–Louveaux cuts, certified against exhaustive lattice enumeration, PVAL-04 guard scoped
+  rather than deleted via a self-verifying per-builder exemption.
+- **IEEE-8500 scale benchmark** (SCALE-01..05) — the public balanced load case (full MV + LV, ~4.9k
+  buses after positive-sequence collapse) as a committed fixture, and a density sweep that reported
+  a memory wall honestly rather than passing the MV-only control fixture's numbers off as the
+  headline result.
+
+**Accepted gap:** SCALE-05 — the ~40x headline fixture was OOM-killed at every density; headline-scale
+solve time / ADMM iterations / exactness were never measured. Accepted as an honest non-measurement.
+The true memory requirement is lower-bounded only (kills at 6.8–9.75 GiB on a shared 15 GiB machine
+under ~9 GiB of unrelated swap pressure).
+
+**Methodological finding worth reusing:** Phase 24's per-cut-validity certificate — a *mechanism*
+test, not an *outcome* test — caught an invalid Laporte–Louveaux cut that an exhaustive 256-pair
+algebra proof had passed cleanly, because that proof validated the formula against a fixed input and
+so could not see a defect in what supplied it. Three stacked defects sat underneath; code review
+found two more. Separately: an outer criterion claiming *exactness* silently inherits inner solver
+slack unless `mip_rel_gap` and `mip_feasibility_tolerance` are both set explicitly.
+
+---

@@ -52,6 +52,31 @@ Last activity: 2026-08-24 -- Phase 24 COMPLETE (INT-01..04, verification passed 
 | 260822-tyf | Typst academic report: IEEE-8500 SOCP-exactness investigation (pt-BR) | 2026-08-23 | f360b50 | [260822-tyf-typst-academic-report-ieee-8500-socp-exa](./quick/260822-tyf-typst-academic-report-ieee-8500-socp-exa/) |
 | 260823-gea | Phase-18 owed corrections — per-stage try/catch + optimizer kwarg in repro_stability_check.jl (item 5 CLOSED); golden-band re-derivation left OPEN, fit_baseline hits ALMOST_OPTIMAL at 3/5 points | 2026-08-23 | 56f007f | [260823-gea-close-the-two-owed-v2-1-phase-18-correct](./quick/260823-gea-close-the-two-owed-v2-1-phase-18-correct/) |
 
+## Deferred Items
+
+Acknowledged at the v3.0 milestone close (2026-08-24). Recorded accurately rather than as
+blanket "deferred work" — most of what `audit-open` flagged is not open work at all:
+
+| Category | Item | Reality |
+|----------|------|---------|
+| quick_task | 16 tasks, all reported `status: missing` | **NOT open work.** All 16 have committed SUMMARY.md files and appear in the Quick Tasks Completed table above with commit hashes. `audit-open` flags them only because this repo's quick-task SUMMARY frontmatter carries `quick_id`/`subsystem`/`tags`/dependency-graph fields but no `status:` field, which the audit expects. A frontmatter-convention gap in the tooling contract, not unfinished work. Worth fixing in the template rather than in 16 files. |
+| verification_gap | Phase 25 `25-VERIFICATION.md` status `gaps_found` | **Accurate and deliberately left as-is.** SCALE-04 was closed 2026-08-24 (see `25-SCALE-04-CLOSURE.md`), but SCALE-05 genuinely remains: the ~40x headline IEEE-8500 fixture was OOM-killed at every density, so solve time / ADMM iterations / exactness at headline scale were never measured. The researcher ACCEPTED this as an honest non-measurement at milestone close. The status field is not being edited to look clean — the gap is real, it is simply accepted. |
+
+Genuinely open, carried past v3.0 (not blocking the close):
+
+- **SCALE-STRETCH** (future milestone): `solve_admm`'s hardcoded final-consolidation
+  `assert_socp_exact!` throws at IEEE-8500 scale even on a converged point; and reaching a
+  converged, memory-feasible headline point needs architectural memory-footprint work. Deliberately
+  separated from the benchmark that justifies it.
+- **Phase-18 `fit_baseline` convergence** (quick task 260823-gea): nested solve returns
+  `ALMOST_OPTIMAL` at 3/5 sweep points at `tol_gap=1e-10` — discrete flake rate 13/20 = 0.650, all
+  at that one stage, reproduced across 3 runs. A solver-convergence issue distinct from SOCP
+  inexactness. Not a v3.0 deliverable; wants its own follow-up.
+- **MESH-06 advisory** (v3.0 audit): `solve_admm` is typed to `pf::ConvexBranchFlow`, so meshed
+  topology + live ADMM reactive pricing cannot compose at runtime today. Phase 23's page discloses
+  this and substitutes a centralized `:balance_q` dual. No requirement mandates the literal
+  composition; surfaced because the ROADMAP's wording could be misread.
+
 ## Performance Metrics
 
 **Velocity:**

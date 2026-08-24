@@ -164,6 +164,37 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**v3.0 Research Extension Rungs — SHIPPED 2026-08-24.** All 7 phases (19–25) complete; milestone
+archived to [`milestones/v3.0-ROADMAP.md`](milestones/v3.0-ROADMAP.md), audit `gaps_accepted`. 26 of
+27 requirements satisfied; SCALE-05 accepted as an honest non-measurement (the ~40x headline
+IEEE-8500 fixture OOM-killed at every density, so headline-scale timings/iterations/exactness were
+never measured — true memory requirement lower-bounded only).
+
+Seven research axes now ship as documented rungs, each with **its own** certificate — verified at
+audit to reuse no other regime's tolerance: 4Q-BESS + live reactive dual-ascent; overvoltage-capable
+restricted relaxation (with an honest OPF-ε negative result); closed-loop MPC/rolling-horizon RTP
+(genuinely reusing Phase 20's escalation ladder); two-stage stochastic extensive form; meshed
+non-radial SOCP with an angle-recoverability certificate exercising both verdicts; discrete/integer
+investment via Laporte–Louveaux cuts certified against exhaustive enumeration, PVAL-04 guard scoped
+not deleted; and the IEEE-8500 benchmark that characterized a memory wall honestly.
+
+**Next milestone goals (candidates, not yet scoped):**
+- **SCALE-STRETCH** — performance/memory-footprint engineering driven by the Phase 25 measurements:
+  `solve_admm`'s hardcoded final-consolidation `assert_socp_exact!` at scale, and reaching a
+  converged memory-feasible headline point. Deliberately separated from the benchmark justifying it.
+- **Phase-18 `fit_baseline` convergence** — `ALMOST_OPTIMAL` at 3/5 sweep points at `tol_gap=1e-10`
+  (flake rate 13/20, reproduced across 3 runs); distinct from SOCP inexactness.
+- **Meshed + ADMM composition** — `solve_admm` is typed to `pf::ConvexBranchFlow`, so the literal
+  meshed + live-reactive-price composition is structurally impossible today (MESH-06 advisory).
+- **Integer investment beyond single-distributor Stackelberg** — the N>1 Nash/diagonalization path,
+  plus a large-lattice termination criterion (a rigorous `δ_min` is provably not derivable).
+
+Run `/gsd:new-milestone` to scope the next cycle.
+
+<details>
+<summary>Previous state (v3.0 in progress — click to expand)</summary>
+
+
 **v3.0 in progress — Phase 23 complete (2026-08-10):** Meshed Networks (MESH-01/02/03/06).
 `MeshedFeeder` + `assert_connected` beside the byte-untouched radial layer; `MeshedFlow` as pure
 delegation (ConvexBranchFlow proven graph-generic); `certify_angle_recoverable!` chord-aware
@@ -239,6 +270,8 @@ figure digitization (Phase 4/5), IEEE-123 exact App. E impedances (Phase 7), `su
 hash stability (Phase 8), and an intermittent version-independent Clarabel `NUMERICAL_ERROR` on the
 IEEE-13 ADMM solve (post-v1, flagged in STATE.md). *Closed post-v1 (2026-07-20/22):* published docs site
 (`DOCUMENTER_KEY` + Pages), docstring `@docs` manual wiring, JuliaFormatter-on-`docs/`, `deploydocs` slug.
+
+</details>
 
 ## Shipped Milestone: v2.0 Stackelberg-Nash TSO–DSO Planning Game (2026-07-24)
 
