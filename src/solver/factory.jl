@@ -89,6 +89,24 @@ select_optimizer(::LP) =
 # discretionary, provided nothing is hard-coded outside select_optimizer") — it does NOT
 # touch `KNOWN_OPTIMUM_ATOL`, `L`, or the LL-cut algebra, none of which this gap-closure wave
 # is authorized to weaken.
+#
+# WR-03 (Phase 24 code review) — NOTE FOR ANY FUTURE MILP() CONSUMER: this
+# `mip_feasibility_tolerance = 1e-9` is set GLOBALLY here (INFRA-02's single-factory
+# discipline gives no per-call-site override), but was tuned SOLELY against
+# `build_master_integer`'s own box constraint (`z <= y_inv`) on the D-12 certification
+# fixture — currently `MILP()`'s ONLY call site in the whole codebase (confirmed
+# repo-wide, 24-05.1). `1e-9` is three orders of magnitude below HiGHS's own runtime
+# default (`1e-6`) and, on a LARGER/harder MILP (more binaries, worse-conditioned
+# constraint matrix), this tight a feasibility tolerance can measurably slow or stall
+# branch-and-bound (more nodes needed to certify feasibility to that precision) or, in
+# rare ill-conditioned cases, cause HiGHS to report spurious infeasibility. Do NOT
+# silently inherit this value for a new MILP model without re-measuring it against
+# THAT model's own constraint scale. If a future consumer genuinely needs a different
+# tolerance, prefer adding a keyword-override seam to this method (mirroring
+# `select_optimizer(::NLP; attrs...)`/`select_optimizer(::SOCP; attrs...)` above, which
+# layer caller-supplied attributes on top of the base set) over silently loosening this
+# shared default in place — this project's integer-investment exactness claim
+# (D-13/D-14) depends on `build_master_integer` keeping this exact value.
 select_optimizer(::MILP) = optimizer_with_attributes(
     HiGHS.Optimizer,
     "output_flag" => false,
