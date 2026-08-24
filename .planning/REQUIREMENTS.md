@@ -146,11 +146,23 @@ largest fixture shipped to date (IEEE-123) — and characterize the wall when it
       capacitor banks (no shunt support exists in `src/`) become fixed reactive injections or a
       documented omission with its voltage-profile consequence measured; regulators and switches
       follow the existing IEEE-123 near-ideal low-impedance treatment (Assumption A2).
-- [ ] **SCALE-04**: The **benchmark itself is the deliverable**: centralized SOCP and ADMM/DADP
+- [x] **SCALE-04**: The **benchmark itself is the deliverable**: centralized SOCP and ADMM/DADP
       solve time (end-to-end and per-iteration), ADMM iteration count, and peak memory are measured
       on the committed fixture against the IEEE-13/IEEE-123 baselines, with the Clarabel-vs-SCS
       crossover point identified rather than assumed. Numbers are reported as measured, including
       any regime where the pipeline does not converge.
+      **Crossover verdict (2026-08-22, plan 25-08; reconfirmed 2026-08-24):** real, non-degraded
+      SCS measurements exist for `ieee13` (4 densities), `ieee123` (4 densities), and
+      `ieee8500-mv` (density=0.1) in `results/ieee8500_benchmark/density_sweep_full.csv`.
+      **No crossover was found in the measured range** — Clarabel remains `OPTIMAL`/exact and
+      faster at every point where both solvers converge; SCS's DADP drift from Clarabel grows
+      with problem size on `ieee13` (0.25 → 4.82) but stays small/flat on `ieee123`
+      (0.0022–0.0050), and SCS fails outright (a real `ErrorException` from its lower first-order
+      accuracy tripping a downstream battery-complementarity tripwire, not a harness bug) at
+      `ieee13` density=1.0. This is the honest, fully-measured answer for the tested range; the
+      true ~40x headline-fixture scale remains SCALE-05's separately-accepted memory-wall gap and
+      was never in this requirement's satisfied scope. See
+      `25-SCALE-04-CLOSURE.md` for the full reconciliation.
 - [ ] **SCALE-05**: **SOCP exactness is re-certified at scale** with its own gate — the existing
       IEEE-13/123 tolerances are not reused (the standing anti-certificate-laundering rule). Where
       exactness or convergence fails, the failure is characterized (conditioning vs. size vs.
@@ -223,7 +235,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCALE-01 | Phase 25 | Complete |
 | SCALE-02 | Phase 25 | Complete |
 | SCALE-03 | Phase 25 | Pending |
-| SCALE-04 | Phase 25 | Pending |
+| SCALE-04 | Phase 25 | Complete — no crossover found in measured range (see requirement note) |
 | SCALE-05 | Phase 25 | Pending |
 
 **Coverage:**
