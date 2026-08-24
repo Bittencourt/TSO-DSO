@@ -266,26 +266,32 @@ end
         α_x_lb = 0.0,
     )
 
-    result = nothing
+    # Scoping note (found 2026-08-23 while diagnosing a TestItemRunner-only failure):
+    # assigning `result` from INSIDE the `try` body does not reach the outer binding under
+    # TestItemRunner's `@testitem` module wrapping -- `caught` stayed `nothing` (no exception)
+    # while `result` also stayed `nothing`, failing every `result !== nothing` assertion below
+    # even though the loop had converged correctly. The identical code passes as a plain script
+    # under both `--project=.` and the `Pkg.test()` sandbox, so this is a harness artifact, not
+    # a solver defect. Take the `try` EXPRESSION's value instead of assigning inside it.
     caught = nothing
-    try
-        result = mktempdir() do dir
-            solve_stackelberg!(
-                feeder,
-                LinDistFlow(),
-                [agg];
-                λ₀ = λ₀,
-                T = 1,
-                follower_kwargs = follower_kwargs,
-                master_kwargs = NamedTuple(),
-                master = imaster,
-                known_optimum = enum_result.best_total,
-                max_iter = 50,
-                checkpoint_dir = dir,
-            )
-        end
+    _tmpdir = mktempdir()
+    result = try
+        solve_stackelberg!(
+            feeder,
+            LinDistFlow(),
+            [agg];
+            λ₀ = λ₀,
+            T = 1,
+            follower_kwargs = follower_kwargs,
+            master_kwargs = NamedTuple(),
+            master = imaster,
+            known_optimum = enum_result.best_total,
+            max_iter = 50,
+            checkpoint_dir = _tmpdir,
+        )
     catch e
         caught = e
+        nothing
     end
 
     # GATE (gate-then-golden ordering, T-14-01/test_planning_goldens.jl:48-55 convention):
