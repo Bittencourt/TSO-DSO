@@ -111,14 +111,14 @@ genuine reactive decision variable and make the v2.1 reactive machinery live.
 ### Discrete/Integer Investment Expansion (`INT`)
 Lift the no-binaries guard consciously; integer investment in the single-distributor planning loop.
 
-- [ ] **INT-01**: The planning master supports **binary-expansion integer investment** (bounded
+- [x] **INT-01**: The planning master supports **binary-expansion integer investment** (bounded
       integer levels as binary blocks) as a HiGHS MILP behind the existing `select_optimizer`
       factory (new/extended `ProblemClass` as needed), single-distributor Stackelberg scope.
-- [ ] **INT-02**: Convergence is driven by genuine **Laporte–Louveaux integer optimality cuts**
+- [x] **INT-02**: Convergence is driven by genuine **Laporte–Louveaux integer optimality cuts**
       (LP Benders cuts retained where valid; plain no-good cuts only as a documented anti-stall
       fallback, never the convergence argument), with iteration behavior re-measured — not
       inherited from the continuous Benders defaults.
-- [ ] **INT-03**: The integer loop is **certified on a tiny instance against an independent
+- [x] **INT-03**: The integer loop is **certified on a tiny instance against an independent
       oracle** (exhaustive enumeration of the discrete investment lattice, and/or a BilevelJuMP
       reduction where mode-compatible), following the v2.0 certify-before-build precedent.
 - [x] **INT-04**: The **PVAL-04 no-binaries guard is scoped, not deleted**: a registry exemption
@@ -216,9 +216,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MESH-04 | Phase 19 | Complete |
 | MESH-05 | Phase 19 | Complete |
 | MESH-06 | Phase 23 | Complete |
-| INT-01 | Phase 24 | Pending |
-| INT-02 | Phase 24 | Pending |
-| INT-03 | Phase 24 | Pending |
+| INT-01 | Phase 24 | Complete |
+| INT-02 | Phase 24 | Complete |
+| INT-03 | Phase 24 | Complete |
 | INT-04 | Phase 24 | Complete |
 | SCALE-01 | Phase 25 | Complete |
 | SCALE-02 | Phase 25 | Complete |
