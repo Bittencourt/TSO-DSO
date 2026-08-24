@@ -330,11 +330,29 @@ function Qfun(z)
     return fr.cost - orr.cost
 end
 
+#
+# **WR-01 fix (Phase 24 code review):** the naive tie-break `f(m1) < f(m2) ? (hi=m2) :
+# (lo=m1)` diverges to `+Inf` whenever BOTH trial points land outside the follower's own
+# deliverable capacity (`Inf < Inf` is `false`, so the tie falls to `lo = m1`, walking the
+# search window AWAY from the guaranteed-feasible `z = 0` anchor and never recovering on a
+# bounded interval) -- reachable via ordinary `K`/`y_max`/`corridor_cap` reconfiguration,
+# dormant on this page's own specific numbers. Fixed by shrinking from the right
+# (`hi = m2`) on a double-infinite tie, and by failing loudly (never silently) if the
+# search still produces a non-finite value, since `z = 0` is always feasible and bounds
+# `Q(y_inv)` from above.
+
 function ternary_min(f, lo, hi; iters::Int = 100)
     for _ in 1:iters
         m1 = lo + (hi - lo) / 3
         m2 = hi - (hi - lo) / 3
-        f(m1) < f(m2) ? (hi = m2) : (lo = m1)
+        f1, f2 = f(m1), f(m2)
+        if isinf(f1) && isinf(f2)
+            hi = m2
+        elseif f1 < f2
+            hi = m2
+        else
+            lo = m1
+        end
     end
     z = (lo + hi) / 2
     return f(z)
@@ -350,6 +368,12 @@ function enumerate_lattice(; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
         b = [(i >> (k - 1)) & 1 for k in 1:K]
         y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
         Qv = y_inv <= 0 ? Qfun(0.0) : ternary_min(Qfun, 0.0, y_inv)
+        isfinite(Qv) || throw(
+            ErrorException(
+                "enumerate_lattice: ternary search diverged to a non-finite Q at " *
+                "y_inv=$y_inv (WR-01 regression, Phase 24 code review).",
+            ),
+        )
         total = c_y * y_inv + Qv
         all_totals[i + 1] = total
         if total < best_total
