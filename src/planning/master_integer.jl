@@ -518,6 +518,25 @@ end
 # own measurement), so it never mistakes solver jitter for continued progress.
 const STALL_Z_ATOL = 1e-6
 
+# WR-02 (Phase 24 code review): STALL_Z_ATOL is a FIXED absolute constant, but nothing
+# ties it to the problem's own natural scale (`y_max`/`K`, both ordinary CONFIGURATION
+# changes per D-01 -- not code changes). Because `z` is box-bounded by `y_inv <= y_max`,
+# the lattice's own step size `y_max / 2^K` is that natural scale: as it SHRINKS (a
+# smaller `y_max` and/or larger `K`), a fixed 1e-6 absolute tolerance becomes RELATIVELY
+# LOOSER, risking a false "stalled" verdict on a corner still making genuine progress --
+# i.e. defect #2's exact catastrophic failure mode (a permanent, silent wrong-answer ban
+# of a still-converging corner), reintroduced via a different mechanism than the one
+# 24-05.1 already fixed. A missed stall (too TIGHT) only costs a few extra iterations
+# (loud, bounded by `max_iter`) -- so this predicate must always err toward the TIGHTER
+# (harder-to-satisfy, `min`) of the two candidate tolerances, never the looser one.
+#
+# `stall_z_atol(master)` is a NO-OP on the certified D-12 fixture (step =
+# 8.0/2^4 = 0.5, so `1e-3 * step = 5e-4 > STALL_Z_ATOL`, and `min` picks the ORIGINAL
+# `1e-6`) -- the certified run's tolerance is UNCHANGED byte-for-byte. It only tightens
+# (never loosens) `apply_integer_cuts!`'s stall predicate on a rescaled problem.
+stall_z_atol(master::BendersMasterInteger) =
+    min(STALL_Z_ATOL, 1.0e-3 * (master.y_max / 2.0^master.K))
+
 """
     apply_integer_cuts!(master, lb_res, Q_nu) -> NamedTuple{(:nogood_fired,)}
 
@@ -539,7 +558,8 @@ ONE call site (wired into `solve_stackelberg!` by plan 24-04):
     then checks whether `key = round.(Int, b_trial)` has already been visited
     (`master.visited`, D-16's anti-stall bookkeeping) AND, if so, whether the
     CURRENT `z` trial (`lb_res.z`) matches the RECORDED `z` from that corner's
-    LAST visit within [`STALL_Z_ATOL`](@ref) — only THAT combination (same
+    LAST visit within [`stall_z_atol`](@ref)`(master)` (WR-02-hardened, see its own
+    docstring) — only THAT combination (same
     corner, unchanged `z`) is a genuine STALL, triggering
     `add_nogood_cut!(master, b_trial)`. `master.visited[key]` is updated to
     the current `z` trial regardless of the stall outcome.
@@ -578,11 +598,12 @@ function apply_integer_cuts!(master::BendersMasterInteger, lb_res, Q_nu)
     key = round.(Int, b_trial)
     z_trial = Vector{Float64}(lb_res.z)
     # Phase 24 gap-closure (plan 24-05.1): a genuine stall requires BOTH the SAME corner
-    # AND an UNCHANGED z trial (within STALL_Z_ATOL) -- a revisit with a materially
-    # different z is expected cutting-plane refinement progress, never a stall.
+    # AND an UNCHANGED z trial (within stall_z_atol(master), WR-02-hardened -- see its
+    # own docstring) -- a revisit with a materially different z is expected
+    # cutting-plane refinement progress, never a stall.
     stalled =
         haskey(master.visited, key) &&
-        isapprox(master.visited[key], z_trial; atol = STALL_Z_ATOL, rtol = 0.0)
+        isapprox(master.visited[key], z_trial; atol = stall_z_atol(master), rtol = 0.0)
     master.visited[key] = z_trial
     if stalled
         add_nogood_cut!(master, b_trial)
