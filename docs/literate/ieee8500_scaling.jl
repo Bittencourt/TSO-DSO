@@ -234,11 +234,27 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 #   item 3). The two walls are independent: this session's OOMs fired BEFORE that gate was ever
 #   reached, so no OOM'd point in the table above is evidence about conditioning one way or the
 #   other — the conditioning finding stands on its own, from the calibration ladder alone.
-# - **Formulation (Clarabel vs. SCS) is not implicated by this session's evidence.** SCS was not
-#   installed in the measurement environment (`scs_status` on every attempted row reads
-#   `scs_unavailable`, `skipped_oom`, or `not_requested`), so the D-20/D-21 crossover diagnostic
-#   could not run at IEEE-8500 scale — whether the memory wall is Clarabel-specific or would recur
-#   under SCS's first-order method is genuinely UNTESTED, not "ruled out."
+# - **Formulation (Clarabel vs. SCS) is not implicated by this session's evidence — but the
+#   crossover diagnostic HAS since been measured off the headline point.** *(Corrected 2026-08-24,
+#   milestone-audit SCALE-04 closure: the earlier text here said SCS "was not installed in the
+#   measurement environment" and that `scs_status` on EVERY attempted row read
+#   `scs_unavailable`/`skipped_oom`/`not_requested`. That was true when first written, but plan
+#   25-08 installed SCS in the dedicated `bench/` environment and re-ran the small fixtures, so it
+#   is now factually wrong and is corrected rather than quietly deleted.)*
+#   `density_sweep_full.csv` now carries **9 real SCS solves**: `ieee13` at densities 0.1/0.25/0.5
+#   (`OPTIMAL`, DADP drift 0.253 → 2.329 → 4.823, i.e. growing with population), `ieee13` at
+#   density 1.0 (a genuine `ErrorException` from SCS itself, not a harness failure), `ieee123` at
+#   all four densities (`OPTIMAL`, drift flat at ~0.002–0.005), and `ieee8500-mv` at density 0.1
+#   (`OPTIMAL`, drift 0.112). Reconfirmed bit-for-bit on 2026-08-24.
+#   **No crossover exists anywhere in that measured range** — Clarabel is `OPTIMAL`, exact, and
+#   faster at every measured point. That is the honest answer to "identify the crossover," not an
+#   extrapolation: the range covered is stated, and nothing beyond it is claimed. Per this script's
+#   own Pitfall-5 warning, Clarabel's `tol_gap` and SCS's `eps_abs` are NOT comparable numbers, so
+#   the drift column is a diagnostic, never a solver-quality ranking.
+#   What remains genuinely UNTESTED is the diagnostic at the **headline** (~40x, full MV+LV) point
+#   specifically: those rows read `skipped_oom`/`not_requested` because they OOM'd BEFORE the
+#   comparison could run. So whether the memory wall is Clarabel-specific or would recur under
+#   SCS's first-order method is still unknown at headline scale — untested there, not "ruled out."
 # - **Assembly-vs-solve split (where it was measured, i.e. never on an OOM'd point) shows assembly
 #   is already a large, non-time-limit-bounded share of cost** at MV scale (e.g. `ieee8500-mv`
 #   density=0.25: ~52 s assembly vs ~50 s solve) — consistent with JuMP model-build cost, not IPM
