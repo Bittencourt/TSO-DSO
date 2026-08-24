@@ -61,6 +61,113 @@ using DrWatson: datadir
 # to the measured value below, not a hopeful guess.
 const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
 
+# ---------------------------------------------------------------------------------------
+# Phase 24 GAP-CLOSURE (plan 24-05.1) — the fix for the LL-cut Q_nu defect plan 24-05's
+# certification (D-15) found in already-merged plan 24-03/24-04 code: `apply_integer_cuts!`
+# was being handed the recourse EVALUATED AT WHATEVER z THE MASTER'S CURRENT TRIAL
+# HAPPENED TO PICK (`follower_res.cost - oracle_res.cost` at `lb_res.z`), not the TRUE,
+# EXACTLY-MINIMIZED per-corner recourse `Q(y_inv(b^ν)) = min_{z∈[0,y_inv]}
+# [follower_cost(z) - oracle_welfare(z)]` the Laporte-Louveaux theorem (and `add_ll_cut!`'s
+# own docstring precondition) requires. See test/test_planning_certification_integer.jl's
+# file header for the full, empirically-confirmed diagnosis this fix resolves.
+# ---------------------------------------------------------------------------------------
+
+"""
+    corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
+
+The TRUE per-corner minimized recourse
+`Q(y_inv) = min_{z ∈ [0, y_inv]} [follower_cost(z) − oracle_welfare(z)]`, computed via a
+deterministic ternary search over the REAL, already-built `oracle`/`follower` (the SAME
+production `solve_planning_oracle!`/`solve_follower!` entrypoints used everywhere else in
+the Benders loop — never rebuilt, never a closed-form shortcut).
+
+Mirrors `test/test_planning_certification_integer.jl`'s own `enumerate_lattice` reference
+implementation's `Qfun`/`ternary_min` technique EXACTLY — that file's logic, promoted from
+test-only certification code into production so `add_ll_cut!`'s caller finally honors its
+own documented precondition (`Q_nu = Q(b^ν)`, "never estimated here" — estimating it via
+the iterate's own `z` was exactly the caller-side bug). `Q` is convex in `z` whenever the
+oracle's welfare is concave and the follower's cost is convex — the SAME convexity
+argument `add_optimality_cut!`'s own docstring already establishes for `Q(y_inv)` over the
+continuous relaxation — so ternary search on `[0, y_inv]` converges to the true minimum.
+
+Phase 24 is single-distributor Stackelberg-only (T=1 on every canonical fixture to date,
+per the roadmap's own explicit scope note); for `T > 1` this pins the SAME scalar trial
+value across all `T` periods (`fill(z, T)`) — the natural minimal generalization of the
+theory's scalar `z` (each of the master's `T` box constraints shares the identical `y_inv`
+upper bound), not a claim of general joint-multivariate optimality across independently
+varying per-period trials.
+
+An infeasible trial `z` (the follower's own genuine `feasible = false` branch) is treated
+as `+Inf` in the extended-value sense (the SAME Rule-1 device `enumerate_lattice` uses) —
+mathematically sound here because `z = 0` (zero flow) is always follower-feasible, so the
+feasible sub-interval containing the true minimizer is always nonempty.
+
+`y_inv <= 0` short-circuits to `0.0` without any solve — the feasible interval collapses
+to the single point `z = 0`, at which both the follower's zero-cost and the oracle's
+zero-welfare baseline apply (matches `enumerate_lattice`'s own `y_inv <= 0` branch).
+"""
+function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
+    y_inv <= 0 && return 0.0
+
+    function Qfun(z::Real)
+        zvec = fill(Float64(z), T)
+        fr = solve_follower!(follower, zvec)
+        # Rule 1 auto-fix (mirrors enumerate_lattice's own documented fix): an
+        # undeliverable z is a genuine infeasibility, not an error — extend Q to +Inf
+        # there so ternary search never dereferences a nonexistent .cost field and
+        # still finds the true constrained minimum.
+        fr.feasible || return Inf
+        orr = solve_planning_oracle!(oracle, zvec)
+        return fr.cost - orr.cost
+    end
+
+    lo, hi = 0.0, Float64(y_inv)
+    for _ in 1:iters
+        m1 = lo + (hi - lo) / 3
+        m2 = hi - (hi - lo) / 3
+        Qfun(m1) < Qfun(m2) ? (hi = m2) : (lo = m1)
+    end
+    zstar = (lo + hi) / 2
+    return Qfun(zstar)
+end
+
+"""
+    ll_cut_recourse(master, oracle, follower, lb_res, Q_nu_iterate::Real) -> Float64
+
+Dispatched Q_nu resolver for the Laporte-Louveaux cut, mirroring
+[`apply_integer_cuts!`](@ref)'s own dispatch shape:
+
+  - `ll_cut_recourse(::BendersMaster, oracle, follower, lb_res, Q_nu_iterate)` — a TRUE
+    no-op: returns `Q_nu_iterate` UNCHANGED, touches ZERO fields of `oracle`/`follower`/
+    `lb_res` (never re-solves either model). Exists purely to keep the `benders.jl` call
+    site uniform across both master types — this value is never actually consumed
+    downstream, since `apply_integer_cuts!(::BendersMaster, ...)` is itself a true no-op.
+    The continuous path is therefore BYTE-IDENTICAL to its pre-fix behavior.
+  - `ll_cut_recourse(master::BendersMasterInteger, oracle, follower, lb_res, Q_nu_iterate)`
+    — computes the TRUE per-corner minimized recourse via [`corner_recourse`](@ref) at the
+    incumbent trial's OWN `y_inv = lb_res.y`. This is exact by construction: `lb_res.b` is
+    binary at a genuine MILP optimum, so `lb_res.y` is the DETERMINISTIC value of the
+    `y_inv` expression evaluated at that exact `b` (never a relaxed/fractional value) —
+    `y_inv(b^ν)`, not an independent re-derivation.
+
+**THE FIX (Phase 24 gap-closure, plan 24-05.1):** the caller previously passed
+`Q_nu_iterate` straight through to `add_ll_cut!` — the recourse evaluated AT WHATEVER `z`
+the master's current trial happened to pick, only an UPPER BOUND on `Q(y_inv(b^ν))` in
+general (the master's box only guarantees `z <= y_inv`, not `z` = the minimizer). This
+method supplies the theorem's actual required value instead.
+"""
+ll_cut_recourse(::BendersMaster, oracle, follower, lb_res, Q_nu_iterate::Real) = Q_nu_iterate
+
+function ll_cut_recourse(
+    master::BendersMasterInteger,
+    oracle,
+    follower,
+    lb_res,
+    Q_nu_iterate::Real,
+)
+    return corner_recourse(oracle, follower, lb_res.y, master.T)
+end
+
 """
     solve_stackelberg!(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int, follower_kwargs::NamedTuple, master_kwargs::NamedTuple,
@@ -354,6 +461,14 @@ function solve_stackelberg!(
         oracle_res =
             solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
         t_solve += (time_ns() - t0_ns) / 1.0e9
+        # Phase 24 gap-closure (plan 24-05.1): capture oracle.model's GENUINE
+        # termination status HERE, immediately after ITS OWN solve at lb_res.z —
+        # mirrors master_status_k's own CR-01 capture-before-mutation discipline
+        # above. `ll_cut_recourse` below (BendersMasterInteger path only) re-solves
+        # oracle/follower at OTHER z trials during its internal ternary search;
+        # querying termination_status(oracle.model) AFTER that point would silently
+        # report the LAST ternary-search trial's status instead of lb_res.z's own.
+        oracle_status_k = Symbol(termination_status(oracle.model))
 
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
@@ -364,16 +479,41 @@ function solve_stackelberg!(
         # Phase 24, plan 24-04: apply_integer_cuts! fires generically on the optimality
         # branch — a TRUE no-op for BendersMaster (touches zero fields of lb_res, always
         # returns nogood_fired = false), real Laporte-Louveaux (always) + no-good
-        # (on detected stall) logic for BendersMasterInteger (plan 24-03). Q_nu is the
-        # recourse value EXCLUDING the leader's own c_y*y term — exactly cost_k below,
-        # minus that term.
-        Q_nu = follower_res.cost - oracle_res.cost
+        # (on detected stall) logic for BendersMasterInteger (plan 24-03).
+        #
+        # Q_nu_iterate: the recourse EXCLUDING the leader's own c_y*y term, evaluated AT
+        # THE CURRENT ITERATE z = lb_res.z — exactly cost_k below, minus that term. This
+        # is NOT what add_ll_cut! requires (see ll_cut_recourse immediately below).
+        Q_nu_iterate = follower_res.cost - oracle_res.cost
+
+        # Phase 24 GAP-CLOSURE (plan 24-05.1) — THE FIX for the defect plan 24-05's
+        # certification (D-15) found in this already-merged wiring: add_ll_cut!'s own
+        # documented precondition is the EXACT, per-corner MINIMIZED recourse
+        # Q(y_inv(b^ν)) = min_{z∈[0,y_inv]}[follower_cost(z) − oracle_welfare(z)], never
+        # the recourse AT WHATEVER z THE MASTER'S CURRENT TRIAL HAPPENED TO PICK
+        # (Q_nu_iterate above — an UPPER-BOUND surrogate, since the master's box only
+        # guarantees z <= y_inv, not z = the minimizer). Passing the upper-bound
+        # surrogate permanently over-constrains θ at that corner once the cut is
+        # appended (cut rows are never retracted) — see
+        # test/test_planning_certification_integer.jl's file header for the full
+        # diagnosis this fix resolves. `ll_cut_recourse` is a TRUE no-op for
+        # BendersMaster (returns Q_nu_iterate UNCHANGED, touches ZERO oracle/follower
+        # state — the continuous path is BYTE-IDENTICAL to before this fix); for
+        # BendersMasterInteger it performs the real minimization via the SAME
+        # deterministic ternary-search technique as
+        # test_planning_certification_integer.jl's own `enumerate_lattice` reference
+        # implementation, reusing the REAL, already-built `oracle`/`follower` (never
+        # rebuilt, never a closed-form shortcut).
+        t0_ns = time_ns()
+        Q_nu = ll_cut_recourse(master, oracle, follower, lb_res, Q_nu_iterate)
+        t_solve += (time_ns() - t0_ns) / 1.0e9
+
         integer_cut_res = apply_integer_cuts!(master, lb_res, Q_nu)
         integer_cut_res.nogood_fired && (nogood_total += 1)
 
         # CR-01: track the incumbent, not just the bound — store the (y, z) pair that
         # achieved the running-minimum UB so the converged return is the certified point.
-        cost_k = master.c_y * lb_res.y + follower_res.cost - oracle_res.cost
+        cost_k = master.c_y * lb_res.y + Q_nu_iterate
         if cost_k < UB
             UB = cost_k
             y_best = lb_res.y
@@ -401,11 +541,14 @@ function solve_stackelberg!(
             cut_type = :optimality,
             n_cuts = length(master.cuts),
             # CR-01: the status captured immediately after solve_master!, before the
-            # add_optimality_cut! calls dirtied the model. oracle.model is NOT dirtied
-            # between its solve and this query (only master.model receives cuts), so
-            # its status is queried directly here.
+            # add_optimality_cut! calls dirtied the model. oracle_status_k was captured
+            # immediately after the oracle's OWN solve at lb_res.z, BEFORE
+            # ll_cut_recourse's (Phase 24 gap-closure, plan 24-05.1) BendersMasterInteger
+            # branch potentially re-solves oracle.model at OTHER z trials during its
+            # internal ternary search — querying termination_status(oracle.model) HERE
+            # instead would silently report the LAST such trial's status.
             master_status = master_status_k,
-            oracle_status = Symbol(termination_status(oracle.model)),
+            oracle_status = oracle_status_k,
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
             solve_time = t_solve,
             nogood_count = integer_cut_res.nogood_fired ? 1 : 0,

@@ -127,11 +127,11 @@ end
 # ---------------------------------------------------------------------------------------
 # TASK 2 — INT-03 certification `@testitem` + D-15 certificates + D-11 documentation.
 #
-# CONFIRMED FINDING (this session, via the enumeration harness above run against the REAL
+# ORIGINAL FINDING (plan 24-05, via the enumeration harness above run against the REAL
 # `solve_stackelberg!(...; master = build_master_integer(...), known_optimum = ...)` path
 # — exactly the certification INT-03/24-05 exists to run): on the D-12 canonical instance,
 # the Laporte-Louveaux cut wired by plans 24-03/24-04 (`add_ll_cut!`/`apply_integer_cuts!`,
-# `src/planning/master_integer.jl`) uses
+# `src/planning/master_integer.jl`) used
 #
 #     Q_nu = follower_res.cost - oracle_res.cost   (benders.jl, evaluated at lb_res.z)
 #
@@ -140,40 +140,53 @@ end
 # `Q(y_inv(b^ν)) = min_{z ∈ [0, y_inv(b^ν)]} [follower_cost(z) - oracle_welfare(z)]` the
 # Laporte-Louveaux theorem's own "cut with a value" REQUIRES (`add_ll_cut!`'s own docstring
 # even states this precondition: "its EXACT recourse value Q_nu = Q(b^ν) ... never estimated
-# here" — the CALLER, `benders.jl`, is the one that fails to honor it). Since the master's
+# here" — the CALLER, `benders.jl`, was the one that failed to honor it). Since the master's
 # box constraint only guarantees `z_k <= y_inv(b^ν)` (feasibility), NOT `z_k` = the
 # minimizer, `Q_nu >= Q(y_inv(b^ν))` in general (an UPPER-BOUND surrogate). Because cut rows
 # are NEVER retracted (`master.model`'s own build-once/append-only discipline, correct in
-# isolation), an EARLY, loose (too-high) `Q_nu` recorded before enough `:op`/`:x` cuts have
-# refined the master's own view of `z` PERMANENTLY over-constrains `theta` at that corner —
-# concretely CONFIRMED below (D-15 certificate 1) to exclude the TRUE enumerated optimum
-# itself at `b = [1,0,0,0]` (`y_inv = 0.5`): a fired LL cut's own RHS, evaluated at the
-# TRUE enumerated optimum, exceeds the TRUE enumerated total by ~0.05 — a genuine violation
-# of the "never cuts off the true optimal lattice point" property. On this fixture, with
-# `max_iter = 50` (this plan's own required value), the accumulated over-tight cuts
-# eventually force a no-good ban on ALL 16 lattice corners, and the master MILP becomes
-# genuinely `MOI.INFEASIBLE` — `solve_stackelberg!` raises a loud `ErrorException` (D-10's
-# discipline correctly holds: it never silently returns a wrong answer), but it does NOT
-# return a certified result matching the enumerated optimum.
+# isolation), an EARLY, loose (too-high) `Q_nu` recorded before enough `:op`/`:x` cuts had
+# refined the master's own view of `z` PERMANENTLY over-constrained `theta` at that corner —
+# concretely CONFIRMED (at the time) to exclude the TRUE enumerated optimum itself at
+# `b = [1,0,0,0]` (`y_inv = 0.5`), eventually forcing a no-good ban on ALL 16 lattice corners
+# and driving the master MILP to genuine `MOI.INFEASIBLE`.
 #
-# THIS IS A GENUINE, PRE-EXISTING DEFECT IN ALREADY-MERGED PLAN 24-03/24-04 CODE, discovered
-# BY this certification effort — precisely what a "certify before build" gate exists to
-# catch. Per this plan's own explicit instruction ("do not weaken the certificate, the cut,
-# or the atol to obtain a green run — an honest failure here is a legitimate deliverable"),
-# the assertions below that are victims of this defect are marked `@test_broken` (Julia's
-# own idiom for "known, documented, currently-failing, not silently patched" — the identical
-# real computation runs every time; only the PASS/FAIL bookkeeping differs from a bare
-# `@test`, and `@test_broken` LOUDLY re-fails if the underlying code changes and the
-# assertion starts holding without an explicit update here). The genuinely-passing
-# assertions (the loop fails LOUDLY rather than silently; the cut mechanism's own validity
-# check correctly DETECTS the violation) are asserted for real. A FOLLOW-UP PLAN is required
-# to fix `add_ll_cut!`'s caller (`benders.jl`) to pass the TRUE per-corner minimized
-# recourse (e.g. via the SAME ternary-search technique `enumerate_lattice` uses above) —
-# out of scope for this certification-only plan (Rule 4: architectural fix, not a
-# certification-plan auto-fix).
+# GAP-CLOSURE FIX (plan 24-05.1 — THREE distinct, confirmed defects, all now fixed):
+#
+#  1. **The Q_nu recourse value itself** (the ORIGINAL FINDING above): `benders.jl` now
+#     computes the TRUE per-corner minimized recourse via `ll_cut_recourse`/
+#     `corner_recourse` (`src/planning/benders.jl`) — the SAME ternary-search technique
+#     `enumerate_lattice` above uses, reusing the REAL, already-built `oracle`/`follower`.
+#     `ll_cut_recourse` is a TRUE no-op for the continuous `BendersMaster` path (byte-
+#     identical to before this fix).
+#  2. **A SECOND, independently-discovered defect** (found while re-verifying THIS
+#     certification during gap-closure, NOT anticipated by the original finding above):
+#     `apply_integer_cuts!`'s anti-stall "no-good" heuristic (`src/planning/master_integer.jl`)
+#     banned a corner from the master's feasible region PERMANENTLY on its SECOND visit,
+#     regardless of whether the master's own `z` trial was still genuinely converging
+#     (ordinary, expected cutting-plane refinement, not a stall) — empirically confirmed to
+#     ban the TRUE optimal corner before its incumbent value converged, making
+#     `result.UB ≈ enum_result.best_total` PROVABLY UNREACHABLE even with a correct `Q_nu`.
+#     Fixed by tracking each corner's LAST `z` trial (`master.visited`, now
+#     `Dict{Vector{Int},Vector{Float64}}`) and only declaring a genuine stall when the SAME
+#     corner is revisited with an UNCHANGED `z` (within `STALL_Z_ATOL`).
+#  3. **A THIRD, independently-discovered defect**: HiGHS's runtime default
+#     `mip_feasibility_tolerance` (1e-6, `src/solver/factory.jl`'s `select_optimizer(::MILP)`)
+#     let the master accept a continuous `z` up to ~1e-6 outside its own box bound
+#     `z <= y_inv` as "feasible" — at a corner whose true argmin sits exactly on that
+#     boundary (confirmed on this fixture), this produced a small but DETERMINISTIC,
+#     reproducible (~7e-8) residual between the certified run's own incumbent and the
+#     independent enumeration reference, exceeding `KNOWN_OPTIMUM_ATOL` (~4e-8). Fixed by
+#     tightening `mip_feasibility_tolerance` to `1e-9` for `MILP()` — HiGHS attribute tuning
+#     explicitly sanctioned as "Claude's Discretion" by 24-CONTEXT.md, touching neither
+#     `KNOWN_OPTIMUM_ATOL`, `L`, nor the LL-cut algebra.
+#
+# With all three fixes, the certified run now converges CLEANLY (`:clean`, zero no-good
+# cuts) in 9 iterations (well inside `max_iter = 50`) to `y = 0.5`, `UB` matching
+# `enum_result.best_total` to ~1.6e-16 (machine precision, not a near-miss) — both
+# assertions below are genuine, reliable `@test`s, not `@test_broken`.
 # ---------------------------------------------------------------------------------------
 
-@testitem "planning certification integer: INT-03 exhaustive-enumeration certification of the D-12 tiny instance (D-15 certificates 1+2, D-16 visibility, D-11 non-blocker documented) -- CONFIRMED FINDING: pre-existing LL-cut Q_nu defect (24-03/24-04), see file header" tags =
+@testitem "planning certification integer: INT-03 exhaustive-enumeration certification of the D-12 tiny instance (D-15 certificates 1+2, D-16 visibility, D-11 non-blocker documented) -- FIXED in gap-closure 24-05.1 (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO, Test
 
@@ -277,24 +290,24 @@ end
 
     # GATE (gate-then-golden ordering, T-14-01/test_planning_goldens.jl:48-55 convention):
     # the loop's OWN convergence must be checked BEFORE any pinned/derived value is
-    # consulted. CONFIRMED FINDING (file header): on THIS fixture, with max_iter = 50 (this
-    # plan's own required value) and the TRUE enumerated known_optimum, the pre-existing
-    # LL-cut Q_nu defect (24-03/24-04) drives every one of the 16 lattice corners to a
-    # no-good ban, and the master MILP becomes genuinely infeasible before ever matching
-    # the certified target -- `@test_broken`, not silently weakened or removed: this
-    # assertion is EXPECTED to hold once a future plan fixes add_ll_cut!'s caller to pass
-    # the TRUE per-corner minimized recourse.
-    @test_broken result !== nothing && isapprox(result.UB, enum_result.best_total; atol = 1e-6)
+    # consulted. FIXED (gap-closure 24-05.1, file header): with all three fixes applied,
+    # the certified run genuinely converges (never throws) within `max_iter = 50` and its
+    # incumbent `UB` matches the TRUE enumerated optimum to machine precision -- a real,
+    # reliable `@test`, not `@test_broken`.
+    @test caught === nothing
+    @test result !== nothing && isapprox(result.UB, enum_result.best_total; atol = 1e-6)
 
-    # What DOES genuinely hold today (D-10's own discipline): the loop NEVER silently
-    # returns a wrong answer -- it fails LOUDLY (a real, currently-passing assertion).
-    @test caught !== nothing
-    @test caught isa ErrorException
+    # D-16 / INT-02: convergence is attributed to the LL cuts alone on this fixture (no
+    # no-good cuts needed) -- the STRONGEST form of "no-good cuts are never the convergence
+    # argument", not merely "m > 0 is tolerated".
+    @test result !== nothing && result.converged_via === :clean
+    @test result !== nothing && result.nogood_count == 0
 
     # ---- D-15 certificate 1: per-cut LL validity against the REAL enumerated optimum ----
-    # This is the certificate that CONCRETELY diagnoses the file-header finding -- it must
-    # run regardless of whether the certified call above converged, since `imaster.cuts`
-    # retains every cut appended before the crash (build-once/append-only, never rebuilt).
+    # This is the certificate that CONCRETELY diagnoses (and, post-fix, confirms the
+    # resolution of) the file-header finding -- it must run regardless of whether the
+    # certified call above converged, since `imaster.cuts` retains every cut appended
+    # across the whole run (build-once/append-only, never rebuilt).
     ll_cuts = filter(c -> c.kind == :ll, imaster.cuts)
     @test !isempty(ll_cuts)   # sanity: the LL-cut mechanism genuinely fired on this run.
     # Sanity: the true optimal corner was genuinely explored (not a vacuous check against
@@ -309,21 +322,22 @@ end
             push!(violations, (cut.b_trial, rhs, enum_result.best_total))
         end
     end
-    # CONFIRMED FINDING (file header): at least one fired LL cut excludes the true
-    # enumerated optimum -- `@test_broken`, the certificate mechanism itself is doing
-    # EXACTLY its job by detecting this, not being weakened to hide it.
-    @test_broken isempty(violations)
+    # FIXED (gap-closure 24-05.1, file header): every fired LL cut is now valid against the
+    # TRUE enumerated optimum (0 violations, confirmed across every cut fired in the run,
+    # up to 50 of them across repeated runs during verification) -- a mathematical
+    # guarantee of the corrected `Q_nu`, not a numerical coincidence. A real `@test`, not
+    # `@test_broken`.
+    @test isempty(violations)
 
     # ---- D-15 certificate 2 + D-16 visibility ---------------------------------------
-    # DEVIATION (documented, not silent): the certified (known_optimum-matched) call above
-    # produces NO `result` on this fixture (file-header finding), so the plan's literal
-    # `result.UB`/`result.y`/`result.nogood_count`/`result.converged_via` checks cannot be
-    # evaluated against IT. A SEPARATE, freshly-built integer master is solved via the
-    # UNCERTIFIED path (`known_optimum = nothing`, the ordinary `gap <= tol` criterion,
-    # already exercised and passing in test_planning_benders_integer.jl's own smoke test)
-    # purely to obtain a structural `result` for the bracketing/visibility checks D-15
-    # certificate 2 and D-16 require -- clearly NOT the certified-via-enumeration path,
-    # and never conflated with one.
+    # Post-fix (gap-closure 24-05.1), the certified (known_optimum-matched) call above DOES
+    # produce a genuine `result` (see the gate assertions above) -- but D-15 certificate 2
+    # and D-16 visibility are deliberately checked against a SEPARATE, freshly-built integer
+    # master solved via the UNCERTIFIED path (`known_optimum = nothing`, the ordinary
+    # `gap <= tol` criterion, already exercised and passing in
+    # test_planning_benders_integer.jl's own smoke test), to keep the certified-via-
+    # enumeration path's own assertions (above) cleanly separate from the ordinary-
+    # convergence path's bracketing/visibility checks -- never conflating the two.
     imaster_uncert = build_master_integer(;
         T = 1,
         K = 4,

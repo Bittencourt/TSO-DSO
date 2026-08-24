@@ -64,8 +64,37 @@ select_optimizer(::LP) =
 # call sites before this phase (confirmed repo-wide), so this changes no existing behavior.
 # Empirically verified (test/test_solver_factory_milp.jl) that `mip_rel_gap => 0.0` does NOT
 # stall branch-and-bound on this project's tiny toy instances.
-select_optimizer(::MILP) =
-    optimizer_with_attributes(HiGHS.Optimizer, "output_flag" => false, "mip_rel_gap" => 0.0)
+#
+# Phase 24 GAP-CLOSURE (plan 24-05.1): `mip_feasibility_tolerance` ALSO needed tightening
+# from HiGHS's runtime default (1e-6) — empirically confirmed (this session) to be the ROOT
+# CAUSE of a genuine, DETERMINISTIC (bit-for-bit reproducible across runs, never flaky)
+# residual between the certified master's own reported incumbent (`result.UB`, from a REAL
+# `solve_follower!`/`solve_planning_oracle!` re-solve at the master's own trial `z`) and the
+# `test/test_planning_certification_integer.jl` enumeration harness's independently-computed
+# reference value: at the DEFAULT `mip_feasibility_tolerance = 1e-6`, HiGHS accepts a
+# continuous `z` up to ~1e-6 outside its own box bound `z <= y_inv` as "MIP-feasible" — at a
+# corner whose TRUE argmin sits exactly ON that box boundary (confirmed on the D-12 fixture:
+# `y_inv=0.5`, follower/oracle net cost strictly decreasing on `[0, y_inv]`, argmin at the
+# right endpoint), this ~1e-6 slack in the ACCEPTED `z` translates via the recourse
+# function's own local slope into an ~7e-8 residual in the reported cost — small, but larger
+# than `KNOWN_OPTIMUM_ATOL` (`benders.jl`, ~4e-8), so the certified exact-match convergence
+# test could never pass no matter how many further Benders iterations ran (the master
+# reaches this SAME numerically-limited fixed point and stops improving). Tightening to
+# `1e-9` (three orders of magnitude below the default, and one order below
+# `KNOWN_OPTIMUM_ATOL` itself) empirically closes the residual to ~1.6e-16 — machine
+# precision, not a coincidental near-miss — and lets the certified run converge CLEANLY
+# (`:clean`, zero no-good cuts) in 9 iterations, well inside the plan's own `max_iter = 50`
+# budget. This is `MILP()`-only, tuning HiGHS's OWN attribute vocabulary (24-CONTEXT.md's
+# own "Claude's Discretion": "MILP solver attribute tuning (HiGHS gap/threads/presolve) is
+# discretionary, provided nothing is hard-coded outside select_optimizer") — it does NOT
+# touch `KNOWN_OPTIMUM_ATOL`, `L`, or the LL-cut algebra, none of which this gap-closure wave
+# is authorized to weaken.
+select_optimizer(::MILP) = optimizer_with_attributes(
+    HiGHS.Optimizer,
+    "output_flag" => false,
+    "mip_rel_gap" => 0.0,
+    "mip_feasibility_tolerance" => 1e-9,
+)
 
 select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose" => false)
 
