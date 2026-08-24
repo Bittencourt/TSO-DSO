@@ -102,13 +102,21 @@ as `+Inf` in the extended-value sense (the SAME Rule-1 device `enumerate_lattice
 mathematically sound here because `z = 0` (zero flow) is always follower-feasible, so the
 feasible sub-interval containing the true minimizer is always nonempty.
 
-`y_inv <= 0` short-circuits to `0.0` without any solve — the feasible interval collapses
-to the single point `z = 0`, at which both the follower's zero-cost and the oracle's
-zero-welfare baseline apply (matches `enumerate_lattice`'s own `y_inv <= 0` branch).
+`y_inv <= 0` collapses the feasible interval `[0, y_inv]` to the single point `z = 0` —
+the recourse there is GENUINELY COMPUTED via `Qfun(0.0)` (one real solve of
+`follower`/`oracle`), never assumed to be `0.0`. An earlier version of this function
+special-cased this corner to a hardcoded `0.0`, asserting the follower's zero-cost/
+oracle's zero-welfare baseline as an UNCONDITIONAL fact; that holds only for the
+test-only `ToyElasticDevice` fixture this function is certified against (D-12) and is
+FALSE in general — e.g. the public `Deferrable` device's utility is centered on a nonzero
+target `E`, so it pays real disutility when forced to `z = 0`. Because the hardcoded
+`0.0` was finite, no downstream `isfinite` guard (`add_ll_cut!`,
+`src/planning/master_integer.jl`) would ever have caught a wrong value here — this failed
+SILENTLY on any device model besides the certified fixture. See
+`docs/literate/integer_investment.jl`'s own `Qfun`/`enumerate_lattice` divergence note,
+where this exact fix was found first and is back-ported here (Phase 24 code-review CR-01).
 """
 function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
-    y_inv <= 0 && return 0.0
-
     function Qfun(z::Real)
         zvec = fill(Float64(z), T)
         fr = solve_follower!(follower, zvec)
@@ -120,6 +128,12 @@ function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100
         orr = solve_planning_oracle!(oracle, zvec)
         return fr.cost - orr.cost
     end
+
+    # Phase 24 code-review fix (CR-01): compute the zero-corner recourse for real via
+    # Qfun(0.0) instead of assuming it is 0.0 -- see the docstring above for the full
+    # rationale. This is exact by construction (Qfun is the same function used by the
+    # ternary search below), not a special-cased approximation.
+    y_inv <= 0 && return Qfun(0.0)
 
     lo, hi = 0.0, Float64(y_inv)
     for _ in 1:iters
