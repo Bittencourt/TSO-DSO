@@ -121,7 +121,7 @@ Lift the no-binaries guard consciously; integer investment in the single-distrib
 - [ ] **INT-03**: The integer loop is **certified on a tiny instance against an independent
       oracle** (exhaustive enumeration of the discrete investment lattice, and/or a BilevelJuMP
       reduction where mode-compatible), following the v2.0 certify-before-build precedent.
-- [ ] **INT-04**: The **PVAL-04 no-binaries guard is scoped, not deleted**: a registry exemption
+- [x] **INT-04**: The **PVAL-04 no-binaries guard is scoped, not deleted**: a registry exemption
       for the lifted builder(s) only, with the full unmodified guard test still green for every
       non-lifted builder (operational layer stays binary-free), and a live-executed literate page
       documenting the guard lift and cut mechanism.
@@ -219,7 +219,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-01 | Phase 24 | Pending |
 | INT-02 | Phase 24 | Pending |
 | INT-03 | Phase 24 | Pending |
-| INT-04 | Phase 24 | Pending |
+| INT-04 | Phase 24 | Complete |
 | SCALE-01 | Phase 25 | Complete |
 | SCALE-02 | Phase 25 | Complete |
 | SCALE-03 | Phase 25 | Pending |

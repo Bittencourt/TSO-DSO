@@ -44,6 +44,7 @@ for src in (
     "mpc_rolling_horizon.jl",   # NEW: Rung 8 MPC / rolling-horizon RTP closed loop (MPC-01..04)
     "stochastic_pv_demand.jl", # NEW: Rung 9 Stochastic PV/Demand Uncertainty (STOCH-01..04)
     "meshed_reactive_price.jl", # NEW: Rung 10 Meshed Networks + Live Reactive Price (MESH-01..03,06)
+    "integer_investment.jl",   # NEW: Rung 11 Discrete/Integer Investment Expansion (INT-01..04)
     "experiments.jl",           # NEW: the Phase-8 experiment harness (Scenario / run_scenario / run_and_store / run_sweep)
 )
     Literate.markdown(
@@ -95,6 +96,7 @@ makedocs(;
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",
             "Rung 7: Nash Diagonalization & Shared Corridor" => "generated/nash_diagonalization.md",
+            "Rung 11: Discrete/Integer Investment Expansion" => "generated/integer_investment.md",
         ],
         "API Reference" => "api.md",
     ],
