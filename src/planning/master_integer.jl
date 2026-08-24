@@ -64,10 +64,33 @@ rebuilt, mirroring `BendersMaster`'s own mutate-without-rebuild idiom.
     global lower bound.
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended, mirroring
     `BendersMaster.cuts`'s exact convention.
-  - `visited::Set{Vector{Int}}` — empty at construction. Plan 24-02's
-    anti-stall no-good fallback (D-16) populates this with previously-visited
-    binary corners; declared here so the struct's full field list is fixed in
+  - `visited::Dict{Vector{Int}, Vector{Float64}}` — empty at construction.
+    Plan 24-02's anti-stall no-good fallback (D-16) populates this, mapping
+    each previously-visited binary corner to the LAST `z` trial the master
+    picked there — declared here so the struct's full field list is fixed in
     one place.
+
+    **Phase 24 gap-closure (plan 24-05.1) — changed from `Set{Vector{Int}}`
+    to `Dict{Vector{Int}, Vector{Float64}}`:** the original `Set`-membership
+    "has this corner EVER been visited before" test treats every legitimate
+    cutting-plane REFINEMENT revisit (the master picking the SAME corner
+    again with a DIFFERENT, better-converged `z`, exactly how a Benders-style
+    outer approximation is SUPPOSED to close in on a corner's true argmin) as
+    an indistinguishable "stall" — banning the corner via `add_nogood_cut!`
+    before the incumbent `UB` has had a chance to converge to that corner's
+    true minimized value, including (confirmed empirically on the D-12
+    canonical fixture) the GLOBALLY OPTIMAL corner itself. Once a corner is
+    banned it is EXCLUDED from the master's feasible region forever (unlike
+    an LL cut, which only tightens `θ`'s bound, `add_nogood_cut!`'s row
+    removes the binary vector from the feasible set entirely) — banning the
+    true optimum before its incumbent value is captured makes it
+    PERMANENTLY UNREACHABLE, no matter how many further iterations run. The
+    `Dict` records each corner's LAST `z` trial so [`apply_integer_cuts!`](@ref)
+    can distinguish a GENUINE stall (the SAME corner revisited with an
+    UNCHANGED `z`, i.e. the cutting-plane refinement has already reached its
+    own fixed point there and no further progress is possible) from ordinary,
+    expected refinement progress (a DIFFERENT `z`) — see
+    [`apply_integer_cuts!`](@ref)'s own docstring for the full diagnosis.
 """
 struct BendersMasterInteger{Y, Z, AOP, AX, B}
     model::Model
@@ -82,7 +105,7 @@ struct BendersMasterInteger{Y, Z, AOP, AX, B}
     y_max::Float64
     L::Float64
     cuts::Vector{Any}
-    visited::Set{Vector{Int}}
+    visited::Dict{Vector{Int}, Vector{Float64}}
 end
 
 """
@@ -168,7 +191,7 @@ function build_master_integer(;
         Float64(y_max),
         Float64(α_op_lb + α_x_lb),
         Any[],
-        Set{Vector{Int}}(),
+        Dict{Vector{Int}, Vector{Float64}}(),
     )
 end
 
@@ -482,6 +505,19 @@ function add_nogood_cut!(master::BendersMasterInteger, b_trial::AbstractVector{<
     return master
 end
 
+# Phase 24 gap-closure (plan 24-05.1): the numerical tolerance for declaring a REVISITED
+# corner GENUINELY stalled (its own cutting-plane refinement has reached a fixed point —
+# further visits provably cannot improve the incumbent there), as opposed to ordinary,
+# EXPECTED refinement progress (a materially different `z` trial). Deliberately DISTINCT
+# from `KNOWN_OPTIMUM_ATOL` (benders.jl) — that constant certifies the FINAL answer against
+# the enumerated oracle; this one only decides when to stop re-exploring a corner, a much
+# coarser bookkeeping question. `1e-6` mirrors the continuous loop's own inherited `tol`
+# default order of magnitude (a z-trial that has stopped moving by more than this amount is
+# the same "no further progress" signal `gap <= tol` uses elsewhere in this codebase), and
+# is many orders of magnitude looser than genuine solver noise (~1e-9, KNOWN_OPTIMUM_ATOL's
+# own measurement), so it never mistakes solver jitter for continued progress.
+const STALL_Z_ATOL = 1e-6
+
 """
     apply_integer_cuts!(master, lb_res, Q_nu) -> NamedTuple{(:nogood_fired,)}
 
@@ -501,12 +537,38 @@ ONE call site (wired into `solve_stackelberg!` by plan 24-04):
     `add_ll_cut!(master, b_trial, Q_nu, master.L)` (24-RESEARCH.md Finding 2:
     the LL cut coexists with, never replaces, the continuous `:op`/`:x` cuts),
     then checks whether `key = round.(Int, b_trial)` has already been visited
-    (`master.visited`, D-16's anti-stall bookkeeping) — if so (a detected
-    STALL, not every iteration), ALSO calls `add_nogood_cut!(master, b_trial)`.
-    `key` is recorded into `master.visited` regardless of the stall outcome.
+    (`master.visited`, D-16's anti-stall bookkeeping) AND, if so, whether the
+    CURRENT `z` trial (`lb_res.z`) matches the RECORDED `z` from that corner's
+    LAST visit within [`STALL_Z_ATOL`](@ref) — only THAT combination (same
+    corner, unchanged `z`) is a genuine STALL, triggering
+    `add_nogood_cut!(master, b_trial)`. `master.visited[key]` is updated to
+    the current `z` trial regardless of the stall outcome.
 
-Returns `(; nogood_fired::Bool)` — `true` only on the integer path's stalled
-branch; always `false` on the continuous no-op.
+**Phase 24 gap-closure (plan 24-05.1) — WHY "any revisit" was itself a defect:**
+the PRE-fix version treated `key in master.visited` (ANY repeat visit,
+regardless of `z`) as the stall signal. But a Laporte-Louveaux LL cut only
+constrains `θ`, never `z` — the master's OWN continuous `z` choice at a given
+corner is refined PURELY by the (separately accumulating) global `:op`/`:x`
+cuts, exactly the standard outer-linearization/cutting-plane mechanism, and
+REQUIRES revisiting the same corner across MULTIPLE iterations as those cuts
+tighten (empirically confirmed on the D-12 fixture: the master's own `z` at
+the TRUE optimal corner moved `0.195 → 0.442 → 0.497 → 0.500` — genuine,
+converging progress — across what the pre-fix code classified as
+"1st visit, then IMMEDIATELY STALLED"). Because `add_nogood_cut!` EXCLUDES a
+corner from the master's feasible region PERMANENTLY (unlike the LL cut, which
+only tightens `θ`'s floor), banning a corner mid-refinement makes it
+UNREACHABLE for the REST OF THE RUN — including, on this fixture, the globally
+optimal corner itself, which was banned on its 2nd visit while the incumbent
+`UB` there (`-0.194`) was still `~0.03` away from its true minimized value
+(`-0.225`), making `result.UB ≈ enum_result.best_total` PROVABLY UNREACHABLE
+regardless of how correct `Q_nu` is. See
+`test/test_planning_certification_integer.jl`'s file header for the full,
+empirically-confirmed diagnosis this fix resolves (a SECOND, DISTINCT defect
+from the `Q_nu` recourse-value bug, found while re-verifying this
+certification during gap-closure).
+
+Returns `(; nogood_fired::Bool)` — `true` only on the integer path's genuinely
+stalled branch; always `false` on the continuous no-op.
 """
 apply_integer_cuts!(::BendersMaster, lb_res, Q_nu) = (; nogood_fired = false)
 
@@ -514,8 +576,14 @@ function apply_integer_cuts!(master::BendersMasterInteger, lb_res, Q_nu)
     b_trial = lb_res.b
     add_ll_cut!(master, b_trial, Q_nu, master.L)
     key = round.(Int, b_trial)
-    stalled = key in master.visited
-    push!(master.visited, key)
+    z_trial = Vector{Float64}(lb_res.z)
+    # Phase 24 gap-closure (plan 24-05.1): a genuine stall requires BOTH the SAME corner
+    # AND an UNCHANGED z trial (within STALL_Z_ATOL) -- a revisit with a materially
+    # different z is expected cutting-plane refinement progress, never a stall.
+    stalled =
+        haskey(master.visited, key) &&
+        isapprox(master.visited[key], z_trial; atol = STALL_Z_ATOL, rtol = 0.0)
+    master.visited[key] = z_trial
     if stalled
         add_nogood_cut!(master, b_trial)
     end
