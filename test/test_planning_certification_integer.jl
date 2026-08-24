@@ -95,7 +95,21 @@ function enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y:
         for _ in 1:iters
             m1 = lo + (hi - lo) / 3
             m2 = hi - (hi - lo) / 3
-            f(m1) < f(m2) ? (hi = m2) : (lo = m1)
+            f1, f2 = f(m1), f(m2)
+            # WR-01 (Phase 24 code review): a double-infinite tie must shrink from the
+            # right (toward the guaranteed-feasible z=0 anchor), never fall to the
+            # ordinary else-branch (lo = m1) -- that walks away from feasibility and
+            # diverges to +Inf on a bounded interval whenever the follower's own
+            # deliverable capacity is well below y_inv/3 (empirically reproduced with
+            # ordinary K/y_max/corridor_cap reconfiguration; dormant on D-12's specific
+            # numbers). See src/planning/benders.jl's corner_recourse for the same fix.
+            if isinf(f1) && isinf(f2)
+                hi = m2
+            elseif f1 < f2
+                hi = m2
+            else
+                lo = m1
+            end
         end
         z = (lo + hi) / 2
         return (z, f(z))
@@ -111,7 +125,23 @@ function enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y:
         b = [(i >> (k - 1)) & 1 for k in 1:K]
         # IDENTICAL formula to build_master_integer's own y_inv expression (T-24-13).
         y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
-        _, Qv = y_inv <= 0 ? (0.0, 0.0) : ternary_min(Qfun, 0.0, y_inv)
+        # y_inv <= 0 collapses [0, y_inv] to the single point z=0 -- Qfun(0.0) is
+        # GENUINELY COMPUTED here (matches src/planning/benders.jl's corner_recourse
+        # CR-01 fix), not assumed to be 0.0, even though it IS 0.0 on this fixture's
+        # ToyElasticDevice (zero utility at zero consumption).
+        _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
+        # WR-01: fail LOUDLY, not silently, if the ternary search ever produces a
+        # non-finite Q for a lattice point that must be feasible (z=0 is always
+        # feasible, so Q(y_inv) can never legitimately exceed Qfun(0.0)). A silent
+        # Inf here would corrupt this certification oracle's own notion of "best"
+        # without ever tripping an error.
+        isfinite(Qv) || throw(
+            ErrorException(
+                "enumerate_lattice: ternary search diverged to a non-finite Q at " *
+                "y_inv=$y_inv (WR-01 regression, Phase 24 code review) -- should be " *
+                "unreachable given the tie-break fix; report as a bug.",
+            ),
+        )
         total = c_y * y_inv + Qv
         all_totals[i + 1] = total
         if total < best_total
@@ -212,7 +242,17 @@ end
             for _ in 1:iters
                 m1 = lo + (hi - lo) / 3
                 m2 = hi - (hi - lo) / 3
-                f(m1) < f(m2) ? (hi = m2) : (lo = m1)
+                f1, f2 = f(m1), f(m2)
+                # WR-01 (Phase 24 code review): see the top-level enumerate_lattice
+                # above / src/planning/benders.jl's corner_recourse for the full
+                # rationale -- a double-infinite tie must shrink from the right.
+                if isinf(f1) && isinf(f2)
+                    hi = m2
+                elseif f1 < f2
+                    hi = m2
+                else
+                    lo = m1
+                end
             end
             z = (lo + hi) / 2
             return (z, f(z))
@@ -225,7 +265,14 @@ end
         for i in 0:(n - 1)
             b = [(i >> (k - 1)) & 1 for k in 1:K]
             y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
-            _, Qv = y_inv <= 0 ? (0.0, 0.0) : ternary_min(Qfun, 0.0, y_inv)
+            # y_inv <= 0: genuinely compute Qfun(0.0), never assume 0.0 (CR-01 parity).
+            _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
+            isfinite(Qv) || throw(
+                ErrorException(
+                    "enumerate_lattice_local: ternary search diverged to a non-finite " *
+                    "Q at y_inv=$y_inv (WR-01 regression, Phase 24 code review).",
+                ),
+            )
             total = c_y * y_inv + Qv
             all_totals[i + 1] = total
             if total < best_total
@@ -414,7 +461,17 @@ end
             for _ in 1:iters
                 m1 = lo + (hi - lo) / 3
                 m2 = hi - (hi - lo) / 3
-                f(m1) < f(m2) ? (hi = m2) : (lo = m1)
+                f1, f2 = f(m1), f(m2)
+                # WR-01 (Phase 24 code review): see the top-level enumerate_lattice
+                # above / src/planning/benders.jl's corner_recourse for the full
+                # rationale -- a double-infinite tie must shrink from the right.
+                if isinf(f1) && isinf(f2)
+                    hi = m2
+                elseif f1 < f2
+                    hi = m2
+                else
+                    lo = m1
+                end
             end
             z = (lo + hi) / 2
             return (z, f(z))
@@ -424,7 +481,14 @@ end
         for i in 0:(n - 1)
             b = [(i >> (k - 1)) & 1 for k in 1:K]
             y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
-            _, Qv = y_inv <= 0 ? (0.0, 0.0) : ternary_min(Qfun, 0.0, y_inv)
+            # y_inv <= 0: genuinely compute Qfun(0.0), never assume 0.0 (CR-01 parity).
+            _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
+            isfinite(Qv) || throw(
+                ErrorException(
+                    "enumerate_lattice_local2: ternary search diverged to a non-finite " *
+                    "Q at y_inv=$y_inv (WR-01 regression, Phase 24 code review).",
+                ),
+            )
             total = c_y * y_inv + Qv
             best_total = min(best_total, total)
         end

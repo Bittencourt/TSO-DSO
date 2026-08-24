@@ -102,6 +102,16 @@ as `+Inf` in the extended-value sense (the SAME Rule-1 device `enumerate_lattice
 mathematically sound here because `z = 0` (zero flow) is always follower-feasible, so the
 feasible sub-interval containing the true minimizer is always nonempty.
 
+**WR-01 (Phase 24 code review) tie-break fix:** the naive ternary-search tie-break
+`f(m1) < f(m2) ? (hi = m2) : (lo = m1)` diverges to `+Inf` whenever BOTH trial points
+land outside the follower's own deliverable capacity (i.e. the feasible sub-interval is
+narrower than `y_inv / 3`, reachable via ordinary `K`/`y_max`/`corridor_cap`
+reconfiguration): `Inf < Inf` is `false`, so the tie falls to the `else` branch
+(`lo = m1`), which walks the search window AWAY from the known-feasible anchor at
+`z = 0` and never recovers within a bounded interval. Since `z = 0` is always feasible,
+the correct tie-break on a double-infinite probe is to shrink from the RIGHT
+(`hi = m2`), which converges the window back toward the guaranteed-feasible low end.
+
 `y_inv <= 0` collapses the feasible interval `[0, y_inv]` to the single point `z = 0` —
 the recourse there is GENUINELY COMPUTED via `Qfun(0.0)` (one real solve of
 `follower`/`oracle`), never assumed to be `0.0`. An earlier version of this function
@@ -129,20 +139,51 @@ function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100
         return fr.cost - orr.cost
     end
 
+    # WR-01 (Phase 24 code review): fail LOUDLY rather than silently propagate a
+    # divergence. The follower is documented to always be feasible at z=0, so
+    # Q(y_inv) can never legitimately be non-finite for y_inv >= 0 -- a non-finite
+    # result here is proof of a search bug, not a legitimate value.
+    check_finite(Qv::Real, z::Real) =
+        isfinite(Qv) || throw(
+            ErrorException(
+                "corner_recourse: recourse evaluated to a non-finite value at z=$z " *
+                "(y_inv=$y_inv) -- the follower is documented to always be feasible " *
+                "at z=0, so this should be unreachable; report as a bug (WR-01 " *
+                "regression, Phase 24 code review).",
+            ),
+        )
+
     # Phase 24 code-review fix (CR-01): compute the zero-corner recourse for real via
     # Qfun(0.0) instead of assuming it is 0.0 -- see the docstring above for the full
     # rationale. This is exact by construction (Qfun is the same function used by the
     # ternary search below), not a special-cased approximation.
-    y_inv <= 0 && return Qfun(0.0)
+    if y_inv <= 0
+        Qv = Qfun(0.0)
+        check_finite(Qv, 0.0)
+        return Qv
+    end
 
     lo, hi = 0.0, Float64(y_inv)
     for _ in 1:iters
         m1 = lo + (hi - lo) / 3
         m2 = hi - (hi - lo) / 3
-        Qfun(m1) < Qfun(m2) ? (hi = m2) : (lo = m1)
+        f1, f2 = Qfun(m1), Qfun(m2)
+        # WR-01 fix (see docstring): a double-infinite tie must shrink from the right
+        # (toward the guaranteed-feasible z=0 anchor), never fall through to the
+        # ordinary else-branch (lo = m1), which would walk away from feasibility and
+        # diverge on a bounded interval.
+        if isinf(f1) && isinf(f2)
+            hi = m2
+        elseif f1 < f2
+            hi = m2
+        else
+            lo = m1
+        end
     end
     zstar = (lo + hi) / 2
-    return Qfun(zstar)
+    Qv = Qfun(zstar)
+    check_finite(Qv, zstar)
+    return Qv
 end
 
 """
