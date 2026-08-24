@@ -28,130 +28,166 @@
 # Per D-10, this is a documented, non-blocking finding — NOT a coverage gap, and NOT an
 # invitation to write BilevelJuMP code known in advance to fail on this fixture.
 #
-# TESTITEMRUNNER ISOLATION NOTE (Rule 3 — auto-fixed blocking issue, discovered by
-# reading `TestItemRunner.jl`'s own `run_tests`/`TestItemDetection` source this
-# session): the runner's discovery pass parses each file with `JuliaSyntax` and
-# extracts ONLY the source ranges of `@testitem`/`@testsetup`/`@testmodule`
-# invocations — every other top-level form in a test file (including a plain
-# top-level `function ... end`) is never `include`d and is therefore silently DEAD
-# CODE from the runner's perspective, unreachable from inside any `@testitem`'s own
-# freshly-`gensym`'d isolated module. `enumerate_lattice` below is defined as a plain
-# top-level function (per the plan's literal instruction and as an independently
-# verifiable, single canonical reference implementation — see this file's own Task-1
-# verification, which `include()`s this file directly, bypassing TestItemRunner
-# entirely, to prove this EXACT committed definition is correct). Because it cannot be
-# `using`-imported into a `@testitem`'s isolated module (it is not a `@testsetup`/
-# `@testmodule`), the certifying `@testitem`s below (Task 2) each carry an IDENTICAL,
-# independently-defined nested copy of this same logic — the only way to make the
-# enumeration genuinely EXECUTE under the real TestItemRunner-driven `Pkg.test()` gate,
-# rather than merely appearing to be tested while actually being inert.
+# CONSOLIDATION (WR-04, Phase 24 code review): this logic previously existed as FOUR
+# near-identical copies in this file alone (a plain top-level `enumerate_lattice` kept
+# only for documentation/ad-hoc direct-script verification, plus a nested
+# `enumerate_lattice_local`/`enumerate_lattice_local2` duplicated inside EACH of the two
+# `@testitem`s below) -- and had already, independently, DIVERGED once from
+# `docs/literate/integer_investment.jl`'s own copy (the `y_inv <= 0` corner: this file's
+# copies special-cased it to a hardcoded `(0.0, 0.0)`, while the literate page correctly
+# computed `Qfun(0.0)` for real -- see CR-01). That divergence is exactly how a wrong
+# assumption can slip past this file's own certification undetected.
+#
+# The prior top-level `function enumerate_lattice(...) end` was ALSO permanently DEAD
+# CODE from TestItemRunner's perspective (its AST-based discovery only extracts
+# `@testitem`/`@testsetup`/`@testmodule` source ranges — a plain top-level `function`
+# is silently never `include`d, hence never genuinely executed by `Pkg.test()`, only by
+# an ad-hoc script bypassing the runner entirely). Converting it to the `@testmodule`
+# below fixes BOTH problems at once: `@testmodule`s (unlike plain top-level functions)
+# ARE `using`-importable into a `@testitem`'s isolated module via `setup=[...]` (the
+# SAME established pattern this file already uses for `Phase6Fixtures`/
+# `ToyDeviceFixture`/`PlanningFixtures`), so ONE definition now serves BOTH `@testitem`s
+# below AND is genuinely exercised by the real TestItemRunner-driven suite gate (not
+# merely appearing to be tested while actually being inert).
+#
+# Two copies remain, UNAVOIDABLY, and are the outer bound of what can be consolidated:
+#  1. This `@testmodule` (used by both `@testitem`s in THIS file).
+#  2. `docs/literate/integer_investment.jl`'s own copy -- a Literate.jl page must be a
+#     SELF-CONTAINED, independently-runnable script (that is the whole point of a
+#     literate experiment page, per CLAUDE.md's documentation requirement), so it
+#     cannot `using` a test-only `@testmodule` without depending on the test tree.
+# If these two ever diverge again, the fix is to re-derive one from the other and
+# grep for `ternary_min`/`enumerate_lattice` across BOTH locations -- see
+# `src/planning/benders.jl`'s `corner_recourse` for the THIRD, structurally-different
+# (single-corner, not full-enumeration) instance of the same `Qfun`/ternary-search
+# technique, promoted to production.
 
-"""
-    enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
-        -> (; best_b, best_y, best_total, all_totals)
+@testmodule EnumerateLatticeOracle begin
+    using TSODSO
 
-Exhaustively enumerate all `2^K` binary-expansion lattice points reachable by
-`build_master_integer`'s own `y_inv = (y_max/2^K) * Σ_k 2^(k-1) b_k` formula (D-01/D-02
-— the IDENTICAL formula, so this independent certificate can never silently disagree
-with the production builder on what `y_inv` a given `b` maps to, T-24-13), and for each
-point find the exact recourse `Q(y_inv) = min_{z ∈ [0, y_inv]} [follower_cost(z) -
-oracle_welfare(z)]` via a deterministic ternary search over the REAL, ALREADY-BUILT
-`oracle`/`follower` (`solve_planning_oracle!`/`solve_follower!` — never the archived
-closed-form `0.5*z^2-0.7*z` shortcut). `Q` is convex in `z` on this fixture (oracle
-welfare concave, follower cost convex, sum of convex functions convex), so ternary
-search on `[0, y_inv]` converges to the true minimum.
+    """
+        enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
+            -> (; best_b, best_y, best_total, all_totals)
 
-**Rule 1 auto-fixed bug (found empirically this session, NOT present in the plan's own
-literal `<verify>` script as-shipped):** on the D-12 fixture the follower's deliverable
-capacity is `corridor_cap * x_inv_max = 2.0 * 2.0 = 4.0`, strictly BELOW `y_max = 8.0` —
-so 7 of the 16 lattice points (`y_inv > 4.0`) have a ternary-search upper bound that
-exceeds the follower's feasible region, and `solve_follower!` genuinely (and correctly,
-per its own documented contract) returns the INFEASIBLE branch `(; feasible = false, v,
-u)` for any trial `z` in that regime — a NamedTuple with no `.cost` field. Naively
-calling `.cost` on that branch throws `FieldError` (confirmed: reproduces exactly this
-way when the plan's literal inline script is run verbatim). The fix treats an infeasible
-`z` as `+Inf` in the extended-value sense (a convex function restricted to a feasible
-sub-interval and set to `+Inf` outside remains convex — the standard indicator-function
-device), which is mathematically sound here since the feasible sub-interval `[0, 4.0]`
-is always nonempty on this fixture and ternary search on an extended-value convex
-function still converges to the true constrained minimum.
+    Exhaustively enumerate all `2^K` binary-expansion lattice points reachable by
+    `build_master_integer`'s own `y_inv = (y_max/2^K) * Σ_k 2^(k-1) b_k` formula (D-01/D-02
+    — the IDENTICAL formula, so this independent certificate can never silently disagree
+    with the production builder on what `y_inv` a given `b` maps to, T-24-13), and for each
+    point find the exact recourse `Q(y_inv) = min_{z ∈ [0, y_inv]} [follower_cost(z) -
+    oracle_welfare(z)]` via a deterministic ternary search over the REAL, ALREADY-BUILT
+    `oracle`/`follower` (`solve_planning_oracle!`/`solve_follower!` — never the archived
+    closed-form `0.5*z^2-0.7*z` shortcut). `Q` is convex in `z` on this fixture (oracle
+    welfare concave, follower cost convex, sum of convex functions convex), so ternary
+    search on `[0, y_inv]` converges to the true minimum.
 
-Returns `(; best_b, best_y, best_total, all_totals)`, `all_totals` a `Vector{Float64}`
-indexed `1:2^K` (index `i+1` <-> the lattice point encoded by integer `i`, `0`-based,
-bit `k` <-> `b[k]`), for a caller to re-derive any lattice point's own total without
-re-enumerating.
-"""
-function enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
-    Qfun(z) = begin
-        fr = solve_follower!(follower, [z])
-        # Rule 1 auto-fix (see docstring): an undeliverable z is a genuine infeasibility,
-        # not an error -- extend Q to +Inf there so ternary search never dereferences a
-        # nonexistent .cost field and still finds the true constrained minimum.
-        fr.feasible || return Inf
-        orr = solve_planning_oracle!(oracle, [z])
-        fr.cost - orr.cost
-    end
-    function ternary_min(f, lo, hi; iters::Int = 100)
-        for _ in 1:iters
-            m1 = lo + (hi - lo) / 3
-            m2 = hi - (hi - lo) / 3
-            f1, f2 = f(m1), f(m2)
-            # WR-01 (Phase 24 code review): a double-infinite tie must shrink from the
-            # right (toward the guaranteed-feasible z=0 anchor), never fall to the
-            # ordinary else-branch (lo = m1) -- that walks away from feasibility and
-            # diverges to +Inf on a bounded interval whenever the follower's own
-            # deliverable capacity is well below y_inv/3 (empirically reproduced with
-            # ordinary K/y_max/corridor_cap reconfiguration; dormant on D-12's specific
-            # numbers). See src/planning/benders.jl's corner_recourse for the same fix.
-            if isinf(f1) && isinf(f2)
-                hi = m2
-            elseif f1 < f2
-                hi = m2
-            else
-                lo = m1
+    **Rule 1 auto-fixed bug (found empirically this session, NOT present in the plan's own
+    literal `<verify>` script as-shipped):** on the D-12 fixture the follower's deliverable
+    capacity is `corridor_cap * x_inv_max = 2.0 * 2.0 = 4.0`, strictly BELOW `y_max = 8.0` —
+    so 7 of the 16 lattice points (`y_inv > 4.0`) have a ternary-search upper bound that
+    exceeds the follower's feasible region, and `solve_follower!` genuinely (and correctly,
+    per its own documented contract) returns the INFEASIBLE branch `(; feasible = false, v,
+    u)` for any trial `z` in that regime — a NamedTuple with no `.cost` field. Naively
+    calling `.cost` on that branch throws `FieldError` (confirmed: reproduces exactly this
+    way when the plan's literal inline script is run verbatim). The fix treats an infeasible
+    `z` as `+Inf` in the extended-value sense (a convex function restricted to a feasible
+    sub-interval and set to `+Inf` outside remains convex — the standard indicator-function
+    device), which is mathematically sound here since the feasible sub-interval `[0, 4.0]`
+    is always nonempty on this fixture and ternary search on an extended-value convex
+    function still converges to the true constrained minimum.
+
+    **WR-01 fix (Phase 24 code review):** the naive ternary-search tie-break diverges to
+    `+Inf` when both trial points land outside the feasible sub-interval -- see the
+    `ternary_min` inline comment below and `src/planning/benders.jl`'s `corner_recourse`
+    for the full rationale. Fixed by shrinking from the right on a double-infinite tie,
+    plus a loud `isfinite` check on every computed `Q` (this oracle previously had NO
+    such guard, so a divergence here would have silently corrupted the certified
+    "best" answer instead of throwing).
+
+    **CR-01 fix (Phase 24 code review):** `y_inv <= 0` genuinely COMPUTES `Qfun(0.0)`,
+    never assumes it is `0.0` (even though it IS `0.0` on this fixture's
+    `ToyElasticDevice`, since its utility is zero at zero consumption) -- matches
+    `src/planning/benders.jl`'s `corner_recourse` and
+    `docs/literate/integer_investment.jl`'s own independently-found fix.
+
+    Returns `(; best_b, best_y, best_total, all_totals)`, `all_totals` a `Vector{Float64}`
+    indexed `1:2^K` (index `i+1` <-> the lattice point encoded by integer `i`, `0`-based,
+    bit `k` <-> `b[k]`), for a caller to re-derive any lattice point's own total without
+    re-enumerating.
+    """
+    function enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
+        Qfun(z) = begin
+            fr = solve_follower!(follower, [z])
+            # Rule 1 auto-fix (see docstring): an undeliverable z is a genuine infeasibility,
+            # not an error -- extend Q to +Inf there so ternary search never dereferences a
+            # nonexistent .cost field and still finds the true constrained minimum.
+            fr.feasible || return Inf
+            orr = solve_planning_oracle!(oracle, [z])
+            fr.cost - orr.cost
+        end
+        function ternary_min(f, lo, hi; iters::Int = 100)
+            for _ in 1:iters
+                m1 = lo + (hi - lo) / 3
+                m2 = hi - (hi - lo) / 3
+                f1, f2 = f(m1), f(m2)
+                # WR-01 (Phase 24 code review): a double-infinite tie must shrink from the
+                # right (toward the guaranteed-feasible z=0 anchor), never fall to the
+                # ordinary else-branch (lo = m1) -- that walks away from feasibility and
+                # diverges to +Inf on a bounded interval whenever the follower's own
+                # deliverable capacity is well below y_inv/3 (empirically reproduced with
+                # ordinary K/y_max/corridor_cap reconfiguration; dormant on D-12's specific
+                # numbers). See src/planning/benders.jl's corner_recourse for the same fix.
+                if isinf(f1) && isinf(f2)
+                    hi = m2
+                elseif f1 < f2
+                    hi = m2
+                else
+                    lo = m1
+                end
+            end
+            z = (lo + hi) / 2
+            return (z, f(z))
+        end
+
+        n = 2^K
+        all_totals = Vector{Float64}(undef, n)
+        best_total = Inf
+        best_y = NaN
+        best_b = Int[]
+
+        for i in 0:(n - 1)
+            b = [(i >> (k - 1)) & 1 for k in 1:K]
+            # IDENTICAL formula to build_master_integer's own y_inv expression (T-24-13).
+            y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
+            # y_inv <= 0 collapses [0, y_inv] to the single point z=0 -- Qfun(0.0) is
+            # GENUINELY COMPUTED here (matches src/planning/benders.jl's corner_recourse
+            # CR-01 fix), not assumed to be 0.0, even though it IS 0.0 on this fixture's
+            # ToyElasticDevice (zero utility at zero consumption).
+            _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
+            # WR-01: fail LOUDLY, not silently, if the ternary search ever produces a
+            # non-finite Q for a lattice point that must be feasible (z=0 is always
+            # feasible, so Q(y_inv) can never legitimately exceed Qfun(0.0)). A silent
+            # Inf here would corrupt this certification oracle's own notion of "best"
+            # without ever tripping an error.
+            isfinite(Qv) || throw(
+                ErrorException(
+                    "enumerate_lattice: ternary search diverged to a non-finite Q at " *
+                    "y_inv=$y_inv (WR-01 regression, Phase 24 code review) -- should be " *
+                    "unreachable given the tie-break fix; report as a bug.",
+                ),
+            )
+            total = c_y * y_inv + Qv
+            all_totals[i + 1] = total
+            if total < best_total
+                best_total = total
+                best_y = y_inv
+                best_b = b
             end
         end
-        z = (lo + hi) / 2
-        return (z, f(z))
+
+        return (; best_b, best_y, best_total, all_totals)
     end
 
-    n = 2^K
-    all_totals = Vector{Float64}(undef, n)
-    best_total = Inf
-    best_y = NaN
-    best_b = Int[]
-
-    for i in 0:(n - 1)
-        b = [(i >> (k - 1)) & 1 for k in 1:K]
-        # IDENTICAL formula to build_master_integer's own y_inv expression (T-24-13).
-        y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
-        # y_inv <= 0 collapses [0, y_inv] to the single point z=0 -- Qfun(0.0) is
-        # GENUINELY COMPUTED here (matches src/planning/benders.jl's corner_recourse
-        # CR-01 fix), not assumed to be 0.0, even though it IS 0.0 on this fixture's
-        # ToyElasticDevice (zero utility at zero consumption).
-        _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
-        # WR-01: fail LOUDLY, not silently, if the ternary search ever produces a
-        # non-finite Q for a lattice point that must be feasible (z=0 is always
-        # feasible, so Q(y_inv) can never legitimately exceed Qfun(0.0)). A silent
-        # Inf here would corrupt this certification oracle's own notion of "best"
-        # without ever tripping an error.
-        isfinite(Qv) || throw(
-            ErrorException(
-                "enumerate_lattice: ternary search diverged to a non-finite Q at " *
-                "y_inv=$y_inv (WR-01 regression, Phase 24 code review) -- should be " *
-                "unreachable given the tie-break fix; report as a bug.",
-            ),
-        )
-        total = c_y * y_inv + Qv
-        all_totals[i + 1] = total
-        if total < best_total
-            best_total = total
-            best_y = y_inv
-            best_b = b
-        end
-    end
-
-    return (; best_b, best_y, best_total, all_totals)
+    export enumerate_lattice
 end
 
 # ---------------------------------------------------------------------------------------
@@ -217,7 +253,7 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning certification integer: INT-03 exhaustive-enumeration certification of the D-12 tiny instance (D-15 certificates 1+2, D-16 visibility, D-11 non-blocker documented) -- FIXED in gap-closure 24-05.1 (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -226,63 +262,10 @@ end
     λ₀ = [4.0]
     follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
 
-    # TestItemRunner isolation (see file header): enumerate_lattice must be redefined
-    # HERE, nested inside this @testitem's own body -- the plain top-level definition
-    # above is dead code from the runner's own AST-based discovery. IDENTICAL logic to
-    # the committed top-level version (Task 1), independently verified there via a
-    # direct `include()` bypassing TestItemRunner entirely.
-    function enumerate_lattice_local(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
-        Qfun(z) = begin
-            fr = solve_follower!(follower, [z])
-            fr.feasible || return Inf
-            orr = solve_planning_oracle!(oracle, [z])
-            fr.cost - orr.cost
-        end
-        function ternary_min(f, lo, hi; iters::Int = 100)
-            for _ in 1:iters
-                m1 = lo + (hi - lo) / 3
-                m2 = hi - (hi - lo) / 3
-                f1, f2 = f(m1), f(m2)
-                # WR-01 (Phase 24 code review): see the top-level enumerate_lattice
-                # above / src/planning/benders.jl's corner_recourse for the full
-                # rationale -- a double-infinite tie must shrink from the right.
-                if isinf(f1) && isinf(f2)
-                    hi = m2
-                elseif f1 < f2
-                    hi = m2
-                else
-                    lo = m1
-                end
-            end
-            z = (lo + hi) / 2
-            return (z, f(z))
-        end
-        n = 2^K
-        all_totals = Vector{Float64}(undef, n)
-        best_total = Inf
-        best_y = NaN
-        best_b = Int[]
-        for i in 0:(n - 1)
-            b = [(i >> (k - 1)) & 1 for k in 1:K]
-            y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
-            # y_inv <= 0: genuinely compute Qfun(0.0), never assume 0.0 (CR-01 parity).
-            _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
-            isfinite(Qv) || throw(
-                ErrorException(
-                    "enumerate_lattice_local: ternary search diverged to a non-finite " *
-                    "Q at y_inv=$y_inv (WR-01 regression, Phase 24 code review).",
-                ),
-            )
-            total = c_y * y_inv + Qv
-            all_totals[i + 1] = total
-            if total < best_total
-                best_total = total
-                best_y = y_inv
-                best_b = b
-            end
-        end
-        return (; best_b, best_y, best_total, all_totals)
-    end
+    # WR-04 consolidation (Phase 24 code review): enumerate_lattice now comes from the
+    # shared EnumerateLatticeOracle @testmodule (file header) via setup=[...], the SAME
+    # `using`-import mechanism this file already uses for Phase6Fixtures/ToyDeviceFixture/
+    # PlanningFixtures -- no more nested per-testitem copy of this logic.
 
     # D(x) -- the SAME hyperplane formula add_ll_cut! writes over master.b, evaluated at an
     # arbitrary point x (plan 24-03's <interfaces>): D(x) = Σ_{i∈S}x[i] - Σ_{i∉S}x[i] - |S| + 1
@@ -297,7 +280,8 @@ end
     # ---- Build ONCE, run the exhaustive enumeration (D-10's PRIMARY certificate) --------
     oracle = build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1)
     follower = build_follower(; follower_kwargs..., T = 1)
-    enum_result = enumerate_lattice_local(oracle, follower; K = 4, y_max = 8.0, c_y = 0.3)
+    enum_result =
+        EnumerateLatticeOracle.enumerate_lattice(oracle, follower; K = 4, y_max = 8.0, c_y = 0.3)
     @test length(enum_result.all_totals) == 16
     # D-04 sanity: the enumerated optimum must be a genuine, non-degenerate lattice point,
     # never accidentally the continuous golden's own y*=0.7 (which is off-lattice by design).
@@ -438,7 +422,7 @@ end
 end
 
 @testitem "planning certification integer: negative-control regression -- a deliberately WRONG known_optimum is rejected, never falsely converges via a stray gap<=tol match (plan-checker Blocker 2, closed for good)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, EnumerateLatticeOracle] begin
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -447,57 +431,15 @@ end
     λ₀ = [4.0]
     follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
 
-    # TestItemRunner isolation (see file header) -- nested, independently-verified-identical
-    # copy of enumerate_lattice, needed only to derive a genuinely-wrong known_optimum (NOT
-    # coincidentally close to any other lattice point's own total).
-    function enumerate_lattice_local2(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
-        Qfun(z) = begin
-            fr = solve_follower!(follower, [z])
-            fr.feasible || return Inf
-            orr = solve_planning_oracle!(oracle, [z])
-            fr.cost - orr.cost
-        end
-        function ternary_min(f, lo, hi; iters::Int = 100)
-            for _ in 1:iters
-                m1 = lo + (hi - lo) / 3
-                m2 = hi - (hi - lo) / 3
-                f1, f2 = f(m1), f(m2)
-                # WR-01 (Phase 24 code review): see the top-level enumerate_lattice
-                # above / src/planning/benders.jl's corner_recourse for the full
-                # rationale -- a double-infinite tie must shrink from the right.
-                if isinf(f1) && isinf(f2)
-                    hi = m2
-                elseif f1 < f2
-                    hi = m2
-                else
-                    lo = m1
-                end
-            end
-            z = (lo + hi) / 2
-            return (z, f(z))
-        end
-        n = 2^K
-        best_total = Inf
-        for i in 0:(n - 1)
-            b = [(i >> (k - 1)) & 1 for k in 1:K]
-            y_inv = (y_max / 2^K) * sum(2.0^(k - 1) * b[k] for k in 1:K)
-            # y_inv <= 0: genuinely compute Qfun(0.0), never assume 0.0 (CR-01 parity).
-            _, Qv = y_inv <= 0 ? (0.0, Qfun(0.0)) : ternary_min(Qfun, 0.0, y_inv)
-            isfinite(Qv) || throw(
-                ErrorException(
-                    "enumerate_lattice_local2: ternary search diverged to a non-finite " *
-                    "Q at y_inv=$y_inv (WR-01 regression, Phase 24 code review).",
-                ),
-            )
-            total = c_y * y_inv + Qv
-            best_total = min(best_total, total)
-        end
-        return best_total
-    end
+    # WR-04 consolidation (Phase 24 code review): enumerate_lattice comes from the shared
+    # EnumerateLatticeOracle @testmodule (file header) -- only `.best_total` is needed
+    # here, to derive a genuinely-wrong known_optimum (NOT coincidentally close to any
+    # other lattice point's own total).
 
     oracle = build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1)
     follower = build_follower(; follower_kwargs..., T = 1)
-    best_total = enumerate_lattice_local2(oracle, follower; K = 4, y_max = 8.0, c_y = 0.3)
+    best_total =
+        EnumerateLatticeOracle.enumerate_lattice(oracle, follower; K = 4, y_max = 8.0, c_y = 0.3).best_total
     # Comfortably outside KNOWN_OPTIMUM_ATOL (~4e-8) and not coincidentally close to any
     # other lattice point's own total (all_totals span roughly [-0.225, 1.75] in steps of
     # ~0.15-0.2 on this fixture -- a 1.0 offset lands well clear of every one of them).
