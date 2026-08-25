@@ -59,7 +59,14 @@ jobs:
         shell: julia --color=yes {0}
         run: |
           using Pkg
-          Pkg.add(PackageSpec(name = "JuliaFormatter", version = "2"))
+          # Pkg reads a bare version string as a CARET spec: "2" (or even "2.10") means
+          # ^2 == [2.0.0, 3.0.0), which floats to the newest 2.x release. That floated us
+          # to JuliaFormatter 2.12.6 in practice, which reformats ~48 files under this
+          # repo's .JuliaFormatter.toml. The leading "~" below is a TILDE spec that pins
+          # the minor version instead: ~2.10 == [2.10.0, 2.11.0), matching
+          # .JuliaFormatter.toml's own documented "2.10.x behaviour" freeze.
+          # DO NOT "simplify" this back to a bare "2" or "2.10" — that reintroduces the float.
+          Pkg.add(PackageSpec(name = "JuliaFormatter", version = "~2.10"))
           using JuliaFormatter
           # Uses the committed .JuliaFormatter.toml to freeze v2 style (Pitfall 4).
           # `docs` is now in scope (Phase-9 WR-04 follow-up): the literate pages are
