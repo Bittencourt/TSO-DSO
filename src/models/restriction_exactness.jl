@@ -71,8 +71,9 @@ requires) and (b) the optimality loss versus the unrestricted (inexact) SOCP bou
 # What "AC-feasible" means here (the certification gate)
 
 `ac_feasible` is decided by THIS solve's OWN per-branch, per-hour SOC-cone residual — the
-IDENTICAL quantity `assert_socp_exact!` (models/exactness.jl) gates, `gap[b,t] =
-|value(l[b,t])·value(v[from_b,t]) − (value(P[b,t])² + value(Q[b,t])²)|` — compared against
+IDENTICAL quantity `assert_socp_exact!` (models/exactness.jl) gates,
+`gap[b,t] = |value(l[b,t])·value(v[from_b,t]) − (value(P[b,t])² + value(Q[b,t])²)|` —
+compared against
 a SCALE-FREE combined bound `gap ≤ cone_atol + cone_rtol·max(|l·v|, |P²+Q²|)` (WR-01's
 philosophy, reproduced here rather than re-imported so this certificate owns its own
 tolerance decision independently of `assert_socp_exact!`'s internal call inside
