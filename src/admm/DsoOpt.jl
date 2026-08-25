@@ -460,8 +460,9 @@ function solve_dso!(
     else
         # CONDITIONING LADDER on the MID-LOOP solve ONLY (debug session
         # `.planning/debug/ieee13-admm-numerical-error.md`). On IEEE-13 the mid-loop DSO-OPT
-        # sits on a numerical knife-edge once adaptive-ρ has climbed to its cap (ρ = 200) and
-        # the residuals are near tolerance: Clarabel's DEFAULT static regularization is not
+        # sits on a numerical knife-edge once adaptive-ρ has doubled from ρ₀ = 100 to ρ = 200
+        # (τ = 2; this is NOT the ρ_max = 1e4 clamp, just one climb step) and the residuals are
+        # within ~1.5-2x of tolerance: Clarabel's DEFAULT static regularization is not
         # always enough, and whether a given build lands on the failing side is decided by
         # pure floating-point/codegen perturbation (an UNREACHABLE `include` flips it; so does
         # a Julia PATCH bump — 1.10.11/1.11.9/1.12.5 fail, 1.12.7 converges, each pair stably).

@@ -125,6 +125,54 @@ Deterministic — 5/5 failures observed on a failing toolchain.
   to a hard dep, absent from `Manifest-v1.11.toml`) — hence 1.10 as the failing-toolchain
   reference.
 
+- timestamp: 2026-08-25 (C2) — **The DSO-OPT constraint matrix is WELL scaled; the
+  ill-conditioning comes entirely from the ρ-weighted objective, and it is ANISOTROPIC.**
+  Measured on the exact model `run_scenario(:ieee13, seed = 7, T = 24)` builds
+  (`build_dso_opt(feeder, aggs, 24; ρ, λ₀)`), read-only:
+  ```
+  Scenario ρ0 = 100.0  τ_ratio = 2.0  μ = 10.0
+  CONSTRAINT MATRIX (ρ-INDEPENDENT — build_dso_opt puts ρ only in the objective):
+    |a_ij| min = 0.028124999999999997   max = 1.2   nnz = 5136
+    spread max/min = 42.66666666666667
+  MODEL SIZE: nvar = 1536  ncon = 2520
+  OBJECTIVE COEFFICIENTS vs ρ (quadratic diag = 0.5ρ on every pag_dso[j,t]):
+  ρ         q_min         q_max         lin_min         lin_max         q_max / |a_ij|_min
+  2.0       1.0           1.0           3.6             9.0             35.5556
+  12.5      6.25          6.25          3.6             9.0             222.222
+  50.0      25.0          25.0          3.6             9.0             888.889
+  100.0     50.0          50.0          3.6             9.0             1777.78
+  200.0     100.0         100.0         3.6             9.0             3555.56
+  (nq = 240 quadratic terms, nl = 24 linear terms)
+  ```
+  Readings:
+    * The constraint matrix has a magnitude spread of only ~43× (0.028 … 1.2 pu) — it is NOT
+      the source of the trouble, and it does not move with ρ at all.
+    * The objective Hessian is a PURE DIAGONAL `0.5ρ`, and it sits on only **240 of the 1536
+      variables** (the `pag_dso[j,t]` coupling block). The other 1296 variables — voltages,
+      squared currents, branch flows, cone slacks — carry **exactly zero curvature**.
+    * So the KKT system is strongly ANISOTROPIC and gets worse LINEARLY in ρ: a curvature-100
+      block (at ρ = 200) adjacent to a curvature-0 block whose only diagonal support is
+      Clarabel's static regularization.
+
+- timestamp: 2026-08-25 (C2) — **Clarabel's measured defaults, and why rung 2 is exactly the
+  right lever.** `Clarabel.Settings()` on this pinned build (0.11.1) reports:
+  `static_regularization_constant = 1.0e-8`, `static_regularization_proportional = 4.93e-32`,
+  `dynamic_regularization_eps = 1.0e-13`, `dynamic_regularization_delta = 2.0e-7`,
+  `iterative_refinement_max_iter = 10`, `equilibrate_max_iter = 10`.
+  MECHANISM (strongly supported, not solver-internally certified — see next_action): the
+  curvature-0 variable block is held up in the quasi-definite KKT factorization by the
+  `1e-8` static regularization, while the coupling block carries `0.5ρ = 100`. That is a
+  ~1e10 diagonal spread at ρ = 200, doubling with every ρ climb step. It is marginal rather
+  than fatal, which is exactly why an arbitrarily small perturbation of the emitted code (an
+  unreachable `include`, a Julia patch bump) decides the outcome. Retry rung 2 raises
+  `static_regularization_constant` to `1e-6` — a 100× reduction of precisely that spread, and
+  the ONLY thing it changes — and that alone converts every observed failure into the same
+  optimum at the same 58 iterations. The lever that fixes it is the lever this mechanism
+  predicts.
+  CAVEAT — ρ = 200 is one τ = 2 doubling of ρ₀ = 100, NOT a clamp (`ρ_max = 1e4`,
+  `src/admm/solve_admm.jl:237`). An earlier draft of the fix comment mis-stated this as "its
+  cap"; corrected in the follow-up commit.
+
 ## Eliminated
 
 - hypothesis: "This is the documented ~55% Clarabel flake that `test/fixtures_retry.jl`
@@ -157,10 +205,11 @@ expecting: Rescue at rung 2 on Julia 1.10/1.11, 58 iterations, welfare agreeing 
   known-good value to ~1e-9 relative.
 
 next_action: |
-  DONE — C1 landed and verified (see ## Resolution). Remaining OPTIONAL follow-up: C2,
-  characterize WHY the iteration-28 SOCP is ill-conditioned (dump Clarabel coefficient/RHS
-  ranges at that iterate; examine how the ρ-scaled quadratic penalty scales the Hessian as
-  adaptive-ρ climbs to its ρ_max = 200 cap). C1 is robustness; C2 is the explanation.
+  DONE — C1 landed and verified (see ## Resolution). C2 partially done: the coefficient-range
+  measurement and the anisotropy mechanism are recorded in Evidence below. The one piece NOT
+  done is a direct dump of Clarabel's INTERNAL KKT condition number at the iteration-28 iterate
+  (would need product-code instrumentation of the ADMM loop); the mechanism below is therefore
+  strongly supported but not solver-internally certified.
 
   --- original plan, retained for the record ---
   C1 (land the fix):
@@ -190,8 +239,8 @@ next_action: |
 
 root_cause: |
   The IEEE-13 mid-loop DSO-OPT SOCP sits on a NUMERICAL KNIFE-EDGE at ADMM iteration 28, once
-  adaptive-ρ has climbed to its cap (ρ = 200) and both residuals are within ~1.5–2× of their
-  tolerances. At that iterate Clarabel's DEFAULT static regularization is marginal: the solve
+  adaptive-ρ has doubled from ρ₀ = 100 to ρ = 200 (τ = 2 — NOT the `ρ_max = 1e4` clamp, just
+  one climb step) and both residuals are within ~1.5–2× of their tolerances. At that iterate Clarabel's DEFAULT static regularization is marginal: the solve
   terminates `NUMERICAL_ERROR` rather than OPTIMAL. Which side of the edge a given build lands
   on is decided by pure floating-point/codegen perturbation, NOT by any logic:
     * adding an UNREACHABLE `include("models/ac_dual_fallback.jl")` flips converge → fail at
