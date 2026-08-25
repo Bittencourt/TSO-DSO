@@ -138,6 +138,7 @@ Pages = [
     "planning/subproblem.jl",
     "planning/follower.jl",
     "planning/master.jl",
+    "planning/master_integer.jl",
     "planning/benders.jl",
     "planning/coupling.jl",
     "planning/nash.jl",
