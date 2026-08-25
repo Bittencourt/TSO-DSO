@@ -71,10 +71,8 @@ end
             @test 0 <= br.x < TSODSO.IMPEDANCE_PU_MAX
             @test 0 < br.smax < TSODSO.SMAX_PU_MAX
         end
-        head = only(
-            b for b in feeder.branches if
-            b.from == feeder.root || b.to == feeder.root
-        )
+        head =
+            only(b for b in feeder.branches if b.from == feeder.root || b.to == feeder.root)
         @test isapprox(head.smax, 55.0; atol = 1e-6)
     end
 end
@@ -189,7 +187,9 @@ end
     out = TSODSO.contribute!(d, ctx; T = T)
 
     @test out isa NamedTuple
-    @test haskey(out, :vars) && haskey(out, :p_inject) && haskey(out, :q_inject) &&
+    @test haskey(out, :vars) &&
+          haskey(out, :p_inject) &&
+          haskey(out, :q_inject) &&
           haskey(out, :utility)
     @test out.vars == NamedTuple()
     @test length(out.q_inject) == T
@@ -225,7 +225,8 @@ end
     # (before the :ieee8500/:ieee8500_mv branches were added to materialize.jl) — a
     # regression trap for the must-not-break invariant, not just "still runs without error."
     golden_bus_phi = [(agg.bus, agg.φ) for agg in pop]
-    @test golden_bus_phi == [(b, 0.90) for b in TSODSO._load_buses(ieee13_modified(), :ieee13)]
+    @test golden_bus_phi ==
+          [(b, 0.90) for b in TSODSO._load_buses(ieee13_modified(), :ieee13)]
 
     expected_load_scale = 0.005
     for agg in pop
@@ -295,8 +296,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     @test 0 < br.smax < TSODSO.SMAX_PU_MAX
                 end
                 head = only(
-                    b for b in feeder.branches if
-                    b.from == feeder.root || b.to == feeder.root
+                    b for
+                    b in feeder.branches if b.from == feeder.root || b.to == feeder.root
                 )
                 @test isapprox(head.smax, 55.0; atol = 1e-6)
             end
@@ -308,9 +309,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             ct5_pair = first(k for (k, v) in TSODSO.IEEE8500_XFMR_EDGES if v.code == "CT5")
             from_idx, to_idx = remap[ct5_pair[1]], remap[ct5_pair[2]]
             br = only(
-                b for b in feeder.branches if
-                (b.from == from_idx && b.to == to_idx) ||
-                (b.from == to_idx && b.to == from_idx)
+                b for b in feeder.branches if (b.from == from_idx && b.to == to_idx) ||
+                    (b.from == to_idx && b.to == from_idx)
             )
             @test isapprox(br.r, 3.00; atol = 1e-2)
             @test isapprox(br.x, 2.72; atol = 1e-2)
@@ -382,7 +382,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 endswith(f, "Aggregator.jl") && continue
                 isfile(f) || continue
                 for line in eachline(f)
-                    occursin(r"add_to_residual!.*:Rq", line) && push!(offenders, "$f: $line")
+                    occursin(r"add_to_residual!.*:Rq", line) &&
+                        push!(offenders, "$f: $line")
                 end
             end
             @test isempty(offenders)
@@ -419,7 +420,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
             @test length(pop8500mv) == length(TSODSO.ieee8500_mv_load_buses()) + 4
 
-            recovered(h) = h.Pdc[1] / generate_profiles(; seed = seed + h.bus, T = T).demand[1]
+            recovered(h) =
+                h.Pdc[1] / generate_profiles(; seed = seed + h.bus, T = T).demand[1]
 
             sum8500 = sum(recovered, houses8500)
             summv = sum(recovered, housesmv)

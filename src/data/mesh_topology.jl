@@ -113,7 +113,9 @@ function assert_connected(buses, branches, root)
     # (4) Exactly one designated frontier (root) bus.
     nroots = count(b -> b.is_root, buses)
     nroots == 1 || throw(
-        ArgumentError("Malformed mesh feeder: must have exactly one frontier (root) bus, got $nroots."),
+        ArgumentError(
+            "Malformed mesh feeder: must have exactly one frontier (root) bus, got $nroots.",
+        ),
     )
 
     # (5) The `root` index and the `is_root` flag must AGREE: the single flagged

@@ -30,10 +30,8 @@
     # (1) Disconnected: 3 buses but bus 3 is unreachable from the root --
     #     parallel edge between 1 and 2 wastes a branch (edge-count check is
     #     dropped, so this must fail on connectivity alone, not edge count).
-    disc_branches = [
-        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
-        TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
-    ]
+    disc_branches =
+        [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0), TSODSO.Branch(1, 2, 0.01, 0.02, 10.0)]
     @test_throws ArgumentError TSODSO.assert_connected(cyc_buses, disc_branches, 1)
 
     # (2a) Zero roots: a connected topology but no bus flagged is_root.

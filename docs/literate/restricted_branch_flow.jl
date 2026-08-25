@@ -158,15 +158,12 @@ N = length(feeder.buses)
 # Lemma 1 sanity check (`v ≤ v̂_GL(s)` everywhere — the number below must be `≥ 0`, up to solver
 # noise):
 
-lemma1_mingap = minimum(
-    v̂_GL_check[j, t] - value(pv_ac_for_ε.v[j, t]) for j in 1:N, t in 1:T
-)
+lemma1_mingap =
+    minimum(v̂_GL_check[j, t] - value(pv_ac_for_ε.v[j, t]) for j in 1:N, t in 1:T)
 
 # The measured modification gap itself (Definition 3, eq. 18), recomputed live on THIS fixture:
 
-ε_measured = maximum(
-    v̂_GL_check[j, t] - value(pv_ac_for_ε.v[j, t]) for j in 1:N, t in 1:T
-)
+ε_measured = maximum(v̂_GL_check[j, t] - value(pv_ac_for_ε.v[j, t]) for j in 1:N, t in 1:T)
 
 # **This live `ε_measured` is a real, citable, non-fabricated number confirming the modification
 # gap is small and strictly positive on this fixture's actual parameters — consistent with C1

@@ -32,8 +32,7 @@ cone peer; `assert_battery_complementarity!` is the `PVBattery`-only peer this f
 does NOT replace, it TIGHTENS its selection instead — see below).
 
 Iterates `ctx.meta[:agg_device_vars]` (a `Dict{Int,Vector{Any}}` keyed by bus, populated by
-`Aggregator.contribute!`) and selects ONLY the 4Q shape: `haskey(v,:p_ch) && haskey(v,:p_dch)
-&& haskey(v,:q)`. The `:q` key is the SOLE distinguishing field — a `PVBattery`'s vars
+`Aggregator.contribute!`) and selects ONLY the 4Q shape: `haskey(v,:p_ch) && haskey(v,:p_dch) && haskey(v,:q)`. The `:q` key is the SOLE distinguishing field — a `PVBattery`'s vars
 (`(;p_ch,p_dch,soc,pv_used)`) never carry it and are therefore NEVER touched by this
 function; `assert_battery_complementarity!`'s loop condition is symmetrically tightened
 (`welfare_solve.jl`) to skip anything WITH `:q`, so the two checks are structurally mutually
@@ -50,8 +49,7 @@ mirroring `assert_socp_exact!`'s `atol + rtol·max(...)` COMBINED-bound shape (a
 floor plus a scale-relative fraction) rather than `assert_battery_complementarity!`'s
 single-`Pmax` shape, because `Pch_max` and `Pdch_max` are INDEPENDENT for a `FourQuadBESS`
 (D-02/D-04) and can differ. On violation (`gap > tol`) it raises a loud `error(...)` naming
-the bus/time/values/tolerance and REFUSES to return a clean diagnostic — UNLESS `report =
-true`, which replaces the `error(...)` with an `@warn` carrying the SAME message and lets
+the bus/time/values/tolerance and REFUSES to return a clean diagnostic — UNLESS `report = true`, which replaces the `error(...)` with an `@warn` carrying the SAME message and lets
 the loop continue (D-06's neutralization kwarg — no other `src/` edit needed to opt into
 diagnostic mode). Returns `maxratio = maxₜ gap/tol` over every checked device/time — the
 worst observed gap-to-tolerance ratio, mirroring `assert_socp_exact!`'s "return a
@@ -69,8 +67,7 @@ a DIFFERENT device's numerical behavior — reusing it here would be certificate
 This function's `rtol`/`atol` defaults are measured against the Clarabel-solved
 `p_ch[t]·p_dch[t]` noise floor at PRODUCTION-FIXTURE per-unit scales (the phase-19 code
 review's CR-01: the ORIGINAL defaults `rtol = atol = 1e-6` were measured only on a benign
-standalone device with `Pch_max=4, Pdch_max=5` — where the relative term `rtol·scale² =
-2.5e-5` dominates — so at the committed per-unit fixtures, `scale² = 4e-4` (2-bus 0.02 pu)
+standalone device with `Pch_max=4, Pdch_max=5` — where the relative term `rtol·scale² = 2.5e-5` dominates — so at the committed per-unit fixtures, `scale² = 4e-4` (2-bus 0.02 pu)
 and `scale² = 6.25e-6` (IEEE-13 0.0025 pu), the flat `atol = 1e-6` floor dominated by up to
 ~5 orders of magnitude and legs of ~40% of the device rating on each side would have passed
 the certificate silently).
@@ -98,8 +95,7 @@ component ≤ ~6.2e-10 (dominant at the 0.0025 pu scale, where the relative floo
     term: at the committed fixture scales the certificate flags simultaneous legs above
     ~1–4% of the device rating (vs ~40% pre-CR-01).
 
-(The ORIGINAL benign standalone-device sweep — `@objective(m, Max, res.utility -
-λ_test*sum(res.p_inject))`, positive in-band `λ_test`, `scale² = 25` — observed floors of
+(The ORIGINAL benign standalone-device sweep — `@objective(m, Max, res.utility - λ_test*sum(res.p_inject))`, positive in-band `λ_test`, `scale² = 25` — observed floors of
 ≤ ~2.6e-9 absolute / ≤ ~1.1e-10 relative; that regime is strictly App.-C-dominated with both
 legs pinned hard to one face, and UNDER-estimates the noise at a realistic network optimum
 where the effective price sits near the device's indifference point and BOTH legs are

@@ -98,16 +98,41 @@ end
     # soc0/term pairs stay within the battery's per-window reachability envelope
     # (2 steps × Pmax=0.002/η=0.95 ⇒ max Δsoc ≈ ±0.004) so every cycle is genuinely feasible.
     cycles = [
-        (soc0 = 0.003, term = 0.002, Tin0 = 20.0, Ppv = 0.008, Tout = 18.0, Pdc = 0.015, λ0 = 3.0),
-        (soc0 = 0.002, term = 0.005, Tin0 = 25.0, Ppv = 0.012, Tout = 24.0, Pdc = 0.020, λ0 = 5.0),
-        (soc0 = 0.006, term = 0.004, Tin0 = 17.0, Ppv = 0.005, Tout = 20.0, Pdc = 0.010, λ0 = 6.5),
+        (
+            soc0 = 0.003,
+            term = 0.002,
+            Tin0 = 20.0,
+            Ppv = 0.008,
+            Tout = 18.0,
+            Pdc = 0.015,
+            λ0 = 3.0,
+        ),
+        (
+            soc0 = 0.002,
+            term = 0.005,
+            Tin0 = 25.0,
+            Ppv = 0.012,
+            Tout = 24.0,
+            Pdc = 0.020,
+            λ0 = 5.0,
+        ),
+        (
+            soc0 = 0.006,
+            term = 0.004,
+            Tin0 = 17.0,
+            Ppv = 0.005,
+            Tout = 20.0,
+            Pdc = 0.010,
+            λ0 = 6.5,
+        ),
     ]
 
     for c in cycles
         for h in o.ic_handles
             if h.kind == :soc
                 set_parameter_value(h.ic_param, c.soc0)
-                h.terminal_param === nothing || set_parameter_value(h.terminal_param, c.term)
+                h.terminal_param === nothing ||
+                    set_parameter_value(h.terminal_param, c.term)
             else # :Tin
                 set_parameter_value(h.ic_param, c.Tin0)
             end
@@ -175,7 +200,8 @@ end
     H = Phase21Fixtures.H
 
     o_true = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = true)
-    o_false = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    o_false =
+        build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
 
     nct = num_constraints(o_true.model; count_variable_in_set_constraints = true)
     ncf = num_constraints(o_false.model; count_variable_in_set_constraints = true)

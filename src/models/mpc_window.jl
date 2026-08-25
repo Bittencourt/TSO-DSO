@@ -54,8 +54,7 @@ full set of per-step device Parameters plan 21-01 widened) over a FIXED window l
     `(; bus::Int, kind::Symbol, ic_param, terminal_param)`, `kind ∈ (:soc, :Tin)`.
     `terminal_param` is `nothing` unless `kind == :soc && terminal_soc` (D-07: Thermostatic's
     `:Tin` entries NEVER carry a terminal target).
-  - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int,
-    Pdc_param)`, the per-step inelastic-demand forecast Parameter.
+  - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int, Pdc_param)`, the per-step inelastic-demand forecast Parameter.
   - `terminal_soc::Bool` — the build-time toggle recorded for introspection; `true` means every
     `:soc`-kind `ic_handles` entry carries a live hard equality `soc[H] == terminal_param`.
 """
@@ -357,8 +356,7 @@ Seeded, INDEPENDENT bounded multiplicative perturbation of PV and demand (D-08),
 `(; pv_factor, demand_factor)`. Throws `ArgumentError` unless `0 <= magnitude < 1` (mirrors
 `Scenario`'s own guard — defensive-in-depth, this function may be called directly).
 
-`magnitude == 0` short-circuits to the deterministic no-op `(; pv_factor = 1.0, demand_factor =
-1.0)` for EVERY `seed`/`t` (avoids a wasted RNG construction on the no-error path). Otherwise,
+`magnitude == 0` short-circuits to the deterministic no-op `(; pv_factor = 1.0, demand_factor = 1.0)` for EVERY `seed`/`t` (avoids a wasted RNG construction on the no-error path). Otherwise,
 derives TWO INDEPENDENT sub-seeds via [`sub_seed`](@ref) with FRESH, per-step tags
 (`:mpc_forecast_pv_<t>`/`:mpc_forecast_demand_<t>`) — never the `:profiles`/`:population` tags
 (Pitfall 5's independent-stream discipline) — constructs a FRESH `StableRNGs.LehmerRNG` from

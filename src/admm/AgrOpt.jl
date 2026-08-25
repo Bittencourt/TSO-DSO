@@ -119,7 +119,13 @@ default. Unused (never referenced) under `OFF`/`CERTIFIED`.
 Returns an [`AgrOpt`](@ref). No concrete solver is named (INFRA-02); the model is well-posed and
 solves OPTIMAL at the default zero price.
 """
-function build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = false, ρ_q::Real = ρ)
+function build_agr_opt(
+    agg::Aggregator,
+    T::Int;
+    ρ::Real,
+    reactive_mode = false,
+    ρ_q::Real = ρ,
+)
     mode = normalize_reactive_mode(reactive_mode)
 
     # (1) One QP model per node, chosen by problem class only (INFRA-02 — never names a solver).
@@ -186,10 +192,8 @@ FIXED `−ρ/2` quadratic self-term built by [`build_agr_opt`](@ref) is untouche
 plain `Float64` vector, NEVER a JuMP `Parameter` (a `λ·pag` Parameter×variable term is an
 indefinite bilinear the convex conic backend rejects — RESEARCH Pitfall 1).
 
-`μ_j`/`d_j`/`ρ_q` (MESH-05, NEW — the reactive analogs of `λ_j`/`c_j`/`ρ`): when `μ_j !==
-nothing`, in the SAME loop as the `pag[t]` update, `qag_live[t]`'s linear objective coefficient
-is set to `−μ_j[t] − ρ_q·d_j[t]`, mirroring the active-power update exactly. `agr.qag_live ===
-nothing` (an `OFF`/`CERTIFIED`-built `AgrOpt`) while `μ_j !== nothing` is a CALLER ERROR — it
+`μ_j`/`d_j`/`ρ_q` (MESH-05, NEW — the reactive analogs of `λ_j`/`c_j`/`ρ`): when `μ_j !== nothing`, in the SAME loop as the `pag[t]` update, `qag_live[t]`'s linear objective coefficient
+is set to `−μ_j[t] − ρ_q·d_j[t]`, mirroring the active-power update exactly. `agr.qag_live === nothing` (an `OFF`/`CERTIFIED`-built `AgrOpt`) while `μ_j !== nothing` is a CALLER ERROR — it
 throws `ArgumentError` rather than silently no-op-ing (which could mask a caller forgetting to
 build with `reactive_mode = :live`). `μ_j`/`d_j` are length-guarded against `agr.T` exactly like
 `λ_j`/`c_j`. When `μ_j === nothing` (the default), the `qag_live` coefficient is left untouched —
@@ -379,7 +383,12 @@ function set_rho_q!(agr::AgrOpt, ρ_q::Real)
     )
     # Diagonal quadratic coeff of every qag_live[t]² set to −0.5ρ_q (Max objective, penalty
     # subtracted). BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
-    set_objective_coefficient(agr.model, agr.qag_live, agr.qag_live, fill(-0.5 * ρ_q, agr.T))
+    set_objective_coefficient(
+        agr.model,
+        agr.qag_live,
+        agr.qag_live,
+        fill(-0.5 * ρ_q, agr.T),
+    )
     return agr
 end
 

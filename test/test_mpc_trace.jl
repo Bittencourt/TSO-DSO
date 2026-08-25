@@ -62,7 +62,8 @@ end
     expected_cum = cumsum([abs(4.0 - 4.0), abs(4.5 - 4.2), abs(4.1 - 4.3), abs(4.1 - 4.1)])
     @test t.cum_deviation_trace ≈ expected_cum
 
-    @test t.cert_status_trace == [:certified_convex_dual, :local_ac_dual, :cert_failed, :certified_convex_dual]
+    @test t.cert_status_trace ==
+          [:certified_convex_dual, :local_ac_dual, :cert_failed, :certified_convex_dual]
 
     @test max_jump(t) ≈ maximum(expected_jump)
     @test mean_jump(t) ≈ sum(expected_jump) / 4

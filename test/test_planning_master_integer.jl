@@ -100,7 +100,13 @@ end
     λ₀ = [4.0]
 
     oracle = build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1)
-    follower = build_follower(; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5], T = 1)
+    follower = build_follower(;
+        corridor_cap = 2.0,
+        x_inv_max = 2.0,
+        c_inv = 1.0,
+        c_op = [0.5],
+        T = 1,
+    )
 
     master = build_master_integer(;
         T = 1,
@@ -213,7 +219,7 @@ end
     # re-deriving D(b') independently of add_ll_cut!'s own internals (closed-form
     # arithmetic on the SAME algebra the function implements), for every one of the
     # 2^K = 16 incumbents x every one of the 15 OTHER corners: 16x16 = 256 pairs total.
-    for i in 0:(2^K - 1)
+    for i in 0:(2 ^ K - 1)
         b_nu = corner(i)
         master = build_fixture()
         L = master.L
@@ -227,7 +233,7 @@ end
         S = findall(==(1.0), b_nu)
         Sc = setdiff(1:K, S)
 
-        for j in 0:(2^K - 1)
+        for j in 0:(2 ^ K - 1)
             b_p = corner(j)
             D = sum(b_p[S]; init = 0.0) - sum(b_p[Sc]; init = 0.0) - length(S) + 1
             rhs = (Q_nu - L) * D + L

@@ -73,8 +73,7 @@
     `build_master_integer`'s own `y_inv = (y_max/2^K) * Σ_k 2^(k-1) b_k` formula (D-01/D-02
     — the IDENTICAL formula, so this independent certificate can never silently disagree
     with the production builder on what `y_inv` a given `b` maps to, T-24-13), and for each
-    point find the exact recourse `Q(y_inv) = min_{z ∈ [0, y_inv]} [follower_cost(z) -
-    oracle_welfare(z)]` via a deterministic ternary search over the REAL, ALREADY-BUILT
+    point find the exact recourse `Q(y_inv) = min_{z ∈ [0, y_inv]} [follower_cost(z) - oracle_welfare(z)]` via a deterministic ternary search over the REAL, ALREADY-BUILT
     `oracle`/`follower` (`solve_planning_oracle!`/`solve_follower!` — never the archived
     closed-form `0.5*z^2-0.7*z` shortcut). `Q` is convex in `z` on this fixture (oracle
     welfare concave, follower cost convex, sum of convex functions convex), so ternary
@@ -85,8 +84,7 @@
     capacity is `corridor_cap * x_inv_max = 2.0 * 2.0 = 4.0`, strictly BELOW `y_max = 8.0` —
     so 7 of the 16 lattice points (`y_inv > 4.0`) have a ternary-search upper bound that
     exceeds the follower's feasible region, and `solve_follower!` genuinely (and correctly,
-    per its own documented contract) returns the INFEASIBLE branch `(; feasible = false, v,
-    u)` for any trial `z` in that regime — a NamedTuple with no `.cost` field. Naively
+    per its own documented contract) returns the INFEASIBLE branch `(; feasible = false, v, u)` for any trial `z` in that regime — a NamedTuple with no `.cost` field. Naively
     calling `.cost` on that branch throws `FieldError` (confirmed: reproduces exactly this
     way when the plan's literal inline script is run verbatim). The fix treats an infeasible
     `z` as `+Inf` in the extended-value sense (a convex function restricted to a feasible
@@ -114,7 +112,13 @@
     bit `k` <-> `b[k]`), for a caller to re-derive any lattice point's own total without
     re-enumerating.
     """
-    function enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
+    function enumerate_lattice(
+        oracle,
+        follower;
+        K::Int = 4,
+        y_max::Real = 8.0,
+        c_y::Real = 0.3,
+    )
         Qfun(z) = begin
             fr = solve_follower!(follower, [z])
             # Rule 1 auto-fix (see docstring): an undeliverable z is a genuine infeasibility,
@@ -253,7 +257,8 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning certification integer: INT-03 exhaustive-enumeration certification of the D-12 tiny instance (D-15 certificates 1+2, D-16 visibility, D-11 non-blocker documented) -- FIXED in gap-closure 24-05.1 (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
+    [:planning] setup =
+    [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -274,14 +279,20 @@ end
         K = length(b_trial)
         S = findall(==(1), b_trial)
         Sc = setdiff(1:K, S)
-        return sum(x[i] for i in S; init = 0) - sum(x[i] for i in Sc; init = 0) - length(S) + 1
+        return sum(x[i] for i in S; init = 0) - sum(x[i] for i in Sc; init = 0) -
+               length(S) + 1
     end
 
     # ---- Build ONCE, run the exhaustive enumeration (D-10's PRIMARY certificate) --------
     oracle = build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1)
     follower = build_follower(; follower_kwargs..., T = 1)
-    enum_result =
-        EnumerateLatticeOracle.enumerate_lattice(oracle, follower; K = 4, y_max = 8.0, c_y = 0.3)
+    enum_result = EnumerateLatticeOracle.enumerate_lattice(
+        oracle,
+        follower;
+        K = 4,
+        y_max = 8.0,
+        c_y = 0.3,
+    )
     @test length(enum_result.all_totals) == 16
     # D-04 sanity: the enumerated optimum must be a genuine, non-degenerate lattice point,
     # never accidentally the continuous golden's own y*=0.7 (which is off-lattice by design).
@@ -438,8 +449,13 @@ end
 
     oracle = build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1)
     follower = build_follower(; follower_kwargs..., T = 1)
-    best_total =
-        EnumerateLatticeOracle.enumerate_lattice(oracle, follower; K = 4, y_max = 8.0, c_y = 0.3).best_total
+    best_total = EnumerateLatticeOracle.enumerate_lattice(
+        oracle,
+        follower;
+        K = 4,
+        y_max = 8.0,
+        c_y = 0.3,
+    ).best_total
     # Comfortably outside KNOWN_OPTIMUM_ATOL (~4e-8) and not coincidentally close to any
     # other lattice point's own total (all_totals span roughly [-0.225, 1.75] in steps of
     # ~0.15-0.2 on this fixture -- a 1.0 offset lands well clear of every one of them).

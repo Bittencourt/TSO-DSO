@@ -40,30 +40,42 @@ rebuilt, mirroring `BendersMaster`'s own mutate-without-rebuild idiom.
   - `model::Model` — the master MILP, built ONCE via
     `Model(select_optimizer(MILP()))` (INFRA-02); mutated ONLY by appending new
     `@constraint` rows (cuts), never rebuilt.
+
   - `y_inv::Y` — the DERIVED continuous investment expression
     `(y_max/2^K) * Σ_k 2^(k-1) b_k` (an `AffExpr`, D-01/D-02). Used in
     constraints/objective exactly like the continuous master's `y_inv`
     variable; NEVER used to reconstruct the LL cut's `S^ν` (Pitfall 1 — use
     `b` for that).
+
   - `z::Z` — the length-T coupling flow (`0 <= z[t] <= y_inv`), identical box
     shape to `BendersMaster`.
+
   - `α_op::AOP` — the oracle's own epigraph variable (`α_op >= α_op_lb`).
+
   - `α_x::AX` — the follower's own epigraph variable (`α_x >= α_x_lb`).
+
   - `b::B` — the raw `Vector{VariableRef}` of K binaries. Needed because the
     Laporte-Louveaux cut (plan 24-02) is written over `b`, never over the
     derived `y_inv` (24-RESEARCH.md Priority Finding 1 / Pitfall 1).
+
   - `K::Int` — the number of binary blocks in the expansion.
+
   - `T::Int` — the horizon.
+
   - `c_y::Float64` — the leader's flexibility-investment unit cost.
+
   - `y_max::Float64` — the nominal investment ceiling. NOTE (D-02): the
     all-ones corner reaches `y_max*(1 - 2^-K)`, NOT `y_max` itself — see
     [`build_master_integer`](@ref)'s own docstring for the full lattice
     derivation.
+
   - `L::Float64` — the pinned `α_op_lb + α_x_lb`, stored once at construction
     so plan 24-02's Laporte-Louveaux cut never has to re-derive the recourse's
     global lower bound.
+
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended, mirroring
     `BendersMaster.cuts`'s exact convention.
+
   - `visited::Dict{Vector{Int}, Vector{Float64}}` — empty at construction.
     Plan 24-02's anti-stall no-good fallback (D-16) populates this, mapping
     each previously-visited binary corner to the LAST `z` trial the master
@@ -117,8 +129,10 @@ Build the binary-expansion MILP Benders master EXACTLY ONCE:
  1. Boundary guards — `T >= 1`, `K >= 1`, `y_max > 0`, `c_y >= 0` — each throws
     `ArgumentError` naming the offending value, BEFORE any `@variable`/
     `@objective` assembly (mirrors `build_master`'s own discipline, master.jl).
+
  2. `model = Model(select_optimizer(MILP()))` — INFRA-02, never
     `Model(HiGHS.Optimizer)` directly.
+
  3. `b[1:K]` binary variables and the DERIVED continuous expression
     `y_inv = (y_max/2^K) * Σ_k 2^(k-1) b_k` (D-01).
 
@@ -130,12 +144,15 @@ Build the binary-expansion MILP Benders master EXACTLY ONCE:
     `8.0*(1 - 1/16) = 7.5` — **`y_max` itself is never attainable.** This is a
     deliberate, accepted consequence of the round-step-size convention (D-02),
     not a bug to be corrected by changing the divisor to `2^K - 1`.
+
  4. `z[1:T]`, `α_op >= α_op_lb`, `α_x >= α_x_lb` — SAME finite-lower-bound-at-
     build-time discipline as `build_master` (Pitfall M1), reused for the MILP
     master.
+
  5. `box_lo[t]: z[t] >= 0`, `box_hi[t]: z[t] <= y_inv` — identical box shape to
     `build_master` (`y_inv` here is an `AffExpr`; JuMP supports this in
     `@constraint` RHS unchanged).
+
  6. `Min c_y*y_inv + α_op + α_x` — identical objective shape to `build_master`.
 
 Returns a [`BendersMasterInteger`](@ref) with an empty `cuts` log and an empty
@@ -154,8 +171,7 @@ function build_master_integer(;
     # build_master's own discipline, master.jl).
     T >= 1 || throw(ArgumentError("build_master_integer needs T >= 1, got T=$T"))
     K >= 1 || throw(ArgumentError("build_master_integer needs K >= 1, got K=$K"))
-    y_max > 0 ||
-        throw(ArgumentError("build_master_integer needs y_max > 0, got $y_max"))
+    y_max > 0 || throw(ArgumentError("build_master_integer needs y_max > 0, got $y_max"))
     c_y >= 0 || throw(ArgumentError("build_master_integer needs c_y >= 0, got $c_y"))
 
     model = Model(select_optimizer(MILP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
@@ -435,8 +451,11 @@ function add_ll_cut!(
     Q_nu::Real,
     L::Real,
 )
-    length(b_trial) == master.K ||
-        throw(ArgumentError("add_ll_cut!: b_trial has length $(length(b_trial)), expected K=$(master.K)"))
+    length(b_trial) == master.K || throw(
+        ArgumentError(
+            "add_ll_cut!: b_trial has length $(length(b_trial)), expected K=$(master.K)",
+        ),
+    )
     all(isfinite, b_trial) ||
         throw(ArgumentError("add_ll_cut!: b_trial contains a non-finite entry: $b_trial"))
     isfinite(Q_nu) || throw(ArgumentError("add_ll_cut!: Q_nu must be finite, got $Q_nu"))
@@ -447,8 +466,9 @@ function add_ll_cut!(
     S = findall(==(1), b_nu)
     Sc = setdiff(1:K, S)
     # RAW binaries master.b ONLY — never master.y_inv (Pitfall 1).
-    Dexpr = sum(master.b[i] for i in S; init = 0) -
-            sum(master.b[i] for i in Sc; init = 0) - length(S) + 1
+    Dexpr =
+        sum(master.b[i] for i in S; init = 0) - sum(master.b[i] for i in Sc; init = 0) -
+        length(S) + 1
     θ = master.α_op + master.α_x
     @constraint(master.model, θ >= (Q_nu - L) * Dexpr + L)
     push!(master.cuts, (; kind = :ll, b_trial = b_nu, Q_nu, L))
@@ -487,10 +507,14 @@ Logs `(; kind = :nogood, b_trial = round.(Int, b_trial))` to `master.cuts`
 and returns `master`.
 """
 function add_nogood_cut!(master::BendersMasterInteger, b_trial::AbstractVector{<:Real})
-    length(b_trial) == master.K ||
-        throw(ArgumentError("add_nogood_cut!: b_trial has length $(length(b_trial)), expected K=$(master.K)"))
-    all(isfinite, b_trial) ||
-        throw(ArgumentError("add_nogood_cut!: b_trial contains a non-finite entry: $b_trial"))
+    length(b_trial) == master.K || throw(
+        ArgumentError(
+            "add_nogood_cut!: b_trial has length $(length(b_trial)), expected K=$(master.K)",
+        ),
+    )
+    all(isfinite, b_trial) || throw(
+        ArgumentError("add_nogood_cut!: b_trial contains a non-finite entry: $b_trial"),
+    )
 
     b_nu = round.(Int, b_trial)
     K = master.K

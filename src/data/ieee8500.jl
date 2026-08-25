@@ -112,8 +112,7 @@ const IEEE8500_HEAD_SMAX_MVA = 27.5
 
 D-07's per-voltage-level band classifier: `true` for any bus reachable only through a service
 transformer (secondary LV network), `false` for MV buses. On this fixture's real bus-name
-population this is EXACTLY the string-prefix rule `startswith(name, "X") || startswith(name,
-"SX")` — verified (this plan) by direct enumeration: no MV-level bus name (from
+population this is EXACTLY the string-prefix rule `startswith(name, "X") || startswith(name, "SX")` — verified (this plan) by direct enumeration: no MV-level bus name (from
 `IEEE8500_MV_BRANCH_RX_OHMS` or `IEEE8500_REGULATOR_EDGES`) starts with `"X"` or `"SX"`, and
 every LV-only bus name (from `IEEE8500_XFMR_EDGES`/`IEEE8500_LV_BRANCH_RX_OHMS`, excluding the
 MV-side transformer endpoint) does.
@@ -211,8 +210,7 @@ MV buses get `(0.9, 1.1)` (the IEEE-123 convention); LV buses (`_ieee8500_is_lv_
 # Thermal limit (D-08, head-only)
 
 The head branch (either endpoint equal to `IEEE8500_ROOT_BUS` — the substation transformer
-edge) carries `to_pu_power(IEEE8500_HEAD_SMAX_MVA, IEEE8500_MV_BASE)` (≈55.0 pu at `S_base =
-0.5 MVA`); every other branch uses the `SMAX_NO_LIMIT` sentinel.
+edge) carries `to_pu_power(IEEE8500_HEAD_SMAX_MVA, IEEE8500_MV_BASE)` (≈55.0 pu at `S_base = 0.5 MVA`); every other branch uses the `SMAX_NO_LIMIT` sentinel.
 
 `Feeder(buses, branches, root)` runs `assert_radial` (DATA-02) and `assert_magnitudes`
 (INFRA-05) before returning, so an invalid feeder can never exist (DATA-03) — see the file
@@ -236,7 +234,8 @@ function ieee8500_modified()
     branches = Branch{Float64}[]
 
     for ((a, b), (r_Ω, x_Ω)) in IEEE8500_MV_BRANCH_RX_OHMS
-        r, x = to_pu_impedance(r_Ω, IEEE8500_MV_BASE), to_pu_impedance(x_Ω, IEEE8500_MV_BASE)
+        r, x =
+            to_pu_impedance(r_Ω, IEEE8500_MV_BASE), to_pu_impedance(x_Ω, IEEE8500_MV_BASE)
         smax = is_head(a, b) ? s_head : s_int
         push!(branches, Branch(remap[a], remap[b], r, x, smax))
     end
@@ -255,7 +254,8 @@ function ieee8500_modified()
     end
 
     for ((a, b), (r_Ω, x_Ω)) in IEEE8500_LV_BRANCH_RX_OHMS
-        r, x = to_pu_impedance(r_Ω, IEEE8500_LV_BASE), to_pu_impedance(x_Ω, IEEE8500_LV_BASE)
+        r, x =
+            to_pu_impedance(r_Ω, IEEE8500_LV_BASE), to_pu_impedance(x_Ω, IEEE8500_LV_BASE)
         push!(branches, Branch(remap[a], remap[b], r, x, s_int))   # never touches root
     end
 
@@ -326,7 +326,8 @@ function ieee8500_mv_modified()
 
     branches = Branch{Float64}[]
     for ((a, b), (r_Ω, x_Ω)) in IEEE8500_MV_BRANCH_RX_OHMS
-        r, x = to_pu_impedance(r_Ω, IEEE8500_MV_BASE), to_pu_impedance(x_Ω, IEEE8500_MV_BASE)
+        r, x =
+            to_pu_impedance(r_Ω, IEEE8500_MV_BASE), to_pu_impedance(x_Ω, IEEE8500_MV_BASE)
         smax = is_head(a, b) ? s_head : s_int
         push!(branches, Branch(remap[a], remap[b], r, x, smax))
     end

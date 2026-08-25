@@ -258,9 +258,7 @@ Base.@kwdef struct Scenario
             throw(ArgumentError("Scenario: window length H must be ≥ 1; got mpc_H=$mpc_H"))
         end
         if mpc_step < 1
-            throw(
-                ArgumentError("Scenario: step size must be ≥ 1; got mpc_step=$mpc_step"),
-            )
+            throw(ArgumentError("Scenario: step size must be ≥ 1; got mpc_step=$mpc_step"))
         end
         if !(0 <= mpc_forecast_error < 1)
             throw(

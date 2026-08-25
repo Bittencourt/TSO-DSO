@@ -37,17 +37,61 @@ end
 
     # Pch_max <= 0 must throw INDEPENDENTLY of Pdch_max's value (asymmetric caps, D-04).
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 0.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        0.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, -1.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        -1.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )
     # Pdch_max <= 0 must throw INDEPENDENTLY of Pch_max's value.
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 0.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        0.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, -1.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        -1.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )
 end
 
@@ -56,10 +100,32 @@ end
     using TSODSO
 
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 0.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        0.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, -1.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        -1.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )
 end
 
@@ -68,10 +134,32 @@ end
     using TSODSO
 
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 1.5, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        1.5,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )  # η > 1
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.0, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0,
+        2,
+        0.0,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
     )  # η <= 0
 end
 
@@ -80,10 +168,32 @@ end
     using TSODSO
 
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 100.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        100.0,
+        1.0,
+        4.0,
+        9.0,
     )  # soc0 > Emax
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, -1.0, 1.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        -1.0,
+        1.0,
+        4.0,
+        9.0,
     )  # soc0 < Emin
 end
 
@@ -93,23 +203,78 @@ end
 
     # λ_med OUTSIDE [λ_min, λ_max].
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 10.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        10.0,
+        9.0,
     )  # λ_med > λ_max
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 0.5, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        0.5,
+        9.0,
     )  # λ_med < λ_min
 
     # CR-01: a NON-STRICT ordering (any equality) is rejected — same rationale as
     # `PVBattery` (the INTERNAL 1-D dominance argument still needs it for a fixed net p;
     # see Task 2's re-derivation docstring for why this is still load-bearing here).
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 4.0, 4.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        4.0,
+        4.0,
+        9.0,
     )  # λ_min == λ_med
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 9.0, 9.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        9.0,
+        9.0,
     )  # λ_med == λ_max
     @test_throws ArgumentError TSODSO.FourQuadBESS(
-        2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 4.0, 4.0, 4.0,
+        2,
+        0.95,
+        1.0,
+        4.0,
+        5.0,
+        6.0,
+        0.0,
+        10.0,
+        2.0,
+        4.0,
+        4.0,
+        4.0,
     )  # all equal
 end
 
@@ -149,7 +314,8 @@ end
     # D-01/D-02: no PV coupling anywhere in the source file (grep-verified, mirrors the
     # plan's acceptance criterion — checked here so it is a live regression, not just a
     # one-time human grep).
-    src_path = joinpath(dirname(dirname(pathof(TSODSO))), "src", "devices", "FourQuadBESS.jl")
+    src_path =
+        joinpath(dirname(dirname(pathof(TSODSO))), "src", "devices", "FourQuadBESS.jl")
     src = read(src_path, String)
     @test !occursin("pv_used", src)
     @test !occursin("Ppv", src)
@@ -166,7 +332,8 @@ end
     res = TSODSO.contribute!(d, ctx; T = T)
 
     cone_constraints = [
-        c for c in all_constraints(model; include_variable_in_set_constraints = false) if
+        c for
+        c in all_constraints(model; include_variable_in_set_constraints = false) if
         constraint_object(c).set isa MOI.SecondOrderCone
     ]
     @test length(cone_constraints) == T
@@ -382,4 +549,3 @@ end
     ratio = TSODSO.assert_4q_complementarity!(ctx; report = true)
     @test ratio > 1.0
 end
-

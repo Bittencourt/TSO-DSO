@@ -91,20 +91,18 @@ certificate-laundering guard, T-20-07; see `# Tolerance provenance` below).
 `matches_ac_optimum` answers the STRICTLY HARDER, SEPARATE question the first
 implementation of this certificate mistakenly used AS the certification gate: does the
 restricted dispatch equal the independently-solved, globally AC-optimal dispatch at every
-hour? Computed by calling `report_ac = assert_ac_exact!(ctx_restricted, ctx_ac; rtol = rtol,
-atol = atol)` — REUSING the existing per-hour comparison loop verbatim (never
+hour? Computed by calling `report_ac = assert_ac_exact!(ctx_restricted, ctx_ac; rtol = rtol, atol = atol)` — REUSING the existing per-hour comparison loop verbatim (never
 re-implemented), with `rtol`/`atol` measured on THIS restricted-vs-AC residual (kept from
 this certificate's original measurement — see `# Tolerance provenance` below; unrelated to
-`cone_rtol`/`cone_atol` above, a DIFFERENT quantity). `matches_ac_optimum =
-all(row.exact for row in report_ac.hours)`. The full per-hour `report_ac.hours` (and
+`cone_rtol`/`cone_atol` above, a DIFFERENT quantity). `matches_ac_optimum = all(row.exact for row in report_ac.hours)`. The full per-hour `report_ac.hours` (and
 `report_ac.obj_gap`) are ALWAYS returned so a caller can inspect exactly which hours
 diverge and by how much — this is D-05's "report the optimality loss" half of the contract,
 generalized to the full per-hour diagnostic, never suppressed.
 
 `optimality_loss = unrestricted_cost === nothing ? nothing : objective_value(ctx_restricted.model)
-- unrestricted_cost` — a NAMED field, never silently folded into `obj_gap` (D-05: `nothing`
-is an explicit, documented "not requested" contract, never silently treated as `0.0`,
-T-20-09).
+
+  - unrestricted_cost`— a NAMED field, never silently folded into`obj_gap`(D-05:`nothing`is an explicit, documented "not requested" contract, never silently treated as`0.0`,
+    T-20-09).
 
 Stashes the D-08 provenance marker UNCONDITIONALLY, on both the pass and fail path — and
 SCRUBS any pre-existing `:price_provenance` marker as its very FIRST action, before any
@@ -136,8 +134,7 @@ cone-residual ratio, and the phase citation ("Gan-Low OPF-m/OPF-ε, Theorem 2; O
 `report`, `@warn`s it and CONTINUES (this is D-09's trigger point — the CALLER is
 responsible for invoking any fallback only after seeing `ac_feasible == false` from a
 `report = true` call, never automatically inside this function); else `error(msg)` (throws
-by default, D-06). Returns `(; ac_feasible, matches_ac_optimum, optimality_loss,
-obj_gap = report_ac.obj_gap, hours = report_ac.hours)` in EITHER path — `report` mode always
+by default, D-06). Returns `(; ac_feasible, matches_ac_optimum, optimality_loss, obj_gap = report_ac.obj_gap, hours = report_ac.hours)` in EITHER path — `report` mode always
 returns the full diagnostic, mirroring `assert_4q_complementarity!`'s "return a diagnostic on
 success" contract (here: "on non-throwing return", success or reported failure alike).
 
@@ -153,8 +150,7 @@ function's own `report`/`error` branching in either case.
 **`cone_rtol`/`cone_atol` (the NEW certification-gate tolerance, measured on
 `ctx_restricted`'s OWN cone residual):** measured on the EXACT-04 fixture
 (`Phase4Fixtures.high_pv_feeder()`, `pv_scale = 1.2`, solved `RestrictedBranchFlow()`,
-`allow_export = true`), computing `gap[b,t] = |value(l[b,t])·value(v[from_b,t]) −
-(value(P[b,t])² + value(Q[b,t])²)|` directly over every branch-hour (2026-08-08): the
+`allow_export = true`), computing `gap[b,t] = |value(l[b,t])·value(v[from_b,t]) − (value(P[b,t])² + value(Q[b,t])²)|` directly over every branch-hour (2026-08-08): the
 observed absolute floor is `2.08e-8` (worst branch `b=2`, hour `t=19`) — reproducing plan
 20-02's `socp_maxgap` EXACTLY, confirming this certificate's independent computation agrees
 with `assert_socp_exact!`'s internal one — and the observed relative floor (gap /
@@ -172,8 +168,7 @@ EXACT-04 is `≈0.051` (well inside the `≤1` pass bound, ~20× margin) — `ac
 certificate's original measurement — a genuinely DIFFERENT quantity, the restricted-vs-AC
 dispatch gap, not the cone residual):** measured on the SAME EXACT-04 fixture,
 `RestrictedBranchFlow()` vs `ACPowerFlow()` (both `allow_export = true`, AC also
-`allow_local = true`), calling `assert_ac_exact!(ctx_restricted, ctx_ac; rtol = 1e-4,
-atol = 1e-6)` diagnostically to READ the observed per-hour `vgap`/`pgap` scale
+`allow_local = true`), calling `assert_ac_exact!(ctx_restricted, ctx_ac; rtol = 1e-4, atol = 1e-6)` diagnostically to READ the observed per-hour `vgap`/`pgap` scale
 (2026-08-08):
 
   - **"Clean" hours (1–5, 16–24, where the OPF-m `v̂_GL(s) ≤ v̄` constraint is numerically
@@ -199,13 +194,12 @@ At these defaults, hours 7–15 fail the `matches_ac_optimum` diagnostic on EXAC
 verdict below) — this is now a REPORTED finding, never a certification failure.
 
 # Verdict on EXACT-04 (documented finding, plan 20-03-SUMMARY.md + its orchestrator-revision
+
 addendum)
 
-At these measured defaults, `assert_restriction_exact!(ctx_restricted, ctx_ac;
-unrestricted_cost = cost_unrestricted)` on the FULL EXACT-04 fixture (`pv_scale = 1.2`)
+At these measured defaults, `assert_restriction_exact!(ctx_restricted, ctx_ac; unrestricted_cost = cost_unrestricted)` on the FULL EXACT-04 fixture (`pv_scale = 1.2`)
 returns **`ac_feasible = true`** (the restricted solution's OWN cone is tight — a genuine
-branch-flow point, reproducing plan 20-02's `socp_maxgap = 2.08e-8`), **`matches_ac_optimum =
-false`** (hours 7–15 diverge from the independently-solved AC optimum), and a substantial,
+branch-flow point, reproducing plan 20-02's `socp_maxgap = 2.08e-8`), **`matches_ac_optimum = false`** (hours 7–15 diverge from the independently-solved AC optimum), and a substantial,
 NEGATIVE `optimality_loss` (measured ≈ `-1.4326`, i.e. `cost_restricted − cost_unrestricted`:
 the restricted welfare sits genuinely below the unrestricted SOCP bound — SIGN CONVENTION:
 negative means the restriction cost the researcher welfare relative to the looser,

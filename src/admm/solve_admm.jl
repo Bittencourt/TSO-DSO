@@ -166,6 +166,7 @@ mid-loop point). Instead it returns EARLY with `status = :budget_exceeded` and
 never a plausible-but-uncertified number silently returned as if it were the DADP.
 
 # Exactness-gate override seam (2026-08-22 follow-up, quick task 260822-f0b —
+
 `atol_exact::Real = 1e-6, rtol_exact::Real = 1e-4`)
 
 An ADDITIVE override onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs, threaded
@@ -302,7 +303,8 @@ function solve_admm(
         haskey(agr_by_bus, agg.bus) && throw(
             ArgumentError("two aggregators share bus $(agg.bus); solve_admm assumes 1:1"),
         )
-        agr_by_bus[agg.bus] = build_agr_opt(agg, T; ρ = ρf, reactive_mode = mode, ρ_q = ρ_qf)
+        agr_by_bus[agg.bus] =
+            build_agr_opt(agg, T; ρ = ρf, reactive_mode = mode, ρ_q = ρ_qf)
     end
 
     N = length(feeder.buses)
@@ -399,14 +401,7 @@ function solve_admm(
                     strict = false,
                 )
             else
-                solve_agr!(
-                    agr_by_bus[j],
-                    λ[j],
-                    c[j],
-                    ρf;
-                    check_battery = false,
-                    strict = false,
-                )
+                solve_agr!(agr_by_bus[j], λ[j], c[j], ρf; check_battery = false, strict = false)
             end
             a[j] = r.pag
             util[j] = r.utility
@@ -433,7 +428,11 @@ function solve_admm(
         # up both coefficient updates.
         if mode == LIVE
             for j in load_nodes, t in 1:T
-                set_objective_coefficient(dso.model, dso.qag[j, t], -μq[j][t] - ρ_qf * b[j][t])
+                set_objective_coefficient(
+                    dso.model,
+                    dso.qag[j, t],
+                    -μq[j][t] - ρ_qf * b[j][t],
+                )
             end
         end
         dres = solve_dso!(dso, λ, a, ρf; check_exact = false, strict = false)

@@ -88,7 +88,13 @@ recording the step-to-step price jump and running cumulative deviation. `k` must
 sequential step (`trace.steps + 1`) — a fail-loud guard against a double-record or a skipped
 step, mirroring `AdmmResiduals`'s own `record!` guard exactly. Returns `trace`.
 """
-function record!(trace::MpcTrace, k::Integer, dadp::Real, dadp_da::Real, cert_status::Symbol)
+function record!(
+    trace::MpcTrace,
+    k::Integer,
+    dadp::Real,
+    dadp_da::Real,
+    cert_status::Symbol,
+)
     _assert_sequential(trace, k)
     jump = trace.steps == 0 ? 0.0 : abs(float(dadp) - last(trace.dadp_trace))
     cum =

@@ -124,7 +124,9 @@ end
     for t in 1:T
         @test isapprox(Rq_no4q[bus, t].constant, 0.0; atol = 1e-9)
         @test isapprox(
-            get(Rq_no4q[bus, t].terms, res_no4q.Pdc_param[t], 0.0), -tanφ; atol = 1e-9,
+            get(Rq_no4q[bus, t].terms, res_no4q.Pdc_param[t], 0.0),
+            -tanφ;
+            atol = 1e-9,
         )
         @test isapprox(parameter_value(res_no4q.Pdc_param[t]), Pdc[t]; atol = 1e-9)
         @test res_no4q.q_inject[t] == zero(AffExpr)
@@ -142,13 +144,15 @@ end
     Rq_4q = ctx_4q.residuals[:Rq]
 
     q_var = res_4q.vars[2].q     # the FourQuadBESS's own q[t] VariableRef vector, per
-                                  # contribute!'s (; vars = device_vars, ...) stash order
+    # contribute!'s (; vars = device_vars, ...) stash order
     for t in 1:T
         # Rq now carries a non-empty terms entry equal to the device's q[t] with
         # coefficient 1.0, ON TOP OF the same untouched Pdc_param[t]*(−tanφ) term (D-10).
         @test isapprox(Rq_4q[bus, t].constant, 0.0; atol = 1e-9)
         @test isapprox(
-            get(Rq_4q[bus, t].terms, res_4q.Pdc_param[t], 0.0), -tanφ; atol = 1e-9,
+            get(Rq_4q[bus, t].terms, res_4q.Pdc_param[t], 0.0),
+            -tanφ;
+            atol = 1e-9,
         )
         @test !isempty(Rq_4q[bus, t].terms)
         @test isapprox(get(Rq_4q[bus, t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)

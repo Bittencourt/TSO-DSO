@@ -198,6 +198,12 @@ scatterlines!(
     label = "relative gap",
     color = :purple,
 )
-hlines!(ax_gap, [1e-6]; label = "tol (solve_stackelberg!)", color = :black, linestyle = :dash)
+hlines!(
+    ax_gap,
+    [1e-6];
+    label = "tol (solve_stackelberg!)",
+    color = :black,
+    linestyle = :dash,
+)
 axislegend(ax_gap; position = :rt)
 fig

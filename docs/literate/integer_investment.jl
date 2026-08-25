@@ -45,7 +45,7 @@ using TSODSO
 
 K = 4
 y_max = 8.0
-lattice = [(y_max / 2^K) * i for i in 0:(2^K - 1)]
+lattice = [(y_max / 2^K) * i for i in 0:(2 ^ K - 1)]
 
 # The full K=4 reachable set — a genuinely computed range, not a hardcoded literal:
 
@@ -463,14 +463,13 @@ count(c -> c.kind == :ll, imaster.cuts)
 function D_at(b_trial::Vector{Int}, x::Vector{Int})
     S = findall(==(1), b_trial)
     Sc = setdiff(1:length(b_trial), S)
-    return sum(x[i] for i in S; init = 0) - sum(x[i] for i in Sc; init = 0) -
-           length(S) + 1
+    return sum(x[i] for i in S; init = 0) - sum(x[i] for i in Sc; init = 0) - length(S) + 1
 end
 
 ll_cuts = filter(c -> c.kind == :ll, imaster.cuts)
 violations = [
-    (cut.b_trial, (cut.Q_nu - cut.L) * D_at(cut.b_trial, enum_result.best_b) + cut.L) for
-    cut in ll_cuts if
+    (cut.b_trial, (cut.Q_nu - cut.L) * D_at(cut.b_trial, enum_result.best_b) + cut.L)
+    for cut in ll_cuts if
     (cut.Q_nu - cut.L) * D_at(cut.b_trial, enum_result.best_b) + cut.L >
     enum_result.best_total + 1e-6
 ]

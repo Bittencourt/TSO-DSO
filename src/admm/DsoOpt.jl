@@ -461,7 +461,8 @@ function solve_dso!(
     # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.
     # Mid-loop iterates skip this — they are legitimately inexact and would throw spuriously.
     if check_exact
-        dso.ctx.meta[:socp_maxgap] = assert_socp_exact!(dso.ctx; rtol = rtol_exact, atol = atol_exact)
+        dso.ctx.meta[:socp_maxgap] =
+            assert_socp_exact!(dso.ctx; rtol = rtol_exact, atol = atol_exact)
     end
 
     return (;

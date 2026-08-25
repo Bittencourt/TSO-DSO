@@ -190,9 +190,7 @@
             Bus(1, 0.95, 1.05, true),    # root / MEM frontier
             Bus(2, 0.95, 1.05, false),   # the single load bus (the priced node)
         ]
-        branches = [
-            Branch(1, 2, REAL_R_2BUS, REAL_X_2BUS, SMAX_NO_LIMIT),
-        ]
+        branches = [Branch(1, 2, REAL_R_2BUS, REAL_X_2BUS, SMAX_NO_LIMIT)]
         return Feeder(buses, branches, 1)
     end
 
@@ -310,8 +308,11 @@
 
         Np = length(feeder.buses)
         for (k, agg) in enumerate(aggregators)
-            1 <= agg.bus <= Np ||
-                throw(ArgumentError("aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$Np"))
+            1 <= agg.bus <= Np || throw(
+                ArgumentError(
+                    "aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$Np",
+                ),
+            )
         end
 
         contribute!(pf, ctx, feeder; T = T)
@@ -354,7 +355,8 @@
         assert_solved!(model; dual = true, allow_local = false)
 
         if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
-            ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; rtol = rtol_exact, atol = atol_exact)
+            ctx.meta[:socp_maxgap] =
+                assert_socp_exact!(ctx; rtol = rtol_exact, atol = atol_exact)
         end
 
         τ_batt = problem_class(pf) isa SOCP ? 1e-3 : 1e-6

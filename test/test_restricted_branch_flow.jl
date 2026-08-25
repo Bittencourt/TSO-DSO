@@ -41,9 +41,8 @@
     pv = ctx.meta[:pf_vars]
     N = length(feeder.buses)
 
-    mingap = minimum(
-        value(pv.v[j, t]) - value(pv.v̂[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T
-    )
+    mingap =
+        minimum(value(pv.v[j, t]) - value(pv.v̂[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T)
     @info "v-v̂ min gap" mingap
 
     # RESEARCH.md Assumption A1: the existing thesis exactness copy is a LOWER-bound shadow
@@ -84,9 +83,8 @@ end
         v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T
     ) >= -1e-9
 
-    ε_measured = maximum(
-        v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T
-    )
+    ε_measured =
+        maximum(v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T)
     @info "measured Gan-Low modification gap (before safety multiplier)" ε_measured
 
     # A nonzero, sensible modification gap. This exact printed value is what plan 20-02's
@@ -351,10 +349,11 @@ end
     # reused ctx must NOT survive the structural-mismatch throw path (assert_ac_exact!
     # raises BEFORE the final stash runs) — the certificate scrubs the marker as its first
     # action, so after the throw the reused ctx carries no marker at all.
-    ctx1.meta[:price_provenance] =
-        (; formulation = :RestrictedBranchFlow,
-            certificate = :assert_restriction_exact!,
-            status = :certified_convex_dual)
+    ctx1.meta[:price_provenance] = (;
+        formulation = :RestrictedBranchFlow,
+        certificate = :assert_restriction_exact!,
+        status = :certified_convex_dual,
+    )
     @test_throws Exception assert_restriction_exact!(ctx1, ctx2)
     @test !haskey(ctx1.meta, :price_provenance)
 
@@ -472,8 +471,7 @@ end
     # Valid inputs unchanged: default, zero, and a positive measured margin.
     @test RestrictedBranchFlow().ε == 0.0
     @test RestrictedBranchFlow(; ε = 0.0).ε == 0.0
-    @test RestrictedBranchFlow(TSODSO._EXACT04_MEASURED_ε).ε ==
-          TSODSO._EXACT04_MEASURED_ε
+    @test RestrictedBranchFlow(TSODSO._EXACT04_MEASURED_ε).ε == TSODSO._EXACT04_MEASURED_ε
     @test RestrictedBranchFlow(; ε = 1 // 100).ε == 0.01         # Real conversion kept
 end
 
@@ -505,13 +503,10 @@ end
     using JuMP
 
     r, x = 0.05, 0.04
-    buses =
-        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
-    feeder_fwd =
-        Feeder(buses, [Branch(1, 2, r, x, 99.0), Branch(2, 3, r, x, 99.0)], 1)
+    buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
+    feeder_fwd = Feeder(buses, [Branch(1, 2, r, x, 99.0), Branch(2, 3, r, x, 99.0)], 1)
     # Branch 2 stored REVERSED (child 3 → parent 2): legal per assert_radial.
-    feeder_rev =
-        Feeder(buses, [Branch(1, 2, r, x, 99.0), Branch(3, 2, r, x, 99.0)], 1)
+    feeder_rev = Feeder(buses, [Branch(1, 2, r, x, 99.0), Branch(3, 2, r, x, 99.0)], 1)
 
     T = 2
     # Branch × hour, parent→child encoding. Hour 2 carries reverse (negative) flow and both
@@ -580,8 +575,8 @@ end
         # push constraints in the same (t-outer, BFS-inner) order, so elementwise
         # comparison is aligned.
         return [
-            value(xx -> val[xx], constraint_object(c).func) - constraint_object(c).set.upper
-            for c in ctx.constraints[:opfm_shadow_voltage]
+            value(xx -> val[xx], constraint_object(c).func) -
+            constraint_object(c).set.upper for c in ctx.constraints[:opfm_shadow_voltage]
         ]
     end
 

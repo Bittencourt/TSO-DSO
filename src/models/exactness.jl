@@ -193,7 +193,12 @@ Ties in `gap` are broken by `(b,t)` ascending for a deterministic row order. `to
 the number of `(branch,time)` pairs actually scanned. Reads the same `ctx.meta[:pf_vars]` /
 `ctx.meta[:feeder]` / `ctx.meta[:T]` stash as `assert_socp_exact!`.
 """
-function socp_gap_report(ctx::ModelContext; topn::Int = 20, rtol::Real = 1e-4, atol::Real = 1e-6)
+function socp_gap_report(
+    ctx::ModelContext;
+    topn::Int = 20,
+    rtol::Real = 1e-4,
+    atol::Real = 1e-6,
+)
     pv = ctx.meta[:pf_vars]
     feeder = ctx.meta[:feeder]
     T = ctx.meta[:T]
@@ -212,10 +217,18 @@ function socp_gap_report(ctx::ModelContext; topn::Int = 20, rtol::Real = 1e-4, a
         push!(
             rows,
             (;
-                b = b, from = br.from, to = br.to,
-                r_pu = br.r, x_pu = br.x,
-                l = l, v_from = v_from, P = P, Q = Q, t = t,
-                gap = gap, ratio = gap / tol,
+                b = b,
+                from = br.from,
+                to = br.to,
+                r_pu = br.r,
+                x_pu = br.x,
+                l = l,
+                v_from = v_from,
+                P = P,
+                Q = Q,
+                t = t,
+                gap = gap,
+                ratio = gap / tol,
                 reverse_flow = P < 0.0,
                 loading = loading,
             ),

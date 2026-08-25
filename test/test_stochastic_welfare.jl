@@ -42,7 +42,8 @@
         ) for k in 1:3
     ]
 
-    r_uniform = build_stochastic_welfare(feeder, ConvexBranchFlow(), scenario_aggs; T = T, λ₀ = λ0)
+    r_uniform =
+        build_stochastic_welfare(feeder, ConvexBranchFlow(), scenario_aggs; T = T, λ₀ = λ0)
     r_weighted = build_stochastic_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -67,10 +68,8 @@ end
     # substrate, needed here because a REAL structural inexactness (not a knife-edge) needs
     # real branch impedance to manifest under high PV.
     buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
-    branches = [
-        Branch(1, 2, 0.05, 0.05, SMAX_NO_LIMIT),
-        Branch(2, 3, 0.05, 0.05, SMAX_NO_LIMIT),
-    ]
+    branches =
+        [Branch(1, 2, 0.05, 0.05, SMAX_NO_LIMIT), Branch(2, 3, 0.05, 0.05, SMAX_NO_LIMIT)]
     f = Feeder(buses, branches, 1)
     T = 6
     λ0 = fill(4.0, T)
@@ -92,7 +91,14 @@ end
     s1 = house(0.5, 301)   # modest, comfortably-exact pv_scale
 
     # Scenario 1 ALONE solves OPTIMAL and passes its own PF-04 gate.
-    s1solo = build_stochastic_welfare(f, ConvexBranchFlow(), [s1]; probabilities = [1.0], T = T, λ₀ = λ0)
+    s1solo = build_stochastic_welfare(
+        f,
+        ConvexBranchFlow(),
+        [s1];
+        probabilities = [1.0],
+        T = T,
+        λ₀ = λ0,
+    )
     @test isfinite(s1solo.welfare)
 
     # SCAN (never guess) candidate pv_scales for scenario 2 until one genuinely TRIPS the
@@ -130,46 +136,48 @@ end
     # FIX: the scan's mutable state now lives inside a `let` block (a hard scope), so the
     # loop's assignments resolve unambiguously to the `let`'s own locals. See immediately
     # below.
-    tripped, trip_pv_scale, outcomes = let tripped = false, trip_pv_scale = NaN, outcomes = String[]
-        # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
-        for pv_scale in (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
-            s2 = house(pv_scale, 302)
-            try
-                r2 = build_stochastic_welfare(
-                    f,
-                    ConvexBranchFlow(),
-                    [s1, s2];
-                    probabilities = [0.5, 0.5],
-                    T = T,
-                    λ₀ = λ0,
-                )
-                push!(
-                    outcomes,
-                    "pv_scale=$pv_scale: solved + certified exact " *
-                    "(socp_maxgap=$(r2.socp_maxgap))",
-                )
-            catch e
-                e isa ErrorException || rethrow()
-                # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
-                # four distinct failures inside build_stochastic_welfare raise a bare
-                # ErrorException (assert_solved! on any non-OPTIMAL status — including the
-                # ALMOST_OPTIMAL this fixture family is demonstrably prone to — the internal
-                # residual-size error, assert_socp_exact!, assert_battery_complementarity!);
-                # the previous catch-all `e isa ErrorException` let a solver convergence
-                # failure set tripped=true and PASS this item without the gate ever firing —
-                # the exact per-scenario-gate-isolation property under test going unverified.
-                # A non-gate ErrorException is RECORDED (not rethrown mid-scan) so the
-                # no-trip failure path below reports what every scale actually did.
-                if occursin("SOCP relaxation INEXACT", e.msg)
-                    tripped = true
-                    trip_pv_scale = pv_scale
-                    break
+    tripped, trip_pv_scale, outcomes =
+        let tripped = false, trip_pv_scale = NaN, outcomes = String[]
+            # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
+            for pv_scale in
+                (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
+                s2 = house(pv_scale, 302)
+                try
+                    r2 = build_stochastic_welfare(
+                        f,
+                        ConvexBranchFlow(),
+                        [s1, s2];
+                        probabilities = [0.5, 0.5],
+                        T = T,
+                        λ₀ = λ0,
+                    )
+                    push!(
+                        outcomes,
+                        "pv_scale=$pv_scale: solved + certified exact " *
+                        "(socp_maxgap=$(r2.socp_maxgap))",
+                    )
+                catch e
+                    e isa ErrorException || rethrow()
+                    # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
+                    # four distinct failures inside build_stochastic_welfare raise a bare
+                    # ErrorException (assert_solved! on any non-OPTIMAL status — including the
+                    # ALMOST_OPTIMAL this fixture family is demonstrably prone to — the internal
+                    # residual-size error, assert_socp_exact!, assert_battery_complementarity!);
+                    # the previous catch-all `e isa ErrorException` let a solver convergence
+                    # failure set tripped=true and PASS this item without the gate ever firing —
+                    # the exact per-scenario-gate-isolation property under test going unverified.
+                    # A non-gate ErrorException is RECORDED (not rethrown mid-scan) so the
+                    # no-trip failure path below reports what every scale actually did.
+                    if occursin("SOCP relaxation INEXACT", e.msg)
+                        tripped = true
+                        trip_pv_scale = pv_scale
+                        break
+                    end
+                    push!(outcomes, "pv_scale=$pv_scale: NON-GATE ErrorException: $(e.msg)")
                 end
-                push!(outcomes, "pv_scale=$pv_scale: NON-GATE ErrorException: $(e.msg)")
             end
+            (tripped, trip_pv_scale, outcomes)
         end
-        (tripped, trip_pv_scale, outcomes)
-    end
     if !tripped
         # WR-06/WR-07: retained as a general-purpose self-diagnosis in case the gate
         # genuinely fails to trip for an unrelated reason in the future — the per-scale
@@ -187,8 +195,7 @@ end
         # whole block is exception-guarded: diagnostics must never ERROR the item.
         resolved = try
             sort!([
-                "$(k.name) = $(Base.pkgversion(m))" for
-                (k, m) in Base.loaded_modules if
+                "$(k.name) = $(Base.pkgversion(m))" for (k, m) in Base.loaded_modules if
                 k.name in ("Clarabel", "StableRNGs", "JuMP", "MathOptInterface")
             ])
         catch err
@@ -203,8 +210,14 @@ end
     # solves OPTIMAL and passes its own gate — one scenario's exactness never masks the
     # other's inexactness, and conversely an extreme scenario 2 never poisons scenario 1's
     # own (already-verified) exactness.
-    s1solo_again =
-        build_stochastic_welfare(f, ConvexBranchFlow(), [s1]; probabilities = [1.0], T = T, λ₀ = λ0)
+    s1solo_again = build_stochastic_welfare(
+        f,
+        ConvexBranchFlow(),
+        [s1];
+        probabilities = [1.0],
+        T = T,
+        λ₀ = λ0,
+    )
     @test isfinite(s1solo_again.welfare)
     @test isapprox(s1solo_again.welfare, s1solo.welfare; rtol = 1e-6)
 end
@@ -223,7 +236,8 @@ end
     )
     # A second scenario whose aggregator sits at a DIFFERENT bus than scenario 1's — the
     # structural mismatch that would mispair the nonanticipativity walk (Task 1, D-03).
-    scenario2 = [TSODSO.Aggregator(1, scenario1[1].φ, scenario1[1].devices, scenario1[1].Pdc)]
+    scenario2 =
+        [TSODSO.Aggregator(1, scenario1[1].φ, scenario1[1].devices, scenario1[1].Pdc)]
 
     @test_throws ArgumentError build_stochastic_welfare(
         feeder,
@@ -322,9 +336,8 @@ end
         λ₀ = λ0,
     )
 
-    batt_of(ctx) = only(
-        v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :soc0)
-    )
+    batt_of(ctx) =
+        only(v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :soc0))
     b1 = batt_of(r.ctxs[1])
     for s in 2:3
         bs = batt_of(r.ctxs[s])
@@ -353,19 +366,27 @@ end
     house(seed) = begin
         base = Phase22Fixtures.stoch_scenario_aggregators(feeder, seed)
         bess = FourQuadBESS(
-            2, 0.95, 1.0,
-            0.1 * L, 0.1 * L, 0.2 * L,      # Pch_max, Pdch_max, Smax
-            0.0, 0.4 * L, 0.2 * L,          # Emin, Emax, soc0
+            2,
+            0.95,
+            1.0,
+            0.1 * L,
+            0.1 * L,
+            0.2 * L,      # Pch_max, Pdch_max, Smax
+            0.0,
+            0.4 * L,
+            0.2 * L,          # Emin, Emax, soc0
             Phase22Fixtures.BATT_λ_MIN,
             Phase22Fixtures.BATT_λ_MED,
             Phase22Fixtures.BATT_λ_MAX,
         )
-        [TSODSO.Aggregator(
-            2,
-            base[1].φ,
-            AbstractDevice[base[1].devices..., bess],
-            base[1].Pdc,
-        )]
+        [
+            TSODSO.Aggregator(
+                2,
+                base[1].φ,
+                AbstractDevice[base[1].devices..., bess],
+                base[1].Pdc,
+            ),
+        ]
     end
 
     s1 = house(sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_a))
@@ -381,9 +402,8 @@ end
     )
     @test isfinite(r.welfare)
 
-    q_of(ctx) = only(
-        v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q)
-    )
+    q_of(ctx) =
+        only(v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q))
     v1 = q_of(r.ctxs[1])
     v2 = q_of(r.ctxs[2])
 
@@ -416,12 +436,14 @@ end
     # index 1 entirely, leaving scenario 2's battery SILENTLY UNTIED: a scenario-specific
     # (clairvoyant) recourse variable quietly corrupting the two-stage welfare and every
     # de-scaled DADP. The guard must throw a clean ArgumentError at build time instead.
-    reordered = [TSODSO.Aggregator(
-        base2[1].bus,
-        base2[1].φ,
-        reverse(base2[1].devices),
-        base2[1].Pdc,
-    )]
+    reordered = [
+        TSODSO.Aggregator(
+            base2[1].bus,
+            base2[1].φ,
+            reverse(base2[1].devices),
+            base2[1].Pdc,
+        ),
+    ]
     @test_throws ArgumentError build_stochastic_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -433,12 +455,8 @@ end
 
     # Device-COUNT mismatch at the same bus (previously a raw BoundsError mid-tie, not
     # the docstring-promised ArgumentError).
-    fewer = [TSODSO.Aggregator(
-        base2[1].bus,
-        base2[1].φ,
-        base2[1].devices[1:1],
-        base2[1].Pdc,
-    )]
+    fewer =
+        [TSODSO.Aggregator(base2[1].bus, base2[1].φ, base2[1].devices[1:1], base2[1].Pdc)]
     @test_throws ArgumentError build_stochastic_welfare(
         feeder,
         ConvexBranchFlow(),

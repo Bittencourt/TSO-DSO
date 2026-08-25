@@ -89,7 +89,8 @@ end
 
     # Pre-condition check (reusing Task 2's own verify-script methodology, not just trusting
     # the constant): the measured pv_scale genuinely trips the inline check on THIS solve.
-    result = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
+    result =
+        TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
 
     @test result.cone_maxratio > 1     # the pre-condition: this call's inline check DID fail
     # escalation resolved it — WR-04: the restricted-tier rescue carries its OWN symbol,
@@ -168,16 +169,21 @@ end
         end
         for handle in o.agg_pdc_handles
             agg = only(a for a in aggs if a.bus == handle.bus)
-            set_parameter_value.(
-                handle.Pdc_param,
-                Float64[agg.Pdc[t + τ - 1] for τ in 1:H],
-            )
+            set_parameter_value.(handle.Pdc_param, Float64[agg.Pdc[t + τ - 1] for τ in 1:H])
         end
         for τ in 1:H
             set_objective_coefficient(o.model, o.p_import[τ], -λ₀[t + τ - 1])
         end
         solve_mpc_window!(o)
-        r = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, t; measured_state = ms, fe = fe)
+        r = TSODSO._mpc_certify_and_price(
+            feeder,
+            aggs,
+            o,
+            λ₀,
+            t;
+            measured_state = ms,
+            fe = fe,
+        )
         @test r.cone_maxratio > 1                              # pre-condition at THIS t
         @test r.cert_status in (:certified_convex_dual_restricted, :local_ac_dual)
         @test all(isfinite, r.price_vec)
@@ -206,7 +212,20 @@ end
     # `only(vv -> haskey(vv, :soc0))` pairing in the apply loop would throw mid-loop instead
     # of up front.
     batt = only(d for d in aggs[1].devices if d isa PVBattery)
-    bess4q = FourQuadBESS(aggs[1].bus, 0.95, 1.0, 0.002, 0.002, 0.003, 0.0, 0.008, 0.004, 3.8, 6.2, 8.9)
+    bess4q = FourQuadBESS(
+        aggs[1].bus,
+        0.95,
+        1.0,
+        0.002,
+        0.002,
+        0.003,
+        0.0,
+        0.008,
+        0.004,
+        3.8,
+        6.2,
+        8.9,
+    )
     two_soc = [Aggregator(aggs[1].bus, 0.9, [batt, bess4q], aggs[1].Pdc)]
     @test_throws ArgumentError TSODSO._mpc_assert_state_keying(two_soc)
 end

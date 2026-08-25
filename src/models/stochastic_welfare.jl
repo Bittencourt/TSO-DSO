@@ -86,6 +86,7 @@ thermostatic response left as per-scenario recourse.
 # Construction (mirrors [`solve_welfare`](@ref)'s shape S times)
 
 For each scenario `s in 1:S`:
+
  1. a FRESH `ModelContext(model)` is built on the SAME shared `model`;
  2. `contribute!(pf, ctx_s, feeder; T)` writes that scenario's OWN network copy — the
     `ConvexBranchFlow` named-container collision (RESEARCH.md Pattern 1) is avoided by
@@ -137,16 +138,14 @@ toward the factory's 1e-8 base). After the gated solve, the PF-04 exactness gate
 certificate) whenever that scenario stashed a squared-current `:l`, recording each
 scenario's own `maxgap` into `socp_maxgap`. THEN `assert_battery_complementarity!` runs
 once per scenario (App. C, applied identically to every scenario's tied battery copy by
-construction). ONLY THEN are duals read: `dadp[s] = dual.(balance_p_s[priced, :]) ./
-probabilities[s]` (D-05 de-scaling — no sign flip; `priced = scenario_aggs[1][1].bus`) is
+construction). ONLY THEN are duals read: `dadp[s] = dual.(balance_p_s[priced, :]) ./ probabilities[s]` (D-05 de-scaling — no sign flip; `priced = scenario_aggs[1][1].bus`) is
 the PRIMARY per-scenario price output; `expected_dadp = Σ_s probabilities[s]·dadp[s]` is
 an explicitly-named DERIVED summary (D-07) — never a constraint-backed price primitive.
 
 # Boundary guards (mirror `solve_welfare`'s ordering + `Scenario`'s own guard style)
 
 Throws `ArgumentError` on: empty `scenario_aggs`; `length(probabilities) != S`; any
-non-positive probability; `sum(probabilities)` not `≈ 1` (`atol = 1e-8`); `length(λ₀) !=
-T`; a structural mismatch between `scenario_aggs[s]` and `scenario_aggs[1]` — differing
+non-positive probability; `sum(probabilities)` not `≈ 1` (`atol = 1e-8`); `length(λ₀) != T`; a structural mismatch between `scenario_aggs[s]` and `scenario_aggs[1]` — differing
 aggregator count, differing bus at any aggregator index, differing DEVICE COUNT within
 any aggregator, or a differing DEVICE TYPE at any device index (WR-03 fix, phase-22
 review: without the per-device check, a reordered/substituted device either crashed
@@ -154,8 +153,7 @@ confusingly mid-tie or — if scenario 1's device at that index is a non-battery
 scenario s's is a battery — silently left scenario s's battery UNTIED, i.e. clairvoyant
 recourse); or any aggregator bus outside `1:length(feeder.buses)`.
 
-Returns a `NamedTuple` `(; model, ctxs, probabilities, welfare, dadp, expected_dadp,
-socp_maxgap)` where `ctxs::Vector{ModelContext}`, `dadp::Vector{Vector{Float64}}` (one
+Returns a `NamedTuple` `(; model, ctxs, probabilities, welfare, dadp, expected_dadp, socp_maxgap)` where `ctxs::Vector{ModelContext}`, `dadp::Vector{Vector{Float64}}` (one
 per scenario), `expected_dadp::Vector{Float64}`, and `socp_maxgap::Vector{Float64}` (one
 per scenario whose formulation carries an SOC cone).
 """
@@ -203,9 +201,7 @@ function build_stochastic_welfare(
     S = length(scenario_aggs)
 
     length(probabilities) == S || throw(
-        ArgumentError(
-            "probabilities has length $(length(probabilities)), expected S=$S",
-        ),
+        ArgumentError("probabilities has length $(length(probabilities)), expected S=$S"),
     )
     any(<=(0), probabilities) && throw(
         ArgumentError("probabilities must all be strictly positive; got $probabilities"),
@@ -344,7 +340,8 @@ function build_stochastic_welfare(
             "scenario $s residual :Rp is $(size(ctx_s.residuals[:Rp])), expected " *
             "($Np, $T) — an index escaped the feeder",
         )
-        balance_p_s = @constraint(model, [j = 1:Np, t = 1:T], ctx_s.residuals[:Rp][j, t] == 0)
+        balance_p_s =
+            @constraint(model, [j = 1:Np, t = 1:T], ctx_s.residuals[:Rp][j, t] == 0)
         register_constraint!(ctx_s, :balance_p, balance_p_s)   # dual = de-scaled DADP (D-05)
 
         if reactive_s
@@ -409,9 +406,10 @@ function build_stochastic_welfare(
         model,
         Max,
         sum(
-            probabilities[s] *
-            (ctxs[s].meta[:objective] - sum(λ₀[t] * ctxs[s].meta[:p_import][t] for t in 1:T))
-            for s in 1:S
+            probabilities[s] * (
+                ctxs[s].meta[:objective] -
+                sum(λ₀[t] * ctxs[s].meta[:p_import][t] for t in 1:T)
+            ) for s in 1:S
         )
     )
 
@@ -454,7 +452,8 @@ function build_stochastic_welfare(
     # of scenario s's OWN nodal balance, divided by its OWN probability. No sign flip: this
     # constraint shape is structurally identical to solve_welfare's own :balance_p.
     priced = scenario_aggs[1][1].bus
-    dadp = [dual.(ctxs[s].constraints[:balance_p][priced, :]) ./ probabilities[s] for s in 1:S]
+    dadp =
+        [dual.(ctxs[s].constraints[:balance_p][priced, :]) ./ probabilities[s] for s in 1:S]
 
     # Probability-weighted expectation (D-07) — an explicitly-named DERIVED summary field,
     # never itself a constraint-backed price primitive.
@@ -526,8 +525,7 @@ rebuilt across held-out re-solves.
     per-step PIN `Parameter`s tying that device's `p_ch[t]`/`p_dch[t]` to the caller-supplied
     in-sample optimum (`p_ch[t] == pin_p_ch[t]`, `p_dch[t] == pin_p_dch[t]`) — `soc` is
     NEVER pinned directly. For a device carrying a reactive dispatch (`FourQuadBESS`;
-    WR-04 fix, phase-22 review) the entry additionally carries `pin_q` (`q[t] ==
-    pin_q[t]`): q is first-stage under D-03, so the held-out re-score pins the FULL
+    WR-04 fix, phase-22 review) the entry additionally carries `pin_q` (`q[t] == pin_q[t]`): q is first-stage under D-03, so the held-out re-score pins the FULL
     committed schedule, active AND reactive.
   - `ppv_handles::Vector{<:NamedTuple}` — one entry per PV-CARRYING battery device
     (`PVBattery` — CR-01 fix: `FourQuadBESS` carries no `Ppv_param` and gets NO entry
@@ -536,8 +534,7 @@ rebuilt across held-out re-solves.
   - `tout_handles::Vector{<:NamedTuple}` — one entry per device carrying an ambient-
     temperature Parameter (`Thermostatic`, and generally any device with `:Tout_param`):
     `(; bus::Int, Tout_param)`.
-  - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int,
-    Pdc_param)`, the per-step inelastic-demand forecast Parameter (re-slid per held-out
+  - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int, Pdc_param)`, the per-step inelastic-demand forecast Parameter (re-slid per held-out
     scenario).
 """
 struct StochasticOosHarness{F}
@@ -580,8 +577,7 @@ D-09), mirroring [`build_mpc_window`](@ref)'s build-once SHAPE:
     is captured into `agg_pdc_handles`.
  6. The residuals are closed via the NAMED single-build form and registered under
     `:balance_p`/`:balance_q`.
- 7. `ctx.meta[:agg_device_vars]` is walked: every battery-like device (`haskey(v,
-    :soc0)` — `PVBattery`/`FourQuadBESS`) gets TWO anonymous per-step PIN `Parameter`s
+ 7. `ctx.meta[:agg_device_vars]` is walked: every battery-like device (`haskey(v, :soc0)` — `PVBattery`/`FourQuadBESS`) gets TWO anonymous per-step PIN `Parameter`s
     defaulting to the benign literal `0.0` for every `t` (mirrors `build_mpc_window`'s own
     "the caller ALWAYS calls `set_parameter_value` before the first solve" convention):
     `pin_p_ch`/`pin_p_dch`, tied via `p_ch[t] == pin_p_ch[t]`/`p_dch[t] == pin_p_dch[t]`
@@ -614,17 +610,13 @@ function build_stochastic_oos_harness(
     # Boundary guards FIRST (mirrors build_mpc_window's own ordering).
     isempty(aggregators) &&
         throw(ArgumentError("build_stochastic_oos_harness needs at least one aggregator"))
-    T >= 1 ||
-        throw(ArgumentError("build_stochastic_oos_harness requires T ≥ 1, got T=$T"))
-    length(λ₀) == T ||
-        throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+    T >= 1 || throw(ArgumentError("build_stochastic_oos_harness requires T ≥ 1, got T=$T"))
+    length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
 
     N = length(feeder.buses)
     for (k, agg) in enumerate(aggregators)
         1 <= agg.bus <= N || throw(
-            ArgumentError(
-                "aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$N",
-            ),
+            ArgumentError("aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$N"),
         )
     end
 
@@ -746,11 +738,7 @@ function build_stochastic_oos_harness(
 
     # REAL objective (not a placeholder — λ₀ never changes across held-out re-solves in
     # this harness, unlike MpcWindow's per-window λ₀ slide).
-    @objective(
-        model,
-        Max,
-        ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
-    )
+    @objective(model, Max, ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T))
 
     return StochasticOosHarness(
         model,
@@ -769,8 +757,7 @@ end
     solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int = 4) -> Model
 
 Re-solve the built-ONCE [`StochasticOosHarness`](@ref) `h` via [`solve_with_retry!`](@ref)
-— a ONE-LINE delegation that NEVER adds a variable or constraint to `h.model`. `dual =
-false`: this harness never reports a per-scenario DADP (STOCH-03's scope is the realized
+— a ONE-LINE delegation that NEVER adds a variable or constraint to `h.model`. `dual = false`: this harness never reports a per-scenario DADP (STOCH-03's scope is the realized
 welfare only). Callers mutate `h.battery_pins`/`h.ppv_handles`/`h.tout_handles`/
 `h.agg_pdc_handles` via `set_parameter_value`/`set_parameter_value.` BEFORE calling this
 function.

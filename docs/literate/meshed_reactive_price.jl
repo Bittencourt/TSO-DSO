@@ -81,7 +81,8 @@ therm3 = Thermostatic(3, 0.0, 1.0, 20.0, 20.0, 20.0, P3_LOAD, P3_LOAD, 0.5, [20.
 # The odd, consistently-oriented triangle really is infeasible on this delegation path — shown
 # live, once, so this claim is never a hand-typed assertion:
 
-triangle_buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.10, false), Bus(3, 0.90, 1.10, false)]
+triangle_buses =
+    [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.10, false), Bus(3, 0.90, 1.10, false)]
 triangle_branches = [
     Branch(1, 2, 0.01, 0.02, SMAX_NO_LIMIT),
     Branch(2, 3, 0.01, 0.02, SMAX_NO_LIMIT),
@@ -108,8 +109,9 @@ triangle_infeasible
 ## Self-checking page (review WR-02): the prose below states this value as fact, so the
 ## docs build must FAIL, loudly, if the live claim ever regresses (a solvable triangle, a
 ## changed failure message, or a non-ErrorException all land on `false` above).
-triangle_infeasible ||
-    error("Rung 10 doc regression: the odd triangle solved -- the degeneracy derivation no longer holds");
+triangle_infeasible || error(
+    "Rung 10 doc regression: the odd triangle solved -- the degeneracy derivation no longer holds",
+);
 
 # `triangle_infeasible === true` above confirms, live, that the literal odd-triangle topology
 # genuinely fails to solve (`PRIMAL_INFEASIBLE`) on this delegation path, exactly as derived
@@ -123,17 +125,28 @@ triangle_infeasible ||
 # 14's point made concrete: this gate alone cannot distinguish the two profiles, since it is
 # tight for both alike.
 
-aggregators_plain = [Aggregator(2, 0.95, [therm2], [0.0]), Aggregator(3, 0.95, [therm3], [0.0])]
+aggregators_plain =
+    [Aggregator(2, 0.95, [therm2], [0.0]), Aggregator(3, 0.95, [therm3], [0.0])]
 
-ctx_u, obj_u, dadp_u =
-    solve_welfare(diamond_feeder(:uniform), MeshedFlow(), aggregators_plain; T = T_MESH, λ₀ = LAMBDA0_MESH)
+ctx_u, obj_u, dadp_u = solve_welfare(
+    diamond_feeder(:uniform),
+    MeshedFlow(),
+    aggregators_plain;
+    T = T_MESH,
+    λ₀ = LAMBDA0_MESH,
+)
 
 (termination_status(ctx_u.model), obj_u, ctx_u.meta[:socp_maxgap])
 
 #-
 
-ctx_h, obj_h, dadp_h =
-    solve_welfare(diamond_feeder(:heterogeneous), MeshedFlow(), aggregators_plain; T = T_MESH, λ₀ = LAMBDA0_MESH)
+ctx_h, obj_h, dadp_h = solve_welfare(
+    diamond_feeder(:heterogeneous),
+    MeshedFlow(),
+    aggregators_plain;
+    T = T_MESH,
+    λ₀ = LAMBDA0_MESH,
+)
 
 (termination_status(ctx_h.model), obj_h, ctx_h.meta[:socp_maxgap])
 
@@ -162,10 +175,12 @@ r_h = certify_angle_recoverable!(ctx_h; report = true)
 
 ## Self-checking page (review WR-02): the "Stated plainly" paragraph and the Finding section
 ## below state both verdicts as fact -- enforce them, never merely display them.
-r_u.status == :angle_certified ||
-    error("Rung 10 doc regression: the :uniform profile no longer certifies (status = $(r_u.status))")
-r_h.status == :angle_unrecoverable ||
-    error("Rung 10 doc regression: the :heterogeneous profile is no longer unrecoverable (status = $(r_h.status))");
+r_u.status == :angle_certified || error(
+    "Rung 10 doc regression: the :uniform profile no longer certifies (status = $(r_u.status))",
+)
+r_h.status == :angle_unrecoverable || error(
+    "Rung 10 doc regression: the :heterogeneous profile is no longer unrecoverable (status = $(r_h.status))",
+);
 
 # Stated plainly (D-10): `:uniform` is a genuine AC-RECOVERABLE operating point — its full
 # voltage-phasor field (`r_u.angles`) is returned and certified consistent with the diamond's
@@ -207,8 +222,9 @@ bess_status = certify_angle_recoverable!(ctx_bess; report = true).status
 #-
 
 ## Self-checking page (review WR-02): enforced, not just displayed.
-bess_status == :angle_certified ||
-    error("Rung 10 doc regression: the :uniform + 4Q-BESS solve no longer certifies (status = $bess_status)");
+bess_status == :angle_certified || error(
+    "Rung 10 doc regression: the :uniform + 4Q-BESS solve no longer certifies (status = $bess_status)",
+);
 
 # The reactive DADP at bus 2 is read directly off the meshed network's own `:balance_q`
 # constraint dual — the genuine convex dual of the SOLVED meshed SOCP, no meshed ADMM built

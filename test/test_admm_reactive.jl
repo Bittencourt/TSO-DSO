@@ -310,10 +310,20 @@ end
     # The guard's home seam: build_dso_opt, in all three non-LIVE spellings.
     @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)   # OFF (default)
     @test_throws ArgumentError build_dso_opt(
-        feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = :certified,
+        feeder,
+        aggs,
+        Th;
+        ρ = ρ,
+        λ₀ = λ₀,
+        reactive_consensus = :certified,
     )
     @test_throws ArgumentError build_dso_opt(
-        feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true,   # Bool back-compat → CERTIFIED
+        feeder,
+        aggs,
+        Th;
+        ρ = ρ,
+        λ₀ = λ₀,
+        reactive_consensus = true,   # Bool back-compat → CERTIFIED
     )
 
     # solve_admm inherits the guard via its build_dso_opt call — no 4Q-bearing run can slip
@@ -421,8 +431,10 @@ end
     # net reactive injection (the `qag_live` PINNING target, `qag_live == qag + q_inject`), so a
     # live mechanism MUST respond even though μ itself stays near-degenerate on this fixture
     # (see the cross-validation item above).
-    aggs1 =
-        Phase19Fixtures.build_two_bus_aggregators_4q(feeder; seed = Phase6Fixtures.SEED_2BUS)
+    aggs1 = Phase19Fixtures.build_two_bus_aggregators_4q(
+        feeder;
+        seed = Phase6Fixtures.SEED_2BUS,
+    )
     aggs2 = Phase19Fixtures.build_two_bus_aggregators_4q(
         feeder;
         seed = Phase6Fixtures.SEED_2BUS + 1,

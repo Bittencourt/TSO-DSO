@@ -91,8 +91,7 @@ silently overwriting state or mispairing devices with variables.
 
 # Returns
 
-A `NamedTuple` `(; trace, day_ahead_welfare, realized_welfare, regret, day_ahead_dadp,
-steps)`:
+A `NamedTuple` `(; trace, day_ahead_welfare, realized_welfare, regret, day_ahead_dadp, steps)`:
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
     cumulative deviation, and certificate/fallback status (MPC-03). The status is one of
@@ -181,8 +180,7 @@ function run_mpc(s::Scenario)
     # --- 1b. Deferrable-excluded aggregator list for the WINDOW model (see this file's
     # header deviation note) — the day-ahead benchmark below still uses the FULL `aggs`. ------
     mpc_aggs = [
-        Aggregator(agg.bus, agg.φ, filter(d -> !(d isa Deferrable), agg.devices), agg.Pdc) for
-        agg in aggs
+        Aggregator(agg.bus, agg.φ, filter(d -> !(d isa Deferrable), agg.devices), agg.Pdc) for agg in aggs
     ]
 
     # WR-02: the window's soc/Tin states have length H and the recursions cover τ ≤ H−1, so
@@ -225,22 +223,10 @@ function run_mpc(s::Scenario)
     #       context, so the day-ahead side of the regret is never charged the frontier cost
     #       of serving a device (Deferrable) whose utility it is denied, and its whole
     #       dispatch reflects the SAME population as the closed loop's. ----------------------
-    ctx_da, welfare_da, dadp_da = solve_welfare(
-        feeder,
-        pf,
-        aggs;
-        T = s.T,
-        λ₀ = λ₀,
-        allow_export = s.allow_export,
-    )
-    ctx_da_cmp, _, _ = solve_welfare(
-        feeder,
-        pf,
-        mpc_aggs;
-        T = s.T,
-        λ₀ = λ₀,
-        allow_export = s.allow_export,
-    )
+    ctx_da, welfare_da, dadp_da =
+        solve_welfare(feeder, pf, aggs; T = s.T, λ₀ = λ₀, allow_export = s.allow_export)
+    ctx_da_cmp, _, _ =
+        solve_welfare(feeder, pf, mpc_aggs; T = s.T, λ₀ = λ₀, allow_export = s.allow_export)
     # D-06/D-11 coherence (CR-03): the terminal-SOC targets track the COMPARABLE benchmark's
     # own optimal SOC trajectory — the trajectory regret is measured against — keeping the
     # terminal pin and the benchmark on the SAME information set (previously sourced from the
@@ -382,8 +368,13 @@ function run_mpc(s::Scenario)
                     elseif d isa Thermostatic
                         v = only(vv for vv in varlist if haskey(vv, :Tin0))
                         p1 = value(v.p[τ_apply])
-                        measured_state[(agg.bus, :Tin)] =
-                            propagate_tin(measured_state[(agg.bus, :Tin)], p1, d.α, d.β, d.Tout[abs_hour])
+                        measured_state[(agg.bus, :Tin)] = propagate_tin(
+                            measured_state[(agg.bus, :Tin)],
+                            p1,
+                            d.α,
+                            d.β,
+                            d.Tout[abs_hour],
+                        )
                     end
                 end
             end
@@ -469,12 +460,10 @@ forecast perturbation — so both are threaded from `run_mpc`'s loop into
 plain fields (hence whose fresh-model Parameter DEFAULTS) carry exactly those values. They
 are required (no silent defaults) so a caller can never accidentally price the wrong state.
 
-On a certified step: `cert_status = :certified_convex_dual`, `price_vec =
-dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
+On a certified step: `cert_status = :certified_convex_dual`, `price_vec = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
 escalates through Phase-20's OWN ladder (never invents a new tolerance) — a ONE-OFF
 [`RestrictedBranchFlow`](@ref)`()` solve + [`ACPowerFlow`](@ref)`()` cross-solve +
-[`assert_restriction_exact!`](@ref)`(...; report = true)`, publishing `cert_status =
-:certified_convex_dual_restricted` on a rescue (WR-04: a DISTINCT symbol from the first-tier
+[`assert_restriction_exact!`](@ref)`(...; report = true)`, publishing `cert_status = :certified_convex_dual_restricted` on a rescue (WR-04: a DISTINCT symbol from the first-tier
 `:certified_convex_dual` — the price is the RESTRICTED solve's dual, a genuinely different
 provenance a ledger must be able to tell apart); if THAT does not certify,
 [`ac_dual_fallback_price`](@ref), publishing `cert_status = :local_ac_dual`. Every escalation
@@ -638,15 +627,16 @@ function _mpc_certify_and_price(
                 price_vec = Vector{Float64}(fallback.dadp)
             catch err
                 err isa InterruptException && rethrow()
-                push!(tier_reasons, "AC-dual fallback tier threw: " * sprint(showerror, err))
+                push!(
+                    tier_reasons,
+                    "AC-dual fallback tier threw: " * sprint(showerror, err),
+                )
             end
         end
 
         if cert_status === :cert_failed
-            @warn "run_mpc: EVERY escalation tier failed — publishing :cert_failed with the reference fallback price for this window (D-04: never throws mid-loop)" t cone_maxratio cert_status reasons = join(
-                tier_reasons,
-                " | ",
-            )
+            @warn "run_mpc: EVERY escalation tier failed — publishing :cert_failed with the reference fallback price for this window (D-04: never throws mid-loop)" t cone_maxratio cert_status reasons =
+                join(tier_reasons, " | ")
         else
             @warn "run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder" t cone_maxratio cert_status
         end
@@ -735,8 +725,7 @@ end
     _mpc_window_device(d, bus::Int, t::Int, H::Int, fe, measured_state) -> AbstractDevice
 
 Internal helper (unexported, CR-01): re-create device `d` as a window-sliced struct for the
-escalation solve at absolute start hour `t` — initial state from `measured_state[(bus,
-kind)]`, per-hour profiles sliced to `t:(t+H-1)` (PV multiplied by `fe.pv_factor`, ambient
+escalation solve at absolute start hour `t` — initial state from `measured_state[(bus, kind)]`, per-hour profiles sliced to `t:(t+H-1)` (PV multiplied by `fe.pv_factor`, ambient
 temperature unperturbed, D-05). The measured state is clamped to the device's own structural
 band (`[Emin, Emax]` / `[Tmin, Tmax]`) purely to absorb solver-tolerance noise in the
 propagated value (|ε| ≲ 1e-8) — a genuinely out-of-band state is prevented upstream by

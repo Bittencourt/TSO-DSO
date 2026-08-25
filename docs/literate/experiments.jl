@@ -39,7 +39,13 @@ using TSODSO
 # Declare the scenario. Everything not named here takes its validated `@kwdef` default
 # (`price = :mem`, `population = :default`, `allow_export = true`, the ADMM knobs, ...):
 
-s = Scenario(name = "docs-demo", feeder = :ieee13, strategy = :centralized, seed = 1, T = 24)
+s = Scenario(
+    name = "docs-demo",
+    feeder = :ieee13,
+    strategy = :centralized,
+    seed = 1,
+    T = 24,
+)
 
 # [`run_scenario`](@ref) materializes the feeder/price/population from the selectors +
 # seed, dispatches on `s.strategy` (`:centralized` → `solve_welfare` + `extract_dlmp`),

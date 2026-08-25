@@ -101,8 +101,8 @@ end
     pin = only(h.battery_pins)
     ppv = only(h.ppv_handles)
     vbatt = only(
-        vv for (bus, varlist) in h.ctx.meta[:agg_device_vars] for vv in varlist if
-        haskey(vv, :p_ch)
+        vv for (bus, varlist) in h.ctx.meta[:agg_device_vars] for
+        vv in varlist if haskey(vv, :p_ch)
     )
 
     # The device's own DEFAULT Ppv_param is a seeded daily profile (zero at night hours),
@@ -204,9 +204,15 @@ end
         sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_oos),
     )
     bess = FourQuadBESS(
-        2, 0.95, 1.0,
-        0.1 * L, 0.1 * L, 0.2 * L,
-        0.0, 0.4 * L, 0.2 * L,
+        2,
+        0.95,
+        1.0,
+        0.1 * L,
+        0.1 * L,
+        0.2 * L,
+        0.0,
+        0.4 * L,
+        0.2 * L,
         Phase22Fixtures.BATT_λ_MIN,
         Phase22Fixtures.BATT_λ_MED,
         Phase22Fixtures.BATT_λ_MAX,
@@ -229,9 +235,8 @@ end
     qvals = fill(0.05 * L, T)
     set_parameter_value.(pin.pin_q, qvals)
     solve_stochastic_oos_step!(h)
-    vbess = only(
-        v for (bus, vl) in h.ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q)
-    )
+    vbess =
+        only(v for (bus, vl) in h.ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q))
     @test all(isapprox.(value.(vbess.q), qvals; atol = 1e-6))
 end
 

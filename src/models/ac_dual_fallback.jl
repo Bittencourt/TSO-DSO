@@ -40,8 +40,7 @@ using JuMP
         -> (; dadp, cost_ac, price_status::Symbol, agreement_report)
 
 The documented nonconvex-AC-dual fallback pricer (OVR-03). Re-solves the SAME problem data
-via the already-existing `ACPowerFlow` oracle (`solve_welfare(feeder, ACPowerFlow(),
-aggregators; allow_local = true, ...)`, ZERO new solve machinery) from `n_seeds` distinct,
+via the already-existing `ACPowerFlow` oracle (`solve_welfare(feeder, ACPowerFlow(), aggregators; allow_local = true, ...)`, ZERO new solve machinery) from `n_seeds` distinct,
 deterministic NLP-backend convergence-strategy variants ([`nlp_multistart_variants`](@ref),
 each applied through the solver factory as `select_optimizer(NLP(); variant...)` — this
 file names no concrete solver, INFRA-02/review WR-04), and reports multi-start agreement
@@ -64,9 +63,7 @@ this file has no opinion on, and does not read, that certificate's verdict.
 
 # Multi-start agreement evidence (D-11)
 
-For `i in 1:n_seeds`, solves `ctxs[i], costs[i], dadps[i] = solve_welfare(feeder,
-ACPowerFlow(), aggregators; T, λ₀, allow_local = true, allow_export, optimizer =
-<variant i>)`. Computes `max_cost_spread = maximum(costs) - minimum(costs)` and
+For `i in 1:n_seeds`, solves `ctxs[i], costs[i], dadps[i] = solve_welfare(feeder, ACPowerFlow(), aggregators; T, λ₀, allow_local = true, allow_export, optimizer = <variant i>)`. Computes `max_cost_spread = maximum(costs) - minimum(costs)` and
 `max_dadp_spread = maximum(maximum(abs.(dadps[i] .- dadps[1])) for i in 1:n_seeds)`, and
 returns them (plus the raw `costs`/`dadps` vectors and `n_seeds`) in `agreement_report`.
 Returns `dadp = dadps[1]`, `cost_ac = costs[1]` — the FIRST seed's result, evidenced (never

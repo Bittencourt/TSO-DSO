@@ -91,8 +91,9 @@
     # if `build_master_integer` were ever renamed/removed from the registry without
     # updating this list, this assertion catches the drift loudly rather than letting a
     # stale string silently do nothing.
-    @test EXEMPT ⊆ Set(keys(registry)) ||
-          error("EXEMPT names a builder not present in the registry: $(setdiff(EXEMPT, Set(keys(registry))))")
+    @test EXEMPT ⊆ Set(keys(registry)) || error(
+        "EXEMPT names a builder not present in the registry: $(setdiff(EXEMPT, Set(keys(registry))))",
+    )
 
     for (name, build) in registry
         model = build()
@@ -112,8 +113,9 @@
             # fail-loud requirement (name the offending builder AND variables) is instead
             # satisfied via `|| error(...)`, which Test.jl reports as an "Error During Test"
             # with the interpolated message printed verbatim.
-            @test isempty(offenders) ||
-                  error("builder $(name) introduced binary/integer variable(s): $(offenders)")
+            @test isempty(offenders) || error(
+                "builder $(name) introduced binary/integer variable(s): $(offenders)",
+            )
         end
     end
 
@@ -165,24 +167,24 @@
         "build_price",       # experiments/materialize.jl — scenario materializer
         "build_population",  # experiments/materialize.jl — scenario materializer
         "build_mpc_window",  # models/mpc_window.jl — Phase-21 receding-horizon window
-                              # builder (MPC-01); an OPERATIONAL-layer builder (build-once
-                              # welfare-shaped window, no binaries/integers by construction,
-                              # same as every other welfare-shaped builder), never a
-                              # planning-layer (Benders/Stackelberg-Nash) builder — consciously
-                              # added here per this file's own documented tripwire contract.
+        # builder (MPC-01); an OPERATIONAL-layer builder (build-once
+        # welfare-shaped window, no binaries/integers by construction,
+        # same as every other welfare-shaped builder), never a
+        # planning-layer (Benders/Stackelberg-Nash) builder — consciously
+        # added here per this file's own documented tripwire contract.
         "build_stochastic_welfare",     # models/stochastic_welfare.jl — Phase-22 S-scenario
-                                         # extensive-form welfare builder (STOCH-01/STOCH-02,
-                                         # plan 22-02); an OPERATIONAL-layer builder (same
-                                         # welfare-shaped, no-binaries-by-construction family
-                                         # as build_mpc_window above), never a planning-layer
-                                         # builder — added here per this file's own tripwire
-                                         # contract (discovered by plan 22-05's own closing
-                                         # acceptance gate: this builder's export alone tripped
-                                         # this test's semantic channel without this entry).
+        # extensive-form welfare builder (STOCH-01/STOCH-02,
+        # plan 22-02); an OPERATIONAL-layer builder (same
+        # welfare-shaped, no-binaries-by-construction family
+        # as build_mpc_window above), never a planning-layer
+        # builder — added here per this file's own tripwire
+        # contract (discovered by plan 22-05's own closing
+        # acceptance gate: this builder's export alone tripped
+        # this test's semantic channel without this entry).
         "build_stochastic_oos_harness",  # models/stochastic_welfare.jl — Phase-22 out-of-
-                                         # sample re-solve harness (STOCH-03, plan 22-03);
-                                         # same OPERATIONAL-layer disposition and rationale as
-                                         # build_stochastic_welfare immediately above.
+        # sample re-solve harness (STOCH-03, plan 22-03);
+        # same OPERATIONAL-layer disposition and rationale as
+        # build_stochastic_welfare immediately above.
     ])
     exported_builders = Set(filter(n -> startswith(n, "build_"), string.(names(TSODSO))))
     union!(found, setdiff(exported_builders, operational_builders))

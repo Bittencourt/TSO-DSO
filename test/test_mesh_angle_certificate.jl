@@ -1,7 +1,6 @@
 # Seam: models/mesh_angle_certificate.jl (MESH-03). Driven green by plan 23-03.
-@testitem "certify_angle_recoverable!: both fixture profiles, status/provenance/strict-mode (MESH-03/D-05/D-06/D-07)" setup = [
-    Phase23Fixtures,
-] begin
+@testitem "certify_angle_recoverable!: both fixture profiles, status/provenance/strict-mode (MESH-03/D-05/D-06/D-07)" setup =
+    [Phase23Fixtures] begin
     using TSODSO, Test
 
     aggs = Phase23Fixtures.mesh_aggregators()
@@ -56,7 +55,8 @@
     plain_feeder = TSODSO.Feeder(plain_buses, plain_branches, 1)
     plain_therm = TSODSO.Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, 0.1, 0.1, 0.5, [20.0])
     plain_aggs = [TSODSO.Aggregator(2, 0.95, [plain_therm], [0.0])]
-    ctx_plain, _, _ = solve_welfare(plain_feeder, ConvexBranchFlow(), plain_aggs; T = 1, λ₀ = [4.0])
+    ctx_plain, _, _ =
+        solve_welfare(plain_feeder, ConvexBranchFlow(), plain_aggs; T = 1, λ₀ = [4.0])
     r_plain = certify_angle_recoverable!(ctx_plain; report = true)
     @test r_plain.recoverable == true
     @test r_plain.worst_residual == 0.0
@@ -92,9 +92,8 @@ end
 # edges are traversed backwards (bsigned < 0), so the -(S_b - z*l_b) receiving-end
 # correction carries the whole phasor recovery; branch 3 stays the chord (anchored at bus 4
 # instead of bus 2).
-@testitem "certify_angle_recoverable!: reversed-orientation re-encoding -- verdicts and phasors invariant (review CR-01/WR-03)" setup = [
-    Phase23Fixtures,
-] begin
+@testitem "certify_angle_recoverable!: reversed-orientation re-encoding -- verdicts and phasors invariant (review CR-01/WR-03)" setup =
+    [Phase23Fixtures] begin
     using TSODSO, Test
 
     # Full root-inward re-encoding of Phase23Fixtures.mesh_feeder (same buses, same (r,x)

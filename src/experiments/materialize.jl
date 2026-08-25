@@ -359,8 +359,10 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
             remap = ieee8500_relabel_map()
             inv_remap = Dict(id => name for (name, id) in remap)
             Dict{Int, Float64}(
-                bus => to_pu_power(IEEE8500_LOAD_KW[inv_remap[bus]] / 1000.0, IEEE8500_MV_BASE)
-                for bus in buses
+                bus => to_pu_power(
+                    IEEE8500_LOAD_KW[inv_remap[bus]] / 1000.0,
+                    IEEE8500_MV_BASE,
+                ) for bus in buses
             )
         else
             # No direct SX->MV table exists: walk SX -> X (triplex) -> MV (service
@@ -397,7 +399,8 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
 
         houses = [_ieee8500_house(bus, kw_pu_dict[bus], profiles, seed, T) for bus in buses]
 
-        cap_relabel = feeder_sym === :ieee8500 ? ieee8500_relabel_map() : ieee8500_mv_relabel_map()
+        cap_relabel =
+            feeder_sym === :ieee8500 ? ieee8500_relabel_map() : ieee8500_mv_relabel_map()
         cap_houses = [
             # D-12: Pdc=0 (zero inelastic demand), so φ's exact value is a formal
             # placeholder — the load-power-factor reactive term (-Pdc*tanφ) vanishes

@@ -50,7 +50,8 @@
         solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀, allow_export = true)
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:T] for
-        (bus, varlist) in ctx_da.meta[:agg_device_vars] for v in varlist if haskey(v, :soc)
+        (bus, varlist) in ctx_da.meta[:agg_device_vars] for
+        v in varlist if haskey(v, :soc)
     )
 
     # The fixture's single aggregator's battery device — its own `soc0`/`η`/`Δt` literals are
@@ -66,7 +67,13 @@
     # `set_objective_coefficient`, and propagates the MEASURED SOC via `TSODSO.propagate_soc`
     # (D-05) on each step's REALIZED first-interval controls. Returns the final measured SOC.
     function run_mini_loop(; terminal_soc::Bool)
-        o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = terminal_soc)
+        o = build_mpc_window(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            H = H,
+            terminal_soc = terminal_soc,
+        )
 
         soc_measured = batt.soc0
         η = batt.η
@@ -80,7 +87,10 @@
         for t in 1:(T - H + 1)
             set_parameter_value(soc_handle.ic_param, soc_measured)
             if terminal_soc
-                set_parameter_value(soc_handle.terminal_param, soc_da_bus[min(t + H - 1, T)])
+                set_parameter_value(
+                    soc_handle.terminal_param,
+                    soc_da_bus[min(t + H - 1, T)],
+                )
             end
             # TRUE ground-truth slices (no forecast error — isolate the terminal-condition
             # effect alone, per the plan's own instruction).

@@ -211,7 +211,8 @@ the master's current trial happened to pick, only an UPPER BOUND on `Q(y_inv(b^Î
 general (the master's box only guarantees `z <= y_inv`, not `z` = the minimizer). This
 method supplies the theorem's actual required value instead.
 """
-ll_cut_recourse(::BendersMaster, oracle, follower, lb_res, Q_nu_iterate::Real) = Q_nu_iterate
+ll_cut_recourse(::BendersMaster, oracle, follower, lb_res, Q_nu_iterate::Real) =
+    Q_nu_iterate
 
 function ll_cut_recourse(
     master::BendersMasterInteger,

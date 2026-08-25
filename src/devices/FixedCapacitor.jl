@@ -66,8 +66,7 @@ the SECOND consumer of the optional `q_inject` seam (MESH-04/D-09) after `FourQu
 `utility` is `zero(QuadExpr)` (a capacitor bank has no preference/cost).
 
 The wrapping `Aggregator` (DEV-05) is the ONLY consumer of this return value: it sums
-`q_inject` into its own net reactive injection via the existing `hasproperty(res,
-:q_inject)` roll-up, so `Aggregator` remains the SOLE `:Rp`/`:Rq` writer — `FixedCapacitor`
+`q_inject` into its own net reactive injection via the existing `hasproperty(res, :q_inject)` roll-up, so `Aggregator` remains the SOLE `:Rp`/`:Rq` writer — `FixedCapacitor`
 itself never becomes a second `:Rq` writer.
 """
 function contribute!(d::FixedCapacitor, ctx::ModelContext; T::Int)

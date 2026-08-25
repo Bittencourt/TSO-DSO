@@ -198,7 +198,20 @@ struct FourQuadBESS{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        return new{T}(bus, η, Δt, Pch_max, Pdch_max, Smax, Emin, Emax, soc0, λ_min, λ_med, λ_max)
+        return new{T}(
+            bus,
+            η,
+            Δt,
+            Pch_max,
+            Pdch_max,
+            Smax,
+            Emin,
+            Emax,
+            soc0,
+            λ_min,
+            λ_med,
+            λ_max,
+        )
     end
 end
 

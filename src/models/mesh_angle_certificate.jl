@@ -51,8 +51,7 @@ conic-feasible on a mesh (Low, arXiv:1405.0814: "for mesh networks, the conic re
 always exact but the angle relaxation may not be exact") and an unrecoverable verdict is
 itself the MESH-03 finding: the solved objective remains a valid UPPER BOUND on the true AC
 welfare optimum (D-07; see the Output contract below — review 23 CR-02), worth reporting,
-not an error worth aborting a run over. `report::Bool =
-true` therefore `@warn`s (never throws) on an unrecoverable verdict by default; passing
+not an error worth aborting a run over. `report::Bool = true` therefore `@warn`s (never throws) on an unrecoverable verdict by default; passing
 `report = false` restores the family's usual throw-by-default contract for a caller that
 wants a hard gate.
 
@@ -81,8 +80,7 @@ committed `Phase23Fixtures.mesh_feeder` diamond (`nB=4`, `N-1=3`) there is exact
 
 For every chord `b` (endpoints `(from, to)`, impedance `z_b`) and every hour `t`: using the
 chord's OWN solved `(P_b, Q_b)` (never traversal-sign-flipped — this evaluates the branch's
-OWN defining equation, not a tree traversal), predict `V_to,predicted = V_from,tree −
-z_b·conj(S_b)/conj(V_from,tree)` where `V_from,tree` is the phasor the traversal already
+OWN defining equation, not a tree traversal), predict `V_to,predicted = V_from,tree − z_b·conj(S_b)/conj(V_from,tree)` where `V_from,tree` is the phasor the traversal already
 assigned to the chord's `from` bus, and compare to `V_to,tree` (the traversal-assigned
 phasor at the chord's `to` bus — both chord endpoints are on the tree, since the whole graph is
 connected). `residual = |V_to,predicted − V_to,tree|`. This operationalizes Farivar-Low's
@@ -94,25 +92,24 @@ vs. via the chord is exactly the identity.
 radial and has no chords at all — a degenerate but well-defined certification: a radial
 context handed to this function trivially certifies, since there is nothing to check).
 `scale = maximum(abs, Vphasor)` (a magnitude reference over ALL bus phasors, all `t`).
-`recoverable = worst_residual <= atol + rtol*scale` — the SAME scale-free `atol +
-rtol·magnitude` combined-bound SHAPE every certificate in this codebase uses (WR-01),
+`recoverable = worst_residual <= atol + rtol*scale` — the SAME scale-free `atol + rtol·magnitude` combined-bound SHAPE every certificate in this codebase uses (WR-01),
 copied for STYLE consistency only; the VALUES below are measured fresh on
 `Phase23Fixtures`, never reused from a sibling certificate (D-08).
 
 # Output contract (D-07)
 
-- **Recoverable** (`status = :angle_certified`): `angles` is the full `(N,T)`
-  `Matrix{ComplexF64}` of traversal-recovered voltage phasors, certified consistent with every
-  chord. The solved objective is a genuine AC-operating-point value.
-- **Unrecoverable** (`status = :angle_unrecoverable`): `angles === nothing` (this
-  certificate's job is ONLY to correctly LABEL the verdict via `status`; it never
-  duplicates the objective — a caller reads `objective_value(ctx.model)` itself, which
-  remains a valid UPPER BOUND on the true AC welfare optimum: `solve_welfare` MAXIMIZES
-  welfare, and the relaxation's feasible set CONTAINS every genuine AC operating point, so
-  the maximum over the larger set can only be ≥ the true AC maximum, `W_SOCP ≥ W_AC` — the
-  welfare-maximization mirror of Low's minimization statement (arXiv:1405.0814), where a
-  relaxation's optimum lower-bounds the true minimum cost. Review 23 CR-02: an earlier
-  revision stated "lower bound", the exactly wrong direction for a maximization).
+  - **Recoverable** (`status = :angle_certified`): `angles` is the full `(N,T)`
+    `Matrix{ComplexF64}` of traversal-recovered voltage phasors, certified consistent with every
+    chord. The solved objective is a genuine AC-operating-point value.
+  - **Unrecoverable** (`status = :angle_unrecoverable`): `angles === nothing` (this
+    certificate's job is ONLY to correctly LABEL the verdict via `status`; it never
+    duplicates the objective — a caller reads `objective_value(ctx.model)` itself, which
+    remains a valid UPPER BOUND on the true AC welfare optimum: `solve_welfare` MAXIMIZES
+    welfare, and the relaxation's feasible set CONTAINS every genuine AC operating point, so
+    the maximum over the larger set can only be ≥ the true AC maximum, `W_SOCP ≥ W_AC` — the
+    welfare-maximization mirror of Low's minimization statement (arXiv:1405.0814), where a
+    relaxation's optimum lower-bounds the true minimum cost. Review 23 CR-02: an earlier
+    revision stated "lower bound", the exactly wrong direction for a maximization).
 
 `ctx.meta[:price_provenance]` is stashed UNCONDITIONALLY (both paths), scrubbing any stale
 marker FIRST (mirrors `restriction_exactness.jl`'s T-20-08 discipline — before anything

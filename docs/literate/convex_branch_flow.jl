@@ -124,7 +124,8 @@ nbus = length(feeder.buses)
 V_true = [sqrt(value(pv.v[j, 1])) for j in 1:nbus]
 V_copy = [sqrt(value(pv.v̂[j, 1])) for j in 1:nbus]
 
-cone_lhs = [value(pv.l[b, 1]) * value(pv.v[br.from, 1]) for (b, br) in enumerate(feeder.branches)]
+cone_lhs =
+    [value(pv.l[b, 1]) * value(pv.v[br.from, 1]) for (b, br) in enumerate(feeder.branches)]
 cone_rhs = [value(pv.P[b, 1])^2 + value(pv.Q[b, 1])^2 for b in 1:length(feeder.branches)]
 cone_gap = abs.(cone_lhs .- cone_rhs)
 refusal = 1e-6 .+ 1e-4 .* max.(abs.(cone_lhs), abs.(cone_rhs))   # assert_socp_exact! defaults

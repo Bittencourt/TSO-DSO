@@ -260,12 +260,8 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int
             bsigned = branch_of_child[i]
             b = abs(bsigned)
             br = feeder.branches[b]
-            Pb =
-                bsigned > 0 ? 1.0 * pv.P[b, t] :
-                br.r * pv.l[b, t] - 1.0 * pv.P[b, t]
-            Qb =
-                bsigned > 0 ? 1.0 * pv.Q[b, t] :
-                br.x * pv.l[b, t] - 1.0 * pv.Q[b, t]
+            Pb = bsigned > 0 ? 1.0 * pv.P[b, t] : br.r * pv.l[b, t] - 1.0 * pv.P[b, t]
+            Qb = bsigned > 0 ? 1.0 * pv.Q[b, t] : br.x * pv.l[b, t] - 1.0 * pv.Q[b, t]
             P̌ = Pb - LossInclR[i]
             Q̌ = Qb - LossInclX[i]
             v̂_GL[i] = v̂_GL[parent_of[i]] - 2 * (br.r * P̌ + br.x * Q̌)
