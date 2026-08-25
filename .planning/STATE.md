@@ -108,6 +108,7 @@ Genuinely open, carried past v3.0 (not blocking the close):
 | 260824-vct | Fix Julia soft-scope bug in the D-06 PF-04 gate scan | 2026-08-25 | d8e8999 | [260824-vct-fix-julia-soft-scope-bug-in-test-stochas](./quick/260824-vct-fix-julia-soft-scope-bug-in-test-stochas/) |
 | 260824-vdh | Give the D-11 welfare_gap golden a measured rtol=1e-4 | 2026-08-25 | ff8f71f | [260824-vdh-give-the-d-11-run-stochastic-welfare-gap](./quick/260824-vdh-give-the-d-11-run-stochastic-welfare-gap/) |
 | 260824-vxn | Reformat 48 drifted files to pinned JuliaFormatter 2.10.2 (+ docstring rewrap) | 2026-08-25 | 0debac9 | [260824-vxn-reformat-48-drifted-files-under-pinned-j](./quick/260824-vxn-reformat-48-drifted-files-under-pinned-j/) |
+| 260825-eme | Reset DSO-OPT conditioning ladder before the final solve (published solve runs at as-built baseline) | 2026-08-25 | d099821 | [260825-eme-reset-ladder-attributes-before-the-final](./quick/260825-eme-reset-ladder-attributes-before-the-final/) |
 
 **Recent Trend:**
 
