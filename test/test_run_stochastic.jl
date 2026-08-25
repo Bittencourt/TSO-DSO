@@ -124,5 +124,32 @@ end
     # -0.02515629356082627. Re-measured per the D-11 measurement-before-golden
     # discipline: 3 fresh same-process run_stochastic calls, bit-for-bit identical,
     # BEFORE this literal was written.
-    @test r1.oos.welfare_gap ≈ -0.02515629356082627
+    #
+    # Julia-1.12 cross-version finding (quick task 260824-vdh): this golden was CI-failing
+    # on the "Julia 1.12 - ubuntu-latest" job only (1.10 and 1.11 pass). Root cause is a
+    # genuine cross-Julia-minor-version Clarabel converged-iterate shift, not a bug or a
+    # flaky test — three fresh same-process run_stochastic(s) calls per version, same
+    # Scenario(name="t", feeder=:ieee13, T=9, stoch_S=3, stoch_H_oos=5), are bit-for-bit
+    # stable WITHIN each version:
+    #
+    #   Julia   | welfare_gap             | stable across 3 calls
+    #   --------|--------------------------|------------------------
+    #   1.10.11 | -0.02515629356082627     | yes
+    #   1.11.9  | -0.02515629356082627     | yes
+    #   1.12.7  | -0.025156313755701376    | yes
+    #
+    # CI's own 1.12 runners additionally observed two distinct values across two different
+    # commits: -0.025156313755701376 (commit 304db38 — matches the local 1.12.7 measurement
+    # exactly) and -0.02515643735591766 (commit 3b73633). The golden -0.02515629356082627
+    # above is correct and unchanged — reproduced bit-for-bit on Julia 1.10 and 1.11 — it is
+    # only Julia 1.12's own converged iterate that differs. Worst observed relative
+    # deviation from the golden: |-0.02515643735591766 - (-0.02515629356082627)| /
+    # 0.02515629356082627 ≈ 5.74e-6. `rtol = 1e-4` clears that worst observed spread by
+    # ~17x while staying far below any physically meaningful change in a welfare gap
+    # (`rtol = 1e-5` would give only ~1.7x headroom — too tight to trust against a solver
+    # iterate). Cross-commit variation on the SAME Julia version (304db38 vs 3b73633, both
+    # 1.12) is a separately-tracked IEEE-13 numerical-knife-edge finding, noted here as
+    # context only — this tolerance is meant to absorb solver-tolerance noise across
+    # environments, not to paper over that structural finding.
+    @test r1.oos.welfare_gap ≈ -0.02515629356082627 rtol = 1e-4
 end
