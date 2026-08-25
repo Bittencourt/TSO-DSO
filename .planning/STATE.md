@@ -51,6 +51,7 @@ Last activity: 2026-08-24 -- Phase 24 COMPLETE (INT-01..04, verification passed 
 | 260822-rle | Widen bus-merge threshold to sub-metre (6 more merges) — SOCP exactness recovered on all 3 points | 2026-08-23 | 8e804f7 | [260822-rle-widen-ieee-8500-bus-merge-threshold-to-s](./quick/260822-rle-widen-ieee-8500-bus-merge-threshold-to-s/) |
 | 260822-tyf | Typst academic report: IEEE-8500 SOCP-exactness investigation (pt-BR) | 2026-08-23 | f360b50 | [260822-tyf-typst-academic-report-ieee-8500-socp-exa](./quick/260822-tyf-typst-academic-report-ieee-8500-socp-exa/) |
 | 260823-gea | Phase-18 owed corrections — per-stage try/catch + optimizer kwarg in repro_stability_check.jl (item 5 CLOSED); golden-band re-derivation left OPEN, fit_baseline hits ALMOST_OPTIMAL at 3/5 points | 2026-08-23 | 56f007f | [260823-gea-close-the-two-owed-v2-1-phase-18-correct](./quick/260823-gea-close-the-two-owed-v2-1-phase-18-correct/) |
+| 260824-vct | Fix Julia soft-scope bug in test_stochastic_welfare.jl's D-06 PF-04 gate scan (let-wrapped scan state; verified gate trips at pv_scale=2.0, 2/2 consecutive runs, 0 soft-scope warnings) | 2026-08-24 | d8e8999 | [260824-vct-fix-julia-soft-scope-bug-in-test-stochas](./quick/260824-vct-fix-julia-soft-scope-bug-in-test-stochas/) |
 
 ## Deferred Items
 
@@ -103,6 +104,10 @@ Genuinely open, carried past v3.0 (not blocking the close):
 | 21 | 6 | - | - |
 | 22 | 5 | - | - |
 | 23 | 4 | - | - |
+| 260824-vc0 | Pin JuliaFormatter to 2.10 in the CI format-check job | 2026-08-25 | d369f5c | [260824-vc0-pin-juliaformatter-to-2-10-in-ci-workflo](./quick/260824-vc0-pin-juliaformatter-to-2-10-in-ci-workflo/) |
+| 260824-vct | Fix Julia soft-scope bug in the D-06 PF-04 gate scan | 2026-08-25 | d8e8999 | [260824-vct-fix-julia-soft-scope-bug-in-test-stochas](./quick/260824-vct-fix-julia-soft-scope-bug-in-test-stochas/) |
+| 260824-vdh | Give the D-11 welfare_gap golden a measured rtol=1e-4 | 2026-08-25 | ff8f71f | [260824-vdh-give-the-d-11-run-stochastic-welfare-gap](./quick/260824-vdh-give-the-d-11-run-stochastic-welfare-gap/) |
+| 260824-vxn | Reformat 48 drifted files to pinned JuliaFormatter 2.10.2 (+ docstring rewrap) | 2026-08-25 | 0debac9 | [260824-vxn-reformat-48-drifted-files-under-pinned-j](./quick/260824-vxn-reformat-48-drifted-files-under-pinned-j/) |
 
 **Recent Trend:**
 
@@ -313,8 +318,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-23T19:54:27.767Z
-Stopped at: Phase 25 context gathered
+Last session: 2026-08-24T00:00:00.000Z
+Stopped at: Completed 260824-vct-PLAN.md (D-06 PF-04 gate soft-scope fix)
 Resume file: None
 
 ## Operator Next Steps
