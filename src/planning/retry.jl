@@ -33,6 +33,26 @@ real modeling/master-side bug).
 const RETRYABLE_STATUSES = (MOI.NUMERICAL_ERROR, MOI.SLOW_PROGRESS, MOI.ALMOST_OPTIMAL)
 
 """
+    LADDER_ATTR_NAMES
+
+Single source of truth for the 4 Clarabel-specific optimizer attribute names the
+[`solve_with_retry!`](@ref) escalation ladder touches: rung 2 sets
+`"static_regularization_constant"`; rung 3 additionally sets
+`"iterative_refinement_max_iter"` and `"equilibrate_max_iter"`; rung 4 additionally sets
+`"dynamic_regularization_eps"` (restating everything the lower rungs touch, per the ladder's
+own complete-attribute-set convention). Any caller that needs to snapshot/restore these
+attributes around the ladder's documented WR-01 stickiness contract (see
+`src/admm/DsoOpt.jl`'s `build_dso_opt`/`solve_dso!`, quick task 260825-eme) reads this
+constant instead of re-listing the 4 strings itself.
+"""
+const LADDER_ATTR_NAMES = (
+    "static_regularization_constant",
+    "iterative_refinement_max_iter",
+    "equilibrate_max_iter",
+    "dynamic_regularization_eps",
+)
+
+"""
     solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = true,
                       allow_almost::Bool = false,
                       attempts_out::Union{Nothing,Ref{Int}} = nothing) -> Model
@@ -196,4 +216,4 @@ function solve_with_retry!(
     end
 end
 
-export solve_with_retry!, RETRYABLE_STATUSES
+export solve_with_retry!, RETRYABLE_STATUSES, LADDER_ATTR_NAMES

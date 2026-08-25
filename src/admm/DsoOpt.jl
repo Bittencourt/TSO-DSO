@@ -57,8 +57,12 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
   - `model::Model` — the SOCP model, built once (`select_optimizer(SOCP())`); re-solved via
     `set_objective_coefficient` only (ADMM-03, never rebuilt).
   - `ctx::ModelContext` — the shared context; `ctx.meta[:pf_vars]` carries `:l` (the SOC cone is
-    present), `ctx.meta[:feeder]`/`[:T]` feed the PF-04 exactness gate, and `:socp_maxgap` is
-    stashed after a `check_exact` solve.
+    present), `ctx.meta[:feeder]`/`[:T]` feed the PF-04 exactness gate, `:socp_maxgap` is
+    stashed after a `check_exact` solve, and `:ladder_baseline` (RESET-01, quick task
+    260825-eme) holds the AS-BUILT Clarabel conditioning-ladder attributes snapshotted once by
+    `_snapshot_ladder_attrs` in `build_dso_opt`; `solve_dso!` reads it back to restore the
+    model to this baseline immediately before every `check_exact = true` (FINAL/converged)
+    solve.
   - `pag` — the ACTIVE coupling container `pag[j,t]` (`j` over the load nodes, `t` over `1:T`),
     each pinned by `:Rp[j] + pag[j,t] == 0`. The SOLE variable per `(j,t)` whose linear
     objective coefficient the ADMM loop updates.
@@ -92,6 +96,62 @@ struct DsoOpt{P, Q, PI, F}
 end
 
 """
+    _snapshot_ladder_attrs(model::Model) -> Dict{String,Any}
+
+RESET-01 (quick task 260825-eme). Read back the current value of each of the 4 Clarabel
+conditioning-ladder attributes named by [`LADDER_ATTR_NAMES`](@ref) directly from `model` via
+`get_optimizer_attribute`, and return them as a `Dict`. Called EXACTLY ONCE, inside
+`build_dso_opt`, immediately after the model is constructed and BEFORE any solve or
+`solve_with_retry!` escalation can possibly have touched it — so the returned Dict captures
+the genuine AS-BUILT factory configuration of the selected backend (e.g. Clarabel's own
+defaults `static_regularization_constant = 1.0e-8`, etc.), never a value hardcoded in this
+file. If the backend does not expose a given attribute (e.g. a non-Clarabel factory swap,
+`INFRA-02`), that key is simply omitted from the Dict rather than raising — a graceful
+degradation so `solve_dso!` keeps working under any factory backend; `_restore_ladder_attrs!`
+below then no-ops for the missing key instead of failing the build.
+"""
+function _snapshot_ladder_attrs(model::Model)
+    baseline = Dict{String, Any}()
+    for name in LADDER_ATTR_NAMES
+        try
+            baseline[name] = get_optimizer_attribute(model, name)
+        catch
+            # Backend doesn't expose this Clarabel-specific attribute — omit it; restore
+            # then no-ops for this key instead of failing the build (graceful degradation,
+            # INFRA-02: solve_dso! must keep working under any factory backend).
+        end
+    end
+    return baseline
+end
+
+"""
+    _restore_ladder_attrs!(model::Model, baseline::Dict{String,Any}) -> Nothing
+
+RESET-01 (quick task 260825-eme). Write each `(name, value)` pair in `baseline` back onto
+`model` via `set_optimizer_attribute`, undoing whatever `solve_with_retry!` escalation (WR-01:
+STICKY, never restored on its own) may have accumulated on the model since it was built.
+Called from `solve_dso!` immediately before the FINAL/converged (`check_exact = true`) solve,
+so the published solve always runs at the AS-BUILT baseline captured once by
+`_snapshot_ladder_attrs` in `build_dso_opt`, never an inherited mid-loop escalation.
+`set_optimizer_attribute` invalidates any prior solution held by the model, but that is
+harmless here because the very next statement in `solve_dso!` re-solves it. If the backend
+rejects restoring a given attribute, that key is skipped rather than raising — no solve
+happens inside this function, so this catch can never swallow a real solve error.
+"""
+function _restore_ladder_attrs!(model::Model, baseline::Dict{String, Any})
+    for (name, value) in baseline
+        try
+            set_optimizer_attribute(model, name, value)
+        catch
+            # Backend rejected restoring this attribute — degrade gracefully. No solve
+            # happens inside this function, so this catch can never swallow a real solve
+            # error.
+        end
+    end
+    return nothing
+end
+
+"""
     build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus = false, ρ_q::Real = ρ)
         -> DsoOpt
 
@@ -104,7 +164,11 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
  1. `model = Model(select_optimizer(SOCP()))` (INFRA-02 — never names a concrete solver);
     register the `RSOCtoNonConvexQuad` / `SOCtoNonConvexQuad` cross-solver bridges exactly as
     `solve_welfare`; wrap in a [`ModelContext`](@ref); stash `ctx.meta[:feeder]` / `[:T]` for
-    the PF-04 gate.
+    the PF-04 gate, and `ctx.meta[:ladder_baseline] = _snapshot_ladder_attrs(model)`
+    (RESET-01, quick task 260825-eme) — taken at THIS exact point, before any solve or
+    `solve_with_retry!` escalation can have touched the model, so it captures the genuine
+    as-built factory conditioning rather than a hardcoded Clarabel default; `solve_dso!`
+    restores it before every FINAL/converged solve.
  2. `contribute!(ConvexBranchFlow(), ctx, feeder; T)` — VERBATIM reuse: builds `P, Q, v, v̂, l ≥ 0`, the rotated SOC cone (3.39), the true voltage drop (3.33), the exactness copy
     (3.43), the apparent-power limit (3.36, only where a real limit binds), accumulates
     `:Rp` (3.31) / `:Rq` (3.32), and stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)`.
@@ -275,6 +339,11 @@ function build_dso_opt(
     ctx = ModelContext(model)
     ctx.meta[:feeder] = feeder
     ctx.meta[:T] = T
+    # RESET-01 (quick task 260825-eme): snapshot the AS-BUILT ladder conditioning NOW —
+    # before any solve or `solve_with_retry!` escalation can have touched the model — so
+    # `solve_dso!`'s FINAL/converged solve can restore TO THIS later, never to a hardcoded
+    # Clarabel default.
+    ctx.meta[:ladder_baseline] = _snapshot_ladder_attrs(model)
 
     # (2) VERBATIM ConvexBranchFlow reuse: P, Q, v, v̂, l, cone, vdrop, cpydrop, smax,
     # :Rp/:Rq, and the pf_vars stash (with :l) — the SOCP is NOT re-implemented here.
@@ -404,6 +473,15 @@ The MID-LOOP (`strict = false`) solve instead routes through
 wrapped in the Clarabel conditioning ladder, because that solve reads NO duals (see the
 inline rationale at the call site and `.planning/debug/ieee13-admm-numerical-error.md`).
 
+RESET-01 (quick task 260825-eme): `check_exact = true` — the FINAL/converged consolidation
+call — ALSO now resets the Clarabel conditioning ladder to the as-built snapshot
+(`dso.ctx.meta[:ladder_baseline]`, taken once by `build_dso_opt`) immediately before the
+solve, REGARDLESS of `strict`. This runs BEFORE the `strict`/`else` dispatch below, so it
+applies whichever branch this call happens to take. Mid-loop iterates (`check_exact = false`)
+are never reset, so an escalation rescued mid-loop stays STICKY in force across the remaining
+mid-loop iterations exactly as before — only the published FINAL/converged solve is guaranteed
+to run at the factory's own configuration.
+
 `λ` and `a` are indexable by the load-node bus id, each yielding a length-`T` price / target
 profile (`λ[j][t]`, `a[j][t]`): `λ` is the current DADP estimate, `a` the AGR-OPT consensus
 target. λ_j is a plain scalar coefficient, NEVER a JuMP `Parameter` (an indefinite bilinear
@@ -448,6 +526,27 @@ function solve_dso!(
         set_objective_coefficient(dso.model, dso.pag[j, t], -λ[j][t] - ρ * a[j][t])
     end
 
+    # RESET-01 (quick task 260825-eme): reset the Clarabel conditioning ladder to the
+    # AS-BUILT snapshot (`dso.ctx.meta[:ladder_baseline]`, taken once in `build_dso_opt`)
+    # immediately before the FINAL/converged solve. Gated on `check_exact`, NOT `strict`:
+    # `solve_admm`'s actual production final-consolidation call passes `strict = false`
+    # (see the WR-01 PUBLISHED-PRIMAL CERTIFICATE block in `solve_admm.jl` — it
+    # deliberately relies on the PHYSICAL `:balance_p` no-slack gate rather than a bare
+    # `dual = true` solver label), so gating on `strict` alone would never fire on the path
+    # this fix exists to protect. `check_exact` is this function's OWN pre-existing "is
+    # this the final/converged call" flag (RESEARCH Pitfall 3 — every mid-loop iterate
+    # passes it `false`), so it is the correct signal regardless of which `strict` branch
+    # is about to run below, and it fires EXACTLY ONCE per `solve_admm` run — mid-loop
+    # iterations (`check_exact = false`) are UNTOUCHED, so a `solve_with_retry!` escalation
+    # applied mid-loop stays STICKY across them exactly as before (no wasted per-iteration
+    # re-failure; see `.planning/debug/ieee13-admm-numerical-error.md`).
+    if check_exact
+        _restore_ladder_attrs!(
+            dso.model,
+            get(dso.ctx.meta, :ladder_baseline, Dict{String, Any}()),
+        )
+    end
+
     # INFRA-03: never trust a dual (price) before a trusted primal solve. `strict = true` (the
     # default, and ALWAYS used on the final/converged solve) requires a fully OPTIMAL, dual-
     # feasible point. `strict = false` is the MID-LOOP mode: the DSO subproblem's DUALS are never
@@ -474,20 +573,33 @@ function solve_dso!(
         # every natively-converging environment) — it rescues a solve, it does not paper over
         # a divergence.
         #
-        # SCOPE — the LADDER IS WIRED ONLY ON THIS BRANCH. The `strict = true` FINAL/converged
-        # solve above deliberately keeps the BARE `assert_solved!(…; dual = true)` STRICT gate:
-        # it is the solve whose result is published, so it must never be allowed to pass on a
-        # merely ALMOST_OPTIMAL/NEARLY_FEASIBLE point, and it must still hard-fail (not silently
-        # escalate) if it is the one that goes numerically bad. `allow_almost = true` here
-        # preserves this branch's pre-existing acceptance of a NEARLY_FEASIBLE intermediate
-        # primal EXACTLY (`solve_with_retry!`'s new `allow_almost` kwarg defaults to `false`, so
-        # no other caller's behaviour changes).
+        # SCOPE — the LADDER IS WIRED ONLY ON THIS BRANCH. This paragraph describes the
+        # `strict = true` branch's OWN behaviour for any caller that selects it (e.g. direct
+        # test calls in `test/test_dso.jl`) — `solve_admm`'s own final-consolidation call in
+        # production actually passes `strict = false` (see the RESET-01 comment above the
+        # `strict`/`else` dispatch for why the reset fix does not depend on which branch runs).
+        # The `strict = true` FINAL/converged solve above deliberately keeps the BARE
+        # `assert_solved!(…; dual = true)` STRICT gate: it is the solve whose result is
+        # published, so it must never be allowed to pass on a merely ALMOST_OPTIMAL/
+        # NEARLY_FEASIBLE point, and it must still hard-fail (not silently escalate) if it is
+        # the one that goes numerically bad. `allow_almost = true` here preserves this branch's
+        # pre-existing acceptance of a NEARLY_FEASIBLE intermediate primal EXACTLY
+        # (`solve_with_retry!`'s new `allow_almost` kwarg defaults to `false`, so no other
+        # caller's behaviour changes).
         #
-        # HONEST CAVEAT — escalation is STICKY (`solve_with_retry!`'s documented WR-01 contract:
-        # `set_optimizer_attribute` mutates the model PERMANENTLY and is never restored). `dso`
-        # is BUILD-ONCE, so once a mid-loop rescue escalates to rung 2 the remaining mid-loop
-        # iterations AND the final `strict = true` solve all run at
-        # `static_regularization_constant = 1e-6`. That is deliberate and measured, not
+        # HONEST CAVEAT (CORRECTED, RESET-01, quick task 260825-eme) — escalation is STILL
+        # STICKY WITHIN the mid-loop iterations after a rescue (`solve_with_retry!`'s documented
+        # WR-01 contract: `set_optimizer_attribute` mutates the model PERMANENTLY and is never
+        # restored on its own); `dso` is BUILD-ONCE, so once a mid-loop rescue escalates to
+        # rung 2, the REMAINING mid-loop iterations run at
+        # `static_regularization_constant = 1e-6` — intentional, unchanged. It NO LONGER
+        # reaches the final/converged solve: `solve_dso!` now resets the ladder to the as-built
+        # snapshot before every `check_exact = true` call (see the RESET-01 block above this
+        # `if strict` dispatch). The PREVIOUS version of this comment claimed the escalation
+        # "reaches the final `strict = true` solve" — that claim was corrected during quick task
+        # 260825-eme's planning: `solve_admm.jl`'s actual final-consolidation call passes
+        # `strict = false`, which is exactly why the RESET-01 fix is gated on `check_exact`
+        # rather than `strict`. The mid-loop stickiness itself is bounded and measured, not
         # overlooked:
         #   * the ADMM transactive price is the OUTER multiplier λ (`dadp == λ` in
         #     `solve_admm.jl`), never `dual(balance_p)` of this model — so no published price is
@@ -500,7 +612,8 @@ function solve_dso!(
         #     include A/B) and -4822.903625595291 (1.12.7, native convergence) — a ~2e-9
         #     relative spread the natively-converging builds already exhibit among themselves,
         #     at an IDENTICAL 58 iterations;
-        #   * the final solve still runs the full STRICT gate AND the PF-04 exactness gate.
+        #   * the final solve still runs the full STRICT gate AND the PF-04 exactness gate, now
+        #     preceded by the RESET-01 restore.
         solve_with_retry!(dso.model; dual = false, allow_almost = true)
     end
 
