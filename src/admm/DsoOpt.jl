@@ -399,6 +399,10 @@ the LINEAR objective coefficient of each coupling variable `pag_dso[j,t]` — no
 
 (the FIXED `0.5·ρ·pag²` quadratic penalty from `build_dso_opt` is left UNTOUCHED), then gates
 the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before any dual is read.
+The MID-LOOP (`strict = false`) solve instead routes through
+[`solve_with_retry!`](@ref)`(...; dual = false, allow_almost = true)` — the same INFRA-03 gate,
+wrapped in the Clarabel conditioning ladder, because that solve reads NO duals (see the
+inline rationale at the call site and `.planning/debug/ieee13-admm-numerical-error.md`).
 
 `λ` and `a` are indexable by the load-node bus id, each yielding a length-`T` price / target
 profile (`λ[j][t]`, `a[j][t]`): `λ` is the current DADP estimate, `a` the AGR-OPT consensus
@@ -454,7 +458,49 @@ function solve_dso!(
     if strict
         assert_solved!(dso.model; dual = true)
     else
-        assert_solved!(dso.model; dual = false, allow_almost = true)
+        # CONDITIONING LADDER on the MID-LOOP solve ONLY (debug session
+        # `.planning/debug/ieee13-admm-numerical-error.md`). On IEEE-13 the mid-loop DSO-OPT
+        # sits on a numerical knife-edge once adaptive-ρ has climbed to its cap (ρ = 200) and
+        # the residuals are near tolerance: Clarabel's DEFAULT static regularization is not
+        # always enough, and whether a given build lands on the failing side is decided by
+        # pure floating-point/codegen perturbation (an UNREACHABLE `include` flips it; so does
+        # a Julia PATCH bump — 1.10.11/1.11.9/1.12.5 fail, 1.12.7 converges, each pair stably).
+        # A bare `assert_solved!` therefore throws `NUMERICAL_ERROR` mid-iteration on an ADMM
+        # run that is otherwise converging normally. `solve_with_retry!` already owns exactly
+        # this escalation (`MOI.NUMERICAL_ERROR ∈ RETRYABLE_STATUSES`); rung 2
+        # (`static_regularization_constant => 1e-6`) recovers the SAME optimum the failing
+        # builds were converging to (58 iterations, welfare agreeing to ~1e-9 relative with
+        # every natively-converging environment) — it rescues a solve, it does not paper over
+        # a divergence.
+        #
+        # SCOPE — the LADDER IS WIRED ONLY ON THIS BRANCH. The `strict = true` FINAL/converged
+        # solve above deliberately keeps the BARE `assert_solved!(…; dual = true)` STRICT gate:
+        # it is the solve whose result is published, so it must never be allowed to pass on a
+        # merely ALMOST_OPTIMAL/NEARLY_FEASIBLE point, and it must still hard-fail (not silently
+        # escalate) if it is the one that goes numerically bad. `allow_almost = true` here
+        # preserves this branch's pre-existing acceptance of a NEARLY_FEASIBLE intermediate
+        # primal EXACTLY (`solve_with_retry!`'s new `allow_almost` kwarg defaults to `false`, so
+        # no other caller's behaviour changes).
+        #
+        # HONEST CAVEAT — escalation is STICKY (`solve_with_retry!`'s documented WR-01 contract:
+        # `set_optimizer_attribute` mutates the model PERMANENTLY and is never restored). `dso`
+        # is BUILD-ONCE, so once a mid-loop rescue escalates to rung 2 the remaining mid-loop
+        # iterations AND the final `strict = true` solve all run at
+        # `static_regularization_constant = 1e-6`. That is deliberate and measured, not
+        # overlooked:
+        #   * the ADMM transactive price is the OUTER multiplier λ (`dadp == λ` in
+        #     `solve_admm.jl`), never `dual(balance_p)` of this model — so no published price is
+        #     read off a regularization-escalated dual;
+        #   * the escalation only ever fires in an environment where the alternative is a HARD
+        #     CRASH mid-ADMM (no result at all). Where the default conditioning suffices, no
+        #     rung ≥ 2 is applied and behaviour is bit-identical to before this change;
+        #   * measured price/welfare impact is BELOW the cross-environment noise floor: rescued
+        #     IEEE-13 welfare = -4822.903616694139 vs -4822.903620476632 (1.10, unreachable-
+        #     include A/B) and -4822.903625595291 (1.12.7, native convergence) — a ~2e-9
+        #     relative spread the natively-converging builds already exhibit among themselves,
+        #     at an IDENTICAL 58 iterations;
+        #   * the final solve still runs the full STRICT gate AND the PF-04 exactness gate.
+        solve_with_retry!(dso.model; dual = false, allow_almost = true)
     end
 
     # PF-04 EXACTNESS GATE — CONVERGENCE ONLY (RESEARCH Pitfall 3). Runs strictly AFTER

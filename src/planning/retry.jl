@@ -34,9 +34,10 @@ const RETRYABLE_STATUSES = (MOI.NUMERICAL_ERROR, MOI.SLOW_PROGRESS, MOI.ALMOST_O
 
 """
     solve_with_retry!(model::Model; max_attempts::Int = 4, dual::Bool = true,
+                      allow_almost::Bool = false,
                       attempts_out::Union{Nothing,Ref{Int}} = nothing) -> Model
 
-Solve `model` via [`assert_solved!`](@ref) (STRICT gate — never `allow_almost = true`,
+Solve `model` via [`assert_solved!`](@ref) (STRICT gate by default — `allow_almost = false`,
 per D-06/CLAUDE.md "duals only from a STRICT solve"), retrying with progressively
 escalated Clarabel conditioning settings if the FIRST (or any subsequent) attempt reports
 a status in [`RETRYABLE_STATUSES`](@ref). Never rebuilds the model (`num_variables`/
@@ -83,6 +84,24 @@ always terminates in either `return assert_solved!(...)` or the loud `error(...)
 this function can NEVER fall off the end returning `nothing` after a failed solve
 (CR-01: that would let a caller silently read duals from an untrusted model).
 
+`allow_almost` is forwarded VERBATIM to [`assert_solved!`](@ref)'s own `allow_almost`
+keyword (plan: debug `ieee13-admm-numerical-error`). It defaults to `false` — the STRICT
+gate — so every pre-existing call site that omits it (the planning master/subproblem, the
+MPC window, the stochastic welfare/OOS harnesses; none pass this keyword) behaves
+BYTE-IDENTICALLY to before this keyword existed. Pass `allow_almost = true` ONLY where
+`assert_solved!` itself sanctions it: an intermediate re-solve whose DUALS are NOT read
+and whose primal only needs to be near-feasible (the mid-loop ADMM DSO-OPT subproblem —
+see `solve_dso!`). It is deliberately independent of `dual`: `dual = false` merely stops
+REQUIRING a feasible dual point, while `allow_almost = true` additionally accepts
+`ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` — a near-feasible primal must never be silently
+accepted on a solve whose result is published.
+
+Note the interaction with `RETRYABLE_STATUSES`: `MOI.ALMOST_OPTIMAL` is a retryable
+status, so under `allow_almost = false` an `ALMOST_OPTIMAL` result escalates the ladder,
+whereas under `allow_almost = true` `assert_solved!` accepts it on attempt 1 and the
+ladder never fires. That is the intended semantics — `allow_almost = true` says the caller
+has already judged a near-feasible primal acceptable, so there is nothing to escalate for.
+
 When `attempts_out` is a `Ref{Int}`, it is set to the attempt number (1-indexed) on
 which the solve succeeded — never touched on the exhaustion/non-retryable-error path,
 since that path never returns. Defaults to `nothing` (a pure no-op) so every existing
@@ -93,6 +112,7 @@ function solve_with_retry!(
     model::Model;
     max_attempts::Int = 4,
     dual::Bool = true,
+    allow_almost::Bool = false,
     attempts_out::Union{Nothing, Ref{Int}} = nothing,
 )
     # CR-01 guard: max_attempts <= 0 would make the ladder slice empty, skip the loop
@@ -151,7 +171,7 @@ function solve_with_retry!(
             end
         end
         try
-            result = assert_solved!(model; dual = dual)
+            result = assert_solved!(model; dual = dual, allow_almost = allow_almost)
             attempts_out === nothing || (attempts_out[] = attempt)
             return result
         catch e
