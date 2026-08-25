@@ -104,78 +104,80 @@ end
     # reverse-flow gap, not a knife-edge residual), and every larger scale scanned stays
     # inexact too. pv_scale=2.0 is the value exported here as `TRIP_PV_SCALE_MEASURED`.
     #
-    # Widened (Rule 1 fix, plan 22-05 — discovered by this phase's own closing full-suite
-    # acceptance gate): a full `julia --project=. -e 'import Pkg; Pkg.test()'` run showed
-    # this scan failing to trip at ANY of the original (1.0, 2.0, 4.0, 8.0, 16.0, 32.0)
-    # values, while every isolated `--project=.` script re-run of the IDENTICAL logic
-    # reproduced the pv_scale=2.0 trip exactly as measured above.
+    # ROOT CAUSE (this task, superseding the retracted sandbox-resolution hypothesis
+    # below the fold — see git history for the original text): the historical CI no-trip
+    # failure (CI run 32791955335) was a Julia **soft-scope bug in this test file**, not a
+    # solver/package-resolution flake. `tripped`, `trip_pv_scale`, and `outcomes` were
+    # assigned directly inside this `@testitem` body — i.e. at module top level, making
+    # them globals. The `for pv_scale in (...)` loop below is a **soft scope**: the
+    # `tripped = true` / `trip_pv_scale = pv_scale` assignments inside it (and inside its
+    # nested `catch`) therefore created BRAND-NEW LOCALS that died with the loop iteration
+    # instead of updating the outer globals — Julia's documented soft-scope-ambiguity rule
+    # for top-level code.
     #
-    # WR-07 (phase-22 review) — the diagnosis, stated precisely rather than filed under
-    # the generic flake class: at maxratio ≈ 9688 the pv_scale=2.0 inexactness is
-    # STRUCTURAL (~9700× over the ratio>1 threshold), so NO amount of Clarabel
-    # numerical jitter explains every 2-scenario solve up to 1024× PV terminating
-    # OPTIMAL and certifying exact under `Pkg.test()`. The only mechanisms consistent
-    # with the observed behavior are (a) MATERIALLY DIFFERENT PACKAGE RESOLUTION in the
-    # `Pkg.test()` sandbox — the developer checkout deliberately carries uncommitted
-    # `Project.toml`/`Manifest-v1.12.toml` drift (CairoMakie promoted to a hard dep;
-    # documented user-local state, NOT to be committed or reverted by a fix pass), which
-    # can change the sandbox's resolved Clarabel/StableRNGs and hence either
-    # `generate_profiles`' stream or the solver itself — or (b) an in-process state leak
-    # that the previous catch-all `e isa ErrorException` made IMPOSSIBLE to observe
-    # (any solver failure silently counted as a trip). Reconciling the drifted
-    # Project/Manifest against CI's resolution is the remaining step and is outside a
-    # test-file fix's scope; what THIS file now guarantees (WR-06 + WR-07) is that any
-    # recurrence is SELF-DIAGNOSING: only the PF-04 gate message counts as a trip,
-    # every scale's actual outcome is recorded, and the no-trip path logs the sandbox's
-    # own resolved Clarabel/StableRNGs versions so hypothesis (a) is checkable directly
-    # from the failure log. The scan range stays widened to 1024× (re-verified via a
-    # direct `--project=.` run to trip cleanly at every value from 2.0 upward) as
-    # mitigation-in-depth, not as the explanation.
-    tripped = false
-    trip_pv_scale = NaN
-    outcomes = String[]   # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
-    for pv_scale in (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
-        s2 = house(pv_scale, 302)
-        try
-            r2 = build_stochastic_welfare(
-                f,
-                ConvexBranchFlow(),
-                [s1, s2];
-                probabilities = [0.5, 0.5],
-                T = T,
-                λ₀ = λ0,
-            )
-            push!(
-                outcomes,
-                "pv_scale=$pv_scale: solved + certified exact " *
-                "(socp_maxgap=$(r2.socp_maxgap))",
-            )
-        catch e
-            e isa ErrorException || rethrow()
-            # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
-            # four distinct failures inside build_stochastic_welfare raise a bare
-            # ErrorException (assert_solved! on any non-OPTIMAL status — including the
-            # ALMOST_OPTIMAL this fixture family is demonstrably prone to — the internal
-            # residual-size error, assert_socp_exact!, assert_battery_complementarity!);
-            # the previous catch-all `e isa ErrorException` let a solver convergence
-            # failure set tripped=true and PASS this item without the gate ever firing —
-            # the exact per-scenario-gate-isolation property under test going unverified.
-            # A non-gate ErrorException is RECORDED (not rethrown mid-scan) so the
-            # no-trip failure path below reports what every scale actually did.
-            if occursin("SOCP relaxation INEXACT", e.msg)
-                tripped = true
-                trip_pv_scale = pv_scale
-                break
+    # CI's own log proves this exactly: a `Warning: Assignment to 'tripped' in soft scope
+    # is ambiguous ...` (and the identical warning for `trip_pv_scale`) printed immediately
+    # before `@test tripped` failed, on every Julia version tested. The self-diagnosis
+    # `outcomes` vector showed exactly ONE entry (`"pv_scale=1.0: solved + certified
+    # exact ..."`), proving the loop DID `break` on the pv_scale=2.0 trip — the gate fired
+    # exactly as measured — only the flag failed to escape the loop.
+    #
+    # This also explains why every isolated script re-run of the identical logic
+    # reproduced the trip: a plain script wraps top-level code in a function body, where
+    # the same assignment is an ordinary (unambiguous) local — same code, different scope
+    # class, not an environment/package-resolution difference.
+    #
+    # FIX: the scan's mutable state now lives inside a `let` block (a hard scope), so the
+    # loop's assignments resolve unambiguously to the `let`'s own locals. See immediately
+    # below.
+    tripped, trip_pv_scale, outcomes = let tripped = false, trip_pv_scale = NaN, outcomes = String[]
+        # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
+        for pv_scale in (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
+            s2 = house(pv_scale, 302)
+            try
+                r2 = build_stochastic_welfare(
+                    f,
+                    ConvexBranchFlow(),
+                    [s1, s2];
+                    probabilities = [0.5, 0.5],
+                    T = T,
+                    λ₀ = λ0,
+                )
+                push!(
+                    outcomes,
+                    "pv_scale=$pv_scale: solved + certified exact " *
+                    "(socp_maxgap=$(r2.socp_maxgap))",
+                )
+            catch e
+                e isa ErrorException || rethrow()
+                # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
+                # four distinct failures inside build_stochastic_welfare raise a bare
+                # ErrorException (assert_solved! on any non-OPTIMAL status — including the
+                # ALMOST_OPTIMAL this fixture family is demonstrably prone to — the internal
+                # residual-size error, assert_socp_exact!, assert_battery_complementarity!);
+                # the previous catch-all `e isa ErrorException` let a solver convergence
+                # failure set tripped=true and PASS this item without the gate ever firing —
+                # the exact per-scenario-gate-isolation property under test going unverified.
+                # A non-gate ErrorException is RECORDED (not rethrown mid-scan) so the
+                # no-trip failure path below reports what every scale actually did.
+                if occursin("SOCP relaxation INEXACT", e.msg)
+                    tripped = true
+                    trip_pv_scale = pv_scale
+                    break
+                end
+                push!(outcomes, "pv_scale=$pv_scale: NON-GATE ErrorException: $(e.msg)")
             end
-            push!(outcomes, "pv_scale=$pv_scale: NON-GATE ErrorException: $(e.msg)")
         end
+        (tripped, trip_pv_scale, outcomes)
     end
     if !tripped
-        # WR-06/WR-07: make the documented Pkg.test no-trip flake self-diagnosing — the
-        # per-scale outcomes distinguish "solved-and-exact everywhere" (data/environment
+        # WR-06/WR-07: retained as a general-purpose self-diagnosis in case the gate
+        # genuinely fails to trip for an unrelated reason in the future — the per-scale
+        # outcomes distinguish "solved-and-exact everywhere" (data/environment
         # difference) from "solver failures masked the gate" (convergence class), and the
-        # resolved solver-stack versions make the sandbox-resolution hypothesis (see the
-        # WR-07 comment above) checkable directly from this failure's own log.
+        # resolved solver-stack versions are logged for that future diagnosis. The
+        # historical failure's real root cause was the soft-scope bug fixed above, not a
+        # package-resolution difference.
         # Version introspection via Base.loaded_modules/Base.pkgversion, NOT
         # `import Pkg`: Pkg is not a declared test dependency and the `Pkg.test()`
         # sandbox restricts the load path, so `import Pkg` throws
@@ -195,6 +197,7 @@ end
         @info "D-06 scan NEVER tripped the PF-04 gate — self-diagnosis follows" resolved outcomes
     end
     @test tripped
+    @test trip_pv_scale == 2.0
 
     # Scenario 1 ALONE, at the SAME pv_scale used for it in the 2-scenario case, still
     # solves OPTIMAL and passes its own gate — one scenario's exactness never masks the
