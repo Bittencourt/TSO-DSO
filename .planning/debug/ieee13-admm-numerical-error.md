@@ -173,6 +173,74 @@ Deterministic — 5/5 failures observed on a failing toolchain.
   `src/admm/solve_admm.jl:237`). An earlier draft of the fix comment mis-stated this as "its
   cap"; corrected in the follow-up commit.
 
+- timestamp: 2026-08-25 (RESET-01, quick task 260825-eme) — **CORRECTION to the C1-landing
+  "reaches the final strict solve" entry above, and the fix that follows from it.** That entry
+  (2026-08-25, C1 landing) stated the sticky escalation "reaches the final `strict = true`
+  solve." That premise about WHICH BRANCH RUNS was wrong: direct source read of
+  `src/admm/solve_admm.jl` plus a grep over the whole file confirms `solve_dso!` is called with
+  `strict = false` at BOTH call sites — the mid-loop call (L438-ish) and the actual
+  final-consolidation call (L768-ish, whose `welfare`/`dadp` are published). `strict = true` is
+  dead code from `solve_admm`'s perspective; only `test/test_dso.jl`'s direct calls reach it.
+  So the sticky mid-loop escalation DID leak into the published solve — via the shared
+  `strict = false` branch, not via a `strict = true` branch that never actually runs — and the
+  entry's conclusion ("measured impact below noise floor") happened to still hold, but for the
+  wrong stated reason.
+
+  **The fix (RESET-01).** `build_dso_opt` snapshots the 4 Clarabel conditioning-ladder
+  attributes (`src/planning/retry.jl`'s new `LADDER_ATTR_NAMES`) into
+  `ctx.meta[:ladder_baseline]` exactly once, immediately after the model is built and before
+  any solve can touch it. `solve_dso!` restores that snapshot onto the model immediately
+  before every `check_exact = true` call — gated on `check_exact` (this function's own
+  pre-existing "is this the final/converged call" flag), NOT on `strict`, precisely because
+  gating on `strict` would be a no-op on the production path this fix exists to protect.
+  Mid-loop (`check_exact = false`) iterations are untouched, so an escalation rescued mid-loop
+  stays STICKY across the remaining mid-loop iterations exactly as before — only the published
+  FINAL/converged solve is now guaranteed to run at the as-built baseline.
+
+  **Measured, Julia 1.10.11 (the same failing toolchain as the C1 verification above), this
+  session:**
+
+  1. `reset01_probe.jl` (direct `solve_admm` call, `dso_ctx.model` inspected post-return):
+     ```
+     ┌ Warning: solve_with_retry!: attempt 1 failed (NUMERICAL_ERROR); escalating conditioning
+     │   raw = "NUMERICAL_ERROR"
+     └ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+     PROBE OK iters=58 welfare=-4822.90361661042
+     FINAL static_regularization_constant = 1.0e-8
+     RESET-01 CHECK: OK (baseline restored)
+     ```
+     `iters = 58` — identical to every prior measurement in this file. `welfare =
+     -4822.90361661042` vs the known-good `-4822.903616694139` — 1.7e-11 relative, well inside
+     the ~2e-9 cross-environment spread already documented above. Exactly **one**
+     `escalating conditioning` line for the whole run (`grep -c` on the tee'd log: `1`). The
+     LOAD-BEARING check: `static_regularization_constant` read back off the SAME build-once
+     `dso_ctx.model` after `solve_admm` returns is `1.0e-8` — the as-built Clarabel baseline,
+     NOT the `1e-6` a rung-2 escalation would have left in force under the pre-RESET-01
+     behaviour. This directly proves the restore fired on the published solve.
+  2. `reset01_infra04.jl` (two in-process `run_scenario` calls, same `Scenario`):
+     ```
+     ┌ Warning: solve_with_retry!: attempt 1 failed (NUMERICAL_ERROR); escalating conditioning
+     ┌ Warning: solve_with_retry!: attempt 1 failed (NUMERICAL_ERROR); escalating conditioning
+     INFRA-04 CHECK: OK
+     ```
+     `welfare == welfare`, `dadp == dadp`, `exact_maxgap == exact_maxgap`, `iters == iters`
+     (all `==`, not `≈`) held across both calls — bit-for-bit reproducibility (INFRA-04)
+     survives the RESET-01 change. Exactly **two** `escalating conditioning` lines (`grep -c`:
+     `2`) — one per independent `run_scenario` call, each building a fresh `DsoOpt` and hitting
+     the same iteration-28 knife-edge, matching this file's own established INFRA-04 evidence
+     pattern (C1 landing, item 2 above).
+  3. `git diff HEAD~1 HEAD -- src/planning/retry.jl` (Task A) shows ONLY the new
+     `LADDER_ATTR_NAMES` const/docstring and the updated final `export` line — zero changes to
+     the `ladder` vector, `RETRYABLE_STATUSES`, or `solve_with_retry!`'s body — so the other
+     existing `solve_with_retry!` call sites (`planning/subproblem.jl`, `planning/master.jl`,
+     `planning/master_integer.jl`, `models/stochastic_welfare.jl`, `models/mpc_window.jl`) are
+     unaffected by construction.
+
+  **Files changed:** `src/planning/retry.jl` (additive `LADDER_ATTR_NAMES` constant, exported),
+  `src/admm/DsoOpt.jl` (`_snapshot_ladder_attrs`/`_restore_ladder_attrs!` helpers,
+  `ctx.meta[:ladder_baseline]` populated once in `build_dso_opt`, restore call gated on
+  `check_exact` in `solve_dso!`, corrected HONEST CAVEAT + SCOPE comments, updated docstrings).
+
 ## Eliminated
 
 - hypothesis: "This is the documented ~55% Clarabel flake that `test/fixtures_retry.jl`
