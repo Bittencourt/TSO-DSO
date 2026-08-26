@@ -82,6 +82,28 @@ jobs:
               @error "Some files were not formatted. Run JuliaFormatter.format(\".\") locally."
               exit(1)
           end
+      - name: Check for formatter content loss
+        # if: always() is REQUIRED, not cosmetic. format([...]) above runs with its
+        # default overwrite=true, so it REWRITES src/ext/test/docs in place BEFORE
+        # deciding pass/fail. The one moment a docstring can be silently damaged
+        # (JuliaFormatter's format_docstrings=true + a `|`-continued inline code span
+        # -> CommonMark reads it as a table row and drops it, e.g. -148 chars from
+        # src/models/restriction_exactness.jl, commit a8f7659) is exactly the moment
+        # the PRIOR step's own exit(1) fires on a dirty repo. Without always(), GitHub
+        # Actions skips every later step once a step fails, so a plain "runs on
+        # success" guard would never see the one case it exists to catch. always()
+        # cannot turn a red job green: GitHub Actions computes a job's conclusion from
+        # ALL steps' conclusions, so if the format step above exited 1 the job is
+        # already failing regardless of what this step reports -- always() only
+        # controls whether this step RUNS, not whether its result can override an
+        # earlier failure. HEAD is the correct comparison ref: nothing else writes to
+        # src/ext/test/docs between actions/checkout@v4 and this step, so `git show
+        # HEAD:<path>` still holds the untouched pre-format checkout while the working
+        # tree already holds whatever the pinned formatter just wrote (in either the
+        # pass or fail branch).
+        if: always()
+        shell: bash
+        run: python3 .github/scripts/check_content_loss.py HEAD
 
   docs:
     name: Documentation build (Documenter + Literate)
