@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Research Extension Rungs (shipped 2026-08-24)
-status: between_milestones
-stopped_at: v3.0 archived; no active milestone — run /gsd:new-milestone to define the next
-last_updated: "2026-08-25T00:00:00.000Z"
-last_activity: "2026-08-25 -- CI green on 9ed6185 (all 5 jobs); 4 CI failures fixed via quick tasks 260824-vc0/vct/vdh/vxn + 260825-eme and debug session ieee13-admm-numerical-error (resolved, archived)"
+status: "between milestones — run /gsd:new-milestone to scope the next one"
+stopped_at: Completed quick task 260825-w5a (retired the no-op AdmmRetryFixtures test-level retry wrapper)
+last_updated: "2026-08-26T04:25:39.870Z"
+last_activity: 2026-08-25 -- CI-failure remediation landed as quick tasks + one debug session
 progress:
   total_phases: 7
   completed_phases: 7
@@ -30,16 +30,23 @@ Status: between milestones — run /gsd:new-milestone to scope the next one
 CI: green on 9ed6185 (run 32910604313, all 5 jobs) — first green main since baaa94f (2026-07-27)
 Last activity: 2026-08-25 -- CI-failure remediation landed as quick tasks + one debug session
 
-### Carry-over backlog (small hardening tasks, no milestone required)
+### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
 - B1 — repo-wide soft-scope sweep (grep the suite for Julia's own
   "Assignment to X in soft scope is ambiguous" warning; 2 instances of this class found so far)
+
 - B2 — audit remaining solver-derived goldens pinned at default `≈` tolerance, and add a
   formatter content-loss guard to the CI format job (see below)
-- C3 — retire/repair `test/fixtures_retry.jl`: it re-calls with no input perturbation, so it
-  cannot rescue a deterministic failure; superseded by the `solve_with_retry!` wiring
+
+- ~~C3 — retire/repair `test/fixtures_retry.jl`~~ **CLOSED 2026-08-26 by quick task 260825-w5a**:
+  deleted the module and unwrapped all three call sites; measured on Julia 1.10 (a genuinely
+  failing toolchain) in a clean detached worktree that the production `solve_with_retry!` ladder
+  alone rescues all three (30154 pass / 0 fail / 0 error, 13 production-ladder escalations fired
+  and rescued).
+
 - C4 — knife-edge canary: assert IEEE-13 ADMM converges with recorded iters/welfare, so a
   future codegen-level flip is attributable to a commit instead of surfacing as a mystery flake
+
 - NEW — `test/Manifest.toml` resolves only on Julia 1.12 (PrecompileTools `StaticData`
   UndefVarError on 1.10/1.11), so there is no working local path to the test suite on the
   declared 1.10 compat floor
@@ -76,6 +83,7 @@ ignoring whitespace and commas. Promoting it into the CI format job is task B2.
 | 260822-tyf | Typst academic report: IEEE-8500 SOCP-exactness investigation (pt-BR) | 2026-08-23 | f360b50 | [260822-tyf-typst-academic-report-ieee-8500-socp-exa](./quick/260822-tyf-typst-academic-report-ieee-8500-socp-exa/) |
 | 260823-gea | Phase-18 owed corrections — per-stage try/catch + optimizer kwarg in repro_stability_check.jl (item 5 CLOSED); golden-band re-derivation left OPEN, fit_baseline hits ALMOST_OPTIMAL at 3/5 points | 2026-08-23 | 56f007f | [260823-gea-close-the-two-owed-v2-1-phase-18-correct](./quick/260823-gea-close-the-two-owed-v2-1-phase-18-correct/) |
 | 260824-vct | Fix Julia soft-scope bug in test_stochastic_welfare.jl's D-06 PF-04 gate scan (let-wrapped scan state; verified gate trips at pv_scale=2.0, 2/2 consecutive runs, 0 soft-scope warnings) | 2026-08-24 | d8e8999 | [260824-vct-fix-julia-soft-scope-bug-in-test-stochas](./quick/260824-vct-fix-julia-soft-scope-bug-in-test-stochas/) |
+| 260825-w5a | Retire the no-op AdmmRetryFixtures test-level retry wrapper (deleted test/fixtures_retry.jl, unwrapped all 3 call sites, measured on Julia 1.10 that the production solve_with_retry! ladder alone rescues all 3) | 2026-08-26 | 5725f7f | [260825-w5a-retire-or-repair-the-no-op-admmretryfixt](./quick/260825-w5a-retire-or-repair-the-no-op-admmretryfixt/) |
 
 ## Deferred Items
 
@@ -93,10 +101,12 @@ Genuinely open, carried past v3.0 (not blocking the close):
   `assert_socp_exact!` throws at IEEE-8500 scale even on a converged point; and reaching a
   converged, memory-feasible headline point needs architectural memory-footprint work. Deliberately
   separated from the benchmark that justifies it.
+
 - **Phase-18 `fit_baseline` convergence** (quick task 260823-gea): nested solve returns
   `ALMOST_OPTIMAL` at 3/5 sweep points at `tol_gap=1e-10` — discrete flake rate 13/20 = 0.650, all
   at that one stage, reproduced across 3 runs. A solver-convergence issue distinct from SOCP
   inexactness. Not a v3.0 deliverable; wants its own follow-up.
+
 - **MESH-06 advisory** (v3.0 audit): `solve_admm` is typed to `pf::ConvexBranchFlow`, so meshed
   topology + live ADMM reactive pricing cannot compose at runtime today. Phase 23's page discloses
   this and substitutes a centralized `:balance_q` dual. No requirement mandates the literal
@@ -133,6 +143,10 @@ Genuinely open, carried past v3.0 (not blocking the close):
 | 260824-vdh | Give the D-11 welfare_gap golden a measured rtol=1e-4 | 2026-08-25 | ff8f71f | [260824-vdh-give-the-d-11-run-stochastic-welfare-gap](./quick/260824-vdh-give-the-d-11-run-stochastic-welfare-gap/) |
 | 260824-vxn | Reformat 48 drifted files to pinned JuliaFormatter 2.10.2 (+ docstring rewrap) | 2026-08-25 | 0debac9 | [260824-vxn-reformat-48-drifted-files-under-pinned-j](./quick/260824-vxn-reformat-48-drifted-files-under-pinned-j/) |
 | 260825-eme | Reset DSO-OPT conditioning ladder before the final solve (published solve runs at as-built baseline) | 2026-08-25 | d099821 | [260825-eme-reset-ladder-attributes-before-the-final](./quick/260825-eme-reset-ladder-attributes-before-the-final/) |
+| 260825-w58 | Add formatter content-loss guard to the CI format job (if: always()) | 2026-08-26 | 3ba4b6f | [260825-w58-add-formatter-content-loss-guard-to-the-](./quick/260825-w58-add-formatter-content-loss-guard-to-the-/) |
+| 260825-w5a | Retire the no-op AdmmRetryFixtures test-level retry wrapper (3 call sites) | 2026-08-26 | 5725f7f | [260825-w5a-retire-or-repair-the-no-op-admmretryfixt](./quick/260825-w5a-retire-or-repair-the-no-op-admmretryfixt/) |
+| 260826-0y4 | Fix the vacuous `caught` soft-scope gate in INT-03; record detection method | 2026-08-26 | 79c1107 | [260826-0y4-fix-vacuous-caught-assertion-soft-scope-](./quick/260826-0y4-fix-vacuous-caught-assertion-soft-scope-/) |
+| 260825-w5b | Add IEEE-13 ADMM knife-edge canary (pinned iters/welfare, ladder reported) | 2026-08-26 | 2648dfb | [260825-w5b-add-ieee-13-admm-knife-edge-canary-test](./quick/260825-w5b-add-ieee-13-admm-knife-edge-canary-test/) |
 
 **Recent Trend:**
 
@@ -343,8 +357,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-24T00:00:00.000Z
-Stopped at: Completed 260824-vct-PLAN.md (D-06 PF-04 gate soft-scope fix)
+Last session: 2026-08-26T00:00:00.000Z
+Stopped at: Completed quick task 260825-w5a (retired the no-op AdmmRetryFixtures test-level retry wrapper)
 Resume file: None
 
 ## Operator Next Steps
