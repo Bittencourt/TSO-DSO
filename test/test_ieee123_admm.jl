@@ -156,14 +156,16 @@ end
 # The PRIMARY, CI-gated evidence for MESH-05's live-convergence/cross-validation/liveness truths
 # lives on the `Phase19Fixtures` 2-bus fixture in `test/test_admm_reactive.jl` (items whose name
 # contains "live"); THIS item is deliberately NOT part of that primary evidence set and is
-# explicitly documented here as never intended to gate CI on its own. It runs under the SAME
-# bounded-retry quarantine `test_admm.jl`'s existing IEEE-13 flaky item already uses (quick task
-# 260726-vn2 — the documented ~55% baseline single-call Clarabel `NUMERICAL_ERROR`-class flake on
-# this congested `ρ=100` IEEE-13 ground fixture). Item name contains BOTH "ieee13" and "4q" (never
+# explicitly documented here as never intended to gate CI on its own. It previously ran under a
+# test-level bounded-retry wrapper (quick task 260726-vn2, `test/fixtures_retry.jl`) that was
+# retired by quick task 260825-w5a — the same congested IEEE-13 `ρ=100` knife-edge that wrapper
+# targeted is now rescued at the production level by `solve_dso!`'s mid-loop `solve_with_retry!`
+# routing (`.planning/debug/resolved/ieee13-admm-numerical-error.md`), so no test-level wrapper
+# is needed here or anywhere else. Item name contains BOTH "ieee13" and "4q" (never
 # matched by the file's own `(ieee123, crossval)`/`(ieee123, phase7)` tags above, so a
 # CI-gating filter selecting on those tags alone never picks this item up).
-@testitem "ieee13 admm 4q-bess: live reactive dual-ascent supporting evidence, quarantined, NOT CI-gating (ieee13, 4q)" setup =
-    [Phase4Fixtures, AdmmRetryFixtures] tags = [:admm, :reactive] begin
+@testitem "ieee13 admm 4q-bess: live reactive dual-ascent supporting evidence, NOT CI-gating (ieee13, 4q)" setup =
+    [Phase4Fixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
     # Reuse the SAME Phase-4 IEEE-13 GROUND fixture `test_admm.jl`'s own flaky crossval item
@@ -209,22 +211,20 @@ end
     ρ_ieee13 = 100.0
     tol_ieee13 = 1e-6
 
-    # AdmmRetryFixtures wrapping (quick task 260726-vn2's exact pattern): retries ONLY on the
-    # documented Clarabel `NUMERICAL_ERROR`-class flake, rethrows anything else immediately.
-    res = AdmmRetryFixtures.retry_flaky_admm_solve(; label = "ieee13 4q-bess live") do
-        solve_admm(
-            feeder,
-            ConvexBranchFlow(),
-            aggs;
-            T = Th,
-            λ₀ = λ₀,
-            ρ = ρ_ieee13,
-            maxiter = 300,
-            tol = tol_ieee13,
-            allow_export = true,
-            reactive_consensus = :live,
-        )
-    end
+    # The test-level retry wrapper was retired (quick task 260825-w5a) — the mid-loop production
+    # ladder in `solve_dso!` now covers this call transparently, no test-level handling required.
+    res = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = ρ_ieee13,
+        maxiter = 300,
+        tol = tol_ieee13,
+        allow_export = true,
+        reactive_consensus = :live,
+    )
 
     @test res.iters < 300                # converged before the fail-loud cap (observed 101 iters)
     @test res.exact_maxgap < 1e-3        # PF-04 on the converged DSO-OPT

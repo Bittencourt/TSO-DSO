@@ -65,7 +65,7 @@
 end
 
 @testitem "admm: cross-validation ieee13 welfare + DADP (crossval, ieee13)" setup =
-    [Phase6Fixtures, Phase4Fixtures, AdmmRetryFixtures] tags = [:admm] begin
+    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
@@ -103,19 +103,17 @@ end
         )
         dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
-        res = AdmmRetryFixtures.retry_flaky_admm_solve(; label = "admm crossval ieee13") do
-            solve_admm(
-                feeder,
-                ConvexBranchFlow(),
-                aggs;
-                T = Th,
-                λ₀ = λ₀,
-                ρ = ρ_ieee13,
-                maxiter = 200,
-                tol = tol_ieee13,
-                allow_export = true,
-            )
-        end
+        res = solve_admm(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ_ieee13,
+            maxiter = 200,
+            tol = tol_ieee13,
+            allow_export = true,
+        )
 
         @test res.iters < 200                                    # converged before the fail-loud cap
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)          # welfare match (ADMM-04)
