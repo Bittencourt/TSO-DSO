@@ -308,32 +308,57 @@ end
         α_x_lb = 0.0,
     )
 
-    # Scoping note (found 2026-08-23 while diagnosing a TestItemRunner-only failure):
-    # assigning `result` from INSIDE the `try` body does not reach the outer binding under
-    # TestItemRunner's `@testitem` module wrapping -- `caught` stayed `nothing` (no exception)
-    # while `result` also stayed `nothing`, failing every `result !== nothing` assertion below
-    # even though the loop had converged correctly. The identical code passes as a plain script
-    # under both `--project=.` and the `Pkg.test()` sandbox, so this is a harness artifact, not
-    # a solver defect. Take the `try` EXPRESSION's value instead of assigning inside it.
-    caught = nothing
-    _tmpdir = mktempdir()
-    result = try
-        solve_stackelberg!(
-            feeder,
-            LinDistFlow(),
-            [agg];
-            λ₀ = λ₀,
-            T = 1,
-            follower_kwargs = follower_kwargs,
-            master_kwargs = NamedTuple(),
-            master = imaster,
-            known_optimum = enum_result.best_total,
-            max_iter = 50,
-            checkpoint_dir = _tmpdir,
-        )
-    catch e
-        caught = e
-        nothing
+    # Scoping note (soft-scope-ambiguity bug fixed 2026-08-26; superseding the retracted
+    # "TestItemRunner-only failure" diagnosis below -- see git history for the original
+    # text): `result = try ... end` taking the `try` EXPRESSION's own value (rather than
+    # assigning to `result` from inside the block) is CORRECT and unaffected by scope
+    # class -- that half of the original fix stands. But the diagnosis of WHY was wrong:
+    # this is an ordinary Julia soft-scope-ambiguity rule, not a TestItemRunner/
+    # `@testitem`-specific harness artifact. `@testitem` bodies run as module top-level
+    # code, so `caught = nothing` at top level makes `caught` a module global; a
+    # `for`/`while`/`try` nested under it is a SOFT SCOPE, and a bare `caught = e` inside
+    # it creates a brand-new local that dies with the block instead of reaching the
+    # global. The identical bug class already hit `test/test_stochastic_welfare.jl`'s
+    # D-06 scan (commit `d8e8999`).
+    #
+    # The SECOND, more serious defect this fix closes: `caught = e` inside the `catch`
+    # block (below) was itself exactly that soft-scope-created dead local relative to the
+    # `caught = nothing` module global -- so `@test caught === nothing` was VACUOUS. It
+    # passed whether or not `solve_stackelberg!` threw, because `caught` was permanently
+    # `nothing`, the value assigned at module top level, regardless of any exception.
+    #
+    # FIX (same idiom as the D-06 fix): `caught`, `caught_bt` (its backtrace), `result`,
+    # and the `mktempdir()`-derived checkpoint dir now live inside a `let` block (a hard
+    # scope), destructured at the `@testitem` top level immediately below. The failure
+    # path now surfaces the exception via `@error ... exception = (caught, caught_bt)`
+    # before the gate assertion, so a future genuine throw is diagnosable instead of
+    # silently invisible.
+    #
+    # DETECTION METHOD (durable, authoritative): Julia's own lowering-time "Assignment to
+    # X in soft scope is ambiguous" warning -- see `test/runtests.jl`'s header for the
+    # full writeup and the established fix idiom.
+    caught, caught_bt, result = let caught = nothing, caught_bt = nothing
+        _tmpdir = mktempdir()
+        result = try
+            solve_stackelberg!(
+                feeder,
+                LinDistFlow(),
+                [agg];
+                λ₀ = λ₀,
+                T = 1,
+                follower_kwargs = follower_kwargs,
+                master_kwargs = NamedTuple(),
+                master = imaster,
+                known_optimum = enum_result.best_total,
+                max_iter = 50,
+                checkpoint_dir = _tmpdir,
+            )
+        catch e
+            caught = e
+            caught_bt = catch_backtrace()
+            nothing
+        end
+        (caught, caught_bt, result)
     end
 
     # GATE (gate-then-golden ordering, T-14-01/test_planning_goldens.jl:48-55 convention):
@@ -342,6 +367,10 @@ end
     # the certified run genuinely converges (never throws) within `max_iter = 50` and its
     # incumbent `UB` matches the TRUE enumerated optimum to machine precision -- a real,
     # reliable `@test`, not `@test_broken`.
+    if caught !== nothing
+        @error "solve_stackelberg! threw during the certified (known_optimum-matched) run" exception =
+            (caught, caught_bt)
+    end
     @test caught === nothing
     @test result !== nothing && isapprox(result.UB, enum_result.best_total; atol = 1e-6)
 
