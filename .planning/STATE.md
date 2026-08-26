@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v3.0
-milestone_name: Research Extension Rungs
-status: executing
-stopped_at: Phase 24 complete (verification passed 4/4)
-last_updated: "2026-08-24T00:00:00.000Z"
-last_activity: "2026-08-24 -- Phase 24 COMPLETE (INT-01..04, verification passed 4/4)"
+milestone_name: Research Extension Rungs (shipped 2026-08-24)
+status: between_milestones
+stopped_at: v3.0 archived; no active milestone — run /gsd:new-milestone to define the next
+last_updated: "2026-08-25T00:00:00.000Z"
+last_activity: "2026-08-25 -- CI green on 9ed6185 (all 5 jobs); 4 CI failures fixed via quick tasks 260824-vc0/vct/vdh/vxn + 260825-eme and debug session ieee13-admm-numerical-error (resolved, archived)"
 progress:
   total_phases: 7
   completed_phases: 7
@@ -21,14 +21,38 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** v3.0 milestone lifecycle (all 7 phases complete) — audit → complete → cleanup
+**Current focus:** Between milestones. v3.0 shipped and archived 2026-08-24; ROADMAP.md carries no active phases. Next milestone not yet defined.
 
 ## Current Position
 
-Phase: 24 (discrete-integer-investment-expansion) — COMPLETE ✓
-Plan: 6 of 6 (+1 gap-closure wave)
-Status: All 7 v3.0 phases complete; entering milestone lifecycle
-Last activity: 2026-08-24 -- Phase 24 COMPLETE (INT-01..04, verification passed 4/4)
+Milestone: none active (v1.0, v2.0, v2.1, v3.0 all shipped — see ROADMAP.md)
+Status: between milestones — run /gsd:new-milestone to scope the next one
+CI: green on 9ed6185 (run 32910604313, all 5 jobs) — first green main since baaa94f (2026-07-27)
+Last activity: 2026-08-25 -- CI-failure remediation landed as quick tasks + one debug session
+
+### Carry-over backlog (small hardening tasks, no milestone required)
+
+- B1 — repo-wide soft-scope sweep (grep the suite for Julia's own
+  "Assignment to X in soft scope is ambiguous" warning; 2 instances of this class found so far)
+- B2 — audit remaining solver-derived goldens pinned at default `≈` tolerance, and add a
+  formatter content-loss guard to the CI format job (see below)
+- C3 — retire/repair `test/fixtures_retry.jl`: it re-calls with no input perturbation, so it
+  cannot rescue a deterministic failure; superseded by the `solve_with_retry!` wiring
+- C4 — knife-edge canary: assert IEEE-13 ADMM converges with recorded iters/welfare, so a
+  future codegen-level flip is attributable to a commit instead of surfacing as a mystery flake
+- NEW — `test/Manifest.toml` resolves only on Julia 1.12 (PrecompileTools `StaticData`
+  UndefVarError on 1.10/1.11), so there is no working local path to the test suite on the
+  declared 1.10 compat floor
+
+### Standing hazard — JuliaFormatter docstring data loss
+
+JuliaFormatter 2.10.2 with `format_docstrings = true` SILENTLY DELETES text when an inline code
+span wraps a line and the continuation line begins with `|` (CommonMark reads it as a table
+row). Cost 148 characters of `src/models/restriction_exactness.jl`'s docstring before it was
+caught. `format_docstrings` is deliberately kept `true`, so the hazard is live for any future
+docstring using wrapped absolute-value notation. Detector:
+`python3 <scratchpad>/check_content_loss.py <git-ref>` — compares every tracked .jl file
+ignoring whitespace and commas. Promoting it into the CI format job is task B2.
 
 ### Quick Tasks Completed
 

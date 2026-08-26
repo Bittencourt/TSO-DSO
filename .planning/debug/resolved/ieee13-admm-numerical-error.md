@@ -4,6 +4,8 @@ status: resolved
 trigger: "IEEE-13 ADMM mid-loop DSO SOCP fails with Clarabel NUMERICAL_ERROR at iteration 28, breaking 4 CI test items. Root cause is characterized and a fix is experimentally confirmed; this session is to land the fix (C1) and investigate the underlying conditioning (C2)."
 created: 2026-08-25
 updated: 2026-08-25
+archived: 2026-08-25
+archived_reason: "CI run 32910604313 on 9ed6185 green across all 5 jobs — Julia 1.10 and 1.11 (the toolchains that reproduced NUMERICAL_ERROR deterministically) and 1.12 (which failed test_admm_adaptive with the same signature) all pass on the real runners."
 ---
 
 # Debug: IEEE-13 ADMM mid-loop DSO SOCP `NUMERICAL_ERROR`
