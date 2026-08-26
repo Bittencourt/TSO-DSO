@@ -147,6 +147,7 @@ Genuinely open, carried past v3.0 (not blocking the close):
 | 260825-w5a | Retire the no-op AdmmRetryFixtures test-level retry wrapper (3 call sites) | 2026-08-26 | 5725f7f | [260825-w5a-retire-or-repair-the-no-op-admmretryfixt](./quick/260825-w5a-retire-or-repair-the-no-op-admmretryfixt/) |
 | 260826-0y4 | Fix the vacuous `caught` soft-scope gate in INT-03; record detection method | 2026-08-26 | 79c1107 | [260826-0y4-fix-vacuous-caught-assertion-soft-scope-](./quick/260826-0y4-fix-vacuous-caught-assertion-soft-scope-/) |
 | 260825-w5b | Add IEEE-13 ADMM knife-edge canary (pinned iters/welfare, ladder reported) | 2026-08-26 | 2648dfb | [260825-w5b-add-ieee-13-admm-knife-edge-canary-test](./quick/260825-w5b-add-ieee-13-admm-knife-edge-canary-test/) |
+| 260826-8gb | Document the ADMM conditioning ladder + knife-edge and the CI docs-integrity guard in the Documenter site | 2026-08-26 | 362e745 | [260826-8gb-document-the-admm-conditioning-ladder-an](./quick/260826-8gb-document-the-admm-conditioning-ladder-an/) |
 
 **Recent Trend:**
 
