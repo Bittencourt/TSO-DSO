@@ -148,6 +148,7 @@ Genuinely open, carried past v3.0 (not blocking the close):
 | 260826-0y4 | Fix the vacuous `caught` soft-scope gate in INT-03; record detection method | 2026-08-26 | 79c1107 | [260826-0y4-fix-vacuous-caught-assertion-soft-scope-](./quick/260826-0y4-fix-vacuous-caught-assertion-soft-scope-/) |
 | 260825-w5b | Add IEEE-13 ADMM knife-edge canary (pinned iters/welfare, ladder reported) | 2026-08-26 | 2648dfb | [260825-w5b-add-ieee-13-admm-knife-edge-canary-test](./quick/260825-w5b-add-ieee-13-admm-knife-edge-canary-test/) |
 | 260826-8gb | Document the ADMM conditioning ladder + knife-edge and the CI docs-integrity guard in the Documenter site | 2026-08-26 | 362e745 | [260826-8gb-document-the-admm-conditioning-ladder-an](./quick/260826-8gb-document-the-admm-conditioning-ladder-an/) |
+| 260826-cjh | Replace the fragile `iters >= 50` load-test bound with an intent-shaped structural floor (measured spread 47-66) | 2026-08-26 | c2b95a6 | [260826-cjh-replace-the-fragile-iters-50-bound-in-th](./quick/260826-cjh-replace-the-fragile-iters-50-bound-in-th/) |
 
 **Recent Trend:**
 
