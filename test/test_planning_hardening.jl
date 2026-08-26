@@ -150,8 +150,11 @@ end
 end
 
 # --------------------------------------------------------------------------------
-# Task 1 (revision 1): load test — >=50-iteration Benders run, retry/checkpoint
-# machinery active, empirical retry-rate measurement.
+# Task 1 (revision 2): load test — T=8 multi-iteration Benders run with checkpoint
+# machinery exercised at scale and a retry-trace/log cross-check. The prior
+# revision's `>=50 iterations` framing and "retry ... machinery active" claim are
+# both retired below — see the REVISION 2 note after the FIX/RUNTIME NOTE
+# paragraphs.
 #
 # FIXTURE-SHAPE DEVIATION (documented per 12-CONTEXT.md's own explicit Claude's
 # Discretion: "Load-test fixture parameterization (how to force slow convergence:
@@ -203,7 +206,45 @@ end
 # total `:planning` quick-run past the ~2-minute budget alongside the other three
 # edge-case items in this file, so this item carries the extra `:slow` tag,
 # mirroring `test_ieee123_admm.jl`'s `[:admm, :phase7]` two-tag precedent.
-@testitem "planning hardening: load test — >=50 Benders iterations, retry + checkpoint machinery active, empirical retry-rate measurement" tags =
+#
+# REVISION 2 (this quick task, 260826-cjh): the old `result.iters` `>= 50`
+# assertion and this item's name were both retired as environment-fragile. CI
+# run 32950768236 failed on Julia 1.11 with `result.iters == 47` on this
+# byte-identical T=8 fixture. This is NOT a regression: zero `src/` changes and
+# this file itself unchanged between the last green commit and the failing one;
+# only test-suite MEMBERSHIP shifted (one item deleted, one added elsewhere),
+# which shifted TestItemRunner's worker scheduling and, with it, the Benders
+# cutting-plane trajectory, even though nothing about the model changed.
+#
+# MEASURED spread of `result.iters` for this byte-identical T=8 fixture:
+#   66  the value that originally tuned T=8, "comfortably inside 50:100"
+#   55  local Julia 1.11.9, clean detached worktree, run 1, suite PASSED
+#   55  local Julia 1.11.9, clean detached worktree, run 2, suite PASSED
+#   47  CI Julia 1.11 runner 32950768236, FAILED against the old `>=50` bound
+#
+# CONCLUSION: deterministic within one environment, ranging 47..66 across
+# environments, with the old threshold of 50 sitting inside that spread (~10%
+# margin on a quantity that itself moves ~30%). The CI failure is not locally
+# reproducible (this machine's Julia 1.11 always yields 55), so it could not be
+# fixed by iterating locally until a number passes. LOCKED USER DECISION: assert
+# the load test's intent directly rather than using a tight iteration count as a
+# proxy — do not re-tune to a new magic number close to 47.
+#
+# The replacement floor (`result.iters >= 30`, below) is a STRUCTURAL threshold,
+# not a re-tuned one: 30 is ~1.9x the T=1 fixture's hard trivial-convergence floor
+# of 16 (see FIXTURE-SHAPE DEVIATION paragraph above), and ~36% below the lowest
+# `result.iters` ever measured for T=8 (47) — generous headroom in both
+# directions, unlike the old bound's ~10% margin. This floor still catches the
+# regression class this task guards against: a hypothetical bug that made this
+# T=8 problem converge trivially (e.g. in 3 iterations, the way the T=1 fixture
+# converges in 16) trips it immediately (`3 < 30`), while no environment measured
+# to date (47..66) comes anywhere close to tripping it.
+#
+# The item's name was corrected because the old name's "retry ... machinery
+# active" clause was false — `total_retries_from_trace` measures `0` on this
+# fixture every time (the retry ladder never fires here) — so the new name no
+# longer claims otherwise.
+@testitem "planning hardening: load test — T=8 multi-iteration Benders run (measured 47-66 iters across environments), checkpoint machinery exercised at scale, retry-trace/log cross-check (load, benders)" tags =
     [:planning, :slow] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
     using DrWatson: wload
@@ -254,12 +295,19 @@ end
         # The cross-check (plan-checker blocker fix, revision 1): the per-iteration
         # trace and the independently captured log stream must agree EXACTLY.
         @test total_retries_from_trace == n_retry_warnings
-        @test total_retries_from_trace >= 0
-        @test all(result.trace.retry_count_trace .>= 0)
+        # REMOVED this revision (260826-cjh) as VACUOUS: `total_retries_from_trace
+        # >= 0` and `all(result.trace.retry_count_trace .>= 0)` were both
+        # non-negativity checks on a sum/elements of a non-negative counter vector
+        # and can never fail — they looked like coverage but asserted nothing.
+        # Precedent for the same removal pattern: test_planning_certification_
+        # integer.jl commit d53db27.
 
         # --- convergence + iteration-count bound (never exhausts) ---
         @test result.gap <= tol
-        @test result.iters >= 50
+        # Replaces the old `result.iters` `>= 50` bound — see the REVISION 2 note
+        # above the `@testitem` for the full measured-spread rationale and the
+        # 30 = ~1.9x-trivial / ~36%-below-min-observed justification.
+        @test result.iters >= 30
         @test result.iters < 200   # converged comfortably before the fail-loud cap
 
         # --- cut-store growth instrumentation ---
