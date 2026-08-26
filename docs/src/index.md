@@ -97,3 +97,30 @@ case, pinned computed goldens for the canonical N=1 and N=2 fixtures (gated by c
 agreement and diagonalization convergence respectively), and an automated no-binaries guard that
 fails the test suite if any planning-layer subproblem builder introduces a binary/integer
 variable — enforcing the milestone's continuous-only scope structurally, not by convention.
+
+The operational layer's ADMM decomposition ships its own numerical-robustness net: the
+mid-loop `DSO-OPT` SOCP subproblem can hit a genuine, floating-point-decided conditioning
+knife-edge on some fixtures (documented in full on [Rung 5: ADMM
+Decomposition](generated/admm.md)), so `solve_dso!`'s mid-loop solve is routed through the
+project's escalating Clarabel-conditioning retry ladder (`solve_with_retry!`), while
+`build_dso_opt` snapshots and `solve_dso!` restores the as-built conditioning immediately
+before every published, converged solve — so a mid-loop rescue can never leak into the
+reported transactive price. A pinned canary regression test
+(`test/test_admm_knifeedge_canary.jl`) hard-asserts the IEEE-13 iteration count and
+welfare converge to their known-good trajectory, while deliberately only reporting — never
+asserting — whether the ladder fired, since that legitimately differs by Julia toolchain.
+
+CI also guards the documentation itself against formatter-induced silent content loss:
+`JuliaFormatter`'s `format_docstrings = true` option (kept on deliberately) can drop text
+when an inline code span wraps a line and its continuation begins with `|` — CommonMark
+reads that as a markdown table row, and the formatter is idempotent afterwards, so a naive
+format-then-check job would go green with documentation missing. A dedicated content-loss
+guard (`.github/scripts/check_content_loss.py`), wired into the CI format job with `if:
+always()`, compares every tracked `.jl` file under `src/`, `ext/`, `test/`, and `docs/`
+against the pre-format git ref, normalizing away whitespace and commas so ordinary
+formatter reflow passes while a real deletion fails the build. The guard only catches loss
+introduced by a formatting pass during a CI run — it cannot catch loss already committed
+to a format-clean `HEAD`. The CI job pins the formatter itself via
+`PackageSpec(name = "JuliaFormatter", version = "2.10")`, which resolves through Pkg's
+`VersionRange` parser (no `^`/`~` operators — a leading `~` throws `ArgumentError`) to the
+range `[2.10.0, 2.11.0)`.

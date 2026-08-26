@@ -129,3 +129,75 @@ if Base.find_package("CairoMakie") !== nothing
     using CairoMakie
     plot_convergence(admm.residuals)
 end
+
+# ## Numerical robustness — the ADMM conditioning ladder (mid-loop knife-edge)
+#
+# The toy 3-bus/`T = 4` feeder solved live above is deliberately small and never
+# approaches the conditioning edge documented below — this section records a general
+# property of the ADMM mid-loop `DSO-OPT` solve, measured on the IEEE-13 fixture
+# (`test/test_admm_knifeedge_canary.jl`), not a defect specific to the toy example above.
+#
+# On IEEE-13, the mid-loop `DSO-OPT` SOCP sits on a genuine numerical knife-edge at ADMM
+# iteration 28, once adaptive-ρ has climbed one `τ = 2` doubling step from `ρ₀ = 100` to
+# `ρ = 200` (nowhere near the `ρ_max = 1e4` clamp) and both Boyd residuals sit within
+# roughly 1.5-2× of their stopping tolerances. At that iterate Clarabel's DEFAULT static
+# regularization is not always enough, and the solve can terminate `NUMERICAL_ERROR`
+# rather than `OPTIMAL`. Which side of the edge a given build lands on is decided by pure
+# floating-point/codegen perturbation, never by logic: an unreachable `include` flips the
+# outcome (A/B verified), and so does a Julia PATCH bump (1.10.11 / 1.11.9 / 1.12.5 fail;
+# 1.12.7 converges natively) — each (tree × Julia version) pair is deterministic, 5/5, not
+# a run-to-run flake.
+#
+# ### Why: an anisotropic objective Hessian, not the constraint matrix
+#
+# The `DSO-OPT` constraint matrix is well scaled and ρ-independent
+# ([`build_dso_opt`](@ref) puts ρ only in the objective): measured coefficient magnitudes
+# span roughly 0.028 to 1.2 per-unit, about a 43× spread, and that spread does not move
+# with ρ at all. The ill-conditioning is ANISOTROPIC and comes entirely from the
+# objective: the `0.5ρ` quadratic penalty is a pure diagonal Hessian sitting on only 240
+# of the model's 1536 variables (the `pag_dso[j,t]` coupling block); the remaining 1296
+# variables — voltages, squared currents, branch flows, cone slacks — carry exactly zero
+# curvature and are held up in the KKT factorization only by Clarabel's
+# `static_regularization_constant` default of `1.0e-8`. At `ρ = 200` that is roughly a
+# `1e10` diagonal spread between the two blocks, degrading linearly as ρ climbs. Retry
+# rung 2 raises `static_regularization_constant` to `1e-6` — a 100× cut of exactly that
+# spread, and the only thing it changes — and that alone converts every observed failure
+# into the same optimum at the same 58 iterations. Clarabel's internal KKT condition number
+# at the iteration-28 iterate was never dumped (that would need product-code
+# instrumentation), so treat this mechanism as strongly supported by the measurements above
+# rather than as solver-internally certified.
+#
+# ### The fix — route the mid-loop solve through the existing conditioning ladder
+#
+# Two additive commits, no tolerance or gate weakened:
+#
+#   - `f9d6ed7` routes [`solve_dso!`](@ref)'s MID-LOOP (`strict = false`) solve through
+#     [`solve_with_retry!`](@ref)`(dso.model; dual = false, allow_almost = true)` instead
+#     of calling `assert_solved!` directly. `MOI.NUMERICAL_ERROR` was already a member of
+#     `RETRYABLE_STATUSES`; the mid-loop branch was simply bypassing the ladder the
+#     project already ships. Rescue lands at rung 2 (`static_regularization_constant =>
+#     1e-6`).
+#   - `d099821` makes [`build_dso_opt`](@ref) snapshot the as-built ladder attributes into
+#     `ctx.meta[:ladder_baseline]` once, before any solve can touch the model, and
+#     `solve_dso!` restores that snapshot immediately before the FINAL/converged
+#     (`check_exact = true`) solve — so the PUBLISHED solve always runs at the factory's
+#     own conditioning, never an inherited mid-loop escalation.
+#
+# This cannot contaminate the published transactive price: the ADMM DADP is the OUTER
+# multiplier `λ` (`dadp == λ` inside [`solve_admm`](@ref)), never a dual read off
+# `dso.model`, and every `DsoOpt` consumer downstream reads primals only. Convergence
+# itself is unchanged — every measured environment (rescued and native) reaches the same
+# 58 iterations, with welfare agreeing to roughly `2e-9` relative across toolchains.
+#
+# ### Regression posture
+#
+# `test/test_admm_knifeedge_canary.jl` (tags `[:admm, :canary]`) hard-asserts
+# `r.iters == 58` and `isapprox(r.welfare, -4822.903616694139; rtol = 1e-6, atol = 1e-3)`
+# on the IEEE-13 fixture, and only REPORTS — never asserts — whether the ladder fired,
+# because that legitimately differs by toolchain (it fires on 1.10/1.11/1.12.5, not on
+# 1.12.7's native convergence path) and asserting it would be permanently red on one
+# side. The prior test-level retry wrapper (`AdmmRetryFixtures`, `test/fixtures_retry.jl`)
+# was retired: it re-called with no input perturbation, so it could never rescue a
+# deterministic failure, never fired in CI, and its broad `catch` matched every
+# `assert_solved!` failure — including a genuine `INFEASIBLE` — so it could have masked a
+# real regression instead of this production-code fix.
