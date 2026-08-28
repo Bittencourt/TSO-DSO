@@ -25,7 +25,7 @@ No active milestone. Run `/gsd:new-milestone` to define the next one.
 | v1.0 Operational Transactive-Energy Core | 1–9 | 43/43 | Complete | 2026-07-20 |
 | v2.0 Stackelberg-Nash TSO–DSO Planning Game | 10–14 | 13/13 | Complete | 2026-07-24 |
 | v2.1 Validation & Reproduction | 15–18 | 14/14 | Complete | 2026-07-26 |
-| v3.0 Research Extension Rungs | 19–25 | 43/41 | Complete (1 gap accepted) | 2026-08-24 |
+| v3.0 Research Extension Rungs | 19–25 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 
 ## Deferred / Future-Milestone Notes
 
