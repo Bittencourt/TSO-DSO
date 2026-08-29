@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 Milestone: none active (v1.0, v2.0, v2.1, v3.0 all shipped — see ROADMAP.md)
 Status: between milestones — run /gsd:new-milestone to scope the next one
-CI: green on 9ed6185 (run 32910604313, all 5 jobs) — first green main since baaa94f (2026-07-27)
+CI: green on 1d96d44 (run 33267030424, all 5 jobs, 2026-08-29) — restored by quick task 260829-jzz after f44ada4 broke the 1.10/1.11 manifests and 1.12 Aqua gate (previous green: 9ed6185, run 32910604313)
 Last activity: 2026-08-25 -- CI-failure remediation landed as quick tasks + one debug session
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
