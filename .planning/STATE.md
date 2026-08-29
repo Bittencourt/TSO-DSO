@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Research Extension Rungs (shipped 2026-08-24)
 status: "between milestones — run /gsd:new-milestone to scope the next one"
-stopped_at: Completed quick task 260825-w5a (retired the no-op AdmmRetryFixtures test-level retry wrapper)
-last_updated: "2026-08-26T04:25:39.870Z"
-last_activity: 2026-08-25 -- CI-failure remediation landed as quick tasks + one debug session
+stopped_at: Completed quick task 260829-jzz (fixed CI red after f44ada4 — CairoMakie weakdep restored, Manifest-v1.12 reverted)
+last_updated: "2026-08-29T17:55:00.000Z"
+last_activity: 2026-08-29 -- CI-failure remediation: restored CairoMakie weakdep + reverted Manifest-v1.12 (quick task 260829-jzz, commit bed47c6)
 progress:
   total_phases: 7
   completed_phases: 7
@@ -84,6 +84,7 @@ ignoring whitespace and commas. Promoting it into the CI format job is task B2.
 | 260823-gea | Phase-18 owed corrections — per-stage try/catch + optimizer kwarg in repro_stability_check.jl (item 5 CLOSED); golden-band re-derivation left OPEN, fit_baseline hits ALMOST_OPTIMAL at 3/5 points | 2026-08-23 | 56f007f | [260823-gea-close-the-two-owed-v2-1-phase-18-correct](./quick/260823-gea-close-the-two-owed-v2-1-phase-18-correct/) |
 | 260824-vct | Fix Julia soft-scope bug in test_stochastic_welfare.jl's D-06 PF-04 gate scan (let-wrapped scan state; verified gate trips at pv_scale=2.0, 2/2 consecutive runs, 0 soft-scope warnings) | 2026-08-24 | d8e8999 | [260824-vct-fix-julia-soft-scope-bug-in-test-stochas](./quick/260824-vct-fix-julia-soft-scope-bug-in-test-stochas/) |
 | 260825-w5a | Retire the no-op AdmmRetryFixtures test-level retry wrapper (deleted test/fixtures_retry.jl, unwrapped all 3 call sites, measured on Julia 1.10 that the production solve_with_retry! ladder alone rescues all 3) | 2026-08-26 | 5725f7f | [260825-w5a-retire-or-repair-the-no-op-admmretryfixt](./quick/260825-w5a-retire-or-repair-the-no-op-admmretryfixt/) |
+| 260829-jzz | Fix CI red after f44ada4 — restore CairoMakie weakdep + revert Manifest-v1.12 (kills 1.10/1.11 buildpkg manifest error AND 1.12 Aqua stale-deps/persistent-tasks failures; verified locally on all three Julia versions) | 2026-08-29 | bed47c6 | [260829-jzz-fix-ci-restore-cairomakie-weakdep-and-re](./quick/260829-jzz-fix-ci-restore-cairomakie-weakdep-and-re/) |
 
 ## Deferred Items
 
