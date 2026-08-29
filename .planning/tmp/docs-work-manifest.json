@@ -1,0 +1,22 @@
+{
+  "canonical_queue": [
+    { "type": "readme", "resolved_path": "README.md", "mode": "update", "preservation_mode": "supplement-surgical", "wave": 1, "status": "completed", "commit": "9f347c3" },
+    { "type": "custom-landing", "resolved_path": "docs/src/index.md", "mode": "update", "preservation_mode": "supplement-surgical", "wave": 1, "status": "completed", "commit": "9f347c3" }
+  ],
+  "review_queue": [
+    { "path": "docs/src/api.md", "type": "hand-written", "status": "pending_review", "note": "verify exports coverage; CI checkdocs=:exports is the authoritative gate" },
+    { "path": "docs/writeups/README.md", "type": "hand-written", "status": "reviewed_current" },
+    { "path": "docs/make.jl", "type": "config", "status": "reviewed_current", "note": "all 13 literate pages registered" },
+    { "path": "docs/src/generated/*", "type": "build-artifact", "status": "do_not_touch" }
+  ],
+  "gap_queue": [
+    { "description": "JuliaFormatter CI failure on origin/main (unformatted files from scripts/writeups reorg)", "output_path": null, "status": "completed", "commit": "d65a2e6" },
+    { "description": "Full local Documenter build must pass before push", "output_path": null, "status": "completed" },
+    { "description": "Push local main (19+ commits) so gh-pages redeploys corrected assumptions page", "output_path": null, "status": "completed", "note": "dev deployed from 9f347c3; v2.1.1 tagged; gh-pages layout normalized (96ee40f); stable advanced to v2.1.1 and live-verified" }
+  ],
+  "notes": {
+    "julia_112_ci_failure": "known IEEE-13 ADMM Clarabel flake (Phase 16-04 measured 55%), not a regression",
+    "caution": "no edits to generated files; no pinned goldens/numbers; preserve 'directional, public-data' and 'a converged equilibrium' language"
+  },
+  "created_at": "2026-07-26T00:00:00Z"
+}
