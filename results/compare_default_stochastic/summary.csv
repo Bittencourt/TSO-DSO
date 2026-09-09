@@ -1,0 +1,16 @@
+key,value,note
+T,9.0,horizon (hours)
+seed,42.0,master seed (both runs)
+default_welfare,-538.8475100160589,deterministic :centralized run (own disjoint profile draw)
+default_exact_maxgap,1.0646384171056363e-8,"PF-04 certificate, default run"
+default_solve_s,51.267977261,"wall time, default run"
+stoch_S,5.0,in-sample scenario count
+stoch_insample_welfare,-538.7162581282422,probability-weighted extensive-form objective
+stoch_exact_maxgap_max,3.6415883071425523e-9,"max over per-scenario PF-04 certificates (gated independently, D-06)"
+stoch_expected_dadp_mean,3.253686339420884,"mean of the derived E[DADP] summary (not a constraint-backed price, D-07)"
+oos_realized_welfare,-538.7522475069767,uniform mean over FEASIBLE held-out draws
+oos_welfare_gap,-0.03598937873448449,realized − in-sample (D-09)
+oos_n_infeasible,0.0,held-out draws infeasible vs committed schedule (WR-05)
+oos_H,10.0,held-out draw count
+stoch_solve_s,9.592313286,"wall time, stochastic run (extensive form + 10 held-out re-solves)"
+dadp_spread_max,0.1273970562276423,max over hours of (max−min scenario DADP)
