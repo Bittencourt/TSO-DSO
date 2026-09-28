@@ -164,6 +164,78 @@ end
     end
 end
 
+@testitem "aggregator: flexible-load members (Thermostatic/Deferrable) draw q = p*tanφ into :Rq (FIX-05)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    T = 6
+    bus = 2
+    φ_agg = 0.9
+    φ_override = 0.75
+    Tout = fill(25.0, T)
+    tanφ_agg = TSODSO.reactive_factor(φ_agg)
+    tanφ_override = TSODSO.reactive_factor(φ_override)
+
+    # (1) A Thermostatic ALONE in a minimal aggregator uses the AGGREGATOR's φ (no
+    # per-device override set). Its own p[t] draws q = p*tanφ into :Rq (thesis eq. 3.23,
+    # FIX-05) — inspect the AffExpr terms map exactly like the q_inject byte-identity
+    # item above.
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+    agg_therm = Aggregator(bus, φ_agg, [therm], fill(0.0, T))
+    ctx_therm = ModelContext(Model())
+    res_therm = contribute!(agg_therm, ctx_therm; T = T)
+    p_therm = res_therm.vars[1].p
+    for t in 1:T
+        @test isapprox(
+            get(res_therm.q_inject[t].terms, p_therm[t], 0.0),
+            -tanφ_agg;
+            atol = 1e-9,
+        )
+    end
+
+    # (2) A Deferrable ALONE in a minimal aggregator, same story.
+    defer = Deferrable(bus, 1, T, 1.0, 1.0, 1.0)
+    agg_defer = Aggregator(bus, φ_agg, [defer], fill(0.0, T))
+    ctx_defer = ModelContext(Model())
+    res_defer = contribute!(agg_defer, ctx_defer; T = T)
+    p_defer = res_defer.vars[1].p
+    for t in 1:T
+        @test isapprox(
+            get(res_defer.q_inject[t].terms, p_defer[t], 0.0),
+            -tanφ_agg;
+            atol = 1e-9,
+        )
+    end
+
+    # (3) φ-OVERRIDE case: a Thermostatic with its OWN φ override inside an aggregator
+    # with a DIFFERENT φ uses the device's override, not the aggregator's φ.
+    therm_ov = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0,
+        0.5,
+        Tout;
+        φ = φ_override,
+    )
+    agg_ov = Aggregator(bus, φ_agg, [therm_ov], fill(0.0, T))
+    ctx_ov = ModelContext(Model())
+    res_ov = contribute!(agg_ov, ctx_ov; T = T)
+    p_therm_ov = res_ov.vars[1].p
+    for t in 1:T
+        @test isapprox(
+            get(res_ov.q_inject[t].terms, p_therm_ov[t], 0.0),
+            -tanφ_override;
+            atol = 1e-9,
+        )
+    end
+end
+
 @testitem "aggregator: constructor + horizon guards (DEV-05)" tags = [:aggregator] begin
     using TSODSO
     using JuMP
