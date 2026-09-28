@@ -55,11 +55,15 @@ which this still captures. All quantities are in the single model per-unit syste
   - `b::T` — utility curvature, `b > 0` required for concavity (eq. 3.12).
   - `E_min::T` — must-complete energy floor (thesis `E_min`, eq. 3.4); keyword, default `0`;
     the total draw satisfies `Σ p ≥ E_min`; require `0 ≤ E_min ≤ E`.
+  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23,
+    FIX-05); `nothing` (default) falls back to the aggregator's own `φ` when this device is
+    rolled up by an [`Aggregator`](@ref). A non-`nothing` value must lie in `(0, 1]`.
 
 Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
 the window is inconsistent (`t_start < 1` or `t_end < t_start`), when the energy budget is
 infeasible/negative (`E < 0` or `E > Pmax·window_length`) — the temporal-infeasibility
-guard, threat T-03-07 — or when the floor is out of band (`E_min < 0` or `E_min > E`).
+guard, threat T-03-07 — when the floor is out of band (`E_min < 0` or `E_min > E`), or when
+a supplied `φ` override lies outside `(0, 1]` (thesis eq. 3.23).
 """
 struct Deferrable{T <: Real} <: AbstractDevice
     bus::Int
@@ -69,6 +73,7 @@ struct Deferrable{T <: Real} <: AbstractDevice
     Pmax::T
     b::T
     E_min::T
+    φ::Union{Nothing, T}
 
     function Deferrable(
         bus::Int,
@@ -78,6 +83,7 @@ struct Deferrable{T <: Real} <: AbstractDevice
         Pmax::T,
         b::T;
         E_min::T = zero(T),
+        φ::Union{Nothing, T} = nothing,
     ) where {T <: Real}
         # Concavity guard (thesis eq. 3.12, b > 0): a non-positive curvature makes the
         # utility convex → welfare maximization unbounded/non-convex. Threat T-03-06.
@@ -120,12 +126,26 @@ struct Deferrable{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        return new{T}(bus, t_start, t_end, E, Pmax, b, E_min)
+        # Power-factor override guard (thesis eq. 3.23, FIX-05): mirrors Aggregator's own
+        # φ ∈ (0,1] guard, applied only when a non-nothing override is supplied.
+        if φ !== nothing && !(zero(T) < φ <= one(T))
+            throw(
+                ArgumentError(
+                    "Deferrable power-factor override φ must lie in (0, 1] " *
+                    "(thesis eq. 3.23); got φ=$φ",
+                ),
+            )
+        end
+        return new{T}(bus, t_start, t_end, E, Pmax, b, E_min, φ)
     end
 end
 
+# A Deferrable load's own consumption draws power-factor reactive power via the
+# Aggregator roll-up (thesis eq. 3.23, FIX-05).
+is_flexible_load(::Deferrable) = true
+
 """
-    Deferrable(bus, t_start, t_end, E, Pmax, b; E_min = 0)
+    Deferrable(bus, t_start, t_end, E, Pmax, b; E_min = 0, φ = nothing)
 
 Convenience outer constructor (IN-01): PROMOTEs the numeric parameters `E`, `Pmax`, `b`,
 `E_min` to a common `Real` type before delegating to the inner constructor, so a natural
@@ -134,6 +154,12 @@ mixed-type call (e.g. an integer budget among `Float64`s) just works instead of 
 purely elastic deferrable load); pass `E_min > 0` for a must-complete task. When `E`,
 `Pmax`, `b` already share a type and `E_min` is omitted, the inner constructor is strictly
 more specific and is selected directly (no promotion, no recursion).
+
+The OPTIONAL keyword `φ` (thesis eq. 3.23, FIX-05) is an optional per-device power-factor
+override; it defaults to `nothing` (falling back to the aggregator's own `φ` at roll-up
+time) and is NOT included in the `promote` call above since it may be `nothing` — a
+supplied `Real` override is separately converted into the common promoted type, while
+`nothing` passes through unchanged.
 """
 function Deferrable(
     bus::Integer,
@@ -143,9 +169,20 @@ function Deferrable(
     Pmax::Real,
     b::Real;
     E_min::Real = 0,
+    φ::Union{Nothing, Real} = nothing,
 )
     Ep, Pmaxp, bp, Eminp = promote(E, Pmax, b, E_min)
-    return Deferrable(Int(bus), Int(t_start), Int(t_end), Ep, Pmaxp, bp; E_min = Eminp)
+    φp = φ === nothing ? nothing : convert(typeof(Ep), φ)
+    return Deferrable(
+        Int(bus),
+        Int(t_start),
+        Int(t_end),
+        Ep,
+        Pmaxp,
+        bp;
+        E_min = Eminp,
+        φ = φp,
+    )
 end
 
 """

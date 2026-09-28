@@ -104,18 +104,28 @@ end
     Tout = fill(25.0, T)
     Ppv = fill(0.2, T)
 
-    # (a) BYTE-IDENTITY: a FRESH Thermostatic + PVBattery aggregator (mirrors the
-    # existing "sole :Rp/:Rq writer" fixture exactly) — no member device carries
-    # q_inject, so :Rq's device-reactive contribution must be zero per t. MPC-01 (D-08)
-    # widened Pdc into a genuine Parameter (Pdc_param), so the inelastic-demand term is
-    # now an AffExpr TERM referencing Pdc_param[t] (coefficient −tanφ, constant 0.0)
-    # rather than a bare numeric constant — the byte-identical-default invariant is on
-    # the EVALUATED value (Pdc_param defaults to the exact prior literal Pdc[t]), not on
-    # the raw `.constant`/`.terms` shape.
-    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+    # (a) BYTE-IDENTITY: a FRESH PVBattery-only aggregator — a member with NEITHER a
+    # genuine `q_inject` field NOR `is_flexible_load(d) == true` (PVBattery is
+    # active-only per Assumption A3), so :Rq's device-reactive contribution must be
+    # zero per t. MPC-01 (D-08) widened Pdc into a genuine Parameter (Pdc_param), so the
+    # inelastic-demand term is now an AffExpr TERM referencing Pdc_param[t] (coefficient
+    # −tanφ, constant 0.0) rather than a bare numeric constant — the byte-identical-
+    # default invariant is on the EVALUATED value (Pdc_param defaults to the exact prior
+    # literal Pdc[t]), not on the raw `.constant`/`.terms` shape.
+    #
+    # DEVIATION (FIX-05, plan 26-04): this sub-case previously used a Thermostatic +
+    # PVBattery pair (mirroring the "sole :Rp/:Rq writer" fixture). Since FIX-05 makes
+    # `is_flexible_load(::Thermostatic) == true`, a Thermostatic member NOW correctly
+    # draws q = p*tanφ into q_inject (thesis eq. 3.23) — so `q_inject[t] == zero(AffExpr)`
+    # is no longer the right assertion for a Thermostatic-bearing aggregator. Swapped to
+    # a SECOND `PVBattery` (both active-only, neither carries `q_inject` nor is a
+    # flexible load) to keep testing the ORIGINAL "no q_inject field present" byte-
+    # identity property this sub-case is actually about, independent of FIX-05's new
+    # flexible-load reactive draw (covered separately by the new FIX-05 @testitem below).
     batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
+    batt2 = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
 
-    agg_no4q = Aggregator(bus, φ, [therm, batt], Pdc)
+    agg_no4q = Aggregator(bus, φ, [batt, batt2], Pdc)
     ctx_no4q = ModelContext(Model())
     res_no4q = contribute!(agg_no4q, ctx_no4q; T = T)
     Rq_no4q = ctx_no4q.residuals[:Rq]
@@ -132,10 +142,14 @@ end
         @test res_no4q.q_inject[t] == zero(AffExpr)
     end
 
-    # (b) SUMMATION: a SECOND aggregator at the SAME bus with the SAME Thermostatic plus
-    # a FourQuadBESS (valid asymmetric Pch_max/Pdch_max/Smax/η/λ triple) — proving the
-    # roll-up genuinely wires the device's own q[t] variable into :Rq and into the
-    # returned q_inject total (CR-01: tests passing != mechanism live).
+    # (b) SUMMATION: an aggregator with a Thermostatic plus a FourQuadBESS (valid
+    # asymmetric Pch_max/Pdch_max/Smax/η/λ triple) — proving the roll-up genuinely wires
+    # the device's own q[t] variable into :Rq and into the returned q_inject total
+    # (CR-01: tests passing != mechanism live), ADDITIVELY alongside the Thermostatic's
+    # own FIX-05 power-factor reactive draw (a DIFFERENT AffExpr term, on p_therm[t] —
+    # the assertions below target ONLY the q_var[t] coefficient, so they hold whether or
+    # not the Thermostatic term is also present).
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
     bess = FourQuadBESS(bus, 0.95, 1.0, 0.3, 0.3, 0.4, 0.0, 1.0, 0.5, 1.0, 2.0, 3.0)
 
     agg_4q = Aggregator(bus, φ, [therm, bess], Pdc)
@@ -161,6 +175,78 @@ end
         # constant — the load-bearing "genuinely wired" assertion (T-19-09).
         @test res_4q.q_inject[t] isa AffExpr
         @test isapprox(get(res_4q.q_inject[t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
+    end
+end
+
+@testitem "aggregator: flexible-load members (Thermostatic/Deferrable) draw q = p*tanφ into :Rq (FIX-05)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    T = 6
+    bus = 2
+    φ_agg = 0.9
+    φ_override = 0.75
+    Tout = fill(25.0, T)
+    tanφ_agg = TSODSO.reactive_factor(φ_agg)
+    tanφ_override = TSODSO.reactive_factor(φ_override)
+
+    # (1) A Thermostatic ALONE in a minimal aggregator uses the AGGREGATOR's φ (no
+    # per-device override set). Its own p[t] draws q = p*tanφ into :Rq (thesis eq. 3.23,
+    # FIX-05) — inspect the AffExpr terms map exactly like the q_inject byte-identity
+    # item above.
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
+    agg_therm = Aggregator(bus, φ_agg, [therm], fill(0.0, T))
+    ctx_therm = ModelContext(Model())
+    res_therm = contribute!(agg_therm, ctx_therm; T = T)
+    p_therm = res_therm.vars[1].p
+    for t in 1:T
+        @test isapprox(
+            get(res_therm.q_inject[t].terms, p_therm[t], 0.0),
+            -tanφ_agg;
+            atol = 1e-9,
+        )
+    end
+
+    # (2) A Deferrable ALONE in a minimal aggregator, same story.
+    defer = Deferrable(bus, 1, T, 1.0, 1.0, 1.0)
+    agg_defer = Aggregator(bus, φ_agg, [defer], fill(0.0, T))
+    ctx_defer = ModelContext(Model())
+    res_defer = contribute!(agg_defer, ctx_defer; T = T)
+    p_defer = res_defer.vars[1].p
+    for t in 1:T
+        @test isapprox(
+            get(res_defer.q_inject[t].terms, p_defer[t], 0.0),
+            -tanφ_agg;
+            atol = 1e-9,
+        )
+    end
+
+    # (3) φ-OVERRIDE case: a Thermostatic with its OWN φ override inside an aggregator
+    # with a DIFFERENT φ uses the device's override, not the aggregator's φ.
+    therm_ov = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0,
+        0.5,
+        Tout;
+        φ = φ_override,
+    )
+    agg_ov = Aggregator(bus, φ_agg, [therm_ov], fill(0.0, T))
+    ctx_ov = ModelContext(Model())
+    res_ov = contribute!(agg_ov, ctx_ov; T = T)
+    p_therm_ov = res_ov.vars[1].p
+    for t in 1:T
+        @test isapprox(
+            get(res_ov.q_inject[t].terms, p_therm_ov[t], 0.0),
+            -tanφ_override;
+            atol = 1e-9,
+        )
     end
 end
 

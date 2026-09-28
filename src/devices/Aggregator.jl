@@ -9,10 +9,12 @@
 # parameter profile `Pdc` for its houses. `contribute!(agg, ctx; T)` drives each
 # device once, sums their active contributions into a single net injection (3.22),
 # derives the net reactive injection q = −P_dc·tan(arccos φ) from the load power
-# factor (3.23; PV/battery are active-only, A3), injects BOTH into :Rp/:Rq at its
-# bus, and adds the summed device utility to the objective (3.21). RESOLVED design
-# (RESEARCH Q1): the Aggregator is the SOLE :Rp/:Rq writer; devices return their
-# `(; vars, p_inject, utility)` terms and never touch the network.
+# factor (3.23; PV/battery are active-only, A3) PLUS the power-factor reactive draw
+# of any FLEXIBLE-LOAD member's own consumption (`is_flexible_load`, FIX-05; a
+# per-device φ override takes precedence over `agg.φ` when set), injects BOTH into
+# :Rp/:Rq at its bus, and adds the summed device utility to the objective (3.21).
+# RESOLVED design (RESEARCH Q1): the Aggregator is the SOLE :Rp/:Rq writer; devices
+# return their `(; vars, p_inject, utility)` terms and never touch the network.
 
 using JuMP
 
@@ -124,7 +126,12 @@ Roll the aggregator's member devices into the single nodal quantities the networ
     field (MESH-04, D-09 — today, only `FourQuadBESS`), its per-`t` reactive injection is
     additionally summed into a `q_inject` accumulator via a `hasproperty` guard; a device
     lacking the field contributes zero, so this accumulator is byte-identical to `zero`
-    when no such device is present;
+    when no such device is present. If a member device is a FLEXIBLE LOAD
+    (`is_flexible_load(d) == true` — [`Thermostatic`](@ref)/[`Deferrable`](@ref), FIX-05),
+    its OWN power-factor reactive draw `res.p_inject[t] * tan(arccos φ_used)` (thesis eq.
+    3.23) is ADDITIONALLY summed into the same `q_inject` accumulator, where `φ_used` is
+    the device's own `φ` override when set, else `agg.φ`; a non-flexible-load device
+    (e.g. `PVBattery`, active-only per Assumption A3) contributes nothing here;
  2. injects, per `t`, ONE net active `Σ_d p_inject_d[t] − P_dc[t]` into `:Rp` (3.22;
     inelastic demand is a negative parameter injection, A4) and ONE net reactive
     `− P_dc[t]·tan(arccos φ) + Σ_d q_inject_d[t]` into `:Rq` (3.23 plus the D-10 additive
@@ -197,6 +204,20 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
         if hasproperty(res, :q_inject)
             for t in 1:T
                 q_inject[t] += res.q_inject[t]
+            end
+        end
+        # Flexible-load power-factor reactive draw (thesis eq. 3.23, FIX-05): a
+        # flexible-load member's OWN consumption also draws q = p*tan(arccos φ_used),
+        # φ_used being the device's own override `φ` when set, else the aggregator's
+        # `φ`. Additive alongside the existing `q_inject` accumulation above (a device
+        # may carry BOTH a genuine q_inject AND be a flexible load, though no current
+        # device does). Active-only DERs (e.g. PVBattery, Assumption A3) are untouched
+        # — `is_flexible_load` defaults to false for them.
+        if is_flexible_load(d)
+            φ_used = hasproperty(d, :φ) && d.φ !== nothing ? d.φ : agg.φ
+            tanφ_d = reactive_factor(φ_used)
+            for t in 1:T
+                q_inject[t] += res.p_inject[t] * tanφ_d
             end
         end
         utility += res.utility
