@@ -48,6 +48,29 @@
 #   volt   = Σ_path −2·r·(β + γ)         (voltage-drop propagation of the v/v̂ bound pressure,
 #                                          3.33/3.43; 0 when no voltage headroom is engaged).
 #
+# [Phase 26 / FIX-01-02 re-certification, plan 26-06] Phase 26 flipped `ConvexBranchFlow`'s
+# default `cpydrop` coefficient (v̂ ≥ v, the Gan-Low direction) — only the coefficient of the
+# branch's OWN r·l / x·l loss term inside cpydrop changed; P's own coefficient (the quantity
+# this file's KKT-stationarity derivation actually depends on) did NOT change. This formula
+# was therefore EMPIRICALLY RE-VERIFIED UNCHANGED (no code edit) against the corrected default
+# by re-running the SAME hard sum-to-price assertion below on three regimes, to at/near machine
+# precision:
+#   - congestion-binding:  IEEE-13 ground solve (`test_pricing_dlmp.jl`'s
+#     "four components SUM to the DADP on IEEE-13" item) — worst residual 6.2e-12;
+#   - voltage-engaged:     the high-PV over-voltage solve (`test_pricing_dlmp.jl`'s
+#     "SUM holds and voltage is engaged" item) — worst residual 1.8e-15;
+#   - uncongested/in-bound: a lossy, uncongested, in-bound 2-bus (Deferrable load, r=0.01,
+#     x=0.02, smax=10 — the SAME fixture as this plan's own `<verify>` smoke test) —
+#     residual 2.2e-16, congestion/voltage both ≈1e-13 (≈0), matching the intended regime of
+#     `test_pricing_dlmp.jl`'s "≈0 congestion/voltage on an uncongested in-bound 2-bus" item.
+# The THIRD item's own PVBattery-based fixture could not be re-exercised as originally written:
+# bisection (see phase 26 `deferred-items.md`) confirms a PRE-EXISTING, UNRELATED SOCP-exactness
+# regression introduced by Plan 26-03's battery SOC-horizon fix (commit cfa7e6e, FIX-04) breaks
+# that specific fixture's `assert_socp_exact!` gate before `decompose_dlmp` is ever reached —
+# confirmed NOT caused by this file's cpydrop-consuming formula or by the cpydrop sign flip
+# itself (the flip alone, commit f677965, leaves that fixture exact to residual 0.0). Out of
+# this plan's file scope (`src/pricing/dlmp.jl` only); logged, not fixed, here.
+#
 # Consumes ONLY the additive Phase-4 seam registered by plan 05-01 (`:cone`, `:vdrop`,
 # `:cpydrop`, `:smax`, and `ctx.meta[:pf_vars]`) plus the always-present `:balance_p` — no
 # change to `solve_welfare` or the power-flow formulations.
