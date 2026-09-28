@@ -56,7 +56,9 @@ full set of per-step device Parameters plan 21-01 widened) over a FIXED window l
     `:Tin` entries NEVER carry a terminal target).
   - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int, Pdc_param)`, the per-step inelastic-demand forecast Parameter.
   - `terminal_soc::Bool` — the build-time toggle recorded for introspection; `true` means every
-    `:soc`-kind `ic_handles` entry carries a live hard equality `soc[H] == terminal_param`.
+    `:soc`-kind `ic_handles` entry carries a live hard equality `soc[H + 1] == terminal_param`
+    (Phase 26 FIX-04: the device's own `soc` vector is now `1:(H+1)` long, so the terminal
+    target is `soc[H + 1]`, not `soc[H]`).
 """
 struct MpcWindow{F}
     model::Model
@@ -79,11 +81,12 @@ end
 Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model EXACTLY ONCE
 (MPC-01), mirroring [`build_planning_oracle`](@ref)'s build-once SHAPE:
 
- 1. Boundary guards (mirror `build_planning_oracle`): empty `aggregators`, `H < 1`,
-    `terminal_soc && H == 1` (WR-03: the terminal equality would double-pin `soc[1]` against
-    the IC — infeasible whenever measured state ≠ terminal target; the terminal toggle
-    requires `H ≥ 2`), or an aggregator bus outside `1:length(feeder.buses)` each throw
-    `ArgumentError` before any model assembly.
+ 1. Boundary guards (mirror `build_planning_oracle`): empty `aggregators`, `H < 1`, or an
+    aggregator bus outside `1:length(feeder.buses)` each throw `ArgumentError` before any
+    model assembly. (Phase 26 FIX-04: the former WR-03 `H == 1` terminal-toggle guard is GONE
+    — since the device's own `soc` vector is now `1:(H+1)` long, the terminal target
+    `soc[H + 1]` is a DIFFERENT index from the IC `soc[1]` even at `H = 1`, so the double-pin
+    collision this guard existed to prevent no longer arises structurally.)
  2. `model = Model(select_optimizer(problem_class(pf)))` — FORMULATION-GENERIC routing, never
     hardcoding `SOCP()`. Registers the same SOC→nonconvex-quad cross-solver bridges as
     `solve_welfare`/`build_planning_oracle` (dormant on the primary Clarabel path).
@@ -108,7 +111,9 @@ Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model E
     a `Tin0` Parameter (Thermostatic) gets a `:Tin`-kind entry with `terminal_param = nothing`
     ALWAYS (D-07: no terminal condition on thermostatic temperature, ever). When
     `terminal_soc = true`, every `:soc`-kind entry ALSO gets a hard equality
-    `soc[H] == terminal_param` against a NEW anonymous Parameter defaulting to the device's own
+    `soc[H + 1] == terminal_param` (Phase 26 FIX-04: the device's own `soc` vector is now
+    `1:(H+1)` long, so the terminal target is `soc[H + 1]`, a DIFFERENT index from the IC
+    `soc[1]` even at `H = 1`) against a NEW anonymous Parameter defaulting to the device's own
     IC value (a benign, always-overridden default) — the ONE build-time toggle this plan
     permits (MPC-02, D-06). When `terminal_soc = false`, no such constraint exists in the model
     at all — a genuinely different model, never a silent no-op.
@@ -133,20 +138,13 @@ function build_mpc_window(
     isempty(aggregators) &&
         throw(ArgumentError("build_mpc_window needs at least one aggregator"))
     H >= 1 || throw(ArgumentError("build_mpc_window requires H ≥ 1, got H=$H"))
-    # WR-03: with H == 1 the terminal toggle would add BOTH `soc[1] == soc0` (the IC
-    # Parameter) and `soc[H] == terminal_param` on the SAME variable — infeasible at the
-    # first re-solve where the measured state differs from the terminal target. Reject the
-    # configuration loudly at build time instead of a cryptic mid-loop solver failure.
-    if terminal_soc && H == 1
-        throw(
-            ArgumentError(
-                "build_mpc_window: terminal_soc = true requires H ≥ 2 — at H = 1 the " *
-                "terminal equality soc[H] == terminal_param double-pins the SAME variable " *
-                "the initial condition soc[1] == soc0 already pins, which is infeasible " *
-                "whenever the measured state differs from the terminal target (MPC-02, D-06)",
-            ),
-        )
-    end
+    # Phase 26 FIX-04: the former WR-03 `H == 1` terminal-toggle guard is REMOVED. It existed
+    # because the terminal toggle added BOTH `soc[1] == soc0` (the IC Parameter) and
+    # `soc[H] == terminal_param` on the SAME variable at H=1 — infeasible whenever the measured
+    # state differs from the terminal target. Now that PVBattery/FourQuadBESS's own `soc`
+    # vector is `1:(H+1)` long (closing the SOC recursion over the whole horizon), the terminal
+    # target is `soc[H + 1]`, a DIFFERENT index from `soc[1]` even at `H = 1` — the double-pin
+    # collision this guard existed to prevent no longer arises structurally.
 
     N = length(feeder.buses)
     for (k, agg) in enumerate(aggregators)
@@ -240,7 +238,9 @@ function build_mpc_window(
                             base_name = "soc_terminal_bus$(bus)",
                             set = Parameter(parameter_value(v.soc0)),
                         )
-                        @constraint(model, v.soc[H] == term)
+                        # Phase 26 FIX-04: target soc[H + 1], not soc[H] — the device's own
+                        # soc vector is now 1:(H+1) long (see the struct docstring above).
+                        @constraint(model, v.soc[H + 1] == term)
                         push!(
                             ic_handles,
                             (; bus, kind = :soc, ic_param = v.soc0, terminal_param = term),

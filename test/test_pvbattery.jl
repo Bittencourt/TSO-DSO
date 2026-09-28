@@ -235,10 +235,13 @@ end
     # Adding a binary or complementarity constraint would break QP convexity + Phase-5
     # pricing. RESEARCH §Anti-Patterns forbids it — assert it never happened.
     vars = all_variables(model)
-    # p_ch, p_dch, soc, pv_used (WR-04) = 4T, PLUS the MPC-01 Parameter widening: soc0 (1
+    # p_ch, p_dch, pv_used (WR-04) = 3T, PLUS soc which is now T+1 long (Phase 26 FIX-04:
+    # this golden MOVED from 5T + 1 to 5T + 2 — soc grew by one variable to close the SOC
+    # recursion over the whole horizon), PLUS the MPC-01 Parameter widening: soc0 (1
     # Parameter) + Ppv_param (T Parameters) — Parameters ARE VariableRefs in JuMP, counted
-    # here too (5T + 1), even though their DEFAULT solved behavior is byte-identical.
-    @test length(vars) == 5T + 1
+    # here too: 3T + (T+1) + 1 + T = 5T + 2, even though their DEFAULT solved behavior is
+    # byte-identical.
+    @test length(vars) == 5T + 2
     @test count(is_binary, vars) == 0
     @test count(is_integer, vars) == 0
 
@@ -277,4 +280,27 @@ end
     # (c) The old literal-bound code path is genuinely gone: pv_used carries NO upper
     # bound anymore (the PV limit moved to a Ppv_param-backed constraint, Pitfall 4).
     @test has_upper_bound(res.vars.pv_used[1]) == false
+end
+
+@testitem "battery: soc0=Emin + hour-T discharge incentive drives p_dch[T] to zero (FIX-04)" tags =
+    [:battery] begin
+    using TSODSO, JuMP
+
+    # Phase 26 FIX-04 regression: soc is now T+1 long with the recursion closing over the
+    # WHOLE horizon (t = 1:T), so p_dch[T] always appears in a constraint. Starting at
+    # soc0 = Emin with zero PV availability (no charging headroom, physically enforced by
+    # Ppv ≡ 0 — Assumption A6, charge from PV only) and a heavy hour-T discharge incentive,
+    # the optimal p_dch[T] must be driven to (numerically) zero — the bound
+    # soc[T+1] >= Emin makes any further discharge infeasible.
+    T = 3
+    bat = TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 0.0, 1.0, 4.0, 9.0, fill(0.0, T))
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    res = TSODSO.contribute!(bat, ctx; T = T)
+
+    price = [0.0, 0.0, 100.0]
+    @objective(model, Max, res.utility + sum(price[t] * res.p_inject[t] for t in 1:T))
+    TSODSO.assert_solved!(model; dual = false, allow_local = false)
+
+    @test value(res.vars.p_dch[T]) < 1e-6
 end

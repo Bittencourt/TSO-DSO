@@ -2,8 +2,9 @@
 #
 # Seam: src/models/stochastic_welfare.jl (STOCH-03, D-09). `StochasticOosHarness` +
 # `build_stochastic_oos_harness` generalize `MpcWindow`'s build-once/`Parameter`-pin shape
-# (`src/models/mpc_window.jl`'s anonymous `soc[H] == terminal_param` idiom) from a single
-# terminal target to the FULL `p_ch`/`p_dch` trajectory, pinning a caller-supplied in-sample
+# (`src/models/mpc_window.jl`'s anonymous `soc[H + 1] == terminal_param` idiom; Phase 26
+# FIX-04 retargeted this from `soc[H]` once the device's own `soc` vector grew to `1:(H+1)`)
+# from a single terminal target to the FULL `p_ch`/`p_dch` trajectory, pinning a caller-supplied in-sample
 # battery schedule while leaving PV/demand/ambient Parameters free to re-slide per held-out
 # scenario. `solve_stochastic_oos_step!` is a one-line `solve_with_retry!` delegation
 # (`dual = false` — STOCH-03's scope is the realized welfare only). Items tagged
