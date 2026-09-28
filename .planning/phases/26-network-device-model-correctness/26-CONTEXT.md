@@ -64,6 +64,34 @@ fixes is re-derived in-phase; suite green at close. Thesis-reproduction restatem
 - Every moved golden: test comment with old→new and cause + table in phase SUMMARY; full suite
   green at phase close; no silent re-pin.
 
+### Post-merge amendment (2026-09-28, user decisions after 26-POSTMERGE-TRIAGE.md)
+- PM-01 Default formulation: KEEP the Gan–Low copy as default, but RELABEL honestly everywhere
+  (docstrings, verdict docs page, 26-02 SUMMARY claims): it is Gan–Low's *modified* OPF — a
+  conservative restriction on the UPPER voltage band, exact by theorem (≈0.05% welfare loss on
+  EXACT-04 vs AC optimum) — NOT "a genuine relaxation". The old thesis-literal copy restricts the
+  LOWER band. Restate the v2.1 high-PV knife-edge finding (no longer reproduces under default).
+  Re-force the Phase-20/21 escalation tests with `thesis_literal=true` (or a plain-relaxation /
+  new fixture) so their trigger is preserved.
+- PM-02 Battery ch/dch overlap with η<1 (not strictly dominated): DOCUMENT as a finding (docs +
+  STATE), make the AC oracle REPORT simultaneous charge/discharge as a diagnostic instead of
+  throwing, and add a backlog item for a proper complementarity treatment. No utility change now.
+- PM-03 ADMM DSO-OPT: use the LIVE reactive coupling by default whenever flexible loads are
+  present so ADMM matches the centralized solve (guard must cover flexible loads, not just devices);
+  re-pin the knife-edge canary only after this.
+- PM-04 Mesh diamond: pin φ=1.0 in the angle-certificate fixture AND record "reactive load breaks
+  exactness on the uniform diamond" as a finding.
+- PM-05 Exactness-gate precision artifacts: tighten Clarabel `tol_gap` per-fixture (5e-10
+  precedent); the gate itself (atol) is unchanged.
+- PM-06 Re-pin legitimately moved goldens with old→new + cause (IEEE-13 h16 DADP 1.402→0.394,
+  |V₉[16]| 1.0436→1.0360, FIT ratio 0.643→0.772, exporter surplus 65.6→47.4, canary) — restated
+  in Phase 28.
+- PM-07 Add the thesis 3.37 receiving-end limit to `ACPowerFlow` too, so AC-vs-SOCP comparisons
+  share a feasible set.
+- PM-08 Call-site fixes: unregister `Prev`/`Qrev`/`smax_rev` in `stochastic_welfare.jl`
+  scenario builds; `decompose_dlmp` must account for the `:smax_rev` dual; `run_mpc`
+  (`src/experiments/mpc_loop.jl`) + `test_mpc_terminal` target `soc_da[t+H]` over `1:T+1`;
+  re-examine the `mpc_step ≤ H−1` guard rationale after FIX-04.
+
 ### Claude's Discretion
 - Naming of the thesis-literal variant (kwarg vs separate type), exact fixture impedances,
   docs page location.
