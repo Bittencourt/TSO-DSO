@@ -29,8 +29,15 @@ fixes is re-derived in-phase; suite green at close. Thesis-reproduction restatem
   `v̂ ≥ V²min` a restriction under the reversed form), citing thesis PDF + Gan–Low 2015.
 - Regression: 3-bus heavy-load low-voltage feeder; Ipopt AC-feasible; default SOCP feasible;
   thesis-literal variant infeasible (documents the restriction); assert v̂ ≥ v at the solution.
-- Share ONE cpydrop helper between `ConvexBranchFlow` and `RestrictedBranchFlow`; a test checks
-  the docstring's "load-bearing bound" claim against the actual constraint.
+- Share ONE cpydrop helper between `ConvexBranchFlow` and `RestrictedBranchFlow` WHERE the forms
+  coincide (discretionary); a test checks the docstring's "load-bearing bound" claim against the
+  actual constraint.
+- [Post-research amendment 2026-09-28] Fix mechanism = RESEARCH Option A: local per-branch sign
+  flip inside the existing `cpydrop` constraint (provably yields v̂ ≥ v, keeps MeshedFlow's
+  tree-order-free delegation). Option B (Restricted's tree-based shadow machinery) rejected.
+  `decompose_dlmp` cpydrop-dual coefficient must be re-derived empirically in THIS phase.
+- `Interruptible` converts from self-injecting (Variant-1) to the aggregatable Variant-2 contract
+  so the Aggregator stays sole `:Rq` writer (follows from the FIX-05 decision).
 
 ### Reverse thermal limit (eq. 3.37) — FIX-03
 - Receiving-end cone `‖(P−r·l, Q−x·l)‖ ≤ S̄` on every limited branch in every formulation with a
