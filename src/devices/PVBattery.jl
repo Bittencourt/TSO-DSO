@@ -63,10 +63,11 @@ it numerically after every solve:
 
 # Aggregatable-device contract (LOCKED: aggregator-as-writer)
 
-Unlike the self-injecting `Interruptible`, this device is network-agnostic to the point of
-writing NOTHING to `ctx.residuals` and calling NO `add_to_objective!`. `contribute!`
-RETURNS `(; vars, p_inject, utility)`; the `Aggregator` (DEV-05) is the sole `:Rp`/`:Rq`
-writer and the utility roll-up point.
+Like every other device (`Thermostatic`, `Deferrable`, `Interruptible` — the latter
+converted from a former self-injecting contract in plan 26-07), this device is
+network-agnostic to the point of writing NOTHING to `ctx.residuals` and calling NO
+`add_to_objective!`. `contribute!` RETURNS `(; vars, p_inject, utility)`; the
+`Aggregator` (DEV-05) is the sole `:Rp`/`:Rq` writer and the utility roll-up point.
 
 # Fields
 

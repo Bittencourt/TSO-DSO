@@ -21,37 +21,14 @@ generator, storage — the full library lands in Phase 3). Concrete subtypes imp
 device adds a METHOD to that shared generic rather than introducing a competing one
 (the `contribute!` generic is reused, never redeclared here).
 
-# The device contract — TWO variants
+# The device contract — AGGREGATABLE device (aggregator-as-writer)
 
 A device method `contribute!(dev::AbstractDevice, ctx::ModelContext; T::Int)` ALWAYS
 creates the device's own decision variables plus their temporal/bound constraints on
-`ctx.model`. Two contract variants then differ ONLY in how the device's power injection
-and utility reach the network — a difference driven by whether the device is grouped
-under an [`Aggregator`](@ref) (DEV-05, the network-facing writer):
-
-## Variant 1 — SELF-INJECTING device (Phase-2 pattern)
-
-Used by [`Interruptible`](@ref). The device is itself the network writer:
-
- 1. it ADDS a signed affine power injection into the shared per-bus/per-time nodal-balance
-    residual `ctx.residuals[:Rp]` (and the reactive residual only for reactive-capable
-    devices) via the indexed `add_to_residual!(ctx, :Rp, bus, t, expr)` seam — a consumed
-    load is a NEGATIVE injection (`-p`), matching the toy-DC sign convention;
- 2. it ADDS its concave-quadratic utility into the welfare objective via
-    [`add_to_objective!`](@ref) (a `QuadExpr`, so curvature is retained — utility must
-    NOT be routed through the affine residual, which would drop the quadratic term); and
- 3. it RETURNS its own per-device decision-variable container (e.g. the served-power
-    vector `p`). Unlike an `AbstractPowerFlow` `contribute!` (which returns `ctx`), a
-    self-injecting device returns its variables so the assembly can stash them
-    (`ctx.meta[:device_vars]`) for post-solve inspection (IN-02).
-
-A self-injecting device holds a `bus::Int` and writes at that bus.
-
-## Variant 2 — AGGREGATABLE device (Phase-3 pattern, aggregator-as-writer)
-
-Used by [`Thermostatic`](@ref), [`Deferrable`](@ref), and [`PVBattery`](@ref) (DEV-05,
-RESEARCH Q1 resolved). The device is network-agnostic to the point of touching NEITHER
-the residual NOR the objective:
+`ctx.model`. Every live device ([`Interruptible`](@ref), [`Thermostatic`](@ref),
+[`Deferrable`](@ref), [`PVBattery`](@ref), `FourQuadBESS`) is network-agnostic to the
+point of touching NEITHER the residual NOR the objective — an [`Aggregator`](@ref)
+(DEV-05) is the SOLE network-facing `:Rp`/`:Rq` writer:
 
  1. it builds ONLY its variables/constraints on `ctx.model`;
  2. it writes NOTHING to `ctx.residuals` and calls NO `add_to_objective!`; and
@@ -63,6 +40,13 @@ the residual NOR the objective:
     ONE summed utility at the aggregator's bus (thesis eqs. 3.21-3.23).
 
 An aggregatable device need not even hold a bus — the aggregator supplies it.
+
+(Historical note: an earlier "Variant 1 — self-injecting" contract, where a device wrote
+directly to `ctx.residuals`/`ctx.meta[:objective]` and returned a bare variable container,
+existed for `Interruptible` only. Plan 26-07 (FIX-05) converted `Interruptible` to this
+Variant-2 contract, so Variant 1 has zero live members and has been removed from this
+docstring; `src/models/linear_solve.jl`'s device roll-up loop was updated in the same plan
+to perform the residual/objective write generically for any Variant-2 device.)
 
 ### Widened contract: optional `q_inject` field (MESH-04, D-09)
 
@@ -96,7 +80,8 @@ Trait identifying devices whose CONSUMPTION should draw power-factor reactive po
 the Aggregator roll-up (thesis eq. 3.23), distinguishing them from active-only DERs
 (PV/battery, per Assumption A3) which never draw power-factor reactive power regardless of
 this trait. Defaults to `false` for any device; a flexible-load device
-([`Thermostatic`](@ref), [`Deferrable`](@ref)) overrides it to `true` (FIX-05).
+([`Interruptible`](@ref), [`Thermostatic`](@ref), [`Deferrable`](@ref)) overrides it to
+`true` (FIX-05).
 """
 is_flexible_load(::AbstractDevice) = false
 
