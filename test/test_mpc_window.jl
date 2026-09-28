@@ -27,19 +27,17 @@
     # H < 1.
     @test_throws ArgumentError build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = 0)
 
-    # WR-03: terminal_soc = true at H = 1 double-pins soc[1] (IC + terminal equality on the
-    # SAME variable) — rejected loudly at build time, not a cryptic mid-loop infeasibility.
-    @test_throws ArgumentError build_mpc_window(
-        feeder,
-        ConvexBranchFlow(),
-        aggs;
-        H = 1,
-        terminal_soc = true,
-    )
-    # ... while H = 1 WITHOUT the terminal toggle stays buildable (a degenerate but legal
-    # single-hour window).
-    o1 = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = 1, terminal_soc = false)
+    # Phase 26 FIX-04: the former WR-03 double-pin (terminal_soc = true at H = 1 pinning
+    # soc[1] both as the IC and the terminal target) no longer exists — the device's own
+    # `soc` vector is now `1:(H+1)` long, so the terminal target `soc[H + 1]` is a DIFFERENT
+    # index from `soc[1]` even at `H = 1`. H = 1, terminal_soc = true now builds successfully.
+    o1 = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = 1, terminal_soc = true)
     @test o1 isa TSODSO.MpcWindow
+
+    # ... and H = 1 WITHOUT the terminal toggle stays buildable too (a degenerate but legal
+    # single-hour window).
+    o1b = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = 1, terminal_soc = false)
+    @test o1b isa TSODSO.MpcWindow
 
     # Aggregator bus outside 1:length(feeder.buses) (feeder has 2 buses; 99 is out of range).
     out_of_range = [TSODSO.Aggregator(99, 0.9, aggs[1].devices, aggs[1].Pdc)]

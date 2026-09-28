@@ -292,7 +292,9 @@ end
     p_ch, p_dch, soc, q = res.vars.p_ch, res.vars.p_dch, res.vars.soc, res.vars.q
     @test length(p_ch) == T
     @test length(p_dch) == T
-    @test length(soc) == T
+    # Phase 26 FIX-04: this golden MOVED from T to T + 1 — soc now closes the SOC recursion
+    # over the WHOLE horizon (t = 1:T), linking hour-T charge/discharge into the horizon.
+    @test length(soc) == T + 1
     @test length(q) == T
     for t in 1:T
         @test lower_bound(p_ch[t]) == 0.0
@@ -305,6 +307,46 @@ end
         @test !has_lower_bound(q[t])
         @test !has_upper_bound(q[t])
     end
+    # soc[T + 1] (Phase 26 FIX-04) carries the SAME Emin/Emax band as every other soc entry.
+    @test lower_bound(soc[T + 1]) == d.Emin
+    @test upper_bound(soc[T + 1]) == d.Emax
+end
+
+@testitem "fourquadbess: soc0=Emin + hour-T discharge incentive drives p_dch[T] to zero (FIX-04)" tags =
+    [:fourquadbess] begin
+    using TSODSO, JuMP
+
+    # Phase 26 FIX-04 regression: soc is now T+1 long with the recursion closing over the
+    # WHOLE horizon (t = 1:T), so p_dch[T] always appears in a constraint.
+    #
+    # Deviation (Rule 1 — fixture fix, discovered executing this task): UNLIKE PVBattery
+    # (whose charge is physically capped at zero by Ppv ≡ 0, Assumption A6), FourQuadBESS
+    # may charge from the GRID (D-02, no PV-availability limit) and its App. C utility
+    # gives a genuine, price-independent marginal benefit to charging whenever there is
+    # bound headroom — so with the SAME literal fixture PVBattery uses, FourQuadBESS
+    # rationally pre-charges at hours 1:(T-1) (paying a real, book-kept utility cost) to
+    # unlock hour-T discharge, and p_dch[T] converges to Pdch_max, NOT zero (verified
+    # numerically: 4.999999998, not < 1e-6). That discharge is no longer FREE energy — it
+    # is backed by real prior charging the closed recursion now correctly accounts for —
+    # so it does not indicate the fix failed; it means this device's own economics don't
+    # produce "no prior charging headroom" the way PVBattery's PV=0 constraint does.
+    # To isolate the SOC-closing property itself (independent of FourQuadBESS's own
+    # rational-pre-charging economics), this test EXOGENOUSLY imposes "no prior charging
+    # headroom" via an explicit equality constraint on p_ch[1:(T-1)] == 0, mirroring the
+    # PHYSICAL constraint PVBattery gets for free from Ppv ≡ 0.
+    T = 3
+    d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 5.0, 5.0, 6.0, 0.0, 10.0, 0.0, 1.0, 4.0, 9.0)
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    res = TSODSO.contribute!(d, ctx; T = T)
+
+    @constraint(model, [t = 1:(T - 1)], res.vars.p_ch[t] == 0.0)
+
+    price = [0.0, 0.0, 100.0]
+    @objective(model, Max, res.utility + sum(price[t] * res.p_inject[t] for t in 1:T))
+    TSODSO.assert_solved!(model; dual = false, allow_local = false)
+
+    @test value(res.vars.p_dch[T]) < 1e-6
 end
 
 @testitem "fourquadbess: contribute! has NO pv_used/Ppv coupling anywhere (D-01/D-02)" tags =
