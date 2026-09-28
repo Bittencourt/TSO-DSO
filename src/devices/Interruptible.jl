@@ -1,15 +1,16 @@
 # src/devices/Interruptible.jl
 #
 # SEAM: interruptible (curtailable) flexible-load device (DEV-03).
-# OWNER: plan 02-03.
+# OWNER: plan 02-03. Converted Variant-1 -> Variant-2 by plan 26-07 (FIX-05).
 #
-# The first `AbstractDevice` implementation: an interruptible load with a concave
-# quadratic utility of served power. Implements the dispatched `contribute!` — adds its
-# per-time served-power variable and bounds to `ctx.model`, injects `-p[t]` (a
-# consumption withdrawal) into `ctx.residuals[:Rp]` at its bus via the indexed
-# `add_to_residual!`, and accumulates `Σ_t (a·p[t] - (b/2)·p[t]^2)` into the welfare
-# objective via `add_to_objective!`. Traces thesis eqs. 3.10 (utility) and 3.13–3.14
-# (flexibility limits).
+# An `AbstractDevice` implementing an interruptible load with a concave quadratic
+# utility of served power. Conforms to the AGGREGATABLE-DEVICE contract
+# (aggregator-as-writer, DEV-05): `contribute!` builds its bounded served-power
+# variable on `ctx.model` and RETURNS `(; vars, p_inject, utility)` — it writes
+# NOTHING to `ctx.residuals` and calls NO `add_to_objective!`. The Aggregator is the
+# sole network-facing writer (RESEARCH Q1), including the power-factor reactive draw
+# on this device's own consumption (thesis eq. 3.23, FIX-05, `is_flexible_load`).
+# Traces thesis eqs. 3.10 (utility) and 3.13–3.14 (flexibility limits).
 
 using JuMP
 
@@ -83,42 +84,47 @@ no recursion).
 Interruptible(bus::Integer, Pmin::Real, Pmax::Real, a::Real, b::Real) =
     Interruptible(Int(bus), promote(Pmin, Pmax, a, b)...)
 
+# An Interruptible load's own consumption draws power-factor reactive power via the
+# Aggregator roll-up (thesis eq. 3.23, FIX-05). Interruptible is the ONLY former
+# Variant-1 (self-injecting) device; converting it to Variant-2 (this file, plan 26-07)
+# lets it share this trait with Thermostatic/Deferrable.
+is_flexible_load(::Interruptible) = true
+
 """
     contribute!(d::Interruptible, ctx::ModelContext; T::Int=1)
 
 Contribute the interruptible load into the shared model context over the horizon
-`t = 1:T`, meeting the network ONLY at the affine `:Rp` residual seam:
+`t = 1:T`, conforming to the AGGREGATABLE-DEVICE contract (aggregator-as-writer,
+DEV-05). It:
 
- 1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` on `ctx.model`;
- 2. ADDS a NEGATIVE injection `−p[t]` into `ctx.residuals[:Rp]` at cell `(d.bus, t)` via
-    the indexed `add_to_residual!` — a consumed load is a withdrawal, i.e. it REDUCES the
-    net injection (sign matches the toy-DC convention; threat T-02-01); and
- 3. ADDS the concave utility `Σ_t ( a·p[t] − (b/2)·p[t]² )` (eq. 3.10) into the welfare
-    objective via [`add_to_objective!`](@ref). The utility flows to the QuadExpr
-    objective accumulator — NOT the affine residual — so its curvature is retained
-    (threat T-02-02, RESEARCH Pitfall 3).
+ 1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` on `ctx.model`
+    (eqs. 3.13–3.14 flexibility limits);
+ 2. builds the concave utility `Σ_t ( a·p[t] − (b/2)·p[t]² )` (eq. 3.10) as a `QuadExpr`,
+    so its curvature is retained (threat T-02-02, RESEARCH Pitfall 3); and
+ 3. RETURNS `(; vars = (; p), p_inject, utility)` where `p_inject[t] = −p[t]` is the
+    signed ACTIVE injection (a consumed load is a NEGATIVE injection — a withdrawal
+    reduces net injection, threat T-02-01 — matching the Deferrable/Thermostatic sign
+    convention).
 
-The device references only `d.bus` and `T`; it never touches the network topology, so the
-DC / LinDistFlow power-flow swap leaves this code untouched (success criterion 2).
+The device writes NOTHING to `ctx.residuals` and calls NO `add_to_objective!`: the
+Aggregator consumes this tuple and is the sole `:Rp`/`:Rq` writer. It references only
+`d.bus` and `T`; it never touches the network topology, so the DC / LinDistFlow
+power-flow swap leaves this code untouched (success criterion 2).
 """
 function contribute!(d::Interruptible, ctx::ModelContext; T::Int = 1)
     m = ctx.model
     # Bounded served-power variable per time step (eqs. 3.13–3.14 flexibility limits).
     p = @variable(m, [t = 1:T], lower_bound = d.Pmin, upper_bound = d.Pmax)
 
-    # Signed AFFINE injection into the price-bearing nodal-balance residual: a consumed
-    # load is a NEGATIVE net injection (−p). Only :Rp — the interruptible load carries no
-    # reactive term, so the reactive residual is never allocated (threat T-02-09).
-    for t in 1:T
-        add_to_residual!(ctx, :Rp, d.bus, t, -p[t])
-    end
-
     # Concave-quadratic utility (eq. 3.10) → the QuadExpr welfare accumulator. Keeping the
-    # −(b/2)p² sign preserves concavity; routing it here (not the residual) preserves
-    # curvature (Pitfall 3, threat T-02-02).
-    add_to_objective!(ctx, sum(d.a * p[t] - (d.b / 2) * p[t]^2 for t in 1:T))
+    # −(b/2)p² sign preserves concavity (Pitfall 3, threat T-02-02).
+    utility = sum(d.a * p[t] - (d.b / 2) * p[t]^2 for t in 1:T)
 
-    return p
+    # Signed ACTIVE injection: a consumed load is a NEGATIVE injection −p (unchanged
+    # sign convention; threat T-02-01). Returned to the aggregator, NOT written here.
+    p_inject = AffExpr[-p[t] for t in 1:T]
+
+    return (; vars = (; p), p_inject, utility)
 end
 
 export Interruptible
