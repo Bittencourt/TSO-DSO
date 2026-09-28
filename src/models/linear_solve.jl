@@ -28,9 +28,11 @@ the shared nodal-balance residual:
     duals); this file NEVER names a concrete solver (INFRA-02);
  2. wrap it in a [`ModelContext`](@ref); stash `feeder`/`T` in `ctx.meta`;
  3. let the power-flow formulation `contribute!` its branch/voltage terms into
-    `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`), and each device `contribute!` its
-    signed injection into `:Rp` plus its concave utility into `ctx.meta[:objective]` — the
-    device variables are stashed under `ctx.meta[:device_vars]`;
+    `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`); each device `contribute!`s its
+    Variant-2 aggregatable-device tuple `(; vars, p_inject, utility)` (DEV-05), and this
+    ASSEMBLY writes the returned `p_inject` into `:Rp` and the returned `utility` into
+    `ctx.meta[:objective]` itself, generically for ANY such device — the returned `vars`
+    are stashed under `ctx.meta[:device_vars]`;
  4. inject a frontier import `p_import[t] ≥ 0` at `feeder.root` (`+p_import`, mirroring the
     toy-DC convention) so the root balance closes; it is priced at `λ₀`;
  5. close EVERY residual present — `:Rp` always, `:Rq` only when `haskey(ctx.residuals, :Rq)`.
@@ -85,9 +87,23 @@ function solve_linear(
 
     # Formulation: subtract branch/voltage terms into :Rp (and :Rq for LinDistFlow).
     contribute!(pf, ctx, feeder; T = T)
-    # Devices: add signed injection into :Rp + concave utility into ctx.meta[:objective].
-    # Stash the returned per-device variables for post-solve inspection.
-    ctx.meta[:device_vars] = [contribute!(d, ctx; T = T) for d in devices]
+    # Devices: each is a Variant-2 aggregatable device (DEV-05) — it builds its own
+    # variables/constraints and returns `(; vars, p_inject, utility)`, writing NOTHING
+    # itself. This assembly is the network-facing writer here (mirroring Aggregator's own
+    # roll-up shape): explicitly add each device's signed injection into :Rp and its
+    # utility into ctx.meta[:objective], generalizing to ANY Variant-2-contract device
+    # with a `.bus` field (not just Interruptible specifically). Stash the returned
+    # per-device `vars` for post-solve inspection (IN-02).
+    device_vars = Any[]
+    for d in devices
+        res = contribute!(d, ctx; T = T)
+        for t in 1:T
+            add_to_residual!(ctx, :Rp, d.bus, t, res.p_inject[t])
+        end
+        add_to_objective!(ctx, res.utility)
+        push!(device_vars, res.vars)
+    end
+    ctx.meta[:device_vars] = device_vars
 
     # Frontier import at the root, priced at λ₀ (thesis §1). Injected like a device
     # (+p_import) so the root active balance closes — mirrors the toy-DC sign convention.
