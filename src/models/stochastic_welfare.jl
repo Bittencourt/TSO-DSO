@@ -489,9 +489,11 @@ export build_stochastic_welfare
 # `p_ch·p_dch = 0`; pinning `soc` directly would double-constrain the SAME recursion the
 # device's own `soc[1] == soc0` IC + recursion already drives once `p_ch`/`p_dch` are
 # pinned). This mirrors `build_mpc_window`'s own anonymous
-# `@variable(model, base_name = ..., set = Parameter(...))` + `@constraint(model, v.soc[H]
-# == term)` idiom (`src/models/mpc_window.jl`), generalized from a single terminal target
-# to the FULL per-step `p_ch`/`p_dch` trajectory. `solve_stochastic_oos_step!` is a
+# `@variable(model, base_name = ..., set = Parameter(...))` + `@constraint(model, v.soc[H + 1]
+# == term)` idiom (`src/models/mpc_window.jl`; Phase 26 FIX-04 retargeted this from `soc[H]`
+# to `soc[H + 1]` once the device's own `soc` vector grew to `1:(H+1)`), generalized from a
+# single terminal target to the FULL per-step `p_ch`/`p_dch` trajectory.
+# `solve_stochastic_oos_step!` is a
 # one-line `solve_with_retry!` delegation with `dual = false` — this harness never reports
 # a per-scenario DADP (STOCH-03's scope is the realized welfare only, per this plan's own
 # boundary against STOCH-02's in-sample pricing).
