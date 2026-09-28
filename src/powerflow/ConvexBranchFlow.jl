@@ -2,6 +2,7 @@
 #
 # SEAM: SOCP Convex Branch Flow (DistFlow SOC relaxation) power-flow formulation (PF-03).
 # OWNER: plan 04-02. Exactness-copy sign corrected by phase 26 plan 26-02 (FIX-01/02).
+# Receiving-end apparent-power limit (3.37) added by phase 26 plan 26-05 (FIX-03).
 #
 # The project's correctness keystone. A THIRD `AbstractPowerFlow` subtype implementing
 # the Baran–Wu / DistFlow branch-flow model relaxed to a Second-Order Cone Program,
@@ -11,7 +12,7 @@
 # current `l[b,t] ≥ 0`, the copy `v̂[j,t]`, the loss terms `−r·l` / `−x·l` in the affine
 # `:Rp`/`:Rq` balances (3.31/3.32), the true voltage drop with `+(r²+x²)·l` (3.33), the
 # copy drop (3.43), the rotated SOC cone `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()`
-# (3.39), and the apparent-power limits (3.36). Stashes
+# (3.39), and the sending-end/receiving-end apparent-power limits (3.36/3.37). Stashes
 # `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)` for the PF-04 exactness checker.
 #
 # FIX-01/02 (phase 26-02): the thesis's OWN text (page ~84) states that after imposing the
@@ -62,8 +63,11 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
   - 3.32 — per-bus reactive balance, now WITH the `−x·l` loss term (affine in `l`);
   - 3.33 — TRUE voltage drop `v_j = v_i − 2(rP+xQ) + (r²+x²)·l` (the loss-current term
     `+(r²+x²)·l` that `LinDistFlow` drops);
-  - 3.36 — forward apparent-power limit `P² + Q² ≤ S²max` (only where a real limit exists,
-    see `_SMAX_NO_LIMIT`);
+  - 3.36 — forward (sending-end) apparent-power limit `P² + Q² ≤ S²max` (only where a real
+    limit exists, see `_SMAX_NO_LIMIT`);
+  - 3.37 — receiving-end apparent-power limit (FIX-03, 26-05): `(P−r·l)² + (Q−x·l)² ≤ S²max`
+    on the SAME limited branches as 3.36, via the shared `Prev`/`Qrev` expressions (see
+    below) — a PV back-feed can violate this while 3.36 stays slack;
   - 3.39 — the SOC relaxation `l_ij·v_i ≥ P² + Q²`, written as a rotated second-order cone
     `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()` (‖x‖² ≤ 2·t·u ⇒ P²+Q² ≤ 2·(0.5l)·v = l·v);
   - 3.43 — the exactness-copy voltage drop. DEFAULT (`thesis_literal=false`, FIX-01/02):
@@ -77,7 +81,9 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
 Differences from [`LinDistFlow`](@ref) (which is this model with `l → 0`): adds the squared
 current `l[b,t] ≥ 0` and the exactness copy `v̂[j,t]`; the rotated SOC cone (3.39); the loss
 terms `−r·l`/`−x·l` in the balances; the `+(r²+x²)·l` term in the true drop; the copy drop
-(3.43); and the forward apparent-power limit (3.36).
+(3.43); the forward apparent-power limit (3.36); and the receiving-end apparent-power limit
+(3.37, FIX-03) — deliberately NOT added to `LinDistFlow`, where `l ≡ 0` makes 3.37 identical
+to 3.36.
 
 Why the exactness copy is not decorative (RESEARCH Pitfall 1 / Pattern 2): the true drop
 3.33 carries `+(r²+x²)·l`. Under the DEFAULT corrected copy drop (`v̂ ≥ v`), the LOAD-BEARING
@@ -95,6 +101,14 @@ Gan-Low-sourced claim, not a code bug. The DEFAULT here corrects the sign (`P̂ 
 `Q̂ = Q−x·l`) to match the thesis's stated intent; the literal (defective) formula remains an
 explicit opt-in via `thesis_literal=true`, clearly labelled a RESTRICTION (never the
 default).
+
+FIX-03 (26-05) / CONTEXT.md "share ONE cpydrop helper ... WHERE the forms coincide": the
+thesis 3.37 receiving-end power `(P−r·l, Q−x·l)` is algebraically IDENTICAL to `cpydrop`'s
+DEFAULT (`thesis_literal=false`) substitution above — both are now computed from ONE shared
+`Prev`/`Qrev` expression pair (defined once, before `cpydrop`), rather than duplicating the
+arithmetic inline a second time. `cpydrop`'s `thesis_literal=true` branch keeps its OWN,
+separate `P+r·l, Q+x·l` arithmetic — the forms genuinely diverge there, so it is NOT routed
+through `Prev`/`Qrev`.
 
 Pitfall 1 (off-by-square voltage): `v`/`v̂` are the SQUARE of the magnitude, so bounds are
 `vmin²`/`vmax²` and the root is fixed at `1.0` (= 1.0²).
@@ -144,8 +158,14 @@ Per branch/time it adds:
     FIX-01/02): `v̂[to] == v̂[from] − 2{r(P−rl) + x(Q−xl)}` (Gan-Low direction, `v̂ ≥ v`).
     Opt-in (`pf.thesis_literal=true`): `v̂[to] == v̂[from] − 2{r(P+rl) + x(Q+xl)}` (the
     literal, defective thesis formula, `v̂ ≤ v`);
-  - where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward apparent-power cone
-    `‖(P,Q)‖₂ ≤ smax` ⇒ `P²+Q² ≤ S²max` (thesis 3.36).
+  - where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward (sending-end)
+    apparent-power cone `‖(P,Q)‖₂ ≤ smax` ⇒ `P²+Q² ≤ S²max` (thesis 3.36);
+  - on the SAME limited branches, the receiving-end apparent-power cone (thesis 3.37,
+    FIX-03, 26-05) `‖(P−r·l, Q−x·l)‖₂ ≤ smax` ⇒ `(P−r·l)²+(Q−x·l)² ≤ S²max` — the
+    receiving-end power is the sending-end power minus the branch's own loss, computed from
+    the SAME shared `Prev`/`Qrev` expressions `cpydrop`'s default branch reads (CONTEXT.md's
+    "share ONE cpydrop helper" decision). Gated by the IDENTICAL filter as 3.36, so the two
+    cones appear or are omitted together per branch.
 
 Then accumulates the per-bus active balance into `ctx.residuals[:Rp]` (thesis 3.31) and the
 reactive balance into `:Rq` (thesis 3.32) via the INDEXED `add_to_residual!`. The incoming
@@ -212,23 +232,34 @@ function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1
     # loss+voltage DLMP component. PURELY ADDITIVE (same container, unchanged math).
     register_constraint!(ctx, :vdrop, vdrop)   # dual β feeds loss+voltage DLMP component (3.33)
 
-    # Exactness-copy voltage drop (thesis 3.43, FIX-01/02): substitute P̂ = P + sign·r·l,
-    # Q̂ = Q + sign·x·l into the copy recursion ⇒
-    # v̂_j = v̂_i − 2{ r(P + sign·r·l) + x(Q + sign·x·l) }. `sign = -1.0` (DEFAULT,
-    # thesis_literal=false) is the FIX-01/02-corrected Gan-Low direction (`v̂ ≥ v`, proven by
-    # a telescoping-sum argument along the root→j path — see
-    # docs/literate/convex_branch_flow.jl); `sign = +1.0` (thesis_literal=true) reproduces
-    # the LITERAL, defective thesis formula (`v̂ ≤ v`), an explicit opt-in RESTRICTION.
-    # Written purely in the ORIGINAL P, Q, l plus the single copy v̂ (no separate P̂/Q̂
-    # variables — RESEARCH Pattern 2).
-    sign = pf.thesis_literal ? 1.0 : -1.0
+    # FIX-03 (26-05) / CONTEXT.md "share ONE cpydrop helper ... WHERE the forms coincide":
+    # the thesis eq. 3.37 receiving-end power (P − r·l, Q − x·l) is ALWAYS in this
+    # (non-literal) direction, regardless of `thesis_literal` — and it is algebraically
+    # IDENTICAL to `cpydrop`'s default (`thesis_literal=false`) substitution. Defined ONCE,
+    # here, as a shared expression pair so BOTH `cpydrop`'s default branch (immediately
+    # below) and the new `smax_rev` cone (after `smax`) read the SAME arithmetic instead of
+    # duplicating it inline a second time. `cpydrop`'s `thesis_literal=true` branch keeps
+    # its OWN separate `P + r·l, Q + x·l` arithmetic — the forms genuinely diverge there, so
+    # nothing is force-shared.
+    @expression(m, Prev[b = 1:nB, t = 1:T], P[b, t] - B[b].r * l[b, t])
+    @expression(m, Qrev[b = 1:nB, t = 1:T], Q[b, t] - B[b].x * l[b, t])
+
+    # Exactness-copy voltage drop (thesis 3.43, FIX-01/02): substitute P̂/Q̂ into the copy
+    # recursion ⇒ v̂_j = v̂_i − 2{ r·P̂ + x·Q̂ }. DEFAULT (thesis_literal=false) reads the
+    # shared `Prev`/`Qrev` expressions above (P̂ = P − r·l, Q̂ = Q − x·l) — the FIX-01/02-
+    # corrected Gan-Low direction (`v̂ ≥ v`, proven by a telescoping-sum argument along the
+    # root→j path — see docs/literate/convex_branch_flow.jl). `thesis_literal=true` keeps
+    # its OWN, separate `P + r·l, Q + x·l` arithmetic (the LITERAL, defective thesis
+    # formula, `v̂ ≤ v`, an explicit opt-in RESTRICTION) — the two forms genuinely diverge
+    # here, so this branch does NOT read `Prev`/`Qrev`. Written purely in the ORIGINAL P, Q,
+    # l plus the single copy v̂ (no separate P̂/Q̂ variables — RESEARCH Pattern 2).
     @constraint(
         m,
         cpydrop[b = 1:nB, t = 1:T],
         v̂[B[b].to, t] ==
         v̂[B[b].from, t] - 2 * (
-            B[b].r * (P[b, t] + sign * B[b].r * l[b, t]) +
-            B[b].x * (Q[b, t] + sign * B[b].x * l[b, t])
+            B[b].r * (pf.thesis_literal ? P[b, t] + B[b].r * l[b, t] : Prev[b, t]) +
+            B[b].x * (pf.thesis_literal ? Q[b, t] + B[b].x * l[b, t] : Qrev[b, t])
         )
     )
     # PRICE-02 (05-01): register the exactness-copy drop (3.43) — its dual feeds the
@@ -254,6 +285,23 @@ function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1
         [B[b].smax, P[b, t], Q[b, t]] in SecondOrderCone()
     )
     register_constraint!(ctx, :smax, smax)   # dual ν = congestion DLMP component (3.36)
+
+    # FIX-03 (26-05): the receiving-end apparent-power limit (thesis 3.37),
+    # `P_{j,i}² + Q_{j,i}² ≤ S²max` ⟺ ‖(P−r·l, Q−x·l)‖₂ ≤ smax — algebraically the SAME
+    # `smax` bound as the sending-end cone above, applied to the receiving-end power via the
+    # shared `Prev`/`Qrev` expressions defined earlier (CONTEXT.md's "share ONE cpydrop
+    # helper ... WHERE the forms coincide" decision, extended here to this cone since
+    # `Prev`/`Qrev` are exactly `cpydrop`'s default-branch substitution). Gated by the
+    # IDENTICAL `B[b].smax < _SMAX_NO_LIMIT` filter as `:smax`, so the two cones are added
+    # or omitted together per branch — a PV back-feed through a limited branch can violate
+    # this receiving-end limit while the sending-end limit stays slack (thesis physics, not
+    # a flag: always on wherever `:smax` is).
+    @constraint(
+        m,
+        smax_rev[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
+        [B[b].smax, Prev[b, t], Qrev[b, t]] in SecondOrderCone()
+    )
+    register_constraint!(ctx, :smax_rev, smax_rev)   # dual = receiving-end congestion (3.37)
 
     # Per-bus active (3.31) and reactive (3.32) balances: inflow − outflow, accumulated into
     # the shared :Rp / :Rq via the indexed seam. The incoming branch (i,j) contributes
