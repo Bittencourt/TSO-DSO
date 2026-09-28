@@ -19,31 +19,48 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
-## Current Milestone: v3.0 Research Extension Rungs
+## Current Milestone: v4.0 Correctness & Depth
 
-**Goal:** Extend the validated two-layer framework along all five deferred research axes — each
-shipped as a minimal validated ladder rung (core capability + validation + literate doc), deferring
-deep parameter studies and paper-grade experiments to later milestones.
+**Goal:** Fix the modeling defects confirmed by the 2026-09-28 full-project quality audit, deepen
+the planning layer into a genuine bilevel TSO–DSO game on a real network, then restructure the
+orchestration layer and clean the codebase — correctness first, depth second, structure third,
+hygiene last.
 
 **Target features:**
-- **Overvoltage-capable relaxation** — a pricing-capable formulation for the high-PV overvoltage
-  regime where the SOCP relaxation is provably inexact (the v2.1 knife-edge finding), so the
-  framework can price the thesis's own motivating scenario instead of refusing.
-- **MPC / rolling-horizon / RTP** — closed-loop receding-horizon operation over the stateful devices
-  (SOC, temperature) via the SEAM-01 rolling-horizon stub, with rolling re-computed DADPs as a
-  real-time price signal, benchmarked against the perfect-foresight day-ahead solve.
-- **Stochastic PV/demand uncertainty** — scenario-based extensive-form welfare solve via the SEAM-01
-  multi-scenario hook (seeded Markov scenario trees), with stochastic DADP semantics documented.
-- **Meshed networks + 4Q-BESS** — meshed formulation slot filled with its own relaxation/exactness
-  treatment (the radial exactness proof does not carry over), four-quadrant BESS with a genuine
-  reactive decision variable, unlocking the live reactive dual-ascent deferred in v2.1.
-- **Discrete/integer investment expansion** — binary-expansion + integer/Lagrangian cuts in the
-  planning Benders layer, consciously lifting the PVAL-04 no-binaries guard (guard becomes scoped,
-  not deleted).
+- **Correctness fixes (operational + integer planning)** — reversed LinDistFlow exactness copy in
+  `ConvexBranchFlow` (v̂ ≤ v makes `v̂ ≥ V²min` a restriction, not a relaxation; verify thesis
+  eq. 3.43 against the PDF); battery terminal SOC (`p_dch[T]` is free energy); reverse thermal
+  limit (3.37); `corner_recourse` flat-profile Laporte–Louveaux cut invalid for T>1; flexible-load
+  reactive draw (3.23); non-physical DLMP loss/voltage labels; exactness-gate absolute floor;
+  uncertified FIT-baseline SOCP; MPC regret settled on forecast. Then re-pin goldens and re-run
+  the thesis reproduction.
+- **Planning depth** — a genuinely bilevel variant (TSO minimizes its own cost; DSO pays a tariff
+  π·z) that the BilevelJuMP oracle can discriminate from joint optimization; SOCP
+  (`ConvexBranchFlow`) on a multi-bus feeder inside the Benders loop with oracle-side feasibility
+  cuts and inexactness handling; derived (not user-supplied) α lower bounds; a Nash fixture with
+  interior caps that exposes GNE multiplicity (variational-equilibrium selection); refresh the
+  stale PSR N1–N2 mapping writeup.
+- **Architecture** — power-flow selector + strategy types in `Scenario` with `run(::Strategy, s)`
+  dispatch covering MPC and stochastic; `AbstractFeeder` supertype; one `close_balance!` helper
+  replacing 5 copies; split `solve_admm` and drop its `ConvexBranchFlow`-only typing; typed
+  `ModelContext` metadata; one consistent report-vs-throw result/status policy; narrow the
+  `mpc_loop` catch-alls.
+- **Hygiene** — strip plan/wave/review IDs from source comments (keep thesis-equation refs);
+  delete the inert SEAM-01 stubs and reactive-mode back-compat; trim generic exports; add a JET
+  check; `:slow` test tag split; quarantine flakes; rename `fixtures_phaseN`; archive one-off
+  scripts; drop the redundant root Manifest.
 
-**Scope discipline:** all five axes are must-haves; depth is capped at "minimal validated rung" per
-axis. Known interdependency: overvoltage-capable relaxation and meshed+4Q-BESS both touch the
-relaxation/exactness machinery — sequencing decided in the roadmap.
+**Scope discipline:** the v1–v3 "byte-identical default path" rule is **consciously relaxed** for
+the correctness track — fixes are expected to move pinned goldens and possibly the v2.1
+thesis-reproduction numbers; every moved golden is re-derived and its change explained, never
+silently re-pinned. Sequencing: Correctness → Planning depth → Architecture → Hygiene.
+
+## Shipped Milestone: v3.0 Research Extension Rungs (2026-08-24)
+
+Seven phases (19–25): 4Q-BESS + live reactive dual-ascent, overvoltage-capable restricted
+relaxation, closed-loop MPC/RTP, two-stage stochastic extensive form, meshed SOCP with an
+angle-recoverability certificate, discrete/integer investment via Laporte–Louveaux cuts, and the
+IEEE-8500 benchmark (memory wall characterized honestly). See `milestones/v3.0-ROADMAP.md`.
 
 ## Shipped Milestone: v2.1 Validation & Reproduction (2026-07-26)
 
@@ -116,18 +133,16 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ### Active
 
-*(v3.0 Research Extension Rungs — REQ-IDs defined in `.planning/REQUIREMENTS.md`)*
+*(v4.0 Correctness & Depth — REQ-IDs defined in `.planning/REQUIREMENTS.md`)*
 
-- Overvoltage-capable relaxation: price the high-PV overvoltage regime the SOCP relaxation
-  provably cannot (v2.1 EXACT-04 finding), with its own validity certificate.
-- MPC / rolling-horizon / RTP: closed-loop receding-horizon solve over stateful devices with
-  rolling DADPs, benchmarked against perfect foresight.
-- Stochastic PV/demand uncertainty: scenario-based extensive-form welfare solve with stochastic
-  DADP semantics.
-- Meshed + 4Q-BESS: meshed formulation with its own relaxation/exactness treatment; 4Q-BESS
-  reactive decision variable + live reactive dual-ascent.
-- Discrete/integer investment expansion: binary-expansion + integer/Lagrangian cuts; PVAL-04
-  no-binaries guard consciously scoped down, not deleted.
+- Correctness: fix the audit-confirmed operational and integer-planning modeling defects; re-pin
+  goldens and re-run the thesis reproduction with every change explained.
+- Planning depth: genuine bilevel TSO–DSO variant, SOCP-in-the-loop Benders on a multi-bus feeder,
+  derived bounds, GNE-multiplicity Nash fixture.
+- Architecture: declarative power-flow + strategy selection in `Scenario`, shared balance helper,
+  decomposed `solve_admm`, typed context, consistent status policy.
+- Hygiene: readable source (no process IDs), dead code removed, lean exports, JET + slow/fast
+  test split, flake quarantine, tidy scripts/manifests.
 
 ### Out of Scope
 
@@ -385,4 +400,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 — Phase 23 (Meshed Networks) complete*
+*Last updated: 2026-09-28 — Milestone v4.0 Correctness & Depth started (from the 2026-09-28 quality audit)*

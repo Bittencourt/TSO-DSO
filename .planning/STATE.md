@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Research Extension Rungs (shipped 2026-08-24)
-status: "between milestones — run /gsd:new-milestone to scope the next one"
-stopped_at: Completed quick task 260829-jzz (fixed CI red after f44ada4 — CairoMakie weakdep restored, Manifest-v1.12 reverted)
-last_updated: "2026-08-29T17:55:00.000Z"
-last_activity: 2026-08-29 -- CI-failure remediation: restored CairoMakie weakdep + reverted Manifest-v1.12 (quick task 260829-jzz, commit bed47c6)
+milestone: v4.0
+milestone_name: Correctness & Depth
+status: planning
+last_updated: "2026-09-28T15:18:43.672Z"
+last_activity: 2026-09-28
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 40
-  completed_plans: 43
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Milestone: none active (v1.0, v2.0, v2.1, v3.0 all shipped — see ROADMAP.md)
-Status: between milestones — run /gsd:new-milestone to scope the next one
-CI: green on 1d96d44 (run 33267030424, all 5 jobs, 2026-08-29) — restored by quick task 260829-jzz after f44ada4 broke the 1.10/1.11 manifests and 1.12 Aqua gate (previous green: 9ed6185, run 32910604313)
-Last activity: 2026-08-25 -- CI-failure remediation landed as quick tasks + one debug session
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-09-28 — Milestone v4.0 started
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
