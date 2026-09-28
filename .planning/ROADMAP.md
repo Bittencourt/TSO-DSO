@@ -83,7 +83,17 @@ restriction or free hour-T energy.
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
      for a later phase and none is silently re-pinned.
-**Plans**: TBD
+**Plans:** 8 plans (3 waves)
+
+Plans:
+- [ ] 26-01-PLAN.md — Baseline full-suite measurement before any fix lands
+- [ ] 26-02-PLAN.md — FIX-01/02: cpydrop sign flip to the Gan-Low direction, thesis-literal opt-in, verdict docs, 3-bus regression
+- [ ] 26-03-PLAN.md — FIX-04: battery SOC horizon linking (PVBattery, FourQuadBESS, mpc_window terminal wiring)
+- [ ] 26-04-PLAN.md — FIX-05: Aggregator flexible-load reactive draw (Thermostatic, Deferrable) + is_flexible_load trait
+- [ ] 26-05-PLAN.md — FIX-03: receiving-end apparent-power limit (:smax_rev) + PV back-feed fixture
+- [ ] 26-06-PLAN.md — DLMP voltage-component coefficient re-derivation after the cpydrop sign flip
+- [ ] 26-07-PLAN.md — FIX-05: Interruptible Variant-1→2 conversion + solve_linear.jl fix
+- [ ] 26-08-PLAN.md — SC-6 golden-move audit + final full-suite green
 
 ### Phase 27: Integer Planning & Pricing Certificate Correctness
 **Goal**: Researcher can trust the integer Benders recourse for T>1, the DLMP component names, the
