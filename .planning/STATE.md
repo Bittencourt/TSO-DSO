@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: planning
-last_updated: "2026-09-28T15:18:43.672Z"
-last_activity: 2026-09-28
+status: executing
+stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
+last_updated: "2026-09-28T17:04:33.449Z"
+last_activity: 2026-09-28 -- Phase 26 planning complete
 progress:
   total_phases: 12
   completed_phases: 0
-  total_plans: 0
+  total_plans: 8
   completed_plans: 0
   percent: 0
 ---
@@ -26,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 Phase: 26 of 37 (Network & Device Model Correctness)
 Plan: — (not yet planned)
-Status: Roadmap drafted, awaiting user approval
-Last activity: 2026-09-28 — ROADMAP.md + REQUIREMENTS.md traceability written for v4.0 (12 phases, 37/37 requirements mapped)
+Status: Ready to execute
+Last activity: 2026-09-28 -- Phase 26 planning complete
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -102,6 +103,7 @@ All three items below are now IN SCOPE for v4.0 (no longer deferred):
 - **SCALE-STRETCH** -> ARCH-10, Phase 35 (IEEE-8500 Scale After Refactor).
 - **Phase-18 `fit_baseline` convergence** -> FIX-09, Phase 27 (Integer Planning & Pricing
   Certificate Correctness).
+
 - **MESH-06 advisory** -> ARCH-06, Phase 34 (ADMM Decomposition, Meshed Reactive & Status/
   Exception Policy).
 
@@ -224,19 +226,25 @@ Recent decisions affecting current work:
   phase — full coverage, no orphans. See REQUIREMENTS.md Traceability table.
 
   Sequencing (user-approved): Correctness -> Planning depth -> Architecture -> Hygiene.
+
   - FIX-01 (thesis 3.43 verdict) precedes FIX-02 within Phase 26; FIX-11 (goldens/repro
     restatement) is its own capstone Phase 28, strictly after all other FIX items land.
+
   - FIX-06 (integer LL T>1 fix) sits in Phase 27 with the pricing/certificate fixes — a
     planning-code fix kept in the correctness track because it must precede BILEV-07 (Phase 31).
+
   - BILEV-03/04/05 (Phase 30) depend on the corrected network model (FIX-01..03, Phase 26).
     BILEV-01/02 (Phase 29, genuine bilevel) is sequenced before Phase 30 as a distinct concern.
     BILEV-08 (docs refresh) closes out Phase 31, the last planning-depth phase.
+
   - ARCH-01/02 (Phase 32) is one coherent declarative-Scenario phase. ARCH-05 precedes ARCH-06
     within Phase 34 (solve_admm split before meshed+live-reactive composition). ARCH-10
     (Phase 35) runs after all architecture refactors (Phases 32-34).
+
   - HYG-01..03/07 (Phase 36, code/export cleanup) is sequenced after every refactor phase so
     comment/dead-code cleanup isn't redone; HYG-04..06/08 (Phase 37, test infra & repo hygiene)
     is kept as a separate phase per the user's split.
+
   - Absorbed into v4.0 (removed from ROADMAP.md's Deferred notes): SCALE-STRETCH -> ARCH-10,
     Phase-18 `fit_baseline` convergence -> FIX-09, MESH-06 composition -> ARCH-06, integer N>1
     Nash -> BILEV-07.
