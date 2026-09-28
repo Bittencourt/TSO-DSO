@@ -4,8 +4,8 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
-last_updated: "2026-09-28T17:04:33.449Z"
-last_activity: 2026-09-28 -- Phase 26 planning complete
+last_updated: "2026-09-28T17:05:04.961Z"
+last_activity: 2026-09-28 -- Phase 26 execution started
 progress:
   total_phases: 12
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** v4.0 Correctness & Depth — Phase 26 (Network & Device Model Correctness), first of 12 phases (26-37). ROADMAP.md drafted 2026-09-28, awaiting approval.
+**Current focus:** Phase 26 — Network & Device Model Correctness
 
 ## Current Position
 
-Phase: 26 of 37 (Network & Device Model Correctness)
-Plan: — (not yet planned)
-Status: Ready to execute
-Last activity: 2026-09-28 -- Phase 26 planning complete
+Phase: 26 (Network & Device Model Correctness) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 26
+Last activity: 2026-09-28 -- Phase 26 execution started
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
