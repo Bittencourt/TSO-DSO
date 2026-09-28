@@ -63,10 +63,11 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [ ] **FIX-10**: MPC realized welfare and regret are settled against the truth plant: realized PV
   clips charging, true-state propagation is checked for feasibility, and settlement uses the true
   import. The forecast-settled number is kept only as a separately labelled diagnostic.
-- [ ] **FIX-11**: After FIX-01..10, every affected golden is re-derived with an explanation, and
-  the v2.1 thesis reproduction (DSO-surplus sign flip, welfare-magnitude gap) and the v2.1/v3.0
-  SOCP-inexactness findings are re-run and restated in the literate docs and PROJECT.md, including
-  any that changed.
+- [ ] **FIX-11**: Each correctness phase re-derives the goldens it moves, in the same phase and
+  with an explanation, so the suite stays green. After FIX-01..10 a cross-phase golden audit
+  confirms none was silently re-pinned, and the v2.1 thesis reproduction (DSO-surplus sign flip,
+  welfare-magnitude gap) and the v2.1/v3.0 SOCP-inexactness findings are re-run and restated in the
+  literate docs and PROJECT.md, including any that changed.
 
 ### Planning depth (BILEV)
 
@@ -167,11 +168,47 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| *(filled by roadmapper)* | | |
+| FIX-01 | Phase 26 | Pending |
+| FIX-02 | Phase 26 | Pending |
+| FIX-03 | Phase 26 | Pending |
+| FIX-04 | Phase 26 | Pending |
+| FIX-05 | Phase 26 | Pending |
+| FIX-06 | Phase 27 | Pending |
+| FIX-07 | Phase 27 | Pending |
+| FIX-08 | Phase 27 | Pending |
+| FIX-09 | Phase 27 | Pending |
+| FIX-10 | Phase 27 | Pending |
+| FIX-11 | Phase 28 | Pending |
+| BILEV-01 | Phase 29 | Pending |
+| BILEV-02 | Phase 29 | Pending |
+| BILEV-03 | Phase 30 | Pending |
+| BILEV-04 | Phase 30 | Pending |
+| BILEV-05 | Phase 30 | Pending |
+| BILEV-06 | Phase 31 | Pending |
+| BILEV-07 | Phase 31 | Pending |
+| BILEV-08 | Phase 31 | Pending |
+| ARCH-01 | Phase 32 | Pending |
+| ARCH-02 | Phase 32 | Pending |
+| ARCH-03 | Phase 33 | Pending |
+| ARCH-04 | Phase 33 | Pending |
+| ARCH-07 | Phase 33 | Pending |
+| ARCH-05 | Phase 34 | Pending |
+| ARCH-06 | Phase 34 | Pending |
+| ARCH-08 | Phase 34 | Pending |
+| ARCH-09 | Phase 34 | Pending |
+| ARCH-10 | Phase 35 | Pending |
+| HYG-01 | Phase 36 | Pending |
+| HYG-02 | Phase 36 | Pending |
+| HYG-03 | Phase 36 | Pending |
+| HYG-07 | Phase 36 | Pending |
+| HYG-04 | Phase 37 | Pending |
+| HYG-05 | Phase 37 | Pending |
+| HYG-06 | Phase 37 | Pending |
+| HYG-08 | Phase 37 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 37 total
-- Mapped to phases: 0 (pending roadmap)
+- Mapped to phases: 37/37 (100%) — no orphans
 
 ---
 *Requirements defined: 2026-09-28*

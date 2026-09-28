@@ -6,6 +6,7 @@
 - ✅ **v2.0 Stackelberg-Nash TSO–DSO Planning Game** — Phases 10–14 (shipped 2026-07-24)
 - ✅ **v2.1 Validation & Reproduction** — Phases 15–18 (shipped 2026-07-26)
 - ✅ **v3.0 Research Extension Rungs** — Phases 19–25 (shipped 2026-08-24)
+- 🚧 **v4.0 Correctness & Depth** — Phases 26–37 (in progress)
 
 Full phase details, decisions, and per-phase artifacts for shipped milestones are archived in
 [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md),
@@ -13,33 +14,285 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 [`milestones/v2.1-ROADMAP.md`](milestones/v2.1-ROADMAP.md), and
 [`milestones/v3.0-ROADMAP.md`](milestones/v3.0-ROADMAP.md).
 
+## v4.0 Correctness & Depth
+
+**Milestone Goal:** Fix the modeling defects confirmed by the 2026-09-28 full-project quality
+audit, deepen the planning layer into a genuine bilevel TSO–DSO game on a real network, then
+restructure the orchestration layer and clean the codebase — correctness first, depth second,
+structure third, hygiene last.
+
+**Golden policy:** the v1–v3 "byte-identical default path" rule is consciously relaxed for the
+correctness track. Any pinned golden that moves is re-derived, and the change is explained in the
+test comment and the phase SUMMARY. Nothing is silently re-pinned.
 
 ## Phases
 
-No active milestone. Run `/gsd:new-milestone` to define the next one.
+- [ ] **Phase 26: Network & Device Model Correctness** - Fix the reversed exactness copy, add the
+  reverse thermal limit, link battery SOC across the horizon, and give flexible loads their
+  reactive draw.
+- [ ] **Phase 27: Integer Planning & Pricing Certificate Correctness** - Fix `corner_recourse` for
+  T>1, relabel DLMP components honestly, tighten the exactness-gate floor, certify the FIT
+  baseline, and settle MPC realized welfare against the true plant.
+- [ ] **Phase 28: Goldens Re-Derivation & Thesis Reproduction Restatement** - Re-derive every
+  golden touched by the correctness fixes and re-run/restate the thesis reproduction and
+  SOCP-inexactness findings.
+- [ ] **Phase 29: Genuine Bilevel TSO-DSO Variant** - Solve a true bilevel game (TSO minimizes its
+  own cost against a DSO tariff) that the BilevelJuMP oracle can tell apart from joint
+  optimization.
+- [ ] **Phase 30: SOCP-in-the-Loop Benders on a Multi-Bus Feeder** - Run Stackelberg-Benders with
+  `ConvexBranchFlow` on a real multi-bus, multi-period feeder, with oracle feasibility cuts and
+  derived master bounds.
+- [ ] **Phase 31: GNE Nash Fixture, Integer N>1 & Planning Docs Refresh** - Expose GNE multiplicity
+  with a variational-equilibrium selection, run integer investment across N>1 distributors, and
+  refresh the planning-variant documentation.
+- [ ] **Phase 32: Declarative Power-Flow & Strategy Dispatch** - Select power-flow formulation and
+  solve strategy declaratively through `Scenario`, dispatched via one `run` entry point.
+- [ ] **Phase 33: Shared Abstractions — Feeder, Balance, Model Context** - Unify `Feeder`/
+  `MeshedFeeder` under `AbstractFeeder`, deduplicate balance-closing code, and type `ModelContext`.
+- [ ] **Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy** - Split
+  `solve_admm` into named phases generic over any power flow, compose meshed + live reactive
+  pricing, and apply one status/exception policy everywhere.
+- [ ] **Phase 35: IEEE-8500 Scale After Refactor** - Re-measure (or re-characterize) the IEEE-8500
+  performance/memory headline point after the architecture changes.
+- [ ] **Phase 36: Code & Export Cleanup** - Strip process IDs from comments, delete inert stubs and
+  back-compat shims, trim exports, and rename fixtures after their content.
+- [ ] **Phase 37: Test Infrastructure & Repo Hygiene** - Add a JET CI check, split fast/slow tests,
+  fix or quarantine known flakes, and tidy scripts/manifests.
+
+## Phase Details
+
+### Phase 26: Network & Device Model Correctness
+**Goal**: Researcher can trust that the default SOCP branch-flow formulation and the SOC device
+models (`PVBattery`, `FourQuadBESS`) reflect the thesis physics, not a silently-introduced
+restriction or free hour-T energy.
+**Depends on**: Nothing (first phase of v4.0)
+**Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, FIX-05
+**Success Criteria** (what must be TRUE):
+  1. A documented verdict on thesis eq. 3.43 exists (relaxation vs. restriction, checked against
+     the thesis PDF and Gan–Low 2015), backed by a passing regression on a heavy-load, low-voltage
+     3-bus feeder that is AC-feasible (Ipopt) and also feasible under the default SOCP formulation.
+  2. The default `ConvexBranchFlow` exactness copy satisfies v̂ ≥ v (Gan–Low direction) or is
+     clearly relabelled as a restriction; a test checks the docstring's claimed load-bearing bound
+     against the actual constraint.
+  3. A PV back-feed fixture shows the reverse (receiving-end) apparent-power limit (thesis 3.37)
+     binding on a limited branch.
+  4. `PVBattery` and `FourQuadBESS` link state of charge across the whole horizon; the "soc0=Emin,
+     discharge at hour T" regression is infeasible or forces zero discharge.
+  5. A per-device test shows interruptible/thermostatic/deferrable loads drawing reactive power
+     `q = p·tanφ` (thesis 3.23) into `:Rq`.
+  6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
+     comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
+     for a later phase and none is silently re-pinned.
+**Plans**: TBD
+
+### Phase 27: Integer Planning & Pricing Certificate Correctness
+**Goal**: Researcher can trust the integer Benders recourse for T>1, the DLMP component names, the
+exactness gate, the FIT-baseline counterfactual, and MPC's realized-welfare accounting.
+**Depends on**: Phase 26
+**Requirements**: FIX-06, FIX-07, FIX-08, FIX-09, FIX-10
+**Success Criteria** (what must be TRUE):
+  1. `corner_recourse` returns the true per-hour `Q(bᵛ)` for T>1 (matching exhaustive enumeration
+     on a T>1 test) or rejects T>1 with a clear error, instead of a flat `fill(z, T)` profile.
+  2. DLMP components are named/documented after what they mathematically are (cone-slot and
+     drop-constraint multipliers); the "voltage component ≈ 0 when unbinding" test uses realistic
+     impedances and passes, or is replaced by a correct property.
+  3. The SOCP exactness gate uses a per-branch relative floor; a test shows a slack cone on a
+     lightly loaded branch is flagged.
+  4. The FIT-baseline counterfactual asserts or reports exactness (never skips it); the
+     `tol_gap=1e-10` `ALMOST_OPTIMAL` flake is root-caused and fixed or explicitly bounded.
+  5. MPC realized welfare/regret settle against the true plant (PV clipping, true-state feasibility,
+     true import); the forecast-settled number survives only as a separately labelled diagnostic.
+  6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
+     comment + phase SUMMARY), and the full suite is green at phase close.
+**Plans**: TBD
+
+### Phase 28: Goldens Re-Derivation & Thesis Reproduction Restatement
+**Goal**: The project's headline findings (thesis reproduction, SOCP-inexactness) are re-run
+against the corrected models and restated, and a cross-phase audit confirms every golden moved in
+Phases 26–27 was re-derived with an explanation (goldens themselves are re-derived in-phase).
+**Depends on**: Phase 26, Phase 27
+**Requirements**: FIX-11
+**Success Criteria** (what must be TRUE):
+  1. A cross-phase golden audit lists every golden moved in Phases 26–27 with its old value, new
+     value, and explanation (test comment + SUMMARY), and confirms none was silently re-pinned.
+  2. The v2.1 thesis reproduction (DSO-surplus sign flip, welfare-magnitude gap) is re-run against
+     the corrected model and PROJECT.md/the literate docs restate whichever result changed.
+  3. The v2.1/v3.0 SOCP-inexactness findings (e.g. EXACT-04) are re-verified against the corrected
+     exactness copy and restated if the verdict changed.
+**Plans**: TBD
+
+### Phase 29: Genuine Bilevel TSO-DSO Variant
+**Goal**: Researcher can express and solve a genuinely bilevel TSO–DSO game — not the integrated
+problem decomposed by Benders — certified as distinct from the joint optimum.
+**Depends on**: Phase 28
+**Requirements**: BILEV-01, BILEV-02
+**Success Criteria** (what must be TRUE):
+  1. Researcher can solve a variant where the TSO follower minimizes its own cost, the DSO leader
+     pays a tariff π·z, and the follower's objective genuinely differs from the leader's view of it,
+     via the hand-rolled loop or a documented appropriate reformulation.
+  2. A BilevelJuMP-certified fixture exists on which the bilevel optimum provably differs from the
+     joint single-level optimum.
+  3. The production method's answer matches the bilevel optimum on that fixture, not the joint one.
+**Plans**: TBD
+
+### Phase 30: SOCP-in-the-Loop Benders on a Multi-Bus Feeder
+**Goal**: Researcher can run Stackelberg-Benders with the real branch-flow SOCP on a realistic
+multi-bus, multi-period feeder, with feasibility cuts and automatically derived bounds.
+**Depends on**: Phase 29
+**Requirements**: BILEV-03, BILEV-04, BILEV-05
+**Success Criteria** (what must be TRUE):
+  1. `solve_stackelberg!` runs with `ConvexBranchFlow` on IEEE-13 (or larger) and T>1 inside the
+     Benders loop, converging with a closed LB/UB gap.
+  2. The planning oracle produces a feasibility cut when a pinned z is voltage- or thermally
+     infeasible.
+  3. SOCP inexactness at a pinned z is handled by a documented policy (restricted formulation, AC
+     fallback, or reported cut rejection) instead of crashing the loop.
+  4. The master's α lower bounds (`α_op_lb`, `α_x_lb`) are derived automatically (e.g. from the
+     relaxed oracle/follower optimum); a user-supplied bound above the true minimum is detected and
+     rejected.
+**Plans**: TBD
+
+### Phase 31: GNE Nash Fixture, Integer N>1 & Planning Docs Refresh
+**Goal**: Researcher can see and select among multiple Nash equilibria under interior caps, run
+integer investment across N>1 distributors, and read docs that accurately state each planning
+variant's game-theoretic nature.
+**Depends on**: Phase 30, Phase 27
+**Requirements**: BILEV-06, BILEV-07, BILEV-08
+**Success Criteria** (what must be TRUE):
+  1. A Nash fixture with interior investment caps exposes a continuum of generalized Nash
+     equilibria — the probe reports a nonzero spread.
+  2. A variational-equilibrium (common shared multiplier) selection is available and documented.
+  3. Integer investment runs in the N>1 Nash diagonalization path, with each best response using
+     the integer master.
+  4. `docs/writeups/stackelberg_vs_psr_n1n2.typ` and related docs state the game-theoretic nature
+     of each planning variant (integrated-decomposed-by-Benders, genuine bilevel, shared-constraint
+     GNE), refreshed to current code including the integer master.
+**Plans**: TBD
+
+### Phase 32: Declarative Power-Flow & Strategy Dispatch
+**Goal**: Researcher can select the power-flow formulation and the solve strategy declaratively
+through `Scenario`, dispatched via one common entry point.
+**Depends on**: Phase 31
+**Requirements**: ARCH-01, ARCH-02
+**Success Criteria** (what must be TRUE):
+  1. Researcher can select the power-flow formulation via `Scenario` and `run_scenario` honours it;
+     nothing is hard-coded to `ConvexBranchFlow()`.
+  2. Solve strategies are types (`Centralized`, `ADMM`, `MPC`, `Stochastic`) dispatched through one
+     `run(strategy, scenario)` entry point that returns results with a common shape.
+  3. `Scenario` no longer carries strategy-specific fields in one flat bag.
+**Plans**: TBD
+**UI hint**: no
+
+### Phase 33: Shared Abstractions — Feeder, Balance, Model Context
+**Goal**: Feeder types, balance-closing logic, and `ModelContext` metadata are unified and typed
+instead of duplicated five times or carried in an untyped `Dict`.
+**Depends on**: Phase 32
+**Requirements**: ARCH-03, ARCH-04, ARCH-07
+**Success Criteria** (what must be TRUE):
+  1. `Feeder` and `MeshedFeeder` share an `AbstractFeeder` supertype, and consumers dispatch on it.
+  2. One `close_balance!` helper replaces the five copied balance-closing blocks in
+     `welfare_solve`, `mpc_window`, `stochastic_welfare`, `DsoOpt`, and `linear_solve`.
+  3. `ModelContext` carries typed fields for its fixed metadata (power-flow variables, objective,
+     feeder, device variables); downstream code dispatches on the formulation type instead of
+     `haskey(pf_vars, :l)`.
+**Plans**: TBD
+
+### Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy
+**Goal**: `solve_admm` is decomposed and formulation-generic, meshed topology + live reactive
+pricing compose end-to-end, and every solve entry point follows one consistent status/exception
+policy.
+**Depends on**: Phase 33
+**Requirements**: ARCH-05, ARCH-06, ARCH-08, ARCH-09
+**Success Criteria** (what must be TRUE):
+  1. `solve_admm` is split into named phases (build, iterate, ρ adaptation, certification),
+     dispatches reactive-mode behaviour instead of repeated `mode == …` branches, and accepts any
+     valid `AbstractPowerFlow`.
+  2. Meshed topology plus live ADMM reactive pricing runs end-to-end, cross-validated against the
+     centralized meshed `:balance_q` dual.
+  3. `solve_admm`, `solve_stackelberg!`, `run_nash!`, `run_mpc`, and `run_stochastic` follow one
+     documented, consistent status-vs-throw policy.
+  4. `mpc_loop`'s exception handlers catch only solver-status and certificate exceptions;
+     `MethodError`/`BoundsError` propagate uncaught.
+**Plans**: TBD
+
+### Phase 35: IEEE-8500 Scale After Refactor
+**Goal**: Researcher can trust the IEEE-8500 performance/memory characterization now that the
+orchestration layer has been refactored.
+**Depends on**: Phase 34
+**Requirements**: ARCH-10
+**Success Criteria** (what must be TRUE):
+  1. The final consolidation's `assert_socp_exact!` behaves correctly at IEEE-8500 scale (no
+     spurious throw on a converged point).
+  2. At least one converged, memory-feasible headline point is measured, or the memory wall is
+     re-characterized honestly after the architecture changes.
+**Plans**: TBD
+
+### Phase 36: Code & Export Cleanup
+**Goal**: Source comments, dead seams, and exports read cleanly and honestly reflect the
+refactored codebase.
+**Depends on**: Phase 35 (runs after the refactors so cleanup isn't redone)
+**Requirements**: HYG-01, HYG-02, HYG-03, HYG-07
+**Success Criteria** (what must be TRUE):
+  1. Source comments/docstrings contain no plan/wave/task/decision/review-finding IDs; a CI grep
+     guard enforces this; thesis-equation and literature references remain.
+  2. The inert SEAM-01 stubs (`operational_oracle`'s ignored `objective_hook`/`horizon_state`, the
+     superseded `z` path) and the reactive-mode Bool/Symbol back-compat shim are removed.
+  3. The export list is trimmed; generic names (`OFF`, `LIVE`, `CERTIFIED`, `LP`, `QP`, `SOCP`,
+     `NLP`, `MILP`, `record!`, `converged`) are namespaced or unexported; the top-module docstring
+     describes the module as it now is.
+  4. Test fixture files and tags are named after their content, not the planning phase (no
+     `fixtures_phaseN`, `:phaseN`).
+**Plans**: TBD
+
+### Phase 37: Test Infrastructure & Repo Hygiene
+**Goal**: CI enforces static analysis and a fast/slow test split, known flakes are resolved
+honestly, and the repo's scripts/manifests are tidy.
+**Depends on**: Phase 36
+**Requirements**: HYG-04, HYG-05, HYG-06, HYG-08
+**Success Criteria** (what must be TRUE):
+  1. A JET check runs in CI over the package, in report mode, against an agreed baseline.
+  2. Tests carry a `:slow` tag; CI runs a fast job on every push and the slow suite in a separate
+     or nightly job.
+  3. Known flakes (Clarabel `NUMERICAL_ERROR` on IEEE-13 ADMM, the stochastic-welfare flake) are
+     fixed or quarantined with `@test_broken`/retry-and-report, so a green suite means green.
+  4. `scripts/` has an index; one-off and superseded scripts are archived; `pv_boom_report*`
+     duplication is merged into shared code; the redundant root `Manifest.toml` is dropped or its
+     purpose documented; `.planning/tmp/` is untracked.
+**Plans**: TBD
 
 ## Progress
 
-| Milestone | Phases | Plans | Status | Shipped |
-|-----------|--------|-------|--------|---------|
-| v1.0 Operational Transactive-Energy Core | 1–9 | 43/43 | Complete | 2026-07-20 |
-| v2.0 Stackelberg-Nash TSO–DSO Planning Game | 10–14 | 13/13 | Complete | 2026-07-24 |
-| v2.1 Validation & Reproduction | 15–18 | 14/14 | Complete | 2026-07-26 |
-| v3.0 Research Extension Rungs | 19–25 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
+**Execution Order:** Phases execute in numeric order within v4.0: 26 → 27 → 28 → 29 → 30 → 31 →
+32 → 33 → 34 → 35 → 36 → 37.
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|-----------------|--------|-----------|
+| 1–9 | v1.0 | 43/43 | Complete | 2026-07-20 |
+| 10–14 | v2.0 | 13/13 | Complete | 2026-07-24 |
+| 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
+| 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
+| 26. Network & Device Model Correctness | v4.0 | 0/TBD | Not started | - |
+| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 0/TBD | Not started | - |
+| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
+| 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
+| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
+| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
+| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
+| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
+| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
+| 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
+| 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
+| 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
 
-- **SCALE-STRETCH** — performance and memory-footprint engineering driven by the Phase 25
-  measurements: `solve_admm`'s hardcoded final-consolidation `assert_socp_exact!` throwing at
-  IEEE-8500 scale even on a converged point, and reaching a converged, memory-feasible headline
-  point at all. Deliberately separated from the benchmark that justifies it.
-- **Phase-18 `fit_baseline` convergence** — nested solve returns `ALMOST_OPTIMAL` at 3/5 sweep
-  points at `tol_gap=1e-10` (flake rate 13/20 = 0.650, all at that stage, reproduced across 3
-  runs). Distinct from SOCP inexactness. Wants its own follow-up.
-- **MESH-06 composition (advisory)** — `solve_admm` is typed to `pf::ConvexBranchFlow`, so meshed
-  topology and live ADMM reactive pricing cannot compose at runtime today. Phase 23 discloses this
-  and substitutes a centralized `:balance_q` dual. No requirement mandates the literal composition.
-- **Integer investment in the N>1 Nash path** — Phase 24 is single-distributor Stackelberg only.
-- **Large-lattice integer termination criterion** — a rigorous `δ_min` is not derivable (`Q`'s local
-  slope is a continuous SOCP dual price with no established Lipschitz bound), so Phase 24's
-  enumeration-backed criterion is tractable only where enumeration is.
+- **Large-lattice integer termination criterion** — a rigorous `δ_min` is not derivable (`Q`'s
+  local slope is a continuous SOCP dual price with no established Lipschitz bound), so the
+  enumeration-backed criterion (Phase 24, v3.0) is tractable only where enumeration is. BILEV-07
+  (Phase 31, v4.0) extends integer investment to N>1 Nash but does not resolve this; still open
+  past v4.0.
+
+Items formerly listed here — **SCALE-STRETCH**, the Phase-18 `fit_baseline` convergence flake,
+the MESH-06 composition advisory, and integer investment beyond single-distributor Stackelberg —
+are now in scope for v4.0 as ARCH-10 (Phase 35), FIX-09 (Phase 27), ARCH-06 (Phase 34), and
+BILEV-07 (Phase 31) respectively, and are no longer deferred.

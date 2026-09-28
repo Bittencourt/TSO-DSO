@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-09-28T15:18:43.672Z"
 last_activity: 2026-09-28
 progress:
-  total_phases: 0
+  total_phases: 12
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Between milestones. v3.0 shipped and archived 2026-08-24; ROADMAP.md carries no active phases. Next milestone not yet defined.
+**Current focus:** v4.0 Correctness & Depth — Phase 26 (Network & Device Model Correctness), first of 12 phases (26-37). ROADMAP.md drafted 2026-09-28, awaiting approval.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-09-28 — Milestone v4.0 started
+Phase: 26 of 37 (Network & Device Model Correctness)
+Plan: — (not yet planned)
+Status: Roadmap drafted, awaiting user approval
+Last activity: 2026-09-28 — ROADMAP.md + REQUIREMENTS.md traceability written for v4.0 (12 phases, 37/37 requirements mapped)
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -97,20 +97,16 @@ blanket "deferred work" — most of what `audit-open` flagged is not open work a
 
 Genuinely open, carried past v3.0 (not blocking the close):
 
-- **SCALE-STRETCH** (future milestone): `solve_admm`'s hardcoded final-consolidation
-  `assert_socp_exact!` throws at IEEE-8500 scale even on a converged point; and reaching a
-  converged, memory-feasible headline point needs architectural memory-footprint work. Deliberately
-  separated from the benchmark that justifies it.
+All three items below are now IN SCOPE for v4.0 (no longer deferred):
 
-- **Phase-18 `fit_baseline` convergence** (quick task 260823-gea): nested solve returns
-  `ALMOST_OPTIMAL` at 3/5 sweep points at `tol_gap=1e-10` — discrete flake rate 13/20 = 0.650, all
-  at that one stage, reproduced across 3 runs. A solver-convergence issue distinct from SOCP
-  inexactness. Not a v3.0 deliverable; wants its own follow-up.
+- **SCALE-STRETCH** -> ARCH-10, Phase 35 (IEEE-8500 Scale After Refactor).
+- **Phase-18 `fit_baseline` convergence** -> FIX-09, Phase 27 (Integer Planning & Pricing
+  Certificate Correctness).
+- **MESH-06 advisory** -> ARCH-06, Phase 34 (ADMM Decomposition, Meshed Reactive & Status/
+  Exception Policy).
 
-- **MESH-06 advisory** (v3.0 audit): `solve_admm` is typed to `pf::ConvexBranchFlow`, so meshed
-  topology + live ADMM reactive pricing cannot compose at runtime today. Phase 23's page discloses
-  this and substitutes a centralized `:balance_q` dual. No requirement mandates the literal
-  composition; surfaced because the ROADMAP's wording could be misread.
+Still genuinely open past v4.0: the large-lattice integer termination criterion (no rigorous
+`δ_min` derivable) — see ROADMAP.md Deferred / Future-Milestone Notes.
 
 ## Performance Metrics
 
@@ -133,6 +129,19 @@ Genuinely open, carried past v3.0 (not blocking the close):
 | 22. Stochastic PV/Demand Uncertainty | TBD | - | - |
 | 23. Meshed Networks | TBD | - | - |
 | 24. Discrete/Integer Investment Expansion | TBD | - | - |
+| 25 (v3.0) | 8 | - | - |
+| 26. Network & Device Model Correctness (v4.0) | TBD | - | - |
+| 27. Integer Planning & Pricing Certificate Correctness (v4.0) | TBD | - | - |
+| 28. Goldens Re-Derivation & Thesis Reproduction Restatement (v4.0) | TBD | - | - |
+| 29. Genuine Bilevel TSO-DSO Variant (v4.0) | TBD | - | - |
+| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder (v4.0) | TBD | - | - |
+| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh (v4.0) | TBD | - | - |
+| 32. Declarative Power-Flow & Strategy Dispatch (v4.0) | TBD | - | - |
+| 33. Shared Abstractions — Feeder, Balance, Model Context (v4.0) | TBD | - | - |
+| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy (v4.0) | TBD | - | - |
+| 35. IEEE-8500 Scale After Refactor (v4.0) | TBD | - | - |
+| 36. Code & Export Cleanup (v4.0) | TBD | - | - |
+| 37. Test Infrastructure & Repo Hygiene (v4.0) | TBD | - | - |
 | 19 | 8 | - | - |
 | 20 | 5 | - | - |
 | 21 | 6 | - | - |
@@ -209,6 +218,28 @@ Recent decisions affecting current work:
   impedances or without priced reactive power.
 
 ### Roadmap Evolution
+
+- Roadmap (v4.0) added 2026-09-28: 12 phases (26-37), continuing numbering from v3.0's Phase 25.
+  All 37 v4.0 REQ-IDs (FIX-01..11, BILEV-01..08, ARCH-01..10, HYG-01..08) mapped 1:1 to exactly one
+  phase — full coverage, no orphans. See REQUIREMENTS.md Traceability table.
+
+  Sequencing (user-approved): Correctness -> Planning depth -> Architecture -> Hygiene.
+  - FIX-01 (thesis 3.43 verdict) precedes FIX-02 within Phase 26; FIX-11 (goldens/repro
+    restatement) is its own capstone Phase 28, strictly after all other FIX items land.
+  - FIX-06 (integer LL T>1 fix) sits in Phase 27 with the pricing/certificate fixes — a
+    planning-code fix kept in the correctness track because it must precede BILEV-07 (Phase 31).
+  - BILEV-03/04/05 (Phase 30) depend on the corrected network model (FIX-01..03, Phase 26).
+    BILEV-01/02 (Phase 29, genuine bilevel) is sequenced before Phase 30 as a distinct concern.
+    BILEV-08 (docs refresh) closes out Phase 31, the last planning-depth phase.
+  - ARCH-01/02 (Phase 32) is one coherent declarative-Scenario phase. ARCH-05 precedes ARCH-06
+    within Phase 34 (solve_admm split before meshed+live-reactive composition). ARCH-10
+    (Phase 35) runs after all architecture refactors (Phases 32-34).
+  - HYG-01..03/07 (Phase 36, code/export cleanup) is sequenced after every refactor phase so
+    comment/dead-code cleanup isn't redone; HYG-04..06/08 (Phase 37, test infra & repo hygiene)
+    is kept as a separate phase per the user's split.
+  - Absorbed into v4.0 (removed from ROADMAP.md's Deferred notes): SCALE-STRETCH -> ARCH-10,
+    Phase-18 `fit_baseline` convergence -> FIX-09, MESH-06 composition -> ARCH-06, integer N>1
+    Nash -> BILEV-07.
 
 - Phase 25 added 2026-08-20: IEEE-8500 Scale Benchmark. Requirements SCALE-01..05 added to
   REQUIREMENTS.md (v3.0 now 27 requirements, all mapped). User-chosen scope: scalability benchmark
@@ -354,15 +385,17 @@ Items acknowledged and carried forward:
 | v3.0 stretch | Economic-MPC terminal value function / robust-tube MPC (`MPC-STRETCH`) | Deferred past Phase 21 | v3.0 requirements definition |
 | v3.0 stretch | Formal scenario reduction, SAA/DRO/chance-constraints (`STOCH-STRETCH`) | Deferred past Phase 22 | v3.0 requirements definition |
 | v3.0 stretch | QC/SDP tightening, phase-shifter convexification for meshed (`MESH-STRETCH`) | Deferred past Phase 23 | v3.0 requirements definition |
-| v3.0 stretch | Integer Nash diagonalization (`INT-STRETCH`) | Deferred past Phase 24 | v3.0 requirements definition |
 | v2.1+ extension | Exact-figure thesis reproduction (`REPRO-STRETCH-01`) | Deferred — contingent on IP-blocked thesis Appendix E | v2.1 requirements definition |
+
+*(Removed from this table 2026-09-28: `INT-STRETCH` integer Nash diagonalization is now in scope as BILEV-07, v4.0 Phase 31.)*
 
 ## Session Continuity
 
-Last session: 2026-08-26T00:00:00.000Z
-Stopped at: Completed quick task 260825-w5a (retired the no-op AdmmRetryFixtures test-level retry wrapper)
+Last session: 2026-09-28T00:00:00.000Z
+Stopped at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
 Resume file: None
 
 ## Operator Next Steps
 
-- Review the ROADMAP draft; once approved, run `/gsd:plan-phase 19` to plan the first v3.0 phase (4Q-BESS + Live Reactive Dual-Ascent).
+- Review the v4.0 ROADMAP draft; once approved, run `/gsd:plan-phase 26` to plan the first phase
+  (Network & Device Model Correctness — FIX-01..05).
