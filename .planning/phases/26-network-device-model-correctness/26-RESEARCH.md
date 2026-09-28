@@ -701,9 +701,12 @@ omitted as not applicable to this codebase's threat model.
 | A3 | Exact 3-bus fixture impedances/loads for the FIX-01 regression need empirical tuning at execution time; no specific numbers are prescribed here | FIX-01 | If the planner expects concrete numbers from research, they must instead be derived empirically during execution (Claude's Discretion per CONTEXT.md, but flagging that no template fixture already matches "heavy-load, low-voltage") |
 | A4 | `decompose_dlmp`'s `voltage` coefficient will need RE-DERIVATION (not just re-verification) after the cpydrop sign changes | DLMP blast radius | If the coefficient happens to remain valid unchanged (e.g. if both `vdrop` and `cpydrop` duals flip sign together in a way that cancels), the phase could over-invest in re-deriving something that needs no change — still safer to verify than assume |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact numeric fixture for FIX-01's 3-bus heavy-load/low-voltage regression**
+All three questions below were resolved during phase planning/revision (2026-09-28); each
+entry states where.
+
+1. **RESOLVED in Plan 26-02 Task 3.** Exact numeric fixture for FIX-01's 3-bus heavy-load/low-voltage regression
    - What we know: needs to be AC-feasible (Ipopt), default-SOCP-feasible after the fix, and
      thesis-literal-variant-infeasible; existing 3-bus fixture patterns exist as structural
      templates but none stresses this specific (low-voltage, not over-voltage) regime.
@@ -711,6 +714,15 @@ omitted as not applicable to this codebase's threat model.
      three-way boundary.
    - Recommendation: empirical tuning at execution time, mirroring how `RestrictedBranchFlow`'s
      own `_EXACT04_MEASURED_ε` constant was originally measured rather than guessed.
+   - Resolution: empirically validated during the 26-02 plan revision session against the
+     CURRENT (pre-fix) code and an independent raw-JuMP replica of the corrected default —
+     3-bus radial, `r=0.08 pu`, `x=0.03 pu` per branch, `vmin=0.90 pu`/`vmax=1.05 pu`, a
+     `Deferrable(bus=3, 1, 1, 0.0, 1.0, 1.0)` dummy device plus `Aggregator(3, 0.999999,
+     [dummy], [0.53])` (near-unity power factor isolates the real-power mechanism). At this
+     point `ACPowerFlow()` is feasible, the current/pre-fix `ConvexBranchFlow()` (≡ the future
+     `thesis_literal=true` opt-in) is INFEASIBLE, and a raw-JuMP replica of the corrected
+     (Gan-Low) sign is FEASIBLE at the identical topology/parameters — see 26-02-PLAN.md Task
+     3's `<verify>` for the exact reproduction script.
 
 2. **Whether Option A's `decompose_dlmp` coefficient re-derivation changes the SIGN or just a
    scalar multiplier**
@@ -724,6 +736,10 @@ omitted as not applicable to this codebase's threat model.
      alone.
    - Recommendation: treat this as its own explicit task with its own pass/fail test
      (`decompose_dlmp`'s existing hard assertion), not a side effect of the FIX-01/02 task.
+   - Resolution: RESOLVED in Plan 26-06 Task 1 — a dedicated, sequenced-after-26-02 task that
+     empirically re-certifies (or re-derives) the `volt_b` coefficient against the SAME hard
+     sum-to-price assertion `decompose_dlmp` already runs, documenting whichever outcome
+     occurs (unchanged vs. re-derived) with measured residuals.
 
 3. **Whether `RestrictedBranchFlow`'s OWN `v̂_GL` OPF-m mechanism needs ANY change**
    - What we know: `RestrictedBranchFlow` delegates its base SOC/exactness-copy machinery to
@@ -738,6 +754,11 @@ omitted as not applicable to this codebase's threat model.
    - Recommendation: out of scope for this phase's success criteria (FIX-01/02 are about the
      DEFAULT formulation); flag for a plan-checker sanity note but do not require
      `RestrictedBranchFlow` behavior changes beyond what its existing delegation already inherits.
+   - Resolution: CONFIRMED out-of-scope for Phase 26 (no plan changes `RestrictedBranchFlow`'s
+     own `v̂_GL` mechanism). Plan 26-08 Task 1 re-measures `RestrictedBranchFlow`'s ε/OVR-01..04
+     regressions against the now-corrected `ConvexBranchFlow` delegate as a golden-policy
+     obligation (SC-6), which is a re-verification of NUMBERS, not a design change to OPF-m —
+     consistent with this question's own recommendation.
 
 ## Sources
 
