@@ -1,7 +1,7 @@
 # src/powerflow/ConvexBranchFlow.jl
 #
 # SEAM: SOCP Convex Branch Flow (DistFlow SOC relaxation) power-flow formulation (PF-03).
-# OWNER: plan 04-02.
+# OWNER: plan 04-02. Exactness-copy sign corrected by phase 26 plan 26-02 (FIX-01/02).
 #
 # The project's correctness keystone. A THIRD `AbstractPowerFlow` subtype implementing
 # the Baran–Wu / DistFlow branch-flow model relaxed to a Second-Order Cone Program,
@@ -13,6 +13,17 @@
 # copy drop (3.43), the rotated SOC cone `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()`
 # (3.39), and the apparent-power limits (3.36). Stashes
 # `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)` for the PF-04 exactness checker.
+#
+# FIX-01/02 (phase 26-02): the thesis's OWN text (page ~84) states that after imposing the
+# exactness-copy bounds, `v ≤ V²max` (3.35) becomes REDUNDANT, citing Gan, Li, Topcu & Low
+# (2015) [ref 136] — a claim that is only true if `v̂ ≥ v`. The LITERAL transcribed formula
+# 3.43 (`P̂ = P + r·l`, `Q̂ = Q + x·l`) algebraically produces the OPPOSITE (`v̂ ≤ v`) — a
+# defect in the thesis's OWN eq. 3.43 algebra relative to its own adjacent Gan-Low-sourced
+# redundancy claim, proven by a telescoping-sum argument along the root→j path (see
+# `docs/literate/convex_branch_flow.jl`'s verdict section). The DEFAULT
+# (`thesis_literal=false`) now substitutes `P̂ = P − r·l`, `Q̂ = Q − x·l` (the Gan-Low
+# direction, `v̂ ≥ v`, a genuine relaxation); the LITERAL thesis formula remains available as
+# an explicit, clearly-labelled RESTRICTION via `ConvexBranchFlow(; thesis_literal=true)`.
 #
 # This file also adds `problem_class(::ConvexBranchFlow) = SOCP()` so the cone routes to
 # the tight-gap Clarabel factory (the generic `problem_class(::AbstractPowerFlow) = QP()`
@@ -55,8 +66,12 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
     see `_SMAX_NO_LIMIT`);
   - 3.39 — the SOC relaxation `l_ij·v_i ≥ P² + Q²`, written as a rotated second-order cone
     `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()` (‖x‖² ≤ 2·t·u ⇒ P²+Q² ≤ 2·(0.5l)·v = l·v);
-  - 3.43 — the exactness-copy voltage drop `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}`, written
-    purely in the ORIGINAL `P, Q, l` plus the single new copy `v̂` (no separate `P̂/Q̂`);
+  - 3.43 — the exactness-copy voltage drop. DEFAULT (`thesis_literal=false`, FIX-01/02):
+    `v̂_j = v̂_i − 2{r(P−rl) + x(Q−xl)}` (the Gan-Low direction, `v̂ ≥ v`, a genuine
+    relaxation — see the verdict below). Opt-in (`thesis_literal=true`): the LITERAL
+    transcribed formula `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}` (`v̂ ≤ v`, a RESTRICTION, kept
+    only for reproducing the thesis's own defective algebra). Both written purely in the
+    ORIGINAL `P, Q, l` plus the single copy `v̂` (no separate `P̂/Q̂`);
   - 3.45 — squared-magnitude voltage bounds `V²min ≤ v, v̂ ≤ V²max` on BOTH `v` and `v̂`.
 
 Differences from [`LinDistFlow`](@ref) (which is this model with `l → 0`): adds the squared
@@ -65,18 +80,42 @@ terms `−r·l`/`−x·l` in the balances; the `+(r²+x²)·l` term in the true 
 (3.43); and the forward apparent-power limit (3.36).
 
 Why the exactness copy is not decorative (RESEARCH Pitfall 1 / Pattern 2): the true drop
-3.33 carries `+(r²+x²)·l` while the copy drop 3.43 carries `−2(r²+x²)·l`; upper-bounding
-`v̂ ≤ V²max` (3.45) drives the loss current `l` down until the cone 3.39 holds with equality
-(exact) at the optimum. Omit it and the recovered DADP prices are physically meaningless in
+3.33 carries `+(r²+x²)·l`. Under the DEFAULT corrected copy drop (`v̂ ≥ v`), the LOAD-BEARING
+bound is `v̂ ≤ V²max` (3.45) — it is what drives the loss current `l` down until the cone
+3.39 holds with equality (exact) at the optimum, while `v̂ ≥ V²min` is redundant (implied by
+`v̂ ≥ v ≥ V²min`). Omit the copy and the recovered DADP prices are physically meaningless in
 exactly the high-PV / over-voltage regimes the research targets.
+
+FIX-01/02 verdict (see `docs/literate/convex_branch_flow.jl` for the full derivation): the
+thesis's own text (page ~84) claims `v ≤ V²max` (3.35) becomes redundant after imposing the
+exactness-copy bounds, citing Gan, Li, Topcu & Low (2015) [ref 136] — true only if `v̂ ≥ v`.
+The LITERAL transcribed eq. 3.43 (`P̂ = P+r·l`, `Q̂ = Q+x·l`) algebraically produces `v̂ ≤ v`,
+the OPPOSITE direction — a defect in the thesis's OWN algebra relative to its own adjacent
+Gan-Low-sourced claim, not a code bug. The DEFAULT here corrects the sign (`P̂ = P−r·l`,
+`Q̂ = Q−x·l`) to match the thesis's stated intent; the literal (defective) formula remains an
+explicit opt-in via `thesis_literal=true`, clearly labelled a RESTRICTION (never the
+default).
 
 Pitfall 1 (off-by-square voltage): `v`/`v̂` are the SQUARE of the magnitude, so bounds are
 `vmin²`/`vmax²` and the root is fixed at `1.0` (= 1.0²).
 """
-struct ConvexBranchFlow <: AbstractPowerFlow end
+struct ConvexBranchFlow <: AbstractPowerFlow
+    thesis_literal::Bool
+end
 
 """
-    contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int=1)
+    ConvexBranchFlow(; thesis_literal::Bool = false)
+
+Outer kwarg constructor. `thesis_literal = false` (the DEFAULT) implements the FIX-01/02
+corrected exactness-copy sign (`v̂ ≥ v`, the Gan-Low direction, a genuine relaxation).
+`thesis_literal = true` reproduces the LITERAL, defective thesis eq. 3.43 formula
+(`v̂ ≤ v`), an explicit, documented RESTRICTION opt-in — never the default. The zero-arg
+call `ConvexBranchFlow()` remains valid and now defaults to the CORRECTED direction.
+"""
+ConvexBranchFlow(; thesis_literal::Bool = false) = ConvexBranchFlow(thesis_literal)
+
+"""
+    contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int=1)
 
 Write the SOCP DistFlow branch/voltage terms — plus the LinDistFlow exactness copy — into
 the shared residuals, mirroring [`contribute!(::LinDistFlow, …)`](@ref) with the additions
@@ -101,7 +140,10 @@ Per branch/time it adds:
     `l·v ≥ P²+Q²` (thesis 3.39; the `0.5` factor is MANDATORY — dropping it silently doubles
     the allowed current, RESEARCH Anti-Pattern);
   - the true voltage drop `v[to] == v[from] − 2(rP+xQ) + (r²+x²)·l` (thesis 3.33);
-  - the copy drop `v̂[to] == v̂[from] − 2{r(P+rl) + x(Q+xl)}` (thesis 3.43, `P̂/Q̂` expanded);
+  - the copy drop (thesis 3.43, `P̂/Q̂` expanded). DEFAULT (`pf.thesis_literal=false`,
+    FIX-01/02): `v̂[to] == v̂[from] − 2{r(P−rl) + x(Q−xl)}` (Gan-Low direction, `v̂ ≥ v`).
+    Opt-in (`pf.thesis_literal=true`): `v̂[to] == v̂[from] − 2{r(P+rl) + x(Q+xl)}` (the
+    literal, defective thesis formula, `v̂ ≤ v`);
   - where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward apparent-power cone
     `‖(P,Q)‖₂ ≤ smax` ⇒ `P²+Q² ≤ S²max` (thesis 3.36).
 
@@ -113,7 +155,7 @@ branch `(i,j)` contributes `+P − r·l` (`:Rp`) / `+Q − x·l` (`:Rq`) at the 
 `add_to_residual!` seam unchanged. Stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)` for the
 PF-04 exactness checker. Returns `ctx`.
 """
-function contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
+function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -170,16 +212,24 @@ function contribute!(::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
     # loss+voltage DLMP component. PURELY ADDITIVE (same container, unchanged math).
     register_constraint!(ctx, :vdrop, vdrop)   # dual β feeds loss+voltage DLMP component (3.33)
 
-    # Exactness-copy voltage drop (thesis 3.43): substitute P̂ = P + r·l, Q̂ = Q + x·l into
-    # the copy recursion ⇒ v̂_j = v̂_i − 2{ r(P + r·l) + x(Q + x·l) }. Written purely in the
-    # ORIGINAL P, Q, l plus the single copy v̂ (no separate P̂/Q̂ variables — RESEARCH
-    # Pattern 2).
+    # Exactness-copy voltage drop (thesis 3.43, FIX-01/02): substitute P̂ = P + sign·r·l,
+    # Q̂ = Q + sign·x·l into the copy recursion ⇒
+    # v̂_j = v̂_i − 2{ r(P + sign·r·l) + x(Q + sign·x·l) }. `sign = -1.0` (DEFAULT,
+    # thesis_literal=false) is the FIX-01/02-corrected Gan-Low direction (`v̂ ≥ v`, proven by
+    # a telescoping-sum argument along the root→j path — see
+    # docs/literate/convex_branch_flow.jl); `sign = +1.0` (thesis_literal=true) reproduces
+    # the LITERAL, defective thesis formula (`v̂ ≤ v`), an explicit opt-in RESTRICTION.
+    # Written purely in the ORIGINAL P, Q, l plus the single copy v̂ (no separate P̂/Q̂
+    # variables — RESEARCH Pattern 2).
+    sign = pf.thesis_literal ? 1.0 : -1.0
     @constraint(
         m,
         cpydrop[b = 1:nB, t = 1:T],
         v̂[B[b].to, t] ==
-        v̂[B[b].from, t] -
-        2 * (B[b].r * (P[b, t] + B[b].r * l[b, t]) + B[b].x * (Q[b, t] + B[b].x * l[b, t]))
+        v̂[B[b].from, t] - 2 * (
+            B[b].r * (P[b, t] + sign * B[b].r * l[b, t]) +
+            B[b].x * (Q[b, t] + sign * B[b].x * l[b, t])
+        )
     )
     # PRICE-02 (05-01): register the exactness-copy drop (3.43) — its dual feeds the
     # exactness-copy contribution to the DLMP split. Pitfall 2: omitting this registration

@@ -14,6 +14,14 @@
 # dependence on the optimal solution's own location (unlike the base Theorem 1, whose
 # condition C2 fails exactly in the over-voltage regime EXACT-04 documents).
 #
+# Phase 26-02 (FIX-01/02) note: `ConvexBranchFlow`'s OWN exactness-copy `v̂` default was
+# corrected to the Gan-Low direction (`v̂ ≥ v`) — see `src/powerflow/ConvexBranchFlow.jl`.
+# This file's `v̂_GL(s)` (built independently below, via a tree-wide subtree-loss
+# accumulation) is a SEPARATE, complementary, strictly TIGHTER restriction than
+# `ConvexBranchFlow`'s per-branch `v̂` and remains independently needed for the
+# over-voltage/EXACT-04 regime; it does not read `ConvexBranchFlow`'s `v̂` variable at all
+# (confirmed: this file only reads `pv.v`, `pv.P`, `pv.Q`, `pv.l` from `ctx.meta[:pf_vars]`).
+#
 # ## Escalation history (Rule 4 / plan 20-02 checkpoint, resolved by roadmap-owner decision)
 #
 # The FIRST implementation of this file (commit 704f029) implemented only the SIMPLER
@@ -71,12 +79,17 @@ argument to [`solve_welfare`](@ref) touches neither device nor assembly code —
 `if formulation ==` branching anywhere).
 
 Purpose (OVR-01): resolve the genuine SOCP-relaxation inexactness the v2.1 EXACT-04 finding
-documented in the high-PV / reverse-flow / over-voltage regime. The existing thesis
-exactness copy (`v̂`, thesis 3.43/3.45, already in `ConvexBranchFlow`) is provably a
-*lower*-bound shadow on the true voltage (`v ≥ v̂` everywhere, confirmed numerically by plan
-20-01 Task 1) — the OPPOSITE sign relationship from Gan-Low's *upper*-bound shadow
-(`v ≤ v̂_GL(s)`), so it is structurally incapable of helping the over-voltage case. This
-formulation adds the genuinely new, complementary Gan-Low restriction instead.
+documented in the high-PV / reverse-flow / over-voltage regime. Prior to phase 26-02
+(FIX-01/02), `ConvexBranchFlow`'s default exactness copy (`v̂`, thesis 3.43/3.45) was
+defect-affected and provably a *lower*-bound shadow on the true voltage (`v ≥ v̂`
+everywhere, confirmed numerically by plan 20-01 Task 1) — the OPPOSITE sign relationship
+from Gan-Low's *upper*-bound shadow (`v ≤ v̂_GL(s)`), so it was structurally incapable of
+helping the over-voltage case. Phase 26-02 corrected `ConvexBranchFlow`'s DEFAULT to the
+Gan-Low direction (`v̂ ≥ v`), but this file's `v̂_GL(s)` is a SEPARATE, complementary,
+tree-wide (whole-subtree loss-free) restriction — strictly TIGHTER than
+`ConvexBranchFlow`'s now-corrected per-branch `v̂` — still independently needed for the
+over-voltage/EXACT-04 regime, and it does not read `ConvexBranchFlow`'s `v̂` variable at
+all. This formulation adds the genuinely new, complementary Gan-Low restriction.
 
 **Mechanism (OPF-m, the PRIMARY restriction, always active):** for every non-root bus `i`
 and time `t`, `contribute!` builds `v̂_GL(s)[i,t]` — Gan-Low's loss-free ("every branch's `ℓ`
@@ -163,9 +176,11 @@ this plan's certificate does not require it).
 **OPF-ε (optional, composes on top, OFF by default):** if `pf.ε > 0`, ALSO shrinks `v`'s own
 upper bound to `vmax² − pf.ε`, mirroring the escalation history's original mechanism — this
 is a strictly-more-restrictive addition (safe to compose per `F_{OPF-ε} ⊆ F_{OPF-m}`), never
-applied to `v̂`'s bound (`ConvexBranchFlow`'s `cpydrop` copy, thesis 3.43): `v̂` is a
-DIFFERENT, LOWER-bound shadow (plan 20-01 Task 1 confirmed `v ≥ v̂` numerically) — shrinking
-it would be a no-op at best, a silent double-restriction at worst.
+applied to `v̂`'s bound (`ConvexBranchFlow`'s `cpydrop` copy, thesis 3.43). Since phase 26-02
+(FIX-01/02), `ConvexBranchFlow`'s DEFAULT `v̂` satisfies `v̂ ≥ v` (the Gan-Low direction) — a
+DIFFERENT, complementary shadow from this file's own tree-wide `v̂_GL(s)`; shrinking
+`ConvexBranchFlow`'s `v̂` bound here would still be a no-op at best, a silent
+double-restriction at worst, so it remains untouched.
 
 After both mechanisms are wired, stashes `ctx.meta[:restriction_ε] = pf.ε` and
 `ctx.meta[:formulation] = :RestrictedBranchFlow` (D-08 provenance, consumed by plan 20-03's
@@ -179,9 +194,10 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int
 
     # Optional OPF-ε companion margin (Section IV-D) — OFF by default (pf.ε == 0.0). Shrinks
     # ONLY v's own bound. Do NOT touch v̂'s bound (ConvexBranchFlow's cpydrop copy, thesis
-    # 3.43): v̂ is a DIFFERENT, LOWER-bound shadow (plan 20-01 Task 1 confirmed v ≥ v̂
-    # numerically) — shrinking it would be a no-op at best, a silent double-restriction at
-    # worst.
+    # 3.43): since phase 26-02 (FIX-01/02) ConvexBranchFlow's DEFAULT v̂ satisfies v̂ ≥ v (the
+    # Gan-Low direction) — a DIFFERENT, complementary shadow from this file's own tree-wide
+    # v̂_GL(s) — shrinking it here would still be a no-op at best, a silent
+    # double-restriction at worst.
     if pf.ε > 0.0
         for j in 1:N, t in 1:T
             j == feeder.root && continue
