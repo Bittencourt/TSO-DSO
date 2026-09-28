@@ -250,6 +250,31 @@ end
     end
 end
 
+@testitem "aggregator: Interruptible (converted Variant-2, 26-07) draws q = p*tanφ into :Rq (FIX-05)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    T = 3
+    bus = 2
+    φ = 0.9
+    tanφ = TSODSO.reactive_factor(φ)
+
+    # Interruptible converted from self-injecting (Variant-1) to the aggregatable
+    # Variant-2 contract in plan 26-07 — it can now sit under an Aggregator exactly like
+    # Thermostatic/Deferrable, and its own consumption draws power-factor reactive power
+    # (thesis eq. 3.23, FIX-05).
+    load = TSODSO.Interruptible(bus, 0.0, 5.0, 4.0, 1.0)
+    agg = TSODSO.Aggregator(bus, φ, [load], fill(0.0, T))
+    ctx = TSODSO.ModelContext(Model())
+    res = TSODSO.contribute!(agg, ctx; T = T)
+    p = res.vars[1].p
+    for t in 1:T
+        @test isapprox(get(res.q_inject[t].terms, p[t], 0.0), -tanφ; atol = 1e-9)
+    end
+    @test TSODSO.is_flexible_load(load) == true
+end
+
 @testitem "aggregator: constructor + horizon guards (DEV-05)" tags = [:aggregator] begin
     using TSODSO
     using JuMP

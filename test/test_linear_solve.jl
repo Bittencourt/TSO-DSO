@@ -33,7 +33,10 @@
     @test dadp[1] > 0                                              # positive = marginal cost sign
 
     # The served-power variable is stashed for inspection; its value is the closed form.
-    p = ctx.meta[:device_vars][1]
+    # (26-07: device_vars[k] now holds device k's returned `vars` NamedTuple, since
+    # Interruptible converted to the Variant-2 aggregatable contract — `.p`, not a bare
+    # vector.)
+    p = ctx.meta[:device_vars][1].p
     @test value(p[1]) ≈ expected_p atol = 1e-6                     # p* = (a−λ₀)/b
 end
 
