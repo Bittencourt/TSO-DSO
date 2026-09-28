@@ -101,7 +101,7 @@ restriction or free hour-T energy.
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
      for a later phase and none is silently re-pinned.
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 
 Plans:
 **Wave 1**
@@ -114,7 +114,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 26-05-PLAN.md — FIX-03: receiving-end apparent-power limit (:smax_rev) + PV back-feed fixture
-- [ ] 26-06-PLAN.md — DLMP voltage-component coefficient re-derivation after the cpydrop sign flip
+- [x] 26-06-PLAN.md — DLMP voltage-component coefficient re-derivation after the cpydrop sign flip
 - [x] 26-07-PLAN.md — FIX-05: Interruptible Variant-1→2 conversion + solve_linear.jl fix
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -357,7 +357,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 10–14 | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
-| 26. Network & Device Model Correctness | v4.0 | 6/8 | In Progress|  |
+| 26. Network & Device Model Correctness | v4.0 | 7/8 | In Progress|  |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 0/TBD | Not started | - |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
