@@ -22,11 +22,16 @@ A standalone battery + four-quadrant (4Q) inverter prosumer device (MESH-04). Ov
 horizon `t = 1:T` it schedules continuous charge `p_ch[t] ≥ 0`, discharge `p_dch[t] ≥ 0`,
 state-of-charge `soc[t]`, and a sign-free reactive decision `q[t]`, subject to:
 
-    soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (mirrors PVBattery 3.6)
+    soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (mirrors PVBattery 3.6), t = 1:T
     0 ≤ p_ch[t]  ≤ Pch_max                                  # charge bound, GRID-chargeable (D-02)
     0 ≤ p_dch[t] ≤ Pdch_max                                 # discharge bound, INDEPENDENT cap (D-04)
-    Emin ≤ soc[t] ≤ Emax ;  soc[1] = soc0                   # SOC band + IC (mirrors PVBattery 3.9)
+    Emin ≤ soc[t] ≤ Emax, t = 1:(T+1) ;  soc[1] = soc0      # SOC band + IC (mirrors PVBattery 3.9)
     (p_dch[t] − p_ch[t])² + q[t]² ≤ Smax²                   # apparent-power cone (D-03/D-04)
+
+`soc` is `T+1` long (Phase 26 FIX-04): the recursion above closes the WHOLE horizon
+`t = 1:T` (including hour `T`), so `p_ch[T]`/`p_dch[T]` always appear in a constraint —
+hour-`T` charge/discharge is never free energy. An optional `soc_terminal` keyword
+(`nothing` default | a numeric value | `:cyclic`) controls `soc[T+1]`; see `contribute!`.
 
 Unlike `PVBattery`, there is **no** curtailable-PV-availability field and **no**
 PV-limited-charge bound (D-01/D-02): this device may import from the grid to charge, capped
@@ -298,19 +303,41 @@ Returns `(; vars = (; p_ch, p_dch, soc, q, soc0), p_inject, q_inject, utility)` 
 `p_inject[t] == p_dch[t] − p_ch[t]` (a `Vector{AffExpr}`) and `q_inject === vars.q` (the
 SAME `Vector{VariableRef}` object, D-09) — the FIRST aggregatable device to carry a
 `q_inject` field; see `AbstractDevice.jl`'s widened Variant-2 contract note.
+`soc` is `T+1` long (Phase 26 FIX-04, `length(soc) == T + 1`): the recursion covers the
+WHOLE horizon `t = 1:T` (closing on `soc[T+1]`), so hour-`T` charge/discharge is never free
+energy. The optional keyword `soc_terminal::Union{Nothing,Real,Symbol} = nothing` controls
+`soc[T+1]`: `nothing` (default) adds no extra constraint beyond the `Emin`/`Emax` bounds
+(byte-identical default behavior otherwise); a `Real` value adds `soc[T+1] == soc_terminal`;
+`:cyclic` adds `soc[T+1] >= soc0` (against the SAME `soc0` Parameter, so it re-targets
+automatically under MPC re-solves). Any other `Symbol` throws `ArgumentError`.
 
 `soc0` (MPC-01 seam, D-01) is a genuine JuMP `Parameter` handle for the SOC initial
 condition — the IDENTICAL idiom `PVBattery` applies — re-settable via
 `set_parameter_value` without rebuilding the constraint, and defaulting to the exact
 prior literal value `d.soc0` (byte-identical default).
 """
-function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
+function contribute!(
+    d::FourQuadBESS,
+    ctx::ModelContext;
+    T::Int,
+    soc_terminal::Union{Nothing, Real, Symbol} = nothing,
+)
+    if soc_terminal isa Symbol && soc_terminal !== :cyclic
+        throw(
+            ArgumentError(
+                "FourQuadBESS.contribute!'s soc_terminal keyword accepts nothing, a Real " *
+                "value, or :cyclic only (Phase 26 FIX-04); got Symbol :$soc_terminal",
+            ),
+        )
+    end
     m = ctx.model
 
     # Continuous decision variables ONLY — NO binary/integer (App. C keeps this a QP/SOCP).
     p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pch_max)   # (D-02/D-04)
     p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pdch_max) # (D-04)
-    soc = @variable(m, [t = 1:T], lower_bound = d.Emin, upper_bound = d.Emax)
+    # Phase 26 FIX-04: soc is T+1 long so the recursion below can close on soc[T+1],
+    # linking hour-T charge/discharge into the horizon instead of leaving it free energy.
+    soc = @variable(m, [t = 1:(T + 1)], lower_bound = d.Emin, upper_bound = d.Emax)
     # q is sign-free and carries NO bound — the apparent-power cone below is its only
     # restriction (D-03: no cost/utility term on reactive power anywhere).
     q = @variable(m, [t = 1:T])
@@ -327,14 +354,20 @@ function contribute!(d::FourQuadBESS, ctx::ModelContext; T::Int)
     # materialization discovered and fixed).
     soc0 = @variable(m, set = Parameter(d.soc0))
     @constraint(m, soc[1] == soc0)
-    if T > 1
-        # SOC dynamics with round-trip efficiency (mirrors PVBattery eq. 3.6): η·p_ch in,
-        # p_dch/η out (η² < 1).
-        @constraint(
-            m,
-            [t = 1:(T - 1)],
-            soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
-        )
+    # Phase 26 FIX-04: the recursion now UNCONDITIONALLY covers the WHOLE horizon t = 1:T
+    # (including hour T, closing on soc[T+1]) — SOC dynamics with round-trip efficiency
+    # (mirrors PVBattery eq. 3.6): η·p_ch in, p_dch/η out (η² < 1). Previously this only ran
+    # over t = 1:(T-1), so p_ch[T]/p_dch[T] never appeared in any SOC constraint (free
+    # hour-T energy).
+    @constraint(
+        m,
+        [t = 1:T],
+        soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
+    )
+    if soc_terminal isa Real
+        @constraint(m, soc[T + 1] == soc_terminal)
+    elseif soc_terminal === :cyclic
+        @constraint(m, soc[T + 1] >= soc0)
     end
 
     # Net active injection at the device (discharge is a source, charge a withdrawal) — the

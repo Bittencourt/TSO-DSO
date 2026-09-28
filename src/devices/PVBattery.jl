@@ -25,11 +25,16 @@ A co-located PV + battery (BESS) prosumer device (DEV-04). Over a horizon `t = 1
 it schedules continuous charge `p_ch[t] ≥ 0`, discharge `p_dch[t] ≥ 0`, and
 state-of-charge `soc[t]`, subject to (thesis eqs. 3.6-3.9):
 
-    soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (3.6)
+    soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (3.6), t = 1:T
     0 ≤ pv_used[t] ≤ Ppv[t]                                 # curtailable PV (WR-04)
     0 ≤ p_ch[t] ≤ pv_used[t]                                # PV-limited charge (3.7, A6)
     0 ≤ p_ch[t], p_dch[t] ≤ Pmax                            # power bounds (3.8)
-    Emin ≤ soc[t] ≤ Emax ;  soc[1] = soc0                   # SOC band + IC (3.9)
+    Emin ≤ soc[t] ≤ Emax, t = 1:(T+1) ;  soc[1] = soc0      # SOC band + IC (3.9)
+
+`soc` is `T+1` long (Phase 26 FIX-04): the recursion above closes the WHOLE horizon
+`t = 1:T` (including hour `T`), so `p_ch[T]`/`p_dch[T]` always appear in a constraint —
+hour-`T` charge/discharge is never free energy. An optional `soc_terminal` keyword
+(`nothing` default | a numeric value | `:cyclic`) controls `soc[T+1]`; see `contribute!`.
 
 Its preference is a concave charge utility minus a convex discharge cost, whose
 coefficients are the App. C parametrization (eqs. 3.15-3.20):
@@ -229,6 +234,13 @@ Returns `(; vars = (; p_ch, p_dch, soc, pv_used, soc0, Ppv_param), p_inject, uti
 is a `Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex
 discharge cost). The `pv_used` curtailment (WR-04) lets surplus PV be dumped rather than
 forcing a high-PV scenario infeasible (there is no export sink at the priced frontier).
+`soc` is `T+1` long (Phase 26 FIX-04, `length(soc) == T + 1`): the recursion covers the
+WHOLE horizon `t = 1:T` (closing on `soc[T+1]`), so hour-`T` charge/discharge is never free
+energy. The optional keyword `soc_terminal::Union{Nothing,Real,Symbol} = nothing` controls
+`soc[T+1]`: `nothing` (default) adds no extra constraint beyond the `Emin`/`Emax` bounds
+(byte-identical default behavior otherwise); a `Real` value adds `soc[T+1] == soc_terminal`;
+`:cyclic` adds `soc[T+1] >= soc0` (against the SAME `soc0` Parameter, so it re-targets
+automatically under MPC re-solves). Any other `Symbol` throws `ArgumentError`.
 
 `soc0` and `Ppv_param` (MPC-01 seam, D-01/D-03) are genuine JuMP `Parameter` handles for
 the SOC initial condition and the per-step PV-availability profile, respectively — a
@@ -238,7 +250,20 @@ default to the EXACT prior literal value (`parameter_value(soc0) == d.soc0`,
 `parameter_value.(Ppv_param) == d.Ppv[1:T]`), so no caller that never calls
 `set_parameter_value` observes any behavior change (byte-identical-default invariant).
 """
-function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
+function contribute!(
+    d::PVBattery,
+    ctx::ModelContext;
+    T::Int,
+    soc_terminal::Union{Nothing, Real, Symbol} = nothing,
+)
+    if soc_terminal isa Symbol && soc_terminal !== :cyclic
+        throw(
+            ArgumentError(
+                "PVBattery.contribute!'s soc_terminal keyword accepts nothing, a Real " *
+                "value, or :cyclic only (Phase 26 FIX-04); got Symbol :$soc_terminal",
+            ),
+        )
+    end
     length(d.Ppv) >= T || throw(
         ArgumentError(
             "PVBattery.Ppv must have length ≥ T for the PV-limited charge (eq. 3.7); " *
@@ -250,7 +275,9 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     # Continuous decision variables ONLY — NO binary/integer (App. C keeps this a QP).
     p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)   # (3.8)
     p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)  # (3.8)
-    soc = @variable(m, [t = 1:T], lower_bound = d.Emin, upper_bound = d.Emax) # (3.9)
+    # Phase 26 FIX-04: soc is T+1 long so the recursion below can close on soc[T+1],
+    # linking hour-T charge/discharge into the horizon instead of leaving it free energy.
+    soc = @variable(m, [t = 1:(T + 1)], lower_bound = d.Emin, upper_bound = d.Emax) # (3.9)
     # WR-04 PV curtailment: the amount of the available PV `Ppv[t]` actually used (exported
     # or charged), `0 ≤ pv_used[t] ≤ Ppv[t]`. Without this, PV was a fixed MUST-TAKE
     # injection `Ppv[t]` with no curtailment and no export sink, so a high-PV/surplus
@@ -287,13 +314,19 @@ function contribute!(d::PVBattery, ctx::ModelContext; T::Int)
     # Parameter construction, never the NAMED `@variable(m, soc0 in Parameter(...))` form.
     soc0 = @variable(m, set = Parameter(d.soc0))
     @constraint(m, soc[1] == soc0)                                            # (3.9 IC)
-    if T > 1
-        # SOC dynamics with round-trip efficiency (3.6): η·p_ch in, p_dch/η out (η² < 1).
-        @constraint(
-            m,
-            [t = 1:(T - 1)],
-            soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
-        )
+    # Phase 26 FIX-04: the recursion now UNCONDITIONALLY covers the WHOLE horizon t = 1:T
+    # (including hour T, closing on soc[T+1]) — SOC dynamics with round-trip efficiency
+    # (3.6): η·p_ch in, p_dch/η out (η² < 1). Previously this only ran over t = 1:(T-1),
+    # so p_ch[T]/p_dch[T] never appeared in any SOC constraint (free hour-T energy).
+    @constraint(
+        m,
+        [t = 1:T],
+        soc[t + 1] == soc[t] + (d.η * p_ch[t] - p_dch[t] / d.η) * d.Δt
+    )
+    if soc_terminal isa Real
+        @constraint(m, soc[T + 1] == soc_terminal)                            # (3.9, terminal)
+    elseif soc_terminal === :cyclic
+        @constraint(m, soc[T + 1] >= soc0)                                    # (3.9, cyclic)
     end
     # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid). WR-04:
     # the battery charges from the NON-curtailed PV, so the bound is `pv_used` (≤ Ppv[t]),
