@@ -76,9 +76,10 @@ using TSODSO
 # with one aggregator (a single-device aggregator is valid — devices need only be
 # non-empty). The aggregator (thesis eqs. 3.21-3.23) is the SOLE `:Rp`/`:Rq` network
 # writer; its member device must therefore conform to the AGGREGATABLE-device contract
-# (returns `(; vars, p_inject, utility)`, writes nothing itself) rather than the
-# self-injecting `Interruptible` used on the previous page — here a `Deferrable`
-# flexible load (thesis eqs. 3.4-3.5, 3.12).
+# (returns `(; vars, p_inject, utility)`, writes nothing itself) — here a `Deferrable`
+# flexible load (thesis eqs. 3.4-3.5, 3.12), the same contract the `Interruptible` used
+# standalone on the previous page also conforms to (converted from an earlier
+# self-injecting contract in plan 26-07).
 
 buses = [
     Bus(1, 0.95, 1.05, true),      # root / MEM frontier
