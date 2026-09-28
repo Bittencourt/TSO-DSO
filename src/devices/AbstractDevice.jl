@@ -89,4 +89,15 @@ impedance, or voltage object. Devices meet the network ONLY at the
 """
 abstract type AbstractDevice end
 
-export AbstractDevice
+"""
+    is_flexible_load(d::AbstractDevice) -> Bool
+
+Trait identifying devices whose CONSUMPTION should draw power-factor reactive power via
+the Aggregator roll-up (thesis eq. 3.23), distinguishing them from active-only DERs
+(PV/battery, per Assumption A3) which never draw power-factor reactive power regardless of
+this trait. Defaults to `false` for any device; a flexible-load device
+([`Thermostatic`](@ref), [`Deferrable`](@ref)) overrides it to `true` (FIX-05).
+"""
+is_flexible_load(::AbstractDevice) = false
+
+export AbstractDevice, is_flexible_load

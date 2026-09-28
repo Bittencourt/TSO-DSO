@@ -50,11 +50,15 @@ system; coefficients are not rescaled here.
   - `b::T` — utility curvature, `b > 0` required for concavity (eqs. 3.11/3.14).
   - `Tout::Vector{T}` — ambient-temperature profile parameter (eq. 3.2); its length is
     validated against the horizon `T` at `contribute!` time (it is not known at construction).
+  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23,
+    FIX-05); `nothing` (default) falls back to the aggregator's own `φ` when this device is
+    rolled up by an [`Aggregator`](@ref). A non-`nothing` value must lie in `(0, 1]`.
 
 Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
 `Tmax < Tmin` (inconsistent comfort band), when `Pmax < Pmin` (inconsistent power bounds),
-when `α < 0` or `β ≤ 0` (non-physical recursion signs, WR-02), or when `Tin0` starts
-outside the comfort band `Tmin ≤ Tin0 ≤ Tmax` (comfort-band IC guard, WR-02).
+when `α < 0` or `β ≤ 0` (non-physical recursion signs, WR-02), when `Tin0` starts outside
+the comfort band `Tmin ≤ Tin0 ≤ Tmax` (comfort-band IC guard, WR-02), or when a supplied
+`φ` override lies outside `(0, 1]` (thesis eq. 3.23).
 """
 struct Thermostatic{T <: Real} <: AbstractDevice
     bus::Int
@@ -67,6 +71,7 @@ struct Thermostatic{T <: Real} <: AbstractDevice
     Pmax::T
     b::T
     Tout::Vector{T}
+    φ::Union{Nothing, T}
 
     function Thermostatic(
         bus::Int,
@@ -79,6 +84,7 @@ struct Thermostatic{T <: Real} <: AbstractDevice
         Pmax::T,
         b::T,
         Tout::Vector{T},
+        φ::Union{Nothing, T},
     ) where {T <: Real}
         # Concavity guard (thesis eqs. 3.11/3.14, b > 0): a non-positive curvature makes
         # the comfort utility convex → welfare maximization unbounded/non-convex. Reject
@@ -142,12 +148,26 @@ struct Thermostatic{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        return new{T}(bus, α, β, Tmin, Tmax, Tin0, Pmin, Pmax, b, Tout)
+        # Power-factor override guard (thesis eq. 3.23, FIX-05): mirrors Aggregator's own
+        # φ ∈ (0,1] guard, applied only when a non-nothing override is supplied.
+        if φ !== nothing && !(zero(T) < φ <= one(T))
+            throw(
+                ArgumentError(
+                    "Thermostatic power-factor override φ must lie in (0, 1] " *
+                    "(thesis eq. 3.23); got φ=$φ",
+                ),
+            )
+        end
+        return new{T}(bus, α, β, Tmin, Tmax, Tin0, Pmin, Pmax, b, Tout, φ)
     end
 end
 
+# A Thermostatic load's own consumption draws power-factor reactive power via the
+# Aggregator roll-up (thesis eq. 3.23, FIX-05).
+is_flexible_load(::Thermostatic) = true
+
 """
-    Thermostatic(bus, α, β, Tmin, Tmax, Tin0, Pmin, Pmax, b, Tout)
+    Thermostatic(bus, α, β, Tmin, Tmax, Tin0, Pmin, Pmax, b, Tout; φ = nothing)
 
 Convenience outer constructor (IN-01): PROMOTEs the scalar parameters and the `Tout`
 element type to a common `Real` type before delegating to the inner constructor, so a
@@ -155,6 +175,12 @@ natural mixed-type call (e.g. an integer `0` among `Float64`s) just works instea
 throwing a `MethodError`. `bus` is converted to `Int`. When every scalar already shares a
 type and `Tout` is a `Vector{T}`, the inner constructor is strictly more specific and is
 selected directly (no promotion, no recursion).
+
+The OPTIONAL keyword `φ` (thesis eq. 3.23, FIX-05) is an optional per-device power-factor
+override; it defaults to `nothing` (falling back to the aggregator's own `φ` at roll-up
+time) and is NOT included in the `promote_type`/`convert` calls above since it may be
+`nothing` — a supplied `Real` override is separately converted into the common type `Tp`,
+while `nothing` passes through unchanged.
 """
 function Thermostatic(
     bus::Integer,
@@ -166,7 +192,8 @@ function Thermostatic(
     Pmin::Real,
     Pmax::Real,
     b::Real,
-    Tout::AbstractVector{<:Real},
+    Tout::AbstractVector{<:Real};
+    φ::Union{Nothing, Real} = nothing,
 )
     Tp = promote_type(
         typeof(α),
@@ -179,6 +206,7 @@ function Thermostatic(
         typeof(b),
         eltype(Tout),
     )
+    φp = φ === nothing ? nothing : convert(Tp, φ)
     return Thermostatic(
         Int(bus),
         convert(Tp, α),
@@ -190,6 +218,7 @@ function Thermostatic(
         convert(Tp, Pmax),
         convert(Tp, b),
         convert(Vector{Tp}, Tout),
+        φp,
     )
 end
 
