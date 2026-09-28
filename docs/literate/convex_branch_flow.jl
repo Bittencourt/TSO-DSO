@@ -22,7 +22,7 @@
 # this: an auxiliary squared voltage `v̂` follows its own voltage-drop recursion
 #
 # ```math
-# \hat v_j = \hat v_i - 2\bigl\{ r(P + rl) + x(Q + xl) \bigr\} \qquad \text{(3.43, exactness-copy voltage drop)}
+# \hat v_j = \hat v_i - 2\bigl\{ r(P - rl) + x(Q - xl) \bigr\} \qquad \text{(3.43, corrected default — FIX-01/02, see Verdict below)}
 # ```
 #
 # and BOTH `v` and `v̂` are bounded by the same squared-magnitude limits
@@ -36,6 +36,37 @@
 # `l → 0` limit that collapses to the previous page's [`LinDistFlow`](@ref) linear
 # voltage drop. Whether the cone actually closed tight is a numerical question, not an
 # assumption; that is what the validation step below certifies.
+#
+# ## Verdict: thesis eq. 3.43 vs. Gan-Low (2015)
+#
+# The thesis's OWN text (page ~84) states that after imposing the exactness-copy bounds
+# (3.45), the constraints of the form `v ≤ V²max` (3.35) become **redundant**, citing
+# Gan, Li, Topcu & Low, "Exact Convex Relaxation of Optimal Power Flow in Radial
+# Networks," *IEEE Trans. Automat. Contr.*, vol. 60, no. 1, 2015 (thesis ref [136]) — i.e.
+# Gan-Low (2015). That redundancy claim is only true if `v̂ ≥ v` (then `v ≤ v̂ ≤ V²max`
+# implies `v ≤ V²max` for free). But the LITERAL transcribed formula for eq. 3.43
+# (`P̂ = P + r·l`, `Q̂ = Q + x·l`) algebraically produces the OPPOSITE relationship,
+# `v̂ ≤ v` — a defect in the thesis's OWN eq. 3.43 algebra relative to its own adjacent
+# Gan-Low-sourced redundancy claim, not a code bug (the code faithfully implemented the
+# literal transcribed formula). Proof (telescoping sum along the unique root→j path on a
+# radial feeder, using `v_root = v̂_root` and `l ≥ 0`):
+#
+# ```math
+# v_j - \hat v_j = (1 + 2a) \sum_{b \in \mathrm{path}(root,j)} (r_b^2 + x_b^2)\, l_b
+# ```
+#
+# where `a` is the sign multiplying the `r·l`/`x·l` terms inside the `P̂`/`Q̂`
+# substitution: `a = +1` (the literal thesis transcription) gives coefficient `3 > 0`,
+# i.e. `v ≥ v̂` — the reverse of Gan-Low; `a = -1` (the corrected default here) gives
+# coefficient `-1 < 0`, i.e. `v ≤ v̂` — the Gan-Low direction, matching the thesis's own
+# stated intent. The corrected default above (`P̂ = P - rl`, `Q̂ = Q - xl`) therefore
+# satisfies `v̂ ≥ v` everywhere on a radial feeder, and the literal (defective) formula
+# remains available as an explicit, clearly-labelled restriction via
+# `ConvexBranchFlow(; thesis_literal=true)`. See `test/test_exactness_verdict.jl` for the
+# empirical regression: an AC-feasible, heavy-load, low-voltage 3-bus feeder that
+# remains feasible under the corrected default SOCP but goes INFEASIBLE under the
+# literal thesis-transcribed variant (i.e. `v̂ ≥ V²min` binds as a genuine restriction
+# under the literal, defective sign, not merely a redundant bound).
 
 using TSODSO
 
