@@ -4,20 +4,21 @@
 # contains "restricted_branch_flow" so `occursin("restricted_branch_flow", ti.name)` selects
 # the whole file.
 #
-# The FIRST @testitem below is the BLOCKING analytic spot-check RESEARCH.md requires BEFORE any
-# `RestrictedBranchFlow` code exists: it numerically confirms (or falsifies) RESEARCH.md
-# Assumption A1 — that the EXISTING thesis exactness copy (`v̂`, thesis 3.43/3.45, already coded
-# in `ConvexBranchFlow.jl`) is a LOWER-bound shadow on the true voltage (`v ≥ v̂` everywhere),
-# the OPPOSITE sign relationship from Gan–Low's UPPER-bound shadow `v ≤ v̂_GL(s)`. If this
-# assertion ever fails, STOP: the derivation in 20-RESEARCH.md has an error and every downstream
-# plan (20-02..05) needs re-deriving before proceeding.
+# The FIRST @testitem below is the analytic spot-check for the CORRECTED (phase 26-02,
+# FIX-01/02) thesis exactness copy (`v̂`, thesis 3.43/3.45, `ConvexBranchFlow.jl`'s DEFAULT
+# `thesis_literal=false`): `v̂ ≥ v` everywhere (the Gan-Low direction), matching Gan-Low's
+# UPPER-bound shadow `v ≤ v̂_GL(s)` in kind (though `ConvexBranchFlow`'s `v̂` is a per-branch
+# local sign flip, not the tree-wide `v̂_GL(s)` below). Prior to phase 26-02, this test
+# encoded the OPPOSITE (defective, thesis-literal) relationship `v ≥ v̂` as
+# "RESEARCH Assumption A1" — that assumption described the PRE-fix state and is now
+# superseded; see `.planning/phases/26-network-device-model-correctness/26-RESEARCH.md`.
 #
 # The SECOND @testitem measures the Gan–Low "modification gap" ε (Definition 3, eq. 18) on a
 # genuine AC-feasible operating point via the new `recover_lossfree_shadow_voltage` helper
 # (src/models/ac_oracle.jl) — a MEASURED, never-searched default for plan 20-02's
 # `RestrictedBranchFlow` shrink kwarg (D-03/D-04).
 
-@testitem "restricted_branch_flow: v ≥ v̂ sign-relationship spot-check on the EXACT-04 fixture (RESEARCH Assumption A1)" tags =
+@testitem "restricted_branch_flow: v̂ ≥ v sign-relationship spot-check on the EXACT-04 fixture (phase 26-02 FIX-01/02)" tags =
     [:restricted_branch_flow] setup = [Phase4Fixtures] begin
     using TSODSO
     using JuMP
@@ -42,14 +43,16 @@
     N = length(feeder.buses)
 
     mingap =
-        minimum(value(pv.v[j, t]) - value(pv.v̂[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T)
-    @info "v-v̂ min gap" mingap
+        minimum(value(pv.v̂[j, t]) - value(pv.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T)
+    @info "v̂-v min gap" mingap
 
-    # RESEARCH.md Assumption A1: the existing thesis exactness copy is a LOWER-bound shadow
-    # (v ≥ v̂), opposite Gan-Low's UPPER-bound shadow — this is the reason Phase 20 needs a
-    # genuinely new mechanism, not an adjustment of the existing v̂ bound. If this assertion ever
-    # fails, STOP: the derivation in 20-RESEARCH.md has an error and every downstream plan
-    # (20-02..05) needs re-deriving before proceeding.
+    # Phase 26-02 (FIX-01/02): ConvexBranchFlow's corrected default exactness copy is an
+    # UPPER-bound shadow (v̂ ≥ v), the Gan-Low direction — matching the thesis's own stated
+    # intent (citing Gan-Low 2015) that v ≤ V²max becomes redundant once v̂ ≤ V²max is
+    # imposed. This assertion FLIPPED from the pre-fix golden (which encoded the opposite,
+    # defective `v ≥ v̂` relationship as "RESEARCH Assumption A1") — see
+    # 26-RESEARCH.md for the telescoping-sum proof. If this assertion ever fails, the
+    # cpydrop sign-flip fix (src/powerflow/ConvexBranchFlow.jl) has regressed.
     @test mingap >= -1e-9
 end
 
@@ -77,8 +80,13 @@ end
     pv_ac = ctx_ac.meta[:pf_vars]
     N = length(feeder.buses)
 
-    # Lemma 1 sanity check: Gan-Low's v ≤ v̂(s) always holds — the OPPOSITE sign from the first
-    # @testitem's v ≥ v̂, confirming the two shadows are genuinely distinct mechanisms.
+    # Lemma 1 sanity check: Gan-Low's v ≤ v̂(s) always holds. Since phase 26-02 (FIX-01/02)
+    # this is the SAME direction as the first @testitem's ConvexBranchFlow v̂ ≥ v (both are
+    # upper-bound shadows), but a DIFFERENT, tree-wide (whole-subtree loss-free) magnitude —
+    # v̂_GL(s) here is the literal Gan-Low Definition-3 quantity computed post-solve from the
+    # AC oracle, strictly tighter than ConvexBranchFlow's per-branch local-sign-flip v̂,
+    # confirming the two shadows are genuinely distinct mechanisms despite now sharing a
+    # sign.
     @test minimum(
         v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T
     ) >= -1e-9

@@ -67,6 +67,75 @@ end
     end
 end
 
+# FIX-01/02 (phase 26-02): ConvexBranchFlow()'s DEFAULT (thesis_literal=false) exactness copy
+# must satisfy v̂ ≥ v (the Gan-Low direction) at the solution.
+@testitem "socp: default ConvexBranchFlow() satisfies v̂ ≥ v (FIX-01/02)" tags = [:socp] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 2)
+    pv = ctx.meta[:pf_vars]
+
+    fix.(pv.P[1, :], 0.3; force = true)
+    fix.(pv.Q[1, :], 0.1; force = true)
+    @objective(model, Min, 0.0)
+    optimize!(model)
+    @test is_solved_and_feasible(model)
+
+    N = length(feeder.buses)
+    mingap = minimum(value(pv.v̂[j, t]) - value(pv.v[j, t]) for j in 1:N, t in 1:2)
+    @info "v̂-v min gap (default ConvexBranchFlow)" mingap
+    @test mingap >= -1e-9   # v̂ ≥ v everywhere (Gan-Low direction)
+end
+
+# FIX-02 load-bearing/redundant bound check: under the CORRECTED direction, `v̂ ≤ V²max` is
+# the LOAD-BEARING (exactness-driving) bound and `v ≤ V²max` is redundant (implied by
+# `v ≤ v̂ ≤ V²max`) — matching ConvexBranchFlow's corrected docstring claim. Demonstrated by
+# maximizing the squared branch current `l` (which increases `v̂` TWICE as fast as `v` per
+# unit `l`, since both start from the SAME root value and `v̂`'s copy-drop coefficient on `l`
+# is `2(r²+x²)` vs `v`'s true-drop coefficient `(r²+x²)`): the solve must hit `v̂`'s own
+# upper bound strictly BEFORE `v`'s, leaving `v`'s bound slack.
+@testitem "socp: default ConvexBranchFlow() has v̂ ≤ V²max load-bearing, v ≤ V²max redundant (FIX-02)" tags =
+    [:socp] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+
+    model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 1)
+    pv = ctx.meta[:pf_vars]
+
+    fix.(pv.P[1, :], 0.05; force = true)
+    fix.(pv.Q[1, :], 0.02; force = true)
+    @objective(model, Max, pv.l[1, 1])   # push l up until a bus-voltage bound binds
+    optimize!(model)
+    @test is_solved_and_feasible(model)
+
+    vmax2 = feeder.buses[2].vmax^2
+    v2 = value(pv.v[2, 1])
+    v̂2 = value(pv.v̂[2, 1])
+    @info "load-bearing check" v2 v̂2 vmax2
+
+    @test isapprox(v̂2, vmax2; atol = 1e-6)   # v̂ ≤ V²max binds (load-bearing)
+    @test v2 < vmax2 - 1e-3                  # v ≤ V²max is SLACK (redundant)
+end
+
 # GREEN confirmation (no factory edit needed): the `SOCP()` problem class already routes to
 # a Clarabel factory with the tight duality-gap tolerances the DADP accuracy / exactness
 # check depend on (src/solver/factory.jl, plan 01-03). This item documents that Phase-4
