@@ -144,6 +144,108 @@ end
     )
 end
 
+@testitem "mpc_loop: A6 truth-settlement clips BOTH p_ch and pv_used to true PV, never crediting phantom PV energy (CR-02, 27-REVIEW.md)" tags =
+    [:mpc_loop] begin
+    using TSODSO, Test
+
+    # CR-02 regression (27-REVIEW.md, 2026-09-29): the PRE-FIX truth-settlement block
+    # clipped only `p_ch` to the device's TRUE (unperturbed) PV availability, leaving
+    # `pv_used` — which feeds `net_p`/`p_inject` and hence the AC truth-settled frontier
+    # import — UNCLIPPED. Under a forecast draw with `fe.pv_factor > 1` (the window
+    # believes MORE PV is available than truly exists — CONFIRMED to occur at several
+    # hours of `test_mpc_loop.jl`'s own existing "forced-PV-shortfall" fixture,
+    # `seed=1, mpc_forecast_error=0.3`: `draw_forecast_error(1, t, 0.3).pv_factor` measured
+    # 2026-09-29 as 1.25/1.06/1.13/1.04/1.28/1.06 at t=1/2/3/6/7/9 respectively), this let
+    # `realized_welfare`/`p_import_true` be credited with PV energy the true plant cannot
+    # physically supply. Fixed by extracting the clip into `_mpc_pvbattery_true_clip`
+    # (internal, unexported) and applying it to BOTH quantities identically — exercised
+    # DIRECTLY here (mirroring this file's own established pattern of unit-testing
+    # `run_mpc`'s internal helpers, e.g. `_mpc_assert_true_state_inband` immediately
+    # above) with HAND-derived numbers, so the fix is checked exactly rather than only
+    # qualitatively.
+    #
+    # PRE-FIX vs POST-FIX (confirmed BY HAND, 2026-09-29, via `git stash` on
+    # `src/experiments/mpc_loop.jl` and re-running this exact body): pre-fix,
+    # `_mpc_pvbattery_true_clip` does not exist (`UndefVarError`) — the semantic
+    # equivalent, "PRE-FIX" `pv_used_true = pv_used` (no clip at all), is checked
+    # explicitly below and FAILS the CR-02 invariant at this fixture's numbers.
+    @test isdefined(TSODSO, :_mpc_pvbattery_true_clip)
+
+    # A fe.pv_factor > 1 device-level scenario: the window solved p_ch=3.0, pv_used=4.0
+    # believing more PV was available (e.g. a forecast-perturbed Ppv_param bounding
+    # pv_used above the true value), but the TRUE (unperturbed) PV availability this hour
+    # is only Ppv_true=2.0 — a forecast that overstated PV by 2x. Both p_ch and pv_used
+    # exceed the TRUE availability.
+    p_ch, pv_used, Ppv_true, p_dch = 3.0, 4.0, 2.0, 0.5
+    clip = TSODSO._mpc_pvbattery_true_clip(p_ch, pv_used, Ppv_true)
+
+    # The core CR-02 invariant (exactly what 27-REVIEW.md's Fix section asks for): NEITHER
+    # realized quantity may exceed the TRUE PV availability, checked for BOTH p_ch_true
+    # AND pv_used_true individually (the PRE-FIX bug was pv_used_true alone violating
+    # this).
+    @test clip.p_ch_true <= Ppv_true
+    @test clip.pv_used_true <= Ppv_true
+    # The PVBattery model's own p_ch <= pv_used invariant (src/devices/PVBattery.jl:308)
+    # survives the clip — the returned pair is itself a valid operating point at the TRUE
+    # PV availability, never just two independently-clamped numbers.
+    @test clip.p_ch_true <= clip.pv_used_true
+
+    # HAND-DERIVED exact values: both p_ch=3.0 and pv_used=4.0 exceed Ppv_true=2.0, so BOTH
+    # clip to exactly 2.0.
+    @test clip.p_ch_true == 2.0
+    @test clip.pv_used_true == 2.0
+
+    # Control: a device-hour where TRUE PV is NOT exceeded — the clip must be a no-op
+    # (never distorts an already-truthful window solve, e.g. fe.pv_factor <= 1 hours).
+    clip_noop = TSODSO._mpc_pvbattery_true_clip(0.5, 1.0, 2.0)
+    @test clip_noop.p_ch_true == 0.5
+    @test clip_noop.pv_used_true == 1.0
+
+    # HAND-DERIVED realized welfare at the clipped point, using the SAME device utility
+    # formula run_mpc itself calls (`_mpc_pvbattery_utility`), on a PVBattery with
+    # λ_min=1.0, λ_med=4.0, λ_max=9.0, Pmax=5.0 (the SAME parametrization as the T>1
+    # fixture in test_planning_certification_integer.jl):
+    #   a_ch = λ_med = 4.0, b_ch = (λ_med-λ_min)/Pmax = 3.0/5.0 = 0.6
+    #   a_dch = λ_med = 4.0, b_dch = (λ_max-λ_med)/Pmax = 5.0/5.0 = 1.0
+    # at p_ch_true=2.0 (from the clip above), p_dch=0.5 (discharge is UNAFFECTED by the
+    # PV clip):
+    #   U = a_ch*p_ch_true - (b_ch/2)*p_ch_true^2 - a_dch*p_dch - (b_dch/2)*p_dch^2
+    #     = 4.0*2.0 - 0.3*2.0^2 - 4.0*0.5 - 0.5*0.5^2
+    #     = 8.0 - 1.2 - 2.0 - 0.125 = 4.675
+    dev = TSODSO.PVBattery(
+        2,
+        0.95,
+        1.0,
+        5.0,
+        0.0,
+        10.0,
+        2.0,
+        1.0,
+        4.0,
+        9.0,
+        [Ppv_true, Ppv_true],
+    )
+    U = TSODSO._mpc_pvbattery_utility(dev, clip.p_ch_true, p_dch)
+    @test isapprox(U, 4.675; atol = 1e-12)
+
+    # The realized NET PV contribution to settlement (`net_p`'s `pv_used_true - p_ch_true +
+    # p_dch` term, mirroring run_mpc's own accumulation) under the FIX vs. the PRE-FIX
+    # (unclipped pv_used) formula — demonstrating the actual bug CR-02 describes: the
+    # device UTILITY term (above) was already correct pre-fix (it never reads pv_used
+    # directly), but the NET INJECTION accounting was not.
+    net_p_prefix_bug = pv_used - clip.p_ch_true + p_dch          # PRE-FIX: pv_used UNCLIPPED
+    net_p_postfix = clip.pv_used_true - clip.p_ch_true + p_dch   # POST-FIX: pv_used CLIPPED
+    @test net_p_prefix_bug == 2.5   # HAND-DERIVED: 4.0 - 2.0 + 0.5 -- overstates true PV
+    @test net_p_postfix == 0.5      # HAND-DERIVED: 2.0 - 2.0 + 0.5 -- reflects TRUE PV
+    @test net_p_postfix < net_p_prefix_bug
+    # The PRE-FIX value physically implies MORE net PV injection than the true plant's
+    # entire PV availability could support net of charging -- exactly the "phantom PV
+    # energy" CR-02 describes. The POST-FIX value never can (by construction, since
+    # pv_used_true <= Ppv_true always).
+    @test net_p_prefix_bug > Ppv_true - clip.p_ch_true + p_dch
+    @test net_p_postfix == Ppv_true - clip.p_ch_true + p_dch
+end
+
 @testitem "mpc_loop: forced-inexact window escalates through Phase-20's ladder WITHOUT throwing (MPC-04, D-04)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
     using TSODSO, Test

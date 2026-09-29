@@ -114,11 +114,15 @@ A `NamedTuple`
     each applied step's applied controls settled against the TRUE plant, over the
     Deferrable-excluded `mpc_aggs` device set (see header note) plus the frontier
     cost/revenue. Three corrections versus the window's own forecast-consistent belief:
-    (1) a `PVBattery`'s realized charge is CLIPPED to the device's TRUE (unperturbed)
-    `d.Ppv[abs_hour]` availability (Assumption A6: `p_ch[t] <= pv_used[t] <= Ppv[t]`) — never
-    the raw solved value, which can exceed truth when `fe.pv_factor > 1` inflated the
-    window's belief; the device utility term is charged on this SAME clipped value, never the
-    unclipped solved one; (2) true-state propagation (`propagate_soc`/`propagate_tin`, kept
+    (1) a `PVBattery`'s realized charge AND self-consumption/export (`pv_used`, which feeds
+    `net_p`/`p_inject` and hence the frontier import settled below) are BOTH CLIPPED to the
+    device's TRUE (unperturbed) `d.Ppv[abs_hour]` availability (Assumption A6:
+    `p_ch[t] <= pv_used[t] <= Ppv[t]`) — never the raw solved values, either of which can
+    exceed truth when `fe.pv_factor > 1` inflated the window's belief (CR-02, 27-REVIEW.md:
+    clipping only `p_ch` and leaving `pv_used` unclipped let `realized_welfare`/
+    `p_import_true` be credited with PV energy the true plant cannot physically supply); the
+    device utility term is charged on the clipped `p_ch`, never the unclipped solved one;
+    (2) true-state propagation (`propagate_soc`/`propagate_tin`, kept
     JuMP-free) THROWS a loud `ErrorException` — never silently clamps — if the realized state
     falls outside `[Emin,Emax]`/`[Tmin,Tmax]`, a genuine out-of-band event distinct from
     `_mpc_window_device`'s SEPARATE solver-tolerance-noise clamp (`mpc_loop.jl:759-780`,
@@ -538,12 +542,23 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                     # ---- truth-settled settlement (NEW, FIX-10) ----
                     if d isa PVBattery
                         v = only(vv for vv in varlist if haskey(vv, :soc0))
-                        # A6 clip: the realized charge can never exceed the device's TRUE
-                        # (unperturbed) PV availability, even when the window believed more
-                        # PV was available (fe.pv_factor != 1.0).
-                        p_ch_true = min(value(v.p_ch[τ_apply]), d.Ppv[abs_hour])
+                        # A6 clip: the realized charge AND self-consumption/export can
+                        # never exceed the device's TRUE (unperturbed) PV availability,
+                        # even when the window believed more PV was available
+                        # (fe.pv_factor != 1.0). CR-02 fix (27-REVIEW.md, 2026-09-29): the
+                        # PRE-FIX code clipped only p_ch, leaving pv_used (which feeds
+                        # net_p / net grid injection / realized_welfare via
+                        # p_import_true) UNCLIPPED — under fe.pv_factor > 1 that credited
+                        # realized_welfare with PV energy the true plant cannot supply. Both
+                        # quantities are now clipped by the SAME rule via
+                        # `_mpc_pvbattery_true_clip` (factored out for direct unit testing).
                         p_dch1 = value(v.p_dch[τ_apply])   # discharge unaffected by the clip
                         pv_used1 = value(v.pv_used[τ_apply])
+                        (p_ch_true, pv_used_true) = _mpc_pvbattery_true_clip(
+                            value(v.p_ch[τ_apply]),
+                            pv_used1,
+                            d.Ppv[abs_hour],
+                        )
                         realized_welfare += _mpc_pvbattery_utility(d, p_ch_true, p_dch1)
                         next_soc = propagate_soc(
                             measured_state_true[(agg.bus, :soc)],
@@ -561,7 +576,7 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                             abs_hour,
                         )
                         measured_state_true[(agg.bus, :soc)] = next_soc
-                        net_p += pv_used1 - p_ch_true + p_dch1
+                        net_p += pv_used_true - p_ch_true + p_dch1
                     elseif d isa FourQuadBESS
                         # No Ppv field (not PV-limited, FourQuadBESS.jl) — the clip applies
                         # ONLY to PVBattery; the truth propagation is otherwise IDENTICAL to
@@ -1106,6 +1121,34 @@ function _mpc_pvbattery_utility(d::PVBattery, p_ch::Real, p_dch::Real)
     a_dch = d.λ_med
     b_dch = (d.λ_max - d.λ_med) / d.Pmax
     return a_ch * p_ch - (b_ch / 2) * p_ch^2 - a_dch * p_dch - (b_dch / 2) * p_dch^2
+end
+
+"""
+    _mpc_pvbattery_true_clip(p_ch::Real, pv_used::Real, Ppv_true::Real) -> NamedTuple
+
+Internal helper (unexported, Phase 27 FIX-10, CR-02 fix per 27-REVIEW.md 2026-09-29): the
+A6 truth-settlement clip — both the window-solved charge `p_ch` AND the window-solved
+self-consumption/export `pv_used` are clipped to the device's TRUE (unperturbed)
+`Ppv_true = d.Ppv[abs_hour]` availability, returning `(; p_ch_true, pv_used_true)`.
+
+Factored out of [`run_mpc`](@ref)'s truth-settlement block (below) so both quantities are
+clipped by the EXACT SAME rule at a single call site, and so this invariant is directly
+unit-testable without driving a full closed-loop `run_mpc` solve. CR-02 (27-REVIEW.md): the
+PRE-FIX code clipped only `p_ch`, leaving `pv_used` — which feeds `net_p`/`p_inject` and
+hence the AC truth-settled frontier import — UNCLIPPED; under `fe.pv_factor > 1` (the
+window believes MORE PV is available than truly exists) that let `realized_welfare`/
+`p_import_true` be credited with PV energy the true plant cannot physically supply.
+
+Invariant preserved (never separately re-checked — it falls out of clipping both the same
+way): since the window's OWN PVBattery model already enforces `p_ch <= pv_used`
+(`src/devices/PVBattery.jl:308`), `min(p_ch, Ppv_true) <= min(pv_used, Ppv_true)` always
+holds, i.e. `p_ch_true <= pv_used_true` — the returned pair is itself a valid PVBattery
+operating point at the TRUE PV availability, never just two independently-clamped numbers.
+"""
+function _mpc_pvbattery_true_clip(p_ch::Real, pv_used::Real, Ppv_true::Real)
+    p_ch_true = min(p_ch, Ppv_true)
+    pv_used_true = min(pv_used, Ppv_true)
+    return (; p_ch_true, pv_used_true)
 end
 
 """
