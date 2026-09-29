@@ -23,7 +23,7 @@ using JuMP
     solve_welfare(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                   T::Int = 24, λ₀, optimizer = select_optimizer(problem_class(pf)),
                   allow_local::Bool = false, τ::Real = 1e-3, rtol_exact::Real = 1e-4,
-                  allow_export::Bool = false)
+                  allow_export::Bool = false, allow_almost::Bool = false)
         -> (ctx::ModelContext, objective::Float64, dadp::Vector{Float64})
 
 Build and solve the GLB-CVX centralized social-welfare problem (thesis eq. 3.38) over
@@ -65,8 +65,16 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
     (active-only) run leaves any aggregator reactive terms unclosed. Both closures are
     registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
  6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
- 7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local)` — the OPTIMAL
-    (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is trusted;
+ 7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local, allow_almost)` —
+    the OPTIMAL (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is
+    trusted. `allow_almost` (FIX-09, Phase 27 plan 27-05) defaults `false` (STRICT gate,
+    byte-identical to every pre-existing call site) and is forwarded VERBATIM to
+    `assert_solved!`'s own `allow_almost` — see that function's docstring for the precondition
+    it sanctions ("an intermediate re-solve whose DUALS are NOT read"). Passing `true` here
+    does NOT bypass step 8/9 below (they still run on whatever primal was accepted); it is the
+    caller's responsibility to independently verify precision before trusting `objective_value`
+    when `allow_almost = true` accepted a near-feasible point (`fit_baseline`'s SITE-3
+    cross-check is the ONE intended caller, gated behind its own measured gap bound);
  8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
     ONLY when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
     cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
@@ -107,6 +115,15 @@ function solve_welfare(
     τ::Real = (problem_class(pf) isa SOCP ? 1e-3 : 1e-6),
     rtol_exact::Real = 1e-4,
     allow_export::Bool = false,
+    # FIX-09 (Phase 27, plan 27-05): a NEW, narrowly-scoped kwarg forwarded VERBATIM to
+    # assert_solved!'s own allow_almost (src/core/status.jl). Defaults false everywhere, so
+    # EVERY existing call site (the planning subproblem/AgrOpt, stochastic_welfare, every
+    # test) is byte-identical. See assert_solved!'s own docstring for the precondition this
+    # sanctions ("an intermediate re-solve whose DUALS are NOT read") — the ONLY intended
+    # caller is fit_baseline's SITE-3 cross-check, which discards this function's `dadp`
+    # return value and gates acceptance behind its OWN measured, named primal-dual gap bound
+    # (FIT_SITE3_ALMOST_GAP_TOL) BEFORE trusting `objective_value` (see src/pricing/fit.jl).
+    allow_almost::Bool = false,
 )
     # Boundary guards (RESEARCH Pitfall 4): empty aggregators ⇒ no priced load / no
     # objective; a λ₀ shape mismatch ⇒ BoundsError deep in objective assembly. Fail here.
@@ -238,7 +255,9 @@ function solve_welfare(
     @objective(model, Max, welfare)
 
     # OPTIMAL gate: never read a dual (price) before a trusted solve (threat T-03-14).
-    assert_solved!(model; dual = true, allow_local = allow_local)
+    # `allow_almost` (FIX-09) is forwarded VERBATIM and defaults false — byte-identical to
+    # before this kwarg existed on every call site that omits it.
+    assert_solved!(model; dual = true, allow_local = allow_local, allow_almost = allow_almost)
 
     # PF-04 EXACTNESS GATE (RESEARCH Pattern 4; threats T-04-01 / T-04-03): the headline
     # correctness gate. It MUST run AFTER assert_solved! (a trusted primal) and BEFORE any

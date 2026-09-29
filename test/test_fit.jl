@@ -54,3 +54,56 @@ end
         @test isfinite(res.ratio)
     end
 end
+
+# FIX-09 (Phase 27, plan 27-05; T-27-12): `fit_baseline`'s FIT AC-PF step (SITE 2) previously
+# called ONLY `assert_solved!` — never `assert_socp_exact!` — so a genuinely inexact SOC
+# relaxation there silently returned an uncertified `social_fit`/`ratio`. This item is RED
+# until the `on_inexact::Symbol` kwarg is wired in (`src/pricing/fit.jl`).
+@testitem "fit: SITE 2 (FIT AC-PF) on_inexact=:error refuses an inexact cone, :report returns a finite certificate (FIX-09)" tags =
+    [:fit] setup = [Phase4Fixtures] begin
+    using TSODSO
+
+    @test isdefined(TSODSO, :fit_baseline)
+
+    if isdefined(TSODSO, :fit_baseline)
+        # pv_scale=2.0 on Phase4Fixtures' high-PV stress fixture (EXACT-04's own substrate)
+        # drives `fit_baseline`'s SITE 2 (the FIT AC-PF, on its OWN voltage-relaxed [0.8,1.2]
+        # feeder copy) genuinely INEXACT — measured directly at ≈6.1 (an O(1) cone slack, not
+        # borderline solver noise) — while the OTHER two internal solves (the FIT-OPT, the
+        # nested solve_welfare cross-check) both succeed. EXACT-04's own pv_scale=1.2 (tuned
+        # against the TIGHT [0.95,1.05] band) stays EXACT here: SITE 2's wider relaxed band
+        # needs a LARGER back-feed to pin its own, higher voltage cap.
+        feeder = Phase4Fixtures.high_pv_feeder()
+        aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 2.0)
+        λ₀ = Phase4Fixtures.mem_price_profile()
+
+        @test_throws Exception fit_baseline(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            on_inexact = :error,
+        )
+
+        res = fit_baseline(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            on_inexact = :report,
+        )
+        @test isfinite(res.socp_maxgap)
+        @test res.socp_maxgap > 0   # a genuine, non-trivial cone slack was measured, not 0
+
+        @test_throws ArgumentError fit_baseline(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            on_inexact = :bogus,
+        )
+    end
+end
