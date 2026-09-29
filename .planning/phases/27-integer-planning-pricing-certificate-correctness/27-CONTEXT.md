@@ -109,6 +109,8 @@ in-phase; suite green at close. Thesis-reproduction restatement is Phase 28.
 ## Deferred Ideas
 
 - Removal of deprecated DLMP aliases — Phase 36.
+- Restate `docs/literate/mpc_rolling_horizon.jl` + `scripts/demo_mpc_plots.jl` realized_welfare/regret prose under the
+  new truth-settled semantics (FIX-10) — Phase 28 restatement (plan-checker W2).
 - App. C η<1 complementarity treatment — unscheduled backlog (Phase 26 finding).
 
 </deferred>
