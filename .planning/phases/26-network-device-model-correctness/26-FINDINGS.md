@@ -97,3 +97,28 @@ Executors in parallel worktrees append here — never edit `STATE.md` directly.
   behavior and stays on the DEFAULT `ConvexBranchFlow()`) unchanged. See
   `test/test_restricted_branch_flow.jl`'s own inline comments (D-05 and `ac_dual_fallback_price`
   testitems) for the full derivation.
+
+## Plan 26-08 — Phase 26 gap-closure wave complete (SC-6 golden-move audit)
+
+Phase 26's gap-closure wave (`26-POSTMERGE-TRIAGE.md`, Plans 26-09 through 26-20) is complete.
+This plan (26-08, the phase-closing gate) re-verified `RestrictedBranchFlow._EXACT04_MEASURED_ε`
+against the fully-merged code (moved: `0.005811069127373614` → `0.010189528427785532`, base,
+unblocked by Plan 26-14's App. C throw-to-diagnostic conversion), discovered and fixed a
+downstream regression Plan 26-12's PM-03 smart default surfaced in `test/test_dso.jl` and
+`test/test_admm_reactive.jl` (a genuinely flexible-load-free `build_two_bus_aggregators_no_flex`
+fixture restores 4 pre-Phase-26 REACT-0x testitems' original testing intent), and certified the
+full suite GREEN (0 fail, 0 error, exit code 0) at HEAD `6c25f27` — 30195 pass / 5 broken / 30200
+total, versus the Plan 26-01 baseline's 30154 pass / 3 broken / 30157 total. All 5 Broken items are
+named, honest, pre-existing findings (2 CairoMakie weakdeps, the v2.1 welfare-ratio figure-bound
+cross-check, and the 2 thesis `v₉[16]` cross-checks whose growing gap is Plan 26-17/26-19's own
+predicted, deliberate outcome) — none is a silent or unexplained regression.
+
+The complete cross-phase golden-move audit table (every golden this phase moved, both waves, with
+old→new values and cause) is `.planning/phases/26-network-device-model-correctness/26-GOLDEN-AUDIT.md`.
+The four cross-phase findings above (PM-01, PM-02, PM-04, the v2.1 restatement) were verified
+consistent across every location the governing plans documented them — no gap was found, no
+re-authoring was needed.
+
+SC-6 ("every moved golden re-derived in-phase with a stated old→new value and cause; full suite
+green at phase close; no silent re-pin") is satisfied. `.planning/STATE.md` is untouched by this
+plan — the orchestrator folds this file's contents in at phase close.
