@@ -1,21 +1,20 @@
-# Direct Test.jl reproduction of test_pricing_fit.jl's "fit: FIT-vs-DADP ratio regression
-# golden (EXP-04)" testitem, per the project memory that TestItemRunner does not resolve
-# under `julia --project=.` (gsd-plan-verify-testitemrunner-trap). Re-inlines the FitFixtures
-# @testmodule body (feeder + aggregators) as plain functions since @testmodule is a
-# TestItems-only macro not available in the package environment.
+# .planning/phases/26-network-device-model-correctness/26-17-repro-fit-ratio.jl
 #
-# Phase 26 gap-closure (26-17, Task 2): re-measures and re-pins FIT_RATIO_GOLDEN after
-# FIX-04 (battery soc[T+1] horizon linking) closed PVBattery's free hour-T discharge on
-# this T=4 fixture. OLD 0.6428101637491034 -> NEW 0.772018581825438 (PM-06).
-using Test
+# Direct-script reproduction of test/test_pricing_fit.jl's EXP-04 "FIT-vs-DADP ratio regression
+# golden" testitem (Plan 26-17, Task 2) — TestItemRunner traps under --project=. (see the
+# gsd-plan-verify-testitemrunner-trap memory), so this script reconstructs the `FitFixtures`
+# @testmodule inline (byte-identical to test/test_pricing_fit.jl's own definition) and asserts
+# against the CURRENTLY-PINNED `FIT_RATIO_GOLDEN` constant, PARSED LIVE from the edited test
+# file (never hardcoded here), so a wrong (or missing) re-pin fails this check.
+
 using TSODSO
 using TSODSO: Bus, Branch, Feeder
 
-const T = 4
+const FIT_T = 4
 
-function fitfixtures_feeder()
+function fit_fixture_feeder()
     buses = [
-        Bus(1, 0.95, 1.05, true),     # root / MEM frontier
+        Bus(1, 0.95, 1.05, true),
         Bus(2, 0.95, 1.05, false),
         Bus(3, 0.95, 1.05, false),
     ]
@@ -23,26 +22,32 @@ function fitfixtures_feeder()
     return Feeder(buses, branches, 1)
 end
 
-function fitfixtures_aggregators(; seed::Integer)
+function fit_fixture_aggregators(; seed::Integer)
     aggs = TSODSO.Aggregator[]
     for bus in 2:3
-        prof = generate_profiles(seed = seed + bus, T = T)
-        defer = Deferrable(bus, 1, T, 0.4, 0.3, 1.0)
+        prof = generate_profiles(seed = seed + bus, T = FIT_T)
+        defer = Deferrable(bus, 1, FIT_T, 0.4, 0.3, 1.0)
         batt = PVBattery(bus, 0.95, 1.0, 0.3, 0.0, 1.0, 0.5, 1.0, 2.0, 3.0, prof.pv)
         push!(aggs, Aggregator(bus, 0.9, [defer, batt], prof.demand))
     end
     return aggs
 end
 
-feeder = fitfixtures_feeder()
-aggs = fitfixtures_aggregators(seed = 20260718)
+feeder = fit_fixture_feeder()
+aggs = fit_fixture_aggregators(seed = 20260718)
+res = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = FIT_T)
+println("MEASURED res.ratio = ", res.ratio)
 
-res = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T)
+src = read("test/test_pricing_fit.jl", String)
+m = match(r"FIT_RATIO_GOLDEN\s*=\s*([0-9.eE+-]+)", src)
+m === nothing && error(
+    "Could not parse FIT_RATIO_GOLDEN from test/test_pricing_fit.jl — Plan 26-17 Task 2 must " *
+    "re-pin this constant",
+)
+pinned = parse(Float64, m.captures[1])
+println("PARSED pinned FIT_RATIO_GOLDEN = ", pinned)
 
-# Phase 26 gap-closure re-pin (PM-06) — FIX-04 closed PVBattery's free hour-T discharge on
-# this T=4 fixture. OLD 0.6428101637491034 -> NEW 0.772018581825438.
-FIT_RATIO_GOLDEN = 0.772018581825438
-
-@testset "26-17 repro: fit ratio golden" begin
-    @test isapprox(res.ratio, FIT_RATIO_GOLDEN; rtol = 1e-4)
-end
+isapprox(res.ratio, pinned; rtol = 1e-4) || error(
+    "FIT_RATIO_GOLDEN re-pin FAILED: measured res.ratio=$(res.ratio) vs pinned=$(pinned)",
+)
+println("OK: measured ratio matches the pinned FIT_RATIO_GOLDEN within rtol=1e-4")
