@@ -186,10 +186,23 @@ end
     # `v` is the SQUARED voltage ⇒ |V₉[16]| = sqrt(v[10, 16]); node 9 → struct index 10; the
     # welfare has a documented (large) gap to the thesis social-welfare $1819 because the
     # MEM/temperature profiles and house counts are figure-bound (A2/A3).
-    const GOLDEN_V9_16 = 1.0436080536       # |V₉[16]| = sqrt(v[10,16]); v[10,16]² ≈ 1.0891178
-    const GOLDEN_WELFARE = -4823.1598620624 # GLB-CVX welfare optimum (computed; ≠ thesis $1819)
-    const GOLDEN_DADP16 = 1.4024313925      # first-aggregator DADP at hour 16
-    const GOLDEN_SUM_DADP = 96.7166853441   # Σ_t DADP — a horizon-wide summary of the price vector
+    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
+    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
+    # see 26-POSTMERGE-TRIAGE.md. OLD 1.0436080536 -> NEW 1.03604426055989.
+    const GOLDEN_V9_16 = 1.03604426055989   # |V₉[16]| = sqrt(v[10,16]); v[10,16]² ≈ 1.0891178
+    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
+    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
+    # see 26-POSTMERGE-TRIAGE.md. OLD -4823.1598620624 -> NEW -4823.496124912337 (still within
+    # rtol 1e-4 of the old value; re-pinned anyway per SC-6's no-silent-re-pin discipline).
+    const GOLDEN_WELFARE = -4823.496124912337 # GLB-CVX welfare optimum (computed; ≠ thesis $1819)
+    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
+    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
+    # see 26-POSTMERGE-TRIAGE.md. OLD 1.4024313925 -> NEW 0.3938281171438668.
+    const GOLDEN_DADP16 = 0.3938281171438668 # first-aggregator DADP at hour 16
+    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
+    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
+    # see 26-POSTMERGE-TRIAGE.md. OLD 96.7166853441 -> NEW 86.84596646996015.
+    const GOLDEN_SUM_DADP = 86.84596646996015 # Σ_t DADP — a horizon-wide summary of the price vector
     const THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude (Open Q1 / A1) — cross-check only
 
     feeder = TSODSO.ieee13_modified()
@@ -223,9 +236,12 @@ end
         THESIS_V9_16 gap = gap note = "gap is expected & documented (Open Q1: inputs figure-bound)"
 
     # A `broken` @test NEVER fails the suite: it reports Broken when the tight tolerance is
-    # unmet and Pass when it is met (here gap ≈ 0.0057 < 1e-2, so it passes). This gives a
-    # suite-visible marker of the approximate match WITHOUT a spurious red from a figure-bound
-    # input difference. Only the COMPUTED golden above uses tight HARD assertions.
+    # unmet and Pass when it is met. Phase 26 gap-closure re-pin (PM-06): gap moved from
+    # ≈0.0057 (Pass) to ≈0.0133 (Broken) — FIX-04/05's real physics changes (flexible-load
+    # reactive draw + battery soc[T+1] linking) lower node-9's voltage further from the
+    # figure-bound thesis magnitude; see 26-POSTMERGE-TRIAGE.md. This gives a suite-visible
+    # marker of the approximate match WITHOUT a spurious red from a figure-bound input
+    # difference. Only the COMPUTED golden above uses tight HARD assertions.
     @test gap < 1e-2 broken = (gap >= 1e-2)
 
     # Generous PHYSICAL-BAND sanity ceiling that cannot spuriously fail: voltage is capped at

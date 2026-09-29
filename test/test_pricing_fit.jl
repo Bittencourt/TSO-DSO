@@ -196,7 +196,9 @@ end
 
     # PRIMARY reproducibility anchor: the COMPUTED ratio pinned as a golden (tight rtol),
     # captured from the first trusted solve on this fixture's fixed seed.
-    FIT_RATIO_GOLDEN = 0.6428101637491034
+    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 closed PVBattery's free hour-T discharge
+    # on this T=4 fixture. OLD 0.6428101637491034 -> NEW 0.772018581825438.
+    FIT_RATIO_GOLDEN = 0.772018581825438
     @test isapprox(res.ratio, FIT_RATIO_GOLDEN; rtol = 1e-4)
 end
 
