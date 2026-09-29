@@ -1,5 +1,82 @@
 ---
 phase: 26-network-device-model-correctness
+fixed_at: 2026-09-29T03:35:00Z
+review_path: .planning/phases/26-network-device-model-correctness/26-REVIEW.md
+iteration: 2
+findings_in_scope: 1
+fixed: 1
+skipped: 0
+status: all_fixed
+---
+
+# Phase 26: Code Review Fix Report
+
+**Fixed at:** 2026-09-29T03:35:00Z
+**Source review:** .planning/phases/26-network-device-model-correctness/26-REVIEW.md
+**Iteration:** 2
+
+**Summary:**
+- Findings in scope (`fix_scope = critical_warning`): 1 (WR-05; iteration 2's re-review reported
+  0 critical/blocker findings and only this one new warning, plus the three iteration-1 INFO
+  items IN-01/IN-02/IN-03 carried forward unchanged and still out of scope)
+- Fixed: 1
+- Skipped: 0
+- Out of scope (not attempted, per `fix_scope`): IN-01, IN-02, IN-03 (Info-tier, carried forward
+  from iteration 1)
+
+The fix was applied in an isolated git worktree/branch (`gsd-reviewfix/26-2540817`), verified
+against the actual current source (re-read before editing) and committed atomically. Verification
+reproduced the exact `@testitem` bodies (both `"EXP-01 scenario centralized"` and `"EXP-01
+scenario admm"`) as a direct `julia --project=.` script exercising a live `run_scenario` call for
+each strategy — never TestItemRunner under `--project=.` (see the
+`gsd-plan-verify-testitemrunner-trap` project memory: TestItemRunner is a test-only dependency
+that does not resolve under the package env). A `Meta.parseall` syntax check of the modified test
+file also passed. No pinned/golden values were touched.
+
+## Fixed Issues
+
+### WR-05: The WR-01 fix (`reactive_consensus_mode` provenance threading) has zero committed regression coverage
+
+**Files modified:** `test/test_experiments.jl`
+**Commit:** `c7aa143`
+**Applied fix:** Added two assertions exactly where the review's Fix section pointed — the
+existing `"EXP-01 scenario centralized"` `@testitem` (`test/test_experiments.jl:26-55`) gained
+`@test ismissing(r1.reactive_consensus_mode)` right after its existing `ismissing(r1.iters)`
+check, and the existing `"EXP-01 scenario admm"` `@testitem` (`test/test_experiments.jl:57-79`)
+gained `@test r.reactive_consensus_mode isa TSODSO.ReactiveMode` after its existing
+`final_r`/`final_s` checks. Both items already reused the smallest fixture in the suite
+(`Phase8Fixtures.minimal_scenario_kwargs()`, IEEE-13, `T=24`, seed 7 — the minimum granularity
+this framework's seeded profiles support end-to-end per `fixtures_phase8.jl`'s own docstring), so
+no new fixture was introduced and no existing test got slower. Did not extend `"INFRA-04
+provenance tagsave"` with an `:admm` sub-case (the review's Fix section listed this as
+"optionally"; the two required assertions already close the coverage gap the finding raises, and
+the task instructions asked to keep the fixture as small/fast as possible and not touch goldens or
+run the full suite — declined the optional extra JLD2-round-trip sub-case to keep the change
+minimal). Verified by reproducing both `@testitem` bodies as a standalone
+`julia --project=. <script>` (not TestItemRunner, per the `gsd-plan-verify-testitemrunner-trap`
+memory): live `run_scenario` on `:centralized` returned `reactive_consensus_mode === missing`,
+and on `:admm` returned `LIVE isa TSODSO.ReactiveMode == true` — both assertions genuinely hold
+against a real solve, not a stub. Also confirmed with a standalone `Meta.parseall` that the
+modified test file still parses cleanly.
+
+## Skipped Issues
+
+None — the sole in-scope finding (WR-05) was fixed. IN-01/IN-02/IN-03 remain excluded by
+`fix_scope = critical_warning` and were not attempted (carried forward unchanged from iteration
+1's report below).
+
+---
+
+_Fixed: 2026-09-29T03:35:00Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2_
+
+---
+
+# Iteration 1 (preserved record)
+
+---
+phase: 26-network-device-model-correctness
 fixed_at: 2026-09-29T00:00:00Z
 review_path: .planning/phases/26-network-device-model-correctness/26-REVIEW.md
 iteration: 1
@@ -114,3 +191,4 @@ excluded by `fix_scope = critical_warning` and were not attempted.
 _Fixed: 2026-09-29T00:00:00Z_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+</content>
