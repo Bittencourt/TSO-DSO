@@ -74,7 +74,7 @@ end
         λ = extract_dlmp(ctx; bus = agg.bus, T = T)
         # The four components (energy + loss + voltage + congestion) must sum to the DLMP.
         for t in 1:T
-            total = comps.energy[t] + comps.loss[t] + comps.voltage[t] + comps.congestion[t]
+            total = comps.energy[t] + comps.cone[t] + comps.drop[t] + comps.congestion[t]
             @test isapprox(total, λ[t]; atol = 1e-4)
         end
     end
