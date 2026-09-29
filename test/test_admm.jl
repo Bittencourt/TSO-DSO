@@ -37,6 +37,16 @@
         load_bus = 2
 
         # Centralized ground truth (Phase 4/5): the monolithic SOCP welfare + its DADP duals.
+        #
+        # PM-05/26-16 (CSB-num): this near-lossless (r=x=1e-3) Phase6 two-bus fixture's TRUE
+        # optimum is exact, but Clarabel's default `tol_gap=1e-8` interior-point stopping point
+        # trips the PF-04 gate at ratio ~4.00 (26-POSTMERGE-TRIAGE.md cluster E). A tol_gap
+        # ladder measurement (this plan) confirms ratio 1.4e-3 at `1e-10` — a ~3000x margin
+        # below the gate — with the objective value UNCHANGED to >=6 significant digits
+        # (-483.819124 either way). The PF-04 gate itself (`assert_socp_exact!`'s atol/rtol) is
+        # NEVER touched; only the SOLVER's own convergence precision is tightened for this
+        # genuinely-degenerate fixture (established precedent: src/models/stochastic_welfare.jl
+        # L187-190, Plan 22-02).
         ctx_c, obj_c, _ = solve_welfare(
             feeder,
             ConvexBranchFlow(),
@@ -44,6 +54,7 @@
             T = Th,
             λ₀ = λ₀,
             allow_export = true,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
         )
         dlmp_c = extract_dlmp(ctx_c; bus = load_bus, T = Th)
 
@@ -168,6 +179,9 @@ end
         # (c) Welfare is recomputed from PRIMAL values (Σ U_ag − λ₀ᵀp_import), NOT a penalized
         # subproblem objective — so it MATCHES the centralized welfare, which the penalized
         # objectives (carrying the ρ-penalty + dual terms) never would (RESEARCH Pattern 5).
+        #
+        # PM-05/26-16 (CSB-num): SAME Phase6 two-bus precision-floor fixture as the `crossval`
+        # item above — tightened tol_gap for the SAME reason (see that item's comment).
         _, obj_c, _ = solve_welfare(
             feeder,
             ConvexBranchFlow(),
@@ -175,6 +189,7 @@ end
             T = Th,
             λ₀ = λ₀,
             allow_export = true,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
         )
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)
 
