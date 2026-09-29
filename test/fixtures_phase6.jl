@@ -156,6 +156,42 @@
         return [Aggregator(bus, 0.90, [therm, defer, batt], Pdc)]
     end
 
+    """
+        build_two_bus_aggregators_no_flex(feeder; seed=SEED_2BUS) -> Vector{<:Aggregator}
+
+    Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): a genuinely
+    FLEXIBLE-LOAD-FREE variant of [`build_two_bus_aggregators`](@ref) — a PVBattery-ONLY
+    aggregator at bus 2 of the [`two_bus_feeder`](@ref) (same seed/PV/battery sizing;
+    the Thermostatic/Deferrable members are dropped). `PVBattery` is neither
+    `is_flexible_load` (Plan 26-04, FIX-05) nor a `q_inject`-carrying device (D-09), so
+    `build_dso_opt`'s smart `reactive_consensus` default (Plan 26-12, PM-03,
+    `_any_flexible_reactive`) resolves to OFF on this population, and an explicit
+    `reactive_consensus = true`/`:certified` override does NOT trip the widened WR-04
+    fail-loud guard — restoring the pre-Phase-26 "default OFF, explicit CERTIFIED override
+    works" REACT-0x testing intent that `build_two_bus_aggregators`'s Thermostatic+Deferrable
+    members broke once PM-03's guard correctly began recognizing them as flexible loads.
+    """
+    function build_two_bus_aggregators_no_flex(feeder; seed::Integer = SEED_2BUS)
+        bus = 2
+        prof = generate_profiles(seed = seed + bus, T = T)
+        Ppv = Float64[PV_SCALE_2BUS * p for p in prof.pv]
+        Pdc = Float64[LOAD_SCALE_2BUS * d for d in prof.demand]
+        batt = PVBattery(
+            bus,
+            0.95,
+            1.0,
+            0.1,
+            0.0,
+            0.2,
+            0.1,
+            BATT_λ_MIN,
+            BATT_λ_MED,
+            BATT_λ_MAX,
+            Ppv,
+        )
+        return [Aggregator(bus, 0.90, [batt], Pdc)]
+    end
+
     export T,
         BATT_λ_MIN,
         BATT_λ_MED,
@@ -168,5 +204,6 @@
         temperature_profile,
         two_bus_lambda0,
         two_bus_feeder,
-        build_two_bus_aggregators
+        build_two_bus_aggregators,
+        build_two_bus_aggregators_no_flex
 end

@@ -312,7 +312,16 @@ end
     using JuMP
 
     feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): this testitem's
+    # ORIGINAL fixture, `build_two_bus_aggregators`, carries Thermostatic+Deferrable members
+    # that FIX-05 (Plan 26-04) made `is_flexible_load`, so `build_dso_opt`'s smart default
+    # (Plan 26-12, PM-03) now resolves to LIVE for that population and an explicit
+    # `reactive_consensus = true` now correctly trips the widened WR-04 guard — breaking BOTH
+    # of this testitem's original assumptions ("default is OFF", "explicit true/CERTIFIED
+    # works"). Swapped to the flexible-load-free `build_two_bus_aggregators_no_flex` (a
+    # PVBattery-only population) to restore the original REACT-03 "default OFF vs explicit
+    # CERTIFIED, physically equivalent" intent this testitem predates Phase 26 with.
+    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
     Th = Phase6Fixtures.T
     λ₀ = Phase6Fixtures.two_bus_lambda0()
     ρ = Phase6Fixtures.RHO_2BUS

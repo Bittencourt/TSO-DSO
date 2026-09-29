@@ -93,7 +93,14 @@
     using TSODSO
 
     feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): swapped to the
+    # flexible-load-free `build_two_bus_aggregators_no_flex` -- the original
+    # `build_two_bus_aggregators` fixture carries Thermostatic+Deferrable members that FIX-05
+    # made `is_flexible_load`, so an explicit `reactive_consensus = true` on it now correctly
+    # trips the widened WR-04 guard (Plan 26-12), which this testitem's `reactive_consensus =
+    # true` call below does not intend to exercise (that guard behavior is covered separately
+    # by "admm reactive: OFF/CERTIFIED with a q_inject-carrying device fails loud..." below).
+    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
 
     # RED probe: does build_dso_opt accept the reactive_consensus kwarg yet? Non-crashing --
     # the 3-arg hasmethod kwarg form never calls the function, so this cannot throw even though
@@ -126,7 +133,15 @@ end
     # land: the DEFAULT path (reactive_consensus never passed) is UNCHANGED (REACT-03's core
     # non-regression guarantee, re-checked at every future plan's commit).
     feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): swapped to the
+    # flexible-load-free `build_two_bus_aggregators_no_flex` -- the original
+    # `build_two_bus_aggregators` fixture carries Thermostatic+Deferrable members that FIX-05
+    # made `is_flexible_load`, so `build_dso_opt`'s smart `reactive_consensus` default
+    # (Plan 26-12, PM-03) now resolves to LIVE (not OFF) for that population, breaking this
+    # testitem's "the DEFAULT path is unchanged/OFF" REACT-03 assertion. The flexible-load-free
+    # population restores the smart default's OFF resolution, matching what this testitem
+    # actually intends to certify.
+    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
     Th = Phase6Fixtures.T
     λ₀ = Phase6Fixtures.two_bus_lambda0()
     ρ = Phase6Fixtures.RHO_2BUS
@@ -142,7 +157,11 @@ end
     using TSODSO
 
     feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): flexible-load-free
+    # fixture, same rationale as the two testitems above -- this item's explicit
+    # `reactive_consensus = true` below would otherwise trip the widened WR-04 guard against
+    # `build_two_bus_aggregators`'s now-`is_flexible_load` Thermostatic+Deferrable members.
+    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
 
     # RED probe, same gate discipline as item (1) -- solve_admm's reactive_consensus kwarg.
     # POSITIVE assertion (see item (1)'s comment) -- RED before plan 16-02, GREEN permanently
@@ -317,8 +336,20 @@ end
     λ₀ = Phase6Fixtures.two_bus_lambda0()
     ρ = Phase6Fixtures.RHO_2BUS
 
-    # The guard's home seam: build_dso_opt, in all three non-LIVE spellings.
-    @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)   # OFF (default)
+    # The guard's home seam: build_dso_opt, in the two remaining non-LIVE EXPLICIT spellings.
+    #
+    # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): the OMITTED-kwarg
+    # (DEFAULT) case used to be a THIRD non-LIVE spelling that this WR-04 guard caught
+    # ("OFF (default)" below) -- that is now STALE. Plan 26-12's `_any_flexible_reactive`
+    # smart default means `build_dso_opt`'s `reactive_consensus` kwarg no longer literally
+    # defaults to OFF for a FourQuadBESS-bearing population; it smart-resolves to LIVE
+    # directly, so the omitted-kwarg call no longer reaches the guard at all -- there is
+    # nothing left to catch on that path. OLD (pre-PM-03) assertion: `@test_throws
+    # ArgumentError build_dso_opt(feeder, aggs, Th; ρ=ρ, λ₀=λ₀)`. NEW: confirms the smart
+    # default resolves directly to LIVE (qag present), matching the explicit
+    # `reactive_consensus=:live` call at the bottom of this same testitem.
+    dso_default = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)   # smart default (PM-03) -> LIVE
+    @test dso_default.qag !== nothing
     @test_throws ArgumentError build_dso_opt(
         feeder,
         aggs,
