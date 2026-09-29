@@ -62,14 +62,20 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
   - 3.34 — the squared branch current `l[b,t] ≥ 0`;
   - 3.36 — forward apparent-power limit `P² + Q² ≤ S²max` (only where a real limit exists,
     see `_SMAX_NO_LIMIT`), written as the plain scalar quadratic inequality;
+  - 3.37 (PM-07, plan 26-15) — receiving-end apparent-power limit
+    `(P−r·l)² + (Q−x·l)² ≤ S²max`, on the SAME limited branches as 3.36, mirroring
+    [`ConvexBranchFlow`](@ref)'s `:smax_rev` cone (plan 26-05, FIX-03) so an AC-vs-SOCP
+    comparison on a limited branch shares the SAME feasible set — the AC oracle is not
+    strictly less restricted at the receiving end than the SOCP formulations it certifies;
   - 3.39 (UNRELAXED) — the branch-flow relation `l_ij·v_i = P_ij² + Q_ij²` as a genuine
     nonconvex EQUALITY, replacing the rotated-SOC inequality of [`ConvexBranchFlow`](@ref).
 
 Differences from [`ConvexBranchFlow`](@ref): drops the exactness copy `v̂` entirely (no `v̂`
 variable, no `v̂` bounds, no copy voltage drop 3.43) — there is no relaxation to force tight;
 replaces the rotated SOC cone (3.39) with the nonconvex scalar-quadratic equality; replaces the
-apparent-power SOC (3.36) with the equivalent scalar-quadratic inequality. Everything else — the
-true voltage drop (3.33), the loss-at-child `:Rp`/`:Rq` accumulation (3.31/3.32) — is
+apparent-power SOC (3.36) with the equivalent scalar-quadratic inequality, and its receiving-end
+peer (3.37, PM-07) with the equivalent scalar-quadratic inequality on `(P−r·l, Q−x·l)`. Everything
+else — the true voltage drop (3.33), the loss-at-child `:Rp`/`:Rq` accumulation (3.31/3.32) — is
 byte-identical to [`ConvexBranchFlow`](@ref).
 
 Squared-voltage convention (matches [`ConvexBranchFlow`](@ref) verbatim, threat T-15-01): `v`
@@ -109,7 +115,12 @@ Per branch/time it adds:
     LOCALLY_SOLVED/OPTIMAL termination the `solve_welfare` dispatch reaches);
   - the true voltage drop `v[to] == v[from] − 2(rP+xQ) + (r²+x²)·l` (thesis 3.33);
   - where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward apparent-power limit
-    `P² + Q² ≤ S²max` (thesis 3.36) as a plain scalar-quadratic inequality.
+    `P² + Q² ≤ S²max` (thesis 3.36) as a plain scalar-quadratic inequality;
+  - under the SAME filter, the receiving-end apparent-power limit
+    `(P−r·l)² + (Q−x·l)² ≤ S²max` (thesis 3.37, PM-07) as a plain scalar-quadratic
+    inequality — mirroring [`ConvexBranchFlow`](@ref)'s `:smax_rev` cone (plan 26-05,
+    FIX-03) so an AC-vs-SOCP comparison shares the same feasible set at both ends of a
+    limited branch.
 
 Then accumulates the per-bus active balance into `ctx.residuals[:Rp]` (thesis 3.31) and the
 reactive balance into `:Rq` (thesis 3.32) via the INDEXED `add_to_residual!`, loss-charged at
@@ -182,6 +193,21 @@ function contribute!(::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
         P[b, t]^2 + Q[b, t]^2 <= B[b].smax^2
     )
     register_constraint!(ctx, :smax, smax)
+
+    # Receiving-end apparent-power limit (thesis 3.37, PM-07 / plan 26-15): the receiving-end
+    # power `(P−r·l, Q−x·l)` is algebraically IDENTICAL to ConvexBranchFlow's shared `Prev`/
+    # `Qrev` expressions (plan 26-05, FIX-03) — written inline here (no shared @expression pair
+    # exists in this formulation) as a plain scalar-quadratic inequality (Ipopt takes it
+    # natively, same as `:cone`/`:smax` above), under the IDENTICAL `B[b].smax < _SMAX_NO_LIMIT`
+    # filter `:smax` uses, so the two limits appear or are omitted together per branch. Without
+    # this, the AC oracle would be strictly LESS restricted than the SOCP formulations at the
+    # receiving end of a limited branch under PV back-feed — comparing different feasible sets.
+    @constraint(
+        m,
+        smax_rev[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
+        (P[b, t] - B[b].r * l[b, t])^2 + (Q[b, t] - B[b].x * l[b, t])^2 <= B[b].smax^2
+    )
+    register_constraint!(ctx, :smax_rev, smax_rev)
 
     # Per-bus active (3.31) and reactive (3.32) balances: inflow − outflow, accumulated into
     # the shared :Rp / :Rq via the indexed seam. The incoming branch (i,j) contributes
