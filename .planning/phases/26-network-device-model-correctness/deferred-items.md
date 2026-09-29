@@ -66,6 +66,39 @@ route this to whichever plan owns the fix.
 **Confidence:** HIGH — reproduced via direct bisection across 4 isolated codebase snapshots, not
 inferred from reading code alone.
 
+---
+
+**RESOLVED (Plan 26-10).** Confirmed a precision-floor artifact, NOT a genuine
+`PVBattery`/`ConvexBranchFlow` interaction: Clarabel's default `tol_gap=1e-8` on this
+near-lossless (`r=x=1e-6`) fixture stops with the SOCP exactness-gate ratio at `4.04` (`>1`,
+throws), but the TRUE optimum IS exactly cone-tight — tightening the solver's convergence
+tolerance (not the gate) resolves it cleanly with the objective value unchanged to 8+
+significant digits across the whole ladder (`47.7991455494916` at `tol_gap=5e-10` vs
+`47.79914555186326` at `tol_gap=1e-12`). Both `test_pricing_dlmp.jl` testitems using this
+fixture (`:22` "extract_dlmp on a lossless 2-bus", `:221` "decompose_dlmp has ≈0
+congestion/voltage on an uncongested in-bound 2-bus") now pass an explicit
+`optimizer = select_optimizer(SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10)` keyword,
+mirroring the `stochastic_welfare.jl` precedent (`5e-10`, already sufficient — no further
+sweep needed). `assert_socp_exact!`'s own `atol`/`rtol` gate in `src/models/exactness.jl` is
+UNCHANGED (confirmed via `git diff`).
+
+Measured tol_gap ladder on the D-26-01 fixture (this plan's own sweep):
+
+| `tol_gap_abs/rel` | Result | Objective | `socp_maxgap` |
+|---|---|---|---|
+| `1e-8` (base) | THROWS (ratio 4.04) | — | — |
+| `5e-10` (chosen) | OK | `47.7991455494916` | `6.339e-6` |
+| `3e-10` | OK | `47.799145551735904` | `3.233e-7` |
+| `1e-10` | OK | `47.799145551735904` | `3.233e-7` |
+| `3e-11` | OK | `47.799145551735904` | `3.233e-7` |
+| `1e-12` | OK | `47.79914555186326` | `6.064e-9` |
+
+Also corrected this deferred item's own stale "uncongested" fixture label (flagged in
+`26-POSTMERGE-TRIAGE.md`'s "Latent issues found"): the fixture's `smax=10` head branch is
+actually a `:smax`/`:smax_rev`-bearing LIMITED branch (`smax=10 < SMAX_NO_LIMIT=99.0`), not an
+interior/unconstrained one — it is merely UN-BINDING (both cones slack) at this fixture's tiny
+flow magnitudes. `test_pricing_dlmp.jl`'s own comment for the `:221` item is updated to match.
+
 ## D-26-02 — Plan 26-12's PM-03 fix (ADMM reactive_consensus smart default) makes
 `test/test_admm.jl:121` and `test/test_acceptance.jl:82` record 1 converge more slowly than
 their pinned ρ/maxiter/tolerance budget on IEEE-13 ground

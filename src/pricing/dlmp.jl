@@ -44,9 +44,22 @@
 # to λ_j − λ_0, attributing:
 #   energy = λ_0 (root MEM price, same at every node),
 #   loss   = Σ_path −cone_dual[3]        (the SOC/DistFlow marginal-loss term, 3.39),
-#   cong   = Σ_path −smax_dual[2]        (thermal congestion, 3.36; 0 unless the head binds),
+#   cong   = Σ_path −smax_dual[2] − smax_rev_dual[2]
+#                                         (thermal congestion, SENDING-end 3.36 PLUS
+#                                          RECEIVING-end 3.37; 0 unless a head-branch limit
+#                                          binds, from EITHER end),
 #   volt   = Σ_path −2·r·(β + γ)         (voltage-drop propagation of the v/v̂ bound pressure,
 #                                          3.33/3.43; 0 when no voltage headroom is engaged).
+#
+# [Phase 26 / FIX-03 congestion follow-up, plan 26-10] `:smax_rev` (thesis 3.37, the
+# RECEIVING-end apparent-power cone added by plan 26-05) was NOT read by the congestion term
+# above until this plan. On IEEE-13, PV back-feed at t=9-16 makes the receiving-end cone bind
+# on the limited head branch INSTEAD OF the sending-end one, so the old sending-end-only
+# `cong_b` went to ~0 in that window and the hard sum-to-price assertion failed (residual 6.23
+# at bus 10, t=9). Fixed by adding a SOFT-guarded (`haskey`) read of `dual(:smax_rev[b,t])[2]`
+# into `cong_b`, SAME sign convention as the sending-end term (empirically verified: the worst
+# residual on the IEEE-13 back-feed window dropped to machine precision, 3.55e-15, at the
+# chosen sign — see `26-10-SUMMARY.md`).
 #
 # [Phase 26 / FIX-01-02 re-certification, plan 26-06] Phase 26 flipped `ConvexBranchFlow`'s
 # default `cpydrop` coefficient (v̂ ≥ v, the Gan-Low direction) — only the coefficient of the
@@ -224,7 +237,9 @@ Components (each summed over the unique radial path root→j; derivation in the 
 
   - `energy`     = `dual(:balance_p[root, t])`     — the MEM price, SAME at every node (≈ λ₀);
   - `loss`       = `Σ_path −dual(:cone[b,t])[3]`   — SOC/DistFlow marginal loss (thesis 3.39);
-  - `congestion` = `Σ_path −dual(:smax[b,t])[2]`   — thermal congestion (3.36; 0 off the head);
+  - `congestion` = `Σ_path (−dual(:smax[b,t])[2] − dual(:smax_rev[b,t])[2])` — thermal
+    congestion, SENDING-end (3.36) PLUS RECEIVING-end (3.37, FIX-03/26-05; soft-guarded —
+    reads 0 if `:smax_rev` is absent from `ctx`) — 0 off the head branch, from either end;
   - `voltage`    = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — voltage-drop propagation of
     the v/v̂ bound pressure (thesis 3.33/3.43; 0 with unengaged voltage headroom);
   - `reactive`   = `extract_reactive_dlmp(ctx)`    — the reactive nodal price (REACT-02;
@@ -271,6 +286,13 @@ function decompose_dlmp(
     cpydrop = ctx.constraints[:cpydrop]
     smax = ctx.constraints[:smax]
     smaxkeys = Set{Tuple{Int, Int}}(Tuple(k) for k in eachindex(smax))
+    # FIX-03/26-05 (plan 26-10): `:smax_rev` (thesis 3.37, the RECEIVING-end apparent-power
+    # cone) is registered under the IDENTICAL `B[b].smax < _SMAX_NO_LIMIT` filter as `:smax`
+    # (ConvexBranchFlow.jl), so `smaxkeys` (already built from `:smax`) applies unchanged to
+    # `:smax_rev` too. Soft-guarded (not added to the hard required-containers loop above)
+    # since some hand-built test contexts (e.g. this file's own unit-test ctxs) may not carry
+    # it — the congestion split degrades gracefully to sending-end-only in that case.
+    smax_rev = get(ctx.constraints, :smax_rev, nothing)
 
     total = extract_dlmp(ctx)                          # (N, Tfull) reference DADP (re-runs gate)
     energy = Matrix{Float64}(undef, N, Tfull)
@@ -286,7 +308,13 @@ function decompose_dlmp(
     for b in 1:nB, t in 1:Tfull
         r = feeder.branches[b].r
         loss_b[b, t] = -dual(cone[b, t])[3]                        # 3.39 P-slot (loss)
-        cong_b[b, t] = -_smax_P(smax, smaxkeys, b, t)              # 3.36 P-slot (congestion)
+        # 3.36 P-slot (sending-end congestion) PLUS 3.37 P-slot (receiving-end congestion,
+        # FIX-03/26-05, plan 26-10) — same sign convention (SAME cone shape, SAME filter),
+        # empirically verified against the hard sum-to-price assertion below on IEEE-13's
+        # PV back-feed window (t=9-16, bus 10) where :smax_rev binds and :smax is slack.
+        cong_b[b, t] =
+            -_smax_P(smax, smaxkeys, b, t) -
+            (smax_rev === nothing ? 0.0 : _smax_P(smax_rev, smaxkeys, b, t))
         volt_b[b, t] = -2 * r * (dual(vdrop[b, t]) + dual(cpydrop[b, t]))  # 3.33/3.43 (voltage)
     end
 
