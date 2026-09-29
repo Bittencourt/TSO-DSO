@@ -166,7 +166,7 @@ exactness gate, the FIT-baseline counterfactual, and MPC's realized-welfare acco
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close.
 
-**Plans:** 7/8 plans executed
+**Plans:** 8/9 plans executed
 
 Plans:
 **Wave 1**
@@ -393,7 +393,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
-| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 7/8 | In Progress|  |
+| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 8/9 | In Progress|  |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
