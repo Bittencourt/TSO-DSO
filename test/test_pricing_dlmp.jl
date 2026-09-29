@@ -356,3 +356,96 @@ end
 
     @test isapprox(predicted_Δobj, actual_Δobj; atol = 1e-8, rtol = 5e-2)
 end
+
+@testitem "dlmp: decompose_dlmp's congestion term is materially driven by :smax_rev in the receiving-end-binding PV back-feed regime (WR-02, phase-26 review)" tags =
+    [:dlmp] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # WR-02 (phase-26 review): the FIX-03 receiving-end cone (:smax_rev, thesis 3.37) was, until
+    # this item, exercised directly at the ConvexBranchFlow/ACPowerFlow level
+    # (test_convex_branch_flow.jl's/test_ac_powerflow.jl's `mag_rev > 100*mag_fwd` PV-back-feed
+    # items) but NEVER through decompose_dlmp itself in a fixture where :smax_rev actually binds
+    # (the existing "congestion binds" IEEE-13 item is congestion-driven at the SENDING end). A
+    # future sign flip or drop of the `cong_b` :smax_rev term (dlmp.jl) could otherwise pass
+    # every currently-committed DLMP test while silently breaking exactly the regime it was
+    # designed for.
+    #
+    # Fixture: a lossy 2-bus (r=x=0.05, so the r·l loss-reinforcement gap between the sending-
+    # and receiving-end apparent-power magnitudes is large and robust) with an abundant PV
+    # aggregator (Ppv=2.0 ≫ smax=0.5) and a negligible inelastic load/battery — the "elastic
+    # PV/Aggregator idiom" (an unconstrained-by-price generator that wants to export as much as
+    # the network allows under `allow_export=true`), mirroring test_convex_branch_flow.jl's own
+    # FIX-03 fixture intent but driven through the ACTUAL solve_welfare + Aggregator + PVBattery
+    # production path (decompose_dlmp requires a real solved ctx: `ctx.meta[:feeder]`,
+    # `:balance_p`, and the PF-04 exactness certificate — none of which the raw-JuMP
+    # ConvexBranchFlow-only fixture provides). Calibrated empirically (this item's own
+    # `<verify>` script): at this smax the sending-end cone is essentially SLACK
+    # (mag_fwd ~ 1e-10) while the receiving-end cone BINDS (mag_rev ~ 5.4), so :smax_rev is the
+    # ONLY materially nonzero congestion driver in this fixture, isolating exactly the term
+    # WR-02 flags as under-tested.
+    r, x, smax = 0.05, 0.05, 0.5
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.05, false)],
+        [Branch(1, 2, r, x, smax)],
+        1,
+    )
+    T = 2
+    λ₀ = fill(4.0, T)
+    Ppv = fill(2.0, T)             # abundant PV, far above what `smax` can carry
+    Pdc = fill(0.01, T)            # negligible inelastic load
+    φ = 0.999999                   # near-unity power factor ⇒ negligible reactive draw
+    batt = PVBattery(2, 0.95, 1.0, 0.01, 0.0, 0.02, 0.01, 1.0, 2.0, 3.0, Ppv)
+    agg = Aggregator(2, φ, [batt], Pdc)
+
+    ctx, _obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+
+    # Confirm the fixture actually lands in the intended regime BEFORE trusting decompose_dlmp's
+    # own reconstruction of it (mirrors test_convex_branch_flow.jl's FIX-03 item exactly).
+    d_fwd = [dual(ctx.constraints[:smax][1, t]) for t in 1:T]
+    d_rev = [dual(ctx.constraints[:smax_rev][1, t]) for t in 1:T]
+    mag_fwd = [sqrt(sum(abs2, d_fwd[t])) for t in 1:T]
+    mag_rev = [sqrt(sum(abs2, d_rev[t])) for t in 1:T]
+    @info "WR-02 PV back-feed + decompose_dlmp" mag_fwd mag_rev
+    for t in 1:T
+        @test mag_rev[t] > 1e-3                # receiving-end cone BINDS
+        @test mag_fwd[t] < 1e-6                # sending-end cone stays SLACK
+        @test mag_rev[t] > 100 * mag_fwd[t]    # materially larger, not just numerically nonzero
+    end
+
+    d = decompose_dlmp(ctx)
+    total = extract_dlmp(ctx)
+    N, Tfull = size(total)
+
+    # THE HARD sum-to-nodal-price identity (decompose_dlmp itself already asserts this
+    # internally and throws on failure — this is a belt-and-suspenders explicit check pinning
+    # the CONTRACT for this specific receiving-end-binding regime).
+    @test all(
+        isapprox(
+            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            total[j, t];
+            atol = 1e-6,
+            rtol = 1e-6,
+        ) for j in 1:N, t in 1:Tfull
+    )
+    @test d.total ≈ total
+
+    # THE load-bearing WR-02 assertion: congestion at the load bus is MATERIALLY nonzero (not a
+    # numerical artifact) and is driven by :smax_rev specifically — the sending-end :smax dual's
+    # OWN contribution to congestion is negligible by comparison, so this fixture genuinely
+    # exercises the receiving-end term the dlmp.jl header (plan 26-10) describes.
+    for t in 1:T
+        @test abs(d.congestion[2, t]) > 1e-2
+        cong_from_smax = abs(dual(ctx.constraints[:smax][1, t])[2])
+        cong_from_smax_rev = abs(dual(ctx.constraints[:smax_rev][1, t])[2])
+        @test cong_from_smax_rev > 100 * cong_from_smax
+    end
+end
