@@ -280,16 +280,27 @@ end
     # item — the free-sign frontier is the exact shape build_planning_oracle builds, and
     # the priced frontier is the SOC-exactness enabler that keeps the FREE solve exact
     # (PF-04), so its optimum is a known-exact pin point.
-    free = operational_oracle(
+    #
+    # PM-05/26-16 (CSB-num): this is the SAME Phase6 two-bus precision-floor fixture as
+    # test_admm.jl's :27/:127 crossval items — Clarabel's default `tol_gap=1e-8` trips the
+    # PF-04 gate at ratio ~4.00 even though the TRUE optimum is exact (ratio 1.4e-3 at
+    # `1e-10`, objective unchanged to >=6 sig digits; 26-POSTMERGE-TRIAGE.md cluster E). Calls
+    # `solve_welfare` DIRECTLY here instead of via `operational_oracle` (which this testitem
+    # used previously) SOLELY because `operational_oracle` hardcodes
+    # `optimizer = select_optimizer(problem_class(pf))` with no override seam — it is not
+    # itself modified by this gap-closure plan. Only `ctx.meta[:p_import]` (the same field
+    # `operational_oracle` itself reads to build `zstar`) is used below, so this is a
+    # behavior-preserving call-site substitution, not a change to what is exercised.
+    ctx_free, _, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        λ₀ = λ₀,
         T = T,
-        z = nothing,
+        λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
     )
-    zstar = value.(free.ctx.meta[:p_import])
+    zstar = value.(ctx_free.meta[:p_import])
 
     o = build_planning_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
 

@@ -37,6 +37,16 @@
         load_bus = 2
 
         # Centralized ground truth (Phase 4/5): the monolithic SOCP welfare + its DADP duals.
+        #
+        # PM-05/26-16 (CSB-num): this near-lossless (r=x=1e-3) Phase6 two-bus fixture's TRUE
+        # optimum is exact, but Clarabel's default `tol_gap=1e-8` interior-point stopping point
+        # trips the PF-04 gate at ratio ~4.00 (26-POSTMERGE-TRIAGE.md cluster E). A tol_gap
+        # ladder measurement (this plan) confirms ratio 1.4e-3 at `1e-10` — a ~3000x margin
+        # below the gate — with the objective value UNCHANGED to >=6 significant digits
+        # (-483.819124 either way). The PF-04 gate itself (`assert_socp_exact!`'s atol/rtol) is
+        # NEVER touched; only the SOLVER's own convergence precision is tightened for this
+        # genuinely-degenerate fixture (established precedent: src/models/stochastic_welfare.jl
+        # L187-190, Plan 22-02).
         ctx_c, obj_c, _ = solve_welfare(
             feeder,
             ConvexBranchFlow(),
@@ -44,6 +54,7 @@
             T = Th,
             λ₀ = λ₀,
             allow_export = true,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
         )
         dlmp_c = extract_dlmp(ctx_c; bus = load_bus, T = Th)
 
@@ -90,8 +101,29 @@ end
         # cross-validation tolerance) in ~99 iterations. A larger ρ speeds the primal but SLOWS the
         # dual (the price) tail; ρ = 100 balances both. (The `solve_admm` −λ₀ multiplier warm start
         # is what keeps this to ~100 rather than ~1000 iterations.) Pinned inline per the plan.
+        #
+        # D-26-02 (PM-03/Plan 26-12, re-tuned by 26-16's additional scope): Plan 26-12's
+        # reactive_consensus smart default now correctly engages `LIVE` reactive coupling on
+        # this Thermostatic/Deferrable/PVBattery IEEE-13 ground population (it was silently OFF
+        # before, since the pre-PM-03 WR-04 guard only inspected `FourQuadBESS`), so this item's
+        # PRE-PM-03 (ρ=100, maxiter=200, default ε_abs=1e-4/ε_rel=1e-3) budget — swept when the
+        # reactive channel was never actually engaged — is too tight for the now-JOINTLY-driven
+        # active+reactive stopping rule: it still terminates at iters=103 (< 200, so it does NOT
+        # hit the fail-loud cap) but the recovered DADP misses the norm-based
+        # `isapprox(...; atol=1e-2, rtol=1e-3)` check (max elementwise |Δ| = 0.139, concentrated
+        # at the PV back-feed hours 9/16 — PM-06/26-05 territory). OLD: `maxiter = 200` with
+        # `ε_abs`/`ε_rel` left at solve_admm's own defaults (1e-4/1e-3). NEW: `maxiter_ieee13 =
+        # 700`, `ε_abs_ieee13 = 1e-6`, `ε_rel_ieee13 = 1e-7` — re-measured this plan (a direct
+        # budget sweep: ρ=100 unchanged, maxiter/ε_abs/ε_rel swept jointly) converges in
+        # `iters = 535` (comfortably under the new 700 cap) to max elementwise |Δ| = 4.24e-3, a
+        # ~2.4× margin under the pinned `atol=1e-2` — genuinely re-tuned to a TIGHTER stopping
+        # rule that the reactive channel needs to jointly converge, never a loosened assertion.
+        # `exact_maxgap` stays at 1.9e-9 (well inside the unchanged `< 1e-3` PF-04 gate).
         ρ_ieee13 = 100.0
         tol_ieee13 = 1e-6
+        maxiter_ieee13 = 700
+        ε_abs_ieee13 = 1e-6
+        ε_rel_ieee13 = 1e-7
 
         ctx_c, obj_c, _ = solve_welfare(
             feeder,
@@ -110,12 +142,14 @@ end
             T = Th,
             λ₀ = λ₀,
             ρ = ρ_ieee13,
-            maxiter = 200,
+            maxiter = maxiter_ieee13,
             tol = tol_ieee13,
+            ε_abs = ε_abs_ieee13,
+            ε_rel = ε_rel_ieee13,
             allow_export = true,
         )
 
-        @test res.iters < 200                                    # converged before the fail-loud cap
+        @test res.iters < maxiter_ieee13                         # converged before the fail-loud cap
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)          # welfare match (ADMM-04)
         @test res.exact_maxgap < 1e-3                            # PF-04 on the converged DSO-OPT
         @test isapprox(res.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)  # DADP match on every load node
@@ -168,6 +202,9 @@ end
         # (c) Welfare is recomputed from PRIMAL values (Σ U_ag − λ₀ᵀp_import), NOT a penalized
         # subproblem objective — so it MATCHES the centralized welfare, which the penalized
         # objectives (carrying the ρ-penalty + dual terms) never would (RESEARCH Pattern 5).
+        #
+        # PM-05/26-16 (CSB-num): SAME Phase6 two-bus precision-floor fixture as the `crossval`
+        # item above — tightened tol_gap for the SAME reason (see that item's comment).
         _, obj_c, _ = solve_welfare(
             feeder,
             ConvexBranchFlow(),
@@ -175,6 +212,7 @@ end
             T = Th,
             λ₀ = λ₀,
             allow_export = true,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
         )
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)
 

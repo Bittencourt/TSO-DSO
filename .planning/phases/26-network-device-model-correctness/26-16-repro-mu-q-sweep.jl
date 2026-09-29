@@ -6,12 +6,42 @@
 # reproduces the testitem body directly. It asserts against the CURRENTLY-PINNED tolerance
 # PARSED LIVE from the edited test file (never hardcoded here), so a wrong re-pin (or a re-pin
 # that never landed) fails this check.
+#
+# EXECUTOR FIX (Rule 1 — auto-fixed bug, this plan): the original two `include("test/...")`
+# calls used paths relative to the process's CURRENT WORKING DIRECTORY, but Julia's `include`
+# resolves a relative path against the DIRECTORY OF THE INCLUDING FILE (this script's own
+# `.planning/phases/26-network-device-model-correctness/` directory), not the shell's cwd —
+# so `test/fixtures_phase6.jl` never resolved from ANY invocation directory. Separately,
+# `test/fixtures_phase6.jl`/`fixtures_phase19.jl` are TestItems `@testmodule`s, and `@testmodule`
+# is not defined under a plain `--project=.` load (TestItems is test-only; see the
+# gsd-plan-verify-testitemrunner-trap memory) — a raw `include` would additionally throw
+# `UndefVarError: @testmodule not defined`. `_load_testmodule_as_plain` below fixes BOTH: it
+# resolves each fixture file with an absolute, invocation-directory-independent path (relative
+# to THIS script's own location via `@__DIR__`) and textually rewrites the `@testmodule Name
+# begin` header to a plain `module Name` (no other line changes) before `include_string`-ing
+# it — reproducing the IDENTICAL fixture-building code without requiring TestItems.jl.
+function _load_testmodule_as_plain(path::AbstractString, modname::AbstractString)
+    src = read(path, String)
+    pattern = Regex("@testmodule\\s+" * modname * "\\s+begin")
+    occursin(pattern, src) ||
+        error("Could not find '@testmodule $modname begin' header in $path")
+    plain = replace(src, pattern => "module $modname")
+    return Base.include_string(Main, plain, path)
+end
+
+const REPRO_REPO_ROOT = normpath(joinpath(@__DIR__, "..", "..", ".."))
 
 using TSODSO
 using JuMP: dual
 
-include("test/fixtures_phase6.jl")
-include("test/fixtures_phase19.jl")
+_load_testmodule_as_plain(
+    joinpath(REPRO_REPO_ROOT, "test", "fixtures_phase6.jl"),
+    "Phase6Fixtures",
+)
+_load_testmodule_as_plain(
+    joinpath(REPRO_REPO_ROOT, "test", "fixtures_phase19.jl"),
+    "Phase19Fixtures",
+)
 using .Phase6Fixtures
 using .Phase19Fixtures
 
@@ -48,9 +78,11 @@ res = solve_admm(
 println("MEASURED: norm(Δmu_q) = ", Δμ_norm, "  maxabs(Δmu_q) = ", Δμ_maxabs)
 
 # Parse the CURRENTLY-PINNED tolerance directly from the edited test file — never hardcode the
-# expected atol, so an executor's wrong (or missing) re-pin fails this check.
-src = read("test/test_admm_reactive.jl", String)
-m = match(r"mu[\s\S]{0,400}?atol\s*=\s*([0-9.eE+-]+)", src)
+# expected atol, so an executor's wrong (or missing) re-pin fails this check. Path fixed
+# (Rule 1, same cwd-independence issue as the fixture includes above) to resolve from this
+# script's own location via REPRO_REPO_ROOT, not the shell's cwd.
+src = read(joinpath(REPRO_REPO_ROOT, "test", "test_admm_reactive.jl"), String)
+m = match(r"res\.mu_q\)[\s\S]{0,50}?atol\s*=\s*([0-9.eE+-]+)", src)
 m === nothing && error(
     "Could not parse the mu_q comparison's atol from test/test_admm_reactive.jl — " *
     "Plan 26-16 Task 2 must re-pin an atol literal near the mu_q assertion",
