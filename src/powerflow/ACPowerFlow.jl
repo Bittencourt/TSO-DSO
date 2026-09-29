@@ -87,8 +87,34 @@ The `NLP()` problem-class routing (defined below) sends the nonconvex equality t
 factory via `solve_welfare`'s default `optimizer` kwarg — unchanged dispatch. The `:l`-keyed
 `assert_socp_exact!` double-fire in `welfare_solve.jl:256-258` is harmless (the cone is an
 equality by construction, residual ~0) and intentional — see this file's header.
+
+**`limits::Bool` (Phase 27, plan 27-09, USER DECISION 2026-09-29):** an operating-limits
+switch, defaulting to `true` (byte-identical to every pre-27-09 caller — `ACPowerFlow()` is
+unchanged). When `limits = true` (the default), [`contribute!`](@ref) writes the SAME
+`:smax`/`:smax_rev` thermal limits and `vmin²`/`vmax²` voltage bounds it always has. When
+`limits = false`, [`contribute!`](@ref) omits `:smax`/`:smax_rev` ENTIRELY (no container is
+even created) and relaxes every non-root bus's `v` to `[0, ∞)` (dropping the OPERATING
+`vmin²`/`vmax²` band, keeping only the well-posedness floor `v ≥ 0` a squared-voltage
+magnitude must satisfy to stay physically meaningful — NOT an operating limit) — this is the
+"physics only" truth-plant settlement mode ([`_mpc_truth_import_acpf`](@ref) in
+`src/experiments/mpc_loop.jl`, and `src/pricing/fit.jl`'s FIT AC-PF SITE 2): the truth plant
+never REFUSES a dispatch on a thermal/voltage limit, it only REPORTS the violation as a
+settlement diagnostic (the caller computes the diagnostic itself from the solved `P`/`Q`/`l`/
+`v`, since no `:smax`/`:smax_rev`/voltage-bound constraint exists to read a dual from). Every
+pre-27-09 call site passes no `limits` kwarg and is therefore completely unaffected.
 """
-struct ACPowerFlow <: AbstractPowerFlow end
+struct ACPowerFlow <: AbstractPowerFlow
+    limits::Bool
+end
+
+"""
+    ACPowerFlow(; limits::Bool = true)
+
+Construct the AC-OPF oracle. `limits = true` (default) is byte-identical to every pre-27-09
+`ACPowerFlow()` call. `limits = false` is the physics-only truth-settlement mode — see the
+`limits::Bool` paragraph on [`ACPowerFlow`](@ref)'s own docstring.
+"""
+ACPowerFlow(; limits::Bool = true) = ACPowerFlow(limits)
 
 """
     contribute!(::ACPowerFlow, ctx::ModelContext, feeder; T::Int=1)
@@ -105,7 +131,9 @@ Creates, on `ctx.model`:
   - `l[b,t] ≥ 0` — squared branch current (thesis 3.34 variable).
 
 There is NO exactness-copy `v̂` — this is not a relaxation. The root squared voltage is fixed
-at the reference `1.0` (= 1.0²); every non-root bus bounds `v` by `vmin²`/`vmax²`.
+at the reference `1.0` (= 1.0²); every non-root bus bounds `v` by `vmin²`/`vmax²` when
+`pf.limits` is `true` (default), or only by the well-posedness floor `v ≥ 0` when
+`pf.limits` is `false` (plan 27-09's physics-only truth-settlement mode).
 
 Per branch/time it adds:
 
@@ -114,13 +142,15 @@ Per branch/time it adds:
     `ScalarQuadraticFunction`-in-`EqualTo` natively, empirically confirmed by the
     LOCALLY_SOLVED/OPTIMAL termination the `solve_welfare` dispatch reaches);
   - the true voltage drop `v[to] == v[from] − 2(rP+xQ) + (r²+x²)·l` (thesis 3.33);
-  - where a real limit exists (`smax < _SMAX_NO_LIMIT`), the forward apparent-power limit
-    `P² + Q² ≤ S²max` (thesis 3.36) as a plain scalar-quadratic inequality;
-  - under the SAME filter, the receiving-end apparent-power limit
+  - where a real limit exists (`smax < _SMAX_NO_LIMIT`) AND `pf.limits` is `true`, the forward
+    apparent-power limit `P² + Q² ≤ S²max` (thesis 3.36) as a plain scalar-quadratic inequality;
+  - under the SAME filter and the SAME `pf.limits` gate, the receiving-end apparent-power limit
     `(P−r·l)² + (Q−x·l)² ≤ S²max` (thesis 3.37, PM-07) as a plain scalar-quadratic
     inequality — mirroring [`ConvexBranchFlow`](@ref)'s `:smax_rev` cone (plan 26-05,
     FIX-03) so an AC-vs-SOCP comparison shares the same feasible set at both ends of a
-    limited branch.
+    limited branch. When `pf.limits` is `false` (plan 27-09), NEITHER `:smax` NOR
+    `:smax_rev` is created at all — the truth plant never refuses a dispatch on a thermal
+    limit, only reports it as a caller-computed diagnostic.
 
 Then accumulates the per-bus active balance into `ctx.residuals[:Rp]` (thesis 3.31) and the
 reactive balance into `:Rq` (thesis 3.32) via the INDEXED `add_to_residual!`, loss-charged at
@@ -128,7 +158,7 @@ the CHILD node — byte-identical to [`contribute!(::ConvexBranchFlow, …)`](@r
 `ctx.meta[:pf_vars] = (; v, P, Q, l)` (NO `v̂`) so [`assert_ac_exact!`](@ref) can index both the
 SOCP-built and AC-built contexts by the same field names. Returns `ctx`.
 """
-function contribute!(::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
+function contribute!(pf::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -146,12 +176,19 @@ function contribute!(::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
     fix.(v[feeder.root, :], 1.0; force = true)
 
     # Squared voltage bounds at every non-root bus (Pitfall 1: SQUARE the pu magnitude bounds).
-    # Only v — there is no v̂ copy in this formulation.
+    # Only v — there is no v̂ copy in this formulation. Plan 27-09 (USER DECISION): when
+    # `pf.limits` is false (the physics-only truth-settlement mode), the OPERATING vmin²/vmax²
+    # band is omitted entirely — only the well-posedness floor v ≥ 0 remains (a squared-voltage
+    # magnitude going negative is not a physical root of l·v = P²+Q², never an operating limit).
     for j in 1:N, t in 1:T
         j == feeder.root && continue
         vb = feeder.buses[j]
-        set_lower_bound(v[j, t], vb.vmin^2)    # V²_min
-        set_upper_bound(v[j, t], vb.vmax^2)    # V²_max
+        if pf.limits
+            set_lower_bound(v[j, t], vb.vmin^2)    # V²_min
+            set_upper_bound(v[j, t], vb.vmax^2)    # V²_max
+        else
+            set_lower_bound(v[j, t], 0.0)          # well-posedness only, NOT an operating limit
+        end
     end
 
     # TRUE nonconvex branch-flow relation (thesis 3.39 UNRELAXED): l·v_from = P²+Q², written as
@@ -187,27 +224,35 @@ function contribute!(::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
     # limit exists (RESEARCH Open Q2 / Assumption A7). Written as the plain scalar-quadratic
     # inequality (Ipopt takes it natively) — the equivalent of ConvexBranchFlow's SOC form,
     # under the SAME `B[b].smax < _SMAX_NO_LIMIT` filter so the feasible set matches.
-    @constraint(
-        m,
-        smax[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
-        P[b, t]^2 + Q[b, t]^2 <= B[b].smax^2
-    )
-    register_constraint!(ctx, :smax, smax)
+    #
+    # Plan 27-09 (USER DECISION): when `pf.limits` is false (physics-only truth settlement),
+    # `:smax`/`:smax_rev` are OMITTED ENTIRELY (no container is even created) — the truth plant
+    # never refuses a dispatch on a thermal limit, it only reports the violation as a diagnostic
+    # (the caller recomputes the overload ratio from the solved P/Q/l directly, since there is
+    # no constraint here to read a dual from).
+    if pf.limits
+        @constraint(
+            m,
+            smax[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
+            P[b, t]^2 + Q[b, t]^2 <= B[b].smax^2
+        )
+        register_constraint!(ctx, :smax, smax)
 
-    # Receiving-end apparent-power limit (thesis 3.37, PM-07 / plan 26-15): the receiving-end
-    # power `(P−r·l, Q−x·l)` is algebraically IDENTICAL to ConvexBranchFlow's shared `Prev`/
-    # `Qrev` expressions (plan 26-05, FIX-03) — written inline here (no shared @expression pair
-    # exists in this formulation) as a plain scalar-quadratic inequality (Ipopt takes it
-    # natively, same as `:cone`/`:smax` above), under the IDENTICAL `B[b].smax < _SMAX_NO_LIMIT`
-    # filter `:smax` uses, so the two limits appear or are omitted together per branch. Without
-    # this, the AC oracle would be strictly LESS restricted than the SOCP formulations at the
-    # receiving end of a limited branch under PV back-feed — comparing different feasible sets.
-    @constraint(
-        m,
-        smax_rev[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
-        (P[b, t] - B[b].r * l[b, t])^2 + (Q[b, t] - B[b].x * l[b, t])^2 <= B[b].smax^2
-    )
-    register_constraint!(ctx, :smax_rev, smax_rev)
+        # Receiving-end apparent-power limit (thesis 3.37, PM-07 / plan 26-15): the receiving-end
+        # power `(P−r·l, Q−x·l)` is algebraically IDENTICAL to ConvexBranchFlow's shared `Prev`/
+        # `Qrev` expressions (plan 26-05, FIX-03) — written inline here (no shared @expression pair
+        # exists in this formulation) as a plain scalar-quadratic inequality (Ipopt takes it
+        # natively, same as `:cone`/`:smax` above), under the IDENTICAL `B[b].smax < _SMAX_NO_LIMIT`
+        # filter `:smax` uses, so the two limits appear or are omitted together per branch. Without
+        # this, the AC oracle would be strictly LESS restricted than the SOCP formulations at the
+        # receiving end of a limited branch under PV back-feed — comparing different feasible sets.
+        @constraint(
+            m,
+            smax_rev[b = 1:nB, t = 1:T; B[b].smax < _SMAX_NO_LIMIT],
+            (P[b, t] - B[b].r * l[b, t])^2 + (Q[b, t] - B[b].x * l[b, t])^2 <= B[b].smax^2
+        )
+        register_constraint!(ctx, :smax_rev, smax_rev)
+    end
 
     # Per-bus active (3.31) and reactive (3.32) balances: inflow − outflow, accumulated into
     # the shared :Rp / :Rq via the indexed seam. The incoming branch (i,j) contributes

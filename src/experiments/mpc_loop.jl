@@ -96,7 +96,7 @@ silently overwriting state or mispairing devices with variables.
 # Returns
 
 A `NamedTuple`
-`(; trace, day_ahead_welfare, forecast_settled_welfare, realized_welfare, regret, day_ahead_dadp, steps)`:
+`(; trace, day_ahead_welfare, forecast_settled_welfare, realized_welfare, regret, day_ahead_dadp, steps, settlement_violations)`:
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
     cumulative deviation, and certificate/fallback status (MPC-03). The status is one of
@@ -122,23 +122,28 @@ A `NamedTuple`
     JuMP-free) THROWS a loud `ErrorException` — never silently clamps — if the realized state
     falls outside `[Emin,Emax]`/`[Tmin,Tmax]`, a genuine out-of-band event distinct from
     `_mpc_window_device`'s SEPARATE solver-tolerance-noise clamp (`mpc_loop.jl:759-780`,
-    untouched); (3) the frontier import is settled by a genuine AC POWER FLOW (Phase 27
-    FIX-10, USER DECISION 2026-09-29, plan 27-08 — supersedes the earlier SOCP-based
-    loss-exact re-solve, see below): `_mpc_truth_import_acpf` builds and solves a FRESH
-    single-hour `ModelContext` on [`ACPowerFlow`](@ref) (Ipopt, `problem_class(ACPowerFlow())
-    = NLP()`) — a genuinely INDEPENDENT nonconvex formulation, not a re-solve of the window's
-    own relaxed cone — with every device's realized (clipped) net active/reactive injection
-    FIXED at each aggregator bus (mirroring `Aggregator.contribute!`'s own `p_inject − Pdc`/
-    `−Pdc·tanφ + q_inject` wiring, but with NUMERIC realized values and the TRUE, unperturbed
-    `agg.Pdc[abs_hour]` baseline demand), warm-started from the WINDOW's own solved
-    `P`/`Q`/`l`/`v` at this hour (26-15: Ipopt's default all-zero start is a degenerate KKT
-    point of the unrelaxed `l·v = P²+Q²` equality), and only the frontier import free. The
-    solve MUST reach `LOCALLY_SOLVED` (or `OPTIMAL`) with a feasible primal —
-    `ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted — throwing a
-    loud `ErrorException` naming `abs_hour` and the full solve status otherwise. SOCP
-    exactness gating (`assert_socp_exact!`) plays NO role in this settlement path — there is
-    no relaxation here to certify, the branch-flow relation is the TRUE nonconvex equality.
-    Under `s.mpc_forecast_error == 0.0` (every `fe.pv_factor == fe.demand_factor == 1.0`)
+    untouched); (3) the frontier import is settled by a genuine AC POWER FLOW, PHYSICS ONLY
+    (Phase 27 FIX-10, USER DECISION 2026-09-29, plans 27-08/27-09 — supersedes the earlier
+    SOCP-based loss-exact re-solve, see below): `_mpc_truth_import_acpf` builds and solves a
+    FRESH single-hour `ModelContext` on [`ACPowerFlow`](@ref)`(; limits = false)` (Ipopt,
+    `problem_class(ACPowerFlow()) = NLP()`) — a genuinely INDEPENDENT nonconvex formulation,
+    not a re-solve of the window's own relaxed cone, and (plan 27-09) WITHOUT the
+    `:smax`/`:smax_rev` thermal limits or the `vmin²`/`vmax²` operating voltage band (the truth
+    plant settles the AC PHYSICS only; it never refuses a dispatch on an operating limit) — with
+    every device's realized (clipped) net active/reactive injection FIXED at each aggregator bus
+    (mirroring `Aggregator.contribute!`'s own `p_inject − Pdc`/`−Pdc·tanφ + q_inject` wiring, but
+    with NUMERIC realized values and the TRUE, unperturbed `agg.Pdc[abs_hour]` baseline demand),
+    warm-started from the WINDOW's own solved `P`/`Q`/`l`/`v` at this hour (26-15: Ipopt's
+    default all-zero start is a degenerate KKT point of the unrelaxed `l·v = P²+Q²` equality),
+    and only the frontier import free. The solve MUST reach `LOCALLY_SOLVED` (or `OPTIMAL`) with
+    a feasible primal — `ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted
+    — throwing a loud `ErrorException` naming `abs_hour` and the full solve status otherwise
+    (this convergence bar is UNCHANGED by plan 27-09 — only the operating limits are relaxed,
+    never the convergence requirement). SOCP exactness gating (`assert_socp_exact!`) plays NO
+    role in this settlement path — there is no relaxation here to certify, the branch-flow
+    relation is the TRUE nonconvex equality. Any per-hour thermal/voltage violation under this
+    relaxed operating band is REPORTED, never refused — see the `settlement_violations` bullet
+    below. Under `s.mpc_forecast_error == 0.0` (every `fe.pv_factor == fe.demand_factor == 1.0`)
     this is BYTE-IDENTICAL to `forecast_settled_welfare` to solver precision: no clip ever
     engages (the window's own PV-limit constraint already bounds the solved `p_ch` by the
     UNPERTURBED `Ppv[abs_hour]`), and the AC truth re-solve reproduces the window's own
@@ -159,17 +164,34 @@ A `NamedTuple`
     `seed=1` drives a realized/clipped dispatch that GENUINELY exceeds the head branch's
     thermal rating once served by the TRUE (unrelaxed) AC equality (confirmed via a
     limits-removed re-solve reaching `LOCALLY_SOLVED` while the limited re-solve correctly
-    reports `LOCALLY_INFEASIBLE` — not a numerics artifact). The forced-PV-shortfall and
-    mpc_step-stride items therefore RETAIN their `seed=5` substitution (27-08-SUMMARY.md
-    "Deviations"/"Findings" — a DEVIATION from this plan's own must_haves text, documented
-    and escalated there, never a weakening of the settlement's convergence bar) — a NEW
-    `@testitem` documents the genuine `seed=1` infeasibility as a citable regression rather
-    than an undocumented flaky seed choice. The SUPERSEDED SOCP re-solve survives ONLY as
-    `_mpc_truth_import_socp_reference`, reachable exclusively via the INTERNAL test seam
-    `_truth_settlement = :socp` (default `:ac`) — used SOLELY by
+    reports `LOCALLY_INFEASIBLE` — not a numerics artifact). Plan 27-08's shipped fix
+    RETAINED `seed=5` on the forced-PV-shortfall and mpc_step-stride items rather than
+    reverting to `seed=1`, a DEVIATION from that plan's own must_haves text.
+    **Plan 27-09 (USER DECISION 2026-09-29) resolves this the OTHER way — by decoupling the
+    truth plant's AC-solvability requirement from the feeder's OPERATING limits**: the truth
+    settlement here is now `ACPowerFlow(; limits = false)` (physics only), so the SAME
+    `seed=1` dispatch that plan 27-08 found `LOCALLY_INFEASIBLE` under the LIMITED model now
+    reaches `LOCALLY_SOLVED` cleanly (it was the `:smax` constraint, not the AC physics
+    itself, that refused it — exactly the "limits-removed re-solve reaching `LOCALLY_SOLVED`"
+    plan 27-08 already used to CONFIRM the finding was genuine). `seed=1` is therefore
+    RESTORED on both items; the genuine thermal overload plan 27-08 found is no longer a
+    convergence failure but a REPORTED `settlement_violations` entry with
+    `max_overload_ratio > 1` on the head branch — see that bullet below. The SUPERSEDED SOCP
+    re-solve survives ONLY as `_mpc_truth_import_socp_reference`, reachable exclusively via
+    the INTERNAL test seam `_truth_settlement = :socp` (default `:ac`) — used SOLELY by
     `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-08-repro.jl`'s
     AC-vs-SOCP cross-check on a seed where the SOCP re-solve happens to be exact; no
     production `Scenario`-driven caller ever passes it.
+  - `settlement_violations::Vector{<:NamedTuple}` — (plan 27-09, USER DECISION 2026-09-29) one
+    entry per PUBLISHED hour (same order/length as `trace`), each
+    `(; abs_hour, n_thermal_violations, max_overload_ratio, n_voltage_violations,
+    min_voltage, max_voltage, voltage_violated)` — see [`_mpc_settlement_violations`](@ref).
+    A DIAGNOSTIC computed from the AC truth settlement's own solved `P`/`Q`/`l`/`v` (never a
+    constraint dual — `ACPowerFlow(; limits = false)` writes no `:smax`/`:smax_rev`/
+    voltage-bound constraint to read one from), NEVER a gate: the settlement never refuses a
+    dispatch for exceeding an operating limit, it only reports it here. Populated only under
+    `_truth_settlement = :ac` (the production default); empty under the `:socp` internal test
+    seam.
   - `forecast_settled_welfare::Float64` — the PRE-PHASE-27 forecast-consistent settlement,
     kept as a clearly-labelled DIAGNOSTIC (never the headline number `regret` is measured
     against, post-FIX-10). **WR-01 — settlement is FORECAST-CONSISTENT by construction, not
@@ -356,6 +378,12 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     # loss-exact per-hour import re-solve) — see this function's own docstring.
     forecast_settled_welfare = 0.0
     realized_welfare = 0.0
+    # Phase 27 FIX-10, plan 27-09 (USER DECISION): the "physics only" truth-plant's
+    # per-applied-hour thermal/voltage DIAGNOSTIC (never a gate) — one entry per published
+    # hour, populated ONLY under `_truth_settlement = :ac` (the production path; the `:socp`
+    # internal test seam never populates this, since the superseded SOCP reference carries no
+    # such diagnostic).
+    settlement_violations = NamedTuple[]
 
     # Measured (nominal-plant) state, keyed by (bus, kind): initialized from each mpc_aggs
     # member device's OWN t=1 literal soc0/Tin0 (the simplest possible source of the initial
@@ -622,7 +650,7 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                            value(o.ctx.meta[:q_import][τ_apply]) : nothing,
             )
             p_import_true = if _truth_settlement === :ac
-                _mpc_truth_import_acpf(
+                p_import_t, violations = _mpc_truth_import_acpf(
                     feeder,
                     mpc_aggs,
                     abs_hour,
@@ -630,6 +658,8 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                     realized_net_q,
                     warm_start,
                 )
+                push!(settlement_violations, violations)
+                p_import_t
             else   # :socp — internal test seam only, see run_mpc's own docstring
                 _mpc_truth_import_socp_reference(
                     feeder,
@@ -684,6 +714,7 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         regret = Float64(regret),
         day_ahead_dadp = Vector{Float64}(dadp_da),
         steps = k,
+        settlement_violations,
     )
 end
 
@@ -1293,24 +1324,101 @@ function _mpc_truth_import_socp_reference(
 end
 
 """
+    _mpc_settlement_violations(feeder, pv_t::NamedTuple, abs_hour::Int) -> NamedTuple
+
+Internal helper (unexported, Phase 27 FIX-10, plan 27-09 — USER DECISION 2026-09-29): compute
+the "physics only" truth plant's per-applied-hour operating-limit DIAGNOSTIC from a SOLVED
+[`ACPowerFlow`](@ref)`(; limits = false)` context's own `P`/`Q`/`l`/`v` at column `1` — never a
+constraint dual (there is no `:smax`/`:smax_rev`/voltage-bound constraint to read one from when
+`limits = false`, see [`ACPowerFlow`](@ref)'s own docstring). This is a REPORT, never a gate:
+the settlement never refuses a dispatch on a thermal/voltage violation, it only surfaces one as
+a labeled diagnostic in [`run_mpc`](@ref)'s `settlement_violations` field.
+
+For every branch with a real thermal rating (`smax < _SMAX_NO_LIMIT`), recomputes the forward
+apparent power `|S_fwd| = sqrt(P²+Q²)` and the receiving-end apparent power
+`|S_rev| = sqrt((P−r·l)²+(Q−x·l)²)` (the SAME two quantities `:smax`/`:smax_rev` would have
+constrained) directly from the solved values, and counts a branch as OVERLOADED whenever
+`max(|S_fwd|, |S_rev|) / smax > 1`. For every non-root bus, recovers the voltage magnitude
+`|V_j| = sqrt(v_j)` and counts it OUT-OF-BAND whenever it falls outside `[vmin, vmax]`.
+
+Returns `(; abs_hour, n_thermal_violations::Int, max_overload_ratio::Float64,
+n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
+voltage_violated::Bool)`. `max_overload_ratio` is `0.0` when the feeder has no branch with a
+real thermal rating (never `NaN`/`-Inf` — a feeder with no limited branch cannot overload one).
+"""
+function _mpc_settlement_violations(feeder, pv_t::NamedTuple, abs_hour::Int)
+    B = feeder.branches
+    Np = length(feeder.buses)
+
+    n_thermal = 0
+    max_ratio = 0.0
+    for (b, br) in enumerate(B)
+        br.smax < _SMAX_NO_LIMIT || continue
+        Pb = value(pv_t.P[b, 1])
+        Qb = value(pv_t.Q[b, 1])
+        lb = value(pv_t.l[b, 1])
+        s_fwd = sqrt(Pb^2 + Qb^2)
+        s_rev = sqrt((Pb - br.r * lb)^2 + (Qb - br.x * lb)^2)
+        ratio = max(s_fwd, s_rev) / br.smax
+        ratio > 1.0 && (n_thermal += 1)
+        max_ratio = max(max_ratio, ratio)
+    end
+
+    n_voltage = 0
+    min_v = Inf
+    max_v = -Inf
+    for j in 1:Np
+        j == feeder.root && continue
+        vb = feeder.buses[j]
+        vj = sqrt(max(value(pv_t.v[j, 1]), 0.0))
+        (vj < vb.vmin || vj > vb.vmax) && (n_voltage += 1)
+        min_v = min(min_v, vj)
+        max_v = max(max_v, vj)
+    end
+
+    return (;
+        abs_hour,
+        n_thermal_violations = n_thermal,
+        max_overload_ratio = max_ratio,
+        n_voltage_violations = n_voltage,
+        min_voltage = min_v,
+        max_voltage = max_v,
+        voltage_violated = n_voltage > 0,
+    )
+end
+
+"""
     _mpc_truth_import_acpf(feeder, mpc_aggs, abs_hour::Int,
                             realized_net_p::AbstractDict{Int,Float64},
                             realized_net_q::AbstractDict{Int,Float64},
-                            warm_start::NamedTuple) -> Float64
+                            warm_start::NamedTuple) -> (Float64, NamedTuple)
 
-Internal helper (unexported, Phase 27 FIX-10, **USER DECISION 2026-09-29, plan 27-08 —
+Internal helper (unexported, Phase 27 FIX-10, **USER DECISION 2026-09-29, plan 27-09 —
 the PRODUCTION truth-settlement function** [`run_mpc`](@ref) calls by default,
 `_truth_settlement = :ac`): settle the per-applied-hour frontier import against a genuine AC
-POWER FLOW ([`ACPowerFlow`](@ref), Ipopt via `select_optimizer(problem_class(ACPowerFlow()))`
-— `problem_class(::ACPowerFlow) = NLP()`) instead of a re-solve of the window's own SOCP
-relaxation. Replaces [`_mpc_truth_import_socp_reference`](@ref) as the production path
-because that SOCP re-solve was MEASURED genuinely inexact on 18/20 tested seeds under
-forecast-error-driven reverse flow (27-07-SUMMARY.md "Findings", ESCALATED) — a real SOCP
-relaxation knife-edge, not fixable by any tolerance or objective change (the LOCKED "never
-raise τ_solver/ε to hide it" policy). The AC oracle has no such relaxation to be inexact:
-[`ACPowerFlow`](@ref)'s branch-flow relation is the TRUE nonconvex EQUALITY `l·v = P²+Q²`
-(thesis 3.39 unrelaxed), so fixing every injection leaves the power flow SQUARE up to the
-free frontier slack — there is no degenerate family of optima to select among.
+POWER FLOW ([`ACPowerFlow`](@ref)`(; limits = false)`, Ipopt via
+`select_optimizer(problem_class(ACPowerFlow()))` — `problem_class(::ACPowerFlow) = NLP()`)
+instead of a re-solve of the window's own SOCP relaxation. Replaces
+[`_mpc_truth_import_socp_reference`](@ref) as the production path because that SOCP re-solve
+was MEASURED genuinely inexact on 18/20 tested seeds under forecast-error-driven reverse flow
+(27-07-SUMMARY.md "Findings", ESCALATED) — a real SOCP relaxation knife-edge, not fixable by
+any tolerance or objective change (the LOCKED "never raise τ_solver/ε to hide it" policy). The
+AC oracle has no such relaxation to be inexact: [`ACPowerFlow`](@ref)'s branch-flow relation is
+the TRUE nonconvex EQUALITY `l·v = P²+Q²` (thesis 3.39 unrelaxed), so fixing every injection
+leaves the power flow SQUARE up to the free frontier slack — there is no degenerate family of
+optima to select among.
+
+**Plan 27-09 (USER DECISION 2026-09-29) — "physics only" settlement:** the truth plant built
+here is `ACPowerFlow(; limits = false)` — the `:smax`/`:smax_rev` thermal limits and the
+`vmin²`/`vmax²` operating voltage band are OMITTED from the model entirely (plan 27-08's
+strict, limited settlement previously required `seed=1` to hold BOTH a genuine AC solution AND
+the feeder's thermal rating simultaneously; the two are now DECOUPLED — the settlement only
+requires a genuine AC solution to exist, never that it also respect an operating limit).
+Per-hour limit violations are RECOMPUTED from the solved `P`/`Q`/`l`/`v` by
+[`_mpc_settlement_violations`](@ref) (never a constraint dual — there is no constraint to read
+one from) and returned as this function's second output for [`run_mpc`](@ref) to accumulate
+into its `settlement_violations` field — a DIAGNOSTIC, never a refusal: this function throws
+ONLY on a genuine Ipopt non-convergence (see below), NEVER on a thermal/voltage violation.
 
 Builds a FRESH, single-hour (`T=1`) `ModelContext` on [`ACPowerFlow`](@ref), mirroring
 [`_mpc_truth_import_socp_reference`](@ref)'s own structural shape verbatim (`Model` →
@@ -1345,7 +1453,9 @@ Requires `is_solved_and_feasible(model_t; dual=false, allow_local=true, allow_al
 **`ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted** (`allow_almost =
 false`): throws a loud `ErrorException` naming `abs_hour` and the FULL solve status
 (`termination_status`/`primal_status`/`raw_status`) on non-convergence — this function NEVER
-weakens the convergence bar to paper over a stalled Ipopt solve. SOCP exactness gating
+weakens the convergence bar to paper over a stalled Ipopt solve, and NEVER relaxes it to paper
+over a genuine Ipopt failure either (this is UNCHANGED from plan 27-08 — only the operating
+LIMITS are relaxed, plan 27-09, never the CONVERGENCE bar). SOCP exactness gating
 (`assert_socp_exact!`) plays NO role here — there is no relaxation to certify, the
 branch-flow relation is the unrelaxed nonconvex equality itself.
 
@@ -1365,7 +1475,7 @@ function _mpc_truth_import_acpf(
     realized_net_q::AbstractDict{Int, Float64},
     warm_start::NamedTuple,
 )
-    ac = ACPowerFlow()
+    ac = ACPowerFlow(; limits = false)   # plan 27-09 (USER DECISION): physics only
     model_t = Model(select_optimizer(problem_class(ac)))
     ctx_t = ModelContext(model_t)
     ctx_t.meta[:feeder] = feeder
@@ -1445,14 +1555,16 @@ function _mpc_truth_import_acpf(
                 "abs_hour=$abs_hour — termination_status=$(termination_status(model_t)), " *
                 "primal_status=$(primal_status(model_t)), " *
                 "raw_status=\"$(raw_status(model_t))\". ALMOST_LOCALLY_SOLVED is TREATED AS " *
-                "A FAILURE here, never silently accepted (USER DECISION 2026-09-29, plan " *
-                "27-08) — this is a genuine Ipopt non-convergence at the realized dispatch, " *
-                "not a relaxation-exactness gate.",
+                "A FAILURE here, never silently accepted (USER DECISION 2026-09-29, plans " *
+                "27-08/27-09) — this is a genuine Ipopt non-convergence at the realized " *
+                "dispatch, never a thermal/voltage limit (those are OMITTED from this " *
+                "physics-only model, plan 27-09) and never a relaxation-exactness gate.",
             ),
         )
     end
 
-    return value(p_import_t)
+    violations = _mpc_settlement_violations(feeder, pv_t, abs_hour)
+    return value(p_import_t), violations
 end
 
 export run_mpc
