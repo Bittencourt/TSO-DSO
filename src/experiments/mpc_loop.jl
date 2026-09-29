@@ -122,20 +122,54 @@ A `NamedTuple`
     JuMP-free) THROWS a loud `ErrorException` — never silently clamps — if the realized state
     falls outside `[Emin,Emax]`/`[Tmin,Tmax]`, a genuine out-of-band event distinct from
     `_mpc_window_device`'s SEPARATE solver-tolerance-noise clamp (`mpc_loop.jl:759-780`,
-    untouched); (3) the frontier import is LOSS-EXACT: `_mpc_truth_import_resolve` builds and
-    solves a FRESH single-hour `ModelContext` on the SAME `feeder`/`pf` this function already
-    materialized, with every device's realized (clipped) net active/reactive injection FIXED
-    at each aggregator bus (mirroring `Aggregator.contribute!`'s own `p_inject − Pdc`/
+    untouched); (3) the frontier import is settled by a genuine AC POWER FLOW (Phase 27
+    FIX-10, USER DECISION 2026-09-29, plan 27-08 — supersedes the earlier SOCP-based
+    loss-exact re-solve, see below): `_mpc_truth_import_acpf` builds and solves a FRESH
+    single-hour `ModelContext` on [`ACPowerFlow`](@ref) (Ipopt, `problem_class(ACPowerFlow())
+    = NLP()`) — a genuinely INDEPENDENT nonconvex formulation, not a re-solve of the window's
+    own relaxed cone — with every device's realized (clipped) net active/reactive injection
+    FIXED at each aggregator bus (mirroring `Aggregator.contribute!`'s own `p_inject − Pdc`/
     `−Pdc·tanφ + q_inject` wiring, but with NUMERIC realized values and the TRUE, unperturbed
-    `agg.Pdc[abs_hour]` baseline demand) and only the frontier import free — certified via
-    `assert_socp_exact!` before its value is charged, so network losses are truthfully
-    re-derived rather than copper-plate-approximated. Under `s.mpc_forecast_error == 0.0`
-    (every `fe.pv_factor == fe.demand_factor == 1.0`) this is BYTE-IDENTICAL to
-    `forecast_settled_welfare`: no clip ever engages (the window's own PV-limit constraint
-    already bounds the solved `p_ch` by the UNPERTURBED `Ppv[abs_hour]`), and the truth
-    power-flow re-solve reproduces the window's own solved dispatch exactly, since the fixed
-    injections match what the window itself balanced (same feeder/formulation, same per-bus
-    net injections).
+    `agg.Pdc[abs_hour]` baseline demand), warm-started from the WINDOW's own solved
+    `P`/`Q`/`l`/`v` at this hour (26-15: Ipopt's default all-zero start is a degenerate KKT
+    point of the unrelaxed `l·v = P²+Q²` equality), and only the frontier import free. The
+    solve MUST reach `LOCALLY_SOLVED` (or `OPTIMAL`) with a feasible primal —
+    `ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted — throwing a
+    loud `ErrorException` naming `abs_hour` and the full solve status otherwise. SOCP
+    exactness gating (`assert_socp_exact!`) plays NO role in this settlement path — there is
+    no relaxation here to certify, the branch-flow relation is the TRUE nonconvex equality.
+    Under `s.mpc_forecast_error == 0.0` (every `fe.pv_factor == fe.demand_factor == 1.0`)
+    this is BYTE-IDENTICAL to `forecast_settled_welfare` to solver precision: no clip ever
+    engages (the window's own PV-limit constraint already bounds the solved `p_ch` by the
+    UNPERTURBED `Ppv[abs_hour]`), and the AC truth re-solve reproduces the window's own
+    solved dispatch exactly, since the fixed injections match what the window itself
+    balanced (same feeder, same per-bus net injections) and a radial network's AC power flow
+    has a unique physical solution at those injections.
+
+    **Post-research amendment history (for provenance, NOT the current behavior):** plans
+    27-03/27-07 originally settled the frontier import via a SOCP-relaxation re-solve
+    (`Min Σ_b r_b·l[b,1]` on `ConvexBranchFlow`, certified by `assert_socp_exact!`) and
+    measured it GENUINELY INEXACT on 18/20 tested seeds under forecast-error-driven reverse
+    flow (27-07-SUMMARY.md "Findings" — a real SOCP relaxation knife-edge, not a solver
+    artifact) — masked in `test/test_mpc_loop.jl` by a `seed=5` substitution. Plan 27-08
+    (USER DECISION 2026-09-29) replaces that SOCP re-solve with the AC power-flow settlement
+    described above, removing THAT SPECIFIC knife-edge (the happy-path fixture's `seed=5`
+    mask reverts cleanly to the default `seed=1`) — but plan 27-08 ALSO MEASURED a NEW,
+    MORE FUNDAMENTAL finding on the SAME tight-thermal-limit fixture family: the DEFAULT
+    `seed=1` drives a realized/clipped dispatch that GENUINELY exceeds the head branch's
+    thermal rating once served by the TRUE (unrelaxed) AC equality (confirmed via a
+    limits-removed re-solve reaching `LOCALLY_SOLVED` while the limited re-solve correctly
+    reports `LOCALLY_INFEASIBLE` — not a numerics artifact). The forced-PV-shortfall and
+    mpc_step-stride items therefore RETAIN their `seed=5` substitution (27-08-SUMMARY.md
+    "Deviations"/"Findings" — a DEVIATION from this plan's own must_haves text, documented
+    and escalated there, never a weakening of the settlement's convergence bar) — a NEW
+    `@testitem` documents the genuine `seed=1` infeasibility as a citable regression rather
+    than an undocumented flaky seed choice. The SUPERSEDED SOCP re-solve survives ONLY as
+    `_mpc_truth_import_socp_reference`, reachable exclusively via the INTERNAL test seam
+    `_truth_settlement = :socp` (default `:ac`) — used SOLELY by
+    `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-08-repro.jl`'s
+    AC-vs-SOCP cross-check on a seed where the SOCP re-solve happens to be exact; no
+    production `Scenario`-driven caller ever passes it.
   - `forecast_settled_welfare::Float64` — the PRE-PHASE-27 forecast-consistent settlement,
     kept as a clearly-labelled DIAGNOSTIC (never the headline number `regret` is measured
     against, post-FIX-10). **WR-01 — settlement is FORECAST-CONSISTENT by construction, not
@@ -168,8 +202,23 @@ Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-ident
 `regret`/`day_ahead_welfare`/`realized_welfare` (INFRA-04, mirroring `run_scenario`'s own
 same-seed guarantee) — the Clarabel solve path is single-threaded and every random draw
 (profiles, population, forecast error) flows through a seeded, independent sub-stream.
+
+`_truth_settlement` (plan 27-08) is an INTERNAL TEST SEAM, `:ac` (the default, PRODUCTION
+behavior — see the `realized_welfare` bullet above) or `:socp` (the SUPERSEDED pre-27-08
+SOCP-relaxation re-solve, `_mpc_truth_import_socp_reference`, kept SOLELY for
+`27-08-repro.jl`'s AC-vs-SOCP cross-check). Mirrors this file's own `_mpc_certify_and_price`
+`_solve_welfare`/`_ac_dual_fallback_price` test-seam idiom. No production `Scenario`-driven
+caller ever passes `:socp`.
 """
-function run_mpc(s::Scenario)
+function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
+    _truth_settlement in (:ac, :socp) || throw(
+        ArgumentError(
+            "run_mpc: _truth_settlement must be :ac or :socp, got " *
+            "$(_truth_settlement) (internal test seam, plan 27-08 — production callers " *
+            "never set this)",
+        ),
+    )
+
     # Boundary guards FIRST, before any materialization (mirrors this file's other
     # boundary-guard idiom, e.g. Scenario.jl's own throw-ArgumentError convention).
     # WR-07: the window cannot exceed the day-ahead horizon — without this guard the
@@ -419,7 +468,7 @@ function run_mpc(s::Scenario)
             # Phase 27 FIX-10: the truth resolve's per-bus REALIZED net active/reactive
             # injection, keyed by aggregator bus — accumulated device-by-device below
             # (mirroring Aggregator.contribute!'s own p_inject/Pdc_param/tanφ wiring, but
-            # with NUMERIC realized values) and fed into `_mpc_truth_import_resolve` after
+            # with NUMERIC realized values) and fed into `_mpc_truth_import_acpf` after
             # the per-device loop.
             realized_net_p = Dict{Int, Float64}()
             realized_net_q = Dict{Int, Float64}()
@@ -555,19 +604,43 @@ function run_mpc(s::Scenario)
             # profiles the optimizer saw.
             forecast_settled_welfare -= λ₀[abs_hour] * value(o.p_import[τ_apply])
 
-            # Phase 27 FIX-10 (post-research amendment): the TRUTH import is LOSS-EXACT — a
-            # fresh single-hour power-flow re-solve with every device's realized/clipped net
-            # injection FIXED, only the frontier import free (never a copper-plate
-            # net-injection approximation).
-            p_import_true = _mpc_truth_import_resolve(
-                feeder,
-                pf,
-                mpc_aggs,
-                λ₀,
-                abs_hour,
-                realized_net_p,
-                realized_net_q,
+            # Phase 27 FIX-10 (USER DECISION 2026-09-29, plan 27-08): the TRUTH import is
+            # settled by a genuine AC power flow at the FIXED realized/clipped dispatch — the
+            # physically true plant. Warm-start every P/Q/l/v/p_import/q_import from the
+            # WINDOW's own solved values at this hour's window-local position (26-15: Ipopt's
+            # default all-zero start is a degenerate KKT point of l·v = P²+Q²).
+            pv_o = o.ctx.meta[:pf_vars]
+            Bf = feeder.branches
+            Np_f = length(feeder.buses)
+            warm_start = (;
+                P = Float64[value(pv_o.P[b, τ_apply]) for b in eachindex(Bf)],
+                Q = Float64[value(pv_o.Q[b, τ_apply]) for b in eachindex(Bf)],
+                l = Float64[value(pv_o.l[b, τ_apply]) for b in eachindex(Bf)],
+                v = Float64[value(pv_o.v[j, τ_apply]) for j in 1:Np_f],
+                p_import = value(o.p_import[τ_apply]),
+                q_import = haskey(o.ctx.meta, :q_import) ?
+                           value(o.ctx.meta[:q_import][τ_apply]) : nothing,
             )
+            p_import_true = if _truth_settlement === :ac
+                _mpc_truth_import_acpf(
+                    feeder,
+                    mpc_aggs,
+                    abs_hour,
+                    realized_net_p,
+                    realized_net_q,
+                    warm_start,
+                )
+            else   # :socp — internal test seam only, see run_mpc's own docstring
+                _mpc_truth_import_socp_reference(
+                    feeder,
+                    pf,
+                    mpc_aggs,
+                    λ₀,
+                    abs_hour,
+                    realized_net_p,
+                    realized_net_q,
+                )
+            end
             realized_welfare -= λ₀[abs_hour] * p_import_true
 
             k += 1
@@ -1084,11 +1157,17 @@ function _mpc_assert_true_state_inband(
 end
 
 """
-    _mpc_truth_import_resolve(feeder, pf::AbstractPowerFlow, mpc_aggs, λ₀::AbstractVector{<:Real},
-                               abs_hour::Int, realized_net_p::AbstractDict{Int,Float64},
-                               realized_net_q::AbstractDict{Int,Float64}) -> Float64
+    _mpc_truth_import_socp_reference(feeder, pf::AbstractPowerFlow, mpc_aggs,
+                                      λ₀::AbstractVector{<:Real}, abs_hour::Int,
+                                      realized_net_p::AbstractDict{Int,Float64},
+                                      realized_net_q::AbstractDict{Int,Float64}) -> Float64
 
-Internal helper (unexported, Phase 27 FIX-10, post-research amendment): the LOSS-EXACT
+**SUPERSEDED (Phase 27 plan 27-08, USER DECISION 2026-09-29) — kept ONLY as the SOCP side of
+`27-08-repro.jl`'s AC-vs-SOCP cross-check, reachable EXCLUSIVELY via [`run_mpc`](@ref)'s
+internal test seam `_truth_settlement = :socp`. No production `Scenario`-driven caller ever
+reaches this function; the production truth settlement is [`_mpc_truth_import_acpf`](@ref).**
+
+(Original Phase 27 FIX-10 / plan 27-07 docstring, preserved for provenance:) the LOSS-EXACT
 per-applied-hour truth import re-solve. Builds a FRESH, single-hour (`T=1`) `ModelContext`
 on the SAME `feeder`/`pf` [`run_mpc`](@ref) already materialized (mirrors `src/pricing/fit.jl`'s
 SITE-2 structural shape: `Model` → `ModelContext` → `contribute!(pf, ctx, feeder; T=1)` →
@@ -1113,16 +1192,18 @@ persists near-identically under EITHER objective (ratio ~1400-1700, MEASURED unc
 `tol_gap_abs/rel` sweep from `1e-9` to `1e-11` and across a dominant quadratic `l` regularizer up
 to weight 100) — a genuine, non-tolerance-fixable, non-objective-fixable SOCP relaxation
 inexactness under compounding forecast-error-driven reverse-flow drift, matching this project's
-own documented high-PV-reverse-flow exactness knife-edge. Gated on `assert_solved!` (no dual
-needed) and `assert_socp_exact!` (no explicit `atol`/`rtol` override — inherits whatever default
-the exactness gate carries) before returning `value(p_import_t)`.
+own documented high-PV-reverse-flow exactness knife-edge — precisely the finding that motivated
+plan 27-08's replacement of this function as the PRODUCTION settlement path. Gated on
+`assert_solved!` (no dual needed) and `assert_socp_exact!` (no explicit `atol`/`rtol`
+override — inherits whatever default the exactness gate carries) before returning
+`value(p_import_t)`.
 
 Under `s.mpc_forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
 `value(o.p_import[τ_apply])` to solver precision: the fixed per-bus injections are IDENTICAL
 to what the window itself balanced at that hour (same feeder, same formulation, same net
 injections), so the SAME physical network equations have the SAME unique solution.
 """
-function _mpc_truth_import_resolve(
+function _mpc_truth_import_socp_reference(
     feeder,
     pf::AbstractPowerFlow,
     mpc_aggs,
@@ -1207,6 +1288,169 @@ function _mpc_truth_import_resolve(
     @objective(model_t, Min, sum(B[b].r * l_t[b, 1] for b in eachindex(B)))
     assert_solved!(model_t; dual = false)
     assert_socp_exact!(ctx_t)
+
+    return value(p_import_t)
+end
+
+"""
+    _mpc_truth_import_acpf(feeder, mpc_aggs, abs_hour::Int,
+                            realized_net_p::AbstractDict{Int,Float64},
+                            realized_net_q::AbstractDict{Int,Float64},
+                            warm_start::NamedTuple) -> Float64
+
+Internal helper (unexported, Phase 27 FIX-10, **USER DECISION 2026-09-29, plan 27-08 —
+the PRODUCTION truth-settlement function** [`run_mpc`](@ref) calls by default,
+`_truth_settlement = :ac`): settle the per-applied-hour frontier import against a genuine AC
+POWER FLOW ([`ACPowerFlow`](@ref), Ipopt via `select_optimizer(problem_class(ACPowerFlow()))`
+— `problem_class(::ACPowerFlow) = NLP()`) instead of a re-solve of the window's own SOCP
+relaxation. Replaces [`_mpc_truth_import_socp_reference`](@ref) as the production path
+because that SOCP re-solve was MEASURED genuinely inexact on 18/20 tested seeds under
+forecast-error-driven reverse flow (27-07-SUMMARY.md "Findings", ESCALATED) — a real SOCP
+relaxation knife-edge, not fixable by any tolerance or objective change (the LOCKED "never
+raise τ_solver/ε to hide it" policy). The AC oracle has no such relaxation to be inexact:
+[`ACPowerFlow`](@ref)'s branch-flow relation is the TRUE nonconvex EQUALITY `l·v = P²+Q²`
+(thesis 3.39 unrelaxed), so fixing every injection leaves the power flow SQUARE up to the
+free frontier slack — there is no degenerate family of optima to select among.
+
+Builds a FRESH, single-hour (`T=1`) `ModelContext` on [`ACPowerFlow`](@ref), mirroring
+[`_mpc_truth_import_socp_reference`](@ref)'s own structural shape verbatim (`Model` →
+`ModelContext` → `contribute!` → per-bus `add_to_residual!` → a free frontier variable at
+`feeder.root` → balance constraints → `@objective` → optimize → read `value(p_import_t)`):
+fixes every `mpc_aggs` bus's REALIZED net active/reactive injection (`realized_net_p`/
+`realized_net_q`, computed by the caller from each device's TRUE/clipped dispatch —
+IDENTICAL wiring to the SOCP reference), and leaves ONLY the frontier import `p_import_t`
+(and, when reactive, `q_import_t`) free.
+
+`warm_start` — a `(; P, Q, l, v, p_import, q_import)` `NamedTuple` of the CALLING window's own
+solved values at this hour's window-local position (`o.ctx.meta[:pf_vars]`/`o.p_import`,
+`run_mpc`'s own read) — seeds every one of this model's `P[b,1]`/`Q[b,1]`/`l[b,1]`/`v[j,1]`/
+`p_import_t`/`q_import_t` via `set_start_value` (root `v` excluded — it is `fix()`ed to
+`1.0` already). Plan 26-15 (`26-15-SUMMARY.md`) found Ipopt's DEFAULT all-zero start sits at
+a DEGENERATE KKT point of `l·v = P²+Q²` (the constraint's `(P,Q)`-gradient vanishes at
+`P=Q=0`), stalling at `ALMOST_LOCALLY_SOLVED`/`NEARLY_FEASIBLE_POINT` at the trivial
+near-zero solution instead of escaping toward the true operating point; a physically
+plausible warm start (the window's own last solved point — close to the true point whenever
+the forecast error is small, and Assumption A6's PV clip is the only source of divergence at
+`mpc_forecast_error = 0`) is the standard, already-established remedy (26-15's own PV
+back-feed regression).
+
+Keeps 27-07's total-loss objective `Min Σ_b B[b].r·l[b,1]` (per this plan's explicit
+instruction) — with every injection fixed AND the AC equality closing the system, this
+objective only resolves any RESIDUAL numerical freedom Ipopt's interior-point iterations
+leave (never a genuine physical ambiguity, unlike the SOCP reference's true degenerate
+family).
+
+Requires `is_solved_and_feasible(model_t; dual=false, allow_local=true, allow_almost=false)`
+— i.e. `termination_status ∈ {OPTIMAL, LOCALLY_SOLVED}` with a `FEASIBLE_POINT` primal.
+**`ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted** (`allow_almost =
+false`): throws a loud `ErrorException` naming `abs_hour` and the FULL solve status
+(`termination_status`/`primal_status`/`raw_status`) on non-convergence — this function NEVER
+weakens the convergence bar to paper over a stalled Ipopt solve. SOCP exactness gating
+(`assert_socp_exact!`) plays NO role here — there is no relaxation to certify, the
+branch-flow relation is the unrelaxed nonconvex equality itself.
+
+Under `s.mpc_forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
+`value(o.p_import[τ_apply])` to solver precision, for the SAME reason
+[`_mpc_truth_import_socp_reference`](@ref) does: the fixed per-bus injections are IDENTICAL
+to what the window itself balanced at that hour, so the SAME physical network equations have
+the SAME unique solution — a radial AC network has a unique physically-realizable operating
+point for a given set of bus injections (the other, unstable/non-physical root the quadratic
+`l·v = P²+Q²` admits is excluded by the warm start landing in the physical basin).
+"""
+function _mpc_truth_import_acpf(
+    feeder,
+    mpc_aggs,
+    abs_hour::Int,
+    realized_net_p::AbstractDict{Int, Float64},
+    realized_net_q::AbstractDict{Int, Float64},
+    warm_start::NamedTuple,
+)
+    ac = ACPowerFlow()
+    model_t = Model(select_optimizer(problem_class(ac)))
+    ctx_t = ModelContext(model_t)
+    ctx_t.meta[:feeder] = feeder
+    ctx_t.meta[:T] = 1
+
+    contribute!(ac, ctx_t, feeder; T = 1)
+    reactive_t = haskey(ctx_t.residuals, :Rq)
+    Np = length(feeder.buses)
+
+    for agg in mpc_aggs
+        add_to_residual!(ctx_t, :Rp, agg.bus, 1, realized_net_p[agg.bus])
+        reactive_t && add_to_residual!(ctx_t, :Rq, agg.bus, 1, realized_net_q[agg.bus])
+    end
+
+    # Free-sign frontier exchange at the root (buy > 0 / sell < 0, mirroring the SOCP
+    # reference and solve_welfare's allow_export=true convention).
+    @variable(model_t, p_import_t)
+    add_to_residual!(ctx_t, :Rp, feeder.root, 1, p_import_t)
+    if reactive_t
+        @variable(model_t, q_import_t)
+        add_to_residual!(ctx_t, :Rq, feeder.root, 1, q_import_t)
+    end
+
+    size(ctx_t.residuals[:Rp]) == (Np, 1) || error(
+        "run_mpc AC truth settlement: residual :Rp is $(size(ctx_t.residuals[:Rp])), " *
+        "expected ($Np, 1) at abs_hour=$abs_hour — an aggregator bus escaped the feeder",
+    )
+    @constraint(model_t, balance_p_t[j = 1:Np], ctx_t.residuals[:Rp][j, 1] == 0)
+    register_constraint!(ctx_t, :balance_p, balance_p_t)
+    if reactive_t
+        size(ctx_t.residuals[:Rq]) == (Np, 1) || error(
+            "run_mpc AC truth settlement: residual :Rq is $(size(ctx_t.residuals[:Rq])), " *
+            "expected ($Np, 1) at abs_hour=$abs_hour — an aggregator bus escaped the feeder",
+        )
+        @constraint(model_t, balance_q_t[j = 1:Np], ctx_t.residuals[:Rq][j, 1] == 0)
+        register_constraint!(ctx_t, :balance_q, balance_q_t)
+    end
+
+    # 26-15: warm-start every P/Q/l/v/p_import_t/q_import_t from the calling window's own
+    # solved point at this hour — Ipopt's default all-zero start is a degenerate KKT point of
+    # the unrelaxed equality l·v = P²+Q² (the (P,Q)-gradient vanishes at P=Q=0).
+    pv_t = ctx_t.meta[:pf_vars]
+    B = feeder.branches
+    for b in eachindex(B)
+        set_start_value(pv_t.P[b, 1], warm_start.P[b])
+        set_start_value(pv_t.Q[b, 1], warm_start.Q[b])
+        set_start_value(pv_t.l[b, 1], warm_start.l[b])
+    end
+    for j in 1:Np
+        j == feeder.root && continue   # root v is fix()ed to 1.0 already, not a free start
+        set_start_value(pv_t.v[j, 1], warm_start.v[j])
+    end
+    set_start_value(p_import_t, warm_start.p_import)
+    if reactive_t && warm_start.q_import !== nothing
+        set_start_value(q_import_t, warm_start.q_import)
+    end
+
+    # FIX-10 (27-07's total-loss form, kept per this plan's explicit instruction): with every
+    # injection FIXED and the AC equality closing the system, this objective only resolves
+    # any residual numerical freedom Ipopt's interior-point iterations leave — never a
+    # genuine physical ambiguity (see docstring; contrast with the SOCP reference's true
+    # degenerate family).
+    l_t = pv_t.l
+    @objective(model_t, Min, sum(B[b].r * l_t[b, 1] for b in eachindex(B)))
+
+    optimize!(model_t)
+    ok = is_solved_and_feasible(
+        model_t;
+        dual = false,
+        allow_local = true,
+        allow_almost = false,
+    )
+    if !ok
+        throw(
+            ErrorException(
+                "run_mpc: AC power-flow truth settlement FAILED to reach LOCALLY_SOLVED at " *
+                "abs_hour=$abs_hour — termination_status=$(termination_status(model_t)), " *
+                "primal_status=$(primal_status(model_t)), " *
+                "raw_status=\"$(raw_status(model_t))\". ALMOST_LOCALLY_SOLVED is TREATED AS " *
+                "A FAILURE here, never silently accepted (USER DECISION 2026-09-29, plan " *
+                "27-08) — this is a genuine Ipopt non-convergence at the realized dispatch, " *
+                "not a relaxation-exactness gate.",
+            ),
+        )
+    end
 
     return value(p_import_t)
 end
