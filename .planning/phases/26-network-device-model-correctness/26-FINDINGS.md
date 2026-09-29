@@ -41,3 +41,38 @@ Executors in parallel worktrees append here — never edit `STATE.md` directly.
   (binary or MPEC formulation) for validation runs; (c) an η-aware round-trip penalty term
   in the battery utility. This is NOT scheduled against any currently-reserved phase number —
   a future phase must claim it explicitly before implementation begins.
+
+## Plan 26-18 — Gan-Low relabel + v2.1 restatement
+
+- [v4.0 Phase 26 finding]: Plan 26-02's own SUMMARY and the `docs/literate/
+  convex_branch_flow.jl` verdict page previously described the corrected `ConvexBranchFlow`
+  default (`thesis_literal=false`, Gan-Low direction, `v̂ ≥ v`) as "a genuine relaxation."
+  This was INACCURATE (locked decision PM-01, `26-POSTMERGE-TRIAGE.md` cluster I): on the
+  EXACT-04 high-PV fixture (`pv_scale=1.2`), the default SOCP optimum is **-921.754** while
+  the TRUE AC optimum (Ipopt, two strategies agreeing) is **-921.277**. A relaxation of a
+  maximization can never score BELOW a feasible AC point, so the default is provably a
+  RESTRICTION — Gan-Low's own "modified OPF": `v̂ ≤ V²max` is load-bearing and
+  conservatively enforces `v ≤ V²max` (26-02's own load-bearing/redundant-bound test
+  demonstrates this), exact by theorem, with a measurable (~0.05% here) welfare loss. The
+  OLD thesis-literal copy (`ConvexBranchFlow(; thesis_literal=true)`) restricts the LOWER
+  voltage band instead. **NEITHER form is a genuine relaxation.**
+- **Restated finding — the v2.1 "SOCP knife-edge under high-PV reverse flow" finding no
+  longer reproduces under the default.** That finding (project memory
+  `v2.1-socp-inexactness-and-thesis-repro`) measured EXACT-04 as genuinely cone-INEXACT
+  under the (then-default) old thesis-literal copy. Under the corrected (Gan-Low) default
+  now shipped since Plan 26-02, EXACT-04 is EXACT (well under the PF-04 gate) — the
+  original finding's premise no longer holds under default settings. The finding DOES still
+  reproduce, unchanged, under the explicit `ConvexBranchFlow(; thesis_literal=true)`
+  opt-in — this is the mechanism Plan 26-18 uses to re-force the tests below.
+- **What changed (Plan 26-18):** honest-relabel-only edits to
+  `src/powerflow/ConvexBranchFlow.jl`'s struct/`contribute!`/outer-constructor docstrings,
+  `docs/literate/convex_branch_flow.jl`'s Verdict subsection (new "PM-01" addendum with the
+  EXACT-04 measured numbers), and `26-02-SUMMARY.md` (appended addendum, prior text left
+  intact). The Phase-20/21 escalation-ladder tests (`test/test_mpc_loop.jl:95/:187/:294` in
+  triage numbering) and the `test_restricted_branch_flow.jl` AC-infeasibility
+  synthetic-violation tests (the two testitems' "unrestricted"/"cert_failing" comparison
+  legs, formerly triage-numbered `:231`/`:398`) are re-forced with an explicit
+  `ConvexBranchFlow(; thesis_literal=true)` construction, restoring their original
+  forcing-mechanism intent (the escalation ladder / genuine AC-infeasible synthetic
+  violation) under the now-honest, now-exact default. No production code behavior changed —
+  only docs/docstrings/planning prose and two test files' fixture construction.

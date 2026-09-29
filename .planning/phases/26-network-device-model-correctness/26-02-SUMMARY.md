@@ -187,3 +187,38 @@ None - no external service configuration required.
 - FOUND commit: `f677965` (Task 1)
 - FOUND commit: `d520758` (Task 2)
 - FOUND commit: `ab397d1` (Task 3)
+
+## Addendum (2026-09-28, Plan 26-18 — PM-01 correction, do not remove prior text above)
+
+This SUMMARY's own "Accomplishments" section above (and this plan's docs page, at the time)
+described the corrected `ConvexBranchFlow` default (`thesis_literal=false`, Gan-Low
+direction, `v̂ ≥ v`) as if it were a relaxation ("the Gan-Low direction, matching the
+thesis's own stated intent"; the accompanying docstrings additionally used the phrase "a
+genuine relaxation"). Per the post-merge amendment PM-01 (`26-CONTEXT.md`,
+`26-POSTMERGE-TRIAGE.md` cluster I, user-decided 2026-09-28), this is INACCURATE and is
+corrected by Plan 26-18:
+
+- On the EXACT-04 high-PV fixture (`pv_scale=1.2`), the default SOCP optimum is
+  **-921.754** while the TRUE AC optimum (Ipopt, two strategies agreeing) is **-921.277**.
+  A relaxation of a maximization can never score BELOW a feasible AC point, so the default
+  is provably a RESTRICTION, not a relaxation.
+- The default is honestly Gan-Low's own "modified OPF": `v̂ ≤ V²max` is load-bearing and
+  conservatively enforces `v ≤ V²max`, exact by theorem, with a measurable (~0.05% here)
+  welfare loss. The OLD thesis-literal copy restricts the LOWER voltage band instead.
+  NEITHER form is a genuine relaxation.
+- Consequence: the v2.1 "SOCP knife-edge under high-PV reverse flow" finding no longer
+  reproduces on EXACT-04 under this DEFAULT (it is now exact); it still reproduces under
+  the explicit `ConvexBranchFlow(; thesis_literal=true)` opt-in. See
+  `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` ("Plan 26-18") for
+  the full restatement, and `docs/literate/convex_branch_flow.jl`'s "PM-01" Verdict
+  subsection and `src/powerflow/ConvexBranchFlow.jl`'s docstrings for the corrected
+  language.
+- The Phase-20/21 escalation-ladder tests (`test/test_mpc_loop.jl`) and the
+  `test_restricted_branch_flow.jl` AC-infeasibility synthetic-violation tests, which relied
+  on the (formerly inexact) default to force their respective certificate paths, are
+  re-forced with an explicit `thesis_literal=true` construction by Plan 26-18 — restoring
+  their original forcing-mechanism intent.
+
+No code behavior changed by this addendum — `ConvexBranchFlow`'s Task 1 sign-flip fix
+(commit `f677965`) is unaffected; only the surrounding prose describing what that fix means
+is corrected.
