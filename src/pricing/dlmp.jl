@@ -276,6 +276,40 @@ function Base.getproperty(d::DlmpDecomposition, s::Symbol)
     end
 end
 
+# WR-01 fix (27-REVIEW.md, 2026-09-29): `DlmpDecomposition` is a plain `struct`, not a
+# `NamedTuple` (unlike its pre-Phase-27 return type) — `propertynames` would otherwise omit
+# the deprecated `.loss`/`.voltage` virtual properties `Base.getproperty` above still serves,
+# which could confuse introspection (`propertynames(d)`, REPL tab-completion) into looking
+# incomplete relative to what `getproperty` actually accepts.
+Base.propertynames(::DlmpDecomposition, ::Bool = false) =
+    (:energy, :cone, :drop, :congestion, :reactive, :total, :loss, :voltage)
+
+"""
+    NamedTuple(d::DlmpDecomposition) -> NamedTuple
+
+WR-01 fix (27-REVIEW.md, 2026-09-29): before Phase 27's FIX-07 rename, `decompose_dlmp`
+returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage,
+reactive, total)`. Any consumer that used genuine `NamedTuple`-only semantics on that return
+value (`Tuple(nt)`/`values(nt)`/`collect(nt)`, or positional destructuring) now hits a
+`MethodError` against `DlmpDecomposition` (a plain `struct`) instead — a LOUD failure, never
+a silent field-order mismatch, but still a breaking change for such a call site (none found
+in this tree, but this API is `export`ed). This conversion restores the OLD field
+NAMES-AND-ORDER exactly — never the new struct's own field order, which additionally
+TRANSPOSES `congestion`/`drop` relative to the old `congestion`/`voltage` positions (see
+`DlmpDecomposition`'s own docstring) — so a duck-typed-as-a-NamedTuple call site can be
+repaired by wrapping the call in `NamedTuple(decompose_dlmp(...))`.
+"""
+function Base.NamedTuple(d::DlmpDecomposition)
+    return (;
+        energy = d.energy,
+        loss = getfield(d, :cone),
+        congestion = getfield(d, :congestion),
+        voltage = getfield(d, :drop),
+        reactive = getfield(d, :reactive),
+        total = getfield(d, :total),
+    )
+end
+
 """
     decompose_dlmp(ctx; bus = nothing, T = nothing, rtol = 1e-5, atol = 1e-7)
         -> DlmpDecomposition

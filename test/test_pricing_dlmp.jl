@@ -547,3 +547,51 @@ end
         @test cong_from_smax_rev > 100 * cong_from_smax
     end
 end
+
+@testitem "dlmp: DlmpDecomposition's NamedTuple(...) conversion restores the pre-FIX-07 field names/order (WR-01, 27-REVIEW.md)" tags =
+    [:dlmp] begin
+    using TSODSO, Test
+
+    # WR-01 (27-REVIEW.md, 2026-09-29): before Phase 27's FIX-07 rename, `decompose_dlmp`
+    # returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage,
+    # reactive, total)`. `DlmpDecomposition` (the NEW return type) is a `struct`, not a
+    # `NamedTuple` — a caller that used genuine `NamedTuple`-only semantics (`Tuple(nt)`,
+    # `values(nt)`, `collect(nt)`, positional destructuring) would hit a LOUD `MethodError`
+    # rather than a silent field-order mismatch, but it is still a breaking change for such
+    # a call site. `NamedTuple(d)` restores the OLD names/order exactly, giving such a call
+    # site a one-line repair. Directly constructed (never a full network solve — this pins
+    # the CONVERSION's contract, independent of any specific fixture's numeric values).
+    d = TSODSO.DlmpDecomposition{Vector{Float64}}(
+        [1.0],   # energy
+        [2.0],   # cone   (formerly `loss`)
+        [3.0],   # drop   (formerly `voltage`)
+        [4.0],   # congestion
+        [5.0],   # reactive
+        [6.0],   # total
+    )
+
+    nt = NamedTuple(d)
+    # EXACT pre-FIX-07 field order: (energy, loss, congestion, voltage, reactive, total) —
+    # note `congestion`/`voltage` are POSITIONALLY TRANSPOSED relative to the new struct's
+    # own `(energy, cone, drop, congestion, reactive, total)` field order (DlmpDecomposition's
+    # own docstring); this conversion must NOT merely reorder-by-name into the new order.
+    @test keys(nt) == (:energy, :loss, :congestion, :voltage, :reactive, :total)
+    @test nt.energy == [1.0]
+    @test nt.loss == [2.0]        # == d.cone
+    @test nt.congestion == [4.0]  # == d.congestion (unchanged name, but 3rd->3rd position differs from new struct order)
+    @test nt.voltage == [3.0]     # == d.drop
+    @test nt.reactive == [5.0]
+    @test nt.total == [6.0]
+
+    # `Tuple`/`values`/`collect` — the genuine NamedTuple-only operations WR-01 is about —
+    # now work again via the conversion, in the OLD positional order.
+    @test Tuple(nt) == ([1.0], [2.0], [4.0], [3.0], [5.0], [6.0])
+    @test collect(values(nt)) == [[1.0], [2.0], [4.0], [3.0], [5.0], [6.0]]
+
+    # propertynames introspection includes the deprecated virtual properties Base.getproperty
+    # still serves, so `propertynames(d)` never looks incomplete relative to what field access
+    # actually accepts.
+    pn = propertynames(d)
+    @test :cone in pn && :drop in pn
+    @test :loss in pn && :voltage in pn   # deprecated aliases, still discoverable
+end
