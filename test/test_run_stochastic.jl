@@ -141,15 +141,22 @@ end
     # CI's own 1.12 runners additionally observed two distinct values across two different
     # commits: -0.025156313755701376 (commit 304db38 — matches the local 1.12.7 measurement
     # exactly) and -0.02515643735591766 (commit 3b73633). The golden -0.02515629356082627
-    # above is correct and unchanged — reproduced bit-for-bit on Julia 1.10 and 1.11 — it is
-    # only Julia 1.12's own converged iterate that differs. Worst observed relative
-    # deviation from the golden: |-0.02515643735591766 - (-0.02515629356082627)| /
-    # 0.02515629356082627 ≈ 5.74e-6. `rtol = 1e-4` clears that worst observed spread by
-    # ~17x while staying far below any physically meaningful change in a welfare gap
-    # (`rtol = 1e-5` would give only ~1.7x headroom — too tight to trust against a solver
-    # iterate). Cross-commit variation on the SAME Julia version (304db38 vs 3b73633, both
+    # above was correct and unchanged on Julia 1.10/1.11 UNTIL Plan 26-09 (gap-closure)
+    # landed. Cross-commit variation on the SAME Julia version (304db38 vs 3b73633, both
     # 1.12) is a separately-tracked IEEE-13 numerical-knife-edge finding, noted here as
     # context only — this tolerance is meant to absorb solver-tolerance noise across
     # environments, not to paper over that structural finding.
-    @test r1.oos.welfare_gap ≈ -0.02515629356082627 rtol = 1e-4
+    #
+    # RE-PINNED (Plan 26-09, phase 26 gap-closure): OLD -0.02515629356082627 ->
+    # NEW -0.018591711034105174. Cause: Plan 26-09 fixed the Prev/Qrev/smax_rev
+    # JuMP name-collision in build_stochastic_welfare's per-scenario unregister list
+    # (26-POSTMERGE-TRIAGE.md cluster A) — this scenario build previously errored before
+    # reaching a golden at all; the device-correctness fixes from Plans 26-03..05
+    # (battery SOC horizon linking, receiving-end thermal limit, flexible-load reactive
+    # draw) independently move this welfare gap too, once the collision no longer masks
+    # them. Re-measured live in this worktree per D-11 (three fresh same-process
+    # run_stochastic(s) calls, bit-for-bit stable, BEFORE this literal was written — see
+    # the stability assertion above). `rtol = 1e-4` retained to absorb the same
+    # cross-Julia-minor-version solver-tolerance noise documented above.
+    @test r1.oos.welfare_gap ≈ -0.018591711034105174 rtol = 1e-4
 end
