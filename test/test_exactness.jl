@@ -135,6 +135,52 @@ end
     end
 end
 
+@testitem "exact: per-branch floor flags a slack cone on a small-smax branch the old flat atol missed (FIX-08)" tags =
+    [:exact] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 0.01)],   # SMALL smax=0.01 ⇒ ref_b = smax^2 = 1e-4
+        1,
+    )
+    T, N, B = 1, 2, 1
+    model = Model(select_optimizer(SOCP()))
+    @variable(model, v[1:N, 1:T])
+    @variable(model, v̂[1:N, 1:T])
+    @variable(model, P[1:B, 1:T])
+    @variable(model, Q[1:B, 1:T])
+    @variable(model, l[1:B, 1:T])
+    # An injected gap of 5e-7 — BELOW the OLD flat atol=1e-6 (the legacy gate would have
+    # silently PASSED this), but LARGE relative to this branch's own ref_b = smax^2 = 1e-4
+    # (relative slack 5e-7 / 1e-4 = 5e-3): exactly the scale-blind-floor regression FIX-08
+    # closes (a fine-grained lateral's slack cone silently accepted because the flat atol was
+    # calibrated against head-branch-scale fixtures, not this branch's own thermal scale).
+    fix.(v, 1.0; force = true)
+    fix.(v̂, 1.0; force = true)
+    fix.(P, 0.0; force = true)
+    fix.(Q, 0.0; force = true)
+    fix.(l, 5.0e-7; force = true)
+    @objective(model, Max, 0)
+    optimize!(model)
+
+    ctx = TSODSO.ModelContext(model)
+    ctx.meta[:feeder] = feeder
+    ctx.meta[:T] = T
+    ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+
+    # Documents the regression this task closes: the OLD flat atol=1e-6 (still reachable via
+    # the explicit-override backward-compat path) PASSES this exact point...
+    maxgap_old_style = TSODSO.assert_socp_exact!(ctx; rtol = 1e-4, atol = 1e-6)
+    @test maxgap_old_style < 1e-6
+
+    # ...but the NEW per-branch default floor (ε * ref_b, ref_b = smax^2 = 1e-4) correctly
+    # THROWS: the cone is slack by ~5x the branch's own scale-relative floor.
+    @test_throws Exception TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)
+end
+
 @testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags =
     [:exact] setup = [Phase4Fixtures] begin
     using TSODSO
