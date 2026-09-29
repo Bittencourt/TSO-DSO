@@ -52,6 +52,15 @@ in-phase; suite green at close. Thesis-reproduction restatement is Phase 28.
   propagation THROWS on an SOC bound violation; the forecast-settled number survives only as a
   clearly labelled `forecast_settled_welfare` diagnostic.
 
+### Post-research amendment (2026-09-29, orchestrator decision — correctness over performance per CLAUDE.md)
+- FIX-10 true import: LOSS-EXACT settlement (a per-applied-hour power-flow re-solve with the applied
+  dispatch fixed at the realized/clipped values), NOT the copper-plate net-injection approximation.
+- FIX-06 algorithm: in-process cutting-plane (Kelley/bundle) over z∈[0,y]^T reusing the existing
+  follower/oracle dual reads as the first-order oracle (RESEARCH recommendation) — Claude's discretion
+  on details; must reduce to the existing ternary result at T=1 (byte-identical goldens).
+- FIX-09: close the real gap — FIT AC-PF step (fit.jl SITE 2) must run `assert_socp_exact!`; first
+  flake experiment is `max_iter` (untried by prior sessions).
+
 ### Golden policy + process (SC-6, lessons from Phase 26)
 - Same as Phase 26: every moved golden re-pinned in-phase with old→new + cause comment and a
   GOLDEN-AUDIT table; no silent re-pin.
