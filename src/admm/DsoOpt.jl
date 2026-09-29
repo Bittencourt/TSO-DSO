@@ -229,8 +229,12 @@ every non-root bus is a load node, so both axes coincide and the model is unchan
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
 `1:length(feeder.buses)`, an aggregator ON the root, or — WR-04, phase-19 review, WIDENED by PM-03
 (post-merge triage cluster D) — a device for which `dv isa FourQuadBESS || is_flexible_load(dv)`
-holds combined with `reactive_consensus != :live` (under `OFF`/`CERTIFIED` the reactive closure is
-the inelastic `−Pdc·tanφ` draw alone, so the device's reactive decision — a `FourQuadBESS`'s live
+holds combined with a NORMALIZED `mode != LIVE` (WR-04, phase-26 review — the guard compares the
+value `normalize_reactive_mode(reactive_consensus)` resolves to, NEVER the caller's raw
+`reactive_consensus` keyword spelling; a maintainer must not "simplify" this to
+`reactive_consensus != :live`, which would be WRONG whenever `reactive_consensus` is passed as a
+`Bool`/`ReactiveMode` rather than the bare `Symbol :live`) (under `OFF`/`CERTIFIED` the reactive
+closure is the inelastic `−Pdc·tanφ` draw alone, so the device's reactive decision — a `FourQuadBESS`'s live
 `q_inject`, OR a flexible-load member's `p_inject·tanφ` term the centralized model folds into
 `:Rq` since FIX-05 — would be silently dropped from the network model — genuinely invalid inputs
 still fail loud). Since PM-03, `reactive_consensus`'s OWN default (see signature above) resolves
