@@ -74,6 +74,35 @@
 # complementarity constraint — verified numerically post-solve by
 # [`assert_battery_complementarity!`](@ref) (called internally by `solve_welfare`).
 #
+# #### Finding (Plan 26-14, PM-02): App. C's no-binary argument implicitly assumes η=1
+#
+# The strict `λ_min < λ_med < λ_max` ordering above is NOT sufficient on its own to rule out
+# simultaneous charge/discharge once the round-trip efficiency `η < 1` is accounted for. App.
+# C's own argument (pp. 166-168) silently assumes `η = 1`; for `η < 1`, whenever `DLMP <
+# λ_med` and BOTH legs are small, an SOC-neutral round trip (charge `p_ch`, discharge `p_dch`
+# chosen so `soc` is unchanged) earns
+#
+# ```math
+# (\lambda_\text{med} - \text{DLMP})\,(1 - \eta^2) > 0 \qquad \text{whenever } \text{DLMP} < \lambda_\text{med},
+# ```
+#
+# so a GENUINE, KKT-consistent simultaneous charge/discharge CAN be the true welfare optimum —
+# this is a LATENT gap in App. C's own parametrization (not a bug introduced by any Phase-26
+# fix). The EXACT-04 high-PV AC (Ipopt) stress fixture demonstrates this concretely: at bus 2,
+# t=7 the solved point has `p_ch ≈ 0.00256`, `p_dch ≈ 0.00305`, verified to 4 digits against the
+# App. C KKT identity `(λ_med - DLMP)(1/η² - 1) = b_dch·p_dch + b_ch·p_ch/η²`. The SOCP path's
+# looser complementarity tolerance (`τ = 1e-3`) masks the identical effect; the AC/NLP path's
+# tighter tolerance (`τ = 1e-6`) catches it.
+#
+# Since this is a genuine optimum the AC oracle correctly found, not a solver bug, `solve_welfare`
+# (Plan 26-14) makes [`assert_battery_complementarity!`](@ref) REPORT it via `@warn` (log and
+# continue) on the AC/NLP call site instead of throwing — the SOCP call site is UNCHANGED and
+# still throws. No utility/model change is made in this phase; a backlog item exists for a
+# proper complementarity treatment (a binary/MPEC formulation, or an η-aware round-trip
+# penalty that makes simultaneous charge/discharge strictly dominated again even for `η < 1`).
+# See `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` for the tracked
+# finding.
+#
 # ### Aggregator roll-up — the sole network-facing writer
 #
 # The `Aggregator` sums its member devices' active injections and utilities into the
