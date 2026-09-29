@@ -4,8 +4,8 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
-last_updated: "2026-09-29T07:52:07.661Z"
-last_activity: 2026-09-29 -- Phase 27 planning complete
+last_updated: "2026-09-29T07:52:09.176Z"
+last_activity: 2026-09-29 -- Phase 27 execution started
 progress:
   total_phases: 12
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 27 — integer planning & pricing certificate correctness
+**Current focus:** Phase 27 — Integer Planning & Pricing Certificate Correctness
 
 ## Current Position
 
-Phase: 27
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-29 -- Phase 27 planning complete
+Phase: 27 (Integer Planning & Pricing Certificate Correctness) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 27
+Last activity: 2026-09-29 -- Phase 27 execution started
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
