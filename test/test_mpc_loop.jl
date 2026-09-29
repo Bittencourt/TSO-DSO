@@ -37,8 +37,101 @@
     @test r.steps == 9 - 3 + 1
     @test all(==(:certified_convex_dual), r.trace.cert_status_trace)
     @test all(isfinite, (r.day_ahead_welfare, r.realized_welfare, r.regret))
+    @test isfinite(r.forecast_settled_welfare)
     @test all(isfinite, r.day_ahead_dadp)
     @test length(r.trace.dadp_trace) == r.steps
+
+    # Phase 27 FIX-10 zero-forecast-error byte-identity invariant (permanent regression): no
+    # clip ever engages (the window's own PV-limit constraint already bounds the solved p_ch
+    # by the UNPERTURBED Ppv[abs_hour]), and the truth power-flow re-solve reproduces the
+    # window's own solved dispatch exactly, since the fixed injections match what the window
+    # itself balanced.
+    @test isapprox(r.realized_welfare, r.forecast_settled_welfare; atol = 1e-6)
+end
+
+@testitem "mpc_loop: forced-PV-shortfall genuinely diverges realized_welfare from forecast_settled_welfare (FIX-10)" tags =
+    [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+
+    # Phase 27 FIX-10: a nonzero mpc_forecast_error draw whose pv_factor inflates the
+    # window's belief of available PV forces the solved p_ch above the device's TRUE
+    # (unperturbed) Ppv[abs_hour] on at least one applied hour — the A6 clip then genuinely
+    # changes both the settled welfare and the loss-exact frontier import versus the
+    # forecast-consistent number. seed=5 is MEASURED (not assumed) to complete end-to-end
+    # without tripping the SOCP exactness gate at fe=0.3 on this fixture — seed=1..4 at this
+    # T/mpc_H genuinely trip `assert_socp_exact!` under the CURRENT flat atol=1e-6 (a
+    # pre-existing, documented SOCP-exactness knife-edge under reverse flow, MEMORY
+    # v2.1-socp-inexactness-and-thesis-repro — NOT a FIX-10 defect; see 27-03-SUMMARY.md
+    # "Cross-plan observations" for the full measurement and root-cause).
+    s = Scenario(;
+        name = "mpc_loop_fix10_shortfall",
+        feeder = :ieee13,
+        T = 9,
+        mpc_H = 3,
+        mpc_step = 1,
+        mpc_terminal_soc = true,
+        mpc_forecast_error = 0.3,
+        seed = 5,
+    )
+    r = run_mpc(s)
+
+    @test isfinite(r.realized_welfare) && isfinite(r.forecast_settled_welfare)
+    @test isfinite(r.regret)
+    # The clip + loss-exact import genuinely changed the settlement — NOT a coincidental
+    # floating-point tie.
+    @test !isapprox(r.realized_welfare, r.forecast_settled_welfare; atol = 1e-9)
+end
+
+@testitem "mpc_loop: true-state propagation THROWS (never clamps) on a genuine out-of-band SOC/temperature event (FIX-10)" tags =
+    [:mpc_loop] begin
+    using TSODSO, Test
+
+    # Phase 27 FIX-10's throw-not-clamp guard (`_mpc_assert_true_state_inband`, internal,
+    # unexported) is exercised DIRECTLY here — mirroring this file's OWN established pattern
+    # of testing `run_mpc`'s internal MPC helpers directly (`_mpc_certify_and_price`,
+    # `_mpc_escalation_aggregators`, `_mpc_assert_state_keying`, above) rather than only
+    # end-to-end. Claude's discretion (27-03-PLAN.md's "at Claude's discretion" fixture
+    # latitude): an EXTENSIVE empirical search (>150 (T, mpc_H, seed, mpc_forecast_error)
+    # combinations, T up to 24, mpc_forecast_error up to 0.99, mpc_terminal_soc both
+    # settings — see 27-03-SUMMARY.md) found NO (seed, mpc_forecast_error) combination on
+    # the default :ieee13/:default population that trips a genuine SOC/temperature
+    # out-of-band event through `run_mpc` BEFORE also tripping the (separate, pre-existing)
+    # SOCP exactness gate — the battery's own headroom (`Emax=2·load_scale`,
+    # `Pmax=0.5·load_scale`, so a single hour's worst-case clip is well under half the SOC
+    # band) makes a genuine violation require a multi-hour compounding drift that, on THIS
+    # fixture, empirically co-occurs with the reverse-flow SOCP knife-edge far more often
+    # than not. This item instead certifies the GUARD ITSELF fires correctly (throws,
+    # names bus/hour/value, never clamps) on a synthetic out-of-band value — the exact
+    # invariant `run_mpc`'s own accumulation loop depends on.
+    @test isdefined(TSODSO, :_mpc_assert_true_state_inband)
+
+    # In-band (including the documented `tol=1e-6` solver-precision slack): never throws.
+    @test TSODSO._mpc_assert_true_state_inband(0.0, 0.01, 0.01, "SOC", 2, 5) === nothing
+    @test TSODSO._mpc_assert_true_state_inband(0.0, 0.01 + 5e-7, 0.01, "SOC", 2, 5) === nothing
+    @test TSODSO._mpc_assert_true_state_inband(15.0, 22.0, 30.0, "temperature", 3, 7) ===
+          nothing
+
+    # Genuinely out-of-band (well beyond the tolerance): throws, names bus/abs_hour/value.
+    err = try
+        TSODSO._mpc_assert_true_state_inband(0.0, 0.05, 0.01, "SOC", 2, 5)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    msg = sprint(showerror, err)
+    @test occursin("TRUE-plant", msg)
+    @test occursin("SOC", msg)
+    @test occursin("bus=2", msg)
+    @test occursin("abs_hour=5", msg)
+    @test_throws ErrorException TSODSO._mpc_assert_true_state_inband(
+        15.0,
+        50.0,
+        30.0,
+        "temperature",
+        3,
+        7,
+    )
 end
 
 @testitem "mpc_loop: forced-inexact window escalates through Phase-20's ladder WITHOUT throwing (MPC-04, D-04)" tags =

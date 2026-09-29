@@ -95,7 +95,8 @@ silently overwriting state or mispairing devices with variables.
 
 # Returns
 
-A `NamedTuple` `(; trace, day_ahead_welfare, realized_welfare, regret, day_ahead_dadp, steps)`:
+A `NamedTuple`
+`(; trace, day_ahead_welfare, forecast_settled_welfare, realized_welfare, regret, day_ahead_dadp, steps)`:
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
     cumulative deviation, and certificate/fallback status (MPC-03). The status is one of
@@ -108,32 +109,56 @@ A `NamedTuple` `(; trace, day_ahead_welfare, realized_welfare, regret, day_ahead
   - `day_ahead_welfare::Float64` — the FULL perfect-foresight day-ahead welfare (`s.T` hours,
     the complete materialized population INCLUDING any `Deferrable` device — see this file's
     header deviation note).
-  - `realized_welfare::Float64` — the closed-loop's realized welfare, accumulated hour-by-hour
-    from each applied step's applied controls (D-05), over the Deferrable-excluded `mpc_aggs`
-    device set (see header note) plus the frontier cost/revenue. **WR-01 — settlement is
-    FORECAST-CONSISTENT by construction, not re-settled against the ground truth:** the
-    frontier term charges the window's OWN solved `p_import[τ]` (which balanced the
-    forecast-perturbed PV/demand the optimizer saw), and the device terms read the solved
-    controls as-is. Under nonzero `s.mpc_forecast_error` the TRUE plant's import would differ
-    by the per-hour demand/PV forecast errors, and when `fe.pv_factor > 1` the applied `p_ch`
-    can exceed the TRUE PV availability `d.Ppv[abs_hour]` (Assumption A6 violated on the
-    ground truth). Only the STATE propagation is truth-anchored (`propagate_tin` uses the
-    ground-truth ambient; the SOC recursion has no exogenous profile). Re-settling the
-    frontier and clipping `p_ch` against truth is plant-model mismatch beyond forecast error
-    — explicitly DEFERRED (21-CONTEXT `<deferred>`), so the forecast-consistent convention is
-    documented here rather than silently implied. `regret` compares this number against a
-    perfect-foresight benchmark settled on the unperturbed truth, so under large forecast
-    error a small POSITIVE regret is possible (the realized side is measured under a
-    different — perturbed — settlement), and is an artifact of this documented convention,
-    not a free lunch.
-  - `regret::Float64` — `realized_welfare` MINUS the day-ahead welfare RESTRICTED to the SAME
-    published `k`-hour decision horizon and the SAME `mpc_aggs` device set (D-11's
-    information-set-fair comparison) — NEVER silently extrapolated to the full `s.T` hours the
-    day-ahead optimum spans. The day-ahead side (utilities AND frontier `p_import` cost) is
-    read from a SECOND one-time benchmark solved over `mpc_aggs` itself (CR-03), never from
-    the full-population context — so the comparison is never charged the frontier cost of a
-    device whose utility it is denied. The terminal-SOC targets (D-06) likewise track THIS
-    comparable benchmark's own optimal SOC trajectory.
+  - `realized_welfare::Float64` — the closed-loop's TRUTH-SETTLED realized welfare (Phase 27
+    FIX-10, as amended by the post-research CONTEXT decision), accumulated hour-by-hour from
+    each applied step's applied controls settled against the TRUE plant, over the
+    Deferrable-excluded `mpc_aggs` device set (see header note) plus the frontier
+    cost/revenue. Three corrections versus the window's own forecast-consistent belief:
+    (1) a `PVBattery`'s realized charge is CLIPPED to the device's TRUE (unperturbed)
+    `d.Ppv[abs_hour]` availability (Assumption A6: `p_ch[t] <= pv_used[t] <= Ppv[t]`) — never
+    the raw solved value, which can exceed truth when `fe.pv_factor > 1` inflated the
+    window's belief; the device utility term is charged on this SAME clipped value, never the
+    unclipped solved one; (2) true-state propagation (`propagate_soc`/`propagate_tin`, kept
+    JuMP-free) THROWS a loud `ErrorException` — never silently clamps — if the realized state
+    falls outside `[Emin,Emax]`/`[Tmin,Tmax]`, a genuine out-of-band event distinct from
+    `_mpc_window_device`'s SEPARATE solver-tolerance-noise clamp (`mpc_loop.jl:759-780`,
+    untouched); (3) the frontier import is LOSS-EXACT: `_mpc_truth_import_resolve` builds and
+    solves a FRESH single-hour `ModelContext` on the SAME `feeder`/`pf` this function already
+    materialized, with every device's realized (clipped) net active/reactive injection FIXED
+    at each aggregator bus (mirroring `Aggregator.contribute!`'s own `p_inject − Pdc`/
+    `−Pdc·tanφ + q_inject` wiring, but with NUMERIC realized values and the TRUE, unperturbed
+    `agg.Pdc[abs_hour]` baseline demand) and only the frontier import free — certified via
+    `assert_socp_exact!` before its value is charged, so network losses are truthfully
+    re-derived rather than copper-plate-approximated. Under `s.mpc_forecast_error == 0.0`
+    (every `fe.pv_factor == fe.demand_factor == 1.0`) this is BYTE-IDENTICAL to
+    `forecast_settled_welfare`: no clip ever engages (the window's own PV-limit constraint
+    already bounds the solved `p_ch` by the UNPERTURBED `Ppv[abs_hour]`), and the truth
+    power-flow re-solve reproduces the window's own solved dispatch exactly, since the fixed
+    injections match what the window itself balanced (same feeder/formulation, same per-bus
+    net injections).
+  - `forecast_settled_welfare::Float64` — the PRE-PHASE-27 forecast-consistent settlement,
+    kept as a clearly-labelled DIAGNOSTIC (never the headline number `regret` is measured
+    against, post-FIX-10). **WR-01 — settlement is FORECAST-CONSISTENT by construction, not
+    re-settled against the ground truth:** the frontier term charges the window's OWN solved
+    `p_import[τ]` (which balanced the forecast-perturbed PV/demand the optimizer saw), and
+    the device terms read the solved controls as-is. Under nonzero `s.mpc_forecast_error` the
+    TRUE plant's import would differ by the per-hour demand/PV forecast errors, and when
+    `fe.pv_factor > 1` the applied `p_ch` can exceed the TRUE PV availability
+    `d.Ppv[abs_hour]` (Assumption A6 violated on the ground truth). Only the STATE
+    propagation is truth-anchored (`propagate_tin` uses the ground-truth ambient; the SOC
+    recursion has no exogenous profile). This number is UNCHANGED by Phase 27 — computed
+    alongside `realized_welfare` from the SAME per-applied-hour loop, never mutated by the
+    clip/throw/loss-exact-import corrections above.
+  - `regret::Float64` — the NEW truth-settled `realized_welfare` (Phase 27 FIX-10) MINUS the
+    day-ahead welfare RESTRICTED to the SAME published `k`-hour decision horizon and the SAME
+    `mpc_aggs` device set (D-11's information-set-fair comparison) — NEVER silently
+    extrapolated to the full `s.T` hours the day-ahead optimum spans, and NEVER measured
+    against `forecast_settled_welfare` (the pre-phase convention). The day-ahead side
+    (utilities AND frontier `p_import` cost) is read from a SECOND one-time benchmark solved
+    over `mpc_aggs` itself (CR-03), never from the full-population context — so the
+    comparison is never charged the frontier cost of a device whose utility it is denied. The
+    terminal-SOC targets (D-06) likewise track THIS comparable benchmark's own optimal SOC
+    trajectory.
   - `day_ahead_dadp::Vector{Float64}` — the full-length (`s.T`) day-ahead reference DADP path.
   - `steps::Int` — the total published-hour count, ALWAYS `s.T - s.mpc_H + 1` regardless of
     `s.mpc_step` (Pitfall 5's fixed-window convention — only the NUMBER OF RESOLVES shrinks as
@@ -276,15 +301,27 @@ function run_mpc(s::Scenario)
     # absolute hour t, which skips by s.mpc_step between resolves).
     k = 0
     trace = MpcTrace()
+    # Phase 27 FIX-10: `forecast_settled_welfare` is the RENAMED pre-phase accumulator
+    # (computation completely unchanged, WR-01); `realized_welfare` is the NEW truth-settled
+    # accumulator (clipped PVBattery charging, throw-on-violation state propagation, and a
+    # loss-exact per-hour import re-solve) — see this function's own docstring.
+    forecast_settled_welfare = 0.0
     realized_welfare = 0.0
 
     # Measured (nominal-plant) state, keyed by (bus, kind): initialized from each mpc_aggs
     # member device's OWN t=1 literal soc0/Tin0 (the simplest possible source of the initial
     # measured state).
     measured_state = Dict{Tuple{Int, Symbol}, Float64}()
+    # Phase 27 FIX-10: a SEPARATE truth trajectory, initialized IDENTICALLY at t=1 and
+    # evolved INDEPENDENTLY thereafter (the two can diverge whenever a clip/violation
+    # occurs) — `measured_state` (forecast-consistent, drives the NEXT resolve's IC
+    # Parameters) is left completely untouched by this addition.
+    measured_state_true = Dict{Tuple{Int, Symbol}, Float64}()
     for agg in mpc_aggs, d in agg.devices
         hasproperty(d, :soc0) && (measured_state[(agg.bus, :soc)] = Float64(d.soc0))
         hasproperty(d, :Tin0) && (measured_state[(agg.bus, :Tin)] = Float64(d.Tin0))
+        hasproperty(d, :soc0) && (measured_state_true[(agg.bus, :soc)] = Float64(d.soc0))
+        hasproperty(d, :Tin0) && (measured_state_true[(agg.bus, :Tin)] = Float64(d.Tin0))
     end
 
     # Outer loop over window RESOLVE epochs — D-03: s.mpc_step genuinely strides this loop's
@@ -379,10 +416,25 @@ function run_mpc(s::Scenario)
         for τ_apply in 1:n_apply
             abs_hour = t + τ_apply - 1
 
+            # Phase 27 FIX-10: the truth resolve's per-bus REALIZED net active/reactive
+            # injection, keyed by aggregator bus — accumulated device-by-device below
+            # (mirroring Aggregator.contribute!'s own p_inject/Pdc_param/tanφ wiring, but
+            # with NUMERIC realized values) and fed into `_mpc_truth_import_resolve` after
+            # the per-device loop.
+            realized_net_p = Dict{Int, Float64}()
+            realized_net_q = Dict{Int, Float64}()
+
             for agg in mpc_aggs
                 varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+                tanφ = reactive_factor(agg.φ)
+                net_p = 0.0
+                # TRUE (unperturbed) baseline demand reactive term (thesis 3.23) — never the
+                # forecast-perturbed agg.Pdc[abs_hour] * fe.demand_factor the window balanced.
+                net_q = -agg.Pdc[abs_hour] * tanφ
+
                 for d in agg.devices
-                    realized_welfare += _mpc_device_hour_utility(d, varlist, τ_apply)
+                    # ---- forecast-consistent settlement (UNCHANGED, WR-01) ----
+                    forecast_settled_welfare += _mpc_device_hour_utility(d, varlist, τ_apply)
                     if d isa PVBattery || d isa FourQuadBESS
                         v = only(vv for vv in varlist if haskey(vv, :soc0))
                         p_ch1 = value(v.p_ch[τ_apply])
@@ -405,14 +457,118 @@ function run_mpc(s::Scenario)
                             d.Tout[abs_hour],
                         )
                     end
+
+                    # ---- truth-settled settlement (NEW, FIX-10) ----
+                    if d isa PVBattery
+                        v = only(vv for vv in varlist if haskey(vv, :soc0))
+                        # A6 clip: the realized charge can never exceed the device's TRUE
+                        # (unperturbed) PV availability, even when the window believed more
+                        # PV was available (fe.pv_factor != 1.0).
+                        p_ch_true = min(value(v.p_ch[τ_apply]), d.Ppv[abs_hour])
+                        p_dch1 = value(v.p_dch[τ_apply])   # discharge unaffected by the clip
+                        pv_used1 = value(v.pv_used[τ_apply])
+                        realized_welfare += _mpc_pvbattery_utility(d, p_ch_true, p_dch1)
+                        next_soc = propagate_soc(
+                            measured_state_true[(agg.bus, :soc)],
+                            p_ch_true,
+                            p_dch1,
+                            d.η,
+                            d.Δt,
+                        )
+                        _mpc_assert_true_state_inband(
+                            d.Emin,
+                            next_soc,
+                            d.Emax,
+                            "SOC",
+                            agg.bus,
+                            abs_hour,
+                        )
+                        measured_state_true[(agg.bus, :soc)] = next_soc
+                        net_p += pv_used1 - p_ch_true + p_dch1
+                    elseif d isa FourQuadBESS
+                        # No Ppv field (not PV-limited, FourQuadBESS.jl) — the clip applies
+                        # ONLY to PVBattery; the truth propagation is otherwise IDENTICAL to
+                        # the forecast-consistent one (defense-in-depth throw guard below).
+                        v = only(vv for vv in varlist if haskey(vv, :soc0))
+                        p_ch1 = value(v.p_ch[τ_apply])
+                        p_dch1 = value(v.p_dch[τ_apply])
+                        q1 = value(v.q[τ_apply])
+                        realized_welfare += _mpc_device_hour_utility(d, varlist, τ_apply)
+                        next_soc = propagate_soc(
+                            measured_state_true[(agg.bus, :soc)],
+                            p_ch1,
+                            p_dch1,
+                            d.η,
+                            d.Δt,
+                        )
+                        _mpc_assert_true_state_inband(
+                            d.Emin,
+                            next_soc,
+                            d.Emax,
+                            "SOC",
+                            agg.bus,
+                            abs_hour,
+                        )
+                        measured_state_true[(agg.bus, :soc)] = next_soc
+                        net_p += p_dch1 - p_ch1
+                        net_q += q1
+                    elseif d isa Thermostatic
+                        v = only(vv for vv in varlist if haskey(vv, :Tin0))
+                        p1 = value(v.p[τ_apply])
+                        realized_welfare += _mpc_device_hour_utility(d, varlist, τ_apply)
+                        next_tin = propagate_tin(
+                            measured_state_true[(agg.bus, :Tin)],
+                            p1,
+                            d.α,
+                            d.β,
+                            d.Tout[abs_hour],
+                        )
+                        _mpc_assert_true_state_inband(
+                            d.Tmin,
+                            next_tin,
+                            d.Tmax,
+                            "temperature",
+                            agg.bus,
+                            abs_hour,
+                        )
+                        measured_state_true[(agg.bus, :Tin)] = next_tin
+                        net_p += -p1
+                        # Flexible-load power-factor reactive draw (thesis 3.23, FIX-05,
+                        # Aggregator.jl's own is_flexible_load wiring) — additive.
+                        φ_used = hasproperty(d, :φ) && d.φ !== nothing ? d.φ : agg.φ
+                        net_q += (-p1) * reactive_factor(φ_used)
+                    else
+                        # mpc_aggs is structurally Deferrable-excluded and window-hostable
+                        # only (_mpc_window_device throws on anything else) — no other
+                        # device type reaches this loop; utility-only, defensive.
+                        realized_welfare += _mpc_device_hour_utility(d, varlist, τ_apply)
+                    end
                 end
+
+                realized_net_p[agg.bus] = net_p - agg.Pdc[abs_hour]   # TRUE baseline demand
+                realized_net_q[agg.bus] = net_q
             end
+
             # WR-01: FORECAST-CONSISTENT settlement (documented convention, see the
-            # `realized_welfare` docstring bullet): this charges the window's OWN solved
-            # frontier exchange — the one that balanced the forecast-perturbed profiles the
-            # optimizer saw — never a truth-re-settled import (plant-model mismatch beyond
-            # forecast error is explicitly deferred, 21-CONTEXT).
-            realized_welfare -= λ₀[abs_hour] * value(o.p_import[τ_apply])
+            # `forecast_settled_welfare` docstring bullet): this charges the window's OWN
+            # solved frontier exchange — the one that balanced the forecast-perturbed
+            # profiles the optimizer saw.
+            forecast_settled_welfare -= λ₀[abs_hour] * value(o.p_import[τ_apply])
+
+            # Phase 27 FIX-10 (post-research amendment): the TRUTH import is LOSS-EXACT — a
+            # fresh single-hour power-flow re-solve with every device's realized/clipped net
+            # injection FIXED, only the frontier import free (never a copper-plate
+            # net-injection approximation).
+            p_import_true = _mpc_truth_import_resolve(
+                feeder,
+                pf,
+                mpc_aggs,
+                λ₀,
+                abs_hour,
+                realized_net_p,
+                realized_net_q,
+            )
+            realized_welfare -= λ₀[abs_hour] * p_import_true
 
             k += 1
             record!(trace, k, price_vec[τ_apply], dadp_da[abs_hour], cert_status)
@@ -442,11 +598,15 @@ function run_mpc(s::Scenario)
         end
         day_ahead_comparable_welfare -= λ₀[τ] * value(ctx_da_cmp.meta[:p_import][τ])
     end
+    # Phase 27 FIX-10: regret is re-derived against the NEW truth-settled realized_welfare
+    # (the day-ahead comparable side is unchanged — it has no forecast error to truth-settle
+    # against).
     regret = realized_welfare - day_ahead_comparable_welfare
 
     return (;
         trace,
         day_ahead_welfare = Float64(welfare_da),
+        forecast_settled_welfare = Float64(forecast_settled_welfare),
         realized_welfare = Float64(realized_welfare),
         regret = Float64(regret),
         day_ahead_dadp = Vector{Float64}(dadp_da),
@@ -825,6 +985,26 @@ function _mpc_window_device(d::AbstractDevice, bus::Int, t::Int, H::Int, fe, mea
 end
 
 """
+    _mpc_pvbattery_utility(d::PVBattery, p_ch::Real, p_dch::Real) -> Float64
+
+Internal helper (unexported, Phase 27 FIX-10): `d`'s own App. C charge-utility-minus-
+discharge-cost formula (thesis 3.15-3.20, IDENTICAL to [`contribute!`](@ref)'s objective
+term), evaluated at EXPLICIT numeric `p_ch`/`p_dch` rather than reading a JuMP variable's
+solved value. Factored out of [`_mpc_device_hour_utility`](@ref) (below, now a thin wrapper
+over this) so [`run_mpc`](@ref)'s NEW truth-settled accumulation can evaluate the SAME
+formula at the A6-clipped `p_ch_true` (never the raw solved `p_ch`, which can exceed the
+device's TRUE PV availability under nonzero forecast error) while the pre-existing
+forecast-consistent path (`_mpc_device_hour_utility`) stays byte-identical.
+"""
+function _mpc_pvbattery_utility(d::PVBattery, p_ch::Real, p_dch::Real)
+    a_ch = d.λ_med
+    b_ch = (d.λ_med - d.λ_min) / d.Pmax
+    a_dch = d.λ_med
+    b_dch = (d.λ_max - d.λ_med) / d.Pmax
+    return a_ch * p_ch - (b_ch / 2) * p_ch^2 - a_dch * p_dch - (b_dch / 2) * p_dch^2
+end
+
+"""
     _mpc_device_hour_utility(d::AbstractDevice, varlist, τ::Int) -> Float64
 
 Internal helper (unexported): the REALIZED per-hour utility contribution of device `d` at
@@ -841,13 +1021,9 @@ information-set-fair contract.
 """
 function _mpc_device_hour_utility(d::PVBattery, varlist, τ::Int)
     v = only(vv for vv in varlist if haskey(vv, :soc0) && haskey(vv, :Ppv_param))
-    a_ch = d.λ_med
-    b_ch = (d.λ_med - d.λ_min) / d.Pmax
-    a_dch = d.λ_med
-    b_dch = (d.λ_max - d.λ_med) / d.Pmax
     p_ch1 = value(v.p_ch[τ])
     p_dch1 = value(v.p_dch[τ])
-    return a_ch * p_ch1 - (b_ch / 2) * p_ch1^2 - a_dch * p_dch1 - (b_dch / 2) * p_dch1^2
+    return _mpc_pvbattery_utility(d, p_ch1, p_dch1)
 end
 
 function _mpc_device_hour_utility(d::FourQuadBESS, varlist, τ::Int)
@@ -865,6 +1041,127 @@ function _mpc_device_hour_utility(d::Thermostatic, varlist, τ::Int)
     v = only(vv for vv in varlist if haskey(vv, :Tin0))
     Tin1 = value(v.Tin[τ])
     return -(d.b / 2) * (Tin1 - d.Tmin)^2
+end
+
+"""
+    _mpc_assert_true_state_inband(lo::Real, x::Real, hi::Real, kind::AbstractString,
+                                   bus::Int, abs_hour::Int; tol::Real = 1e-6) -> Nothing
+
+Internal helper (unexported, Phase 27 FIX-10): assert the TRUE-plant propagated state `x`
+lies in `[lo, hi]`, throwing a loud `ErrorException` — never `@assert` (elided under `-O`,
+project convention, `src/models/exactness.jl`) — naming `kind` ("SOC"/"temperature"), `bus`,
+and `abs_hour` on violation. `tol` (default `1e-6`, this project's own standing absolute
+floor — `assert_socp_exact!`/`assert_no_slack`'s identical default) widens ONLY the
+COMPARISON, never the reported/propagated value itself (no clamp, no repair): a solved JuMP
+variable sits at its bound only up to the solver's own achieved precision (`|ε| ≲ 1e-8`,
+`_mpc_window_device`'s documented figure for the SAME class of noise), so a bare
+zero-tolerance comparison would spuriously throw on genuinely in-band states. This is
+DELIBERATELY DISTINCT from [`_mpc_window_device`](@ref)'s SEPARATE, differently-scoped clamp
+(`mpc_loop.jl:759-780`), which REPAIRS (clamps) a value for the escalation ladder's
+window-slicing helper — this guard NEVER repairs the value, it only tolerates the SAME
+class of numerical noise in the boundary CHECK before throwing on anything genuinely
+out-of-band (an event this project's own convention treats as a modeling finding to surface
+loudly, not silently absorb).
+"""
+function _mpc_assert_true_state_inband(
+    lo::Real,
+    x::Real,
+    hi::Real,
+    kind::AbstractString,
+    bus::Int,
+    abs_hour::Int;
+    tol::Real = 1e-6,
+)
+    (lo - tol <= x <= hi + tol) || throw(
+        ErrorException(
+            "run_mpc: TRUE-plant $kind propagation out of [$lo,$hi] (tol=$tol) at " *
+            "bus=$bus, abs_hour=$abs_hour, value=$x — a genuine out-of-band state (not " *
+            "solver-tolerance noise; see _mpc_window_device's SEPARATE clamp, " *
+            "mpc_loop.jl:759-780, which absorbs a DIFFERENT, already-in-band case).",
+        ),
+    )
+    return nothing
+end
+
+"""
+    _mpc_truth_import_resolve(feeder, pf::AbstractPowerFlow, mpc_aggs, λ₀::AbstractVector{<:Real},
+                               abs_hour::Int, realized_net_p::AbstractDict{Int,Float64},
+                               realized_net_q::AbstractDict{Int,Float64}) -> Float64
+
+Internal helper (unexported, Phase 27 FIX-10, post-research amendment): the LOSS-EXACT
+per-applied-hour truth import re-solve. Builds a FRESH, single-hour (`T=1`) `ModelContext`
+on the SAME `feeder`/`pf` [`run_mpc`](@ref) already materialized (mirrors `src/pricing/fit.jl`'s
+SITE-2 structural shape: `Model` → `ModelContext` → `contribute!(pf, ctx, feeder; T=1)` →
+per-bus `add_to_residual!` → a free frontier variable at `feeder.root` → balance
+constraints → `@objective` → `assert_solved!` → `assert_socp_exact!` → read
+`value(p_import)`), fixes every `mpc_aggs` bus's REALIZED net active/reactive injection
+(`realized_net_p`/`realized_net_q`, computed by the caller from each device's TRUE/clipped
+dispatch — mirroring `Aggregator.contribute!`'s own `p_inject − Pdc_param`/
+`−Pdc_param·tanφ + q_inject` wiring, but with NUMERIC realized values), and leaves ONLY the
+frontier import `p_import_t` free. With every injection fixed, `p_import_t` is uniquely
+determined by the network's own physical balance, so the `Max −λ₀[abs_hour]·p_import_t`
+objective's role is only to give the solver a well-posed direction, not to select among
+degenerate optima. Gated on `assert_solved!` (no dual needed) and `assert_socp_exact!` (no
+explicit `atol`/`rtol` override — inherits whatever default the exactness gate carries) before
+returning `value(p_import_t)`.
+
+Under `s.mpc_forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
+`value(o.p_import[τ_apply])` to solver precision: the fixed per-bus injections are IDENTICAL
+to what the window itself balanced at that hour (same feeder, same formulation, same net
+injections), so the SAME physical network equations have the SAME unique solution.
+"""
+function _mpc_truth_import_resolve(
+    feeder,
+    pf::AbstractPowerFlow,
+    mpc_aggs,
+    λ₀::AbstractVector{<:Real},
+    abs_hour::Int,
+    realized_net_p::AbstractDict{Int, Float64},
+    realized_net_q::AbstractDict{Int, Float64},
+)
+    model_t = Model(select_optimizer(problem_class(pf)))
+    ctx_t = ModelContext(model_t)
+    ctx_t.meta[:feeder] = feeder
+    ctx_t.meta[:T] = 1
+
+    contribute!(pf, ctx_t, feeder; T = 1)
+    reactive_t = haskey(ctx_t.residuals, :Rq)
+    Np = length(feeder.buses)
+
+    for agg in mpc_aggs
+        add_to_residual!(ctx_t, :Rp, agg.bus, 1, realized_net_p[agg.bus])
+        reactive_t && add_to_residual!(ctx_t, :Rq, agg.bus, 1, realized_net_q[agg.bus])
+    end
+
+    # Free-sign frontier exchange at the root (buy > 0 / sell < 0, mirroring fit.jl's SITE-2
+    # and solve_welfare's allow_export=true convention) — priced at λ₀[abs_hour].
+    @variable(model_t, p_import_t)
+    add_to_residual!(ctx_t, :Rp, feeder.root, 1, p_import_t)
+    if reactive_t
+        @variable(model_t, q_import_t)
+        add_to_residual!(ctx_t, :Rq, feeder.root, 1, q_import_t)
+    end
+
+    size(ctx_t.residuals[:Rp]) == (Np, 1) || error(
+        "run_mpc truth resolve: residual :Rp is $(size(ctx_t.residuals[:Rp])), expected " *
+        "($Np, 1) at abs_hour=$abs_hour — an aggregator bus escaped the feeder",
+    )
+    @constraint(model_t, balance_p_t[j = 1:Np], ctx_t.residuals[:Rp][j, 1] == 0)
+    register_constraint!(ctx_t, :balance_p, balance_p_t)
+    if reactive_t
+        size(ctx_t.residuals[:Rq]) == (Np, 1) || error(
+            "run_mpc truth resolve: residual :Rq is $(size(ctx_t.residuals[:Rq])), " *
+            "expected ($Np, 1) at abs_hour=$abs_hour — an aggregator bus escaped the feeder",
+        )
+        @constraint(model_t, balance_q_t[j = 1:Np], ctx_t.residuals[:Rq][j, 1] == 0)
+        register_constraint!(ctx_t, :balance_q, balance_q_t)
+    end
+
+    @objective(model_t, Max, -λ₀[abs_hour] * p_import_t)
+    assert_solved!(model_t; dual = false)
+    assert_socp_exact!(ctx_t)
+
+    return value(p_import_t)
 end
 
 export run_mpc
