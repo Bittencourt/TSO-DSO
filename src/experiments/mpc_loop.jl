@@ -196,6 +196,22 @@ A `NamedTuple`
     dispatch for exceeding an operating limit, it only reports it here. Populated only under
     `_truth_settlement = :ac` (the production default); empty under the `:socp` internal test
     seam.
+  - `pvbattery_truth_trace::Vector{<:NamedTuple}` — (WR-04, 27-REVIEW.md iteration 2) one entry
+    PER APPLIED HOUR PER `PVBattery` device (NOT one per published hour like `trace`/
+    `settlement_violations` — an hour with zero PVBattery devices contributes zero entries, an
+    hour with two contributes two), each `(; abs_hour, bus, p_ch_true, pv_used_true, p_dch,
+    Ppv_true, net_p_delta)`. `net_p_delta` is the ACTUAL amount the PVBattery truth-settlement
+    call site added to `net_p` this hour (captured as `net_p_after - net_p_before` around that
+    exact line, never a separate re-derivation), so it is provably sensitive to a revert of
+    that line back to the pre-CR-02 unclipped `pv_used1` — a test recovering the
+    "actually-summed" self-consumption value as `net_p_delta + p_ch_true - p_dch` and asserting
+    it `<= Ppv_true` is asserting the A6 clip invariant against the REAL call site, not merely
+    against `_mpc_pvbattery_true_clip` in isolation (closing 27-REVIEW.md WR-04's gap between
+    "the clip helper is correct" and "the clip helper is wired correctly"). The other fields
+    (`p_ch_true`, `pv_used_true`) are the clip helper's own verbatim outputs, kept for
+    convenience/cross-checking. A pure DIAGNOSTIC never read by `run_mpc` itself or fed back
+    into any control/pricing/state decision. Populated under BOTH `_truth_settlement` seam
+    values (the clip happens before the truth-settlement branch).
   - `forecast_settled_welfare::Float64` — the PRE-PHASE-27 forecast-consistent settlement,
     kept as a clearly-labelled DIAGNOSTIC (never the headline number `regret` is measured
     against, post-FIX-10). **WR-01 — settlement is FORECAST-CONSISTENT by construction, not
@@ -388,6 +404,14 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     # internal test seam never populates this, since the superseded SOCP reference carries no
     # such diagnostic).
     settlement_violations = NamedTuple[]
+    # WR-04 (27-REVIEW.md iteration 2): a per-applied-hour, per-PVBattery-device DIAGNOSTIC of
+    # the exact truth-settlement quantities that feed `net_p` at the PVBattery truth-settlement
+    # site below — added ONLY so a regression test can assert the A6 clip invariant through
+    # `run_mpc`'s OWN public entry point (never a synthetic construction), closing WR-04's gap
+    # ("the clip helper is correct" vs "the clip helper is used correctly at the real call
+    # site"). NEVER read by `run_mpc` itself; every other return field and every
+    # control/pricing/state decision is completely unchanged by this addition.
+    pvbattery_truth_trace = NamedTuple[]
 
     # Measured (nominal-plant) state, keyed by (bus, kind): initialized from each mpc_aggs
     # member device's OWN t=1 literal soc0/Tin0 (the simplest possible source of the initial
@@ -576,7 +600,26 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                             abs_hour,
                         )
                         measured_state_true[(agg.bus, :soc)] = next_soc
+                        # WR-04 diagnostic (27-REVIEW.md iteration 2): capture the ACTUAL
+                        # delta this line adds to `net_p` — never a separate re-derivation —
+                        # so a test asserting against `pvbattery_truth_trace` is provably
+                        # sensitive to a revert of the very next line (e.g. back to the
+                        # pre-CR-02 `pv_used1`, which would change `net_p_delta` itself,
+                        # not just a value computed alongside it).
+                        net_p_before = net_p
                         net_p += pv_used_true - p_ch_true + p_dch1
+                        push!(
+                            pvbattery_truth_trace,
+                            (;
+                                abs_hour,
+                                bus = agg.bus,
+                                p_ch_true,
+                                pv_used_true,
+                                p_dch = p_dch1,
+                                Ppv_true = d.Ppv[abs_hour],
+                                net_p_delta = net_p - net_p_before,
+                            ),
+                        )
                     elseif d isa FourQuadBESS
                         # No Ppv field (not PV-limited, FourQuadBESS.jl) — the clip applies
                         # ONLY to PVBattery; the truth propagation is otherwise IDENTICAL to
@@ -730,6 +773,7 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         day_ahead_dadp = Vector{Float64}(dadp_da),
         steps = k,
         settlement_violations,
+        pvbattery_truth_trace,
     )
 end
 

@@ -246,6 +246,72 @@ end
     @test net_p_postfix == Ppv_true - clip.p_ch_true + p_dch
 end
 
+@testitem "mpc_loop: A6 clip invariant holds at run_mpc's REAL PVBattery call site, not just the isolated helper (WR-04, 27-REVIEW.md iteration 2)" tags =
+    [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+
+    # WR-04 (27-REVIEW.md, 2026-09-29, iteration 2): the CR-02 unit test above pins
+    # `_mpc_pvbattery_true_clip`'s own correctness in isolation but never drives `run_mpc`'s
+    # actual PVBattery truth-settlement call site (`src/experiments/mpc_loop.jl`, the
+    # `net_p += pv_used_true - p_ch_true + p_dch1` line) — so a future edit silently
+    # reverting THAT line back to the pre-CR-02 unclipped `pv_used1` would leave every
+    # then-committed test green. This item closes that gap by driving `run_mpc`'s PUBLIC
+    # path directly and reading `r.pvbattery_truth_trace` — a per-applied-hour,
+    # per-PVBattery-device diagnostic added SOLELY for this test (`net_p_delta` is captured
+    # as `net_p_after - net_p_before` AROUND the real accumulation line, never a
+    # re-derivation) — so the assertion below is provably sensitive to a revert of that
+    # exact line.
+    #
+    # SAME "forced-PV-shortfall" fixture as the existing FIX-10/CR-02 items above
+    # (seed=1, mpc_forecast_error=0.3): `draw_forecast_error(1, t, 0.3).pv_factor` was
+    # measured (see the CR-02 item's own comment) to exceed 1 at several resolves
+    # (t=1/2/3/6/7/9), i.e. the window's belief genuinely overstates true PV availability —
+    # the exact regime CR-02/WR-04 concern.
+    #
+    # CONFIRMED BY HAND (2026-09-29): reverting ONLY the accumulation line
+    # `net_p += pv_used_true - p_ch_true + p_dch1` back to
+    # `net_p += pv_used1 - p_ch_true + p_dch1` (a temporary in-place edit, restored
+    # immediately after, never committed — no `git stash` used) makes the invariant
+    # assertion below FAIL (`pv_used_actually_summed > Ppv_true` at abs_hour=3, bus=2,
+    # `0.003531... > 0.003126...`); against the current (fixed) source, it passes.
+    s = Scenario(;
+        name = "mpc_loop_fix10_shortfall",
+        feeder = :ieee13,
+        T = 9,
+        mpc_H = 3,
+        mpc_step = 1,
+        mpc_terminal_soc = true,
+        mpc_forecast_error = 0.3,
+        seed = 1,
+    )
+    r = run_mpc(s)
+
+    # Precondition: the fixture genuinely exercises the PVBattery truth-settlement call site
+    # (never a vacuously-empty pass).
+    @test !isempty(r.pvbattery_truth_trace)
+
+    tol = 1e-9
+    for entry in r.pvbattery_truth_trace
+        # Recover the quantity ACTUALLY summed into net_p this hour from the measured delta
+        # (`net_p_delta = pv_used_ACTUALLY_USED - p_ch_true + p_dch`, whatever
+        # `pv_used_ACTUALLY_USED` the real call site used) — never re-deriving it from the
+        # clip helper's own output, so this is genuinely a check of the CALL SITE, not the
+        # helper in isolation.
+        pv_used_actually_summed = entry.net_p_delta + entry.p_ch_true - entry.p_dch
+        # The exact CR-02/WR-04 invariant: the self-consumption/export value actually fed
+        # into the settled net PV-battery injection can never exceed the device's TRUE
+        # (unperturbed) PV availability this hour — this is what FAILS if the real call site
+        # reverts to the unclipped `pv_used1` under `fe.pv_factor > 1`.
+        @test pv_used_actually_summed <= entry.Ppv_true + tol
+        # Cross-check against the clip helper's own verbatim outputs (both individually
+        # bounded by the true PV, and p_ch_true <= pv_used_true, per
+        # `_mpc_pvbattery_true_clip`'s own documented invariant).
+        @test entry.p_ch_true <= entry.Ppv_true + tol
+        @test entry.pv_used_true <= entry.Ppv_true + tol
+        @test entry.p_ch_true <= entry.pv_used_true + tol
+    end
+end
+
 @testitem "mpc_loop: forced-inexact window escalates through Phase-20's ladder WITHOUT throwing (MPC-04, D-04)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
     using TSODSO, Test
