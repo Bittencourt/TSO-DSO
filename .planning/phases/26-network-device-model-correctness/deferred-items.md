@@ -65,3 +65,79 @@ route this to whichever plan owns the fix.
 
 **Confidence:** HIGH — reproduced via direct bisection across 4 isolated codebase snapshots, not
 inferred from reading code alone.
+
+## D-26-02 — Plan 26-12's PM-03 fix (ADMM reactive_consensus smart default) makes
+`test/test_admm.jl:121` and `test/test_acceptance.jl:82` record 1 converge more slowly than
+their pinned ρ/maxiter/tolerance budget on IEEE-13 ground
+
+**Discovered during:** Plan 26-12 Task 2 (verifying `test_admm.jl:121` and `test_acceptance.jl:82`
+record 1 now pass after Task 1's `reactive_consensus` smart-default fix — reproduced as direct
+scripts per project convention, NOT by editing either test file).
+
+**Symptom:** Both items' direct-script reproductions (exact same fixture, aggregators, `ρ = 100.0`,
+default `maxiter = 200`, default `tol`/`ε_abs`/`ε_rel`) now converge (`res.iters = 103 < 200`,
+`res.exact_maxgap < 1e-3`, welfare matches centralized at `rtol = 1e-4`) but the recovered DADP
+(`res.λ`/`admm.λ` vs `extract_dlmp(centralized)[load_buses, :]`) FAILS the pinned
+`isapprox(...; atol = 1e-2, rtol = 1e-3)` check — which is NORM-based (Julia's default
+`isapprox` on `AbstractArray`, per `test_acceptance.jl`'s own WR-01 comment), not elementwise:
+
+```
+iters = 103
+norm(admm.λ .- dlmp_c) = 0.6971
+bound = max(1e-2, 1e-3 * max(norm(admm.λ), norm(dlmp_c))) = 0.0722   (≈10x under the actual gap)
+```
+
+The elementwise gap is concentrated at hours 9 and 16 (the PV back-feed / receiving-end
+`smax_rev` congestion hours, PM-06/26-05 territory) — up to 0.14 at some (bus, hour) pairs,
+consistent across every load bus at hour 9.
+
+**Root cause, confirmed empirically:** this is a genuine CONVERGENCE-BUDGET gap, not a bug in
+the reactive-coupling logic. Re-running the IDENTICAL fixture/call with a much larger iteration
+budget and tighter joint stopping tolerances converges the same DADP to within `4.2e-4`
+elementwise (well inside `atol = 1e-2`):
+
+```julia
+solve_admm(feeder, ConvexBranchFlow(), aggs; T=24, λ₀=λ0, ρ=100.0,
+           maxiter=2000, tol=1e-6, ε_abs=1e-7, ε_rel=1e-8, allow_export=true)
+# -> iters = 792, max elementwise |Δ| = 4.2e-4
+```
+
+Both pinned test items' `ρ_ieee13 = 100.0`, `maxiter = 200` (and, for `test_admm.jl:121`,
+`tol_ieee13 = 1e-6`; for `test_acceptance.jl:82` the bare `solve_admm` defaults) were "swept
+empirically" (per `test_admm.jl`'s own inline comment) BEFORE PM-03: at that time the WR-04
+guard's narrower `dv isa FourQuadBESS`-only probe never caught this IEEE-13 ground population
+(Thermostatic/Deferrable/PVBattery, no `FourQuadBESS`), so `reactive_consensus` silently stayed
+at its literal `false` (`OFF`) default and ADMM never ran the `LIVE` reactive dual-ascent block
+on this fixture at all — the JOINT stacked stopping rule (active `λ`/`pag_dso` PLUS reactive
+`μ`/`qag_dso`) is new to this fixture/scale as of this fix. The reactive channel evidently
+converges more slowly at the two congested hours, so the SAME `(ρ, maxiter, tol)` budget that
+used to land the (then reactive-free) active DADP within margin no longer does once the
+correctly-restored `LIVE` reactive coupling is also being jointly driven to convergence.
+
+**Why this is out of scope for Plan 26-12:** Plan 26-12's declared `files_modified` is
+`src/admm/DsoOpt.jl`, `src/admm/solve_admm.jl` only, and Task 2 explicitly forbids editing
+either test file ("NO edit to either test file is expected or permitted in this task"). The fix
+is a test-file numeric re-tune (larger `maxiter` and/or tighter `ε_abs`/`ε_rel`, and/or a
+different `ρ`/`ρ_q` split for faster reactive convergence) to `test/test_admm.jl`'s
+`ρ_ieee13`/`tol_ieee13`/`maxiter` literals and/or `test/test_acceptance.jl:82`'s bare
+`solve_admm` call (record 1 only — record 2, the `v9_16`/DADP16 golden re-pin, is a SEPARATE,
+already-tracked concern per PM-06/26-08). Task 1's own source fix (the `reactive_consensus`
+smart default and widened WR-04 guard) is independently verified correct: a flexible-load-free
+population is unaffected (still `OFF`, byte-identical), an explicit override on a flexible-load
+population still throws, and the smart default correctly resolves to `LIVE` and converges to the
+CORRECT answer given enough iterations — it is only the two test items' PRE-PM-03-tuned
+convergence budget that is now too tight.
+
+**Action needed (NOT done here):** before Phase 26 closes (SC-6 "full suite green" policy),
+re-tune `test/test_admm.jl:121`'s `ρ_ieee13`/`tol_ieee13`/`maxiter` (or `ε_abs`/`ε_rel`) and
+`test/test_acceptance.jl:82`'s record-1 `solve_admm` call so the DADP match assertion passes
+under the now-correctly-active `LIVE` reactive coupling — e.g. `maxiter = 400`-`800` and/or
+tightened `ε_abs`/`ε_rel` (empirically, `maxiter = 2000, ε_abs = 1e-7, ε_rel = 1e-8` converges to
+`4.2e-4`; a smaller, still-comfortable margin under `atol = 1e-2` should be findable with less
+iteration budget — not swept in this plan, out of scope). This will also surface in the phase's
+full `Pkg.test()` run — the wave-merge/phase-close full-suite step should catch and route this to
+whichever plan owns the re-tune (or a dedicated follow-up gap-closure plan).
+
+**Confidence:** HIGH — reproduced via direct script, both at the exact pinned tolerances (fails,
+norm-based per the test's own `isapprox` semantics) and at a much wider budget (passes,
+elementwise), isolating the discrepancy to convergence budget rather than a logic defect.
