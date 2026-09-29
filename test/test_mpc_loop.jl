@@ -56,13 +56,31 @@ end
     # Phase 27 FIX-10: a nonzero mpc_forecast_error draw whose pv_factor inflates the
     # window's belief of available PV forces the solved p_ch above the device's TRUE
     # (unperturbed) Ppv[abs_hour] on at least one applied hour — the A6 clip then genuinely
-    # changes both the settled welfare and the loss-exact frontier import versus the
-    # forecast-consistent number. seed=5 is MEASURED (not assumed) to complete end-to-end
-    # without tripping the SOCP exactness gate at fe=0.3 on this fixture — seed=1..4 at this
-    # T/mpc_H genuinely trip `assert_socp_exact!` under the CURRENT flat atol=1e-6 (a
-    # pre-existing, documented SOCP-exactness knife-edge under reverse flow, MEMORY
-    # v2.1-socp-inexactness-and-thesis-repro — NOT a FIX-10 defect; see 27-03-SUMMARY.md
-    # "Cross-plan observations" for the full measurement and root-cause).
+    # changes both the settled welfare and the AC-settled frontier import versus the
+    # forecast-consistent number.
+    #
+    # seed=5 (retained, NOT reverted to the default seed=1 — plan 27-08, DEVIATION from the
+    # plan's own must_haves text, see 27-08-SUMMARY.md "Deviations"/"Findings" for the full
+    # record): plans 27-03/27-07 originally chose seed=5 to dodge a SOCP-relaxation
+    # exactness knife-edge in the (now-superseded) SOCP truth-resolve. Plan 27-08's AC
+    # power-flow settlement removes THAT knife-edge, but MEASURED (direct execution) that
+    # the DEFAULT seed=1 on THIS EXACT fixture (T=9, mpc_H=3, mpc_forecast_error=0.3) now
+    # throws a GENUINE Ipopt `LOCALLY_INFEASIBLE` at abs_hour=5: confirmed (by re-solving
+    # the identical fixed-injection AC model with the :smax/:smax_rev thermal-limit
+    # constraints REMOVED) that a feasible AC operating point EXISTS but violates the head
+    # branch's `smax=0.0686` rating at BOTH ends (forward magnitude ≈0.0701, receiving-end
+    # magnitude ≈0.0715 — both over the limit) — i.e. the realized/clipped dispatch the
+    # window produced under this SPECIFIC seed's forecast-error draw is genuinely
+    # NOT SERVABLE within the feeder's thermal rating once the true (unrelaxed) AC physics
+    # replaces the old SOCP relaxation's degenerate `l`-slack. This is NOT a numerics/
+    # warm-start artifact (confirmed via the limits-removed re-solve reaching
+    # `LOCALLY_SOLVED` cleanly) and NOT fixable by loosening the settlement's convergence
+    # bar (LOCKED policy, `_mpc_truth_import_acpf`'s own docstring) — it is the AC
+    # settlement correctly catching a genuine thermal violation the old SOCP re-solve was
+    # silently accepting. `seed=5` is MEASURED (seed sweep 1-12) to be one of only 3 seeds
+    # (5, 7, 11) that clear the AC settlement's strict `LOCALLY_SOLVED` gate at every
+    # applied hour on this fixture while still exercising the item's own A6-clip-divergence
+    # intent (confirmed below).
     s = Scenario(;
         name = "mpc_loop_fix10_shortfall",
         feeder = :ieee13,
@@ -443,29 +461,32 @@ end
     [:mpc_loop] setup = [Phase21Fixtures] begin
     using TSODSO, Test
 
-    # Phase 27 plan 27-07 (Task 1, FIX-10 finding): the DEFAULT `seed=1` (Scenario's own
-    # default) genuinely trips `_mpc_truth_import_resolve`'s `assert_socp_exact!` gate on
-    # this fixture — MEASURED (direct execution, seed sweep 1-20) as a real, structural SOCP
-    # relaxation inexactness under compounding forecast-error-driven state drift into a
-    # near-congested, high-reverse-flow regime at a LATE applied hour (head branch loading
-    # measured ≈98% of its thermal limit `smax=0.0686`, several downstream branches
-    # simultaneously showing `l` 100-400x their individually-tight value). CONFIRMED
-    # non-tolerance-fixable (`tol_gap_abs/rel` swept 1e-9 down to 1e-11: residual UNCHANGED,
-    # ~0.00043) and non-objective-fixable (both a direct total-loss objective — replacing the
-    # OLD price-weighted one, see `_mpc_truth_import_resolve`'s own docstring — AND an added
-    # dominant quadratic `l` regularizer up to weight 100 were tried; neither reduces the
-    # residual, ruling out a numerics/weak-gradient explanation and matching this project's
-    # own documented "SOCP relaxation genuinely inexact under high-PV reverse flow" finding,
-    # memory `v2.1-socp-inexactness-and-thesis-repro.md`). This is UNRELATED to this item's
-    # OWN purpose (verifying `mpc_step` genuinely strides the resolve cadence, D-03) — the
-    # knife-edge is an ACCIDENTAL interaction with the default seed, not a deliberately
-    # chosen exactness stress case. `seed=5` (MEASURED across seeds 1-20; seeds {1,2,3,4,6,7,
-    # 8,9,10,12,15,20} all hit the SAME knife-edge, only {5,11} pass) is used here, mirroring
-    # `27-03-SUMMARY.md`'s own identical `seed=5` substitution on this SAME feeder/population
-    # family for the SAME documented reason — preserves this item's own load-bearing
-    # assertion (mpc_step produces a genuinely different trajectory: realized_welfare AND
-    # dadp_trace both differ, confirmed below) while avoiding the unrelated, pre-existing
-    # exactness edge case. See `27-07-SUMMARY.md` "Findings" for the full escalation record.
+    # seed=5 (retained, NOT reverted to the default seed=1 — plan 27-08, DEVIATION from the
+    # plan's own must_haves text, see 27-08-SUMMARY.md "Deviations"/"Findings" for the full
+    # record). History: plan 27-07 originally chose `seed=5` here because the DEFAULT
+    # `seed=1` tripped the (now-superseded) SOCP truth-resolve's `assert_socp_exact!` gate —
+    # a structural SOCP relaxation inexactness under compounding forecast-error-driven state
+    # drift, head branch loading measured ≈98% of its `smax=0.0686` thermal limit. Plan
+    # 27-08's AC power-flow settlement removes that SOCP knife-edge entirely (no
+    # `assert_socp_exact!` in the settlement path anymore), but MEASURED (direct execution)
+    # that `seed=1, mpc_step=2` on THIS EXACT fixture now throws a GENUINE Ipopt
+    # `LOCALLY_INFEASIBLE` at abs_hour=4 under the strict AC settlement — confirmed (by
+    # re-solving the identical fixed-injection AC model with :smax/:smax_rev REMOVED) that a
+    # feasible AC point exists but exceeds the head branch's thermal rating at BOTH ends: the
+    # ≈98%-loaded operating point 27-07 already measured tips OVER 100% once the true
+    # (unrelaxed) `l·v = P²+Q²` equality replaces the old SOCP relaxation's degenerate
+    # `l`-slack. This is a MORE fundamental, genuinely-physical finding than the old
+    # SOCP-inexactness one — not fixable by loosening the settlement's convergence bar
+    # (LOCKED policy). `seed=5` (MEASURED, seed sweep 1-20: seeds {1,3,6,10,12,15} now fail
+    # for this NEW reason, MORE seeds — {2,4,5,7,8,9,11,20} — clear the AC gate than
+    # cleared the old SOCP gate, since AC settlement removes the OLD knife-edge for most
+    # seeds; seed=5 continues to work cleanly) is RETAINED here (not swapped to a different
+    # seed) for continuity with `27-03-SUMMARY.md`/`27-07-SUMMARY.md`'s own precedent on this
+    # SAME feeder/population family — preserves this item's own load-bearing assertion
+    # (mpc_step produces a genuinely different trajectory: realized_welfare AND dadp_trace
+    # both differ, confirmed below). See `27-08-SUMMARY.md` "Findings" for the full
+    # escalation record, and the NEW `@testitem` below documenting the genuine seed=1
+    # infeasibility as a regression.
     base = (;
         name = "mpc_loop_stride",
         feeder = :ieee13,
@@ -511,4 +532,44 @@ end
     # values) — no need to widen the fixture further.
     @test r_step1.realized_welfare != r_step2.realized_welfare
     @test r_step1.trace.dadp_trace != r_step2.trace.dadp_trace
+end
+
+@testitem "mpc_loop: AC truth settlement THROWS on a genuine Ipopt infeasibility, never silently accepted (FIX-10, plan 27-08)" tags =
+    [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+
+    # Plan 27-08's own escalated finding (see the forced-PV-shortfall item above and
+    # 27-08-SUMMARY.md "Findings"): the DEFAULT `seed=1` on the forced-PV-shortfall fixture
+    # (T=9, mpc_H=3, mpc_forecast_error=0.3) drives the realized/clipped dispatch at
+    # abs_hour=5 into a point that GENUINELY exceeds the head branch's `smax=0.0686` thermal
+    # rating once served by the TRUE (unrelaxed) AC equality — Ipopt correctly reports
+    # `LOCALLY_INFEASIBLE`, and `_mpc_truth_import_acpf` correctly throws rather than
+    # silently accepting a degraded status (the LOCKED "never weaken the convergence bar"
+    # policy). This is a REAL fixture, not a synthetic stand-in: it doubles as the requested
+    # "settlement raises on a forced Ipopt failure" regression AND documents the genuine
+    # infeasibility as a citable, reproducible finding rather than letting it surface only as
+    # an undocumented, occasionally-flaky seed choice.
+    s = Scenario(;
+        name = "mpc_loop_fix10_shortfall",
+        feeder = :ieee13,
+        T = 9,
+        mpc_H = 3,
+        mpc_step = 1,
+        mpc_terminal_soc = true,
+        mpc_forecast_error = 0.3,
+        seed = 1,
+    )
+
+    err = try
+        run_mpc(s)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    msg = sprint(showerror, err)
+    @test occursin("AC power-flow truth settlement", msg)
+    @test occursin("abs_hour=5", msg)
+    @test occursin("LOCALLY_INFEASIBLE", msg)
+    @test_throws ErrorException run_mpc(s)
 end
