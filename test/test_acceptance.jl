@@ -126,6 +126,12 @@ end
 
     # ── Centralized ground truth: monolithic SOCP welfare + its DADP duals (ADMM-03 oracle),
     # identical to test_ieee123_admm.jl's cross-validation path.
+    # Phase 26 gap-closure (PM-05/cluster E): the real-impedance IEEE-123 feeder trips the PF-04
+    # exactness gate at Clarabel's default tol_gap=1e-8 (ratio 3.94, precision-floor artifact, NOT
+    # a genuine inexactness — the true optimum IS cone-tight; see 26-POSTMERGE-TRIAGE.md and the
+    # v2.1 IEEE-123 noise-floor precedent). Calibrated tol_gap=3e-9 clears it (ratio ~0.084);
+    # 1e-10 with tol_feas tightened FAILED on this same feeder in a prior measurement, so this is
+    # not over-tightened. `assert_socp_exact!`'s own gate (atol/rtol) is UNCHANGED.
     ctx_c, obj_c, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -133,6 +139,7 @@ end
         T = Th,
         λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
     )
     dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 

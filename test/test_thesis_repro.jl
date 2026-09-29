@@ -73,6 +73,12 @@
     λ₀ = Phase7Fixtures.ieee123_lambda0()
 
     # ── DADP: centralized GLB-CVX welfare optimum (thesis 3.38) + its surplus split (3.46/3.47).
+    # Phase 26 gap-closure (PM-05/cluster E): default tol_gap=1e-8 trips the PF-04 gate on this
+    # real-impedance feeder (precision-floor artifact, same band as test_acceptance.jl's IEEE-123
+    # item and test_ieee123_admm.jl — see 26-POSTMERGE-TRIAGE.md). tol_gap=3e-9 clears it;
+    # `assert_socp_exact!`'s own gate is UNCHANGED. This makes REPRO-01's sign-flip result
+    # ASSESSABLE (no longer masked by the gate throw) — restating the finding itself is Phase 28's
+    # scope (26-CONTEXT.md deferred ideas), not this plan's.
     ctx, welfare_dadp, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -80,6 +86,7 @@
         T = Th,
         λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
     )
     acct = welfare_accounting(ctx; T = Th)                       # (; social, dso, prosumer)
 

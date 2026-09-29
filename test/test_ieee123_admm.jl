@@ -47,6 +47,11 @@
         # base, so λ_j → DADP is certified DIRECTLY against `extract_dlmp` (the strongest gate,
         # T-07-14), NOT the weaker residual+exactness+price-sanity fallback. The exactness gate
         # (PF-04) and the PRICE-04 economic-direction sanity below are ADDITIONAL certificates.
+        # Phase 26 gap-closure (PM-05/cluster E): default tol_gap=1e-8 trips the PF-04 gate on
+        # this real-impedance feeder (ratio 3.94, precision-floor artifact — see
+        # 26-POSTMERGE-TRIAGE.md and the v2.1 IEEE-123 noise-floor precedent). tol_gap=3e-9
+        # clears it (ratio ~0.084); 1e-10 with tol_feas tightened FAILED in a prior measurement.
+        # `assert_socp_exact!`'s own gate is UNCHANGED.
         ctx_c, obj_c, _ = solve_welfare(
             feeder,
             ConvexBranchFlow(),
@@ -54,6 +59,7 @@
             T = Th,
             λ₀ = λ₀,
             allow_export = true,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
         )
         dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
@@ -110,6 +116,9 @@ end
     Th = Phase7Fixtures.T
     λ₀ = Phase7Fixtures.ieee123_lambda0()
 
+    # Phase 26 gap-closure (PM-05/cluster E): same tol_gap calibration as the crossval item
+    # above — default 1e-8 trips the PF-04 gate on this feeder (precision-floor artifact);
+    # 3e-9 clears it. `assert_socp_exact!`'s own gate is UNCHANGED.
     ctx_c, obj_c, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -117,6 +126,7 @@ end
         T = Th,
         λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
     )
 
     # `v` is the SQUARED per-unit voltage (LinDistFlow convention); sqrt recovers |V|.
