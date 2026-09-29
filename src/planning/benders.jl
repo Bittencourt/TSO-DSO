@@ -72,61 +72,98 @@ const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
 # file header for the full, empirically-confirmed diagnosis this fix resolves.
 # ---------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------
+# Phase 27 (plan 27-01, FIX-06) — the T>1 generalization of corner_recourse: replaces the
+# scalar `fill(z, T)` surrogate with a genuine joint T-dimensional convex minimization
+# `Q(y_inv) = min_{z∈[0,y_inv]^T} [follower_cost(z) - oracle_welfare(z)]`, via a Kelley's
+# cutting-plane ("bundle") loop reusing the SAME solve_follower!/solve_planning_oracle!
+# dual reads already used by the outer Benders loop's own :x/:op cuts (benders.jl:299-301/
+# 530-533) as a first-order (value+gradient) oracle for Q. See 27-RESEARCH.md's
+# "Architecture Patterns FIX-06" for the full derivation this implements.
+# ---------------------------------------------------------------------------------------
+
+# EMPIRICALLY MEASURED (2026-09-29) on a T=2 PVBattery-bearing (genuinely non-separable
+# across hours via its soc[t+1] recursion) fixture — two-bus feeder,
+# `PVBattery(bus=2, η=0.95, Δt=1, Pmax=5, Emin=0, Emax=10, soc0=2, λ=(1,4,9), Ppv=[3,3])`,
+# aggregator net-load `[3.5, 3.5]`, follower `corridor_cap=x_inv_max=2, c_inv=1,
+# c_op=[0.5,0.5]`, oracle `λ₀=[4,4]` — solving the follower (HiGHS LP) and oracle
+# (Clarabel SOCP) once each at four representative interior trials
+# (`z ∈ {[1,1],[0.2,0.2],[1.5,0.5],[0.5,1.5]}`) and reading each solver's OWN certified
+# primal/dual objective gap directly (`abs(objective_value(model) -
+# dual_objective_value(model))` — no second reference solve needed):
+#   gap_follower = 0.0                    (HiGHS LP — exact simplex, zero measured gap)
+#   gap_oracle   <= 1.2219521394740696e-8 (Clarabel SOCP, worst of the 4 sampled trials)
+# Per the SAME measurement formula `max(1e-9, 10 * max(gap_follower, gap_oracle))`
+# `KNOWN_OPTIMUM_ATOL` above uses, the joint cutting-plane loop's own UB-LB convergence
+# gate is set to the measured value below.
+const JOINT_RECOURSE_GAP_TOL = 1.2219521394740696e-7
+
 """
     corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
 
 The TRUE per-corner minimized recourse
-`Q(y_inv) = min_{z ∈ [0, y_inv]} [follower_cost(z) − oracle_welfare(z)]`, computed via a
-deterministic ternary search over the REAL, already-built `oracle`/`follower` (the SAME
-production `solve_planning_oracle!`/`solve_follower!` entrypoints used everywhere else in
-the Benders loop — never rebuilt, never a closed-form shortcut).
+`Q(y_inv) = min_{z ∈ [0, y_inv]^T} [follower_cost(z) − oracle_welfare(z)]`, computed over
+the REAL, already-built `oracle`/`follower` (the SAME production
+`solve_planning_oracle!`/`solve_follower!` entrypoints used everywhere else in the
+Benders loop — never rebuilt, never a closed-form shortcut).
 
-Mirrors `test/test_planning_certification_integer.jl`'s own `enumerate_lattice` reference
-implementation's `Qfun`/`ternary_min` technique EXACTLY — that file's logic, promoted from
-test-only certification code into production so `add_ll_cut!`'s caller finally honors its
-own documented precondition (`Q_nu = Q(b^ν)`, "never estimated here" — estimating it via
-the iterate's own `z` was exactly the caller-side bug). `Q` is convex in `z` whenever the
-oracle's welfare is concave and the follower's cost is convex — the SAME convexity
-argument `add_optimality_cut!`'s own docstring already establishes for `Q(y_inv)` over the
-continuous relaxation — so ternary search on `[0, y_inv]` converges to the true minimum.
+**T==1/T>1 dispatch (Phase 27, plan 27-01, FIX-06):**
 
-Phase 24 is single-distributor Stackelberg-only (T=1 on every canonical fixture to date,
-per the roadmap's own explicit scope note); for `T > 1` this pins the SAME scalar trial
-value across all `T` periods (`fill(z, T)`) — the natural minimal generalization of the
-theory's scalar `z` (each of the master's `T` box constraints shares the identical `y_inv`
-upper bound), not a claim of general joint-multivariate optimality across independently
-varying per-period trials.
+  - `T == 1` calls the EXISTING deterministic ternary-search body, UNCHANGED, byte-for-
+    byte identical to its pre-Phase-27 output (see [`_corner_recourse_ternary`](@ref)) —
+    mirrors `test/test_planning_certification_integer.jl`'s own `enumerate_lattice`
+    reference implementation's `Qfun`/`ternary_min` technique EXACTLY (that file's logic,
+    promoted from test-only certification code into production so `add_ll_cut!`'s caller
+    finally honors its own documented precondition, `Q_nu = Q(b^ν)`, "never estimated
+    here" — Phase 24 gap-closure 24-05.1). `Q` is convex in `z` whenever the oracle's
+    welfare is concave and the follower's cost is convex — the SAME convexity argument
+    `add_optimality_cut!`'s own docstring already establishes for `Q(y_inv)` over the
+    continuous relaxation — so ternary search on `[0, y_inv]` converges to the true
+    minimum.
+  - `T > 1` calls [`_corner_recourse_joint`](@ref), a NEW Kelley's-method cutting-plane
+    ("bundle") loop performing the GENUINE joint T-dimensional minimization over the
+    shared hypercube `[0, y_inv]^T` (a SINGLE scalar `y_inv` bounds every one of the
+    master's `T` box constraints, `master_integer.jl:107-156` — never per-hour-
+    independent boxes). Any aggregator with a `PVBattery`/`FourQuadBESS`/`Deferrable`
+    member couples hours via `soc[t+1]`, so `oracle_welfare(z)` is in general NOT
+    separable across `t` — pinning a single scalar trial across all `T` hours (the
+    pre-Phase-27 `fill(z, T)` surrogate, now REMOVED for `T > 1`) silently gives the
+    WRONG answer on exactly this common case (27-RESEARCH.md Pitfall FIX-06-1). The two
+    dispatch branches are DELIBERATELY not unified into one algebraically-equivalent
+    body: different floating-point trajectories would break the `T == 1` byte-identity
+    requirement even where mathematically equivalent (27-RESEARCH.md "T=1 byte-identical
+    requirement").
 
-An infeasible trial `z` (the follower's own genuine `feasible = false` branch) is treated
-as `+Inf` in the extended-value sense (the SAME Rule-1 device `enumerate_lattice` uses) —
-mathematically sound here because `z = 0` (zero flow) is always follower-feasible, so the
-feasible sub-interval containing the true minimizer is always nonempty.
+Both branches treat a follower-infeasible trial `z` (`solve_follower!`'s genuine
+`feasible = false` branch) as `+Inf` in the extended-value sense (the SAME Rule-1 device
+`enumerate_lattice` uses) — mathematically sound because `z = zeros(T)` is always
+follower-feasible, so the feasible sub-region containing the true minimizer is always
+nonempty.
 
-**WR-01 (Phase 24 code review) tie-break fix:** the naive ternary-search tie-break
-`f(m1) < f(m2) ? (hi = m2) : (lo = m1)` diverges to `+Inf` whenever BOTH trial points
-land outside the follower's own deliverable capacity (i.e. the feasible sub-interval is
-narrower than `y_inv / 3`, reachable via ordinary `K`/`y_max`/`corridor_cap`
-reconfiguration): `Inf < Inf` is `false`, so the tie falls to the `else` branch
-(`lo = m1`), which walks the search window AWAY from the known-feasible anchor at
-`z = 0` and never recovers within a bounded interval. Since `z = 0` is always feasible,
-the correct tie-break on a double-infinite probe is to shrink from the RIGHT
-(`hi = m2`), which converges the window back toward the guaranteed-feasible low end.
-
-`y_inv <= 0` collapses the feasible interval `[0, y_inv]` to the single point `z = 0` —
-the recourse there is GENUINELY COMPUTED via `Qfun(0.0)` (one real solve of
-`follower`/`oracle`), never assumed to be `0.0`. An earlier version of this function
-special-cased this corner to a hardcoded `0.0`, asserting the follower's zero-cost/
-oracle's zero-welfare baseline as an UNCONDITIONAL fact; that holds only for the
-test-only `ToyElasticDevice` fixture this function is certified against (D-12) and is
-FALSE in general — e.g. the public `Deferrable` device's utility is centered on a nonzero
-target `E`, so it pays real disutility when forced to `z = 0`. Because the hardcoded
-`0.0` was finite, no downstream `isfinite` guard (`add_ll_cut!`,
-`src/planning/master_integer.jl`) would ever have caught a wrong value here — this failed
-SILENTLY on any device model besides the certified fixture. See
-`docs/literate/integer_investment.jl`'s own `Qfun`/`enumerate_lattice` divergence note,
-where this exact fix was found first and is back-ported here (Phase 24 code-review CR-01).
+`y_inv <= 0` collapses the feasible region to the single point `z = zeros(T)` — the
+recourse there is GENUINELY COMPUTED (one real solve of `follower`/`oracle`), never
+assumed to be `0.0` (CR-01, Phase 24 code review) — see `docs/literate/integer_investment.jl`'s
+own independently-found fix for the historical rationale.
 """
 function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
+    if T == 1
+        return _corner_recourse_ternary(oracle, follower, y_inv, T; iters = iters)
+    else
+        return _corner_recourse_joint(oracle, follower, y_inv, T; iters = iters)
+    end
+end
+
+"""
+    _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
+
+The PRE-PHASE-27 `T == 1` ternary-search body, copied VERBATIM (byte-for-byte identical
+floating-point trajectory) into its own named function per [`corner_recourse`](@ref)'s
+dispatch — see that function's docstring for the full WR-01/CR-01 rationale. Never called
+with `T != 1` (the `fill(z, T)` scalar-pinning here is exactly the surrogate FIX-06 removes
+for `T > 1`; it remains correct-by-definition at `T == 1`, where pinning the single scalar
+`z` across "all `T` periods" is a no-op).
+"""
+function _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
     function Qfun(z::Real)
         zvec = fill(Float64(z), T)
         fr = solve_follower!(follower, zvec)
@@ -184,6 +221,205 @@ function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100
     Qv = Qfun(zstar)
     check_finite(Qv, zstar)
     return Qv
+end
+
+"""
+    _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
+
+The `T > 1` joint T-dimensional minimization `Q(y_inv) = min_{z ∈ [0, y_inv]^T} [follower_cost(z) − oracle_welfare(z)]`, via a Kelley's-method cutting-plane ("bundle")
+loop: at each trial `z`, one call each to `solve_follower!`/`solve_planning_oracle!`
+yields BOTH `Q(z) = fr.cost − orr.cost` AND its EXACT gradient
+`∇Q(z) = fr.π_s .+ orr.π` (elementwise, length T) — the SAME dual reads
+`add_optimality_cut!`'s `:x`/`:op` cuts already use for the OUTER Benders loop
+(`benders.jl:299-301/530-533`), reused here as a zero-extra-solve first-order oracle for
+the convex value function `Q` (convexity: the SAME parametric-value-function/sensitivity
+argument `add_optimality_cut!`'s own docstring already establishes for `Q(y_inv)` over the
+continuous relaxation of `y_inv`, one level down — over `z` at fixed `y_inv` — since
+`master_integer.jl`'s box is the JOINT hypercube `0 <= z[t] <= y_inv ∀t`, not per-hour
+independent boxes).
+
+Each outer iteration rebuilds a SMALL cutting-plane master LP FRESH — `Min θ` subject to
+`θ >= Q_j + g_j'(z − z_j)` for every accumulated finite (epigraph) cut, `v_k + u_k'(z − z_k) <= 0` for every accumulated FOLLOWER feasibility cut (see below), and
+`0 <= z[t] <= y_inv ∀t` — via the SAME `select_optimizer(LP())` factory
+`src/planning/follower.jl` uses (never `Model(HiGHS.Optimizer)` directly). This is a
+CHEAP, T-variable, at-most-`iters`-row bookkeeping LP, deliberately NOT the expensive
+build-once model this project's "build once, re-solve many" convention protects (the
+oracle/follower themselves ARE build-once, re-solved via `set_parameter_value.`; only
+THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan discretion).
+
+**Infeasible-trial handling (27-RESEARCH.md Pitfall FIX-06-2, generalized):**
+
+  - A FOLLOWER-infeasible trial (`solve_follower!`'s genuine `feasible = false` branch,
+    e.g. a `y_inv` large enough that some `z` in the hypercube exceeds the follower's own
+    deliverable capacity `corridor_cap * x_inv_max`) contributes NO epigraph cut (an
+    `Inf` affine minorant is meaningless) — but its GENUINE Farkas certificate
+    (`fr.v`, `fr.u`) IS added as a REAL linear feasibility cut to the small master,
+    `v_k + u_k'(z − z_k) <= 0`, the IDENTICAL cut form [`add_feasibility_cut!`](@ref)
+    already uses for the OUTER Benders master (`src/planning/master.jl:209-242`). This
+    is a deliberate strengthening beyond a bare "skip": without it, the small master's
+    deterministic LP would re-propose the IDENTICAL infeasible corner every subsequent
+    iteration (no new information ever excludes it), stalling until `iters` exhausts for
+    no reason — the SAME certificate already computed for the caller's own feasibility-
+    cut branch is reused here at zero extra cost.
+  - An ORACLE-infeasible trial (`solve_planning_oracle!` throwing — e.g. a genuine
+    network-balance infeasibility unreachable via the follower's own, purely economic,
+    capacity model; CONFIRMED to occur on realistic non-separable battery fixtures
+    whenever the follower-feasible box extends beyond what the NETWORK can physically
+    accept) is caught and ALSO treated as `+Inf`/no epigraph cut — but NO certificate is
+    available here (`solve_planning_oracle!` has no structured infeasible return), so it
+    contributes NO cut of ANY kind. If the SAME trial is proposed twice in a row this way
+    (a genuine stall — the master has zero new information to move away from it), a
+    T-dimensional generalization of the ternary search's own WR-01 double-infinite
+    tie-break applies: bisect toward the guaranteed-feasible incumbent `z_best` (the SAME
+    "shrink toward the known-feasible anchor" principle, one dimension per coordinate
+    instead of one).
+
+`y_inv <= 0` collapses `[0, y_inv]^T` to the single point `z = zeros(T)` — genuinely
+computed (never assumed `0.0`), matching [`_corner_recourse_ternary`](@ref)'s own CR-01
+treatment. The FIRST trial (before any master solve) is always `z = zeros(T)` (the
+guaranteed-feasible WR-01 anchor), so at least one finite epigraph cut always exists
+before the loop's first master solve.
+
+Terminates when `UB − LB <= JOINT_RECOURSE_GAP_TOL` (a MEASURED, not guessed, constant —
+see the comment immediately above its definition) or after `iters` outer iterations,
+whichever comes first; on exhausting `iters` without meeting the tolerance, raises a loud
+`ErrorException` naming the achieved gap (never silently returns an unconverged value).
+"""
+function _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
+    # Evaluate Q(z) and its gradient at a trial z::Vector{Float64}. See the docstring
+    # above ("Infeasible-trial handling") for the full rationale of each branch.
+    function evaluate(z::Vector{Float64})
+        fr = solve_follower!(follower, z)
+        if !fr.feasible
+            return (;
+                Qz = Inf,
+                gradQ = nothing,
+                feas_cut = (; v = fr.v, u = fr.u, z_k = copy(z)),
+            )
+        end
+        orr = try
+            solve_planning_oracle!(oracle, z)
+        catch
+            # Pitfall FIX-06-2 generalized (docstring above): an ORACLE-side
+            # infeasibility (or any other trust-gate throw) is extended-value +Inf,
+            # exactly like a follower infeasibility, but carries no certificate.
+            return (; Qz = Inf, gradQ = nothing, feas_cut = nothing)
+        end
+        Qz = fr.cost - orr.cost
+        gradQ = fr.π_s .+ orr.π   # elementwise, length T (docstring's dual-read pattern)
+        return (; Qz, gradQ, feas_cut = nothing)
+    end
+
+    # WR-01 T-dimensional analogue: fail LOUDLY rather than silently propagate a
+    # divergence -- the anchor z=zeros(T) is documented to always be follower- AND
+    # oracle-feasible, so a non-finite result there is proof of a search bug.
+    check_finite(Qv::Real, z::AbstractVector) =
+        isfinite(Qv) || throw(
+            ErrorException(
+                "_corner_recourse_joint: recourse evaluated to a non-finite value at " *
+                "z=$z (y_inv=$y_inv, T=$T) -- the anchor z=zeros(T) is documented to " *
+                "always be follower- and oracle-feasible, so this should be " *
+                "unreachable; report as a bug (T-dimensional generalization of WR-01, " *
+                "Phase 27 FIX-06).",
+            ),
+        )
+
+    # CR-01 T-dimensional analogue: y_inv <= 0 collapses [0, y_inv]^T to the single
+    # point z = zeros(T) -- genuinely COMPUTED via evaluate, never assumed.
+    if y_inv <= 0
+        r0 = evaluate(zeros(T))
+        check_finite(r0.Qz, zeros(T))
+        return r0.Qz
+    end
+
+    y_inv_f = Float64(y_inv)
+    cuts = Tuple{Vector{Float64}, Float64, Vector{Float64}}[]        # (z_k, Q_k, gradQ_k)
+    feas_cuts = Tuple{Float64, Vector{Float64}, Vector{Float64}}[]   # (v_k, u_k, z_k)
+
+    # WR-01 T-dimensional anchor: the FIRST trial is zeros(T), the guaranteed-feasible
+    # point -- at least one finite epigraph cut always exists before the first master
+    # solve.
+    z_trial = zeros(T)
+    r0 = evaluate(z_trial)
+    check_finite(r0.Qz, z_trial)
+    push!(cuts, (copy(z_trial), r0.Qz, r0.gradQ))
+    UB = r0.Qz
+    z_best = copy(z_trial)
+    last_skipped = nothing   # anti-stall guard (see docstring's oracle-infeasible case)
+
+    for _ in 1:iters
+        # Rebuild the small master LP FRESH each outer iteration (plan discretion,
+        # deliberately distinct from the BUILD-ONCE convention this project otherwise
+        # protects for the oracle/follower's own expensive models -- this is a cheap,
+        # T-variable, at-most-`iters`-row bookkeeping LP, never the expensive
+        # build-once model the project's "build once, re-solve many" rule is about).
+        mmodel = Model(select_optimizer(LP()))
+        @variable(mmodel, 0 <= zz[t = 1:T] <= y_inv_f)
+        @variable(mmodel, θ)
+        for (z_k, Q_k, g_k) in cuts
+            @constraint(mmodel, θ >= Q_k + sum(g_k[t] * (zz[t] - z_k[t]) for t in 1:T))
+        end
+        for (v_k, u_k, z_k) in feas_cuts
+            @constraint(mmodel, v_k + sum(u_k[t] * (zz[t] - z_k[t]) for t in 1:T) <= 0)
+        end
+        @objective(mmodel, Min, θ)
+        optimize!(mmodel)
+        is_solved_and_feasible(mmodel) || error(
+            "_corner_recourse_joint: the small cutting-plane master LP failed to " *
+            "solve (status=$(termination_status(mmodel))) at y_inv=$y_inv, T=$T -- " *
+            "report as a bug.",
+        )
+        LB = objective_value(mmodel)
+        z_next = value.(zz)
+
+        r = evaluate(z_next)
+        if isfinite(r.Qz)
+            push!(cuts, (copy(z_next), r.Qz, r.gradQ))
+            if r.Qz < UB
+                UB = r.Qz
+                z_best = copy(z_next)
+            end
+            last_skipped = nothing
+        elseif r.feas_cut !== nothing
+            push!(feas_cuts, (r.feas_cut.v, r.feas_cut.u, r.feas_cut.z_k))
+            last_skipped = nothing
+        else
+            # ORACLE-infeasible, no certificate (docstring's second bullet): if this is
+            # the SAME trial skipped last iteration (no new information was added to
+            # the master in between, so it deterministically re-proposed the identical
+            # point), bisect toward the guaranteed-feasible incumbent z_best instead of
+            # spinning until `iters` exhausts for no reason.
+            if last_skipped !== nothing && maximum(abs, z_next .- last_skipped) <= 1e-9
+                z_mid = (z_next .+ z_best) ./ 2
+                r_mid = evaluate(z_mid)
+                if isfinite(r_mid.Qz)
+                    push!(cuts, (copy(z_mid), r_mid.Qz, r_mid.gradQ))
+                    if r_mid.Qz < UB
+                        UB = r_mid.Qz
+                        z_best = copy(z_mid)
+                    end
+                elseif r_mid.feas_cut !== nothing
+                    push!(
+                        feas_cuts,
+                        (r_mid.feas_cut.v, r_mid.feas_cut.u, r_mid.feas_cut.z_k),
+                    )
+                end
+            end
+            last_skipped = copy(z_next)
+        end
+
+        gap = UB - LB
+        if gap <= JOINT_RECOURSE_GAP_TOL
+            check_finite(UB, z_best)
+            return UB
+        end
+    end
+
+    error(
+        "_corner_recourse_joint: exhausted $iters iteration(s) without meeting the " *
+        "measured gap tolerance JOINT_RECOURSE_GAP_TOL=$JOINT_RECOURSE_GAP_TOL at " *
+        "y_inv=$y_inv (T=$T) -- refusing to silently return a non-converged result.",
+    )
 end
 
 """
