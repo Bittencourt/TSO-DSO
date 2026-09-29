@@ -41,6 +41,11 @@
         @test r1.exact_maxgap isa Real
         @test ismissing(r1.iters)              # centralized has no ADMM iteration count
 
+        # WR-05 (phase-26 review, iteration 2): :centralized has no ADMM reactive-consensus
+        # concept, so the WR-01 provenance field must stay `missing` here (regression guard for
+        # src/experiments/run.jl's `reactive_consensus_mode = missing` centralized branch).
+        @test ismissing(r1.reactive_consensus_mode)
+
         # INFRA-04 bit-for-bit: same Scenario+seed -> identical through the full solve
         # (single-thread Clarabel, same process; timings are EXCLUDED, never compared).
         @test r1.welfare == r2.welfare
@@ -65,6 +70,12 @@ end
         @test size(r.dadp, 2) == kw.T           # node×T, matching the :centralized shape
         @test r.iters isa Integer && r.iters >= 1
         @test !ismissing(r.final_r) && !ismissing(r.final_s)
+
+        # WR-05 (phase-26 review, iteration 2): the WR-01 fix threads solve_admm's RESOLVED
+        # reactive_consensus mode out to ScenarioResult; guard that it stays populated (not
+        # `missing`, not silently dropped/renamed by a future refactor of solve_admm's return
+        # tuple or ScenarioResult's field list).
+        @test r.reactive_consensus_mode isa TSODSO.ReactiveMode
     end
 end
 
