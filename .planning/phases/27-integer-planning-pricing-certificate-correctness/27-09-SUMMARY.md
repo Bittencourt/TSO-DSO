@@ -311,3 +311,18 @@ None — no external service configuration required.
 ---
 *Phase: 27-integer-planning-pricing-certificate-correctness*
 *Completed: 2026-09-29*
+
+## Self-Check: PASSED
+
+- FOUND: `src/powerflow/ACPowerFlow.jl`
+- FOUND: `src/experiments/mpc_loop.jl`
+- FOUND: `src/pricing/fit.jl`
+- FOUND: `test/test_mpc_loop.jl`
+- FOUND: `test/test_fit.jl`
+- FOUND: `test/test_pricing_fit.jl`
+- FOUND: `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-09-repro.jl`
+- FOUND: `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-09-SUMMARY.md`
+- FOUND commit: `8647923` (Task 1)
+- FOUND commit: `126f806` (Task 2)
+- FOUND commit: `dc0bfe7` (docs: SUMMARY)
+- `julia --project=. .planning/phases/27-integer-planning-pricing-certificate-correctness/27-09-repro.jl` exits 0 (verified by direct execution)
