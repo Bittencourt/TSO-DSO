@@ -101,7 +101,7 @@ restriction or free hour-T energy.
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
      for a later phase and none is silently re-pinned.
-**Plans:** 7/8 plans executed
+**Plans:** 7/20 plans executed (12 post-merge gap-closure plans added per 26-POSTMERGE-TRIAGE.md)
 
 Plans:
 **Wave 1**
@@ -117,9 +117,27 @@ Plans:
 - [x] 26-06-PLAN.md — DLMP voltage-component coefficient re-derivation after the cpydrop sign flip
 - [x] 26-07-PLAN.md — FIX-05: Interruptible Variant-1→2 conversion + solve_linear.jl fix
 
-**Wave 3** *(blocked on Wave 2 completion)*
+**Gap-closure wave 1** *(post-merge remediation, per 26-POSTMERGE-TRIAGE.md — parallel, disjoint files)*
 
-- [ ] 26-08-PLAN.md — SC-6 golden-move audit + final full-suite green
+- [ ] 26-09-PLAN.md — Cluster A: stochastic_welfare.jl Prev/Qrev/smax_rev unregister fix + run_stochastic:104 golden repin
+- [ ] 26-10-PLAN.md — Cluster B: decompose_dlmp :smax_rev congestion dual + near-lossless DLMP tol_gap (D-26-01)
+- [ ] 26-11-PLAN.md — Cluster C: mpc_loop.jl/test_mpc_terminal.jl soc[H+1] reindex + mpc_step guard re-scope
+- [ ] 26-12-PLAN.md — PM-03: ADMM DsoOpt live-reactive default whenever flexible loads are present
+- [ ] 26-13-PLAN.md — PM-04: mesh diamond fixture φ=1.0 pin + reactive-load-breaks-exactness finding
+- [ ] 26-14-PLAN.md — PM-02: AC oracle battery-complementarity throw-to-diagnostic + App. C eta<1 finding
+- [ ] 26-15-PLAN.md — PM-07: ACPowerFlow receiving-end apparent-power limit (:smax_rev)
+- [ ] 26-16-PLAN.md — Cluster E: admm/planning_oracle/admm_reactive near-lossless SOCP tolerance calibration
+- [ ] 26-17-PLAN.md — PM-06: ieee13/pricing_fit/pricing_welfare golden repins + pricing_welfare tol_gap
+
+**Gap-closure wave 2** *(blocked on wave-1 gap-closure completion)*
+
+- [ ] 26-18-PLAN.md — PM-01: Gan-Low relabeling (restriction, not relaxation) + escalation-ladder re-force
+- [ ] 26-19-PLAN.md — test_acceptance.jl golden repin (cross-ref 26-17) + IEEE-123 tol_gap calibration
+- [ ] 26-20-PLAN.md — ADMM knife-edge canary re-pin (post PM-03)
+
+**Wave 3** *(blocked on ALL of the above)*
+
+- [ ] 26-08-PLAN.md — SC-6 golden-move audit (both waves) + final full-suite green
 
 ### Phase 27: Integer Planning & Pricing Certificate Correctness
 
