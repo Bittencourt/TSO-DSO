@@ -99,15 +99,21 @@ compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_
 
 # Reactive consensus (Phase 16, REACT-01/02 — `reactive_consensus::Bool = false`)
 
-Threaded straight into [`build_dso_opt`](@ref). At the DEFAULT `false`, byte-identical to
-pre-Phase-16 behavior (REACT-03): the per-load-node reactive draw stays the constant `q_draw`
-and NO extra certificate runs. At `true`, `build_dso_opt` promotes it to the pinned coupling
-variable `qag_dso[j,t]` (`ctx.meta[:qag_dso]`), and after the final consolidation solve this
-function additionally certifies `:balance_q` via [`assert_no_slack`](@ref) — mirroring the
-`:balance_p` certificate — so its dual becomes trustworthy/publishable (e.g. as a reactive DLMP
-component). This is a ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3:
-`qag_dso` is pinned to a fixed target that never moves, so convergence speed is materially
-unaffected).
+Threaded straight into [`build_dso_opt`](@ref) — its OWN default is IDENTICAL to
+`build_dso_opt`'s (PM-03, post-merge triage cluster D): `_any_flexible_reactive(aggregators) ?
+LIVE : false`, applied BEFORE `normalize_reactive_mode` ever sees a bare sentinel, so a direct
+`solve_admm` caller who omits `reactive_consensus` gets the smart default too (`build_dso_opt`'s
+own smart default never fires for `solve_admm` callers, since this function always passes an
+already-normalized `mode` — see below). At the FALLBACK `false` (no flexible-load/FourQuadBESS
+member present), byte-identical to pre-Phase-16 behavior (REACT-03): the per-load-node reactive
+draw stays the constant `q_draw` and NO extra certificate runs. At `true` (an EXPLICIT caller
+choice — the smart default itself only ever resolves to `LIVE` or `false`, never `true`),
+`build_dso_opt` promotes it to the pinned coupling variable `qag_dso[j,t]`
+(`ctx.meta[:qag_dso]`), and after the final consolidation solve this function additionally
+certifies `:balance_q` via [`assert_no_slack`](@ref) — mirroring the `:balance_p` certificate —
+so its dual becomes trustworthy/publishable (e.g. as a reactive DLMP component). This is a
+ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3: `qag_dso` is pinned to a
+fixed target that never moves, so convergence speed is materially unaffected).
 
 # Live reactive dual-ascent (Phase 19, MESH-05 — `reactive_consensus = :live`, `ρ_q::Real = ρ`)
 
@@ -207,12 +213,16 @@ price (WR-03, phase-19 review).
     (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
     1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus netflow
     splitting is a Phase-7 generalization).
-  - `ArgumentError` (via [`build_dso_opt`](@ref) — WR-04, phase-19 review) when any aggregator
-    carries a `q_inject`-bearing device (`FourQuadBESS`) while `reactive_consensus` is NOT
-    `:live`: under `OFF`/`CERTIFIED` the DSO reactive closure is the inelastic `−Pdc·tanφ` draw
-    alone, so the device's reactive decision would be silently dropped from the network model
-    (and, under `CERTIFIED`, the certified `dual(:balance_q)` would be priced against a closure
-    that no longer matches the centralized model's). Pass `reactive_consensus = :live`.
+  - `ArgumentError` (via [`build_dso_opt`](@ref) — WR-04, phase-19 review, WIDENED by PM-03,
+    post-merge triage cluster D) when any aggregator carries a `q_inject`-bearing device
+    (`FourQuadBESS`) OR an `is_flexible_load` member (Thermostatic/Deferrable/Interruptible,
+    FIX-05) while `reactive_consensus` is EXPLICITLY forced to something other than `:live`:
+    under `OFF`/`CERTIFIED` the DSO reactive closure is the inelastic `−Pdc·tanφ` draw alone, so
+    the device's reactive decision would be silently dropped from the network model (and, under
+    `CERTIFIED`, the certified `dual(:balance_q)` would be priced against a closure that no
+    longer matches the centralized model's). Since PM-03, this only fires on an EXPLICIT
+    override — `reactive_consensus`'s own default already resolves to `:live` whenever such a
+    member is present.
   - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence AND WITHOUT the
     `time_limit_s` wall-clock budget having been exceeded first — the fail-loud cap that
     refuses to return a non-consensus iterate (RESEARCH Pitfall 2). When `time_limit_s` IS
@@ -236,7 +246,7 @@ function solve_admm(
     ρ_min::Real = 1e-2,
     ρ_max::Real = 1e4,
     allow_export::Bool = true,
-    reactive_consensus = false,
+    reactive_consensus = _any_flexible_reactive(aggregators) ? LIVE : false,
     ρ_q::Real = ρ,
     time_limit_s::Union{Nothing, Real} = nothing,
     atol_exact::Real = 1e-6,

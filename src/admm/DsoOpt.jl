@@ -152,7 +152,31 @@ function _restore_ladder_attrs!(model::Model, baseline::Dict{String, Any})
 end
 
 """
-    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀, reactive_consensus = false, ρ_q::Real = ρ)
+    _any_flexible_reactive(aggregators) -> Bool
+
+PM-03 (post-merge triage, cluster D). Returns `true` iff ANY aggregator in `aggregators` has a
+`:devices` property containing at least one member for which `dv isa FourQuadBESS ||
+is_flexible_load(dv)` holds — i.e. a device whose reactive decision is NOT the constant
+`-Pdc*tanφ` draw alone (a `FourQuadBESS`'s live `q_inject`, or a flexible-load member's
+`p_inject*tanφ` term the centralized `Aggregator.contribute!` folds into `:Rq` since FIX-05,
+plan 26-04/07). Shared (unexported — same `TSODSO` module) by both `build_dso_opt`'s and
+`solve_admm`'s smart `reactive_consensus` default below, so a caller of EITHER function who does
+not pass `reactive_consensus` explicitly gets `LIVE` whenever such a member is present, keeping
+ADMM's DSO-OPT subproblem matched to the centralized model's reactive draw by default. Returns
+`false` (no behavior change) for a population with no such member.
+"""
+function _any_flexible_reactive(aggregators)
+    for agg in aggregators
+        hasproperty(agg, :devices) || continue
+        any(dv -> dv isa FourQuadBESS || is_flexible_load(dv), agg.devices) && return true
+    end
+    return false
+end
+
+"""
+    build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀,
+                  reactive_consensus = _any_flexible_reactive(aggregators) ? LIVE : false,
+                  ρ_q::Real = ρ)
         -> DsoOpt
 
 Build the whole-network `DSO-OPT` SOCP (thesis eq. 3.47) ONCE, reusing the validated
@@ -203,19 +227,30 @@ that lets IEEE-123 (~37 junction buses) build. `load_nodes` (the ADMM coupling a
 DECOUPLED from "all non-root buses" (the balance-closure axis); on the 2-bus / IEEE-13 fixtures
 every non-root bus is a load node, so both axes coincide and the model is unchanged. Throws
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
-`1:length(feeder.buses)`, an aggregator ON the root, or — WR-04, phase-19 review — a
-`q_inject`-carrying device (`FourQuadBESS`) combined with `reactive_consensus != :live` (under
-`OFF`/`CERTIFIED` the reactive closure is the inelastic `−Pdc·tanφ` draw alone, so the device's
-reactive decision would be silently dropped from the network model — genuinely invalid inputs
-still fail loud).
+`1:length(feeder.buses)`, an aggregator ON the root, or — WR-04, phase-19 review, WIDENED by PM-03
+(post-merge triage cluster D) — a device for which `dv isa FourQuadBESS || is_flexible_load(dv)`
+holds combined with `reactive_consensus != :live` (under `OFF`/`CERTIFIED` the reactive closure is
+the inelastic `−Pdc·tanφ` draw alone, so the device's reactive decision — a `FourQuadBESS`'s live
+`q_inject`, OR a flexible-load member's `p_inject·tanφ` term the centralized model folds into
+`:Rq` since FIX-05 — would be silently dropped from the network model — genuinely invalid inputs
+still fail loud). Since PM-03, `reactive_consensus`'s OWN default (see signature above) resolves
+to `LIVE` whenever [`_any_flexible_reactive`](@ref) finds such a member, so this guard now only
+fires on an EXPLICIT caller override to `OFF`/`CERTIFIED` against such a population — never on
+the default path.
 
 `reactive_consensus` (D-12, MESH-05): a 3-state mode normalized via
 [`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
 `true → CERTIFIED`), a `Symbol` (`:off`/`:certified`/`:live`), or a [`ReactiveMode`](@ref)
-directly.
+directly. Its OWN DEFAULT (PM-03, post-merge triage cluster D) is now the CONTEXT-SENSITIVE
+expression `_any_flexible_reactive(aggregators) ? LIVE : false` — resolving to `LIVE` whenever
+ANY aggregator carries a `FourQuadBESS` or an `is_flexible_load` member, so ADMM's DSO-OPT
+matches the centralized `Aggregator`'s post-FIX-05 reactive draw WITHOUT the caller having to
+pass `reactive_consensus = :live` by hand; a population with NO such member still defaults to
+`false` (`OFF`), byte-identical to before PM-03.
 
-  - `OFF` (default, `false`): step 4's reactive injection is the byte-identical constant
-    `q_draw[j][t]` (no `ctx.meta[:qag_dso]` key exists).
+  - `OFF` (default when no flexible-load/FourQuadBESS member is present, `false`): step 4's
+    reactive injection is the byte-identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]`
+    key exists).
   - `CERTIFIED` (`true`): the constant is promoted to a genuine JuMP coupling variable
     `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a
     registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual
@@ -238,7 +273,7 @@ function build_dso_opt(
     T::Int;
     ρ::Real,
     λ₀,
-    reactive_consensus = false,
+    reactive_consensus = _any_flexible_reactive(aggregators) ? LIVE : false,
     ρ_q::Real = ρ,
 )
     mode = normalize_reactive_mode(reactive_consensus)
@@ -264,33 +299,40 @@ function build_dso_opt(
         )
     end
 
-    # WR-04 (phase-19 code review): under OFF/CERTIFIED this model's reactive closure target
-    # `q_draw[j][t]` is composed from the INELASTIC `−Pdc·tanφ` term ALONE (thesis 3.23, below),
-    # so a DEVICE-carried reactive decision (the widened D-09 `q_inject` contract — today only
-    # `FourQuadBESS`) would be silently DROPPED from the network model, while the centralized
-    # model's `Aggregator.contribute!` DOES write `−Pdc·tanφ + q_inject` into `:Rq` — a silent
+    # WR-04 (phase-19 code review), WIDENED by PM-03 (post-merge triage cluster D): under
+    # OFF/CERTIFIED this model's reactive closure target `q_draw[j][t]` is composed from the
+    # INELASTIC `−Pdc·tanφ` term ALONE (thesis 3.23, below), so a DEVICE-carried reactive
+    # decision — the widened D-09 `q_inject` contract (`FourQuadBESS`), OR a flexible-load
+    # member's `p_inject·tanφ` term (Thermostatic/Deferrable/Interruptible, `is_flexible_load`
+    # trait, Plan 26-04/07's FIX-05) — would be silently DROPPED from the network model, while
+    # the centralized model's `Aggregator.contribute!` DOES write it into `:Rq` — a silent
     # semantic divergence. Under CERTIFIED that divergence would additionally be laundered
     # through the `:balance_q` no-slack certificate into a PUBLISHED reactive dual priced
-    # against the wrong closure. The combination is new and undefined (pre-Phase-19 no device
-    # carried `q_inject`), so it fails LOUD (project convention), directing the caller to
-    # `:live` — the only mode whose coupling target (`qag_live == qag + q_inject`, AgrOpt.jl)
-    # includes the device's reactive decision. The `dv isa FourQuadBESS` probe matches the sole
-    # `q_inject`-implementing device today; a future `q_inject`-carrying device must extend
-    # this guard (or the probe should move to a contract-level trait).
+    # against the wrong closure. It fails LOUD (project convention), directing the caller to
+    # `:live` — the only mode whose coupling target (`qag_live == qag + q_inject`, AgrOpt.jl;
+    # or the centralized `Aggregator`'s flexible-load `:Rq` roll-up) includes the device's
+    # reactive decision. The probe now covers `dv isa FourQuadBESS || is_flexible_load(dv)` —
+    # a future `q_inject`-carrying OR reactive-drawing device must extend this guard (or the
+    # probe should move to a single contract-level trait). Since PM-03, this guard fires ONLY
+    # on an EXPLICIT caller override to OFF/CERTIFIED (this function's own default now resolves
+    # to LIVE whenever such a member is present, via `_any_flexible_reactive` above).
     if mode != LIVE
         for (k, agg) in enumerate(aggregators)
-            if hasproperty(agg, :devices) && any(dv -> dv isa FourQuadBESS, agg.devices)
+            if hasproperty(agg, :devices) &&
+               any(dv -> dv isa FourQuadBESS || is_flexible_load(dv), agg.devices)
                 throw(
                     ArgumentError(
                         "build_dso_opt: aggregator[$k] (bus $(agg.bus)) carries a " *
-                        "FourQuadBESS — a device-level reactive decision (q_inject, D-09) — " *
-                        "but reactive_consensus normalizes to $(mode), not LIVE. Under " *
-                        "OFF/CERTIFIED the DSO reactive closure is the inelastic −Pdc·tanφ " *
-                        "draw alone, so the device's q_inject would be silently dropped " *
-                        "from the network model (and under CERTIFIED the published " *
-                        "dual(:balance_q) would be priced against a closure that no longer " *
-                        "matches the centralized model's). Pass reactive_consensus = :live " *
-                        "(WR-04, phase-19 review).",
+                        "FourQuadBESS or flexible-load (is_flexible_load) member — a " *
+                        "device-level reactive decision (q_inject, D-09, or the FIX-05 " *
+                        "p_inject·tanφ flexible-load draw) — but reactive_consensus " *
+                        "normalizes to $(mode), not LIVE. Under OFF/CERTIFIED the DSO " *
+                        "reactive closure is the inelastic −Pdc·tanφ draw alone, so the " *
+                        "device's reactive decision would be silently dropped from the " *
+                        "network model (and under CERTIFIED the published dual(:balance_q) " *
+                        "would be priced against a closure that no longer matches the " *
+                        "centralized model's). Pass reactive_consensus = :live " *
+                        "(WR-04, phase-19 review; widened PM-03, post-merge triage).",
                     ),
                 )
             end
