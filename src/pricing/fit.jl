@@ -232,8 +232,9 @@ end
 """
     fit_baseline(feeder, pf, aggregators; T=24, λ_fit=FIT_λ_IMPORT, λ₀=fill(λ_fit, T),
                  λ_import=FIT_λ_IMPORT, λ_export=FIT_λ_EXPORT, λ_self=FIT_λ_SELF,
-                 optimizer=select_optimizer(problem_class(pf)), seed=nothing)
-        -> (; ctx, social_fit, welfare, ratio, prosumer_surplus, fit_flows)
+                 optimizer=select_optimizer(problem_class(pf)), on_inexact::Symbol=:error,
+                 seed=nothing)
+        -> (; ctx, social_fit, welfare, ratio, prosumer_surplus, fit_flows, socp_maxgap)
 
 The FIT (feed-in-tariff) baseline counterfactual (PRICE-03) — the ONE new solve of Phase 5.
 It (1) solves the per-prosumer FIT-OPT schedule (thesis eqs. 3.24-3.28) under the FIXED
@@ -241,6 +242,32 @@ German-FIT prices with PV + flexible loads and NO battery (Assumption A4), (2) a
 each prosumer's net injection to its nodal bus (thesis eqs. 3.22-3.23), and (3) evaluates a
 plain AC power flow — reusing `ConvexBranchFlow` on a voltage-RELAXED feeder so the voltage
 limit (3.35) is NOT enforced (the thesis FIT "AC-PF" step, RESEARCH Open Q3).
+
+**FIX-09 (Phase 27, plan 27-05): the FIT AC-PF step (SITE 2) is now exactness-certified.**
+Despite its "plain AC power flow" naming, SITE 2 solves a GENUINE SOC relaxation whenever `pf`
+stashes a squared-current `:l` (i.e. `ConvexBranchFlow`, the only formulation this file is
+exercised with in practice) — it was previously gated ONLY by `assert_solved!` (a trusted
+OPTIMAL primal, not a certified cone), so a slack cone there silently returned a fictitious
+`social_fit`/`ratio` with no warning (RESEARCH Pitfall 1; `[VERIFIED: src/pricing/fit.jl:320-378]`
+before this plan). `on_inexact::Symbol` selects what happens on a cone-slack finding, mirroring
+the project-standard `on_violation` idiom (`assert_battery_complementarity!`,
+`src/models/welfare_solve.jl:284,345-348`):
+
+  - `:error` (default) — `assert_socp_exact!` throws on an inexact SITE-2 cone, refusing the
+    counterfactual outright (never silently returns an uncertified `social_fit`).
+  - `:report` — never throws on SITE-2 inexactness; the measured cone residual is returned as
+    the new `socp_maxgap` field instead (mirroring the `ctx.meta[:socp_maxgap]` stash convention
+    already used by `solve_welfare`/`subproblem.jl:298`). Obtained via the NON-throwing
+    `socp_relaxation_gap` calibration sibling on catch — `assert_socp_exact!`'s own throw is
+    never used as control flow.
+  - any other value raises a loud `ArgumentError` (project's universal invalid-kwarg convention).
+
+Both modes SKIP the gate entirely (leaving `socp_maxgap = nothing`) when `pf` has no SOC cone
+(e.g. `DCPowerFlow`/`LinDistFlow`, no `:l` stashed) — data-driven, no `if formulation ==`
+branching, exactly mirroring `solve_welfare`'s own `haskey(ctx.meta[:pf_vars], :l)` gate. On a
+genuinely-exact SITE-2 solve (the common case on every canonical fixture to date), every OTHER
+`fit_baseline` behavior — `social_fit`, `ratio`, `prosumer_surplus`, `fit_flows` — is completely
+unchanged; only the new `socp_maxgap` field is added to the returned `NamedTuple`.
 
 Every solve routes through the `optimizer` keyword, which DEFAULTS to
 `select_optimizer(problem_class(pf))` — so INFRA-02 holds (no concrete solver is ever named here,
@@ -255,9 +282,11 @@ sits at Clarabel's achievable cone residual on a large feeder at the default `to
 Without a way to tighten the solver, that gate can refuse prices for purely numerical reasons and
 the caller has no recourse. Passing e.g.
 `optimizer_with_attributes(Clarabel.Optimizer, "tol_gap_abs" => 1e-10, "tol_gap_rel" => 1e-10)`
-converges the cone properly at an unchanged optimum. Note the FIT AC-PF step itself calls only
-`assert_solved!` (never `assert_socp_exact!`), so it is the NESTED `solve_welfare` that this
-mainly matters for.
+converges the cone properly at an unchanged optimum. The FIT AC-PF step itself is now gated by
+BOTH `assert_solved!` AND (FIX-09) `assert_socp_exact!` via the `on_inexact` kwarg above; the
+NESTED `solve_welfare` retains its OWN separate PF-04 gate, which is what the `optimizer`
+override mainly matters for (SITE 2's gate is data-driven on the SAME `optimizer`, so a tighter
+`tol_gap` benefits both).
 
 Returns a `NamedTuple`:
 
@@ -274,15 +303,21 @@ Returns a `NamedTuple`:
     1.25). The AUTHORITATIVE +25% ratio is (re)computed by 05-05 against the real DADP ctx;
     this is the self-contained cross-check the FIT baseline reports;
   - `prosumer_surplus` — the FIT-OPT objective (Σ prosumer FIT surplus, thesis 3.24);
-  - `fit_flows`        — per-aggregator numeric FIT schedule (`Ppv, p_h, self, imp, exp, net`).
+  - `fit_flows`        — per-aggregator numeric FIT schedule (`Ppv, p_h, self, imp, exp, net`);
+  - `socp_maxgap`      — (FIX-09) the FIT AC-PF's (SITE 2) measured SOC cone residual
+    (`assert_socp_exact!`'s absolute cone gap, or the same value recovered via the non-throwing
+    `socp_relaxation_gap` on an `on_inexact = :report` catch) — `nothing` when `pf` has no SOC
+    cone (DC/LinDistFlow, data-driven, no formulation branching).
 
 Reproducibility (INFRA-04, threat T-05-09): the whole computation is DETERMINISTIC in its
 inputs; when the `aggregators` are built from seeded `generate_profiles(seed=…)`, two calls
 with the same seed return an identical `social_fit`. `seed` is accepted for provenance.
 
-Throws `ArgumentError` on empty `aggregators` or a `λ₀` length ≠ `T`, and `error`s if the
-resulting `social_fit`/`ratio` is non-finite or out of the magnitude-sanity band (a mis-
-specified baseline must fail loudly rather than silently skew the headline — threat T-05-04).
+Throws `ArgumentError` on empty `aggregators`, a `λ₀` length ≠ `T`, or an invalid `on_inexact`
+(neither `:error` nor `:report`); `error`s if the resulting `social_fit`/`ratio` is non-finite or
+out of the magnitude-sanity band (a mis-specified baseline must fail loudly rather than silently
+skew the headline — threat T-05-04); and (FIX-09, `on_inexact = :error` only) `error`s via
+`assert_socp_exact!` if the FIT AC-PF's SOC relaxation is genuinely inexact (T-27-12).
 """
 function fit_baseline(
     feeder,
@@ -299,11 +334,21 @@ function fit_baseline(
     # solver named here). A caller may pass a differently-conditioned factory — see the
     # docstring for why (spike 003: the nested solve_welfare's PF-04 gate).
     optimizer = select_optimizer(problem_class(pf)),
+    # FIX-09 (Phase 27, plan 27-05): SITE 2's own exactness-gate mode — mirrors the project's
+    # `on_violation::Symbol` idiom (`assert_battery_complementarity!`). `:error` (default) throws
+    # on an inexact FIT AC-PF cone; `:report` returns the measured certificate instead (see
+    # docstring). Validated below alongside the function's other boundary guards.
+    on_inexact::Symbol = :error,
     seed = nothing,
 )
     isempty(aggregators) &&
         throw(ArgumentError("fit_baseline needs at least one aggregator (thesis 3.24)"))
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+    on_inexact in (:error, :report) || throw(
+        ArgumentError(
+            "fit_baseline: invalid on_inexact=$(repr(on_inexact)), expected :error or :report",
+        ),
+    )
     seed === nothing || @debug "fit_baseline: profiles are seeded upstream by the caller " *
            "(generate_profiles(seed=$seed)); the FIT solve is deterministic"
 
@@ -377,6 +422,32 @@ function fit_baseline(
     @objective(model, Max, -sum(λ₀[t] * p_import[t] for t in 1:T))
     assert_solved!(model; dual = false)
 
+    # FIX-09 (Phase 27, plan 27-05; T-27-12): the exactness gate SITE 2 was previously missing.
+    # Despite the file's own "plain AC power flow" language, this step solves a GENUINE SOC
+    # relaxation whenever `pf` stashes a squared-current `:l` (ConvexBranchFlow) — gated ONLY by
+    # `assert_solved!` (trusted OPTIMAL, not a certified cone) before this plan. Data-driven on
+    # the SAME `haskey(ctx.meta[:pf_vars], :l)` predicate `solve_welfare` uses (no `if formulation
+    # ==` branching): a DC/LinDistFlow `pf` has no cone to certify and `socp_maxgap` stays
+    # `nothing`. `on_inexact === :error` (default) lets `assert_socp_exact!`'s own throw
+    # propagate naturally — refusing to return an uncertified `social_fit`/`ratio` (PF-04).
+    # `on_inexact === :report` NEVER uses that throw as control flow: it wraps the call in a
+    # try/catch and recovers the SAME measured residual via the non-throwing
+    # `socp_relaxation_gap` sibling on catch (both re-walk the identical solved `ctx` state, so
+    # the recovered value is exact, not an approximation).
+    socp_maxgap = nothing
+    if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
+        socp_maxgap = if on_inexact === :error
+            assert_socp_exact!(ctx)
+        else
+            try
+                assert_socp_exact!(ctx)
+            catch
+                socp_relaxation_gap(ctx)
+            end
+        end
+        ctx.meta[:socp_maxgap] = socp_maxgap
+    end
+
     imports = value.(p_import)
 
     # FIT social welfare (thesis 3.38, evaluated on the FIT schedule): flexible-device utility
@@ -426,6 +497,7 @@ function fit_baseline(
         ratio,
         prosumer_surplus = fa.prosumer_surplus,
         fit_flows = fa.per_agg,
+        socp_maxgap,
     )
 end
 
