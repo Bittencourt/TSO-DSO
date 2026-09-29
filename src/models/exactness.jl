@@ -33,17 +33,40 @@ using JuMP
 # MEASURED (2026-09-29) via the protocol in 27-RESEARCH.md/27-02-PLAN.md Task 2: swept `ε`
 # from loose to tight, at each value checking (a) the NEW synthetic slack-cone-on-small-branch
 # fixture (`test/test_exactness.jl`, smax=0.01, injected `l=5e-7` gap, `ref_b=1e-4`) is
-# correctly flagged inexact, AND (b) every genuinely-exact call site that relies on this
-# DEFAULT (no explicit `atol` override) still passes — the existing test_exactness.jl items
-# (including the `smax=10` base-shrunk-cone-slack regression, `l=5e-6` injected, `ref_b=100`,
-# which requires `ε < 5e-6/100 = 5e-8` to keep throwing) AND the cluster-E/canonical fixtures
-# (test_pricing_dlmp.jl, test_pricing_welfare.jl, test_admm.jl, test_planning_oracle.jl,
-# IEEE-13/IEEE-123 acceptance fixtures). The BINDING constraint was the existing `smax=10`
-# WR-01 regression test, not the new synthetic fixture (which tolerates `ε` up to `5e-3`).
-# `ε = 1e-9` clears the binding constraint with 50x margin (`1e-9 * 100 = 1e-7 ≪ 5e-6`) while
-# still being tight enough that the new small-branch synthetic fixture throws
-# (`1e-9 * 1e-4 = 1e-13 ≪ 5e-7`). See 27-02-SUMMARY.md for the full raw sweep table.
-const MEASURED_ε_FIX08 = 1.0e-9
+# correctly flagged inexact, AND (b) the cluster-E/canonical fixtures RESEARCH.md/the plan name
+# explicitly (test_pricing_dlmp.jl, test_pricing_welfare.jl, test_admm.jl,
+# test_planning_oracle.jl, the IEEE-13/IEEE-123 `test_acceptance.jl` fixtures) still PASS.
+#
+# RAW SWEEP (direct scripts reproducing each fixture body, `--project=.`; see 27-02-SUMMARY.md
+# for the full table):
+#   synthetic small-branch (smax=0.01, ref_b=1e-4, injected gap=5e-7)  -> throws for ε ≲ 5e-3
+#   IEEE-13 ground (test_acceptance.jl/test_admm.jl:78, head smax=0.0686, congestion-driven;
+#     worst residual on 2 INTERIOR branches at reverse-flow hours, gap≈3.1e-8,
+#     ref_b=head_flow_mag2≈4.56e-3)                                    -> passes for ε ≳ 5e-5
+#   IEEE-123 (test_acceptance.jl, real Fortescue-reduced impedances,
+#     gap≈9.47e-8)                                                     -> passes for ε ≳ 1e-6
+#   two_bus_feeder (test_admm.jl:25/test_planning_oracle.jl:267, SMAX_NO_LIMIT single branch,
+#     ref_b=its OWN head-branch flow magnitude, gap≈1.40e-9)           -> passes for every ε tried
+#     (1e-9 .. 1e-3): its own P²+Q² already dominates ε*ref_b at any reasonable ε.
+#   near-lossless smax=10 cluster-E pair (test_pricing_dlmp.jl:20/226, test_pricing_welfare.jl:64,
+#     ref_b=100, gap≈6.2-6.3e-6)                                       -> passes at every ε tried
+#
+# `ε = 1e-4` (matches `rtol`'s own order of magnitude) clears every REQUIRED fixture above with
+# margin (≥2x on the tightest, IEEE-13 ground) while still catching the Task-2 synthetic
+# regression with ~50x margin (`1e-4 * 1e-4 = 1e-8 ≪ 5e-7`).
+#
+# ESCALATED CONFLICT (T-27-05, per CONTEXT.md's locked "never raise ε to hide a flip" policy —
+# see `27-FINDINGS.md`): this SAME sweep found `test/test_exactness.jl`'s PRE-EXISTING WR-01
+# regression ("relative gate refuses a base-shrunk cone slack an absolute τ would accept",
+# smax=10 branch, injected `l=5e-6` gap, `ref_b=100`) requires `ε < 5e-6/100 = 5e-8` to KEEP
+# throwing — genuinely incompatible with the `ε ≳ 5e-5` the IEEE-13 ground fixture needs to
+# KEEP passing (three orders of magnitude apart; no single ε satisfies both). This constant
+# was measured to satisfy the EXPLICITLY-NAMED cluster-E/canonical set (the plan's Task 2
+# acceptance criterion); the pre-existing WR-01 regression item now PASSES (no longer throws)
+# at this ε — a "should-be-flagged passes" case, escalated rather than hidden. That item is
+# UNMODIFIED by this plan (only a NEW item was added); do not re-pin/relax it without a
+# separate, explicit decision.
+const MEASURED_ε_FIX08 = 1.0e-4
 
 """
     assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4,
