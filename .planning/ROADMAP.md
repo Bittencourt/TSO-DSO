@@ -165,7 +165,16 @@ exactness gate, the FIT-baseline counterfactual, and MPC's realized-welfare acco
 
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close.
-**Plans**: TBD
+
+**Plans:** 6 plans
+
+Plans:
+- [ ] 27-01-PLAN.md — FIX-06: corner_recourse joint T>1 recourse + T=2 grid-enumeration certification
+- [ ] 27-02-PLAN.md — FIX-08: per-branch exactness floor in assert_socp_exact!
+- [ ] 27-03-PLAN.md — FIX-10: MPC truth-plant settlement (clip, throw, loss-exact import)
+- [ ] 27-04-PLAN.md — FIX-07: DLMP cone/drop rename with deprecated .loss/.voltage alias
+- [ ] 27-05-PLAN.md — FIX-09: fit_baseline exactness certificate + ALMOST_OPTIMAL root-cause
+- [ ] 27-06-PLAN.md — SC-6 golden-move audit + final full-suite certification
 
 ### Phase 28: Goldens Re-Derivation & Thesis Reproduction Restatement
 
