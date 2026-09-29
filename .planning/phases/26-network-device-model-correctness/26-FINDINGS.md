@@ -69,10 +69,31 @@ Executors in parallel worktrees append here — never edit `STATE.md` directly.
   `docs/literate/convex_branch_flow.jl`'s Verdict subsection (new "PM-01" addendum with the
   EXACT-04 measured numbers), and `26-02-SUMMARY.md` (appended addendum, prior text left
   intact). The Phase-20/21 escalation-ladder tests (`test/test_mpc_loop.jl:95/:187/:294` in
-  triage numbering) and the `test_restricted_branch_flow.jl` AC-infeasibility
-  synthetic-violation tests (the two testitems' "unrestricted"/"cert_failing" comparison
-  legs, formerly triage-numbered `:231`/`:398`) are re-forced with an explicit
-  `ConvexBranchFlow(; thesis_literal=true)` construction, restoring their original
-  forcing-mechanism intent (the escalation ladder / genuine AC-infeasible synthetic
-  violation) under the now-honest, now-exact default. No production code behavior changed —
-  only docs/docstrings/planning prose and two test files' fixture construction.
+  triage numbering, on the Phase21Fixtures high-PV window at `pv_scale=3.0`) are re-forced
+  with a direct `ConvexBranchFlow(; thesis_literal=true)` swap and genuinely re-fire
+  (measured cone_maxratio ≈ 9157–9166). No production code behavior changed — only
+  docs/docstrings/planning prose and two test files' fixture construction.
+- **Additional measured finding (Task 3, `test_restricted_branch_flow.jl`'s own EXACT-04
+  fixture) — a bare `thesis_literal=true` swap does NOT reproduce genuine AC-infeasibility on
+  THIS SPECIFIC fixture.** Unlike the Phase21Fixtures MPC window above, on
+  `Phase4Fixtures.high_pv_feeder()` at `pv_scale=1.2` (the EXACT-04 fixture the two
+  `test_restricted_branch_flow.jl` synthetic-violation testitems, formerly triage-numbered
+  `:231`/`:398`, use), MEASURED: BOTH `ConvexBranchFlow()` (default) AND
+  `ConvexBranchFlow(; thesis_literal=true)` are genuinely cone-EXACT (ratios 0.017 and 0.002
+  respectively; `thesis_literal=true`'s objective, -921.277, matches the true AC optimum
+  exactly) — confirming `26-POSTMERGE-TRIAGE.md`'s own cluster-I evidence ("the old literal
+  copy gives −921.277 and is also exact"). On this small 3-bus/2-branch radial path, `v`'s
+  own always-imposed `V²max` bound (3.35, imposed on BOTH `v` and `v̂` regardless of
+  `thesis_literal`) is apparently sufficient by itself to force cone-tightness, regardless of
+  which band the exactness-copy `v̂` additionally restricts — so this fixture's own
+  `pv_scale=1.2` cannot force EITHER direction's relaxation loose. Per PM-01's own locked
+  alternative ("re-force ... with `thesis_literal=true` ... or a new fixture"), Task 3 feeds
+  the two testitems' synthetic-violation legs from a SEPARATE, measured `pv_scale=1.4`
+  aggregator set (genuinely cone-inexact under `thesis_literal=true`, ratio ≈ 1982, and
+  chosen to stay clear of the App. C battery-complementarity throw threshold that fires
+  beyond `pv_scale≈1.46` on this same fixture) while leaving the ORIGINAL `pv_scale=1.2`
+  contexts (`ctx_restricted`, `ctx_ac`, and the unrelated "optimality loss vs the
+  unrestricted SOCP bound" diagnostic leg, which was never part of this cluster's broken
+  behavior and stays on the DEFAULT `ConvexBranchFlow()`) unchanged. See
+  `test/test_restricted_branch_flow.jl`'s own inline comments (D-05 and `ac_dual_fallback_price`
+  testitems) for the full derivation.
