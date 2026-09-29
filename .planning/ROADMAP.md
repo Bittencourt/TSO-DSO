@@ -101,7 +101,7 @@ restriction or free hour-T energy.
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
      for a later phase and none is silently re-pinned.
-**Plans:** 17/20 plans executed
+**Plans:** 18/20 plans executed
 
 Plans:
 **Wave 1**
@@ -125,7 +125,7 @@ Plans:
 - [x] 26-12-PLAN.md — PM-03: ADMM DsoOpt live-reactive default whenever flexible loads are present
 - [x] 26-13-PLAN.md — PM-04: mesh diamond fixture φ=1.0 pin + reactive-load-breaks-exactness finding
 - [x] 26-14-PLAN.md — PM-02: AC oracle battery-complementarity throw-to-diagnostic + App. C eta<1 finding
-- [ ] 26-15-PLAN.md — PM-07: ACPowerFlow receiving-end apparent-power limit (:smax_rev)
+- [x] 26-15-PLAN.md — PM-07: ACPowerFlow receiving-end apparent-power limit (:smax_rev)
 - [x] 26-16-PLAN.md — Cluster E: admm/planning_oracle/admm_reactive near-lossless SOCP tolerance calibration
 - [x] 26-17-PLAN.md — PM-06: ieee13/pricing_fit/pricing_welfare golden repins + pricing_welfare tol_gap
 
@@ -375,7 +375,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 10–14 | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
-| 26. Network & Device Model Correctness | v4.0 | 17/20 | In Progress|  |
+| 26. Network & Device Model Correctness | v4.0 | 18/20 | In Progress|  |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 0/TBD | Not started | - |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
