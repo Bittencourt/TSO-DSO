@@ -181,6 +181,86 @@ end
     @test_throws Exception TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)
 end
 
+@testitem "exact: head-branch lookup is orientation-agnostic — ref_b matches forward vs reversed root branch (FIX-08, plan 27-07)" tags =
+    [:exact] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # A 3-bus radial chain, root=1: branch A (the HEAD branch, SMAX_NO_LIMIT) connects the
+    # root to bus 2; branch B (interior, ALSO SMAX_NO_LIMIT) connects bus 2 to bus 3. Since
+    # BOTH branches are unlimited, `ref_b` for BOTH falls back to the head branch's OWN flow
+    # magnitude squared (`head_flow_mag2`) — this item checks that value is IDENTICAL whether
+    # the head branch is stored `br.from==root` (forward) or `br.to==root` (reversed, the
+    # `test_mesh_angle_certificate.jl` CR-01/WR-03 "reversed-orientation" convention).
+    #
+    # `ref_b = 20^2 + 10^2 = 500` is chosen LARGE enough that `ε*ref_b = 1e-9*500 = 5e-7`
+    # STRICTLY EXCEEDS the absolute floor `τ_solver = 2e-7` (2.5x) — i.e. the relative term
+    # actually GOVERNS the gate here, so a wrong/zero `ref_b` (e.g. a broken head-branch
+    # lookup silently defaulting to 0) would measurably change the verdict, not just its
+    # margin. The interior branch's injected gap `3.5e-7` sits strictly BETWEEN the two
+    # floors (`τ_solver=2e-7 < 3.5e-7 < ε*ref_b=5e-7`): it PASSES only when `ref_b` correctly
+    # resolves to 500 in EITHER orientation.
+    function build_ctx(head_branch_forward::Bool)
+        feeder = Feeder(
+            [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.10, false), Bus(3, 0.90, 1.10, false)],
+            head_branch_forward ?
+            [
+                Branch(1, 2, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT),
+                Branch(2, 3, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT),
+            ] :
+            [
+                Branch(2, 1, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT),   # head branch, REVERSED storage
+                Branch(2, 3, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT),
+            ],
+            1,
+        )
+        T, N, B = 1, 3, 2
+        model = Model(select_optimizer(SOCP()))
+        @variable(model, v[1:N, 1:T])
+        @variable(model, v̂[1:N, 1:T])
+        @variable(model, P[1:B, 1:T])
+        @variable(model, Q[1:B, 1:T])
+        @variable(model, l[1:B, 1:T])
+        fix.(v, 1.0; force = true)
+        fix.(v̂, 1.0; force = true)
+        # Head branch (index 1): P=20, Q=10 (ref_b = 500), l set EXACT (l*v = P²+Q²) so the
+        # head branch's OWN cone (evaluated against its own ref_b too) never throws — this
+        # item isolates the INTERIOR branch's use of the head-derived ref_b, not the head
+        # branch's own exactness.
+        fix(P[1, 1], 20.0; force = true)
+        fix(Q[1, 1], 10.0; force = true)
+        fix(l[1, 1], 500.0; force = true)
+        # Interior branch (index 2): P=Q=0, l = 3.5e-7 — strictly between τ_solver and
+        # ε*ref_b (see header comment above).
+        fix(P[2, 1], 0.0; force = true)
+        fix(Q[2, 1], 0.0; force = true)
+        fix(l[2, 1], 3.5e-7; force = true)
+        @objective(model, Max, 0)
+        optimize!(model)
+
+        ctx = TSODSO.ModelContext(model)
+        ctx.meta[:feeder] = feeder
+        ctx.meta[:T] = T
+        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+        return ctx
+    end
+
+    ctx_fwd = build_ctx(true)
+    ctx_rev = build_ctx(false)
+
+    # Neither orientation throws `ArgumentError` (the malformed-feeder guard) NOR the
+    # inexactness `error(...)` — both correctly resolve `ref_b=500` via the orientation-
+    # agnostic head-branch lookup (`br.from==root || br.to==root`).
+    maxgap_fwd = TSODSO.assert_socp_exact!(ctx_fwd; rtol = 1e-4)
+    maxgap_rev = TSODSO.assert_socp_exact!(ctx_rev; rtol = 1e-4)
+
+    # The gate's verdict (and the reported absolute residual) is IDENTICAL regardless of
+    # the head branch's storage orientation — the direct regression this item pins.
+    @test maxgap_fwd == maxgap_rev
+    @test isapprox(maxgap_fwd, 3.5e-7; rtol = 1e-6)
+end
+
 @testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags =
     [:exact] setup = [Phase4Fixtures] begin
     using TSODSO

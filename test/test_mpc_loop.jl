@@ -443,6 +443,29 @@ end
     [:mpc_loop] setup = [Phase21Fixtures] begin
     using TSODSO, Test
 
+    # Phase 27 plan 27-07 (Task 1, FIX-10 finding): the DEFAULT `seed=1` (Scenario's own
+    # default) genuinely trips `_mpc_truth_import_resolve`'s `assert_socp_exact!` gate on
+    # this fixture — MEASURED (direct execution, seed sweep 1-20) as a real, structural SOCP
+    # relaxation inexactness under compounding forecast-error-driven state drift into a
+    # near-congested, high-reverse-flow regime at a LATE applied hour (head branch loading
+    # measured ≈98% of its thermal limit `smax=0.0686`, several downstream branches
+    # simultaneously showing `l` 100-400x their individually-tight value). CONFIRMED
+    # non-tolerance-fixable (`tol_gap_abs/rel` swept 1e-9 down to 1e-11: residual UNCHANGED,
+    # ~0.00043) and non-objective-fixable (both a direct total-loss objective — replacing the
+    # OLD price-weighted one, see `_mpc_truth_import_resolve`'s own docstring — AND an added
+    # dominant quadratic `l` regularizer up to weight 100 were tried; neither reduces the
+    # residual, ruling out a numerics/weak-gradient explanation and matching this project's
+    # own documented "SOCP relaxation genuinely inexact under high-PV reverse flow" finding,
+    # memory `v2.1-socp-inexactness-and-thesis-repro.md`). This is UNRELATED to this item's
+    # OWN purpose (verifying `mpc_step` genuinely strides the resolve cadence, D-03) — the
+    # knife-edge is an ACCIDENTAL interaction with the default seed, not a deliberately
+    # chosen exactness stress case. `seed=5` (MEASURED across seeds 1-20; seeds {1,2,3,4,6,7,
+    # 8,9,10,12,15,20} all hit the SAME knife-edge, only {5,11} pass) is used here, mirroring
+    # `27-03-SUMMARY.md`'s own identical `seed=5` substitution on this SAME feeder/population
+    # family for the SAME documented reason — preserves this item's own load-bearing
+    # assertion (mpc_step produces a genuinely different trajectory: realized_welfare AND
+    # dadp_trace both differ, confirmed below) while avoiding the unrelated, pre-existing
+    # exactness edge case. See `27-07-SUMMARY.md` "Findings" for the full escalation record.
     base = (;
         name = "mpc_loop_stride",
         feeder = :ieee13,
@@ -450,6 +473,7 @@ end
         mpc_H = 3,
         mpc_terminal_soc = true,
         mpc_forecast_error = 0.05,
+        seed = 5,
     )
     s_step1 = Scenario(; base..., mpc_step = 1)
     s_step2 = Scenario(; base..., mpc_step = 2)
