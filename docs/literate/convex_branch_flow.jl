@@ -67,6 +67,35 @@
 # remains feasible under the corrected default SOCP but goes INFEASIBLE under the
 # literal thesis-transcribed variant (i.e. `v̂ ≥ V²min` binds as a genuine restriction
 # under the literal, defective sign, not merely a redundant bound).
+#
+# ## PM-01 (phase 26-18): the DEFAULT is a restriction, not "a genuine relaxation"
+#
+# Earlier phase-26 text (plan 26-02's own SUMMARY and an earlier draft of this Verdict
+# subsection) called the corrected default (`v̂ ≥ v`, above) "a genuine relaxation." This
+# is INACCURATE and is corrected here per the post-merge amendment PM-01
+# (`26-POSTMERGE-TRIAGE.md` cluster I, `26-CONTEXT.md`): a relaxation of a maximization can
+# never score BELOW a feasible AC point. Measured on the EXACT-04 high-PV fixture
+# (`pv_scale=1.2`):
+#
+# ```math
+# \text{default SOCP optimum} = -921.754 \quad<\quad \text{true AC optimum} = -921.277
+# ```
+#
+# The default SCORES LOWER than a feasible AC point, so it is provably a RESTRICTION, not a
+# relaxation — specifically Gan-Low's own "modified OPF": `v̂ ≤ V²max` is load-bearing (the
+# `test_convex_branch_flow.jl` load-bearing/redundant-bound regression demonstrates this)
+# and conservatively enforces `v ≤ V²max`, exact by theorem, with a measurable (~0.05% here)
+# welfare loss. The OLD thesis-literal copy (`ConvexBranchFlow(; thesis_literal=true)`)
+# restricts the LOWER voltage band instead. **NEITHER form is a genuine relaxation.**
+#
+# Consequence: the "SOCP knife-edge under high-PV reverse flow" finding previously measured
+# on this SAME EXACT-04 fixture (project memory `v2.1-socp-inexactness-and-thesis-repro`) no
+# longer reproduces under the DEFAULT — EXACT-04 is now exact (cone ratio well under the
+# PF-04 gate), not inexact, so that finding's premise no longer holds under default
+# settings. It DOES still reproduce under the explicit `thesis_literal=true` opt-in (see
+# `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` for the restated
+# finding, and `test/test_mpc_loop.jl`'s escalation-ladder testitems, which are re-forced
+# with `ConvexBranchFlow(; thesis_literal=true)` for exactly this reason).
 
 using TSODSO
 

@@ -23,8 +23,17 @@
 # redundancy claim, proven by a telescoping-sum argument along the root→j path (see
 # `docs/literate/convex_branch_flow.jl`'s verdict section). The DEFAULT
 # (`thesis_literal=false`) now substitutes `P̂ = P − r·l`, `Q̂ = Q − x·l` (the Gan-Low
-# direction, `v̂ ≥ v`, a genuine relaxation); the LITERAL thesis formula remains available as
-# an explicit, clearly-labelled RESTRICTION via `ConvexBranchFlow(; thesis_literal=true)`.
+# direction, `v̂ ≥ v`).
+#
+# PM-01 (phase 26-18 relabel, post-merge amendment — see `26-POSTMERGE-TRIAGE.md` cluster I):
+# this DEFAULT is honestly Gan-Low's MODIFIED OPF — a conservative RESTRICTION on the UPPER
+# voltage band (`v̂ ≤ V²max` is load-bearing, conservatively enforcing `v ≤ V²max`), exact by
+# theorem, with a measurable (~0.05% on EXACT-04: default optimum -921.754 vs true AC optimum
+# -921.277) welfare loss — NEVER "a genuine relaxation" (a relaxation of a maximization can
+# never score BELOW a feasible AC point, yet the default does here). The OLD thesis-literal
+# copy restricts the LOWER band instead — NEITHER form is a genuine relaxation. The LITERAL
+# thesis formula remains available as an explicit, clearly-labelled RESTRICTION via
+# `ConvexBranchFlow(; thesis_literal=true)`.
 #
 # This file also adds `problem_class(::ConvexBranchFlow) = SOCP()` so the cone routes to
 # the tight-gap Clarabel factory (the generic `problem_class(::AbstractPowerFlow) = QP()`
@@ -71,11 +80,13 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
   - 3.39 — the SOC relaxation `l_ij·v_i ≥ P² + Q²`, written as a rotated second-order cone
     `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()` (‖x‖² ≤ 2·t·u ⇒ P²+Q² ≤ 2·(0.5l)·v = l·v);
   - 3.43 — the exactness-copy voltage drop. DEFAULT (`thesis_literal=false`, FIX-01/02):
-    `v̂_j = v̂_i − 2{r(P−rl) + x(Q−xl)}` (the Gan-Low direction, `v̂ ≥ v`, a genuine
-    relaxation — see the verdict below). Opt-in (`thesis_literal=true`): the LITERAL
-    transcribed formula `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}` (`v̂ ≤ v`, a RESTRICTION, kept
-    only for reproducing the thesis's own defective algebra). Both written purely in the
-    ORIGINAL `P, Q, l` plus the single copy `v̂` (no separate `P̂/Q̂`);
+    `v̂_j = v̂_i − 2{r(P−rl) + x(Q−xl)}` (the Gan-Low direction, `v̂ ≥ v` — PM-01: Gan-Low's
+    MODIFIED OPF, a conservative RESTRICTION on the upper voltage band, exact by theorem,
+    with a measurable (~0.05% on EXACT-04) welfare loss — see the verdict below). Opt-in
+    (`thesis_literal=true`): the LITERAL transcribed formula `v̂_j = v̂_i − 2{r(P+rl) +
+    x(Q+xl)}` (`v̂ ≤ v`, a RESTRICTION on the LOWER band instead, kept only for reproducing
+    the thesis's own defective algebra). NEITHER form is a genuine relaxation. Both written
+    purely in the ORIGINAL `P, Q, l` plus the single copy `v̂` (no separate `P̂/Q̂`);
   - 3.45 — squared-magnitude voltage bounds `V²min ≤ v, v̂ ≤ V²max` on BOTH `v` and `v̂`.
 
 Differences from [`LinDistFlow`](@ref) (which is this model with `l → 0`): adds the squared
@@ -102,6 +113,17 @@ Gan-Low-sourced claim, not a code bug. The DEFAULT here corrects the sign (`P̂ 
 explicit opt-in via `thesis_literal=true`, clearly labelled a RESTRICTION (never the
 default).
 
+PM-01 (phase 26-18, post-merge amendment — `26-POSTMERGE-TRIAGE.md` cluster I): the DEFAULT
+above is honestly a RESTRICTION, not "a genuine relaxation" — a relaxation of a maximization
+can never score BELOW a feasible AC point, yet on EXACT-04 (`pv_scale=1.2`) the default SOCP
+optimum is **-921.754** while the TRUE AC optimum is **-921.277**, so the default is provably
+Gan-Low's own "modified OPF": `v̂ ≤ V²max` is load-bearing and conservatively enforces
+`v ≤ V²max`, exact by theorem, with a measurable (~0.05% here) welfare loss. The OLD
+thesis-literal copy restricted the LOWER voltage band instead — NEITHER form is a genuine
+relaxation. This also means the v2.1 "SOCP knife-edge under high-PV reverse flow" finding
+(EXACT-04) no longer reproduces under this default (it IS exact now); it still reproduces
+under the explicit `thesis_literal=true` opt-in (see `26-FINDINGS.md`).
+
 FIX-03 (26-05) / CONTEXT.md "share ONE cpydrop helper ... WHERE the forms coincide": the
 thesis 3.37 receiving-end power `(P−r·l, Q−x·l)` is algebraically IDENTICAL to `cpydrop`'s
 DEFAULT (`thesis_literal=false`) substitution above — both are now computed from ONE shared
@@ -121,10 +143,14 @@ end
     ConvexBranchFlow(; thesis_literal::Bool = false)
 
 Outer kwarg constructor. `thesis_literal = false` (the DEFAULT) implements the FIX-01/02
-corrected exactness-copy sign (`v̂ ≥ v`, the Gan-Low direction, a genuine relaxation).
-`thesis_literal = true` reproduces the LITERAL, defective thesis eq. 3.43 formula
-(`v̂ ≤ v`), an explicit, documented RESTRICTION opt-in — never the default. The zero-arg
-call `ConvexBranchFlow()` remains valid and now defaults to the CORRECTED direction.
+corrected exactness-copy sign (`v̂ ≥ v`, the Gan-Low direction — PM-01: Gan-Low's MODIFIED
+OPF, a conservative RESTRICTION on the upper voltage band, exact by theorem, with a
+measurable (~0.05%) welfare loss on EXACT-04, default optimum -921.754 vs true AC optimum
+-921.277 — NOT "a genuine relaxation"). `thesis_literal = true` reproduces the LITERAL,
+defective thesis eq. 3.43 formula (`v̂ ≤ v`), an explicit, documented RESTRICTION on the
+LOWER band instead — never the default. NEITHER form is a genuine relaxation. The zero-arg
+call `ConvexBranchFlow()` remains valid and now defaults to the CORRECTED (restriction, not
+relaxation) direction.
 """
 ConvexBranchFlow(; thesis_literal::Bool = false) = ConvexBranchFlow(thesis_literal)
 

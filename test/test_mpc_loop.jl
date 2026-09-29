@@ -60,7 +60,18 @@ end
     H = Phase21Fixtures.H
     λ₀ = Phase21Fixtures.mpc_lambda0()
 
-    o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    # PM-01 (phase 26-18): the DEFAULT ConvexBranchFlow() is now EXACT on this fixture (it is
+    # Gan-Low's modified OPF, a restriction on the UPPER voltage band — see
+    # ConvexBranchFlow.jl's PM-01 docstring addendum), so it no longer forces the inexactness
+    # this escalation-ladder test needs; thesis_literal=true (the OLD, lower-band-restricting
+    # copy) is re-forced here as the explicit opt-in that reproduces the original trigger.
+    o = build_mpc_window(
+        feeder,
+        ConvexBranchFlow(; thesis_literal = true),
+        aggs;
+        H = H,
+        terminal_soc = false,
+    )
     for agg in aggs
         varlist = o.ctx.meta[:agg_device_vars][agg.bus]
         for (d, v) in zip(agg.devices, varlist)
@@ -151,7 +162,15 @@ end
     # solved hours 1..H with construction-time ICs, so with this FLAT λ₀ its published price
     # was IDENTICAL at every t; the fixed escalation prices the t-window, so the two prices
     # MUST differ (the PV slices differ across the two windows).
-    o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    # PM-01 (phase 26-18): re-forced with thesis_literal=true — see the identical rationale
+    # comment in the testitem above (the default is now exact on this fixture).
+    o = build_mpc_window(
+        feeder,
+        ConvexBranchFlow(; thesis_literal = true),
+        aggs;
+        H = H,
+        terminal_soc = false,
+    )
     prices = Dict{Int, Vector{Float64}}()
     for t in (1, 4)
         for agg in aggs
@@ -257,7 +276,16 @@ end
     end
     fe = (; pv_factor = 1.0, demand_factor = 1.0)
 
-    o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    # PM-01 (phase 26-18): re-forced with thesis_literal=true — see the identical rationale
+    # comment in the first escalation-ladder testitem above (the default is now exact on this
+    # fixture, so the terminal :cert_failed tier's own pre-condition needs the explicit opt-in).
+    o = build_mpc_window(
+        feeder,
+        ConvexBranchFlow(; thesis_literal = true),
+        aggs;
+        H = H,
+        terminal_soc = false,
+    )
     for agg in aggs
         varlist = o.ctx.meta[:agg_device_vars][agg.bus]
         for (d, v) in zip(agg.devices, varlist)
