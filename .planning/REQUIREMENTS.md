@@ -20,25 +20,25 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 ### Correctness — network model (FIX)
 
-- [ ] **FIX-01**: Researcher can read a documented verdict on thesis eq. 3.43, checked against the
+- [x] **FIX-01**: Researcher can read a documented verdict on thesis eq. 3.43, checked against the
   thesis PDF and Gan–Low (2015): is the default exactness copy a relaxation or a restriction? It is
   backed by a regression in which a heavy-load, low-voltage 3-bus feeder that is AC-feasible
   (Ipopt) is also feasible under the default SOCP formulation.
-- [ ] **FIX-02**: The default `ConvexBranchFlow` formulation's lossless-shadow copy satisfies
+- [x] **FIX-02**: The default `ConvexBranchFlow` formulation's lossless-shadow copy satisfies
   v̂ ≥ v (Gan–Low direction) or is clearly relabelled as a restriction. Its `v̂` bounds are never
   redundant or silently tightening, and the docstring's claims about which bound is load-bearing
   match a test that checks them.
-- [ ] **FIX-03**: Every limited branch enforces the receiving-end apparent-power limit (thesis
+- [x] **FIX-03**: Every limited branch enforces the receiving-end apparent-power limit (thesis
   3.37, `|(P − r·l, Q − x·l)| ≤ S̄`) as well as the sending-end one, and a PV back-feed fixture
   shows the reverse limit binding.
 
 ### Correctness — devices (FIX)
 
-- [ ] **FIX-04**: `PVBattery` and `FourQuadBESS` link state of charge across the whole horizon
+- [x] **FIX-04**: `PVBattery` and `FourQuadBESS` link state of charge across the whole horizon
   (`soc[T+1]` with bounds, plus an optional terminal condition), so hour-T charge and discharge
   change stored energy. The regression "soc0 = Emin, discharge at hour T" must be infeasible or give
   zero discharge.
-- [ ] **FIX-05**: Flexible loads (interruptible, thermostatic, deferrable) draw reactive power
+- [x] **FIX-05**: Flexible loads (interruptible, thermostatic, deferrable) draw reactive power
   through their power factor, `q = p·tanφ` (thesis 3.23), flowing into `:Rq`. A per-device test
   checks the reactive injection.
 
@@ -168,11 +168,11 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FIX-01 | Phase 26 | Pending |
-| FIX-02 | Phase 26 | Pending |
-| FIX-03 | Phase 26 | Pending |
-| FIX-04 | Phase 26 | Pending |
-| FIX-05 | Phase 26 | Pending |
+| FIX-01 | Phase 26 | Complete |
+| FIX-02 | Phase 26 | Complete |
+| FIX-03 | Phase 26 | Complete |
+| FIX-04 | Phase 26 | Complete |
+| FIX-05 | Phase 26 | Complete |
 | FIX-06 | Phase 27 | Pending |
 | FIX-07 | Phase 27 | Pending |
 | FIX-08 | Phase 27 | Pending |

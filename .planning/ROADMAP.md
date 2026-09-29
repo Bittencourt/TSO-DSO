@@ -27,7 +27,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 
 ## Phases
 
-- [ ] **Phase 26: Network & Device Model Correctness** - Fix the reversed exactness copy, add the
+- [x] **Phase 26: Network & Device Model Correctness** - Fix the reversed exactness copy, add the (completed 2026-09-29)
   reverse thermal limit, link battery SOC across the horizon, and give flexible loads their
   reactive draw.
 
@@ -101,7 +101,7 @@ restriction or free hour-T energy.
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
      for a later phase and none is silently re-pinned.
-**Plans:** 19/20 plans executed
+**Plans:** 20/20 plans complete
 
 Plans:
 **Wave 1**
@@ -137,7 +137,7 @@ Plans:
 
 **Wave 3** *(blocked on ALL of the above)*
 
-- [ ] 26-08-PLAN.md — SC-6 golden-move audit (both waves) + final full-suite green
+- [x] 26-08-PLAN.md — SC-6 golden-move audit (both waves) + final full-suite green
 
 ### Phase 27: Integer Planning & Pricing Certificate Correctness
 
@@ -375,7 +375,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 10–14 | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
-| 26. Network & Device Model Correctness | v4.0 | 19/20 | In Progress|  |
+| 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 0/TBD | Not started | - |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |

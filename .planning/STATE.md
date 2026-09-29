@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
-stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
-last_updated: "2026-09-28T17:05:04.961Z"
+status: ready_to_plan
+stopped_at: Phase 26 complete (20/20) — ready to discuss Phase 27
+last_updated: 2026-09-29T03:39:46.496Z
 last_activity: 2026-09-28 -- Phase 26 execution started
 progress:
   total_phases: 12
   completed_phases: 0
   total_plans: 8
-  completed_plans: 0
+  completed_plans: 20
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 26 — Network & Device Model Correctness
+**Current focus:** Phase 27 — integer planning & pricing certificate correctness
 
 ## Current Position
 
-Phase: 26 (Network & Device Model Correctness) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 26
-Last activity: 2026-09-28 -- Phase 26 execution started
+Phase: 27
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-29
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -114,7 +114,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 98 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 118 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -160,6 +160,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 260825-w5b | Add IEEE-13 ADMM knife-edge canary (pinned iters/welfare, ladder reported) | 2026-08-26 | 2648dfb | [260825-w5b-add-ieee-13-admm-knife-edge-canary-test](./quick/260825-w5b-add-ieee-13-admm-knife-edge-canary-test/) |
 | 260826-8gb | Document the ADMM conditioning ladder + knife-edge and the CI docs-integrity guard in the Documenter site | 2026-08-26 | 362e745 | [260826-8gb-document-the-admm-conditioning-ladder-an](./quick/260826-8gb-document-the-admm-conditioning-ladder-an/) |
 | 260826-cjh | Replace the fragile `iters >= 50` load-test bound with an intent-shaped structural floor (measured spread 47-66) | 2026-08-26 | c2b95a6 | [260826-cjh-replace-the-fragile-iters-50-bound-in-th](./quick/260826-cjh-replace-the-fragile-iters-50-bound-in-th/) |
+| 26 | 20 | - | - |
 
 **Recent Trend:**
 
@@ -289,6 +290,21 @@ Recent decisions affecting current work:
 None yet.
 
 ### Blockers/Concerns
+
+- [v4.0 Phase 26 findings — full text in `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md`]:
+  (1) The corrected `ConvexBranchFlow` default (Gan–Low copy, v̂ ≥ v) is Gan–Low's *modified* OPF —
+  a conservative RESTRICTION on the upper voltage band, exact by theorem (EXACT-04: SOCP −921.754 vs
+  AC −921.277, ≈0.05%); the old `thesis_literal=true` copy restricts the LOWER band. Neither is a
+  genuine relaxation. The thesis's own eq. 3.43 algebra contradicts its adjacent redundancy claim.
+  (2) The v2.1 "SOCP knife-edge under high-PV reverse flow" finding no longer reproduces under the
+  default; it still reproduces under `thesis_literal=true` (escalation tests re-forced that way).
+  (3) App. C battery: with η < 1 simultaneous charge/discharge is NOT strictly dominated
+  ((λ_med − DLMP)(1 − η²) > 0) — affects every PVBattery result; AC oracle now reports instead of
+  throwing. BACKLOG (unscheduled): proper complementarity treatment / η-aware re-parametrisation.
+  (4) Uniform mesh diamond loses cone exactness once loads draw reactive power (pf 0.95); fixture
+  pinned φ = 1.0. (5) Headline goldens moved (IEEE-13 h16 DADP 1.402→0.394, |V₉[16]| 1.0436→1.0360
+  farther from thesis, FIT ratio 0.643→0.772, exporter surplus 65.6→47.4) — see
+  `26-GOLDEN-AUDIT.md`; restate in Phase 28.
 
 - [v3.0 Phase 23 research flag — RESOLVED 2026-08-10]: `.planning/phases/23-meshed-networks/23-RESEARCH.md`
   resolves the non-radial formulation question: `ConvexBranchFlow`'s existing KCL/v-drop/cone
