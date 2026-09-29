@@ -35,6 +35,12 @@
     λ₀ = fill(40.0, T)
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    # D-26-01 (Plan 26-10): this near-lossless (r=x=1e-6) fixture's loss current `l`'s
+    # objective weight (r·λ) is tiny enough that Clarabel's default `tol_gap=1e-8` stops
+    # short of the true (exact) cone-tight optimum, tripping the PF-04 gate on a genuine
+    # precision-floor artifact (gate ratio 4.04 at 1e-8; 6.3e-6 at 5e-10 — see
+    # `26-10-SUMMARY.md`). Tightened per the `stochastic_welfare.jl` `5e-10` precedent
+    # (src/models/stochastic_welfare.jl); `assert_socp_exact!`'s own atol/rtol are untouched.
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -42,6 +48,7 @@
         T = T,
         λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10),
     )
 
     M = extract_dlmp(ctx)
@@ -222,8 +229,12 @@ end
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
-    # Lossless, uncongested (smax ≫ flow), in-bound (voltage un-binding) 2-bus: only the ENERGY
-    # component survives — congestion ≈ 0, voltage ≈ 0, and the total ≈ energy ≈ λ₀.
+    # Lossless, UN-BINDING (smax=10 ≫ flow ~0.1-0.2 — the branch IS a `:smax`/`:smax_rev`-
+    # bearing LIMITED branch (smax=10 < SMAX_NO_LIMIT=99.0, per 26-POSTMERGE-TRIAGE.md's
+    # "Latent issues found"; corrected label, Plan 26-10 — the prior "uncongested" wording
+    # conflated "no cone registered" with "cone registered but slack"), in-bound (voltage
+    # un-binding) 2-bus: only the ENERGY component survives — congestion ≈ 0 (both cones
+    # slack), voltage ≈ 0, and the total ≈ energy ≈ λ₀.
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
         [Branch(1, 2, 1e-6, 1e-6, 10.0)],
@@ -233,6 +244,10 @@ end
     λ₀ = fill(40.0, T)
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    # D-26-01 (Plan 26-10): SAME near-lossless precision-floor artifact as this file's
+    # earlier "extract_dlmp ... energy-only" item (identical fixture) — tightened tol_gap,
+    # see that item's comment for the full explanation. assert_socp_exact!'s own atol/rtol
+    # are untouched.
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -240,6 +255,7 @@ end
         T = T,
         λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10),
     )
 
     d = decompose_dlmp(ctx)
