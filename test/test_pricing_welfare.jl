@@ -77,6 +77,11 @@ end
     T = 3
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    # Phase 26 gap-closure (PM-06/PM-05) — this near-lossless (r≈1e-6) fixture trips the PF-04
+    # exactness gate at Clarabel's default tol_gap=1e-8 (gate ratio 3.985; objective unchanged):
+    # a solver-precision artifact of the interior-point stopping point on a near-degenerate
+    # branch, per 26-POSTMERGE-TRIAGE.md cluster E. Calibrate tol_gap to 1e-9 (ratio 0.33, well
+    # clear of the gate); the gate itself (assert_socp_exact!'s atol/rtol) is UNTOUCHED.
     ctx, obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -84,6 +89,7 @@ end
         T = T,
         λ₀ = fill(40.0, T),
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
     )
 
     acct = welfare_accounting(ctx; T = T)
@@ -190,10 +196,12 @@ end
     # prosumer ≈ +65.60, dso ≈ +0.39; sum = social ≈ 65.99). A net-exporter's prosumer surplus
     # is positive; the DSO's spread is non-negative and CANNOT exceed the whole social welfare.
     @test acct.prosumer > 0
-    @test isapprox(acct.prosumer, 65.594; atol = 0.1)
+    # PM-06 re-pin (FIX-04 closed the T=3 soc0=Emax free hour-3 discharge): OLD 65.594 -> NEW.
+    @test isapprox(acct.prosumer, 47.38684825193795; atol = 0.1)
     @test acct.dso >= 0
     @test acct.dso < acct.social
-    @test isapprox(acct.dso, 0.397; atol = 0.05)
+    # PM-06 re-pin (FIX-04 closed the T=3 soc0=Emax free hour-3 discharge): OLD 0.397 -> NEW.
+    @test isapprox(acct.dso, 0.2024939446849814; atol = 0.05)
 end
 
 @testitem "welfare surplus accounting: net-IMPORTER pays — individual surplus signs (WR-01/PRICE-03)" tags =
