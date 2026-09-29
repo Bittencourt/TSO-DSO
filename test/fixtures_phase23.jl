@@ -180,13 +180,58 @@
     load via a single `Thermostatic` device whose comfort band is collapsed to a point
     (`Tmin == Tmax == Tin0`, a no-op recursion at `T=1`); bus 3 is the asymmetric analog with
     `P3_LOAD`. With no device utility curvature doing any work (loads are pinned, not chosen
-    by the optimizer) and `Pdc = [0.0]` at both aggregators (no additional φ-driven reactive
-    draw), `solve_welfare`'s objective reduces to minimizing the cost of imported power at
-    `feeder.root` -- a genuine LOSS-MINIMIZING SOCP over the loop.
+    by the optimizer) and `Pdc = [0.0]` at both aggregators, `solve_welfare`'s objective
+    reduces to minimizing the cost of imported power at `feeder.root` -- a genuine
+    LOSS-MINIMIZING SOCP over the loop.
+
+    Both `Thermostatic` members PIN their own power factor to `φ = 1.0` (thesis eq. 3.23's
+    per-device override, Plan 26-04) -- i.e. UNITY power factor, zero reactive draw --
+    overriding the aggregators' own `φ = 0.95`. This is a Plan 26-13 gap-closure fix
+    (`26-POSTMERGE-TRIAGE.md` cluster G / PM-04), restoring this fixture's ORIGINAL
+    MESH-02/03 intent: isolating the angle-recoverability certificate from any reactive-power
+    effect. That original intent was implicit (Thermostatic loads drew no reactive power at
+    all before FIX-05/Plan 26-04 made `is_flexible_load(::Thermostatic) == true`
+    unconditionally); the `φ = 1.0` pin here makes it explicit and permanent instead of
+    leaving it as an accident of the pre-FIX-05 device contract.
+
+    **Discovered finding (Plan 26-13, RECORDED not silently fixed away):** at the
+    aggregators' own native `φ = 0.95` (i.e. WITHOUT this pin), the `:uniform` impedance
+    profile's SOC relaxation becomes GENUINELY inexact on this diamond -- measured cone ratio
+    ≈2711, gap ≈0.0147, persistent across a Clarabel `tol_gap` ladder (so it is a real
+    relaxation gap, not solver-precision noise). The `:heterogeneous` profile stays exact
+    throughout. In other words: reactive load breaks SOCP exactness on this specific
+    uniform-R/X meshed diamond topology. This is NOT a bug and NOT in scope for a fix in this
+    phase -- it is Plan 26-13's own discovered consequence of FIX-05 (Plan 26-04) on a mesh
+    topology, left for future research (see `26-POSTMERGE-TRIAGE.md` cluster G and the
+    Phase-26 CONTEXT.md PM-04 decision).
     """
     function mesh_aggregators()
-        therm2 = Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, P2_LOAD, P2_LOAD, 0.5, [20.0])
-        therm3 = Thermostatic(3, 0.0, 1.0, 20.0, 20.0, 20.0, P3_LOAD, P3_LOAD, 0.5, [20.0])
+        therm2 = Thermostatic(
+            2,
+            0.0,
+            1.0,
+            20.0,
+            20.0,
+            20.0,
+            P2_LOAD,
+            P2_LOAD,
+            0.5,
+            [20.0];
+            φ = 1.0,
+        )
+        therm3 = Thermostatic(
+            3,
+            0.0,
+            1.0,
+            20.0,
+            20.0,
+            20.0,
+            P3_LOAD,
+            P3_LOAD,
+            0.5,
+            [20.0];
+            φ = 1.0,
+        )
         return [Aggregator(2, 0.95, [therm2], [0.0]), Aggregator(3, 0.95, [therm3], [0.0])]
     end
 
