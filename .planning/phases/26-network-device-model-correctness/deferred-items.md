@@ -174,3 +174,17 @@ whichever plan owns the re-tune (or a dedicated follow-up gap-closure plan).
 **Confidence:** HIGH — reproduced via direct script, both at the exact pinned tolerances (fails,
 norm-based per the test's own `isapprox` semantics) and at a much wider budget (passes,
 elementwise), isolating the discrepancy to convergence budget rather than a logic defect.
+
+---
+
+**RESOLVED (Plans 26-16, 26-19).** `test/test_admm.jl:121`'s ieee13 crossval convergence
+budget re-tuned by **Plan 26-16** (`maxiter=200` → `maxiter=700`, `ε_abs=1e-6`, `ε_rel=1e-7`;
+converges in 535 iters to max elementwise `|Δ|=4.24e-3`, a ~2.4× margin under the UNCHANGED
+`atol=1e-2`). `test/test_acceptance.jl:82` record 1's convergence budget re-tuned
+independently by **Plan 26-19** (`maxiter=400`, `ε_abs=1e-5`, `ε_rel=1e-4`; converges in 377
+iters to `norm(Δ)=0.0050`, a ~14× margin under the SAME unchanged `atol=1e-2`/`rtol=1e-3`
+bound) — a smaller, faster budget than the note above's own untuned `maxiter=2000` suggestion,
+found via each plan's own direct sweep. Neither plan loosened the pinned `isapprox` tolerances
+themselves; both are genuine convergence-budget fixes. Confirmed both testitems pass in Plan
+26-08's final full-suite certification run (HEAD `6c25f27`, exit code 0, 0 fail/0 error) — see
+`.planning/phases/26-network-device-model-correctness/26-GOLDEN-AUDIT.md`.
