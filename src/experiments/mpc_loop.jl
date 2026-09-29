@@ -78,11 +78,15 @@ longer-than-`T`-profile population, a silent zero-resolve `steps = 0` run), and
 `s.mpc_step > s.mpc_H` throws `ArgumentError` — a resolve cannot hold its plan longer than
 the window it solved.
 
-After the population materializes: with ANY stateful device present (battery SOC /
-thermostatic temperature — every `:default` population), `s.mpc_step > s.mpc_H − 1` throws
-`ArgumentError` (WR-02): the window's `H`-th control carries no modeled state consequence
-(the recursions cover `τ ≤ H−1`), so applying it can push the propagated measured state out
-of its structural band and make the next resolve's IC pin infeasible mid-loop. Additionally
+After the population materializes: with any THERMOSTATIC (temperature-stateful) device
+present, `s.mpc_step > s.mpc_H − 1` throws `ArgumentError` (WR-02, re-scoped post-FIX-04 —
+PM-08): Thermostatic's `Tin` recursion still covers only `τ ≤ H−1` (unchanged by Plan
+26-03), so its window's `H`-th control carries no modeled state consequence, and applying it
+can push the propagated measured temperature out of its structural band and make the next
+resolve's IC pin infeasible mid-loop. Battery-only populations (`PVBattery`/`FourQuadBESS`)
+no longer trip this guard: Plan 26-03 (FIX-04) closes their `soc[1:(H+1)]` recursion
+unconditionally over the WHOLE window, so their H-th control IS fully state-covered.
+Additionally
 (WR-05), aggregator buses must be UNIQUE and each bus may host at most ONE device of each
 state kind (one `:soc0`-carrying, one `:Tin0`-carrying) — the loop's measured-state ledger,
 terminal-target Dict, and device-vars pairing are all keyed by `(bus, kind)`, an invariant
@@ -183,27 +187,36 @@ function run_mpc(s::Scenario)
         Aggregator(agg.bus, agg.φ, filter(d -> !(d isa Deferrable), agg.devices), agg.Pdc) for agg in aggs
     ]
 
-    # WR-02: the window's soc/Tin states have length H and the recursions cover τ ≤ H−1, so
-    # the controls at τ = H carry NO modeled state consequence — the optimizer can
-    # discharge/consume freely there (e.g. p_dch[H] limited only by Pmax, not stored
-    # energy). APPLYING that dynamics-uncovered interval (which mpc_step == mpc_H does on
-    # every full resolve) can push the propagated measured state out of its structural band,
-    # making the NEXT window's IC pin infeasible → a cryptic mid-loop solver throw. With any
-    # stateful device present, a resolve may therefore hold its plan at most H−1 hours.
-    # (A hypothetical all-stateless population has no propagated state and keeps the looser
-    # mpc_step ≤ mpc_H guard above.)
-    has_stateful = any(
-        hasproperty(d, :soc0) || hasproperty(d, :Tin0) for agg in mpc_aggs for
-        d in agg.devices
+    # WR-02 (re-scoped post-FIX-04, PM-08): ORIGINALLY this guarded EVERY stateful device
+    # (`:soc0`-carrying battery-likes AND `:Tin0`-carrying Thermostatic), because the
+    # window's soc/Tin states had length H with recursions covering only τ ≤ H−1, so the
+    # controls at τ = H carried NO modeled state consequence. Plan 26-03 (FIX-04) extended
+    # PVBattery/FourQuadBESS's `soc` to `1:(H+1)` with an UNCONDITIONAL whole-horizon
+    # recursion (`soc[t+1]` closes for every `t = 1:H`, including `t = H`) — so for THOSE
+    # devices the H-th control (`p_ch[H]`/`p_dch[H]`) now IS fully state-covered, and
+    # applying it no longer risks driving the propagated SOC out of its structural band.
+    # Thermostatic's `Tin` recursion is UNCHANGED by Plan 26-03 (still `Tin[1:(H-1)]` closed,
+    # `src/devices/Thermostatic.jl`) — its H-th control genuinely remains dynamics-uncovered,
+    # so the guard STILL protects it. The predicate below therefore narrows from "any
+    # stateful device" to "any Tin0-carrying (Thermostatic) device" only; a battery-only
+    # population with `mpc_step == mpc_H` no longer trips this guard (verified empirically,
+    # 26-11-PLAN.md Task 1), while a Thermostatic-carrying population with
+    # `mpc_step > mpc_H - 1` still does (guard not silently disabled).
+    has_uncovered_state = any(
+        hasproperty(d, :Tin0) for agg in mpc_aggs for d in agg.devices
     )
-    if has_stateful && s.mpc_step > s.mpc_H - 1
+    if has_uncovered_state && s.mpc_step > s.mpc_H - 1
         throw(
             ArgumentError(
-                "run_mpc: with stateful devices (battery SOC / thermostatic temperature) " *
-                "the step size must satisfy mpc_step ≤ mpc_H − 1 — the window's H-th " *
-                "control carries no modeled state consequence, so applying it can drive " *
-                "the measured state out of bounds and make the next resolve infeasible " *
-                "(got mpc_step=$(s.mpc_step), mpc_H=$(s.mpc_H))",
+                "run_mpc: with thermostatic (temperature-stateful) devices present " *
+                "the step size must satisfy mpc_step ≤ mpc_H − 1 — Thermostatic's Tin " *
+                "recursion covers only τ ≤ H−1 (unchanged by Plan 26-03/FIX-04), so the " *
+                "window's H-th control carries no modeled state consequence for it, and " *
+                "applying it can drive the measured temperature out of bounds and make " *
+                "the next resolve infeasible (got mpc_step=$(s.mpc_step), " *
+                "mpc_H=$(s.mpc_H)). Battery-only populations (PVBattery/FourQuadBESS) no " *
+                "longer trip this guard — their soc[1:(H+1)] recursion (FIX-04) covers " *
+                "the H-th control fully.",
             ),
         )
     end
@@ -232,8 +245,16 @@ function run_mpc(s::Scenario)
     # terminal pin and the benchmark on the SAME information set (previously sourced from the
     # full-population context, whose trajectory reflects a population the closed loop
     # structurally cannot represent).
+    # FIX-04 (Plan 26-03) retargeted build_mpc_window's terminal-condition constraint to
+    # `soc[H + 1]` (the day-ahead state AFTER the window), since the battery `soc` vector is
+    # now `1:(s.T + 1)` long. `soc_da` must therefore be built over the SAME `1:(s.T + 1)`
+    # range so the terminal Parameter below can be indexed at `soc_da[bus][t + s.mpc_H]`
+    # (the day-ahead state exactly one window-length past resolve hour `t`) — never the
+    # stale `soc_da[bus][min(t + s.mpc_H - 1, s.T)]` (one hour BEFORE the window's actual
+    # end), which silently drifts the terminal pin and makes a later resolve
+    # PRIMAL_INFEASIBLE (26-POSTMERGE-TRIAGE.md cluster C).
     soc_da = Dict(
-        bus => [value(v.soc[t]) for t in 1:s.T] for
+        bus => [value(v.soc[t]) for t in 1:(s.T + 1)] for
         (bus, varlist) in ctx_da_cmp.meta[:agg_device_vars] for
         v in varlist if haskey(v, :soc)
     )
@@ -276,9 +297,17 @@ function run_mpc(s::Scenario)
         for entry in o.ic_handles
             set_parameter_value(entry.ic_param, measured_state[(entry.bus, entry.kind)])
             if entry.terminal_param !== nothing
+                # FIX-04 (Plan 26-03): the day-ahead state at exactly `t + s.mpc_H` — the
+                # window's own terminal target is `soc[H + 1]`, the state AFTER the window,
+                # so its day-ahead counterpart is `soc_da[bus][t + s.mpc_H]`. No `min(...,
+                # s.T)` clamp: the outer loop's own header bound (`t in
+                # 1:s.mpc_step:(s.T - s.mpc_H + 1)`) guarantees `t + s.mpc_H <= s.T + 1` at
+                # every visited `t`, and `soc_da` is now built over `1:(s.T + 1)`, so every
+                # index here is in-bounds by construction — a silent clamp would re-hide the
+                # exact stale-index bug this fixes.
                 set_parameter_value(
                     entry.terminal_param,
-                    soc_da[entry.bus][min(t + s.mpc_H - 1, s.T)],
+                    soc_da[entry.bus][t + s.mpc_H],
                 )
             end
         end
