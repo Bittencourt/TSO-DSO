@@ -104,6 +104,8 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 - ✓ Prosumer device models (thermostatic, deferrable, interruptible, PV+battery — no binaries) with
       concave quadratic utility/cost — v1.0
 - ✓ Aggregator aggregation of prosumer devices into nodal net power + utility — v1.0
+- ✓ Network & device model correctness (FIX-01..05: Gan–Low exactness-copy verdict, receiving-end limit
+      3.37, full-horizon SOC, flexible-load reactive draw) — Validated in Phase 26: Network & Device Model Correctness
 - ✓ Social-welfare maximization (`GLB-CVX`): Σ aggregator utility − wholesale purchase — v1.0
 - ✓ Two selectable solve strategies — centralized monolithic **and** ADMM (`AGR-OPT`/`DSO-OPT`, DADP as
       duals, convergence diagnostics), cross-validated on IEEE 13 + 123 — v1.0
@@ -178,6 +180,14 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
   dynamic tariff signals coordinating many devices without compromising network security.
 
 ## Current State
+
+**v4.0 in progress — Phase 26 (Network & Device Model Correctness) COMPLETE 2026-09-29.** FIX-01..05
+validated: default `ConvexBranchFlow` exactness copy now Gan–Low direction (honestly labelled a
+conservative upper-band restriction, exact by theorem; thesis-literal copy kept as opt-in), receiving-end
+thermal limit 3.37 in SOCP + AC formulations, battery SOC linked over `soc[1:T+1]`, flexible loads draw
+`q = p·tanφ`, ADMM live reactive coupling by default with flexible loads. Headline goldens moved (see
+`phases/26-*/26-GOLDEN-AUDIT.md`); thesis-repro restatement is Phase 28. New findings: App. C η<1
+charge/discharge overlap; v2.1 high-PV knife-edge no longer reproduces under the default.
 
 **v3.0 Research Extension Rungs — SHIPPED 2026-08-24.** All 7 phases (19–25) complete; milestone
 archived to [`milestones/v3.0-ROADMAP.md`](milestones/v3.0-ROADMAP.md), audit `gaps_accepted`. 26 of
@@ -400,4 +410,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-28 — Milestone v4.0 Correctness & Depth started (from the 2026-09-28 quality audit)*
+*Last updated: 2026-09-29 — Phase 26 complete (v4.0 Correctness & Depth)*
