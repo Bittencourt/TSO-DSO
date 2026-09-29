@@ -17,14 +17,16 @@
 #
 # The genuinely new mechanical fact this file's construction depends on (RESEARCH.md
 # Pattern 1, empirically verified): `contribute!(::ConvexBranchFlow, ctx, feeder; T)`
-# registers NINE named JuMP containers (`:v, :v̂, :P, :Q, :l, :cone, :vdrop, :cpydrop,
-# :smax`). Calling it a second time on the SAME `Model` throws
-# `"An object of name v is already attached to this model"` unless `JuMP.unregister(model,
-# name)` is called for each of those nine names between scenario blocks. `unregister` frees
-# only the NAME (the model's object-dictionary lookup) — the underlying `VariableRef`/
-# `ConstraintRef` handles already captured in a scenario's own `ctx_s.meta[:pf_vars]` /
-# `ctx_s.constraints` remain independently usable afterward. `unregister` is never called
-# after the LAST scenario (nothing follows it).
+# registers TWELVE named JuMP containers (`:v, :v̂, :P, :Q, :l, :cone, :vdrop, :cpydrop,
+# :smax, :Prev, :Qrev, :smax_rev` — the last three added by Plan 26-05's FIX-03 receiving-
+# end thermal limit, thesis 3.37). Calling it a second time on the SAME `Model` throws
+# `"An object of name v is already attached to this model"` (or the equivalent for `Prev`/
+# `Qrev`/`smax_rev`) unless `JuMP.unregister(model, name)` is called for each of those
+# twelve names between scenario blocks. `unregister` frees only the NAME (the model's
+# object-dictionary lookup) — the underlying `VariableRef`/`ConstraintRef` handles already
+# captured in a scenario's own `ctx_s.meta[:pf_vars]` / `ctx_s.constraints` remain
+# independently usable afterward. `unregister` is never called after the LAST scenario
+# (nothing follows it).
 #
 # Nonanticipativity (D-03): the battery-like devices (any device whose returned `vars`
 # NamedTuple carries `:soc0` — currently `PVBattery`/`FourQuadBESS`) are first-stage,
@@ -90,7 +92,7 @@ For each scenario `s in 1:S`:
  1. a FRESH `ModelContext(model)` is built on the SAME shared `model`;
  2. `contribute!(pf, ctx_s, feeder; T)` writes that scenario's OWN network copy — the
     `ConvexBranchFlow` named-container collision (RESEARCH.md Pattern 1) is avoided by
-    `JuMP.unregister`-ing the nine formulation container names between scenario blocks
+    `JuMP.unregister`-ing the twelve formulation container names between scenario blocks
     (never after the last one);
  3. every aggregator in `scenario_aggs[s]` `contribute!`s its own scenario's devices
     (`ctx_s.meta[:agg_device_vars]` records each device's returned vars, keyed by bus);
@@ -293,7 +295,15 @@ function build_stochastic_welfare(
         # free the NAMES (not the already-captured handles in ctx_s.meta[:pf_vars]) so the
         # NEXT scenario's contribute! call does not collide. Never after the last scenario.
         if s < S
-            for name in (:v, :v̂, :P, :Q, :l, :cone, :vdrop, :cpydrop, :smax)
+            # Plan 26-09 (gap-closure, FIX-03): Plan 26-05 added THREE more named
+            # containers to `ConvexBranchFlow.contribute!` — the shared `Prev`/`Qrev`
+            # expressions and the `:smax_rev` receiving-end-limit constraint (thesis 3.37).
+            # `JuMP.unregister` frees any name bound in `model.obj_dict` regardless of
+            # container kind, so expressions unregister identically to constraints. Without
+            # these three, the SECOND scenario's `contribute!` throws "object of name Prev
+            # is already attached to this model".
+            for name in
+                (:v, :v̂, :P, :Q, :l, :cone, :vdrop, :cpydrop, :smax, :Prev, :Qrev, :smax_rev)
                 JuMP.unregister(model, name)
             end
         end
