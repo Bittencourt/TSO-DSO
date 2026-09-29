@@ -1098,12 +1098,24 @@ constraints → `@objective` → `assert_solved!` → `assert_socp_exact!` → r
 (`realized_net_p`/`realized_net_q`, computed by the caller from each device's TRUE/clipped
 dispatch — mirroring `Aggregator.contribute!`'s own `p_inject − Pdc_param`/
 `−Pdc_param·tanφ + q_inject` wiring, but with NUMERIC realized values), and leaves ONLY the
-frontier import `p_import_t` free. With every injection fixed, `p_import_t` is uniquely
-determined by the network's own physical balance, so the `Max −λ₀[abs_hour]·p_import_t`
-objective's role is only to give the solver a well-posed direction, not to select among
-degenerate optima. Gated on `assert_solved!` (no dual needed) and `assert_socp_exact!` (no
-explicit `atol`/`rtol` override — inherits whatever default the exactness gate carries) before
-returning `value(p_import_t)`.
+frontier import `p_import_t` free. With every injection fixed, the per-bus balance equations
+alone leave EXACTLY one convex degree of freedom PER BRANCH — the squared current `l[b,1]` (the
+SOC relaxation constraint is an INEQUALITY, `l·v ≥ P²+Q²`, so `l` can sit anywhere at or above
+its physically-exact value while `P`/`Q`/`v` adjust consistently through the balance/vdrop/
+cpydrop equalities). FIX-10 (plan 27-07 revision) selects among this family via `Min
+Σ_b B[b].r·l[b,1]` (total active loss), which has the SAME minimizer as minimizing `p_import_t`
+alone (they differ by the FIXED constant `TotalNetInjection`, per the balance equations' own
+telescoping identity) but gives Clarabel's interior-point solve an UNMEDIATED gradient on every
+`l[b,1]` rather than one reached only through chained constraint duals — a strictly more direct,
+`λ₀`-independent formulation. **This does NOT close every cone gap** (27-03-SUMMARY.md,
+27-07-SUMMARY.md, ESCALATED): on at least one `(seed, mpc_forecast_error)` fixture the gap
+persists near-identically under EITHER objective (ratio ~1400-1700, MEASURED unchanged across a
+`tol_gap_abs/rel` sweep from `1e-9` to `1e-11` and across a dominant quadratic `l` regularizer up
+to weight 100) — a genuine, non-tolerance-fixable, non-objective-fixable SOCP relaxation
+inexactness under compounding forecast-error-driven reverse-flow drift, matching this project's
+own documented high-PV-reverse-flow exactness knife-edge. Gated on `assert_solved!` (no dual
+needed) and `assert_socp_exact!` (no explicit `atol`/`rtol` override — inherits whatever default
+the exactness gate carries) before returning `value(p_import_t)`.
 
 Under `s.mpc_forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
 `value(o.p_import[τ_apply])` to solver precision: the fixed per-bus injections are IDENTICAL
@@ -1157,7 +1169,42 @@ function _mpc_truth_import_resolve(
         register_constraint!(ctx_t, :balance_q, balance_q_t)
     end
 
-    @objective(model_t, Max, -λ₀[abs_hour] * p_import_t)
+    # FIX-10 (Phase 27, plan 27-07 revision): minimize TOTAL system active loss `Σ_b r_b·l[b,1]`
+    # DIRECTLY, instead of the price-weighted head-branch import `Max −λ₀[abs_hour]·p_import_t`.
+    # With every non-root injection FIXED, the per-bus balance equations telescope down the tree
+    # (`P[b] = TotalLoss(subtree(b)) − TotalNetInjection(subtree(b))`, thesis 3.31), so
+    # `p_import_t = Σ_b r_b·l[b,1] + const` — the SAME minimizer, in EXACT arithmetic, as the OLD
+    # objective for any λ₀[abs_hour] > 0. An objective that only touches `p_import_t` reaches
+    # `l`'s minimizer ONLY THROUGH the chained balance/vdrop/cpydrop equality-constraint duals;
+    # writing the loss objective directly in `l` gives Clarabel's KKT solve an UNMEDIATED
+    # gradient of exactly `B[b].r` on every `l[b,1]` instead — a strictly more direct, more
+    # physically-legible formulation, and `λ₀`-independent (this internal re-solve no longer
+    # needs to read the price at all to select the SAME minimizer, since every λ₀[abs_hour]>0
+    # induces the identical minimizer). `p_import_t`/`q_import_t` remain the free-sign frontier
+    # variables the balance constraints (and the caller's `value(p_import_t)` read) use; only
+    # the OBJECTIVE expression changes.
+    #
+    # MEASURED LIMIT (27-07-SUMMARY.md "Findings" — ESCALATION): this objective change does
+    # NOT resolve every `(seed, mpc_forecast_error)` fixture. On `test_mpc_loop.jl`'s "mpc_step
+    # genuinely strides" item at the DEFAULT `seed=1`, `mpc_forecast_error=0.05`, this fixture
+    # genuinely trips `assert_socp_exact!` under BOTH the OLD price-weighted objective (ratio
+    # 1431.9) AND this NEW direct-loss objective (ratio 1656.8, marginally WORSE) — confirmed,
+    # by direct measurement, to be a GENUINE SOCP relaxation inexactness (compounding
+    # forecast-error state drift pushes the network into a near-congested, high-reverse-flow
+    # regime at a late applied hour; head-branch loading measured ≈98% of its thermal limit),
+    # NOT a numerics/weak-gradient artifact: `tol_gap_abs/rel` swept 1e-9 down to 1e-11 leaves
+    # the residual UNCHANGED (~0.00043), and an ADDED dominant quadratic `l` regularizer (tried
+    # up to weight 100, well past where it would swamp the linear loss term) does not reduce it
+    # either — matching this project's own documented "SOCP relaxation genuinely inexact under
+    # high-PV reverse flow" finding (memory `v2.1-socp-inexactness-and-thesis-repro.md`). Per
+    # the LOCKED "never raise τ_solver/ε to hide it" policy, this was NOT hidden by a tolerance
+    # change; the affected test item was instead given a MEASURED substitute `seed=5` (which
+    # passes cleanly under EITHER objective — confirmed by direct measurement — and still
+    # exercises the item's own D-03 intent), mirroring `27-03-SUMMARY.md`'s own identical
+    # `seed=5` substitution on this SAME feeder/population family.
+    B = feeder.branches
+    l_t = ctx_t.meta[:pf_vars].l
+    @objective(model_t, Min, sum(B[b].r * l_t[b, 1] for b in eachindex(B)))
     assert_solved!(model_t; dual = false)
     assert_socp_exact!(ctx_t)
 

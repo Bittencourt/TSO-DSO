@@ -92,7 +92,26 @@
 
     # ── FIT counterfactual: German-FIT baseline (thesis 3.24-3.28), voltage-relaxed AC-PF —
     # CONFIRMED FEASIBLE on this voltage-driven (not congestion-driven) fixture (18-RESEARCH.md).
-    fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀)
+    #
+    # Phase 27 plan 27-07 (Task 2): under FIX-08's hybrid floor (τ_solver=2e-7), this
+    # fit_baseline's OWN internal SITE-3 solve_welfare re-check (fit.jl:407, on the voltage-
+    # relaxed feeder) trips PF-04 at the DEFAULT `tol_gap=1e-8` (ratio ≈2.50, max gap 8.21e-7,
+    # just above τ_solver). MEASURED ladder (tol_gap_abs=tol_gap_rel, direct execution of this
+    # exact fixture body):
+    #   1e-8  -> THROWS (ratio 2.50, gap 8.21e-7)
+    #   1e-9  -> PASSES (fit_dso=-196.26281848751387); stable to ~8 significant digits vs
+    #            5e-10/1e-10/5e-11 (all -196.26282174995868)
+    #   1e-11 -> solver fails to converge (ALMOST_OPTIMAL) — outside the usable range
+    # `1e-9` is the LOOSEST rung clearing the gate with ample margin (this call's `optimizer`
+    # propagates to ALL THREE of fit_baseline's internal solve sites, per its own docstring).
+    fb = fit_baseline(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+    )
     fit_dso = fb.social_fit - fb.prosumer_surplus                # NOT a returned field
 
     # ── Gate-then-golden, in order, all HARD (no `broken=`):

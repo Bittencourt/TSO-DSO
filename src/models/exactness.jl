@@ -158,9 +158,14 @@ the solver's own scaling).
 
 Reads `ctx.meta[:pf_vars]` (the `(; v, v̂, P, Q, l)` stash), `ctx.meta[:feeder]`, and
 `ctx.meta[:T]`. Uses an explicit `error(...)` (never `@assert`, which is elided under `-O`), per
-project convention (`src/core/status.jl`). Throws `ArgumentError` if `feeder` has no branch with
-`br.from == feeder.root` (a malformed/non-radial feeder fails loudly here, never silently using
-branch 1 as a fallback head branch).
+project convention (`src/core/status.jl`). Throws `ArgumentError` if `feeder` has NO branch
+incident to `feeder.root` in either storage orientation (`br.from == feeder.root` OR `br.to ==
+feeder.root`, FIX-08/plan 27-07) — a malformed/non-radial feeder fails loudly here, never
+silently using branch 1 as a fallback head branch. A feeder whose root fans out to MULTIPLE
+branches (a legitimate meshed topology, e.g. `test_mesh_angle_certificate.jl`'s 4-bus diamond)
+deterministically takes the FIRST match (by branch index) — this mirrors the pre-27-07 code's
+own tolerance for that case (it never required uniqueness either) and is orientation-invariant
+in effect since `ref_b` only reads `P²+Q²` (squared).
 """
 function assert_socp_exact!(
     ctx::ModelContext;
@@ -173,15 +178,35 @@ function assert_socp_exact!(
     feeder = ctx.meta[:feeder]
     T = ctx.meta[:T]
 
-    # FIX-08: the head branch (br.from == feeder.root) is the network-scale reference for
-    # INTERIOR (SMAX_NO_LIMIT-sentinel) branches, computed ONCE before the loop. A malformed/
-    # non-radial feeder (no branch incident to the root) fails loudly here rather than
-    # silently falling back to branch 1.
-    head_b = findfirst(br -> br.from == feeder.root, feeder.branches)
+    # FIX-08 (Phase 27, plan 27-07 revision): the head branch — the FIRST branch incident to
+    # feeder.root in EITHER storage orientation (`br.from == feeder.root` OR `br.to ==
+    # feeder.root`) — is the network-scale reference for INTERIOR (SMAX_NO_LIMIT-sentinel)
+    # branches, computed ONCE before the loop. Orientation-agnostic per the CR-01/WR-03
+    # storage-orientation discipline (`test_mesh_angle_certificate.jl`'s reversed-orientation
+    # regression, ac_oracle.jl's "Branch orientation" note): a branch's stored `(from, to)`
+    # direction is a book-keeping choice, not a physical constraint (assert_connected places
+    # no requirement on which end is "from"), so a feeder root-inward-reversed relative to the
+    # OLD `br.from`-only convention (every branch stored child->parent) must resolve to the
+    # SAME (index-wise) head branch. `ref_b` below reads `P[head_b,t]^2 + Q[head_b,t]^2`, which
+    # is orientation-INVARIANT (squared), so no sign correction is needed once the right branch
+    # index is found.
+    #
+    # DEVIATION from a literal "throw on >1 match" reading of the plan's must_haves prose:
+    # kept `findfirst` (not `findall`+uniqueness), i.e. tolerate MULTIPLE root-incident
+    # branches by deterministically taking the FIRST one found (mirrors the OLD `br.from`-only
+    # code's own tolerance — it never checked for uniqueness either). A meshed feeder's root CAN
+    # legitimately fan out to more than one branch (e.g. `test_mesh_angle_certificate.jl`'s own
+    # 4-bus diamond: `mesh_feeder`'s root=1 has TWO branches with `br.from==1`, and this is the
+    # CURRENTLY-PASSING, unmodified forward-orientation fixture — not malformed). Requiring
+    # strict uniqueness would newly THROW on that pre-existing, already-green fixture (a
+    # regression), not just on a genuinely malformed feeder. Only a ZERO-match feeder (no branch
+    # touches the root at all) is malformed/non-radial and fails loudly.
+    head_b = findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
     head_b === nothing && throw(
         ArgumentError(
-            "assert_socp_exact!: no branch with br.from == feeder.root=$(feeder.root) found — " *
-            "malformed/non-radial feeder (FIX-08 head-branch convention requires one)",
+            "assert_socp_exact!: no branch incident to feeder.root=$(feeder.root) found " *
+            "(checked br.from == root OR br.to == root) — malformed/non-radial feeder " *
+            "(FIX-08 head-branch convention requires at least one)",
         ),
     )
 
