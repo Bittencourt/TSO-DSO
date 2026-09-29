@@ -23,10 +23,19 @@
 # exists to correct: the myopic (disabled) loop's window covering the spike hour has zero
 # incentive to preserve a specific SOC beyond its own end, while the day-ahead optimum (full
 # horizon visibility) commits to a SPECIFIC SOC trajectory through that hour that every window
-# before/after it should track. Measured margin: `dev_disabled ≈ 9.3e-7` vs
-# `dev_enabled ≈ 2.6e-11` — a ratio of ~35,500×, an unambiguous, non-noise-floor separation
-# (`dev_enabled` sits at the same ~1e-10-1e-11 solver-precision floor as the flat-price probe;
-# `dev_disabled` is 3-4 orders of magnitude ABOVE that floor).
+# before/after it should track. Originally measured margin (pre-FIX-04):
+# `dev_disabled ≈ 9.3e-7` vs `dev_enabled ≈ 2.6e-11`, a ratio of ~35,500×.
+#
+# RE-MEASURED (Phase 26 plan 26-11, post-FIX-04 soc[H+1]/soc_da[t+H] retarget): this file's
+# own hand-rolled loop carried the SAME stale `soc_da_bus[min(t + H - 1, T)]` index the
+# 26-POSTMERGE-TRIAGE.md cluster-C fix corrects — building `soc_da` over `1:(T + 1)` and
+# indexing the terminal target at `soc_da_bus[t + H]` (matching `run_mpc`'s own retarget,
+# `src/experiments/mpc_loop.jl`) restores a measurable, non-noise-floor margin:
+# `dev_disabled ≈ 4.36e-7` vs `dev_enabled ≈ 8.98e-11` — a ratio of ~4,851× (re-run via
+# `.planning/phases/26-network-device-model-correctness/26-11-repro-mpc-terminal.jl`; live
+# numbers, not assumed from any prior measurement — SC-6, no silent re-pin). Still
+# comfortably above the `dev_disabled > 1000 * dev_enabled` assertion below, and
+# `dev_enabled` still sits at the same ~1e-10-1e-11 solver-precision floor.
 
 @testitem "mpc_terminal: hard terminal-SOC condition prevents end-of-horizon dump/hoard, present when disabled (MPC-02)" tags =
     [:mpc_terminal] setup = [Phase21Fixtures] begin
@@ -48,8 +57,14 @@
     # Day-ahead perfect-foresight benchmark, solved ONCE (the RESEARCH-verified extraction idiom).
     ctx_da, welfare_da, _ =
         solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀, allow_export = true)
+    # FIX-04 (Plan 26-03) retargeted build_mpc_window's terminal-condition constraint to
+    # `soc[H + 1]` (the day-ahead state AFTER the window), since the battery `soc` vector is
+    # now `1:(T + 1)` long. `soc_da` must therefore be built over the SAME `1:(T + 1)` range
+    # so the terminal target below can be indexed at `soc_da_bus[t + H]` — never the stale
+    # `soc_da_bus[min(t + H - 1, T)]` (one hour BEFORE the window's actual end), which
+    # silently drives this mini-loop INFEASIBLE (26-POSTMERGE-TRIAGE.md cluster C).
     soc_da = Dict(
-        bus => [value(v.soc[t]) for t in 1:T] for
+        bus => [value(v.soc[t]) for t in 1:(T + 1)] for
         (bus, varlist) in ctx_da.meta[:agg_device_vars] for
         v in varlist if haskey(v, :soc)
     )
@@ -87,9 +102,15 @@
         for t in 1:(T - H + 1)
             set_parameter_value(soc_handle.ic_param, soc_measured)
             if terminal_soc
+                # FIX-04: the window's own terminal target is soc[H + 1] (the state AFTER
+                # the window, Plan 26-03); its day-ahead counterpart is soc_da_bus[t + H].
+                # No min(..., T) clamp — the outer loop's own header bound (t in
+                # 1:(T - H + 1)) guarantees t + H <= T + 1 at every visited t, and
+                # soc_da_bus is now built over 1:(T + 1), so every index here is in-bounds
+                # by construction.
                 set_parameter_value(
                     soc_handle.terminal_param,
-                    soc_da_bus[min(t + H - 1, T)],
+                    soc_da_bus[t + H],
                 )
             end
             # TRUE ground-truth slices (no forecast error — isolate the terminal-condition
@@ -119,9 +140,10 @@
     soc_final_enabled = run_mini_loop(; terminal_soc = true)
 
     # The day-ahead trajectory's value at the LAST window's terminal hour — the reference the
-    # enabled case is pinned toward (algebraically just soc_da_bus[T], written this way to
-    # name what it MEANS: the last published window's own terminal target).
-    soc_da_final = soc_da_bus[T - H + 1 + H - 1]
+    # enabled case is pinned toward (algebraically soc_da_bus[T + 1] post-FIX-04, written
+    # this way to name what it MEANS: the last published window's own terminal target,
+    # `t + H` at the last resolve `t = T - H + 1`).
+    soc_da_final = soc_da_bus[(T - H + 1) + H]
 
     dev_disabled = abs(soc_final_disabled - soc_da_final)
     dev_enabled = abs(soc_final_enabled - soc_da_final)
@@ -130,8 +152,8 @@
 
     # MEASURED margin (not assumed): dev_enabled sits at the solver-precision floor (~1e-10-
     # 1e-11); dev_disabled is 3-4 orders of magnitude above it. A 1000x margin is comfortably
-    # inside the measured ~35,500x ratio while leaving generous headroom against solver-run
-    # noise.
+    # inside the RE-MEASURED (Phase 26 plan 26-11, post-FIX-04 soc[H+1] retarget — see file
+    # header) ~4,851x ratio while leaving generous headroom against solver-run noise.
     @test dev_enabled < dev_disabled
     @test dev_disabled > 1000 * dev_enabled
 end
