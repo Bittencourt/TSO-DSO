@@ -101,7 +101,7 @@ restriction or free hour-T energy.
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close — no golden is left red
      for a later phase and none is silently re-pinned.
-**Plans:** 14/20 plans executed
+**Plans:** 15/20 plans executed
 
 Plans:
 **Wave 1**
@@ -132,7 +132,7 @@ Plans:
 **Gap-closure wave 2** *(blocked on wave-1 gap-closure completion)*
 
 - [ ] 26-18-PLAN.md — PM-01: Gan-Low relabeling (restriction, not relaxation) + escalation-ladder re-force
-- [ ] 26-19-PLAN.md — test_acceptance.jl golden repin (cross-ref 26-17) + IEEE-123 tol_gap calibration
+- [x] 26-19-PLAN.md — test_acceptance.jl golden repin (cross-ref 26-17) + IEEE-123 tol_gap calibration
 - [ ] 26-20-PLAN.md — ADMM knife-edge canary re-pin (post PM-03)
 
 **Wave 3** *(blocked on ALL of the above)*
@@ -375,7 +375,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 10–14 | v2.0 | 13/13 | Complete | 2026-07-24 |
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
-| 26. Network & Device Model Correctness | v4.0 | 14/20 | In Progress|  |
+| 26. Network & Device Model Correctness | v4.0 | 15/20 | In Progress|  |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 0/TBD | Not started | - |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
