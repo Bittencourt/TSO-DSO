@@ -58,7 +58,8 @@ using JuMP
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
                allow_export::Bool = true, reactive_consensus = false, ρ_q::Real = ρ,
                time_limit_s::Union{Nothing,Real} = nothing)
-        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, status)
+        -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices,
+              reactive_consensus_mode, status)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
 eqs. 3.46/3.47), the Phase-6 DECOMPOSED counterpart of the centralized [`solve_welfare`](@ref).
@@ -189,10 +190,15 @@ independently measured noise floor for the tolerance they pass, mirroring how
 
 # Returns
 
-`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, status)` where
+`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices,
+reactive_consensus_mode, status)` where
 `status` is `:converged` on the normal path (ADDITIVE new field — every other field is
 UNCHANGED from before this plan) or `:budget_exceeded` on the new early-exit path above
-(see "Wall-clock budget"). `λ == dadp`
+(see "Wall-clock budget"). `reactive_consensus_mode::ReactiveMode` (WR-01, phase-26 review) is
+the RESOLVED mode this call actually ran with — ALWAYS present on both the `:converged` and
+`:budget_exceeded` paths, so a caller relying on the smart PM-03 default (`reactive_consensus`
+omitted) can recover which mode fired without re-deriving `_any_flexible_reactive` itself.
+`λ == dadp`
 is the `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus
 order, matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
 [`ModelContext`](@ref) (its `.model` shape is iteration-count-independent — ADMM-03), and
@@ -678,6 +684,7 @@ function solve_admm(
             exact_maxgap = nothing,
             mu_q = nothing,
             q_devices = Dict{Int, Vector{Float64}}(),
+            reactive_consensus_mode = mode,   # WR-01: resolved mode recoverable even on early exit
             status = :budget_exceeded,
         )
     end
@@ -904,6 +911,11 @@ function solve_admm(
         exact_maxgap = exact_maxgap,
         mu_q = mu_q_mat,
         q_devices = q_devices,
+        # WR-01 (phase-26 review): thread the RESOLVED reactive_consensus mode back out so a
+        # caller (e.g. run_scenario) can record which mode actually ran — the smart
+        # `_any_flexible_reactive` default (PM-03) silently resolves to LIVE for some callers
+        # and was otherwise unrecoverable from a saved Scenario alone.
+        reactive_consensus_mode = mode,
         status = :converged,
     )
 end

@@ -50,6 +50,14 @@ strategies and across sweep runs (EXP-02).
   - `final_r::Union{Missing,Float64}`, `final_s::Union{Missing,Float64}` — the FINAL ADMM
     primal/dual residual norms (`last(residuals.primal_trace)`/`last(residuals.dual_trace)`);
     `missing` for `:centralized`.
+  - `reactive_consensus_mode::Union{Missing,ReactiveMode}` — WR-01 (phase-26 review): the
+    RESOLVED `ReactiveMode` (`OFF`/`CERTIFIED`/`LIVE`) that `:admm` actually ran with, threaded
+    straight out of [`solve_admm`](@ref)'s own return tuple. `build_dso_opt`/`solve_admm` resolve
+    a SMART default (PM-03, `_any_flexible_reactive`) whenever `reactive_consensus` is omitted, so
+    two runs of the IDENTICAL `Scenario` at two different commits of this package can silently
+    diverge on this axis with no other field changed; recording the resolved mode here makes that
+    otherwise-invisible provenance gap recoverable from the `ScenarioResult` alone. `missing` for
+    `:centralized` (no ADMM reactive-consensus concept applies to the monolithic solve).
   - `elapsed::Float64` — wall-clock seconds for the full materialize+solve (`@elapsed`).
     NON-REPRODUCIBLE: recorded for reporting only, NEVER compared in a reproducibility/equality
     check (RESEARCH Anti-Pattern; threat T-08-07).
@@ -62,6 +70,7 @@ struct ScenarioResult
     iters::Union{Missing, Int}
     final_r::Union{Missing, Float64}
     final_s::Union{Missing, Float64}
+    reactive_consensus_mode::Union{Missing, ReactiveMode}
     elapsed::Float64
 end
 
@@ -124,6 +133,7 @@ function run_scenario(s::Scenario)
                 iters = missing,
                 final_r = missing,
                 final_s = missing,
+                reactive_consensus_mode = missing,   # no ADMM reactive-consensus concept applies
             )
         elseif s.strategy === :admm
             r = solve_admm(
@@ -147,6 +157,10 @@ function run_scenario(s::Scenario)
                 iters = Int(r.iters),
                 final_r = Float64(last(r.residuals.primal_trace)),
                 final_s = Float64(last(r.residuals.dual_trace)),
+                # WR-01 (phase-26 review): record the RESOLVED mode solve_admm actually ran with
+                # (its own smart PM-03 default is otherwise invisible to this Scenario's own
+                # serializable parameters).
+                reactive_consensus_mode = r.reactive_consensus_mode,
             )
         else
             # Terminal strategy guard (threat T-08-08): a Scenario already validates its own
@@ -170,6 +184,7 @@ function run_scenario(s::Scenario)
         result.iters,
         result.final_r,
         result.final_s,
+        result.reactive_consensus_mode,
         elapsed,
     )
 end

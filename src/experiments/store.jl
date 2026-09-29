@@ -122,8 +122,14 @@ Build the Symbol-keyed provenance dict that [`run_and_store`](@ref) `@tagsave`s:
 self-describing without re-loading the `Scenario` (CR-02 fix: a hand-picked field subset
 previously omitted the ADMM knobs and `allow_export`, silently breaking this exact guarantee
 for any non-default `:admm` run), the scalar result fields (`welfare`, `exact_maxgap`, `iters`,
-`final_r`, `final_s`), the array `dadp`, and `:julia_version => string(VERSION)` (the
-Manifest-gap workaround, RESEARCH Pitfall 2).
+`final_r`, `final_s`, `reactive_consensus_mode`), the array `dadp`, and
+`:julia_version => string(VERSION)` (the Manifest-gap workaround, RESEARCH Pitfall 2).
+
+NOTE (WR-01, phase-26 review): `reactive_consensus_mode` is `missing` for `:centralized` and the
+RESOLVED `ReactiveMode` (`OFF`/`CERTIFIED`/`LIVE`) for `:admm` — `solve_admm`'s smart PM-03
+default (`_any_flexible_reactive`) otherwise silently resolves per-call and is not recoverable
+from `Scenario`'s own fields alone; stamping it here makes an on-disk artifact self-describing
+even when the resolved mode was never explicitly requested by the caller.
 """
 function result_to_dict(res::ScenarioResult)
     s = res.scenario
@@ -134,6 +140,7 @@ function result_to_dict(res::ScenarioResult)
     d[:iters] = res.iters
     d[:final_r] = res.final_r
     d[:final_s] = res.final_s
+    d[:reactive_consensus_mode] = res.reactive_consensus_mode
     d[:julia_version] = string(VERSION)
     return d
 end
