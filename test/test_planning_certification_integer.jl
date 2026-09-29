@@ -647,3 +647,102 @@ end
         @test isapprox(joint_Q, grid_Q; atol = grid_match_tol)
     end
 end
+
+# ---------------------------------------------------------------------------------------
+# CR-01 regression (27-REVIEW.md, 2026-09-29) -- the oracle-infeasible-no-certificate
+# double-stall guard in `_corner_recourse_joint` (src/planning/benders.jl) must make
+# GENUINE progress (a new cut, of either kind) rather than silently looping to `iters`
+# exhaustion. PRE-FIX behaviour (confirmed BY HAND, 2026-09-29, by temporarily reverting
+# the fix -- `git stash` on `src/planning/benders.jl` -- and running this EXACT fixture as
+# a direct `julia --project=.` script): with `iters` capped at 15, `corner_recourse` THREW
+# `_corner_recourse_joint: exhausted 15 iteration(s) ...` -- the master LP deterministically
+# re-proposed the identical stalled trial every remaining iteration because the FIRST
+# bisection midpoint was ALSO oracle-infeasible with no certificate, and the pre-fix code
+# gave up (added no cut) after exactly one midpoint attempt. POST-FIX, the SAME call
+# converges well within the SAME bounded `iters` budget because the bisection keeps
+# halving toward the feasible anchor `z_best` until a new cut is produced.
+# ---------------------------------------------------------------------------------------
+
+@testitem "planning certification integer: T>1 joint corner_recourse survives the oracle-infeasible double-stall (CR-01, 27-REVIEW.md)" tags =
+    [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO, Test
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+
+    # Genuinely non-separable across hours (soc[t+1] recursion), SAME device as the T>1
+    # certification test above. `corridor_cap`/`x_inv_max` deliberately WIDENED to 20.0
+    # (vs. that test's 2.0) so the follower stays feasible far beyond the point where the
+    # ORACLE goes infeasible with NO Farkas certificate -- widening the oracle-infeasible-
+    # no-certificate band (EMPIRICALLY MEASURED 2026-09-29: on this fixture the band starts
+    # around y_inv≈3.75 and, with this wider follower capacity, extends at least to
+    # y_inv=30 without ever recovering feasibility or reaching the follower's OWN
+    # certificate-bearing infeasibility) so that a box large enough to reach it
+    # (`y_inv=10.0`) ALSO makes the single-bisection midpoint (`(z_next+z_best)/2 ≈
+    # [5,5]`) land back inside that same band -- exactly the double-infeasible-midpoint
+    # case CR-01 requires to reproduce (a narrower band, as in the T>1 test above at
+    # `corridor_cap=2.0`, lets a single bisection escape immediately and never exercises
+    # this branch at all).
+    dev = TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, [3.0, 3.0])
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [3.5, 3.5])
+    follower_kwargs =
+        (; corridor_cap = 20.0, x_inv_max = 20.0, c_inv = 1.0, c_op = [0.5, 0.5])
+    λ₀ = [4.0, 4.0]
+
+    oracle = build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 2)
+    follower = build_follower(; follower_kwargs..., T = 2)
+
+    # CONTROL: a box small enough (y_inv=3.0, safely below the ≈3.75 infeasibility onset)
+    # that the oracle-infeasible branch is never reached at all -- the normal, unstalled
+    # path. Establishes the TRUE unconstrained-over-this-box optimum independently of the
+    # stall-guard code under test.
+    Q_control = TSODSO.corner_recourse(oracle, follower, 3.0, 2)
+    @test isfinite(Q_control)
+
+    # STRESS: a box large enough (y_inv=10.0) that the master LP's proposed trials reach
+    # the wide oracle-infeasible-no-certificate band, AND its first bisection midpoint
+    # lands back inside that same band -- the exact double-infeasible-midpoint scenario
+    # CR-01 identifies. `iters` deliberately capped FAR below the default 100: the PRE-FIX
+    # code makes ZERO progress once stalled (confirmed by hand at iters=15, see header
+    # comment above), so ANY `iters` bound reproduces the bug there; the POST-FIX code's
+    # bisection is bounded by `JOINT_RECOURSE_BISECT_MAX_DEPTH` (a small per-stall INNER
+    # loop, not the outer `iters` budget), so it converges within a handful of OUTER
+    # iterations regardless.
+    Q_stress = TSODSO.corner_recourse(oracle, follower, 10.0, 2; iters = 20)
+    @test isfinite(Q_stress)
+
+    # Box monotonicity ([0,3]^2 ⊆ [0,10]^2, and the true unconstrained minimizer of this
+    # fixture's Q lies inside the SMALLER box -- empirically measured 2026-09-29):
+    # enlarging the box can only ever WEAKLY DECREASE the true minimum, and on this
+    # fixture the minimizer is already interior to [0,3]^2, so the two must agree (up to
+    # solver-precision noise). A genuine correctness check, not merely a "didn't throw"
+    # check -- a broken bisection that returns some OTHER stalled/incorrect value would
+    # generally violate this equality.
+    @test isapprox(Q_stress, Q_control; atol = 1e-4)
+
+    # Independent dense-grid cross-check (SAME technique as the T>1 test above, reusing
+    # solve_follower!/solve_planning_oracle! directly -- deliberately NOT
+    # `EnumerateLatticeOracle`, to keep this @testitem's `setup` list minimal): any
+    # feasible grid point's Qz is an UPPER BOUND on the true continuum minimum
+    # `corner_recourse` computes over the same box, so `Q_stress` must not exceed it
+    # (beyond solver-precision noise) -- this is a ONE-DIRECTIONAL bound, deliberately
+    # avoiding a two-sided Lipschitz-style match tolerance: gradient norms measured on
+    # this fixture blow up near the oracle-infeasibility boundary (up to ~30, vs. ~2 in
+    # the interior), which would make any two-sided discretization-error bound absurdly
+    # loose to be a meaningful correctness check.
+    grid_Q = let n = 15, y = 10.0, best = Inf
+        for z1 in range(0.0, y; length = n), z2 in range(0.0, y; length = n)
+            fr = solve_follower!(follower, [z1, z2])
+            fr.feasible || continue
+            Qz = try
+                orr = solve_planning_oracle!(oracle, [z1, z2])
+                fr.cost - orr.cost
+            catch
+                Inf
+            end
+            best = min(best, Qz)
+        end
+        best
+    end
+    @test isfinite(grid_Q)
+    @test Q_stress <= grid_Q + 1e-3
+end

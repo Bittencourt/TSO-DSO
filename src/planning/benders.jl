@@ -98,6 +98,16 @@ const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
 # gate is set to the measured value below.
 const JOINT_RECOURSE_GAP_TOL = 1.2219521394740696e-7
 
+# CR-01 fix (27-REVIEW.md, 2026-09-29): bound on how many successive bisection halvings
+# the oracle-infeasible-no-certificate stall guard (below) will attempt before giving up
+# and raising a diagnostic error, rather than silently making zero progress forever. Not a
+# measured tolerance like JOINT_RECOURSE_GAP_TOL above -- it is a hard IEEE-754 double
+# bound: halving ANY bounded bracket `[z_lo, z_hi]` this many times drives `z_mid` to be
+# bit-identical to one endpoint (a double has 52 mantissa bits; 64 halvings exhausts any
+# representable gap even for extreme exponents), so termination is guaranteed independent
+# of `iters` and independent of the fixture's scale.
+const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
+
 """
     corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
 
@@ -272,7 +282,15 @@ THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan dis
     T-dimensional generalization of the ternary search's own WR-01 double-infinite
     tie-break applies: bisect toward the guaranteed-feasible incumbent `z_best` (the SAME
     "shrink toward the known-feasible anchor" principle, one dimension per coordinate
-    instead of one).
+    instead of one). CR-01 fix (27-REVIEW.md): this bisection is genuinely ITERATIVE, not
+    single-shot — if a midpoint is *itself* oracle-infeasible with no certificate, the
+    bracket shrinks toward `z_best` and a NEW midpoint is tried, up to
+    `JOINT_RECOURSE_BISECT_MAX_DEPTH` halvings, before giving up with a diagnostic error
+    that clearly distinguishes "stalled, no progress possible" (this branch) from "gap not
+    yet met" (the `iters`-exhaustion branch below). A single bisection step is NOT
+    sufficient in general: nothing guarantees the first midpoint is feasible, and a
+    single-shot version would silently make zero progress and loop until `iters` exhausted
+    for no reason whenever it isn't.
 
 `y_inv <= 0` collapses `[0, y_inv]^T` to the single point `z = zeros(T)` — genuinely
 computed (never assumed `0.0`), matching [`_corner_recourse_ternary`](@ref)'s own CR-01
@@ -389,19 +407,58 @@ function _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::In
             # the master in between, so it deterministically re-proposed the identical
             # point), bisect toward the guaranteed-feasible incumbent z_best instead of
             # spinning until `iters` exhausts for no reason.
+            #
+            # CR-01 fix (27-REVIEW.md): a SINGLE bisection step is not guaranteed to
+            # land on a feasible/certified midpoint -- the midpoint itself can ALSO be
+            # oracle-infeasible with no certificate. The old single-shot version added
+            # NO cut in that case and reset last_skipped to the SAME z_next, so the
+            # (deterministic, unchanged) master LP re-proposed the identical trial every
+            # remaining outer iteration -- zero progress until `iters` exhausted. Fix:
+            # keep halving the bracket [z_best, z_next] toward the feasible anchor,
+            # trying a NEW midpoint each time, until a cut of either kind is produced
+            # (guaranteed progress -> break out and continue the outer loop) or
+            # JOINT_RECOURSE_BISECT_MAX_DEPTH halvings are exhausted (guaranteed
+            # termination -- see that constant's comment -- with a diagnostic error that
+            # names this as a genuine stall, distinct from "gap not yet met").
             if last_skipped !== nothing && maximum(abs, z_next .- last_skipped) <= 1e-9
-                z_mid = (z_next .+ z_best) ./ 2
-                r_mid = evaluate(z_mid)
-                if isfinite(r_mid.Qz)
-                    push!(cuts, (copy(z_mid), r_mid.Qz, r_mid.gradQ))
-                    if r_mid.Qz < UB
-                        UB = r_mid.Qz
-                        z_best = copy(z_mid)
+                progressed = false
+                z_lo = copy(z_best)   # guaranteed follower- and oracle-feasible anchor
+                z_hi = copy(z_next)   # stalled: oracle-infeasible, no certificate
+                for _ in 1:JOINT_RECOURSE_BISECT_MAX_DEPTH
+                    z_mid = (z_lo .+ z_hi) ./ 2
+                    r_mid = evaluate(z_mid)
+                    if isfinite(r_mid.Qz)
+                        push!(cuts, (copy(z_mid), r_mid.Qz, r_mid.gradQ))
+                        if r_mid.Qz < UB
+                            UB = r_mid.Qz
+                            z_best = copy(z_mid)
+                        end
+                        progressed = true
+                        break
+                    elseif r_mid.feas_cut !== nothing
+                        push!(
+                            feas_cuts,
+                            (r_mid.feas_cut.v, r_mid.feas_cut.u, r_mid.feas_cut.z_k),
+                        )
+                        progressed = true
+                        break
+                    else
+                        # z_mid is ALSO oracle-infeasible with no certificate: shrink
+                        # the bracket toward the known-feasible anchor and retry -- this
+                        # NEVER re-tests z_hi's own value again, which is what
+                        # guarantees eventual termination (see the constant's comment).
+                        z_hi = z_mid
                     end
-                elseif r_mid.feas_cut !== nothing
-                    push!(
-                        feas_cuts,
-                        (r_mid.feas_cut.v, r_mid.feas_cut.u, r_mid.feas_cut.z_k),
+                end
+                if !progressed
+                    error(
+                        "_corner_recourse_joint: stalled at z=$z_next (y_inv=$y_inv, " *
+                        "T=$T) -- $JOINT_RECOURSE_BISECT_MAX_DEPTH successive " *
+                        "bisections toward the feasible anchor z_best=$z_best all " *
+                        "remained oracle-infeasible with no Farkas certificate; no " *
+                        "further progress is possible without more information. This " *
+                        "is a genuine stall (distinct from 'gap not yet met') -- " *
+                        "report as a bug or relax/inspect the fixture.",
                     )
                 end
             end
