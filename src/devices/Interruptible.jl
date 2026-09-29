@@ -35,9 +35,15 @@ rescaled here.
   - `Pmin::T`, `Pmax::T` — served-power bounds (eqs. 3.13–3.14 flexibility limits).
   - `a::T` — linear marginal-utility intercept (eq. 3.13).
   - `b::T` — quadratic curvature, `b > 0` required for concavity (eq. 3.14).
+  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23,
+    FIX-05; WR-03, phase-26 review — contract parity with [`Thermostatic`](@ref)/
+    [`Deferrable`](@ref)); `nothing` (default) falls back to the aggregator's own `φ` when
+    this device is rolled up by an [`Aggregator`](@ref). A non-`nothing` value must lie in
+    `(0, 1]`.
 
-Construction throws `ArgumentError` when `b ≤ 0` (curvature guard, threat T-02-02) or
-when `Pmax < Pmin` (inconsistent bounds).
+Construction throws `ArgumentError` when `b ≤ 0` (curvature guard, threat T-02-02), when
+`Pmax < Pmin` (inconsistent bounds), or when a supplied `φ` override lies outside `(0, 1]`
+(thesis eq. 3.23).
 """
 struct Interruptible{T <: Real} <: AbstractDevice
     bus::Int
@@ -45,8 +51,16 @@ struct Interruptible{T <: Real} <: AbstractDevice
     Pmax::T
     a::T
     b::T
+    φ::Union{Nothing, T}
 
-    function Interruptible(bus::Int, Pmin::T, Pmax::T, a::T, b::T) where {T <: Real}
+    function Interruptible(
+        bus::Int,
+        Pmin::T,
+        Pmax::T,
+        a::T,
+        b::T;
+        φ::Union{Nothing, T} = nothing,
+    ) where {T <: Real}
         # Concavity guard (thesis eq. 3.14, b > 0): a non-positive curvature would make
         # the utility convex → welfare maximization unbounded/non-convex → garbage or
         # solver failure. Reject LOUDLY (project convention: throw, never @assert, since
@@ -67,12 +81,23 @@ struct Interruptible{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        return new{T}(bus, Pmin, Pmax, a, b)
+        # Power-factor override guard (thesis eq. 3.23, FIX-05; WR-03, phase-26 review):
+        # mirrors Aggregator's/Thermostatic's/Deferrable's own φ ∈ (0,1] guard, applied only
+        # when a non-nothing override is supplied.
+        if φ !== nothing && !(zero(T) < φ <= one(T))
+            throw(
+                ArgumentError(
+                    "Interruptible power-factor override φ must lie in (0, 1] " *
+                    "(thesis eq. 3.23); got φ=$φ",
+                ),
+            )
+        end
+        return new{T}(bus, Pmin, Pmax, a, b, φ)
     end
 end
 
 """
-    Interruptible(bus, Pmin, Pmax, a, b)
+    Interruptible(bus, Pmin, Pmax, a, b; φ = nothing)
 
 Convenience outer constructor (IN-01): `PROMOTE`s `Pmin`, `Pmax`, `a`, `b` to a common
 `Real` type before delegating to the inner constructor, so a natural mixed-type call like
@@ -80,9 +105,27 @@ Convenience outer constructor (IN-01): `PROMOTE`s `Pmin`, `Pmax`, `a`, `b` to a 
 confusing `MethodError`. `bus` is converted to `Int`. When all four already share a type
 the inner constructor is strictly more specific and is selected directly (no promotion,
 no recursion).
+
+The OPTIONAL keyword `φ` (thesis eq. 3.23, FIX-05; WR-03, phase-26 review) is an optional
+per-device power-factor override — contract parity with [`Thermostatic`](@ref)/
+[`Deferrable`](@ref), both of which already carry this field; it defaults to `nothing`
+(falling back to the aggregator's own `φ` at roll-up time) and is NOT included in the
+`promote`/`convert` calls above since it may be `nothing` — a supplied `Real` override is
+separately converted into the common type, while `nothing` passes through unchanged.
 """
-Interruptible(bus::Integer, Pmin::Real, Pmax::Real, a::Real, b::Real) =
-    Interruptible(Int(bus), promote(Pmin, Pmax, a, b)...)
+function Interruptible(
+    bus::Integer,
+    Pmin::Real,
+    Pmax::Real,
+    a::Real,
+    b::Real;
+    φ::Union{Nothing, Real} = nothing,
+)
+    Pminp, Pmaxp, ap, bp = promote(Pmin, Pmax, a, b)
+    Tp = typeof(Pminp)
+    φp = φ === nothing ? nothing : convert(Tp, φ)
+    return Interruptible(Int(bus), Pminp, Pmaxp, ap, bp; φ = φp)
+end
 
 # An Interruptible load's own consumption draws power-factor reactive power via the
 # Aggregator roll-up (thesis eq. 3.23, FIX-05). Interruptible is the ONLY former

@@ -275,6 +275,36 @@ end
     @test TSODSO.is_flexible_load(load) == true
 end
 
+@testitem "aggregator: Interruptible's own φ override takes precedence over agg.φ (WR-03, phase-26 review)" tags =
+    [:aggregator] begin
+    using TSODSO
+    using JuMP
+
+    T = 3
+    bus = 2
+    φ_agg = 0.9
+    φ_override = 0.75
+    tanφ_override = TSODSO.reactive_factor(φ_override)
+
+    # Contract parity with Thermostatic/Deferrable (test_aggregator.jl's "flexible-load
+    # members ... draw q = p*tanφ" item, case 3): an Interruptible with its OWN φ override
+    # inside an aggregator with a DIFFERENT φ uses the device's override, not agg.φ.
+    load_ov = TSODSO.Interruptible(bus, 0.0, 5.0, 4.0, 1.0; φ = φ_override)
+    @test load_ov.φ == φ_override
+    agg_ov = TSODSO.Aggregator(bus, φ_agg, [load_ov], fill(0.0, T))
+    ctx_ov = TSODSO.ModelContext(Model())
+    res_ov = TSODSO.contribute!(agg_ov, ctx_ov; T = T)
+    p_ov = res_ov.vars[1].p
+    for t in 1:T
+        @test isapprox(get(res_ov.q_inject[t].terms, p_ov[t], 0.0), -tanφ_override; atol = 1e-9)
+    end
+
+    # Construction-time guard parity: a supplied φ override outside (0,1] is rejected LOUDLY,
+    # exactly like Thermostatic/Deferrable's own φ guard.
+    @test_throws ArgumentError TSODSO.Interruptible(bus, 0.0, 5.0, 4.0, 1.0; φ = 0.0)
+    @test_throws ArgumentError TSODSO.Interruptible(bus, 0.0, 5.0, 4.0, 1.0; φ = 1.5)
+end
+
 @testitem "aggregator: constructor + horizon guards (DEV-05)" tags = [:aggregator] begin
     using TSODSO
     using JuMP
