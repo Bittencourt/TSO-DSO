@@ -254,7 +254,10 @@ end
     )
     # The unrestricted (inexact) SOCP diagnostic bound (D-05's "optimality loss vs the
     # unrestricted SOCP bound"), via the SAME rtol_exact = 1.0 override test_ac_oracle.jl's
-    # EXACT-04 item uses.
+    # EXACT-04 item uses. UNCHANGED by PM-01/phase 26-18: this leg is the "optimality loss vs
+    # the unrestricted SOCP bound" diagnostic, not the synthetic-violation leg below — the
+    # DEFAULT ConvexBranchFlow() remains correct here regardless of which voltage band it
+    # restricts, since RestrictedBranchFlow's feasible set stays a genuine subset either way.
     ctx_unrestricted, cost_unrestricted, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -307,15 +310,43 @@ end
     # the genuinely cone-INEXACT solution is returned rather than refused) must FAIL
     # ac_feasible — confirming the certificate now actually gates cone-tightness rather than
     # trivially passing any solved context.
-    report_unrestricted = assert_restriction_exact!(ctx_unrestricted, ctx_ac; report = true)
+    #
+    # PM-01 (phase 26-18): at EXACT-04's own pv_scale = 1.2, BOTH ConvexBranchFlow()'s DEFAULT
+    # (Gan-Low direction) AND ConvexBranchFlow(; thesis_literal=true) (the OLD literal copy)
+    # are genuinely cone-EXACT on this small 3-bus/2-branch fixture (MEASURED: v's OWN
+    # always-imposed V²max bound alone is sufficient to force cone-tightness on a path this
+    # short, regardless of which voltage band the exactness-copy v̂ restricts — see
+    # ConvexBranchFlow.jl's PM-01 docstring addendum and 26-FINDINGS.md's "Plan 26-18"
+    # section) — so this fixture's own pv_scale can no longer force the synthetic violation
+    # this gate needs. Per PM-01's own locked alternative ("... or a new fixture"), a SEPARATE,
+    # higher-pv_scale aggregator set (`aggs_synth`, MEASURED per this project's own discipline
+    # to remain solvable while pushing ConvexBranchFlow(; thesis_literal=true) genuinely
+    # cone-inexact — ratio ≈ 1982 at pv_scale = 1.4, well past the App. C battery-
+    # complementarity throw threshold that fires beyond ≈1.46 on this fixture) feeds ONLY this
+    # synthetic-violation leg; `ctx_ac` above (solved at the ORIGINAL pv_scale = 1.2) is reused
+    # unchanged as the comparator, since `assert_restriction_exact!`'s `ac_feasible` gate reads
+    # ONLY the tested context's own cone residual (never ctx_ac's data), and its ONLY
+    # structural requirement against ctx_ac is a matching T (unaffected by pv_scale).
+    aggs_synth = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.4)
+    ctx_unrestricted_synth, cost_unrestricted_synth, _ = solve_welfare(
+        feeder,
+        ConvexBranchFlow(; thesis_literal = true),
+        aggs_synth;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+        rtol_exact = 1.0,
+    )
+    report_unrestricted =
+        assert_restriction_exact!(ctx_unrestricted_synth, ctx_ac; report = true)
     @test report_unrestricted.ac_feasible == false
-    @test ctx_unrestricted.meta[:price_provenance].status == :cert_failed
+    @test ctx_unrestricted_synth.meta[:price_provenance].status == :cert_failed
     # Review WR-01: the provenance formulation is READ from ctx.meta[:formulation] (the
     # D-08 marker RestrictedBranchFlow.contribute! stashes), never fabricated by the
     # certificate — a plain ConvexBranchFlow context (which stashes no marker) reports
     # :unknown, not a false :RestrictedBranchFlow.
-    @test ctx_unrestricted.meta[:price_provenance].formulation == :unknown
-    @test_throws Exception assert_restriction_exact!(ctx_unrestricted, ctx_ac)
+    @test ctx_unrestricted_synth.meta[:price_provenance].formulation == :unknown
+    @test_throws Exception assert_restriction_exact!(ctx_unrestricted_synth, ctx_ac)
 end
 
 @testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch (D-06)" tags =
@@ -426,19 +457,26 @@ end
     @test cert.ac_feasible == true
 
     # (b) A GENUINELY FAILING case (mirrors plan 20-03's testitem 5's synthetic violation):
-    # the unrestricted ConvexBranchFlow context, cone-inexact at rtol_exact = 1.0.
-    ctx_unrestricted, cost_unrestricted, _ = solve_welfare(
+    # the unrestricted ConvexBranchFlow context, cone-inexact at rtol_exact = 1.0. PM-01
+    # (phase 26-18): at this fixture's OWN pv_scale = 1.2, BOTH ConvexBranchFlow() directions
+    # (default AND thesis_literal=true) are genuinely cone-EXACT — see the identical,
+    # fully-explained rationale comment in the D-05 testitem above. A SEPARATE, higher
+    # pv_scale = 1.4 aggregator set (`aggs_synth`, MEASURED to remain solvable while genuinely
+    # cone-inexact under thesis_literal=true) feeds ONLY this synthetic-violation leg; `ctx_ac`
+    # (solved at the original pv_scale = 1.2) is reused unchanged as the comparator.
+    aggs_synth = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.4)
+    ctx_unrestricted_synth, cost_unrestricted_synth, _ = solve_welfare(
         feeder,
-        ConvexBranchFlow(),
-        aggs;
+        ConvexBranchFlow(; thesis_literal = true),
+        aggs_synth;
         T = Phase4Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         rtol_exact = 1.0,
     )
-    cert_failing = assert_restriction_exact!(ctx_unrestricted, ctx_ac; report = true)
+    cert_failing = assert_restriction_exact!(ctx_unrestricted_synth, ctx_ac; report = true)
     @test cert_failing.ac_feasible == false
-    @test ctx_unrestricted.meta[:price_provenance].status == :cert_failed
+    @test ctx_unrestricted_synth.meta[:price_provenance].status == :cert_failed
 
     # D-09: the fallback below is called REGARDLESS of `cert.ac_feasible` here ONLY because
     # this test exercises the fallback's OWN mechanics in isolation — a real caller must gate
