@@ -31,7 +31,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
   reverse thermal limit, link battery SOC across the horizon, and give flexible loads their
   reactive draw.
 
-- [ ] **Phase 27: Integer Planning & Pricing Certificate Correctness** - Fix `corner_recourse` for
+- [x] **Phase 27: Integer Planning & Pricing Certificate Correctness** - Fix `corner_recourse` for (completed 2026-09-29)
   T>1, relabel DLMP components honestly, tighten the exactness-gate floor, certify the FIT
   baseline, and settle MPC realized welfare against the true plant.
 
@@ -166,7 +166,7 @@ exactness gate, the FIT-baseline counterfactual, and MPC's realized-welfare acco
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close.
 
-**Plans:** 8/9 plans executed
+**Plans:** 9/9 plans complete
 
 Plans:
 **Wave 1**
@@ -182,7 +182,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 27-06-PLAN.md — SC-6 golden-move audit + final full-suite certification
+- [x] 27-06-PLAN.md — SC-6 golden-move audit + final full-suite certification
 
 ### Phase 28: Goldens Re-Derivation & Thesis Reproduction Restatement
 
@@ -393,7 +393,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
-| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 8/9 | In Progress|  |
+| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |

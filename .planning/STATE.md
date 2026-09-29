@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
-stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
-last_updated: "2026-09-29T07:52:09.176Z"
+status: ready_to_plan
+stopped_at: Phase 27 complete (9/9) — ready to discuss Phase 28
+last_updated: 2026-09-29T14:10:38.581Z
 last_activity: 2026-09-29 -- Phase 27 execution started
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 26
-  completed_plans: 20
+  completed_plans: 29
   percent: 8
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 27 — Integer Planning & Pricing Certificate Correctness
+**Current focus:** Phase 28 — goldens re derivation & thesis reproduction restatement
 
 ## Current Position
 
-Phase: 27 (Integer Planning & Pricing Certificate Correctness) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 27
-Last activity: 2026-09-29 -- Phase 27 execution started
+Phase: 28
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-29
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -114,7 +114,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 118 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 127 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -161,6 +161,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 260826-8gb | Document the ADMM conditioning ladder + knife-edge and the CI docs-integrity guard in the Documenter site | 2026-08-26 | 362e745 | [260826-8gb-document-the-admm-conditioning-ladder-an](./quick/260826-8gb-document-the-admm-conditioning-ladder-an/) |
 | 260826-cjh | Replace the fragile `iters >= 50` load-test bound with an intent-shaped structural floor (measured spread 47-66) | 2026-08-26 | c2b95a6 | [260826-cjh-replace-the-fragile-iters-50-bound-in-th](./quick/260826-cjh-replace-the-fragile-iters-50-bound-in-th/) |
 | 26 | 20 | - | - |
+| 27 | 9 | - | - |
 
 **Recent Trend:**
 
@@ -290,6 +291,24 @@ Recent decisions affecting current work:
 None yet.
 
 ### Blockers/Concerns
+
+- [v4.0 Phase 27 findings — full text in `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-FINDINGS.md`]:
+  (1) Exactness gate is now a HYBRID per-branch floor `atol_b = max(τ_solver=2e-7, ε·ref_b)`, ε=1e-9
+  (pure relative floor was infeasible: WR-01 needs ε<5e-8, IEEE-13 ground ≳5e-5). Margins only ~2.4x;
+  IEEE-8500 NOT swept — re-measure in Phase 35. At DEFAULT Clarabel tol_gap the gate's detectability
+  floor is solver precision (~1e-6): several fixtures now carry measured tighter tol_gap.
+  (2) Fixed-dispatch SOCP re-solves (MPC truth import, FIT SITE-2 AC-PF) are STRUCTURALLY inexact (loss
+  current free; gap 211 on REPRO-01, 18/20 MPC seeds). Both now settle via AC power flow, PHYSICS ONLY
+  (`ACPowerFlow(; limits=false)`), limit violations reported as diagnostics. Realized MPC dispatch under
+  5% forecast error genuinely overloads the IEEE-13 head branch (seed=1).
+  (3) FIT SITE-3 `ALMOST_OPTIMAL` at tol_gap=1e-10 is a genuine Clarabel conditioning wall (max_iter
+  refuted); bounded by measured `FIT_SITE3_ALMOST_GAP_TOL`. Repro population point's SOCP exactness has
+  drifted since Phase 18 — Phase 28 must re-check.
+  (4) corner_recourse T>1 is a joint Kelley cutting-plane (T=1 byte-identical); pre-existing
+  `solve_follower!`/HiGHS certificate-loss fragility logged (F-27-01-2), unscheduled.
+  (5) Phase 28 restatement items: MPC realized_welfare/regret semantics changed (docs/literate/
+  mpc_rolling_horizon.jl, scripts/demo_mpc_plots.jl); DLMP `loss`/`voltage` → `cone`/`drop` (aliases
+  until Phase 36).
 
 - [v4.0 Phase 26 findings — full text in `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md`]:
   (1) The corrected `ConvexBranchFlow` default (Gan–Low copy, v̂ ≥ v) is Gan–Low's *modified* OPF —

@@ -106,6 +106,8 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 - ✓ Aggregator aggregation of prosumer devices into nodal net power + utility — v1.0
 - ✓ Network & device model correctness (FIX-01..05: Gan–Low exactness-copy verdict, receiving-end limit
       3.37, full-horizon SOC, flexible-load reactive draw) — Validated in Phase 26: Network & Device Model Correctness
+- ✓ Integer planning & pricing certificate correctness (FIX-06..10: T>1 recourse, DLMP naming, per-branch
+      exactness floor, FIT certificate, MPC truth-plant settlement) — Validated in Phase 27: Integer Planning & Pricing Certificate Correctness
 - ✓ Social-welfare maximization (`GLB-CVX`): Σ aggregator utility − wholesale purchase — v1.0
 - ✓ Two selectable solve strategies — centralized monolithic **and** ADMM (`AGR-OPT`/`DSO-OPT`, DADP as
       duals, convergence diagnostics), cross-validated on IEEE 13 + 123 — v1.0
@@ -180,6 +182,10 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
   dynamic tariff signals coordinating many devices without compromising network security.
 
 ## Current State
+
+**Phase 27 (Integer Planning & Pricing Certificate Correctness) COMPLETE 2026-09-29.** FIX-06..10 validated:
+T>1 joint Benders recourse, DLMP `cone`/`drop` naming, hybrid per-branch exactness floor, FIT/MPC settlement
+on AC physics (violations reported), ALMOST_OPTIMAL flake bounded. Suite 30703/0/0/5.
 
 **v4.0 in progress — Phase 26 (Network & Device Model Correctness) COMPLETE 2026-09-29.** FIX-01..05
 validated: default `ConvexBranchFlow` exactness copy now Gan–Low direction (honestly labelled a
@@ -410,4 +416,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-29 — Phase 26 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-09-29 — Phase 27 complete (v4.0 Correctness & Depth)*

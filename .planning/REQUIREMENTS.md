@@ -44,23 +44,23 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 ### Correctness — integer planning (FIX)
 
-- [ ] **FIX-06**: `corner_recourse` returns the true Q(bᵛ) for T > 1 (a per-hour minimization, not
+- [x] **FIX-06**: `corner_recourse` returns the true Q(bᵛ) for T > 1 (a per-hour minimization, not
   a flat `fill(z, T)` profile), or rejects T > 1 with a clear error. A T > 1 test compares the
   Laporte–Louveaux loop against exhaustive enumeration.
 
 ### Correctness — pricing & certificates (FIX)
 
-- [ ] **FIX-07**: DLMP decomposition components are named and documented after what they are
+- [x] **FIX-07**: DLMP decomposition components are named and documented after what they are
   mathematically: cone-slot and drop-constraint multipliers. They are not called "loss" and
   "voltage" unless a derivation justifies it. The test for "voltage component ≈ 0 when no voltage
   bound binds" uses realistic impedances and either passes or is replaced by a correct property.
-- [ ] **FIX-08**: The SOCP exactness gate uses a per-branch relative floor (for example relative to
+- [x] **FIX-08**: The SOCP exactness gate uses a per-branch relative floor (for example relative to
   that branch's thermal limit or head-branch magnitude), so lightly loaded branches are actually
   checked. A test shows a slack cone on a small branch is flagged.
-- [ ] **FIX-09**: The FIT-baseline counterfactual is certified: exactness is asserted or reported,
+- [x] **FIX-09**: The FIT-baseline counterfactual is certified: exactness is asserted or reported,
   never skipped. The Phase-18 `fit_baseline` `ALMOST_OPTIMAL` flake at `tol_gap=1e-10` is
   root-caused and fixed or explicitly bounded (carry-over).
-- [ ] **FIX-10**: MPC realized welfare and regret are settled against the truth plant: realized PV
+- [x] **FIX-10**: MPC realized welfare and regret are settled against the truth plant: realized PV
   clips charging, true-state propagation is checked for feasibility, and settlement uses the true
   import. The forecast-settled number is kept only as a separately labelled diagnostic.
 - [ ] **FIX-11**: Each correctness phase re-derives the goldens it moves, in the same phase and
@@ -173,11 +173,11 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | FIX-03 | Phase 26 | Complete |
 | FIX-04 | Phase 26 | Complete |
 | FIX-05 | Phase 26 | Complete |
-| FIX-06 | Phase 27 | Pending |
-| FIX-07 | Phase 27 | Pending |
-| FIX-08 | Phase 27 | Pending |
-| FIX-09 | Phase 27 | Pending |
-| FIX-10 | Phase 27 | Pending |
+| FIX-06 | Phase 27 | Complete |
+| FIX-07 | Phase 27 | Complete |
+| FIX-08 | Phase 27 | Complete |
+| FIX-09 | Phase 27 | Complete |
+| FIX-10 | Phase 27 | Complete |
 | FIX-11 | Phase 28 | Pending |
 | BILEV-01 | Phase 29 | Pending |
 | BILEV-02 | Phase 29 | Pending |
