@@ -21,6 +21,15 @@
 # that would be a second, separable piece of work with its own review surface. Instead, this
 # canary captures the ladder's `@warn "solve_with_retry!: ... escalating conditioning"` message
 # with a plain `Logging.SimpleLogger` on the test side only (strictly additive).
+#
+# RE-PIN LOG (append an entry here every time the pinned trajectory below is re-measured — do
+# NOT silently overwrite without a log entry, per SC-6):
+#   - 2026-09-29 (Plan 26-20, Phase 26 gap-closure): r.iters 58 -> 56, welfare
+#     -4822.903616694139 -> -4823.66604824162. Cause: Plan 26-12 (PM-03) made
+#     `solve_admm`/`build_dso_opt` default `reactive_consensus` to LIVE whenever a flexible-load
+#     member is present, which this fixture's IEEE-13 population has; re-measured strictly AFTER
+#     26-12 landed per its own explicit ordering requirement (26-POSTMERGE-TRIAGE.md cluster F).
+#     Bit-stable across 3 fresh `julia --project=.` processes on Julia 1.12.5 in this worktree.
 
 @testitem "admm knife-edge canary: IEEE-13 mid-loop SOCP pinned trajectory (canary, admm)" setup =
     [Phase8Fixtures] tags = [:admm, :canary] begin
@@ -46,16 +55,30 @@
     @info "IEEE-13 ADMM knife-edge canary" iters = r.iters welfare = r.welfare escalations =
         escalations
 
-    # PINNED — holds across every environment measured to date (native convergence on Julia
-    # 1.12.7 AND ladder-rescued convergence on Julia 1.10/1.11/1.12.5 alike). A failure here means
-    # the trajectory moved, not a flake: see the resolved debug doc's "known-good welfare
-    # references" table for the full cross-environment comparison.
-    @test r.iters == 58
+    # PINNED — re-measured 2026-09-29 (Phase 26 gap-closure, Plan 26-20), bit-stable across 3
+    # fresh `julia --project=.` processes on Julia 1.12.5. OLD -> NEW: r.iters 58 -> 56. CAUSE:
+    # Plan 26-12's (PM-03) live-reactive-default fix makes `solve_admm`/`build_dso_opt` default
+    # `reactive_consensus` to LIVE whenever any aggregator carries a flexible-load member (this
+    # fixture's IEEE-13 population does), engaging DSO-OPT's reactive-consensus coupling on every
+    # ADMM iteration and moving the mid-loop SOCP's numerical-knife-edge trajectory; Plan 26-05's
+    # `:smax_rev` cone addition also contributed to earlier trajectory shifts (see
+    # 26-POSTMERGE-TRIAGE.md, cluster F). Prior pin (58 / -4822.903616694139) was itself a
+    # re-measurement after 26-02's cpydrop sign fix and 26-05's :smax_rev addition; this is the
+    # FIRST re-measurement after 26-12 landed, per PM-03's explicit "re-pin only after this"
+    # ordering requirement. A future flip means the trajectory moved again, not a flake: see the
+    # resolved debug doc's "known-good welfare references" table for the historical
+    # cross-environment comparison (pre-26-12 only; not yet re-run cross-environment post-26-12).
+    @test r.iters == 56
 
-    # rtol=1e-6 gives ~500x headroom over the ~1.86e-9 max relative spread measured across all 4
-    # recorded known-good references, i.e. tight enough to flag a genuine trajectory change, loose
-    # enough that no legitimate toolchain difference observed to date trips it.
-    @test isapprox(r.welfare, -4822.903616694139; rtol = 1e-6, atol = 1e-3)
+    # rtol=1e-6/atol=1e-3 band UNCHANGED from the prior pin — its stated rationale (empirically
+    # tight enough to flag a genuine trajectory change, loose enough to absorb legitimate
+    # toolchain spread) still applies; this plan re-measured only on the single Julia 1.12.5
+    # toolchain available in this worktree (3 fresh processes, bit-identical), not the full
+    # multi-version matrix the original margin was derived from — the band is kept AS-IS rather
+    # than re-derived from a partial cross-environment sample (see SUMMARY for the reasoning).
+    # OLD -> NEW welfare: -4822.903616694139 -> -4823.66604824162 (same PM-03 cause as r.iters
+    # above).
+    @test isapprox(r.welfare, -4823.66604824162; rtol = 1e-6, atol = 1e-3)
 
     # Deliberately NO assertion on `escalations` itself: whether the conditioning ladder fires is
     # a legitimate, already-documented environment difference (fires on 1.10/1.11/1.12.5 as
