@@ -61,6 +61,12 @@ in-phase; suite green at close. Thesis-reproduction restatement is Phase 28.
 - FIX-09: close the real gap — FIT AC-PF step (fit.jl SITE 2) must run `assert_socp_exact!`; first
   flake experiment is `max_iter` (untried by prior sessions).
 
+### Execution amendment (2026-09-29, user decisions during execution)
+- FIX-08: HYBRID floor `atol_b = max(τ_solver, ε·ref_b)` (τ_solver measured 2e-7, ε=1e-9) — 27-02.
+- FIX-10: truth settlement via AC POWER FLOW (ACPowerFlow/Ipopt at fixed realized dispatch), not the
+  SOCP re-solve (genuinely inexact on 18/20 seeds under forecast-error reverse flow); seed=5 masks
+  reverted — 27-08.
+
 ### Golden policy + process (SC-6, lessons from Phase 26)
 - Same as Phase 26: every moved golden re-pinned in-phase with old→new + cause comment and a
   GOLDEN-AUDIT table; no silent re-pin.
