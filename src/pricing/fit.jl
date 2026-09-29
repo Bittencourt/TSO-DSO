@@ -36,6 +36,38 @@ const FIT_λ_IMPORT = 6.6   # residual import from the grid  (λ_im, page 93)
 const FIT_λ_EXPORT = 9.6   # exported PV surplus to the grid (λ_e,  page 93)
 const FIT_λ_SELF = 5.6     # self-consumed PV                (λ_s,  page 93)
 
+# FIX-09 (Phase 27, plan 27-05; T-27-13/T-27-14): the measured, NAMED gap-bound for the
+# SITE-3 nested `solve_welfare` cross-check's bounded `ALMOST_OPTIMAL` fallback.
+#
+# ROOT-CAUSE PROTOCOL (the untried `max_iter` hypothesis, RESEARCH FIX-09 / Pitfall FIX-09-1):
+# `scripts/repro_stability_check.jl`'s `REPRO_MAX_ITER` env var was run at `REPRO_TOL_GAP=1e-10`
+# against `max_iter ∈ {200 (default), 400, 2000}` on the documented flaking fixture (the
+# Phase-17-retuned IEEE-123 population point). Clarabel's OWN printed iteration trace is
+# BYTE-IDENTICAL across all three `max_iter` values — every run terminates at iteration 24
+# with `status = solved (reduced accuracy)` (`ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT`), and
+# iterations 23-24 show IDENTICAL `pcost`/`dcost`/`gap`/`pres`/`dres` (a genuine STALL, not a
+# budget exhaustion — `max_iter=2000` never comes close to being reached). This CONCLUSIVELY
+# REFUTES the slow-convergence hypothesis: raising `max_iter` has ZERO effect. The flake is a
+# genuine Clarabel numerical-precision conditioning wall at this tight `tol_gap`, matching the
+# prior IEEE-8500 precedent (quick task `260822-hld`) — CONTEXT's locked fallback therefore
+# applies: bound `ALMOST_OPTIMAL` acceptance behind a measured, named gap tolerance. Full
+# iteration traces and the measurement protocol are recorded in `27-FINDINGS.md`.
+#
+# MEASURED (2026-09-29), same fixture/tolerance, using `solve_welfare(...; allow_almost=true)`
+# to reach the near-feasible point and reading Clarabel's OWN certified primal/dual objective
+# gap directly (`abs(objective_value(model) - dual_objective_value(model))` — no second
+# reference solve needed, mirroring `KNOWN_OPTIMUM_ATOL`'s protocol, `benders.jl:35-60`):
+#   objective_value      = -41035.40436349072
+#   dual_objective_value = -41035.40435574188
+#   gap_measured          = 7.74884392740205e-6
+# Per the measurement formula `10 * gap_measured` (KNOWN_OPTIMUM_ATOL's own 10x-margin
+# convention), the bound is set to the measured value below, not a hopeful guess. The SAME
+# near-feasible point's cone residual (`ctx.meta[:socp_maxgap] = 9.466352679510237e-8`)
+# independently PASSES `assert_socp_exact!`'s hybrid floor (FIX-08) with a comfortable margin —
+# confirming this specific ALMOST_OPTIMAL point is genuinely cone-exact, only the interior-point
+# duality gap itself sits fractionally above `tol_gap=1e-10`.
+const FIT_SITE3_ALMOST_GAP_TOL = 7.74884392740205e-5
+
 """
     _fit_pv_and_flex(agg, ctx; T) -> (; Ppv, consumption, utility, flex_vars)
 
@@ -288,6 +320,20 @@ NESTED `solve_welfare` retains its OWN separate PF-04 gate, which is what the `o
 override mainly matters for (SITE 2's gate is data-driven on the SAME `optimizer`, so a tighter
 `tol_gap` benefits both).
 
+**FIX-09 root-caused, bounded `ALMOST_OPTIMAL` fallback on SITE 3 ONLY (Phase 27, plan 27-05;
+T-27-13/T-27-14).** At a tightened `tol_gap` (e.g. `1e-10`), the NESTED `solve_welfare` cross-
+check has a DOCUMENTED, root-caused intermittent `ALMOST_OPTIMAL` flake on some fixtures — a
+measured, genuine Clarabel numerical-precision conditioning wall (confirmed via the `max_iter`
+root-cause protocol: Clarabel's OWN iteration trace is BYTE-IDENTICAL at `max_iter ∈ {200, 400,
+2000}`, ruling out slow convergence; see [`FIT_SITE3_ALMOST_GAP_TOL`](@ref)'s comment and
+`27-FINDINGS.md`). SITE 3 (and ONLY SITE 3) now retries once with `allow_almost = true` on that
+SPECIFIC failure class and accepts the near-feasible `social_dadp` ONLY if the retry's OWN
+measured primal-dual gap clears the named `FIT_SITE3_ALMOST_GAP_TOL`; otherwise the original
+exception still propagates. This is safe because `social_dadp`'s underlying `dadp` (the dual
+vector) is NEVER read here — only `objective_value`. SITE 1 and SITE 2 are completely unaffected
+(threat T-27-14: the new `allow_almost` kwarg on `solve_welfare` defaults `false` everywhere
+else).
+
 Returns a `NamedTuple`:
 
   - `ctx`              — the solved FIT AC-PF `ModelContext` (the baseline ctx; structurally
@@ -475,15 +521,45 @@ function fit_baseline(
     # SITE 3 of 3 — and the one the `optimizer` kwarg mainly exists for: THIS solve carries its own
     # PF-04 exactness gate (assert_socp_exact!), which is what refuses prices on numerical grounds
     # when the solver is under-converged on a large feeder (spike 003).
-    _, social_dadp, _ = solve_welfare(
-        relaxed,
-        pf,
-        aggregators;
-        T = T,
-        λ₀ = λ₀,
-        optimizer = optimizer,
-        allow_export = true,
-    )
+    #
+    # FIX-09 (Phase 27, plan 27-05; T-27-13/T-27-14): a bounded ALMOST_OPTIMAL fallback,
+    # NARROWLY SCOPED to this one cross-check. `dadp` is ALWAYS discarded (`_`) below,
+    # satisfying `assert_solved!`'s own documented precondition for `allow_almost=true` ("an
+    # intermediate re-solve whose DUALS are NOT read"). The root-cause protocol (see
+    # `FIT_SITE3_ALMOST_GAP_TOL`'s comment / `27-FINDINGS.md`) CONFIRMED this is a genuine
+    # solver-precision conditioning wall, not a slow-convergence issue `max_iter` could fix. On
+    # the strict attempt's failure, retry ONCE with `allow_almost = true` ONLY for that SPECIFIC,
+    # root-caused failure class (never a genuine INFEASIBLE/boundary-guard error — mirrors
+    # `solve_with_retry!`'s RETRYABLE_STATUSES discipline of never retrying a real modeling
+    # failure), then accept the near-feasible `objective_value` ONLY if this SAME solve's OWN
+    # measured primal-dual gap is under `FIT_SITE3_ALMOST_GAP_TOL` — otherwise the ORIGINAL
+    # exception still propagates (never silently trust an unbounded near-feasible point).
+    _, social_dadp, _ = try
+        solve_welfare(
+            relaxed,
+            pf,
+            aggregators;
+            T = T,
+            λ₀ = λ₀,
+            optimizer = optimizer,
+            allow_export = true,
+        )
+    catch e
+        (e isa ErrorException && occursin("ALMOST_OPTIMAL", e.msg)) || rethrow(e)
+        retry_ctx, retry_obj, retry_dadp = solve_welfare(
+            relaxed,
+            pf,
+            aggregators;
+            T = T,
+            λ₀ = λ₀,
+            optimizer = optimizer,
+            allow_export = true,
+            allow_almost = true,
+        )
+        gap = abs(objective_value(retry_ctx.model) - dual_objective_value(retry_ctx.model))
+        gap <= FIT_SITE3_ALMOST_GAP_TOL || rethrow(e)
+        (retry_ctx, retry_obj, retry_dadp)
+    end
     abs(social_fit) > eps(Float64) || error(
         "fit_baseline: social_fit≈0 — cannot form the efficiency ratio (degenerate baseline)",
     )

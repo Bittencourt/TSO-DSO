@@ -204,3 +204,115 @@ in a discarded ad hoc exploration fixture.
 "off")`) or otherwise re-verify the WR-05 docstring's "both infeasible regimes" claim
 against HiGHS 1.24.1 — the claim is not universally true as currently written. No
 correctness impact on any code this plan modifies or any currently-committed test.
+
+## Plan 27-05 (FIX-09: FIT-baseline certificate + ALMOST_OPTIMAL root cause)
+
+### F-27-05-1 — `ALMOST_OPTIMAL` flake root-caused: genuine Clarabel conditioning wall, NOT slow convergence (max_iter hypothesis REFUTED)
+
+**Status: RESOLVED (2026-09-29).**
+
+**Protocol:** `scripts/repro_stability_check.jl`'s new `REPRO_MAX_ITER` env var (this plan,
+mirroring the existing `REPRO_TOL_GAP` mechanism) was run at `REPRO_TOL_GAP=1e-10` against
+`max_iter ∈ {200 (Clarabel's own default), 400, 2000}` on the documented flaking fixture
+(Phase-17-retuned IEEE-123 population point: `LOAD_SCALE_IEEE123=0.05`,
+`PV_SCALE_IEEE123=0.12`, seed=20260719), reading Clarabel's OWN `verbose=true` iteration
+trace in detail (not just the terminal `ALMOST_OPTIMAL` symbol), per the RESEARCH-mandated
+root-cause protocol.
+
+**Result — CONCLUSIVE NEGATIVE for the max_iter hypothesis.** Clarabel's printed iteration
+trace is BYTE-IDENTICAL across all three `max_iter` values: every run terminates at
+**iteration 24** with `Terminated with status = solved (reduced accuracy)`
+(`termination_status=ALMOST_OPTIMAL`, `primal_status=dual_status=NEARLY_FEASIBLE_POINT`,
+`raw_status=ALMOST_SOLVED`), and iterations 23 and 24 show byte-IDENTICAL `pcost`/`dcost`/
+`gap`/`pres`/`dres` values — a genuine numerical STALL/PLATEAU, never a budget exhaustion
+(`max_iter=2000` is never remotely approached; the solver voluntarily stops at iteration 24
+regardless of the ceiling). **Raising `max_iter` has ZERO effect on the outcome.** This
+matches the prior IEEE-8500 precedent (quick task `260822-hld`) exactly: a genuine
+solver-precision conditioning wall, not a slow-convergence issue — Pitfall FIX-09-1's
+warning ("distinguish slow convergence from a genuine conditioning wall BEFORE concluding
+unfixable") is answered: this IS the conditioning-wall case.
+
+**Measured gap** (via the NEW `solve_welfare(...; allow_almost=true)` kwarg added by this
+plan, same fixture/tolerance, reading Clarabel's OWN certified primal/dual objective bound
+directly — no second reference solve needed, mirroring `KNOWN_OPTIMUM_ATOL`'s protocol,
+`src/planning/benders.jl:35-60`):
+
+| Quantity | Value |
+|---|---|
+| `objective_value` | `-41035.40436349072` |
+| `dual_objective_value` | `-41035.40435574188` |
+| absolute gap `\|objective_value - dual_objective_value\|` | `7.74884392740205e-6` |
+| relative gap (matches Clarabel's own printed `gap` column) | `≈1.888e-10` |
+| SOC cone residual at this SAME point (`socp_maxgap`) | `9.466352679510237e-8` |
+
+The stalled point's cone residual **independently PASSES** `assert_socp_exact!`'s FIX-08
+hybrid floor (`τ_solver=2e-7 > 9.47e-8`) with a comfortable margin — this specific
+`ALMOST_OPTIMAL` point is genuinely cone-EXACT; only the interior-point duality gap itself
+sits fractionally (`≈1.89e-10` vs the requested `1e-10`) above the tightened `tol_gap`.
+
+**Disposition (CONTEXT's locked fallback, root cause confirmed solver-intrinsic):** a NEW,
+narrowly-scoped `allow_almost::Bool=false` kwarg was added to `solve_welfare`
+(`src/models/welfare_solve.jl`), forwarded VERBATIM to `assert_solved!`'s own `allow_almost`
+— defaults `false` everywhere, so every pre-existing call site (planning subproblem/AgrOpt,
+stochastic_welfare, every test) is byte-identical (threat T-27-14). `fit_baseline`'s SITE-3
+nested `solve_welfare` cross-check (`src/pricing/fit.jl`) is the ONLY caller that ever passes
+`allow_almost=true`, and ONLY as a one-shot retry after the strict attempt fails SPECIFICALLY
+with an `ALMOST_OPTIMAL`-class error (`e isa ErrorException && occursin("ALMOST_OPTIMAL",
+e.msg)` — an UNRELATED error, e.g. a genuine `ArgumentError`/`INFEASIBLE`, is NEVER retried,
+mirroring `solve_with_retry!`'s `RETRYABLE_STATUSES` discipline). The retry's OWN measured
+gap must clear a NEW, measured constant `FIT_SITE3_ALMOST_GAP_TOL = 7.74884392740205e-5`
+(`src/pricing/fit.jl`, 10× the measured gap above — `KNOWN_OPTIMUM_ATOL`'s own margin
+convention) before the near-feasible `social_dadp` is accepted; otherwise the ORIGINAL
+exception still propagates unchanged. This is sound because SITE 3's `dadp` (the dual
+vector) is NEVER read by `fit_baseline` — only `objective_value` — satisfying
+`assert_solved!`'s own documented precondition for `allow_almost=true` ("an intermediate
+re-solve whose DUALS are NOT read").
+
+**Verified (direct `julia --project=.` scripts, not TestItemRunner — memory
+`gsd-plan-verify-testitemrunner-trap`):**
+- Positive: the EXACT SITE-3 wrapper logic (isolated from SITE 1/2) on the flaking fixture
+  correctly catches the `ALMOST_OPTIMAL` failure, retries, measures
+  `gap=7.74884392740205e-6 <= 7.74884392740205e-5`, and accepts the near-feasible
+  `social_dadp=-41035.40436349072`.
+- Negative control: an UNRELATED error (`ArgumentError` from `solve_welfare`'s own empty-
+  aggregator boundary guard) is confirmed NEVER retried — propagates unchanged.
+- `test/test_exactness.jl`'s existing WR-01 item and the cluster-E/canonical fixtures are
+  UNAFFECTED (T-27-14): `allow_almost` defaults `false`, so every OTHER `solve_welfare` call
+  site is byte-identical.
+
+### F-27-05-2 — Related discovery: the flake landscape has WORSENED since Phase 18 (likely Phase 26 FIX-04's SOC T+1 extension) — documented, NOT fixed by this plan (out of scope)
+
+**Found during:** Task 2's `REPRO_MAX_ITER` experiment.
+
+**Issue:** Phase 18 (`.planning/notes/socp-validity-envelope.md`, spike 003) documented that
+at `tol_gap=1e-10` on this SAME fixture, `solve_welfare`'s OWN top-level call resolved
+**5/5** (0% flake) — ONLY `fit_baseline`'s NESTED call flaked (13/20 = 0.65). Re-measuring
+this session (`scripts/repro_stability_check.jl`'s `count_failures`, `REPRO_TOL_GAP=1e-10`,
+`N_REPEATS=20`, `REPRO_MAX_ITER=400`): the first 16 repeats observed before a 300s timeout
+ALL failed at the **`:solve_welfare` STAGE ITSELF** (16/16 = 100%), not at `:fit_baseline` —
+a materially WORSE and structurally DIFFERENT symptom than the documented Phase-18 baseline.
+
+**Plausible cause (NOT confirmed, NOT investigated further — outside this plan's own
+`files_modified`):** Phase 26 plan 26-03 (FIX-04, commit `cfa7e6e`) extended
+`PVBattery`/`FourQuadBESS` SOC recursion from `1:(T-1)` to the full `1:(T+1)` horizon, adding
+one more SOC-coupling constraint per battery per hour — a plausible conditioning-tightening
+change on a 122-branch, ~85-aggregator feeder. This was NOT independently verified against a
+pre-26-03 checkout in this session (a bisection was out of scope for FIX-09's own
+`files_modified`); flagged as the most likely explanation, not a confirmed cause.
+
+**Disposition:** documented as a FACT, not silently absorbed (per this phase's honest-
+measurement mandate). This does NOT change FIX-09's own disposition: the root cause (a
+genuine Clarabel conditioning wall, not `max_iter`-fixable) is IDENTICAL whether it manifests
+in `solve_welfare` directly or in `fit_baseline`'s nested call, and the SAME bounded-
+`allow_almost` mechanism would apply to either. `fit_baseline`'s own flake is now BOUNDED
+(F-27-05-1, closing FIX-09's scope). A BARE top-level `solve_welfare(...; optimizer=...
+tol_gap=1e-10...)` call from a THIRD-PARTY script (as `repro_stability_check.jl`'s
+`count_failures` does directly, stage 1) is NOT `fit_baseline` and is OUT OF this plan's
+scope — it has NO bounded fallback and will continue to flake at `tol_gap=1e-10` until a
+future plan explicitly extends equivalent protection to it, if ever needed.
+
+**Escalate?** No user action required for THIS plan's own scope (FIX-09 is closed — see
+F-27-05-1). Flagged for future-plan awareness: any future work that runs `solve_welfare`
+directly at a very tight `tol_gap` (e.g. Phase 28's thesis-reproduction restatement, or a
+future IEEE-8500-scale experiment) should expect a HIGHER baseline flake rate than Phase 18
+documented, and should re-measure rather than assume the old 0/5 figure still holds.

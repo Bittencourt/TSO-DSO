@@ -47,6 +47,17 @@
 # `Clarabel.Optimizer` with `tol_gap_abs`/`tol_gap_rel` pinned to that value (same attribute pair as
 # `.planning/spikes/003-phase18-fragility-tolerance/check.jl`), letting the sweep be re-run at a
 # tightened tolerance (e.g. `REPRO_TOL_GAP=1e-10`) without editing source.
+#
+# `REPRO_MAX_ITER` (FIX-09, Phase 27 plan 27-05): a SECOND, INDEPENDENT env-var override, mirroring
+# `REPRO_TOL_GAP`'s exact mechanism, extending the SAME `REPRO_OPTIMIZER` builder (COMBINABLE with
+# `REPRO_TOL_GAP` — both may be set together, e.g. `REPRO_TOL_GAP=1e-10 REPRO_MAX_ITER=2000`). It
+# pins Clarabel's `max_iter` attribute (default 200, confirmed via `Clarabel.Settings().max_iter`)
+# so the documented `fit_baseline` `ALMOST_OPTIMAL` flake at `tol_gap=1e-10` (13/20 baseline,
+# `.planning/notes/socp-validity-envelope.md`) can be tested against the UNTRIED "slow convergence,
+# not a genuine conditioning wall" hypothesis (RESEARCH FIX-09, Pitfall FIX-09-1) — distinguishing
+# it from the IEEE-8500 precedent where NEITHER a looser NOR a tighter `tol_gap` fixed a genuine
+# conditioning wall. Unset (the default): byte-for-byte unchanged from before this change (no
+# `max_iter` attribute is ever passed downstream).
 
 using DrWatson
 @quickactivate "TSODSO"
@@ -76,17 +87,29 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ratio to LOAD_SCALE held fixe
 # every downstream call keeps its own default `optimizer` factory (byte-for-byte unchanged path).
 # Set REPRO_TOL_GAP=<tol> => a Clarabel optimizer pinned to that tol_gap_abs/tol_gap_rel, same
 # attribute pair as spike 003's `check.jl`, threaded into `count_failures`/`sweep_population_scale`.
-const REPRO_OPTIMIZER = let tol_str = get(ENV, "REPRO_TOL_GAP", nothing)
-    if tol_str === nothing
+#
+# REPRO_MAX_ITER (FIX-09, Phase 27 plan 27-05): a SECOND, INDEPENDENT override on the SAME
+# builder, combinable with REPRO_TOL_GAP (both may be set together). Unset => no `max_iter`
+# attribute is ever passed downstream (byte-for-byte unchanged). Set REPRO_MAX_ITER=<n> => pins
+# Clarabel's `max_iter` attribute (default 200) to `<n>`, testing whether the documented
+# `fit_baseline` ALMOST_OPTIMAL flake at tol_gap=1e-10 is slow-convergence (fixable by more
+# iterations) rather than a genuine conditioning wall (RESEARCH FIX-09 root-cause protocol).
+const REPRO_OPTIMIZER = let tol_str = get(ENV, "REPRO_TOL_GAP", nothing),
+    max_iter_str = get(ENV, "REPRO_MAX_ITER", nothing)
+
+    if tol_str === nothing && max_iter_str === nothing
         nothing
     else
-        tol = parse(Float64, tol_str)
-        optimizer_with_attributes(
-            Clarabel.Optimizer,
-            "verbose" => false,
-            "tol_gap_abs" => tol,
-            "tol_gap_rel" => tol,
-        )
+        attrs = Pair{String,Any}["verbose" => false]
+        if tol_str !== nothing
+            tol = parse(Float64, tol_str)
+            push!(attrs, "tol_gap_abs" => tol)
+            push!(attrs, "tol_gap_rel" => tol)
+        end
+        if max_iter_str !== nothing
+            push!(attrs, "max_iter" => parse(Int, max_iter_str))
+        end
+        optimizer_with_attributes(Clarabel.Optimizer, attrs...)
     end
 end
 
