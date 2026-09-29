@@ -75,8 +75,14 @@ function diamond_feeder(profile::Symbol)
     return MeshedFeeder(buses, branches, 1)
 end
 
-therm2 = Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, P2_LOAD, P2_LOAD, 0.5, [20.0])
-therm3 = Thermostatic(3, 0.0, 1.0, 20.0, 20.0, 20.0, P3_LOAD, P3_LOAD, 0.5, [20.0])
+## Plan 26-13 pin (PM-04, `26-POSTMERGE-TRIAGE.md` cluster G): both loads pin their OWN power
+## factor to phi=1.0 (unity, zero reactive draw), overriding the aggregators' own phi=0.95,
+## restoring this fixture's original MESH-02/03 zero-reactive-draw intent -- see
+## `test/fixtures_phase23.jl`'s `mesh_aggregators()` docstring (Plan 26-13) for the identical
+## pin and the discovered finding it documents: at phi=0.95, the `:uniform` profile's SOC
+## relaxation becomes genuinely inexact on this diamond (cone ratio ~2711, gap ~0.0147).
+therm2 = Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, P2_LOAD, P2_LOAD, 0.5, [20.0]; φ = 1.0)
+therm3 = Thermostatic(3, 0.0, 1.0, 20.0, 20.0, 20.0, P3_LOAD, P3_LOAD, 0.5, [20.0]; φ = 1.0)
 
 # The odd, consistently-oriented triangle really is infeasible on this delegation path — shown
 # live, once, so this claim is never a hand-typed assertion:
