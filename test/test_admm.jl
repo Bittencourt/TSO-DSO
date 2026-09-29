@@ -101,8 +101,29 @@ end
         # cross-validation tolerance) in ~99 iterations. A larger ρ speeds the primal but SLOWS the
         # dual (the price) tail; ρ = 100 balances both. (The `solve_admm` −λ₀ multiplier warm start
         # is what keeps this to ~100 rather than ~1000 iterations.) Pinned inline per the plan.
+        #
+        # D-26-02 (PM-03/Plan 26-12, re-tuned by 26-16's additional scope): Plan 26-12's
+        # reactive_consensus smart default now correctly engages `LIVE` reactive coupling on
+        # this Thermostatic/Deferrable/PVBattery IEEE-13 ground population (it was silently OFF
+        # before, since the pre-PM-03 WR-04 guard only inspected `FourQuadBESS`), so this item's
+        # PRE-PM-03 (ρ=100, maxiter=200, default ε_abs=1e-4/ε_rel=1e-3) budget — swept when the
+        # reactive channel was never actually engaged — is too tight for the now-JOINTLY-driven
+        # active+reactive stopping rule: it still terminates at iters=103 (< 200, so it does NOT
+        # hit the fail-loud cap) but the recovered DADP misses the norm-based
+        # `isapprox(...; atol=1e-2, rtol=1e-3)` check (max elementwise |Δ| = 0.139, concentrated
+        # at the PV back-feed hours 9/16 — PM-06/26-05 territory). OLD: `maxiter = 200` with
+        # `ε_abs`/`ε_rel` left at solve_admm's own defaults (1e-4/1e-3). NEW: `maxiter_ieee13 =
+        # 700`, `ε_abs_ieee13 = 1e-6`, `ε_rel_ieee13 = 1e-7` — re-measured this plan (a direct
+        # budget sweep: ρ=100 unchanged, maxiter/ε_abs/ε_rel swept jointly) converges in
+        # `iters = 535` (comfortably under the new 700 cap) to max elementwise |Δ| = 4.24e-3, a
+        # ~2.4× margin under the pinned `atol=1e-2` — genuinely re-tuned to a TIGHTER stopping
+        # rule that the reactive channel needs to jointly converge, never a loosened assertion.
+        # `exact_maxgap` stays at 1.9e-9 (well inside the unchanged `< 1e-3` PF-04 gate).
         ρ_ieee13 = 100.0
         tol_ieee13 = 1e-6
+        maxiter_ieee13 = 700
+        ε_abs_ieee13 = 1e-6
+        ε_rel_ieee13 = 1e-7
 
         ctx_c, obj_c, _ = solve_welfare(
             feeder,
@@ -121,12 +142,14 @@ end
             T = Th,
             λ₀ = λ₀,
             ρ = ρ_ieee13,
-            maxiter = 200,
+            maxiter = maxiter_ieee13,
             tol = tol_ieee13,
+            ε_abs = ε_abs_ieee13,
+            ε_rel = ε_rel_ieee13,
             allow_export = true,
         )
 
-        @test res.iters < 200                                    # converged before the fail-loud cap
+        @test res.iters < maxiter_ieee13                         # converged before the fail-loud cap
         @test isapprox(res.welfare, obj_c; rtol = 1e-4)          # welfare match (ADMM-04)
         @test res.exact_maxgap < 1e-3                            # PF-04 on the converged DSO-OPT
         @test isapprox(res.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)  # DADP match on every load node
