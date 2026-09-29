@@ -201,6 +201,28 @@ function assert_socp_exact!(
     # strict uniqueness would newly THROW on that pre-existing, already-green fixture (a
     # regression), not just on a genuinely malformed feeder. Only a ZERO-match feeder (no branch
     # touches the root at all) is malformed/non-radial and fails loudly.
+    #
+    # WR-02 (27-REVIEW.md, 2026-09-29, code-review-fixer pass): the concern raised is that on a
+    # meshed feeder with MULTIPLE root-incident branches carrying materially different flow
+    # magnitudes, `findfirst`'s branch-STORAGE-ORDER-dependent choice could under/over-state the
+    # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this gate's numeric check
+    # only ever runs on a `ConvexBranchFlow`-formulated `ctx` (the DATA-DRIVEN `:l`-stash guard
+    # at this function's call site — `ConvexBranchFlow.jl` is the ONLY formulation module that
+    # stashes `:l` anywhere in this tree, confirmed by grep). The ONE currently-known
+    # multi-root-branch feeder, `Phase23Fixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
+    # at buses 2/3, so its two root branches (1,2)/(1,3) DO carry different flow magnitudes by
+    # construction), is exercised EXCLUSIVELY via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
+    # /`test_mesh_flow.jl` — which never stashes `:l`, so this gate's `head_b`/`ref_b` logic never
+    # actually runs against it. So, as of this commit, WR-02's scale-choice concern is real IN
+    # PRINCIPLE (a future `ConvexBranchFlow` meshed fixture with disparate root-branch flows
+    # would need re-verification here) but is NOT a currently-live defect: no such fixture exists
+    # in the tree today. Left as `findfirst` rather than `sum`/`max`-over-root-branches (the
+    # review's own alternative fix) because that numeric change would touch `ref_b` — and hence
+    # the exactness PASS/FAIL verdict — for EVERY interior branch on EVERY feeder in the suite
+    # (this gate is called from 30+ src/test/docs sites), and verifying no regression requires a
+    # full-suite run genuinely out of scope for this fix pass (per this pass's own instructions).
+    # Revisit with a full-suite-verified `sum`/`max` change if/when a `ConvexBranchFlow` meshed
+    # fixture with disparate root-branch flows is added.
     head_b = findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
     head_b === nothing && throw(
         ArgumentError(
