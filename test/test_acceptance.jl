@@ -31,8 +31,15 @@
     # (Phase4Fixtures.build_ieee13_ground_aggregators rescales the seeded shapes to a
     # residential magnitude so the head-branch-congested GLB-CVX solve is feasible and lands
     # in the thesis congestion-driven over-voltage regime).
-    GOLDEN_WELFARE = -4823.1598620624 # GLB-CVX welfare optimum (computed; test_ieee13.jl)
-    GOLDEN_V9_16 = 1.0436080536       # |V₉[16]| computed golden (test_ieee13.jl); HARD regression anchor
+    # Phase 26 gap-closure re-pin (PM-06) — kept byte-identical to test_ieee13.jl's Plan-26-17
+    # re-pin (FIX-04 battery soc[T+1] dominant, FIX-05 flexible-load reactive draw and FIX-03
+    # :smax_rev back-feed limit also contribute; see 26-POSTMERGE-TRIAGE.md), per this file's own
+    # reused-verbatim convention. OLD -4823.1598620624 -> NEW -4823.496124912337.
+    GOLDEN_WELFARE = -4823.496124912337 # GLB-CVX welfare optimum (computed; test_ieee13.jl)
+    # Phase 26 gap-closure re-pin (PM-06) — kept byte-identical to test_ieee13.jl's Plan-26-17
+    # re-pin (same causes as GOLDEN_WELFARE above); see 26-POSTMERGE-TRIAGE.md.
+    # OLD 1.0436080536 -> NEW 1.03604426055989.
+    GOLDEN_V9_16 = 1.03604426055989   # |V₉[16]| computed golden (test_ieee13.jl); HARD regression anchor
     THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude — non-failing cross-check only
 
     feeder = TSODSO.ieee13_modified()
@@ -61,6 +68,13 @@
     # Build the SAME-shape centralized cross-check via `extract_dlmp` (identical pattern to
     # test_ieee123_admm.jl / the IEEE-123 acceptance item below) rather than the dimensionally
     # mismatched single-bus `res.dadp` — reusing the SAME tolerances (atol/rtol), never new ones.
+    # D-26-02 (Plan 26-12 PM-03): once ADMM's DsoOpt correctly engages LIVE reactive coupling
+    # (this fixture carries Thermostatic/Deferrable flexible loads), the joint active+reactive
+    # dual-ascent converges more slowly than this fixture's PRE-PM-03 budget (ρ=100, maxiter=200,
+    # default ε_abs=1e-4/ε_rel=1e-3 → 103 iters, norm(Δλ)=0.697 vs bound=0.072 — FAILS). Re-tuned
+    # (measured sweep, not guessed): ε_abs=1e-5/ε_rel=1e-4/maxiter=400 converges in 377 iters to
+    # norm(Δλ)=0.0050, a ~14x margin under the SAME bound=0.072 — a genuine convergence-budget
+    # fix, not a loosened assertion (the isapprox atol/rtol below are UNCHANGED).
     admm = solve_admm(
         feeder,
         ConvexBranchFlow(),
@@ -68,6 +82,9 @@
         T = 24,
         λ₀ = λ₀,
         ρ = 100.0,
+        maxiter = 400,
+        ε_abs = 1e-5,
+        ε_rel = 1e-4,
         allow_export = true,
     )
     load_buses = sort([a.bus for a in aggs])
@@ -77,8 +94,10 @@
     # NOTE (09-REVIEW WR-01): `isapprox` on `AbstractArray` args is norm-based
     # (`norm(x-y) <= max(atol, rtol*max(norm(x),norm(y)))`), NOT elementwise — this is an
     # AGGREGATE bound over all (bus, hour) entries, not a per-entry `atol = 1e-2` guarantee.
-    # A single bus/hour DADP can differ by more than `atol` and this assertion still passes
-    # (observed: max |Δ| ≈ 0.0166 > atol = 1e-2 here, while the norm-based check still holds).
+    # A single bus/hour DADP can differ by more than `atol` and this assertion would still pass
+    # (D-26-02 re-tune, Phase 26 gap-closure: at the re-tuned convergence budget above, the
+    # observed max elementwise |Δ| ≈ 0.0020 and norm(Δ) ≈ 0.0050 both now comfortably clear
+    # atol = 1e-2, but the check is still norm-based, not elementwise, in general).
     @test isapprox(admm.λ, dlmp_c; atol = 1e-2, rtol = 1e-3)     # recovered DADP match (aggregate, not per-entry)
 
     # ── HARD regression assertion on the COMPUTED golden (09-REVIEW WR-03: restores the
@@ -107,6 +126,12 @@ end
 
     # ── Centralized ground truth: monolithic SOCP welfare + its DADP duals (ADMM-03 oracle),
     # identical to test_ieee123_admm.jl's cross-validation path.
+    # Phase 26 gap-closure (PM-05/cluster E): the real-impedance IEEE-123 feeder trips the PF-04
+    # exactness gate at Clarabel's default tol_gap=1e-8 (ratio 3.94, precision-floor artifact, NOT
+    # a genuine inexactness — the true optimum IS cone-tight; see 26-POSTMERGE-TRIAGE.md and the
+    # v2.1 IEEE-123 noise-floor precedent). Calibrated tol_gap=3e-9 clears it (ratio ~0.084);
+    # 1e-10 with tol_feas tightened FAILED on this same feeder in a prior measurement, so this is
+    # not over-tightened. `assert_socp_exact!`'s own gate (atol/rtol) is UNCHANGED.
     ctx_c, obj_c, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -114,6 +139,7 @@ end
         T = Th,
         λ₀ = λ₀,
         allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
     )
     dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
