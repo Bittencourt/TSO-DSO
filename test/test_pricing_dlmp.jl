@@ -152,7 +152,7 @@ end
     N, T = size(total)
 
     # Every field is an (N, T) matrix.
-    for f in (d.energy, d.loss, d.congestion, d.voltage, d.total)
+    for f in (d.energy, d.cone, d.congestion, d.drop, d.total)
         @test size(f) == (N, T)
     end
 
@@ -160,7 +160,7 @@ end
     # reconstructed components sum to the DADP elementwise, and `total` IS the DADP.
     @test all(
         isapprox(
-            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            d.energy[j, t] + d.cone[j, t] + d.congestion[j, t] + d.drop[j, t],
             total[j, t];
             atol = 1e-6,
             rtol = 1e-6,
@@ -171,7 +171,7 @@ end
     # PARALLEL, non-summed finite-check on `d.reactive` (REACT-02): a SEPARATE price signal
     # from the 4-term active reconstruction above — checked for finiteness only, deliberately
     # NOT folded into the sum-to-nodal-price assertion (which stays exactly 4-term).
-    for f in (d.energy, d.loss, d.congestion, d.voltage, d.reactive)
+    for f in (d.energy, d.cone, d.congestion, d.drop, d.reactive)
         @test all(isfinite, f)
     end
 
@@ -209,7 +209,7 @@ end
     # Sum-to-nodal-price holds in the over-voltage / reverse-flow regime too.
     @test all(
         isapprox(
-            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            d.energy[j, t] + d.cone[j, t] + d.congestion[j, t] + d.drop[j, t],
             total[j, t];
             atol = 1e-6,
             rtol = 1e-6,
@@ -220,7 +220,7 @@ end
     # No thermal limit exists on this fixture (99.0 sentinel), so congestion is identically 0 …
     @test all(iszero, d.congestion)
     # … while the voltage-drop component is ENGAGED (nonzero) as the back-feed lifts voltage.
-    @test any(abs(d.voltage[j, t]) > 1e-8 for j in 1:N, t in 1:T)
+    @test any(abs(d.drop[j, t]) > 1e-8 for j in 1:N, t in 1:T)
 end
 
 @testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus (PRICE-02)" tags =
@@ -264,15 +264,20 @@ end
 
     @test all(
         isapprox(
-            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            d.energy[j, t] + d.cone[j, t] + d.congestion[j, t] + d.drop[j, t],
             total[j, t];
             atol = 1e-6,
             rtol = 1e-6,
         ) for j in 1:N, t in 1:T
     )
+    # FIX-07 (phase 27): the old "d.drop ≈ 0 when [voltage] in-bound" claim conflated the
+    # `:vdrop`/`:cpydrop` EQUALITY-constraint dual (drop's underlying multiplier, always
+    # "active" as an equality) with the voltage INEQUALITY bound multiplier (v/v̂ ≤ V²max) — no
+    # longer the same statement post-Phase-26 (PM-01: the exactness copy is a genuine
+    # RESTRICTION, not a relaxation). REMOVED here; the CORRECT zero-iff-multiplier-zero
+    # property is verified separately below, on a realistic-impedance (IEEE-13) fixture.
     for t in 1:T
         @test isapprox(d.congestion[2, t], 0.0; atol = 1e-4)   # uncongested ⇒ ≈ 0
-        @test isapprox(d.voltage[2, t], 0.0; atol = 1e-4)      # in-bound ⇒ ≈ 0
         @test isapprox(d.energy[2, t], λ₀[t]; atol = 1e-6)     # energy = root MEM price
         @test isapprox(d.total[2, t], λ₀[t]; atol = 1e-2)      # total ≈ energy (energy-only)
         @test d.total[2, t] > 0                                # positive marginal cost
@@ -283,8 +288,101 @@ end
     @test dv.energy isa Vector{Float64}
     @test length(dv.total) == T
     for t in 1:T
-        @test dv.energy[t] + dv.loss[t] + dv.voltage[t] + dv.congestion[t] ≈ dv.total[t]
+        @test dv.energy[t] + dv.cone[t] + dv.drop[t] + dv.congestion[t] ≈ dv.total[t]
     end
+end
+
+@testitem "dlmp: decompose_dlmp's cone/drop components are zero IFF their underlying multiplier is zero on IEEE-13 (PRICE-02, FIX-07)" tags =
+    [:dlmp] setup = [Phase4Fixtures] begin
+    using TSODSO
+    using JuMP
+
+    # FIX-07 (phase 27): replaces the removed "d.drop ≈ 0 when [voltage] in-bound" claim (see
+    # the 2-bus item above), which conflated the drop EQUALITY-constraint dual with the voltage
+    # INEQUALITY bound multiplier — no longer the same statement post-Phase-26 (PM-01). The
+    # CORRECT property: `d.cone[j,t]`/`d.drop[j,t]` is a SUM of per-branch terms over j's root
+    # path (`-dual(:cone[b,t])[3]` / `-2r(dual(:vdrop[b,t])+dual(:cpydrop[b,t]))`), so it is
+    # ZERO IFF EVERY branch on that path has its underlying multiplier at zero. Verified on the
+    # IEEE-13 ground solve — a realistic-impedance fixture (r,x genuinely nonzero on every
+    # branch), NOT the toy near-lossless 2-bus other items use. The root bus (empty root→root
+    # path) gives the trivial "zero" side of the IFF (a vacuously-true empty product == the
+    # component's exact 0.0 by construction); every non-root bus/hour on this fixture has BOTH
+    # multipliers genuinely nonzero (confirmed by this plan's own measurement script), so the
+    # "nonzero" side is the one this test actually exercises — precisely the direction a
+    # dropped/mis-signed accumulation term would violate.
+    feeder = ieee13_modified()
+    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = Phase4Fixtures.mem_price_profile()
+    ctx, _obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Phase4Fixtures.T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+
+    d = decompose_dlmp(ctx)
+    N, Tfull = size(extract_dlmp(ctx))
+    root = feeder.root
+    mult_atol = 1e-9
+    comp_atol = 1e-6
+    hours = 1:4:Tfull   # a representative sample spanning the horizon (every 4th hour)
+
+    for j in 1:N
+        pth = j == root ? Int[] : TSODSO._path_branches(feeder, j)
+        for t in hours
+            drop_mult_zero = all(
+                isapprox(dual(ctx.constraints[:vdrop][b, t]), 0.0; atol = mult_atol) &&
+                isapprox(dual(ctx.constraints[:cpydrop][b, t]), 0.0; atol = mult_atol) for
+                b in pth
+            )
+            @test isapprox(d.drop[j, t], 0.0; atol = comp_atol) == drop_mult_zero
+
+            cone_mult_zero = all(
+                isapprox(dual(ctx.constraints[:cone][b, t])[3], 0.0; atol = mult_atol) for
+                b in pth
+            )
+            @test isapprox(d.cone[j, t], 0.0; atol = comp_atol) == cone_mult_zero
+        end
+    end
+end
+
+@testitem "dlmp: DlmpDecomposition's deprecated .loss/.voltage aliases still work and return the identical .cone/.drop value (FIX-07)" tags =
+    [:dlmp] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # Suite-level regression for the Base.getproperty deprecation shim (src/pricing/dlmp.jl):
+    # confirms BOTH the full-matrix (`bus === nothing`) and `bus`-sliced return shapes honor
+    # the alias identically, on an existing fixture already built earlier in this file.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 1e-6, 1e-6, 10.0)],
+        1,
+    )
+    T = 3
+    λ₀ = fill(40.0, T)
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    ctx, _obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10),
+    )
+
+    d = decompose_dlmp(ctx)
+    @test d.loss == d.cone
+    @test d.voltage == d.drop
+
+    dv = decompose_dlmp(ctx; bus = 2, T = T)
+    @test dv.loss == dv.cone
+    @test dv.voltage == dv.drop
 end
 
 @testitem "dlmp: reactive price is degenerate at the root and finite/economically-consistent at a load bus on a lossy 2-bus (REACT-02)" tags =
@@ -430,7 +528,7 @@ end
     # the CONTRACT for this specific receiving-end-binding regime).
     @test all(
         isapprox(
-            d.energy[j, t] + d.loss[j, t] + d.congestion[j, t] + d.voltage[j, t],
+            d.energy[j, t] + d.cone[j, t] + d.congestion[j, t] + d.drop[j, t],
             total[j, t];
             atol = 1e-6,
             rtol = 1e-6,

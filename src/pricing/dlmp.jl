@@ -20,16 +20,18 @@
 #     DC/active-only formulation never registers `:balance_q`. This is a SEPARATE price
 #     signal from the active DADP — never summed into it.
 #
-#   * `decompose_dlmp(ctx)`  — the four-way DLMP split into energy + loss + congestion +
-#     voltage that provably SUMS to the nodal price, PLUS the reactive price as a 5th,
+#   * `decompose_dlmp(ctx)`  — the four-way DLMP split into energy + cone + congestion +
+#     drop that provably SUMS to the nodal price, PLUS the reactive price as a 5th,
 #     UN-summed field (`reactive`). The thesis gives the active split only qualitatively
 #     (Fig 4.5/4.6), so each component is reconstructed INDEPENDENTLY from a DISTINCT
-#     registered dual (RESEARCH strategy B — loss is NOT the leftover) and a HARD
-#     relative-tolerance assertion checks `energy+loss+congestion+voltage ≈ dual(balance_p)`
+#     registered dual (RESEARCH strategy B — cone is NOT the leftover) and a HARD
+#     relative-tolerance assertion checks `energy+cone+congestion+drop ≈ dual(balance_p)`
 #     per node/hour, throwing with the worst per-node residual so a dropped term is
 #     localizable (RESEARCH Pitfall 2). `reactive` is documented and citable but is NOT part
 #     of this 4-term active-price reconstruction (REACT-02; distinct component, distinct unit
-#     of account).
+#     of account). [FIX-07, phase 27] `cone`/`drop` are named after what they mathematically
+#     ARE (the rotated-SOC cone-slot multiplier, thesis 3.39, and the voltage-drop/copy-drop
+#     multiplier, thesis 3.33/3.43); `.loss`/`.voltage` remain as deprecated aliases.
 #
 # Decomposition derivation (KKT stationarity of the branch active flow P_b, empirically
 # certified to machine precision on the 2-bus / IEEE-13 / high-PV solves). For branch
@@ -41,15 +43,17 @@
 # SOC dual (3.39; slot 3 is the P-slot), and smax_dualᵦ is the apparent-power SOC dual (3.36;
 # slot 2 is the P-slot, present only where a real limit binds — the head branch). Because the
 # feeder is a radial TREE, node j has a unique path root→j; summing the increment telescopes
-# to λ_j − λ_0, attributing:
+# to λ_j − λ_0, attributing (FIX-07, phase 27: fields named `cone`/`drop` after what they ARE,
+# not the misleading `loss`/`voltage` they were previously called):
 #   energy = λ_0 (root MEM price, same at every node),
-#   loss   = Σ_path −cone_dual[3]        (the SOC/DistFlow marginal-loss term, 3.39),
+#   cone   = Σ_path −cone_dual[3]        (the rotated-SOC cone-slot multiplier, 3.39),
 #   cong   = Σ_path −smax_dual[2] − smax_rev_dual[2]
 #                                         (thermal congestion, SENDING-end 3.36 PLUS
 #                                          RECEIVING-end 3.37; 0 unless a head-branch limit
 #                                          binds, from EITHER end),
-#   volt   = Σ_path −2·r·(β + γ)         (voltage-drop propagation of the v/v̂ bound pressure,
-#                                          3.33/3.43; 0 when no voltage headroom is engaged).
+#   drop   = Σ_path −2·r·(β + γ)         (voltage-drop/copy-drop multiplier propagation of the
+#                                          v/v̂ bound pressure, 3.33/3.43; 0 when no voltage
+#                                          headroom is engaged).
 #
 # [Phase 26 / FIX-03 congestion follow-up, plan 26-10] `:smax_rev` (thesis 3.37, the
 # RECEIVING-end apparent-power cone added by plan 26-05) was NOT read by the congestion term
@@ -219,15 +223,69 @@ function _smax_P(smax, keyset::Set{Tuple{Int, Int}}, b::Int, t::Int)
 end
 
 """
-    decompose_dlmp(ctx; bus = nothing, T = nothing, rtol = 1e-5, atol = 1e-7)
-        -> NamedTuple(energy, loss, congestion, voltage, reactive, total)
+    DlmpDecomposition{A}
 
-Four-way DLMP decomposition (PRICE-02): split the nodal ACTIVE price into **energy + loss +
-congestion + voltage** components that provably SUM to the DADP, PLUS a 5th, UN-summed
+The return type of [`decompose_dlmp`](@ref): the five-component (plus `total`) DLMP
+decomposition. `A` is `Matrix{Float64}` for the full-`(N_buses, T)` shape (`bus === nothing`)
+or a `Vector{Float64}` for the `bus`-sliced shape — the SAME struct is reused for both.
+
+Fields (thesis-traceable multiplier identity, FIX-07 — named after what each component
+mathematically IS, not a downstream physical effect):
+
+  - `energy::A`     — the root MEM price `dual(:balance_p[root,t])`, SAME at every node (≈λ₀);
+  - `cone::A`       — the rotated-SOC cone-slot multiplier (thesis 3.39; formerly `loss`);
+  - `drop::A`       — the voltage-drop/copy-drop multiplier (thesis 3.33/3.43; formerly
+    `voltage`);
+  - `congestion::A` — the thermal-limit dual (thesis 3.36 sending-end / 3.37 receiving-end);
+  - `reactive::A`   — the reactive nodal price (`dual(:balance_q)`), a SEPARATE, UN-summed
+    signal (REACT-02), never folded into `total`;
+  - `total::A`      — the reference DADP (`dual(:balance_p)`); `energy+cone+congestion+drop`
+    reconstructs this within `decompose_dlmp`'s hard sum-to-price tolerance.
+
+`.loss` and `.voltage` remain accessible as ONE-TIME `Base.depwarn`-deprecated aliases for
+`.cone`/`.drop` respectively (never erroring, returning the identical value) — kept for
+backward compatibility with existing consumers, removal scheduled for Phase 36 (Code & Export
+Cleanup).
+"""
+struct DlmpDecomposition{A}
+    energy::A
+    cone::A
+    drop::A
+    congestion::A
+    reactive::A
+    total::A
+end
+
+function Base.getproperty(d::DlmpDecomposition, s::Symbol)
+    if s === :loss
+        Base.depwarn(
+            "DlmpDecomposition.loss is deprecated, use .cone (the rotated-SOC cone-slot " *
+            "multiplier, thesis 3.39) -- removal scheduled for Phase 36",
+            :decompose_dlmp,
+        )
+        return getfield(d, :cone)
+    elseif s === :voltage
+        Base.depwarn(
+            "DlmpDecomposition.voltage is deprecated, use .drop (the voltage-drop/copy-drop " *
+            "multiplier, thesis 3.33/3.43) -- removal scheduled for Phase 36",
+            :decompose_dlmp,
+        )
+        return getfield(d, :drop)
+    else
+        return getfield(d, s)
+    end
+end
+
+"""
+    decompose_dlmp(ctx; bus = nothing, T = nothing, rtol = 1e-5, atol = 1e-7)
+        -> DlmpDecomposition
+
+Four-way DLMP decomposition (PRICE-02): split the nodal ACTIVE price into **energy + cone +
+congestion + drop** components that provably SUM to the DADP, PLUS a 5th, UN-summed
 `reactive` field (REACT-02). Each active component is reconstructed INDEPENDENTLY from a
-DISTINCT registered dual (RESEARCH strategy B — loss is NOT the leftover, so a dropped
-congestion/voltage term cannot hide), then a HARD relative-tolerance assertion checks
-`energy + loss + congestion + voltage ≈ total` per node/hour and `total ≈ extract_dlmp(ctx)`,
+DISTINCT registered dual (RESEARCH strategy B — cone is NOT the leftover, so a dropped
+congestion/drop term cannot hide), then a HARD relative-tolerance assertion checks
+`energy + cone + congestion + drop ≈ total` per node/hour and `total ≈ extract_dlmp(ctx)`,
 throwing (never `@assert`) with the worst per-node residual so a missing term is localizable
 (RESEARCH Pitfall 2; threat T-05-02). This 4-term reconstruction and its assertion are
 UNCHANGED by the `reactive` field — `reactive` is a SEPARATE price signal (the dual of
@@ -236,16 +294,22 @@ UNCHANGED by the `reactive` field — `reactive` is a SEPARATE price signal (the
 Components (each summed over the unique radial path root→j; derivation in the file header):
 
   - `energy`     = `dual(:balance_p[root, t])`     — the MEM price, SAME at every node (≈ λ₀);
-  - `loss`       = `Σ_path −dual(:cone[b,t])[3]`   — SOC/DistFlow marginal loss (thesis 3.39);
+  - `cone`       = `Σ_path −dual(:cone[b,t])[3]`   — the rotated-SOC cone-slot multiplier
+    (thesis 3.39);
   - `congestion` = `Σ_path (−dual(:smax[b,t])[2] − dual(:smax_rev[b,t])[2])` — thermal
     congestion, SENDING-end (3.36) PLUS RECEIVING-end (3.37, FIX-03/26-05; soft-guarded —
     reads 0 if `:smax_rev` is absent from `ctx`) — 0 off the head branch, from either end;
-  - `voltage`    = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — voltage-drop propagation of
-    the v/v̂ bound pressure (thesis 3.33/3.43; 0 with unengaged voltage headroom);
+  - `drop`       = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — the voltage-drop/copy-drop
+    multiplier (thesis 3.33/3.43; 0 with unengaged voltage headroom);
   - `reactive`   = `extract_reactive_dlmp(ctx)`    — the reactive nodal price (REACT-02;
     `dual(:balance_q[j,t])`), a documented, citable 5th component, DISTINCT from and NEVER
     summed into `total`;
   - `total`      = `extract_dlmp(ctx)`             — the reference DADP (active price only).
+
+FIX-07 (phase 27): these fields were previously named `loss`/`voltage` — misleading, since
+they name each component after a downstream PHYSICAL EFFECT rather than the multiplier it
+provably IS. `.loss`/`.voltage` remain accessible as deprecated aliases (see
+[`DlmpDecomposition`](@ref)) so existing consumers keep working unchanged.
 
 Inherits the PF-04 exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP ctx is
 refused). Requires the SOCP branch-flow handles registered by plan 05-01 (`:cone`, `:vdrop`,
@@ -256,7 +320,7 @@ additional presence guard here (the guard lives in the standalone `extract_react
 direct/DC-only callers).
 
 With `bus === nothing` (default) every field is an `(N_buses, T)` matrix; passing `bus`
-returns that bus's length-`T` component vectors.
+returns a `DlmpDecomposition` of that bus's length-`T` component vectors.
 """
 function decompose_dlmp(
     ctx::ModelContext;
@@ -281,7 +345,8 @@ function decompose_dlmp(
     N, Tfull = size(bp)
     root = feeder.root
 
-    cone = ctx.constraints[:cone]
+    cone_constr = ctx.constraints[:cone]      # constraint container (renamed from `cone` to
+    # avoid shadowing the `cone` COMPONENT accumulator matrix built below, FIX-07)
     vdrop = ctx.constraints[:vdrop]
     cpydrop = ctx.constraints[:cpydrop]
     smax = ctx.constraints[:smax]
@@ -296,18 +361,18 @@ function decompose_dlmp(
 
     total = extract_dlmp(ctx)                          # (N, Tfull) reference DADP (re-runs gate)
     energy = Matrix{Float64}(undef, N, Tfull)
-    loss = zeros(Float64, N, Tfull)
+    cone = zeros(Float64, N, Tfull)
     congestion = zeros(Float64, N, Tfull)
-    voltage = zeros(Float64, N, Tfull)
+    drop = zeros(Float64, N, Tfull)
 
     # Per-branch/time increments, computed ONCE (each from its own distinct dual — strategy B).
     nB = length(feeder.branches)
-    loss_b = Matrix{Float64}(undef, nB, Tfull)
+    cone_b = Matrix{Float64}(undef, nB, Tfull)
     cong_b = Matrix{Float64}(undef, nB, Tfull)
-    volt_b = Matrix{Float64}(undef, nB, Tfull)
+    drop_b = Matrix{Float64}(undef, nB, Tfull)
     for b in 1:nB, t in 1:Tfull
         r = feeder.branches[b].r
-        loss_b[b, t] = -dual(cone[b, t])[3]                        # 3.39 P-slot (loss)
+        cone_b[b, t] = -dual(cone_constr[b, t])[3]                 # 3.39 P-slot (cone)
         # 3.36 P-slot (sending-end congestion) PLUS 3.37 P-slot (receiving-end congestion,
         # FIX-03/26-05, plan 26-10) — same sign convention (SAME cone shape, SAME filter),
         # empirically verified against the hard sum-to-price assertion below on IEEE-13's
@@ -315,7 +380,7 @@ function decompose_dlmp(
         cong_b[b, t] =
             -_smax_P(smax, smaxkeys, b, t) -
             (smax_rev === nothing ? 0.0 : _smax_P(smax_rev, smaxkeys, b, t))
-        volt_b[b, t] = -2 * r * (dual(vdrop[b, t]) + dual(cpydrop[b, t]))  # 3.33/3.43 (voltage)
+        drop_b[b, t] = -2 * r * (dual(vdrop[b, t]) + dual(cpydrop[b, t]))  # 3.33/3.43 (drop)
     end
 
     # Accumulate along each node's unique root→j tree path (energy is the same root price).
@@ -324,9 +389,9 @@ function decompose_dlmp(
         for t in 1:Tfull
             energy[j, t] = total[root, t]
             for b in pth
-                loss[j, t] += loss_b[b, t]
+                cone[j, t] += cone_b[b, t]
                 congestion[j, t] += cong_b[b, t]
-                voltage[j, t] += volt_b[b, t]
+                drop[j, t] += drop_b[b, t]
             end
         end
     end
@@ -341,7 +406,7 @@ function decompose_dlmp(
     worst_j = 0
     worst_t = 0
     for j in 1:N, t in 1:Tfull
-        recon = energy[j, t] + loss[j, t] + congestion[j, t] + voltage[j, t]
+        recon = energy[j, t] + cone[j, t] + congestion[j, t] + drop[j, t]
         res = abs(recon - total[j, t])
         if res > worst_res
             worst_res = res
@@ -352,24 +417,24 @@ function decompose_dlmp(
     tol = atol + rtol * maximum(abs, total)
     worst_res <= tol || error(
         "decompose_dlmp: four-way split does NOT reconstruct the nodal DADP — worst residual " *
-        "|energy+loss+congestion+voltage − dual(balance_p)| = $worst_res at (bus=$worst_j, " *
+        "|energy+cone+congestion+drop − dual(balance_p)| = $worst_res at (bus=$worst_j, " *
         "t=$worst_t) exceeds tol=$tol (atol=$atol, rtol=$rtol). A component is missing or " *
         "mis-signed (RESEARCH Pitfall 2; thesis 3.31/3.33/3.36/3.39/3.43; threat T-05-02).",
     )
 
     reactive = extract_reactive_dlmp(ctx)               # (N, Tfull) reactive price (REACT-02)
 
-    bus === nothing && return (; energy, loss, congestion, voltage, reactive, total)
+    bus === nothing && return DlmpDecomposition(energy, cone, drop, congestion, reactive, total)
     Tsel = T === nothing ? Tfull : Int(T)
     rows = 1:Tsel
-    return (;
-        energy = energy[bus, rows],
-        loss = loss[bus, rows],
-        congestion = congestion[bus, rows],
-        voltage = voltage[bus, rows],
-        reactive = reactive[bus, rows],
-        total = total[bus, rows],
+    return DlmpDecomposition(
+        energy[bus, rows],
+        cone[bus, rows],
+        drop[bus, rows],
+        congestion[bus, rows],
+        reactive[bus, rows],
+        total[bus, rows],
     )
 end
 
-export extract_dlmp, extract_reactive_dlmp, decompose_dlmp
+export extract_dlmp, extract_reactive_dlmp, decompose_dlmp, DlmpDecomposition

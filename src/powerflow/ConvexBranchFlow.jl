@@ -241,9 +241,9 @@ function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1
         [0.5 * l[b, t], v[B[b].from, t], P[b, t], Q[b, t]] in RotatedSecondOrderCone()
     )
     # PRICE-02 (05-01): register the rotated cone (3.39) so its dual is recoverable for the
-    # DLMP loss/voltage split (decompose_dlmp, plan 05-02). PURELY ADDITIVE — the handle is
+    # DLMP cone/drop split (decompose_dlmp, plan 05-02). PURELY ADDITIVE — the handle is
     # the SAME container already built above; nothing about the feasible set changes.
-    register_constraint!(ctx, :cone, cone)   # dual feeds the loss/voltage DLMP component (3.39)
+    register_constraint!(ctx, :cone, cone)   # dual feeds the cone/drop DLMP component (Phase 27 rename) (3.39)
 
     # TRUE voltage drop (thesis 3.33): v_j = v_i − 2(rP + xQ) + (r²+x²)·l. Unlike
     # LinDistFlow (l→0), the loss-current term (r²+x²)·l is retained.
@@ -255,8 +255,8 @@ function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1
         (B[b].r^2 + B[b].x^2) * l[b, t]
     )
     # PRICE-02 (05-01): register the true voltage drop (3.33) — its dual β feeds the
-    # loss+voltage DLMP component. PURELY ADDITIVE (same container, unchanged math).
-    register_constraint!(ctx, :vdrop, vdrop)   # dual β feeds loss+voltage DLMP component (3.33)
+    # cone+drop DLMP component. PURELY ADDITIVE (same container, unchanged math).
+    register_constraint!(ctx, :vdrop, vdrop)   # dual β feeds cone+drop DLMP component (Phase 27 rename) (3.33)
 
     # FIX-03 (26-05) / CONTEXT.md "share ONE cpydrop helper ... WHERE the forms coincide":
     # the thesis eq. 3.37 receiving-end power (P − r·l, Q − x·l) is ALWAYS in this

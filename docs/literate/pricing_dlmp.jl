@@ -33,21 +33,28 @@
 #
 # ```math
 # \lambda_j[t] \;=\; \underbrace{\lambda_0[t]}_{\text{energy}} \;+\;
-# \underbrace{\sum_{b\in\text{path}} -\,\text{dual}(\text{cone}[b,t])[3]}_{\text{loss (3.39)}} \;+\;
+# \underbrace{\sum_{b\in\text{path}} -\,\text{dual}(\text{cone}[b,t])[3]}_{\text{cone (3.39)}} \;+\;
 # \underbrace{\sum_{b\in\text{path}} -\,\text{dual}(\text{smax}[b,t])[2]}_{\text{congestion (3.36)}} \;+\;
-# \underbrace{\sum_{b\in\text{path}} -2\,r_b\big(\text{dual}(\text{vdrop}[b,t])+\text{dual}(\text{cpydrop}[b,t])\big)}_{\text{voltage (3.33/3.43)}}
+# \underbrace{\sum_{b\in\text{path}} -2\,r_b\big(\text{dual}(\text{vdrop}[b,t])+\text{dual}(\text{cpydrop}[b,t])\big)}_{\text{drop (3.33/3.43)}}
 # ```
 #
 # - **energy** — the root MEM price `dual(balance_p[root,t])`, the SAME at every node;
-# - **loss** — the SOC/DistFlow marginal-loss term, sourced from the rotated
+# - **cone** — the rotated-SOC cone-slot multiplier, sourced from the rotated
 #   second-order-cone dual (eq. 3.39);
 # - **congestion** — the thermal-limit dual (eq. 3.36), zero unless a branch's apparent
 #   power actually binds its `smax`;
-# - **voltage** — propagation of the voltage-drop bound pressure (eqs. 3.33/3.43), zero
-#   when no voltage headroom is engaged.
+# - **drop** — the voltage-drop/copy-drop multiplier (eqs. 3.33/3.43), propagating the
+#   bound pressure along the path.
 #
-# `decompose_dlmp` asserts `energy + loss + congestion + voltage ≈ dual(balance_p)` at
+# `decompose_dlmp` asserts `energy + cone + congestion + drop ≈ dual(balance_p)` at
 # every (bus, hour) — a HARD relative-tolerance gate, never a soft check.
+#
+# !!! note "Deprecated field names (FIX-07, phase 27)"
+#     `decompose_dlmp` returned a `.loss`/`.voltage`-named NamedTuple prior to phase 27; those
+#     names are now `.cone`/`.drop` respectively (renamed after what each component
+#     mathematically IS, not a downstream physical effect). `.loss`/`.voltage` remain
+#     accessible as deprecated aliases (one-time `Base.depwarn`, never erroring) — removal is
+#     scheduled for Phase 36 (Code & Export Cleanup).
 #
 # ## Welfare accounting — social = prosumer + DSO surplus
 #
@@ -115,9 +122,9 @@ dlmp = extract_dlmp(ctx)
 decomp = decompose_dlmp(ctx)
 (
     energy = sum(decomp.energy),
-    loss = sum(decomp.loss),
+    cone = sum(decomp.cone),
     congestion = sum(decomp.congestion),
-    voltage = sum(decomp.voltage),
+    drop = sum(decomp.drop),
 )
 
 # ## Welfare accounting — the surplus split
@@ -141,9 +148,9 @@ acct = welfare_accounting(ctx; T = T, λ₀ = λ₀)
 # leaf bus is the CHEAPEST node, not the dearest (the classic DLMP sign flip under reverse
 # flow; the import-dominated case would lift the leaf above `λ₀` instead). The RIGHT panel
 # stacks exactly those increments at the LEAF bus (the deepest node, hence the largest
-# telescoped sum): the loss (3.39), congestion (3.36), and voltage (3.33/3.43) components
+# telescoped sum): the cone (3.39), congestion (3.36), and drop (3.33/3.43) components
 # of `λ_leaf[t] − λ₀[t]` per hour. On this small unconstrained fixture the congestion and
-# voltage duals are numerically zero (no `smax` or voltage bound binds), so the stack is
+# drop duals are numerically zero (no `smax` or voltage bound binds), so the stack is
 # honestly all (negative) marginal-loss — the same decomposition whose four-way sum-back
 # `decompose_dlmp` hard-asserted above. Same guarded-CairoMakie idiom as `admm.jl` /
 # `socp_applicability.jl`: the block's final expression is the `Figure`, which Documenter
@@ -179,7 +186,7 @@ if Base.find_package("CairoMakie") !== nothing
         xticks = hours,
         title = "Leaf-bus locational increment, stacked (eq. 3.39/3.36/3.33)",
     )
-    comps = (decomp.loss, decomp.congestion, decomp.voltage)
+    comps = (decomp.cone, decomp.congestion, decomp.drop)
     bar_x = repeat(collect(hours), length(comps))
     bar_stack = repeat(1:length(comps); inner = T)
     bar_y = vcat((M[leaf, :] for M in comps)...)
@@ -187,7 +194,7 @@ if Base.find_package("CairoMakie") !== nothing
     Legend(
         fig[1, 3],
         [PolyElement(color = c) for c in comp_colors],
-        ["loss (3.39)", "congestion (3.36)", "voltage (3.33/3.43)"];
+        ["cone (3.39)", "congestion (3.36)", "drop (3.33/3.43)"];
         framevisible = false,
     )
     fig
