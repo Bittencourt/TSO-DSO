@@ -66,6 +66,10 @@ in-phase; suite green at close. Thesis-reproduction restatement is Phase 28.
 - FIX-10: truth settlement via AC POWER FLOW (ACPowerFlow/Ipopt at fixed realized dispatch), not the
   SOCP re-solve (genuinely inexact on 18/20 seeds under forecast-error reverse flow); seed=5 masks
   reverted — 27-08.
+- FIX-10 refinement: truth plant = AC PHYSICS ONLY (no thermal/voltage limits as constraints);
+  limit violations REPORTED as a settlement diagnostic; seed=1 restored — 27-09.
+- FIX-09 extension (orchestrator, same decision): FIT SITE-2 fixed-dispatch AC-PF uses the same AC
+  physics-only settlement (its SOCP re-solve is structurally inexact: gap 211 on REPRO-01) — 27-09.
 
 ### Golden policy + process (SC-6, lessons from Phase 26)
 - Same as Phase 26: every moved golden re-pinned in-phase with old→new + cause comment and a
