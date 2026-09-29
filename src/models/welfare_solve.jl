@@ -261,7 +261,17 @@ function solve_welfare(
     # T-03-13): with λ_min < λ_med < λ_max there is no binary/complementarity constraint,
     # so p_ch·p_dch = 0 must be VERIFIED numerically at the welfare optimum. The check is a
     # SCALE-FREE relative test (WR-02) — see `assert_battery_complementarity!`.
-    assert_battery_complementarity!(ctx; τ = τ, T = T)
+    #
+    # Plan 26-14 (PM-02): App. C's "no simultaneous charge/discharge" argument implicitly
+    # assumes η=1. For η<1, whenever DLMP < λ_med and both legs are small, an SOC-neutral
+    # round trip earns (λ_med−DLMP)(1−η²) > 0, so a GENUINE, KKT-consistent simultaneous
+    # charge/discharge CAN be the true optimum on the AC (NLP/Ipopt) oracle path — this is a
+    # latent gap in App. C's own parametrization, not a Plan 26-04 bug (see 26-FINDINGS.md).
+    # The AC/NLP oracle therefore REPORTS (never throws on) a violation via `:warn`; every
+    # other (SOCP) call site is COMPLETELY unaffected and keeps the default `:error` (still
+    # throws, byte-for-byte the same message).
+    on_violation = problem_class(pf) isa SOCP ? :error : :warn
+    assert_battery_complementarity!(ctx; τ = τ, T = T, on_violation = on_violation)
 
     # DADP = dual of the ACTIVE balance at the first aggregator's bus over the horizon.
     priced = aggregators[1].bus
@@ -270,13 +280,35 @@ function solve_welfare(
 end
 
 """
-    assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T])
+    assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T],
+                                     on_violation::Symbol = :error)
 
 Verify the App. C no-binary battery complementarity `p_ch[t]·p_dch[t] = 0` numerically at a
-solved point, throwing loudly on violation (RESEARCH Pitfall 1, threat T-03-13). There is NO
-`p_ch·p_dch == 0` constraint in the model — the strict `λ_min < λ_med < λ_max` parametrization
-alone makes simultaneous charge/discharge dominated — so this post-solve certificate is the
-only thing that catches a degenerate co-activation.
+solved point (RESEARCH Pitfall 1, threat T-03-13). There is NO `p_ch·p_dch == 0` constraint in
+the model — the strict `λ_min < λ_med < λ_max` parametrization alone makes simultaneous
+charge/discharge dominated — so this post-solve certificate is the only thing that catches a
+degenerate co-activation.
+
+`on_violation` selects what happens on a violation:
+  - `:error` (default) — throw, byte-for-byte the same message as before Plan 26-14. Used by
+    EVERY call site except the AC/NLP path in `solve_welfare` (`src/planning/subproblem.jl`,
+    `src/admm/AgrOpt.jl`, `src/models/stochastic_welfare.jl` all pass only `τ`/`T` and so get
+    this default, unchanged).
+  - `:warn` — log the SAME message via `@warn` and CONTINUE (every violating `(bus, t)` pair
+    is reported, not just the first). `solve_welfare` passes this ONLY on the AC/NLP
+    (non-SOCP) path. Plan 26-14 (PM-02) found that App. C's "no simultaneous
+    charge/discharge" argument implicitly assumes η=1: for η<1, whenever DLMP < λ_med and
+    both legs are small, an SOC-neutral round trip earns `(λ_med−DLMP)(1−η²) > 0`, so a
+    GENUINE, KKT-consistent simultaneous charge/discharge CAN be the true optimum — verified
+    to 4 digits against the App. C KKT identity on the EXACT-04 high-PV AC fixture (bus 2,
+    t=7). This is a LATENT model-parametrization gap in App. C itself, not a solver bug, so
+    the AC oracle must not hard-fail on an optimum it correctly found; see the dated finding
+    in `26-FINDINGS.md` and `docs/literate/prosumer_welfare.jl` for the backlog item (a
+    proper complementarity treatment — binary/MPEC or an η-aware round-trip penalty — is
+    deferred, NOT done in this plan). The SOCP path's own call site is UNCHANGED and still
+    throws (its looser `τ=1e-3` masks the identical effect, so no equivalent finding fires
+    there).
+  - any other value — throws an `ArgumentError` (fail loud on programmer error).
 
 WR-02 — the test is RELATIVE (scale-free), not an absolute product threshold. For each
 battery it normalizes the product by the square of the device's rated charge/discharge power
@@ -306,7 +338,14 @@ independently-measured tolerance. Excluding `:q`-carrying devices here keeps the
 checks structurally mutually exclusive over the same `ctx.meta[:agg_device_vars]` stash —
 this one never silently runs against a `FourQuadBESS`'s vars.
 """
-function assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T])
+function assert_battery_complementarity!(
+    ctx::ModelContext;
+    τ::Real,
+    T::Int = ctx.meta[:T],
+    on_violation::Symbol = :error,
+)
+    on_violation in (:error, :warn) ||
+        throw(ArgumentError("assert_battery_complementarity!: invalid on_violation=$(repr(on_violation)), expected :error or :warn"))
     haskey(ctx.meta, :agg_device_vars) || return nothing
     for (bus, varlist) in ctx.meta[:agg_device_vars]
         for v in varlist
@@ -317,11 +356,17 @@ function assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = c
             scale² = max(abs(pmax), 1e-8)^2
             for t in 1:T
                 prod = value(v.p_ch[t]) * value(v.p_dch[t])
-                prod < τ * scale² || error(
-                    "Battery complementarity violated at bus $bus, t=$t: " *
-                    "p_ch·p_dch = $prod ≥ τ·Pmax² = $(τ * scale²) " *
-                    "(relative τ=$τ, Pmax≈$pmax; App. C, threat T-03-13)",
-                )
+                if prod >= τ * scale²
+                    msg =
+                        "Battery complementarity violated at bus $bus, t=$t: " *
+                        "p_ch·p_dch = $prod ≥ τ·Pmax² = $(τ * scale²) " *
+                        "(relative τ=$τ, Pmax≈$pmax; App. C, threat T-03-13)"
+                    if on_violation === :error
+                        error(msg)
+                    else
+                        @warn msg
+                    end
+                end
             end
         end
     end
