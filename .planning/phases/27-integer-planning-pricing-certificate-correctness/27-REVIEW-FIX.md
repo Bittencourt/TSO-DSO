@@ -1,15 +1,87 @@
 ---
 phase: 27-integer-planning-pricing-certificate-correctness
-fixed_at: 2026-09-29T13:12:15Z
+fixed_at: 2026-09-29T14:45:00Z
 review_path: .planning/phases/27-integer-planning-pricing-certificate-correctness/27-REVIEW.md
-iteration: 1
-findings_in_scope: 5
-fixed: 5
+iteration: 2
+findings_in_scope: 1
+fixed: 1
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 27: Code Review Fix Report
+
+**Fixed at:** 2026-09-29T14:45:00Z
+**Source review:** .planning/phases/27-integer-planning-pricing-certificate-correctness/27-REVIEW.md
+**Iteration:** 2 (iteration 1 preserved below)
+
+**Iteration 2 summary:**
+- Findings in scope: 1 (WR-04, the sole open finding from the iteration-2 re-review;
+  fix_scope=critical_warning)
+- Fixed: 1
+- Skipped: 0
+
+## Iteration 2 — Fixed Issues
+
+### WR-04: CR-02's regression test does not exercise `run_mpc`'s actual accumulation wiring — a revert of the fixed call site would not be caught
+
+**Files modified:** `src/experiments/mpc_loop.jl`, `test/test_mpc_loop.jl`
+**Commit:** `7c3e401`
+**Applied fix:** Added a minimal, documented diagnostic field to `run_mpc`'s return
+`NamedTuple`, `pvbattery_truth_trace::Vector{<:NamedTuple}` — one entry per applied hour
+per `PVBattery` device, each `(; abs_hour, bus, p_ch_true, pv_used_true, p_dch, Ppv_true,
+net_p_delta)`. Critically, `net_p_delta` is captured as `net_p_after - net_p_before`
+wrapped directly AROUND the real accumulation line
+(`net_p += pv_used_true - p_ch_true + p_dch1`, `mpc_loop.jl`) rather than being
+independently re-derived from the clip helper's own output — this makes the diagnostic
+provably sensitive to a future revert of that exact line, not just to a change in
+`_mpc_pvbattery_true_clip` itself. The addition is pure accumulation/bookkeeping: no
+existing control, pricing, or state-propagation decision reads or is affected by the new
+field (confirmed: the zero-forecast-error happy-path fixture's byte-identity invariant,
+`isapprox(r.realized_welfare, r.forecast_settled_welfare; atol=1e-6)`, still holds after
+this change — see verification below).
+
+Added a committed `@testitem`
+(`"mpc_loop: A6 clip invariant holds at run_mpc's REAL PVBattery call site, not just the
+isolated helper (WR-04, 27-REVIEW.md iteration 2)"`) that drives `run_mpc`'s PUBLIC path
+on the SAME "forced-PV-shortfall" fixture already used by the existing FIX-10/CR-02 items
+(`feeder=:ieee13, T=9, mpc_H=3, mpc_step=1, mpc_terminal_soc=true,
+mpc_forecast_error=0.3, seed=1` — `fe.pv_factor > 1` at several resolves, per the
+existing CR-02 item's own measured values) and asserts, for EVERY entry in
+`r.pvbattery_truth_trace`, that the quantity ACTUALLY summed into `net_p` this hour
+(recovered as `net_p_delta + p_ch_true - p_dch`, never re-derived from the clip helper)
+never exceeds the device's TRUE PV availability `Ppv_true` — the exact CR-02/WR-04
+invariant, now checked through the real call site.
+
+**Verified by hand (never `git stash` — a temporary in-place edit, restored
+immediately after, per this task's explicit instruction):** reverted ONLY the
+accumulation line from `net_p += pv_used_true - p_ch_true + p_dch1` back to the
+pre-CR-02 `net_p += pv_used1 - p_ch_true + p_dch1` (the exact historical bug) and
+re-ran the committed test body as a standalone `julia --project=.` script (never
+TestItemRunner, per this repo's own established trap —
+`gsd-plan-verify-testitemrunner-trap` memory): the test FAILED
+(`AssertionError`/`Test Failed`: `pv_used_actually_summed=0.0035313963145166567 >
+Ppv_true=0.003125668198004747` at `abs_hour=3, bus=2`). Restored the fixed line and
+re-ran: the test PASSED (70 `pvbattery_truth_trace` entries checked on this fixture, all
+invariants held). Also smoke-tested the existing zero-forecast-error happy-path
+`@testitem` end-to-end after the change (no TestItemRunner — direct script reproducing
+its exact body plus a `pvbattery_truth_trace` sanity check): unaffected, same pass
+result as before this change. Both `src/experiments/mpc_loop.jl` and
+`test/test_mpc_loop.jl` parse cleanly (`Meta.parseall`, Tier-2 syntax check).
+
+## Iteration 2 — Skipped Issues
+
+None — the sole in-scope finding (WR-04) was fixed.
+
+---
+
+_Fixed: 2026-09-29T14:45:00Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2_
+
+---
+
+# Iteration 1 (preserved)
 
 **Fixed at:** 2026-09-29T13:12:15Z
 **Source review:** .planning/phases/27-integer-planning-pricing-certificate-correctness/27-REVIEW.md
