@@ -277,13 +277,23 @@ end
     @test isapprox(res.welfare, obj_c; atol = 1e-4)
     #   λ       : atol = 5e-5   (measured max |Δλ|₂       = 1.519e-5, ≈3.3x margin)
     @test isapprox(vec(res.λ), λ_c; atol = 5e-5)
-    #   μ       : atol = 1e-7   (measured max |Δμ|₂       = 1.610e-8, ≈6.2x margin) --
+    #   μ       : OLD atol = 1e-7 (measured max |Δμ|₂ = 1.610e-8, ≈6.2x margin, ORIGINAL
+    #             2026-08-08 measurement — see fixtures_phase19.jl's header table, now STALE).
+    #             NEW atol = 4e-7 (PM-05/26-16 re-measurement, 2026-09-28, against the CURRENT
+    #             merged code through Plan 26-12: a fresh 5-seed sweep, SAME procedure/seeds
+    #             (SEED_2BUS..SEED_2BUS+4) as the original D-14 measurement, gives max |Δμ|₂ =
+    #             1.147e-7 at the default seed itself (SEED_2BUS = 20260719) — already ABOVE the
+    #             old 1e-7 pin. CAUSE: Plan 26-03's FIX-04 FourQuadBESS soc[T+1] change moved
+    #             this near-lossless, uncongested fixture's degenerate μ noise floor upward, per
+    #             26-POSTMERGE-TRIAGE.md cluster E / test_admm_reactive.jl:286 row. 4e-7 gives
+    #             ≈3.5x margin over the freshly-measured 1.147e-7 max, matching this file's own
+    #             3.3x-6.2x margin discipline for its sibling tolerances above — a genuinely
+    #             re-measured re-pin, never a guessed number.
     #             DELIBERATELY ABSOLUTE, never relative: μ itself is ≈0 on this near-lossless,
-    #             uncongested fixture (D-03's honest degeneracy note, confirmed empirically in
-    #             Task 1's measurement -- both the centralized dual(:balance_q) and the LIVE
-    #             internal μq converge to ≈1e-8, an honest "no genuine reactive network cost to
-    #             price here" feature, not a bug).
-    @test isapprox(vec(res.mu_q), μ_c; atol = 1e-7)
+    #             uncongested fixture (D-03's honest degeneracy note) -- both the centralized
+    #             dual(:balance_q) and the LIVE internal μq converge to ≈1e-7-1e-8, an honest "no
+    #             genuine reactive network cost to price here" feature, not a bug.
+    @test isapprox(vec(res.mu_q), μ_c; atol = 4e-7)
 
     # D-03 CROSS-VALIDATION SCOPE: q trajectories are DELIBERATELY excluded from this gate --
     # when μ ≈ 0 (as measured here) a FourQuadBESS's own P-Q split inside its apparent-power
