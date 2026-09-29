@@ -316,3 +316,48 @@ F-27-05-1). Flagged for future-plan awareness: any future work that runs `solve_
 directly at a very tight `tol_gap` (e.g. Phase 28's thesis-reproduction restatement, or a
 future IEEE-8500-scale experiment) should expect a HIGHER baseline flake rate than Phase 18
 documented, and should re-measure rather than assume the old 0/5 figure still holds.
+
+**Full-run confirmation (2026-09-29, `REPRO_TOL_GAP=1e-10 REPRO_MAX_ITER=400`, run to
+completion):** `count_failures` (`N_REPEATS=20`): **20/20 = 1.000** flake rate, ALL 20 at the
+`:solve_welfare` stage (`failures_by_stage = {solve_welfare: 20, welfare_accounting: 0,
+fit_baseline: 0}`) — `fit_baseline`'s OWN stage is NEVER REACHED in `count_failures` at this
+population point because its OWN per-stage short-circuit (`stage1_ok || continue`) skips
+stages 2/3 once stage 1 (the SAME raw `solve_welfare` call F-27-05-2 describes) fails first,
+every single repeat. This script's own three-stage structure can therefore no longer exercise
+`fit_baseline`'s bounded fallback (F-27-05-1) AT THIS SPECIFIC population point/tolerance —
+the fallback's correctness was instead verified by the ISOLATED direct-script tests in
+F-27-05-1 (positive case + negative control), which mirror `fit_baseline`'s SITE-3 code
+byte-for-byte outside `count_failures`'s stage-skip structure.
+
+`sweep_population_scale` (5 points) surfaced a THIRD, independent, and EXPECTED discovery:
+at `δ ∈ {-0.05, -0.02}` (where `solve_welfare` and `welfare_accounting` both SUCCEED), the
+run now fails at the `:fit_baseline` stage — but via Task 1's NEW SITE-2 exactness gate
+(`assert_socp_exact!` throwing `SOCP relaxation INEXACT`, maxgap `155.5`/`200.7` respectively
+— an O(100) cone slack, not a borderline noise-floor case), NOT via `ALMOST_OPTIMAL`. This is
+Task 1 (FIX-09's own SITE-2 gate) working AS INTENDED: `fit_baseline`'s FIT AC-PF step on
+this population point was ALWAYS this badly inexact at these two `δ` values — PRE-Task-1 it
+silently returned an uncertified, physically-meaningless `social_fit`/`ratio` with NO
+warning; POST-Task-1 it correctly REFUSES. This is not a regression introduced by this plan;
+it is the exact class of silent-wrongness FIX-09 exists to close, now visible for the first
+time. At `δ ∈ {0.0, 0.02, 0.05}`, `solve_welfare` itself fails first (the SAME F-27-05-2
+symptom). `welfare_accounting`'s own failure count stayed at 0 throughout — confirming NO
+OTHER stage's flake rate regressed from this plan's changes (the plan's own closing
+acceptance check).
+
+**Second full run, DEFAULT settings (no `REPRO_TOL_GAP`/`REPRO_MAX_ITER` at all — the
+script's own byte-for-byte historical path):** `count_failures` ALSO shows **20/20 = 1.000**,
+but via a DIFFERENT mechanism than the tight-tolerance run — `solve_welfare`'s OWN
+`assert_socp_exact!` gate throws `SOCP relaxation INEXACT` (maxgap≈`4.38e-6`, ratio≈19.25)
+on EVERY repeat, at Clarabel's DEFAULT `tol_gap=1e-8`. The sweep's `δ=0.05` point ALSO now
+fails at `:fit_baseline` for the SAME reason (maxgap≈298.6). This means the population
+point's genuine inexactness (F-27-05-2's likely Phase-26-driven drift) is NOT merely a
+tight-tolerance `ALMOST_OPTIMAL` artifact — it now exceeds `assert_socp_exact!`'s gate at
+essentially ANY tested tolerance, default or tight. (Confirmed NOT a FIX-08 regression: the
+OLD flat `atol=1e-6` default, pre-FIX-08, is itself SMALLER than the measured `4.38e-6` gap,
+so the OLD gate would have thrown here too, had it been checked — this is a genuine
+conditioning/exactness drift, not an artifact of FIX-08's hybrid floor formula.)
+`welfare_accounting` again stayed at 0 failures. **Consequence for Phase 28:** this
+population point can no longer produce ANY exactness-certified `solve_welfare`/`fit_baseline`
+price at this session's code state — a future plan reusing it for thesis-reproduction
+restatement will need to either retune the population scale or accept/investigate this
+finding first, rather than assume it still "just works" as in Phase 18/26.
