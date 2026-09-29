@@ -65,7 +65,28 @@ using JuMP
 # researchers who want to COMPOSE the OPF-ε margin on top of OPF-m (see `RestrictedBranchFlow`
 # docstring) — it is NOT the default any more (OPF-m needs no such margin; Theorem 2 holds
 # unconditionally on C2 once the `v̂_GL(s) ≤ v̄` constraint is present).
-const _EXACT04_MEASURED_ε = 0.005811069127373614 * 1.25
+#
+# Phase 26 gap-closure re-measurement (Plan 26-08, SC-6): Plan 26-14's App. C
+# throw-to-diagnostic conversion (`assert_battery_complementarity!`'s `on_violation=:warn` on
+# the AC/NLP oracle path) unblocked re-measuring this constant on the SAME EXACT-04 fixture,
+# since the AC oracle solve that measures `ε` used to throw on this fixture's genuine App. C
+# eta<1 simultaneous charge/discharge violation (bus 2, t=7) before Plan 26-14 landed. The
+# operating point the AC oracle now returns (with the diagnostic `@warn` instead of a throw)
+# is a DIFFERENT AC-feasible point than whatever the pre-Phase-26 measurement used (that
+# measurement itself pre-dates FIX-01..05 and was taken against an older `ConvexBranchFlow`/
+# `PVBattery`/`Aggregator` codepath entirely), so ε moved: OLD ε_measured (base, pre-1.25x)
+# = 0.005811069127373614 pu² -> NEW ε_measured (base) = 0.010189528427785532 pu², measured
+# 2026-09-29 via `.planning/phases/26-network-device-model-correctness/
+# 26-08-repro-restricted-and-canary.jl` on `Phase4Fixtures.high_pv_feeder()` /
+# `build_high_pv_aggregators(feeder; pv_scale=1.2)`. Cause: the cumulative effect of FIX-01
+# through FIX-05 (cpydrop sign flip, receiving-end thermal limit, full-horizon battery SOC
+# recursion, flexible-load reactive draw) on the AC oracle's optimal high-PV operating point,
+# NOT a defect in the Gan-Low modification-gap measurement mechanism itself — `ε_measured`
+# stays strictly positive and the same order of magnitude, only its measured value shifted
+# with the underlying physics. 1.25x safety multiplier retained unchanged (D-03/D-07's own
+# margin policy is untouched by this re-measurement) ⇒ new `_EXACT04_MEASURED_ε` =
+# 0.012736910534731915 pu².
+const _EXACT04_MEASURED_ε = 0.010189528427785532 * 1.25
 
 """
     RestrictedBranchFlow <: AbstractPowerFlow

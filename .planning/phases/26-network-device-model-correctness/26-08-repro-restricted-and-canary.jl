@@ -115,6 +115,10 @@ println(
     "live ε_measured=$ε_measured  pinned(base)=$pinned_ε_base  " *
     "pinned(with 1.25x)=$(TSODSO._EXACT04_MEASURED_ε)",
 )
+# Phase 26 gap-closure (Plan 26-08): re-measured 2026-09-29 after Plan 26-14's App. C
+# throw-to-diagnostic conversion unblocked this AC-oracle-based measurement. OLD pinned
+# base 0.005811069127373614 -> NEW pinned base 0.010189528427785532; see
+# src/powerflow/RestrictedBranchFlow.jl's `_EXACT04_MEASURED_ε` comment for the full cause.
 @assert isapprox(ε_measured, pinned_ε_base; rtol = 1e-6) "RestrictedBranchFlow._EXACT04_MEASURED_ε is STALE vs a live re-measurement (live=$ε_measured, pinned-base=$pinned_ε_base) -- re-measure and update the constant in src/powerflow/RestrictedBranchFlow.jl with an old->new+cause comment (Phase 26 FIX-01/02), then update this script's expectation to match"
 
 # --- (2) Re-run the IEEE-13 ADMM knife-edge canary trajectory, exactly as
@@ -129,7 +133,17 @@ println("live ADMM canary: iters=$(r.iters) welfare=$(r.welfare)")
 # PINNED literals below MUST be kept in sync with test/test_admm_knifeedge_canary.jl's own
 # pinned assertions -- if this task updates that file's r.iters/r.welfare goldens, update
 # these two literals identically in the SAME commit.
-@assert r.iters == 58 "ADMM knife-edge canary iteration count moved (live=$(r.iters), pinned=58) -- update test/test_admm_knifeedge_canary.jl AND this script with an old->new+cause comment"
-@assert isapprox(r.welfare, -4822.903616694139; rtol = 1e-6, atol = 1e-3) "ADMM knife-edge canary welfare moved (live=$(r.welfare), pinned=-4822.903616694139) -- update test/test_admm_knifeedge_canary.jl AND this script with an old->new+cause comment"
+#
+# Phase 26 gap-closure (Plan 26-08, Task 1): this canary trajectory is Plan 26-20's own
+# responsibility (re-pinned strictly after Plan 26-12's live-reactive-default fix), NOT
+# re-derived by this task -- Task 1 only cross-referenced it for the NO-DISCREPANCY check
+# its own action text requires. Re-running this script here (2026-09-29, after ALL of Plans
+# 26-01..26-20 are merged) reproduces Plan 26-20's own pinned values EXACTLY (r.iters=56,
+# r.welfare=-4823.66604824162, bit-identical) -- NO discrepancy found; these literals are
+# updated to match 26-20-SUMMARY.md/test/test_admm_knifeedge_canary.jl's already-landed
+# re-pin (OLD 58/-4822.903616694139 -> NEW 56/-4823.66604824162), not independently
+# re-derived.
+@assert r.iters == 56 "ADMM knife-edge canary iteration count moved (live=$(r.iters), pinned=56) -- update test/test_admm_knifeedge_canary.jl AND this script with an old->new+cause comment"
+@assert isapprox(r.welfare, -4823.66604824162; rtol = 1e-6, atol = 1e-3) "ADMM knife-edge canary welfare moved (live=$(r.welfare), pinned=-4823.66604824162) -- update test/test_admm_knifeedge_canary.jl AND this script with an old->new+cause comment"
 
 println("OK: RestrictedBranchFlow ε + ADMM knife-edge canary both re-verified against their currently pinned values")
