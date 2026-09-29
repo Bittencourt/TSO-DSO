@@ -166,14 +166,14 @@ exactness gate, the FIT-baseline counterfactual, and MPC's realized-welfare acco
   6. Every golden this phase's fixes move is re-derived in-phase with a stated explanation (test
      comment + phase SUMMARY), and the full suite is green at phase close.
 
-**Plans:** 2/6 plans executed
+**Plans:** 3/6 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 27-01-PLAN.md — FIX-06: corner_recourse joint T>1 recourse + T=2 grid-enumeration certification
 - [x] 27-02-PLAN.md — FIX-08: per-branch exactness floor in assert_socp_exact!
-- [ ] 27-03-PLAN.md — FIX-10: MPC truth-plant settlement (clip, throw, loss-exact import)
+- [x] 27-03-PLAN.md — FIX-10: MPC truth-plant settlement (clip, throw, loss-exact import)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -393,7 +393,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 15–18 | v2.1 | 14/14 | Complete | 2026-07-26 |
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
-| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 2/6 | In Progress|  |
+| 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 3/6 | In Progress|  |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/TBD | Not started | - |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
