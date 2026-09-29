@@ -57,33 +57,57 @@ end
 
 # FIX-09 (Phase 27, plan 27-05; T-27-12): `fit_baseline`'s FIT AC-PF step (SITE 2) previously
 # called ONLY `assert_solved!` — never `assert_socp_exact!` — so a genuinely inexact SOC
-# relaxation there silently returned an uncertified `social_fit`/`ratio`. This item is RED
-# until the `on_inexact::Symbol` kwarg is wired in (`src/pricing/fit.jl`).
-@testitem "fit: SITE 2 (FIT AC-PF) on_inexact=:error refuses an inexact cone, :report returns a finite certificate (FIX-09)" tags =
+# relaxation there silently returned an uncertified `social_fit`/`ratio`.
+#
+# UPDATED SEMANTICS (plan 27-09, USER DECISION 2026-09-29): SITE 2 is no longer a fixed-
+# dispatch SOC relaxation gated by `assert_socp_exact!` — it is a genuine AC power flow,
+# PHYSICS ONLY (`ACPowerFlow(; limits = false)`), because the OLD fixed-dispatch SOC re-solve
+# was found STRUCTURALLY inexact on a real fixture (IEEE-123 REPRO-01, gap≈211,
+# `27-wave2-suite.log`) — fixing every injection leaves the loss current free with nothing to
+# pin it. There is no longer a "cone slack" for `on_inexact` to certify; it now gates a
+# genuine Ipopt NON-CONVERGENCE instead. Rather than searching for a fixture that happens to
+# make the physics-only AC power flow genuinely non-solvable (fragile, feeder-specific), this
+# item FORCES the failure deterministically via the internal test seam
+# `_site2_ac_optimizer` (mirrors `run_mpc`'s own `_truth_settlement` idiom) — a crippled
+# `max_iter=1` Ipopt cannot converge in one iteration on ANY fixture, giving a reproducible
+# `ITERATION_LIMIT` regardless of the feeder.
+@testitem "fit: SITE 2 (FIT AC-PF) on_inexact=:error throws on a forced AC non-convergence, :report returns the diagnostic (FIX-09, plan 27-09)" tags =
     [:fit] setup = [Phase4Fixtures] begin
-    using TSODSO
+    using TSODSO, JuMP
 
     @test isdefined(TSODSO, :fit_baseline)
 
     if isdefined(TSODSO, :fit_baseline)
-        # pv_scale=2.0 on Phase4Fixtures' high-PV stress fixture (EXACT-04's own substrate)
-        # drives `fit_baseline`'s SITE 2 (the FIT AC-PF, on its OWN voltage-relaxed [0.8,1.2]
-        # feeder copy) genuinely INEXACT — measured directly at ≈6.1 (an O(1) cone slack, not
-        # borderline solver noise) — while the OTHER two internal solves (the FIT-OPT, the
-        # nested solve_welfare cross-check) both succeed. EXACT-04's own pv_scale=1.2 (tuned
-        # against the TIGHT [0.95,1.05] band) stays EXACT here: SITE 2's wider relaxed band
-        # needs a LARGER back-feed to pin its own, higher voltage cap.
         feeder = Phase4Fixtures.high_pv_feeder()
         aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 2.0)
         λ₀ = Phase4Fixtures.mem_price_profile()
+        crippled = TSODSO.select_optimizer(TSODSO.NLP(); max_iter = 1)
 
-        @test_throws Exception fit_baseline(
+        err = try
+            fit_baseline(
+                feeder,
+                ConvexBranchFlow(),
+                aggs;
+                T = Phase4Fixtures.T,
+                λ₀ = λ₀,
+                on_inexact = :error,
+                _site2_ac_optimizer = crippled,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        msg = sprint(showerror, err)
+        @test occursin("FIT AC-PF (SITE 2)", msg)
+        @test_throws ErrorException fit_baseline(
             feeder,
             ConvexBranchFlow(),
             aggs;
             T = Phase4Fixtures.T,
             λ₀ = λ₀,
             on_inexact = :error,
+            _site2_ac_optimizer = crippled,
         )
 
         res = fit_baseline(
@@ -93,9 +117,27 @@ end
             T = Phase4Fixtures.T,
             λ₀ = λ₀,
             on_inexact = :report,
+            _site2_ac_optimizer = crippled,
         )
-        @test isfinite(res.socp_maxgap)
-        @test res.socp_maxgap > 0   # a genuine, non-trivial cone slack was measured, not 0
+        @test res.ac_status !== nothing
+        @test res.ac_status != MOI.LOCALLY_SOLVED   # ITERATION_LIMIT (or similar), never a pass
+        @test isnan(res.social_fit)   # :report never reads a value off a non-converged model
+        @test isnan(res.ratio)
+
+        # A NORMAL (uncrippled) solve on the SAME fixture converges cleanly (the forced failure
+        # above is an ARTIFACT of the crippled optimizer, not a genuine property of this
+        # fixture's AC physics) and reports a violations diagnostic instead.
+        ok = fit_baseline(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Phase4Fixtures.T,
+            λ₀ = λ₀,
+            on_inexact = :error,
+        )
+        @test isfinite(ok.social_fit)
+        @test ok.ac_status == MOI.LOCALLY_SOLVED
+        @test length(ok.ac_violations) == Phase4Fixtures.T
 
         @test_throws ArgumentError fit_baseline(
             feeder,

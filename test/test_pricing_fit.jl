@@ -299,19 +299,32 @@ end
     @test isapprox(tight.ratio, loose.ratio; rtol = 1e-6)
 end
 
-@testitem "fit: source tripwire — no solver factory is hardcoded inside fit_baseline" tags =
+@testitem "fit: source tripwire — no solver factory is hardcoded inside fit_baseline's BODY (plan 27-09 updates the count)" tags =
     [:fit] begin
     using TSODSO
 
     src = read(joinpath(dirname(pathof(TSODSO)), "pricing", "fit.jl"), String)
     idx = findfirst("function fit_baseline(", src)
     @test idx !== nothing
-    body = src[first(idx):end]
+    full = src[first(idx):end]
 
-    # EXACTLY ONE `select_optimizer(` may appear in the function: the kwarg default. Any second
-    # occurrence means a solve site hardcodes the factory again and silently ignores the caller's
-    # optimizer — the precise regression this kwarg exists to prevent. A future new solve site
-    # added inside fit_baseline trips this immediately.
-    @test count(_ -> true, eachmatch(r"select_optimizer\(", body)) == 1
-    @test occursin("optimizer = select_optimizer(problem_class(pf))", body)
+    # Plan 27-09 (USER DECISION 2026-09-29): SITE 2's AC-PF is a DIFFERENT problem class (NLP)
+    # from the `optimizer` kwarg's SOCP/QP factory, so it needs its OWN kwarg default
+    # (`_site2_ac_optimizer`) — a SECOND, LEGITIMATE `select_optimizer(` call, not a regression.
+    # The tripwire's real invariant is narrower than "exactly one call anywhere": no
+    # `select_optimizer(` may appear in the EXECUTABLE BODY (bypassing BOTH kwargs) — split at
+    # the first executable statement (the boundary-guard `isempty(aggregators)`) to check the
+    # kwarg-defaults header and the body separately.
+    split_idx = findfirst("isempty(aggregators)", full)
+    @test split_idx !== nothing
+    header = full[1:(first(split_idx) - 1)]
+    body = full[first(split_idx):end]
+
+    @test count(_ -> true, eachmatch(r"select_optimizer\(", header)) == 2
+    @test count(_ -> true, eachmatch(r"select_optimizer\(", body)) == 0
+    @test occursin("optimizer = select_optimizer(problem_class(pf))", header)
+    @test occursin(
+        "_site2_ac_optimizer = select_optimizer(problem_class(ACPowerFlow()))",
+        header,
+    )
 end

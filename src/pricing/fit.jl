@@ -266,59 +266,74 @@ end
                  λ_import=FIT_λ_IMPORT, λ_export=FIT_λ_EXPORT, λ_self=FIT_λ_SELF,
                  optimizer=select_optimizer(problem_class(pf)), on_inexact::Symbol=:error,
                  seed=nothing)
-        -> (; ctx, social_fit, welfare, ratio, prosumer_surplus, fit_flows, socp_maxgap)
+        -> (; ctx, social_fit, welfare, ratio, prosumer_surplus, fit_flows, socp_maxgap,
+             ac_status, ac_violations)
 
 The FIT (feed-in-tariff) baseline counterfactual (PRICE-03) — the ONE new solve of Phase 5.
 It (1) solves the per-prosumer FIT-OPT schedule (thesis eqs. 3.24-3.28) under the FIXED
 German-FIT prices with PV + flexible loads and NO battery (Assumption A4), (2) aggregates
 each prosumer's net injection to its nodal bus (thesis eqs. 3.22-3.23), and (3) evaluates a
-plain AC power flow — reusing `ConvexBranchFlow` on a voltage-RELAXED feeder so the voltage
-limit (3.35) is NOT enforced (the thesis FIT "AC-PF" step, RESEARCH Open Q3).
+genuine AC power flow — the thesis FIT "AC-PF" step, RESEARCH Open Q3 — on a voltage-RELAXED
+feeder so the voltage limit (3.35) is NOT enforced.
 
-**FIX-09 (Phase 27, plan 27-05): the FIT AC-PF step (SITE 2) is now exactness-certified.**
-Despite its "plain AC power flow" naming, SITE 2 solves a GENUINE SOC relaxation whenever `pf`
-stashes a squared-current `:l` (i.e. `ConvexBranchFlow`, the only formulation this file is
-exercised with in practice) — it was previously gated ONLY by `assert_solved!` (a trusted
-OPTIMAL primal, not a certified cone), so a slack cone there silently returned a fictitious
-`social_fit`/`ratio` with no warning (RESEARCH Pitfall 1; `[VERIFIED: src/pricing/fit.jl:320-378]`
-before this plan). `on_inexact::Symbol` selects what happens on a cone-slack finding, mirroring
-the project-standard `on_violation` idiom (`assert_battery_complementarity!`,
+**FIX-09 (Phase 27, plan 27-05) gated SITE 2 on `assert_socp_exact!`; plan 27-09 (USER
+DECISION 2026-09-29) REPLACES that gated SOC re-solve with a genuine AC power flow, PHYSICS
+ONLY.** Despite its "plain AC power flow" naming, SITE 2's fixed-dispatch step was, before
+27-09, a GENUINE SOC relaxation whenever `pf` stashes a squared-current `:l` (i.e.
+`ConvexBranchFlow`, the only formulation this file is exercised with in practice) — plan 27-05
+found this could be silently inexact; plan 27-09 found it is STRUCTURALLY inexact on the
+IEEE-123 REPRO-01 point (measured gap≈211, ratio≈9993, `27-wave2-suite.log`), because FIXING
+every injection leaves the loss current `l` free with no objective term able to pin it (unlike
+a genuine welfare solve, where the network itself chooses `l`). SITE 2 now (plan 27-09):
+
+  1. Solves the ORIGINAL fixed-dispatch model on `pf` — UNCHANGED code — but ONLY as a
+     warm-start SEED for step 2 (its own exactness is irrelevant; it is discarded).
+  2. When `pf` has a cone (`:l` stashed), builds a FRESH `ACPowerFlow(; limits = false)`
+     model (Ipopt) with the IDENTICAL fixed injections, warm-started from step 1's own solved
+     `P`/`Q`/`l`/`v` (26-15's documented remedy for Ipopt's degenerate all-zero-start KKT
+     point, `src/experiments/mpc_loop.jl`'s `_mpc_truth_import_acpf` uses the SAME idiom).
+     `limits = false` means `:smax`/`:smax_rev`/the operating voltage band are OMITTED — the
+     settlement requires only that a genuine AC solution EXISTS, never that it also respect an
+     operating limit (any violation is REPORTED via `ac_violations`, never refused).
+  3. When `pf` has no cone (DC/LinDistFlow, no `:l` stashed), step 1's own solve IS the final
+     settlement — BYTE-IDENTICAL to pre-27-09 behavior (data-driven, no `if formulation ==`
+     branching, mirroring `solve_welfare`'s own `haskey(ctx.meta[:pf_vars], :l)` gate).
+
+`on_inexact::Symbol` is now the REPORTING switch for a genuine AC non-convergence at step 2
+(mirroring the project-standard `on_violation` idiom, `assert_battery_complementarity!`,
 `src/models/welfare_solve.jl:284,345-348`):
 
-  - `:error` (default) — `assert_socp_exact!` throws on an inexact SITE-2 cone, refusing the
-    counterfactual outright (never silently returns an uncertified `social_fit`).
-  - `:report` — never throws on SITE-2 inexactness; the measured cone residual is returned as
-    the new `socp_maxgap` field instead (mirroring the `ctx.meta[:socp_maxgap]` stash convention
-    already used by `solve_welfare`/`subproblem.jl:298`). Obtained via the NON-throwing
-    `socp_relaxation_gap` calibration sibling on catch — `assert_socp_exact!`'s own throw is
-    never used as control flow.
+  - `:error` (default) — throws a loud `ErrorException` naming the full Ipopt solve status if
+    step 2 fails to reach `LOCALLY_SOLVED`/`OPTIMAL` (`ALMOST_LOCALLY_SOLVED` is TREATED AS A
+    FAILURE, never silently accepted) — refusing the counterfactual outright.
+  - `:report` — never throws on a step-2 non-convergence; returns EARLY with
+    `social_fit`/`welfare`/`ratio` all `NaN` (never reads a value off a non-converged model)
+    and `ac_status` set to the measured `termination_status` — the diagnostic replaces the
+    trustworthy welfare number rather than accompanying it.
   - any other value raises a loud `ArgumentError` (project's universal invalid-kwarg convention).
 
-Both modes SKIP the gate entirely (leaving `socp_maxgap = nothing`) when `pf` has no SOC cone
-(e.g. `DCPowerFlow`/`LinDistFlow`, no `:l` stashed) — data-driven, no `if formulation ==`
-branching, exactly mirroring `solve_welfare`'s own `haskey(ctx.meta[:pf_vars], :l)` gate. On a
-genuinely-exact SITE-2 solve (the common case on every canonical fixture to date), every OTHER
-`fit_baseline` behavior — `social_fit`, `ratio`, `prosumer_surplus`, `fit_flows` — is completely
-unchanged; only the new `socp_maxgap` field is added to the returned `NamedTuple`.
+On a genuinely-converged SITE-2 AC solve (the common case), every OTHER `fit_baseline`
+behavior — `social_fit`, `ratio`, `prosumer_surplus`, `fit_flows` — proceeds normally; the new
+`ac_status`/`ac_violations` fields are additive.
 
 Every solve routes through the `optimizer` keyword, which DEFAULTS to
 `select_optimizer(problem_class(pf))` — so INFRA-02 holds (no concrete solver is ever named here,
 and the default is the factory), while a caller may supply a differently-CONDITIONED factory for
-the same problem class. All three internal solves honour it: the per-prosumer FIT-OPT, the FIT
-AC-PF, and the nested `solve_welfare` that forms the efficiency `ratio`. Every solve is gated on
-`assert_solved!`.
+the same problem class. It drives the per-prosumer FIT-OPT, step 1's warm-start seed, and the
+nested `solve_welfare` that forms the efficiency `ratio`. Step 2's AC-PF is a DIFFERENT problem
+class (NLP, not SOCP/QP) and is driven by the SEPARATE internal test seam `_site2_ac_optimizer`
+(defaults to `select_optimizer(problem_class(ACPowerFlow()))`; production callers never set
+this — see that kwarg's own doc comment) — a caller-tuned Clarabel `tol_gap` cannot meaningfully
+condition an Ipopt solve. Every solve is gated on `assert_solved!` (step 1, SITE 1, SITE 3) or
+`is_solved_and_feasible(...; allow_local=true, allow_almost=false)` (step 2, AC).
 
-Why the kwarg exists (spike 003, `.planning/spikes/003-phase18-fragility-tolerance/`): the nested
-`solve_welfare` carries its own PF-04 exactness gate (`assert_socp_exact!`), whose `atol = 1e-6`
-sits at Clarabel's achievable cone residual on a large feeder at the default `tol_gap = 1e-8`.
-Without a way to tighten the solver, that gate can refuse prices for purely numerical reasons and
-the caller has no recourse. Passing e.g.
+Why the `optimizer` kwarg exists (spike 003, `.planning/spikes/003-phase18-fragility-tolerance/`):
+the nested `solve_welfare` carries its own PF-04 exactness gate (`assert_socp_exact!`), whose
+`atol = 1e-6` sits at Clarabel's achievable cone residual on a large feeder at the default
+`tol_gap = 1e-8`. Without a way to tighten the solver, that gate can refuse prices for purely
+numerical reasons and the caller has no recourse. Passing e.g.
 `optimizer_with_attributes(Clarabel.Optimizer, "tol_gap_abs" => 1e-10, "tol_gap_rel" => 1e-10)`
-converges the cone properly at an unchanged optimum. The FIT AC-PF step itself is now gated by
-BOTH `assert_solved!` AND (FIX-09) `assert_socp_exact!` via the `on_inexact` kwarg above; the
-NESTED `solve_welfare` retains its OWN separate PF-04 gate, which is what the `optimizer`
-override mainly matters for (SITE 2's gate is data-driven on the SAME `optimizer`, so a tighter
-`tol_gap` benefits both).
+converges the cone properly at an unchanged optimum.
 
 **FIX-09 root-caused, bounded `ALMOST_OPTIMAL` fallback on SITE 3 ONLY (Phase 27, plan 27-05;
 T-27-13/T-27-14).** At a tightened `tol_gap` (e.g. `1e-10`), the NESTED `solve_welfare` cross-
@@ -350,10 +365,17 @@ Returns a `NamedTuple`:
     this is the self-contained cross-check the FIT baseline reports;
   - `prosumer_surplus` — the FIT-OPT objective (Σ prosumer FIT surplus, thesis 3.24);
   - `fit_flows`        — per-aggregator numeric FIT schedule (`Ppv, p_h, self, imp, exp, net`);
-  - `socp_maxgap`      — (FIX-09) the FIT AC-PF's (SITE 2) measured SOC cone residual
-    (`assert_socp_exact!`'s absolute cone gap, or the same value recovered via the non-throwing
-    `socp_relaxation_gap` on an `on_inexact = :report` catch) — `nothing` when `pf` has no SOC
-    cone (DC/LinDistFlow, data-driven, no formulation branching).
+  - `socp_maxgap`      — ALWAYS `nothing` as of plan 27-09 (kept for source compatibility with
+    plan 27-05 callers) — there is no cone residual to report once SITE 2 is a genuine AC power
+    flow; see `ac_status`/`ac_violations` instead;
+  - `ac_status`        — (plan 27-09) the measured `termination_status` of SITE 2's AC solve
+    when `pf` has a cone, `nothing` when `pf` has none (DC/LinDistFlow, data-driven, no
+    formulation branching);
+  - `ac_violations`    — (plan 27-09) a length-`T` `Vector` of per-hour thermal/voltage
+    DIAGNOSTICS (see [`_fit_ac_settlement_violations`](@ref)) recomputed from SITE 2's own
+    solved `P`/`Q`/`l`/`v` — NEVER a gate, `fit_baseline` never refuses the counterfactual for
+    exceeding an operating limit. `nothing` when `pf` has no cone, or when `on_inexact =
+    :report` caught a genuine AC non-convergence (no solved values to compute it from).
 
 Reproducibility (INFRA-04, threat T-05-09): the whole computation is DETERMINISTIC in its
 inputs; when the `aggregators` are built from seeded `generate_profiles(seed=…)`, two calls
@@ -362,8 +384,9 @@ with the same seed return an identical `social_fit`. `seed` is accepted for prov
 Throws `ArgumentError` on empty `aggregators`, a `λ₀` length ≠ `T`, or an invalid `on_inexact`
 (neither `:error` nor `:report`); `error`s if the resulting `social_fit`/`ratio` is non-finite or
 out of the magnitude-sanity band (a mis-specified baseline must fail loudly rather than silently
-skew the headline — threat T-05-04); and (FIX-09, `on_inexact = :error` only) `error`s via
-`assert_socp_exact!` if the FIT AC-PF's SOC relaxation is genuinely inexact (T-27-12).
+skew the headline — threat T-05-04); and (plan 27-09, `on_inexact = :error` only) throws an
+`ErrorException` if SITE 2's genuine AC power flow fails to reach `LOCALLY_SOLVED`/`OPTIMAL`
+(T-27-12).
 """
 function fit_baseline(
     feeder,
@@ -380,11 +403,22 @@ function fit_baseline(
     # solver named here). A caller may pass a differently-conditioned factory — see the
     # docstring for why (spike 003: the nested solve_welfare's PF-04 gate).
     optimizer = select_optimizer(problem_class(pf)),
-    # FIX-09 (Phase 27, plan 27-05): SITE 2's own exactness-gate mode — mirrors the project's
-    # `on_violation::Symbol` idiom (`assert_battery_complementarity!`). `:error` (default) throws
-    # on an inexact FIT AC-PF cone; `:report` returns the measured certificate instead (see
-    # docstring). Validated below alongside the function's other boundary guards.
+    # FIX-09 (Phase 27, plan 27-05, semantics UPDATED by plan 27-09): SITE 2's own reporting
+    # mode — mirrors the project's `on_violation::Symbol` idiom
+    # (`assert_battery_complementarity!`). `:error` (default) throws on a genuine SITE-2 AC
+    # non-convergence; `:report` returns the diagnostic instead (see docstring). Validated
+    # below alongside the function's other boundary guards.
     on_inexact::Symbol = :error,
+    # Plan 27-09 (USER DECISION 2026-09-29): SITE 2's AC-PF solver — an INTERNAL TEST SEAM
+    # (mirrors `run_mpc`'s own `_truth_settlement` idiom, `src/experiments/mpc_loop.jl`), NOT
+    # part of the public API (leading underscore). Defaults to the SAME problem-class factory
+    # every production caller gets; a test may override it (e.g. a crippled `max_iter=1`
+    # Ipopt) to FORCE a deterministic non-convergence and exercise `on_inexact`'s two branches
+    # without relying on a fragile genuine-infeasibility fixture. Production callers never set
+    # this. Independent of the `optimizer` kwarg above (which still drives the FIT-OPT seed
+    # solve and SITE 3) because SITE 2's AC-PF is a DIFFERENT problem class (NLP, not SOCP) —
+    # a caller-tuned Clarabel `tol_gap` cannot meaningfully condition an Ipopt solve.
+    _site2_ac_optimizer = select_optimizer(problem_class(ACPowerFlow())),
     seed = nothing,
 )
     isempty(aggregators) &&
@@ -412,18 +446,31 @@ function fit_baseline(
     # (2)+(3) Aggregate the net injections (3.22-3.23) and evaluate a plain AC power flow on
     # the voltage-RELAXED feeder (3.35 NOT enforced — RESEARCH Open Q3).
     relaxed = _relax_voltage(feeder)
-    model = Model(optimizer)                 # SITE 2 of 3 — the FIT AC-PF
-    ctx = ModelContext(model)
-    ctx.meta[:feeder] = relaxed
-    ctx.meta[:T] = T
-    ctx.meta[:fit_baseline] = true      # marks this ctx as the FIT counterfactual (not DADP)
-
     Np = length(relaxed.buses)
+
+    # --- SITE 2 of 3 — the FIT AC-PF ------------------------------------------------------
+    # Step (a): the fixed-dispatch solve on `pf` (UNCHANGED code from before plan 27-09) — the
+    # SAME model this file has always built here. Plan 27-09 (USER DECISION 2026-09-29)
+    # demotes this to a WARM-START SEED whenever `pf` stashes a squared-current `:l`
+    # (ConvexBranchFlow, the only formulation this file is exercised with in practice): its OWN
+    # exactness is now IRRELEVANT (it is discarded before this function returns) — plan 27-05's
+    # `assert_socp_exact!` gate on this exact re-solve was measured GENUINELY, STRUCTURALLY
+    # inexact on the IEEE-123 REPRO-01 point (gap≈211, ratio≈9993,
+    # `27-wave2-suite.log`) because FIXING every injection leaves the loss current `l` free —
+    # there is no relaxation-tightening objective that can pin it, unlike a genuine welfare
+    # solve where the network itself chooses `l`. When `pf` has NO cone (DC/LinDistFlow, no
+    # `:l` stashed), this step IS the final settlement, data-driven and BYTE-IDENTICAL to
+    # pre-27-09 behavior (no cone to be inexact about in the first place).
+    seed_model = Model(optimizer)
+    seed_ctx = ModelContext(seed_model)
+    seed_ctx.meta[:feeder] = relaxed
+    seed_ctx.meta[:T] = T
+    seed_ctx.meta[:fit_baseline] = true
 
     # Formulation writes branch/voltage terms into :Rp/:Rq (voltage bounds are the relaxed
     # band, so 3.35 does not bind — the FIT "AC-PF, observe 3.35 not enforced" step).
-    contribute!(pf, ctx, relaxed; T = T)
-    reactive = haskey(ctx.residuals, :Rq)
+    contribute!(pf, seed_ctx, relaxed; T = T)
+    seed_reactive = haskey(seed_ctx.residuals, :Rq)
 
     # Fix each aggregator's FIT net injection at its bus (3.22) and its power-factor reactive
     # draw (3.23) — both NUMERIC constants from the FIT-OPT solve.
@@ -432,9 +479,9 @@ function fit_baseline(
             throw(ArgumentError("aggregator bus=$(a.bus) outside feeder buses 1:$Np"))
         tanφ = sqrt(1 - a.φ^2) / a.φ            # tan(arccos φ) (thesis 3.23)
         for t in 1:T
-            add_to_residual!(ctx, :Rp, a.bus, t, a.net[t])          # net active (3.22)
-            if reactive
-                add_to_residual!(ctx, :Rq, a.bus, t, -a.Pdc[t] * tanφ)  # reactive (3.23)
+            add_to_residual!(seed_ctx, :Rp, a.bus, t, a.net[t])          # net active (3.22)
+            if seed_reactive
+                add_to_residual!(seed_ctx, :Rq, a.bus, t, -a.Pdc[t] * tanφ)  # reactive (3.23)
             end
         end
     end
@@ -442,56 +489,153 @@ function fit_baseline(
     # Priced free-sign frontier exchange at the root (buy > 0 / sell < 0), which closes the
     # active balance and, priced at λ₀, drives the loss current down so the DistFlow SOC is a
     # genuine AC power flow (the same export-as-loss-penalty mechanism as the DADP solve).
-    @variable(model, p_import[t = 1:T])
+    @variable(seed_model, seed_p_import[t = 1:T])
     for t in 1:T
-        add_to_residual!(ctx, :Rp, relaxed.root, t, p_import[t])
+        add_to_residual!(seed_ctx, :Rp, relaxed.root, t, seed_p_import[t])
     end
-    ctx.meta[:p_import] = p_import
-    if reactive
-        @variable(model, q_import[t = 1:T])   # free-sign reactive frontier
+    seed_ctx.meta[:p_import] = seed_p_import
+    if seed_reactive
+        @variable(seed_model, seed_q_import[t = 1:T])   # free-sign reactive frontier
         for t in 1:T
-            add_to_residual!(ctx, :Rq, relaxed.root, t, q_import[t])
+            add_to_residual!(seed_ctx, :Rq, relaxed.root, t, seed_q_import[t])
         end
-        ctx.meta[:q_import] = q_import
+        seed_ctx.meta[:q_import] = seed_q_import
     end
 
     # Close the nodal balances (register so the ctx exposes :balance_p like a normal solve).
-    @constraint(model, balance_p[j = 1:Np, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
-    register_constraint!(ctx, :balance_p, balance_p)
-    if reactive
-        @constraint(model, balance_q[j = 1:Np, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
-        register_constraint!(ctx, :balance_q, balance_q)
+    @constraint(seed_model, balance_p[j = 1:Np, t = 1:T], seed_ctx.residuals[:Rp][j, t] == 0)
+    register_constraint!(seed_ctx, :balance_p, balance_p)
+    if seed_reactive
+        @constraint(
+            seed_model,
+            balance_q[j = 1:Np, t = 1:T],
+            seed_ctx.residuals[:Rq][j, t] == 0
+        )
+        register_constraint!(seed_ctx, :balance_q, balance_q)
     end
 
     # A plain AC-PF: minimize the MEM import cost (= net import + losses) so the SOC cone is
     # tight and the flow is physical. Max −λ₀ᵀ p_import (sign-correct for buy/sell).
-    @objective(model, Max, -sum(λ₀[t] * p_import[t] for t in 1:T))
-    assert_solved!(model; dual = false)
+    @objective(seed_model, Max, -sum(λ₀[t] * seed_p_import[t] for t in 1:T))
+    assert_solved!(seed_model; dual = false)
 
-    # FIX-09 (Phase 27, plan 27-05; T-27-12): the exactness gate SITE 2 was previously missing.
-    # Despite the file's own "plain AC power flow" language, this step solves a GENUINE SOC
-    # relaxation whenever `pf` stashes a squared-current `:l` (ConvexBranchFlow) — gated ONLY by
-    # `assert_solved!` (trusted OPTIMAL, not a certified cone) before this plan. Data-driven on
-    # the SAME `haskey(ctx.meta[:pf_vars], :l)` predicate `solve_welfare` uses (no `if formulation
-    # ==` branching): a DC/LinDistFlow `pf` has no cone to certify and `socp_maxgap` stays
-    # `nothing`. `on_inexact === :error` (default) lets `assert_socp_exact!`'s own throw
-    # propagate naturally — refusing to return an uncertified `social_fit`/`ratio` (PF-04).
-    # `on_inexact === :report` NEVER uses that throw as control flow: it wraps the call in a
-    # try/catch and recovers the SAME measured residual via the non-throwing
-    # `socp_relaxation_gap` sibling on catch (both re-walk the identical solved `ctx` state, so
-    # the recovered value is exact, not an approximation).
-    socp_maxgap = nothing
-    if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
-        socp_maxgap = if on_inexact === :error
-            assert_socp_exact!(ctx)
-        else
-            try
-                assert_socp_exact!(ctx)
-            catch
-                socp_relaxation_gap(ctx)
+    has_cone = haskey(seed_ctx.meta, :pf_vars) && haskey(seed_ctx.meta[:pf_vars], :l)
+
+    # Step (b) — plan 27-09 (USER DECISION 2026-09-29): when `pf` has a cone, replace the
+    # fixed-dispatch SOC relaxation with a genuine AC power flow, PHYSICS ONLY
+    # (`ACPowerFlow(; limits = false)`, Ipopt), warm-started from step (a)'s own solved
+    # `P`/`Q`/`l`/`v` (mirroring `_mpc_truth_import_acpf`'s identical remedy for Ipopt's
+    # degenerate all-zero-start KKT point, `src/experiments/mpc_loop.jl`, 26-15).
+    # `on_inexact` is preserved as the REPORTING switch for AC non-convergence: `:error`
+    # (default) throws on a genuine Ipopt non-convergence; `:report` returns a diagnostic
+    # instead (never reads a value off a non-converged model).
+    socp_maxgap = nothing        # kept nothing whenever there is no cone — UNCHANGED semantics
+    ac_status = nothing
+    ac_violations = nothing
+    ctx = seed_ctx
+    p_import = seed_p_import
+
+    if has_cone
+        ac = ACPowerFlow(; limits = false)
+        model = Model(_site2_ac_optimizer)
+        ctx = ModelContext(model)
+        ctx.meta[:feeder] = relaxed
+        ctx.meta[:T] = T
+        ctx.meta[:fit_baseline] = true
+
+        contribute!(ac, ctx, relaxed; T = T)
+        reactive = haskey(ctx.residuals, :Rq)
+
+        for a in fa.per_agg
+            tanφ = sqrt(1 - a.φ^2) / a.φ
+            for t in 1:T
+                add_to_residual!(ctx, :Rp, a.bus, t, a.net[t])
+                reactive && add_to_residual!(ctx, :Rq, a.bus, t, -a.Pdc[t] * tanφ)
             end
         end
-        ctx.meta[:socp_maxgap] = socp_maxgap
+
+        @variable(model, p_import[t = 1:T])
+        for t in 1:T
+            add_to_residual!(ctx, :Rp, relaxed.root, t, p_import[t])
+        end
+        ctx.meta[:p_import] = p_import
+        if reactive
+            @variable(model, q_import[t = 1:T])
+            for t in 1:T
+                add_to_residual!(ctx, :Rq, relaxed.root, t, q_import[t])
+            end
+            ctx.meta[:q_import] = q_import
+        end
+
+        @constraint(model, balance_p[j = 1:Np, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
+        register_constraint!(ctx, :balance_p, balance_p)
+        if reactive
+            @constraint(model, balance_q[j = 1:Np, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
+            register_constraint!(ctx, :balance_q, balance_q)
+        end
+
+        # Warm start every P/Q/l/v/p_import/q_import from step (a)'s own solved point (26-15's
+        # documented remedy — Ipopt's default all-zero start is a degenerate KKT point of the
+        # unrelaxed `l·v = P²+Q²` equality).
+        pv_seed = seed_ctx.meta[:pf_vars]
+        pv_ac = ctx.meta[:pf_vars]
+        Bf = relaxed.branches
+        for b in eachindex(Bf), t in 1:T
+            set_start_value(pv_ac.P[b, t], value(pv_seed.P[b, t]))
+            set_start_value(pv_ac.Q[b, t], value(pv_seed.Q[b, t]))
+            set_start_value(pv_ac.l[b, t], value(pv_seed.l[b, t]))
+        end
+        for j in 1:Np, t in 1:T
+            j == relaxed.root && continue   # root v is fix()ed to 1.0 already
+            set_start_value(pv_ac.v[j, t], value(pv_seed.v[j, t]))
+        end
+        for t in 1:T
+            set_start_value(p_import[t], value(seed_p_import[t]))
+            if reactive && seed_reactive
+                set_start_value(q_import[t], value(seed_q_import[t]))
+            end
+        end
+
+        @objective(model, Max, -sum(λ₀[t] * p_import[t] for t in 1:T))
+        optimize!(model)
+
+        ok = is_solved_and_feasible(
+            model;
+            dual = false,
+            allow_local = true,
+            allow_almost = false,
+        )
+        ac_status = termination_status(model)
+
+        if !ok
+            on_inexact === :error && throw(
+                ErrorException(
+                    "fit_baseline: FIT AC-PF (SITE 2) FAILED to reach LOCALLY_SOLVED — " *
+                    "termination_status=$(termination_status(model)), " *
+                    "primal_status=$(primal_status(model)), " *
+                    "raw_status=\"$(raw_status(model))\". ALMOST_LOCALLY_SOLVED is TREATED " *
+                    "AS A FAILURE, never silently accepted (plan 27-09, USER DECISION " *
+                    "2026-09-29) — this is a genuine Ipopt non-convergence at the FIT " *
+                    "schedule's fixed dispatch, never a thermal/voltage limit (those are " *
+                    "OMITTED from this physics-only model).",
+                ),
+            )
+            # on_inexact === :report: never reads a value off a non-converged model — return
+            # the diagnostic (ac_status) instead of a trustworthy social_fit/ratio.
+            return (;
+                ctx,
+                social_fit = NaN,
+                welfare = NaN,
+                ratio = NaN,
+                prosumer_surplus = fa.prosumer_surplus,
+                fit_flows = fa.per_agg,
+                socp_maxgap = nothing,
+                ac_status,
+                ac_violations = nothing,
+            )
+        end
+
+        ac_violations = _fit_ac_settlement_violations(relaxed, ctx.meta[:pf_vars], T)
     end
 
     imports = value.(p_import)
@@ -574,7 +718,77 @@ function fit_baseline(
         prosumer_surplus = fa.prosumer_surplus,
         fit_flows = fa.per_agg,
         socp_maxgap,
+        ac_status,
+        ac_violations,
     )
+end
+
+"""
+    _fit_ac_settlement_violations(feeder, pf_vars::NamedTuple, T::Int) -> Vector{<:NamedTuple}
+
+Internal helper (unexported, Phase 27 FIX-09, plan 27-09 — USER DECISION 2026-09-29): the
+FIT-AC-PF analogue of `_mpc_settlement_violations` (`src/experiments/mpc_loop.jl`, FIX-10) —
+computes SITE 2's per-hour thermal/voltage DIAGNOSTIC from a SOLVED
+[`ACPowerFlow`](@ref)`(; limits = false)` context's own `P`/`Q`/`l`/`v`, never a constraint
+dual (there is none to read when `limits = false`). A REPORT, never a gate: `fit_baseline`
+never refuses the FIT counterfactual for exceeding an operating limit, it only surfaces one
+here via the `ac_violations` field.
+
+For every branch with a real thermal rating (`smax < _SMAX_NO_LIMIT`) and every hour `t = 1:T`,
+recomputes the forward apparent power `|S_fwd| = sqrt(P²+Q²)` and the receiving-end apparent
+power `|S_rev| = sqrt((P−r·l)²+(Q−x·l)²)` directly from the solved values, and counts a branch
+as OVERLOADED at hour `t` whenever `max(|S_fwd|, |S_rev|) / smax > 1`. For every non-root bus,
+recovers `|V_j| = sqrt(v_j)` and counts it OUT-OF-BAND whenever it falls outside `[vmin, vmax]`.
+
+Returns a length-`T` `Vector` of `(; t, n_thermal_violations::Int, max_overload_ratio::Float64,
+n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
+voltage_violated::Bool)` — one entry per hour, mirroring `_mpc_settlement_violations`'s field
+set (with `t` in place of `abs_hour`, since SITE 2 has no absolute-hour concept). Deliberately
+NOT shared code with `_mpc_settlement_violations` (single-hour `T=1` there, general `T` here) —
+kept as two small, independently-readable functions rather than one over-parametrized one.
+"""
+function _fit_ac_settlement_violations(feeder, pf_vars::NamedTuple, T::Int)
+    B = feeder.branches
+    Np = length(feeder.buses)
+    out = Vector{NamedTuple}(undef, T)
+    for t in 1:T
+        n_thermal = 0
+        max_ratio = 0.0
+        for (b, br) in enumerate(B)
+            br.smax < _SMAX_NO_LIMIT || continue
+            Pb = value(pf_vars.P[b, t])
+            Qb = value(pf_vars.Q[b, t])
+            lb = value(pf_vars.l[b, t])
+            s_fwd = sqrt(Pb^2 + Qb^2)
+            s_rev = sqrt((Pb - br.r * lb)^2 + (Qb - br.x * lb)^2)
+            ratio = max(s_fwd, s_rev) / br.smax
+            ratio > 1.0 && (n_thermal += 1)
+            max_ratio = max(max_ratio, ratio)
+        end
+
+        n_voltage = 0
+        min_v = Inf
+        max_v = -Inf
+        for j in 1:Np
+            j == feeder.root && continue
+            vb = feeder.buses[j]
+            vj = sqrt(max(value(pf_vars.v[j, t]), 0.0))
+            (vj < vb.vmin || vj > vb.vmax) && (n_voltage += 1)
+            min_v = min(min_v, vj)
+            max_v = max(max_v, vj)
+        end
+
+        out[t] = (;
+            t,
+            n_thermal_violations = n_thermal,
+            max_overload_ratio = max_ratio,
+            n_voltage_violations = n_voltage,
+            min_voltage = min_v,
+            max_voltage = max_v,
+            voltage_violated = n_voltage > 0,
+        )
+    end
+    return out
 end
 
 export fit_baseline, FIT_λ_IMPORT, FIT_λ_EXPORT, FIT_λ_SELF
