@@ -272,8 +272,26 @@ end
     # (Same model shape and construction order by design; the two default optimizers
     # differ only in tol_gap — 1e-8 vs the stochastic builder's 5e-10 — so the comparison
     # is a tight ≈, not ==.)
-    ctx_det, welfare_det, dadp_det =
-        solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    #
+    # Phase 27 plan 27-07 (Task 2): under FIX-08's hybrid floor (τ_solver=2e-7), this
+    # DETERMINISTIC anchor's DEFAULT `tol_gap=1e-8` trips PF-04 at ratio ≈2.52 (max gap
+    # 5.14e-7, just above τ_solver). MEASURED ladder (tol_gap_abs=tol_gap_rel, direct
+    # execution of this exact fixture body):
+    #   1e-8  -> THROWS (ratio 2.52, gap 5.14e-7)
+    #   1e-9  -> PASSES (gap 2.07e-8, ratio ≈0.10, >=2x margin); welfare stable to >=8
+    #            significant digits vs 1e-10/5e-11/1e-11 (all -44.7090390898374, vs
+    #            -44.70903909121903 at 1e-9/5e-10 — agree to ~9 sig figs)
+    #   5e-10 -> PASSES, IDENTICAL gap (2.07e-8) to 1e-9
+    #   1e-10, 5e-11, 1e-11 -> PASSES, gap drops to 5.63e-10 (solver-precision floor)
+    # `1e-9` is the LOOSEST rung clearing the gate with ample margin.
+    ctx_det, welfare_det, dadp_det = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ0,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+    )
     r1 = build_stochastic_welfare(
         feeder,
         ConvexBranchFlow(),

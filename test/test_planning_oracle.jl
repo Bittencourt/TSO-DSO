@@ -302,7 +302,27 @@ end
     )
     zstar = value.(ctx_free.meta[:p_import])
 
-    o = build_planning_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+    # Phase 27 plan 27-07 (Task 2): a SECOND precision-floor artifact on this SAME 2-bus
+    # fixture, now on the `build_planning_oracle`/`solve_planning_oracle!` path — under
+    # FIX-08's hybrid floor (τ_solver=2e-7), the DEFAULT `tol_gap=1e-8` trips PF-04 at ratio
+    # ≈2.19 (max gap 4.47e-7, just above τ_solver). MEASURED ladder (tol_gap_abs=tol_gap_rel,
+    # direct execution of this exact fixture body):
+    #   1e-8  -> THROWS (ratio 2.19, gap 4.47e-7)
+    #   1e-9  -> PASSES (gap 4.48e-9, ratio ≈0.022, >=2x margin) — objective (cost) stable to
+    #            ~10 significant digits vs 1e-11 (-483.81912360978106 vs -483.81912360819973)
+    #   5e-10, 1e-10, 5e-11 -> PASSES, IDENTICAL gap (4.4787537614767174e-9) to 1e-9
+    #   1e-11 -> PASSES, gap drops further to 4.29e-10 (solver-precision floor)
+    # `1e-9` is the LOOSEST rung clearing the gate with ample margin — used here via the NEW
+    # `optimizer` kwarg (Task 2's byte-identical-default seam) added to
+    # `build_planning_oracle`.
+    o = build_planning_oracle(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = T,
+        optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+    )
 
     # The SOCP arm of the CR-03 gate is ARMED on this oracle: ConvexBranchFlow stashed the
     # squared-current `:l` under `ctx.meta[:pf_vars]` (the exact haskey chain

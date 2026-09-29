@@ -71,7 +71,8 @@ end
 """
     build_planning_oracle(feeder, pf::AbstractPowerFlow,
                           aggregators::AbstractVector{<:Aggregator};
-                          λ₀, T::Int = 24) -> PlanningOracle
+                          λ₀, T::Int = 24,
+                          optimizer = select_optimizer(problem_class(pf))) -> PlanningOracle
 
 Build the planning-layer oracle subproblem (thesis-welfare-shaped, mirrors
 [`solve_welfare`](@ref) WITHOUT modifying it) EXACTLY ONCE (D-11), with a genuine
@@ -81,11 +82,15 @@ Build the planning-layer oracle subproblem (thesis-welfare-shaped, mirrors
  1. Boundary guards (mirror `solve_welfare`/`build_dso_opt`): empty `aggregators`, a
     `λ₀` length mismatch, or an aggregator bus outside `1:length(feeder.buses)` each
     throw `ArgumentError` before any objective assembly.
- 2. `model = Model(select_optimizer(problem_class(pf)))` — FORMULATION-GENERIC routing
-    (QP for DC/LinDistFlow, SOCP for `ConvexBranchFlow`), never hardcoding `SOCP()`
-    (unlike [`DsoOpt`](@ref), this oracle mirrors `solve_welfare`'s formulation-agnostic
-    factory choice). Registers the same SOC→nonconvex-quad cross-solver bridges as
-    `solve_welfare`/`DsoOpt` (dormant on the primary Clarabel path).
+ 2. `model = Model(optimizer)`, `optimizer` DEFAULTING to `select_optimizer(problem_class(pf))`
+    — FORMULATION-GENERIC routing (QP for DC/LinDistFlow, SOCP for `ConvexBranchFlow`), never
+    hardcoding `SOCP()` (unlike [`DsoOpt`](@ref), this oracle mirrors `solve_welfare`'s
+    formulation-agnostic factory choice). The `optimizer` kwarg (Phase 27, plan 27-07 Task 2)
+    lets a caller pass a differently-conditioned factory (e.g. a tighter Clarabel `tol_gap`)
+    when the default sits at the solver's own achievable precision floor on a specific
+    fixture — the DEFAULT expression is byte-identical to every pre-27-07 call site. Registers
+    the same SOC→nonconvex-quad cross-solver bridges as `solve_welfare`/`DsoOpt` (dormant on
+    the primary Clarabel path).
  3. `contribute!(pf, ctx, feeder; T)` — VERBATIM reuse of the validated power-flow
     builder.
  4. FREE-SIGN frontier `p_import[t]` at `feeder.root` (no lower bound — Open Question 1
@@ -113,6 +118,14 @@ function build_planning_oracle(
     aggregators::AbstractVector{<:Aggregator};
     λ₀,
     T::Int = 24,
+    # Phase 27 plan 27-07 (Task 2): a NEW optimizer seam, defaulting to the EXACT SAME factory
+    # expression this call site always used, so the default path is byte-identical for every
+    # pre-existing caller. Added so a test/call site can pass a tighter Clarabel `tol_gap`
+    # (e.g. `select_optimizer(SOCP(); tol_gap_abs=…, tol_gap_rel=…)`) when the DEFAULT
+    # `tol_gap=1e-8` sits at Clarabel's own achievable cone-residual precision floor for a
+    # specific fixture (measured, per-fixture — never a blanket relaxation of the exactness
+    # gate itself) — see `test/test_planning_oracle.jl`'s own measured ladder comment.
+    optimizer = select_optimizer(problem_class(pf)),
 )
     # Boundary guards (mirror solve_welfare/build_dso_opt): fail here, not deep in
     # objective assembly.
@@ -128,8 +141,9 @@ function build_planning_oracle(
     end
 
     # Formulation-generic factory routing (NEVER hardcode SOCP() — unlike DsoOpt; this
-    # oracle mirrors solve_welfare's formulation-agnostic choice).
-    model = Model(select_optimizer(problem_class(pf)))
+    # oracle mirrors solve_welfare's formulation-agnostic choice). `optimizer` defaults to
+    # this SAME expression (byte-identical default path, see the kwarg's own docstring note).
+    model = Model(optimizer)
 
     # Cross-solver enablement, dormant on the primary Clarabel path (mirrors
     # solve_welfare/build_dso_opt verbatim).

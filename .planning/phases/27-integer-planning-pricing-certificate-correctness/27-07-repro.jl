@@ -388,7 +388,14 @@ run_repro("test_planning_oracle.jl:269 planning oracle precision floor") do
         )
         zstar = value.(ctx_free.meta[:p_import])
 
-        o = build_planning_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+        o = build_planning_oracle(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            λ₀ = λ₀,
+            T = T,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+        )
 
         @test haskey(o.ctx.meta, :pf_vars)
         @test haskey(o.ctx.meta[:pf_vars], :l)
@@ -417,8 +424,14 @@ run_repro("test_stochastic_welfare.jl:254 WR-10 anchor") do
             sub_seed(Phase22FixturesRepro.SEED_STOCH, :wr10_anchor),
         )
 
-        ctx_det, welfare_det, dadp_det =
-            solve_welfare(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+        ctx_det, welfare_det, dadp_det = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = T,
+            λ₀ = λ0,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+        )
         r1 = build_stochastic_welfare(
             feeder, ConvexBranchFlow(), [aggs]; probabilities = [1.0], T = T, λ₀ = λ0,
         )
@@ -457,7 +470,14 @@ run_repro("test_thesis_repro.jl:62 IEEE-123 fit_baseline") do
         )
         acct = welfare_accounting(ctx; T = Th)
 
-        fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀)
+        fb = fit_baseline(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+        )
         fit_dso = fb.social_fit - fb.prosumer_surplus
 
         @test ctx.meta[:socp_maxgap] < 1e-5
