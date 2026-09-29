@@ -10,14 +10,16 @@ requires:
     provides: per-fixture Clarabel tol_gap calibrations (cluster-E fixtures) that interact
       with the new per-branch exactness floor
 provides:
-  - assert_socp_exact! per-branch relative exactness floor (atol_b = ε * ref_b), replacing
-    the flat atol=1e-6 default
-  - MEASURED_ε_FIX08 = 1e-4, a measured (not guessed) named constant
+  - assert_socp_exact! HYBRID per-branch exactness floor (atol_b = max(τ_solver, ε*ref_b)),
+    replacing the flat atol=1e-6 default
+  - MEASURED_ε_FIX08 = 1e-9 and TAU_SOLVER_FIX08 = 2e-7, two measured (not guessed) named
+    constants
   - A synthetic regression proving a slack cone on a small-smax branch is now caught
-  - A documented, escalated ε conflict between the new floor and a pre-existing WR-01
-    regression test in test_exactness.jl
-affects: [28-thesis-reproduction-restatement, any future FIX-08 follow-up on the escalated
-  WR-01 conflict]
+  - A resolved ε conflict between the new floor and a pre-existing WR-01 regression test in
+    test_exactness.jl (initially escalated, then resolved with a hybrid absolute+relative
+    floor per user decision)
+affects: [28-thesis-reproduction-restatement, any future FIX-08 follow-up if a fixture with a
+  genuinely-exact excess above ~1.5e-7 or a tighter synthetic regression is added]
 
 # Tech tracking
 tech-stack:
@@ -26,8 +28,13 @@ tech-stack:
     - "Backward-compatible kwarg override: atol::Union{Nothing,Real}=nothing bypasses a new
       default computation entirely when the caller passes an explicit value, preserving
       byte-identical behavior at 2 existing call sites"
-    - "Measured-constant discipline: MEASURED_ε_FIX08 mirrors KNOWN_OPTIMUM_ATOL's
-      cite-the-raw-sweep-numbers comment convention rather than a hand-picked value"
+    - "Measured-constant discipline: MEASURED_ε_FIX08/TAU_SOLVER_FIX08 mirror
+      KNOWN_OPTIMUM_ATOL's cite-the-raw-sweep-numbers comment convention rather than a
+      hand-picked value"
+    - "Hybrid absolute+relative floor: atol_b = max(τ_solver, ε*ref_b) — an absolute
+      solver-noise floor for lightly-loaded/interior branches, a relative per-branch floor
+      for larger-scale branches, chosen when a PURE relative floor proved irreconcilable
+      with two conflicting fixture requirements"
 
 key-files:
   created:
@@ -37,105 +44,167 @@ key-files:
     - test/test_exactness.jl
 
 key-decisions:
-  - "MEASURED_ε_FIX08 = 1e-4, chosen to satisfy the plan's explicitly-named cluster-E/
-    canonical fixture set (IEEE-13/IEEE-123 acceptance, test_pricing_dlmp.jl,
-    test_pricing_welfare.jl, test_admm.jl, test_planning_oracle.jl) plus the new Task-2
-    synthetic regression, all with >=2x margin"
-  - "Escalated (not silently resolved) an irreconcilable conflict: no single ε keeps BOTH
-    the new required fixture set passing AND test_exactness.jl's pre-existing WR-01
-    regression item throwing (thresholds ~5e-5 vs <5e-8, three orders of magnitude apart)"
+  - "Initial approach (a PURE relative floor, MEASURED_ε_FIX08=1e-4) was escalated as
+    irreconcilable: no single ε kept both the required canonical/cluster-E fixture set
+    passing AND test_exactness.jl's pre-existing WR-01 regression item throwing (thresholds
+    ~5e-5 vs <5e-8, three orders of magnitude apart)."
+  - "User-directed resolution: HYBRID floor atol_b = max(τ_solver, ε*ref_b). τ_solver=2e-7
+    (measured: ~2.53x the worst genuinely-exact 'excess' residual, 7.90e-8 on IEEE-123, found
+    by isolating gap - rtol_term at each branch/hour — the part an absolute floor alone must
+    cover). ε reset to 1e-9 (<5e-8, keeps the relative term meaningful for large-smax
+    branches). All three required outcomes (WR-01 throws, synthetic regression throws,
+    every canonical/cluster-E fixture passes >=2x) hold simultaneously — hybrid is feasible,
+    the ε=1e-4-plus-rescope fallback was not needed."
+  - "Chose a documented ~2.5x margin for τ_solver rather than KNOWN_OPTIMUM_ATOL's own 10x
+    convention: 10x (7.9e-7) would itself exceed the Task-2 synthetic regression's injected
+    gap (5e-7) and break the 'must still throw' requirement. The feasible window was
+    [1.635e-7, 2.5e-7]; 2e-7 sits centered in it."
 
 patterns-established:
   - "Per-branch exactness floor: ref_b = br.smax^2 for thermally-limited branches, else the
     head branch's own flow magnitude squared, for any future exactness-adjacent certificate
     that needs a scale-aware floor"
+  - "Excess decomposition for absolute-floor measurement: excess[b,t] = gap[b,t] -
+    rtol*max(|lhs|,|rhs|) isolates exactly what an absolute floor must cover, independent of
+    any relative/ref_b term — negative excess means rtol alone already covers that point"
 
 requirements-completed: [FIX-08]
 
 # Metrics
-duration: ~75min
+duration: ~140min
 completed: 2026-09-29
 ---
 
 # Phase 27 Plan 02: Per-Branch Exactness Floor Summary
 
-**`assert_socp_exact!` now gates on a per-branch relative floor `atol_b = ε·ref_b` (ε=1e-4, measured) instead of a flat `atol=1e-6`, closing a scale-blind gap on lightly-loaded branches — but the same measurement surfaced an irreconcilable conflict with a pre-existing WR-01 regression test, escalated rather than hidden.**
+**`assert_socp_exact!` now gates on a HYBRID floor `atol_b = max(τ_solver, ε·ref_b)` (τ_solver=2e-7, ε=1e-9, both measured) instead of a flat `atol=1e-6` — closing the scale-blind gap on lightly-loaded branches while keeping a pre-existing WR-01 regression test throwing, after an initial pure-relative-floor approach was found irreconcilable and escalated, then resolved per user decision.**
 
 ## Performance
 
-- **Duration:** ~75 min
+- **Duration:** ~140 min (includes the initial pure-relative-floor implementation, escalation,
+  and the subsequent hybrid-floor measurement/implementation directed by the coordinator)
 - **Started:** 2026-09-29T06:55:00Z (approx, worktree setup)
-- **Completed:** 2026-09-29T08:22:00Z
-- **Tasks:** 2 completed
+- **Completed:** 2026-09-29T09:15:00Z (approx)
+- **Tasks:** 2 plan tasks completed, plus 1 coordinator-directed follow-up (hybrid floor)
 - **Files modified:** 2 (`src/models/exactness.jl`, `test/test_exactness.jl`), 1 created (`27-FINDINGS.md`)
 
 ## Accomplishments
 
 - `assert_socp_exact!` computes a per-branch, per-hour reference scale `ref_b` (the branch's
   own `smax^2` if thermally limited, else the head branch's own flow magnitude squared) and
-  gates on `atol_b = ε * ref_b` by default, replacing the flat `atol = 1e-6` that was
-  calibrated only against head-branch-scale fixtures.
-- An explicit `atol` kwarg still bypasses the new computation entirely — verified
+  gates on the HYBRID floor `atol_b = max(τ_solver, ε * ref_b)` by default, replacing the flat
+  `atol = 1e-6` that was calibrated only against head-branch-scale fixtures.
+- An explicit `atol` kwarg still bypasses the hybrid computation entirely — verified
   byte-identical (same `maxgap`, no throw) on the existing exact-point fixture under both the
   new default path and the explicit-override path, and confirmed the 2 real call sites
   (`src/admm/DsoOpt.jl:671`, `test/fixtures_phase19.jl:359`) already pass an explicit `atol`
   and so take the unchanged bypass path.
 - A new `@testitem` in `test/test_exactness.jl` demonstrates the regression this plan closes:
   a `smax=0.01` branch with an injected `l=5e-7` gap — below the OLD flat `atol=1e-6` (would
-  have silently passed) but ~5x its own `ref_b=1e-4` scale (now correctly thrown).
-- `MEASURED_ε_FIX08 = 1e-4` was measured (not guessed) via a direct-script sweep against the
-  synthetic regression and the plan's explicitly-named cluster-E/canonical fixture set — see
-  "ε Sweep" below for the full raw table.
-- **A genuine, irreconcilable ε conflict was found and escalated** (not hidden): see
-  "Escalation" below.
+  have silently passed) — now correctly thrown by the hybrid default (2.5x margin).
+- **First attempt (pure relative floor, `MEASURED_ε_FIX08=1e-4`) was measured, found to create
+  an irreconcilable 3-order-of-magnitude conflict with a pre-existing WR-01 regression test,
+  and ESCALATED** rather than silently resolved either direction (see "History" below).
+- **Second attempt (HYBRID floor, coordinator-directed) was measured and found FEASIBLE**:
+  `TAU_SOLVER_FIX08 = 2.0e-7` (an absolute Clarabel-noise-floor term, ~2.53x the worst measured
+  genuinely-exact residual) combined with `MEASURED_ε_FIX08 = 1.0e-9` (a small relative term)
+  satisfies all three required outcomes simultaneously with >=2.4x margin. The escalation in
+  `27-FINDINGS.md` was updated from ESCALATED to RESOLVED with the full measured numbers.
 
 ## Task Commits
 
-Each task was committed atomically:
+Each task/step was committed atomically:
 
 1. **Task 1: Per-branch relative exactness floor in assert_socp_exact!** - `9374e5c` (feat)
 2. **Task 2: Measure ε, add synthetic regression, re-verify cluster-E fixtures** - `9876322` (test)
-
-**Plan metadata:** pending (this SUMMARY + STATE/ROADMAP updates are owned by the orchestrator per this plan's instructions — this executor does not touch STATE.md/ROADMAP.md)
+3. **Plan metadata (initial escalation)** - `f7d334c` (docs)
+4. **Coordinator-directed hybrid floor** - `5b72c74` (fix)
+5. **Plan metadata (resolution)** - this commit (docs)
 
 ## Files Created/Modified
 
-- `src/models/exactness.jl` - `assert_socp_exact!` per-branch floor (`atol_b = ε*ref_b`),
-  new `MEASURED_ε_FIX08` constant with a full measured-sweep comment, backward-compatible
-  `atol` override, head-branch lookup with a loud `ArgumentError` on a malformed feeder.
+- `src/models/exactness.jl` - `assert_socp_exact!` HYBRID per-branch floor
+  (`atol_b = max(τ_solver, ε*ref_b)`), `MEASURED_ε_FIX08` (1e-9) and `TAU_SOLVER_FIX08`
+  (2e-7) constants with full measured-sweep comments (including the superseded pure-relative
+  attempt's history), backward-compatible `atol` override, head-branch lookup with a loud
+  `ArgumentError` on a malformed feeder.
 - `test/test_exactness.jl` - new `@testitem` "per-branch floor flags a slack cone on a
-  small-smax branch the old flat atol missed (FIX-08)".
+  small-smax branch the old flat atol missed (FIX-08)". The 3 pre-existing items are
+  byte-identical (untouched).
 - `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-FINDINGS.md` -
-  NEW file (didn't exist before this plan), documenting the escalated ε conflict.
+  NEW file (didn't exist before this plan); documents the initial escalation (preserved for
+  the record) and its RESOLUTION via the hybrid floor, with the full measured sweep.
 
-## ε Sweep (measured, direct scripts reproducing each fixture body under `julia --project=.`)
+## History: pure relative floor -> escalation -> hybrid resolution
 
-| Fixture | ref_b | gap (measured) | ε threshold |
-|---|---|---|---|
-| Task-2 synthetic (smax=0.01, injected l=5e-7) | 1e-4 | 5e-7 | throws for ε ≲ 5e-3 |
-| IEEE-13 ground (`test_acceptance.jl`/`test_admm.jl:78`) | head_flow_mag2≈4.56e-3 (2 interior branches) | ≈3.1e-8 | passes for ε ≳ 5e-5 (binary search: throws@4e-5, passes@5e-5) |
-| IEEE-123 (`test_acceptance.jl`) | (real impedances) | ≈9.47e-8 | passes for ε ≳ 1e-6 |
-| two_bus_feeder (`test_admm.jl:25`/`test_planning_oracle.jl:267`) | own head-branch flow mag2 | ≈1.40e-9 | passes at every ε tried (1e-9..1e-3) |
-| near-lossless smax=10 pair (`test_pricing_dlmp.jl:20/226`, `test_pricing_welfare.jl:64`) | 100 | ≈6.2-6.3e-6 | passes at every ε tried |
-| **test_exactness.jl's pre-existing WR-01 item** (smax=10, injected l=5e-6) | 100 | 5e-6 | **throws ONLY for ε < 5e-8** |
+**Attempt 1 (pure relative floor `atol_b = ε*ref_b`):** swept `ε` against the Task-2
+synthetic regression and the plan's explicitly-named required fixture set (cluster-E +
+IEEE-13/IEEE-123 canonical). Found `ε = 1e-4` satisfies all of those, but ALSO found that
+`test/test_exactness.jl`'s PRE-EXISTING WR-01 item (a `smax=10` branch, injected `l=5e-6`
+gap) needs `ε < 5e-8` to keep throwing — 3 orders of magnitude below the `ε ≳ 5e-5` the
+IEEE-13 ground fixture needs to keep passing. **No single ε satisfies both.** Per the
+locked "never raise/lower ε to hide a flip" policy, this was recorded as an ESCALATION in
+`27-FINDINGS.md` rather than resolved silently in either direction, and surfaced prominently
+in this plan's first completion report.
 
-`ε = 1e-4` clears every row in the REQUIRED set (synthetic + cluster-E + IEEE-13/123
-canonical) with ≥2x margin on the tightest (IEEE-13 ground). It does NOT keep the
-pre-existing WR-01 item throwing — see Escalation.
+**Coordinator decision:** implement a HYBRID floor, `atol_b = max(τ_solver, ε·ref_b)`, with
+`τ_solver` a separately-measured absolute Clarabel-noise floor and `ε` kept `< 5e-8`.
+
+**Attempt 2 (hybrid, this plan's final state):** see "τ_solver / ε Measurement" below — found
+FEASIBLE, implemented, verified.
+
+## τ_solver / ε Measurement (hybrid, final)
+
+**Stage 1 — measure `τ_solver`.** For every REQUIRED canonical/cluster-E fixture, computed
+`excess[b,t] = gap[b,t] - rtol*max(|lhs|,|rhs|)` (the residual an absolute floor alone must
+cover; negative excess means `rtol` alone already covers that point regardless of any
+absolute floor):
+
+| Fixture | Worst excess |
+|---|---|
+| IEEE-13 ground (branch 5→6, t=16) | ≈3.08e-8 |
+| **IEEE-123 (branch 48→49, t=9)** | **≈7.90e-8 (worst REQUIRED excess, binding)** |
+| two_bus_feeder | < 0 (every b,t — fully covered by `rtol`) |
+| near-lossless smax=10 pair (dlmp/welfare) | < 0 (every b,t — real, non-trivial flow; `rtol_term≈1.76e-5 ≫ gap≈6.3e-6`) |
+
+A strict 10x margin (matching `KNOWN_OPTIMUM_ATOL`'s own convention) would give
+`τ_solver = 7.9e-7`, which is ITSELF larger than the Task-2 synthetic regression's injected
+gap (`5e-7`) and would break the "must still throw" requirement — so a smaller, explicitly
+documented margin was used: `τ_solver = 2.0e-7` (~2.53x the worst measured excess), the
+largest value inside the numerically-narrow feasible window `[1.635e-7, 2.5e-7]` (lower bound
+from a 2x pass-margin on IEEE-123; upper bound from a 2x throw-margin on the Task-2
+synthetic regression).
+
+**Stage 2 — verify all three required outcomes** at `τ_solver = 2.0e-7`, `ε = 1.0e-9`:
+
+| Requirement | Result | Margin |
+|---|---|---|
+| (1) WR-01 pre-existing item (smax=10, l=5e-6) must THROW | **THROWS** | ≈24.9x |
+| (2) Task-2 synthetic (smax=0.01, l=5e-7) must THROW | **THROWS** | ≈2.5x |
+| (3) IEEE-13 ground must PASS ≥2x | **PASSES** | ≈6.47x |
+| (3) IEEE-123 must PASS ≥2x | **PASSES** | ≈2.43x (tightest) |
+| (3) two_bus_feeder must PASS ≥2x | **PASSES** | ≈145.8x |
+| (3) near-lossless smax=10 pair (dlmp/welfare) must PASS ≥2x | **PASSES** | ≈2.81x |
+
+All verified by DIRECT EXECUTION of `assert_socp_exact!` against each fixture's actual
+reproduced solve (not just the arithmetic) — including running the literal `test_exactness.jl`
+fixture bodies for both the WR-01 item and the new synthetic item.
 
 ## Decisions Made
 
-- Chose `ε = 1e-4` (matches `rtol`'s own order of magnitude) over a tighter value: the
-  binding lower bound from the REQUIRED fixture set is ≈5e-5 (IEEE-13 ground); `1e-4` gives
-  ~2x margin without being needlessly loose relative to the Task-2 synthetic fixture's
-  tolerance ceiling (≈5e-3).
-- Did NOT attempt to satisfy the pre-existing WR-01 regression item's `ε<5e-8` requirement
-  by choosing a smaller ε, because doing so would newly flag the IEEE-13 ground canonical
-  fixture (and IEEE-123) as inexact — the LOCKED policy explicitly forbids resolving this
-  either direction silently. Recorded as an escalation instead.
-- Left `test/test_exactness.jl`'s 3 pre-existing `@testitem`s completely untouched (only a
-  NEW item was added) — modifying an existing item's fixture to "work around" the ε
-  conflict would itself be a silent re-pin, which the plan's locked decision forbids.
+- **Hybrid over a pure relative floor**, per the coordinator's explicit directive after
+  reviewing the escalation, because a pure relative floor is architecturally unable to
+  distinguish "this branch is small so its floor should be small" from "this branch's
+  residual sits at the solver's own noise floor regardless of scale" — the absolute term
+  `τ_solver` exists precisely for the latter.
+- **~2.5x margin instead of a textbook 10x margin for `τ_solver`**: measured window
+  `[1.635e-7, 2.5e-7]` is narrow; a 10x margin (`7.9e-7`) would have made the hybrid
+  INFEASIBLE (it would itself exceed the Task-2 synthetic regression's gap). Chose `2e-7`,
+  centered in the feasible window, and documented WHY 10x doesn't fit here (unlike
+  `KNOWN_OPTIMUM_ATOL`'s own context, where 10x was feasible).
+- Left `test/test_exactness.jl`'s 3 pre-existing `@testitem`s completely untouched throughout
+  both attempts (only a NEW item was added) — never modified an existing item's fixture to
+  "work around" a conflict.
 
 ## Deviations from Plan
 
@@ -144,58 +213,32 @@ pre-existing WR-01 item throwing — see Escalation.
 **1. [Rule 3 - Blocking] Fixed a `julia -e` top-level soft-scope bug in the plan's own Task 2 `<verify>` script**
 - **Found during:** Task 2 verification
 - **Issue:** The plan's literal verify script uses `threw = false; try ... catch e; threw = true; end`. Under `julia -e` (non-interactive top-level), Julia's soft-scope rule treats the `catch`-block assignment as a NEW local that dies with the block — the outer `threw` never updates, silently vacating the assertion (same failure class documented in this repo's `test/runtests.jl` header and the `testitem-try-scoping-trap` project memory, but here reproduced under plain `julia -e`, not TestItemRunner).
-- **Fix:** Added `global threw = ...` in the verify script when running interactively via `-e` (not needed in the actual `test/test_exactness.jl` `@testitem`, which uses `@test_throws Exception` directly instead of a try/catch accumulator, avoiding the trap entirely).
-- **Files modified:** none (only affected an ad hoc verify invocation, not committed code).
-- **Verification:** Re-ran with the `global` keyword; script now correctly reports the exception was caught.
+- **Fix:** Added `global threw = ...` in ad hoc verify scripts when running interactively via `-e` (not needed in the actual `test/test_exactness.jl` `@testitem`, which uses `@test_throws Exception` directly instead of a try/catch accumulator, avoiding the trap entirely).
+- **Files modified:** none (only affected ad hoc verify invocations, not committed code).
+- **Verification:** Re-ran with the `global` keyword; scripts now correctly report the exception was caught.
 - **Committed in:** N/A (verify-script-only fix, not part of any commit).
 
 ---
 
 **Total deviations:** 1 auto-fixed (1 blocking, verify-script-only, no source change)
-**Impact on plan:** No impact on shipped code; the actual regression test in
-`test/test_exactness.jl` uses `@test_throws Exception` directly and never hits this trap.
+**Impact on plan:** No impact on shipped code; the actual regression tests in
+`test/test_exactness.jl` use `@test_throws Exception` directly and never hit this trap.
 
 ## Issues Encountered
 
-See "Escalation" below — the significant finding of this plan.
+An initial pure-relative-floor implementation was measured and found to create an
+irreconcilable conflict (see "History" above) — escalated, then resolved via a coordinator-
+directed hybrid floor. Fully resolved; no open issues remain from this plan's scope.
 
-## Escalation (prominent — read before proceeding)
+## Escalation — RESOLVED
 
-**A single `ε` cannot simultaneously satisfy the plan's required fixture set AND the
-pre-existing `test/test_exactness.jl` WR-01 regression item.** Full detail in
+The escalation raised mid-plan (a pure relative floor could not satisfy both the required
+fixture set and a pre-existing WR-01 regression test) was reviewed by the user, who directed
+the hybrid floor implemented in this plan's final state. Full detail, including the original
+escalation text preserved verbatim, is in
 `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-FINDINGS.md`
-("Plan 27-02 — FIX-08 per-branch exactness floor: irreconcilable ε conflict (ESCALATED)").
-
-Summary:
-
-- `test/test_exactness.jl`'s pre-existing item "exact: relative gate refuses a base-shrunk
-  cone slack an absolute τ would accept (WR-01)" (a `smax=10` branch, injected `l=5e-6` gap)
-  needs `ε < 5e-8` to keep throwing (its whole documented purpose).
-- The IEEE-13 ground canonical acceptance fixture (`test_acceptance.jl`, and the identical
-  fixture reused by `test_admm.jl:78`/planning-oracle cross-validation) needs `ε ≳ 5e-5` to
-  keep NOT throwing (it is genuinely exact; the residual is a Clarabel precision-floor
-  artifact on 2 interior branches at PV-back-feed reverse-flow hours).
-- These thresholds are 3 orders of magnitude apart — not a matter of finding a better
-  constant. Root cause: for a thermally-limited branch, `ref_b = smax^2` scales UP with the
-  branch's own `smax`; the WR-01 item's `smax=10` synthetic branch and the IEEE-13 fixture's
-  interior branches (whose `ref_b` inherits the SMALL-`smax=0.0686` head branch's own flow
-  magnitude) sit at very different points on that scale, while Clarabel's actual achievable
-  cone-residual noise floor (~1e-8) does not shrink with network `smax`.
-- **Per the locked policy, `MEASURED_ε_FIX08 = 1e-4` was chosen to satisfy the plan's
-  EXPLICITLY-NAMED required set (Task 2's own acceptance criterion: the synthetic regression
-  + the cluster-E/canonical fixtures). This leaves the pre-existing WR-01 item now PASSING
-  (no longer throwing) — a "should-be-flagged now passes" case, escalated per the objective's
-  locked decision rather than resolved by raising OR lowering ε.**
-- **Consequence for the suite:** running `test/test_exactness.jl`'s full item set will show
-  this ONE pre-existing item failing (its `@test_throws Exception` no longer observes an
-  exception) until the orchestrator/user makes an explicit follow-up decision. This item was
-  NOT edited by this plan.
-- **Candidate resolutions (none applied, awaiting user triage):** (a) accept the item's
-  regression as a documented consequence of FIX-08 and update it to use a smaller `smax`
-  that still demonstrates the same "small absolute ≠ exact" lesson under the new per-branch
-  floor; (b) give the near-zero-flow/WR-01 regime a separate, smaller floor constant distinct
-  from the interior-branch head-flow-magnitude reference (an architectural change, Rule 4
-  territory, out of scope here); (c) explicitly retire/relabel the WR-01 item's claim.
+("Plan 27-02 — FIX-08 per-branch exactness floor: irreconcilable ε conflict (RESOLVED — hybrid floor)").
+No open escalation remains for this plan.
 
 ## User Setup Required
 
@@ -203,14 +246,17 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 
-- FIX-08's per-branch floor is implemented, measured, and the 2 backward-compat call sites
-  are verified unaffected.
-- **Blocker for suite-green claims:** `test/test_exactness.jl`'s pre-existing WR-01 item will
-  read as failing until the escalated ε conflict above is triaged by the user — the
-  orchestrator should surface this prominently before declaring the phase/suite green.
-- IEEE-8500 was NOT swept (not explicitly named in the plan's required fixture list; a much
-  larger fixture) — if a future plan touches IEEE-8500's exactness gating, sweep it too
-  before assuming `ε=1e-4` is universally safe there.
+- FIX-08's hybrid per-branch floor is implemented, measured, verified against all three
+  required outcomes, and the 2 backward-compat call sites are confirmed unaffected.
+- `test/test_exactness.jl`'s pre-existing WR-01 item is confirmed throwing again
+  (byte-identical fixture, re-verified by direct execution) — no suite-green blocker remains
+  from this plan.
+- **Caveat carried forward:** the tightest margins in this set (IEEE-123 pass-side ≈2.43x,
+  Task-2 synthetic throw-side ≈2.5x) leave less headroom than a textbook 10x margin. IEEE-8500
+  was NOT swept (not explicitly named in the plan's required fixture list; a much larger
+  fixture). If a future plan touches IEEE-8500's exactness gating, or adds a tighter synthetic
+  regression, re-measure `τ_solver`/`ε` rather than assuming this pair generalizes
+  indefinitely.
 
 ---
 *Phase: 27-integer-planning-pricing-certificate-correctness*
@@ -224,3 +270,5 @@ None - no external service configuration required.
 - FOUND: `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-02-SUMMARY.md`
 - FOUND commit: `9374e5c`
 - FOUND commit: `9876322`
+- FOUND commit: `f7d334c`
+- FOUND commit: `5b72c74`

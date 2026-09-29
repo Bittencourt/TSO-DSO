@@ -4,7 +4,13 @@ Findings discovered during Phase 27 gap-closure execution that are documented as
 silently fixed) and folded into `.planning/STATE.md` by the orchestrator at phase close.
 Executors in parallel worktrees append here — never edit `STATE.md` directly.
 
-## Plan 27-02 — FIX-08 per-branch exactness floor: irreconcilable ε conflict (ESCALATED)
+## Plan 27-02 — FIX-08 per-branch exactness floor: irreconcilable ε conflict (RESOLVED — hybrid floor)
+
+**Status: RESOLVED (2026-09-29).** The user reviewed this escalation and directed a HYBRID
+floor: `atol_b = max(τ_solver, ε·ref_b)`, with `τ_solver` a separately-measured ABSOLUTE
+Clarabel cone-residual floor and `ε` kept small (`< 5e-8`) so the pre-existing WR-01 item
+keeps throwing. See "Resolution" at the end of this entry for the measured numbers. The
+original escalation is preserved below UNEDITED for the record.
 
 - **[v?.? Phase 27 finding, ESCALATED]:** the per-branch relative exactness floor
   `atol_b = ε * ref_b` (FIX-08, replacing the flat `atol = 1e-6` default in
@@ -67,3 +73,64 @@ Executors in parallel worktrees append here — never edit `STATE.md` directly.
   `MEASURED_ε_FIX08` comment and `27-02-SUMMARY.md` for the complete per-fixture ε-threshold
   table (synthetic small-branch, IEEE-13 ground, IEEE-123, two_bus_feeder, near-lossless
   smax=10 cluster-E pair).
+
+### Resolution (2026-09-29) — hybrid floor `atol_b = max(τ_solver, ε·ref_b)`
+
+The user's directive: keep `ε` small (`< 5e-8`, so the per-branch RELATIVE term still does its
+original job on large-`smax` branches) and add a SEPARATELY-MEASURED ABSOLUTE floor `τ_solver`
+(Clarabel's own achievable cone-residual noise floor, measured with a documented margin,
+mirroring the `KNOWN_OPTIMUM_ATOL` measure-then-pin protocol) to protect lightly-loaded/
+interior branches without needing `ref_b` to carry that burden. `atol_b = max(τ_solver,
+ε·ref_b)` — the LARGER of the two applies per branch/hour.
+
+**Measurement protocol (2 stages), direct scripts reproducing each fixture body under
+`julia --project=.`:**
+
+1. **`τ_solver`:** for every REQUIRED canonical/cluster-E fixture, computed
+   `excess[b,t] = gap[b,t] - rtol·max(|lhs|,|rhs|)` — the residual an ABSOLUTE floor alone
+   must cover, independent of `ref_b`/`ε` (a negative excess means the `rtol` term alone
+   already passes that (b,t) regardless of any absolute floor choice).
+
+   | Fixture | Worst excess | Note |
+   |---|---|---|
+   | IEEE-13 ground (branch 5→6, t=16) | ≈3.08e-8 | interior branch, small head-flow ref_b |
+   | **IEEE-123 (branch 48→49, t=9)** | **≈7.90e-8** | **worst REQUIRED excess — binding** |
+   | two_bus_feeder | < 0 (every b,t) | fully covered by `rtol` regardless of atol |
+   | near-lossless smax=10 pair (dlmp/welfare) | < 0 (every b,t) | fully covered by `rtol` (real, non-trivial flow; rtol_term ≈1.76e-5 ≫ gap ≈6.3e-6) |
+
+   Worst REQUIRED excess = **7.90e-8** (IEEE-123). A strict 10x margin (the
+   `KNOWN_OPTIMUM_ATOL` convention) would give `τ_solver = 7.9e-7`, which is ITSELF larger
+   than the Task-2 synthetic regression's injected gap (`5e-7`) and would break requirement
+   (2) below — so a smaller, explicitly-documented margin was used instead: `τ_solver = 2.0e-7`
+   (≈2.53x the worst measured excess), chosen as the largest value in the numerically-narrow
+   feasible window `[1.635e-7, 2.5e-7]` (lower bound: 2x margin on the IEEE-123 pass side;
+   upper bound: 2x margin on the Task-2 synthetic throw side).
+
+2. **Verification of all three required outcomes**, with `τ_solver = 2.0e-7` and
+   `ε = 1.0e-9` (well under the `< 5e-8` bound):
+
+   | Requirement | Result | Margin |
+   |---|---|---|
+   | (1) WR-01 pre-existing item (smax=10, l=5e-6) must THROW | **THROWS** | ratio ≈24.9 (24.9x) |
+   | (2) Task-2 synthetic (smax=0.01, l=5e-7) must THROW | **THROWS** | ratio ≈2.50 (2.5x) |
+   | (3a) IEEE-13 ground must PASS ≥2x | **PASSES** | ≈6.47x |
+   | (3b) IEEE-123 must PASS ≥2x | **PASSES** | ≈2.43x (tightest) |
+   | (3c) two_bus_feeder must PASS ≥2x | **PASSES** | ≈145.8x |
+   | (3d) near-lossless smax=10 pair (dlmp) must PASS ≥2x | **PASSES** | ≈2.81x |
+   | (3e) near-lossless smax=10 pair (welfare) must PASS ≥2x | **PASSES** | (rtol-dominated, same fixture family as 3d) |
+
+All three required outcomes hold simultaneously — the hybrid floor is FEASIBLE (the
+coordinator's fallback — `ε=1e-4` + rescoping the WR-01 fixture — was NOT needed). Implemented
+in `src/models/exactness.jl` (commit `5b72c74`): `MEASURED_ε_FIX08 = 1.0e-9`,
+`TAU_SOLVER_FIX08 = 2.0e-7`, `atol_b = atol === nothing ? max(τ_solver, ε * ref_b) : atol`.
+`test/test_exactness.jl`'s pre-existing WR-01 item is UNCHANGED (byte-identical) and now
+throws again, confirmed by direct execution of its exact literal fixture body. The 2
+explicit-`atol` call sites (`src/admm/DsoOpt.jl`, `test/fixtures_phase19.jl`) remain on the
+unchanged bypass path.
+
+**Caveat carried forward:** the margin on requirement (3b) (IEEE-123, ≈2.43x) and the throw
+margin on requirement (2) (≈2.5x) are the TIGHTEST in this set — both comfortably clear the
+plan's ≥2x bar but leave less headroom than a textbook 10x margin would. If a FUTURE fixture
+(e.g. IEEE-8500, not swept in this plan — see `27-02-SUMMARY.md`) produces a genuinely-exact
+excess above ≈1.5e-7, or a stricter synthetic regression is added with an injected gap below
+≈4e-7, this hybrid pair should be re-measured, not assumed to generalize indefinitely.
