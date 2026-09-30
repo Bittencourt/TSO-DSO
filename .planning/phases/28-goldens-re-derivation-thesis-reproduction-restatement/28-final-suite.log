@@ -1,0 +1,1241 @@
+HEAD=817ada4
+2026-09-30T06:01:56-03:00
+┌ Warning: The project dependencies or compat requirements have changed since the manifest was last resolved.
+│ It is recommended to `Pkg.resolve()` or consider `Pkg.update()` if necessary.
+└ @ Pkg.API ~/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/share/julia/stdlib/v1.12/Pkg/src/API.jl:1308
+     Testing TSODSO
+┌ Warning: Entry in manifest at "/home/pedro/programming/TSO-DSO/test" for package "HiGHS_jll" differs from that in "/home/pedro/programming/TSO-DSO/Manifest-v1.12.toml"
+└ @ Pkg.Operations ~/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/share/julia/stdlib/v1.12/Pkg/src/Operations.jl:2259
+      Status `/tmp/jl_ho7ytn/Project.toml`
+⌃ [4c88cf16] Aqua v0.8.16
+  [485130c0] BilevelJuMP v0.6.3
+⌃ [336ed68f] CSV v0.10.16
+  [a93c6f00] DataFrames v1.8.2
+  [634d3b9d] DrWatson v2.19.1
+⌅ [87dc4568] HiGHS v1.24.1
+⌅ [b6b21f68] Ipopt v1.15.0
+⌃ [c3a54625] JET v0.11.6
+⌃ [4076af6c] JuMP v1.30.1
+  [860ef19b] StableRNGs v1.0.4
+  [67a63935] TSODSO v0.1.0 `~/programming/TSO-DSO`
+⌃ [f8b46487] TestItemRunner v1.1.5
+⌃ [1c621080] TestItems v1.0.0
+  [56ddb016] Logging v1.11.0
+  [8dfed614] Test v1.11.0
+      Status `/tmp/jl_ho7ytn/Manifest.toml`
+⌃ [14f7f29c] AMD v0.5.3
+⌃ [4c88cf16] Aqua v0.8.16
+  [485130c0] BilevelJuMP v0.6.3
+⌃ [336ed68f] CSV v0.10.16
+⌃ [0b6fb165] ChunkCodecCore v1.0.1
+  [4c0bbee4] ChunkCodecLibZlib v1.1.0
+  [55437552] ChunkCodecLibZstd v1.0.0
+  [61c947e1] Clarabel v0.11.1
+  [da1fd8a2] CodeTracking v3.0.2
+  [523fee87] CodecBzip2 v0.8.5
+⌃ [944b1d66] CodecZlib v0.7.8
+  [bbf7d656] CommonSubexpressions v0.3.1
+  [34da2185] Compat v4.18.1
+  [807dbc54] Compiler v0.1.1
+  [a8cc5b0e] Crayons v4.2.0
+  [9a962f9c] DataAPI v1.16.0
+  [a93c6f00] DataFrames v1.8.2
+  [864edb3b] DataStructures v0.19.6
+  [e2d170a0] DataValueInterfaces v1.0.0
+  [163ba53b] DiffResults v1.1.0
+  [b552c78f] DiffRules v1.16.0
+  [ffbed154] DocStringExtensions v0.9.5
+  [634d3b9d] DrWatson v2.19.1
+  [191a621a] Dualization v0.7.7
+⌃ [e2ba6199] ExprTools v0.1.10
+  [5789e2e9] FileIO v1.20.0
+  [48062228] FilePathsBase v0.9.24
+⌃ [f6369f11] ForwardDiff v1.4.1
+⌅ [14197337] GenericLinearAlgebra v0.3.19
+  [076d061b] HashArrayMappedTries v0.2.0
+⌅ [87dc4568] HiGHS v1.24.1
+⌅ [842dd82b] InlineStrings v1.4.5
+  [41ab1584] InvertedIndices v1.3.1
+⌅ [b6b21f68] Ipopt v1.15.0
+  [92d709cd] IrrationalConstants v0.2.6
+  [82899510] IteratorInterfaceExtensions v1.0.0
+⌃ [c3a54625] JET v0.11.6
+⌃ [033835bb] JLD2 v0.6.5
+  [692b3bcd] JLLWrappers v1.8.0
+⌃ [682c06a0] JSON v1.6.1
+⌃ [4076af6c] JuMP v1.30.1
+⌃ [aa1ae85d] JuliaInterpreter v0.11.3
+  [70703baa] JuliaSyntax v1.0.2
+⌃ [b964fa9f] LaTeXStrings v1.4.0
+⌃ [2ab3a3ac] LogExpFunctions v1.0.1
+⌃ [6f1432cf] LoweredCodeUtils v3.7.2
+  [1914dd2f] MacroTools v0.5.16
+  [8c4f8055] MathOptIIS v0.2.0
+⌃ [b8f27783] MathOptInterface v1.51.2
+  [e1d29d7a] Missings v1.2.0
+⌃ [d8a4904e] MutableArithmetics v1.8.0
+  [77ba4419] NaNMath v1.1.4
+⌅ [bac558e1] OrderedCollections v1.8.2
+⌅ [69de0a69] Parsers v2.8.6
+  [2dfb63ee] PooledArrays v1.4.3
+  [aea7be01] PrecompileTools v1.3.4
+⌃ [21216c6a] Preferences v1.5.2
+⌃ [08abe8d2] PrettyTables v3.4.2
+  [bfc457fd] QDLDL v0.4.1
+  [189a3867] Reexport v1.2.2
+  [ae029012] Requires v1.3.1
+⌃ [295af30f] Revise v3.16.1
+  [7e506255] ScopedValues v1.6.2
+  [6c6a2e73] Scratch v1.3.0
+  [91c51154] SentinelArrays v1.4.10
+  [66db9d55] SnoopPrecompile v1.0.3
+  [a2af1166] SortingAlgorithms v1.2.3
+⌃ [276daf66] SpecialFunctions v2.8.0
+  [860ef19b] StableRNGs v1.0.4
+⌃ [90137ffa] StaticArrays v1.9.18
+  [1e83bf80] StaticArraysCore v1.4.4
+⌃ [10745b16] Statistics v1.11.1
+⌅ [892a3eda] StringManipulation v0.4.5
+⌃ [ec057cc2] StructUtils v2.8.2
+  [67a63935] TSODSO v0.1.0 `~/programming/TSO-DSO`
+  [3783bdb8] TableTraits v1.0.1
+⌃ [bd369af6] Tables v1.13.0
+⌃ [f8b46487] TestItemRunner v1.1.5
+⌃ [1c621080] TestItems v1.0.0
+⌅ [a759f4b9] TimerOutputs v0.5.29
+  [3bb67fe8] TranscodingStreams v0.11.3
+  [3a884ed6] UnPack v1.0.2
+⌅ [ea10d353] WeakRefStrings v1.4.3
+  [76eceee3] WorkerUtilities v1.6.1
+⌃ [ae81ac8f] ASL_jll v0.1.3+0
+  [6e34b625] Bzip2_jll v1.0.9+0
+⌃ [8fd58aa0] HiGHS_jll v1.15.1+0
+⌃ [e33a78d0] Hwloc_jll v2.14.0+0
+⌅ [9cc047cb] Ipopt_jll v300.1400.1902+0
+  [94ce4f54] Libiconv_jll v1.18.0+0
+⌃ [d00139f3] METIS_jll v5.1.3+0
+⌃ [d7ed1dd3] MUMPS_seq_jll v500.900.0+0
+⌃ [656ef2d0] OpenBLAS32_jll v0.3.33+2
+  [efe28fd5] OpenSpecFun_jll v0.5.6+0
+⌃ [319450e9] SPRAL_jll v2025.9.18+0
+⌅ [02c8fc9c] XML2_jll v2.13.9+0
+  [a65dc6b1] Xorg_libpciaccess_jll v0.19.0+0
+  [3161d3a3] Zstd_jll v1.5.7+1
+  [0dad84c5] ArgTools v1.1.2
+  [56f22d72] Artifacts v1.11.0
+  [2a0f44e3] Base64 v1.11.0
+  [8bf52ea8] CRC32c v1.11.0
+  [ade2ca70] Dates v1.11.0
+  [f43a241f] Downloads v1.7.0
+  [7b1f6079] FileWatching v1.11.0
+  [9fa8497b] Future v1.11.0
+  [b77e0a4c] InteractiveUtils v1.11.0
+  [ac6e5ff7] JuliaSyntaxHighlighting v1.12.0
+  [b27032c2] LibCURL v0.6.4
+  [76f85450] LibGit2 v1.11.0
+  [8f399da3] Libdl v1.11.0
+  [37e2e46d] LinearAlgebra v1.12.0
+  [56ddb016] Logging v1.11.0
+  [d6f4376e] Markdown v1.11.0
+  [a63ad114] Mmap v1.11.0
+  [ca575930] NetworkOptions v1.3.0
+  [44cfe95a] Pkg v1.12.1
+  [de0858da] Printf v1.11.0
+  [3fa0cd96] REPL v1.11.0
+  [9a3f8284] Random v1.11.0
+  [ea8e919c] SHA v0.7.0
+  [9e88b42a] Serialization v1.11.0
+  [6462fe0b] Sockets v1.11.0
+  [2f01184e] SparseArrays v1.12.0
+  [f489334b] StyledStrings v1.11.0
+  [4607b0f0] SuiteSparse
+  [fa267f1f] TOML v1.0.3
+  [a4e569a6] Tar v1.10.0
+  [8dfed614] Test v1.11.0
+  [cf7118a7] UUIDs v1.11.0
+  [4ec0a83e] Unicode v1.11.0
+  [e66e0078] CompilerSupportLibraries_jll v1.3.0+1
+  [deac9b47] LibCURL_jll v8.15.0+0
+  [e37daf67] LibGit2_jll v1.9.0+0
+  [29816b5a] LibSSH2_jll v1.11.3+1
+  [14a3606d] MozillaCACerts_jll v2025.11.4
+  [4536629a] OpenBLAS_jll v0.3.29+0
+  [05823500] OpenLibm_jll v0.8.7+0
+  [458c3c95] OpenSSL_jll v3.5.4+0
+  [bea87d4a] SuiteSparse_jll v7.8.3+2
+  [83775a58] Zlib_jll v1.3.1+2
+  [8e850b90] libblastrampoline_jll v5.15.0+0
+  [8e850ede] nghttp2_jll v1.64.0+1
+  [3f19e933] p7zip_jll v17.7.0+0
+        Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading.
+     Testing Running tests...
+
+******************************************************************************
+This program contains Ipopt, a library for large-scale nonlinear optimization.
+ Ipopt is released as open source code under the Eclipse Public License (EPL).
+         For more information visit https://github.com/coin-or/Ipopt
+******************************************************************************
+
+┌ Info: default ConvexBranchFlow() v̂-v gap at bus 3
+└   gap = 0.004999503800895866
+┌ Warning: Meshed SOCP angle-recovery FAILED (worst_residual=0.060728807830099145 at chord branch b=3, bus 2->4, hour t=1; atol=0.01, rtol=0.01, scale=1.0): the SOCP welfare objective is a valid UPPER BOUND on the true AC welfare optimum only (the relaxation maximizes over a superset of the AC-feasible points, so W_SOCP >= W_AC), NOT a certified AC operating point (Gan-Low angle-recovery condition; MESH-03).
+└ @ TSODSO ~/programming/TSO-DSO/src/models/mesh_angle_certificate.jl:293
+┌ Warning: Meshed SOCP angle-recovery FAILED (worst_residual=0.060728807830099145 at chord branch b=3, bus 2->4, hour t=1; atol=0.01, rtol=0.01, scale=1.0): the SOCP welfare objective is a valid UPPER BOUND on the true AC welfare optimum only (the relaxation maximizes over a superset of the AC-feasible points, so W_SOCP >= W_AC), NOT a certified AC operating point (Gan-Low angle-recovery condition; MESH-03).
+└ @ TSODSO ~/programming/TSO-DSO/src/models/mesh_angle_certificate.jl:293
+┌ Warning: Meshed SOCP angle-recovery FAILED (worst_residual=0.05950491514837753 at chord branch b=3, bus 4->2, hour t=1; atol=0.01, rtol=0.01, scale=1.0): the SOCP welfare objective is a valid UPPER BOUND on the true AC welfare optimum only (the relaxation maximizes over a superset of the AC-feasible points, so W_SOCP >= W_AC), NOT a certified AC operating point (Gan-Low angle-recovery condition; MESH-03).
+└ @ TSODSO ~/programming/TSO-DSO/src/models/mesh_angle_certificate.jl:293
+┌ Info: mpc_terminal MPC-02 measured deviations
+│   dev_disabled = 4.355290927461966e-7
+│   dev_enabled = 8.977467987753007e-11
+│   soc_da_final = 0.006103992205672523
+│   soc_final_disabled = 0.006104427734765269
+└   soc_final_enabled = 0.006103992295447203
+┌ Info: IEEE-13 ADMM knife-edge canary
+│   iters = 56
+│   welfare = -4823.66604824162
+└   escalations = 0
+┌ Info: acceptance ieee13: thesis v₉[16] cross-check (Assumption A1)
+│   v9_16 = 1.03604426055989
+│   thesis = 1.0493
+│   gap = 0.013255739440109826
+└   note = "gap is expected & documented (Open Q1: inputs figure-bound)"
+[ Info: CairoMakie not installed (weakdep) — SKIPPING the with-CairoMakie Figure check; the headless core suite stays plot-free.
+┌ Warning: DlmpDecomposition.loss is deprecated, use .cone (the rotated-SOC cone-slot multiplier, thesis 3.39) -- removal scheduled for Phase 36
+│   caller = ip:0x0
+└ @ Core :-1
+┌ Info: WR-02 PV back-feed + decompose_dlmp
+│   mag_fwd =
+│    2-element Vector{Float64}:
+│     2.756073357547479e-10
+│     2.7587264960840124e-10
+│   mag_rev =
+│    2-element Vector{Float64}:
+│     5.393302523170145
+└     5.393302523144269
+┌ Warning: run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder
+│   t = 1
+│   cone_maxratio = 9156.547126483905
+│   cert_status = :certified_convex_dual_restricted
+└ @ TSODSO ~/programming/TSO-DSO/src/experiments/mpc_loop.jl:993
+┌ Warning: run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder
+│   t = 1
+│   cone_maxratio = 9156.547126483905
+│   cert_status = :certified_convex_dual_restricted
+└ @ TSODSO ~/programming/TSO-DSO/src/experiments/mpc_loop.jl:993
+┌ Warning: run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder
+│   t = 4
+│   cone_maxratio = 9166.372600681541
+│   cert_status = :certified_convex_dual_restricted
+└ @ TSODSO ~/programming/TSO-DSO/src/experiments/mpc_loop.jl:993
+┌ Warning: run_mpc: EVERY escalation tier failed — publishing :cert_failed with the reference fallback price for this window (D-04: never throws mid-loop)
+│   t = 2
+│   cone_maxratio = 9156.547126483905
+│   cert_status = :cert_failed
+│   reasons = "restricted tier threw: forced tier failure (test seam) | AC-dual fallback tier threw: forced tier failure (test seam)"
+└ @ TSODSO ~/programming/TSO-DSO/src/experiments/mpc_loop.jl:990
+┌ Warning: run_mpc: per-resolve cone check failed — escalating via Phase-20's certificate/fallback ladder
+│   t = 2
+│   cone_maxratio = 9156.547126483905
+│   cert_status = :local_ac_dual
+└ @ TSODSO ~/programming/TSO-DSO/src/experiments/mpc_loop.jl:993
+┌ Info: mpc_loop mpc_step stride measured difference
+│   r_step1.realized_welfare = -468.9569280395262
+│   r_step2.realized_welfare = -468.9479223577931
+│   r_step1.regret = -0.008051652184008162
+│   r_step2.regret = 0.0009540295490637618
+│   r_step1.trace.dadp_trace = 7-element Vector{Float64}: …
+└   r_step2.trace.dadp_trace = 7-element Vector{Float64}: …
+┌ Info: v̂-v min gap
+└   mingap = 0.0
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788198173349456e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Info: measured Gan-Low modification gap (before safety multiplier)
+└   ε_measured = 0.010189528427785532
+┌ Info: RestrictedBranchFlow socp_maxgap on EXACT-04
+└   ctx.meta[:socp_maxgap] = 1.921931873545557e-8
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788198173349456e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788012168312091e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788198173349456e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Info: assert_restriction_exact! on EXACT-04 (revised semantics: physical feasibility + dispatch-mismatch diagnostic)
+│   report.ac_feasible = true
+│   report.matches_ac_optimum = false
+└   report.optimality_loss = -0.08257379393660358
+┌ Warning: RestrictedBranchFlow solution NOT certified PHYSICALLY AC-feasible: worst cone residual at branch b=2, t=12: |l·v-(P²+Q²)|=1.4794430661571119 vs tol=0.0007464375871847799 (ratio=1982.0050484554138, cone_rtol=0.0005, cone_atol=2.0e-7) — the l·v = P²+Q² cone is not tight at this solve, so it is NOT a genuine branch-flow / AC operating point (Gan-Low OPF-m/OPF-ε, Theorem 2; OVR-02). See restriction_exactness.jl's docstring for the EXACT-04 reference verdict.
+└ @ TSODSO ~/programming/TSO-DSO/src/models/restriction_exactness.jl:304
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788198173349456e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Warning: RestrictedBranchFlow solution NOT certified PHYSICALLY AC-feasible: worst cone residual at branch b=2, t=12: |l·v-(P²+Q²)|=1.4794430661571119 vs tol=0.0007464375871847799 (ratio=1982.0050484554138, cone_rtol=0.0005, cone_atol=2.0e-7) — the l·v = P²+Q² cone is not tight at this solve, so it is NOT a genuine branch-flow / AC operating point (Gan-Low OPF-m/OPF-ε, Theorem 2; OVR-02). See restriction_exactness.jl's docstring for the EXACT-04 reference verdict.
+└ @ TSODSO ~/programming/TSO-DSO/src/models/restriction_exactness.jl:304
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788198173349456e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788012168312091e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+[ Info: Scanning folder /tmp/jl_Ghyf8k for result files.
+[ Info: Added 2 entries.
+[ Info: Scanning folder /tmp/jl_Ghyf8k for result files.
+[ Info: Added 2 entries.
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+This is Ipopt version 3.14.19, running with linear solver MUMPS 5.9.0.
+
+Number of nonzeros in equality constraint Jacobian...:        8
+Number of nonzeros in inequality constraint Jacobian.:       15
+Number of nonzeros in Lagrangian Hessian.............:        3
+
+Total number of variables............................:        9
+                     variables with only lower bounds:        4
+                variables with lower and upper bounds:        1
+                     variables with only upper bounds:        2
+Total number of equality constraints.................:        3
+Total number of inequality constraints...............:        5
+        inequality constraints with only lower bounds:        2
+   inequality constraints with lower and upper bounds:        0
+        inequality constraints with only upper bounds:        3
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  1.7999982e-02 9.80e-01 1.11e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  1.7170281e-02 8.72e-01 1.65e+00  -1.0 7.37e-01    -  4.02e-02 1.11e-01f  1
+   2  1.7463492e-02 7.80e-01 1.82e+01  -1.0 7.45e-01    -  6.27e-01 1.05e-01f  1
+   3  5.9091523e-02 3.00e-01 6.03e+00  -1.0 4.91e-01    -  2.08e-01 6.16e-01f  1
+   4  7.2541243e-02 1.92e-01 3.01e+01  -1.0 1.91e-01    -  7.64e-01 3.60e-01h  1
+   5  1.3334223e-01 6.73e-02 3.21e+01  -1.0 3.11e-01    -  8.03e-01 6.49e-01h  1
+   6  1.6209178e-01 3.40e-02 1.93e+02  -1.0 2.00e-01    -  1.00e+00 4.94e-01h  1
+   7  1.8782935e-01 9.37e-03 2.27e+02  -1.0 2.07e-01    -  1.00e+00 7.25e-01h  1
+   8  1.9199113e-01 4.84e-03 1.07e+03  -1.0 5.17e-02    -  1.00e+00 4.84e-01h  1
+   9  1.9565505e-01 1.34e-03 1.30e+03  -1.0 4.30e-02    -  1.00e+00 7.22e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  10  1.9587524e-01 7.54e-04 7.64e+03  -1.0 5.06e-03    -  1.00e+00 4.39e-01h  1
+  11  1.9684229e-01 1.80e-04 6.86e+03  -1.0 6.47e-03    -  1.00e+00 7.61e-01h  1
+  12  1.9653500e-01 1.06e-04 4.65e+04  -1.0 1.16e-03    -  1.00e+00 4.13e-01h  1
+  13  1.9697608e-01 2.12e-05 3.38e+04  -1.0 1.08e-03    -  1.00e+00 8.00e-01h  1
+  14  1.9660286e-01 1.38e-05 3.02e+05  -1.0 1.29e-03    -  1.00e+00 3.50e-01f  1
+  15  1.9669936e-01 1.10e-05 7.99e+05  -1.0 5.47e-04    -  1.00e+00 2.03e-01f  3
+  16  1.9781778e-01 1.05e-06 1.45e+05  -1.0 1.45e-03    -  1.00e+00 9.04e-01h  1
+  17  1.9766092e-01 8.51e-07 3.64e+06  -1.0 9.72e-04    -  1.00e+00 1.91e-01f  2
+  18  1.9788471e-01 6.13e-09 8.10e+02  -1.0 2.63e-04    -  1.00e+00 1.00e+00h  1
+  19  3.5055406e-03 0.00e+00 1.53e+02  -2.5 6.48e-01    -  1.00e+00 1.00e+00f  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  20  3.4591543e-03 0.00e+00 3.68e+01  -2.5 5.48e-05   4.0 1.00e+00 1.00e+00f  1
+  21 -3.3168731e-03 9.71e-15 2.90e+05  -3.8 1.86e-02    -  5.46e-01 9.44e-01f  1
+  22 -1.4935585e-02 5.17e-09 1.65e+05  -3.8 2.69e-02    -  1.56e-01 6.60e-01f  1
+  23 -2.0727085e-01 9.74e-08 9.15e+05  -3.8 4.04e-01    -  5.54e-02 1.00e+00f  1
+  24 -2.3670233e-01 1.04e-08 8.39e+04  -3.8 1.62e-01    -  9.90e-01 9.02e-01f  1
+  25 -2.4484482e-01 3.26e-09 4.53e+03  -3.8 1.25e-01    -  1.00e+00 1.00e+00f  1
+  26 -2.4484931e-01 1.11e-16 8.51e+01  -3.8 3.62e-03    -  1.00e+00 1.00e+00h  1
+  27 -2.4484929e-01 1.11e-16 1.49e-01  -3.8 2.69e-05    -  1.00e+00 1.00e+00f  1
+  28 -2.4484929e-01 0.00e+00 6.33e-06  -3.8 5.37e-08    -  1.00e+00 1.00e+00f  1
+  29 -2.4500000e-01 8.88e-16 9.80e+00  -8.6 1.10e-03    -  9.99e-01 9.99e-01f  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  30 -2.4500000e-01 7.77e-16 2.43e+01  -8.6 9.66e-07    -  1.00e+00 1.21e-01f  2
+  31 -2.4500000e-01 1.11e-16 1.09e-05  -8.6 8.99e-07    -  1.00e+00 1.00e+00h  1
+  32 -2.4500000e-01 0.00e+00 5.10e-10  -8.6 6.11e-08    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 32
+
+                                   (scaled)                 (unscaled)
+Objective...............:  -2.4500000344714717e-01   -2.4500000344714717e-01
+Dual infeasibility......:   5.0971835086066619e-10    5.0971835086066619e-10
+Constraint violation....:   0.0000000000000000e+00    0.0000000000000000e+00
+Variable bound violation:   3.1803365911644719e-09    3.1803365911644719e-09
+Complementarity.........:   2.5157192346346253e-09    2.5157192346346253e-09
+Overall NLP error.......:   2.5157192346346253e-09    2.5157192346346253e-09
+
+
+Number of objective function evaluations             = 37
+Number of objective gradient evaluations             = 33
+Number of equality constraint evaluations            = 37
+Number of inequality constraint evaluations          = 37
+Number of equality constraint Jacobian evaluations   = 33
+Number of inequality constraint Jacobian evaluations = 33
+Number of Lagrangian Hessian evaluations             = 32
+Total seconds in IPOPT                               = 0.014
+
+EXIT: Optimal Solution Found.
+This is Ipopt version 3.14.19, running with linear solver MUMPS 5.9.0.
+
+Number of nonzeros in equality constraint Jacobian...:        8
+Number of nonzeros in inequality constraint Jacobian.:       16
+Number of nonzeros in Lagrangian Hessian.............:        6
+
+Total number of variables............................:        9
+                     variables with only lower bounds:        4
+                variables with lower and upper bounds:        1
+                     variables with only upper bounds:        2
+Total number of equality constraints.................:        3
+Total number of inequality constraints...............:        7
+        inequality constraints with only lower bounds:        1
+   inequality constraints with lower and upper bounds:        0
+        inequality constraints with only upper bounds:        6
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  1.7999982e-02 9.80e-01 1.22e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  1.6151663e-02 8.09e-01 3.42e+00  -1.0 7.52e-01    -  3.81e-02 1.74e-01f  1
+   2  1.0032976e-02 6.77e-01 3.92e+00  -1.0 7.09e-01    -  4.71e-01 1.64e-01f  1
+   3 -3.0152254e-02 4.26e-01 5.42e+00  -1.0 6.19e-01    -  4.71e-01 3.71e-01h  1
+   4 -1.5998566e-02 3.17e-01 4.50e+01  -1.0 6.29e-01   0.0 5.78e-01 2.56e-01h  1
+   5 -2.8311479e-02 1.85e-01 7.50e+01  -1.0 4.19e-01    -  8.41e-01 4.17e-01h  1
+   6 -4.2148486e-02 1.01e-01 1.09e+02  -1.0 4.57e-01    -  6.41e-01 4.54e-01h  1
+   7 -1.1332281e-01 9.35e-02 1.08e+02  -1.0 3.00e+00    -  8.58e-02 7.36e-02h  1
+   8 -1.2781213e-01 7.83e-02 3.03e+03  -1.0 7.36e-01    -  1.00e+00 1.62e-01h  1
+   9 -8.7996614e-02 2.24e-02 1.63e+03  -1.0 1.63e-01    -  1.00e+00 7.14e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  10 -1.0639848e-01 9.71e-03 5.11e+03  -1.0 2.41e-01    -  1.00e+00 5.67e-01h  1
+  11 -1.0795711e-01 4.40e-03 1.02e+04  -1.0 1.56e-01    -  1.00e+00 5.47e-01h  1
+  12 -1.0424400e-01 2.07e-03 3.32e+04  -1.0 1.48e-01    -  1.00e+00 5.29e-01h  1
+  13 -1.0487582e-01 7.45e-04 4.95e+04  -1.0 3.02e-02    -  1.00e+00 6.40e-01h  1
+  14 -9.9299363e-02 3.06e-04 1.37e+05  -1.0 1.06e-01    -  1.00e+00 5.89e-01h  1
+  15 -1.0199960e-01 1.09e-04 2.53e+05  -1.0 4.16e-02    -  1.00e+00 6.45e-01h  1
+  16 -9.3837488e-02 4.11e-05 5.98e+05  -1.0 1.05e-01    -  1.00e+00 6.22e-01h  1
+  17 -9.5314359e-02 2.77e-05 1.86e+06  -1.0 3.02e-02    -  1.00e+00 3.27e-01f  2
+  18 -9.8113626e-02 4.36e-07 1.37e+05  -1.0 2.16e-02    -  1.00e+00 9.84e-01h  1
+  19 -9.5449516e-02 3.64e-07 6.52e+06  -1.0 1.18e-01    -  1.00e+00 1.65e-01f  2
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  20 -8.2149705e-02 1.82e-07 4.51e+06  -1.0 1.43e-01    -  1.00e+00 5.00e-01f  2
+  21 -7.0105536e-02 5.55e-17 8.40e+04  -1.0 4.87e-02    -  1.00e+00 1.00e+00h  1
+  22 -7.2167354e-02 0.00e+00 4.43e+02  -1.0 7.56e-03    -  1.00e+00 1.00e+00h  1
+  23 -2.3978197e-01 0.00e+00 1.41e+06  -3.8 7.17e-01    -  8.70e-01 8.70e-01f  1
+  24 -2.4480017e-01 2.22e-16 1.84e+05  -3.8 9.44e-02    -  9.17e-01 1.00e+00f  1
+  25 -2.4484969e-01 5.55e-17 1.36e+03  -3.8 6.95e-03    -  1.00e+00 1.00e+00f  1
+  26 -2.4484926e-01 0.00e+00 1.27e-01  -3.8 8.03e-05    -  1.00e+00 1.00e+00h  1
+  27 -2.4484926e-01 0.00e+00 1.49e-04  -3.8 2.53e-06    -  1.00e+00 1.00e+00h  1
+  28 -2.4500000e-01 0.00e+00 1.09e+01  -8.6 1.15e-03    -  9.99e-01 9.99e-01f  1
+  29 -2.4500000e-01 1.11e-16 2.46e-01  -8.6 1.09e-06    -  9.87e-01 1.00e+00f  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  30 -2.4500001e-01 0.00e+00 7.05e-09  -8.6 1.50e-08    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 30
+
+                                   (scaled)                 (unscaled)
+Objective...............:  -2.4500000530977470e-01   -2.4500000530977470e-01
+Dual infeasibility......:   7.0504611762371922e-09    7.0504611762371922e-09
+Constraint violation....:   0.0000000000000000e+00    0.0000000000000000e+00
+Variable bound violation:   1.6666666288845909e-09    1.6666666288845909e-09
+Complementarity.........:   4.7718723281109476e-09    4.7718723281109476e-09
+Overall NLP error.......:   7.0504611762371922e-09    7.0504611762371922e-09
+
+
+Number of objective function evaluations             = 34
+Number of objective gradient evaluations             = 31
+Number of equality constraint evaluations            = 34
+Number of inequality constraint evaluations          = 34
+Number of equality constraint Jacobian evaluations   = 31
+Number of inequality constraint Jacobian evaluations = 31
+Number of Lagrangian Hessian evaluations             = 30
+Total seconds in IPOPT                               = 0.012
+
+EXIT: Optimal Solution Found.
+Running HiGHS 1.15.1 (git hash: 04024d701f): Copyright (c) 2026 under MIT licence terms
+Includes third-party software components, see THIRD_PARTY_NOTICES.md for full details
+Using BLAS: blastrampoline 
+MIQP has 14 rows; 13 cols; 30 matrix nonzeros; 13 Hessian nonzeros; 4 integer variables (4 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 2e+01]
+  Cost    [3e-01, 2e+00]
+  Hessian [1e+00, 1e+00]
+  Bound   [1e+00, 2e+00]
+  RHS     [5e-01, 2e+01]
+Attempting to find feasible solution by solving LP for user-supplied values of discrete variables
+  Iteration        Objective     NullspaceDim
+Model status        : Infeasible
+Objective value     :  0.0000000000e+00
+P-D objective error :  0.0000000000e+00
+HiGHS run time      :          0.01
+ERROR:   Cannot solve MIQP problems with HiGHS
+MIQP has 14 rows; 13 cols; 30 matrix nonzeros; 13 Hessian nonzeros; 4 integer variables (4 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 2e+01]
+  Cost    [3e-01, 2e+00]
+  Hessian [1e+00, 1e+00]
+  Bound   [1e+00, 2e+00]
+  RHS     [5e-01, 2e+01]
+ERROR:   Cannot solve MIQP problems with HiGHS
+This is Ipopt version 3.14.19, running with linear solver MUMPS 5.9.0.
+
+Number of nonzeros in equality constraint Jacobian...:        8
+Number of nonzeros in inequality constraint Jacobian.:       15
+Number of nonzeros in Lagrangian Hessian.............:        3
+
+Total number of variables............................:        9
+                     variables with only lower bounds:        4
+                variables with lower and upper bounds:        1
+                     variables with only upper bounds:        2
+Total number of equality constraints.................:        3
+Total number of inequality constraints...............:        5
+        inequality constraints with only lower bounds:        2
+   inequality constraints with lower and upper bounds:        0
+        inequality constraints with only upper bounds:        3
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  1.7999982e-02 9.80e-01 1.11e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  1.7170281e-02 8.72e-01 1.65e+00  -1.0 7.37e-01    -  4.02e-02 1.11e-01f  1
+   2  1.7463492e-02 7.80e-01 1.82e+01  -1.0 7.45e-01    -  6.27e-01 1.05e-01f  1
+   3  5.9091523e-02 3.00e-01 6.03e+00  -1.0 4.91e-01    -  2.08e-01 6.16e-01f  1
+   4  7.2541243e-02 1.92e-01 3.01e+01  -1.0 1.91e-01    -  7.64e-01 3.60e-01h  1
+   5  1.3334223e-01 6.73e-02 3.21e+01  -1.0 3.11e-01    -  8.03e-01 6.49e-01h  1
+   6  1.6209178e-01 3.40e-02 1.93e+02  -1.0 2.00e-01    -  1.00e+00 4.94e-01h  1
+   7  1.8782935e-01 9.37e-03 2.27e+02  -1.0 2.07e-01    -  1.00e+00 7.25e-01h  1
+   8  1.9199113e-01 4.84e-03 1.07e+03  -1.0 5.17e-02    -  1.00e+00 4.84e-01h  1
+   9  1.9565505e-01 1.34e-03 1.30e+03  -1.0 4.30e-02    -  1.00e+00 7.22e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  10  1.9587524e-01 7.54e-04 7.64e+03  -1.0 5.06e-03    -  1.00e+00 4.39e-01h  1
+  11  1.9684229e-01 1.80e-04 6.86e+03  -1.0 6.47e-03    -  1.00e+00 7.61e-01h  1
+  12  1.9653500e-01 1.06e-04 4.65e+04  -1.0 1.16e-03    -  1.00e+00 4.13e-01h  1
+  13  1.9697608e-01 2.12e-05 3.38e+04  -1.0 1.08e-03    -  1.00e+00 8.00e-01h  1
+  14  1.9660286e-01 1.38e-05 3.02e+05  -1.0 1.29e-03    -  1.00e+00 3.50e-01f  1
+  15  1.9669936e-01 1.10e-05 7.99e+05  -1.0 5.47e-04    -  1.00e+00 2.03e-01f  3
+  16  1.9781778e-01 1.05e-06 1.45e+05  -1.0 1.45e-03    -  1.00e+00 9.04e-01h  1
+  17  1.9766092e-01 8.51e-07 3.64e+06  -1.0 9.72e-04    -  1.00e+00 1.91e-01f  2
+  18  1.9788471e-01 6.13e-09 8.10e+02  -1.0 2.63e-04    -  1.00e+00 1.00e+00h  1
+  19  3.5055406e-03 0.00e+00 1.53e+02  -2.5 6.48e-01    -  1.00e+00 1.00e+00f  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  20  3.4591543e-03 0.00e+00 3.68e+01  -2.5 5.48e-05   4.0 1.00e+00 1.00e+00f  1
+  21 -3.3168731e-03 9.71e-15 2.90e+05  -3.8 1.86e-02    -  5.46e-01 9.44e-01f  1
+  22 -1.4935585e-02 5.17e-09 1.65e+05  -3.8 2.69e-02    -  1.56e-01 6.60e-01f  1
+  23 -2.0727085e-01 9.74e-08 9.15e+05  -3.8 4.04e-01    -  5.54e-02 1.00e+00f  1
+  24 -2.3670233e-01 1.04e-08 8.39e+04  -3.8 1.62e-01    -  9.90e-01 9.02e-01f  1
+  25 -2.4484482e-01 3.26e-09 4.53e+03  -3.8 1.25e-01    -  1.00e+00 1.00e+00f  1
+  26 -2.4484931e-01 1.11e-16 8.51e+01  -3.8 3.62e-03    -  1.00e+00 1.00e+00h  1
+  27 -2.4484929e-01 1.11e-16 1.49e-01  -3.8 2.69e-05    -  1.00e+00 1.00e+00f  1
+  28 -2.4484929e-01 0.00e+00 6.33e-06  -3.8 5.37e-08    -  1.00e+00 1.00e+00f  1
+  29 -2.4500000e-01 8.88e-16 9.80e+00  -8.6 1.10e-03    -  9.99e-01 9.99e-01f  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  30 -2.4500000e-01 7.77e-16 2.43e+01  -8.6 9.66e-07    -  1.00e+00 1.21e-01f  2
+  31 -2.4500000e-01 1.11e-16 1.09e-05  -8.6 8.99e-07    -  1.00e+00 1.00e+00h  1
+  32 -2.4500000e-01 0.00e+00 5.10e-10  -8.6 6.11e-08    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 32
+
+                                   (scaled)                 (unscaled)
+Objective...............:  -2.4500000344714717e-01   -2.4500000344714717e-01
+Dual infeasibility......:   5.0971835086066619e-10    5.0971835086066619e-10
+Constraint violation....:   0.0000000000000000e+00    0.0000000000000000e+00
+Variable bound violation:   3.1803365911644719e-09    3.1803365911644719e-09
+Complementarity.........:   2.5157192346346253e-09    2.5157192346346253e-09
+Overall NLP error.......:   2.5157192346346253e-09    2.5157192346346253e-09
+
+
+Number of objective function evaluations             = 37
+Number of objective gradient evaluations             = 33
+Number of equality constraint evaluations            = 37
+Number of inequality constraint evaluations          = 37
+Number of equality constraint Jacobian evaluations   = 33
+Number of inequality constraint Jacobian evaluations = 33
+Number of Lagrangian Hessian evaluations             = 32
+Total seconds in IPOPT                               = 0.011
+
+EXIT: Optimal Solution Found.
+This is Ipopt version 3.14.19, running with linear solver MUMPS 5.9.0.
+
+Number of nonzeros in equality constraint Jacobian...:        8
+Number of nonzeros in inequality constraint Jacobian.:       16
+Number of nonzeros in Lagrangian Hessian.............:        6
+
+Total number of variables............................:        9
+                     variables with only lower bounds:        4
+                variables with lower and upper bounds:        1
+                     variables with only upper bounds:        2
+Total number of equality constraints.................:        3
+Total number of inequality constraints...............:        7
+        inequality constraints with only lower bounds:        1
+   inequality constraints with lower and upper bounds:        0
+        inequality constraints with only upper bounds:        6
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  1.7999982e-02 9.80e-01 1.22e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  1.6151663e-02 8.09e-01 3.42e+00  -1.0 7.52e-01    -  3.81e-02 1.74e-01f  1
+   2  1.0032976e-02 6.77e-01 3.92e+00  -1.0 7.09e-01    -  4.71e-01 1.64e-01f  1
+   3 -3.0152254e-02 4.26e-01 5.42e+00  -1.0 6.19e-01    -  4.71e-01 3.71e-01h  1
+   4 -1.5998566e-02 3.17e-01 4.50e+01  -1.0 6.29e-01   0.0 5.78e-01 2.56e-01h  1
+   5 -2.8311479e-02 1.85e-01 7.50e+01  -1.0 4.19e-01    -  8.41e-01 4.17e-01h  1
+   6 -4.2148486e-02 1.01e-01 1.09e+02  -1.0 4.57e-01    -  6.41e-01 4.54e-01h  1
+   7 -1.1332281e-01 9.35e-02 1.08e+02  -1.0 3.00e+00    -  8.58e-02 7.36e-02h  1
+   8 -1.2781213e-01 7.83e-02 3.03e+03  -1.0 7.36e-01    -  1.00e+00 1.62e-01h  1
+   9 -8.7996614e-02 2.24e-02 1.63e+03  -1.0 1.63e-01    -  1.00e+00 7.14e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  10 -1.0639848e-01 9.71e-03 5.11e+03  -1.0 2.41e-01    -  1.00e+00 5.67e-01h  1
+  11 -1.0795711e-01 4.40e-03 1.02e+04  -1.0 1.56e-01    -  1.00e+00 5.47e-01h  1
+  12 -1.0424400e-01 2.07e-03 3.32e+04  -1.0 1.48e-01    -  1.00e+00 5.29e-01h  1
+  13 -1.0487582e-01 7.45e-04 4.95e+04  -1.0 3.02e-02    -  1.00e+00 6.40e-01h  1
+  14 -9.9299363e-02 3.06e-04 1.37e+05  -1.0 1.06e-01    -  1.00e+00 5.89e-01h  1
+  15 -1.0199960e-01 1.09e-04 2.53e+05  -1.0 4.16e-02    -  1.00e+00 6.45e-01h  1
+  16 -9.3837488e-02 4.11e-05 5.98e+05  -1.0 1.05e-01    -  1.00e+00 6.22e-01h  1
+  17 -9.5314359e-02 2.77e-05 1.86e+06  -1.0 3.02e-02    -  1.00e+00 3.27e-01f  2
+  18 -9.8113626e-02 4.36e-07 1.37e+05  -1.0 2.16e-02    -  1.00e+00 9.84e-01h  1
+  19 -9.5449516e-02 3.64e-07 6.52e+06  -1.0 1.18e-01    -  1.00e+00 1.65e-01f  2
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  20 -8.2149705e-02 1.82e-07 4.51e+06  -1.0 1.43e-01    -  1.00e+00 5.00e-01f  2
+  21 -7.0105536e-02 5.55e-17 8.40e+04  -1.0 4.87e-02    -  1.00e+00 1.00e+00h  1
+  22 -7.2167354e-02 0.00e+00 4.43e+02  -1.0 7.56e-03    -  1.00e+00 1.00e+00h  1
+  23 -2.3978197e-01 0.00e+00 1.41e+06  -3.8 7.17e-01    -  8.70e-01 8.70e-01f  1
+  24 -2.4480017e-01 2.22e-16 1.84e+05  -3.8 9.44e-02    -  9.17e-01 1.00e+00f  1
+  25 -2.4484969e-01 5.55e-17 1.36e+03  -3.8 6.95e-03    -  1.00e+00 1.00e+00f  1
+  26 -2.4484926e-01 0.00e+00 1.27e-01  -3.8 8.03e-05    -  1.00e+00 1.00e+00h  1
+  27 -2.4484926e-01 0.00e+00 1.49e-04  -3.8 2.53e-06    -  1.00e+00 1.00e+00h  1
+  28 -2.4500000e-01 0.00e+00 1.09e+01  -8.6 1.15e-03    -  9.99e-01 9.99e-01f  1
+  29 -2.4500000e-01 1.11e-16 2.46e-01  -8.6 1.09e-06    -  9.87e-01 1.00e+00f  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  30 -2.4500001e-01 0.00e+00 7.05e-09  -8.6 1.50e-08    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 30
+
+                                   (scaled)                 (unscaled)
+Objective...............:  -2.4500000530977470e-01   -2.4500000530977470e-01
+Dual infeasibility......:   7.0504611762371922e-09    7.0504611762371922e-09
+Constraint violation....:   0.0000000000000000e+00    0.0000000000000000e+00
+Variable bound violation:   1.6666666288845909e-09    1.6666666288845909e-09
+Complementarity.........:   4.7718723281109476e-09    4.7718723281109476e-09
+Overall NLP error.......:   7.0504611762371922e-09    7.0504611762371922e-09
+
+
+Number of objective function evaluations             = 34
+Number of objective gradient evaluations             = 31
+Number of equality constraint evaluations            = 34
+Number of inequality constraint evaluations          = 34
+Number of equality constraint Jacobian evaluations   = 31
+Number of inequality constraint Jacobian evaluations = 31
+Number of Lagrangian Hessian evaluations             = 30
+Total seconds in IPOPT                               = 0.011
+
+EXIT: Optimal Solution Found.
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: you passed a key as a symbol instead of a string, it has been automatically converted
+└ @ JLD2 ~/.julia/packages/JLD2/ADycq/src/fileio.jl:10
+┌ Warning: 4Q-BESS complementarity violated at bus 2, t=1: p_ch·p_dch=15.600000974531067 exceeds atol+rtol·scale²=0.00640001 (rtol=0.0001, atol=1.0e-8, scale=8.0) — MESH-04 clause 2; if this fixture has a negative effective nodal price and grid-charging enabled, this MAY be the honest boundary D-08 documents rather than a bug — see FourQuadBESS.jl's complementarity derivation docstring
+└ @ TSODSO ~/programming/TSO-DSO/src/models/complementarity_4q.jl:149
+┌ Warning: 4Q-BESS complementarity violated at bus 2, t=2: p_ch·p_dch=15.599999024877762 exceeds atol+rtol·scale²=0.00640001 (rtol=0.0001, atol=1.0e-8, scale=8.0) — MESH-04 clause 2; if this fixture has a negative effective nodal price and grid-charging enabled, this MAY be the honest boundary D-08 documents rather than a bug — see FourQuadBESS.jl's complementarity derivation docstring
+└ @ TSODSO ~/programming/TSO-DSO/src/models/complementarity_4q.jl:149
+┌ Info: The General registry is installed via git. Consider reinstalling it via
+│ the newer faster direct from tarball format by running:
+│   pkg> registry rm General; registry add General
+└ 
+┌ Info: ieee123 voltage-binding margin
+│   vmin_solved = 0.9487492294806376
+│   vmax_solved = 1.0104399661000587
+└   band = (0.9, 1.1)
+┌ Info: welfare: +25% headline ratio vs thesis 1.25 (figure-bound cross-check)
+│   ratio = 0.9999738569409319
+└   gap = 0.2500261430590681
+┌ Warning: solve_with_retry!: attempt 1 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 2 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 3 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 1 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 2 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 3 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 1 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 2 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Warning: solve_with_retry!: attempt 3 failed (ALMOST_OPTIMAL); escalating conditioning
+│   raw = "ALMOST_SOLVED"
+└ @ TSODSO ~/programming/TSO-DSO/src/planning/retry.jl:201
+┌ Info: ACPowerFlow PV back-feed limit duals
+│   mag_fwd = 8.789522143052902e-7
+│   mag_rev = 1.2282510562715063
+│   value(pv.P[1, 1]) = -0.3930097722375642
+└   value(pv.l[1, 1]) = 0.15445698998464177
+┌ Warning: run_stochastic: held-out scenario 1 is INFEASIBLE against the committed first-stage schedule (its PV/demand draw cannot support the pinned p_ch/p_dch at some hour) — recorded as welfare_h = NaN, infeasible_h = true, and EXCLUDED from realized_welfare (WR-05 skip-and-report, never silent)
+│   termination_status = INFEASIBLE::TerminationStatusCode = 2
+└ @ TSODSO ~/programming/TSO-DSO/src/experiments/run_stochastic.jl:74
+┌ Info: ieee13 ground: thesis v₉[16] cross-check (Assumption A1)
+│   v9_16 = 1.03604426055989
+│   thesis = 1.0493
+│   gap = 0.013255739440109826
+└   note = "gap is expected & documented (Open Q1: inputs figure-bound)"
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Info: v̂-v min gap (default ConvexBranchFlow)
+└   mingap = 0.0
+┌ Info: load-bearing check
+│   v2 = 1.0503500116143374
+│   v̂2 = 1.1025000232286692
+└   vmax2 = 1.1025
+┌ Info: PV back-feed cone duals
+│   mag_fwd = 2.377669609470182e-7
+│   mag_rev = 1.381491966419648
+│   value(pv.P[1, 1]) = -0.39300976281251476
+└   value(pv.l[1, 1]) = 0.15445700922830352
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: primal_var_dual_quad_slack field is deprecated, use primal_var_in_quad_obj_to_dual_slack_var instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:251
+┌ Warning: primal_parameter field is deprecated, use primal_parameter_to_dual_parameter instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:248
+┌ Warning: primal_var_dual_quad_slack field is deprecated, use primal_var_in_quad_obj_to_dual_slack_var instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:251
+┌ Warning: primal_parameter field is deprecated, use primal_parameter_to_dual_parameter instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:248
+┌ Warning: primal_var_dual_quad_slack field is deprecated, use primal_var_in_quad_obj_to_dual_slack_var instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:251
+┌ Warning: primal_parameter field is deprecated, use primal_parameter_to_dual_parameter instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:248
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: The Git repository ('/home/pedro/programming/TSO-DSO') is dirty! Appending -dirty to the commit ID.
+└ @ DrWatson ~/.julia/packages/DrWatson/2QF5p/src/saving_tools.jl:71
+┌ Warning: primal_var_dual_quad_slack field is deprecated, use primal_var_in_quad_obj_to_dual_slack_var instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:251
+┌ Warning: primal_parameter field is deprecated, use primal_parameter_to_dual_parameter instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:248
+┌ Warning: primal_var_dual_quad_slack field is deprecated, use primal_var_in_quad_obj_to_dual_slack_var instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:251
+┌ Warning: primal_parameter field is deprecated, use primal_parameter_to_dual_parameter instead
+└ @ Dualization ~/.julia/packages/Dualization/lt5ES/src/structures.jl:248
+┌ Info: thesis_repro (IEEE-13, secondary): fit_baseline infeasible as expected (Pitfall 2); falling back to the manual S_max-relaxed FIT solve
+│   exception =
+│    Solve failed — refusing to trust results:
+│      termination_status : INFEASIBLE
+│      primal_status      : INFEASIBLE_POINT
+│      dual_status        : INFEASIBILITY_CERTIFICATE
+│      raw_status         : PRIMAL_INFEASIBLE
+└    
+┌ Info: thesis_repro (IEEE-13, secondary, non-gated): DSO-surplus sign-flip cross-check
+│   acct.dso = 3.0006551130173604
+│   fit_dso = -5.322224210126478
+│   acct.prosumer = -4826.496780025333
+│   fit_prosumer = -4816.759029781787
+└   sign_flip_holds = true
+┌ Info: planning hardening load test: empirical retry rate
+│   total_retries_from_trace = 0
+│   n_retry_warnings = 0
+└   result.iters = 55
+[ Info: CairoMakie not installed (weakdep) — SKIPPING the with-CairoMakie Figure check; the headless core suite stays plot-free. Aesthetics are the manual-only 07-VALIDATION check.
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788198173349456e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+┌ Warning: Battery complementarity violated at bus 2, t=7: p_ch·p_dch = 7.788012168312091e-6 ≥ τ·Pmax² = 1.0000000000000002e-8 (relative τ=1.0e-6, Pmax≈0.1; App. C, threat T-03-13)
+└ @ TSODSO ~/programming/TSO-DSO/src/models/welfare_solve.jl:386
+D-06 measured per-unit impedance spread: min=8.446311112615211e-7 pu, max=3.0 pu, spread=6.55045418047193 orders of magnitude
+Test Summary: |  Pass  Broken  Total      Time
+Package       | 30703       5  30708  29m06.8s
+     Testing TSODSO tests passed 

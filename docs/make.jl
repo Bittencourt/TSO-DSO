@@ -60,12 +60,14 @@ makedocs(;
     authors = "Pedro Bittencourt",
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", nothing) == "true",
-        # The consolidated `api.md` (full @autodocs of the ~100-symbol public API on one
-        # page) exceeds Documenter's default 200 KiB per-page HTML size_threshold. Raise
-        # the hard limit (and the warn threshold) so the single API-reference page builds;
-        # all other pages are well under this.
-        size_threshold = 600 * 1024,
-        size_threshold_warn = 400 * 1024,
+        # The consolidated `api.md` (full @autodocs of the public API on one page) exceeds
+        # Documenter's default 200 KiB per-page HTML size_threshold. Raised once already
+        # (dc0de79, post-v1) to 600/400 KiB; by Phase 28 (v4.0) the page has organically
+        # grown to 676.24 KiB (more exported symbols/docstrings across Phases 9-27) and
+        # tripped that limit too. Raised again with headroom for further growth rather
+        # than re-bumping every few phases; all other pages are well under this.
+        size_threshold = 1024 * 1024,
+        size_threshold_warn = 800 * 1024,
     ),
     # No repo source links: the build must succeed in a bare/worktree checkout
     # where Documenter cannot infer a remote. Re-enable when deploying from CI.

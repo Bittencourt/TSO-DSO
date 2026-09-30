@@ -292,7 +292,11 @@ if Base.find_package("CairoMakie") !== nothing
         linestyle = :dash,
         linewidth = 1,
     )
-    scatterlines!(ax3, hours, value.(bvars.soc); color = :seagreen, label = "soc")
+    ## `bvars.soc` is `T+1`-long since Phase 26 FIX-04 closed the battery SOC recursion
+    ## over the whole window (`soc[1:(T+1)]`, terminal target at `soc[T+1]`); truncate to
+    ## the `T`-long `hours` axis, matching `scripts/demo_mpc_plots.jl`'s/`thesis_caseA.jl`'s
+    ## established convention for the identical situation (Phase 28 restatement).
+    scatterlines!(ax3, hours, value.(bvars.soc)[1:T]; color = :seagreen, label = "soc")
     axislegend(ax3; position = :rb, labelsize = 11)
     fig
 end
