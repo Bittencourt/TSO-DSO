@@ -214,6 +214,46 @@ r.day_ahead_welfare
 
 r.realized_welfare
 
+# ## Restated in v4.0 (Phase 28)
+#
+# Phase 27 (FIX-10) changed what `realized_welfare` MEANS without changing this section's own
+# narrative shape — the numbers displayed above are recomputed LIVE against the NEW semantics
+# every time this page builds, never a frozen pre-Phase-27 value left undocumented. Concretely:
+#
+#   - `realized_welfare` above is now TRUTH-SETTLED against the true plant, not the window's own
+#     forecast-consistent belief: `run_mpc` clips every `PVBattery`'s realized charge and
+#     self-consumption/export to the device's TRUE (unperturbed) `Ppv[abs_hour]` availability
+#     (Assumption A6), THROWS (never silently clamps) on a genuine out-of-band SOC/temperature
+#     propagation, and settles the frontier import via a genuine AC power flow, PHYSICS ONLY
+#     (`ACPowerFlow(; limits = false)`, Ipopt) — replacing the earlier SOCP-relaxation re-solve
+#     this page's own `src/experiments/mpc_loop.jl` docstring documents as superseded (Phase 27
+#     FIX-10, USER DECISION 2026-09-29).
+#   - The OLD, pre-Phase-27 forecast-consistent number survives as a SEPARATELY-labelled
+#     diagnostic — `forecast_settled_welfare` — never the headline `regret` above is measured
+#     against:
+
+r.forecast_settled_welfare
+
+#   - `run_mpc` also now reports `settlement_violations` — one entry per PUBLISHED hour, each a
+#     thermal/voltage overload diagnostic recomputed DIRECTLY from the AC truth settlement's own
+#   solved `P`/`Q`/`l`/`v` (never a constraint dual: `ACPowerFlow(; limits = false)` omits the
+#   `:smax`/`:smax_rev`/voltage-bound constraints entirely, so there is nothing to refuse a
+#   dispatch on and nothing to read a dual from). A DIAGNOSTIC, never a gate — an overload is
+#   REPORTED, not thrown. The count of published hours on THIS page's own fixture reporting at
+#   least one thermal or voltage overload under the relaxed operating band, measured live:
+
+count(v -> v.n_thermal_violations > 0 || v.voltage_violated, r.settlement_violations)
+
+# Measured on THIS 24-hour `:ieee13` default-population fixture: 3 of the 19 published hours
+# (abs_hour 10, 13, 14) report a genuine thermal overload once served by the TRUE, unrelaxed AC
+# equality (`max_overload_ratio` ≈ 1.02, 1.004, 1.001 respectively — modest, single-digit-percent
+# head-branch overloads, no voltage violation on any of the three) — a real, physically-settled
+# finding this fixture's own reverse-flow/forecast-error interaction produces, REPORTED here
+# exactly as measured, never refused or hidden by the truth settlement (Assumption A6/FIX-10's
+# "physics only, report don't refuse" convention). This is a DIFFERENT nonzero-overload instance
+# than `test/test_mpc_loop.jl`'s own DELIBERATELY forced-PV-shortfall/tight-thermal-limit fixtures
+# (plan 27-09), which exercise the same reporting path under a fixture engineered to trigger it.
+
 # ## 4. Per-step certificate/fallback status (D-04)
 #
 # Every one of the 19 resolves ran Phase-20's own non-throwing certificate check — `run_mpc`
