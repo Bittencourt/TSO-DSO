@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-09-30T23:43:02.787Z"
+stopped_at: Completed 29-04-PLAN.md
+last_updated: "2026-09-30T23:55:48.836Z"
 last_activity: 2026-09-30
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 38
-  completed_plans: 37
+  completed_plans: 38
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 29 (Genuine Bilevel TSO-DSO Variant) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-09-30
 
@@ -172,6 +172,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 *Updated after each plan completion*
 | Phase 29 P01 | 25min | 2 tasks | 5 files |
 | Phase 29 P02 | 25min | 2 tasks | 2 files |
+| Phase 29 P04 | 33min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,7 @@ Recent decisions affecting current work:
 
 - [Phase 29]: Measured SOS1 bounds must include both named-constraint duals AND variable-bound reduced costs -- the research's illustrative probe (named-constraint duals only) silently underestimates on a fixture whose follower optimum is a degenerate corner at both probe extremes
 - [Phase 29]: Phase 29 P02: BILEV_GAP_FLOOR derived as 10x the production MILP's measured mip_feasibility_tolerance=1e-9 (never as a fraction of the observed bilevel-vs-joint gap); stacked JULIA_LOAD_PATH="test:.:@stdlib" verification idiom resolves both main-env TSODSO and test-only BilevelJuMP/Ipopt without Pkg.develop mutation
+- [Phase 29]: Phase 29 P04 (BILEV-02 BLOCKER-1): closed the fixture-adequacy gap with a second, non-degenerate (q_op=1.0) interior certification fixture in test/test_planning_certification_bilevel_interior.jl, self-contained (no edits to test/fixtures_planning.jl); GAP_FLOOR_INTERIOR/Z_GAP_FLOOR_INTERIOR set to 1e-6 (looser than plan 29-02's 1e-8) from this fixture's own measured cross-solver (HiGHS-MILP-KKT vs Clarabel-QP) residual ~3.7e-5
 
 ### Roadmap Evolution
 
@@ -449,8 +451,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-09-30T23:42:32.305Z
-Stopped at: Completed 29-01-PLAN.md
+Last session: 2026-09-30T23:55:48.814Z
+Stopped at: Completed 29-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
