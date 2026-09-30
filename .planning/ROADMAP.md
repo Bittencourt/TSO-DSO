@@ -201,7 +201,7 @@ Phases 26–27 was re-derived with an explanation (goldens themselves are re-der
 
   3. The v2.1/v3.0 SOCP-inexactness findings (e.g. EXACT-04) are re-verified against the corrected
      exactness copy and restated if the verdict changed.
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 Plans:
 **Wave 1**
@@ -212,7 +212,7 @@ Plans:
 
 **Wave 2** *(concurrency-cap only — no data dependency on Wave 1)*
 
-- [ ] 28-04-PLAN.md — SC-3: MPC truth-settlement + DLMP naming restatement
+- [x] 28-04-PLAN.md — SC-3: MPC truth-settlement + DLMP naming restatement
 
 **Wave 3** *(phase-closing gate, blocked on ALL of the above)*
 
@@ -409,7 +409,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
-| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 1/5 | In Progress|  |
+| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 2/5 | In Progress|  |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
