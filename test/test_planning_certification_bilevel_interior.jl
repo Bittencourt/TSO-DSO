@@ -264,6 +264,25 @@
         )
     end
 
+    # --- BILEV-02 BLOCKER-1 golden constants (Task 2) ------------------------------
+    # Pinned from a LIVE, measured solve this session (see this file's header
+    # derivation comment (c) for the full analytic argument — EMPIRICALLY CONFIRMED,
+    # not blindly trusted: the direct-script reproduction under a stacked
+    # JULIA_LOAD_PATH="test:.:@stdlib" measured production y=0.148, x_inv=0.148,
+    # z=1.48, total_cost=-1.4726 to within 1e-7 of these analytic values; joint
+    # y=x_inv=0.2475, z=2.475, total=-3.0628125 to within 1e-7; rho_y(0.05)=9.8 to
+    # within 3e-8; rho_y(1.0)=0.0 to within 6e-11 -- no derivation correction needed).
+    const INTERIOR_Y_HAND = 0.148
+    const INTERIOR_XINV_HAND = 0.148
+    const INTERIOR_Z_HAND = 1.48
+    const INTERIOR_TOTAL_HAND = -1.4726
+    const JOINT_Y_HAND_INTERIOR = 0.2475
+    const JOINT_XINV_HAND_INTERIOR = 0.2475
+    const JOINT_Z_HAND_INTERIOR = 2.475
+    const JOINT_TOTAL_HAND_INTERIOR = -3.0628125
+    const RHO_Y_BELOW_HAND = 9.8
+    const RHO_Y_ABOVE_HAND = 0.0
+
     # GAP_FLOOR_INTERIOR / Z_GAP_FLOOR_INTERIOR — T-29-07 mitigation: derived from
     # MEASURED solver-precision quantities (10x the production MILP's own
     # `select_optimizer(MILP())` `mip_feasibility_tolerance=1e-9`, memory
@@ -289,6 +308,16 @@
         v_d,
         d_max,
         agg_bus,
+        INTERIOR_Y_HAND,
+        INTERIOR_XINV_HAND,
+        INTERIOR_Z_HAND,
+        INTERIOR_TOTAL_HAND,
+        JOINT_Y_HAND_INTERIOR,
+        JOINT_XINV_HAND_INTERIOR,
+        JOINT_Z_HAND_INTERIOR,
+        JOINT_TOTAL_HAND_INTERIOR,
+        RHO_Y_BELOW_HAND,
+        RHO_Y_ABOVE_HAND,
         GAP_FLOOR_INTERIOR,
         Z_GAP_FLOOR_INTERIOR
 end
@@ -344,16 +373,16 @@ end
     # atol MEASURED this session: HiGHS's own achieved precision on this fixture's
     # embedded SOS1-bridged MILP (see file header derivation comment (c)).
     atol_hand = 1e-4
-    @test isapprox(prod.y, 0.148; atol = atol_hand)
-    @test isapprox(prod.x_inv, 0.148; atol = atol_hand)
-    @test isapprox(prod.z[1], 1.48; atol = atol_hand)
-    @test isapprox(prod.total_cost, -1.4726; atol = atol_hand)
+    @test isapprox(prod.y, F.INTERIOR_Y_HAND; atol = atol_hand)
+    @test isapprox(prod.x_inv, F.INTERIOR_XINV_HAND; atol = atol_hand)
+    @test isapprox(prod.z[1], F.INTERIOR_Z_HAND; atol = atol_hand)
+    @test isapprox(prod.total_cost, F.INTERIOR_TOTAL_HAND; atol = atol_hand)
 
     # --- Joint reference reproduces the named golden optimum ---
-    @test isapprox(jt.y, 0.2475; atol = atol_hand)
-    @test isapprox(jt.x_inv, 0.2475; atol = atol_hand)
-    @test isapprox(jt.z, 2.475; atol = atol_hand)
-    @test isapprox(jt.total, -3.0628125; atol = atol_hand)
+    @test isapprox(jt.y, F.JOINT_Y_HAND_INTERIOR; atol = atol_hand)
+    @test isapprox(jt.x_inv, F.JOINT_XINV_HAND_INTERIOR; atol = atol_hand)
+    @test isapprox(jt.z, F.JOINT_Z_HAND_INTERIOR; atol = atol_hand)
+    @test isapprox(jt.total, F.JOINT_TOTAL_HAND_INTERIOR; atol = atol_hand)
 
     # --- Three-way agreement: production == BilevelJuMP == brute-force ---
     # atol_bilevel MEASURED this session: BilevelJuMP StrongDualityMode (Ipopt, an
@@ -377,7 +406,7 @@ end
     # The brute-force grid's OWN achieving point sits within one grid spacing of
     # the hand-derived kink (confirms the fine grid itself resolves the true
     # optimum, independent of the salted point).
-    @test abs(bf.y - 0.148) < grid_spacing + atol_hand
+    @test abs(bf.y - F.INTERIOR_Y_HAND) < grid_spacing + atol_hand
 
     # The salted 0.148 point is not silently doing all the work: the grid's
     # achieving total agrees with a fine-only re-run (no salted point) to within
@@ -406,9 +435,9 @@ end
 
     @test r_below.rho_y > 1.0
     @test isapprox(r_below.x_inv, 0.05; atol = 1e-4)   # 0.05 is the PROBE input, not a golden
-    @test isapprox(r_below.rho_y, 9.8; atol = 1e-2)
+    @test isapprox(r_below.rho_y, F.RHO_Y_BELOW_HAND; atol = 1e-2)
 
     @test r_above.rho_y < 1e-6
-    @test isapprox(r_above.x_inv, 0.148; atol = 1e-4)
-    @test isapprox(r_above.rho_y, 0.0; atol = 1e-6)
+    @test isapprox(r_above.x_inv, F.INTERIOR_XINV_HAND; atol = 1e-4)
+    @test isapprox(r_above.rho_y, F.RHO_Y_ABOVE_HAND; atol = 1e-6)
 end
