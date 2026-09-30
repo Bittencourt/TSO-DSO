@@ -305,6 +305,17 @@ end
         T = f.T,
     )
 
+    # --- Production reproduces the named golden corner (PlanningFixtures.BILEV_*_HAND) ---
+    @test isapprox(prod.y, PlanningFixtures.BILEV_Y_HAND; atol = 1e-9)
+    @test isapprox(prod.z[1], PlanningFixtures.BILEV_Z_HAND; atol = 1e-9)
+    @test isapprox(prod.total_cost, PlanningFixtures.BILEV_TOTAL_HAND; atol = 1e-9)
+
+    # --- Joint reference reproduces the named golden optimum (PlanningFixtures.JOINT_*_HAND) ---
+    @test isapprox(jt.y, PlanningFixtures.JOINT_Y_HAND; atol = 1e-9)
+    @test isapprox(jt.x_inv, PlanningFixtures.JOINT_XINV_HAND; atol = 1e-9)
+    @test isapprox(jt.z[1], PlanningFixtures.JOINT_Z_HAND; atol = 1e-9)
+    @test isapprox(jt.total, PlanningFixtures.JOINT_TOTAL_HAND; atol = 1e-9)
+
     # --- Three-way agreement: production == BilevelJuMP == brute-force ---
     # atol=1e-3 MEASURED this session: BilevelJuMP StrongDualityMode (Ipopt, an NLP
     # strong-duality reformulation) converges to this fixture's y*=z*=0.0 corner
@@ -327,16 +338,11 @@ end
     @test isapprox(prod.total_cost, bf.total; atol = atol_bruteforce)
 
     # --- Genuine bilevel != joint divergence (T-29-04 mitigation) ---
-    # GAP_FLOOR derived from a MEASURED solver-precision quantity: 10x the
-    # production MILP's own `select_optimizer(MILP())` mip_feasibility_tolerance
-    # (1e-9, memory highs-exactness-defaults) — NEVER as a fraction of the
-    # observed ~3.9/~2.0 gaps themselves (29-RESEARCH.md Pitfall 6). Measured this
-    # session: the true gap sits 8 orders of magnitude above this floor for BOTH
-    # total_cost (a cost quantity, O(1)-O(4) scale here) and z (a power quantity
-    # bounded by d_max=2.0) — both are within the same order of magnitude in THIS
-    # fixture, so sharing one floor between them is justified (checked, not
-    # assumed).
-    GAP_FLOOR = 1e-8
-    @test abs(prod.total_cost - jt.total) > GAP_FLOOR
-    @test abs(prod.z[1] - jt.z[1]) > GAP_FLOOR
+    # PlanningFixtures.BILEV_GAP_FLOOR is derived from a MEASURED solver-precision
+    # quantity: 10x the production MILP's own `select_optimizer(MILP())`
+    # mip_feasibility_tolerance (1e-9, memory highs-exactness-defaults) — NEVER as
+    # a fraction of the observed ~3.9/~2.0 gaps themselves (29-RESEARCH.md Pitfall
+    # 6). See fixtures_planning.jl's own derivation comment for the full argument.
+    @test abs(prod.total_cost - jt.total) > PlanningFixtures.BILEV_GAP_FLOOR
+    @test abs(prod.z[1] - jt.z[1]) > PlanningFixtures.BILEV_GAP_FLOOR
 end

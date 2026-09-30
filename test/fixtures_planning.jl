@@ -118,6 +118,53 @@
         )
     end
 
+    # BILEV-02 (Phase 29 plan 29-02) golden constants — the measured production/
+    # joint answers on `bilevel_toy_fixture()`, consumed by
+    # test/test_planning_certification_bilevel.jl's single @testitem instead of
+    # inline literals, mirroring this file's own N1_Y_HAND/N1_Z_HAND/N1_OBJ_HAND
+    # block convention.
+    #
+    # BILEV_* (production `TSODSO.solve_bilevel!` on this fixture): ANALYTIC
+    # argument (see `bilevel_toy_fixture`'s own docstring) — the follower's
+    # response is `x_inv=z=0` for EVERY `y_inv` (strict per-unit cost dominance,
+    # `pi_tariff[1]-c_op[1] = -0.3 < 0`), so the leader's objective reduces to
+    # `c_y*y_inv` alone, minimized at `y_inv=0`. EMPIRICALLY CONFIRMED by a live
+    # solve this session (`julia`, stacked `JULIA_LOAD_PATH="test:.:@stdlib"`):
+    # production, BilevelJuMP StrongDualityMode (residual ~1e-7, an Ipopt
+    # interior-point noise floor near the corner, NOT a disagreement), and
+    # brute-force grid enumeration (bit-identical, residual exactly 0.0) all
+    # agree at this exact corner.
+    const BILEV_Y_HAND = 0.0
+    const BILEV_Z_HAND = 0.0
+    const BILEV_TOTAL_HAND = 0.0
+
+    # JOINT_* (the true single-planner, no-tariff reference on this fixture):
+    # ANALYTIC argument (see `bilevel_toy_fixture`'s own docstring) — the net
+    # coefficient on `z` is `c_op[1]-v_d[1] = -2.5` (strictly beneficial to
+    # deliver), so `z*=d_max=2.0` (network-tied `d[t]=z[t]` exactly, lossless
+    # single-branch feeder), requiring `x_inv*=1.0` (from
+    # `corridor_cap*x_inv>=z` binding) and `y_inv*=1.0` (minimal `y_inv>=x_inv`,
+    # since `c_y>0`). EMPIRICALLY CONFIRMED this session: live solve of
+    # `build_joint_reference` (embedded `contribute!(LinDistFlow(), ...)`,
+    # `TSODSO.assert_solved!`) reproduces this exactly (`total = 0.1*1 + 1.0*1 +
+    # 0.5*2 - 3.0*2 = -3.9`).
+    const JOINT_Y_HAND = 1.0
+    const JOINT_XINV_HAND = 1.0
+    const JOINT_Z_HAND = 2.0
+    const JOINT_TOTAL_HAND = -3.9
+
+    # BILEV_GAP_FLOOR — T-29-04 mitigation (29-RESEARCH.md Pitfall 6): derived
+    # from a MEASURED solver-precision quantity, 10x the production MILP's own
+    # `select_optimizer(MILP())` `mip_feasibility_tolerance=1e-9` (memory
+    # `highs-exactness-defaults`), NEVER as a fraction of the very
+    # `|BILEV_TOTAL_HAND - JOINT_TOTAL_HAND| = 3.9` / `|BILEV_Z_HAND -
+    # JOINT_Z_HAND| = 2.0` gaps it is meant to validate. Both gaps sit 8 orders
+    # of magnitude above this floor; `total_cost` (a cost quantity, O(1)-O(4)
+    # scale here) and `z` (a power quantity bounded by `d_max=2.0`) are within
+    # the same order of magnitude in THIS fixture (checked, not assumed), so one
+    # shared floor is valid for both assertions.
+    const BILEV_GAP_FLOOR = 1e-8
+
     export N1_Y_HAND,
         N1_Z_HAND,
         N1_OBJ_HAND,
@@ -126,5 +173,13 @@
         N2_PROBE_Z_SPREAD_MAX,
         N2_PROBE_XINV_SPREAD_MAX,
         N2_PROBE_COST_SPREAD_MAX,
-        bilevel_toy_fixture
+        bilevel_toy_fixture,
+        BILEV_Y_HAND,
+        BILEV_Z_HAND,
+        BILEV_TOTAL_HAND,
+        JOINT_Y_HAND,
+        JOINT_XINV_HAND,
+        JOINT_Z_HAND,
+        JOINT_TOTAL_HAND,
+        BILEV_GAP_FLOOR
 end
