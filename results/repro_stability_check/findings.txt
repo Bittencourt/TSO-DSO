@@ -1,49 +1,28 @@
 Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)
-Measured: 2026-08-23 12:41:10 UTC-local
+Measured: 2026-09-29 22:05:44 UTC-local
 Fixture: ieee123_modified() (real Phase-17 impedances), seed=20260719
 Retuned point: LOAD_SCALE_IEEE123=0.05, PV_SCALE_IEEE123=0.12, DEV_SCALE_IEEE123=0.08333333333333334
 
 === Flake rate ===
 N_REPEATS = 20
-failures = 13
-rate = 0.6500
-failures_by_stage = Dict(:welfare_accounting => 0, :fit_baseline => 13, :solve_welfare => 0)
+failures = 1
+rate = 0.0500
+failures_by_stage = Dict(:welfare_accounting => 0, :fit_baseline => 1, :solve_welfare => 0)
 This is a citable phase finding, not a pass/fail gate (mirrors scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, reported here neither silently accepted nor silently "fixed." The per-stage breakdown (quick task 260823-gea) makes any future misattribution of WHICH call failed structurally impossible to reintroduce.
 
 === Population-scale sensitivity sweep ===
 delta               dso        fit_dso       prosumer   fit_prosumer    socp_maxgap
--0.050         2.709838    -182.961149  -41036.040490  -40864.623238      3.505e-08
--0.020   FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline)
-0.000    FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline)
-0.020          4.163925    -201.616678  -41040.418983  -40854.646797      4.616e-08
-0.050    FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline) FAILED(fit_baseline)
+-0.050         2.709841    -178.175916  -41036.040492  -40864.623246      1.367e-08
+-0.020         3.291901    -184.023074  -41037.857139  -40860.347452      3.798e-08
+0.000          3.739374    -286.107696  -41039.143738  -40857.497070      9.466e-08
+0.020          4.177013    -290.020280  -41040.433142  -40854.646797      8.678e-08
+0.050          4.819615    -295.900337  -41042.376493  -40850.371621      1.277e-07
 
-Failed-point error detail:
-  δ=-0.02 [fit_baseline]: Solve failed — refusing to trust results:
-  termination_status : ALMOST_OPTIMAL
-  primal_status      : NEARLY_FEASIBLE_POINT
-  dual_status        : NEARLY_FEASIBLE_POINT
-  raw_status         : ALMOST_SOLVED
-
-  δ=0.0 [fit_baseline]: Solve failed — refusing to trust results:
-  termination_status : ALMOST_OPTIMAL
-  primal_status      : NEARLY_FEASIBLE_POINT
-  dual_status        : NEARLY_FEASIBLE_POINT
-  raw_status         : ALMOST_SOLVED
-
-  δ=0.05 [fit_baseline]: Solve failed — refusing to trust results:
-  termination_status : ALMOST_OPTIMAL
-  primal_status      : NEARLY_FEASIBLE_POINT
-  dual_status        : NEARLY_FEASIBLE_POINT
-  raw_status         : ALMOST_SOLVED
-
-
-sign_flip_survives: false
-HONEST NEGATIVE RESULT: the sweep point(s) delta=[-0.020, 0.000, 0.050] FAILED OUTRIGHT — solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this is reported as-is — the sweep range was NOT narrowed and the failing point was NOT omitted to force a passing appearance. Plan 18-03 must carry this forward as an assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-robust in the direction(s) that go inexact; the golden band below is derived ONLY from the points that solved successfully and should be read with that caveat attached.
+sign_flip_survives: true
+The DSO-surplus sign flip (FIT dso < 0 -> DADP dso > 0) AND the prosumer-surplus decrease (DADP prosumer < FIT prosumer) hold at EVERY swept point (delta in [-0.050, -0.020, 0.000, 0.020, 0.050]). This is the robustness evidence 18-RESEARCH.md's Open Question 1 / Pitfall 4 required before pinning a golden magnitude band.
 
 === RECOMMENDED BAND ===
-NOTE: at least one sweep point FAILED (see above). 2/5 points completed ALL THREE stages. The band below is derived over the 5/5 points whose `dso` is trustworthy — i.e. those that cleared solve_welfare + welfare_accounting, whether or not fit_baseline's ORTHOGONAL nested solve then converged. It does NOT certify sign-flip robustness across the direction(s) where fit_baseline failed.
 Derivation: DSO_BAND_LO = 0.0 (the DADP DSO surplus must be strictly positive per the sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the swept points whose `dso` is TRUSTWORTHY (solve_welfare + welfare_accounting both succeeded) — deliberately NOT gated on fit_baseline, whose nested solve is orthogonal to `dso` and whose failure therefore says nothing about whether a `dso` value is sound (quick task 260823-gea). The 1.5 is a 50% safety-margin multiplier above the largest trustworthy magnitude, so the pinned golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being so wide it stops meaning anything.
 DSO_BAND_LO = 0.000000
-DSO_BAND_HI = 7.211126
-RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=7.211125525764296
+DSO_BAND_HI = 7.229422
+RECOMMENDED BAND: DSO_BAND_LO=0.0, DSO_BAND_HI=7.229422341375
