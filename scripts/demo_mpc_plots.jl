@@ -24,6 +24,16 @@
 #   4. mpc_welfare_regret   — the information-set-fair welfare comparison and the published
 #      vs day-ahead price-tracking scatter.
 #
+# Restated in v4.0 (Phase 28): `r.realized_welfare`/`r.regret` printed and plotted below are now
+# TRUTH-SETTLED (Phase 27 FIX-10, USER DECISION 2026-09-29) — clipped PVBattery charge/export to
+# TRUE (unperturbed) PV availability (Assumption A6), throw-not-clamp state propagation, and a
+# genuine AC power flow, physics only (`ACPowerFlow(; limits = false)`, Ipopt), for the frontier
+# import — never the window's own pre-Phase-27 forecast-consistent belief. That OLD number
+# survives as `r.forecast_settled_welfare`, a diagnostic never plotted as the headline here.
+# `r.settlement_violations` (one entry per published hour) reports any thermal/voltage overload
+# under the relaxed operating band directly from the AC settlement's own solved P/Q/l/v — a
+# diagnostic, never a refusal gate.
+#
 # Run:
 #     julia --project=. scripts/demo_mpc_plots.jl
 
@@ -93,13 +103,17 @@ pub_hours = 1:r.steps                      # published hours are ALWAYS 1:T-H+1 
 statuses = unique(r.trace.cert_status_trace)
 println("  steps published : $(r.steps)  (= T - H + 1)")
 @printf("  day-ahead welfare (FULL population, 24 h) : %12.5f\n", r.day_ahead_welfare)
-@printf("  realized welfare  (closed loop, %d h)      : %12.5f\n", r.steps, r.realized_welfare)
+@printf("  realized welfare  (closed loop, %d h, TRUTH-SETTLED, FIX-10) : %12.5f\n", r.steps, r.realized_welfare)
+@printf("  forecast_settled_welfare (OLD pre-Phase-27 diagnostic)      : %12.5f\n", r.forecast_settled_welfare)
 @printf("  regret (info-set-fair, same %d h horizon)  : %12.5f\n", r.steps, r.regret)
 @printf("  price jumps  max = %8.4f   mean = %8.4f\n", max_jump(r.trace), mean_jump(r.trace))
 @printf("  final cumulative |RTP - DA| deviation     : %12.5f\n", last(r.trace.cum_deviation_trace))
 println("  certificate statuses: ",
     join(["$(count(==(st), r.trace.cert_status_trace))× $(CERT_LABELS[st])" for st in statuses], ", "))
 any_cert_failed(r.trace) && println("  ⚠ at least one resolve exhausted the escalation ladder")
+n_settlement_overload = count(v -> v.n_thermal_violations > 0 || v.voltage_violated, r.settlement_violations)
+println("  settlement_violations (AC truth diagnostic, plan 27-09): $n_settlement_overload / $(r.steps) ",
+    "published hours report a thermal/voltage overload under the relaxed operating band")
 
 # ===========================================================================================
 # 2. SINGLE-KNOB SWEEPS — forecast-error magnitude and window length H.
@@ -405,14 +419,21 @@ let
         xticks = 2:2:T)
     hspan!(axb, rec_batt.Emin, rec_batt.Emax; color = (:gray, 0.15), label = "structural band [Emin, Emax]")
     for (i, p) in enumerate(fe_plans)
-        lines!(axb, p.t:(p.t + H - 1), p.soc_plan; color = (pcol(i), 0.30), linewidth = 1.2)
+        # SOC is a STATE (stock), recorded at H+1 points (Plan 26-03/FIX-04 closes soc[1:(H+1)]
+        # unconditionally): soc_plan[1] is the IC at hour p.t, soc_plan[H+1] the terminal state
+        # AT hour p.t+H — one more x-point than the H-length FLOW variables (price/import/Tin)
+        # plotted elsewhere on this figure. Restated in v4.0 (Phase 28): this length grew from H
+        # to H+1 when FIX-04 (phase 26) closed the SOC recursion over the whole window; this
+        # plotting code was never updated to match until now (a genuine DimensionMismatch,
+        # Rule 1 bug fix, this plan).
+        lines!(axb, p.t:(p.t + H), p.soc_plan; color = (pcol(i), 0.30), linewidth = 1.2)
     end
     lines!(axb, 1:T, rec_da_soc; color = :dodgerblue, linestyle = :dash, linewidth = 1.8,
         label = "day-ahead optimal SOC")
     lines!(axb, applied_t, applied_soc; color = :crimson, linewidth = 2.8,
         label = "realized SOC (propagated on applied controls)")
     scatter!(axb, applied_t, applied_soc; color = :crimson, markersize = 6)
-    scatter!(axb, [p.t + H - 1 for p in fe_plans], [p.terminal for p in fe_plans];
+    scatter!(axb, [p.t + H for p in fe_plans], [p.terminal for p in fe_plans];
         color = :black, marker = :diamond, markersize = 9, label = "terminal-SOC target (D-06 pin)")
     axislegend(axb; position = :rt, labelsize = 9, framevisible = false)
 
