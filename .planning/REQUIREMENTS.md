@@ -63,7 +63,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [x] **FIX-10**: MPC realized welfare and regret are settled against the truth plant: realized PV
   clips charging, true-state propagation is checked for feasibility, and settlement uses the true
   import. The forecast-settled number is kept only as a separately labelled diagnostic.
-- [ ] **FIX-11**: Each correctness phase re-derives the goldens it moves, in the same phase and
+- [x] **FIX-11**: Each correctness phase re-derives the goldens it moves, in the same phase and
   with an explanation, so the suite stays green. After FIX-01..10 a cross-phase golden audit
   confirms none was silently re-pinned, and the v2.1 thesis reproduction (DSO-surplus sign flip,
   welfare-magnitude gap) and the v2.1/v3.0 SOCP-inexactness findings are re-run and restated in the
@@ -178,7 +178,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | FIX-08 | Phase 27 | Complete |
 | FIX-09 | Phase 27 | Complete |
 | FIX-10 | Phase 27 | Complete |
-| FIX-11 | Phase 28 | Pending |
+| FIX-11 | Phase 28 | Complete |
 | BILEV-01 | Phase 29 | Pending |
 | BILEV-02 | Phase 29 | Pending |
 | BILEV-03 | Phase 30 | Pending |

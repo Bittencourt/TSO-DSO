@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
-stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
-last_updated: "2026-09-30T00:29:29.672Z"
+status: ready_to_plan
+stopped_at: Phase 28 complete (6/5) — ready to discuss Phase 29
+last_updated: 2026-09-30T10:50:36.251Z
 last_activity: 2026-09-30 -- Phase 28 execution started
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 34
-  completed_plans: 29
+  completed_plans: 35
   percent: 17
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 28 — Goldens Re-Derivation & Thesis Reproduction Restatement
+**Current focus:** Phase 29 — genuine bilevel tso dso variant
 
 ## Current Position
 
-Phase: 28 (Goldens Re-Derivation & Thesis Reproduction Restatement) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 28
-Last activity: 2026-09-30 -- Phase 28 execution started
+Phase: 29
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-30
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -114,7 +114,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 127 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 133 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -162,6 +162,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 260826-cjh | Replace the fragile `iters >= 50` load-test bound with an intent-shaped structural floor (measured spread 47-66) | 2026-08-26 | c2b95a6 | [260826-cjh-replace-the-fragile-iters-50-bound-in-th](./quick/260826-cjh-replace-the-fragile-iters-50-bound-in-th/) |
 | 26 | 20 | - | - |
 | 27 | 9 | - | - |
+| 28 | 6 | - | - |
 
 **Recent Trend:**
 
@@ -291,6 +292,15 @@ Recent decisions affecting current work:
 None yet.
 
 ### Blockers/Concerns
+
+- [v4.0 Phase 28 restatement — `.planning/phases/28-goldens-re-derivation-thesis-reproduction-restatement/28-RESTATEMENT-SUMMARY.md`]:
+  every golden moved in Phases 26–27 is attributed (audit script: 13 attributed / 1 allowlisted / 0
+  unattributed). REPRO-01 DSO-surplus sign flip STILL reproduces; fit_dso ≈−196.22→≈−286.11;
+  aggregate welfare gap ≈+0.045%→≈+0.263% (thesis +25% magnitude still NOT reproduced); stability
+  flake 13/20→1/20, sign-flip survival 2/5→5/5 (v2.1 "knife-edge-fragile" no longer holds).
+  EXACT-04: gate-1 (cone) exact under both copies; gate-2 (AC dispatch) inexact under default
+  (restriction suboptimality), exact under thesis_literal. Default NOT unconditionally cone-exact
+  (3/150 high-PV sweep points). MPC: 3/19 settled hours genuinely overload thermally.
 
 - [v4.0 Phase 27 findings — full text in `.planning/phases/27-integer-planning-pricing-certificate-correctness/27-FINDINGS.md`]:
   (1) Exactness gate is now a HYBRID per-branch floor `atol_b = max(τ_solver=2e-7, ε·ref_b)`, ε=1e-9

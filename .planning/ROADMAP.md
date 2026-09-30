@@ -35,7 +35,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
   T>1, relabel DLMP components honestly, tighten the exactness-gate floor, certify the FIT
   baseline, and settle MPC realized welfare against the true plant.
 
-- [ ] **Phase 28: Goldens Re-Derivation & Thesis Reproduction Restatement** - Re-derive every
+- [x] **Phase 28: Goldens Re-Derivation & Thesis Reproduction Restatement** - Re-derive every (completed 2026-09-30)
   golden touched by the correctness fixes and re-run/restate the thesis reproduction and
   SOCP-inexactness findings.
 
@@ -201,7 +201,7 @@ Phases 26–27 was re-derived with an explanation (goldens themselves are re-der
 
   3. The v2.1/v3.0 SOCP-inexactness findings (e.g. EXACT-04) are re-verified against the corrected
      exactness copy and restated if the verdict changed.
-**Plans:** 4/5 plans executed
+**Plans:** 6/5 plans complete
 
 Plans:
 **Wave 1**
@@ -216,7 +216,7 @@ Plans:
 
 **Wave 3** *(phase-closing gate, blocked on ALL of the above)*
 
-- [ ] 28-05-PLAN.md — Full-suite + docs-build certification, consolidated findings + PROJECT.md restatement
+- [x] 28-05-PLAN.md — Full-suite + docs-build certification, consolidated findings + PROJECT.md restatement
 
 ### Phase 29: Genuine Bilevel TSO-DSO Variant
 
@@ -409,7 +409,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
-| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 4/5 | In Progress|  |
+| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
