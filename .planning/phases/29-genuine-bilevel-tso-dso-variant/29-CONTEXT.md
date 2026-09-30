@@ -41,6 +41,15 @@ the planning docs refresh (Phase 31, BILEV-08) are out of scope.
 - Unsupported inputs (SOCP lower level, integer follower, …) throw a clear ArgumentError — never a
   silent fallback.
 
+### Post-research amendment (2026-09-30)
+- Complementarity: SOS1 via JuMP/MOI's automatic SOS1ToMILPBridge (verified working with HiGHS 1.24.1
+  when every complementarity pair has FINITE bounds — derive valid primal/dual bounds; fail loudly otherwise).
+- Certification oracle: BilevelJuMP StrongDualityMode (Ipopt) — its SOS1/Indicator modes fail with HiGHS.
+- Leader welfare: Option B — embedded LinDistFlow network (per the locked LinDistFlow decision), not a fixed
+  linear valuation.
+- Do NOT reuse FollowerLP (pins z by equality Parameter — wrong coupling direction). MILP tolerance in
+  select_optimizer(::MILP) must be re-measured for this consumer.
+
 ### Process (carried)
 - ≤3 concurrent Julia executors; full suite after each wave with NO `.claude/worktrees/agent-*`
   present; executors never edit STATE/ROADMAP; findings → 29-FINDINGS.md (serialized) or SUMMARY;
