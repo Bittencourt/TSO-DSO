@@ -1,19 +1,40 @@
 SOC-relaxation applicability sweep — real IEEE-123 OpenDSS positive-sequence impedances, Phase-17-retuned population
 Detector: cone residual |l·v − (P²+Q²)| vs atol=1e-6 + rtol=1e-4·magnitude
-NO AC/Ipopt oracle involved. rtol_exact neutralized so inexact solves are
-returned for classification rather than refused by the PF-04 gate.
+NO AC/Ipopt oracle involved (this is a GATE-1/cone-residual map only — see
+docs/literate/ac_oracle.jl for the SEPARATE gate-2/AC-dispatch comparison).
+rtol_exact neutralized so inexact solves are returned for classification
+rather than refused by the PF-04 gate.
 
-  exact        25
-  inexact      23
-  guard        6
+DUAL-MODE (Phase 28, Task 3): every grid point solved under BOTH
+ConvexBranchFlow() (default, Gan-Low direction) AND
+ConvexBranchFlow(; thesis_literal=true) (OLD literal copy) — see the
+`formulation` column and the per-formulation breakdown below.
 
-ratio range (solved): 0.05475 .. 4.76
-vpeak range:          0.99969 .. 1.01581
+  default          exact        18
+  default          inexact      27
+  default          guard        9
+  thesis_literal   exact        19
+  thesis_literal   inexact      26
+  thesis_literal   guard        9
+
+--- formulation = default ---
+ratio range (solved): 0.05078 .. 4.405
+vpeak range:          0.99969 .. 1.01198
 voltage upper bound EVER active: false
 reverse flow at every solved point: true
+max ratio among EXACT:   0.8667
+min ratio among INEXACT: 1.392
+(a wide empty band between these two means the boundary is
+ insensitive to where the threshold is placed; a narrow one means
+ the classification is threshold-dependent — see the tolerance ladder)
 
-max ratio among EXACT:   0.7356
-min ratio among INEXACT: 1.088
+--- formulation = thesis_literal ---
+ratio range (solved): 0.05417 .. 5.777
+vpeak range:          0.99969 .. 1.01198
+voltage upper bound EVER active: false
+reverse flow at every solved point: true
+max ratio among EXACT:   0.976
+min ratio among INEXACT: 1.011
 (a wide empty band between these two means the boundary is
  insensitive to where the threshold is placed; a narrow one means
  the classification is threshold-dependent — see the tolerance ladder)
