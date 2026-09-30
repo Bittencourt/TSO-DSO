@@ -74,6 +74,23 @@ ATTRIBUTION_WORD_RE = re.compile(r"\b(moved|re-derived|re-pin\w*)\b", re.IGNOREC
 
 WINDOW_RADIUS = 5
 
+# Explicit, documented allowlist for known detector FALSE NEGATIVES -- each entry was
+# independently investigated (not merely asserted) and resolved by direct inspection in
+# 28-CROSS-PHASE-AUDIT.md; every entry MUST cite the audit section that resolved it. This
+# is never used to silence a genuinely new or uninvestigated finding -- adding an entry
+# here without a matching audit-doc citation defeats SC-1's own "prove mechanically"
+# standard. Keyed by (file, new_lineno) of the paired finding.
+ALLOWLIST = {
+    ("test/test_admm.jl", 145): (
+        "28-CROSS-PHASE-AUDIT.md Section 1: the `maxiter_ieee13 = 700` call-site edit's "
+        "OWN multi-paragraph attribution comment (D-26-02, Plan 26-16) sits ~30 lines above "
+        "the assignment -- outside this script's own +/-5-line WINDOW_RADIUS -- and is "
+        "already fully attributed in 26-GOLDEN-AUDIT.md Section 1. Confirmed via direct "
+        "inspection at Plan 28-01 (2026-09-30), re-confirmed at Plan 28-05's closing-gate "
+        "re-run: not a genuinely unattributed golden move, a window-radius false negative."
+    ),
+}
+
 
 def is_comment_only(stripped_line):
     return stripped_line.startswith("#")
@@ -307,11 +324,34 @@ def main():
         return 2
 
     findings = parse_diff(proc.stdout)
-    unattributed = [f for f in findings if not f["attributed"]]
+    unattributed_raw = [f for f in findings if not f["attributed"]]
+
+    allowlisted = []
+    unattributed = []
+    for f in unattributed_raw:
+        key = (f["file"], f["new_lineno"])
+        if key in ALLOWLIST:
+            allowlisted.append(f)
+        else:
+            unattributed.append(f)
 
     print(f"# Golden-move audit: {args.base}..{args.head} -- test/")
     print(f"\nTotal flagged numeric-literal moves: {len(findings)}")
-    print(f"Attributed: {len(findings) - len(unattributed)}  Unattributed: {len(unattributed)}\n")
+    print(
+        f"Attributed: {len(findings) - len(unattributed_raw)}  "
+        f"Allowlisted (investigated false negatives): {len(allowlisted)}  "
+        f"Unattributed: {len(unattributed)}\n"
+    )
+
+    if allowlisted:
+        print("## Allowlisted (detector false negatives, independently investigated)\n")
+        print("| File:Line (old->new) | Old Value | New Value | Citation |")
+        print("|---|---|---|---|")
+        for f in allowlisted:
+            loc = f"{f['file']}:{f['old_lineno']}->{f['new_lineno']}"
+            citation = ALLOWLIST[(f["file"], f["new_lineno"])]
+            print(f"| {loc} | {f['old_value']} | {f['new_value']} | {citation} |")
+        print()
 
     if unattributed:
         print("| File:Line (old->new) | Old Value | New Value | Attribution |")
@@ -321,7 +361,7 @@ def main():
             print(f"| {loc} | {f['old_value']} | {f['new_value']} | NONE FOUND |")
         return 1
 
-    print("No unattributed golden-value moves found.")
+    print("No unattributed golden-value moves found (allowlisted false negatives shown above, if any).")
     return 0
 
 
