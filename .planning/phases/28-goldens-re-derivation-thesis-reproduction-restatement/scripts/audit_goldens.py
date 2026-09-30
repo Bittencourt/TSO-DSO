@@ -30,8 +30,15 @@ Design (mirrors 28-RESEARCH.md "Cross-Phase Golden Audit Design"):
 4. For each flagged pair, scan a window of the surrounding hunk lines (+/-5 positions,
    covering both removed and added hunk context) for an attribution signal: the literal
    substrings `OLD` and (`->` or the unicode arrow `->`... i.e. an ASCII "->" or "→") and
-   `NEW`, OR a `Plan-`/`Plan `/`FIX-`/`PM-`/`WR-`/`D-` reference, OR the words
-   "moved"/"re-derived"/"re-pin".
+   `NEW`, OR a decision-ID-shaped reference -- `Plan-\\d+`/`Plan \\d+`/`FIX-\\d+`/`PM-\\d+`/
+   `WR-\\d+`/`D-\\d+`/a bare plan id like `26-18` -- OR the words "moved"/"re-derived"/"re-pin".
+   Code-review FIX WR-02 (plan 28-05) tightened this from a bare `D-` (and equally bare
+   `Plan[- ]`/`FIX-`/`PM-`/`WR-`) substring match: the bare `D-` alternative matched any
+   capital letter immediately followed by a hyphen anywhere in the window -- e.g.
+   "GRID-connected", "HYBRID-floor", "VALID-only" -- with no real `D-<number>` decision-ID
+   nearby, which would silently mark an unattributed golden move as attributed. Now requires a
+   trailing digit / decision-ID shape, matching the `\\d`-suffixed precision `FIX-`/`PM-`/`WR-`
+   already had in this repo's real convention.
 5. Extraction is restricted to lines that are NOT pure `#`-comment-only lines and that
    contain an assignment (`=`), or a `@test`/`isapprox(`/`atol=`/`rtol=` call-site marker --
    i.e. skip lines where a number appears only inside comment prose describing a ratio, not
@@ -69,7 +76,9 @@ GOLDEN_NAME_RE = re.compile(
 
 CODE_VALUE_SIGNALS = ("=", "@test", "isapprox(", "atol=", "rtol=")
 
-ATTRIBUTION_REF_RE = re.compile(r"(Plan[- ]|FIX-|PM-|WR-|D-)")
+ATTRIBUTION_REF_RE = re.compile(
+    r"(\bPlan[- ]\d+\b|\bFIX-\d+\b|\bPM-\d+\b|\bWR-\d+\b|\bD-\d+\b|\b\d{2}-\d{2}\b)"
+)
 ATTRIBUTION_WORD_RE = re.compile(r"\b(moved|re-derived|re-pin\w*)\b", re.IGNORECASE)
 
 WINDOW_RADIUS = 5
@@ -261,10 +270,25 @@ FIXTURE_UNATTRIBUTED_BODY = [
     "     # context below",
 ]
 
+# WR-02 (Phase 28 code review FIX, plan 28-05) regression fixture: a hyphenated word containing
+# a capital letter immediately followed by a hyphen ("HYBRID-floor"), with NO real decision-ID
+# (`D-<number>`, `FIX-<number>`, etc.) anywhere nearby. Before the fix, the bare `D-` alternative
+# in ATTRIBUTION_REF_RE matched the literal "D-" inside "HYBRID-floor" and wrongly marked this
+# pair as attributed; after the fix it must NOT be recognized as an attribution.
+FIXTURE_FALSE_POSITIVE_BAIT_BODY = [
+    "     # context above -- this comment mentions a HYBRID-floor tolerance change",
+    "-    GOLDEN_TOL = 1.234567890",
+    "+    GOLDEN_TOL = 9.876543210",
+    "     # context below",
+]
+
 
 def run_selftest():
     findings_attr = process_hunk("selftest_attributed.jl", 1, 1, FIXTURE_ATTRIBUTED_BODY)
     findings_unattr = process_hunk("selftest_unattributed.jl", 1, 1, FIXTURE_UNATTRIBUTED_BODY)
+    findings_bait = process_hunk(
+        "selftest_false_positive_bait.jl", 1, 1, FIXTURE_FALSE_POSITIVE_BAIT_BODY
+    )
 
     ok = True
     reasons = []
@@ -282,6 +306,19 @@ def run_selftest():
     elif findings_unattr[0]["attributed"] is not False:
         ok = False
         reasons.append("unattributed fixture's pair was WRONGLY recognized as attributed (false positive)")
+
+    if len(findings_bait) != 1:
+        ok = False
+        reasons.append(
+            f"expected 1 flagged pair in false-positive-bait fixture, got {len(findings_bait)}"
+        )
+    elif findings_bait[0]["attributed"] is not False:
+        ok = False
+        reasons.append(
+            "WR-02 REGRESSION: 'HYBRID-floor' bare hyphenated word was WRONGLY recognized as an "
+            "attribution (the bug ATTRIBUTION_REF_RE's tightened decision-ID-shape requirement "
+            "exists to prevent)"
+        )
 
     if ok:
         print("SELFTEST: PASS")
