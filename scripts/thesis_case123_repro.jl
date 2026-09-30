@@ -8,8 +8,11 @@
 #
 # WHAT THIS DOES NOT CLAIM (18-RESEARCH.md's central honesty finding, carried forward here):
 # the thesis's headline +25% AGGREGATE-WELFARE-RATIO MAGNITUDE does NOT reproduce on real public
-# IEEE-123 data — the aggregate welfare gap here is small (≈+0.045% on this fixture) and reported
-# below ONLY as an explicitly-labeled fragile SECONDARY number, never the primary claim (Pitfall
+# IEEE-123 data — the aggregate welfare gap here is small (≈+0.2630% on this fixture — CORRECTED
+# Phase 28 code review FIX, CR-01, from the stale pre-Phase-26/27 ≈+0.045% figure; see this
+# script's own live `welfare_delta_pct` below and
+# docs/literate/thesis_reproduction_assumptions.jl Section 6's correction box for the
+# recomputation) and reported below ONLY as an explicitly-labeled fragile SECONDARY number, never the primary claim (Pitfall
 # 1: `welfare_dadp / welfare_fit` sign-inverts on negative welfare and must never be the headline
 # metric). What DOES reproduce, robustly and correctly-signed, is the DSO-SURPLUS SIGN FLIP: the
 # FIT baseline's DSO surplus is negative, the DADP optimum's DSO surplus is positive — the same
@@ -29,13 +32,18 @@
 #
 # This script still runs ONLY at the exact pinned point and does not re-run the sweep.
 #
-# RESTATED IN v4.0 (Phase 28, plan 28-02): Phases 26-27 changed the model underneath this
+# RESTATED IN v4.0 (Phase 28, plan 28-02; welfare-gap % corrected by plan 28-05's code review
+# FIX, CR-01): Phases 26-27 changed the model underneath this
 # script — see the `solve_welfare`/`fit_baseline` call sites below for the measured
 # PRECISION-ARTIFACT tol_gap overrides this required (Task 1's empirical verdict, never a
 # guess), and `docs/literate/thesis_reproduction_ieee123.jl`'s own "Restated in v4.0" table
 # for the full old-vs-new headline-number restatement (`fit_dso` moved materially due to
 # FIX-09/FIX-10's physics-only AC settlement of `fit_baseline`; the DSO-surplus SIGN FLIP
-# itself is unaffected).
+# itself is unaffected). NOTE: plan 28-02 restated the three surplus figures but never
+# recomputed the DERIVED aggregate-welfare-gap percentage, leaving this header's own
+# "≈+0.045%" text stale even though `fit_dso` had moved materially — caught by the phase's own
+# code review (CR-01). Recomputed by actually running this script: the CURRENT value is
+# ≈+0.2630%, about 5.9x the stale figure; direction unchanged (small, positive, fragile).
 #
 # Run:
 #     julia --project=. scripts/thesis_case123_repro.jl

@@ -88,8 +88,12 @@ downstream extension — and the thesis itself — rests on validated, citable g
    real IEEE-123 (upper/overvoltage band cannot reach ~1.05 while exact). Surfaced as a citable finding,
    not tuned away.
 2. **Thesis reproduction is DIRECTIONAL only** — the DSO-surplus sign flip reproduces on real public
-   data (FIT −196.22 → DADP +3.73; prosumer surplus decreases), but the headline +25% welfare magnitude
-   does **not** (~+0.045%), and the sign flip is knife-edge-fragile (fails a ±2–5% population sweep).
+   data (FIT −286.11 → DADP +3.74; prosumer surplus decreases), but the headline +25% welfare magnitude
+   does **not** (~+0.263%). [RESTATED Phase 28 (plan 28-05 code review FIX, CR-01): figures above are
+   current, superseding the stale pre-Phase-26/27 FIT −196.22 → DADP +3.73 / ~+0.045% figures. The
+   "knife-edge-fragile" population-sweep characterization was also RETIRED BY MEASUREMENT in Phase 28
+   (plan 28-02): flake rate dropped 13/20→1/20 and the sign flip now survives 5/5 swept points, not
+   2/5 — see `.planning/phases/28-goldens-re-derivation-thesis-reproduction-restatement/28-RESTATEMENT-SUMMARY.md`.]
    The exact +$1,819/+25% figure remains deferred (needs thesis App. E).
 
 See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
@@ -412,7 +416,7 @@ flow; linking price = interconnection dual ≈ DLMP.
 | **AC oracle is a genuinely independent nonconvex peer** (`ACPowerFlow`, true equality `l·v==P²+Q²`), and `assert_ac_exact!` **reports per-hour, never throws** on a numeric gap | An oracle that re-solved the same relaxed cone would prove nothing; a genuine inexactness is the milestone's most valuable finding, not a defect to suppress | ✓ Good — v2.1; the high-PV SOCP inexactness surfaced as a citable finding (EXACT-04), reproduced again on real IEEE-123 |
 | **Reactive dual read "for free" off a certified `:balance_q`** — no live μ dual-ascent loop | Thesis A3 makes DERs active-only, so `qag_dso` is a fixed constant; a one-shot certified dual suffices and avoids over-building | ✓ Good — v2.1; `assert_no_slack` gate makes the reactive DLMP trustworthy; `Scenario.jl` golden-hash untouched |
 | **Real IEEE-123 impedances via a dependency-free regex parser** (PMD dropped entirely, not weakdep) | The `.dss` files are simple; a ~50-line parser satisfies "PMD out of runtime deps" trivially and is more reproducible | ✓ Good — v2.1; zero new deps; linecode.1 sanity-pinned (R1≈0.05797) |
-| **Thesis golden pinned on the DSO-surplus SIGN FLIP, not the welfare ratio** | The aggregate `welfare_dadp/welfare_fit` ratio sign-inverts on negative welfare; the surplus sign flip is the thesis's own framing and is sign-safe | ✓ Good — v2.1; honest directional-only result — +25% magnitude does not transfer (~+0.045%), stated plainly |
+| **Thesis golden pinned on the DSO-surplus SIGN FLIP, not the welfare ratio** | The aggregate `welfare_dadp/welfare_fit` ratio sign-inverts on negative welfare; the surplus sign flip is the thesis's own framing and is sign-safe | ✓ Good — v2.1; honest directional-only result — +25% magnitude does not transfer (~+0.263%, restated Phase 28 CR-01 from the stale ~+0.045% figure), stated plainly |
 
 ## Evolution
 

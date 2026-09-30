@@ -116,6 +116,25 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # pages). The sign flip, not the ratio magnitude, is this phase's actually-pinned,
 # thesis-faithful signal.
 #
+# !!! warning "CORRECTED 2026-09-30 (Phase 28 code review FIX, CR-01) -- every figure in the paragraph above is STALE"
+#     The **≈+0.045%** aggregate-welfare-gap figure and the **`fit_dso ≈ -196.216447`**,
+#     **`acct.dso ≈ +3.725705`**, **`acct.prosumer ≈ -41039.129`** surplus figures quoted above
+#     are the PRE-Phase-26/27 values, contradicted by the "Restated in v4.0 (Phase 28)" table
+#     later on this same page (FIX-01/FIX-02, FIX-09/FIX-10). That table restates the three
+#     surplus figures but the DERIVED aggregate-welfare-gap percentage was never recomputed
+#     anywhere in the Phase 28 restatement -- corrected here by actually running the current
+#     `HEAD` code (never by re-deriving from the stale numbers above): `acct.dso ≈ +3.739374`,
+#     `acct.prosumer ≈ -41039.144`, `fit_dso ≈ -286.107696`, `fit_prosumer ≈ -40857.497`
+#     (matching the restated table below). Using this codebase's own identity
+#     `social == prosumer + dso` (`src/pricing/welfare.jl`): `welfare_dadp = acct.dso +
+#     acct.prosumer ≈ -41035.404`, `welfare_fit = fit_dso + fit_prosumer ≈ -41143.605`, giving a
+#     **CURRENT aggregate welfare gap of ≈+0.2630%** -- about 5.9x the stale ≈+0.045% figure
+#     above. The thesis's own +25% headline magnitude still does NOT transfer either way; the
+#     direction (small, positive, fragile) is unchanged, only the magnitude claim moves. The
+#     DSO-surplus sign flip and the prosumer-surplus decrease -- this paragraph's actual pinned
+#     claims -- are UNCHANGED. See the "Restated in v4.0 (Phase 28)" section below for the full
+#     old->new table and named causes.
+#
 # ## 7. The asymmetric voltage-binding caveat (Phase 17)
 #
 # The real-impedance IEEE-123 fixture's voltage constraint binds **asymmetrically**: the lower
