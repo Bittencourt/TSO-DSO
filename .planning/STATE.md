@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
-last_updated: "2026-09-30T12:32:36.057Z"
-last_activity: 2026-09-30 -- Phase 29 planning complete
+stopped_at: Completed 29-01-PLAN.md
+last_updated: "2026-09-30T23:31:37.034Z"
+last_activity: 2026-09-30
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 38
-  completed_plans: 35
+  completed_plans: 36
   percent: 25
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 29 — genuine bilevel tso dso variant
+**Current focus:** Phase 29 — Genuine Bilevel TSO-DSO Variant
 
 ## Current Position
 
-Phase: 29
-Plan: Not started
+Phase: 29 (Genuine Bilevel TSO-DSO Variant) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-09-30 -- Phase 29 planning complete
+Last activity: 2026-09-30
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -170,6 +170,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 29 P01 | 25min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -221,6 +222,8 @@ Recent decisions affecting current work:
   hard dependency — strictly depends on Phase 16 (reactive pricing) + Phase 17 (real impedances)
   both landing, since the thesis's voltage-driven Case B result is not credible on synthetic
   impedances or without priced reactive power.
+
+- [Phase 29]: Measured SOS1 bounds must include both named-constraint duals AND variable-bound reduced costs -- the research's illustrative probe (named-constraint duals only) silently underestimates on a fixture whose follower optimum is a degenerate corner at both probe extremes
 
 ### Roadmap Evolution
 
@@ -444,8 +447,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-09-28T00:00:00.000Z
-Stopped at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
+Last session: 2026-09-30T23:31:37.002Z
+Stopped at: Completed 29-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

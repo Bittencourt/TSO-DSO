@@ -71,7 +71,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 ### Planning depth (BILEV)
 
-- [ ] **BILEV-01**: Researcher can solve a genuinely bilevel TSO–DSO variant. The TSO follower
+- [x] **BILEV-01**: Researcher can solve a genuinely bilevel TSO–DSO variant. The TSO follower
   minimizes its own cost, the DSO leader pays a tariff π·z, and the follower's objective differs
   from the leader's view of it. It is solved by the hand-rolled loop, or by an appropriate
   reformulation where plain Benders is no longer valid, with the method documented.
@@ -179,7 +179,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | FIX-09 | Phase 27 | Complete |
 | FIX-10 | Phase 27 | Complete |
 | FIX-11 | Phase 28 | Complete |
-| BILEV-01 | Phase 29 | Pending |
+| BILEV-01 | Phase 29 | Complete |
 | BILEV-02 | Phase 29 | Pending |
 | BILEV-03 | Phase 30 | Pending |
 | BILEV-04 | Phase 30 | Pending |
