@@ -189,9 +189,41 @@ end
     if isdefined(TSODSO, :assert_ac_exact!) && isdefined(TSODSO, :ACPowerFlow)
         feeder = Phase4Fixtures.high_pv_feeder()
         # pv_scale = 1.2 is the EMPIRICALLY-FOUND value (RESEARCH Open Question 1's 1.0–2.0 range)
-        # that pins bus voltage at V²max and drives the SOC relaxation genuinely INEXACT while the
-        # true nonconvex AC-OPF stays feasible — see the ## Finding below. It is hard-coded (no
-        # search loop) so the committed test is deterministic and reproducible.
+        # that pins bus voltage at V²max — see the ## Finding below. It is hard-coded (no search
+        # loop) so the committed test is deterministic and reproducible.
+        #
+        # RESTATED IN v4.0 (PHASE 28, dual-mode gate-2 re-verification, Pitfall 3 discipline):
+        # this comment previously claimed pv_scale=1.2 drove the SOC relaxation into a state of
+        # genuine cone INEXACTness — that describes GATE 1 (assert_socp_exact!'s cone-residual
+        # check) and is now FALSE under the default: PM-01/26-18 (test_restricted_branch_flow.jl:
+        # 314-320, 26-FINDINGS.md "Plan
+        # 26-18") already MEASURED both ConvexBranchFlow() (default) and ConvexBranchFlow(;
+        # thesis_literal=true) genuinely cone-EXACT on this SAME fixture (ratios 0.017/0.002).
+        # Directly re-measured this plan (28-03): socp_maxgap = 2.59e-8 (default) / 9.05e-9
+        # (thesis_literal=true), both orders of magnitude under the FIX-08 hybrid floor
+        # (atol_b = max(2e-7, ...)) — gate 1 is EXACT under BOTH formulations at this pv_scale.
+        #
+        # What this testitem's assertions below ACTUALLY exercise is GATE 2
+        # (`assert_ac_exact!`'s per-hour AC-dispatch comparison), which measures optimality against
+        # the true AC-OPF, not cone physical-consistency. Under the DEFAULT (this testitem's own
+        # `ConvexBranchFlow()` call below), gate 2 IS genuinely inexact (`inexact_hours =
+        # 6:15`, `diagnosed = true`, cost_socp = -921.754 vs cost_ac = -921.277) — but the
+        # MECHANISM is restriction-induced dispatch-suboptimality, not cone slack: the default is
+        # Gan-Low's modified-OPF RESTRICTION (`v̂ ≤ V²max` binds during the high-PV window), which
+        # can be cone-exact (its own solution is physically self-consistent) while still excluding
+        # the true AC optimum from its own feasible set (PM-01/26-18). Directly re-measured this
+        # plan (28-03) under `ConvexBranchFlow(; thesis_literal=true)` on this SAME fixture: gate 2
+        # is ALSO EXACT there (`inexact_hours = []`, cost_socp = -921.27700 vs cost_ac = -921.27699
+        # — matching within 1e-4), because the thesis-literal copy's own optimum coincides with the
+        # true AC optimum at pv_scale=1.2 (consistent with 26-18's "-921.277 matches the true AC
+        # optimum exactly"). So on THIS fixture at pv_scale=1.2, gate-2 inexactness is a property of
+        # the DEFAULT restriction, not of "the SOC relaxation" generically, and does NOT reproduce
+        # under thesis_literal=true — the OPPOSITE of what this comment previously implied. (The
+        # historic v2.1 "genuine cone-inexactness" finding is a SEPARATE phenomenon that still
+        # reproduces, but only under thesis_literal=true at a DIFFERENT, higher pv_scale — e.g.
+        # pv_scale=1.4 on this fixture (ratio≈1982) or Phase21Fixtures' pv_scale=3.0 MPC window
+        # (cone_maxratio≈9157-9166) — see 26-FINDINGS.md "Plan 26-18".) Assertions below are
+        # UNCHANGED — they were already passing for this now-correctly-documented reason.
         aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
         λ₀ = Phase4Fixtures.mem_price_profile()
 
@@ -268,10 +300,26 @@ end
             voltage_bound_hit || reverse_flow
         end
         @test diagnosed
-        # DOCUMENTED FINDING (EXACT-04): at pv_scale = 1.2 the SOC relaxation goes genuinely INEXACT
-        # over the high-PV afternoon window (hours 6–15), with bus voltage pinned at V²max = 1.1025
-        # and reverse (PV back-feed) branch flow — the documented SOC exactness-failure regime. The
-        # two independent AC starts agree (no local-optimum artifact), so the gap is a relaxation
-        # property, not solver noise. Narrated in docs/literate/ac_oracle.jl.
+        # DOCUMENTED FINDING (EXACT-04), RESTATED IN v4.0 (PHASE 28): at pv_scale = 1.2, under the
+        # DEFAULT ConvexBranchFlow() this testitem solves, GATE 2 (`assert_ac_exact!`'s per-hour
+        # AC-dispatch comparison) goes genuinely inexact over the high-PV afternoon window (hours
+        # 6–15), with bus voltage pinned at V²max = 1.1025 and reverse (PV back-feed) branch flow.
+        # GATE 1 (`assert_socp_exact!`'s cone-residual check, `ctx_socp.meta[:socp_maxgap]`) is NOT
+        # the mechanism here — it is EXACT under the default (measured socp_maxgap ≈ 2.6e-8, well
+        # under the FIX-08 hybrid floor; PM-01/26-18). The genuine mechanism is Gan-Low's
+        # modified-OPF RESTRICTION actively binding (`v̂ ≤ V²max`) during this window, which
+        # excludes the true AC optimum (cost_socp = -921.754 vs cost_ac = -921.277) from the
+        # restricted formulation's own feasible set — a restriction-induced dispatch-suboptimality,
+        # not a slack/loose cone. The two independent AC starts agree (no local-optimum artifact),
+        # so the gap is a genuine formulation property, not solver noise.
+        #
+        # Directly re-measured this plan (28-03) under `ConvexBranchFlow(; thesis_literal=true)` on
+        # this SAME fixture: GATE 2 is ALSO EXACT there (inexact_hours = [], cost_socp = -921.27700
+        # matching cost_ac = -921.27699 within 1e-4) — this gate-2 inexactness does NOT reproduce
+        # under thesis_literal=true at pv_scale=1.2. The historic v2.1 "genuine SOC-relaxation
+        # cone-inexactness" finding is a DIFFERENT phenomenon (gate 1, not gate 2) that still
+        # reproduces, but only under thesis_literal=true at a higher pv_scale (e.g. 1.4+ on this
+        # fixture, or Phase21Fixtures' pv_scale=3.0 MPC window) — see 26-FINDINGS.md "Plan 26-18".
+        # Narrated (gate-qualified) in docs/literate/ac_oracle.jl and restricted_branch_flow.jl.
     end
 end
