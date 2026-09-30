@@ -157,8 +157,16 @@ end
 # Non-solved points are split by cause: `infeasible` is legitimate white space (the feeder cannot
 # serve that operating point inside its voltage band), a tripped model guard is genuinely
 # **unmeasured**. Neither is ever silently dropped.
+#
+# DUAL-MODE (restated in v4.0, Phase 28): every point is solved under BOTH `ConvexBranchFlow()`
+# (the corrected default, Gan-Low direction) AND `ConvexBranchFlow(; thesis_literal=true)` (the OLD
+# literal copy) — a `formulation` field on every row records which. This is a **gate-1
+# (cone-residual) map only** — no AC/Ipopt oracle is involved anywhere on this page; see
+# `docs/literate/ac_oracle.jl` for the separate gate-2 (AC-dispatch) finding.
 
-function sweep_3bus(pvs, lds, vms)
+function sweep_3bus(pvs, lds, vms, thesis_literal::Bool)
+    formulation = thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
+    formulation_label = thesis_literal ? :thesis_literal : :default
     rows = NamedTuple[]
     for vmax in vms, ls in lds, ps in pvs
         f = feeder_3bus(; vmax = vmax)
@@ -168,7 +176,7 @@ function sweep_3bus(pvs, lds, vms)
             try
                 ctx, _, _ = solve_welfare(
                     f,
-                    ConvexBranchFlow(),
+                    formulation,
                     aggs;
                     T = T,
                     λ₀ = PRICE,
@@ -177,6 +185,7 @@ function sweep_3bus(pvs, lds, vms)
                 )
                 s = cone_stats(ctx, f)
                 (;
+                    formulation = formulation_label,
                     vmax,
                     load = ls,
                     pv = ps,
@@ -189,6 +198,7 @@ function sweep_3bus(pvs, lds, vms)
             catch err
                 msg = sprint(showerror, err)
                 (;
+                    formulation = formulation_label,
                     vmax,
                     load = ls,
                     pv = ps,
@@ -209,11 +219,14 @@ PV_3BUS = [0.3, 0.5, 0.7, 0.9, 1.0, 1.1, 1.2, 1.4, 1.6, 2.0]
 LOAD_3BUS = [0.10, 0.15, 0.20, 0.30, 0.40]
 VMAX_3BUS = [1.05, 1.075, 1.10]
 
-rows_3bus = sweep_3bus(PV_3BUS, LOAD_3BUS, VMAX_3BUS)
+rows_3bus = vcat(
+    sweep_3bus(PV_3BUS, LOAD_3BUS, VMAX_3BUS, false),
+    sweep_3bus(PV_3BUS, LOAD_3BUS, VMAX_3BUS, true),
+)
 
-for cls in ("exact", "inexact", "infeasible", "guard")
-    n = count(r -> r.class == cls, rows_3bus)
-    n > 0 && @printf("%-11s %3d\n", cls, n)
+for formulation in (:default, :thesis_literal), cls in ("exact", "inexact", "infeasible", "guard")
+    n = count(r -> r.formulation == formulation && r.class == cls, rows_3bus)
+    n > 0 && @printf("%-16s %-11s %3d\n", formulation, cls, n)
 end
 
 # ### The controls that make this map trustworthy
@@ -221,46 +234,111 @@ end
 # A sweep that reports "everything is exact" is worthless unless it can also reproduce a point
 # already **known** to be inexact — otherwise that outcome is indistinguishable from a fixture in
 # which the mechanism cannot fire. (An earlier attempt at this map swept a network whose impedances
-# are too low to move voltage; it returned 111/111 exact and was pure artifact.) Both EXACT-04
-# control points are therefore asserted live:
+# are too low to move voltage; it returned 111/111 exact and was pure artifact.)
+#
+# RESTATED IN v4.0 (PHASE 28): pre-Phase-28 this page asserted `pv=1.2` "inexact" under the (then
+# bare-default) `ConvexBranchFlow()`. Since Phase 26 flipped the default to the Gan-Low direction,
+# THIS SPECIFIC point (`pv=1.2, load=0.20, vmax=1.05` — EXACT-04's own calibrated fixture) is now
+# measured EXACT under **both** formulations (PM-01/26-18, cited not re-derived). This does **not**
+# mean the default is unconditionally cone-exact everywhere on the map below: MEASURED this plan
+# (28-03), 3/150 default grid points ARE genuinely cone-inexact (ratio 8196–9746, at OTHER,
+# lower-load combinations, e.g. `vmax=1.05, load=0.1, pv=1.2`) — Gan-Low's construction is designed
+# to force cone-tightness, but this sweep finds it is not an unconditional guarantee at every
+# operating point; the default's inexact region is simply far RARER (3/150 here) than
+# `thesis_literal=true`'s (5/150). The genuine negative control used below — a point that still
+# reproduces genuine cone-inexactness AT THIS CONTROL'S OWN load/vmax — is a property of
+# `thesis_literal=true` specifically, at a higher `pv_scale` (measured here: `pv=1.4`; the default
+# hits an unrelated App. C battery-complementarity guard at this same point, so it is not a
+# comparable control at THIS load level). All three control points are asserted live, gate-qualified
+# (this is gate 1, cone-residual, only):
 
-ctl(rs, ps, ls, vm) = only(filter(r -> r.pv == ps && r.load == ls && r.vmax == vm, rs))
-c_exact = ctl(rows_3bus, 0.5, 0.20, 1.05)
-c_inexact = ctl(rows_3bus, 1.2, 0.20, 1.05)
+ctl(rs, ps, ls, vm, formulation) = only(
+    filter(
+        r -> r.pv == ps && r.load == ls && r.vmax == vm && r.formulation == formulation,
+        rs,
+    ),
+)
+c_exact_default = ctl(rows_3bus, 0.5, 0.20, 1.05, :default)
+c_exact_thesis = ctl(rows_3bus, 0.5, 0.20, 1.05, :thesis_literal)
+c_exact04_default = ctl(rows_3bus, 1.2, 0.20, 1.05, :default)
+c_exact04_thesis = ctl(rows_3bus, 1.2, 0.20, 1.05, :thesis_literal)
+c_inexact_thesis = ctl(rows_3bus, 1.4, 0.20, 1.05, :thesis_literal)
 
-@assert c_exact.class == "exact"
-@assert c_inexact.class == "inexact"
+@assert c_exact_default.class == "exact"
+@assert c_exact_thesis.class == "exact"
+@assert c_exact04_default.class == "exact"
+@assert c_exact04_thesis.class == "exact"
+@assert c_inexact_thesis.class == "inexact"
 @printf(
-    "pv=0.5 -> %s (ratio %.4g, vpeak %.5f)\npv=1.2 -> %s (ratio %.4g, vpeak %.5f)\n",
-    c_exact.class,
-    c_exact.ratio,
-    c_exact.vpeak,
-    c_inexact.class,
-    c_inexact.ratio,
-    c_inexact.vpeak
+    "pv=0.5 default -> %s (ratio %.4g)   pv=0.5 thesis_literal -> %s (ratio %.4g)\n",
+    c_exact_default.class,
+    c_exact_default.ratio,
+    c_exact_thesis.class,
+    c_exact_thesis.ratio
+)
+@printf(
+    "pv=1.2 (EXACT-04) default -> %s (ratio %.4g)   pv=1.2 thesis_literal -> %s (ratio %.4g)\n",
+    c_exact04_default.class,
+    c_exact04_default.ratio,
+    c_exact04_thesis.class,
+    c_exact04_thesis.ratio
+)
+@printf(
+    "pv=1.4 thesis_literal -> %s (ratio %.4g, vpeak %.5f)  <- the genuine negative control\n",
+    c_inexact_thesis.class,
+    c_inexact_thesis.ratio,
+    c_inexact_thesis.vpeak
 )
 
-# `vpeak ≈ 1.04` at the exact control independently matches the fixture's own documented
+# `vpeak ≈ 1.04` at the `pv=0.5` exact control independently matches the fixture's own documented
 # "≈1.04 pu, clear over-voltage with headroom below the cap" calibration note.
 
 # ### The boundary, quantified
 #
-# Largest `pv_scale` still exact, per `(vmax, load)`:
+# Largest `pv_scale` still exact, per `(vmax, load)`, PER FORMULATION — this table now DIFFERS
+# materially between the two, which is itself the restated finding: the default's genuinely
+# cone-inexact region on this grid is small (3/150 points, MEASURED this plan) and its boundary is
+# LARGELY (not entirely) governed by the App. C battery-complementarity guard tripping before the
+# cone would otherwise go inexact — but the guard is not the ONLY mechanism at play, since a few
+# points (e.g. `vmax=1.05, load=0.1, pv=1.2`) DO go genuinely cone-inexact under the default before
+# any guard fires. `thesis_literal=true`'s boundary is the ORIGINAL, pre-Phase-26 cone-exactness
+# boundary this page originally characterized, now correctly re-attributed to it specifically.
 
-print("load  ", join([@sprintf("vmax=%-7s", v) for v in VMAX_3BUS]), "\n")
-for ls in LOAD_3BUS
-    print(@sprintf("%-6s", ls))
-    for vm in VMAX_3BUS
-        ok = filter(r -> r.vmax == vm && r.load == ls && r.class == "exact", rows_3bus)
-        print(@sprintf("%-12s", isempty(ok) ? "—" : string(maximum(r.pv for r in ok))))
+for (label, formulation) in (("default", :default), ("thesis_literal", :thesis_literal))
+    println("\n--- formulation = ", label, " ---")
+    print("load  ", join([@sprintf("vmax=%-7s", v) for v in VMAX_3BUS]), "\n")
+    for ls in LOAD_3BUS
+        print(@sprintf("%-6s", ls))
+        for vm in VMAX_3BUS
+            ok = filter(
+                r ->
+                    r.vmax == vm &&
+                        r.load == ls &&
+                        r.formulation == formulation &&
+                        r.class == "exact",
+                rows_3bus,
+            )
+            print(@sprintf("%-12s", isempty(ok) ? "—" : string(maximum(r.pv for r in ok))))
+        end
+        println()
     end
-    println()
 end
 
-# **Voltage headroom is the first-order control; load is second-order.** Each `+0.025` pu of headroom
-# buys roughly `+0.2` of `pv_scale`, near-linearly, while load moves the boundary by at most one grid
-# step across its whole swept range. The `load = 0.40` row is infeasible throughout — the fixture
-# simply cannot serve that load inside `vmin = 0.95`, which is white space, not a measurement.
+# **Under `thesis_literal=true`, voltage headroom is the first-order control; load is
+# second-order** — each `+0.025` pu of headroom buys roughly `+0.2` of `pv_scale`, near-linearly,
+# while load moves the boundary by at most one grid step across its whole swept range (this is the
+# SAME boundary this page originally characterized, pre-Phase-26, now correctly attributed to
+# `thesis_literal=true` rather than the default). **Under the default, most of the "boundary" in
+# this table is an App. C battery-complementarity guard artifact, not a cone-exactness boundary**
+# — the default stays cone-exact at almost every point it solves (MEASURED: 98/150 exact, 19/150
+# guard, 30/150 infeasible), so much of what looks like a shrinking exact region is the guard
+# tripping earlier at higher `pv_scale`/lower headroom, an UNRELATED mechanism. But NOT all of
+# it: MEASURED 3/150 default points ARE genuinely cone-inexact (ratio 8196–9746, e.g.
+# `vmax=1.05, load=0.1, pv=1.2`) — a narrow window, right before the guard trips at higher
+# `pv_scale`, showing the default has its own (much smaller) genuine exactness boundary too, not
+# an unconditional guarantee. The `load = 0.40` row is infeasible throughout for BOTH
+# formulations — the fixture simply cannot serve that load inside `vmin = 0.95`, which is white
+# space, not a measurement.
 
 # ### Is the inexactness real? The tolerance ladder
 #
@@ -268,49 +346,67 @@ end
 # most important methodological point on this page. **A structural gap is a property of the optimum
 # and must PERSIST as the solver tolerance tightens. A numerical residual SHRINKS.**
 #
-# Run on the known-inexact control point, going through the solver factory so no backend is named:
+# RESTATED IN v4.0 (PHASE 28): run on the CURRENT genuine negative control
+# (`thesis_literal=true`, `pv=1.4`) rather than the old default `pv=1.2` point (no longer inexact
+# under either formulation at THIS load level — see controls above). The default `pv=1.2` point is
+# included alongside for contrast: gate-1 EXACT here, and MEASURED to stay so as tolerance
+# tightens — though this is an empirical observation at this specific point, not a blanket
+# guarantee (the default DOES go genuinely cone-inexact at other grid points, e.g.
+# `vmax=1.05, load=0.1, pv=1.2` — see "The boundary, quantified" above).
 
 base_opt = select_optimizer(SOCP())
-for tol in (nothing, 1e-10)
-    opt =
-        tol === nothing ? base_opt :
-        optimizer_with_attributes(
-            base_opt.optimizer_constructor,
-            base_opt.params...,
-            "tol_gap_abs" => tol,
-            "tol_gap_rel" => tol,
+for (label, thesis_literal, ps) in
+    (("default (pv=1.2, EXACT-04)", false, 1.2), ("thesis_literal (pv=1.4)", true, 1.4))
+    formulation = thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
+    println("\n", label, ":")
+    for tol in (nothing, 1e-10)
+        opt =
+            tol === nothing ? base_opt :
+            optimizer_with_attributes(
+                base_opt.optimizer_constructor,
+                base_opt.params...,
+                "tol_gap_abs" => tol,
+                "tol_gap_rel" => tol,
+            )
+        f = feeder_3bus(; vmax = 1.05)
+        aggs = [house_3bus(b; pv_scale = ps, load_scale = 0.20) for b in 2:3]
+        ctx, obj, _ = solve_welfare(
+            f,
+            formulation,
+            aggs;
+            T = T,
+            λ₀ = PRICE,
+            optimizer = opt,
+            allow_export = true,
+            rtol_exact = 1e6,
         )
-    f = feeder_3bus(; vmax = 1.05)
-    aggs = [house_3bus(b; pv_scale = 1.2, load_scale = 0.20) for b in 2:3]
-    ctx, obj, _ = solve_welfare(
-        f,
-        ConvexBranchFlow(),
-        aggs;
-        T = T,
-        λ₀ = PRICE,
-        optimizer = opt,
-        allow_export = true,
-        rtol_exact = 1e6,
-    )
-    s = cone_stats(ctx, f)
-    @printf(
-        "tol_gap=%-7s ratio=%-11.5g maxgap=%-10.4g obj=%.6f\n",
-        tol === nothing ? "1e-8*" : string(tol),
-        s.maxratio,
-        s.maxgap,
-        obj
-    )
+        s = cone_stats(ctx, f)
+        @printf(
+            "tol_gap=%-7s ratio=%-11.5g maxgap=%-10.4g obj=%.6f\n",
+            tol === nothing ? "1e-8*" : string(tol),
+            s.maxratio,
+            s.maxgap,
+            obj
+        )
+    end
 end
 
-# The ratio does not budge: this gap is **structural**, and the classification is safe. Keep that
-# number in mind — the IEEE-123 section below runs the identical ladder and gets the opposite answer.
+# Both ratios do not budge as tolerance tightens: the default's is a tiny, structurally-EXACT ratio
+# (Gan-Low's theorem), and `thesis_literal=true`'s is a large, structurally-INEXACT ratio — both
+# **structural**, and the classification is safe either way. Keep that in mind — the IEEE-123
+# section below runs the identical ladder and gets a genuinely DIFFERENT answer (numerical noise,
+# not a structural gap).
 
 # ### Figure — the 3-bus applicability map
+#
+# RESTATED IN v4.0 (PHASE 28): TWO maps now, one per formulation — this is itself the finding.
+# `thesis_literal=true` reproduces the SAME boundary this page originally characterized
+# (pre-Phase-26); the default's map is almost entirely "exact" wherever it solves at all (MEASURED
+# 98/150), with MOST of the remaining non-exact cells being App. C guard/infeasible outcomes — an
+# UNRELATED mechanism, not a cone-exactness boundary — but a SMALL genuine cone-inexact region
+# does survive (3/150, ratio 8196–9746), visible as isolated red cells rather than a wide band.
 
-if Base.find_package("CairoMakie") !== nothing
-    using CairoMakie
-    CairoMakie.activate!(type = "png")
-
+function plot_3bus_map(rows_3bus, formulation, title_str)
     code = Dict("exact" => 1, "inexact" => 2, "guard" => 3, "infeasible" => 4)
     colors = [
         RGBf(0.13, 0.55, 0.49),
@@ -320,12 +416,7 @@ if Base.find_package("CairoMakie") !== nothing
     ]
 
     fig = Figure(size = (1000, 380), backgroundcolor = :white)
-    Label(
-        fig[0, 1:3],
-        "Where the SOC relaxation is exact — 3-bus high-PV stress fixture",
-        fontsize = 17,
-        font = :bold,
-    )
+    Label(fig[0, 1:3], title_str, fontsize = 17, font = :bold)
     for (k, vm) in enumerate(VMAX_3BUS)
         ax = Axis(
             fig[1, k];
@@ -339,7 +430,10 @@ if Base.find_package("CairoMakie") !== nothing
             xgridvisible = false,
             ygridvisible = false,
         )
-        Z = [Float64(code[ctl(rows_3bus, p, l, vm).class]) for p in PV_3BUS, l in LOAD_3BUS]
+        Z = [
+            Float64(code[ctl(rows_3bus, p, l, vm, formulation).class]) for
+            p in PV_3BUS, l in LOAD_3BUS
+        ]
         heatmap!(
             ax,
             1:length(PV_3BUS),
@@ -350,7 +444,7 @@ if Base.find_package("CairoMakie") !== nothing
         )
         ## A dot marks the free diagnostic: upper voltage bound ACTIVE at >=1 (bus,hour).
         for (i, p) in enumerate(PV_3BUS), (j, l) in enumerate(LOAD_3BUS)
-            ctl(rows_3bus, p, l, vm).atvmax >= 1 && scatter!(
+            ctl(rows_3bus, p, l, vm, formulation).atvmax >= 1 && scatter!(
                 ax,
                 [i],
                 [j];
@@ -404,7 +498,34 @@ if Base.find_package("CairoMakie") !== nothing
         labelsize = 11,
     )
     rowgap!(fig.layout, 4)
-    fig
+    return fig
+end
+
+if Base.find_package("CairoMakie") !== nothing
+    using CairoMakie
+    CairoMakie.activate!(type = "png")
+
+    fig_thesis_literal = plot_3bus_map(
+        rows_3bus,
+        :thesis_literal,
+        "Where gate 1 is exact — 3-bus fixture, ConvexBranchFlow(; thesis_literal=true) (OLD copy)",
+    )
+    fig_thesis_literal
+end
+
+# By contrast, the DEFAULT's own map (below) is almost entirely "exact" wherever it solves at
+# all (MEASURED 98/150) — MOST of the remaining non-teal cells are App. C battery-complementarity
+# guard trips or infeasibility, an UNRELATED mechanism, not a cone-exactness boundary — but look
+# for a handful of isolated genuine-inexact cells too (3/150, ratio 8196–9746): the default's own
+# exactness boundary is much smaller than `thesis_literal=true`'s, not absent:
+
+if Base.find_package("CairoMakie") !== nothing
+    fig_default = plot_3bus_map(
+        rows_3bus,
+        :default,
+        "Where gate 1 is exact — 3-bus fixture, ConvexBranchFlow() (DEFAULT, Gan-Low direction)",
+    )
+    fig_default
 end
 
 # ## Substrate B — real IEEE-123 impedances (precomputed)
@@ -426,6 +547,9 @@ end
 # generate ourselves does not justify adding `CSV`/`DataFrames` to it and re-resolving
 # `docs/Manifest.toml` (which CI requires to stay in Julia-version lockstep).
 
+# DUAL-MODE (restated in v4.0, Phase 28): the committed CSV now carries a `formulation` column
+# (`default`/`thesis_literal`) — parsed below and used to split every report/figure by formulation.
+
 function read_sweep_csv(path)
     lines = readlines(path)
     header = split(first(lines), ',')
@@ -434,6 +558,7 @@ function read_sweep_csv(path)
     return map(lines[2:end]) do ln
         f = split(ln, ',')
         (;
+            formulation = Symbol(strip(f[idx["formulation"]])),
             vmax = num(f[idx["vmax"]]),
             load = num(f[idx["load"]]),
             pv = num(f[idx["pv"]]),
@@ -450,24 +575,28 @@ rows_123 = read_sweep_csv(
     joinpath(pkgdir(TSODSO), "results", "socp_applicability", "ieee123_sweep.csv"),
 )
 
-for cls in ("exact", "inexact", "infeasible", "guard")
-    n = count(r -> r.class == cls, rows_123)
-    n > 0 && @printf("%-11s %3d\n", cls, n)
+for formulation in (:default, :thesis_literal), cls in ("exact", "inexact", "infeasible", "guard")
+    n = count(r -> r.formulation == formulation && r.class == cls, rows_123)
+    n > 0 && @printf("%-16s %-11s %3d\n", formulation, cls, n)
 end
 
-solved_123 = filter(r -> isfinite(r.ratio), rows_123)
-@printf(
-    "\nratio range      : %.4g .. %.4g\n",
-    minimum(r.ratio for r in solved_123),
-    maximum(r.ratio for r in solved_123)
-)
-@printf(
-    "vpeak range      : %.5f .. %.5f\n",
-    minimum(r.vpeak for r in solved_123),
-    maximum(r.vpeak for r in solved_123)
-)
-@printf("bound EVER active: %s\n", any(r.atvmax >= 1 for r in solved_123))
-@printf("reverse flow everywhere: %s\n", all(r.minP < 0 for r in solved_123))
+for (label, formulation) in (("default", :default), ("thesis_literal", :thesis_literal))
+    s = filter(r -> r.formulation == formulation && isfinite(r.ratio), rows_123)
+    isempty(s) && continue
+    println("\n--- formulation = ", label, " ---")
+    @printf(
+        "ratio range      : %.4g .. %.4g\n",
+        minimum(r.ratio for r in s),
+        maximum(r.ratio for r in s)
+    )
+    @printf(
+        "vpeak range      : %.5f .. %.5f\n",
+        minimum(r.vpeak for r in s),
+        maximum(r.vpeak for r in s)
+    )
+    @printf("bound EVER active: %s\n", any(r.atvmax >= 1 for r in s))
+    @printf("reverse flow everywhere: %s\n", all(r.minP < 0 for r in s))
+end
 
 # ### The two findings, and they are not what Substrate A suggests
 #
@@ -479,6 +608,15 @@ solved_123 = filter(r -> isfinite(r.ratio), rows_123)
 #
 # **2. Reverse flow alone does not predict inexactness.** It is present at *every* solved point,
 # including every exact one. Reverse flow is the setting; the binding voltage cap is the cause.
+#
+# RESTATED IN v4.0 (PHASE 28): BOTH findings hold under BOTH formulations — MEASURED this plan,
+# the voltage upper bound is never active at any solved point (`atvmax==0` everywhere) and
+# `vpeak` ranges IDENTICALLY (0.99969–1.01198 pu) under `ConvexBranchFlow()` (default) AND
+# `ConvexBranchFlow(; thesis_literal=true)`. Classification counts are also close (default:
+# 18 exact/27 inexact/9 guard; thesis_literal: 19 exact/26 inexact/9 guard, out of 54 each) — the
+# mechanism genuinely does not distinguish the two formulations on real IEEE-123 impedances, unlike
+# Substrate A where the gap between them is large. This gate-1 map's conclusion is therefore
+# formulation-INDEPENDENT on this substrate.
 #
 # ### The noise floor — why ~half these points flag spuriously
 #
@@ -501,9 +639,15 @@ solved_123 = filter(r -> isfinite(r.ratio), rows_123)
 #     produce.
 #
 #     Another free tell, visible in the summary above: the exact/inexact band on this feeder is
-#     `0.7356 … 1.088` — a factor of **1.5**, straddling the threshold continuously. On Substrate A it
-#     is `0.024 … 8.448`, a factor of **350** with nothing inside. A narrow band means the boundary's
-#     position is decided by where the threshold was put; a wide one means it isn't.
+#     narrow — RESTATED IN v4.0 (PHASE 28), MEASURED per formulation: `0.8667 … 1.392` (default,
+#     factor **1.6**) and `0.976 … 1.011` (thesis_literal, factor **1.04**, even narrower). On
+#     Substrate A it is `0.05103 … 8196` under the default (factor **~161000**) and wider still
+#     under thesis_literal — nothing comparable to IEEE-123's straddling band under EITHER
+#     formulation. A narrow band means the boundary's position is decided by where the threshold
+#     was put; a wide one means it isn't. The table below is a single (default-formulation)
+#     snapshot from an earlier run — not re-run dual-mode this plan, since the mechanism (solver
+#     noise scaling with problem size) is architecturally formulation-independent, confirmed by the
+#     near-identical dual-mode summary above.
 #
 #     **Mechanism:** the classifier's `atol = 1e-6` sits *at* Clarabel's achievable cone residual on a
 #     122-branch problem at the default `tol_gap = 1e-8`. The WR-01 idiom scales the threshold with
@@ -527,11 +671,16 @@ solved_123 = filter(r -> isfinite(r.ratio), rows_123)
 # or reliably converged tight solves; neither is claimed on this page.
 
 # ### Figure — the IEEE-123 map
+#
+# RESTATED IN v4.0 (PHASE 28): one map per formulation, mirroring Substrate A's dual-mode
+# treatment (gate 1, cone-residual, only — see the per-formulation numeric summary above for
+# whether the two substantively differ here).
 
-if Base.find_package("CairoMakie") !== nothing
-    pv123 = sort(unique(r.pv for r in rows_123))
-    ld123 = sort(unique(r.load for r in rows_123))
-    vm123 = sort(unique(r.vmax for r in rows_123))
+function plot_ieee123_map(rows_123, formulation, title_str, subtitle_str)
+    rows_f = filter(r -> r.formulation == formulation, rows_123)
+    pv123 = sort(unique(r.pv for r in rows_f))
+    ld123 = sort(unique(r.load for r in rows_f))
+    vm123 = sort(unique(r.vmax for r in rows_f))
     code2 = Dict("exact" => 1, "inexact" => 2, "guard" => 3, "infeasible" => 4)
     colors2 = [
         RGBf(0.13, 0.55, 0.49),
@@ -540,23 +689,13 @@ if Base.find_package("CairoMakie") !== nothing
         RGBf(0.88, 0.88, 0.90),
     ]
     cell(vm, p, l) = begin
-        h = filter(r -> r.vmax == vm && r.pv == p && r.load == l, rows_123)
+        h = filter(r -> r.vmax == vm && r.pv == p && r.load == l, rows_f)
         isempty(h) ? nothing : only(h)
     end
 
     fig123 = Figure(size = (1000, 360), backgroundcolor = :white)
-    Label(
-        fig123[0, 1:3],
-        "Real IEEE-123 impedances — no structural inexactness found",
-        fontsize = 17,
-        font = :bold,
-    )
-    Label(
-        fig123[1, 1:3],
-        "red cells are SOLVER NOISE, not relaxation gaps (tol_gap 1e-8→1e-10 collapses the worst ratio 4.76→0.0029 at an identical optimum)",
-        fontsize = 10.5,
-        color = :gray35,
-    )
+    Label(fig123[0, 1:3], title_str, fontsize = 17, font = :bold)
+    Label(fig123[1, 1:3], subtitle_str, fontsize = 10.5, color = :gray35)
     for (k, vm) in enumerate(vm123)
         ax = Axis(
             fig123[2, k];
@@ -609,33 +748,79 @@ if Base.find_package("CairoMakie") !== nothing
         color = :gray40,
     )
     rowgap!(fig123.layout, 4)
-    fig123
+    return fig123
+end
+
+if Base.find_package("CairoMakie") !== nothing
+    fig123_default = plot_ieee123_map(
+        rows_123,
+        :default,
+        "Real IEEE-123 impedances (DEFAULT) — no structural inexactness found",
+        "red cells are SOLVER NOISE, not relaxation gaps — see the tolerance ladder below",
+    )
+    fig123_default
+end
+
+if Base.find_package("CairoMakie") !== nothing
+    fig123_thesis = plot_ieee123_map(
+        rows_123,
+        :thesis_literal,
+        "Real IEEE-123 impedances (thesis_literal=true, OLD copy) — no structural inexactness found",
+        "red cells are SOLVER NOISE, not relaxation gaps — see the tolerance ladder below",
+    )
+    fig123_thesis
 end
 
 # ## What does not generalize — the point of showing two substrates
 #
 # Two findings that looked like properties of the *method* on Substrate A turned out to be properties
-# of that *fixture*:
+# of that *fixture*. RESTATED IN v4.0 (PHASE 28), MEASURED per formulation (the 3-bus column below
+# is `thesis_literal=true`, the formulation whose boundary this page originally characterized;
+# the default's own much-smaller inexact region, MEASURED this plan at ratio 8196–9746, would make
+# an even wider band — see "The boundary, quantified" above):
 #
-# | claim on the 3-bus fixture | on real IEEE-123 |
+# | claim on the 3-bus fixture (`thesis_literal=true`) | on real IEEE-123 (both formulations) |
 # |---|---|
-# | "bound active" predicts inexactness with **zero** false negatives (recall 66/66) | fails — points flag with the bound inactive, because the flags are not structural |
-# | the transition is a **cliff**: a ~350× empty band (max exact ratio 0.024, min inexact 8.45) | no cliff — everything lies in 0.055–4.8, straddling the threshold continuously |
+# | "bound active" predicts inexactness with a low false-negative rate | fails — points flag with the bound inactive, because the flags are not structural |
+# | the transition is a **cliff**: a wide empty band (max exact ratio 0.08487, min inexact 9727 — factor ~114600) | no cliff — default lies in 0.051–4.4, thesis_literal in 0.054–5.78, both straddling the threshold continuously |
 #
 # Reporting either as a general property, on the strength of one synthetic fixture, would have been
 # wrong. The transferable results are the **method** (free detector, controls, tolerance ladder,
 # failure-class separation) and the **caveat** (calibrate the noise floor per feeder) — not the
 # boundary values.
 #
+# ## Restated in v4.0 (Phase 28)
+#
+# Summary of this plan's (28-03) dual-mode re-verification, gate-qualified (this entire page is
+# gate 1, cone-residual, only — see `docs/literate/ac_oracle.jl` for the separate gate-2 finding):
+#
+# - **Substrate A control point (`pv=1.2, load=0.20, vmax=1.05`, EXACT-04):** now measured EXACT
+#   under BOTH `ConvexBranchFlow()` (default) and `ConvexBranchFlow(; thesis_literal=true)` —
+#   PM-01/26-18, cited not re-derived. The pre-Phase-28 page asserted this point "inexact" under
+#   the (then bare-default) `ConvexBranchFlow()`, which described the OLD (pre-Phase-26) default.
+# - **The default is NOT unconditionally cone-exact**, despite Gan-Low's construction being
+#   designed to force cone-tightness: MEASURED 3/150 default grid points on Substrate A are
+#   genuinely cone-inexact (ratio 8196–9746), at different (mostly lower-load) combinations than
+#   the EXACT-04 control point. This is a narrower, rarer exactness-failure region than
+#   `thesis_literal=true`'s (5/150, ratio 9727–9872) — not an absent one.
+# - **`thesis_literal=true` reproduces the ORIGINAL, pre-Phase-26 exactness boundary** this page
+#   was built to characterize — now correctly attributed to it specifically, not to the default.
+# - **Substrate B (real IEEE-123) shows no measurable formulation-dependent difference**: both
+#   formulations report near-identical classification counts, `vpeak` ranges, and noise-floor
+#   bands; the voltage upper bound is never active under either. The applicability MAP genuinely
+#   differs by formulation on Substrate A but not on Substrate B, itself an informative finding
+#   about which network regimes the fix's directional choice actually matters for.
+#
 # ## Reproducing this
 #
 # ```
-# julia --project=. scripts/socp_applicability_sweep.jl highpv --tol-ladder   # ~70 s, live above
-# julia --project=. scripts/socp_applicability_sweep.jl ieee123 --tol-ladder  # ~16 min
+# julia --project=. scripts/socp_applicability_sweep.jl highpv --tol-ladder   # dual-mode, ~3 min
+# julia --project=. scripts/socp_applicability_sweep.jl ieee123 --tol-ladder  # dual-mode, ~35 min
 # ```
 #
-# Outputs land in `results/socp_applicability/` as CSV plus a findings summary. The script asserts
-# and prints its controls on every run; a drifted control is a warning, never a silent pass.
+# Outputs land in `results/socp_applicability/` as CSV (now with a `formulation` column) plus a
+# findings summary broken down per formulation. The script asserts and prints its controls on
+# every run; a drifted control is a warning, never a silent pass.
 #
 # Full investigation trails, including the inert-fixture false start and the per-stage failure
 # attribution work, are in `.planning/spikes/001-relaxation-validity-map/`,

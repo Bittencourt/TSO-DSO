@@ -295,9 +295,11 @@ restriction_report.optimality_loss
 
 # ## Finding
 #
-# EXACT-04 — the high-PV, reverse-flow feeder that the previous page found the plain SOC
-# relaxation genuinely, physically inexact on — is now PRICEABLE via a genuine restriction of
-# the convex feasible set, not a relaxation hack: Gan-Low's OPF-m mechanism
+# EXACT-04 — the high-PV, reverse-flow feeder that the previous page found genuinely inexact
+# under **gate 2** (`assert_ac_exact!`'s AC-dispatch comparison, under the plain
+# `ConvexBranchFlow()` default — see "## Restated in v4.0 (Phase 28)" below; **gate 1**,
+# `assert_socp_exact!`'s cone-residual check, is EXACT there, not inexact) — is now PRICEABLE via
+# a genuine restriction of the convex feasible set, not a relaxation hack: Gan-Low's OPF-m mechanism
 # (`v̂_GL(s) ≤ v̄`, Theorem 2) forces condition C2 to hold by construction, closing the SOC cone
 # to noise-floor scale (the free PF-04 signal above) with NO tunable parameter to search (D-03).
 # This is a STRICTLY MORE POWERFUL result than the simpler OPF-ε special case this project's own
@@ -318,3 +320,36 @@ restriction_report.optimality_loss
 # `ac_dual_fallback_price` instead: whenever `assert_restriction_exact!`'s `ac_feasible` gate
 # itself fails, which does not happen on THIS fixture, but which the fallback's own quarantined
 # multi-seed evidence confirms is a sound, trustworthy pricer when it is needed.
+#
+# ## Restated in v4.0 (Phase 28)
+#
+# Earlier text on this page (mirroring `ac_oracle.jl`'s own earlier text, corrected in the same
+# phase) described the previous page's EXACT-04 disagreement as the plain SOC relaxation being
+# "genuinely, physically inexact" — language that reads as **gate 1** (`assert_socp_exact!`'s
+# cone-residual check). MEASURED this plan (28-03), directly reproducing `test_ac_oracle.jl`'s
+# EXACT-04 fixture under BOTH formulations at `pv_scale = 1.2`:
+#
+# | Formulation | Gate 1 (`socp_maxgap`) | Gate 1 verdict | Gate 2 (`inexact_hours`) | Gate 2 verdict |
+# |---|---|---|---|---|
+# | `ConvexBranchFlow()` (default) | 2.59e-8 | EXACT | `6:15` | INEXACT |
+# | `ConvexBranchFlow(; thesis_literal=true)` | 9.05e-9 | EXACT | `[]` (none) | EXACT |
+#
+# Gate 1 is EXACT under BOTH formulations on this fixture at this `pv_scale` (already established
+# by PM-01/26-18, `test_restricted_branch_flow.jl:314-320`, cited not re-derived — the very
+# `opfm_shadow_voltage` dual/`ac_feasible=true` mechanism this page's own "OVR-02 certificate"
+# section above demonstrates). What genuinely disagrees under the DEFAULT is **gate 2**
+# (`assert_ac_exact!`'s AC-dispatch comparison, the SAME mechanism `restriction_report`'s own
+# `matches_ac_optimum = false` reports above) — the plain, UNRESTRICTED `ConvexBranchFlow()`'s
+# optimum (`-921.754`) diverges from the true AC optimum (`-921.277`) precisely because the
+# unrestricted relaxation, absent OPF-m's added `v̂_GL(s) ≤ v̄` constraint, is loose enough at these
+# hours that its own optimum sits at a DIFFERENT point than either OPF-m's restricted optimum or
+# the true AC optimum — even though its OWN cone residual is small (gate 1 exact). Under
+# `thesis_literal = true` on this SAME fixture, gate 2 is ALSO exact (measured this plan:
+# `cost_socp = -921.27700` matches `cost_ac = -921.27699` within `rtol = 1e-4`) — this specific
+# gate-2 disagreement does NOT reproduce under `thesis_literal = true` at `pv_scale = 1.2`.
+#
+# This is NOT the historic v2.1 "SOCP knife-edge under high-PV reverse flow" finding (project
+# memory `v2.1-socp-inexactness-and-thesis-repro`), which is a gate-1 (cone-slack) phenomenon that
+# reproduces only under `thesis_literal = true` at a higher `pv_scale` (e.g. `1.4` on this fixture,
+# ratio ≈ 1982) — see `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` "Plan
+# 26-18". Every "exact"/"inexact" claim above is now gate-qualified per Pitfall 3 discipline.
