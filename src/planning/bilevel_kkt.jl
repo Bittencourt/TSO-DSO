@@ -128,7 +128,25 @@ never part of the single-level MILP itself, only a measurement pre-pass, so Pitf
 Solves via `optimize!` directly (not `assert_solved!`, since `y_probe=0` forces a
 fixed/degenerate `x_inv` that must still be accepted). If
 `is_solved_and_feasible(m; dual=true)`, collects `abs(dual(inv_bound))` and
-`abs(dual(cap[t]))` for every `t` into a magnitudes vector.
+`abs(dual(cap[t]))` for every `t` (the follower's own NAMED-constraint duals — these
+correspond to `mu_cap`/`rho_y` in the production KKT block) INTO a magnitudes vector,
+AND ALSO `abs(reduced_cost(x_inv))`/`abs(reduced_cost(z[t]))` for every `t` (the
+follower's own VARIABLE-BOUND duals on `x_inv >= 0`/`z[t] >= 0` — these correspond to
+`rho_lo`/`mu_lo[t]` in the production KKT block, via the SAME stationarity identity
+`statio_x`/`statio_z` already establish).
+
+Rule 1 fix (auto-fixed bug, empirically found this session): named-constraint duals
+ALONE are insufficient on a fixture where the follower's true optimum is a
+DEGENERATE corner at BOTH probe extremes (e.g. a `pi_tariff` dominated enough that
+`x_inv=z=0` is optimal regardless of `y_inv`) — `dual(inv_bound)`/`dual(cap[t])` both
+measure exactly `0.0` there (the bound genuinely isn't economically binding), while
+the production MILP's own `statio_x`/`statio_z` equalities still require a
+NONZERO `rho_lo`/`mu_lo[t]` to balance (verified: `reduced_cost(x_inv)`/
+`reduced_cost(z[t])` are the EXACT KKT multipliers `statio_x`/`statio_z` need at this
+degenerate vertex, and are nonzero precisely when the named-constraint duals are
+degenerately zero). Omitting them produced a genuinely `MOI.INFEASIBLE` single-level
+MILP (no complementarity assignment fit inside `[0, m_ub]`), not merely a
+too-tight-but-feasible bound.
 
 Errors (naming both probe statuses) if the magnitudes vector is empty after both
 probes — neither probe produced a trusted dual, so no safe bound can be derived;
@@ -181,8 +199,10 @@ function _measure_follower_kkt_bounds(;
 
         if is_solved_and_feasible(m; dual = true)
             push!(magnitudes, abs(dual(inv_bound)))
+            push!(magnitudes, abs(reduced_cost(x_inv)))
             for t in 1:T
                 push!(magnitudes, abs(dual(cap[t])))
+                push!(magnitudes, abs(reduced_cost(z[t])))
             end
         end
     end

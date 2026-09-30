@@ -52,6 +52,72 @@
     # cost is a derived/scaled quantity, not a primal variable).
     const N2_PROBE_COST_SPREAD_MAX = 1e-3
 
+    """
+        bilevel_toy_fixture() -> NamedTuple
+
+    The shared locked 2-bus/T=1 fixture for the GENUINELY bilevel TSO-DSO variant
+    (Phase 29, BILEV-01/02): a near-lossless 2-bus feeder (root bus 1 + load bus 2),
+    the TSO follower's own cost coefficients (`corridor_cap`, `x_inv_max`, `c_inv`,
+    `c_op`, `pi_tariff`, `q_op`), and the DSO leader's own investment/network-welfare
+    coefficients (`c_y`, `y_max`, `v_d`, `d_max`, `agg_bus`). Consumed by BOTH this
+    plan (29-01, sanity-check corner case) and plan 29-02 (the BILEV-02 certification
+    fixture).
+
+    `pi_tariff = [0.2]` is deliberately far below `c_op = [0.5]` — the follower's own
+    marginal profit `pi_tariff[t]-c_op[t] = -0.3` is strictly negative for every unit
+    of `z`, so its optimal response is `x_inv=z=0` for EVERY `y_inv >= 0`, a
+    structural — not knife-edge — dominance argument (29-RESEARCH.md Pitfall 6).
+    `q_op = [0.0]` (BLOCKER-1 revision) deliberately keeps the follower's own cost
+    LINEAR/bang-bang, reproducing the pre-revision behavior byte-for-byte — the
+    genuinely NON-DEGENERATE, interior-response fixture with `q_op > 0` is plan
+    29-04's concern, not this plan's; this corner fixture is retained here purely as
+    a cheap sanity check.
+
+    # Hand-derived expectations (VERIFIED, not blindly trusted, by this plan's own
+    # direct-script run — re-derive independently if a discrepancy appears, exactly
+    # like this file's own N1_Y_HAND note)
+
+      - BILEVEL (production `solve_bilevel!` on this fixture): since the follower's
+        response is `x_inv=z=0` regardless of `y_inv` (strict per-unit cost
+        dominance, not solver-dependent), the leader's own objective reduces to
+        `c_y*y_inv` alone, minimized at `y_inv=0` ⇒ `y*=0, x_inv*=0, z*=[0.0],
+        d*=[0.0], total*=0.0`.
+      - JOINT (single planner, true costs, no tariff — see plan 29-02 for the actual
+        reference model): `z` is bounded by `d_max=2.0` (network-tied `d[t]=z[t]`
+        exactly, lossless single-branch feeder) and by `corridor_cap*x_inv`; net
+        coefficient on `z` is `c_op[t]-v_d[t] = -2.5` (strictly beneficial to
+        deliver, so `z*=d_max=2.0`), requiring `x_inv*=1.0` (from
+        `corridor_cap*x_inv>=z` binding) and `y_inv*=1.0` (minimal `y_inv>=x_inv`,
+        since `c_y>0`): `total* = 0.1*1 + 1.0*1 + 0.5*2 - 3.0*2 = -3.9`.
+      - MEASURED GAP: `|0.0 - (-3.9)| = 3.9`, and `z` differs `0.0` vs `2.0` — both
+        orders of magnitude above any HiGHS `mip_feasibility_tolerance`/
+        `mip_rel_gap`-class quantity (29-RESEARCH.md Pitfall 6 / memory
+        `highs-exactness-defaults`), i.e. a genuine structural finding, not solver
+        noise.
+    """
+    function bilevel_toy_fixture()
+        feeder = Feeder(
+            [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+            [Branch(1, 2, 1e-3, 1e-3, 99.0)],
+            1,
+        )
+        return (;
+            feeder = feeder,
+            T = 1,
+            agg_bus = 2,
+            corridor_cap = 2.0,
+            x_inv_max = 2.0,
+            c_inv = 1.0,
+            c_op = [0.5],
+            pi_tariff = [0.2],
+            q_op = [0.0],
+            c_y = 0.1,
+            y_max = 2.0,
+            v_d = [3.0],
+            d_max = 2.0,
+        )
+    end
+
     export N1_Y_HAND,
         N1_Z_HAND,
         N1_OBJ_HAND,
@@ -59,5 +125,6 @@
         N2_XINV_HAND,
         N2_PROBE_Z_SPREAD_MAX,
         N2_PROBE_XINV_SPREAD_MAX,
-        N2_PROBE_COST_SPREAD_MAX
+        N2_PROBE_COST_SPREAD_MAX,
+        bilevel_toy_fixture
 end
