@@ -235,7 +235,7 @@ problem decomposed by Benders — certified as distinct from the joint optimum.
 
   3. The production method's answer matches the bilevel optimum on that fixture, not the joint one.
 
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
@@ -244,7 +244,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 29-02-PLAN.md — BILEV-02: BilevelJuMP StrongDualityMode + brute-force certification vs. joint optimum (corner fixture)
+- [x] 29-02-PLAN.md — BILEV-02: BilevelJuMP StrongDualityMode + brute-force certification vs. joint optimum (corner fixture)
 - [ ] 29-04-PLAN.md — BILEV-02 BLOCKER-1 remediation: non-degenerate (interior-response) certification fixture, SOS1 branch-switch assertion, z≡0 mutation guard
 
 **Wave 3** *(phase-closing gate, blocked on Wave 1-2 completion)*
@@ -424,7 +424,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
-| 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 1/4 | In Progress|  |
+| 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 2/4 | In Progress|  |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |

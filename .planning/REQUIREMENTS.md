@@ -75,7 +75,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   minimizes its own cost, the DSO leader pays a tariff π·z, and the follower's objective differs
   from the leader's view of it. It is solved by the hand-rolled loop, or by an appropriate
   reformulation where plain Benders is no longer valid, with the method documented.
-- [ ] **BILEV-02**: The BilevelJuMP certification includes a fixture on which the bilevel optimum
+- [x] **BILEV-02**: The BilevelJuMP certification includes a fixture on which the bilevel optimum
   provably differs from the joint single-level optimum, and the production method matches the
   bilevel answer, not the joint one.
 - [ ] **BILEV-03**: `solve_stackelberg!` runs with `ConvexBranchFlow` on a multi-bus feeder
@@ -180,7 +180,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | FIX-10 | Phase 27 | Complete |
 | FIX-11 | Phase 28 | Complete |
 | BILEV-01 | Phase 29 | Complete |
-| BILEV-02 | Phase 29 | Pending |
+| BILEV-02 | Phase 29 | Complete |
 | BILEV-03 | Phase 30 | Pending |
 | BILEV-04 | Phase 30 | Pending |
 | BILEV-05 | Phase 30 | Pending |

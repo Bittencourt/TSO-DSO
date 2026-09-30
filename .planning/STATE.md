@@ -4,13 +4,13 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-09-30T23:31:37.034Z"
+last_updated: "2026-09-30T23:43:02.787Z"
 last_activity: 2026-09-30
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 38
-  completed_plans: 36
+  completed_plans: 37
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 29 (Genuine Bilevel TSO-DSO Variant) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-09-30
 
@@ -171,6 +171,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 *Updated after each plan completion*
 | Phase 29 P01 | 25min | 2 tasks | 5 files |
+| Phase 29 P02 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -224,6 +225,7 @@ Recent decisions affecting current work:
   impedances or without priced reactive power.
 
 - [Phase 29]: Measured SOS1 bounds must include both named-constraint duals AND variable-bound reduced costs -- the research's illustrative probe (named-constraint duals only) silently underestimates on a fixture whose follower optimum is a degenerate corner at both probe extremes
+- [Phase 29]: Phase 29 P02: BILEV_GAP_FLOOR derived as 10x the production MILP's measured mip_feasibility_tolerance=1e-9 (never as a fraction of the observed bilevel-vs-joint gap); stacked JULIA_LOAD_PATH="test:.:@stdlib" verification idiom resolves both main-env TSODSO and test-only BilevelJuMP/Ipopt without Pkg.develop mutation
 
 ### Roadmap Evolution
 
@@ -447,7 +449,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-09-30T23:31:37.002Z
+Last session: 2026-09-30T23:42:32.305Z
 Stopped at: Completed 29-01-PLAN.md
 Resume file: None
 
