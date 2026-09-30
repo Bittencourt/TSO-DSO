@@ -1,0 +1,86 @@
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/toy_dc.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/toy_dc.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/lindistflow.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/lindistflow.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/convex_branch_flow.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/convex_branch_flow.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/ac_oracle.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/ac_oracle.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/restricted_branch_flow.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/restricted_branch_flow.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/prosumer_welfare.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/prosumer_welfare.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/pricing_dlmp.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/pricing_dlmp.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/admm.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/admm.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/stackelberg_benders.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/stackelberg_benders.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/nash_diagonalization.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/nash_diagonalization.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/ieee123_impedances.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/ieee123_impedances.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/thesis_reproduction_ieee123.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/thesis_reproduction_ieee123.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/thesis_reproduction_assumptions.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/thesis_reproduction_assumptions.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/socp_applicability.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/socp_applicability.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/ieee8500_scaling.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/ieee8500_scaling.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/mpc_rolling_horizon.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/mpc_rolling_horizon.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/stochastic_pv_demand.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/stochastic_pv_demand.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/meshed_reactive_price.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/meshed_reactive_price.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/integer_investment.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/integer_investment.md`
+[ Info: generating markdown page from `~/programming/TSO-DSO/docs/literate/experiments.jl`
+[ Info: writing result to `~/programming/TSO-DSO/docs/src/generated/experiments.md`
+[ Info: SetupBuildDirectory: setting up build directory.
+[ Info: Doctest: running doctests.
+[ Info: ExpandTemplates: expanding markdown templates.
+┌ Warning: No strict ticks found
+└ @ PlotUtils ~/.julia/packages/PlotUtils/HX80C/src/ticks.jl:194
+┌ Warning: No strict ticks found
+└ @ PlotUtils ~/.julia/packages/PlotUtils/HX80C/src/ticks.jl:194
+[ Info: CrossReferences: building cross-references.
+┌ Warning: Cannot resolve @ref for md"[`TAU_SOLVER_FIX08`](@ref)" in docs/src/api.md.
+│ - No docstring found in doc for binding `TSODSO.TAU_SOLVER_FIX08`.
+│ - No docstring found in doc for binding `Main.TAU_SOLVER_FIX08`.
+└ @ Documenter ~/.julia/packages/Documenter/AXNMp/src/utilities/utilities.jl:49
+┌ Warning: Cannot resolve @ref for md"[`MEASURED_ε_FIX08`](@ref)" in docs/src/api.md.
+│ - No docstring found in doc for binding `TSODSO.MEASURED_ε_FIX08`.
+│ - No docstring found in doc for binding `Main.MEASURED_ε_FIX08`.
+└ @ Documenter ~/.julia/packages/Documenter/AXNMp/src/utilities/utilities.jl:49
+┌ Warning: Cannot resolve @ref for md"[`FIT_SITE3_ALMOST_GAP_TOL`](@ref)" in docs/src/api.md.
+│ - No docstring found in doc for binding `TSODSO.FIT_SITE3_ALMOST_GAP_TOL`.
+│ - No docstring found in doc for binding `Main.FIT_SITE3_ALMOST_GAP_TOL`.
+└ @ Documenter ~/.julia/packages/Documenter/AXNMp/src/utilities/utilities.jl:49
+┌ Warning: Cannot resolve @ref for md"[`stall_z_atol`](@ref)" in docs/src/api.md.
+│ - No docstring found in doc for binding `TSODSO.stall_z_atol`.
+│ - No docstring found in doc for binding `Main.stall_z_atol`.
+└ @ Documenter ~/.julia/packages/Documenter/AXNMp/src/utilities/utilities.jl:49
+[ Info: CheckDocument: running document checks.
+[ Info: Populate: populating indices.
+[ Info: RenderDocument: rendering document.
+[ Info: HTMLWriter: rendering HTML pages.
+┌ Warning: Unable to determine the repository root URL for the navbar link.
+│ This can happen when a string is passed to the `repo` keyword of `makedocs`.
+│ 
+│ To remove this warning, either pass a Remotes.Remote object to `repo` to completely
+│ specify the remote repository, or explicitly set the remote URL by setting `repolink`
+│ via `makedocs(format = HTML(repolink = "..."), ...)`.
+└ @ Documenter.HTMLWriter ~/.julia/packages/Documenter/AXNMp/src/html/HTMLWriter.jl:833
+┌ Warning: For 17 @example blocks, the 'text/html' representation of the resulting
+│ object is above the threshold (example_size_threshold: 8192 bytes).
+│ - 17 blocks had 'image/png' fallback image representation available, using that.
+│   On pages: generated/admm.md, generated/convex_branch_flow.md, generated/experiments.md, generated/mpc_rolling_horizon.md, generated/nash_diagonalization.md, generated/pricing_dlmp.md, generated/prosumer_welfare.md, generated/socp_applicability.md, generated/stackelberg_benders.md, generated/stochastic_pv_demand.md
+└ @ Documenter.HTMLWriter ~/.julia/packages/Documenter/AXNMp/src/html/HTMLWriter.jl:915
+┌ Warning: Generated search index over size_threshold_warn limit:
+│     Generated file size: 784.64 (KiB)
+│     search_size_threshold_warn: 500.0 (KiB)
+│     Search index file:   build/search_index.js
+└ @ Documenter.HTMLWriter ~/.julia/packages/Documenter/AXNMp/src/html/HTMLWriter.jl:931
+[ Info: Automatic `version="0.1.0"` for inventory from ../Project.toml

@@ -23,11 +23,11 @@ files_reviewed_list:
   - scripts/thesis_caseA.jl
   - test/test_ac_oracle.jl
 findings:
-  critical: 1
-  warning: 2
+  critical: 0
+  warning: 0
   info: 1
   total: 4
-status: issues_found
+status: clean
 ---
 
 # Phase 28: Code Review Report
@@ -216,3 +216,9 @@ currently not called out, unlike the other three documented blind spots).
 _Reviewed: 2026-09-30T10:03:56Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Iteration 2 (orchestrator re-review)
+
+CR-01 (fbc1e35): welfare gap recomputed by running REPRO-01 (≈+0.2630%), restated in the assumptions page, repro script, FRAMEWORK_GUIDE.html, PROJECT.md, RESTATEMENT-SUMMARY. WR-01 (92e8f3b): DSO_BAND_HI 7.211125525764296→7.229422341375 from regenerated findings.txt, provenance comment true. WR-02 (efaf58e): attribution regex requires ID shapes; selftest 3/3; live audit exit 0. Post-fix at d8ccc1d: suite 30703/0/0/5 (uncontaminated), docs build exit 0. IN-01 carried forward.
