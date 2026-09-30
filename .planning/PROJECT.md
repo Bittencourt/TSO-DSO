@@ -183,6 +183,22 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 28 (Goldens Re-Derivation & Thesis Reproduction Restatement) COMPLETE 2026-09-30.**
+FIX-11 validated: a mechanical, self-testing audit script confirms every golden moved across
+Phases 26-27 was re-derived with a stated cause (`phases/28-*/28-CROSS-PHASE-AUDIT.md`); the
+v2.1 thesis reproduction was re-run against the corrected Phase 26/27 model — the DSO-surplus
+sign flip and prosumer-surplus decrease reproduce unchanged, and the v2.1 "knife-edge-fragile"
+population-scale-sensitivity characterization is retired by measurement (flake rate
+13/20->1/20, sign-flip survival 2/5->5/5); EXACT-04 and the SOC-relaxation applicability maps
+were re-verified under both the default Gan-Low copy and the thesis-literal copy, correcting a
+stale test comment that had conflated the two exactness gates; MPC truth-settlement and DLMP
+naming restatements (deferred from Phase 27) are complete. Full suite certified at an EXACT
+match to the Phase 27 close baseline (30703 pass / 0 fail / 0 error / 5 broken); the full
+Documenter/Literate docs build is green after fixing two genuine pre-existing bugs (a latent
+`DimensionMismatch` in `prosumer_welfare.jl`'s SOC plot, `api.md`'s HTML size threshold).
+Every headline old->new number restated this phase, with its named cause, is consolidated in
+[`28-RESTATEMENT-SUMMARY.md`](phases/28-goldens-re-derivation-thesis-reproduction-restatement/28-RESTATEMENT-SUMMARY.md).
+
 **Phase 27 (Integer Planning & Pricing Certificate Correctness) COMPLETE 2026-09-29.** FIX-06..10 validated:
 T>1 joint Benders recourse, DLMP `cone`/`drop` naming, hybrid per-branch exactness floor, FIT/MPC settlement
 on AC physics (violations reported), ALMOST_OPTIMAL flake bounded. Suite 30703/0/0/5.
