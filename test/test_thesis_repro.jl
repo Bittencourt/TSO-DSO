@@ -56,16 +56,30 @@
 # this decoupling argument -- NOT by the refuted "sweep solves 5/5 everywhere" assumption that
 # figure was originally projected from. The band WIDENS (5.5886 -> 7.2111); the sign gate
 # DSO_BAND_LO = 0.0 and every other assertion here are unchanged.
+#
+# GOLDEN BAND RE-PINNED AGAIN (Phase 28, plan 28-02 re-run the population-scale sweep against
+# the corrected Phase 26/27 model -- code review FIX WR-01, plan 28-05, re-pins the constant
+# below to match): the committed `results/repro_stability_check/findings.txt` was regenerated
+# with fresh numbers (`sign_flip_survives: true`, 5/5, flake rate 1/20 -- see
+# `28-RESTATEMENT-SUMMARY.md`), and its own "RECOMMENDED BAND:" line now computes to
+# `1.5 x max|dso| = 1.5 x 4.819615 = 7.229422341375` (the `δ=+0.050` swept point's `dso` grew
+# slightly under FIX-01/FIX-02's Gan-Low default). OLD DSO_BAND_HI = 7.211125525764296 (260823-gea,
+# above) -> NEW DSO_BAND_HI = 7.229422341375 (28-02's regenerated findings.txt), copied verbatim
+# from that file, never invented here. The pinned point (`acct.dso ~ 3.739`) sits comfortably
+# inside both the old and new band, so this re-pin does not change the test's verdict -- it only
+# restores the "copied verbatim from the committed findings.txt" provenance claim to true.
 
 @testitem "thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip (REPRO-01)" tags =
     [:thesis_repro] setup = [Phase7Fixtures] begin
     using TSODSO
 
     # ── Pinned magnitude band (committed findings.txt "RECOMMENDED BAND:" line
-    # -- DSO_BAND_LO=0.0, DSO_BAND_HI=7.211125525764296 -- copied verbatim, never invented
-    # here; re-derived by 260823-gea over the dso-trustworthy points, see header).
+    # -- DSO_BAND_LO=0.0, DSO_BAND_HI=7.229422341375 -- copied verbatim, never invented
+    # here; re-derived by 260823-gea over the dso-trustworthy points (see header), re-pinned
+    # again by code review FIX WR-01 (plan 28-05) after 28-02 regenerated findings.txt against
+    # the corrected Phase 26/27 model: OLD 7.211125525764296 -> NEW 7.229422341375).
     const DSO_BAND_LO = 0.0
-    const DSO_BAND_HI = 7.211125525764296
+    const DSO_BAND_HI = 7.229422341375
 
     feeder = ieee123_modified()
     aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)
