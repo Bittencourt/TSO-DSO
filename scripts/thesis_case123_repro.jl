@@ -29,6 +29,14 @@
 #
 # This script still runs ONLY at the exact pinned point and does not re-run the sweep.
 #
+# RESTATED IN v4.0 (Phase 28, plan 28-02): Phases 26-27 changed the model underneath this
+# script — see the `solve_welfare`/`fit_baseline` call sites below for the measured
+# PRECISION-ARTIFACT tol_gap overrides this required (Task 1's empirical verdict, never a
+# guess), and `docs/literate/thesis_reproduction_ieee123.jl`'s own "Restated in v4.0" table
+# for the full old-vs-new headline-number restatement (`fit_dso` moved materially due to
+# FIX-09/FIX-10's physics-only AC settlement of `fit_baseline`; the DSO-surplus SIGN FLIP
+# itself is unaffected).
+#
 # Run:
 #     julia --project=. scripts/thesis_case123_repro.jl
 # Figures land in  results/thesis_case123_repro/  (PDF + PNG).
@@ -220,12 +228,42 @@ println("=" ^ 72)
 #    congestion-driven infeasibility — no manual S_max-relaxed FIT solve needed here).
 # -------------------------------------------------------------------------------------------
 println("\n[1/2] Solving the DADP welfare optimum (GLB-CVX SOCP, eq 3.38)...")
-ctx, welfare_dadp, _ = solve_welfare(FEEDER, PF, aggs; T = T, λ₀ = λ₀, allow_export = true)
+# Restated in v4.0 (Phase 28, plan 28-02, Task 2 — Rule 1 auto-fix): this call site, run
+# WITHOUT any override, was measured this session (identical population/call signature to
+# Task 1's (b) measurement) to trip `assert_socp_exact!` (gap=4.384e-6, ratio=19.25 — the
+# SAME precision-floor residual Task 1 verdicted PRECISION-ARTIFACT). Not explicitly listed
+# in this plan's own interfaces section (which named only the fit_baseline call site here),
+# but empirically necessary for this script to run without throwing — the identical
+# `tol_gap_abs=tol_gap_rel=3e-9` override applied to `docs/literate/thesis_reproduction_ieee123.jl`'s
+# solve_welfare call is applied here too (never a NEW, invented tolerance).
+ctx, welfare_dadp, _ = solve_welfare(
+    FEEDER,
+    PF,
+    aggs;
+    T = T,
+    λ₀ = λ₀,
+    allow_export = true,
+    optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
+)
 acct = welfare_accounting(ctx; T = T)          # (; social, dso, prosumer)
 maxgap = ctx.meta[:socp_maxgap]                # PF-04 SOC-exactness certificate
 
 println("\n[2/2] Solving the FIT baseline (German feed-in tariff, eqs 3.24-3.28)...")
-fb = fit_baseline(FEEDER, PF, aggs; T = T, λ₀ = λ₀)
+# Restated in v4.0 (Phase 28, plan 28-02, Task 1): this call site, run WITHOUT any override,
+# was measured this session to trip `assert_socp_exact!` inside `fit_baseline`'s internal
+# SITE-3 solve_welfare re-check (gap=8.207e-7, ratio=2.50 — IDENTICAL to the same measured
+# residual `docs/literate/thesis_reproduction_ieee123.jl` and `test/test_thesis_repro.jl`'s
+# own committed golden already resolve). VERDICT: PRECISION-ARTIFACT, not genuine new
+# inexactness — the identical `tol_gap_abs=tol_gap_rel=1e-9` override is applied here too,
+# matching the OTHER two call sites exactly (never a NEW, invented tolerance).
+fb = fit_baseline(
+    FEEDER,
+    PF,
+    aggs;
+    T = T,
+    λ₀ = λ₀,
+    optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
+)
 fit_dso = fb.social_fit - fb.prosumer_surplus
 
 # ── Reactive DLMP (Phase 16, decompose_dlmp(ctx).reactive) — a plain solve_welfare ctx already
