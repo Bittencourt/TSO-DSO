@@ -173,7 +173,13 @@ therm9_p = Float64[value.(v9[1].p)...]
 defer9_p = Float64[value.(v9[2].p)...]
 batt9_ch = Float64[value.(v9[3].p_ch)...]
 batt9_dch = Float64[value.(v9[3].p_dch)...]
-batt9_soc = Float64[value.(v9[3].soc)...]
+# Phase 26 FIX-04 made `soc` T+1 long (closes the horizon on soc[T+1]); this plotting script
+# pre-dates that change. Mirroring scripts/demo_mpc_plots.jl:173's own established convention
+# for this exact situation (`[value(v.soc[t]) for t in 1:s.T]`), take only the first T points
+# so the length matches every other per-hour series plotted alongside it (Rule 1 — this is a
+# genuine consumer-side bug, not a modeling change: the T+1th point, soc AFTER hour T's
+# dispatch, is simply not plotted on this hourly-indexed figure).
+batt9_soc = Float64[value.(v9[3].soc)...][1:T]
 batt9_pv = Float64[value.(v9[3].pv_used)...]
 println(
     "  node 9 devices: A/C peaks $(round(maximum(therm9_p);digits=4)) at h$(argmax(therm9_p)-1); ",

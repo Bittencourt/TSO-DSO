@@ -224,6 +224,56 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # re-derivation, budgeted for the slower tight-tolerance solves) can re-run it directly with no
 # further prerequisite fix.
 #
+# ## Restated in v4.0 (Phase 28)
+#
+# Phases 26-27 changed the model underneath the [Thesis Case A Reproduction —
+# Real-Impedance IEEE-123](@ref) page's live solve, and this session (Phase 28, plan 28-02)
+# MEASURED (not merely re-asserted) what changed and why, per this plan's own locked
+# "measure first" discipline:
+#
+# **1. The exactness gate is now genuinely tighter (FIX-08, Phase 27).** `assert_socp_exact!`
+# switched from a flat `atol=1e-6` to a per-branch hybrid floor
+# `atol_b = max(τ_solver=2e-7, ε·ref_b)`. At this page's exact population point, re-measured
+# live this session WITHOUT any override: `solve_welfare` trips the gate at
+# gap=4.384e-6/ratio=19.25, and `fit_baseline`'s internal SITE-3 re-check trips it at
+# gap=8.207e-7/ratio=2.50. Per the `exactness-gate-hybrid-floor` project memory's own policy
+# ("never raise τ_solver/ε to hide it; measure a tighter solver `tol_gap` first"), Task 1 of
+# plan 28-02 measured that BOTH residuals are resolved cleanly by the SAME
+# `tol_gap_abs=tol_gap_rel=3e-9` (`solve_welfare`) / `1e-9` (`fit_baseline`) overrides
+# `test/test_thesis_repro.jl`'s own committed golden already carries — VERDICT:
+# PRECISION-ARTIFACT for both, confirmed empirically, not a genuine new inexactness. Both
+# overrides are now threaded through the live docs page and `scripts/thesis_case123_repro.jl`.
+#
+# **2. `fit_dso`'s magnitude moved materially — FIX-09/FIX-10 (Phase 27, plan 27-09).**
+# `fit_baseline`'s internal settlement (SITE 2) moved from a SOCP-based re-solve to a genuine
+# physics-only `ACPowerFlow(; limits=false)` settlement (F-27-09-1). Measured old vs new at
+# this exact population point:
+#
+# | Quantity | OLD (findings.txt, 2026-08-23) | NEW (this session, live) |
+# |---|---|---|
+# | `fit_dso` | ≈ -196.216447 | ≈ -286.107696 |
+# | `fb.prosumer_surplus` (`fit_prosumer`) | ≈ -40857.497 | ≈ -40857.497 (essentially unchanged, 8 sig. figs) |
+# | `acct.dso` (DADP side, unaffected by FIX-09/10) | ≈ +3.725705 | ≈ +3.739374 |
+#
+# Since `fit_prosumer` itself barely moves, the entire `fit_dso` shift is attributable to
+# `fb.social_fit`'s lossy frontier-exchange accounting changing under the new AC-physics
+# settlement, not to the per-prosumer FIT-OPT schedule. **The DSO-surplus sign flip and the
+# prosumer-surplus decrease — this page's actual pinned claims — are UNCHANGED**: `fit_dso`
+# stays negative, `acct.dso` stays positive and within `test_thesis_repro.jl`'s
+# `DSO_BAND_HI=7.211125525764296` golden band (measured `acct.dso≈3.739`, comfortably inside).
+#
+# **3. The small `acct.dso` shift (+3.7257 -> +3.7394) is FIX-01/FIX-02 (Phase 26).** The
+# default `ConvexBranchFlow()` switched from the old thesis-literal lower-band restriction to
+# the Gan-Low upper-band restriction (`26-FINDINGS.md`'s PM-01) — a small, expected shift in
+# the SOCP optimum on any fixture using the bare default, unrelated to the FIT-side change
+# above.
+#
+# **Restatement verdict, stated plainly per the locked "never hide a changed result" policy:**
+# a genuinely different number (`fit_dso`) is reported here as a FINDING with a named cause
+# (FIX-09/FIX-10's AC-settlement change), not silently re-pinned or masked by a tolerance
+# change. The reproduction's actual claim — the DSO-surplus sign flip and the prosumer
+# decrease — reproduces unchanged under the corrected Phase 26/27 model.
+#
 # ## Live-checked constants
 #
 # A small amount of live code, so this page cannot silently drift from `src/` even though it is
