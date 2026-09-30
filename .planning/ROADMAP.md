@@ -235,16 +235,17 @@ problem decomposed by Benders — certified as distinct from the joint optimum.
 
   3. The production method's answer matches the bilevel optimum on that fixture, not the joint one.
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 **Wave 1**
 
-- [ ] 29-01-PLAN.md — BILEV-01: build_bilevel_kkt/solve_bilevel! embedded-LinDistFlow KKT-MILP + benders.jl docstring relabel
+- [ ] 29-01-PLAN.md — BILEV-01: build_bilevel_kkt/solve_bilevel! embedded-LinDistFlow KKT-MILP + benders.jl docstring relabel (+ q_op curvature keyword, BLOCKER-1 revision)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 29-02-PLAN.md — BILEV-02: BilevelJuMP StrongDualityMode + brute-force certification vs. joint optimum
+- [ ] 29-02-PLAN.md — BILEV-02: BilevelJuMP StrongDualityMode + brute-force certification vs. joint optimum (corner fixture)
+- [ ] 29-04-PLAN.md — BILEV-02 BLOCKER-1 remediation: non-degenerate (interior-response) certification fixture, SOS1 branch-switch assertion, z≡0 mutation guard
 
 **Wave 3** *(phase-closing gate, blocked on Wave 1-2 completion)*
 
