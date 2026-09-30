@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: ready_to_plan
-stopped_at: Phase 27 complete (9/9) — ready to discuss Phase 28
-last_updated: 2026-09-29T14:10:38.581Z
-last_activity: 2026-09-29 -- Phase 27 execution started
+status: executing
+stopped_at: Wrote v4.0 ROADMAP.md (12 phases, 26-37) + REQUIREMENTS.md traceability (37/37 requirements mapped, no orphans); STATE.md updated to reflect the new milestone
+last_updated: "2026-09-30T00:29:29.672Z"
+last_activity: 2026-09-30 -- Phase 28 execution started
 progress:
   total_phases: 12
-  completed_phases: 1
-  total_plans: 26
+  completed_phases: 2
+  total_plans: 34
   completed_plans: 29
-  percent: 8
+  percent: 17
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 28 — goldens re derivation & thesis reproduction restatement
+**Current focus:** Phase 28 — Goldens Re-Derivation & Thesis Reproduction Restatement
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-29
+Phase: 28 (Goldens Re-Derivation & Thesis Reproduction Restatement) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 28
+Last activity: 2026-09-30 -- Phase 28 execution started
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
