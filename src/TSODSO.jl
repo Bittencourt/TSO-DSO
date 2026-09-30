@@ -196,6 +196,12 @@ include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP +
 include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)
 include("planning/master_integer.jl") # BendersMasterInteger binary-expansion MILP master (plan 24-01, INT-01)
 include("planning/benders.jl")      # solve_stackelberg! outer Benders loop (plan 11-02, PLAN-06)
+# NEW, independent entry point (build-once + one-shot solve, no outer loop) for the
+# GENUINELY bilevel TSO-DSO variant (BILEV-01, plan 29-01) — needs only follower.jl's/
+# master.jl's ALREADY-LOADED sibling files transitively (ModelContext, powerflow,
+# solver); it does not itself depend on follower.jl/master.jl/benders.jl at load time,
+# positioned here purely for diff-locality with the rest of planning/.
+include("planning/bilevel_kkt.jl")  # BilevelKKT / build_bilevel_kkt / solve_bilevel! (plan 29-01, BILEV-01)
 include("planning/coupling.jl")     # SharedTransmission per-distributor views (plan 13-01, NASH-01)
 include("planning/nash.jl")         # NashTrace/run_nash! outer Gauss-Seidel loop (plan 13-02, NASH-02/03/04)
 

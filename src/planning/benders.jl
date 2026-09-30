@@ -6,6 +6,12 @@
 # 11-01) into a single-distributor Stackelberg equilibrium (PLAN-06).
 # OWNER: plan 11-02.
 #
+# HONEST RELABELLING (Phase 29, BILEV-01 API decision, comment/docstring-only diff):
+# despite its "Stackelberg" name, `solve_stackelberg!` solves THE INTEGRATED PROBLEM,
+# BENDERS-DECOMPOSED, not a genuinely bilevel game — see `solve_stackelberg!`'s own
+# docstring below and `src/planning/bilevel_kkt.jl`'s module header for the genuinely
+# bilevel variant and why plain Benders is invalid there.
+#
 # THE OUTER ORCHESTRATOR (mirrors src/admm/solve_admm.jl's own shape: boundary guards ->
 # build subproblems ONCE, outside the loop -> iterate -> fail-loud maxiter cap). This file
 # builds NO JuMP model of its own — it only calls the three already-validated build_*
@@ -530,6 +536,17 @@ Solve the single-distributor Stackelberg equilibrium (flexibility-investment lea
 transmission-reinforcement follower, operational welfare oracle) end-to-end via a
 hand-rolled Benders loop (PLAN-06), converging to a documented relative UB/LB gap
 tolerance or raising loudly on iteration-cap exhaustion (D-10).
+
+**Honest relabelling (Phase 29, BILEV-01 API decision):** this function solves THE
+INTEGRATED PROBLEM, BENDERS-DECOMPOSED — the follower's own true cost is fed directly
+into the leader's Benders epigraph, which is only valid because leader and follower
+share the same underlying objective here (there is no separate tariff wedge). It is
+NOT a genuinely bilevel game, despite the "Stackelberg" name. For a genuinely bilevel
+TSO-DSO variant, where the follower minimizes its OWN cost `c(z) - pi_tariff*z` that
+differs from the leader's own valuation of `z`, see
+[`solve_bilevel!`](@ref)/[`build_bilevel_kkt`](@ref) (`src/planning/bilevel_kkt.jl`,
+plan 29-01) — a single-level KKT-MILP, not a Benders loop, because plain Benders is
+invalid on that genuinely divergent-objective game (see that file's module header).
 
 # Algorithm
 
