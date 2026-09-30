@@ -201,12 +201,12 @@ Phases 26–27 was re-derived with an explanation (goldens themselves are re-der
 
   3. The v2.1/v3.0 SOCP-inexactness findings (e.g. EXACT-04) are re-verified against the corrected
      exactness copy and restated if the verdict changed.
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 28-01-PLAN.md — SC-1: cross-phase golden-move audit script + 28-CROSS-PHASE-AUDIT.md
+- [x] 28-01-PLAN.md — SC-1: cross-phase golden-move audit script + 28-CROSS-PHASE-AUDIT.md
 - [ ] 28-02-PLAN.md — SC-2: REPRO-01 thesis-reproduction re-run + restatement + figure regen
 - [ ] 28-03-PLAN.md — SC-3: EXACT-04 dual-mode (cone vs AC-optimality) re-verification + restatement
 
@@ -409,7 +409,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 19–25 | v3.0 | 43/40 | Complete (1 gap accepted) | 2026-08-24 |
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
-| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 0/5 | Planned | - |
+| 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 1/5 | In Progress|  |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 0/TBD | Not started | - |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
