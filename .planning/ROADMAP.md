@@ -444,7 +444,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
-| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete   | 2026-10-01 |
+| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |

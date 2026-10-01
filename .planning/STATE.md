@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
-stopped_at: Completed 30-06-PLAN.md (Phase 30 CERTIFIED COMPLETE)
-last_updated: "2026-10-01T15:45:15.771Z"
+status: ready_to_plan
+stopped_at: Phase 30 complete (6/6) — ready to discuss Phase 31
+last_updated: 2026-10-01T15:58:07.976Z
 last_activity: 2026-10-01
 progress:
   total_phases: 12
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 31 — GNE Nash Fixture, Integer N>1 & Planning Docs Refresh (next)
+**Current focus:** Phase 31 — gne nash fixture, integer n>1 & planning docs refresh
 
 ## Current Position
 
-Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — COMPLETE
-Plan: 6 of 6
-Status: Complete — certified full suite 31091/0/0/5 (+220 over Phase-29 baseline); see
+Phase: 31
+Plan: Not started
+Status: Ready to plan
   `.planning/phases/30-socp-in-the-loop-benders-on-a-multi-bus-feeder/30-FINDINGS.md`
 Last activity: 2026-10-01
 
@@ -115,7 +115,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 137 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 143 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -165,6 +165,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 27 | 9 | - | - |
 | 28 | 6 | - | - |
 | 29 | 4 | - | - |
+| 30 | 6 | - | - |
 
 **Recent Trend:**
 
