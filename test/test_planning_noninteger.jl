@@ -23,9 +23,10 @@
 # this guard (T-14-04, Repudiation).
 
 @testitem "planning PVAL-04: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
-    using JuMP: all_variables, is_binary, is_integer
+    using JuMP: all_variables, is_binary, is_integer, num_constraints, VariableRef
+    import JuMP: MOI
 
     # Toy fixture (verbatim from test/test_planning_certification.jl lines 176-181, the
     # SAME instance already used elsewhere in the planning test suite).
@@ -79,6 +80,32 @@
                 α_op_lb = -5.0,
                 α_x_lb = 0.0,
             ).model,
+        # Phase 29 (BILEV-01): `build_bilevel_kkt` is a PLANNING-layer builder whose
+        # follower complementarity is modelled as `MOI.SOS1` pairs, NOT binary/integer
+        # variables — the SOS1ToMILPBridge introduces binaries only at solve time. So at
+        # the JuMP-model level it is genuinely binary-free and is NOT on `EXEMPT`; the
+        # SOS1 assertion after the loop verifies that it is a MILP *via SOS1*, so a future
+        # switch to explicit binaries (or a loss of the complementarity) fails loudly.
+        "build_bilevel_kkt" =>
+            () -> begin
+                f = PlanningFixtures.bilevel_toy_fixture()
+                build_bilevel_kkt(
+                    f.feeder,
+                    LinDistFlow();
+                    T = f.T,
+                    agg_bus = f.agg_bus,
+                    corridor_cap = f.corridor_cap,
+                    x_inv_max = f.x_inv_max,
+                    c_inv = f.c_inv,
+                    c_op = f.c_op,
+                    pi_tariff = f.pi_tariff,
+                    q_op = f.q_op,
+                    c_y = f.c_y,
+                    y_max = f.y_max,
+                    v_d = f.v_d,
+                    d_max = f.d_max,
+                ).model
+            end,
     )
 
     # D-06: the PVAL-04 exemption is a per-builder carve-out, not a conditional one.
@@ -118,6 +145,13 @@
             )
         end
     end
+
+    # Phase 29: the bilevel builder's complementarity lives in SOS1 constraints.
+    @test num_constraints(
+        registry["build_bilevel_kkt"](),
+        Vector{VariableRef},
+        MOI.SOS1{Float64},
+    ) > 0
 
     # Source-scan tripwire (T-14-04): a future new build_* function under src/planning/
     # cannot silently skip this registry — the found-set must equal the registry's keys.
