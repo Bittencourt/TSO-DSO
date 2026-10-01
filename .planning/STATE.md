@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: verifying
-stopped_at: Completed 29-03-PLAN.md (phase close)
-last_updated: "2026-10-01T02:19:08.105Z"
+status: ready_to_plan
+stopped_at: Phase 29 complete (4/4) — ready to discuss Phase 30
+last_updated: 2026-10-01T02:25:35.782Z
 last_activity: 2026-10-01
 progress:
   total_phases: 12
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 29 — Genuine Bilevel TSO-DSO Variant
+**Current focus:** Phase 30 — socp in the loop benders on a multi bus feeder
 
 ## Current Position
 
-Phase: 29 (Genuine Bilevel TSO-DSO Variant) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 30
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-10-01
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
@@ -114,7 +114,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 133 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 137 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -163,6 +163,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 26 | 20 | - | - |
 | 27 | 9 | - | - |
 | 28 | 6 | - | - |
+| 29 | 4 | - | - |
 
 **Recent Trend:**
 
