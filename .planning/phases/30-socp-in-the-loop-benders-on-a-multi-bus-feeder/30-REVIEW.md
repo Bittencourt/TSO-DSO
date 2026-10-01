@@ -1,375 +1,265 @@
 ---
 phase: 30-socp-in-the-loop-benders-on-a-multi-bus-feeder
-reviewed: 2026-10-01T14:05:47Z
+reviewed: 2026-10-01T15:17:45Z
 depth: standard
-iteration: 2
-files_reviewed: 14
+iteration: 3
+files_reviewed: 17
 files_reviewed_list:
-  - src/planning/feasibility_oracle.jl
-  - src/planning/ac_recheck.jl
   - src/planning/benders.jl
+  - src/planning/nash.jl
   - src/planning/master.jl
   - src/planning/trace.jl
+  - src/planning/ac_recheck.jl
+  - src/planning/feasibility_oracle.jl
   - src/planning/subproblem.jl
-  - test/fixtures_planning_ieee13_short.jl
+  - test/test_planning_nash.jl
+  - test/test_planning_inexact_policy.jl
   - test/test_planning_ac_recheck.jl
   - test/test_planning_alpha_bounds_stackelberg.jl
+  - test/test_planning_master.jl
   - test/test_planning_benders_ieee13.jl
   - test/test_planning_feasibility_oracle.jl
-  - test/test_planning_inexact_policy.jl
-  - test/test_planning_master.jl
-  - test/test_planning_oracle.jl
+  - docs/literate/integer_investment.jl
+  - src/planning/master_integer.jl (call-chain only: add_ll_cut!/build_master_integer, needed to verify CR-02)
 findings:
-  critical: 2
-  warning: 6
-  info: 4
-  total: 12
+  critical: 0
+  warning: 3
+  info: 3
+  total: 6
 status: issues_found
 ---
 
-# Phase 30: Code Review Report (iteration 2)
+# Phase 30: Code Review Report (iteration 3, final)
 
-**Reviewed:** 2026-10-01T14:05:47Z
-**Depth:** standard (plus targeted cross-file call-site tracing of `solve_planning_oracle!` / `solve_stackelberg!`)
-**Files Reviewed:** 14
+**Reviewed:** 2026-10-01T15:17:45Z
+**Depth:** standard, plus call-chain tracing into `master_integer.jl` (`add_ll_cut!`, `build_master_integer`) to check the CR-02 validity argument
+**Files Reviewed:** 17 (16 in scope, plus 1 traced call-chain file)
 **Status:** issues_found
 
 ## Summary
 
-This pass re-reviews the code after fix commits 2bdefc2..083f7c3. Most iteration-1 fixes
-hold up when checked independently:
+This pass re-reviews the code after fix commits 12bfef2..22b7eb5. No blockers remain. The
+items marked "requires human verification" were checked one by one:
 
-- **CR-01/CR-03.** `solve_planning_oracle!` now returns an explicit `exactness` verdict. The
-  battery-complementarity gate runs on every result it returns, including `:report` results.
-  `socp_relaxation_gap` is only read when an `:l` stash exists.
-- **Return shape.** The change is additive (two new trailing NamedTuple fields). No caller in
-  `src/`, `docs/` or `test/` destructures the result by position, so nothing breaks.
-- **WR-01 catch block.** Only an untrusted solve with a status in
-  `ORACLE_INFEASIBLE_STATUSES` reaches the feasibility branch. Everything else is rethrown.
-- **WR-06.** The stall guard is correct.
-- **WR-10.** Removing the second solve is correct: the incumbent's verdict comes from the
-  solve that set UB.
-- **WR-07.** The bracket is no longer circular. The lower side `LB − ε ≤ J*` really tests
-  cut validity against an independent model.
+1. **CR-02 (`_oracle_or_infeasible`).**
+   - The classification is correct. Non-`ErrorException`s rethrow, and so do trusted-solve
+     gate throws (exactness under `:throw`, complementarity) and non-infeasibility statuses.
+   - The `:report` argument holds. Inexact and exact points both return the relaxation's
+     value, so the corner search minimizes the convex function `Q_R` exactly, and
+     `min Q_R ≤ min Q_true`.
+   - A lower `Q_nu` gives a weaker Laporte-Louveaux (LL) cut **only while `Q_nu ≥ L`**. Two
+     gaps remain, below:
+     - that precondition is not enforced (WR-02);
+     - the corner search maps `ALMOST_INFEASIBLE` to `+Inf` without the confirmation step
+       the outer loop applies (WR-01).
+2. **CR-01 (Nash).** Resolved.
+   - `run_nash!` and `run_nash_probe` default to `:strict` and validate the policy before any
+     solve. The policy is forwarded to every best response.
+   - `certificates` and `any_relaxation_only` are populated from each returned result, after
+     `_select_incumbent`, so the certificate matches the committed `z`.
+3. **WR-01 (`_select_incumbent`).** Well-defined and honest.
+   - `exact.UB ≥ relax.UB`. Near convergence the gap test is monotone in UB, so a converged
+     certified point implies the loop's own test fires. Rule 2 cannot be starved.
+   - `exact_incumbent.gap` pairs a true upper bound with a valid LB.
+   - One cosmetic gap (IN-02): the trace's last row is not updated when the point is swapped.
+4. **WR-02 (`:reject`).** Sound.
+   - Relaxation cuts under-estimate `Q_R ≤ Q_true`, so appending them keeps LB valid. "Reject"
+     still means the trial never reaches UB or the incumbent.
+   - The stall backstop is correct for both master types. If the master re-proposes `z`
+     after cuts that are tight at `z`, then `LB = c_y·y + Q_R(z)` is the cost of a feasible
+     relaxed point, so that point *is* the relaxation optimum. This also holds for
+     `BendersMasterInteger` with a different `b`.
+   - Termination is guaranteed by `max_iter` (fail-loud). The backstop only shortens the
+     period-1 repeat.
+5. **WR-05 (`lb_slack`).** The proof in the `ALPHA_LB_REJECTION_TOL` docstring is correct:
+   `cost_k ≥ optimum − gap − gap_k ≥ α − (S+gap) − tol_k`.
+   - Yes, an over-high bound can now escape both layers. Any bound in
+     `(true_min, optimum + S]` is accepted at build time, and by construction never fires at
+     runtime.
+   - Nothing accounts for its effect on LB (WR-03).
+6. **WR-06 (`_feas_cut_class`).** A weak cut is still valid (convexity of `V`, `V = 0` on the
+   feasible set).
+   - The loop cannot cycle unboundedly: period-1 repeats are caught, and anything else ends at
+     `max_iter`.
+   - For `v` below the master's own ~1e-7 feasibility tolerance, though, a "weak" cut cannot
+     exclude `z_k`. That sub-band is effectively a fatal error deferred by one iteration
+     (IN-03).
 
-Two problems remain at blocker level. Both concern the main question for this pass: can an
-untrusted result still become a cut, UB or incumbent?
-
-1. **Nash ignores the new certificate.** The default policy changed from "inexact means
-   throw" (before Phase 30) to `:certify_incumbent`. The only production multi-distributor
-   caller, `run_nash!`, never reads `ub_relaxation_only` or `incumbent_exactness`. A Nash
-   sweep therefore silently commits relaxation-only best responses that used to fail loudly.
-2. **The integer-master corner search bypasses the policy.** Its recourse search
-   (`corner_recourse`) still calls the oracle in `:throw` mode. At T=1 it crashes under the
-   default policy. At T>1 its bare `catch` turns any inexact or complementarity throw into
-   `+Inf`. The minimum it returns is then too high, which can make the Laporte-Louveaux (LL)
-   cut invalid.
-
-The warnings cover:
-
-- the incumbent comparison, which mixes exact and relaxation-only costs;
-- `:reject`, which can never make progress;
-- a post-convergence AC tooling failure, which discards a converged result;
-- the meaning of `ac_report.ok`;
-- a gap between the build-time rejection slack and the runtime floor tolerance;
-- `FEAS_CUT_V_TOL`, which can wrongly stop the run near a curved feasibility boundary.
+Also verified:
+- **WR-03 (`_incumbent_ac_report`).** The success and failure NamedTuples have identical
+  field sets.
+- **WR-04.** A docstring-only change, now accurate.
+- **IN-02.** `solve_feasibility_oracle!` forwards `attempts_out` correctly.
+- **IN-03.** The guards now reject unknown Symbols.
 
 ## Narrative Findings (AI reviewer)
 
-## Critical Issues
-
-### CR-01: `run_nash!` silently accepts relaxation-only best responses — the new default policy turned a loud failure into a silent one, and no production caller reads the certificate
-
-**File:** `src/planning/benders.jl:826` (default `inexact_policy = :certify_incumbent`), `src/planning/benders.jl:1317-1358` (certificate only on the return value), `src/planning/nash.jl:475-489`
-
-**Issue:**
-- **Before Phase 30.** Every `solve_stackelberg!` call threw at the first SOCP-inexact
-  oracle solve, because `solve_planning_oracle!` threw unconditionally.
-- **Now.** The default `:certify_incumbent` accepts inexact iterates as cuts, as UB, and as
-  the incumbent. It only flags this on the result: `ub_relaxation_only`,
-  `incumbent_exactness`, `ac_report`.
-- **Nash never sees the flags.** `run_nash!` (nash.jl:475) calls `solve_stackelberg!`
-  without `inexact_policy`, so it gets the new default. It then reads only `result_i.z` and
-  `result_i.follower`. A grep of `src/planning/nash.jl` and `coupling.jl` finds no reference
-  to `ub_relaxation_only`, `incumbent_exactness` or `ac_report`.
-- **Consequence.** A best response whose UB certifies only the SOC relaxation, and whose
-  incumbent is physically unverified, is written into the shared model by `write_back!`. It
-  feeds the Nash residual, and the returned equilibrium carries no marker that any part of
-  it is relaxation-only.
-- **This is the same bypass CR-02 was meant to close.** The certificate is honest on the
-  `solve_stackelberg!` result, but the one production consumer drops it. The pre-Phase-30
-  fail-loud guarantee for Nash is gone without notice.
-- **Other callers.** `docs/literate/integer_investment.jl` (lines 289, 413) also inherits
-  the new default and does not check the flags.
-
-**Fix:** Do not change Nash's behaviour silently. Either pin the old behaviour, or carry the
-certificate through:
-```julia
-# nash.jl, inside the sweep
-result_i = solve_stackelberg!(spec.feeder, spec.pf, spec.aggregators;
-    ...,
-    follower = DistributorView(shared, i),
-    inexact_policy = get(spec, :inexact_policy, :strict),   # preserve pre-Phase-30 semantics by default
-)
-result_i.ub_relaxation_only && error(
-    "run_nash!: distributor $i best response (sweep $k) is SOCP-inexact " *
-    "(incumbent maxgap=$(result_i.incumbent_socp_maxgap)); its UB certifies the " *
-    "relaxation only. Pass inexact_policy=:certify_incumbent explicitly and record it.")
-```
-If certified-relaxation equilibria are meant to be allowed, add an `ub_relaxation_only`
-column to `NashTrace` and a run-level flag on `run_nash!`'s return value.
-
-### CR-02: The integer-master recourse path ignores `inexact_policy` — T=1 crashes under the default policy, T>1 silently computes an over-estimated `Q_nu` (invalid LL cut)
-
-**File:** `src/planning/benders.jl:216` (`_corner_recourse_ternary`), `src/planning/benders.jl:349-356` (`_corner_recourse_joint`), `src/planning/benders.jl:1237`
-
-**Issue:** `ll_cut_recourse(::BendersMasterInteger, ...)` runs on every optimality iteration,
-after the outer loop has already accepted the iterate under the active `inexact_policy`. It
-calls `corner_recourse`, which calls `solve_planning_oracle!(oracle, z)` with the default
-`on_inexact = :throw`.
-
-- **T == 1.** Any corner-search trial in the SOC-inexact region throws `"SOCP relaxation
-  INEXACT"`. The whole run aborts under `:certify_incumbent`, the documented default. The
-  policy is honoured for the outer trial and then ignored one call later.
-- **T > 1.** The bare `catch` at line 351 turns the throw into `Qz = Inf, feas_cut =
-  nothing`, i.e. "oracle-infeasible, no certificate". That covers inexact solves, real
-  complementarity violations, and even `InterruptException`. The Kelley/bisection loop then
-  minimizes `Q` only over the exact points. That minimum is at least the true
-  `min_{z∈[0,y_inv]^T} Q(z)`, and strictly larger whenever the minimizer is in the inexact
-  region. `add_ll_cut!` requires `Q_nu` to be the exact per-corner minimum; an over-estimate
-  over-constrains θ at that corner permanently, because cut rows are never retracted. The
-  run can then converge to a wrong integer solution with no error.
-
-Before Phase 30, the outer loop crashed at the first inexact iterate, so this mismatch was
-rarely reached. The new default makes it reachable.
-
-**Fix:** Pass the policy into the recourse evaluator, and stop treating every exception as
-"infeasible":
-```julia
-function _corner_recourse_joint(oracle, follower, y_inv, T; iters = 100, on_inexact = :throw)
-    ...
-    orr = try
-        solve_planning_oracle!(oracle, z; on_inexact = on_inexact)
-    catch e
-        e isa ErrorException || rethrow()                      # never swallow InterruptException etc.
-        is_solved_and_feasible(oracle.model; dual = true) && rethrow()   # gate failure, not infeasibility
-        termination_status(oracle.model) in ORACLE_INFEASIBLE_STATUSES || rethrow()
-        return (; Qz = Inf, gradQ = nothing, feas_cut = nothing)
-    end
-```
-Apply the same change to `_corner_recourse_ternary`. Then call
-`ll_cut_recourse(master, oracle, follower, lb_res, Q_nu_iterate; on_inexact = inexact_policy === :strict ? :throw : :report)`
-from `solve_stackelberg!`.
-
 ## Warnings
 
-### WR-01: Incumbent selection compares relaxation-only costs against certified costs, so an inexact iterate can displace an exact incumbent and downgrade the whole result to `ub_relaxation_only`
+### WR-01: The corner search maps `ALMOST_INFEASIBLE` to `+Inf` without the confirmation the outer loop requires, so a false infeasibility over-estimates `Q_nu` and makes the LL cut invalid
 
-**File:** `src/planning/benders.jl:1245-1257`
+**File:** `src/planning/benders.jl:123-124`, `src/planning/benders.jl:280-289`, `src/planning/benders.jl:324-325`, `src/planning/benders.jl:475-476` (compare `src/planning/benders.jl:1346-1353`)
 
-**Issue:** `cost_k < UB` is evaluated the same way for exact and inexact iterates. For an
-inexact iterate, `cost_k` uses `W_R(z_k) ≥ W_true(z_k)`, so it is a lower estimate of that
-point's physical cost. An inexact iterate can therefore replace an exact incumbent whose
-physical cost is lower than the inexact point's true cost.
+**Issue:**
+- **Two different rules.**
+  - The outer loop treats an oracle status in `ORACLE_INFEASIBLE_STATUSES` (which includes
+    `ALMOST_INFEASIBLE`, a reduced-accuracy near-certificate) only as a *claim*. It confirms
+    the claim with the slack-min oracle and raises a named "oracles disagree" error when
+    `v ≤ FEAS_CUT_V_NOISE`. The comment at lines 120-122 calls that check "what actually
+    confirms (or refutes, loudly)".
+  - `_oracle_or_infeasible` has no confirmation step: any status in that tuple becomes
+    `nothing`, which means `Q = +Inf`.
+- **Its docstring is wrong.** It says it applies "the same classification
+  `solve_stackelberg!`'s own outer oracle catch applies". It does not.
+- **Over-estimating `Q_nu` is the dangerous direction.** A false `+Inf` is a feasible `z` that
+  Clarabel flags `ALMOST_INFEASIBLE` after the retry ladder; it is most likely near the
+  network boundary, where the welfare-maximizing import usually sits.
+  - In the ternary branch it shrinks `hi = m2` and discards a region that may contain the
+    minimizer.
+  - In the joint branch it removes points from the minimization.
+  - Either way the returned `Q_nu` is above the true corner minimum. `add_ll_cut!` then
+    over-constrains θ at that corner permanently, because cut rows are never retracted.
+  - This is the same failure class that iteration-2 CR-02 fixed for the bare `catch`, now
+    narrowed to one status.
 
-The run then returns `ub_relaxation_only = true` and a relaxation-only `UB`. A physically
-certified incumbent was found and is thrown away. The convergence test `gap <= tol` is also
-measured against this relaxation UB, not the best certified one.
-
-**Fix:** Track a separate exact incumbent (`UB_exact`, `y_best_exact`, `z_best_exact`)
-updated only when `oracle_res.exactness !== :inexact`. Report both. When an exact incumbent
-exists, prefer it for the returned `(y, z)` and for the certificate, or at least return it
-alongside, so callers can choose a certified point.
-
-### WR-02: `:reject` can never get past an inexact trial — it is `:strict` delayed by one iteration, under a misleading name
-
-**File:** `src/planning/benders.jl:1128-1170`
-
-**Issue:** A rejection adds no row to the master. The deterministic master LP re-proposes the
-same `z` next iteration, and the WR-06 guard then raises `":reject stalled"`. So any run that
-meets an inexact trial under `:reject` ends with an error after one wasted iteration. The
-test confirms this (stall at iteration 8, 7 checkpoints). The docstring still describes it
-as a policy that "skips the inexact trial".
-
-A useful and sound version exists. The relaxation's cuts are valid lower bounds whatever the
-exactness verdict, so they can be appended. Only the iterate's ability to become UB or the
-incumbent needs to be blocked.
-
-**Fix:** Under `:reject`, append the `:op`/`:x` optimality cuts (so the master moves on) but
-skip the incumbent update and record `policy_action = :rejected`:
+**Fix:** Treat only certified infeasibility as `+Inf` in the corner search. Either confirm
+the claim with the slack-min oracle (thread `feas_oracle` through `ll_cut_recourse`), or
+exclude the reduced-accuracy status:
 ```julia
-if oracle_res.exactness === :inexact && inexact_policy === :reject
-    add_optimality_cut!(master, :op, -oracle_res.cost, oracle_res.π, lb_res.z)
-    add_optimality_cut!(master, :x, follower_res.cost, follower_res.π_s, lb_res.z)
-    # no UB / incumbent update; trace row cut_type = :rejected
-    continue
-end
-```
-Keep the stall guard as a backstop. If the current fail-fast behaviour is intended, rename
-or document `:reject` as "`:strict` with one diagnostic iteration".
+const CORNER_INFEASIBLE_STATUSES =
+    (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE)
 
-### WR-03: A post-convergence AC tooling failure throws away a converged Benders result
-
-**File:** `src/planning/benders.jl:1318-1324`, `src/planning/ac_recheck.jl:105-117`
-
-**Issue:** When the incumbent is inexact, `ac_recheck_incumbent` runs after convergence. If
-Ipopt does not reach `LOCALLY_SOLVED`, it rethrows an `ErrorException`. `solve_stackelberg!`
-does not catch it, so the converged result, trace and certificate are all lost, and the
-diagnostic's tooling failure is reported as the run's failure. This contradicts the
-solve_stackelberg! docstring (line 788: "NEVER thrown, never silently passed"). The AC
-re-check is the slowest and least robust solve in the pipeline (Ipopt on a nonconvex model).
-
-**Fix:** Catch at the call site and report the failure in `ac_report`:
-```julia
-ac_report = if ub_relaxation_only
-    try
-        ac = ac_recheck_incumbent(feeder, aggregators, λ₀, T, z_best)
-        (; ac..., socp_welfare = incumbent_welfare, welfare_gap = incumbent_welfare - ac.ac_welfare)
+function _oracle_or_infeasible(oracle, z; on_inexact::Symbol, feas_oracle = nothing)
+    return try
+        solve_planning_oracle!(oracle, z; on_inexact = on_inexact)
     catch e
         e isa ErrorException || rethrow()
-        (; ok = false, violations = nothing, p_import = nothing, ac_welfare = NaN,
-           raw_status = "AC_RECHECK_FAILED", error = sprint(showerror, e),
-           socp_welfare = incumbent_welfare, welfare_gap = NaN)
+        is_solved_and_feasible(oracle.model; dual = true) && rethrow()
+        ts = termination_status(oracle.model)
+        ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
+        if ts == MOI.ALMOST_INFEASIBLE
+            feas_oracle === nothing && rethrow()   # unconfirmed near-certificate: fail loud
+            _feas_cut_class(solve_feasibility_oracle!(feas_oracle, z).v) === :disagree && rethrow()
+        end
+        nothing
     end
-else
-    nothing
 end
 ```
+Then correct the docstring's "same classification" claim.
 
-### WR-04: `ac_report.ok` and its docstring overclaim — a violation of a limits-DROPPED re-optimized dispatch does not show the incumbent is physically unrealizable
+### WR-02: The CR-02 validity argument ("a weaker cut, never an invalid one") holds only when `Q_nu ≥ L`, and nothing enforces that; `add_ll_cut!`'s docstring math is also wrong
 
-**File:** `src/planning/ac_recheck.jl:44-47`, `src/planning/ac_recheck.jl:131-171`
-
-**Issue:** The AC model re-optimizes welfare with all thermal and voltage limits removed.
-Since the optimizer is never told about the limits, it will cross any binding limit whenever
-welfare improves by doing so. `ok = false` therefore only says that the limits-free AC
-optimum violates a limit. It does not say that no AC-feasible dispatch exists at `z`.
-
-The docstring says "A violation means the SOCP relaxation's answer at `z` is not physically
-realizable as-is", which does not follow. It will raise false alarms at exactly the
-incumbents that matter: those where a limit binds. The 10δ tolerance is fine as a noise
-floor. The problem is what the check means, not how tight it is.
-
-**Fix:**
-- Make the check a real feasibility test. First solve `ACPowerFlow(; limits = true)` at the
-  pinned `z`. `LOCALLY_SOLVED` there shows a limit-respecting AC dispatch exists, so set
-  `ok = true`.
-- Fall back to the limits-dropped model only for the diagnostic magnitudes.
-- Reword the docstring to state that `ok = false` from the fallback is "not certified", not
-  "not realizable".
-
-### WR-05: The build-time rejection slack and the runtime floor tolerance differ, so an explicitly accepted bound can later fire the runtime "modeling bug" error
-
-**File:** `src/planning/master.jl:556-557`, `src/planning/master.jl:587-588`, `src/planning/benders.jl:575-583`, `src/planning/benders.jl:1193-1198`
+**File:** `src/planning/benders.jl:223-236` (the claim), `src/planning/master_integer.jl:208` (`L = α_op_lb + α_x_lb`, never validated), `src/planning/master_integer.jl:433-438` and `:473` (the cut)
 
 **Issue:**
-- **Build time.** An explicit bound is accepted up to
-  `optimum + max(1e-6, 10·gap_derive, 1e-8·|optimum|)`.
-- **Runtime.** The floor fires when `cost_k < lb − max(1e-6, 10·gap_k, 1e-8·|cost_k|)`.
-  Here `gap_k` is the pinned oracle's own gap, which is usually much smaller than the
-  derivation solve's gap.
-- **Worked example (IEEE-13 T=4, measured numbers from the fix report).**
-  - Derivation: `gap_derive = 4.5e-6`, so the accepted slack is about `4.5e-5`.
-  - Pinned solve: `gap_k ≈ 2.8e-7`, so the runtime tolerance is about `6.1e-6`.
-  - An explicit bound at `optimum + 3e-5` passes the build-time check. If the master later
-    visits the welfare argmax, where `cost_k ≈ optimum`, the runtime floor fires as a
-    "genuine modeling bug (invalid declared lower bound)".
-- **Root cause.** The true minimum is only known to lie in about `[optimum − gap,
-  optimum + gap]`. Accepting bounds up to `optimum + 10·gap` accepts bounds that may be up to
-  about 11·gap above the true minimum, i.e. genuinely invalid ones. The two checks disagree
-  about what counts as valid.
+- **The cut and its precondition.** The cut is `θ ≥ (Q_nu − L)·D(b) + L`. At Hamming distance
+  `k` from `b^ν`, `D = 1 − k`.
+  - It is implied by `θ ≥ L` at every other corner **iff `Q_nu ≥ L`**.
+  - If `Q_nu < L`, the cut raises θ's floor at every corner with `k ≥ 2` to
+    `L + (k−1)(L − Q_nu) > L`. That is an invalid cut, not a weaker one.
+- **The fix makes this easier to reach.** CR-02 deliberately makes `Q_nu` smaller under
+  `:report` (the relaxation's per-corner minimum).
+- **Nothing checks `L`.** For `BendersMasterInteger`, `L` is the sum of two explicit,
+  never-validated bounds (`_accepted_lb_slack` returns 0 and `build_master_integer` has no
+  `bounds_ctx`).
+- **The runtime floor guard does not cover it.** It checks only the *iterate's*
+  `−W_R(z_k)` against `α_op_lb` and `follower(z_k)` against `α_x_lb`. It never checks the
+  corner *minimum* `Q_nu`, which sits at a different `z` and can be lower than every
+  visited iterate.
+- **So the claim is conditional.** "The integer cut stays valid" is true only under an
+  unchecked precondition.
+- **Docstring errors.** `add_ll_cut!`'s docstring says other corners have "`D <= -1`,
+  reduces to `θ >= L - 2k(Q_nu - L)`". Both parts are wrong: `D = 0` at `k = 1`, and the
+  reduction is `L − (k−1)(Q_nu − L)`.
 
-The rejection can still catch a clearly over-high bound: the T=8 `-5.0` case is about 11
-above the optimum. The `:auto` path, `optimum − margin`, is sound and cannot false-fire
-unless solver error exceeds `10·gap_derive + 10·gap_k`.
+**Fix:** Enforce the precondition where the cut is built, and fail loudly rather than add an
+invalid row:
+```julia
+function add_ll_cut!(master::BendersMasterInteger, b_trial, Q_nu::Real, L::Real; atol = 1e-6)
+    ...
+    Q_nu >= L - atol * max(1, abs(L)) || error(
+        "add_ll_cut!: Q_nu=$Q_nu < L=$L — the declared epigraph lower bound " *
+        "α_op_lb + α_x_lb is not a valid lower bound on the per-corner recourse; " *
+        "the LL cut would be INVALID at every corner with Hamming distance >= 2.")
+    ...
+end
+```
+Then correct the docstring reduction and state the `Q_nu ≥ L` precondition in
+`corner_recourse`'s CR-02 paragraph.
 
-**Fix:** Use one validity rule in both places. For example, accept an explicit bound only if
-`α ≤ optimum + gap_derive` (the largest value that can still be the true minimum), and treat
-anything between that and `optimum + slack` as "accepted with warning: may be invalid by up
-to Δ". Alternatively, pass `gap_derive` into `_assert_epigraph_floor` and use
-`max(tol_k, slack_derive)` so an accepted bound can never trip the runtime check.
+### WR-03: WR-05 makes bounds in `(true_min, optimum + S]` invisible to BOTH layers, but the convergence certificate is not widened, so LB can exceed the true optimum by up to `S + gap` while `gap ≤ tol` is reported
 
-### WR-06: `FEAS_CUT_V_TOL` turns a genuinely infeasible near-boundary trial into a fatal "oracles disagree" error
-
-**File:** `src/planning/benders.jl:140`, `src/planning/benders.jl:1087-1094`
+**File:** `src/planning/master.jl:584-595`, `src/planning/master.jl:617-624`, `src/planning/master.jl:141-155` (the docstring proof), `src/planning/benders.jl:720`, `src/planning/benders.jl:1606-1609`
 
 **Issue:**
-- **Why small `v` happens.** Benders feasibility cuts are Kelley cuts on the convex
-  slack-min value `V(z)`. After a cut, the master usually proposes a point on that cut's
-  plane. Where `V` is curved (voltage-driven boundaries, coupled multi-hour boundaries),
-  that point can still be infeasible, with `V` shrinking towards 0 on each successive cut.
-- **What the code does.** Once a genuinely infeasible trial has `V ≤ 1e-6` while Clarabel
-  still reports `INFEASIBLE`/`ALMOST_INFEASIBLE`, the loop raises a hard error instead of
-  continuing.
-- **Why the threshold is weakly grounded.** It is absolute, and `v` is a sum over `T` hours.
-  It was checked against only three natural cuts (smallest 3.86e-5). The T=1 thermal case
-  never reaches this regime only because `V` is linear there, so one cut is exact.
+- **The proof is right, and it is the problem.** The docstring itself says build time accepts
+  bounds "that may sit up to `S + gap` above the TRUE minimum". The new runtime tolerance,
+  `tol_k + lb_slack`, then guarantees such a bound never fires.
+- **How LB is inflated.** At the true argmin `z*`, the master's `α_op` is floored at
+  `α > −W_R(z*)`. So `LB = c_y·y + α + α_x` can exceed the true optimum by up to
+  `(S_op + gap_op) + S_x`.
+- **The certificate does not cover it.** The convergence test
+  `(UB − LB)/max(1,|UB|) ≤ tol` does not account for this, so the reported gap can
+  understate the true gap by `(lb_slack.op + lb_slack.x)/max(1,|UB|)`.
+- **It can be as large as `tol`.** `S ≥ ALPHA_LB_REJECTION_TOL = 1e-6`, which equals the
+  default `tol`. On any instance with `|UB| ≲ 1`, or with a caller-tightened `tol`, an
+  accepted bound can therefore hide a true gap up to about 2×tol. This is reached silently,
+  with no runtime signal.
+- **Measured case.** On IEEE-13 T=4 the effect is about 2.5e-8 relative, which is harmless.
+  That depends on the instance; the design does not guarantee it.
 
-The guard correctly refuses to append a cut that does not separate `z_k`. Treating that
-situation as fatal is the wrong response to a normal convergence regime.
-
-**Fix:** Handle the boundary case instead of erroring. The slack-min solve returns a
-`p_import` that is feasible to within `v`. Re-evaluate the oracle and follower at that
-repaired point, `z_rep = value.(fo.p_import)`, and take the optimality branch there; cuts
-from any feasible point are globally valid. Raise the "disagree" error only if the repaired
-point also fails. At minimum, scale the threshold by `T` and record `v` on the trace row so
-the regime can be measured.
+**Fix:** Make the build-time acceptance sound, not just consistent. Clamp an accepted explicit
+bound to the derivation's certified lower bound, so it is never above the true minimum:
+```julia
+# master.jl, explicit-bound branch after the rejection check
+α_eff = min(Float64(α_op_lb), d.optimum - alpha_lb_margin(d.optimum, d.gap))
+α_eff < α_op_lb && @warn "build_master: α_op_lb=$α_op_lb lies within the acceptance slack " *
+    "above the derived minimum; using the certified bound $α_eff" maxlog = 1
+slack_op = 0.0   # the clamped bound is sound, so the runtime floor needs no slack
+```
+Alternatively, keep the bound as given and widen the certificate:
+`converged_at(UBx) = (UBx − (LB_k − lb_slack.op − lb_slack.x)) / max(1, abs(UBx)) <= tol`.
 
 ## Info
 
-### IN-01: Stale trace docstrings after CR-01/WR-01
+### IN-01: Stale comments still describe `v > FEAS_CUT_V_TOL` as the only acceptance rule
 
-**File:** `src/planning/trace.jl:61-62`, `src/planning/trace.jl:102-106`
+**File:** `src/planning/benders.jl:117-122`, `src/planning/benders.jl:916-920`
 **Issue:**
-- `cut_type_trace` is documented as `:optimality` or `:feasibility`, but `:rejected` is also
-  pushed.
-- `:certified_incumbent` is still described as "the SOCP-inexact oracle throw was caught and
-  the incumbent reconstructed from the already-solved model". After CR-01 there is no throw
-  and no reconstruction.
-- `:oracle_feasibility_cut` is described as "a genuine `MOI.INFEASIBLE`", but it is now any
-  of the four `ORACLE_INFEASIBLE_STATUSES`.
+- The `ORACLE_INFEASIBLE_STATUSES` comment says the "`v > FEAS_CUT_V_TOL` check ... confirms
+  (or refutes, loudly)".
+- The `solve_stackelberg!` docstring says the cut "is appended only if `v > FEAS_CUT_V_TOL`"
+  and then contradicts itself a few lines later with the WR-06 weak band.
+- Since WR-06 the deciding threshold is `FEAS_CUT_V_NOISE`.
 
-**Fix:** Update all three descriptions.
+**Fix:** Reword both to the three-way `_feas_cut_class` rule.
 
-### IN-02: `retry_count` and `solve_time` under-report on the new branches
+### IN-02: When `_select_incumbent` swaps in the certified point, the trace's last row disagrees with the returned `UB`/`gap`
 
-**File:** `src/planning/benders.jl:1065-1112`, `src/planning/benders.jl:1165`
+**File:** `src/planning/benders.jl:1570-1576`, `src/planning/benders.jl:1615-1630`
+**Issue:** The optimality row is pushed with the relaxation `UB`/`gap` before
+`_select_incumbent` runs. After a swap, `result.UB`/`result.gap` are the certified values, but
+`last(result.trace.UB_trace)` is the relaxation-only one. `trace_summary`/`is_converged`
+consumers then see a different certificate than the result.
+**Fix:** Add an `incumbent_swapped::Bool` to the result, or document on the result that the
+trace records the running-minimum UB, not the returned one.
+
+### IN-03: The WR-06 "weak" band below the master's own feasibility tolerance is a deferred fatal error, not "the loop continues"
+
+**File:** `src/planning/benders.jl:142-149`, `src/planning/benders.jl:157-164`, `src/planning/benders.jl:1354-1364`
 **Issue:**
-- The `:oracle_feasibility_cut` row records `t_solve` from before `solve_feasibility_oracle!`
-  runs, so that solve is never timed.
-- That row's `retry_count` counts only the master's retries.
-- The `:rejected` row ignores the oracle's retries (`oracle_attempts[] - 1`), even though the
-  oracle solved successfully.
+- For `FEAS_CUT_V_NOISE < v ≲ 1e-7` (HiGHS's primal feasibility tolerance), the appended cut
+  `v + u'(z − z_k) ≤ 0` is satisfied at `z_k` within the master's tolerance. The master may
+  return the same `z_k`, and the next iteration then raises the named stall error.
+- Only `(~1e-7, 1e-6]` really degrades gracefully.
+- The docstring presents the whole band as "the normal regime ... appended and the loop
+  continues".
 
-These rows break the trace docstring's claim of "GENUINE per-iteration retry count".
-**Fix:** Bracket the feasibility-oracle solve with `time_ns()`, and add
-`oracle_attempts[] - 1` on the `:rejected` row.
-
-### IN-03: Dead type guards in `build_master`; an unknown Symbol raises `MethodError`, not `ArgumentError`
-
-**File:** `src/planning/master.jl:521-530`
-**Issue:** `α_op_lb isa Union{Symbol, Real}` is always true, because the keyword is already
-typed that way. `α_op_lb = :atuo` (a typo) therefore skips every guard. It then reaches
-`α_op_lb > d.optimum + slack` (a `MethodError` on `isless`) or `Float64(:atuo)`.
-**Fix:** `(α_op_lb isa Real || α_op_lb === :auto) || throw(ArgumentError(...))`. Do the same
-for `α_x_lb`.
-
-### IN-04: Weak or tautological test assertions
-
-**File:** `test/test_planning_inexact_policy.jl:358`, `test/test_planning_master.jl:316-323`, `test/test_planning_benders_ieee13.jl:149`
-**Issue:**
-- `rep.welfare_gap == rep.socp_welfare - rep.ac_welfare` restates the definition.
-- The "beyond the slack" `@test_throws ArgumentError` checks never confirm which bound was
-  rejected (no message match), so an unrelated `ArgumentError` would pass.
-- `Jstar <= result.UB + ε` holds for any feasible UB against a global optimum. Only the
-  `LB − ε ≤ J*` side tests the decomposition. This is acceptable, but the header should say
-  so.
-
-**Fix:** Match the error message (for example `occursin("α_op_lb", msg)`). Drop or replace
-the tautological equality.
+**Fix:** State the two sub-bands in `_feas_cut_class`'s docstring. Optionally classify
+`v ≤ 10·(master primal tol)` as `:weak_nonseparating`, so the trace shows it.
 
 ---
 
-_Reviewed: 2026-10-01T14:05:47Z_
+_Reviewed: 2026-10-01T15:17:45Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
