@@ -187,6 +187,19 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 29 (Genuine Bilevel TSO-DSO Variant) COMPLETE 2026-09-30.** BILEV-01/BILEV-02 validated:
+new production entry point `solve_bilevel!` / `build_bilevel_kkt` (`src/planning/bilevel_kkt.jl`)
+solves a genuinely bilevel game — DSO leader with its own LinDistFlow valuation, TSO follower
+minimizing its own cost `c(z) - pi_tariff*z` — as ONE single-level KKT-MILP (follower stationarity +
+`MOI.SOS1` complementarity, closed-form proven dual bound `m_ub`, post-solve KKT-certificate LP that
+returns unique minimal multipliers). Certified three ways (production == BilevelJuMP StrongDualityMode
+== brute-force grid, all measurably != joint single-planner) on a corner fixture AND a non-degenerate
+interior fixture (`y*=0.148`, `z*=1.48`, SOS1 branch switching, z≡0 stub rejected), plus d_max-binding
+and T=2 fixtures. `solve_stackelberg!` (Benders) is unchanged — relabelled as the integrated variant.
+3-iteration code review (cap reached; 1 warning — stale multipliers if a built model is mutated in place
+— documented in `phases/29-*/29-REVIEW.md`). Suite 30871/0/0/5 (+168 bilevel/PVAL-04 assertions vs
+Phase 28's 30703), zero golden moves.
+
 **Phase 28 (Goldens Re-Derivation & Thesis Reproduction Restatement) COMPLETE 2026-09-30.**
 FIX-11 validated: a mechanical, self-testing audit script confirms every golden moved across
 Phases 26-27 was re-derived with a stated cause (`phases/28-*/28-CROSS-PHASE-AUDIT.md`); the
@@ -436,4 +449,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-29 — Phase 27 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-09-30 — Phase 29 complete (v4.0 Correctness & Depth)*
