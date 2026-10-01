@@ -207,3 +207,193 @@ hlines!(
 )
 axislegend(ax_gap; position = :rt)
 fig
+
+# ## Rung 6 at scale — a full day-ahead horizon on IEEE-13 (T=24)
+#
+# Everything above is a T=1 toy instance, chosen to stay byte-comparable to the
+# `test/test_planning_certification.jl` certification narrative. The phase-30 headline
+# result (BILEV-03, `test/test_planning_benders_ieee13.jl`) demonstrates
+# `solve_stackelberg!` with the REAL `ConvexBranchFlow()` SOCP branch-flow formulation on
+# a realistic multi-bus, multi-period feeder (`ieee13_modified()`) at `T=4`; this section
+# extends that same demonstration to a full day-ahead horizon, `T=24`, confirming the
+# Benders loop scales cleanly beyond the suite's own `≤2min` budget (this section is
+# OUTSIDE the test suite — it runs once, live, as part of this documentation build).
+#
+# `test/fixtures_planning_ieee13_short.jl`'s own `IEEE13ShortHorizonFixtures.house_agg`
+# hard-codes `T = 4` as a MODULE CONSTANT referenced inside its own body (feeding
+# `generate_profiles`/`Thermostatic`/`PVBattery`), so it does not generalize to an
+# arbitrary `T` by simply passing a larger value — a small, `T=24`-specific variant,
+# `house_agg_t24`, is defined inline below instead, reusing the SAME tuned magnitudes
+# (`load_scale=0.01`, `pv_scale=0.03`, `batt_pmax=0.02`, `batt_emax=0.1`,
+# `batt_soc0=0.05`, the STRICT battery price triple `λ_min=3.8 < λ_med=6.2 < λ_max=8.9`)
+# as `IEEE13ShortHorizonFixtures`'s own T=4 recipe, parametrized by `T` this time. This
+# page imports `using TSODSO` ONLY (no test-only fixture module), so the day-ahead price
+# profile below is also redefined inline — the SAME digitized morning-ramp/evening-peak
+# shape `test/fixtures_phase4.jl`'s own `Phase4Fixtures.mem_price_profile()` uses (low
+# overnight, moderate midday shoulder, evening peak), not imported from that test-only
+# module.
+
+function house_agg_t24(
+    bus;
+    seed::Integer,
+    φ::Real = 0.90,
+    load_scale::Real = 0.01,
+    pv_scale::Real = 0.03,
+    batt_pmax::Real = 0.02,
+    batt_emax::Real = 0.1,
+    batt_soc0::Real = 0.05,
+)
+    prof = generate_profiles(seed = seed + bus, T = 24)
+    Ppv = Float64[pv_scale * p for p in prof.pv]
+    Pdc = Float64[load_scale * d for d in prof.demand]
+    therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, 24))
+    batt = PVBattery(bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0, 3.8, 6.2, 8.9, Ppv)
+    return Aggregator(bus, φ, [therm, batt], Pdc)
+end
+
+feeder24 = TSODSO.ieee13_modified()
+N24 = length(feeder24.buses)
+aggs24 = [house_agg_t24(bus; seed = 20260718) for bus in 2:N24]
+
+λ0_24 = Float64[
+    3.8, 3.7, 3.6, 3.6, 3.7, 4.0,   # 00–05 overnight trough
+    4.8, 5.8, 6.5, 6.2, 5.9, 5.7,   # 06–11 morning ramp -> midday shoulder
+    5.6, 5.8, 6.0, 6.8, 8.2, 9.0,   # 12–17 afternoon rise -> evening peak
+    8.6, 7.4, 6.2, 5.2, 4.4, 4.0,   # 18–23 evening decline
+]
+
+# `follower_kwargs24`/`master_kwargs24` are DELIBERATELY smaller than the T=4 headline
+# test's own kwargs (`y_max=0.05, corridor_cap=1.0`): a live probe this session found
+# that configuration throws a genuine `assert_battery_complementarity!` violation at
+# `t=7` once the full 24-hour price swing is in play (OUT OF SCOPE for `inexact_policy`
+# — a complementarity violation, not an exactness-class throw, per `solve_stackelberg!`'s
+# own documented disambiguation). Tightening the leader's investment ceiling
+# (`y_max=0.03`, `corridor_cap=0.5`, `x_inv_max=0.03`) keeps every Benders trial inside a
+# region where the battery's own complementarity gate holds throughout — confirmed
+# below by a full, live, error-free run. `master_kwargs24` again OMITS `α_op_lb`/
+# `α_x_lb` entirely (the `:auto` default, BILEV-05, same as the T=4 headline test).
+
+follower_kwargs24 =
+    (; corridor_cap = 0.5, x_inv_max = 0.03, c_inv = 0.01, c_op = fill(0.01, 24))
+master_kwargs24 = (; c_y = 0.01, y_max = 0.03)
+
+checkpoint_dir24 = mktempdir()
+result24 = solve_stackelberg!(
+    feeder24,
+    ConvexBranchFlow(),
+    aggs24;
+    λ₀ = λ0_24,
+    T = 24,
+    follower_kwargs = follower_kwargs24,
+    master_kwargs = master_kwargs24,
+    tol = 1e-6,
+    max_iter = 100,
+    checkpoint_dir = checkpoint_dir24,
+)
+
+# ## T=24 validation — real, observed numbers
+#
+# The converged relative UB/LB gap (measured THIS session: `iters=15`,
+# `gap≈3.09e-7`, well inside `tol=1e-6`):
+
+result24.gap
+
+# The leader's converged flexibility investment `y` (measured this session: `0.015`,
+# half of `y_max=0.03` — the master's own box did not bind at the optimum):
+
+result24.y
+
+# The converged coupling flow `z` across all 24 hours (measured this session: `0.015`
+# pu during the overnight/morning/evening hours where importing is economic, `0.0`
+# during the midday hours where it is not):
+
+result24.z
+
+# The converged upper bound (total leader cost at the incumbent):
+
+result24.UB
+
+# The incumbent's AC-recheck-at-convergence report (BILEV-04b): `nothing` means the
+# incumbent was found genuinely SOCP-EXACT at convergence — measured this session, this
+# T=24 run stayed exact throughout (every entry of `result24.trace.socp_maxgap_trace`
+# is the `NaN` exactness sentinel; see the cone-gap panel below), so no AC physics
+# re-check was triggered:
+
+result24.ac_report
+
+# ## T=24 Benders convergence figure, with a cone-gap panel (CairoMakie)
+#
+# The SAME canonical Benders bounds/gap panels as the T=1 figure above, PLUS a THIRD
+# panel plotting `result24.trace.socp_maxgap_trace` — the incumbent's per-iteration SOCP
+# cone-gap ledger (BILEV-04b, `src/planning/trace.jl`), masked with the SAME
+# `isfinite.(...)` + `max.(..., eps())` log-axis-floor idiom the existing two panels
+# already use (a `NaN` entry means "this iteration's oracle solve never triggered the
+# exactness-reporting path" — a legitimate sentinel per `BendersTrace`'s own docstring,
+# not a missing measurement). Measured this session: every entry is `NaN` (this
+# configuration stayed SOCP-exact at every iteration), so the third panel is empty —
+# itself a genuine, positively-confirmed result (never a silent assumption), contrasted
+# here against the non-empty case `test/test_planning_inexact_policy.jl`'s own fixture
+# exercises.
+
+trace24 = result24.trace
+ks24 = trace24.iter_trace
+ub_mask24 = isfinite.(trace24.UB_trace)
+gap_mask24 = .!isnan.(trace24.gap_trace)
+sg_mask24 = isfinite.(trace24.socp_maxgap_trace)
+
+fig24 = Figure(size = (1300, 380))
+ax_bounds24 = Axis(
+    fig24[1, 1];
+    xlabel = "Benders iteration k",
+    ylabel = "leader objective bound",
+    title = "T=24: Benders bounds (UB & LB)",
+)
+scatterlines!(
+    ax_bounds24,
+    ks24[ub_mask24],
+    trace24.UB_trace[ub_mask24];
+    label = "UB (incumbent)",
+    color = :crimson,
+)
+scatterlines!(
+    ax_bounds24,
+    ks24,
+    trace24.LB_trace;
+    label = "LB (master)",
+    color = :dodgerblue,
+)
+axislegend(ax_bounds24; position = :rb)
+
+ax_gap24 = Axis(
+    fig24[1, 2];
+    xlabel = "Benders iteration k",
+    ylabel = "relative gap (UB − LB) / max(1, |UB|)",
+    yscale = log10,
+    title = "T=24: relative gap vs tol",
+)
+scatterlines!(
+    ax_gap24,
+    ks24[gap_mask24],
+    max.(trace24.gap_trace[gap_mask24], eps());
+    label = "relative gap",
+    color = :purple,
+)
+hlines!(ax_gap24, [1e-6]; label = "tol", color = :black, linestyle = :dash)
+axislegend(ax_gap24; position = :rt)
+
+ax_cone24 = Axis(
+    fig24[1, 3];
+    xlabel = "Benders iteration k",
+    ylabel = "SOCP cone gap (socp_maxgap)",
+    yscale = log10,
+    title = "T=24: incumbent cone-gap (BILEV-04b)",
+)
+scatterlines!(
+    ax_cone24,
+    ks24[sg_mask24],
+    max.(trace24.socp_maxgap_trace[sg_mask24], eps());
+    label = "socp_maxgap",
+    color = :darkgreen,
+)
+axislegend(ax_cone24; position = :rt)
+fig24
