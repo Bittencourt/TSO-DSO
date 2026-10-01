@@ -221,8 +221,10 @@ plan 29-04's non-degenerate fixture passes a nonzero `q_op`.
 `@variable`/`@objective` assembly, mirroring `follower.jl`/`master.jl`):
 
   - `T >= 1`
-  - `problem_class(pf) isa SOCP` — SOCP-class network formulations are out of scope
-    for this phase (CONTEXT.md locked decision: DSO network LinDistFlow (LP) only).
+  - `pf isa LinDistFlow` — an allowlist: only the strictly affine LinDistFlow network
+    is supported (CONTEXT.md locked decision: DSO network LinDistFlow (LP) only). Any
+    SOCP, NLP (`ACPowerFlow`) or other formulation is rejected up front, since a
+    nonlinear term would make this an MIQP/MINLP that HiGHS cannot solve.
   - `follower_integer` — an integer follower is not supported in this phase
     (continuous-only investment, 29-RESEARCH.md Open Question 3).
   - `corridor_cap > 0`, `x_inv_max > 0`, `c_inv >= 0`, `c_y >= 0`, `y_max > 0`,
@@ -276,11 +278,14 @@ function build_bilevel_kkt(
     # ---- Boundary guards FIRST — fail here, not deep in objective assembly. ----------
     T >= 1 || throw(ArgumentError("build_bilevel_kkt needs T >= 1, got T=$T"))
 
-    problem_class(pf) isa SOCP && throw(
+    # ALLOWLIST, not an SOCP denylist (29-REVIEW.md WR-02): ACPowerFlow (NLP) and any
+    # QP-class formulation would put a nonlinear term into this MILP and fail deep in
+    # JuMP/HiGHS; DCPowerFlow is untested/undocumented here.
+    pf isa LinDistFlow || throw(
         ArgumentError(
-            "build_bilevel_kkt: SOCP-class network formulations are out of scope for " *
-            "this phase (CONTEXT.md locked decision: DSO network LinDistFlow (LP) " *
-            "only) — got $(typeof(pf))",
+            "build_bilevel_kkt supports only LinDistFlow (a strictly affine network; " *
+            "CONTEXT.md locked decision: DSO network LinDistFlow (LP) only) — got " *
+            "$(typeof(pf))",
         ),
     )
     follower_integer && throw(

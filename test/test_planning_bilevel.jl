@@ -106,6 +106,23 @@ end
         T = f.T,
     )
 
+    # pf = ACPowerFlow() (NLP-class network — WR-02: must be rejected by the allowlist
+    # guard as an ArgumentError, not fail later inside JuMP with an ErrorException)
+    @test_throws ArgumentError build_bilevel_kkt(
+        f.feeder,
+        ACPowerFlow();
+        base...,
+        T = f.T,
+    )
+
+    # pf = DCPowerFlow() (affine but untested here — WR-02 allowlist rejects it)
+    @test_throws ArgumentError build_bilevel_kkt(
+        f.feeder,
+        DCPowerFlow();
+        base...,
+        T = f.T,
+    )
+
     # follower_integer = true (unsupported)
     @test_throws ArgumentError build_bilevel_kkt(
         f.feeder,
