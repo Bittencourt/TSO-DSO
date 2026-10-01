@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 30-02-PLAN.md
-last_updated: "2026-10-01T11:15:13.899Z"
+stopped_at: Completed 30-04-PLAN.md
+last_updated: "2026-10-01T12:17:55.220Z"
 last_activity: 2026-10-01
 progress:
   total_phases: 12
   completed_phases: 4
   total_plans: 44
-  completed_plans: 42
+  completed_plans: 43
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-10-01
 
@@ -177,6 +177,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 29 P03 | 90min | 2 tasks | 2 files |
 | Phase 30 P01 | 55min | 3 tasks | 6 files |
 | Phase 30 P02 | 75min | 3 tasks | 5 files |
+| Phase 30 P04 | 95min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -238,6 +239,9 @@ Recent decisions affecting current work:
 - [Phase 30-01]: Voltage-infeasible fixture uses a thermally-widened (smax=90) IEEE-13 variant with an ample-battery population, not the unmodified feeder -- thermal always binds first as z grows on the real feeder
 - [Phase 30]: ALPHA_LB_MARGIN=ALPHA_LB_REJECTION_TOL=1e-6, measured on the toy two-bus/ToyElasticDevice fixture at T=1 — Single shared probe sufficient: oracle gap ~2.85e-9, follower gap 0.0; max(1e-6,10*gap) dominated by the floor
 - [Phase 30]: Repo-wide T>1 alpha-bound audit (test/ and src/) found no previously-unknown invalid bound — Only T>1 site is test_planning_hardening.jl's T=8 fixture (alpha_op_lb=-50.0), already fixed in-repo and accepted by the new derivation formula
+- [Phase 30]: Phase 30-04: genuine-infeasibility routing (BILEV-04a) is unconditional regardless of inexact_policy; only the exactness-class throw is policy-dispatched
+- [Phase 30]: Phase 30-04: :reject's deterministic stall confirmed empirically (no cut appended on a rejected trial => identical master LP re-proposes the same trial forever) -- accepted per T-30-09, not engineered around
+- [Phase 30]: Phase 30-04: W2 overhead measured -- derive_alpha_op_lb ~13.1ms vs ~695.5ms full solve_stackelberg! best-response (~1.9%) on the toy two-bus fixture, now paid unconditionally through every solve_stackelberg!/run_nash! best-response; carried to Phase 31 FINDINGS
 
 ### Roadmap Evolution
 
@@ -461,8 +465,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-01T11:15:13.859Z
-Stopped at: Completed 30-02-PLAN.md
+Last session: 2026-10-01T12:17:55.196Z
+Stopped at: Completed 30-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

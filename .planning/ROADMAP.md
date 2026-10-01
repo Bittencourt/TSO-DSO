@@ -271,7 +271,7 @@ multi-bus, multi-period feeder, with feasibility cuts and automatically derived 
   4. The master's α lower bounds (`α_op_lb`, `α_x_lb`) are derived automatically (e.g. from the
      relaxed oracle/follower optimum); a user-supplied bound above the true minimum is detected and
      rejected.
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -282,7 +282,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 30-04-PLAN.md — BILEV-04/05 integration: inexact_policy dispatch, oracle-feasibility-cut branch, :auto bounds wiring, AC-recheck-at-convergence hook
+- [x] 30-04-PLAN.md — BILEV-04/05 integration: inexact_policy dispatch, oracle-feasibility-cut branch, :auto bounds wiring, AC-recheck-at-convergence hook
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -444,7 +444,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
-| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 3/6 | In Progress|  |
+| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 4/6 | In Progress|  |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
