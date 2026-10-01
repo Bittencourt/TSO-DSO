@@ -59,7 +59,9 @@ Fields:
     iteration — a legitimate sentinel, NOT guarded away; this is the ONE scalar gap
     field, structurally distinct from `AdmmResiduals`'s primal/dual residual pair).
   - `cut_type_trace::Vector{Symbol}` — `:optimality` or `:feasibility`, the branch taken
-    at this iteration.
+    at this iteration (`push!` also accepts `:rejected`, the pre-iteration-2 label of a
+    `:reject` row; since the Phase 30 code review iteration 2, WR-02, a rejected trial's
+    cuts are appended and its row is `:optimality` with `policy_action = :rejected`).
   - `n_cuts_trace::Vector{Int}` — `length(master.cuts)` immediately after this
     iteration's cut was appended (cut-store growth instrumentation, read-only off
     `BendersMaster.cuts`, never a new mutator).
@@ -99,11 +101,16 @@ Fields:
     for the verdict.
   - `policy_action_trace::Vector{Symbol}` — Phase 30 (BILEV-04b, plan 30-04),
     ADDITIVE: which `inexact_policy` branch (if any) fired at this iteration —
-    `:certified_incumbent` (the SOCP-inexact oracle throw was caught and the
-    incumbent reconstructed from the already-solved model), `:rejected` (the
-    inexact trial was skipped, no cut appended), `:oracle_feasibility_cut` (a
-    genuine `MOI.INFEASIBLE` routed to the new feasibility-oracle-cut branch,
-    BILEV-04a), or the default `:none` (no policy branch fired — the ordinary
+    `:certified_incumbent` (the oracle returned an explicit `:inexact` verdict under
+    `inexact_policy = :certify_incumbent`; the relaxation's cuts were appended and the
+    trial competed for the incumbent), `:rejected` (an `:inexact` verdict under
+    `:reject`; the relaxation's cuts were appended but the trial was barred from UB and
+    the incumbent — WR-02, iteration 2), `:oracle_feasibility_cut` (an untrusted oracle
+    solve whose status is in `ORACLE_INFEASIBLE_STATUSES` — INFEASIBLE,
+    INFEASIBLE_OR_UNBOUNDED, LOCALLY_INFEASIBLE, ALMOST_INFEASIBLE — routed to the
+    feasibility-oracle-cut branch, BILEV-04a, with a separating cut),
+    `:oracle_feasibility_cut_weak` (the same, with a valid but weak cut — WR-06,
+    iteration 2), or the default `:none` (no policy branch fired — the ordinary
     success/follower-feasibility path). No validity-restriction guard beyond its
     `Symbol` type, mirroring `oracle_status_trace`'s own lenient treatment — this is
     a diagnostics column, not a correctness gate.
@@ -185,9 +192,11 @@ skipped iteration, mirroring `AdmmResiduals`'s own `_assert_sequential` idiom.
 Guards (each a distinct `ArgumentError`, fired BEFORE any field is mutated):
 
   - `cut_type in (:optimality, :feasibility, :rejected)` — any other symbol is rejected.
-    `:rejected` (Phase 30, BILEV-04b, plan 30-04, ADDITIVE) is the new row kind for
-    `solve_stackelberg!`'s `inexact_policy = :reject` branch: a SOCP-inexact trial was
-    skipped (no cut appended) rather than certified or rejected outright.
+    `:rejected` (Phase 30, BILEV-04b, plan 30-04, ADDITIVE) was the row kind of
+    `solve_stackelberg!`'s `inexact_policy = :reject` branch while a rejection appended no
+    cut; it stays accepted, but since the Phase 30 code review iteration 2 (WR-02)
+    `solve_stackelberg!` records rejected trials as `:optimality` rows with
+    `policy_action = :rejected`.
   - `isfinite(LB)` — `LB` is always a real LP objective value; unlike `UB`/`gap` it has
     no legitimate non-finite state.
   - `isfinite(solve_time) && solve_time >= 0`.
