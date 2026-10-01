@@ -271,7 +271,26 @@ multi-bus, multi-period feeder, with feasibility cuts and automatically derived 
   4. The master's α lower bounds (`α_op_lb`, `α_x_lb`) are derived automatically (e.g. from the
      relaxed oracle/follower optimum); a user-supplied bound above the true minimum is detected and
      rejected.
-**Plans**: TBD
+**Plans:** 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 30-01-PLAN.md — BILEV-04a/04b infra: feasibility oracle (slack-min) + incumbent-only AC physics re-check
+- [ ] 30-02-PLAN.md — BILEV-05: :auto epigraph-bound derivation in build_master + repo-wide T>1 alpha-bound audit
+- [ ] 30-03-PLAN.md — BILEV-03 fixture: tuned T in [3,6] IEEE-13 population (z=0 feasible) + independent monolithic joint reference
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 30-04-PLAN.md — BILEV-04/05 integration: inexact_policy dispatch, oracle-feasibility-cut branch, :auto bounds wiring, AC-recheck-at-convergence hook
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 30-05-PLAN.md — BILEV-03: convergence + monolithic cross-check test, T=24 Literate experiment extension
+
+**Wave 4** *(phase-closing gate, blocked on ALL of the above)*
+
+- [ ] 30-06-PLAN.md — Golden-move audit, consolidated findings, full-suite certification
 
 ### Phase 31: GNE Nash Fixture, Integer N>1 & Planning Docs Refresh
 
@@ -425,7 +444,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
-| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
+| 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/6 | Not started | - |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
