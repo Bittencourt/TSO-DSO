@@ -8,8 +8,11 @@
 # genuinely `MOI.INFEASIBLE` (voltage- or thermally-caused), this file builds a SECOND,
 # independent, built-ONCE oracle whose pin is RELAXED into an equality with free-sign slack:
 # `p_import[t] == z[t] + s_plus[t] - s_minus[t]`, minimizing `Σ_t (s_plus[t] + s_minus[t])`
-# (an L1 slack-min — always feasible by construction, since `s_plus`/`s_minus` are free-sign
-# relative to any `z_trial`). Its pin's dual is read EXACTLY like `PlanningOracle`'s own pin
+# (an L1 slack-min). The slack frees ONLY `p_import`, so this model is feasible iff SOME
+# `p_import` trajectory admits the network + device constraints — NOT unconditionally
+# (Phase 30 code review, WR-02): an import-independent voltage violation or unmeetable
+# device minimums make it infeasible too, and `solve_stackelberg!` then reports both
+# errors. Its pin's dual is read EXACTLY like `PlanningOracle`'s own pin
 # dual, yielding a valid Benders feasibility-cut pair `(v, u)` in the SAME shape
 # `add_feasibility_cut!` (master.jl) already consumes — `v_k = cost` (the minimized total
 # slack, >= 0, ≈0 iff `z_trial` is genuinely oracle-feasible) and `u_k` the (sign-verified,
@@ -20,8 +23,8 @@
 # kwarg / no economic objective (this oracle has no welfare sense, only a feasibility
 # diagnostic), (b) the relaxed pin with free-sign slack variables, (c) the L1 slack-min
 # objective. Routes its solve through `solve_with_retry!` (D-08, the SOLE solve entry point)
-# — never raw `optimize!` — since a genuine solve failure on this ALWAYS-feasible-by-
-# construction model would be numerical, never modeling.
+# — never raw `optimize!`. A solve failure here is either numerical or the "no
+# `p_import` admits the network at all" case above.
 
 using JuMP
 
@@ -171,10 +174,13 @@ end
 
 Re-solve the built-ONCE [`FeasibilityOracle`](@ref) `fo` at the coupling-flow trial
 `z_trial` (`set_parameter_value.` only, never a rebuild) via [`solve_with_retry!`](@ref)
-(D-08, the SOLE solve entry point) — this LP/SOCP is ALWAYS feasible by construction
-(`s_plus`/`s_minus` are free-sign relative to any `z_trial`), so a genuine solve failure here
-is numerical, never modeling; no exactness/battery-complementarity gate is applied (this is a
-diagnostic probe, not a cut-producing optimality subproblem).
+(D-08, the SOLE solve entry point). The slack frees only `p_import` (`s_plus`/`s_minus`
+absorb any mismatch between `p_import` and `z_trial`), so this LP/SOCP is feasible iff SOME
+`p_import` trajectory admits the network + device constraints — feasible for every
+`z_trial` in that case, but NOT unconditionally (Phase 30 code review, WR-02): an
+import-independent voltage violation or device minimums no import can meet make it
+infeasible too, and `solve_with_retry!` then throws. No exactness/battery-complementarity
+gate is applied (this is a diagnostic probe, not a cut-producing optimality subproblem).
 
 Throws `ArgumentError` when `length(z_trial) != fo.T` (mirrors `solve_planning_oracle!`'s own
 shape guard).
@@ -218,8 +224,8 @@ function solve_feasibility_oracle!(
 
     set_parameter_value.(fo.z, z_trial)   # no rebuild
 
-    # D-08: solve_with_retry! is the SOLE solve entry point — this model is ALWAYS
-    # feasible by construction (free-sign slack), so a genuine failure here is numerical.
+    # D-08: solve_with_retry! is the SOLE solve entry point. Feasible iff some p_import
+    # admits the network (WR-02) — a failure here is numerical or that structural case.
     solve_with_retry!(fo.model; max_attempts = max_attempts, dual = true)
 
     cost = objective_value(fo.model)

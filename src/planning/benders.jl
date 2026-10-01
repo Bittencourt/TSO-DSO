@@ -876,8 +876,8 @@ function solve_stackelberg!(
     # via `solve_planning_oracle!`/`solve_follower!`/`solve_master!` and appends cut rows.
     oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)
     # BILEV-04a (plan 30-01/30-04): the second, built-ONCE slack-minimization
-    # feasibility oracle — unconditional, cheap (an always-feasible-by-construction
-    # LP/SOCP), never built inside the loop.
+    # feasibility oracle — unconditional, cheap (an LP/SOCP feasible whenever some
+    # p_import admits the network, WR-02), never built inside the loop.
     feas_oracle = build_feasibility_oracle(feeder, pf, aggregators; T = T)
 
     # BILEV-05 (plan 30-04, checker BLOCKER 1 + BLOCKER 2 fix): ALWAYS construct a
@@ -1032,7 +1032,22 @@ function solve_stackelberg!(
             # EXISTING follower-feasibility-cut branch's own "never update UB" discipline
             # (T-11-06).
             t_solve += (time_ns() - t0_ns) / 1.0e9
-            fo_res = solve_feasibility_oracle!(feas_oracle, lb_res.z)
+            # WR-02 (Phase 30 code review): the slack-min model is feasible only if SOME
+            # p_import admits the network, so it can fail too — never let its error mask
+            # the original oracle infeasibility. Rethrow with BOTH diagnoses and z_k.
+            fo_res = try
+                solve_feasibility_oracle!(feas_oracle, lb_res.z)
+            catch fo_err
+                fo_err isa ErrorException || rethrow()
+                error(
+                    "solve_stackelberg!: oracle reported $(oracle_ts) at z_k=$(lb_res.z) " *
+                    "(iteration $k), and the slack-minimization feasibility oracle ALSO " *
+                    "failed there, so no feasibility cut can be built (no p_import admits " *
+                    "the network/device constraints at all, or a numerical failure).\n" *
+                    "Original oracle error: $(sprint(showerror, e))\n" *
+                    "Feasibility-oracle error: $(sprint(showerror, fo_err))",
+                )
+            end
             # WR-01: the cut evaluates to exactly `v` at z_k, so it SEPARATES z_k only if
             # v clears the master's own feasibility tolerance (with headroom) — see
             # FEAS_CUT_V_TOL's derivation. A smaller v means the oracle's infeasibility
