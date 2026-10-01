@@ -524,6 +524,40 @@ function ll_cut_recourse(
 end
 
 """
+    _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol;
+                           tol::Real = ALPHA_LB_REJECTION_TOL)
+
+Phase 30 (BILEV-05, plan 30-04): a UNIVERSAL, bound-source-independent runtime sanity
+check — `error(...)`s if `cost_k < lb - tol`, naming `label` (`:op`/`:x`), the evaluated
+`cost_k`, and the declared `lb`. Reuses `ALPHA_LB_REJECTION_TOL` (`master.jl`, plan
+30-02) as its default tolerance — the SAME measured solver-tolerance-scale constant,
+never a second, drifting one.
+
+Called UNCONDITIONALLY on `solve_stackelberg!`'s optimality branch (Task 1, this plan),
+regardless of whether `master.α_op`/`master.α_x`'s declared lower bound came from
+`:auto`, an explicit `Real`, or was build-time-validated via `bounds_ctx` at all — a
+genuine lower bound, by definition, can never exceed an actually-achieved cost at a
+feasible point. If this ever fires, it is proof of a modeling bug in the derivation or
+declaration of that bound (BILEV-05's own core-value risk: "an invalid declared lower
+bound silently produces a wrong 'converged' answer"), never a legitimate convergence
+edge case to special-case away.
+"""
+function _assert_epigraph_floor(
+    cost_k::Real,
+    lb::Real,
+    label::Symbol;
+    tol::Real = ALPHA_LB_REJECTION_TOL,
+)
+    cost_k < lb - tol && error(
+        "solve_stackelberg!: epigraph $label evaluated to cost_k=$cost_k, below its " *
+        "OWN declared lower bound lb=$lb (tol=$tol) — BILEV-05: this is a genuine " *
+        "modeling bug (an invalid declared lower bound), not a convergence issue. " *
+        "Never silently accepted.",
+    )
+    return nothing
+end
+
+"""
     solve_stackelberg!(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int, follower_kwargs::NamedTuple, master_kwargs::NamedTuple,
                        tol::Real = 1e-6, max_iter::Int = 100,
@@ -675,9 +709,19 @@ function solve_stackelberg!(
     follower = nothing,
     master = nothing,
     known_optimum::Union{Nothing, Real} = nothing,
+    inexact_policy::Symbol = :certify_incumbent,
 )
     # ---- Boundary guards (mirror solve_admm): fail here, not deep in the loop ----------------
     T >= 1 || throw(ArgumentError("solve_stackelberg! needs T >= 1 (got T=$T)"))
+    # Phase 30 (BILEV-04b, plan 30-04): inexact_policy must be one of the three
+    # documented dispatches — fail here, alongside the other boundary checks, BEFORE
+    # any build call (never deep inside the loop's oracle-throw disambiguation).
+    inexact_policy in (:strict, :reject, :certify_incumbent) || throw(
+        ArgumentError(
+            "solve_stackelberg! needs inexact_policy in (:strict, :reject, " *
+            ":certify_incumbent), got $inexact_policy",
+        ),
+    )
     max_iter >= 1 || throw(
         ArgumentError("solve_stackelberg! needs max_iter >= 1 (got max_iter=$max_iter)"),
     )
@@ -823,9 +867,92 @@ function solve_stackelberg!(
 
         # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
         oracle_attempts = Ref(1)
+        # Phase 30 (BILEV-04a/BILEV-04b, plan 30-04): clear any STALE :socp_maxgap key
+        # left over from a PRIOR iteration's success before this iteration's solve, so
+        # the disambiguation below (this plan's <interfaces> recipe) can tell "exactness
+        # already passed THIS iteration" apart from a stale leftover.
+        delete!(oracle.ctx.meta, :socp_maxgap)
+        # Per-iteration policy bookkeeping (Phase 30, BILEV-04b): overwritten below only
+        # on the branches that actually engage inexact_policy; :none/NaN on every
+        # ordinary success path, mirroring every other sentinel default in this loop.
+        policy_action_k = :none
+        socp_maxgap_k = NaN
         t0_ns = time_ns()
-        oracle_res =
+        oracle_res = try
             solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
+        catch e
+            e isa ErrorException || rethrow()
+            # Disambiguation recipe (this plan's own <interfaces> block): uses ONLY
+            # information solve_planning_oracle! ALREADY computes — no string-matching
+            # on the error message, no duplicated tolerance logic.
+            if !is_solved_and_feasible(oracle.model; dual = true)
+                # The trusted-solve gate itself failed -> a genuine MOI.INFEASIBLE (or a
+                # non-retryable solver failure), the exactness gate never ran.
+                # TODO(plan 30-04 Task 2): route to the NEW oracle-feasibility-cut branch
+                # (BILEV-04a) instead of rethrowing — Task 1 of this plan scopes the
+                # exactness-policy half only, independently verifiable on its own.
+                rethrow()
+            elseif haskey(oracle.ctx.meta, :socp_maxgap)
+                # Exactness ALREADY passed THIS iteration (the key got set) -> the throw
+                # came from assert_battery_complementarity! or something else entirely ->
+                # OUT OF SCOPE for inexact_policy; never silently swallowed.
+                rethrow()
+            else
+                # Trusted solve, exactness ITSELF failed (assert_socp_exact! threw) ->
+                # genuine exactness-class throw -> dispatch on inexact_policy (BILEV-04b).
+                if inexact_policy === :strict
+                    rethrow()   # byte-identical to today's throw
+                elseif inexact_policy === :reject
+                    # Skip the inexact cut entirely this iteration (no add_optimality_cut!
+                    # for :op/:x) — checkpoint with feasible=false-equivalent semantics,
+                    # reusing the SAME checkpoint_iteration! call shape as the existing
+                    # feasibility branch, record the :rejected trace row, and `continue`
+                    # (never update UB, mirrors T-11-06's existing feasibility-cut
+                    # discipline). `continue` here means the post-try/catch `t_solve`
+                    # accumulation below is never reached on THIS path — record it now.
+                    t_solve += (time_ns() - t0_ns) / 1.0e9
+                    checkpoint_iteration!(
+                        (;
+                            k,
+                            LB = lb_res.LB,
+                            UB,
+                            gap = NaN,
+                            z_k = lb_res.z,
+                            feasible = false,
+                        ),
+                        k;
+                        dir = checkpoint_dir,
+                    )
+                    push!(
+                        trace,
+                        k;
+                        LB = lb_res.LB,
+                        UB = UB,
+                        gap = NaN,
+                        cut_type = :rejected,
+                        n_cuts = length(master.cuts),
+                        master_status = master_status_k,
+                        oracle_status = Symbol(termination_status(oracle.model)),
+                        retry_count = master_attempts[] - 1,
+                        solve_time = t_solve,
+                        policy_action = :rejected,
+                        socp_maxgap = socp_relaxation_gap(oracle.ctx),
+                    )
+                    continue   # T-11-06 analogue: a rejected trial NEVER updates UB
+                else   # :certify_incumbent (the default)
+                    # The underlying oracle.model IS still solved and trustworthy — only
+                    # the Julia-level exception prevented solve_planning_oracle! from
+                    # returning it. Reconstruct the NamedTuple it would have returned
+                    # (this plan's own <interfaces> recipe) directly off the model.
+                    π = dual.(oracle.pin)
+                    cost = objective_value(oracle.model)
+                    dadp = dual.(oracle.ctx.constraints[:balance_p][oracle.agg_bus, :])
+                    socp_maxgap_k = socp_relaxation_gap(oracle.ctx)
+                    policy_action_k = :certified_incumbent
+                    (; cost, π, π_s = sum(π), dadp, ctx = oracle.ctx)
+                end
+            end
+        end
         t_solve += (time_ns() - t0_ns) / 1.0e9
         # Phase 24 gap-closure (plan 24-05.1): capture oracle.model's GENUINE
         # termination status HERE, immediately after ITS OWN solve at lb_res.z —
@@ -835,6 +962,15 @@ function solve_stackelberg!(
         # querying termination_status(oracle.model) AFTER that point would silently
         # report the LAST ternary-search trial's status instead of lb_res.z's own.
         oracle_status_k = Symbol(termination_status(oracle.model))
+
+        # Phase 30 (BILEV-05, plan 30-04): the UNIVERSAL runtime epigraph floor guard —
+        # unconditional, independent of whether master.α_op/master.α_x's declared lower
+        # bound came from :auto, an explicit Real, or was build-time-validated at all,
+        # and independent of inexact_policy. oracle_res/follower_res are known-
+        # trustworthy here (either the ordinary success path above, or the
+        # :certify_incumbent reconstruction off the already-solved oracle.model).
+        _assert_epigraph_floor(-oracle_res.cost, lower_bound(master.α_op), :op)
+        _assert_epigraph_floor(follower_res.cost, lower_bound(master.α_x), :x)
 
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
@@ -918,6 +1054,11 @@ function solve_stackelberg!(
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
             solve_time = t_solve,
             nogood_count = integer_cut_res.nogood_fired ? 1 : 0,
+            # Phase 30 (BILEV-04b, plan 30-04): :none/NaN on the ordinary success path
+            # (byte-identical to pre-30-04 behavior); :certified_incumbent/a finite gap
+            # when inexact_policy's :certify_incumbent branch fired this iteration.
+            policy_action = policy_action_k,
+            socp_maxgap = socp_maxgap_k,
         )
 
         # Phase 24, plan 24-04 (D-13/D-14, plan-checker Blocker 2): an EXCLUSIVE branch,

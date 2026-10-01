@@ -87,6 +87,25 @@ Fields:
     oracle on an optimality-branch row); cut appends, `checkpoint_iteration!`'s
     JLD2/git-provenance I/O, and trace bookkeeping are EXCLUDED (WR-01, phase 12
     review). Non-negative, finite.
+  - `socp_maxgap_trace::Vector{Float64}` — Phase 30 (BILEV-04b, plan 30-04), ADDITIVE:
+    the SOC-relaxation cone gap ([`socp_relaxation_gap`](@ref), the NON-THROWING
+    sibling of `assert_socp_exact!`) measured at this iteration's pinned `z_k`, ONLY
+    when the oracle's own exactness gate actually fired and either passed with a
+    nonzero residual or was overridden by `inexact_policy`'s `:reject`/
+    `:certify_incumbent` branch. `NaN` on every OTHER row (the ordinary success path
+    where the exactness gate was never data-driven-engaged, every feasibility-cut
+    row, and every row before this field existed) — a legitimate sentinel, mirroring
+    `gap_trace`'s own NaN convention, never guarded away.
+  - `policy_action_trace::Vector{Symbol}` — Phase 30 (BILEV-04b, plan 30-04),
+    ADDITIVE: which `inexact_policy` branch (if any) fired at this iteration —
+    `:certified_incumbent` (the SOCP-inexact oracle throw was caught and the
+    incumbent reconstructed from the already-solved model), `:rejected` (the
+    inexact trial was skipped, no cut appended), `:oracle_feasibility_cut` (a
+    genuine `MOI.INFEASIBLE` routed to the new feasibility-oracle-cut branch,
+    BILEV-04a), or the default `:none` (no policy branch fired — the ordinary
+    success/follower-feasibility path). No validity-restriction guard beyond its
+    `Symbol` type, mirroring `oracle_status_trace`'s own lenient treatment — this is
+    a diagnostics column, not a correctness gate.
   - `iters::Int` — the number of recorded rows (`== length(gap_trace) == …`).
 
 Construct empty via [`BendersTrace()`](@ref); append one row with [`push!`](@ref)
@@ -105,6 +124,8 @@ mutable struct BendersTrace
     retry_count_trace::Vector{Int}
     nogood_count_trace::Vector{Int}
     solve_time_trace::Vector{Float64}
+    socp_maxgap_trace::Vector{Float64}
+    policy_action_trace::Vector{Symbol}
     iters::Int
 end
 
@@ -126,6 +147,8 @@ BendersTrace() = BendersTrace(
     Int[],
     Int[],
     Float64[],
+    Float64[],
+    Symbol[],
     0,
 )
 
@@ -142,7 +165,8 @@ end
 """
     push!(trace::BendersTrace, k::Integer; LB, UB, gap, cut_type, n_cuts,
           master_status, oracle_status = :not_solved, retry_count,
-          nogood_count::Integer = 0, solve_time)
+          nogood_count::Integer = 0, solve_time,
+          socp_maxgap::Real = NaN, policy_action::Symbol = :none)
         -> BendersTrace
 
 Append ONE new row to `trace`, incrementing `trace.iters`. `k` must be the next
@@ -151,7 +175,10 @@ skipped iteration, mirroring `AdmmResiduals`'s own `_assert_sequential` idiom.
 
 Guards (each a distinct `ArgumentError`, fired BEFORE any field is mutated):
 
-  - `cut_type in (:optimality, :feasibility)` — any other symbol is rejected.
+  - `cut_type in (:optimality, :feasibility, :rejected)` — any other symbol is rejected.
+    `:rejected` (Phase 30, BILEV-04b, plan 30-04, ADDITIVE) is the new row kind for
+    `solve_stackelberg!`'s `inexact_policy = :reject` branch: a SOCP-inexact trial was
+    skipped (no cut appended) rather than certified or rejected outright.
   - `isfinite(LB)` — `LB` is always a real LP objective value; unlike `UB`/`gap` it has
     no legitimate non-finite state.
   - `isfinite(solve_time) && solve_time >= 0`.
@@ -167,11 +194,20 @@ optimality iteration) and `gap = NaN` (every feasibility-branch row) are legitim
 sentinel values, not defects to reject. `oracle_status` needs no additional guard
 beyond its `Symbol` type — it is either the sentinel `:not_solved` (feasibility-branch
 default) or a genuine termination-status symbol (optimality branch), mirroring
-`master_status`'s own unvalidated-`Symbol` treatment.
+`master_status`'s own unvalidated-`Symbol` treatment. `policy_action` (Phase 30,
+BILEV-04b, plan 30-04, ADDITIVE) likewise carries NO validity-restriction guard — it
+mirrors `oracle_status`'s own lenient `Symbol` treatment, a diagnostics column, never a
+correctness gate.
 
 **`nogood_count` is ADDITIVE (Phase 24, plan 24-03): defaults to `0`.** Every
 PRE-EXISTING `benders.jl` call site omits this keyword entirely and keeps compiling,
 recording `0` here — byte-identical to its behavior before this keyword existed.
+
+**`socp_maxgap`/`policy_action` are ADDITIVE (Phase 30, BILEV-04b, plan 30-04): default
+to `NaN`/`:none`.** Every PRE-EXISTING `benders.jl` call site (and every call site in
+this file's own pre-30-04 history) omits both keywords entirely and keeps compiling,
+recording the sentinel pair here — byte-identical to its behavior before these fields
+existed.
 
 Returns `trace`.
 """
@@ -188,10 +224,14 @@ function Base.push!(
     retry_count::Integer,
     nogood_count::Integer = 0,
     solve_time::Real,
+    socp_maxgap::Real = NaN,
+    policy_action::Symbol = :none,
 )
     _assert_sequential_trace(trace, k)
-    cut_type in (:optimality, :feasibility) || throw(
-        ArgumentError("push!: cut_type must be :optimality or :feasibility, got $cut_type"),
+    cut_type in (:optimality, :feasibility, :rejected) || throw(
+        ArgumentError(
+            "push!: cut_type must be :optimality, :feasibility, or :rejected, got $cut_type",
+        ),
     )
     # LB is always a real LP objective value — no legitimate non-finite state, unlike
     # UB/gap (see docstring: UB=Inf pre-first-optimality-iteration and gap=NaN on every
@@ -216,6 +256,8 @@ function Base.push!(
     push!(trace.retry_count_trace, Int(retry_count))
     push!(trace.nogood_count_trace, Int(nogood_count))
     push!(trace.solve_time_trace, float(solve_time))
+    push!(trace.socp_maxgap_trace, float(socp_maxgap))
+    push!(trace.policy_action_trace, policy_action)
     trace.iters += 1
     return trace
 end
@@ -237,7 +279,8 @@ end
     trace_summary(trace::BendersTrace) -> NamedTuple
 
 Summarize `trace` as
-`(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries, total_nogoods)`.
+`(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries, total_nogoods,
+n_inexact_iterations)`.
 On an empty trace, returns `iters = 0` and all others as `NaN`/`0` sentinels.
 Otherwise `final_LB`/`final_UB`/`final_gap` are the LAST recorded row's values,
 `max_cuts = maximum(trace.n_cuts_trace)`, `total_retries = sum(trace.retry_count_trace)`
@@ -248,7 +291,12 @@ plan 24-03, ADDITIVE, mirrors `total_retries`'s own `sum(...)` pattern exactly):
 D-16's "never invisible" requirement for the count of anti-stall no-good cuts fired
 across the whole run. `m > 0` here is informational only — it never fails a run;
 `solve_stackelberg!` (plan 24-04) downgrades its own `converged_via` attribution to
-`:nogood_assisted` when `total_nogoods > 0`.
+`:nogood_assisted` when `total_nogoods > 0`. `n_inexact_iterations =
+count(!isnan, trace.socp_maxgap_trace)` (Phase 30, BILEV-04b, plan 30-04, ADDITIVE,
+mirrors `total_retries`'s own always-computed-sum-over-column pattern): the number of
+iterations where the oracle's exactness gate was data-driven-engaged with a recorded
+cone gap (`:certify_incumbent`/`:reject` branches) — `0` on an empty trace and on every
+run where `inexact_policy`'s SOCP-inexactness branches never fired.
 """
 function trace_summary(trace::BendersTrace)
     trace.iters == 0 && return (;
@@ -259,6 +307,7 @@ function trace_summary(trace::BendersTrace)
         max_cuts = 0,
         total_retries = 0,
         total_nogoods = 0,
+        n_inexact_iterations = 0,
     )
     return (;
         iters = trace.iters,
@@ -268,6 +317,7 @@ function trace_summary(trace::BendersTrace)
         max_cuts = maximum(trace.n_cuts_trace),
         total_retries = sum(trace.retry_count_trace),
         total_nogoods = sum(trace.nogood_count_trace),
+        n_inexact_iterations = count(!isnan, trace.socp_maxgap_trace),
     )
 end
 
