@@ -73,3 +73,31 @@ end
     @test r.violations.max_overload_ratio > 1.0
     @test r.raw_status == "Solve_Succeeded"
 end
+
+@testitem "planning ac_recheck: a failed AC re-check is reported on ac_report, never thrown past a converged result (WR-03 iter 2)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # Phase 30 code review iteration 2 (WR-03). `solve_stackelberg!` builds its
+    # `ac_report` through `_incumbent_ac_report`, which must turn an Ipopt
+    # non-convergence (a tooling failure of the diagnostic) into a REPORTED failure.
+    # MEASURED 2026-10-01 (scratchpad fix2/probe_wr03.jl): on the single-Thermostatic
+    # T=1 population (fixed 0.01 load at bus 2), the pin z = [0.0] cannot serve the load,
+    # and Ipopt does not reach LOCALLY_SOLVED (ac_recheck_incumbent throws its named
+    # "FAILED to reach LOCALLY_SOLVED" ErrorException).
+    T = 1
+    feeder = TSODSO.ieee13_modified()
+    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
+
+    @test_throws ErrorException TSODSO.ac_recheck_incumbent(feeder, [agg], [-1.0], T, [0.0])
+    r = TSODSO._incumbent_ac_report(feeder, [agg], [-1.0], T, [0.0], 12.0)
+    @test !r.ok
+    @test r.raw_status == "AC_RECHECK_FAILED"
+    @test r.violations === nothing && r.p_import === nothing
+    @test isnan(r.ac_welfare) && isnan(r.welfare_gap)
+    @test r.socp_welfare == 12.0
+    @test occursin("FAILED to reach LOCALLY_SOLVED", r.error)
+    # A malformed call is NOT a tooling failure: it still propagates.
+    @test_throws ArgumentError TSODSO._incumbent_ac_report(feeder, [agg], [-1.0], T, [0.0, 0.0], 12.0)
+end

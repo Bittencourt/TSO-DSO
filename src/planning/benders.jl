@@ -681,6 +681,41 @@ function _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real
 end
 
 """
+    _incumbent_ac_report(feeder, aggregators, λ₀, T::Int, z, socp_welfare::Real) -> NamedTuple
+
+The `ac_report` of a converged, relaxation-only incumbent (Phase 30 code review iteration
+2, WR-03). Runs [`ac_recheck_incumbent`](@ref) at `z` and extends its report with
+`socp_welfare`, `welfare_gap = socp_welfare − ac_welfare` and `error = nothing`.
+
+The AC re-check is a DIAGNOSTIC of an already-converged result — the slowest and least
+robust solve in the pipeline (Ipopt on a nonconvex model). If it fails with an
+`ErrorException` (Ipopt does not reach `LOCALLY_SOLVED`), the failure is REPORTED here
+instead of discarding the converged result: `ok = false`, `violations = nothing`,
+`p_import = nothing`, `ac_welfare = NaN`, `raw_status = "AC_RECHECK_FAILED"`,
+`welfare_gap = NaN`, and `error` holds the full message. `ok = false` then means "not
+certified", never "physically infeasible". Any other exception type (e.g.
+`InterruptException`, an `ArgumentError` from a malformed call) propagates.
+"""
+function _incumbent_ac_report(feeder, aggregators, λ₀, T::Int, z, socp_welfare::Real)
+    return try
+        ac = ac_recheck_incumbent(feeder, aggregators, λ₀, T, z)
+        (; ac..., socp_welfare, welfare_gap = socp_welfare - ac.ac_welfare, error = nothing)
+    catch e
+        e isa ErrorException || rethrow()
+        (;
+            ok = false,
+            violations = nothing,
+            p_import = nothing,
+            ac_welfare = NaN,
+            raw_status = "AC_RECHECK_FAILED",
+            socp_welfare,
+            welfare_gap = NaN,
+            error = sprint(showerror, e),
+        )
+    end
+end
+
+"""
     _select_incumbent(relax::NamedTuple, exact::Union{Nothing,NamedTuple},
                       converged::Function) -> NamedTuple
 
@@ -924,11 +959,17 @@ was certified. When the returned point is certified, `exact_incumbent` is that s
 
 `ac_report` (BILEV-04b, plan 30-04) is `nothing` unless `ub_relaxation_only`, in which
 case it is [`ac_recheck_incumbent`](@ref)'s report at `z_best` —
-`(; ok, violations, p_import, ac_welfare, raw_status)`, where `ok` is `false` whenever a
-thermal/voltage limit is violated beyond the measured tolerance — extended with
-`socp_welfare = W_R(z_best)` and `welfare_gap = socp_welfare − ac_welfare` (the AC model
+`(; ok, violations, p_import, ac_welfare, raw_status)`, where `ok` is `false` whenever the
+limits-DROPPED, re-optimized AC dispatch violates a thermal/voltage limit beyond the
+measured tolerance (a violation INDICATOR, not proof that no limit-respecting AC dispatch
+exists at `z_best` — see that function's docstring) — extended with
+`socp_welfare = W_R(z_best)`, `welfare_gap = socp_welfare − ac_welfare` (the AC model
 drops the limits, so the gap is a diagnostic of how far the relaxation sits from AC
-physics at `z_best`, not a certified error bound). NEVER thrown, never silently passed.
+physics at `z_best`, not a certified error bound) and `error` (`nothing` on success). If
+the AC re-check itself fails (Ipopt does not converge), that failure is REPORTED in
+`ac_report` (`ok = false`, `raw_status = "AC_RECHECK_FAILED"`, `error` = the message)
+and the converged result is still returned (Phase 30 code review iteration 2, WR-03; see
+[`_incumbent_ac_report`](@ref)). NEVER thrown, never silently passed.
 
 # Throws
 
@@ -1512,16 +1553,12 @@ function solve_stackelberg!(
             # carries the SOCP welfare at the same z so the relaxation error in UB is
             # measured, not just flagged.
             ub_relaxation_only = incumbent_exactness === :inexact
-            ac_report = if ub_relaxation_only
-                ac = ac_recheck_incumbent(feeder, aggregators, λ₀, T, z_best)
-                (;
-                    ac...,
-                    socp_welfare = incumbent_welfare,
-                    welfare_gap = incumbent_welfare - ac.ac_welfare,
-                )
-            else
+            # WR-03 (iteration 2): a failure of this diagnostic is REPORTED on
+            # ac_report, never allowed to discard the converged result.
+            ac_report =
+                ub_relaxation_only ?
+                _incumbent_ac_report(feeder, aggregators, λ₀, T, z_best, incumbent_welfare) :
                 nothing
-            end
 
             # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
             # (continuous path) or UB matches known_optimum exactly within

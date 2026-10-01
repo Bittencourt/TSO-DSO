@@ -432,7 +432,12 @@ end
         @test rep.ok                                   # measured: no limit violated
         # The relaxation error in UB is MEASURED: SOCP vs AC welfare at the same z.
         @test isfinite(rep.socp_welfare) && isfinite(rep.ac_welfare)
-        @test rep.welfare_gap == rep.socp_welfare - rep.ac_welfare
+        # IN-04 (iteration 2): the old `welfare_gap == socp_welfare − ac_welfare` check only
+        # restated the definition. Pin the measured magnitude instead: |welfare_gap| ≈ 3e-10
+        # at z = 0.04 (the AC optimum matches the relaxation's welfare there).
+        @test abs(rep.welfare_gap) < 1.0e-6
+        # WR-03 (iteration 2): the AC re-check succeeded, so no failure is recorded.
+        @test rep.error === nothing
     end
 end
 
