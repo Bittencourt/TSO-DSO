@@ -154,3 +154,47 @@ end
     )
     @test_throws Exception solve_bilevel!(kkt)
 end
+
+@testitem "bilevel: follower's own x_inv <= x_inv_max carries a KKT multiplier (WR-01)" tags =
+    [:planning] begin
+    using TSODSO, JuMP
+
+    # Interior-fixture data (test_planning_certification_bilevel_interior.jl) with the
+    # follower's own investment ceiling shrunk to x_inv_max = 0.1, BELOW its
+    # unconstrained optimum x_inv_F = 0.148. Fix the leader at y_inv = 1.0 > x_inv_max.
+    # The true follower response is x_inv = 0.1, z = corridor_cap*x_inv = 1.0.
+    # Hand-derived multipliers: slack_y = 0.9 > 0, so rho_y = 0;
+    # mu_cap = (pi_tariff - c_op) - q_op*z = 1.5 - 1.0 = 0.5;
+    # rho_max = corridor_cap*mu_cap - c_inv = 10*0.5 - 0.2 = 4.8.
+    # Before the WR-01 fix (no rho_max in statio_x) this model was INFEASIBLE.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 1e-3, 1e-3, 99.0)],
+        1,
+    )
+    kkt = build_bilevel_kkt(
+        feeder,
+        LinDistFlow();
+        T = 1,
+        agg_bus = 2,
+        corridor_cap = 10.0,
+        x_inv_max = 0.1,
+        c_inv = 0.2,
+        c_op = [0.5],
+        pi_tariff = [2.0],
+        q_op = [1.0],
+        c_y = 0.05,
+        y_max = 5.0,
+        v_d = [3.0],
+        d_max = 10.0,
+    )
+    fix(kkt.y_inv, 1.0; force = true)
+    r = solve_bilevel!(kkt)
+
+    atol = 1e-6
+    @test isapprox(r.x_inv, 0.1; atol = atol)
+    @test isapprox(r.z[1], 1.0; atol = atol)
+    @test isapprox(r.mu_cap[1], 0.5; atol = atol)
+    @test isapprox(r.rho_y, 0.0; atol = atol)
+    @test isapprox(r.rho_max, 4.8; atol = atol)
+end

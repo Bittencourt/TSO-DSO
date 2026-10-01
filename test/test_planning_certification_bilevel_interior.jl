@@ -35,10 +35,10 @@
 # `corridor_cap=10.0`, `x_inv_max=10.0`, `c_inv=0.2`, `c_op=[0.5]`,
 # `pi_tariff=[2.0]`, `q_op=[1.0]`, `c_y=0.05`, `y_max=5.0`, `v_d=[3.0]`,
 # `d_max=10.0`, `agg_bus=2`. `x_inv_max`/`d_max` are deliberately LARGE relative to
-# every quantity actually reached (never bind on this fixture, verified below) —
-# this sidesteps a known modeling gap (the production KKT's `statio_x` has no dual
-# term for `x_inv <= x_inv_max`, only for `x_inv <= y_inv`), by construction, not by
-# fixing the model.
+# every quantity actually reached (never bind on this fixture, verified below).
+# The production KKT carries its own `rho_max` multiplier for `x_inv <= x_inv_max`
+# (29-REVIEW.md WR-01). That pair is exercised separately in
+# test/test_planning_bilevel.jl ("x_inv_max binds").
 #
 # Follower's own problem (given fixed `y_inv`, T=1, dropping the time index):
 #   min_{x_inv,z} c_inv*x_inv + (c_op-pi_tariff)*z + 0.5*q_op*z^2

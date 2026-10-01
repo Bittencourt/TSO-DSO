@@ -88,6 +88,9 @@ outer loop, unlike every other `planning/` file.
     `z[t] <= corridor_cap*x_inv` capacity constraint.
   - `rho_y::VariableRef` — the follower's own dual on `x_inv <= y_inv`.
   - `rho_lo::VariableRef` — the follower's own dual on `x_inv >= 0`.
+  - `rho_max::VariableRef` — the follower's own dual on `x_inv <= x_inv_max`
+    (29-REVIEW.md WR-01: `x_inv_max` is a bound in the FOLLOWER's own problem, so it
+    needs its own multiplier and SOS1 pair, not just a variable bound).
   - `mu_lo::ML` (`Vector{VariableRef}`, length `T`) — the follower's own dual on
     `z[t] >= 0`.
   - `m_ub::Float64` — the single closed-form (never guessed, never solver-measured)
@@ -104,6 +107,7 @@ struct BilevelKKT{Z, MC, D, ML}
     mu_cap::MC
     rho_y::VariableRef
     rho_lo::VariableRef
+    rho_max::VariableRef
     mu_lo::ML
     m_ub::Float64
     T::Int
@@ -138,7 +142,7 @@ own LP/QP at `y_probe in (0, y_max)` and read the duals. That approach had two d
 Write `a[t] = pi_tariff[t] - c_op[t]` (the follower's per-unit margin) and
 `a⁺ = max(a, 0)`, `a⁻ = max(-a, 0)`. The follower's KKT system is
 
-    statio_x:     c_inv - corridor_cap*Σ_t mu_cap[t] + rho_y - rho_lo = 0
+    statio_x:     c_inv - corridor_cap*Σ_t mu_cap[t] + rho_y + rho_max - rho_lo = 0
     statio_z[t]:  -a[t] + q_op[t]*z[t] + mu_cap[t] - mu_lo[t] = 0
 
 with `q_op[t] >= 0`, `z[t] >= 0` and all multipliers `>= 0`. The single-level MILP
@@ -154,9 +158,10 @@ sufficient.) Such a vector always exists:
   - `mu_lo[t] <= a⁻[t]`. It is nonzero only when `z[t] = 0`. Then
     `mu_lo[t] = mu_cap[t] - a[t]`, which is `a⁻[t]` under the choice above (or with
     `mu_cap[t] = 0`).
-  - `rho_y <= max(corridor_cap*Σ_t a⁺[t] - c_inv, 0)`. If `x_inv > 0`, then
-    `rho_lo = 0` and `rho_y = corridor_cap*Σ mu_cap - c_inv`. If `x_inv = 0`, `rho_y`
-    takes the positive part of the same quantity.
+  - `rho_y, rho_max <= max(corridor_cap*Σ_t a⁺[t] - c_inv, 0)`. If `x_inv > 0`, then
+    `rho_lo = 0` and `rho_y + rho_max = corridor_cap*Σ mu_cap - c_inv`. If
+    `x_inv = 0`, then `rho_max = 0` (its slack is `x_inv_max > 0`) and `rho_y` takes
+    the positive part of the same quantity.
   - `rho_lo <= c_inv`. It is nonzero only when `x_inv = 0`, where
     `rho_lo = c_inv - corridor_cap*Σ a⁺ + rho_y <= c_inv`, using the
     `rho_y = (corridor_cap*Σ a⁺ - c_inv)⁺` choice above.
@@ -184,7 +189,7 @@ function _follower_kkt_dual_bound(;
 
     mu_cap_max = maximum(a_plus)
     mu_lo_max = maximum(a_minus)
-    rho_y_max = max(corridor_cap * sum(a_plus) - c_inv, 0.0)
+    rho_y_max = max(corridor_cap * sum(a_plus) - c_inv, 0.0)   # also bounds rho_max
     rho_lo_max = Float64(c_inv)
 
     bound = max(1e-6, mu_cap_max, mu_lo_max, rho_y_max, rho_lo_max)
@@ -354,15 +359,19 @@ function build_bilevel_kkt(
     @variable(model, 0 <= mu_cap[t = 1:T] <= m_ub)
     @variable(model, 0 <= rho_y <= m_ub)
     @variable(model, 0 <= rho_lo <= m_ub)
+    @variable(model, 0 <= rho_max <= m_ub)   # WR-01: dual on the follower's x_inv <= x_inv_max
     @variable(model, 0 <= mu_lo[t = 1:T] <= m_ub)
 
     # ---- Follower KKT stationarity (linear equalities). -----------------------------
     # d/d(x_inv): x_inv is a SINGLE scalar shared across every t's cap constraint, so its
-    # stationarity sums mu_cap over t.
+    # stationarity sums mu_cap over t. `rho_max` (WR-01) is the multiplier of the
+    # follower's own `x_inv <= x_inv_max`; without it, a leader decision
+    # `y_inv > x_inv_max` whose follower response hits `x_inv_max` has no feasible
+    # KKT completion and the MILP wrongly declares it infeasible.
     @constraint(
         model,
         statio_x,
-        c_inv - corridor_cap * sum(mu_cap[t] for t in 1:T) + rho_y - rho_lo == 0
+        c_inv - corridor_cap * sum(mu_cap[t] for t in 1:T) + rho_y + rho_max - rho_lo == 0
     )
     # d/d(z[t]): the q_op[t]*z[t] term is STILL AFFINE (z[t] to the first power with a
     # constant literal coefficient q_op[t]) — this is the linear KKT stationarity
@@ -380,6 +389,7 @@ function build_bilevel_kkt(
     @constraint(model, slack_cap_nonneg[t = 1:T], slack_cap[t] >= 0)
     @expression(model, slack_y, y_inv - x_inv)
     @constraint(model, slack_y_nonneg, slack_y >= 0)
+    @expression(model, slack_max, x_inv_max - x_inv)   # >= 0 by x_inv's variable bound
 
     for t in 1:T
         @constraint(model, [slack_cap[t], mu_cap[t]] in MOI.SOS1([1.0, 2.0]))
@@ -387,6 +397,7 @@ function build_bilevel_kkt(
     end
     @constraint(model, [slack_y, rho_y] in MOI.SOS1([1.0, 2.0]))
     @constraint(model, [x_inv, rho_lo] in MOI.SOS1([1.0, 2.0]))
+    @constraint(model, [slack_max, rho_max] in MOI.SOS1([1.0, 2.0]))
 
     # ---- Network coupling: the follower's delivered z enters at the root; the ---------
     # leader's own served elastic demand d draws at agg_bus.
@@ -413,7 +424,7 @@ function build_bilevel_kkt(
     # in this single-level MILP's objective or constraints).
     @objective(model, Min, c_y * y_inv + sum(pi_tariff[t] * z[t] - v_d[t] * d[t] for t in 1:T))
 
-    return BilevelKKT(model, y_inv, x_inv, z, d, mu_cap, rho_y, rho_lo, mu_lo, m_ub, T)
+    return BilevelKKT(model, y_inv, x_inv, z, d, mu_cap, rho_y, rho_lo, rho_max, mu_lo, m_ub, T)
 end
 
 """
@@ -424,7 +435,7 @@ dual = false)` call (MILP — post-SOS1-bridge binaries mean JuMP duals are not
 available/meaningful; `dual=false` here is the CORRECT, not a weakened, gate).
 
 Then runs the Pitfall-3 at-bound sanity check: for every complementarity variable
-(`mu_cap[t]` ∀t, `rho_y`, `rho_lo`, `mu_lo[t]` ∀t), asserts its solved value is NOT
+(`mu_cap[t]` ∀t, `rho_y`, `rho_lo`, `rho_max`, `mu_lo[t]` ∀t), asserts its solved value is NOT
 within `1e-6` of `kkt.m_ub`. A dual sitting at its big-M bound is a hard error, never
 a warning.
 
@@ -437,7 +448,7 @@ which [`_follower_kkt_dual_bound`](@ref) derives in closed form for every
 `y_inv in [0, y_max]`. This check only catches a gross violation, such as a
 caller-supplied `safety < 1`.
 
-Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, mu_lo, model)`.
+Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, rho_max, mu_lo, model)`.
 """
 function solve_bilevel!(kkt::BilevelKKT)
     assert_solved!(kkt.model; dual = false)
@@ -476,6 +487,13 @@ function solve_bilevel!(kkt::BilevelKKT)
         "result where the true optimum may have been cut off; re-derive a looser bound " *
         "(increase `safety`) and re-build.",
     )
+    v = value(kkt.rho_max)
+    isapprox(v, kkt.m_ub; atol = atol_bound) && error(
+        "solve_bilevel!: complementarity variable rho_max sits at (or within $atol_bound " *
+        "of) the derived SOS1 bound m_ub=$(kkt.m_ub) (value=$v) — refusing to trust a " *
+        "result where the true optimum may have been cut off; re-derive a looser bound " *
+        "(increase `safety`) and re-build.",
+    )
 
     return (;
         y = value(kkt.y_inv),
@@ -486,6 +504,7 @@ function solve_bilevel!(kkt::BilevelKKT)
         mu_cap = value.(kkt.mu_cap),
         rho_y = value(kkt.rho_y),
         rho_lo = value(kkt.rho_lo),
+        rho_max = value(kkt.rho_max),
         mu_lo = value.(kkt.mu_lo),
         model = kkt.model,
     )
