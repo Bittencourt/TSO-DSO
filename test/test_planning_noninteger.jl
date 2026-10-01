@@ -38,6 +38,11 @@
         "build_planning_oracle" =>
             () ->
                 build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = [4.0], T = 1).model,
+        # Plan 30-01 (BILEV-04a): the slack-minimization feasibility oracle is a genuinely
+        # binary-free LP/SOCP (free-sign s_plus/s_minus, no investment/complementarity
+        # structure) — NOT added to EXEMPT.
+        "build_feasibility_oracle" =>
+            () -> build_feasibility_oracle(feeder, LinDistFlow(), [agg]; T = 1).model,
         "build_follower" =>
             () -> build_follower(;
                 T = 1,
