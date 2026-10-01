@@ -139,6 +139,39 @@ const ORACLE_INFEASIBLE_STATUSES =
 # floor, and ~39x below the smallest genuine v measured.
 const FEAS_CUT_V_TOL = 1.0e-6
 
+# WR-06 (Phase 30 code review iteration 2): the NOISE floor below which a slack-min value
+# `v` is indistinguishable from zero. Same measurement as FEAS_CUT_V_TOL above: |v| <=
+# 2.4e-10 at every relaxation-FEASIBLE pin probed (T=4 and T=1, so no growth with T was
+# observed over that range — `v` sums |s| over the T hours, and the per-instance noise
+# did not scale with it), and `FEAS_CUT_V_NOISE = 10 * 2.4e-10`. Between this floor and
+# FEAS_CUT_V_TOL a cut is "weak": still VALID (see `_feas_cut_class`), but it may not
+# separate z_k beyond the master's own 1e-7 feasibility tolerance.
+const FEAS_CUT_V_NOISE = 2.4e-9
+
+"""
+    _feas_cut_class(v::Real) -> Symbol
+
+Classify the slack-min value `v` at an oracle-infeasible trial `z_k` (Phase 30 code review
+iteration 2, WR-06):
+
+  - `:separating` if `v > FEAS_CUT_V_TOL` — the cut `v + u'(z − z_k) ≤ 0` excludes `z_k`
+    with headroom over the master's feasibility tolerance (the iteration-1 rule);
+  - `:weak` if `FEAS_CUT_V_NOISE < v ≤ FEAS_CUT_V_TOL` — the normal regime of Kelley
+    feasibility cuts converging on a CURVED boundary (voltage-driven or multi-hour
+    coupled), where each new trial sits on the last cut's plane and `v` shrinks toward 0.
+    The cut is still VALID — `V(z) ≥ v + u'(z − z_k)` by convexity of the slack-min value
+    `V`, and `V(z) = 0` at every feasible `z` — so it is appended and the loop continues;
+    only a deterministic re-proposal of the same `z_k` right after a weak cut is an error;
+  - `:disagree` if `v ≤ FEAS_CUT_V_NOISE` — the slack-min oracle sees `z_k` as feasible
+    within its own noise while the oracle reported an infeasibility status: the two
+    oracles genuinely disagree and no cut can carry information.
+"""
+function _feas_cut_class(v::Real)
+    v > FEAS_CUT_V_TOL && return :separating
+    v > FEAS_CUT_V_NOISE && return :weak
+    return :disagree
+end
+
 """
     corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100,
                     on_inexact::Symbol = :throw) -> Float64
@@ -882,10 +915,15 @@ invalid on that genuinely divergent-objective game (see that file's module heade
             oracle-feasibility-cut branch: `feas_oracle` (built once above) produces a
             `(v, u)` cut pair (`solve_feasibility_oracle!`/`add_feasibility_cut!`, plan
             30-01), which is appended only if `v > FEAS_CUT_V_TOL` (so it really
-            separates `z_k`; otherwise a named "oracles disagree" error is raised), the
-            loop `continue`s WITHOUT updating `UB` (T-11-06 analogue), and the trace row
-            records the oracle's REAL termination status and
-            `policy_action = :oracle_feasibility_cut`. Any OTHER untrusted outcome
+            separates `z_k`), the loop `continue`s WITHOUT updating `UB` (T-11-06
+            analogue), and the trace row records the oracle's REAL termination status,
+            the measured `v` (`feas_cut_v`) and `policy_action = :oracle_feasibility_cut`.
+            Phase 30 code review iteration 2 (WR-06): a cut with
+            `FEAS_CUT_V_NOISE < v ≤ FEAS_CUT_V_TOL` — the normal regime near a curved
+            boundary — is still VALID and is appended too (`policy_action =
+            :oracle_feasibility_cut_weak`); only a deterministic re-proposal of the same
+            `z_k` right after a weak cut, or `v ≤ FEAS_CUT_V_NOISE` (the two oracles
+            genuinely disagree), raises a named error. See [`_feas_cut_class`](@ref). Any OTHER untrusted outcome
             (exhausted retry ladder, iteration limit, numerical error) is a solver
             failure and is rethrown unchanged (Phase 30 code review, WR-01).
           * A throw from a TRUSTED solve can only be a post-solve gate (battery
@@ -1165,6 +1203,9 @@ function solve_stackelberg!(
     # trial means the relaxation's optimum sits there — detected below and turned into an
     # immediate, named error instead of silently burning the rest of the iteration budget.
     last_rejected_z = nothing
+    # WR-06 (iteration 2): the trial at which the IMMEDIATELY preceding iteration appended
+    # a WEAK oracle feasibility cut (see `_feas_cut_class`), or `nothing`.
+    last_weak_feas_z = nothing
     for k in 1:max_iter
         # WR-01/IN-04 (phase 12 review): solve_time_trace records ONLY the wall-clock
         # seconds spent inside this iteration's solve calls (master + follower, plus
@@ -1204,6 +1245,7 @@ function solve_stackelberg!(
 
         if !follower_res.feasible
             last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
+            last_weak_feas_z = nothing
             add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)
             checkpoint_iteration!(
                 (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
@@ -1293,19 +1335,29 @@ function solve_stackelberg!(
                     "Feasibility-oracle error: $(sprint(showerror, fo_err))",
                 )
             end
-            # WR-01: the cut evaluates to exactly `v` at z_k, so it SEPARATES z_k only if
-            # v clears the master's own feasibility tolerance (with headroom) — see
-            # FEAS_CUT_V_TOL's derivation. A smaller v means the oracle's infeasibility
-            # verdict and the slack-min oracle's ~zero slack DISAGREE about z_k; appending
-            # the non-separating row would let the master re-propose z_k until max_iter.
-            fo_res.v > FEAS_CUT_V_TOL || error(
+            # WR-01 / WR-06 (iteration 2): the cut evaluates to exactly `v` at z_k. It is
+            # VALID for any v >= 0 (convexity of the slack-min value), but separates z_k
+            # beyond the master's tolerance only for v > FEAS_CUT_V_TOL. See
+            # `_feas_cut_class` for the measured three-way rule.
+            feas_class = _feas_cut_class(fo_res.v)
+            feas_class === :disagree && error(
                 "solve_stackelberg!: oracle reported $(oracle_ts) at z_k=$(lb_res.z) " *
                 "(iteration $k), but the slack-minimization feasibility oracle measures " *
-                "only v=$(fo_res.v) <= FEAS_CUT_V_TOL=$(FEAS_CUT_V_TOL) of slack there — " *
-                "the two oracles disagree about z_k, and a cut with this v would not " *
-                "separate z_k from the master (WR-01). Refusing to append a " *
-                "non-separating cut.",
+                "only v=$(fo_res.v) <= FEAS_CUT_V_NOISE=$(FEAS_CUT_V_NOISE) of slack there " *
+                "(its own noise floor) — the two oracles disagree about z_k, so no " *
+                "feasibility cut carries any information (WR-01/WR-06).",
             )
+            if feas_class === :weak && last_weak_feas_z !== nothing &&
+               maximum(abs, lb_res.z .- last_weak_feas_z) <= 1e-9
+                error(
+                    "solve_stackelberg!: stalled near a curved feasibility boundary at " *
+                    "z_k=$(lb_res.z) (iteration $k): the previous iteration appended a " *
+                    "weak oracle feasibility cut there (FEAS_CUT_V_NOISE < v <= " *
+                    "FEAS_CUT_V_TOL), the master re-proposed the identical trial, and the " *
+                    "slack-min oracle again measures only v=$(fo_res.v) (WR-06).",
+                )
+            end
+            last_weak_feas_z = feas_class === :weak ? copy(lb_res.z) : nothing
             last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
             add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
             checkpoint_iteration!(
@@ -1325,7 +1377,12 @@ function solve_stackelberg!(
                 oracle_status = Symbol(oracle_ts),
                 retry_count = master_attempts[] - 1,
                 solve_time = t_solve,
-                policy_action = :oracle_feasibility_cut,
+                # WR-06 (iteration 2): a weak (valid, possibly non-separating) cut is
+                # labelled distinctly, and the measured v is recorded on every
+                # oracle-feasibility row so the regime can be measured.
+                policy_action = feas_class === :weak ? :oracle_feasibility_cut_weak :
+                                :oracle_feasibility_cut,
+                feas_cut_v = fo_res.v,
             )
             continue   # T-11-06: an oracle feasibility cut NEVER updates UB
         end
@@ -1410,6 +1467,7 @@ function solve_stackelberg!(
         # WR-06/WR-02: remember a rejected trial for the stall backstop above; any other
         # optimality iteration resets it.
         last_rejected_z = rejected_k ? copy(lb_res.z) : nothing
+        last_weak_feas_z = nothing   # WR-06: optimality cuts are added — the master moves on
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
         add_optimality_cut!(master, :op, -oracle_res.cost, oracle_res.π, lb_res.z)

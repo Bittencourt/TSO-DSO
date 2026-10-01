@@ -107,6 +107,11 @@ Fields:
     success/follower-feasibility path). No validity-restriction guard beyond its
     `Symbol` type, mirroring `oracle_status_trace`'s own lenient treatment — this is
     a diagnostics column, not a correctness gate.
+  - `feas_cut_v_trace::Vector{Float64}` — Phase 30 code review iteration 2 (WR-06),
+    ADDITIVE: the slack-minimization value `v` measured at `z_k` on every ORACLE
+    feasibility-cut row (`:oracle_feasibility_cut` / `:oracle_feasibility_cut_weak`), so
+    the near-boundary regime is measurable; `NaN` on every other row (including follower
+    feasibility rows, whose Farkas `v` is not recorded here).
   - `iters::Int` — the number of recorded rows (`== length(gap_trace) == …`).
 
 Construct empty via [`BendersTrace()`](@ref); append one row with [`push!`](@ref)
@@ -127,6 +132,7 @@ mutable struct BendersTrace
     solve_time_trace::Vector{Float64}
     socp_maxgap_trace::Vector{Float64}
     policy_action_trace::Vector{Symbol}
+    feas_cut_v_trace::Vector{Float64}
     iters::Int
 end
 
@@ -150,6 +156,7 @@ BendersTrace() = BendersTrace(
     Float64[],
     Float64[],
     Symbol[],
+    Float64[],
     0,
 )
 
@@ -167,7 +174,8 @@ end
     push!(trace::BendersTrace, k::Integer; LB, UB, gap, cut_type, n_cuts,
           master_status, oracle_status = :not_solved, retry_count,
           nogood_count::Integer = 0, solve_time,
-          socp_maxgap::Real = NaN, policy_action::Symbol = :none)
+          socp_maxgap::Real = NaN, policy_action::Symbol = :none,
+          feas_cut_v::Real = NaN)
         -> BendersTrace
 
 Append ONE new row to `trace`, incrementing `trace.iters`. `k` must be the next
@@ -204,6 +212,8 @@ correctness gate.
 PRE-EXISTING `benders.jl` call site omits this keyword entirely and keeps compiling,
 recording `0` here — byte-identical to its behavior before this keyword existed.
 
+**`feas_cut_v` is ADDITIVE (Phase 30 code review iteration 2, WR-06): defaults to `NaN`.**
+
 **`socp_maxgap`/`policy_action` are ADDITIVE (Phase 30, BILEV-04b, plan 30-04): default
 to `NaN`/`:none`.** Every PRE-EXISTING `benders.jl` call site (and every call site in
 this file's own pre-30-04 history) omits both keywords entirely and keeps compiling,
@@ -227,6 +237,7 @@ function Base.push!(
     solve_time::Real,
     socp_maxgap::Real = NaN,
     policy_action::Symbol = :none,
+    feas_cut_v::Real = NaN,
 )
     _assert_sequential_trace(trace, k)
     cut_type in (:optimality, :feasibility, :rejected) || throw(
@@ -259,6 +270,7 @@ function Base.push!(
     push!(trace.solve_time_trace, float(solve_time))
     push!(trace.socp_maxgap_trace, float(socp_maxgap))
     push!(trace.policy_action_trace, policy_action)
+    push!(trace.feas_cut_v_trace, float(feas_cut_v))
     trace.iters += 1
     return trace
 end

@@ -276,6 +276,11 @@ end
         # realistic multi-bus fixture, not just plan 30-01's own purpose-built ones):
         # the SAME run also hits a genuine MOI.INFEASIBLE trial along the way.
         @test :oracle_feasibility_cut in result.trace.policy_action_trace
+        # WR-06 (iteration 2): the measured slack-min v is recorded on every oracle
+        # feasibility row (NaN elsewhere); on this run every such cut is separating.
+        fc = findall(a -> a in (:oracle_feasibility_cut, :oracle_feasibility_cut_weak), tr.policy_action_trace)
+        @test all(i -> tr.feas_cut_v_trace[i] > TSODSO.FEAS_CUT_V_TOL, fc)
+        @test all(i -> isnan(tr.feas_cut_v_trace[i]), setdiff(1:(tr.iters), fc))
     end
 end
 
@@ -523,4 +528,22 @@ end
     @test TSODSO._select_incumbent(relax_inexact, exact, strict) === relax_inexact
     # 4. No certified iterate at all.
     @test TSODSO._select_incumbent(relax_inexact, nothing, conv) === relax_inexact
+end
+
+@testitem "planning inexact policy: the oracle-feasibility-cut v rule degrades gracefully near a curved boundary (WR-06 iter 2)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # Phase 30 code review iteration 2 (WR-06): `_feas_cut_class` is the measured
+    # three-way rule (see FEAS_CUT_V_TOL / FEAS_CUT_V_NOISE: noise <= 2.4e-10 at feasible
+    # pins, smallest genuine v measured 3.86e-5). A v between the noise floor and the
+    # separation tolerance used to abort the run; it is now a valid, appended "weak" cut.
+    @test TSODSO.FEAS_CUT_V_NOISE < TSODSO.FEAS_CUT_V_TOL
+    @test TSODSO._feas_cut_class(3.86e-5) === :separating        # smallest measured genuine v
+    @test TSODSO._feas_cut_class(2 * TSODSO.FEAS_CUT_V_TOL) === :separating
+    @test TSODSO._feas_cut_class(TSODSO.FEAS_CUT_V_TOL) === :weak
+    @test TSODSO._feas_cut_class(1.0e-8) === :weak
+    @test TSODSO._feas_cut_class(TSODSO.FEAS_CUT_V_NOISE) === :disagree
+    @test TSODSO._feas_cut_class(2.4e-10) === :disagree          # measured noise floor
+    @test TSODSO._feas_cut_class(0.0) === :disagree
 end
