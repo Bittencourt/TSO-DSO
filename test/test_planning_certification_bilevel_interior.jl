@@ -446,4 +446,46 @@ end
     @test r_above.rho_y < 1e-6
     @test isapprox(r_above.x_inv, F.INTERIOR_XINV_HAND; atol = 1e-4)
     @test isapprox(r_above.rho_y, F.RHO_Y_ABOVE_HAND; atol = 1e-6)
+
+    # --- SOS1 branch-switch + z≡0 guard on the PRODUCTION MILP (29-REVIEW.md WR-05) ---
+    # The block above only exercises the oracle QP. The production optimum sits
+    # exactly at the kink y = 0.148 (slack_y = 0 AND rho_y = 0, degenerate), so it
+    # never shows [slack_y, rho_y] in a strict branch. Fix the leader decision in the
+    # production KKT-MILP itself and read ITS complementarity variables:
+    #   y = 0.05 (below the kink): slack_y = 0, rho_y = 14.8 - 100*0.05 = 9.8 > 0,
+    #            x_inv = 0.05, z = 0.5;
+    #   y = 1.0  (above the kink): slack_y = 0.852 > 0, rho_y = 0,
+    #            x_inv = 0.148, z = 1.48 (also a production-level z≡0 mutation guard).
+    # A production reformulation with a broken rho_y pair (or a z≡0 stub) fails here.
+    for (y_fixed, expect_rho, expect_x, expect_z) in (
+        (0.05, F.RHO_Y_BELOW_HAND, 0.05, 0.5),
+        (1.0, F.RHO_Y_ABOVE_HAND, F.INTERIOR_XINV_HAND, F.INTERIOR_Z_HAND),
+    )
+        k = build_bilevel_kkt(
+            feeder,
+            LinDistFlow();
+            T = 1,
+            agg_bus = F.agg_bus,
+            corridor_cap = F.corridor_cap,
+            x_inv_max = F.x_inv_max,
+            c_inv = F.c_inv,
+            c_op = F.c_op,
+            pi_tariff = F.pi_tariff,
+            q_op = F.q_op,
+            c_y = F.c_y,
+            y_max = F.y_max,
+            v_d = F.v_d,
+            d_max = F.d_max,
+        )
+        fix(k.y_inv, y_fixed; force = true)
+        r = solve_bilevel!(k)
+        @test isapprox(r.rho_y, expect_rho; atol = 1e-6)
+        @test isapprox(r.x_inv, expect_x; atol = 1e-6)
+        @test isapprox(r.z[1], expect_z; atol = 1e-6)
+        if expect_rho > 0
+            @test isapprox(r.y - r.x_inv, 0.0; atol = 1e-6)   # slack_y = 0 branch
+        else
+            @test r.y - r.x_inv > 0.5                          # slack_y > 0 branch
+        end
+    end
 end
