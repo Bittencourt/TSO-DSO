@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 30-04-PLAN.md
-last_updated: "2026-10-01T12:42:08.148Z"
+stopped_at: Completed 30-06-PLAN.md (Phase 30 CERTIFIED COMPLETE)
+last_updated: "2026-10-01T15:45:15.771Z"
 last_activity: 2026-10-01
 progress:
   total_phases: 12
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 44
-  completed_plans: 44
-  percent: 33
+  completed_plans: 45
+  percent: 42
 ---
 
 # Project State
@@ -21,13 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 30 — SOCP-in-the-Loop Benders on a Multi-Bus Feeder
+**Current focus:** Phase 31 — GNE Nash Fixture, Integer N>1 & Planning Docs Refresh (next)
 
 ## Current Position
 
-Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — EXECUTING
-Plan: 5 of 6
-Status: Ready to execute
+Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — COMPLETE
+Plan: 6 of 6
+Status: Complete — certified full suite 31091/0/0/5 (+220 over Phase-29 baseline); see
+  `.planning/phases/30-socp-in-the-loop-benders-on-a-multi-bus-feeder/30-FINDINGS.md`
 Last activity: 2026-10-01
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
@@ -179,6 +180,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 30 P02 | 75min | 3 tasks | 5 files |
 | Phase 30 P04 | 95min | 3 tasks | 5 files |
 | Phase 30 P05 | 50min | 2 tasks | 2 files |
+| Phase 30 P06 | 15min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -245,6 +247,8 @@ Recent decisions affecting current work:
 - [Phase 30]: Phase 30-04: W2 overhead measured -- derive_alpha_op_lb ~13.1ms vs ~695.5ms full solve_stackelberg! best-response (~1.9%) on the toy two-bus fixture, now paid unconditionally through every solve_stackelberg!/run_nash! best-response; carried to Phase 31 FINDINGS
 - [Phase 30]: Extended the BILEV-03 cross-check tolerance formula to a THIRD source (Benders loop's own converged |UB-LB| absolute gap) beyond the two solver-precision duality gaps the plan named — found necessary by direct measurement (the two-source formula fails the cross-check by ~53x).
 - [Phase 30]: T=24 Literate IEEE-13 demonstration tightens follower/master investment-ceiling kwargs vs the T=4 headline test, after a live probe found the T=4-scale kwargs throw a genuine assert_battery_complementarity! violation under the full 24-hour price swing.
+- [Phase 30]: Phase 30-06: golden-audit base corrected to the TRUE Phase-29 close commit e5dc782 (not the plan's own flawed tail-1-grep result 990b51c, an intermediate Phase-29 commit) -- exit 0, zero flagged moves, re-confirmed after the post-handoff code review
+- [Phase 30]: Phase 30 certified complete: 31091 pass / 0 fail / 0 error / 5 broken (+220 over Phase-29 baseline, zero new broken); 3-iteration code review left 3 open Laporte-Louveaux integer-recourse warnings (unconfirmed ALMOST_INFEASIBLE handling, unenforced Q_nu>=L cut precondition, unwidened convergence certificate under accepted bound slack), carried forward as Phase 31/BILEV-07 input
 
 ### Roadmap Evolution
 
@@ -468,8 +472,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-01T12:41:14.830Z
-Stopped at: Completed 30-04-PLAN.md
+Last session: 2026-10-01T15:45:15.726Z
+Stopped at: Completed 30-06-PLAN.md (Phase 30 CERTIFIED COMPLETE)
 Resume file: None
 
 ## Operator Next Steps
