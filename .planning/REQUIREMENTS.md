@@ -80,7 +80,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   bilevel answer, not the joint one.
 - [ ] **BILEV-03**: `solve_stackelberg!` runs with `ConvexBranchFlow` on a multi-bus feeder
   (IEEE-13 or larger) and T > 1 inside the Benders loop, and converges with a closed LB/UB gap.
-- [ ] **BILEV-04**: The planning oracle produces feasibility cuts when a pinned z is
+- [x] **BILEV-04**: The planning oracle produces feasibility cuts when a pinned z is
   voltage- or thermally infeasible, and handles SOCP inexactness at a pinned z with a documented
   policy (restricted formulation, AC fallback, or reported cut rejection) instead of crashing the
   loop.
@@ -182,7 +182,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | BILEV-01 | Phase 29 | Complete |
 | BILEV-02 | Phase 29 | Complete |
 | BILEV-03 | Phase 30 | Pending |
-| BILEV-04 | Phase 30 | Pending |
+| BILEV-04 | Phase 30 | Complete |
 | BILEV-05 | Phase 30 | Pending |
 | BILEV-06 | Phase 31 | Pending |
 | BILEV-07 | Phase 31 | Pending |

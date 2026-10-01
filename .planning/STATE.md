@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: ready_to_plan
-stopped_at: Phase 29 complete (4/4) — ready to discuss Phase 30
-last_updated: 2026-10-01T02:25:35.782Z
+status: executing
+stopped_at: Completed 29-03-PLAN.md (phase close)
+last_updated: "2026-10-01T10:48:17.965Z"
 last_activity: 2026-10-01
 progress:
   total_phases: 12
   completed_phases: 4
-  total_plans: 38
-  completed_plans: 39
+  total_plans: 44
+  completed_plans: 40
   percent: 33
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 30 — socp in the loop benders on a multi bus feeder
+**Current focus:** Phase 30 — SOCP-in-the-Loop Benders on a Multi-Bus Feeder
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
-Status: Ready to plan
+Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
 Last activity: 2026-10-01
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
@@ -175,6 +175,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 29 P02 | 25min | 2 tasks | 2 files |
 | Phase 29 P04 | 33min | 2 tasks | 1 files |
 | Phase 29 P03 | 90min | 2 tasks | 2 files |
+| Phase 30 P01 | 55min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -232,6 +233,8 @@ Recent decisions affecting current work:
 - [Phase 29]: Phase 29 P04 (BILEV-02 BLOCKER-1): closed the fixture-adequacy gap with a second, non-degenerate (q_op=1.0) interior certification fixture in test/test_planning_certification_bilevel_interior.jl, self-contained (no edits to test/fixtures_planning.jl); GAP_FLOOR_INTERIOR/Z_GAP_FLOOR_INTERIOR set to 1e-6 (looser than plan 29-02's 1e-8) from this fixture's own measured cross-solver (HiGHS-MILP-KKT vs Clarabel-QP) residual ~3.7e-5
 - [Phase 29]: P03 (phase close): audit_goldens.py scoped --base to the recorded Phase-28 close commit (3d4beb0), isolating exactly what Phase 29 changed; zero flagged golden moves across the whole phase at both pre-review (990b51c) and post-review (a5e9900) HEADs
 - [Phase 29]: P03 close: full suite certified 30871/0/0/5 (+168 over Phase-28's 30703/0/0/5, fully attributed: +166 bilevel test files incl. a 3-iteration code-review hardening cycle, +2 PVAL-04 build_bilevel_kkt registration); zero goldens re-pinned, zero worktree contamination
+- [Phase 30-01]: Feasibility-cut gradient sign empirically re-derived as u=+dual.(pin) (un-negated), opposite convention from solve_planning_oracle!'s own pi -- verified against the full measured feasible/infeasible map on ieee13_modified()
+- [Phase 30-01]: Voltage-infeasible fixture uses a thermally-widened (smax=90) IEEE-13 variant with an ample-battery population, not the unmodified feeder -- thermal always binds first as z grows on the real feeder
 
 ### Roadmap Evolution
 
@@ -455,7 +458,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-01T02:19:08.082Z
+Last session: 2026-10-01T10:44:12.546Z
 Stopped at: Completed 29-03-PLAN.md (phase close)
 Resume file: None
 
