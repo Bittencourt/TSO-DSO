@@ -229,8 +229,9 @@ end
                           max_attempts::Int = 4, Δt::Real = 1.0,
                           rtol_exact::Real = 1e-4,
                           τ::Real = (SOCP path ? 1e-3 : 1e-6),
-                          attempts_out::Union{Nothing,Ref{Int}} = nothing)
-        -> (; cost, π, π_s, dadp, ctx)
+                          attempts_out::Union{Nothing,Ref{Int}} = nothing,
+                          on_inexact::Symbol = :throw)
+        -> (; cost, π, π_s, dadp, ctx, exactness, socp_maxgap)
 
 Re-solve the built-ONCE [`PlanningOracle`](@ref) `o` at the coupling-flow trial
 `z_trial` (D-01/D-11: `set_parameter_value.` only, NEVER a rebuild) via
@@ -270,7 +271,22 @@ Returns a `NamedTuple`:
   - `dadp` — the distribution price at the first aggregator's bus
     (`dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])`), mirroring
     `solve_welfare`'s `priced = aggregators[1].bus` convention;
-  - `ctx`  — the solved [`ModelContext`](@ref), so a caller can read any other dual.
+  - `ctx`  — the solved [`ModelContext`](@ref), so a caller can read any other dual;
+  - `exactness` — the exactness gate's EXPLICIT verdict (Phase 30 code review, CR-01/
+    CR-03): `:exact` (the gate ran and passed), `:inexact` (the gate ran and failed —
+    only ever returned under `on_inexact = :report`), or `:not_applicable` (no `:l`
+    stash — DC/LinDistFlow — so the gate never ran);
+  - `socp_maxgap` — the measured absolute cone residual `max |l·v − (P²+Q²)|` whenever
+    the gate ran (exact or inexact), `NaN` when `exactness === :not_applicable`.
+
+`on_inexact` (Phase 30 code review, CR-01/CR-03): `:throw` (the default — byte-identical
+to every pre-Phase-30 call site) rethrows the exactness gate's own `ErrorException`;
+`:report` returns the inexact result instead, with `exactness = :inexact`. In BOTH modes
+the battery-complementarity gate runs on every result that is returned — an inexact
+`:report` result is never exempted from it (a complementarity violation always throws).
+`:report` exists for `solve_stackelberg!`'s `inexact_policy` dispatch, so the caller
+learns the verdict from an explicit return field rather than inferring it from which
+side effects a throw left behind.
 
 Throws `ArgumentError` when `length(z_trial) != o.T` (T-10-06: a shape mismatch must
 fail loudly before `set_parameter_value.` — never silently truncate/pad the trial).
@@ -286,11 +302,20 @@ function solve_planning_oracle!(
     rtol_exact::Real = 1e-4,
     τ::Real = (get(o.ctx.meta, :problem_class, nothing) isa SOCP ? 1e-3 : 1e-6),
     attempts_out::Union{Nothing, Ref{Int}} = nothing,
+    on_inexact::Symbol = :throw,
 )
     length(z_trial) == o.T ||
         throw(ArgumentError("z_trial has length $(length(z_trial)), expected T=$(o.T)"))
+    on_inexact in (:throw, :report) || throw(
+        ArgumentError(
+            "solve_planning_oracle!: on_inexact must be :throw or :report, got $(repr(on_inexact))",
+        ),
+    )
 
     set_parameter_value.(o.z, z_trial)   # D-01/D-11: mutate the Parameter, no rebuild
+    # Phase 30 code review (CR-03): drop any `:socp_maxgap` certificate left by a PRIOR
+    # solve of this build-once model, so a stashed key always describes THIS solve.
+    delete!(o.ctx.meta, :socp_maxgap)
 
     # D-08: solve_with_retry! is the SOLE solve entry point (its internal STRICT gate,
     # dual = true, ensures π is read only after a trusted solve — T-10-05).
@@ -308,14 +333,39 @@ function solve_planning_oracle!(
     # `:l` stash: only ConvexBranchFlow stashes `:l`, so DC/LinDistFlow skip untouched.
     # The pin removes the priced-export SOC-exactness enabler, making this gate MORE
     # load-bearing at an off-optimal z_trial than in the free welfare solve, not less.
+    #
+    # Phase 30 code review (CR-01/CR-03): the gate's verdict is captured EXPLICITLY here,
+    # at the one call site that can produce it, instead of being inferred later by a
+    # caller from whether `:socp_maxgap` happens to be stashed. `assert_socp_exact!`'s ONLY
+    # `ErrorException` is its inexactness verdict (its malformed-feeder guard is an
+    # `ArgumentError`, a missing stash a `KeyError` — both propagate untouched below).
+    # Under `on_inexact = :throw` (the default) that verdict is rethrown unchanged — the
+    # byte-identical pre-Phase-30 behavior every other caller relies on. Under
+    # `on_inexact = :report` the verdict is RETURNED (`exactness = :inexact`, the raw cone
+    # residual in `socp_maxgap`) instead of thrown — and, crucially, execution still falls
+    # through to the battery-complementarity gate below, which is NEVER skipped.
+    # `:socp_maxgap` is stashed ONLY on an exact verdict: its presence is the PF-04
+    # certificate other consumers check (e.g. `extract_dlmp`), so it must never be set on
+    # an inexact solve.
+    exactness = :not_applicable
+    socp_maxgap = NaN
     if haskey(o.ctx.meta, :pf_vars) && haskey(o.ctx.meta[:pf_vars], :l)
-        o.ctx.meta[:socp_maxgap] = assert_socp_exact!(o.ctx; rtol = rtol_exact)
+        try
+            socp_maxgap = assert_socp_exact!(o.ctx; rtol = rtol_exact)
+            o.ctx.meta[:socp_maxgap] = socp_maxgap
+            exactness = :exact
+        catch e
+            (e isa ErrorException && on_inexact === :report) || rethrow()
+            exactness = :inexact
+            socp_maxgap = socp_relaxation_gap(o.ctx)
+        end
     end
 
     # CR-03 / App. C MANDATORY battery complementarity at the PINNED point (mirrors
     # solve_welfare, threat T-03-13): degenerate p_ch·p_dch co-activation is MORE likely
     # at a pinned off-optimal z than at the free optimum. Data-driven no-op when no
-    # batteries were registered under ctx.meta[:agg_device_vars].
+    # batteries were registered under ctx.meta[:agg_device_vars]. Runs on EVERY returned
+    # result, including an `on_inexact = :report` inexact one (Phase 30 CR-01).
     assert_battery_complementarity!(o.ctx; τ = τ, T = o.T)
 
     π = dual.(o.pin)                                    # length-T pin dual (D-01/D-05)
@@ -323,7 +373,7 @@ function solve_planning_oracle!(
     dadp = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])
     cost = objective_value(o.model)
 
-    return (; cost, π, π_s, dadp, ctx = o.ctx)
+    return (; cost, π, π_s, dadp, ctx = o.ctx, exactness, socp_maxgap)
 end
 
 export PlanningOracle, build_planning_oracle, solve_planning_oracle!

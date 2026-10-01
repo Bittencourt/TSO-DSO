@@ -657,35 +657,32 @@ invalid on that genuinely divergent-objective game (see that file's module heade
         checkpoint with `gap = NaN` and `feasible = false`, then `continue` — a
         feasibility cut NEVER updates `UB` (T-11-06); the oracle is NEVER solved on
         this branch.
-      + Else: `oracle_res = solve_planning_oracle!(oracle, lb_res.z)` — only a
-        follower-deliverable `z_k` ever reaches the oracle. A throw here is
-        disambiguated (never by string-matching) using ONLY information
-        `solve_planning_oracle!` already computes (BILEV-04a/BILEV-04b, plan 30-04):
+      + Else: `oracle_res = solve_planning_oracle!(oracle, lb_res.z; on_inexact)` — only
+        a follower-deliverable `z_k` ever reaches the oracle. `on_inexact = :throw` under
+        `:strict`, `:report` otherwise; the oracle returns its exactness gate's verdict
+        as an EXPLICIT field (`oracle_res.exactness`), and its battery-complementarity
+        gate runs on EVERY returned result, inexact or not (Phase 30 code review,
+        CR-01/CR-03 — the verdict is never inferred from a stashed side-effect key, and
+        no result can bypass the complementarity gate):
 
-          * `!is_solved_and_feasible(oracle.model; dual = true)` — the trusted-solve
-            gate itself failed (a genuine `MOI.INFEASIBLE`, the exactness gate never
-            ran) — routes to the NEW oracle-feasibility-cut branch: `feas_oracle`
+          * A throw from an UNTRUSTED solve (`!is_solved_and_feasible(oracle.model;
+            dual = true)`) routes to the oracle-feasibility-cut branch: `feas_oracle`
             (built once above) produces a genuine `(v, u)` cut pair
             (`solve_feasibility_oracle!`/`add_feasibility_cut!`, plan 30-01), the loop
             `continue`s WITHOUT updating `UB` (T-11-06 analogue), and the trace row
             records `policy_action = :oracle_feasibility_cut`.
-          * `haskey(oracle.ctx.meta, :socp_maxgap)` — exactness ALREADY passed this
-            iteration; the throw came from `assert_battery_complementarity!` or
-            something else entirely — OUT OF SCOPE for `inexact_policy`, propagated
-            unchanged (never silently swallowed).
-          * Otherwise — a genuine exactness-class throw (`assert_socp_exact!` itself
-            failed) — dispatches on `inexact_policy` (BILEV-04b): `:strict` rethrows
-            (today's byte-identical behavior); `:reject` skips the inexact trial
-            entirely (no cut appended, `UB` never updated, trace row
-            `cut_type = :rejected`/`policy_action = :rejected`); `:certify_incumbent`
-            (the default) reconstructs the already-solved model's
-            `(cost, π, π_s, dadp, ctx)` directly (the Julia-level exception prevented
-            `solve_planning_oracle!` from returning it, but the underlying solve IS
-            trustworthy) and proceeds as if it had returned normally, recording
-            `policy_action = :certified_incumbent` and the measured
+          * A throw from a TRUSTED solve can only be a post-solve gate (battery
+            complementarity on any formulation, or exactness under `:strict`) — OUT OF
+            SCOPE for the feasibility branch, propagated UNCHANGED with its own message.
+          * A returned result with `exactness === :inexact` dispatches on
+            `inexact_policy` (BILEV-04b): `:reject` skips the inexact trial entirely (no
+            cut appended, `UB` never updated, trace row `cut_type = :rejected`/
+            `policy_action = :rejected`); `:certify_incumbent` (the default) accepts the
+            relaxation's cut (a valid under-estimator of the RELAXED value function),
+            recording `policy_action = :certified_incumbent` and the measured
             `socp_maxgap` on the trace.
 
-        On a successful (or `:certify_incumbent`-reconstructed) solve: the universal
+        On a successful (or `:certify_incumbent`-accepted) solve: the universal
         runtime epigraph floor guard (`_assert_epigraph_floor`, BILEV-05) checks
         `-oracle_res.cost >= lower_bound(master.α_op) - tol` and
         `follower_res.cost >= lower_bound(master.α_x) - tol`, UNCONDITIONALLY,
@@ -961,45 +958,79 @@ function solve_stackelberg!(
 
         # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
         oracle_attempts = Ref(1)
-        # Phase 30 (BILEV-04a/BILEV-04b, plan 30-04): clear any STALE :socp_maxgap key
-        # left over from a PRIOR iteration's success before this iteration's solve, so
-        # the disambiguation below (this plan's <interfaces> recipe) can tell "exactness
-        # already passed THIS iteration" apart from a stale leftover.
-        delete!(oracle.ctx.meta, :socp_maxgap)
         # Per-iteration policy bookkeeping (Phase 30, BILEV-04b): overwritten below only
-        # on the branches that actually engage inexact_policy; :none/NaN on every
-        # ordinary success path, mirroring every other sentinel default in this loop.
+        # on the branches that actually engage inexact_policy; :none on every ordinary
+        # success path, mirroring every other sentinel default in this loop.
         policy_action_k = :none
         socp_maxgap_k = NaN
         t0_ns = time_ns()
+        # Phase 30 code review (CR-01/CR-03): the exactness verdict is an EXPLICIT return
+        # field of solve_planning_oracle! (`exactness`), never inferred from which side
+        # effects a throw left behind. Under `:strict` the oracle's own `:throw` mode
+        # rethrows the gate's error unchanged (byte-identical to pre-Phase-30). Under
+        # `:reject`/`:certify_incumbent` the `:report` mode returns the inexact result —
+        # and the battery-complementarity gate still runs on it inside the oracle, so a
+        # complementarity violation ALWAYS throws and can never become a cut, a UB, or an
+        # incumbent (CR-01). The catch below therefore only ever sees a genuine
+        # solve failure or an out-of-scope gate throw (complementarity, or exactness under
+        # `:strict`); the latter are rethrown UNCHANGED.
         oracle_res = try
-            solve_planning_oracle!(oracle, lb_res.z; attempts_out = oracle_attempts)
+            solve_planning_oracle!(
+                oracle,
+                lb_res.z;
+                attempts_out = oracle_attempts,
+                on_inexact = inexact_policy === :strict ? :throw : :report,
+            )
         catch e
             e isa ErrorException || rethrow()
-            # Disambiguation recipe (this plan's own <interfaces> block): uses ONLY
-            # information solve_planning_oracle! ALREADY computes — no string-matching
-            # on the error message, no duplicated tolerance logic.
-            if !is_solved_and_feasible(oracle.model; dual = true)
-                # The trusted-solve gate itself failed -> a genuine MOI.INFEASIBLE (or a
-                # non-retryable solver failure), the exactness gate never ran (BILEV-04a,
-                # plan 30-04 Task 2). Route to the NEW oracle-feasibility-cut branch: the
-                # second, built-ONCE slack-minimization oracle (plan 30-01) produces a
-                # genuine (v, u) Benders feasibility-cut pair for this pinned z_k — the
-                # loop recovers instead of crashing, mirroring the EXISTING
-                # follower-feasibility-cut branch's own "never update UB" discipline
-                # (T-11-06).
-                t_solve += (time_ns() - t0_ns) / 1.0e9
-                fo_res = solve_feasibility_oracle!(feas_oracle, lb_res.z)
-                add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
+            # A throw from a TRUSTED solve can only come from a post-solve gate
+            # (complementarity, or exactness under :strict) — never an infeasibility.
+            # Propagate it with its own diagnosis (CR-03: no reclassification).
+            is_solved_and_feasible(oracle.model; dual = true) && rethrow()
+            # The trusted-solve gate itself failed -> route to the oracle-feasibility-cut
+            # branch: the second, built-ONCE slack-minimization oracle (plan 30-01)
+            # produces a genuine (v, u) Benders feasibility-cut pair for this pinned z_k —
+            # the loop recovers instead of crashing, mirroring the EXISTING
+            # follower-feasibility-cut branch's own "never update UB" discipline
+            # (T-11-06).
+            t_solve += (time_ns() - t0_ns) / 1.0e9
+            fo_res = solve_feasibility_oracle!(feas_oracle, lb_res.z)
+            add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
+            checkpoint_iteration!(
+                (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
+                k;
+                dir = checkpoint_dir,
+            )
+            push!(
+                trace,
+                k;
+                LB = lb_res.LB,
+                UB = UB,
+                gap = NaN,
+                cut_type = :feasibility,
+                n_cuts = length(master.cuts),
+                master_status = master_status_k,
+                oracle_status = :genuinely_infeasible,
+                retry_count = master_attempts[] - 1,
+                solve_time = t_solve,
+                policy_action = :oracle_feasibility_cut,
+            )
+            continue   # T-11-06: an oracle feasibility cut NEVER updates UB
+        end
+        t_solve += (time_ns() - t0_ns) / 1.0e9
+
+        # BILEV-04b policy dispatch on the EXPLICIT verdict. `:strict` never reaches an
+        # :inexact result (the oracle threw above). The result has already passed the
+        # battery-complementarity gate whatever its exactness verdict.
+        if oracle_res.exactness === :inexact
+            socp_maxgap_k = oracle_res.socp_maxgap
+            if inexact_policy === :reject
+                # Skip the inexact cut entirely this iteration (no add_optimality_cut!
+                # for :op/:x) — checkpoint with feasible=false-equivalent semantics,
+                # record the :rejected trace row, and `continue` (never update UB,
+                # mirrors T-11-06's existing feasibility-cut discipline).
                 checkpoint_iteration!(
-                    (;
-                        k,
-                        LB = lb_res.LB,
-                        UB,
-                        gap = NaN,
-                        z_k = lb_res.z,
-                        feasible = false,
-                    ),
+                    (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
                     k;
                     dir = checkpoint_dir,
                 )
@@ -1009,77 +1040,23 @@ function solve_stackelberg!(
                     LB = lb_res.LB,
                     UB = UB,
                     gap = NaN,
-                    cut_type = :feasibility,
+                    cut_type = :rejected,
                     n_cuts = length(master.cuts),
                     master_status = master_status_k,
-                    oracle_status = :genuinely_infeasible,
+                    oracle_status = Symbol(termination_status(oracle.model)),
                     retry_count = master_attempts[] - 1,
                     solve_time = t_solve,
-                    policy_action = :oracle_feasibility_cut,
+                    policy_action = :rejected,
+                    socp_maxgap = socp_maxgap_k,
                 )
-                continue   # T-11-06: an oracle feasibility cut NEVER updates UB
-            elseif haskey(oracle.ctx.meta, :socp_maxgap)
-                # Exactness ALREADY passed THIS iteration (the key got set) -> the throw
-                # came from assert_battery_complementarity! or something else entirely ->
-                # OUT OF SCOPE for inexact_policy; never silently swallowed.
-                rethrow()
-            else
-                # Trusted solve, exactness ITSELF failed (assert_socp_exact! threw) ->
-                # genuine exactness-class throw -> dispatch on inexact_policy (BILEV-04b).
-                if inexact_policy === :strict
-                    rethrow()   # byte-identical to today's throw
-                elseif inexact_policy === :reject
-                    # Skip the inexact cut entirely this iteration (no add_optimality_cut!
-                    # for :op/:x) — checkpoint with feasible=false-equivalent semantics,
-                    # reusing the SAME checkpoint_iteration! call shape as the existing
-                    # feasibility branch, record the :rejected trace row, and `continue`
-                    # (never update UB, mirrors T-11-06's existing feasibility-cut
-                    # discipline). `continue` here means the post-try/catch `t_solve`
-                    # accumulation below is never reached on THIS path — record it now.
-                    t_solve += (time_ns() - t0_ns) / 1.0e9
-                    checkpoint_iteration!(
-                        (;
-                            k,
-                            LB = lb_res.LB,
-                            UB,
-                            gap = NaN,
-                            z_k = lb_res.z,
-                            feasible = false,
-                        ),
-                        k;
-                        dir = checkpoint_dir,
-                    )
-                    push!(
-                        trace,
-                        k;
-                        LB = lb_res.LB,
-                        UB = UB,
-                        gap = NaN,
-                        cut_type = :rejected,
-                        n_cuts = length(master.cuts),
-                        master_status = master_status_k,
-                        oracle_status = Symbol(termination_status(oracle.model)),
-                        retry_count = master_attempts[] - 1,
-                        solve_time = t_solve,
-                        policy_action = :rejected,
-                        socp_maxgap = socp_relaxation_gap(oracle.ctx),
-                    )
-                    continue   # T-11-06 analogue: a rejected trial NEVER updates UB
-                else   # :certify_incumbent (the default)
-                    # The underlying oracle.model IS still solved and trustworthy — only
-                    # the Julia-level exception prevented solve_planning_oracle! from
-                    # returning it. Reconstruct the NamedTuple it would have returned
-                    # (this plan's own <interfaces> recipe) directly off the model.
-                    π = dual.(oracle.pin)
-                    cost = objective_value(oracle.model)
-                    dadp = dual.(oracle.ctx.constraints[:balance_p][oracle.agg_bus, :])
-                    socp_maxgap_k = socp_relaxation_gap(oracle.ctx)
-                    policy_action_k = :certified_incumbent
-                    (; cost, π, π_s = sum(π), dadp, ctx = oracle.ctx)
-                end
+                continue   # T-11-06 analogue: a rejected trial NEVER updates UB
+            else   # :certify_incumbent (the default)
+                # A cut from the SOC relaxation is a valid under-estimator of the RELAXED
+                # value function, so it is accepted; the inexactness is logged here and
+                # carried onto the incumbent's certificate if this iterate becomes it.
+                policy_action_k = :certified_incumbent
             end
         end
-        t_solve += (time_ns() - t0_ns) / 1.0e9
         # Phase 24 gap-closure (plan 24-05.1): capture oracle.model's GENUINE
         # termination status HERE, immediately after ITS OWN solve at lb_res.z —
         # mirrors master_status_k's own CR-01 capture-before-mutation discipline
@@ -1092,9 +1069,9 @@ function solve_stackelberg!(
         # Phase 30 (BILEV-05, plan 30-04): the UNIVERSAL runtime epigraph floor guard —
         # unconditional, independent of whether master.α_op/master.α_x's declared lower
         # bound came from :auto, an explicit Real, or was build-time-validated at all,
-        # and independent of inexact_policy. oracle_res/follower_res are known-
-        # trustworthy here (either the ordinary success path above, or the
-        # :certify_incumbent reconstruction off the already-solved oracle.model).
+        # and independent of inexact_policy. oracle_res/follower_res have passed every
+        # post-solve gate here (an :inexact oracle_res only under :certify_incumbent,
+        # and it too has passed battery complementarity).
         _assert_epigraph_floor(-oracle_res.cost, lower_bound(master.α_op), :op)
         _assert_epigraph_floor(follower_res.cost, lower_bound(master.α_x), :x)
 
@@ -1200,25 +1177,13 @@ function solve_stackelberg!(
         if converged_now
             # BILEV-04b (plan 30-04): AC-recheck-at-convergence — ONCE, at the converged
             # incumbent, never per iteration. Re-solve the SAME build-once `oracle` at
-            # `z_best` (clearing any stale :socp_maxgap key first, mirroring the
-            # per-iteration disambiguation above) to determine whether the INCUMBENT
-            # itself is SOCP-exact. A genuinely non-retryable/infeasible throw here would
-            # be a correctness defect this far into a converged run (the incumbent was
-            # already shown deliverable/oracle-reachable earlier in the loop) — propagate
-            # it unchanged, mirroring every other unclassified-throw path above.
-            delete!(oracle.ctx.meta, :socp_maxgap)
-            _incumbent_exact = true
-            try
-                solve_planning_oracle!(oracle, z_best)
-            catch e
-                e isa ErrorException || rethrow()
-                if is_solved_and_feasible(oracle.model; dual = true) &&
-                   !haskey(oracle.ctx.meta, :socp_maxgap)
-                    _incumbent_exact = false
-                else
-                    rethrow()
-                end
-            end
+            # `z_best` and read its EXPLICIT exactness verdict (Phase 30 code review,
+            # CR-03 — never inferred from a stashed side-effect key). Any throw here (a
+            # solve failure or a complementarity violation at the incumbent) would be a
+            # correctness defect this far into a converged run — propagate it unchanged.
+            _incumbent_exact =
+                solve_planning_oracle!(oracle, z_best; on_inexact = :report).exactness !==
+                :inexact
             ac_report =
                 _incumbent_exact ? nothing :
                 ac_recheck_incumbent(feeder, aggregators, λ₀, T, z_best)

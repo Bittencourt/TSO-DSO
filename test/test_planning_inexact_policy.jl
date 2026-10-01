@@ -203,3 +203,87 @@ end
         @test :oracle_feasibility_cut in result.trace.policy_action_trace
     end
 end
+
+@testitem "planning inexact policy: solve_planning_oracle! reports exactness explicitly and never skips the complementarity gate (CR-01/CR-03)" tags =
+    [:planning] setup = [IEEE13ShortHorizonFixtures] begin
+    using TSODSO
+
+    # Phase 30 code review (CR-01/CR-03). The measured pins come from
+    # IEEE13ShortHorizonFixtures' own header sweep map: uniform z = 0.0 is feasible and
+    # SOCP-exact, uniform z = 0.06 is feasible but measurably SOCP-INEXACT.
+    feeder = TSODSO.ieee13_modified()
+    aggs = IEEE13ShortHorizonFixtures.population(feeder)
+    λ₀ = IEEE13ShortHorizonFixtures.LAMBDA0
+    T = IEEE13ShortHorizonFixtures.T
+    oracle = TSODSO.build_planning_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+
+    # Function barrier (TestItem try-scoping trap): return the caught exception or nothing.
+    function caught(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    # 1. Exact pin: explicit :exact verdict, measured gap returned AND stashed.
+    r0 = TSODSO.solve_planning_oracle!(oracle, zeros(T); on_inexact = :report)
+    @test r0.exactness === :exact
+    @test isfinite(r0.socp_maxgap)
+    @test oracle.ctx.meta[:socp_maxgap] == r0.socp_maxgap
+
+    # 2. Inexact pin, default :throw mode: the gate's own error, byte-identical.
+    e1 = caught(() -> TSODSO.solve_planning_oracle!(oracle, fill(0.06, T)))
+    @test e1 isa ErrorException
+    @test occursin("SOCP relaxation INEXACT", e1.msg)
+    # The stale exact-pin certificate from step 1 must NOT survive an inexact solve.
+    @test !haskey(oracle.ctx.meta, :socp_maxgap)
+
+    # 3. Inexact pin, :report mode: the verdict is RETURNED, with the measured residual,
+    # and no PF-04 certificate is stashed on the inexact ctx.
+    r2 = TSODSO.solve_planning_oracle!(oracle, fill(0.06, T); on_inexact = :report)
+    @test r2.exactness === :inexact
+    @test r2.socp_maxgap > 0
+    @test !haskey(oracle.ctx.meta, :socp_maxgap)
+
+    # 4. CR-01: the battery-complementarity gate still runs on an inexact :report result.
+    # A negative relative τ makes every product p_ch·p_dch ≥ τ·Pmax² (the gate's own
+    # monotone threshold), so the gate MUST throw if it runs at all; before the fix the
+    # inexact path skipped it entirely.
+    e3 = caught(
+        () -> TSODSO.solve_planning_oracle!(
+            oracle,
+            fill(0.06, T);
+            on_inexact = :report,
+            τ = -1.0,
+        ),
+    )
+    @test e3 isa ErrorException
+    @test occursin("Battery complementarity violated", e3.msg)
+
+    # 5. CR-03: a formulation with no `:l` stash (LinDistFlow) reports :not_applicable —
+    # the exactness gate never ran, so no cone residual is read (the old disambiguation
+    # called socp_relaxation_gap here and died with a FieldError on `pv.l`), and its
+    # complementarity throw propagates with its OWN message.
+    oracle_ldf = TSODSO.build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)
+    r4 = TSODSO.solve_planning_oracle!(oracle_ldf, zeros(T); on_inexact = :report)
+    @test r4.exactness === :not_applicable
+    @test isnan(r4.socp_maxgap)
+    e5 = caught(
+        () -> TSODSO.solve_planning_oracle!(
+            oracle_ldf,
+            zeros(T);
+            on_inexact = :report,
+            τ = -1.0,
+        ),
+    )
+    @test e5 isa ErrorException
+    @test occursin("Battery complementarity violated", e5.msg)
+
+    @test_throws ArgumentError TSODSO.solve_planning_oracle!(
+        oracle,
+        zeros(T);
+        on_inexact = :ignore,
+    )
+end
