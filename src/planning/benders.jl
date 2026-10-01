@@ -114,6 +114,31 @@ const JOINT_RECOURSE_GAP_TOL = 1.2219521394740696e-7
 # of `iters` and independent of the fixture's scale.
 const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
 
+# WR-01 (Phase 30 code review): the termination statuses that make an oracle throw a
+# GENUINE infeasibility of the pinned z_k (routed to the oracle-feasibility-cut branch).
+# Anything else untrusted is a solver failure and is rethrown. `ALMOST_INFEASIBLE` is
+# included because Clarabel reports a near-certificate that way; the slack-min oracle's
+# `v > FEAS_CUT_V_TOL` check below is what actually confirms (or refutes, loudly) that z_k
+# is infeasible before any cut is appended.
+const ORACLE_INFEASIBLE_STATUSES =
+    (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE, MOI.ALMOST_INFEASIBLE)
+
+# WR-01 (Phase 30 code review): minimum slack-min value `v` for an oracle feasibility cut
+# `v + u'(z - z_k) <= 0` to be appended. At z = z_k the cut reads `v <= 0`, so it separates
+# z_k from the master only if `v` exceeds the master's own primal feasibility tolerance.
+# MEASURED 2026-10-01 (scratchpad probe_wr01.jl), `solve_feasibility_oracle!` on
+# ConvexBranchFlow `ieee13_modified()`:
+#   - noise floor at relaxation-FEASIBLE pins (T=4 IEEE13ShortHorizonFixtures population at
+#     uniform z ∈ {0, 0.02, 0.05, 0.06}; T=1 single-Thermostatic population at
+#     z ∈ [0.0105, 0.05]): |v| <= 2.4e-10;
+#   - smallest GENUINE v observed at an infeasible pin: 3.86e-5 (T=1, z=0.01) and 5.04e-5
+#     (the inexact-policy T=4 run's third natural oracle feasibility cut);
+#   - the master LP's HiGHS default primal feasibility tolerance: 1e-7.
+# `FEAS_CUT_V_TOL = max(10 * 2.4e-10, 10 * 1e-7) = 1e-6`: 10x above the master's own
+# tolerance (so an appended cut really excludes z_k), >= 4000x above the measured noise
+# floor, and ~39x below the smallest genuine v measured.
+const FEAS_CUT_V_TOL = 1.0e-6
+
 """
     corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
 
@@ -665,12 +690,17 @@ invalid on that genuinely divergent-objective game (see that file's module heade
         CR-01/CR-03 — the verdict is never inferred from a stashed side-effect key, and
         no result can bypass the complementarity gate):
 
-          * A throw from an UNTRUSTED solve (`!is_solved_and_feasible(oracle.model;
-            dual = true)`) routes to the oracle-feasibility-cut branch: `feas_oracle`
-            (built once above) produces a genuine `(v, u)` cut pair
-            (`solve_feasibility_oracle!`/`add_feasibility_cut!`, plan 30-01), the loop
-            `continue`s WITHOUT updating `UB` (T-11-06 analogue), and the trace row
-            records `policy_action = :oracle_feasibility_cut`.
+          * A throw from an UNTRUSTED solve whose termination status is a genuine
+            infeasibility verdict (`ORACLE_INFEASIBLE_STATUSES`) routes to the
+            oracle-feasibility-cut branch: `feas_oracle` (built once above) produces a
+            `(v, u)` cut pair (`solve_feasibility_oracle!`/`add_feasibility_cut!`, plan
+            30-01), which is appended only if `v > FEAS_CUT_V_TOL` (so it really
+            separates `z_k`; otherwise a named "oracles disagree" error is raised), the
+            loop `continue`s WITHOUT updating `UB` (T-11-06 analogue), and the trace row
+            records the oracle's REAL termination status and
+            `policy_action = :oracle_feasibility_cut`. Any OTHER untrusted outcome
+            (exhausted retry ladder, iteration limit, numerical error) is a solver
+            failure and is rethrown unchanged (Phase 30 code review, WR-01).
           * A throw from a TRUSTED solve can only be a post-solve gate (battery
             complementarity on any formulation, or exactness under `:strict`) — OUT OF
             SCOPE for the feasibility branch, propagated UNCHANGED with its own message.
@@ -987,14 +1017,35 @@ function solve_stackelberg!(
             # (complementarity, or exactness under :strict) — never an infeasibility.
             # Propagate it with its own diagnosis (CR-03: no reclassification).
             is_solved_and_feasible(oracle.model; dual = true) && rethrow()
-            # The trusted-solve gate itself failed -> route to the oracle-feasibility-cut
-            # branch: the second, built-ONCE slack-minimization oracle (plan 30-01)
-            # produces a genuine (v, u) Benders feasibility-cut pair for this pinned z_k —
-            # the loop recovers instead of crashing, mirroring the EXISTING
-            # follower-feasibility-cut branch's own "never update UB" discipline
+            # WR-01 (Phase 30 code review): ONLY a genuine infeasibility verdict goes to
+            # the feasibility-cut branch. Every other untrusted outcome — the retry
+            # ladder exhausted on SLOW_PROGRESS/NUMERICAL_ERROR/ITERATION_LIMIT, a
+            # foreign-backend attribute rejection, ... — is a solver failure, not a
+            # property of z_k, and is rethrown UNCHANGED (a "cut" built there would be
+            # meaningless and could stall the master).
+            oracle_ts = termination_status(oracle.model)
+            oracle_ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
+            # The trusted-solve gate failed with an infeasibility verdict -> route to the
+            # oracle-feasibility-cut branch: the second, built-ONCE slack-minimization
+            # oracle (plan 30-01) produces a genuine (v, u) Benders feasibility-cut pair
+            # for this pinned z_k — the loop recovers instead of crashing, mirroring the
+            # EXISTING follower-feasibility-cut branch's own "never update UB" discipline
             # (T-11-06).
             t_solve += (time_ns() - t0_ns) / 1.0e9
             fo_res = solve_feasibility_oracle!(feas_oracle, lb_res.z)
+            # WR-01: the cut evaluates to exactly `v` at z_k, so it SEPARATES z_k only if
+            # v clears the master's own feasibility tolerance (with headroom) — see
+            # FEAS_CUT_V_TOL's derivation. A smaller v means the oracle's infeasibility
+            # verdict and the slack-min oracle's ~zero slack DISAGREE about z_k; appending
+            # the non-separating row would let the master re-propose z_k until max_iter.
+            fo_res.v > FEAS_CUT_V_TOL || error(
+                "solve_stackelberg!: oracle reported $(oracle_ts) at z_k=$(lb_res.z) " *
+                "(iteration $k), but the slack-minimization feasibility oracle measures " *
+                "only v=$(fo_res.v) <= FEAS_CUT_V_TOL=$(FEAS_CUT_V_TOL) of slack there — " *
+                "the two oracles disagree about z_k, and a cut with this v would not " *
+                "separate z_k from the master (WR-01). Refusing to append a " *
+                "non-separating cut.",
+            )
             add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
             checkpoint_iteration!(
                 (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
@@ -1010,7 +1061,7 @@ function solve_stackelberg!(
                 cut_type = :feasibility,
                 n_cuts = length(master.cuts),
                 master_status = master_status_k,
-                oracle_status = :genuinely_infeasible,
+                oracle_status = Symbol(oracle_ts),
                 retry_count = master_attempts[] - 1,
                 solve_time = t_solve,
                 policy_action = :oracle_feasibility_cut,
