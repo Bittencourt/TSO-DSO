@@ -160,14 +160,25 @@
 
     Certification oracle #2: for each `y in y_grid`, re-solve the follower's own QP
     via [`solve_follower_at`](@ref), compute the leader's own total cost
-    `c_y*y + pi_tariff[1]*z - v_d[1]*d` (`d=min(z,d_max)`), and return the grid
-    point achieving the MINIMUM total.
+    `c_y*y + pi_tariff[1]*z - v_d[1]*d`, and return the grid point achieving the
+    MINIMUM total.
+
+    Leader-level semantics match production (29-REVIEW.md WR-07): the lossless
+    network forces `d = z`. A follower response with `z > dmax`, or a bus-2 squared
+    voltage `1 - 2e-3*z` outside `[0.95^2, 1.05^2]`, makes that `y` INFEASIBLE for
+    the leader (`continue`), never feasible-but-curtailed. The follower's response
+    is unique here (`q_op > 0` makes its QP strictly convex in `z`, and `c_inv > 0`
+    pins `x_inv = z/corridor_cap`), so the optimistic-vs-reported tie question
+    does not arise. `dmax` defaults to the fixture's `d_max`. The d_max-binding
+    testitem below overrides it.
     """
-    function brute_force_interior(; y_grid)
+    function brute_force_interior(; y_grid, dmax = d_max)
         best = nothing
         for y in y_grid
             r = solve_follower_at(y)
-            d = min(r.z, d_max)
+            r.z <= dmax + 1e-6 || continue                         # network: d = z <= d_max
+            0.95^2 <= 1.0 - 2 * (1e-3 * r.z) <= 1.05^2 || continue  # leader voltage bounds
+            d = r.z
             total = c_y * y + pi_tariff[1] * r.z - v_d[1] * d
             if best === nothing || total < best.total
                 best = (; y, z = r.z, d, total)
@@ -182,13 +193,13 @@
     Certification oracle #1: `BilevelModel(Ipopt.Optimizer, mode =
     BilevelJuMP.StrongDualityMode())` — a hand-derived MPEC with a QUADRATIC
     lower-level objective (Ipopt/NLP handles the strong-duality equality of a
-    convex QP lower level natively).
+    convex QP lower level natively). `dmax` defaults to the fixture's `d_max`.
     """
-    function build_interior_bilevel_jump()
+    function build_interior_bilevel_jump(; dmax = d_max)
         model = BilevelModel(Ipopt.Optimizer, mode = BilevelJuMP.StrongDualityMode())
         @variable(Upper(model), 0 <= y_inv <= y_max)
         @variable(Upper(model), 0.95^2 <= v2 <= 1.05^2)
-        @variable(Upper(model), 0 <= d <= d_max)
+        @variable(Upper(model), 0 <= d <= dmax)
         @variable(Lower(model), 0 <= x_inv <= x_inv_max)
         @variable(Lower(model), z >= 0)
         @constraint(Lower(model), cap, z <= corridor_cap * x_inv)
@@ -488,4 +499,64 @@ end
             @test r.y - r.x_inv > 0.5                          # slack_y > 0 branch
         end
     end
+end
+
+@testitem "bilevel certification (interior fixture, d_max binds): the embedded network coupling restricts the leader (WR-07)" tags =
+    [:planning] setup = [BilevelInteriorCertFixture] begin
+    using TSODSO, BilevelJuMP, JuMP
+
+    # 29-REVIEW.md WR-07: on the base fixtures d_max and the voltage limits are
+    # slack, so oracle agreement says nothing about the embedded LinDistFlow coupling
+    # (CONTEXT "Option B"). Here d_max = 1.0 binds the follower's response.
+    #
+    # Hand derivation: the follower's response is unchanged (it never sees d_max):
+    # z(y) = 10y for y < 0.148, z = 1.48 for y >= 0.148. The network forces
+    # d = z <= d_max = 1.0, so the leader's feasible set is y in [0, 0.1]. On that set
+    # total(y) = (c_y + corridor_cap*(pi_tariff - v_d))*y = -9.95y, minimized at the
+    # coupling boundary: y* = x_inv* = 0.1, z* = d* = 1.0, total* = -0.995, with
+    # rho_y = 14.8 - 100*0.1 = 4.8 > 0. (The unrestricted optimum y = 0.148 is now
+    # leader-infeasible.) Measured: production matches to ~1e-15; BilevelJuMP to ~1e-8.
+    F = BilevelInteriorCertFixture
+    feeder = F._interior_feeder()
+    dmax = 1.0
+
+    kkt = build_bilevel_kkt(
+        feeder,
+        LinDistFlow();
+        T = 1,
+        agg_bus = F.agg_bus,
+        corridor_cap = F.corridor_cap,
+        x_inv_max = F.x_inv_max,
+        c_inv = F.c_inv,
+        c_op = F.c_op,
+        pi_tariff = F.pi_tariff,
+        q_op = F.q_op,
+        c_y = F.c_y,
+        y_max = F.y_max,
+        v_d = F.v_d,
+        d_max = dmax,
+    )
+    prod = solve_bilevel!(kkt)
+
+    atol_hand = 1e-6
+    @test isapprox(prod.y, 0.1; atol = atol_hand)
+    @test isapprox(prod.x_inv, 0.1; atol = atol_hand)
+    @test isapprox(prod.z[1], 1.0; atol = atol_hand)
+    @test isapprox(prod.d[1], 1.0; atol = atol_hand)
+    @test isapprox(prod.total_cost, -0.995; atol = atol_hand)
+    @test isapprox(prod.rho_y, 4.8; atol = atol_hand)
+
+    bj = F.build_interior_bilevel_jump(; dmax = dmax)
+    @test termination_status(bj.model) == MOI.LOCALLY_SOLVED
+    @test isapprox(prod.y, bj.y_inv; atol = 1e-6)
+    @test isapprox(prod.z[1], bj.z; atol = 1e-6)
+    @test isapprox(prod.total_cost, objective_value(bj.model); atol = 1e-6)
+
+    # Brute force with production semantics: every grid y > 0.1 is leader-infeasible.
+    # The fine grid contains the analytic boundary (0.1 = 40 * 0.0025, up to rounding).
+    fine_grid = range(0.0, F.y_max; length = 2001)
+    bf = F.brute_force_interior(; y_grid = fine_grid, dmax = dmax)
+    @test bf.y <= 0.1 + 1e-9
+    @test isapprox(prod.y, bf.y; atol = step(fine_grid))
+    @test isapprox(prod.total_cost, bf.total; atol = 9.95 * step(fine_grid))
 end

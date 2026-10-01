@@ -118,10 +118,20 @@
     to production's follower cost/constraints, but with `y` as a FIXED upper
     bound rather than a leader decision variable), solves it, and tracks the
     grid point achieving the minimum LEADER total cost
-    `c_y*y + pi_tariff*z_star - v_d*d_star` (with `d_star = min(z_star, d_max)`,
-    the leader's elastic-demand cap). Skips a grid point whose LP does not solve
-    and feasible (should not happen on this fixture — every `y >= 0` is follower-
-    feasible with `x_inv=z=0`).
+    `c_y*y + pi_tariff*z_star - v_d*d_star`.
+
+    Leader-level semantics match production (29-REVIEW.md WR-07): the lossless
+    network forces `d = z`, so `d_star = z_star`. A follower response with
+    `z_star > d_max`, or a bus-2 squared voltage `1 - 2*r*z_star` outside
+    `[vmin2, vmax2]`, makes that `y` INFEASIBLE for the leader (`continue`). It is
+    not counted as feasible-but-curtailed. Also skips a grid point whose follower LP
+    does not solve and feasible (should not happen on this fixture — every `y >= 0`
+    is follower-feasible with `x_inv=z=0`).
+
+    Follower ties: this oracle takes whichever follower optimum HiGHS reports, while
+    production is OPTIMISTIC (the leader picks among the follower's optimal set).
+    The two agree only when the follower's response is unique. It is unique on this
+    fixture: `pi_tariff < c_op` and `c_inv > 0` make `x_inv = z = 0` strictly optimal.
     """
     function brute_force_bilevel(;
         y_grid,
@@ -133,6 +143,9 @@
         c_y,
         v_d,
         d_max,
+        r = 1e-3,
+        vmin2 = 0.95^2,
+        vmax2 = 1.05^2,
     )
         best = nothing
         for y in y_grid
@@ -145,7 +158,9 @@
             optimize!(m)
             is_solved_and_feasible(m) || continue
             z_star = value(z)
-            d_star = min(z_star, d_max)
+            z_star <= d_max + 1e-7 || continue                  # network: d = z <= d_max
+            vmin2 <= 1.0 - 2 * r * z_star <= vmax2 || continue  # leader voltage bounds
+            d_star = z_star
             total = c_y * y + pi_tariff * z_star - v_d * d_star
             if best === nothing || total < best.total
                 best = (; y, z = z_star, d = d_star, total)

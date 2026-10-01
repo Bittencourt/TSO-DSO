@@ -213,6 +213,14 @@ end
 Build the genuinely bilevel single-level KKT-MILP EXACTLY ONCE (BILEV-01). See this
 file's module header for the full "why single-level KKT, why not Benders" rationale.
 
+**Bilevel semantics (29-REVIEW.md WR-07).** The reformulation is the OPTIMISTIC
+bilevel problem. The single MILP minimizes over the leader decision AND the
+follower's KKT points jointly, so when the follower has several optimal responses the
+leader effectively picks the one it prefers. Leader-level constraints on follower
+variables are COUPLING constraints: the network balance (`d = z` on a lossless
+feeder), `d <= d_max` and the LinDistFlow voltage bounds. A leader decision whose
+follower response violates them is infeasible, not feasible-but-curtailed.
+
 `q_op` (BLOCKER-1 revision) is a NEW keyword defaulting to `zeros(T)`, so every
 EXISTING call site (the plan 29-02 corner fixture) is byte-for-bit unaffected; only
 plan 29-04's non-degenerate fixture passes a nonzero `q_op`.
