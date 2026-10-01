@@ -138,3 +138,185 @@ end
 
     @test value(master.α_op) >= 5.0 + 2.0 * (value(master.z[1]) - 1.0) - 1e-6
 end
+
+# ---------------------------------------------------------------------------------------
+# Plan 30-02 (BILEV-05): `:auto` α-bound derivation + build-time rejection. The new
+# @testitems below reuse the SAME two-bus/ToyElasticDevice toy fixture test_planning_oracle.jl's
+# own D-06 dual-sign regression already established (Phase6Fixtures + ToyDeviceFixture).
+# ---------------------------------------------------------------------------------------
+
+@testitem "planning master: explicit bounds with no bounds_ctx are byte-identical (regression guard)" tags =
+    [:planning] begin
+    using TSODSO
+    using JuMP: termination_status, MOI
+
+    master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
+    @test master isa TSODSO.BendersMaster
+
+    solve_master!(master)
+
+    @test termination_status(master.model) == MOI.OPTIMAL
+end
+
+@testitem "planning master: :auto resolves both epigraph bounds via a genuine relaxed solve" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: termination_status, MOI, lower_bound
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+    )
+
+    # α_op_lb/α_x_lb omitted entirely — the new :auto default.
+    master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, bounds_ctx = bounds_ctx)
+    @test master isa TSODSO.BendersMaster
+
+    solve_master!(master)
+    @test termination_status(master.model) == MOI.OPTIMAL
+
+    @test isfinite(lower_bound(master.α_op))
+    @test !isnan(lower_bound(master.α_op))
+    @test isfinite(lower_bound(master.α_x))
+    @test !isnan(lower_bound(master.α_x))
+    # A sane sign: α_op_lb = -(relaxed welfare optimum) should be <= 0 on this fixture
+    # (the relaxed welfare optimum is nonnegative: a=6,b=1,λ₀=4 toy device, box [0,y_max]).
+    @test lower_bound(master.α_op) <= 0.0
+end
+
+@testitem "planning master: build-time rejection of an over-high explicit α_op_lb when bounds_ctx is supplied" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+    )
+
+    @test_throws ArgumentError build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = 1e9,
+        bounds_ctx = bounds_ctx,
+    )
+end
+
+@testitem "planning master: build-time rejection of an over-high explicit α_x_lb when bounds_ctx is supplied" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+    )
+
+    @test_throws ArgumentError build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_x_lb = 1e9,
+        bounds_ctx = bounds_ctx,
+    )
+end
+
+@testitem "planning master: :auto derivation independently confirms test_planning_hardening.jl's own T=8 finding (α_op_lb=-5.0 invalid, α_op_lb=-50.0 valid)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    # EXACT T=8 fixture literals, verbatim from test_planning_hardening.jl's own header
+    # comment (the "FIX" paragraph): dev=ToyElasticDevice(2,6.0,1.0,10.0), agg with zeros(8)
+    # Pdc, λ₀=fill(4.0,8).
+    T = 8
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
+    λ₀ = fill(4.0, T)
+
+    derived = TSODSO.derive_alpha_op_lb(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, y_max = 8.0)
+
+    # -5.0 is REJECTED (too tight — exceeds the derived minimum): the already-documented
+    # finding that -5.0 silently converges to a wrong answer at T=8.
+    @test -5.0 > derived + TSODSO.ALPHA_LB_REJECTION_TOL
+    # -50.0 remains a VALID, non-rejected bound (small slack on the comparison itself).
+    @test -50.0 <= derived + TSODSO.ALPHA_LB_REJECTION_TOL + 1e-9
+end
+
+@testitem "planning master: derive_alpha_x_lb(::FollowerLP) dispatch agrees with the follower_kwargs path" tags =
+    [:planning] begin
+    using TSODSO
+
+    f = build_follower(; T = 1, corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    a = TSODSO.derive_alpha_x_lb(f)
+    b = TSODSO.derive_alpha_x_lb(;
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = 2.0,
+        c_inv = 1.0,
+        c_op = [0.5],
+    )
+    @test isapprox(a, b; atol = 1e-8)
+end
+
+@testitem "planning master: α_x_lb build-time validation is honestly skipped when bounds_ctx.follower_kwargs is nothing (DistributorView-equivalent scope limit)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: lower_bound
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+
+    bounds_ctx_skip = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = nothing,
+    )
+
+    master = build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = :auto,
+        α_x_lb = 0.0,
+        bounds_ctx = bounds_ctx_skip,
+    )
+    @test lower_bound(master.α_x) == 0.0   # explicit literal passed straight through
+    @test isfinite(lower_bound(master.α_op))   # α_op_lb WAS resolved via bounds_ctx
+    @test lower_bound(master.α_op) != -5.0     # not a stray default/literal
+
+    @test_throws ArgumentError build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_x_lb = :auto,
+        bounds_ctx = bounds_ctx_skip,
+    )
+end
