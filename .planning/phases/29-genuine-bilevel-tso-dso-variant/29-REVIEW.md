@@ -1,8 +1,8 @@
 ---
 phase: 29-genuine-bilevel-tso-dso-variant
-reviewed: 2026-10-01T00:52:20Z
+reviewed: 2026-10-01T01:31:44Z
 depth: standard
-iteration: 2
+iteration: 3
 files_reviewed: 7
 files_reviewed_list:
   - src/planning/bilevel_kkt.jl
@@ -13,158 +13,120 @@ files_reviewed_list:
   - test/test_planning_certification_bilevel.jl
   - test/test_planning_certification_bilevel_interior.jl
 findings:
-  critical: 1
-  warning: 2
-  info: 3
-  total: 6
+  critical: 0
+  warning: 1
+  info: 4
+  total: 5
 status: issues_found
 ---
 
-# Phase 29: Code Review Report (iteration 2)
+# Phase 29: Code Review Report (iteration 3)
 
-**Reviewed:** 2026-10-01T00:52:20Z
+**Reviewed:** 2026-10-01T01:31:44Z
 **Depth:** standard
 **Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-This pass re-reviews the code after commits 5da5232..07b3822, which fixed CR-01 and WR-01..WR-08 from iteration 1 (backed up as `29-REVIEW.iter1.md`). Iteration-1 items are not raised again.
+This pass re-reviews the code after 81cc227 (CR-01: post-solve certificate LP), a8f4411 (WR-01: `safety >= 1`) and 23a72b1 (WR-02: three-stage lexicographic multipliers). The iteration-2 report is backed up as `29-REVIEW.iter2.md`. Resolved items are not raised again.
 
-**Closed-form bound `_follower_kkt_dual_bound`: verified valid.** I checked the four-case proof by hand against the follower KKT system, including the new `rho_max` term:
+**Iteration-2 CR-01, WR-01 and WR-02 are fixed.** No critical issue remains. The results of the priority checks follow.
 
-- **`x_inv > 0`:** `rho_lo = 0`. Each `mu_cap[t]` is uniquely determined and `<= a⁺[t]`. So `rho_y + rho_max = cap*Σmu_cap - c_inv <= cap*Σa⁺ - c_inv`.
-- **`x_inv = 0`, `y > 0`:** `rho_y = 0` and `rho_max = 0`. Optimality of `x = 0` requires `c_inv >= cap*Σa⁺`. With `mu_cap = a⁺` this gives `rho_lo = c_inv - cap*Σa⁺`, which lies in `[0, c_inv]`.
-- **`x_inv = 0`, `y = 0`:** choose `rho_y = (cap*Σa⁺ - c_inv)⁺` and `rho_lo = (c_inv - cap*Σa⁺)⁺`.
+1. **The certificate LP characterizes valid KKT multipliers correctly.** `_recover_kkt_certificate` (`bilevel_kkt.jl:598-609`) uses exactly the MILP's `statio_x`/`statio_z` at the fixed primal. It zeroes every multiplier whose primal slack is above `act_tol`, and it puts no other restriction on the multipliers. So the LP is feasible exactly when the primal is an (act_tol-)KKT point of the follower, and its min-max objective tests "some certificate fits the limits", not "HiGHS's vertex fits".
+   - **The 1e-6 threshold can err in two directions.**
+     - *False reject:* an active slack is reported above 1e-6. The multiplier is then fixed to 0, the LP becomes infeasible, and the code raises a hard error. HiGHS's integrality tolerance of 1e-9 times the SOS1 big-M would have to exceed 1e-6 for this to happen.
+     - *False accept:* a slack in (0, 1e-6] leaves its multiplier free. The worst effect is a complementarity product of about `m_ub·1e-6`, which is within tolerance.
+   - **Neither direction showed up in testing.** Three scratch sweeps found no misclassification:
+     - `hard.jl`: 459 optimal solves, T in 1..4. About 40% had `q_op = 0` (bang-bang), about 20% had `a[t] = 0` exactly, `c_inv = 0` and `c_y = 0` were included, and `y` was fixed at `0`, at `x_inv_max` or at random. 0 errors.
+     - `scale.jl`: magnitudes scaled up to the per-unit band ceiling. 0 errors.
+     - `bigM.jl`: `x_inv_max` up to 1e5, which inflates the bridge big-M on `slack_cap`. 0 errors, and no slack fell in (1e-7, 1e-3).
+   - The per-unit guard in `Feeder` (`smax < 100`) bounds the network magnitudes, so the absolute threshold is adequate in practice.
+2. **The bound-exception rule is sound.** `_lim` (`:579`) only admits certificates `<= m_ub_proven + atol` when the box is at least `m_ub_proven`. The closed-form proof (re-verified in iteration 2) guarantees such a certificate at every follower optimum for every `y_inv`. So a box `>= m_ub_proven` cannot cut off the optimum, and the exception masks nothing.
+   - The consequence is that with untouched bounds and any `safety >= 1`, the check is mathematically unreachable. It can only fire when a caller tightens a bound below `m_ub_proven`. The docstrings say this honestly ("necessary, not sufficient", "catches a bound ... tightened by a caller").
+3. **The lexicographic minimization is well defined and unique.** I checked the docstring's case analysis by hand. Stage 1 reduces to `min Σ mu_cap` subject to `mu_cap >= a⁺`, which gives `mu_cap = a⁺` componentwise. Stage 2 fixes `rho_y - rho_lo` or `rho_y + rho_max` at its positive or negative part. Stage 3 resolves the only remaining split.
+   - **Empirical check:** `hard.jl` min/max-probes every multiplier on the lexicographic optimal face. The worst spread was 5.1e-8 over 459 solves, including 87 `y = x_inv = x_inv_max` corners and 204 `x_inv = 0` cases.
+   - **The `rho_y = 0` / `rho_max = total` convention at the corner is defensible.** It reports the right-derivative of the follower's value in `y`. That is the same one-sided convention the `x = y = 0` case uses (`rho_y = K⁺` is the right-derivative there too), so the two degenerate cases are consistent with each other.
+4. **The new tests are falsifiable.**
+   - **CR-01 regression testitem:** its 6 cases threw under the pre-fix code.
+   - **WR-02 testitem:** it pins hand-derived canonical values. Against the raw-vertex code the corner fixture returns `mu_cap = 0.5`/`mu_lo = 0.8`, and the corner case tells stage 3 apart from a plain `min Σ`.
+   - **WR-01 stress test:** it reaches the at-bound branch through `set_upper_bound` with a unique `rho_y = 9.8`. The new `safety = 0.5` guard assertion is genuine.
 
-At least one KKT multiplier vector therefore fits in `[0, m_ub]` for every `y_inv` and every follower optimum, as long as `safety >= 1`. The bound cannot cut off the true optimum.
+**One new defect** (WR-01 below): moving the returned multipliers onto the certificate LP introduced a silent-wrong-value regression. The LP reads cached copies of the follower data instead of the model.
 
-Empirical check: a scratch script ran 60 random instances (T in 1..3, random data, `x_inv_max`/`d_max` often binding) at the tightest `safety = 1`. It compared the production MILP objective with a 301-point brute-force grid using the follower QP. Worst `prod - bf` was 1.0e-7, and no instance was cut off. The `rho_max` stationarity term, its SOS1 pair and the T>1 `Σmu_cap` sum are correct.
-
-**New defect: the post-solve at-bound check rejects correct results.** The bound proof only shows that *some* in-box multiplier exists. HiGHS returns an arbitrary vertex of the multiplier face, and when `x_inv* = 0` that face is degenerate and its vertices sit at `m_ub`. `solve_bilevel!` then throws a hard error on a correct optimum. Raising `safety`, as the error message advises, cannot help: the vertex moves with `m_ub`. This is reproduced below (CR-01).
-
-**Fixed tests:** all are genuinely falsifiable.
-
-- **WR-01 test:** without `rho_max` the fixed-y model is INFEASIBLE.
-- **WR-05/WR-08 fixed-y checks:** they pin uniquely determined multipliers.
-- **WR-06 test:** it reaches the at-bound branch with a unique `rho_y = 9.8`.
-- **WR-04 test:** it now checks the fine-only grid.
-- **WR-07 d_max test:** it has a hand-derived binding optimum.
-
-## Critical Issues
-
-### CR-01: `solve_bilevel!` throws a "true optimum may have been cut off" error on correct optima whenever the follower does not invest (`x_inv* = 0`)
-
-**File:** `src/planning/bilevel_kkt.jl:469-509` (check). Root cause is the degenerate multiplier face described at `:129-131` and `:155-167`.
-
-**Issue:** When `x_inv = 0` with `y_inv = 0`, the slack pairs `[slack_y, rho_y]`, `[x_inv, rho_lo]`, `[slack_cap, mu_cap]` and `[z, mu_lo]` all have zero primal slack. The multipliers then form an unbounded ray, which the `[0, m_ub]` box truncates:
-
-- `rho_y - rho_lo = cap*Σmu_cap - c_inv`
-- `mu_cap - mu_lo = a`
-
-The MILP objective does not involve the multipliers, so HiGHS returns whichever vertex its pivoting reaches. Those vertices lie on the box face `= m_ub`, so the check fires on a mathematically valid KKT point.
-
-This is the generic outcome whenever the leader prefers no delivery:
-
-- `pi_tariff >= v_d`, or
-- a large `c_y`, or
-- a caller that fixes `y_inv = 0` for a sensitivity sweep.
-
-Reproduced with a scratch script on the interior fixture data:
-
-```
-interior, v_d=[1.0] (true optimum y*=0, obj 0):  rho_y=148.0 = m_ub, mu_cap=14.82  -> ERROR "rho_y sits at ... m_ub=148.0"
-same, safety=1:                                  rho_y=14.8  = m_ub               -> ERROR
-interior, c_y=20 (true optimum y*=0):            rho_y=148.0 = m_ub               -> ERROR
-interior, fix(y_inv, 0.0):                       rho_y=148.0, rho_lo=133.2        -> ERROR
-```
-
-In the 60-instance random sweep, the default `safety = 10` gave 6/60 false errors, all on optima the brute force confirmed. `safety = 1` gave 26/60.
-
-The corner fixture passes only because HiGHS happens to pick the vertex `mu_cap = 0.5`, `mu_lo = 0.8`, `rho_y = rho_lo = 0`. That is solver-path luck, not a property of the code.
-
-The error text ("re-derive a looser bound (increase `safety`) and re-build") sends users into a loop that can never succeed, because the offending vertex scales with `m_ub`. No testitem covers a `y* = 0` optimum with a profitable follower (`a⁺ > 0`), so the suite stays green.
-
-**Fix:** Validity already rests on the closed-form bound, as the docstring concedes. Make the post-check test whether an in-box certificate exists, not where HiGHS's vertex happens to land:
-
-```julia
-# after assert_solved!: fix the primal, then find the SMALLEST KKT certificate
-cert = Model(select_optimizer(LP()))
-@variable(cert, 0 <= mc[1:T]); @variable(cert, 0 <= ml[1:T])
-@variable(cert, 0 <= ry); @variable(cert, 0 <= rl); @variable(cert, 0 <= rm); @variable(cert, s)
-@constraint(cert, c_inv - cap*sum(mc) + ry + rm - rl == 0)
-@constraint(cert, [t=1:T], -a[t] + q_op[t]*zv[t] + mc[t] - ml[t] == 0)
-# complementarity on the solved active set: zero every multiplier whose primal slack > tol
-slack_cap_v[t] > tol && fix(mc[t], 0.0)  # likewise ml/ry/rl/rm
-@constraint(cert, [mc; ml; ry; rl; rm] .<= s); @objective(cert, Min, s)
-optimize!(cert)
-objective_value(cert) < kkt.m_ub - atol || error("... no KKT certificate inside m_ub ...")
-```
-
-Keep the extra data needed for this (`a`, `q_op`, `c_inv`, `corridor_cap`) on `BilevelKKT`. Report the minimal certificate as the multipliers (see WR-02). Then add a regression testitem: interior data with `v_d = [1.0]`, expecting `y* = x_inv* = z* = 0`, `total = 0`, and `solve_bilevel!` not throwing.
-
-A minimal alternative is to drop the hard error when `x_inv ≈ 0`, since all the degenerate faces arise there. The `y = x = x_max` split of `rho_y`/`rho_max` is bounded by its sum and did not trigger in testing.
+## Narrative Findings (AI reviewer)
 
 ## Warnings
 
-### WR-01: `safety` in `(0, 1)` is accepted, but the validity proof needs `safety >= 1`, and the check cannot detect the resulting cut-off
+### WR-01: The certificate LP uses cached follower data, so modifying the built model in place silently returns wrong multipliers (regression from 23a72b1)
 
-**File:** `src/planning/bilevel_kkt.jl:316`
+**File:** `src/planning/bilevel_kkt.jl:476-481` (cached fields), `:598-609` (certificate LP), `:769-773` (returned values)
 
-**Issue:** The guard is `safety > 0`. The `_follower_kkt_dual_bound` proof shows the tight multiplier can equal the unscaled bound exactly; for example, `rho_y(y=0) = 14.8` on the interior fixture. So any `safety < 1` can remove the true optimum from the MILP.
+**Issue:** `_recover_kkt_certificate` rebuilds the follower's stationarity from the `c_inv`, `corridor_cap`, `margin`, `q_op` and `x_inv_max` copies stored on `BilevelKKT` at build time. It does not read the coefficients of `kkt.model[:statio_x]`/`kkt.model[:statio_z]`.
 
-The `solve_bilevel!` docstring (`:455-462`) itself says the at-bound check cannot detect a cut-off optimum. A caller who passes `safety = 0.5` to "tighten the big-M" therefore gets a silently wrong leader decision, with no error.
+The project's stated idiom is "build once; mutate via `set_normalized_rhs` / `set_objective_coefficient`; re-solve" (CLAUDE.md §6). A researcher who sweeps the follower's data in place on the registered constraints therefore gets a MILP solved for the new data and multipliers certified against the old data. Before 23a72b1 the returned multipliers were the MILP's own values, which were consistent with the mutated model. They are now silently wrong.
 
-**Fix:** Change the guard to `safety >= 1 || throw(ArgumentError("safety must be >= 1 (the closed-form bound is tight); got $safety"))`. The WR-06 stress test needs some other way to build an under-sized `m_ub`, for example:
+Reproduced with `scratchpad/stale.jl` on the interior fixture:
 
-- an internal `_m_ub_override` keyword, or
-- building with `safety = 1` and then `set_upper_bound(tight.rho_y, 9.8)`.
+```
+set_normalized_rhs(k.model[:statio_x], -1.0)   # c_inv 0.2 -> 1.0
+solve_bilevel!(k)  ->  y = 0.14 (correct for c_inv = 1.0), rho_y = 0.8 (WRONG; true rho_y = 10*0.1 - 1.0 = 0)
+```
 
-The second option is simpler and keeps the public API safe.
+The code raises no error. Stationarity under the cached `c_inv = 0.2` happens to be satisfiable. Other mutations, such as changing a `statio_z` coefficient while every multiplier of that t is fixed, would instead make the certificate LP infeasible. That raises the misleading "MILP returned a primal with no valid follower KKT certificate" error on a correct solve.
 
-### WR-02: Returned multipliers (`mu_cap`, `mu_lo`, `rho_*`) are arbitrary points on a non-unique multiplier face, but are returned as if meaningful
+**Fix:** Read the data from the model at solve time so the certificate always matches what HiGHS solved:
 
-**File:** `src/planning/bilevel_kkt.jl:511-523`
+```julia
+sx = kkt.model[:statio_x]; sz = kkt.model[:statio_z]
+c_inv_now = -normalized_rhs(sx)                                  # c_inv + ... == 0
+cap_now   = -normalized_coefficient(sx, kkt.mu_cap[1])           # coefficient of mu_cap[t]
+q_now     = [normalized_coefficient(sz[t], kkt.z[t]) for t in 1:T]
+margin_now = [normalized_rhs(sz[t]) for t in 1:T]                # (c_op - pi) + ... == 0  =>  rhs = pi - c_op
+```
 
-**Issue:** Whenever `x_inv = 0`, or `y = x = x_max`, the multipliers are not unique, and the returned values are just HiGHS's vertex:
-
-- Corner fixture: returns `mu_cap = 0.5` and `mu_lo = 0.8`, while the minimal certificate is `mu_cap = 0`, `mu_lo = 0.3`.
-- `v_d = [1.0]` case: returns `mu_cap = 14.82` and `rho_y = 148` against `a⁺ = 1.5`.
-
-The project treats duals as prices, so a consumer will reasonably read `rho_y` as the shadow value of the leader's investment cap. These values can change with the HiGHS version or presolve path, which hurts reproducibility.
-
-**Fix:** Return the minimal (canonical) certificate computed in the CR-01 fix. At the least, state in the docstring that the multipliers are unique only on non-degenerate active sets and must not be read as prices otherwise.
+Use these values in place of the cached fields. At minimum, assert at the top of `_recover_kkt_certificate` that the cached fields still equal the model's coefficients, and error loudly if they do not. Also document on `BilevelKKT` that the model must not be mutated except through `fix(y_inv, ·)`.
 
 ## Info
 
-### IN-01: `GAP_FLOOR_INTERIOR` derivation comment contradicts its value
+### IN-01: Fixing a multiplier variable bypasses the at-bound check that is meant to catch hand-tightened bounds
+
+**File:** `src/planning/bilevel_kkt.jl:565`
+
+**Issue:** `_ub(v) = has_upper_bound(v) ? upper_bound(v) : Inf`. `fix(v, c; force = true)` deletes the variable's bounds, so a fixed multiplier is reported with `ub = Inf`. The certificate LP then leaves it unrestricted.
+
+On the WR-01 stress setup, `set_upper_bound(rho_y, 9.8)` raises the at-bound error, but `fix(rho_y, 9.8; force = true)` passes silently (`scratchpad/stale.jl`). The docstring (`:712-714`) presents the check as the guard against caller-tightened bounds.
+
+**Fix:** `_ub(v) = is_fixed(v) ? fix_value(v) : has_upper_bound(v) ? upper_bound(v) : Inf`. A fixed multiplier is the tightest possible bound, so it should be checked like one.
+
+### IN-02 (carried from iteration-2 IN-01): `GAP_FLOOR_INTERIOR` derivation comment contradicts its value
 
 **File:** `test/test_planning_certification_bilevel_interior.jl:297-304`
 
-**Issue:** The comment says the floor is "10x the production MILP's own `mip_feasibility_tolerance=1e-9`", which is 1e-8, but the value is `1e-6`. `fixtures_planning.jl:166` uses 1e-8 for the same stated derivation.
+**Issue:** The comment derives the floor as "10x ... `mip_feasibility_tolerance=1e-9`", which is 1e-8, but the constants are `1e-6`. This is still unresolved; it was out of the fixer's scope.
 
-**Fix:** Either set `1e-8`, or state the real basis (for example, the 1e-6 production-vs-hand tolerance).
+**Fix:** Set the constants to `1e-8`, or state the real basis of 1e-6.
 
-### IN-02: T=2 brute force omits the voltage-bound filter that the other oracles apply "to match production semantics"
+### IN-03 (carried from iteration-2 IN-02): The T=2 brute force omits the voltage-band filter
 
 **File:** `test/test_planning_certification_bilevel_interior.jl:687-698`
 
-**Issue:** `brute_force_T2` filters only `z <= d_max`. The other two brute-force oracles also filter the bus-2 voltage band, per WR-07. The band is slack on this fixture, so results are unaffected, but the oracle is not semantically equivalent to production if it is copied or reused.
+**Issue:** `brute_force_T2` filters only `z <= d_max`. The other oracles also filter the bus-2 voltage band. The result is unaffected on this fixture, but the oracle is not equivalent to production semantics.
 
 **Fix:** Add `all(0.95^2 .<= 1 .- 2e-3 .* zs .<= 1.05^2) || continue`.
 
-### IN-03: Stale plan-time language in the `build_bilevel_kkt` docstring
+### IN-04 (carried from iteration-2 IN-03): Stale plan-time language in the `build_bilevel_kkt` docstring
 
-**File:** `src/planning/bilevel_kkt.jl:260-264`
+**File:** `src/planning/bilevel_kkt.jl:275-279`
 
-**Issue:** The paragraph "MEASURES, does not assume ... extended with a keyword-passthrough seam ONLY if measurement (Task 2's fixture) shows it is insufficient" describes a plan task, not behaviour. It should be resolved or removed.
+**Issue:** "MEASURES, does not assume ... extended ... ONLY if measurement (Task 2's fixture) shows it is insufficient" describes a plan task, not behaviour.
 
-**Fix:** Replace it with the measured outcome. The shared `select_optimizer(MILP())` defaults are used unchanged and solve all fixtures to `OPTIMAL`.
+**Fix:** Replace it with the measured outcome: the shared `select_optimizer(MILP())` defaults are used unchanged and solve every fixture to `OPTIMAL`.
 
-_Iteration-1 info items IN-01..IN-05 were out of the fixer's scope and remain as described in `29-REVIEW.iter1.md`. They are not repeated here._
+_Iteration-1 info items IN-01..IN-05 (see `29-REVIEW.iter1.md`) were not re-checked and are not repeated._
 
 ---
 
-_Reviewed: 2026-10-01T00:52:20Z_
+_Reviewed: 2026-10-01T01:31:44Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
