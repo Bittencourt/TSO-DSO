@@ -115,7 +115,12 @@ end
     res = solve_planning_oracle!(o, zstar)
 
     @test res isa NamedTuple
-    @test keys(res) == (:cost, :π, :π_s, :dadp, :ctx)
+    # Phase 30 code review (CR-01/CR-03): two ADDITIVE trailing fields — the exactness
+    # gate's explicit verdict and its measured cone residual. The original five keys keep
+    # their names and order.
+    @test keys(res) == (:cost, :π, :π_s, :dadp, :ctx, :exactness, :socp_maxgap)
+    @test res.exactness === :not_applicable   # LinDistFlow: no `:l` stash, gate never ran
+    @test isnan(res.socp_maxgap)
     @test length(res.π) == T
     @test all(isfinite, res.π)
     @test res.π_s ≈ sum(res.π)
