@@ -78,7 +78,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [x] **BILEV-02**: The BilevelJuMP certification includes a fixture on which the bilevel optimum
   provably differs from the joint single-level optimum, and the production method matches the
   bilevel answer, not the joint one.
-- [ ] **BILEV-03**: `solve_stackelberg!` runs with `ConvexBranchFlow` on a multi-bus feeder
+- [x] **BILEV-03**: `solve_stackelberg!` runs with `ConvexBranchFlow` on a multi-bus feeder
   (IEEE-13 or larger) and T > 1 inside the Benders loop, and converges with a closed LB/UB gap.
 - [x] **BILEV-04**: The planning oracle produces feasibility cuts when a pinned z is
   voltage- or thermally infeasible, and handles SOCP inexactness at a pinned z with a documented
@@ -181,7 +181,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | FIX-11 | Phase 28 | Complete |
 | BILEV-01 | Phase 29 | Complete |
 | BILEV-02 | Phase 29 | Complete |
-| BILEV-03 | Phase 30 | Pending |
+| BILEV-03 | Phase 30 | Complete |
 | BILEV-04 | Phase 30 | Complete |
 | BILEV-05 | Phase 30 | Complete |
 | BILEV-06 | Phase 31 | Pending |

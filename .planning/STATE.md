@@ -4,13 +4,13 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Completed 30-04-PLAN.md
-last_updated: "2026-10-01T12:17:55.220Z"
+last_updated: "2026-10-01T12:42:08.148Z"
 last_activity: 2026-10-01
 progress:
   total_phases: 12
   completed_phases: 4
   total_plans: 44
-  completed_plans: 43
+  completed_plans: 44
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-10-01
 
@@ -178,6 +178,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 30 P01 | 55min | 3 tasks | 6 files |
 | Phase 30 P02 | 75min | 3 tasks | 5 files |
 | Phase 30 P04 | 95min | 3 tasks | 5 files |
+| Phase 30 P05 | 50min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,8 @@ Recent decisions affecting current work:
 - [Phase 30]: Phase 30-04: genuine-infeasibility routing (BILEV-04a) is unconditional regardless of inexact_policy; only the exactness-class throw is policy-dispatched
 - [Phase 30]: Phase 30-04: :reject's deterministic stall confirmed empirically (no cut appended on a rejected trial => identical master LP re-proposes the same trial forever) -- accepted per T-30-09, not engineered around
 - [Phase 30]: Phase 30-04: W2 overhead measured -- derive_alpha_op_lb ~13.1ms vs ~695.5ms full solve_stackelberg! best-response (~1.9%) on the toy two-bus fixture, now paid unconditionally through every solve_stackelberg!/run_nash! best-response; carried to Phase 31 FINDINGS
+- [Phase 30]: Extended the BILEV-03 cross-check tolerance formula to a THIRD source (Benders loop's own converged |UB-LB| absolute gap) beyond the two solver-precision duality gaps the plan named — found necessary by direct measurement (the two-source formula fails the cross-check by ~53x).
+- [Phase 30]: T=24 Literate IEEE-13 demonstration tightens follower/master investment-ceiling kwargs vs the T=4 headline test, after a live probe found the T=4-scale kwargs throw a genuine assert_battery_complementarity! violation under the full 24-hour price swing.
 
 ### Roadmap Evolution
 
@@ -465,7 +468,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-01T12:17:55.196Z
+Last session: 2026-10-01T12:41:14.830Z
 Stopped at: Completed 30-04-PLAN.md
 Resume file: None
 
