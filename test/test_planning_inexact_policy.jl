@@ -34,9 +34,9 @@
 # that function's `<interfaces>`), so iterations 2/3/6 behave IDENTICALLY under all three
 # policies below; only iterations 7/8/10 (the genuine exactness-class throws) differ.
 #
-# `max_iter=10` for `:strict`/`:reject` (both resolve — throw or stall — by iteration 7-8,
-# well inside the budget) and `max_iter=20` for `:certify_incumbent` (converges at
-# iteration 11) keep every item's solve time small (a handful of cheap IEEE-13 T=4 SOCP
+# `max_iter=10` for `:strict` (throws at iteration 7) and `max_iter=20`/`50` for
+# `:certify_incumbent`/`:reject` (both converge at iteration 11 — `:reject` appends the
+# inexact trials' cuts since the Phase 30 code review iteration 2, WR-02) keep every item's solve time small (a handful of cheap IEEE-13 T=4 SOCP
 # re-solves, ~tens of ms each per 30-RESEARCH.md's own measurement).
 #
 # Items tagged `[:planning]`, names contain "planning" and "inexact" (occursin filter
@@ -87,7 +87,7 @@
     end
 end
 
-@testitem "planning inexact policy: :reject skips the inexact trial and fails fast on the deterministic repeat (T-30-09, WR-06)" tags =
+@testitem "planning inexact policy: :reject appends the inexact trial's cuts but bars it from the incumbent, and converges certified-only (T-30-09, WR-02 iter 2)" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
 
@@ -101,46 +101,105 @@ end
     master_kwargs =
         (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
 
-    # `:reject` never appends ANY cut on the inexact trial (by design — see
-    # `solve_stackelberg!`'s own docstring), so the master's LP is UNCHANGED on the next
-    # iteration and deterministically re-proposes the IDENTICAL trial (T-30-09). Before
-    # the Phase 30 code review (WR-06) this burned the whole remaining budget and ended in
-    # a generic "exhausted" error that hid the cause; `:reject` is now FAIL-FAST: the
-    # first repeat raises a named "stalled" error at once. On this fixture the first
-    # inexact trial is iteration 7 (see the file header), so the stall fires at
-    # iteration 8 — measured, and pinned below via the checkpoint count (one JLD2 file per
-    # completed iteration; the stalled iteration writes none). Cross-referenced against
-    # the companion `:certify_incumbent` item below (same fixture/configuration), whose
-    # trace shows the SAME iteration is genuinely SOCP-INEXACT-but-feasible.
-    mktempdir() do dir
-        caught = nothing
+    # Phase 30 code review iteration 2 (WR-02). `:reject` used to append NO cut at an
+    # inexact trial, so the master re-proposed it and the run could only ever stall.
+    # Now the trial's relaxation cuts are appended (valid lower bounds whatever the
+    # exactness verdict) and only its access to UB / the incumbent is barred. The master
+    # therefore follows EXACTLY the same trajectory as under :certify_incumbent; only
+    # UB differs while an inexact trial would have been the running minimum. MEASURED
+    # 2026-10-01 (scratchpad fix2/probe_wr02.jl), both policies: iters = 11,
+    # UB = 609.0155321155983, LB = 608.9819521916484, the same exact incumbent; rows
+    # 7, 8, 10 are the inexact trials (:rejected here); UB_trace[10] = 609.043154704391
+    # under :reject vs 609.0392231361435 (a relaxation-only value) under
+    # :certify_incumbent.
+    solve_with(pol) = mktempdir() do dir
+        TSODSO.solve_stackelberg!(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            λ₀ = λ₀,
+            T = T,
+            follower_kwargs = follower_kwargs,
+            master_kwargs = master_kwargs,
+            tol = 1.0e-4,
+            max_iter = 50,
+            checkpoint_dir = dir,
+            inexact_policy = pol,
+        )
+    end
+    rr = solve_with(:reject)
+    rc = solve_with(:certify_incumbent)
+
+    @test rr.gap <= 1.0e-4
+    tr = rr.trace
+    rejected = findall(==(:rejected), tr.policy_action_trace)
+    @test rejected == findall(==(:certified_incumbent), rc.trace.policy_action_trace)
+    @test !isempty(rejected)
+    # The rejected rows appended their optimality cuts (the master moved on) ...
+    @test all(i -> tr.cut_type_trace[i] === :optimality, rejected)
+    @test tr.n_cuts_trace == rc.trace.n_cuts_trace
+    @test tr.LB_trace ≈ rc.trace.LB_trace
+    # ... but never touched UB: it is unchanged across every rejected row.
+    @test all(i -> tr.UB_trace[i] == tr.UB_trace[i - 1], rejected)
+    @test all(tr.UB_trace .>= rc.trace.UB_trace)
+    # UB / the returned point are certified-only under :reject.
+    @test rr.incumbent_exactness === :exact
+    @test !rr.ub_relaxation_only
+    @test rr.UB ≈ rc.UB
+    @test rr.z ≈ rc.z
+end
+
+@testitem "planning inexact policy: :reject fails fast when the relaxation's optimum is itself inexact (WR-06 backstop, WR-02 iter 2)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # The CR-02 T=1 fixture below (λ₀ = [-1.0]): every feasible pin above the 0.01 load is
+    # SOCP-inexact and the relaxation's optimum is the box corner z = y_max = 0.04. Under
+    # :reject the corner's cuts are appended, the master re-proposes the identical corner
+    # (the relaxation's optimum), and no certified incumbent can close the gap there.
+    # MEASURED 2026-10-01 (scratchpad fix2/probe_wr01.jl, POL=reject): the stall fires at
+    # iteration 5 at z = [0.04], best certified UB = 12.240262587779437 (the certified
+    # boundary point z ≈ 0.010039) — 4 completed iterations, far short of max_iter = 30.
+    T = 1
+    feeder = TSODSO.ieee13_modified()
+    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
+
+    function caught(f)
         try
-            TSODSO.solve_stackelberg!(
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    mktempdir() do dir
+        e = caught(
+            () -> TSODSO.solve_stackelberg!(
                 feeder,
                 ConvexBranchFlow(),
-                aggs;
-                λ₀ = λ₀,
+                [agg];
+                λ₀ = [-1.0],
                 T = T,
-                follower_kwargs = follower_kwargs,
-                master_kwargs = master_kwargs,
-                tol = 1.0e-4,
-                max_iter = 50,
+                follower_kwargs = (;
+                    corridor_cap = 1.0,
+                    x_inv_max = 0.2,
+                    c_inv = 0.01,
+                    c_op = [0.01],
+                ),
+                master_kwargs = (; c_y = 0.01, y_max = 0.04),
+                tol = 1.0e-6,
+                max_iter = 30,
                 checkpoint_dir = dir,
                 inexact_policy = :reject,
-            )
-        catch e
-            caught = e
-        end
-        @test caught !== nothing
-        @test caught isa ErrorException
-        @test occursin(":reject stalled", caught.msg)
-        @test !occursin("exhausted", caught.msg)
-        # NEVER the exactness gate's own message leaking through unhandled — :reject's
-        # whole purpose is to intercept the inexact verdict.
-        @test !occursin("SOCP relaxation INEXACT", caught.msg)
-        # Fail-fast: 7 completed iterations (6 ordinary + the first rejection), far
-        # short of max_iter = 50.
-        @test length(filter(f -> endswith(f, ".jld2"), readdir(dir))) == 7
+            ),
+        )
+        @test e isa ErrorException
+        @test occursin(":reject stalled", e.msg)
+        @test !occursin("exhausted", e.msg)
+        @test !occursin("SOCP relaxation INEXACT", e.msg)
+        @test length(filter(f -> endswith(f, ".jld2"), readdir(dir))) == 4
     end
 end
 

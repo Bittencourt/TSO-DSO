@@ -162,7 +162,15 @@ synthetic forced `z`) passes through a measured SOCP-inexact pin at `z~0.0504`
   budget to a generic "exhausted" error; the test pins the stall message and the 7
   completed checkpoints.) The test cross-references the companion `:certify_incumbent`
   item (same fixture/configuration) to show the pin is genuinely inexact-but-feasible,
-  never a true infeasibility (T-30-09).
+  never a true infeasibility (T-30-09). (Code-review iteration 2, WR-02: the fail-fast
+  version above could never get past an inexact trial. `:reject` now APPENDS the inexact
+  trial's relaxation cuts, which are valid lower bounds whatever the exactness verdict,
+  and only bars it from UB/the incumbent. On this fixture it follows the identical master
+  trajectory as `:certify_incumbent` and converges at iteration 11 with the same exact
+  incumbent, UB = 609.0155321155983; rows 7, 8 and 10 are `:rejected`. The "stalled" error
+  remains as a backstop for the case where the relaxation's optimum is itself inexact:
+  measured on the single-Thermostatic T=1 λ₀=[-1] fixture, it fires at iteration 5 at
+  z = [0.04].)
 - `:certify_incumbent` (default) — reconstructs the already-solved model's `(cost, π, π_s,
   dadp, ctx)` and proceeds normally, logging the cone gap.
 
