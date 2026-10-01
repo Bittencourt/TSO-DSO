@@ -96,7 +96,15 @@ outer loop, unlike every other `planning/` file.
   - `m_ub::Float64` — the single closed-form (never guessed, never solver-measured)
     upper bound shared by every complementarity dual in the KKT block (see
     [`_follower_kkt_dual_bound`](@ref)).
+  - `m_ub_proven::Float64` — the same closed-form bound before the `safety` factor
+    (`m_ub == safety * m_ub_proven`). The derivation shows a KKT certificate with
+    every multiplier `<= m_ub_proven` always exists.
   - `T::Int` — the horizon.
+  - `corridor_cap::Float64`, `x_inv_max::Float64`, `c_inv::Float64`,
+    `margin::Vector{Float64}` (`pi_tariff - c_op`), `q_op::Vector{Float64}` — the
+    follower's own data. `solve_bilevel!` needs it to rebuild the follower's KKT
+    stationarity at the solved primal and recover a KKT certificate (29-REVIEW.md
+    iteration-2 CR-01, see [`_recover_kkt_certificate`](@ref)).
 """
 struct BilevelKKT{Z, MC, D, ML}
     model::Model
@@ -110,7 +118,13 @@ struct BilevelKKT{Z, MC, D, ML}
     rho_max::VariableRef
     mu_lo::ML
     m_ub::Float64
+    m_ub_proven::Float64
     T::Int
+    corridor_cap::Float64
+    x_inv_max::Float64
+    c_inv::Float64
+    margin::Vector{Float64}
+    q_op::Vector{Float64}
 end
 
 """
@@ -437,7 +451,155 @@ function build_bilevel_kkt(
     # in this single-level MILP's objective or constraints).
     @objective(model, Min, c_y * y_inv + sum(pi_tariff[t] * z[t] - v_d[t] * d[t] for t in 1:T))
 
-    return BilevelKKT(model, y_inv, x_inv, z, d, mu_cap, rho_y, rho_lo, rho_max, mu_lo, m_ub, T)
+    return BilevelKKT(
+        model,
+        y_inv,
+        x_inv,
+        z,
+        d,
+        mu_cap,
+        rho_y,
+        rho_lo,
+        rho_max,
+        mu_lo,
+        m_ub,
+        m_ub / safety,
+        T,
+        Float64(corridor_cap),
+        Float64(x_inv_max),
+        Float64(c_inv),
+        Float64[pi_tariff[t] - c_op[t] for t in 1:T],
+        Float64.(collect(q_op)),
+    )
+end
+
+"""
+    _recover_kkt_certificate(kkt::BilevelKKT; act_tol = 1e-6, atol_bound = 1e-6)
+        -> NamedTuple
+
+Post-solve KKT-certificate recovery (29-REVIEW.md iteration-2 CR-01). It fixes the
+solved primal `(y_inv, x_inv, z)` of the single-level MILP and solves a small LP over
+the follower's multipliers `(mu_cap, mu_lo, rho_y, rho_lo, rho_max) >= 0`. The LP
+contains the follower's two stationarity equations (`statio_x`, `statio_z[t]`) at the
+fixed primal and complementarity on the solved active set: every multiplier whose
+primal slack exceeds `act_tol` is fixed to `0`.
+
+# Why this exists
+
+When `x_inv* = 0` (and in the `y = x_inv = x_inv_max` corner) the multiplier set is a
+degenerate, unbounded face. The `[0, m_ub]` box truncates that face. Because the MILP
+objective does not involve the multipliers, HiGHS returns any vertex it reaches, and
+those vertices often lie ON the box face. A check on HiGHS's own vertex then rejects a
+correct optimum, and raising `safety` cannot help: the vertex moves with `m_ub`.
+
+The right question is whether ANY valid certificate fits inside the box. This LP answers
+it exactly. It minimizes `s` subject to `multiplier_i - lim_i <= s` for every
+multiplier. `ub_i` is that variable's actual upper bound in the MILP (normally `m_ub`),
+and the limit is:
+
+  - `lim_i = ub_i - atol_bound` in general, so a certificate pressing on the box counts
+    as "at the bound";
+  - `lim_i = max(ub_i - atol_bound, m_ub_proven + atol_bound)` when
+    `ub_i >= m_ub_proven - atol_bound`. With `safety = 1` the box IS the proven bound,
+    and the derivation in [`_follower_kkt_dual_bound`](@ref) shows a certificate AT
+    `m_ub_proven` is admissible (e.g. the tight `rho_y(y=0) = 14.8` on the interior
+    fixture). Reaching it is expected, not a sign of a cut-off optimum.
+
+`s* <= 0` means some valid certificate respects every limit. `s* > 0` means none does,
+and the multipliers with `multiplier_i - lim_i = s*` are the ones pressing on the box.
+
+Returns `(; s, mu_cap, mu_lo, rho_y, rho_lo, rho_max, ub, lim)`. Here `s` is `s*`, the
+multiplier fields hold the min-max certificate, and `ub`/`lim` hold the per-multiplier
+upper bounds and limits (same field names).
+"""
+function _recover_kkt_certificate(
+    kkt::BilevelKKT;
+    act_tol::Real = 1e-6,
+    atol_bound::Real = 1e-6,
+)
+    T = kkt.T
+    yv = value(kkt.y_inv)
+    xv = value(kkt.x_inv)
+    zv = value.(kkt.z)
+
+    _ub(v) = has_upper_bound(v) ? upper_bound(v) : Inf
+    ub = (;
+        mu_cap = Float64[_ub(kkt.mu_cap[t]) for t in 1:T],
+        mu_lo = Float64[_ub(kkt.mu_lo[t]) for t in 1:T],
+        rho_y = _ub(kkt.rho_y),
+        rho_lo = _ub(kkt.rho_lo),
+        rho_max = _ub(kkt.rho_max),
+    )
+    # Per-multiplier limit for the at-bound test. Normally `ub - atol_bound`: a
+    # certificate pressing on the box suggests the box may be too small. The exception
+    # is a box at least as large as the proven bound `m_ub_proven` (e.g. `safety = 1`):
+    # the derivation proves a certificate with every multiplier `<= m_ub_proven`
+    # exists, so reaching `m_ub_proven` itself is admissible, not a symptom.
+    proven = kkt.m_ub_proven
+    _lim(u) = u >= proven - atol_bound ? max(u - atol_bound, proven + atol_bound) :
+        u - atol_bound
+    lim = (;
+        mu_cap = _lim.(ub.mu_cap),
+        mu_lo = _lim.(ub.mu_lo),
+        rho_y = _lim(ub.rho_y),
+        rho_lo = _lim(ub.rho_lo),
+        rho_max = _lim(ub.rho_max),
+    )
+
+    cert = Model(select_optimizer(LP()))   # INFRA-02
+    @variable(cert, mc[1:T] >= 0)
+    @variable(cert, ml[1:T] >= 0)
+    @variable(cert, ry >= 0)
+    @variable(cert, rl >= 0)
+    @variable(cert, rm >= 0)
+
+    # Follower stationarity at the FIXED solved primal (same equations as the MILP's
+    # statio_x / statio_z, with z replaced by its solved value).
+    @constraint(cert, kkt.c_inv - kkt.corridor_cap * sum(mc) + ry + rm - rl == 0)
+    @constraint(cert, [t = 1:T], -kkt.margin[t] + kkt.q_op[t] * zv[t] + mc[t] - ml[t] == 0)
+
+    # Complementarity on the solved active set: an inactive primal constraint has a
+    # zero multiplier.
+    for t in 1:T
+        kkt.corridor_cap * xv - zv[t] > act_tol && fix(mc[t], 0.0; force = true)
+        zv[t] > act_tol && fix(ml[t], 0.0; force = true)
+    end
+    yv - xv > act_tol && fix(ry, 0.0; force = true)
+    xv > act_tol && fix(rl, 0.0; force = true)
+    kkt.x_inv_max - xv > act_tol && fix(rm, 0.0; force = true)
+
+    # Min-max distance to the MILP's own box bounds.
+    # Min-max excess over the per-multiplier limits. s >= -min(lim) holds for every
+    # certificate (all multipliers are >= 0); stating it keeps the LP bounded even if
+    # a caller removed every upper bound.
+    finite_lims =
+        filter(isfinite, vcat(lim.mu_cap, lim.mu_lo, lim.rho_y, lim.rho_lo, lim.rho_max))
+    @variable(cert, s >= (isempty(finite_lims) ? -1.0 : -minimum(finite_lims)))
+    for t in 1:T
+        isfinite(lim.mu_cap[t]) && @constraint(cert, mc[t] - lim.mu_cap[t] <= s)
+        isfinite(lim.mu_lo[t]) && @constraint(cert, ml[t] - lim.mu_lo[t] <= s)
+    end
+    isfinite(lim.rho_y) && @constraint(cert, ry - lim.rho_y <= s)
+    isfinite(lim.rho_lo) && @constraint(cert, rl - lim.rho_lo <= s)
+    isfinite(lim.rho_max) && @constraint(cert, rm - lim.rho_max <= s)
+    @objective(cert, Min, s)
+    optimize!(cert)
+    termination_status(cert) == MOI.OPTIMAL || error(
+        "solve_bilevel!: the KKT-certificate recovery LP at the solved primal " *
+        "(y_inv=$yv, x_inv=$xv, z=$zv) ended with $(termination_status(cert)) — the MILP " *
+        "returned a primal with no valid follower KKT certificate; refusing to trust it",
+    )
+
+    return (;
+        s = value(s),
+        mu_cap = value.(mc),
+        mu_lo = value.(ml),
+        rho_y = value(ry),
+        rho_lo = value(rl),
+        rho_max = value(rm),
+        ub,
+        lim,
+    )
 end
 
 """
@@ -447,66 +609,67 @@ Solve the built-ONCE [`BilevelKKT`](@ref) `kkt` via a SINGLE `assert_solved!(kkt
 dual = false)` call (MILP — post-SOS1-bridge binaries mean JuMP duals are not
 available/meaningful; `dual=false` here is the CORRECT, not a weakened, gate).
 
-Then runs the Pitfall-3 at-bound sanity check: for every complementarity variable
-(`mu_cap[t]` ∀t, `rho_y`, `rho_lo`, `rho_max`, `mu_lo[t]` ∀t), asserts its solved value is NOT
-within `1e-6` of `kkt.m_ub`. A dual sitting at its big-M bound is a hard error, never
-a warning.
+Then runs the Pitfall-3 at-bound sanity check on a recovered KKT certificate, not on
+HiGHS's own multiplier vertex (29-REVIEW.md iteration-2 CR-01). With the solved primal
+fixed, [`_recover_kkt_certificate`](@ref) finds the valid follower KKT certificate
+(stationarity plus complementarity on the solved active set) that stays farthest from
+the multipliers' box bounds. The check fails, as a hard error and never a warning, only
+if EVERY valid certificate has some multiplier (`mu_cap[t]`, `mu_lo[t]`, `rho_y`,
+`rho_lo`, `rho_max`) within `1e-6` of its upper bound (normally `kkt.m_ub`). The one
+exception is a multiplier that reaches the proven closed-form bound `kkt.m_ub_proven`
+when the box equals it (`safety = 1`): the derivation admits that value.
 
-This check is NECESSARY, NOT SUFFICIENT (29-REVIEW.md CR-01; Pineda & Morales 2019,
-"Solving linear bilevel problems using big-Ms: not all that glitters is gold"). If
-`m_ub` were too small, the true optimum would be cut off. The MILP would then return
-the best remaining leader decision, whose duals can sit strictly inside `[0, m_ub]`,
-and the check would pass. The validity guarantee therefore rests on `m_ub` itself,
-which [`_follower_kkt_dual_bound`](@ref) derives in closed form for every
-`y_inv in [0, y_max]`. This check only catches a gross violation, such as a
-caller-supplied `safety < 1`.
+Checking HiGHS's raw values instead was wrong. When `x_inv* = 0` the multiplier face is
+degenerate and unbounded, and the box truncates it. HiGHS may return a vertex ON the
+box face (for example `rho_y = m_ub`) even though a certificate well inside the box
+exists. That falsely rejected correct optima such as "the leader prefers no delivery".
+Raising `safety` could not help, because the vertex scales with `m_ub`.
+
+This check is NECESSARY, NOT SUFFICIENT (29-REVIEW.md iteration-1 CR-01; Pineda &
+Morales 2019, "Solving linear bilevel problems using big-Ms: not all that glitters is
+gold"). If `m_ub` were too small, the true optimum would be cut off. The MILP would
+then return the best remaining leader decision, whose certificate can sit strictly
+inside the box, and the check would pass. The validity guarantee therefore rests on
+`m_ub` itself, which [`_follower_kkt_dual_bound`](@ref) derives in closed form for
+every `y_inv in [0, y_max]` (with `safety >= 1`). This check catches a bound that is
+provably too tight at the returned point, for example one tightened by a caller via
+`set_upper_bound`.
 
 Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, rho_max, mu_lo, model)`.
 """
 function solve_bilevel!(kkt::BilevelKKT)
     assert_solved!(kkt.model; dual = false)
 
-    # Pitfall-3 validity check (mandatory, never skipped): a complementarity variable
-    # sitting AT its derived SOS1 upper bound is proof the bound was too tight, not a
-    # benign coincidence — this would silently misreport the bilevel optimum.
+    # Pitfall-3 validity check (mandatory, never skipped), run on the recovered
+    # certificate (CR-01, iteration 2). A multiplier at its bound in EVERY valid
+    # certificate proves the bound is too tight at this point.
     atol_bound = 1e-6
-    for t in 1:kkt.T
-        v = value(kkt.mu_cap[t])
-        isapprox(v, kkt.m_ub; atol = atol_bound) && error(
-            "solve_bilevel!: complementarity variable mu_cap[$t] sits at (or within " *
-            "$atol_bound of) the derived SOS1 bound m_ub=$(kkt.m_ub) (value=$v) — " *
-            "refusing to trust a result where the true optimum may have been cut off; " *
-            "re-derive a looser bound (increase `safety`) and re-build.",
-        )
-        v = value(kkt.mu_lo[t])
-        isapprox(v, kkt.m_ub; atol = atol_bound) && error(
-            "solve_bilevel!: complementarity variable mu_lo[$t] sits at (or within " *
-            "$atol_bound of) the derived SOS1 bound m_ub=$(kkt.m_ub) (value=$v) — " *
-            "refusing to trust a result where the true optimum may have been cut off; " *
-            "re-derive a looser bound (increase `safety`) and re-build.",
+    cert = _recover_kkt_certificate(kkt; atol_bound = atol_bound)
+    if cert.s > 0
+        names = String[]
+        vals = Float64[]
+        ubs = Float64[]
+        lims = Float64[]
+        for t in 1:kkt.T
+            push!(names, "mu_cap[$t]", "mu_lo[$t]")
+            push!(vals, cert.mu_cap[t], cert.mu_lo[t])
+            push!(ubs, cert.ub.mu_cap[t], cert.ub.mu_lo[t])
+            push!(lims, cert.lim.mu_cap[t], cert.lim.mu_lo[t])
+        end
+        push!(names, "rho_y", "rho_lo", "rho_max")
+        push!(vals, cert.rho_y, cert.rho_lo, cert.rho_max)
+        push!(ubs, cert.ub.rho_y, cert.ub.rho_lo, cert.ub.rho_max)
+        push!(lims, cert.lim.rho_y, cert.lim.rho_lo, cert.lim.rho_max)
+        i = argmax(vals .- lims)   # a multiplier attaining s*
+        error(
+            "solve_bilevel!: no valid KKT certificate of the solved primal keeps every " *
+            "multiplier more than $atol_bound inside its SOS1 bound — complementarity " *
+            "variable $(names[i]) sits at (or within $atol_bound of) its bound " *
+            "$(ubs[i]) (value=$(vals[i]) in the min-max certificate). The bound is too " *
+            "tight here and the true optimum may have been cut off; rebuild with a " *
+            "larger `safety` (>= 1) and do not tighten the multiplier bounds by hand.",
         )
     end
-    v = value(kkt.rho_y)
-    isapprox(v, kkt.m_ub; atol = atol_bound) && error(
-        "solve_bilevel!: complementarity variable rho_y sits at (or within $atol_bound " *
-        "of) the derived SOS1 bound m_ub=$(kkt.m_ub) (value=$v) — refusing to trust a " *
-        "result where the true optimum may have been cut off; re-derive a looser bound " *
-        "(increase `safety`) and re-build.",
-    )
-    v = value(kkt.rho_lo)
-    isapprox(v, kkt.m_ub; atol = atol_bound) && error(
-        "solve_bilevel!: complementarity variable rho_lo sits at (or within $atol_bound " *
-        "of) the derived SOS1 bound m_ub=$(kkt.m_ub) (value=$v) — refusing to trust a " *
-        "result where the true optimum may have been cut off; re-derive a looser bound " *
-        "(increase `safety`) and re-build.",
-    )
-    v = value(kkt.rho_max)
-    isapprox(v, kkt.m_ub; atol = atol_bound) && error(
-        "solve_bilevel!: complementarity variable rho_max sits at (or within $atol_bound " *
-        "of) the derived SOS1 bound m_ub=$(kkt.m_ub) (value=$v) — refusing to trust a " *
-        "result where the true optimum may have been cut off; re-derive a looser bound " *
-        "(increase `safety`) and re-build.",
-    )
 
     return (;
         y = value(kkt.y_inv),

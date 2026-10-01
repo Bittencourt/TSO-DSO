@@ -299,3 +299,70 @@ end
     @test abs(r.x_inv * r.rho_lo) < 1e-6
     @test abs((10.0 - r.x_inv) * r.rho_max) < 1e-6
 end
+
+@testitem "bilevel: at-bound check accepts correct x_inv*=0 optima on a degenerate multiplier face (iteration-2 CR-01)" tags =
+    [:planning] begin
+    using TSODSO, JuMP
+
+    # 29-REVIEW.md iteration-2 CR-01. Interior-fixture data (a = pi_tariff - c_op = 1.5,
+    # so the follower is profitable), in three variants where the leader prefers NO
+    # delivery and the follower therefore cannot invest (y* = x_inv* = z* = 0):
+    #   v_d = [1.0]   : the leader pays pi_tariff = 2.0 for a unit it values at 1.0;
+    #   c_y = 20.0    : investment is too expensive for the leader;
+    #   y_inv fixed 0 : a caller's sensitivity sweep at y = 0.
+    # Leader objective at the optimum: 0. At x_inv = y_inv = 0 the follower's
+    # multiplier face is degenerate and unbounded (rho_y - rho_lo = 10*mu_cap - 0.2,
+    # mu_cap - mu_lo = 1.5). HiGHS returned box-face vertices such as rho_y = m_ub = 148
+    # and the old raw-value check threw "rho_y sits at ...". The smallest valid
+    # certificate is mu_cap = 1.5, mu_lo = 0, rho_y = 14.8, rho_lo = 0 — exactly the
+    # proven bound, so the check must also pass at safety = 1 (m_ub = 14.8).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 1e-3, 1e-3, 99.0)],
+        1,
+    )
+    base = (;
+        T = 1,
+        agg_bus = 2,
+        corridor_cap = 10.0,
+        x_inv_max = 10.0,
+        c_inv = 0.2,
+        c_op = [0.5],
+        pi_tariff = [2.0],
+        q_op = [1.0],
+        c_y = 0.05,
+        y_max = 5.0,
+        v_d = [3.0],
+        d_max = 10.0,
+    )
+    cases = [
+        ("v_d = [1.0]", merge(base, (; v_d = [1.0])), false),
+        ("c_y = 20", merge(base, (; c_y = 20.0)), false),
+        ("y_inv fixed at 0", base, true),
+    ]
+
+    # Wrapped in a function: @testitem bodies run as top-level code (soft scope).
+    function run_case(kw, fix_y0, safety)
+        kkt = build_bilevel_kkt(feeder, LinDistFlow(); kw..., safety = safety)
+        fix_y0 && fix(kkt.y_inv, 0.0; force = true)
+        err = nothing
+        r = try
+            solve_bilevel!(kkt)
+        catch e
+            err = e
+            nothing
+        end
+        return r, err
+    end
+
+    atol = 1e-6
+    for (label, kw, fix_y0) in cases, safety in (10.0, 1.0)
+        r, err = run_case(kw, fix_y0, safety)
+        @test err === nothing
+        r === nothing && (@info "CR-01 regression threw" label safety err; continue)
+        @test isapprox(r.y, 0.0; atol = atol)
+        @test isapprox(r.x_inv, 0.0; atol = atol)
+        @test isapprox(r.z[1], 0.0; atol = atol)
+        @test isapprox(r.total_cost, 0.0; atol = atol)
+    end
+end
