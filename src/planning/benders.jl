@@ -681,6 +681,35 @@ function _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real
 end
 
 """
+    _select_incumbent(relax::NamedTuple, exact::Union{Nothing,NamedTuple},
+                      converged::Function) -> NamedTuple
+
+The incumbent ORDERING rule (Phase 30 code review iteration 2, WR-01). `relax` is the
+running-minimum-cost incumbent over ALL accepted iterates (the one whose cost is the
+loop's `UB`, which drives convergence); `exact` is the running-minimum-cost incumbent
+over the CERTIFIED iterates only (oracle verdict `:exact` or `:not_applicable`), or
+`nothing` if none exists. Both carry at least `UB` and `exactness`.
+
+An inexact iterate's cost uses the relaxation's welfare `W_R(z) ≥ W_true(z)`, so it is a
+LOWER estimate of that point's physical cost and cannot be compared with a certified
+cost on cost alone. The rule is therefore:
+
+ 1. If `relax` is itself certified, return it (then `relax === exact`; the case of every
+    `:strict`/`:reject` run and of every run on a cone-free formulation).
+ 2. Otherwise, if a certified incumbent exists AND `converged(exact.UB)` holds against
+    the same `LB` (the caller's own convergence test: `gap ≤ tol`, or the
+    `known_optimum` exact match), return `exact` — a certified point that is itself
+    converged is never displaced by a relaxation-only one.
+ 3. Otherwise return `relax` (the caller labels it `ub_relaxation_only` and reports
+    `exact` alongside, so a certified point is never thrown away).
+"""
+function _select_incumbent(relax::NamedTuple, exact::Union{Nothing, NamedTuple}, converged::Function)
+    relax.exactness === :inexact || return relax
+    exact !== nothing && converged(exact.UB) && return exact
+    return relax
+end
+
+"""
     solve_stackelberg!(feeder, pf::AbstractPowerFlow, aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int, follower_kwargs::NamedTuple, master_kwargs::NamedTuple,
                        tol::Real = 1e-6, max_iter::Int = 100,
@@ -846,7 +875,7 @@ invalid on that genuinely divergent-objective game (see that file's module heade
 
 # Returns
 
-On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only)`
+On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, exact_incumbent)`
 where `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so
 the returned point's true cost equals `UB` and the convergence certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
@@ -875,6 +904,18 @@ incumbent's welfare `W_R(z_best)` comes from a slack cone, `W_R ≥ W_true`, so 
 LOWER estimate of the incumbent's physical cost, not an upper bound on the physical
 problem (the `LB` stays valid either way — relaxation cuts under-estimate the true value
 function). This state is reachable only under `inexact_policy = :certify_incumbent`.
+
+**Incumbent ordering (Phase 30 code review iteration 2, WR-01).** An inexact iterate's
+cost is a LOWER estimate of its physical cost, so it is never compared with a certified
+cost on cost alone. The loop keeps two incumbents: the running-minimum over all accepted
+iterates (its cost is the `UB` that drives convergence) and the running-minimum over
+CERTIFIED iterates only. At convergence [`_select_incumbent`](@ref) returns the certified
+one whenever the first is relaxation-only and the certified one ALSO passes the
+convergence test against the same `LB`; otherwise the relaxation-only incumbent is
+returned (with `ub_relaxation_only = true`). `exact_incumbent` always reports the best
+certified iterate as `(; y, z, UB, gap, exactness, socp_maxgap)` — its `gap` is a genuine
+PHYSICAL optimality gap, since its `UB` is a true upper bound — or `nothing` if no iterate
+was certified. When the returned point is certified, `exact_incumbent` is that same point.
 
 `ac_report` (BILEV-04b, plan 30-04) is `nothing` unless `ub_relaxation_only`, in which
 case it is [`ac_recheck_incumbent`](@ref)'s report at `z_best` —
@@ -1034,6 +1075,11 @@ function solve_stackelberg!(
     incumbent_exactness = :not_applicable
     incumbent_socp_maxgap = NaN
     incumbent_welfare = NaN
+    # WR-01 (Phase 30 code review iteration 2): the best CERTIFIED iterate (oracle
+    # verdict :exact/:not_applicable), tracked separately from the running-minimum
+    # incumbent above, so a relaxation-only iterate can never silently discard it.
+    # See `_select_incumbent` for the ordering applied at convergence.
+    exact_inc = nothing
     gap = NaN
     # plan 12-01: the purpose-built Benders convergence ledger (roadmap criterion 2) —
     # built alongside the other accumulator state, immediately before the loop.
@@ -1361,6 +1407,18 @@ function solve_stackelberg!(
             incumbent_socp_maxgap = oracle_res.socp_maxgap
             incumbent_welfare = oracle_res.cost
         end
+        # WR-01 (Phase 30 code review iteration 2): the certified incumbent, updated only
+        # by a certified iterate, compared only against other certified costs.
+        if oracle_res.exactness !== :inexact && (exact_inc === nothing || cost_k < exact_inc.UB)
+            exact_inc = (;
+                y = lb_res.y,
+                z = copy(lb_res.z),
+                UB = cost_k,
+                exactness = oracle_res.exactness,
+                socp_maxgap = oracle_res.socp_maxgap,
+                welfare = oracle_res.cost,
+            )
+        end
         gap = (UB - lb_res.LB) / max(1, abs(UB))
 
         checkpoint_iteration!(
@@ -1407,11 +1465,49 @@ function solve_stackelberg!(
         # exactly the path this mechanism exists to keep tolerance-free. When
         # known_optimum === nothing, this reduces EXACTLY to `gap <= tol`, byte-identical
         # to the pre-Phase-24 behavior.
-        converged_now =
-            known_optimum === nothing ? (gap <= tol) :
-            isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)
+        # The convergence test as a function of an upper bound, so the SAME test can be
+        # applied to the certified incumbent (WR-01, `_select_incumbent`).
+        LB_k = lb_res.LB
+        converged_at(UBx) =
+            known_optimum === nothing ? ((UBx - LB_k) / max(1, abs(UBx)) <= tol) :
+            isapprox(UBx, known_optimum; atol = KNOWN_OPTIMUM_ATOL)
+        converged_now = converged_at(UB)
 
         if converged_now
+            # WR-01 (Phase 30 code review iteration 2): apply the documented incumbent
+            # ordering. Only when the running-minimum incumbent is relaxation-only AND
+            # the certified incumbent is itself converged does the returned point change.
+            chosen = _select_incumbent(
+                (;
+                    y = y_best,
+                    z = z_best,
+                    UB,
+                    exactness = incumbent_exactness,
+                    socp_maxgap = incumbent_socp_maxgap,
+                    welfare = incumbent_welfare,
+                ),
+                exact_inc,
+                converged_at,
+            )
+            y_best = chosen.y
+            z_best = chosen.z
+            UB = chosen.UB
+            gap = (UB - lb_res.LB) / max(1, abs(UB))
+            incumbent_exactness = chosen.exactness
+            incumbent_socp_maxgap = chosen.socp_maxgap
+            incumbent_welfare = chosen.welfare
+            # The best certified point and its OWN physical gap (UB_exact is a true upper
+            # bound there; LB is a valid lower bound whatever the exactness verdicts).
+            exact_incumbent =
+                exact_inc === nothing ? nothing :
+                (;
+                    exact_inc.y,
+                    exact_inc.z,
+                    exact_inc.UB,
+                    gap = (exact_inc.UB - lb_res.LB) / max(1, abs(exact_inc.UB)),
+                    exact_inc.exactness,
+                    exact_inc.socp_maxgap,
+                )
             # BILEV-04b (plan 30-04) + CR-02/WR-10 (Phase 30 code review): the AC
             # re-check runs ONCE, at the converged incumbent, iff the incumbent's OWN
             # recorded verdict is :inexact — only reachable under :certify_incumbent
@@ -1462,6 +1558,9 @@ function solve_stackelberg!(
                 incumbent_exactness,
                 incumbent_socp_maxgap,
                 ub_relaxation_only,
+                # WR-01 (Phase 30 code review iteration 2): the best certified incumbent,
+                # `nothing` if no iterate was certified (trailing, additive).
+                exact_incumbent,
             )
         end
     end

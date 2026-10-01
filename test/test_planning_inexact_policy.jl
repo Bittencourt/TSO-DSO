@@ -206,6 +206,12 @@ end
         # so UB/gap are NOT relaxation-only here.
         @test result.incumbent_exactness === :exact
         @test !result.ub_relaxation_only
+        # WR-01 (iteration 2): the returned point is certified, so the certified
+        # incumbent IS the returned point.
+        @test result.exact_incumbent !== nothing
+        @test result.exact_incumbent.UB == result.UB
+        @test result.exact_incumbent.z == result.z
+        @test result.exact_incumbent.gap == result.gap
 
         # BILEV-04a cross-check (Task 2 regression, confirmed NATURALLY on this
         # realistic multi-bus fixture, not just plan 30-01's own purpose-built ones):
@@ -339,6 +345,18 @@ end
         @test result.incumbent_exactness === :inexact
         @test result.ub_relaxation_only
         @test result.incumbent_socp_maxgap > 1.0e-3     # measured 1.74e-2
+        # WR-01 (iteration 2): the run DID visit one certified point — iteration 2 at
+        # z ≈ 0.010039, right at the load boundary (measured 2026-10-01, scratchpad
+        # fix2/probe_wr01.jl: UB 12.240262587779437, socp_maxgap 6.6e-11). It used to be
+        # displaced silently by the cheaper relaxation-only iterates. It is now reported
+        # alongside, with its own PHYSICAL gap against the same LB (measured 2.37e-3),
+        # and is not returned as the main point because that gap exceeds tol.
+        ex = result.exact_incumbent
+        @test ex !== nothing
+        @test ex.exactness === :exact
+        @test ex.UB > result.UB
+        @test ex.gap > 1.0e-6
+        @test ex.gap ≈ (ex.UB - result.LB) / max(1, abs(ex.UB))
         @test :certified_incumbent in result.trace.policy_action_trace
 
         # The populated AC re-check report, reached through solve_stackelberg!.
@@ -417,4 +435,28 @@ end
     @test q06 <= q05 + TSODSO.JOINT_RECOURSE_GAP_TOL
     # The exact box is unaffected by the policy.
     @test TSODSO.corner_recourse(oracle, fol, 0.05, T) ≈ q05 atol = TSODSO.JOINT_RECOURSE_GAP_TOL
+end
+
+@testitem "planning inexact policy: incumbent ordering never lets a relaxation-only iterate displace a converged certified one (WR-01 iter 2)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # Phase 30 code review iteration 2 (WR-01): the ordering rule `_select_incumbent`,
+    # tested on its own (a pure function of the two incumbents and the convergence test).
+    exact = (; y = 0.0, z = [0.0], UB = 10.0, exactness = :exact)
+    relax_inexact = (; y = 0.0, z = [0.1], UB = 9.99995, exactness = :inexact)
+    relax_exact = (; y = 0.0, z = [0.2], UB = 9.9, exactness = :exact)
+    LB = 9.9999
+    conv(UBx) = (UBx - LB) / max(1, abs(UBx)) <= 1.0e-4
+
+    # 1. A certified running-minimum incumbent is returned as-is.
+    @test TSODSO._select_incumbent(relax_exact, relax_exact, conv) === relax_exact
+    # 2. Relaxation-only running minimum, certified incumbent ALSO converged -> certified.
+    @test TSODSO._select_incumbent(relax_inexact, exact, conv) === exact
+    # 3. Certified incumbent NOT converged against the same LB -> relaxation-only point
+    #    (the caller labels it ub_relaxation_only and reports `exact` alongside).
+    strict(UBx) = (UBx - LB) / max(1, abs(UBx)) <= 1.0e-6
+    @test TSODSO._select_incumbent(relax_inexact, exact, strict) === relax_inexact
+    # 4. No certified iterate at all.
+    @test TSODSO._select_incumbent(relax_inexact, nothing, conv) === relax_inexact
 end
