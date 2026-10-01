@@ -84,7 +84,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   voltage- or thermally infeasible, and handles SOCP inexactness at a pinned z with a documented
   policy (restricted formulation, AC fallback, or reported cut rejection) instead of crashing the
   loop.
-- [ ] **BILEV-05**: The master's α lower bounds (`α_op_lb`, `α_x_lb`) are derived automatically,
+- [x] **BILEV-05**: The master's α lower bounds (`α_op_lb`, `α_x_lb`) are derived automatically,
   for example from the relaxed oracle or follower optimum. A user-supplied bound above the true
   minimum is detected and rejected.
 - [ ] **BILEV-06**: A Nash fixture with interior investment caps exposes a continuum of generalized
@@ -183,7 +183,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | BILEV-02 | Phase 29 | Complete |
 | BILEV-03 | Phase 30 | Pending |
 | BILEV-04 | Phase 30 | Complete |
-| BILEV-05 | Phase 30 | Pending |
+| BILEV-05 | Phase 30 | Complete |
 | BILEV-06 | Phase 31 | Pending |
 | BILEV-07 | Phase 31 | Pending |
 | BILEV-08 | Phase 31 | Pending |

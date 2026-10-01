@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 29-03-PLAN.md (phase close)
-last_updated: "2026-10-01T10:48:17.965Z"
+stopped_at: Completed 30-02-PLAN.md
+last_updated: "2026-10-01T11:15:13.899Z"
 last_activity: 2026-10-01
 progress:
   total_phases: 12
   completed_phases: 4
   total_plans: 44
-  completed_plans: 40
+  completed_plans: 42
   percent: 33
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-10-01
 
@@ -176,6 +176,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 29 P04 | 33min | 2 tasks | 1 files |
 | Phase 29 P03 | 90min | 2 tasks | 2 files |
 | Phase 30 P01 | 55min | 3 tasks | 6 files |
+| Phase 30 P02 | 75min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -235,6 +236,8 @@ Recent decisions affecting current work:
 - [Phase 29]: P03 close: full suite certified 30871/0/0/5 (+168 over Phase-28's 30703/0/0/5, fully attributed: +166 bilevel test files incl. a 3-iteration code-review hardening cycle, +2 PVAL-04 build_bilevel_kkt registration); zero goldens re-pinned, zero worktree contamination
 - [Phase 30-01]: Feasibility-cut gradient sign empirically re-derived as u=+dual.(pin) (un-negated), opposite convention from solve_planning_oracle!'s own pi -- verified against the full measured feasible/infeasible map on ieee13_modified()
 - [Phase 30-01]: Voltage-infeasible fixture uses a thermally-widened (smax=90) IEEE-13 variant with an ample-battery population, not the unmodified feeder -- thermal always binds first as z grows on the real feeder
+- [Phase 30]: ALPHA_LB_MARGIN=ALPHA_LB_REJECTION_TOL=1e-6, measured on the toy two-bus/ToyElasticDevice fixture at T=1 — Single shared probe sufficient: oracle gap ~2.85e-9, follower gap 0.0; max(1e-6,10*gap) dominated by the floor
+- [Phase 30]: Repo-wide T>1 alpha-bound audit (test/ and src/) found no previously-unknown invalid bound — Only T>1 site is test_planning_hardening.jl's T=8 fixture (alpha_op_lb=-50.0), already fixed in-repo and accepted by the new derivation formula
 
 ### Roadmap Evolution
 
@@ -458,8 +461,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-01T10:44:12.546Z
-Stopped at: Completed 29-03-PLAN.md (phase close)
+Last session: 2026-10-01T11:15:13.859Z
+Stopped at: Completed 30-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
