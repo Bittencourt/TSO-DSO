@@ -32,55 +32,51 @@
 # probe_3005_convergence.jl against the UNMODIFIED `ieee13_modified()` + this exact
 # population/kwargs — see this comment block for the full transcript) ---
 #
-#   iters = 6, gap = 3.141107077821004e-7 (<= tol=1e-6)
-#   UB = 609.0113505622323, LB = 609.011159265246
-#   y = 0.05, z = [0.0010186833736006077, -0.0, -0.0, 0.0499999999999553]
+#   RE-MEASURED 2026-10-01 after the Phase 30 code review (the WR-04 scale-aware :auto
+#   margin lowers α_op_lb from optimum−1e-6 to optimum−1.5e-5, which moves this
+#   Phase-30-only trajectory slightly; original 30-05 values in parentheses):
+#   iters = 6, gap = 3.160109796119891e-7 (3.141e-7) (<= tol=1e-6)
+#   UB = 609.01133901254 (609.0113506), LB = 609.0111465582702 (609.0111593)
+#   y = 0.05, z = [0.001173086302114036, -0.0, -0.0, 0.050000000000067095]
+#     (z[1] was 0.0010187)
 #   ac_report = nothing; incumbent_exactness = :exact; trace.socp_maxgap_trace (the
-#     MEASURED per-iteration cone residual, re-measured 2026-10-01 after the Phase 30
-#     code review's WR-05 fix — it used to be a NaN placeholder on exact rows) =
-#     [2.24e-10, 3.06e-9, 4.15e-9, 8.62e-10, 4.23e-10, 2.78e-10]
+#     MEASURED per-iteration cone residual — it used to be a NaN placeholder on exact
+#     rows, WR-05) = [2.24e-10, 3.13e-9, 4.17e-9, 8.89e-10, 1.69e-10, 2.85e-10]
 #     (every iteration SOCP-EXACT — a legitimate outcome per 30-03's own sweep map,
 #     since this whole box sits inside the documented exact window; see this file's
 #     own cone-gap assertions below for the POSITIVE statement this makes, never a
 #     silent skip)
 #
-# --- MEASURED CROSS-CHECK TOLERANCE DERIVATION (mirrors `benders.jl`'s own
-# `KNOWN_OPTIMUM_ATOL`/`JOINT_RECOURSE_GAP_TOL` convention: read each model's OWN
-# certified solver precision, take 10x the worst observed source of imprecision — never
-# a picked/guessed number) ---
+# --- CROSS-CHECK: A BRACKET, NOT A TOLERANCE BAND (Phase 30 code review, WR-07) ---
 #
-# Three independent sources of imprecision were measured on the SAME run:
-#   1. `oracle_gap = abs(objective_value(result.oracle.model) -
-#      dual_objective_value(result.oracle.model))` at the incumbent's LAST oracle solve
-#      = 2.7910277822229546e-7 (Clarabel SOCP interior-point duality gap).
-#   2. `joint.gap` = the SAME `abs(objective_value - dual_objective_value)` read on
-#      `solve_joint_reference`'s own model at ITS optimum = 1.9234505543863634e-7.
-#   3. `ub_lb_gap = abs(result.UB - result.LB)` = 0.00019129698637243564 — the Benders
-#      loop's OWN converged absolute bound gap. This is the DOMINANT source: `result.UB`
-#      is only CERTIFIED to lie within this gap of the true joint optimum (the master's
-#      `LB` is a valid lower bound on it whenever every cut is exact, which this run's
-#      `ac_report === nothing` confirms) — a tighter cross-check than this would reject
-#      a perfectly correct Benders convergence merely because `tol` (a RELATIVE gap,
-#      1e-6) was not driven to an arbitrarily small ABSOLUTE value. Omitting this term
-#      (10x-ing only the two solver-precision gaps) measurably FAILS the cross-check
-#      below (|UB - (-welfare)| = 1.49e-4 > 2.79e-6) — confirmed this session — which is
-#      exactly why it is included here, not silently dropped.
+# Benders' own certificate is `LB <= J* <= UB` for the joint optimum `J*` of the SAME
+# relaxation whenever every cut is valid. The cross-check therefore asserts exactly that
+# bracket, widened only by the two solvers' OWN runtime-measured duality gaps (read inside
+# the test, never frozen):
 #
-# `measured_tol = 10 * max(oracle_gap, joint.gap, ub_lb_gap)
-#               = 10 * 0.00019129698637243564 = 0.0019129698637243564`
+#   ε = 10 * max(oracle_gap, joint.gap)
+#   @test result.LB - ε <= -joint.welfare_total <= result.UB + ε
 #
-# Confirmed this session: `|result.UB - (-joint.welfare_total)| = 1.4885271548337187e-4`,
-# comfortably inside `measured_tol` (≈13x margin), while the un-measured 2.79e-6 guess
-# would have (incorrectly) failed.
+# where `oracle_gap = |objective_value − dual_objective_value|` of the oracle re-solved at
+# the incumbent and `joint.gap` the same quantity on `solve_joint_reference`'s own model
+# (which now solves with `dual = true` and certifies its OWN cone exactness via
+# `assert_socp_exact!` — it would throw otherwise, and its `socp_maxgap` is asserted
+# below). The previous version froze `10 * (UB − LB)` of one run as a literal (a picked
+# number dressed as a measurement, 10x LOOSER than the certificate it checked) and cited a
+# `joint.gap` field that did not exist. Measured 2026-10-01: oracle_gap = 2.78e-7,
+# joint.gap = 1.92e-7 (joint socp_maxgap = 2.1e-10, exact), so ε = 2.78e-6, and
+# J* = 609.0112017 lies inside [LB, UB] = [609.0111466, 609.0113390]
+# (J* − LB = 5.5e-5, UB − J* = 1.37e-4) without needing ε at all.
 #
-# NOTE: TestItemRunner gives each `@testitem` its own anonymous module — a file-level
-# `const` here would NOT be visible inside the item body (confirmed this session), so
-# the constant itself is defined INSIDE the testitem below; this header comment is its
-# sole documented derivation, per every other measured-constant convention in this repo.
+# Independence scope (WR-07): the joint model shares no oracle/follower/master object
+# with the decomposition but is built from the same `contribute!` builders, so this
+# validates the Benders DECOMPOSITION, not the formulation itself.
+#
 
-@testitem "planning benders ieee13: converges on a realistic multi-bus feeder with :auto bounds, matches an independent monolithic reference within a measured tolerance" tags =
+@testitem "planning benders ieee13: converges on a realistic multi-bus feeder with :auto bounds, brackets an independent monolithic reference within measured solver gaps" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
+    using JuMP: objective_value, dual_objective_value
 
     feeder = TSODSO.ieee13_modified()
     aggs = IEEE13ShortHorizonFixtures.population(feeder)
@@ -136,14 +132,21 @@
 
         # Sign convention per solve_joint_reference's own docstring: result.UB (a
         # MIN-sense total cost) ≈ -joint.welfare_total (the MAX-sense negative of the
-        # same quantity at the joint, non-decomposed optimum). Tolerance is the
-        # MEASURED constant derived and documented in this file's own header comment
-        # (never picked) — see that comment for the full three-source derivation
-        # (oracle's own SOCP duality gap, joint reference's own SOCP duality gap, and
-        # the Benders loop's own converged UB-LB absolute gap, 10x the worst of the
-        # three).
-        measured_crosscheck_atol = 0.0019129698637243564
-        @test isapprox(result.UB, -joint.welfare_total; atol = measured_crosscheck_atol)
+        # same quantity at the joint, non-decomposed optimum).
+        Jstar = -joint.welfare_total
+        # The joint reference certified its OWN cone exactness (it throws otherwise).
+        @test isfinite(joint.socp_maxgap)
+        # Runtime-measured duality gaps (WR-07): the oracle's at the incumbent, and the
+        # joint model's own.
+        TSODSO.solve_planning_oracle!(result.oracle, result.z)
+        oracle_gap = abs(
+            objective_value(result.oracle.model) - dual_objective_value(result.oracle.model),
+        )
+        ε = 10 * max(oracle_gap, joint.gap)
+        @test isfinite(ε) && ε < 1.0e-4
+        # The Benders certificate itself: LB <= J* <= UB, up to measured solver precision.
+        @test result.LB - ε <= Jstar
+        @test Jstar <= result.UB + ε
 
         # BILEV-03's "do not assume exactness" requirement: a POSITIVE statement about
         # the incumbent's cone-gap status, never a silent skip. This fixture's own

@@ -42,6 +42,16 @@ reusing plan 30-03's own smoke-test kwargs tuple verbatim: `follower_kwargs` =
 
 **Converged numbers:** `iters=6`, `gap=3.141107077821004e-7` (well inside `tol=1e-6`).
 
+**Code-review correction (WR-07) — the three-source tolerance below is RETIRED.** It froze
+`10·(UB−LB)` of one run as a literal (10× looser than the certificate it checked, and not
+re-measured if UB−LB changes) and cited a `joint.gap` field that did not exist. The test
+now asserts Benders' own bracket `LB − ε ≤ J* ≤ UB + ε` with
+`ε = 10·max(oracle_gap, joint.gap)` read at runtime (`solve_joint_reference` now solves
+with `dual = true`, returns `gap`, and certifies its own cone exactness via
+`assert_socp_exact!`). Re-measured: ε = 2.78e-6, J* = 609.0112017 inside
+[LB, UB] = [609.0111466, 609.0113390]. The "reusable three-source convention" claimed
+below should NOT be reused. Original text follows.
+
 **Cross-check tolerance — measured, three sources (found correction to the plan's own
 two-source recipe):** the plan's `<action>` text named "10x the worse of the two solvers'
 own certified duality gaps" as the recipe. Measured directly: `10 * max(oracle_gap=2.79e-7,

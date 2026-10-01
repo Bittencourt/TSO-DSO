@@ -140,6 +140,16 @@
     `welfare_total = oracle_welfare(z) - c_y*y_inv - c_inv*x_inv - Σc_op[t]*z[t]`.
     Plan 30-05's convergence test must therefore compare
     `result.UB ≈ -joint.welfare_total`.
+
+    Also returns `gap = |objective_value − dual_objective_value|` (the joint solve's OWN
+    certified duality gap) and `socp_maxgap` (its own cone residual — the solve THROWS via
+    `assert_socp_exact!` if the joint relaxation is inexact, so a returned value is an
+    exactness-certified optimum; Phase 30 code review, WR-07).
+
+    Independence scope (WR-07, stated plainly): the joint model shares NO
+    oracle/follower/master object with the decomposition, but it is assembled from the
+    SAME `contribute!` network/device builders, so it validates the DECOMPOSITION
+    (cuts, bounds, incumbent tracking), not the formulation itself.
     """
     function solve_joint_reference(
         feeder,
@@ -212,13 +222,19 @@
             c_inv * x_inv - sum(c_op[t] * z[t] for t in 1:T)
         )
 
-        solve_with_retry!(model; dual = false)
+        # Phase 30 code review (WR-07): `dual = true` so the solver's OWN duality gap is
+        # certified and readable, and the joint model checks its OWN cone exactness —
+        # otherwise the cross-check would compare one relaxation against another.
+        solve_with_retry!(model; dual = true)
+        socp_maxgap = assert_socp_exact!(ctx)   # throws if the joint relaxation is inexact
 
         return (;
             y = value(y_inv),
             x_inv = value(x_inv),
             z = value.(z),
             welfare_total = objective_value(model),
+            gap = abs(objective_value(model) - dual_objective_value(model)),
+            socp_maxgap,
         )
     end
 
