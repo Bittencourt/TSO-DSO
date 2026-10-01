@@ -31,7 +31,7 @@
 # (d) The follower's complementarity conditions are reformulated via `MOI.SOS1` pairs,
 # relying on JuMP/MOI's automatic `SOS1ToMILPBridge` (MOI 1.51.2, verified against the
 # pinned HiGHS 1.24.1 in 29-RESEARCH.md). Every paired variable/expression needs a
-# FINITE bound, derived by measurement (`_measure_follower_kkt_bounds`), never guessed
+# FINITE bound, derived in closed form (`_follower_kkt_dual_bound`), never guessed
 # (29-RESEARCH.md Pattern 2, Pitfall 3).
 #
 # (e) THE DSO'S OWN LEADER WELFARE IS AN EMBEDDED LinDistFlow NETWORK (CONTEXT.md's
@@ -90,9 +90,9 @@ outer loop, unlike every other `planning/` file.
   - `rho_lo::VariableRef` — the follower's own dual on `x_inv >= 0`.
   - `mu_lo::ML` (`Vector{VariableRef}`, length `T`) — the follower's own dual on
     `z[t] >= 0`.
-  - `m_ub::Float64` — the single MEASURED (never guessed) upper bound shared by every
-    complementarity dual in the KKT block (see
-    [`_measure_follower_kkt_bounds`](@ref)).
+  - `m_ub::Float64` — the single closed-form (never guessed, never solver-measured)
+    upper bound shared by every complementarity dual in the KKT block (see
+    [`_follower_kkt_dual_bound`](@ref)).
   - `T::Int` — the horizon.
 """
 struct BilevelKKT{Z, MC, D, ML}
@@ -110,111 +110,90 @@ struct BilevelKKT{Z, MC, D, ML}
 end
 
 """
-    _measure_follower_kkt_bounds(; corridor_cap, x_inv_max, c_inv, c_op, pi_tariff,
-                                 q_op, y_max, T, safety) -> Float64
+    _follower_kkt_dual_bound(; corridor_cap, c_inv, c_op, pi_tariff, T, safety) -> Float64
 
-Pattern 2 (29-RESEARCH.md): derive the SINGLE shared upper bound for every
-complementarity dual in the KKT block by solving the follower's OWN tiny LP/QP (a
-THROWAWAY model, never part of the production single-level MILP) at the two extremes
-of the leader's feasible investment range (`y_probe in (0.0, y_max)`), and reading
-the resulting duals.
+Derive, IN CLOSED FORM, the single shared upper bound `m_ub` for every complementarity
+dual in the KKT block (29-REVIEW.md CR-01/WR-03 fix). The bound is valid for EVERY
+leader decision `y_inv in [0, y_max]`, and it does not depend on any solver's choice of
+dual point.
 
-Uses `Model(select_optimizer(LP()))` when `all(iszero, q_op)` (byte-identical to the
-pre-BLOCKER-1 probe) and `Model(select_optimizer(QP()))` (Clarabel) otherwise, since a
-nonzero `q_op` makes this THROWAWAY probe itself a genuine QP — this is fine, it is
-never part of the single-level MILP itself, only a measurement pre-pass, so Pitfall
-5's "strictly affine MILP" rule does not apply to it.
+# Why closed form, not a solver probe
 
-Solves via `optimize!` directly (not `assert_solved!`, since `y_probe=0` forces a
-fixed/degenerate `x_inv` that must still be accepted). If
-`is_solved_and_feasible(m; dual=true)`, collects `abs(dual(inv_bound))` and
-`abs(dual(cap[t]))` for every `t` (the follower's own NAMED-constraint duals — these
-correspond to `mu_cap`/`rho_y` in the production KKT block) INTO a magnitudes vector,
-AND ALSO `abs(reduced_cost(x_inv))`/`abs(reduced_cost(z[t]))` for every `t` (the
-follower's own VARIABLE-BOUND duals on `x_inv >= 0`/`z[t] >= 0` — these correspond to
-`rho_lo`/`mu_lo[t]` in the production KKT block, via the SAME stationarity identity
-`statio_x`/`statio_z` already establish).
+The original implementation (`_measure_follower_kkt_bounds`) solved the follower's
+own LP/QP at `y_probe in (0, y_max)` and read the duals. That approach had two defects:
 
-Rule 1 fix (auto-fixed bug, empirically found this session): named-constraint duals
-ALONE are insufficient on a fixture where the follower's true optimum is a
-DEGENERATE corner at BOTH probe extremes (e.g. a `pi_tariff` dominated enough that
-`x_inv=z=0` is optimal regardless of `y_inv`) — `dual(inv_bound)`/`dual(cap[t])` both
-measure exactly `0.0` there (the bound genuinely isn't economically binding), while
-the production MILP's own `statio_x`/`statio_z` equalities still require a
-NONZERO `rho_lo`/`mu_lo[t]` to balance (verified: `reduced_cost(x_inv)`/
-`reduced_cost(z[t])` are the EXACT KKT multipliers `statio_x`/`statio_z` need at this
-degenerate vertex, and are nonzero precisely when the named-constraint duals are
-degenerately zero). Omitting them produced a genuinely `MOI.INFEASIBLE` single-level
-MILP (no complementarity assignment fit inside `[0, m_ub]`), not merely a
-too-tight-but-feasible bound.
+  - At `y_probe = 0` the follower's feasible set collapses to `0 <= x_inv <= 0`, so
+    Slater's condition fails and the dual optimal face is UNBOUNDED (`rho_y`/`rho_lo`
+    and `mu_cap[t]`/`mu_lo[t]` can both move along a ray). The IPM (Clarabel) returns
+    an arbitrary point of that face. On the interior fixture it gave `m_ub = 9544.4`
+    where the tight value is `14.8`, so the result depended on the solver and its
+    version.
+  - A failed probe was skipped silently. If only the `y = 0` probe failed, `m_ub` came
+    from the `y_max` probe alone. That under-measured bound cut off every leader
+    decision whose `rho_y` exceeded it, and the post-solve at-bound check cannot detect
+    a cut-off optimum.
 
-Errors (naming both probe statuses) if the magnitudes vector is empty after both
-probes — neither probe produced a trusted dual, so no safe bound can be derived;
-never silently defaults to a guessed constant.
+# Derivation
 
-Returns `safety * max(1e-6, maximum(magnitudes))`.
+Write `a[t] = pi_tariff[t] - c_op[t]` (the follower's per-unit margin) and
+`a⁺ = max(a, 0)`, `a⁻ = max(-a, 0)`. The follower's KKT system is
 
-BLOCKER-1 revision note: probing only the two EXTREMES remains valid for a
-CONVEX-quadratic `q_op` follower cost because the follower's marginal value of
-relaxing `x_inv <= y_inv` is monotonically NON-INCREASING in `y_inv` for a convex
-follower cost — the extremes bracket the true maximum dual magnitude. A FUTURE
-fixture whose dual is non-monotonic in `y_inv` would need a denser probe grid; not
-needed here.
+    statio_x:     c_inv - corridor_cap*Σ_t mu_cap[t] + rho_y - rho_lo = 0
+    statio_z[t]:  -a[t] + q_op[t]*z[t] + mu_cap[t] - mu_lo[t] = 0
+
+with `q_op[t] >= 0`, `z[t] >= 0` and all multipliers `>= 0`. The single-level MILP
+is equivalent to the bilevel problem as long as, for every `y_inv` and every
+follower-optimal `(x_inv, z)`, AT LEAST ONE KKT multiplier vector fits inside the box
+`[0, m_ub]`. (The follower is convex with affine constraints, so KKT is necessary and
+sufficient.) Such a vector always exists:
+
+  - `mu_cap[t] <= a⁺[t]`. If `z[t] > 0`, then `mu_lo[t] = 0` and
+    `mu_cap[t] = a[t] - q_op[t]*z[t] <= a[t]`. If `z[t] = 0` and `x_inv > 0`, the cap
+    slack is `corridor_cap*x_inv > 0`, so `mu_cap[t] = 0`. If `x_inv = 0`, choose the
+    smallest admissible value, `mu_cap[t] = a⁺[t]`.
+  - `mu_lo[t] <= a⁻[t]`. It is nonzero only when `z[t] = 0`. Then
+    `mu_lo[t] = mu_cap[t] - a[t]`, which is `a⁻[t]` under the choice above (or with
+    `mu_cap[t] = 0`).
+  - `rho_y <= max(corridor_cap*Σ_t a⁺[t] - c_inv, 0)`. If `x_inv > 0`, then
+    `rho_lo = 0` and `rho_y = corridor_cap*Σ mu_cap - c_inv`. If `x_inv = 0`, `rho_y`
+    takes the positive part of the same quantity.
+  - `rho_lo <= c_inv`. It is nonzero only when `x_inv = 0`, where
+    `rho_lo = c_inv - corridor_cap*Σ a⁺ + rho_y <= c_inv`, using the
+    `rho_y = (corridor_cap*Σ a⁺ - c_inv)⁺` choice above.
+
+Returns `safety * max(1e-6, maximum(a⁺), maximum(a⁻), corridor_cap*Σ a⁺ - c_inv, c_inv)`.
+The bound does not depend on `q_op`, `x_inv_max` or `y_max`. A nonzero `q_op` only
+LOWERS `mu_cap` below `a⁺`, and the box bound must hold for all `y_inv`.
+
+Worked values: corner fixture (`a = [-0.3]`, `c_inv = 1`, `corridor_cap = 2`)
+gives `max(0, 0.3, 0, 1) = 1`, so `m_ub = 10`. Interior fixture (`a = [1.5]`,
+`c_inv = 0.2`, `corridor_cap = 10`) gives `max(1.5, 0, 14.8, 0.2) = 14.8`, so
+`m_ub = 148`. That `14.8` is exactly the tight `rho_y(y=0)`.
 """
-function _measure_follower_kkt_bounds(;
+function _follower_kkt_dual_bound(;
     corridor_cap::Real,
-    x_inv_max::Real,
     c_inv::Real,
     c_op::AbstractVector{<:Real},
     pi_tariff::AbstractVector{<:Real},
-    q_op::AbstractVector{<:Real},
-    y_max::Real,
     T::Int,
     safety::Real,
 )
-    magnitudes = Float64[]
-    probe_statuses = String[]
-    quadratic_probe = !all(iszero, q_op)
+    margin = Float64[pi_tariff[t] - c_op[t] for t in 1:T]
+    a_plus = max.(margin, 0.0)
+    a_minus = max.(-margin, 0.0)
 
-    for y_probe in (0.0, Float64(y_max))
-        m = quadratic_probe ? Model(select_optimizer(QP())) : Model(select_optimizer(LP()))
-        @variable(m, 0 <= x_inv <= x_inv_max)
-        @variable(m, z[t = 1:T] >= 0)
-        @constraint(m, cap[t = 1:T], corridor_cap * x_inv - z[t] >= 0)
-        @constraint(m, inv_bound, x_inv <= y_probe)
-        @objective(
-            m,
-            Min,
-            c_inv * x_inv + sum(
-                (c_op[t] - pi_tariff[t]) * z[t] + 0.5 * q_op[t] * z[t]^2 for t in 1:T
-            )
-        )
-        optimize!(m)
+    mu_cap_max = maximum(a_plus)
+    mu_lo_max = maximum(a_minus)
+    rho_y_max = max(corridor_cap * sum(a_plus) - c_inv, 0.0)
+    rho_lo_max = Float64(c_inv)
 
-        push!(
-            probe_statuses,
-            "y_probe=$y_probe: termination_status=$(termination_status(m)), " *
-            "primal_status=$(primal_status(m)), dual_status=$(dual_status(m))",
-        )
-
-        if is_solved_and_feasible(m; dual = true)
-            push!(magnitudes, abs(dual(inv_bound)))
-            push!(magnitudes, abs(reduced_cost(x_inv)))
-            for t in 1:T
-                push!(magnitudes, abs(dual(cap[t])))
-                push!(magnitudes, abs(reduced_cost(z[t])))
-            end
-        end
-    end
-
-    isempty(magnitudes) && error(
-        "_measure_follower_kkt_bounds: neither probe (y_inv=0.0, y_inv=$y_max) " *
-        "produced a trusted dual — cannot derive a safe complementarity bound, " *
-        "refusing to silently default to a guessed constant. Probe statuses:\n" *
-        join(probe_statuses, "\n"),
+    bound = max(1e-6, mu_cap_max, mu_lo_max, rho_y_max, rho_lo_max)
+    isfinite(bound) || error(
+        "_follower_kkt_dual_bound: derived a non-finite complementarity bound " *
+        "(mu_cap_max=$mu_cap_max, mu_lo_max=$mu_lo_max, rho_y_max=$rho_y_max, " *
+        "rho_lo_max=$rho_lo_max) — refusing to build the single-level MILP",
     )
-
-    return safety * max(1e-6, maximum(magnitudes))
+    return safety * bound
 end
 
 """
@@ -254,8 +233,8 @@ plan 29-04's non-degenerate fixture passes a nonzero `q_op`.
     flow from the root to it (mirrors `solve_welfare`'s own "aggregator bus outside
     feeder buses" guard).
 
-Then measures the shared SOS1 complementarity bound via
-[`_measure_follower_kkt_bounds`](@ref), builds `Model(select_optimizer(MILP()))`,
+Then derives the shared SOS1 complementarity bound in closed form via
+[`_follower_kkt_dual_bound`](@ref), builds `Model(select_optimizer(MILP()))`,
 embeds the LinDistFlow network (`contribute!(pf, ctx, feeder; T=T)`, CONTEXT.md
 Option B), declares the leader/follower KKT variables, the follower's KKT
 stationarity (linear equalities), the complementarity slacks + SOS1 pairs, the
@@ -345,15 +324,12 @@ function build_bilevel_kkt(
         ),
     )
 
-    # ---- Pattern 2: MEASURE the shared SOS1 complementarity bound, never guess. -----
-    m_ub = _measure_follower_kkt_bounds(;
+    # ---- Derive the shared SOS1 complementarity bound in CLOSED FORM (CR-01). --------
+    m_ub = _follower_kkt_dual_bound(;
         corridor_cap = corridor_cap,
-        x_inv_max = x_inv_max,
         c_inv = c_inv,
         c_op = c_op,
         pi_tariff = pi_tariff,
-        q_op = q_op,
-        y_max = y_max,
         T = T,
         safety = safety,
     )
@@ -447,11 +423,19 @@ Solve the built-ONCE [`BilevelKKT`](@ref) `kkt` via a SINGLE `assert_solved!(kkt
 dual = false)` call (MILP — post-SOS1-bridge binaries mean JuMP duals are not
 available/meaningful; `dual=false` here is the CORRECT, not a weakened, gate).
 
-Then runs the Pitfall-3 validity check: for every complementarity variable
+Then runs the Pitfall-3 at-bound sanity check: for every complementarity variable
 (`mu_cap[t]` ∀t, `rho_y`, `rho_lo`, `mu_lo[t]` ∀t), asserts its solved value is NOT
-within `1e-6` of `kkt.m_ub` — a binding "big-M" bound is invalid evidence the true
-optimum was cut off, never a benign coincidence, so this is a hard error, never a
-warning.
+within `1e-6` of `kkt.m_ub`. A dual sitting at its big-M bound is a hard error, never
+a warning.
+
+This check is NECESSARY, NOT SUFFICIENT (29-REVIEW.md CR-01; Pineda & Morales 2019,
+"Solving linear bilevel problems using big-Ms: not all that glitters is gold"). If
+`m_ub` were too small, the true optimum would be cut off. The MILP would then return
+the best remaining leader decision, whose duals can sit strictly inside `[0, m_ub]`,
+and the check would pass. The validity guarantee therefore rests on `m_ub` itself,
+which [`_follower_kkt_dual_bound`](@ref) derives in closed form for every
+`y_inv in [0, y_max]`. This check only catches a gross violation, such as a
+caller-supplied `safety < 1`.
 
 Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, mu_lo, model)`.
 """
