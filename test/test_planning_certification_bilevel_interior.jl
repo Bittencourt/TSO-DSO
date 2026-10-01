@@ -560,3 +560,147 @@ end
     @test isapprox(prod.y, bf.y; atol = step(fine_grid))
     @test isapprox(prod.total_cost, bf.total; atol = 9.95 * step(fine_grid))
 end
+
+@testitem "bilevel certification (T=2 interior fixture): shared-x_inv stationarity sum over t; production == BilevelJuMP == brute-force (WR-08)" tags =
+    [:planning] setup = [BilevelInteriorCertFixture] begin
+    using TSODSO, BilevelJuMP, JuMP, Ipopt
+
+    # 29-REVIEW.md WR-08: every other production call uses T = 1, so the
+    # `sum(mu_cap[t] for t in 1:T)` in statio_x and the per-t SOS1 loops were never
+    # exercised. T = 2 fixture with DISTINCT tariffs, both periods delivering
+    # (pi_tariff[t] - c_op[t] > c_inv/corridor_cap = 0.02 for both t):
+    #   corridor_cap = 10, x_inv_max = 10, c_inv = 0.2, c_op = [0.5, 0.5],
+    #   pi_tariff = [2.0, 1.5], q_op = [1, 1], c_y = 0.05, y_max = 5,
+    #   v_d = [3, 3], d_max = 10. Margins a = pi_tariff - c_op = [1.5, 1.0].
+    #
+    # Hand derivation. Given x_inv, the follower picks z[t] = min(10*x_inv, a[t]/q_op[t]).
+    # Its own x_inv FOC on the branch 1.0 <= 10x <= 1.5 (z[2] = 1.0 interior,
+    # mu_cap[2] = 0) is 0.2 + 10*(-1.5 + 10x) = 0, so x_inv_F = 0.148 (the
+    # both-capped branch's FOC root, 10x = 1.24, lies outside its own region 10x <= 1).
+    # Follower response vs leader y:
+    #   y <= 0.1:          x = y, z = [10y, 10y], mu_cap = a .- 10y,
+    #                      rho_y = 10*sum(mu_cap) - 0.2 = 24.8 - 200y
+    #   0.1 <= y <= 0.148: x = y, z = [10y, 1.0], mu_cap = [1.5 - 10y, 0],
+    #                      rho_y = 14.8 - 100y
+    #   y >= 0.148:        x = 0.148, z = [1.48, 1.0], rho_y = 0
+    # Leader total = 0.05y + sum((pi_tariff - v_d) .* z) = 0.05y - z[1] - 1.5*z[2]:
+    #   -24.95y, then -9.95y - 1.5, then 0.05y - 2.98, so the optimum is the kink
+    #   y* = x_inv* = 0.148, z* = [1.48, 1.0], total* = -2.9726.
+    # At y* statio_x needs 0.2 - 10*(mu_cap[1] + mu_cap[2]) = 0 with
+    # mu_cap = [0.02, 0]. A wrong index (e.g. mu_cap[1] repeated: 0.2 - 10*2*0.02 != 0)
+    # breaks it. The fixed-y production checks below pin each branch's rho_y.
+    # Closed-form m_ub = 10 * max(1.5, 0, 10*2.5 - 0.2, 0.2) = 248.
+    F = BilevelInteriorCertFixture
+    feeder = F._interior_feeder()
+    T = 2
+    kw = (;
+        T = T,
+        agg_bus = 2,
+        corridor_cap = 10.0,
+        x_inv_max = 10.0,
+        c_inv = 0.2,
+        c_op = [0.5, 0.5],
+        pi_tariff = [2.0, 1.5],
+        q_op = [1.0, 1.0],
+        c_y = 0.05,
+        y_max = 5.0,
+        v_d = [3.0, 3.0],
+        d_max = 10.0,
+    )
+
+    # --- Production ---
+    kkt = build_bilevel_kkt(feeder, LinDistFlow(); kw...)
+    @test isapprox(kkt.m_ub, 248.0; rtol = 1e-12)
+    prod = solve_bilevel!(kkt)
+    atol_hand = 1e-6
+    @test isapprox(prod.y, 0.148; atol = atol_hand)
+    @test isapprox(prod.x_inv, 0.148; atol = atol_hand)
+    @test isapprox(prod.z, [1.48, 1.0]; atol = atol_hand)
+    @test isapprox(prod.d, [1.48, 1.0]; atol = atol_hand)
+    @test isapprox(prod.total_cost, -2.9726; atol = atol_hand)
+    @test isapprox(prod.mu_cap, [0.02, 0.0]; atol = atol_hand)
+
+    # --- Production at FIXED leader decisions: one point per follower branch ---
+    for (y_fixed, z_hand, rho_hand) in (
+        (0.05, [0.5, 0.5], 24.8 - 200 * 0.05),   # both periods cap-bound: 14.8
+        (0.12, [1.2, 1.0], 14.8 - 100 * 0.12),   # only period 1 cap-bound: 2.8
+        (1.0, [1.48, 1.0], 0.0),                 # coupling slack
+    )
+        k = build_bilevel_kkt(feeder, LinDistFlow(); kw...)
+        fix(k.y_inv, y_fixed; force = true)
+        r = solve_bilevel!(k)
+        @test isapprox(r.z, z_hand; atol = atol_hand)
+        @test isapprox(r.rho_y, rho_hand; atol = atol_hand)
+    end
+
+    # --- Oracle #1: BilevelJuMP StrongDualityMode (Ipopt), T = 2 ---
+    bjm = BilevelModel(Ipopt.Optimizer, mode = BilevelJuMP.StrongDualityMode())
+    set_silent(bjm)
+    @variable(Upper(bjm), 0 <= y_inv <= kw.y_max)
+    @variable(Upper(bjm), 0.95^2 <= v2[1:T] <= 1.05^2)
+    @variable(Upper(bjm), 0 <= d[1:T] <= kw.d_max)
+    @variable(Lower(bjm), 0 <= x_inv <= kw.x_inv_max)
+    @variable(Lower(bjm), z[1:T] >= 0)
+    @constraint(Lower(bjm), cap[t = 1:T], z[t] <= kw.corridor_cap * x_inv)
+    @constraint(Lower(bjm), coupling, x_inv <= y_inv)
+    @objective(
+        Lower(bjm),
+        Min,
+        kw.c_inv * x_inv + sum(
+            (kw.c_op[t] - kw.pi_tariff[t]) * z[t] + 0.5 * kw.q_op[t] * z[t]^2 for t in 1:T
+        )
+    )
+    @constraint(Upper(bjm), [t = 1:T], v2[t] == 1.0 - 2 * (1e-3 * z[t]))
+    @constraint(Upper(bjm), [t = 1:T], d[t] == z[t])
+    @objective(
+        Upper(bjm),
+        Min,
+        kw.c_y * y_inv + sum(kw.pi_tariff[t] * z[t] - kw.v_d[t] * d[t] for t in 1:T)
+    )
+    optimize!(bjm)
+    @test termination_status(bjm) == MOI.LOCALLY_SOLVED
+    atol_bilevel = 1e-5
+    @test isapprox(prod.y, value(y_inv); atol = atol_bilevel)
+    @test isapprox(prod.z, value.(z); atol = atol_bilevel)
+    @test isapprox(prod.total_cost, objective_value(bjm); atol = atol_bilevel)
+
+    # --- Oracle #2: brute-force grid over y, follower QP (Clarabel) per point ---
+    function follower_T2(y)
+        m = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        @variable(m, 0 <= xi <= kw.x_inv_max)
+        @variable(m, zz[1:T] >= 0)
+        @constraint(m, [t = 1:T], kw.corridor_cap * xi - zz[t] >= 0)
+        @constraint(m, xi <= y)
+        @objective(
+            m,
+            Min,
+            kw.c_inv * xi + sum(
+                (kw.c_op[t] - kw.pi_tariff[t]) * zz[t] + 0.5 * kw.q_op[t] * zz[t]^2 for
+                t in 1:T
+            )
+        )
+        TSODSO.assert_solved!(m; dual = false)
+        return value.(zz)
+    end
+    # A function, not a top-level loop: @testitem bodies run as top-level code, where
+    # a for-loop assigning to an outer binding creates a new local (soft scope).
+    function brute_force_T2(grid)
+        best_y, best_total = NaN, Inf
+        for y in grid
+            zs = follower_T2(y)
+            all(zs .<= kw.d_max + 1e-6) || continue   # network: d = z <= d_max
+            total = kw.c_y * y + sum((kw.pi_tariff[t] - kw.v_d[t]) * zs[t] for t in 1:T)
+            if total < best_total
+                best_y, best_total = y, total
+            end
+        end
+        return best_y, best_total
+    end
+    fine_grid = range(0.0, kw.y_max; length = 2001)
+    best_y, best_total = brute_force_T2(fine_grid)
+    # Same spacing argument as the T = 1 fixture: a fine-grid point lies in
+    # [0.148, 0.148 + spacing] on the slope-c_y right branch, plus 5e-5 for
+    # Clarabel's noise near the degenerate kink.
+    @test abs(best_y - prod.y) <= step(fine_grid)
+    @test isapprox(prod.total_cost, best_total; atol = kw.c_y * step(fine_grid) + 5e-5)
+end
