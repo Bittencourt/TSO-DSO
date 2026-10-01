@@ -549,35 +549,36 @@ function ll_cut_recourse(
 end
 
 """
-    _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol;
-                           tol::Real = ALPHA_LB_REJECTION_TOL)
+    _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real = NaN)
 
 Phase 30 (BILEV-05, plan 30-04): a UNIVERSAL, bound-source-independent runtime sanity
 check — `error(...)`s if `cost_k < lb - tol`, naming `label` (`:op`/`:x`), the evaluated
-`cost_k`, and the declared `lb`. Reuses `ALPHA_LB_REJECTION_TOL` (`master.jl`, plan
-30-02) as its default tolerance — the SAME measured solver-tolerance-scale constant,
-never a second, drifting one.
+`cost_k`, the declared `lb` and the tolerance used.
 
-Called UNCONDITIONALLY on `solve_stackelberg!`'s optimality branch (Task 1, this plan),
-regardless of whether `master.α_op`/`master.α_x`'s declared lower bound came from
-`:auto`, an explicit `Real`, or was build-time-validated via `bounds_ctx` at all — a
-genuine lower bound, by definition, can never exceed an actually-achieved cost at a
-feasible point. If this ever fires, it is proof of a modeling bug in the derivation or
-declaration of that bound (BILEV-05's own core-value risk: "an invalid declared lower
-bound silently produces a wrong 'converged' answer"), never a legitimate convergence
-edge case to special-case away.
+The tolerance is SCALE-AWARE and measured per evaluation (Phase 30 code review, WR-04):
+`tol = alpha_lb_margin(cost_k, gap; floor = ALPHA_LB_REJECTION_TOL)` =
+`max(1e-6, 10·gap, ALPHA_LB_RTOL·|cost_k|)`, where `gap` is the measured duality gap of the
+solve that produced `cost_k` (the oracle's own Clarabel gap; `NaN` — no gap term — for the
+follower LP, whose HiGHS simplex gap is exactly 0, see `KNOWN_OPTIMUM_ATOL`'s
+measurement). The same formula as the α-bound margin itself, so the two can never drift
+apart, and at `|W| ≈ 609` (IEEE-13 T=4) or larger the interior-point solver's own relative
+precision is covered instead of a T=1-toy absolute `1e-6` (which could fire as a
+"modeling bug" on pure solver noise near the box argmax).
+
+Called UNCONDITIONALLY on `solve_stackelberg!`'s optimality branch, regardless of whether
+`master.α_op`/`master.α_x`'s declared lower bound came from `:auto`, an explicit `Real`, or
+was build-time-validated via `bounds_ctx` at all — a genuine lower bound, by definition,
+can never exceed an actually-achieved cost at a feasible point. If this ever fires, it is
+proof of a modeling bug in the derivation or declaration of that bound (BILEV-05's own
+core-value risk), never a legitimate convergence edge case to special-case away.
 """
-function _assert_epigraph_floor(
-    cost_k::Real,
-    lb::Real,
-    label::Symbol;
-    tol::Real = ALPHA_LB_REJECTION_TOL,
-)
+function _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real = NaN)
+    tol = alpha_lb_margin(cost_k, gap; floor = ALPHA_LB_REJECTION_TOL)
     cost_k < lb - tol && error(
         "solve_stackelberg!: epigraph $label evaluated to cost_k=$cost_k, below its " *
-        "OWN declared lower bound lb=$lb (tol=$tol) — BILEV-05: this is a genuine " *
-        "modeling bug (an invalid declared lower bound), not a convergence issue. " *
-        "Never silently accepted.",
+        "OWN declared lower bound lb=$lb (tol=$tol, measured gap=$gap) — BILEV-05: this " *
+        "is a genuine modeling bug (an invalid declared lower bound), not a convergence " *
+        "issue. Never silently accepted.",
     )
     return nothing
 end
@@ -1189,7 +1190,12 @@ function solve_stackelberg!(
         # and independent of inexact_policy. oracle_res/follower_res have passed every
         # post-solve gate here (an :inexact oracle_res only under :certify_incumbent,
         # and it too has passed battery complementarity).
-        _assert_epigraph_floor(-oracle_res.cost, lower_bound(master.α_op), :op)
+        _assert_epigraph_floor(
+            -oracle_res.cost,
+            lower_bound(master.α_op),
+            :op;
+            gap = _measured_duality_gap(oracle.model),
+        )
         _assert_epigraph_floor(follower_res.cost, lower_bound(master.α_x), :x)
 
         last_rejected_z = nothing   # WR-06: cuts are added below — the master moves on

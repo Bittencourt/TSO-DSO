@@ -257,13 +257,64 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
     λ₀ = fill(4.0, T)
 
-    derived = TSODSO.derive_alpha_op_lb(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, y_max = 8.0)
+    d = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, y_max = 8.0)
+    # Phase 30 code review (WR-03): rejection compares against the UN-margined optimum
+    # plus the measured, scale-aware slack — the same rule build_master applies.
+    slack = TSODSO.alpha_lb_margin(d.optimum, d.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
-    # -5.0 is REJECTED (too tight — exceeds the derived minimum): the already-documented
-    # finding that -5.0 silently converges to a wrong answer at T=8.
-    @test -5.0 > derived + TSODSO.ALPHA_LB_REJECTION_TOL
-    # -50.0 remains a VALID, non-rejected bound (small slack on the comparison itself).
-    @test -50.0 <= derived + TSODSO.ALPHA_LB_REJECTION_TOL + 1e-9
+    # -5.0 is REJECTED (too tight — exceeds the derived minimum ≈ -16): the
+    # already-documented finding that -5.0 silently converges to a wrong answer at T=8.
+    @test -5.0 > d.optimum + slack
+    # -50.0 remains a VALID, non-rejected bound.
+    @test -50.0 <= d.optimum + slack
+    # The declared :auto bound sits strictly below the optimum by the measured margin.
+    @test d.bound == d.optimum - d.margin
+    @test d.margin >= TSODSO.ALPHA_LB_MARGIN
+end
+
+@testitem "planning master: build-time rejection has real headroom — a bound AT the derived optimum is accepted (WR-03)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: lower_bound
+
+    # Phase 30 code review (WR-03): the old rule rejected `α > (optimum − margin) + tol`
+    # with margin == tol == 1e-6, i.e. `α > optimum` — ZERO tolerance: a user bound equal
+    # to the true minimum was rejected whenever the solver reported its optimum slightly
+    # low, and α_x_lb = 0.0 on a 0.0-minimum follower was accepted only because
+    # -1e-6 + 1e-6 == 0.0 in floating point. Now: reject iff α > optimum + slack.
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+    fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+
+    dop = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
+    dx = TSODSO.alpha_x_lb_derivation(; fk..., T = 1)
+    sop = TSODSO.alpha_lb_margin(dop.optimum, dop.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+    sx = TSODSO.alpha_lb_margin(dx.optimum, dx.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+
+    # A bound slightly ABOVE the reported optimum, but inside the measured slack, is
+    # accepted (the old rule rejected both of these).
+    m = build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = dop.optimum + sop / 2,
+        α_x_lb = dx.optimum + sx / 2,
+        bounds_ctx = bounds_ctx,
+    )
+    @test lower_bound(m.α_op) == dop.optimum + sop / 2
+    @test lower_bound(m.α_x) == dx.optimum + sx / 2
+    # Beyond the slack, both are still rejected.
+    @test_throws ArgumentError build_master(;
+        T = 1, c_y = 0.3, y_max = 8.0,
+        α_op_lb = dop.optimum + 2 * sop, α_x_lb = 0.0, bounds_ctx = bounds_ctx,
+    )
+    @test_throws ArgumentError build_master(;
+        T = 1, c_y = 0.3, y_max = 8.0,
+        α_op_lb = -50.0, α_x_lb = dx.optimum + 2 * sx, bounds_ctx = bounds_ctx,
+    )
 end
 
 @testitem "planning master: derive_alpha_x_lb(::FollowerLP) dispatch agrees with the follower_kwargs path" tags =

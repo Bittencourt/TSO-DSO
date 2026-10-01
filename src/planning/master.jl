@@ -81,33 +81,84 @@ end
 """
     ALPHA_LB_MARGIN
 
-MEASURED safety margin (plan 30-02, BILEV-05) subtracted from a derived `α_op_lb`/
-`α_x_lb` relaxed-solve optimum, mirroring `benders.jl`'s `KNOWN_OPTIMUM_ATOL`/
-`JOINT_RECOURSE_GAP_TOL` "measure, don't guess" convention. Derivation: built
-`make_relaxed_oracle_model`/`make_relaxed_follower_model` on
-`Phase6Fixtures.two_bus_feeder()` + `ToyElasticDevice(2, 6.0, 1.0, 10.0)` (the SAME toy
-fixture `test_planning_master.jl` already uses) at `T=1`, `λ₀=[4.0]`, `y_max=8.0`, and
-`follower_kwargs=(; corridor_cap=2.0, x_inv_max=2.0, c_inv=1.0, c_op=[0.5])`, solved each,
-and read `abs(objective_value(model) - dual_objective_value(model))` directly:
-oracle gap ≈ `2.8509e-9`, follower gap `= 0.0` (an LP with a trivial `x_inv=x_op=0`
-optimum) — `max_gap ≈ 2.8509e-9`. `ALPHA_LB_MARGIN = max(1e-6, 10*max_gap) = 1e-6` (the
-floor dominates; `10*max_gap ≈ 2.85e-8` is far below it). Probe script:
-`JULIA_LOAD_PATH="test:.:@stdlib" julia probe_alpha_margin.jl`, this session, re-runnable
-from the recipe in this comment.
+ABSOLUTE FLOOR (plan 30-02, BILEV-05) of the safety margin subtracted from a derived
+`α_op_lb`/`α_x_lb` relaxed-solve optimum. Since the Phase 30 code review (WR-04) the
+margin actually applied is SCALE-AWARE and measured PER INSTANCE by
+[`alpha_lb_margin`](@ref): `max(ALPHA_LB_MARGIN, 10·gap, ALPHA_LB_RTOL·|optimum|)`, where
+`gap = |objective_value − dual_objective_value|` is the derive solve's OWN duality gap read
+at derivation time. This constant is only the floor of that formula. Original toy
+measurement (still the floor's justification): `Phase6Fixtures.two_bus_feeder()` +
+`ToyElasticDevice(2, 6.0, 1.0, 10.0)` at `T=1`, `λ₀=[4.0]`, `y_max=8.0`: oracle gap
+≈ `2.8509e-9`, follower gap `= 0.0`, so `max(1e-6, 10*max_gap) = 1e-6`. Probe script:
+`JULIA_LOAD_PATH="test:.:@stdlib" julia probe_alpha_margin.jl`.
 """
 const ALPHA_LB_MARGIN = 1e-6
 
 """
+    ALPHA_LB_RTOL
+
+RELATIVE term (Phase 30 code review, WR-04) of the scale-aware α-bound margin/tolerance
+`max(1e-6, 10·gap, ALPHA_LB_RTOL·|value|)`. Set to `1e-8`, Clarabel's configured relative
+duality-gap tolerance `tol_gap_rel` in this project's solver factory (`select_optimizer`
+for `SOCP()`; Clarabel's own default for `QP()`): an interior-point optimum is only
+certified to that relative precision. RE-MEASURED 2026-10-01 (scratchpad
+probe_wr04.jl/probe_wr04b.jl) on the derive solve itself: toy two-bus T=1/T=8 gap
+`2.9e-9`/`2.5e-8` (the `1e-6` floor dominates — unchanged behavior there), but
+`IEEE13ShortHorizonFixtures` T=4 (`|optimum| ≈ 609`) gap `1.5e-6` at `y_max=0.05` and
+`4.5e-6` at `y_max=0.07`, and the T=24 Literate run (`|optimum| ≈ 5316`) gap `4.2e-5` — the
+old absolute `1e-6` margin sat BELOW the solver's own measured error there. The `10·gap`
+term tracks that per instance (margin `1.5e-5`/`4.5e-5`/`4.2e-4` respectively); this
+relative term is the floor for a solve whose reported dual objective understates its
+error.
+"""
+const ALPHA_LB_RTOL = 1e-8
+
+"""
     ALPHA_LB_REJECTION_TOL
 
-MEASURED tolerance (plan 30-02, BILEV-05) `build_master` adds to a derived `α_op_lb`/
-`α_x_lb` minimum before rejecting an explicit user-supplied bound that exceeds it — set to
-the SAME measured value as [`ALPHA_LB_MARGIN`](@ref) (`1e-6`, derivation above), since both
-quantities are bounding the SAME solver-tolerance-scale numerical slack (the relaxed-solve
-primal/dual gap) on the SAME toy-fixture probe; a single shared probe is sufficient
-evidence for both constants (no second derivation needed).
+ABSOLUTE FLOOR (plan 30-02, BILEV-05) of the build-time rejection slack and of the runtime
+epigraph-floor tolerance. Phase 30 code review (WR-03): a user bound is rejected iff it
+exceeds the UN-margined relaxed optimum by more than
+`max(ALPHA_LB_REJECTION_TOL, 10·gap, ALPHA_LB_RTOL·|optimum|)` (see
+[`alpha_lb_margin`](@ref)) — previously the rejection threshold was
+`(optimum − margin) + tol` with `margin == tol == 1e-6`, which cancelled to the raw
+solver optimum and gave NO tolerance at all. Derivation of the headroom: the true minimum
+lies within the measured duality gap of the reported optimum, `|true − optimum| ≤ gap`, so
+a user bound equal to the true minimum sits at most `gap` above `optimum` and is accepted
+with at least `9·gap` (and at least `1e-6 − gap`) to spare. Floor value `1e-6`, the same
+toy measurement as [`ALPHA_LB_MARGIN`](@ref).
 """
 const ALPHA_LB_REJECTION_TOL = 1e-6
+
+"""
+    alpha_lb_margin(optimum::Real, gap::Real; floor::Real = ALPHA_LB_MARGIN) -> Float64
+
+The scale-aware, per-instance-measured margin/tolerance of the α-bound machinery (Phase 30
+code review, WR-03/WR-04): `max(floor, 10·gap, ALPHA_LB_RTOL·|optimum|)`. `gap` is the
+MEASURED duality gap of the solve that produced `optimum` (a non-finite `gap` — a backend
+that does not report a dual objective — contributes nothing; the other two terms remain).
+"""
+function alpha_lb_margin(optimum::Real, gap::Real; floor::Real = ALPHA_LB_MARGIN)
+    g = isfinite(gap) ? 10 * abs(gap) : 0.0
+    return Float64(max(floor, g, ALPHA_LB_RTOL * abs(optimum)))
+end
+
+"""
+    _measured_duality_gap(model) -> Float64
+
+`|objective_value(model) − dual_objective_value(model)|` of an already-solved model — the
+solver's OWN certified gap at its solution. `NaN` if the backend does not report a dual
+objective (never silently `0.0`).
+"""
+function _measured_duality_gap(model)
+    dobj = try
+        dual_objective_value(model)
+    catch err
+        err isa InterruptException && rethrow()
+        return NaN   # backend reports no dual objective: unmeasured, never 0.0
+    end
+    return Float64(abs(objective_value(model) - dobj))
+end
 
 """
     make_relaxed_oracle_model(feeder, pf::AbstractPowerFlow,
@@ -207,18 +258,48 @@ function make_relaxed_oracle_model(
 end
 
 """
+    alpha_op_lb_derivation(feeder, pf::AbstractPowerFlow,
+                           aggregators::AbstractVector{<:Aggregator};
+                           λ₀, T::Int, y_max::Real)
+        -> (; optimum, gap, margin, bound)
+
+The full, measured `α_op_lb` derivation (BILEV-05; Phase 30 code review WR-03/WR-04): a
+genuine ONE-TIME relaxed solve of [`make_relaxed_oracle_model`](@ref) via
+[`solve_with_retry!`](@ref) (D-08). `optimum = -objective_value(model)` is the UN-margined
+relaxed minimum of `-welfare` over `p_import ∈ [0, y_max]^T` — a valid global lower bound
+on `-welfare(z)` for ANY `z` in that box (the box strictly contains every pinned trial;
+confirmed numerically, 30-RESEARCH.md Architecture Pattern 3, and valid even when the box
+SOCP is itself inexact). `gap` is that solve's own measured duality gap, `margin =
+alpha_lb_margin(optimum, gap)` (scale-aware), and `bound = optimum − margin` is the bound
+`build_master` declares. `build_master`'s rejection compares an explicit bound against
+`optimum` (never against `bound` — WR-03).
+"""
+function alpha_op_lb_derivation(
+    feeder,
+    pf::AbstractPowerFlow,
+    aggregators::AbstractVector{<:Aggregator};
+    λ₀,
+    T::Int,
+    y_max::Real,
+)
+    model = make_relaxed_oracle_model(feeder, pf, aggregators; λ₀ = λ₀, T = T, y_max = y_max)
+    solve_with_retry!(model; dual = true)
+    optimum = -objective_value(model)
+    gap = _measured_duality_gap(model)
+    margin = alpha_lb_margin(optimum, gap)
+    return (; optimum, gap, margin, bound = optimum - margin)
+end
+
+"""
     derive_alpha_op_lb(feeder, pf::AbstractPowerFlow,
                        aggregators::AbstractVector{<:Aggregator};
                        λ₀, T::Int, y_max::Real,
-                       margin::Real = ALPHA_LB_MARGIN) -> Float64
+                       margin::Union{Nothing,Real} = nothing) -> Float64
 
-Derive `α_op_lb` (BILEV-05) via a genuine ONE-TIME relaxed solve of
-[`make_relaxed_oracle_model`](@ref) (never a closed-form shortcut): builds the relaxed
-model, solves it via [`solve_with_retry!`](@ref) (D-08, the SOLE solve entry point), and
-returns `-objective_value(model) - margin` — a valid global lower bound on `-welfare(z)`
-for ANY `z` inside `[0, y_max]^T`, since the relaxed model's box-bounded `p_import`
-strictly contains every pinned welfare value the real oracle can produce at a feasible
-`z_trial` in that box (confirmed numerically, 30-RESEARCH.md Architecture Pattern 3).
+Derive `α_op_lb` (BILEV-05): the `bound` of [`alpha_op_lb_derivation`](@ref), i.e.
+`optimum − margin` with the scale-aware, per-instance-measured margin
+[`alpha_lb_margin`](@ref) by default (Phase 30 code review, WR-04); an explicit `margin`
+overrides it.
 """
 function derive_alpha_op_lb(
     feeder,
@@ -227,11 +308,10 @@ function derive_alpha_op_lb(
     λ₀,
     T::Int,
     y_max::Real,
-    margin::Real = ALPHA_LB_MARGIN,
+    margin::Union{Nothing, Real} = nothing,
 )
-    model = make_relaxed_oracle_model(feeder, pf, aggregators; λ₀ = λ₀, T = T, y_max = y_max)
-    solve_with_retry!(model; dual = true)
-    return -objective_value(model) - margin
+    d = alpha_op_lb_derivation(feeder, pf, aggregators; λ₀ = λ₀, T = T, y_max = y_max)
+    return margin === nothing ? d.bound : d.optimum - margin
 end
 
 """
@@ -278,24 +358,29 @@ function make_relaxed_follower_model(;
 end
 
 """
-    derive_alpha_x_lb(; T::Int, corridor_cap::Real, x_inv_max::Real, c_inv::Real,
-                      c_op::AbstractVector{<:Real},
-                      margin::Real = ALPHA_LB_MARGIN) -> Float64
+    alpha_x_lb_derivation(; T::Int, corridor_cap::Real, x_inv_max::Real, c_inv::Real,
+                          c_op::AbstractVector{<:Real}) -> (; optimum, gap, margin, bound)
+    alpha_x_lb_derivation(f::FollowerLP) -> (; optimum, gap, margin, bound)
 
-Derive `α_x_lb` (BILEV-05) via a genuine ONE-TIME relaxed solve of
-[`make_relaxed_follower_model`](@ref) (never a hard-coded `0.0` shortcut, even though every
-existing fixture's `c_op`/`c_inv` happen to be nonnegative — RESEARCH.md Open Question 3's
-own resolution: always solve the relaxed LP, robust to a future negative-cost fixture).
-Returns `objective_value(model) - margin` (the Min-sense relaxed minimum, lowered by the
-same measured margin as [`derive_alpha_op_lb`](@ref)).
+The full, measured `α_x_lb` derivation (BILEV-05; Phase 30 code review WR-03/WR-04): a
+genuine ONE-TIME relaxed solve of [`make_relaxed_follower_model`](@ref) (never a hard-coded
+`0.0` shortcut — RESEARCH.md Open Question 3), `optimum = objective_value(model)` (the
+UN-margined relaxed minimum), its measured duality `gap`, the scale-aware `margin`, and
+`bound = optimum − margin`. The `FollowerLP` method extracts `corridor_cap`/`x_inv_max`/`T`
+off the struct and `c_inv`/`c_op` via `coefficient(objective_function(f.model), ·)` — sound
+because `FollowerLP`'s structure is an EXACT match for `make_relaxed_follower_model`'s
+assumptions — and calls the keyword method, so both agree by construction. Deliberately
+NOT extended to `src/planning/coupling.jl`'s `DistributorView` (pooled capacity row: no
+sound per-distributor relaxed minimum at `solve_stackelberg!`'s build-once boundary, full
+argument in plan 30-04 Task 2); `build_master` then honestly SKIPS `α_x_lb`'s build-time
+check and the universal runtime floor guard remains the defense-in-depth.
 """
-function derive_alpha_x_lb(;
+function alpha_x_lb_derivation(;
     T::Int,
     corridor_cap::Real,
     x_inv_max::Real,
     c_inv::Real,
     c_op::AbstractVector{<:Real},
-    margin::Real = ALPHA_LB_MARGIN,
 )
     model = make_relaxed_follower_model(;
         T = T,
@@ -305,44 +390,55 @@ function derive_alpha_x_lb(;
         c_op = c_op,
     )
     solve_with_retry!(model; dual = true)
-    return objective_value(model) - margin
+    optimum = objective_value(model)
+    gap = _measured_duality_gap(model)
+    margin = alpha_lb_margin(optimum, gap)
+    return (; optimum, gap, margin, bound = optimum - margin)
 end
 
-"""
-    derive_alpha_x_lb(f::FollowerLP; margin::Real = ALPHA_LB_MARGIN) -> Float64
-
-A SOUND, cheap overload of [`derive_alpha_x_lb`](@ref) for a pre-built [`FollowerLP`](@ref)
-follower (checker-fix revision), distinct from the `follower_kwargs`-NamedTuple method
-above. Extracts `corridor_cap`/`x_inv_max`/`T` directly off the struct, and `c_inv`/`c_op`
-via JuMP's `coefficient(objective_function(f.model), ·)` — sound because `FollowerLP`'s
-structure is an EXACT match for [`make_relaxed_follower_model`](@ref)'s assumptions (same
-`invest_op`-shaped cap, same additive cost, no other coupling). Calls the `follower_kwargs`
-method above with the extracted values, so the two dispatch methods agree by construction.
-
-Deliberately NOT extended to `src/planning/coupling.jl`'s `DistributorView`: its
-per-distributor capacity is governed by a POOLED row shared across ALL distributors
-(`capacity[t]: Σⱼ x_op[j,t] <= corridor_cap*Σⱼ x_inv[j]`), so distributor `i`'s true local
-bound also depends on every OTHER distributor's currently-committed state, which changes
-every Gauss-Seidel sweep and is unavailable at `solve_stackelberg!`'s build-once call
-boundary — a per-distributor relaxed minimum computed without that state would NOT be a
-sound lower bound (full argument in plan 30-04 Task 2). `build_master`'s resolution logic
-treats the absence of this method as `bounds_ctx.follower_kwargs === nothing`: `α_x_lb`'s
-build-time rejection is then honestly SKIPPED for that follower type (documented scope
-limit, never a silent pass) — the universal runtime floor guard (plan 30-04, benders.jl)
-remains active as defense-in-depth.
-"""
-function derive_alpha_x_lb(f::FollowerLP; margin::Real = ALPHA_LB_MARGIN)
+function alpha_x_lb_derivation(f::FollowerLP)
     obj = objective_function(f.model)
     c_inv = coefficient(obj, f.x_inv)
     c_op = [coefficient(obj, f.x_op[t]) for t in 1:f.T]
-    return derive_alpha_x_lb(;
+    return alpha_x_lb_derivation(;
         T = f.T,
         corridor_cap = f.corridor_cap,
         x_inv_max = f.x_inv_max,
         c_inv = c_inv,
         c_op = c_op,
-        margin = margin,
     )
+end
+
+"""
+    derive_alpha_x_lb(; T::Int, corridor_cap::Real, x_inv_max::Real, c_inv::Real,
+                      c_op::AbstractVector{<:Real},
+                      margin::Union{Nothing,Real} = nothing) -> Float64
+    derive_alpha_x_lb(f::FollowerLP; margin::Union{Nothing,Real} = nothing) -> Float64
+
+Derive `α_x_lb` (BILEV-05): the `bound` of [`alpha_x_lb_derivation`](@ref) (scale-aware
+measured margin by default, Phase 30 code review WR-04; an explicit `margin` overrides it).
+"""
+function derive_alpha_x_lb(;
+    T::Int,
+    corridor_cap::Real,
+    x_inv_max::Real,
+    c_inv::Real,
+    c_op::AbstractVector{<:Real},
+    margin::Union{Nothing, Real} = nothing,
+)
+    d = alpha_x_lb_derivation(;
+        T = T,
+        corridor_cap = corridor_cap,
+        x_inv_max = x_inv_max,
+        c_inv = c_inv,
+        c_op = c_op,
+    )
+    return margin === nothing ? d.bound : d.optimum - margin
+end
+
+function derive_alpha_x_lb(f::FollowerLP; margin::Union{Nothing, Real} = nothing)
+    d = alpha_x_lb_derivation(f)
+    return margin === nothing ? d.bound : d.optimum - margin
 end
 
 """
@@ -377,7 +473,9 @@ be supplied. An explicit `Real` is accepted unconditionally when `bounds_ctx ===
 (the byte-identical, zero-regression path every pre-existing call site uses: NO relaxed
 model is built, NO rejection check runs). When `bounds_ctx` IS supplied alongside an
 explicit `Real`, that explicit value is VALIDATED against the derived minimum: a bound
-that exceeds `derived + rejection_tol` throws `ArgumentError` — an invalid (too-tight)
+that exceeds the UN-margined relaxed optimum by more than the measured slack
+`alpha_lb_margin(optimum, gap; floor = rejection_tol)` throws `ArgumentError` (Phase 30
+code review, WR-03 — see [`ALPHA_LB_REJECTION_TOL`](@ref)) — an invalid (too-tight)
 declared lower bound would otherwise silently produce a WRONG converged answer (see
 `test_planning_hardening.jl`'s own T=8 finding, 30-RESEARCH.md Pitfall 4).
 
@@ -444,7 +542,7 @@ function build_master(;
             y_max = y_max,
         )
     elseif bounds_ctx !== nothing
-        derived = derive_alpha_op_lb(
+        d = alpha_op_lb_derivation(
             bounds_ctx.feeder,
             bounds_ctx.pf,
             bounds_ctx.aggregators;
@@ -452,10 +550,15 @@ function build_master(;
             T = T,
             y_max = y_max,
         )
-        α_op_lb > derived + rejection_tol && throw(
+        # WR-03: compare against the UN-margined optimum plus a measured, scale-aware
+        # slack (see ALPHA_LB_REJECTION_TOL's derivation) — never `bound + tol`, which
+        # cancelled to the raw optimum and left no tolerance at all.
+        slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)
+        α_op_lb > d.optimum + slack && throw(
             ArgumentError(
-                "build_master: α_op_lb=$α_op_lb exceeds the derived minimum $derived " *
-                "(+tol=$rejection_tol) — would silently produce a wrong-converged answer " *
+                "build_master: α_op_lb=$α_op_lb exceeds the derived relaxed minimum " *
+                "$(d.optimum) by more than the measured slack $slack (duality gap " *
+                "$(d.gap)) — would silently produce a wrong-converged answer " *
                 "(see test_planning_hardening.jl's own T=8 finding)",
             ),
         )
@@ -479,11 +582,14 @@ function build_master(;
         )
         _fk isa NamedTuple ? derive_alpha_x_lb(; _fk..., T = T) : derive_alpha_x_lb(_fk)
     elseif bounds_ctx !== nothing && _fk !== nothing
-        derived = _fk isa NamedTuple ? derive_alpha_x_lb(; _fk..., T = T) : derive_alpha_x_lb(_fk)
-        α_x_lb > derived + rejection_tol && throw(
+        d = _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
+            alpha_x_lb_derivation(_fk)
+        slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)   # WR-03
+        α_x_lb > d.optimum + slack && throw(
             ArgumentError(
-                "build_master: α_x_lb=$α_x_lb exceeds the derived minimum $derived " *
-                "(+tol=$rejection_tol) — would silently produce a wrong-converged answer",
+                "build_master: α_x_lb=$α_x_lb exceeds the derived relaxed minimum " *
+                "$(d.optimum) by more than the measured slack $slack (duality gap " *
+                "$(d.gap)) — would silently produce a wrong-converged answer",
             ),
         )
         Float64(α_x_lb)

@@ -253,7 +253,14 @@ regression on every one of the ~90 pre-existing explicit-bound `build_master` ca
 acceptance criteria and plan 30-04's full `test_planning_nash.jl` regression run (Nash
 results unchanged).
 
-**Measured constants:** `ALPHA_LB_MARGIN = ALPHA_LB_REJECTION_TOL = 1e-6`, derived from ONE
+**Measured constants (superseded in part by the code-review pass, WR-03/WR-04):** the
+margin applied is now scale-aware and measured per instance,
+`max(1e-6, 10·gap, 1e-8·|optimum|)` with `gap` the derive solve's own duality gap, and
+rejection compares against the UN-margined optimum plus that slack (the old rule's
+margin and tolerance cancelled to zero tolerance). Re-measured derive gaps: toy T=1/T=8
+`2.9e-9`/`2.5e-8` (floor dominates, unchanged), IEEE-13 T=4 `1.5e-6`–`4.5e-6`, T=24
+`4.2e-5` — the old absolute `1e-6` sat below the solver's own error on the IEEE-13
+instances. Original text: `ALPHA_LB_MARGIN = ALPHA_LB_REJECTION_TOL = 1e-6`, derived from ONE
 shared probe (the toy two-bus/`ToyElasticDevice` fixture at T=1, mirroring
 `test_planning_master.jl`'s own fixture): oracle primal/dual gap `~2.85e-9`, follower gap
 `0.0` exactly (trivial `x_inv=x_op=0` LP optimum) — `max(1e-6, 10*max_gap)` is dominated by
