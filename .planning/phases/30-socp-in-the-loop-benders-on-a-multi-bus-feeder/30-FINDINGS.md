@@ -344,3 +344,59 @@ confirming Phase 30 only ADDS new named constants (`ALPHA_LB_MARGIN`,
 `ALPHA_LB_REJECTION_TOL`, the BILEV-03 three-source cross-check tolerance, the
 feasibility-oracle's empirically-verified sign `u=+dual.(pin)`, etc.) and never touches,
 moves, or re-pins any pre-existing golden value.
+
+---
+
+## READY FOR ORCHESTRATOR SUITE CERTIFICATION
+
+**HEAD sha:** `38b2e05` (`docs(30-06): golden-move audit + consolidated phase findings` —
+this plan's own Task 1 commit). `git status --short` is clean at this sha: all Phase 30
+work (plans 30-01 through 30-05, plus this plan's Task 1 findings) is committed; there were
+no outstanding `src/`/`test/` changes left for this Task 2 to commit.
+
+**Preconditions confirmed:**
+
+1. `git worktree list` — **no `.claude/worktrees/agent-*` entries.** Two UNRELATED, stale
+   worktrees exist at a different path pattern (`TSO-DSO.worktrees/operational-planning-
+   integration` on branch `agents/operational-planning-integration`, last commit
+   2026-08-29; `TSO-DSO.worktrees/pdf-documentation-thesis-results` on branch
+   `agents/pdf-documentation-thesis-results`, last commit 2026-07-25) — these do NOT match
+   the `background-suite-orphan-race` contamination pattern (which is specifically about
+   live `.claude/worktrees/agent-*` sessions doubling the reported suite count), are weeks
+   stale, and are outside this repo's own `test/`/`src/` tree scope. Reported here per the
+   plan's own "report, don't silently pass" instruction; not treated as a blocking
+   precondition failure since the pattern genuinely doesn't match.
+2. No stale `Pkg.test`/julia processes running — confirmed via `ps aux | grep -i
+   "julia\|Pkg.test"` (filtered of self-matching grep/pgrep artifacts): zero real matches.
+3. `git status --short` clean at HEAD `38b2e05`; all Phase 30 work committed.
+
+**Phase-29 close baseline to compare against:** **30871 pass / 0 fail / 0 error / 5
+broken** (recorded in `29-FINDINGS.md`'s own certification section, HEAD `a5e9900`,
+confirmed unchanged through the two subsequent docs-only closing commits `a98ac98`/
+`e5dc782`).
+
+**This phase's new/extended test files** whose `@testitem`s should be added to that
+baseline when the orchestrator certifies:
+- `test/test_planning_feasibility_oracle.jl` (new, plan 30-01; extended, plan 30-04)
+- `test/test_planning_ac_recheck.jl` (new, plan 30-01)
+- `test/test_planning_noninteger.jl` (PVAL-04 registry addition, plan 30-01)
+- `test/test_planning_master.jl` (7 new `@testitem`s, plan 30-02)
+- `test/fixtures_planning_ieee13_short.jl` (new `@testmodule`, plan 30-03)
+- `test/test_planning_ieee13_short_fixture.jl` (new, plan 30-03)
+- `test/test_planning_alpha_bounds_stackelberg.jl` (new, plan 30-04)
+- `test/test_planning_inexact_policy.jl` (new, plan 30-04)
+- `test/test_planning_benders_ieee13.jl` (new, plan 30-05)
+
+**Fail/error must stay 0. Broken must stay 5** (Phase 30 adds no new `@test_broken`,
+confirmed by a grep finding zero `@test_broken`/`broken=` matches in any file this phase
+touches — see the "Design deviations" section above).
+
+**This plan's own executor never launches, polls, or waits for `Pkg.test()`.** The
+ORCHESTRATOR is responsible for: launching the single detached `julia --project=. -e
+'import Pkg; Pkg.test()'` run via its own persistent background-process mechanism,
+confirming the log's first timestamp postdates HEAD `38b2e05`, filtering for zero
+`.claude/worktrees/` contamination, comparing the final tallies against the baseline above,
+and appending those final tallies directly into this file (or resuming this plan with the
+tallies for a follow-up write-up step).
+
+<!-- ORCHESTRATOR: append certified full-suite tallies below this line once the run completes. -->
