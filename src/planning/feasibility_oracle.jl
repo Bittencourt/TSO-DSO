@@ -213,11 +213,16 @@ Returns `(; cost, v, u, z_k)`:
     scratch here, never assumed from that other docstring's convention);
   - `z_k` — `copy(z_trial)`, the trial point this cut is anchored at (mirrors
     `add_feasibility_cut!`'s own `z_k` argument).
+
+`attempts_out` is forwarded unchanged to `solve_with_retry!` (Phase 30 code review
+iteration 2, IN-02; additive, `nothing` by default) so `solve_stackelberg!` can report this
+solve's genuine retries on its trace.
 """
 function solve_feasibility_oracle!(
     fo::FeasibilityOracle,
     z_trial::AbstractVector{<:Real};
     max_attempts::Int = 4,
+    attempts_out::Union{Nothing, Ref{Int}} = nothing,
 )
     length(z_trial) == fo.T ||
         throw(ArgumentError("z_trial has length $(length(z_trial)), expected T=$(fo.T)"))
@@ -226,7 +231,12 @@ function solve_feasibility_oracle!(
 
     # D-08: solve_with_retry! is the SOLE solve entry point. Feasible iff some p_import
     # admits the network (WR-02) — a failure here is numerical or that structural case.
-    solve_with_retry!(fo.model; max_attempts = max_attempts, dual = true)
+    solve_with_retry!(
+        fo.model;
+        max_attempts = max_attempts,
+        dual = true,
+        attempts_out = attempts_out,
+    )
 
     cost = objective_value(fo.model)
     π = dual.(fo.pin)

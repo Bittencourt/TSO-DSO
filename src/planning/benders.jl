@@ -1322,8 +1322,11 @@ function solve_stackelberg!(
             # WR-02 (Phase 30 code review): the slack-min model is feasible only if SOME
             # p_import admits the network, so it can fail too — never let its error mask
             # the original oracle infeasibility. Rethrow with BOTH diagnoses and z_k.
+            # IN-02 (iteration 2): this solve is timed and its retries are counted.
+            fo_attempts = Ref(1)
+            t0_fo_ns = time_ns()
             fo_res = try
-                solve_feasibility_oracle!(feas_oracle, lb_res.z)
+                solve_feasibility_oracle!(feas_oracle, lb_res.z; attempts_out = fo_attempts)
             catch fo_err
                 fo_err isa ErrorException || rethrow()
                 error(
@@ -1335,6 +1338,7 @@ function solve_stackelberg!(
                     "Feasibility-oracle error: $(sprint(showerror, fo_err))",
                 )
             end
+            t_solve += (time_ns() - t0_fo_ns) / 1.0e9
             # WR-01 / WR-06 (iteration 2): the cut evaluates to exactly `v` at z_k. It is
             # VALID for any v >= 0 (convexity of the slack-min value), but separates z_k
             # beyond the master's tolerance only for v > FEAS_CUT_V_TOL. See
@@ -1375,7 +1379,11 @@ function solve_stackelberg!(
                 n_cuts = length(master.cuts),
                 master_status = master_status_k,
                 oracle_status = Symbol(oracle_ts),
-                retry_count = master_attempts[] - 1,
+                # IN-02 (iteration 2): the master's and the feasibility oracle's retries.
+                # The FAILED oracle solve's own attempts are not observable here
+                # (solve_with_retry! sets attempts_out only on success), so they are not
+                # counted: a lower bound on this row's true retry count.
+                retry_count = (master_attempts[] - 1) + (fo_attempts[] - 1),
                 solve_time = t_solve,
                 # WR-06 (iteration 2): a weak (valid, possibly non-separating) cut is
                 # labelled distinctly, and the measured v is recorded on every
