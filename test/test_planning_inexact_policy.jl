@@ -87,7 +87,7 @@
     end
 end
 
-@testitem "planning inexact policy: :reject skips the inexact trial — no guaranteed progress (T-30-09)" tags =
+@testitem "planning inexact policy: :reject skips the inexact trial and fails fast on the deterministic repeat (T-30-09, WR-06)" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
 
@@ -103,19 +103,15 @@ end
 
     # `:reject` never appends ANY cut on the inexact trial (by design — see
     # `solve_stackelberg!`'s own docstring), so the master's LP is UNCHANGED on the next
-    # iteration and deterministically re-proposes the IDENTICAL trial forever — a
-    # genuine, documented, non-default-policy limitation (T-30-09, accepted in this
-    # plan's own threat register), not a bug. This is the EXPECTED outcome at THIS
-    # measured pin (confirmed empirically this session): `solve_stackelberg!` exhausts
-    # `max_iter` and raises, rather than converging — one of the two outcomes this
-    # plan's own PLAN.md Task 3 explicitly accepts as valid for this policy ("EITHER
-    # outcome is acceptable ... provided that, if it converges, the trace shows
-    # :rejected"). Cross-referenced against the companion `:certify_incumbent` item
-    # below, run on the IDENTICAL fixture/configuration: its own trace shows the SAME
-    # iteration range is genuinely SOCP-INEXACT-but-feasible (never a genuine
-    # MOI.INFEASIBLE) — so this raise is attributable to the designed `:reject` branch
-    # repeatedly re-firing on that same inexact trial, not to an unrelated follower/
-    # oracle infeasibility or a modeling bug.
+    # iteration and deterministically re-proposes the IDENTICAL trial (T-30-09). Before
+    # the Phase 30 code review (WR-06) this burned the whole remaining budget and ended in
+    # a generic "exhausted" error that hid the cause; `:reject` is now FAIL-FAST: the
+    # first repeat raises a named "stalled" error at once. On this fixture the first
+    # inexact trial is iteration 7 (see the file header), so the stall fires at
+    # iteration 8 — measured, and pinned below via the checkpoint count (one JLD2 file per
+    # completed iteration; the stalled iteration writes none). Cross-referenced against
+    # the companion `:certify_incumbent` item below (same fixture/configuration), whose
+    # trace shows the SAME iteration is genuinely SOCP-INEXACT-but-feasible.
     mktempdir() do dir
         caught = nothing
         try
@@ -128,7 +124,7 @@ end
                 follower_kwargs = follower_kwargs,
                 master_kwargs = master_kwargs,
                 tol = 1.0e-4,
-                max_iter = 10,
+                max_iter = 50,
                 checkpoint_dir = dir,
                 inexact_policy = :reject,
             )
@@ -137,10 +133,14 @@ end
         end
         @test caught !== nothing
         @test caught isa ErrorException
-        @test occursin("exhausted", caught.msg)
+        @test occursin(":reject stalled", caught.msg)
+        @test !occursin("exhausted", caught.msg)
         # NEVER the exactness gate's own message leaking through unhandled — :reject's
-        # whole purpose is to intercept that throw and turn it into a skipped iteration.
+        # whole purpose is to intercept the inexact verdict.
         @test !occursin("SOCP relaxation INEXACT", caught.msg)
+        # Fail-fast: 7 completed iterations (6 ordinary + the first rejection), far
+        # short of max_iter = 50.
+        @test length(filter(f -> endswith(f, ".jld2"), readdir(dir))) == 7
     end
 end
 

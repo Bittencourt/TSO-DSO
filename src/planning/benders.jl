@@ -707,7 +707,11 @@ invalid on that genuinely divergent-objective game (see that file's module heade
           * A returned result with `exactness === :inexact` dispatches on
             `inexact_policy` (BILEV-04b): `:reject` skips the inexact trial entirely (no
             cut appended, `UB` never updated, trace row `cut_type = :rejected`/
-            `policy_action = :rejected`); `:certify_incumbent` (the default) accepts the
+            `policy_action = :rejected`). Because a rejection changes no master state,
+            the master re-proposes the identical trial next iteration; `:reject` is
+            therefore FAIL-FAST — that repeat raises a named "`:reject` stalled"
+            `ErrorException` immediately instead of exhausting `max_iter` (Phase 30 code
+            review, WR-06); `:certify_incumbent` (the default) accepts the
             relaxation's cut (a valid under-estimator of the RELAXED value function),
             recording `policy_action = :certified_incumbent` and the measured
             `socp_maxgap` on the trace.
@@ -797,7 +801,9 @@ physics at `z_best`, not a certified error bound). NEVER thrown, never silently 
     call site, never silenced.
   - `ErrorException` if `max_iter` is exhausted without converging, naming the trace's
     last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
-    return a non-converged result. ALSO raised by the universal runtime epigraph floor
+    return a non-converged result. ALSO raised, immediately, when `inexact_policy =
+    :reject` re-encounters the identical SOCP-inexact trial it just rejected (a named
+    "`:reject` stalled" error — WR-06). ALSO raised by the universal runtime epigraph floor
     guard (`_assert_epigraph_floor`, BILEV-05) if ANY evaluated epigraph cost ever falls
     below its own declared lower bound — a genuine modeling bug, never a convergence
     issue.
@@ -938,6 +944,12 @@ function solve_stackelberg!(
     # the whole run — always 0 on the continuous path (apply_integer_cuts! is a true no-op
     # for BendersMaster). Surfaced on the returned NamedTuple, never a silent count.
     nogood_total = 0
+    # WR-06 (Phase 30 code review): the trial rejected on the IMMEDIATELY preceding
+    # iteration under `inexact_policy = :reject` (or `nothing`). A rejection adds no cut,
+    # so the master is unchanged and deterministically re-proposes the same trial —
+    # detected below and turned into an immediate, named error instead of silently
+    # burning the rest of the iteration budget.
+    last_rejected_z = nothing
     for k in 1:max_iter
         # WR-01/IN-04 (phase 12 review): solve_time_trace records ONLY the wall-clock
         # seconds spent inside this iteration's solve calls (master + follower, plus
@@ -976,6 +988,7 @@ function solve_stackelberg!(
         t_solve += (time_ns() - t0_ns) / 1.0e9
 
         if !follower_res.feasible
+            last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
             add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)
             checkpoint_iteration!(
                 (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
@@ -1078,6 +1091,7 @@ function solve_stackelberg!(
                 "separate z_k from the master (WR-01). Refusing to append a " *
                 "non-separating cut.",
             )
+            last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
             add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
             checkpoint_iteration!(
                 (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
@@ -1111,6 +1125,23 @@ function solve_stackelberg!(
         # battery-complementarity gate whatever its exactness verdict.
         if oracle_res.exactness === :inexact
             if inexact_policy === :reject
+                # WR-06: a rejection changes no master state, so the master re-proposes
+                # the IDENTICAL trial next iteration. On that repeat, fail fast with a
+                # named diagnosis (`:reject` is fail-fast by design) rather than looping
+                # to max_iter. 1e-9 is the same "identical deterministic re-proposal"
+                # threshold `_corner_recourse_joint`'s own stall guard uses.
+                if last_rejected_z !== nothing &&
+                   maximum(abs, lb_res.z .- last_rejected_z) <= 1e-9
+                    error(
+                        "solve_stackelberg!: inexact_policy=:reject stalled at the " *
+                        "SOCP-inexact trial z=$(lb_res.z) (iteration $k, measured cone " *
+                        "gap maxgap=$(socp_maxgap_k)): a rejected trial adds no cut, so " *
+                        "the master re-proposed the identical trial and no further " *
+                        "progress is possible (WR-06). Use inexact_policy=:certify_incumbent " *
+                        "to accept relaxation cuts, or :strict to fail at the first inexact solve.",
+                    )
+                end
+                last_rejected_z = copy(lb_res.z)
                 # Skip the inexact cut entirely this iteration (no add_optimality_cut!
                 # for :op/:x) — checkpoint with feasible=false-equivalent semantics,
                 # record the :rejected trace row, and `continue` (never update UB,
@@ -1161,6 +1192,7 @@ function solve_stackelberg!(
         _assert_epigraph_floor(-oracle_res.cost, lower_bound(master.α_op), :op)
         _assert_epigraph_floor(follower_res.cost, lower_bound(master.α_x), :x)
 
+        last_rejected_z = nothing   # WR-06: cuts are added below — the master moves on
         # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
         add_optimality_cut!(master, :op, -oracle_res.cost, oracle_res.π, lb_res.z)

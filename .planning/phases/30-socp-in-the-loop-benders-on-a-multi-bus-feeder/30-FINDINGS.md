@@ -146,11 +146,13 @@ synthetic forced `z`) passes through a measured SOCP-inexact pin at `z~0.0504`
 - `:reject` — skips the inexact cut (no `UB` update, `:rejected` trace row). Confirmed
   **empirically** (not assumed) to be **deterministic**: since no cut is ever appended on a
   rejected trial, the master's LP is byte-identical on the next iteration and re-proposes the
-  SAME trial forever once it first lands in the inexact zone — the test asserts `max_iter`
-  exhaustion and cross-references the companion `:certify_incumbent` item (same
-  fixture/configuration) to show the pin is genuinely inexact-but-feasible, never a true
-  infeasibility. This is an accepted limitation of the non-default `:reject` policy
-  (T-30-09), documented rather than engineered around.
+  SAME trial forever once it first lands in the inexact zone. (Code-review update, WR-06:
+  `:reject` is now FAIL-FAST — the first deterministic repeat raises a named "`:reject`
+  stalled at the SOCP-inexact trial z=…" error at iteration 8 instead of burning the
+  budget to a generic "exhausted" error; the test pins the stall message and the 7
+  completed checkpoints.) The test cross-references the companion `:certify_incumbent`
+  item (same fixture/configuration) to show the pin is genuinely inexact-but-feasible,
+  never a true infeasibility (T-30-09).
 - `:certify_incumbent` (default) — reconstructs the already-solved model's `(cost, π, π_s,
   dadp, ctx)` and proceeds normally, logging the cone gap.
 
