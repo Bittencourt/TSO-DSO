@@ -130,7 +130,7 @@ end
 @testitem "planning feasibility oracle: THERMAL-infeasible pinned z produces a genuine feasibility cut" tags =
     [:planning] setup = [FeasibilityOracleFixtures] begin
     using TSODSO
-    using JuMP: num_constraints
+    using JuMP: num_constraints, value
 
     T = 1
     feeder = TSODSO.ieee13_modified()                      # head branch smax = 0.0686 pu
@@ -173,12 +173,29 @@ end
     TSODSO.add_feasibility_cut!(master, r.v, r.u, r.z_k)
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
     @test nc1 == nc0 + 1
+
+    # --- WR-08 (Phase 30 code review): pin the cut's SIGN and VALIDITY, not just its
+    # shape. Every assertion above also holds for the wrong sign u = −π. Measured
+    # 2026-10-01 on this fixture: v = 8.27e-3, u = +0.99999999645 at z_k = 0.07.
+    # z_feas = 0.02 is relaxation-FEASIBLE for this population (the pinned oracle
+    # SOLVES there — inexact cone, but not infeasible; V(0.02) ≈ 0).
+    z_feas = [0.02]
+    r_feas = TSODSO.solve_planning_oracle!(oracle0, z_feas; on_inexact = :report)
+    @test r_feas.exactness in (:exact, :inexact)                 # solved, not infeasible
+    cut(u, zz) = r.v + sum(u .* (zz .- r.z_k))
+    @test r.v > TSODSO.FEAS_CUT_V_TOL                            # separates z_k itself
+    @test cut(r.u, r.z_k) > 0                                    # z_k is EXCLUDED
+    @test cut(r.u, z_feas) <= 1e-8                               # a feasible z is KEPT
+    @test cut(-r.u, z_feas) > 0          # the wrong sign u = −π would exclude it: pinned
+    # The master, re-solved after the cut, respects it.
+    solve_master!(master)
+    @test cut(r.u, value.(master.z)) <= 1e-7
 end
 
 @testitem "planning feasibility oracle: VOLTAGE-infeasible pinned z (thermally-widened variant) produces a genuine feasibility cut" tags =
     [:planning] setup = [FeasibilityOracleFixtures] begin
     using TSODSO
-    using JuMP: num_constraints
+    using JuMP: num_constraints, value
 
     # Provenance (30-RESEARCH.md: "on the REAL unmodified feeder, thermal ALWAYS binds
     # first as z grows" — a genuinely voltage-only infeasibility needs a THERMALLY-WIDENED
@@ -231,6 +248,20 @@ end
     TSODSO.add_feasibility_cut!(master, r.v, r.u, r.z_k)
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
     @test nc1 == nc0 + 1
+
+    # --- WR-08: sign/validity pin on the VOLTAGE cut too. Measured 2026-10-01:
+    # v = 0.1737, u = +0.99999999988 at z_k = 0.5; z_feas = 0.0 is feasible AND
+    # SOCP-exact on this smax-widened feeder.
+    z_feas = [0.0]
+    @test TSODSO.solve_planning_oracle!(oracleS, z_feas; on_inexact = :report).exactness in
+          (:exact, :inexact)
+    cut(u, zz) = r.v + sum(u .* (zz .- r.z_k))
+    @test r.v > TSODSO.FEAS_CUT_V_TOL
+    @test cut(r.u, r.z_k) > 0
+    @test cut(r.u, z_feas) <= 1e-8
+    @test cut(-r.u, z_feas) > 0
+    solve_master!(master)
+    @test cut(r.u, value.(master.z)) <= 1e-7
 end
 
 # --- Plan 30-04 Task 3: "loop still converges" — solve_stackelberg! end-to-end --------
