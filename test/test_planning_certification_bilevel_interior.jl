@@ -403,15 +403,21 @@ end
     @test isapprox(prod.z[1], bf.z; atol = atol_bruteforce)
     @test isapprox(prod.total_cost, bf.total; atol = atol_bruteforce)
 
-    # The brute-force grid's OWN achieving point sits within one grid spacing of
-    # the hand-derived kink (confirms the fine grid itself resolves the true
-    # optimum, independent of the salted point).
-    @test abs(bf.y - F.INTERIOR_Y_HAND) < grid_spacing + atol_hand
+    # The FINE-ONLY grid (no salted point) resolves the optimum on its own: its
+    # achieving point sits within one grid spacing of the hand-derived kink
+    # (29-REVIEW.md WR-04 — the earlier version tested the salted `bf.y`, which
+    # contains 0.148 exactly, so it passed by construction).
+    @test abs(bf_fine_only.y - F.INTERIOR_Y_HAND) <= grid_spacing
 
-    # The salted 0.148 point is not silently doing all the work: the grid's
-    # achieving total agrees with a fine-only re-run (no salted point) to within
-    # the fine grid's own spacing-induced total variation.
-    @test isapprox(bf.total, bf_fine_only.total; atol = 1e-2)
+    # The salted 0.148 point is not silently doing all the work: the fine-only
+    # total agrees with the salted total to within the analytic spacing error. Some
+    # fine-grid point lies in [0.148, 0.148 + grid_spacing], on the right branch
+    # total(y) = c_y*y - 1.48 (slope c_y = 0.05), so the fine-only minimum is at most
+    # c_y*grid_spacing = 1.25e-4 above the true minimum (analytic gap at y = 0.15:
+    # 1.0e-4). The 5e-5 term covers Clarabel's noise at the degenerate kink point:
+    # measured z(0.148) = 1.47996 (3.7e-5 short of 1.48), so the measured
+    # |bf.total - bf_fine_only.total| is 6.3e-5.
+    @test isapprox(bf.total, bf_fine_only.total; atol = F.c_y * grid_spacing + 5e-5)
 
     # --- Genuine bilevel != joint divergence (well above solver precision) ---
     @test abs(prod.total_cost - jt.total) > F.GAP_FLOOR_INTERIOR
