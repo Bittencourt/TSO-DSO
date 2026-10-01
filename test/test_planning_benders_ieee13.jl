@@ -35,7 +35,10 @@
 #   iters = 6, gap = 3.141107077821004e-7 (<= tol=1e-6)
 #   UB = 609.0113505622323, LB = 609.011159265246
 #   y = 0.05, z = [0.0010186833736006077, -0.0, -0.0, 0.0499999999999553]
-#   ac_report = nothing; trace.socp_maxgap_trace = [NaN, NaN, NaN, NaN, NaN, NaN]
+#   ac_report = nothing; incumbent_exactness = :exact; trace.socp_maxgap_trace (the
+#     MEASURED per-iteration cone residual, re-measured 2026-10-01 after the Phase 30
+#     code review's WR-05 fix — it used to be a NaN placeholder on exact rows) =
+#     [2.24e-10, 3.06e-9, 4.15e-9, 8.62e-10, 4.23e-10, 2.78e-10]
 #     (every iteration SOCP-EXACT — a legitimate outcome per 30-03's own sweep map,
 #     since this whole box sits inside the documented exact window; see this file's
 #     own cone-gap assertions below for the POSITIVE statement this makes, never a
@@ -146,17 +149,24 @@
         # the incumbent's cone-gap status, never a silent skip. This fixture's own
         # kwargs keep the whole Benders trial box inside the measured
         # feasible-and-exact z ∈ [-0.05, 0.05] window (30-03's own sweep table), so
-        # EVERY iteration this session came back SOCP-EXACT (confirmed: every entry in
-        # socp_maxgap_trace is the :none-sentinel NaN, and the AC-recheck-at-convergence
-        # hook found ac_report === nothing) — a legitimate, even likely, outcome per
-        # that same sweep table, not a cop-out: the alternative branch
-        # (any(isfinite, ...) === true) is exercised instead by
-        # test_planning_inexact_policy.jl's own fixture, which deliberately drives a
-        # trial just past this window.
+        # EVERY iteration this session came back SOCP-EXACT (confirmed: every
+        # policy_action is :none, every measured socp_maxgap is <= 4.2e-9, and
+        # ac_report === nothing) — a legitimate, even likely, outcome per that same
+        # sweep table, not a cop-out: the inexact branch is exercised instead by
+        # test_planning_inexact_policy.jl's own fixtures, which deliberately drive trials
+        # (and, in one item, the incumbent) past this window.
         @test result.ac_report === nothing
         @test result.incumbent_exactness === :exact
         @test !result.ub_relaxation_only
-        @test all(isnan, result.trace.socp_maxgap_trace)
-        @test all(a -> a in (:none, :certified_incumbent), result.trace.policy_action_trace)
+        # WR-05 (Phase 30 code review): the MEASURED cone gap of every optimality row is
+        # recorded (it used to be a NaN placeholder on exact rows, making this assertion
+        # vacuous). Every row's verdict was exact, and the incumbent's own measured gap
+        # is returned.
+        tr = result.trace
+        opt_rows = findall(==(:optimality), tr.cut_type_trace)
+        @test all(i -> isfinite(tr.socp_maxgap_trace[i]), opt_rows)
+        @test all(==(:none), tr.policy_action_trace)
+        @test TSODSO.trace_summary(tr).n_inexact_iterations == 0
+        @test isfinite(result.incumbent_socp_maxgap)
     end
 end

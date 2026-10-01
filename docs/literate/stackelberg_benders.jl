@@ -313,27 +313,33 @@ result24.z
 
 result24.UB
 
-# The incumbent's AC-recheck-at-convergence report (BILEV-04b): `nothing` means the
-# incumbent was found genuinely SOCP-EXACT at convergence — measured this session, this
-# T=24 run stayed exact throughout (every entry of `result24.trace.socp_maxgap_trace`
-# is the `NaN` exactness sentinel; see the cone-gap panel below), so no AC physics
-# re-check was triggered:
+# The incumbent's exactness certificate (BILEV-04b; Phase 30 code review CR-02): the
+# verdict of the very oracle solve that produced `UB`, its measured cone residual, and
+# whether `UB`/`gap` certify only the SOC relaxation. Measured 2026-10-01: `:exact`,
+# `incumbent_socp_maxgap ≈ 3.03e-9`, `ub_relaxation_only = false` — so `UB` is a genuine
+# upper bound here, and no AC physics re-check was triggered (`ac_report === nothing`):
+
+(result24.incumbent_exactness, result24.incumbent_socp_maxgap, result24.ub_relaxation_only)
+
+#-
 
 result24.ac_report
 
 # ## T=24 Benders convergence figure, with a cone-gap panel (CairoMakie)
 #
 # The SAME canonical Benders bounds/gap panels as the T=1 figure above, PLUS a THIRD
-# panel plotting `result24.trace.socp_maxgap_trace` — the incumbent's per-iteration SOCP
-# cone-gap ledger (BILEV-04b, `src/planning/trace.jl`), masked with the SAME
-# `isfinite.(...)` + `max.(..., eps())` log-axis-floor idiom the existing two panels
-# already use (a `NaN` entry means "this iteration's oracle solve never triggered the
-# exactness-reporting path" — a legitimate sentinel per `BendersTrace`'s own docstring,
-# not a missing measurement). Measured this session: every entry is `NaN` (this
-# configuration stayed SOCP-exact at every iteration), so the third panel is empty —
-# itself a genuine, positively-confirmed result (never a silent assumption), contrasted
-# here against the non-empty case `test/test_planning_inexact_policy.jl`'s own fixture
-# exercises.
+# panel plotting `result24.trace.socp_maxgap_trace` — the per-iteration MEASURED SOCP
+# cone residual `max |l·v − (P²+Q²)|` (BILEV-04b, `src/planning/trace.jl`), recorded on
+# every row whose oracle solve ran the exactness gate (Phase 30 code review WR-05: it used
+# to be a `NaN` placeholder on every exact row, which left this panel empty by
+# construction). `NaN` remains only on rows with no trusted oracle solve — here the
+# follower-feasibility-cut rows, iterations 2–13 — and is masked with the SAME
+# `isfinite.(...)` + `max.(..., eps())` log-axis-floor idiom the other two panels use.
+# Measured 2026-10-01: the three oracle-solving rows (k = 1, 14, 15) record 3.02e-9,
+# 3.03e-9 and 4.09e-9 — every one far inside the exactness gate's tolerance, i.e. this
+# configuration is SOCP-exact at every iteration that reached the oracle. Contrast
+# `test/test_planning_inexact_policy.jl`, whose fixture records inexact rows at
+# 1.7e-3–2.4e-3.
 
 trace24 = result24.trace
 ks24 = trace24.iter_trace

@@ -177,17 +177,23 @@ end
 
         @test result.gap <= 1.0e-4
 
-        # At least one iteration recorded a finite, nonzero cone gap (the inexact trial
-        # was ACCEPTED and certified, not silently discarded).
-        finite_gaps = filter(!isnan, result.trace.socp_maxgap_trace)
-        @test !isempty(finite_gaps)
-        @test all(g -> g > 0, finite_gaps)
+        # WR-05 (Phase 30 code review): the measured cone gap is recorded on EVERY
+        # optimality row (exact and inexact), NaN only on feasibility-cut rows. The
+        # inexact (certified) rows' gaps must sit far above the exact rows' gaps
+        # (measured 2026-10-01: inexact 1.71e-3–2.40e-3, exact <= 1.41e-8 on this run).
+        tr = result.trace
+        opt_rows = findall(==(:optimality), tr.cut_type_trace)
+        @test all(i -> isfinite(tr.socp_maxgap_trace[i]), opt_rows)
+        @test all(i -> isnan(tr.socp_maxgap_trace[i]), findall(==(:feasibility), tr.cut_type_trace))
+        inexact_rows = findall(==(:certified_incumbent), tr.policy_action_trace)
+        exact_rows = filter(i -> tr.policy_action_trace[i] === :none, opt_rows)
+        @test !isempty(inexact_rows) && !isempty(exact_rows)
+        @test minimum(tr.socp_maxgap_trace[inexact_rows]) >
+              1000 * maximum(tr.socp_maxgap_trace[exact_rows])
 
-        @test :certified_incumbent in result.trace.policy_action_trace
-
-        # trace_summary's n_inexact_iterations (ADDITIVE, this plan) must count EXACTLY
-        # the same rows as the finite socp_maxgap_trace entries above.
-        @test TSODSO.trace_summary(result.trace).n_inexact_iterations == length(finite_gaps)
+        # trace_summary's n_inexact_iterations counts the inexact-VERDICT rows (by policy
+        # action), not the finite-gap rows.
+        @test TSODSO.trace_summary(tr).n_inexact_iterations == length(inexact_rows)
 
         # THIS fixture's measured trajectory (see file header): the FINAL (converged)
         # iteration is itself genuinely SOCP-EXACT — the inexact trials were transient,

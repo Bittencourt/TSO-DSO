@@ -1010,7 +1010,6 @@ function solve_stackelberg!(
         # on the branches that actually engage inexact_policy; :none on every ordinary
         # success path, mirroring every other sentinel default in this loop.
         policy_action_k = :none
-        socp_maxgap_k = NaN
         t0_ns = time_ns()
         # Phase 30 code review (CR-01/CR-03): the exactness verdict is an EXPLICIT return
         # field of solve_planning_oracle! (`exactness`), never inferred from which side
@@ -1102,12 +1101,15 @@ function solve_stackelberg!(
             continue   # T-11-06: an oracle feasibility cut NEVER updates UB
         end
         t_solve += (time_ns() - t0_ns) / 1.0e9
+        # WR-05 (Phase 30 code review): the measured cone residual is recorded on EVERY
+        # row whose oracle solve ran the exactness gate (exact or inexact) — NaN only when
+        # the gate does not apply (no `:l` stash: DC/LinDistFlow).
+        socp_maxgap_k = oracle_res.socp_maxgap
 
         # BILEV-04b policy dispatch on the EXPLICIT verdict. `:strict` never reaches an
         # :inexact result (the oracle threw above). The result has already passed the
         # battery-complementarity gate whatever its exactness verdict.
         if oracle_res.exactness === :inexact
-            socp_maxgap_k = oracle_res.socp_maxgap
             if inexact_policy === :reject
                 # Skip the inexact cut entirely this iteration (no add_optimality_cut!
                 # for :op/:x) — checkpoint with feasible=false-equivalent semantics,
@@ -1248,9 +1250,9 @@ function solve_stackelberg!(
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
             solve_time = t_solve,
             nogood_count = integer_cut_res.nogood_fired ? 1 : 0,
-            # Phase 30 (BILEV-04b, plan 30-04): :none/NaN on the ordinary success path
-            # (byte-identical to pre-30-04 behavior); :certified_incumbent/a finite gap
-            # when inexact_policy's :certify_incumbent branch fired this iteration.
+            # Phase 30 (BILEV-04b, plan 30-04): :none on the ordinary success path,
+            # :certified_incumbent when inexact_policy's :certify_incumbent branch fired.
+            # socp_maxgap is the MEASURED cone residual whenever the gate ran (WR-05).
             policy_action = policy_action_k,
             socp_maxgap = socp_maxgap_k,
         )

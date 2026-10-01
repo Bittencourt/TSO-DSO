@@ -88,14 +88,15 @@ Fields:
     JLD2/git-provenance I/O, and trace bookkeeping are EXCLUDED (WR-01, phase 12
     review). Non-negative, finite.
   - `socp_maxgap_trace::Vector{Float64}` — Phase 30 (BILEV-04b, plan 30-04), ADDITIVE:
-    the SOC-relaxation cone gap ([`socp_relaxation_gap`](@ref), the NON-THROWING
-    sibling of `assert_socp_exact!`) measured at this iteration's pinned `z_k`, ONLY
-    when the oracle's own exactness gate actually fired and either passed with a
-    nonzero residual or was overridden by `inexact_policy`'s `:reject`/
-    `:certify_incumbent` branch. `NaN` on every OTHER row (the ordinary success path
-    where the exactness gate was never data-driven-engaged, every feasibility-cut
-    row, and every row before this field existed) — a legitimate sentinel, mirroring
-    `gap_trace`'s own NaN convention, never guarded away.
+    the measured SOC-relaxation cone residual `max |l·v − (P²+Q²)|` at this
+    iteration's pinned `z_k`, recorded on EVERY row whose oracle solve ran the
+    exactness gate — exact rows AND inexact (`:certified_incumbent`/`:rejected`) rows
+    (Phase 30 code review, WR-05; it used to be recorded only on the policy rows). `NaN`
+    on rows where the gate does not apply: feasibility-cut rows (no trusted oracle
+    solve) and every row of a DC/LinDistFlow run (no `:l` stash) — a legitimate
+    sentinel, mirroring `gap_trace`'s own NaN convention, never guarded away. A finite
+    entry is therefore NOT by itself a sign of inexactness — read `policy_action_trace`
+    for the verdict.
   - `policy_action_trace::Vector{Symbol}` — Phase 30 (BILEV-04b, plan 30-04),
     ADDITIVE: which `inexact_policy` branch (if any) fired at this iteration —
     `:certified_incumbent` (the SOCP-inexact oracle throw was caught and the
@@ -291,12 +292,12 @@ plan 24-03, ADDITIVE, mirrors `total_retries`'s own `sum(...)` pattern exactly):
 D-16's "never invisible" requirement for the count of anti-stall no-good cuts fired
 across the whole run. `m > 0` here is informational only — it never fails a run;
 `solve_stackelberg!` (plan 24-04) downgrades its own `converged_via` attribution to
-`:nogood_assisted` when `total_nogoods > 0`. `n_inexact_iterations =
-count(!isnan, trace.socp_maxgap_trace)` (Phase 30, BILEV-04b, plan 30-04, ADDITIVE,
-mirrors `total_retries`'s own always-computed-sum-over-column pattern): the number of
-iterations where the oracle's exactness gate was data-driven-engaged with a recorded
-cone gap (`:certify_incumbent`/`:reject` branches) — `0` on an empty trace and on every
-run where `inexact_policy`'s SOCP-inexactness branches never fired.
+`:nogood_assisted` when `total_nogoods > 0`. `n_inexact_iterations` (Phase 30,
+BILEV-04b, plan 30-04, ADDITIVE) counts the rows whose `policy_action_trace` entry is
+`:certified_incumbent` or `:rejected` — the iterations where the oracle's exactness gate
+returned an INEXACT verdict (Phase 30 code review, WR-05: it no longer relies on a NaN
+sentinel in `socp_maxgap_trace`, which now carries the measured gap on exact rows too) —
+`0` on an empty trace and on every run where those branches never fired.
 """
 function trace_summary(trace::BendersTrace)
     trace.iters == 0 && return (;
@@ -317,7 +318,10 @@ function trace_summary(trace::BendersTrace)
         max_cuts = maximum(trace.n_cuts_trace),
         total_retries = sum(trace.retry_count_trace),
         total_nogoods = sum(trace.nogood_count_trace),
-        n_inexact_iterations = count(!isnan, trace.socp_maxgap_trace),
+        n_inexact_iterations = count(
+            a -> a === :certified_incumbent || a === :rejected,
+            trace.policy_action_trace,
+        ),
     )
 end
 
