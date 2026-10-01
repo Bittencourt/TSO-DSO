@@ -215,3 +215,63 @@ end
     @test isapprox(r.rho_y, 0.0; atol = atol)
     @test isapprox(r.rho_max, 4.8; atol = atol)
 end
+
+@testitem "bilevel: m_ub is the closed-form dual bound, pinned on both fixtures (WR-03)" tags =
+    [:planning] setup = [PlanningFixtures] begin
+    using TSODSO, JuMP
+
+    # 29-REVIEW.md WR-03: the old solver-probe bound depended on Clarabel's arbitrary
+    # point on an unbounded dual face (m_ub = 9544.4 on the interior fixture). The
+    # closed-form bound (_follower_kkt_dual_bound) is pinned EXACTLY here, so any
+    # drift is visible. Hand values (safety = 10):
+    #   corner:   max(mu_cap 0, mu_lo 0.3, rho_y (2*0-1)^+ = 0, rho_lo 1.0) = 1.0  -> 10.0
+    #   interior: max(mu_cap 1.5, mu_lo 0, rho_y 10*1.5-0.2 = 14.8, rho_lo 0.2) = 14.8
+    #             -> 148.0 (14.8 is exactly the tight rho_y at y_inv = 0)
+    f = PlanningFixtures.bilevel_toy_fixture()
+    corner = build_bilevel_kkt(
+        f.feeder,
+        LinDistFlow();
+        T = f.T,
+        agg_bus = f.agg_bus,
+        corridor_cap = f.corridor_cap,
+        x_inv_max = f.x_inv_max,
+        c_inv = f.c_inv,
+        c_op = f.c_op,
+        pi_tariff = f.pi_tariff,
+        q_op = f.q_op,
+        c_y = f.c_y,
+        y_max = f.y_max,
+        v_d = f.v_d,
+        d_max = f.d_max,
+    )
+    @test corner.m_ub == 10.0
+
+    interior_kwargs = (;
+        T = 1,
+        agg_bus = 2,
+        corridor_cap = 10.0,
+        x_inv_max = 10.0,
+        c_inv = 0.2,
+        c_op = [0.5],
+        pi_tariff = [2.0],
+        q_op = [1.0],
+        c_y = 0.05,
+        y_max = 5.0,
+        v_d = [3.0],
+        d_max = 10.0,
+    )
+    interior = build_bilevel_kkt(f.feeder, LinDistFlow(); interior_kwargs...)
+    @test isapprox(interior.m_ub, 148.0; rtol = 1e-12)
+
+    # Complementarity is enforced to within the bridge's big-M times HiGHS's
+    # integrality tolerance (~ m_ub * 1e-9 ≈ 1.5e-7 here). Measured products on the
+    # interior optimum are checked against 1e-6.
+    r = solve_bilevel!(interior)
+    slack_cap = 10.0 * r.x_inv - r.z[1]
+    slack_y = r.y - r.x_inv
+    @test abs(slack_cap * r.mu_cap[1]) < 1e-6
+    @test abs(r.z[1] * r.mu_lo[1]) < 1e-6
+    @test abs(slack_y * r.rho_y) < 1e-6
+    @test abs(r.x_inv * r.rho_lo) < 1e-6
+    @test abs((10.0 - r.x_inv) * r.rho_max) < 1e-6
+end
