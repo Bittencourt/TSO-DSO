@@ -145,3 +145,69 @@ end
         follower = DistributorView(shared, 1),
     )
 end
+
+@testitem "planning alpha bounds stackelberg: an explicit bound accepted inside the build-time slack never trips the runtime floor at the box argmax (WR-05 iter 2)" tags =
+    [:planning] setup = [IEEE13ShortHorizonFixtures] begin
+    using TSODSO
+    using JuMP: value, lower_bound
+
+    # Phase 30 code review iteration 2 (WR-05). Build time accepts an explicit α_op_lb up
+    # to optimum + S; the runtime floor used to test only against the pinned solve's own
+    # tolerance tol_k, which is far smaller than S. MEASURED 2026-10-01 (scratchpad
+    # fix2/probe_wr05.jl), IEEE13ShortHorizonFixtures T=4, ConvexBranchFlow, y_max=0.05:
+    #   derivation: optimum = 609.0096500784123, gap = 1.525e-6, S = 1.525e-5;
+    #   pinned oracle at the box argmax (z ≈ [0.00544, 0, 0, 0.05], SOCP-exact):
+    #   cost_k = optimum − 1.68e-7, gap_k = 1.94e-7, tol_k = 6.09e-6.
+    # With α = optimum + S/2 (accepted), cost_k < α − tol_k: the old runtime rule fired a
+    # "modeling bug" on a bound build_master had just accepted.
+    feeder = TSODSO.ieee13_modified()
+    aggs = IEEE13ShortHorizonFixtures.population(feeder)
+    λ₀ = IEEE13ShortHorizonFixtures.LAMBDA0
+    T = IEEE13ShortHorizonFixtures.T
+    y_max = 0.05
+    pf = ConvexBranchFlow()
+
+    d = TSODSO.alpha_op_lb_derivation(feeder, pf, aggs; λ₀ = λ₀, T = T, y_max = y_max)
+    S = TSODSO.alpha_lb_margin(d.optimum, d.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+    α = d.optimum + S / 2
+
+    fk = (; corridor_cap = 1.0, x_inv_max = 0.05, c_inv = 0.01, c_op = fill(0.01, T))
+    bounds_ctx = (; feeder, pf, aggregators = aggs, λ₀, follower_kwargs = fk)
+    m = build_master(; T = T, c_y = 0.01, y_max = y_max, α_op_lb = α, α_x_lb = 0.0, bounds_ctx)
+    @test lower_bound(m.α_op) == α                       # accepted at build time
+    @test m.lb_slack.op ≈ S + abs(d.gap)                  # ... and its slack recorded
+    @test m.lb_slack.x > 0                                # α_x_lb = 0.0 validated too
+
+    # The box argmax, and the pinned oracle's own value there.
+    rm = TSODSO.make_relaxed_oracle_model(feeder, pf, aggs; λ₀ = λ₀, T = T, y_max = y_max)
+    TSODSO.solve_with_retry!(rm; dual = true)
+    zstar = value.(rm[:p_import])
+    o = TSODSO.build_planning_oracle(feeder, pf, aggs; λ₀ = λ₀, T = T)
+    r = TSODSO.solve_planning_oracle!(o, zstar; on_inexact = :report)
+    gk = TSODSO._measured_duality_gap(o.model)
+    cost_k = -r.cost
+    tol_k = TSODSO.alpha_lb_margin(cost_k, gk; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+    # The regime of the finding: the accepted bound sits above cost_k by more than tol_k.
+    @test cost_k < α - tol_k
+    # Old rule (no accepted slack): a false "modeling bug".
+    @test_throws ErrorException TSODSO._assert_epigraph_floor(cost_k, α, :op; gap = gk)
+    # One validity rule: with the bound's recorded acceptance slack, no error.
+    @test TSODSO._assert_epigraph_floor(
+        cost_k,
+        α,
+        :op;
+        gap = gk,
+        accepted_slack = TSODSO._accepted_lb_slack(m, :op),
+    ) === nothing
+    # A value clearly below the derivation's own certified lower bound still fires.
+    @test_throws ErrorException TSODSO._assert_epigraph_floor(
+        d.optimum - 10 * (S + abs(d.gap)),
+        α,
+        :op;
+        gap = gk,
+        accepted_slack = TSODSO._accepted_lb_slack(m, :op),
+    )
+    # :auto bounds carry no slack (they already sit below the optimum).
+    m_auto = build_master(; T = T, c_y = 0.01, y_max = y_max, bounds_ctx)
+    @test m_auto.lb_slack == (; op = 0.0, x = 0.0)
+end

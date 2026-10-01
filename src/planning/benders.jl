@@ -646,7 +646,8 @@ function ll_cut_recourse(
 end
 
 """
-    _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real = NaN)
+    _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real = NaN,
+                           accepted_slack::Real = 0.0)
 
 Phase 30 (BILEV-05, plan 30-04): a UNIVERSAL, bound-source-independent runtime sanity
 check — `error(...)`s if `cost_k < lb - tol`, naming `label` (`:op`/`:x`), the evaluated
@@ -662,6 +663,13 @@ apart, and at `|W| ≈ 609` (IEEE-13 T=4) or larger the interior-point solver's 
 precision is covered instead of a T=1-toy absolute `1e-6` (which could fire as a
 "modeling bug" on pure solver noise near the box argmax).
 
+`accepted_slack` (Phase 30 code review iteration 2, WR-05) is the build-time acceptance
+slack of the bound in force (`BendersMaster.lb_slack`, read via `_accepted_lb_slack`):
+`tol` becomes `alpha_lb_margin(...) + accepted_slack`, so build-time acceptance and this
+runtime check apply ONE validity rule and a bound `build_master` accepted can never fire
+here (proof in `ALPHA_LB_REJECTION_TOL`'s docstring). `0.0` — the old behavior — for
+`:auto` and unvalidated bounds.
+
 Called UNCONDITIONALLY on `solve_stackelberg!`'s optimality branch, regardless of whether
 `master.α_op`/`master.α_x`'s declared lower bound came from `:auto`, an explicit `Real`, or
 was build-time-validated via `bounds_ctx` at all — a genuine lower bound, by definition,
@@ -669,8 +677,14 @@ can never exceed an actually-achieved cost at a feasible point. If this ever fir
 proof of a modeling bug in the derivation or declaration of that bound (BILEV-05's own
 core-value risk), never a legitimate convergence edge case to special-case away.
 """
-function _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real = NaN)
-    tol = alpha_lb_margin(cost_k, gap; floor = ALPHA_LB_REJECTION_TOL)
+function _assert_epigraph_floor(
+    cost_k::Real,
+    lb::Real,
+    label::Symbol;
+    gap::Real = NaN,
+    accepted_slack::Real = 0.0,
+)
+    tol = alpha_lb_margin(cost_k, gap; floor = ALPHA_LB_REJECTION_TOL) + accepted_slack
     cost_k < lb - tol && error(
         "solve_stackelberg!: epigraph $label evaluated to cost_k=$cost_k, below its " *
         "OWN declared lower bound lb=$lb (tol=$tol, measured gap=$gap) — BILEV-05: this " *
@@ -679,6 +693,17 @@ function _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real
     )
     return nothing
 end
+
+"""
+    _accepted_lb_slack(master, label::Symbol) -> Float64
+
+The build-time acceptance slack of `master`'s declared `:op`/`:x` epigraph lower bound
+(WR-05, Phase 30 code review iteration 2): `master.lb_slack[label]` for a
+[`BendersMaster`](@ref), `0.0` for any master type without that record (e.g.
+`BendersMasterInteger`, whose explicit bounds are never build-time validated).
+"""
+_accepted_lb_slack(master::BendersMaster, label::Symbol) = getproperty(master.lb_slack, label)
+_accepted_lb_slack(master, label::Symbol) = 0.0
 
 """
     _incumbent_ac_report(feeder, aggregators, λ₀, T::Int, z, socp_welfare::Real) -> NamedTuple
@@ -1366,13 +1391,21 @@ function solve_stackelberg!(
         # and independent of inexact_policy. oracle_res/follower_res have passed every
         # post-solve gate here (an :inexact oracle_res only under :certify_incumbent,
         # and it too has passed battery complementarity).
+        # WR-05 (iteration 2): the guard's tolerance includes the build-time acceptance
+        # slack of each bound, so build_master and this check apply ONE validity rule.
         _assert_epigraph_floor(
             -oracle_res.cost,
             lower_bound(master.α_op),
             :op;
             gap = _measured_duality_gap(oracle.model),
+            accepted_slack = _accepted_lb_slack(master, :op),
         )
-        _assert_epigraph_floor(follower_res.cost, lower_bound(master.α_x), :x)
+        _assert_epigraph_floor(
+            follower_res.cost,
+            lower_bound(master.α_x),
+            :x;
+            accepted_slack = _accepted_lb_slack(master, :x),
+        )
 
         # WR-06/WR-02: remember a rejected trial for the stall backstop above; any other
         # optimality iteration resets it.

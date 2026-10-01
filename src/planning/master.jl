@@ -66,6 +66,15 @@ cut) — with cuts appended as persistent `@constraint` rows, never rebuilt.
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended (NamedTuples
     tagged `kind = :optimality`/`:feasibility`), for cut-validity testing in
     plan 11-02; not consumed by `solve_master!` itself.
+  - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 30 code review
+    iteration 2 (WR-05): how far ABOVE its derived relaxed optimum each declared epigraph
+    lower bound was ALLOWED to be when `build_master` accepted it. `S + |gap|` for an
+    explicit bound validated against `bounds_ctx` (`S` the acceptance slack, `gap` the
+    derivation solve's measured duality gap); `0.0` for an `:auto` bound (it sits BELOW
+    the optimum by construction) and for an unvalidated explicit bound. The runtime
+    epigraph floor guard adds it to its own tolerance, so a bound `build_master`
+    accepted can never later be reported as a "modeling bug" (see
+    `ALPHA_LB_REJECTION_TOL`).
 """
 struct BendersMaster{Y, Z, AOP, AX}
     model::Model
@@ -76,6 +85,7 @@ struct BendersMaster{Y, Z, AOP, AX}
     T::Int
     c_y::Float64
     cuts::Vector{Any}
+    lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}
 end
 
 """
@@ -127,6 +137,22 @@ lies within the measured duality gap of the reported optimum, `|true − optimum
 a user bound equal to the true minimum sits at most `gap` above `optimum` and is accepted
 with at least `9·gap` (and at least `1e-6 − gap`) to spare. Floor value `1e-6`, the same
 toy measurement as [`ALPHA_LB_MARGIN`](@ref).
+
+**One validity rule at build time AND at runtime (Phase 30 code review iteration 2,
+WR-05).** Accepting bounds up to `optimum + S` (`S` the slack above) means accepting bounds
+that may sit up to `S + gap` above the TRUE minimum. The runtime floor guard used to test
+`cost_k < α − tol_k` with only the pinned solve's own tolerance `tol_k`, which can be far
+smaller than `S` (IEEE-13 T=4, y_max=0.05: derivation gap 1.5e-6 → `S` 1.5e-5, pinned
+`tol_k` ≈ 6.1e-6), so an accepted bound could later fire as a "modeling bug" at the box
+argmax. `build_master` therefore records `S + |gap|` per epigraph in
+`BendersMaster.lb_slack`, and the runtime guard fires only if
+`cost_k < α − (tol_k + lb_slack)`. Proof that an accepted bound can never fire: `α ≤
+optimum + S`, `true cost(z_k) ≥ true minimum ≥ optimum − gap` and `cost_k ≥ true cost(z_k)
+− gap_k` with `gap_k ≤ tol_k`, so `cost_k ≥ α − (S + gap) − tol_k`. For an `:auto` bound
+(`optimum − margin`, `margin ≥ 10·gap`) the same chain gives `cost_k ≥ α + 9·gap − tol_k`,
+so `lb_slack = 0` there. What still fires is a value below the DERIVATION's own certified
+lower bound `optimum − gap` by more than the pinned solve's error — a genuine bug in the
+derivation or the declaration.
 """
 const ALPHA_LB_REJECTION_TOL = 1e-6
 
@@ -529,6 +555,11 @@ function build_master(;
         ),
     )
 
+    # WR-05 (Phase 30 code review iteration 2): the acceptance slack actually granted to
+    # each declared bound, carried to the runtime floor guard (see ALPHA_LB_REJECTION_TOL).
+    slack_op = 0.0
+    slack_x = 0.0
+
     # BILEV-05 resolution: α_op_lb. :auto always derives; an explicit bound is validated
     # ONLY when bounds_ctx is supplied (the opt-in design decision above) — the
     # bounds_ctx === nothing branch is the byte-identical, zero-regression path.
@@ -562,6 +593,7 @@ function build_master(;
                 "(see test_planning_hardening.jl's own T=8 finding)",
             ),
         )
+        slack_op = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
         Float64(α_op_lb)
     else
         Float64(α_op_lb)
@@ -592,6 +624,7 @@ function build_master(;
                 "$(d.gap)) — would silently produce a wrong-converged answer",
             ),
         )
+        slack_x = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
         Float64(α_x_lb)
     else
         # bounds_ctx === nothing (opt-out, byte-identical path), OR _fk === nothing (a
@@ -618,7 +651,17 @@ function build_master(;
 
     @objective(model, Min, c_y * y_inv + α_op + α_x)
 
-    return BendersMaster(model, y_inv, z, α_op, α_x, T, Float64(c_y), Any[])
+    return BendersMaster(
+        model,
+        y_inv,
+        z,
+        α_op,
+        α_x,
+        T,
+        Float64(c_y),
+        Any[],
+        (; op = Float64(slack_op), x = Float64(slack_x)),
+    )
 end
 
 """
