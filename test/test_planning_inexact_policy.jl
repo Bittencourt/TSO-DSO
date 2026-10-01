@@ -358,3 +358,63 @@ end
         @test rep.welfare_gap == rep.socp_welfare - rep.ac_welfare
     end
 end
+
+@testitem "planning inexact policy: the integer-master corner search honours the policy and only maps genuine infeasibility to +Inf (CR-02 iter 2)" tags =
+    [:planning] setup = [IEEE13ShortHorizonFixtures] begin
+    using TSODSO
+    import JuMP: MOI, termination_status
+
+    # Phase 30 code review iteration 2 (CR-02). `corner_recourse` (the Laporte-Louveaux
+    # Q_nu evaluator) used to call the oracle in `:throw` mode whatever the outer policy,
+    # and its T>1 branch wrapped it in a bare `catch` that turned EVERY throw into +Inf —
+    # so an SOCP-inexact trial silently dropped out of the minimization and Q_nu came out
+    # too high (an invalid LL cut). MEASURED 2026-10-01 (scratchpad fix2/probe_cr02b.jl),
+    # T=4 IEEE13ShortHorizonFixtures population, follower (corridor_cap=1, x_inv_max=0.1,
+    # c_inv=c_op=1e-6):
+    #   y_inv=0.05: :throw and :report both 609.009650006013 (the box stays exact);
+    #   y_inv=0.06: :throw raises "SOCP relaxation INEXACT" (it used to return a value over
+    #               the exact points only); :report = 609.0086589949267;
+    #   uniform z=0.06 is inexact-but-feasible, uniform z=0.07 is MOI.INFEASIBLE.
+    feeder = TSODSO.ieee13_modified()
+    aggs = IEEE13ShortHorizonFixtures.population(feeder)
+    λ₀ = IEEE13ShortHorizonFixtures.LAMBDA0
+    T = IEEE13ShortHorizonFixtures.T
+    oracle = TSODSO.build_planning_oracle(feeder, ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+    fol = TSODSO.build_follower(;
+        corridor_cap = 1.0,
+        x_inv_max = 0.1,
+        c_inv = 1.0e-6,
+        c_op = fill(1.0e-6, T),
+        T = T,
+    )
+
+    function caught(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    # Classification: an infeasibility verdict is `nothing`; an inexact verdict is a
+    # result under :report and the gate's own throw under :throw.
+    @test TSODSO._oracle_or_infeasible(oracle, fill(0.07, T); on_inexact = :report) === nothing
+    @test termination_status(oracle.model) in TSODSO.ORACLE_INFEASIBLE_STATUSES
+    r06 = TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :report)
+    @test r06 !== nothing && r06.exactness === :inexact
+    e06 = caught(() -> TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :throw))
+    @test e06 isa ErrorException && occursin("SOCP relaxation INEXACT", e06.msg)
+
+    # T>1 joint corner search: :throw now fails loud instead of silently skipping the
+    # inexact region; :report returns the RELAXATION's per-corner minimum.
+    e = caught(() -> TSODSO.corner_recourse(oracle, fol, 0.06, T))
+    @test e isa ErrorException && occursin("SOCP relaxation INEXACT", e.msg)
+    q05 = TSODSO.corner_recourse(oracle, fol, 0.05, T; on_inexact = :report)
+    q06 = TSODSO.corner_recourse(oracle, fol, 0.06, T; on_inexact = :report)
+    @test isfinite(q05) && isfinite(q06)
+    # A larger box can only lower the minimum (the [0, 0.05]^4 box is inside [0, 0.06]^4).
+    @test q06 <= q05 + TSODSO.JOINT_RECOURSE_GAP_TOL
+    # The exact box is unaffected by the policy.
+    @test TSODSO.corner_recourse(oracle, fol, 0.05, T) ≈ q05 atol = TSODSO.JOINT_RECOURSE_GAP_TOL
+end

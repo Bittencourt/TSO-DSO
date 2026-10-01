@@ -140,7 +140,8 @@ const ORACLE_INFEASIBLE_STATUSES =
 const FEAS_CUT_V_TOL = 1.0e-6
 
 """
-    corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
+    corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100,
+                    on_inexact::Symbol = :throw) -> Float64
 
 The TRUE per-corner minimized recourse
 `Q(y_inv) = min_{z ∈ [0, y_inv]^T} [follower_cost(z) − oracle_welfare(z)]`, computed over
@@ -185,17 +186,78 @@ nonempty.
 recourse there is GENUINELY COMPUTED (one real solve of `follower`/`oracle`), never
 assumed to be `0.0` (CR-01, Phase 24 code review) — see `docs/literate/integer_investment.jl`'s
 own independently-found fix for the historical rationale.
+
+**`on_inexact` (Phase 30 code review iteration 2, CR-02).** Forwarded UNCHANGED to every
+`solve_planning_oracle!` call of both branches. `solve_stackelberg!` passes `:throw`
+under `inexact_policy = :strict` and `:report` otherwise, so the corner search honours
+the SAME policy as the outer trial. Under `:report` an SOCP-inexact trial contributes its
+relaxed value `Q_R(z) ≤ Q_true(z)` (the relaxation's welfare over-estimates the true
+welfare), so the returned minimum is the RELAXATION's per-corner minimum — never above
+the true one. The Laporte-Louveaux cut built from it under-estimates the true recourse
+at that corner, so it stays valid (a weaker cut, never an invalid one). An oracle throw
+is classified, never swallowed: only an untrusted solve whose termination status is in
+`ORACLE_INFEASIBLE_STATUSES` is treated as `+Inf` (outside the oracle's feasible set,
+which is convex in `z`, so `Q` stays an extended-value convex function). Every other
+throw — an exactness verdict under `:throw`, a battery-complementarity violation, an
+exhausted retry ladder, a non-`ErrorException` such as `InterruptException` — is
+rethrown unchanged.
 """
-function corner_recourse(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
+function corner_recourse(
+    oracle,
+    follower,
+    y_inv::Real,
+    T::Int;
+    iters::Int = 100,
+    on_inexact::Symbol = :throw,
+)
     if T == 1
-        return _corner_recourse_ternary(oracle, follower, y_inv, T; iters = iters)
+        return _corner_recourse_ternary(
+            oracle,
+            follower,
+            y_inv,
+            T;
+            iters = iters,
+            on_inexact = on_inexact,
+        )
     else
-        return _corner_recourse_joint(oracle, follower, y_inv, T; iters = iters)
+        return _corner_recourse_joint(
+            oracle,
+            follower,
+            y_inv,
+            T;
+            iters = iters,
+            on_inexact = on_inexact,
+        )
     end
 end
 
 """
-    _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
+    _oracle_or_infeasible(oracle, z; on_inexact) -> NamedTuple or nothing
+
+The corner search's ONE oracle entry point (Phase 30 code review iteration 2, CR-02):
+`solve_planning_oracle!(oracle, z; on_inexact)`, except that a throw from an UNTRUSTED
+solve whose termination status is a genuine infeasibility verdict
+(`ORACLE_INFEASIBLE_STATUSES`) returns `nothing` ("z is outside the oracle's feasible
+set"). Everything else propagates unchanged: non-`ErrorException`s (e.g.
+`InterruptException`), throws from a TRUSTED solve (the exactness gate under `:throw`,
+battery complementarity), and untrusted solves with any other status (a solver failure,
+not a property of `z`). The same classification `solve_stackelberg!`'s own outer
+oracle catch applies (WR-01).
+"""
+function _oracle_or_infeasible(oracle, z; on_inexact::Symbol)
+    return try
+        solve_planning_oracle!(oracle, z; on_inexact = on_inexact)
+    catch e
+        e isa ErrorException || rethrow()
+        is_solved_and_feasible(oracle.model; dual = true) && rethrow()
+        termination_status(oracle.model) in ORACLE_INFEASIBLE_STATUSES || rethrow()
+        nothing
+    end
+end
+
+"""
+    _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::Int = 100,
+                             on_inexact::Symbol = :throw) -> Float64
 
 The PRE-PHASE-27 `T == 1` ternary-search body, copied VERBATIM (byte-for-byte identical
 floating-point trajectory) into its own named function per [`corner_recourse`](@ref)'s
@@ -203,8 +265,21 @@ dispatch — see that function's docstring for the full WR-01/CR-01 rationale. N
 with `T != 1` (the `fill(z, T)` scalar-pinning here is exactly the surrogate FIX-06 removes
 for `T > 1`; it remains correct-by-definition at `T == 1`, where pinning the single scalar
 `z` across "all `T` periods" is a no-op).
+
+Phase 30 code review iteration 2 (CR-02): `on_inexact` is forwarded to the oracle, and a
+genuinely oracle-INFEASIBLE trial (see [`_oracle_or_infeasible`](@ref)) is `+Inf`, like
+a follower-infeasible one. Before, every oracle throw aborted the search. That
+`+Inf` path only engages where the old code threw, so every trajectory that used to
+complete is byte-identical.
 """
-function _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
+function _corner_recourse_ternary(
+    oracle,
+    follower,
+    y_inv::Real,
+    T::Int;
+    iters::Int = 100,
+    on_inexact::Symbol = :throw,
+)
     function Qfun(z::Real)
         zvec = fill(Float64(z), T)
         fr = solve_follower!(follower, zvec)
@@ -213,7 +288,8 @@ function _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::
         # there so ternary search never dereferences a nonexistent .cost field and
         # still finds the true constrained minimum.
         fr.feasible || return Inf
-        orr = solve_planning_oracle!(oracle, zvec)
+        orr = _oracle_or_infeasible(oracle, zvec; on_inexact = on_inexact)
+        orr === nothing && return Inf   # CR-02: genuine oracle infeasibility only
         return fr.cost - orr.cost
     end
 
@@ -265,7 +341,8 @@ function _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::
 end
 
 """
-    _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::Int = 100) -> Float64
+    _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::Int = 100,
+                           on_inexact::Symbol = :throw) -> Float64
 
 The `T > 1` joint T-dimensional minimization `Q(y_inv) = min_{z ∈ [0, y_inv]^T} [follower_cost(z) − oracle_welfare(z)]`, via a Kelley's-method cutting-plane ("bundle")
 loop: at each trial `z`, one call each to `solve_follower!`/`solve_planning_oracle!`
@@ -302,8 +379,10 @@ THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan dis
     iteration (no new information ever excludes it), stalling until `iters` exhausts for
     no reason — the SAME certificate already computed for the caller's own feasibility-
     cut branch is reused here at zero extra cost.
-  - An ORACLE-infeasible trial (`solve_planning_oracle!` throwing — e.g. a genuine
-    network-balance infeasibility unreachable via the follower's own, purely economic,
+  - An ORACLE-infeasible trial (`solve_planning_oracle!` throwing from an untrusted
+    solve with a status in `ORACLE_INFEASIBLE_STATUSES` — Phase 30 code review iteration 2,
+    CR-02: every other throw is rethrown, see [`_oracle_or_infeasible`](@ref) — e.g. a
+    genuine network-balance infeasibility unreachable via the follower's own, purely economic,
     capacity model; CONFIRMED to occur on realistic non-separable battery fixtures
     whenever the follower-feasible box extends beyond what the NETWORK can physically
     accept) is caught and ALSO treated as `+Inf`/no epigraph cut — but NO certificate is
@@ -334,7 +413,14 @@ see the comment immediately above its definition) or after `iters` outer iterati
 whichever comes first; on exhausting `iters` without meeting the tolerance, raises a loud
 `ErrorException` naming the achieved gap (never silently returns an unconverged value).
 """
-function _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::Int = 100)
+function _corner_recourse_joint(
+    oracle,
+    follower,
+    y_inv::Real,
+    T::Int;
+    iters::Int = 100,
+    on_inexact::Symbol = :throw,
+)
     # Evaluate Q(z) and its gradient at a trial z::Vector{Float64}. See the docstring
     # above ("Infeasible-trial handling") for the full rationale of each branch.
     function evaluate(z::Vector{Float64})
@@ -346,14 +432,15 @@ function _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::In
                 feas_cut = (; v = fr.v, u = fr.u, z_k = copy(z)),
             )
         end
-        orr = try
-            solve_planning_oracle!(oracle, z)
-        catch
-            # Pitfall FIX-06-2 generalized (docstring above): an ORACLE-side
-            # infeasibility (or any other trust-gate throw) is extended-value +Inf,
-            # exactly like a follower infeasibility, but carries no certificate.
-            return (; Qz = Inf, gradQ = nothing, feas_cut = nothing)
-        end
+        # Pitfall FIX-06-2 generalized (docstring above): a GENUINE oracle-side
+        # infeasibility is extended-value +Inf, exactly like a follower infeasibility,
+        # but carries no certificate. CR-02 (Phase 30 code review iteration 2): this
+        # used to be a bare `catch` that turned EVERY throw (an exactness verdict, a
+        # complementarity violation, even an InterruptException) into +Inf, so the
+        # minimum was taken over the remaining points only — an over-estimated Q_nu
+        # and an invalid LL cut. Now only an infeasibility status maps to +Inf.
+        orr = _oracle_or_infeasible(oracle, z; on_inexact = on_inexact)
+        orr === nothing && return (; Qz = Inf, gradQ = nothing, feas_cut = nothing)
         Qz = fr.cost - orr.cost
         gradQ = fr.π_s .+ orr.π   # elementwise, length T (docstring's dual-read pattern)
         return (; Qz, gradQ, feas_cut = nothing)
@@ -511,7 +598,8 @@ function _corner_recourse_joint(oracle, follower, y_inv::Real, T::Int; iters::In
 end
 
 """
-    ll_cut_recourse(master, oracle, follower, lb_res, Q_nu_iterate::Real) -> Float64
+    ll_cut_recourse(master, oracle, follower, lb_res, Q_nu_iterate::Real;
+                    on_inexact::Symbol = :throw) -> Float64
 
 Dispatched Q_nu resolver for the Laporte-Louveaux cut, mirroring
 [`apply_integer_cuts!`](@ref)'s own dispatch shape:
@@ -527,7 +615,9 @@ Dispatched Q_nu resolver for the Laporte-Louveaux cut, mirroring
     incumbent trial's OWN `y_inv = lb_res.y`. This is exact by construction: `lb_res.b` is
     binary at a genuine MILP optimum, so `lb_res.y` is the DETERMINISTIC value of the
     `y_inv` expression evaluated at that exact `b` (never a relaxed/fractional value) —
-    `y_inv(b^ν)`, not an independent re-derivation.
+    `y_inv(b^ν)`, not an independent re-derivation. `on_inexact` is forwarded to
+    [`corner_recourse`](@ref) (Phase 30 code review iteration 2, CR-02), so the corner
+    search honours the caller's `inexact_policy` instead of always throwing.
 
 **THE FIX (Phase 24 gap-closure, plan 24-05.1):** the caller previously passed
 `Q_nu_iterate` straight through to `add_ll_cut!` — the recourse evaluated AT WHATEVER `z`
@@ -535,17 +625,24 @@ the master's current trial happened to pick, only an UPPER BOUND on `Q(y_inv(b^�
 general (the master's box only guarantees `z <= y_inv`, not `z` = the minimizer). This
 method supplies the theorem's actual required value instead.
 """
-ll_cut_recourse(::BendersMaster, oracle, follower, lb_res, Q_nu_iterate::Real) =
-    Q_nu_iterate
+ll_cut_recourse(
+    ::BendersMaster,
+    oracle,
+    follower,
+    lb_res,
+    Q_nu_iterate::Real;
+    on_inexact::Symbol = :throw,
+) = Q_nu_iterate
 
 function ll_cut_recourse(
     master::BendersMasterInteger,
     oracle,
     follower,
     lb_res,
-    Q_nu_iterate::Real,
+    Q_nu_iterate::Real;
+    on_inexact::Symbol = :throw,
 )
-    return corner_recourse(oracle, follower, lb_res.y, master.T)
+    return corner_recourse(oracle, follower, lb_res.y, master.T; on_inexact = on_inexact)
 end
 
 """
@@ -1234,7 +1331,16 @@ function solve_stackelberg!(
         # implementation, reusing the REAL, already-built `oracle`/`follower` (never
         # rebuilt, never a closed-form shortcut).
         t0_ns = time_ns()
-        Q_nu = ll_cut_recourse(master, oracle, follower, lb_res, Q_nu_iterate)
+        # CR-02 (Phase 30 code review iteration 2): the corner search runs under the
+        # SAME policy as the outer trial — :throw under :strict, :report otherwise.
+        Q_nu = ll_cut_recourse(
+            master,
+            oracle,
+            follower,
+            lb_res,
+            Q_nu_iterate;
+            on_inexact = inexact_policy === :strict ? :throw : :report,
+        )
         t_solve += (time_ns() - t0_ns) / 1.0e9
 
         integer_cut_res = apply_integer_cuts!(master, lb_res, Q_nu)
