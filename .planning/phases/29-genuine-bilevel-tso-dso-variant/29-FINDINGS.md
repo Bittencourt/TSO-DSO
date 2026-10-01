@@ -163,4 +163,104 @@ is modeled) would need a fixture where that bound genuinely binds to exercise it
 
 ## Full-suite certification
 
-See the "Full-Suite Certification" section appended below once Task 2 completes.
+**Certified run:** HEAD `a5e9900`, started 2026-09-30T22:49:51-03:00, single detached run
+(duration 22m09.2s), exit 0, "Testing TSODSO tests passed". Log:
+`/tmp/claude-1000/p29_certified_suite_a5e9900.log`. `git worktree list` showed zero
+`.claude/worktrees/agent-*` entries at launch; a `grep -c worktrees` over the full log
+returns 0 matches — no contamination.
+
+**Tallies:** **30871 pass / 0 fail / 0 error / 5 broken** (30876 total).
+
+**Baseline comparison:** Phase-28 close baseline (STATE.md, `3d4beb0`) was
+**30703 pass / 0 fail / 0 error / 5 broken**. Delta: **+168 pass**, fail/error unchanged at
+0, broken unchanged at 5 (Phase 29 adds no new `@test_broken`).
+
+**Attribution of the +168 pass delta:**
+- **+166** from the phase's three new bilevel test files (counted on the immediately
+  preceding run at `23a72b1`, files unchanged since): `test/test_planning_bilevel.jl` (82
+  assertions), `test/test_planning_certification_bilevel.jl` (16 assertions),
+  `test/test_planning_certification_bilevel_interior.jl` (68 assertions) — these counts are
+  larger than the per-plan SUMMARYs' originally-reported assertion counts (12/28/28)
+  because the 3-iteration code review (see Deviations below) added genuinely new test
+  cases to all three files (WR-04..WR-08: a hand-derived T=2 interior fixture, a
+  `d_max`-binding fixture, explicit SOS1 branch-switch/z-guard assertions on the production
+  KKT-MILP itself, and CR-01/WR-01/WR-02 regression testitems for the certificate-LP fix),
+  not a miscount.
+- **+2** from `test/test_planning_noninteger.jl` (the PVAL-04 no-binaries source/export
+  guard), which gained `build_bilevel_kkt` as a registered (non-EXEMPT) entry in commit
+  `a5e9900` — confirmed by direct inspection (`grep -n build_bilevel_kkt
+  test/test_planning_noninteger.jl`, line 89 registry entry) — plus the accompanying
+  assertion that the registered model carries `MOI.SOS1` constraints (the guard's
+  "SOS1 bridges to binaries only at solve time" exemption-criterion check).
+
+**Zero re-pinned pre-existing goldens**: all production answers (corner: `y=x_inv=z=
+total=0.0`; interior: `y*=x_inv*=0.148`, `z*=1.48`, `total*=-1.4726`) are unchanged through
+every code-review fix — only the new fixtures' own hand-derived constants were added, never
+a pre-existing golden re-pinned (consistent with point 7's zero-flagged-moves audit result).
+
+## Process deviation: overlapping `Pkg.test()` launches (honest record)
+
+During this plan's execution, the executor agent attempted to launch the full suite
+detached per the plan's protocol, but the sandboxed Bash tool silently killed each
+`nohup setsid` background launch at the end of its call (processes vanished with no log
+output) before the executor discovered the `run_in_background` Bash-tool parameter was the
+correct mechanism in this environment. This produced **three overlapping `Pkg.test()`
+processes** all writing to the same `/tmp/phase29_fullsuite.log` path. The orchestrator
+caught this, killed all three concurrent runs, and launched and certified ONE clean
+detached run itself (HEAD `a5e9900`, the run tallied above) rather than trusting any of the
+corrupted-log concurrent runs. No test results from the overlapping runs were used in this
+FINDINGS document or the plan's SUMMARY — only the orchestrator's single certified run.
+
+## Code review (3 iterations, post-Task-1)
+
+Between this plan's Task 1 commit (`990b51c`) and the certified full-suite run, a 3-iteration
+code review cycle ran against the phase's new files (`src/planning/bilevel_kkt.jl`,
+`src/TSODSO.jl`, `src/planning/benders.jl`, and the three new/extended test files), moving
+HEAD from `990b51c` to `a5e9900` via commits `770132f`..`a5e9900` (reports:
+`29-REVIEW.iter1.md`, `29-REVIEW-FIX.iter1.md`, `29-REVIEW.iter2.md`, `29-REVIEW-FIX.md`,
+`29-REVIEW.md`). Key fixes:
+
+- **CR-01** (`5da5232`, iter 1 → further corrected `81cc227`, iter 2): the SOS1 dual bound
+  `m_ub` is now derived in **closed form** (rather than the original silent-skip solver
+  probes), and the post-solve at-bound validity check now runs against a **recovered KKT
+  certificate LP** (characterizing "some valid certificate fits the bound," not merely
+  "HiGHS's own reported vertex fits the bound") — fixing a false-at-bound-rejection
+  regression that `81cc227` introduced and then corrected.
+- **WR-01** (`78e5066`, iter 1): added an SOS1 pair + `rho_max` multiplier for the
+  follower's own `x_inv <= x_inv_max` bound, partially addressing the `x_inv_max`/`d_max`
+  "never binds" gap flagged in point 8 above — a new `d_max`-binding fixture (`ec36025`,
+  WR-07) now exercises a case where `d_max` genuinely DOES bind, narrowing (not fully
+  closing) the original T-29-09 gap.
+- **WR-02** (`65b7310` iter 1 LinDistFlow allowlist guard; `23a72b1` iter 2 canonical
+  lexicographically-minimal multiplier selection): replaced an SOCP denylist with a
+  LinDistFlow allowlist guard in `build_bilevel_kkt`, and made the certificate LP return
+  the unique lexicographically-minimal KKT multipliers (rather than an arbitrary feasible
+  point) for reproducibility.
+- **WR-03..WR-08** (iter 1): pinned closed-form `m_ub` on both fixtures with complementarity-
+  product checks, tightened the brute-force grid-spacing tolerance, asserted SOS1
+  branch-switching directly on the production KKT-MILP (not only the certification oracle),
+  added the T=2 and `d_max`-binding fixtures noted above.
+- **Iteration 3** (final, `a5e9900` + `ac900a3`): iteration cap reached with **0 critical**,
+  **1 warning**, **4 info** items left open and documented (not fixed) in `29-REVIEW.md`:
+  - **WR-01 (iter 3, open)**: `_recover_kkt_certificate` reads cached follower-data copies
+    (`c_inv`, `corridor_cap`, `margin`, `q_op`, `x_inv_max`) stored on `BilevelKKT` at build
+    time, rather than the live coefficients on `kkt.model[:statio_x]`/`[:statio_z]` — if a
+    caller mutates the built model's data in place (e.g. via `set_normalized_rhs`, the
+    project's own stated "build once, re-solve" idiom) before calling `solve_bilevel!`
+    again, the certificate is checked against STALE data and can silently return wrong
+    multipliers. Does not affect this phase's own fixtures (built once, solved once, never
+    mutated in place) but is a real risk for a future consumer.
+  - **IN-01..IN-04 (open, informational)**: a fixed-variable upper-bound reporting gap in
+    the at-bound check (`_ub`), a stale derivation-comment/value mismatch on
+    `GAP_FLOOR_INTERIOR` (states "10x 1e-9 = 1e-8" but the pinned value is `1e-6`), the T=2
+    brute-force oracle omitting the voltage-band filter the other oracles apply (no effect
+    on this fixture's own result), and stale plan-time language in a docstring. None affect
+    correctness of the certified production results above; all are documented, unscheduled
+    follow-ups.
+- Also fixed outside the numbered review items: a run at `23a72b1` (30868 pass / 1 fail /
+  5 broken) caught by the PVAL-04 no-binaries source-scan tripwire
+  (`test/test_planning_noninteger.jl`) correctly flagging `build_bilevel_kkt` as an
+  unregistered new planning builder — fixed in `a5e9900` by registering it (non-EXEMPT,
+  since SOS1 bridges to binaries only at solve time) with an added assertion that the
+  built model genuinely carries `MOI.SOS1` constraints. This is the tripwire functioning
+  exactly as designed, not a defect.
