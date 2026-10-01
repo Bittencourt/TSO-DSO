@@ -39,7 +39,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
   golden touched by the correctness fixes and re-run/restate the thesis reproduction and
   SOCP-inexactness findings.
 
-- [ ] **Phase 29: Genuine Bilevel TSO-DSO Variant** - Solve a true bilevel game (TSO minimizes its
+- [x] **Phase 29: Genuine Bilevel TSO-DSO Variant** - Solve a true bilevel game (TSO minimizes its (completed 2026-10-01)
   own cost against a DSO tariff) that the BilevelJuMP oracle can tell apart from joint
   optimization.
 
@@ -235,7 +235,7 @@ problem decomposed by Benders — certified as distinct from the joint optimum.
 
   3. The production method's answer matches the bilevel optimum on that fixture, not the joint one.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -249,7 +249,7 @@ Plans:
 
 **Wave 3** *(phase-closing gate, blocked on Wave 1-2 completion)*
 
-- [ ] 29-03-PLAN.md — Golden-move audit, consolidated findings, full-suite certification
+- [x] 29-03-PLAN.md — Golden-move audit, consolidated findings, full-suite certification
 
 ### Phase 30: SOCP-in-the-Loop Benders on a Multi-Bus Feeder
 
@@ -424,7 +424,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 26. Network & Device Model Correctness | v4.0 | 20/20 | Complete    | 2026-09-29 |
 | 27. Integer Planning & Pricing Certificate Correctness | v4.0 | 9/9 | Complete    | 2026-09-29 |
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
-| 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 3/4 | In Progress|  |
+| 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete   | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 0/TBD | Not started | - |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
