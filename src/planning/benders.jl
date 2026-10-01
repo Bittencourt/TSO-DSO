@@ -563,7 +563,8 @@ end
                        tol::Real = 1e-6, max_iter::Int = 100,
                        checkpoint_dir::AbstractString = datadir("planning_checkpoints"),
                        follower = nothing, master = nothing,
-                       known_optimum::Union{Nothing,Real} = nothing)
+                       known_optimum::Union{Nothing,Real} = nothing,
+                       inexact_policy::Symbol = :certify_incumbent)
         -> NamedTuple
 
 Solve the single-distributor Stackelberg equilibrium (flexibility-investment leader vs.
@@ -588,12 +589,32 @@ invalid on that genuinely divergent-objective game (see that file's module heade
     each `ArgumentError` BEFORE any build call.
 
  2. BUILD ONCE, outside the loop: `oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)`,
+    `feas_oracle = build_feasibility_oracle(feeder, pf, aggregators; T = T)` (BILEV-04a,
+    plan 30-01/30-04, unconditional — the second, built-ONCE slack-minimization
+    feasibility oracle consumed by the oracle-feasibility-cut branch below),
     `follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower`,
-    `master = master === nothing ? build_master(; master_kwargs..., T = T) : master`. No
-    `build_*`/`Model(` call appears anywhere inside this function OTHER THAN these two
-    conditional builder calls, BOTH of which are skippable via injection and BOTH of which
-    still execute strictly BEFORE the `for k in 1:max_iter` loop below — the loop itself
-    never constructs a model.
+    `master = master === nothing ? build_master(; master_kwargs..., bounds_ctx = _bounds_ctx, T = T) : master`
+    (BILEV-05, plan 30-04 — `bounds_ctx` now ALWAYS populated, see below). No
+    `build_*`/`Model(` call appears anywhere inside this function OTHER THAN these
+    conditional/unconditional builder calls, ALL of which still execute strictly BEFORE
+    the `for k in 1:max_iter` loop below — the loop itself never constructs a model.
+
+    **`bounds_ctx` wiring (BILEV-05, plan 30-04, UNCONDITIONAL):** `solve_stackelberg!`
+    is the project's ONE public, validated entry point into the integrated Benders loop,
+    and always has `feeder`/`pf`/`aggregators`/`λ₀` in scope — so `α_op_lb` (whether
+    `:auto` or an explicit `Real` inside `master_kwargs`) is now validated at build time
+    on EVERY `master === nothing` call path, not only when `:auto` is explicitly
+    requested. `α_x_lb` is likewise validated whenever the follower information supports
+    a sound derivation — a `follower_kwargs` `NamedTuple` or a pre-built `FollowerLP` —
+    computed from the ORIGINAL `follower`/`follower_kwargs` arguments BEFORE the
+    `follower` reassignment immediately below. `solve_stackelberg!` NEVER throws merely
+    because a pre-built `follower` is supplied: for a follower type with no sound
+    per-object derivation (e.g. `src/planning/coupling.jl`'s `DistributorView`, whose
+    pooled-capacity coupling makes a per-distributor relaxed minimum ill-defined —
+    `run_nash!`'s own production path), `bounds_ctx.follower_kwargs = nothing` and
+    `α_x_lb`'s build-time check is honestly SKIPPED (never silently "passed") — the
+    universal runtime floor guard (`_assert_epigraph_floor`, defined above) remains
+    active as defense-in-depth for that case.
 
     **`follower` keyword (plan 13-02, additive/non-breaking — mirrors the
     `attempts_out::Union{Nothing,Ref{Int}}` precedent in `master.jl`/`retry.jl`):**
@@ -637,8 +658,39 @@ invalid on that genuinely divergent-objective game (see that file's module heade
         feasibility cut NEVER updates `UB` (T-11-06); the oracle is NEVER solved on
         this branch.
       + Else: `oracle_res = solve_planning_oracle!(oracle, lb_res.z)` — only a
-        follower-deliverable `z_k` ever reaches the oracle;
-        then append the oracle's `:op` optimality cut (`cost_k = -oracle_res.cost`,
+        follower-deliverable `z_k` ever reaches the oracle. A throw here is
+        disambiguated (never by string-matching) using ONLY information
+        `solve_planning_oracle!` already computes (BILEV-04a/BILEV-04b, plan 30-04):
+
+          * `!is_solved_and_feasible(oracle.model; dual = true)` — the trusted-solve
+            gate itself failed (a genuine `MOI.INFEASIBLE`, the exactness gate never
+            ran) — routes to the NEW oracle-feasibility-cut branch: `feas_oracle`
+            (built once above) produces a genuine `(v, u)` cut pair
+            (`solve_feasibility_oracle!`/`add_feasibility_cut!`, plan 30-01), the loop
+            `continue`s WITHOUT updating `UB` (T-11-06 analogue), and the trace row
+            records `policy_action = :oracle_feasibility_cut`.
+          * `haskey(oracle.ctx.meta, :socp_maxgap)` — exactness ALREADY passed this
+            iteration; the throw came from `assert_battery_complementarity!` or
+            something else entirely — OUT OF SCOPE for `inexact_policy`, propagated
+            unchanged (never silently swallowed).
+          * Otherwise — a genuine exactness-class throw (`assert_socp_exact!` itself
+            failed) — dispatches on `inexact_policy` (BILEV-04b): `:strict` rethrows
+            (today's byte-identical behavior); `:reject` skips the inexact trial
+            entirely (no cut appended, `UB` never updated, trace row
+            `cut_type = :rejected`/`policy_action = :rejected`); `:certify_incumbent`
+            (the default) reconstructs the already-solved model's
+            `(cost, π, π_s, dadp, ctx)` directly (the Julia-level exception prevented
+            `solve_planning_oracle!` from returning it, but the underlying solve IS
+            trustworthy) and proceeds as if it had returned normally, recording
+            `policy_action = :certified_incumbent` and the measured
+            `socp_maxgap` on the trace.
+
+        On a successful (or `:certify_incumbent`-reconstructed) solve: the universal
+        runtime epigraph floor guard (`_assert_epigraph_floor`, BILEV-05) checks
+        `-oracle_res.cost >= lower_bound(master.α_op) - tol` and
+        `follower_res.cost >= lower_bound(master.α_x) - tol`, UNCONDITIONALLY,
+        regardless of how either bound was derived; then append the oracle's `:op`
+        optimality cut (`cost_k = -oracle_res.cost`,
         `grad_k = oracle_res.π`, the plan-11-01-derived sign convention) and the
         follower's `:x` optimality cut (`cost_k = follower_res.cost`,
         `grad_k = follower_res.π_s`, used as-is); compute the iterate's TRUE cost
@@ -665,7 +717,7 @@ invalid on that genuinely divergent-objective game (see that file's module heade
 
 # Returns
 
-On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via)`
+On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report)`
 where `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so
 the returned point's true cost equals `UB` and the convergence certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
@@ -681,19 +733,34 @@ retry-gated subproblems' termination statuses (never a log-scrape estimate), and
 number of no-good anti-stall cuts fired (`nogood_count`, always `0` on the continuous
 path) and the convergence attribution (`converged_via`, `:clean` if `nogood_count == 0`
 else `:nogood_assisted`) — a nonzero `nogood_count` never fails the run, it is reported,
-never silently absorbed.
+never silently absorbed. `ac_report` (BILEV-04b, plan 30-04, a NEW, TRAILING, additive
+field) is the AC-recheck-at-convergence result: `nothing` whenever the incumbent is
+genuinely SOCP-exact (certified ONCE, immediately before this return, by re-solving the
+build-once `oracle` at `z_best` — true for every pre-existing LinDistFlow-based test,
+since `:l` is never stashed there), or a populated
+`(; ok, violations, p_import, raw_status)` physical AC re-check report
+([`ac_recheck_incumbent`](@ref), plan 30-01) when the incumbent turns out SOCP-inexact —
+NEVER thrown, never silently passed, per BILEV-04b's documented policy.
 
 # Throws
 
   - `ArgumentError` on `T < 1`, `max_iter < 1`, `length(λ₀) != T`, a non-finite/non-positive
     `tol`, `max_iter > 99_999`, a non-`nothing` `follower` supplied together with a
     non-empty `follower_kwargs` (plan 13-02), a non-`nothing` `master` supplied together
-    with a non-empty `master_kwargs` (Phase 24, plan 24-04, D-08), or a non-`nothing`
-    `known_optimum` that is not finite (Phase 24, plan 24-04, D-13/D-14) — before any build
-    call (IN-02/IN-03).
+    with a non-empty `master_kwargs` (Phase 24, plan 24-04, D-08), a non-`nothing`
+    `known_optimum` that is not finite (Phase 24, plan 24-04, D-13/D-14), or an
+    `inexact_policy` outside `(:strict, :reject, :certify_incumbent)` (Phase 30, BILEV-04b,
+    plan 30-04) — before any build call (IN-02/IN-03). ALSO raised (now, BILEV-05, plan
+    30-04 — unconditionally, on EVERY `master === nothing` build) if an explicit
+    `α_op_lb`/`α_x_lb` inside `master_kwargs` exceeds `build_master`'s own derived minimum
+    (see that function's docstring) — a found-invalid bound is a genuine bug to fix at its
+    call site, never silenced.
   - `ErrorException` if `max_iter` is exhausted without converging, naming the trace's
     last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
-    return a non-converged result.
+    return a non-converged result. ALSO raised by the universal runtime epigraph floor
+    guard (`_assert_epigraph_floor`, BILEV-05) if ANY evaluated epigraph cost ever falls
+    below its own declared lower bound — a genuine modeling bug, never a convergence
+    issue.
 """
 function solve_stackelberg!(
     feeder,
@@ -781,8 +848,35 @@ function solve_stackelberg!(
     # loop. No `build_*`/`Model(` call appears below this point — the loop only re-solves
     # via `solve_planning_oracle!`/`solve_follower!`/`solve_master!` and appends cut rows.
     oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)
+    # BILEV-04a (plan 30-01/30-04): the second, built-ONCE slack-minimization
+    # feasibility oracle — unconditional, cheap (an always-feasible-by-construction
+    # LP/SOCP), never built inside the loop.
+    feas_oracle = build_feasibility_oracle(feeder, pf, aggregators; T = T)
+
+    # BILEV-05 (plan 30-04, checker BLOCKER 1 + BLOCKER 2 fix): ALWAYS construct a
+    # populated bounds_ctx — never conditional on α_op_lb/α_x_lb being :auto, and NEVER
+    # throwing merely because a pre-built `follower` is supplied (solve_stackelberg! is
+    # the project's ONE public, validated entry point into the integrated Benders loop;
+    # feeder/pf/aggregators/λ₀ are always in scope here). Computed from the ORIGINAL
+    # `follower`/`follower_kwargs` arguments BEFORE the reassignment immediately below —
+    # a pre-built follower's TYPE (not the post-reassignment FollowerLP-or-not value)
+    # determines which of the three α_x_lb derivability cases applies (see this plan's
+    # own <interfaces>/Task 2 <action> for the full three-way argument, especially why
+    # DistributorView's pooled-capacity coupling has NO sound per-object derivation).
+    _follower_info = if follower === nothing
+        follower_kwargs                      # case 1: NamedTuple, unchanged derivation path
+    elseif follower isa FollowerLP
+        follower                             # case 2: sound FollowerLP dispatch (plan 30-02)
+    else
+        nothing                              # case 3: no sound derivation (e.g. DistributorView) —
+                                              # documented scope limit, α_x_lb validation skipped
+    end
+    _bounds_ctx = (; feeder, pf, aggregators, λ₀, follower_kwargs = _follower_info)
+
     follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower
-    master = master === nothing ? build_master(; master_kwargs..., T = T) : master
+    master =
+        master === nothing ?
+        build_master(; master_kwargs..., bounds_ctx = _bounds_ctx, T = T) : master
 
     UB = Inf
     # CR-01: the INCUMBENT — the (y, z) iterate that achieved the running-minimum UB.
@@ -887,11 +981,43 @@ function solve_stackelberg!(
             # on the error message, no duplicated tolerance logic.
             if !is_solved_and_feasible(oracle.model; dual = true)
                 # The trusted-solve gate itself failed -> a genuine MOI.INFEASIBLE (or a
-                # non-retryable solver failure), the exactness gate never ran.
-                # TODO(plan 30-04 Task 2): route to the NEW oracle-feasibility-cut branch
-                # (BILEV-04a) instead of rethrowing — Task 1 of this plan scopes the
-                # exactness-policy half only, independently verifiable on its own.
-                rethrow()
+                # non-retryable solver failure), the exactness gate never ran (BILEV-04a,
+                # plan 30-04 Task 2). Route to the NEW oracle-feasibility-cut branch: the
+                # second, built-ONCE slack-minimization oracle (plan 30-01) produces a
+                # genuine (v, u) Benders feasibility-cut pair for this pinned z_k — the
+                # loop recovers instead of crashing, mirroring the EXISTING
+                # follower-feasibility-cut branch's own "never update UB" discipline
+                # (T-11-06).
+                t_solve += (time_ns() - t0_ns) / 1.0e9
+                fo_res = solve_feasibility_oracle!(feas_oracle, lb_res.z)
+                add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
+                checkpoint_iteration!(
+                    (;
+                        k,
+                        LB = lb_res.LB,
+                        UB,
+                        gap = NaN,
+                        z_k = lb_res.z,
+                        feasible = false,
+                    ),
+                    k;
+                    dir = checkpoint_dir,
+                )
+                push!(
+                    trace,
+                    k;
+                    LB = lb_res.LB,
+                    UB = UB,
+                    gap = NaN,
+                    cut_type = :feasibility,
+                    n_cuts = length(master.cuts),
+                    master_status = master_status_k,
+                    oracle_status = :genuinely_infeasible,
+                    retry_count = master_attempts[] - 1,
+                    solve_time = t_solve,
+                    policy_action = :oracle_feasibility_cut,
+                )
+                continue   # T-11-06: an oracle feasibility cut NEVER updates UB
             elseif haskey(oracle.ctx.meta, :socp_maxgap)
                 # Exactness ALREADY passed THIS iteration (the key got set) -> the throw
                 # came from assert_battery_complementarity! or something else entirely ->
@@ -1072,6 +1198,31 @@ function solve_stackelberg!(
             isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)
 
         if converged_now
+            # BILEV-04b (plan 30-04): AC-recheck-at-convergence — ONCE, at the converged
+            # incumbent, never per iteration. Re-solve the SAME build-once `oracle` at
+            # `z_best` (clearing any stale :socp_maxgap key first, mirroring the
+            # per-iteration disambiguation above) to determine whether the INCUMBENT
+            # itself is SOCP-exact. A genuinely non-retryable/infeasible throw here would
+            # be a correctness defect this far into a converged run (the incumbent was
+            # already shown deliverable/oracle-reachable earlier in the loop) — propagate
+            # it unchanged, mirroring every other unclassified-throw path above.
+            delete!(oracle.ctx.meta, :socp_maxgap)
+            _incumbent_exact = true
+            try
+                solve_planning_oracle!(oracle, z_best)
+            catch e
+                e isa ErrorException || rethrow()
+                if is_solved_and_feasible(oracle.model; dual = true) &&
+                   !haskey(oracle.ctx.meta, :socp_maxgap)
+                    _incumbent_exact = false
+                else
+                    rethrow()
+                end
+            end
+            ac_report =
+                _incumbent_exact ? nothing :
+                ac_recheck_incumbent(feeder, aggregators, λ₀, T, z_best)
+
             # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
             # (continuous path) or UB matches known_optimum exactly within
             # KNOWN_OPTIMUM_ATOL (certified path); the current iterate (lb_res.y,
@@ -1092,6 +1243,14 @@ function solve_stackelberg!(
                 # field access is name-based, never position-based).
                 nogood_count = nogood_total,
                 converged_via = nogood_total > 0 ? :nogood_assisted : :clean,
+                # BILEV-04b (plan 30-04): a NEW, TRAILING, additive field — `nothing`
+                # whenever the incumbent is genuinely SOCP-exact (true for every
+                # pre-existing LinDistFlow-based test: :l is never stashed,
+                # solve_planning_oracle! never throws from exactness there, so
+                # _incumbent_exact stays true), a populated
+                # (; ok, violations, p_import, raw_status) report only when the
+                # incumbent turns out SOCP-inexact.
+                ac_report,
             )
         end
     end
