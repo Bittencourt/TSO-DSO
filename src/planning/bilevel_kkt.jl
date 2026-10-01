@@ -517,9 +517,40 @@ and the limit is:
 `s* <= 0` means some valid certificate respects every limit. `s* > 0` means none does,
 and the multipliers with `multiplier_i - lim_i = s*` are the ones pressing on the box.
 
-Returns `(; s, mu_cap, mu_lo, rho_y, rho_lo, rho_max, ub, lim)`. Here `s` is `s*`, the
-multiplier fields hold the min-max certificate, and `ub`/`lim` hold the per-multiplier
-upper bounds and limits (same field names).
+# Canonical multipliers (29-REVIEW.md iteration-2 WR-02)
+
+When `s* <= 0`, the same LP then computes the LEXICOGRAPHICALLY MINIMAL valid
+certificate inside the box:
+
+ 1. minimize `Σ_t (mu_cap[t] + mu_lo[t])`;
+ 2. then minimize `rho_y + rho_lo + rho_max`;
+ 3. then minimize `rho_y`.
+
+Each stage keeps the previous optimum. The result is unique on every active set this
+model can produce:
+
+  - `x_inv > 0`: `mu_cap`, `mu_lo` and `rho_lo = 0` are already unique.
+    `rho_y + rho_max` is unique, and only the `y_inv = x_inv = x_inv_max` corner leaves
+    its split open. Stage 3 gives that split to `rho_max`, so `rho_y = 0`. That is the
+    marginal value of raising `y_inv`, which cannot help when `x_inv_max` binds.
+  - `x_inv = 0`: then `z = 0`, and stage 1 gives `mu_cap = a⁺`, `mu_lo = a⁻`. Stage 2
+    gives `rho_y = (corridor_cap*Σa⁺ - c_inv)⁺` and
+    `rho_lo = (c_inv - corridor_cap*Σa⁺)⁺`. This is exactly the certificate used in the
+    [`_follower_kkt_dual_bound`](@ref) derivation.
+
+A plain `min Σ multipliers` would NOT be unique. On the corner fixture
+(`corridor_cap = 2`) any `mu_cap = δ in [0, 0.5]` with `mu_lo = 0.3 + δ`,
+`rho_lo = 1 - 2δ` has the same total of 1.3.
+
+Returns `(; s, minimax, canonical, ub, lim)`:
+
+  - `s` is `s*`;
+  - `minimax` is the min-max certificate;
+  - `canonical` is the lexicographic certificate, or `nothing` when `s* > 0`;
+  - `ub` and `lim` hold the per-multiplier upper bounds and limits.
+
+`minimax` and `canonical` are NamedTuples with fields `mu_cap`, `mu_lo`, `rho_y`,
+`rho_lo` and `rho_max`.
 """
 function _recover_kkt_certificate(
     kkt::BilevelKKT;
@@ -577,7 +608,6 @@ function _recover_kkt_certificate(
     xv > act_tol && fix(rl, 0.0; force = true)
     kkt.x_inv_max - xv > act_tol && fix(rm, 0.0; force = true)
 
-    # Min-max distance to the MILP's own box bounds.
     # Min-max excess over the per-multiplier limits. s >= -min(lim) holds for every
     # certificate (all multipliers are >= 0); stating it keeps the LP bounded even if
     # a caller removed every upper bound.
@@ -598,17 +628,56 @@ function _recover_kkt_certificate(
         "(y_inv=$yv, x_inv=$xv, z=$zv) ended with $(termination_status(cert)) — the MILP " *
         "returned a primal with no valid follower KKT certificate; refusing to trust it",
     )
-
-    return (;
-        s = value(s),
+    s_star = value(s)
+    minimax = (;
         mu_cap = value.(mc),
         mu_lo = value.(ml),
         rho_y = value(ry),
         rho_lo = value(rl),
         rho_max = value(rm),
-        ub,
-        lim,
     )
+
+    # Canonical certificate (29-REVIEW.md iteration-2 WR-02), only once the check can
+    # pass. Lexicographic minimization inside the MILP's own box (widened to `lim`
+    # where the proven-bound exception applies, so the stage is feasible whenever
+    # s* <= 0):
+    #   stage 1  min Σ_t (mu_cap[t] + mu_lo[t])
+    #   stage 2  min rho_y + rho_lo + rho_max
+    #   stage 3  min rho_y
+    # Each stage keeps the previous optimum as a constraint.
+    canonical = nothing
+    if s_star <= 0
+        box(v, u, l) = (b = max(u, l); isfinite(b) && @constraint(cert, v <= b))
+        for t in 1:T
+            box(mc[t], ub.mu_cap[t], lim.mu_cap[t])
+            box(ml[t], ub.mu_lo[t], lim.mu_lo[t])
+        end
+        box(ry, ub.rho_y, lim.rho_y)
+        box(rl, ub.rho_lo, lim.rho_lo)
+        box(rm, ub.rho_max, lim.rho_max)
+        stages = (sum(mc) + sum(ml), ry + rl + rm, 1.0 * ry)
+        for (k, stage_obj) in enumerate(stages)
+            @objective(cert, Min, stage_obj)
+            optimize!(cert)
+            termination_status(cert) == MOI.OPTIMAL || error(
+                "solve_bilevel!: canonical KKT-multiplier stage LP ended with " *
+                "$(termination_status(cert)) at the solved primal (y_inv=$yv, " *
+                "x_inv=$xv, z=$zv)",
+            )
+            k == length(stages) && break   # read the values before modifying again
+            v = objective_value(cert)
+            @constraint(cert, stage_obj <= v + 1e-9 * max(1.0, abs(v)))
+        end
+        canonical = (;
+            mu_cap = value.(mc),
+            mu_lo = value.(ml),
+            rho_y = value(ry),
+            rho_lo = value(rl),
+            rho_max = value(rm),
+        )
+    end
+
+    return (; s = s_star, minimax, canonical, ub, lim)
 end
 
 """
@@ -645,6 +714,17 @@ bound that is provably too tight at the returned point, for example one tightene
 caller via `set_upper_bound`.
 
 Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, rho_max, mu_lo, model)`.
+
+**Returned multipliers (29-REVIEW.md iteration-2 WR-02).** `mu_cap`, `mu_lo`, `rho_y`,
+`rho_lo` and `rho_max` are NOT the MILP's raw multiplier values. Those are an arbitrary
+vertex of the multiplier face whenever it is degenerate (`x_inv = 0`, or
+`y_inv = x_inv = x_inv_max`). They can also change with the HiGHS version or presolve
+path. The returned values are the canonical, lexicographically minimal valid KKT
+multipliers at the solved primal (see [`_recover_kkt_certificate`](@ref)). They are
+unique and reproducible, and they coincide with the raw values wherever the
+multipliers are unique. Even so, on a degenerate active set they are ONE valid
+certificate among many: read them as one-sided shadow values, not as the price. Read
+the raw MILP values from `kkt.mu_cap` etc. if needed.
 """
 function solve_bilevel!(kkt::BilevelKKT)
     assert_solved!(kkt.model; dual = false)
@@ -661,12 +741,12 @@ function solve_bilevel!(kkt::BilevelKKT)
         lims = Float64[]
         for t in 1:kkt.T
             push!(names, "mu_cap[$t]", "mu_lo[$t]")
-            push!(vals, cert.mu_cap[t], cert.mu_lo[t])
+            push!(vals, cert.minimax.mu_cap[t], cert.minimax.mu_lo[t])
             push!(ubs, cert.ub.mu_cap[t], cert.ub.mu_lo[t])
             push!(lims, cert.lim.mu_cap[t], cert.lim.mu_lo[t])
         end
         push!(names, "rho_y", "rho_lo", "rho_max")
-        push!(vals, cert.rho_y, cert.rho_lo, cert.rho_max)
+        push!(vals, cert.minimax.rho_y, cert.minimax.rho_lo, cert.minimax.rho_max)
         push!(ubs, cert.ub.rho_y, cert.ub.rho_lo, cert.ub.rho_max)
         push!(lims, cert.lim.rho_y, cert.lim.rho_lo, cert.lim.rho_max)
         i = argmax(vals .- lims)   # a multiplier attaining s*
@@ -686,11 +766,11 @@ function solve_bilevel!(kkt::BilevelKKT)
         z = value.(kkt.z),
         d = value.(kkt.d),
         total_cost = objective_value(kkt.model),
-        mu_cap = value.(kkt.mu_cap),
-        rho_y = value(kkt.rho_y),
-        rho_lo = value(kkt.rho_lo),
-        rho_max = value(kkt.rho_max),
-        mu_lo = value.(kkt.mu_lo),
+        mu_cap = cert.canonical.mu_cap,
+        rho_y = cert.canonical.rho_y,
+        rho_lo = cert.canonical.rho_lo,
+        rho_max = cert.canonical.rho_max,
+        mu_lo = cert.canonical.mu_lo,
         model = kkt.model,
     )
 end

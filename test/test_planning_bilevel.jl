@@ -381,3 +381,89 @@ end
         @test isapprox(r.total_cost, 0.0; atol = atol)
     end
 end
+
+@testitem "bilevel: returned multipliers are the canonical lexicographically minimal KKT certificate (iteration-2 WR-02)" tags =
+    [:planning] setup = [PlanningFixtures] begin
+    using TSODSO, JuMP
+
+    # 29-REVIEW.md iteration-2 WR-02. On a degenerate active set the MILP's raw
+    # multipliers are an arbitrary vertex (corner fixture: HiGHS returned mu_cap = 0.5,
+    # mu_lo = 0.8). solve_bilevel! now returns the lexicographic certificate
+    # (min Σ(mu_cap + mu_lo), then min Σrho, then min rho_y). Hand values, with
+    # a = pi_tariff - c_op:
+    #   corner (a = -0.3, cap = 2, c_inv = 1, x = y = 0): mu_cap = a⁺ = 0,
+    #     mu_lo = a⁻ = 0.3, rho_y - rho_lo = 2*0 - 1 = -1 -> rho_y = 0, rho_lo = 1.
+    #   interior with v_d = [1.0] (a = 1.5, cap = 10, c_inv = 0.2, x = y = 0):
+    #     mu_cap = 1.5, mu_lo = 0, rho_y - rho_lo = 15 - 0.2 -> rho_y = 14.8, rho_lo = 0.
+    #   interior with x_inv_max = 0.1, y fixed at 0.1 (y = x = x_inv_max corner):
+    #     mu_cap = 1.5 - 1.0 = 0.5, rho_y + rho_max = 10*0.5 - 0.2 = 4.8, split by
+    #     stage 3 as rho_y = 0, rho_max = 4.8.
+    # Every returned vector must also satisfy the follower's stationarity.
+    f = PlanningFixtures.bilevel_toy_fixture()
+    corner_kw = (;
+        T = f.T,
+        agg_bus = f.agg_bus,
+        corridor_cap = f.corridor_cap,
+        x_inv_max = f.x_inv_max,
+        c_inv = f.c_inv,
+        c_op = f.c_op,
+        pi_tariff = f.pi_tariff,
+        q_op = f.q_op,
+        c_y = f.c_y,
+        y_max = f.y_max,
+        v_d = f.v_d,
+        d_max = f.d_max,
+    )
+    interior_kw = (;
+        T = 1,
+        agg_bus = 2,
+        corridor_cap = 10.0,
+        x_inv_max = 10.0,
+        c_inv = 0.2,
+        c_op = [0.5],
+        pi_tariff = [2.0],
+        q_op = [1.0],
+        c_y = 0.05,
+        y_max = 5.0,
+        v_d = [3.0],
+        d_max = 10.0,
+    )
+    cases = [
+        ("corner", f.feeder, corner_kw, nothing, (0.0, 0.3, 0.0, 1.0, 0.0)),
+        (
+            "interior v_d=[1.0]",
+            f.feeder,
+            merge(interior_kw, (; v_d = [1.0])),
+            nothing,
+            (1.5, 0.0, 14.8, 0.0, 0.0),
+        ),
+        (
+            "interior y = x_inv = x_inv_max = 0.1",
+            f.feeder,
+            merge(interior_kw, (; x_inv_max = 0.1)),
+            0.1,
+            (0.5, 0.0, 0.0, 0.0, 4.8),
+        ),
+    ]
+
+    # Wrapped in a function: @testitem bodies run as top-level code (soft scope).
+    function solve_case(feeder, kw, fixy)
+        kkt = build_bilevel_kkt(feeder, LinDistFlow(); kw...)
+        fixy === nothing || fix(kkt.y_inv, fixy; force = true)
+        return solve_bilevel!(kkt)
+    end
+
+    atol = 1e-6
+    for (label, feeder, kw, fixy, (mc, ml, ry, rl, rm)) in cases
+        r = solve_case(feeder, kw, fixy)
+        @test isapprox(r.mu_cap[1], mc; atol = atol)
+        @test isapprox(r.mu_lo[1], ml; atol = atol)
+        @test isapprox(r.rho_y, ry; atol = atol)
+        @test isapprox(r.rho_lo, rl; atol = atol)
+        @test isapprox(r.rho_max, rm; atol = atol)
+        a = kw.pi_tariff[1] - kw.c_op[1]
+        @test abs(kw.c_inv - kw.corridor_cap * r.mu_cap[1] + r.rho_y + r.rho_max - r.rho_lo) <
+              atol
+        @test abs(-a + kw.q_op[1] * r.z[1] + r.mu_cap[1] - r.mu_lo[1]) < atol
+    end
+end
