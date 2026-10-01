@@ -143,33 +143,57 @@ end
 end
 
 @testitem "bilevel: solve_bilevel! validity check rejects a genuinely too-tight SOS1 bound" tags =
-    [:planning] setup = [PlanningFixtures] begin
-    using TSODSO
+    [:planning] begin
+    using TSODSO, JuMP
 
-    f = PlanningFixtures.bilevel_toy_fixture()
-
-    # DELIBERATE stress test of the Pitfall-3 validity check itself (never a claim
-    # about the production default): a deliberately tiny `safety` makes the measured
-    # `m_ub` far too tight, so the solved complementarity variables land at/near the
-    # bound and solve_bilevel! must throw rather than silently misreport the optimum.
-    kkt = build_bilevel_kkt(
-        f.feeder,
-        LinDistFlow();
-        T = f.T,
-        agg_bus = f.agg_bus,
-        corridor_cap = f.corridor_cap,
-        x_inv_max = f.x_inv_max,
-        c_inv = f.c_inv,
-        c_op = f.c_op,
-        pi_tariff = f.pi_tariff,
-        q_op = f.q_op,
-        c_y = f.c_y,
-        y_max = f.y_max,
-        v_d = f.v_d,
-        d_max = f.d_max,
-        safety = 1e-9,
+    # DELIBERATE stress test of the Pitfall-3 at-bound check itself (never a claim
+    # about the production default). 29-REVIEW.md WR-06: the earlier version used
+    # safety = 1e-9, which made the MILP INFEASIBLE, so assert_solved! threw
+    # "Solve failed" first and the at-bound branch was never reached.
+    #
+    # Here the model stays FEASIBLE but a dual binds. Interior-fixture data with the
+    # leader fixed at y_inv = 0.05 (below the 0.148 kink) forces the follower's
+    # coupling dual to rho_y = 14.8 - 100*0.05 = 9.8 exactly. The closed-form bound
+    # before `safety` is 14.8, so safety = 9.8/14.8 gives m_ub = 9.8: rho_y must sit
+    # AT the bound, and solve_bilevel! must reject it.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 1e-3, 1e-3, 99.0)],
+        1,
     )
-    @test_throws Exception solve_bilevel!(kkt)
+    kwargs = (;
+        T = 1,
+        agg_bus = 2,
+        corridor_cap = 10.0,
+        x_inv_max = 10.0,
+        c_inv = 0.2,
+        c_op = [0.5],
+        pi_tariff = [2.0],
+        q_op = [1.0],
+        c_y = 0.05,
+        y_max = 5.0,
+        v_d = [3.0],
+        d_max = 10.0,
+    )
+
+    tight = build_bilevel_kkt(feeder, LinDistFlow(); kwargs..., safety = 9.8 / 14.8)
+    @test isapprox(tight.m_ub, 9.8; atol = 1e-12)
+    fix(tight.y_inv, 0.05; force = true)
+    err = try
+        solve_bilevel!(tight)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    @test err !== nothing && occursin("rho_y sits at (or within", sprint(showerror, err))
+
+    # Positive control: the SAME fixed-y solve with safety = 1 (m_ub = 14.8, still
+    # strictly above rho_y = 9.8) passes the check and reports the forced dual.
+    loose = build_bilevel_kkt(feeder, LinDistFlow(); kwargs..., safety = 1.0)
+    fix(loose.y_inv, 0.05; force = true)
+    r = solve_bilevel!(loose)
+    @test isapprox(r.rho_y, 9.8; atol = 1e-6)
 end
 
 @testitem "bilevel: follower's own x_inv <= x_inv_max carries a KKT multiplier (WR-01)" tags =
