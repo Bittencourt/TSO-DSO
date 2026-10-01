@@ -187,6 +187,20 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) COMPLETE 2026-10-01.** BILEV-03/04/05
+validated: `solve_stackelberg!` now runs with `ConvexBranchFlow` on `ieee13_modified()` at T=4 (and a
+T=24 Literate demo), converging with a closed gap and bracketing an independently built monolithic SOCP
+(`LB − ε ≤ J* ≤ UB + ε`, ε from runtime-measured solver gaps). New: a built-once slack-min
+`FeasibilityOracle` giving voltage/thermal feasibility cuts (gradient = un-negated pin dual, sign pinned
+by test); `inexact_policy ∈ {:strict, :reject, :certify_incumbent}` (default `:certify_incumbent`) with an
+explicit oracle `exactness` verdict, honest `ub_relaxation_only` / `exact_incumbent` on the result, and an
+incumbent-only `ACPowerFlow(limits=false)` re-check reported in `ac_report`; `run_nash!` keeps `:strict`
+by default; `:auto` α bounds (relaxed solves, scale-aware measured margin) with build-time rejection of
+over-high bounds plus a runtime epigraph floor. 3-iteration code review (cap reached: 0 critical, 3
+warnings — integer-path LL-cut validity / `ALMOST_INFEASIBLE` corner classification carried to Phase 31,
+and a ≤S+gap LB inflation within the accepted slack, ≈2.5e-8 relative on IEEE-13). Suite 31091/0/0/5
+(+220 vs Phase 29), zero golden moves.
+
 **Phase 29 (Genuine Bilevel TSO-DSO Variant) COMPLETE 2026-09-30.** BILEV-01/BILEV-02 validated:
 new production entry point `solve_bilevel!` / `build_bilevel_kkt` (`src/planning/bilevel_kkt.jl`)
 solves a genuinely bilevel game — DSO leader with its own LinDistFlow valuation, TSO follower
@@ -449,4 +463,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-30 — Phase 29 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-01 — Phase 30 complete (v4.0 Correctness & Depth)*
