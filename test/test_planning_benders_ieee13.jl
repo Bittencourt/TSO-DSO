@@ -145,6 +145,9 @@
         ε = 10 * max(oracle_gap, joint.gap)
         @test isfinite(ε) && ε < 1.0e-4
         # The Benders certificate itself: LB <= J* <= UB, up to measured solver precision.
+        # (IN-04, iteration 2: only the LOWER side tests the decomposition — it fails if
+        # any appended cut over-estimates the value function. The upper side holds for any
+        # feasible UB against a global optimum and is kept as a sanity check only.)
         @test result.LB - ε <= Jstar
         @test Jstar <= result.UB + ε
 

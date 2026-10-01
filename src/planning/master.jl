@@ -544,15 +544,14 @@ function build_master(;
     (α_op_lb === :auto || α_x_lb === :auto) &&
         bounds_ctx === nothing &&
         throw(ArgumentError("build_master: α_op_lb/α_x_lb = :auto requires bounds_ctx"))
-    α_op_lb isa Union{Symbol, Real} || throw(
-        ArgumentError(
-            "build_master: α_op_lb must be :auto or a Real, got $(typeof(α_op_lb))",
-        ),
+    # IN-03 (Phase 30 code review iteration 2): the keyword type already restricts these
+    # to Union{Symbol,Real}, so the guard must reject every Symbol OTHER than :auto (a
+    # typo such as :atuo used to fall through to a MethodError deep in the resolution).
+    (α_op_lb isa Real || α_op_lb === :auto) || throw(
+        ArgumentError("build_master: α_op_lb must be :auto or a Real, got $(repr(α_op_lb))"),
     )
-    α_x_lb isa Union{Symbol, Real} || throw(
-        ArgumentError(
-            "build_master: α_x_lb must be :auto or a Real, got $(typeof(α_x_lb))",
-        ),
+    (α_x_lb isa Real || α_x_lb === :auto) || throw(
+        ArgumentError("build_master: α_x_lb must be :auto or a Real, got $(repr(α_x_lb))"),
     )
 
     # WR-05 (Phase 30 code review iteration 2): the acceptance slack actually granted to

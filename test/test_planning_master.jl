@@ -306,15 +306,38 @@ end
     )
     @test lower_bound(m.α_op) == dop.optimum + sop / 2
     @test lower_bound(m.α_x) == dx.optimum + sx / 2
-    # Beyond the slack, both are still rejected.
-    @test_throws ArgumentError build_master(;
+    # Beyond the slack, both are still rejected — and the error names the bound that was
+    # rejected (IN-04, iteration 2: an unrelated ArgumentError must not pass).
+    function caught(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+    e_op = caught(() -> build_master(;
         T = 1, c_y = 0.3, y_max = 8.0,
         α_op_lb = dop.optimum + 2 * sop, α_x_lb = 0.0, bounds_ctx = bounds_ctx,
-    )
-    @test_throws ArgumentError build_master(;
+    ))
+    @test e_op isa ArgumentError
+    @test occursin("α_op_lb=", e_op.msg) && occursin("exceeds the derived relaxed minimum", e_op.msg)
+    e_x = caught(() -> build_master(;
         T = 1, c_y = 0.3, y_max = 8.0,
         α_op_lb = -50.0, α_x_lb = dx.optimum + 2 * sx, bounds_ctx = bounds_ctx,
-    )
+    ))
+    @test e_x isa ArgumentError
+    @test occursin("α_x_lb=", e_x.msg) && occursin("exceeds the derived relaxed minimum", e_x.msg)
+end
+
+@testitem "planning master: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # Phase 30 code review iteration 2 (IN-03): the old `isa Union{Symbol,Real}` guard was
+    # always true, so a typo reached `isless`/`Float64(::Symbol)` as a MethodError.
+    @test_throws ArgumentError build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = :atuo, α_x_lb = 0.0)
+    @test_throws ArgumentError build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = :atuo)
 end
 
 @testitem "planning master: derive_alpha_x_lb(::FollowerLP) dispatch agrees with the follower_kwargs path" tags =
