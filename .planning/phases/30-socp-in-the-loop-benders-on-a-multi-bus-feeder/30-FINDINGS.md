@@ -1,7 +1,7 @@
 # Phase 30 Findings: SOCP-in-the-Loop Benders on a Multi-Bus Feeder
 
 **Phase:** 30-socp-in-the-loop-benders-on-a-multi-bus-feeder
-**Closed:** 2026-10-01 (pending orchestrator suite certification, see final section)
+**Closed:** 2026-10-01 (certified complete — see "CERTIFIED: Full-Suite Tallies" section)
 **Requirements:** BILEV-03, BILEV-04, BILEV-05
 
 This document consolidates the fixture designs, measured numbers, and audit results across
@@ -378,6 +378,224 @@ confirming Phase 30 only ADDS new named constants (`ALPHA_LB_MARGIN`,
 feasibility-oracle's empirically-verified sign `u=+dual.(pin)`, etc.) and never touches,
 moves, or re-pins any pre-existing golden value.
 
+**Re-confirmed at the FINAL HEAD after the post-handoff code review (point 7 below):**
+```
+python3 .planning/.../scripts/audit_goldens.py --base e5dc782 --head HEAD   # HEAD = c68aa19
+# Golden-move audit: e5dc782..HEAD -- test/
+Total flagged numeric-literal moves: 0
+Attributed: 0  Allowlisted: 0  Unattributed: 0
+AUDIT_EXIT: 0
+```
+Still exit 0, still zero flagged moves, after 3 full code-review iterations and ~25 fix
+commits landed on top of the state this section originally audited. The IEEE-13 T=4
+headline UB/LB shift (point 7 below) is a Phase-30-only value (introduced and changed
+entirely within this phase, never a pre-Phase-30 golden), so it correctly produces no
+audit flag.
+
+## 7. Post-handoff code review (iterations 1-3): full summary and known open issues for Phase 31
+
+After this plan's own Task 1/Task 2 handoff (HEAD `38b2e05`/`c1e9a4c`), the orchestrator ran
+a 3-iteration code review cycle against the phase's new/modified files before launching the
+certified suite run. This section is the single consolidated record of that cycle, written
+after the certified suite returned (see the certification section below). Artifacts:
+`30-REVIEW.iter1.md`/`30-REVIEW-FIX.iter1.md`, `30-REVIEW.iter2.md`/`30-REVIEW-FIX.iter2.md`,
+`30-REVIEW.md`/`30-REVIEW-FIX.md` (final, iteration 3). **0 critical, 3 warning, 3 info
+findings remained open when the iteration cap (3) was reached** — all three warnings are
+real, unfixed correctness gaps, documented below and carried forward as known open issues
+for Phase 31, not silently left out of this FINDINGS document.
+
+### Iteration 1 (commits `2bdefc2`..`083f7c3`, 13 findings, all fixed)
+
+- **CR-01/CR-03:** `:certify_incumbent` (the then-default-adjacent path) no longer silently
+  bypasses the battery-complementarity gate; an explicit `exactness` verdict
+  (`:exact`/`:inexact`/`:relaxation_only`) replaces the old `:socp_maxgap`-presence
+  heuristic for disambiguating an oracle throw.
+- **CR-02/WR-09/WR-10:** the result gains honest `ub_relaxation_only`/`incumbent_exactness`
+  fields; the AC re-check's `ok` field now reflects REAL violations (`n_thermal_violations
+  == 0 && n_voltage_violations == 0` beyond a measured per-instance tolerance) instead of
+  being hard-coded `true` — this is the fix already recorded in point 3 above (BILEV-04b).
+- **WR-01 (iter 1):** a feasibility cut is appended only on GENUINE oracle infeasibility,
+  confirmed by a new separation check — not on every oracle throw.
+- **WR-02 (iter 1):** corrected an over-claim that the feasibility oracle is "always
+  feasible"; the original oracle error is never masked.
+- **WR-03/WR-04 (iter 1):** `α_op_lb`/`α_x_lb` margin/rejection made scale-aware (see point
+  4 above, "Measured constants" paragraph) — this is the change that moved the IEEE-13 T=4
+  headline `UB` from `609.0113506` to `609.0113390` (point 7's "Headline UB/LB shift" below).
+- **WR-05 (iter 1):** the measured cone gap (`socp_maxgap`) is recorded on every
+  oracle-solving trace row, not only on inexact ones.
+- **WR-06 (iter 1):** `:reject` made fail-fast on a deterministic repeat of a rejected
+  trial (later SUPERSEDED by iteration 2's WR-02 redesign, see below — `:reject` no longer
+  fails fast in the common case).
+- **WR-07 (iter 1):** replaced the BILEV-03 cross-check's frozen `10·(UB−LB)` literal
+  tolerance (which cited a non-existent `joint.gap` field) with the Benders bracket
+  assertion `LB − ε ≤ J* ≤ UB + ε`, `ε` measured at runtime — this SUPERSEDES the original
+  "three-source tolerance" design recorded in point 1 above (already marked RETIRED there).
+- **WR-08 (iter 1):** pinned the feasibility-cut sign (`u=+dual.(pin)`, point 2 above) and
+  its validity with a dedicated test.
+- **IN-02/IN-04 (iter 1, fixed as a side effect):** minor trace/test accuracy fixes.
+
+**Golden impact (iteration 1):** no pre-Phase-30 golden moved. `test_planning_oracle.jl`'s
+return-shape assertion was extended (non-breaking) to cover two new trailing result fields.
+
+### Iteration 2 (commits `12bfef2`..`22b7eb5` / `d6f3275`, 8 findings + 4 info, all fixed)
+
+- **CR-01 (iter 2):** `run_nash!`/`run_nash_probe` gain an `inexact_policy` keyword
+  (**default `:strict`**, preserving pre-Phase-30 fail-loud behavior), checked at the
+  boundary and forwarded to every best response. Opting into `:certify_incumbent`/`:reject`
+  populates two new trailing result fields: `certificates` (one row per best response:
+  `sweep`, `distributor`, `incumbent_exactness`, `incumbent_socp_maxgap`,
+  `ub_relaxation_only`, `ac_report`) and `any_relaxation_only`.
+- **CR-02 (iter 2):** the integer-master recourse path (`corner_recourse`,
+  `_corner_recourse_ternary`, `_corner_recourse_joint`, `ll_cut_recourse`) now threads
+  `on_inexact` instead of using a bare `catch`. A new `_oracle_or_infeasible` helper maps
+  ONLY a status in `ORACLE_INFEASIBLE_STATUSES` to `+Inf`/`nothing`; every other throw
+  (non-`ErrorException`, a trusted-solve exactness/complementarity throw, any other status)
+  rethrows. Integer goldens unchanged (444/444 pass).
+- **WR-01 (iter 2):** `_select_incumbent` now tracks TWO incumbents — the running-minimum
+  (drives convergence, unchanged) and the best CERTIFIED iterate separately. A relaxation-
+  only running minimum is replaced by the certified incumbent only when that incumbent ALSO
+  passes the convergence test against `LB`; otherwise the relaxation-only point is returned
+  with the certified one reported alongside via a new `exact_incumbent` result field.
+- **WR-02 (iter 2, REDESIGN of iteration 1's WR-06 fail-fast):** `:reject` now APPENDS the
+  rejected trial's relaxation/integer cuts (valid lower bounds regardless of exactness
+  verdict) and bars it ONLY from `UB`/the incumbent — it no longer fails fast on the first
+  deterministic repeat. Measured: the T=4 fixture now CONVERGES under `:reject` at iteration
+  11 with the same exact incumbent as `:certify_incumbent` (`UB=609.0155321155983`); the
+  fail-fast stall guard remains as a backstop for the case where the relaxation's own
+  optimum is itself inexact (measured to fire on a dedicated T=1 λ₀=[-1] fixture at
+  iteration 5, `z=[0.04]`).
+- **WR-03 (iter 2):** a post-convergence AC-recheck TOOLING failure (e.g. Ipopt itself
+  failing) no longer silently discards the converged result — `_incumbent_ac_report` now
+  catches the `ErrorException` and reports it ON `ac_report` (`ok=false`,
+  `raw_status="AC_RECHECK_FAILED"`, welfare fields `NaN`, a new `error` field; `nothing` on
+  success). Other exception types still propagate.
+- **WR-04 (iter 2):** `ac_report.ok`'s docstring corrected — `ok=false` is a violation
+  INDICATOR (the model drops limits and re-optimizes), not proof no limit-respecting
+  dispatch exists; `ok=true` is evidence, not proof. Documentation-only.
+- **WR-05 (iter 2):** `BendersMaster` gains a recorded `lb_slack = (; op, x)` — nonzero only
+  for an explicit bound validated against `bounds_ctx` (`S + |gap_derive|`); zero for
+  `:auto` bounds and for unvalidated bounds (e.g. `BendersMasterInteger`, via
+  `_accepted_lb_slack`). `_assert_epigraph_floor`'s runtime tolerance now adds this slack,
+  so an accepted build-time bound can never spuriously fire the runtime check.
+- **WR-06 (iter 2):** oracle feasibility cuts near a curved boundary are classified
+  three-way by `_feas_cut_class` (measured `FEAS_CUT_V_NOISE = 2.4e-9`, 10x the measured
+  feasible-pin noise floor): `v > FEAS_CUT_V_TOL` (separating, appended as before);
+  `FEAS_CUT_V_NOISE < v ≤ FEAS_CUT_V_TOL` (weak, appended with
+  `policy_action=:oracle_feasibility_cut_weak` — still a VALID cut by convexity of `V`);
+  `v ≤ FEAS_CUT_V_NOISE` (disagree, a named "oracles disagree" error). `BendersTrace` gains
+  an additive `feas_cut_v` column.
+- **IN-01..IN-04 (iter 2, fixed):** stale `BendersTrace` docstrings corrected;
+  `solve_feasibility_oracle!` gains `attempts_out` (the oracle-feasibility trace row is now
+  timed and its retries counted); `build_master`'s `:auto`-or-`Real` guard now rejects a
+  misspelled Symbol (e.g. `:atuo`) with `ArgumentError`; a tautological `welfare_gap`
+  equality replaced with a measured-magnitude assertion (`|gap| < 1e-6`, measured `3e-10`).
+
+**Golden impact (iteration 2):** no pre-Phase-30 golden moved. Two Phase-30-only test
+EXPECTATIONS changed, both intended: the `:reject` item now converges instead of stalling
+(WR-02 redesign); the CR-02 end-to-end item now asserts the certified point that used to be
+silently discarded (WR-01).
+
+### Iteration 3 (final review, cap reached: 0 critical / 3 warning / 3 info OPEN, not fixed)
+
+Iteration 3 re-reviewed the post-iteration-2 code and found the fixes themselves sound
+(explicitly re-verified: CR-02's `Q_R ≤ Q_true` argument, CR-01's certificate/incumbent
+match, WR-01's monotonicity argument, WR-02's cut-validity-under-rejection argument, WR-05's
+docstring proof, WR-06's convexity argument) — but surfaced **3 NEW warnings** that were
+NOT fixed because the iteration cap (3) was reached. Full text in `30-REVIEW.md`; carried
+forward here as **KNOWN OPEN ISSUES for Phase 31**, not silently dropped:
+
+- **WR-01 (iter 3, OPEN):** the integer corner search's `_oracle_or_infeasible` maps
+  `MOI.ALMOST_INFEASIBLE` (a reduced-accuracy near-certificate, not a confirmed
+  infeasibility) straight to `+Inf`, with no confirmation step — unlike the outer Benders
+  loop's own oracle-throw handling, which confirms an `ALMOST_INFEASIBLE` claim against the
+  slack-min feasibility oracle before trusting it (and raises a named "oracles disagree"
+  error if the claim doesn't hold up). Over-estimating the corner minimum `Q_nu` is the
+  DANGEROUS direction for a Laporte-Louveaux cut: a false `+Inf` near the network boundary
+  (where the welfare-maximizing import usually sits) permanently over-constrains θ at that
+  corner, since LL cut rows are never retracted. `_oracle_or_infeasible`'s own docstring
+  additionally claims it applies "the same classification `solve_stackelberg!`'s own outer
+  oracle catch applies" — this is FALSE; the outer loop's confirmation step is absent here.
+- **WR-02 (iter 3, OPEN):** the CR-02 argument "a weaker cut, never an invalid one" (`θ ≥
+  (Q_nu − L)·D(b) + L`, `D = 1−k` at Hamming distance `k`) holds **only while `Q_nu ≥ L`**
+  — this precondition is NEVER enforced. If `Q_nu < L`, the cut raises θ's floor at every
+  corner with `k ≥ 2` to `L + (k−1)(L−Q_nu) > L`, which is an INVALID cut, not a weaker one.
+  `L = α_op_lb + α_x_lb` for `BendersMasterInteger` is two explicit, never-validated bounds
+  (`_accepted_lb_slack` returns 0; `build_master_integer` has no `bounds_ctx`), and the
+  runtime floor guard checks only the iterate's own value against `α_op_lb`/`α_x_lb`, never
+  the corner minimum `Q_nu` (which sits at a DIFFERENT `z` and can be lower than every
+  visited iterate). `add_ll_cut!`'s own docstring math is ALSO independently wrong (states
+  "`D <= -1`, reduces to `θ >= L - 2k(Q_nu - L)`"; both parts are incorrect — `D=0` at
+  `k=1`, and the correct reduction is `L − (k−1)(Q_nu−L)`).
+- **WR-03 (iter 3, OPEN):** WR-05 (iteration 2)'s own build-time acceptance rule makes a
+  bound in `(true_min, optimum + S]` invisible to BOTH the build-time rejection layer AND
+  the (now-widened) runtime floor — but the Benders convergence CERTIFICATE itself
+  (`(UB−LB)/max(1,|UB|) ≤ tol`) is never widened to account for this, so `LB` can exceed the
+  TRUE optimum by up to `S + gap` while the loop still reports `gap ≤ tol`. Since
+  `S ≥ ALPHA_LB_REJECTION_TOL = 1e-6` equals the DEFAULT `tol`, on any instance with
+  `|UB| ≲ 1` (or a caller-tightened `tol`) this can silently hide a true gap up to ~2×tol,
+  with no runtime signal. **Measured on IEEE-13 T=4: the effect is ≈2.5e-8 relative
+  (harmless at this instance's scale)** — but the design gives no general guarantee, and
+  the measured smallness is instance-specific, not structural.
+
+Also 3 info items left open (documentation/cosmetic, no correctness impact): stale comments
+still describing the old single-threshold feasibility-cut rule (IN-01); the trace's last row
+can disagree with the returned `UB`/`gap` after an incumbent swap, a reporting-only gap
+(IN-02); the WR-06 "weak" cut band actually contains a sub-band (`FEAS_CUT_V_NOISE < v ≲
+1e-7`, HiGHS's own primal feasibility tolerance) that is a DEFERRED fatal error (the next
+iteration's deterministic repeat raises the stall error), not graceful degradation as the
+docstring implies (IN-03).
+
+**These three warnings are real, unresolved correctness gaps in the integer-investment
+(Laporte-Louveaux) recourse path, explicitly out of this phase's own closing scope (Phase 30
+is the continuous/LinDistFlow+ConvexBranchFlow SOCP-in-the-loop phase; integer N>1 is
+Phase 31's own BILEV-07 scope) — carried forward verbatim as Phase 31 input, not silenced or
+downplayed.**
+
+### Headline UB/LB shift (fully explained, not a surprise)
+
+The BILEV-03 headline IEEE-13 T=4 `@testitem` (point 1 above) moved from
+`UB=609.0113506, LB=609.0111593` (this plan's own Task-1-handoff state) to
+`UB=609.0113390, LB=609.0111465582702` at the final certified HEAD — caused entirely by
+iteration 1's WR-03/WR-04 scale-aware `α_op_lb` margin fix (point 4's "Measured constants"
+paragraph), which legitimately lowers the derived bound by a measured amount rather than
+the old fixed `1e-6`. **This is a Phase-30-only value** (the fixture, the test, and the
+`:auto`-bound feature it exercises were all introduced within Phase 30 itself), so the
+golden-move audit (point 6/this section's re-confirmation above) correctly reports zero
+flags for it — there is no pre-Phase-30 golden to move. The T=24 Literate run is UNCHANGED
+throughout all 3 review iterations: `iters=15, gap≈3.09e-7, y=0.015`, exact.
+
+### Superseded 30-01..30-05 SUMMARY numbers
+
+The following numbers recorded in the individual plans' own `30-0N-SUMMARY.md` files are
+SUPERSEDED by the post-handoff code review and should be read in light of this section, not
+taken at face value in isolation:
+
+- **30-05-SUMMARY.md:** the BILEV-03 cross-check's "three-source tolerance"
+  (`measured_tol = 10*max(oracle_gap, joint_gap, ub_lb_gap) = 1.913e-3`) is RETIRED (WR-07,
+  iteration 1) — replaced by the Benders bracket `LB−ε ≤ J* ≤ UB+ε`. The headline
+  `UB=609.0113506`/`gap=3.141107077821004e-7` reported there are the PRE-review numbers;
+  the post-review numbers are `UB=609.0113390` (WR-03/WR-04 margin fix) with the loop still
+  converging in 6 iterations.
+- **30-02-SUMMARY.md/30-ALPHA-AUDIT.md:** the fixed `ALPHA_LB_MARGIN = ALPHA_LB_REJECTION_TOL
+  = 1e-6` constant is SUPERSEDED by the scale-aware `max(1e-6, 10·gap, 1e-8·|optimum|)` rule
+  (WR-03/WR-04, iteration 1) — point 4 above's "Measured constants" paragraph is the current
+  authority; the audit's own VERDICT (no previously-unknown invalid bound) is UNCHANGED by
+  this refinement (re-confirmed: the T=8 fixture's `-50.0` is still accepted under the new
+  rule).
+- **30-04-SUMMARY.md:** the `:reject` policy's documented "deterministic stall" behavior
+  (T-30-09) is SUPERSEDED by iteration 2's WR-02 redesign — `:reject` now converges on the
+  T=4 fixture (point 3 above) rather than stalling; the stall guard survives only as a
+  backstop for a separately-inexact relaxation optimum. The `ac_report`-never-populated-
+  through-`solve_stackelberg!` scope note is SUPERSEDED by the CR-02/WR-09/WR-10 fix (point
+  3 above) — a dedicated T=1 fixture now drives a populated `ac_report` end-to-end.
+  `run_nash!`'s own silent accept-relaxation-only gap is closed by iteration 2's CR-01 (this
+  section).
+- **30-01-SUMMARY.md:** the feasibility-cut sign (`u=+dual.(pin)`) and the thermal/voltage
+  fixture designs are UNCHANGED and remain authoritative (re-pinned by WR-08's dedicated
+  sign test); only the cut's ACCEPTANCE classification downstream in `solve_stackelberg!`
+  changed (WR-01 iter 1 "genuine infeasibility only", WR-06 iter 2 "three-way
+  separating/weak/disagree").
+
 ---
 
 ## READY FOR ORCHESTRATOR SUITE CERTIFICATION
@@ -433,3 +651,51 @@ and appending those final tallies directly into this file (or resuming this plan
 tallies for a follow-up write-up step).
 
 <!-- ORCHESTRATOR: append certified full-suite tallies below this line once the run completes. -->
+
+## CERTIFIED: Full-Suite Tallies
+
+**Certified run:** single detached run launched by the orchestrator (never this plan's own
+executor, per checker BLOCKER 2). Started 2026-10-01T12:12:35-03:00, duration 23m56.7s, exit
+0, `"Testing TSODSO tests passed"`. Log: `/tmp/claude-1000/p30_certified_suite_22b7eb5.log`.
+Zero `.claude/worktrees/agent-*` entries; zero worktree paths found in the log (no
+contamination, per the `background-suite-orphan-race` memory's own detection method).
+
+**Certified HEAD:** `22b7eb5` (`fix(30): IN-03/IN-04 reject unknown Symbol α bounds; tighten
+weak test assertions`) — the last CODE commit of the post-handoff review cycle (point 7
+above). The repo's true final HEAD at the time this section is written is `c68aa19`
+(`docs(30): code review iterations 2-3 + fix reports`), strictly docs-only (the final
+iteration-3 review/fix reports) relative to `22b7eb5` — confirmed by `git diff 22b7eb5..c68aa19
+--stat` touching only `30-REVIEW*.md`/`30-REVIEW-FIX*.md` files, zero `src/`/`test/` diff.
+This mirrors Phase 29's own precedent (certified at `a5e9900`, closed two docs-only commits
+later at `e5dc782`) — the certified run genuinely covers the code being shipped.
+
+**Tallies:** **31091 pass / 0 fail / 0 error / 5 broken** (31096 total).
+
+**Baseline comparison:** Phase-29 close baseline (`29-FINDINGS.md`, HEAD `a5e9900`) was
+**30871 pass / 0 fail / 0 error / 5 broken**. Delta: **+220 pass**, fail/error unchanged at
+0, **broken unchanged at 5** (confirming Phase 30 adds no new `@test_broken`, as predicted
+in the readiness section above and in point 5's deviation log).
+
+**Attribution of the +220 pass delta (fully accounted for):** the phase's 9 new/extended
+test files listed above, PLUS the 3-iteration code review's own additional test items
+(iteration 1's new `@testitem`s for CR-01/CR-02/WR-01..WR-08 and the T=24/`exactness`-field
+coverage; iteration 2's new `@testitem`s for CR-01's Nash `inexact_policy` matrix, CR-02's
+integer-corner `on_inexact` dispatch, WR-01..WR-06's dedicated regression items, and the 4
+info-item fixes) — not a single flat per-plan count, since the review cycle genuinely added
+test coverage beyond what plans 30-01 through 30-05 originally shipped, exactly as Phase
+29's own `+168` delta was likewise attributed to its own in-review test growth (see
+`29-FINDINGS.md`'s own attribution note for the precedent).
+
+**Golden-move audit at this HEAD:** re-confirmed in point 6/7 above — exit 0, zero flagged
+moves, `--base e5dc782 --head HEAD` (HEAD = `c68aa19`).
+
+**Zero re-pinned pre-existing goldens.** The only Phase-30 numeric shift (the IEEE-13 T=4
+headline `UB`/`LB`, point 7 above) is a Phase-30-introduced value, never a pre-existing
+golden — confirmed by the audit finding zero flags for it.
+
+**Phase 30 is CERTIFIED COMPLETE.** All three requirements (BILEV-03, BILEV-04, BILEV-05)
+are demonstrated end-to-end on a real multi-bus IEEE-13 feeder with `ConvexBranchFlow`, the
+full suite is green at a net +220 pass over the Phase-29 baseline with zero regressions and
+zero new broken items, and the one code-review-identified gap class left genuinely open (the
+3 Laporte-Louveaux integer-recourse warnings, point 7 above) is explicitly scoped as Phase
+31 (BILEV-07, integer N>1) input, not a Phase-30 blocker.
