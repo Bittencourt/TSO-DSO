@@ -42,9 +42,20 @@ incumbent's own dispatch or prices. It builds a FRESH
 the SAME coupling flow `set_parameter_value.(oracle_ac.z, z_incumbent)`, and RE-OPTIMIZES
 the welfare dispatch under exact AC physics with the feeder's thermal/voltage limits
 DROPPED. The question it answers is: "at the incumbent's coupling flow `z`, does the
-AC-optimal dispatch respect the ORIGINAL feeder's `smax`/`vmin`/`vmax`?" A violation
-means the SOCP relaxation's answer at `z` is not physically realizable as-is; a clean
-report is evidence (not proof) that it is.
+limits-free AC-optimal dispatch respect the ORIGINAL feeder's `smax`/`vmin`/`vmax`?"
+
+**What `ok` does and does not mean (Phase 30 code review iteration 2, WR-04).** The AC
+model is never told about the limits and re-optimizes welfare, so it will cross any limit
+that binds whenever doing so raises welfare. `ok = false` is therefore a violation
+INDICATOR — "the limits-free AC optimum at `z` violates a limit; the incumbent is NOT
+certified AC-realizable by this check" — not a proof that no limit-respecting AC dispatch
+exists at `z` (such a dispatch may well exist at slightly lower welfare). It will fire
+most often exactly where a limit binds. `ok = true` is evidence, not proof, of
+realizability (Ipopt certifies a LOCAL optimum of a nonconvex model). A genuine
+feasibility test would solve `ACPowerFlow(; limits = true)` at the pinned `z` (a
+`LOCALLY_SOLVED` there would show a limit-respecting AC dispatch exists). That is not done
+here: BILEV-04b (30-CONTEXT.md) fixes this diagnostic to `ACPowerFlow(; limits = false)`,
+and a limits-respecting feasibility solve is left as a possible extension.
 
 The solve calls `assert_solved!(oracle_ac.model; dual = false, allow_local = true)`
 DIRECTLY — NEVER `solve_planning_oracle!`/`solve_with_retry!` (both reject Ipopt's
@@ -60,12 +71,15 @@ runtime — measured 2.0e-9 to 9.9e-9 on `ieee13_modified()` T=1/T=4 pins, 2026-
 a branch counts as overloaded iff `max(s_fwd, s_rev) > smax + 10δ`, a bus as out of band iff
 `√v < vmin − 10δ` or `√v > vmax + 10δ` (a constraint residual `δ` moves `√(P²+Q²)` by at most
 `√2·δ` and `√v` by at most `δ` for `v ≥ 0.25`; the factor 10 is headroom over that).
-**NEVER throws on a genuine physical violation** — it is REPORTED.
+**NEVER throws on a limit violation** — it is REPORTED (see "What `ok` does and does not
+mean" above).
 
 Returns `(; ok, violations, p_import, ac_welfare, raw_status)`:
 
-  - `ok = n_thermal_violations == 0 && n_voltage_violations == 0` — `true` ONLY when no
-    limit is violated beyond the measured tolerance (it is never hard-coded);
+  - `ok = n_thermal_violations == 0 && n_voltage_violations == 0` — `true` ONLY when the
+    limits-free AC optimum violates no limit beyond the measured tolerance (it is never
+    hard-coded); `false` means "not certified by this check", not "physically
+    infeasible" (WR-04);
   - `violations::NamedTuple` — `(; n_thermal_violations::Int, max_overload_ratio::Float64,
     n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
     voltage_violated::Bool, ac_primal_violation::Float64, violation_tol::Float64)`.
