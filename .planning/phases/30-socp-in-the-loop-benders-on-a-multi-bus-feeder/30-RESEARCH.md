@@ -547,7 +547,11 @@ behavior; `α_op_lb`/`α_x_lb` still accept explicit numbers).
 | A3 | The new feasibility oracle (BILEV-04a) should be built via the SAME `problem_class(pf)`-routed `select_optimizer` factory as `PlanningOracle` (formulation-generic, not hardcoded to a specific solver) | Architecture Patterns / Don't Hand-Roll | If a different solver choice is assumed, the `∥s∥₁` slack objective (piecewise-linear, LP-representable even under an SOCP network) might need an explicit epigraph reformulation depending on solver support for mixed LP/SOCP objectives — worth a quick Clarabel-support check at implementation time |
 | A4 | `BendersMasterInteger`/Nash (`run_nash!`) call sites are OUT of this phase's direct scope (Phase 31), so the `α_op_lb=-5.0` audit (Pitfall 4) should be run FOR AWARENESS across all call sites but the FIX (if any T>1 Nash/integer site is found invalid) may be deferred to Phase 31 if it touches integer-master-specific code, rather than blocking Phase 30 | Pitfall 4 | If the user intends BILEV-05's validation to apply repo-wide starting this phase, deferring any fix found in Nash/integer call sites would leave a known-invalid bound live past this phase's close |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three questions below were resolved during planning (plans 30-01/30-02/30-04) and are
+recorded here for traceability; the RECOMMENDATION in each was adopted as written unless
+noted otherwise.
 
 1. **Can the new feasibility (slack-min) oracle reuse `ConvexBranchFlow`'s existing SOC
    machinery directly, or does the `‖s‖₁` objective need a separate LP/QP epigraph reformulation
@@ -563,6 +567,13 @@ behavior; `α_op_lb`/`α_x_lb` still accept explicit numbers).
    - Recommendation: verify with a short Julia probe at plan/implementation time; expected to be
      a routine LP-term-inside-an-SOCP-model case Clarabel handles natively, but confirm before
      committing to the design.
+   - **RESOLVED (plan 30-01, `build_feasibility_oracle`):** confirmed — the feasibility
+     oracle reuses `ConvexBranchFlow`'s existing SOCP/Clarabel routing directly
+     (`Model(select_optimizer(problem_class(pf)))`), with the `‖s‖₁` slack objective added
+     as a genuinely LINEAR term (`s = s⁺ - s⁻`, minimize `Σ(s⁺+s⁻)`) composed inside the
+     same SOCP-constrained model — no separate LP/QP epigraph reformulation was needed;
+     Clarabel accepts the mixed linear-objective/SOC-constrained model natively, as
+     anticipated.
 
 2. **What EXACT T and population tuning makes the T=3–6 BILEV-03 convergence fixture land
    mostly inside the feasible-and-exact z window while still occasionally exercising the
@@ -579,6 +590,14 @@ behavior; `α_op_lb`/`α_x_lb` still accept explicit numbers).
      criterion 1) is stated separately from BILEV-04's feasibility/inexactness criteria, a clean
      BILEV-03 fixture (tuned to mostly avoid friction) plus SEPARATE BILEV-04 fixtures (this
      session's approach) is the safer reading — confirm at plan/discuss time if ambiguous.
+   - **RESOLVED (plan 30-05 / BILEV-03):** the clean-fixture reading was adopted — the
+     `ieee13_modified()` BILEV-03 convergence fixture converges under the DEFAULT
+     `inexact_policy = :certify_incumbent` with no forced friction; natural
+     feasibility-cut / inexactness events (if the search for the convergence window
+     happens to cross one) are recorded in `BendersTrace` and asserted on honestly, never
+     suppressed or re-tuned away to manufacture a "clean" run. Separate, dedicated
+     fixtures (plan 30-01's thermal/voltage-infeasible pins; plan 30-04's measured-inexact
+     pin) exercise BILEV-04a/04b deliberately, independent of the BILEV-03 fixture.
 
 3. **Does the follower's relaxed minimum (`α_x_lb`) ever need a genuine LP solve, or is `0.0`
    always provably correct given the project's cost-coefficient conventions?**
@@ -591,6 +610,11 @@ behavior; `α_op_lb`/`α_x_lb` still accept explicit numbers).
    - Recommendation: always solve the relaxed LP (cheap, HiGHS, <0.1s) rather than hard-coding
      the `0.0` shortcut — consistent with CONTEXT.md's own "derivation by relaxed solves" wording
      and avoids a silent-wrong-answer trap for a future negative-cost fixture.
+   - **RESOLVED (plan 30-02, `derive_alpha_x_lb`):** the always-solve recommendation was
+     adopted verbatim — `α_x_lb = :auto` always builds `make_relaxed_follower_model` and
+     runs a genuine `solve_with_retry!` LP solve; there is no closed-form `0.0` shortcut
+     anywhere in the implementation, so a future negative-cost fixture is handled correctly
+     by construction rather than by convention.
 
 ## Environment Availability
 

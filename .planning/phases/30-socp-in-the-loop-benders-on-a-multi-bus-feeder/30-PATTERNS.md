@@ -6,6 +6,18 @@
 **Analogs found:** 10 / 10 (every file has a strong, in-repo analog — this phase is
 explicitly a "small variant of an existing pattern" phase, per RESEARCH.md's own framing)
 
+**REVISION NOTE (checker WARNING 2, post-planning):** plan 30-02 (the locked, authoritative
+plan) does NOT create a separate `src/planning/alpha_bounds.jl` file as this pattern map
+originally assumed. The relaxed α-bound derivation (`make_relaxed_oracle_model`,
+`derive_alpha_op_lb`, `make_relaxed_follower_model`, `derive_alpha_x_lb`) lives directly in
+`src/planning/master.jl`, ADDED immediately before `build_master`. Rationale (verbatim from
+30-02-PLAN.md's `<objective>`): creating a new file would require an unrelated
+`src/TSODSO.jl` include-line edit that conflicts with plan 30-01's own wave-1 new files
+(`feasibility_oracle.jl`, `ac_recheck.jl`) touching the same include block — co-locating the
+derivation helpers in the file that already consumes them (`master.jl`) avoids that
+cross-plan file-conflict entirely. Every `alpha_bounds.jl` reference below is superseded:
+read `src/planning/master.jl` wherever `alpha_bounds.jl` is named.
+
 ## File Classification
 
 | New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
@@ -13,7 +25,7 @@ explicitly a "small variant of an existing pattern" phase, per RESEARCH.md's own
 | `src/planning/feasibility_oracle.jl` (NEW — slack-min oracle, BILEV-04a) | service/model-builder | build-once + Parameter re-solve | `src/planning/subproblem.jl` (`PlanningOracle`/`build_planning_oracle`) | exact (same build-once/Parameter/pin shape, different objective) |
 | `src/planning/benders.jl` (MODIFIED — `inexact_policy`, oracle-feasibility-cut branch, `:auto` α wiring) | orchestrator | iterative build-once/re-solve loop | itself (`solve_stackelberg!`, pre-existing feasibility-cut branch at lines 795-822) | exact (extending its own established branch pattern) |
 | `src/planning/ac_recheck.jl` (NEW — incumbent-only AC re-check, BILEV-04b) | service/diagnostic | one-shot direct-solve bypass | `src/experiments/mpc_loop.jl`'s `_mpc_truth_import_acpf` (lines 1557-1650ish) | exact (CONTEXT.md explicitly mandates mirroring this function) |
-| `src/planning/alpha_bounds.jl` (NEW — relaxed α-bound derivation, BILEV-05) | service/model-builder | one-time relaxed solve, discard | `test/test_planning_certification_bilevel.jl`'s `build_joint_reference` (lines 187+) + `subproblem.jl`'s `contribute!`-wiring shape | role-match (a genuinely separate model reusing `contribute!`, not a `PlanningOracle` variant) |
+| (superseded — see REVISION NOTE above) relaxed α-bound derivation helpers, BILEV-05, now co-located in `src/planning/master.jl` | service/model-builder | one-time relaxed solve, discard | `test/test_planning_certification_bilevel.jl`'s `build_joint_reference` (lines 187+) + `subproblem.jl`'s `contribute!`-wiring shape | role-match (a genuinely separate model reusing `contribute!`, not a `PlanningOracle` variant) |
 | `src/planning/master.jl` (MODIFIED — `α_op_lb`/`α_x_lb` gain `Union{Symbol,Real}` + `:auto` resolution + rejection) | model-builder | build-once LP | itself (`build_master`, boundary-guard style) | exact |
 | `src/planning/trace.jl` (MODIFIED — `socp_maxgap_trace`, policy-action column) | diagnostics ledger | pure-data accumulator | itself (`BendersTrace`/`push!`, `nogood_count_trace`'s additive-keyword precedent) | exact |
 | T=3–6 IEEE-13 aggregator population helper (new test/experiment fixture code) | fixture/test-data builder | pure data construction | `test/fixtures_phase4.jl`'s `_house_aggregator` / `build_ieee13_ground_aggregators` | role-match (same shape, must NOT reuse verbatim — T=24-locked `Deferrable` window) |
@@ -230,7 +242,14 @@ result — never thrown, never silently passed."
 
 ---
 
-### `src/planning/alpha_bounds.jl` (NEW — `:auto` α-bound derivation, BILEV-05)
+### α-bound derivation helpers in `src/planning/master.jl` (NEW functions — `:auto` α-bound derivation, BILEV-05)
+
+**Location (REVISED, checker WARNING 2):** these helpers are NOT a separate
+`alpha_bounds.jl` file — they live in `src/planning/master.jl`, added immediately before
+`build_master` itself, per 30-02-PLAN.md's locked design decision (avoids an unrelated
+`src/TSODSO.jl` include-line conflict with plan 30-01's own new wave-1 files). Named
+`make_relaxed_oracle_model`/`derive_alpha_op_lb`/`make_relaxed_follower_model`/
+`derive_alpha_x_lb` — deliberately WITHOUT a `build_` prefix (see the PVAL-04 note below).
 
 **Analog:** `test/test_planning_certification_bilevel.jl`'s `build_joint_reference`
 (lines 187-230ish) for the "build a genuinely separate model reusing `contribute!`"
@@ -239,7 +258,7 @@ shape, combined with `subproblem.jl`'s aggregator-wiring loop.
 **The one-time relaxed, pin-free model pattern** (RESEARCH.md Code Examples, confirmed
 working this session — this IS the pattern to implement, not just reference):
 ```julia
-function build_relaxed_oracle(feeder, pf, aggregators; λ₀, T, y_max)
+function make_relaxed_oracle_model(feeder, pf, aggregators; λ₀, T, y_max)  # name per 30-02-PLAN.md
     model = Model(TSODSO.select_optimizer(TSODSO.problem_class(pf)))
     ctx = TSODSO.ModelContext(model)
     ctx.meta[:feeder] = feeder; ctx.meta[:T] = T; ctx.meta[:problem_class] = TSODSO.problem_class(pf)
@@ -251,7 +270,7 @@ function build_relaxed_oracle(feeder, pf, aggregators; λ₀, T, y_max)
     return model, ctx
 end
 TSODSO.solve_with_retry!(model_r; dual=true)
-α_op_lb = -objective_value(model_r)
+α_op_lb = -objective_value(model_r) - margin   # derive_alpha_op_lb; margin = ALPHA_LB_MARGIN (measured, master.jl)
 ```
 Reuse `contribute!(pf, ctx, feeder; T)` and the aggregator loop VERBATIM from
 `build_planning_oracle` (subproblem.jl lines 162-203) — the ONLY structural difference is
@@ -262,7 +281,8 @@ value"). Route the solve through `solve_with_retry!` (D-08 convention), never
 
 **`build_master`'s own boundary-guard-before-assembly pattern to extend** (master.jl
 lines 92-116): `build_master`'s `α_op_lb`/`α_x_lb` keywords need to accept
-`Union{Symbol,Real}` with `:auto` resolved by calling into `alpha_bounds.jl` BEFORE the
+`Union{Symbol,Real}` with `:auto` resolved by calling the co-located derivation helpers
+(`derive_alpha_op_lb`/`derive_alpha_x_lb`, same file) BEFORE the
 existing `T >= 1`/`y_max > 0`/`c_y >= 0` guards' sibling guard for the NEW over-high-bound
 rejection:
 ```julia
@@ -278,8 +298,8 @@ c_y >= 0 || throw(ArgumentError("build_master needs c_y >= 0, got $c_y"))
 
 ### `src/planning/master.jl` (MODIFIED — `:auto` α-bound resolution)
 
-**Analog:** itself (`build_master`, lines 92-116) — see Pattern Assignment above
-(alpha_bounds.jl section) for the extension shape. No new file-level pattern beyond what's
+**Analog:** itself (`build_master`, lines 92-116) — see the "α-bound derivation helpers
+in `src/planning/master.jl`" Pattern Assignment above for the extension shape. No new file-level pattern beyond what's
 already shown; this is a surgical extension of the existing boundary-guard block and the
 existing `@variable(model, α_op >= α_op_lb)` line (which becomes
 `@variable(model, α_op >= α_op_lb_resolved)` after `:auto` resolution).
@@ -442,9 +462,9 @@ new per-iteration trace columns, extend this figure's second panel analogously (
 
 ## Shared Patterns
 
-### Build-once / Parameter re-solve (applies to feasibility_oracle.jl, alpha_bounds.jl's
-relaxed oracle is the ONE exception — it is deliberately NOT re-solved, built once and
-discarded)
+### Build-once / Parameter re-solve (applies to feasibility_oracle.jl; master.jl's
+relaxed-derivation helpers are the ONE exception — each relaxed model is deliberately NOT
+re-solved across iterations, built once and discarded immediately after one solve)
 **Source:** `src/planning/subproblem.jl` lines 115-225, `src/planning/follower.jl` lines
 94-131, `src/planning/master.jl` lines 92-116 — ALL THREE existing build-once JuMP models
 in this repo share the identical skeleton: boundary guards → `Model(select_optimizer(...))`
@@ -487,9 +507,16 @@ function name, `EXEMPT` set for deliberately-non-binary-free builders, a trailin
 source-scan that asserts the registry's keys equal every `build_\w+` definition under
 `src/planning/`).
 **Apply to:** `build_feasibility_oracle` (or whatever name the new builder in
-`feasibility_oracle.jl` takes) and the relaxed α-bound builder in `alpha_bounds.jl` IF it
-is named with a `build_` prefix — register BOTH in the SAME commit that introduces them,
-in the exact Dict-entry style shown (`"build_x" => () -> build_x(...).model`).
+`feasibility_oracle.jl` takes) — register it in the SAME commit that introduces it, in the
+exact Dict-entry style shown (`"build_x" => () -> build_x(...).model`). The relaxed
+α-bound derivation helpers in `master.jl` (`make_relaxed_oracle_model`,
+`derive_alpha_op_lb`, `make_relaxed_follower_model`, `derive_alpha_x_lb`) are DELIBERATELY
+named WITHOUT a `build_` prefix specifically so the source-scan regex (`build_\w+`) never
+matches them — they are one-time, discard-after-use derivation models, binary-free by
+construction, not planning-layer subproblem builders in this registry's sense (30-02-PLAN.md's
+locked design decision). Per checker WARNING 3, this exemption is documented directly in
+`test/test_planning_noninteger.jl`'s own PVAL-04 registry header comment (plan 30-02, Task 1),
+not only here.
 
 ### Checkpoint-once-per-iteration + BendersTrace push-once-per-iteration (never skip either)
 **Source:** `benders.jl` lines 795-822 (feasibility branch) and 890-921 (optimality
