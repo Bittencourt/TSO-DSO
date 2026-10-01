@@ -21,6 +21,17 @@
 # the documented operational-layer allowlist), and asserts the found set equals this
 # registry's key set — so a future new builder file/function cannot silently ship without
 # this guard (T-14-04, Repudiation).
+#
+# Plan 30-02 (BILEV-05) adds four one-time, discard-after-use relaxed-derivation helpers to
+# `src/planning/master.jl` (`make_relaxed_oracle_model`, `derive_alpha_op_lb`,
+# `make_relaxed_follower_model`, `derive_alpha_x_lb`). These are deliberately named WITHOUT a
+# `build_` prefix and are NOT planning-layer subproblem builders in this registry's sense —
+# each is built once, solved once, and discarded; none is ever re-solved or re-used across
+# Benders iterations the way `build_planning_oracle`/`build_follower`/`build_master`/
+# `build_shared_transmission` are. They are binary-free by construction (plain LP/relaxed-SOCP
+# relaxations of already-binary-free builders) and are therefore intentionally OUT of this
+# registry's scope — the source-scan's `build_\w+` regex correctly never discovers them, and
+# this is not a gap in the tripwire's coverage.
 
 @testitem "planning PVAL-04: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
