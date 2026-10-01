@@ -285,6 +285,13 @@ c_y = 0.3
 # no `known_optimum` — solved live on THIS instance, so the `y* ≈ 0.7` claim discussed
 # under D-04 above is backed by a genuinely computed number in THIS page, not merely a
 # citation of `stackelberg_benders.jl`'s own separate run.
+#
+# Both `solve_stackelberg!` calls on this page pass `inexact_policy = :strict`
+# explicitly. `LinDistFlow()` has no second-order cone, so the SOCP exactness gate never
+# runs here and the policy cannot change any number below. It is stated anyway so the
+# page never relies on `solve_stackelberg!`'s `:certify_incumbent` default, which can
+# accept SOC-relaxation-only incumbents on a `ConvexBranchFlow()` run. `:strict` keeps the
+# pre-Phase-30 behaviour: any SOCP-inexact oracle solve throws.
 
 result_cont = solve_stackelberg!(
     feeder,
@@ -297,6 +304,7 @@ result_cont = solve_stackelberg!(
     tol = 1e-6,
     max_iter = 100,
     checkpoint_dir = mktempdir(),
+    inexact_policy = :strict,   # explicit; a no-op on LinDistFlow (see above)
 )
 
 result_cont.y
@@ -422,6 +430,7 @@ result = solve_stackelberg!(
     known_optimum = enum_result.best_total,
     max_iter = 50,
     checkpoint_dir = checkpoint_dir,
+    inexact_policy = :strict,   # explicit; a no-op on LinDistFlow (see above)
 )
 
 # ## Validation — a real, live-computed answer

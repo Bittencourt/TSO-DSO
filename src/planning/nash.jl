@@ -271,7 +271,8 @@ export NashTrace
     run_nash!(specs::AbstractVector{<:NamedTuple}, shared::SharedTransmission;
               z0::AbstractMatrix{<:Real}, x_inv0 = nothing, tol_outer::Real = 1e-4,
               max_sweeps::Int = 50, order::Symbol = :forward, ω::Real = 1.0,
-              checkpoint_dir::AbstractString = datadir("nash_checkpoints")) -> NamedTuple
+              checkpoint_dir::AbstractString = datadir("nash_checkpoints"),
+              inexact_policy::Symbol = :strict) -> NamedTuple
 
 Run the outer Gauss-Seidel diagonalization loop (NASH-02) over `shared.N` distributors,
 each atomic best-response a FULL `solve_stackelberg!` convergence (never a partial
@@ -280,6 +281,17 @@ plan 13-01). Each element of `specs` supplies, per distributor `i`: `feeder`, `p
 `aggregators`, `λ₀`, `master_kwargs` (all required — mirrors `solve_stackelberg!`'s own
 split), and OPTIONALLY `tol` (default `1e-6`) and `max_iter` (default `100`) via
 `get(spec, :tol, 1e-6)`/`get(spec, :max_iter, 100)`.
+
+**`inexact_policy` (Phase 30 code review iteration 2, CR-01).** Forwarded UNCHANGED to
+every inner `solve_stackelberg!` best response. It defaults to `:strict` here, NOT to
+`solve_stackelberg!`'s own `:certify_incumbent` default: before Phase 30 every inner
+best response threw at the first SOCP-inexact oracle solve, and a Nash sweep must keep
+that fail-loud guarantee unless the caller opts out explicitly. With a non-`:strict`
+policy an inner best response can certify only the SOC relaxation
+(`result_i.ub_relaxation_only`). That is never committed silently: every best
+response's exactness certificate is collected on the returned `certificates` vector,
+and `any_relaxation_only` flags the run as a whole (see Returns). On a formulation with
+no cone (DC/LinDistFlow, every pre-Phase-30 Nash fixture) the policy has no effect.
 
 # Algorithm
 
@@ -344,7 +356,8 @@ never a stale loop-local) — never silently returns a non-converged result.
 # Throws
 
   - `ArgumentError` on any boundary-guard violation (including the nested-tolerance
-    guard), before any solve call.
+    guard and an `inexact_policy` outside `(:strict, :reject, :certify_incumbent)`),
+    before any solve call.
   - `ErrorException` if `max_sweeps` is exhausted without converging.
 
 # Returns
@@ -356,6 +369,14 @@ incumbent upper bound), `sweeps` is the converged sweep count, `outer_residual` 
 sweep's own worst-distributor residual, `trace::NashTrace` is the full two-level
 ledger, `shared` is the (mutated) `SharedTransmission` this run committed its final
 state to, and `order` is the sweep order actually used.
+
+Two trailing, additive certificate fields (Phase 30 code review iteration 2, CR-01):
+`certificates::Vector{NamedTuple}` has one row per best response actually solved, in
+solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap,
+ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
+`any_relaxation_only::Bool` is `true` iff any best response of ANY sweep (not only the
+final one) certified the SOC relaxation only. Under the default `inexact_policy =
+:strict` it is always `false` (an inexact solve throws instead).
 """
 function run_nash!(
     specs::AbstractVector{<:NamedTuple},
@@ -367,9 +388,18 @@ function run_nash!(
     order::Symbol = :forward,
     ω::Real = 1.0,
     checkpoint_dir::AbstractString = datadir("nash_checkpoints"),
+    inexact_policy::Symbol = :strict,
 )
     # ---- Boundary guards (mirror solve_stackelberg!'s own guards-before-build
     # discipline): fail here, not deep in the sweep loop. ----------------------------
+    # CR-01 (Phase 30 code review iteration 2): validated HERE, before any solve, so a
+    # typo never surfaces from inside the first best response.
+    inexact_policy in (:strict, :reject, :certify_incumbent) || throw(
+        ArgumentError(
+            "run_nash!: inexact_policy must be :strict, :reject or :certify_incumbent, " *
+            "got $(repr(inexact_policy))",
+        ),
+    )
     length(specs) == shared.N || throw(
         ArgumentError(
             "run_nash!: length(specs)=$(length(specs)) must equal shared.N=$(shared.N)",
@@ -454,6 +484,9 @@ function run_nash!(
     x_inv_prev = copy(x_inv0_vec)
     trace = NashTrace()
     ub_prev = fill(NaN, shared.N)
+    # CR-01 (Phase 30 code review iteration 2): one exactness certificate per best
+    # response, so a relaxation-only best response is never committed silently.
+    certificates = NamedTuple[]
     sweep_order = order === :forward ? (1:(shared.N)) : (shared.N:-1:1)
 
     # ---- CR-01 (load-bearing, do NOT skip): commit the seed into the shared model's
@@ -484,6 +517,19 @@ function run_nash!(
                 max_iter = get(spec, :max_iter, 100),
                 checkpoint_dir = joinpath(checkpoint_dir, "sweep_$k", "distributor_$i"),
                 follower = DistributorView(shared, i),
+                # CR-01: :strict by default — the pre-Phase-30 fail-loud semantics.
+                inexact_policy = inexact_policy,
+            )
+            push!(
+                certificates,
+                (;
+                    sweep = k,
+                    distributor = i,
+                    incumbent_exactness = result_i.incumbent_exactness,
+                    incumbent_socp_maxgap = result_i.incumbent_socp_maxgap,
+                    ub_relaxation_only = result_i.ub_relaxation_only,
+                    ac_report = result_i.ac_report,
+                ),
             )
 
             # CR-01 parity (load-bearing, do NOT skip): solve_stackelberg! returns the
@@ -600,6 +646,9 @@ function run_nash!(
                 trace,
                 shared,
                 order,
+                # CR-01 (Phase 30 code review iteration 2): trailing, additive.
+                certificates,
+                any_relaxation_only = any(c -> c.ub_relaxation_only, certificates),
             )
         end
     end
@@ -644,7 +693,8 @@ export run_nash!
     run_nash_probe(specs::AbstractVector{<:NamedTuple}, build_shared::Function;
                    seeds::NamedTuple, orders::Tuple = (:forward, :reverse),
                    tol_outer::Real = 1e-4, max_sweeps::Int = 50,
-                   checkpoint_dir::AbstractString = datadir("nash_probe_checkpoints")) ->
+                   checkpoint_dir::AbstractString = datadir("nash_probe_checkpoints"),
+                   inexact_policy::Symbol = :strict) ->
     NamedTuple
 
 Probe `run_nash!`'s Gauss-Seidel diagonalization across every `(seed, order)` combination
@@ -679,7 +729,9 @@ residual-baseline relabel.
 For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in `orders`
 (`length(seeds) * length(orders) >= 6` combinations): build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = seed_z0, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
 `try`/`catch` around the call (see this section's header; a non-converging run's
-`ErrorException` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination.
+`ErrorException` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination. `inexact_policy` is forwarded
+to every `run_nash!` call (default `:strict`, Phase 30 code review iteration 2, CR-01);
+each run's own `certificates`/`any_relaxation_only` stay on its `result`.
 
 After every combination converges (by construction — any non-convergence already
 propagated and exited this function before this point is reached), compute the pairwise
@@ -722,6 +774,7 @@ function run_nash_probe(
     tol_outer::Real = 1e-4,
     max_sweeps::Int = 50,
     checkpoint_dir::AbstractString = datadir("nash_probe_checkpoints"),
+    inexact_policy::Symbol = :strict,
 )
     # ---- Boundary guards (mirror run_nash!'s own guards-before-solve discipline):
     # fail here, not deep inside the probe matrix. --------------------------------
@@ -762,6 +815,7 @@ function run_nash_probe(
                 max_sweeps = max_sweeps,
                 order = order,
                 checkpoint_dir = joinpath(checkpoint_dir, "$(seed_name)_$(order)"),
+                inexact_policy = inexact_policy,   # CR-01: forwarded, :strict default
             )
             push!(runs, (; seed = seed_name, order, result))
         end

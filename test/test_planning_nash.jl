@@ -973,3 +973,82 @@ end
         checkpoint_dir = mktempdir(),
     )
 end
+
+# Phase 30 code review iteration 2 (CR-01): run_nash! must keep its pre-Phase-30
+# fail-loud semantics by default (inexact_policy = :strict, forwarded to every inner
+# solve_stackelberg!), and when a caller opts into :certify_incumbent every best
+# response's exactness certificate must be surfaced on the result, never dropped.
+#
+# FIXTURE (measured 2026-10-01, scratchpad fix2/probe_nash.jl): the single-Thermostatic
+# T=1 IEEE-13 population at λ₀ = [-1.0] from test_planning_inexact_policy.jl's CR-02
+# item, duplicated into an N=2 symmetric Nash game (build_shared_transmission needs
+# N >= 2). Every feasible pin above the 0.01 load is SOCP-inexact there, so each best
+# response sits at the inexact box corner z = y_max = 0.04. Measured: :strict throws the
+# exactness gate's own "SOCP relaxation INEXACT" error inside sweep 1; :certify_incumbent
+# converges in 2 sweeps (~13 s) with z = [0.04, 0.04] and all 4 certificates :inexact
+# (incumbent maxgap 1.74e-2).
+@testitem "planning nash: inexact_policy defaults to :strict and certificates surface relaxation-only best responses (CR-01)" tags =
+    [:planning] begin
+    using TSODSO
+
+    T = 1
+    feeder = TSODSO.ieee13_modified()
+    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
+    mk() = build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 1.0,
+        x_inv_max = [0.2, 0.2],
+        c_inv = [0.01, 0.01],
+        c_op = [[0.01], [0.01]],
+    )
+    # α_x_lb must be explicit: a DistributorView follower has no sound α_x_lb derivation.
+    spec = (;
+        feeder,
+        pf = ConvexBranchFlow(),
+        aggregators = [agg],
+        λ₀ = [-1.0],
+        master_kwargs = (; c_y = 0.01, y_max = 0.04, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    function caught(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    # Bogus policy: rejected at run_nash!'s own boundary, before any solve.
+    @test_throws ArgumentError run_nash!(
+        specs,
+        mk();
+        z0 = zeros(2, 1),
+        checkpoint_dir = mktempdir(),
+        inexact_policy = :ignore,
+    )
+
+    # Default (:strict): the pre-Phase-30 loud failure, with the gate's own message.
+    e = caught(() -> run_nash!(specs, mk(); z0 = zeros(2, 1), checkpoint_dir = mktempdir()))
+    @test e isa ErrorException
+    @test occursin("SOCP relaxation INEXACT", e.msg)
+
+    # Opt-in :certify_incumbent: converges, and the certificate is carried through.
+    r = run_nash!(
+        specs,
+        mk();
+        z0 = zeros(2, 1),
+        checkpoint_dir = mktempdir(),
+        inexact_policy = :certify_incumbent,
+    )
+    @test r.converged
+    @test length(r.certificates) == r.sweeps * 2
+    @test all(c -> c.incumbent_exactness === :inexact && c.ub_relaxation_only, r.certificates)
+    @test all(c -> c.ac_report !== nothing, r.certificates)
+    @test r.any_relaxation_only
+    @test [(c.sweep, c.distributor) for c in r.certificates] ==
+          [(k, i) for k in 1:(r.sweeps) for i in 1:2]
+end
