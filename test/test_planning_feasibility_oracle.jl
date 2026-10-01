@@ -232,3 +232,116 @@ end
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
     @test nc1 == nc0 + 1
 end
+
+# --- Plan 30-04 Task 3: "loop still converges" — solve_stackelberg! end-to-end --------
+#
+# BILEV-04a's own acceptance criterion is not just "a cut CAN be produced" (the two
+# items above) but "the Benders LOOP survives a genuine oracle infeasibility and still
+# converges". Both items below drive `solve_stackelberg!` (never a direct oracle probe)
+# on the SAME feeder/population this file's own two ablation items above already use,
+# with `y_max`/costs chosen (measured this session) so the master's NATURAL trial
+# sequence — not a synthetic forced z — passes through a genuine `MOI.INFEASIBLE` early
+# on, confirmed via the SAME relax-one-constraint ablation technique used above.
+
+@testitem "planning feasibility oracle: solve_stackelberg! survives a THERMAL-infeasible trial and still converges" tags =
+    [:planning] setup = [FeasibilityOracleFixtures] begin
+    using TSODSO
+
+    # HONEST FINDING (measured this session, not assumed): with this minimal
+    # single-Thermostatic, no-DER population, the master's FIRST trial (z=0, the
+    # zero-cut LP's own degenerate starting point) is ALSO genuinely infeasible — but
+    # for a DIFFERENT, non-thermal reason (no local generation at all to balance even
+    # zero import against the aggregator's own load). The THIRD iteration's trial
+    # (z = y_max = 0.1, the master's box upper bound once the first cut is in place) IS
+    # confirmed THERMAL by the SAME ablation technique the file's own dedicated item
+    # above uses (z=0.1/0.08/0.07 all genuinely `MOI.INFEASIBLE` on the UNMODIFIED
+    # feeder; widening `smax` alone turns each into a non-infeasible failure mode).
+    # `solve_stackelberg!`'s oracle-feasibility-cut branch is, BY DESIGN, agnostic to
+    # WHICH kind of genuine infeasibility it recovers from (BILEV-04a never inspects
+    # the error message) — this run therefore exercises the branch on BOTH causes in
+    # the SAME 6-iteration run, a STRONGER regression than a narrowly-thermal-only one.
+    T = 1
+    feeder = TSODSO.ieee13_modified()                      # head branch smax = 0.0686 pu
+    agg = FeasibilityOracleFixtures.small_house_agg(2; T = T)
+    λ₀ = [6.0]
+
+    follower_kwargs = (; corridor_cap = 1.0, x_inv_max = 0.2, c_inv = 1.0, c_op = [0.5])
+    master_kwargs = (; c_y = 0.3, y_max = 0.1, α_op_lb = -50.0, α_x_lb = -5.0)
+
+    mktempdir() do dir
+        result = TSODSO.solve_stackelberg!(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            λ₀ = λ₀,
+            T = T,
+            follower_kwargs = follower_kwargs,
+            master_kwargs = master_kwargs,
+            tol = 1.0e-5,
+            max_iter = 15,
+            checkpoint_dir = dir,
+        )
+
+        @test result.gap <= 1.0e-5
+        @test :oracle_feasibility_cut in result.trace.policy_action_trace
+        # A feasibility cut never updates UB (T-11-06 analogue) — every
+        # :oracle_feasibility_cut row must carry gap = NaN (the feasibility-branch
+        # sentinel, never the converged-iteration's own finite gap).
+        for (action, gap) in
+            zip(result.trace.policy_action_trace, result.trace.gap_trace)
+            action === :oracle_feasibility_cut && @test isnan(gap)
+        end
+    end
+end
+
+@testitem "planning feasibility oracle: solve_stackelberg! survives a VOLTAGE-infeasible trial (thermally-widened variant) and still converges" tags =
+    [:planning] setup = [FeasibilityOracleFixtures] begin
+    using TSODSO
+
+    # HONEST FINDING (measured this session): this 10-aggregator, ample-battery
+    # population is largely self-sufficient at z=0 under ORDINARY investment
+    # economics (c_y/c_inv/c_op at this file's usual magnitudes), so it converges
+    # trivially at y=0 without ever exploring the extreme-z region where voltage
+    # binds. Near-zero leader/follower costs (not a synthetic z pin — the Benders
+    # loop's own cuts still drive every trial) are used here so the master's natural
+    # trial sequence explores all the way to its box upper bound `y_max=1.0` at
+    # iteration 2, confirmed VOLTAGE-infeasible (not thermal, not device-capacity) by
+    # the SAME ablation technique as the dedicated item above: `z≈1.0` on the
+    # smax-widened feeder with its REAL `[0.95,1.05]` voltage band is genuinely
+    # `MOI.INFEASIBLE`; widening voltage ALONE (smax already widened) turns it into a
+    # non-infeasible failure mode.
+    T = 1
+    feeder0 = TSODSO.ieee13_modified()
+    feederS = FeasibilityOracleFixtures.widen_smax(feeder0; smax = 90.0)
+    N = length(feeder0.buses)
+    aggs = [FeasibilityOracleFixtures.big_battery_agg(bus; T = T) for bus in 2:N]
+    λ₀ = fill(6.0, T)
+
+    y_max = 1.0
+    follower_kwargs =
+        (; corridor_cap = 1.0, x_inv_max = y_max, c_inv = 1.0e-6, c_op = fill(1.0e-6, T))
+    master_kwargs =
+        (; c_y = 1.0e-6, y_max = y_max, α_op_lb = -500.0, α_x_lb = -5.0)
+
+    mktempdir() do dir
+        result = TSODSO.solve_stackelberg!(
+            feederS,
+            ConvexBranchFlow(),
+            aggs;
+            λ₀ = λ₀,
+            T = T,
+            follower_kwargs = follower_kwargs,
+            master_kwargs = master_kwargs,
+            tol = 1.0e-4,
+            max_iter = 15,
+            checkpoint_dir = dir,
+        )
+
+        @test result.gap <= 1.0e-4
+        @test :oracle_feasibility_cut in result.trace.policy_action_trace
+        for (action, gap) in
+            zip(result.trace.policy_action_trace, result.trace.gap_trace)
+            action === :oracle_feasibility_cut && @test isnan(gap)
+        end
+    end
+end
