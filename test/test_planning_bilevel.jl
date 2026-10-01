@@ -140,6 +140,18 @@ end
         T = f.T,
         q_op = [-1.0],
     )
+
+    # safety < 1 (iteration-2 WR-01): the closed-form bound is tight, so a factor below
+    # 1 could cut off the true optimum undetectably. safety = 1 itself is accepted.
+    @test_throws ArgumentError build_bilevel_kkt(
+        f.feeder,
+        LinDistFlow();
+        base...,
+        T = f.T,
+        safety = 0.5,
+    )
+    @test build_bilevel_kkt(f.feeder, LinDistFlow(); base..., T = f.T, safety = 1.0) isa
+          BilevelKKT
 end
 
 @testitem "bilevel: solve_bilevel! validity check rejects a genuinely too-tight SOS1 bound" tags =
@@ -153,9 +165,11 @@ end
     #
     # Here the model stays FEASIBLE but a dual binds. Interior-fixture data with the
     # leader fixed at y_inv = 0.05 (below the 0.148 kink) forces the follower's
-    # coupling dual to rho_y = 14.8 - 100*0.05 = 9.8 exactly. The closed-form bound
-    # before `safety` is 14.8, so safety = 9.8/14.8 gives m_ub = 9.8: rho_y must sit
-    # AT the bound, and solve_bilevel! must reject it.
+    # coupling dual to rho_y = 14.8 - 100*0.05 = 9.8 exactly (x_inv = 0.05 > 0, so the
+    # multiplier is unique). Iteration-2 WR-01 forbids safety < 1, so the under-sized
+    # bound is made by hand: build with safety = 1 (m_ub = 14.8), then
+    # set_upper_bound(rho_y, 9.8). rho_y must sit AT that bound in every valid KKT
+    # certificate, and solve_bilevel! must reject it.
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
         [Branch(1, 2, 1e-3, 1e-3, 99.0)],
@@ -176,8 +190,9 @@ end
         d_max = 10.0,
     )
 
-    tight = build_bilevel_kkt(feeder, LinDistFlow(); kwargs..., safety = 9.8 / 14.8)
-    @test isapprox(tight.m_ub, 9.8; atol = 1e-12)
+    tight = build_bilevel_kkt(feeder, LinDistFlow(); kwargs..., safety = 1.0)
+    @test isapprox(tight.m_ub, 14.8; atol = 1e-12)
+    set_upper_bound(tight.rho_y, 9.8)
     fix(tight.y_inv, 0.05; force = true)
     err = try
         solve_bilevel!(tight)

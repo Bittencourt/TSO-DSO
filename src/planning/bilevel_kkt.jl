@@ -250,7 +250,8 @@ plan 29-04's non-degenerate fixture passes a nonzero `q_op`.
   - `follower_integer` — an integer follower is not supported in this phase
     (continuous-only investment, 29-RESEARCH.md Open Question 3).
   - `corridor_cap > 0`, `x_inv_max > 0`, `c_inv >= 0`, `c_y >= 0`, `y_max > 0`,
-    `d_max > 0`, `safety > 0`.
+    `d_max > 0`, `safety >= 1` (the closed-form dual bound is tight, so a factor
+    below 1 can silently cut off the true optimum; 29-REVIEW.md iteration-2 WR-01).
   - `length(c_op) == T`, `length(pi_tariff) == T`, `length(q_op) == T`,
     `length(v_d) == T`.
   - `all(q_op .>= 0)` — `q_op` is the follower's own per-unit QUADRATIC curvature
@@ -327,7 +328,15 @@ function build_bilevel_kkt(
     c_y >= 0 || throw(ArgumentError("build_bilevel_kkt needs c_y >= 0, got $c_y"))
     y_max > 0 || throw(ArgumentError("build_bilevel_kkt needs y_max > 0, got $y_max"))
     d_max > 0 || throw(ArgumentError("build_bilevel_kkt needs d_max > 0, got $d_max"))
-    safety > 0 || throw(ArgumentError("build_bilevel_kkt needs safety > 0, got $safety"))
+    # 29-REVIEW.md iteration-2 WR-01: the closed-form bound is TIGHT (e.g. the interior
+    # fixture's rho_y(y=0) equals it exactly), so any safety < 1 can silently cut off
+    # the true optimum, which no post-solve check can detect.
+    safety >= 1 || throw(
+        ArgumentError(
+            "build_bilevel_kkt needs safety >= 1 (the closed-form dual bound is tight; " *
+            "a smaller factor can cut off the true optimum undetectably), got $safety",
+        ),
+    )
 
     length(c_op) == T ||
         throw(ArgumentError("c_op has length $(length(c_op)), expected T=$T"))
@@ -631,9 +640,9 @@ gold"). If `m_ub` were too small, the true optimum would be cut off. The MILP wo
 then return the best remaining leader decision, whose certificate can sit strictly
 inside the box, and the check would pass. The validity guarantee therefore rests on
 `m_ub` itself, which [`_follower_kkt_dual_bound`](@ref) derives in closed form for
-every `y_inv in [0, y_max]` (with `safety >= 1`). This check catches a bound that is
-provably too tight at the returned point, for example one tightened by a caller via
-`set_upper_bound`.
+every `y_inv in [0, y_max]` (`build_bilevel_kkt` rejects `safety < 1`). This check catches a
+bound that is provably too tight at the returned point, for example one tightened by a
+caller via `set_upper_bound`.
 
 Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, rho_max, mu_lo, model)`.
 """
