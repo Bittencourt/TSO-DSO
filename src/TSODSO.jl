@@ -193,6 +193,7 @@ include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoi
 include("planning/trace.jl")        # BendersTrace convergence ledger (plan 12-01, roadmap criterion 2; zero load-time deps, no JuMP)
 include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (plan 10-02, PLAN-01/02)
 include("planning/feasibility_oracle.jl") # FeasibilityOracle slack-min feasibility-cut oracle (plan 30-01, BILEV-04a)
+include("planning/ac_recheck.jl")   # ac_recheck_incumbent incumbent-only AC physics re-check (plan 30-01, BILEV-04b)
 include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs (plan 11-01, PLAN-04)
 include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)
 include("planning/master_integer.jl") # BendersMasterInteger binary-expansion MILP master (plan 24-01, INT-01)
