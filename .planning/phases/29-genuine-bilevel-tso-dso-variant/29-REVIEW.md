@@ -1,7 +1,8 @@
 ---
 phase: 29-genuine-bilevel-tso-dso-variant
-reviewed: 2026-09-30T00:00:00Z
+reviewed: 2026-10-01T00:52:20Z
 depth: standard
+iteration: 2
 files_reviewed: 7
 files_reviewed_list:
   - src/planning/bilevel_kkt.jl
@@ -13,326 +14,157 @@ files_reviewed_list:
   - test/test_planning_certification_bilevel_interior.jl
 findings:
   critical: 1
-  warning: 8
-  info: 5
-  total: 14
+  warning: 2
+  info: 3
+  total: 6
 status: issues_found
 ---
 
-# Phase 29: Code Review Report
+# Phase 29: Code Review Report (iteration 2)
 
-**Reviewed:** 2026-09-30
-**Depth:** standard (with targeted live probes; no `Pkg.test` launched)
+**Reviewed:** 2026-10-01T00:52:20Z
+**Depth:** standard
 **Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-I checked the KKT/SOS1 single-level reformulation in `bilevel_kkt.jl` by hand against the
-follower's Lagrangian. On both fixtures, the stationarity rows (`statio_x` sums `mu_cap` over `t`,
-and `statio_z` carries the linear `q_op*z` gradient) and the four complementarity pairs are
-correct. The MOI `SOS1ToMILPBridge` takes interval-arithmetic bounds for the affine slack
-elements. That makes the primal side of every pair rigorously bounded. Both fixtures' hand
-derivations (corner `0 / -3.9`; interior `y*=0.148, total=-1.4726`; joint `-3.0628125`;
-`rho_y(0.05)=9.8`) re-derive correctly.
+This pass re-reviews the code after commits 5da5232..07b3822, which fixed CR-01 and WR-01..WR-08 from iteration 1 (backed up as `29-REVIEW.iter1.md`). Iteration-1 items are not raised again.
 
-The defects sit around the reformulation, not inside its algebra:
+**Closed-form bound `_follower_kkt_dual_bound`: verified valid.** I checked the four-case proof by hand against the follower KKT system, including the new `rho_max` term:
 
-- **Dual bound (`m_ub`):** the only thing that makes the answer exact is the measured dual bound,
-  and the code that measures it can fail silently.
-- **Lower-level KKT:** the KKT system leaves out one lower-level bound (`x_inv <= x_inv_max`).
-- **Boundary guard:** the guard lets non-LinDistFlow formulations through.
-- **Tests:** several assertions that claim to certify something actually pass for an unrelated
-  reason, or check the oracle instead of the production model.
+- **`x_inv > 0`:** `rho_lo = 0`. Each `mu_cap[t]` is uniquely determined and `<= a⁺[t]`. So `rho_y + rho_max = cap*Σmu_cap - c_inv <= cap*Σa⁺ - c_inv`.
+- **`x_inv = 0`, `y > 0`:** `rho_y = 0` and `rho_max = 0`. Optimality of `x = 0` requires `c_inv >= cap*Σa⁺`. With `mu_cap = a⁺` this gives `rho_lo = c_inv - cap*Σa⁺`, which lies in `[0, c_inv]`.
+- **`x_inv = 0`, `y = 0`:** choose `rho_y = (cap*Σa⁺ - c_inv)⁺` and `rho_lo = (c_inv - cap*Σa⁺)⁺`.
 
-Live probes (scratch scripts that only `using TSODSO`) confirmed:
-- `m_ub = 9544.44` on the interior fixture. It comes from Clarabel's arbitrary point on an
-  unbounded dual face at `y=0`. The tight value is 14.8.
-- Fixing `y_inv = 1.0` with `x_inv_max = 0.1` makes the production MILP `INFEASIBLE`, even though
-  `y = 1.0` is bilevel-feasible.
-- `ACPowerFlow()` gets past the guard and fails deep inside JuMP with an `ErrorException`, not an
-  `ArgumentError`.
+At least one KKT multiplier vector therefore fits in `[0, m_ub]` for every `y_inv` and every follower optimum, as long as `safety >= 1`. The bound cannot cut off the true optimum.
 
-## Structural Findings (fallow)
+Empirical check: a scratch script ran 60 random instances (T in 1..3, random data, `x_inv_max`/`d_max` often binding) at the tightest `safety = 1`. It compared the production MILP objective with a 301-point brute-force grid using the follower QP. Worst `prod - bf` was 1.0e-7, and no instance was cut off. The `rho_max` stationarity term, its SOS1 pair and the T>1 `Σmu_cap` sum are correct.
 
-No structural pre-pass was provided.
+**New defect: the post-solve at-bound check rejects correct results.** The bound proof only shows that *some* in-box multiplier exists. HiGHS returns an arbitrary vertex of the multiplier face, and when `x_inv* = 0` that face is degenerate and its vertices sit at `m_ub`. `solve_bilevel!` then throws a hard error on a correct optimum. Raising `safety`, as the error message advises, cannot help: the vertex moves with `m_ub`. This is reproduced below (CR-01).
 
-## Narrative Findings (AI reviewer)
+**Fixed tests:** all are genuinely falsifiable.
+
+- **WR-01 test:** without `rho_max` the fixed-y model is INFEASIBLE.
+- **WR-05/WR-08 fixed-y checks:** they pin uniquely determined multipliers.
+- **WR-06 test:** it reaches the at-bound branch with a unique `rho_y = 9.8`.
+- **WR-04 test:** it now checks the fine-only grid.
+- **WR-07 d_max test:** it has a hand-derived binding optimum.
 
 ## Critical Issues
 
-### CR-01: The dual bound `m_ub` can be silently under-measured, and the post-solve check cannot detect a cut-off optimum
+### CR-01: `solve_bilevel!` throws a "true optimum may have been cut off" error on correct optima whenever the follower does not invest (`x_inv* = 0`)
 
-**File:** `src/planning/bilevel_kkt.jl:179-217` (probe loop, silent skip at line 200) and `src/planning/bilevel_kkt.jl:461-494` (validity check)
+**File:** `src/planning/bilevel_kkt.jl:469-509` (check). Root cause is the degenerate multiplier face described at `:129-131` and `:155-167`.
 
-**Issue:** `m_ub` is the big-M for every complementarity dual. It is the only thing that makes the
-single-level MILP equivalent to the bilevel problem. Two compounding defects:
+**Issue:** When `x_inv = 0` with `y_inv = 0`, the slack pairs `[slack_y, rho_y]`, `[x_inv, rho_lo]`, `[slack_cap, mu_cap]` and `[z, mu_lo]` all have zero primal slack. The multipliers then form an unbounded ray, which the `[0, m_ub]` box truncates:
 
-1. **A failed probe is skipped silently.** `if is_solved_and_feasible(m; dual = true) ... end` just
-   drops a probe that failed, and the code errors only when *both* probes fail. The `y_probe = 0.0`
-   probe is the one that carries the large duals: `rho_y` is non-increasing in `y`, so its maximum
-   is at `y = 0`. That probe is also the degenerate one (`0 <= x_inv <= 0`, so Slater's condition
-   fails and the dual optimal face is unbounded). With `q_op > 0` it goes through Clarabel's
-   interior-point method, the solver most likely to return `ALMOST_OPTIMAL` or `SLOW_PROGRESS` on a
-   problem with no strictly feasible interior.
-   - If only that probe fails, `m_ub` comes from the `y_max` probe alone.
-   - On the interior fixture that gives `10 * 0.02 = 0.2`, while the true `rho_y` reaches 14.8.
-   - Every leader decision with `rho_y > 0.2` (here `y < 0.146`) is then excluded from the MILP's
-     feasible set, with no error.
-   - The CONTEXT decision says "derive valid primal/dual bounds; fail loudly otherwise". A
-     half-measured bound is not "loud".
+- `rho_y - rho_lo = cap*Σmu_cap - c_inv`
+- `mu_cap - mu_lo = a`
 
-2. **The post-solve check is necessary, not sufficient.** `solve_bilevel!` rejects a solution only
-   when a dual sits within `1e-6` of `m_ub`. When `m_ub` is too small, the true optimum is cut off.
-   The MILP then returns the best remaining leader decision, and its duals can lie strictly inside
-   `[0, m_ub]`. This is the documented failure mode of big-M bilevel reformulations (Pineda &
-   Morales 2019, "Solving linear bilevel problems using big-Ms: not all that glitters is gold").
-   - Concrete mechanism: with `T >= 2` and a non-monotone leader cost in `y`, the true optimum can
-     be at `y = 0` (needs large `rho_y`, excluded) while the restricted optimum is a later kink
-     where `rho_y < m_ub`.
-   - The check passes and a wrong "bilevel optimum" is returned.
-   - The docstring of `solve_bilevel!` presents this check as the validity gate.
+The MILP objective does not involve the multipliers, so HiGHS returns whichever vertex its pivoting reaches. Those vertices lie on the box face `= m_ub`, so the check fires on a mathematically valid KKT point.
 
-Together these give a credible way to return a wrong answer with no error, in the one component
-whose correctness the phase's "exact" claim depends on.
+This is the generic outcome whenever the leader prefers no delivery:
 
-**Fix:** Fail if *either* probe fails, and stop depending on an IPM's choice on a degenerate face.
-For this follower structure the dual bounds are available in closed form:
-```julia
-# inside _measure_follower_kkt_bounds, replacing the silent skip
-is_solved_and_feasible(m; dual = true) || error(
-    "_measure_follower_kkt_bounds: probe y_probe=$y_probe failed — refusing to " *
-    "derive m_ub from a partial measurement:\n" * last(probe_statuses))
+- `pi_tariff >= v_d`, or
+- a large `c_y`, or
+- a caller that fixes `y_inv = 0` for a sensitivity sweep.
 
-# and/or an analytic bound valid for every y (follower: z ≥ 0, z ≤ cap*x, 0 ≤ x ≤ y):
-mu_cap_max = maximum(max.(pi_tariff .- c_op, 0.0))            # statio_z with z ≥ 0
-rho_y_max  = corridor_cap * sum(max.(pi_tariff .- c_op, 0.0)) # statio_x with rho_lo = 0
-mu_lo_max  = maximum(max.(c_op .- pi_tariff, 0.0)) + mu_cap_max
-rho_lo_max = c_inv + corridor_cap * T * mu_cap_max
-m_ub = safety * max(1e-6, mu_cap_max, rho_y_max, mu_lo_max, rho_lo_max)
+Reproduced with a scratch script on the interior fixture data:
+
 ```
-Also reword the `solve_bilevel!` docstring so it says the at-bound check is a necessary (not
-sufficient) sanity check, and that the validity guarantee rests on `m_ub`.
+interior, v_d=[1.0] (true optimum y*=0, obj 0):  rho_y=148.0 = m_ub, mu_cap=14.82  -> ERROR "rho_y sits at ... m_ub=148.0"
+same, safety=1:                                  rho_y=14.8  = m_ub               -> ERROR
+interior, c_y=20 (true optimum y*=0):            rho_y=148.0 = m_ub               -> ERROR
+interior, fix(y_inv, 0.0):                       rho_y=148.0, rho_lo=133.2        -> ERROR
+```
+
+In the 60-instance random sweep, the default `safety = 10` gave 6/60 false errors, all on optima the brute force confirmed. `safety = 1` gave 26/60.
+
+The corner fixture passes only because HiGHS happens to pick the vertex `mu_cap = 0.5`, `mu_lo = 0.8`, `rho_y = rho_lo = 0`. That is solver-path luck, not a property of the code.
+
+The error text ("re-derive a looser bound (increase `safety`) and re-build") sends users into a loop that can never succeed, because the offending vertex scales with `m_ub`. No testitem covers a `y* = 0` optimum with a profitable follower (`a⁺ > 0`), so the suite stays green.
+
+**Fix:** Validity already rests on the closed-form bound, as the docstring concedes. Make the post-check test whether an in-box certificate exists, not where HiGHS's vertex happens to land:
+
+```julia
+# after assert_solved!: fix the primal, then find the SMALLEST KKT certificate
+cert = Model(select_optimizer(LP()))
+@variable(cert, 0 <= mc[1:T]); @variable(cert, 0 <= ml[1:T])
+@variable(cert, 0 <= ry); @variable(cert, 0 <= rl); @variable(cert, 0 <= rm); @variable(cert, s)
+@constraint(cert, c_inv - cap*sum(mc) + ry + rm - rl == 0)
+@constraint(cert, [t=1:T], -a[t] + q_op[t]*zv[t] + mc[t] - ml[t] == 0)
+# complementarity on the solved active set: zero every multiplier whose primal slack > tol
+slack_cap_v[t] > tol && fix(mc[t], 0.0)  # likewise ml/ry/rl/rm
+@constraint(cert, [mc; ml; ry; rl; rm] .<= s); @objective(cert, Min, s)
+optimize!(cert)
+objective_value(cert) < kkt.m_ub - atol || error("... no KKT certificate inside m_ub ...")
+```
+
+Keep the extra data needed for this (`a`, `q_op`, `c_inv`, `corridor_cap`) on `BilevelKKT`. Report the minimal certificate as the multipliers (see WR-02). Then add a regression testitem: interior data with `v_d = [1.0]`, expecting `y* = x_inv* = z* = 0`, `total = 0`, and `solve_bilevel!` not throwing.
+
+A minimal alternative is to drop the hard error when `x_inv ≈ 0`, since all the degenerate faces arise there. The `y = x = x_max` split of `rho_y`/`rho_max` is bounded by its sum and did not trigger in testing.
 
 ## Warnings
 
-### WR-01: The KKT system has no multiplier for the follower's `x_inv <= x_inv_max`, so bilevel-feasible leader decisions become MILP-infeasible
+### WR-01: `safety` in `(0, 1)` is accepted, but the validity proof needs `safety >= 1`, and the check cannot detect the resulting cut-off
 
-**File:** `src/planning/bilevel_kkt.jl:375`, `src/planning/bilevel_kkt.jl:386-390`
+**File:** `src/planning/bilevel_kkt.jl:316`
 
-**Issue:** `x_inv_max` is a bound in the follower's own problem (the probe at line 181 and both
-oracles model it that way). In the single-level model it is only a variable bound, with no dual in
-`statio_x`. When the follower's response would hit `x_inv_max` and `y_inv > x_inv_max`, the
-equation `c_inv - cap*Σmu_cap + rho_y - rho_lo = 0` has no feasible completion.
+**Issue:** The guard is `safety > 0`. The `_follower_kkt_dual_bound` proof shows the tight multiplier can equal the unscaled bound exactly; for example, `rho_y(y=0) = 14.8` on the interior fixture. So any `safety < 1` can remove the true optimum from the MILP.
 
-Live probe: `x_inv_max = 0.1, y_max = 5`, with `y_inv` fixed to `1.0`, gives `INFEASIBLE`. The true
-follower response (`x_inv = 0.1, z = 1.0`) exists. The optimal value survives today only because
-`c_y >= 0` makes `y = x_inv_max` weakly dominant. Any change to the leader objective (a subsidy on
-`y`, or coupling `y` to other upper-level terms) turns this into a wrong answer. The interior test
-file's header (lines 37-41) admits this as a "known modeling gap" that is "sidestepped by
-construction". The src file says nothing about it and does not guard it, which breaks the "throw a
-clear ArgumentError, never a silent fallback" API decision.
+The `solve_bilevel!` docstring (`:455-462`) itself says the at-bound check cannot detect a cut-off optimum. A caller who passes `safety = 0.5` to "tighten the big-M" therefore gets a silently wrong leader decision, with no error.
 
-**Fix:** Add the missing complementarity pair:
-```julia
-@variable(model, 0 <= rho_max <= m_ub)
-@expression(model, slack_max, x_inv_max - x_inv)
-# statio_x: c_inv - corridor_cap*sum(mu_cap) + rho_y + rho_max - rho_lo == 0
-@constraint(model, [slack_max, rho_max] in MOI.SOS1([1.0, 2.0]))
-```
-Include `rho_max` in the `solve_bilevel!` bound check. At minimum, throw an `ArgumentError` when
-`y_max > x_inv_max`.
+**Fix:** Change the guard to `safety >= 1 || throw(ArgumentError("safety must be >= 1 (the closed-form bound is tight); got $safety"))`. The WR-06 stress test needs some other way to build an under-sized `m_ub`, for example:
 
-### WR-02: The formulation guard is a SOCP denylist, so `ACPowerFlow` gets through and fails deep in JuMP (and `DCPowerFlow` is accepted untested)
+- an internal `_m_ub_override` keyword, or
+- building with `safety = 1` and then `set_upper_bound(tight.rho_y, 9.8)`.
 
-**File:** `src/planning/bilevel_kkt.jl:295-301`
+The second option is simpler and keeps the public API safe.
 
-**Issue:** `problem_class(pf) isa SOCP` rejects only SOCP formulations. `ACPowerFlow`
-(`problem_class == NLP()`) passes the guard, then fails at solve with
-`ScalarQuadraticFunction-in-EqualTo are not supported by the solver` (an `ErrorException`, confirmed
-live). The locked decisions say "DSO network LinDistFlow (LP)" and "Unsupported inputs ... throw a
-clear ArgumentError". `DCPowerFlow` builds and solves without any test or documentation. Any
-future QP-class formulation that adds a quadratic term would also make this an MIQP that HiGHS
-cannot solve (the file's own Pitfall 5).
+### WR-02: Returned multipliers (`mu_cap`, `mu_lo`, `rho_*`) are arbitrary points on a non-unique multiplier face, but are returned as if meaningful
 
-**Fix:** Use an allowlist:
-```julia
-pf isa LinDistFlow || throw(ArgumentError(
-    "build_bilevel_kkt supports only LinDistFlow (strictly affine network) — got $(typeof(pf))"))
-```
-Add an `ACPowerFlow()` case to the boundary-guard testitem.
+**File:** `src/planning/bilevel_kkt.jl:511-523`
 
-### WR-03: `m_ub` is an artefact of Clarabel's dual choice, not a measured quantity (9544 vs the tight 14.8), and it weakens complementarity enforcement
+**Issue:** Whenever `x_inv = 0`, or `y = x = x_max`, the multipliers are not unique, and the returned values are just HiGHS's vertex:
 
-**File:** `src/planning/bilevel_kkt.jl:180, 200-206`
+- Corner fixture: returns `mu_cap = 0.5` and `mu_lo = 0.8`, while the minimal certificate is `mu_cap = 0`, `mu_lo = 0.3`.
+- `v_d = [1.0]` case: returns `mu_cap = 14.82` and `rho_y = 148` against `a⁺ = 1.5`.
 
-**Issue:** At `y_probe = 0` the dual optimal set is unbounded: `rho_y` and `rho_lo` can both move
-along a ray, and so can `mu_cap` and `mu_lo`. HiGHS (LP) returns the vertex `14.8 / 1.5`. Clarabel
-(QP) returns an interior point of the face: `dual(inv_bound) = -954.4`, `reduced_cost(x) = 350.6`,
-giving `m_ub = 9544.4` (live probe on the interior fixture; `3318.5` on a T=2 variant). So the
-"MEASURED, never guessed" bound depends on the solver and its version, and is about 650x larger
-than needed. The bridge enforces `mu <= m_ub * b`. With HiGHS `mip_feasibility_tolerance = 1e-9`
-also acting as the integrality tolerance, a fractional `b` of 1e-9 leaves up to ~1e-5 of
-complementarity violation. The CONTEXT asked for the MILP tolerance to be re-measured for this
-consumer, and that was not done for this M.
+The project treats duals as prices, so a consumer will reasonably read `rho_y` as the shadow value of the leader's investment cap. These values can change with the HiGHS version or presolve path, which hurts reproducibility.
 
-**Fix:** Use the closed-form bounds from CR-01, or probe at a small `y = ε > 0` (non-degenerate).
-Record `m_ub` in a test so that drift is visible.
-
-### WR-04: The interior test's "fine grid resolves the optimum independently of the salted point" assertion uses the salted result
-
-**File:** `test/test_planning_certification_bilevel_interior.jl:406-409`
-
-**Issue:** The comment says the check confirms "the fine grid itself resolves the true optimum,
-independent of the salted point". The code tests `bf.y`, which comes from `salted_grid`, a grid
-that contains `0.148` exactly. So `abs(bf.y - 0.148) < grid_spacing + atol_hand` is true by
-construction. The fine-only run `bf_fine_only` is computed but only used in the loose `atol = 1e-2`
-total check (line 414).
-
-**Fix:**
-```julia
-@test abs(bf_fine_only.y - F.INTERIOR_Y_HAND) <= grid_spacing
-@test isapprox(bf.total, bf_fine_only.total; atol = 10 * grid_spacing)  # analytic slope ≈ 9.95
-```
-The real difference is about 1e-4 (`f(0.15) = -1.4725` vs `-1.4726`), so `1e-2` is about 100x
-looser than the claimed spacing argument.
-
-### WR-05: The "SOS1 branch-switch" and "z≡0 mutation guard" assertions run on the oracle QP, not on the production MILP
-
-**File:** `test/test_planning_certification_bilevel_interior.jl:424-442`
-
-**Issue:** `r_below`, `r_above` and `r_at_one` all come from `solve_follower_at`, a standalone
-Clarabel QP. None of them touches `kkt.model`. The production optimum sits exactly at the kink
-`y = 0.148`, where `slack_y = 0` and `rho_y = 0` hold at the same time (degenerate
-complementarity). So the production solve never shows `[slack_y, rho_y]` in either strict branch.
-The checker's requirement ("[slack_y, rho_y] SOS1 pair genuinely switching") is met only for the
-oracle. A production reformulation with a broken `rho_y` pair would still pass lines 433-442.
-
-**Fix:** Fix the leader decision in the production model and read the production duals:
-```julia
-for (y, expect_rho) in ((0.05, F.RHO_Y_BELOW_HAND), (1.0, 0.0))
-    k = build_bilevel_kkt(feeder, LinDistFlow(); ...same kwargs...)
-    fix(k.y_inv, y; force = true)
-    r = solve_bilevel!(k)
-    @test isapprox(r.rho_y, expect_rho; atol = 1e-6)
-end
-```
-
-### WR-06: The "too-tight bound" test passes through MILP infeasibility and never reaches the validity check it claims to test
-
-**File:** `test/test_planning_bilevel.jl:128-156`
-
-**Issue:** With `safety = 1e-9`, `m_ub` is about 1e-9. On the corner fixture, `statio_x`
-(`1 - 2*mu_cap + rho_y - rho_lo = 0`, all multipliers in `[0, 1e-9]`) has no solution, so
-`assert_solved!` throws "Solve failed" first. `@test_throws Exception` accepts any exception. The
-`isapprox(v, kkt.m_ub)` error branches in `solve_bilevel!` (lines 465-494) are therefore never
-exercised by any test. The comment ("the solved complementarity variables land at/near the bound")
-is false.
-
-**Fix:** Choose a `safety` that keeps the model feasible but makes a dual bind. On the interior
-fixture with the leader fixed at a small `y` (so `rho_y` is forced to `14.8 - 100y`), set `m_ub`
-equal to that value. Match on the message, for example
-`@test_throws r"sits at \(or within" solve_bilevel!(kkt)` on Julia 1.11, or catch the error and
-check `occursin`.
-
-### WR-07: The oracles do not share production's semantics for the network coupling or the follower's tie-breaking
-
-**File:** `test/test_planning_certification_bilevel.jl:146-149`, `test/test_planning_certification_bilevel_interior.jl:170-171`, `test/test_planning_certification_bilevel.jl:104-105`
-
-**Issue:**
-- **Network coupling:** brute force sets `d_star = min(z_star, d_max)` and still charges
-  `pi_tariff * z_star`, so a `z > d_max` response counts as feasible-but-curtailed. In production,
-  `balance_p` forces `d = z`, so the same `y` is infeasible.
-- **Voltage bounds:** brute force ignores them; production enforces them.
-- **BilevelJuMP:** the oracle hand-codes `d == z`.
-- **Follower ties:** brute force takes whatever optimum HiGHS or Clarabel reports when the follower
-  has ties. The KKT-MILP is *optimistic*: the leader picks among the follower's optimal set.
-
-The fixtures never activate these differences (`d_max` and the voltage limits are slack, and there
-are no follower ties). So the oracles agreeing with production says nothing about the embedded
-LinDistFlow coupling, which is the CONTEXT "Option B" decision. The optimistic assumption is also
-not stated in the `bilevel_kkt.jl` docstrings.
-
-**Fix:** In brute force, mark `z_star > d_max` (or `v2` outside its bounds) as infeasible
-(`continue`) instead of capping it. State "optimistic bilevel; leader-level constraints on
-follower variables are coupling constraints" in the `build_bilevel_kkt` docstring. Add one fixture
-where `d_max` binds the follower's response, to exercise the network coupling.
-
-### WR-08: The multi-period path (`T > 1`, the shared-`x_inv` stationarity sum) has no test
-
-**File:** `src/planning/bilevel_kkt.jl:386-390`; all three test files
-
-**Issue:** Every production call in the tests uses `T = 1`. The CONTEXT scope is `T <= 2`. The
-`sum(mu_cap[t] for t in 1:T)` in `statio_x` and the per-`t` SOS1 loops are the most error-prone
-lines, and nothing exercises them. A wrong index (for example `mu_cap[1]` repeated) would pass
-every test. A live T=2 probe gave a plausible answer (`y = 0.148, z = [1.48, 0]`), but that is not
-a pinned test.
-
-**Fix:** Add a T=2 interior fixture with distinct tariffs where both periods deliver
-(`pi_tariff[t] - c_op[t] > c_inv/corridor_cap` for both `t`). Hand-derive it and cross-check
-against BilevelJuMP and brute force.
+**Fix:** Return the minimal (canonical) certificate computed in the CR-01 fix. At the least, state in the docstring that the multipliers are unique only on non-degenerate active sets and must not be read as prices otherwise.
 
 ## Info
 
-### IN-01: The "differs" floors are below the "equals" tolerances
+### IN-01: `GAP_FLOOR_INTERIOR` derivation comment contradicts its value
 
-**File:** `test/test_planning_certification_bilevel_interior.jl:292-293, 375`; `test/fixtures_planning.jl:166`
+**File:** `test/test_planning_certification_bilevel_interior.jl:297-304`
 
-**Issue:** `GAP_FLOOR_INTERIOR = 1e-6` while `atol_hand = 1e-4`, and `BILEV_GAP_FLOOR = 1e-8`. A
-result could be "equal to joint within atol_hand" and "different from joint" at the same time. The
-floors are justified by `mip_feasibility_tolerance`, which is a constraint-violation tolerance and
-not an objective-comparison error bar. The divergence asserts are carried by the golden-value
-asserts, not by the floors.
+**Issue:** The comment says the floor is "10x the production MILP's own `mip_feasibility_tolerance=1e-9`", which is 1e-8, but the value is `1e-6`. `fixtures_planning.jl:166` uses 1e-8 for the same stated derivation.
 
-**Fix:** Set each floor to at least 10x the largest equality tolerance used in the same test
-(`>= 1e-3`), or drop the floors and say that the golden asserts carry the divergence claim.
+**Fix:** Either set `1e-8`, or state the real basis (for example, the 1e-6 production-vs-hand tolerance).
 
-### IN-02: Tolerance comments point to "this plan's SUMMARY" instead of stating the measured value
+### IN-02: T=2 brute force omits the voltage-bound filter that the other oracles apply "to match production semantics"
 
-**File:** `test/test_planning_certification_bilevel_interior.jl:373-375, 388-392, 397-401`; `test/test_planning_bilevel.jl:36-40`
+**File:** `test/test_planning_certification_bilevel_interior.jl:687-698`
 
-**Issue:** The header says production matched within 1e-7, but `atol_hand = 1e-4` (1000x looser).
-`atol_bilevel` and `atol_bruteforce` (both 1e-3) cite measurements that are not recorded in the
-file. That goes against the "measure comparison epsilons" convention (memory:
-`highs-exactness-defaults`).
+**Issue:** `brute_force_T2` filters only `z <= d_max`. The other two brute-force oracles also filter the bus-2 voltage band, per WR-07. The band is slack on this fixture, so results are unaffected, but the oracle is not semantically equivalent to production if it is copied or reused.
 
-**Fix:** Write the measured residuals inline next to each `atol`, and set each `atol` to about 10x
-the measured value.
+**Fix:** Add `all(0.95^2 .<= 1 .- 2e-3 .* zs .<= 1.05^2) || continue`.
 
-### IN-03: The absolute tolerance in the at-bound check does not scale with `m_ub`
+### IN-03: Stale plan-time language in the `build_bilevel_kkt` docstring
 
-**File:** `src/planning/bilevel_kkt.jl:464-494`
+**File:** `src/planning/bilevel_kkt.jl:260-264`
 
-**Issue:** `isapprox(v, m_ub; atol = 1e-6)` uses a fixed absolute window, while `m_ub` ranges from
-1e-5 to about 1e4. The four blocks are also copy-pasted.
+**Issue:** The paragraph "MEASURES, does not assume ... extended with a keyword-passthrough seam ONLY if measurement (Task 2's fixture) shows it is insufficient" describes a plan task, not behaviour. It should be resolved or removed.
 
-**Fix:** Loop over `(name, var)` pairs and test `v >= m_ub * (1 - 1e-6) - 1e-9`.
+**Fix:** Replace it with the measured outcome. The shared `select_optimizer(MILP())` defaults are used unchanged and solve all fixtures to `OPTIMAL`.
 
-### IN-04: The boundary-guard test covers only part of the guard list
-
-**File:** `test/test_planning_bilevel.jl:47-126`
-
-**Issue:** There are no cases for:
-- the `pi_tariff`, `q_op` and `v_d` length mismatches
-- non-positive `corridor_cap`, `x_inv_max`, `y_max`, `d_max` and `safety`
-- negative `c_inv` and `c_y`
-- `ACPowerFlow` (see WR-02)
-
-**Fix:** Add one `@test_throws ArgumentError` per guard.
-
-### IN-05: The `TSODSO.jl` include comment is garbled about dependencies
-
-**File:** `src/TSODSO.jl` (bilevel_kkt include block)
-
-**Issue:** "needs only follower.jl's/master.jl's ALREADY-LOADED sibling files transitively" is
-confusing. The file actually depends on `ModelContext`, `contribute!`, `add_to_residual!`,
-`register_constraint!`, `problem_class`/`SOCP` and `select_optimizer`/`assert_solved!`, all from
-core, powerflow and solver, not from planning.
-
-**Fix:** List the real dependencies.
+_Iteration-1 info items IN-01..IN-05 were out of the fixer's scope and remain as described in `29-REVIEW.iter1.md`. They are not repeated here._
 
 ---
 
-_Reviewed: 2026-09-30_
+_Reviewed: 2026-10-01T00:52:20Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
