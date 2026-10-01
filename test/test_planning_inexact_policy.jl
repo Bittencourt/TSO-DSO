@@ -196,6 +196,10 @@ end
         # exact" case, not the "populated report" case — both are valid per BILEV-04b,
         # this fixture happens to land in the former).
         @test result.ac_report === nothing
+        # CR-02: the explicit certificate agrees — the incumbent's own solve was exact,
+        # so UB/gap are NOT relaxation-only here.
+        @test result.incumbent_exactness === :exact
+        @test !result.ub_relaxation_only
 
         # BILEV-04a cross-check (Task 2 regression, confirmed NATURALLY on this
         # realistic multi-bus fixture, not just plan 30-01's own purpose-built ones):
@@ -286,4 +290,65 @@ end
         zeros(T);
         on_inexact = :ignore,
     )
+end
+
+@testitem "planning inexact policy: an SOCP-inexact incumbent is labelled relaxation-only and gets a populated AC report end-to-end (CR-02)" tags =
+    [:planning] begin
+    using TSODSO
+
+    # Phase 30 code review (CR-02): the FIRST test that drives the populated-`ac_report`
+    # path through `solve_stackelberg!` itself (every other item's incumbent is exact).
+    #
+    # FIXTURE (measured 2026-10-01, scratchpad probe_cr02b.jl): the single-Thermostatic
+    # T=1 population on the UNMODIFIED `ieee13_modified()` at a NEGATIVE wholesale price
+    # λ₀ = [-1.0] (an oversupply hour — the network is PAID to import). The pinned SOC
+    # relaxation then prefers to "dissipate" the extra import in a slack cone, so every
+    # feasible pin above the load is genuinely SOCP-inexact: measured maxgap 4.3e-4 at
+    # z=0.0105, 5.9e-3 at 0.02, 1.1e-2 at 0.03, 1.74e-2 at 0.04. With near-zero
+    # investment costs the Benders optimum sits at the box corner z = y_max = 0.04, so the
+    # incumbent itself is inexact. Measured run: iters=4, gap≈2.0e-9, z_best=[0.04],
+    # incumbent maxgap=1.74e-2; the AC re-check SOLVES with no limit violated
+    # (max_overload_ratio≈0.648, |V|≈0.9846), ac_welfare≈socp_welfare (gap≈3e-10).
+    T = 1
+    feeder = TSODSO.ieee13_modified()
+    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
+
+    mktempdir() do dir
+        result = TSODSO.solve_stackelberg!(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            λ₀ = [-1.0],
+            T = T,
+            follower_kwargs = (; corridor_cap = 1.0, x_inv_max = 0.2, c_inv = 0.01, c_op = [0.01]),
+            master_kwargs = (; c_y = 0.01, y_max = 0.04),   # :auto α bounds
+            tol = 1.0e-6,
+            max_iter = 30,
+            checkpoint_dir = dir,
+        )
+
+        @test result.gap <= 1.0e-6
+        # The incumbent's OWN solve was inexact, and the result says so explicitly.
+        @test result.incumbent_exactness === :inexact
+        @test result.ub_relaxation_only
+        @test result.incumbent_socp_maxgap > 1.0e-3     # measured 1.74e-2
+        @test :certified_incumbent in result.trace.policy_action_trace
+
+        # The populated AC re-check report, reached through solve_stackelberg!.
+        rep = result.ac_report
+        @test rep !== nothing
+        @test rep.raw_status == "Solve_Succeeded"
+        @test length(rep.p_import) == T
+        @test isapprox(rep.p_import, result.z; atol = 1.0e-6)
+        # `ok` is DERIVED from the violation counts, never hard-coded.
+        @test rep.ok == (
+            rep.violations.n_thermal_violations == 0 &&
+            rep.violations.n_voltage_violations == 0
+        )
+        @test rep.ok                                   # measured: no limit violated
+        # The relaxation error in UB is MEASURED: SOCP vs AC welfare at the same z.
+        @test isfinite(rep.socp_welfare) && isfinite(rep.ac_welfare)
+        @test rep.welfare_gap == rep.socp_welfare - rep.ac_welfare
+    end
 end

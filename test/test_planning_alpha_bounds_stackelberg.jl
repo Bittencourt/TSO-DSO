@@ -77,6 +77,10 @@ end
         # exactness there — the AC-recheck-at-convergence hook (BILEV-04b) must find the
         # incumbent genuinely exact and report ac_report = nothing.
         @test result.ac_report === nothing
+        # CR-02/IN-04: on LinDistFlow the exactness gate never runs — "not checked",
+        # reported as such, never as "certified exact".
+        @test result.incumbent_exactness === :not_applicable
+        @test !result.ub_relaxation_only
     end
 end
 

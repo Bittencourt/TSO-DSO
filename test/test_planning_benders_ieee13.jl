@@ -154,6 +154,8 @@
         # test_planning_inexact_policy.jl's own fixture, which deliberately drives a
         # trial just past this window.
         @test result.ac_report === nothing
+        @test result.incumbent_exactness === :exact
+        @test !result.ub_relaxation_only
         @test all(isnan, result.trace.socp_maxgap_trace)
         @test all(a -> a in (:none, :certified_incumbent), result.trace.policy_action_trace)
     end

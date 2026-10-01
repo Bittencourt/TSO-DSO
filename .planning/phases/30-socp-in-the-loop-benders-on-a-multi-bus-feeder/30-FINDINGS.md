@@ -154,16 +154,22 @@ synthetic forced `z`) passes through a measured SOCP-inexact pin at `z~0.0504`
 - `:certify_incumbent` (default) — reconstructs the already-solved model's `(cost, π, π_s,
   dadp, ctx)` and proceeds normally, logging the cone gap.
 
-**`ac_report` population status — honest scope note:** across this phase's own test suite,
-`ac_report` is confirmed populated (non-`nothing`) wherever `:certify_incumbent` processes a
-genuinely inexact incumbent (the measured-inexact pin above). However, the BILEV-03 headline
-convergence test (point 1) and the T=24 Literate run both report `ac_report === nothing`
-because every iteration in those runs happened to stay SOCP-exact. The AC-recheck-at-
-convergence path exists and is unit-tested directly in plan 30-01
-(`test_planning_ac_recheck.jl`'s feasible-pin and overload-pin items), and IS exercised
+**`ac_report` population status — CORRECTED by the Phase 30 code review (CR-02).** The
+original text of this paragraph claimed the populated-`ac_report` path "IS exercised
 end-to-end through `solve_stackelberg!` by `test_planning_inexact_policy.jl`'s
-`:certify_incumbent` item — so it has been triggered end-to-end at least once this phase,
-not merely unit-tested in isolation. Stated plainly rather than silently implied universal.
+`:certify_incumbent` item". **That was false**: that item asserts
+`result.ac_report === nothing`, because its converged incumbent is itself SOCP-exact (the
+inexact iterates there are transient). No phase-30 test reached the populated path through
+`solve_stackelberg!`; it was only unit-tested via `ac_recheck_incumbent`, whose `ok` field
+was additionally hard-coded `true` (and a unit test asserted `r.ok` next to
+`n_thermal_violations > 0`). Fixed in the code-review pass: `ok` is now
+`n_thermal_violations == 0 && n_voltage_violations == 0` beyond a per-instance measured
+tolerance (`10·δ`, `δ` = the AC solve's own max primal residual, measured 2e-9–1e-8), the
+result carries an explicit `incumbent_exactness`/`incumbent_socp_maxgap`/
+`ub_relaxation_only` certificate (UB/gap certify the relaxation only when the incumbent is
+inexact), and a new item in `test_planning_inexact_policy.jl` drives an SOCP-inexact
+incumbent end-to-end (single-Thermostatic T=1 `ieee13_modified()`, λ₀ = [-1.0], incumbent
+z = 0.04 with measured maxgap 1.74e-2) and asserts the populated report.
 
 **Trace extensions:** `BendersTrace` gains additive `socp_maxgap_trace`/
 `policy_action_trace` columns and a `:rejected` `cut_type` kind; `trace_summary` gains

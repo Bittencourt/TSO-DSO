@@ -744,7 +744,7 @@ invalid on that genuinely divergent-objective game (see that file's module heade
 
 # Returns
 
-On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report)`
+On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only)`
 where `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so
 the returned point's true cost equals `UB` and the convergence certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
@@ -760,14 +760,27 @@ retry-gated subproblems' termination statuses (never a log-scrape estimate), and
 number of no-good anti-stall cuts fired (`nogood_count`, always `0` on the continuous
 path) and the convergence attribution (`converged_via`, `:clean` if `nogood_count == 0`
 else `:nogood_assisted`) — a nonzero `nogood_count` never fails the run, it is reported,
-never silently absorbed. `ac_report` (BILEV-04b, plan 30-04, a NEW, TRAILING, additive
-field) is the AC-recheck-at-convergence result: `nothing` whenever the incumbent is
-genuinely SOCP-exact (certified ONCE, immediately before this return, by re-solving the
-build-once `oracle` at `z_best` — true for every pre-existing LinDistFlow-based test,
-since `:l` is never stashed there), or a populated
-`(; ok, violations, p_import, raw_status)` physical AC re-check report
-([`ac_recheck_incumbent`](@ref), plan 30-01) when the incumbent turns out SOCP-inexact —
-NEVER thrown, never silently passed, per BILEV-04b's documented policy.
+never silently absorbed.
+
+**Incumbent exactness certificate (Phase 30 code review, CR-02, additive trailing
+fields).** `incumbent_exactness ∈ (:exact, :inexact, :not_applicable)` is the exactness
+verdict of the very oracle solve that produced `UB` (`:not_applicable` for DC/
+LinDistFlow, where no cone exists — "not checked", never "certified exact");
+`incumbent_socp_maxgap` is that solve's measured cone residual (`NaN` when not
+applicable); `ub_relaxation_only = (incumbent_exactness === :inexact)`. **When
+`ub_relaxation_only` is `true`, `UB` and `gap` certify the SOC RELAXATION ONLY**: the
+incumbent's welfare `W_R(z_best)` comes from a slack cone, `W_R ≥ W_true`, so `UB` is a
+LOWER estimate of the incumbent's physical cost, not an upper bound on the physical
+problem (the `LB` stays valid either way — relaxation cuts under-estimate the true value
+function). This state is reachable only under `inexact_policy = :certify_incumbent`.
+
+`ac_report` (BILEV-04b, plan 30-04) is `nothing` unless `ub_relaxation_only`, in which
+case it is [`ac_recheck_incumbent`](@ref)'s report at `z_best` —
+`(; ok, violations, p_import, ac_welfare, raw_status)`, where `ok` is `false` whenever a
+thermal/voltage limit is violated beyond the measured tolerance — extended with
+`socp_welfare = W_R(z_best)` and `welfare_gap = socp_welfare − ac_welfare` (the AC model
+drops the limits, so the gap is a diagnostic of how far the relaxation sits from AC
+physics at `z_best`, not a certified error bound). NEVER thrown, never silently passed.
 
 # Throws
 
@@ -912,6 +925,11 @@ function solve_stackelberg!(
     # iterate's true cost over UB is NOT bounded by tol.
     y_best = NaN
     z_best = fill(NaN, T)
+    # CR-02 (Phase 30 code review): the incumbent's own exactness certificate, set
+    # together with (y_best, z_best) — see the incumbent update in the loop.
+    incumbent_exactness = :not_applicable
+    incumbent_socp_maxgap = NaN
+    incumbent_welfare = NaN
     gap = NaN
     # plan 12-01: the purpose-built Benders convergence ledger (roadmap criterion 2) —
     # built alongside the other accumulator state, immediately before the loop.
@@ -1189,6 +1207,13 @@ function solve_stackelberg!(
             UB = cost_k
             y_best = lb_res.y
             z_best = copy(lb_res.z)
+            # CR-02/WR-10 (Phase 30 code review): the incumbent's exactness certificate is
+            # the verdict of the VERY solve that produced UB — recorded here, never
+            # re-derived later by a second solve (whose sticky retry attributes could
+            # disagree with this one).
+            incumbent_exactness = oracle_res.exactness
+            incumbent_socp_maxgap = oracle_res.socp_maxgap
+            incumbent_welfare = oracle_res.cost
         end
         gap = (UB - lb_res.LB) / max(1, abs(UB))
 
@@ -1241,18 +1266,25 @@ function solve_stackelberg!(
             isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)
 
         if converged_now
-            # BILEV-04b (plan 30-04): AC-recheck-at-convergence — ONCE, at the converged
-            # incumbent, never per iteration. Re-solve the SAME build-once `oracle` at
-            # `z_best` and read its EXPLICIT exactness verdict (Phase 30 code review,
-            # CR-03 — never inferred from a stashed side-effect key). Any throw here (a
-            # solve failure or a complementarity violation at the incumbent) would be a
-            # correctness defect this far into a converged run — propagate it unchanged.
-            _incumbent_exact =
-                solve_planning_oracle!(oracle, z_best; on_inexact = :report).exactness !==
-                :inexact
-            ac_report =
-                _incumbent_exact ? nothing :
-                ac_recheck_incumbent(feeder, aggregators, λ₀, T, z_best)
+            # BILEV-04b (plan 30-04) + CR-02/WR-10 (Phase 30 code review): the AC
+            # re-check runs ONCE, at the converged incumbent, iff the incumbent's OWN
+            # recorded verdict is :inexact — only reachable under :certify_incumbent
+            # (:strict throws on any inexact solve; :reject never lets an inexact iterate
+            # become the incumbent). No second oracle solve happens here, so sticky retry
+            # attributes cannot change the verdict and no policy is bypassed. The report
+            # carries the SOCP welfare at the same z so the relaxation error in UB is
+            # measured, not just flagged.
+            ub_relaxation_only = incumbent_exactness === :inexact
+            ac_report = if ub_relaxation_only
+                ac = ac_recheck_incumbent(feeder, aggregators, λ₀, T, z_best)
+                (;
+                    ac...,
+                    socp_welfare = incumbent_welfare,
+                    welfare_gap = incumbent_welfare - ac.ac_welfare,
+                )
+            else
+                nothing
+            end
 
             # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
             # (continuous path) or UB matches known_optimum exactly within
@@ -1275,13 +1307,15 @@ function solve_stackelberg!(
                 nogood_count = nogood_total,
                 converged_via = nogood_total > 0 ? :nogood_assisted : :clean,
                 # BILEV-04b (plan 30-04): a NEW, TRAILING, additive field — `nothing`
-                # whenever the incumbent is genuinely SOCP-exact (true for every
-                # pre-existing LinDistFlow-based test: :l is never stashed,
-                # solve_planning_oracle! never throws from exactness there, so
-                # _incumbent_exact stays true), a populated
-                # (; ok, violations, p_import, raw_status) report only when the
-                # incumbent turns out SOCP-inexact.
+                # unless the incumbent is SOCP-inexact, then the populated AC re-check
+                # report (see the docstring's Returns section).
                 ac_report,
+                # CR-02 (Phase 30 code review): the incumbent's exactness certificate.
+                # When ub_relaxation_only is true, UB/gap certify the SOC RELAXATION
+                # only — UB is then not an upper bound on the physical problem.
+                incumbent_exactness,
+                incumbent_socp_maxgap,
+                ub_relaxation_only,
             )
         end
     end
