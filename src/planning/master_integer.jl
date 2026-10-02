@@ -73,6 +73,14 @@ rebuilt, mirroring `BendersMaster`'s own mutate-without-rebuild idiom.
     so plan 24-02's Laporte-Louveaux cut never has to re-derive the recourse's
     global lower bound.
 
+  - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 31 (BILEV-07)
+    port of `BendersMaster.lb_slack`'s own field (master.jl, WR-05): how far ABOVE its
+    derived relaxed optimum each declared epigraph lower bound was ALLOWED to be when
+    `build_master_integer` accepted it. Populated identically to the continuous
+    master's own field (see [`build_master_integer`](@ref)); read via
+    `_accepted_lb_slack(::BendersMasterInteger, label)`, dispatched automatically by
+    `benders.jl`'s pre-existing generic `_accepted_lb_slack` fallback mechanism.
+
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended, mirroring
     `BendersMaster.cuts`'s exact convention.
 
@@ -116,13 +124,17 @@ struct BendersMasterInteger{Y, Z, AOP, AX, B}
     c_y::Float64
     y_max::Float64
     L::Float64
+    lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}
     cuts::Vector{Any}
     visited::Dict{Vector{Int}, Vector{Float64}}
 end
 
 """
     build_master_integer(; T::Int, K::Int = 4, c_y::Real, y_max::Real,
-                         α_op_lb::Real, α_x_lb::Real) -> BendersMasterInteger
+                         α_op_lb::Union{Symbol,Real} = :auto,
+                         α_x_lb::Union{Symbol,Real} = :auto,
+                         bounds_ctx::Union{Nothing,NamedTuple} = nothing,
+                         rejection_tol::Real = ALPHA_LB_REJECTION_TOL) -> BendersMasterInteger
 
 Build the binary-expansion MILP Benders master EXACTLY ONCE:
 
@@ -145,9 +157,9 @@ Build the binary-expansion MILP Benders master EXACTLY ONCE:
     deliberate, accepted consequence of the round-step-size convention (D-02),
     not a bug to be corrected by changing the divisor to `2^K - 1`.
 
- 4. `z[1:T]`, `α_op >= α_op_lb`, `α_x >= α_x_lb` — SAME finite-lower-bound-at-
-    build-time discipline as `build_master` (Pitfall M1), reused for the MILP
-    master.
+ 4. `z[1:T]`, `α_op >= α_op_lb_resolved`, `α_x >= α_x_lb_resolved` — SAME
+    finite-lower-bound-at-build-time discipline as `build_master` (Pitfall M1),
+    reused for the MILP master.
 
  5. `box_lo[t]: z[t] >= 0`, `box_hi[t]: z[t] <= y_inv` — identical box shape to
     `build_master` (`y_inv` here is an `AffExpr`; JuMP supports this in
@@ -155,17 +167,31 @@ Build the binary-expansion MILP Benders master EXACTLY ONCE:
 
  6. `Min c_y*y_inv + α_op + α_x` — identical objective shape to `build_master`.
 
-Returns a [`BendersMasterInteger`](@ref) with an empty `cuts` log and an empty
-`visited` set, and `L = α_op_lb + α_x_lb` pinned for reuse by plan 24-02's
-Laporte-Louveaux cut.
+**Phase 31 (BILEV-07): `α_op_lb`/`α_x_lb` gain the SAME `:auto`/validated-explicit/
+opt-out `bounds_ctx` machinery `build_master` already has (BILEV-05, Phase 30) —
+ported VERBATIM from `build_master` (master.jl), reusing
+`derive_alpha_op_lb`/`alpha_op_lb_derivation`/`derive_alpha_x_lb`/
+`alpha_x_lb_derivation`/`alpha_lb_margin` unchanged (no duplication). Every
+pre-existing call site (explicit `Real` `α_op_lb`/`α_x_lb`, no `bounds_ctx`) stays
+BYTE-IDENTICAL — the `bounds_ctx === nothing` branch never calls the derivation
+helpers. See `build_master`'s own docstring for the full three-way
+`bounds_ctx.follower_kwargs` dispatch (`NamedTuple` / `FollowerLP` / `nothing`) this
+function reuses verbatim.**
+
+Returns a [`BendersMasterInteger`](@ref) with an empty `cuts` log, an empty
+`visited` set, a populated `lb_slack` field (mirroring `BendersMaster.lb_slack`,
+WR-05), and `L = α_op_lb_resolved + α_x_lb_resolved` pinned for reuse by plan
+24-02's Laporte-Louveaux cut.
 """
 function build_master_integer(;
     T::Int,
     K::Int = 4,
     c_y::Real,
     y_max::Real,
-    α_op_lb::Real,
-    α_x_lb::Real,
+    α_op_lb::Union{Symbol, Real} = :auto,
+    α_x_lb::Union{Symbol, Real} = :auto,
+    bounds_ctx::Union{Nothing, NamedTuple} = nothing,
+    rejection_tol::Real = ALPHA_LB_REJECTION_TOL,
 )
     # Boundary guards FIRST — fail here, not deep in objective assembly (mirrors
     # build_master's own discipline, master.jl).
@@ -173,6 +199,106 @@ function build_master_integer(;
     K >= 1 || throw(ArgumentError("build_master_integer needs K >= 1, got K=$K"))
     y_max > 0 || throw(ArgumentError("build_master_integer needs y_max > 0, got $y_max"))
     c_y >= 0 || throw(ArgumentError("build_master_integer needs c_y >= 0, got $c_y"))
+
+    (α_op_lb === :auto || α_x_lb === :auto) &&
+        bounds_ctx === nothing &&
+        throw(
+            ArgumentError(
+                "build_master_integer: α_op_lb/α_x_lb = :auto requires bounds_ctx",
+            ),
+        )
+    # IN-03 (ported from build_master): the keyword type already restricts these to
+    # Union{Symbol,Real}, so the guard must reject every Symbol OTHER than :auto (a typo
+    # such as :atuo used to fall through to a MethodError deep in the resolution).
+    (α_op_lb isa Real || α_op_lb === :auto) || throw(
+        ArgumentError(
+            "build_master_integer: α_op_lb must be :auto or a Real, got $(repr(α_op_lb))",
+        ),
+    )
+    (α_x_lb isa Real || α_x_lb === :auto) || throw(
+        ArgumentError(
+            "build_master_integer: α_x_lb must be :auto or a Real, got $(repr(α_x_lb))",
+        ),
+    )
+
+    # WR-05 (ported from build_master): the acceptance slack actually granted to each
+    # declared bound, carried to BendersMasterInteger.lb_slack for _accepted_lb_slack.
+    slack_op = 0.0
+    slack_x = 0.0
+
+    # BILEV-05/BILEV-07 resolution: α_op_lb. :auto always derives; an explicit bound is
+    # validated ONLY when bounds_ctx is supplied (the opt-in design decision) — the
+    # bounds_ctx === nothing branch is the byte-identical, zero-regression path.
+    α_op_lb_resolved = if α_op_lb === :auto
+        derive_alpha_op_lb(
+            bounds_ctx.feeder,
+            bounds_ctx.pf,
+            bounds_ctx.aggregators;
+            λ₀ = bounds_ctx.λ₀,
+            T = T,
+            y_max = y_max,
+        )
+    elseif bounds_ctx !== nothing
+        d = alpha_op_lb_derivation(
+            bounds_ctx.feeder,
+            bounds_ctx.pf,
+            bounds_ctx.aggregators;
+            λ₀ = bounds_ctx.λ₀,
+            T = T,
+            y_max = y_max,
+        )
+        # WR-03: compare against the UN-margined optimum plus a measured, scale-aware
+        # slack (see ALPHA_LB_REJECTION_TOL's derivation) — never `bound + tol`, which
+        # cancelled to the raw optimum and left no tolerance at all.
+        slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)
+        α_op_lb > d.optimum + slack && throw(
+            ArgumentError(
+                "build_master_integer: α_op_lb=$α_op_lb exceeds the derived relaxed " *
+                "minimum $(d.optimum) by more than the measured slack $slack (duality " *
+                "gap $(d.gap)) — would silently produce a wrong-converged answer",
+            ),
+        )
+        slack_op = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
+        Float64(α_op_lb)
+    else
+        Float64(α_op_lb)
+    end
+
+    # BILEV-05/BILEV-07 resolution: α_x_lb. Three-way dispatch on
+    # bounds_ctx.follower_kwargs: a NamedTuple, a FollowerLP, or nothing (no sound
+    # derivation for this follower type — skip the rejection check, accept the explicit
+    # value as-is; :auto in this branch is a hard error, since there is nothing to
+    # derive from).
+    _fk = bounds_ctx === nothing ? nothing : bounds_ctx.follower_kwargs
+    α_x_lb_resolved = if α_x_lb === :auto
+        _fk === nothing && throw(
+            ArgumentError(
+                "build_master_integer: α_x_lb=:auto requires bounds_ctx.follower_kwargs " *
+                "to be a NamedTuple or a FollowerLP — got `nothing` (no sound derivation " *
+                "for this follower type)",
+            ),
+        )
+        _fk isa NamedTuple ? derive_alpha_x_lb(; _fk..., T = T) : derive_alpha_x_lb(_fk)
+    elseif bounds_ctx !== nothing && _fk !== nothing
+        d = _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
+            alpha_x_lb_derivation(_fk)
+        slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)   # WR-03
+        α_x_lb > d.optimum + slack && throw(
+            ArgumentError(
+                "build_master_integer: α_x_lb=$α_x_lb exceeds the derived relaxed " *
+                "minimum $(d.optimum) by more than the measured slack $slack (duality " *
+                "gap $(d.gap)) — would silently produce a wrong-converged answer",
+            ),
+        )
+        slack_x = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
+        Float64(α_x_lb)
+    else
+        # bounds_ctx === nothing (opt-out, byte-identical path), OR _fk === nothing (a
+        # pre-built follower with no sound derivation) — accept the explicit value
+        # unvalidated at build time; the universal runtime floor guard (benders.jl)
+        # remains the defense-in-depth check.
+        Float64(α_x_lb)
+    end
 
     model = Model(select_optimizer(MILP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
 
@@ -184,8 +310,8 @@ function build_master_integer(;
     @variable(model, z[t = 1:T])
     # Pitfall M1 (reused verbatim from build_master): FINITE epigraph lower bounds
     # declared AT BUILD TIME — the very first (zero-cut) solve depends on this.
-    @variable(model, α_op >= α_op_lb)
-    @variable(model, α_x >= α_x_lb)
+    @variable(model, α_op >= α_op_lb_resolved)
+    @variable(model, α_x >= α_x_lb_resolved)
 
     # Pitfall O1 (reused verbatim from build_master): z is a physically nonnegative
     # delivered import flow, bounded above by the leader's own (derived) investment.
@@ -205,11 +331,25 @@ function build_master_integer(;
         T,
         Float64(c_y),
         Float64(y_max),
-        Float64(α_op_lb + α_x_lb),
+        Float64(α_op_lb_resolved + α_x_lb_resolved),
+        (; op = Float64(slack_op), x = Float64(slack_x)),
         Any[],
         Dict{Vector{Int}, Vector{Float64}}(),
     )
 end
+
+"""
+    _accepted_lb_slack(master::BendersMasterInteger, label::Symbol) -> Float64
+
+Phase 31 (BILEV-07) port of `_accepted_lb_slack(::BendersMaster, ...)` (benders.jl) for
+the integer master: `master.lb_slack[label]`, the build-time acceptance slack of the
+declared `:op`/`:x` epigraph lower bound (WR-05). This is an ADDITIVE new method on the
+generic `_accepted_lb_slack` function already defined in `benders.jl` — Julia's dispatch
+picks this specific method up automatically for a `BendersMasterInteger`, falling back to
+the generic `0.0` for any other master type without a `lb_slack` record.
+"""
+_accepted_lb_slack(master::BendersMasterInteger, label::Symbol) =
+    getproperty(master.lb_slack, label)
 
 """
     solve_master!(master::BendersMasterInteger; max_attempts::Int = 4,
@@ -434,13 +574,24 @@ D(b) = Σ_{i∈S^ν} b[i] − Σ_{i∉S^ν} b[i] − |S^ν| + 1
 plan's own K=4 16-corner unit test):** the cut is TIGHT at `b = b^ν`
 (`D = 1`, reduces to `θ >= Q_nu`) and adds ZERO new information — is IMPLIED
 by the master's own existing `θ >= L` epigraph bound — at every other binary
-corner (`D <= -1`, reduces to `θ >= L - 2k(Q_nu - L) <= L` for Hamming
-distance `k >= 1`).
+corner (`D = 1 - k` at Hamming distance `k`, reduces to
+`θ >= L - (k-1)(Q_nu - L) <= L` for Hamming distance `k >= 1`).
 
 Throws `ArgumentError` if `length(b_trial) != master.K` or any entry of
 `b_trial` is non-finite (WR-03 discipline, reused verbatim from
 `add_optimality_cut!`/`add_feasibility_cut!`) — a malformed trial must fail
 loudly BEFORE corrupting the build-once master's persistent constraint set.
+
+**Phase 31 (WR-02) — the `Q_nu >= L` precondition is now ENFORCED, not merely
+assumed:** the cut's own validity argument above requires `Q_nu >= L` (an exact
+recourse value can never fall below the master's own declared global lower
+bound on that recourse); previously this was undocumented and unchecked, so a
+caller-side bug in `Q_nu`'s computation could silently append an INVALID cut
+that over-constrains `θ` at every corner with Hamming distance `>= 2`. Throws a
+named `ErrorException` (not `ArgumentError` — this is a precondition violation
+on otherwise well-typed/finite inputs, not a malformed-argument shape/
+finiteness check) if `Q_nu < L - atol * max(1, abs(L))`, BEFORE any cut is
+appended (`master.cuts`/`master.model` are left untouched on the throw path).
 
 Logs `(; kind = :ll, b_trial = round.(Int, b_trial), Q_nu, L)` to
 `master.cuts` and returns `master`.
@@ -449,7 +600,8 @@ function add_ll_cut!(
     master::BendersMasterInteger,
     b_trial::AbstractVector{<:Real},
     Q_nu::Real,
-    L::Real,
+    L::Real;
+    atol::Real = 1e-6,
 )
     length(b_trial) == master.K || throw(
         ArgumentError(
@@ -460,6 +612,14 @@ function add_ll_cut!(
         throw(ArgumentError("add_ll_cut!: b_trial contains a non-finite entry: $b_trial"))
     isfinite(Q_nu) || throw(ArgumentError("add_ll_cut!: Q_nu must be finite, got $Q_nu"))
     isfinite(L) || throw(ArgumentError("add_ll_cut!: L must be finite, got $L"))
+    # WR-02 (Phase 24 code review): the cut's own validity argument requires Q_nu >= L —
+    # enforce it loudly here, BEFORE any cut is appended, rather than silently appending an
+    # invalid cut that over-constrains θ at every corner with Hamming distance >= 2.
+    Q_nu >= L - atol * max(1, abs(L)) || error(
+        "add_ll_cut!: Q_nu=$Q_nu < L=$L — the declared epigraph lower bound " *
+        "α_op_lb + α_x_lb is not a valid lower bound on the per-corner recourse; " *
+        "the LL cut would be INVALID at every corner with Hamming distance >= 2.",
+    )
 
     b_nu = round.(Int, b_trial)
     K = master.K
