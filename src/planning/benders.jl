@@ -123,15 +123,17 @@ const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
 const ORACLE_INFEASIBLE_STATUSES =
     (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE, MOI.ALMOST_INFEASIBLE)
 
-# WR-01 (Phase 31 code review carry-over, 30-REVIEW.md): the SUBSET of
-# ORACLE_INFEASIBLE_STATUSES that are CERTIFIED infeasibility verdicts, deliberately
-# excluding MOI.ALMOST_INFEASIBLE — that reduced-accuracy near-certificate needs
-# confirmation via the slack-min `feas_oracle` before it can be trusted (see
-# `_oracle_or_infeasible` below). Kept for documentation/future-dispatch purposes even
-# though `_oracle_or_infeasible` branches on `ts == MOI.ALMOST_INFEASIBLE` directly rather
-# than `ts in CORNER_INFEASIBLE_STATUSES`.
-const CORNER_INFEASIBLE_STATUSES =
-    (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE)
+# WR-01 (Phase 31 code review carry-over, 30-REVIEW.md) + WR-05 (Phase 31 code review):
+# the oracle-infeasibility statuses that are NOT certified verdicts and must be CONFIRMED
+# by the slack-min `feas_oracle` before the corner search may treat the trial as +Inf
+# (see `_oracle_or_infeasible`). `ALMOST_INFEASIBLE` is a reduced-accuracy
+# near-certificate; `LOCALLY_INFEASIBLE` is a local solver's (e.g. Ipopt's) verdict that
+# says nothing about global infeasibility. The remaining members of
+# ORACLE_INFEASIBLE_STATUSES are accepted as certified: `INFEASIBLE` is a certificate,
+# and `INFEASIBLE_OR_UNBOUNDED` (a presolve verdict) can only mean infeasible here,
+# because the welfare oracle at a pinned z is bounded (every device dispatch is boxed and
+# the network flows are fixed by the balance rows) — an explicit modelling assumption.
+const CORNER_UNCONFIRMED_STATUSES = (MOI.ALMOST_INFEASIBLE, MOI.LOCALLY_INFEASIBLE)
 
 # WR-01 (Phase 30 code review): minimum slack-min value `v` for an oracle feasibility cut
 # `v + u'(z - z_k) <= 0` to be appended. At z = z_k the cut reads `v <= 0`, so it separates
@@ -239,7 +241,9 @@ welfare), so the returned minimum is the RELAXATION's per-corner minimum — nev
 the true one. The Laporte-Louveaux cut built from it under-estimates the true recourse
 at that corner, so it stays valid (a weaker cut, never an invalid one). An oracle throw
 is classified, never swallowed: only an untrusted solve whose termination status is in
-`ORACLE_INFEASIBLE_STATUSES` is treated as `+Inf` (outside the oracle's feasible set,
+`ORACLE_INFEASIBLE_STATUSES` — and, for `CORNER_UNCONFIRMED_STATUSES`, confirmed by a
+`:separating` slack-min verdict (see [`_oracle_or_infeasible`](@ref), WR-05) — is
+treated as `+Inf` (outside the oracle's feasible set,
 which is convex in `z`, so `Q` stays an extended-value convex function). Every other
 throw — an exactness verdict under `:throw`, a battery-complementarity violation, an
 exhausted retry ladder, a non-`ErrorException` such as `InterruptException` — is
@@ -283,8 +287,8 @@ end
 The corner search's ONE oracle entry point (Phase 30 code review iteration 2, CR-02):
 `solve_planning_oracle!(oracle, z; on_inexact)`, except that a throw from an UNTRUSTED
 solve whose termination status is a CERTIFIED infeasibility verdict
-(`ORACLE_INFEASIBLE_STATUSES` minus `MOI.ALMOST_INFEASIBLE`) returns `nothing` ("z is
-outside the oracle's feasible set"). Everything else propagates unchanged:
+(`ORACLE_INFEASIBLE_STATUSES` minus `CORNER_UNCONFIRMED_STATUSES`) returns `nothing`
+("z is outside the oracle's feasible set"). Everything else propagates unchanged:
 non-`ErrorException`s (e.g. `InterruptException`), throws from a TRUSTED solve (the
 exactness gate under `:throw`, battery complementarity), and untrusted solves with any
 other status (a solver failure, not a property of `z`).
@@ -296,10 +300,16 @@ Laporte-Louveaux cut invalid. It is now CONFIRMED via the same slack-min `feas_o
 `solve_stackelberg!`'s own outer oracle catch already uses: with no `feas_oracle` supplied,
 the status is unconfirmed and the throw is rethrown (fail loud, never silently `+Inf`); with
 a `feas_oracle` supplied, `solve_feasibility_oracle!(feas_oracle, z).v` is classified via
-[`_feas_cut_class`](@ref) and only a `:disagree` verdict (the two oracles genuinely
-disagree) rethrows — any other verdict confirms the infeasibility and returns `nothing`.
-This now DOES apply the same classification `solve_stackelberg!`'s own outer oracle catch
-applies (previously false, see 30-REVIEW.md WR-01).
+[`_feas_cut_class`](@ref).
+
+**WR-05 (Phase 31 code review):** only a `:separating` verdict confirms the infeasibility
+and returns `nothing`; `:weak` and `:disagree` both rethrow. This is deliberately STRICTER
+than `solve_stackelberg!`'s outer catch, where a `:weak` cut is still a VALID cut to
+append: here the verdict is turned into `Q(z) = +Inf`, and a `:weak` `z` sits within the
+master's feasibility tolerance of the boundary, where `+Inf` could discard the true
+near-boundary minimizer and over-estimate `Q_nu`. `MOI.LOCALLY_INFEASIBLE` (a local
+solver's verdict) is routed through the SAME confirmation (`CORNER_UNCONFIRMED_STATUSES`)
+instead of being accepted as certified.
 """
 function _oracle_or_infeasible(oracle, z; on_inexact::Symbol, feas_oracle = nothing)
     return try
@@ -309,9 +319,14 @@ function _oracle_or_infeasible(oracle, z; on_inexact::Symbol, feas_oracle = noth
         is_solved_and_feasible(oracle.model; dual = true) && rethrow()
         ts = termination_status(oracle.model)
         ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
-        if ts == MOI.ALMOST_INFEASIBLE
-            feas_oracle === nothing && rethrow()   # unconfirmed near-certificate: fail loud
-            _feas_cut_class(solve_feasibility_oracle!(feas_oracle, z).v) === :disagree &&
+        if ts in CORNER_UNCONFIRMED_STATUSES
+            feas_oracle === nothing && rethrow()   # unconfirmed verdict: fail loud
+            # WR-05 (Phase 31 code review): ONLY a :separating slack-min value confirms.
+            # A :weak value (FEAS_CUT_V_NOISE < v <= FEAS_CUT_V_TOL) puts z within the
+            # master's own feasibility tolerance of the boundary — mapping it to +Inf
+            # could drop a near-boundary minimizer, over-estimate Q_nu and make the LL
+            # cut invalid — so it rethrows, like :disagree.
+            _feas_cut_class(solve_feasibility_oracle!(feas_oracle, z).v) === :separating ||
                 rethrow()
         end
         nothing

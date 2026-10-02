@@ -207,6 +207,41 @@ end
     # feas_oracle=nothing is UNAFFECTED by this fix — still returns `nothing` immediately.
     fake4 = make_fake_oracle_wr01(MOI.INFEASIBLE)
     @test TSODSO._oracle_or_infeasible(fake4, [0.1]; on_inexact = :throw) === nothing
+
+    # WR-05 (Phase 31 code review): only a :separating verdict confirms.
+    # Test 5: a :weak-class verdict (FEAS_CUT_V_NOISE < v <= FEAS_CUT_V_TOL — z within
+    # the master's feasibility tolerance of the boundary) must RETHROW, never become
+    # +Inf (which could discard a near-boundary minimizer and over-estimate Q_nu).
+    v_weak = (TSODSO.FEAS_CUT_V_NOISE + TSODSO.FEAS_CUT_V_TOL) / 2
+    @test TSODSO._feas_cut_class(v_weak) === :weak
+    fake5 = make_fake_oracle_wr01(MOI.ALMOST_INFEASIBLE)
+    @test_throws ErrorException TSODSO._oracle_or_infeasible(
+        fake5,
+        [0.1];
+        on_inexact = :throw,
+        feas_oracle = FakeFeasOracleWR01(v_weak),
+    )
+    # Test 6: LOCALLY_INFEASIBLE (a local solver's verdict) is NOT certified: without a
+    # feas_oracle it rethrows; with a :separating confirmation it returns `nothing`;
+    # with a :weak one it rethrows.
+    fake6 = make_fake_oracle_wr01(MOI.LOCALLY_INFEASIBLE)
+    @test_throws ErrorException TSODSO._oracle_or_infeasible(fake6, [0.1]; on_inexact = :throw)
+    @test TSODSO._oracle_or_infeasible(
+        fake6,
+        [0.1];
+        on_inexact = :throw,
+        feas_oracle = feas_agree,
+    ) === nothing
+    @test_throws ErrorException TSODSO._oracle_or_infeasible(
+        fake6,
+        [0.1];
+        on_inexact = :throw,
+        feas_oracle = FakeFeasOracleWR01(v_weak),
+    )
+    # Test 7 (documented acceptance): INFEASIBLE_OR_UNBOUNDED stays a certified verdict
+    # (the welfare oracle at a pinned z is bounded, so it can only mean infeasible).
+    fake7 = make_fake_oracle_wr01(MOI.INFEASIBLE_OR_UNBOUNDED)
+    @test TSODSO._oracle_or_infeasible(fake7, [0.1]; on_inexact = :throw) === nothing
 end
 
 @testitem "planning benders integer: T>1 joint corner search routes a certificate-less follower infeasibility to bisection — no NaN feasibility cut reaches the small master LP (WR-01, Phase 31 code review)" tags =
