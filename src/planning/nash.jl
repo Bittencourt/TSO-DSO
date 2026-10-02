@@ -268,6 +268,56 @@ export NashTrace
 # reading `x_inv[i]` or calling `write_back!` — load-bearing, never skip this re-solve.
 
 """
+    _integer_cycle_hit(history, joint_b, state, residual; atol) -> Union{Nothing, Int}
+
+The integer-diagonalization cycle predicate of [`run_nash!`](@ref) (Phase 31 code
+review, CR-01). `history` holds one `(; sweep, joint_b, state, residual)` entry per
+earlier completed sweep, where `state = vcat(vec(z), x_inv)` is the FULL committed
+continuous state and `residual` is that sweep's worst-distributor Nash residual.
+Returns the `sweep` of the first entry that the current sweep REPEATS, or `nothing`.
+
+An entry is repeated only when ALL three hold:
+
+ 1. the joint binary state is identical (exact `Vector{Int}` equality — binaries are
+    exact);
+ 2. the committed continuous state recurs, `maximum(abs.(state .- h.state)) <= atol`;
+ 3. there was no progress, `residual >= h.residual - atol`.
+
+Why the binaries alone are NOT a cycle (the bug this predicate fixes): binaries
+routinely settle sweeps before `z`/`x_inv` do, so a `b`-only key flagged every
+converging run that needed three or more sweeps with a stable `b` — reproduced with
+damping `ω = 0.5`, where the residual halves each sweep at a fixed `b`. Condition 2
+rejects such runs because a non-converged sweep moves the committed state, and
+condition 3 independently rejects any contracting trajectory (the residual of a
+genuine cycle recurs; that of a converging run decreases). The same lesson as Phase
+24's own inner stall guard (`apply_integer_cuts!`): a revisit with materially
+different continuous state is refinement progress, never a stall.
+
+`run_nash!` passes `atol = ω * tol_outer / 2`: on a non-converged sweep at least one
+distributor's residual exceeds `tol_outer`, and with `ω = 1` its committed state moves
+by exactly that residual (`ω` times it for the damped `z`), so half of `ω·tol_outer`
+separates a recurrence from a move. A genuine cycle whose recurring states differ by
+more than `atol` (inner-solve noise) is NOT detected here; it still fails loudly at
+`max_sweeps` — a missed detection is safe, a false one is not.
+"""
+function _integer_cycle_hit(
+    history::AbstractVector,
+    joint_b::AbstractVector{<:Integer},
+    state::AbstractVector{<:Real},
+    residual::Real;
+    atol::Real,
+)
+    for h in history
+        h.joint_b == joint_b || continue
+        length(h.state) == length(state) || continue
+        maximum(abs.(state .- h.state)) <= atol || continue
+        residual >= h.residual - atol || continue
+        return h.sweep
+    end
+    return nothing
+end
+
+"""
     run_nash!(specs::AbstractVector{<:NamedTuple}, shared::SharedTransmission;
               z0::AbstractMatrix{<:Real}, x_inv0 = nothing, tol_outer::Real = 1e-4,
               max_sweeps::Int = 50, order::Symbol = :forward, ω::Real = 1.0,
@@ -370,8 +420,9 @@ never a stale loop-local) — never silently returns a non-converged result.
     finite), before any solve call.
   - `ErrorException` if `max_sweeps` is exhausted without converging, OR (Phase 31,
     BILEV-07, `integer !== nothing` only) if the integer diagonalization cycles (the
-    same joint binary state recurs across sweeps without converging) — reports the
-    full cycle shape (see Algorithm above).
+    full committed state — joint binary state, `z` and `x_inv` — recurs across sweeps
+    with no residual decrease, without converging) — reports the full cycle shape (see
+    "Cycle detection" below).
 
 # Returns
 
@@ -406,16 +457,29 @@ documented skip the continuous path already uses); `α_x_lb` defaults to
 continuous path is BYTE-IDENTICAL to every pre-Phase-31 call (this kwarg's mere
 presence/default never touches the existing `master_kwargs = spec.master_kwargs` call).
 
-**Cycle detection (Phase 31, BILEV-07), active only when `integer !== nothing`.** Each
-distributor's own converged binary investment state `b_i` (recovered EXACTLY from
-`result_i.y` via the lattice step `spec.master_kwargs.y_max / 2^K`, `Base.digits`) is
-accumulated, in FIXED canonical distributor order `1:shared.N` (independent of
-`sweep_order`), into a joint state `joint_b` at the end of every sweep. If the SAME
-joint state recurs (exact `Vector{Int}` equality — binaries are exact, never a tolerance
-comparison) without the loop having already converged in between, `run_nash!` raises a
-loud, NAMED `ErrorException` reporting the full cycle shape (the sweep index first seen
-and the current sweep index, plus every distributor's own `b` at both sweeps) — never
-silently continuing toward `max_sweeps`.
+**Cycle detection (Phase 31, BILEV-07; corrected by the Phase-31 code review, CR-01),
+active only when `integer !== nothing`.** Each distributor's own converged binary
+investment state `b_i` (recovered EXACTLY from `result_i.y` via the lattice step
+`spec.master_kwargs.y_max / 2^K`, `Base.digits`) is accumulated, in FIXED canonical
+distributor order `1:shared.N` (independent of `sweep_order`), into a joint state
+`joint_b` at the end of every sweep, together with the FULL committed continuous state
+`(vec(z), x_inv)` and the sweep's worst-distributor residual. A cycle is reported only
+when the whole committed state recurs — identical `joint_b`, continuous state within
+`ω·tol_outer/2`, and no residual decrease — on a sweep that has not converged (the
+predicate and its tolerance argument: `_integer_cycle_hit`). The binaries alone are
+NOT the game state: they routinely settle before `z`/`x_inv` do, and a `b`-only key
+raised false "CYCLED" errors on runs that were still converging (e.g. any damped
+`ω < 1` run). On a detected cycle `run_nash!` raises a loud, NAMED `ErrorException`
+reporting the sweep first seen, the current sweep and every distributor's own `b`, `z`
+and `x_inv` — never silently continuing toward `max_sweeps`.
+
+Limitation, stated honestly: no live cycling instance exists in the test suite. With
+objectives separable except through the shared row, each best response lowers the
+mover's own cost and leaves every other player's cost unchanged, so the summed cost is
+a potential that exact Gauss-Seidel best responses cannot cycle on (ties and
+inner-solve noise aside). The predicate is therefore regression-tested directly on
+synthetic converging and cycling histories, and live on a damped converging run that
+the old `b`-only key wrongly rejected (`test/test_planning_nash_integer.jl`).
 """
 function run_nash!(
     specs::AbstractVector{<:NamedTuple},
@@ -545,12 +609,18 @@ function run_nash!(
     # response, so a relaxation-only best response is never committed silently.
     certificates = NamedTuple[]
     sweep_order = order === :forward ? (1:(shared.N)) : (shared.N:-1:1)
-    # BILEV-07 (Phase 31, plan 31-04): exact-binary-state cycle bookkeeping, active only
-    # when integer !== nothing. Maps each VISITED joint binary state (the concatenation,
-    # in FIXED canonical distributor order 1:shared.N, of every distributor's own exact
-    # b::Vector{Int}) to the sweep index it was first seen at — see this function's own
-    # docstring for the full design.
-    visited_joint_b = Dict{Vector{Int}, Int}()
+    # BILEV-07 (Phase 31, plan 31-04; CR-01 of the Phase-31 code review): cycle
+    # bookkeeping, active only when integer !== nothing. One entry per completed sweep:
+    # the joint binary state (the concatenation, in FIXED canonical distributor order
+    # 1:shared.N, of every distributor's own exact b::Vector{Int}), the FULL committed
+    # continuous state (vec(z), x_inv) and the sweep's worst-distributor residual. A
+    # cycle is flagged only when ALL of the committed state recurs without progress —
+    # see `_integer_cycle_hit` and this function's own docstring.
+    cycle_history = NamedTuple{
+        (:sweep, :joint_b, :state, :residual),
+        Tuple{Int, Vector{Int}, Vector{Float64}, Float64},
+    }[]
+    cycle_atol = ω * tol_outer / 2
 
     # ---- CR-01 (load-bearing, do NOT skip): commit the seed into the shared model's
     # OWN state — every distributor's z Parameter AND a consistent bound-pinned x_inv
@@ -733,24 +803,48 @@ function run_nash!(
         # own by-sweep-index window (reporting only).
         sweep_converged = is_converged(trace, tol_outer, shared.N)
 
-        # BILEV-07 (Phase 31, plan 31-04): exact-binary-state cycle detection, active
-        # only when integer !== nothing. A revisited joint state is a GENUINE cycle
-        # only if the loop has not ALREADY converged at this sweep — never report a
-        # cycle on the very sweep that legitimately reproduces the converged state.
+        # BILEV-07 (Phase 31, plan 31-04; CR-01 of the Phase-31 code review): cycle
+        # detection, active only when integer !== nothing. The key is the FULL
+        # committed state, never the binaries alone: binaries routinely settle sweeps
+        # before the continuous z/x_inv do (e.g. under damping ω < 1 the residual
+        # halves every sweep while b stays fixed), so a b-only key raised false
+        # "CYCLED" errors on runs that were still converging. Never reported on the
+        # very sweep that converges.
         if integer !== nothing
             joint_b = vcat(integer_buffer...)
-            if haskey(visited_joint_b, joint_b) && !sweep_converged
-                first_seen = visited_joint_b[joint_b]
-                error(
-                    "run_nash!: integer diagonalization CYCLED — the joint binary " *
-                    "state $joint_b recurred at sweep $k (first seen at sweep " *
-                    "$first_seen) without converging in between; per-distributor " *
-                    "states at the repeat: " *
-                    join(["i=$i: b=$(integer_buffer[i])" for i in 1:shared.N], ", ") *
-                    " — refusing to silently continue toward max_sweeps",
+            state_k = vcat(vec(z_prev), x_inv_prev)
+            residual_k = maximum(trace.nash_residual_trace[(end - shared.N + 1):end])
+            if !sweep_converged
+                first_seen = _integer_cycle_hit(
+                    cycle_history,
+                    joint_b,
+                    state_k,
+                    residual_k;
+                    atol = cycle_atol,
                 )
+                if first_seen !== nothing
+                    error(
+                        "run_nash!: integer diagonalization CYCLED — the full " *
+                        "committed state (joint binary state $joint_b, z, x_inv) " *
+                        "recurred at sweep $k (first seen at sweep $first_seen, " *
+                        "state atol=$cycle_atol) with no residual decrease " *
+                        "(residual=$residual_k, tol_outer=$tol_outer); " *
+                        "per-distributor states at the repeat: " *
+                        join(
+                            [
+                                "i=$i: b=$(integer_buffer[i]), z=$(z_prev[i, :]), " *
+                                "x_inv=$(x_inv_prev[i])" for i in 1:shared.N
+                            ],
+                            ", ",
+                        ) *
+                        " — refusing to silently continue toward max_sweeps",
+                    )
+                end
             end
-            visited_joint_b[joint_b] = k
+            push!(
+                cycle_history,
+                (; sweep = k, joint_b, state = state_k, residual = residual_k),
+            )
         end
 
         if sweep_converged

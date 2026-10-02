@@ -202,51 +202,106 @@ end
     )
 end
 
-# Cycle-detection (Task 1's own Test 3; also serves as Task 2's own Test 3, DOWNGRADED
-# per this plan's own explicit allowance — see 31-04-SUMMARY.md's "Deviations"/scope
-# note): constructing a GENUINELY cycling integer diagonalization deterministically on
-# this toy N=2/K=4 fixture was not attempted (31-RESEARCH.md's own stated difficulty —
-# forcing a Gauss-Seidel best-response oscillation requires a carefully engineered
-# fixture, disproportionate effort for a toy-scale regression). This test instead
-# independently verifies the DETECTION MECHANISM `run_nash!` itself uses
-# (`Dict{Vector{Int}, Int}` keyed by the exact concatenated joint binary state) is exact
-# `Vector{Int}` equality, never a tolerance comparison — mirrors
-# `test_planning_benders_integer.jl`'s own `_converged_now` standalone-replication
-# pattern.
-@testitem "planning nash integer: cycle-detection dictionary uses exact Vector{Int} equality, never tolerance (standalone replication)" tags =
+# Cycle detection (Phase 31 code review, CR-01). The original detector keyed a cycle on
+# the joint binary state ALONE and raised a false "CYCLED" error on any run that needed
+# three or more sweeps with a stable `b` (reproduced: this file's fixture with `ω = 0.5`).
+# Two testitems below replace the old standalone `Dict` replication, which never called
+# production code:
+#   (a) the PRODUCTION predicate `TSODSO._integer_cycle_hit` on synthetic histories — a
+#       damped converging history (must NOT fire) and genuine period-1/period-2 cycles
+#       (must fire);
+#   (b) a LIVE damped `run_nash!(...; integer = (; K = 4), ω = 0.5)` run on this file's
+#       fixture that must converge (the old detector threw at sweep 2).
+# No LIVE cycling run exists: with objectives separable except through the shared row,
+# the summed cost is a potential that exact Gauss-Seidel best responses cannot cycle on
+# (see `run_nash!`'s docstring, "Cycle detection") — a stated limitation, not a gap
+# papered over.
+@testitem "planning nash integer: cycle predicate keys on the full committed state — fires on genuine recurrences, never on a converging damped history (CR-01)" tags =
     [:planning] begin
-    # Standalone replication of run_nash!'s own joint-binary-state bookkeeping
-    # (src/planning/nash.jl): a Dict{Vector{Int},Int} mapping each visited joint state
-    # to the sweep it was first seen at.
-    visited_joint_b = Dict{Vector{Int}, Int}()
+    using TSODSO
 
-    b1_sweep1 = [1, 0, 1, 0]
-    b2_sweep1 = [0, 1, 1, 0]
-    joint_sweep1 = vcat(b1_sweep1, b2_sweep1)
-    visited_joint_b[joint_sweep1] = 1
+    hit = TSODSO._integer_cycle_hit
+    tol_outer = 1e-4
+    ω = 0.5
+    atol = ω * tol_outer / 2
+    b = [1, 0, 0, 0, 1, 0, 0, 0]
+    entry(k, jb, st, r) = (; sweep = k, joint_b = jb, state = st, residual = r)
 
-    # An IDENTICAL joint state, constructed independently (different Vector objects,
-    # same values) — exact Vector{Int} equality must detect this as the SAME key.
-    b1_sweep5 = [1, 0, 1, 0]
-    b2_sweep5 = [0, 1, 1, 0]
-    joint_sweep5 = vcat(b1_sweep5, b2_sweep5)
-    @test joint_sweep1 !== joint_sweep5   # genuinely distinct Vector objects
-    @test joint_sweep1 == joint_sweep5    # but EQUAL by value
-    @test haskey(visited_joint_b, joint_sweep5)
-    @test visited_joint_b[joint_sweep5] == 1
+    # (1) The reviewer's false positive: damped run, b fixed from sweep 1, the committed
+    # state moves by ω × residual each sweep and the residual halves. NO prefix of this
+    # history may be reported as a cycle.
+    damped = [entry(k, b, fill(0.5 - 0.5^(k + 1), 3), 0.5^k) for k in 1:12]
+    @test all(hit(damped[1:(k - 1)], b, damped[k].state, damped[k].residual; atol) === nothing for k in 2:12)
 
-    # A joint state differing by a SINGLE bit must NOT be treated as a repeat — proves
-    # this is exact equality, never a looser/tolerance-based membership test.
-    joint_near_miss = vcat([1, 0, 1, 1], [0, 1, 1, 0])
-    @test !haskey(visited_joint_b, joint_near_miss)
+    # (2) A genuine period-1 recurrence: same b, same state, same residual -> fires and
+    # names the FIRST sweep the state was seen at.
+    st = [0.5, 0.5, 0.25, 0.25]
+    h1 = [entry(1, b, st, 0.3)]
+    @test hit(h1, b, copy(st), 0.3; atol) == 1
 
-    # A genuine SECOND distinct visit to the ORIGINAL state, after being recorded once,
-    # is detected on lookup (mirrors run_nash!'s own "haskey(...) && !sweep_converged"
-    # cycle-detection predicate, exercised here at the dictionary-logic level only).
-    b1_sweep9 = [1, 0, 1, 0]
-    b2_sweep9 = [0, 1, 1, 0]
-    joint_sweep9 = vcat(b1_sweep9, b2_sweep9)
-    @test haskey(visited_joint_b, joint_sweep9)
-    first_seen = visited_joint_b[joint_sweep9]
-    @test first_seen == 1
+    # (3) A genuine period-2 cycle: A, B, A -> fires at the third sweep, naming sweep 1.
+    bA, bB = [1, 0, 1, 0], [0, 1, 1, 0]
+    stA, stB = [0.5, 0.0, 0.25, 0.0], [0.0, 0.5, 0.0, 0.25]
+    h2 = [entry(1, bA, stA, 0.5), entry(2, bB, stB, 0.5)]
+    @test hit(h2, bA, copy(stA), 0.5; atol) == 1
+
+    # (4) Exactness of the binary key: one flipped bit is a different state.
+    @test hit(h2, [1, 0, 1, 1], copy(stA), 0.5; atol) === nothing
+    # (5) Same b, continuous state moved by more than atol -> progress, not a cycle.
+    @test hit(h1, b, st .+ 2atol, 0.3; atol) === nothing
+    # (6) Same b and state but a strictly smaller residual -> progress, not a cycle.
+    @test hit(h1, b, copy(st), 0.3 - 2atol; atol) === nothing
+end
+
+@testitem "planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (CR-01, live)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    shared = build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0),
+    )
+    specs = [spec, spec]
+
+    # HAND-DERIVED trajectory (see the brute-force testitem above for the per-player
+    # derivation): every best response on this fixture is y = 0.5 (b = [1,0,0,0]),
+    # z = 0.5, x_inv = 0.25, independent of the other player's committed state. Seeded
+    # at z0 = 0.46 (x_inv0 = 0.23 by run_nash!'s default derivation) with ω = 0.5, the
+    # committed z moves 0.46 -> 0.48 -> 0.49 -> 0.495 and the sweep residual is
+    # 0.04, 0.02, 0.01 — so b is IDENTICAL at sweeps 1 and 2 while sweep 2 has not
+    # converged (0.02 > tol_outer = 0.015): exactly the state on which the old b-only
+    # detector threw "CYCLED ... recurred at sweep 2 (first seen at sweep 1)" (measured
+    # 2026-10-02 against the pre-fix code). Sweep 3 converges (0.01 <= 0.015). The
+    # seed/tolerance are chosen so the run needs exactly three integer sweeps (~1 min)
+    # rather than the reviewer's z0 = 0, tol_outer = 1e-4 repro (~14 sweeps).
+    result = run_nash!(
+        specs,
+        shared;
+        z0 = fill(0.46, 2, 1),
+        tol_outer = 0.015,
+        max_sweeps = 10,
+        ω = 0.5,
+        integer = (; K = 4),
+        checkpoint_dir = mktempdir(),
+    )
+    @test result.converged
+    @test result.sweeps == 3
+    # Measured: residuals [0.04, 0.04, 0.02, 0.02, 0.01, 0.01] to ~1e-17.
+    @test isapprox(result.trace.nash_residual_trace, [0.04, 0.04, 0.02, 0.02, 0.01, 0.01]; atol = 1e-9)
+    @test isapprox(result.z, fill(0.495, 2, 1); atol = 1e-9)
+    @test isapprox(result.x_inv, [0.2475, 0.2475]; atol = 1e-9)
+    @test isapprox(result.UB, [-0.225, -0.225]; atol = 1e-9)
 end
