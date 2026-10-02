@@ -92,7 +92,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   multiplier) selection is available and documented.
 - [x] **BILEV-07**: Researcher can run integer investment in the N > 1 Nash diagonalization path,
   with each best response using the integer master (carry-over).
-- [ ] **BILEV-08**: The docs state the game-theoretic nature of each planning variant: the
+- [x] **BILEV-08**: The docs state the game-theoretic nature of each planning variant: the
   integrated problem decomposed by Benders, the genuine bilevel, and the shared-constraint GNE.
   `docs/writeups/stackelberg_vs_psr_n1n2.typ` is refreshed to the current code, including the
   integer master.
@@ -186,7 +186,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | BILEV-05 | Phase 30 | Complete |
 | BILEV-06 | Phase 31 | Pending |
 | BILEV-07 | Phase 31 | Complete |
-| BILEV-08 | Phase 31 | Pending |
+| BILEV-08 | Phase 31 | Complete |
 | ARCH-01 | Phase 32 | Pending |
 | ARCH-02 | Phase 32 | Pending |
 | ARCH-03 | Phase 33 | Pending |

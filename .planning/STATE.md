@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 31-04-PLAN.md (integer N>1 Nash wiring + exact-state cycle detection; Rule-1 coupling.jl fix; see 31-04-SUMMARY.md)
-last_updated: "2026-10-02T02:40:47.993Z"
+stopped_at: Completed 31-05-PLAN.md (BILEV-08 planning docs refresh — integer master/GNE/VE taxonomy in both .typ writeups + 3 Documenter docstrings; see 31-05-SUMMARY.md)
+last_updated: "2026-10-02T11:52:02.756Z"
 last_activity: 2026-10-02
 progress:
   total_phases: 12
   completed_phases: 5
   total_plans: 51
-  completed_plans: 49
+  completed_plans: 51
   percent: 42
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
   `.planning/phases/30-socp-in-the-loop-benders-on-a-multi-bus-feeder/30-FINDINGS.md`
 Last activity: 2026-10-02
@@ -184,6 +184,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 30 P06 | 15min | 2 tasks | 1 files |
 | Phase 31 P01 | 100min | 1 tasks | 2 files |
 | Phase 31 P04 | 95min | 2 tasks | 3 files |
+| Phase 31 P05 | 20min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -254,6 +255,8 @@ Recent decisions affecting current work:
 - [Phase 30]: Phase 30 certified complete: 31091 pass / 0 fail / 0 error / 5 broken (+220 over Phase-29 baseline, zero new broken); 3-iteration code review left 3 open Laporte-Louveaux integer-recourse warnings (unconfirmed ALMOST_INFEASIBLE handling, unenforced Q_nu>=L cut precondition, unwidened convergence certificate under accepted bound slack), carried forward as Phase 31/BILEV-07 input
 - [Phase 31-01]: WR-01 (confirmed ALMOST_INFEASIBLE via feas_oracle) fixed and committed (986aa4b); WR-03 (widen convergence certificate by _accepted_lb_slack) NOT implemented — the plan's directed fix (30-REVIEW.md Option B) breaks pre-existing pinned Benders goldens (test_planning_benders.jl flagship N=1 case) because build_master's WR-05 lb_slack (~2e-6) already exceeds the project's standard tol=1e-6 for ANY explicit-bound solve_stackelberg! call, not just near-the-edge bounds; reverted rather than move a golden or touch master.jl (Option A's fix) outside this plan's file scope -- recommended as follow-up (candidate 31-02)
 - [Phase 31-04]: run_nash! integer kwarg: fresh build_master_integer per best response via solve_stackelberg!'s master= keyword; exact-binary-state Dict cycle detection (never tolerance); found+fixed a Rule-1 bug in solve_follower!(::DistributorView) -- a confirmed MOI.INFEASIBLE without a Farkas ray was previously an unrecoverable error, now returns feasible=false (v=NaN,u=NaN) since corner_recourse's own ternary search only reads .feasible
+- [Phase 31]: 31-05 docs refresh: integer-extension deviation documented as two independent axes (target variable y_inv/N2 vs x_inv/N1; mechanism Laporte-Louveaux vs Lagrangian relaxation)
+- [Phase 31]: User force-added (git add -f) the two refreshed writeup PDFs despite the project-wide .gitignore convention (track .typ source, regenerate PDF); .gitignore itself left untouched
 
 ### Roadmap Evolution
 
@@ -479,8 +482,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-02T02:40:47.962Z
-Stopped at: Completed 31-04-PLAN.md (integer N>1 Nash wiring + exact-state cycle detection; Rule-1 coupling.jl fix; see 31-04-SUMMARY.md)
+Last session: 2026-10-02T11:52:02.728Z
+Stopped at: Completed 31-05-PLAN.md (BILEV-08 planning docs refresh — integer master/GNE/VE taxonomy in both .typ writeups + 3 Documenter docstrings; see 31-05-SUMMARY.md)
 Resume file: None
 
 ## Operator Next Steps

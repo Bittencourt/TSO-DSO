@@ -311,7 +311,7 @@ variant's game-theoretic nature.
   4. `docs/writeups/stackelberg_vs_psr_n1n2.typ` and related docs state the game-theoretic nature
      of each planning variant (integrated-decomposed-by-Benders, genuine bilevel, shared-constraint
      GNE), refreshed to current code including the integer master.
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -327,7 +327,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 31-05-PLAN.md — BILEV-08: planning-variant taxonomy + docs refresh (stackelberg_vs_psr_n1n2.typ, modelo_stackelberg_dso_unico.typ, 3 docstrings)
+- [x] 31-05-PLAN.md — BILEV-08: planning-variant taxonomy + docs refresh (stackelberg_vs_psr_n1n2.typ, modelo_stackelberg_dso_unico.typ, 3 docstrings)
 
 **Wave 4** *(phase-closing gate, blocked on ALL of the above)*
 
@@ -465,7 +465,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
-| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 5/7 | In Progress|  |
+| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 6/7 | In Progress|  |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
