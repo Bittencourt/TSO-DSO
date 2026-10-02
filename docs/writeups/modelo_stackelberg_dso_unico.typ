@@ -178,11 +178,27 @@ $ (y_"inv"^*, z^*) = "argmin" space {c_y y_"inv" + alpha_"op"(z) + alpha_x(z)} $
 
 No caso de múltiplos distribuidores (`coupling.jl`), uma diagonalização de Gauss–Seidel sobre o Stackelberg de cada distribuidor converge para o *equilíbrio de Nash*.
 
+= Taxonomia dos variantes de planejamento
+
+Este modelo (`solve_stackelberg!`) é UM dos três variantes de planejamento que o repositório implementa hoje — cada um com uma natureza teórico-dos-jogos distinta, apesar de todos compartilharem o rótulo informal "Stackelberg":
+
+#table(
+  columns: (auto, 1.2fr, 1.4fr, 0.8fr),
+  align: (center, left, left, left),
+  stroke: 0.4pt + gray,
+  [*Variante*], [*Função Julia*], [*Natureza teórico-dos-jogos*], [*Teste de certificação*],
+  [Integrado, decomposto por Benders], [`solve_stackelberg!`], [Problema único — NÃO é um jogo de dois níveis genuíno; líder e seguidor compartilham o MESMO objetivo (ver "Honest relabelling" no docstring de `solve_stackelberg!`)], [`test_planning_benders.jl`, `test_planning_goldens.jl` (PVAL-02)],
+  [Bilevel genuíno], [`solve_bilevel!` / `build_bilevel_kkt`], [Stackelberg genuíno — o seguidor minimiza seu PRÓPRIO custo, divergente da valorização do líder], [`test_planning_bilevel.jl`, `test_planning_certification_bilevel.jl` / `test_planning_certification_bilevel_interior.jl`],
+  [GNE de restrição compartilhada / VE], [`run_nash!` / `solve_variational_equilibrium`], [Jogo de Nash generalizado ($N$ jogadores, restrição de capacidade compartilhada); VE = GNE com multiplicador comum], [`test_planning_nash.jl`],
+)
+
+`BendersMasterInteger` (investimento binário-expansão, `master_integer.jl`) é utilizável via o kwarg `master=` TANTO na linha (1) (`solve_stackelberg!`, desde a Fase 24) QUANTO na linha (3) (`run_nash!`'s kwarg `integer`, desde a Fase 31) — ver `docs/writeups/stackelberg_vs_psr_n1n2.typ` para o mapeamento completo contra a nota PSR. A política de inexatidão SOCP da Fase 30 (`inexact_policy`, `:strict`/`:reject`/`:certify_incumbent`) aplica-se às três linhas, pois todas chamam `solve_stackelberg!` internamente (linha 2 via sua própria resolução KKT-MILP + LP de certificado, linhas 1/3 diretamente).
+
 = Notas de implementação
 
 - O oráculo reutiliza literalmente os construtores de `solve_welfare` (`contribute!(pf, dots)`, `contribute!(agg, dots)`) — o subproblema da camada de planejamento *é* a resolução de bem-estar DADP, parametrizada na importação via a restrição de pino.
 - Todos os três modelos são *construídos uma vez* e resolvidos novamente via `Parameter`s / `set_parameter_value` do JuMP — nunca reconstruídos dentro do loop (espelha a disciplina de construir-uma-vez da camada ADMM).
-- Sem variáveis binárias em lugar algum (investimento contínuo + fluxos contínuos) — LP/SOCP puro, então Benders converge finitamente com o teste de intervalo relativo.
+- Investimento CONTÍNUO é o padrão (`BendersMaster`, LP/SOCP puro — Benders converge finitamente com o teste de intervalo relativo); `BendersMasterInteger` (`master_integer.jl`, Fase 24/31) está disponível via `master=` para investimento inteiro por expansão binária — ver a Taxonomia acima e `docs/writeups/stackelberg_vs_psr_n1n2.typ` para o mapeamento completo.
 
 #v(1em)
 #line(length: 100%, stroke: 0.4pt + gray)
