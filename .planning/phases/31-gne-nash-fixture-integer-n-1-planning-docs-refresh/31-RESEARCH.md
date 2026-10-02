@@ -705,7 +705,9 @@ SOCP/inexactness policy (`inexact_policy`, applies to all three via `solve_stack
 **If this table is empty:** N/A — three low-risk discretionary items above, nothing load-bearing is
 unverified.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED by orchestrator 2026-10-01: (1) extend `run_nash_probe` by dispatch-in-place, additive/backward-compatible; (2) VE joint model generic over `pf`; (3) WR-03 fix covers BOTH `BendersMaster` and `BendersMasterInteger`.
 
 1. **Should `run_nash_probe`'s signature change be backward-compatible (dispatch on
    `seed_z0 isa NamedTuple`) or should a NEW function (`run_nash_probe_integer`-style) be added
