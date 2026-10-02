@@ -435,7 +435,10 @@ THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan dis
     e.g. a `y_inv` large enough that some `z` in the hypercube exceeds the follower's own
     deliverable capacity `corridor_cap * x_inv_max`) contributes NO epigraph cut (an
     `Inf` affine minorant is meaningless) — but its GENUINE Farkas certificate
-    (`fr.v`, `fr.u`) IS added as a REAL linear feasibility cut to the small master,
+    (`fr.v`, `fr.u`; WR-01 of the Phase-31 code review: only when both are finite — a
+    certificate-less infeasibility, `solve_follower!(::DistributorView)`'s NaN sentinel,
+    is handled exactly like the ORACLE-infeasible case below, by bisection)
+    IS added as a REAL linear feasibility cut to the small master,
     `v_k + u_k'(z − z_k) <= 0`, the IDENTICAL cut form [`add_feasibility_cut!`](@ref)
     already uses for the OUTER Benders master (`src/planning/master.jl:209-242`). This
     is a deliberate strengthening beyond a bare "skip": without it, the small master's
@@ -491,11 +494,15 @@ function _corner_recourse_joint(
     function evaluate(z::Vector{Float64})
         fr = solve_follower!(follower, z)
         if !fr.feasible
-            return (;
-                Qz = Inf,
-                gradQ = nothing,
-                feas_cut = (; v = fr.v, u = fr.u, z_k = copy(z)),
-            )
+            # WR-01 (Phase 31 code review): a follower may confirm infeasibility WITHOUT
+            # a certificate (`solve_follower!(::DistributorView)`'s NaN sentinel). A NaN
+            # cut must never reach the small master LP (JuMP rejects a NaN coefficient
+            # with an opaque error): route it to the no-certificate bisection fallback,
+            # exactly like an oracle infeasibility.
+            feas_cut =
+                isfinite(fr.v) && all(isfinite, fr.u) ? (; v = fr.v, u = fr.u, z_k = copy(z)) :
+                nothing
+            return (; Qz = Inf, gradQ = nothing, feas_cut)
         end
         # Pitfall FIX-06-2 generalized (docstring above): a GENUINE oracle-side
         # infeasibility is extended-value +Inf, exactly like a follower infeasibility,
@@ -1296,6 +1303,17 @@ function solve_stackelberg!(
         t_solve += (time_ns() - t0_ns) / 1.0e9
 
         if !follower_res.feasible
+            # WR-01 (Phase 31 code review): a confirmed infeasibility without a Farkas
+            # certificate (`solve_follower!(::DistributorView)`'s NaN sentinel, after its
+            # own presolve-free re-solve) carries no cut, and this loop has no other way
+            # to exclude z_k — fail with a named diagnosis rather than add_feasibility_cut!'s
+            # generic non-finite-argument error.
+            isfinite(follower_res.v) && all(isfinite, follower_res.u) || error(
+                "solve_stackelberg!: the follower is infeasible at the master trial " *
+                "z_k=$(lb_res.z) but returned no Farkas certificate (v=$(follower_res.v)) " *
+                "even after a presolve-free re-solve — no feasibility cut can exclude " *
+                "z_k, so the Benders loop cannot continue",
+            )
             last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
             last_weak_feas_z = nothing
             add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)

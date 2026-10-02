@@ -375,20 +375,21 @@ Three mutually exclusive, exhaustively-checked branches:
     parity with `follower.jl`): a non-finite or non-positive certificate
     raises loudly here instead of poisoning a downstream Benders master's
     persistent cut set with a vacuous cut.
-  - INFEASIBLE WITHOUT A CERTIFICATE (Phase 31, BILEV-07 — `termination_status(shared.model) == MOI.INFEASIBLE` CONFIRMED by the solver itself, but
-    `dual_status(shared.model) != MOI.INFEASIBILITY_CERTIFICATE`): HiGHS can
-    confirm genuine primal infeasibility via presolve (e.g. a trial `z_trial`
-    far outside distributor `i`'s own pinned-capacity-reduced feasible range)
-    WITHOUT ever running the dual simplex that would produce a Farkas ray —
-    this is still a CONFIRMED infeasibility (`MOI.INFEASIBLE`, never the
-    unconfirmed `MOI.ALMOST_INFEASIBLE` near-certificate), merely one with no
-    cut-forming gradient available. Returns `(; feasible = false, v = NaN, u = fill(NaN, shared.T))` — a caller that only reads `.feasible`
-    (e.g. `corner_recourse`'s own ternary-search `Qfun`, which never touches
-    `.v`/`.u`) treats this exactly like any other infeasible trial; a caller
-    that NEEDS a genuine cut (`solve_stackelberg!`'s own outer feasibility-cut
-    branch, `add_feasibility_cut!`) hits THAT function's own pre-existing
-    finiteness guard and fails loudly there instead — never silently accepts
-    a vacuous cut.
+  - INFEASIBLE WITHOUT A CERTIFICATE (Phase 31, BILEV-07; WR-01 of the Phase-31
+    code review): `termination_status(shared.model) == MOI.INFEASIBLE` but no Farkas
+    ray — HiGHS presolve's verdict, reached without the dual simplex. Measured on the
+    integer-Nash fixture, every such case was a tolerance-borderline trial (a `1e-7`
+    capacity violation, HiGHS's own feasibility tolerance). The model is first
+    RE-SOLVED ONCE WITH PRESOLVE OFF (set and restored on the inner optimizer, so
+    the model's results stay queryable), and that solve's own trusted outcome is
+    returned — feasible, or a genuine certificate as above. Only if it still yields
+    neither (or the solver has no `"presolve"` attribute) does this return
+    `(; feasible = false, v = NaN, u = fill(NaN, shared.T))`: a CONFIRMED
+    infeasibility with no cut-forming gradient. Callers must not form a cut from it:
+    `corner_recourse`'s ternary `Qfun` reads only `.feasible`; the `T > 1`
+    `_corner_recourse_joint` routes a non-finite certificate to its bisection
+    fallback; `solve_stackelberg!`'s outer feasibility branch raises a named error
+    (no cut can be formed, so no recovery is possible there).
 
 Any OTHER outcome raises loudly, naming `termination_status`/
 `primal_status`/`dual_status`/`raw_status` (T-11-01 parity).
@@ -412,6 +413,39 @@ function solve_follower!(view::DistributorView, z_trial::AbstractVector{<:Real})
     # certificate is unreachable.
     optimize!(shared.model)
 
+    res = _classify_shared_solve(shared, i)
+    res === nothing || return res
+
+    if termination_status(shared.model) == MOI.INFEASIBLE
+        # Phase 31 (BILEV-07) + WR-01 of the Phase-31 code review: INFEASIBLE without a
+        # Farkas ray is HiGHS presolve's verdict (it never ran the dual simplex).
+        # MEASURED 2026-10-02 on the integer-Nash fixture: every such case was a
+        # tolerance-borderline trial (z = 0.6000001 against a capacity of 0.6, a 1e-7
+        # violation = HiGHS's own primal feasibility tolerance), and the presolve-free
+        # re-solve returned OPTIMAL. Re-solve once without presolve so the verdict is
+        # the simplex's own: a trusted solve or a genuine certificate.
+        res = _resolve_without_presolve!(shared, i)
+        res === nothing || return res
+        # Still no certificate (or the solver has no "presolve" attribute): a
+        # CONFIRMED infeasibility with no cut-forming gradient. NaN sentinel — see the
+        # docstring for which callers may receive it.
+        return (; feasible = false, v = NaN, u = fill(NaN, shared.T))
+    end
+
+    error(
+        """
+        solve_follower!(::DistributorView): neither a trusted solve nor a genuine infeasibility certificate for distributor i=$i — refusing to trust results:
+          termination_status : $(termination_status(shared.model))
+          primal_status      : $(primal_status(shared.model))
+          dual_status        : $(dual_status(shared.model))
+          raw_status         : $(raw_status(shared.model))
+        """,
+    )
+end
+
+# The two trusted outcomes of a `shared.model` solve, scoped to distributor `i`, or
+# `nothing` for anything else (see `solve_follower!(::DistributorView, ...)`).
+function _classify_shared_solve(shared::SharedTransmission, i::Int)
     if is_solved_and_feasible(shared.model; dual = true)
         cost =
             shared.c_inv[i] * value(shared.x_inv[i]) +
@@ -431,27 +465,34 @@ function solve_follower!(view::DistributorView, z_trial::AbstractVector{<:Real})
             "refusing to emit a feasibility cut that would fail to exclude z_k",
         )
         return (; feasible = false, v = v, u = u)
-    elseif termination_status(shared.model) == MOI.INFEASIBLE
-        # Phase 31 (BILEV-07): a CONFIRMED primal infeasibility (MOI.INFEASIBLE,
-        # never the unconfirmed MOI.ALMOST_INFEASIBLE) without a Farkas ray — see
-        # this function's own docstring, third branch. Found empirically: the new
-        # integer-master corner search (corner_recourse's ternary search over
-        # [0, y_inv]) explores trial z values far beyond what the master's own box
-        # constraint (z <= y_inv, up to y_max) ever checks against this
-        # distributor's OWN pinned-capacity-reduced feasible range — HiGHS's
-        # presolve proves infeasibility directly at such a trial without running
-        # the dual simplex.
-        return (; feasible = false, v = NaN, u = fill(NaN, shared.T))
-    else
-        error(
-            """
-            solve_follower!(::DistributorView): neither a trusted solve nor a genuine infeasibility certificate for distributor i=$i — refusing to trust results:
-              termination_status : $(termination_status(shared.model))
-              primal_status      : $(primal_status(shared.model))
-              dual_status        : $(dual_status(shared.model))
-              raw_status         : $(raw_status(shared.model))
-            """,
-        )
+    end
+    return nothing
+end
+
+# WR-01 (Phase 31 code review): one re-solve of `shared.model` with presolve OFF, the
+# documented HiGHS fallback for a missing dual ray (follower.jl, WR-05 note). The
+# attribute is set and restored on the INNER optimizer (`unsafe_backend`) on purpose:
+# JuMP's `set_attribute` marks the model dirty, which would make the results just read
+# unqueryable (`OptimizeNotCalled`) for callers that read `value(shared.x_inv[i])`
+# after this returns (`run_nash!`'s parity re-solve). The original value is restored in
+# a `finally`, so presolve is never left off. Returns `_classify_shared_solve`'s
+# verdict, or `nothing` if the solver exposes no "presolve" attribute.
+function _resolve_without_presolve!(shared::SharedTransmission, i::Int)
+    attr = MOI.RawOptimizerAttribute("presolve")
+    inner = unsafe_backend(shared.model)
+    old = try
+        MOI.get(inner, attr)
+    catch err
+        err isa MOI.GetAttributeNotAllowed || err isa MOI.UnsupportedAttribute ||
+            err isa ErrorException || rethrow()
+        return nothing
+    end
+    MOI.set(inner, attr, "off")
+    try
+        optimize!(shared.model)
+        return _classify_shared_solve(shared, i)
+    finally
+        MOI.set(inner, attr, old)
     end
 end
 

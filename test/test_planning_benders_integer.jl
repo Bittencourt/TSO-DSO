@@ -208,3 +208,50 @@ end
     fake4 = make_fake_oracle_wr01(MOI.INFEASIBLE)
     @test TSODSO._oracle_or_infeasible(fake4, [0.1]; on_inexact = :throw) === nothing
 end
+
+@testitem "planning benders integer: T>1 joint corner search routes a certificate-less follower infeasibility to bisection — no NaN feasibility cut reaches the small master LP (WR-01, Phase 31 code review)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    # A follower whose FIRST infeasible verdict carries no certificate (the NaN sentinel
+    # of solve_follower!(::DistributorView), e.g. a presolve-only verdict) and every later
+    # one a genuine certificate. Deliverable region z_t <= 0.6; certificate of the
+    # slack-min value V(z) = Σ_t max(z_t − 0.6, 0): v = V(z_k), u_t = 1{z_k,t > 0.6}.
+    # Before WR-01 the NaN pair was pushed into the small master LP and JuMP threw
+    # "Invalid coefficient NaN"; now it is routed to the bisection fallback, the master
+    # re-proposes the same trial, the certificate arrives, and the search converges.
+    mutable struct OnceNaNFollower
+        T::Int
+        nan_left::Int
+    end
+    function TSODSO.solve_follower!(f::OnceNaNFollower, z::AbstractVector{<:Real})
+        all(<=(0.6), z) && return (; feasible = true, cost = 0.5 * sum(z), π_s = fill(0.5, f.T))
+        if f.nan_left > 0
+            f.nan_left -= 1
+            return (; feasible = false, v = NaN, u = fill(NaN, f.T))
+        end
+        return (;
+            feasible = false,
+            v = sum(max(zt - 0.6, 0.0) for zt in z),
+            u = [zt > 0.6 ? 1.0 : 0.0 for zt in z],
+        )
+    end
+
+    T = 2
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
+    oracle = TSODSO.build_planning_oracle(
+        Phase6Fixtures.two_bus_feeder(),
+        LinDistFlow(),
+        [agg];
+        λ₀ = fill(4.0, T),
+        T = T,
+    )
+    follower = OnceNaNFollower(T, 1)
+    Qv = TSODSO.corner_recourse(oracle, follower, 2.0, T)
+    # HAND-DERIVED: Q(z) = Σ_t [0.5 z_t − (6 z_t − z_t²/2 − 4 z_t)] = Σ_t (z_t²/2 − 1.5 z_t),
+    # unconstrained minimizer z_t = 1.5 > 0.6, so the minimum over [0, 0.6]^2 sits on the
+    # deliverability boundary: Q = 2 (0.18 − 0.9) = −1.44.
+    @test follower.nan_left == 0                 # the certificate-less verdict was hit
+    @test isapprox(Qv, -1.44; atol = 1e-6)
+end

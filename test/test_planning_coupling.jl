@@ -253,3 +253,45 @@ end
 
     @test all(v -> !is_binary(v) && !is_integer(v), all_variables(shared.model))
 end
+
+@testitem "planning coupling: presolve-only INFEASIBLE without a Farkas ray is re-solved without presolve — tolerance-borderline trial returns the simplex's own verdict, results stay queryable, presolve restored (WR-01, Phase 31 code review)" tags =
+    [:planning] begin
+    using TSODSO
+    using JuMP: optimize!, termination_status, dual_status, value, get_attribute, MOI
+
+    # MEASURED 2026-10-02 (the integer-Nash fixture of test_planning_nash_integer.jl):
+    # with distributor 2 pinned at (z, x_inv) = (0.5, 0.25) and x_inv_max = 0.3, the
+    # pooled capacity leaves distributor 1 at most 0.6. A trial z_1 = 0.6000001 violates
+    # it by 1e-7 — exactly HiGHS's primal feasibility tolerance. HiGHS PRESOLVE declares
+    # it INFEASIBLE with NO dual ray (dual_status NO_SOLUTION), which before WR-01 became
+    # the NaN sentinel and a dead end for every cut-needing caller; the presolve-free
+    # simplex re-solve declares it OPTIMAL (x_inv_1 = 0.30000005, within tolerance).
+    shared = build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    write_back!(shared, 2, [0.5], 0.25)
+    activate_distributor!(shared, 1)
+    z_border = [0.6000001]
+
+    # Precondition: presolve alone gives the certificate-less verdict this fix handles.
+    update_coupling!(shared, 1, z_border)
+    optimize!(shared.model)
+    @test termination_status(shared.model) == MOI.INFEASIBLE
+    @test dual_status(shared.model) != MOI.INFEASIBILITY_CERTIFICATE
+
+    r = solve_follower!(DistributorView(shared, 1), z_border)
+    @test r.feasible
+    @test all(isfinite, r.π_s)
+    @test isapprox(value(shared.x_inv[1]), 0.30000005; atol = 1e-9)   # queryable, not dirty
+    @test get_attribute(shared.model, "presolve") == "on"            # restored
+
+    # A clearly infeasible trial still returns a GENUINE certificate (unchanged path).
+    r_bad = solve_follower!(DistributorView(shared, 1), [0.7])
+    @test !r_bad.feasible
+    @test isfinite(r_bad.v) && r_bad.v > 0
+end
