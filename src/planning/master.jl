@@ -66,15 +66,24 @@ cut) — with cuts appended as persistent `@constraint` rows, never rebuilt.
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended (NamedTuples
     tagged `kind = :optimality`/`:feasibility`), for cut-validity testing in
     plan 11-02; not consumed by `solve_master!` itself.
-  - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 30 code review
-    iteration 2 (WR-05): how far ABOVE its derived relaxed optimum each declared epigraph
-    lower bound was ALLOWED to be when `build_master` accepted it. `S + |gap|` for an
-    explicit bound validated against `bounds_ctx` (`S` the acceptance slack, `gap` the
-    derivation solve's measured duality gap); `0.0` for an `:auto` bound (it sits BELOW
-    the optimum by construction) and for an unvalidated explicit bound. The runtime
-    epigraph floor guard adds it to its own tolerance, so a bound `build_master`
-    accepted can never later be reported as a "modeling bug" (see
-    `ALPHA_LB_REJECTION_TOL`).
+  - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — ALWAYS `(; op=0.0, x=0.0)`
+    since Phase 31 WR-03 (Plan 31-07, Option A). Phase 30 code review iteration 2 (WR-05)
+    originally recorded here how far ABOVE its derived relaxed optimum each declared
+    epigraph lower bound was ALLOWED to be when `build_master` accepted it, and widened the
+    runtime floor guard's own tolerance by that amount. Option A (WR-03) supersedes that
+    design: `build_master` now CLAMPS any accepted-but-slack explicit bound DOWN to the
+    certified `:auto`-equivalent minimum at BUILD TIME (see `lb_clamped` below), so the
+    INSTALLED bound can never sit above the true relaxed minimum — the runtime floor guard
+    needs no widening at all, and this field is kept only so `_accepted_lb_slack`'s dispatch
+    and `_assert_epigraph_floor`'s `accepted_slack` keyword (both `benders.jl`, UNTOUCHED by
+    Plan 31-07) keep a uniform interface across master types.
+  - `lb_clamped::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 31 WR-03 (Plan
+    31-07, Option A): how far DOWN an accepted explicit epigraph lower bound was moved to
+    reach the certified `:auto`-equivalent minimum (`d.bound`). `0.0` for every pre-existing
+    call site (a bound already at or below `d.bound`), for an `:auto` bound, and for an
+    unvalidated explicit bound (`bounds_ctx === nothing` or `follower_kwargs === nothing`);
+    positive only when build-time clamping actually fired. The caller's requested value is
+    tightened, never silently discarded.
 """
 struct BendersMaster{Y, Z, AOP, AX}
     model::Model
@@ -86,6 +95,7 @@ struct BendersMaster{Y, Z, AOP, AX}
     c_y::Float64
     cuts::Vector{Any}
     lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}
+    lb_clamped::NamedTuple{(:op, :x), Tuple{Float64, Float64}}
 end
 
 """
@@ -138,21 +148,23 @@ a user bound equal to the true minimum sits at most `gap` above `optimum` and is
 with at least `9·gap` (and at least `1e-6 − gap`) to spare. Floor value `1e-6`, the same
 toy measurement as [`ALPHA_LB_MARGIN`](@ref).
 
-**One validity rule at build time AND at runtime (Phase 30 code review iteration 2,
-WR-05).** Accepting bounds up to `optimum + S` (`S` the slack above) means accepting bounds
-that may sit up to `S + gap` above the TRUE minimum. The runtime floor guard used to test
-`cost_k < α − tol_k` with only the pinned solve's own tolerance `tol_k`, which can be far
-smaller than `S` (IEEE-13 T=4, y_max=0.05: derivation gap 1.5e-6 → `S` 1.5e-5, pinned
-`tol_k` ≈ 6.1e-6), so an accepted bound could later fire as a "modeling bug" at the box
-argmax. `build_master` therefore records `S + |gap|` per epigraph in
-`BendersMaster.lb_slack`, and the runtime guard fires only if
-`cost_k < α − (tol_k + lb_slack)`. Proof that an accepted bound can never fire: `α ≤
-optimum + S`, `true cost(z_k) ≥ true minimum ≥ optimum − gap` and `cost_k ≥ true cost(z_k)
-− gap_k` with `gap_k ≤ tol_k`, so `cost_k ≥ α − (S + gap) − tol_k`. For an `:auto` bound
-(`optimum − margin`, `margin ≥ 10·gap`) the same chain gives `cost_k ≥ α + 9·gap − tol_k`,
-so `lb_slack = 0` there. What still fires is a value below the DERIVATION's own certified
-lower bound `optimum − gap` by more than the pinned solve's error — a genuine bug in the
-derivation or the declaration.
+**Build-time clamp supersedes runtime widening (Phase 31 WR-03, Plan 31-07, Option A).**
+Phase 30 code review iteration 2 (WR-05) originally handled an accepted-but-slack bound by
+WIDENING the runtime floor guard: accepting bounds up to `optimum + S` (`S` the slack above)
+meant accepting bounds that could sit up to `S + gap` above the TRUE minimum, so the runtime
+guard's tolerance `tol_k` was augmented by a recorded `lb_slack = S + |gap|` to keep
+`cost_k < α − (tol_k + lb_slack)` sound. Measurement during Plan 31-01 found this widened
+formula breaks the project's own flagship pinned Benders goldens at the standard
+`tol=1e-6` (`31-01-SUMMARY.md`'s Deviations), so Option A (Plan 31-07) replaces it entirely:
+`build_master`/`build_master_integer` now CLAMP any accepted explicit bound DOWN to
+`optimum − margin` (`d.bound`, the SAME value an `:auto` bound installs) whenever the
+request lies strictly above it; a bound already at or below that minimum (every
+pre-existing call site) is installed unchanged. Because the INSTALLED bound can therefore
+never exceed `optimum − margin` for ANY accepted bound, `lb_slack` is always
+`(; op=0.0, x=0.0)` and the runtime floor guard needs no widening at all — any accepted
+bound now behaves, at runtime, exactly like an `:auto` bound already did. The amount any
+bound was clamped is recorded on the new `lb_clamped` field instead (see `BendersMaster`'s
+own Fields list).
 """
 const ALPHA_LB_REJECTION_TOL = 1e-6
 
@@ -503,7 +515,11 @@ that exceeds the UN-margined relaxed optimum by more than the measured slack
 `alpha_lb_margin(optimum, gap; floor = rejection_tol)` throws `ArgumentError` (Phase 30
 code review, WR-03 — see [`ALPHA_LB_REJECTION_TOL`](@ref)) — an invalid (too-tight)
 declared lower bound would otherwise silently produce a WRONG converged answer (see
-`test_planning_hardening.jl`'s own T=8 finding, 30-RESEARCH.md Pitfall 4).
+`test_planning_hardening.jl`'s own T=8 finding, 30-RESEARCH.md Pitfall 4). An ACCEPTED
+bound that lies strictly above the certified `:auto`-equivalent minimum `d.bound` (inside
+the acceptance slack band) is CLAMPED DOWN to `d.bound` at build time (Phase 31 WR-03, Plan
+31-07, Option A), never installed at the raw requested value — the clamp amount is recorded
+on [`BendersMaster.lb_clamped`](@ref).
 
 `bounds_ctx`'s expected shape: `(; feeder, pf, aggregators, λ₀, follower_kwargs)`, where
 `follower_kwargs` is ONE of: a `NamedTuple` with `corridor_cap`/`x_inv_max`/`c_inv`/`c_op`
@@ -556,8 +572,15 @@ function build_master(;
 
     # WR-05 (Phase 30 code review iteration 2): the acceptance slack actually granted to
     # each declared bound, carried to the runtime floor guard (see ALPHA_LB_REJECTION_TOL).
+    # Phase 31 WR-03 (Plan 31-07, Option A): both ALWAYS stay 0.0 now — any accepted bound
+    # is clamped down to a genuine certified minimum at build time (see clamp_op/clamp_x
+    # below), so no runtime floor slack is ever needed again.
     slack_op = 0.0
     slack_x = 0.0
+    # Phase 31 WR-03 (Plan 31-07, Option A): how far DOWN an accepted explicit bound was
+    # moved to reach the certified minimum (0.0 unless clamping actually fired).
+    clamp_op = 0.0
+    clamp_x = 0.0
 
     # BILEV-05 resolution: α_op_lb. :auto always derives; an explicit bound is validated
     # ONLY when bounds_ctx is supplied (the opt-in design decision above) — the
@@ -592,8 +615,21 @@ function build_master(;
                 "(see test_planning_hardening.jl's own T=8 finding)",
             ),
         )
-        slack_op = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
-        Float64(α_op_lb)
+        # Phase 31 WR-03 (Plan 31-07, Option A): clamp an accepted-but-slack bound DOWN to
+        # the certified :auto-equivalent minimum d.bound, rather than installing the raw
+        # requested value and widening the runtime certificate (Option B, rejected per
+        # 31-01-SUMMARY.md's own finding — it breaks the project's flagship pinned goldens).
+        α_eff = min(Float64(α_op_lb), d.bound)
+        α_eff < Float64(α_op_lb) && @warn(
+            "build_master: α_op_lb=$α_op_lb lies within the acceptance slack above the " *
+            "derived minimum $(d.bound); installing the certified bound $α_eff instead " *
+            "(Option A, Phase 31 WR-03)",
+            maxlog = 1,
+        )
+        clamp_op = Float64(α_op_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
+        slack_op = 0.0   # Option A: the installed bound is a genuine certified lower
+                          # bound by construction -- no runtime floor slack needed
+        α_eff
     else
         Float64(α_op_lb)
     end
@@ -623,8 +659,18 @@ function build_master(;
                 "$(d.gap)) — would silently produce a wrong-converged answer",
             ),
         )
-        slack_x = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
-        Float64(α_x_lb)
+        # Phase 31 WR-03 (Plan 31-07, Option A): mirror the α_op_lb clamp above.
+        α_eff = min(Float64(α_x_lb), d.bound)
+        α_eff < Float64(α_x_lb) && @warn(
+            "build_master: α_x_lb=$α_x_lb lies within the acceptance slack above the " *
+            "derived minimum $(d.bound); installing the certified bound $α_eff instead " *
+            "(Option A, Phase 31 WR-03)",
+            maxlog = 1,
+        )
+        clamp_x = Float64(α_x_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
+        slack_x = 0.0   # Option A: the installed bound is a genuine certified lower
+                         # bound by construction -- no runtime floor slack needed
+        α_eff
     else
         # bounds_ctx === nothing (opt-out, byte-identical path), OR _fk === nothing (a
         # pre-built follower with no sound derivation, e.g. DistributorView) — accept the
@@ -660,6 +706,7 @@ function build_master(;
         Float64(c_y),
         Any[],
         (; op = Float64(slack_op), x = Float64(slack_x)),
+        (; op = Float64(clamp_op), x = Float64(clamp_x)),
     )
 end
 

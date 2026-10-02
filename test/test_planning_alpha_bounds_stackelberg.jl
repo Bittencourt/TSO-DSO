@@ -146,7 +146,7 @@ end
     )
 end
 
-@testitem "planning alpha bounds stackelberg: an explicit bound accepted inside the build-time slack never trips the runtime floor at the box argmax (WR-05 iter 2)" tags =
+@testitem "planning alpha bounds stackelberg: an explicit bound accepted inside the build-time slack is CLAMPED and never trips the runtime floor at the box argmax (Option A, Phase 31 WR-05/WR-03, Plan 31-07)" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
     using JuMP: value, lower_bound
@@ -174,9 +174,13 @@ end
     fk = (; corridor_cap = 1.0, x_inv_max = 0.05, c_inv = 0.01, c_op = fill(0.01, T))
     bounds_ctx = (; feeder, pf, aggregators = aggs, λ₀, follower_kwargs = fk)
     m = build_master(; T = T, c_y = 0.01, y_max = y_max, α_op_lb = α, α_x_lb = 0.0, bounds_ctx)
-    @test lower_bound(m.α_op) == α                       # accepted at build time
-    @test m.lb_slack.op ≈ S + abs(d.gap)                  # ... and its slack recorded
-    @test m.lb_slack.x > 0                                # α_x_lb = 0.0 validated too
+    # Option A (Phase 31 WR-03, Plan 31-07): the accepted-but-in-slack bound is CLAMPED
+    # down to the certified minimum d.bound, NEVER installed at the raw requested α.
+    @test lower_bound(m.α_op) == d.bound
+    @test m.lb_clamped.op ≈ α - d.bound
+    @test m.lb_clamped.op > 0.0
+    # lb_slack is now ALWAYS zero — no residual runtime floor slack is ever needed again.
+    @test m.lb_slack == (; op = 0.0, x = 0.0)
 
     # The box argmax, and the pinned oracle's own value there.
     rm = TSODSO.make_relaxed_oracle_model(feeder, pf, aggs; λ₀ = λ₀, T = T, y_max = y_max)
@@ -189,12 +193,16 @@ end
     tol_k = TSODSO.alpha_lb_margin(cost_k, gk; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
     # The regime of the finding: the accepted bound sits above cost_k by more than tol_k.
     @test cost_k < α - tol_k
-    # Old rule (no accepted slack): a false "modeling bug".
+    # Old rule (no accepted slack), raw unclamped α: a false "modeling bug" — this proof
+    # that the finding is genuine and demonstrable is KEPT UNCHANGED (the raw, unclamped α
+    # is passed directly, never lower_bound(m.α_op)).
     @test_throws ErrorException TSODSO._assert_epigraph_floor(cost_k, α, :op; gap = gk)
-    # One validity rule: with the bound's recorded acceptance slack, no error.
+    # Option A (Phase 31 WR-03, Plan 31-07): the PRODUCTION path uses the INSTALLED
+    # (clamped) bound lower_bound(m.α_op), never the raw α — with accepted_slack = 0.0
+    # (the default, since _accepted_lb_slack now always returns 0.0), no error fires.
     @test TSODSO._assert_epigraph_floor(
         cost_k,
-        α,
+        lower_bound(m.α_op),
         :op;
         gap = gk,
         accepted_slack = TSODSO._accepted_lb_slack(m, :op),
@@ -202,7 +210,7 @@ end
     # A value clearly below the derivation's own certified lower bound still fires.
     @test_throws ErrorException TSODSO._assert_epigraph_floor(
         d.optimum - 10 * (S + abs(d.gap)),
-        α,
+        lower_bound(m.α_op),
         :op;
         gap = gk,
         accepted_slack = TSODSO._accepted_lb_slack(m, :op),
