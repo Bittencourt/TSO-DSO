@@ -262,6 +262,52 @@ end
     end
 end
 
+@testitem "planning master_integer: add_ll_cut! enforces its own Q_nu >= L precondition (WR-02)" tags =
+    [:planning] begin
+    using TSODSO
+
+    master = build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+    )
+    L = master.L
+    b_trial = [1.0, 0.0, 1.0, 0.0]
+
+    # Test 1 (the fix): Q_nu strictly below L by more than atol*max(1,|L|) throws a named
+    # ErrorException mentioning both Q_nu and L, and does NOT append a cut.
+    Q_nu_bad = L - 1.0
+    n_before = length(master.cuts)
+    e = try
+        add_ll_cut!(master, b_trial, Q_nu_bad, L)
+        nothing
+    catch err
+        err
+    end
+    @test e isa ErrorException
+    @test occursin("Q_nu=$Q_nu_bad", e.msg)
+    @test occursin("L=$L", e.msg)
+    @test length(master.cuts) == n_before   # unmutated on the throw path
+
+    # Test 3 (boundary): Q_nu == L exactly does NOT throw (the guard uses >=, not >).
+    master2 = build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+    )
+    L2 = master2.L
+    add_ll_cut!(master2, b_trial, L2, L2)
+    @test length(master2.cuts) == 1
+    @test master2.cuts[1].kind == :ll
+
+    # Test custom atol: a Q_nu that violates the DEFAULT atol but is within a looser,
+    # explicitly supplied atol does not throw.
+    master3 = build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+    )
+    L3 = master3.L
+    Q_nu_borderline = L3 - 0.5
+    @test_throws ErrorException add_ll_cut!(master3, b_trial, Q_nu_borderline, L3)
+    add_ll_cut!(master3, b_trial, Q_nu_borderline, L3; atol = 10.0)
+    @test length(master3.cuts) == 1
+end
+
 @testitem "planning master_integer: add_nogood_cut! forbids exact re-visitation, leaves other corners feasible" tags =
     [:planning] begin
     using TSODSO

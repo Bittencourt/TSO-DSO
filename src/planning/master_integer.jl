@@ -574,13 +574,24 @@ D(b) = Σ_{i∈S^ν} b[i] − Σ_{i∉S^ν} b[i] − |S^ν| + 1
 plan's own K=4 16-corner unit test):** the cut is TIGHT at `b = b^ν`
 (`D = 1`, reduces to `θ >= Q_nu`) and adds ZERO new information — is IMPLIED
 by the master's own existing `θ >= L` epigraph bound — at every other binary
-corner (`D <= -1`, reduces to `θ >= L - 2k(Q_nu - L) <= L` for Hamming
-distance `k >= 1`).
+corner (`D = 1 - k` at Hamming distance `k`, reduces to
+`θ >= L - (k-1)(Q_nu - L) <= L` for Hamming distance `k >= 1`).
 
 Throws `ArgumentError` if `length(b_trial) != master.K` or any entry of
 `b_trial` is non-finite (WR-03 discipline, reused verbatim from
 `add_optimality_cut!`/`add_feasibility_cut!`) — a malformed trial must fail
 loudly BEFORE corrupting the build-once master's persistent constraint set.
+
+**Phase 31 (WR-02) — the `Q_nu >= L` precondition is now ENFORCED, not merely
+assumed:** the cut's own validity argument above requires `Q_nu >= L` (an exact
+recourse value can never fall below the master's own declared global lower
+bound on that recourse); previously this was undocumented and unchecked, so a
+caller-side bug in `Q_nu`'s computation could silently append an INVALID cut
+that over-constrains `θ` at every corner with Hamming distance `>= 2`. Throws a
+named `ErrorException` (not `ArgumentError` — this is a precondition violation
+on otherwise well-typed/finite inputs, not a malformed-argument shape/
+finiteness check) if `Q_nu < L - atol * max(1, abs(L))`, BEFORE any cut is
+appended (`master.cuts`/`master.model` are left untouched on the throw path).
 
 Logs `(; kind = :ll, b_trial = round.(Int, b_trial), Q_nu, L)` to
 `master.cuts` and returns `master`.
@@ -589,7 +600,8 @@ function add_ll_cut!(
     master::BendersMasterInteger,
     b_trial::AbstractVector{<:Real},
     Q_nu::Real,
-    L::Real,
+    L::Real;
+    atol::Real = 1e-6,
 )
     length(b_trial) == master.K || throw(
         ArgumentError(
@@ -600,6 +612,14 @@ function add_ll_cut!(
         throw(ArgumentError("add_ll_cut!: b_trial contains a non-finite entry: $b_trial"))
     isfinite(Q_nu) || throw(ArgumentError("add_ll_cut!: Q_nu must be finite, got $Q_nu"))
     isfinite(L) || throw(ArgumentError("add_ll_cut!: L must be finite, got $L"))
+    # WR-02 (Phase 24 code review): the cut's own validity argument requires Q_nu >= L —
+    # enforce it loudly here, BEFORE any cut is appended, rather than silently appending an
+    # invalid cut that over-constrains θ at every corner with Hamming distance >= 2.
+    Q_nu >= L - atol * max(1, abs(L)) || error(
+        "add_ll_cut!: Q_nu=$Q_nu < L=$L — the declared epigraph lower bound " *
+        "α_op_lb + α_x_lb is not a valid lower bound on the per-corner recourse; " *
+        "the LL cut would be INVALID at every corner with Hamming distance >= 2.",
+    )
 
     b_nu = round.(Int, b_trial)
     K = master.K
