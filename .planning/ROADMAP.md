@@ -311,7 +311,26 @@ variant's game-theoretic nature.
   4. `docs/writeups/stackelberg_vs_psr_n1n2.typ` and related docs state the game-theoretic nature
      of each planning variant (integrated-decomposed-by-Benders, genuine bilevel, shared-constraint
      GNE), refreshed to current code including the integer master.
-**Plans**: TBD
+**Plans:** 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 31-01-PLAN.md — WR-01/WR-03: feas_oracle-confirmed ALMOST_INFEASIBLE in the integer corner search + widened convergence certificate
+- [ ] 31-02-PLAN.md — WR-02 root fix: integer master bounds_ctx/lb_slack + Laporte-Louveaux cut-validity guard
+- [ ] 31-03-PLAN.md — BILEV-06a/06b: interior-cap GNE fixture + run_nash_probe seed extension + solve_variational_equilibrium
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 31-04-PLAN.md — BILEV-07: run_nash! integer kwarg + cycle detection + N=2 integer Nash brute-force certification
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 31-05-PLAN.md — BILEV-08: planning-variant taxonomy + docs refresh (stackelberg_vs_psr_n1n2.typ, modelo_stackelberg_dso_unico.typ, 3 docstrings)
+
+**Wave 4** *(phase-closing gate, blocked on ALL of the above)*
+
+- [ ] 31-06-PLAN.md — Golden-move audit, consolidated findings, full-suite certification
 
 ### Phase 32: Declarative Power-Flow & Strategy Dispatch
 
@@ -445,7 +464,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
-| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/TBD | Not started | - |
+| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 0/6 | Not started | - |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
