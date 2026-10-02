@@ -378,3 +378,151 @@ mechanism, confirming the log's first timestamp postdates HEAD `445c08a`, filter
 and appending those final tallies directly into this file.
 
 <!-- ORCHESTRATOR: append certified full-suite tallies below this line once the run completes. -->
+
+## CERTIFIED: Full-Suite Tallies
+
+**Certified run:** single detached run launched by the orchestrator (never this plan's own
+executor). Started 2026-10-02T08:56:54-03:00, duration 29m37.9s, exit 0,
+`"Testing TSODSO tests passed"`. Log: `/tmp/claude-1000/p31_certified_suite_32e4cd5.log`.
+Zero `.claude/worktrees/agent-*` entries; zero worktree paths found in the log (no
+contamination, per the `background-suite-orphan-race` memory's own detection method).
+
+**Certified HEAD:** `32e4cd5` (`docs(31-06): correct self-referential HEAD sha in
+31-FINDINGS.md`) — the readiness-marker HEAD recorded above. The repo's actual HEAD at the
+time this section is written is `476e165` (`docs(31): add code review report`), docs-only
+relative to `32e4cd5` (confirmed: `31-REVIEW.md` only, zero `src/`/`test/` diff) — this
+mirrors the Phase-29/Phase-30 precedent (certified at a code commit, closed one or more
+docs-only commits later) and the certified run genuinely covers the code being shipped.
+
+**Tallies:** **31190 pass / 0 fail / 0 error / 5 broken** (31195 total).
+
+**Baseline comparison:** Phase-30 close baseline (`30-FINDINGS.md`, certified HEAD `22b7eb5`)
+was **31091 pass / 0 fail / 0 error / 5 broken**. Delta: **+99 pass**, fail/error unchanged
+at 0, **broken unchanged at 5** (confirming Phase 31 adds no new `@test_broken`, as predicted
+in the readiness section above and in point 6's deviation log).
+
+**Golden-move audit at this HEAD:** re-confirmed in point 7 above — exit 0, zero flagged
+moves, `--base 36e3c1e --head HEAD` (re-run against the certified state would show the same
+zero-flag result; `31-REVIEW.md` is a `.planning/` doc, outside the audit script's `test/`
+scope).
+
+**Zero re-pinned pre-existing goldens** at the certified HEAD, same conclusion as point 7's
+pre-certification run.
+
+## Known Open Issues (post-certification code review, left unresolved)
+
+**Process note:** after the certified suite run above, the orchestrator ran a code-review
+pass against this phase's full diff (`git diff 36e3c1e`, commit `476e165`,
+`31-REVIEW.md`) — **2 critical / 6 warning / 7 info findings**. The user explicitly
+**STOPPED autonomous mode after this review**, so **no fix iteration was run**. Every finding
+below is OPEN, not fixed. Per the coordinator's explicit instruction: **Phase 31 is
+certified-green on tests, but BILEV-06 (VE selection) and BILEV-07 (cycle detection) have
+known correctness gaps pending a fix round — the phase is NOT being marked verified; full
+phase-level completion is deferred to a later session.**
+
+### Critical findings (2)
+
+**CR-01 — Integer cycle detection fires on runs that are still converging (reproduced).**
+`src/planning/nash.jl:736-754` (key built at 633-641). The cycle key is only the joint
+binary vector `b`, but the game state also includes the continuous `z`/`x_inv`; binaries
+routinely settle before those do, so any run needing ≥3 sweeps with a stable `b` is reported
+as a false "CYCLED" error. **Reproduced**: the BILEV-07 test fixture with
+`integer=(;K=4), ω=0.5` throws
+`integer diagonalization CYCLED — the joint binary state [1,0,0,0,1,0,0,0] recurred at sweep 2
+(first seen at sweep 1)` after 107s — damping halves the residual each sweep while `b` stays
+fixed, and point 4's own standalone-replication-only cycle test (exact `Dict` key equality,
+never calling `run_nash!`) cannot catch this class of false positive. **This directly
+contradicts point 4 above's own "exercised implicitly by every converged run" framing** — it
+is exercised, but demonstrated here to be WRONG on a converging run, not merely
+untested-end-to-end as point 4 honestly stated. Fix proposed (not applied): key on the full
+committed state (joint_b, rounded z, rounded x_inv), checked only when the sweep has not
+converged; or require `b` to recur with a non-decreasing residual (mirroring Phase 24's
+`apply_integer_cuts!` stall-guard pattern).
+
+**CR-02 — The VE is not unique on the interior-cap fixture; docs/tests wrongly claim
+selection.** `src/planning/nash.jl:285-292, 1037-1049, 1079-1083`;
+`docs/writeups/stackelberg_vs_psr_n1n2.typ:229-231`; `test/test_planning_nash.jl` (VE
+testitem). With `c_inv = [1, 1]` (the shipped interior-cap fixture from point 2/3 above), the
+joint objective and every constraint depend on `x_inv` only through `x1 + x2`, so the joint
+problem's optimal face is the ENTIRE split segment, and every GNE point on the continuum has
+an IDENTICAL shared-row multiplier `π = 0.5` — the VE set equals the GNE set on this fixture.
+**This directly contradicts point 3 above's framing of `solve_variational_equilibrium` as
+genuinely "selecting" a distinguished equilibrium**: on the fixture actually shipped,
+"VE selection" is mathematically empty (every GNE already satisfies the VE's own
+equal-multiplier criterion), so the returned point `(0.35, 0.35)` (point 3's "degenerate-face
+vertex" paragraph) is merely solver-dependent, not a selection in any meaningful sense. The
+writeup's "Dentro do continuum de GNEs acima, o VE é o GNE cujo multiplicador ... é
+IDÊNTICO" is literally false AS A DISTINGUISHING STATEMENT for this fixture (true but vacuous
+— true of every point). The existing tests (`sum(x_inv)≈0.7`, `isfinite(π)`,
+no-profitable-deviation) cannot distinguish a VE from any other GNE, since all three hold at
+every point of the continuum. Rosen's uniqueness argument needs diagonal strict concavity,
+which this linear-in-`x` fixture lacks. Fix proposed (not applied): state explicitly in the
+docs that the VE is non-unique on this fixture and the returned point is solver-dependent;
+add a SEPARATE selection-test fixture with asymmetric `c_inv` or a strictly convex investment
+cost so the VE is actually unique, and assert the hand-derived split there.
+
+### Warnings (6)
+
+- **WR-01:** the new no-Farkas-ray infeasible branch (point 4 above's Rule-1 fix,
+  `coupling.jl:434-444`) is a dead end for every caller that needs a cut: at T>1,
+  `_corner_recourse_joint.evaluate` pushes a NaN feasibility cut into the small LP and JuMP
+  throws an opaque `Invalid coefficient NaN` error; in the outer loop, `add_feasibility_cut!`
+  aborts the whole Nash run on a merely-infeasible trial. The coupling docstring's "fails
+  loudly there" claim does not hold — nothing can recover. Fix proposed: route a
+  `NaN`/non-finite cut to `nothing` (bisection fallback) instead of pushing it; re-solve once
+  with presolve off to get a genuine Farkas ray before falling back.
+- **WR-02:** `modelo_stackelberg_dso_unico.typ:195` wrongly claims `inexact_policy` applies
+  to all three taxonomy rows including the bilevel KKT row — `bilevel_kkt.jl` never calls
+  `solve_stackelberg!`, has no `inexact_policy`, and rejects QP/SOCP formulations. Fix
+  proposed: restrict the claim to rows 1 and 3; state row 2 is LP-only.
+- **WR-03:** `test_planning_nash_integer.jl`'s "brute-force certification" (point 4 above) is
+  NOT independent — the enumeration reuses production `corner_recourse` with the same
+  oracle/follower/accounting as the UB under test, so a bug there would be reproduced on both
+  sides of the comparison; the measured equilibrium (`z=[0.5,0.5]`, `x_inv=[0.25,0.25]`,
+  `UB=-0.225`) is never asserted as a pinned value. Fix proposed: assert the hand-derived
+  lattice equilibrium directly; certify each lattice point via a separately-built LP/QP, not
+  `corner_recourse`.
+- **WR-04:** `add_ll_cut!`'s `Q_nu >= L` tolerance band (point 1/WR-02 above) still permits
+  an invalid cut: for `L − atol·max(1,|L|) ≤ Q_nu < L`, the guard passes but the appended cut
+  has negative slope, over-constraining θ by up to `(K−1)·atol·|L|`. The public `atol` kwarg
+  allows arbitrarily invalid cuts. Fix proposed: clamp `Q_eff = max(Q_nu, L)` after the guard
+  passes, logging the clamp.
+- **WR-05:** in the corner search (point 1/WR-01 above), a `:weak` or unconfirmed
+  infeasibility verdict is treated as confirmed and mapped to `+Inf` just like a genuine
+  `:separating` verdict — `LOCALLY_INFEASIBLE`/`INFEASIBLE_OR_UNBOUNDED` are also labelled
+  "CERTIFIED" and skip confirmation entirely. This can drop a near-boundary minimizer and
+  make the Laporte-Louveaux cut slightly invalid. Fix proposed: confirm only on
+  `:separating`; rethrow/bisect on `:weak`; route `LOCALLY_INFEASIBLE` through feas_oracle
+  confirmation too.
+- **WR-06:** the `integer` kwarg path (point 4 above) silently ignores any
+  `spec.master_kwargs.α_op_lb`/`α_x_lb` the caller supplies, and assumes nonnegative
+  `c_inv`/`c_op` (never validated) when deriving its own default `α_x_lb = 0.0` — a negative
+  `c_op` makes `L` an invalid bound and the run aborts deep inside `add_ll_cut!` or the floor
+  guard instead of failing at the boundary with a clear message. Fix proposed: throw if
+  `master_kwargs` contains α-bound keys while `integer !== nothing` (or honor them); validate
+  `c_inv, c_op ≥ 0` or derive `α_x_lb` from their actual signs.
+
+### Info (7, documentation/cosmetic, no correctness impact)
+
+IN-01 (`CORNER_INFEASIBLE_STATUSES` dead code, self-admitted), IN-02 (a stale `benders.jl`
+comment claiming "tolerance includes the build-time acceptance slack" — `lb_slack` is always
+zero post-31-07, so the field and `_accepted_lb_slack` are dead weight), IN-03 (`run_nash!`
+docstring Algorithm step 4 is garbled), IN-04 (`stackelberg_vs_psr_n1n2.typ`'s claim that
+`b[1:K]` are the "ÚNICAS variáveis binárias" in `src/planning/` is misleading —
+`bilevel_kkt.jl`'s SOS1 pairs are bridged to binaries by `SOS1ToMILPBridge`), IN-05
+(`nash.jl` never checks `result_i.y` actually lies on the lattice or `idx_i < 2^K`), IN-06
+(the interior-cap probe's `z_spread` measurement, point 2 above, sits ~6× the outer
+tolerance vs. a 17×-looser assertion bound — unexplained, not just unexercised), IN-07
+(`@warn ... maxlog=1` in the WR-03/Option A clamp hides every clamp after the first in
+multi-build contexts such as Nash; `run_nash_probe` cannot forward `integer`, so integer N>1
+multiplicity cannot currently be probed the way point 2's continuous-case probe was).
+
+### Verdict
+
+**Phase 31 is certified-green on tests** (31190/0/0/5, +99 over the Phase-30 baseline, zero
+regressions, zero new broken) **but is NOT being marked verified at the phase level.**
+BILEV-06 (variational-equilibrium selection, CR-02) and BILEV-07 (integer cycle detection,
+CR-01) both have known, reproduced correctness gaps — the shipped VE "selection" is vacuous
+on the shipped fixture, and the cycle detector can raise a false-positive error on a
+genuinely converging integer Nash run. These are carried forward, unresolved, pending a
+dedicated fix round in a later session — not silently accepted as the phase's final state.
