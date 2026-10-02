@@ -73,13 +73,17 @@ rebuilt, mirroring `BendersMaster`'s own mutate-without-rebuild idiom.
     so plan 24-02's Laporte-Louveaux cut never has to re-derive the recourse's
     global lower bound.
 
-  - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 31 (BILEV-07)
-    port of `BendersMaster.lb_slack`'s own field (master.jl, WR-05): how far ABOVE its
-    derived relaxed optimum each declared epigraph lower bound was ALLOWED to be when
-    `build_master_integer` accepted it. Populated identically to the continuous
-    master's own field (see [`build_master_integer`](@ref)); read via
-    `_accepted_lb_slack(::BendersMasterInteger, label)`, dispatched automatically by
-    `benders.jl`'s pre-existing generic `_accepted_lb_slack` fallback mechanism.
+  - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — ALWAYS `(; op=0.0, x=0.0)`
+    since Phase 31 WR-03 (Plan 31-07, Option A) — port of `BendersMaster.lb_slack`'s own
+    field (master.jl). Phase 31 (BILEV-07) originally populated this identically to the
+    continuous master's own WR-05 field (how far ABOVE its derived relaxed optimum each
+    declared epigraph lower bound was ALLOWED to be when `build_master_integer` accepted
+    it); Option A (WR-03) supersedes that design: `build_master_integer` now CLAMPS any
+    accepted-but-slack explicit bound DOWN to the certified `:auto`-equivalent minimum at
+    build time (see `lb_clamped` below), so this field is always zero and is kept only so
+    `_accepted_lb_slack(::BendersMasterInteger, label)` keeps a uniform interface,
+    dispatched automatically by `benders.jl`'s pre-existing generic
+    `_accepted_lb_slack` fallback mechanism.
 
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended, mirroring
     `BendersMaster.cuts`'s exact convention.
@@ -111,6 +115,13 @@ rebuilt, mirroring `BendersMaster`'s own mutate-without-rebuild idiom.
     own fixed point there and no further progress is possible) from ordinary,
     expected refinement progress (a DIFFERENT `z`) — see
     [`apply_integer_cuts!`](@ref)'s own docstring for the full diagnosis.
+
+  - `lb_clamped::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 31 WR-03 (Plan
+    31-07, Option A): verbatim port of `BendersMaster.lb_clamped`'s own field (master.jl)
+    — how far DOWN an accepted explicit epigraph lower bound was moved to reach the
+    certified `:auto`-equivalent minimum. `0.0` for every pre-existing call site, `:auto`,
+    or an unvalidated explicit bound; positive only when build-time clamping actually
+    fired.
 """
 struct BendersMasterInteger{Y, Z, AOP, AX, B}
     model::Model
@@ -127,6 +138,7 @@ struct BendersMasterInteger{Y, Z, AOP, AX, B}
     lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}
     cuts::Vector{Any}
     visited::Dict{Vector{Int}, Vector{Float64}}
+    lb_clamped::NamedTuple{(:op, :x), Tuple{Float64, Float64}}
 end
 
 """
@@ -176,12 +188,18 @@ pre-existing call site (explicit `Real` `α_op_lb`/`α_x_lb`, no `bounds_ctx`) s
 BYTE-IDENTICAL — the `bounds_ctx === nothing` branch never calls the derivation
 helpers. See `build_master`'s own docstring for the full three-way
 `bounds_ctx.follower_kwargs` dispatch (`NamedTuple` / `FollowerLP` / `nothing`) this
-function reuses verbatim.**
+function reuses verbatim.** An ACCEPTED bound that lies strictly above the certified
+`:auto`-equivalent minimum `d.bound` (inside the acceptance slack band) is CLAMPED DOWN
+to `d.bound` at build time (Phase 31 WR-03, Plan 31-07, Option A), never installed at the
+raw requested value — the clamp amount is recorded on
+[`BendersMasterInteger.lb_clamped`](@ref), the identical verbatim port of
+`build_master`'s own clamp transformation.
 
 Returns a [`BendersMasterInteger`](@ref) with an empty `cuts` log, an empty
-`visited` set, a populated `lb_slack` field (mirroring `BendersMaster.lb_slack`,
-WR-05), and `L = α_op_lb_resolved + α_x_lb_resolved` pinned for reuse by plan
-24-02's Laporte-Louveaux cut.
+`visited` set, `lb_slack` ALWAYS `(; op=0.0, x=0.0)` (Option A, Plan 31-07 — no runtime
+floor slack is ever needed again), a populated `lb_clamped` field recording any
+build-time clamp, and `L = α_op_lb_resolved + α_x_lb_resolved` (computed from the
+CLAMPED resolved values) pinned for reuse by plan 24-02's Laporte-Louveaux cut.
 """
 function build_master_integer(;
     T::Int,
@@ -223,8 +241,15 @@ function build_master_integer(;
 
     # WR-05 (ported from build_master): the acceptance slack actually granted to each
     # declared bound, carried to BendersMasterInteger.lb_slack for _accepted_lb_slack.
+    # Phase 31 WR-03 (Plan 31-07, Option A): both ALWAYS stay 0.0 now — any accepted bound
+    # is clamped down to a genuine certified minimum at build time (see clamp_op/clamp_x
+    # below), so no runtime floor slack is ever needed again.
     slack_op = 0.0
     slack_x = 0.0
+    # Phase 31 WR-03 (Plan 31-07, Option A): how far DOWN an accepted explicit bound was
+    # moved to reach the certified minimum (0.0 unless clamping actually fired).
+    clamp_op = 0.0
+    clamp_x = 0.0
 
     # BILEV-05/BILEV-07 resolution: α_op_lb. :auto always derives; an explicit bound is
     # validated ONLY when bounds_ctx is supplied (the opt-in design decision) — the
@@ -258,8 +283,21 @@ function build_master_integer(;
                 "gap $(d.gap)) — would silently produce a wrong-converged answer",
             ),
         )
-        slack_op = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
-        Float64(α_op_lb)
+        # Phase 31 WR-03 (Plan 31-07, Option A): clamp an accepted-but-slack bound DOWN to
+        # the certified :auto-equivalent minimum d.bound, rather than installing the raw
+        # requested value and widening the runtime certificate (Option B, rejected per
+        # 31-01-SUMMARY.md's own finding — it breaks the project's flagship pinned goldens).
+        α_eff = min(Float64(α_op_lb), d.bound)
+        α_eff < Float64(α_op_lb) && @warn(
+            "build_master_integer: α_op_lb=$α_op_lb lies within the acceptance slack " *
+            "above the derived minimum $(d.bound); installing the certified bound " *
+            "$α_eff instead (Option A, Phase 31 WR-03)",
+            maxlog = 1,
+        )
+        clamp_op = Float64(α_op_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
+        slack_op = 0.0   # Option A: the installed bound is a genuine certified lower
+                          # bound by construction -- no runtime floor slack needed
+        α_eff
     else
         Float64(α_op_lb)
     end
@@ -290,8 +328,18 @@ function build_master_integer(;
                 "gap $(d.gap)) — would silently produce a wrong-converged answer",
             ),
         )
-        slack_x = slack + (isfinite(d.gap) ? abs(d.gap) : 0.0)   # WR-05
-        Float64(α_x_lb)
+        # Phase 31 WR-03 (Plan 31-07, Option A): mirror the α_op_lb clamp above.
+        α_eff = min(Float64(α_x_lb), d.bound)
+        α_eff < Float64(α_x_lb) && @warn(
+            "build_master_integer: α_x_lb=$α_x_lb lies within the acceptance slack " *
+            "above the derived minimum $(d.bound); installing the certified bound " *
+            "$α_eff instead (Option A, Phase 31 WR-03)",
+            maxlog = 1,
+        )
+        clamp_x = Float64(α_x_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
+        slack_x = 0.0   # Option A: the installed bound is a genuine certified lower
+                         # bound by construction -- no runtime floor slack needed
+        α_eff
     else
         # bounds_ctx === nothing (opt-out, byte-identical path), OR _fk === nothing (a
         # pre-built follower with no sound derivation) — accept the explicit value
@@ -335,6 +383,7 @@ function build_master_integer(;
         (; op = Float64(slack_op), x = Float64(slack_x)),
         Any[],
         Dict{Vector{Int}, Vector{Float64}}(),
+        (; op = Float64(clamp_op), x = Float64(clamp_x)),
     )
 end
 

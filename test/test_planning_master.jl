@@ -272,7 +272,7 @@ end
     @test d.margin >= TSODSO.ALPHA_LB_MARGIN
 end
 
-@testitem "planning master: build-time rejection has real headroom — a bound AT the derived optimum is accepted (WR-03)" tags =
+@testitem "planning master: build-time rejection has real headroom, but an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
     using JuMP: lower_bound
@@ -282,6 +282,10 @@ end
     # to the true minimum was rejected whenever the solver reported its optimum slightly
     # low, and α_x_lb = 0.0 on a 0.0-minimum follower was accepted only because
     # -1e-6 + 1e-6 == 0.0 in floating point. Now: reject iff α > optimum + slack.
+    # Phase 31 WR-03 (Plan 31-07, Option A): an ACCEPTED bound inside the slack band is no
+    # longer installed verbatim — it is CLAMPED DOWN to the certified :auto-equivalent
+    # minimum d.bound (the same value :auto would install), closing the regression Plan
+    # 31-01 found (the raw-install path inflated the reported LB above the true minimum).
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
@@ -295,19 +299,51 @@ end
     sx = TSODSO.alpha_lb_margin(dx.optimum, dx.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
     # A bound slightly ABOVE the reported optimum, but inside the measured slack, is
-    # accepted (the old rule rejected both of these).
+    # ACCEPTED (not rejected) — but Option A clamps the installed value down to d.bound,
+    # NEVER the raw requested value.
+    req_op = dop.optimum + sop / 2
+    req_x = dx.optimum + sx / 2
     m = build_master(;
         T = 1,
         c_y = 0.3,
         y_max = 8.0,
-        α_op_lb = dop.optimum + sop / 2,
-        α_x_lb = dx.optimum + sx / 2,
+        α_op_lb = req_op,
+        α_x_lb = req_x,
         bounds_ctx = bounds_ctx,
     )
-    @test lower_bound(m.α_op) == dop.optimum + sop / 2
-    @test lower_bound(m.α_x) == dx.optimum + sx / 2
-    # Beyond the slack, both are still rejected — and the error names the bound that was
-    # rejected (IN-04, iteration 2: an unrelated ArgumentError must not pass).
+    @test lower_bound(m.α_op) == dop.bound
+    @test lower_bound(m.α_x) == dx.bound
+    # The installed bound can never exceed the TRUE relaxed minimum — the regression this
+    # plan closes.
+    @test lower_bound(m.α_op) <= dop.optimum
+    @test lower_bound(m.α_x) <= dx.optimum
+    # The clamp amount is recorded, never silently discarded.
+    @test m.lb_clamped.op ≈ (req_op - dop.bound)
+    @test m.lb_clamped.op > 0.0
+    @test m.lb_clamped.x ≈ (req_x - dx.bound)
+    @test m.lb_clamped.x > 0.0
+    # Option A: lb_slack is always zero now — no residual runtime floor slack is needed.
+    @test m.lb_slack == (; op = 0.0, x = 0.0)
+
+    # Byte-identical regression: a bound already AT OR BELOW the certified minimum (every
+    # pre-existing call site's own -50.0/-5.0-style literals) passes through UNCHANGED —
+    # zero clamp fired.
+    m_unclamped = build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -50.0,
+        α_x_lb = -50.0,
+        bounds_ctx = bounds_ctx,
+    )
+    @test lower_bound(m_unclamped.α_op) == -50.0
+    @test lower_bound(m_unclamped.α_x) == -50.0
+    @test m_unclamped.lb_clamped == (; op = 0.0, x = 0.0)
+    @test m_unclamped.lb_slack == (; op = 0.0, x = 0.0)
+
+    # Beyond the slack, both are still rejected — the rejection ceiling is UNCHANGED by
+    # Option A — and the error names the bound that was rejected (IN-04, iteration 2: an
+    # unrelated ArgumentError must not pass).
     function caught(f)
         try
             f()

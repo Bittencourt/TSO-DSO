@@ -469,9 +469,10 @@ end
     )
 end
 
-@testitem "planning master_integer: _accepted_lb_slack dispatches to BendersMasterInteger's own populated lb_slack, not the generic 0.0 fallback" tags =
+@testitem "planning master_integer: _accepted_lb_slack is always 0.0 — an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using JuMP: lower_bound
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -486,29 +487,46 @@ end
     sx = TSODSO.alpha_lb_margin(dx.optimum, dx.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
     # A bound slightly ABOVE the reported optimum, but inside the measured slack, is
-    # accepted — and carries a NONZERO recorded slack (WR-05).
+    # ACCEPTED (not rejected) — but Option A clamps the installed value down to d.bound,
+    # NEVER the raw requested value, so _accepted_lb_slack is always 0.0 now.
+    req_op = dop.optimum + sop / 2
+    req_x = dx.optimum + sx / 2
     master = build_master_integer(;
         T = 1,
         K = 4,
         c_y = 0.3,
         y_max = 8.0,
-        α_op_lb = dop.optimum + sop / 2,
-        α_x_lb = dx.optimum + sx / 2,
+        α_op_lb = req_op,
+        α_x_lb = req_x,
         bounds_ctx = bounds_ctx,
     )
-    @test TSODSO._accepted_lb_slack(master, :op) > 0.0
-    @test TSODSO._accepted_lb_slack(master, :x) > 0.0
+    @test TSODSO._accepted_lb_slack(master, :op) == 0.0
+    @test TSODSO._accepted_lb_slack(master, :x) == 0.0
     @test TSODSO._accepted_lb_slack(master, :op) == master.lb_slack.op
     @test TSODSO._accepted_lb_slack(master, :x) == master.lb_slack.x
+    # The installed bound is CLAMPED to the certified minimum, never the raw requested
+    # value — and can never exceed the TRUE relaxed minimum.
+    @test lower_bound(master.α_op) == dop.bound
+    @test lower_bound(master.α_x) == dx.bound
+    @test lower_bound(master.α_op) <= dop.optimum
+    @test lower_bound(master.α_x) <= dx.optimum
+    # The clamp amount is recorded, never silently discarded.
+    @test master.lb_clamped.op ≈ (req_op - dop.bound)
+    @test master.lb_clamped.op > 0.0
+    @test master.lb_clamped.x ≈ (req_x - dx.bound)
+    @test master.lb_clamped.x > 0.0
 
     # Regression: a BendersMasterInteger built WITHOUT bounds_ctx (explicit, unvalidated
-    # bounds, the byte-identical opt-out path) carries ZERO slack — genuinely dispatched
-    # via the type-specific method, not accidentally always nonzero.
+    # bounds, the byte-identical opt-out path) carries ZERO slack and ZERO clamp — the
+    # installed value passes through byte-identical.
     plain = build_master_integer(;
         T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
     )
     @test TSODSO._accepted_lb_slack(plain, :op) == 0.0
     @test TSODSO._accepted_lb_slack(plain, :x) == 0.0
+    @test plain.lb_clamped == (; op = 0.0, x = 0.0)
+    @test lower_bound(plain.α_op) == -5.0
+    @test lower_bound(plain.α_x) == 0.0
 end
 
 @testitem "planning master_integer: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
