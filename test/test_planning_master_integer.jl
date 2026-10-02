@@ -265,6 +265,7 @@ end
 @testitem "planning master_integer: add_ll_cut! enforces its own Q_nu >= L precondition (WR-02)" tags =
     [:planning] begin
     using TSODSO
+    using JuMP: fix, optimize!, objective_value, @objective
 
     master = build_master_integer(;
         T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
@@ -297,15 +298,41 @@ end
     @test master2.cuts[1].kind == :ll
 
     # Test custom atol: a Q_nu that violates the DEFAULT atol but is within a looser,
-    # explicitly supplied atol does not throw.
+    # explicitly supplied atol does not throw — and (WR-04, Phase 31 code review) the
+    # appended cut is CLAMPED to Q_eff = L, so it stays VALID: before the clamp this
+    # appended θ >= L + (k−1)·0.5 at Hamming distance k, cutting off every far corner.
     master3 = build_master_integer(;
         T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
     )
     L3 = master3.L
     Q_nu_borderline = L3 - 0.5
     @test_throws ErrorException add_ll_cut!(master3, b_trial, Q_nu_borderline, L3)
-    add_ll_cut!(master3, b_trial, Q_nu_borderline, L3; atol = 10.0)
+    @test_logs (:warn, r"clamping") add_ll_cut!(
+        master3,
+        b_trial,
+        Q_nu_borderline,
+        L3;
+        atol = 10.0,
+    )
     @test length(master3.cuts) == 1
+    @test master3.cuts[1].Q_nu == L3                  # the installed value
+    @test master3.cuts[1].Q_nu_raw == Q_nu_borderline  # the caller's value
+    # Validity at the FARTHEST corner (Hamming distance K = 4 from b_trial): with b
+    # pinned there, minimizing θ must reach the epigraph floor L, i.e. the cut adds no
+    # constraint beyond θ >= L (the unclamped cut demanded θ >= L + 3·0.5).
+    far = 1.0 .- b_trial
+    fix.(master3.b, far; force = true)
+    @objective(master3.model, Min, master3.α_op + master3.α_x)
+    optimize!(master3.model)
+    @test isapprox(objective_value(master3.model), L3; atol = 1e-9)
+
+    # A Q_nu at or above L is installed unchanged (no clamp, no warning).
+    master4 = build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+    )
+    @test_logs add_ll_cut!(master4, b_trial, master4.L + 1.0, master4.L)
+    @test master4.cuts[1].Q_nu == master4.L + 1.0
+    @test master4.cuts[1].Q_nu_raw == master4.L + 1.0
 end
 
 @testitem "planning master_integer: add_nogood_cut! forbids exact re-visitation, leaves other corners feasible" tags =

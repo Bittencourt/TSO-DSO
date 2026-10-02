@@ -642,8 +642,17 @@ on otherwise well-typed/finite inputs, not a malformed-argument shape/
 finiteness check) if `Q_nu < L - atol * max(1, abs(L))`, BEFORE any cut is
 appended (`master.cuts`/`master.model` are left untouched on the throw path).
 
-Logs `(; kind = :ll, b_trial = round.(Int, b_trial), Q_nu, L)` to
-`master.cuts` and returns `master`.
+**WR-04 (Phase 31 code review) — the tolerance band never appends an invalid cut.**
+Inside the band `L − atol·max(1, |L|) <= Q_nu < L` the cut is built with
+`Q_eff = max(Q_nu, L)` (and a `@warn`): an unclamped negative slope `Q_nu − L` would
+make the cut `θ >= L + (k−1)(L − Q_nu)` at Hamming distance `k`, over-constraining every
+corner with `k >= 2` by up to `(K−1)·atol·max(1,|L|)`. The clamped cut is `θ >= L` at
+every corner — valid, and implied by the epigraph bound. A larger `atol` therefore only
+widens what is accepted as noise around `L`; it can never make the appended cut invalid.
+
+Logs `(; kind = :ll, b_trial = round.(Int, b_trial), Q_nu = Q_eff, L, Q_nu_raw = Q_nu)`
+to `master.cuts` (`Q_nu` is the value the installed cut uses, so a consumer rebuilding
+the cut's RHS from the log reproduces the installed row) and returns `master`.
 """
 function add_ll_cut!(
     master::BendersMasterInteger,
@@ -670,6 +679,18 @@ function add_ll_cut!(
         "the LL cut would be INVALID at every corner with Hamming distance >= 2.",
     )
 
+    # WR-04 (Phase 31 code review): the tolerance band above must not let an INVALID cut
+    # through. For L − atol·max(1,|L|) <= Q_nu < L the slope (Q_nu − L) is negative and
+    # the cut would read θ >= L + (k−1)(L − Q_nu) > L at Hamming distance k >= 2 —
+    # over-constraining. Clamp to Q_eff = max(Q_nu, L): a sub-L recourse inside the band
+    # is solver noise around L, and θ >= L is already implied everywhere, so the clamped
+    # cut is valid at every corner (tight at b^ν up to that noise).
+    Q_eff = max(Float64(Q_nu), Float64(L))
+    Q_eff == Q_nu || @warn(
+        "add_ll_cut!: Q_nu=$Q_nu < L=$L within atol=$atol; clamping the cut's value " *
+        "to L so it stays valid at every corner (WR-04)",
+    )
+
     b_nu = round.(Int, b_trial)
     K = master.K
     S = findall(==(1), b_nu)
@@ -679,8 +700,10 @@ function add_ll_cut!(
         sum(master.b[i] for i in S; init = 0) - sum(master.b[i] for i in Sc; init = 0) -
         length(S) + 1
     θ = master.α_op + master.α_x
-    @constraint(master.model, θ >= (Q_nu - L) * Dexpr + L)
-    push!(master.cuts, (; kind = :ll, b_trial = b_nu, Q_nu, L))
+    @constraint(master.model, θ >= (Q_eff - L) * Dexpr + L)
+    # `Q_nu` records the value the INSTALLED cut uses (consumers rebuild the cut's RHS
+    # from it); `Q_nu_raw` the caller's original value.
+    push!(master.cuts, (; kind = :ll, b_trial = b_nu, Q_nu = Q_eff, L, Q_nu_raw = Q_nu))
     return master
 end
 
