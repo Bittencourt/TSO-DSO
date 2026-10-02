@@ -32,8 +32,11 @@
 # lattice point AT OR BELOW the continuous optimum `z=0.6` (lattice points are
 # `{0,0.5,1.0,...,7.5}`; `0.5` is the largest point `<= 0.6`). The per-player
 # brute-force sweep below (Test 2, the load-bearing item) independently confirms this is
-# a genuine equilibrium: diff between the reported `UB[i]` and the brute-forced best of
-# all 16 lattice points was `2.22e-16` (machine epsilon) for BOTH distributors.
+# a genuine equilibrium — since the Phase-31 code review (WR-03) with a separately
+# hand-written QP per lattice point, never production `corner_recourse`: diff between
+# the reported `UB[i]` and the brute-forced best of all 16 lattice points is `2.2e-9`
+# for BOTH distributors, and the equilibrium itself is pinned against its hand
+# derivation (Test 1b).
 #
 # RULE 1 AUTO-FIX (found during this plan's own execution, see 31-04-SUMMARY.md for the
 # full account): `solve_follower!(::DistributorView, ...)` (`src/planning/coupling.jl`)
@@ -55,6 +58,7 @@
 @testitem "planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation, BILEV-07)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    import JuMP
 
     shared = build_shared_transmission(;
         N = 2,
@@ -94,60 +98,70 @@
     )
     @test result.converged
 
-    # Test 2 (brute-force certification, THE load-bearing item): for EACH distributor i,
-    # hold the OTHER distributor's (x_inv_j, z_j) PINNED at the reported equilibrium (via
-    # a FRESH SharedTransmission + write_back!/activate_distributor!), enumerate
-    # distributor i's own 2^K=16 lattice points via the PRODUCTION `corner_recourse`
-    # (never a re-derived enumeration — 31-PATTERNS.md's own "Don't Hand-Roll"
-    # guidance), built fresh per distributor (never reused across i), and assert NONE
-    # achieves a strictly lower total cost than the reported equilibrium's own UB[i].
+    # Test 1b (WR-03, Phase 31 code review): PIN the hand-derived lattice equilibrium.
+    # Player i's cost at master lattice point y (step y_max/2^K = 0.5), the other
+    # player j pinned at (z_j, x_inv_j): the pooled row z_i + z_j <= 2(x_i + x_j) with
+    # x_i <= 0.3 caps z_i at 0.6 + 2x_j − z_j, and the follower's cheapest support is
+    # x_i = (z_i + z_j)/2 − x_j. With the oracle welfare W(z) − λ₀z = 6z − z²/2 − 4z:
+    #   cost_i(y) = c_y·y + min_{0 <= z <= min(y, cap)} [c_inv·x_i(z) + c_op·z − (2z − z²/2)]
+    # At the symmetric candidate (z_j, x_j) = (0.5, 0.25): x_i(z) = z/2, so the bracket
+    # is z²/2 − z, decreasing on [0, 1] — z_i = min(y, 0.6). Lattice: y = 0 → 0;
+    # y = 0.5 → 0.15 + (0.125 − 0.5) = −0.225; y = 1.0 → 0.3 + (0.18 − 0.6) = −0.12;
+    # every larger y adds 0.15 per step at the same z = 0.6. Unique argmin y = 0.5:
+    # z_i = 0.5, x_inv_i = 0.25, UB_i = −0.225 for both players — a Nash equilibrium of
+    # the lattice game. MEASURED: UB = −0.2249999999999959, z and x_inv exact.
+    @test isapprox(result.z, fill(0.5, 2, 1); atol = 1e-9)
+    @test isapprox(result.x_inv, [0.25, 0.25]; atol = 1e-9)
+    @test isapprox(result.UB, [-0.225, -0.225]; atol = 1e-9)
+
+    # Test 2 (brute-force certification, THE load-bearing item; made INDEPENDENT by
+    # WR-03): for EACH distributor i, hold the other player's (z_j, x_inv_j) at the
+    # reported equilibrium and evaluate player i's FULL cost at every one of its 2^K = 16
+    # lattice points with a FRESH, hand-written JuMP model per point (one solve each) —
+    # never production `corner_recourse`, `build_planning_oracle`, `DistributorView` or
+    # `SharedTransmission`, so a bug in the code under test cannot be reproduced on both
+    # sides of the comparison. The model writes the toy economics directly: device
+    # p ∈ [0, Pmax] with utility a·p − (b/2)p², lossless two-bus balance p == z (the
+    # LinDistFlow two-bus feeder carries no active losses), master box 0 <= z <= y,
+    # pooled row z + z_j <= corridor_cap·(x + x_j), 0 <= x <= x_inv_max.
     y_max = spec.master_kwargs.y_max
     c_y = spec.master_kwargs.c_y
     step = y_max / 2.0^K
-    # Measured tolerance (this file's own header): the brute-force/reported diff was
-    # 2.22e-16 (machine epsilon) on this fixture for BOTH distributors — a generous
-    # 1e-6 ceiling (this project's own standard tol order of magnitude, e.g.
-    # KNOWN_OPTIMUM_ATOL/stall_z_atol in src/planning/benders.jl|master_integer.jl) is
-    # used here rather than a hairline machine-epsilon bound, to stay robust to ordinary
-    # solver-to-solver noise without masking a genuine profitable deviation (which would
-    # be orders of magnitude larger than 1e-6 on this fixture's own cost scale).
+    # MEASURED 2026-10-02: |UB[i] − brute-force best| = 2.2e-9 and the first three
+    # lattice costs within 2.2e-9 of the hand values on this independent conic QP
+    # (Clarabel interior-point accuracy; 2.2e-16 when the comparison reused
+    # corner_recourse). NO_DEVIATION_TOL = 1e-6 is ~450x that and far below the smallest
+    # lattice cost difference (0.105 between y = 0.5 and y = 1.0).
     NO_DEVIATION_TOL = 1.0e-6
 
-    for i in 1:2
+    function independent_cost(y, z_j, x_j)
+        m = JuMP.Model(TSODSO.select_optimizer(TSODSO.QP()))
+        JuMP.@variable(m, 0 <= z <= y)
+        JuMP.@variable(m, 0 <= x <= 0.3)
+        JuMP.@variable(m, 0 <= p <= dev.Pmax)
+        JuMP.@constraint(m, p == z)
+        JuMP.@constraint(m, z + z_j <= 2.0 * (x + x_j))
+        JuMP.@objective(
+            m,
+            Min,
+            c_y * y + 1.0 * x + 0.5 * z - (dev.a * p - (dev.b / 2) * p^2 - spec.λ₀[1] * z),
+        )
+        JuMP.optimize!(m)
+        @assert JuMP.is_solved_and_feasible(m)
+        return JuMP.objective_value(m)
+    end
+    function brute_force(i)
         j = i == 1 ? 2 : 1
-        shared_check = build_shared_transmission(;
-            N = 2,
-            T = 1,
-            corridor_cap = 2.0,
-            x_inv_max = [0.3, 0.3],
-            c_inv = [1.0, 1.0],
-            c_op = [[0.5], [0.5]],
-        )
-        write_back!(shared_check, j, result.z[j, :], result.x_inv[j])
-        activate_distributor!(shared_check, i)
-        follower_i = DistributorView(shared_check, i)
-        oracle_i = TSODSO.build_planning_oracle(
-            spec.feeder,
-            spec.pf,
-            spec.aggregators;
-            λ₀ = spec.λ₀,
-            T = 1,
-        )
+        costs = [independent_cost(step * idx, result.z[j, 1], result.x_inv[j]) for idx in 0:(2^K - 1)]
+        return (; best = minimum(costs), argbest = argmin(costs) - 1, costs)
+    end
 
-        best_total = Inf
-        for idx in 0:(2^K - 1)
-            y_inv_idx = step * idx
-            Qv = TSODSO.corner_recourse(oracle_i, follower_i, y_inv_idx, 1)
-            total_idx = c_y * y_inv_idx + Qv
-            best_total = min(best_total, total_idx)
-        end
-
-        # The mathematically correct "no profitable unilateral deviation" check for a
-        # GNE at this lattice: the reported equilibrium's own cost for i must be WITHIN
-        # tolerance of the brute-forced best (never strictly beaten by more than the
-        # measured tolerance).
-        @test result.UB[i] <= best_total + NO_DEVIATION_TOL
-        @test isapprox(result.UB[i], best_total; atol = NO_DEVIATION_TOL)
+    for i in 1:2
+        bf = brute_force(i)
+        @test bf.argbest == 1                                    # y = 0.5, hand-derived
+        @test isapprox(bf.costs[1:3], [0.0, -0.225, -0.12]; atol = NO_DEVIATION_TOL)
+        @test result.UB[i] <= bf.best + NO_DEVIATION_TOL         # no profitable deviation
+        @test isapprox(result.UB[i], bf.best; atol = NO_DEVIATION_TOL)
     end
 end
 
