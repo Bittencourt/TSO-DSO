@@ -90,7 +90,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [ ] **BILEV-06**: A Nash fixture with interior investment caps exposes a continuum of generalized
   Nash equilibria (the probe reports a nonzero spread). A variational-equilibrium (common shared
   multiplier) selection is available and documented.
-- [ ] **BILEV-07**: Researcher can run integer investment in the N > 1 Nash diagonalization path,
+- [x] **BILEV-07**: Researcher can run integer investment in the N > 1 Nash diagonalization path,
   with each best response using the integer master (carry-over).
 - [ ] **BILEV-08**: The docs state the game-theoretic nature of each planning variant: the
   integrated problem decomposed by Benders, the genuine bilevel, and the shared-constraint GNE.
@@ -185,7 +185,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | BILEV-04 | Phase 30 | Complete |
 | BILEV-05 | Phase 30 | Complete |
 | BILEV-06 | Phase 31 | Pending |
-| BILEV-07 | Phase 31 | Pending |
+| BILEV-07 | Phase 31 | Complete |
 | BILEV-08 | Phase 31 | Pending |
 | ARCH-01 | Phase 32 | Pending |
 | ARCH-02 | Phase 32 | Pending |
