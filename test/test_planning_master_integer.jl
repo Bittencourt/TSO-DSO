@@ -8,6 +8,11 @@
 #
 # Toy fixture (same D-12 canonical instance as test_planning_master.jl / the N=1 golden):
 # T=1, c_y=0.3, y_max=8.0, K=4, α_op_lb=-5.0, α_x_lb=0.0.
+#
+# Phase 31 (BILEV-07): build_master_integer gains build_master's own :auto/bounds_ctx/
+# lb_slack machinery (ported verbatim from master.jl) — the @testitems below (after the
+# pre-existing regression suite) mirror test_planning_master.jl's own bounds_ctx test
+# pattern (lines 144-397), adapted for the integer master.
 
 @testitem "planning master_integer: build_master_integer guards (T, K, y_max, c_y)" tags =
     [:planning] begin
@@ -289,4 +294,185 @@ end
     optimize!(master.model)
     @test termination_status(master.model) == MOI.OPTIMAL
     unfix.(master.b)
+end
+
+# ---------------------------------------------------------------------------------------
+# Phase 31 (BILEV-07): build_master_integer's new bounds_ctx/lb_slack machinery, ported
+# verbatim from build_master (master.jl). Toy fixture mirrors test_planning_master.jl's
+# own two-bus/ToyElasticDevice bounds_ctx tests.
+# ---------------------------------------------------------------------------------------
+
+@testitem "planning master_integer: :auto requires bounds_ctx" tags = [:planning] begin
+    using TSODSO
+
+    @test_throws ArgumentError build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = :auto,
+        α_x_lb = 0.0,
+    )
+end
+
+@testitem "planning master_integer: :auto resolves both epigraph bounds via a genuine relaxed solve, matching derive_alpha_op_lb/derive_alpha_x_lb directly" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: termination_status, MOI, lower_bound
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+    fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+
+    master = build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = :auto,
+        α_x_lb = :auto,
+        bounds_ctx = bounds_ctx,
+    )
+    @test master isa TSODSO.BendersMasterInteger
+
+    solve_master!(master)
+    @test termination_status(master.model) == MOI.OPTIMAL
+
+    expected_op = TSODSO.derive_alpha_op_lb(
+        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0,
+    )
+    expected_x = TSODSO.derive_alpha_x_lb(; fk..., T = 1)
+    @test lower_bound(master.α_op) == expected_op
+    @test lower_bound(master.α_x) == expected_x
+    @test master.L == Float64(expected_op + expected_x)
+end
+
+@testitem "planning master_integer: build-time rejection of an over-high explicit α_op_lb when bounds_ctx is supplied" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+    fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+
+    d = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
+    slack = TSODSO.alpha_lb_margin(d.optimum, d.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+
+    function caught(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+    e = caught(() -> build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0,
+        α_op_lb = d.optimum + 2 * slack, α_x_lb = 0.0, bounds_ctx = bounds_ctx,
+    ))
+    @test e isa ArgumentError
+    @test occursin("α_op_lb=", e.msg) && occursin("exceeds the derived relaxed minimum", e.msg)
+    @test occursin("$(d.optimum)", e.msg)
+end
+
+@testitem "planning master_integer: honest skip for DistributorView-shaped followers (bounds_ctx.follower_kwargs = nothing)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: lower_bound
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+
+    bounds_ctx_skip = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = nothing,
+    )
+
+    master = build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = :auto,
+        α_x_lb = 0.0,
+        bounds_ctx = bounds_ctx_skip,
+    )
+    @test lower_bound(master.α_x) == 0.0   # explicit literal passed straight through
+    @test TSODSO._accepted_lb_slack(master, :x) == 0.0   # unvalidated -> zero slack
+    @test isfinite(lower_bound(master.α_op))   # α_op_lb WAS resolved via bounds_ctx
+    @test lower_bound(master.α_op) != -5.0     # not a stray default/literal
+
+    @test_throws ArgumentError build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_x_lb = :auto,
+        bounds_ctx = bounds_ctx_skip,
+    )
+end
+
+@testitem "planning master_integer: _accepted_lb_slack dispatches to BendersMasterInteger's own populated lb_slack, not the generic 0.0 fallback" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
+    λ₀ = [4.0]
+    fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+
+    dop = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
+    dx = TSODSO.alpha_x_lb_derivation(; fk..., T = 1)
+    sop = TSODSO.alpha_lb_margin(dop.optimum, dop.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+    sx = TSODSO.alpha_lb_margin(dx.optimum, dx.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+
+    # A bound slightly ABOVE the reported optimum, but inside the measured slack, is
+    # accepted — and carries a NONZERO recorded slack (WR-05).
+    master = build_master_integer(;
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = dop.optimum + sop / 2,
+        α_x_lb = dx.optimum + sx / 2,
+        bounds_ctx = bounds_ctx,
+    )
+    @test TSODSO._accepted_lb_slack(master, :op) > 0.0
+    @test TSODSO._accepted_lb_slack(master, :x) > 0.0
+    @test TSODSO._accepted_lb_slack(master, :op) == master.lb_slack.op
+    @test TSODSO._accepted_lb_slack(master, :x) == master.lb_slack.x
+
+    # Regression: a BendersMasterInteger built WITHOUT bounds_ctx (explicit, unvalidated
+    # bounds, the byte-identical opt-out path) carries ZERO slack — genuinely dispatched
+    # via the type-specific method, not accidentally always nonzero.
+    plain = build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+    )
+    @test TSODSO._accepted_lb_slack(plain, :op) == 0.0
+    @test TSODSO._accepted_lb_slack(plain, :x) == 0.0
+end
+
+@testitem "planning master_integer: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
+    [:planning] begin
+    using TSODSO
+
+    @test_throws ArgumentError build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = :atuo, α_x_lb = 0.0,
+    )
+    @test_throws ArgumentError build_master_integer(;
+        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = :atuo,
+    )
 end
