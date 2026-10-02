@@ -372,11 +372,9 @@ state to, and `order` is the sweep order actually used.
 
 Two trailing, additive certificate fields (Phase 30 code review iteration 2, CR-01):
 `certificates::Vector{NamedTuple}` has one row per best response actually solved, in
-solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap,
-ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
+solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
 `any_relaxation_only::Bool` is `true` iff any best response of ANY sweep (not only the
-final one) certified the SOC relaxation only. Under the default `inexact_policy =
-:strict` it is always `false` (an inexact solve throws instead).
+final one) certified the SOC relaxation only. Under the default `inexact_policy = :strict` it is always `false` (an inexact solve throws instead).
 """
 function run_nash!(
     specs::AbstractVector{<:NamedTuple},
@@ -718,6 +716,25 @@ distinct sweep-1 states. The seed dimension of this probe matrix is live (a
 seed-dependent equilibrium IS detectable in the reported spread), never a mere
 residual-baseline relabel.
 
+**Seed shape (Phase 31, BILEV-06a): bare matrix OR `(; z0, x_inv0)` NamedTuple.** Each
+entry of `seeds` is EITHER a bare `z0::AbstractMatrix{<:Real}` (the original, unchanged
+shape every pre-Phase-31 caller uses) OR a `(; z0, x_inv0)` NamedTuple that ALSO supplies
+`run_nash!`'s own `x_inv0` keyword. This is additive and backward-compatible: a bare
+matrix forwards `x_inv0 = nothing` to `run_nash!`, which is byte-identical to every
+pre-Phase-31 call. **Why this extension is necessary** (31-RESEARCH.md's own "CRITICAL
+FINDING", restated here): `run_nash!`'s DEFAULT `x_inv0` derivation
+(`maximum(z0[j,:])/corridor_cap`, used whenever `x_inv0` is omitted) always seeds the
+MINIMAL exactly-supporting investment for whatever `z0` is chosen — by construction this
+default has ZERO slack, so on a shared-constraint game whose continuum of generalized Nash
+equilibria (GNE) lives entirely in how the pooled investment is SPLIT (not in the flow
+`z` itself, which sits at the same unconstrained optimum everywhere on the continuum), the
+first mover in Gauss-Seidel always ends up "alone" at its own exact marginal need,
+regardless of which `z0` or sweep order is probed. Varying `z0` alone is therefore
+STRUCTURALLY INCAPABLE of exposing this specific kind of GNE multiplicity — not a
+fixture-tuning problem, a probe-API gap. Supplying an explicit, non-minimal `x_inv0` per
+seed is the ONLY way to land distinct probe runs on distinct points of an investment-split
+continuum.
+
 # Boundary guards (before any `run_nash!` call)
 
   - `length(seeds) >= 3` — CONTEXT.md's locked "≥3 seeds" minimum.
@@ -727,7 +744,8 @@ residual-baseline relabel.
 # Algorithm
 
 For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in `orders`
-(`length(seeds) * length(orders) >= 6` combinations): build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = seed_z0, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
+(`length(seeds) * length(orders) >= 6` combinations): dispatch `seed_z0` on `seed_z0 isa NamedTuple` — a bare matrix forwards `z0 = seed_z0, x_inv0 = nothing` (unchanged
+behavior); a `(; z0, x_inv0)` NamedTuple forwards `z0 = seed_z0.z0, x_inv0 = get(seed_z0, :x_inv0, nothing)`. Build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = z0_arg, x_inv0 = x_inv0_arg, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
 `try`/`catch` around the call (see this section's header; a non-converging run's
 `ErrorException` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination. `inexact_policy` is forwarded
 to every `run_nash!` call (default `:strict`, Phase 30 code review iteration 2, CR-01);
@@ -744,6 +762,14 @@ NEVER a mean/variance or other statistical summary that could understate an outl
   - `x_inv_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv))`.
   - `cost_spread`: maximum over all pairs of `abs(sum(runs[a].result.UB) - sum(runs[b].result.UB))` (system-level total cost = the sum of every distributor's
     own converged `UB`, already returned by `run_nash!`).
+
+**On an investment-split GNE continuum (Phase 31, BILEV-06a), `z_spread` near-zero while
+`x_inv_spread` is large is a CORRECT, EXPECTED property of that continuum — never a probe
+bug.** On such a game every point of the continuum pairs the SAME unconstrained-optimum
+flow `z` with a DIFFERENT split of the pooled investment `x_inv`; a caller probing this
+kind of fixture with `(; z0, x_inv0)`-shaped seeds spanning the split should expect exactly
+this asymmetric spread pattern and must not treat a small `z_spread` there as a sign the
+seed dimension failed to vary.
 
 # Returns
 
@@ -802,6 +828,14 @@ function run_nash_probe(
     # SharedTransmission (see this section's header: never reuse one across runs). ----
     runs = Vector{NamedTuple}()
     for (seed_name, seed_z0) in pairs(seeds)
+        # Phase 31 (BILEV-06a) seed dispatch: a bare matrix (every pre-Phase-31 caller)
+        # forwards x_inv0 = nothing, byte-identical to before this dispatch existed; a
+        # `(; z0, x_inv0)` NamedTuple forwards BOTH to run_nash!, whose own `x_inv0`
+        # keyword already exists — see this function's own docstring for WHY the
+        # z0-only default seed cannot expose an investment-split GNE continuum.
+        z0_arg, x_inv0_arg =
+            seed_z0 isa NamedTuple ? (seed_z0.z0, get(seed_z0, :x_inv0, nothing)) :
+            (seed_z0, nothing)
         for order in orders
             shared_run = build_shared()
             # Deliberately NOT wrapped in a try/rescue block here, BY DESIGN (T-13-10):
@@ -810,7 +844,8 @@ function run_nash_probe(
             result = run_nash!(
                 specs,
                 shared_run;
-                z0 = seed_z0,
+                z0 = z0_arg,
+                x_inv0 = x_inv0_arg,
                 tol_outer = tol_outer,
                 max_sweeps = max_sweeps,
                 order = order,
@@ -851,3 +886,333 @@ function run_nash_probe(
 end
 
 export run_nash_probe
+
+# --- solve_variational_equilibrium — monolithic joint model selecting the variational
+# equilibrium (VE) inside a shared-constraint game's GNE continuum (BILEV-06b, plan 31-03
+# Task 2) ---
+#
+# WHY A MONOLITHIC JOINT SOLVE, NOT A DECOMPOSITION (31-RESEARCH.md's own GNE-structure
+# argument, restated here): the shared-transmission game is a textbook Rosen (1965)
+# shared-constraint game — every player's own problem is individually convex, objectives
+# are STRICTLY additively separable (no cross-player term anywhere — confirmed by direct
+# read of `build_shared_transmission`'s own objective and each distributor's own
+# oracle/master), and the ONLY place any player's variables appear in another player's
+# constraint is the ONE shared pooled `capacity[t]` row. For this class, the variational
+# equilibrium (the GNE whose shared-row multiplier is IDENTICAL across every player) is
+# EXACTLY the solution of the single joint optimization problem that writes the shared
+# row ONCE instead of `N` times (Rosen's own normalized-equilibrium construction at
+# uniform player weights) — no iterative algorithm is needed to CHARACTERIZE the VE, only
+# to iterate toward a GNE when a direct joint solve is intractable at scale (out of scope
+# here; `run_nash!` remains the iterative path).
+#
+# PATTERN REUSE (31-PATTERNS.md): this function generalizes
+# `test/fixtures_planning_ieee13_short.jl`'s own `solve_joint_reference` — the
+# "independently-built monolithic joint model" cross-check Phase 30 used for its
+# single-distributor BILEV-03 certification — from N=1 to N players sharing ONE pooled
+# `capacity[t]` row (mirroring `coupling.jl`'s own `build_shared_transmission`, but with
+# every `x_inv[i]`/`z[i,:]` kept GENUINELY FREE throughout, never bound-pinned via
+# `activate_distributor!`/`write_back!`).
+#
+# SIMPLIFICATION vs `build_shared_transmission` (documented per the plan's own
+# instruction): `build_shared_transmission`'s `x_op[i,t]` is tied to `z[i,t]` by an
+# identity coupling row (`coupling[i,t]: x_op[i,t] == z[i,t]`) ONLY because
+# `DistributorView`'s per-distributor best-response needs its OWN dualizable coupling row
+# to drive Benders cuts. A monolithic joint solve has no such need — it is solved in one
+# shot, not iterated per distributor — so this function writes the shared `capacity[t]`
+# row DIRECTLY over each distributor's own `z[i,t]`, dropping the redundant `x_op`
+# variable entirely. This changes no economics, only drops a variable
+# `build_shared_transmission` needs for its own per-distributor-dualizable design.
+#
+# PVAL-04 scope note: every `@variable` below is continuous (investment, flow, reactive
+# channel) — no binary/integer variable is introduced anywhere in this function.
+
+"""
+    solve_variational_equilibrium(specs::AbstractVector{<:NamedTuple};
+                                  T::Int, corridor_cap::Real,
+                                  x_inv_max::AbstractVector{<:Real},
+                                  c_inv::AbstractVector{<:Real},
+                                  c_op::AbstractVector{<:AbstractVector{<:Real}}) -> NamedTuple
+
+Select the variational equilibrium (VE) — the generalized Nash equilibrium (GNE) whose
+shared-row multiplier is identical across every player — of an `N`-distributor
+shared-transmission game via ONE direct, monolithic joint JuMP solve (BILEV-06b). See
+this section's header for why a single convex solve suffices to CHARACTERIZE the VE on
+this game (Rosen's shared-constraint-game theory), never an iterative decomposition.
+
+`specs` is the SAME shape [`run_nash!`](@ref) already accepts: each entry supplies, per
+distributor `i`, `feeder`, `pf::AbstractPowerFlow`, `aggregators`, `λ₀`, and
+`master_kwargs` with (at least) `c_y` and `y_max` — so a caller can pass the IDENTICAL
+`specs` vector to both `run_nash!` and this function. `N = length(specs)`.
+
+# Boundary guards (before any `@variable`/`@constraint`/solve call)
+
+  - `N >= 2` (a "shared" game with `N=1` has nothing to share, mirrors
+    `build_shared_transmission`'s own guard).
+  - `length(x_inv_max) == length(c_inv) == length(c_op) == N`; each `c_op[i]` has
+    `length(c_op[i]) == T`.
+  - `corridor_cap > 0`; `T >= 1`.
+  - every `specs[i].pf` maps to the SAME `problem_class(specs[i].pf)` — a
+    mixed-formulation joint model is out of scope for this phase's fixture; a mismatch
+    throws `ArgumentError` naming the first offending index.
+
+# Algorithm
+
+Build ONE `model = Model(select_optimizer(problem_class(specs[1].pf)))`. For each
+distributor `i`: a fresh `ctx_i = ModelContext(model)` (a per-distributor
+residual/meta registry over the SAME shared `model` — `ModelContext` is a thin
+dict-bearing wrapper, so N independent registries over one model is valid), its own
+`0 <= y_inv[i] <= specs[i].master_kwargs.y_max`, `0 <= x_inv[i] <= x_inv_max[i]`, and a
+free `z[i,t]` with box constraints `0 <= z[i,t] <= y_inv[i]` (mirrors
+`solve_joint_reference`'s own `box_lo`/`box_hi`). `z[i,t]` is reused DIRECTLY as the
+frontier import (`add_to_residual!(ctx_i, :Rp, specs[i].feeder.root, t, z[i,t])`,
+mirroring `solve_joint_reference`'s own "z reused directly" simplification). Immediately
+after `contribute!(specs[i].pf, ctx_i, specs[i].feeder; T)`, `reactive_i = haskey(ctx_i.residuals, :Rq)` is captured (WR-03 ordering, mirrors
+`build_planning_oracle`); when `reactive_i`, a free `zq[i,t]` is added into `:Rq`. Each
+distributor's own aggregators then `contribute!` into `ctx_i`, and distributor `i`'s own
+`balance_p[i]`/`balance_q[i]` residual-closing constraints are added — per-distributor,
+never shared.
+
+The ONE genuinely shared row (SIMPLIFIED per this section's header, directly over
+`z[i,t]`, never a separate `x_op`):
+`capacity[t]: Σᵢ z[i,t] <= corridor_cap * Σᵢ x_inv[i]`.
+
+Objective: `Max Σᵢ [ctx_i.meta[:objective] - Σₜ specs[i].λ₀[t]*z[i,t] - specs[i].master_kwargs.c_y*y_inv[i] - c_inv[i]*x_inv[i] - Σₜ c_op[i][t]*z[i,t]]` — the
+SAME per-distributor cost/welfare shape `solve_joint_reference`/
+`build_shared_transmission` already use, summed over every distributor.
+
+Solved ONCE via [`solve_with_retry!`](@ref)`(model; dual = true)`. If
+`problem_class(specs[1].pf) isa SOCP`, [`assert_socp_exact!`](@ref) is called on EVERY
+distributor's own `ctx_i` — never silently accepting an inexact joint solve (mirrors
+`solve_joint_reference`'s own exactness-or-throw discipline). On a non-SOCP formulation
+(the toy `LinDistFlow`/`DC` fixtures) no cone exists, so the gate is skipped entirely —
+identical to `problem_class`'s own generic `QP()` fallback routing.
+
+# Returns
+
+`(; y, x_inv, z, π_capacity, cost_per_distributor, model)` where `y::Vector{Float64}`
+and `x_inv::Vector{Float64}` are length-`N` (`value.(y_inv)`/`value.(x_inv)`),
+`z::Matrix{Float64}` is `N × T` (`value.(z)`), `π_capacity::Vector{Float64}` is the
+length-`T` shared multiplier `dual.(capacity)` — a SINGLE, finite vector BY
+CONSTRUCTION, since the row is written exactly ONCE (there is nothing to "equalize"
+across players; every player's own multiplier IS this one vector) — and
+`cost_per_distributor::Vector{Float64}` is each distributor `i`'s OWN MINIMIZATION-sense
+total cost (`specs[i].master_kwargs.c_y*y_inv[i] + c_inv[i]*x_inv[i] + Σₜ c_op[i][t]*z[i,t]`) MINUS its own oracle welfare (`ctxs[i].meta[:objective] - Σₜ specs[i].λ₀[t]*z[i,t]` — the
+SAME Max-sense quantity `build_planning_oracle`'s own objective assembles, NOT
+`ctxs[i].meta[:objective]` alone, which carries ONLY the device/aggregator utility and
+omits the `-λ₀[t]*z[i,t]` pricing term that lives in THIS function's own joint
+`@objective`, not inside any per-distributor `ctx`). This is EXACTLY the quantity
+`solve_stackelberg!`'s own `UB` tracks (`benders.jl`'s `cost_k = master.c_y*lb_res.y + follower_res.cost - oracle_res.cost`), so `cost_per_distributor[i]` is directly
+comparable to a `solve_stackelberg!` best-response's own reported `UB` at this
+distributor's VE-pinned state (the no-profitable-deviation certification this function's
+own test suite performs). `model` is the solved `Model`, so a caller can read any other
+dual.
+
+# Throws
+
+  - `ArgumentError` on any boundary-guard violation, before any `@variable`/`@constraint`/
+    solve call.
+  - Whatever `solve_with_retry!`/`assert_socp_exact!` throw on a genuinely infeasible or
+    inexact joint solve (never silently swallowed).
+"""
+function solve_variational_equilibrium(
+    specs::AbstractVector{<:NamedTuple};
+    T::Int,
+    corridor_cap::Real,
+    x_inv_max::AbstractVector{<:Real},
+    c_inv::AbstractVector{<:Real},
+    c_op::AbstractVector{<:AbstractVector{<:Real}},
+)
+    N = length(specs)
+    N >= 2 || throw(
+        ArgumentError(
+            "solve_variational_equilibrium needs N = length(specs) >= 2 (nothing to " *
+            "share), got N=$N",
+        ),
+    )
+    T >= 1 || throw(ArgumentError("solve_variational_equilibrium needs T >= 1, got T=$T"))
+    corridor_cap > 0 || throw(
+        ArgumentError(
+            "solve_variational_equilibrium needs corridor_cap > 0, got $corridor_cap",
+        ),
+    )
+    length(x_inv_max) == N ||
+        throw(ArgumentError("x_inv_max has length $(length(x_inv_max)), expected N=$N"))
+    length(c_inv) == N ||
+        throw(ArgumentError("c_inv has length $(length(c_inv)), expected N=$N"))
+    length(c_op) == N ||
+        throw(ArgumentError("c_op has length $(length(c_op)), expected N=$N"))
+    for i in 1:N
+        length(c_op[i]) == T ||
+            throw(ArgumentError("c_op[$i] has length $(length(c_op[i])), expected T=$T"))
+    end
+
+    # Formulation-genericity guard: a mixed-formulation joint model (e.g. distributor 1
+    # on LinDistFlow/QP() and distributor 2 on ConvexBranchFlow/SOCP()) is out of scope
+    # for this phase's fixture — fail here, naming the first mismatched index, BEFORE
+    # any build call.
+    classes = [problem_class(specs[i].pf) for i in 1:N]
+    for i in 2:N
+        classes[i] == classes[1] || throw(
+            ArgumentError(
+                "solve_variational_equilibrium: distributor $i's problem_class " *
+                "$(classes[i]) differs from distributor 1's $(classes[1]) — a " *
+                "mixed-formulation joint model is out of scope for this phase's fixture",
+            ),
+        )
+    end
+    is_socp = classes[1] isa SOCP
+
+    model = Model(select_optimizer(classes[1]))
+
+    y_inv = Vector{VariableRef}(undef, N)
+    x_inv = Vector{VariableRef}(undef, N)
+    z = Matrix{VariableRef}(undef, N, T)
+    ctxs = Vector{ModelContext}(undef, N)
+
+    for i in 1:N
+        ctx_i = ModelContext(model)
+        ctx_i.meta[:feeder] = specs[i].feeder
+        ctx_i.meta[:T] = T
+        ctx_i.meta[:problem_class] = classes[i]
+        # Rule 1 (bug, discovered during execution): every `AbstractPowerFlow.contribute!`
+        # method (e.g. LinDistFlow/ConvexBranchFlow) registers ITS OWN formulation-level
+        # variables/constraints under FIXED, NAMED symbols (`:v`, `:P`, `:Q`, `:vdrop`, ...)
+        # directly on `ctx_i.model` — unlike `Aggregator`'s own device loop, which already
+        # switched to ANONYMOUS registration for exactly this reason (plan 21-05, this
+        # file's sibling fix). A second distributor's `contribute!` call on the SAME
+        # shared `model` would collide ("An object of name v is already attached to this
+        # model"), since JuMP's object-dictionary registration is MODEL-scoped, not
+        # ctx-scoped. Capture the model's object-dictionary keys immediately before/after
+        # this ONE call and `unregister` every NEWLY-added name (JuMP's own sanctioned
+        # mechanism for exactly this situation — it only removes the `model[:name]`
+        # lookup, never the underlying variable/constraint objects, which stay fully
+        # live via `ctx_i.residuals`/`ctx_i.meta[:pf_vars]`). Formulation-generic: no
+        # hardcoded name list, so this works for ANY `AbstractPowerFlow` subtype.
+        names_before = Set(keys(JuMP.object_dictionary(model)))
+        contribute!(specs[i].pf, ctx_i, specs[i].feeder; T = T)
+        for name in setdiff(keys(JuMP.object_dictionary(model)), names_before)
+            JuMP.unregister(model, name)
+        end
+
+        y_inv[i] = @variable(
+            model,
+            lower_bound = 0.0,
+            upper_bound = Float64(specs[i].master_kwargs.y_max),
+            base_name = "y_inv[$i]",
+        )
+        x_inv[i] = @variable(
+            model,
+            lower_bound = 0.0,
+            upper_bound = Float64(x_inv_max[i]),
+            base_name = "x_inv[$i]",
+        )
+        z_i = @variable(model, [t = 1:T], base_name = "z[$i,:]")
+        for t in 1:T
+            z[i, t] = z_i[t]
+            @constraint(model, z_i[t] >= 0)
+            @constraint(model, z_i[t] <= y_inv[i])
+            add_to_residual!(ctx_i, :Rp, specs[i].feeder.root, t, z_i[t])
+        end
+
+        # WR-03 ordering (mirrors build_planning_oracle/solve_joint_reference): capture
+        # `reactive_i` IMMEDIATELY after the formulation contributes, BEFORE any
+        # aggregator writes.
+        reactive_i = haskey(ctx_i.residuals, :Rq)
+        if reactive_i
+            zq_i = @variable(model, [t = 1:T], base_name = "zq[$i,:]")
+            for t in 1:T
+                add_to_residual!(ctx_i, :Rq, specs[i].feeder.root, t, zq_i[t])
+            end
+        end
+
+        for agg in specs[i].aggregators
+            contribute!(agg, ctx_i; T = T)
+        end
+
+        Ni = length(specs[i].feeder.buses)
+        size(ctx_i.residuals[:Rp]) == (Ni, T) || error(
+            "solve_variational_equilibrium: distributor $i's residual :Rp is " *
+            "$(size(ctx_i.residuals[:Rp])), expected ($Ni, $T) — an index escaped the " *
+            "feeder",
+        )
+        balance_p_i =
+            @constraint(model, [j = 1:Ni, t = 1:T], ctx_i.residuals[:Rp][j, t] == 0)
+        register_constraint!(ctx_i, :balance_p, balance_p_i)
+
+        if reactive_i
+            size(ctx_i.residuals[:Rq]) == (Ni, T) || error(
+                "solve_variational_equilibrium: distributor $i's residual :Rq is " *
+                "$(size(ctx_i.residuals[:Rq])), expected ($Ni, $T) — an index escaped " *
+                "the feeder",
+            )
+            balance_q_i =
+                @constraint(model, [j = 1:Ni, t = 1:T], ctx_i.residuals[:Rq][j, t] == 0)
+            register_constraint!(ctx_i, :balance_q, balance_q_i)
+        end
+
+        ctxs[i] = ctx_i
+    end
+
+    # The ONE genuinely shared row (SIMPLIFIED, directly over z[i,t] — this section's
+    # header).
+    @constraint(
+        model,
+        capacity[t = 1:T],
+        sum(z[i, t] for i in 1:N) <= corridor_cap * sum(x_inv[i] for i in 1:N)
+    )
+
+    @objective(
+        model,
+        Max,
+        sum(
+            ctxs[i].meta[:objective] - sum(specs[i].λ₀[t] * z[i, t] for t in 1:T) -
+            Float64(specs[i].master_kwargs.c_y) * y_inv[i] - c_inv[i] * x_inv[i] -
+            sum(c_op[i][t] * z[i, t] for t in 1:T) for i in 1:N
+        )
+    )
+
+    solve_with_retry!(model; dual = true)
+
+    # Never silently accept an inexact joint solve (mirrors solve_joint_reference's own
+    # exactness-or-throw discipline); skipped entirely on a non-SOCP formulation (no cone
+    # exists there, identical to problem_class's own generic QP() fallback routing).
+    if is_socp
+        for i in 1:N
+            assert_socp_exact!(ctxs[i])
+        end
+    end
+
+    # Rule 1 (bug, discovered during execution, Test 3 below): distributor i's OWN
+    # oracle welfare — the quantity solve_stackelberg!'s own UB subtracts (`cost_k =
+    # master.c_y*lb_res.y + follower_res.cost - oracle_res.cost`, benders.jl) — is
+    # `build_planning_oracle`'s FULL objective `ctx.meta[:objective] - Σ_t λ₀[t]*p_import[t]`,
+    # NOT `ctx.meta[:objective]` alone: the `-λ₀[t]*z[i,t]` pricing term lives in THIS
+    # function's own joint `@objective` assembly (summed once over every distributor),
+    # never inside `ctxs[i].meta[:objective]` (which only ever accumulates device/
+    # aggregator utility via `add_to_objective!`). Omitting it understated every
+    # distributor's own welfare by exactly `Σ_t λ₀[t]*z[i,t]`, silently inflating the
+    # reported `cost_per_distributor` — caught by Test 3's own no-profitable-deviation
+    # cross-check against `solve_stackelberg!`'s independently-computed `UB` on the toy
+    # fixture (measured mismatch: 2.8, exactly `λ₀[1]*z[i,1] = 4.0*0.7`).
+    cost_per_distributor = [
+        value(
+            Float64(specs[i].master_kwargs.c_y) * y_inv[i] +
+            c_inv[i] * x_inv[i] +
+            sum(c_op[i][t] * z[i, t] for t in 1:T),
+        ) - (
+            value(ctxs[i].meta[:objective]) -
+            sum(specs[i].λ₀[t] * value(z[i, t]) for t in 1:T)
+        ) for i in 1:N
+    ]
+
+    return (;
+        y = value.(y_inv),
+        x_inv = value.(x_inv),
+        z = value.(z),
+        π_capacity = dual.(capacity),
+        cost_per_distributor,
+        model,
+    )
+end
+
+export solve_variational_equilibrium
