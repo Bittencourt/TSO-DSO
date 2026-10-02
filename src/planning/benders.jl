@@ -1541,8 +1541,11 @@ function solve_stackelberg!(
         # and independent of inexact_policy. oracle_res/follower_res have passed every
         # post-solve gate here (an :inexact oracle_res only under :certify_incumbent,
         # and it too has passed battery complementarity).
-        # WR-05 (iteration 2): the guard's tolerance includes the build-time acceptance
-        # slack of each bound, so build_master and this check apply ONE validity rule.
+        # WR-05 (iteration 2) / Option A (plan 31-07): the guard's tolerance adds the
+        # build-time acceptance slack of each bound (`_accepted_lb_slack`). Since 31-07
+        # clamps every accepted explicit bound to the certified minimum at build time,
+        # that slack is always 0.0 on both master types (IN-02, Phase 31 code review) —
+        # the term is kept only as a seam, it widens nothing.
         _assert_epigraph_floor(
             -oracle_res.cost,
             lower_bound(master.α_op),
