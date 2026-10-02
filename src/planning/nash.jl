@@ -769,6 +769,19 @@ function run_nash!(
                 # on the lattice for the integer path).
                 step_i = spec.master_kwargs.y_max / 2.0^integer.K
                 idx_i = round(Int, result_i.y / step_i)
+                # IN-05 (Phase 31 code review): never decode an off-lattice or
+                # out-of-range y — `digits(...; pad = K)` silently returns MORE than K
+                # digits for idx >= 2^K, which would corrupt the joint state key. The
+                # tolerance is the MIP integrality tolerance (1e-6) propagated through
+                # y = Σ_k step·2^(k-1)·b_k: at most step·(2^K − 1)·1e-6 < 1e-6·y_max.
+                (
+                    abs(result_i.y - idx_i * step_i) <= 1e-6 * spec.master_kwargs.y_max &&
+                    0 <= idx_i < 2^integer.K
+                ) || error(
+                    "run_nash!: distributor $i's integer best response y=$(result_i.y) " *
+                    "is not on the K=$(integer.K) lattice (step=$step_i, idx=$idx_i) — " *
+                    "cannot recover its binary state",
+                )
                 integer_buffer[i] = digits(idx_i; base = 2, pad = integer.K)
             end
             push!(
