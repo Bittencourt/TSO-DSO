@@ -311,18 +311,19 @@ variant's game-theoretic nature.
   4. `docs/writeups/stackelberg_vs_psr_n1n2.typ` and related docs state the game-theoretic nature
      of each planning variant (integrated-decomposed-by-Benders, genuine bilevel, shared-constraint
      GNE), refreshed to current code including the integer master.
-**Plans:** 2/6 plans executed
+**Plans:** 2/7 plans executed
 
 Plans:
 **Wave 1**
 
-- [x] 31-01-PLAN.md — WR-01/WR-03: feas_oracle-confirmed ALMOST_INFEASIBLE in the integer corner search + widened convergence certificate
+- [x] 31-01-PLAN.md — WR-01: feas_oracle-confirmed ALMOST_INFEASIBLE in the integer corner search (WR-03 found BLOCKED here, Option B breaks goldens — closed instead by 31-07's Option A)
 - [x] 31-02-PLAN.md — WR-02 root fix: integer master bounds_ctx/lb_slack + Laporte-Louveaux cut-validity guard
 - [ ] 31-03-PLAN.md — BILEV-06a/06b: interior-cap GNE fixture + run_nash_probe seed extension + solve_variational_equilibrium
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [ ] 31-04-PLAN.md — BILEV-07: run_nash! integer kwarg + cycle detection + N=2 integer Nash brute-force certification
+- [ ] 31-07-PLAN.md — WR-03 gap closure: Option A build-time clamp (accepted-but-slack explicit epigraph bound) in build_master/build_master_integer
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
