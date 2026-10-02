@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: ready_to_plan
-stopped_at: Phase 30 complete (6/6) — ready to discuss Phase 31
-last_updated: 2026-10-01T15:58:07.976Z
-last_activity: 2026-10-01
+status: executing
+stopped_at: Completed 30-06-PLAN.md (Phase 30 CERTIFIED COMPLETE)
+last_updated: "2026-10-02T01:02:14.096Z"
+last_activity: 2026-10-02 -- Phase 31 execution started
 progress:
   total_phases: 12
   completed_phases: 5
-  total_plans: 44
+  total_plans: 50
   completed_plans: 45
   percent: 42
 ---
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 31 — gne nash fixture, integer n>1 & planning docs refresh
+**Current focus:** Phase 31 — GNE Nash Fixture, Integer N>1 & Planning Docs Refresh
 
 ## Current Position
 
-Phase: 31
-Plan: Not started
-Status: Ready to plan
+Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 31
   `.planning/phases/30-socp-in-the-loop-benders-on-a-multi-bus-feeder/30-FINDINGS.md`
-Last activity: 2026-10-01
+Last activity: 2026-10-02 -- Phase 31 execution started
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
