@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
-stopped_at: Completed 31-05-PLAN.md (BILEV-08 planning docs refresh — integer master/GNE/VE taxonomy in both .typ writeups + 3 Documenter docstrings; see 31-05-SUMMARY.md)
-last_updated: "2026-10-02T11:52:02.756Z"
+status: verifying
+stopped_at: Completed 31-06-PLAN.md (golden audit + consolidated findings + certified tallies; Phase 31 test-certified but NOT verified -- 2 open critical findings, see 31-FINDINGS.md Known Open Issues)
+last_updated: "2026-10-02T12:34:17.440Z"
 last_activity: 2026-10-02
 progress:
   total_phases: 12
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 51
-  completed_plans: 51
-  percent: 42
+  completed_plans: 52
+  percent: 50
 ---
 
 # Project State
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 31 — GNE Nash Fixture, Integer N>1 & Planning Docs Refresh
+**Current focus:** Phase 31 — all 7 plans executed, full suite certified green, but NOT verified (2 open critical findings — see Blockers/Concerns below and `.planning/phases/31-gne-nash-fixture-integer-n-1-planning-docs-refresh/31-FINDINGS.md`)
 
 ## Current Position
 
-Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — EXECUTING
-Plan: 4 of 6
-Status: Ready to execute
-  `.planning/phases/30-socp-in-the-loop-benders-on-a-multi-bus-feeder/30-FINDINGS.md`
+Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — ALL PLANS EXECUTED, NOT VERIFIED
+Plan: 7 of 7 executed (31-01, 31-02, 31-03, 31-04, 31-05, 31-07, 31-06 — all committed)
+Status: Test-certified (31190/0/0/5) but phase-level verification deferred — 2 open critical
+  findings (CR-01 integer cycle-detection false positive, CR-02 vacuous VE selection on the
+  shipped fixture) require a fix round before this phase can be marked complete/verified.
+  `.planning/phases/31-gne-nash-fixture-integer-n-1-planning-docs-refresh/31-FINDINGS.md`
 Last activity: 2026-10-02
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
@@ -185,6 +187,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 31 P01 | 100min | 1 tasks | 2 files |
 | Phase 31 P04 | 95min | 2 tasks | 3 files |
 | Phase 31 P05 | 20min | 2 tasks | 8 files |
+| Phase 31 P06 | 35min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -257,6 +260,7 @@ Recent decisions affecting current work:
 - [Phase 31-04]: run_nash! integer kwarg: fresh build_master_integer per best response via solve_stackelberg!'s master= keyword; exact-binary-state Dict cycle detection (never tolerance); found+fixed a Rule-1 bug in solve_follower!(::DistributorView) -- a confirmed MOI.INFEASIBLE without a Farkas ray was previously an unrecoverable error, now returns feasible=false (v=NaN,u=NaN) since corner_recourse's own ternary search only reads .feasible
 - [Phase 31]: 31-05 docs refresh: integer-extension deviation documented as two independent axes (target variable y_inv/N2 vs x_inv/N1; mechanism Laporte-Louveaux vs Lagrangian relaxation)
 - [Phase 31]: User force-added (git add -f) the two refreshed writeup PDFs despite the project-wide .gitignore convention (track .typ source, regenerate PDF); .gitignore itself left untouched
+- [Phase 31]: 31-06 (phase close): golden-move audit exit 0 (base 36e3c1e); consolidated 31-FINDINGS.md; orchestrator certified full suite 31190/0/0/5 (+99 over Phase-30, zero regressions, zero new broken); post-certification code review found 2 OPEN critical findings (CR-01 integer cycle-detection false positive, CR-02 vacuous VE selection on the shipped interior-cap fixture) -- user stopped autonomous mode before a fix round, so phase is test-certified but explicitly NOT marked verified
 
 ### Roadmap Evolution
 
@@ -328,6 +332,24 @@ Recent decisions affecting current work:
 None yet.
 
 ### Blockers/Concerns
+
+- [v4.0 Phase 31 — NOT VERIFIED, `31-FINDINGS.md`'s "Known Open Issues" section /
+  `31-REVIEW.md`, code review commit `476e165`]: all 7 plans executed and the full suite is
+  certified-green (31190/0/0/5, +99 over Phase-30), but a post-certification code review found
+  **2 OPEN critical findings** that the user stopped autonomous mode before fixing (no fix
+  iteration run): **CR-01** — `run_nash!`'s integer cycle detection (`nash.jl:736-754`) keys
+  only on the joint binary vector `b`, so any run needing ≥3 sweeps with a stable `b` (while
+  `z`/`x_inv` are still converging) raises a FALSE "CYCLED" error; reproduced on the BILEV-07
+  fixture with `integer=(;K=4), ω=0.5`. **CR-02** — on the shipped interior-cap GNE fixture
+  (`c_inv=[1,1]`), every point of the GNE continuum has an identical shared-row multiplier
+  (`π=0.5`), so the VE set equals the full GNE set and `solve_variational_equilibrium`'s
+  "selection" is mathematically vacuous there — the writeup's claim that the VE is
+  distinguished by an identical multiplier is true but vacuous (true of every GNE point, not
+  a distinguishing criterion) on this specific fixture. 6 warnings and 7 info items are also
+  open (WR-01..WR-06, see `31-FINDINGS.md`). **Do not mark Phase 31 complete/verified until a
+  fix round closes CR-01 (cycle-key must include the continuous state, not just `b`) and CR-02
+  (either re-fixture with an asymmetric/strictly-convex investment cost so the VE is unique, or
+  correct the docs/tests to state the VE is non-unique on this fixture).**
 
 - [v4.0 Phase 28 restatement — `.planning/phases/28-goldens-re-derivation-thesis-reproduction-restatement/28-RESTATEMENT-SUMMARY.md`]:
   every golden moved in Phases 26–27 is attributed (audit script: 13 attributed / 1 allowlisted / 0
@@ -482,8 +504,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-02T11:52:02.728Z
-Stopped at: Completed 31-05-PLAN.md (BILEV-08 planning docs refresh — integer master/GNE/VE taxonomy in both .typ writeups + 3 Documenter docstrings; see 31-05-SUMMARY.md)
+Last session: 2026-10-02T12:34:17.418Z
+Stopped at: Completed 31-06-PLAN.md (golden audit + consolidated findings + certified tallies; Phase 31 test-certified but NOT verified -- 2 open critical findings, see 31-FINDINGS.md Known Open Issues)
 Resume file: None
 
 ## Operator Next Steps

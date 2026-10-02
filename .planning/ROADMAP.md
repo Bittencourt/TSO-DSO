@@ -47,7 +47,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
   `ConvexBranchFlow` on a real multi-bus, multi-period feeder, with oracle feasibility cuts and
   derived master bounds.
 
-- [ ] **Phase 31: GNE Nash Fixture, Integer N>1 & Planning Docs Refresh** - Expose GNE multiplicity
+- [x] **Phase 31: GNE Nash Fixture, Integer N>1 & Planning Docs Refresh** - Expose GNE multiplicity (completed 2026-10-02; NOT verified — 2 open critical findings, see Phase 31 detail below)
   with a variational-equilibrium selection, run integer investment across N>1 distributors, and
   refresh the planning-variant documentation.
 
@@ -311,7 +311,18 @@ variant's game-theoretic nature.
   4. `docs/writeups/stackelberg_vs_psr_n1n2.typ` and related docs state the game-theoretic nature
      of each planning variant (integrated-decomposed-by-Benders, genuine bilevel, shared-constraint
      GNE), refreshed to current code including the integer master.
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
+
+**NOT VERIFIED — known open correctness gaps (post-certification code review, `31-REVIEW.md`,
+2026-10-02):** all 7 plans executed and the full suite is certified-green
+(31190 pass / 0 fail / 0 error / 5 broken), but a code-review pass found 2 OPEN critical
+findings the user stopped autonomous mode before fixing: **CR-01** — integer cycle detection
+(success criterion 3 above) raises a false "CYCLED" error on a genuinely converging run
+(reproduced, `ω=0.5` on the BILEV-07 fixture); **CR-02** — the shipped interior-cap fixture's
+`c_inv=[1,1]` makes the VE set equal the full GNE set, so success criterion 2's "selection" is
+mathematically vacuous on that fixture. See `31-FINDINGS.md`'s "Known Open Issues" section for
+the full review (also 6 warnings, 7 info). **Do not treat this phase as verified correct until
+a fix round closes CR-01/CR-02.**
 
 Plans:
 **Wave 1**
@@ -331,7 +342,7 @@ Plans:
 
 **Wave 4** *(phase-closing gate, blocked on ALL of the above)*
 
-- [ ] 31-06-PLAN.md — Golden-move audit, consolidated findings, full-suite certification
+- [x] 31-06-PLAN.md — Golden-move audit, consolidated findings, full-suite certification
 
 ### Phase 32: Declarative Power-Flow & Strategy Dispatch
 
@@ -465,7 +476,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 28. Goldens Re-Derivation & Thesis Reproduction Restatement | v4.0 | 6/5 | Complete    | 2026-09-30 |
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
-| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 6/7 | In Progress|  |
+| 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
