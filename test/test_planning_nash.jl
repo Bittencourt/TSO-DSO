@@ -671,6 +671,117 @@ end
     @test result.spread.z_spread >= 0.0 && isfinite(result.spread.z_spread)
     @test result.spread.x_inv_spread >= 0.0 && isfinite(result.spread.x_inv_spread)
     @test result.spread.cost_spread >= 0.0 && isfinite(result.spread.cost_spread)
+
+    # Phase 31 (BILEV-06a), Task 1's own "Test 2 (control, unique equilibrium unaffected)":
+    # this corner-cap fixture is NOT modified by this plan — re-asserted here as a
+    # regression that bare-matrix seeds (this testitem's own unchanged call shape) still
+    # report an at-or-below-solver-noise spread (unique equilibrium, no split continuum).
+    # MEASURED 2026-10-02 (scratchpad probe_interior_gne.jl, this exact fixture/seeds):
+    # z_spread ≈ 1.11e-16, x_inv_spread = 0.0, cost_spread = 0.0 — comfortably inside a
+    # 1e-6 floor (>> machine epsilon, << the interior-cap fixture's own ~0.7 spread below).
+    @test result.spread.x_inv_spread < 1e-6
+    @test result.spread.z_spread < 1e-6
+end
+
+# --- Task 1 (plan 31-03, BILEV-06a): interior-investment-cap GNE fixture — a genuine 1-D
+# continuum of generalized Nash equilibria (GNE), certified via run_nash_probe's own
+# Phase-31 seed-dispatch extension (bare matrix OR (;z0,x_inv0) NamedTuple).
+#
+# HAND-DERIVED GNE INTERVAL (31-RESEARCH.md "Concrete fixture numbers", independently
+# re-derivable from the corner-cap control's own "HAND-DERIVED EQUILIBRIUM" comment
+# above): each distributor's UNCONSTRAINED Stackelberg optimum is z_i*=0.7 (same
+# marginal follower cost m_f = c_inv[i]/corridor_cap + c_op[i] = 1.0/2.0+0.5 = 1.0 as the
+# corner-cap fixture). The MINIMAL total investment supporting BOTH distributors at their
+# unconstrained optimum is S_min = (0.7+0.7)/corridor_cap = 0.7. With
+# x_inv_max=[1.0,1.0] (margin 0.3 above S_min, safely non-binding everywhere on the
+# interval — Pitfall 4: a modest margin, not a de facto Inf), the GNE set is
+# {(x_inv_1, 0.7 - x_inv_1) : x_inv_1 ∈ [0, 0.7]}, each paired with (z_1,z_2) ≈ (0.7,0.7)
+# (constant across the continuum, since c_inv[i] > 0 strictly makes each player minimize
+# its OWN x_inv_i at the SAME marginal cost regardless of the split — see 31-RESEARCH.md
+# "Why a continuum exists here specifically" for the full derivation).
+#
+# WHY z0-ONLY SEEDS CANNOT EXPOSE THIS CONTINUUM (31-RESEARCH.md's own "CRITICAL
+# FINDING", restated in run_nash_probe's own docstring): run_nash!'s default x_inv0
+# derivation (maximum(z0[j,:])/corridor_cap) always seeds the MINIMAL exactly-supporting
+# investment for whatever z0 is chosen — zero slack by construction — so every z0/order
+# combination converges to the BIT-IDENTICAL point regardless of seed. Seeds below are
+# therefore `(; z0, x_inv0)` NamedTuples spanning x_inv0 ∈ {0.0, 0.2, 0.5, 0.7} (the full
+# interval, not just touching it) with the SAME z0 = [0.7,0.7] (the unconstrained
+# optimum, constant across the continuum) for every seed.
+
+@testitem "planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero (BILEV-06a)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    # S_min = (0.7+0.7)/corridor_cap = 0.7 — see this testitem's own header comment for
+    # the full derivation. A `let`-scoped local (not a file-level `const`): TestItemRunner
+    # executes each `@testitem` body in an isolated module, so a bare top-level `const`
+    # between testitems in this file is a landmine (never defined inside any testitem's
+    # own scope under the real runner) — mirrors this file's own established
+    # inline-fixture-construction convention (see this file's Task-2 header comment).
+    S_MIN = 0.7
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    build_shared =
+        () -> build_shared_transmission(;
+            N = 2,
+            T = 1,
+            corridor_cap = 2.0,
+            x_inv_max = [1.0, 1.0],
+            c_inv = [1.0, 1.0],
+            c_op = [[0.5], [0.5]],
+        )
+
+    z0_optimum = reshape([0.7, 0.7], 2, 1)
+    seeds = (;
+        low = (; z0 = z0_optimum, x_inv0 = [0.0, 0.7]),
+        mid_low = (; z0 = z0_optimum, x_inv0 = [0.2, 0.5]),
+        mid_high = (; z0 = z0_optimum, x_inv0 = [0.5, 0.2]),
+        high = (; z0 = z0_optimum, x_inv0 = [0.7, 0.0]),
+    )
+    orders = (:forward, :reverse)
+
+    result = run_nash_probe(
+        specs,
+        build_shared;
+        seeds = seeds,
+        orders = orders,
+        tol_outer = 1e-4,
+        max_sweeps = 50,
+        checkpoint_dir = mktempdir(),
+    )
+
+    @test result.n_runs == 8
+    @test all(r -> r.result.converged, result.runs)
+    @test occursin("a converged equilibrium", result.summary)
+    @test !occursin("the equilibrium", result.summary)
+
+    # MEASURED 2026-10-02 (scratchpad probe_interior_gne.jl, this exact fixture/seeds):
+    # x_inv_spread ≈ 0.6999 (the interval's own full width S_min=0.7, confirming every
+    # seed genuinely landed on a DISTINCT point of the continuum); z_spread ≈ 5.8e-4
+    # (outer-tol_outer-scale Benders inner-loop noise, ~1000x smaller than x_inv_spread);
+    # cost_spread ≈ 9.4e-8 (solver-precision noise). Floor set comfortably below the
+    # measured ~0.6999 (margin ~0.2) and far above the noise scale.
+    @test result.spread.x_inv_spread > 0.5
+    @test result.spread.z_spread < 0.01
+
+    # Every converged run's own (x_inv_1, x_inv_2) sums to S_min — the same atol=1e-3
+    # this fixture family already uses (e.g. the corner-cap control's own
+    # `isapprox(result.z, [0.6, 0.6]; atol = 1e-3)` above): measured max deviation from
+    # S_min across all 8 runs is ≈3.4e-4, well inside this tolerance.
+    for r in result.runs
+        @test isapprox(sum(r.result.x_inv), S_MIN; atol = 1e-3)
+    end
 end
 
 @testitem "planning nash: N=3 probe converges (no closed-form hand-check required, per CONTEXT.md's N=2-hand-checkable/N=3-probe-only scope)" tags =
@@ -993,7 +1104,8 @@ end
 
     T = 1
     feeder = TSODSO.ieee13_modified()
-    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    therm =
+        TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
     agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
     mk() = build_shared_transmission(;
         N = 2,
@@ -1046,9 +1158,11 @@ end
     )
     @test r.converged
     @test length(r.certificates) == r.sweeps * 2
-    @test all(c -> c.incumbent_exactness === :inexact && c.ub_relaxation_only, r.certificates)
+    @test all(
+        c -> c.incumbent_exactness === :inexact && c.ub_relaxation_only,
+        r.certificates,
+    )
     @test all(c -> c.ac_report !== nothing, r.certificates)
     @test r.any_relaxation_only
-    @test [(c.sweep, c.distributor) for c in r.certificates] ==
-          [(k, i) for k in 1:(r.sweeps) for i in 1:2]
+    @test [(c.sweep, c.distributor) for c in r.certificates] == [(k, i) for k in 1:(r.sweeps) for i in 1:2]
 end

@@ -372,11 +372,9 @@ state to, and `order` is the sweep order actually used.
 
 Two trailing, additive certificate fields (Phase 30 code review iteration 2, CR-01):
 `certificates::Vector{NamedTuple}` has one row per best response actually solved, in
-solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap,
-ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
+solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
 `any_relaxation_only::Bool` is `true` iff any best response of ANY sweep (not only the
-final one) certified the SOC relaxation only. Under the default `inexact_policy =
-:strict` it is always `false` (an inexact solve throws instead).
+final one) certified the SOC relaxation only. Under the default `inexact_policy = :strict` it is always `false` (an inexact solve throws instead).
 """
 function run_nash!(
     specs::AbstractVector{<:NamedTuple},
@@ -718,6 +716,25 @@ distinct sweep-1 states. The seed dimension of this probe matrix is live (a
 seed-dependent equilibrium IS detectable in the reported spread), never a mere
 residual-baseline relabel.
 
+**Seed shape (Phase 31, BILEV-06a): bare matrix OR `(; z0, x_inv0)` NamedTuple.** Each
+entry of `seeds` is EITHER a bare `z0::AbstractMatrix{<:Real}` (the original, unchanged
+shape every pre-Phase-31 caller uses) OR a `(; z0, x_inv0)` NamedTuple that ALSO supplies
+`run_nash!`'s own `x_inv0` keyword. This is additive and backward-compatible: a bare
+matrix forwards `x_inv0 = nothing` to `run_nash!`, which is byte-identical to every
+pre-Phase-31 call. **Why this extension is necessary** (31-RESEARCH.md's own "CRITICAL
+FINDING", restated here): `run_nash!`'s DEFAULT `x_inv0` derivation
+(`maximum(z0[j,:])/corridor_cap`, used whenever `x_inv0` is omitted) always seeds the
+MINIMAL exactly-supporting investment for whatever `z0` is chosen — by construction this
+default has ZERO slack, so on a shared-constraint game whose continuum of generalized Nash
+equilibria (GNE) lives entirely in how the pooled investment is SPLIT (not in the flow
+`z` itself, which sits at the same unconstrained optimum everywhere on the continuum), the
+first mover in Gauss-Seidel always ends up "alone" at its own exact marginal need,
+regardless of which `z0` or sweep order is probed. Varying `z0` alone is therefore
+STRUCTURALLY INCAPABLE of exposing this specific kind of GNE multiplicity — not a
+fixture-tuning problem, a probe-API gap. Supplying an explicit, non-minimal `x_inv0` per
+seed is the ONLY way to land distinct probe runs on distinct points of an investment-split
+continuum.
+
 # Boundary guards (before any `run_nash!` call)
 
   - `length(seeds) >= 3` — CONTEXT.md's locked "≥3 seeds" minimum.
@@ -727,7 +744,8 @@ residual-baseline relabel.
 # Algorithm
 
 For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in `orders`
-(`length(seeds) * length(orders) >= 6` combinations): build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = seed_z0, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
+(`length(seeds) * length(orders) >= 6` combinations): dispatch `seed_z0` on `seed_z0 isa NamedTuple` — a bare matrix forwards `z0 = seed_z0, x_inv0 = nothing` (unchanged
+behavior); a `(; z0, x_inv0)` NamedTuple forwards `z0 = seed_z0.z0, x_inv0 = get(seed_z0, :x_inv0, nothing)`. Build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = z0_arg, x_inv0 = x_inv0_arg, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
 `try`/`catch` around the call (see this section's header; a non-converging run's
 `ErrorException` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination. `inexact_policy` is forwarded
 to every `run_nash!` call (default `:strict`, Phase 30 code review iteration 2, CR-01);
@@ -744,6 +762,14 @@ NEVER a mean/variance or other statistical summary that could understate an outl
   - `x_inv_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv))`.
   - `cost_spread`: maximum over all pairs of `abs(sum(runs[a].result.UB) - sum(runs[b].result.UB))` (system-level total cost = the sum of every distributor's
     own converged `UB`, already returned by `run_nash!`).
+
+**On an investment-split GNE continuum (Phase 31, BILEV-06a), `z_spread` near-zero while
+`x_inv_spread` is large is a CORRECT, EXPECTED property of that continuum — never a probe
+bug.** On such a game every point of the continuum pairs the SAME unconstrained-optimum
+flow `z` with a DIFFERENT split of the pooled investment `x_inv`; a caller probing this
+kind of fixture with `(; z0, x_inv0)`-shaped seeds spanning the split should expect exactly
+this asymmetric spread pattern and must not treat a small `z_spread` there as a sign the
+seed dimension failed to vary.
 
 # Returns
 
@@ -802,6 +828,14 @@ function run_nash_probe(
     # SharedTransmission (see this section's header: never reuse one across runs). ----
     runs = Vector{NamedTuple}()
     for (seed_name, seed_z0) in pairs(seeds)
+        # Phase 31 (BILEV-06a) seed dispatch: a bare matrix (every pre-Phase-31 caller)
+        # forwards x_inv0 = nothing, byte-identical to before this dispatch existed; a
+        # `(; z0, x_inv0)` NamedTuple forwards BOTH to run_nash!, whose own `x_inv0`
+        # keyword already exists — see this function's own docstring for WHY the
+        # z0-only default seed cannot expose an investment-split GNE continuum.
+        z0_arg, x_inv0_arg =
+            seed_z0 isa NamedTuple ? (seed_z0.z0, get(seed_z0, :x_inv0, nothing)) :
+            (seed_z0, nothing)
         for order in orders
             shared_run = build_shared()
             # Deliberately NOT wrapped in a try/rescue block here, BY DESIGN (T-13-10):
@@ -810,7 +844,8 @@ function run_nash_probe(
             result = run_nash!(
                 specs,
                 shared_run;
-                z0 = seed_z0,
+                z0 = z0_arg,
+                x_inv0 = x_inv0_arg,
                 tol_outer = tol_outer,
                 max_sweeps = max_sweeps,
                 order = order,
