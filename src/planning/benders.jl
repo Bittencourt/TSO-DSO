@@ -123,6 +123,16 @@ const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
 const ORACLE_INFEASIBLE_STATUSES =
     (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE, MOI.ALMOST_INFEASIBLE)
 
+# WR-01 (Phase 31 code review carry-over, 30-REVIEW.md): the SUBSET of
+# ORACLE_INFEASIBLE_STATUSES that are CERTIFIED infeasibility verdicts, deliberately
+# excluding MOI.ALMOST_INFEASIBLE — that reduced-accuracy near-certificate needs
+# confirmation via the slack-min `feas_oracle` before it can be trusted (see
+# `_oracle_or_infeasible` below). Kept for documentation/future-dispatch purposes even
+# though `_oracle_or_infeasible` branches on `ts == MOI.ALMOST_INFEASIBLE` directly rather
+# than `ts in CORNER_INFEASIBLE_STATUSES`.
+const CORNER_INFEASIBLE_STATUSES =
+    (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE)
+
 # WR-01 (Phase 30 code review): minimum slack-min value `v` for an oracle feasibility cut
 # `v + u'(z - z_k) <= 0` to be appended. At z = z_k the cut reads `v <= 0`, so it separates
 # z_k from the master only if `v` exceeds the master's own primal feasibility tolerance.
@@ -242,6 +252,7 @@ function corner_recourse(
     T::Int;
     iters::Int = 100,
     on_inexact::Symbol = :throw,
+    feas_oracle = nothing,
 )
     if T == 1
         return _corner_recourse_ternary(
@@ -251,6 +262,7 @@ function corner_recourse(
             T;
             iters = iters,
             on_inexact = on_inexact,
+            feas_oracle = feas_oracle,
         )
     else
         return _corner_recourse_joint(
@@ -260,30 +272,48 @@ function corner_recourse(
             T;
             iters = iters,
             on_inexact = on_inexact,
+            feas_oracle = feas_oracle,
         )
     end
 end
 
 """
-    _oracle_or_infeasible(oracle, z; on_inexact) -> NamedTuple or nothing
+    _oracle_or_infeasible(oracle, z; on_inexact, feas_oracle = nothing) -> NamedTuple or nothing
 
 The corner search's ONE oracle entry point (Phase 30 code review iteration 2, CR-02):
 `solve_planning_oracle!(oracle, z; on_inexact)`, except that a throw from an UNTRUSTED
-solve whose termination status is a genuine infeasibility verdict
-(`ORACLE_INFEASIBLE_STATUSES`) returns `nothing` ("z is outside the oracle's feasible
-set"). Everything else propagates unchanged: non-`ErrorException`s (e.g.
-`InterruptException`), throws from a TRUSTED solve (the exactness gate under `:throw`,
-battery complementarity), and untrusted solves with any other status (a solver failure,
-not a property of `z`). The same classification `solve_stackelberg!`'s own outer
-oracle catch applies (WR-01).
+solve whose termination status is a CERTIFIED infeasibility verdict
+(`ORACLE_INFEASIBLE_STATUSES` minus `MOI.ALMOST_INFEASIBLE`) returns `nothing` ("z is
+outside the oracle's feasible set"). Everything else propagates unchanged:
+non-`ErrorException`s (e.g. `InterruptException`), throws from a TRUSTED solve (the
+exactness gate under `:throw`, battery complementarity), and untrusted solves with any
+other status (a solver failure, not a property of `z`).
+
+**WR-01 (Phase 31 code review carry-over, 30-REVIEW.md):** `MOI.ALMOST_INFEASIBLE` is a
+REDUCED-ACCURACY near-certificate, not a confirmed infeasibility — mapping it straight to
+`+Inf` (the pre-fix behavior) can over-estimate `Q_nu` and make the caller's
+Laporte-Louveaux cut invalid. It is now CONFIRMED via the same slack-min `feas_oracle`
+`solve_stackelberg!`'s own outer oracle catch already uses: with no `feas_oracle` supplied,
+the status is unconfirmed and the throw is rethrown (fail loud, never silently `+Inf`); with
+a `feas_oracle` supplied, `solve_feasibility_oracle!(feas_oracle, z).v` is classified via
+[`_feas_cut_class`](@ref) and only a `:disagree` verdict (the two oracles genuinely
+disagree) rethrows — any other verdict confirms the infeasibility and returns `nothing`.
+This now DOES apply the same classification `solve_stackelberg!`'s own outer oracle catch
+applies (previously false, see 30-REVIEW.md WR-01).
 """
-function _oracle_or_infeasible(oracle, z; on_inexact::Symbol)
+function _oracle_or_infeasible(oracle, z; on_inexact::Symbol, feas_oracle = nothing)
     return try
         solve_planning_oracle!(oracle, z; on_inexact = on_inexact)
     catch e
         e isa ErrorException || rethrow()
         is_solved_and_feasible(oracle.model; dual = true) && rethrow()
-        termination_status(oracle.model) in ORACLE_INFEASIBLE_STATUSES || rethrow()
+        ts = termination_status(oracle.model)
+        ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
+        if ts == MOI.ALMOST_INFEASIBLE
+            feas_oracle === nothing && rethrow()   # unconfirmed near-certificate: fail loud
+            _feas_cut_class(solve_feasibility_oracle!(feas_oracle, z).v) === :disagree &&
+                rethrow()
+        end
         nothing
     end
 end
@@ -312,6 +342,7 @@ function _corner_recourse_ternary(
     T::Int;
     iters::Int = 100,
     on_inexact::Symbol = :throw,
+    feas_oracle = nothing,
 )
     function Qfun(z::Real)
         zvec = fill(Float64(z), T)
@@ -321,7 +352,7 @@ function _corner_recourse_ternary(
         # there so ternary search never dereferences a nonexistent .cost field and
         # still finds the true constrained minimum.
         fr.feasible || return Inf
-        orr = _oracle_or_infeasible(oracle, zvec; on_inexact = on_inexact)
+        orr = _oracle_or_infeasible(oracle, zvec; on_inexact = on_inexact, feas_oracle = feas_oracle)
         orr === nothing && return Inf   # CR-02: genuine oracle infeasibility only
         return fr.cost - orr.cost
     end
@@ -453,6 +484,7 @@ function _corner_recourse_joint(
     T::Int;
     iters::Int = 100,
     on_inexact::Symbol = :throw,
+    feas_oracle = nothing,
 )
     # Evaluate Q(z) and its gradient at a trial z::Vector{Float64}. See the docstring
     # above ("Infeasible-trial handling") for the full rationale of each branch.
@@ -472,7 +504,7 @@ function _corner_recourse_joint(
         # complementarity violation, even an InterruptException) into +Inf, so the
         # minimum was taken over the remaining points only — an over-estimated Q_nu
         # and an invalid LL cut. Now only an infeasibility status maps to +Inf.
-        orr = _oracle_or_infeasible(oracle, z; on_inexact = on_inexact)
+        orr = _oracle_or_infeasible(oracle, z; on_inexact = on_inexact, feas_oracle = feas_oracle)
         orr === nothing && return (; Qz = Inf, gradQ = nothing, feas_cut = nothing)
         Qz = fr.cost - orr.cost
         gradQ = fr.π_s .+ orr.π   # elementwise, length T (docstring's dual-read pattern)
@@ -665,6 +697,7 @@ ll_cut_recourse(
     lb_res,
     Q_nu_iterate::Real;
     on_inexact::Symbol = :throw,
+    feas_oracle = nothing,
 ) = Q_nu_iterate
 
 function ll_cut_recourse(
@@ -674,8 +707,16 @@ function ll_cut_recourse(
     lb_res,
     Q_nu_iterate::Real;
     on_inexact::Symbol = :throw,
+    feas_oracle = nothing,
 )
-    return corner_recourse(oracle, follower, lb_res.y, master.T; on_inexact = on_inexact)
+    return corner_recourse(
+        oracle,
+        follower,
+        lb_res.y,
+        master.T;
+        on_inexact = on_inexact,
+        feas_oracle = feas_oracle,
+    )
 end
 
 """
@@ -1520,6 +1561,7 @@ function solve_stackelberg!(
             lb_res,
             Q_nu_iterate;
             on_inexact = inexact_policy === :strict ? :throw : :report,
+            feas_oracle = feas_oracle,
         )
         t_solve += (time_ns() - t0_ns) / 1.0e9
 

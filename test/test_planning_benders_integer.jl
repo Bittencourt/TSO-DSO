@@ -133,3 +133,78 @@ end
         @test occursin("exhausted", sprint(showerror, e))
     end
 end
+
+# WR-01 (Phase 31, BILEV-07): `_oracle_or_infeasible`'s MOI.ALMOST_INFEASIBLE handling
+# must be CONFIRMED via the real slack-min `feas_oracle`, never assumed. These 4 tests
+# demonstrate the pre-fix bug (Test 1, now fixed) and the post-fix confirmed/disagree/
+# non-regression behavior (Tests 2-4), using a `MOI.Utilities.MockOptimizer`-backed JuMP
+# model to deterministically pin `termination_status` without a real solve (see
+# .planning/phases/31-*/31-01-PLAN.md Task 1 <behavior>).
+@testitem "planning benders integer: WR-01 _oracle_or_infeasible confirms ALMOST_INFEASIBLE via feas_oracle, never assumes +Inf" tags =
+    [:planning] begin
+    using TSODSO
+    import JuMP
+    import JuMP: MOI
+
+    MOIU = MOI.Utilities
+
+    # A fake oracle whose `solve_planning_oracle!` ALWAYS throws (mimicking an untrusted
+    # solve), with its `model`'s termination_status pinned via a MockOptimizer backend
+    # (no real solve needed — deterministic, per the plan's own <behavior> spec).
+    struct FakeOracleWR01
+        model::JuMP.Model
+    end
+    TSODSO.solve_planning_oracle!(::FakeOracleWR01, z; on_inexact) =
+        error("FakeOracleWR01: forced throw (untrusted solve)")
+
+    function make_fake_oracle_wr01(status::MOI.TerminationStatusCode)
+        inner = MOIU.MockOptimizer(MOIU.Model{Float64}())
+        model = JuMP.direct_model(inner)
+        MOIU.set_mock_optimize!(inner, mock -> MOIU.mock_optimize!(mock, status))
+        JuMP.optimize!(model)
+        return FakeOracleWR01(model)
+    end
+
+    # A stub feasibility oracle whose `solve_feasibility_oracle!` returns a caller-chosen
+    # slack-min value `v` (classified by `_feas_cut_class`), with a dummy `u`.
+    struct FakeFeasOracleWR01
+        v::Float64
+    end
+    TSODSO.solve_feasibility_oracle!(fo::FakeFeasOracleWR01, z) = (; v = fo.v, u = [0.0])
+
+    # Test 1 (the bug this task fixes): no feas_oracle supplied, ALMOST_INFEASIBLE is an
+    # UNCONFIRMED near-certificate — must rethrow, never silently become `nothing`.
+    fake1 = make_fake_oracle_wr01(MOI.ALMOST_INFEASIBLE)
+    @test_throws ErrorException TSODSO._oracle_or_infeasible(
+        fake1,
+        [0.1];
+        on_inexact = :throw,
+    )
+
+    # Test 2: a :separating-class feas_oracle verdict (v > FEAS_CUT_V_TOL) CONFIRMS the
+    # infeasibility claim -> returns `nothing` (genuinely infeasible, confirmed).
+    fake2 = make_fake_oracle_wr01(MOI.ALMOST_INFEASIBLE)
+    feas_agree = FakeFeasOracleWR01(1.0e-3)
+    @test TSODSO._oracle_or_infeasible(
+        fake2,
+        [0.1];
+        on_inexact = :throw,
+        feas_oracle = feas_agree,
+    ) === nothing
+
+    # Test 3: a :disagree-class feas_oracle verdict (v <= FEAS_CUT_V_NOISE) means the two
+    # oracles genuinely disagree -> must rethrow, never silently return `nothing`.
+    fake3 = make_fake_oracle_wr01(MOI.ALMOST_INFEASIBLE)
+    feas_disagree = FakeFeasOracleWR01(0.0)
+    @test_throws ErrorException TSODSO._oracle_or_infeasible(
+        fake3,
+        [0.1];
+        on_inexact = :throw,
+        feas_oracle = feas_disagree,
+    )
+
+    # Test 4 (non-regression): a plain MOI.INFEASIBLE (not ALMOST_INFEASIBLE) with
+    # feas_oracle=nothing is UNAFFECTED by this fix — still returns `nothing` immediately.
+    fake4 = make_fake_oracle_wr01(MOI.INFEASIBLE)
+    @test TSODSO._oracle_or_infeasible(fake4, [0.1]; on_inexact = :throw) === nothing
+end
