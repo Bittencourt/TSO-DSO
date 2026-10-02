@@ -16,11 +16,10 @@
 # with `K=4` (lattice step `y_max/2^K = 0.5`) so the known continuous equilibrium
 # (z=[0.6,0.6], x_inv=[0.3,0.3]) is a documented reference point for where the INTEGER
 # equilibrium is expected to land (the nearest lattice point at or below the continuous
-# optimum). `master_kwargs`'s own `α_op_lb=-5.0`/`α_x_lb=0.0` fields are UNUSED by the
-# new `integer` branch (that branch derives `α_op_lb` via `:auto`/`bounds_ctx` and reads
-# `α_x_lb` from the `integer` NamedTuple itself, defaulting to `0.0`) — harmless leftover
-# fields, kept only so `specs`/`spec` stays the SAME literal shape every other Nash
-# testitem in this phase uses.
+# optimum). Unlike the continuous fixture, `master_kwargs` here carries ONLY `c_y`/
+# `y_max`: since the Phase-31 code review (WR-06) the integer path REJECTS any other
+# master_kwargs key (an α bound there used to be silently ignored); epigraph bounds go in
+# `integer = (; K, α_op_lb, α_x_lb)` (defaults `:auto` and the sign-derived `0.0`).
 #
 # EMPIRICALLY MEASURED (2026-10-02, scratchpad probe_nash_integer.jl/probe_bruteforce.jl,
 # `julia --project=.`, no TestItemRunner): `run_nash!(specs, shared; z0=zeros(2,1),
@@ -75,7 +74,7 @@
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
-        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+        master_kwargs = (; c_y = 0.3, y_max = 8.0),
     )
     specs = [spec, spec]
     z0 = zeros(2, 1)
@@ -165,7 +164,7 @@
     end
 end
 
-@testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_x_lb must be finite) — before any solve call" tags =
+@testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_x_lb must be finite; no silently ignored master_kwargs/integer keys, derived α_x_lb — WR-06) — before any solve call" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -176,7 +175,7 @@ end
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
-        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+        master_kwargs = (; c_y = 0.3, y_max = 8.0),
     )
     specs = [spec, spec]
     z0 = zeros(2, 1)
@@ -214,6 +213,57 @@ end
         integer = (; K = 4, α_x_lb = Inf),
         checkpoint_dir = mktempdir(),
     )
+
+    # WR-06 (Phase 31 code review): inputs the integer path does not read are rejected,
+    # never silently ignored. (a) an α bound in master_kwargs (honoured by the
+    # continuous path, ignored by the integer master) names `integer` as the fix:
+    spec_alpha = merge(spec, (; master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0)))
+    e = try
+        run_nash!(
+            [spec_alpha, spec_alpha],
+            build_fresh_shared();
+            z0 = z0,
+            integer = (; K = 4),
+            checkpoint_dir = mktempdir(),
+        )
+        nothing
+    catch err
+        err
+    end
+    @test e isa ArgumentError
+    @test occursin("α_op_lb", e.msg) && occursin("integer", e.msg)
+    # (b) an unknown `integer` key:
+    @test_throws ArgumentError run_nash!(
+        specs,
+        build_fresh_shared();
+        z0 = z0,
+        integer = (; K = 4, α_lb = 0.0),
+        checkpoint_dir = mktempdir(),
+    )
+    # (c) master_kwargs missing y_max:
+    spec_noymax = merge(spec, (; master_kwargs = (; c_y = 0.3)))
+    @test_throws ArgumentError run_nash!(
+        [spec_noymax, spec_noymax],
+        build_fresh_shared();
+        z0 = z0,
+        integer = (; K = 4),
+        checkpoint_dir = mktempdir(),
+    )
+
+    # WR-06: the DERIVED default α_x_lb — 0.0 for nonnegative costs (this file's
+    # fixture, byte-identical to the old hard-coded default) and the sign-aware bound
+    # min(0,c_inv)·x_inv_max + Σ_t min(0,c_op[t])·y_max otherwise.
+    @test TSODSO._integer_alpha_x_lb(build_fresh_shared(), 1, 8.0) == 0.0
+    shared_neg = build_shared_transmission(;
+        N = 2,
+        T = 2,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.5],
+        c_inv = [-1.0, 1.0],
+        c_op = [[-0.5, 0.25], [0.5, 0.5]],
+    )
+    @test TSODSO._integer_alpha_x_lb(shared_neg, 1, 8.0) ≈ -1.0 * 0.3 + -0.5 * 8.0
+    @test TSODSO._integer_alpha_x_lb(shared_neg, 2, 8.0) == 0.0
 end
 
 # Cycle detection (Phase 31 code review, CR-01). The original detector keyed a cycle on

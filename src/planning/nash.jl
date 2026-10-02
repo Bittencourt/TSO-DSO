@@ -268,6 +268,22 @@ export NashTrace
 # reading `x_inv[i]` or calling `write_back!` — load-bearing, never skip this re-solve.
 
 """
+    _integer_alpha_x_lb(shared::SharedTransmission, i::Int, y_max::Real) -> Float64
+
+A valid lower bound on distributor `i`'s follower cost slice
+`c_inv[i]·x_inv[i] + Σₜ c_op[i][t]·x_op[i,t]` for `run_nash!`'s integer path (Phase 31
+code review, WR-06): `x_inv[i] ∈ [0, x_inv_max[i]]` and `x_op[i,t] = z[i,t] ∈ [0, y_max]`
+(the master box `z <= y_inv <= y_max`), so each term is bounded below by
+`min(0, coefficient) × its upper bound`. Exactly `0.0` when every cost is nonnegative —
+the previous hard-coded default — and still valid when a cost is negative, where `0.0`
+would make the integer master's `L = α_op_lb + α_x_lb` an invalid floor.
+"""
+function _integer_alpha_x_lb(shared::SharedTransmission, i::Int, y_max::Real)
+    return min(0.0, shared.c_inv[i]) * shared.x_inv_max[i] +
+           sum(min(0.0, shared.c_op[i][t]) * Float64(y_max) for t in 1:(shared.T))
+end
+
+"""
     _integer_cycle_hit(history, joint_b, state, residual; atol) -> Union{Nothing, Int}
 
 The integer-diagonalization cycle predicate of [`run_nash!`](@ref) (Phase 31 code
@@ -444,19 +460,26 @@ solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap,
 final one) certified the SOC relaxation only. Under the default `inexact_policy = :strict` it is always `false` (an inexact solve throws instead).
 
 **`integer` (Phase 31, BILEV-07).** `Union{Nothing, NamedTuple} = nothing`. When supplied
-(e.g. `integer = (; K = 4, α_x_lb = 0.0)`), every distributor's best response in the
+(e.g. `integer = (; K = 4)`), every distributor's best response in the
 sweep loop uses a FRESH [`build_master_integer`](@ref) (binary-expansion MILP master,
 `K` binary blocks, that distributor's own `spec.master_kwargs.c_y`/`y_max` reused)
 instead of the continuous `BendersMaster` — built fresh every single best response
 (never persisted across best responses or sweeps, mirroring this file's own "fresh cut
-store per best-response, by construction" header discipline). `α_op_lb` is derived
-`:auto` via the SAME `bounds_ctx` machinery `build_master`/`solve_stackelberg!` already
-use (`(; feeder, pf, aggregators, λ₀, follower_kwargs = nothing)` — `DistributorView`'s
-pooled-capacity coupling has no sound per-object relaxed minimum, the SAME accepted,
-documented skip the continuous path already uses); `α_x_lb` defaults to
-`get(integer, :α_x_lb, 0.0)`, an explicit, UNVALIDATED bound (same accepted skip).
-`integer.K` must be a positive `Integer`; `integer.α_x_lb` (if supplied) must be finite
-— both guarded BEFORE any solve call. When `integer === nothing` (the default), the
+store per best-response, by construction" header discipline). `α_op_lb` defaults to
+`:auto` (`get(integer, :α_op_lb, :auto)`), derived via the SAME `bounds_ctx` machinery
+`build_master`/`solve_stackelberg!` already use (`(; feeder, pf, aggregators, λ₀,
+follower_kwargs = nothing)` — `DistributorView`'s pooled-capacity coupling has no sound
+per-object relaxed minimum, the SAME accepted, documented skip the continuous path
+already uses). `α_x_lb` defaults (WR-06, Phase 31 code review) to the bound DERIVED from
+the follower cost's signs, `min(0, c_inv[i])·x_inv_max[i] + Σₜ min(0, c_op[i][t])·y_max`
+(`_integer_alpha_x_lb`; `0.0` for nonnegative costs) — a valid lower bound on
+distributor `i`'s cost slice whatever the signs, so `L = α_op_lb + α_x_lb` stays a valid
+Laporte-Louveaux floor; an explicit `integer.α_x_lb` is the caller's responsibility.
+Guards BEFORE any solve call: `integer.K` a positive `Integer`; `integer.α_x_lb` (if
+supplied) finite; `integer` keys within `(:K, :α_op_lb, :α_x_lb)`; and every
+`spec.master_kwargs` supplying `c_y`/`y_max` and NOTHING else — an `α_op_lb`/`α_x_lb`
+placed in `master_kwargs` (which the continuous path honours) is rejected with an
+`ArgumentError` pointing at `integer`, never silently ignored. When `integer === nothing` (the default), the
 continuous path is BYTE-IDENTICAL to every pre-Phase-31 call (this kwarg's mere
 presence/default never touches the existing `master_kwargs = spec.master_kwargs` call).
 
@@ -553,6 +576,35 @@ function run_nash!(
                 "$(get(integer, :α_x_lb, 0.0))",
             ),
         )
+        # WR-06 (Phase 31 code review): never silently ignore a caller's input. The
+        # integer branch reads ONLY c_y/y_max from each spec's master_kwargs and only
+        # K/α_op_lb/α_x_lb from `integer`; anything else (notably an α bound placed in
+        # master_kwargs, which the continuous path would honour) is rejected here.
+        bad_int = setdiff(keys(integer), (:K, :α_op_lb, :α_x_lb))
+        isempty(bad_int) || throw(
+            ArgumentError(
+                "run_nash!: unsupported integer key(s) $(collect(bad_int)) — integer " *
+                "accepts only K, α_op_lb, α_x_lb",
+            ),
+        )
+        for (idx, spec) in enumerate(specs)
+            mk = spec.master_kwargs
+            (haskey(mk, :c_y) && haskey(mk, :y_max)) || throw(
+                ArgumentError(
+                    "run_nash!: distributor $idx's master_kwargs must supply c_y and " *
+                    "y_max on the integer path",
+                ),
+            )
+            bad_mk = setdiff(keys(mk), (:c_y, :y_max))
+            isempty(bad_mk) || throw(
+                ArgumentError(
+                    "run_nash!: distributor $idx's master_kwargs carries " *
+                    "$(collect(bad_mk)), which the integer path does not read — the " *
+                    "integer master takes only c_y and y_max from master_kwargs; pass " *
+                    "epigraph bounds as `integer = (; K, α_op_lb, α_x_lb)` instead",
+                ),
+            )
+        end
     end
 
     # ---- SEED-CONSISTENCY guards (CR-01): the seed is about to be COMMITTED into the
@@ -676,8 +728,14 @@ function run_nash!(
                     K = integer.K,
                     c_y = spec.master_kwargs.c_y,
                     y_max = spec.master_kwargs.y_max,
-                    α_op_lb = :auto,
-                    α_x_lb = get(integer, :α_x_lb, 0.0),
+                    α_op_lb = get(integer, :α_op_lb, :auto),
+                    # WR-06: the default is DERIVED from the cost signs, never an
+                    # assumed 0.0 (see `_integer_alpha_x_lb`).
+                    α_x_lb = get(
+                        integer,
+                        :α_x_lb,
+                        _integer_alpha_x_lb(shared, i, spec.master_kwargs.y_max),
+                    ),
                     bounds_ctx = (;
                         feeder = spec.feeder,
                         pf = spec.pf,
