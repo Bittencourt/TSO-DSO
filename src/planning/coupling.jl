@@ -358,7 +358,7 @@ called DIRECTLY — NOT the escalating retry wrapper — mirroring
 `follower.jl`'s `solve_follower!` three-way branch EXACTLY, scoped to
 distributor `view.i`'s own row.
 
-Two mutually exclusive, exhaustively-checked branches:
+Three mutually exclusive, exhaustively-checked branches:
 
   - FEASIBLE (`is_solved_and_feasible(shared.model; dual = true)`): returns
     `(; feasible = true, cost, π_s)` where `cost` is distributor `view.i`'s
@@ -368,13 +368,27 @@ Two mutually exclusive, exhaustively-checked branches:
     and pollute the hand-checkable per-distributor cost/incumbent tracking
     `solve_stackelberg!`'s CR-01 discipline depends on) — and `π_s = dual.(shared.coupling[i,:])` (length-T, restricted to distributor `i`'s
     own rows).
-  - INFEASIBLE (`dual_status(shared.model) == MOI.INFEASIBILITY_CERTIFICATE`,
+  - INFEASIBLE WITH A CERTIFICATE (`dual_status(shared.model) == MOI.INFEASIBILITY_CERTIFICATE`,
     a GENUINE HiGHS Farkas/dual ray): returns `(; feasible = false, v, u)`
     where `v = dual_objective_value(shared.model)` and `u = dual.(shared.coupling[i,:])` (restricted to distributor `i`'s own rows
     only) — both ENFORCED `isfinite` AND `v > 0` in production (WR-03/IN-06
     parity with `follower.jl`): a non-finite or non-positive certificate
     raises loudly here instead of poisoning a downstream Benders master's
     persistent cut set with a vacuous cut.
+  - INFEASIBLE WITHOUT A CERTIFICATE (Phase 31, BILEV-07 — `termination_status(shared.model) == MOI.INFEASIBLE` CONFIRMED by the solver itself, but
+    `dual_status(shared.model) != MOI.INFEASIBILITY_CERTIFICATE`): HiGHS can
+    confirm genuine primal infeasibility via presolve (e.g. a trial `z_trial`
+    far outside distributor `i`'s own pinned-capacity-reduced feasible range)
+    WITHOUT ever running the dual simplex that would produce a Farkas ray —
+    this is still a CONFIRMED infeasibility (`MOI.INFEASIBLE`, never the
+    unconfirmed `MOI.ALMOST_INFEASIBLE` near-certificate), merely one with no
+    cut-forming gradient available. Returns `(; feasible = false, v = NaN, u = fill(NaN, shared.T))` — a caller that only reads `.feasible`
+    (e.g. `corner_recourse`'s own ternary-search `Qfun`, which never touches
+    `.v`/`.u`) treats this exactly like any other infeasible trial; a caller
+    that NEEDS a genuine cut (`solve_stackelberg!`'s own outer feasibility-cut
+    branch, `add_feasibility_cut!`) hits THAT function's own pre-existing
+    finiteness guard and fails loudly there instead — never silently accepts
+    a vacuous cut.
 
 Any OTHER outcome raises loudly, naming `termination_status`/
 `primal_status`/`dual_status`/`raw_status` (T-11-01 parity).
@@ -417,6 +431,17 @@ function solve_follower!(view::DistributorView, z_trial::AbstractVector{<:Real})
             "refusing to emit a feasibility cut that would fail to exclude z_k",
         )
         return (; feasible = false, v = v, u = u)
+    elseif termination_status(shared.model) == MOI.INFEASIBLE
+        # Phase 31 (BILEV-07): a CONFIRMED primal infeasibility (MOI.INFEASIBLE,
+        # never the unconfirmed MOI.ALMOST_INFEASIBLE) without a Farkas ray — see
+        # this function's own docstring, third branch. Found empirically: the new
+        # integer-master corner search (corner_recourse's ternary search over
+        # [0, y_inv]) explores trial z values far beyond what the master's own box
+        # constraint (z <= y_inv, up to y_max) ever checks against this
+        # distributor's OWN pinned-capacity-reduced feasible range — HiGHS's
+        # presolve proves infeasibility directly at such a trial without running
+        # the dual simplex.
+        return (; feasible = false, v = NaN, u = fill(NaN, shared.T))
     else
         error(
             """

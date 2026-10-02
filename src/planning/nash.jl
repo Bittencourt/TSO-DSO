@@ -356,9 +356,13 @@ never a stale loop-local) — never silently returns a non-converged result.
 # Throws
 
   - `ArgumentError` on any boundary-guard violation (including the nested-tolerance
-    guard and an `inexact_policy` outside `(:strict, :reject, :certify_incumbent)`),
-    before any solve call.
-  - `ErrorException` if `max_sweeps` is exhausted without converging.
+    guard, an `inexact_policy` outside `(:strict, :reject, :certify_incumbent)`, or an
+    `integer` kwarg whose `K` is not a positive `Integer` or whose `α_x_lb` is not
+    finite), before any solve call.
+  - `ErrorException` if `max_sweeps` is exhausted without converging, OR (Phase 31,
+    BILEV-07, `integer !== nothing` only) if the integer diagonalization cycles (the
+    same joint binary state recurs across sweeps without converging) — reports the
+    full cycle shape (see Algorithm above).
 
 # Returns
 
@@ -375,6 +379,34 @@ Two trailing, additive certificate fields (Phase 30 code review iteration 2, CR-
 solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
 `any_relaxation_only::Bool` is `true` iff any best response of ANY sweep (not only the
 final one) certified the SOC relaxation only. Under the default `inexact_policy = :strict` it is always `false` (an inexact solve throws instead).
+
+**`integer` (Phase 31, BILEV-07).** `Union{Nothing, NamedTuple} = nothing`. When supplied
+(e.g. `integer = (; K = 4, α_x_lb = 0.0)`), every distributor's best response in the
+sweep loop uses a FRESH [`build_master_integer`](@ref) (binary-expansion MILP master,
+`K` binary blocks, that distributor's own `spec.master_kwargs.c_y`/`y_max` reused)
+instead of the continuous `BendersMaster` — built fresh every single best response
+(never persisted across best responses or sweeps, mirroring this file's own "fresh cut
+store per best-response, by construction" header discipline). `α_op_lb` is derived
+`:auto` via the SAME `bounds_ctx` machinery `build_master`/`solve_stackelberg!` already
+use (`(; feeder, pf, aggregators, λ₀, follower_kwargs = nothing)` — `DistributorView`'s
+pooled-capacity coupling has no sound per-object relaxed minimum, the SAME accepted,
+documented skip the continuous path already uses); `α_x_lb` defaults to
+`get(integer, :α_x_lb, 0.0)`, an explicit, UNVALIDATED bound (same accepted skip).
+`integer.K` must be a positive `Integer`; `integer.α_x_lb` (if supplied) must be finite
+— both guarded BEFORE any solve call. When `integer === nothing` (the default), the
+continuous path is BYTE-IDENTICAL to every pre-Phase-31 call (this kwarg's mere
+presence/default never touches the existing `master_kwargs = spec.master_kwargs` call).
+
+**Cycle detection (Phase 31, BILEV-07), active only when `integer !== nothing`.** Each
+distributor's own converged binary investment state `b_i` (recovered EXACTLY from
+`result_i.y` via the lattice step `spec.master_kwargs.y_max / 2^K`, `Base.digits`) is
+accumulated, in FIXED canonical distributor order `1:shared.N` (independent of
+`sweep_order`), into a joint state `joint_b` at the end of every sweep. If the SAME
+joint state recurs (exact `Vector{Int}` equality — binaries are exact, never a tolerance
+comparison) without the loop having already converged in between, `run_nash!` raises a
+loud, NAMED `ErrorException` reporting the full cycle shape (the sweep index first seen
+and the current sweep index, plus every distributor's own `b` at both sweeps) — never
+silently continuing toward `max_sweeps`.
 """
 function run_nash!(
     specs::AbstractVector{<:NamedTuple},
@@ -387,6 +419,7 @@ function run_nash!(
     ω::Real = 1.0,
     checkpoint_dir::AbstractString = datadir("nash_checkpoints"),
     inexact_policy::Symbol = :strict,
+    integer::Union{Nothing, NamedTuple} = nothing,
 )
     # ---- Boundary guards (mirror solve_stackelberg!'s own guards-before-build
     # discipline): fail here, not deep in the sweep loop. ----------------------------
@@ -425,6 +458,23 @@ function run_nash!(
             ArgumentError(
                 "run_nash!: distributor $idx's inner tol=$inner_tol must be strictly " *
                 "tighter than tol_outer=$tol_outer (nested-tolerance guard)",
+            ),
+        )
+    end
+
+    # BILEV-07 (Phase 31, plan 31-04): the `integer` kwarg's own boundary guard, before
+    # any solve call — mirrors this function's own guards-before-build discipline.
+    if integer !== nothing
+        (haskey(integer, :K) && integer.K isa Integer && integer.K >= 1) || throw(
+            ArgumentError(
+                "run_nash!: integer.K must be a positive Integer, got " *
+                "$(get(integer, :K, nothing))",
+            ),
+        )
+        isfinite(get(integer, :α_x_lb, 0.0)) || throw(
+            ArgumentError(
+                "run_nash!: integer.α_x_lb must be finite, got " *
+                "$(get(integer, :α_x_lb, 0.0))",
             ),
         )
     end
@@ -486,6 +536,12 @@ function run_nash!(
     # response, so a relaxation-only best response is never committed silently.
     certificates = NamedTuple[]
     sweep_order = order === :forward ? (1:(shared.N)) : (shared.N:-1:1)
+    # BILEV-07 (Phase 31, plan 31-04): exact-binary-state cycle bookkeeping, active only
+    # when integer !== nothing. Maps each VISITED joint binary state (the concatenation,
+    # in FIXED canonical distributor order 1:shared.N, of every distributor's own exact
+    # b::Vector{Int}) to the sweep index it was first seen at — see this function's own
+    # docstring for the full design.
+    visited_joint_b = Dict{Vector{Int}, Int}()
 
     # ---- CR-01 (load-bearing, do NOT skip): commit the seed into the shared model's
     # OWN state — every distributor's z Parameter AND a consistent bound-pinned x_inv
@@ -500,24 +556,80 @@ function run_nash!(
     end
 
     for k in 1:max_sweeps
+        # BILEV-07: a fresh per-sweep buffer for this sweep's joint binary state,
+        # indexed by distributor i (FIXED canonical order 1:shared.N, independent of
+        # sweep_order) — only populated when integer !== nothing.
+        integer_buffer =
+            integer === nothing ? nothing : Vector{Vector{Int}}(undef, shared.N)
         for i in sweep_order
             spec = specs[i]
             activate_distributor!(shared, i)
-            result_i = solve_stackelberg!(
-                spec.feeder,
-                spec.pf,
-                spec.aggregators;
-                λ₀ = spec.λ₀,
-                T = shared.T,
-                follower_kwargs = NamedTuple(),
-                master_kwargs = spec.master_kwargs,
-                tol = get(spec, :tol, 1e-6),
-                max_iter = get(spec, :max_iter, 100),
-                checkpoint_dir = joinpath(checkpoint_dir, "sweep_$k", "distributor_$i"),
-                follower = DistributorView(shared, i),
-                # CR-01: :strict by default — the pre-Phase-30 fail-loud semantics.
-                inexact_policy = inexact_policy,
-            )
+            # BILEV-07 (Phase 31, plan 31-04): when integer !== nothing, every
+            # distributor's best response builds a FRESH build_master_integer (never
+            # persisted across best responses or sweeps, mirroring this file's own
+            # "fresh cut store per best-response" discipline) and passes it via
+            # solve_stackelberg!'s existing master= keyword; master_kwargs MUST then be
+            # empty (D-08's own mutual-exclusivity guard). The continuous
+            # (integer === nothing) branch is BYTE-IDENTICAL to before this kwarg
+            # existed.
+            result_i = if integer === nothing
+                solve_stackelberg!(
+                    spec.feeder,
+                    spec.pf,
+                    spec.aggregators;
+                    λ₀ = spec.λ₀,
+                    T = shared.T,
+                    follower_kwargs = NamedTuple(),
+                    master_kwargs = spec.master_kwargs,
+                    tol = get(spec, :tol, 1e-6),
+                    max_iter = get(spec, :max_iter, 100),
+                    checkpoint_dir = joinpath(checkpoint_dir, "sweep_$k", "distributor_$i"),
+                    follower = DistributorView(shared, i),
+                    # CR-01: :strict by default — the pre-Phase-30 fail-loud semantics.
+                    inexact_policy = inexact_policy,
+                )
+            else
+                imaster = build_master_integer(;
+                    T = shared.T,
+                    K = integer.K,
+                    c_y = spec.master_kwargs.c_y,
+                    y_max = spec.master_kwargs.y_max,
+                    α_op_lb = :auto,
+                    α_x_lb = get(integer, :α_x_lb, 0.0),
+                    bounds_ctx = (;
+                        feeder = spec.feeder,
+                        pf = spec.pf,
+                        aggregators = spec.aggregators,
+                        λ₀ = spec.λ₀,
+                        follower_kwargs = nothing,
+                    ),
+                )
+                solve_stackelberg!(
+                    spec.feeder,
+                    spec.pf,
+                    spec.aggregators;
+                    λ₀ = spec.λ₀,
+                    T = shared.T,
+                    follower_kwargs = NamedTuple(),
+                    master_kwargs = NamedTuple(),
+                    tol = get(spec, :tol, 1e-6),
+                    max_iter = get(spec, :max_iter, 100),
+                    checkpoint_dir = joinpath(checkpoint_dir, "sweep_$k", "distributor_$i"),
+                    follower = DistributorView(shared, i),
+                    master = imaster,
+                    # CR-01: :strict by default — the pre-Phase-30 fail-loud semantics.
+                    inexact_policy = inexact_policy,
+                )
+            end
+            if integer !== nothing
+                # BILEV-07: recover distributor i's own exact binary state from the
+                # incumbent y_inv on the lattice (see this function's own docstring —
+                # corner_recourse/ll_cut_recourse guarantee the incumbent sits EXACTLY
+                # on the lattice for the integer path).
+                step_i = spec.master_kwargs.y_max / 2.0^integer.K
+                idx_i = round(Int, result_i.y / step_i)
+                integer_buffer[i] = digits(idx_i; base = 2, pad = integer.K)
+            end
             push!(
                 certificates,
                 (;
@@ -610,7 +722,29 @@ function run_nash!(
         # loop's actual convergence test drift independently. The sweep just
         # completed, so the trailing shared.N rows below ARE exactly is_converged's
         # own by-sweep-index window (reporting only).
-        if is_converged(trace, tol_outer, shared.N)
+        sweep_converged = is_converged(trace, tol_outer, shared.N)
+
+        # BILEV-07 (Phase 31, plan 31-04): exact-binary-state cycle detection, active
+        # only when integer !== nothing. A revisited joint state is a GENUINE cycle
+        # only if the loop has not ALREADY converged at this sweep — never report a
+        # cycle on the very sweep that legitimately reproduces the converged state.
+        if integer !== nothing
+            joint_b = vcat(integer_buffer...)
+            if haskey(visited_joint_b, joint_b) && !sweep_converged
+                first_seen = visited_joint_b[joint_b]
+                error(
+                    "run_nash!: integer diagonalization CYCLED — the joint binary " *
+                    "state $joint_b recurred at sweep $k (first seen at sweep " *
+                    "$first_seen) without converging in between; per-distributor " *
+                    "states at the repeat: " *
+                    join(["i=$i: b=$(integer_buffer[i])" for i in 1:shared.N], ", ") *
+                    " — refusing to silently continue toward max_sweeps",
+                )
+            end
+            visited_joint_b[joint_b] = k
+        end
+
+        if sweep_converged
             outer_residual_k = maximum(trace.nash_residual_trace[(end - shared.N + 1):end])
             # Final re-solve (load-bearing, do NOT skip): the LAST distributor's own
             # write_back! (bound-pinning x_inv[i]) dirties shared.model's solved status
