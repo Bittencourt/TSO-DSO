@@ -1168,11 +1168,22 @@ end
 end
 
 # --- Task 2 (plan 31-03, BILEV-06b): solve_variational_equilibrium — monolithic joint
-# model selecting the variational equilibrium (VE) inside the interior-cap fixture's own
-# GNE continuum (see the testitem above for the HAND-DERIVED GNE INTERVAL derivation this
+# model for the variational equilibrium (VE), run on the interior-cap fixture's own GNE
+# continuum (see the testitem above for the HAND-DERIVED GNE INTERVAL derivation this
 # section reuses verbatim: S_min = 0.7, x_inv_1 ∈ [0, 0.7], z_1 ≈ z_2 ≈ 0.7).
+#
+# CORRECTED by the Phase-31 code review (CR-02): on THIS symmetric fixture the VE is NOT
+# unique and nothing is "selected". With c_inv = [1, 1] the joint objective and every
+# constraint depend on x_inv only through x_inv_1 + x_inv_2, so the joint optimal face is
+# the whole split segment, and every GNE of the continuum carries the SAME shared
+# multiplier (interior x_i: c_inv = corridor_cap·μ_i ⇒ μ_i = 0.5; endpoint x_1 = 0:
+# z-stationarity gives μ_1 = W'(0.7) − λ₀ − c_y − c_op = 0.5) — the VE set EQUALS the GNE
+# set. The point returned is solver-dependent (Clarabel's IPM lands on the analytic
+# centre (0.35, 0.35)); the testitem below therefore asserts only what holds on the whole
+# face. The UNIQUE-VE selection test is the asymmetric-c_inv testitem at the end of this
+# file.
 
-@testitem "planning nash: solve_variational_equilibrium certifies the VE on the interior-cap fixture — joint solve, single shared multiplier, no-profitable-deviation (BILEV-06b)" tags =
+@testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (VE set = GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation (BILEV-06b, CR-02)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
     using JuMP: value
@@ -1204,13 +1215,14 @@ end
     @test isapprox(ve.z, fill(0.7, 2, 1); atol = 1e-3)
     @test all(0.0 .<= ve.x_inv .<= 1.0 + 1e-6)
 
-    # Test 2 (multiplier, trivially-true-by-construction but asserted explicitly per
-    # CONTEXT.md): exactly ONE shared row exists by construction (the capacity[t] row is
-    # written ONCE, never per-distributor), so "every player's own multiplier is
-    # identical" holds trivially — assert the returned π_capacity is finite, not NaN,
-    # rather than silently relying on this.
+    # Test 2 (multiplier): exactly ONE shared row exists by construction (the
+    # capacity[t] row is written ONCE, never per-distributor). Its multiplier is the
+    # hand-derived 0.5 that EVERY GNE of this continuum shares (file comment above —
+    # which is why this fixture cannot distinguish a VE from any other GNE). JuMP's
+    # sign convention for a <= row in a Max model gives π_capacity = −0.5; measured
+    # −0.4999999998.
     @test length(ve.π_capacity) == 1
-    @test all(isfinite, ve.π_capacity)
+    @test isapprox(ve.π_capacity, [-0.5]; atol = 1e-6)
 
     # Test 3 (no-profitable-deviation certification): build a FRESH SharedTransmission
     # with the SAME parameters, write_back! every distributor at the VE's own (x_inv, z),
@@ -1285,4 +1297,141 @@ end
     @test isapprox(ve.x_inv, [0.3, 0.3]; atol = 1e-3)
     @test length(ve.π_capacity) == 1
     @test all(isfinite, ve.π_capacity)
+end
+
+# --- Phase 31 code review (CR-02): a fixture on which the VE is UNIQUE and genuinely
+# SELECTS one point of a GNE continuum. On the symmetric interior-cap fixture above
+# (c_inv = [1, 1]) the joint objective depends on x_inv only through x_inv_1 + x_inv_2,
+# so every GNE of the continuum carries the SAME shared multiplier (0.5) — the VE set
+# EQUALS the GNE set there, and solve_variational_equilibrium returns a solver-dependent
+# point of that face. Making investment cost ASYMMETRIC breaks the tie.
+#
+# HAND DERIVATION (T=1, corridor_cap=2, x_inv_max=[1,1], c_inv=[1.0,1.4],
+# c_op=[0.5,0.5], c_y=0.3, λ₀=4, W(z)=6z−z²/2 per distributor, lossless two-bus feeder):
+# player i's KKT, with μ_i >= 0 its own multiplier on the shared row
+# z_1 + z_2 <= 2(x_1 + x_2) and y_i = z_i at the optimum:
+#   z-stationarity:  W'(z_i) − λ₀ − c_y − c_op = μ_i   ⇒  z_i = 1.2 − μ_i
+#   x-stationarity:  c_inv_i − 2μ_i >= 0, with equality if x_i > 0.
+# GNE set (shared row binding): any μ with μ_i = c_inv_i/2 for an investing player and
+# μ_i <= c_inv_i/2 for a non-investing one — e.g. x_2 = 0, μ_1 = 0.5, μ_2 = p ∈ [0, 0.7],
+# x_1 = (1.9 − p)/2 ∈ [0.6, 0.95]: a 1-D continuum with player-specific multipliers.
+# VE (equal multipliers μ_1 = μ_2 = μ): the joint problem buys capacity only from the
+# CHEAPER player 1 (marginal capacity cost c_inv_1/corridor_cap = 0.5 < 0.7), so
+# μ = 0.5, z = (0.7, 0.7), x_inv = (0.7, 0.0), y = (0.7, 0.7) — UNIQUE (strictly concave
+# W fixes z; c_inv_1 < c_inv_2 fixes the split). cost_per_distributor =
+# c_y·y + c_inv·x + c_op·z − (W(z) − λ₀z) = [0.105, −0.595].
+# Gauss-Seidel from z0 = 0 (either order) instead lands on the GNE x_inv = (0.35, 0.25),
+# z = (0.7, 0.5), μ = (0.5, 0.7): player 2, moving against player 1's committed
+# capacity, pays its own 0.7 marginal — a GNE that is NOT the VE.
+@testitem "planning nash: solve_variational_equilibrium selects the UNIQUE VE on an asymmetric-c_inv fixture — hand-derived split, equal per-player shared multipliers, distinct from the diagonalization's GNE (CR-02)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: value
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+    C_INV = [1.0, 1.4]
+    C_OP = [[0.5], [0.5]]
+    C_Y = 0.3
+    fresh_shared() = build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [1.0, 1.0],
+        c_inv = C_INV,
+        c_op = C_OP,
+    )
+
+    # Player i's OWN shared-row multiplier at a best response z_i, from z-stationarity
+    # (header): μ_i = −π_oracle − c_y − c_op, where π_oracle = dual of the oracle's
+    # coupling row = −(W'(z) − λ₀). Read from the ORACLE, not the follower LP: at the
+    # VE player 2 sits on the kink x_2 = 0 of its follower value function, where the
+    # follower's capacity dual is degenerate (measured 0.0 for player 2 vs −0.5 for
+    # player 1 on the SAME row) and so carries no multiplier information.
+    function own_multiplier(z_i)
+        oracle = TSODSO.build_planning_oracle(
+            spec.feeder,
+            spec.pf,
+            spec.aggregators;
+            λ₀ = spec.λ₀,
+            T = 1,
+        )
+        return -solve_planning_oracle!(oracle, z_i).π[1] - C_Y - C_OP[1][1]
+    end
+
+    ve = solve_variational_equilibrium(
+        specs;
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [1.0, 1.0],
+        c_inv = C_INV,
+        c_op = C_OP,
+    )
+    # MEASURED 2026-10-02 (Clarabel IPM): every quantity below within ~1.1e-9 of the
+    # hand-derived value; atol = 1e-6 is a ~1000x margin that still rejects any other
+    # GNE of the continuum (x_inv_1 ∈ [0.6, 0.95] there).
+    VE_ATOL = 1e-6
+    @test isapprox(ve.x_inv, [0.7, 0.0]; atol = VE_ATOL)
+    @test isapprox(ve.z, fill(0.7, 2, 1); atol = VE_ATOL)
+    @test isapprox(ve.y, [0.7, 0.7]; atol = VE_ATOL)
+    # JuMP's sign convention for a <= row in a Max model: π_capacity = −μ.
+    @test isapprox(ve.π_capacity, [-0.5]; atol = VE_ATOL)
+    @test isapprox(ve.cost_per_distributor, [0.105, -0.595]; atol = VE_ATOL)
+
+    # Each player's OWN shared-row multiplier from a run_nash!-style best response
+    # (solve_stackelberg! with follower = DistributorView, the other player pinned at
+    # the VE) equals −π_capacity: the VE's defining property, checked per player
+    # against the joint solve's single multiplier. MEASURED: player 1's Benders best
+    # response stops at z_1 = 0.69979 (inside its 1e-6 relative UB gap on a flat
+    # optimum), giving μ_1 = 0.50021 — BR_ATOL = 1e-3 is ~5x that.
+    BR_ATOL = 1e-3
+    shared_check = fresh_shared()
+    for i in 1:2
+        write_back!(shared_check, i, ve.z[i, :], ve.x_inv[i])
+    end
+    for i in 1:2
+        activate_distributor!(shared_check, i)
+        result_i = solve_stackelberg!(
+            specs[i].feeder,
+            specs[i].pf,
+            specs[i].aggregators;
+            λ₀ = specs[i].λ₀,
+            T = 1,
+            follower_kwargs = NamedTuple(),
+            master_kwargs = specs[i].master_kwargs,
+            follower = DistributorView(shared_check, i),
+            checkpoint_dir = mktempdir(),
+        )
+        @test isapprox(result_i.z, ve.z[i, :]; atol = BR_ATOL)
+        @test isapprox(result_i.UB, ve.cost_per_distributor[i]; atol = 1e-4)
+        @test isapprox(own_multiplier(result_i.z), -ve.π_capacity[1]; atol = BR_ATOL)
+        write_back!(shared_check, i, ve.z[i, :], ve.x_inv[i])
+    end
+
+    # The diagonalization's GNE is NOT the VE: hand-derived x_inv = (0.35, 0.25),
+    # z = (0.7, 0.5), μ = (0.5, 0.7). MEASURED: z = (0.69971, 0.49959), x_inv =
+    # (0.34985, 0.24980) — inner-Benders flatness again, so BR_ATOL applies.
+    gne = run_nash!(
+        specs,
+        fresh_shared();
+        z0 = zeros(2, 1),
+        tol_outer = 1e-4,
+        max_sweeps = 20,
+        checkpoint_dir = mktempdir(),
+    )
+    @test gne.converged
+    @test isapprox(gne.x_inv, [0.35, 0.25]; atol = BR_ATOL)
+    @test isapprox(gne.z, reshape([0.7, 0.5], 2, 1); atol = BR_ATOL)
+    μ_gne = [own_multiplier(gne.z[i, :]) for i in 1:2]
+    @test isapprox(μ_gne, [0.5, 0.7]; atol = BR_ATOL)
+    @test abs(μ_gne[2] - μ_gne[1]) > 0.1   # unequal multipliers: a GNE, not the VE
+    @test maximum(abs.(gne.x_inv .- ve.x_inv)) > 0.3
 end
