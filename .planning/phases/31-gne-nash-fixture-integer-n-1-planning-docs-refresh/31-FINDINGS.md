@@ -317,11 +317,13 @@ moves, or re-pins any pre-existing golden value.
 
 ## READY FOR ORCHESTRATOR SUITE CERTIFICATION
 
-**HEAD sha:** `85a96be` (`docs(31-05): complete BILEV-08 planning docs refresh plan`).
-`git status --short` is clean at this sha on branch `main`: all Phase 31 work (plans 31-01,
-31-02, 31-03, 31-04, 31-05, 31-07, plus this plan's own Task 1 findings draft written directly
-to this file) is committed; this plan's own Task 2 found no outstanding `src/`/`test/`/`docs/`
-changes requiring a new commit before certification.
+**HEAD sha:** `445c08a` (`docs(31-06): golden-move audit + consolidated phase findings` — the
+commit that adds this very file). Parent commit `85a96be`
+(`docs(31-05): complete BILEV-08 planning docs refresh plan`) was the full state of all prior
+Phase-31 plans (31-01, 31-02, 31-03, 31-04, 31-05, 31-07) with a clean working tree — this
+plan's own Task 2 found no outstanding `src/`/`test/`/`docs/` changes beyond this findings
+file itself requiring a new commit before certification. `git status --short` is clean at
+`445c08a` on branch `main`.
 
 **Preconditions confirmed:**
 
@@ -340,7 +342,7 @@ changes requiring a new commit before certification.
    match returned is the `pgrep` invocation's own command-line self-match via the Bash
    wrapper's `eval` string, not a real running process — confirmed by inspecting the matched
    line, which is the shell wrapper's own `eval '... pgrep ...'` invocation).
-3. `git status --short` clean at HEAD `85a96be`; working tree on branch `main` (this is the
+3. `git status --short` clean at HEAD `445c08a`; working tree on branch `main` (this is the
    main working tree — `.git` is a directory, not a worktree file — so no worktree-specific
    HEAD-safety assertions apply).
 
@@ -371,7 +373,7 @@ gap. No plan in this phase introduced a new `@test_broken`/`broken=` marker.
 **This plan's own executor never launches, polls, or waits for `Pkg.test()`.** The
 ORCHESTRATOR is responsible for: launching the single detached
 `julia --project=. -e 'import Pkg; Pkg.test()'` run via its own persistent background-process
-mechanism, confirming the log's first timestamp postdates HEAD `85a96be`, filtering for zero
+mechanism, confirming the log's first timestamp postdates HEAD `445c08a`, filtering for zero
 `.claude/worktrees/` contamination, comparing the final tallies against the baseline above,
 and appending those final tallies directly into this file.
 
