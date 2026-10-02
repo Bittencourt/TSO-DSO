@@ -713,6 +713,14 @@ every `y_inv in [0, y_max]` (`build_bilevel_kkt` rejects `safety < 1`). This che
 bound that is provably too tight at the returned point, for example one tightened by a
 caller via `set_upper_bound`.
 
+**Taxonomy cross-reference (Phase 31, BILEV-08):** this is the GENUINE bilevel
+variant among the three planning-layer variants this project ships — see
+`docs/writeups/modelo_stackelberg_dso_unico.typ`'s "Taxonomia dos variantes de
+planejamento" section for the full comparison against [`solve_stackelberg!`](@ref)
+(integrated, decomposed by Benders — not a genuine two-level game) and
+[`run_nash!`](@ref)/[`solve_variational_equilibrium`](@ref) (N-player shared-constraint
+GNE/VE, `src/planning/nash.jl`).
+
 Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, rho_max, mu_lo, model)`.
 
 **Returned multipliers (29-REVIEW.md iteration-2 WR-02).** `mu_cap`, `mu_lo`, `rho_y`,

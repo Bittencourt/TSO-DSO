@@ -867,7 +867,13 @@ TSO-DSO variant, where the follower minimizes its OWN cost `c(z) - pi_tariff*z` 
 differs from the leader's own valuation of `z`, see
 [`solve_bilevel!`](@ref)/[`build_bilevel_kkt`](@ref) (`src/planning/bilevel_kkt.jl`,
 plan 29-01) — a single-level KKT-MILP, not a Benders loop, because plain Benders is
-invalid on that genuinely divergent-objective game (see that file's module header).
+invalid on that genuinely divergent-objective game (see that file's module header). For
+the N>1 shared-constraint case (multiple distributors sharing one pooled transmission
+corridor), see [`run_nash!`](@ref)/[`solve_variational_equilibrium`](@ref)
+(`src/planning/nash.jl`, Phase 13/31) — a generalized Nash equilibrium (GNE) among `N`
+copies of THIS function's own per-distributor best response, not a single integrated
+problem. See `docs/writeups/modelo_stackelberg_dso_unico.typ`'s "Taxonomia dos
+variantes de planejamento" for the full three-way comparison.
 
 # Algorithm
 
@@ -923,6 +929,11 @@ invalid on that genuinely divergent-objective game (see that file's module heade
     freshly-built `BendersMaster` — no master is built by this function at all in that case.
     Supplying BOTH a non-`nothing` `master` AND a non-empty `master_kwargs` simultaneously is
     rejected with an `ArgumentError`, mirroring the `follower`/`follower_kwargs` guard.
+    `BendersMasterInteger` now carries its own `bounds_ctx`/`:auto`/`lb_slack` validation
+    (Phase 31, plan 31-02 — ported verbatim from `build_master`'s own machinery) and a
+    build-time `lb_clamped` field (Phase 31 WR-03, plan 31-07, Option A), so a caller
+    supplying a pre-built integer master gets the SAME build-time bound
+    validation/clamping discipline as the continuous path, not an unvalidated raw bound.
 
     **`known_optimum` keyword (Phase 24, plan 24-04, D-13/D-14):** defaults to `nothing`, in
     which case the loop's termination gate is unchanged (`gap <= tol`). When a caller

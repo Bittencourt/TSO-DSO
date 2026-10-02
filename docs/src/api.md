@@ -140,6 +140,7 @@ Pages = [
     "planning/master.jl",
     "planning/master_integer.jl",
     "planning/benders.jl",
+    "planning/bilevel_kkt.jl",
     "planning/coupling.jl",
     "planning/nash.jl",
 ]

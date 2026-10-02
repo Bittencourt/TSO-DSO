@@ -282,6 +282,15 @@ plan 13-01). Each element of `specs` supplies, per distributor `i`: `feeder`, `p
 split), and OPTIONALLY `tol` (default `1e-6`) and `max_iter` (default `100`) via
 `get(spec, :tol, 1e-6)`/`get(spec, :max_iter, 100)`.
 
+**GNE-multiplicity caveat (Phase 31, BILEV-06).** This loop converges to A generalized
+Nash equilibrium (GNE) of the shared-constraint game, not necessarily the UNIQUE one —
+on a fixture whose shared capacity row is the only binding coupling (interior individual
+investment caps), a whole continuum of GNEs can exist (see [`run_nash_probe`](@ref)'s
+own docstring for the full derivation and `test/test_planning_nash.jl`'s interior-cap
+fixture). For the specific GNE whose shared-row multiplier is IDENTICAL across every
+player (the variational equilibrium, VE), use [`solve_variational_equilibrium`](@ref)
+instead — a single monolithic joint solve, not a diagonalization.
+
 **`inexact_policy` (Phase 30 code review iteration 2, CR-01).** Forwarded UNCHANGED to
 every inner `solve_stackelberg!` best response. It defaults to `:strict` here, NOT to
 `solve_stackelberg!`'s own `:certify_incumbent` default: before Phase 30 every inner
