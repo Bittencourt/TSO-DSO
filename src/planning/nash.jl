@@ -409,7 +409,8 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
  3. CR-01 parity re-solve (`solve_follower!(result_i.follower, result_i.z)`), then read
     `x_inv_i_converged = value(shared.x_inv[i])` — see this file's header for why this
     re-solve is load-bearing.
- 4. |Δx_inv_i|)`.
+ 4. Compute distributor `i`'s Nash residual `residual_i = max(‖z_i^(k+1) − z_i^(k)‖∞,
+    |Δx_inv_i|)` against its previously COMMITTED `(z_i, x_inv_i)`.
  5. Compute the (possibly damped) write-back value `z_i_new` (`ω == 1.0` recovers plain
     undamped Gauss-Seidel, the locked default; `ω < 1` damps toward the PREVIOUS `z_i`).
     With `ω < 1` the follower is RE-SOLVED at the damped `z_i_new` and the MATCHING
