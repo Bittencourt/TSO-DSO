@@ -1166,3 +1166,123 @@ end
     @test r.any_relaxation_only
     @test [(c.sweep, c.distributor) for c in r.certificates] == [(k, i) for k in 1:(r.sweeps) for i in 1:2]
 end
+
+# --- Task 2 (plan 31-03, BILEV-06b): solve_variational_equilibrium — monolithic joint
+# model selecting the variational equilibrium (VE) inside the interior-cap fixture's own
+# GNE continuum (see the testitem above for the HAND-DERIVED GNE INTERVAL derivation this
+# section reuses verbatim: S_min = 0.7, x_inv_1 ∈ [0, 0.7], z_1 ≈ z_2 ≈ 0.7).
+
+@testitem "planning nash: solve_variational_equilibrium certifies the VE on the interior-cap fixture — joint solve, single shared multiplier, no-profitable-deviation (BILEV-06b)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+    using JuMP: value
+
+    S_MIN = 0.7
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    # Test 1 (certification core): the joint solve's own (x_inv_1, x_inv_2) sums to
+    # S_min within the SAME atol=1e-3 the probe testitem above uses, and z ≈ (0.7, 0.7).
+    ve = solve_variational_equilibrium(
+        specs;
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [1.0, 1.0],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    @test isapprox(sum(ve.x_inv), S_MIN; atol = 1e-3)
+    @test isapprox(ve.z, fill(0.7, 2, 1); atol = 1e-3)
+    @test all(0.0 .<= ve.x_inv .<= 1.0 + 1e-6)
+
+    # Test 2 (multiplier, trivially-true-by-construction but asserted explicitly per
+    # CONTEXT.md): exactly ONE shared row exists by construction (the capacity[t] row is
+    # written ONCE, never per-distributor), so "every player's own multiplier is
+    # identical" holds trivially — assert the returned π_capacity is finite, not NaN,
+    # rather than silently relying on this.
+    @test length(ve.π_capacity) == 1
+    @test all(isfinite, ve.π_capacity)
+
+    # Test 3 (no-profitable-deviation certification): build a FRESH SharedTransmission
+    # with the SAME parameters, write_back! every distributor at the VE's own (x_inv, z),
+    # then for EACH distributor run ONE best response via solve_stackelberg! (follower =
+    # DistributorView) and confirm its own UB does NOT improve on (is not strictly less
+    # than, beyond solver-noise tolerance) that distributor's own cost slice at the VE.
+    shared_check = build_shared_transmission(;
+        N = 2,
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [1.0, 1.0],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    for i in 1:2
+        write_back!(shared_check, i, ve.z[i, :], ve.x_inv[i])
+    end
+    # MEASURED 2026-10-02 (scratchpad probe_ve_deviation.jl, this exact fixture): both
+    # distributors' own best response matches the VE's own cost_per_distributor to
+    # within ≈4.3e-8 (solver precision) — 1e-4 is a generous margin above that noise
+    # floor, consistent with this fixture family's own atol=1e-3/1e-4 conventions.
+    NO_DEVIATION_TOL = 1e-4
+    for i in 1:2
+        activate_distributor!(shared_check, i)
+        result_i = solve_stackelberg!(
+            specs[i].feeder,
+            specs[i].pf,
+            specs[i].aggregators;
+            λ₀ = specs[i].λ₀,
+            T = 1,
+            follower_kwargs = NamedTuple(),
+            master_kwargs = specs[i].master_kwargs,
+            follower = DistributorView(shared_check, i),
+            checkpoint_dir = mktempdir(),
+        )
+        @test result_i.UB >= ve.cost_per_distributor[i] - NO_DEVIATION_TOL
+        # Re-pin distributor i back at its own VE point before checking the next
+        # distributor (solve_stackelberg! leaves shared_check's own state at ITS best
+        # response, not the VE — write_back! is a cheap Parameter/bound set, no re-solve).
+        write_back!(shared_check, i, ve.z[i, :], ve.x_inv[i])
+    end
+end
+
+@testitem "planning nash: solve_variational_equilibrium agrees with the corner-cap control's pinned unique equilibrium — VE and GNE coincide when the equilibrium IS unique (BILEV-06b)" tags =
+    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    using TSODSO
+
+    dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
+    agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
+    spec = (;
+        feeder = Phase6Fixtures.two_bus_feeder(),
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = [4.0],
+        master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0),
+    )
+    specs = [spec, spec]
+
+    # Test 4 (control fixture, byte-identical structural sanity): the corner-cap fixture
+    # (x_inv_max=[0.3,0.3]) has a UNIQUE equilibrium (testitem "N=2 Gauss-Seidel converges
+    # to the hand-checked congested equilibrium" above), so VE and GNE coincide — the
+    # SAME atol=1e-3 that pinned testitem uses.
+    ve = solve_variational_equilibrium(
+        specs;
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = [0.3, 0.3],
+        c_inv = [1.0, 1.0],
+        c_op = [[0.5], [0.5]],
+    )
+    @test isapprox(ve.z, fill(0.6, 2, 1); atol = 1e-3)
+    @test isapprox(ve.x_inv, [0.3, 0.3]; atol = 1e-3)
+    @test length(ve.π_capacity) == 1
+    @test all(isfinite, ve.π_capacity)
+end
