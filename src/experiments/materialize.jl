@@ -445,4 +445,48 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
     ]
 end
 
-export sub_seed, build_feeder, build_price, build_population
+"""
+    _powerflow_from_selector(pf::Symbol, thesis_literal::Bool, ε::Float64)
+
+Internal dispatch behind [`build_powerflow`](@ref); the terminal branch throws `ArgumentError`
+for an unknown selector.
+"""
+function _powerflow_from_selector(pf::Symbol, thesis_literal::Bool, ε::Float64)
+    if pf === :convex_branch_flow
+        return ConvexBranchFlow(; thesis_literal = thesis_literal)
+    elseif pf === :restricted_branch_flow
+        return RestrictedBranchFlow(; ε = ε)
+    elseif pf === :lindistflow
+        return LinDistFlow()
+    elseif pf === :ac
+        # Default `limits = true`: this path solves the full welfare problem.
+        return ACPowerFlow()
+    else
+        throw(
+            ArgumentError(
+                "build_powerflow: unknown pf selector $(repr(pf)); expected one of " *
+                "$(SCENARIO_VALID_PFS)",
+            ),
+        )
+    end
+end
+
+"""
+    build_powerflow(s::Scenario) -> AbstractPowerFlow
+
+Materialize the power-flow formulation named by `s.pf`:
+
+| `s.pf`                    | result                                              |
+|:--------------------------|:----------------------------------------------------|
+| `:convex_branch_flow`     | `ConvexBranchFlow(; thesis_literal = s.pf_thesis_literal)` |
+| `:restricted_branch_flow` | `RestrictedBranchFlow(; ε = s.pf_ε)`                |
+| `:lindistflow`            | `LinDistFlow()`                                     |
+| `:ac`                     | `ACPowerFlow()` (default `limits = true`)           |
+
+The default scenario yields an object `===` the pre-phase hard-coded `ConvexBranchFlow()`, so
+numeric goldens stay bit-identical. `:ac` is the researcher's responsibility on large feeders
+(only `:ieee13` has been measured).
+"""
+build_powerflow(s::Scenario) = _powerflow_from_selector(s.pf, s.pf_thesis_literal, s.pf_ε)
+
+export sub_seed, build_feeder, build_price, build_population, build_powerflow
