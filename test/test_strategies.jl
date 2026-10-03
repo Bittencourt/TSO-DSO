@@ -324,3 +324,10 @@ end
     @test_throws ArgumentError run_mpc(s)
     @test_throws ArgumentError run_stochastic(s)
 end
+
+@testitem "REVIEW WR-02 ADMM rejects non-finite knobs" begin
+    using TSODSO, Test
+    for k in (:ρ, :ε_abs, :ε_rel, :τ_ratio, :μ), v in (NaN, Inf)
+        @test_throws ArgumentError ADMM(; (k => v,)...)
+    end
+end

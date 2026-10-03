@@ -43,6 +43,14 @@ struct ADMM <: AbstractStrategy
     τ_ratio::Float64
     μ::Float64
     function ADMM(ρ, ε_abs, ε_rel, maxiter, τ_ratio, μ)
+        if !all(isfinite, (ρ, ε_abs, ε_rel, τ_ratio, μ))
+            throw(
+                ArgumentError(
+                    "ADMM: ρ/ε_abs/ε_rel/τ_ratio/μ must be finite; got ρ=$ρ, ε_abs=$ε_abs, " *
+                    "ε_rel=$ε_rel, τ_ratio=$τ_ratio, μ=$μ",
+                ),
+            )
+        end
         if maxiter < 1
             throw(ArgumentError("ADMM: maxiter must be ≥ 1 (ADMM iteration cap); got maxiter=$maxiter"))
         end
