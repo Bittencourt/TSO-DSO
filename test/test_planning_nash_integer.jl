@@ -272,14 +272,15 @@ end
 # Two testitems below replace the old standalone `Dict` replication, which never called
 # production code:
 #   (a) the PRODUCTION predicate `TSODSO._integer_cycle_hit` on synthetic histories — a
-#       damped converging history (must NOT fire) and genuine period-1/period-2 cycles
-#       (must fire);
+#       damped converging history and a sign-flipping oscillatory contraction (both must
+#       NOT fire; the latter is the iteration-2 review's CR-01 repro) and genuine
+#       period-1/period-2 cycles (must fire);
 #   (b) a LIVE damped `run_nash!(...; integer = (; K = 4), ω = 0.5)` run on this file's
 #       fixture that must converge (the old detector threw at sweep 2).
 # No LIVE cycling run exists: with objectives separable except through the shared row,
 # the summed cost is a potential that exact Gauss-Seidel best responses cannot cycle on
-# (see `run_nash!`'s docstring, "Cycle detection") — a stated limitation, not a gap
-# papered over.
+# ABSENT TIES (see `run_nash!`'s docstring, "Cycle detection"; the interior-cap fixtures
+# do have tied best responses) — a stated limitation, not a gap papered over.
 @testitem "planning nash integer: cycle predicate keys on the full committed state — fires on genuine recurrences, never on a converging damped history (CR-01)" tags =
     [:planning] begin
     using TSODSO
@@ -290,6 +291,32 @@ end
     atol = ω * tol_outer / 2
     b = [1, 0, 0, 0, 1, 0, 0, 0]
     entry(k, jb, st, r) = (; sweep = k, joint_b = jb, state = st, residual = r)
+
+    # Wrapped in a function (TestItem scoping: the loop must not reassign outer bindings).
+    function oscillatory_history_never_flagged(hit)
+        tol_o = 1e-4
+        atol_o = 1.0 * tol_o / 2
+        c, zstar, e = -0.9, 0.7, 0.01
+        s(k) = zstar + c^k * e
+        bo = [1, 0, 0, 0]
+        hist = NamedTuple{
+            (:sweep, :joint_b, :state, :residual),
+            Tuple{Int, Vector{Int}, Vector{Float64}, Float64},
+        }[]
+        converged = false
+        for k in 1:200
+            r = abs(s(k) - s(k - 1))
+            if r <= tol_o
+                converged = true
+                break
+            end
+            hit(hist, bo, [s(k)], r; atol = atol_o) === nothing || return false
+            push!(hist, entry(k, bo, [s(k)], r))
+        end
+        # Guard against a vacuous pass: the history must reach the regime where the
+        # old slack fired (sweep 44) and then genuinely converge.
+        return converged && length(hist) >= 44
+    end
 
     # (1) The reviewer's false positive: damped run, b fixed from sweep 1, the committed
     # state moves by ω × residual each sweep and the residual halves. NO prefix of this
@@ -313,8 +340,18 @@ end
     @test hit(h2, [1, 0, 1, 1], copy(stA), 0.5; atol) === nothing
     # (5) Same b, continuous state moved by more than atol -> progress, not a cycle.
     @test hit(h1, b, st .+ 2atol, 0.3; atol) === nothing
-    # (6) Same b and state but a strictly smaller residual -> progress, not a cycle.
+    # (6) Same b and state but a strictly smaller residual -> progress, not a cycle —
+    # with NO tolerance slack (iteration-2 review, CR-01): even a decrease far below
+    # atol vetoes the match.
     @test hit(h1, b, copy(st), 0.3 - 2atol; atol) === nothing
+    @test hit(h1, b, copy(st), 0.3 - 1e-12; atol) === nothing
+
+    # (7) Iteration-2 review CR-01 regression: an OSCILLATORY contraction (sign-flipping
+    # geometric history, step factor c = -0.9, ω = 1, tol_outer = 1e-4, b fixed) returns
+    # within atol of its state two sweeps earlier while the residual drops by less than
+    # atol; the former `residual >= h.residual - atol` slack reported a FALSE cycle at
+    # sweep 44 (matching sweep 42). It converges, so no prefix may be reported.
+    @test oscillatory_history_never_flagged(hit)
 end
 
 @testitem "planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (CR-01, live)" tags =

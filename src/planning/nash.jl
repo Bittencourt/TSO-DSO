@@ -297,24 +297,50 @@ An entry is repeated only when ALL three hold:
  1. the joint binary state is identical (exact `Vector{Int}` equality — binaries are
     exact);
  2. the committed continuous state recurs, `maximum(abs.(state .- h.state)) <= atol`;
- 3. there was no progress, `residual >= h.residual - atol`.
+ 3. there was no progress at all, `residual >= h.residual` — NO tolerance slack: any
+    strict residual decrease between the matched sweeps vetoes the match (iteration-2
+    review, CR-01).
 
 Why the binaries alone are NOT a cycle (the bug this predicate fixes): binaries
 routinely settle sweeps before `z`/`x_inv` do, so a `b`-only key flagged every
 converging run that needed three or more sweeps with a stable `b` — reproduced with
 damping `ω = 0.5`, where the residual halves each sweep at a fixed `b`. Condition 2
-rejects such runs because a non-converged sweep moves the committed state, and
-condition 3 independently rejects any contracting trajectory (the residual of a
-genuine cycle recurs; that of a converging run decreases). The same lesson as Phase
-24's own inner stall guard (`apply_integer_cuts!`): a revisit with materially
-different continuous state is refinement progress, never a stall.
+rejects such runs when consecutive sweeps move the committed state by more than
+`atol`, and condition 3 rejects every trajectory whose residual strictly decreased
+between the matched sweeps (the residual of a genuine cycle recurs; that of a
+converging run decreases). The same lesson as Phase 24's own inner stall guard
+(`apply_integer_cuts!`): a revisit with materially different continuous state is
+refinement progress, never a stall.
 
-`run_nash!` passes `atol = ω * tol_outer / 2`: on a non-converged sweep at least one
-distributor's residual exceeds `tol_outer`, and with `ω = 1` its committed state moves
-by exactly that residual (`ω` times it for the damped `z`), so half of `ω·tol_outer`
-separates a recurrence from a move. A genuine cycle whose recurring states differ by
-more than `atol` (inner-solve noise) is NOT detected here; it still fails loudly at
-`max_sweeps` — a missed detection is safe, a false one is not.
+Why condition 3 carries NO `atol` slack (iteration-2 review, CR-01): `history` is
+scanned for ANY earlier sweep, not just the previous one, so condition 2 alone does not
+separate a converging run from a recurrence. An OSCILLATORY contraction — committed
+state `s_k = s* + c^k e` with `c ∈ (-1, 0)`, which a negative-slope Gauss-Seidel sweep
+map produces when free-riding on pooled capacity makes one player's best response
+decrease in the other's committed state — returns close to its value two sweeps earlier:
+`|s_k - s_{k-2}| = (1 - c²)|s_{k-2} - s*|`, and the residual drops by only `(1 - c²)·r_{k-2}`.
+Near the end of a run both fall under `atol` for `|c| ≳ 0.82` at `ω = 1`; with the former
+`residual >= h.residual - atol` slack the production predicate reported a false cycle on
+the synthetic `c = -0.9` history (sweep 44 matching sweep 42) of a run that converges six
+sweeps later. Requiring `residual >= h.residual` exactly removes that false positive: on
+a contracting trajectory the residual strictly decreases. A genuine cycle whose
+recurring residuals differ by inner-solve noise may now go undetected — a missed
+detection is safe (it still fails loudly at `max_sweeps`), a false one is not.
+
+`run_nash!` passes `atol = ω * tol_outer / 2`, a recurrence tolerance for the committed
+state, not a guaranteed separation: on a non-converged sweep at least one distributor's
+residual exceeds `tol_outer`, but only the committed `z` is damped by `ω` — `x_inv` is
+RE-SOLVED at the damped `z` (bound-pinned), not interpolated — so when the residual is
+`x_inv`-dominated even consecutive sweeps need not differ by `atol`. Condition 3 (not
+condition 2) is what keeps such sweeps from being flagged. A genuine cycle whose
+recurring states differ by more than `atol` (inner-solve noise, measured ~2–3e-4) is NOT
+detected here either; again it fails loudly at `max_sweeps`.
+
+Ties caveat: the potential-game argument in [`run_nash!`](@ref)'s docstring ("Cycle
+detection") rules out cycles of exact best responses only ABSENT TIES — a recurrent
+state requires every move in the loop to be a tie (ΔΦ = Δcost_i = 0). The interior-cap
+fixtures have tied, degenerate best responses, so ties are not hypothetical here; this
+predicate is the guard for exactly that case.
 """
 function _integer_cycle_hit(
     history::AbstractVector,
@@ -327,7 +353,7 @@ function _integer_cycle_hit(
         h.joint_b == joint_b || continue
         length(h.state) == length(state) || continue
         maximum(abs.(state .- h.state)) <= atol || continue
-        residual >= h.residual - atol || continue
+        residual >= h.residual || continue  # no slack: any decrease = progress (CR-01, iter 2)
         return h.sweep
     end
     return nothing
@@ -492,7 +518,7 @@ distributor order `1:shared.N` (independent of `sweep_order`), into a joint stat
 `joint_b` at the end of every sweep, together with the FULL committed continuous state
 `(vec(z), x_inv)` and the sweep's worst-distributor residual. A cycle is reported only
 when the whole committed state recurs — identical `joint_b`, continuous state within
-`ω·tol_outer/2`, and no residual decrease — on a sweep that has not converged (the
+`ω·tol_outer/2`, and no strict residual decrease (no slack) — on a sweep that has not converged (the
 predicate and its tolerance argument: `_integer_cycle_hit`). The binaries alone are
 NOT the game state: they routinely settle before `z`/`x_inv` do, and a `b`-only key
 raised false "CYCLED" errors on runs that were still converging (e.g. any damped
@@ -503,9 +529,12 @@ and `x_inv` — never silently continuing toward `max_sweeps`.
 Limitation, stated honestly: no live cycling instance exists in the test suite. With
 objectives separable except through the shared row, each best response lowers the
 mover's own cost and leaves every other player's cost unchanged, so the summed cost is
-a potential that exact Gauss-Seidel best responses cannot cycle on (ties and
-inner-solve noise aside). The predicate is therefore regression-tested directly on
-synthetic converging and cycling histories, and live on a damped converging run that
+a generalized exact potential (ΔΦ = Δcost_i ≤ 0) that exact Gauss-Seidel best
+responses cannot cycle on ABSENT TIES: a recurrent state needs every move in the loop to
+be a tie. That caveat is material — the interior-cap fixtures have tied, degenerate best
+responses — and inner-solve noise is a second escape. The predicate is therefore
+regression-tested directly on synthetic converging (monotone damped AND sign-flipping
+oscillatory contraction) and cycling histories, and live on a damped converging run that
 the old `b`-only key wrongly rejected (`test/test_planning_nash_integer.jl`).
 """
 function run_nash!(
