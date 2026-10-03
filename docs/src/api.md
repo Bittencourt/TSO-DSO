@@ -143,6 +143,8 @@ Pages = [
     "planning/bilevel_kkt.jl",
     "planning/coupling.jl",
     "planning/nash.jl",
+    "planning/feasibility_oracle.jl",
+    "planning/ac_recheck.jl",
 ]
 Order = [:type, :constant, :function]
 ```
