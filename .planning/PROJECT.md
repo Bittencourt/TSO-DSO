@@ -187,6 +187,20 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) COMPLETE 2026-10-03.**
+BILEV-06/07/08 validated: an interior-cap 2-distributor fixture (`x_inv_max=[1.0,1.0]`) exposes a
+genuine GNE continuum (analytic segment `x_inv_1 + x_inv_2 = 0.7` plus free-riding branches);
+`run_nash_probe` seeds may now vary `x_inv0` (the original `z0`-only seeds could not expose it);
+`solve_variational_equilibrium` computes Rosen's VE via one joint model (shared row once) — non-unique
+(a face) on the symmetric fixture, unique on an asymmetric `c_inv=[1.0,1.4]` fixture
+(`x_inv=(0.7,0)`, `z=(0.7,0.7)`, hand-derived); `run_nash!(...; integer=(; K, ...))` runs integer
+investment at N>1 with a fresh `build_master_integer` per best response, full-state cycle detection,
+and an independent brute-force no-profitable-deviation certificate (N=2, K=4). Phase-30 integer-path
+warnings closed (ALMOST_INFEASIBLE confirmation, integer-master L validation + `Q_ν ≥ L` LL-cut
+guard, WR-03 build-time α-bound clamp `min(requested, derived)` on both masters). Both Portuguese
+writeups refreshed with a planning-variant taxonomy (PDFs force-tracked). 3-iteration post-execution
+review/fix cycle (0 critical / 0 warning / 2 info open). Suite 31260/0/0/5 (+169 vs Phase 30); UAT 5/5.
+
 **Phase 30 (SOCP-in-the-Loop Benders on a Multi-Bus Feeder) COMPLETE 2026-10-01.** BILEV-03/04/05
 validated: `solve_stackelberg!` now runs with `ConvexBranchFlow` on `ieee13_modified()` at T=4 (and a
 T=24 Literate demo), converging with a closed gap and bracketing an independently built monolithic SOCP
@@ -463,4 +477,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-01 — Phase 30 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-03 — Phase 31 complete (v4.0 Correctness & Depth)*

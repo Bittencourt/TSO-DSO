@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: verifying
-stopped_at: Completed 31-06-PLAN.md (golden audit + consolidated findings + certified tallies; Phase 31 test-certified but NOT verified -- 2 open critical findings, see 31-FINDINGS.md Known Open Issues)
-last_updated: "2026-10-02T12:34:17.440Z"
-last_activity: 2026-10-02
+status: in_progress
+stopped_at: "Phase 31 VERIFIED (UAT 5/5) after 3-iteration review/fix cycle; suite 31260/0/0/5; next: Phase 32"
+last_updated: "2026-10-03T12:00:00.000Z"
+last_activity: 2026-10-03
 progress:
   total_phases: 12
   completed_phases: 6
@@ -21,17 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 31 — all 7 plans executed, full suite certified green, but NOT verified (2 open critical findings — see Blockers/Concerns below and `.planning/phases/31-gne-nash-fixture-integer-n-1-planning-docs-refresh/31-FINDINGS.md`)
+**Current focus:** Phase 32 (Declarative Power-Flow & Strategy Dispatch) — next to discuss/plan. Phase 31 complete and verified 2026-10-03.
 
 ## Current Position
 
-Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — ALL PLANS EXECUTED, NOT VERIFIED
-Plan: 7 of 7 executed (31-01, 31-02, 31-03, 31-04, 31-05, 31-07, 31-06 — all committed)
-Status: Test-certified (31190/0/0/5) but phase-level verification deferred — 2 open critical
-  findings (CR-01 integer cycle-detection false positive, CR-02 vacuous VE selection on the
-  shipped fixture) require a fix round before this phase can be marked complete/verified.
-  `.planning/phases/31-gne-nash-fixture-integer-n-1-planning-docs-refresh/31-FINDINGS.md`
-Last activity: 2026-10-02
+Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — COMPLETE, VERIFIED 2026-10-03
+Plan: 7 of 7 executed; post-execution 3-iteration code-review/fix cycle closed CR-01/CR-02 + 6 warnings
+Status: Full suite re-certified 31260/0/0/5 at d7cdb34 (+169 vs Phase-30 baseline 31091); UAT 5/5 pass
+  (`31-UAT.md`); review cap reached with 0 critical / 0 warning / 2 info open (`31-REVIEW.md`).
+  Next: Phase 32. `/gsd-secure-phase` not run for Phases 29–31 (security enforcement default-on).
+Last activity: 2026-10-03
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -333,23 +332,16 @@ None yet.
 
 ### Blockers/Concerns
 
-- [v4.0 Phase 31 — NOT VERIFIED, `31-FINDINGS.md`'s "Known Open Issues" section /
-  `31-REVIEW.md`, code review commit `476e165`]: all 7 plans executed and the full suite is
-  certified-green (31190/0/0/5, +99 over Phase-30), but a post-certification code review found
-  **2 OPEN critical findings** that the user stopped autonomous mode before fixing (no fix
-  iteration run): **CR-01** — `run_nash!`'s integer cycle detection (`nash.jl:736-754`) keys
-  only on the joint binary vector `b`, so any run needing ≥3 sweeps with a stable `b` (while
-  `z`/`x_inv` are still converging) raises a FALSE "CYCLED" error; reproduced on the BILEV-07
-  fixture with `integer=(;K=4), ω=0.5`. **CR-02** — on the shipped interior-cap GNE fixture
-  (`c_inv=[1,1]`), every point of the GNE continuum has an identical shared-row multiplier
-  (`π=0.5`), so the VE set equals the full GNE set and `solve_variational_equilibrium`'s
-  "selection" is mathematically vacuous there — the writeup's claim that the VE is
-  distinguished by an identical multiplier is true but vacuous (true of every GNE point, not
-  a distinguishing criterion) on this specific fixture. 6 warnings and 7 info items are also
-  open (WR-01..WR-06, see `31-FINDINGS.md`). **Do not mark Phase 31 complete/verified until a
-  fix round closes CR-01 (cycle-key must include the continuous state, not just `b`) and CR-02
-  (either re-fixture with an asymmetric/strictly-convex investment cost so the VE is unique, or
-  correct the docs/tests to state the VE is non-unique on this fixture).**
+- [v4.0 Phase 31 — RESOLVED 2026-10-03, `31-FINDINGS.md` "Post-review fix cycle" / `31-REVIEW.md`]:
+  the two critical findings that blocked verification are fixed — CR-01 integer cycle detection now
+  keys on the full committed state (binaries + (z, x_inv) within ω·tol_outer/2) and requires a
+  strictly non-decreasing residual (live damped ω=0.5 run converges; sign-flipping −0.9 history not
+  flagged); CR-02 VE non-uniqueness on the symmetric fixture documented (VE = whole split segment,
+  GNE set strictly larger incl. free-riding equilibria) plus a new asymmetric fixture
+  (`c_inv=[1.0,1.4]`) with a unique hand-derived VE `x_inv=(0.7,0)`, `z=(0.7,0.7)`. WR-01..WR-06
+  fixed. Open (info only): docstring/writeup precision — "residual strictly decreases" holds for
+  potential games only; free-riding range should read `p ∈ [0, 0.5)`; the writeup's "não ciclam"
+  sentence omits the ties caveat. Human full read of the two writeup PDFs still pending.
 
 - [v4.0 Phase 28 restatement — `.planning/phases/28-goldens-re-derivation-thesis-reproduction-restatement/28-RESTATEMENT-SUMMARY.md`]:
   every golden moved in Phases 26–27 is attributed (audit script: 13 attributed / 1 allowlisted / 0
@@ -486,7 +478,7 @@ None yet.
   false-positive** inexactness rate (`.planning/spikes/002-ieee123-validity-map/`). A cone-gap ratio
   near 1 is not evidence — genuine structural gaps were 1e3-1e4.
 
-- [Phase 31 plan 01] WR-03 convergence-certificate widening (30-REVIEW.md Option B, _accepted_lb_slack) breaks pre-existing pinned Benders goldens at the project's standard tol=1e-6 -- build_master's WR-05 lb_slack is nonzero (~2e-6) for ANY explicit-bound solve_stackelberg! call since Phase 30's unconditional bounds_ctx wiring, not just near-the-edge bounds. Measured on test_planning_benders.jl's flagship N=1 golden + test_planning_alpha_bounds_stackelberg.jl; very likely affects test_planning_goldens.jl/test_planning_nash.jl/test_planning_certification.jl/test_planning_noninteger.jl too (same fixture pattern, not individually re-run). Reverted, not committed. WR-01 (same plan) IS fixed and committed. Recommended: Option A (build-time clamp in master.jl, out of this plan's file scope) in a follow-up plan (candidate 31-02).
+- [RESOLVED by 31-07, Option A build-time clamp] [Phase 31 plan 01] WR-03 convergence-certificate widening (30-REVIEW.md Option B, _accepted_lb_slack) breaks pre-existing pinned Benders goldens at the project's standard tol=1e-6 -- build_master's WR-05 lb_slack is nonzero (~2e-6) for ANY explicit-bound solve_stackelberg! call since Phase 30's unconditional bounds_ctx wiring, not just near-the-edge bounds. Measured on test_planning_benders.jl's flagship N=1 golden + test_planning_alpha_bounds_stackelberg.jl; very likely affects test_planning_goldens.jl/test_planning_nash.jl/test_planning_certification.jl/test_planning_noninteger.jl too (same fixture pattern, not individually re-run). Reverted, not committed. WR-01 (same plan) IS fixed and committed. Recommended: Option A (build-time clamp in master.jl, out of this plan's file scope) in a follow-up plan (candidate 31-02).
 
 ## Deferred Items
 
@@ -504,8 +496,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-02T12:34:17.418Z
-Stopped at: Completed 31-06-PLAN.md (golden audit + consolidated findings + certified tallies; Phase 31 test-certified but NOT verified -- 2 open critical findings, see 31-FINDINGS.md Known Open Issues)
+Last session: 2026-10-03T12:00:00.000Z
+Stopped at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
 Resume file: None
 
 ## Operator Next Steps

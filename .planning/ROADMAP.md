@@ -313,16 +313,11 @@ variant's game-theoretic nature.
      GNE), refreshed to current code including the integer master.
 **Plans:** 7/7 plans complete
 
-**NOT VERIFIED — known open correctness gaps (post-certification code review, `31-REVIEW.md`,
-2026-10-02):** all 7 plans executed and the full suite is certified-green
-(31190 pass / 0 fail / 0 error / 5 broken), but a code-review pass found 2 OPEN critical
-findings the user stopped autonomous mode before fixing: **CR-01** — integer cycle detection
-(success criterion 3 above) raises a false "CYCLED" error on a genuinely converging run
-(reproduced, `ω=0.5` on the BILEV-07 fixture); **CR-02** — the shipped interior-cap fixture's
-`c_inv=[1,1]` makes the VE set equal the full GNE set, so success criterion 2's "selection" is
-mathematically vacuous on that fixture. See `31-FINDINGS.md`'s "Known Open Issues" section for
-the full review (also 6 warnings, 7 info). **Do not treat this phase as verified correct until
-a fix round closes CR-01/CR-02.**
+**VERIFIED 2026-10-03:** a post-certification code review found 2 critical findings (CR-01 false
+integer-cycle detection on converging runs; CR-02 VE selection vacuous on the symmetric
+interior-cap fixture); both were fixed in a 3-iteration review/fix cycle (cap reached: 0 critical,
+0 warning, 2 info open). Full suite re-certified 31260/0/0/5; UAT 5/5 (`31-UAT.md`). See
+`31-FINDINGS.md` "Post-review fix cycle" and `31-REVIEW.md`.
 
 Plans:
 **Wave 1**
