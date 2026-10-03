@@ -1397,7 +1397,12 @@ end
     # Each player's OWN shared-row multiplier from a run_nash!-style best response
     # (solve_stackelberg! with follower = DistributorView, the other player pinned at
     # the VE) equals −π_capacity: the VE's defining property, checked per player
-    # against the joint solve's single multiplier. MEASURED: player 1's Benders best
+    # against the joint solve's single multiplier. NOTE (iteration-2 review, IN-01):
+    # own_multiplier(z) = 1.2 − z is a fixed function of z on this fixture, so this
+    # check is a REPARAMETRIZATION of the `z ≈ 0.7` assertion (same BR_ATOL), not
+    # independent evidence — it documents the identification μ_i ↔ z-stationarity and
+    # ties it to the joint solve's −π_capacity, nothing more. The same holds for
+    # μ_gne ≈ (0.5, 0.7) below, which equals gne.z ≈ (0.7, 0.5). MEASURED: player 1's Benders best
     # response stops at z_1 = 0.69979 (inside its 1e-6 relative UB gap on a flat
     # optimum), giving μ_1 = 0.50021 — BR_ATOL = 1e-3 is ~5x that.
     BR_ATOL = 1e-3
