@@ -44,15 +44,18 @@
 # Farkas dual ray (`dual_status` stays `NO_SOLUTION`) — a real, previously-unreachable
 # code path this plan's `corner_recourse` ternary search (exploring trial `z` values far
 # beyond what the shared model's own OTHER-distributor-pinned capacity ever permits)
-# triggers routinely. Fixed by adding a third, additive branch: a CONFIRMED
-# `MOI.INFEASIBLE` without a certificate now returns `(; feasible = false, v = NaN,
-# u = fill(NaN, T))` instead of raising — `corner_recourse`'s own `Qfun` only reads
-# `.feasible` (returns `+Inf`, exactly as for a certificate-bearing infeasible trial), so
-# this is transparent to every existing caller; a caller that DOES need a cut
-# (`solve_stackelberg!`'s own outer feasibility-cut branch, `add_feasibility_cut!`) still
-# hits THAT function's pre-existing finiteness guard and fails loudly there instead —
-# never silently accepts a vacuous cut. See `src/planning/coupling.jl`'s own updated
-# `solve_follower!(::DistributorView, ...)` docstring for the full account.
+# triggers routinely. Fixed by adding a third, additive branch, refined by the Phase-31
+# code review (WR-01, 381644a): a `MOI.INFEASIBLE` without a certificate first RE-SOLVES
+# the shared model ONCE WITH PRESOLVE OFF (set and restored on the inner optimizer) and
+# returns that solve's own trusted outcome — feasible, or a genuine certificate. Only if
+# that still yields neither does it return the sentinel `(; feasible = false, v = NaN,
+# u = fill(NaN, T))`. Callers never form a cut from the sentinel: `corner_recourse`'s
+# ternary `Qfun` reads only `.feasible` (+Inf, as for a certificate-bearing infeasible
+# trial); the `T > 1` `_corner_recourse_joint` routes a non-finite certificate to its
+# depth-bounded bisection fallback; and `solve_stackelberg!`'s outer feasibility branch
+# raises a NAMED error before `add_feasibility_cut!` (no cut can be formed there). See
+# `src/planning/coupling.jl`'s `solve_follower!(::DistributorView, ...)` docstring for
+# the full account.
 
 @testitem "planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation, BILEV-07)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
