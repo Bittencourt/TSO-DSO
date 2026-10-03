@@ -101,6 +101,21 @@ function MPC(; H = 6, step = 1, terminal_soc = true, forecast_error = 0.05)
     return MPC(Int(H), Int(step), Bool(terminal_soc), Float64(forecast_error))
 end
 
+# Shared by the constructor and `_run_stochastic` (the stored vector is mutable, so it is
+# re-validated before each run).
+function _check_probabilities(S::Integer, probabilities::AbstractVector)
+    if length(probabilities) != S
+        throw(ArgumentError("Stochastic: probabilities must have length S=$S; got $(length(probabilities))"))
+    end
+    if !all(>(0), probabilities)
+        throw(ArgumentError("Stochastic: probabilities must all be > 0; got $probabilities"))
+    end
+    if !isapprox(sum(probabilities), 1; atol = 1e-8)
+        throw(ArgumentError("Stochastic: probabilities must sum to 1; got sum=$(sum(probabilities))"))
+    end
+    return nothing
+end
+
 """
     Stochastic(; S = 3, probabilities = Float64[], H_oos = 5)
 
@@ -122,15 +137,7 @@ struct Stochastic <: AbstractStrategy
         if isempty(probabilities)
             p = fill(1 / S, S)
         else
-            if length(probabilities) != S
-                throw(ArgumentError("Stochastic: probabilities must have length S=$S; got $(length(probabilities))"))
-            end
-            if !all(>(0), probabilities)
-                throw(ArgumentError("Stochastic: probabilities must all be > 0; got $probabilities"))
-            end
-            if !isapprox(sum(probabilities), 1; atol = 1e-8)
-                throw(ArgumentError("Stochastic: probabilities must sum to 1; got sum=$(sum(probabilities))"))
-            end
+            _check_probabilities(S, probabilities)
             p = copy(probabilities)
         end
         return new(S, p, H_oos)

@@ -341,3 +341,11 @@ end
     @test !signbit(a.pf_ε)
     @test hash(MPC(forecast_error = -0.0)) == hash(MPC(forecast_error = 0.0))
 end
+
+@testitem "REVIEW WR-04 post-construction probability mutation is caught at run time" begin
+    using TSODSO, Test
+    st = Stochastic(probabilities = [0.5, 0.3, 0.2])
+    st.probabilities[1] = 0.9    # bypasses constructor validation (sum != 1)
+    s = Scenario(name = "w4", feeder = :ieee13, T = 9, strategy = st)
+    @test_throws ArgumentError run_stochastic(s)
+end

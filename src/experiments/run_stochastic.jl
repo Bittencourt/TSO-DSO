@@ -143,6 +143,7 @@ guarantee) — every stochastic draw flows through a seeded, independent `sub_se
 never the global RNG.
 """
 function _run_stochastic(s::Scenario, st::Stochastic)
+    _check_probabilities(st.S, st.probabilities)   # `probabilities` is mutable post-construction
     # --- 1. MATERIALIZE, verbatim per run_mpc's/run_scenario's own materialization block
     # (mirrors `src/experiments/mpc_loop.jl`): feeder/pf built ONCE, reused for every
     # scenario below (never rebuilt inside the per-scenario loops). ------------------------
