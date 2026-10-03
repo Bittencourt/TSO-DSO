@@ -70,6 +70,27 @@ Phase 34); status/exception policy (ARCH-08/09, Phase 34); planning-layer balanc
 - `pf_vars` stays a per-formulation NamedTuple (concrete per formulation), held in a parametric or
   `Union` field — no new per-formulation structs.
 
+### Research Refinements (33-RESEARCH.md + user decision 2026-10-03 — supersede looser wording above)
+- Invalid pairs (USER DECISION): `RestrictedBranchFlow`, direct `ConvexBranchFlow`, and `LinDistFlow` on a
+  `MeshedFeeder` throw `ArgumentError`. `DCPowerFlow`, `ACPowerFlow`, and `MeshedFlow` remain allowed on
+  meshed feeders. `MeshedFlow`/`RestrictedBranchFlow` delegate to an INTERNAL shared SOCP body (not the
+  public `contribute!(ConvexBranchFlow(), …)`) so the radial-only guard doesn't block legitimate delegation.
+  Planner must confirm no existing test relies on a now-rejected pair.
+- ONE trait `has_branch_current(pf)` (true: ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, ACPowerFlow;
+  false: LinDistFlow, DCPowerFlow) replaces all five `haskey(pf_vars, :l)` sites — no separate
+  SOCP-exactness trait (that would change AC behaviour).
+- `has_reactive(pf)` matches `haskey(ctx.residuals, :Rq)` for all six formulations; `close_balance!`
+  takes a `label` kwarg (for the stochastic `"scenario $s "` error prefix) and returns the tuple.
+- Typed field name is `agg_device_vars` (NOT `device_vars` — `linear_solve.jl:106` already uses
+  `meta[:device_vars]` for a different value, which stays in `meta`).
+- `ModelContext` = concrete struct with `Union{Nothing,…}` fields (incremental fill); `pf_vars` may be
+  `nothing` (DCPowerFlow never stashes it). Move the `AbstractPowerFlow` include above `ModelContext`.
+  Missing `T`/`feeder` reads must throw, never default silently.
+- Migration may use a TRANSIENT mirror of the old `meta` keys inside the ModelContext-migration wave only
+  if needed to keep the package compiling between plans; the mirror MUST be removed before the phase
+  gate, and the final grep gate (zero `meta[:pf_vars|:T|:feeder|:objective|:agg_device_vars]`) covers
+  `src/`, `test/`, `docs/literate/`, and `scripts/`.
+
 ### Claude's Discretion
 - Whether `ModelContext` becomes parametric (`ModelContext{F,V}`) or uses `Union`/abstract fields,
   provided JET/type-stability does not regress and incremental construction (`ModelContext(model)`
@@ -122,5 +143,6 @@ Phase 34); status/exception policy (ARCH-08/09, Phase 34); planning-layer balanc
   to `close_balance!`.
 - Typing the result-specific `meta` keys (`p_import`, `socp_maxgap`, …).
 - Accessor-function interface for feeders.
+- Balance-closing copies in `pricing/fit.jl` (2) and `experiments/mpc_loop.jl` (2).
 
 </deferred>

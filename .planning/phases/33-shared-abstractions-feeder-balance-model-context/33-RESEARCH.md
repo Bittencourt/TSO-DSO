@@ -526,13 +526,13 @@ Not applicable (internal refactor). JuMP anonymous containers with `base_name` a
 | A5 | `ctx.T` unset sentinel `0` (CONTEXT says `T::Int`) | ModelContext design | Alternative `Union{Nothing,Int}` is safer but widens kwarg defaults |
 | A6 | `iszero`/term-emptiness predicate for "objective untouched" on `QuadExpr` | meta inventory | Verify in REPL during planning; trivial to swap |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Which pairs throw?** Certain: `RestrictedBranchFlow` x `MeshedFeeder` (silent BFS spanning tree). Recommended: `ConvexBranchFlow` direct and
-   `LinDistFlow` x `MeshedFeeder`. Left to the planner/user: `DCPowerFlow`, `ACPowerFlow`. Recommendation: throw only for the three above.
+   `LinDistFlow` x `MeshedFeeder`. Left to the planner/user: `DCPowerFlow`, `ACPowerFlow`. Recommendation: throw only for the three above. RESOLVED (user, 2026-10-03): throw for RestrictedBranchFlow, ConvexBranchFlow (direct), LinDistFlow on MeshedFeeder; DC/AC/MeshedFlow allowed.
 2. **Unlisted balance copies in src**: `pricing/fit.jl:506,570` and `experiments/mpc_loop.jl:1367,1600` are copies of the same block but not among
-   the five ARCH-04 sites. Recommendation: leave (CONTEXT scope), record as deferred alongside the planning copies.
-3. **Field name `device_vars` vs `agg_device_vars`** (A4).
+   the five ARCH-04 sites. Recommendation: leave (CONTEXT scope), record as deferred alongside the planning copies. RESOLVED: left out of scope, deferred.
+3. **Field name `device_vars` vs `agg_device_vars`** (A4). RESOLVED: `agg_device_vars`.
 
 ## Environment Availability
 
