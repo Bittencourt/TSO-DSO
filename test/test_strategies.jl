@@ -94,3 +94,67 @@ end
         @test n in names(TSODSO)
     end
 end
+
+@testitem "ARCH-02 Scenario has no flat strategy fields" begin
+    using TSODSO
+    @test fieldnames(Scenario) == (
+        :name, :feeder, :seed, :T, :population, :price, :allow_export,
+        :pf, :pf_thesis_literal, :pf_ε, :strategy,
+    )
+    s = Scenario(name = "x")
+    @test !hasproperty(s, :ρ)
+    @test !hasproperty(s, :mpc_H)
+    @test !hasproperty(s, :stoch_S)
+    @test !hasproperty(s, :maxiter)
+end
+
+@testitem "ARCH-02 legacy kwargs map identically" begin
+    using TSODSO
+    @test Scenario(name = "x", strategy = :admm, ρ = 50.0, maxiter = 10) ==
+          Scenario(name = "x", strategy = ADMM(ρ = 50.0, maxiter = 10))
+    @test Scenario(name = "x", strategy = :mpc, mpc_H = 3) ==
+          Scenario(name = "x", strategy = MPC(H = 3))
+    @test Scenario(name = "x", strategy = :stochastic, stoch_S = 4, stoch_H_oos = 6) ==
+          Scenario(name = "x", strategy = Stochastic(S = 4, H_oos = 6))
+    p = [0.5, 0.3, 0.2]
+    s = Scenario(name = "x", strategy = :stochastic, stoch_probabilities = p)
+    @test s == Scenario(name = "x", strategy = Stochastic(probabilities = p))
+    @test s.strategy.probabilities == p
+    @test s.strategy.probabilities !== p
+    @test Scenario(name = "x", strategy = :centralized).strategy == Centralized()
+    @test Scenario(name = "x").strategy == Centralized()
+end
+
+@testitem "ARCH-02 foreign and contradictory knobs throw ArgumentError" begin
+    using TSODSO
+    @test_throws ArgumentError Scenario(name = "x", mpc_H = 3)
+    @test_throws ArgumentError Scenario(name = "x", strategy = :admm, mpc_H = 3)
+    @test_throws ArgumentError Scenario(name = "x", strategy = ADMM(), ρ = 10.0)
+    @test_throws ArgumentError Scenario(name = "x", strategy = :mpc, ρ = 10.0)
+    @test_throws ArgumentError Scenario(name = "x", strategy = :stochastic, mpc_H = 2)
+end
+
+@testitem "ARCH-02 unknown strategy symbol, kwarg and feeder throw ArgumentError" begin
+    using TSODSO
+    @test_throws ArgumentError Scenario(name = "x", strategy = :bogus)
+    @test_throws ArgumentError Scenario(name = "x", bogus = 1)
+    @test_throws ArgumentError Scenario(name = "x", feeder = :ieee14)
+end
+
+@testitem "ARCH-02 Scenario value equality" begin
+    using TSODSO
+    a = Scenario(name = "x", strategy = :admm, ρ = 50.0)
+    b = Scenario(name = "x", strategy = ADMM(ρ = 50.0))
+    @test a == b
+    @test hash(a) == hash(b)
+    @test Scenario(name = "x", pf = :restricted_branch_flow, pf_ε = 0.1) !=
+          Scenario(name = "x", pf = :restricted_branch_flow, pf_ε = 0.2)
+    @test a != Scenario(name = "x", strategy = ADMM(ρ = 51.0))
+end
+
+@testitem "ARCH-02 with_strategy re-validates" begin
+    using TSODSO
+    s = TSODSO.with_strategy(Scenario(name = "x"), ADMM())
+    @test s.strategy == ADMM()
+    @test_throws ArgumentError TSODSO.with_strategy(Scenario(name = "x", pf = :ac), ADMM())
+end
