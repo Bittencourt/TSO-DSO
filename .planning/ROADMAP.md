@@ -360,7 +360,7 @@ through `Scenario`, dispatched via one common entry point.
 Plans:
 **Wave 1**
 
-- [ ] 32-01-PLAN.md — strategy types (`Centralized`/`ADMM`/`MPC`/`Stochastic`), `TSODSO.run`, `supports_pf`, details structs
+- [x] 32-01-PLAN.md — strategy types (`Centralized`/`ADMM`/`MPC`/`Stochastic`), `TSODSO.run`, `supports_pf`, details structs
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -499,7 +499,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
-| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 0/TBD | Not started | - |
+| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 1/7 | In Progress|  |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
