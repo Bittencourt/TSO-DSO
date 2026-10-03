@@ -187,6 +187,19 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 32 (Declarative Power-Flow & Strategy Dispatch) COMPLETE 2026-10-03.**
+ARCH-01/02 validated: `Scenario` selects the power-flow formulation via a primitive `pf` selector
+(`:convex_branch_flow` default, `:restricted_branch_flow`, `:lindistflow`, `:ac`; materialized by
+`build_powerflow`) — nothing in `src/experiments` hard-codes `ConvexBranchFlow()`. Solve strategies are
+types (`Centralized`, `ADMM`, `MPC`, `Stochastic` <: `AbstractStrategy`) carrying their own validated
+knobs, dispatched by the un-exported `TSODSO.run(strategy, scenario)` returning a common-shape
+`ScenarioResult` (typed `details`; ADMM fields forwarded, `missing` otherwise). `Scenario` holds
+`strategy` instead of the flat knob bag; legacy flat kwargs still map through an outer constructor;
+`supports_pf` rejects ADMM/MPC/Stochastic with non-default pf at construction (until ARCH-05, Phase 34).
+Filenames flatten only the active strategy's knobs. Numeric goldens bit-identical; full suite
+31782/0/0/5 at 0e1b30a. Accepted residual: `Stochastic.probabilities` stays a mutable `Vector`
+(re-validated per run). Next: Phase 33 (Shared Abstractions).
+
 **Phase 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) COMPLETE 2026-10-03.**
 BILEV-06/07/08 validated: an interior-cap 2-distributor fixture (`x_inv_max=[1.0,1.0]`) exposes a
 genuine GNE continuum (analytic segment `x_inv_1 + x_inv_2 = 0.7` plus free-riding branches);
@@ -477,4 +490,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-03 — Phase 31 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-03 — Phase 32 complete (v4.0 Correctness & Depth)*
