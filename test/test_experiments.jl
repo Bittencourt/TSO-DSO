@@ -227,11 +227,11 @@ end
     # silently gone while savename/hash/reproducibility stay keyed to the stale check).
     # The fix copies on construction; this item pins it.
     p = [0.2, 0.3, 0.5]
-    s = Scenario(name = "wr01-alias", stoch_probabilities = p)   # stoch_S defaults to 3
+    s = Scenario(name = "wr01-alias", strategy = Stochastic(probabilities = p))   # S defaults to 3
     p[1] = 99.0
-    @test s.stoch_probabilities == [0.2, 0.3, 0.5]
-    @test isapprox(sum(s.stoch_probabilities), 1; atol = 1e-8)
-    @test s.stoch_probabilities !== p
+    @test s.strategy.probabilities == [0.2, 0.3, 0.5]
+    @test isapprox(sum(s.strategy.probabilities), 1; atol = 1e-8)
+    @test s.strategy.probabilities !== p
 end
 
 @testitem "WR-02 (phase-22 review): scenario_filename identifies the probability vector" begin
@@ -244,10 +244,10 @@ end
     # digest of a NON-uniform vector into the name; the uniform case stays byte-identical
     # to the pre-fix name (uniform is fully determined by the stoch_S field the name
     # already carries).
-    s_uniform = Scenario(name = "wr02")                                     # default uniform
-    s_uniform_explicit = Scenario(name = "wr02", stoch_probabilities = fill(1 / 3, 3))
-    s_a = Scenario(name = "wr02", stoch_probabilities = [0.2, 0.3, 0.5])
-    s_b = Scenario(name = "wr02", stoch_probabilities = [0.5, 0.3, 0.2])
+    s_uniform = Scenario(name = "wr02", strategy = Stochastic())             # default uniform
+    s_uniform_explicit = Scenario(name = "wr02", strategy = Stochastic(probabilities = fill(1 / 3, 3)))
+    s_a = Scenario(name = "wr02", strategy = Stochastic(probabilities = [0.2, 0.3, 0.5]))
+    s_b = Scenario(name = "wr02", strategy = Stochastic(probabilities = [0.5, 0.3, 0.2]))
 
     fu = TSODSO.scenario_filename(s_uniform)
     fa = TSODSO.scenario_filename(s_a)
@@ -316,6 +316,130 @@ end
             @test haskey(dict, "julia_version")
             @test dict["julia_version"] == string(VERSION)
             @test haskey(dict, "seed")
+        end
+    end
+end
+
+@testitem "ARCH-02 filename identity" begin
+    using TSODSO
+
+    base = (name = "id", seed = 1, T = 24)
+    four = [
+        Scenario(; base..., strategy = Centralized()),
+        Scenario(; base..., strategy = ADMM(ρ = 50.0)),
+        Scenario(; base..., strategy = MPC()),
+        Scenario(; base..., strategy = Stochastic()),
+    ]
+    names = TSODSO.scenario_filename.(four)
+    @test allunique(names)
+    @test occursin("strategy=ADMM", names[2])
+    @test occursin("admm_ρ=", names[2])
+    @test !any(occursin(r"admm_|mpc_|stoch_", names[1]))
+    @test all(f -> sizeof(f) <= 255, names)
+
+    function variants()
+        v = Scenario[Scenario(; base...)]
+        push!(v, Scenario(; base..., name = "id2"))
+        push!(v, Scenario(; base..., seed = 2))
+        push!(v, Scenario(; base..., T = 48))
+        push!(v, Scenario(; base..., allow_export = false))
+        push!(v, Scenario(; base..., pf = :lindistflow))
+        push!(v, Scenario(; base..., pf_thesis_literal = true))
+        push!(v, Scenario(; base..., pf = :restricted_branch_flow, pf_ε = 1e-3))
+        push!(v, Scenario(; base..., pf = :restricted_branch_flow, pf_ε = 2e-3))
+        for kw in (
+            (ρ = 7.0,), (ε_abs = 2e-4,), (ε_rel = 2e-3,), (maxiter = 150,), (τ_ratio = 3.0,), (μ = 5.0,),
+        )
+            push!(v, Scenario(; base..., strategy = ADMM(; kw...)))
+        end
+        push!(v, Scenario(; base..., strategy = ADMM()))
+        for kw in (
+            (H = 8,), (step = 2,), (terminal_soc = false,), (forecast_error = 0.1,),
+        )
+            push!(v, Scenario(; base..., strategy = MPC(; kw...)))
+        end
+        push!(v, Scenario(; base..., strategy = MPC()))
+        push!(v, Scenario(; base..., strategy = Stochastic(S = 4)))
+        push!(v, Scenario(; base..., strategy = Stochastic(H_oos = 6)))
+        push!(v, Scenario(; base..., strategy = Stochastic(probabilities = [0.2, 0.3, 0.5])))
+        return v
+    end
+    vs = variants()
+    fs = TSODSO.scenario_filename.(vs)
+    @test allunique(fs)
+    @test fs == TSODSO.scenario_filename.(variants())   # deterministic
+    @test all(f -> sizeof(f) <= 255, fs)
+
+    f_u = TSODSO.scenario_filename(Scenario(; base..., strategy = Stochastic()))
+    f_n = TSODSO.scenario_filename(Scenario(; base..., strategy = Stochastic(probabilities = [0.2, 0.3, 0.5])))
+    @test !occursin("_p", replace(f_u, "_population" => "", "_price" => "", "_pf" => ""))
+    @test occursin(r"_p[0-9a-f]{16}\.jld2$", f_n)
+end
+
+@testitem "ARCH-02 result_to_dict flat primitives" setup = [Phase8Fixtures] begin
+    using TSODSO
+
+    kw = Phase8Fixtures.minimal_scenario_kwargs()
+    rc = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized))
+    d = TSODSO.result_to_dict(rc)
+    @test d[:strategy] == :centralized
+    @test d[:pf] == :convex_branch_flow
+    @test ismissing(d[:iters])
+    @test !haskey(d, :ρ)
+    @test all(v -> !(v isa TSODSO.AbstractStrategy), values(d))
+
+    ra = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :admm))
+    da = TSODSO.result_to_dict(ra)
+    @test da[:strategy] == :admm
+    @test haskey(da, :ρ)
+    @test da[:iters] isa Int
+    @test all(v -> !(v isa TSODSO.AbstractStrategy), values(da))
+end
+
+@testitem "ARCH-02 run_and_store round-trip" setup = [Phase8Fixtures] begin
+    using TSODSO
+    using DrWatson: wload
+
+    function roundtrip(dir, strat)
+        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        s = TSODSO.Scenario(; kw..., strategy = strat)
+        TSODSO.run_and_store(s; dir = dir)
+        return wload(joinpath(dir, TSODSO.scenario_filename(s)))
+    end
+
+    Phase8Fixtures.with_tempdir() do dir
+        for (strat, lab) in ((:centralized, :centralized), (:admm, :admm))
+            dict = roundtrip(dir, strat)
+            for k in ("strategy", "pf", "welfare", "gitcommit", "julia_version")
+                @test haskey(dict, k)
+            end
+            @test dict["strategy"] == lab
+        end
+    end
+end
+
+@testitem "ARCH-02 mixed-strategy sweep collate" setup = [Phase8Fixtures] begin
+    using TSODSO
+    using DataFrames: DataFrame, nrow
+    using CSV: CSV
+
+    Phase8Fixtures.with_tempdir() do dir
+        params = Dict(
+            :name => "mix", :feeder => :ieee13, :strategy => [:centralized, :admm],
+            :seed => 1, :T => 24,
+        )
+        TSODSO.run_sweep(params; dir = dir)
+        Phase8Fixtures.with_tempdir() do outdir
+            c1 = joinpath(outdir, "a.csv")
+            c2 = joinpath(outdir, "b.csv")
+            df = TSODSO.collate_summary(dir, c1)
+            TSODSO.collate_summary(dir, c2)
+            @test read(c1, String) == read(c2, String)
+            @test nrow(df) == 2
+            @test "pf" in names(df)
+            @test !("path" in names(df))
+            cen = df[df.strategy .== :centralized, :]
+            @test all(ismissing, cen.ρ)
         end
     end
 end
