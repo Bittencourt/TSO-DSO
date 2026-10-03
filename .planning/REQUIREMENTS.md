@@ -101,7 +101,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 - [ ] **ARCH-01**: Researcher can select the power-flow formulation declaratively in `Scenario`,
   and `run_scenario` honours it; nothing is hard-coded to `ConvexBranchFlow()`.
-- [x] **ARCH-02**: Solve strategies are types (`Centralized`, `ADMM`, `MPC`, `Stochastic`)
+- [ ] **ARCH-02**: Solve strategies are types (`Centralized`, `ADMM`, `MPC`, `Stochastic`)
   dispatched by one `run(strategy, scenario)` entry point that returns results with a common shape.
   `Scenario` no longer carries strategy-specific fields in one flat bag.
 - [ ] **ARCH-03**: `Feeder` and `MeshedFeeder` share an `AbstractFeeder` supertype, and consumers
@@ -188,7 +188,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | BILEV-07 | Phase 31 | Complete |
 | BILEV-08 | Phase 31 | Complete |
 | ARCH-01 | Phase 32 | Pending |
-| ARCH-02 | Phase 32 | Complete |
+| ARCH-02 | Phase 32 | Pending |
 | ARCH-03 | Phase 33 | Pending |
 | ARCH-04 | Phase 33 | Pending |
 | ARCH-07 | Phase 33 | Pending |
