@@ -28,127 +28,45 @@ files_reviewed_list:
   - docs/src/api.md
 findings:
   critical: 0
-  warning: 5
-  info: 3
-  total: 8
+  warning: 0
+  info: 2
+  total: 2
 status: issues_found
 ---
 
-# Phase 32: Code Review Report
+# Phase 32: Code Review Report (iteration 2)
 
 **Reviewed:** 2026-10-03
 **Depth:** standard
 **Files Reviewed:** 22
+**Status:** issues_found (info only)
 
 ## Summary
 
-The source files were reviewed in full (strategies, Scenario, materialize, run, store, sweep, mpc_loop, run_stochastic, TSODSO.jl). The tests, docs, scripts and README were only grepped for stale use of the removed flat fields (`s.mpc_H`, `s.stoch_S`, and similar); none was found in executable code.
+Verified the five fixes (b89f8d5, b1ad445, 99853f2, 2f9aed3, a47e758) by reading the diffs and surrounding code. I did not run the test suite. All five are correct, and I found no regressions or new warnings or blockers.
 
-The core design holds up:
-- The legacy-kwarg mapping is correct and detects knobs by supplied keys, not by comparing against defaults.
-- Strategy `==` and `hash` are consistent for ordinary values.
-- Filename flattening keeps the active strategy's knobs and uses `digits = 10` and `safe = true`.
-- `TSODSO.run` does not shadow `Base.run` anywhere else in the module.
-
-I found no blockers. The warnings are validation holes, one bypass of the strategy x pf matrix, and `==`/`hash` edge cases.
-
-## Warnings
-
-### WR-01: `run_mpc` / `run_stochastic` bypass the strategy x pf support matrix
-
-**File:** `src/experiments/mpc_loop.jl:1660`, `src/experiments/run_stochastic.jl:315`
-**Issue:**
-- The wrappers do `st = s.strategy isa MPC ? s.strategy : MPC()`.
-- A `Scenario` built with `strategy = Centralized()` and `pf = :lindistflow`, `:ac` or `:restricted_branch_flow` (or `pf_thesis_literal = true`) is valid at construction.
-- Calling `run_mpc(s)` or `run_stochastic(s)` on it skips `supports_pf` entirely. `_run_mpc` and `_run_stochastic` then call `build_powerflow(s)` and hit exactly the combinations that `supports_pf` documents as failing (measured).
-- The failure is a cryptic solver or model error deep in the loop instead of an `ArgumentError`.
-- Silently substituting `MPC()` defaults for a non-MPC scenario is also surprising. This is a loss of the invariant that Phase 32 introduced.
-
-**Fix:** Re-validate inside the wrappers, or require the right strategy type:
-```julia
-function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
-    st = s.strategy isa MPC ? s.strategy : MPC()
-    s_eff = st == s.strategy ? s : with_strategy(s, st)   # re-runs supports_pf
-    return _run_mpc(s_eff, st; _truth_settlement)
-end
-```
-Do the same in `run_stochastic`. Alternatively, throw an `ArgumentError` when `s.strategy` is not an `MPC` / `Stochastic`.
-
-### WR-02: ADMM constructor accepts NaN and Inf knobs
-
-**File:** `src/experiments/strategies.jl:49-57`
-**Issue:**
-- `NaN <= 0` is `false`, so `ADMM(ρ = NaN)`, `ε_abs = NaN`, `ε_rel = NaN`, `τ_ratio = NaN` and `μ = NaN` all pass validation. `Inf` is also accepted.
-- The run never converges and silently burns `maxiter` iterations.
-- NaN also breaks `==` reflexivity (`ADMM(ρ=NaN) != ADMM(ρ=NaN)`), so `_effective_scenario` always rebuilds the scenario.
-- `Scenario` validates `pf_ε` with `isfinite`, but the ADMM knobs do not.
-
-**Fix:**
-```julia
-all(isfinite, (ρ, ε_abs, ε_rel, τ_ratio, μ)) ||
-    throw(ArgumentError("ADMM: knobs must be finite"))
-```
-Add this before the sign checks.
-
-### WR-03: `Scenario` `==` and `hash` disagree for `pf_ε = -0.0`
-
-**File:** `src/experiments/Scenario.jl:175-185, 361-377`
-**Issue:**
-- `-0.0 >= 0` is true and `-0.0 != 0.0` is false, so `Scenario(...; pf_ε = -0.0)` is accepted for any `pf`.
-- `-0.0 == 0.0` is true, so such a scenario is `==` to the `0.0` one. But `hash(-0.0) != hash(0.0)`, which violates the `==` => same-hash contract and breaks `Dict`/`Set`/`unique` use.
-- The same applies to `ADMM`/`MPC` float knobs.
-- `savename` would also render `pf_ε=-0.0` under restricted flow.
-
-**Fix:** Normalize in the constructor with `pf_ε = pf_ε + 0.0`, which turns `-0.0` into `+0.0`, or hash with `isequal` semantics. The same normalization is cheap for the strategy floats.
-
-### WR-04: `Stochastic.probabilities` is a mutable vector inside a value-hashed immutable
-
-**File:** `src/experiments/strategies.jl:103-130, 147-149`
-**Issue:**
-- The constructor copies the vector defensively, but `st.probabilities[i] = x` afterwards mutates it silently.
-- `Scenario` and `Stochastic` are used as value keys: `hash`, `==`, `scenario_filename`, `_effective_scenario`.
-- A mutation after construction bypasses the sum-to-1 and positivity validation and changes the hash of an object already stored in a `Dict` or `Set`.
-
-**Fix:** Store an immutable container (`NTuple`, or a `Vector` wrapped read-only), or document it as read-only. At minimum have `_strategy_knobs` and `_run_stochastic` re-validate before use.
-
-### WR-05: Filename-truncation fallback uses `Base.hash`, contradicting the file's own reproducibility rationale
-
-**File:** `src/experiments/store.jl:165`
-**Issue:**
-- `_stable_hex64` exists because `Base.hash` is not stable across Julia versions (1.10 vs 1.11+), per its docstring.
-- The over-length fallback nevertheless appends `string(hash(full); base = 16)`, so the same Scenario can get different artifact names on different Julia versions.
-- The hash is also not zero-padded, so its length varies.
-- The path is rarely hit, but when it is, reproducibility and the collision claim are weaker than documented.
-
-**Fix:**
-```julia
-return stem * "_h" * _stable_hex64(codeunits(full)) * ".jld2"
-```
+- WR-01: `run_mpc` and `run_stochastic` now route through `with_strategy` when the substituted default strategy differs from `s.strategy`. This reuses the same pattern as `run(st, s)` and `_effective_scenario`, so the strategy x pf check re-runs. When the strategy already matches, `s` is passed through untouched, so there is no behavior change.
+- WR-02: `isfinite` is checked on all five float knobs before the sign checks, so NaN and Inf are rejected. `maxiter` is an Int and needs no check.
+- WR-03: `x + 0.0` turns `-0.0` into `+0.0` (IEEE: `-0.0 + 0.0 == +0.0`). `Scenario.pf_ε` and `MPC.forecast_error` are the only floats that admit zero. NaN is already rejected by the `isfinite` and range checks. The ADMM knobs must be > 0, and `Stochastic.probabilities` must be > 0, so `-0.0` cannot occur there.
+- WR-04: `_check_probabilities` is shared by the constructor and `_run_stochastic`. Because it uses `all(>(0), ...)`, NaN entries fail it. The length check uses `st.S`, so a vector that was resized after construction is caught.
+- WR-05: `_stable_hex64(codeunits(full))` is deterministic. It is zero-padded to 16 hex digits, matching the `hash_suffix_len` budget (2 + 16 + 5), so the length bound still holds.
 
 ## Info
 
-### IN-01: `strategy::AbstractStrategy` is an abstractly typed field
+### IN-01: `scenario_filename` docstring still says `_h<hash(full)>`
 
-**File:** `src/experiments/Scenario.jl:118`
-**Issue:**
-- Every `s.strategy` access is type-unstable.
-- This is acceptable for a per-run seam but will show up in JET reports.
-- `ScenarioResult.details` is already a small `Union` and is fine.
+**File:** `src/experiments/store.jl:139`
+**Issue:** After WR-05 the fallback suffix is `_h` plus a 16-digit FNV-1a digest from `_stable_hex64`, not `Base.hash`. The docstring is stale and contradicts the stable-digest claim made a few lines above it.
+**Fix:** Replace it with `_h<16-hex FNV-1a digest of full>` and link `_stable_hex64`.
 
-**Fix:** Optionally parametrize `Scenario{S<:AbstractStrategy}`, or note the trade-off in the docs.
+### IN-02: `Stochastic.probabilities` remains a mutable vector inside a value-hashed struct
 
-### IN-02: Docstring shape inconsistency for Stochastic `dadp`
+**File:** `src/experiments/strategies.jl:130,164`
+**Issue:** The WR-04 fix re-validates at run time, but `hash` and `==` still read the live vector. If a caller mutates `probabilities` after a `Scenario` has been placed in a `Dict` or `Set`, the stored hash goes stale. Mutation after a `scenario_filename` call would also yield a different filename. This is a documented, accepted trade-off from the fixer, and the risk is low for a research bench.
+**Fix (optional):** Store an immutable `NTuple` or `SVector`, or document "do not mutate" in the `Stochastic` docstring.
 
-**File:** `src/experiments/run_stochastic.jl:322` versus `src/experiments/run.jl:25-27`
-**Issue:**
-- The Stochastic `run` docstring says `1 x T` row.
-- The `ScenarioResult` docstring says `1 x n`, and the MPC docstring says `1 x n` for the published hours.
-- Make these consistent. `expected_dadp` is a per-hour vector at one bus, so `1 x T` is probably the correct shape for Stochastic.
+---
 
-### IN-03: `MPC` `H ≤ T` and `step ≤ H` are checked only at run time
-
-**File:** `src/experiments/strategies.jl:66-72`
-**Issue:**
-- `Scenario(T = 12, strategy = MPC(H = 24))` constructs fine and only fails inside `_run_mpc`.
-- The comment documents this. The cross-field check (`H ≤ T`) could cheaply live in the `Scenario` inner constructor, alongside the `supports_pf` check, so that sweeps fail before any solve.
-- `step ≤ H` could be validated in the `MPC` constructor itself.
+_Reviewed: 2026-10-03_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: standard_
