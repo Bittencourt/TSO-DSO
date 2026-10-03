@@ -224,6 +224,8 @@ include("diagnostics/plots.jl")
 # (dict_list expansion + diff-friendly CSV collation, consumes store's run_and_store). Each
 # seam is a comment-only STUB in this plan, filled file-disjointly by exactly one later plan
 # (08-02 Scenario+materialize, 08-03 run, 08-04 store+sweep), so Waves 2-4 never touch this file.
+# Phase 32 (ARCH-02): strategy types precede Scenario, which will hold an AbstractStrategy.
+include("experiments/strategies.jl")    # AbstractStrategy/Centralized/ADMM/MPC/Stochastic + run + supports_pf (plan 32-01)
 include("experiments/Scenario.jl")      # primitive-selector Scenario struct (plan 08-02, EXP-01)
 include("experiments/materialize.jl")   # sub_seed + build_feeder/price/population (plan 08-02, INFRA-04)
 include("experiments/run.jl")           # ScenarioResult + run_scenario dispatch (plan 08-03, EXP-01/INFRA-04)

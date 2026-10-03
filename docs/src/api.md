@@ -123,7 +123,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["experiments/Scenario.jl", "experiments/materialize.jl", "experiments/run.jl", "experiments/store.jl", "experiments/sweep.jl"]
+Pages = ["experiments/strategies.jl", "experiments/Scenario.jl", "experiments/materialize.jl", "experiments/run.jl", "experiments/store.jl", "experiments/sweep.jl"]
 Order = [:type, :constant, :function]
 ```
 
