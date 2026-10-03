@@ -1,9 +1,9 @@
 ---
 phase: 32
 slug: declarative-power-flow-strategy-dispatch
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-03
 ---
 
@@ -38,15 +38,15 @@ created: 2026-10-03
 
 | Req | Behavior | Test Type | Automated Command | File Exists | Status |
 |-----|----------|-----------|-------------------|-------------|--------|
-| ARCH-01 | `Scenario(pf=…)` honoured for 4 selectors; `build_powerflow` types/options; default identical to `ConvexBranchFlow()` | integration | quick-run `test_scenario_pf.jl` | ❌ W0 | ⬜ pending |
-| ARCH-01 | `:lindistflow`/`:ac` → `isnan(exact_maxgap)`, no throw; restricted → finite | integration | quick-run `test_scenario_pf.jl` | ❌ W0 | ⬜ pending |
-| ARCH-01 | invalid selectors/options & strategy×pf combos throw `ArgumentError` | unit | quick-run `test_scenario_pf.jl` | ❌ W0 | ⬜ pending |
-| ARCH-02 | strategy constructors validate + keep defaults | unit | quick-run `test_strategies.jl` | ❌ W0 | ⬜ pending |
-| ARCH-02 | `TSODSO.run(strategy, s)` returns common-shape `ScenarioResult`; MPC/Stochastic values equal legacy NamedTuples | integration | quick-run `test_strategies.jl` | ❌ W0 | ⬜ pending |
-| ARCH-02 | legacy kwargs map identically; foreign knob throws; no flat strategy fields on `Scenario` | unit | quick-run `test_strategies.jl` | ❌ W0 | ⬜ pending |
-| ARCH-02 | `scenario_filename` distinct/short/deterministic; JLD2 round-trip; mixed-strategy sweep collate | integration | quick-run `test_experiments.jl` | partial | ⬜ pending |
-| ARCH-01/02 | numeric goldens bit-identical (knife-edge, stochastic, MPC, repro) | integration | quick-run the 4 golden files | ✅ | ⬜ pending |
-| ARCH-02 | Aqua + docs `checkdocs = :exports` | quality | full suite; docs build | ✅ | ⬜ pending |
+| ARCH-01 | `Scenario(pf=…)` honoured for 4 selectors; `build_powerflow` types/options; default identical to `ConvexBranchFlow()` | integration | quick-run `test_scenario_pf.jl` | ✅ | ✅ green |
+| ARCH-01 | `:lindistflow`/`:ac` → `isnan(exact_maxgap)`, no throw; restricted → finite | integration | quick-run `test_scenario_pf.jl` | ✅ | ✅ green |
+| ARCH-01 | invalid selectors/options & strategy×pf combos throw `ArgumentError` | unit | quick-run `test_scenario_pf.jl` | ✅ | ✅ green |
+| ARCH-02 | strategy constructors validate + keep defaults | unit | quick-run `test_strategies.jl` | ✅ | ✅ green |
+| ARCH-02 | `TSODSO.run(strategy, s)` returns common-shape `ScenarioResult`; MPC/Stochastic values equal legacy NamedTuples | integration | quick-run `test_strategies.jl` | ✅ | ✅ green |
+| ARCH-02 | legacy kwargs map identically; foreign knob throws; no flat strategy fields on `Scenario` | unit | quick-run `test_strategies.jl` | ✅ | ✅ green |
+| ARCH-02 | `scenario_filename` distinct/short/deterministic; JLD2 round-trip; mixed-strategy sweep collate | integration | quick-run `test_experiments.jl` | ✅ | ✅ green |
+| ARCH-01/02 | numeric goldens bit-identical (knife-edge, stochastic, MPC, repro) | integration | quick-run the 4 golden files | ✅ | ✅ green |
+| ARCH-02 | Aqua + docs `checkdocs = :exports` | quality | full suite; docs build | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -54,10 +54,10 @@ created: 2026-10-03
 
 ## Wave 0 Requirements
 
-- [ ] `test/test_strategies.jl` — ARCH-02 strategy/dispatch/legacy/flat-field tests
-- [ ] `test/test_scenario_pf.jl` — ARCH-01 pf selection + guards
-- [ ] `test/test_experiments.jl` — update WR-01/WR-02 items, mixed-strategy sweep
-- [ ] migrate `test_mpc_loop.jl` / `test_run_stochastic.jl` Scenario constructions (numeric asserts untouched)
+- [x] `test/test_strategies.jl` — ARCH-02 strategy/dispatch/legacy/flat-field tests
+- [x] `test/test_scenario_pf.jl` — ARCH-01 pf selection + guards
+- [x] `test/test_experiments.jl` — update WR-01/WR-02 items, mixed-strategy sweep
+- [x] migrate `test_mpc_loop.jl` / `test_run_stochastic.jl` Scenario constructions (numeric asserts untouched)
 
 ---
 
@@ -71,11 +71,11 @@ created: 2026-10-03
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 180s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 180s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** certified 2026-10-03 — full suite 31762/0/0/5 at 03b91a5 (log start 16:01:42 > commit 16:01:02); docs build exit 0; knife-edge canary iters=56, welfare=-4823.66604824162
