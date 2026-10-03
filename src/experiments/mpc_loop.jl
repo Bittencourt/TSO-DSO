@@ -1663,7 +1663,8 @@ contract is unchanged (see [`TSODSO.run`](@ref) for the `ScenarioResult` form).
 """
 function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     st = s.strategy isa MPC ? s.strategy : MPC()
-    return _run_mpc(s, st; _truth_settlement)
+    s_eff = st == s.strategy ? s : with_strategy(s, st)   # re-runs the strategy x pf check
+    return _run_mpc(s_eff, st; _truth_settlement)
 end
 
 """

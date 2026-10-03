@@ -315,7 +315,8 @@ for a non-Stochastic strategy). NamedTuple contract unchanged.
 """
 function run_stochastic(s::Scenario)
     st = s.strategy isa Stochastic ? s.strategy : Stochastic()
-    return _run_stochastic(s, st)
+    s_eff = st == s.strategy ? s : with_strategy(s, st)   # re-runs the strategy x pf check
+    return _run_stochastic(s_eff, st)
 end
 
 """

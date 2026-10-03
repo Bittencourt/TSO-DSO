@@ -317,3 +317,10 @@ end
     @test length(unique(names)) == 4
     @test all(endswith(".jld2"), names)
 end
+
+@testitem "REVIEW WR-01 run_mpc/run_stochastic re-validate strategy x pf" begin
+    using TSODSO, Test
+    s = Scenario(name = "w1", feeder = :ieee13, T = 9, pf = :lindistflow)
+    @test_throws ArgumentError run_mpc(s)
+    @test_throws ArgumentError run_stochastic(s)
+end
