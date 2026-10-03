@@ -526,3 +526,30 @@ CR-01) both have known, reproduced correctness gaps — the shipped VE "selectio
 on the shipped fixture, and the cycle detector can raise a false-positive error on a
 genuinely converging integer Nash run. These are carried forward, unresolved, pending a
 dedicated fix round in a later session — not silently accepted as the phase's final state.
+
+## Post-review fix cycle (2026-10-02, `/gsd-code-review 31 --fix --auto`)
+
+The "Known Open Issues" above were addressed in a 3-iteration review/fix loop (cap reached):
+
+- **Iteration 1 fixes** (`876a83d`..`2383876`): CR-01 cycle detection keyed on full committed state
+  (binaries + (z, x_inv) + residual) with a live damped `ω=0.5` integer run that now converges; CR-02
+  VE non-uniqueness on the symmetric fixture documented, new asymmetric fixture `c_inv=[1.0,1.4]` with a
+  unique hand-derived VE `x_inv=(0.7,0)`, `z=(0.7,0.7)`; WR-01 presolve-off Farkas re-solve + NaN
+  certificates routed to bisection; WR-02 writeup `inexact_policy` scope corrected; WR-03 integer
+  equilibrium pinned + independent fresh-QP brute force; WR-04 LL cut built with `max(Q_nu, L)`; WR-05
+  only `:separating` confirms ALMOST/LOCALLY_INFEASIBLE; WR-06 integer-path input validation; IN-01..05.
+- **Iteration 2 fixes** (`deb70be`..`d7cdb34`): cycle predicate requires a strictly non-decreasing
+  residual (no slack; sign-flipping −0.9 regression test); "VE set = GNE set" claim corrected (symmetric
+  fixture also has free-riding GNEs off the segment); up-front `ArgumentError` validation of
+  `integer.α_op_lb`/`α_x_lb`; IN-01/02.
+- **Iteration 3 (final review):** 0 critical / 0 warning / 2 info open (docstring precision: the
+  "residual strictly decreases" claim holds for potential games only; free-riding branch should read
+  `p ∈ [0, 0.5)`). See `31-REVIEW.md`; history in `31-REVIEW.iter{1,2}.md`, `31-REVIEW-FIX{.iter1,.iter2,}.md`.
+
+**Re-certified full suite** (single detached orchestrator run, zero worktree contamination):
+HEAD `d7cdb34`, 28m21s, exit 0 — **31260 pass / 0 fail / 0 error / 5 broken** (+70 vs the pre-fix
+Phase-31 run 31190; +169 vs Phase-30 baseline 31091). Log: `/tmp/claude-1000/p31_certified_suite_d7cdb34.log`.
+No pre-Phase-31 golden moved (golden-move audit from `36e3c1e`: 0 flagged).
+
+The two critical gaps that blocked verification (CR-01, CR-02) are resolved; phase verification is the
+next step.
