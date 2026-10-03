@@ -93,9 +93,17 @@ using TSODSO
 **Run a declarative operational scenario** (seeded, bit-for-bit reproducible):
 
 ```julia
-s = Scenario(name = "demo", feeder = :ieee13, strategy = :admm, seed = 1, T = 24)
-res = run_scenario(s)      # → welfare, DADP prices, exactness gap, ADMM residuals
+s = Scenario(name = "demo", feeder = :ieee13, strategy = ADMM(ρ = 100.0),
+             pf = :convex_branch_flow, seed = 1, T = 24)
+res = TSODSO.run(s.strategy, s)   # → welfare, DADP prices, exactness gap, ADMM details
 ```
+
+`TSODSO.run(strategy, scenario)` is the single entry point (`run_scenario(s)` is a wrapper).
+Strategies: `Centralized()`, `ADMM(...)`, `MPC(...)`, `Stochastic(...)`. The power-flow
+formulation is selected with `pf` (`:convex_branch_flow` default, `:restricted_branch_flow`
+with `pf_ε`, `:lindistflow`, `:ac`; `pf_thesis_literal` for the default). `Centralized`
+accepts all four; ADMM/MPC/Stochastic accept only the default convex formulation until the
+ADMM generalisation phase. The legacy flat-kwarg form (`strategy = :admm, ρ = ...`) remains valid.
 
 **Solve a small Stackelberg–Nash planning game** (N=2 distributors, shared corridor):
 

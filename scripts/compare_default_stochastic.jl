@@ -69,9 +69,7 @@ s_stoch = Scenario(;
     feeder = :ieee13,
     seed = SEED,
     T = T,
-    stoch_S = 5,
-    stoch_probabilities = [0.05, 0.15, 0.30, 0.30, 0.20],
-    stoch_H_oos = 10,
+    strategy = Stochastic(S = 5, probabilities = [0.05, 0.15, 0.30, 0.30, 0.20], H_oos = 10),
 )
 
 println()
@@ -122,8 +120,8 @@ println("max scenario spread at any hour: ", round(maximum(spread); digits = 4))
 # --- 4. FIGURES ---------------------------------------------------------------------------
 # Fixed color per scenario, reused across ALL figures (identity follows the entity across
 # figures — same idiom as docs/literate/stochastic_pv_demand.jl).
-const S = s_stoch.stoch_S
-const H_OOS = s_stoch.stoch_H_oos
+const S = s_stoch.strategy.S
+const H_OOS = s_stoch.strategy.H_oos
 scen_colors = [:dodgerblue, :crimson, :seagreen, :orange, :purple]
 
 # Figure 1 — DADP comparison: default vs the 5 scenario DADPs + expectation; deviations.

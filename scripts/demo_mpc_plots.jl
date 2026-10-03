@@ -3,7 +3,7 @@
 # Demo: the RECEDING-HORIZON CLOSED LOOP (MPC) — an example case + rich diagnostics.
 #
 # Phase 21's `run_mpc(s::Scenario)` re-solves a fixed-length window model (`MpcWindow`, built
-# ONCE) every `mpc_step` hours, publishes only the first interval's DADP dual, propagates the
+# ONCE) every `step` hours, publishes only the first interval's DADP dual, propagates the
 # measured battery/temperature state on the nominal plant, and benchmarks itself against a
 # perfect-foresight day-ahead optimum over the SAME information set. This script runs ONE
 # baseline example case end-to-end, then two single-knob sweeps (forecast-error magnitude and
@@ -68,10 +68,7 @@ s_base = Scenario(;
     name = "mpc-demo-baseline",
     feeder = :ieee13,
     T = T,
-    mpc_H = H,
-    mpc_step = 1,                # re-solve every real hour (classic receding horizon)
-    mpc_terminal_soc = true,
-    mpc_forecast_error = FE,
+    strategy = MPC(H = H, step = 1, terminal_soc = true, forecast_error = FE),  # step=1: re-solve every real hour
 )                               # seed defaults to 1 (deterministic, INFRA-04)
 
 # Certificate-provenance → color (run_mpc's D-04 ladder statuses).
@@ -90,7 +87,7 @@ const CERT_LABELS = Dict(
 
 println("="^78)
 println("MPC receding-horizon closed loop — example case & diagnostics")
-println("  feeder = ieee13, T = $T h, window H = $H h, mpc_step = 1 h, forecast error = ±$(100FE)%")
+println("  feeder = ieee13, T = $T h, window H = $H h, step = 1 h, forecast error = ±$(100FE)%")
 println("="^78)
 
 # ===========================================================================================
@@ -128,8 +125,8 @@ fe_records = [(; fe = FE, regret = r.regret, realized = r.realized_welfare,
     cumdev = last(r.trace.cum_deviation_trace), steps = r.steps)]
 for fe in FE_LEVELS
     fe == FE && continue
-    s = Scenario(; name = "mpc-demo-fe$(fe)", feeder = :ieee13, T = T, mpc_H = H,
-        mpc_step = 1, mpc_terminal_soc = true, mpc_forecast_error = fe)
+    s = Scenario(; name = "mpc-demo-fe$(fe)", feeder = :ieee13, T = T,
+        strategy = MPC(H = H, step = 1, terminal_soc = true, forecast_error = fe))
     rr = run_mpc(s)
     push!(fe_records, (; fe, regret = rr.regret, realized = rr.realized_welfare,
         max_jump = max_jump(rr.trace), mean_jump = mean_jump(rr.trace),
@@ -143,8 +140,8 @@ h_records = [(; H = H, regret = r.regret, max_jump = max_jump(r.trace),
     mean_jump = mean_jump(r.trace), cumdev = last(r.trace.cum_deviation_trace), steps = r.steps)]
 for h in H_LEVELS
     h == H && continue
-    s = Scenario(; name = "mpc-demo-H$(h)", feeder = :ieee13, T = T, mpc_H = h,
-        mpc_step = 1, mpc_terminal_soc = true, mpc_forecast_error = FE)
+    s = Scenario(; name = "mpc-demo-H$(h)", feeder = :ieee13, T = T,
+        strategy = MPC(H = h, step = 1, terminal_soc = true, forecast_error = FE))
     rr = run_mpc(s)
     push!(h_records, (; H = h, regret = rr.regret, max_jump = max_jump(rr.trace),
         mean_jump = mean_jump(rr.trace), cumdev = last(rr.trace.cum_deviation_trace),
@@ -202,7 +199,7 @@ let s = s_base
     therm = only(d for d in mpc_aggs[1].devices if hasproperty(d, :Tin0))
 
     # --- build the window ONCE (run_mpc §3) ---------------------------------------------------
-    o = build_mpc_window(feeder, pf, mpc_aggs; H = s.mpc_H, terminal_soc = s.mpc_terminal_soc,
+    o = build_mpc_window(feeder, pf, mpc_aggs; H = s.strategy.H, terminal_soc = s.strategy.terminal_soc,
         allow_export = s.allow_export)
 
     # Measured state ledger, keyed (bus, kind) — initialized from each device's own t=1 IC.
@@ -219,14 +216,14 @@ let s = s_base
     v_tin = only(vv for vv in vl if haskey(vv, :Tin0))
 
     global fe_plans, fe_applied
-    for t in 1:s.mpc_step:(s.T - s.mpc_H + 1)
-        fe = draw_forecast_error(s.seed, t, s.mpc_forecast_error)
+    for t in 1:s.strategy.step:(s.T - s.strategy.H + 1)
+        fe = draw_forecast_error(s.seed, t, s.strategy.forecast_error)
 
         # IC + terminal-target Parameters (verbatim run_mpc).
         for entry in o.ic_handles
             set_parameter_value(entry.ic_param, measured_state[(entry.bus, entry.kind)])
             if entry.terminal_param !== nothing
-                set_parameter_value(entry.terminal_param, soc_da[entry.bus][min(t + s.mpc_H - 1, s.T)])
+                set_parameter_value(entry.terminal_param, soc_da[entry.bus][min(t + s.strategy.H - 1, s.T)])
             end
         end
         # Per-step device forecast slices (verbatim run_mpc: PV/demand perturbed, ambient not).
@@ -235,21 +232,21 @@ let s = s_base
             for (d, v) in zip(agg.devices, varlist)
                 if haskey(v, :Ppv_param)
                     set_parameter_value.(v.Ppv_param,
-                        Float64[d.Ppv[t + τ - 1] * fe.pv_factor for τ in 1:s.mpc_H])
+                        Float64[d.Ppv[t + τ - 1] * fe.pv_factor for τ in 1:s.strategy.H])
                 end
                 if haskey(v, :Tout_param)
                     set_parameter_value.(v.Tout_param,
-                        Float64[d.Tout[t + τ - 1] for τ in 1:(s.mpc_H - 1)])
+                        Float64[d.Tout[t + τ - 1] for τ in 1:(s.strategy.H - 1)])
                 end
             end
         end
         for handle in o.agg_pdc_handles
             agg = only(a for a in mpc_aggs if a.bus == handle.bus)
             set_parameter_value.(handle.Pdc_param,
-                Float64[agg.Pdc[t + τ - 1] * fe.demand_factor for τ in 1:s.mpc_H])
+                Float64[agg.Pdc[t + τ - 1] * fe.demand_factor for τ in 1:s.strategy.H])
         end
         # Slide λ₀ via set_objective_coefficient — NEVER a Parameter (Pitfall 2).
-        for τ in 1:s.mpc_H
+        for τ in 1:s.strategy.H
             set_objective_coefficient(o.model, o.p_import[τ], -λ₀[t + τ - 1])
         end
 
@@ -265,12 +262,12 @@ let s = s_base
             soc_plan = Float64[value.(v_soc.soc)...],
             tin_plan = Float64[value.(v_tin.Tin)...],
             import_plan = Float64[value.(o.p_import)...],
-            terminal = soc_da[bus][min(t + s.mpc_H - 1, s.T)],
+            terminal = soc_da[bus][min(t + s.strategy.H - 1, s.T)],
         )
         push!(fe_plans, plan)
 
         # APPLY the first interval and propagate the measured state (verbatim run_mpc).
-        n_apply = min(s.mpc_step, s.mpc_H, (s.T - s.mpc_H + 1) - t + 1)
+        n_apply = min(s.strategy.step, s.strategy.H, (s.T - s.strategy.H + 1) - t + 1)
         for τ in 1:n_apply
             abs_hour = t + τ - 1
             for agg in mpc_aggs
@@ -583,7 +580,7 @@ end
 println("\n" ^ 2)
 println("="^78)
 println("Done. Baseline example case summary")
-@printf("  published steps            : %d (always T − H + 1, independent of mpc_step)\n", r.steps)
+@printf("  published steps            : %d (always T − H + 1, independent of step)\n", r.steps)
 @printf("  regret (info-set-fair)     : %.5f\n", r.regret)
 @printf("  max / mean price jump      : %.4f / %.4f\n", max_jump(r.trace), mean_jump(r.trace))
 @printf("  final cumulative deviation : %.5f\n", last(r.trace.cum_deviation_trace))
