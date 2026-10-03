@@ -75,6 +75,24 @@ type unification (Phase 33); meshed feeders as a `Scenario` selector.
 - `run_mpc`/`run_stochastic` keep returning their current NamedTuples (goldens untouched);
   `run(::MPC, s)` / `run(::Stochastic, s)` wrap them into `ScenarioResult`.
 
+### Research Refinements (32-RESEARCH.md, measured — supersede the looser wording above)
+- Valid strategy × pf matrix: `Centralized` accepts all four pf selectors; `ADMM`, `MPC`,
+  `Stochastic` accept ONLY `:convex_branch_flow` with `pf_thesis_literal = false` (ADMM ignores
+  `pf` internally — DsoOpt hard-codes `ConvexBranchFlow()`; MPC/Stochastic fail on
+  restricted/LinDistFlow/AC). Any other combo throws `ArgumentError` at `Scenario` construction.
+- `:centralized` + `:ac` calls `solve_welfare(...; allow_local = true)`; `exact_maxgap = NaN` for
+  `:lindistflow` and `:ac` regardless of any `:socp_maxgap` left in `ctx.meta`.
+- Foreign `pf_*` options (e.g. `pf_ε` with `:convex_branch_flow`) throw like foreign strategy knobs.
+- MPC/Stochastic `dadp` in `ScenarioResult` is a `1×n` matrix row (MPC: published-hour prices;
+  Stochastic: `expected_dadp`), full data kept in `details`.
+- `run_mpc(s)`/`run_stochastic(s)` on a Scenario whose strategy is not MPC/Stochastic fall back to
+  the strategy struct's defaults (`MPC()`/`Stochastic()`); ~20 legacy call sites that pass
+  `mpc_*`/`stoch_*` to a default centralized Scenario migrate to `strategy = MPC(...)` etc.
+- `ScenarioResult` forwarding returns `missing` for ADMM-only properties on non-ADMM results.
+- Stored result dict keeps lowercase `:strategy => :centralized/:admm/:mpc/:stochastic` symbols;
+  only the filename uses the flattened `strategy=ADMM, admm_ρ=…` form.
+- `docs/src/api.md` must include `experiments/strategies.jl` (checkdocs = :exports).
+
 ### Claude's Discretion
 - Exact concrete type of `details` (per-strategy NamedTuple vs small structs), as long as it is
   type-stable enough for JET and serializable by `result_to_dict`.
