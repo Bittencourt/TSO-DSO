@@ -137,7 +137,7 @@ security hash. Uniform vectors add nothing (they are determined by `stoch_S`).
 NOTE: filename STRINGS changed in phase 32 (prefixed knob names, `strategy=`, `pf=`), orphaning
 older `data/sims` artifacts (gitignored, never committed). The NAME_MAX = 255-byte guard is kept
 (rarely hit now): an over-long name is truncated on a UTF-8 boundary and suffixed with
-`_h<hash(full)>`; no information is lost because [`result_to_dict`](@ref) stamps every selector
+`_h<_stable_hex64(codeunits(full))>` (16-hex FNV-1a, stable across Julia versions); no information is lost because [`result_to_dict`](@ref) stamps every selector
 inside the JLD2 itself.
 
 Any caller that needs the path `run_and_store` will use MUST call this helper rather than
