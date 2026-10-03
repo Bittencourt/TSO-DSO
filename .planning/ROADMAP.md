@@ -355,7 +355,16 @@ through `Scenario`, dispatched via one common entry point.
 
   3. `Scenario` no longer carries strategy-specific fields in one flat bag.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 32-01-PLAN.md — strategy types (`Centralized`/`ADMM`/`MPC`/`Stochastic`), `TSODSO.run`, `supports_pf`, details structs
+- [ ] 32-02-PLAN.md — restructured `Scenario` (pf selector + strategy field + legacy kwarg ctor), `build_powerflow`
+- [ ] 32-03-PLAN.md — `ScenarioResult` reshape, `run(::Centralized/ADMM)` with pf wiring and guards
+- [ ] 32-04-PLAN.md — store/sweep identity flattening (`scenario_filename`, `result_to_dict`, `collate_summary`)
+- [ ] 32-05-PLAN.md — `run(::MPC)`/`run(::Stochastic)` wrappers, pf de-hardcoding, test migration
+- [ ] 32-06-PLAN.md — migrate literate docs, scripts, README; `run_and_store` for all strategies
+- [ ] 32-07-PLAN.md — full-suite certification (31260/0/0/5), docs build, VALIDATION sign-off
 **UI hint**: no
 
 ### Phase 33: Shared Abstractions — Feeder, Balance, Model Context
