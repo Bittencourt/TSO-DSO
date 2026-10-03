@@ -1,177 +1,134 @@
 ---
 phase: 31-gne-nash-fixture-integer-n-1-planning-docs-refresh
-reviewed: 2026-10-02T18:00:00Z
+reviewed: 2026-10-02T23:30:00Z
 depth: standard
-iteration: 2
-files_reviewed: 12
+iteration: 3
+files_reviewed: 8
 files_reviewed_list:
-  - src/planning/benders.jl
-  - src/planning/coupling.jl
-  - src/planning/master.jl
-  - src/planning/master_integer.jl
   - src/planning/nash.jl
-  - test/test_planning_benders_integer.jl
-  - test/test_planning_master_integer.jl
+  - src/planning/coupling.jl
+  - src/planning/benders.jl
+  - src/planning/master_integer.jl
   - test/test_planning_nash.jl
   - test/test_planning_nash_integer.jl
-  - test/test_planning_coupling.jl
   - docs/writeups/stackelberg_vs_psr_n1n2.typ
   - docs/writeups/modelo_stackelberg_dso_unico.typ
 findings:
-  critical: 1
-  warning: 2
-  info: 3
-  total: 6
+  critical: 0
+  warning: 0
+  info: 2
+  total: 2
 status: issues_found
 ---
 
-# Phase 31: Code Review Report (iteration 2)
+# Phase 31: Code Review Report (iteration 3, final)
 
-**Reviewed:** 2026-10-02 · **Depth:** standard (fix range `b07bfa9..2383876`) · **Status:** issues_found
+**Reviewed:** 2026-10-02 · **Depth:** standard (fix range `deb70be..d7cdb34`) · **Status:** issues_found (Info only)
 
 ## Summary
 
-This pass re-reviewed the iteration-1 fixes (876a83d..2383876) and checked each item the fixer marked
-"requires human verification". Resolved iteration-1 items are not raised again.
+This pass re-reviewed the iteration-2 fixes (CR-01, WR-01, WR-02, IN-01, IN-02). Resolved items are not raised again. No BLOCKER or WARNING remains. Two Info items cover documentation precision only.
 
-Verified sound:
+### CR-01: cycle predicate with no slack — verified
 
-- **WR-01 (presolve-off re-solve):**
-  - The attribute is read, set and restored with `MOI.get`/`MOI.set` on `unsafe_backend(shared.model)` inside a `finally`.
-  - HiGHS.jl's `MOI.set(::Optimizer, ::RawOptimizerAttribute)` only writes `model.options` and the HiGHS option. It does not clear the solution, and JuMP's dirty flag is never touched, so `value(shared.x_inv[i])` stays queryable.
-  - The CachingOptimizer cache keeps the original value, so a later re-attach cannot leak `"off"`.
-  - Every `shared.model` is HiGHS (`select_optimizer(LP())`).
-  - On the NaN route, `_corner_recourse_joint` now passes `feas_cut = nothing` into the existing depth-bounded bisection (`JOINT_RECOURSE_BISECT_MAX_DEPTH`). That bisection terminates, and a feasible midpoint yields a valid epigraph cut, because the follower-feasible set is convex and `z_best` is feasible.
-- **WR-04 (`max(Q_nu, L)` clamp):**
-  - With `Q_eff = L` the cut reads `θ >= L`, which the epigraph bounds already imply, so it is valid at every corner.
-  - With `Q_nu >= L` the cut is unchanged.
-  - The `master.cuts` consumers (the literate doc and the certification test) rebuild the right-hand side from `Q_nu`, which is now the installed value. `master.cuts` is `Vector{Any}`, so the new `Q_nu_raw` field breaks nothing.
-- **WR-05 (corner-search confirmation):**
-  - Only a `:separating` verdict confirms. `:weak`, `:disagree` and a missing `feas_oracle` rethrow, which fails loudly and is never an invalid `+Inf`.
-  - Accepting `INFEASIBLE_OR_UNBOUNDED` is sound. With z pinned and every device boxed, the welfare objective is bounded. An unbounded `l` with `r = 0` would leave the feasible set unbounded but not the objective, so "or unbounded" can only mean infeasible.
-- **WR-06 (integer-path inputs):**
-  - `_integer_alpha_x_lb` is a valid bound: `x_inv ∈ [0, x_inv_max]`, `x_op = z ∈ [0, y_inv] ⊆ [0, y_max]`, and each term is bounded by `min(0,c)·ub`. It reduces to 0.0 for nonnegative costs.
-  - No caller in `src/`, `docs/literate/` or `scripts/` passes `integer=`. The only callers are in `test/test_planning_nash_integer.jl`, and they were updated, so nothing breaks.
-  - The new key rejection is correct. See WR-02 for the one gap.
-- **CR-02 asymmetric fixture:**
-  - I re-derived and independently re-solved it (scratch `gne_branch.jl`, standalone Clarabel QPs with no TSODSO code).
-  - The VE is `x_inv = (0.7, 0)`, `z = (0.7, 0.7)`, μ = 0.5 for both players, costs `[0.105, −0.595]`. It is unique: μ = 0.7 would violate player 1's x-stationarity, μ = 0 is infeasible, and `x_1 = 1` would force μ = 0.2 < 0.5.
-  - The Gauss-Seidel GNE `(0.35, 0.25)`, `z = (0.7, 0.5)`, μ = (0.5, 0.7) is correct for both orders.
-  - Reading μ_i from z-stationarity through the oracle dual is the right identification. At player 2's kink the follower LP's capacity dual is genuinely degenerate (anything in [0, 0.7] is optimal), so it cannot be used.
-  - The sign `π_capacity = −μ` matches the measured value (−0.4999999998).
-  - But see IN-01: this check adds no evidence beyond the `z` assertion.
-- **The claim that exact best responses cannot cycle is correct, with the stated caveat.**
-  - Player i's best response is computed with j's `(z_j, x_inv_j)` pinned, so the joint state stays feasible for j.
-  - j's cost depends only on j's own variables, so it is unchanged by i's move.
-  - Hence Φ = Σ cost is a generalized exact potential: ΔΦ = Δcost_i ≤ 0, strictly negative unless i's move is a tie.
-  - A recurrent state therefore requires every move in the loop to be a tie, which is exactly the "ties aside" caveat. That caveat is material, because the interior-cap fixtures have tied, degenerate best responses.
-- **WR-03 (brute force):** the hand-derived lattice costs `0, −0.225, −0.12` and the argmin `y = 0.5` check out, and the brute-force QP is genuinely independent of production code.
+The predicate is `residual >= h.residual || continue` at `nash.jl:356`.
 
-One blocker. The new cycle predicate still false-fires, demonstrated with the production `_integer_cycle_hit`. The corrected docs also introduce a new false mathematical claim: "VE set = GNE set" on the symmetric fixture.
+**Missed cycles are always safe.**
+- When the predicate does not fire, the loop continues to the `max_sweeps` `error(...)` at `nash.jl:1021`.
+- `run_nash_probe` deliberately does not catch that error (T-13-10).
+- So a missed genuine cycle still fails loudly. It is never returned as a silent non-converged result.
+- An exact period-p recurrence of a deterministic sweep map has an identical per-sweep residual, so `>=` still fires on it. Only noise-perturbed cycles can slip through, and those hit `max_sweeps`.
 
-## Critical Issues
+**False flags on converging runs: none found for this game's structure.**
+- I simulated linear Gauss-Seidel using `run_nash!`'s residual, damping, state and `atol` semantics, with best-response slopes derived from an SPD quadratic potential.
+  - Setup: N ∈ {3, 4}, ω ∈ {1, 0.7, 0.5}, clamped to [0, 2].
+  - Result: 300k trials, zero false flags.
+  - Script: scratch `gs_sim3.jl`. It uses a verbatim copy of `_integer_cycle_hit`.
+- The general claim does fail outside potential games (see IN-01).
 
-### CR-01: `_integer_cycle_hit` still flags converging runs as CYCLED (oscillatory contraction; demonstrated on the production predicate)
+**The new regression test discriminates.**
+- The oscillatory history with c = −0.9 converges at sweep 51, because r_k = 0.019·0.9^(k−1) ≤ 1e-4 first holds there. The ≥ 44 sweep guard is therefore met.
+- The old `- atol` slack fires at sweep 44, so the test fails on the old predicate and passes on the new one.
+- The ω < 1 caveat (`x_inv` is re-solved, not interpolated) and the ties caveat in the docstring are accurate.
 
-**File:** `src/planning/nash.jl:319-334` (docstring claim at 300-311)
+### WR-01: free-riding equilibria — verified mathematically
 
-**Issue:**
-- **The broken claim:** the docstring says "condition 3 independently rejects any contracting trajectory". That holds only when the residual drops by more than `atol = ω·tol_outer/2` between the matched sweeps. The "committed state moves" argument covers only consecutive sweeps, but `history` is scanned for any earlier sweep `h`.
-- **The failing case:** a trajectory contracting with an oscillating factor c (d_k = c^k e, r_k = (1+|c|)|d_{k−1}|), compared against sweep k−2:
-  - the two-sweep state difference is (1−c²)|d_{k−2}|;
-  - the residual drop is (1−c²)·r_{k−2}.
-  - Near the end of the run, with r slightly above `tol_outer`, both fall under `atol` whenever |c| ≳ 0.82 at ω = 1.
-  - Binaries are typically already settled by then, so condition 1 holds too, and the predicate reports a cycle on a run that converges a few sweeps later.
-- **Reproduced (scratch `cycle_osc.jl`):** the production `TSODSO._integer_cycle_hit` was fed the synthetic history c = −0.9, z* = 0.7, e = 0.01, ω = 1, tol_outer = 1e-4, fixed `b`. It returns `FALSE CYCLE at sweep 44 (matches sweep 42): r=2.05e-4, |Δs|=2.27e-5`. The same run converges about 6 sweeps later.
-- **Why it can happen live:** a negative-slope Gauss-Seidel sweep map arises when one player's best response increases in the other's committed state while the other's decreases. That is free-riding on pooled capacity, exactly the mechanism of this game.
-- **Secondary:** the `ω·tol_outer/2` separation argument (docstring 306-311) assumes the committed state moves by ω × residual. Under ω < 1 only `z` is damped. `x_inv_committed` is re-solved at the damped `z`, so when the residual is `x_inv`-dominated even consecutive sweeps are not guaranteed to differ by `atol`.
-- **Missed cycles:** the other direction is acceptable. A genuine cycle whose recurring states differ by inner-solve noise (about 2–3e-4 measured, against `atol = 5e-5`) goes undetected and still fails at `max_sweeps`, as documented.
+I re-derived the full equilibrium set of the symmetric fixture from the per-player KKT conditions:
+- z_i = 1.2 − μ_i
+- c_inv ≥ 2μ_i, with equality when 0 < x_i < 1
+- capacity row z_1 + z_2 ≤ 2(x_1 + x_2)
 
-**Fix:** drop the tolerance slack in the no-progress test so that any strict residual decrease vetoes the match. Missed detections stay safe.
-```julia
-for h in history
-    h.joint_b == joint_b || continue
-    length(h.state) == length(state) || continue
-    maximum(abs.(state .- h.state)) <= atol || continue
-    residual >= h.residual || continue          # no slack: any decrease = progress
-    return h.sweep
-end
-```
-A stricter alternative also requires that no sweep between `h` and `k` had a lower residual than `h.residual`. Add the oscillatory-contraction history above to the synthetic predicate test as a must-not-fire case, and correct the docstring's "rejects any contracting trajectory" and ω < 1 separation claims.
+**GNE set.** It is exactly the union of:
+- the segment x_1 + x_2 = 0.7, z = (0.7, 0.7), μ = (0.5, 0.5);
+- two free-riding branches: x_j = 0, μ_j = p ∈ [0, 0.5], z_j = 1.2 − p, x_i = (1.9 − p)/2 ∈ [0.7, 0.95].
 
-## Warnings
+**Other cases are infeasible.**
+- If any x_i = 1, then μ_i ≥ 0.5, so z_1 + z_2 ≤ 1.9 < 2(1 + x_j). The row is slack, which forces μ = 0, a contradiction.
+- If both x = 0 with p < 0.5, then z > 0 cannot satisfy z_1 + z_2 ≤ 0, so it is infeasible.
 
-### WR-01: New false claim: "the VE set equals the GNE set" on the symmetric interior-cap fixture (and the GNE set itself is mis-stated)
+**VE set.** A common μ forces μ = 0.5, so the VE set is exactly the segment.
 
-**Files:**
-- `src/planning/nash.jl:357-361, 1221-1227, 1264-1269`
-- `docs/writeups/stackelberg_vs_psr_n1n2.typ:227, 233`
-- `test/test_planning_nash.jl:695-700, 1174-1186, 1303-1306`
+**Wording.** The corrected wording is correct in:
+- `nash.jl` at all 3 sites
+- both test files
+- `stackelberg_vs_psr_n1n2.typ`
+- `modelo_stackelberg_dso_unico.typ` ("subconjunto ESTRITO dos GNEs … equilíbrios de carona com multiplicadores desiguais")
 
-**Issue:**
-- **What the docs claim:** on `c_inv = [1,1]`, `x_inv_max = [1,1]` the GNE set is `{(x_1, 0.7 − x_1)}` with `z = (0.7, 0.7)`, and "o conjunto de VEs É o conjunto de GNEs … não há 'seleção' alguma nesse fixture".
-- **Why it is false:** a free-riding branch exists, the same branch the new asymmetric derivation describes for player 2 ("x_2 = 0, μ_2 = p").
-  - x_2 = 0, μ_1 = 0.5 ⇒ z_1 = 0.7.
-  - μ_2 = p ∈ [0, 0.5] ⇒ z_2 = 1.2 − p.
-  - x_1 = (1.9 − p)/2 ∈ [0.7, 0.95], below the cap of 1.
-- **Checked independently:** standalone Clarabel QPs (scratch `gne_branch.jl`) at `x = (0.95, 0)`, `z = (0.7, 1.2)`:
-  - player 1's best response is `x_1 = 0.95`, `z_1 = 0.70`, μ_1 = 0.5;
-  - player 2's best response is `x_2 = 0`, `z_2 = 1.19996`, μ_2 ≈ 0.
-- **Consequence:** this is a GNE off the claimed segment, with unequal multipliers, so it is not a VE. The VE set (the segment, μ = 0.5) is a strict subset of the GNE set, and the VE does select on this fixture: it excludes the free-riding branch.
-- **What is still correct:** the narrower claims hold. The segment points all share μ = 0.5, the VE is non-unique, and the returned point is solver-dependent. `modelo_stackelberg_dso_unico.typ:192` ("o conjunto de VEs é o próprio continuum") is also correct.
-- **Why it matters here:** this is the thesis writeup, and the project treats exact traceability of every modelling claim as a hard requirement.
+**Leftovers.** A grep for the old "VE set = GNE set", "nothing is selected" and "seleção alguma" wording finds nothing in src, test, docs or scripts.
 
-**Fix:**
-- Restate in all listed places: "the VE set is the whole split segment `x_1 + x_2 = 0.7`, `z = (0.7, 0.7)` (non-unique, solver-dependent point); the GNE set is strictly larger and also contains free-riding equilibria `x_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]`, with unequal multipliers."
-- Remove "nothing is selected" and "VE set = GNE set", including from the testitem name at test/test_planning_nash.jl:1186.
-- Correct the test comment at 697 ("the GNE set is …") to "the GNE set contains …".
+**Minor imprecision.** See IN-02 (endpoint p = 0.5).
 
-### WR-02: Newly honoured `integer.α_op_lb` is not validated at `run_nash!`'s boundary; `α_x_lb = :auto` gives a MethodError
+### WR-02: boundary validation of `α_op_lb` and `α_x_lb` — verified
 
-**File:** `src/planning/nash.jl:574-579, 732`
+- Both guards (`nash.jl:615-632`) run inside the `integer !== nothing` block. That block comes before the seed `write_back!` and before any `optimize!` or `solve_*` call.
+- Rejected inputs:
+  - `α_op_lb`: NaN, ±Inf, any Symbol other than `:auto`, and Strings.
+  - `α_x_lb`: NaN, ±Inf, `:auto`, and Strings. Previously `:auto` hit `MethodError: isfinite(::Symbol)`.
+- An omitted `α_x_lb` still uses the derived default `_integer_alpha_x_lb`.
+- A finite `α_op_lb` above the derived optimum is still rejected downstream in `build_master_integer`'s explicit branch (`master_integer.jl:285`), and no solve happens before that rejection either.
+- The tests cover all of these cases.
 
-**Issue:**
-- **The docstring's promise:** guards run "BEFORE any solve call".
-- **`α_op_lb` is unchecked:** `integer.α_op_lb` is now forwarded (`get(integer, :α_op_lb, :auto)`), but nothing at the boundary validates it.
-  - **NaN** passes `build_master_integer`'s explicit-bound branch (`NaN > d.optimum + slack` is false) and is then installed, because `min(NaN, d.bound) === NaN`, at master_integer.jl:288.
-  - **`-Inf`** is installed as the bound, so `L = -Inf`. It surfaces only after a full inner Benders loop, as `add_ll_cut!`'s "L must be finite".
-- **`α_x_lb = :auto` is mishandled:** the existing guard `isfinite(get(integer, :α_x_lb, 0.0))` throws `MethodError: isfinite(::Symbol)`, not an `ArgumentError`. `build_master_integer` accepts `:auto` for this key, and here it can never work, because `bounds_ctx.follower_kwargs = nothing`.
+### IN-01 and IN-02 of iteration 2 — resolved
 
-**Fix:** in the `integer !== nothing` guard block:
-```julia
-a_op = get(integer, :α_op_lb, :auto)
-(a_op === :auto || (a_op isa Real && isfinite(a_op))) || throw(ArgumentError(
-    "run_nash!: integer.α_op_lb must be :auto or a finite Real, got $(repr(a_op))"))
-a_x = get(integer, :α_x_lb, 0.0)
-(a_x isa Real && isfinite(a_x)) || throw(ArgumentError(
-    "run_nash!: integer.α_x_lb must be a finite Real (no :auto — a DistributorView " *
-    "follower has no derivation), got $(repr(a_x))"))
-```
-and add `NaN`/`-Inf`/`:auto` cases to the WR-06 guard testitem.
+- The test comment now states the reparametrization.
+- The test-file header describes the presolve-off re-solve flow, consistent with `coupling.jl`.
 
 ## Info
 
-### IN-01: The CR-02 "own shared-row multiplier" check is a reparametrization of the `z` check, not independent evidence
+### IN-01: The docstring's "on a contracting trajectory the residual strictly decreases" is stated too broadly
 
-**File:** `test/test_planning_nash.jl` (CR-02 testitem, `own_multiplier` and its uses)
+**File:** `src/planning/nash.jl:324-325` (and "the residual … of a converging run decreases", `:311-312`)
 
-`own_multiplier(z) = −π_oracle(z) − c_y − c_op = W′(z) − λ₀ − c_y − c_op = 1.2 − z` is a fixed function of `z`. So `own_multiplier(result_i.z) ≈ 0.5` is exactly `result_i.z ≈ 0.7`, which the line above already asserts with the same `BR_ATOL`. The same holds for `μ_gne ≈ (0.5, 0.7)`, which equals `gne.z ≈ (0.7, 0.5)`. The identification is mathematically right, since z-stationarity pins μ_i. But the comment's framing ("the VE's defining property, checked per player") overstates what the test certifies. Either say so in the comment, or add a genuinely independent multiplier read, for example the dual of the shared row in a standalone per-player QP like scratch `gne_branch.jl`, which gives −0.5 for both players at the VE.
+**Issue:**
+- **Not a property of contraction:** a strictly decreasing ∞-norm residual is not a property of contracting Gauss-Seidel trajectories in general.
+- **Counterexample (verbatim predicate copy, scratch `gs_sim2.jl`):**
+  - N = 3, linear best responses, ω = 1, residual and state built exactly as in `run_nash!`.
+  - Slopes `S = [-0.783 0.557 0.48; -0.704 0.241 -1.108; 0.91 0.998 -0.912]`, `z0 = [0.7339, 0.7154, 0.6945]`.
+  - The trajectory converges at sweep 24.
+  - At sweep 21 the state is within `atol` of sweep 19, and the residual has grown from 1.07e-4 to 2.15e-4.
+  - The predicate therefore reports a false CYCLED at sweep 21.
+- **Why it does not happen in `run_nash!`:**
+  - Those slopes are not potential-consistent: sign(S_ij) ≠ sign(S_ji).
+  - `run_nash!`'s game is a generalized potential game: separable costs, coupling only through the shared row.
+  - With potential-consistent slopes, 300k trials gave no false flag.
+- **Not proven in general:** this is evidence, not a proof. Inexact inner best responses also break the exact-potential argument. The docstring itself notes about 2e-4 deviations of the Benders best response on flat optima.
 
-### IN-02: Stale test-file header describes the pre-WR-01 NaN-sentinel flow
+**Fix:** scope the sentence. For example: "for exact best responses of this generalized-potential game the residual has not been observed to rise near convergence (empirically, no false flag across 300k potential-consistent linear Gauss-Seidel trials). It is NOT a general property of contracting maps: non-potential N ≥ 3 sweeps can transiently increase the ∞-norm residual."
 
-**File:** `test/test_planning_nash_integer.jl:40-56`
+### IN-02: The free-riding branch is described as "off the segment" with "unequal multipliers" for p ∈ [0, 0.5], but p = 0.5 lies on the segment with equal multipliers
 
-The header still says that a certificate-less infeasibility returns the NaN sentinel directly, and that a cut-needing caller "hits THAT function's pre-existing finiteness guard". Since 381644a the shared model is first re-solved without presolve. The T>1 corner search bisects, and `solve_stackelberg!` raises a named error before `add_feasibility_cut!`. Update the header to match `coupling.jl`'s docstring.
+**Files:**
+- `src/planning/nash.jl:386-389, 1281-1284, 1328-1331`
+- `docs/writeups/stackelberg_vs_psr_n1n2.typ:227, 233`
+- `test/test_planning_nash.jl:697-700, 1183-1185`
 
-### IN-03: The WR-05 strictness trades a possibly-invalid +Inf for a hard abort near feasibility boundaries
+**Issue:** at p = 0.5 the branch gives x_j = 0, z_j = 0.7, x_i = 0.7. That is the segment's endpoint, with μ = (0.5, 0.5). The statements are true of every point except that endpoint.
 
-**File:** `src/planning/benders.jl:322-331`
-
-When the per-corner minimizer sits on the oracle's feasibility boundary, the ternary or Kelley trials approach it from outside. A Clarabel `ALMOST_INFEASIBLE` there, with `v` in the `:weak` band, now aborts the whole best response or Nash run. The behaviour is sound, because it fails loudly, but it is a new liveness risk on boundary-binding fixtures. None of the certified batches hit it. If it appears, the documented alternative is to bisect toward `z_best`, as the no-certificate path already does, rather than rethrow.
+**Fix:** write `p ∈ [0, 0.5)` wherever the text says "off the segment" or "unequal multipliers". Alternatively, add a note that the branch meets the segment at its endpoint p = 0.5.
 
 ---
 
 _Reviewed: 2026-10-02_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
-_Scratch evidence (not committed): `/tmp/claude-1000/-home-pedro-programming-TSO-DSO/981f784b-8b89-4fdd-b64d-2c7c39f9b271/scratchpad/cycle_osc.jl`, `gne_branch.jl`_
+_Scratch evidence (not committed): `/tmp/claude-1000/-home-pedro-programming-TSO-DSO/981f784b-8b89-4fdd-b64d-2c7c39f9b271/scratchpad/gs_sim2.jl`, `gs_sim3.jl`, `cycle_iter3_fast2.jl`_
