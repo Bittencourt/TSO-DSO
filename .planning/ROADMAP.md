@@ -499,7 +499,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
-| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete   | 2026-10-03 |
+| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
