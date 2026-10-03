@@ -1,192 +1,160 @@
 # src/experiments/run.jl
 #
-# SEAM: ScenarioResult + run_scenario strategy dispatch + normalization (EXP-01 / INFRA-04).
-# OWNER: plan 08-03 (this plan).
+# SEAM: ScenarioResult + `TSODSO.run` strategy method dispatch + normalization (EXP-01 / INFRA-04,
+# reshaped in Phase 32 / ARCH-01, ARCH-02).
 #
-# THE FIRST TRUE END-TO-END CAPABILITY of the phase: `run_scenario(s::Scenario)` materializes
-# the heavy objects (08-02's `build_feeder`/`build_price`/`build_population`/`sub_seed`) and
-# DISPATCHES on `s.strategy` — `:centralized` -> `solve_welfare` + `extract_dlmp`, `:admm` ->
-# `solve_admm` — then NORMALIZES both into one comparable `ScenarioResult` (welfare, node×T
-# DADP, exactness certificate, iters/final residuals for ADMM, timings). An unknown strategy
-# throws `ArgumentError`. This is PURE ORCHESTRATION over already-validated Phase 3-7 builders
-# (RESEARCH Summary / Pattern 1) — no new model, no new solver named anywhere (INFRA-02).
+# Phase 32 turns the former symbol dispatch into METHOD dispatch on the strategy type:
+# `run(::Centralized, s)` -> `solve_welfare` + `extract_dlmp`, `run(::ADMM, s)` -> `solve_admm`,
+# each normalized into one comparable `ScenarioResult` (common fields + typed `details`). The
+# power-flow formulation comes from `build_powerflow(s)` — nothing is hard-coded. `run_scenario`
+# stays as a thin wrapper. MPC/Stochastic methods live in mpc_loop.jl / run_stochastic.jl.
 #
-# Because the seed is threaded end-to-end (08-02's `sub_seed`) and the Clarabel path is
-# single-threaded, a same-Scenario same-seed run is bit-for-bit identical within one process —
-# the load-bearing INFRA-04 reproducibility gate goes GREEN here. Timings are recorded on the
-# result but EXCLUDED from every equality comparison (RESEARCH Anti-Pattern: wall-clock is
-# non-deterministic and must never enter a reproducibility check).
+# PURE ORCHESTRATION over already-validated builders — no new model, no solver named anywhere
+# (INFRA-02). Because the seed is threaded end-to-end (`sub_seed`) and the conic path is
+# single-threaded, a same-Scenario same-seed run is bit-for-bit identical within one process
+# (INFRA-04). Timings are recorded but EXCLUDED from every equality comparison.
 #
-# `run_scenario` is PATH-FREE — it returns a `ScenarioResult`, never writes a file (persistence
-# is a separate seam, 08-04's `store.jl`).
-#
-# Task 1 landed the `ScenarioResult` record + the `:centralized` branch (end-to-end slice +
-# the INFRA-04 same-seed reproducibility gate). THIS TASK (Task 2) adds the `:admm` branch
-# (dispatching to `solve_admm`, whose `dadp` is ALREADY node×T — RESEARCH A5 — matching the
-# `:centralized` shape) and the terminal `else` strategy guard (throws `ArgumentError` naming
-# the two valid strategies; threat T-08-08). No solver is named anywhere in this file
-# (INFRA-02) — `solve_admm`/`solve_welfare` route through `select_optimizer` internally.
+# `run` is PATH-FREE — it returns a `ScenarioResult`, never writes a file (see `store.jl`).
 
 """
     ScenarioResult
 
-The normalized, comparable outcome of [`run_scenario`](@ref) — the SAME schema for both the
-`:centralized` and `:admm` strategies (EXP-01), so results are directly comparable across
-strategies and across sweep runs (EXP-02).
+The normalized, comparable outcome of [`run_scenario`](@ref) / `TSODSO.run`.
 
 # Fields
 
-  - `scenario::Scenario` — the input spec this result was produced from (provenance).
-  - `welfare::Float64` — the social-welfare objective (thesis eq. 3.38) at the converged/solved
-    optimum.
-  - `dadp::Matrix{Float64}` — the day-ahead dynamic price, normalized to `(n_load_nodes, T)`
-    with rows in ASCENDING load-bus order — the SAME shape for `:centralized`
-    (`extract_dlmp(ctx)[load_buses, :]`) and `:admm` (already node×T, RESEARCH A5), making the
-    two strategies' DADP directly comparable.
-  - `exact_maxgap::Float64` — the PF-04 SOC-cone exactness certificate (`ctx.meta[:socp_maxgap]`
-    for `:centralized`, `r.exact_maxgap` for `:admm`).
-  - `iters::Union{Missing,Int}` — ADMM iteration count; `missing` for `:centralized` (no
-    iteration — a single monolithic solve).
-  - `final_r::Union{Missing,Float64}`, `final_s::Union{Missing,Float64}` — the FINAL ADMM
-    primal/dual residual norms (`last(residuals.primal_trace)`/`last(residuals.dual_trace)`);
-    `missing` for `:centralized`.
-  - `reactive_consensus_mode::Union{Missing,ReactiveMode}` — WR-01 (phase-26 review): the
-    RESOLVED `ReactiveMode` (`OFF`/`CERTIFIED`/`LIVE`) that `:admm` actually ran with, threaded
-    straight out of [`solve_admm`](@ref)'s own return tuple. `build_dso_opt`/`solve_admm` resolve
-    a SMART default (PM-03, `_any_flexible_reactive`) whenever `reactive_consensus` is omitted, so
-    two runs of the IDENTICAL `Scenario` at two different commits of this package can silently
-    diverge on this axis with no other field changed; recording the resolved mode here makes that
-    otherwise-invisible provenance gap recoverable from the `ScenarioResult` alone. `missing` for
-    `:centralized` (no ADMM reactive-consensus concept applies to the monolithic solve).
-  - `elapsed::Float64` — wall-clock seconds for the full materialize+solve (`@elapsed`).
-    NON-REPRODUCIBLE: recorded for reporting only, NEVER compared in a reproducibility/equality
-    check (RESEARCH Anti-Pattern; threat T-08-07).
+  - `scenario::Scenario` — the scenario actually run (provenance).
+  - `welfare::Float64` — headline social welfare. Centralized/ADMM: the optimum (eq. 3.38).
+    MPC: `realized_welfare` (truth-settled). Stochastic: expected `in_sample.welfare`.
+  - `dadp::Matrix{Float64}` — day-ahead dynamic price. Centralized/ADMM: `(n_load_nodes, T)`,
+    rows in ascending load-bus order. MPC: published-hour prices as a `1 x n` row. Stochastic:
+    `expected_dadp` as a `1 x n` row at the first aggregator's bus.
+  - `exact_maxgap::Float64` — SOC-cone exactness certificate. `NaN` means "not applicable":
+    LinDistFlow and AC have no SOC cone; MPC has no numeric gap.
+  - `elapsed::Float64` — wall-clock seconds (NON-REPRODUCIBLE; never compared).
+  - `details` — `nothing` (Centralized), `ADMMDetails`, `MPCDetails` or `StochasticDetails`.
+
+The ADMM-only properties `iters`, `final_r`, `final_s`, `reactive_consensus_mode` are forwarded
+from `details` by `getproperty` and are `missing` for non-ADMM results.
 """
 struct ScenarioResult
     scenario::Scenario
     welfare::Float64
     dadp::Matrix{Float64}
     exact_maxgap::Float64
-    iters::Union{Missing, Int}
-    final_r::Union{Missing, Float64}
-    final_s::Union{Missing, Float64}
-    reactive_consensus_mode::Union{Missing, ReactiveMode}
     elapsed::Float64
+    details::Union{Nothing, ADMMDetails, MPCDetails, StochasticDetails}
 end
+
+const _ADMM_FORWARDED = (:iters, :final_r, :final_s, :reactive_consensus_mode)
+
+function Base.getproperty(r::ScenarioResult, name::Symbol)
+    if name in _ADMM_FORWARDED
+        d = getfield(r, :details)
+        return d isa ADMMDetails ? getfield(d, name) : missing
+    end
+    return getfield(r, name)
+end
+
+function Base.propertynames(r::ScenarioResult, private::Bool = false)
+    return (fieldnames(ScenarioResult)..., _ADMM_FORWARDED...)
+end
+
+# Shared, UNCHANGED materialize sequence (seeds / sub_seed tags / call order: INFRA-04).
+function _materialize(s::Scenario)
+    feeder = build_feeder(s.feeder)
+    profiles = generate_profiles(; seed = sub_seed(s.seed, :profiles), T = s.T)
+    λ₀ = build_price(s.price, s.T, profiles)
+    aggs = build_population(
+        s.population,
+        feeder,
+        s.feeder,
+        profiles,
+        sub_seed(s.seed, :population),
+    )
+    return feeder, λ₀, aggs
+end
+
+_effective_scenario(st::AbstractStrategy, s::Scenario) = st == s.strategy ? s : with_strategy(s, st)
+
+"""
+    TSODSO.run(::Centralized, s::Scenario) -> ScenarioResult
+
+Monolithic solve with the power flow selected by `s.pf` (via `build_powerflow`). AC is solved with
+`allow_local = true` (a local NLP optimum is `LOCALLY_SOLVED`, refused by default).
+`exact_maxgap` is the SOC certificate for the convex/restricted formulations and `NaN` for
+LinDistFlow/AC.
+"""
+function run(st::Centralized, s::Scenario)
+    s_eff = _effective_scenario(st, s)
+    local result
+    elapsed = @elapsed begin
+        feeder, λ₀, aggs = _materialize(s_eff)
+        pf = build_powerflow(s_eff)
+        ctx, welfare, _ = solve_welfare(
+            feeder,
+            pf,
+            aggs;
+            T = s_eff.T,
+            λ₀ = λ₀,
+            allow_export = s_eff.allow_export,
+            allow_local = pf isa ACPowerFlow,
+        )
+        load_buses = sort!([a.bus for a in aggs])
+        dadp = Matrix{Float64}(extract_dlmp(ctx)[load_buses, :])
+        maxgap =
+            pf isa Union{ConvexBranchFlow,RestrictedBranchFlow} ?
+            Float64(ctx.meta[:socp_maxgap]) : NaN
+        result = (Float64(welfare), dadp, maxgap)
+    end
+    return ScenarioResult(s_eff, result[1], result[2], result[3], elapsed, nothing)
+end
+
+"""
+    TSODSO.run(st::ADMM, s::Scenario) -> ScenarioResult
+
+ADMM-decomposed solve with the knobs of `st`; `details` is an `ADMMDetails`.
+"""
+function run(st::ADMM, s::Scenario)
+    s_eff = _effective_scenario(st, s)
+    local result
+    elapsed = @elapsed begin
+        feeder, λ₀, aggs = _materialize(s_eff)
+        pf = build_powerflow(s_eff)
+        r = solve_admm(
+            feeder,
+            pf,
+            aggs;
+            T = s_eff.T,
+            λ₀ = λ₀,
+            ρ = st.ρ,
+            maxiter = st.maxiter,
+            ε_abs = st.ε_abs,
+            ε_rel = st.ε_rel,
+            τ = st.τ_ratio,
+            μ = st.μ,
+            allow_export = s_eff.allow_export,
+        )
+        details = ADMMDetails(
+            Int(r.iters),
+            Float64(last(r.residuals.primal_trace)),
+            Float64(last(r.residuals.dual_trace)),
+            r.reactive_consensus_mode,
+        )
+        result = (Float64(r.welfare), Matrix{Float64}(r.dadp), Float64(r.exact_maxgap), details)
+    end
+    return ScenarioResult(s_eff, result[1], result[2], result[3], elapsed, result[4])
+end
+
+run(s::Scenario) = run(s.strategy, s)
 
 """
     run_scenario(s::Scenario) -> ScenarioResult
 
-Materialize the heavy Phase 1-7 objects from `s`'s primitive selectors + master seed, then
-DISPATCH on `s.strategy`:
-
-  - `:centralized` -> [`solve_welfare`](@ref) + [`extract_dlmp`](@ref), normalized to the
-    sorted-load-bus node×T shape; `iters`/`final_r`/`final_s` are `missing` (no ADMM iteration).
-  - `:admm` -> [`solve_admm`](@ref); `dadp` is ALREADY node×T (RESEARCH A5) and `iters`/
-    `final_r`/`final_s` are populated from the converged residual trace.
-  - any other selector -> throws `ArgumentError` naming the two valid strategies (a `Scenario`
-    itself already guards this at construction — 08-02 — so this is defensive-in-depth, threat
-    T-08-08).
-
-PATH-FREE (INFRA-04 Pitfall 6): returns a `ScenarioResult`, never writes to disk — persistence
-is [`run_and_store`](@ref) (08-04). Because the seed is threaded end-to-end via `sub_seed`
-(08-02) and the Clarabel solve path is single-threaded, two calls with the SAME `Scenario` in
-the SAME process return `==`-identical `welfare`/`dadp`/`exact_maxgap` (INFRA-04, the
-load-bearing same-seed reproducibility gate); a different `seed` changes the profile-driven
-population and hence the result (INFRA-04 seed sensitivity). Wall-clock is recorded on the
-result under `elapsed` but is EXCLUDED from every such comparison (RESEARCH Anti-Pattern).
+Thin wrapper over `TSODSO.run(s.strategy, s)` (dispatch is method dispatch on the strategy type).
+PATH-FREE: never writes to disk (see [`run_and_store`](@ref)). Same-seed runs in one process
+return `==`-identical `welfare`/`dadp`/`exact_maxgap` (INFRA-04); `elapsed` is excluded.
 """
-function run_scenario(s::Scenario)
-    elapsed = @elapsed begin
-        # --- 1. MATERIALIZE (deterministic in s.seed; RESEARCH Pattern 1 / 08-02) -------------
-        feeder = build_feeder(s.feeder)
-        profiles = generate_profiles(; seed = sub_seed(s.seed, :profiles), T = s.T)
-        λ₀ = build_price(s.price, s.T, profiles)
-        aggs = build_population(
-            s.population,
-            feeder,
-            s.feeder,
-            profiles,
-            sub_seed(s.seed, :population),
-        )
-        pf = ConvexBranchFlow()
-
-        # --- 2. DISPATCH on s.strategy, normalized to a common (welfare, dadp, exact_maxgap,
-        # iters, final_r, final_s) shape (EXP-01 / RESEARCH Pattern 1 / threat T-08-09). --------
-        if s.strategy === :centralized
-            ctx, welfare, _ = solve_welfare(
-                feeder,
-                pf,
-                aggs;
-                T = s.T,
-                λ₀ = λ₀,
-                allow_export = s.allow_export,
-            )
-            load_buses = sort!([a.bus for a in aggs])
-            dadp = extract_dlmp(ctx)[load_buses, :]           # normalize to sorted node×T
-            maxgap = ctx.meta[:socp_maxgap]
-
-            result = (;
-                welfare = Float64(welfare),
-                dadp = Matrix{Float64}(dadp),
-                exact_maxgap = Float64(maxgap),
-                iters = missing,
-                final_r = missing,
-                final_s = missing,
-                reactive_consensus_mode = missing,   # no ADMM reactive-consensus concept applies
-            )
-        elseif s.strategy === :admm
-            r = solve_admm(
-                feeder,
-                pf,
-                aggs;
-                T = s.T,
-                λ₀ = λ₀,
-                ρ = s.ρ,
-                maxiter = s.maxiter,
-                ε_abs = s.ε_abs,
-                ε_rel = s.ε_rel,
-                τ = s.τ_ratio,
-                μ = s.μ,
-                allow_export = s.allow_export,
-            )
-            result = (;
-                welfare = Float64(r.welfare),
-                dadp = Matrix{Float64}(r.dadp),               # already node×T (RESEARCH A5)
-                exact_maxgap = Float64(r.exact_maxgap),
-                iters = Int(r.iters),
-                final_r = Float64(last(r.residuals.primal_trace)),
-                final_s = Float64(last(r.residuals.dual_trace)),
-                # WR-01 (phase-26 review): record the RESOLVED mode solve_admm actually ran with
-                # (its own smart PM-03 default is otherwise invisible to this Scenario's own
-                # serializable parameters).
-                reactive_consensus_mode = r.reactive_consensus_mode,
-            )
-        else
-            # Terminal strategy guard (threat T-08-08): a Scenario already validates its own
-            # `strategy` field at construction (08-02), so this branch is DEFENSIVE-IN-DEPTH —
-            # it never fires via a normally-constructed Scenario, but keeps run_scenario safe
-            # if ever called against a hand-built/mutated selector.
-            throw(
-                ArgumentError(
-                    "run_scenario: unknown strategy $(repr(s.strategy)); expected " *
-                    ":centralized or :admm",
-                ),
-            )
-        end
-    end
-
-    return ScenarioResult(
-        s,
-        result.welfare,
-        result.dadp,
-        result.exact_maxgap,
-        result.iters,
-        result.final_r,
-        result.final_s,
-        result.reactive_consensus_mode,
-        elapsed,
-    )
-end
+run_scenario(s::Scenario) = run(s.strategy, s)
 
 export ScenarioResult, run_scenario
