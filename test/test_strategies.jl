@@ -255,3 +255,65 @@ end
         @test res.elapsed >= 0
     end
 end
+
+@testitem "ARCH-02 run_and_store round-trip for MPC and Stochastic" setup = [Phase8Fixtures] begin
+    using TSODSO, Test
+    using DrWatson: wload
+
+    is_prim(v) = v isa Union{Number,Symbol,String,Bool,Missing,Nothing} ||
+                 (v isa AbstractArray && eltype(v) <: Union{Number,Symbol,String,Bool})
+    Phase8Fixtures.with_tempdir() do dir
+        s_mpc = Scenario(
+            name = "st-mpc", feeder = :ieee13, T = 9,
+            strategy = MPC(H = 3, forecast_error = 0.0),
+        )
+        s_sto = Scenario(
+            name = "st-sto", feeder = :ieee13, T = 9,
+            strategy = Stochastic(S = 3, H_oos = 5),
+        )
+        run_and_store(s_mpc; dir = dir)
+        run_and_store(s_sto; dir = dir)
+        f_mpc = joinpath(dir, TSODSO.scenario_filename(s_mpc))
+        f_sto = joinpath(dir, TSODSO.scenario_filename(s_sto))
+        @test isfile(f_mpc)
+        @test isfile(f_sto)
+        @test f_mpc != f_sto
+        d_mpc = wload(f_mpc)
+        d_sto = wload(f_sto)
+
+        @test Symbol(d_mpc["strategy"]) == :mpc
+        @test Symbol(d_sto["strategy"]) == :stochastic
+        @test Symbol(d_mpc["pf"]) == :convex_branch_flow
+        @test Symbol(d_sto["pf"]) == :convex_branch_flow
+        @test haskey(d_mpc, "regret")
+        @test haskey(d_mpc, "steps")
+        @test haskey(d_sto, "welfare_gap")
+        @test isfinite(d_mpc["welfare"])
+        @test isfinite(d_sto["welfare"])
+        for d in (d_mpc, d_sto)
+            @test haskey(d, "gitcommit")
+            @test haskey(d, "julia_version")
+            for (k, v) in d
+                @test !(v isa TSODSO.AbstractStrategy)
+                @test !(v isa NamedTuple)
+                @test !(v isa TSODSO.MpcTrace)
+                @test is_prim(v)
+            end
+        end
+        @test haskey(d_mpc, "mpc_H")
+        @test !haskey(d_mpc, "stoch_S")
+        @test haskey(d_sto, "stoch_S")
+        @test !haskey(d_sto, "mpc_H")
+    end
+end
+
+@testitem "ARCH-02 four strategies four filenames" begin
+    using TSODSO, Test
+    strategies = (Centralized(), ADMM(), MPC(), Stochastic())
+    names = [
+        TSODSO.scenario_filename(Scenario(name = "n", feeder = :ieee13, strategy = st))
+        for st in strategies
+    ]
+    @test length(unique(names)) == 4
+    @test all(endswith(".jld2"), names)
+end
