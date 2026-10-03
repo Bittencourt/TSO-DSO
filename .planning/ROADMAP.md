@@ -400,7 +400,20 @@ instead of duplicated five times or carried in an untyped `Dict`.
   3. `ModelContext` carries typed fields for its fixed metadata (power-flow variables, objective,
      feeder, device variables); downstream code dispatches on the formulation type instead of
      `haskey(pf_vars, :l)`.
-**Plans**: TBD
+**Plans:** 11 plans
+
+Plans:
+- [ ] 33-01-PLAN.md — AbstractFeeder supertype, has_reactive/has_branch_current traits, internal shared SOCP body, invalid-pair ArgumentError methods
+- [ ] 33-02-PLAN.md — Type shared entry points AbstractFeeder, radial-only ADMM ::Feeder with meshed rejection
+- [ ] 33-03-PLAN.md — close_balance! helper plus pre-migration constraint-order fingerprints
+- [ ] 33-04-PLAN.md — Typed ModelContext fields, checked accessors, core writers with transient mirror
+- [ ] 33-05-PLAN.md — Migrate the five balance-closing sites to close_balance!
+- [ ] 33-06-PLAN.md — Dual-write typed feeder/T at all builders and hand-built test contexts
+- [ ] 33-07-PLAN.md — Migrate models/admm/devices readers and haskey(:l) gates to typed fields and traits
+- [ ] 33-08-PLAN.md — Migrate pricing/planning/experiments readers and gates
+- [ ] 33-09-PLAN.md — Migrate tests, docs/literate, scripts to typed fields
+- [ ] 33-10-PLAN.md — Remove the transient mirror, add the source-scan grep gate
+- [ ] 33-11-PLAN.md — Phase gate: detached full suite, docs build, VALIDATION sign-off
 
 ### Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy
 
