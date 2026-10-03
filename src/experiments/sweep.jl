@@ -32,7 +32,8 @@ Expand `params` via `dict_list` (RESEARCH §Pattern 2 — Vector-valued entries 
 Cartesian product, scalar entries stay fixed) into a `Scenario` per combination, then
 `run_and_store` each into `dir` (default `datadir("sims")`, gitignored). Returns the
 `Vector{ScenarioResult}` in `dict_list` order. `dir` is an explicit keyword so tests pass
-`mktempdir()` and stay hermetic (RESEARCH Pitfall 6).
+`mktempdir()` and stay hermetic (RESEARCH Pitfall 6). A sweep Dict mixing strategies must not
+carry knobs foreign to ANY listed strategy symbol (`ArgumentError` by design).
 """
 function run_sweep(params::Dict; dir::AbstractString = datadir("sims"))
     scenarios = [Scenario(; nt...) for nt in dict_list(params)]
@@ -75,6 +76,10 @@ All THREE diff-friendly rules are mandatory:
     JLD2/FileIO always round-trips dict keys as strings, RESEARCH-adjacent to Pitfall 2 —
     so the override must be `String`, not `Symbol`, entries).
 
+In a mixed-strategy sweep, knob keys absent from a run's JLD2 (inactive strategy) surface as
+`missing` cells; `sort!` places `missing` last deterministically. `:stoch_probabilities` is
+deliberately NOT a column (a vector is not CSV-friendly; its digest lives in the filename).
+
 Two `collate_summary` calls over the SAME run directory produce byte-identical CSV files
 (no git churn) because all three rules are deterministic given the same on-disk artifacts.
 """
@@ -90,12 +95,21 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
         :price,
         :population,
         :allow_export,
+        :pf,
+        :pf_thesis_literal,
+        :pf_ε,
         :ρ,
         :ε_abs,
         :ε_rel,
         :maxiter,
         :τ_ratio,
         :μ,
+        :mpc_H,
+        :mpc_step,
+        :mpc_terminal_soc,
+        :mpc_forecast_error,
+        :stoch_S,
+        :stoch_H_oos,
         :welfare,
         :exact_maxgap,
         :iters,
@@ -118,12 +132,21 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
         :price,
         :population,
         :allow_export,
+        :pf,
+        :pf_thesis_literal,
+        :pf_ε,
         :ρ,
         :ε_abs,
         :ε_rel,
         :maxiter,
         :τ_ratio,
         :μ,
+        :mpc_H,
+        :mpc_step,
+        :mpc_terminal_soc,
+        :mpc_forecast_error,
+        :stoch_S,
+        :stoch_H_oos,
     ]
     sort!(df, intersect(selector_cols, present))
 
