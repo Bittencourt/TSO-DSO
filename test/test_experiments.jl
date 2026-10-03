@@ -443,3 +443,13 @@ end
         end
     end
 end
+
+@testitem "REVIEW WR-05 over-length filename fallback uses the stable FNV digest" begin
+    using TSODSO, Test
+    s = Scenario(name = "w5-" * repeat("x", 400), feeder = :ieee13)
+    f = TSODSO.scenario_filename(s)
+    @test sizeof(f) <= 245
+    m = match(r"_h([0-9a-f]{16})\.jld2$", f)
+    @test m !== nothing
+    @test f == TSODSO.scenario_filename(s)
+end

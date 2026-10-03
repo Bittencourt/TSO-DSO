@@ -160,7 +160,7 @@ function scenario_filename(s::Scenario)
     stem_budget = target - hash_suffix_len
     stem_end = thisind(full, min(sizeof(full), stem_budget))
     stem = full[1:stem_end]
-    return stem * "_h" * string(hash(full); base = 16) * ".jld2"
+    return stem * "_h" * _stable_hex64(codeunits(full)) * ".jld2"
 end
 
 """
