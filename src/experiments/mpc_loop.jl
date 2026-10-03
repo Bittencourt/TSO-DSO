@@ -3,9 +3,9 @@
 # SEAM: receding-horizon closed-loop orchestrator (MPC-01..04).
 # OWNER: plan 21-05.
 #
-# `run_mpc(s::Scenario)` is an INDEPENDENT entry point — it is NOT wired through
-# `run_scenario`/`run.jl`'s `:centralized`/`:admm` `strategy` dispatch (D-01, Pitfall 7);
-# that dispatch stays byte-for-byte untouched. It materializes the SAME heavy objects
+# `run_mpc(s::Scenario)` reads its knobs from `Scenario.strategy::MPC` (Phase 32) and is also
+# reachable through `TSODSO.run(::MPC, s)`, which wraps the unchanged `run_mpc` NamedTuple
+# into the common `ScenarioResult`. It materializes the SAME heavy objects
 # `run_scenario` does (feeder/profiles/λ₀/aggregators, `src/experiments/materialize.jl`
 # verbatim), solves TWO one-time perfect-foresight day-ahead benchmarks via `solve_welfare`
 # (the FULL-population reference and the CR-03 comparable benchmark over the
@@ -14,7 +14,7 @@
 # acceptance bar and CLAUDE.md's hard build-once rule),
 # then drives plan 21-03/21-04's `build_mpc_window`/`solve_mpc_window!`/`propagate_soc`/
 # `propagate_tin`/`draw_forecast_error` through a FIXED-window receding horizon, re-solving
-# every `s.mpc_step` real hours (D-03's step-size kwarg genuinely strides the outer loop's
+# every `st.step` real hours (D-03's step-size kwarg genuinely strides the outer loop's
 # header, never a silently-inert field), dispatching Phase-20's OWN non-throwing
 # certificate/fallback ladder (`RestrictedBranchFlow`/`assert_restriction_exact!`/
 # `ac_dual_fallback_price`) on every resolve, recording every published hour into plan
@@ -26,8 +26,8 @@
 # includes a `Deferrable` device per house whose energy-budget window `[t_start, t_end]` is
 # baked, at CONSTRUCTION time, against the FULL day-ahead horizon `s.T` (e.g. hours 8-16 of
 # a 24h day) — a window that is virtually always LONGER than any sane MPC window length
-# `s.mpc_H`. `Deferrable.contribute!`'s own temporal-infeasibility guard (`d.t_end > T`)
-# throws whenever `build_mpc_window` tries to contribute it at `T = s.mpc_H`, and
+# `st.H`. `Deferrable.contribute!`'s own temporal-infeasibility guard (`d.t_end > T`)
+# throws whenever `build_mpc_window` tries to contribute it at `T = st.H`, and
 # `Deferrable` has no inter-temporal recursion (unlike `soc[t+1]`/`Tin[t+1]`) to propagate
 # across MPC steps in the first place (RESEARCH.md Pitfall 8's own documented reasoning,
 # there scoped to "keep the CI fixture Deferrable-free" — this generalizes the SAME
@@ -65,21 +65,21 @@ Drive the FULL receding-horizon closed loop for `s` (MPC-01..04): materialize th
 objects [`run_scenario`](@ref) does, solve the TWO one-time perfect-foresight day-ahead
 benchmarks via [`solve_welfare`](@ref) (the full-population reference and the CR-03
 comparable benchmark over the Deferrable-excluded `mpc_aggs` — both strictly outside the
-loop), then re-solve a build-once [`MpcWindow`](@ref) every `s.mpc_step` real hours (never
+loop), then re-solve a build-once [`MpcWindow`](@ref) every `st.step` real hours (never
 rebuilding it), dispatching Phase-20's own certificate/fallback ladder on every resolve and
 recording every published hour into an [`MpcTrace`](@ref).
 
 # Guards
 
-Before any materialization: `s.mpc_H > s.T` throws `ArgumentError` (WR-07 — the window
+Before any materialization: `st.H > s.T` throws `ArgumentError` (WR-07 — the window
 cannot exceed the day-ahead horizon; previously this surfaced as a cryptic device-level
 "profile too short" deep inside `build_mpc_window`, or, for a hypothetical
 longer-than-`T`-profile population, a silent zero-resolve `steps = 0` run), and
-`s.mpc_step > s.mpc_H` throws `ArgumentError` — a resolve cannot hold its plan longer than
+`st.step > st.H` throws `ArgumentError` — a resolve cannot hold its plan longer than
 the window it solved.
 
 After the population materializes: with any THERMOSTATIC (temperature-stateful) device
-present, `s.mpc_step > s.mpc_H − 1` throws `ArgumentError` (WR-02, re-scoped post-FIX-04 —
+present, `st.step > st.H − 1` throws `ArgumentError` (WR-02, re-scoped post-FIX-04 —
 PM-08): Thermostatic's `Tin` recursion still covers only `τ ≤ H−1` (unchanged by Plan
 26-03), so its window's `H`-th control carries no modeled state consequence, and applying it
 can push the propagated measured temperature out of its structural band and make the next
@@ -147,7 +147,7 @@ A `NamedTuple`
     role in this settlement path — there is no relaxation here to certify, the branch-flow
     relation is the TRUE nonconvex equality. Any per-hour thermal/voltage violation under this
     relaxed operating band is REPORTED, never refused — see the `settlement_violations` bullet
-    below. Under `s.mpc_forecast_error == 0.0` (every `fe.pv_factor == fe.demand_factor == 1.0`)
+    below. Under `st.forecast_error == 0.0` (every `fe.pv_factor == fe.demand_factor == 1.0`)
     this is BYTE-IDENTICAL to `forecast_settled_welfare` to solver precision: no clip ever
     engages (the window's own PV-limit constraint already bounds the solved `p_ch` by the
     UNPERTURBED `Ppv[abs_hour]`), and the AC truth re-solve reproduces the window's own
@@ -217,7 +217,7 @@ A `NamedTuple`
     against, post-FIX-10). **WR-01 — settlement is FORECAST-CONSISTENT by construction, not
     re-settled against the ground truth:** the frontier term charges the window's OWN solved
     `p_import[τ]` (which balanced the forecast-perturbed PV/demand the optimizer saw), and
-    the device terms read the solved controls as-is. Under nonzero `s.mpc_forecast_error` the
+    the device terms read the solved controls as-is. Under nonzero `st.forecast_error` the
     TRUE plant's import would differ by the per-hour demand/PV forecast errors, and when
     `fe.pv_factor > 1` the applied `p_ch` can exceed the TRUE PV availability
     `d.Ppv[abs_hour]` (Assumption A6 violated on the ground truth). Only the STATE
@@ -236,9 +236,9 @@ A `NamedTuple`
     terminal-SOC targets (D-06) likewise track THIS comparable benchmark's own optimal SOC
     trajectory.
   - `day_ahead_dadp::Vector{Float64}` — the full-length (`s.T`) day-ahead reference DADP path.
-  - `steps::Int` — the total published-hour count, ALWAYS `s.T - s.mpc_H + 1` regardless of
-    `s.mpc_step` (Pitfall 5's fixed-window convention — only the NUMBER OF RESOLVES shrinks as
-    `s.mpc_step` grows, never the published-hour count).
+  - `steps::Int` — the total published-hour count, ALWAYS `s.T - st.H + 1` regardless of
+    `st.step` (Pitfall 5's fixed-window convention — only the NUMBER OF RESOLVES shrinks as
+    `st.step` grows, never the published-hour count).
 
 Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-identical
 `regret`/`day_ahead_welfare`/`realized_welfare` (INFRA-04, mirroring `run_scenario`'s own
@@ -252,7 +252,7 @@ SOCP-relaxation re-solve, `_mpc_truth_import_socp_reference`, kept SOLELY for
 `_solve_welfare`/`_ac_dual_fallback_price` test-seam idiom. No production `Scenario`-driven
 caller ever passes `:socp`.
 """
-function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
+function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
     _truth_settlement in (:ac, :socp) || throw(
         ArgumentError(
             "run_mpc: _truth_settlement must be :ac or :socp, got " *
@@ -268,18 +268,18 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     # deep inside build_mpc_window's contribute! calls (a misleading message for a
     # Scenario-level misconfiguration), and a hypothetical future population with
     # longer-than-T profiles would instead run ZERO resolves and silently return steps = 0 /
-    # regret = 0.0, contradicting the documented "steps is ALWAYS s.T - s.mpc_H + 1".
-    s.mpc_H > s.T && throw(
+    # regret = 0.0, contradicting the documented "steps is ALWAYS s.T - st.H + 1".
+    st.H > s.T && throw(
         ArgumentError(
             "run_mpc: window length cannot exceed the day-ahead horizon " *
-            "(mpc_H=$(s.mpc_H) > T=$(s.T))",
+            "(mpc_H=$(st.H) > T=$(s.T))",
         ),
     )
     # A resolve cannot hold its plan longer than the window it solved.
-    s.mpc_step > s.mpc_H && throw(
+    st.step > st.H && throw(
         ArgumentError(
             "run_mpc: step size cannot exceed window length H " *
-            "(mpc_step=$(s.mpc_step) > mpc_H=$(s.mpc_H))",
+            "(mpc_step=$(st.step) > mpc_H=$(st.H))",
         ),
     )
 
@@ -295,7 +295,7 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         profiles,
         sub_seed(s.seed, :population),
     )
-    pf = ConvexBranchFlow()
+    pf = build_powerflow(s)
 
     # --- 1b. Deferrable-excluded aggregator list for the WINDOW model (see this file's
     # header deviation note) — the day-ahead benchmark below still uses the FULL `aggs`. ------
@@ -321,7 +321,7 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     has_uncovered_state = any(
         hasproperty(d, :Tin0) for agg in mpc_aggs for d in agg.devices
     )
-    if has_uncovered_state && s.mpc_step > s.mpc_H - 1
+    if has_uncovered_state && st.step > st.H - 1
         throw(
             ArgumentError(
                 "run_mpc: with thermostatic (temperature-stateful) devices present " *
@@ -329,8 +329,8 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                 "recursion covers only τ ≤ H−1 (unchanged by Plan 26-03/FIX-04), so the " *
                 "window's H-th control carries no modeled state consequence for it, and " *
                 "applying it can drive the measured temperature out of bounds and make " *
-                "the next resolve infeasible (got mpc_step=$(s.mpc_step), " *
-                "mpc_H=$(s.mpc_H)). Battery-only populations (PVBattery/FourQuadBESS) no " *
+                "the next resolve infeasible (got mpc_step=$(st.step), " *
+                "mpc_H=$(st.H)). Battery-only populations (PVBattery/FourQuadBESS) no " *
                 "longer trip this guard — their soc[1:(H+1)] recursion (FIX-04) covers " *
                 "the H-th control fully.",
             ),
@@ -364,9 +364,9 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     # FIX-04 (Plan 26-03) retargeted build_mpc_window's terminal-condition constraint to
     # `soc[H + 1]` (the day-ahead state AFTER the window), since the battery `soc` vector is
     # now `1:(s.T + 1)` long. `soc_da` must therefore be built over the SAME `1:(s.T + 1)`
-    # range so the terminal Parameter below can be indexed at `soc_da[bus][t + s.mpc_H]`
+    # range so the terminal Parameter below can be indexed at `soc_da[bus][t + st.H]`
     # (the day-ahead state exactly one window-length past resolve hour `t`) — never the
-    # stale `soc_da[bus][min(t + s.mpc_H - 1, s.T)]` (one hour BEFORE the window's actual
+    # stale `soc_da[bus][min(t + st.H - 1, s.T)]` (one hour BEFORE the window's actual
     # end), which silently drifts the terminal pin and makes a later resolve
     # PRIMAL_INFEASIBLE (26-POSTMERGE-TRIAGE.md cluster C).
     soc_da = Dict(
@@ -383,13 +383,13 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         feeder,
         pf,
         mpc_aggs;
-        H = s.mpc_H,
-        terminal_soc = s.mpc_terminal_soc,
+        H = st.H,
+        terminal_soc = st.terminal_soc,
         allow_export = s.allow_export,
     )
 
     # Strictly sequential published-step counter record! requires (distinct from the
-    # absolute hour t, which skips by s.mpc_step between resolves).
+    # absolute hour t, which skips by st.step between resolves).
     k = 0
     trace = MpcTrace()
     # Phase 27 FIX-10: `forecast_settled_welfare` is the RENAMED pre-phase accumulator
@@ -429,27 +429,27 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         hasproperty(d, :Tin0) && (measured_state_true[(agg.bus, :Tin)] = Float64(d.Tin0))
     end
 
-    # Outer loop over window RESOLVE epochs — D-03: s.mpc_step genuinely strides this loop's
-    # header (never a hardcoded 1:(s.T - s.mpc_H + 1), the checker-flagged regression this
+    # Outer loop over window RESOLVE epochs — D-03: st.step genuinely strides this loop's
+    # header (never a hardcoded 1:(s.T - st.H + 1), the checker-flagged regression this
     # task fixes). Every visited `t` re-solves the SAME build-once window `o`.
-    for t in 1:s.mpc_step:(s.T - s.mpc_H + 1)
-        fe = draw_forecast_error(s.seed, t, s.mpc_forecast_error)
+    for t in 1:st.step:(s.T - st.H + 1)
+        fe = draw_forecast_error(s.seed, t, st.forecast_error)
 
         # IC + terminal-target Parameters (MPC-01/MPC-02).
         for entry in o.ic_handles
             set_parameter_value(entry.ic_param, measured_state[(entry.bus, entry.kind)])
             if entry.terminal_param !== nothing
-                # FIX-04 (Plan 26-03): the day-ahead state at exactly `t + s.mpc_H` — the
+                # FIX-04 (Plan 26-03): the day-ahead state at exactly `t + st.H` — the
                 # window's own terminal target is `soc[H + 1]`, the state AFTER the window,
-                # so its day-ahead counterpart is `soc_da[bus][t + s.mpc_H]`. No `min(...,
+                # so its day-ahead counterpart is `soc_da[bus][t + st.H]`. No `min(...,
                 # s.T)` clamp: the outer loop's own header bound (`t in
-                # 1:s.mpc_step:(s.T - s.mpc_H + 1)`) guarantees `t + s.mpc_H <= s.T + 1` at
+                # 1:st.step:(s.T - st.H + 1)`) guarantees `t + st.H <= s.T + 1` at
                 # every visited `t`, and `soc_da` is now built over `1:(s.T + 1)`, so every
                 # index here is in-bounds by construction — a silent clamp would re-hide the
                 # exact stale-index bug this fixes.
                 set_parameter_value(
                     entry.terminal_param,
-                    soc_da[entry.bus][t + s.mpc_H],
+                    soc_da[entry.bus][t + st.H],
                 )
             end
         end
@@ -463,13 +463,13 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
                 if haskey(v, :Ppv_param)
                     set_parameter_value.(
                         v.Ppv_param,
-                        Float64[d.Ppv[t + τ - 1] * fe.pv_factor for τ in 1:s.mpc_H],
+                        Float64[d.Ppv[t + τ - 1] * fe.pv_factor for τ in 1:st.H],
                     )
                 end
                 if haskey(v, :Tout_param)
                     set_parameter_value.(
                         v.Tout_param,
-                        Float64[d.Tout[t + τ - 1] for τ in 1:(s.mpc_H - 1)],
+                        Float64[d.Tout[t + τ - 1] for τ in 1:(st.H - 1)],
                     )
                 end
             end
@@ -478,12 +478,12 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
             agg = only(a for a in mpc_aggs if a.bus == handle.bus)
             set_parameter_value.(
                 handle.Pdc_param,
-                Float64[agg.Pdc[t + τ - 1] * fe.demand_factor for τ in 1:s.mpc_H],
+                Float64[agg.Pdc[t + τ - 1] * fe.demand_factor for τ in 1:st.H],
             )
         end
 
         # Slide λ₀ via set_objective_coefficient — NEVER a Parameter (Pitfall 2).
-        for τ in 1:s.mpc_H
+        for τ in 1:st.H
             set_objective_coefficient(o.model, o.p_import[τ], -λ₀[t + τ - 1])
         end
 
@@ -513,10 +513,10 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         # n_apply: the number of REAL hours THIS resolve's plan is held for before the next
         # resolve — capped by the window length itself (cannot apply more intervals than were
         # solved) and by the remaining published horizon (the final resolve never overruns
-        # s.T - s.mpc_H + 1 total published hours). This formula guarantees the TOTAL
-        # published-hour count across ALL resolves is exactly s.T - s.mpc_H + 1 for ANY
-        # s.mpc_step (only the NUMBER OF RESOLVES shrinks as s.mpc_step grows).
-        n_apply = min(s.mpc_step, s.mpc_H, (s.T - s.mpc_H + 1) - t + 1)
+        # s.T - st.H + 1 total published hours). This formula guarantees the TOTAL
+        # published-hour count across ALL resolves is exactly s.T - st.H + 1 for ANY
+        # st.step (only the NUMBER OF RESOLVES shrinks as st.step grows).
+        n_apply = min(st.step, st.H, (s.T - st.H + 1) - t + 1)
 
         for τ_apply in 1:n_apply
             abs_hour = t + τ_apply - 1
@@ -736,12 +736,12 @@ function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
         end
     end
     # After the full double loop (resolves × applied hours), k equals the total number of
-    # published hours — ALWAYS s.T - s.mpc_H + 1, independent of s.mpc_step (only the NUMBER
-    # OF RESOLVES that produced them shrinks as s.mpc_step grows; the published-hour COUNT
+    # published hours — ALWAYS s.T - st.H + 1, independent of st.step (only the NUMBER
+    # OF RESOLVES that produced them shrinks as st.step grows; the published-hour COUNT
     # never changes, Pitfall 5).
 
     # D-11: regret is scoped to the PUBLISHED decision horizon (k hours, Pitfall 5's honest
-    # step-count convention, invariant to s.mpc_step) — NEVER silently extrapolated to the
+    # step-count convention, invariant to st.step) — NEVER silently extrapolated to the
     # full s.T hours the day-ahead optimum spans. Both sides are evaluated via the IDENTICAL
     # per-device utility-formula accumulation over the SAME mpc_aggs device set (Deferrable
     # excluded from BOTH sides, see this file's header deviation note) — CR-03: every read
@@ -1316,7 +1316,7 @@ plan 27-08's replacement of this function as the PRODUCTION settlement path. Gat
 override — inherits whatever default the exactness gate carries) before returning
 `value(p_import_t)`.
 
-Under `s.mpc_forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
+Under `st.forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
 `value(o.p_import[τ_apply])` to solver precision: the fixed per-bus injections are IDENTICAL
 to what the window itself balanced at that hour (same feeder, same formulation, same net
 injections), so the SAME physical network equations have the SAME unique solution.
@@ -1546,7 +1546,7 @@ LIMITS are relaxed, plan 27-09, never the CONVERGENCE bar). SOCP exactness gatin
 (`assert_socp_exact!`) plays NO role here — there is no relaxation to certify, the
 branch-flow relation is the unrelaxed nonconvex equality itself.
 
-Under `s.mpc_forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
+Under `st.forecast_error == 0.0` this reproduces [`run_mpc`](@ref)'s own window-solved
 `value(o.p_import[τ_apply])` to solver precision, for the SAME reason
 [`_mpc_truth_import_socp_reference`](@ref) does: the fixed per-bus injections are IDENTICAL
 to what the window itself balanced at that hour, so the SAME physical network equations have
@@ -1652,6 +1652,44 @@ function _mpc_truth_import_acpf(
 
     violations = _mpc_settlement_violations(feeder, pv_t, abs_hour)
     return value(p_import_t), violations
+end
+
+"""
+    run_mpc(s::Scenario; _truth_settlement::Symbol = :ac) -> NamedTuple
+
+Thin wrapper over the receding-horizon loop. The knobs live on `Scenario.strategy::MPC`; for a
+Scenario whose strategy is not `MPC` the `MPC()` defaults apply. The returned NamedTuple
+contract is unchanged (see [`TSODSO.run`](@ref) for the `ScenarioResult` form).
+"""
+function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
+    st = s.strategy isa MPC ? s.strategy : MPC()
+    return _run_mpc(s, st; _truth_settlement)
+end
+
+"""
+    run(st::MPC, s::Scenario) -> ScenarioResult
+
+Run the receding-horizon strategy and wrap the result: `welfare = realized_welfare`
+(truth-settled), `dadp` = published-hour prices as a `1 x n` matrix row, `exact_maxgap = NaN`
+(not applicable: `run_mpc` returns only the per-resolve certificate-status trace),
+`details::MPCDetails` carrying the raw NamedTuple.
+"""
+function run(st::MPC, s::Scenario)
+    s_eff = st == s.strategy ? s : with_strategy(s, st)
+    t0 = time_ns()
+    r = _run_mpc(s_eff, st)
+    elapsed = (time_ns() - t0) / 1.0e9
+    return ScenarioResult(
+        s_eff,
+        Float64(r.realized_welfare),
+        Matrix{Float64}(reshape(r.trace.dadp_trace, 1, :)),
+        NaN,
+        elapsed,
+        MPCDetails(
+            r.regret, r.steps, r.day_ahead_welfare, r.forecast_settled_welfare,
+            r.realized_welfare, r,
+        ),
+    )
 end
 
 export run_mpc
