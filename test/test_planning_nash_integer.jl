@@ -164,7 +164,7 @@
     end
 end
 
-@testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_x_lb must be finite; no silently ignored master_kwargs/integer keys, derived α_x_lb — WR-06) — before any solve call" tags =
+@testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_op_lb :auto or finite, α_x_lb finite — WR-02; no silently ignored master_kwargs/integer keys, derived α_x_lb — WR-06) — before any solve call" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -213,6 +213,29 @@ end
         integer = (; K = 4, α_x_lb = Inf),
         checkpoint_dir = mktempdir(),
     )
+    # WR-02 (Phase 31 code review iteration 2): BOTH epigraph bounds are validated at
+    # the boundary with an ArgumentError, before any solve. α_op_lb: :auto or a finite
+    # Real only — NaN would otherwise be installed by build_master_integer's explicit
+    # branch and -Inf would surface only after a full inner Benders loop. α_x_lb: a
+    # finite Real only — `:auto` used to raise `MethodError: isfinite(::Symbol)`.
+    for bad in (NaN, -Inf, Inf, :foo, "auto")
+        @test_throws ArgumentError run_nash!(
+            specs,
+            build_fresh_shared();
+            z0 = z0,
+            integer = (; K = 4, α_op_lb = bad),
+            checkpoint_dir = mktempdir(),
+        )
+    end
+    for bad in (NaN, -Inf, :auto, "0.0")
+        @test_throws ArgumentError run_nash!(
+            specs,
+            build_fresh_shared();
+            z0 = z0,
+            integer = (; K = 4, α_x_lb = bad),
+            checkpoint_dir = mktempdir(),
+        )
+    end
 
     # WR-06 (Phase 31 code review): inputs the integer path does not read are rejected,
     # never silently ignored. (a) an α bound in master_kwargs (honoured by the

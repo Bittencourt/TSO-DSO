@@ -464,8 +464,9 @@ never a stale loop-local) — never silently returns a non-converged result.
 
   - `ArgumentError` on any boundary-guard violation (including the nested-tolerance
     guard, an `inexact_policy` outside `(:strict, :reject, :certify_incumbent)`, or an
-    `integer` kwarg whose `K` is not a positive `Integer` or whose `α_x_lb` is not
-    finite), before any solve call.
+    `integer` kwarg whose `K` is not a positive `Integer`, whose `α_op_lb` is not
+    `:auto` or a finite `Real`, or whose `α_x_lb` is not a finite `Real`), before any
+    solve call.
   - `ErrorException` if `max_sweeps` is exhausted without converging, OR (Phase 31,
     BILEV-07, `integer !== nothing` only) if the integer diagonalization cycles (the
     full committed state — joint binary state, `z` and `x_inv` — recurs across sweeps
@@ -504,8 +505,10 @@ the follower cost's signs, `min(0, c_inv[i])·x_inv_max[i] + Σₜ min(0, c_op[i
 (`_integer_alpha_x_lb`; `0.0` for nonnegative costs) — a valid lower bound on
 distributor `i`'s cost slice whatever the signs, so `L = α_op_lb + α_x_lb` stays a valid
 Laporte-Louveaux floor; an explicit `integer.α_x_lb` is the caller's responsibility.
-Guards BEFORE any solve call: `integer.K` a positive `Integer`; `integer.α_x_lb` (if
-supplied) finite; `integer` keys within `(:K, :α_op_lb, :α_x_lb)`; and every
+Guards BEFORE any solve call: `integer.K` a positive `Integer`; `integer.α_op_lb` (if
+supplied) `:auto` or a finite `Real`; `integer.α_x_lb` (if supplied) a finite `Real` (no
+`:auto` on this path — omit it for the derived default); NaN/±Inf/other values raise an
+`ArgumentError` (WR-02, Phase 31 code review iteration 2); `integer` keys within `(:K, :α_op_lb, :α_x_lb)`; and every
 `spec.master_kwargs` supplying `c_y`/`y_max` and NOTHING else — an `α_op_lb`/`α_x_lb`
 placed in `master_kwargs` (which the continuous path honours) is rejected with an
 `ArgumentError` pointing at `integer`, never silently ignored. When `integer === nothing` (the default), the
@@ -602,12 +605,31 @@ function run_nash!(
                 "$(get(integer, :K, nothing))",
             ),
         )
-        isfinite(get(integer, :α_x_lb, 0.0)) || throw(
+        # WR-02 (Phase 31 code review iteration 2): validate BOTH epigraph bounds here,
+        # before any solve. `α_op_lb` is forwarded to `build_master_integer`, whose
+        # explicit-bound branch would accept NaN (`NaN > optimum + slack` is false; then
+        # `min(NaN, bound) === NaN` is installed) and install -Inf (surfacing only after
+        # a full inner Benders loop as `add_ll_cut!`'s "L must be finite"). `α_x_lb`
+        # accepts no `:auto` on this path: a `DistributorView` follower has no
+        # derivation (`bounds_ctx.follower_kwargs = nothing`); omit the key to get the
+        # sign-derived default `_integer_alpha_x_lb`.
+        a_op = get(integer, :α_op_lb, :auto)
+        (a_op === :auto || (a_op isa Real && isfinite(a_op))) || throw(
             ArgumentError(
-                "run_nash!: integer.α_x_lb must be finite, got " *
-                "$(get(integer, :α_x_lb, 0.0))",
+                "run_nash!: integer.α_op_lb must be :auto or a finite Real, got " *
+                "$(repr(a_op))",
             ),
         )
+        if haskey(integer, :α_x_lb)
+            a_x = integer.α_x_lb
+            (a_x isa Real && isfinite(a_x)) || throw(
+                ArgumentError(
+                    "run_nash!: integer.α_x_lb must be a finite Real (no :auto — a " *
+                    "DistributorView follower has no derivation; omit the key for the " *
+                    "sign-derived default), got $(repr(a_x))",
+                ),
+            )
+        end
         # WR-06 (Phase 31 code review): never silently ignore a caller's input. The
         # integer branch reads ONLY c_y/y_max from each spec's master_kwargs and only
         # K/α_op_lb/α_x_lb from `integer`; anything else (notably an α bound placed in
