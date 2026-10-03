@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: in_progress
-stopped_at: "Phase 31 VERIFIED (UAT 5/5) after 3-iteration review/fix cycle; suite 31260/0/0/5; next: Phase 32"
-last_updated: "2026-10-03T12:00:00.000Z"
-last_activity: 2026-10-03
+status: executing
+stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
+last_updated: "2026-10-03T17:40:10.844Z"
+last_activity: 2026-10-03 -- Phase 32 planning complete
 progress:
   total_phases: 12
   completed_phases: 6
-  total_plans: 51
+  total_plans: 58
   completed_plans: 52
   percent: 50
 ---
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 Phase: 31 (GNE Nash Fixture, Integer N>1 & Planning Docs Refresh) — COMPLETE, VERIFIED 2026-10-03
 Plan: 7 of 7 executed; post-execution 3-iteration code-review/fix cycle closed CR-01/CR-02 + 6 warnings
-Status: Full suite re-certified 31260/0/0/5 at d7cdb34 (+169 vs Phase-30 baseline 31091); UAT 5/5 pass
+Status: Ready to execute
   (`31-UAT.md`); review cap reached with 0 critical / 0 warning / 2 info open (`31-REVIEW.md`).
   Next: Phase 32. `/gsd-secure-phase` not run for Phases 29–31 (security enforcement default-on).
-Last activity: 2026-10-03
+Last activity: 2026-10-03 -- Phase 32 planning complete
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
