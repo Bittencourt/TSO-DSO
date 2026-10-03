@@ -158,3 +158,38 @@ end
     @test s.strategy == ADMM()
     @test_throws ArgumentError TSODSO.with_strategy(Scenario(name = "x", pf = :ac), ADMM())
 end
+
+# ---- Run-time ARCH-02 result-shape items (Plan 32-03) ----
+
+@testitem "ARCH-02 ScenarioResult shape Centralized" begin
+    using TSODSO, Test
+    r = TSODSO.run(Centralized(), Scenario(name = "cen", feeder = :ieee13, seed = 1, T = 24))
+    @test ismissing(r.iters)
+    @test ismissing(r.final_r)
+    @test ismissing(r.final_s)
+    @test ismissing(r.reactive_consensus_mode)
+    @test r.details === nothing
+    @test :iters in propertynames(r)
+    @test r.welfare isa Float64
+    @test r.dadp isa Matrix{Float64}
+end
+
+@testitem "ARCH-02 ScenarioResult shape ADMM" begin
+    using TSODSO, Test
+    r = TSODSO.run(Scenario(name = "adm", feeder = :ieee13, seed = 1, T = 24, strategy = ADMM()))
+    @test r.details isa TSODSO.ADMMDetails
+    @test r.iters isa Int
+    @test r.iters >= 1
+    @test r.final_r isa Float64
+    @test r.reactive_consensus_mode isa TSODSO.ReactiveMode
+    @test r.iters == r.details.iters
+    @test r.final_r == r.details.final_r
+    @test r.final_s == r.details.final_s
+    @test r.reactive_consensus_mode == r.details.reactive_consensus_mode
+end
+
+@testitem "ARCH-02 run(st, s) explicit strategy wins" begin
+    using TSODSO, Test
+    r = TSODSO.run(ADMM(maxiter = 300), Scenario(name = "x", feeder = :ieee13, seed = 1, T = 24))
+    @test r.scenario.strategy == ADMM(maxiter = 300)
+end

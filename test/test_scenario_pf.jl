@@ -85,3 +85,73 @@ end
     using TSODSO
     @test_throws ArgumentError TSODSO._powerflow_from_selector(:bogus, false, 0.0)
 end
+
+# ---- Run-time ARCH-01 items (Plan 32-03): ieee13, T = 24, seed = 1 ----
+
+@testitem "ARCH-01 default pf bit-identical to direct solve" begin
+    using TSODSO, Test
+    s = Scenario(name = "pf-default", feeder = :ieee13, seed = 1, T = 24)
+    feeder = TSODSO.build_feeder(s.feeder)
+    profiles = TSODSO.generate_profiles(; seed = TSODSO.sub_seed(s.seed, :profiles), T = s.T)
+    λ₀ = TSODSO.build_price(s.price, s.T, profiles)
+    aggs = TSODSO.build_population(
+        s.population, feeder, s.feeder, profiles, TSODSO.sub_seed(s.seed, :population),
+    )
+    ctx, welfare, _ = TSODSO.solve_welfare(
+        feeder, TSODSO.ConvexBranchFlow(), aggs; T = s.T, λ₀ = λ₀, allow_export = s.allow_export,
+    )
+    load_buses = sort!([a.bus for a in aggs])
+    dadp = Matrix{Float64}(TSODSO.extract_dlmp(ctx)[load_buses, :])
+    r = TSODSO.run(Centralized(), s)
+    @test r.welfare == Float64(welfare)
+    @test r.dadp == dadp
+    @test r.exact_maxgap == Float64(ctx.meta[:socp_maxgap])
+end
+
+@testitem "ARCH-01 restricted and thesis_literal honoured" begin
+    using TSODSO, Test
+    base = TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
+    s_r = Scenario(name = "r", feeder = :ieee13, seed = 1, T = 24, pf = :restricted_branch_flow)
+    s_t = Scenario(name = "t", feeder = :ieee13, seed = 1, T = 24, pf_thesis_literal = true)
+    @test TSODSO.build_powerflow(s_r) isa TSODSO.RestrictedBranchFlow
+    @test TSODSO.build_powerflow(s_t) isa TSODSO.ConvexBranchFlow
+    for s in (s_r, s_t)
+        r = TSODSO.run(Centralized(), s)
+        @test isfinite(r.welfare)
+        @test isfinite(r.exact_maxgap)
+        @test r.exact_maxgap < 1e-4
+        @test isapprox(r.welfare, base.welfare; rtol = 1e-6)
+    end
+end
+
+@testitem "ARCH-01 lindistflow: NaN maxgap, no KeyError" begin
+    using TSODSO, Test
+    s = Scenario(name = "ldf", feeder = :ieee13, seed = 1, T = 24, pf = :lindistflow)
+    r = TSODSO.run(Centralized(), s)
+    @test isfinite(r.welfare)
+    @test isnan(r.exact_maxgap)
+    @test size(r.dadp, 2) == 24
+    @test size(r.dadp, 1) > 0
+end
+
+@testitem "ARCH-01 ac: NaN maxgap, allow_local honoured" begin
+    using TSODSO, Test
+    base = TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
+    r = TSODSO.run(Centralized(), Scenario(name = "ac", feeder = :ieee13, seed = 1, T = 24, pf = :ac))
+    @test isfinite(r.welfare)
+    @test isnan(r.exact_maxgap)
+    @test isapprox(r.welfare, base.welfare; rtol = 1e-3)
+end
+
+@testitem "ARCH-01 wrapper equivalence" begin
+    using TSODSO, Test
+    s = Scenario(name = "w", feeder = :ieee13, seed = 1, T = 24)
+    a = run_scenario(s)
+    b = TSODSO.run(s)
+    c = TSODSO.run(s.strategy, s)
+    for x in (b, c)
+        @test x.welfare == a.welfare
+        @test x.dadp == a.dadp
+        @test x.exact_maxgap == a.exact_maxgap
+    end
+end
