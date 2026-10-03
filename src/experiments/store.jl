@@ -5,7 +5,7 @@
 #
 # `run_and_store(s::Scenario; dir)` calls `run_scenario(s)` (08-03, PATH-FREE), builds a
 # Symbol-keyed provenance dict via `result_to_dict`, and `@tagsave`s it to a per-run JLD2
-# named `savename(s, "jld2"; digits = 10)` under `dir` (CR-01 fix: `digits = 10` avoids
+# named `scenario_filename(s)` under `dir` (CR-01 fix: `digits = 10` avoids
 # DrWatson's lossy default float rounding colliding two distinguishable ADMM-knob Scenarios;
 # `safe = true` additionally routes through `safesave` so any residual collision appends
 # `_1`/`_2`... rather than silently overwriting). `@tagsave` stamps the saved dict with
@@ -22,14 +22,14 @@
 # hermetic (RESEARCH Pitfall 6) — `run_scenario` itself stays path-free; persistence lives only
 # here. The per-run JLD2 is NEVER committed (data/ is gitignored, 08-01).
 
-using DrWatson: @tagsave, datadir, savename, struct2dict
+using DrWatson: @tagsave, datadir, savename
 
 """
     _stable_hex64(bytes) -> String
 
 Internal (unexported): a DETERMINISTIC, Julia-version-stable 64-bit FNV-1a digest of a
 byte iterable, rendered as exactly 16 zero-padded lowercase hex characters. Used by
-[`scenario_filename`](@ref) (phase-22 review WR-02) to fold `stoch_probabilities` — a
+[`scenario_filename`](@ref) (phase-22 review WR-02) to fold `probabilities` — a
 `Vector{Float64}` DrWatson's `default_allowed` filter silently DROPS from `savename` —
 back into the filename. Deliberately NOT `Base.hash`, whose value is only stable within
 a single Julia version (this project tests 1.10 LTS and 1.11+), and dependency-free (no
@@ -43,57 +43,111 @@ function _stable_hex64(bytes)
     return string(h; base = 16, pad = 16)
 end
 
+# --- strategy flatten helpers (one method per strategy: a new strategy adds one method) ---
+_strategy_label(::Centralized) = :centralized
+_strategy_label(::ADMM) = :admm
+_strategy_label(::MPC) = :mpc
+_strategy_label(::Stochastic) = :stochastic
+
+# Active-strategy knobs. :filename -> prefixed primitive names (probabilities dropped: folded
+# into the name as a digest by `scenario_filename`); :record -> legacy flat keys.
+_strategy_knobs(::Centralized, ::Symbol) = Pair{Symbol,Any}[]
+function _strategy_knobs(st::ADMM, style::Symbol)
+    pre = style === :filename ? "admm_" : ""
+    return Pair{Symbol,Any}[
+        Symbol(pre, "ρ") => st.ρ,
+        Symbol(pre, "ε_abs") => st.ε_abs,
+        Symbol(pre, "ε_rel") => st.ε_rel,
+        Symbol(pre, "maxiter") => st.maxiter,
+        Symbol(pre, "τ_ratio") => st.τ_ratio,
+        Symbol(pre, "μ") => st.μ,
+    ]
+end
+function _strategy_knobs(st::MPC, ::Symbol)
+    return Pair{Symbol,Any}[
+        :mpc_H => st.H,
+        :mpc_step => st.step,
+        :mpc_terminal_soc => st.terminal_soc,
+        :mpc_forecast_error => st.forecast_error,
+    ]
+end
+function _strategy_knobs(st::Stochastic, style::Symbol)
+    knobs = Pair{Symbol,Any}[:stoch_S => st.S]
+    style === :record && push!(knobs, :stoch_probabilities => copy(st.probabilities))
+    push!(knobs, :stoch_H_oos => st.H_oos)
+    return knobs
+end
+
+"""
+    _scenario_identity(s::Scenario; style::Symbol) -> Dict{Symbol,Any}
+
+Single source of truth flattening a `Scenario` (whose `strategy` is a struct) to primitive
+fields. `style = :filename` yields prefixed names for [`scenario_filename`](@ref)
+(`strategy => :ADMM`, `admm_ρ`, ...; `pf_ε` only under `:restricted_branch_flow`,
+`pf_thesis_literal` only under `:convex_branch_flow`); `style = :record` yields the legacy flat
+keys for [`result_to_dict`](@ref) (lowercase `:strategy`, `:ρ`, ..., `:pf`, `:pf_thesis_literal`,
+`:pf_ε` always). Only the ACTIVE strategy's knobs appear in either style.
+"""
+function _scenario_identity(s::Scenario; style::Symbol)::Dict{Symbol,Any}
+    style in (:filename, :record) || throw(
+        ArgumentError("_scenario_identity: style must be :filename or :record; got $(repr(style))"),
+    )
+    d = Dict{Symbol,Any}(
+        :name => s.name,
+        :feeder => s.feeder,
+        :seed => s.seed,
+        :T => s.T,
+        :population => s.population,
+        :price => s.price,
+        :allow_export => s.allow_export,
+        :pf => s.pf,
+    )
+    if style === :filename
+        s.pf === :restricted_branch_flow && (d[:pf_ε] = s.pf_ε)
+        s.pf === :convex_branch_flow && (d[:pf_thesis_literal] = s.pf_thesis_literal)
+        d[:strategy] = Symbol(nameof(typeof(s.strategy)))
+    else
+        d[:pf_thesis_literal] = s.pf_thesis_literal
+        d[:pf_ε] = s.pf_ε
+        d[:strategy] = _strategy_label(s.strategy)
+    end
+    for (k, v) in _strategy_knobs(s.strategy, style)
+        d[k] = v
+    end
+    return d
+end
+
 """
     scenario_filename(s::Scenario) -> String
 
-Single source of truth for the JLD2 filename [`run_and_store`](@ref) saves `s` under:
-`savename(s, "jld2"; digits = 10)` (CR-01 fix — see [`run_and_store`](@ref) for why
-`digits = 10` is required), PLUS — phase-22 review WR-02 fix — a `_p<digest>` component
-whenever `s.stoch_probabilities` is non-uniform: `stoch_probabilities` is a
-`Vector{Float64}`, which DrWatson's `default_allowed = (Real, String, SubString, Symbol, TimeType)` filter silently DROPS from `savename`, so two `Scenario`s differing ONLY in
-their probability weighting (exactly this phase's own D-04 uniform-vs-non-uniform
-comparison) previously rendered the IDENTICAL filename stem. The digest is a
-deterministic, Julia-version-stable FNV-1a over the vector's raw `Float64` bytes
-([`_stable_hex64`](@ref)); the uniform case (all entries equal — including the
-default-uniform sentinel resolution) adds NO component, because a uniform vector is
-already fully determined by the `stoch_S` field the name carries, keeping every
-pre-existing uniform-probability filename byte-identical. The NAME_MAX guard below
-applies AFTER the digest is folded in, so the lengthened name still respects the
-255-byte basename ceiling. Any caller that needs to know/print/reconstruct the path
-`run_and_store` will use (e.g. `scripts/run_scenario.jl`) MUST call this helper instead of
-re-deriving its own `savename(s, "jld2")` call — a second, independently-maintained call site
-is exactly how WR-06 (printed path silently diverging from the actual saved file) happened.
+Single source of truth for the JLD2 filename [`run_and_store`](@ref) saves `s` under.
 
-NOTE (Rule 1 fix, plan 22-05 — discovered by this phase's own closing full-suite acceptance
-gate, `test/test_experiments.jl`'s EXP-02/INFRA-04 items): `Scenario.jl`'s "ZERO
-`DrWatson.default_allowed` overloading" design invariant (RESEARCH.md Phase-21 Pitfall 6,
-"a documented, accepted cost") means the bare `savename` STRING grows monotonically as future
-phases add additive fields. Phase 21's `mpc_*` block plus Phase 22's `stoch_*` block, combined
-with `digits = 10`'s multi-byte Greek selector glyphs (`ε_abs`/`ε_rel`/`μ`/`ρ`/`τ_ratio`), have
-now pushed the bare `savename` BASENAME past Linux's `NAME_MAX = 255` BYTES (never
-characters) for EVERY `Scenario`, not just long-`name` ones — verified: even the shortest
-possible `name = "x"` with every OTHER field at its `@kwdef` default renders a 263-BYTE
-basename; `Phase8Fixtures.minimal_scenario_kwargs()`'s own `name = "phase8-fixture"` renders
-276 bytes. Shortening the caller's own descriptive `name` alone can therefore never close this
-gap — this is a structural filename-length ceiling reached by cumulative field growth across
-two phases, not a fixable caller-side choice, and it now applies to essentially every
-`Scenario`, not a rare pathological case. (Flagged here as a real limitation for a future
-phase to address properly — e.g. excluding structurally-inactive `mpc_*`/`stoch_*` fields from
-the name when the OTHER is a no-op for the given `strategy` — rather than papered over.) This
-guard never drops information: every selector field is ALREADY separately stamped inside the
-saved JLD2's own dict by [`result_to_dict`](@ref) (`d = struct2dict(s)`), so a hash-suffixed
-fallback filename loses no self-description at the CONTENT level, only shortens the
-human-skimmable FILENAME.
+DrWatson's `savename` silently DROPS struct-valued fields (`Scenario.strategy` is a struct), so
+the name is built from the explicit flattened `Dict` of `_scenario_identity`
+(`style = :filename`): `savename(dict, "jld2"; digits = 10)` (keys sorted alphabetically;
+`digits = 10` keeps float knobs from colliding under display rounding; `run_and_store` adds
+`safe = true` as defense-in-depth). Only the ACTIVE strategy's knobs appear
+(`strategy=ADMM`, `admm_ρ=...`), which also keeps names well under the NAME_MAX ceiling.
+
+For a `Stochastic` strategy with non-uniform `probabilities` (a `Vector{Float64}` that `savename`
+drops) a `_p<digest>` component is folded in before `.jld2`: a deterministic, Julia-version-stable
+FNV-1a over the raw `Float64` bytes ([`_stable_hex64`](@ref)) — a filename disambiguator, NOT a
+security hash. Uniform vectors add nothing (they are determined by `stoch_S`).
+
+NOTE: filename STRINGS changed in phase 32 (prefixed knob names, `strategy=`, `pf=`), orphaning
+older `data/sims` artifacts (gitignored, never committed). The NAME_MAX = 255-byte guard is kept
+(rarely hit now): an over-long name is truncated on a UTF-8 boundary and suffixed with
+`_h<hash(full)>`; no information is lost because [`result_to_dict`](@ref) stamps every selector
+inside the JLD2 itself.
+
+Any caller that needs the path `run_and_store` will use MUST call this helper rather than
+re-deriving a `savename` call.
 """
 function scenario_filename(s::Scenario)
-    full = savename(s, "jld2"; digits = 10)
-    # WR-02 (phase-22 review): fold a stable digest of the savename-DROPPED
-    # `stoch_probabilities` vector into the name whenever it is non-uniform (a uniform
-    # vector is fully determined by the `stoch_S` field already in the name, so uniform
-    # filenames stay byte-identical to before this fix). Raw-Float64-byte digest: no
-    # float-printing round-trip, deterministic across Julia versions (unlike Base.hash).
-    if !allequal(s.stoch_probabilities)
-        digest = _stable_hex64(reinterpret(UInt8, s.stoch_probabilities))
+    full = savename(_scenario_identity(s; style = :filename), "jld2"; digits = 10)
+    st = s.strategy
+    if st isa Stochastic && !allequal(st.probabilities)
+        digest = _stable_hex64(reinterpret(UInt8, st.probabilities))
         full = string(chop(full; tail = 5), "_p", digest, ".jld2")   # 5 = length(".jld2")
     end
     name_max = 255                    # Linux/most filesystems' hard basename byte ceiling.
@@ -101,12 +155,8 @@ function scenario_filename(s::Scenario)
     hash_suffix_len = 2 + 16 + 5      # "_h" + 16 hex digits + ".jld2".
     target = name_max - safesave_buffer
     sizeof(full) <= target && return full
-    # Fallback: a filesystem-safe, human-recognizable STEM (as much of the full descriptive
-    # name as fits the budget, snapped to a valid UTF-8 character boundary via `thisind` so a
-    # multi-byte Greek glyph is never split mid-codepoint) plus a stable content hash of the
-    # COMPLETE (untruncated) descriptive string — so two `Scenario`s that happen to share the
-    # same truncated PREFIX but differ later (e.g. in `stoch_H_oos`/`τ_ratio`) still resolve to
-    # DIFFERENT filenames, never silently colliding on the truncated stem alone.
+    # Fallback: truncated STEM (snapped to a UTF-8 boundary via `thisind`) plus a hash of the
+    # COMPLETE descriptive string so prefix-sharing Scenarios never collide.
     stem_budget = target - hash_suffix_len
     stem_end = thisind(full, min(sizeof(full), stem_budget))
     stem = full[1:stem_end]
@@ -116,24 +166,21 @@ end
 """
     result_to_dict(res::ScenarioResult) -> Dict{Symbol,Any}
 
-Build the Symbol-keyed provenance dict that [`run_and_store`](@ref) `@tagsave`s: EVERY
-`Scenario` selector (`struct2dict(s)` — `name`, `feeder`, `strategy`, `seed`, `T`, `population`,
-`price`, `allow_export`, `ρ`, `ε_abs`, `ε_rel`, `maxiter`, `τ_ratio`, `μ`) so the artifact is
-self-describing without re-loading the `Scenario` (CR-02 fix: a hand-picked field subset
-previously omitted the ADMM knobs and `allow_export`, silently breaking this exact guarantee
-for any non-default `:admm` run), the scalar result fields (`welfare`, `exact_maxgap`, `iters`,
-`final_r`, `final_s`, `reactive_consensus_mode`), the array `dadp`, and
-`:julia_version => string(VERSION)` (the Manifest-gap workaround, RESEARCH Pitfall 2).
+Build the Symbol-keyed provenance dict that [`run_and_store`](@ref) `@tagsave`s, from the same
+flatten helper as [`scenario_filename`](@ref) (`style = :record`): the common selectors
+(`name`, `feeder`, `seed`, `T`, `population`, `price`, `allow_export`), `:pf`,
+`:pf_thesis_literal`, `:pf_ε`, lowercase `:strategy`, and the legacy flat knob keys of the
+ACTIVE strategy only (`:ρ ... :μ` / `:mpc_*` / `:stoch_*`); plus `welfare`, `dadp`,
+`exact_maxgap`, `iters`, `final_r`, `final_s`, `reactive_consensus_mode` (`missing` for
+non-ADMM), `:julia_version = string(VERSION)`, for MPC `:regret`/`:steps`, and for Stochastic
+`:welfare_gap`. Only primitives/arrays are stored — never strategy objects, `MpcTrace`,
+NamedTuples or details structs — so the JLD2 loads without TSODSO types.
 
-NOTE (WR-01, phase-26 review): `reactive_consensus_mode` is `missing` for `:centralized` and the
-RESOLVED `ReactiveMode` (`OFF`/`CERTIFIED`/`LIVE`) for `:admm` — `solve_admm`'s smart PM-03
-default (`_any_flexible_reactive`) otherwise silently resolves per-call and is not recoverable
-from `Scenario`'s own fields alone; stamping it here makes an on-disk artifact self-describing
-even when the resolved mode was never explicitly requested by the caller.
+NOTE (WR-01, phase-26 review): `reactive_consensus_mode` is the RESOLVED `ReactiveMode` for
+ADMM, stamped so the artifact is self-describing.
 """
 function result_to_dict(res::ScenarioResult)
-    s = res.scenario
-    d = struct2dict(s)   # ALL Scenario selectors (CR-02) — never a hand-picked subset
+    d = _scenario_identity(res.scenario; style = :record)
     d[:welfare] = res.welfare
     d[:dadp] = res.dadp
     d[:exact_maxgap] = res.exact_maxgap
@@ -142,6 +189,13 @@ function result_to_dict(res::ScenarioResult)
     d[:final_s] = res.final_s
     d[:reactive_consensus_mode] = res.reactive_consensus_mode
     d[:julia_version] = string(VERSION)
+    det = res.details
+    if det isa MPCDetails
+        d[:regret] = det.regret
+        d[:steps] = det.steps
+    elseif det isa StochasticDetails
+        d[:welfare_gap] = det.oos.welfare_gap
+    end
     return d
 end
 
@@ -149,7 +203,7 @@ end
     run_and_store(s::Scenario; dir::AbstractString = datadir("sims")) -> ScenarioResult
 
 Run `s` via [`run_scenario`](@ref) and `@tagsave` a per-run provenance dict to a JLD2 file
-named `savename(s, "jld2"; digits = 10)` under `dir` (default `datadir("sims")`, gitignored).
+named `scenario_filename(s)` under `dir` (default `datadir("sims")`, gitignored).
 The saved dict carries every field from [`result_to_dict`](@ref) PLUS `:gitcommit` (+
 `:gitpatch` on a dirty tree) and `:script`, stamped by `@tagsave` itself (`storepatch = true`).
 
