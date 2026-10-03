@@ -373,11 +373,11 @@ JULIA_LOAD_PATH="@:.:test:@stdlib" julia --project=. -e 'using TestItemRunner; T
 | A4 | Recommending foreign `pf_*` options (e.g. `pf_ε` with `:convex_branch_flow`) throw, like foreign strategy knobs | Scenario design | Low; CONTEXT silent — user may prefer silently ignoring. Planner/discuss may confirm. [ASSUMED] |
 | A5 | `run_mpc(s)`/`run_stochastic(s)` fallback to `MPC()`/`Stochastic()` defaults when `s.strategy` is another type | Pitfall 5 | Low-medium: CONTEXT silent; alternative is an `ArgumentError`. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`exact_maxgap` for MPC** — `run_mpc` returns no numeric gap. Recommend `NaN` + doc. Alternative: add the max `cone_maxratio` to the trace (touches `MpcTrace`; out of scope).
-2. **Should `run(st, s)` accept `st` different from `s.strategy`?** Recommend yes (explicit arg wins; result's scenario is rebuilt). CONTEXT's `run(s) = run(s.strategy, s)` is compatible.
-3. **Dict-key lowercase vs CONTEXT's filename `strategy=ADMM`.** Recommend lowercase Symbols in the stored dict/CSV (compat with `collate_summary` consumers) and the type name in the filename; planner to confirm.
+1. **`exact_maxgap` for MPC** — `run_mpc` returns no numeric gap. Recommend `NaN` + doc. Alternative: add the max `cone_maxratio` to the trace (touches `MpcTrace`; out of scope). RESOLVED: `exact_maxgap = NaN` for MPC, documented (Plan 32-05).
+2. **Should `run(st, s)` accept `st` different from `s.strategy`?** Recommend yes (explicit arg wins; result's scenario is rebuilt). CONTEXT's `run(s) = run(s.strategy, s)` is compatible. RESOLVED: explicit `st` wins via `with_strategy` (Plans 32-02/32-03).
+3. **Dict-key lowercase vs CONTEXT's filename `strategy=ADMM`.** Recommend lowercase Symbols in the stored dict/CSV (compat with `collate_summary` consumers) and the type name in the filename; planner to confirm. RESOLVED: lowercase Symbols in stored dict/CSV, type-name form in filename (Plan 32-04).
 
 ## Environment Availability
 
