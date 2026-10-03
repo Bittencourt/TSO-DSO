@@ -3,7 +3,7 @@
 # Every prior "Models" page in this manual solves ONE day-ahead problem and reports ONE set of
 # duals. This page closes Phase 21 by demonstrating the alternative this framework now also
 # supports: a **receding-horizon closed loop** — [`run_mpc`](@ref) re-solves a fixed-length
-# window model every `mpc_step` hours, publishing a genuinely rolling real-time price (RTP)
+# window model every `step` hours, publishing a genuinely rolling real-time price (RTP)
 # signal, and is honestly benchmarked against the perfect-foresight day-ahead optimum computed
 # on the SAME realized truth. The terminal-equality mechanism this page exercises (D-06) follows
 # the standard MPC textbook framing of a **hard terminal-equality constraint** (as opposed to a
@@ -31,14 +31,14 @@ using TSODSO
 # `Scenario` rather than hand-building a second bespoke feeder: the declarative spec IS the
 # "inlined fixture" for an entry point that only ever accepts one.
 #
-# `T = 24` is the full day-ahead horizon. `mpc_H = 6` is a genuinely multi-hour receding window
+# `T = 24` is the full day-ahead horizon. `MPC(H = 6)` is a genuinely multi-hour receding window
 # (documented choice: large enough to be demonstrative of a receding horizon, short enough that
-# the closed loop re-solves many times over the day) — giving `T - mpc_H + 1 = 19` published
+# the closed loop re-solves many times over the day) — giving `T - H + 1 = 19` published
 # steps (Pitfall 5's fixed-window convention: the published-step COUNT is invariant to
-# `mpc_step`, which stays at its default of `1`). `mpc_terminal_soc = true` keeps D-06's hard
+# `step`, which stays at its default of `1`). `terminal_soc = true` keeps D-06's hard
 # terminal-SOC equality active (this page does NOT re-run the disabled/dump-hoard negative
 # control — that A/B regression is `test/test_mpc_terminal.jl`'s job, plan 21-04, not this rung's).
-# `mpc_forecast_error = 0.08` is a genuinely nonzero seeded bounded PV/demand perturbation,
+# `forecast_error = 0.08` is a genuinely nonzero seeded bounded PV/demand perturbation,
 # citing D-08's documented "±5-10%" range.
 
 const T = 24
@@ -48,9 +48,7 @@ s = Scenario(;
     name = "mpc-rolling-horizon-demo",
     feeder = :ieee13,
     T = T,
-    mpc_H = H,
-    mpc_terminal_soc = true,
-    mpc_forecast_error = 0.08,
+    strategy = MPC(H = H, terminal_soc = true, forecast_error = 0.08),
 )
 
 # ## Running the full receding-horizon closed loop
@@ -62,7 +60,7 @@ s = Scenario(;
 # reference DADP path, and the COMPARABLE benchmark over the same Deferrable-excluded device
 # set the closed loop controls, which the regret comparison reads (see section 3). It then
 # builds the receding-horizon [`MpcWindow`](@ref) ONCE, and re-solves it `19` times (once per
-# published hour, since `mpc_step = 1` here), dispatching Phase-20's own non-throwing
+# published hour, since `step = 1` here), dispatching Phase-20's own non-throwing
 # certificate/fallback ladder on every resolve and recording every published hour into an
 # [`MpcTrace`](@ref).
 
@@ -70,7 +68,7 @@ r = run_mpc(s)
 
 r.steps
 
-# `steps == T - mpc_H + 1 == 19`, confirmed live above — the published-hour count this page's
+# `steps == T - H + 1 == 19`, confirmed live above — the published-hour count this page's
 # own `<verify>` invocation asserts.
 
 # ## 1. Day-ahead SOC/price trajectory (perfect-foresight benchmark, all 24 hours)
@@ -112,7 +110,7 @@ last(r.trace.cum_deviation_trace)
 # already-computed `r` — nothing below re-runs the closed loop. TOP panel: the full 24-hour
 # perfect-foresight day-ahead DADP reference (dashed) with the 19 genuinely PUBLISHED
 # real-time prices overlaid at their absolute hours; the shaded tail marks the hours the
-# fixed-window convention never publishes (`T − mpc_H + 1` through `T` fall inside the final
+# fixed-window convention never publishes (`T − H + 1` through `T` fall inside the final
 # window but after its first interval — Pitfall 5). BOTTOM panel: the per-hour absolute
 # published-vs-day-ahead gap `|λ_RTP[t] − λ_DA[t]|` (bars) under the RUNNING cumulative
 # deviation (line) — the D-10 price-consistency ledger `max_jump`/`mean_jump` summarize as

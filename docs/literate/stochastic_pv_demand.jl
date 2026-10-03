@@ -4,12 +4,12 @@
 # loop — solves exactly ONE realization of PV/demand and reports exactly ONE price path. This
 # page closes Phase 22 by demonstrating the genuinely different structure this framework now
 # also supports: a **two-stage stochastic extensive form** — [`run_stochastic`](@ref) builds
-# `s.stoch_S` independently-seeded scenarios sharing a single first-stage battery schedule
+# `s.strategy.S` independently-seeded scenarios sharing a single first-stage battery schedule
 # (tied by explicit nonanticipativity equality constraints, D-02), solves ALL of them at once
 # on one shared `Model`, and reports the per-scenario day-ahead dynamic price (DADP) as the
 # PRIMARY output — the probability-weighted expectation across scenarios is a DERIVED SUMMARY,
 # never a constraint-backed price in its own right (D-05/D-07). The committed first-stage
-# schedule is then scored out-of-sample against `s.stoch_H_oos` disjoint held-out draws it
+# schedule is then scored out-of-sample against `s.strategy.H_oos` disjoint held-out draws it
 # never saw during the in-sample solve (STOCH-03/D-09). Every number shown below is RECOMPUTED
 # live during this page's build, exactly like every prior rung page in this manual.
 
@@ -24,15 +24,15 @@ using TSODSO
 # as `mpc_rolling_horizon.jl` does for its own entry point.
 #
 # `T = 9` mirrors the Pitfall-3 `:default`-population floor and keeps this page's live build
-# fast (a handful of seconds). `stoch_S = 5` is the upper end of the locked D-01 band
-# (`3 <= stoch_S <= 5`) — the most scenarios this framework currently allows, chosen here so
+# fast (a handful of seconds). `S = 5` is the upper end of the locked D-01 band
+# (`3 <= S <= 5`) — the most scenarios this framework currently allows, chosen here so
 # the extensive form is genuinely demonstrative rather than a degenerate 2-scenario case.
-# `stoch_probabilities = [0.05, 0.15, 0.30, 0.30, 0.20]` is a genuinely non-uniform 5-vector
+# `probabilities = [0.05, 0.15, 0.30, 0.30, 0.20]` is a genuinely non-uniform 5-vector
 # summing to 1: a "central scenarios more likely than extreme ones" bell shape, rising to a
 # peak at scenarios 3-4 and falling off toward scenarios 1 and 5 — the kind of asymmetric
 # weighting a uniform-probability demo would never exercise (D-04's own CI-fixture requirement
-# generalizes to this page too). `stoch_H_oos = 10` is the upper end of the locked D-10 band
-# (`5 <= stoch_H_oos <= 10`).
+# generalizes to this page too). `H_oos = 10` is the upper end of the locked D-10 band
+# (`5 <= H_oos <= 10`).
 #
 # **A documented numerical-sensitivity finding (mirrors 22-02's own D-08 discovery):** the
 # first uniformly-spaced probability vector tried while drafting this page
@@ -50,19 +50,17 @@ s = Scenario(;
     name = "stochastic-pv-demand-demo",
     feeder = :ieee13,
     T = T,
-    stoch_S = 5,
-    stoch_probabilities = [0.05, 0.15, 0.30, 0.30, 0.20],
-    stoch_H_oos = 10,
+    strategy = Stochastic(S = 5, probabilities = [0.05, 0.15, 0.30, 0.30, 0.20], H_oos = 10),
 )
 
 # ## Running the extensive form + out-of-sample evaluation
 #
-# [`run_stochastic`](@ref) materializes `s.stoch_S = 5` in-sample scenario populations from a
+# [`run_stochastic`](@ref) materializes `s.strategy.S = 5` in-sample scenario populations from a
 # disjoint `sub_seed` tag family, solves the S-scenario extensive form via
 # [`build_stochastic_welfare`](@ref) (nonanticipativity-tying every battery-like device across
 # scenarios, per-scenario PF-04 exactness gated INDEPENDENTLY, never aggregated — D-06), reads
 # the solved shared first-stage battery schedule off scenario 1's own device variables, then
-# builds the out-of-sample [`StochasticOosHarness`](@ref) EXACTLY ONCE against `s.stoch_H_oos
+# builds the out-of-sample [`StochasticOosHarness`](@ref) EXACTLY ONCE against `s.strategy.H_oos
 # = 10` disjoint held-out scenarios, pins the harness's battery controls to the in-sample
 # optimum ONCE (D-09's build-once contract), and re-solves across all 10 held-out draws:
 
@@ -70,7 +68,7 @@ r = run_stochastic(s)
 
 length(r.in_sample.dadp)
 
-# `length(r.in_sample.dadp) == s.stoch_S == 5`, confirmed live above.
+# `length(r.in_sample.dadp) == s.strategy.S == 5`, confirmed live above.
 
 # ## Figure — the in-sample PV/demand scenario fan
 #
@@ -92,7 +90,7 @@ if Base.find_package("CairoMakie") !== nothing
         generate_profiles(;
             seed = sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)),
             T = T,
-        ) for k in 1:s.stoch_S
+        ) for k in 1:s.strategy.S
     ]
 
     fig = Figure(size = (980, 400))
@@ -110,8 +108,8 @@ if Base.find_package("CairoMakie") !== nothing
         xticks = 1:T,
         title = "In-sample demand fan",
     )
-    for k in 1:s.stoch_S
-        lab = "scenario $k (p = $(s.stoch_probabilities[k]))"
+    for k in 1:s.strategy.S
+        lab = "scenario $k (p = $(s.strategy.probabilities[k]))"
         scatterlines!(axpv, 1:T, scen_profiles[k].pv; color = scen_colors[k], label = lab)
         scatterlines!(axdem, 1:T, scen_profiles[k].demand; color = scen_colors[k])
     end
@@ -126,7 +124,7 @@ end
 # reported as "the" price. The five vectors below are the genuine primary output of this
 # model:
 
-[round.(r.in_sample.dadp[k]; digits = 4) for k in 1:s.stoch_S]
+[round.(r.in_sample.dadp[k]; digits = 4) for k in 1:s.strategy.S]
 
 # ## 2. Expected DADP — a DERIVED SUMMARY, never a constraint-backed price (D-07)
 #
@@ -170,13 +168,13 @@ if Base.find_package("CairoMakie") !== nothing
         xticks = 1:T,
         title = "Deviation from the derived expectation (D-07)",
     )
-    for k in 1:s.stoch_S
+    for k in 1:s.strategy.S
         scatterlines!(
             axfan,
             1:T,
             r.in_sample.dadp[k];
             color = scen_colors[k],
-            label = "scenario $k (p = $(s.stoch_probabilities[k]))",
+            label = "scenario $k (p = $(s.strategy.probabilities[k]))",
         )
         scatterlines!(
             axdev,
@@ -253,7 +251,7 @@ if Base.find_package("CairoMakie") !== nothing
         fig[1, 1];
         xlabel = "held-out draw h",
         ylabel = "welfare (objective units)",
-        xticks = 1:s.stoch_H_oos,
+        xticks = 1:s.strategy.H_oos,
         title = "Committed first-stage schedule scored out-of-sample (STOCH-03/D-09)",
     )
     hlines!(

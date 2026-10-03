@@ -42,17 +42,25 @@ using TSODSO
 s = Scenario(
     name = "docs-demo",
     feeder = :ieee13,
-    strategy = :centralized,
+    strategy = Centralized(),
+    pf = :convex_branch_flow,
     seed = 1,
     T = 24,
 )
 
-# [`run_scenario`](@ref) materializes the feeder/price/population from the selectors +
-# seed, dispatches on `s.strategy` (`:centralized` → `solve_welfare` + `extract_dlmp`),
-# and normalizes the outcome into a strategy-independent [`ScenarioResult`](@ref). It is
+# The `strategy` field holds a strategy STRUCT (`Centralized()`, `ADMM(...)`, `MPC(...)`,
+# `Stochastic(...)`) carrying that strategy's own knobs, and `pf` selects the power-flow
+# formulation. (The legacy flat form `Scenario(; strategy = :admm, ρ = 50.0)` is still
+# accepted for compatibility and is converted to the same struct, but the declarative form
+# above is the documented path.)
+#
+# `TSODSO.run(strategy, scenario)` is the ONE entry point: it dispatches on the strategy
+# type, materializes the feeder/price/population from the selectors + seed, and
+# normalizes the outcome into a strategy-independent [`ScenarioResult`](@ref).
+# [`run_scenario`](@ref) is a thin wrapper that calls `TSODSO.run(s.strategy, s)`. It is
 # PATH-FREE — nothing touches the disk here; persistence is a separate seam below.
 
-res_c = run_scenario(s)
+res_c = TSODSO.run(s.strategy, s)
 
 # The social-welfare objective (thesis eq. 3.38) at the solved optimum:
 
@@ -119,6 +127,35 @@ if Base.find_package("CairoMakie") !== nothing
     fig1
 end
 
+# ## Selecting the power-flow formulation
+#
+# The `pf` selector (plus `pf_thesis_literal` and `pf_ε`) picks the network model:
+#
+# | `pf`                       | extra knobs                    | Centralized | ADMM/MPC/Stochastic |
+# |:---------------------------|:-------------------------------|:-----------:|:-------------------:|
+# | `:convex_branch_flow` (default) | `pf_thesis_literal`       | yes         | yes                 |
+# | `:restricted_branch_flow`  | `pf_ε`                         | yes         | no                  |
+# | `:lindistflow`             | —                              | yes         | no                  |
+# | `:ac`                      | — (runs with `allow_local`)    | yes         | no                  |
+#
+# LinDistFlow and AC have no SOC cone, so their `exact_maxgap` is `NaN` ("not
+# applicable"). Run the linearized formulation through the same entry point:
+
+s_lin = Scenario(name = "docs-lindistflow", feeder = :ieee13, pf = :lindistflow, seed = 1, T = 24)
+res_lin = TSODSO.run(Centralized(), s_lin)
+(welfare = res_lin.welfare, exact_maxgap = res_lin.exact_maxgap)
+
+# An unsupported strategy × formulation pair is rejected at construction, before any
+# solve (until the ADMM generalisation phase, decomposed strategies accept only the
+# default convex formulation):
+
+bad_pf = try
+    Scenario(name = "docs-bad-pf", feeder = :ieee13, strategy = ADMM(), pf = :lindistflow)
+catch err
+    err
+end
+sprint(showerror, bad_pf)
+
 # ## Validation is a construction invariant
 #
 # A bogus selector never reaches a solver — the `Scenario` constructor itself throws a
@@ -133,17 +170,21 @@ end
 sprint(showerror, bad)
 
 # The same guard covers `strategy`/`price`/`population` selectors and the numeric ranges
-# (`T ≥ 1`, `seed ≥ 1`, `maxiter ≥ 1`, positive ADMM knobs, the MPC/stochastic bands).
+# (`T ≥ 1`, `seed ≥ 1`) and the per-strategy knobs (`ADMM`: `maxiter ≥ 1`, positive
+# penalties; `MPC`/`Stochastic`: their bands), validated by the strategy constructors.
 #
 # ## The `:admm` strategy — same Scenario schema, decomposed solve
 #
 # Switching the ONE `strategy` selector re-runs the IDENTICAL materialized problem
 # through the Rung-5 hand-rolled 2-block dual-ascent loop (`solve_admm`) instead of the
 # monolithic solve. The result lands in the SAME `ScenarioResult` schema, now with the
-# ADMM-only fields populated:
+# ADMM details populated. `ScenarioResult` keeps strategy-specific output in a typed
+# `details` field (`nothing` for Centralized, `ADMMDetails`/`MPCDetails`/
+# `StochasticDetails` otherwise); the ADMM properties `iters`, `final_r`, `final_s` are
+# forwarded from `details` and are `missing` for non-ADMM results:
 
-s_admm = Scenario(name = "docs-demo", feeder = :ieee13, strategy = :admm, seed = 1, T = 24)
-res_a = run_scenario(s_admm)
+s_admm = Scenario(name = "docs-demo", feeder = :ieee13, strategy = ADMM(), seed = 1, T = 24)
+res_a = TSODSO.run(s_admm.strategy, s_admm)
 
 (iters = res_a.iters, final_r = res_a.final_r, final_s = res_a.final_s)
 
@@ -221,7 +262,8 @@ res_stored = run_and_store(s; dir = store_dir)
 # [`scenario_filename`](@ref) is the single source of truth for the artifact's name —
 # `savename(s, "jld2"; digits = 10)`, hash-suffix-truncated when the fully descriptive
 # stem would exceed the filesystem's 255-byte basename ceiling (the content itself
-# always carries every selector, so nothing is lost):
+# always carries every selector, so nothing is lost). Names are prefixed with the active
+# strategy and only that strategy's knobs, e.g. `strategy=ADMM`, `admm_ρ=...`:
 
 fname = scenario_filename(s)
 
@@ -311,7 +353,7 @@ end
 #   - `scripts/sweep.jl` — edit the `params` Dict, run it to launch a sweep and collate
 #     the committed CSV summary under `results/sweeps/`.
 #
-# The `mpc_*` and `stoch_*` fields a `Scenario` also carries are NO-OPS for the
-# `:centralized`/`:admm` strategies shown here — they are consumed only by the separate
-# `run_mpc` (Rung-8 rolling horizon) and `run_stochastic` (Rung-9 uncertainty) entry
-# points, which read the same declarative `Scenario` schema.
+# The `MPC(...)` and `Stochastic(...)` strategies (Rung-8 rolling horizon, Rung-9
+# uncertainty) plug into the same `Scenario(strategy = ...)` schema and the same
+# `TSODSO.run(strategy, scenario)` entry point; `run_mpc`/`run_stochastic` remain as
+# wrappers returning their richer NamedTuples.
