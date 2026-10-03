@@ -216,6 +216,11 @@
         "build_feeder",      # experiments/materialize.jl — scenario materializer
         "build_price",       # experiments/materialize.jl — scenario materializer
         "build_population",  # experiments/materialize.jl — scenario materializer
+        "build_powerflow",   # experiments/materialize.jl — Phase-32 pf-selector materializer
+        # (ARCH-01): maps a Scenario's primitive `pf` selector to an
+        # AbstractPowerFlow instance; builds no JuMP model, so it is an
+        # OPERATIONAL-layer helper, never a planning-layer builder —
+        # added here per this file's own tripwire contract.
         "build_mpc_window",  # models/mpc_window.jl — Phase-21 receding-horizon window
         # builder (MPC-01); an OPERATIONAL-layer builder (build-once
         # welfare-shaped window, no binaries/integers by construction,
