@@ -3,17 +3,16 @@
 # SEAM: stochastic extensive-form closed orchestrator (STOCH-01..03).
 # OWNER: plan 22-04.
 #
-# `run_stochastic(s::Scenario)` is an INDEPENDENT entry point — it is NOT wired through
-# `run_scenario`/`run.jl`'s `:centralized`/`:admm` `strategy` dispatch (D-01/D-02; mirrors
-# `run_mpc`'s own positioning note verbatim, `src/experiments/mpc_loop.jl`). It:
+# `run_stochastic(s::Scenario)` reads its knobs from `Scenario.strategy::Stochastic`
+# (Phase 32) and is also reachable via `TSODSO.run(::Stochastic, s)`. It:
 #
-#  1. materializes `s.stoch_S` in-sample scenario aggregator populations from a DISJOINT
+#  1. materializes `st.S` in-sample scenario aggregator populations from a DISJOINT
 #     `sub_seed` tag family (`:stoch_insample_profiles_k`/`:stoch_insample_population_k`);
 #  2. solves the S-scenario extensive form via `build_stochastic_welfare` (plan 22-02);
 #  3. reads the SOLVED, shared first-stage battery schedule off scenario 1's own device vars
 #     (every scenario's battery is nonanticipativity-tied to it, so scenario 1's copy IS the
 #     shared schedule);
-#  4. materializes `s.stoch_H_oos` held-out scenario aggregator populations from a SECOND,
+#  4. materializes `st.H_oos` held-out scenario aggregator populations from a SECOND,
 #     DISJOINT `sub_seed` tag family (`:stoch_oos_profiles_h`/`:stoch_oos_population_h`);
 #  5. builds the out-of-sample harness EXACTLY ONCE (`build_stochastic_oos_harness`, plan
 #     22-03) against held-out scenario 1's aggregator list as the device STRUCTURE template,
@@ -84,10 +83,10 @@ end
     run_stochastic(s::Scenario) -> NamedTuple
 
 Drive the FULL two-stage stochastic extensive-form + out-of-sample evaluation for `s`
-(STOCH-01..03): materialize `s.stoch_S` in-sample scenario aggregator populations, solve the
+(STOCH-01..03): materialize `st.S` in-sample scenario aggregator populations, solve the
 extensive form via [`build_stochastic_welfare`](@ref), then drive
 [`build_stochastic_oos_harness`](@ref)/[`solve_stochastic_oos_step!`](@ref) across
-`s.stoch_H_oos` held-out scenarios — pinning the first-stage battery schedule to the
+`st.H_oos` held-out scenarios — pinning the first-stage battery schedule to the
 in-sample optimum ONCE (D-09's build-once contract, never rebuilding across the held-out
 loop) — and reporting the realized-vs-in-sample welfare gap (D-09/D-10).
 
@@ -143,19 +142,19 @@ Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-ident
 guarantee) — every stochastic draw flows through a seeded, independent `sub_seed` sub-stream,
 never the global RNG.
 """
-function run_stochastic(s::Scenario)
+function _run_stochastic(s::Scenario, st::Stochastic)
     # --- 1. MATERIALIZE, verbatim per run_mpc's/run_scenario's own materialization block
     # (mirrors `src/experiments/mpc_loop.jl`): feeder/pf built ONCE, reused for every
     # scenario below (never rebuilt inside the per-scenario loops). ------------------------
     feeder = build_feeder(s.feeder)
-    pf = ConvexBranchFlow()
+    pf = build_powerflow(s)
 
-    # --- 2. In-sample scenario populations, one per k in 1:s.stoch_S, from a DISJOINT
+    # --- 2. In-sample scenario populations, one per k in 1:st.S, from a DISJOINT
     # `sub_seed` tag family (T-22-06). λ₀ is computed ONCE, from scenario 1's own profile
     # draw, and reused verbatim for every scenario (see file header). ----------------------
-    scenario_aggs = Vector{Vector{Aggregator}}(undef, s.stoch_S)
+    scenario_aggs = Vector{Vector{Aggregator}}(undef, st.S)
     λ₀ = Float64[]
-    for k in 1:s.stoch_S
+    for k in 1:st.S
         profiles_k = generate_profiles(;
             seed = sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)),
             T = s.T,
@@ -177,7 +176,7 @@ function run_stochastic(s::Scenario)
         feeder,
         pf,
         scenario_aggs;
-        probabilities = s.stoch_probabilities,
+        probabilities = st.probabilities,
         T = s.T,
         λ₀ = λ₀,
         allow_export = s.allow_export,
@@ -213,10 +212,10 @@ function run_stochastic(s::Scenario)
         end
     end
 
-    # --- 5. MATERIALIZE the held-out scenario populations, one per h in 1:s.stoch_H_oos,
+    # --- 5. MATERIALIZE the held-out scenario populations, one per h in 1:st.H_oos,
     # from a SECOND, DISJOINT `sub_seed` tag family (T-22-06). ------------------------------
-    held_out_aggs = Vector{Vector{Aggregator}}(undef, s.stoch_H_oos)
-    for h in 1:s.stoch_H_oos
+    held_out_aggs = Vector{Vector{Aggregator}}(undef, st.H_oos)
+    for h in 1:st.H_oos
         profiles_h = generate_profiles(;
             seed = sub_seed(s.seed, Symbol(:stoch_oos_profiles_, h)),
             T = s.T,
@@ -266,9 +265,9 @@ function run_stochastic(s::Scenario)
     # INFEASIBLE against the committed first-stage schedule (WR-05, phase-22 review) is
     # skipped-and-reported (welfare_h = NaN + infeasible_h mask + @warn), never allowed to
     # abort the whole run after the expensive extensive-form solve, and never silent. ------
-    welfare_h = Vector{Float64}(undef, s.stoch_H_oos)
-    infeasible_h = fill(false, s.stoch_H_oos)
-    for h in 1:s.stoch_H_oos
+    welfare_h = Vector{Float64}(undef, st.H_oos)
+    infeasible_h = fill(false, st.H_oos)
+    for h in 1:st.H_oos
         aggs_h = held_out_aggs[h]
 
         for ppv in h_oos.ppv_handles
@@ -305,6 +304,40 @@ function run_stochastic(s::Scenario)
             socp_maxgap = r.socp_maxgap,
         ),
         oos = (; welfare_h, infeasible_h, realized_welfare, welfare_gap),
+    )
+end
+
+"""
+    run_stochastic(s::Scenario) -> NamedTuple
+
+Thin wrapper; knobs live on `Scenario.strategy::Stochastic` (`Stochastic()` defaults apply
+for a non-Stochastic strategy). NamedTuple contract unchanged.
+"""
+function run_stochastic(s::Scenario)
+    st = s.strategy isa Stochastic ? s.strategy : Stochastic()
+    return _run_stochastic(s, st)
+end
+
+"""
+    run(st::Stochastic, s::Scenario) -> ScenarioResult
+
+`welfare = in_sample.welfare`; `dadp = expected_dadp` as a `1 x T` row (first aggregator's
+priced bus); `exact_maxgap = maximum(in_sample.socp_maxgap)` (NaN if empty);
+`details::StochasticDetails`.
+"""
+function run(st::Stochastic, s::Scenario)
+    s_eff = st == s.strategy ? s : with_strategy(s, st)
+    t0 = time_ns()
+    r = _run_stochastic(s_eff, st)
+    elapsed = (time_ns() - t0) / 1.0e9
+    gap = isempty(r.in_sample.socp_maxgap) ? NaN : Float64(maximum(r.in_sample.socp_maxgap))
+    return ScenarioResult(
+        s_eff,
+        Float64(r.in_sample.welfare),
+        Matrix{Float64}(reshape(Vector{Float64}(r.in_sample.expected_dadp), 1, :)),
+        gap,
+        elapsed,
+        StochasticDetails(r.in_sample, r.oos),
     )
 end
 
