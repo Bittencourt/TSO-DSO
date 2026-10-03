@@ -27,9 +27,7 @@
         name = "mpc_loop_happy",
         feeder = :ieee13,
         T = 9,
-        mpc_H = 3,
-        mpc_terminal_soc = true,
-        mpc_forecast_error = 0.0,
+        strategy = MPC(H = 3, terminal_soc = true, forecast_error = 0.0),
     )
     r = run_mpc(s)
 
@@ -77,10 +75,7 @@ end
         name = "mpc_loop_fix10_shortfall",
         feeder = :ieee13,
         T = 9,
-        mpc_H = 3,
-        mpc_step = 1,
-        mpc_terminal_soc = true,
-        mpc_forecast_error = 0.3,
+        strategy = MPC(H = 3, step = 1, terminal_soc = true, forecast_error = 0.3),
         seed = 1,
     )
     r = run_mpc(s)
@@ -278,10 +273,7 @@ end
         name = "mpc_loop_fix10_shortfall",
         feeder = :ieee13,
         T = 9,
-        mpc_H = 3,
-        mpc_step = 1,
-        mpc_terminal_soc = true,
-        mpc_forecast_error = 0.3,
+        strategy = MPC(H = 3, step = 1, terminal_soc = true, forecast_error = 0.3),
         seed = 1,
     )
     r = run_mpc(s)
@@ -639,13 +631,11 @@ end
         name = "mpc_loop_stride",
         feeder = :ieee13,
         T = 9,
-        mpc_H = 3,
-        mpc_terminal_soc = true,
-        mpc_forecast_error = 0.05,
         seed = 1,
     )
-    s_step1 = Scenario(; base..., mpc_step = 1)
-    s_step2 = Scenario(; base..., mpc_step = 2)
+    mpc_base = (H = 3, terminal_soc = true, forecast_error = 0.05)
+    s_step1 = Scenario(; base..., strategy = MPC(; mpc_base..., step = 1))
+    s_step2 = Scenario(; base..., strategy = MPC(; mpc_base..., step = 2))
 
     r_step1 = run_mpc(s_step1)
     r_step2 = run_mpc(s_step2)
@@ -655,20 +645,20 @@ end
     @test r_step1.trace.steps == r_step1.steps
     @test r_step2.trace.steps == r_step1.steps
 
-    s_bad = Scenario(; base..., mpc_H = 3, mpc_step = 5)
+    s_bad = Scenario(; base..., strategy = MPC(; mpc_base..., H = 3, step = 5))
     @test_throws ArgumentError run_mpc(s_bad)
 
     # WR-02: with stateful devices (every :default population), mpc_step == mpc_H would
     # apply the window's dynamics-UNCOVERED H-th control (the recursions cover τ ≤ H−1),
     # which can drive the propagated measured state out of bounds and crash the NEXT
     # resolve — rejected loudly up front: mpc_step must be ≤ mpc_H − 1.
-    s_free_lunch = Scenario(; base..., mpc_H = 3, mpc_step = 3)
+    s_free_lunch = Scenario(; base..., strategy = MPC(; mpc_base..., H = 3, step = 3))
     @test_throws ArgumentError run_mpc(s_free_lunch)
 
     # WR-07: the window cannot exceed the day-ahead horizon — a Scenario-level
     # misconfiguration must throw HERE, not as a cryptic device-level "profile too short"
     # deep inside build_mpc_window (or a silent zero-resolve run).
-    s_long_window = Scenario(; base..., mpc_H = 12)   # T = 9 < mpc_H = 12
+    s_long_window = Scenario(; base..., strategy = MPC(; mpc_base..., H = 12))   # T = 9 < mpc_H = 12
     @test_throws ArgumentError run_mpc(s_long_window)
 
     @info "mpc_loop mpc_step stride measured difference" r_step1.realized_welfare r_step2.realized_welfare r_step1.regret r_step2.regret r_step1.trace.dadp_trace r_step2.trace.dadp_trace
@@ -705,10 +695,7 @@ end
         name = "mpc_loop_fix10_shortfall",
         feeder = :ieee13,
         T = 9,
-        mpc_H = 3,
-        mpc_step = 1,
-        mpc_terminal_soc = true,
-        mpc_forecast_error = 0.3,
+        strategy = MPC(H = 3, step = 1, terminal_soc = true, forecast_error = 0.3),
         seed = 1,
     )
 

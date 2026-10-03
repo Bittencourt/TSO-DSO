@@ -193,3 +193,65 @@ end
     r = TSODSO.run(ADMM(maxiter = 300), Scenario(name = "x", feeder = :ieee13, seed = 1, T = 24))
     @test r.scenario.strategy == ADMM(maxiter = 300)
 end
+
+@testitem "ARCH-02 run(MPC) common shape" tags = [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+    s = Scenario(name = "m", feeder = :ieee13, T = 9, strategy = MPC(H = 3, forecast_error = 0.0))
+    r = run_mpc(s)
+    res = TSODSO.run(s.strategy, s)
+    @test res isa TSODSO.ScenarioResult
+    @test res.welfare == r.realized_welfare
+    @test res.dadp == reshape(r.trace.dadp_trace, 1, :)
+    @test isnan(res.exact_maxgap)
+    @test res.details isa TSODSO.MPCDetails
+    @test res.details.regret == r.regret
+    @test res.details.steps == r.steps
+end
+
+@testitem "ARCH-02 run(Stochastic) common shape" begin
+    using TSODSO, Test
+    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
+    r = run_stochastic(s)
+    res = TSODSO.run(s.strategy, s)
+    @test res isa TSODSO.ScenarioResult
+    @test res.welfare == r.in_sample.welfare
+    @test size(res.dadp) == (1, 9)
+    @test res.dadp == reshape(r.in_sample.expected_dadp, 1, :)
+    @test res.exact_maxgap == maximum(r.in_sample.socp_maxgap)
+    @test res.details isa TSODSO.StochasticDetails
+end
+
+@testitem "ARCH-02 run_mpc/run_stochastic fallback to defaults" begin
+    using TSODSO, Test
+    r_def = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9))
+    r_exp = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic()))
+    @test r_def.in_sample.welfare == r_exp.in_sample.welfare
+    @test run_mpc(Scenario(name = "m", feeder = :ieee13, T = 9)).steps == 9 - 6 + 1
+end
+
+@testitem "ARCH-02 MPC/Stochastic reject non-convex pf at construction" begin
+    using TSODSO, Test
+    for st in (MPC(), Stochastic())
+        @test_throws ArgumentError Scenario(name = "x", feeder = :ieee13, pf = :lindistflow, strategy = st)
+        @test_throws ArgumentError Scenario(name = "x", feeder = :ieee13, pf = :ac, strategy = st)
+        @test_throws ArgumentError Scenario(
+            name = "x", feeder = :ieee13, pf = :restricted_branch_flow, strategy = st,
+        )
+        @test_throws ArgumentError Scenario(
+            name = "x", feeder = :ieee13, pf_thesis_literal = true, strategy = st,
+        )
+    end
+end
+
+@testitem "ARCH-02 run(st, s) dispatch uniformity" setup = [Phase21Fixtures] begin
+    using TSODSO, Test
+    for st in (Centralized(), MPC(H = 3, forecast_error = 0.0), Stochastic(S = 3, H_oos = 5))
+        s = Scenario(name = "u", feeder = :ieee13, T = 9, strategy = st)
+        res = TSODSO.run(s.strategy, s)
+        @test res isa TSODSO.ScenarioResult
+        @test res.welfare isa Float64
+        @test res.dadp isa Matrix{Float64}
+        @test res.exact_maxgap isa Float64
+        @test res.elapsed >= 0
+    end
+end

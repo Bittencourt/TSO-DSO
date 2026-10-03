@@ -2,9 +2,9 @@
 #
 # Seam: src/experiments/run_stochastic.jl (STOCH-01..03, plan 22-04). `run_stochastic`
 # generalizes `run_mpc`'s independent-entry-point SHAPE to the two-stage stochastic
-# extensive-form + out-of-sample evaluation: it materializes `s.stoch_S` in-sample scenario
+# extensive-form + out-of-sample evaluation: it materializes `s.strategy.S` in-sample scenario
 # populations from a DISJOINT `sub_seed` tag family, solves `build_stochastic_welfare`
-# (plan 22-02), then materializes `s.stoch_H_oos` held-out populations from a SECOND,
+# (plan 22-02), then materializes `s.strategy.H_oos` held-out populations from a SECOND,
 # DISJOINT tag family and drives them through the build-once `StochasticOosHarness`
 # (plan 22-03), reporting the realized-vs-in-sample welfare gap. Items tagged
 # `[:run_stochastic]`, `setup = [Phase22Fixtures]` (this file's own items construct a
@@ -20,13 +20,13 @@
     [:run_stochastic] setup = [Phase22Fixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, stoch_S = 3, stoch_H_oos = 5)
+    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
 
     # Independently re-derive the SAME two seed families run_stochastic itself derives
     # internally, using the SAME sub_seed(s.seed, tag) idiom and DISJOINT tag prefixes.
     insample_seeds =
-        [sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)) for k in 1:s.stoch_S]
-    oos_seeds = [sub_seed(s.seed, Symbol(:stoch_oos_profiles_, h)) for h in 1:s.stoch_H_oos]
+        [sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)) for k in 1:s.strategy.S]
+    oos_seeds = [sub_seed(s.seed, Symbol(:stoch_oos_profiles_, h)) for h in 1:s.strategy.H_oos]
 
     @test isempty(intersect(insample_seeds, oos_seeds))
 end
@@ -35,7 +35,7 @@ end
     [Phase22Fixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, stoch_S = 3, stoch_H_oos = 5)
+    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
 
     r1 = run_stochastic(s)
     r2 = run_stochastic(s)
@@ -89,21 +89,21 @@ end
     [:run_stochastic] setup = [Phase22Fixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, stoch_S = 3, stoch_H_oos = 5)
+    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
     r = run_stochastic(s)
 
-    @test length(r.oos.infeasible_h) == s.stoch_H_oos
+    @test length(r.oos.infeasible_h) == s.strategy.H_oos
     @test all(.!r.oos.infeasible_h)
     @test all(isfinite, r.oos.welfare_h)
     # With nothing infeasible, realized_welfare keeps its pre-WR-05 definition exactly.
-    @test r.oos.realized_welfare == sum(r.oos.welfare_h) / s.stoch_H_oos
+    @test r.oos.realized_welfare == sum(r.oos.welfare_h) / s.strategy.H_oos
 end
 
 @testitem "run_stochastic: D-11 measurement-before-golden — repeated-run stability precedes the pinned literal" tags =
     [:run_stochastic] setup = [Phase22Fixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, stoch_S = 3, stoch_H_oos = 5)
+    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
 
     # THREE fresh calls (never a cached result) with the SAME s — bit-for-bit stability,
     # exploiting this project's own deterministic-seeded-draw guarantee. This assertion MUST
@@ -129,7 +129,7 @@ end
     # on the "Julia 1.12 - ubuntu-latest" job only (1.10 and 1.11 pass). Root cause is a
     # genuine cross-Julia-minor-version Clarabel converged-iterate shift, not a bug or a
     # flaky test — three fresh same-process run_stochastic(s) calls per version, same
-    # Scenario(name="t", feeder=:ieee13, T=9, stoch_S=3, stoch_H_oos=5), are bit-for-bit
+    # Scenario(name="t", feeder=:ieee13, T=9, strategy=Stochastic(S=3, H_oos=5)), are bit-for-bit
     # stable WITHIN each version:
     #
     #   Julia   | welfare_gap             | stable across 3 calls
