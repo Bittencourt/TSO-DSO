@@ -383,8 +383,10 @@ fixture). For a GNE whose shared-row multiplier is IDENTICAL across every player
 variational equilibrium, VE), use [`solve_variational_equilibrium`](@ref) instead — a
 single monolithic joint solve, not a diagonalization. The VE is unique only when the
 joint problem's optimum is (e.g. asymmetric `c_inv`); on the symmetric interior-cap
-fixture every GNE of the continuum already shares the multiplier, so the VE set equals
-the GNE set there (see that function's docstring).
+fixture the VE set is the whole split segment `x_inv_1 + x_inv_2 = 0.7`, `z = (0.7, 0.7)`
+(non-unique, solver-dependent point), and the GNE set is STRICTLY larger — it also
+contains free-riding GNEs `x_inv_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]`, with unequal
+multipliers (see that function's docstring).
 
 **`inexact_policy` (Phase 30 code review iteration 2, CR-01).** Forwarded UNCHANGED to
 every inner `solve_stackelberg!` best response. It defaults to `:strict` here, NOT to
@@ -1250,9 +1252,14 @@ export run_nash_probe
 # needs diagonal strict concavity, which a game LINEAR in `x_inv` lacks. The VE is
 # unique iff the joint problem's optimum is. On the symmetric interior-cap fixture
 # (`c_inv = [1, 1]`) the joint objective depends on `x_inv` only through `Σᵢ x_inv[i]`,
-# the optimal face is the whole split segment, every GNE of the continuum carries the
-# same multiplier, and the VE set EQUALS the GNE set — the solve returns a
-# solver-dependent point of that face (Clarabel's IPM: the analytic centre). With
+# the optimal face is the whole split segment `x_inv_1 + x_inv_2 = 0.7`, `z = (0.7, 0.7)`,
+# every point of which carries the common multiplier 0.5 — that segment IS the VE set,
+# and the solve returns a solver-dependent point of it (Clarabel's IPM: the analytic
+# centre). The GNE set there is STRICTLY larger: it also contains free-riding GNEs off
+# the segment (`x_inv_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]`, `x_inv_i = (1.9 − p)/2`;
+# e.g. `x_inv = (0.95, 0)`, `z = (0.7, 1.2)`, multipliers `(0.5, ≈0)`) with UNEQUAL
+# multipliers, which the VE excludes — so the VE still selects, just not a single
+# point (iteration-2 review, WR-01). With
 # asymmetric `c_inv` the joint optimum buys capacity from the cheapest player only, the
 # VE is unique, and it genuinely SELECTS one point of a GNE continuum whose other points
 # carry player-specific multipliers (`test/test_planning_nash.jl`, CR-02 testitem).
@@ -1293,10 +1300,14 @@ this game (Rosen's shared-constraint-game theory), never an iterative decomposit
 
 **Uniqueness (Phase 31 code review, CR-02).** The returned VE is unique only when the
 joint problem's optimum is. On the symmetric interior-cap fixture (`c_inv = [1, 1]`,
-`test/test_planning_nash.jl`) it is NOT: the joint problem sees only `Σᵢ x_inv[i]`, every
-GNE of the continuum has the same multiplier (0.5), the VE set equals the GNE set, and
-the split returned is a solver-dependent point of that face (measured: the analytic
-centre `(0.35, 0.35)`). With asymmetric `c_inv` (e.g. `[1.0, 1.4]`) the VE is unique —
+`test/test_planning_nash.jl`) it is NOT: the joint problem sees only `Σᵢ x_inv[i]`, so
+the VE set is the whole split segment `x_inv_1 + x_inv_2 = 0.7`, `z = (0.7, 0.7)`, every
+point carrying the common multiplier 0.5, and the split returned is a solver-dependent
+point of that face (measured: the analytic centre `(0.35, 0.35)`). The GNE set is
+STRICTLY larger than the VE set even there: it also contains free-riding GNEs
+`x_inv_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]` (e.g. `x_inv = (0.95, 0)`,
+`z = (0.7, 1.2)`, multipliers `(0.5, ≈0)`), whose unequal multipliers the VE excludes
+(iteration-2 review, WR-01). With asymmetric `c_inv` (e.g. `[1.0, 1.4]`) the VE is unique —
 the cheaper player builds all the capacity, `x_inv = (0.7, 0)` — and differs from the
 GNE that `run_nash!` reaches from `z0 = 0`, `x_inv = (0.35, 0.25)`, whose players carry
 unequal multipliers `(0.5, 0.7)` (hand-derived and regression-tested in the CR-02

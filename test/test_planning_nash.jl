@@ -694,11 +694,15 @@ end
 # corner-cap fixture). The MINIMAL total investment supporting BOTH distributors at their
 # unconstrained optimum is S_min = (0.7+0.7)/corridor_cap = 0.7. With
 # x_inv_max=[1.0,1.0] (margin 0.3 above S_min, safely non-binding everywhere on the
-# interval — Pitfall 4: a modest margin, not a de facto Inf), the GNE set is
+# interval — Pitfall 4: a modest margin, not a de facto Inf), the GNE set contains
 # {(x_inv_1, 0.7 - x_inv_1) : x_inv_1 ∈ [0, 0.7]}, each paired with (z_1,z_2) ≈ (0.7,0.7)
 # (constant across the continuum, since c_inv[i] > 0 strictly makes each player minimize
 # its OWN x_inv_i at the SAME marginal cost regardless of the split — see 31-RESEARCH.md
-# "Why a continuum exists here specifically" for the full derivation).
+# "Why a continuum exists here specifically" for the full derivation). It is NOT the
+# whole GNE set: free-riding GNEs off this segment also exist (x_inv_j = 0,
+# z_j = 1.2 − p, p ∈ [0, 0.5], x_inv_i = (1.9 − p)/2 — e.g. x_inv = (0.95, 0),
+# z = (0.7, 1.2), multipliers (0.5, ≈0); iteration-2 review, WR-01). The segment is the
+# part this testitem exercises (and, with the common multiplier 0.5, the VE set).
 #
 # WHY z0-ONLY SEEDS CANNOT EXPOSE THIS CONTINUUM (31-RESEARCH.md's own "CRITICAL
 # FINDING", restated in run_nash_probe's own docstring): run_nash!'s default x_inv0
@@ -1172,18 +1176,21 @@ end
 # continuum (see the testitem above for the HAND-DERIVED GNE INTERVAL derivation this
 # section reuses verbatim: S_min = 0.7, x_inv_1 ∈ [0, 0.7], z_1 ≈ z_2 ≈ 0.7).
 #
-# CORRECTED by the Phase-31 code review (CR-02): on THIS symmetric fixture the VE is NOT
-# unique and nothing is "selected". With c_inv = [1, 1] the joint objective and every
+# CORRECTED by the Phase-31 code review (CR-02; iteration-2 WR-01): on THIS symmetric
+# fixture the VE is NOT unique. With c_inv = [1, 1] the joint objective and every
 # constraint depend on x_inv only through x_inv_1 + x_inv_2, so the joint optimal face is
-# the whole split segment, and every GNE of the continuum carries the SAME shared
+# the whole split segment, and every point of the segment carries the SAME shared
 # multiplier (interior x_i: c_inv = corridor_cap·μ_i ⇒ μ_i = 0.5; endpoint x_1 = 0:
-# z-stationarity gives μ_1 = W'(0.7) − λ₀ − c_y − c_op = 0.5) — the VE set EQUALS the GNE
-# set. The point returned is solver-dependent (Clarabel's IPM lands on the analytic
+# z-stationarity gives μ_1 = W'(0.7) − λ₀ − c_y − c_op = 0.5) — the segment is the VE
+# set (a face, not a point). The GNE set is STRICTLY larger: it also contains the
+# free-riding GNEs x_inv_j = 0, z_j = 1.2 − p, p ∈ [0, 0.5] with unequal multipliers,
+# which the VE excludes — so the VE still selects, just not a single point. The point
+# returned is solver-dependent (Clarabel's IPM lands on the analytic
 # centre (0.35, 0.35)); the testitem below therefore asserts only what holds on the whole
 # face. The UNIQUE-VE selection test is the asymmetric-c_inv testitem at the end of this
 # file.
 
-@testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (VE set = GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation (BILEV-06b, CR-02)" tags =
+@testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (a strict subset of the GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation (BILEV-06b, CR-02)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
     using JuMP: value
@@ -1302,9 +1309,10 @@ end
 # --- Phase 31 code review (CR-02): a fixture on which the VE is UNIQUE and genuinely
 # SELECTS one point of a GNE continuum. On the symmetric interior-cap fixture above
 # (c_inv = [1, 1]) the joint objective depends on x_inv only through x_inv_1 + x_inv_2,
-# so every GNE of the continuum carries the SAME shared multiplier (0.5) — the VE set
-# EQUALS the GNE set there, and solve_variational_equilibrium returns a solver-dependent
-# point of that face. Making investment cost ASYMMETRIC breaks the tie.
+# so every point of the split segment carries the SAME shared multiplier (0.5) — that
+# segment is the (non-unique) VE set, strictly smaller than the GNE set, which also
+# contains free-riding GNEs with unequal multipliers — and
+# solve_variational_equilibrium returns a solver-dependent point of that face. Making investment cost ASYMMETRIC breaks the tie.
 #
 # HAND DERIVATION (T=1, corridor_cap=2, x_inv_max=[1,1], c_inv=[1.0,1.4],
 # c_op=[0.5,0.5], c_y=0.3, λ₀=4, W(z)=6z−z²/2 per distributor, lossless two-bus feeder):
