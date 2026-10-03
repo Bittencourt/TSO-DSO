@@ -51,7 +51,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
   with a variational-equilibrium selection, run integer investment across N>1 distributors, and
   refresh the planning-variant documentation.
 
-- [ ] **Phase 32: Declarative Power-Flow & Strategy Dispatch** - Select power-flow formulation and
+- [x] **Phase 32: Declarative Power-Flow & Strategy Dispatch** - Select power-flow formulation and (completed 2026-10-03)
   solve strategy declaratively through `Scenario`, dispatched via one `run` entry point.
 
 - [ ] **Phase 33: Shared Abstractions — Feeder, Balance, Model Context** - Unify `Feeder`/
@@ -381,7 +381,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 32-07-PLAN.md — full-suite certification (31260/0/0/5), docs build, VALIDATION sign-off
+- [x] 32-07-PLAN.md — full-suite certification (31260/0/0/5), docs build, VALIDATION sign-off
 
 **UI hint**: no
 
@@ -499,7 +499,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 29. Genuine Bilevel TSO-DSO Variant | v4.0 | 4/4 | Complete    | 2026-10-01 |
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
-| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 6/7 | In Progress|  |
+| 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete   | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
