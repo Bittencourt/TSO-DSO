@@ -93,7 +93,7 @@ struct MPC <: AbstractStrategy
         if !(0 <= forecast_error < 1)
             throw(ArgumentError("MPC: forecast_error must be in [0, 1); got forecast_error=$forecast_error"))
         end
-        return new(H, step, terminal_soc, forecast_error)
+        return new(H, step, terminal_soc, forecast_error + 0.0)   # -0.0 -> +0.0 (== / hash)
     end
 end
 

@@ -200,6 +200,7 @@ struct Scenario
                 ),
             )
         end
+        pf_ε = pf_ε + 0.0   # normalize -0.0 -> +0.0 so `==` and `hash` agree
         return new(
             name,
             feeder,

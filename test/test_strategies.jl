@@ -331,3 +331,13 @@ end
         @test_throws ArgumentError ADMM(; (k => v,)...)
     end
 end
+
+@testitem "REVIEW WR-03 negative zero is normalized (== implies same hash)" begin
+    using TSODSO, Test
+    a = Scenario(name = "z", feeder = :ieee13, pf = :restricted_branch_flow, pf_ε = -0.0)
+    b = Scenario(name = "z", feeder = :ieee13, pf = :restricted_branch_flow, pf_ε = 0.0)
+    @test a == b
+    @test hash(a) == hash(b)
+    @test !signbit(a.pf_ε)
+    @test hash(MPC(forecast_error = -0.0)) == hash(MPC(forecast_error = 0.0))
+end
