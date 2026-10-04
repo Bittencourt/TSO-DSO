@@ -121,7 +121,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   `run_stochastic` follow it consistently.
 - [x] **ARCH-09**: The `mpc_loop` exception handlers catch only solver-status and certificate
   exceptions. Programming errors such as `MethodError` and `BoundsError` propagate.
-- [ ] **ARCH-10**: IEEE-8500 performance and memory work (carry-over SCALE-STRETCH): the final
+- [x] **ARCH-10**: IEEE-8500 performance and memory work (carry-over SCALE-STRETCH): the final
   consolidation's `assert_socp_exact!` behaves correctly at scale, and at least one converged,
   memory-feasible headline point is measured, or the wall is re-characterized after the
   architecture changes.
@@ -196,7 +196,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | ARCH-06 | Phase 34 | Complete |
 | ARCH-08 | Phase 34 | Complete |
 | ARCH-09 | Phase 34 | Complete |
-| ARCH-10 | Phase 35 | Pending |
+| ARCH-10 | Phase 35 | Complete |
 | HYG-01 | Phase 36 | Pending |
 | HYG-02 | Phase 36 | Pending |
 | HYG-03 | Phase 36 | Pending |

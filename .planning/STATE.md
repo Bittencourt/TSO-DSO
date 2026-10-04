@@ -4,13 +4,13 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-04T23:29:17.866Z"
-last_activity: 2026-10-04 -- Phase 35 planning complete
+last_updated: "2026-10-04T23:40:51.370Z"
+last_activity: 2026-10-04
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 86
-  completed_plans: 82
+  completed_plans: 83
   percent: 75
 ---
 
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 35 — ieee 8500 scale after refactor
+**Current focus:** Phase 35 — IEEE-8500 Scale After Refactor
 
 ## Current Position
 
-Phase: 35 (IEEE-8500 Scale After Refactor) — not started; next to discuss/plan
-Plan: Not started
+Phase: 35 (IEEE-8500 Scale After Refactor) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
   Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
   `/gsd-secure-phase` not run for Phases 29–34 (security enforcement default-on).
   Remaining v4.0 phases: 35 (IEEE-8500 scale), 36 (code & export cleanup), 37 (test infra & hygiene).
-Last activity: 2026-10-04 -- Phase 35 planning complete
+Last activity: 2026-10-04
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -502,7 +502,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-04T13:49:36.927Z
+Last session: 2026-10-04T23:40:51.312Z
 Stopped at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
 Resume file: None
 
