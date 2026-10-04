@@ -82,10 +82,13 @@ end
     @variable(model, x[1:2, 1:1])
     @constraint(model, bp[j = 1:2, t = 1:1], x[j, t] == 0)
     ctx = TSODSO.ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = 1
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = 1
+    ctx.meta[:T] = 1  # TRANSIENT-MIRROR
     register_constraint!(ctx, :balance_p, bp)
-    ctx.meta[:pf_vars] = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated
+    ctx.pf_vars = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated
+    ctx.meta[:pf_vars] = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated  # TRANSIENT-MIRROR
 
     @test_throws ArgumentError extract_dlmp(ctx)
 
@@ -100,7 +103,8 @@ end
     # is required — the gate must NOT refuse it.
     ctx2 = TSODSO.ModelContext(model)
     register_constraint!(ctx2, :balance_p, bp)
-    ctx2.meta[:pf_vars] = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate
+    ctx2.pf_vars = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate
+    ctx2.meta[:pf_vars] = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate  # TRANSIENT-MIRROR
     @test TSODSO._assert_priceable(ctx2) === nothing
 end
 

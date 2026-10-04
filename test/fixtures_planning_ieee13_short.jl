@@ -171,8 +171,10 @@
 
         model = Model(select_optimizer(SOCP()))
         ctx = ModelContext(model)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.meta[:problem_class] = SOCP()
         contribute!(ConvexBranchFlow(), ctx, feeder; T = T)
 

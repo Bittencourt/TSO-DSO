@@ -114,8 +114,10 @@ fit_feeder = Feeder(
 )
 _fit_model = Model(select_optimizer(problem_class(PF)))
 _fit_ctx = ModelContext(_fit_model)
-_fit_ctx.meta[:feeder] = fit_feeder
-_fit_ctx.meta[:T] = T
+_fit_ctx.feeder = fit_feeder
+_fit_ctx.meta[:feeder] = fit_feeder  # TRANSIENT-MIRROR
+_fit_ctx.T = T
+_fit_ctx.meta[:T] = T  # TRANSIENT-MIRROR
 contribute!(PF, _fit_ctx, fit_feeder; T = T)
 _Np = length(fit_feeder.buses)
 for a in fa.per_agg

@@ -373,9 +373,12 @@ end
         @objective(m, Max, 0)
         optimize!(m)
         ctx = TSODSO.ModelContext(m)
-        ctx.meta[:feeder] = feeder2
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v, P, Q, l)
+        ctx.feeder = feeder2
+        ctx.meta[:feeder] = feeder2  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v, P, Q, l)
+        ctx.meta[:pf_vars] = (; v, P, Q, l)  # TRANSIENT-MIRROR
         return ctx
     end
     ctx1 = fixed_ctx(1)
@@ -584,9 +587,12 @@ end
         @objective(m, Max, 0)
         optimize!(m)
         ctx = TSODSO.ModelContext(m)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v = vv, P = PP, Q = QQ, l = ll)
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v = vv, P = PP, Q = QQ, l = ll)
+        ctx.meta[:pf_vars] = (; v = vv, P = PP, Q = QQ, l = ll)  # TRANSIENT-MIRROR
         return ctx
     end
 

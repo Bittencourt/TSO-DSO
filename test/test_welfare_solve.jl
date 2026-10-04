@@ -190,8 +190,10 @@ end
         @objective(model, Max, 0)
         optimize!(model)
         ctx = TSODSO.ModelContext(model)
-        ctx.meta[:T] = T
-        store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        store = ctx.agg_device_vars
+        ctx.meta[:agg_device_vars] = store  # TRANSIENT-MIRROR
         store[2] = Any[(; p_ch, p_dch)]
         return ctx
     end

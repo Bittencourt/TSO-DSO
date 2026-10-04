@@ -41,9 +41,12 @@
         optimize!(model)
 
         ctx = TSODSO.ModelContext(model)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v, v̂, P, Q, l)
+        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
         @test_throws Exception TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)
     end
@@ -80,9 +83,12 @@ end
         optimize!(model)
 
         ctx = TSODSO.ModelContext(model)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v, v̂, P, Q, l)
+        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
         maxgap = TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)   # returns the abs gap; must not throw
         @test maxgap < 1e-5
@@ -124,9 +130,12 @@ end
         optimize!(model)
 
         ctx = TSODSO.ModelContext(model)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v, v̂, P, Q, l)
+        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
         # The absolute residual is tiny (would slip past a 1e-5 ABSOLUTE gate)...
         @test 5.0e-6 < 1e-5
@@ -167,9 +176,12 @@ end
     optimize!(model)
 
     ctx = TSODSO.ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = T
-    ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
+    ctx.pf_vars = (; v, v̂, P, Q, l)
+    ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
     # Documents the regression this task closes: the OLD flat atol=1e-6 (still reachable via
     # the explicit-override backward-compat path) PASSES this exact point...
@@ -240,9 +252,12 @@ end
         optimize!(model)
 
         ctx = TSODSO.ModelContext(model)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v, v̂, P, Q, l)
+        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
         return ctx
     end
 

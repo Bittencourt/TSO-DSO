@@ -205,8 +205,10 @@ end
             )
             _fit_model = Model(select_optimizer(problem_class(ConvexBranchFlow())))
             _fit_ctx = ModelContext(_fit_model)
-            _fit_ctx.meta[:feeder] = fit_feeder
-            _fit_ctx.meta[:T] = Th
+            _fit_ctx.feeder = fit_feeder
+            _fit_ctx.meta[:feeder] = fit_feeder  # TRANSIENT-MIRROR
+            _fit_ctx.T = Th
+            _fit_ctx.meta[:T] = Th  # TRANSIENT-MIRROR
             contribute!(ConvexBranchFlow(), _fit_ctx, fit_feeder; T = Th)
             _Np = length(fit_feeder.buses)
             for a in fa.per_agg

@@ -53,9 +53,12 @@
         optimize!(model)
 
         ctx = TSODSO.ModelContext(model)
-        ctx.meta[:feeder] = feeder
-        ctx.meta[:T] = T
-        ctx.meta[:pf_vars] = (; v, P, Q, l)
+        ctx.feeder = feeder
+        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
+        ctx.pf_vars = (; v, P, Q, l)
+        ctx.meta[:pf_vars] = (; v, P, Q, l)  # TRANSIENT-MIRROR
 
         Vphasor = TSODSO.recover_voltage_angles(ctx)
 
@@ -162,9 +165,12 @@ end
             @objective(m, Max, 0)
             optimize!(m)
             ctx = TSODSO.ModelContext(m)
-            ctx.meta[:feeder] = feeder
-            ctx.meta[:T] = T
-            ctx.meta[:pf_vars] = (; v, P, Q, l)
+            ctx.feeder = feeder
+            ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+            ctx.T = T
+            ctx.meta[:T] = T  # TRANSIENT-MIRROR
+            ctx.pf_vars = (; v, P, Q, l)
+            ctx.meta[:pf_vars] = (; v, P, Q, l)  # TRANSIENT-MIRROR
             return ctx
         end
         ctx1 = fixed_ctx(1)
