@@ -1,9 +1,9 @@
 ---
 phase: 34
 slug: admm-decomposition-meshed-reactive-status-exception-policy
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-04
 ---
 
@@ -38,17 +38,17 @@ created: 2026-10-04
 
 | Req | Behavior | Test Type | Automated Command | File Exists | Status |
 |-----|----------|-----------|-------------------|-------------|--------|
-| ARCH-05 | default path bit-identical (iters 56, welfare -4823.66604824162) | canary | `test_admm_knifeedge_canary.jl` | ✅ | ⬜ pending |
-| ARCH-05 | all ADMM goldens unchanged | integration | admm/admm_reactive/admm_adaptive/admm_dualresid/admm_timeout/dso/agr/ieee123_admm | ✅ | ⬜ pending |
-| ARCH-05 | phase functions + hook dispatch; no `mode == LIVE` outside hooks | unit + audit | `test_admm_phases.jl` | ❌ W0 | ⬜ pending |
-| ARCH-05 | `admm_supported` matrix; LinDist NaN maxgap; Restricted/LinDist vs centralized | integration | `test_admm_generic_pf.jl` | ❌ W0 | ⬜ pending |
-| ARCH-06 | meshed ADMM LIVE vs centralized (measured tolerances); angle-certificate agreement | integration | `test_admm_meshed.jl` | ❌ W0 | ⬜ pending |
-| ARCH-08 | typed exceptions; byte-identical messages | unit | `test_tsodso_errors.jl` | ❌ W0 | ⬜ pending |
-| ARCH-08 | status vocabulary per entry point; DC+reactive pin | integration | `test_status_policy.jl` | ❌ W0 | ⬜ pending |
-| ARCH-08 | retry ladder retries on `SolveFailedError` | unit | `test_planning_retry.jl` | ✅ edit | ⬜ pending |
-| ARCH-09 | MethodError/BoundsError propagate from mpc tiers; solver/cert failures still ledgered | unit | `test_mpc_loop.jl` | ✅ edit | ⬜ pending |
-| ARCH-09 | stochastic skip-and-report narrowed | unit | `test_run_stochastic.jl` / `test_stochastic_oos_harness.jl` | ✅ edit | ⬜ pending |
-| all | docs build; Aqua | quality | docs build; full suite | ✅ | ⬜ pending |
+| ARCH-05 | default path bit-identical (iters 56, welfare -4823.66604824162) | canary | `test_admm_knifeedge_canary.jl` | ✅ | ✅ green |
+| ARCH-05 | all ADMM goldens unchanged | integration | admm/admm_reactive/admm_adaptive/admm_dualresid/admm_timeout/dso/agr/ieee123_admm | ✅ | ✅ green |
+| ARCH-05 | phase functions + hook dispatch; no `mode == LIVE` outside hooks | unit + audit | `test_admm_phases.jl` | ✅ | ✅ green |
+| ARCH-05 | `admm_supported` matrix; LinDist NaN maxgap; Restricted/LinDist vs centralized | integration | `test_admm_generic_pf.jl` | ✅ | ✅ green |
+| ARCH-06 | meshed ADMM LIVE vs centralized (measured tolerances); angle-certificate agreement | integration | `test_admm_meshed.jl` | ✅ | ✅ green |
+| ARCH-08 | typed exceptions; byte-identical messages | unit | `test_tsodso_errors.jl` | ✅ | ✅ green |
+| ARCH-08 | status vocabulary per entry point; DC+reactive pin | integration | `test_status_policy.jl` | ✅ | ✅ green |
+| ARCH-08 | retry ladder retries on `SolveFailedError` | unit | `test_planning_retry.jl` | ✅ | ✅ green |
+| ARCH-09 | MethodError/BoundsError propagate from mpc tiers; solver/cert failures still ledgered | unit | `test_mpc_loop.jl` | ✅ | ✅ green |
+| ARCH-09 | stochastic skip-and-report narrowed | unit | `test_run_stochastic.jl` / `test_stochastic_oos_harness.jl` | ✅ | ✅ green |
+| all | docs build; Aqua | quality | docs build; full suite | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -56,11 +56,11 @@ created: 2026-10-04
 
 ## Wave 0 Requirements
 
-- [ ] `test/test_tsodso_errors.jl`
-- [ ] `test/test_status_policy.jl`
-- [ ] `test/test_admm_phases.jl`
-- [ ] `test/test_admm_generic_pf.jl`
-- [ ] `test/test_admm_meshed.jl` + φ=0.95 heterogeneous-diamond fixture helper
+- [x] `test/test_tsodso_errors.jl`
+- [x] `test/test_status_policy.jl`
+- [x] `test/test_admm_phases.jl`
+- [x] `test/test_admm_generic_pf.jl`
+- [x] `test/test_admm_meshed.jl` + φ=0.95 heterogeneous-diamond fixture helper
 
 ---
 
@@ -72,11 +72,11 @@ All phase behaviors have automated verification.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 240s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 240s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** certified 2026-10-04 — full suite 32128/0/0/5 at 45bb659 (log start 10:50:14 > commit 10:49:37); docs build exit 0; knife-edge canary iters=56, welfare=-4823.66604824162 (never re-pinned)
