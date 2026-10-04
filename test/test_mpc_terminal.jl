@@ -65,7 +65,7 @@
     # silently drives this mini-loop INFEASIBLE (26-POSTMERGE-TRIAGE.md cluster C).
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:(T + 1)] for
-        (bus, varlist) in ctx_da.meta[:agg_device_vars] for
+        (bus, varlist) in ctx_da.agg_device_vars for
         v in varlist if haskey(v, :soc)
     )
 
@@ -95,7 +95,7 @@
         Δt = batt.Δt
 
         soc_handle = only(h for h in o.ic_handles if h.kind == :soc)
-        device_vars = [v for (b, varlist) in o.ctx.meta[:agg_device_vars] for v in varlist]
+        device_vars = [v for (b, varlist) in o.ctx.agg_device_vars for v in varlist]
         batt_vars = only(v for v in device_vars if haskey(v, :soc))
         therm_vars = only(v for v in device_vars if haskey(v, :Tin0))
 

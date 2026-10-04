@@ -70,7 +70,7 @@ end
         allow_export = true,
         rtol_exact = 1.0,
     )
-    gap = value(ctx_cv.meta[:pf_vars].v̂[3, 1]) - value(ctx_cv.meta[:pf_vars].v[3, 1])
+    gap = value(ctx_cv.pf_vars.v̂[3, 1]) - value(ctx_cv.pf_vars.v[3, 1])
     @info "default ConvexBranchFlow() v̂-v gap at bus 3" gap
     @test gap >= -1e-9   # v̂ ≥ v (Gan-Low direction), FIX-01/02
 

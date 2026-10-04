@@ -104,7 +104,7 @@
     # per-node voltage golden that test_ieee13.jl hard-asserts, so THIS file also catches a
     # voltage-drop/sign regression that welfare + ADMM cross-validation alone would not).
     # A1: `v` is the SQUARED voltage ⇒ |V₉[16]| = sqrt(v[10,16]); node 9 → struct index 10.
-    v9_16 = sqrt(value(ctx.meta[:pf_vars].v[10, 16]))
+    v9_16 = sqrt(value(ctx.pf_vars.v[10, 16]))
     @test isapprox(v9_16, GOLDEN_V9_16; atol = 1e-4)             # existing golden (test_ieee13.jl)
 
     # ── NON-FAILING thesis cross-check (never a hard failure — mirrors test_ieee13.jl).

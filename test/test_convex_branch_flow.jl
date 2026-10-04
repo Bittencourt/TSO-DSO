@@ -55,8 +55,8 @@ end
 
         # The SOCP formulation must stash the squared-voltage v, its exactness copy v̂, the
         # branch flows P/Q, and the squared current l for the PF-04 exactness checker.
-        @test haskey(ctx.meta, :pf_vars)
-        pv = ctx.meta[:pf_vars]
+        @test ctx.pf_vars !== nothing
+        pv = ctx.pf_vars
         for k in (:v, :v̂, :P, :Q, :l)
             @test k in keys(pv)
         end
@@ -83,7 +83,7 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
     ctx = TSODSO.ModelContext(model)
     TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 2)
-    pv = ctx.meta[:pf_vars]
+    pv = ctx.pf_vars
 
     fix.(pv.P[1, :], 0.3; force = true)
     fix.(pv.Q[1, :], 0.1; force = true)
@@ -119,7 +119,7 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
     ctx = TSODSO.ModelContext(model)
     TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 1)
-    pv = ctx.meta[:pf_vars]
+    pv = ctx.pf_vars
 
     fix.(pv.P[1, :], 0.05; force = true)
     fix.(pv.Q[1, :], 0.02; force = true)
@@ -230,7 +230,7 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
     ctx = TSODSO.ModelContext(model)
     TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 1)
-    pv = ctx.meta[:pf_vars]
+    pv = ctx.pf_vars
 
     # Near-unity power factor (φ ≈ 0.999999) isolates the real-power back-feed mechanism:
     # Q tracks P via the same tanφ throughout.

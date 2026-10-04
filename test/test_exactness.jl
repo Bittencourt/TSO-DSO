@@ -42,11 +42,8 @@
 
         ctx = TSODSO.ModelContext(model)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v, v̂, P, Q, l)
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
         @test_throws Exception TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)
     end
@@ -84,11 +81,8 @@ end
 
         ctx = TSODSO.ModelContext(model)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v, v̂, P, Q, l)
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
         maxgap = TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)   # returns the abs gap; must not throw
         @test maxgap < 1e-5
@@ -131,11 +125,8 @@ end
 
         ctx = TSODSO.ModelContext(model)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v, v̂, P, Q, l)
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
         # The absolute residual is tiny (would slip past a 1e-5 ABSOLUTE gate)...
         @test 5.0e-6 < 1e-5
@@ -177,11 +168,8 @@ end
 
     ctx = TSODSO.ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
     ctx.pf_vars = (; v, v̂, P, Q, l)
-    ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
 
     # Documents the regression this task closes: the OLD flat atol=1e-6 (still reachable via
     # the explicit-override backward-compat path) PASSES this exact point...
@@ -253,11 +241,8 @@ end
 
         ctx = TSODSO.ModelContext(model)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v, v̂, P, Q, l)
-        ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)  # TRANSIENT-MIRROR
         return ctx
     end
 
@@ -319,7 +304,7 @@ end
         # This is a GENUINE over-voltage / reverse-flow regime, not a trivial no-flow case:
         # at least one bus voltage exceeds nominal (v > 1.0² ⇒ over-voltage) and at least one
         # branch carries reverse power flow (P < 0 ⇒ PV back-feed toward the root).
-        pv = ctx.meta[:pf_vars]
+        pv = ctx.pf_vars
         N = length(feeder.buses)
         B = length(feeder.branches)
         @test any(value(pv.v[j, t]) > 1.0 + 1e-4 for j in 1:N, t in 1:Phase4Fixtures.T)

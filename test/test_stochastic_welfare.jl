@@ -257,7 +257,7 @@ end
     # (dadp[s] = raw dual ./ probabilities[s], no sign flip) and the D-08 degenerate
     # anchor (S=1 with probabilities=[1.0] reproduces solve_welfare) — was 'empirically
     # verified' in comments but had NO committed regression test: moving probabilities[s]
-    # inside ctx.meta[:objective], flipping a sign, or breaking the de-scaling
+    # inside ctx.objective, flipping a sign, or breaking the de-scaling
     # denominator would have silently corrupted every reported price while the whole
     # suite passed. Both properties are pinned here.
     feeder = Phase22Fixtures.stoch_feeder()
@@ -355,7 +355,7 @@ end
     )
 
     batt_of(ctx) =
-        only(v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :soc0))
+        only(v for (bus, vl) in ctx.agg_device_vars for v in vl if haskey(v, :soc0))
     b1 = batt_of(r.ctxs[1])
     for s in 2:3
         bs = batt_of(r.ctxs[s])
@@ -421,7 +421,7 @@ end
     @test isfinite(r.welfare)
 
     q_of(ctx) =
-        only(v for (bus, vl) in ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q))
+        only(v for (bus, vl) in ctx.agg_device_vars for v in vl if haskey(v, :q))
     v1 = q_of(r.ctxs[1])
     v2 = q_of(r.ctxs[2])
 

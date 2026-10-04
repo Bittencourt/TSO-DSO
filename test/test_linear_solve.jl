@@ -73,7 +73,7 @@ end
 end
 
 # Seam: models/linear_solve.jl — WR-01. An empty `devices` vector previously produced a
-# bare `KeyError` on `ctx.meta[:objective]` (and a `BoundsError` on `devices[1]`). It must
+# bare `KeyError` on `ctx.objective` (and a `BoundsError` on `devices[1]`). It must
 # reject with a clear message instead.
 @testitem "linear: empty devices vector throws a clear error (WR-01)" tags = [:linear] begin
     using TSODSO, JuMP

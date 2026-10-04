@@ -86,7 +86,7 @@ end
     nv0 = num_variables(o.model)
     nc0 = num_constraints(o.model; count_variable_in_set_constraints = true)
 
-    device_vars = [v for (bus, varlist) in o.ctx.meta[:agg_device_vars] for v in varlist]
+    device_vars = [v for (bus, varlist) in o.ctx.agg_device_vars for v in varlist]
 
     # THREE heterogeneous re-solve cycles: every ic_handles entry's ic_param/terminal_param,
     # every device's Ppv_param/Tout_param, every aggregator's Pdc_param, AND every p_import[τ]
@@ -167,7 +167,7 @@ end
     o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
 
     soc_handle = only(h for h in o.ic_handles if h.kind == :soc)
-    device_vars = [v for (bus, varlist) in o.ctx.meta[:agg_device_vars] for v in varlist]
+    device_vars = [v for (bus, varlist) in o.ctx.agg_device_vars for v in varlist]
     batt_vars = only(v for v in device_vars if haskey(v, :soc))
 
     for τ in 1:H

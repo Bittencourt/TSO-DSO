@@ -59,8 +59,8 @@ end
         # load-bearing difference from ConvexBranchFlow's own stash, which carries :v̂): the
         # copy exists solely to force the SOC relaxation tight, and this formulation is not a
         # relaxation.
-        @test haskey(ctx.meta, :pf_vars)
-        pv = ctx.meta[:pf_vars]
+        @test ctx.pf_vars !== nothing
+        pv = ctx.pf_vars
         @test keys(pv) == (:v, :P, :Q, :l)
 
         # AC branch flow is reactive-capable: it must populate BOTH :Rp and :Rq (like the SOCP
@@ -98,7 +98,7 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.NLP()))
     ctx = TSODSO.ModelContext(model)
     TSODSO.contribute!(TSODSO.ACPowerFlow(), ctx, feeder; T = 1)
-    pv = ctx.meta[:pf_vars]
+    pv = ctx.pf_vars
 
     # Near-unity power factor (φ ≈ 0.999999), the same real-power back-feed isolation Plan
     # 26-05's ConvexBranchFlow test uses.

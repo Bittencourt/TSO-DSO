@@ -39,7 +39,7 @@
         allow_export = true,
         rtol_exact = 1.0,
     )
-    pv = ctx.meta[:pf_vars]
+    pv = ctx.pf_vars
     N = length(feeder.buses)
 
     mingap =
@@ -77,7 +77,7 @@ end
     )
 
     v̂_GL = TSODSO.recover_lossfree_shadow_voltage(ctx_ac)
-    pv_ac = ctx_ac.meta[:pf_vars]
+    pv_ac = ctx_ac.pf_vars
     N = length(feeder.buses)
 
     # Lemma 1 sanity check: Gan-Low's v ≤ v̂(s) always holds. Since phase 26-02 (FIX-01/02)
@@ -192,7 +192,7 @@ end
     inexact_hours = [row.t for row in report.hours if !row.exact]
     @test !isempty(inexact_hours)
 
-    pv_socp = ctx_socp.meta[:pf_vars]
+    pv_socp = ctx_socp.pf_vars
     N = length(feeder.buses)
     B = length(feeder.branches)
     diagnosed = any(inexact_hours) do t★
@@ -374,11 +374,8 @@ end
         optimize!(m)
         ctx = TSODSO.ModelContext(m)
         ctx.feeder = feeder2
-        ctx.meta[:feeder] = feeder2  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v, P, Q, l)
-        ctx.meta[:pf_vars] = (; v, P, Q, l)  # TRANSIENT-MIRROR
         return ctx
     end
     ctx1 = fixed_ctx(1)
@@ -401,7 +398,7 @@ end
 
     # report = true on the SAME structural mismatch: assert_ac_exact!'s T-mismatch guard is
     # a HARD structural error (never neutralized by ITS OWN report contract — it has none;
-    # T-mismatch is unconditional) — read from src/models/ac_oracle.jl: `T == ctx_ac.meta[:T]
+    # T-mismatch is unconditional) — read from src/models/ac_oracle.jl: `T == ctx_ac.T
     # || error(...)` runs BEFORE any report/throw branching this file's own
     # assert_restriction_exact! adds, so the exception propagates through unconditionally.
     # report=true therefore ALSO throws here — it neutralizes AC-INFEASIBILITY findings
@@ -588,11 +585,8 @@ end
         optimize!(m)
         ctx = TSODSO.ModelContext(m)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v = vv, P = PP, Q = QQ, l = ll)
-        ctx.meta[:pf_vars] = (; v = vv, P = PP, Q = QQ, l = ll)  # TRANSIENT-MIRROR
         return ctx
     end
 
@@ -613,7 +607,7 @@ end
     function opfm_margins(feeder, P, Q, l, v)
         ctx = TSODSO.ModelContext(Model())
         TSODSO.contribute!(RestrictedBranchFlow(), ctx, feeder; T = T)
-        pv = ctx.meta[:pf_vars]
+        pv = ctx.pf_vars
         val = Dict{VariableRef, Float64}()
         for j in 1:3, t in 1:T
             val[pv.v[j, t]] = v[j, t]

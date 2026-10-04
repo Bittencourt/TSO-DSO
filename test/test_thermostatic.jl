@@ -162,7 +162,7 @@ end
     # A bare context: NO feeder anywhere — the device is network-agnostic.
     model = Model()
     ctx = TSODSO.ModelContext(model)
-    @test !haskey(ctx.meta, :feeder)
+    @test ctx.feeder === nothing
 
     T = 4
     Tout = fill(30.0, T)
@@ -204,7 +204,7 @@ end
 
     # Aggregator-as-writer: the device wrote NOTHING to the residual or the objective.
     @test isempty(ctx.residuals)
-    @test !haskey(ctx.meta, :objective)
+    @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
 end
 
 @testitem "thermostatic: recursion 3.2 and IC hold at the solved optimum (DEV-01)" tags =

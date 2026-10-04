@@ -172,9 +172,7 @@
         model = Model(select_optimizer(SOCP()))
         ctx = ModelContext(model)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.meta[:problem_class] = SOCP()
         contribute!(ConvexBranchFlow(), ctx, feeder; T = T)
 
@@ -220,7 +218,7 @@
         @objective(
             model,
             Max,
-            ctx.meta[:objective] - sum(λ₀[t] * z[t] for t in 1:T) - c_y * y_inv -
+            ctx.objective - sum(λ₀[t] * z[t] for t in 1:T) - c_y * y_inv -
             c_inv * x_inv - sum(c_op[t] * z[t] for t in 1:T)
         )
 

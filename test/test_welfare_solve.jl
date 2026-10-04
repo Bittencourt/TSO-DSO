@@ -58,9 +58,9 @@ end
     @test any(t -> abs(value(q_import[t])) > 1e-6, 1:T)
 
     # App. C: every battery honors p_ch·p_dch < τ at the FULL welfare optimum.
-    @test haskey(ctx.meta, :agg_device_vars)
+    @test !isempty(ctx.agg_device_vars)
     batteries = [
-        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for
+        v for (_bus, varlist) in ctx.agg_device_vars for
         v in varlist if haskey(v, :p_ch) && haskey(v, :p_dch)
     ]
     @test length(batteries) == 2                # both aggregators' batteries are checked
@@ -122,9 +122,9 @@ end
     @test haskey(ctx.constraints, :balance_p)
 
     # App. C battery complementarity still enforced under the DC formulation.
-    @test haskey(ctx.meta, :agg_device_vars)
+    @test !isempty(ctx.agg_device_vars)
     batteries = [
-        v for (_bus, varlist) in ctx.meta[:agg_device_vars] for
+        v for (_bus, varlist) in ctx.agg_device_vars for
         v in varlist if haskey(v, :p_ch) && haskey(v, :p_dch)
     ]
     @test length(batteries) == 2
@@ -163,7 +163,7 @@ end
     @test isfinite(obj)
 
     # The curtailment variable exists and BINDS: used PV is well below the available Ppv.
-    battery_vars = ctx.meta[:agg_device_vars][2][1]
+    battery_vars = ctx.agg_device_vars[2][1]
     @test haskey(battery_vars, :pv_used)
     @test all(t -> value(battery_vars.pv_used[t]) <= Ppv[t] + 1e-6, 1:T)
     @test any(t -> value(battery_vars.pv_used[t]) < Ppv[t] - 1e-3, 1:T)
@@ -191,9 +191,7 @@ end
         optimize!(model)
         ctx = TSODSO.ModelContext(model)
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         store = ctx.agg_device_vars
-        ctx.meta[:agg_device_vars] = store  # TRANSIENT-MIRROR
         store[2] = Any[(; p_ch, p_dch)]
         return ctx
     end
@@ -261,6 +259,6 @@ end
         @test rec.utility isa JuMP.QuadExpr     # concave utility retained for the surplus split
     end
 
-    # The total-utility source is UNCHANGED: Σ_j U_agⱼ is still value(ctx.meta[:objective]).
-    @test haskey(ctx.meta, :objective)
+    # The total-utility source is UNCHANGED: Σ_j U_agⱼ is still value(ctx.objective).
+    @test !isempty(ctx.objective.terms)
 end

@@ -31,7 +31,7 @@ end
     # A bare context: QP model, NO feeder anywhere. The device is network-agnostic.
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
-    @test !haskey(ctx.meta, :feeder)
+    @test ctx.feeder === nothing
 
     bus, Pmin, Pmax, a, b = 2, 0.0, 5.0, 4.0, 1.0
     load = TSODSO.Interruptible(bus, Pmin, Pmax, a, b)
@@ -43,7 +43,7 @@ end
     # itself; the Aggregator is the sole :Rp/:Rq writer.
     @test propertynames(res) == (:vars, :p_inject, :utility)
     @test isempty(ctx.residuals)
-    @test !haskey(ctx.meta, :objective)
+    @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
     @test TSODSO.is_flexible_load(load) == true
 
     # (1) A bounded served-power variable per time step: Pmin ≤ p[t] ≤ Pmax.

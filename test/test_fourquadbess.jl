@@ -409,7 +409,7 @@ end
     res = TSODSO.contribute!(d, ctx; T = T)
 
     @test isempty(ctx.residuals)
-    @test !haskey(ctx.meta, :objective)
+    @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
     @test res.utility isa QuadExpr
     @test length(res.p_inject) == T
     @test all(x -> x isa AffExpr, res.p_inject)
@@ -444,7 +444,7 @@ end
 # Plan 19-05: assert_4q_complementarity! (MESH-04 clause 2) + the OLD
 # assert_battery_complementarity!'s tightened mutual-exclusivity guard. The shared
 # harness below mirrors the plan's standalone-solve pattern: one FourQuadBESS, its OWN
-# ModelContext, SOCP()/Clarabel, and a manually-populated ctx.meta[:agg_device_vars]
+# ModelContext, SOCP()/Clarabel, and a manually-populated ctx.agg_device_vars
 # stash (this fixture bypasses Aggregator on purpose, to isolate the certificate).
 
 @testitem "fourquadbess: assert_4q_complementarity! exists, is exported, callable with only ctx (D-07)" tags =
@@ -459,14 +459,12 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
     ctx = TSODSO.ModelContext(model)
     ctx.T = 3
-    ctx.meta[:T] = 3  # TRANSIENT-MIRROR
     res = TSODSO.contribute!(d, ctx; T = 3)
     λ_test = 2.5
     @objective(model, Max, res.utility - λ_test * sum(res.p_inject[t] for t in 1:3))
     TSODSO.assert_solved!(model; dual = false, allow_local = false)
 
     store = ctx.agg_device_vars
-    ctx.meta[:agg_device_vars] = store  # TRANSIENT-MIRROR
     append!(get!(store, d.bus, Vector{Any}()), [res.vars])
 
     # Callable with only ctx (defaults present) -- must NOT throw on this benign solve.
@@ -474,11 +472,10 @@ end
     @test ratio isa Float64
     @test ratio <= 1.0
 
-    # No-op (returns 0.0) when ctx.meta[:agg_device_vars] is absent entirely.
+    # No-op (returns 0.0) when ctx.agg_device_vars is empty.
     model2 = Model()
     ctx2 = TSODSO.ModelContext(model2)
     ctx2.T = 3
-    ctx2.meta[:T] = 3  # TRANSIENT-MIRROR
     @test TSODSO.assert_4q_complementarity!(ctx2) == 0.0
 end
 
@@ -494,14 +491,12 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
     ctx = TSODSO.ModelContext(model)
     ctx.T = 2
-    ctx.meta[:T] = 2  # TRANSIENT-MIRROR
     res = TSODSO.contribute!(d, ctx; T = 2)
     λ_test = 9.0
     @objective(model, Max, res.utility - λ_test * sum(res.p_inject[t] for t in 1:2))
     TSODSO.assert_solved!(model; dual = false, allow_local = false)
 
     store = ctx.agg_device_vars
-    ctx.meta[:agg_device_vars] = store  # TRANSIENT-MIRROR
     append!(get!(store, d.bus, Vector{Any}()), [res.vars])
 
     # Confirm this fixture DOES co-activate (p_ch, p_dch both meaningfully positive) --
@@ -533,7 +528,6 @@ end
         ctx = TSODSO.ModelContext(model)
         T = 2
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         p_ch = @variable(model, [t = 1:T], lower_bound = 0.0, upper_bound = pmax)
         p_dch = @variable(model, [t = 1:T], lower_bound = 0.0, upper_bound = pmax)
         q = @variable(model, [t = 1:T])
@@ -543,7 +537,6 @@ end
         @objective(model, Max, 0.0)
         TSODSO.assert_solved!(model; dual = false, allow_local = false)
         store = ctx.agg_device_vars
-        ctx.meta[:agg_device_vars] = store  # TRANSIENT-MIRROR
         append!(get!(store, 2, Vector{Any}()), [(; p_ch, p_dch, q)])
         return ctx
     end
@@ -579,14 +572,12 @@ end
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
     ctx = TSODSO.ModelContext(model)
     ctx.T = 2
-    ctx.meta[:T] = 2  # TRANSIENT-MIRROR
     res = TSODSO.contribute!(d, ctx; T = 2)
     λ_test = 9.0
     @objective(model, Max, res.utility - λ_test * sum(res.p_inject[t] for t in 1:2))
     TSODSO.assert_solved!(model; dual = false, allow_local = false)
 
     store = ctx.agg_device_vars
-    ctx.meta[:agg_device_vars] = store  # TRANSIENT-MIRROR
     append!(get!(store, d.bus, Vector{Any}()), [res.vars])
 
     prod1 = value(res.vars.p_ch[1]) * value(res.vars.p_dch[1])

@@ -131,7 +131,7 @@ end
 
     # `v` is the SQUARED per-unit voltage (LinDistFlow convention); sqrt recovers |V|.
     # (N, T) matrix of solved |V| per bus/hour across the whole real-impedance feeder.
-    Vall = sqrt.(value.(ctx_c.meta[:pf_vars].v))
+    Vall = sqrt.(value.(ctx_c.pf_vars.v))
     vmin_solved, vmax_solved = extrema(Vall)
     @info "ieee123 voltage-binding margin" vmin_solved vmax_solved band = (0.9, 1.1)
 

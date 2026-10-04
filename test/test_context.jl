@@ -44,9 +44,9 @@ end
     @variable(model, p >= 0)
     ctx = TSODSO.ModelContext(model)
 
-    # Fresh ctx: NO ctx.meta[:feeder]. Sizing must come from the indices alone
+    # Fresh ctx: NO ctx.feeder. Sizing must come from the indices alone
     # (the device seam is network-agnostic).
-    @test !haskey(ctx.meta, :feeder)
+    @test ctx.feeder === nothing
 
     TSODSO.add_to_residual!(ctx, :Rp, 2, 1, 1.0 * p)
     @test size(ctx.residuals[:Rp]) == (2, 1)
@@ -71,15 +71,15 @@ end
     # Concave-quadratic utility must NOT flow through add_to_residual! (which drops
     # curvature via convert(AffExpr, ·)). It goes to the WELFARE accumulator (T-02-02).
     TSODSO.add_to_objective!(ctx, a * p - (b / 2) * p^2)
-    @test haskey(ctx.meta, :objective)
-    @test ctx.meta[:objective] isa QuadExpr
+    @test !isempty(ctx.objective.terms)
+    @test ctx.objective isa QuadExpr
     # Curvature survives: the quadratic term is present (not silently linearized).
-    @test !isempty(ctx.meta[:objective].terms)
+    @test !isempty(ctx.objective.terms)
 
     # A second call ACCUMULATES (adds) into the objective.
     TSODSO.add_to_objective!(ctx, a * p - (b / 2) * p^2)
-    @test ctx.meta[:objective] isa QuadExpr
-    @test isequal_canonical(ctx.meta[:objective], 2 * (a * p - (b / 2) * p^2))
+    @test ctx.objective isa QuadExpr
+    @test isequal_canonical(ctx.objective, 2 * (a * p - (b / 2) * p^2))
 end
 
 @testitem "context: scalar add_to_residual! backward-compat preserved (PF-01)" tags =

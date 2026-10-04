@@ -39,12 +39,12 @@
     @test dso isa TSODSO.DsoOpt
 
     # VERBATIM ConvexBranchFlow reuse: the SOC squared-current :l is stashed in pf_vars.
-    @test haskey(dso.ctx.meta, :pf_vars)
-    @test haskey(dso.ctx.meta[:pf_vars], :l)
+    @test dso.ctx.pf_vars !== nothing
+    @test haskey(dso.ctx.pf_vars, :l)
 
     # feeder / T stashed for the PF-04 exactness gate.
-    @test dso.ctx.meta[:feeder] === feeder
-    @test dso.ctx.meta[:T] == Th
+    @test dso.ctx.feeder === feeder
+    @test dso.ctx.T == Th
 
     # Load nodes = the single non-root bus 2; the coupling container is bus × time.
     @test dso.load_nodes == [2]

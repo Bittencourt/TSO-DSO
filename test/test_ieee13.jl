@@ -93,7 +93,7 @@ end
 # a DOCUMENTED calibration, not the thesis inputs — hence a pinned COMPUTED golden.
 #
 # ── Assumption A1 (|V| = √v) ──────────────────────────────────────────────────────────
-# `ctx.meta[:pf_vars].v` is the SQUARED voltage v = |V|², so the voltage MAGNITUDE is
+# `ctx.pf_vars.v` is the SQUARED voltage v = |V|², so the voltage MAGNITUDE is
 # `|V| = sqrt(value(v[bus, t]))`. The thesis y-axis (Fig 4.4, "Tensión [p.u.]") plots the
 # MAGNITUDE, so `v₉[16] ≈ 1.0493` is compared against `sqrt(v)`, NOT the squared variable.
 #
@@ -149,7 +149,7 @@ end
 
     # A1 sanity: `v` is the SQUARED voltage, so |V₉[16]| = sqrt(v[10, 16]) (node 9 → index
     # 10). The over-voltage regime puts it above 1.0 but strictly below the 1.05 pu cap.
-    v9_16 = sqrt(value(ctx.meta[:pf_vars].v[10, 16]))
+    v9_16 = sqrt(value(ctx.pf_vars.v[10, 16]))
     @test 1.0 < v9_16 < 1.05
 
     # Cross-solver sanity (RESEARCH Pitfall 4): re-solve the SAME assembly through the NLP
@@ -220,7 +220,7 @@ end
     ctx = res.ctx
 
     # |V₉[16]| — sqrt because `v` is |V|² (A1); struct index 10 = thesis node 9, t = 16.
-    v9_16 = sqrt(value(ctx.meta[:pf_vars].v[10, 16]))
+    v9_16 = sqrt(value(ctx.pf_vars.v[10, 16]))
 
     # ── HARD regression assertions on the COMPUTED golden (~1e-4 anchor) ────────────────
     @test isapprox(v9_16, GOLDEN_V9_16; atol = 1e-4)

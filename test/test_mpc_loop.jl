@@ -336,7 +336,7 @@ end
         terminal_soc = false,
     )
     for agg in aggs
-        varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+        varlist = o.ctx.agg_device_vars[agg.bus]
         for (d, v) in zip(agg.devices, varlist)
             haskey(v, :Ppv_param) && set_parameter_value.(v.Ppv_param, d.Ppv[1:H])
             haskey(v, :Tout_param) && set_parameter_value.(v.Tout_param, d.Tout[1:(H - 1)])
@@ -437,7 +437,7 @@ end
     prices = Dict{Int, Vector{Float64}}()
     for t in (1, 4)
         for agg in aggs
-            varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+            varlist = o.ctx.agg_device_vars[agg.bus]
             for (d, v) in zip(agg.devices, varlist)
                 haskey(v, :Ppv_param) && set_parameter_value.(
                     v.Ppv_param,
@@ -550,7 +550,7 @@ end
         terminal_soc = false,
     )
     for agg in aggs
-        varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+        varlist = o.ctx.agg_device_vars[agg.bus]
         for (d, v) in zip(agg.devices, varlist)
             haskey(v, :Ppv_param) && set_parameter_value.(v.Ppv_param, d.Ppv[1:H])
             haskey(v, :Tout_param) && set_parameter_value.(v.Tout_param, d.Tout[1:(H - 1)])

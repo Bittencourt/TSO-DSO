@@ -68,13 +68,13 @@ end
     end
 
     # The summed device utility reached the QuadExpr welfare accumulator (3.21).
-    @test ctx.meta[:objective] isa QuadExpr
+    @test ctx.objective isa QuadExpr
     @test res.utility isa QuadExpr
 
     # Device vars stashed for the post-solve battery-complementarity check, keyed by bus,
     # and the battery's charge/discharge variables are reachable.
-    @test haskey(ctx.meta, :agg_device_vars)
-    @test any(v -> haskey(v, :p_ch) && haskey(v, :p_dch), ctx.meta[:agg_device_vars][bus])
+    @test !isempty(ctx.agg_device_vars)
+    @test any(v -> haskey(v, :p_ch) && haskey(v, :p_dch), ctx.agg_device_vars[bus])
 end
 
 @testitem "aggregator: reactive_factor helper single-sources tan(acos φ) (IN-01)" tags =

@@ -160,7 +160,7 @@ end
 
     # The AC-PF ran on a voltage-RELAXED feeder: the original tight band [0.95, 1.05] is
     # widened to the per-unit sanity band [0.8, 1.2], so 3.35 does not bind (not enforced).
-    relaxed = res.ctx.meta[:feeder]
+    relaxed = res.ctx.feeder
     for b in relaxed.buses
         b.is_root && continue
         @test b.vmin == 0.8

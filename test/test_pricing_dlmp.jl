@@ -83,13 +83,10 @@ end
     @constraint(model, bp[j = 1:2, t = 1:1], x[j, t] == 0)
     ctx = TSODSO.ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = 1
-    ctx.meta[:T] = 1  # TRANSIENT-MIRROR
     register_constraint!(ctx, :balance_p, bp)
     ctx.pf = ConvexBranchFlow()
     ctx.pf_vars = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated
-    ctx.meta[:pf_vars] = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated  # TRANSIENT-MIRROR
 
     @test_throws ArgumentError extract_dlmp(ctx)
 
@@ -106,7 +103,6 @@ end
     register_constraint!(ctx2, :balance_p, bp)
     ctx2.pf = LinDistFlow()
     ctx2.pf_vars = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate
-    ctx2.meta[:pf_vars] = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate  # TRANSIENT-MIRROR
     @test TSODSO._assert_priceable(ctx2) === nothing
 end
 
@@ -482,7 +478,7 @@ end
     # PV/Aggregator idiom" (an unconstrained-by-price generator that wants to export as much as
     # the network allows under `allow_export=true`), mirroring test_convex_branch_flow.jl's own
     # FIX-03 fixture intent but driven through the ACTUAL solve_welfare + Aggregator + PVBattery
-    # production path (decompose_dlmp requires a real solved ctx: `ctx.meta[:feeder]`,
+    # production path (decompose_dlmp requires a real solved ctx: `ctx.feeder`,
     # `:balance_p`, and the PF-04 exactness certificate — none of which the raw-JuMP
     # ConvexBranchFlow-only fixture provides). Calibrated empirically (this item's own
     # `<verify>` script): at this smax the sending-end cone is essentially SLACK

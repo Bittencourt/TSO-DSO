@@ -51,7 +51,7 @@ end
     # A bare context: NO feeder anywhere — the device is network-agnostic.
     model = Model()
     ctx = TSODSO.ModelContext(model)
-    @test !haskey(ctx.meta, :feeder)
+    @test ctx.feeder === nothing
 
     T = 5
     t_start, t_end, E, Pmax = 2, 4, 6.0, 5.0
@@ -94,7 +94,7 @@ end
 
     # Aggregator-as-writer: the device wrote NOTHING to the residual or the objective.
     @test isempty(ctx.residuals)
-    @test !haskey(ctx.meta, :objective)
+    @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
 end
 
 @testitem "deferrable: energy-window budget 3.4 binds at the solved optimum (DEV-02)" tags =

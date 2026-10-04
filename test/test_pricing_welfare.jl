@@ -179,7 +179,7 @@ end
     acct = welfare_accounting(ctx; T = T)
 
     # Independently recompute the utility + price-transfer from the ctx stash (the split's inputs).
-    util = value(ctx.meta[:objective])
+    util = value(ctx.objective)
     λ = extract_dlmp(ctx)
     transfer = sum(λ[e.bus, t] * value(e.net[t]) for e in ctx.meta[:agg_net] for t in 1:T)
 
@@ -231,7 +231,7 @@ end
 
     acct = welfare_accounting(ctx; T = T)
 
-    util = value(ctx.meta[:objective])
+    util = value(ctx.objective)
     λ = extract_dlmp(ctx)
     transfer = sum(λ[e.bus, t] * value(e.net[t]) for e in ctx.meta[:agg_net] for t in 1:T)
 
@@ -324,7 +324,7 @@ end
     # ¢$/kWh (page 93). Its `social_fit` is the denominator of the +25% headline ratio.
     base = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀)
 
-    relaxed = base.ctx.meta[:feeder]
+    relaxed = base.ctx.feeder
     ctx, obj, _dadp = solve_welfare(
         relaxed,
         ConvexBranchFlow(),

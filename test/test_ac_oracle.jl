@@ -54,11 +54,8 @@
 
         ctx = TSODSO.ModelContext(model)
         ctx.feeder = feeder
-        ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx.T = T
-        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.pf_vars = (; v, P, Q, l)
-        ctx.meta[:pf_vars] = (; v, P, Q, l)  # TRANSIENT-MIRROR
 
         Vphasor = TSODSO.recover_voltage_angles(ctx)
 
@@ -166,11 +163,8 @@ end
             optimize!(m)
             ctx = TSODSO.ModelContext(m)
             ctx.feeder = feeder
-            ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
             ctx.T = T
-            ctx.meta[:T] = T  # TRANSIENT-MIRROR
             ctx.pf_vars = (; v, P, Q, l)
-            ctx.meta[:pf_vars] = (; v, P, Q, l)  # TRANSIENT-MIRROR
             return ctx
         end
         ctx1 = fixed_ctx(1)
@@ -295,7 +289,7 @@ end
         # The EARLIEST inexact hour can instead be an inter-hour-coupling artifact (the battery /
         # deferrable dispatch shifts in response to the peak-hour inexactness), so the diagnostic
         # scans the whole inexact window rather than only its first hour.
-        pv_socp = ctx_socp.meta[:pf_vars]
+        pv_socp = ctx_socp.pf_vars
         N = length(feeder.buses)
         B = length(feeder.branches)
         diagnosed = any(inexact_hours) do t★

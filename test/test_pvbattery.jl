@@ -189,7 +189,7 @@ end
     # --- A bare battery-only convex QP, NO feeder anywhere (device is network-agnostic) ---
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
-    @test !haskey(ctx.meta, :feeder)
+    @test ctx.feeder === nothing
 
     # STRICT λ ordering (thesis-typical 1/4/9 ¢$/kWh) so the App. C dominance is strict.
     T = 4
@@ -200,7 +200,7 @@ end
 
     # Aggregatable contract: the device wrote NOTHING to the residual/objective seams.
     @test isempty(ctx.residuals)
-    @test !haskey(ctx.meta, :objective)
+    @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
     @test res.utility isa QuadExpr                 # concave charge utility − convex discharge cost
     @test length(res.p_inject) == T
     @test all(x -> x isa AffExpr, res.p_inject)    # p_inject = Ppv − p_ch + p_dch (affine)

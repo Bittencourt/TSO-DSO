@@ -330,10 +330,10 @@ end
     )
 
     # The SOCP arm of the CR-03 gate is ARMED on this oracle: ConvexBranchFlow stashed the
-    # squared-current `:l` under `ctx.meta[:pf_vars]` (the exact haskey chain
+    # squared-current `:l` under `ctx.pf_vars` (the exact haskey chain
     # solve_planning_oracle! branches on), and no exactness certificate exists yet.
-    @test haskey(o.ctx.meta, :pf_vars)
-    @test haskey(o.ctx.meta[:pf_vars], :l)
+    @test o.ctx.pf_vars !== nothing
+    @test haskey(o.ctx.pf_vars, :l)
     @test !haskey(o.ctx.meta, :socp_maxgap)
 
     res = solve_planning_oracle!(o, zstar)

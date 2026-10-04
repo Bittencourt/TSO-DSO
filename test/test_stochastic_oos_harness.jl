@@ -102,7 +102,7 @@ end
     pin = only(h.battery_pins)
     ppv = only(h.ppv_handles)
     vbatt = only(
-        vv for (bus, varlist) in h.ctx.meta[:agg_device_vars] for
+        vv for (bus, varlist) in h.ctx.agg_device_vars for
         vv in varlist if haskey(vv, :p_ch)
     )
 
@@ -237,7 +237,7 @@ end
     set_parameter_value.(pin.pin_q, qvals)
     solve_stochastic_oos_step!(h)
     vbess =
-        only(v for (bus, vl) in h.ctx.meta[:agg_device_vars] for v in vl if haskey(v, :q))
+        only(v for (bus, vl) in h.ctx.agg_device_vars for v in vl if haskey(v, :q))
     @test all(isapprox.(value.(vbess.q), qvals; atol = 1e-6))
 end
 
