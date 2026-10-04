@@ -462,17 +462,7 @@ function build_dso_opt(
 
     # (4c) Close BOTH balances at ALL buses (root + every load node). Registered so the DADP
     # duals are recoverable (mirrors the centralized SOCP; ADMM welfare + duals then match).
-    size(ctx.residuals[:Rp]) == (N, T) || error(
-        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($N, $T) — an index escaped the feeder",
-    )
-    @constraint(model, balance_p[j = 1:N, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
-    register_constraint!(ctx, :balance_p, balance_p)          # dual = λ_j (DADP)
-
-    size(ctx.residuals[:Rq]) == (N, T) || error(
-        "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($N, $T) — an index escaped the feeder",
-    )
-    @constraint(model, balance_q[j = 1:N, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
-    register_constraint!(ctx, :balance_q, balance_q)
+    close_balance!(ctx, N, T; reactive = true)
 
     # (5) FIXED-penalty objective built ONCE (thesis 3.47). The pag_dso variables carry NO
     # linear term yet (default zero coupling price); solve_dso! sets each linear coefficient
