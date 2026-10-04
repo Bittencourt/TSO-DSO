@@ -141,7 +141,7 @@ A `NamedTuple`
     default all-zero start is a degenerate KKT point of the unrelaxed `l·v = P²+Q²` equality),
     and only the frontier import free. The solve MUST reach `LOCALLY_SOLVED` (or `OPTIMAL`) with
     a feasible primal — `ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted
-    — throwing a loud `ErrorException` naming `abs_hour` and the full solve status otherwise
+    — throwing a loud `SolveFailedError` naming `abs_hour` and the full solve status otherwise
     (this convergence bar is UNCHANGED by plan 27-09 — only the operating limits are relaxed,
     never the convergence requirement). SOCP exactness gating (`assert_socp_exact!`) plays NO
     role in this settlement path — there is no relaxation here to certify, the branch-flow
@@ -1558,7 +1558,7 @@ family).
 Requires `is_solved_and_feasible(model_t; dual=false, allow_local=true, allow_almost=false)`
 — i.e. `termination_status ∈ {OPTIMAL, LOCALLY_SOLVED}` with a `FEASIBLE_POINT` primal.
 **`ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted** (`allow_almost =
-false`): throws a loud `ErrorException` naming `abs_hour` and the FULL solve status
+false`): throws a loud `SolveFailedError` naming `abs_hour` and the FULL solve status
 (`termination_status`/`primal_status`/`raw_status`) on non-convergence — this function NEVER
 weakens the convergence bar to paper over a stalled Ipopt solve, and NEVER relaxes it to paper
 over a genuine Ipopt failure either (this is UNCHANGED from plan 27-08 — only the operating

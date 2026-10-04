@@ -60,7 +60,7 @@ and a limits-respecting feasibility solve is left as a possible extension.
 The solve calls `assert_solved!(oracle_ac.model; dual = false, allow_local = true)`
 DIRECTLY — NEVER `solve_planning_oracle!`/`solve_with_retry!` (both reject Ipopt's
 `LOCALLY_SOLVED` and have no `allow_local` passthrough, confirmed 30-RESEARCH.md). A
-THROWN `ErrorException` from it (Ipopt non-convergence — a tooling failure, not a
+THROWN `SolveFailedError` from it (Ipopt non-convergence — a tooling failure, not a
 physical violation) is re-thrown with a clearer message naming `z_incumbent`.
 
 Violations are computed DIRECTLY from `oracle_ac.ctx.pf_vars` (`P`, `Q`, `l`, `v`)

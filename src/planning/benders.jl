@@ -810,7 +810,7 @@ The `ac_report` of a converged, relaxation-only incumbent (Phase 30 code review 
 
 The AC re-check is a DIAGNOSTIC of an already-converged result — the slowest and least
 robust solve in the pipeline (Ipopt on a nonconvex model). If it fails with an
-`ErrorException` (Ipopt does not reach `LOCALLY_SOLVED`), the failure is REPORTED here
+`SolveFailedError` (Ipopt does not reach `LOCALLY_SOLVED`), the failure is REPORTED here
 instead of discarding the converged result: `ok = false`, `violations = nothing`,
 `p_import = nothing`, `ac_welfare = NaN`, `raw_status = "AC_RECHECK_FAILED"`,
 `welfare_gap = NaN`, and `error` holds the full message. `ok = false` then means "not
