@@ -400,7 +400,7 @@ instead of duplicated five times or carried in an untyped `Dict`.
   3. `ModelContext` carries typed fields for its fixed metadata (power-flow variables, objective,
      feeder, device variables); downstream code dispatches on the formulation type instead of
      `haskey(pf_vars, :l)`.
-**Plans:** 7/11 plans executed
+**Plans:** 8/11 plans executed
 
 Plans:
 **Wave 1**
@@ -424,7 +424,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 33-07-PLAN.md — Migrate models/admm/devices readers and haskey(:l) gates to typed fields and traits
-- [ ] 33-08-PLAN.md — Migrate pricing/planning/experiments readers and gates
+- [x] 33-08-PLAN.md — Migrate pricing/planning/experiments readers and gates
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -540,7 +540,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
-| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 7/11 | In Progress|  |
+| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 8/11 | In Progress|  |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
