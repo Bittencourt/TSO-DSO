@@ -166,7 +166,8 @@ function _fit_opt_solve(
 
     model = Model(optimizer)
     ctx = ModelContext(model)
-    ctx.meta[:T] = T
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     surplus = zero(QuadExpr)          # Σ prosumer FIT surplus (the objective, thesis 3.24)
     total_utility = zero(QuadExpr)    # Σ flexible-device utility (the welfare-relevant part)
@@ -463,8 +464,10 @@ function fit_baseline(
     # pre-27-09 behavior (no cone to be inexact about in the first place).
     seed_model = Model(optimizer)
     seed_ctx = ModelContext(seed_model)
-    seed_ctx.meta[:feeder] = relaxed
-    seed_ctx.meta[:T] = T
+    seed_ctx.feeder = relaxed
+    seed_ctx.meta[:feeder] = relaxed  # TRANSIENT-MIRROR
+    seed_ctx.T = T
+    seed_ctx.meta[:T] = T  # TRANSIENT-MIRROR
     seed_ctx.meta[:fit_baseline] = true
 
     # Formulation writes branch/voltage terms into :Rp/:Rq (voltage bounds are the relaxed
@@ -539,8 +542,10 @@ function fit_baseline(
         ac = ACPowerFlow(; limits = false)
         model = Model(_site2_ac_optimizer)
         ctx = ModelContext(model)
-        ctx.meta[:feeder] = relaxed
-        ctx.meta[:T] = T
+        ctx.feeder = relaxed
+        ctx.meta[:feeder] = relaxed  # TRANSIENT-MIRROR
+        ctx.T = T
+        ctx.meta[:T] = T  # TRANSIENT-MIRROR
         ctx.meta[:fit_baseline] = true
 
         contribute!(ac, ctx, relaxed; T = T)

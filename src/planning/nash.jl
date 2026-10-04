@@ -1467,8 +1467,10 @@ function solve_variational_equilibrium(
 
     for i in 1:N
         ctx_i = ModelContext(model)
-        ctx_i.meta[:feeder] = specs[i].feeder
-        ctx_i.meta[:T] = T
+        ctx_i.feeder = specs[i].feeder
+        ctx_i.meta[:feeder] = specs[i].feeder  # TRANSIENT-MIRROR
+        ctx_i.T = T
+        ctx_i.meta[:T] = T  # TRANSIENT-MIRROR
         ctx_i.meta[:problem_class] = classes[i]
         # Rule 1 (bug, discovered during execution): every `AbstractPowerFlow.contribute!`
         # method (e.g. LinDistFlow/ConvexBranchFlow) registers ITS OWN formulation-level

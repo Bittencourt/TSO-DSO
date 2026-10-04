@@ -1332,8 +1332,10 @@ function _mpc_truth_import_socp_reference(
 )
     model_t = Model(select_optimizer(problem_class(pf)))
     ctx_t = ModelContext(model_t)
-    ctx_t.meta[:feeder] = feeder
-    ctx_t.meta[:T] = 1
+    ctx_t.feeder = feeder
+    ctx_t.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx_t.T = 1
+    ctx_t.meta[:T] = 1  # TRANSIENT-MIRROR
 
     contribute!(pf, ctx_t, feeder; T = 1)
     reactive_t = haskey(ctx_t.residuals, :Rq)
@@ -1565,8 +1567,10 @@ function _mpc_truth_import_acpf(
     ac = ACPowerFlow(; limits = false)   # plan 27-09 (USER DECISION): physics only
     model_t = Model(select_optimizer(problem_class(ac)))
     ctx_t = ModelContext(model_t)
-    ctx_t.meta[:feeder] = feeder
-    ctx_t.meta[:T] = 1
+    ctx_t.feeder = feeder
+    ctx_t.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx_t.T = 1
+    ctx_t.meta[:T] = 1  # TRANSIENT-MIRROR
 
     contribute!(ac, ctx_t, feeder; T = 1)
     reactive_t = haskey(ctx_t.residuals, :Rq)
