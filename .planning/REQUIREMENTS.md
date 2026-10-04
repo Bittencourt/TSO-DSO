@@ -108,18 +108,18 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   dispatch on it.
 - [x] **ARCH-04**: One `close_balance!` helper replaces the five copied balance-closing blocks in
   `welfare_solve`, `mpc_window`, `stochastic_welfare`, `DsoOpt` and `linear_solve`.
-- [ ] **ARCH-05**: `solve_admm` is split into named phases (build, iterate, ρ adaptation,
+- [x] **ARCH-05**: `solve_admm` is split into named phases (build, iterate, ρ adaptation,
   certification). Reactive-mode behaviour is dispatched, not repeated `mode == …` branches. It
   accepts any valid `AbstractPowerFlow`.
-- [ ] **ARCH-06**: Meshed topology plus live ADMM reactive pricing runs end-to-end and is
+- [x] **ARCH-06**: Meshed topology plus live ADMM reactive pricing runs end-to-end and is
   cross-validated against the centralized meshed `:balance_q` dual (carry-over MESH-06).
 - [x] **ARCH-07**: `ModelContext` carries typed fields for its fixed metadata (power-flow
   variables, objective, feeder, device variables) in place of an untyped `Dict{Symbol,Any}`
   interface. Downstream code dispatches on the formulation type, not on `haskey(pf_vars, :l)`.
-- [ ] **ARCH-08**: One documented status policy covers all solve entry points: when they return a
+- [x] **ARCH-08**: One documented status policy covers all solve entry points: when they return a
   status and when they throw. `solve_admm`, `solve_stackelberg!`, `run_nash!`, `run_mpc` and
   `run_stochastic` follow it consistently.
-- [ ] **ARCH-09**: The `mpc_loop` exception handlers catch only solver-status and certificate
+- [x] **ARCH-09**: The `mpc_loop` exception handlers catch only solver-status and certificate
   exceptions. Programming errors such as `MethodError` and `BoundsError` propagate.
 - [ ] **ARCH-10**: IEEE-8500 performance and memory work (carry-over SCALE-STRETCH): the final
   consolidation's `assert_socp_exact!` behaves correctly at scale, and at least one converged,
@@ -192,10 +192,10 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | ARCH-03 | Phase 33 | Complete |
 | ARCH-04 | Phase 33 | Complete |
 | ARCH-07 | Phase 33 | Complete |
-| ARCH-05 | Phase 34 | Pending |
-| ARCH-06 | Phase 34 | Pending |
-| ARCH-08 | Phase 34 | Pending |
-| ARCH-09 | Phase 34 | Pending |
+| ARCH-05 | Phase 34 | Complete |
+| ARCH-06 | Phase 34 | Complete |
+| ARCH-08 | Phase 34 | Complete |
+| ARCH-09 | Phase 34 | Complete |
 | ARCH-10 | Phase 35 | Pending |
 | HYG-01 | Phase 36 | Pending |
 | HYG-02 | Phase 36 | Pending |

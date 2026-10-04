@@ -153,6 +153,6 @@ outside `mpc_loop.jl` (only inventoried), except `run_stochastic`'s skip-and-rep
 
 - Narrowing catch blocks outside `mpc_loop.jl`/`run_stochastic` (inventoried only).
 - Public type-based reactive-mode API.
-- (from 34 code review, → Phase 36) IN-06 stale `ErrorException` docstrings (ac_recheck.jl:63, mpc_loop.jl:144,1561, benders.jl:813); IN-07 strengthen the WR-04 4Q test with a FourQuadBESS fixture; IN-08 type the remaining solver failures (fit.jl:612, benders.jl:590,680) as `SolveFailedError` or list them in status_policy.md.
+- (from 34 code review) IN-06/07/08 — RESOLVED in Phase 34 iteration 3 at the user's request (no longer deferred).
 
 </deferred>
