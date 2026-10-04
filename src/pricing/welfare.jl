@@ -7,7 +7,7 @@
 # it and declares its own `export`s. It will export:
 #   - `welfare_accounting(ctx; T, ...)` — split the social welfare into prosumer surplus and
 #     DSO surplus from a solved ctx. Prosumer surplus = Σ_j U_agⱼ − Σ_j Σ_t λ_j[t]·p_agⱼ[t]
-#     (thesis eqs. 3.46/3.47), where Σ_j U_agⱼ = value(ctx.meta[:objective]) and the
+#     (thesis eqs. 3.46/3.47), where Σ_j U_agⱼ = value(ctx.objective) and the
 #     price-transfer term reads the per-aggregator net injection p_agⱼ[t] stashed under
 #     `ctx.meta[:agg_net]` (the additive Phase-4 seam from plan 05-01) priced at the DADP
 #     λ_j[t]; the surplus-identity (prosumer + DSO == social) is the correctness net.
@@ -19,7 +19,7 @@
 using JuMP
 
 """
-    welfare_accounting(ctx::ModelContext; T = ctx.meta[:T], λ₀ = nothing,
+    welfare_accounting(ctx::ModelContext; T = _require_T(ctx), λ₀ = nothing,
                        baseline = nothing, rtol = 1e-4, atol = 1e-4,
                        _transfer_flip = false)
         -> (; social, dso, prosumer[, ratio])
@@ -33,7 +33,7 @@ Reads only stashed primals/duals — **no re-solve**. The three quantities (thes
 
   - `social`   = `objective_value(ctx.model)` — the GLB-CVX social welfare (3.38);
   - `prosumer` = `Σ_j U_agⱼ + Σ_j Σ_t λ_j[t]·p_agⱼ[t]` — the AGR-OPT value (3.46), where
-    `Σ_j U_agⱼ = value(ctx.meta[:objective])` and the price-transfer term prices each
+    `Σ_j U_agⱼ = value(ctx.objective)` and the price-transfer term prices each
     aggregator's net INJECTION `p_agⱼ[t]` (`net = p_inject − Pdc`, `ctx.meta[:agg_net]`, plan
     05-01) at the DADP `λ_j[t] = extract_dlmp(ctx)`. The transfer is **added** (not subtracted):
     a net-EXPORTER (net>0) at a positive λ EARNS `λ·net`, an importer PAYS it — thesis 3.46
@@ -72,7 +72,7 @@ ctx is refused).
 """
 function welfare_accounting(
     ctx::ModelContext;
-    T::Int = ctx.meta[:T],
+    T::Int = _require_T(ctx),
     λ₀ = nothing,
     baseline = nothing,
     rtol::Real = 1e-4,
@@ -89,7 +89,7 @@ function welfare_accounting(
         )
     end
 
-    feeder = ctx.meta[:feeder]
+    feeder = _require_feeder(ctx)
     root = feeder.root
 
     # Per-node DADP λ_j[t] (runs the PF-04 exactness gate; refuses an ungated SOCP ctx).
@@ -123,7 +123,7 @@ function welfare_accounting(
         end
     end
 
-    util = value(ctx.meta[:objective])                # Σ_j U_agⱼ (total prosumer utility)
+    util = value(ctx.objective)                # Σ_j U_agⱼ (total prosumer utility)
 
     # AGR-OPT value (3.46). `transfer = Σⱼ Σₜ λⱼ·netⱼ` where `net = p_inject − Pdc` is the net
     # INJECTION (net>0 ⇒ export). Thesis 3.46 prices the aggregator's net DEMAND (= −net

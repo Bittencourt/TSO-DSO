@@ -89,7 +89,7 @@
 # this plan's file scope (`src/pricing/dlmp.jl` only); logged, not fixed, here.
 #
 # Consumes ONLY the additive Phase-4 seam registered by plan 05-01 (`:cone`, `:vdrop`,
-# `:cpydrop`, `:smax`, and `ctx.meta[:pf_vars]`) plus the always-present `:balance_p` — no
+# `:cpydrop`, `:smax`, and `ctx.pf_vars`) plus the always-present `:balance_p` — no
 # change to `solve_welfare` or the power-flow formulations.
 
 using JuMP
@@ -109,8 +109,7 @@ function _assert_priceable(ctx::ModelContext)
             "welfare ModelContext (thesis eq. 3.31)",
         ),
     )
-    if haskey(ctx.meta, :pf_vars) &&
-       haskey(ctx.meta[:pf_vars], :l) &&
+    if has_branch_current(ctx.pf) &&
        !haskey(ctx.meta, :socp_maxgap)
         throw(
             ArgumentError(
@@ -374,7 +373,7 @@ function decompose_dlmp(
         )
     end
 
-    feeder = ctx.meta[:feeder]
+    feeder = _require_feeder(ctx)
     bp = ctx.constraints[:balance_p]
     N, Tfull = size(bp)
     root = feeder.root

@@ -298,7 +298,7 @@ a genuine welfare solve, where the network itself chooses `l`). SITE 2 now (plan
      operating limit (any violation is REPORTED via `ac_violations`, never refused).
   3. When `pf` has no cone (DC/LinDistFlow, no `:l` stashed), step 1's own solve IS the final
      settlement — BYTE-IDENTICAL to pre-27-09 behavior (data-driven, no `if formulation ==`
-     branching, mirroring `solve_welfare`'s own `haskey(ctx.meta[:pf_vars], :l)` gate).
+     branching, mirroring `solve_welfare`'s own `has_branch_current(ctx.pf)` gate).
 
 `on_inexact::Symbol` is now the REPORTING switch for a genuine AC non-convergence at step 2
 (mirroring the project-standard `on_violation` idiom, `assert_battery_complementarity!`,
@@ -522,7 +522,7 @@ function fit_baseline(
     @objective(seed_model, Max, -sum(λ₀[t] * seed_p_import[t] for t in 1:T))
     assert_solved!(seed_model; dual = false)
 
-    has_cone = haskey(seed_ctx.meta, :pf_vars) && haskey(seed_ctx.meta[:pf_vars], :l)
+    has_cone = has_branch_current(seed_ctx.pf)
 
     # Step (b) — plan 27-09 (USER DECISION 2026-09-29): when `pf` has a cone, replace the
     # fixed-dispatch SOC relaxation with a genuine AC power flow, PHYSICS ONLY
@@ -582,8 +582,8 @@ function fit_baseline(
         # Warm start every P/Q/l/v/p_import/q_import from step (a)'s own solved point (26-15's
         # documented remedy — Ipopt's default all-zero start is a degenerate KKT point of the
         # unrelaxed `l·v = P²+Q²` equality).
-        pv_seed = seed_ctx.meta[:pf_vars]
-        pv_ac = ctx.meta[:pf_vars]
+        pv_seed = _require_pf_vars(seed_ctx)
+        pv_ac = _require_pf_vars(ctx)
         Bf = relaxed.branches
         for b in eachindex(Bf), t in 1:T
             set_start_value(pv_ac.P[b, t], value(pv_seed.P[b, t]))
@@ -640,7 +640,7 @@ function fit_baseline(
             )
         end
 
-        ac_violations = _fit_ac_settlement_violations(relaxed, ctx.meta[:pf_vars], T)
+        ac_violations = _fit_ac_settlement_violations(relaxed, _require_pf_vars(ctx), T)
     end
 
     imports = value.(p_import)

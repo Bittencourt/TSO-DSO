@@ -21,7 +21,7 @@ using JuMP
 
 """
     economic_direction_checks(ctx::ModelContext; λ₀, regime=:auto, bus=nothing,
-                              dadp=nothing, T=ctx.meta[:T], tol=1e-6)
+                              dadp=nothing, T=_require_T(ctx), tol=1e-6)
         -> (; pv_glut_ok::Bool, congestion_ok::Bool)
 
 Assert the distribution price (the DADP `λ_j[t]` = dual of the registered `:balance_p` active
@@ -56,7 +56,7 @@ extremum must exceed `tol` in the expected direction).
   - `dadp = nothing` — optional DADP override (a `Vector` single-bus series or a `bus × time`
     `Matrix`); when supplied it REPLACES the `:balance_p` read. Used to prove non-vacuity (feed a
     sign-flipped DADP and watch the check throw); the default path always reads `:balance_p`.
-  - `T::Integer = ctx.meta[:T]` — horizon; `length(λ₀) == T` is a loud shape guard (T-05-11).
+  - `T::Integer = _require_T(ctx)` — horizon; `length(λ₀) == T` is a loud shape guard (T-05-11).
   - `tol::Real = 1e-6` — strict-inequality slack separating a genuine excursion from dual noise.
 
 Returns `(; pv_glut_ok, congestion_ok)` — whether a strict below-/above-wholesale excursion
@@ -71,7 +71,7 @@ function economic_direction_checks(
     regime::Symbol = :auto,
     bus::Union{Nothing, Integer} = nothing,
     dadp::Union{Nothing, AbstractVecOrMat} = nothing,
-    T::Integer = ctx.meta[:T],
+    T::Integer = _require_T(ctx),
     tol::Real = 1e-6,
 )
     regime in (:auto, :pv_glut, :congestion) || throw(
@@ -120,7 +120,7 @@ function economic_direction_checks(
     # Exclude the frontier/root bus when reading from the true balance (its DADP just tracks
     # λ₀, contributing a ~0 deviation). With a `dadp` override we cannot know the root, so scan
     # all supplied rows.
-    feeder = get(ctx.meta, :feeder, nothing)
+    feeder = ctx.feeder
     root = (dadp === nothing && feeder !== nothing) ? feeder.root : 0
     buses = bus === nothing ? [j for j in 1:Np if j != root] : [Int(bus)]
     isempty(buses) && throw(

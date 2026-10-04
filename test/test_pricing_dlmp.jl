@@ -87,6 +87,7 @@ end
     ctx.T = 1
     ctx.meta[:T] = 1  # TRANSIENT-MIRROR
     register_constraint!(ctx, :balance_p, bp)
+    ctx.pf = ConvexBranchFlow()
     ctx.pf_vars = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated
     ctx.meta[:pf_vars] = (; l = x)          # `:l` present ⇒ SOCP-shaped; NO :socp_maxgap ⇒ ungated  # TRANSIENT-MIRROR
 
@@ -103,6 +104,7 @@ end
     # is required — the gate must NOT refuse it.
     ctx2 = TSODSO.ModelContext(model)
     register_constraint!(ctx2, :balance_p, bp)
+    ctx2.pf = LinDistFlow()
     ctx2.pf_vars = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate
     ctx2.meta[:pf_vars] = (; P = x)         # no `:l` ⇒ not a cone ⇒ no gate  # TRANSIENT-MIRROR
     @test TSODSO._assert_priceable(ctx2) === nothing
