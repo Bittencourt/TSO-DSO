@@ -42,7 +42,7 @@ is accumulated into `ctx.residuals[:Rp]` via the INDEXED `add_to_residual!`
 reactive channel and no voltage magnitudes, so `:Rq` and any voltage variable are never
 allocated. Returns `ctx`.
 """
-function contribute!(pf::DCPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
+function contribute!(pf::DCPowerFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -58,6 +58,7 @@ function contribute!(pf::DCPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
         add_to_residual!(ctx, :Rp, j, t, inflow - outflow)
     end
     ctx.pf = pf
+    ctx.pf_vars = nothing   # DC stashes no variables; clear any stale stash from an earlier formulation
     return ctx
 end
 

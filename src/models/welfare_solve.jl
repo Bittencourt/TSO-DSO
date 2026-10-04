@@ -261,7 +261,7 @@ function solve_welfare(
     # DELIBERATELY DISTINCT from the battery-check `τ` — a different physical quantity, do not
     # conflate them. `maxgap` (the absolute residual) is stashed under `ctx.meta[:socp_maxgap]`
     # as a first-class output reported alongside the prices.
-    if has_branch_current(ctx.pf)
+    if has_branch_current(ctx)
         ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; rtol = rtol_exact)
     end
 

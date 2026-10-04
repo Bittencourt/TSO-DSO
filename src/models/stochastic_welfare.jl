@@ -430,7 +430,7 @@ function build_stochastic_welfare(
     # stashed no squared-current :l (DC/LinDistFlow paths), exactly like solve_welfare.
     socp_maxgap = Float64[]
     for s in 1:S
-        if has_branch_current(ctxs[s].pf)
+        if has_branch_current(ctxs[s])
             push!(socp_maxgap, assert_socp_exact!(ctxs[s]; rtol = rtol_exact))
         end
     end

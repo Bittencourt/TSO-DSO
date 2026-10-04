@@ -349,7 +349,7 @@ function solve_planning_oracle!(
     # an inexact solve.
     exactness = :not_applicable
     socp_maxgap = NaN
-    if has_branch_current(o.ctx.pf)
+    if has_branch_current(o.ctx)
         try
             socp_maxgap = assert_socp_exact!(o.ctx; rtol = rtol_exact)
             o.ctx.meta[:socp_maxgap] = socp_maxgap

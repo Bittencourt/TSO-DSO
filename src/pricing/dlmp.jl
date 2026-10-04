@@ -109,7 +109,7 @@ function _assert_priceable(ctx::ModelContext)
             "welfare ModelContext (thesis eq. 3.31)",
         ),
     )
-    if has_branch_current(ctx.pf) &&
+    if has_branch_current(ctx) &&
        !haskey(ctx.meta, :socp_maxgap)
         throw(
             ArgumentError(

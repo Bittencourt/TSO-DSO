@@ -470,7 +470,7 @@ function fit_baseline(
     # Formulation writes branch/voltage terms into :Rp/:Rq (voltage bounds are the relaxed
     # band, so 3.35 does not bind — the FIT "AC-PF, observe 3.35 not enforced" step).
     contribute!(pf, seed_ctx, relaxed; T = T)
-    seed_reactive = haskey(seed_ctx.residuals, :Rq)
+    seed_reactive = has_reactive(pf)
 
     # Fix each aggregator's FIT net injection at its bus (3.22) and its power-factor reactive
     # draw (3.23) — both NUMERIC constants from the FIT-OPT solve.
@@ -519,7 +519,7 @@ function fit_baseline(
     @objective(seed_model, Max, -sum(λ₀[t] * seed_p_import[t] for t in 1:T))
     assert_solved!(seed_model; dual = false)
 
-    has_cone = has_branch_current(seed_ctx.pf)
+    has_cone = has_branch_current(seed_ctx)
 
     # Step (b) — plan 27-09 (USER DECISION 2026-09-29): when `pf` has a cone, replace the
     # fixed-dispatch SOC relaxation with a genuine AC power flow, PHYSICS ONLY
@@ -544,7 +544,7 @@ function fit_baseline(
         ctx.meta[:fit_baseline] = true
 
         contribute!(ac, ctx, relaxed; T = T)
-        reactive = haskey(ctx.residuals, :Rq)
+        reactive = has_reactive(ac)
 
         for a in fa.per_agg
             tanφ = sqrt(1 - a.φ^2) / a.φ

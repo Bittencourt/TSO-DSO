@@ -95,7 +95,7 @@ ModelContext(model::Model) = ModelContext(
 
 # Checked accessors: unset state fails loudly instead of defaulting silently.
 function _require_T(ctx::ModelContext)
-    ctx.T == 0 && throw(ArgumentError("ModelContext.T is unset (0); the builder must set ctx.T"))
+    ctx.T <= 0 && throw(ArgumentError("ModelContext.T is unset or non-positive ($(ctx.T)); the builder must set ctx.T"))
     return ctx.T
 end
 
@@ -112,6 +112,28 @@ function _require_pf_vars(ctx::ModelContext)
         ),
     )
     return ctx.pf_vars
+end
+
+"""
+    has_branch_current(ctx::ModelContext) -> Bool
+
+Consistency-guarded gate for the SOCP exactness certificate. Returns
+`has_branch_current(ctx.pf)` but first checks it against the data (`ctx.pf_vars` carries a
+branch-current `l`); a disagreement (a formulation that stashes `l` without implementing the
+trait, or `pf_vars` populated without `ctx.pf`) throws `ArgumentError` instead of silently
+skipping the exactness gate.
+"""
+function has_branch_current(ctx::ModelContext)
+    declared = has_branch_current(ctx.pf)
+    actual = ctx.pf_vars !== nothing && haskey(ctx.pf_vars, :l)
+    declared == actual || throw(
+        ArgumentError(
+            "ModelContext: has_branch_current($(typeof(ctx.pf))) = $declared but pf_vars " *
+            "$(actual ? "carries" : "has no") branch current :l — implement " *
+            "`has_branch_current` for this formulation (and set ctx.pf in contribute!)",
+        ),
+    )
+    return declared
 end
 
 """
