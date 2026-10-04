@@ -82,6 +82,29 @@ outside `mpc_loop.jl` (only inventoried), except `run_stochastic`'s skip-and-rep
 - Scope: every try/catch in `mpc_loop.jl`; `run_stochastic`'s skip-and-report catch narrowed to the
   same types (behaviour preserved); other files' catch blocks inventoried only.
 
+### Research Refinements (34-RESEARCH.md + user decisions 2026-10-04 — supersede looser wording above)
+- Typed exceptions CANNOT subtype `ErrorException` (concrete). USER: accept migration — ordered rollout:
+  (1) add `TSODSOError` types + `_is_solver_failure(e)` predicate (no behaviour change); (2) widen the 11
+  production `e isa ErrorException || rethrow()` sites (incl. `src/planning/retry.jl:198`, the retry
+  ladder the knife-edge canary relies on) to the predicate; (3) convert throw sites; (4) update the ~20
+  test lines matching `ErrorException`. Knife-edge canary after every step. "Byte-identical message
+  text" still holds; only the exception TYPE changes.
+- `ConvergenceError` scope: solve_admm maxiter, `solve_stackelberg!` exhaustion + `:reject` stalled,
+  `run_nash!` exhaustion + CYCLED. Other planning `error(...)` modeling-bug asserts stay `ErrorException`
+  and are inventoried in the policy doc.
+- LinDistFlow ADMM (USER): additive `solve_agr!` kwarg `battery_on_violation::Symbol = :error`
+  (existing callers unchanged); `solve_admm` passes `:warn` iff `!(problem_class(pf) isa SOCP)`,
+  mirroring `welfare_solve.jl`. LinDistFlow is in `admm_supported`.
+- Canary (USER): NEVER re-pin. Any change to `iters = 56` / welfare means FP order drifted; fix the refactor.
+- Meshed ADMM: delete the `::MeshedFeeder` throw methods (ambiguity with the generic method) and gate
+  pairs via `admm_supported`/pair check instead. Reactive-price cross-check uses a heterogeneous diamond +
+  new `φ = 0.95` test helper (committed fixture's reactive price ≈ 0); angle-certificate composition uses
+  uniform φ=1 + BESS. Tolerances from the measured table in 34-RESEARCH.md.
+- `has_reactive` guard: NOT added (DC + aggregators legitimately solves with unclosed `:Rq`); instead a
+  pinning test (objective `-4819.9377763808125`) + a policy-doc sentence.
+- `mpc_loop.jl` has exactly two try/catch blocks (in `_mpc_certify_and_price`); no extra source wrapping
+  needed; the `boom` test seam must throw `SolveFailedError`.
+
 ### Claude's Discretion
 - Exact internal function/struct names beyond those listed; file split of `solve_admm.jl`.
 - Field set of `ConvergenceError`.
