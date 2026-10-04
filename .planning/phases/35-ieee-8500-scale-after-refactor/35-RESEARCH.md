@@ -296,14 +296,17 @@ end
 | A5 | ADMM-only T=24 headline may fit (never measured in isolation) | Finding 3 | Re-characterization table branch instead |
 | A6 | Mechanism C (overwriting `ladder_baseline`) works | Finding 2 | Skip C; A+B suffice |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **If the diagnostic shows hybrid ratio > 1 at IEEE-8500, what does SC1 mean?**
    - Known: near-zero-r branch `L2916620->N1136366` has gap ~1.8e-3 = its whole cone magnitude, loss cost ~4e-9 pu; CONTEXT forbids excluding such branches and forbids raising τ/ε.
    - Unclear: whether the user accepts "the gate correctly refuses, documented as the new honest wall" (SC1 reinterpreted) versus ratifying a new principled cost-weighted floor (gate-semantics change).
    - Recommendation: plan a `checkpoint:decision` immediately after the diagnostic run. Default to option (a) (honest report, no gate change) unless the user ratifies (b).
+   - **RESOLVED (user, 2026-10-04):** option (a) HONEST REFUSAL — no gate-semantics change; recorded in 35-CONTEXT.md Research Refinements. No checkpoint needed.
 2. **Which point is "one real IEEE-8500 run recorded in the benchmark CSV" if the gate throws?** Recommend recording the converged ADMM point as `admm_status = ERROR:CertificateError` plus the diagnostic (hybrid ratio, worst branch) via the `atol_exact=Inf` run, labelled clearly, rather than a passing row.
+   - **RESOLVED:** adopted in plans 35-02/35-03 (ERROR:CertificateError row + bypass diagnostic row).
 3. **Do the v3.0 T=10 results (ADMM 8 iters, 227 s, 3.2 GB) still reproduce post-Phase-34 refactor and bus-merge (fixture is now 4866 buses; v3.0 numbers were on 4875/4872)?** Unknown; the first measurement task answers it.
+   - **RESOLVED:** plan 35-03 measures it (T=10 ADMM-only re-measurement vs v3.0).
 
 ## Environment Availability
 
