@@ -476,7 +476,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 34-03-PLAN.md — convert certificate refusals to CertificateError + migrate tests
+- [x] 34-03-PLAN.md — convert certificate refusals to CertificateError + migrate tests
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -594,7 +594,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
-| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 2/12 | In Progress|  |
+| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 3/12 | In Progress|  |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
