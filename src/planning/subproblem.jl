@@ -280,7 +280,7 @@ Returns a `NamedTuple`:
     the gate ran (exact or inexact), `NaN` when `exactness === :not_applicable`.
 
 `on_inexact` (Phase 30 code review, CR-01/CR-03): `:throw` (the default — byte-identical
-to every pre-Phase-30 call site) rethrows the exactness gate's own `ErrorException`;
+to every pre-Phase-30 call site) rethrows the exactness gate's own `CertificateError`;
 `:report` returns the inexact result instead, with `exactness = :inexact`. In BOTH modes
 the battery-complementarity gate runs on every result that is returned — an inexact
 `:report` result is never exempted from it (a complementarity violation always throws).
@@ -337,7 +337,7 @@ function solve_planning_oracle!(
     # Phase 30 code review (CR-01/CR-03): the gate's verdict is captured EXPLICITLY here,
     # at the one call site that can produce it, instead of being inferred later by a
     # caller from whether `:socp_maxgap` happens to be stashed. `assert_socp_exact!`'s ONLY
-    # a solver-failure exception (legacy `ErrorException` or typed `TSODSOError`) is its inexactness verdict (its malformed-feeder guard is an
+    # exactness verdict is `CertificateError(kind = :socp_exact)` (its malformed-feeder guard is an
     # `ArgumentError`, a missing stash a `KeyError` — both propagate untouched below).
     # Under `on_inexact = :throw` (the default) that verdict is rethrown unchanged — the
     # byte-identical pre-Phase-30 behavior every other caller relies on. Under
@@ -355,7 +355,8 @@ function solve_planning_oracle!(
             o.ctx.meta[:socp_maxgap] = socp_maxgap
             exactness = :exact
         catch e
-            (_is_solver_failure(e) && on_inexact === :report) || rethrow()
+            (e isa CertificateError && e.kind === :socp_exact && on_inexact === :report) ||
+                rethrow()
             exactness = :inexact
             socp_maxgap = socp_relaxation_gap(o.ctx)
         end
