@@ -531,7 +531,14 @@ orchestration layer has been refactored.
 
   2. At least one converged, memory-feasible headline point is measured, or the memory wall is
      re-characterized honestly after the architecture changes.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 35-01-PLAN.md — ADMM atol_exact default -> nothing (hybrid floor), tests A/B/negative, hybrid_ratios diagnostic, goldens/canary bit-identical
+- [ ] 35-02-PLAN.md — harness: --admm-only, --admm-atol, --admm-diagnostic-bypass, per-point wrapper (peak RSS + earlyoom capture), memory profiler
+- [ ] 35-03-PLAN.md — measurements: memory profile, SC1 bypass diagnostic, headline density 0.1 T=10 post-refactor
+- [ ] 35-04-PLAN.md — conditional bit-identical memory win, T=24/density 0.25 ladder, memory-wall re-characterization table
+- [ ] 35-05-PLAN.md — docs section + regenerated page, append-only SCALE-05 status notes, full-suite phase gate
 
 ### Phase 36: Code & Export Cleanup
 
