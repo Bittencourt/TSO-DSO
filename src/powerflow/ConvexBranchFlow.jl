@@ -198,11 +198,13 @@ reactive balance into `:Rq` (thesis 3.32) via the INDEXED `add_to_residual!`. Th
 branch `(i,j)` contributes `+P − r·l` (`:Rp`) / `+Q − x·l` (`:Rq`) at the CHILD node `j`
 (RESEARCH Pitfall 6 — losses are charged at the child); outgoing branches `(j,m)` contribute
 `−P` / `−Q`. The loss terms are LINEAR in `l`, so they flow through the affine
-`add_to_residual!` seam unchanged. Stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)` for the
+`add_to_residual!` seam unchanged. Stashes `ctx.pf_vars = (; v, v̂, P, Q, l)` for the
 PF-04 exactness checker. Returns `ctx`.
 """
 function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
-    return _contribute_convex!(pf, ctx, feeder; T = T)
+    _contribute_convex!(pf, ctx, feeder; T = T)
+    ctx.pf = pf
+    return ctx
 end
 
 """
@@ -369,7 +371,8 @@ function _contribute_convex!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::Ab
     # Stash the SOC/exactness variables for the PF-04 exactness checker (plan 04-05), which
     # keys off the presence of :l to run `max|l·v − (P²+Q²)| < τ` and refuse prices on
     # inexactness. DC/LinDistFlow stash no :l, so that gate leaves them untouched.
-    ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)
+    ctx.pf_vars = (; v, v̂, P, Q, l)
+    ctx.meta[:pf_vars] = ctx.pf_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
     return ctx
 end
 

@@ -320,6 +320,7 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder
 
     ctx.meta[:restriction_ε] = pf.ε             # D-08 provenance
     ctx.meta[:formulation] = :RestrictedBranchFlow   # D-08 provenance
+    ctx.pf = pf
     return ctx
 end
 

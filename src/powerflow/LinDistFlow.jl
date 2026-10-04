@@ -50,7 +50,7 @@ Creates, on `ctx.model`:
 Then accumulates the per-bus active balance (inflow − outflow of `P`) into
 `ctx.residuals[:Rp]` (thesis 3.31, loss-less) and the reactive balance (inflow −
 outflow of `Q`) into `ctx.residuals[:Rq]` (thesis 3.32), both via the INDEXED
-`add_to_residual!`. Stashes `ctx.meta[:pf_vars] = (; v, P, Q)` for post-solve
+`add_to_residual!`. Stashes `ctx.pf_vars = (; v, P, Q)` for post-solve
 inspection / the Phase-4 exactness check. Returns `ctx`.
 """
 function contribute!(::LinDistFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
@@ -58,7 +58,7 @@ function contribute!(::LinDistFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
         "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair per ARCH-03"))
 end
 
-function contribute!(::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
+function contribute!(pf::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -99,7 +99,9 @@ function contribute!(::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int = 
         add_to_residual!(ctx, :Rq, j, t, qin - qout)
     end
 
-    ctx.meta[:pf_vars] = (; v, P, Q)   # stash for post-solve inspection / Phase-4 exactness
+    ctx.pf_vars = (; v, P, Q)   # stash for post-solve inspection / Phase-4 exactness
+    ctx.meta[:pf_vars] = ctx.pf_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
+    ctx.pf = pf
     return ctx
 end
 

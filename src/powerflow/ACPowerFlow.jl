@@ -155,7 +155,7 @@ Per branch/time it adds:
 Then accumulates the per-bus active balance into `ctx.residuals[:Rp]` (thesis 3.31) and the
 reactive balance into `:Rq` (thesis 3.32) via the INDEXED `add_to_residual!`, loss-charged at
 the CHILD node — byte-identical to [`contribute!(::ConvexBranchFlow, …)`](@ref). Stashes
-`ctx.meta[:pf_vars] = (; v, P, Q, l)` (NO `v̂`) so [`assert_ac_exact!`](@ref) can index both the
+`ctx.pf_vars = (; v, P, Q, l)` (NO `v̂`) so [`assert_ac_exact!`](@ref) can index both the
 SOCP-built and AC-built contexts by the same field names. Returns `ctx`.
 """
 function contribute!(pf::ACPowerFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
@@ -277,7 +277,9 @@ function contribute!(pf::ACPowerFlow, ctx::ModelContext, feeder::AbstractFeeder;
     # Stash the AC variables for assert_ac_exact! (plan 15-02) and the harmless :l-keyed
     # assert_socp_exact! double-fire inside solve_welfare (residual ~0 since the cone is an
     # equality). No :v̂ — the field set is the ConvexBranchFlow stash MINUS the copy.
-    ctx.meta[:pf_vars] = (; v, P, Q, l)
+    ctx.pf_vars = (; v, P, Q, l)
+    ctx.meta[:pf_vars] = ctx.pf_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
+    ctx.pf = pf
     return ctx
 end
 

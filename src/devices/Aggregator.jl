@@ -139,7 +139,7 @@ Roll the aggregator's member devices into the single nodal quantities the networ
     via `q_inject`) at `agg.bus`;
  3. adds the summed device utility to `ctx.meta[:objective]` via `add_to_objective!`
     (3.21, kept a `QuadExpr` so curvature is retained); and
- 4. stashes the collected device vars under `ctx.meta[:agg_device_vars]` keyed by bus,
+ 4. stashes the collected device vars in `ctx.agg_device_vars` keyed by bus,
     so the assembly can run the post-solve battery-complementarity check.
 
 The member devices themselves write NOTHING to the residual/objective — the aggregator
@@ -238,8 +238,8 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     add_to_objective!(ctx, utility)
 
     # Stash device vars keyed by bus for the post-solve p_ch·p_dch < τ battery check.
-    store = get!(ctx.meta, :agg_device_vars, Dict{Int, Vector{Any}}())
-    append!(get!(store, agg.bus, Vector{Any}()), device_vars)
+    append!(get!(ctx.agg_device_vars, agg.bus, Vector{Any}()), device_vars)
+    ctx.meta[:agg_device_vars] = ctx.agg_device_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
 
     return (; vars = device_vars, p_inject, q_inject, utility, Pdc_param)
 end

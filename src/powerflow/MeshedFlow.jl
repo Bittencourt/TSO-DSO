@@ -79,6 +79,7 @@ stash: `ctx.meta[:formulation] = :MeshedFlow`. Returns `ctx`.
 function contribute!(pf::MeshedFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
     _contribute_convex!(ConvexBranchFlow(), ctx, feeder; T = T)
     ctx.meta[:formulation] = :MeshedFlow   # D-08-style provenance for plan 23-03's certificate
+    ctx.pf = pf
     return ctx
 end
 
