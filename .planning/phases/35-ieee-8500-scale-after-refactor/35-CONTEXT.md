@@ -59,6 +59,28 @@ new solvers as headline.
   typed exception names (`CertificateError`/`ConvergenceError`) handled, drop the script-side
   `EXACTNESS_ATOL` override once the library default is right (keep a CLI override flag).
 
+### Research Refinements (35-RESEARCH.md + user decision 2026-10-04 — supersede looser wording above)
+- The hybrid floor `max(2e-7, 1e-9·ref_b)` is TIGHTER than the old flat 1e-6 except on branches with
+  smax in ~32–99 pu, so no natural ADMM point sits in "gap > 1e-6 but < hybrid floor". Proof recipe
+  replaced by: (a) an assert-level test on an smax≈90 branch (passes under hybrid, throws under flat
+  1e-6); (b) a plumbing test on the 2-bus fixture proving `nothing` reaches `assert_socp_exact!`;
+  (c) a near-zero-r genuinely-inexact negative test raising `CertificateError`.
+- Early diagnostic task: IEEE-8500 density 0.1, T=10 ADMM with `atol_exact = Inf` (bypass), then
+  per-branch hybrid ratios from `res.dso_ctx`.
+- USER DECISION (SC1 meaning): HONEST REFUSAL. If the diagnostic confirms a genuine cone gap at
+  IEEE-8500 (expected ≈1.8e-3 on `L2916620->N1136366`, ≫ hybrid bound), the throw is NOT spurious —
+  SC1 is met by: hybrid default in the library + documented proof that the 8500 throw is a genuine
+  certificate failure (per-branch diagnostic, loss-weighted impact ≈4e-9 pu). Record the point as
+  `ERROR:CertificateError` plus the bypass diagnostic row. NO gate-semantics change, no new
+  cost-weighted floor, no branch exclusion; τ and ε are NOT raised.
+- Memory: v3.0 never isolated ADMM's own footprint (centralized + ADMM in one process). Add an
+  `--admm-only` harness flag; GC between stages; staged `/proc/self/status` profiling. earlyoom runs on
+  this machine (`-m 12,6 -s 12,6`) — OOM capture must read BOTH `journalctl -k` and
+  `journalctl -u earlyoom` (SIGTERM).
+- Docs: `docs/literate/ieee8500_scaling.jl` (headline section ~:178) + regenerate tracked
+  `docs/src/generated/ieee8500_scaling.md`; SCALE-05 notes are append-only dated notes in
+  `25-VERIFICATION.md`, `deferred-items.md` items 3–4, `STATE.md`, `PROJECT.md`, `REQUIREMENTS.md`.
+
 ### Claude's Discretion
 - Choice of proxy fixture for the fast regression test; exact profiling method; the wrapper script
   shape for per-process runs.
