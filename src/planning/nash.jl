@@ -993,12 +993,13 @@ function run_nash!(
             # Parameters and the pinned x_inv bounds; returning `converged = true`
             # over an untrusted solver state would poison every subsequent
             # value()/dual() query far from the cause.
-            is_solved_and_feasible(shared.model) || error(
+            is_solved_and_feasible(shared.model) || throw(SolveFailedError(
                 "run_nash!: final consistency re-solve of the fully-pinned shared " *
                 "model failed (termination_status=" *
                 "$(termination_status(shared.model))) — the converged state is " *
                 "not mutually feasible",
-            )
+                shared.model,
+            ))
             return (;
                 z = copy(z_prev),
                 x_inv = copy(x_inv_prev),

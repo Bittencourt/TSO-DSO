@@ -157,7 +157,7 @@ end
                         "(socp_maxgap=$(r2.socp_maxgap))",
                     )
                 catch e
-                    e isa ErrorException || rethrow()
+                    TSODSO._is_solver_failure(e) || rethrow()
                     # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
                     # four distinct failures inside build_stochastic_welfare raise a bare
                     # ErrorException (assert_solved! on any non-OPTIMAL status — including the

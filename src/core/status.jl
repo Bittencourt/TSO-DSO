@@ -18,7 +18,7 @@ using JuMP
 
 Optimize `model` and assert the result is trustworthy. This is the single INFRA-03
 choke point: it calls `optimize!` then `is_solved_and_feasible(model; dual, allow_local)`
-and, on failure, raises loudly with the full status diagnostics
+and, on failure, throws a `SolveFailedError` with the full status diagnostics
 (`termination_status`, `primal_status`, `dual_status`, `raw_status`).
 
 `allow_local=false` (the default) rejects `LOCALLY_SOLVED` — correct for the convex
@@ -54,13 +54,13 @@ function assert_solved!(
             (ps == MOI.FEASIBLE_POINT || ps == MOI.NEARLY_FEASIBLE_POINT)
     end
     if !ok
-        error("""
+        throw(SolveFailedError("""
               Solve failed — refusing to trust results:
                 termination_status : $(termination_status(model))
                 primal_status      : $(primal_status(model))
                 dual_status        : $(dual_status(model))
                 raw_status         : $(raw_status(model))
-              """)
+              """, model))
     end
     return model
 end
@@ -73,7 +73,7 @@ from the solved variable values and assert it matches the constraint's right-han
 side within `atol`. This catches a solver reporting `OPTIMAL` while silently
 violating the constraint within its loose feasibility tolerance (INFRA-03).
 
-`cref` must reference a scalar equality constraint. Errors with the observed LHS,
+`cref` must reference a scalar equality constraint. Throws `CertificateError` (`kind = :no_slack`) with the observed LHS,
 RHS, and residual on violation. Returns the (signed) residual `lhs - rhs` on success.
 """
 function assert_no_slack(model::Model, cref; atol::Real = 1e-6)
@@ -82,13 +82,13 @@ function assert_no_slack(model::Model, cref; atol::Real = 1e-6)
     rhs = MOI.constant(obj.set)           # RHS for EqualTo / scalar sets
     residual = lhs - rhs
     if abs(residual) > atol
-        error("""
+        throw(CertificateError("""
               Hidden constraint slack detected — refusing to trust results:
                 constraint : $(cref)
                 lhs(value) : $(lhs)
                 rhs        : $(rhs)
                 residual   : $(residual)  (atol = $(atol))
-              """)
+              """; kind = :no_slack))
     end
     return residual
 end

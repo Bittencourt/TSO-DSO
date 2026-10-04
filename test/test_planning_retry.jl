@@ -44,14 +44,14 @@
 
     if raw_ts in TSODSO.RETRYABLE_STATUSES
         # Wrap a fresh instance of the same ill-conditioned model in solve_with_retry! and
-        # assert it either ends MOI.OPTIMAL or throws an ErrorException naming the
+        # assert it either ends MOI.OPTIMAL or throws a SolveFailedError naming the
         # exhausted attempt budget.
         retry_model = build_ill_conditioned_model()
         try
             TSODSO.solve_with_retry!(retry_model)
             @test termination_status(retry_model) == MOI.OPTIMAL
         catch e
-            @test e isa ErrorException
+            @test e isa SolveFailedError
             @test occursin("exhausted", e.msg)
         end
 
@@ -68,7 +68,7 @@
             @test ret !== nothing
             @test termination_status(overshoot_model) == MOI.OPTIMAL
         catch e
-            @test e isa ErrorException
+            @test e isa SolveFailedError
             @test occursin("exhausted", e.msg)
         end
 
@@ -83,7 +83,7 @@
             @test termination_status(attempts_model) == MOI.OPTIMAL
             @test attempts_ref[] >= 2
         catch e
-            @test e isa ErrorException
+            @test e isa SolveFailedError
             @test occursin("exhausted", e.msg)
         end
     else
@@ -135,6 +135,62 @@ end
     @constraint(bad, y <= -1)
     @objective(bad, Min, y)
 
-    result = @test_throws ErrorException TSODSO.solve_with_retry!(bad)
+    result = @test_throws SolveFailedError TSODSO.solve_with_retry!(bad)
     @test occursin("exhausted 1 attempt", result.value.msg)
+end
+
+@testitem "planning retry: retries on SolveFailedError from assert_solved!, rethrows non-solver errors" tags =
+    [:planning] begin
+    using TSODSO, JuMP
+
+    # Same ill-conditioned fixture as the escalation item above. `assert_solved!` now throws
+    # a typed `SolveFailedError`; `solve_with_retry!` must STILL recognise it
+    # (`_is_solver_failure`) and escalate: the exhausted message then reports > 1 attempt.
+    function build_ill(; scale = 1e8, max_iter = 5)
+        model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
+        set_silent(model)
+        set_optimizer_attribute(model, "max_iter", max_iter)
+        n = 20
+        @variable(model, x[1:n])
+        @variable(model, t)
+        coeffs = [scale^((-1)^i) for i in 1:n]
+        @constraint(model, cone, [t; coeffs .* x] in SecondOrderCone())
+        @constraint(model, bal, sum(x) == 1e-6)
+        @objective(model, Min, t)
+        return model
+    end
+    function run_catch(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    raw = build_ill()
+    optimize!(raw)
+    if termination_status(raw) in TSODSO.RETRYABLE_STATUSES
+        m = build_ill()
+        ref = Ref(0)
+        e = run_catch(() -> TSODSO.solve_with_retry!(m; attempts_out = ref))
+        if e === nothing
+            @test ref[] >= 2
+        else
+            @test e isa SolveFailedError
+            @test !occursin("exhausted 1 attempt", e.msg)
+        end
+    else
+        @info "fixture no longer retryable; skipping escalation branch" raw = raw_status(raw)
+    end
+
+    # A non-solver exception raised inside the retried body (TypeError from `dual = nothing`
+    # used as a Bool) is rethrown unchanged, never swallowed as a solver failure.
+    trivial = Model(TSODSO.select_optimizer(TSODSO.LP()))
+    @variable(trivial, x >= 0)
+    @objective(trivial, Min, x)
+    e3 = run_catch(() -> TSODSO.solve_with_retry!(trivial; dual = nothing))
+    @test e3 !== nothing
+    @test !(e3 isa SolveFailedError)
+    @test !(e3 isa ErrorException)
 end

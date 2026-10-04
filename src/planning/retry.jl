@@ -14,7 +14,7 @@
 # exact 4-line diagnostic format plus the exhausted attempt count — never a silent fallback.
 #
 # `termination_status(model)`/`raw_status(model)` remain queryable inside a `catch` block
-# AFTER `assert_solved!` throws its plain `ErrorException` (verified, 10-RESEARCH.md
+# AFTER `assert_solved!` throws its typed `SolveFailedError` (verified, 10-RESEARCH.md
 # Pitfall 3) — this wrapper re-queries them, it does not receive a typed exception.
 
 using JuMP
@@ -177,7 +177,7 @@ function solve_with_retry!(
             try
                 set_optimizer_attribute(model, k, v)  # post-build attribute change; no rebuild
             catch attr_err
-                error(
+                throw(SolveFailedError(
                     """
                     solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
                     but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
@@ -187,7 +187,8 @@ function solve_with_retry!(
                       dual_status        : $(dual_status(model))
                       raw_status         : $(raw_status(model))
                     """,
-                )
+                    model,
+                ))
             end
         end
         try
@@ -203,7 +204,7 @@ function solve_with_retry!(
                 continue
             end
             # non-retryable status, OR budget exhausted: RAISE LOUDLY with full diagnostics (D-10)
-            error(
+            throw(SolveFailedError(
                 """
                 solve_with_retry!: exhausted $attempt attempt(s) — refusing to trust results:
                   termination_status : $(ts)
@@ -211,7 +212,8 @@ function solve_with_retry!(
                   dual_status        : $(dual_status(model))
                   raw_status         : $(raw_status(model))
                 """,
-            )
+                model,
+            ))
         end
     end
 end
