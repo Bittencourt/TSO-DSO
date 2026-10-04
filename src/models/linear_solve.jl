@@ -70,8 +70,10 @@ function solve_linear(
 
     model = Model(select_optimizer(QP()))   # concave-quad utility ⇒ QP factory backend (INFRA-02)
     ctx = ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = T
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     Np = length(feeder.buses)
 

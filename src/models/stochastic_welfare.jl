@@ -285,8 +285,10 @@ function build_stochastic_welfare(
 
     for s in 1:S
         ctx_s = ModelContext(model)
-        ctx_s.meta[:feeder] = feeder
-        ctx_s.meta[:T] = T
+        ctx_s.feeder = feeder
+        ctx_s.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+        ctx_s.T = T
+        ctx_s.meta[:T] = T  # TRANSIENT-MIRROR
 
         # Formulation: branch/voltage terms into ctx_s.residuals[:Rp] (and :Rq).
         contribute!(pf, ctx_s, feeder; T = T)
@@ -625,8 +627,10 @@ function build_stochastic_oos_harness(
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
 
     ctx = ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = T
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     # VERBATIM power-flow builder reuse — called EXACTLY ONCE (no unregister needed).
     contribute!(pf, ctx, feeder; T = T)

@@ -383,8 +383,10 @@ function build_dso_opt(
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
 
     ctx = ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = T
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
     # RESET-01 (quick task 260825-eme): snapshot the AS-BUILT ladder conditioning NOW —
     # before any solve or `solve_with_retry!` escalation can have touched the model — so
     # `solve_dso!`'s FINAL/converged solve can restore TO THIS later, never to a hardcoded

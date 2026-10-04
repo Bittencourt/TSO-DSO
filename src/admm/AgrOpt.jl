@@ -131,7 +131,8 @@ function build_agr_opt(
     # (1) One QP model per node, chosen by problem class only (INFRA-02 — never names a solver).
     model = Model(select_optimizer(QP()))
     ctx = ModelContext(model)
-    ctx.meta[:T] = T
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     # (2) Reuse the aggregator/device builders VERBATIM (RESEARCH Pattern 4, option a). This
     # populates ctx.meta[:objective] (U_ag, a QuadExpr) and ctx.meta[:agg_device_vars] (the

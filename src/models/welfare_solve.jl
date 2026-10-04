@@ -148,8 +148,10 @@ function solve_welfare(
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
 
     ctx = ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = T
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = T
+    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     Np = length(feeder.buses)
 

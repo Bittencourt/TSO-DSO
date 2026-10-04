@@ -163,8 +163,10 @@ function build_mpc_window(
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
 
     ctx = ModelContext(model)
-    ctx.meta[:feeder] = feeder
-    ctx.meta[:T] = H
+    ctx.feeder = feeder
+    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
+    ctx.T = H
+    ctx.meta[:T] = H  # TRANSIENT-MIRROR
     ctx.meta[:problem_class] = problem_class(pf)
 
     # VERBATIM power-flow builder reuse.
