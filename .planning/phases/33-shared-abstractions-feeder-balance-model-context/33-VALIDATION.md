@@ -1,9 +1,9 @@
 ---
 phase: 33
 slug: shared-abstractions-feeder-balance-model-context
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-03
 ---
 
@@ -38,14 +38,14 @@ created: 2026-10-03
 
 | Req | Behavior | Test Type | Automated Command | File Exists | Status |
 |-----|----------|-----------|-------------------|-------------|--------|
-| ARCH-03 | `Feeder`/`MeshedFeeder <: AbstractFeeder`; constructors still gate | unit | quick-run `test_feeder.jl`, `test_mesh_feeder.jl` | partial | ⬜ pending |
-| ARCH-03 | invalid pairs (Restricted/Convex/LinDistFlow × MeshedFeeder) throw `ArgumentError`; DC/AC/MeshedFlow on meshed still solve | unit | quick-run `test_abstract_feeder.jl` | ❌ W0 | ⬜ pending |
-| ARCH-04 | `close_balance!` contract (tuple, registration, anonymous names, label error text, reactive=false) | unit | quick-run `test_close_balance.jl` | ❌ W0 | ⬜ pending |
-| ARCH-04 | constraint-order fingerprint unchanged | golden | quick-run `test_close_balance.jl` | ❌ W0 | ⬜ pending |
-| ARCH-04 | five sites bit-identical | golden | welfare/linear/mpc_window/stochastic/dso/admm/knife-edge files | ✅ | ⬜ pending |
-| ARCH-07 | typed fields + incremental fill; traits `has_branch_current`/`has_reactive` truth tables (6 formulations) | unit | quick-run `test_model_context_traits.jl`, `test_context.jl` | ❌ W0 | ⬜ pending |
-| ARCH-07 | grep gate: zero `meta[:pf_vars|:T|:feeder|:objective|:agg_device_vars]` in src/test/docs/literate/scripts | source-scan | grep-gate testitem | ❌ W0 | ⬜ pending |
-| all | docs build `checkdocs = :exports`; Aqua | quality | docs build; full suite | ✅ | ⬜ pending |
+| ARCH-03 | `Feeder`/`MeshedFeeder <: AbstractFeeder`; constructors still gate | unit | quick-run `test_feeder.jl`, `test_mesh_feeder.jl` | ✅ | ✅ green |
+| ARCH-03 | invalid pairs (Restricted/Convex/LinDistFlow × MeshedFeeder) throw `ArgumentError`; DC/AC/MeshedFlow on meshed still solve | unit | quick-run `test_abstract_feeder.jl` | ✅ | ✅ green |
+| ARCH-04 | `close_balance!` contract (tuple, registration, anonymous names, label error text, reactive=false) | unit | quick-run `test_close_balance.jl` | ✅ | ✅ green |
+| ARCH-04 | constraint-order fingerprint unchanged | golden | quick-run `test_close_balance.jl` | ✅ | ✅ green |
+| ARCH-04 | five sites bit-identical | golden | welfare/linear/mpc_window/stochastic/dso/admm/knife-edge files | ✅ | ✅ green |
+| ARCH-07 | typed fields + incremental fill; traits `has_branch_current`/`has_reactive` truth tables (6 formulations) | unit | quick-run `test_model_context_traits.jl`, `test_context.jl` | ✅ | ✅ green |
+| ARCH-07 | grep gate: zero `meta[:pf_vars|:T|:feeder|:objective|:agg_device_vars]` in src/test/docs/literate/scripts | source-scan | grep-gate testitem | ✅ | ✅ green |
+| all | docs build `checkdocs = :exports`; Aqua | quality | docs build; full suite | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -53,10 +53,10 @@ created: 2026-10-03
 
 ## Wave 0 Requirements
 
-- [ ] `test/test_abstract_feeder.jl`
-- [ ] `test/test_close_balance.jl` (incl. constraint-order fingerprint captured BEFORE migration)
-- [ ] `test/test_model_context_traits.jl`
-- [ ] grep-gate testitem (added in the last migration plan)
+- [x] `test/test_abstract_feeder.jl`
+- [x] `test/test_close_balance.jl` (incl. constraint-order fingerprint captured BEFORE migration)
+- [x] `test/test_model_context_traits.jl`
+- [x] grep-gate testitem (added in the last migration plan)
 
 ---
 
@@ -68,11 +68,11 @@ All phase behaviors have automated verification.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 240s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 240s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** certified 2026-10-04 — full suite 31899/0/0/5 at 670bd09 (log start 23:19:19 > commit 23:18:50); docs build exit 0; knife-edge canary iters=56, welfare=-4823.66604824162
