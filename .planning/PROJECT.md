@@ -187,6 +187,22 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 34 (ADMM Decomposition, Meshed Reactive & Status/Exception Policy) COMPLETE 2026-10-04.**
+ARCH-05/06/08/09 validated. `solve_admm` is a thin orchestrator over `_admm_build` / `_admm_iterate!` /
+`_adapt_rho!` / `_admm_certify` on a mutable `AdmmState`; reactive OFF/CERTIFIED/LIVE behaviour is
+dispatched through internal singleton hooks (no `mode == …` branches); public signature unchanged.
+ADMM is formulation-generic via `admm_supported(pf)` (ConvexBranchFlow both variants, Restricted,
+MeshedFlow, LinDistFlow; AC/DC rejected), `DsoOpt` uses the passed `pf`, LinDistFlow battery/4Q gates
+warn instead of throw. Meshed topology + LIVE reactive ADMM runs end-to-end and matches the centralized
+meshed `:balance_q` dual (worst price gap 6.1e-5 vs tolerance 5e-4; angle-certificate verdicts agree) —
+closes the v3.0 MESH-06 advisory; the rung-10 literate page now runs live meshed ADMM. Typed exceptions
+`TSODSOError` → `SolveFailedError` / `CertificateError` / `ConvergenceError` (byte-identical messages),
+`_is_solver_failure` predicate at every widened catch site, `STATUS_VOCABULARY` + additive `status`
+fields on the five entry points, `docs/src/status_policy.md`. `mpc_loop`/`run_stochastic` handlers catch
+only typed solver/certificate errors; programming errors propagate. Knife-edge canary never re-pinned
+(`iters = 56`, `welfare = -4823.66604824162`). Full suite 32148/0/0/5 at 874c44a; docs build green.
+Next: Phase 35 (IEEE-8500 Scale After Refactor).
+
 **Phase 33 (Shared Abstractions — Feeder, Balance, Model Context) COMPLETE 2026-10-04.**
 ARCH-03/04/07 validated: `Feeder`/`MeshedFeeder <: AbstractFeeder{T}`; shared entry points dispatch on
 `AbstractFeeder`, radial-only paths (ADMM, LinDistFlow, direct ConvexBranchFlow, RestrictedBranchFlow) on
@@ -502,4 +518,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-04 — Phase 33 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-04 — Phase 34 complete (v4.0 Correctness & Depth)*

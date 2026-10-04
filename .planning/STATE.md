@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: verifying
-stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-04T14:26:49.079Z"
+status: ready_to_plan
+stopped_at: Phase 34 complete (12/12) — ready to discuss Phase 35
+last_updated: 2026-10-04T18:04:58.679Z
 last_activity: 2026-10-04
 progress:
   total_phases: 12
@@ -21,15 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 34 — ADMM Decomposition, Meshed Reactive & Status/Exception Policy
+**Current focus:** Phase 35 — ieee 8500 scale after refactor
 
 ## Current Position
 
-Phase: 34 (ADMM Decomposition, Meshed Reactive & Status/Exception Policy) — EXECUTING
-Plan: 12 of 12
-Status: Phase complete — ready for verification
-  (`31-UAT.md`); review cap reached with 0 critical / 0 warning / 2 info open (`31-REVIEW.md`).
-  Next: Phase 32. `/gsd-secure-phase` not run for Phases 29–31 (security enforcement default-on).
+Phase: 35 (IEEE-8500 Scale After Refactor) — not started; next to discuss/plan
+Plan: Not started
+Status: Ready to plan. Phases 32, 33, 34 COMPLETE and VERIFIED 2026-10-03/04 (autonomous run).
+  Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
+  docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
+  Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
+  `/gsd-secure-phase` not run for Phases 29–34 (security enforcement default-on).
+  Remaining v4.0 phases: 35 (IEEE-8500 scale), 36 (code & export cleanup), 37 (test infra & hygiene).
 Last activity: 2026-10-04
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
@@ -116,7 +119,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 161 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 173 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -169,6 +172,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 30 | 6 | - | - |
 | 32 | 7 | - | - |
 | 33 | 11 | - | - |
+| 34 | 12 | - | - |
 
 **Recent Trend:**
 
