@@ -125,3 +125,28 @@ end
     @test ctx3.residuals[:scalar_name] isa AffExpr
     @test ctx3.residuals[:indexed_name] isa Matrix{AffExpr}
 end
+
+@testitem "context: typed defaults, objective accumulation, checked accessors (ARCH-07)" tags =
+    [:context] begin
+    using TSODSO, JuMP
+
+    model = Model(TSODSO.select_optimizer(TSODSO.LP()))
+    @variable(model, p >= 0)
+    ctx = TSODSO.ModelContext(model)
+
+    @test ctx.feeder === nothing
+    @test ctx.T == 0
+    @test ctx.pf === nothing
+    @test ctx.pf_vars === nothing
+    @test isempty(ctx.agg_device_vars)
+    @test ctx.objective isa QuadExpr
+    @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
+
+    TSODSO.add_to_objective!(ctx, 3.0 * p - p^2)
+    TSODSO.add_to_objective!(ctx, 3.0 * p - p^2)
+    @test isequal_canonical(ctx.objective, 2 * (3.0 * p - p^2))
+
+    @test_throws ArgumentError TSODSO._require_T(ctx)
+    @test_throws ArgumentError TSODSO._require_feeder(ctx)
+    @test_throws ArgumentError TSODSO._require_pf_vars(ctx)
+end
