@@ -543,6 +543,11 @@ responses — and inner-solve noise is a second escape. The predicate is therefo
 regression-tested directly on synthetic converging (monotone damped AND sign-flipping
 oscillatory contraction) and cycling histories, and live on a damped converging run that
 the old `b`-only key wrongly rejected (`test/test_planning_nash_integer.jl`).
+
+# Status and exceptions
+The returned `status` is `:converged` or `:converged_relaxation_only`. Throws
+`ArgumentError` (invalid inputs), `SolveFailedError`, `CertificateError` and
+`ConvergenceError` (non-converging diagonalization). See the [status & exception policy](@ref status-policy).
 """
 function run_nash!(
     specs::AbstractVector{<:NamedTuple},

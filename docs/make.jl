@@ -93,6 +93,7 @@ makedocs(;
             "Rung 10: Meshed Networks + Live Reactive Price" => "generated/meshed_reactive_price.md",
         ],
         "Experiments" => ["The Experiment Harness" => "generated/experiments.md"],
+        "Status & Exception Policy" => "status_policy.md",
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",
             "Rung 7: Nash Diagonalization & Shared Corridor" => "generated/nash_diagonalization.md",

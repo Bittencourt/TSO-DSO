@@ -235,6 +235,12 @@ price (WR-03, phase-19 review).
     exceeded first, this throw is SKIPPED — the honest `status = :budget_exceeded` return
     (see "Wall-clock budget" above) replaces it; that path is not itself a genuine
     non-convergence, so it is not fail-loud.
+
+# Status and exceptions
+The returned `status` is `:converged` or `:budget_exceeded` (the caller-set
+`time_limit_s` budget). Invalid inputs throw `ArgumentError`; solver failures throw
+`SolveFailedError`; genuine non-convergence throws `ConvergenceError`. See the
+[status & exception policy](@ref status-policy).
 """
 function solve_admm(
     feeder::AbstractFeeder,

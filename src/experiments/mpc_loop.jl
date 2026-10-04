@@ -1680,6 +1680,11 @@ end
 Thin wrapper over the receding-horizon loop. The knobs live on `Scenario.strategy::MPC`; for a
 Scenario whose strategy is not `MPC` the `MPC()` defaults apply. The returned NamedTuple
 contract is unchanged (see [`TSODSO.run`](@ref) for the `ScenarioResult` form).
+
+# Status and exceptions
+The returned `status` is `:certified` (every step first tier), `:degraded` (a
+restricted/local-AC step, none failed) or `:cert_failed`. The tier handlers admit only
+`SolveFailedError` / `CertificateError`; programming errors propagate. See the [status & exception policy](@ref status-policy).
 """
 function run_mpc(s::Scenario; _truth_settlement::Symbol = :ac)
     st = s.strategy isa MPC ? s.strategy : MPC()

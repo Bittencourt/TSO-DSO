@@ -1129,6 +1129,12 @@ and the converged result is still returned (Phase 30 code review iteration 2, WR
     guard (`_assert_epigraph_floor`, BILEV-05) if ANY evaluated epigraph cost ever falls
     below its own declared lower bound — a genuine modeling bug, never a convergence
     issue.
+
+# Status and exceptions
+The returned `status` is `:converged` or `:converged_relaxation_only` (the UB certifies
+only the SOC relaxation). Throws: `ArgumentError` (invalid inputs), `SolveFailedError`
+(untrustworthy solver result), `CertificateError` (refused certificate), `ConvergenceError`
+(exhausted `max_iter`). See the [status & exception policy](@ref status-policy).
 """
 function solve_stackelberg!(
     feeder,

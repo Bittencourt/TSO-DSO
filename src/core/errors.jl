@@ -5,7 +5,7 @@
 # `ErrorException` is a concrete struct, so a `SolveFailedError` is NOT an
 # `ErrorException`. Catch sites that must keep treating both generations as solver
 # failures use `_is_solver_failure`. The "Status & exception policy" docs section is
-# the policy home (cross-reference link added in a later plan).
+# the policy home.
 
 using JuMP
 const MOI = JuMP.MOI
@@ -15,14 +15,15 @@ const MOI = JuMP.MOI
 
 Abstract supertype of every typed TSODSO failure (`SolveFailedError`,
 `CertificateError`, `ConvergenceError`). Each concrete subtype carries a `msg::String`
-and prints exactly that message via `Base.showerror`. Policy home: the docs section
-"Status & exception policy".
+and prints exactly that message via `Base.showerror`. Policy home: the
+[status & exception policy](@ref status-policy).
 """
 abstract type TSODSOError <: Exception end
 
 """
     SolveFailedError(msg, model) <: TSODSOError
 
+See the [status & exception policy](@ref status-policy).
 Policy role: the solver result is untrustworthy (non-optimal termination, missing
 primal/dual point). Carries the four solver statuses `termination_status`,
 `primal_status`, `dual_status`, `raw_status`. `SolveFailedError(msg)` is a convenience
@@ -60,6 +61,7 @@ end
 """
     CertificateError(msg; kind = :unspecified) <: TSODSOError
 
+See the [status & exception policy](@ref status-policy).
 Policy role: an exactness / no-slack / complementarity certificate was refused.
 `kind` is a `Symbol` tagging which certificate failed.
 """
@@ -73,6 +75,7 @@ CertificateError(msg::AbstractString; kind::Symbol = :unspecified) =
 """
     ConvergenceError(msg; iterations = nothing) <: TSODSOError
 
+See the [status & exception policy](@ref status-policy).
 Policy role: an iterative method (ADMM, Benders, diagonalization) exhausted its budget
 without consensus. `iterations` records the count when known.
 """
