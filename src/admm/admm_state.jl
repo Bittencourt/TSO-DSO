@@ -313,3 +313,41 @@ function _react_adapt_rho!(
     end
     return nothing
 end
+
+# ---- hook: reactive default (smart PM-03 default, moved out of the solve_admm signature) --------
+_default_reactive_consensus(aggregators) = _any_flexible_reactive(aggregators) ? LIVE : false
+
+# ---- hook: `:balance_q` no-slack certificate (REACT-02) -----------------------------------------
+# OFF: `:balance_q` is the inelastic constant closure, intentionally NOT gated (REACT-03).
+_react_certify_q!(::_ReactiveOff, dso) = nothing
+
+function _react_certify_q!(::Union{_ReactiveCertified, _ReactiveLive}, dso)
+    let balance_q = dso.ctx.constraints[:balance_q]
+        for j in 1:size(balance_q, 1), t in 1:size(balance_q, 2)
+            assert_no_slack(dso.model, balance_q[j, t]; atol = 1e-6)
+        end
+    end
+    return nothing
+end
+
+# ---- hook: published reactive outputs `(mu_q, q_devices)` ---------------------------------------
+_react_outputs(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState, agr_by_bus) =
+    (nothing, nothing)
+
+function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)
+    load_nodes = st.load_nodes
+    T = st.T
+    # SIGN CONVENTION: internal `μq[j]` converges to the NEGATED `dual(:balance_q[j])` (same
+    # relationship as `λ` to `dual(:balance_p)`); reported `mu_q` is the negation, in the same
+    # ascending-bus order as `λ_mat`. D-03: never compare an individual FourQuadBESS `q` trajectory.
+    mu_q_mat = reduce(vcat, (permutedims(-st.react.μq[j]) for j in load_nodes))
+    q_devices = Dict{Int, Vector{Float64}}()
+    for j in load_nodes
+        for v in agr_by_bus[j].ctx.agg_device_vars[j]
+            if haskey(v, :p_ch) && haskey(v, :p_dch) && haskey(v, :q)
+                q_devices[j] = Float64[value(v.q[t]) for t in 1:T]
+            end
+        end
+    end
+    return (mu_q_mat, q_devices)
+end

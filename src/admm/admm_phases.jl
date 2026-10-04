@@ -245,3 +245,90 @@ function _admm_iterate!(
     end
     return nothing
 end
+
+"""
+CERTIFICATION phase (moved verbatim from the former monolithic `solve_admm`): the converged
+consolidation pass running the PHYSICAL gates (RESEARCH Pitfall 3 / Pattern 5, WR-01 / INFRA-03):
+AGR re-solve per load node with the battery (`τ_batt = 1e-3`) and 4Q (`rtol_4q = 1e-3`,
+`atol_4q = 1e-7`) complementarity certificates (interior-point-loosened, `strict = false`), the
+final DSO solve with the PF-04 SOC exactness gate, the ACTIVE `:balance_p` no-slack certificate, the
+reactive `:balance_q` certificate hook, then welfare from PRIMALS and the published DADP
+(`λ_mat = −λ`, RESEARCH Pitfall 5: the reported price is the NEGATED internal multiplier).
+Returns the `solve_admm` result NamedTuple.
+"""
+function _admm_certify(
+    st::AdmmState,
+    rmode::_ReactiveMode,
+    mode::ReactiveMode,
+    aggregators,
+    λ₀,
+    atol_exact,
+    rtol_exact,
+)
+    dso = st.dso
+    load_nodes = st.load_nodes
+    residuals = st.residuals
+    agr_by_bus = st.agr_by_bus
+    λ, a, util = st.λ, st.a, st.util
+    T = st.T
+
+    # `check_4q` discriminator: an ACTUAL `FourQuadBESS` device (a property of the device, not of
+    # whether the reactive coupling is pinned or live).
+    has_4q_by_bus = Dict{Int, Bool}(
+        agg.bus => any(dv -> dv isa FourQuadBESS, agg.devices) for agg in aggregators
+    )
+    for j in load_nodes
+        _react_agr_solve!(rmode, st, j; final = true, has_4q = has_4q_by_bus[j])
+    end
+    # LIVE only: re-assert `qag_dso`'s linear coefficient (`b`, NEVER `d`) before the final solve.
+    _react_dso_prepare!(rmode, st)
+    dres_final = solve_dso!(
+        dso,
+        λ,
+        a,
+        st.ρf;
+        check_exact = true,
+        strict = false,
+        atol_exact = atol_exact,
+        rtol_exact = rtol_exact,
+    )
+    p_import = dres_final.p_import
+    exact_maxgap = dres_final.exact_maxgap
+    st.p_import = p_import
+    st.exact_maxgap = exact_maxgap
+
+    # WR-01 PUBLISHED-PRIMAL CERTIFICATE (INFRA-03): label-independent ACTIVE nodal-balance
+    # no-slack gate (thesis 3.31); `welfare` and the DADP are published from this primal.
+    let balance_p = dso.ctx.constraints[:balance_p]
+        for j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
+            assert_no_slack(dso.model, balance_p[j, t]; atol = 1e-6)
+        end
+    end
+
+    # REACT-02: `:balance_q` no-slack certificate for CERTIFIED/LIVE (OFF: intentionally not gated).
+    _react_certify_q!(rmode, dso)
+
+    # Welfare recomputed from PRIMALS (Σ U_ag − λ₀ᵀp_import — NOT the penalized objective).
+    welfare = sum(util[j] for j in load_nodes) - sum(λ₀[t] * p_import[t] for t in 1:T)
+
+    # Converged DADP in ascending-bus order (matches extract_dlmp(centralized)[load_buses, :]).
+    λ_mat = reduce(vcat, (permutedims(-λ[j]) for j in load_nodes))
+
+    # `mu_q`/`q_devices`: STABLE keys, `nothing` unless LIVE (MESH-05 D-11; never bare `μ`, WR-03).
+    mu_q_mat, q_devices = _react_outputs(rmode, st, agr_by_bus)
+
+    return (;
+        welfare = welfare,
+        dadp = λ_mat,
+        λ = λ_mat,
+        iters = residuals.iters,
+        residuals = residuals,
+        dso_ctx = dso.ctx,
+        exact_maxgap = exact_maxgap,
+        mu_q = mu_q_mat,
+        q_devices = q_devices,
+        # WR-01 (phase-26 review): the RESOLVED mode this call actually ran with.
+        reactive_consensus_mode = mode,
+        status = :converged,
+    )
+end
