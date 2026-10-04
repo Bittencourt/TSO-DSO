@@ -83,3 +83,102 @@ end
     @test endswith(e2.msg, "(atol = -1.0)\n")
     @test sprint(showerror, e2) == e2.msg
 end
+
+@testitem "errors: assert_socp_exact! throws CertificateError(kind = :socp_exact)" begin
+    using TSODSO, JuMP, Test
+
+    function _catch(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T, N, B = 1, 2, 1
+    model = Model(select_optimizer(SOCP()))
+    @variable(model, v[1:N, 1:T])
+    @variable(model, v̂[1:N, 1:T])
+    @variable(model, P[1:B, 1:T])
+    @variable(model, Q[1:B, 1:T])
+    @variable(model, l[1:B, 1:T])
+    fix.(v, 1.0; force = true)
+    fix.(v̂, 1.0; force = true)
+    fix.(P, 0.0; force = true)
+    fix.(Q, 0.0; force = true)
+    fix.(l, 1.0; force = true)
+    @objective(model, Max, 0)
+    optimize!(model)
+    ctx = TSODSO.ModelContext(model)
+    ctx.feeder = feeder
+    ctx.T = T
+    ctx.pf_vars = (; v, v̂, P, Q, l)
+    e = _catch(() -> TSODSO.assert_socp_exact!(ctx; rtol = 1e-4))
+    @test e isa CertificateError
+    @test e.kind === :socp_exact
+    @test occursin("SOCP relaxation INEXACT", e.msg)
+end
+
+@testitem "errors: assert_battery_complementarity! throws CertificateError(kind = :battery); :warn does not" begin
+    using TSODSO, JuMP, Test
+
+    function _catch(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    model = Model(select_optimizer(SOCP()))
+    ctx = TSODSO.ModelContext(model)
+    ctx.T = 1
+    @variable(model, 0 <= p_ch[1:1] <= 1.0)
+    @variable(model, 0 <= p_dch[1:1] <= 1.0)
+    fix.(p_ch, 0.5; force = true)
+    fix.(p_dch, 0.5; force = true)
+    @objective(model, Max, 0.0)
+    optimize!(model)
+    append!(get!(ctx.agg_device_vars, 2, Vector{Any}()), [(; p_ch, p_dch)])
+    e = _catch(() -> TSODSO.assert_battery_complementarity!(ctx; τ = 1e-6, on_violation = :error))
+    @test e isa CertificateError
+    @test e.kind === :battery
+    @test occursin("Battery complementarity violated", e.msg)
+    @test _catch(() -> TSODSO.assert_battery_complementarity!(ctx; τ = 1e-6, on_violation = :warn)) ===
+          nothing
+end
+
+@testitem "errors: certify_angle_recoverable! report=true does not throw; report=false throws CertificateError(kind = :angle)" setup =
+    [Phase23Fixtures] begin
+    using TSODSO, Test
+
+    function _catch(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    aggs = Phase23Fixtures.mesh_aggregators()
+    λ₀ = Phase23Fixtures.mesh_lambda0()
+    ctx, _, _ = solve_welfare(
+        Phase23Fixtures.mesh_feeder(:heterogeneous),
+        MeshedFlow(),
+        aggs;
+        T = Phase23Fixtures.T_MESH,
+        λ₀ = λ₀,
+    )
+    @test _catch(() -> certify_angle_recoverable!(ctx; report = true)) === nothing
+    e = _catch(() -> certify_angle_recoverable!(ctx; report = false))
+    @test e isa CertificateError
+    @test e.kind === :angle
+end

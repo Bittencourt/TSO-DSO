@@ -370,7 +370,7 @@ function assert_battery_complementarity!(
                         "p_ch·p_dch = $prod ≥ τ·Pmax² = $(τ * scale²) " *
                         "(relative τ=$τ, Pmax≈$pmax; App. C, threat T-03-13)"
                     if on_violation === :error
-                        error(msg)
+                        throw(CertificateError(msg; kind = :battery))
                     else
                         @warn msg
                     end

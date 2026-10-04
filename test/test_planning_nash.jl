@@ -1149,7 +1149,7 @@ end
 
     # Default (:strict): the pre-Phase-30 loud failure, with the gate's own message.
     e = caught(() -> run_nash!(specs, mk(); z0 = zeros(2, 1), checkpoint_dir = mktempdir()))
-    @test e isa ErrorException
+    @test e isa CertificateError
     @test occursin("SOCP relaxation INEXACT", e.msg)
 
     # Opt-in :certify_incumbent: converges, and the certificate is carried through.

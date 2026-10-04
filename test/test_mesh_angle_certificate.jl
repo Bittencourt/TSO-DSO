@@ -43,7 +43,7 @@
         T = Phase23Fixtures.T_MESH,
         λ₀ = λ₀,
     )
-    @test_throws ErrorException certify_angle_recoverable!(ctx_h2; report = false)
+    @test_throws CertificateError certify_angle_recoverable!(ctx_h2; report = false)
 
     # (d) Provenance is READ, never fabricated: a plain ConvexBranchFlow context (which
     # never stashes :formulation) run through the SAME certificate reports :unknown --

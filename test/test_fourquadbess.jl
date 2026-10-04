@@ -543,10 +543,10 @@ end
 
     # (a) IEEE-13 device scale (Pch_max = 0.0025), legs at 40% of rating — the review's cited
     #     escape (product 1e-6 vs old tol ≈ 1e-6, ratio ≈ 1): now ratio ≈ 94, must THROW.
-    @test_throws ErrorException TSODSO.assert_4q_complementarity!(pinned_ctx(0.0025, 1e-3))
+    @test_throws CertificateError TSODSO.assert_4q_complementarity!(pinned_ctx(0.0025, 1e-3))
     # (b) 2-bus device scale (Pch_max = 0.02), legs at 5% of rating — the review's other cited
     #     escape: now ratio ≈ 20, must THROW.
-    @test_throws ErrorException TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-3))
+    @test_throws CertificateError TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-3))
     # (c) the measured production noise-floor magnitude still PASSES: per-leg ~1e-5 at the
     #     2-bus scale (product ~1e-10, below the atol = 1e-8 machine-noise guard).
     @test TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-5)) <= 1.0
@@ -584,7 +584,7 @@ end
     @test prod1 > 1.0   # genuine, large co-activation -- not solver noise
 
     # (b) throws by default (Task 1's measured rtol/atol defaults).
-    @test_throws ErrorException TSODSO.assert_4q_complementarity!(ctx)
+    @test_throws CertificateError TSODSO.assert_4q_complementarity!(ctx)
 
     # (c) report = true neutralizes the SAME violating fixture -- no exception, and the
     # returned diagnostic still names the violation's magnitude (worst ratio > 1).

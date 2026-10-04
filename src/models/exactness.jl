@@ -106,7 +106,7 @@ and compares it to an isapprox-style COMBINED threshold (WR-01):
     gap ≤ atol_b + rtol · max(|lhs|, |rhs|)
 
 tracking `maxratio = maxₜ,ᵦ gap / (atol_b + rtol·max(|lhs|, |rhs|))`. If any branch violates the
-bound (`maxratio > 1`) it raises a loud `error(...)` and REFUSES prices (thesis 3.43–3.45;
+bound (`maxratio > 1`) it raises a `CertificateError` and REFUSES prices (thesis 3.43–3.45;
 PF-04); otherwise it returns `maxgap = maxₜ,ᵦ gap` — the absolute cone residual — as a
 FIRST-CLASS output reported alongside the prices.
 
@@ -157,7 +157,7 @@ Clarabel's internal interior-point duality gap `tol_gap_abs/rel` — a different
 the solver's own scaling).
 
 Reads `ctx.pf_vars` (the `(; v, v̂, P, Q, l)` stash), `ctx.feeder`, and
-`ctx.T`. Uses an explicit `error(...)` (never `@assert`, which is elided under `-O`), per
+`ctx.T`. Uses an explicit `CertificateError` (never `@assert`, which is elided under `-O`), per
 project convention (`src/core/status.jl`). Throws `ArgumentError` if `feeder` has NO branch
 incident to `feeder.root` in either storage orientation (`br.from == feeder.root` OR `br.to ==
 feeder.root`, FIX-08/plan 27-07) — a malformed/non-radial feeder fails loudly here, never
@@ -261,12 +261,13 @@ function assert_socp_exact!(
         maxratio = max(maxratio, gap / tol)
     end
 
-    maxratio <= 1 || error(
+    maxratio <= 1 || throw(CertificateError(
         "SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=$maxratio > 1 " *
         "(rtol=$rtol, atol=$(atol === nothing ? "max(τ_solver=$τ_solver, ε*ref_b, ε=$ε)" : atol); " *
         "max abs |l·v−(P²+Q²)|=$maxgap) — " *
-        "prices REFUSED (thesis 3.43-3.45; PF-04)",
-    )
+        "prices REFUSED (thesis 3.43-3.45; PF-04)";
+        kind = :socp_exact,
+    ))
     return maxgap
 end
 

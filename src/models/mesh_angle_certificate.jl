@@ -168,7 +168,7 @@ shipped as the deliverable, never chased away by further parameter tuning.
 Reads `ctx.feeder`, `ctx.T`, `ctx.pf_vars` (the `(; v, v̂, P, Q, l)`
 stash `ConvexBranchFlow.contribute!` populates — `MeshedFlow` delegates to it verbatim,
 plan 23-02) — identical inputs to [`recover_voltage_angles`](@ref). Uses an explicit
-`error(...)`/`@warn(...)` (never `@assert`, elided under `-O`), per project convention
+`CertificateError`/`@warn(...)` (never `@assert`, elided under `-O`), per project convention
 (`src/core/status.jl`).
 """
 function certify_angle_recoverable!(
@@ -290,7 +290,7 @@ function certify_angle_recoverable!(
             "UPPER BOUND on the true AC welfare optimum only (the relaxation maximizes " *
             "over a superset of the AC-feasible points, so W_SOCP >= W_AC), NOT a " *
             "certified AC operating point (Gan-Low angle-recovery condition; MESH-03)."
-        report ? (@warn msg) : error(msg)
+        report ? (@warn msg) : throw(CertificateError(msg; kind = :angle))
     end
 
     return (; recoverable, worst_residual = worst, status, angles)

@@ -48,8 +48,8 @@ an `isapprox`-style COMBINED WR-01 tolerance scaled by the device's OWN rating:
 mirroring `assert_socp_exact!`'s `atol + rtol·max(...)` COMBINED-bound shape (an absolute
 floor plus a scale-relative fraction) rather than `assert_battery_complementarity!`'s
 single-`Pmax` shape, because `Pch_max` and `Pdch_max` are INDEPENDENT for a `FourQuadBESS`
-(D-02/D-04) and can differ. On violation (`gap > tol`) it raises a loud `error(...)` naming
-the bus/time/values/tolerance and REFUSES to return a clean diagnostic — UNLESS `report = true`, which replaces the `error(...)` with an `@warn` carrying the SAME message and lets
+(D-02/D-04) and can differ. On violation (`gap > tol`) it raises a `CertificateError` naming
+the bus/time/values/tolerance and REFUSES to return a clean diagnostic — UNLESS `report = true`, which replaces the `CertificateError` with an `@warn` carrying the SAME message and lets
 the loop continue (D-06's neutralization kwarg — no other `src/` edit needed to opt into
 diagnostic mode). Returns `maxratio = maxₜ gap/tol` over every checked device/time — the
 worst observed gap-to-tolerance ratio, mirroring `assert_socp_exact!`'s "return a
@@ -148,7 +148,7 @@ function assert_4q_complementarity!(
                 if report
                     @warn msg
                 else
-                    error(msg)
+                    throw(CertificateError(msg; kind = :four_quadrant))
                 end
             end
         end

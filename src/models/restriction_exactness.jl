@@ -133,7 +133,7 @@ If `!ac_feasible`: builds a loud message naming `cone_rtol`/`cone_atol`, the wor
 cone-residual ratio, and the phase citation ("Gan-Low OPF-m/OPF-ε, Theorem 2; OVR-02"); if
 `report`, `@warn`s it and CONTINUES (this is D-09's trigger point — the CALLER is
 responsible for invoking any fallback only after seeing `ac_feasible == false` from a
-`report = true` call, never automatically inside this function); else `error(msg)` (throws
+`report = true` call, never automatically inside this function); else throws `CertificateError` (throws
 by default, D-06). Returns `(; ac_feasible, matches_ac_optimum, optimality_loss, obj_gap = report_ac.obj_gap, hours = report_ac.hours)` in EITHER path — `report` mode always
 returns the full diagnostic, mirroring `assert_4q_complementarity!`'s "return a diagnostic on
 success" contract (here: "on non-throwing return", success or reported failure alike).
@@ -303,7 +303,7 @@ function assert_restriction_exact!(
         if report
             @warn msg
         else
-            error(msg)
+            throw(CertificateError(msg; kind = :restriction))
         end
     end
 

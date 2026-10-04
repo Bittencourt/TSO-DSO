@@ -79,7 +79,7 @@
             caught = e
         end
         @test caught !== nothing
-        @test caught isa ErrorException
+        @test caught isa CertificateError
         # Not over-constraining the FULL message (brittle) — just confirming it is
         # genuinely the SOCP-exactness gate's own error (PF-04), not some other failure
         # (e.g. a genuine infeasibility or the :reject-style "exhausted" message).
@@ -315,7 +315,7 @@ end
 
     # 2. Inexact pin, default :throw mode: the gate's own error, byte-identical.
     e1 = caught(() -> TSODSO.solve_planning_oracle!(oracle, fill(0.06, T)))
-    @test e1 isa ErrorException
+    @test e1 isa CertificateError
     @test occursin("SOCP relaxation INEXACT", e1.msg)
     # The stale exact-pin certificate from step 1 must NOT survive an inexact solve.
     @test !haskey(oracle.ctx.meta, :socp_maxgap)
@@ -339,7 +339,7 @@ end
             τ = -1.0,
         ),
     )
-    @test e3 isa ErrorException
+    @test e3 isa CertificateError
     @test occursin("Battery complementarity violated", e3.msg)
 
     # 5. CR-03: a formulation with no `:l` stash (LinDistFlow) reports :not_applicable —
@@ -358,7 +358,7 @@ end
             τ = -1.0,
         ),
     )
-    @test e5 isa ErrorException
+    @test e5 isa CertificateError
     @test occursin("Battery complementarity violated", e5.msg)
 
     @test_throws ArgumentError TSODSO.solve_planning_oracle!(
@@ -491,12 +491,12 @@ end
     r06 = TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :report)
     @test r06 !== nothing && r06.exactness === :inexact
     e06 = caught(() -> TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :throw))
-    @test e06 isa ErrorException && occursin("SOCP relaxation INEXACT", e06.msg)
+    @test e06 isa CertificateError && occursin("SOCP relaxation INEXACT", e06.msg)
 
     # T>1 joint corner search: :throw now fails loud instead of silently skipping the
     # inexact region; :report returns the RELAXATION's per-corner minimum.
     e = caught(() -> TSODSO.corner_recourse(oracle, fol, 0.06, T))
-    @test e isa ErrorException && occursin("SOCP relaxation INEXACT", e.msg)
+    @test e isa CertificateError && occursin("SOCP relaxation INEXACT", e.msg)
     q05 = TSODSO.corner_recourse(oracle, fol, 0.05, T; on_inexact = :report)
     q06 = TSODSO.corner_recourse(oracle, fol, 0.06, T; on_inexact = :report)
     @test isfinite(q05) && isfinite(q06)
