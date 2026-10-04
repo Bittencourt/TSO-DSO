@@ -400,12 +400,12 @@ instead of duplicated five times or carried in an untyped `Dict`.
   3. `ModelContext` carries typed fields for its fixed metadata (power-flow variables, objective,
      feeder, device variables); downstream code dispatches on the formulation type instead of
      `haskey(pf_vars, :l)`.
-**Plans:** 11 plans
+**Plans:** 1/11 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 33-01-PLAN.md — AbstractFeeder supertype, has_reactive/has_branch_current traits, internal shared SOCP body, invalid-pair ArgumentError methods
+- [x] 33-01-PLAN.md — AbstractFeeder supertype, has_reactive/has_branch_current traits, internal shared SOCP body, invalid-pair ArgumentError methods
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -540,7 +540,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
-| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 0/TBD | Not started | - |
+| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 1/11 | In Progress|  |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
