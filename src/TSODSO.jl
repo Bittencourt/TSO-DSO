@@ -170,6 +170,8 @@ include("admm/residuals.jl")    # AdmmResiduals primal/dual residual ledger (pla
 include("admm/ReactiveMode.jl") # OFF/CERTIFIED/LIVE 3-state enum (plan 19-01, MESH-05)
 include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (plan 06-02, ADMM-01, thesis 3.46)
 include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (plan 06-03, ADMM-01, thesis 3.47)
+include("admm/admm_state.jl")   # AdmmState + reactive singleton dispatch hooks (plan 34-07, ARCH-05)
+include("admm/admm_phases.jl")  # _admm_build/_admm_iterate!/_adapt_rho! named phases (plan 34-07, ARCH-05)
 include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation (plan 06-04, ADMM-01/03/04)
 
 # --- Planning-layer resilience primitives: escalating retry + iteration checkpointing ---
