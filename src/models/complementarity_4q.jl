@@ -6,7 +6,7 @@
 # Defines `assert_4q_complementarity!(ctx; rtol, atol, report)`: a NEW, named certificate,
 # a peer of `assert_socp_exact!` (`exactness.jl`) and `assert_battery_complementarity!`
 # (`welfare_solve.jl`), that numerically checks `p_ch[t]·p_dch[t] ≈ 0` for every
-# `FourQuadBESS` stashed under `ctx.meta[:agg_device_vars]` — selected by its OWN,
+# `FourQuadBESS` stashed under `ctx.agg_device_vars` — selected by its OWN,
 # distinguishing `:q` key (a `PVBattery`'s vars never carry `:q` and are never touched
 # here; `welfare_solve.jl`'s OLD check is symmetrically tightened to skip anything WITH
 # `:q`). Its `rtol`/`atol` defaults are MEASURED against this device's own Clarabel-solved
@@ -22,7 +22,7 @@ using JuMP
 
 """
     assert_4q_complementarity!(ctx::ModelContext; rtol::Real = 1e-4, atol::Real = 1e-8,
-                                T::Int = ctx.meta[:T], report::Bool = false)
+                                T::Int = _require_T(ctx), report::Bool = false)
         -> maxratio::Float64
 
 Certify the App. C-style no-simultaneous-charge/discharge condition `p_ch[t]·p_dch[t] ≈ 0`
@@ -31,7 +31,7 @@ peer, 4Q-specific certificate MESH-04 clause 2 requires (`assert_socp_exact!` is
 cone peer; `assert_battery_complementarity!` is the `PVBattery`-only peer this function
 does NOT replace, it TIGHTENS its selection instead — see below).
 
-Iterates `ctx.meta[:agg_device_vars]` (a `Dict{Int,Vector{Any}}` keyed by bus, populated by
+Iterates `ctx.agg_device_vars` (a `Dict{Int,Vector{Any}}` keyed by bus, populated by
 `Aggregator.contribute!`) and selects ONLY the 4Q shape: `haskey(v,:p_ch) && haskey(v,:p_dch) && haskey(v,:q)`. The `:q` key is the SOLE distinguishing field — a `PVBattery`'s vars
 (`(;p_ch,p_dch,soc,pv_used)`) never carry it and are therefore NEVER touched by this
 function; `assert_battery_complementarity!`'s loop condition is symmetrically tightened
@@ -55,7 +55,7 @@ diagnostic mode). Returns `maxratio = maxₜ gap/tol` over every checked device/
 worst observed gap-to-tolerance ratio, mirroring `assert_socp_exact!`'s "return a
 diagnostic on success" contract (in `report` mode this is returned even when it exceeds 1,
 so a caller can inspect HOW badly a fixture violated the certificate without an exception).
-Is a no-op (`maxratio` stays `0.0`) when `ctx.meta[:agg_device_vars]` is absent or contains
+Is a no-op (`maxratio` stays `0.0`) when `ctx.agg_device_vars` is absent or contains
 no 4Q device.
 
 # Tolerance provenance (D-07, T-19-10 — measurement, not a copy; RE-MEASURED for CR-01)
@@ -110,20 +110,20 @@ that call site passes the interior-point-loosened `rtol_4q = 1e-3, atol_4q = 1e-
 mirroring exactly how `assert_battery_complementarity!` gets `τ_batt = 1e-3` there instead of
 its QP-tight `1e-6` default (see `solve_admm.jl`'s consolidation comment).
 
-Reads `ctx.meta[:agg_device_vars]` and `ctx.meta[:T]`. Uses an explicit `error(...)` (never
+Reads `ctx.agg_device_vars` and `ctx.T`. Uses an explicit `error(...)` (never
 `@assert`, elided under `-O`), per project convention (`src/core/status.jl`).
 """
 function assert_4q_complementarity!(
     ctx::ModelContext;
     rtol::Real = 1e-4,
     atol::Real = 1e-8,
-    T::Int = ctx.meta[:T],
+    T::Int = _require_T(ctx),
     report::Bool = false,
 )
-    haskey(ctx.meta, :agg_device_vars) || return 0.0
+    !isempty(ctx.agg_device_vars) || return 0.0
 
     maxratio = 0.0
-    for (bus, varlist) in ctx.meta[:agg_device_vars]
+    for (bus, varlist) in ctx.agg_device_vars
         for v in varlist
             (haskey(v, :p_ch) && haskey(v, :p_dch) && haskey(v, :q)) || continue   # a 4Q device
             # Rated charge/discharge power (D-02/D-04: INDEPENDENT bounds) — the base-scaling

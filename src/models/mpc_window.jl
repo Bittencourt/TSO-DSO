@@ -101,12 +101,12 @@ Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model E
     (free-sign in BOTH cases, exactly as `solve_welfare` builds it).
  5. Each aggregator `contribute!`s its net injection + utility; its returned `Pdc_param`
     (returned at the Aggregator's OWN top level, not nested inside `res.vars`) is captured into
-    `agg_pdc_handles`. `ctx.meta[:agg_device_vars]` is populated as a SIDE EFFECT of this SAME
+    `agg_pdc_handles`. `ctx.agg_device_vars` is populated as a SIDE EFFECT of this SAME
     `contribute!` call (plan 21-01's widened `soc0`/`Tin0`/`Ppv_param`/`Tout_param` Parameters).
  6. Residuals are closed with the same defensive `size(...) == (N, H)` guard as
     `build_planning_oracle` before each `@constraint`; `:balance_p` is always registered,
     `:balance_q` only when `reactive`.
- 7. `ctx.meta[:agg_device_vars]` is walked to populate `ic_handles`: every device carrying a
+ 7. `ctx.agg_device_vars` is walked to populate `ic_handles`: every device carrying a
     `soc0` Parameter (PVBattery, FourQuadBESS) gets a `:soc`-kind entry; every device carrying
     a `Tin0` Parameter (Thermostatic) gets a `:Tin`-kind entry with `terminal_param = nothing`
     ALWAYS (D-07: no terminal condition on thermostatic temperature, ever). When
@@ -200,7 +200,7 @@ function build_mpc_window(
 
     # Aggregators: net active/reactive injections + utility. Capture each aggregator's
     # top-level Pdc_param handle (plan 21-01's widened per-step inelastic-demand Parameter) —
-    # ctx.meta[:agg_device_vars] is populated as a SIDE EFFECT of this SAME contribute! call.
+    # ctx.agg_device_vars is populated as a SIDE EFFECT of this SAME contribute! call.
     agg_pdc_handles = NamedTuple[]
     for agg in aggregators
         res = contribute!(agg, ctx; T = H)
@@ -210,7 +210,7 @@ function build_mpc_window(
     # Close :Rp always; :Rq only when the formulation provides a reactive channel.
     close_balance!(ctx, N, H; reactive = reactive)
 
-    # Walk ctx.meta[:agg_device_vars] to populate ic_handles (MPC-01 seam consumption): every
+    # Walk ctx.agg_device_vars to populate ic_handles (MPC-01 seam consumption): every
     # device carrying a soc0 Parameter (PVBattery, FourQuadBESS) gets a :soc-kind entry, every
     # device carrying a Tin0 Parameter (Thermostatic) gets a :Tin-kind entry. terminal_param
     # stays `nothing` for :Tin ALWAYS (D-07). Anonymous per-device Parameter/constraint (unique
@@ -218,8 +218,8 @@ function build_mpc_window(
     # compose in one window without a name collision — the same discipline FourQuadBESS's
     # anonymous apparent-power cone already establishes in this codebase.
     ic_handles = NamedTuple[]
-    if haskey(ctx.meta, :agg_device_vars)
-        for (bus, varlist) in ctx.meta[:agg_device_vars]
+    if !isempty(ctx.agg_device_vars)
+        for (bus, varlist) in ctx.agg_device_vars
             for v in varlist
                 if haskey(v, :soc0)
                     if terminal_soc
@@ -261,7 +261,7 @@ function build_mpc_window(
     # slides via set_objective_coefficient, mirroring AgrOpt.jl's own documented avoidance of
     # the Parameter-times-variable bilinear failure). The caller (Wave 4) ALWAYS calls
     # set_objective_coefficient before the first solve; 0.0 is never itself a modeling claim.
-    @objective(model, Max, ctx.meta[:objective] - sum(0.0 * p_import[τ] for τ in 1:H))
+    @objective(model, Max, ctx.objective - sum(0.0 * p_import[τ] for τ in 1:H))
 
     return MpcWindow(
         model,

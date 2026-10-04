@@ -42,7 +42,7 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
  3. lets the power-flow formulation `contribute!` its branch/voltage terms into
     `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`) and each aggregator `contribute!`
     its net active/reactive injections into `:Rp`/`:Rq` plus its summed utility into
-    `ctx.meta[:objective]`;
+    `ctx.objective`;
  4. injects a priced active frontier exchange `p_import[t]` at `feeder.root` (stashed
     under `ctx.meta[:p_import]`). By default it is IMPORT-ONLY (`p_import ≥ 0`, buy from the
     MEM). With `allow_export = true` it is FREE-SIGN (`>0` buy, `<0` sell surplus to the MEM
@@ -76,7 +76,7 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
     when `allow_almost = true` accepted a near-feasible point (`fit_baseline`'s SITE-3
     cross-check is the ONE intended caller, gated behind its own measured gap bound);
  8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
-    ONLY when the formulation stashed a squared-current `:l` in `ctx.meta[:pf_vars]` (i.e. a SOCP
+    ONLY when the formulation stashed a squared-current `:l` in `ctx.pf_vars` (i.e. a SOCP
     cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
     physically-meaningless duals from a STRICT (inexact) relaxation are REFUSED (thrown) rather
     than returned (threats T-04-01/T-04-03). `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
@@ -85,7 +85,7 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
     battery-check `τ` — never conflated (Pitfall 2);
  9. runs the MANDATORY App. C post-solve battery complementarity check via
     [`assert_battery_complementarity!`](@ref): for every battery stashed under
-    `ctx.meta[:agg_device_vars]`, asserts the SCALE-FREE relative test
+    `ctx.agg_device_vars`, asserts the SCALE-FREE relative test
     `value(p_ch[t])·value(p_dch[t]) < τ·Pmax²` for all `t`, throwing loudly on violation
     (RESEARCH Pitfall 1, threat T-03-13; WR-02). Normalizing by the battery's rated power²
     makes the gate's protective strength INVARIANT to the per-unit base — an absolute product
@@ -181,7 +181,7 @@ function solve_welfare(
     reactive = has_reactive(pf)
 
     # Aggregators: net active/reactive injections into :Rp/:Rq + summed utility into
-    # ctx.meta[:objective]. Each aggregator is the sole :Rp/:Rq writer at its bus. (On a DC
+    # ctx.objective. Each aggregator is the sole :Rp/:Rq writer at its bus. (On a DC
     # run the aggregators still write :Rq, but it is left unclosed below — active-only.)
     #
     # PRICE-03 (05-01): PURELY ADDITIVE surplus stash. Capture each `contribute!` return
@@ -191,7 +191,7 @@ function solve_welfare(
     # (plan 05-05) splits social = prosumer + DSO surplus: the prosumer surplus is
     # `Σ_j U_agⱼ − Σ_j Σ_t λ_j[t]·net_j[t]` (thesis eqs. 3.46/3.47), where the price-transfer
     # term needs the per-aggregator net injection `p_agⱼ[t]` (= net[t] here) and `Σ_j U_agⱼ`
-    # remains sourced from `value(ctx.meta[:objective])`. Recording it does NOT alter the
+    # remains sourced from `value(ctx.objective)`. Recording it does NOT alter the
     # residual writes, the objective, the balance registration, the exactness gate, the battery
     # check, or the returned tuple.
     agg_net = Vector{NamedTuple}(undef, length(aggregators))
@@ -242,7 +242,7 @@ function solve_welfare(
     balance_p, balance_q = close_balance!(ctx, Np, T; reactive = reactive)
 
     # GLB-CVX welfare (thesis eq. 3.38): Σ aggregator utility − λ₀ᵀ·p_import.
-    welfare = ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
+    welfare = ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T)
     @objective(model, Max, welfare)
 
     # OPTIMAL gate: never read a dual (price) before a trusted solve (threat T-03-14).
@@ -263,7 +263,7 @@ function solve_welfare(
     # DELIBERATELY DISTINCT from the battery-check `τ` — a different physical quantity, do not
     # conflate them. `maxgap` (the absolute residual) is stashed under `ctx.meta[:socp_maxgap]`
     # as a first-class output reported alongside the prices.
-    if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
+    if has_branch_current(ctx.pf)
         ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; rtol = rtol_exact)
     end
 
@@ -290,7 +290,7 @@ function solve_welfare(
 end
 
 """
-    assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = ctx.meta[:T],
+    assert_battery_complementarity!(ctx::ModelContext; τ::Real, T::Int = _require_T(ctx),
                                      on_violation::Symbol = :error)
 
 Verify the App. C no-binary battery complementarity `p_ch[t]·p_dch[t] = 0` numerically at a
@@ -337,7 +337,7 @@ another. Genuine solver-noise co-activation (a tiny product on a truly-zero leg)
 `τ` is a RELATIVE tolerance (fraction of `Pmax²`). `solve_welfare` defaults it PROBLEM-CLASS-
 AWARE via the `problem_class` trait — looser on the interior-point SOCP path, tighter on the
 QP path — and this function never loosens the QP path (its `Pmax²`-scaled threshold is ≤ the
-old absolute one for every `Pmax ≤ 1`). Iterates `ctx.meta[:agg_device_vars]` (skips
+old absolute one for every `Pmax ≤ 1`). Iterates `ctx.agg_device_vars` (skips
 non-battery device stashes) and is a no-op when no batteries were registered.
 
 BATTERY-ACTIVE-POWER-ONLY (MESH-04, T-19-11): this check's loop condition excludes any
@@ -345,19 +345,19 @@ device that ALSO carries a reactive decision variable (`:q`) — such a device (
 only `FourQuadBESS`) has its OWN peer certificate,
 [`assert_4q_complementarity!`](@ref) (`complementarity_4q.jl`), with its OWN
 independently-measured tolerance. Excluding `:q`-carrying devices here keeps the two
-checks structurally mutually exclusive over the same `ctx.meta[:agg_device_vars]` stash —
+checks structurally mutually exclusive over the same `ctx.agg_device_vars` stash —
 this one never silently runs against a `FourQuadBESS`'s vars.
 """
 function assert_battery_complementarity!(
     ctx::ModelContext;
     τ::Real,
-    T::Int = ctx.meta[:T],
+    T::Int = _require_T(ctx),
     on_violation::Symbol = :error,
 )
     on_violation in (:error, :warn) ||
         throw(ArgumentError("assert_battery_complementarity!: invalid on_violation=$(repr(on_violation)), expected :error or :warn"))
-    haskey(ctx.meta, :agg_device_vars) || return nothing
-    for (bus, varlist) in ctx.meta[:agg_device_vars]
+    !isempty(ctx.agg_device_vars) || return nothing
+    for (bus, varlist) in ctx.agg_device_vars
         for v in varlist
             (haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q)) || continue   # a battery, not a 4Q device
             # Rated charge/discharge power (eq. 3.8 bound) = the base-scaling reference. The

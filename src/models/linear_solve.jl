@@ -8,7 +8,7 @@
 # into the SHARED residual / welfare accumulators with no formulation-flag
 # branching, pins the per-bus/time nodal balance to zero (registering the constraint so
 # its dual — the distribution price / DADP — is recoverable), sets the welfare
-# objective from `ctx.meta[:objective]` minus the priced frontier import, and solves as
+# objective from `ctx.objective` minus the priced frontier import, and solves as
 # the `QP()` factory backend through `assert_solved!(...; dual = true)`. Central, single-solve
 # assembly; the ADMM decomposition lands in Phase 6.
 #
@@ -31,7 +31,7 @@ the shared nodal-balance residual:
     `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`); each device `contribute!`s its
     Variant-2 aggregatable-device tuple `(; vars, p_inject, utility)` (DEV-05), and this
     ASSEMBLY writes the returned `p_inject` into `:Rp` and the returned `utility` into
-    `ctx.meta[:objective]` itself, generically for ANY such device — the returned `vars`
+    `ctx.objective` itself, generically for ANY such device — the returned `vars`
     are stashed under `ctx.meta[:device_vars]`;
  4. inject a frontier import `p_import[t] ≥ 0` at `feeder.root` (`+p_import`, mirroring the
     toy-DC convention) so the root balance closes; it is priced at `λ₀`;
@@ -56,8 +56,8 @@ function solve_linear(
     T::Int = 1,
     λ₀,
 )
-    # WR-01: an empty `devices` has no priced load — `ctx.meta[:objective]` is never
-    # created (bare `KeyError` at welfare assembly) and `devices[1].bus` would
+    # WR-01: an empty `devices` has no priced load — `ctx.objective` stays zero
+    # (a silent zero-welfare solve) and `devices[1].bus` would
     # `BoundsError`. The rung-1 model is defined around at least the priced load, so
     # reject the empty case up front with a clear message instead of a cryptic crash.
     isempty(devices) &&
@@ -93,7 +93,7 @@ function solve_linear(
     # variables/constraints and returns `(; vars, p_inject, utility)`, writing NOTHING
     # itself. This assembly is the network-facing writer here (mirroring Aggregator's own
     # roll-up shape): explicitly add each device's signed injection into :Rp and its
-    # utility into ctx.meta[:objective], generalizing to ANY Variant-2-contract device
+    # utility into ctx.objective, generalizing to ANY Variant-2-contract device
     # with a `.bus` field (not just Interruptible specifically). Stash the returned
     # per-device `vars` for post-solve inspection (IN-02).
     device_vars = Any[]
@@ -139,7 +139,7 @@ function solve_linear(
     balance_p, balance_q = close_balance!(ctx, Np, T; reactive = has_reactive(pf))
 
     # Welfare (thesis eq. 3.38 shape): Σ device utility − λ₀ᵀ·p_import.
-    welfare = ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
+    welfare = ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T)
     @objective(model, Max, welfare)
 
     # INFRA-03 gate: never trust (or read) a dual before an OPTIMAL+feasible solve

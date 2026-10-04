@@ -9,7 +9,7 @@
 # `ModelContext`, `assert_solved!`, `assert_socp_exact!`, `assert_battery_complementarity!`).
 #
 # D-02's honest SEAM-01 resolution note: `models/oracle.jl`'s `objective_hook` stub (inert
-# since Phase 4) is INSUFFICIENT for this axis — it only transforms `ctx.meta[:objective]`
+# since Phase 4) is INSUFFICIENT for this axis — it only transforms `ctx.objective`
 # on ONE already-built `ctx`, and has no argument through which to express per-scenario
 # DUPLICATION of the network + device layer. Building S independently-`contribute!`d
 # scenario blocks needs a genuinely new orchestration entry point, hence this sibling
@@ -24,7 +24,7 @@
 # `Qrev`/`smax_rev`) unless `JuMP.unregister(model, name)` is called for each of those
 # twelve names between scenario blocks. `unregister` frees only the NAME (the model's
 # object-dictionary lookup) — the underlying `VariableRef`/`ConstraintRef` handles already
-# captured in a scenario's own `ctx_s.meta[:pf_vars]` / `ctx_s.constraints` remain
+# captured in a scenario's own `ctx_s.pf_vars` / `ctx_s.constraints` remain
 # independently usable afterward. `unregister` is never called after the LAST scenario
 # (nothing follows it).
 #
@@ -95,7 +95,7 @@ For each scenario `s in 1:S`:
     `JuMP.unregister`-ing the twelve formulation container names between scenario blocks
     (never after the last one);
  3. every aggregator in `scenario_aggs[s]` `contribute!`s its own scenario's devices
-    (`ctx_s.meta[:agg_device_vars]` records each device's returned vars, keyed by bus);
+    (`ctx_s.agg_device_vars` records each device's returned vars, keyed by bus);
  4. an ANONYMOUS per-scenario frontier `p_import_s` (free-sign under `allow_export`, else
     `≥ 0`) and, when the formulation provides a reactive channel (WR-03,
     `haskey(ctx_s.residuals, :Rq)`, captured right after step 2, before step 3's
@@ -126,7 +126,7 @@ interior-point conditioning hazard. `Deferrable` is DELIBERATELY excluded from t
 (not first-stage in this builder).
 
 The objective is the probability-weighted sum
-`Σ_s probabilities[s]·(ctx_s.meta[:objective] − Σ_t λ₀[t]·p_import_s[t])`. The solve is
+`Σ_s probabilities[s]·(ctx_s.objective − Σ_t λ₀[t]·p_import_s[t])`. The solve is
 routed through [`solve_with_retry!`](@ref)`(model; dual = true)` (WR-08 fix, phase-22
 review: the escalating Clarabel-conditioning ladder — attributes-only, build-once
 preserved, STRICT `assert_solved!` gate — because this solve is empirically known to sit
@@ -233,7 +233,7 @@ function build_stochastic_welfare(
             )
             # WR-03 fix (phase-22 review): DEVICE-COMPOSITION congruence, per this
             # docstring's own promise. The tie walk below pairs
-            # ctxs[s].meta[:agg_device_vars][bus][idx] blindly against scenario 1's idx,
+            # ctxs[s].agg_device_vars[bus][idx] blindly against scenario 1's idx,
             # so a composition mismatch either crashes confusingly (BoundsError /
             # 'no field p_ch') or — worst — SILENTLY skips a tie: if scenario 1's device
             # at idx is a non-battery while scenario s's is a battery, the
@@ -294,7 +294,7 @@ function build_stochastic_welfare(
         contribute!(pf, ctx_s, feeder; T = T)
 
         # RESEARCH.md Pattern 1: ConvexBranchFlow registers NAMED containers on `model`;
-        # free the NAMES (not the already-captured handles in ctx_s.meta[:pf_vars]) so the
+        # free the NAMES (not the already-captured handles in ctx_s.pf_vars) so the
         # NEXT scenario's contribute! call does not collide. Never after the last scenario.
         if s < S
             # Plan 26-09 (gap-closure, FIX-03): Plan 26-05 added THREE more named
@@ -357,11 +357,11 @@ function build_stochastic_welfare(
     # PVBattery or FourQuadBESS) at bus/index (bus, idx) across scenarios s = 2:S to
     # scenario 1's own copy. Runs AFTER the full scenario loop so every scenario's device
     # vars already exist. Deferrable is deliberately excluded from this tie.
-    for (bus, varlist1) in ctxs[1].meta[:agg_device_vars]
+    for (bus, varlist1) in ctxs[1].agg_device_vars
         for (idx, v1) in enumerate(varlist1)
             haskey(v1, :soc0) || continue   # battery-like device marker
             for s in 2:S
-                vs = ctxs[s].meta[:agg_device_vars][bus][idx]
+                vs = ctxs[s].agg_device_vars[bus][idx]
                 @constraint(model, [t = 1:T], vs.p_ch[t] == v1.p_ch[t])
                 @constraint(model, [t = 1:T], vs.p_dch[t] == v1.p_dch[t])
                 # WR-09 fix (phase-22 review): NO soc tie — it was EXACTLY linearly
@@ -403,7 +403,7 @@ function build_stochastic_welfare(
         Max,
         sum(
             probabilities[s] * (
-                ctxs[s].meta[:objective] -
+                ctxs[s].objective -
                 sum(λ₀[t] * ctxs[s].meta[:p_import][t] for t in 1:T)
             ) for s in 1:S
         )
@@ -432,7 +432,7 @@ function build_stochastic_welfare(
     # stashed no squared-current :l (DC/LinDistFlow paths), exactly like solve_welfare.
     socp_maxgap = Float64[]
     for s in 1:S
-        if haskey(ctxs[s].meta, :pf_vars) && haskey(ctxs[s].meta[:pf_vars], :l)
+        if has_branch_current(ctxs[s].pf)
             push!(socp_maxgap, assert_socp_exact!(ctxs[s]; rtol = rtol_exact))
         end
     end
@@ -575,7 +575,7 @@ D-09), mirroring [`build_mpc_window`](@ref)'s build-once SHAPE:
     is captured into `agg_pdc_handles`.
  6. The residuals are closed via the NAMED single-build form and registered under
     `:balance_p`/`:balance_q`.
- 7. `ctx.meta[:agg_device_vars]` is walked: every battery-like device (`haskey(v, :soc0)` — `PVBattery`/`FourQuadBESS`) gets TWO anonymous per-step PIN `Parameter`s
+ 7. `ctx.agg_device_vars` is walked: every battery-like device (`haskey(v, :soc0)` — `PVBattery`/`FourQuadBESS`) gets TWO anonymous per-step PIN `Parameter`s
     defaulting to the benign literal `0.0` for every `t` (mirrors `build_mpc_window`'s own
     "the caller ALWAYS calls `set_parameter_value` before the first solve" convention):
     `pin_p_ch`/`pin_p_dch`, tied via `p_ch[t] == pin_p_ch[t]`/`p_dch[t] == pin_p_dch[t]`
@@ -589,7 +589,7 @@ D-09), mirroring [`build_mpc_window`](@ref)'s build-once SHAPE:
     — is captured into `ppv_handles`, and its `Tout_param` (if any) into `tout_handles`.
     Every OTHER device carrying a `Tout_param` (e.g. `Thermostatic`) also gets a
     `tout_handles` entry.
- 8. The REAL objective `ctx.meta[:objective] - Σ_t λ₀[t]·p_import[t]` is built at construction
+ 8. The REAL objective `ctx.objective - Σ_t λ₀[t]·p_import[t]` is built at construction
     time — `λ₀` never changes across held-out re-solves in this harness (unlike
     `MpcWindow`'s per-window `λ₀` slide), so it is NOT a placeholder.
 
@@ -671,12 +671,12 @@ function build_stochastic_oos_harness(
     # single-build form (safe here, this model is built exactly once).
     close_balance!(ctx, N, T; reactive = reactive)
 
-    # Walk ctx.meta[:agg_device_vars] to populate battery_pins/ppv_handles/tout_handles.
+    # Walk ctx.agg_device_vars to populate battery_pins/ppv_handles/tout_handles.
     battery_pins = NamedTuple[]
     ppv_handles = NamedTuple[]
     tout_handles = NamedTuple[]
-    if haskey(ctx.meta, :agg_device_vars)
-        for (bus, varlist) in ctx.meta[:agg_device_vars]
+    if !isempty(ctx.agg_device_vars)
+        for (bus, varlist) in ctx.agg_device_vars
             for v in varlist
                 if haskey(v, :soc0)
                     # Battery-like device (PVBattery/FourQuadBESS): TWO anonymous per-step
@@ -726,7 +726,7 @@ function build_stochastic_oos_harness(
 
     # REAL objective (not a placeholder — λ₀ never changes across held-out re-solves in
     # this harness, unlike MpcWindow's per-window λ₀ slide).
-    @objective(model, Max, ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T))
+    @objective(model, Max, ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T))
 
     return StochasticOosHarness(
         model,
