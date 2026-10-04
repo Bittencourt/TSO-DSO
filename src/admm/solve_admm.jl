@@ -237,7 +237,7 @@ price (WR-03, phase-19 review).
     non-convergence, so it is not fail-loud.
 """
 function solve_admm(
-    feeder,
+    feeder::Feeder,
     pf::ConvexBranchFlow,
     aggregators::AbstractVector{<:Aggregator};
     T::Int = 24,
@@ -918,6 +918,10 @@ function solve_admm(
         reactive_consensus_mode = mode,
         status = :converged,
     )
+end
+
+function solve_admm(::MeshedFeeder, args...; kwargs...)
+    throw(ArgumentError("solve_admm is radial-only (decentralized ADMM needs the radial recursion); got a MeshedFeeder - use solve_welfare with MeshedFlow for the centralized meshed solve (ARCH-03; formulation-generic meshed ADMM is Phase 34)"))
 end
 
 export solve_admm

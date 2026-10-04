@@ -111,3 +111,34 @@ end
     end
     @test TSODSO.has_branch_current(nothing) == false
 end
+
+@testitem "abstract feeder: radial-only ADMM entry points reject a MeshedFeeder" tags = [:feeder] begin
+    using TSODSO
+
+    function _check()
+        bus3 = [
+            TSODSO.Bus(1, 0.95, 1.05, true),
+            TSODSO.Bus(2, 0.95, 1.05, false),
+            TSODSO.Bus(3, 0.95, 1.05, false),
+        ]
+        loop = [
+            TSODSO.Branch(1, 2, 0.01, 0.02, 10.0),
+            TSODSO.Branch(2, 3, 0.01, 0.02, 10.0),
+            TSODSO.Branch(3, 1, 0.01, 0.02, 10.0),
+        ]
+        mesh = TSODSO.MeshedFeeder(bus3, loop, 1)
+        for (f, name) in ((TSODSO.solve_admm, "solve_admm"), (TSODSO.build_dso_opt, "build_dso_opt"))
+            err = try
+                f(mesh, TSODSO.ConvexBranchFlow(), TSODSO.Aggregator[]; T = 2)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin(name, err.msg) && occursin("MeshedFeeder", err.msg)
+        end
+        @test hasmethod(TSODSO.solve_admm, Tuple{TSODSO.Feeder,TSODSO.ConvexBranchFlow,Vector{TSODSO.Aggregator}})
+        @test hasmethod(TSODSO.build_dso_opt, Tuple{TSODSO.Feeder,Vector{TSODSO.Aggregator},Int})
+    end
+    _check()
+end

@@ -82,7 +82,7 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
     holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
   - `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
 """
-struct DsoOpt{P, Q, PI, F}
+struct DsoOpt{P, Q, PI, F <: AbstractFeeder}
     model::Model
     ctx::ModelContext
     pag::P
@@ -272,7 +272,7 @@ caller overrides it (plan 19-07 adapts it independently via [`set_rho_q!`](@ref)
 (never referenced) under `OFF`/`CERTIFIED`.
 """
 function build_dso_opt(
-    feeder,
+    feeder::Feeder,
     aggregators,
     T::Int;
     ρ::Real,
@@ -500,6 +500,10 @@ function build_dso_opt(
         Float64(ρ),
         Vector{Float64}(λ₀),
     )
+end
+
+function build_dso_opt(::MeshedFeeder, args...; kwargs...)
+    throw(ArgumentError("build_dso_opt is radial-only (decentralized ADMM needs the radial recursion); got a MeshedFeeder - use solve_welfare with MeshedFlow for the centralized meshed solve (ARCH-03; formulation-generic meshed ADMM is Phase 34)"))
 end
 
 """
