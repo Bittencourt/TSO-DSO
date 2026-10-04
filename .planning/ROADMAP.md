@@ -463,7 +463,21 @@ policy.
 
   4. `mpc_loop`'s exception handlers catch only solver-status and certificate exceptions;
      `MethodError`/`BoundsError` propagate uncaught.
-**Plans**: TBD
+**Plans**: 12 plans
+
+Plans:
+- [ ] 34-01-PLAN.md — typed exception types + `_is_solver_failure`; widen all legacy ErrorException catch sites
+- [ ] 34-02-PLAN.md — convert SolveFailedError/no-slack throw sites + migrate tests (retry ladder proven)
+- [ ] 34-03-PLAN.md — convert certificate refusals to CertificateError + migrate tests
+- [ ] 34-04-PLAN.md — convert non-convergence throws to ConvergenceError + migrate tests
+- [ ] 34-05-PLAN.md — additive `status` vocabulary on the five entry points + DC/reactive pin
+- [ ] 34-06-PLAN.md — narrow mpc_loop / run_stochastic handlers (ARCH-09) + seam tests
+- [ ] 34-07-PLAN.md — AdmmState, reactive singleton hooks, `_admm_build`/`_admm_iterate!`/`_adapt_rho!`
+- [ ] 34-08-PLAN.md — `_admm_certify`, certify hooks, thin orchestrator, grep audit
+- [ ] 34-09-PLAN.md — `admm_supported`, generic DsoOpt/solve_admm, pair check, LinDist warn-gate, widened supports_pf
+- [ ] 34-10-PLAN.md — meshed live-reactive ADMM vs centralized cross-validation (measured tolerances)
+- [ ] 34-11-PLAN.md — Status & exception policy docs, docstring links, meshed literate page (MESH-06 closed)
+- [ ] 34-12-PLAN.md — phase gate: source gates, detached full suite, docs build, VALIDATION sign-off
 
 ### Phase 35: IEEE-8500 Scale After Refactor
 
