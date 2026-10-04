@@ -236,6 +236,31 @@
     end
 
     """
+        mesh_aggregators_phi(φ::Real; bess::Bool = false) -> Vector{Aggregator}
+
+    Same two pinned-load Thermostatic aggregators as [`mesh_aggregators`](@ref) (buses 2 and 3,
+    loads `P2_LOAD` / `P3_LOAD`) but with the reactive power factor `φ` as a parameter, and with
+    an optional `FourQuadBESS` (bus 2) appended to the bus-2 aggregator when `bess = true`.
+
+    Plan 34-10 (ARCH-06): `φ = 0.95` is used ONLY with the `:heterogeneous` profile -- it gives a
+    clearly non-degenerate centralized reactive price (`dual(:balance_q)` ~ 0.2511 / 0.1354 at
+    buses 2/3), whereas `φ = 1.0` pins the reactive price to ~0. Uniform `φ = 0.95` is NOT usable:
+    the centralized solve itself throws `SOCP relaxation INEXACT` (the Plan 26-13 finding above).
+    """
+    function mesh_aggregators_phi(φ::Real; bess::Bool = false)
+        therm2 =
+            Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, P2_LOAD, P2_LOAD, 0.5, [20.0]; φ = φ)
+        therm3 =
+            Thermostatic(3, 0.0, 1.0, 20.0, 20.0, 20.0, P3_LOAD, P3_LOAD, 0.5, [20.0]; φ = φ)
+        devs2 = AbstractDevice[therm2]
+        bess && push!(
+            devs2,
+            FourQuadBESS(2, 0.95, 1.0, 0.05, 0.05, 0.08, 0.0, 0.2, 0.1, 3.8, 6.2, 8.9),
+        )
+        return [Aggregator(2, 0.95, devs2, [0.0]), Aggregator(3, 0.95, [therm3], [0.0])]
+    end
+
+    """
         mesh_lambda0() -> Vector{Float64}
 
     The flat MEM/wholesale price `λ₀ = LAMBDA0_MESH` over the fixture's single-hour horizon.
@@ -250,5 +275,6 @@
         HETEROGENEOUS_RX,
         mesh_feeder,
         mesh_aggregators,
+        mesh_aggregators_phi,
         mesh_lambda0
 end
