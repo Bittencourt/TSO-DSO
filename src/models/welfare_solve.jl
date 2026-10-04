@@ -176,7 +176,7 @@ function solve_welfare(
     # active power only). Without this, a DCPowerFlow + reactive-aggregator run pinned :Rq
     # to zero at every non-root load bus and was INFEASIBLE. This is a data-driven seam —
     # no `if formulation ==` branching.
-    reactive = haskey(ctx.residuals, :Rq)
+    reactive = has_reactive(pf)
 
     # Aggregators: net active/reactive injections into :Rp/:Rq + summed utility into
     # ctx.meta[:objective]. Each aggregator is the sole :Rp/:Rq writer at its bus. (On a DC
@@ -237,18 +237,7 @@ function solve_welfare(
     # when the FORMULATION provides a reactive channel (`reactive`) — DATA-DRIVEN on the
     # formulation's capability, never a formulation flag. On a DC run any aggregator :Rq
     # terms remain unclosed (reactive is out of scope for an active-only model).
-    size(ctx.residuals[:Rp]) == (Np, T) || error(
-        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($Np, $T) — an index escaped the feeder",
-    )
-    @constraint(model, balance_p[j = 1:Np, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
-    register_constraint!(ctx, :balance_p, balance_p)          # dual = λ_j (DADP)
-    if reactive
-        size(ctx.residuals[:Rq]) == (Np, T) || error(
-            "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($Np, $T) — an index escaped the feeder",
-        )
-        @constraint(model, balance_q[j = 1:Np, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
-        register_constraint!(ctx, :balance_q, balance_q)
-    end
+    balance_p, balance_q = close_balance!(ctx, Np, T; reactive = reactive)
 
     # GLB-CVX welfare (thesis eq. 3.38): Σ aggregator utility − λ₀ᵀ·p_import.
     welfare = ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
