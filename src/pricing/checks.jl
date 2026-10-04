@@ -120,8 +120,7 @@ function economic_direction_checks(
     # Exclude the frontier/root bus when reading from the true balance (its DADP just tracks
     # λ₀, contributing a ~0 deviation). With a `dadp` override we cannot know the root, so scan
     # all supplied rows.
-    feeder = ctx.feeder
-    root = (dadp === nothing && feeder !== nothing) ? feeder.root : 0
+    root = dadp === nothing ? _require_feeder(ctx).root : 0
     buses = bus === nothing ? [j for j in 1:Np if j != root] : [Int(bus)]
     isempty(buses) && throw(
         ArgumentError(
