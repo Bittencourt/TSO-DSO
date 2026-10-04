@@ -403,17 +403,44 @@ instead of duplicated five times or carried in an untyped `Dict`.
 **Plans:** 11 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 33-01-PLAN.md — AbstractFeeder supertype, has_reactive/has_branch_current traits, internal shared SOCP body, invalid-pair ArgumentError methods
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 33-02-PLAN.md — Type shared entry points AbstractFeeder, radial-only ADMM ::Feeder with meshed rejection
 - [ ] 33-03-PLAN.md — close_balance! helper plus pre-migration constraint-order fingerprints
 - [ ] 33-04-PLAN.md — Typed ModelContext fields, checked accessors, core writers with transient mirror
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 33-05-PLAN.md — Migrate the five balance-closing sites to close_balance!
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 33-06-PLAN.md — Dual-write typed feeder/T at all builders and hand-built test contexts
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 33-07-PLAN.md — Migrate models/admm/devices readers and haskey(:l) gates to typed fields and traits
 - [ ] 33-08-PLAN.md — Migrate pricing/planning/experiments readers and gates
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 33-09-PLAN.md — Migrate tests, docs/literate, scripts to typed fields
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 33-10-PLAN.md — Remove the transient mirror, add the source-scan grep gate
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 33-11-PLAN.md — Phase gate: detached full suite, docs build, VALIDATION sign-off
+
+**Cross-cutting constraints:**
+
+- Goldens bit-identical
 
 ### Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy
 
