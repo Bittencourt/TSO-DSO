@@ -500,7 +500,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 34-09-PLAN.md — `admm_supported`, generic DsoOpt/solve_admm, pair check, LinDist warn-gate, widened supports_pf
+- [x] 34-09-PLAN.md — `admm_supported`, generic DsoOpt/solve_admm, pair check, LinDist warn-gate, widened supports_pf
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
@@ -594,7 +594,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
-| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 8/12 | In Progress|  |
+| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 9/12 | In Progress|  |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
