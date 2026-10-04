@@ -303,7 +303,7 @@ a genuine welfare solve, where the network itself chooses `l`). SITE 2 now (plan
 (mirroring the project-standard `on_violation` idiom, `assert_battery_complementarity!`,
 `src/models/welfare_solve.jl:284,345-348`):
 
-  - `:error` (default) — throws a loud `ErrorException` naming the full Ipopt solve status if
+  - `:error` (default) — throws a loud `SolveFailedError` naming the full Ipopt solve status if
     step 2 fails to reach `LOCALLY_SOLVED`/`OPTIMAL` (`ALMOST_LOCALLY_SOLVED` is TREATED AS A
     FAILURE, never silently accepted) — refusing the counterfactual outright.
   - `:report` — never throws on a step-2 non-convergence; returns EARLY with
@@ -384,8 +384,8 @@ with the same seed return an identical `social_fit`. `seed` is accepted for prov
 Throws `ArgumentError` on empty `aggregators`, a `λ₀` length ≠ `T`, or an invalid `on_inexact`
 (neither `:error` nor `:report`); `error`s if the resulting `social_fit`/`ratio` is non-finite or
 out of the magnitude-sanity band (a mis-specified baseline must fail loudly rather than silently
-skew the headline — threat T-05-04); and (plan 27-09, `on_inexact = :error` only) throws an
-`ErrorException` if SITE 2's genuine AC power flow fails to reach `LOCALLY_SOLVED`/`OPTIMAL`
+skew the headline — threat T-05-04); and (plan 27-09, `on_inexact = :error` only) throws a
+`SolveFailedError` if SITE 2's genuine AC power flow fails to reach `LOCALLY_SOLVED`/`OPTIMAL`
 (T-27-12).
 """
 function fit_baseline(
@@ -609,7 +609,7 @@ function fit_baseline(
 
         if !ok
             on_inexact === :error && throw(
-                ErrorException(
+                SolveFailedError(
                     "fit_baseline: FIT AC-PF (SITE 2) FAILED to reach LOCALLY_SOLVED — " *
                     "termination_status=$(termination_status(model)), " *
                     "primal_status=$(primal_status(model)), " *
@@ -618,6 +618,7 @@ function fit_baseline(
                     "2026-09-29) — this is a genuine Ipopt non-convergence at the FIT " *
                     "schedule's fixed dispatch, never a thermal/voltage limit (those are " *
                     "OMITTED from this physics-only model).",
+                    model,
                 ),
             )
             # on_inexact === :report: never reads a value off a non-converged model — return

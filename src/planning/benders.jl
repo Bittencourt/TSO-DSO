@@ -493,7 +493,7 @@ before the loop's first master solve.
 Terminates when `UB − LB <= JOINT_RECOURSE_GAP_TOL` (a MEASURED, not guessed, constant —
 see the comment immediately above its definition) or after `iters` outer iterations,
 whichever comes first; on exhausting `iters` without meeting the tolerance, raises a loud
-`ErrorException` naming the achieved gap (never silently returns an unconverged value).
+`ConvergenceError` naming the achieved gap (never silently returns an unconverged value).
 """
 function _corner_recourse_joint(
     oracle,
@@ -587,10 +587,13 @@ function _corner_recourse_joint(
         end
         @objective(mmodel, Min, θ)
         optimize!(mmodel)
-        is_solved_and_feasible(mmodel) || error(
-            "_corner_recourse_joint: the small cutting-plane master LP failed to " *
-            "solve (status=$(termination_status(mmodel))) at y_inv=$y_inv, T=$T -- " *
-            "report as a bug.",
+        is_solved_and_feasible(mmodel) || throw(
+            SolveFailedError(
+                "_corner_recourse_joint: the small cutting-plane master LP failed to " *
+                "solve (status=$(termination_status(mmodel))) at y_inv=$y_inv, T=$T -- " *
+                "report as a bug.",
+                mmodel,
+            ),
         )
         LB = objective_value(mmodel)
         z_next = value.(zz)
@@ -677,10 +680,13 @@ function _corner_recourse_joint(
         end
     end
 
-    error(
-        "_corner_recourse_joint: exhausted $iters iteration(s) without meeting the " *
-        "measured gap tolerance JOINT_RECOURSE_GAP_TOL=$JOINT_RECOURSE_GAP_TOL at " *
-        "y_inv=$y_inv (T=$T) -- refusing to silently return a non-converged result.",
+    throw(
+        ConvergenceError(
+            "_corner_recourse_joint: exhausted $iters iteration(s) without meeting the " *
+            "measured gap tolerance JOINT_RECOURSE_GAP_TOL=$JOINT_RECOURSE_GAP_TOL at " *
+            "y_inv=$y_inv (T=$T) -- refusing to silently return a non-converged result.";
+            iterations = iters,
+        ),
     )
 end
 

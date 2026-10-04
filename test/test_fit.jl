@@ -97,10 +97,10 @@ end
         catch e
             e
         end
-        @test err isa ErrorException
+        @test err isa SolveFailedError
         msg = sprint(showerror, err)
         @test occursin("FIT AC-PF (SITE 2)", msg)
-        @test_throws ErrorException fit_baseline(
+        @test_throws SolveFailedError fit_baseline(
             feeder,
             ConvexBranchFlow(),
             aggs;

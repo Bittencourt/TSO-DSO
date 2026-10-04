@@ -73,14 +73,17 @@ Catch blocks are narrowed to the documented failure modes:
 **Remaining `ErrorException` modeling-bug asserts** (a failure here is a bug in the model or a
 violated internal invariant, not a researcher-facing outcome; they stay `error(...)`):
 
-- `_assert_epigraph_floor` and the corner-recourse bug checks in `src/planning/benders.jl`;
+- `_assert_epigraph_floor` and the corner-recourse non-finite bug checks in `src/planning/benders.jl`
+  (the `_corner_recourse_joint` master-LP failure is a `SolveFailedError` and its iteration
+  exhaustion a `ConvergenceError`);
   `add_ll_cut!` `Q_nu` in `src/planning/master_integer.jl`;
 - the feasibility-oracle failure, `:disagree` and weak-stall errors in `benders.jl`;
 - `add_to_residual!` / `close_balance!` shape checks (`src/core/balance.jl`, the
   `ctx.residuals` size checks in `master.jl`, `subproblem.jl`, `feasibility_oracle.jl`,
   `bilevel_kkt.jl`, `mpc_loop.jl`, `nash.jl`);
-- `welfare_accounting` (`src/pricing/welfare.jl`), the `fit_baseline` SITE-2 failure
-  (`src/pricing/fit.jl`), the DLMP closure checks (`src/pricing/dlmp.jl`);
+- `welfare_accounting` (`src/pricing/welfare.jl`), the DLMP closure checks
+  (`src/pricing/dlmp.jl`); the `fit_baseline` SITE-2 AC-PF non-convergence
+  (`src/pricing/fit.jl`) is a `SolveFailedError`;
 - `_mpc_assert_true_state_inband` in `src/experiments/mpc_loop.jl` (the AC
   truth-settlement non-convergence and the `ac_recheck_incumbent` re-check failure are
   `SolveFailedError`, carrying the solver statuses);
