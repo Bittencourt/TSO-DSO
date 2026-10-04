@@ -1362,7 +1362,7 @@ free `z[i,t]` with box constraints `0 <= z[i,t] <= y_inv[i]` (mirrors
 `solve_joint_reference`'s own `box_lo`/`box_hi`). `z[i,t]` is reused DIRECTLY as the
 frontier import (`add_to_residual!(ctx_i, :Rp, specs[i].feeder.root, t, z[i,t])`,
 mirroring `solve_joint_reference`'s own "z reused directly" simplification). Immediately
-after `contribute!(specs[i].pf, ctx_i, specs[i].feeder; T)`, `reactive_i = haskey(ctx_i.residuals, :Rq)` is captured (WR-03 ordering, mirrors
+after `contribute!(specs[i].pf, ctx_i, specs[i].feeder; T)`, `reactive_i = has_reactive(specs[i].pf)` is captured (WR-03 ordering, mirrors
 `build_planning_oracle`); when `reactive_i`, a free `zq[i,t]` is added into `:Rq`. Each
 distributor's own aggregators then `contribute!` into `ctx_i`, and distributor `i`'s own
 `balance_p[i]`/`balance_q[i]` residual-closing constraints are added — per-distributor,
@@ -1513,7 +1513,7 @@ function solve_variational_equilibrium(
         # WR-03 ordering (mirrors build_planning_oracle/solve_joint_reference): capture
         # `reactive_i` IMMEDIATELY after the formulation contributes, BEFORE any
         # aggregator writes.
-        reactive_i = haskey(ctx_i.residuals, :Rq)
+        reactive_i = has_reactive(specs[i].pf)
         if reactive_i
             zq_i = @variable(model, [t = 1:T], base_name = "zq[$i,:]")
             for t in 1:T

@@ -127,7 +127,7 @@ function build_feasibility_oracle(
     end
     ctx.meta[:p_import] = p_import
 
-    reactive = haskey(ctx.residuals, :Rq)
+    reactive = has_reactive(pf)
 
     if reactive
         @variable(model, q_import[t = 1:T])

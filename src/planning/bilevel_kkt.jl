@@ -385,7 +385,7 @@ function build_bilevel_kkt(
 
     # WR-03-style capability capture (mirrors solve_welfare): whether a REACTIVE channel
     # exists is decided by the FORMULATION, captured right after it contributes.
-    reactive = haskey(ctx.residuals, :Rq)
+    reactive = has_reactive(pf)
 
     # ---- Leader/follower KKT variables. ---------------------------------------------
     @variable(model, 0 <= y_inv <= y_max)
