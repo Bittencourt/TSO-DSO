@@ -534,10 +534,24 @@ orchestration layer has been refactored.
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 35-01-PLAN.md — ADMM atol_exact default -> nothing (hybrid floor), tests A/B/negative, hybrid_ratios diagnostic, goldens/canary bit-identical
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 35-02-PLAN.md — harness: --admm-only, --admm-atol, --admm-diagnostic-bypass, per-point wrapper (peak RSS + earlyoom capture), memory profiler
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 35-03-PLAN.md — measurements: memory profile, SC1 bypass diagnostic, headline density 0.1 T=10 post-refactor
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 35-04-PLAN.md — conditional bit-identical memory win, T=24/density 0.25 ladder, memory-wall re-characterization table
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 35-05-PLAN.md — docs section + regenerated page, append-only SCALE-05 status notes, full-suite phase gate
 
 ### Phase 36: Code & Export Cleanup
