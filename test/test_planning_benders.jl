@@ -221,7 +221,7 @@ end
     )
 end
 
-@testitem "planning benders: max_iter=1 raises loudly (ErrorException, 'exhausted'), never returns a non-converged result" tags =
+@testitem "planning benders: max_iter=1 raises loudly (ConvergenceError, 'exhausted'), never returns a non-converged result" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -250,7 +250,7 @@ end
         catch e
             err = e
         end
-        @test err isa ErrorException
+        @test err isa ConvergenceError
         @test occursin("exhausted", err.msg)
         # IN-01 (plan 12-01): the message now sources from the trace, not a stale
         # loop-local gap.

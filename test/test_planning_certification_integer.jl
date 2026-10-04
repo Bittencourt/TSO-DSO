@@ -558,7 +558,7 @@ end
     # MILP infeasibility the file header documents for the CORRECT known_optimum at
     # max_iter = 50 -- 30 iterations is comfortably below the ~40-50 iteration threshold
     # where that defect's no-good bans accumulate enough to exhaust all 16 corners).
-    @test_throws ErrorException mktempdir() do dir
+    @test_throws ConvergenceError mktempdir() do dir
         solve_stackelberg!(
             feeder,
             LinDistFlow(),

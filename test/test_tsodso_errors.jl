@@ -182,3 +182,35 @@ end
     @test e isa CertificateError
     @test e.kind === :angle
 end
+
+@testitem "errors: solve_admm maxiter=1 throws ConvergenceError(iterations = 1)" setup =
+    [Phase6Fixtures] tags = [:admm] begin
+    using TSODSO, Test
+
+    function _catch(f)
+        try
+            f()
+            return nothing
+        catch e
+            return e
+        end
+    end
+
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    e = _catch(
+        () -> solve_admm(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Phase6Fixtures.T,
+            λ₀ = Phase6Fixtures.two_bus_lambda0(),
+            ρ = Phase6Fixtures.RHO_2BUS,
+            maxiter = 1,
+            tol = 1e-12,
+        ),
+    )
+    @test e isa ConvergenceError
+    @test e.iterations == 1
+    @test startswith(e.msg, "solve_admm FAILED to converge")
+end

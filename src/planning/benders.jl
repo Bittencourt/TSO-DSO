@@ -1014,7 +1014,7 @@ variantes de planejamento" for the full three-way comparison.
             re-proposes the identical rejected trial on the very next iteration, the
             relaxation's optimum sits at that inexact point and no certified incumbent
             can close the gap there; that repeat raises a named "`:reject` stalled"
-            `ErrorException` at once instead of exhausting `max_iter` (the WR-06
+            `ConvergenceError` at once instead of exhausting `max_iter` (the WR-06
             backstop). `:certify_incumbent` (the default) accepts the relaxation's cut
             AND lets the trial compete for the incumbent, recording
             `policy_action = :certified_incumbent` and the measured `socp_maxgap` on
@@ -1046,7 +1046,7 @@ variantes de planejamento" for the full three-way comparison.
         exactly the "certificate laundering" this mechanism exists to forbid); if
         `converged_now`, return the converged result at the INCUMBENT `(y_best, z_best)`.
 
- 4. If `max_iter` is exhausted without `converged_now`, raise a loud `ErrorException` naming
+ 4. If `max_iter` is exhausted without `converged_now`, raise a loud `ConvergenceError` naming
     the exhausted iteration count and the last observed gap (D-10) — never silently return
     a non-converged result.
 
@@ -1121,7 +1121,7 @@ and the converged result is still returned (Phase 30 code review iteration 2, WR
     `α_op_lb`/`α_x_lb` inside `master_kwargs` exceeds `build_master`'s own derived minimum
     (see that function's docstring) — a found-invalid bound is a genuine bug to fix at its
     call site, never silenced.
-  - `ErrorException` if `max_iter` is exhausted without converging, naming the trace's
+  - `ConvergenceError` if `max_iter` is exhausted without converging, naming the trace's
     last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
     return a non-converged result. ALSO raised, immediately, when `inexact_policy =
     :reject` re-encounters the identical SOCP-inexact trial it just rejected even though
@@ -1505,7 +1505,7 @@ function solve_stackelberg!(
                 # `_corner_recourse_joint`'s own stall guard uses.
                 if last_rejected_z !== nothing &&
                    maximum(abs, lb_res.z .- last_rejected_z) <= 1e-9
-                    error(
+                    throw(ConvergenceError(
                         "solve_stackelberg!: inexact_policy=:reject stalled at the " *
                         "SOCP-inexact trial z=$(lb_res.z) (iteration $k, measured cone " *
                         "gap maxgap=$(socp_maxgap_k)): its relaxation cuts were appended " *
@@ -1514,8 +1514,9 @@ function solve_stackelberg!(
                         "certified incumbent can close the gap (best certified UB=$UB). " *
                         "Use inexact_policy=:certify_incumbent to accept a " *
                         "relaxation-only incumbent, or :strict to fail at the first " *
-                        "inexact solve.",
-                    )
+                        "inexact solve.";
+                        iterations = k,
+                    ))
                 end
                 rejected_k = true
                 policy_action_k = :rejected
@@ -1792,12 +1793,13 @@ function solve_stackelberg!(
     last_LB = last(trace.LB_trace)
     last_UB = last(trace.UB_trace)
     last_gap = last(trace.gap_trace)
-    error(
+    throw(ConvergenceError(
         "solve_stackelberg!: exhausted $max_iter iteration(s) without converging " *
         "(last recorded LB=$last_LB, UB=$last_UB, gap=$last_gap [gap may be NaN if the " *
         "final iteration was a feasibility cut], tol=$tol) — refusing to silently " *
-        "return a non-converged result",
-    )
+        "return a non-converged result";
+        iterations = max_iter,
+    ))
 end
 
 export solve_stackelberg!

@@ -456,7 +456,7 @@ After each sweep completes, convergence is decided by `is_converged(trace, tol_o
 — i.e. the just-completed sweep's own worst-distributor residual is `<= tol_outer`; on
 convergence returns `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace, shared, order)`.
 
-If `max_sweeps` is exhausted without converging, raises a loud `ErrorException` naming
+If `max_sweeps` is exhausted without converging, raises a loud `ConvergenceError` naming
 the exhausted sweep count and the LAST recorded `nash_residual` (read from the trace,
 never a stale loop-local) — never silently returns a non-converged result.
 
@@ -467,7 +467,7 @@ never a stale loop-local) — never silently returns a non-converged result.
     `integer` kwarg whose `K` is not a positive `Integer`, whose `α_op_lb` is not
     `:auto` or a finite `Real`, or whose `α_x_lb` is not a finite `Real`), before any
     solve call.
-  - `ErrorException` if `max_sweeps` is exhausted without converging, OR (Phase 31,
+  - `ConvergenceError` if `max_sweeps` is exhausted without converging, OR (Phase 31,
     BILEV-07, `integer !== nothing` only) if the integer diagonalization cycles (the
     full committed state — joint binary state, `z` and `x_inv` — recurs across sweeps
     with no residual decrease, without converging) — reports the full cycle shape (see
@@ -527,7 +527,7 @@ when the whole committed state recurs — identical `joint_b`, continuous state 
 predicate and its tolerance argument: `_integer_cycle_hit`). The binaries alone are
 NOT the game state: they routinely settle before `z`/`x_inv` do, and a `b`-only key
 raised false "CYCLED" errors on runs that were still converging (e.g. any damped
-`ω < 1` run). On a detected cycle `run_nash!` raises a loud, NAMED `ErrorException`
+`ω < 1` run). On a detected cycle `run_nash!` raises a loud, NAMED `ConvergenceError`
 reporting the sweep first seen, the current sweep and every distributor's own `b`, `z`
 and `x_inv` — never silently continuing toward `max_sweeps`.
 
@@ -951,7 +951,7 @@ function run_nash!(
                     atol = cycle_atol,
                 )
                 if first_seen !== nothing
-                    error(
+                    throw(ConvergenceError(
                         "run_nash!: integer diagonalization CYCLED — the full " *
                         "committed state (joint binary state $joint_b, z, x_inv) " *
                         "recurred at sweep $k (first seen at sweep $first_seen, " *
@@ -965,8 +965,9 @@ function run_nash!(
                             ],
                             ", ",
                         ) *
-                        " — refusing to silently continue toward max_sweeps",
-                    )
+                        " — refusing to silently continue toward max_sweeps";
+                        iterations = k,
+                    ))
                 end
             end
             push!(
@@ -1018,11 +1019,12 @@ function run_nash!(
     end
 
     last_residual = last(trace.nash_residual_trace)
-    error(
+    throw(ConvergenceError(
         "run_nash!: exhausted $max_sweeps sweep(s) without converging (last recorded " *
         "nash_residual=$last_residual, tol_outer=$tol_outer) — refusing to silently " *
-        "return a non-converged result",
-    )
+        "return a non-converged result";
+        iterations = max_sweeps,
+    ))
 end
 
 export run_nash!
@@ -1048,7 +1050,7 @@ export run_nash!
 # passed in and reused.
 #
 # NO try/catch AROUND run_nash!, BY DESIGN (T-13-10): a non-converging probe run's
-# `ErrorException` (raised internally by `run_nash!` on `max_sweeps` exhaustion) must
+# `ConvergenceError` (raised internally by `run_nash!` on `max_sweeps` exhaustion) must
 # propagate directly out of `run_nash_probe` to the caller — this is the gating
 # regression NASH-04's own success criterion requires, not a defect to be caught and
 # summarized away as "mostly converged".
@@ -1113,7 +1115,7 @@ For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in
 (`length(seeds) * length(orders) >= 6` combinations): dispatch `seed_z0` on `seed_z0 isa NamedTuple` — a bare matrix forwards `z0 = seed_z0, x_inv0 = nothing` (unchanged
 behavior); a `(; z0, x_inv0)` NamedTuple forwards `z0 = seed_z0.z0, x_inv0 = get(seed_z0, :x_inv0, nothing)`. Build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = z0_arg, x_inv0 = x_inv0_arg, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
 `try`/`catch` around the call (see this section's header; a non-converging run's
-`ErrorException` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination. `inexact_policy` is forwarded
+`ConvergenceError` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination. `inexact_policy` is forwarded
 to every `run_nash!` call (default `:strict`, Phase 30 code review iteration 2, CR-01);
 each run's own `certificates`/`any_relaxation_only` stay on its `result`.
 
@@ -1154,7 +1156,7 @@ canonical" mandate, discharged here in code (T-13-08).
 
   - `ArgumentError` if `length(seeds) < 3`, `length(orders) < 2`, or any `orders` entry is
     not `:forward`/`:reverse` — before any `run_nash!` call.
-  - `ErrorException`, propagated UNCAUGHT from the underlying `run_nash!` call, if ANY
+  - `ConvergenceError`, propagated UNCAUGHT from the underlying `run_nash!` call, if ANY
     `(seed, order)` combination fails to converge within `max_sweeps` (T-13-10 — never
     swallowed or summarized as "mostly converged").
 """
@@ -1205,7 +1207,7 @@ function run_nash_probe(
         for order in orders
             shared_run = build_shared()
             # Deliberately NOT wrapped in a try/rescue block here, BY DESIGN (T-13-10):
-            # a non-converging run's ErrorException propagates directly out of
+            # a non-converging run's ConvergenceError propagates directly out of
             # run_nash_probe.
             result = run_nash!(
                 specs,

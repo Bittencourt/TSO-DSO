@@ -101,7 +101,7 @@ end
     )
 
     # No known_optimum yet (plan 24-05's certification harness supplies that) — either
-    # outcome (converges within max_iter, or raises the existing loud ErrorException
+    # outcome (converges within max_iter, or raises the existing loud ConvergenceError
     # naming the exhausted count) is acceptable at THIS smoke-test stage; the point is
     # proving the wiring runs without a MethodError/UndefVarError.
     try
@@ -129,7 +129,7 @@ end
         @test result.nogood_count isa Integer
         @test result.converged_via in (:clean, :nogood_assisted)
     catch e
-        @test e isa ErrorException
+        @test e isa ConvergenceError
         @test occursin("exhausted", sprint(showerror, e))
     end
 end

@@ -106,7 +106,7 @@
         )
 
         # solve_stackelberg!'s own convergence certificate — it would have raised an
-        # ErrorException on max_iter exhaustion otherwise.
+        # ConvergenceError on max_iter exhaustion otherwise.
         @test result.gap <= 1.0e-6
         # Structural floor (NOT a brittle exact count, mirroring
         # test_planning_hardening.jl's own convention): measured 6 this session,

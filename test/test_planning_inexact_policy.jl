@@ -195,7 +195,7 @@ end
                 inexact_policy = :reject,
             ),
         )
-        @test e isa ErrorException
+        @test e isa ConvergenceError
         @test occursin(":reject stalled", e.msg)
         @test !occursin("exhausted", e.msg)
         @test !occursin("SOCP relaxation INEXACT", e.msg)

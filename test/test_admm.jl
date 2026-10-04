@@ -219,7 +219,7 @@ end
         # (d) FAIL-LOUD cap (RESEARCH Pitfall 2, threat T-06-03): a budget too small to reach a
         # consensus THROWS rather than silently returning the last (non-consensus) iterate. The
         # 2-bus needs several iterations, so maxiter = 1 with a tight tol cannot converge.
-        @test_throws Exception solve_admm(
+        @test_throws ConvergenceError solve_admm(
             feeder,
             ConvexBranchFlow(),
             aggs;

@@ -229,7 +229,7 @@ price (WR-03, phase-19 review).
     longer matches the centralized model's). Since PM-03, this only fires on an EXPLICIT
     override — `reactive_consensus`'s own default already resolves to `:live` whenever such a
     member is present.
-  - A loud `ErrorException` if `maxiter` is reached WITHOUT convergence AND WITHOUT the
+  - A loud `ConvergenceError` if `maxiter` is reached WITHOUT convergence AND WITHOUT the
     `time_limit_s` wall-clock budget having been exceeded first — the fail-loud cap that
     refuses to return a non-consensus iterate (RESEARCH Pitfall 2). When `time_limit_s` IS
     exceeded first, this throw is SKIPPED — the honest `status = :budget_exceeded` return
@@ -658,13 +658,14 @@ function solve_admm(
     # below instead of this loud throw.
     if !converged_flag && !budget_exceeded_flag
         throw(
-            ErrorException(
+            ConvergenceError(
                 "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
                 "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
                 "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
                 "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$ρf). Retune the adaptive-ρ config " *
                 "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
-                "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).",
+                "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).";
+                iterations = maxiter,
             ),
         )
     elseif budget_exceeded_flag

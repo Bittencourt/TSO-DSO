@@ -516,7 +516,7 @@ end
         catch e
             err = e
         end
-        @test err isa ErrorException
+        @test err isa ConvergenceError
         @test occursin("exhausted", err.msg)
         @test occursin("last recorded nash_residual", err.msg)
     end
@@ -868,9 +868,9 @@ end
     orders = (:forward, :reverse)
 
     # Deliberately too tight a max_sweeps for ONE probe combination to converge within
-    # — must raise ErrorException, propagated from the underlying run_nash!, never
+    # — must raise ConvergenceError, propagated from the underlying run_nash!, never
     # caught/swallowed by run_nash_probe.
-    @test_throws ErrorException run_nash_probe(
+    @test_throws ConvergenceError run_nash_probe(
         specs,
         build_shared;
         seeds = seeds,
