@@ -47,10 +47,15 @@ documented results cannot drift from the code.
 
 **Experiment harness:**
 
-- [The Experiment Harness](generated/experiments.md) — declarative `Scenario`s run
-  end-to-end via `run_scenario`, persisted with DrWatson provenance stamping by
-  `run_and_store`, and fanned out into Cartesian parameter sweeps with `run_sweep` +
-  `collate_summary` — the reproducibility backbone behind every experiment above.
+- [The Experiment Harness](generated/experiments.md) — declarative `Scenario`s (a `pf`
+  power-flow selector plus a typed `strategy`: `Centralized`, `ADMM`, `MPC`, `Stochastic`)
+  run end-to-end via `TSODSO.run(strategy, scenario)` / `run_scenario`, persisted with
+  DrWatson provenance stamping by `run_and_store`, and fanned out into Cartesian parameter
+  sweeps with `run_sweep` + `collate_summary` — the reproducibility backbone behind every
+  experiment above.
+- [Status & Exception Policy](status_policy.md) — when each solve entry point returns a
+  `status` versus throws, the typed `SolveFailedError` / `CertificateError` /
+  `ConvergenceError` hierarchy, and each entry point's documented status vocabulary.
 
 **Validation & reproduction (v2.1):**
 

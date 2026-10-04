@@ -155,8 +155,12 @@ Plus a full API reference for the ~130-symbol public surface.
 - **Build once, re-solve many**: ADMM/Benders/Nash outer loops mutate JuMP `Parameter`s
   and RHS — models are never rebuilt inside a loop.
 - **Fail loud**: every solve passes an `assert_solved!` status gate; guards raise
-  `ArgumentError`s rather than warn; retry ladders (`solve_with_retry!`) escalate solver
-  conditioning explicitly and are instrumented, never silent.
+  `ArgumentError`s rather than warn; solver, certificate and non-convergence failures raise
+  typed `SolveFailedError` / `CertificateError` / `ConvergenceError` (all `<: TSODSOError`),
+  and handlers catch only those, so programming errors always propagate. One documented
+  status-vs-throw policy covers every solve entry point (`docs/src/status_policy.md`).
+  Retry ladders (`solve_with_retry!`) escalate solver conditioning explicitly and are
+  instrumented, never silent.
 - **Traceability**: every constraint maps to a numbered thesis/PSR equation, documented
   beside the code in literate pages.
 - **Reproducibility**: declarative `Scenario`s, seeded data generation, DrWatson-stamped
@@ -166,17 +170,22 @@ Plus a full API reference for the ~130-symbol public surface.
 
 ```
 src/
-  core/         solver status gate, model context, residual registry
+  core/         solver status gate, typed errors + status policy, typed ModelContext,
+                residual registry, shared close_balance! helper
   solver/       ProblemClass-keyed optimizer factory (Clarabel/HiGHS/Ipopt; Gurobi/Mosek ext)
   units/        per-unit system
-  data/         feeder data model, IEEE 13/123 fixtures, seeded profiles
-  powerflow/    DC / LinDistFlow / SOCP convex branch-flow residual seams
+  data/         AbstractFeeder (radial Feeder / MeshedFeeder), IEEE 13/123/8500 fixtures,
+                seeded profiles
+  powerflow/    DC / LinDistFlow / SOCP convex branch-flow / restricted / meshed / AC
+                residual seams (has_reactive, has_branch_current, admm_supported traits)
   devices/      convex prosumer device library
   models/       GLB-CVX social-welfare centralized solve
   pricing/      DADP/DLMP extraction, 4-way decomposition, welfare accounting
-  admm/         AGR-OPT / DSO-OPT decomposition, adaptive ρ, convergence diagnostics
+  admm/         AGR-OPT / DSO-OPT decomposition (build / iterate / ρ-adapt / certify phases),
+                formulation-generic incl. meshed + live reactive pricing, adaptive ρ
   planning/     oracle, follower LP, Benders master + loop, SharedTransmission, Nash
-  experiments/  declarative Scenario / run_scenario / sweeps / DrWatson storage
+  experiments/  declarative Scenario (pf selector + typed strategies) / TSODSO.run /
+                sweeps / DrWatson storage
   diagnostics/  plotting stubs (CairoMakie via package extension)
 ext/            CairoMakie / Gurobi / Mosek package extensions
 docs/           Documenter + Literate sources (the rung ladder) + Typst writeups
