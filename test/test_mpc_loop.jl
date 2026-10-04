@@ -565,7 +565,7 @@ end
     end
     solve_mpc_window!(o)
 
-    boom = (args...; kwargs...) -> error("forced tier failure (test seam)")
+    boom = (args...; kwargs...) -> throw(SolveFailedError("forced tier failure (test seam)"))
     fallback_ref = Float64[2.0 + 0.1 * t for t in eachindex(λ₀)]   # distinguishable slice
 
     # BOTH tiers fail → the terminal :cert_failed with the fallback_price window slice —
@@ -607,6 +607,50 @@ end
     @test result_t3.cert_status == :local_ac_dual
     @test length(result_t3.price_vec) == H
     @test all(isfinite, result_t3.price_vec)
+
+    # ARCH-09: the tier catches admit ONLY SolveFailedError / CertificateError. Programming
+    # errors injected through either seam propagate; typed failures are ledgered as before.
+    # (try/catch wrapped in functions: @testitem top-level scope trap.)
+    function _call(; kw...)
+        return TSODSO._mpc_certify_and_price(
+            feeder, aggs, o, λ₀, 2; measured_state = ms, fe = fe, kw...,
+        )
+    end
+    function _thrown(; kw...)
+        try
+            _call(; kw...)
+            return nothing
+        catch e
+            return e
+        end
+    end
+    thrower(E) = (args...; kwargs...) -> throw(E)
+    bad_errs = (
+        MethodError(identity, ()),
+        BoundsError([1], 2),
+        ArgumentError("seam"),
+        KeyError(:seam),
+    )
+    for E in bad_errs
+        # tier 2 seam
+        @test _thrown(_solve_welfare = thrower(E)) isa typeof(E)
+        # tier 3 seam (tier 2 forced to a typed failure so tier 3 is reached)
+        @test _thrown(
+            _solve_welfare = boom,
+            _ac_dual_fallback_price = thrower(E),
+        ) isa typeof(E)
+    end
+    @test _thrown(_solve_welfare = thrower(InterruptException())) isa InterruptException
+
+    for E in (
+        SolveFailedError("forced tier failure (test seam)"),
+        CertificateError("forced certificate failure (test seam)"),
+    )
+        r = _call(_solve_welfare = thrower(E), _ac_dual_fallback_price = thrower(E))
+        @test r.cert_status == :cert_failed
+        r3 = _call(_solve_welfare = thrower(E))
+        @test r3.cert_status == :local_ac_dual
+    end
 end
 
 @testitem "mpc_loop: mpc_step genuinely strides the resolve cadence — NOT a silently-inert kwarg (D-03, checker revision 1)" tags =

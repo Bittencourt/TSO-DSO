@@ -307,10 +307,10 @@ function assert_ac_exact!(
     # are not the same operating point, so any per-hour "gap" would be meaningless — refuse that
     # (EXACT-03: a NUMERIC disagreement, by contrast, is reported, never raised).
     T = _require_T(ctx_socp)
-    T == ctx_ac.T || error(
+    T == ctx_ac.T || throw(ArgumentError(
         "assert_ac_exact!: T mismatch ($T vs $(ctx_ac.T)) — " *
         "the two solves are not the same operating point",
-    )
+    ))
 
     feeder = _require_feeder(ctx_socp)
     pv_s = _require_pf_vars(ctx_socp)

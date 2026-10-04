@@ -170,7 +170,7 @@ end
         ctx1 = fixed_ctx(1)
         ctx2 = fixed_ctx(2)
 
-        @test_throws Exception TSODSO.assert_ac_exact!(ctx1, ctx2; rtol = 1e-4)
+        @test_throws ArgumentError TSODSO.assert_ac_exact!(ctx1, ctx2; rtol = 1e-4)
         # Any test asserting a throw on a HIGH-PV/inexact fixture (as opposed to this
         # structural-mismatch fixture) is a signal the design has drifted toward the wrong shape —
         # see plan 15-03's stress test, which is a POSITIVE (non-throwing) assertion.

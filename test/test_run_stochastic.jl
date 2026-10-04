@@ -83,6 +83,9 @@ end
     w_ok, infeas_ok = TSODSO._stoch_solve_held_out!(h, 2)
     @test !infeas_ok
     @test isfinite(w_ok)
+
+    # ARCH-09: a non-solver error (programming error) is NOT skipped — it propagates.
+    @test_throws MethodError TSODSO._stoch_solve_held_out!(nothing, 3)
 end
 
 @testitem "run_stochastic: WR-05 (phase-22 review) — oos result carries the infeasible_h mask (all-feasible fixture: all false)" tags =

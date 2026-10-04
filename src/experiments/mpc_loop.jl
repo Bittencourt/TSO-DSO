@@ -842,9 +842,11 @@ from the escalation problem — an accepted, rare-path approximation).
 
 Each escalation tier runs inside a `catch` that routes its DOCUMENTED failure modes into the
 returned status instead of propagating out of `run_mpc` mid-loop: `assert_solved!` retry
-exhaustion, `assert_battery_complementarity!`'s legitimate negative-effective-price throw
-(`FourQuadBESS.jl`'s step-3 derivation — the very regime that trips the inline cone check),
-and `assert_ac_exact!`'s structural guards. `InterruptException` is ALWAYS rethrown. The
+exhaustion (`SolveFailedError`) and `assert_battery_complementarity!`'s legitimate
+negative-effective-price throw (`FourQuadBESS.jl`'s step-3 derivation — the very regime that
+trips the inline cone check; `CertificateError`). The tiers admit ONLY `SolveFailedError` /
+`CertificateError`; everything else (`MethodError`, `BoundsError`, `ArgumentError`,
+`KeyError`, ...) propagates. `InterruptException` is ALWAYS rethrown. The
 restricted-tier `solve_welfare` is called with `rtol_exact = Inf`, neutralizing ITS internal
 `assert_socp_exact!` gate on that one solve only: that gate's `rtol = 1e-4` is STRICTER than
 `assert_restriction_exact!`'s own independently-measured `cone_rtol = 5e-4`, so leaving it
@@ -975,6 +977,8 @@ function _mpc_certify_and_price(
             end
         catch err
             err isa InterruptException && rethrow()
+            # ConvergenceError is deliberately not admitted: neither tier is iterative.
+            err isa Union{SolveFailedError, CertificateError} || rethrow()
             push!(tier_reasons, "restricted tier threw: " * sprint(showerror, err))
         end
 
@@ -994,6 +998,7 @@ function _mpc_certify_and_price(
                 price_vec = Vector{Float64}(fallback.dadp)
             catch err
                 err isa InterruptException && rethrow()
+                err isa Union{SolveFailedError, CertificateError} || rethrow()
                 push!(
                     tier_reasons,
                     "AC-dual fallback tier threw: " * sprint(showerror, err),
