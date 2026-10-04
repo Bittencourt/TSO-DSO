@@ -42,7 +42,7 @@ point of touching NEITHER the residual NOR the objective — an [`Aggregator`](@
 An aggregatable device need not even hold a bus — the aggregator supplies it.
 
 (Historical note: an earlier "Variant 1 — self-injecting" contract, where a device wrote
-directly to `ctx.residuals`/`ctx.meta[:objective]` and returned a bare variable container,
+directly to `ctx.residuals`/`ctx.objective` and returned a bare variable container,
 existed for `Interruptible` only. Plan 26-07 (FIX-05) converted `Interruptible` to this
 Variant-2 contract, so Variant 1 has zero live members and has been removed from this
 docstring; `src/models/linear_solve.jl`'s device roll-up loop was updated in the same plan

@@ -39,8 +39,8 @@ iteration by a single `set_objective_coefficient` update on the coupling variabl
 
   - `model::Model` — the JuMP QP (backend chosen by `select_optimizer(QP())`), built ONCE.
   - `ctx::ModelContext` — the model context the aggregator/device `contribute!` wrote into; its
-    `ctx.meta[:objective]` holds the aggregator utility `U_ag` (a `QuadExpr`) and
-    `ctx.meta[:agg_device_vars]` the battery vars for the App. C complementarity check.
+    `ctx.objective` holds the aggregator utility `U_ag` (a `QuadExpr`) and
+    `ctx.agg_device_vars` the battery vars for the App. C complementarity check.
   - `pag::Vector{VariableRef}` — the coupling variable `pag_j[t]` (net active injection), pinned
     to `Σ_d p_inject_d[t] − Pdc[t]` (thesis 3.22). Its linear objective coefficient is the
     per-iteration ADMM handle.
@@ -135,7 +135,7 @@ function build_agr_opt(
     ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     # (2) Reuse the aggregator/device builders VERBATIM (RESEARCH Pattern 4, option a). This
-    # populates ctx.meta[:objective] (U_ag, a QuadExpr) and ctx.meta[:agg_device_vars] (the
+    # populates ctx.objective (U_ag, a QuadExpr) and ctx.agg_device_vars (the
     # battery vars for the App. C check). Its :Rp/:Rq writes are never closed here (harmless).
     # `res.q_inject` (plan 19-04) is the summed OPTIONAL device reactive injection, zero when no
     # member device carries it — the LIVE branch below adds it to `qag` for the pinning target.
@@ -155,7 +155,7 @@ function build_agr_opt(
     # Under LIVE ONLY, declare + pin qag_live and fold its (ρ_q/2)·Σ qag_live² penalty into the
     # SAME accumulator BEFORE the single @objective call — OFF/CERTIFIED never construct or touch
     # it (byte-identical built objective under those two modes).
-    obj_expr = ctx.meta[:objective] - 0.5 * ρ * sum(pag[t]^2 for t in 1:T)
+    obj_expr = ctx.objective - 0.5 * ρ * sum(pag[t]^2 for t in 1:T)
     qag_live = nothing
     if mode == LIVE
         # NEW (MESH-05): qag_live[t] genuinely PINNED to the aggregator's TOTAL reactive
@@ -237,7 +237,7 @@ stopping just shy of its centralized-grade gap under the ρ-penalty — is accep
 intermediate iterate (the residual loop self-corrects; RESEARCH Pitfall 2/4). `solve_admm` passes
 `strict = false` on every mid-loop re-solve and keeps the default `strict = true` on the final one.
 
-Returns `(; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))`: the solved net
+Returns `(; pag = value.(agr.pag), utility = value(agr.ctx.objective))`: the solved net
 active injection over the horizon and the aggregator utility `U_ag` value (the un-penalized
 welfare term the ADMM loop recombines for reporting). Throws `ArgumentError` on a `λ_j`/`c_j` or
 `μ_j`/`d_j` length mismatch — the boundary guard against a silently-wrong coefficient update.
@@ -317,7 +317,7 @@ function solve_agr!(
         assert_4q_complementarity!(agr.ctx; rtol = rtol_4q, atol = atol_4q, T = agr.T)
     end
 
-    return (; pag = value.(agr.pag), utility = value(agr.ctx.meta[:objective]))
+    return (; pag = value.(agr.pag), utility = value(agr.ctx.objective))
 end
 
 """

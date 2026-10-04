@@ -56,8 +56,8 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
 
   - `model::Model` — the SOCP model, built once (`select_optimizer(SOCP())`); re-solved via
     `set_objective_coefficient` only (ADMM-03, never rebuilt).
-  - `ctx::ModelContext` — the shared context; `ctx.meta[:pf_vars]` carries `:l` (the SOC cone is
-    present), `ctx.meta[:feeder]`/`[:T]` feed the PF-04 exactness gate, `:socp_maxgap` is
+  - `ctx::ModelContext` — the shared context; `ctx.pf_vars` carries `:l` (the SOC cone is
+    present), `ctx.feeder`/`[:T]` feed the PF-04 exactness gate, `:socp_maxgap` is
     stashed after a `check_exact` solve, and `:ladder_baseline` (RESET-01, quick task
     260825-eme) holds the AS-BUILT Clarabel conditioning-ladder attributes snapshotted once by
     `_snapshot_ladder_attrs` in `build_dso_opt`; `solve_dso!` reads it back to restore the
@@ -187,7 +187,7 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
 
  1. `model = Model(select_optimizer(SOCP()))` (INFRA-02 — never names a concrete solver);
     register the `RSOCtoNonConvexQuad` / `SOCtoNonConvexQuad` cross-solver bridges exactly as
-    `solve_welfare`; wrap in a [`ModelContext`](@ref); stash `ctx.meta[:feeder]` / `[:T]` for
+    `solve_welfare`; wrap in a [`ModelContext`](@ref); stash `ctx.feeder` / `[:T]` for
     the PF-04 gate, and `ctx.meta[:ladder_baseline] = _snapshot_ladder_attrs(model)`
     (RESET-01, quick task 260825-eme) — taken at THIS exact point, before any solve or
     `solve_with_retry!` escalation can have touched the model, so it captures the genuine
@@ -195,7 +195,7 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
     restores it before every FINAL/converged solve.
  2. `contribute!(ConvexBranchFlow(), ctx, feeder; T)` — VERBATIM reuse: builds `P, Q, v, v̂, l ≥ 0`, the rotated SOC cone (3.39), the true voltage drop (3.33), the exactness copy
     (3.43), the apparent-power limit (3.36, only where a real limit binds), accumulates
-    `:Rp` (3.31) / `:Rq` (3.32), and stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)`.
+    `:Rp` (3.31) / `:Rq` (3.32), and stashes `ctx.pf_vars = (; v, v̂, P, Q, l)`.
  3. Add the FREE-SIGN priced frontier `p_import[t]` (active, 3.31) and `q_import[t]` (reactive,
     3.32) at `feeder.root`, injected into `:Rp[root]` / `:Rq[root]` (mirrors
     `solve_welfare(...; allow_export = true)`). Priced export makes the objective strictly

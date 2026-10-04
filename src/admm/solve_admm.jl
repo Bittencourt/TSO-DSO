@@ -888,12 +888,12 @@ function solve_admm(
         mu_q_mat = reduce(vcat, (permutedims(-μq[j]) for j in load_nodes))
 
         # Extract each `FourQuadBESS`'s converged `q[t]` trajectory from
-        # `ctx.meta[:agg_device_vars]` (the SAME stash `assert_4q_complementarity!` iterates),
+        # `ctx.agg_device_vars` (the SAME stash `assert_4q_complementarity!` iterates),
         # selected by the SAME `:p_ch`/`:p_dch`/`:q` triple the certificate uses — mirrors its own
         # selection condition exactly, never a looser/different check.
         q_devices = Dict{Int, Vector{Float64}}()
         for j in load_nodes
-            for v in agr_by_bus[j].ctx.meta[:agg_device_vars][j]
+            for v in agr_by_bus[j].ctx.agg_device_vars[j]
                 if haskey(v, :p_ch) && haskey(v, :p_dch) && haskey(v, :q)
                     q_devices[j] = Float64[value(v.q[t]) for t in 1:T]
                 end

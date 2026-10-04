@@ -9,7 +9,7 @@
 # variables and NO constraints at all: its reactive injection is a compile-time-known
 # constant (the bank's nameplate rating), always on (D-11: CapControl switching is
 # explicitly out of scope — a documented assumption, not a silent omission). It never
-# touches `ctx.residuals` or `ctx.meta[:objective]` directly — like every AGGREGATABLE
+# touches `ctx.residuals` or `ctx.objective` directly — like every AGGREGATABLE
 # device it RETURNS its `(; vars, p_inject, q_inject, utility)` terms for the wrapping
 # `Aggregator` (DEV-05, the SOLE `:Rp`/`:Rq` writer) to roll up.
 
