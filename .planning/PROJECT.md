@@ -187,6 +187,18 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 33 (Shared Abstractions — Feeder, Balance, Model Context) COMPLETE 2026-10-04.**
+ARCH-03/04/07 validated: `Feeder`/`MeshedFeeder <: AbstractFeeder{T}`; shared entry points dispatch on
+`AbstractFeeder`, radial-only paths (ADMM, LinDistFlow, direct ConvexBranchFlow, RestrictedBranchFlow) on
+`::Feeder`, and those formulations throw `ArgumentError` on a `MeshedFeeder` (DC/AC/MeshedFlow allowed;
+MeshedFlow/Restricted delegate via internal `_contribute_convex!`). One `close_balance!(ctx, N, T;
+reactive, label)` replaces the five balance blocks (anonymous containers, identical constraint order —
+fingerprint-tested). `ModelContext` carries typed `feeder`/`T`/`pf`/`pf_vars`/`objective`/`agg_device_vars`
+with throwing `_require_*` accessors; the five legacy `meta` keys are gone everywhere (gate-tested);
+dispatch uses `has_reactive(pf)` / `has_branch_current(ctx)` (with a pf↔pf_vars consistency guard).
+Goldens bit-identical; full suite 31915/0/0/5 at b955aa4. Deferred to Phase 34: a `has_reactive`
+consistency guard (DC + reactive device leaves `:Rq` unclosed — pre-existing). Next: Phase 34.
+
 **Phase 32 (Declarative Power-Flow & Strategy Dispatch) COMPLETE 2026-10-03.**
 ARCH-01/02 validated: `Scenario` selects the power-flow formulation via a primitive `pf` selector
 (`:convex_branch_flow` default, `:restricted_branch_flow`, `:lindistflow`, `:ac`; materialized by
@@ -490,4 +502,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-03 — Phase 32 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-04 — Phase 33 complete (v4.0 Correctness & Depth)*
