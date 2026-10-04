@@ -26,7 +26,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["core/ModelContext.jl", "core/balance.jl", "core/status.jl"]
+Pages = ["core/ModelContext.jl", "core/balance.jl", "core/errors.jl", "core/status.jl"]
 Order = [:type, :constant, :function]
 ```
 
