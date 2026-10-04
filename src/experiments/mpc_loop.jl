@@ -371,7 +371,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
     # PRIMAL_INFEASIBLE (26-POSTMERGE-TRIAGE.md cluster C).
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:(s.T + 1)] for
-        (bus, varlist) in ctx_da_cmp.meta[:agg_device_vars] for
+        (bus, varlist) in ctx_da_cmp.agg_device_vars for
         v in varlist if haskey(v, :soc)
     )
 
@@ -458,7 +458,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
         # SAME seeded forecast-error draw; ambient temperature slides UNPERTURBED (D-05: model
         # mismatch enters only via forecast error, never the deterministic window slide).
         for agg in mpc_aggs
-            varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+            varlist = o.ctx.agg_device_vars[agg.bus]
             for (d, v) in zip(agg.devices, varlist)
                 if haskey(v, :Ppv_param)
                     set_parameter_value.(
@@ -530,7 +530,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
             realized_net_q = Dict{Int, Float64}()
 
             for agg in mpc_aggs
-                varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+                varlist = o.ctx.agg_device_vars[agg.bus]
                 tanφ = reactive_factor(agg.φ)
                 net_p = 0.0
                 # TRUE (unperturbed) baseline demand reactive term (thesis 3.23) — never the
@@ -695,7 +695,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
             # physically true plant. Warm-start every P/Q/l/v/p_import/q_import from the
             # WINDOW's own solved values at this hour's window-local position (26-15: Ipopt's
             # default all-zero start is a degenerate KKT point of l·v = P²+Q²).
-            pv_o = o.ctx.meta[:pf_vars]
+            pv_o = _require_pf_vars(o.ctx)
             Bf = feeder.branches
             Np_f = length(feeder.buses)
             warm_start = (;
@@ -752,7 +752,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
     day_ahead_comparable_welfare = 0.0
     for τ in 1:k
         for agg in mpc_aggs
-            varlist = ctx_da_cmp.meta[:agg_device_vars][agg.bus]
+            varlist = ctx_da_cmp.agg_device_vars[agg.bus]
             for d in agg.devices
                 day_ahead_comparable_welfare += _mpc_device_hour_utility(d, varlist, τ)
             end
@@ -862,7 +862,7 @@ function _mpc_certify_and_price(
     _solve_welfare = solve_welfare,
     _ac_dual_fallback_price = ac_dual_fallback_price,
 )
-    pv = o.ctx.meta[:pf_vars]
+    pv = _require_pf_vars(o.ctx)
     cone_maxratio = 0.0
     for (b, br) in enumerate(feeder.branches), τ in 1:(o.H)
         lhs = value(pv.l[b, τ]) * value(pv.v[br.from, τ])
@@ -1202,7 +1202,7 @@ Internal helper (unexported): the REALIZED per-hour utility contribution of devi
 window/day-ahead position `τ`, reading `d`'s OWN documented `contribute!` utility formula off
 `d`'s ORIGINAL struct fields (never inventing new math) and the SOLVED value of its decision
 variable(s) at `τ` — found in `varlist` (a `Vector{Any}` of device-vars `NamedTuple`s, e.g.
-`ctx.meta[:agg_device_vars][bus]`) by the SAME type-specific marker key
+`ctx.agg_device_vars[bus]`) by the SAME type-specific marker key
 [`build_mpc_window`](@ref)'s own `ic_handles` walk uses (`:soc0` for battery-like devices,
 `:Tin0` for `Thermostatic`). Used IDENTICALLY for [`run_mpc`](@ref)'s closed-loop
 `realized_welfare` accumulation (source: the window's own `ctx`) and its day-ahead
@@ -1404,7 +1404,7 @@ function _mpc_truth_import_socp_reference(
     # exercises the item's own D-03 intent), mirroring `27-03-SUMMARY.md`'s own identical
     # `seed=5` substitution on this SAME feeder/population family.
     B = feeder.branches
-    l_t = ctx_t.meta[:pf_vars].l
+    l_t = _require_pf_vars(ctx_t).l
     @objective(model_t, Min, sum(B[b].r * l_t[b, 1] for b in eachindex(B)))
     assert_solved!(model_t; dual = false)
     assert_socp_exact!(ctx_t)
@@ -1519,7 +1519,7 @@ IDENTICAL wiring to the SOCP reference), and leaves ONLY the frontier import `p_
 (and, when reactive, `q_import_t`) free.
 
 `warm_start` — a `(; P, Q, l, v, p_import, q_import)` `NamedTuple` of the CALLING window's own
-solved values at this hour's window-local position (`o.ctx.meta[:pf_vars]`/`o.p_import`,
+solved values at this hour's window-local position (`o.ctx.pf_vars`/`o.p_import`,
 `run_mpc`'s own read) — seeds every one of this model's `P[b,1]`/`Q[b,1]`/`l[b,1]`/`v[j,1]`/
 `p_import_t`/`q_import_t` via `set_start_value` (root `v` excluded — it is `fix()`ed to
 `1.0` already). Plan 26-15 (`26-15-SUMMARY.md`) found Ipopt's DEFAULT all-zero start sits at
@@ -1608,7 +1608,7 @@ function _mpc_truth_import_acpf(
     # 26-15: warm-start every P/Q/l/v/p_import_t/q_import_t from the calling window's own
     # solved point at this hour — Ipopt's default all-zero start is a degenerate KKT point of
     # the unrelaxed equality l·v = P²+Q² (the (P,Q)-gradient vanishes at P=Q=0).
-    pv_t = ctx_t.meta[:pf_vars]
+    pv_t = _require_pf_vars(ctx_t)
     B = feeder.branches
     for b in eachindex(B)
         set_start_value(pv_t.P[b, 1], warm_start.P[b])

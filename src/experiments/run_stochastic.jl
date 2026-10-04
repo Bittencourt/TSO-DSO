@@ -187,7 +187,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
     # device vars (every scenario's battery is nonanticipativity-tied to it, so scenario 1's
     # copy IS the shared schedule). --------------------------------------------------------
     in_sample_battery = NamedTuple[]
-    for (bus, varlist) in r.ctxs[1].meta[:agg_device_vars]
+    for (bus, varlist) in r.ctxs[1].agg_device_vars
         for v in varlist
             if haskey(v, :soc0)
                 # WR-04 fix (phase-22 review): a FourQuadBESS's reactive dispatch q is

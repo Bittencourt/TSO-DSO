@@ -20,7 +20,7 @@
 # accumulation) is a SEPARATE, complementary, strictly TIGHTER restriction than
 # `ConvexBranchFlow`'s per-branch `v̂` and remains independently needed for the
 # over-voltage/EXACT-04 regime; it does not read `ConvexBranchFlow`'s `v̂` variable at all
-# (confirmed: this file only reads `pv.v`, `pv.P`, `pv.Q`, `pv.l` from `ctx.meta[:pf_vars]`).
+# (confirmed: this file only reads `pv.v`, `pv.P`, `pv.Q`, `pv.l` from `ctx.pf_vars`).
 #
 # ## Escalation history (Rule 4 / plan 20-02 checkpoint, resolved by roadmap-owner decision)
 #
@@ -178,7 +178,7 @@ if `pf.ε > 0`), compose the simpler OPF-ε bound-shrink on top (Section IV-D).
 Delegates `contribute!(ConvexBranchFlow(), ctx, feeder; T = T)` FIRST (correctness-drift
 avoidance per RESEARCH.md's explicit recommendation to delegate rather than duplicate the
 SOC cone / exactness copy / apparent-power cone / balance accumulation). Reads
-`ctx.meta[:pf_vars]` (the `(; v, v̂, P, Q, l)` stash `ConvexBranchFlow.contribute!` just
+`ctx.pf_vars` (the `(; v, v̂, P, Q, l)` stash `ConvexBranchFlow.contribute!` just
 populated).
 
 **OPF-m (primary mechanism, always applied):** builds the SAME rooted parent/child BFS tree
@@ -215,7 +215,7 @@ end
 function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
     _contribute_convex!(ConvexBranchFlow(), ctx, feeder; T = T)
 
-    pv = ctx.meta[:pf_vars]
+    pv = _require_pf_vars(ctx)
     N = length(feeder.buses)
 
     # Optional OPF-ε companion margin (Section IV-D) — OFF by default (pf.ε == 0.0). Shrinks
