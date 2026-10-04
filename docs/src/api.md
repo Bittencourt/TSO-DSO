@@ -91,7 +91,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["admm/ReactiveMode.jl", "admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/residuals.jl", "admm/solve_admm.jl"]
+Pages = ["admm/ReactiveMode.jl", "admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/residuals.jl", "admm/admm_state.jl", "admm/admm_phases.jl", "admm/solve_admm.jl"]
 Order = [:type, :constant, :function]
 ```
 

@@ -280,395 +280,38 @@ function solve_admm(
 
     ρf = Float64(ρ)
     ρ_qf = Float64(ρ_q)
-    # MESH-05 (D-12): normalize ONCE, before the loop, alongside ρf — the SINGLE source of truth
-    # for OFF/CERTIFIED/LIVE threaded symmetrically into build_dso_opt AND every build_agr_opt
-    # call below (mirrors normalize_reactive_mode's own D-12 back-compat: Bool/Symbol/ReactiveMode
-    # all accepted). NEVER named bare `μ`/`mu`/`MU` anywhere in this file's NEW reactive-dual-ascent
-    # state below — that identifier is PERMANENTLY the adaptive-ρ residual-balancing imbalance band
-    # (the `μ::Real = 10.0` kwarg above; test_admm_reactive.jl's grep audit). The reactive coupling
-    # multiplier uses the DISTINCT identifier `μq` instead.
+    # MESH-05 (D-12): normalize ONCE — the SINGLE source of truth for OFF/CERTIFIED/LIVE threaded
+    # symmetrically into build_dso_opt AND every build_agr_opt. The reactive coupling multiplier is
+    # `μq` inside the state, NEVER bare `μ` (the adaptive-ρ band kwarg; test_admm_reactive grep audit).
     mode = normalize_reactive_mode(reactive_consensus)
+    rmode = _react_mode(mode)
 
-    # ---- BUILD ONCE (ADMM-03): the subproblem models are constructed OUTSIDE the loop ----------
-    # One AGR-OPT per aggregator (thesis 3.46); the whole-network DSO-OPT (thesis 3.47). No
-    # `Model(`/`build_*` call appears below this point — the loop only re-solves via coefficient
-    # updates, so num_variables/num_constraints stay fixed (RESEARCH Pattern 3 / Pitfall 6).
-    dso = build_dso_opt(
-        feeder,
-        aggregators,
-        T;
-        ρ = ρf,
-        λ₀ = λ₀,
-        reactive_consensus = mode,
-        ρ_q = ρ_qf,
-    )
-    load_nodes = dso.load_nodes                       # ascending non-root aggregator buses
+    # ---- BUILD ONCE (ADMM-03) + ITERATE (ARCH-05 named phases; see admm_phases.jl) --------------
+    st = _admm_build(feeder, pf, aggregators, T, λ₀, ρf, ρ_qf, mode, rmode)
+    _admm_iterate!(st, rmode, maxiter, ε_abs, ε_rel, τ, μ, ρ_min, ρ_max, time_limit_s)
 
-    # This Phase-6 loop assumes a 1:1 node↔aggregator coupling (both cross-validation fixtures
-    # satisfy it: one aggregator per non-root bus). With several aggregators sharing a bus the
-    # shared netflow target `c_j` could not be split unambiguously — a Phase-7 generalization.
-    length(aggregators) == length(load_nodes) || throw(
-        ArgumentError(
-            "solve_admm assumes one aggregator per load node (got $(length(aggregators)) " *
-            "aggregators for $(length(load_nodes)) load nodes); multi-aggregator-per-bus " *
-            "coupling is a Phase-7 extension",
-        ),
-    )
-    agr_by_bus = Dict{Int, AgrOpt}()
-    for agg in aggregators
-        haskey(agr_by_bus, agg.bus) && throw(
-            ArgumentError("two aggregators share bus $(agg.bus); solve_admm assumes 1:1"),
-        )
-        agr_by_bus[agg.bus] =
-            build_agr_opt(agg, T; ρ = ρf, reactive_mode = mode, ρ_q = ρ_qf)
-    end
-
-    N = length(feeder.buses)
-    residuals = AdmmResiduals(N, T)
-
-    # ---- ADMM state (per load node, length-T profiles; NEVER a JuMP Parameter — Pitfall 1) -----
-    # Warm-start the INTERNAL multiplier at −λ₀. The internal `λ` is the multiplier of the
-    # `−λ_jᵀR_{p,j}` term and converges to `−DADP` (the reported price negates it — see the
-    # return block). Since the DADP is `λ₀` plus small loss/congestion/voltage terms, `−λ₀` starts
-    # the internal multiplier RIGHT NEXT to the solution; warm-starting at `+λ₀` (its negation)
-    # would place it a distance `≈2·λ₀` away and make dual ascent crawl across the whole gap
-    # (empirically ~100+ iters on the congested IEEE-13), whereas `−λ₀` converges the DADP in ~10.
-    λ = Dict{Int, Vector{Float64}}(j => Float64[-λ₀[t] for t in 1:T] for j in load_nodes)
-    c = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # netflow target for AGR
-    a = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)   # pag target for DSO
-    # Boyd z-block dual residual s = ρ·‖Δ(pag_dso)‖₂ tracks the CONSENSUS (second-updated) block —
-    # store the previous iterate's pag_dso EXACTLY as Phase 6 stored `a_prev` for its ρ·Δa
-    # diagnostic. Initialized to zeros ⇒ iteration 1's s = ρ·‖pag_dso¹‖₂ is large (so a 1-iteration
-    # budget cannot false-converge; RESEARCH Pattern 2 / Pitfall 2).
-    pag_dso_prev = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    util = Dict{Int, Float64}(j => 0.0 for j in load_nodes)                      # U_ag per node (primal welfare)
-    p_import = zeros(Float64, T)                                                # frontier exchange (primal welfare)
-    exact_maxgap = nothing
-
-    # ---- LIVE reactive dual-ascent state (MESH-05, D-11) — mirrors the ACTIVE λ/a/c/pag_dso_prev
-    # state exactly, on the REACTIVE coupling axis (`qag_dso` ↔ `qag_live`): `μq` is the reactive
-    # coupling multiplier (mirrors `λ`), `b` is AGR's solved `qag_live` value (mirrors `a`), `d` is
-    # the reactive netflow target for AGR (mirrors `c`), `qag_dso_prev` is the z-block snapshot
-    # (mirrors `pag_dso_prev`). Claude's Discretion (per the plan): `μq` warm-starts at ZERO, NOT
-    # `-λ₀`-style — unlike the active DADP, the reactive price has no comparable physical anchor to
-    # warm-start from. Allocated ONLY under `LIVE`; OFF/CERTIFIED keep these as empty `Dict`s (never
-    # indexed — every reactive-block code path below is itself gated on `mode == LIVE`), so no
-    # T-length array allocation happens on the byte-identical default path.
-    μq = if mode == LIVE
-        Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    else
-        Dict{Int, Vector{Float64}}()
-    end
-    d = if mode == LIVE
-        Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    else
-        Dict{Int, Vector{Float64}}()
-    end
-    b = if mode == LIVE
-        Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    else
-        Dict{Int, Vector{Float64}}()
-    end
-    qag_dso_prev = if mode == LIVE
-        Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    else
-        Dict{Int, Vector{Float64}}()
-    end
-    ρ_q_frozen = false
-
-    # ---- Adaptive-ρ state (RESEARCH Pattern 4, Boyd §3.4.1). `ρf` is the LIVE penalty/dual-step
-    # (initialized to the ρ₀ keyword). `ρ_frozen` latches TRUE once both residuals fall within ~10×
-    # tolerance, after which ρ is held fixed (Boyd's convergence theory assumes ρ eventually
-    # constant — prevents late-stage oscillation stalling the tail). τ/μ are the residual-balancing
-    # multiplier/band; [ρ_min, ρ_max] clamp the penalty (SOCP-conditioning + proximal meaningfulness).
-    ρ_frozen = false
-
-    # ---- Wall-clock budget state (Phase 25, D-18). `t0_wall_ns` is the loop-entry timestamp;
-    # `budget_exceeded_flag` mirrors `converged_flag`'s latch shape exactly (checked once per
-    # iteration, right after the convergence check, right before the dual-ascent update). Both
-    # are complete no-ops when `time_limit_s === nothing` (the default) — byte-identical to the
-    # pre-existing unbounded behavior.
-    t0_wall_ns = time_ns()
-    budget_exceeded_flag = false
-
-    converged_flag = false
-    for k in 1:maxiter
-        # (1) AGR-OPT[j] ∀j: coeff −λ_j − ρ·c_j (thesis 3.46). a_j = solved net injection.
-        # `check_battery = false` mid-loop: the App. C complementarity is a property of the
-        # correctly-priced CONVERGED optimum, not of an off-consensus iterate where λ_j is still
-        # being found (the battery legitimately co-activates at a wrong price) — the same reason
-        # the DSO exactness gate is deferred to convergence (RESEARCH Pitfall 3). The gate is run
-        # on the final converged re-solve below.
-        # UNDER LIVE (MESH-05): thread μq_j/d_j/ρ_q in the SAME call, mid-loop `check_4q = false`
-        # (mirroring `check_battery = false`'s existing mid-loop discipline — the 4Q certificate is
-        # a property of the correctly-priced CONVERGED optimum, not an off-consensus iterate). Then
-        # collect `b_j = value.(qag_live)` (mirrors `a_j = value.(pag)`).
-        for j in load_nodes
-            r = if mode == LIVE
-                solve_agr!(
-                    agr_by_bus[j],
-                    λ[j],
-                    c[j],
-                    ρf;
-                    μ_j = μq[j],
-                    d_j = d[j],
-                    ρ_q = ρ_qf,
-                    check_battery = false,
-                    strict = false,
-                )
-            else
-                solve_agr!(agr_by_bus[j], λ[j], c[j], ρf; check_battery = false, strict = false)
-            end
-            a[j] = r.pag
-            util[j] = r.utility
-            if mode == LIVE
-                b[j] = value.(agr_by_bus[j].qag_live)
-            end
-        end
-
-        # (2) DSO-OPT: coeff −λ_j − ρ·a_j (thesis 3.47). Mid-loop iterates are legitimately
-        # inexact, so the PF-04 gate is NOT run here (check_exact = false; RESEARCH Pitfall 3),
-        # and the mid-loop solve tolerates a NEARLY_FEASIBLE primal (strict = false; the DSO dual
-        # is never read — the price is the outer multiplier λ). The final solve below likewise
-        # tolerates the benign ALMOST_OPTIMAL label but adds PHYSICAL published-primal certificates
-        # (PF-04 exactness + the WR-01 active-balance no-slack gate — see the final block).
-        #
-        # UNDER LIVE ONLY (MESH-05): `solve_dso!` (plan 19-03's shipped signature — confirmed, not
-        # assumed) does NOT accept a μq/b/ρ_q kwarg; `DsoOpt.qag` is a public field, so THIS outer
-        # loop drives `qag_dso[j,t]`'s linear objective coefficient directly via
-        # `set_objective_coefficient`, mirroring `solve_dso!`'s own internal `pag_dso` update
-        # exactly (`-λ[j][t] - ρ*a[j][t]` uses `a` — AGR's OWN solved pag value — NEVER `c`, the
-        # AGR-side netflow target; the reactive mirror is therefore `-μq[j][t] - ρ_q*b[j][t]`,
-        # using `b` — AGR's OWN solved qag_live value — NEVER `d`, the reactive netflow target fed
-        # into `solve_agr!`'s `d_j` instead), BEFORE calling `solve_dso!` so the same solve picks
-        # up both coefficient updates.
-        if mode == LIVE
-            for j in load_nodes, t in 1:T
-                set_objective_coefficient(
-                    dso.model,
-                    dso.qag[j, t],
-                    -μq[j][t] - ρ_qf * b[j][t],
-                )
-            end
-        end
-        dres = solve_dso!(dso, λ, a, ρf; check_exact = false, strict = false)
-        pag_dso = dres.pag_dso
-        p_import = dres.p_import
-        qag_dso = mode == LIVE ? value.(dso.qag) : nothing
-
-        # (3) BOYD TWO-RESIDUAL diagnostics (RESEARCH Pattern 2 / 3; thesis App. B.30–B.32, the
-        # UNSCALED form). PRIMAL residual r = ‖a − pag_dso‖₂ (the 2-norm of the consensus violation,
-        # → 0 ⇔ the two blocks agree). DUAL residual s = ρ·‖pag_dso − pag_dso_prev‖₂ (the z-block
-        # change — the SECOND-updated consensus block; → 0 ⇔ the price has stopped moving, i.e.
-        # optimality). This REPLACES the Phase-6 ρ·Δa x-block diagnostic (the wrong block, a textbook
-        # false-convergence bug). Both use the 2-norm over the flattened (j,t) coupling entries so
-        # they match the √p·ε_abs per-unit tolerance scaling.
-        #
-        # MESH-05 EXTENSION: under LIVE, the SAME loop ALSO accumulates the reactive-block
-        # `_q`-suffixed quantities (mirroring the active ones on the `qag_dso`/`qag_live` coupling
-        # axis) — NEVER a second loop (RESEARCH Code Examples, verbatim structure). Under
-        # OFF/CERTIFIED every `_q` accumulator stays 0.0 (untouched), so `r_norm`/`s_norm`/`ε_pri`/
-        # `ε_dual` below are ALGEBRAICALLY IDENTICAL to the pre-Phase-19 single-block form —
-        # BYTE-IDENTICAL default path.
-        sq_r = 0.0        # Σ (a − pag_dso)²        → ‖r_p‖₂
-        sq_ds = 0.0       # Σ (Δ pag_dso)²          → ‖s_p‖₂ / ρ
-        sq_a = 0.0        # Σ a²                    → ‖a‖₂
-        sq_pd = 0.0       # Σ pag_dso²              → ‖pag_dso‖₂
-        sq_λ = 0.0        # Σ λ²                    → ‖λ‖₂
-        sq_r_q = 0.0      # Σ (b − qag_dso)²        → ‖r_q‖₂ (LIVE only)
-        sq_ds_q = 0.0     # Σ (Δ qag_dso)²          → ‖s_q‖₂ / ρ_q (LIVE only)
-        sq_b = 0.0        # Σ b²                    → ‖b‖₂ (LIVE only)
-        sq_qd = 0.0       # Σ qag_dso²              → ‖qag_dso‖₂ (LIVE only)
-        sq_μq = 0.0       # Σ μq²                   → ‖μq‖₂ (LIVE only)
-        for j in load_nodes, t in 1:T
-            rp = a[j][t] - pag_dso[j, t]
-            dz = pag_dso[j, t] - pag_dso_prev[j][t]
-            sq_r += rp^2
-            sq_ds += dz^2
-            sq_a += a[j][t]^2
-            sq_pd += pag_dso[j, t]^2
-            sq_λ += λ[j][t]^2
-            if mode == LIVE
-                rq = b[j][t] - qag_dso[j, t]
-                dzq = qag_dso[j, t] - qag_dso_prev[j][t]
-                sq_r_q += rq^2
-                sq_ds_q += dzq^2
-                sq_b += b[j][t]^2
-                sq_qd += qag_dso[j, t]^2
-                sq_μq += μq[j][t]^2
-            end
-        end
-
-        # ACTIVE-BLOCK-ONLY quantities (mirrors pre-Phase-19 EXACTLY — used for the INDEPENDENT
-        # active-ρ adaptation decision below, kept separate from the JOINT stacked stopping-rule
-        # quantities so a LIVE reactive block can never contaminate the active block's own
-        # freeze/adapt decision).
-        r_norm_p = sqrt(sq_r)
-        s_norm_p = ρf * sqrt(sq_ds)
-        p_p = length(load_nodes) * T
-        ε_pri_p = sqrt(p_p) * ε_abs + ε_rel * max(sqrt(sq_a), sqrt(sq_pd))
-        ε_dual_p = sqrt(p_p) * ε_abs + ε_rel * sqrt(sq_λ)
-
-        # (4) PER-UNIT stopping thresholds (Boyd §3.3.1 eq. 3.12, RESEARCH Pattern 3), extended to
-        # the JOINT (λ,μq) STACKED norm (RESEARCH Code Examples — used verbatim in STRUCTURE; Boyd
-        # §3.3's own multi-block caveat / Pitfall 17: a genuinely INDEPENDENT per-block
-        # `converged(...)` check is a textbook false-convergence bug on a two-block ADMM). p_p =
-        # n_load_nodes·T is the coupling-entry count for ONE block; under LIVE the total doubles
-        # (both blocks contribute). The SAME (ε_abs, ε_rel) transfer unchanged across scales
-        # (per-unit scale-invariance — the "no hard-coded scale-specific penalty" requirement).
-        r_norm = sqrt(sq_r + sq_r_q)
-        s_norm = ρf * sqrt(sq_ds) + ρ_qf * sqrt(sq_ds_q)
-        p_total = p_p * (mode == LIVE ? 2 : 1)
-        ε_pri = sqrt(p_total) * ε_abs + ε_rel * max(sqrt(sq_a + sq_b), sqrt(sq_pd + sq_qd))
-        ε_dual = sqrt(p_total) * ε_abs + ε_rel * sqrt(sq_λ + sq_μq)
-        # price_gap = ‖Δλ‖₂ of the pending UNSCALED dual step λ ← λ + ρ·r (== ρ·‖r_p‖₂, since
-        # Δλ = ρ·r_p): the per-iteration ACTIVE price-convergence trajectory (ADMM-05 plot
-        # diagnostic) — kept as the active-only move (identical to pre-Phase-19) even under LIVE, so
-        # the existing plot/diagnostic contract is unchanged.
-        price_gap = ρf * r_norm_p
-
-        # ONE record!/converged call on the JOINT stacked (r_norm,s_norm,ε_pri,ε_dual) — never two
-        # independent per-block checks (T-19-15; grep-enforced at exactly one call site).
-        record!(residuals, k, r_norm, s_norm, ρf, ε_pri, ε_dual, price_gap)
-
-        # STOP iff BOTH ‖r‖₂ ≤ ε_pri AND ‖s‖₂ ≤ ε_dual (RESEARCH Pattern 2 / Pitfall 2). A
-        # primal-satisfied-but-dual-unsatisfied iterate does NOT stop — the false-convergence net.
-        # Under LIVE this is the JOINT (λ,μq) check — genuinely converging BOTH blocks together.
-        if converged(residuals, ε_pri, ε_dual)
-            converged_flag = true
-            break
-        end
-
-        # ---- Wall-clock budget check (Phase 25, D-18). Placed AFTER the convergence check
-        # (never preempts a genuine consensus on the SAME iteration) and BEFORE the dual-ascent
-        # update below (a mid-loop iterate about to be perturbed further is exactly the point at
-        # which "budget exceeded, stop here honestly" belongs). A complete no-op when
-        # `time_limit_s === nothing` (byte-identical default path).
-        if time_limit_s !== nothing && (time_ns() - t0_wall_ns) / 1.0e9 > time_limit_s
-            budget_exceeded_flag = true
-            break
-        end
-
-        # Dual ascent λ_j ← λ_j + ρ·R_{p,j} (UNSCALED — λ is the physical price, NOT rescaled on a ρ
-        # change; RESEARCH Pattern 4) and refresh the netflow target c_j = −pag_dso_j (the network
-        # injection carries the OPPOSITE sign of the coupling variable — see file header). Snapshot
-        # pag_dso into pag_dso_prev for the NEXT iteration's z-block dual residual.
-        #
-        # MESH-05: the SAME loop ALSO ascends μq (mirrored, ONLY under LIVE): μq_j ← μq_j +
-        # ρ_q·(b_j − qag_dso_j), refresh d_j = −qag_dso_j, snapshot qag_dso into qag_dso_prev.
-        for j in load_nodes
-            for t in 1:T
-                pag_dso_prev[j][t] = pag_dso[j, t]
-                λ[j][t] += ρf * (a[j][t] - pag_dso[j, t])
-                c[j][t] = -pag_dso[j, t]
-                if mode == LIVE
-                    qag_dso_prev[j][t] = qag_dso[j, t]
-                    μq[j][t] += ρ_qf * (b[j][t] - qag_dso[j, t])
-                    d[j][t] = -qag_dso[j, t]
-                end
-            end
-        end
-
-        # (5) RESIDUAL-BALANCING ADAPTIVE ρ (Boyd §3.4.1 eq. 3.13, RESEARCH Pattern 4). Once BOTH
-        # residuals are within ~10× tolerance, FREEZE (latch) — Boyd's convergence theory assumes ρ
-        # eventually fixed, and freezing stops late-stage ρ oscillation from stalling the tail.
-        #
-        # BALANCE ON ε-NORMALIZED RESIDUALS (r̂ = ‖r‖/ε_pri, ŝ = ‖s‖/ε_dual), NOT the raw ‖r‖/‖s‖:
-        # here ε_pri (∝ the tiny per-unit injection magnitude) and ε_dual (∝ ‖λ‖, the O(1–10) price)
-        # differ by ~50×, so a RAW ‖r‖-vs-μ‖s‖ comparison is apples-to-oranges — it reads "balanced"
-        # while the primal is 60× its tolerance and the dual only 3×, leaving ρ stuck at a value too
-        # small to regularize the DSO SOCP (Clarabel NUMERICAL_ERROR by iter 3 on IEEE-13). Comparing
-        # each residual to its OWN threshold makes the balancing dimensionless and self-consistent
-        # with the freeze/stop tests (which already use r/ε_pri, s/ε_dual), so the SAME (τ, μ, ρ_min,
-        # ρ_max) climb ρ from ρ₀ to a well-conditioned value on the 2-bus, IEEE-13 AND IEEE-123
-        # (per-unit scale-invariance, ADMM-02). This is the standard scaled-residual balancing form.
-        #
-        # ρ ← τ·ρ if the primal lags (r̂ > μ·ŝ ⇒ penalize consensus harder), ρ ← ρ/τ if the dual lags
-        # (ŝ > μ·r̂ ⇒ relax the penalty), clamped to [ρ_min, ρ_max]. On an ACTUAL change call set_rho!
-        # on the DSO-OPT and every AGR-OPT so the QUADRATIC penalty matches the new ρ WITHOUT a
-        # rebuild (build-once preserved, ADMM-04) — in lockstep with the linear/ascent ρf (Pitfall 1:
-        # penalty ρ and ascent ρ must never diverge). λ is NOT rescaled (unscaled physical price;
-        # Pattern 4). ρ > 0 always (clamp ⇒ convexity kept).
-        #
-        # THIS BLOCK NOW OPERATES ON THE ACTIVE-BLOCK-ONLY quantities (r_norm_p/s_norm_p/ε_pri_p/
-        # ε_dual_p, renamed from r_norm/s_norm/ε_pri/ε_dual — IDENTICAL VALUES under OFF/CERTIFIED,
-        # since sq_r_q etc. are 0.0 there) so LIVE's reactive block can never perturb this decision.
-        if !ρ_frozen
-            r̂ = r_norm_p / ε_pri_p
-            ŝ = s_norm_p / ε_dual_p
-            if r̂ <= 10 && ŝ <= 10
-                ρ_frozen = true
-            else
-                ρ_new = if r̂ > μ * ŝ
-                    τ * ρf
-                elseif ŝ > μ * r̂
-                    ρf / τ
-                else
-                    ρf
-                end
-                ρ_new = clamp(ρ_new, ρ_min, ρ_max)
-                if ρ_new != ρf
-                    ρf = ρ_new
-                    set_rho!(dso, ρf)
-                    for j in load_nodes
-                        set_rho!(agr_by_bus[j], ρf)
-                    end
-                end
-            end
-        end
-
-        # MESH-05: an ANALOGOUS, INDEPENDENT ρ_q adaptation for the REACTIVE block, using the
-        # reactive block's OWN r̂_q/ŝ_q (RESEARCH's recommendation — a SHARED ρ would be badly
-        # scaled for the typically much-smaller reactive channel; an independent freeze/adapt
-        # decision from the active block's own). Mirrors the block above exactly, ONLY under
-        # LIVE — a complete no-op (ρ_qf untouched, no set_rho_q! calls) under OFF/CERTIFIED.
-        if mode == LIVE && !ρ_q_frozen
-            r_norm_q = sqrt(sq_r_q)
-            s_norm_q = ρ_qf * sqrt(sq_ds_q)
-            ε_pri_q = sqrt(p_p) * ε_abs + ε_rel * max(sqrt(sq_b), sqrt(sq_qd))
-            ε_dual_q = sqrt(p_p) * ε_abs + ε_rel * sqrt(sq_μq)
-            r̂_q = r_norm_q / ε_pri_q
-            ŝ_q = s_norm_q / ε_dual_q
-            if r̂_q <= 10 && ŝ_q <= 10
-                ρ_q_frozen = true
-            else
-                ρ_q_new = if r̂_q > μ * ŝ_q
-                    τ * ρ_qf
-                elseif ŝ_q > μ * r̂_q
-                    ρ_qf / τ
-                else
-                    ρ_qf
-                end
-                ρ_q_new = clamp(ρ_q_new, ρ_min, ρ_max)
-                if ρ_q_new != ρ_qf
-                    ρ_qf = ρ_q_new
-                    set_rho_q!(dso, ρ_qf)
-                    for j in load_nodes
-                        set_rho_q!(agr_by_bus[j], ρ_qf)
-                    end
-                end
-            end
-        end
-    end
+    dso = st.dso
+    load_nodes = st.load_nodes
+    residuals = st.residuals
+    agr_by_bus = st.agr_by_bus
+    λ, a, util = st.λ, st.a, st.util
 
     # ---- FAIL LOUD on the maxiter cap (RESEARCH Pitfall 2) — never return a non-consensus point.
-    # Phase 25 (D-18): this throw fires ONLY on a genuine non-convergence — i.e. NEITHER converged
-    # NOR an honest wall-clock budget exit. An expired `time_limit_s` is NOT itself a
-    # non-convergence bug; it gets its OWN honest early return (`status = :budget_exceeded`)
-    # below instead of this loud throw.
-    if !converged_flag && !budget_exceeded_flag
+    # Phase 25 (D-18): fires ONLY on genuine non-convergence — NEITHER converged NOR an honest
+    # wall-clock budget exit.
+    if !st.converged_flag && !st.budget_exceeded_flag
         throw(
             ConvergenceError(
                 "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
                 "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
                 "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
-                "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$ρf). Retune the adaptive-ρ config " *
+                "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$(st.ρf)). Retune the adaptive-ρ config " *
                 "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
                 "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).";
                 iterations = maxiter,
             ),
         )
-    elseif budget_exceeded_flag
+    elseif st.budget_exceeded_flag
         # ---- HONEST early exit on the wall-clock budget (Phase 25, D-18). SKIPS the final
         # consolidation pass below — it assumes a converged iterate and runs the battery/4Q/
         # exactness certificates, which are meaningless on a mid-loop, non-consensus point.
@@ -740,54 +383,16 @@ function solve_admm(
         agg.bus => any(dv -> dv isa FourQuadBESS, agg.devices) for agg in aggregators
     )
     for j in load_nodes
-        r = if mode == LIVE
-            solve_agr!(
-                agr_by_bus[j],
-                λ[j],
-                c[j],
-                ρf;
-                μ_j = μq[j],
-                d_j = d[j],
-                ρ_q = ρ_qf,
-                check_battery = true,
-                τ_batt = 1e-3,
-                strict = false,
-                check_4q = has_4q_by_bus[j],
-                rtol_4q = 1e-3,
-                atol_4q = 1e-7,
-            )
-        else
-            solve_agr!(
-                agr_by_bus[j],
-                λ[j],
-                c[j],
-                ρf;
-                check_battery = true,
-                τ_batt = 1e-3,
-                strict = false,
-                check_4q = has_4q_by_bus[j],
-                rtol_4q = 1e-3,
-                atol_4q = 1e-7,
-            )
-        end
-        a[j] = r.pag
-        util[j] = r.utility
+        _react_agr_solve!(rmode, st, j; final = true, has_4q = has_4q_by_bus[j])
     end
-    # UNDER LIVE ONLY (MESH-05): re-assert `qag_dso`'s linear coefficient one final time (mirrors
-    # the mid-loop discipline exactly, `-μq[j][t] - ρ_q*b[j][t]` — `b`, NEVER `d`, see the
-    # mid-loop comment above) BEFORE the final `solve_dso!` — a no-op numerically (μq/b are
-    # unchanged since the last mid-loop iteration) but keeps this final solve's coefficient state
-    # explicit/self-contained, mirroring how λ[j]/c[j] are also explicitly re-passed above.
-    if mode == LIVE
-        for j in load_nodes, t in 1:T
-            set_objective_coefficient(dso.model, dso.qag[j, t], -μq[j][t] - ρ_qf * b[j][t])
-        end
-    end
+    # UNDER LIVE ONLY (MESH-05): re-assert `qag_dso`'s linear coefficient one final time (`b`, NEVER
+    # `d`) BEFORE the final `solve_dso!` — numerically a no-op, kept explicit/self-contained.
+    _react_dso_prepare!(rmode, st)
     dres_final = solve_dso!(
         dso,
         λ,
         a,
-        ρf;
+        st.ρf;
         check_exact = true,
         strict = false,
         atol_exact = atol_exact,
@@ -795,6 +400,8 @@ function solve_admm(
     )
     p_import = dres_final.p_import
     exact_maxgap = dres_final.exact_maxgap
+    st.p_import = p_import
+    st.exact_maxgap = exact_maxgap
 
     # WR-01 PUBLISHED-PRIMAL CERTIFICATE (INFRA-03). The final DSO solve tolerates the conic
     # backend's BENIGN `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE` LABEL (under the converged ρ-penalty
@@ -886,7 +493,7 @@ function solve_admm(
         # individual `q` trajectory, since a near-zero μ makes that device's own P-Q split
         # non-unique/degenerate (many `(p,q)` splits inside the apparent-power cone are equally
         # optimal at a ≈0 reactive price) — pinning a non-unique quantity would be meaningless.
-        mu_q_mat = reduce(vcat, (permutedims(-μq[j]) for j in load_nodes))
+        mu_q_mat = reduce(vcat, (permutedims(-st.react.μq[j]) for j in load_nodes))
 
         # Extract each `FourQuadBESS`'s converged `q[t]` trajectory from
         # `ctx.agg_device_vars` (the SAME stash `assert_4q_complementarity!` iterates),
