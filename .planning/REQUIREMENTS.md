@@ -104,16 +104,16 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [x] **ARCH-02**: Solve strategies are types (`Centralized`, `ADMM`, `MPC`, `Stochastic`)
   dispatched by one `run(strategy, scenario)` entry point that returns results with a common shape.
   `Scenario` no longer carries strategy-specific fields in one flat bag.
-- [ ] **ARCH-03**: `Feeder` and `MeshedFeeder` share an `AbstractFeeder` supertype, and consumers
+- [x] **ARCH-03**: `Feeder` and `MeshedFeeder` share an `AbstractFeeder` supertype, and consumers
   dispatch on it.
-- [ ] **ARCH-04**: One `close_balance!` helper replaces the five copied balance-closing blocks in
+- [x] **ARCH-04**: One `close_balance!` helper replaces the five copied balance-closing blocks in
   `welfare_solve`, `mpc_window`, `stochastic_welfare`, `DsoOpt` and `linear_solve`.
 - [ ] **ARCH-05**: `solve_admm` is split into named phases (build, iterate, ρ adaptation,
   certification). Reactive-mode behaviour is dispatched, not repeated `mode == …` branches. It
   accepts any valid `AbstractPowerFlow`.
 - [ ] **ARCH-06**: Meshed topology plus live ADMM reactive pricing runs end-to-end and is
   cross-validated against the centralized meshed `:balance_q` dual (carry-over MESH-06).
-- [ ] **ARCH-07**: `ModelContext` carries typed fields for its fixed metadata (power-flow
+- [x] **ARCH-07**: `ModelContext` carries typed fields for its fixed metadata (power-flow
   variables, objective, feeder, device variables) in place of an untyped `Dict{Symbol,Any}`
   interface. Downstream code dispatches on the formulation type, not on `haskey(pf_vars, :l)`.
 - [ ] **ARCH-08**: One documented status policy covers all solve entry points: when they return a
@@ -189,9 +189,9 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | BILEV-08 | Phase 31 | Complete |
 | ARCH-01 | Phase 32 | Complete |
 | ARCH-02 | Phase 32 | Complete |
-| ARCH-03 | Phase 33 | Pending |
-| ARCH-04 | Phase 33 | Pending |
-| ARCH-07 | Phase 33 | Pending |
+| ARCH-03 | Phase 33 | Complete |
+| ARCH-04 | Phase 33 | Complete |
+| ARCH-07 | Phase 33 | Complete |
 | ARCH-05 | Phase 34 | Pending |
 | ARCH-06 | Phase 34 | Pending |
 | ARCH-08 | Phase 34 | Pending |
