@@ -466,18 +466,57 @@ policy.
 **Plans**: 12 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 34-01-PLAN.md — typed exception types + `_is_solver_failure`; widen all legacy ErrorException catch sites
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 34-02-PLAN.md — convert SolveFailedError/no-slack throw sites + migrate tests (retry ladder proven)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 34-03-PLAN.md — convert certificate refusals to CertificateError + migrate tests
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 34-04-PLAN.md — convert non-convergence throws to ConvergenceError + migrate tests
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 34-05-PLAN.md — additive `status` vocabulary on the five entry points + DC/reactive pin
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 34-06-PLAN.md — narrow mpc_loop / run_stochastic handlers (ARCH-09) + seam tests
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 34-07-PLAN.md — AdmmState, reactive singleton hooks, `_admm_build`/`_admm_iterate!`/`_adapt_rho!`
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 34-08-PLAN.md — `_admm_certify`, certify hooks, thin orchestrator, grep audit
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 34-09-PLAN.md — `admm_supported`, generic DsoOpt/solve_admm, pair check, LinDist warn-gate, widened supports_pf
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 34-10-PLAN.md — meshed live-reactive ADMM vs centralized cross-validation (measured tolerances)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 34-11-PLAN.md — Status & exception policy docs, docstring links, meshed literate page (MESH-06 closed)
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 34-12-PLAN.md — phase gate: source gates, detached full suite, docs build, VALIDATION sign-off
+
+**Cross-cutting constraints:**
+
+- Canary unchanged; never re-pinned
 
 ### Phase 35: IEEE-8500 Scale After Refactor
 
