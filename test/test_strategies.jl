@@ -76,12 +76,13 @@ end
     for (pf, tl) in cases
         @test TSODSO.supports_pf(Centralized(), pf, tl)
         expected = pf === :convex_branch_flow && !tl
-        @test TSODSO.supports_pf(ADMM(), pf, tl) == expected
+        @test TSODSO.supports_pf(ADMM(), pf, tl) == (pf !== :ac)
         @test TSODSO.supports_pf(MPC(), pf, tl) == expected
         @test TSODSO.supports_pf(Stochastic(), pf, tl) == expected
     end
     @test length(TSODSO.supported_pfs(Centralized())) == 4
-    @test TSODSO.supported_pfs(ADMM()) == (:convex_branch_flow,)
+    @test TSODSO.supported_pfs(ADMM()) ==
+          (:convex_branch_flow, :restricted_branch_flow, :lindistflow)
     @test TSODSO.supported_pfs(MPC()) == (:convex_branch_flow,)
     @test TSODSO.supported_pfs(Stochastic()) == (:convex_branch_flow,)
 end

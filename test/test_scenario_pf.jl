@@ -43,11 +43,17 @@ end
         () -> Scenario(name = "x", pf = :restricted_branch_flow, pf_thesis_literal = true),
     )
     for pf in (:restricted_branch_flow, :lindistflow, :ac)
-        for st in (:admm, :mpc, :stochastic)
+        for st in (:mpc, :stochastic)
             @test throws_arg(() -> Scenario(name = "x", strategy = st, pf = pf))
         end
     end
-    for st in (:admm, :mpc, :stochastic)
+    # ADMM (Plan 34-09) is formulation-generic: convex (also thesis-literal), restricted, LinDist
+    @test throws_arg(() -> Scenario(name = "x", strategy = :admm, pf = :ac))
+    for pf in (:restricted_branch_flow, :lindistflow)
+        @test Scenario(name = "x", strategy = :admm, pf = pf).pf === pf
+    end
+    @test Scenario(name = "x", strategy = :admm, pf_thesis_literal = true).pf_thesis_literal
+    for st in (:mpc, :stochastic)
         @test throws_arg(
             () -> Scenario(name = "x", strategy = st, pf_thesis_literal = true),
         )

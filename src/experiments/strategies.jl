@@ -169,19 +169,20 @@ Base.hash(a::Stochastic, h::UInt) = hash((a.S, a.probabilities, a.H_oos), hash(:
 Power-flow selectors the strategy accepts. See [`TSODSO.supports_pf`](@ref).
 """
 supported_pfs(::Centralized) = (:convex_branch_flow, :restricted_branch_flow, :lindistflow, :ac)
-supported_pfs(::Union{ADMM,MPC,Stochastic}) = (:convex_branch_flow,)
+supported_pfs(::ADMM) = (:convex_branch_flow, :restricted_branch_flow, :lindistflow)
+supported_pfs(::Union{MPC,Stochastic}) = (:convex_branch_flow,)
 
 """
     TSODSO.supports_pf(strategy, pf::Symbol, thesis_literal::Bool) -> Bool
 
 Single place encoding the valid strategy x power-flow matrix. `Centralized` accepts all four
-selectors. `ADMM`, `MPC`, `Stochastic` accept only `:convex_branch_flow` with
-`thesis_literal = false`. To relax: ADMM relaxes in Phase 34 (ARCH-05) because DsoOpt hard-codes
-`ConvexBranchFlow()` and silently ignores `pf`; MPC/Stochastic fail (measured) on
-restricted/LinDistFlow/AC.
+selectors. `ADMM` accepts convex (thesis-literal allowed), restricted and LinDistFlow; it mirrors
+`admm_supported` (`:ac` is rejected). `MPC`, `Stochastic` accept only `:convex_branch_flow` with
+`thesis_literal = false` (they fail, measured, on restricted/LinDistFlow/AC).
 """
+supports_pf(st::ADMM, pf::Symbol, thesis_literal::Bool) = pf in supported_pfs(st)
 supports_pf(st::Centralized, pf::Symbol, thesis_literal::Bool) = pf in supported_pfs(st)
-supports_pf(::Union{ADMM,MPC,Stochastic}, pf::Symbol, thesis_literal::Bool) =
+supports_pf(::Union{MPC,Stochastic}, pf::Symbol, thesis_literal::Bool) =
     pf === :convex_branch_flow && !thesis_literal
 
 """
