@@ -28,9 +28,30 @@ per-time branch/voltage terms into `ctx.residuals[:Rp]` — and, for reactive-ca
 formulations (e.g. LinDistFlow), `ctx.residuals[:Rq]` — via the INDEXED
 `add_to_residual!(ctx, :Rp, bus, t, expr)` seam, over the horizon `t = 1:T`. Active-only
 formulations (e.g. DC) write `:Rp` alone and never allocate `:Rq`; assembly keys off
-`haskey(ctx.residuals, :Rq)` (registry contents, not a formulation flag), so swapping DC
+[`has_reactive`](@ref)`(pf)`, so swapping DC
 ↔ LinDistFlow touches neither device nor assembly code.
 """
 function contribute! end
 
-export AbstractPowerFlow, contribute!
+"""
+    has_reactive(pf) -> Bool
+
+Whether `contribute!(pf, ...)` writes the reactive residual `:Rq`. Default `true`;
+`DCPowerFlow` is the only `false` case. Replaces the data-driven
+`haskey(ctx.residuals, :Rq)` check.
+"""
+has_reactive(::AbstractPowerFlow) = true
+
+"""
+    has_branch_current(pf) -> Bool
+
+Whether the formulation carries a branch-current variable `l`, so the SOCP
+exactness certificate is required/run. `true` for `ConvexBranchFlow`,
+`RestrictedBranchFlow`, `MeshedFlow` and `ACPowerFlow` (`assert_socp_exact!`
+already runs on AC contexts); `false` for `LinDistFlow`, `DCPowerFlow` and
+`nothing` (an unset `ctx.pf`, like today's absent `pf_vars`).
+"""
+has_branch_current(::AbstractPowerFlow) = false
+has_branch_current(::Nothing) = false
+
+export AbstractPowerFlow, contribute!, has_reactive, has_branch_current

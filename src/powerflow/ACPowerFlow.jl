@@ -158,7 +158,7 @@ the CHILD node — byte-identical to [`contribute!(::ConvexBranchFlow, …)`](@r
 `ctx.meta[:pf_vars] = (; v, P, Q, l)` (NO `v̂`) so [`assert_ac_exact!`](@ref) can index both the
 SOCP-built and AC-built contexts by the same field names. Returns `ctx`.
 """
-function contribute!(pf::ACPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
+function contribute!(pf::ACPowerFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -290,3 +290,5 @@ end
 problem_class(::ACPowerFlow) = NLP()
 
 export ACPowerFlow
+
+has_branch_current(::ACPowerFlow) = true  # carries the branch-current variable l

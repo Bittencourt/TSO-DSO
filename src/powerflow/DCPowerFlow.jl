@@ -27,7 +27,7 @@ flag). Contrast with [`LinDistFlow`](@ref), which adds `:Rq` and the squared-vol
 struct DCPowerFlow <: AbstractPowerFlow end
 
 """
-    contribute!(::DCPowerFlow, ctx::ModelContext, feeder; T::Int=1)
+    contribute!(::DCPowerFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int=1)
 
 Write the DC (active-only) branch terms into the shared per-bus/per-time residual.
 
@@ -61,3 +61,5 @@ function contribute!(::DCPowerFlow, ctx::ModelContext, feeder; T::Int = 1)
 end
 
 export DCPowerFlow
+
+has_reactive(::DCPowerFlow) = false  # DC is active-only: never writes :Rq

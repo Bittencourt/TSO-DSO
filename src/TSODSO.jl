@@ -46,12 +46,13 @@ include("data/ieee8500.jl")
 include("solver/ProblemClass.jl")
 include("solver/factory.jl")
 
+# --- Power-flow interface (owned by plan 01-03, PF-01) ---
+# Included BEFORE core/ModelContext.jl: the typed `ModelContext.pf` field (Plan 33-04) needs it first.
+include("powerflow/AbstractPowerFlow.jl")
+
 # --- Core (owned by plan 01-03, PF-01 residual seam / INFRA-03 status) ---
 include("core/ModelContext.jl")
 include("core/status.jl")
-
-# --- Power-flow interface (owned by plan 01-03, PF-01) ---
-include("powerflow/AbstractPowerFlow.jl")
 
 # --- Power-flow formulations (owned by plan 02-02, PF-02) ---
 include("powerflow/DCPowerFlow.jl")

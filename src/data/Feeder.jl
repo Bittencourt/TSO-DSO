@@ -43,6 +43,17 @@ struct Branch{T <: Real}
 end
 
 """
+    AbstractFeeder{T<:Real}
+
+Abstract supertype of every feeder topology (ARCH-03). Contract: each subtype
+exposes the fields `buses::Vector{Bus{T}}`, `branches::Vector{Branch{T}}` and
+`root::Int`. There are NO accessor functions; consumers read the fields directly.
+Each concrete struct validates in its own inner constructor (`Feeder`:
+`assert_radial`; `MeshedFeeder`: `assert_connected`).
+"""
+abstract type AbstractFeeder{T <: Real} end
+
+"""
     Feeder{T<:Real}
 
 An immutable radial feeder: its `buses`, `branches`, and the index `root` of the
@@ -54,7 +65,7 @@ Validation lives in the INNER constructor deliberately: defining an inner
 constructor suppresses Julia's auto-generated (non-validating) constructors, so
 there is no way to bypass the checks (and no method-overwriting at precompile).
 """
-struct Feeder{T <: Real}
+struct Feeder{T <: Real} <: AbstractFeeder{T}
     buses::Vector{Bus{T}}
     branches::Vector{Branch{T}}
     root::Int
@@ -90,4 +101,4 @@ Feeder(
     root::Integer,
 ) where {T <: Real} = Feeder{T}(buses, branches, Int(root))
 
-export Bus, Branch, Feeder
+export Bus, Branch, AbstractFeeder, Feeder

@@ -39,7 +39,7 @@ Validation lives in the INNER constructor deliberately, exactly as `Feeder`
 does: defining an inner constructor suppresses Julia's auto-generated
 (non-validating) constructors, so there is no way to bypass the checks.
 """
-struct MeshedFeeder{T <: Real}
+struct MeshedFeeder{T <: Real} <: AbstractFeeder{T}
     buses::Vector{Bus{T}}
     branches::Vector{Branch{T}}
     root::Int
