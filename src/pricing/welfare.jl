@@ -89,6 +89,16 @@ function welfare_accounting(
         )
     end
 
+    # `ctx.objective` is a non-optional field defaulting to zero; without any aggregator having
+    # contributed, `value(ctx.objective)` would silently yield 0 and a plausible-looking split.
+    isempty(ctx.agg_device_vars) && throw(
+        ArgumentError(
+            "welfare_accounting: ctx has no aggregator contributions (agg_device_vars is empty), " *
+            "so ctx.objective is the default zero — this is not a solved solve_welfare ModelContext " *
+            "(thesis 3.38/3.46/3.47).",
+        ),
+    )
+
     feeder = _require_feeder(ctx)
     root = feeder.root
 
