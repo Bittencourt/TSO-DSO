@@ -57,7 +57,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 - [x] **Phase 33: Shared Abstractions — Feeder, Balance, Model Context** - Unify `Feeder`/ (completed 2026-10-04)
   `MeshedFeeder` under `AbstractFeeder`, deduplicate balance-closing code, and type `ModelContext`.
 
-- [ ] **Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy** - Split
+- [x] **Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy** - Split (completed 2026-10-04)
   `solve_admm` into named phases generic over any power flow, compose meshed + live reactive
   pricing, and apply one status/exception policy everywhere.
 
@@ -512,7 +512,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 34-12-PLAN.md — phase gate: source gates, detached full suite, docs build, VALIDATION sign-off
+- [x] 34-12-PLAN.md — phase gate: source gates, detached full suite, docs build, VALIDATION sign-off
 
 **Cross-cutting constraints:**
 
@@ -594,7 +594,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
-| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 11/12 | In Progress|  |
+| 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete   | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
