@@ -54,7 +54,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 - [x] **Phase 32: Declarative Power-Flow & Strategy Dispatch** - Select power-flow formulation and (completed 2026-10-03)
   solve strategy declaratively through `Scenario`, dispatched via one `run` entry point.
 
-- [ ] **Phase 33: Shared Abstractions — Feeder, Balance, Model Context** - Unify `Feeder`/
+- [x] **Phase 33: Shared Abstractions — Feeder, Balance, Model Context** - Unify `Feeder`/ (completed 2026-10-04)
   `MeshedFeeder` under `AbstractFeeder`, deduplicate balance-closing code, and type `ModelContext`.
 
 - [ ] **Phase 34: ADMM Decomposition, Meshed Reactive & Status/Exception Policy** - Split
@@ -400,7 +400,7 @@ instead of duplicated five times or carried in an untyped `Dict`.
   3. `ModelContext` carries typed fields for its fixed metadata (power-flow variables, objective,
      feeder, device variables); downstream code dispatches on the formulation type instead of
      `haskey(pf_vars, :l)`.
-**Plans:** 10/11 plans executed
+**Plans:** 11/11 plans complete
 
 Plans:
 **Wave 1**
@@ -436,7 +436,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 33-11-PLAN.md — Phase gate: detached full suite, docs build, VALIDATION sign-off
+- [x] 33-11-PLAN.md — Phase gate: detached full suite, docs build, VALIDATION sign-off
 
 **Cross-cutting constraints:**
 
@@ -540,7 +540,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 30. SOCP-in-the-Loop Benders on a Multi-Bus Feeder | v4.0 | 6/6 | Complete    | 2026-10-01 |
 | 31. GNE Nash Fixture, Integer N>1 & Planning Docs Refresh | v4.0 | 7/7 | Complete (NOT verified — 2 open critical findings) | 2026-10-02 |
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
-| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 10/11 | In Progress|  |
+| 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete   | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 0/TBD | Not started | - |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 0/TBD | Not started | - |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
