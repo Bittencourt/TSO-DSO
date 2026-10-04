@@ -79,6 +79,8 @@ end
 # Battery complementarity policy under ADMM: SOCP-class formulations keep the fail-loud gate
 # (default path bit-identical); non-SOCP ones warn (mirrors welfare_solve.jl).
 _batt_on_violation(st) = problem_class(st.dso.ctx.pf) isa SOCP ? :error : :warn
+# Same policy for the 4Q-BESS peer certificate: strict (throw) on SOCP, `report = true` (warn) otherwise.
+_report_4q(st) = !(problem_class(st.dso.ctx.pf) isa SOCP)
 
 export admm_supported
 
@@ -141,6 +143,7 @@ function _react_agr_solve!(
             τ_batt = 1e-3,
             strict = false,
             check_4q = has_4q,
+            report_4q = _report_4q(st),
             rtol_4q = 1e-3,
             atol_4q = 1e-7,
         )
@@ -175,6 +178,7 @@ function _react_agr_solve!(
             τ_batt = 1e-3,
             strict = false,
             check_4q = has_4q,
+            report_4q = _report_4q(st),
             rtol_4q = 1e-3,
             atol_4q = 1e-7,
         )

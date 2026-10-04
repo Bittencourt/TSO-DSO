@@ -147,3 +147,28 @@ end
     r_cen = TSODSO.run(TSODSO.with_strategy(base, Centralized()))
     @test isapprox(r_res.welfare, r_cen.welfare; rtol = 1e-4)
 end
+
+@testitem "admm generic pf: 4Q certificate policy mirrors the battery gate (SOCP strict, others report)" setup =
+    [Phase6Fixtures] tags = [:admm, :genericpf] begin
+    using TSODSO
+
+    stub(pf) = (; dso = (; ctx = (; pf = pf)))
+    @test TSODSO._report_4q(stub(LinDistFlow()))
+    @test !TSODSO._report_4q(stub(ConvexBranchFlow()))
+    @test !TSODSO._report_4q(stub(MeshedFlow()))
+    @test !TSODSO._report_4q(stub(RestrictedBranchFlow()))
+    @test TSODSO._batt_on_violation(stub(LinDistFlow())) === :warn
+    @test TSODSO._batt_on_violation(stub(ConvexBranchFlow())) === :error
+
+    # the kwarg reaches solve_agr!'s 4Q gate (no 4Q device here -> no-op either way)
+    feeder = Phase6Fixtures.two_bus_feeder()
+    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    Th = Phase6Fixtures.T
+    agr = TSODSO.build_agr_opt(aggs[1], Th; ρ = 5.0)
+    λj = fill(4.0, Th)
+    cj = zeros(Th)
+    for rep in (false, true)
+        r = TSODSO.solve_agr!(agr, λj, cj, 5.0; check_4q = true, report_4q = rep)
+        @test length(r.pag) == Th
+    end
+end

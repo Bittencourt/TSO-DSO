@@ -256,6 +256,7 @@ function solve_agr!(
     rtol_4q::Real = 1e-4,
     atol_4q::Real = 1e-8,
     battery_on_violation::Symbol = :error,
+    report_4q::Bool = false,
 )
     length(λ_j) == agr.T || throw(
         ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"),
@@ -319,7 +320,13 @@ function solve_agr!(
     # convergence-only discipline as check_battery — gated behind check_4q so mid-loop,
     # off-consensus iterates never spuriously throw.
     if check_4q
-        assert_4q_complementarity!(agr.ctx; rtol = rtol_4q, atol = atol_4q, T = agr.T)
+        assert_4q_complementarity!(
+            agr.ctx;
+            rtol = rtol_4q,
+            atol = atol_4q,
+            T = agr.T,
+            report = report_4q,
+        )
     end
 
     return (; pag = value.(agr.pag), utility = value(agr.ctx.objective))
