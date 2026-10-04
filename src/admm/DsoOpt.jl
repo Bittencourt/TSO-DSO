@@ -534,9 +534,11 @@ gate THROWS and prices are refused. When `false` the gate is NOT run (and `atol_
 `rtol_exact` are inert — never consulted).
 
 `atol_exact`/`rtol_exact` (2026-08-22 follow-up, quick task 260822-f0b) are an ADDITIVE override
-seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`1e-6`/`1e-4`)
-are copied VERBATIM from `assert_socp_exact!`'s own current defaults
-(`src/models/exactness.jl:78`), so every existing call site — including this function's own
+seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`nothing`/`1e-4`)
+are `assert_socp_exact!`'s own defaults (Phase 35, ARCH-10): `atol_exact = nothing` selects the
+hybrid per-branch/hour floor `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08*ref_b)`; an explicit `Real`
+is a flat bypass. ADMM points with gap in (2e-7, 1e-6] can now raise `CertificateError`. Every
+existing call site — including this function's own
 mid-loop `check_exact = false` calls, which never reach the branch that consults them — is
 byte-identical. This is a SEAM, not a default weakening (T-25-12, certificate-laundering): never
 use it to make a point classify as exact that would otherwise be inexact under the project's own
@@ -555,7 +557,7 @@ function solve_dso!(
     ρ::Real;
     check_exact::Bool = false,
     strict::Bool = true,
-    atol_exact::Real = 1e-6,
+    atol_exact::Union{Nothing, Real} = nothing,
     rtol_exact::Real = 1e-4,
 )
     # ADMM-03 build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]

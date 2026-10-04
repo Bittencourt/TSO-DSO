@@ -174,7 +174,7 @@ never a plausible-but-uncertified number silently returned as if it were the DAD
 
 # Exactness-gate override seam (2026-08-22 follow-up, quick task 260822-f0b —
 
-`atol_exact::Real = 1e-6, rtol_exact::Real = 1e-4`)
+`atol_exact::Union{Nothing, Real} = nothing, rtol_exact::Real = 1e-4`)
 
 An ADDITIVE override onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs, threaded
 ONLY into the FINAL consolidation [`solve_dso!`](@ref) call (the mid-loop `check_exact = false`
@@ -261,7 +261,7 @@ function solve_admm(
     reactive_consensus = _default_reactive_consensus(aggregators),
     ρ_q::Real = ρ,
     time_limit_s::Union{Nothing, Real} = nothing,
-    atol_exact::Real = 1e-6,
+    atol_exact::Union{Nothing, Real} = nothing,
     rtol_exact::Real = 1e-4,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
