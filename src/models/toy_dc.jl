@@ -38,7 +38,7 @@ walking-skeleton spine:
 Returns the populated `ctx`, the optimal `objective_value`, and `dual(balance)` —
 the nodal-balance dual that becomes the distribution price (DADP) in later phases.
 """
-function solve_toy_dc(feeder::Feeder)
+function solve_toy_dc(feeder::AbstractFeeder)
     model = Model(select_optimizer(LP()))       # factory — NO solver named here (INFRA-02)
     ctx = ModelContext(model)
     ctx.meta[:feeder] = feeder

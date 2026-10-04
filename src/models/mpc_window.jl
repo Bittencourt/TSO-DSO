@@ -60,7 +60,7 @@ full set of per-step device Parameters plan 21-01 widened) over a FIXED window l
     (Phase 26 FIX-04: the device's own `soc` vector is now `1:(H+1)` long, so the terminal
     target is `soc[H + 1]`, not `soc[H]`).
 """
-struct MpcWindow{F}
+struct MpcWindow{F <: AbstractFeeder}
     model::Model
     ctx::ModelContext
     H::Int
@@ -127,7 +127,7 @@ function (D-01/D-03) — it is a wholly NEW module reusing their builders verbat
 calls `solve_welfare` internally.
 """
 function build_mpc_window(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     H::Int,

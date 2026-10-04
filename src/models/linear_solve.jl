@@ -50,7 +50,7 @@ sign follows the toy-DC convention (frontier import positive, load negative ⇒ 
 price = marginal cost, threat T-02-01). Returns `(ctx, objective_value, dadp)`.
 """
 function solve_linear(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     devices::Vector{<:AbstractDevice};
     T::Int = 1,

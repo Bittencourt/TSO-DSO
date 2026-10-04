@@ -105,7 +105,7 @@ outside `1:length(feeder.buses)` — the boundary guards that keep a shape misma
 becoming a cryptic deep crash or a silently-wrong optimum (RESEARCH Pitfall 4).
 """
 function solve_welfare(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     T::Int = 24,

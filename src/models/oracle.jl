@@ -88,7 +88,7 @@ Throws `ArgumentError` on an unknown `role` (project convention: fail loudly, ne
 are inherited unchanged from [`solve_welfare`](@ref).
 """
 function operational_oracle(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     λ₀,

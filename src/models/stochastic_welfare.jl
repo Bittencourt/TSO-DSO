@@ -160,7 +160,7 @@ per scenario), `expected_dadp::Vector{Float64}`, and `socp_maxgap::Vector{Float6
 per scenario whose formulation carries an SOC cone).
 """
 function build_stochastic_welfare(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     scenario_aggs::AbstractVector{<:AbstractVector{<:Aggregator}};
     probabilities::AbstractVector{<:Real} = fill(
@@ -549,7 +549,7 @@ rebuilt across held-out re-solves.
   - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int, Pdc_param)`, the per-step inelastic-demand forecast Parameter (re-slid per held-out
     scenario).
 """
-struct StochasticOosHarness{F}
+struct StochasticOosHarness{F <: AbstractFeeder}
     model::Model
     ctx::ModelContext
     agg_bus::Int
@@ -611,7 +611,7 @@ Returns a [`StochasticOosHarness`](@ref). Re-solve via
 [`solve_stochastic_oos_step!`](@ref) — never rebuild.
 """
 function build_stochastic_oos_harness(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     T::Int,
