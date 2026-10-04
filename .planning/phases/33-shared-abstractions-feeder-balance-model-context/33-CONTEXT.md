@@ -144,5 +144,6 @@ Phase 34); status/exception policy (ARCH-08/09, Phase 34); planning-layer balanc
 - Typing the result-specific `meta` keys (`p_import`, `socp_maxgap`, …).
 - Accessor-function interface for feeders.
 - Balance-closing copies in `pricing/fit.jl` (2) and `experiments/mpc_loop.jl` (2).
+- (from 33 code review) `has_reactive` consistency guard: DC + reactive device leaves `:Rq` unclosed silently (pre-existing); handle under Phase 34 ARCH-08 status/exception policy with a pinning test.
 
 </deferred>
