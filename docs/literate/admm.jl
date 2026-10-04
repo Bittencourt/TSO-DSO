@@ -48,6 +48,14 @@
 using TSODSO
 using TSODSO: Bus, Branch, Feeder
 
+# **Scope of the formulation.** The demonstration below uses a radial feeder, but `solve_admm`
+# accepts any [`admm_supported`](@ref) formulation: `ConvexBranchFlow` (both variants),
+# `RestrictedBranchFlow`, `MeshedFlow` on a `MeshedFeeder`, and `LinDistFlow`; `ACPowerFlow` and
+# `DCPowerFlow` are rejected with an `ArgumentError`. The meshed live-reactive case is
+# cross-validated against the centralized solve on the Rung 10 page
+# ("Meshed Networks + Live Reactive Price"); the status vocabulary and what each failure throws
+# are documented in the [status & exception policy](@ref status-policy).
+#
 # ## Building a small radial feeder with two aggregators
 #
 # The SAME 3-bus radial shape used on the pricing page (root + two downstream load

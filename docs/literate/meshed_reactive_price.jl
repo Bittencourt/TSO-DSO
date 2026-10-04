@@ -12,7 +12,9 @@
 # Pitfall 14) — that is exactly the gap [`certify_angle_recoverable!`](@ref) (MESH-03) closes.
 # Section 3 then combines this meshed loop with Phase 19's 4Q-BESS device to read a LIVE
 # reactive price directly off the meshed network's own centralized `:balance_q` dual
-# (MESH-06/D-04) — no meshed ADMM is built this rung; see that section's own note.
+# (MESH-06/D-04), then runs the decomposed meshed ADMM (`solve_admm(feeder, MeshedFlow(), aggs;
+# reactive_consensus = LIVE, ...)`) next to it and cross-validates the two live — closing the
+# v3.0 MESH-06 advisory.
 #
 # Every number shown below is RECOMPUTED live during this page's build, exactly like every
 # prior rung page in this manual.
@@ -105,7 +107,7 @@ triangle_infeasible = try
     )
     false   # the reached-on-regression path: a solved triangle means the derivation above no longer holds
 catch e
-    e isa ErrorException && occursin("INFEASIBLE", sprint(showerror, e))
+    e isa SolveFailedError && occursin("INFEASIBLE", sprint(showerror, e))
 end
 
 triangle_infeasible
@@ -233,18 +235,53 @@ bess_status == :angle_certified || error(
 );
 
 # The reactive DADP at bus 2 is read directly off the meshed network's own `:balance_q`
-# constraint dual — the genuine convex dual of the SOLVED meshed SOCP, no meshed ADMM built
-# this rung (D-04):
+# constraint dual — the genuine convex dual of the SOLVED meshed SOCP:
 
 q_dadp_bus2 = dual.(ctx_bess.constraints[:balance_q][2, :])
 
-# This is the CENTRALIZED analog of Phase 19's LIVE radial μ-ascent (`solve_admm(...;
-# reactive_consensus = :live)`, `19-4q-bess-live-reactive-dual-ascent`): there, the internal
-# reactive dual `μ_j[t]` converges ITERATIVELY to `-dual(:balance_q[j,t])` via ADMM (Phase
-# 19's own empirically-resolved sign convention). Here, on the meshed loop, the SAME quantity
-# — `dual(:balance_q[j,t])` — is read directly off ONE centralized solve; no iterative
-# consensus loop is built or needed, since the meshed SOCP is solved as a single monolithic
-# problem either way. Phase 19's live μ-ascent is referenced BY NAME, never re-derived here.
+# This is the CENTRALIZED reference for Phase 19's LIVE radial μ-ascent. The decomposed
+# counterpart now exists on the mesh too: `solve_admm(feeder, MeshedFlow(), aggs;
+# reactive_consensus = LIVE, ...)` iterates the reactive dual `μ_j[t]` to consensus, and it is
+# cross-validated against the centralized `dual.(ctx_bess.constraints[:balance_q][2, :])` just
+# computed (Phase 34, ARCH-06), closing the v3.0 MESH-06 advisory:
+
+r_admm = solve_admm(
+    diamond_feeder(:uniform),
+    MeshedFlow(),
+    aggregators_bess;
+    T = T_MESH,
+    λ₀ = LAMBDA0_MESH,
+    ρ = 10.0,
+    ε_abs = 1e-6,
+    ε_rel = 1e-5,
+    reactive_consensus = LIVE,
+    maxiter = 500,
+)
+
+p_central = [dual(ctx_bess.constraints[:balance_p][j, 1]) for j in (2, 3)]
+q_central = [dual(ctx_bess.constraints[:balance_q][j, 1]) for j in (2, 3)]
+gap_p = maximum(abs.(vec(r_admm.λ) .- p_central))
+gap_q = maximum(abs.(vec(r_admm.mu_q) .- q_central))
+gap_w = abs(r_admm.welfare - obj_bess) / max(abs(obj_bess), 1.0)
+
+(status = r_admm.status, iters = r_admm.iters, gap_p = gap_p, gap_q = gap_q, rel_gap_welfare = gap_w)
+
+#-
+
+## Self-checking page: the claim "meshed live ADMM reproduces the centralized duals and
+## welfare" is enforced with the Plan 34-10 tolerances (5e-4 price, rtol 1e-4 welfare).
+(r_admm.status == :converged && gap_p < 5e-4 && gap_q < 5e-4 && gap_w < 1e-4) || error(
+    "Rung 10 doc regression: meshed live ADMM no longer matches the centralized solve " *
+    "(status = $(r_admm.status), gap_p = $gap_p, gap_q = $gap_q, rel gap_w = $gap_w)",
+);
+
+# **Honest caveat.** On THIS page's diamond (uniform impedance, unity-power-factor loads) the
+# centralized reactive price is near-degenerate (about `5e-10` / `2e-3`), so the agreement
+# printed above certifies the quantities shown, not a well-conditioned reactive price. The
+# non-degenerate check (heterogeneous profile, `φ = 0.95`, centralized reactive prices
+# `≈0.25 / 0.14`) lives in `test/test_admm_meshed.jl` and agrees to `≈6e-5` for
+# `ρ₀ ∈ {1, 10, 100}`. See the [status & exception policy](@ref status-policy) for the
+# status vocabulary of `solve_admm`.
 
 # ## Finding
 #
@@ -273,7 +310,7 @@ q_dadp_bus2 = dual.(ctx_bess.constraints[:balance_q][2, :])
 # value at the SOCP optimum, and the centralized `:balance_q` dual reflects that directly,
 # right down to the solver's own numerical floor.
 #
-# **Explicit scope note:** a meshed-IEEE-13-with-tie-switch quarantined variant (D-02/D-12,
+# **Scope note:** the MESH-06 advisory (no meshed ADMM) is closed above. A meshed-IEEE-13-with-tie-switch quarantined variant (D-02/D-12,
 # MESH-STRETCH) was NOT built this phase — it remains deferred. The single small diamond
 # fixture with its two impedance profiles, demonstrated live on this page, is the phase's SOLE
 # committed evidence, sufficient for the ROADMAP Phase 23 success criterion "at least one
