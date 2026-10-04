@@ -186,7 +186,7 @@ function build_mpc_window(
 
     # WR-03 ordering: capture `reactive` IMMEDIATELY after the formulation contributes, BEFORE
     # any aggregator writes (mirrors build_planning_oracle/solve_welfare).
-    reactive = haskey(ctx.residuals, :Rq)
+    reactive = has_reactive(pf)
 
     if reactive
         @variable(model, q_import[τ = 1:H])   # free-sign reactive frontier import
@@ -206,19 +206,7 @@ function build_mpc_window(
     end
 
     # Close :Rp always; :Rq only when the formulation provides a reactive channel.
-    size(ctx.residuals[:Rp]) == (N, H) || error(
-        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($N, $H) — an index escaped the feeder",
-    )
-    @constraint(model, balance_p[j = 1:N, τ = 1:H], ctx.residuals[:Rp][j, τ] == 0)
-    register_constraint!(ctx, :balance_p, balance_p)          # dual = λ_j (DADP)
-
-    if reactive
-        size(ctx.residuals[:Rq]) == (N, H) || error(
-            "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($N, $H) — an index escaped the feeder",
-        )
-        @constraint(model, balance_q[j = 1:N, τ = 1:H], ctx.residuals[:Rq][j, τ] == 0)
-        register_constraint!(ctx, :balance_q, balance_q)
-    end
+    close_balance!(ctx, N, H; reactive = reactive)
 
     # Walk ctx.meta[:agg_device_vars] to populate ic_handles (MPC-01 seam consumption): every
     # device carrying a soc0 Parameter (PVBattery, FourQuadBESS) gets a :soc-kind entry, every

@@ -310,7 +310,7 @@ function build_stochastic_welfare(
 
         # WR-03: captured right after the formulation contributes, before any aggregator
         # write — reflects the FORMULATION's own reactive capability, not the devices'.
-        reactive_s = haskey(ctx_s.residuals, :Rq)
+        reactive_s = has_reactive(pf)
 
         # Each scenario's own aggregators (and hence its own device copies, each seeing its
         # own scenario's data Parameters) contribute their net injections + utility.
@@ -346,23 +346,7 @@ function build_stochastic_welfare(
         # Close the residuals via the ANONYMOUS array-constraint form (no name), then
         # register into ctx_s.constraints — a fresh per-ModelContext Dict, so S scenarios
         # never collide on the same :balance_p/:balance_q key.
-        size(ctx_s.residuals[:Rp]) == (Np, T) || error(
-            "scenario $s residual :Rp is $(size(ctx_s.residuals[:Rp])), expected " *
-            "($Np, $T) — an index escaped the feeder",
-        )
-        balance_p_s =
-            @constraint(model, [j = 1:Np, t = 1:T], ctx_s.residuals[:Rp][j, t] == 0)
-        register_constraint!(ctx_s, :balance_p, balance_p_s)   # dual = de-scaled DADP (D-05)
-
-        if reactive_s
-            size(ctx_s.residuals[:Rq]) == (Np, T) || error(
-                "scenario $s residual :Rq is $(size(ctx_s.residuals[:Rq])), expected " *
-                "($Np, $T) — an index escaped the feeder",
-            )
-            balance_q_s =
-                @constraint(model, [j = 1:Np, t = 1:T], ctx_s.residuals[:Rq][j, t] == 0)
-            register_constraint!(ctx_s, :balance_q, balance_q_s)
-        end
+        close_balance!(ctx_s, Np, T; reactive = reactive_s, label = "scenario $s ")
 
         push!(ctxs, ctx_s)
     end
@@ -649,7 +633,7 @@ function build_stochastic_oos_harness(
 
     # WR-03 ordering: captured IMMEDIATELY after the formulation contributes, before any
     # aggregator write (mirrors build_mpc_window/solve_welfare).
-    reactive = haskey(ctx.residuals, :Rq)
+    reactive = has_reactive(pf)
 
     # NAMED form is safe here — this model is built exactly once, unlike the anonymous
     # per-scenario frontier build_stochastic_welfare needs to avoid an S-way name collision.
@@ -681,19 +665,7 @@ function build_stochastic_oos_harness(
 
     # Close :Rp always; :Rq only when the formulation provides a reactive channel — NAMED
     # single-build form (safe here, this model is built exactly once).
-    size(ctx.residuals[:Rp]) == (N, T) || error(
-        "residual :Rp is $(size(ctx.residuals[:Rp])), expected ($N, $T) — an index escaped the feeder",
-    )
-    @constraint(model, balance_p[j = 1:N, t = 1:T], ctx.residuals[:Rp][j, t] == 0)
-    register_constraint!(ctx, :balance_p, balance_p)
-
-    if reactive
-        size(ctx.residuals[:Rq]) == (N, T) || error(
-            "residual :Rq is $(size(ctx.residuals[:Rq])), expected ($N, $T) — an index escaped the feeder",
-        )
-        @constraint(model, balance_q[j = 1:N, t = 1:T], ctx.residuals[:Rq][j, t] == 0)
-        register_constraint!(ctx, :balance_q, balance_q)
-    end
+    close_balance!(ctx, N, T; reactive = reactive)
 
     # Walk ctx.meta[:agg_device_vars] to populate battery_pins/ppv_handles/tout_handles.
     battery_pins = NamedTuple[]
