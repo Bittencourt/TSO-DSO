@@ -81,8 +81,9 @@ violated internal invariant, not a researcher-facing outcome; they stay `error(.
   `bilevel_kkt.jl`, `mpc_loop.jl`, `nash.jl`);
 - `welfare_accounting` (`src/pricing/welfare.jl`), the `fit_baseline` SITE-2 failure
   (`src/pricing/fit.jl`), the DLMP closure checks (`src/pricing/dlmp.jl`);
-- `_mpc_assert_true_state_inband` and the AC truth-settlement non-convergence in
-  `src/experiments/mpc_loop.jl`;
+- `_mpc_assert_true_state_inband` in `src/experiments/mpc_loop.jl` (the AC
+  truth-settlement non-convergence and the `ac_recheck_incumbent` re-check failure are
+  `SolveFailedError`, carrying the solver statuses);
 - the `run_nash!` lattice / parity / damped guards in `src/planning/nash.jl`;
 - the `ModelContext` construction checks and the solver-factory configuration errors
   (`src/core/ModelContext.jl`, `src/solver/factory.jl`).

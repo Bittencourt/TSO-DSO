@@ -1657,7 +1657,7 @@ function _mpc_truth_import_acpf(
     )
     if !ok
         throw(
-            ErrorException(
+            SolveFailedError(
                 "run_mpc: AC power-flow truth settlement FAILED to reach LOCALLY_SOLVED at " *
                 "abs_hour=$abs_hour — termination_status=$(termination_status(model_t)), " *
                 "primal_status=$(primal_status(model_t)), " *
@@ -1666,6 +1666,7 @@ function _mpc_truth_import_acpf(
                 "27-08/27-09) — this is a genuine Ipopt non-convergence at the realized " *
                 "dispatch, never a thermal/voltage limit (those are OMITTED from this " *
                 "physics-only model, plan 27-09) and never a relaxation-exactness gate.",
+                model_t,
             ),
         )
     end

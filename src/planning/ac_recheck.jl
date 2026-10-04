@@ -121,11 +121,12 @@ function ac_recheck_incumbent(
     catch e
         _is_solver_failure(e) || rethrow()
         throw(
-            ErrorException(
+            SolveFailedError(
                 "ac_recheck_incumbent: AC power-flow re-check FAILED to reach " *
                 "LOCALLY_SOLVED at the incumbent z=$(z_incumbent) — a genuine Ipopt " *
                 "non-convergence (tooling failure), never a reported physical violation " *
                 "(BILEV-04b). Original error: $(sprint(showerror, e))",
+                oracle_ac.model,
             ),
         )
     end
