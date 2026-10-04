@@ -1052,7 +1052,7 @@ variantes de planejamento" for the full three-way comparison.
 
 # Returns
 
-On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, exact_incumbent)`
+On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, exact_incumbent, status)`
 where `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so
 the returned point's true cost equals `UB` and the convergence certificate applies to it,
 CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
@@ -1782,6 +1782,8 @@ function solve_stackelberg!(
                 # WR-01 (Phase 30 code review iteration 2): the best certified incumbent,
                 # `nothing` if no iterate was certified (trailing, additive).
                 exact_incumbent,
+                # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.solve_stackelberg).
+                status = ub_relaxation_only ? :converged_relaxation_only : :converged,
             )
         end
     end

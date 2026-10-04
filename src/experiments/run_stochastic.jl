@@ -82,6 +82,9 @@ end
 """
     run_stochastic(s::Scenario) -> NamedTuple
 
+The result additionally carries a trailing `status` (`:solved` or `:oos_infeasible_skipped`,
+see `STATUS_VOCABULARY.run_stochastic`).
+
 Drive the FULL two-stage stochastic extensive-form + out-of-sample evaluation for `s`
 (STOCH-01..03): materialize `st.S` in-sample scenario aggregator populations, solve the
 extensive form via [`build_stochastic_welfare`](@ref), then drive
@@ -305,8 +308,17 @@ function _run_stochastic(s::Scenario, st::Stochastic)
             socp_maxgap = r.socp_maxgap,
         ),
         oos = (; welfare_h, infeasible_h, realized_welfare, welfare_gap),
+        # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.run_stochastic).
+        status = _stochastic_status(infeasible_h),
     )
 end
+
+"""
+    _stochastic_status(infeasible_h) -> Symbol
+
+`:oos_infeasible_skipped` iff any held-out scenario was skipped-and-reported, else `:solved`.
+"""
+_stochastic_status(infeasible_h) = any(infeasible_h) ? :oos_infeasible_skipped : :solved
 
 """
     run_stochastic(s::Scenario) -> NamedTuple

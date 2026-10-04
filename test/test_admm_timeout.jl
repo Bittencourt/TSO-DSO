@@ -77,6 +77,7 @@ const RHO = 100.0
         time_limit_s = 1e-9,
     )
     @test res_budget.status == :budget_exceeded
+    @test res_budget.status in TSODSO.STATUS_VOCABULARY.solve_admm
     @test res_budget.iters < 200
     @test res_budget.dadp === nothing
     @test res_budget.λ === nothing
@@ -100,6 +101,7 @@ const RHO = 100.0
         allow_export = true,
     )
     @test res_ok.status == :converged
+    @test res_ok.status in TSODSO.STATUS_VOCABULARY.solve_admm
     @test res_ok.iters < 200
     @test res_ok.dadp !== nothing
     @test res_ok.λ === res_ok.dadp

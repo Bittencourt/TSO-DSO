@@ -96,7 +96,7 @@ silently overwriting state or mispairing devices with variables.
 # Returns
 
 A `NamedTuple`
-`(; trace, day_ahead_welfare, forecast_settled_welfare, realized_welfare, regret, day_ahead_dadp, steps, settlement_violations)`:
+`(; trace, day_ahead_welfare, forecast_settled_welfare, realized_welfare, regret, day_ahead_dadp, steps, settlement_violations, status)` (`status` is the trailing, additive Phase 34 field, one of `STATUS_VOCABULARY.run_mpc`: `:certified`, `:degraded`, `:cert_failed`):
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
     cumulative deviation, and certificate/fallback status (MPC-03). The status is one of
@@ -774,7 +774,22 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
         steps = k,
         settlement_violations,
         pvbattery_truth_trace,
+        # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.run_mpc).
+        status = _mpc_status(trace.cert_status_trace),
     )
+end
+
+"""
+    _mpc_status(cert_status_trace) -> Symbol
+
+Roll the per-step certificate tags up into the `run_mpc` status: `:cert_failed` if any step
+is `:cert_failed`; else `:degraded` if any step is not the first tier
+(`:certified_convex_dual`); else `:certified`.
+"""
+function _mpc_status(cert_status_trace)
+    any(==(:cert_failed), cert_status_trace) && return :cert_failed
+    all(==(:certified_convex_dual), cert_status_trace) && return :certified
+    return :degraded
 end
 
 """

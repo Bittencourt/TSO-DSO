@@ -93,4 +93,21 @@ Internal legacy-union predicate: true for a legacy `ErrorException` or any typed
 """
 _is_solver_failure(e) = e isa ErrorException || e isa TSODSOError
 
+"""
+    STATUS_VOCABULARY
+
+Single source of truth (not exported) for the `status::Symbol` each entry point's result
+carries. The status-vs-throw policy page and `test/test_status_policy.jl` both consume it.
+`run_mpc`: `:certified` (every step first tier), `:degraded` (a restricted/local-AC step,
+none failed), `:cert_failed`. Stackelberg/Nash: `:converged_relaxation_only` iff the UB
+certifies only the SOC relaxation.
+"""
+const STATUS_VOCABULARY = (
+    solve_admm = (:converged, :budget_exceeded),
+    solve_stackelberg = (:converged, :converged_relaxation_only),
+    run_nash = (:converged, :converged_relaxation_only),
+    run_mpc = (:certified, :degraded, :cert_failed),
+    run_stochastic = (:solved, :oos_infeasible_skipped),
+)
+
 export TSODSOError, SolveFailedError, CertificateError, ConvergenceError

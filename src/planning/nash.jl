@@ -486,6 +486,8 @@ state to, and `order` is the sweep order actually used.
 Two trailing, additive certificate fields (Phase 30 code review iteration 2, CR-01):
 `certificates::Vector{NamedTuple}` has one row per best response actually solved, in
 solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
+A trailing `status` is `:converged` or `:converged_relaxation_only` (iff `any_relaxation_only`; see `STATUS_VOCABULARY.run_nash`).
+
 `any_relaxation_only::Bool` is `true` iff any best response of ANY sweep (not only the
 final one) certified the SOC relaxation only. Under the default `inexact_policy = :strict` it is always `false` (an inexact solve throws instead).
 
@@ -1014,6 +1016,9 @@ function run_nash!(
                 # CR-01 (Phase 30 code review iteration 2): trailing, additive.
                 certificates,
                 any_relaxation_only = any(c -> c.ub_relaxation_only, certificates),
+                # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.run_nash).
+                status = any(c -> c.ub_relaxation_only, certificates) ?
+                         :converged_relaxation_only : :converged,
             )
         end
     end
