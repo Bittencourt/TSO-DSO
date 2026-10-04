@@ -33,6 +33,7 @@ function _admm_build(
         λ₀ = λ₀,
         reactive_consensus = mode,
         ρ_q = ρ_qf,
+        pf = pf,
     )
     load_nodes = dso.load_nodes                       # ascending non-root aggregator buses
 
@@ -294,6 +295,9 @@ function _admm_certify(
     )
     p_import = dres_final.p_import
     exact_maxgap = dres_final.exact_maxgap
+    # No cone / branch current (e.g. LinDistFlow): NaN, never 0/nothing, so a missing
+    # certificate cannot read as "exact".
+    has_branch_current(dso.ctx) || (exact_maxgap = NaN)
     st.p_import = p_import
     st.exact_maxgap = exact_maxgap
 

@@ -255,6 +255,7 @@ function solve_agr!(
     check_4q::Bool = false,
     rtol_4q::Real = 1e-4,
     atol_4q::Real = 1e-8,
+    battery_on_violation::Symbol = :error,
 )
     length(λ_j) == agr.T || throw(
         ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"),
@@ -306,7 +307,12 @@ function solve_agr!(
     # App. C battery complementarity — CONVERGENCE-ONLY under ADMM (see docstring): mid-loop
     # iterates are legitimately off-consensus, so `solve_admm` gates this behind check_battery.
     if check_battery
-        assert_battery_complementarity!(agr.ctx; τ = τ_batt, T = agr.T)
+        assert_battery_complementarity!(
+            agr.ctx;
+            τ = τ_batt,
+            T = agr.T,
+            on_violation = battery_on_violation,
+        )
     end
 
     # NEW (MESH-04/MESH-05): the 4Q-BESS peer certificate, SAME post-solve block, SAME

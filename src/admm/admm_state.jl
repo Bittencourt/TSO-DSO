@@ -42,6 +42,47 @@ mutable struct _LiveState
 end
 
 """
+    admm_supported(pf::AbstractPowerFlow) -> Bool
+
+Trait: can `pf` drive the decentralized ADMM (`solve_admm`/`build_dso_opt`)? `true` for
+[`ConvexBranchFlow`](@ref) (both variants), [`RestrictedBranchFlow`](@ref), [`MeshedFlow`](@ref)
+and [`LinDistFlow`](@ref); `false` for everything else (`ACPowerFlow`, `DCPowerFlow`, ...).
+DSO-OPT delegates network construction to the formulation's `contribute!`, so any formulation
+whose `contribute!` yields the nodal-balance / `Rp,Rq` seam the ADMM coupling needs is supported
+(ARCH-05). Mirrored at the symbol level by `supports_pf(::ADMM, ...)`.
+"""
+admm_supported(::AbstractPowerFlow) = false
+admm_supported(::Union{ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, LinDistFlow}) = true
+
+"""
+    _check_admm_pair!(fname::Symbol, feeder::AbstractFeeder, pf::AbstractPowerFlow)
+
+Up-front validation of the (topology, formulation) pair: `pf` must be [`admm_supported`](@ref), and
+a `MeshedFeeder` is valid ONLY with [`MeshedFlow`](@ref). Throws `ArgumentError` naming `fname`.
+"""
+function _check_admm_pair!(fname::Symbol, feeder::AbstractFeeder, pf::AbstractPowerFlow)
+    admm_supported(pf) || throw(
+        ArgumentError(
+            "$fname: power flow $(typeof(pf)) is not ADMM-capable (supported: " *
+            "ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, LinDistFlow)",
+        ),
+    )
+    feeder isa MeshedFeeder && !(pf isa MeshedFlow) && throw(
+        ArgumentError(
+            "$fname is radial-only for $(typeof(pf)); got a MeshedFeeder - use pf = MeshedFlow() " *
+            "for a meshed feeder",
+        ),
+    )
+    return nothing
+end
+
+# Battery complementarity policy under ADMM: SOCP-class formulations keep the fail-loud gate
+# (default path bit-identical); non-SOCP ones warn (mirrors welfare_solve.jl).
+_batt_on_violation(st) = problem_class(st.dso.ctx.pf) isa SOCP ? :error : :warn
+
+export admm_supported
+
+"""
 Mutable iterate state of one `solve_admm` run (per-load-node length-`T` profiles, NEVER a JuMP
 Parameter). `react` is `nothing` under OFF/CERTIFIED (no reactive arrays allocated).
 """
@@ -96,6 +137,7 @@ function _react_agr_solve!(
             st.c[j],
             st.ρf;
             check_battery = true,
+            battery_on_violation = _batt_on_violation(st),
             τ_batt = 1e-3,
             strict = false,
             check_4q = has_4q,
@@ -129,6 +171,7 @@ function _react_agr_solve!(
             d_j = ls.d[j],
             ρ_q = ls.ρ_qf,
             check_battery = true,
+            battery_on_violation = _batt_on_violation(st),
             τ_batt = 1e-3,
             strict = false,
             check_4q = has_4q,

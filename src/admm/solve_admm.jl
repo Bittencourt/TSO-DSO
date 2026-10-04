@@ -52,7 +52,7 @@
 using JuMP
 
 """
-    solve_admm(feeder, pf::ConvexBranchFlow, aggregators;
+    solve_admm(feeder, pf::AbstractPowerFlow, aggregators;
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
@@ -237,8 +237,8 @@ price (WR-03, phase-19 review).
     non-convergence, so it is not fail-loud.
 """
 function solve_admm(
-    feeder::Feeder,
-    pf::ConvexBranchFlow,
+    feeder::AbstractFeeder,
+    pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     T::Int = 24,
     λ₀,
@@ -259,6 +259,7 @@ function solve_admm(
     rtol_exact::Real = 1e-4,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
+    _check_admm_pair!(:solve_admm, feeder, pf)
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
     # A degenerate horizon (T = 0, with a length-0 λ₀ that would pass the shape guard below) makes
     # the coupling-entry count p = length(load_nodes)·T == 0, so ε_pri = ε_dual = 0 AND every
@@ -334,10 +335,6 @@ function solve_admm(
     end
 
     return _admm_certify(st, rmode, mode, aggregators, λ₀, atol_exact, rtol_exact)
-end
-
-function solve_admm(::MeshedFeeder, args...; kwargs...)
-    throw(ArgumentError("solve_admm is radial-only (decentralized ADMM needs the radial recursion); got a MeshedFeeder - use solve_welfare with MeshedFlow for the centralized meshed solve (ARCH-03; formulation-generic meshed ADMM is Phase 34)"))
 end
 
 export solve_admm

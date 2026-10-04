@@ -129,13 +129,34 @@ end
         mesh = TSODSO.MeshedFeeder(bus3, loop, 1)
         for (f, name) in ((TSODSO.solve_admm, "solve_admm"), (TSODSO.build_dso_opt, "build_dso_opt"))
             err = try
-                f(mesh, TSODSO.ConvexBranchFlow(), TSODSO.Aggregator[]; T = 2)
+                if f === TSODSO.solve_admm
+                    f(mesh, TSODSO.ConvexBranchFlow(), TSODSO.Aggregator[]; T = 2, λ₀ = [4.0, 4.0], ρ = 10.0)
+                else
+                    f(mesh, TSODSO.Aggregator[], 2; ρ = 10.0, λ₀ = [4.0, 4.0])
+                end
                 nothing
             catch e
                 e
             end
             @test err isa ArgumentError
             @test occursin(name, err.msg) && occursin("MeshedFeeder", err.msg)
+        end
+        # (MeshedFeeder, MeshedFlow) passes the pair check: with an EMPTY aggregator vector it
+        # reaches the NEXT guard (the empty-aggregators error), not the pair error.
+        for f in (TSODSO.solve_admm, TSODSO.build_dso_opt)
+            err = try
+                if f === TSODSO.solve_admm
+                    f(mesh, TSODSO.MeshedFlow(), TSODSO.Aggregator[]; T = 2, λ₀ = [4.0, 4.0], ρ = 10.0)
+                else
+                    f(mesh, TSODSO.Aggregator[], 2; ρ = 10.0, λ₀ = [4.0, 4.0], pf = TSODSO.MeshedFlow())
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("at least one aggregator", err.msg)
+            @test !occursin("radial-only", err.msg)
         end
         @test hasmethod(TSODSO.solve_admm, Tuple{TSODSO.Feeder,TSODSO.ConvexBranchFlow,Vector{TSODSO.Aggregator}})
         @test hasmethod(TSODSO.build_dso_opt, Tuple{TSODSO.Feeder,Vector{TSODSO.Aggregator},Int})

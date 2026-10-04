@@ -272,14 +272,16 @@ caller overrides it (plan 19-07 adapts it independently via [`set_rho_q!`](@ref)
 (never referenced) under `OFF`/`CERTIFIED`.
 """
 function build_dso_opt(
-    feeder::Feeder,
+    feeder::AbstractFeeder,
     aggregators,
     T::Int;
     ρ::Real,
     λ₀,
     reactive_consensus = _any_flexible_reactive(aggregators) ? LIVE : false,
     ρ_q::Real = ρ,
+    pf::AbstractPowerFlow = ConvexBranchFlow(),
 )
+    _check_admm_pair!(:build_dso_opt, feeder, pf)
     mode = normalize_reactive_mode(reactive_consensus)
 
     # Boundary guards (mirror solve_welfare): fail here, not deep in objective assembly.
@@ -393,7 +395,7 @@ function build_dso_opt(
 
     # (2) VERBATIM ConvexBranchFlow reuse: P, Q, v, v̂, l, cone, vdrop, cpydrop, smax,
     # :Rp/:Rq, and the pf_vars stash (with :l) — the SOCP is NOT re-implemented here.
-    contribute!(ConvexBranchFlow(), ctx, feeder; T = T)
+    contribute!(pf, ctx, feeder; T = T)
 
     # (3) FREE-SIGN priced frontier at the root, injected BEFORE closing the residuals.
     @variable(model, p_import[t = 1:T])              # free-sign active frontier exchange
@@ -490,10 +492,6 @@ function build_dso_opt(
         Float64(ρ),
         Vector{Float64}(λ₀),
     )
-end
-
-function build_dso_opt(::MeshedFeeder, args...; kwargs...)
-    throw(ArgumentError("build_dso_opt is radial-only (decentralized ADMM needs the radial recursion); got a MeshedFeeder - use solve_welfare with MeshedFlow for the centralized meshed solve (ARCH-03; formulation-generic meshed ADMM is Phase 34)"))
 end
 
 """
@@ -660,7 +658,7 @@ function solve_dso!(
     # PF-04 EXACTNESS GATE — CONVERGENCE ONLY (RESEARCH Pitfall 3). Runs strictly AFTER
     # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.
     # Mid-loop iterates skip this — they are legitimately inexact and would throw spuriously.
-    if check_exact
+    if check_exact && has_branch_current(dso.ctx)
         dso.ctx.meta[:socp_maxgap] =
             assert_socp_exact!(dso.ctx; rtol = rtol_exact, atol = atol_exact)
     end
