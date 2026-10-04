@@ -689,7 +689,7 @@ function fit_baseline(
             allow_export = true,
         )
     catch e
-        (e isa ErrorException && occursin("ALMOST_OPTIMAL", e.msg)) || rethrow(e)
+        (_is_solver_failure(e) && occursin("ALMOST_OPTIMAL", e.msg)) || rethrow(e)
         retry_ctx, retry_obj, retry_dadp = solve_welfare(
             relaxed,
             pf,

@@ -195,7 +195,7 @@ function solve_with_retry!(
             attempts_out === nothing || (attempts_out[] = attempt)
             return result
         catch e
-            e isa ErrorException || rethrow()
+            _is_solver_failure(e) || rethrow()
             ts = termination_status(model)
             if ts in RETRYABLE_STATUSES && attempt < n_attempts
                 @warn "solve_with_retry!: attempt $attempt failed ($ts); escalating conditioning" raw =

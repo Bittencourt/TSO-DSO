@@ -119,7 +119,7 @@ function ac_recheck_incumbent(
     try
         assert_solved!(oracle_ac.model; dual = false, allow_local = true)
     catch e
-        e isa ErrorException || rethrow()
+        _is_solver_failure(e) || rethrow()
         throw(
             ErrorException(
                 "ac_recheck_incumbent: AC power-flow re-check FAILED to reach " *

@@ -66,7 +66,7 @@ function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
         solve_stochastic_oos_step!(h_oos)
         return objective_value(h_oos.model), false
     catch e
-        e isa ErrorException || rethrow()
+        _is_solver_failure(e) || rethrow()
         ts = termination_status(h_oos.model)
         ts in (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE) ||
             rethrow()

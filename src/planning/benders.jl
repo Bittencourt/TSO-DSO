@@ -315,7 +315,7 @@ function _oracle_or_infeasible(oracle, z; on_inexact::Symbol, feas_oracle = noth
     return try
         solve_planning_oracle!(oracle, z; on_inexact = on_inexact)
     catch e
-        e isa ErrorException || rethrow()
+        _is_solver_failure(e) || rethrow()
         is_solved_and_feasible(oracle.model; dual = true) && rethrow()
         ts = termination_status(oracle.model)
         ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
@@ -822,7 +822,7 @@ function _incumbent_ac_report(feeder, aggregators, λ₀, T::Int, z, socp_welfar
         ac = ac_recheck_incumbent(feeder, aggregators, λ₀, T, z)
         (; ac..., socp_welfare, welfare_gap = socp_welfare - ac.ac_welfare, error = nothing)
     catch e
-        e isa ErrorException || rethrow()
+        _is_solver_failure(e) || rethrow()
         (;
             ok = false,
             violations = nothing,
@@ -1384,7 +1384,7 @@ function solve_stackelberg!(
                 on_inexact = inexact_policy === :strict ? :throw : :report,
             )
         catch e
-            e isa ErrorException || rethrow()
+            _is_solver_failure(e) || rethrow()
             # A throw from a TRUSTED solve can only come from a post-solve gate
             # (complementarity, or exactness under :strict) — never an infeasibility.
             # Propagate it with its own diagnosis (CR-03: no reclassification).
@@ -1413,7 +1413,7 @@ function solve_stackelberg!(
             fo_res = try
                 solve_feasibility_oracle!(feas_oracle, lb_res.z; attempts_out = fo_attempts)
             catch fo_err
-                fo_err isa ErrorException || rethrow()
+                _is_solver_failure(fo_err) || rethrow()
                 error(
                     "solve_stackelberg!: oracle reported $(oracle_ts) at z_k=$(lb_res.z) " *
                     "(iteration $k), and the slack-minimization feasibility oracle ALSO " *
