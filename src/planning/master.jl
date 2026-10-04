@@ -223,7 +223,7 @@ planning-layer subproblem builder in that registry's sense — see that file's o
 comment for the full exemption rationale.
 """
 function make_relaxed_oracle_model(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     λ₀,
@@ -313,7 +313,7 @@ alpha_lb_margin(optimum, gap)` (scale-aware), and `bound = optimum − margin` i
 `optimum` (never against `bound` — WR-03).
 """
 function alpha_op_lb_derivation(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     λ₀,
@@ -340,7 +340,7 @@ Derive `α_op_lb` (BILEV-05): the `bound` of [`alpha_op_lb_derivation`](@ref), i
 overrides it.
 """
 function derive_alpha_op_lb(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     λ₀,

@@ -53,7 +53,7 @@ objective), with the RELAXED pin's free-sign slack variables `s_plus`/`s_minus` 
   - `T::Int` — the day-ahead horizon.
   - `feeder` — the network the oracle is built on.
 """
-struct FeasibilityOracle{Z, PC, PI, SP, SM, F}
+struct FeasibilityOracle{Z, PC, PI, SP, SM, F <: AbstractFeeder}
     model::Model
     ctx::ModelContext
     z::Z
@@ -90,7 +90,7 @@ Throws `ArgumentError` on an empty `aggregators` or an aggregator bus outside
 (no `λ₀`-length guard here — this oracle takes no `λ₀`).
 """
 function build_feasibility_oracle(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     T::Int,

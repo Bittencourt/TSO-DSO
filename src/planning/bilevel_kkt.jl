@@ -281,7 +281,7 @@ insufficient.
 Returns a [`BilevelKKT`](@ref).
 """
 function build_bilevel_kkt(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow = LinDistFlow();
     T::Int,
     agg_bus::Int,

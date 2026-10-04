@@ -389,7 +389,7 @@ skew the headline — threat T-05-04); and (plan 27-09, `on_inexact = :error` on
 (T-27-12).
 """
 function fit_baseline(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators;
     T::Int = 24,

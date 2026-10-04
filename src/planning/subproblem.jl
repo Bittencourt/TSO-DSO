@@ -56,7 +56,7 @@ setpoint `z[t]` and a named pin constraint `p_import[t] == z[t]` (D-01).
   - `feeder` — the network the oracle is built on.
   - `λ₀::Vector{Float64}` — the MEM / wholesale price profile pricing `p_import`.
 """
-struct PlanningOracle{Z, PC, PI, F}
+struct PlanningOracle{Z, PC, PI, F <: AbstractFeeder}
     model::Model
     ctx::ModelContext
     z::Z
@@ -113,7 +113,7 @@ Returns a [`PlanningOracle`](@ref). `welfare_solve.jl`/`oracle.jl` are NOT modif
 this function (D-03/D-11) — it is a wholly NEW module reusing their builders verbatim.
 """
 function build_planning_oracle(
-    feeder,
+    feeder::AbstractFeeder,
     pf::AbstractPowerFlow,
     aggregators::AbstractVector{<:Aggregator};
     λ₀,
