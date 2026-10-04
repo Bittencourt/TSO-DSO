@@ -164,9 +164,7 @@ function build_mpc_window(
 
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = H
-    ctx.meta[:T] = H  # TRANSIENT-MIRROR
     ctx.meta[:problem_class] = problem_class(pf)
 
     # VERBATIM power-flow builder reuse.

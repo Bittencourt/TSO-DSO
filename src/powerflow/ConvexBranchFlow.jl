@@ -13,7 +13,7 @@
 # `:Rp`/`:Rq` balances (3.31/3.32), the true voltage drop with `+(r²+x²)·l` (3.33), the
 # copy drop (3.43), the rotated SOC cone `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()`
 # (3.39), and the sending-end/receiving-end apparent-power limits (3.36/3.37). Stashes
-# `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)` for the PF-04 exactness checker.
+# `ctx.pf_vars = (; v, v̂, P, Q, l)` for the PF-04 exactness checker.
 #
 # FIX-01/02 (phase 26-02): the thesis's OWN text (page ~84) states that after imposing the
 # exactness-copy bounds, `v ≤ V²max` (3.35) becomes REDUNDANT, citing Gan, Li, Topcu & Low
@@ -372,7 +372,6 @@ function _contribute_convex!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::Ab
     # keys off the presence of :l to run `max|l·v − (P²+Q²)| < τ` and refuse prices on
     # inexactness. DC/LinDistFlow stash no :l, so that gate leaves them untouched.
     ctx.pf_vars = (; v, v̂, P, Q, l)
-    ctx.meta[:pf_vars] = ctx.pf_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
     return ctx
 end
 

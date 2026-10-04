@@ -79,7 +79,7 @@ function welfare_accounting(
     atol::Real = 1e-4,
     _transfer_flip::Bool = false,
 )
-    for key in (:agg_net, :objective, :p_import, :feeder)
+    for key in (:agg_net, :p_import)
         haskey(ctx.meta, key) || throw(
             ArgumentError(
                 "welfare_accounting: ctx.meta is missing :$key — this is not a solved " *

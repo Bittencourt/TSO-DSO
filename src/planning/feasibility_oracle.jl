@@ -114,9 +114,7 @@ function build_feasibility_oracle(
 
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
     ctx.meta[:problem_class] = problem_class(pf)
 
     # VERBATIM power-flow builder reuse.

@@ -379,9 +379,7 @@ function build_bilevel_kkt(
     model = Model(select_optimizer(MILP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     contribute!(pf, ctx, feeder; T = T)   # the embedded LinDistFlow network (Option B)
 

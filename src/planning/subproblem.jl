@@ -152,9 +152,7 @@ function build_planning_oracle(
 
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
     # CR-03: stash the formulation's problem class so solve_planning_oracle! can default
     # its battery-complementarity τ PROBLEM-CLASS-AWARE (looser 1e-3 on the interior-point
     # SOCP path, tighter 1e-6 on the QP path) — mirroring solve_welfare's τ default —

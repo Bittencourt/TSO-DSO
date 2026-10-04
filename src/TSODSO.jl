@@ -112,7 +112,7 @@ include("models/complementarity_4q.jl")   # plan 19-05, MESH-04
 include("models/oracle.jl")
 
 # --- AC-exactness oracle post-processing (owned by plan 15-01/15-02, EXACT-01/02/03) ---
-# Sits beside models/exactness.jl: reads ModelContext.meta[:pf_vars] populated by BOTH the SOCP
+# Sits beside models/exactness.jl: reads ModelContext.pf_vars populated by BOTH the SOCP
 # (ConvexBranchFlow) and AC (ACPowerFlow) solves. recover_voltage_angles (15-01) recovers true
 # voltage phasors; assert_ac_exact! (15-02) certifies the SOCP relaxation per-hour against the AC
 # oracle. Included after models/oracle.jl and before the pricing/ block.

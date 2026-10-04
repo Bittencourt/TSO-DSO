@@ -204,7 +204,6 @@ Keeping it in its own typed field keeps `residuals` strictly affine/physical.
 """
 function add_to_objective!(ctx::ModelContext, expr)
     ctx.objective = ctx.objective + expr
-    ctx.meta[:objective] = ctx.objective  # TRANSIENT-MIRROR (removed in Plan 33-10)
     return ctx.objective
 end
 

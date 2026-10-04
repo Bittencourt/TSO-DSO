@@ -28,7 +28,7 @@
 # formulation-flag branching anywhere.
 #
 # Harmless :l-keyed double-fire (documented, NOT a defect to "fix"): because this formulation
-# ALSO stashes `:l` in `ctx.meta[:pf_vars]`, the `:l`-gated `assert_socp_exact!` call inside
+# ALSO stashes `:l` in `ctx.pf_vars`, the `:l`-gated `assert_socp_exact!` call inside
 # `solve_welfare` (welfare_solve.jl:256-258) fires on an ACPowerFlow-built ctx too. It is
 # harmless: the "cone" is an EQUALITY by construction, so the residual `l·v − (P²+Q²)` is ~0
 # and the gate passes trivially, stashing a near-zero `ctx.meta[:socp_maxgap]`. This is
@@ -278,7 +278,6 @@ function contribute!(pf::ACPowerFlow, ctx::ModelContext, feeder::AbstractFeeder;
     # assert_socp_exact! double-fire inside solve_welfare (residual ~0 since the cone is an
     # equality). No :v̂ — the field set is the ConvexBranchFlow stash MINUS the copy.
     ctx.pf_vars = (; v, P, Q, l)
-    ctx.meta[:pf_vars] = ctx.pf_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
     ctx.pf = pf
     return ctx
 end

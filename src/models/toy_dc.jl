@@ -42,7 +42,6 @@ function solve_toy_dc(feeder::AbstractFeeder)
     model = Model(select_optimizer(LP()))       # factory — NO solver named here (INFRA-02)
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
 
     @variable(model, p_import >= 0)              # power drawn from the frontier node (pu)
     @variable(model, 0 <= p_load <= 1.0)         # trivial servable load (pu)

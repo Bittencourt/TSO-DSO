@@ -132,7 +132,6 @@ function build_agr_opt(
     model = Model(select_optimizer(QP()))
     ctx = ModelContext(model)
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     # (2) Reuse the aggregator/device builders VERBATIM (RESEARCH Pattern 4, option a). This
     # populates ctx.objective (U_ag, a QuadExpr) and ctx.agg_device_vars (the

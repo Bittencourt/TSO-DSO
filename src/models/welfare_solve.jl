@@ -149,9 +149,7 @@ function solve_welfare(
 
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     Np = length(feeder.buses)
 

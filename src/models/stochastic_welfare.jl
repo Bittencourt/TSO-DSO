@@ -286,9 +286,7 @@ function build_stochastic_welfare(
     for s in 1:S
         ctx_s = ModelContext(model)
         ctx_s.feeder = feeder
-        ctx_s.meta[:feeder] = feeder  # TRANSIENT-MIRROR
         ctx_s.T = T
-        ctx_s.meta[:T] = T  # TRANSIENT-MIRROR
 
         # Formulation: branch/voltage terms into ctx_s.residuals[:Rp] (and :Rq).
         contribute!(pf, ctx_s, feeder; T = T)
@@ -628,9 +626,7 @@ function build_stochastic_oos_harness(
 
     ctx = ModelContext(model)
     ctx.feeder = feeder
-    ctx.meta[:feeder] = feeder  # TRANSIENT-MIRROR
     ctx.T = T
-    ctx.meta[:T] = T  # TRANSIENT-MIRROR
 
     # VERBATIM power-flow builder reuse — called EXACTLY ONCE (no unregister needed).
     contribute!(pf, ctx, feeder; T = T)

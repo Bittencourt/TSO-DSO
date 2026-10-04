@@ -100,7 +100,6 @@ function contribute!(pf::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int 
     end
 
     ctx.pf_vars = (; v, P, Q)   # stash for post-solve inspection / Phase-4 exactness
-    ctx.meta[:pf_vars] = ctx.pf_vars  # TRANSIENT-MIRROR (removed in Plan 33-10)
     ctx.pf = pf
     return ctx
 end
