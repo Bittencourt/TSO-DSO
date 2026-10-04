@@ -168,7 +168,7 @@ end
 RestrictedBranchFlow(; ε::Real = 0.0) = RestrictedBranchFlow(ε)
 
 """
-    contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int=1)
+    contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int=1)
 
 Write the SOCP DistFlow branch/voltage terms — identical to
 [`contribute!(::ConvexBranchFlow, …)`](@ref), via direct delegation — then add Gan-Low's
@@ -207,8 +207,13 @@ After both mechanisms are wired, stashes `ctx.meta[:restriction_ε] = pf.ε` and
 `ctx.meta[:formulation] = :RestrictedBranchFlow` (D-08 provenance, consumed by plan 20-03's
 certificate). Returns `ctx`.
 """
-function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
-    contribute!(ConvexBranchFlow(), ctx, feeder; T = T)
+function contribute!(::RestrictedBranchFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
+    throw(ArgumentError("RestrictedBranchFlow requires a radial Feeder, got MeshedFeeder " *
+        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair per ARCH-03"))
+end
+
+function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
+    _contribute_convex!(ConvexBranchFlow(), ctx, feeder; T = T)
 
     pv = ctx.meta[:pf_vars]
     N = length(feeder.buses)
@@ -324,3 +329,5 @@ end
 problem_class(::RestrictedBranchFlow) = SOCP()
 
 export RestrictedBranchFlow
+
+has_branch_current(::RestrictedBranchFlow) = true  # carries the branch-current variable l

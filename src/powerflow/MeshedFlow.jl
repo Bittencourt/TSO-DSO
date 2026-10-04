@@ -76,8 +76,8 @@ exactness-copy/apparent-power-cone constraint set, since that constraint set is 
 graph-generic (see [`MeshedFlow`](@ref)'s docstring). Adds NOTHING beyond a provenance
 stash: `ctx.meta[:formulation] = :MeshedFlow`. Returns `ctx`.
 """
-function contribute!(pf::MeshedFlow, ctx::ModelContext, feeder; T::Int = 1)
-    contribute!(ConvexBranchFlow(), ctx, feeder; T = T)
+function contribute!(pf::MeshedFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
+    _contribute_convex!(ConvexBranchFlow(), ctx, feeder; T = T)
     ctx.meta[:formulation] = :MeshedFlow   # D-08-style provenance for plan 23-03's certificate
     return ctx
 end
@@ -88,3 +88,5 @@ end
 problem_class(::MeshedFlow) = SOCP()
 
 export MeshedFlow
+
+has_branch_current(::MeshedFlow) = true  # carries the branch-current variable l

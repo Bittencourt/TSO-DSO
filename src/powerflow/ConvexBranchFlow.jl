@@ -201,7 +201,23 @@ branch `(i,j)` contributes `+P − r·l` (`:Rp`) / `+Q − x·l` (`:Rq`) at the 
 `add_to_residual!` seam unchanged. Stashes `ctx.meta[:pf_vars] = (; v, v̂, P, Q, l)` for the
 PF-04 exactness checker. Returns `ctx`.
 """
-function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder; T::Int = 1)
+function contribute!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
+    return _contribute_convex!(pf, ctx, feeder; T = T)
+end
+
+"""
+    contribute!(::ConvexBranchFlow, ::ModelContext, ::MeshedFeeder; T)
+
+Invalid formulation x feeder pair (ARCH-03): always throws `ArgumentError`. Use `MeshedFlow`.
+"""
+function contribute!(::ConvexBranchFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
+    throw(ArgumentError("ConvexBranchFlow requires a radial Feeder, got MeshedFeeder " *
+        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair per ARCH-03"))
+end
+
+# INTERNAL shared SOCP body (byte-for-byte the former public `contribute!` body); also used by
+# `RestrictedBranchFlow` and `MeshedFlow`, which must NOT go through the radial-only public method.
+function _contribute_convex!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -365,3 +381,5 @@ end
 problem_class(::ConvexBranchFlow) = SOCP()
 
 export ConvexBranchFlow
+
+has_branch_current(::ConvexBranchFlow) = true  # carries the branch-current variable l

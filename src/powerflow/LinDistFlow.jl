@@ -53,7 +53,12 @@ outflow of `Q`) into `ctx.residuals[:Rq]` (thesis 3.32), both via the INDEXED
 `add_to_residual!`. Stashes `ctx.meta[:pf_vars] = (; v, P, Q)` for post-solve
 inspection / the Phase-4 exactness check. Returns `ctx`.
 """
-function contribute!(::LinDistFlow, ctx::ModelContext, feeder; T::Int = 1)
+function contribute!(::LinDistFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
+    throw(ArgumentError("LinDistFlow requires a radial Feeder, got MeshedFeeder " *
+        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair per ARCH-03"))
+end
+
+function contribute!(::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
