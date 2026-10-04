@@ -106,7 +106,7 @@ Build the planning-layer oracle subproblem (thesis-welfare-shaped, mirrors
  7. THE NEW SEAM: `z[t] in Parameter(0.0)` and the named pin `p_import[t] == z[t]`
     (D-01/D-11) — the live coupling constraint superseding the SEAM-01 `ArgumentError`
     stub in `_coupling_dual`.
- 8. `@objective(model, Max, ctx.meta[:objective] - Σ_t λ₀[t]*p_import[t])` — identical
+ 8. `@objective(model, Max, ctx.objective - Σ_t λ₀[t]*p_import[t])` — identical
     shape to `solve_welfare`'s welfare objective (thesis eq. 3.38).
 
 Returns a [`PlanningOracle`](@ref). `welfare_solve.jl`/`oracle.jl` are NOT modified by
@@ -211,7 +211,7 @@ function build_planning_oracle(
     @constraint(model, pin[t = 1:T], p_import[t] == z[t])
 
     # GLB-CVX welfare (thesis eq. 3.38), identical shape to solve_welfare's objective.
-    @objective(model, Max, ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T))
+    @objective(model, Max, ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T))
 
     return PlanningOracle(
         model,
@@ -242,7 +242,7 @@ the SAME two mandatory post-solve trust gates as [`solve_welfare`](@ref), the mo
 oracle mirrors, strictly BEFORE any dual is read (CR-03):
 
  1. the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(o.ctx; rtol = rtol_exact)` —
-    DATA-DRIVEN on the squared-current `:l` stash in `o.ctx.meta[:pf_vars]` (only
+    DATA-DRIVEN on the squared-current `:l` stash in `o.ctx.pf_vars` (only
     `ConvexBranchFlow` stashes `:l`; DC/LinDistFlow skip untouched). The pin
     `p_import[t] == z[t]` REMOVES the priced-export degree of freedom that
     `solve_welfare` identifies as the SOC-exactness ENABLER, so an off-optimal `z_trial`
@@ -351,7 +351,7 @@ function solve_planning_oracle!(
     # an inexact solve.
     exactness = :not_applicable
     socp_maxgap = NaN
-    if haskey(o.ctx.meta, :pf_vars) && haskey(o.ctx.meta[:pf_vars], :l)
+    if has_branch_current(o.ctx.pf)
         try
             socp_maxgap = assert_socp_exact!(o.ctx; rtol = rtol_exact)
             o.ctx.meta[:socp_maxgap] = socp_maxgap
@@ -366,7 +366,7 @@ function solve_planning_oracle!(
     # CR-03 / App. C MANDATORY battery complementarity at the PINNED point (mirrors
     # solve_welfare, threat T-03-13): degenerate p_ch·p_dch co-activation is MORE likely
     # at a pinned off-optimal z than at the free optimum. Data-driven no-op when no
-    # batteries were registered under ctx.meta[:agg_device_vars]. Runs on EVERY returned
+    # batteries were registered under ctx.agg_device_vars. Runs on EVERY returned
     # result, including an `on_inexact = :report` inexact one (Phase 30 CR-01).
     assert_battery_complementarity!(o.ctx; τ = τ, T = o.T)
 

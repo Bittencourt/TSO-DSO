@@ -213,7 +213,7 @@ one. `PlanningOracle.z`'s `Parameter`-pin cannot be "freed" into an inequality b
 re-setting its value — it stays an equality at whatever value is set — so this function
 builds an INDEPENDENT model, never reuses [`PlanningOracle`](@ref).
 
-Objective: `Max ctx.meta[:objective] - Σ_t λ₀[t]*p_import[t]` — identical shape to
+Objective: `Max ctx.objective - Σ_t λ₀[t]*p_import[t]` — identical shape to
 `build_planning_oracle`'s welfare objective, just over the free box instead of a fixed pin.
 
 Deliberately named WITHOUT a `build_` prefix: `test/test_planning_noninteger.jl`'s PVAL-04
@@ -292,7 +292,7 @@ function make_relaxed_oracle_model(
         register_constraint!(ctx, :balance_q, balance_q)
     end
 
-    @objective(model, Max, ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T))
+    @objective(model, Max, ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T))
 
     return model
 end

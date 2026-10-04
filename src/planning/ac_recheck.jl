@@ -63,7 +63,7 @@ DIRECTLY — NEVER `solve_planning_oracle!`/`solve_with_retry!` (both reject Ipo
 THROWN `ErrorException` from it (Ipopt non-convergence — a tooling failure, not a
 physical violation) is re-thrown with a clearer message naming `z_incumbent`.
 
-Violations are computed DIRECTLY from `oracle_ac.ctx.meta[:pf_vars]` (`P`, `Q`, `l`, `v`)
+Violations are computed DIRECTLY from `oracle_ac.ctx.pf_vars` (`P`, `Q`, `l`, `v`)
 against the ORIGINAL `feeder`, over EVERY branch/hour and bus/hour pair, BEYOND a
 per-instance MEASURED tolerance (Phase 30 code review, CR-02): `δ` is the maximum primal
 constraint violation of the solved AC model itself (`primal_feasibility_report`, read at
@@ -136,7 +136,7 @@ function ac_recheck_incumbent(
     δ = isempty(feas_report) ? 0.0 : Float64(maximum(values(feas_report)))
     viol_tol = 10 * δ
 
-    pv = oracle_ac.ctx.meta[:pf_vars]
+    pv = _require_pf_vars(oracle_ac.ctx)
     B = feeder.branches
     Np = length(feeder.buses)
 

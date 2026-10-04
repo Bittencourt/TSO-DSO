@@ -351,12 +351,12 @@
             balance_q = balance_q_
         end
 
-        welfare = ctx.meta[:objective] - sum(λ₀[t] * p_import[t] for t in 1:T)
+        welfare = ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T)
         @objective(model, Max, welfare)
 
         assert_solved!(model; dual = true, allow_local = false)
 
-        if haskey(ctx.meta, :pf_vars) && haskey(ctx.meta[:pf_vars], :l)
+        if has_branch_current(ctx.pf)
             ctx.meta[:socp_maxgap] =
                 assert_socp_exact!(ctx; rtol = rtol_exact, atol = atol_exact)
         end

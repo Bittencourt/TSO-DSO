@@ -1372,7 +1372,7 @@ The ONE genuinely shared row (SIMPLIFIED per this section's header, directly ove
 `z[i,t]`, never a separate `x_op`):
 `capacity[t]: Σᵢ z[i,t] <= corridor_cap * Σᵢ x_inv[i]`.
 
-Objective: `Max Σᵢ [ctx_i.meta[:objective] - Σₜ specs[i].λ₀[t]*z[i,t] - specs[i].master_kwargs.c_y*y_inv[i] - c_inv[i]*x_inv[i] - Σₜ c_op[i][t]*z[i,t]]` — the
+Objective: `Max Σᵢ [ctx_i.objective - Σₜ specs[i].λ₀[t]*z[i,t] - specs[i].master_kwargs.c_y*y_inv[i] - c_inv[i]*x_inv[i] - Σₜ c_op[i][t]*z[i,t]]` — the
 SAME per-distributor cost/welfare shape `solve_joint_reference`/
 `build_shared_transmission` already use, summed over every distributor.
 
@@ -1392,9 +1392,9 @@ length-`T` shared multiplier `dual.(capacity)` — a SINGLE, finite vector BY
 CONSTRUCTION, since the row is written exactly ONCE (there is nothing to "equalize"
 across players; every player's own multiplier IS this one vector) — and
 `cost_per_distributor::Vector{Float64}` is each distributor `i`'s OWN MINIMIZATION-sense
-total cost (`specs[i].master_kwargs.c_y*y_inv[i] + c_inv[i]*x_inv[i] + Σₜ c_op[i][t]*z[i,t]`) MINUS its own oracle welfare (`ctxs[i].meta[:objective] - Σₜ specs[i].λ₀[t]*z[i,t]` — the
+total cost (`specs[i].master_kwargs.c_y*y_inv[i] + c_inv[i]*x_inv[i] + Σₜ c_op[i][t]*z[i,t]`) MINUS its own oracle welfare (`ctxs[i].objective - Σₜ specs[i].λ₀[t]*z[i,t]` — the
 SAME Max-sense quantity `build_planning_oracle`'s own objective assembles, NOT
-`ctxs[i].meta[:objective]` alone, which carries ONLY the device/aggregator utility and
+`ctxs[i].objective` alone, which carries ONLY the device/aggregator utility and
 omits the `-λ₀[t]*z[i,t]` pricing term that lives in THIS function's own joint
 `@objective`, not inside any per-distributor `ctx`). This is EXACTLY the quantity
 `solve_stackelberg!`'s own `UB` tracks (`benders.jl`'s `cost_k = master.c_y*lb_res.y + follower_res.cost - oracle_res.cost`), so `cost_per_distributor[i]` is directly
@@ -1484,7 +1484,7 @@ function solve_variational_equilibrium(
         # this ONE call and `unregister` every NEWLY-added name (JuMP's own sanctioned
         # mechanism for exactly this situation — it only removes the `model[:name]`
         # lookup, never the underlying variable/constraint objects, which stay fully
-        # live via `ctx_i.residuals`/`ctx_i.meta[:pf_vars]`). Formulation-generic: no
+        # live via `ctx_i.residuals`/`ctx_i.pf_vars`). Formulation-generic: no
         # hardcoded name list, so this works for ANY `AbstractPowerFlow` subtype.
         names_before = Set(keys(JuMP.object_dictionary(model)))
         contribute!(specs[i].pf, ctx_i, specs[i].feeder; T = T)
@@ -1563,7 +1563,7 @@ function solve_variational_equilibrium(
         model,
         Max,
         sum(
-            ctxs[i].meta[:objective] - sum(specs[i].λ₀[t] * z[i, t] for t in 1:T) -
+            ctxs[i].objective - sum(specs[i].λ₀[t] * z[i, t] for t in 1:T) -
             Float64(specs[i].master_kwargs.c_y) * y_inv[i] - c_inv[i] * x_inv[i] -
             sum(c_op[i][t] * z[i, t] for t in 1:T) for i in 1:N
         )
@@ -1583,10 +1583,10 @@ function solve_variational_equilibrium(
     # Rule 1 (bug, discovered during execution, Test 3 below): distributor i's OWN
     # oracle welfare — the quantity solve_stackelberg!'s own UB subtracts (`cost_k =
     # master.c_y*lb_res.y + follower_res.cost - oracle_res.cost`, benders.jl) — is
-    # `build_planning_oracle`'s FULL objective `ctx.meta[:objective] - Σ_t λ₀[t]*p_import[t]`,
-    # NOT `ctx.meta[:objective]` alone: the `-λ₀[t]*z[i,t]` pricing term lives in THIS
+    # `build_planning_oracle`'s FULL objective `ctx.objective - Σ_t λ₀[t]*p_import[t]`,
+    # NOT `ctx.objective` alone: the `-λ₀[t]*z[i,t]` pricing term lives in THIS
     # function's own joint `@objective` assembly (summed once over every distributor),
-    # never inside `ctxs[i].meta[:objective]` (which only ever accumulates device/
+    # never inside `ctxs[i].objective` (which only ever accumulates device/
     # aggregator utility via `add_to_objective!`). Omitting it understated every
     # distributor's own welfare by exactly `Σ_t λ₀[t]*z[i,t]`, silently inflating the
     # reported `cost_per_distributor` — caught by Test 3's own no-profitable-deviation
@@ -1598,7 +1598,7 @@ function solve_variational_equilibrium(
             c_inv[i] * x_inv[i] +
             sum(c_op[i][t] * z[i, t] for t in 1:T),
         ) - (
-            value(ctxs[i].meta[:objective]) -
+            value(ctxs[i].objective) -
             sum(specs[i].λ₀[t] * value(z[i, t]) for t in 1:T)
         ) for i in 1:N
     ]
