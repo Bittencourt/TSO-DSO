@@ -13,8 +13,8 @@
 # On FAILURE it THROWS, refusing to return any price: a strict cone at the optimum means
 # `l` is a fictitious over-current and the DADP duals are physically meaningless, with no
 # solver error to warn you (RESEARCH Pitfall 1). It is called inside `solve_welfare`
-# AFTER `assert_solved!` and BEFORE any `dual()` read, gated on `haskey(ctx.meta[:pf_vars],
-# :l)` so the DC/LinDistFlow paths are untouched (data-driven, no formulation branch). The
+# AFTER `assert_solved!` and BEFORE any `dual()` read, gated on `has_branch_current(ctx.pf)`
+# so the DC/LinDistFlow paths are untouched (data-driven, no formulation branch). The
 # returned `maxgap` (the absolute cone residual) is reported as a first-class output.
 #
 using JuMP
@@ -156,8 +156,8 @@ tolerance in `solve_welfare` (do not conflate the two, and do not confuse `rtol`
 Clarabel's internal interior-point duality gap `tol_gap_abs/rel` — a different quantity in
 the solver's own scaling).
 
-Reads `ctx.meta[:pf_vars]` (the `(; v, v̂, P, Q, l)` stash), `ctx.meta[:feeder]`, and
-`ctx.meta[:T]`. Uses an explicit `error(...)` (never `@assert`, which is elided under `-O`), per
+Reads `ctx.pf_vars` (the `(; v, v̂, P, Q, l)` stash), `ctx.feeder`, and
+`ctx.T`. Uses an explicit `error(...)` (never `@assert`, which is elided under `-O`), per
 project convention (`src/core/status.jl`). Throws `ArgumentError` if `feeder` has NO branch
 incident to `feeder.root` in either storage orientation (`br.from == feeder.root` OR `br.to ==
 feeder.root`, FIX-08/plan 27-07) — a malformed/non-radial feeder fails loudly here, never
@@ -174,9 +174,9 @@ function assert_socp_exact!(
     ε::Real = MEASURED_ε_FIX08,
     τ_solver::Real = TAU_SOLVER_FIX08,
 )
-    pv = ctx.meta[:pf_vars]
-    feeder = ctx.meta[:feeder]
-    T = ctx.meta[:T]
+    pv = _require_pf_vars(ctx)
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
 
     # FIX-08 (Phase 27, plan 27-07 revision): the head branch — the FIRST branch incident to
     # feeder.root in EITHER storage orientation (`br.from == feeder.root` OR `br.to ==
@@ -206,17 +206,17 @@ function assert_socp_exact!(
     # meshed feeder with MULTIPLE root-incident branches carrying materially different flow
     # magnitudes, `findfirst`'s branch-STORAGE-ORDER-dependent choice could under/over-state the
     # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this gate's numeric check
-    # only ever runs on a `ConvexBranchFlow`-formulated `ctx` (the DATA-DRIVEN `:l`-stash guard
-    # at this function's call site — `ConvexBranchFlow.jl` is the ONLY formulation module that
-    # stashes `:l` anywhere in this tree, confirmed by grep). The ONE currently-known
+    # only runs on a `ctx` whose formulation carries the branch-current variable (the
+    # `has_branch_current(ctx.pf)` guard at this function's call site). The ONE currently-known
     # multi-root-branch feeder, `Phase23Fixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
     # at buses 2/3, so its two root branches (1,2)/(1,3) DO carry different flow magnitudes by
-    # construction), is exercised EXCLUSIVELY via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
-    # /`test_mesh_flow.jl` — which never stashes `:l`, so this gate's `head_b`/`ref_b` logic never
-    # actually runs against it. So, as of this commit, WR-02's scale-choice concern is real IN
-    # PRINCIPLE (a future `ConvexBranchFlow` meshed fixture with disparate root-branch flows
-    # would need re-verification here) but is NOT a currently-live defect: no such fixture exists
-    # in the tree today. Left as `findfirst` rather than `sum`/`max`-over-root-branches (the
+    # construction), is exercised via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
+    # /`test_mesh_flow.jl`. MeshedFlow delegates to the shared SOCP body, which stashes `:l`, so
+    # `solve_welfare(MeshedFlow)` DOES run this gate (`assert_socp_exact!` passes in test_mesh_flow).
+    # Its `head_b`/`ref_b` logic therefore DOES run on that fixture, and the gate passes there
+    # in the current suite, so WR-02's scale-choice concern is not a currently observed defect
+    # (no verdict flips), but it is unproven for other disparate-flow meshed fixtures.
+    # Left as `findfirst` rather than `sum`/`max`-over-root-branches (the
     # review's own alternative fix) because that numeric change would touch `ref_b` — and hence
     # the exactness PASS/FAIL verdict — for EVERY interior branch on EVERY feeder in the suite
     # (this gate is called from 30+ src/test/docs sites), and verifying no regression requires a
@@ -296,12 +296,12 @@ Duplicates `assert_socp_exact!`'s per-branch, per-time gap computation VERBATIM 
 
 — but returns the raw absolute cone residual `maxgap = maxₜ,ᵦ gap` directly, WITHOUT comparing
 it to any `atol`/`rtol` bound and WITHOUT throwing on a large value. Reads the same
-`ctx.meta[:pf_vars]`/`ctx.meta[:feeder]`/`ctx.meta[:T]` stash as `assert_socp_exact!`.
+`ctx.pf_vars`/`ctx.feeder`/`ctx.T` stash as `assert_socp_exact!`.
 """
 function socp_relaxation_gap(ctx::ModelContext)
-    pv = ctx.meta[:pf_vars]
-    feeder = ctx.meta[:feeder]
-    T = ctx.meta[:T]
+    pv = _require_pf_vars(ctx)
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
 
     maxgap = 0.0
     for (b, br) in enumerate(feeder.branches), t in 1:T
@@ -354,8 +354,8 @@ Each row is a `NamedTuple` with:
     number for an unconstrained interior branch).
 
 Ties in `gap` are broken by `(b,t)` ascending for a deterministic row order. `topn` is clamped to
-the number of `(branch,time)` pairs actually scanned. Reads the same `ctx.meta[:pf_vars]` /
-`ctx.meta[:feeder]` / `ctx.meta[:T]` stash as `assert_socp_exact!`.
+the number of `(branch,time)` pairs actually scanned. Reads the same `ctx.pf_vars` /
+`ctx.feeder` / `ctx.T` stash as `assert_socp_exact!`.
 """
 function socp_gap_report(
     ctx::ModelContext;
@@ -363,9 +363,9 @@ function socp_gap_report(
     rtol::Real = 1e-4,
     atol::Real = 1e-6,
 )
-    pv = ctx.meta[:pf_vars]
-    feeder = ctx.meta[:feeder]
-    T = ctx.meta[:T]
+    pv = _require_pf_vars(ctx)
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
 
     rows = NamedTuple[]
     for (b, br) in enumerate(feeder.branches), t in 1:T

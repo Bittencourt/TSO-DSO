@@ -141,7 +141,7 @@ end
     _coupling_dual(ctx::ModelContext, z) -> Vector{Float64}
 
 Recover the FRONTIER coupling dual `π` from a solved [`ModelContext`](@ref): the dual of
-the active nodal balance `:balance_p` at the feeder root (`ctx.meta[:feeder].root`) over
+the active nodal balance `:balance_p` at the feeder root (`ctx.feeder.root`) over
 the horizon. This is the interconnection price the deferred planning game equates across
 the TSO↔DSO boundary (`λ_j ↔ π_s`, PSR note).
 
@@ -160,7 +160,7 @@ Reads the constraint handle registered by `solve_welfare` as `:balance_p` (a
 `bus × time` array); requires a solve that passed `assert_solved!(...; dual = true)`.
 """
 function _coupling_dual(ctx::ModelContext, z)
-    feeder = ctx.meta[:feeder]
+    feeder = _require_feeder(ctx)
     balance_p = ctx.constraints[:balance_p]        # bus × time ConstraintRef array (DADP)
     root = feeder.root
 

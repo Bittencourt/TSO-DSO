@@ -216,7 +216,7 @@ exists precisely to QUANTIFY that divergence, and `matches_ac_optimum = false` e
 FLAG that the certified-feasible point is not the global optimum — two distinct, both now
 correctly-scoped findings D-05 requires in the SAME call.
 
-Reads `ctx_restricted.meta[:pf_vars]`/`[:feeder]`/`[:T]` and `ctx_ac.meta[:pf_vars]`/`[:T]`
+Reads `ctx_restricted.pf_vars`/`[:feeder]`/`[:T]` and `ctx_ac.pf_vars`/`[:T]`
 (via the internal `assert_ac_exact!` call). Uses an explicit `error(...)`/`@warn(...)`
 (never `@assert`, elided under `-O`), per project convention (`src/core/status.jl`).
 """
@@ -243,9 +243,9 @@ function assert_restriction_exact!(
     # assert_socp_exact!'s 1e-4/1e-6 defaults, D-07/T-20-07 guard). Reimplemented inline
     # (rather than delegating to assert_socp_exact!) so this certificate owns its own
     # throw/report decision instead of inheriting assert_socp_exact!'s unconditional throw.
-    pv = ctx_restricted.meta[:pf_vars]
-    feeder = ctx_restricted.meta[:feeder]
-    T = ctx_restricted.meta[:T]
+    pv = _require_pf_vars(ctx_restricted)
+    feeder = _require_feeder(ctx_restricted)
+    T = _require_T(ctx_restricted)
 
     cone_maxgap = 0.0     # absolute cone residual (worst branch-hour)
     cone_maxratio = 0.0   # worst gap / (cone_atol + cone_rtol·magnitude) — ≤ 1 iff exact

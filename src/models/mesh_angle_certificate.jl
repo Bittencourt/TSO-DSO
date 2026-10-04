@@ -165,7 +165,7 @@ bridge change, Clarabel tolerance change) before a committed verdict flips.
 `recoverable = false` on `:heterogeneous` remains the honest structural gap (D-10),
 shipped as the deliverable, never chased away by further parameter tuning.
 
-Reads `ctx.meta[:feeder]`, `ctx.meta[:T]`, `ctx.meta[:pf_vars]` (the `(; v, v̂, P, Q, l)`
+Reads `ctx.feeder`, `ctx.T`, `ctx.pf_vars` (the `(; v, v̂, P, Q, l)`
 stash `ConvexBranchFlow.contribute!` populates — `MeshedFlow` delegates to it verbatim,
 plan 23-02) — identical inputs to [`recover_voltage_angles`](@ref). Uses an explicit
 `error(...)`/`@warn(...)` (never `@assert`, elided under `-O`), per project convention
@@ -181,9 +181,9 @@ function certify_angle_recoverable!(
     # before anything that can throw.
     delete!(ctx.meta, :price_provenance)
 
-    feeder = ctx.meta[:feeder]
-    T = ctx.meta[:T]
-    pv = ctx.meta[:pf_vars]
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
+    pv = _require_pf_vars(ctx)
     N = length(feeder.buses)
     nB = length(feeder.branches)
 

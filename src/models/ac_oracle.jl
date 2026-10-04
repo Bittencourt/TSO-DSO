@@ -35,12 +35,12 @@ using JuMP
 
 Recover the TRUE voltage phasors `V_j[t]` (magnitude AND angle) from a solved branch-flow
 `ModelContext`, whose native voltage state is the magnitude-only squared voltage
-`v = |V|²`. Returns an `(N, T)` `Matrix{ComplexF64}` (`N = length(ctx.meta[:feeder].buses)`,
-`T = ctx.meta[:T]`).
+`v = |V|²`. Returns an `(N, T)` `Matrix{ComplexF64}` (`N = length(ctx.feeder.buses)`,
+`T = ctx.T`).
 
 This is pure POST-PROCESSING over an already-solved `(v, P, Q, l)` point — it creates no JuMP
-variable and invokes no solver. It reads `ctx.meta[:feeder]`, `ctx.meta[:T]`, and
-`ctx.meta[:pf_vars]` (the `(; v, P, Q, l)` stash) only, and writes nothing back to `ctx`.
+variable and invokes no solver. It reads `ctx.feeder`, `ctx.T`, and
+`ctx.pf_vars` (the `(; v, P, Q, l)` stash) only, and writes nothing back to `ctx`.
 
 Method (Baran–Wu complex-phasor recursion, thesis-adjacent to the 3.33 voltage-drop
 derivation). Anchor the root phasor at angle zero, `V_root[t] = √(v_root[t]) + 0im` (a
@@ -64,9 +64,9 @@ hand-derived closed-form 2-bus phasor (`V₂ = 0.998 − 0.0015im` at the fixtur
 IEEE-13/123.
 """
 function recover_voltage_angles(ctx::ModelContext)
-    feeder = ctx.meta[:feeder]
-    T = ctx.meta[:T]
-    pv = ctx.meta[:pf_vars]
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
+    pv = _require_pf_vars(ctx)
     N = length(feeder.buses)
 
     # Signed-branch adjacency: bus -> list of (neighbor_bus, signed_branch_index). Mirrors
@@ -122,8 +122,8 @@ section.
 
 Pure POST-PROCESSING over an already-solved `(v, P, Q, l)` point — it creates no JuMP
 variable and invokes no solver, and writes nothing back to `ctx`. It reads
-`ctx.meta[:feeder]`, `ctx.meta[:T]`, and `ctx.meta[:pf_vars]` only. Returns an `(N, T)`
-`Matrix{Float64}` (`N = length(ctx.meta[:feeder].buses)`, `T = ctx.meta[:T]`).
+`ctx.feeder`, `ctx.T`, and `ctx.pf_vars` only. Returns an `(N, T)`
+`Matrix{Float64}` (`N = length(ctx.feeder.buses)`, `T = ctx.T`).
 
 `v̂_GL(s)` is the squared voltage that WOULD result from the same power injections `s` if
 every branch's loss current `ℓ ≡ 0` (i.e. the lossless LinDistFlow voltage for the SAME
@@ -174,9 +174,9 @@ Validation (threat T-20-02): a sign or accumulation bug here would silently prod
 measured `ε` for anything downstream.
 """
 function recover_lossfree_shadow_voltage(ctx::ModelContext)
-    feeder = ctx.meta[:feeder]
-    T = ctx.meta[:T]
-    pv = ctx.meta[:pf_vars]
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
+    pv = _require_pf_vars(ctx)
     N = length(feeder.buses)
 
     # Rooted parent/child tree via one BFS traversal from feeder.root. Unlike
@@ -292,7 +292,7 @@ Returns `(; obj_gap, hours)`, NEVER a bare `Bool`:
     threshold. Inspect `hours` to locate and diagnose a genuine per-hour gap; it never collapses
     to a single pass/fail boolean.
 
-Reads `ctx_socp.meta[:pf_vars]`/`[:feeder]`/`[:T]` and `ctx_ac.meta[:pf_vars]`/`[:T]` — the
+Reads `ctx_socp.pf_vars`/`[:feeder]`/`[:T]` and `ctx_ac.pf_vars`/`[:T]` — the
 `(; v, P, Q, l)` (AC) and `(; v, v̂, P, Q, l)` (SOCP) stashes share the `v`/`P`/`Q` field names
 this indexes. Uses an explicit `error` call (never `@assert`) for the `T`-mismatch guard, per
 `src/core/status.jl`.
@@ -306,15 +306,15 @@ function assert_ac_exact!(
     # The ONLY exception path: a STRUCTURAL mismatch. A differing horizon T means the two solves
     # are not the same operating point, so any per-hour "gap" would be meaningless — refuse that
     # (EXACT-03: a NUMERIC disagreement, by contrast, is reported, never raised).
-    T = ctx_socp.meta[:T]
-    T == ctx_ac.meta[:T] || error(
-        "assert_ac_exact!: T mismatch ($T vs $(ctx_ac.meta[:T])) — " *
+    T = _require_T(ctx_socp)
+    T == ctx_ac.T || error(
+        "assert_ac_exact!: T mismatch ($T vs $(ctx_ac.T)) — " *
         "the two solves are not the same operating point",
     )
 
-    feeder = ctx_socp.meta[:feeder]
-    pv_s = ctx_socp.meta[:pf_vars]
-    pv_a = ctx_ac.meta[:pf_vars]
+    feeder = _require_feeder(ctx_socp)
+    pv_s = _require_pf_vars(ctx_socp)
+    pv_a = _require_pf_vars(ctx_ac)
     N = length(feeder.buses)
     nB = length(feeder.branches)
 
