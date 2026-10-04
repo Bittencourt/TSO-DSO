@@ -172,3 +172,33 @@ end
         @test length(r.pag) == Th
     end
 end
+
+@testitem "admm generic pf: solve_agr! 4Q gate on a real co-activating FourQuadBESS (report_4q warns vs throws, IN-07)" tags =
+    [:admm, :genericpf] begin
+    using TSODSO, JuMP, Logging
+
+    # D-08 boundary fixture (same device as test_fourquadbess.jl's honest-boundary item): a
+    # large positive frontier price λ plus a tight upper SOC band makes the AGR-OPT optimum
+    # co-activate p_ch AND p_dch (measured p_ch·p_dch ≈ 15.6 >> tol 6.4e-3), i.e. a REAL
+    # violation reached through solve_agr!'s own call path, not a hand-set solution.
+    d = TSODSO.FourQuadBESS(2, 0.5, 1.0, 8.0, 8.0, 12.0, 0.0, 1.5, 1.3, 1.0, 4.0, 9.0)
+    agg = TSODSO.Aggregator(2, 0.9, [d], [0.0, 0.0])
+    ρ = 0.01
+    λj = [9.0, 9.0]
+    cj = zeros(2)
+
+    agr_err = TSODSO.build_agr_opt(agg, 2; ρ = ρ)
+    @test_throws CertificateError TSODSO.solve_agr!(
+        agr_err, λj, cj, ρ; check_4q = true, report_4q = false,
+    )
+
+    agr_rep = TSODSO.build_agr_opt(agg, 2; ρ = ρ)
+    logger = Test.TestLogger()
+    r = Logging.with_logger(logger) do
+        TSODSO.solve_agr!(agr_rep, λj, cj, ρ; check_4q = true, report_4q = true)
+    end
+    @test length(r.pag) == 2
+    warns = filter(l -> l.level == Logging.Warn, logger.logs)
+    @test !isempty(warns)
+    @test any(l -> occursin("4Q-BESS complementarity violated", string(l.message)), warns)
+end
