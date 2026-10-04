@@ -200,7 +200,7 @@ function _admm_iterate!(
         # (4) JOINT stacked stopping quantities (one record!/converged call; never per-block).
         r_norm, s_norm, ε_pri, ε_dual =
             _react_stack(rmode, st, acc, sq_r, sq_ds, sq_a, sq_pd, sq_λ, p_p, ε_abs, ε_rel)
-        price_gap = st.ρf * r_norm_p   # ACTIVE-only move even under LIVE
+        price_gap = st.ρf * r_norm_p   # ACTIVE-only move even with a live reactive block
 
         record!(residuals, k, r_norm, s_norm, st.ρf, ε_pri, ε_dual, price_gap)
 

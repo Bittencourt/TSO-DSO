@@ -331,7 +331,7 @@ function _react_certify_q!(::Union{_ReactiveCertified, _ReactiveLive}, dso)
 end
 
 # ---- hook: published reactive outputs `(mu_q, q_devices)` ---------------------------------------
-_react_outputs(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState, agr_by_bus) =
+_react_outputs(::Union{_ReactiveOff, _ReactiveCertified}, st, agr_by_bus) =
     (nothing, nothing)
 
 function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)

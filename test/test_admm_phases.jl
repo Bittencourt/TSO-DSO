@@ -90,3 +90,53 @@ end
         @test (r.mu_q === nothing) == (m != TSODSO.LIVE)
     end
 end
+
+@testitem "admm phases: no reactive-mode comparisons outside hooks (audit)" tags =
+    [:admm, :phases] begin
+    using TSODSO
+    root = pkgdir(TSODSO)
+    # Non-comment, non-docstring lines of a source file.
+    function code_lines(path)
+        out = String[]
+        in_doc = false
+        for ln in eachline(path)
+            s = strip(ln)
+            if count("\"\"\"", ln) == 1
+                in_doc = !in_doc
+                continue
+            end
+            (in_doc || startswith(s, "#")) && continue
+            push!(out, ln)
+        end
+        return out
+    end
+    files = [
+        joinpath(root, "src", "admm", "solve_admm.jl"),
+        joinpath(root, "src", "admm", "admm_phases.jl"),
+    ]
+    all_lines = reduce(vcat, (code_lines(f) for f in files))
+    @test !isempty(all_lines)
+    @test !any(l -> occursin(r"\b(OFF|CERTIFIED|LIVE)\b", l), all_lines)
+    @test !any(
+        l -> occursin(r"reactive\w*mode\w*\s*(==|!=|===|!==|\bin\b|∈|isequal)", l) ||
+             occursin(r"(==|!=|===|!==|\bin\b|∈)\s*reactive\w*mode", l),
+        all_lines,
+    )
+    joined = join(all_lines, "\n")
+    for sym in ("_admm_build", "_admm_iterate!", "_adapt_rho!", "_admm_certify")
+        @test occursin(sym, joined)
+    end
+end
+
+@testitem "admm phases: certify/output hooks per mode (admm_phases)" tags =
+    [:admm, :phases] begin
+    using TSODSO
+    # OFF never touches the dso (stub accepted); OFF/CERTIFIED publish no reactive outputs.
+    @test TSODSO._react_certify_q!(TSODSO._ReactiveOff(), nothing) === nothing
+    @test TSODSO._react_outputs(TSODSO._ReactiveOff(), nothing, nothing) == (nothing, nothing)
+    @test TSODSO._react_outputs(TSODSO._ReactiveCertified(), nothing, nothing) ==
+          (nothing, nothing)
+    # CERTIFIED/LIVE certify against the dso (a stub dso must therefore be touched -> error).
+    @test_throws Exception TSODSO._react_certify_q!(TSODSO._ReactiveCertified(), nothing)
+    @test_throws Exception TSODSO._react_certify_q!(TSODSO._ReactiveLive(), nothing)
+end
