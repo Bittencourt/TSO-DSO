@@ -52,6 +52,7 @@ include("powerflow/AbstractPowerFlow.jl")
 
 # --- Core (owned by plan 01-03, PF-01 residual seam / INFRA-03 status) ---
 include("core/ModelContext.jl")
+include("core/balance.jl")
 include("core/status.jl")
 
 # --- Power-flow formulations (owned by plan 02-02, PF-02) ---

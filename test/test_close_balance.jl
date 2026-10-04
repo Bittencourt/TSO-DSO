@@ -126,3 +126,89 @@ end
     @test fp.dsoc[2] == ("balance_p[1,1]", "balance_p[2,24]", 49, 96, 48, true)
     @test fp.dsoc[3] == ("balance_q[1,1]", "balance_q[2,24]", 97, 144, 48, true)
 end
+
+@testitem "close_balance!: contract (reactive/DC, registration, anonymous, shapes) (ARCH-04)" tags =
+    [:balance] begin
+    using TSODSO
+    using JuMP
+    const MOI = JuMP.MOI
+
+    function mkctx(model, N, T; Rq = true)
+        ctx = ModelContext(model)
+        @variable(model, x[1:N, 1:T])
+        ctx.residuals[:Rp] = AffExpr[1.0 * x[j, t] for j in 1:N, t in 1:T]
+        Rq && (ctx.residuals[:Rq] = AffExpr[2.0 * x[j, t] for j in 1:N, t in 1:T])
+        return ctx
+    end
+
+    function t1()
+        m = Model()
+        ctx = mkctx(m, 2, 1)
+        bp, bq = close_balance!(ctx, 2, 1; reactive = true)
+        @test bp isa Matrix && bq isa Matrix
+        @test size(bp) == (2, 1) && size(bq) == (2, 1)
+        @test ctx.constraints[:balance_p] === bp
+        @test ctx.constraints[:balance_q] === bq
+        @test JuMP.name(bp[2, 1]) == "balance_p[2,1]"
+        @test JuMP.name(bq[2, 1]) == "balance_q[2,1]"
+        co = JuMP.constraint_object(bp[1, 1])
+        @test co.set isa MOI.EqualTo
+        @test MOI.constant(co.set) == 0
+    end
+    t1()
+
+    function t2()
+        m = Model()
+        ctx = mkctx(m, 2, 1)
+        bp, bq = close_balance!(ctx, 2, 1; reactive = false)
+        @test bq === nothing
+        @test !haskey(ctx.constraints, :balance_q)
+        @test haskey(ctx.constraints, :balance_p)
+    end
+    t2()
+
+    function t3()
+        m = Model()
+        c1 = mkctx(m, 2, 1)
+        c2 = ModelContext(m)
+        c2.residuals[:Rp] = AffExpr[AffExpr(0.0) for j in 1:2, t in 1:1]
+        close_balance!(c1, 2, 1; reactive = true)
+        close_balance!(c2, 2, 1; reactive = false)
+        @test !haskey(JuMP.object_dictionary(m), :balance_p)
+        @test !haskey(JuMP.object_dictionary(m), :balance_q)
+    end
+    t3()
+
+    function t4()
+        m = Model()
+        ctx = mkctx(m, 1, 1)
+        e = try
+            close_balance!(ctx, 2, 1; reactive = false)
+            nothing
+        catch err
+            err
+        end
+        @test e isa ErrorException
+        @test e.msg == "residual :Rp is (1, 1), expected (2, 1) — an index escaped the feeder"
+        e = try
+            close_balance!(ctx, 2, 1; reactive = false, label = "scenario 3 ")
+            nothing
+        catch err
+            err
+        end
+        @test e.msg ==
+              "scenario 3 residual :Rp is (1, 1), expected (2, 1) — an index escaped the feeder"
+        # :Rq wrong-sized (Rp right-sized)
+        ctx2 = mkctx(Model(), 2, 1)
+        ctx2.residuals[:Rq] = ctx2.residuals[:Rq][1:1, :]
+        e = try
+            close_balance!(ctx2, 2, 1; reactive = true, label = "scenario 3 ")
+            nothing
+        catch err
+            err
+        end
+        @test e.msg ==
+              "scenario 3 residual :Rq is (1, 1), expected (2, 1) — an index escaped the feeder"
+    end
+    t4()
+end
