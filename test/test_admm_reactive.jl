@@ -109,7 +109,7 @@
     # permanently afterward; a negated assertion here would flip to a permanent failure once the
     # kwarg exists, which is not the intended terminal state (Rule 1 bugfix, plan 16-02).
     has_kwarg =
-        hasmethod(build_dso_opt, Tuple{Any, typeof(aggs), Int}, (:reactive_consensus,))
+        hasmethod(build_dso_opt, Tuple{typeof(feeder), typeof(aggs), Int}, (:reactive_consensus,))
     @test has_kwarg   # RED until plan 16-02 lands the kwarg; GREEN and permanent afterward
 
     if has_kwarg
@@ -168,7 +168,7 @@ end
     # afterward.
     has_kwarg = hasmethod(
         solve_admm,
-        Tuple{Any, ConvexBranchFlow, typeof(aggs)},
+        Tuple{typeof(feeder), ConvexBranchFlow, typeof(aggs)},
         (:reactive_consensus,),
     )
     @test has_kwarg   # RED until plan 16-02 lands the kwarg; GREEN and permanent afterward
