@@ -115,9 +115,7 @@ fit_feeder = Feeder(
 _fit_model = Model(select_optimizer(problem_class(PF)))
 _fit_ctx = ModelContext(_fit_model)
 _fit_ctx.feeder = fit_feeder
-_fit_ctx.meta[:feeder] = fit_feeder  # TRANSIENT-MIRROR
 _fit_ctx.T = T
-_fit_ctx.meta[:T] = T  # TRANSIENT-MIRROR
 contribute!(PF, _fit_ctx, fit_feeder; T = T)
 _Np = length(fit_feeder.buses)
 for a in fa.per_agg
@@ -151,7 +149,7 @@ println("  welfare (FIT)    = $(round(welfare_fit; digits=4))")
 #    Thesis Fig 4.4: the worst bus sits near the 1.05 pu upper bound around the evening peak
 #    (reports v₉[16]≈1.0493). pv.v[j,t] is the squared magnitude (Pitfall 1).
 # -------------------------------------------------------------------------------------------
-pv = ctx_dadp.meta[:pf_vars]
+pv = ctx_dadp.pf_vars
 vmag = zeros(length(FEEDER.buses), T)
 for j in 1:length(FEEDER.buses), t in 1:T
     vmag[j, t] = sqrt(value(pv.v[j, t]))
@@ -165,11 +163,11 @@ println(
 
 # -------------------------------------------------------------------------------------------
 # 3. Per-device schedule at thesis node 9 (struct index 10) — the "flexible devices at
-#    node 9" thesis plot. Device vars are stashed under ctx.meta[:agg_device_vars][bus] as
+#    node 9" thesis plot. Device vars are stashed under ctx.agg_device_vars[bus] as
 #    a Vector{Any} in the aggregator's device order [Thermostatic, Deferrable, PVBattery].
 # -------------------------------------------------------------------------------------------
 const NODE9 = 10                                  # thesis node 9 → struct index 10
-const DEV_VARS = ctx_dadp.meta[:agg_device_vars]
+const DEV_VARS = ctx_dadp.agg_device_vars
 v9 = DEV_VARS[NODE9]
 therm9_p = Float64[value.(v9[1].p)...]
 defer9_p = Float64[value.(v9[2].p)...]

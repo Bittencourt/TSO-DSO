@@ -191,7 +191,7 @@ length(ctx.meta[:agg_net])
 # ## Figure — the scheduled flexibility, device by device
 #
 # Everything below is read off the ALREADY-SOLVED `ctx` — `value.()` on the per-device
-# variable stash `ctx.meta[:agg_device_vars]` (the same seam `assert_battery_complementarity!`
+# variable stash `ctx.agg_device_vars` (the same seam `assert_battery_complementarity!`
 # and the stochastic/MPC orchestrators consume) — no re-solve. Devices are identified by
 # their STRUCTURAL variable signature (`:Tin` ⇒ thermostatic, `:soc` ⇒ battery, the
 # remainder ⇒ deferrable), never by container order. Three stacked panels, one physical
@@ -218,7 +218,7 @@ if Base.find_package("CairoMakie") !== nothing
     using CairoMakie
     using TSODSO.JuMP: value
 
-    varlist = ctx.meta[:agg_device_vars][agg.bus]
+    varlist = ctx.agg_device_vars[agg.bus]
     tvars = only(v for v in varlist if haskey(v, :Tin))
     bvars = only(v for v in varlist if haskey(v, :soc))
     dvars = only(v for v in varlist if !haskey(v, :Tin) && !haskey(v, :soc))

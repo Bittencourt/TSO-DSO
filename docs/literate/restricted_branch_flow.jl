@@ -152,7 +152,7 @@ ctx_ac_for_ε, _, _ = solve_welfare(
     allow_export = true,
 )
 v̂_GL_check = recover_lossfree_shadow_voltage(ctx_ac_for_ε)
-pv_ac_for_ε = ctx_ac_for_ε.meta[:pf_vars]
+pv_ac_for_ε = ctx_ac_for_ε.pf_vars
 N = length(feeder.buses)
 
 # Lemma 1 sanity check (`v ≤ v̂_GL(s)` everywhere — the number below must be `≥ 0`, up to solver

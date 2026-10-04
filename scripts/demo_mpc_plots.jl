@@ -182,7 +182,7 @@ let s = s_base
     ctx_cmp, _, _ = solve_welfare(feeder, pf, mpc_aggs; T = s.T, λ₀ = λ₀, allow_export = s.allow_export)
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:s.T] for
-        (bus, varlist) in ctx_cmp.meta[:agg_device_vars] for v in varlist if haskey(v, :soc)
+        (bus, varlist) in ctx_cmp.agg_device_vars for v in varlist if haskey(v, :soc)
     )
     # Day-ahead reference paths at the PUBLISHED bus (same dual convention as the window's
     # published price: dual of balance_p at the first aggregator's bus — welfare_solve.jl
@@ -191,7 +191,7 @@ let s = s_base
     da_price = Float64[dual.(ctx_cmp.constraints[:balance_p][bus, :])...]
     da_import = Float64[value.(ctx_cmp.meta[:p_import])...]
     da_soc = soc_da[bus]
-    vl_da = ctx_cmp.meta[:agg_device_vars][bus]
+    vl_da = ctx_cmp.agg_device_vars[bus]
     da_tin = Float64[value.(only(vv for vv in vl_da if haskey(vv, :Tin0)).Tin)...]
 
     # The recorded bus's own devices (structural fields for the propagation + panel bands).
@@ -211,7 +211,7 @@ let s = s_base
 
     # Recording handles at the published bus (the default population hosts exactly one
     # :soc-kind and one :Tin-kind device per bus — WR-05's asserted invariant).
-    vl = o.ctx.meta[:agg_device_vars][bus]
+    vl = o.ctx.agg_device_vars[bus]
     v_soc = only(vv for vv in vl if haskey(vv, :soc))
     v_tin = only(vv for vv in vl if haskey(vv, :Tin0))
 
@@ -228,7 +228,7 @@ let s = s_base
         end
         # Per-step device forecast slices (verbatim run_mpc: PV/demand perturbed, ambient not).
         for agg in mpc_aggs
-            varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+            varlist = o.ctx.agg_device_vars[agg.bus]
             for (d, v) in zip(agg.devices, varlist)
                 if haskey(v, :Ppv_param)
                     set_parameter_value.(v.Ppv_param,
@@ -271,7 +271,7 @@ let s = s_base
         for τ in 1:n_apply
             abs_hour = t + τ - 1
             for agg in mpc_aggs
-                varlist = o.ctx.meta[:agg_device_vars][agg.bus]
+                varlist = o.ctx.agg_device_vars[agg.bus]
                 for d in agg.devices
                     if d isa PVBattery || d isa FourQuadBESS
                         v = only(vv for vv in varlist if haskey(vv, :soc0))

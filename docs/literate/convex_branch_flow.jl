@@ -152,7 +152,7 @@ ctx.meta[:socp_maxgap]
 
 # ## Exactness figure — WHY the certificate holds (CairoMakie)
 #
-# Two panels drawn from the SAME solved model — `ctx.meta[:pf_vars]`, the `(; v, v̂, P,
+# Two panels drawn from the SAME solved model — `ctx.pf_vars`, the `(; v, v̂, P,
 # Q, l)` stash `ConvexBranchFlow` left behind for the PF-04 checker — so no additional
 # solve happens here, only `value(...)` reads off the already-optimal point.
 #
@@ -180,7 +180,7 @@ ctx.meta[:socp_maxgap]
 using TSODSO.JuMP
 using CairoMakie
 
-pv = ctx.meta[:pf_vars]
+pv = ctx.pf_vars
 nbus = length(feeder.buses)
 V_true = [sqrt(value(pv.v[j, 1])) for j in 1:nbus]
 V_copy = [sqrt(value(pv.v̂[j, 1])) for j in 1:nbus]

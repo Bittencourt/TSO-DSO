@@ -90,7 +90,7 @@ const PRICE = Float64[
 ]
 
 function cone_stats(ctx, feeder; atol = 1e-6, rtol = 1e-4)
-    pf = ctx.meta[:pf_vars]
+    pf = ctx.pf_vars
     maxgap = maxratio = 0.0
     n_at_vmax = 0
     min_P, vpeak = Inf, 0.0
