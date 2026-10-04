@@ -403,4 +403,52 @@ function socp_gap_report(
     return rows[1:min(topn, length(rows))]
 end
 
-export assert_socp_exact!, socp_relaxation_gap, socp_gap_report
+"""
+    hybrid_ratios(ctx::ModelContext; rtol::Real = 1e-4) -> Vector{NamedTuple}
+
+Phase 35 (ARCH-10) additive DIAGNOSTIC mirror of [`assert_socp_exact!`](@ref)'s default hybrid
+gate: per `(branch, hour)` row it reports `gap = |l·v_from − (P²+Q²)|`, the hybrid floor
+`atol_b = max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08·ref_b)`, `ratio = gap / (atol_b + rtol·|cone|)`
+(`ratio ≤ 1` iff the gate accepts that row), `r_pu`, and `loss_impact = r_pu·gap`. Rows are
+sorted worst-first (descending `ratio`). It is NEVER used to decide pass/fail (T-25-12:
+anti-certificate-laundering) -- it only explains which branches dominate a refusal.
+Reads the same `ctx.pf_vars`/`ctx.feeder`/`ctx.T` stash as `assert_socp_exact!`.
+"""
+function hybrid_ratios(ctx::ModelContext; rtol::Real = 1e-4)
+    pv = _require_pf_vars(ctx)
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
+    head_b = findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
+    head_b === nothing && throw(
+        ArgumentError("hybrid_ratios: no branch incident to feeder.root=$(feeder.root)"),
+    )
+    rows = NamedTuple[]
+    for (b, br) in enumerate(feeder.branches), t in 1:T
+        lhs = value(pv.l[b, t]) * value(pv.v[br.from, t])
+        rhs = value(pv.P[b, t])^2 + value(pv.Q[b, t])^2
+        gap = abs(lhs - rhs)
+        ref_b =
+            br.smax < SMAX_NO_LIMIT ? br.smax^2 :
+            (value(pv.P[head_b, t])^2 + value(pv.Q[head_b, t])^2)
+        atol_b = max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08 * ref_b)
+        ratio = gap / (atol_b + rtol * max(abs(lhs), abs(rhs)))
+        push!(
+            rows,
+            (;
+                b = b,
+                t = t,
+                from = br.from,
+                to = br.to,
+                r_pu = br.r,
+                gap = gap,
+                atol_b = atol_b,
+                ratio = ratio,
+                loss_impact = br.r * gap,
+            ),
+        )
+    end
+    sort!(rows; by = row -> (-row.ratio, row.b, row.t))
+    return rows
+end
+
+export assert_socp_exact!, socp_relaxation_gap, socp_gap_report, hybrid_ratios
