@@ -212,3 +212,59 @@ end
     end
     t4()
 end
+
+@testitem "close_balance: missing/ill-shaped residual and bad N/T raise ArgumentError (WR-05)" tags =
+    [:balance] begin
+    using TSODSO
+    using JuMP
+
+    function check_missing()
+        ctx = ModelContext(Model())
+        e = try
+            close_balance!(ctx, 2, 1; reactive = false)
+            nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError
+        @test occursin(":Rp", e.msg)
+    end
+    check_missing()
+
+    function check_scalar()
+        m = Model()
+        @variable(m, x)
+        ctx = ModelContext(m)
+        ctx.residuals[:Rp] = AffExpr(0.0) + x
+        e = try
+            close_balance!(ctx, 1, 1; reactive = false)
+            nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError
+    end
+    check_scalar()
+
+    function check_missing_rq()
+        ctx = ModelContext(Model())
+        ctx.residuals[:Rp] = AffExpr[AffExpr(0.0) for j in 1:2, t in 1:1]
+        e = try
+            close_balance!(ctx, 2, 1; reactive = true)
+            nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError
+        @test occursin(":Rq", e.msg)
+    end
+    check_missing_rq()
+
+    function check_nt()
+        ctx = ModelContext(Model())
+        ctx.residuals[:Rp] = AffExpr[AffExpr(0.0) for j in 1:2, t in 1:1]
+        @test_throws ArgumentError close_balance!(ctx, 2, 0; reactive = false)
+        @test_throws ArgumentError close_balance!(ctx, 0, 1; reactive = false)
+    end
+    check_nt()
+end

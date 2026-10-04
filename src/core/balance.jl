@@ -3,6 +3,21 @@
 
 export close_balance!
 
+# Validate that residual `name` exists, is an indexed `Matrix{AffExpr}` and has shape (N, T).
+function _check_residual(ctx::ModelContext, name::Symbol, N::Int, T::Int, label)
+    r = get(ctx.residuals, name, nothing)
+    r isa Matrix{AffExpr} || throw(
+        ArgumentError(
+            "close_balance!: $(label)residual :$name is missing or not an indexed Matrix{AffExpr} " *
+            "(got $(typeof(r))) — no formulation/aggregator has contributed it",
+        ),
+    )
+    size(r) == (N, T) || error(
+        "$(label)residual :$name is $(size(r)), expected ($N, $T) — an index escaped the feeder",
+    )
+    return r
+end
+
 """
     close_balance!(ctx::ModelContext, N::Int, T::Int; reactive::Bool, label::AbstractString = "")
         -> (balance_p, balance_q_or_nothing)
@@ -42,9 +57,10 @@ function close_balance!(
     label::AbstractString = "",
 )
     model = ctx.model
-    size(ctx.residuals[:Rp]) == (N, T) || error(
-        "$(label)residual :Rp is $(size(ctx.residuals[:Rp])), expected ($N, $T) — an index escaped the feeder",
+    (N > 0 && T > 0) || throw(
+        ArgumentError("close_balance!: $(label)N=$N and T=$T must both be positive"),
     )
+    _check_residual(ctx, :Rp, N, T, label)
     bp = @constraint(
         model,
         [j = 1:N, t = 1:T],
@@ -54,9 +70,7 @@ function close_balance!(
     register_constraint!(ctx, :balance_p, bp)          # dual = λ_j (DADP)
     bq = nothing
     if reactive
-        size(ctx.residuals[:Rq]) == (N, T) || error(
-            "$(label)residual :Rq is $(size(ctx.residuals[:Rq])), expected ($N, $T) — an index escaped the feeder",
-        )
+        _check_residual(ctx, :Rq, N, T, label)
         bq = @constraint(
             model,
             [j = 1:N, t = 1:T],
