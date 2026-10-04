@@ -72,6 +72,19 @@
 #   julia scripts/benchmark_ieee8500.jl --fixture ieee13 --density 1.0 --solver clarabel --time-limit 5
 #   julia --project=. scripts/benchmark_ieee8500.jl --gap-report --fixture ieee8500-mv --density 0.1
 #
+# 2026-10-04 (phase 35 plan 35-02, ARCH-10) -- append-only note, the T-25-12 history above is kept:
+#   * ADMM now runs with `atol_exact = nothing` (the library HYBRID floor, plan 35-01) unless
+#     `--admm-atol <finite float>` is given; the per-fixture `EXACTNESS_ATOL` remains ONLY as the
+#     CSV-comparability threshold of the centralized `exact_verdict` column, it no longer gates ADMM.
+#   * `--admm-only` skips the centralized model entirely (one point per process).
+#   * `--admm-diagnostic-bypass` (requires `--admm-only`) runs ADMM with `atol_exact = Inf` and writes
+#     the top-`--topn` `hybrid_ratios` rows to `hybrid_diagnostic.csv`; the row is labelled
+#     DIAGNOSTIC_BYPASS and is NEVER a certificate or a price claim.
+#   * `--run-label <str>` (join key with `point_resources.csv`), `--results-dir <path>` /
+#     `TSODSO_IEEE8500_RESULTS_DIR` (output redirect), `--help`.
+#   * A `started` row is upserted before the ADMM solve and replaced on completion.
+#   * `main(ARGS)` only runs when this file is the program entry point (never on `include`).
+#
 # Provenance of the committed CSVs in results/ieee8500_benchmark/:
 # .planning/phases/25-ieee-8500-scalability-benchmark/25-05-SUMMARY.md.
 
@@ -86,8 +99,10 @@ using LinearAlgebra: norm
 using StableRNGs
 
 const T = 24
-const OUT = projectdir("results", "ieee8500_benchmark")
-mkpath(OUT)
+# Output directory: resolved at RUN time (`out_dir()`), overridable via `--results-dir` or the
+# `TSODSO_IEEE8500_RESULTS_DIR` env var (tests redirect to a mktempdir so committed CSVs stay untouched).
+const OUT_REF = Ref(get(ENV, "TSODSO_IEEE8500_RESULTS_DIR", projectdir("results", "ieee8500_benchmark")))
+out_dir() = OUT_REF[]
 
 # CLI string -> feeder selector map (`build_feeder`'s own symbol vocabulary, D-14). Note the
 # CLI spells the MV-only control with a HYPHEN ("ieee8500-mv") while `build_feeder`/
@@ -408,7 +423,7 @@ function run_calibrate_mode(args)
         calibration_t_horizon,
     )
 
-    csv_path = joinpath(OUT, "noise_floor_calibration.csv")
+    csv_path = joinpath(out_dir(), "noise_floor_calibration.csv")
     df_new = DataFrame(rows)
     df_final = if isfile(csv_path)
         df_old = CSV.read(csv_path, DataFrame)
@@ -551,7 +566,7 @@ a literal chosen to make a point pass (T-25-12, anti-certificate-laundering): a 
 converged cone gap genuinely EXCEEDS its fixture's own measured floor still throws here exactly as
 it does today.
 """
-function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol_exact::Real)
+function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol_exact::Union{Nothing, Real}; keep_ctx::Bool = false)
     t0 = time_ns()
     rss_before = Sys.maxrss()
     result = try
@@ -566,19 +581,29 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol
             time_limit_s = time_limit,
             atol_exact = atol_exact,
         )
-        (; admm_status = string(r.status), admm_iters = r.iters, admm_error_msg = "")
+        (;
+            admm_status = string(r.status), admm_iters = r.iters, admm_error_msg = "",
+            dso_ctx = keep_ctx ? r.dso_ctx : nothing,
+        )
     catch err
         msg = sprint(showerror, err)
+        # Failure rows keep their evidence: iterations from the exception when it carries them
+        # (ConvergenceError.iterations), else NaN; wall time / peak RSS are added below.
+        iters = err isa TSODSO.ConvergenceError && err.iterations !== nothing ? err.iterations : NaN
         (;
             admm_status = "ERROR:" * string(nameof(typeof(err))),
-            admm_iters = -1,
+            admm_iters = iters,
             admm_error_msg = replace(first(msg, 200), '\n' => " | "),
+            dso_ctx = nothing,
         )
     end
     total_s = (time_ns() - t0) / 1.0e9
     rss_after = Sys.maxrss()
     peak_delta_mb = (rss_after - rss_before) / (1024^2)
-    return merge(result, (; admm_time_s = total_s, admm_peak_rss_delta_mb = peak_delta_mb))
+    return merge(
+        result,
+        (; admm_time_s = total_s, admm_peak_rss_delta_mb = peak_delta_mb, peak_rss_mb = rss_after / 2^20),
+    )
 end
 
 """
@@ -690,8 +715,75 @@ end
 
 has_flag(args, flag::String) = flag in args
 
+# Schema-evolving, key-based upsert of density_sweep rows (see the `cols = :union` note below).
+# Key includes `T_horizon` so rows measured at different horizons never clobber each other.
+function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
+    df_final = if isfile(csv_path)
+        df_old = CSV.read(csv_path, DataFrame)
+        keyfn(r) = (r.fixture, r.density, r.solver, hasproperty(r, :T_horizon) ? r.T_horizon : missing)
+        new_keys = Set(keyfn(r) for r in eachrow(df_new))
+        # `cols = :union` (Rule 1 bug fix, 2026-08-22): schema-evolving upsert must not throw on
+        # rows written under an older column set, nor drop them (T-25-11).
+        vcat(filter(r -> !(keyfn(r) in new_keys), df_old), df_new; cols = :union)
+    else
+        df_new
+    end
+    CSV.write(csv_path, df_final)
+    return nothing
+end
+
+# Fixture-specific bus NAME lookup (script layer only; exactness.jl stays fixture-agnostic).
+function bus_name_lookup(fixture_sym::Symbol)
+    if fixture_sym === :ieee8500
+        inv = Dict(id => name for (name, id) in ieee8500_relabel_map())
+        return id -> get(inv, id, missing)
+    elseif fixture_sym === :ieee8500_mv
+        inv = Dict(id => name for (name, id) in ieee8500_mv_relabel_map())
+        return id -> get(inv, id, missing)
+    end
+    return id -> missing
+end
+
+const USAGE = """
+Usage: julia --project=. scripts/benchmark_ieee8500.jl [mode] [flags]
+
+Modes:
+  (default)                density sweep (centralized + ADMM per point)
+  --calibrate-noise-floor  per-fixture SOCP noise-floor ladder
+  --gap-report             centralized-only per-branch SOCP gap diagnostic
+
+Sweep flags:
+  --fixture <ieee13|ieee123|ieee8500-mv|ieee8500>   --density <f[,f...]>   --solver <clarabel|scs|both>
+  --time-limit <s>   --t-horizon <int>   --clarabel-tol <f>   --quick
+  --admm-only                 skip the centralized model (one point per process)
+  --admm-atol <finite float>  flat ADMM gate override (default: library hybrid floor)
+  --admm-diagnostic-bypass    (needs --admm-only) atol_exact=Inf + hybrid_ratios CSV; row = DIAGNOSTIC_BYPASS
+  --topn <int>                rows kept in hybrid_diagnostic.csv (default 20)
+  --run-label <str>           label column (join key with point_resources.csv)
+  --results-dir <path>        output directory (or env TSODSO_IEEE8500_RESULTS_DIR)
+  --help                      print this message and exit
+"""
+
 function run_sweep_mode(args)
     quick = has_flag(args, "--quick")
+    admm_only = has_flag(args, "--admm-only")
+    bypass = has_flag(args, "--admm-diagnostic-bypass")
+    bypass && !admm_only &&
+        throw(ArgumentError("--admm-diagnostic-bypass requires --admm-only"))
+    run_label = parse_kv_flag(args, "--run-label", "")
+    topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
+    admm_atol_str = parse_kv_flag(args, "--admm-atol", nothing)
+    admm_atol = if admm_atol_str === nothing
+        nothing
+    else
+        v = parse(Float64, admm_atol_str)
+        isfinite(v) || throw(
+            ArgumentError(
+                "--admm-atol must be finite (got $v); the Inf bypass exists ONLY as --admm-diagnostic-bypass (T-35-04)",
+            ),
+        )
+        v
+    end
     fixture_str = parse_kv_flag(args, "--fixture", "ieee8500-mv")
     solver_str = parse_kv_flag(args, "--solver", "both")
     time_limit = parse(
@@ -771,11 +863,78 @@ function run_sweep_mode(args)
         flush(stdout)
         aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
 
-        cpoint = run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon, clarabel_tol)
-        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon, atol)   # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty; adaptive-ρ self-corrects thereafter; atol: EXACTNESS_ATOL[fixture_sym], see run_admm_point's own docstring (T-25-12)
+        row_solver = bypass ? "admm_bypass" : (admm_only ? "admm" : solver_str)
+        csv_path_sweep = joinpath(out_dir(), "density_sweep.csv")
+        # Incremental row: a kill mid-solve leaves a trace; the completion upsert (same key) replaces it.
+        upsert_sweep_rows(
+            csv_path_sweep,
+            DataFrame([(;
+                fixture = fixture_str, density = density, solver = row_solver,
+                T_horizon = T_horizon, n_agg = length(aggs), admm_status = "started",
+                run_label = run_label,
+            )]),
+        )
+
+        cpoint = if admm_only
+            (;
+                termination_status = "skipped_admm_only", assembly_time_s = NaN, solve_time_s = NaN,
+                total_time_s = NaN, exact_maxgap = NaN, exact_verdict = "", model_vars = -1,
+                model_cons = -1, dadp = nothing, error_msg = "",
+            )
+        else
+            run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon, clarabel_tol)
+        end
+        GC.gc()   # drop the centralized model before the ADMM stage (peak-RSS attribution)
+        # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty. ADMM gate: hybrid floor
+        # (`nothing`) unless --admm-atol; Inf ONLY in the labelled diagnostic bypass (T-35-04).
+        gate_atol = bypass ? Inf : admm_atol
+        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon, gate_atol; keep_ctx = bypass)
+
+        diag = (; diag_max_ratio = NaN, diag_worst_branch = "", diag_loss_impact_max = NaN)
+        if bypass
+            admm_status_out = "DIAGNOSTIC_BYPASS"
+            if apoint.dso_ctx !== nothing
+                name_of = bus_name_lookup(fixture_sym)
+                hr = TSODSO.hybrid_ratios(apoint.dso_ctx)
+                top = hr[1:min(topn, length(hr))]
+                drows = [
+                    (;
+                        fixture = fixture_str, density = density, T_horizon = T_horizon,
+                        b = r.b, t = r.t, from_id = r.from, to_id = r.to,
+                        from_name = name_of(r.from), to_name = name_of(r.to), r_pu = r.r_pu,
+                        gap = r.gap, atol_b = r.atol_b, ratio = r.ratio,
+                        loss_impact = r.loss_impact, run_label = run_label,
+                    ) for r in top
+                ]
+                dpath = joinpath(out_dir(), "hybrid_diagnostic.csv")
+                ddf = DataFrame(drows)
+                if isfile(dpath)
+                    dold = CSV.read(dpath, DataFrame)
+                    dkeys = Set((r.fixture, r.density, r.T_horizon, r.b, r.t) for r in eachrow(ddf))
+                    ddf = vcat(
+                        filter(r -> !((r.fixture, r.density, r.T_horizon, r.b, r.t) in dkeys), dold),
+                        ddf; cols = :union,
+                    )
+                end
+                CSV.write(dpath, ddf)
+                w = top[1]
+                diag = (;
+                    diag_max_ratio = w.ratio,
+                    diag_worst_branch = string(name_of(w.from), "->", name_of(w.to)),
+                    diag_loss_impact_max = maximum(r.loss_impact for r in hr),
+                )
+                println("  DIAGNOSTIC_BYPASS (NOT a certificate): max hybrid ratio = ", w.ratio)
+            else
+                admm_status_out = "DIAGNOSTIC_BYPASS:" * apoint.admm_status
+            end
+        else
+            admm_status_out = apoint.admm_status
+        end
+        apoint = merge(apoint, (; dso_ctx = nothing))
+        GC.gc()
 
         scs_row =
-            solver_sym in (:scs, :both) ?
+            solver_sym in (:scs, :both) && !admm_only ?
             run_scs_comparison(feeder, aggs, λ0, cpoint.dadp, T_horizon) :
             (; scs_status = "not_requested", scs_dadp_drift = NaN)
 
@@ -787,7 +946,8 @@ function run_sweep_mode(args)
         row = (;
             fixture = fixture_str,
             density = density,
-            solver = solver_str,
+            solver = row_solver,
+            run_label = run_label,
             T_horizon = T_horizon,
             n_agg = length(aggs),
             model_vars = cpoint.model_vars,
@@ -800,11 +960,16 @@ function run_sweep_mode(args)
             exact_atol_used = atol,
             exact_verdict = cpoint.exact_verdict,
             clarabel_tol_gap = clarabel_tol,
-            admm_atol_used = atol,
-            admm_status = apoint.admm_status,
+            admm_atol_used = bypass ? "Inf(DIAGNOSTIC_BYPASS)" : (admm_atol === nothing ? "hybrid" : string(admm_atol)),
+            admm_status = admm_status_out,
             admm_iters = apoint.admm_iters,
             admm_time_s = apoint.admm_time_s,
             admm_peak_rss_delta_mb = apoint.admm_peak_rss_delta_mb,
+            peak_rss_mb = apoint.peak_rss_mb,
+            admm_error_msg = apoint.admm_error_msg,
+            diag_max_ratio = diag.diag_max_ratio,
+            diag_worst_branch = diag.diag_worst_branch,
+            diag_loss_impact_max = diag.diag_loss_impact_max,
             scs_status = scs_row.scs_status,
             scs_dadp_drift = scs_row.scs_dadp_drift,
             scs_eps_abs = scs_row.scs_status in ("scs_unavailable", "skipped_no_clarabel_dadp", "not_requested") ?
@@ -818,30 +983,14 @@ function run_sweep_mode(args)
             row.termination_status,
             row.admm_status,
             row.exact_verdict,
-            row.total_time_s
+            isnan(row.total_time_s) ? 0.0 : row.total_time_s
         )
         flush(stdout)
     end
 
-    csv_path = joinpath(OUT, "density_sweep.csv")
+    csv_path = joinpath(out_dir(), "density_sweep.csv")
     df_new = DataFrame(rows)
-    df_final = if isfile(csv_path)
-        df_old = CSV.read(csv_path, DataFrame)
-        key(r) = (r.fixture, r.density, r.solver)
-        new_keys = Set(key(r) for r in eachrow(df_new))
-        # `cols = :union` (Rule 1 bug fix, discovered live 2026-08-22 round-2 follow-up): a
-        # SCHEMA-EVOLVING upsert (this task just added `admm_atol_used`; `clarabel_tol_gap` was
-        # added the SAME way by quick task 260822-f0b) otherwise throws `ArgumentError: column(s)
-        # ... are missing` the moment `df_old` (rows written under an OLDER column set) is vcat'd
-        # against `df_new` (this invocation's, under the CURRENT column set) with DataFrames'
-        # default `cols = :setequal`. `:union` fills the missing cells with `missing` instead —
-        # never silently dropping a previously-committed row (T-25-11) just because it predates a
-        # later column addition.
-        vcat(filter(r -> !(key(r) in new_keys), df_old), df_new; cols = :union)
-    else
-        df_new
-    end
-    CSV.write(csv_path, df_final)
+    upsert_sweep_rows(csv_path, df_new)
 
     println("\n", "="^96)
     println("RUN SUMMARY (this invocation)")
@@ -950,7 +1099,7 @@ function run_gap_report_mode(args)
         )
     end
 
-    csv_path = joinpath(OUT, "socp_gap_report.csv")
+    csv_path = joinpath(out_dir(), "socp_gap_report.csv")
     df_new = DataFrame(rows)
     df_final = if isfile(csv_path)
         df_old = CSV.read(csv_path, DataFrame)
@@ -967,6 +1116,12 @@ end
 # ── Entrypoint ───────────────────────────────────────────────────────────────────────────────────
 
 function main(args)
+    if has_flag(args, "--help") || has_flag(args, "-h")
+        print(USAGE)
+        return nothing
+    end
+    OUT_REF[] = parse_kv_flag(args, "--results-dir", OUT_REF[])
+    mkpath(out_dir())
     if has_flag(args, "--calibrate-noise-floor")
         run_calibrate_mode(args)
     elseif has_flag(args, "--gap-report")
@@ -977,4 +1132,6 @@ function main(args)
     return nothing
 end
 
-main(ARGS)
+if abspath(PROGRAM_FILE) == @__FILE__
+    main(ARGS)
+end
