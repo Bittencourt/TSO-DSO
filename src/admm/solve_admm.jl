@@ -196,6 +196,7 @@ NOT byte-identical:
     flow exceeds ≈ 31.6 pu.
 
 An explicit `Real` `atol_exact` is a FLAT per-branch floor that bypasses the hybrid computation.
+The value that reached the gate is recorded in `dso_ctx.meta[:socp_atol_exact]` (WR-06).
 This is a SEAM, not a default weakening (T-25-12, certificate-laundering): it must never be
 used to manufacture a passing verdict for a point that would otherwise be inexact under the
 project's own default gate. A caller overriding it is asserting they have their OWN

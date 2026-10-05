@@ -29,6 +29,24 @@
 
     ctx_A() = fixed_ctx(Branch(1, 2, 0.01, 0.02, 90.0), 1.0, 5.0e-6)
     ctx_N() = fixed_ctx(Branch(1, 2, 2.4e-6, 5.6e-6, TSODSO.SMAX_NO_LIMIT), 1.06, 1.7e-3)
+    # WR-06: gap 5e-7 on an unlimited branch with zero head flow -> hybrid floor τ = 2e-7
+    # refuses (ratio ≈ 2.5) while the old flat 1e-6 would accept (ratio ≈ 0.5).
+    ctx_M() = fixed_ctx(Branch(1, 2, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT), 1.0, 5.0e-7)
+
+    # WR-06: wrap a fixed-value ctx as a coupling-free `DsoOpt` (no load nodes), so the REAL
+    # `solve_dso!(...; check_exact = true)` final-gate path runs on a controlled cone gap.
+    function dso_from(ctx)
+        ctx.pf = ConvexBranchFlow()
+        model = ctx.model
+        @variable(model, p_import[1:1])
+        fix(p_import[1], 0.0; force = true)
+        pag = Matrix{VariableRef}(undef, 0, 1)
+        return TSODSO.DsoOpt(model, ctx, pag, pag, p_import, Int[], 1, ctx.feeder, 1.0, [0.0])
+    end
+    final_gate!(dso; kw...) = solve_dso!(
+        dso, Dict{Int, Vector{Float64}}(), Dict{Int, Vector{Float64}}(), 1.0;
+        check_exact = true, strict = false, kw...,
+    )
 end
 
 @testitem "admm exactness default: hybrid floor accepts smax=90 gap 5e-6, flat 1e-6 refuses (A)" setup =
@@ -76,8 +94,28 @@ end
     @test err.kind === :socp_exact
     # WR-07 (35-REVIEW): the final-gate refusal carries the converged ADMM iteration count.
     @test err.iterations == r1.iters
-    r3 =solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = Inf)
+    r3 = solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = Inf)
     @test r3.iters == r1.iters
+    # WR-06 (35-REVIEW): the gate floor that REACHED the final gate is recorded. Fails if the
+    # solve_admm default reverts to a flat 1e-6 (the 2-bus gap ~8e-9 cannot tell them apart).
+    @test r1.dso_ctx.meta[:socp_atol_exact] === nothing
+    @test r3.dso_ctx.meta[:socp_atol_exact] == Inf
+end
+
+@testitem "admm exactness default: solve_dso! final gate defaults to the hybrid floor (WR-06)" setup =
+    [ExactDefaultHelpers] tags = [:exact, :admm] begin
+    using TSODSO
+    H = ExactDefaultHelpers
+    # (M) unlimited branch, gap 5e-7 in (2e-7, 1e-6]: the default REFUSES (old flat 1e-6 accepted).
+    dM = H.dso_from(H.ctx_M())
+    @test_throws CertificateError H.final_gate!(dM)
+    @test dM.ctx.meta[:socp_atol_exact] === nothing
+    @test isapprox(H.final_gate!(H.dso_from(H.ctx_M()); atol_exact = 1e-6).exact_maxgap, 5e-7; rtol = 1e-3)
+    # (A) smax = 90, gap 5e-6: the default ACCEPTS (old flat 1e-6 refused).
+    dA = H.dso_from(H.ctx_A())
+    @test isapprox(H.final_gate!(dA).exact_maxgap, 5e-6; rtol = 1e-3)
+    @test dA.ctx.meta[:socp_atol_exact] === nothing
+    @test_throws CertificateError H.final_gate!(H.dso_from(H.ctx_A()); atol_exact = 1e-6)
 end
 
 @testitem "admm exactness default: hybrid_ratios diagnostic" setup = [ExactDefaultHelpers] tags =

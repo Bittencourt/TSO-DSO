@@ -543,7 +543,9 @@ byte-identical: the gate is STRICTER where `ref_b < 1000` (smax below ≈ 31.6 p
 branch whose hour's head-branch |S| is below ≈ 31.6 pu — a gap in `(2e-7, 1e-6]` now raises
 `CertificateError`) and LOOSER where `ref_b > 1000` (up to ≈ `9.8e-6` at smax just below
 `SMAX_NO_LIMIT = 99`, unbounded in principle on an unlimited branch with head flow above ≈ 31.6
-pu). Mid-loop `check_exact = false` calls never consult these kwargs and are unaffected.
+pu). Mid-loop `check_exact = false` calls never consult these kwargs and are unaffected. A
+`check_exact = true` call records the `atol_exact` it judged with in
+`dso.ctx.meta[:socp_atol_exact]` (before the gate runs, so also on a refusal).
 This is a SEAM, not a default weakening (T-25-12, certificate-laundering): never
 use it to make a point classify as exact that would otherwise be inexact under the project's own
 default gate. A caller overriding it is asserting they have their OWN independently measured
@@ -665,6 +667,10 @@ function solve_dso!(
     # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.
     # Mid-loop iterates skip this — they are legitimately inexact and would throw spuriously.
     if check_exact && has_branch_current(dso.ctx)
+        # WR-06 (35-REVIEW): record the gate floor this certificate was judged with (`nothing` =
+        # hybrid floor, a `Real` = flat override) BEFORE the gate runs, so the default that
+        # actually reached the gate is traceable — and testable — even when the gate refuses.
+        dso.ctx.meta[:socp_atol_exact] = atol_exact
         dso.ctx.meta[:socp_maxgap] =
             assert_socp_exact!(dso.ctx; rtol = rtol_exact, atol = atol_exact)
     end
