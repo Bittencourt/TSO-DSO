@@ -294,18 +294,33 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 #
 # The wall now sits **between density 0.1 and 0.25 at T = 24**. Phase 25's OOM kills at T = 24 were in a
 # combined centralized+ADMM process; its density 0.1 T = 10 point fit (live-monitored anon-rss "~5.9GB", unit
-# not recorded, see section 3). The dominant consumer is
-# the per-hour DSO solver state retained across the ADMM loop. The staged profile of the SAME fixture and point
-# (`memory_profile.csv` rows with `fixture = ieee8500`, density 0.1, T = 10, written by run
-# `p35-prof-ieee8500-s3` in `point_resources.csv`) shows one `build_dso_opt` adding 0.23 GiB of VmRSS
-# (stage 1 to 2: 1,102,128 to 1,340,200 KiB) and the first `optimize!` a further 0.89 GiB (stage 2 to 3:
-# 1,340,200 to 2,269,900 KiB; VmHWM 2.40 GiB), while the whole T = 10 loop adds 4.56 GiB (4,672.8 MiB) and T = 24
-# adds 10.17 GiB (10,409.9 MiB) (`admm_peak_rss_delta_mb` of the two head rows in `density_sweep.csv`), roughly
-# linear in T. One build plus one solve therefore accounts for about a quarter of the T = 10
-# loop's growth; the rest is state kept across iterations. (The same CSV also keeps an earlier profile with
-# `fixture = ieee8500-mv`, the profiler's default, which measured 0.14 / 0.42 GiB on the 2,521-bus MV-only
-# feeder. It is a different fixture from the loop deltas above and is not used for this comparison.) No
-# `src/` memory mitigation was adopted (none was both dominant and provably bit-identical).
+# not recorded, see section 3). **What consumes the memory inside `solve_admm` is not established by the
+# measurements below.** Two kinds of figure were measured, with different metrics:
+#
+# - **Staged profile (VmRSS between stages).** The profile of the SAME fixture and point (`memory_profile.csv`
+#   rows with `fixture = ieee8500`, density 0.1, T = 10, written by run `p35-prof-ieee8500-s3` in
+#   `point_resources.csv`) shows one `build_dso_opt` adding 0.23 GiB of VmRSS (stage 1 to 2: 1,102,128 to
+#   1,340,200 KiB) and the first `optimize!` a further 0.89 GiB (stage 2 to 3: 1,340,200 to 2,269,900 KiB),
+#   i.e. 1.12 GiB of VmRSS for one DSO build plus its first solve. Measured as VmHWM over the same stages
+#   (1,254,188 to 2,515,692 KiB) it is 1.20 GiB. The profile stops at stage 3; no committed run reached
+#   stage 5 (`after_agr_opts`), so the AgrOpt contribution was not measured.
+# - **Whole-loop peak-RSS delta.** `admm_peak_rss_delta_mb` (`Sys.maxrss()` after `solve_admm` minus before
+#   it) of the two head rows in `density_sweep.csv` is 4.56 GiB (4,672.8 MiB) at T = 10 and 10.17 GiB
+#   (10,409.9 MiB) at T = 24. This delta covers everything `solve_admm` allocates: the DSO build and its
+#   solves, one `build_agr_opt` per aggregator (122 here) and their solves, any state kept across
+#   iterations, and the final `check_exact = true` consolidation.
+#
+# One DSO build plus its first solve therefore accounts for about a quarter of the T = 10 loop's peak
+# growth. The remainder (about 3.4 GiB) is **unattributed**: it was not split between AgrOpt construction,
+# their solves, per-iteration state and the final consolidation, and no single dominant consumer is
+# established by this profile. That the remainder is mostly per-hour DSO solver state retained across the
+# ADMM loop is a **hypothesis**, not a measurement. The only scaling statement the data support is that the
+# loop delta grows roughly linearly in T (one pair of points, T = 10 and T = 24, at density 0.1); scaling in
+# the number of nodes was not measured, because only density 0.1 completed at T = 24. (The same CSV also
+# keeps an earlier profile with `fixture = ieee8500-mv`, the profiler's default, which measured 0.14 / 0.42
+# GiB on the 2,521-bus MV-only feeder. It is a different fixture from the loop deltas above and is not used
+# for this comparison.) No `src/` memory mitigation was adopted: no consumer was shown to be dominant, and
+# none was provably bit-identical.
 #
 # **5. Protocol.** ADMM-only (`--admm-only`), one measurement point per process, each wrapped with peak-RSS
 # capture and earlyoom attribution, with the number of other Julia processes and free memory/swap recorded
