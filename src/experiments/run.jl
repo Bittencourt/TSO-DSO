@@ -72,7 +72,8 @@ function _materialize(s::Scenario)
     return feeder, λ₀, aggs
 end
 
-_effective_scenario(st::AbstractStrategy, s::Scenario) = st == s.strategy ? s : with_strategy(s, st)
+_effective_scenario(st::AbstractStrategy, s::Scenario) =
+    st == s.strategy ? s : with_strategy(s, st)
 
 """
     TSODSO.run(::Centralized, s::Scenario) -> ScenarioResult
@@ -100,7 +101,7 @@ function run(st::Centralized, s::Scenario)
         load_buses = sort!([a.bus for a in aggs])
         dadp = Matrix{Float64}(extract_dlmp(ctx)[load_buses, :])
         maxgap =
-            pf isa Union{ConvexBranchFlow,RestrictedBranchFlow} ?
+            pf isa Union{ConvexBranchFlow, RestrictedBranchFlow} ?
             Float64(ctx.meta[:socp_maxgap]) : NaN
         result = (Float64(welfare), dadp, maxgap)
     end
@@ -138,7 +139,12 @@ function run(st::ADMM, s::Scenario)
             Float64(last(r.residuals.dual_trace)),
             r.reactive_consensus_mode,
         )
-        result = (Float64(r.welfare), Matrix{Float64}(r.dadp), Float64(r.exact_maxgap), details)
+        result = (
+            Float64(r.welfare),
+            Matrix{Float64}(r.dadp),
+            Float64(r.exact_maxgap),
+            details,
+        )
     end
     return ScenarioResult(s_eff, result[1], result[2], result[3], elapsed, result[4])
 end

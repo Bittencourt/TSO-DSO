@@ -218,9 +218,9 @@ struct Scenario
 end
 
 # Knob name (legacy flat kwarg) -> strategy-constructor kwarg, per strategy symbol.
-const _LEGACY_KNOBS = Dict{Symbol,Dict{Symbol,Symbol}}(
-    :centralized => Dict{Symbol,Symbol}(),
-    :admm => Dict{Symbol,Symbol}(
+const _LEGACY_KNOBS = Dict{Symbol, Dict{Symbol, Symbol}}(
+    :centralized => Dict{Symbol, Symbol}(),
+    :admm => Dict{Symbol, Symbol}(
         :ρ => :ρ,
         :ε_abs => :ε_abs,
         :ε_rel => :ε_rel,
@@ -228,13 +228,13 @@ const _LEGACY_KNOBS = Dict{Symbol,Dict{Symbol,Symbol}}(
         :τ_ratio => :τ_ratio,
         :μ => :μ,
     ),
-    :mpc => Dict{Symbol,Symbol}(
+    :mpc => Dict{Symbol, Symbol}(
         :mpc_H => :H,
         :mpc_step => :step,
         :mpc_terminal_soc => :terminal_soc,
         :mpc_forecast_error => :forecast_error,
     ),
-    :stochastic => Dict{Symbol,Symbol}(
+    :stochastic => Dict{Symbol, Symbol}(
         :stoch_S => :S,
         :stoch_probabilities => :probabilities,
         :stoch_H_oos => :H_oos,
@@ -272,7 +272,7 @@ function _resolve_strategy(strategy::Symbol, knobs)
         )
     end
     allowed = _LEGACY_KNOBS[strategy]
-    mapped = Dict{Symbol,Any}()
+    mapped = Dict{Symbol, Any}()
     for (k, v) in pairs(knobs)
         if haskey(allowed, k)
             mapped[allowed[k]] = v
@@ -308,7 +308,7 @@ end
 function Scenario(;
     name::String,
     feeder::Symbol = :ieee13,
-    strategy::Union{Symbol,AbstractStrategy} = Centralized(),
+    strategy::Union{Symbol, AbstractStrategy} = Centralized(),
     seed::Integer = 1,
     T::Integer = 24,
     population::Symbol = :default,
@@ -360,18 +360,33 @@ end
 
 # Value semantics over every field (incl. the strategy).
 function Base.:(==)(a::Scenario, b::Scenario)
-    return a.name == b.name && a.feeder == b.feeder && a.seed == b.seed && a.T == b.T &&
-           a.population == b.population && a.price == b.price &&
-           a.allow_export == b.allow_export && a.pf == b.pf &&
-           a.pf_thesis_literal == b.pf_thesis_literal && a.pf_ε == b.pf_ε &&
+    return a.name == b.name &&
+           a.feeder == b.feeder &&
+           a.seed == b.seed &&
+           a.T == b.T &&
+           a.population == b.population &&
+           a.price == b.price &&
+           a.allow_export == b.allow_export &&
+           a.pf == b.pf &&
+           a.pf_thesis_literal == b.pf_thesis_literal &&
+           a.pf_ε == b.pf_ε &&
            a.strategy == b.strategy
 end
 
 function Base.hash(s::Scenario, h::UInt)
     return hash(
         (
-            s.name, s.feeder, s.seed, s.T, s.population, s.price, s.allow_export, s.pf,
-            s.pf_thesis_literal, s.pf_ε, s.strategy,
+            s.name,
+            s.feeder,
+            s.seed,
+            s.T,
+            s.population,
+            s.price,
+            s.allow_export,
+            s.pf,
+            s.pf_thesis_literal,
+            s.pf_ε,
+            s.strategy,
         ),
         hash(:Scenario, h),
     )

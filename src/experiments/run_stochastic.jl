@@ -325,6 +325,7 @@ Thin wrapper; knobs live on `Scenario.strategy::Stochastic` (`Stochastic()` defa
 for a non-Stochastic strategy). NamedTuple contract unchanged.
 
 # Status and exceptions
+
 The returned `status` is `:solved` or `:oos_infeasible_skipped` (a held-out scenario was
 skipped and reported). Only a `SolveFailedError` on an INFEASIBLE status is skipped; every
 other failure throws. See the [status & exception policy](@ref status-policy).

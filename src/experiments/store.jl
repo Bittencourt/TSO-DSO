@@ -50,10 +50,10 @@ _strategy_label(::Stochastic) = :stochastic
 
 # Active-strategy knobs. :filename -> prefixed primitive names (probabilities dropped: folded
 # into the name as a digest by `scenario_filename`); :record -> legacy flat keys.
-_strategy_knobs(::Centralized, ::Symbol) = Pair{Symbol,Any}[]
+_strategy_knobs(::Centralized, ::Symbol) = Pair{Symbol, Any}[]
 function _strategy_knobs(st::ADMM, style::Symbol)
     pre = style === :filename ? "admm_" : ""
-    return Pair{Symbol,Any}[
+    return Pair{Symbol, Any}[
         Symbol(pre, "ρ") => st.ρ,
         Symbol(pre, "ε_abs") => st.ε_abs,
         Symbol(pre, "ε_rel") => st.ε_rel,
@@ -63,7 +63,7 @@ function _strategy_knobs(st::ADMM, style::Symbol)
     ]
 end
 function _strategy_knobs(st::MPC, ::Symbol)
-    return Pair{Symbol,Any}[
+    return Pair{Symbol, Any}[
         :mpc_H => st.H,
         :mpc_step => st.step,
         :mpc_terminal_soc => st.terminal_soc,
@@ -71,7 +71,7 @@ function _strategy_knobs(st::MPC, ::Symbol)
     ]
 end
 function _strategy_knobs(st::Stochastic, style::Symbol)
-    knobs = Pair{Symbol,Any}[:stoch_S => st.S]
+    knobs = Pair{Symbol, Any}[:stoch_S => st.S]
     style === :record && push!(knobs, :stoch_probabilities => copy(st.probabilities))
     push!(knobs, :stoch_H_oos => st.H_oos)
     return knobs
@@ -87,11 +87,13 @@ fields. `style = :filename` yields prefixed names for [`scenario_filename`](@ref
 keys for [`result_to_dict`](@ref) (lowercase `:strategy`, `:ρ`, ..., `:pf`, `:pf_thesis_literal`,
 `:pf_ε` always). Only the ACTIVE strategy's knobs appear in either style.
 """
-function _scenario_identity(s::Scenario; style::Symbol)::Dict{Symbol,Any}
+function _scenario_identity(s::Scenario; style::Symbol)::Dict{Symbol, Any}
     style in (:filename, :record) || throw(
-        ArgumentError("_scenario_identity: style must be :filename or :record; got $(repr(style))"),
+        ArgumentError(
+            "_scenario_identity: style must be :filename or :record; got $(repr(style))",
+        ),
     )
-    d = Dict{Symbol,Any}(
+    d = Dict{Symbol, Any}(
         :name => s.name,
         :feeder => s.feeder,
         :seed => s.seed,

@@ -52,13 +52,21 @@ struct ADMM <: AbstractStrategy
             )
         end
         if maxiter < 1
-            throw(ArgumentError("ADMM: maxiter must be ≥ 1 (ADMM iteration cap); got maxiter=$maxiter"))
+            throw(
+                ArgumentError(
+                    "ADMM: maxiter must be ≥ 1 (ADMM iteration cap); got maxiter=$maxiter",
+                ),
+            )
         end
         if ρ <= 0
             throw(ArgumentError("ADMM: ρ must be > 0 (ADMM penalty); got ρ=$ρ"))
         end
         if ε_abs <= 0 || ε_rel <= 0
-            throw(ArgumentError("ADMM: ε_abs/ε_rel must be > 0; got ε_abs=$ε_abs, ε_rel=$ε_rel"))
+            throw(
+                ArgumentError(
+                    "ADMM: ε_abs/ε_rel must be > 0; got ε_abs=$ε_abs, ε_rel=$ε_rel",
+                ),
+            )
         end
         if τ_ratio <= 0 || μ <= 0
             throw(ArgumentError("ADMM: τ_ratio/μ must be > 0; got τ_ratio=$τ_ratio, μ=$μ"))
@@ -67,8 +75,22 @@ struct ADMM <: AbstractStrategy
     end
 end
 
-function ADMM(; ρ = 100.0, ε_abs = 1e-4, ε_rel = 1e-3, maxiter = 200, τ_ratio = 2.0, μ = 10.0)
-    return ADMM(Float64(ρ), Float64(ε_abs), Float64(ε_rel), Int(maxiter), Float64(τ_ratio), Float64(μ))
+function ADMM(;
+    ρ = 100.0,
+    ε_abs = 1e-4,
+    ε_rel = 1e-3,
+    maxiter = 200,
+    τ_ratio = 2.0,
+    μ = 10.0,
+)
+    return ADMM(
+        Float64(ρ),
+        Float64(ε_abs),
+        Float64(ε_rel),
+        Int(maxiter),
+        Float64(τ_ratio),
+        Float64(μ),
+    )
 end
 
 """
@@ -91,7 +113,11 @@ struct MPC <: AbstractStrategy
             throw(ArgumentError("MPC: step must be ≥ 1; got step=$step"))
         end
         if !(0 <= forecast_error < 1)
-            throw(ArgumentError("MPC: forecast_error must be in [0, 1); got forecast_error=$forecast_error"))
+            throw(
+                ArgumentError(
+                    "MPC: forecast_error must be in [0, 1); got forecast_error=$forecast_error",
+                ),
+            )
         end
         return new(H, step, terminal_soc, forecast_error + 0.0)   # -0.0 -> +0.0 (== / hash)
     end
@@ -105,13 +131,23 @@ end
 # re-validated before each run).
 function _check_probabilities(S::Integer, probabilities::AbstractVector)
     if length(probabilities) != S
-        throw(ArgumentError("Stochastic: probabilities must have length S=$S; got $(length(probabilities))"))
+        throw(
+            ArgumentError(
+                "Stochastic: probabilities must have length S=$S; got $(length(probabilities))",
+            ),
+        )
     end
     if !all(>(0), probabilities)
-        throw(ArgumentError("Stochastic: probabilities must all be > 0; got $probabilities"))
+        throw(
+            ArgumentError("Stochastic: probabilities must all be > 0; got $probabilities"),
+        )
     end
     if !isapprox(sum(probabilities), 1; atol = 1e-8)
-        throw(ArgumentError("Stochastic: probabilities must sum to 1; got sum=$(sum(probabilities))"))
+        throw(
+            ArgumentError(
+                "Stochastic: probabilities must sum to 1; got sum=$(sum(probabilities))",
+            ),
+        )
     end
     return nothing
 end
@@ -150,27 +186,37 @@ end
 
 # Value semantics: Scenario equality and sweeps must compare strategies by value.
 Base.:(==)(a::ADMM, b::ADMM) =
-    a.ρ == b.ρ && a.ε_abs == b.ε_abs && a.ε_rel == b.ε_rel &&
-    a.maxiter == b.maxiter && a.τ_ratio == b.τ_ratio && a.μ == b.μ
-Base.hash(a::ADMM, h::UInt) = hash((a.ρ, a.ε_abs, a.ε_rel, a.maxiter, a.τ_ratio, a.μ), hash(:ADMM, h))
+    a.ρ == b.ρ &&
+    a.ε_abs == b.ε_abs &&
+    a.ε_rel == b.ε_rel &&
+    a.maxiter == b.maxiter &&
+    a.τ_ratio == b.τ_ratio &&
+    a.μ == b.μ
+Base.hash(a::ADMM, h::UInt) =
+    hash((a.ρ, a.ε_abs, a.ε_rel, a.maxiter, a.τ_ratio, a.μ), hash(:ADMM, h))
 
 Base.:(==)(a::MPC, b::MPC) =
-    a.H == b.H && a.step == b.step && a.terminal_soc == b.terminal_soc &&
+    a.H == b.H &&
+    a.step == b.step &&
+    a.terminal_soc == b.terminal_soc &&
     a.forecast_error == b.forecast_error
-Base.hash(a::MPC, h::UInt) = hash((a.H, a.step, a.terminal_soc, a.forecast_error), hash(:MPC, h))
+Base.hash(a::MPC, h::UInt) =
+    hash((a.H, a.step, a.terminal_soc, a.forecast_error), hash(:MPC, h))
 
 Base.:(==)(a::Stochastic, b::Stochastic) =
     a.S == b.S && a.H_oos == b.H_oos && a.probabilities == b.probabilities
-Base.hash(a::Stochastic, h::UInt) = hash((a.S, a.probabilities, a.H_oos), hash(:Stochastic, h))
+Base.hash(a::Stochastic, h::UInt) =
+    hash((a.S, a.probabilities, a.H_oos), hash(:Stochastic, h))
 
 """
     TSODSO.supported_pfs(strategy::AbstractStrategy) -> Tuple{Vararg{Symbol}}
 
 Power-flow selectors the strategy accepts. See [`TSODSO.supports_pf`](@ref).
 """
-supported_pfs(::Centralized) = (:convex_branch_flow, :restricted_branch_flow, :lindistflow, :ac)
+supported_pfs(::Centralized) =
+    (:convex_branch_flow, :restricted_branch_flow, :lindistflow, :ac)
 supported_pfs(::ADMM) = (:convex_branch_flow, :restricted_branch_flow, :lindistflow)
-supported_pfs(::Union{MPC,Stochastic}) = (:convex_branch_flow,)
+supported_pfs(::Union{MPC, Stochastic}) = (:convex_branch_flow,)
 
 """
     TSODSO.supports_pf(strategy, pf::Symbol, thesis_literal::Bool) -> Bool
@@ -182,7 +228,7 @@ selectors. `ADMM` accepts convex (thesis-literal allowed), restricted and LinDis
 """
 supports_pf(st::ADMM, pf::Symbol, thesis_literal::Bool) = pf in supported_pfs(st)
 supports_pf(st::Centralized, pf::Symbol, thesis_literal::Bool) = pf in supported_pfs(st)
-supports_pf(::Union{MPC,Stochastic}, pf::Symbol, thesis_literal::Bool) =
+supports_pf(::Union{MPC, Stochastic}, pf::Symbol, thesis_literal::Bool) =
     pf === :convex_branch_flow && !thesis_literal
 
 """

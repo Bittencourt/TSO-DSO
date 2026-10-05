@@ -102,9 +102,11 @@ A `NamedTuple`
     (nonconvex-AC-dual fallback tier), or the TERMINAL `:cert_failed` (every escalation tier
     failed — the published price for that resolve is the day-ahead reference DADP slice, and
     each tier's failure reason is `@warn`ed; the ladder is genuinely non-throwing).
+
   - `day_ahead_welfare::Float64` — the FULL perfect-foresight day-ahead welfare (`s.T` hours,
     the complete materialized population INCLUDING any `Deferrable` device — see this file's
     header design note).
+
   - `realized_welfare::Float64` — the closed-loop's TRUTH-SETTLED realized welfare, accumulated hour-by-hour from
     each applied step's applied controls settled against the TRUE plant, over the
     Deferrable-excluded `mpc_aggs` device set (see header note) plus the frontier
@@ -170,21 +172,21 @@ A `NamedTuple`
     the INTERNAL test seam `_truth_settlement = :socp` (default `:ac`) — used SOLELY for an
     AC-vs-SOCP cross-check on a seed where the SOCP re-solve happens to be exact; no
     production `Scenario`-driven caller ever passes it.
+
   - `settlement_violations::Vector{<:NamedTuple}` — one
     entry per PUBLISHED hour (same order/length as `trace`), each
-    `(; abs_hour, n_thermal_violations, max_overload_ratio, n_voltage_violations,
-    min_voltage, max_voltage, voltage_violated)` — see [`_mpc_settlement_violations`](@ref).
+    `(; abs_hour, n_thermal_violations, max_overload_ratio, n_voltage_violations, min_voltage, max_voltage, voltage_violated)` — see [`_mpc_settlement_violations`](@ref).
     A DIAGNOSTIC computed from the AC truth settlement's own solved `P`/`Q`/`l`/`v` (never a
     constraint dual — `ACPowerFlow(; limits = false)` writes no `:smax`/`:smax_rev`/
     voltage-bound constraint to read one from), NEVER a gate: the settlement never refuses a
     dispatch for exceeding an operating limit, it only reports it here. Populated only under
     `_truth_settlement = :ac` (the production default); empty under the `:socp` internal test
     seam.
+
   - `pvbattery_truth_trace::Vector{<:NamedTuple}` — one entry
     PER APPLIED HOUR PER `PVBattery` device (NOT one per published hour like `trace`/
     `settlement_violations` — an hour with zero PVBattery devices contributes zero entries, an
-    hour with two contributes two), each `(; abs_hour, bus, p_ch_true, pv_used_true, p_dch,
-    Ppv_true, net_p_delta)`. `net_p_delta` is the ACTUAL amount the PVBattery truth-settlement
+    hour with two contributes two), each `(; abs_hour, bus, p_ch_true, pv_used_true, p_dch, Ppv_true, net_p_delta)`. `net_p_delta` is the ACTUAL amount the PVBattery truth-settlement
     call site added to `net_p` this hour (captured as `net_p_after - net_p_before` around that
     exact line, never a separate re-derivation), so it is provably sensitive to a revert of
     that line back to the earlier unclipped `pv_used1` — a test recovering the
@@ -196,6 +198,7 @@ A `NamedTuple`
     convenience/cross-checking. A pure DIAGNOSTIC never read by `run_mpc` itself or fed back
     into any control/pricing/state decision. Populated under BOTH `_truth_settlement` seam
     values (the clip happens before the truth-settlement branch).
+
   - `forecast_settled_welfare::Float64` — the forecast-consistent settlement,
     kept as a clearly-labelled DIAGNOSTIC (never the headline number `regret` is measured
     against, once truth settlement exists). **Settlement is FORECAST-CONSISTENT by construction, not
@@ -209,6 +212,7 @@ A `NamedTuple`
     recursion has no exogenous profile). This number is computed
     alongside `realized_welfare` from the SAME per-applied-hour loop, never mutated by the
     clip/throw/AC-import corrections above.
+
   - `regret::Float64` — the truth-settled `realized_welfare` MINUS the
     day-ahead welfare RESTRICTED to the SAME published `k`-hour decision horizon and the SAME
     `mpc_aggs` device set (information-set-fair comparison) — NEVER silently
@@ -219,7 +223,9 @@ A `NamedTuple`
     comparison is never charged the frontier cost of a device whose utility it is denied. The
     terminal-SOC targets likewise track THIS comparable benchmark's own optimal SOC
     trajectory.
+
   - `day_ahead_dadp::Vector{Float64}` — the full-length (`s.T`) day-ahead reference DADP path.
+
   - `steps::Int` — the total published-hour count, ALWAYS `s.T - st.H + 1` regardless of
     `st.step` (fixed-window convention — only the NUMBER OF RESOLVES shrinks as
     `st.step` grows, never the published-hour count).
@@ -302,9 +308,8 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
     # population with `mpc_step == mpc_H` no longer trips this guard (verified empirically),
     # while a Thermostatic-carrying population with
     # `mpc_step > mpc_H - 1` still does (guard not silently disabled).
-    has_uncovered_state = any(
-        hasproperty(d, :Tin0) for agg in mpc_aggs for d in agg.devices
-    )
+    has_uncovered_state =
+        any(hasproperty(d, :Tin0) for agg in mpc_aggs for d in agg.devices)
     if has_uncovered_state && st.step > st.H - 1
         throw(
             ArgumentError(
@@ -355,8 +360,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
     # PRIMAL_INFEASIBLE.
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:(s.T + 1)] for
-        (bus, varlist) in ctx_da_cmp.agg_device_vars for
-        v in varlist if haskey(v, :soc)
+        (bus, varlist) in ctx_da_cmp.agg_device_vars for v in varlist if haskey(v, :soc)
     )
 
     # --- 3. Build the window ONCE, against the Deferrable-excluded mpc_aggs.
@@ -430,10 +434,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
                 # every visited `t`, and `soc_da` is now built over `1:(s.T + 1)`, so every
                 # index here is in-bounds by construction — a silent clamp would re-hide the
                 # exact stale-index bug this fixes.
-                set_parameter_value(
-                    entry.terminal_param,
-                    soc_da[entry.bus][t + st.H],
-                )
+                set_parameter_value(entry.terminal_param, soc_da[entry.bus][t + st.H])
             end
         end
 
@@ -522,7 +523,8 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
 
                 for d in agg.devices
                     # ---- forecast-consistent settlement (diagnostic) ----
-                    forecast_settled_welfare += _mpc_device_hour_utility(d, varlist, τ_apply)
+                    forecast_settled_welfare +=
+                        _mpc_device_hour_utility(d, varlist, τ_apply)
                     if d isa PVBattery || d isa FourQuadBESS
                         v = only(vv for vv in varlist if haskey(vv, :soc0))
                         p_ch1 = value(v.p_ch[τ_apply])
@@ -1300,8 +1302,7 @@ frontier import `p_import_t` free. With every injection fixed, the per-bus balan
 alone leave EXACTLY one convex degree of freedom PER BRANCH — the squared current `l[b,1]` (the
 SOC relaxation constraint is an INEQUALITY, `l·v ≥ P²+Q²`, so `l` can sit anywhere at or above
 its physically-exact value while `P`/`Q`/`v` adjust consistently through the balance/vdrop/
-cpydrop equalities). The loss-exact variant selects among this family via `Min
-Σ_b B[b].r·l[b,1]` (total active loss), which has the SAME minimizer as minimizing `p_import_t`
+cpydrop equalities). The loss-exact variant selects among this family via `Min Σ_b B[b].r·l[b,1]` (total active loss), which has the SAME minimizer as minimizing `p_import_t`
 alone (they differ by the FIXED constant `TotalNetInjection`, per the balance equations' own
 telescoping identity) but gives Clarabel's interior-point solve an UNMEDIATED gradient on every
 `l[b,1]` rather than one reached only through chained constraint duals — a strictly more direct,
@@ -1428,9 +1429,7 @@ constrained) directly from the solved values, and counts a branch as OVERLOADED 
 `max(|S_fwd|, |S_rev|) / smax > 1`. For every non-root bus, recovers the voltage magnitude
 `|V_j| = sqrt(v_j)` and counts it OUT-OF-BAND whenever it falls outside `[vmin, vmax]`.
 
-Returns `(; abs_hour, n_thermal_violations::Int, max_overload_ratio::Float64,
-n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
-voltage_violated::Bool)`. `max_overload_ratio` is `0.0` when the feeder has no branch with a
+Returns `(; abs_hour, n_thermal_violations::Int, max_overload_ratio::Float64, n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64, voltage_violated::Bool)`. `max_overload_ratio` is `0.0` when the feeder has no branch with a
 real thermal rating (never `NaN`/`-Inf` — a feeder with no limited branch cannot overload one).
 """
 function _mpc_settlement_violations(feeder, pv_t::NamedTuple, abs_hour::Int)
@@ -1535,8 +1534,7 @@ family).
 
 Requires `is_solved_and_feasible(model_t; dual=false, allow_local=true, allow_almost=false)`
 — i.e. `termination_status ∈ {OPTIMAL, LOCALLY_SOLVED}` with a `FEASIBLE_POINT` primal.
-**`ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted** (`allow_almost =
-false`): throws a loud `SolveFailedError` naming `abs_hour` and the FULL solve status
+**`ALMOST_LOCALLY_SOLVED` is TREATED AS A FAILURE, never silently accepted** (`allow_almost = false`): throws a loud `SolveFailedError` naming `abs_hour` and the FULL solve status
 (`termination_status`/`primal_status`/`raw_status`) on non-convergence — this function NEVER
 weakens the convergence bar to paper over a stalled Ipopt solve, and NEVER relaxes it to paper
 over a genuine Ipopt failure either (only the operating
@@ -1661,6 +1659,7 @@ Scenario whose strategy is not `MPC` the `MPC()` defaults apply. The returned Na
 contract is unchanged (see [`TSODSO.run`](@ref) for the `ScenarioResult` form).
 
 # Status and exceptions
+
 The returned `status` is `:certified` (every step first tier), `:degraded` (a
 restricted/local-AC step, none failed) or `:cert_failed`. The tier handlers admit only
 `SolveFailedError` / `CertificateError`; programming errors propagate. See the [status & exception policy](@ref status-policy).
@@ -1691,8 +1690,12 @@ function run(st::MPC, s::Scenario)
         NaN,
         elapsed,
         MPCDetails(
-            r.regret, r.steps, r.day_ahead_welfare, r.forecast_settled_welfare,
-            r.realized_welfare, r,
+            r.regret,
+            r.steps,
+            r.day_ahead_welfare,
+            r.forecast_settled_welfare,
+            r.realized_welfare,
+            r,
         ),
     )
 end

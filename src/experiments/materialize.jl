@@ -486,4 +486,3 @@ numeric goldens stay bit-identical. `:ac` is the researcher's responsibility on 
 (only `:ieee13` has been measured).
 """
 build_powerflow(s::Scenario) = _powerflow_from_selector(s.pf, s.pf_thesis_literal, s.pf_ε)
-
