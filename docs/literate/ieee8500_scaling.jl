@@ -201,11 +201,65 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # deliverable" carried forward one step further: honest non-completion is too) — never as a
 # passing row manufactured by loosening a tolerance or a time budget (T-25-12).
 #
+# *(Update 2026-10-04: after the v4.0 refactor the ADMM-only headline at density 0.1 does run to convergence
+# and is then refused by the exactness gate; see "Post-refactor measured results (Phase 35)" below.)*
+#
 # The MV-only control fixture (`ieee8500-mv`, 2,521 buses) fares only somewhat better: its own
 # density=0.1 point (the SAME point solved live above) converges centralized and reports
 # `exact`, but ADMM there hits its `maxiter` cap without both residuals converging — a genuine
 # algorithmic non-convergence, not a bug — and both its density=0.5 and density=1.0 points also
 # OOM-killed on this machine.
+
+# ## Post-refactor measured results (Phase 35)
+#
+# *(Appended 2026-10-04, requirement ARCH-10. The v3.0 text above is kept as history; where it says the
+# headline point "did not converge", read it together with this section. Figures below are copied from
+# `results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv`.)*
+#
+# **1. Library default change.** `solve_admm`/`solve_dso!` now default `atol_exact` to `nothing`, i.e. the
+# ADMM final-consolidation gate uses the same per-branch hybrid floor as the centralized path
+# (`atol_b = max(2e-7, 1e-9*ref_b)`, relative term on the cone value). An explicit `Real` `atol_exact` keeps
+# its old flat-bypass semantics. The gate logic, `tau` and the comparison epsilon are untouched. The new
+# default is stricter than the old flat `1e-6` except on branches with `smax` of 32-99 pu, so a
+# `CertificateError` can now newly appear for a gap in (2e-7, 1e-6]. This is a deliberate behaviour change.
+#
+# **2. SC1 diagnostic (density 0.1, T = 10, gate bypassed with `--admm-diagnostic-bypass`).** The ADMM run
+# converged in 8 iterations. The worst branch is `L2916620 -> N1136366` (b = 1325, t = 3): `r_pu = 2.40e-6`,
+# cone gap `1.21e-4`, `atol_b = 2.0e-7`, hybrid ratio **568.95**. All 20 recorded rows have ratio > 1.
+# The largest loss-weighted impact `r_pu * gap` is `4.4e-9` pu, so the economic effect is negligible, but
+# the certificate refusal is **genuine**: these are near-ideal (very low resistance) branches where the
+# relaxation gap is not certified at the floor. No tolerance was raised and no branch was excluded.
+#
+# **3. Headline re-measurement (density 0.1, T = 10, ADMM-only, library hybrid gate).**
+#
+# | metric | v3.0 (25-08) | Phase 35 |
+# |---|---|---|
+# | status | centralized `ALMOST_OPTIMAL` | `ERROR:CertificateError` (prices REFUSED, ratio 568.95) |
+# | ADMM iterations | 8 | 8 |
+# | wall time | 227 s | 287 s |
+# | peak RSS | about 5.9 GB | 6.21 GB (delta 4.67 GB) |
+#
+# The time and memory difference may include load from other processes on the shared host and extra GC
+# calls added to the harness; it was not isolated.
+#
+# **4. Ladder and memory wall (15.9 GB host, earlyoom `-m 12`).**
+#
+# | point | outcome | peak RSS | wall |
+# |---|---|---|---|
+# | Phase 25, density 0.1 and 1.0, T = 24 (combined centralized+ADMM process) | OOM kills | n/a | n/a |
+# | Phase 35 d = 0.1, T = 10 | `CertificateError` (ratio 568.95) | 6.21 GB | 287 s |
+# | Phase 35 d = 0.1, T = 24 | ADMM completed, `CertificateError` (ratio 223.68) | 12.08 GB | 678 s |
+# | Phase 35 d = 0.25, T = 24 | earlyoom SIGTERM at 10.6 GiB anon RSS | 12.64 GB | 213 s |
+#
+# The wall now sits **between density 0.1 and 0.25 at T = 24**. Phase 25's OOM kills at T = 24 were in a
+# combined centralized+ADMM process; its density 0.1 T = 10 point fit (about 5.9 GB). The dominant consumer is
+# the per-hour DSO solver state retained across the ADMM loop: one build adds only 151 MB and the first
+# optimize 441 MB, while the whole T = 10 loop adds 4.67 GB and T = 24 adds 10.4 GB, roughly linear in T. No
+# `src/` memory mitigation was adopted (none was both dominant and provably bit-identical).
+#
+# **5. Protocol.** ADMM-only (`--admm-only`), one measurement point per process, each wrapped with peak-RSS
+# capture and earlyoom attribution, with the number of other Julia processes and free memory/swap recorded
+# before each point (`point_resources.csv`, `runs/`). One attempt per ladder step; no retry after a kill.
 
 # ## Synthesis — conditioning, size, or formulation?
 #
