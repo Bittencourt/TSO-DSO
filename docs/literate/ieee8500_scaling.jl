@@ -256,7 +256,7 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # | centralized | `ALMOST_OPTIMAL`, refused by `assert_solved!` | not run (`--admm-only`) |
 # | ADMM gate | flat `atol_exact = 4.97e-3` (`admm_atol_used = 0.004969`, the old `IEEE8500_EXACT_ATOL`) | library hybrid floor (`admm_atol_used = hybrid`, `atol_b` as low as 2e-7) |
 # | ADMM outcome | `converged`, passed the flat gate | `ERROR:CertificateError` (prices REFUSED, ratio 568.95) |
-# | ADMM iterations | 8 | 8, taken from the `p35-diag-d0.1-T10` row (the gate-bypassed re-run of the same point, section 2); the head row was written before WR-07 and records the unknown sentinel `-1` |
+# | ADMM iterations | 8 | 8, taken from the `p35-diag-d0.1-T10` row (the gate-bypassed re-run of the same point, section 2); the head row was written before WR-07 with `NaN`, normalized to the unknown sentinel `-1` by the WR-04 repair (`aa6277e`) |
 # | ADMM time (`admm_time_s`) | 227 s | 287 s |
 # | peak RSS | no harness-recorded peak (see below) | 5.92 GiB (6,205,808 KiB, `point_resources.csv` `peak_rss_kb`, same `run_label`) |
 # | ADMM RSS delta (`admm_peak_rss_delta_mb`) | 3.13 GiB (3,200.4 MiB) | 4.56 GiB (4,672.8 MiB) |
