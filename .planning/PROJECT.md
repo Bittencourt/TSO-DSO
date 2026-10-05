@@ -187,6 +187,17 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 36 (Code & Export Cleanup) COMPLETE 2026-10-05.**
+HYG-01/02/03/07 validated. Planning/review IDs scrubbed from all source, tests, scripts and docs
+(~6,500 lines, rationale kept as prose, thesis refs intact, every edit proven code-neutral by an AST
+check); `.github/scripts/check_planning_ids.py` guards it in CI (fail-closed, empty allowlist).
+`operational_oracle` stub kwargs + `z` path, the reactive Bool/Symbol shim and the deprecated DLMP
+`loss`/`voltage` aliases removed; `ReactiveMode` is a module (`ReactiveMode.T`, `ReactiveMode.LIVE`).
+Exports trimmed 192 → 90 (others `@compat public`; Compat now a direct dep); module docstring rewritten;
+"Breaking changes" in `docs/src/status_policy.md`. Fixtures/tags renamed after content.
+`check_script_api.jl` statically checks scripts/ + docs/literate/ against the API in CI. Full suite
+32205/0/0/5, canary unchanged, goldens untouched. Next: Phase 37 (Test Infrastructure & Repo Hygiene).
+
 **Phase 35 (IEEE-8500 Scale After Refactor) COMPLETE 2026-10-05.**
 ARCH-10 validated. The ADMM final consolidation (`solve_admm` → `_admm_certify` → `solve_dso!`) now
 defaults `atol_exact = nothing`, i.e. the same hybrid exactness floor `max(2e-7, 1e-9·ref_b)` as the
@@ -531,4 +542,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-05 — Phase 35 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-05 — Phase 36 complete (v4.0 Correctness & Depth)*
