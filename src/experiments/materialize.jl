@@ -474,12 +474,12 @@ end
 
 Materialize the power-flow formulation named by `s.pf`:
 
-| `s.pf`                    | result                                              |
-|:--------------------------|:----------------------------------------------------|
+| `s.pf`                    | result                                                     |
+|:------------------------- |:---------------------------------------------------------- |
 | `:convex_branch_flow`     | `ConvexBranchFlow(; thesis_literal = s.pf_thesis_literal)` |
-| `:restricted_branch_flow` | `RestrictedBranchFlow(; ε = s.pf_ε)`                |
-| `:lindistflow`            | `LinDistFlow()`                                     |
-| `:ac`                     | `ACPowerFlow()` (default `limits = true`)           |
+| `:restricted_branch_flow` | `RestrictedBranchFlow(; ε = s.pf_ε)`                       |
+| `:lindistflow`            | `LinDistFlow()`                                            |
+| `:ac`                     | `ACPowerFlow()` (default `limits = true`)                  |
 
 The default scenario yields an object `===` the earlier hard-coded `ConvexBranchFlow()`, so
 numeric goldens stay bit-identical. `:ac` is the researcher's responsibility on large feeders

@@ -785,8 +785,8 @@ end
 `s.allow_export` so the tiers honor the SAME frontier semantics the main window and both
 day-ahead benchmarks were solved under.
 
-Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check
- + escalation ladder, factored out so a test can drive it DIRECTLY against a
+Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check and
+escalation ladder, factored out so a test can drive it DIRECTLY against a
 non-`Scenario` `feeder`/`mpc_aggs` pair (e.g. `MPCFixtures`' high-PV fixture) without
 duplicating this logic — `run_mpc`'s own loop calls this EXACT function.
 

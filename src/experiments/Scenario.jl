@@ -70,24 +70,24 @@ solve strategy is a strategy struct (see [`AbstractStrategy`](@ref)).
 
 # `pf` selector and strategy compatibility
 
-| `pf`                      | option             | Centralized | ADMM / MPC / Stochastic |
-|:--------------------------|:-------------------|:-----------:|:-----------------------:|
-| `:convex_branch_flow`     | `pf_thesis_literal`| yes         | only with `pf_thesis_literal = false` |
-| `:restricted_branch_flow` | `pf_ε`             | yes         | no                      |
-| `:lindistflow`            | —                  | yes         | no                      |
-| `:ac`                     | —                  | yes         | no                      |
+| `pf`                      | option              | Centralized | ADMM / MPC / Stochastic               |
+|:------------------------- |:------------------- |:-----------:|:-------------------------------------:|
+| `:convex_branch_flow`     | `pf_thesis_literal` | yes         | only with `pf_thesis_literal = false` |
+| `:restricted_branch_flow` | `pf_ε`              | yes         | no                                    |
+| `:lindistflow`            | —                   | yes         | no                                    |
+| `:ac`                     | —                   | yes         | no                                    |
 
 # Legacy flat keyword mapping
 
 The keyword constructor still accepts `strategy::Symbol` plus flat knobs and maps them to the
 strategy struct:
 
-| `strategy`    | accepted knobs                                                                  |
-|:--------------|:--------------------------------------------------------------------------------|
-| `:centralized`| none                                                                            |
-| `:admm`       | `ρ, ε_abs, ε_rel, maxiter, τ_ratio, μ`                                          |
-| `:mpc`        | `mpc_H → H`, `mpc_step → step`, `mpc_terminal_soc → terminal_soc`, `mpc_forecast_error → forecast_error` |
-| `:stochastic` | `stoch_S → S`, `stoch_probabilities → probabilities`, `stoch_H_oos → H_oos`     |
+| `strategy`     | accepted knobs                                                                                           |
+|:-------------- |:-------------------------------------------------------------------------------------------------------- |
+| `:centralized` | none                                                                                                     |
+| `:admm`        | `ρ, ε_abs, ε_rel, maxiter, τ_ratio, μ`                                                                   |
+| `:mpc`         | `mpc_H → H`, `mpc_step → step`, `mpc_terminal_soc → terminal_soc`, `mpc_forecast_error → forecast_error` |
+| `:stochastic`  | `stoch_S → S`, `stoch_probabilities → probabilities`, `stoch_H_oos → H_oos`                              |
 
 A knob foreign to the chosen strategy, an unknown keyword, or any knob combined with an
 `AbstractStrategy` value throws `ArgumentError` (knobs are detected by the keys actually
