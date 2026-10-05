@@ -26,7 +26,7 @@ MPC certificate tiers, and the documented stochastic skip-and-report.
 | `ConvergenceError` | an iterative method exhausted its budget without consensus; carries `iterations` | `solve_admm` (`maxiter`), `solve_stackelberg!` (`max_iter`, `:reject` stall), `run_nash!` |
 
 Migration note: these replace the former `ErrorException` throws at the same sites. The
-message text is byte-identical (`showerror` prints exactly `e.msg`); only the exception
+message text is bit-for-bit identical (`showerror` prints exactly `e.msg`); only the exception
 **type** changed. `ErrorException` is a concrete struct, so a `SolveFailedError` is not an
 `ErrorException`; internal catch sites that must treat both generations as solver failures use
 the predicate `_is_solver_failure`.
@@ -58,7 +58,7 @@ Meaning of the less obvious values: `:budget_exceeded` is the caller-set `time_l
 relaxation; `:degraded` means a restricted/local-AC MPC step with none failed;
 `:oos_infeasible_skipped` means a held-out stochastic scenario was skipped and reported.
 
-## 4. Handler rule (ARCH-09)
+## 4. Handler rule
 
 Catch blocks are narrowed to the documented failure modes:
 
@@ -82,7 +82,7 @@ violated internal invariant, not a researcher-facing outcome; they stay `error(.
   `ctx.residuals` size checks in `master.jl`, `subproblem.jl`, `feasibility_oracle.jl`,
   `bilevel_kkt.jl`, `mpc_loop.jl`, `nash.jl`);
 - `welfare_accounting` (`src/pricing/welfare.jl`), the DLMP closure checks
-  (`src/pricing/dlmp.jl`); the `fit_baseline` SITE-2 AC-PF non-convergence
+  (`src/pricing/dlmp.jl`); the `fit_baseline` AC-PF non-convergence
   (`src/pricing/fit.jl`) is a `SolveFailedError`;
 - `_mpc_assert_true_state_inband` in `src/experiments/mpc_loop.jl` (the AC
   truth-settlement non-convergence and the `ac_recheck_incumbent` re-check failure are

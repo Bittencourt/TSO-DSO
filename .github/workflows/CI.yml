@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.10'   # LTS floor (INFRA-01 [compat] floor)
+          - '1.10'   # LTS floor ([compat] floor)
           - '1.11'   # current stable
           - '1.12'   # additive insurance
         os:
@@ -36,7 +36,7 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
-      # INFRA-01: prove clean-checkout resolution against the committed Manifest.
+      # Prove clean-checkout resolution against the committed Manifest.
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
@@ -74,8 +74,8 @@ jobs:
           # bare "2" — that reintroduces the float to the newest 2.x release.
           Pkg.add(PackageSpec(name = "JuliaFormatter", version = "2.10"))
           using JuliaFormatter
-          # Uses the committed .JuliaFormatter.toml to freeze v2 style (Pitfall 4).
-          # `docs` is now in scope (Phase-9 WR-04 follow-up): the literate pages are
+          # Uses the committed .JuliaFormatter.toml to freeze v2 style.
+          # `docs` is in scope: the literate pages are
           # formatter-clean, with positional-arg label comments lifted to standalone
           # lines so auto-formatting cannot detach them from the code they annotate.
           if !format(["src", "ext", "test", "docs"]; verbose = true)
@@ -120,10 +120,10 @@ jobs:
           # in lockstep with docs/Manifest.toml's julia_version if the docs env is re-resolved.
           version: '1.12'
       - uses: julia-actions/cache@v2
-      # Explicit docs-env instantiate: docs/Manifest.toml (re-resolved in plan 09-04
-      # to include CairoMakie) must be installed here — the `format` job above has no
+      # Explicit docs-env instantiate: docs/Manifest.toml (which includes
+      # CairoMakie) must be installed here — the `format` job above has no
       # instantiate step because it never loads project code, but `docs` builds a real
-      # Documenter site with CairoMakie figures, so this step is required (T-09-05).
+      # Documenter site with CairoMakie figures, so this step is required.
       - uses: julia-actions/julia-buildpkg@v1
         with:
           project: docs

@@ -1,10 +1,9 @@
 # docs/make.jl
 #
-# Documenter + Literate build for the full six-rung abstraction ladder (Phase 1
-# proved the pipeline with a single page; Phase 9 / EXP-03 wires all six). Every
+# Documenter + Literate build for the full abstraction ladder. Every
 # `docs/literate/*.jl` source becomes a Documenter markdown page whose `@example`
 # blocks Documenter EXECUTES during `makedocs` — so the rendered numbers cannot
-# drift from the real `src/` code (threat T-01-09 / T-09-03).
+# drift from the real `src/` code.
 
 using Documenter
 using Literate
@@ -16,36 +15,36 @@ const GENERATED_DIR = joinpath(@__DIR__, "src", "generated")
 # Render each Literate source to a Documenter markdown page. `flavor =
 # Literate.DocumenterFlavor()` emits `@example` blocks, so every solve below runs
 # during `makedocs` (the non-deprecated replacement for the old `documenter = true`
-# kwarg — RESEARCH Pitfall 1; migrated here for the existing `toy_dc.jl` call too).
+# kwarg; the `toy_dc.jl` call uses it too).
 for src in (
     "toy_dc.jl",
     "lindistflow.jl",
     "convex_branch_flow.jl",
-    "ac_oracle.jl",             # NEW: Rung 3 AC-exactness oracle (EXACT-04)
-    "restricted_branch_flow.jl", # NEW: Rung 3 overvoltage-capable restriction (OVR-01..04)
+    "ac_oracle.jl",             # Rung 3 AC-exactness oracle
+    "restricted_branch_flow.jl", # Rung 3 overvoltage-capable restriction
     "prosumer_welfare.jl",
     "pricing_dlmp.jl",
     "admm.jl",
-    "stackelberg_benders.jl",   # NEW: Rung 6
-    "nash_diagonalization.jl",  # NEW: Rung 7
-    "ieee123_impedances.jl",    # NEW: real IEEE-123 impedance reduction (IMPED-01/02)
-    "thesis_reproduction_ieee123.jl",  # NEW: thesis reproduction — IEEE-123 real-impedance DSO-surplus sign flip (REPRO-01)
-    "thesis_reproduction_assumptions.jl",  # NEW: thesis reproduction assumptions/reduction chain (REPRO-02)
+    "stackelberg_benders.jl",   # Rung 6
+    "nash_diagonalization.jl",  # Rung 7
+    "ieee123_impedances.jl",    # real IEEE-123 impedance reduction
+    "thesis_reproduction_ieee123.jl",  # thesis reproduction — IEEE-123 real-impedance DSO-surplus sign flip
+    "thesis_reproduction_assumptions.jl",  # thesis reproduction assumptions/reduction chain
     # SOC-relaxation applicability maps. Substrate A (3-bus, ~70 s) is solved LIVE here;
     # substrate B (real IEEE-123, ~16 min) is loaded from results/socp_applicability/ because
     # it exceeds this job's whole CI timeout. See the page's own note.
     "socp_applicability.jl",
-    # IEEE-8500 scalability benchmark (phase 25, SCALE-05): a cheap live slice (ieee8500-mv,
+    # IEEE-8500 scalability benchmark: a cheap live slice (ieee8500-mv,
     # lowest density, Clarabel only) + the committed cross-fixture density-sweep curve, following
-    # socp_applicability.jl's own precomputed-results precedent (D-17 REVISED) — the full grid
+    # socp_applicability.jl's own precomputed-results precedent — the full grid
     # (including the 4,875-bus headline point) exceeds this job's CI timeout AND, at this scale,
     # the measurement machine's available RAM; see the page's own note.
     "ieee8500_scaling.jl",
-    "mpc_rolling_horizon.jl",   # NEW: Rung 8 MPC / rolling-horizon RTP closed loop (MPC-01..04)
-    "stochastic_pv_demand.jl", # NEW: Rung 9 Stochastic PV/Demand Uncertainty (STOCH-01..04)
-    "meshed_reactive_price.jl", # NEW: Rung 10 Meshed Networks + Live Reactive Price (MESH-01..03,06)
-    "integer_investment.jl",   # NEW: Rung 11 Discrete/Integer Investment Expansion (INT-01..04)
-    "experiments.jl",           # NEW: the Phase-8 experiment harness (Scenario / run_scenario / run_and_store / run_sweep)
+    "mpc_rolling_horizon.jl",   # Rung 8 MPC / rolling-horizon RTP closed loop
+    "stochastic_pv_demand.jl", # Rung 9 Stochastic PV/Demand Uncertainty
+    "meshed_reactive_price.jl", # Rung 10 Meshed Networks + Live Reactive Price
+    "integer_investment.jl",   # Rung 11 Discrete/Integer Investment Expansion
+    "experiments.jl",           # the experiment harness (Scenario / run_scenario / run_and_store / run_sweep)
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -62,10 +61,10 @@ makedocs(;
         prettyurls = get(ENV, "CI", nothing) == "true",
         # The consolidated `api.md` (full @autodocs of the public API on one page) exceeds
         # Documenter's default 200 KiB per-page HTML size_threshold. Raised once already
-        # (dc0de79, post-v1) to 600/400 KiB; by Phase 28 (v4.0) the page has organically
-        # grown to 676.24 KiB (more exported symbols/docstrings across Phases 9-27) and
+        # (commit dc0de79) to 600/400 KiB; since then the page has organically
+        # grown to 676.24 KiB (more exported symbols and docstrings) and
         # tripped that limit too. Raised again with headroom for further growth rather
-        # than re-bumping every few phases; all other pages are well under this.
+        # than re-bumping repeatedly; all other pages are well under this.
         size_threshold = 1024 * 1024,
         size_threshold_warn = 800 * 1024,
     ),
@@ -105,19 +104,19 @@ makedocs(;
     # surfaced somewhere in the manual. The `api.md` page wires the full module docstring
     # set in via `@autodocs` blocks, so exported docstrings now appear in the rendered docs.
     # `:missing_docs` is NO LONGER in `warnonly` — a documented-but-UNSURFACED exported
-    # symbol now FAILS the build (the tracked Phase-9 follow-up, completed here). KNOWN
-    # LIMIT (Phase 14 review WR-02): an exported symbol with NO docstring at all passes
+    # symbol now FAILS the build. KNOWN
+    # LIMIT: an exported symbol with NO docstring at all passes
     # `checkdocs` silently — docstring EXISTENCE is enforced by review convention, not by
     # this build gate; and every `api.md` `@autodocs` block must keep `:constant` in its
     # `Order`, or the first docstring added to an exported constant in that section turns
     # into a delayed build failure here. `:cross_references` stays in `warnonly` (broken
-    # `@ref`s remain non-fatal, cross-version-safe on the 1.10 LTS floor per RESEARCH
-    # Pitfall 4) so an unrelated stray link doesn't break the docs deploy.
+    # `@ref`s remain non-fatal, cross-version-safe on the 1.10 LTS floor)
+    # so an unrelated stray link doesn't break the docs deploy.
     checkdocs = :exports,
     warnonly = [:cross_references],
 )
 
-# Deploy only from CI (never from a local/worktree checkout — Pitfall 5 / the same
+# Deploy only from CI (never from a local/worktree checkout — the same
 # `remotes = nothing` rationale above).
 #
 # Gated on `CI == "true"`, so it is inert locally and only runs in GitHub Actions.

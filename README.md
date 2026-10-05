@@ -70,7 +70,7 @@ Every downstream extension rests on validated, citable ground:
   (`assert_ac_exact!`, report-don't-throw). It surfaced a **genuine high-PV/reverse-flow
   inexactness** of the SOC relaxation as a first-class, citable finding.
 - **Certified reactive DLMP**: a genuine per-node reactive balance behind a
-  `reactive_consensus` flag (byte-identical default path), whose certified dual is a
+  `reactive_consensus` flag (bit-for-bit identical default path), whose certified dual is a
   documented 5th DLMP component — never summed into the active-price total.
 - **Real IEEE-123 impedances**: positive-sequence R₁/X₁ reduced from the public OpenDSS
   case via a dependency-free Fortescue parser (no PMD runtime dependency).
@@ -208,7 +208,7 @@ exported symbol fails the build.
 | v1.0 Operational Transactive-Energy Core | rungs 0–5, DADP/DLMP, ADMM | ✅ shipped 2026-07-20 |
 | v2.0 Stackelberg-Nash TSO–DSO Planning Game | rungs 6–7, Benders + Nash | ✅ shipped 2026-07-24 |
 | v2.1 Validation & Reproduction | AC oracle, reactive DLMP, real IEEE-123 impedances, directional thesis reproduction | ✅ shipped 2026-07-26 |
-| v3.0 Research Extension Rungs | overvoltage-capable relaxation, MPC/rolling-horizon/RTP, stochastic scenarios, meshed + 4Q-BESS, integer investment expansion | 📋 scoped 2026-07-26 (Phases 19–24) |
+| v3.0 Research Extension Rungs | overvoltage-capable relaxation, MPC/rolling-horizon/RTP, stochastic scenarios, meshed + 4Q-BESS, integer investment expansion | 📋 scoped 2026-07-26 |
 
 ## Theory sources
 
