@@ -71,6 +71,32 @@ JET/CI fast-slow split/flakes/scripts index (Phase 37).
   canary checked each time.
 - `.planning/` out of scope; guard excludes it.
 
+### Research Refinements (36-RESEARCH.md + user decisions 2026-10-05 — supersede looser wording above)
+- USER: add `Compat = "4.10"` as a direct dep (`[deps]` + `[compat]`) for `Compat.@compat public`;
+  re-resolve the affected manifests (root ×4, test/, docs/, bench/) on 1.10/1.11/1.12 as needed.
+- USER: remove the deprecated `DlmpDecomposition.loss` / `.voltage` aliases (promised "removal in
+  Phase 36" in `src/pricing/dlmp.jl` and `docs/literate/pricing_dlmp.jl`); list in Breaking changes.
+- USER: comments citing planning artifacts by path/name (`RESEARCH.md`, `CONTEXT.md`, `.planning/...`,
+  ~270 lines) are planning references too — scrub (keep rationale as prose; cite docs/ pages or
+  literature instead) and guard.
+- USER: extend scrub + guard scope to `docs/make.jl`, `docs/src/*.md`, `README.md`,
+  `.github/workflows/CI.yml`.
+- Scrub size is ~6,391 lines (not ~5,300); ~81 are runtime error/log STRINGS in src/ — rewriting a
+  user-visible message changes behaviour visible to `@test_throws`/message assertions: such strings are
+  rewritten only together with their asserting tests, and any message change is listed in the SUMMARY.
+  ~74 lines mix thesis refs with IDs (hand edit).
+- Export audit: 196 unique exports → keep 90, collapse 3 into `ReactiveMode` module, unexport 103
+  (~899 sites / 108 files → scripted migration). Scoped enum makes `ReactiveMode` a module:
+  annotations become `::ReactiveMode.T`; `false` defaults (`admm_state.jl:365`, `DsoOpt.jl:178/280`)
+  become `ReactiveMode.OFF`; `docs/src/api.md` needs `@docs ReactiveMode` and
+  `modules=[TSODSO, TSODSO.ReactiveMode]`; `test/test_admm_phases.jl:119` bare-word guard respected.
+- HYG-02 also deletes the third `z` `@test_throws` in `test/test_planning_oracle.jl:218-238`.
+- Verification: AST-equivalence check (parse with strings/comments stripped) proves comment-only
+  edits; Aqua as a direct script (not inside the filtered runner); fast runner recipe
+  `JULIA_LOAD_PATH="@:test:@stdlib" julia --project=. -t2 scripts/run_tests_filtered.jl $PWD file:<x>`;
+  canary check = test pass + grep `welfare = -4823.66604824162`; JuliaFormatter 2.10.2 (NOT global
+  2.12.6) + `check_content_loss.py HEAD` before any formatter commit.
+
 ### Claude's Discretion
 - Exact content names for fixtures/modules; exact keep/unexport classification of the 199 exports
   (documented in the plan); guard regex details and allowlist entries; wording of rewritten comments.
