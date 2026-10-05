@@ -771,6 +771,27 @@ function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
     return nothing
 end
 
+# 35-REVIEW iter-2 WR-05: `hybrid_diagnostic.csv` is replaced PER POINT, not per (b, t) row.
+# Every existing row of the same `(fixture, density, T_horizon)` is dropped before the new run's
+# rows are appended, so a re-run with a different worst set or a smaller `--topn` cannot leave the
+# file mixing two runs' rows for one point. `ddf_new === nothing` (a non-converged bypass) only
+# removes the point's old rows. No file is created when there is nothing to write.
+function replace_diagnostic_rows(
+    dpath::AbstractString, fixture::AbstractString, density::Real, T_horizon::Integer,
+    ddf_new::Union{Nothing, DataFrame},
+)
+    same_point(r) = string(r.fixture) == fixture && r.density == density && r.T_horizon == T_horizon
+    if isfile(dpath)
+        dold = CSV.read(dpath, DataFrame)
+        kept = filter(r -> !same_point(r), dold)
+        ddf = ddf_new === nothing ? kept : vcat(kept, ddf_new; cols = :union)
+        CSV.write(dpath, ddf)
+    elseif ddf_new !== nothing
+        CSV.write(dpath, ddf_new)
+    end
+    return nothing
+end
+
 # Fixture-specific bus NAME lookup (script layer only; exactness.jl stays fixture-agnostic).
 function bus_name_lookup(fixture_sym::Symbol)
     if fixture_sym === :ieee8500
@@ -953,17 +974,10 @@ function run_sweep_mode(args)
                         loss_impact = r.loss_impact, run_label = run_label,
                     ) for r in top
                 ]
-                dpath = joinpath(out_dir(), "hybrid_diagnostic.csv")
-                ddf = DataFrame(drows)
-                if isfile(dpath)
-                    dold = CSV.read(dpath, DataFrame)
-                    dkeys = Set((r.fixture, r.density, r.T_horizon, r.b, r.t) for r in eachrow(ddf))
-                    ddf = vcat(
-                        filter(r -> !((r.fixture, r.density, r.T_horizon, r.b, r.t) in dkeys), dold),
-                        ddf; cols = :union,
-                    )
-                end
-                CSV.write(dpath, ddf)
+                replace_diagnostic_rows(
+                    joinpath(out_dir(), "hybrid_diagnostic.csv"), fixture_str, density, T_horizon,
+                    DataFrame(drows),
+                )
                 w = hr[1]   # the worst row, independent of topn (WR-08)
                 diag = (;
                     diag_max_ratio = w.ratio,
@@ -973,6 +987,13 @@ function run_sweep_mode(args)
                 println("  DIAGNOSTIC_BYPASS (NOT a certificate): max hybrid ratio = ", w.ratio)
             else
                 admm_status_out = "DIAGNOSTIC_BYPASS:" * apoint.admm_status
+                # WR-05 (iter 2): a non-converged re-run of the point records NO ratios, so it
+                # must also remove the earlier run's rows; otherwise `density_sweep.csv` says
+                # `diag_max_ratio = NaN` while `hybrid_diagnostic.csv` still holds old ratios.
+                replace_diagnostic_rows(
+                    joinpath(out_dir(), "hybrid_diagnostic.csv"), fixture_str, density, T_horizon,
+                    nothing,
+                )
             end
         else
             admm_status_out = apoint.admm_status

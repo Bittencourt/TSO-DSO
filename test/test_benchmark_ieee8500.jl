@@ -180,6 +180,32 @@ end
         @test !ok
         @test !isfile(joinpath(dir_g, "density_sweep.csv"))
     end
+
+    # (h) WR-05 (35-REVIEW iter 2): the CONVERGED diagnostic-bypass branch, on the cheap ieee13
+    # point (ADMM converges there in a few iterations). Checks the `admm_status` column of
+    # hybrid_diagnostic.csv, and that the file is replaced PER POINT: a second run of the same
+    # point with a smaller --topn leaves exactly that many rows, never a mix of the two runs.
+    dir_h = mktempdir()
+    hargs(n, label) = [
+        "--fixture", "ieee13", "--density", "0.1", "--t-horizon", "10", "--solver", "clarabel",
+        "--admm-only", "--admm-diagnostic-bypass", "--time-limit", "300", "--topn", n,
+        "--run-label", label,
+    ]
+    ok, _ = run_harness(hargs("5", "t35h1"), dir_h)
+    @test ok
+    rh = only(eachrow(CSV.read(joinpath(dir_h, "density_sweep.csv"), DataFrame)))
+    @test rh.admm_status == "DIAGNOSTIC_BYPASS"
+    @test rh.admm_iters isa Integer && rh.admm_iters >= 1
+    @test isfinite(rh.diag_max_ratio)
+    dh = CSV.read(joinpath(dir_h, "hybrid_diagnostic.csv"), DataFrame)
+    @test nrow(dh) == 5
+    @test all(==("converged"), dh.admm_status)
+    @test maximum(dh.ratio) == rh.diag_max_ratio   # worst row is hr[1], independent of topn
+    ok, _ = run_harness(hargs("2", "t35h2"), dir_h)
+    @test ok
+    dh2 = CSV.read(joinpath(dir_h, "hybrid_diagnostic.csv"), DataFrame)
+    @test nrow(dh2) == 2
+    @test all(==("t35h2"), string.(dh2.run_label))
 end
 
 println("test_benchmark_ieee8500.jl: ALL TESTS PASSED")
