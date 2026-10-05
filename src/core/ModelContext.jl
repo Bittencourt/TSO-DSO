@@ -95,13 +95,18 @@ ModelContext(model::Model) = ModelContext(
 
 # Checked accessors: unset state fails loudly instead of defaulting silently.
 function _require_T(ctx::ModelContext)
-    ctx.T <= 0 && throw(ArgumentError("ModelContext.T is unset or non-positive ($(ctx.T)); the builder must set ctx.T"))
+    ctx.T <= 0 && throw(
+        ArgumentError(
+            "ModelContext.T is unset or non-positive ($(ctx.T)); the builder must set ctx.T",
+        ),
+    )
     return ctx.T
 end
 
 function _require_feeder(ctx::ModelContext)
-    ctx.feeder === nothing &&
-        throw(ArgumentError("ModelContext.feeder is unset; the builder must set ctx.feeder"))
+    ctx.feeder === nothing && throw(
+        ArgumentError("ModelContext.feeder is unset; the builder must set ctx.feeder"),
+    )
     return ctx.feeder
 end
 

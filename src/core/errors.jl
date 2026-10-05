@@ -71,13 +71,14 @@ caller can report how many iterations ran before the certificate was refused.
 struct CertificateError <: TSODSOError
     msg::String
     kind::Symbol
-    iterations::Union{Nothing,Int}
+    iterations::Union{Nothing, Int}
 end
-CertificateError(msg::AbstractString, kind::Symbol) = CertificateError(String(msg), kind, nothing)
+CertificateError(msg::AbstractString, kind::Symbol) =
+    CertificateError(String(msg), kind, nothing)
 CertificateError(
     msg::AbstractString;
     kind::Symbol = :unspecified,
-    iterations::Union{Nothing,Int} = nothing,
+    iterations::Union{Nothing, Int} = nothing,
 ) = CertificateError(String(msg), kind, iterations)
 
 """
@@ -89,9 +90,9 @@ without consensus. `iterations` records the count when known.
 """
 struct ConvergenceError <: TSODSOError
     msg::String
-    iterations::Union{Nothing,Int}
+    iterations::Union{Nothing, Int}
 end
-ConvergenceError(msg::AbstractString; iterations::Union{Nothing,Int} = nothing) =
+ConvergenceError(msg::AbstractString; iterations::Union{Nothing, Int} = nothing) =
     ConvergenceError(String(msg), iterations)
 
 Base.showerror(io::IO, e::TSODSOError) = print(io, e.msg)

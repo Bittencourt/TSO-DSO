@@ -1,7 +1,6 @@
 # Shared nodal-balance closing helper. Loaded after core/ModelContext.jl because it
 # relies on `register_constraint!`.
 
-
 # Validate that residual `name` exists, is an indexed `Matrix{AffExpr}` and has shape (N, T).
 function _check_residual(ctx::ModelContext, name::Symbol, N::Int, T::Int, label)
     r = get(ctx.residuals, name, nothing)
@@ -34,16 +33,19 @@ A residual of the wrong shape raises
 before any constraint is built; `label` (e.g. `"scenario 3 "`) prefixes the message.
 
 # Dual recovery (DADP)
+
 The returned container is the very object stored in `ctx.constraints`, so
 `dual.(balance_p[priced, :])` remains the distribution price `λ_j[t]` exactly as before.
 
 # Anonymous containers
+
 The constraints are created with `base_name = "balance_p"` / `"balance_q"` rather than a named
 `@constraint(model, balance_p[...] ...)`, so nothing is added to the model's object dictionary.
 Several scenario contexts can therefore share one model without name collisions, while MOI
 names (`balance_p[j,t]`) stay identical.
 
 # Left to the caller
+
 Frontier `p_import`/`q_import` creation and DsoOpt transit-node zero injections are NOT done
 here; they must be added to the residuals before calling this function.
 """
@@ -55,9 +57,8 @@ function close_balance!(
     label::AbstractString = "",
 )
     model = ctx.model
-    (N > 0 && T > 0) || throw(
-        ArgumentError("close_balance!: $(label)N=$N and T=$T must both be positive"),
-    )
+    (N > 0 && T > 0) ||
+        throw(ArgumentError("close_balance!: $(label)N=$N and T=$T must both be positive"))
     _check_residual(ctx, :Rp, N, T, label)
     bp = @constraint(
         model,

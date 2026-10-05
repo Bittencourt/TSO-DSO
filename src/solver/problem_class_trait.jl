@@ -32,4 +32,3 @@ the tight duality-gap tolerances (`tol_gap_abs`/`tol_gap_rel = 1e-8`) the DADP a
 and the exactness check depend on.
 """
 problem_class(::AbstractPowerFlow) = QP()
-
