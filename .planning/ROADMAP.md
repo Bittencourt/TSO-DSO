@@ -583,7 +583,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 36-02-PLAN.md — Remove operational_oracle stub kwargs/z path and DlmpDecomposition aliases
+- [x] 36-02-PLAN.md — Remove operational_oracle stub kwargs/z path and DlmpDecomposition aliases
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -706,7 +706,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
-| 36. Code & Export Cleanup | v4.0 | 1/22 | In Progress|  |
+| 36. Code & Export Cleanup | v4.0 | 2/22 | In Progress|  |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
