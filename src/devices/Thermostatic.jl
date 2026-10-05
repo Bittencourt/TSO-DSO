@@ -1,7 +1,6 @@
 # src/devices/Thermostatic.jl
 #
-# SEAM: thermostatic (A/C) flexible-load device (DEV-01).
-# OWNER: plan 03-03.
+# SEAM: thermostatic (A/C) flexible-load device.
 #
 # An `AbstractDevice` implementing a thermostatically-controlled load: an indoor
 # temperature state that evolves by an RC/ETP-style linear recursion in power
@@ -9,10 +8,10 @@
 # comfort utility (eq. 3.11, curvature b > 0 for concavity per 3.13-3.14). Follows
 # the `Interruptible` pattern structurally (immutable concretely-typed struct,
 # throw-based constructor guards, promotion outer constructor) but conforms to the
-# Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer, DEV-05): `contribute!`
+# AGGREGATABLE-DEVICE contract (aggregator-as-writer): `contribute!`
 # builds its variables + temporal-coupling constraints on `ctx.model` and RETURNS
 # `(; vars, p_inject, utility)` — it writes NOTHING to `ctx.residuals` and calls NO
-# `add_to_objective!`. The Aggregator (plan 03-05) is the sole network-facing writer.
+# `add_to_objective!`. The Aggregator is the sole network-facing writer.
 # Network-agnostic: holds only a bus id + parameter vectors, never a Feeder.
 
 using JuMP
@@ -20,14 +19,14 @@ using JuMP
 """
     Thermostatic{T<:Real} <: AbstractDevice
 
-A thermostatically-controlled (A/C) flexible load (DEV-01). It draws power `p[t]` within
+A thermostatically-controlled (A/C) flexible load. It draws power `p[t]` within
 `[Pmin, Pmax]` to drive an indoor-temperature state `Tin[t]` that evolves by the linear
 RC/ETP recursion (thesis eq. 3.2)
 
     Tin[t+1] = Tin[t] + α·(Tout[t] − Tin[t]) − β·p[t]                       (3.2)
 
 held inside the comfort band `Tmin ≤ Tin[t] ≤ Tmax` (eq. 3.3), and derives the
-concave-quadratic comfort utility (eq. 3.11, constant `c` dropped — RESEARCH A5)
+concave-quadratic comfort utility (eq. 3.11, constant `c` dropped)
 
     U(Tin) = − (b/2)·Σ_t (Tin[t] − Tmin)²                                   (3.11)
 
@@ -38,26 +37,26 @@ system; coefficients are not rescaled here.
 # Fields
 
   - `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
-    it never sees the network object or line parameters — network-agnostic, DEV-05).
+    it never sees the network object or line parameters — network-agnostic).
   - `α::T` — thermal coupling to the ambient (eq. 3.2); `α ≥ 0` required (a negative
-    coupling reverses heat flow — non-physical, WR-02).
+    coupling reverses heat flow — non-physical).
   - `β::T` — power-to-temperature gain (eq. 3.2); `β > 0` required so power COOLS via the
-    `−β·p` term (a non-positive β silently flips the sign, WR-02).
+    `−β·p` term (a non-positive β silently flips the sign).
   - `Tmin::T`, `Tmax::T` — comfort band (eq. 3.3).
   - `Tin0::T` — initial indoor temperature (state IC for the recursion); `Tmin ≤ Tin0 ≤ Tmax`
-    required (comfort-band IC, WR-02).
+    required (comfort-band IC).
   - `Pmin::T`, `Pmax::T` — A/C power bounds.
   - `b::T` — utility curvature, `b > 0` required for concavity (eqs. 3.11/3.14).
   - `Tout::Vector{T}` — ambient-temperature profile parameter (eq. 3.2); its length is
     validated against the horizon `T` at `contribute!` time (it is not known at construction).
-  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23,
-    FIX-05); `nothing` (default) falls back to the aggregator's own `φ` when this device is
+  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23);
+    `nothing` (default) falls back to the aggregator's own `φ` when this device is
     rolled up by an [`Aggregator`](@ref). A non-`nothing` value must lie in `(0, 1]`.
 
-Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
+Construction throws `ArgumentError` when `b ≤ 0` (concavity guard), when
 `Tmax < Tmin` (inconsistent comfort band), when `Pmax < Pmin` (inconsistent power bounds),
-when `α < 0` or `β ≤ 0` (non-physical recursion signs, WR-02), when `Tin0` starts outside
-the comfort band `Tmin ≤ Tin0 ≤ Tmax` (comfort-band IC guard, WR-02), or when a supplied
+when `α < 0` or `β ≤ 0` (non-physical recursion signs), when `Tin0` starts outside
+the comfort band `Tmin ≤ Tin0 ≤ Tmax` (comfort-band IC guard), or when a supplied
 `φ` override lies outside `(0, 1]` (thesis eq. 3.23).
 """
 struct Thermostatic{T <: Real} <: AbstractDevice
@@ -88,7 +87,7 @@ struct Thermostatic{T <: Real} <: AbstractDevice
     ) where {T <: Real}
         # Concavity guard (thesis eqs. 3.11/3.14, b > 0): a non-positive curvature makes
         # the comfort utility convex → welfare maximization unbounded/non-convex. Reject
-        # LOUDLY (project convention: throw, never @assert). Threat T-03-06.
+        # LOUDLY (project convention: throw, never @assert).
         if b <= zero(T)
             throw(
                 ArgumentError(
@@ -113,7 +112,7 @@ struct Thermostatic{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        # WR-02 physical-sign guards on the RC/ETP recursion (eq. 3.2)
+        # Physical-sign guards on the RC/ETP recursion (eq. 3.2)
         #   Tin[t+1] = Tin[t] + α·(Tout − Tin) − β·p.
         # α is the ambient-coupling fraction: a NEGATIVE α makes heat flow from cold to hot
         # (2nd-law violation) and destabilizes the discrete recursion — reject α < 0.
@@ -148,7 +147,7 @@ struct Thermostatic{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        # Power-factor override guard (thesis eq. 3.23, FIX-05): mirrors Aggregator's own
+        # Power-factor override guard (thesis eq. 3.23): mirrors Aggregator's own
         # φ ∈ (0,1] guard, applied only when a non-nothing override is supplied.
         if φ !== nothing && !(zero(T) < φ <= one(T))
             throw(
@@ -163,20 +162,20 @@ struct Thermostatic{T <: Real} <: AbstractDevice
 end
 
 # A Thermostatic load's own consumption draws power-factor reactive power via the
-# Aggregator roll-up (thesis eq. 3.23, FIX-05).
+# Aggregator roll-up (thesis eq. 3.23).
 is_flexible_load(::Thermostatic) = true
 
 """
     Thermostatic(bus, α, β, Tmin, Tmax, Tin0, Pmin, Pmax, b, Tout; φ = nothing)
 
-Convenience outer constructor (IN-01): PROMOTEs the scalar parameters and the `Tout`
+Convenience outer constructor: PROMOTEs the scalar parameters and the `Tout`
 element type to a common `Real` type before delegating to the inner constructor, so a
 natural mixed-type call (e.g. an integer `0` among `Float64`s) just works instead of
 throwing a `MethodError`. `bus` is converted to `Int`. When every scalar already shares a
 type and `Tout` is a `Vector{T}`, the inner constructor is strictly more specific and is
 selected directly (no promotion, no recursion).
 
-The OPTIONAL keyword `φ` (thesis eq. 3.23, FIX-05) is an optional per-device power-factor
+The OPTIONAL keyword `φ` (thesis eq. 3.23) is an optional per-device power-factor
 override; it defaults to `nothing` (falling back to the aggregator's own `φ` at roll-up
 time) and is NOT included in the `promote_type`/`convert` calls above since it may be
 `nothing` — a supplied `Real` override is separately converted into the common type `Tp`,
@@ -226,15 +225,15 @@ end
     contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
 
 Contribute the thermostatic load into the shared model context over the horizon
-`t = 1:T`, conforming to the Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer,
-DEV-05). It:
+`t = 1:T`, conforming to the AGGREGATABLE-DEVICE contract (aggregator-as-writer).
+It:
 
  1. creates a bounded served-power variable `Pmin ≤ p[t] ≤ Pmax` and a bounded
     indoor-temperature state `Tmin ≤ Tin[t] ≤ Tmax` (comfort band, eq. 3.3) on `ctx.model`;
  2. fixes the state IC `Tin[1] == Tin0` and adds the RC/ETP temperature recursion (eq. 3.2)
     `Tin[t+1] == Tin[t] + α·(Tout[t] − Tin[t]) − β·p[t]` for `t = 1:T-1` (validating
     `length(Tout) ≥ T`, throwing `ArgumentError` otherwise — the temporal-infeasibility
-    guard, threat T-03-07); and
+    guard); and
  3. builds the concave comfort utility `− (b/2)·Σ_t (Tin[t] − Tmin)²` (eq. 3.11) as a
     `QuadExpr`.
 
@@ -245,17 +244,17 @@ injection, matching the `Interruptible` sign convention). The device writes NOTH
 is the sole `:Rp`/`:Rq` writer. The device references only `d.bus` (never the network),
 so the power-flow swap leaves this code untouched.
 
-`Tin0` and `Tout_param` (MPC-01 seam, D-01/D-03) are genuine JuMP `Parameter` handles for
+`Tin0` and `Tout_param` (the receding-horizon seam) are genuine JuMP `Parameter` handles for
 the temperature initial condition and the per-step ambient-temperature profile (only
 `t = 1:(T-1)` entries — the recursion never reads `Tout[T]`), respectively — a future
 receding-horizon window re-targets them via `set_parameter_value`/`set_parameter_value.`
 WITHOUT rebuilding any constraint. Both default to the EXACT prior literal value
 (`parameter_value(Tin0) == d.Tin0`, `parameter_value.(Tout_param) == d.Tout[1:(T-1)]`), so
 no caller that never calls `set_parameter_value` observes any behavior change
-(byte-identical-default invariant).
+(bit-for-bit-identical-default invariant).
 """
 function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
-    # Temporal-infeasibility guard (threat T-03-07): the recursion (3.2) reads Tout[t] for
+    # Temporal-infeasibility guard: the recursion (3.2) reads Tout[t] for
     # t = 1:T-1, so the ambient profile must cover the requested horizon.
     if length(d.Tout) < T
         throw(
@@ -273,13 +272,13 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
 
     # State IC + RC/ETP recursion (thesis eq. 3.2) — the inter-temporal coupling.
     #
-    # MPC-01 seam (D-01/D-03): both the temperature IC and the ambient-temperature profile
+    # Receding-horizon seam: both the temperature IC and the ambient-temperature profile
     # are now genuine Parameters (Tin0, Tout_param), not baked-in literals — re-settable via
     # `set_parameter_value`/`set_parameter_value.` without rebuilding either constraint, and
     # both defaulting to the exact prior literal value. `Tout_param` covers ONLY
     # `t = 1:(T-1)` since the recursion never reads `Tout[T]` (guarded against T == 1: no
     # recursion constraint — and hence no Tout_param — is built in that case, unchanged).
-    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): both Parameters are declared
+    # Both Parameters are declared
     # via the ANONYMOUS form, never a NAMED `@variable(m, Tin0 in Parameter(...))`/
     # `@variable(m, Tout_param[t=1:(T-1)] in Parameter.(...))` — a named container registers
     # a symbol in the model's object dictionary, which collides ("An object of name Tin0/
@@ -288,7 +287,7 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
     # aggregator — the common case, discovered running `run_mpc` against the default
     # multi-aggregator `:ieee13` population). Anonymous construction (mirrors
     # `FourQuadBESS`'s own anonymous apparent-power cone, `FourQuadBESS.jl:332`) is
-    # byte-identical in value/behavior — only the registration mechanics differ.
+    # bit-for-bit identical in value/behavior — only the registration mechanics differ.
     Tin0 = @variable(m, set = Parameter(d.Tin0))
     @constraint(m, Tin[1] == Tin0)
     if T > 1
@@ -302,7 +301,7 @@ function contribute!(d::Thermostatic, ctx::ModelContext; T::Int)
         Tout_param = JuMP.VariableRef[]
     end
 
-    # Concave comfort utility (eq. 3.11, constant c dropped — RESEARCH A5). Curvature
+    # Concave comfort utility (eq. 3.11, constant c dropped). Curvature
     # −(b/2) ≤ 0 keeps it concave; built as a QuadExpr so the curvature is retained.
     utility = sum(-(d.b / 2) * (Tin[t] - d.Tmin)^2 for t in 1:T)
 

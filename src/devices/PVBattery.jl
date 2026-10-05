@@ -1,7 +1,6 @@
 # src/devices/PVBattery.jl
 #
-# SEAM: PV + battery (BESS) prosumer device (DEV-04).
-# OWNER: plan 03-04.
+# SEAM: PV + battery (BESS) prosumer device.
 #
 # An `AbstractDevice` implementing a co-located PV generator and battery with
 # continuous charge/discharge and SOC dynamics (thesis eqs. 3.6-3.9): SOC
@@ -13,25 +12,25 @@
 # = 0 holds at the optimum; this must be VERIFIED numerically post-solve
 # (p_ch*p_dch < τ). This is the AGGREGATABLE-device variant of the `Interruptible`
 # pattern: it writes NOTHING to ctx.residuals and calls NO add_to_objective! -- it
-# RETURNS its (; vars, p_inject, utility) terms for the Aggregator (DEV-05, plan
-# 03-05) to roll up. Network-agnostic (bus + parameters only; never a Feeder).
+# RETURNS its (; vars, p_inject, utility) terms for the Aggregator
+# to roll up. Network-agnostic (bus + parameters only; never a Feeder).
 
 using JuMP
 
 """
     PVBattery{T<:Real} <: AbstractDevice
 
-A co-located PV + battery (BESS) prosumer device (DEV-04). Over a horizon `t = 1:T`
+A co-located PV + battery (BESS) prosumer device. Over a horizon `t = 1:T`
 it schedules continuous charge `p_ch[t] ≥ 0`, discharge `p_dch[t] ≥ 0`, and
 state-of-charge `soc[t]`, subject to (thesis eqs. 3.6-3.9):
 
     soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (3.6), t = 1:T
-    0 ≤ pv_used[t] ≤ Ppv[t]                                 # curtailable PV (WR-04)
+    0 ≤ pv_used[t] ≤ Ppv[t]                                 # curtailable PV
     0 ≤ p_ch[t] ≤ pv_used[t]                                # PV-limited charge (3.7, A6)
     0 ≤ p_ch[t], p_dch[t] ≤ Pmax                            # power bounds (3.8)
     Emin ≤ soc[t] ≤ Emax, t = 1:(T+1) ;  soc[1] = soc0      # SOC band + IC (3.9)
 
-`soc` is `T+1` long (Phase 26 FIX-04): the recursion above closes the WHOLE horizon
+`soc` is `T+1` long: the recursion above closes the WHOLE horizon
 `t = 1:T` (including hour `T`), so `p_ch[T]`/`p_dch[T]` always appear in a constraint —
 hour-`T` charge/discharge is never free energy. An optional `soc_terminal` keyword
 (`nothing` default | a numeric value | `:cyclic`) controls `soc[T+1]`; see `contribute!`.
@@ -47,27 +46,27 @@ coefficients are the App. C parametrization (eqs. 3.15-3.20):
 # The no-binary correctness argument (App. C, pp. 166-168)
 
 There is **no** binary and **no** `p_ch·p_dch == 0` complementarity constraint — adding
-one would break QP convexity and destroy the duals Phase-5 pricing relies on. Instead,
+one would break QP convexity and destroy the duals the pricing relies on. Instead,
 with the **strict** ordering `λ_min < λ_med < λ_max` the marginal charge benefit
 `∂U_ch/∂p_ch = λ_med − b_ch·p_ch ≤ λ_med` never exceeds the marginal discharge cost
 `∂C_dch/∂p_dch = λ_med + b_dch·p_dch ≥ λ_med`, so any round-trip through the battery is
 non-improving and, with round-trip efficiency `η² < 1`, strictly wasteful. Hence the
 optimum has `p_ch[t]·p_dch[t] = 0` for every `t` **without** any complementarity
-constraint. The ordering must be STRICT (CR-01): a non-strict ordering zeroes a utility
+constraint. The ordering must be STRICT: a non-strict ordering zeroes a utility
 curvature (`b_ch` or `b_dch = 0`), which flattens the dominance to a tie and admits
 SOC-draining `p_ch·p_dch > 0` co-optima that break the post-solve check. Because
 correctness rests entirely on this parametrization (the strict `λ_min < λ_med < λ_max`
 inner-constructor guard is the load-bearing invariant), it is a HARD requirement to VERIFY
 it numerically after every solve:
-`value(p_ch[t])·value(p_dch[t]) < τ` (RESEARCH Pitfall 1, threat T-03-09).
+`value(p_ch[t])·value(p_dch[t]) < τ`.
 
 # Aggregatable-device contract (LOCKED: aggregator-as-writer)
 
 Like every other device (`Thermostatic`, `Deferrable`, `Interruptible` — the latter
-converted from a former self-injecting contract in plan 26-07), this device is
+converted from a former self-injecting contract), this device is
 network-agnostic to the point of writing NOTHING to `ctx.residuals` and calling NO
 `add_to_objective!`. `contribute!` RETURNS `(; vars, p_inject, utility)`; the
-`Aggregator` (DEV-05) is the sole `:Rp`/`:Rq` writer and the utility roll-up point.
+`Aggregator` is the sole `:Rp`/`:Rq` writer and the utility roll-up point.
 
 # Fields
 
@@ -81,14 +80,14 @@ network-agnostic to the point of writing NOTHING to `ctx.residuals` and calling 
   - `soc0::T`    — initial state of charge, `Emin ≤ soc0 ≤ Emax` (3.9 IC).
   - `λ_min::T`, `λ_med::T`, `λ_max::T` — App. C price triple; the **strict** ordering
     `λ_min < λ_med < λ_max` is the sufficient condition for `p_ch·p_dch = 0` (the
-    load-bearing guard, threat T-03-09; strictness is required — see CR-01 note above).
+    load-bearing guard; strictness is required — see the note above).
   - `Ppv::Vector{T}` — per-step PV-availability profile (pu power); the used PV satisfies
-    `0 ≤ pv_used[t] ≤ Ppv[t]` (curtailable, WR-04) and the charge draws from it
+    `0 ≤ pv_used[t] ≤ Ppv[t]` (curtailable) and the charge draws from it
     `p_ch[t] ≤ pv_used[t]` (3.7, Assumption A6: the battery charges from PV only, not the
     grid). Must have `length ≥ T`.
 
-Construction throws `ArgumentError` unless `λ_min < λ_med < λ_max` (strict App. C guard,
-CR-01), `Pmax > 0`, `η ∈ (0,1]`, and `Emin ≤ soc0 ≤ Emax`.
+Construction throws `ArgumentError` unless `λ_min < λ_med < λ_max` (strict App. C guard),
+`Pmax > 0`, `η ∈ (0,1]`, and `Emin ≤ soc0 ≤ Emax`.
 """
 struct PVBattery{T <: Real} <: AbstractDevice
     bus::Int
@@ -116,8 +115,8 @@ struct PVBattery{T <: Real} <: AbstractDevice
         λ_max::T,
         Ppv::Vector{T},
     ) where {T <: Real}
-        # App. C sufficient condition (the load-bearing guard, threat T-03-09): the
-        # ordering must be STRICT (λ_min < λ_med < λ_max). CR-01: a non-strict ordering
+        # App. C sufficient condition (the load-bearing guard): the
+        # ordering must be STRICT (λ_min < λ_med < λ_max). A non-strict ordering
         # (any equality) collapses a utility curvature to zero (b_ch or b_dch = 0), which
         # with η² < 1 admits SOC-draining co-optima where the charge-utility marginal
         # (≤ λ_med) exactly TIES the discharge-cost marginal (≥ λ_med), so p_ch·p_dch > 0
@@ -165,7 +164,7 @@ end
 """
     PVBattery(bus, η, Δt, Pmax, Emin, Emax, soc0, λ_min, λ_med, λ_max, Ppv)
 
-Convenience outer constructor (IN-01): `promote`s the scalar parameters and the `Ppv`
+Convenience outer constructor: `promote`s the scalar parameters and the `Ppv`
 element type to a common `Real` type before delegating to the inner constructor, so a
 natural mixed-type call (e.g. an integer `Pmax` among `Float64`s, or an `Int`-eltype
 `Ppv`) just works instead of throwing a confusing `MethodError`. `bus` is converted to
@@ -220,10 +219,10 @@ Contribute the PV+battery into the shared model context over `t = 1:T`, followin
 AGGREGATABLE-device contract: it builds its own variables and temporal-coupling
 constraints on `ctx.model` but writes NOTHING to `ctx.residuals` and calls NO
 `add_to_objective!`. Instead it RETURNS `(; vars, p_inject, utility)` for the `Aggregator`
-(DEV-05) to roll up.
+to roll up.
 
 It creates continuous `0 ≤ p_ch[t], p_dch[t] ≤ Pmax`, `Emin ≤ soc[t] ≤ Emax`, and the
-curtailable PV `0 ≤ pv_used[t] ≤ Ppv[t]` (WR-04) — and **no** binary/integer variable —
+curtailable PV `0 ≤ pv_used[t] ≤ Ppv[t]` — and **no** binary/integer variable —
 then adds the SOC recursion (3.6), the PV-limited charge `p_ch[t] ≤ pv_used[t]` (3.7,
 charge from non-curtailed PV, requires `length(Ppv) ≥ T`), the SOC band + IC
 `soc[1] == soc0` (3.9), and the App. C utility (3.15-3.20). It adds NO `p_ch·p_dch == 0`
@@ -233,23 +232,23 @@ constraint — App. C (pp. 166-168) makes it unnecessary; the caller MUST verify
 Returns `(; vars = (; p_ch, p_dch, soc, pv_used, soc0, Ppv_param), p_inject, utility)` where
 `p_inject[t] = pv_used[t] − p_ch[t] + p_dch[t]` (used-PV export − charge draw + discharge)
 is a `Vector{AffExpr}` and `utility` is a `QuadExpr` (concave charge utility − convex
-discharge cost). The `pv_used` curtailment (WR-04) lets surplus PV be dumped rather than
+discharge cost). The `pv_used` curtailment lets surplus PV be dumped rather than
 forcing a high-PV scenario infeasible (there is no export sink at the priced frontier).
-`soc` is `T+1` long (Phase 26 FIX-04, `length(soc) == T + 1`): the recursion covers the
+`soc` is `T+1` long (`length(soc) == T + 1`): the recursion covers the
 WHOLE horizon `t = 1:T` (closing on `soc[T+1]`), so hour-`T` charge/discharge is never free
 energy. The optional keyword `soc_terminal::Union{Nothing,Real,Symbol} = nothing` controls
 `soc[T+1]`: `nothing` (default) adds no extra constraint beyond the `Emin`/`Emax` bounds
-(byte-identical default behavior otherwise); a `Real` value adds `soc[T+1] == soc_terminal`;
+(bit-for-bit identical default behavior otherwise); a `Real` value adds `soc[T+1] == soc_terminal`;
 `:cyclic` adds `soc[T+1] >= soc0` (against the SAME `soc0` Parameter, so it re-targets
 automatically under MPC re-solves). Any other `Symbol` throws `ArgumentError`.
 
-`soc0` and `Ppv_param` (MPC-01 seam, D-01/D-03) are genuine JuMP `Parameter` handles for
+`soc0` and `Ppv_param` (the receding-horizon seam) are genuine JuMP `Parameter` handles for
 the SOC initial condition and the per-step PV-availability profile, respectively — a
 receding-horizon window re-targets them via
 `set_parameter_value`/`set_parameter_value.` WITHOUT rebuilding any constraint. Both
 default to the EXACT prior literal value (`parameter_value(soc0) == d.soc0`,
 `parameter_value.(Ppv_param) == d.Ppv[1:T]`), so no caller that never calls
-`set_parameter_value` observes any behavior change (byte-identical-default invariant).
+`set_parameter_value` observes any behavior change (bit-for-bit-identical-default invariant).
 """
 function contribute!(
     d::PVBattery,
@@ -261,7 +260,7 @@ function contribute!(
         throw(
             ArgumentError(
                 "PVBattery.contribute!'s soc_terminal keyword accepts nothing, a Real " *
-                "value, or :cyclic only (Phase 26 FIX-04); got Symbol :$soc_terminal",
+                "value, or :cyclic only; got Symbol :$soc_terminal",
             ),
         )
     end
@@ -276,23 +275,23 @@ function contribute!(
     # Continuous decision variables ONLY — NO binary/integer (App. C keeps this a QP).
     p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)   # (3.8)
     p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pmax)  # (3.8)
-    # Phase 26 FIX-04: soc is T+1 long so the recursion below can close on soc[T+1],
+    # soc is T+1 long so the recursion below can close on soc[T+1],
     # linking hour-T charge/discharge into the horizon instead of leaving it free energy.
     soc = @variable(m, [t = 1:(T + 1)], lower_bound = d.Emin, upper_bound = d.Emax) # (3.9)
-    # WR-04 PV curtailment: the amount of the available PV `Ppv[t]` actually used (exported
+    # PV curtailment: the amount of the available PV `Ppv[t]` actually used (exported
     # or charged), `0 ≤ pv_used[t] ≤ Ppv[t]`. Without this, PV was a fixed MUST-TAKE
     # injection `Ppv[t]` with no curtailment and no export sink, so a high-PV/surplus
     # scenario (the frontier import is non-negative, i.e. no export) went INFEASIBLE with no
     # recourse. Curtailment lets the surplus be dumped instead (thesis-consistent).
     #
-    # MPC-01 seam (D-01/D-03): the PV-availability bound is now a genuine per-step
+    # Receding-horizon seam: the PV-availability bound is now a genuine per-step
     # Parameter (Ppv_param), not a literal `upper_bound=`. A Parameter cannot be passed as
-    # an `upper_bound=` kwarg — only as the RHS of a constraint (RESEARCH.md Pitfall 4) — so
+    # an `upper_bound=` kwarg — only as the RHS of a constraint — so
     # `pv_used` is declared with ONLY a lower bound and the PV-limit is enforced by a
     # separate constraint against `Ppv_param`, which defaults to the exact prior literal
-    # `d.Ppv[1:T]` (byte-identical default) and is re-settable without rebuilding.
+    # `d.Ppv[1:T]` (bit-for-bit identical default) and is re-settable without rebuilding.
     #
-    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): declared via the ANONYMOUS
+    # Declared via the ANONYMOUS
     # indexed-Parameter form (`@variable(m, [t=1:T], set = Parameter(...))`), never the NAMED
     # `@variable(m, Ppv_param[t=1:T] in Parameter.(...))` form — a named container registers
     # the symbol `:Ppv_param` in the model's object dictionary, which collides ("An object of
@@ -301,21 +300,21 @@ function contribute!(
     # aggregator — the common case, discovered running `run_mpc` against the default
     # multi-aggregator `:ieee13` population). Anonymous construction (mirrors
     # `FourQuadBESS`'s own anonymous apparent-power cone, `FourQuadBESS.jl:332`) is
-    # byte-identical in value/behavior (verified: `parameter_value.(Ppv_param) ==
+    # bit-for-bit identical in value/behavior (verified: `parameter_value.(Ppv_param) ==
     # d.Ppv[1:T]`), only the registration mechanics differ.
     pv_used = @variable(m, [t = 1:T], lower_bound = 0.0)
     Ppv_param = @variable(m, [t = 1:T], set = Parameter(d.Ppv[t]))
     @constraint(m, [t = 1:T], pv_used[t] <= Ppv_param[t])
 
-    # MPC-01 seam (D-01): the SOC initial condition is now a genuine Parameter (soc0), not
+    # Receding-horizon seam: the SOC initial condition is now a genuine Parameter (soc0), not
     # a baked-in literal `d.soc0` — re-settable via `set_parameter_value` without rebuilding
     # the constraint, and defaulting to the exact prior literal value.
     #
-    # 21-05 deviation (Rule 1, same collision class as Ppv_param above): anonymous scalar
+    # Same collision class as Ppv_param above: anonymous scalar
     # Parameter construction, never the NAMED `@variable(m, soc0 in Parameter(...))` form.
     soc0 = @variable(m, set = Parameter(d.soc0))
     @constraint(m, soc[1] == soc0)                                            # (3.9 IC)
-    # Phase 26 FIX-04: the recursion now UNCONDITIONALLY covers the WHOLE horizon t = 1:T
+    # The recursion UNCONDITIONALLY covers the WHOLE horizon t = 1:T
     # (including hour T, closing on soc[T+1]) — SOC dynamics with round-trip efficiency
     # (3.6): η·p_ch in, p_dch/η out (η² < 1). Previously this only ran over t = 1:(T-1),
     # so p_ch[T]/p_dch[T] never appeared in any SOC constraint (free hour-T energy).
@@ -329,13 +328,13 @@ function contribute!(
     elseif soc_terminal === :cyclic
         @constraint(m, soc[T + 1] >= soc0)                                    # (3.9, cyclic)
     end
-    # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid). WR-04:
+    # PV-limited charge (3.7, Assumption A6: charge from PV only, never the grid):
     # the battery charges from the NON-curtailed PV, so the bound is `pv_used` (≤ Ppv[t]),
     # keeping the charge-from-PV-only invariant while allowing surplus PV to be curtailed.
     @constraint(m, [t = 1:T], p_ch[t] <= pv_used[t])
 
     # App. C utility parametrization (3.15-3.20): concave charge utility, convex discharge
-    # cost. The STRICT λ_min < λ_med < λ_max constructor guard (CR-01) makes b_ch, b_dch > 0,
+    # cost. The STRICT λ_min < λ_med < λ_max constructor guard makes b_ch, b_dch > 0,
     # so the p_ch·p_dch = 0 dominance is strict (no tie/co-optima).
     a_ch = d.λ_med
     b_ch = (d.λ_med - d.λ_min) / d.Pmax                                       # (3.17-3.18)
@@ -353,7 +352,7 @@ function contribute!(
     )
 
     # Signed active injection at the device's bus (for the Aggregator's :Rp): the USED
-    # (non-curtailed) PV export is positive (WR-04), the charge draw is a withdrawal
+    # (non-curtailed) PV export is positive, the charge draw is a withdrawal
     # (−p_ch), discharge is a source (+p_dch).
     p_inject = [pv_used[t] - p_ch[t] + p_dch[t] for t in 1:T]
 

@@ -1,17 +1,16 @@
 # src/devices/Deferrable.jl
 #
-# SEAM: deferrable (shiftable) flexible-load device (DEV-02).
-# OWNER: plan 03-03.
+# SEAM: deferrable (shiftable) flexible-load device.
 #
 # An `AbstractDevice` implementing a deferrable / shiftable load (washer, EV charge):
 # power drawn per hour within a time window whose integral must meet an energy budget
 # (thesis eqs. 3.4-3.5), with a concave-quadratic utility (eq. 3.12). Follows the
 # `Interruptible`/`Thermostatic` pattern structurally (immutable concretely-typed struct,
 # throw-based constructor guards, promotion outer constructor) but conforms to the
-# Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer, DEV-05): `contribute!`
+# AGGREGATABLE-DEVICE contract (aggregator-as-writer): `contribute!`
 # builds its variables + the energy-window coupling constraint on `ctx.model` and RETURNS
 # `(; vars, p_inject, utility)` — it writes NOTHING to `ctx.residuals` and calls NO
-# `add_to_objective!`. The Aggregator (plan 03-05) is the sole network-facing writer.
+# `add_to_objective!`. The Aggregator is the sole network-facing writer.
 # Network-agnostic: holds only a bus id + scalar parameters, never a Feeder.
 
 using JuMP
@@ -19,17 +18,17 @@ using JuMP
 """
     Deferrable{T<:Real} <: AbstractDevice
 
-A deferrable / shiftable flexible load (DEV-02): a task (washer, EV charge) that draws an
+A deferrable / shiftable flexible load: a task (washer, EV charge) that draws an
 energy budget within the band `[E_min, E]` somewhere inside a contiguous time window
 `[t_start, t_end]`, drawing zero outside it (thesis eqs. 3.4–3.5)
 
     E_min ≤ Σ_{t ∈ [t_start,t_end]} p[t] ≤ E ,   0 ≤ p[t] ≤ Pmax (t in window), p[t]=0 (else)
 
-and derives the concave-quadratic utility (eq. 3.12, constant `c` dropped — RESEARCH A5)
+and derives the concave-quadratic utility (eq. 3.12, constant `c` dropped)
 
     U(p) = − (b/2)·( Σ_{t ∈ window} p[t] − E )²                             (3.12)
 
-The upper budget is an INEQUALITY (thesis eq. 3.4 `E_max` role), NOT a hard equality (WR-01):
+The upper budget is an INEQUALITY (thesis eq. 3.4 `E_max` role), NOT a hard equality:
 this makes the utility a LIVE soft target — `U` peaks at `Σ p = E` and penalizes consuming
 less, so the load reaches the budget when energy is cheap but backs off (Σ p < E) when the
 network price is high. The strictly-positive curvature `b > 0` keeps `U` concave (welfare
@@ -45,7 +44,7 @@ which this still captures. All quantities are in the single model per-unit syste
 # Fields
 
   - `bus::Int` — the bus id the load withdraws at (the ONLY topology handle a device holds;
-    it never sees the network object — network-agnostic, DEV-05).
+    it never sees the network object — network-agnostic).
   - `t_start::Int`, `t_end::Int` — inclusive window bounds (eq. 3.5 `T_{h,d}`); require
     `1 ≤ t_start ≤ t_end`.
   - `E::T` — upper energy-budget target over the window (thesis `E_max`, eq. 3.4); the total
@@ -55,14 +54,14 @@ which this still captures. All quantities are in the single model per-unit syste
   - `b::T` — utility curvature, `b > 0` required for concavity (eq. 3.12).
   - `E_min::T` — must-complete energy floor (thesis `E_min`, eq. 3.4); keyword, default `0`;
     the total draw satisfies `Σ p ≥ E_min`; require `0 ≤ E_min ≤ E`.
-  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23,
-    FIX-05); `nothing` (default) falls back to the aggregator's own `φ` when this device is
+  - `φ::Union{Nothing,T}` — optional per-device power-factor override (thesis eq. 3.23);
+    `nothing` (default) falls back to the aggregator's own `φ` when this device is
     rolled up by an [`Aggregator`](@ref). A non-`nothing` value must lie in `(0, 1]`.
 
-Construction throws `ArgumentError` when `b ≤ 0` (concavity guard, threat T-03-06), when
+Construction throws `ArgumentError` when `b ≤ 0` (concavity guard), when
 the window is inconsistent (`t_start < 1` or `t_end < t_start`), when the energy budget is
 infeasible/negative (`E < 0` or `E > Pmax·window_length`) — the temporal-infeasibility
-guard, threat T-03-07 — when the floor is out of band (`E_min < 0` or `E_min > E`), or when
+guard — when the floor is out of band (`E_min < 0` or `E_min > E`), or when
 a supplied `φ` override lies outside `(0, 1]` (thesis eq. 3.23).
 """
 struct Deferrable{T <: Real} <: AbstractDevice
@@ -86,7 +85,7 @@ struct Deferrable{T <: Real} <: AbstractDevice
         φ::Union{Nothing, T} = nothing,
     ) where {T <: Real}
         # Concavity guard (thesis eq. 3.12, b > 0): a non-positive curvature makes the
-        # utility convex → welfare maximization unbounded/non-convex. Threat T-03-06.
+        # utility convex → welfare maximization unbounded/non-convex.
         if b <= zero(T)
             throw(
                 ArgumentError(
@@ -107,7 +106,7 @@ struct Deferrable{T <: Real} <: AbstractDevice
         # Energy-budget feasibility (eq. 3.4 `E_min ≤ Σp ≤ E_max`): the band must be
         # reachable within the window at Pmax, non-negative, and ordered. `E_min` is the
         # must-complete floor (0 = purely elastic; > 0 = a task that MUST consume at least
-        # this much energy, e.g. an EV charge). Threat T-03-07 (reject infeasibility at build).
+        # this much energy, e.g. an EV charge). Rejecting infeasibility at build time.
         window_length = t_end - t_start + 1
         if E < zero(T) || E > Pmax * window_length
             throw(
@@ -126,7 +125,7 @@ struct Deferrable{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        # Power-factor override guard (thesis eq. 3.23, FIX-05): mirrors Aggregator's own
+        # Power-factor override guard (thesis eq. 3.23): mirrors Aggregator's own
         # φ ∈ (0,1] guard, applied only when a non-nothing override is supplied.
         if φ !== nothing && !(zero(T) < φ <= one(T))
             throw(
@@ -141,13 +140,13 @@ struct Deferrable{T <: Real} <: AbstractDevice
 end
 
 # A Deferrable load's own consumption draws power-factor reactive power via the
-# Aggregator roll-up (thesis eq. 3.23, FIX-05).
+# Aggregator roll-up (thesis eq. 3.23).
 is_flexible_load(::Deferrable) = true
 
 """
     Deferrable(bus, t_start, t_end, E, Pmax, b; E_min = 0, φ = nothing)
 
-Convenience outer constructor (IN-01): PROMOTEs the numeric parameters `E`, `Pmax`, `b`,
+Convenience outer constructor: PROMOTEs the numeric parameters `E`, `Pmax`, `b`,
 `E_min` to a common `Real` type before delegating to the inner constructor, so a natural
 mixed-type call (e.g. an integer budget among `Float64`s) just works instead of throwing a
 `MethodError`. `bus`, `t_start`, `t_end` are converted to `Int`. `E_min` defaults to 0 (a
@@ -155,7 +154,7 @@ purely elastic deferrable load); pass `E_min > 0` for a must-complete task. When
 `Pmax`, `b` already share a type and `E_min` is omitted, the inner constructor is strictly
 more specific and is selected directly (no promotion, no recursion).
 
-The OPTIONAL keyword `φ` (thesis eq. 3.23, FIX-05) is an optional per-device power-factor
+The OPTIONAL keyword `φ` (thesis eq. 3.23) is an optional per-device power-factor
 override; it defaults to `nothing` (falling back to the aggregator's own `φ` at roll-up
 time) and is NOT included in the `promote` call above since it may be `nothing` — a
 supplied `Real` override is separately converted into the common promoted type, while
@@ -189,13 +188,13 @@ end
     contribute!(d::Deferrable, ctx::ModelContext; T::Int)
 
 Contribute the deferrable load into the shared model context over the horizon `t = 1:T`,
-conforming to the Phase-3 AGGREGATABLE-DEVICE contract (aggregator-as-writer, DEV-05). It:
+conforming to the AGGREGATABLE-DEVICE contract (aggregator-as-writer). It:
 
  1. creates a per-hour power variable `0 ≤ p[t] ≤ Pmax` inside the window and `p[t] = 0`
     outside it (bounds pinned to zero — eq. 3.5) on `ctx.model`, validating that the window
     fits the horizon (`t_end ≤ T`, throwing `ArgumentError` otherwise — the
-    temporal-infeasibility guard, threat T-03-07);
- 2. adds the energy-within-window budget BAND coupling `E_min ≤ Σ_{t ∈ [t_start,t_end]} p[t] ≤ E` (thesis eq. 3.4; upper bound an inequality — WR-01, NOT an equality; lower bound
+    temporal-infeasibility guard);
+ 2. adds the energy-within-window budget BAND coupling `E_min ≤ Σ_{t ∈ [t_start,t_end]} p[t] ≤ E` (thesis eq. 3.4; upper bound an inequality, NOT an equality; lower bound
     `E_min` added only when `E_min > 0`, the must-complete floor) — the inter-temporal
     coupling; and
  3. builds the concave-quadratic utility `− (b/2)·(Σ p[t] − E)²` (eq. 3.12) as a `QuadExpr`,
@@ -209,7 +208,7 @@ Aggregator consumes this tuple and is the sole `:Rp`/`:Rq` writer. The device re
 only `d.bus` (never the network), so the power-flow swap leaves this code untouched.
 """
 function contribute!(d::Deferrable, ctx::ModelContext; T::Int)
-    # Temporal-infeasibility guard (threat T-03-07): the window must fit the horizon.
+    # Temporal-infeasibility guard: the window must fit the horizon.
     if d.t_end > T
         throw(
             ArgumentError(
@@ -229,7 +228,7 @@ function contribute!(d::Deferrable, ctx::ModelContext; T::Int)
     )
 
     # Energy-within-window budget BAND (thesis eq. 3.4 `E_min ≤ Σp ≤ E_max`) — the
-    # inter-temporal coupling. WR-01: the UPPER bound `Σ p ≤ E` is an INEQUALITY (not a hard
+    # inter-temporal coupling. The UPPER bound `Σ p ≤ E` is an INEQUALITY (not a hard
     # equality), so the soft utility below is a LIVE preference and `b` genuinely shapes the
     # solution. The LOWER bound `Σ p ≥ E_min` is the must-complete floor: with `E_min = 0`
     # the load is purely elastic (can consume nothing when prices are high); with `E_min > 0`
@@ -241,7 +240,7 @@ function contribute!(d::Deferrable, ctx::ModelContext; T::Int)
         @constraint(m, total_energy >= d.E_min)
     end
 
-    # Concave-quadratic utility (eq. 3.12, constant c dropped — RESEARCH A5): a soft target
+    # Concave-quadratic utility (eq. 3.12, constant c dropped): a soft target
     # at `E` (thesis `E_max`). The negative semidefinite quadratic form keeps it concave;
     # built as a QuadExpr so curvature holds. Because the budget above is now an inequality,
     # this term is a LIVE preference (0 only when the load actually reaches Σ p = E), so `b`

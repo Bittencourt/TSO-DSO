@@ -1,40 +1,39 @@
 # src/devices/FourQuadBESS.jl
 #
-# SEAM: four-quadrant (P,Q) battery + inverter device (MESH-04).
-# OWNER: plan 19-02.
+# SEAM: four-quadrant (P,Q) battery + inverter device.
 #
-# A standalone battery + 4-quadrant inverter `AbstractDevice` (D-01: NO PV field — PV-owning
+# A standalone battery + 4-quadrant inverter `AbstractDevice` (NO PV field — PV-owning
 # prosumers keep using `PVBattery` alongside this device). Its inverter can inject/absorb BOTH
-# active and reactive power within an apparent-power cone `p²+q²≤Smax²` (D-03: q is free, no
-# cost/utility term — its price is purely the reactive nodal dual μ, plan 19-07). Grid charging
-# is permitted with an explicit, asymmetric charge/discharge cap (D-02/D-04: `Pch_max≠Pdch_max`
+# active and reactive power within an apparent-power cone `p²+q²≤Smax²` (q is free, no
+# cost/utility term — its price is purely the reactive nodal dual μ). Grid charging
+# is permitted with an explicit, asymmetric charge/discharge cap (`Pch_max≠Pdch_max`
 # is legal — unlike `PVBattery`'s Assumption-A6 PV-only charge). This is the AGGREGATABLE-device
 # variant of the `PVBattery` pattern: it writes NOTHING to `ctx.residuals` and calls NO
 # `add_to_objective!` — it RETURNS its `(; vars, p_inject, q_inject, utility)` terms for the
-# `Aggregator` (DEV-05) to roll up, via D-09's widened optional-`q_inject` contract.
+# `Aggregator` to roll up, via the widened optional-`q_inject` contract.
 
 using JuMP
 
 """
     FourQuadBESS{T<:Real} <: AbstractDevice
 
-A standalone battery + four-quadrant (4Q) inverter prosumer device (MESH-04). Over a
+A standalone battery + four-quadrant (4Q) inverter prosumer device. Over a
 horizon `t = 1:T` it schedules continuous charge `p_ch[t] ≥ 0`, discharge `p_dch[t] ≥ 0`,
 state-of-charge `soc[t]`, and a sign-free reactive decision `q[t]`, subject to:
 
     soc[t+1] = soc[t] + (η·p_ch[t] − p_dch[t]/η)·Δt         # SOC dynamics (mirrors PVBattery 3.6), t = 1:T
-    0 ≤ p_ch[t]  ≤ Pch_max                                  # charge bound, GRID-chargeable (D-02)
-    0 ≤ p_dch[t] ≤ Pdch_max                                 # discharge bound, INDEPENDENT cap (D-04)
+    0 ≤ p_ch[t]  ≤ Pch_max                                  # charge bound, GRID-chargeable
+    0 ≤ p_dch[t] ≤ Pdch_max                                 # discharge bound, INDEPENDENT cap
     Emin ≤ soc[t] ≤ Emax, t = 1:(T+1) ;  soc[1] = soc0      # SOC band + IC (mirrors PVBattery 3.9)
-    (p_dch[t] − p_ch[t])² + q[t]² ≤ Smax²                   # apparent-power cone (D-03/D-04)
+    (p_dch[t] − p_ch[t])² + q[t]² ≤ Smax²                   # apparent-power cone
 
-`soc` is `T+1` long (Phase 26 FIX-04): the recursion above closes the WHOLE horizon
+`soc` is `T+1` long: the recursion above closes the WHOLE horizon
 `t = 1:T` (including hour `T`), so `p_ch[T]`/`p_dch[T]` always appear in a constraint —
 hour-`T` charge/discharge is never free energy. An optional `soc_terminal` keyword
 (`nothing` default | a numeric value | `:cyclic`) controls `soc[T+1]`; see `contribute!`.
 
 Unlike `PVBattery`, there is **no** curtailable-PV-availability field and **no**
-PV-limited-charge bound (D-01/D-02): this device may import from the grid to charge, capped
+PV-limited-charge bound: this device may import from the grid to charge, capped
 only by `Pch_max`. Its
 preference is the same App. C-shaped concave charge utility minus convex discharge cost, but
 with the INDEPENDENT `Pch_max`/`Pdch_max` as the curvature denominators (instead of one shared
@@ -44,19 +43,19 @@ with the INDEPENDENT `Pch_max`/`Pdch_max` as the curvature denominators (instead
     a_dch = λ_med ;  b_dch = (λ_max − λ_med)/Pdch_max
     utility = Σ_t ( a_ch·p_ch − (b_ch/2)·p_ch² − a_dch·p_dch − (b_dch/2)·p_dch² )
 
-with **no** `q` term anywhere (D-03) — `q`'s only role is inside the apparent-power cone.
+with **no** `q` term anywhere — `q`'s only role is inside the apparent-power cone.
 
-# The re-derived complementarity argument (4Q, grid-charging) — MESH-04 clause 2
+# The re-derived complementarity argument (4Q, grid-charging)
 
 `PVBattery`'s App. C argument (pp. 166-168, see `PVBattery.jl:42-57`) is a PURE
 ACTIVE-POWER, one-dimensional argument: with the strict ordering `λ_min < λ_med < λ_max`,
 the marginal charge benefit never exceeds `λ_med` and the marginal discharge cost never
 falls below it, so any simultaneous `p_ch, p_dch > 0` is strictly dominated. That
 conclusion does **not** transfer here automatically merely because the field names match —
-it must be re-earned for the 4Q, grid-charging case (RESEARCH.md's "Complementarity
-Derivation Skeleton," re-derived below in four steps):
+it must be re-earned for the 4Q, grid-charging case (re-derived below in four
+steps):
 
- 1. **The internal argument is unchanged in form.** `q` never enters the objective (D-03),
+ 1. **The internal argument is unchanged in form.** `q` never enters the objective,
     and the apparent-power cone only RESTRICTS the achievable range of the net active power
     `p = p_dch − p_ch` as a function of `|q|` (`|p| ≤ √(Smax² − q²)`) — it never rewards a
     *particular* `(p_ch, p_dch)` split for a fixed net `p`. So for a FIXED net `p`, the
@@ -65,7 +64,7 @@ Derivation Skeleton," re-derived below in four steps):
     makes — which is exactly why the constructor STILL requires the strict
     `λ_min < λ_med < λ_max` ordering: this internal, fixed-net-`p` dominance argument is
     load-bearing here too, unchanged in form.
- 2. **The genuinely new failure mode is D-02's removal of the PV-limited-charge bound**, not
+ 2. **The genuinely new failure mode is the removal of the PV-limited-charge bound**, not
     the reactive cone directly. Without `PVBattery`'s charge-from-available-PV-only bound
     (Assumption A6, deliberately not inherited), `p_ch` is driven by the GRID price rather
     than only by available PV — which reopens whether this device's OWN internal indifference
@@ -74,8 +73,8 @@ Derivation Skeleton," re-derived below in four steps):
     faces (the ADMM dual `λ_j[t]`, or `dual(:balance_p[j,t])` centrally), not just against its
     own internal `λ_min/λ_max` triple.
  3. **When the effective external nodal price is NEGATIVE**, the DSO effectively PAYS to
-    inject (a high-PV reverse-flow regime, the same family of regime `v2.1`'s `EXACT-04`
-    found interesting for a different reason). There, grid-charging combined with
+    inject (a high-PV reverse-flow regime, the same family of regime in which the
+    SOCP relaxation's exactness is delicate). There, grid-charging combined with
     round-trip-efficiency energy-burning (`η² < 1`: simultaneous `p_ch, p_dch > 0`, net
     `p ≈ 0`, gross throughput `> 0`) becomes a way to ABSORB MORE negatively-priced energy
     than the net-power bound alone would permit. That is NOT dominated once the external
@@ -85,16 +84,17 @@ Derivation Skeleton," re-derived below in four steps):
     strict-ordering guard — a SUFFICIENT condition the constructor can verify without knowing
     the future nodal price — the failure mode above depends on the SOLVED price, which is
     unknown at construction time. The mandatory check is therefore a POST-SOLVE numeric
-    certificate (plan 19-05's `assert_4q_complementarity!`, D-05's "both routes"), and it is
+    certificate (`assert_4q_complementarity!`, available both as a direct call and from the
+    solve routes), and it is
     EXPECTED to legitimately throw in the negative-effective-price + grid-charging regime —
-    an honest boundary (D-08), not a bug, when it does.
+    an honest boundary, not a bug, when it does.
 
-# Aggregatable-device contract (widened, D-09)
+# Aggregatable-device contract (widened)
 
 Like `PVBattery`, this device is network-agnostic: `contribute!` writes NOTHING to
 `ctx.residuals` and calls NO `add_to_objective!`, instead RETURNING
 `(; vars, p_inject, q_inject, utility)` for the `Aggregator` to roll up. The NEW
-`q_inject` field (D-09) is this device's signed reactive injection — the FIRST
+`q_inject` field is this device's signed reactive injection — the FIRST
 aggregatable device to carry one; see `AbstractDevice.jl` for the widened contract note.
 
 # Fields
@@ -102,12 +102,12 @@ aggregatable device to carry one; see `AbstractDevice.jl` for the widened contra
   - `bus::Int`      — the bus id the device sits at (never sees the network object).
   - `η::T`          — round-trip charge/discharge efficiency, `η ∈ (0,1]`.
   - `Δt::T`         — time-step length (h) for the SOC recursion.
-  - `Pch_max::T`    — charge power bound, `Pch_max > 0`. INDEPENDENT of `Pdch_max` (D-02:
-    "grid charging, capped" — this device may import from the grid to charge, unlike
+  - `Pch_max::T`    — charge power bound, `Pch_max > 0`. INDEPENDENT of `Pdch_max`
+    ("grid charging, capped") — this device may import from the grid to charge, unlike
     `PVBattery`'s Assumption-A6 PV-only charge, so `Pch_max` is NOT limited by any PV
     availability).
   - `Pdch_max::T`   — discharge power bound, `Pdch_max > 0`. INDEPENDENT of `Pch_max`
-    (D-04: genuinely asymmetric caps, `Pch_max ≠ Pdch_max` is legal).
+    (genuinely asymmetric caps, `Pch_max ≠ Pdch_max` is legal).
   - `Smax::T`       — apparent-power cone bound, `Smax > 0` (`p²+q²≤Smax²`).
   - `Emin::T`, `Emax::T` — SOC band.
   - `soc0::T`       — initial state of charge, `Emin ≤ soc0 ≤ Emax`.
@@ -116,7 +116,7 @@ aggregatable device to carry one; see `AbstractDevice.jl` for the widened contra
     fixed-net-`p` dominance argument is unchanged in form and still load-bearing).
 
 Construction throws `ArgumentError` unless `Pch_max > 0`, `Pdch_max > 0` (checked
-INDEPENDENTLY — D-04), `Smax > 0`, `η ∈ (0,1]`, `Emin ≤ soc0 ≤ Emax`, and the strict
+INDEPENDENTLY), `Smax > 0`, `η ∈ (0,1]`, `Emin ≤ soc0 ≤ Emax`, and the strict
 `λ_min < λ_med < λ_max` ordering.
 """
 struct FourQuadBESS{T <: Real} <: AbstractDevice
@@ -147,13 +147,13 @@ struct FourQuadBESS{T <: Real} <: AbstractDevice
         λ_med::T,
         λ_max::T,
     ) where {T <: Real}
-        # D-02/D-04: charge and discharge caps are INDEPENDENT — asymmetric caps means BOTH
+        # Charge and discharge caps are INDEPENDENT — asymmetric caps means BOTH
         # must be checked, never one shared `Pmax` guard. Reject LOUDLY (project convention:
         # throw, never @assert — @assert elides under -O).
         if Pch_max <= zero(T)
             throw(
                 ArgumentError(
-                    "FourQuadBESS charge power bound Pch_max must be > 0 (MESH-04, D-02: " *
+                    "FourQuadBESS charge power bound Pch_max must be > 0 (" *
                     "grid-charging is capped but never non-positive); got Pch_max=$Pch_max",
                 ),
             )
@@ -161,8 +161,8 @@ struct FourQuadBESS{T <: Real} <: AbstractDevice
         if Pdch_max <= zero(T)
             throw(
                 ArgumentError(
-                    "FourQuadBESS discharge power bound Pdch_max must be > 0 (MESH-04, " *
-                    "D-04: independent of Pch_max); got Pdch_max=$Pdch_max",
+                    "FourQuadBESS discharge power bound Pdch_max must be > 0 (" *
+                    "independent of Pch_max); got Pdch_max=$Pdch_max",
                 ),
             )
         end
@@ -170,7 +170,7 @@ struct FourQuadBESS{T <: Real} <: AbstractDevice
             throw(
                 ArgumentError(
                     "FourQuadBESS apparent-power cone bound Smax must be > 0 " *
-                    "(p²+q²≤Smax², MESH-04 D-03/D-04); got Smax=$Smax",
+                    "(p²+q²≤Smax²); got Smax=$Smax",
                 ),
             )
         end
@@ -189,13 +189,13 @@ struct FourQuadBESS{T <: Real} <: AbstractDevice
                 ),
             )
         end
-        # CR-01 analog (see the docstring's step-1 re-derivation): the INTERNAL, fixed-net-p
+        # Same guard as PVBattery (see the docstring's step-1 re-derivation): the INTERNAL, fixed-net-p
         # dominance argument is UNCHANGED IN FORM from App. C and is STILL load-bearing, so
         # the STRICT λ_min < λ_med < λ_max ordering is still a hard requirement here.
         if !(λ_min < λ_med < λ_max)
             throw(
                 ArgumentError(
-                    "FourQuadBESS requires STRICT λ_min < λ_med < λ_max (MESH-04 D-05: the " *
+                    "FourQuadBESS requires STRICT λ_min < λ_med < λ_max (the " *
                     "internal, fixed-net-p dominance argument re-derives App. C's " *
                     "no-binary conclusion unchanged in form; a non-strict ordering zeroes a " *
                     "utility curvature and admits p_ch·p_dch > 0 co-optima); got " *
@@ -223,7 +223,7 @@ end
 """
     FourQuadBESS(bus, η, Δt, Pch_max, Pdch_max, Smax, Emin, Emax, soc0, λ_min, λ_med, λ_max)
 
-Convenience outer constructor (IN-01): `promote`s the scalar parameters to a common
+Convenience outer constructor: `promote`s the scalar parameters to a common
 `Real` type before delegating to the inner constructor, so a natural mixed-type call
 (e.g. an integer `Smax` among `Float64`s) just works instead of throwing a confusing
 `MethodError`. `bus` is converted to `Int`. When every parameter already shares a
@@ -278,43 +278,43 @@ end
 
 Contribute the 4Q battery into the shared model context over `t = 1:T`, following the
 AGGREGATABLE-device contract (mirrors `PVBattery.contribute!`'s shape, minus the PV
-coupling — D-01/D-02): it builds its own variables and temporal-coupling constraints on
+coupling): it builds its own variables and temporal-coupling constraints on
 `ctx.model` but writes NOTHING to `ctx.residuals` and calls NO `add_to_objective!`.
-Instead it RETURNS `(; vars, p_inject, q_inject, utility)` for the `Aggregator` (DEV-05)
-to roll up, via D-09's widened optional-`q_inject` contract.
+Instead it RETURNS `(; vars, p_inject, q_inject, utility)` for the `Aggregator`
+to roll up, via the widened optional-`q_inject` contract.
 
 It creates continuous `0 ≤ p_ch[t] ≤ Pch_max`, `0 ≤ p_dch[t] ≤ Pdch_max` (INDEPENDENT
-caps, D-04), `Emin ≤ soc[t] ≤ Emax`, and a FREE (unbounded) `q[t]` (D-03: no cost/utility
+caps), `Emin ≤ soc[t] ≤ Emax`, and a FREE (unbounded) `q[t]` (no cost/utility
 term on reactive power) — and **no** binary/integer variable, and **no** curtailable-PV
-coupling anywhere (D-01/D-02: this device may charge from the
+coupling anywhere (this device may charge from the
 grid, capped only by `Pch_max`). It adds the SOC recursion + IC (mirrors `PVBattery`'s
 eq. 3.6/3.9), the App. C-shaped utility (with `Pch_max`/`Pdch_max` as the INDEPENDENT
-curvature denominators — no `q` term anywhere, D-03), and ONE apparent-power second-order
+curvature denominators — no `q` term anywhere), and ONE apparent-power second-order
 cone constraint per `t` tying `Smax`, the net active expression `p_dch[t] − p_ch[t]`, and
-`q[t]` together (D-03/D-04). Mirroring `PVBattery`'s
+`q[t]` together. Mirroring `PVBattery`'s
 device-level constraints, this cone is NOT registered via `register_constraint!` — only
 network-level `ConvexBranchFlow` constraints are registered (see PATTERNS.md) — and it is
-ANONYMOUS (WR-01, phase-19 review): it claims NO JuMP object-dictionary name, so any number
+ANONYMOUS: it claims NO JuMP object-dictionary name, so any number
 of `FourQuadBESS` devices compose in one shared model alongside `ConvexBranchFlow`'s own
 named network `:cone` (the previous named `cone[t = 1:T]` container crashed both cases with
 `"An object of name cone is already attached to this model"`).
 
 Returns `(; vars = (; p_ch, p_dch, soc, q, soc0), p_inject, q_inject, utility)` where
 `p_inject[t] == p_dch[t] − p_ch[t]` (a `Vector{AffExpr}`) and `q_inject === vars.q` (the
-SAME `Vector{VariableRef}` object, D-09) — the FIRST aggregatable device to carry a
+SAME `Vector{VariableRef}` object) — the FIRST aggregatable device to carry a
 `q_inject` field; see `AbstractDevice.jl`'s widened Variant-2 contract note.
-`soc` is `T+1` long (Phase 26 FIX-04, `length(soc) == T + 1`): the recursion covers the
+`soc` is `T+1` long (`length(soc) == T + 1`): the recursion covers the
 WHOLE horizon `t = 1:T` (closing on `soc[T+1]`), so hour-`T` charge/discharge is never free
 energy. The optional keyword `soc_terminal::Union{Nothing,Real,Symbol} = nothing` controls
 `soc[T+1]`: `nothing` (default) adds no extra constraint beyond the `Emin`/`Emax` bounds
-(byte-identical default behavior otherwise); a `Real` value adds `soc[T+1] == soc_terminal`;
+(bit-for-bit identical default behavior otherwise); a `Real` value adds `soc[T+1] == soc_terminal`;
 `:cyclic` adds `soc[T+1] >= soc0` (against the SAME `soc0` Parameter, so it re-targets
 automatically under MPC re-solves). Any other `Symbol` throws `ArgumentError`.
 
-`soc0` (MPC-01 seam, D-01) is a genuine JuMP `Parameter` handle for the SOC initial
+`soc0` (the receding-horizon seam) is a genuine JuMP `Parameter` handle for the SOC initial
 condition — the IDENTICAL idiom `PVBattery` applies — re-settable via
 `set_parameter_value` without rebuilding the constraint, and defaulting to the exact
-prior literal value `d.soc0` (byte-identical default).
+prior literal value `d.soc0` (bit-for-bit identical default).
 """
 function contribute!(
     d::FourQuadBESS,
@@ -326,35 +326,35 @@ function contribute!(
         throw(
             ArgumentError(
                 "FourQuadBESS.contribute!'s soc_terminal keyword accepts nothing, a Real " *
-                "value, or :cyclic only (Phase 26 FIX-04); got Symbol :$soc_terminal",
+                "value, or :cyclic only; got Symbol :$soc_terminal",
             ),
         )
     end
     m = ctx.model
 
     # Continuous decision variables ONLY — NO binary/integer (App. C keeps this a QP/SOCP).
-    p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pch_max)   # (D-02/D-04)
-    p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pdch_max) # (D-04)
-    # Phase 26 FIX-04: soc is T+1 long so the recursion below can close on soc[T+1],
+    p_ch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pch_max)   # independent charge cap
+    p_dch = @variable(m, [t = 1:T], lower_bound = 0.0, upper_bound = d.Pdch_max) # independent discharge cap
+    # soc is T+1 long so the recursion below can close on soc[T+1],
     # linking hour-T charge/discharge into the horizon instead of leaving it free energy.
     soc = @variable(m, [t = 1:(T + 1)], lower_bound = d.Emin, upper_bound = d.Emax)
     # q is sign-free and carries NO bound — the apparent-power cone below is its only
-    # restriction (D-03: no cost/utility term on reactive power anywhere).
+    # restriction (no cost/utility term on reactive power anywhere).
     q = @variable(m, [t = 1:T])
 
-    # MPC-01 seam (D-01): the SOC initial condition is now a genuine Parameter (soc0), the
+    # Receding-horizon seam: the SOC initial condition is now a genuine Parameter (soc0), the
     # IDENTICAL idiom PVBattery applies — re-settable via `set_parameter_value` without
     # rebuilding the constraint, and defaulting to the exact prior literal value.
     #
-    # 21-05 deviation (Rule 1 — pre-existing bug, plan 21-01): anonymous scalar Parameter
+    # Anonymous scalar Parameter
     # construction, never the NAMED `@variable(m, soc0 in Parameter(...))` form — a named
     # container collides ("An object of name soc0 is already attached to this model") the
     # moment a SECOND `FourQuadBESS` contributes to the SAME model (mirrors the identical
-    # PVBattery/Thermostatic/Aggregator collision this plan's own multi-aggregator
-    # materialization discovered and fixed).
+    # PVBattery/Thermostatic/Aggregator collision that multi-aggregator
+    # materialization exposed).
     soc0 = @variable(m, set = Parameter(d.soc0))
     @constraint(m, soc[1] == soc0)
-    # Phase 26 FIX-04: the recursion now UNCONDITIONALLY covers the WHOLE horizon t = 1:T
+    # The recursion UNCONDITIONALLY covers the WHOLE horizon t = 1:T
     # (including hour T, closing on soc[T+1]) — SOC dynamics with round-trip efficiency
     # (mirrors PVBattery eq. 3.6): η·p_ch in, p_dch/η out (η² < 1). Previously this only ran
     # over t = 1:(T-1), so p_ch[T]/p_dch[T] never appeared in any SOC constraint (free
@@ -371,13 +371,13 @@ function contribute!(
     end
 
     # Net active injection at the device (discharge is a source, charge a withdrawal) — the
-    # quantity that enters the apparent-power cone alongside q (D-03/D-04).
+    # quantity that enters the apparent-power cone alongside q.
     p_net = @expression(m, [t = 1:T], p_dch[t] - p_ch[t])
 
-    # Apparent-power cone (D-03/D-04): p²+q²≤Smax² ⟺ ‖(p_net,q)‖₂ ≤ Smax — the SAME idiom
+    # Apparent-power cone: p²+q²≤Smax² ⟺ ‖(p_net,q)‖₂ ≤ Smax — the SAME idiom
     # already shipped in `ConvexBranchFlow.jl`'s per-branch `smax` limit. Un-registered
     # (device-level, mirrors PVBattery's un-registered constraints — only network-level
-    # ConvexBranchFlow constraints are registered) and ANONYMOUS (WR-01, phase-19 review):
+    # ConvexBranchFlow constraints are registered) and ANONYMOUS:
     # a NAMED `cone[t = 1:T]` container claims the JuMP object-dictionary symbol `:cone` on
     # the SHARED model, colliding both with `ConvexBranchFlow.contribute!`'s network cone
     # (any centralized `solve_welfare` with a 4Q device) and with a SECOND `FourQuadBESS`
@@ -385,8 +385,8 @@ function contribute!(
     @constraint(m, [t = 1:T], [d.Smax, p_net[t], q[t]] in SecondOrderCone())
 
     # App. C-shaped utility (concave charge benefit, convex discharge cost), but with the
-    # INDEPENDENT Pch_max/Pdch_max as the curvature denominators (D-04). NO `q` term
-    # anywhere (D-03) — q's only role is inside the cone above.
+    # INDEPENDENT Pch_max/Pdch_max as the curvature denominators. NO `q` term
+    # anywhere — q's only role is inside the cone above.
     a_ch = d.λ_med
     b_ch = (d.λ_med - d.λ_min) / d.Pch_max
     a_dch = d.λ_med
@@ -400,7 +400,7 @@ function contribute!(
         )
     )
 
-    # Signed active injection at the device's bus for the Aggregator's :Rp: net p (D-04).
+    # Signed active injection at the device's bus for the Aggregator's :Rp: net p.
     p_inject = [p_dch[t] - p_ch[t] for t in 1:T]
 
     return (; vars = (; p_ch, p_dch, soc, q, soc0), p_inject, q_inject = q, utility)
