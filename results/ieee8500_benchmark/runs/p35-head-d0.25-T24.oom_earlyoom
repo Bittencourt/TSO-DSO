@@ -1,0 +1,2 @@
+Oct 04 21:45:59 London earlyoom[1631]: low memory! at or below SIGTERM limits: mem 12.00%, swap 12.00%
+Oct 04 21:45:59 London earlyoom[1631]: sending SIGTERM to process 2048487 uid 1000 "julia": badness 1526, VmRSS 10641 MiB
