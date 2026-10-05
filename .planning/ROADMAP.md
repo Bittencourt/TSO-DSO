@@ -574,10 +574,10 @@ refactored codebase.
 
   4. Test fixture files and tags are named after their content, not the planning phase (no
      `fixtures_phaseN`, `:phaseN`).
-**Plans**: 21 plans (sequential, one per wave)
+**Plans**: 22 plans (sequential, one per wave)
 
 Plans:
-- [ ] 36-01-PLAN.md — Verification tooling (AST/thesis/ID classifiers, migrator, multi-spec runner) and baseline
+- [ ] 36-01-PLAN.md — Verification tooling (AST/thesis/ID classifiers, migrator, multi-spec runner, detached-suite recipe) and baseline
 - [ ] 36-02-PLAN.md — Remove operational_oracle stub kwargs/z path and DlmpDecomposition aliases
 - [ ] 36-03-PLAN.md — Remove reactive Bool/Symbol shim; scope ReactiveMode in a module; full suite
 - [ ] 36-04-PLAN.md — Compat dep, export trim, public block, module docstring, export snapshot test
@@ -588,16 +588,17 @@ Plans:
 - [ ] 36-09-PLAN.md — Scrub remaining src/planning
 - [ ] 36-10-PLAN.md — Scrub src/models and src/pricing
 - [ ] 36-11-PLAN.md — Scrub src/admm and src/powerflow
-- [ ] 36-12-PLAN.md — Scrub src/experiments, devices, data, core, solver, units, diagnostics, ext
-- [ ] 36-13-PLAN.md — Scrub src/TSODSO.jl, docs/make.jl, docs/src, README, CI comments
-- [ ] 36-14-PLAN.md — Scrub docs/literate
-- [ ] 36-15-PLAN.md — Scrub scripts/
-- [ ] 36-16-PLAN.md — Scrub tests part 1 (fixtures, runtests, test_a-d)
-- [ ] 36-17-PLAN.md — Scrub tests part 2 (test_e-m)
-- [ ] 36-18-PLAN.md — Scrub tests part 3 (test_planning_*)
-- [ ] 36-19-PLAN.md — Scrub tests part 4 (rest) and whole-test verification
-- [ ] 36-20-PLAN.md — CI planning-ID guard (fail-closed) and workflow wiring
-- [ ] 36-21-PLAN.md — Final gates: formatter, guard, docs build, full suite, evidence
+- [ ] 36-12-PLAN.md — Scrub src/experiments, core, solver, units, diagnostics, ext
+- [ ] 36-13-PLAN.md — Scrub src/devices and src/data (incl. ieee8500_impedances.jl); full-suite checkpoint for the src scrub stage
+- [ ] 36-14-PLAN.md — Scrub src/TSODSO.jl, docs/make.jl, docs/src, README, CI comments
+- [ ] 36-15-PLAN.md — Scrub docs/literate
+- [ ] 36-16-PLAN.md — Scrub scripts/
+- [ ] 36-17-PLAN.md — Scrub tests part 1 (fixtures, runtests, test_a-d)
+- [ ] 36-18-PLAN.md — Scrub tests part 2 (test_e-m)
+- [ ] 36-19-PLAN.md — Scrub tests part 3 (test_planning_*)
+- [ ] 36-20-PLAN.md — Scrub tests part 4 (rest), whole-test verification and full-suite checkpoint
+- [ ] 36-21-PLAN.md — CI planning-ID guard (fail-closed) and workflow wiring
+- [ ] 36-22-PLAN.md — Final gates: formatter, guard, docs build, full suite, evidence
 
 ### Phase 37: Test Infrastructure & Repo Hygiene
 
