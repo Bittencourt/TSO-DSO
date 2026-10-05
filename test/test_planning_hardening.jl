@@ -312,7 +312,7 @@ end
 
         # --- convergence + iteration-count bound (never exhausts) ---
         @test result.gap <= tol
-        # Replaces the old `result.iters` `>= 50` bound — see the REVISION 2 note
+        # Replaces the old `result.iters` `>= 50` bound — see the note on the iteration floor
         # above the `@testitem` for the full measured-spread rationale and the
         # 30 = ~1.9x-trivial / ~36%-below-min-observed justification.
         @test result.iters >= 30

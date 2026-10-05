@@ -91,8 +91,8 @@ end
 
     # Mirrors test_planning_nash.jl's own N=2, T=1 toy fixture shape: distributor 1 is
     # the one actually solved against (activate_distributor!), distributor 2 stays
-    # pinned at the build-time default x_inv=0 — matching this plan's own <interfaces>
-    # item (3) recipe (`build_shared_transmission(; N=2, T=1, ...)`,
+    # pinned at the build-time default x_inv=0 — matching the
+    # documented recipe (`build_shared_transmission(; N=2, T=1, ...)`,
     # `follower = DistributorView(shared, 1)`).
     shared = build_shared_transmission(;
         N = 2,

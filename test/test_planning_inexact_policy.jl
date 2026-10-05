@@ -31,7 +31,7 @@
 #
 # `:oracle_feasibility_cut` firing is UNCONDITIONAL regardless of `inexact_policy` (it is
 # resolved BEFORE the policy dispatch in `solve_stackelberg!`'s own disambiguation — see
-# that function's `<interfaces>`), so iterations 2/3/6 behave IDENTICALLY under all three
+# that function's docstring), so iterations 2/3/6 behave IDENTICALLY under all three
 # policies below; only iterations 7/8/10 (the genuine exactness-class throws) differ.
 #
 # `max_iter=10` for `:strict` (throws at iteration 7) and `max_iter=20`/`50` for
@@ -40,7 +40,7 @@
 # re-solves, ~tens of ms each, as measured).
 #
 # Items tagged `[:planning]`, names contain "planning" and "inexact" (occursin filter
-# convention, mirrors this phase's other new test files).
+# convention, mirrors the other planning test files).
 
 @testitem "planning inexact policy: :strict reproduces solve_planning_oracle!'s own exactness throw" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin

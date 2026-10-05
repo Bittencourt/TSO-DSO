@@ -150,7 +150,7 @@ end
 
     # A fake oracle whose `solve_planning_oracle!` ALWAYS throws (mimicking an untrusted
     # solve), with its `model`'s termination_status pinned via a MockOptimizer backend
-    # (no real solve needed — deterministic, per the plan's own <behavior> spec).
+    # (no real solve needed — deterministic).
     struct FakeOracleWR01
         model::JuMP.Model
     end
