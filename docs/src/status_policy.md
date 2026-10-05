@@ -123,7 +123,9 @@ fails loudly instead of silently changing behavior.
   on Julia 1.11 and later use `Base.isexported` to inspect the exported set, since `names`
   also lists `public` names.
 - **`DlmpDecomposition` aliases.** The deprecated `.loss` and `.voltage` properties are
-  removed; use `.cone` and `.drop`.
+  removed; use `.cone` and `.drop`. `NamedTuple(d)` keeps the historical positional order but
+  now uses the same names: its keys are `(energy, cone, congestion, drop, reactive, total)`
+  instead of `(energy, loss, congestion, voltage, reactive, total)`.
 - **Stored simulation provenance.** The type path of the reactive mode changed, so locally
   stored simulation provenance files written before this change load the mode with a
   reconstructed type.

@@ -250,23 +250,24 @@ end
 """
     NamedTuple(d::DlmpDecomposition) -> NamedTuple
 
-Before the `cone`/`drop` rename, `decompose_dlmp`
-returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage, reactive, total)`. Any consumer that used genuine `NamedTuple`-only semantics on that return
-value (`Tuple(nt)`/`values(nt)`/`collect(nt)`, or positional destructuring) now hits a
-`MethodError` against `DlmpDecomposition` (a plain `struct`) instead — a LOUD failure, never
-a silent field-order mismatch, but still a breaking change for such a call site (none found
-in this tree, but this API is `export`ed). This conversion restores the OLD field
-NAMES-AND-ORDER exactly — never the new struct's own field order, which additionally
-TRANSPOSES `congestion`/`drop` relative to the old `congestion`/`voltage` positions (see
-`DlmpDecomposition`'s own docstring) — so a duck-typed-as-a-NamedTuple call site can be
-repaired by wrapping the call in `NamedTuple(decompose_dlmp(...))`.
+Positional `NamedTuple` view of a decomposition, with keys
+`(energy, cone, congestion, drop, reactive, total)`.
+
+Before the `cone`/`drop` rename, `decompose_dlmp` returned a plain `NamedTuple` in the
+positional order `(energy, loss, congestion, voltage, reactive, total)`. A consumer that used
+`NamedTuple`-only semantics on that value (`Tuple(nt)`, `values(nt)`, `collect(nt)`, or
+positional destructuring) now hits a `MethodError` against `DlmpDecomposition` (a plain
+`struct`). Wrapping the call in `NamedTuple(decompose_dlmp(...))` repairs it: this conversion
+keeps that historical POSITIONAL order (which transposes `congestion`/`drop` relative to the
+struct's own field order) but uses the current names, so `cone` sits where `loss` was and
+`drop` where `voltage` was. The removed `loss`/`voltage` names are not reintroduced.
 """
 function Base.NamedTuple(d::DlmpDecomposition)
     return (;
         energy = d.energy,
-        loss = getfield(d, :cone),
+        cone = getfield(d, :cone),
         congestion = getfield(d, :congestion),
-        voltage = getfield(d, :drop),
+        drop = getfield(d, :drop),
         reactive = getfield(d, :reactive),
         total = getfield(d, :total),
     )

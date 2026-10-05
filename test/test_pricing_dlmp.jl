@@ -561,8 +561,8 @@ end
     # `NamedTuple` — a caller that used genuine `NamedTuple`-only semantics (`Tuple(nt)`,
     # `values(nt)`, `collect(nt)`, positional destructuring) would hit a LOUD `MethodError`
     # rather than a silent field-order mismatch, but it is still a breaking change for such
-    # a call site. `NamedTuple(d)` restores the OLD names/order exactly, giving such a call
-    # site a one-line repair. Directly constructed (never a full network solve — this pins
+    # a call site. `NamedTuple(d)` restores the OLD positional order (with the current
+    # `cone`/`drop` names), giving such a call site a one-line repair. Directly constructed (never a full network solve — this pins
     # the CONVERSION's contract, independent of any specific fixture's numeric values).
     d = TSODSO.DlmpDecomposition{Vector{Float64}}(
         [1.0],   # energy
@@ -574,15 +574,17 @@ end
     )
 
     nt = NamedTuple(d)
-    # EXACT earlier field order: (energy, loss, congestion, voltage, reactive, total) —
-    # note `congestion`/`voltage` are POSITIONALLY TRANSPOSED relative to the new struct's
-    # own `(energy, cone, drop, congestion, reactive, total)` field order (DlmpDecomposition's
-    # own docstring); this conversion must NOT merely reorder-by-name into the new order.
-    @test keys(nt) == (:energy, :loss, :congestion, :voltage, :reactive, :total)
+    # EXACT earlier positional order (energy, loss, congestion, voltage, reactive, total),
+    # under the current names — note `congestion`/`drop` are POSITIONALLY TRANSPOSED relative
+    # to the struct's own `(energy, cone, drop, congestion, reactive, total)` field order
+    # (DlmpDecomposition's own docstring); this conversion must NOT merely reorder-by-name
+    # into the new order, and must not reintroduce the removed `loss`/`voltage` names.
+    @test keys(nt) == (:energy, :cone, :congestion, :drop, :reactive, :total)
+    @test !haskey(nt, :loss) && !haskey(nt, :voltage)
     @test nt.energy == [1.0]
-    @test nt.loss == [2.0]        # == d.cone
-    @test nt.congestion == [4.0]  # == d.congestion (unchanged name, but 3rd->3rd position differs from new struct order)
-    @test nt.voltage == [3.0]     # == d.drop
+    @test nt.cone == [2.0]        # == d.cone (old position of `loss`)
+    @test nt.congestion == [4.0]  # == d.congestion (3rd position, unlike the struct order)
+    @test nt.drop == [3.0]        # == d.drop (old position of `voltage`)
     @test nt.reactive == [5.0]
     @test nt.total == [6.0]
 
