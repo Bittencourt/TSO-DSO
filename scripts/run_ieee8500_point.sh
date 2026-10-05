@@ -41,8 +41,14 @@ SWAP_USED="$(awk '/^Swap:/{print $3}' "$RUNS/$LABEL.free_before")"
 OTHER_JULIA="$(pgrep -c -x julia 2>/dev/null || true)"
 OTHER_JULIA="${OTHER_JULIA:-0}"
 
-/usr/bin/time -v -o "$RUNS/$LABEL.time" julia --project=. "$SCRIPT" "$@" "${LABEL_ARGS[@]}"
+# The child records its OWN pid and then `exec`s julia (same pid), so OOM log lines can be matched
+# to THIS point's process rather than to any process killed on the host meanwhile (WR-03).
+PIDFILE="$RUNS/$LABEL.pid"
+rm -f "$PIDFILE"
+/usr/bin/time -v -o "$RUNS/$LABEL.time" bash -c 'echo $$ > "$0"; exec "$@"' "$PIDFILE" \
+  julia --project=. "$SCRIPT" "$@" "${LABEL_ARGS[@]}"
 RC=$?
+CHILD_PID="$(cat "$PIDFILE" 2>/dev/null || true)"
 
 PEAK_KB="$(awk -F': ' '/Maximum resident set size/{print $2}' "$RUNS/$LABEL.time" 2>/dev/null)"
 PEAK_KB="${PEAK_KB:-NaN}"
@@ -51,11 +57,28 @@ EARLY="$(journalctl -u earlyoom --since "$START" --no-pager 2>/dev/null | grep -
 printf '%s\n' "$KERN" > "$RUNS/$LABEL.oom_kernel"
 printf '%s\n' "$EARLY" > "$RUNS/$LABEL.oom_earlyoom"
 
+# WR-03 (35-REVIEW): the journals above are host-wide (other julia processes are expected here, see
+# other_julia_procs), so the full logs are kept as evidence but an OOM is ATTRIBUTED to this point
+# only when (a) the point actually failed (RC != 0) AND (b) a log line names THIS point's pid.
+#   oom_source = kernel | earlyoom      — RC != 0 and that killer's log names CHILD_PID
+#              = signal_unattributed    — RC 137/143 (SIGKILL/SIGTERM) but no log line names CHILD_PID
+#              = none                   — otherwise (including RC = 0, whatever else was killed)
 OOM_SOURCE=none
-if [ "$RC" -eq 137 ] || [ -n "$KERN" ]; then
-  OOM_SOURCE=kernel
-elif [ "$RC" -eq 143 ] || [ -n "$EARLY" ]; then
-  OOM_SOURCE=earlyoom
+if [ "$RC" -ne 0 ]; then
+  KERN_MINE=""
+  EARLY_MINE=""
+  if [ -n "$CHILD_PID" ]; then
+    PID_RE="(process |pid[= ])${CHILD_PID}([^0-9]|\$)"
+    KERN_MINE="$(printf '%s\n' "$KERN" | grep -E "$PID_RE" || true)"
+    EARLY_MINE="$(printf '%s\n' "$EARLY" | grep -E "$PID_RE" || true)"
+  fi
+  if [ -n "$KERN_MINE" ]; then
+    OOM_SOURCE=kernel
+  elif [ -n "$EARLY_MINE" ]; then
+    OOM_SOURCE=earlyoom
+  elif [ "$RC" -eq 137 ] || [ "$RC" -eq 143 ]; then
+    OOM_SOURCE=signal_unattributed
+  fi
 fi
 
 CSV="$OUTDIR/point_resources.csv"
