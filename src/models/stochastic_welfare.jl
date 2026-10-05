@@ -461,7 +461,6 @@ function build_stochastic_welfare(
     )
 end
 
-export build_stochastic_welfare
 
 # D-09's out-of-sample harness (STOCH-03) — a SEPARATE, smaller build-once model than the
 # S-scenario extensive form above.
@@ -747,4 +746,3 @@ function solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int =
     return solve_with_retry!(h.model; max_attempts = max_attempts, dual = false)
 end
 
-export StochasticOosHarness, build_stochastic_oos_harness, solve_stochastic_oos_step!

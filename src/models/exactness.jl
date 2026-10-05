@@ -480,4 +480,4 @@ function hybrid_ratios(
     return rows
 end
 
-export assert_socp_exact!, socp_relaxation_gap, socp_gap_report, hybrid_ratios
+export assert_socp_exact!, socp_relaxation_gap

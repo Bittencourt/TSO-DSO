@@ -89,7 +89,6 @@ _batt_on_violation(st) = problem_class(st.dso.ctx.pf) isa SOCP ? :error : :warn
 # Same policy for the 4Q-BESS peer certificate: strict (throw) on SOCP, `report = true` (warn) otherwise.
 _report_4q(st) = !(problem_class(st.dso.ctx.pf) isa SOCP)
 
-export admm_supported
 
 """
 Mutable iterate state of one `solve_admm` run (per-load-node length-`T` profiles, NEVER a JuMP

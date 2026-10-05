@@ -1,7 +1,6 @@
 # Shared nodal-balance closing helper (ARCH-04). Loaded after core/ModelContext.jl because it
 # relies on `register_constraint!`.
 
-export close_balance!
 
 # Validate that residual `name` exists, is an indexed `Matrix{AffExpr}` and has shape (N, T).
 function _check_residual(ctx::ModelContext, name::Symbol, N::Int, T::Int, label)

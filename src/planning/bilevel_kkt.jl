@@ -783,4 +783,3 @@ function solve_bilevel!(kkt::BilevelKKT)
     )
 end
 
-export BilevelKKT, build_bilevel_kkt, solve_bilevel!

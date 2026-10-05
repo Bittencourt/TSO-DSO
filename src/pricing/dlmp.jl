@@ -433,4 +433,4 @@ function decompose_dlmp(
     )
 end
 
-export extract_dlmp, extract_reactive_dlmp, decompose_dlmp, DlmpDecomposition
+export extract_dlmp, decompose_dlmp, DlmpDecomposition

@@ -496,10 +496,4 @@ function _resolve_without_presolve!(shared::SharedTransmission, i::Int)
     end
 end
 
-export SharedTransmission,
-    build_shared_transmission,
-    activate_distributor!,
-    update_coupling!,
-    write_back!,
-    DistributorView,
-    solve_follower!
+export SharedTransmission, build_shared_transmission, DistributorView

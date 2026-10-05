@@ -346,4 +346,4 @@ function trace_summary(trace::BendersTrace)
     )
 end
 
-export BendersTrace, is_converged, trace_summary
+export BendersTrace

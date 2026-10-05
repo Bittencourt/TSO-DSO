@@ -191,4 +191,3 @@ function ac_recheck_incumbent(
     )
 end
 
-export ac_recheck_incumbent

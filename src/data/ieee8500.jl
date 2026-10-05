@@ -389,14 +389,4 @@ function ieee8500_capacitor_buses(relabel_map::Dict{String, Int} = ieee8500_rela
     return sort!([relabel_map[name] for name in keys(IEEE8500_CAPACITOR_KVAR)])
 end
 
-export ieee8500_modified,
-    ieee8500_mv_modified,
-    ieee8500_relabel_map,
-    ieee8500_mv_relabel_map,
-    ieee8500_load_nodes,
-    ieee8500_mv_load_buses,
-    ieee8500_capacitor_buses,
-    IEEE8500_MV_BASE,
-    IEEE8500_LV_BASE,
-    IEEE8500_ROOT_BUS,
-    IEEE8500_HEAD_SMAX_MVA
+export ieee8500_modified, ieee8500_mv_modified

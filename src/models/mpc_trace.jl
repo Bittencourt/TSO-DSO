@@ -136,4 +136,3 @@ are SUCCESSFUL escalations (D-04's ladder semantics), not failures.
 any_cert_failed(trace::MpcTrace) =
     trace.steps == 0 ? false : any(==(:cert_failed), trace.cert_status_trace)
 
-export MpcTrace, record!, max_jump, mean_jump, any_cert_failed

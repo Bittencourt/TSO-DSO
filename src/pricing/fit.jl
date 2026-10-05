@@ -794,4 +794,4 @@ function _fit_ac_settlement_violations(feeder, pf_vars::NamedTuple, T::Int)
     return out
 end
 
-export fit_baseline, FIT_λ_IMPORT, FIT_λ_EXPORT, FIT_λ_SELF
+export fit_baseline

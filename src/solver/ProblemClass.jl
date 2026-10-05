@@ -78,4 +78,4 @@ solely when the user has `SCS` in their environment.
 """
 struct SCSChoice end
 
-export ProblemClass, LP, MILP, QP, SOCP, NLP, GurobiChoice, MosekChoice, SCSChoice
+export ProblemClass

@@ -1,15 +1,47 @@
 """
     TSODSO
 
-Walking-skeleton chassis for the TSO–DSO Integration Optimization Framework.
+TSO-DSO Integration Optimization Framework: a research bench for transactive-energy
+dynamic distribution pricing and Stackelberg-Nash TSO-DSO planning, built on JuMP with
+swappable open-source solvers.
 
-This top module ONLY wires the include graph of the architectural seams, in
-dependency order. Each seam file is created empty (comment-only) in plan 01-01
-and filled by exactly one later plan, which declares that seam's own `export`s.
-`TSODSO.jl` itself exports nothing — it is the assembly point, never a shared
-edit surface, so Waves 2–3 fill stubs without ever touching this file.
+# Layers
+
+- **Data** (`Feeder`, `MeshedFeeder`, IEEE 13/123/8500 fixtures, `generate_profiles`):
+  radial and meshed distribution networks and seeded profile generation.
+- **Core** (`ModelContext`, `contribute!`, residual and objective hooks, `TSODSOError`
+  and the certificate / convergence / solve-failure error types): the shared model
+  container every formulation and device writes into.
+- **Solver factory** (`ProblemClass`, `select_optimizer`): models never name a solver.
+- **Power flow** (`DCPowerFlow`, `LinDistFlow`, `ConvexBranchFlow`,
+  `RestrictedBranchFlow`, `MeshedFlow`, `ACPowerFlow`): interchangeable network models.
+- **Devices** (`Thermostatic`, `Deferrable`, `Interruptible`, `PVBattery`, `FourQuadBESS`,
+  `FixedCapacitor`, `Aggregator`): prosumer models.
+- **Models and certificates** (`solve_welfare`, `operational_oracle`, `assert_socp_exact!`,
+  `assert_ac_exact!`, ...): centralized welfare solves and relaxation-exactness gates.
+- **Pricing** (`extract_dlmp`, `decompose_dlmp`, `fit_baseline`, `welfare_accounting`):
+  prices recovered as duals of the nodal balance.
+- **ADMM** (`solve_admm`, `AgrOpt`, `DsoOpt`, the `ReactiveMode` namespace): the
+  operational-layer decomposition.
+- **Experiments** (`Scenario`, `run_scenario`, `run_sweep`, `run_mpc`, `run_stochastic`):
+  declarative scenarios, swappable strategies and provenance-stamped storage.
+- **Planning** (`solve_stackelberg!`, `run_nash!`, `SharedTransmission`): the Benders and
+  Gauss-Seidel Stackelberg-Nash investment layer.
+- **Diagnostics** (`plot_convergence`, ...): method-less plot functions whose methods are
+  provided by the CairoMakie extension.
+
+# API policy
+
+The researcher-facing entry points, data, device, model, result and error types are
+exported. Advanced building blocks (problem-class singletons, planning components,
+exactness helpers, experiment builders, ...) are declared `public`: they are documented
+and stable but must be qualified, e.g. `TSODSO.SOCP()`. Purely internal helpers are
+reachable as `TSODSO.name` and carry no stability promise. See the API and
+architecture pages of the documentation.
 """
 module TSODSO
+
+import Compat: @compat
 
 # --- Units (owned by plan 01-02, INFRA-05) ---
 include("units/PerUnit.jl")
@@ -252,5 +284,50 @@ include("experiments/mpc_loop.jl")
 # build_stochastic_welfare/build_stochastic_oos_harness/solve_stochastic_oos_step!
 # (plans 22-02/22-03).
 include("experiments/run_stochastic.jl")
+
+# --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
+# Declared with Compat's `@compat public` so that `public` also works on Julia 1.10.
+
+# Solver abstraction: problem-class singletons and optimizer selection.
+@compat public LP, QP, SOCP, NLP, MILP, GurobiChoice, MosekChoice, SCSChoice,
+    problem_class, alternative_optimizer, commercial_optimizer
+
+# Data: fixture node sets, relabelling maps and topology helpers.
+@compat public ieee123_load_nodes, ieee123_relabel_map, ieee8500_load_nodes,
+    ieee8500_mv_load_buses, ieee8500_capacitor_buses, ieee8500_relabel_map,
+    ieee8500_mv_relabel_map, build_ieee123, assert_connected, markov_path
+
+# Power-flow capability queries and balance helpers.
+@compat public has_branch_current, has_reactive, reactive_factor, is_flexible_load,
+    close_balance!
+
+# Exactness and recovery helpers.
+@compat public hybrid_ratios, socp_gap_report, recover_lossfree_shadow_voltage,
+    recover_voltage_angles, ac_dual_fallback_price
+
+# Pricing.
+@compat public extract_reactive_dlmp
+
+# ADMM penalty control.
+@compat public set_rho!, set_rho_q!
+
+# MPC and stochastic building blocks.
+@compat public MpcTrace, any_cert_failed, max_jump, mean_jump, build_mpc_window,
+    solve_mpc_window!, StochasticOosHarness, build_stochastic_welfare,
+    build_stochastic_oos_harness, solve_stochastic_oos_step!
+
+# Experiment builders.
+@compat public build_feeder, build_population, build_powerflow, build_price, sub_seed
+
+# Planning building blocks.
+@compat public PlanningOracle, build_planning_oracle, solve_planning_oracle!,
+    FollowerLP, build_follower, solve_follower!, BendersMaster, build_master,
+    solve_master!, add_feasibility_cut!, add_optimality_cut!, BendersMasterInteger,
+    build_master_integer, add_ll_cut!, add_nogood_cut!, apply_integer_cuts!,
+    FeasibilityOracle, build_feasibility_oracle, solve_feasibility_oracle!,
+    ac_recheck_incumbent, checkpoint_iteration!, resume_from_checkpoint,
+    solve_with_retry!, RETRYABLE_STATUSES, LADDER_ATTR_NAMES, BilevelKKT,
+    build_bilevel_kkt, solve_bilevel!, solve_variational_equilibrium, run_nash_probe,
+    activate_distributor!, update_coupling!, write_back!, is_converged, trace_summary
 
 end # module TSODSO

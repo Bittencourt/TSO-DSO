@@ -243,4 +243,4 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
     return (; vars = device_vars, p_inject, q_inject, utility, Pdc_param)
 end
 
-export Aggregator, reactive_factor
+export Aggregator

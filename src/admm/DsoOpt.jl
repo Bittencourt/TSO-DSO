@@ -751,4 +751,4 @@ function set_rho_q!(dso::DsoOpt, ρ_q::Real)
     return dso
 end
 
-export DsoOpt, build_dso_opt, solve_dso!, set_rho!, set_rho_q!
+export DsoOpt, build_dso_opt, solve_dso!

@@ -246,4 +246,3 @@ function solve_feasibility_oracle!(
     return (; cost, v, u, z_k = copy(z_trial))
 end
 
-export FeasibilityOracle, build_feasibility_oracle, solve_feasibility_oracle!

@@ -85,4 +85,4 @@ this trait. Defaults to `false` for any device; a flexible-load device
 """
 is_flexible_load(::AbstractDevice) = false
 
-export AbstractDevice, is_flexible_load
+export AbstractDevice

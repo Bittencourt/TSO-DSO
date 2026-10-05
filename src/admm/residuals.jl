@@ -191,4 +191,4 @@ function converged(res::AdmmResiduals, tol::Real)
     return last(res.primal_trace) <= tol
 end
 
-export AdmmResiduals, record!, converged
+export AdmmResiduals

@@ -489,4 +489,3 @@ numeric goldens stay bit-identical. `:ac` is the researcher's responsibility on 
 """
 build_powerflow(s::Scenario) = _powerflow_from_selector(s.pf, s.pf_thesis_literal, s.pf_ε)
 
-export sub_seed, build_feeder, build_price, build_population, build_powerflow

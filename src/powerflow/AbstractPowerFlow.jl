@@ -54,4 +54,4 @@ already runs on AC contexts); `false` for `LinDistFlow`, `DCPowerFlow` and
 has_branch_current(::AbstractPowerFlow) = false
 has_branch_current(::Nothing) = false
 
-export AbstractPowerFlow, contribute!, has_reactive, has_branch_current
+export AbstractPowerFlow, contribute!

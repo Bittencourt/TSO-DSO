@@ -231,4 +231,4 @@ function alternative_optimizer(choice, pc::ProblemClass)
     )
 end
 
-export select_optimizer, commercial_optimizer, alternative_optimizer
+export select_optimizer

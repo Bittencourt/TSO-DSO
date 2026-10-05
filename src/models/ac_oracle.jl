@@ -339,4 +339,4 @@ function assert_ac_exact!(
     return (; obj_gap, hours = rows)
 end
 
-export recover_lossfree_shadow_voltage, recover_voltage_angles, assert_ac_exact!
+export assert_ac_exact!

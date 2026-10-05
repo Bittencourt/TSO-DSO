@@ -1263,7 +1263,6 @@ function run_nash_probe(
     return (; runs, spread, summary, n_runs)
 end
 
-export run_nash_probe
 
 # --- solve_variational_equilibrium — monolithic joint model selecting the variational
 # equilibrium (VE) inside a shared-constraint game's GNE continuum (BILEV-06b, plan 31-03
@@ -1624,4 +1623,3 @@ function solve_variational_equilibrium(
     )
 end
 
-export solve_variational_equilibrium

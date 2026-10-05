@@ -101,7 +101,6 @@ function markov_path(
     return path
 end
 
-export markov_path
 
 # --- Default state→value tables and transition matrices (documented, overridable) ---
 #

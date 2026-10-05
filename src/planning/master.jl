@@ -875,4 +875,3 @@ function solve_master!(
     )
 end
 
-export BendersMaster, build_master, add_optimality_cut!, add_feasibility_cut!, solve_master!

@@ -35,4 +35,3 @@ and the exactness check depend on.
 """
 problem_class(::AbstractPowerFlow) = QP()
 
-export problem_class

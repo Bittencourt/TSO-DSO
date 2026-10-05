@@ -404,4 +404,4 @@ function set_rho_q!(agr::AgrOpt, ρ_q::Real)
     return agr
 end
 
-export AgrOpt, build_agr_opt, solve_agr!, set_rho!, set_rho_q!
+export AgrOpt, build_agr_opt, solve_agr!

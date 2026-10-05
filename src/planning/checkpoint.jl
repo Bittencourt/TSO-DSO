@@ -111,4 +111,3 @@ function resume_from_checkpoint(dir::AbstractString = datadir("planning_checkpoi
     return (; iteration = dict["iteration"], state = dict["state"])
 end
 
-export checkpoint_iteration!, resume_from_checkpoint
