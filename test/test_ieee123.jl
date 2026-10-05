@@ -16,7 +16,7 @@
 #   - a single root at the substation/frontier terminal (thesis 150), all other buses non-root.
 #   - voltage-constrained band V ∈ [0.9, 1.1] (thesis Case B, looser than IEEE-13).
 
-@testitem "ieee123: fixture is radial, contiguous, single-root (ieee123)" tags = [:phase7] begin
+@testitem "ieee123: fixture is radial, contiguous, single-root (ieee123)" tags = [:ieee123] begin
     using TSODSO
 
     # RED until Wave 2 (plan 07-02 fills the ieee123_modified fixture).
@@ -38,7 +38,7 @@
     end
 end
 
-@testitem "ieee123: voltage band + per-unit magnitude sanity (ieee123)" tags = [:phase7] begin
+@testitem "ieee123: voltage band + per-unit magnitude sanity (ieee123)" tags = [:ieee123] begin
     using TSODSO
 
     # RED until Wave 2 (plan 07-02).
@@ -63,7 +63,7 @@ end
     end
 end
 
-@testitem "ieee123: relabel map + substation root spot-check (ieee123)" tags = [:phase7] begin
+@testitem "ieee123: relabel map + substation root spot-check (ieee123)" tags = [:ieee123] begin
     using TSODSO
     using TSODSO: ieee123_relabel_map
 
@@ -90,7 +90,7 @@ end
     end
 end
 
-@testitem "ieee123: transit (zero-injection) bus count (ieee123)" tags = [:phase7] begin
+@testitem "ieee123: transit (zero-injection) bus count (ieee123)" tags = [:ieee123] begin
     using TSODSO
     using TSODSO: ieee123_load_nodes
 
@@ -118,7 +118,7 @@ end
 end
 
 @testitem "ieee123: pinned real-impedance spot-check on branch (149,1) (ieee123)" tags =
-    [:phase7] begin
+    [:ieee123] begin
     using TSODSO
     using TSODSO: ieee123_relabel_map
 

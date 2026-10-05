@@ -20,7 +20,7 @@
 #     converged ledger satisfies the two-residual predicate at its final iterate.
 
 @testitem "admm dualresid: z-block dual residual + two-residual stop (dualresid, admm)" setup =
-    [IEEE123Fixtures, TwoBusFixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures, TwoBusFixtures] tags = [:admm, :adaptive] begin
     using TSODSO
     using TSODSO: converged
 
@@ -62,7 +62,7 @@
 end
 
 @testitem "admm dualresid: ledger two-residual converged predicate (dualresid, resid)" setup =
-    [IEEE123Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :adaptive] begin
     using TSODSO
     using TSODSO: converged, record!
 

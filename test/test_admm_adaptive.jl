@@ -21,7 +21,7 @@
 #     injection pinned) rather than throwing the Phase-6 guard (RESEARCH Pitfall 5).
 
 @testitem "admm adaptive rho: set_rho! in-place quad-coeff, build-once invariant (adaptive, rho)" setup =
-    [IEEE123Fixtures, TwoBusFixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures, TwoBusFixtures] tags = [:admm, :adaptive] begin
     using TSODSO
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
@@ -53,7 +53,7 @@
 end
 
 @testitem "admm adaptive rho: scale-invariant convergence 2-bus AND ieee13 (adaptive, rho)" setup =
-    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :adaptive] begin
     using TSODSO
     using TSODSO: converged
 
@@ -111,7 +111,7 @@ end
 end
 
 @testitem "admm transit dso: zero-injection non-load bus accepted (transit, dso)" setup =
-    [IEEE123Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :adaptive] begin
     using TSODSO
 
     # RED until Wave 2/3 (plan 07-03 relaxes the DSO-OPT transit-node guard). The observable

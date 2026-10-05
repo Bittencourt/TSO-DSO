@@ -208,7 +208,7 @@ end
 # printing HiGHS's default verbose solver log) — comfortably pushes the file's
 # total `:planning` quick-run past the ~2-minute budget alongside the other three
 # edge-case items in this file, so this item carries the extra `:slow` tag,
-# mirroring `test_ieee123_admm.jl`'s `[:admm, :phase7]` two-tag precedent.
+# mirroring `test_ieee123_admm.jl`'s `[:admm, :ieee123]` two-tag precedent.
 #
 # REVISION 2 (this quick task, 260826-cjh): the old `result.iters` `>= 50`
 # assertion and this item's name were both retired as environment-fragile. CI

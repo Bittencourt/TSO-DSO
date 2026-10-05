@@ -137,7 +137,7 @@ end
 end
 
 @testitem "agr: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
-    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :phase7] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :adaptive] begin
     using TSODSO
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints

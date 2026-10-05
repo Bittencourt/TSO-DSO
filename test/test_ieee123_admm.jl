@@ -18,7 +18,7 @@
 #     and the converged DSO-OPT is PF-04 exact (`exact_maxgap` small) at the binding-voltage point.
 
 @testitem "ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval)" setup =
-    [IEEE123Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :ieee123] begin
     using TSODSO
     using TSODSO: SOCP
 
@@ -108,7 +108,7 @@ end
 # real-impedance swap could silently turn the case numerically slack (e.g. staying inside
 # [0.95, 1.05] at every hour/bus) without any existing test noticing.
 @testitem "ieee123 admm: voltage-binding margin (ieee123, crossval)" setup =
-    [IEEE123Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :ieee123] begin
     using TSODSO
     using TSODSO: SOCP
     using JuMP: value

@@ -130,7 +130,7 @@ end
 end
 
 @testitem "dso: transit zero-injection bus admitted, balance closes, solves OPTIMAL (transit, dso)" setup =
-    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :phase7] begin
+    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :adaptive] begin
     using TSODSO
     using JuMP
 
@@ -258,7 +258,7 @@ end
 end
 
 @testitem "dso: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
-    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :phase7] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :adaptive] begin
     using TSODSO
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints

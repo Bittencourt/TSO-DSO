@@ -32,7 +32,7 @@ using TSODSO
 using JuMP
 
 @testitem "ieee8500: headline fixture is radial, contiguous, single-root (ieee8500)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
 
     feeder = TSODSO.ieee8500_modified()
@@ -50,7 +50,7 @@ using JuMP
 end
 
 @testitem "ieee8500: MV-only control fixture is radial, contiguous, single-root (ieee8500)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
 
     feeder = TSODSO.ieee8500_mv_modified()
@@ -62,7 +62,7 @@ end
     @test feeder.buses[feeder.root].is_root
 end
 
-@testitem "ieee8500: per-unit magnitude sanity, both fixtures (ieee8500)" tags = [:phase25] begin
+@testitem "ieee8500: per-unit magnitude sanity, both fixtures (ieee8500)" tags = [:ieee8500] begin
     using TSODSO
 
     for feeder in (TSODSO.ieee8500_modified(), TSODSO.ieee8500_mv_modified())
@@ -78,7 +78,7 @@ end
 end
 
 @testitem "ieee8500: pinned corrected-transformer spot-check on a CT5 branch (ieee8500)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
 
     # Regression trap (T-25-07): a future accidental revert to the superseded 2-winding
@@ -99,7 +99,7 @@ end
     @test isapprox(br.x, 2.72; atol = 1e-2)
 end
 
-@testitem "ieee8500: capacitor/load/mv-load bus-role helpers (ieee8500)" tags = [:phase25] begin
+@testitem "ieee8500: capacitor/load/mv-load bus-role helpers (ieee8500)" tags = [:ieee8500] begin
     using TSODSO
 
     full_feeder = TSODSO.ieee8500_modified()
@@ -124,7 +124,7 @@ end
 end
 
 @testitem "ieee8500: D-06 measured per-unit impedance spread is reported (ieee8500)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
 
     feeder = TSODSO.ieee8500_modified()
@@ -144,7 +144,7 @@ end
 end
 
 @testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up (plan 25-04)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
 
@@ -176,7 +176,7 @@ end
 end
 
 @testitem "ieee8500: FixedCapacitor contribute! + DEV-05 sole-:Rq-writer invariant (plan 25-04)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO, JuMP
 
     # Direct unit call: a bare context, no feeder anywhere (network-agnostic device).
@@ -216,7 +216,7 @@ end
 end
 
 @testitem "ieee8500: build_population(:ieee13) is byte-identical to its pre-plan-25-04 golden (plan 25-04)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
 
@@ -239,7 +239,7 @@ end
 end
 
 @testitem "ieee8500: build_population(:ieee8500_mv) total-load conservation (plan 25-04)" tags =
-    [:phase25] begin
+    [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
 
