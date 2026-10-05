@@ -1,6 +1,6 @@
 # # Rung 1-2 — LinDistFlow (Linear Branch Flow)
 #
-# This page is the reproducibility proof that the residual-seam contract (PF-01/PF-02)
+# This page is the reproducibility proof that the residual-seam contract
 # generalizes from Rung 0's toy single-node balance to a REAL, multi-bus radial
 # branch-flow network with a flexible device. It calls the real
 # [`solve_linear`](@ref) end-to-end — never a re-implemented `@constraint`/`@objective`

@@ -118,7 +118,7 @@ end;
 # ## Solving both formulations on the same data
 #
 # The SOCP solve passes `rtol_exact = 1.0` — a DELIBERATE, documented diagnostic override of
-# `solve_welfare`'s own internal PF-04 exactness gate, so the loose-relaxation solution is
+# `solve_welfare`'s own internal SOC-exactness gate, so the loose-relaxation solution is
 # RETURNED for comparison instead of refused. It changes no code in `solve_welfare`. The AC solve
 # uses the default Ipopt backend (`allow_local = true` for the nonconvex local-optimum gate). Both
 # share the IDENTICAL `feeder` / `aggs` / `λ₀` / `T` / `allow_export`.
@@ -183,7 +183,7 @@ ctx_socp.meta[:socp_maxgap]
 #
 # **Gate 1** (`assert_socp_exact!`'s cone-residual check, `ctx_socp.meta[:socp_maxgap]` above) is
 # NOT the mechanism here: it is EXACT, not "orders of magnitude larger than the benign feeder's" as
-# an earlier draft of this page claimed (see "## Restated in v4.0 (Phase 28)" below for the
+# an earlier draft of this page claimed (see "## Restated: gate 1 versus gate 2" below for the
 # measured numbers and gate-qualified correction). The genuine mechanism at these hours is the
 # DEFAULT's Gan-Low modified-OPF RESTRICTION actively binding (`v̂ ≤ V²max`), which excludes the
 # true AC optimum from its own feasible set — a restriction-induced dispatch-suboptimality
@@ -197,40 +197,40 @@ ctx_socp.meta[:socp_maxgap]
 # against a two-start Ipopt comparison in the test suite (ruling out a local-optimum artifact) and
 # against a closed-form 2-bus phasor for its angle recovery — is what certifies which regime is
 # which. The voltage-binding / reverse-flow diagnostic itself is asserted live in
-# `test/test_ac_oracle.jl` (EXACT-04).
+# `test/test_ac_oracle.jl`.
 #
-# ## Restated in v4.0 (Phase 28)
+# ## Restated: gate 1 versus gate 2
 #
-# Earlier text on this page (and `test/test_ac_oracle.jl`'s own comment, corrected in the same
-# phase) described the `pv_scale = 1.2` disagreement above as **gate 1** cone-inexactness ("the SOC
+# Earlier text on this page (and `test/test_ac_oracle.jl`'s own comment, since corrected)
+# described the `pv_scale = 1.2` disagreement above as **gate 1** cone-inexactness ("the SOC
 # relaxation is genuinely inexact... the internal relaxation gap is orders of magnitude larger than
 # the benign feeder's"). This conflated the two exactness notions this project's own code
-# distinguishes (Pitfall 3): `assert_socp_exact!` (gate 1, cone-residual — is the SOCP solution
+# distinguishes: `assert_socp_exact!` (gate 1, cone-residual — is the SOCP solution
 # itself physically self-consistent?) vs `assert_ac_exact!` (gate 2, AC-dispatch-comparison — does
-# the SOCP-optimal dispatch match the TRUE AC-optimal dispatch?). MEASURED this plan (28-03):
+# the SOCP-optimal dispatch match the TRUE AC-optimal dispatch?). MEASURED on this fixture:
 #
 # | Formulation | Gate 1 (`socp_maxgap`) | Gate 1 verdict | Gate 2 (`inexact_hours`) | Gate 2 verdict |
 # |---|---|---|---|---|
-# | `ConvexBranchFlow()` (default) | 2.59e-8 | EXACT (well under FIX-08's `atol_b=max(2e-7,...)` floor) | `6:15` | INEXACT |
+# | `ConvexBranchFlow()` (default) | 2.59e-8 | EXACT (well under the `atol_b=max(2e-7,...)` floor) | `6:15` | INEXACT |
 # | `ConvexBranchFlow(; thesis_literal=true)` | 9.05e-9 | EXACT | `[]` (none) | EXACT |
 #
 # So on THIS fixture at `pv_scale = 1.2`, gate 1 is EXACT under BOTH formulations (already
-# established by PM-01/26-18, `test_restricted_branch_flow.jl:314-320`, cited not re-derived) —
+# established by `test_restricted_branch_flow.jl:314-320`, cited not re-derived) —
 # there is no genuine cone slack to explain here. Gate 2's inexactness is specific to the DEFAULT:
 # the Gan-Low restriction's own optimum (`cost_socp = -921.754`) genuinely diverges from the true
 # AC optimum (`cost_ac = -921.277`), because the restriction's binding upper-voltage-band bound
 # excludes that optimum from its own feasible set (a restriction-induced dispatch-suboptimality).
 # Under `thesis_literal = true` on this SAME fixture, gate 2 is ALSO exact (`cost_socp =
-# -921.27700` matches `cost_ac = -921.27699` within `rtol=1e-4`) — consistent with 26-18's own
+# -921.27700` matches `cost_ac = -921.27699` within `rtol=1e-4`) — consistent with the
 # finding that the thesis-literal copy's optimum coincides with the true AC optimum here.
 #
 # **This does NOT reproduce the historic v2.1 "SOCP knife-edge under high-PV reverse flow" finding**
-# (project memory `v2.1-socp-inexactness-and-thesis-repro`), which is a GATE-1 (cone-residual)
+# (the earlier SOCP-inexactness study), which is a gate-1 (cone-residual)
 # phenomenon, not gate 2. That finding still reproduces, but only under `thesis_literal = true` at a
 # DIFFERENT, higher `pv_scale` on this or a related fixture (e.g. `pv_scale = 1.4` on this same
 # 3-bus feeder, cone ratio ≈ 1982, or MPCFixtures' `pv_scale = 3.0` MPC window, cone_maxratio ≈
-# 9157–9166) — see `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` "Plan
-# 26-18". The two findings are mechanically distinct and must not be conflated: this page's own
+# 9157–9166) — see the restricted-branch-flow
+# page. The two findings are mechanically distinct and must not be conflated: this page's own
 # `pv_scale = 1.2` gate-2 finding is a restriction-suboptimality property of the DEFAULT, while the
 # v2.1 knife-edge is a genuine cone-slack property that requires the OLD `thesis_literal = true`
 # opt-in AND a higher `pv_scale` than this page uses.

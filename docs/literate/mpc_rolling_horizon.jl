@@ -1,17 +1,16 @@
 # # Rung 8 — MPC / Rolling-Horizon Real-Time Pricing
 #
 # Every prior "Models" page in this manual solves ONE day-ahead problem and reports ONE set of
-# duals. This page closes Phase 21 by demonstrating the alternative this framework now also
+# duals. This page demonstrates the alternative this framework now also
 # supports: a **receding-horizon closed loop** — [`run_mpc`](@ref) re-solves a fixed-length
 # window model every `step` hours, publishing a genuinely rolling real-time price (RTP)
 # signal, and is honestly benchmarked against the perfect-foresight day-ahead optimum computed
-# on the SAME realized truth. The terminal-equality mechanism this page exercises (D-06) follows
+# on the SAME realized truth. The terminal-equality mechanism this page exercises follows
 # the standard MPC textbook framing of a **hard terminal-equality constraint** (as opposed to a
 # terminal COST/penalty) — Rawlings, Mayne & Diehl, *Model Predictive Control: Theory,
-# Computation, and Design* is this project's own research citation for that framing
-# (`.planning/phases/21-mpc-rolling-horizon-real-time-pricing/21-RESEARCH.md`, Assumptions Log
-# A1) — **flagged here explicitly as an unverified, training-knowledge citation**: the edition
-# and chapter were never checked against a live source this session, and a reader relying on the
+# Computation, and Design* is this project's own reference for that framing
+# — **flagged here explicitly as an unverified citation**: the edition
+# and chapter were never checked against a live source, and a reader relying on the
 # exact citation should confirm it independently rather than trust this page's mention of it.
 # Every number shown below is RECOMPUTED live during this page's build, exactly like every prior
 # rung page in this manual.
@@ -24,7 +23,7 @@ using TSODSO: any_cert_failed, max_jump, mean_jump
 # Unlike every prior rung page (`restricted_branch_flow.jl`, `ac_oracle.jl`), which
 # inline a bespoke `Bus`/`Branch`/`Feeder`/`Aggregator` fixture by hand (literate pages never
 # load test-only modules), [`run_mpc`](@ref) has exactly ONE entry point signature:
-# `run_mpc(s::Scenario)` (D-01's "independent sibling orchestrator" — it is NOT wired through
+# `run_mpc(s::Scenario)` (an "independent sibling orchestrator" — it is NOT wired through
 # `run_scenario`'s `:centralized`/`:admm` strategy dispatch, and never accepts a bare
 # `feeder`/`pf`/`aggregators` tuple). [`Scenario`](@ref)'s existing selector set — `feeder =
 # :ieee13`, the project's ONLY `:default` population, the standard `:mem` price shape — already
@@ -35,12 +34,12 @@ using TSODSO: any_cert_failed, max_jump, mean_jump
 # `T = 24` is the full day-ahead horizon. `MPC(H = 6)` is a genuinely multi-hour receding window
 # (documented choice: large enough to be demonstrative of a receding horizon, short enough that
 # the closed loop re-solves many times over the day) — giving `T - H + 1 = 19` published
-# steps (Pitfall 5's fixed-window convention: the published-step COUNT is invariant to
-# `step`, which stays at its default of `1`). `terminal_soc = true` keeps D-06's hard
+# steps (the fixed-window convention: the published-step COUNT is invariant to
+# `step`, which stays at its default of `1`). `terminal_soc = true` keeps the hard
 # terminal-SOC equality active (this page does NOT re-run the disabled/dump-hoard negative
-# control — that A/B regression is `test/test_mpc_terminal.jl`'s job, plan 21-04, not this rung's).
+# control — that A/B regression is `test/test_mpc_terminal.jl`'s job, not this rung's).
 # `forecast_error = 0.08` is a genuinely nonzero seeded bounded PV/demand perturbation,
-# citing D-08's documented "±5-10%" range.
+# citing the documented "±5-10%" range.
 
 const T = 24
 const H = 6
@@ -61,7 +60,7 @@ s = Scenario(;
 # reference DADP path, and the COMPARABLE benchmark over the same Deferrable-excluded device
 # set the closed loop controls, which the regret comparison reads (see section 3). It then
 # builds the receding-horizon [`MpcWindow`](@ref TSODSO.MpcWindow) ONCE, and re-solves it `19` times (once per
-# published hour, since `step = 1` here), dispatching Phase-20's own non-throwing
+# published hour, since `step = 1` here), dispatching the non-throwing
 # certificate/fallback ladder on every resolve and recording every published hour into an
 # [`MpcTrace`](@ref TSODSO.MpcTrace).
 
@@ -79,7 +78,7 @@ r.steps
 
 round.(r.day_ahead_dadp; digits = 4)
 
-# ## 2. The rolling published DADP path and its price-consistency metrics (MPC-03)
+# ## 2. The rolling published DADP path and its price-consistency metrics
 #
 # The genuinely PUBLISHED real-time price at each of the 19 rolling steps (elapsed hours are
 # final — only the first interval of each resolved window is ever published):
@@ -91,7 +90,7 @@ round.(r.trace.dadp_trace; digits = 4)
 
 round.(r.trace.dadp_da_trace; digits = 4)
 
-# Step-to-step price jump ([`max_jump`](@ref TSODSO.max_jump)/[`mean_jump`](@ref TSODSO.mean_jump), D-10's price-consistency
+# Step-to-step price jump ([`max_jump`](@ref TSODSO.max_jump)/[`mean_jump`](@ref TSODSO.mean_jump), the price-consistency
 # norms) — the largest and average absolute price MOVE between two successive published hours:
 
 max_jump(r.trace)
@@ -112,9 +111,9 @@ last(r.trace.cum_deviation_trace)
 # perfect-foresight day-ahead DADP reference (dashed) with the 19 genuinely PUBLISHED
 # real-time prices overlaid at their absolute hours; the shaded tail marks the hours the
 # fixed-window convention never publishes (`T − H + 1` through `T` fall inside the final
-# window but after its first interval — Pitfall 5). BOTTOM panel: the per-hour absolute
+# window but after its first interval). BOTTOM panel: the per-hour absolute
 # published-vs-day-ahead gap `|λ_RTP[t] − λ_DA[t]|` (bars) under the RUNNING cumulative
-# deviation (line) — the D-10 price-consistency ledger `max_jump`/`mean_jump` summarize as
+# deviation (line) — the price-consistency ledger `max_jump`/`mean_jump` summarize as
 # scalars above, shown here hour by hour. Both panels share the price unit; no twin axes.
 # Same guarded-CairoMakie idiom as `admm.jl`/`socp_applicability.jl`; the block's final
 # expression is the `Figure` Documenter renders inline.
@@ -130,7 +129,7 @@ if Base.find_package("CairoMakie") !== nothing
         xlabel = "hour t",
         ylabel = "DADP (price units)",
         xticks = 2:2:T,
-        title = "Published real-time price vs day-ahead reference (MPC-03)",
+        title = "Published real-time price vs day-ahead reference",
     )
     vspan!(ax1, r.steps + 0.5, T + 0.5; color = (:gray, 0.10))
     lines!(
@@ -155,7 +154,7 @@ if Base.find_package("CairoMakie") !== nothing
         xlabel = "published hour t",
         ylabel = "price deviation (price units)",
         xticks = 2:2:r.steps,
-        title = "Per-hour |published − day-ahead| and its running cumulative sum (D-10)",
+        title = "Per-hour |published − day-ahead| and its running cumulative sum",
     )
     barplot!(
         ax2,
@@ -179,7 +178,7 @@ if Base.find_package("CairoMakie") !== nothing
     fig
 end
 
-# ## 3. Regret — the measured, information-set-fair benchmark (MPC-04, D-11)
+# ## 3. Regret — the measured, information-set-fair benchmark
 #
 # **This is the honesty-load-bearing number on this page.** `regret` is `realized_welfare` MINUS
 # the day-ahead perfect-foresight welfare, but — per `src/experiments/mpc_loop.jl`'s own
@@ -190,7 +189,7 @@ end
 # actually controls (the window model structurally cannot host a `Deferrable` device — its
 # energy-budget window is baked against the full day-ahead horizon at construction time,
 # `src/experiments/mpc_loop.jl`'s own header deviation note). BOTH the comparison's per-device
-# utilities AND its frontier `p_import` cost come from that comparable benchmark (review CR-03):
+# utilities AND its frontier `p_import` cost come from that comparable benchmark :
 # an earlier revision of this comparison read `p_import` from the FULL-population day-ahead
 # context, charging the day-ahead side the frontier cost of serving Deferrable's consumption
 # while denying it Deferrable's utility — which systematically understated the benchmark and
@@ -213,21 +212,19 @@ r.day_ahead_welfare
 
 r.realized_welfare
 
-# ## Restated in v4.0 (Phase 28)
+# ## Truth-settled realized welfare
 #
-# Phase 27 (FIX-10) changed what `realized_welfare` MEANS without changing this section's own
+# The settlement rules changed what `realized_welfare` MEANS without changing this section's own
 # narrative shape — the numbers displayed above are recomputed LIVE against the NEW semantics
-# every time this page builds, never a frozen pre-Phase-27 value left undocumented. Concretely:
+# every time this page builds, never a frozen earlier value left undocumented. Concretely:
 #
 #   - `realized_welfare` above is now TRUTH-SETTLED against the true plant, not the window's own
 #     forecast-consistent belief: `run_mpc` clips every `PVBattery`'s realized charge and
-#     self-consumption/export to the device's TRUE (unperturbed) `Ppv[abs_hour]` availability
-#     (Assumption A6), THROWS (never silently clamps) on a genuine out-of-band SOC/temperature
+#     self-consumption/export to the device's TRUE (unperturbed) `Ppv[abs_hour]` availability, THROWS (never silently clamps) on a genuine out-of-band SOC/temperature
 #     propagation, and settles the frontier import via a genuine AC power flow, PHYSICS ONLY
 #     (`ACPowerFlow(; limits = false)`, Ipopt) — replacing the earlier SOCP-relaxation re-solve
-#     this page's own `src/experiments/mpc_loop.jl` docstring documents as superseded (Phase 27
-#     FIX-10, USER DECISION 2026-09-29).
-#   - The OLD, pre-Phase-27 forecast-consistent number survives as a SEPARATELY-labelled
+#     this page's own `src/experiments/mpc_loop.jl` docstring documents as superseded.
+#   - The OLD forecast-consistent number survives as a SEPARATELY-labelled
 #     diagnostic — `forecast_settled_welfare` — never the headline `regret` above is measured
 #     against:
 
@@ -248,14 +245,14 @@ count(v -> v.n_thermal_violations > 0 || v.voltage_violated, r.settlement_violat
 # equality (`max_overload_ratio` ≈ 1.02, 1.004, 1.001 respectively — modest, single-digit-percent
 # head-branch overloads, no voltage violation on any of the three) — a real, physically-settled
 # finding this fixture's own reverse-flow/forecast-error interaction produces, REPORTED here
-# exactly as measured, never refused or hidden by the truth settlement (Assumption A6/FIX-10's
+# exactly as measured, never refused or hidden by the truth settlement (the
 # "physics only, report don't refuse" convention). This is a DIFFERENT nonzero-overload instance
-# than `test/test_mpc_loop.jl`'s own DELIBERATELY forced-PV-shortfall/tight-thermal-limit fixtures
-# (plan 27-09), which exercise the same reporting path under a fixture engineered to trigger it.
+# than `test/test_mpc_loop.jl`'s own DELIBERATELY forced-PV-shortfall/tight-thermal-limit fixtures,
+# which exercise the same reporting path under a fixture engineered to trigger it.
 
-# ## 4. Per-step certificate/fallback status (D-04)
+# ## 4. Per-step certificate/fallback status
 #
-# Every one of the 19 resolves ran Phase-20's own non-throwing certificate check — `run_mpc`
+# Every one of the 19 resolves ran the non-throwing certificate check — `run_mpc`
 # NEVER throws mid-loop even on a genuinely inexact step, escalating instead through
 # `RestrictedBranchFlow`/`assert_restriction_exact!`/`ac_dual_fallback_price` (the SAME ladder
 # `restricted_branch_flow.jl` documents) and recording the outcome:
@@ -270,7 +267,7 @@ any_cert_failed(r.trace)
 # certifies cleanly at the first (SOC-relaxation) tier — no escalation to the restricted or
 # AC-fallback tiers was needed here. This is a plausible, honest outcome for a moderate fixture,
 # not a claim that the escalation ladder is untested: `test/test_mpc_loop.jl`'s forced-inexact
-# `@testitem`s (plan 21-05, extended by the phase's review fixes) drive `MPCFixtures`'
+# `@testitem`s drive `MPCFixtures`'
 # high-PV fixture (`pv_scale = MPC_HIGH_PV_SCALE_MEASURED = 3.0`, a measured knife-edge value,
 # cone ratio ≈ 9157× over threshold) directly through `_mpc_certify_and_price` — at `t = 1` AND
 # at `t > 1` — and assert `cert_status ∈ (:certified_convex_dual_restricted, :local_ac_dual)`
@@ -292,9 +289,9 @@ any_cert_failed(r.trace)
 # error and the receding window — the direction theory expects from a genuine upper-bound
 # benchmark; an earlier, biased revision of the comparison reported a small positive value,
 # see the regret section above). Every certificate on this fixture cleared at the cheapest tier; the escalation ladder
-# itself is proven never to throw on a genuinely forced-inexact fixture elsewhere in this phase's
-# test suite (`test/test_mpc_loop.jl`), not on this page. The terminal-equality mechanism (D-06)
+# itself is proven never to throw on a genuinely forced-inexact fixture elsewhere in the
+# test suite (`test/test_mpc_loop.jl`), not on this page. The terminal-equality mechanism
 # that keeps the closed loop's battery trajectories information-set-fair against the day-ahead
 # benchmark — rather than dumping or hoarding energy at the window's own artificial end — is
-# validated, measured (a ~35,530× separation margin), and documented in `test/test_mpc_terminal.jl`
-# (plan 21-04), not re-demonstrated on this page's own fixture.
+# validated, measured (a ~35,530× separation margin), and documented in `test/test_mpc_terminal.jl`,
+# not re-demonstrated on this page's own fixture.

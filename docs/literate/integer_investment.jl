@@ -1,21 +1,21 @@
 # # Rung 11 — Discrete/Integer Investment Expansion (Planning)
 #
-# This page is Phase 24's INT-04 deliverable: it documents the genuinely new mathematics
-# the phase added to the single-distributor Stackelberg-Benders planning loop — a
+# This page documents the genuinely new mathematics
+# of the single-distributor Stackelberg-Benders planning loop — a
 # binary-expansion MILP investment master, the Laporte-Louveaux "no-good cut with a
 # value," the honest termination story, and a certification saga that caught (and then
 # fixed) three real, stacked defects in already-merged code. Every number below comes
 # from a LIVE call to [`build_master_integer`](@ref TSODSO.build_master_integer)/[`solve_stackelberg!`](@ref)/
 # [`solve_planning_oracle!`](@ref TSODSO.solve_planning_oracle!)/[`solve_follower!`](@ref TSODSO.solve_follower!) during the Documenter build
-# (T-24-16) — never a literal copied from a test file — and this page imports ONLY
-# `TSODSO` (never importing `BilevelJuMP`, `HiGHS`, or `Ipopt`, T-24-17), mirroring
+# — never a literal copied from a test file — and this page imports ONLY
+# `TSODSO` (never importing `BilevelJuMP`, `HiGHS`, or `Ipopt`), mirroring
 # `stackelberg_benders.jl`'s own established discipline.
 #
-# Substance over triumphalism: this phase's own certification effort found a genuine,
+# Substance over triumphalism: the certification effort found a genuine,
 # pre-existing bug in already-merged code, and diagnosing it took three rounds, not one.
 # That is presented below as a methodological result in its own right, not smoothed over.
 
-# ## The lattice — pure binary expansion, with a documented unreachable endpoint (D-01/D-02/D-03)
+# ## The lattice — pure binary expansion, with a documented unreachable endpoint
 #
 # The leader's flexibility investment is not a single continuous variable — it is a
 # binary expansion over `K` raw bits `b_1, …, b_K`:
@@ -24,13 +24,13 @@
 # y_inv = (y_max / 2^K) · Σ_{k=1}^{K} 2^{k-1} · b_k
 # ```
 #
-# This is a deliberate choice (D-01): the discreteness carries **no engineering
+# This is a deliberate choice: the discreteness carries **no engineering
 # meaning** here — it is not an attempt to model physically lumpy investment blocks or
 # an explicit menu of standard sizes. It is framed purely as a **solver-behavior axis**,
 # chosen because it gives a clean, interpretable diff against the continuous v2.0
 # baseline as `K` grows and the lattice refines.
 #
-# **The divisor is `2^K`, not `2^K − 1` (D-02).** This is the "round step size"
+# **The divisor is `2^K`, not `2^K − 1`.** This is the "round step size"
 # convention — for the default `K = 4`, `y_max = 8.0` fixture below, the step is
 # `y_max / 2^K = 0.5` and the reachable lattice is the clean set
 # `{0, 0.5, 1.0, …, 7.5}`. The accepted, documented consequence is that the all-ones
@@ -56,7 +56,7 @@ lattice
 
 (lattice[end], y_max - lattice[end])
 
-# ## The genuine, non-degenerate integrality gap (D-04)
+# ## The genuine, non-degenerate integrality gap
 #
 # This instance's continuous Stackelberg optimum is `y* ≈ 0.7` (the same golden value
 # certified in `test/fixtures_planning.jl`'s `N1_Y_HAND`), and `0.7` is **not** a
@@ -91,7 +91,7 @@ lattice
 # — written strictly over the RAW binaries `b_k` returned by
 # [`build_master_integer`](@ref TSODSO.build_master_integer), **never** over the derived expression `y_inv`
 # (substituting `y_inv`'s numeric value would silently break the whole combinatorial
-# argument — this is the single most important correctness constraint in the phase).
+# argument — this is the single most important correctness constraint of the loop).
 # At the incumbent itself `D(b^ν) = 1`, so the cut reduces to `θ ≥ Q(b^ν)` — tight and
 # exact. At every OTHER binary corner (Hamming distance `k ≥ 1` from `b^ν`),
 # `D(b) = 1 − 2k ≤ −1`, and since `Q(b^ν) − L ≥ 0` the cut reduces to something
@@ -100,8 +100,8 @@ lattice
 # requires no convexity assumption on `Q` at all (unlike a standard Benders cut) and
 # why it delivers *finite* termination even for a smooth, non-polyhedral recourse.
 # `L = α_op_lb + α_x_lb = -5.0` on this fixture — the SAME finite epigraph lower bound
-# `build_master` already declares at build time (Pitfall M1), reused verbatim with zero
-# new derivation, confirmed valid by measurement in plan 24-01.
+# `build_master` already declares at build time, reused verbatim with zero
+# new derivation, confirmed valid by measurement.
 #
 # **Why the existing continuous `add_optimality_cut!`/`add_feasibility_cut!` cuts
 # remain valid and keep firing UNCHANGED alongside the LL cut (Finding 2):**
@@ -127,7 +127,7 @@ lattice
 # in `src/solver/factory.jl` now sets `mip_rel_gap => 0.0` for every `MILP()` solve —
 # a required, not cosmetic, fix for the outer loop's own exactness claim to be sound.
 
-# ## The PVAL-04 guard lift — scoped, not deleted (D-06/D-07)
+# ## The binary-variable guard lift — scoped, not deleted
 #
 # The project's standing "no bare binaries outside the planning master" guard
 # (`test/test_planning_noninteger.jl`) is a source-scan tripwire, not just a registry:
@@ -142,7 +142,7 @@ lattice
 
 # ## How the certification caught (and fixed) three stacked defects
 #
-# Phase 24's own certification effort (an independent, exhaustive enumeration of all
+# The certification effort (an independent, exhaustive enumeration of all
 # 16 K=4 lattice points, solving the real recourse at each) did not simply confirm the
 # integer loop's correctness — it found a genuinely INVALID cut in already-merged code,
 # and closing the gap took three separate, independently-discovered fixes:
@@ -180,18 +180,18 @@ lattice
 # proof and a full-loop certification against an independent oracle are BOTH required,
 # and neither substitutes for the other.
 #
-# **A finding that generalizes beyond this phase:** an outer termination criterion that
+# **A finding that generalizes beyond this page:** an outer termination criterion that
 # advertises itself as *exact* silently inherits whatever slack the INNER solver leaves
 # unconfigured. `mip_rel_gap` closes one such gap; `mip_feasibility_tolerance` closes a
 # different one. Anyone reusing this "exact lattice termination" machinery on a new
 # problem should check both defaults explicitly, not just the more famous
 # `mip_rel_gap` — this project's own first pass missed the second one too.
 
-# ## Termination — an honest negative result, and the certified fallback (D-13/D-14)
+# ## Termination — an honest negative result, and the certified fallback
 #
 # The integer loop's termination criterion is explicitly NOT the continuous loop's
 # inherited `tol = 1e-6` relative-gap tolerance — reusing it would be exactly the kind
-# of "certificate laundering" this milestone forbids on a genuinely new mathematical
+# of "certificate laundering" this project forbids on a genuinely new mathematical
 # regime. The intended criterion is a lattice-gap EXACT test: terminate when
 # `UB − LB` falls below the smallest objective separation two distinct lattice points
 # can produce (`δ_min`) — on a finite lattice this is an optimality PROOF, not a
@@ -208,16 +208,16 @@ lattice
 # points can produce an arbitrarily small — or exactly zero — true objective
 # separation, with no generic formula ruling this out.
 #
-# **The actual termination path used here is the enumeration-backed fallback**
-# (D-14): on a tractable, exhaustively-enumerable lattice, terminate when the
+# **The actual termination path used here is the enumeration-backed fallback**:
+# on a tractable, exhaustively-enumerable lattice, terminate when the
 # incumbent MATCHES the independently enumerated optimum — exact by construction, and
 # free, since the enumeration already serves as the certification oracle. **The
 # accepted cost, stated plainly, not papered over:** this only works where exhaustive
 # enumeration is tractable. A production termination criterion for large,
 # non-enumerable lattices is an explicitly DEFERRED open item, not something this
-# phase quietly solves.
+# page quietly solves.
 
-# ## No-good cuts as an anti-stall fallback — honest attribution (D-16)
+# ## No-good cuts as an anti-stall fallback — honest attribution
 #
 # The classical (un-weighted) no-good cut remains available as a fallback: it forbids
 # exact re-visitation of a stalled binary corner but pins no objective value, so it is
@@ -227,13 +227,13 @@ lattice
 # (`result.converged_via`), never presented as clean Laporte-Louveaux convergence.
 # `nogood_count > 0` never fails a run; it must simply never be invisible.
 
-# ## The BilevelJuMP secondary certificate — unavailable here, narrated, not re-executed (D-10/D-11)
+# ## The BilevelJuMP secondary certificate — unavailable here, narrated, not re-executed
 #
-# The primary certificate for this phase is the exhaustive enumeration executed live
+# The primary certificate is the exhaustive enumeration executed live
 # below. A `BilevelJuMP` MPEC reduction was investigated as a secondary, independent
 # confirmation (as it is for the continuous Rung 6 page) and found UNAVAILABLE on this
-# fixture for two independent, verified reasons — this is a documented non-blocker
-# (D-10), not a coverage gap, and per CLAUDE.md's "validation oracle only, test-only
+# fixture for two independent, verified reasons — this is a documented non-blocker,
+# not a coverage gap, and per CLAUDE.md's "validation oracle only, test-only
 # dependency" rule, **`BilevelJuMP` is never imported anywhere in this published page**:
 #
 #   1. `StrongDualityMode`/`ProductMode` (Ipopt-backed) reject a binary leader
@@ -246,11 +246,11 @@ lattice
 #      `test/test_planning_certification.jl` — a failure that fires independently of
 #      leader integrality.
 #
-# Both findings are verified, reproducible spikes, recorded in full in
+# Both findings are verified, reproducible probes, recorded in full in
 # `test/test_planning_certification_integer.jl`'s file header and
-# `24-RESEARCH.md`'s Priority Finding 3 — not re-derived or re-attempted here.
+# the research notes on the MPEC reductions — not re-derived or re-attempted here.
 
-# ## Live-executed section — building the D-12-equivalent fixture
+# ## Live-executed section — building the equivalent fixture
 #
 # The certified fixture (`TwoBusFixtures.two_bus_feeder()` +
 # `ToyDeviceFixture.ToyElasticDevice`) uses test-only structs unreachable from a
@@ -280,11 +280,11 @@ c_y = 0.3
 α_op_lb = -5.0
 α_x_lb = 0.0
 
-# ## The continuous baseline, solved live (grounds the D-04 claim above in a real number)
+# ## The continuous baseline, solved live (grounds the integrality-gap claim above in a real number)
 #
 # The SAME continuous master this fixture would use in Rung 6 — `master = nothing`,
 # no `known_optimum` — solved live on THIS instance, so the `y* ≈ 0.7` claim discussed
-# under D-04 above is backed by a genuinely computed number in THIS page, not merely a
+# under the integrality-gap section above is backed by a genuinely computed number in THIS page, not merely a
 # citation of `stackelberg_benders.jl`'s own separate run.
 #
 # Both `solve_stackelberg!` calls on this page pass `inexact_policy = :strict`
@@ -292,7 +292,7 @@ c_y = 0.3
 # runs here and the policy cannot change any number below. It is stated anyway so the
 # page never relies on `solve_stackelberg!`'s `:certify_incumbent` default, which can
 # accept SOC-relaxation-only incumbents on a `ConvexBranchFlow()` run. `:strict` keeps the
-# pre-Phase-30 behaviour: any SOCP-inexact oracle solve throws.
+# earlier behaviour: any SOCP-inexact oracle solve throws.
 
 result_cont = solve_stackelberg!(
     feeder,
@@ -340,7 +340,7 @@ function Qfun(z)
 end
 
 #
-# **WR-01 fix (Phase 24 code review):** the naive tie-break `f(m1) < f(m2) ? (hi=m2) :
+# **Tie-break fix:** the naive tie-break `f(m1) < f(m2) ? (hi=m2) :
 # (lo=m1)` diverges to `+Inf` whenever BOTH trial points land outside the follower's own
 # deliverable capacity (`Inf < Inf` is `false`, so the tie falls to `lo = m1`, walking the
 # search window AWAY from the guaranteed-feasible `z = 0` anchor and never recovering on a
@@ -380,7 +380,7 @@ function enumerate_lattice(; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
         isfinite(Qv) || throw(
             ErrorException(
                 "enumerate_lattice: ternary search diverged to a non-finite Q at " *
-                "y_inv=$y_inv (WR-01 regression, Phase 24 code review).",
+                "y_inv=$y_inv (regression: both trial points outside the deliverable capacity).",
             ),
         )
         total = c_y * y_inv + Qv
@@ -404,8 +404,8 @@ enum_result = enumerate_lattice(; K = K, y_max = y_max, c_y = c_y)
 # ## Solving the certified integer Benders loop live
 #
 # `build_master_integer` builds the binary-expansion MILP master ONCE (behind
-# `select_optimizer(MILP())`, INFRA-02); `solve_stackelberg!` is called with
-# `known_optimum = enum_result.best_total` (D-13/D-14's exact-match termination) so
+# `select_optimizer(MILP())`); `solve_stackelberg!` is called with
+# `known_optimum = enum_result.best_total` (the exact-match termination) so
 # convergence is a genuine proof against the independent oracle just computed above,
 # not a coincidental `gap ≤ tol` match.
 
@@ -437,7 +437,7 @@ result = solve_stackelberg!(
 # ## Validation — a real, live-computed answer
 #
 # The converged leader investment, on the K=4 lattice (compare against `result_cont.y`
-# above — these are expected to differ, per D-04):
+# above — these are expected to differ, as the integrality-gap section explains):
 
 result.y
 
@@ -451,7 +451,7 @@ result.y
 
 result.iters
 
-# D-16 visibility — the no-good count and the honest convergence attribution. A count
+# Visibility of the fallback — the no-good count and the honest convergence attribution. A count
 # of `0` and `:clean` here means this run needed no anti-stall fallback; either
 # outcome is legitimate and both are always surfaced, never hidden:
 
@@ -462,7 +462,7 @@ result.iters
 
 count(c -> c.kind == :ll, imaster.cuts)
 
-# ## D-15 certificate 1 — per-cut LL validity, checked live against the enumerated optimum
+# ## Certificate 1 — per-cut LL validity, checked live against the enumerated optimum
 #
 # The exact certificate the "three stacked defects" saga above required: every fired
 # LL cut, evaluated at the TRUE enumerated optimal corner, must never claim a total
@@ -489,11 +489,11 @@ violations = [
 
 length(violations)
 
-# ## D-15 certificate 2 — the continuous relaxation brackets the integer answer
+# ## Certificate 2 — the continuous relaxation brackets the integer answer
 #
 # Relaxing integrality can only improve (lower) the achievable minimum, so the
 # continuous objective must be a valid lower bound on the integer one; and the integer
 # solution must be a lattice neighbor of the continuous optimum (lattice step
-# `y_max / 2^K`, D-04):
+# `y_max / 2^K`):
 
 (result_cont.UB <= result.UB + 1e-6, abs(result.y - result_cont.y) <= (y_max / 2^K) + 1e-6)

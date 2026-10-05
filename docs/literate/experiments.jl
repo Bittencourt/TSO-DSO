@@ -1,13 +1,13 @@
 # # The Experiment Harness — Declarative Scenarios, Runs & Sweeps
 #
-# This page is the user-facing tour of the Phase-8 experiment harness (EXP-01/EXP-02/
-# INFRA-04): declare a [`Scenario`](@ref) as a handful of primitive selectors, run it
+# This page is the user-facing tour of the experiment harness:
+# declare a [`Scenario`](@ref) as a handful of primitive selectors, run it
 # end-to-end with [`run_scenario`](@ref), persist it with provenance via
 # [`run_and_store`](@ref), and fan out a Cartesian parameter sweep with
 # [`run_sweep`](@ref) + [`collate_summary`](@ref). Every solve below EXECUTES during the
 # Documenter build over the real `src/` code — the displayed welfare/gap/price numbers
 # can never silently drift from the implementation (the `toy_dc.jl` reproducibility-proof
-# pattern, threat T-01-09).
+# pattern).
 #
 # ## Why a declarative `Scenario`?
 #
@@ -18,17 +18,17 @@
 #  1. **Validation at construction** — the inner constructor `throw`s `ArgumentError` on
 #     any unknown `feeder`/`strategy`/`price`/`population` selector or out-of-range
 #     `T`/`seed`/`maxiter`, so a `Scenario` can never silently underdetermine a run
-#     (threat T-08-05). There is no "half-configured" state to debug later.
+#     There is no "half-configured" state to debug later.
 #  2. **Deterministic materialization** — the heavy objects (feeder fixture, MEM price
 #     shape, seeded residential aggregator population) are reconstructed from the
 #     selectors + the master `seed` by `build_feeder`/`build_price`/`build_population`,
 #     with independent sub-streams derived via `sub_seed` (never the global RNG). The
-#     SAME `Scenario` in the SAME process reproduces bit-for-bit (INFRA-04).
+#     SAME `Scenario` in the SAME process reproduces bit-for-bit.
 #  3. **`savename`/provenance for free** — because every field sits inside DrWatson's
 #     `default_allowed` scalar filter, the on-disk artifact name, hashing, and diffing
 #     all fall out with zero customization.
 #
-# No solver is named anywhere in the harness (INFRA-02) — `run_scenario` routes through
+# No solver is named anywhere in the harness — `run_scenario` routes through
 # the framework's own `solve_welfare`/`solve_admm`, which pick their optimizer via the
 # central solver factory.
 
@@ -67,7 +67,7 @@ res_c = TSODSO.run(s.strategy, s)
 
 res_c.welfare
 
-# The PF-04 SOC-cone exactness certificate — the max `l·v − (P² + Q²)` gap across all
+# The SOC-cone exactness certificate — the max `l·v − (P² + Q²)` gap across all
 # (branch, hour). A tiny value means the relaxation is EXACT, so the recovered duals
 # below are trustworthy prices, not artifacts of a slack cone:
 
@@ -160,7 +160,7 @@ sprint(showerror, bad_pf)
 # ## Validation is a construction invariant
 #
 # A bogus selector never reaches a solver — the `Scenario` constructor itself throws a
-# loud `ArgumentError` naming the valid set (threat T-08-05; caught here only so the
+# loud `ArgumentError` naming the valid set (caught here only so the
 # page can display the message):
 
 bad = try
@@ -193,7 +193,7 @@ res_a = TSODSO.run(s_admm.strategy, s_admm)
 
 abs(res_a.welfare - res_c.welfare) / abs(res_c.welfare)
 
-# and carries its own PF-04 exactness certificate from the final converged DSO-OPT
+# and carries its own exactness certificate from the final converged DSO-OPT
 # re-solve:
 
 res_a.exact_maxgap
@@ -244,7 +244,7 @@ if Base.find_package("CairoMakie") !== nothing
 end
 
 # The curves are visually indistinguishable — the ADMM coupling price converged onto the
-# centralized dual, which is exactly the ADMM-04 cross-validation the normalized
+# centralized dual, which is exactly the ADMM-versus-centralized cross-validation the normalized
 # `ScenarioResult` schema exists to make routine.
 #
 # ## Provenance storage — `run_and_store`
@@ -303,7 +303,7 @@ length(sweep_results)
 
 # [`collate_summary`](@ref) reads every per-run JLD2 under the directory back into ONE
 # diff-friendly summary table (fixed column order, deterministic row order, no
-# machine-local path column — so re-collating the same runs is byte-identical, no git
+# machine-local path column — so re-collating the same runs is bit-for-bit identical, no git
 # churn) and writes it as a CSV; the committed home for real sweeps is
 # `results/sweeps/`:
 
@@ -317,7 +317,7 @@ df[:, [:strategy, :seed, :welfare, :exact_maxgap, :iters, :final_r, :final_s]]
 # seed, dodged by strategy — the centralized/ADMM pairs coincide at each seed (the
 # cross-strategy agreement above, now holding across the seed axis), while the two seeds
 # land on genuinely different welfare levels (different seeded populations — the
-# INFRA-04 seed-sensitivity flip side):
+# seed-sensitivity flip side):
 
 if Base.find_package("CairoMakie") !== nothing
     seeds = sort(unique(df.seed))

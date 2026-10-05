@@ -18,7 +18,7 @@
 # `IEEELineCodes.dss` (lowercase extension) 404s on this GitHub mirror. Both vendored files are
 # committed under `scripts/data/` so the reduction remains offline-reproducible even if the
 # upstream mirror ever changes or disappears (data-provenance/tampering mitigation, not a
-# security control in the ASVS sense — see Phase 17 threat register T-17-11).
+# security control in the ASVS sense).
 #
 # Only 12 of the 29 `New linecode.*` blocks defined in the shared `IEEELineCodes.DSS` are
 # actually referenced by a `LineCode=` in `IEEE123Master.dss` — the rest belong to the
@@ -36,7 +36,7 @@
 # ```
 #
 # For `n = 1` there is no off-diagonal term, so `R1 = rmatrix[1,1]` directly (no reduction
-# needed) — this is the short-circuit RESEARCH.md documents for single-phase laterals.
+# needed) — this is the short-circuit for single-phase laterals.
 #
 # ### Worked example: `linecode.1` (verified against the live file, fetched 2026-07-25)
 #
@@ -87,10 +87,9 @@
 #   no off-diagonal).
 # - **Regulators / capacitors / switches**: absorbed into the fixture's existing near-ideal
 #   switch-class impedance (`IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` in `src/data/ieee123.jl`) —
-#   NOT actively modeled as real regulator/capacitor devices, per the phase's REQUIREMENTS
-#   Out-of-Scope. Only the 117 ordinary (non-switch) branches receive real per-segment Ω data
+#   NOT actively modeled as real regulator/capacitor devices, as out of scope for this model. Only the 117 ordinary (non-switch) branches receive real per-segment Ω data
 #   from `IEEE123_BRANCH_RX_OHMS`; the 5 switch/regulator-collapsed edges intentionally keep
-#   their pre-existing synthetic near-ideal value (RESEARCH Assumption A2).
+#   their pre-existing synthetic near-ideal value.
 #
 # ## 5. Live execution: building the real-impedance feeder
 #

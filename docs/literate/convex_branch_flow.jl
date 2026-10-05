@@ -22,7 +22,7 @@
 # this: an auxiliary squared voltage `v̂` follows its own voltage-drop recursion
 #
 # ```math
-# \hat v_j = \hat v_i - 2\bigl\{ r(P - rl) + x(Q - xl) \bigr\} \qquad \text{(3.43, corrected default — FIX-01/02, see Verdict below)}
+# \hat v_j = \hat v_i - 2\bigl\{ r(P - rl) + x(Q - xl) \bigr\} \qquad \text{(3.43, corrected default — see Verdict below)}
 # ```
 #
 # and BOTH `v` and `v̂` are bounded by the same squared-magnitude limits
@@ -68,13 +68,12 @@
 # literal thesis-transcribed variant (i.e. `v̂ ≥ V²min` binds as a genuine restriction
 # under the literal, defective sign, not merely a redundant bound).
 #
-# ## PM-01 (phase 26-18): the DEFAULT is a restriction, not "a genuine relaxation"
+# ## Amendment: the DEFAULT is a restriction, not "a genuine relaxation"
 #
-# Earlier phase-26 text (plan 26-02's own SUMMARY and an earlier draft of this Verdict
+# Earlier text (an earlier draft of this Verdict
 # subsection) called the corrected default (`v̂ ≥ v`, above) "a genuine relaxation." This
-# is INACCURATE and is corrected here per the post-merge amendment PM-01
-# (`26-POSTMERGE-TRIAGE.md` cluster I, `26-CONTEXT.md`): a relaxation of a maximization can
-# never score BELOW a feasible AC point. Measured on the EXACT-04 high-PV fixture
+# is INACCURATE and is corrected here: a relaxation of a maximization can
+# never score BELOW a feasible AC point. Measured on the high-PV fixture
 # (`pv_scale=1.2`):
 #
 # ```math
@@ -89,11 +88,11 @@
 # restricts the LOWER voltage band instead. **NEITHER form is a genuine relaxation.**
 #
 # Consequence: the "SOCP knife-edge under high-PV reverse flow" finding previously measured
-# on this SAME EXACT-04 fixture (project memory `v2.1-socp-inexactness-and-thesis-repro`) no
-# longer reproduces under the DEFAULT — EXACT-04 is now exact (cone ratio well under the
-# PF-04 gate), not inexact, so that finding's premise no longer holds under default
-# settings. It DOES still reproduce under the explicit `thesis_literal=true` opt-in (see
-# `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` for the restated
+# on this SAME high-PV fixture (the earlier SOCP-inexactness study) no
+# longer reproduces under the DEFAULT — the fixture is now exact (cone ratio well under the
+# exactness gate), not inexact, so that finding's premise no longer holds under default
+# settings. It DOES still reproduce under the explicit `thesis_literal=true` opt-in (see the
+# `ac_oracle` page for the restated
 # finding, and `test/test_mpc_loop.jl`'s escalation-ladder testitems, which are re-forced
 # with `ConvexBranchFlow(; thesis_literal=true)` for exactly this reason).
 
@@ -108,7 +107,7 @@ using TSODSO
 # (returns `(; vars, p_inject, utility)`, writes nothing itself) — here a `Deferrable`
 # flexible load (thesis eqs. 3.4-3.5, 3.12), the same contract the `Interruptible` used
 # standalone on the previous page also conforms to (converted from an earlier
-# self-injecting contract in plan 26-07).
+# self-injecting contract).
 
 buses = [
     Bus(1, 0.95, 1.05, true),      # root / MEM frontier
@@ -124,7 +123,7 @@ agg = Aggregator(2, 0.95, [device], [0.2])       # bus, φ, devices, Pdc
 #
 # [`solve_welfare`](@ref) lets `ConvexBranchFlow` `contribute!` the cone, both voltage
 # drops (true + copy), and the loss terms into the shared residuals, then — strictly
-# AFTER `assert_solved!` and BEFORE any dual is read — runs the PF-04 exactness gate
+# AFTER `assert_solved!` and BEFORE any dual is read — runs the exactness gate
 # [`assert_socp_exact!`](@ref) INSIDE the solve itself. That gate THROWS (refusing
 # prices) on an inexact relaxation, so reaching this line at all is already the passing
 # certificate. `allow_export = true` gives the feeder a priced export sink for
@@ -143,7 +142,7 @@ objective
 
 dadp
 
-# The PF-04 exactness certificate: `solve_welfare` already ran `assert_socp_exact!`
+# The exactness certificate: `solve_welfare` already ran `assert_socp_exact!`
 # internally and stashed its result. A well-under-tolerance `socp_maxgap` here is a
 # REAL, solved number — not a hardcoded placeholder — confirming the cone `l·v ≥ P²+Q²`
 # closed with equality at the optimum, so the DADP above is trustworthy.
@@ -153,7 +152,7 @@ ctx.meta[:socp_maxgap]
 # ## Exactness figure — WHY the certificate holds (CairoMakie)
 #
 # Two panels drawn from the SAME solved model — `ctx.pf_vars`, the `(; v, v̂, P,
-# Q, l)` stash `ConvexBranchFlow` left behind for the PF-04 checker — so no additional
+# Q, l)` stash `ConvexBranchFlow` left behind for the exactness checker — so no additional
 # solve happens here, only `value(...)` reads off the already-optimal point.
 #
 # **Left — the voltage profile and the exactness copy.** The solved voltage magnitude
@@ -224,7 +223,7 @@ ax_gap = Axis(
     ylabel = "|l·v − (P² + Q²)| (pu²)",
     yscale = log10,
     xticks = 1:length(feeder.branches),
-    title = "Per-branch cone residual vs PF-04 refusal threshold",
+    title = "Per-branch cone residual vs exactness refusal threshold",
 )
 scatter!(
     ax_gap,

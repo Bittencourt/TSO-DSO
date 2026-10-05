@@ -1,11 +1,11 @@
 # # Rung 5 — ADMM Decomposition & Convergence
 #
-# This page is the EXP-03 literate proof for the operational decomposition seam
-# (ADMM-01/ADMM-03/ADMM-04): it executes the real [`solve_admm`](@ref) hand-rolled
+# This page is the literate proof for the operational decomposition seam:
+# it executes the real [`solve_admm`](@ref) hand-rolled
 # dual-ascent loop end-to-end during the Documenter build, on the SAME scenario also
 # solved centrally by [`solve_welfare`](@ref), so the ADMM-vs-centralized cross-
 # validation displayed below is a genuinely solved comparison — never a hardcoded
-# number (mirrors the `toy_dc.jl` reproducibility-proof pattern, threat T-01-09).
+# number (mirrors the `toy_dc.jl` reproducibility-proof pattern).
 #
 # ## The 2-block ADMM split (thesis 3.46/3.47)
 #
@@ -33,9 +33,9 @@
 # ```
 #
 # so `λ_j` converges to the SAME nodal price [`extract_dlmp`](@ref) reports from the
-# centralized solve — the load-bearing ADMM-04 cross-validation this page performs.
+# centralized solve — the load-bearing ADMM-versus-centralized cross-validation this page performs.
 #
-# ## Build once, re-solve many (ADMM-03/ADMM-04)
+# ## Build once, re-solve many
 #
 # The practical payoff of this split is NOT solving a smaller problem — it is that
 # both the AGR-OPT and DSO-OPT JuMP models are constructed **once**, outside the
@@ -60,7 +60,7 @@ using TSODSO: Bus, Branch, Feeder
 #
 # The SAME 3-bus radial shape used on the pricing page (root + two downstream load
 # buses, one `PVBattery` aggregator per load bus) — `solve_admm` assumes a 1:1
-# node↔aggregator coupling (the Phase-6 scope), which this feeder already satisfies.
+# node↔aggregator coupling (the supported scope), which this feeder already satisfies.
 # `T = 4` keeps the doc build fast while still exercising a real multi-iteration
 # dual-ascent trajectory.
 
@@ -81,7 +81,7 @@ agg3 = Aggregator(3, 0.9, [batt3], fill(0.2, T))
 # `solve_welfare` on the monolithic `ConvexBranchFlow` SOCP is the centralized
 # ground truth. `solve_admm` decomposes the IDENTICAL feeder/aggregators/`λ₀` via
 # the hand-rolled 2-block dual-ascent loop above; `allow_export = true` on both
-# keeps the SOC relaxation exact (PF-04), the enabler for trustworthy recovered
+# keeps the SOC relaxation exact, the enabler for trustworthy recovered
 # duals in either solve path.
 
 ctx_c, obj_c, dadp_c = solve_welfare(
@@ -103,7 +103,7 @@ admm = solve_admm(
     allow_export = true,
 )
 
-# ## Validation — ADMM ≈ centralized (ADMM-04)
+# ## Validation — ADMM ≈ centralized
 #
 # The number of dual-ascent iterations to convergence (both the Boyd primal AND
 # dual residuals below their per-unit thresholds — a primal-only stop is refused,
@@ -117,7 +117,7 @@ admm.iters
 
 abs(admm.welfare - obj_c)
 
-# The PF-04 SOC-exactness certificate from `solve_admm`'s FINAL converged DSO-OPT
+# The SOC-exactness certificate from `solve_admm`'s FINAL converged DSO-OPT
 # re-solve — confirming the recovered ADMM DADP is trustworthy, exactly as on the
 # Rung-3 page:
 
@@ -126,7 +126,7 @@ admm.exact_maxgap
 # ## Convergence figure (CairoMakie, guarded)
 #
 # `plot_convergence` renders the primal/dual residual trace on a log axis against
-# the per-unit stopping thresholds (ADMM-05). The SAME source degrades gracefully
+# the per-unit stopping thresholds. The SAME source degrades gracefully
 # (no error, just skips the figure) when CairoMakie is absent from the active
 # environment — but `docs/Project.toml` now hard-depends on it (docs-only
 # environments may; the root package's weakdep discipline is untouched), so the
