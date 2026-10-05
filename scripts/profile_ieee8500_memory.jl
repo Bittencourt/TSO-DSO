@@ -38,7 +38,19 @@ function report(stage::Int, name::String)
     live = Base.gc_live_bytes() / 2^20
     println(stage, "\t", name, "\t", rss, "\t", hwm, "\t", round(live; digits = 1))
     flush(stdout)
-    push!(ROWS, (; fixture = FIXTURE, density = DENSITY, T = T_H, stage = stage, name = name, VmRSS_kB = rss, VmHWM_kB = hwm, gc_live_MB = live))
+    push!(
+        ROWS,
+        (;
+            fixture = FIXTURE,
+            density = DENSITY,
+            T = T_H,
+            stage = stage,
+            name = name,
+            VmRSS_kB = rss,
+            VmHWM_kB = hwm,
+            gc_live_MB = live,
+        ),
+    )
     return nothing
 end
 
@@ -47,11 +59,16 @@ function profile_main(args)
     global T_H = parse(Int, parse_kv_flag(args, "--t-horizon", "10"))
     max_stage = parse(Int, parse_kv_flag(args, "--stage", "2"))
     fixture_str = parse_kv_flag(args, "--fixture", "ieee8500-mv")
-    haskey(FIXTURE_MAP, fixture_str) || throw(ArgumentError("unknown --fixture $fixture_str"))
+    haskey(FIXTURE_MAP, fixture_str) ||
+        throw(ArgumentError("unknown --fixture $fixture_str"))
     global FIXTURE = fixture_str
-    max_stage >= 3 && T_H > 10 &&
-        throw(ArgumentError("stage >= 3 (optimize!) is only allowed with --t-horizon <= 10"))
-    T_H < T_HORIZON_FLOOR && throw(ArgumentError("--t-horizon below floor $T_HORIZON_FLOOR"))
+    max_stage >= 3 &&
+        T_H > 10 &&
+        throw(
+            ArgumentError("stage >= 3 (optimize!) is only allowed with --t-horizon <= 10"),
+        )
+    T_H < T_HORIZON_FLOOR &&
+        throw(ArgumentError("--t-horizon below floor $T_HORIZON_FLOOR"))
     fixture_sym = FIXTURE_MAP[fixture_str]
 
     println("stage\tname\tVmRSS_kB\tVmHWM_kB\tgc_live_MB")
@@ -60,7 +77,14 @@ function profile_main(args)
     profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_H)
     λ0 = build_price(:mem, T_H, nothing)
     rng = StableRNGs.LehmerRNG(_SWEEP_SEED)
-    aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, DENSITY, rng)
+    aggs = density_filtered_population(
+        feeder,
+        fixture_sym,
+        profiles,
+        _SWEEP_SEED,
+        DENSITY,
+        rng,
+    )
     report(1, "feeder_population")
     dso = nothing
     if max_stage >= 2

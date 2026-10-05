@@ -92,7 +92,17 @@ using DrWatson
 @quickactivate "TSODSO"
 
 using TSODSO
-using TSODSO: SOCP, build_feeder, build_population, build_price, ieee123_load_nodes, ieee8500_load_nodes, ieee8500_mv_load_buses, ieee8500_mv_relabel_map, ieee8500_relabel_map, socp_gap_report
+using TSODSO:
+    SOCP,
+    build_feeder,
+    build_population,
+    build_price,
+    ieee123_load_nodes,
+    ieee8500_load_nodes,
+    ieee8500_mv_load_buses,
+    ieee8500_mv_relabel_map,
+    ieee8500_relabel_map,
+    socp_gap_report
 using JuMP
 using CSV, DataFrames
 using Printf
@@ -102,7 +112,9 @@ using StableRNGs
 const T = 24
 # Output directory: resolved at RUN time (`out_dir()`), overridable via `--results-dir` or the
 # `TSODSO_IEEE8500_RESULTS_DIR` env var (tests redirect to a mktempdir so committed CSVs stay untouched).
-const OUT_REF = Ref(get(ENV, "TSODSO_IEEE8500_RESULTS_DIR", projectdir("results", "ieee8500_benchmark")))
+const OUT_REF = Ref(
+    get(ENV, "TSODSO_IEEE8500_RESULTS_DIR", projectdir("results", "ieee8500_benchmark")),
+)
 out_dir() = OUT_REF[]
 
 # CLI string -> feeder selector map (`build_feeder`'s own symbol vocabulary). Note the
@@ -189,7 +201,7 @@ const SCS_EPS_ABS_DEFAULT = 1.0e-4   # SCS.jl's own documented default eps_abs (
 # noise-floor ladders never showed a comparable failure at 1e-8).
 const IEEE8500_CLARABEL_TOL_GAP = 1.0e-7   # MEASURED floor (see noise_floor_calibration.csv, ieee8500 row)
 
-const DEFAULT_CLARABEL_TOL_GAP = Dict{Symbol,Float64}(
+const DEFAULT_CLARABEL_TOL_GAP = Dict{Symbol, Float64}(
     :ieee13 => CLARABEL_TOL_GAP,
     :ieee123 => CLARABEL_TOL_GAP,
     :ieee8500_mv => CLARABEL_TOL_GAP,
@@ -337,7 +349,16 @@ function run_calibration(
                 fixture_label tol = tol exception = (err, catch_backtrace())
             NaN
         end
-        push!(rows, (; fixture = fixture_label, density = density, t_horizon = T_horizon, tol = tol, measured_gap = gap))
+        push!(
+            rows,
+            (;
+                fixture = fixture_label,
+                density = density,
+                t_horizon = T_horizon,
+                tol = tol,
+                measured_gap = gap,
+            ),
+        )
         if isfinite(gap)
             push!(good_tols, tol)
             push!(good_gaps, gap)
@@ -356,7 +377,7 @@ function run_calibration(
     # loosest successful tolerance) IS already the noise floor.
     floor_idx = 1
     for i in 2:length(good_gaps)
-        prev = good_gaps[i-1]
+        prev = good_gaps[i - 1]
         improvement = prev == 0 ? 0.0 : (prev - good_gaps[i]) / prev
         improvement > 0.01 && (floor_idx = i)
     end
@@ -492,8 +513,21 @@ freshly calibrated `atol`) rather than refused. On `TIME_LIMIT` the row is repor
 `run_calibrate_mode`'s own `select_optimizer(SOCP(); tol_gap_abs = tol, tol_gap_rel = tol)`
 precedent at line ~230 exactly).
 """
-function run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon::Int, clarabel_tol::Float64)
-    opt = select_optimizer(SOCP(); time_limit = time_limit, tol_gap_abs = clarabel_tol, tol_gap_rel = clarabel_tol)
+function run_centralized_point(
+    feeder,
+    aggs,
+    λ0,
+    atol,
+    time_limit,
+    T_horizon::Int,
+    clarabel_tol::Float64,
+)
+    opt = select_optimizer(
+        SOCP();
+        time_limit = time_limit,
+        tol_gap_abs = clarabel_tol,
+        tol_gap_rel = clarabel_tol,
+    )
     t0 = time_ns()
     try
         ctx, _, dadp = solve_welfare(
@@ -518,7 +552,10 @@ function run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon::I
             exact_maxgap = gap,
             exact_verdict = gap <= atol ? "exact" : "inexact",
             model_vars = num_variables(ctx.model),
-            model_cons = num_constraints(ctx.model; count_variable_in_set_constraints = true),
+            model_cons = num_constraints(
+                ctx.model;
+                count_variable_in_set_constraints = true,
+            ),
             dadp = dadp,
             error_msg = "",
         )
@@ -576,7 +613,16 @@ untouched). `run_sweep_mode` passes one of three values:
 `keep_ctx = true` returns `solve_admm`'s `dso_ctx` on BOTH `:converged` and `:budget_exceeded`
 exits — the caller must check `admm_status` before reading anything from it.
 """
-function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol_exact::Union{Nothing, Real}; keep_ctx::Bool = false)
+function run_admm_point(
+    feeder,
+    aggs,
+    λ0,
+    ρ0,
+    time_limit,
+    T_horizon::Int,
+    atol_exact::Union{Nothing, Real};
+    keep_ctx::Bool = false,
+)
     t0 = time_ns()
     rss_before = Sys.maxrss()
     result = try
@@ -592,7 +638,9 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol
             atol_exact = atol_exact,
         )
         (;
-            admm_status = string(r.status), admm_iters = r.iters, admm_error_msg = "",
+            admm_status = string(r.status),
+            admm_iters = r.iters,
+            admm_error_msg = "",
             dso_ctx = keep_ctx ? r.dso_ctx : nothing,
         )
     catch err
@@ -618,7 +666,11 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol
     peak_delta_mb = (rss_after - rss_before) / (1024^2)
     return merge(
         result,
-        (; admm_time_s = total_s, admm_peak_rss_delta_mb = peak_delta_mb, peak_rss_mb = rss_after / 2^20),
+        (;
+            admm_time_s = total_s,
+            admm_peak_rss_delta_mb = peak_delta_mb,
+            peak_rss_mb = rss_after / 2^20,
+        ),
     )
 end
 
@@ -724,9 +776,8 @@ const T_HORIZON_FLOOR = T_QUICK
 function parse_kv_flag(args, flag::String, default)
     idx = findfirst(==(flag), args)
     idx === nothing && return default
-    idx == length(args) &&
-        throw(ArgumentError("$flag requires a value (none given)"))
-    return args[idx+1]
+    idx == length(args) && throw(ArgumentError("$flag requires a value (none given)"))
+    return args[idx + 1]
 end
 
 has_flag(args, flag::String) = flag in args
@@ -759,7 +810,12 @@ end
 function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
     df_final = if isfile(csv_path)
         df_old = CSV.read(csv_path, DataFrame)
-        keyfn(r) = (r.fixture, r.density, r.solver, hasproperty(r, :T_horizon) ? r.T_horizon : missing)
+        keyfn(r) = (
+            r.fixture,
+            r.density,
+            r.solver,
+            hasproperty(r, :T_horizon) ? r.T_horizon : missing,
+        )
         new_keys = Set(keyfn(r) for r in eachrow(df_new))
         # `cols = :union` (2026-08-22 fix): schema-evolving upsert must not throw on
         # rows written under an older column set, nor drop them.
@@ -778,10 +834,14 @@ end
 # file mixing two runs' rows for one point. `ddf_new === nothing` (a non-converged bypass) only
 # removes the point's old rows. No file is created when there is nothing to write.
 function replace_diagnostic_rows(
-    dpath::AbstractString, fixture::AbstractString, density::Real, T_horizon::Integer,
+    dpath::AbstractString,
+    fixture::AbstractString,
+    density::Real,
+    T_horizon::Integer,
     ddf_new::Union{Nothing, DataFrame},
 )
-    same_point(r) = string(r.fixture) == fixture && r.density == density && r.T_horizon == T_horizon
+    same_point(r) =
+        string(r.fixture) == fixture && r.density == density && r.T_horizon == T_horizon
     if isfile(dpath)
         dold = CSV.read(dpath, DataFrame)
         kept = filter(r -> !same_point(r), dold)
@@ -830,7 +890,8 @@ function run_sweep_mode(args)
     quick = has_flag(args, "--quick")
     admm_only = has_flag(args, "--admm-only")
     bypass = has_flag(args, "--admm-diagnostic-bypass")
-    bypass && !admm_only &&
+    bypass &&
+        !admm_only &&
         throw(ArgumentError("--admm-diagnostic-bypass requires --admm-only"))
     run_label = parse_kv_flag(args, "--run-label", "")
     topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
@@ -852,7 +913,11 @@ function run_sweep_mode(args)
     solver_str = parse_kv_flag(args, "--solver", "both")
     time_limit = parse(
         Float64,
-        parse_kv_flag(args, "--time-limit", quick ? _QUICK_TIME_LIMIT_S : _DEFAULT_TIME_LIMIT_S),
+        parse_kv_flag(
+            args,
+            "--time-limit",
+            quick ? _QUICK_TIME_LIMIT_S : _DEFAULT_TIME_LIMIT_S,
+        ),
     )
     densities = if quick
         # --quick: the EXACT VALIDATION.md-documented CI-affordable single point — the smallest
@@ -872,8 +937,9 @@ function run_sweep_mode(args)
         ),
     )
     fixture_sym = FIXTURE_MAP[fixture_str]
-    solver_str in ("clarabel", "scs", "both") ||
-        throw(ArgumentError("unknown --solver $solver_str; expected clarabel, scs, or both"))
+    solver_str in ("clarabel", "scs", "both") || throw(
+        ArgumentError("unknown --solver $solver_str; expected clarabel, scs, or both"),
+    )
     solver_sym = Symbol(solver_str)
 
     # `--t-horizon` an explicit CLI override of
@@ -925,7 +991,14 @@ function run_sweep_mode(args)
             "s ===",
         )
         flush(stdout)
-        aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
+        aggs = density_filtered_population(
+            feeder,
+            fixture_sym,
+            profiles,
+            _SWEEP_SEED,
+            density,
+            rng,
+        )
 
         row_solver = bypass ? "admm_bypass" : (admm_only ? "admm" : solver_str)
         csv_path_sweep = joinpath(out_dir(), "density_sweep.csv")
@@ -933,17 +1006,28 @@ function run_sweep_mode(args)
         upsert_sweep_rows(
             csv_path_sweep,
             DataFrame([(;
-                fixture = fixture_str, density = density, solver = row_solver,
-                T_horizon = T_horizon, n_agg = length(aggs), admm_status = "started",
+                fixture = fixture_str,
+                density = density,
+                solver = row_solver,
+                T_horizon = T_horizon,
+                n_agg = length(aggs),
+                admm_status = "started",
                 run_label = run_label,
             )]),
         )
 
         cpoint = if admm_only
             (;
-                termination_status = "skipped_admm_only", assembly_time_s = NaN, solve_time_s = NaN,
-                total_time_s = NaN, exact_maxgap = NaN, exact_verdict = "", model_vars = -1,
-                model_cons = -1, dadp = nothing, error_msg = "",
+                termination_status = "skipped_admm_only",
+                assembly_time_s = NaN,
+                solve_time_s = NaN,
+                total_time_s = NaN,
+                exact_maxgap = NaN,
+                exact_verdict = "",
+                model_vars = -1,
+                model_cons = -1,
+                dadp = nothing,
+                error_msg = "",
             )
         else
             run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon, clarabel_tol)
@@ -952,7 +1036,16 @@ function run_sweep_mode(args)
         # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty. ADMM gate: hybrid floor
         # (`nothing`) unless --admm-atol; Inf ONLY in the labelled diagnostic bypass.
         gate_atol = bypass ? Inf : admm_atol
-        apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon, gate_atol; keep_ctx = bypass)
+        apoint = run_admm_point(
+            feeder,
+            aggs,
+            λ0,
+            100.0,
+            time_limit,
+            T_horizon,
+            gate_atol;
+            keep_ctx = bypass,
+        )
 
         diag = (; diag_max_ratio = NaN, diag_worst_branch = "", diag_loss_impact_max = NaN)
         if bypass
@@ -968,15 +1061,29 @@ function run_sweep_mode(args)
                 top = hr[1:min(topn, length(hr))]
                 drows = [
                     (;
-                        fixture = fixture_str, density = density, T_horizon = T_horizon,
-                        admm_status = apoint.admm_status, b = r.b, t = r.t, from_id = r.from, to_id = r.to,
-                        from_name = name_of(r.from), to_name = name_of(r.to), r_pu = r.r_pu,
-                        gap = r.gap, atol_b = r.atol_b, ratio = r.ratio,
-                        loss_impact = r.loss_impact, run_label = run_label,
+                        fixture = fixture_str,
+                        density = density,
+                        T_horizon = T_horizon,
+                        admm_status = apoint.admm_status,
+                        b = r.b,
+                        t = r.t,
+                        from_id = r.from,
+                        to_id = r.to,
+                        from_name = name_of(r.from),
+                        to_name = name_of(r.to),
+                        r_pu = r.r_pu,
+                        gap = r.gap,
+                        atol_b = r.atol_b,
+                        ratio = r.ratio,
+                        loss_impact = r.loss_impact,
+                        run_label = run_label,
                     ) for r in top
                 ]
                 replace_diagnostic_rows(
-                    joinpath(out_dir(), "hybrid_diagnostic.csv"), fixture_str, density, T_horizon,
+                    joinpath(out_dir(), "hybrid_diagnostic.csv"),
+                    fixture_str,
+                    density,
+                    T_horizon,
                     DataFrame(drows),
                 )
                 w = hr[1]   # the worst row, independent of topn
@@ -985,14 +1092,20 @@ function run_sweep_mode(args)
                     diag_worst_branch = string(name_of(w.from), "->", name_of(w.to)),
                     diag_loss_impact_max = maximum(r.loss_impact for r in hr),
                 )
-                println("  DIAGNOSTIC_BYPASS (NOT a certificate): max hybrid ratio = ", w.ratio)
+                println(
+                    "  DIAGNOSTIC_BYPASS (NOT a certificate): max hybrid ratio = ",
+                    w.ratio,
+                )
             else
                 admm_status_out = "DIAGNOSTIC_BYPASS:" * apoint.admm_status
                 # a non-converged re-run of the point records NO ratios, so it
                 # must also remove the earlier run's rows; otherwise `density_sweep.csv` says
                 # `diag_max_ratio = NaN` while `hybrid_diagnostic.csv` still holds old ratios.
                 replace_diagnostic_rows(
-                    joinpath(out_dir(), "hybrid_diagnostic.csv"), fixture_str, density, T_horizon,
+                    joinpath(out_dir(), "hybrid_diagnostic.csv"),
+                    fixture_str,
+                    density,
+                    T_horizon,
                     nothing,
                 )
             end
@@ -1007,10 +1120,8 @@ function run_sweep_mode(args)
             run_scs_comparison(feeder, aggs, λ0, cpoint.dadp, T_horizon) :
             (; scs_status = "not_requested", scs_dadp_drift = NaN)
 
-        combined_err = join(
-            filter(!isempty, [cpoint.error_msg, apoint.admm_error_msg]),
-            " | ",
-        )
+        combined_err =
+            join(filter(!isempty, [cpoint.error_msg, apoint.admm_error_msg]), " | ")
 
         row = (;
             fixture = fixture_str,
@@ -1029,7 +1140,8 @@ function run_sweep_mode(args)
             exact_atol_used = atol,
             exact_verdict = cpoint.exact_verdict,
             clarabel_tol_gap = clarabel_tol,
-            admm_atol_used = bypass ? "Inf(DIAGNOSTIC_BYPASS)" : (admm_atol === nothing ? "hybrid" : string(admm_atol)),
+            admm_atol_used = bypass ? "Inf(DIAGNOSTIC_BYPASS)" :
+                             (admm_atol === nothing ? "hybrid" : string(admm_atol)),
             admm_status = admm_status_out,
             admm_iters = apoint.admm_iters,
             admm_time_s = apoint.admm_time_s,
@@ -1041,8 +1153,11 @@ function run_sweep_mode(args)
             diag_loss_impact_max = diag.diag_loss_impact_max,
             scs_status = scs_row.scs_status,
             scs_dadp_drift = scs_row.scs_dadp_drift,
-            scs_eps_abs = scs_row.scs_status in ("scs_unavailable", "skipped_no_clarabel_dadp", "not_requested") ?
-                          NaN : SCS_EPS_ABS_DEFAULT,
+            scs_eps_abs = scs_row.scs_status in (
+                "scs_unavailable",
+                "skipped_no_clarabel_dadp",
+                "not_requested",
+            ) ? NaN : SCS_EPS_ABS_DEFAULT,
             error_msg = combined_err,
         )
         push!(rows, row)
@@ -1095,14 +1210,18 @@ end
 # is reported as an error row's `error_msg`, and is not force-classified).
 function run_gap_report_mode(args)
     fixture_str = parse_kv_flag(args, "--fixture", nothing)
-    fixture_str === nothing && throw(ArgumentError("--gap-report requires --fixture <name>"))
+    fixture_str === nothing &&
+        throw(ArgumentError("--gap-report requires --fixture <name>"))
     haskey(FIXTURE_MAP, fixture_str) || throw(
-        ArgumentError("unknown --fixture $fixture_str; expected one of $(join(keys(FIXTURE_MAP), ", "))"),
+        ArgumentError(
+            "unknown --fixture $fixture_str; expected one of $(join(keys(FIXTURE_MAP), ", "))",
+        ),
     )
     fixture_sym = FIXTURE_MAP[fixture_str]
 
     density_str = parse_kv_flag(args, "--density", nothing)
-    density_str === nothing && throw(ArgumentError("--gap-report requires --density <float>"))
+    density_str === nothing &&
+        throw(ArgumentError("--gap-report requires --density <float>"))
     density = parse(Float64, density_str)
 
     t_horizon_str = parse_kv_flag(args, "--t-horizon", nothing)
@@ -1117,8 +1236,9 @@ function run_gap_report_mode(args)
     end
 
     clarabel_tol_str = parse_kv_flag(args, "--clarabel-tol", nothing)
-    clarabel_tol = clarabel_tol_str === nothing ? DEFAULT_CLARABEL_TOL_GAP[fixture_sym] :
-                   parse(Float64, clarabel_tol_str)
+    clarabel_tol =
+        clarabel_tol_str === nothing ? DEFAULT_CLARABEL_TOL_GAP[fixture_sym] :
+        parse(Float64, clarabel_tol_str)
 
     topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
     # reject at parse time, never after a multi-minute solve.
@@ -1128,15 +1248,37 @@ function run_gap_report_mode(args)
     profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_horizon)
     λ0 = build_price(:mem, T_horizon, nothing)
     rng = StableRNGs.LehmerRNG(_SWEEP_SEED)
-    aggs = density_filtered_population(feeder, fixture_sym, profiles, _SWEEP_SEED, density, rng)
+    aggs = density_filtered_population(
+        feeder,
+        fixture_sym,
+        profiles,
+        _SWEEP_SEED,
+        density,
+        rng,
+    )
 
     opt = select_optimizer(SOCP(); tol_gap_abs = clarabel_tol, tol_gap_rel = clarabel_tol)
-    println("Solving centralized-only ", fixture_str, " density=", density, " T=", T_horizon,
-        " clarabel_tol=", clarabel_tol, " ...")
+    println(
+        "Solving centralized-only ",
+        fixture_str,
+        " density=",
+        density,
+        " T=",
+        T_horizon,
+        " clarabel_tol=",
+        clarabel_tol,
+        " ...",
+    )
     flush(stdout)
     ctx, _, _ = solve_welfare(
-        feeder, ConvexBranchFlow(), aggs;
-        T = T_horizon, λ₀ = λ0, optimizer = opt, allow_export = true, rtol_exact = 1.0e6,
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T_horizon,
+        λ₀ = λ0,
+        optimizer = opt,
+        allow_export = true,
+        rtol_exact = 1.0e6,
     )
     ts = string(termination_status(ctx.model))
     println("  termination_status=", ts)
@@ -1154,8 +1296,9 @@ function run_gap_report_mode(args)
     else
         (id -> missing), nothing
     end
-    is_near_ideal(a, b) = near_ideal_edges === nothing || a === missing || b === missing ?
-                          missing : ((a, b) in near_ideal_edges || (b, a) in near_ideal_edges)
+    is_near_ideal(a, b) =
+        near_ideal_edges === nothing || a === missing || b === missing ? missing :
+        ((a, b) in near_ideal_edges || (b, a) in near_ideal_edges)
 
     point_id = "$(fixture_str)|density=$(density)|T=$(T_horizon)|tol=$(clarabel_tol)"
     rows = NamedTuple[]
@@ -1164,13 +1307,30 @@ function run_gap_report_mode(args)
         push!(
             rows,
             (;
-                point = point_id, fixture = fixture_str, density = density,
-                t_horizon = T_horizon, clarabel_tol_gap = clarabel_tol,
-                termination_status = ts, rank = rank,
-                b = r.b, from_id = r.from, to_id = r.to, from_name = fname, to_name = tname,
-                r_pu = r.r_pu, x_pu = r.x_pu, l = r.l, v_from = r.v_from, P = r.P, Q = r.Q,
-                t = r.t, gap = r.gap, ratio = r.ratio, reverse_flow = r.reverse_flow,
-                loading = r.loading, is_near_ideal = is_near_ideal(fname, tname),
+                point = point_id,
+                fixture = fixture_str,
+                density = density,
+                t_horizon = T_horizon,
+                clarabel_tol_gap = clarabel_tol,
+                termination_status = ts,
+                rank = rank,
+                b = r.b,
+                from_id = r.from,
+                to_id = r.to,
+                from_name = fname,
+                to_name = tname,
+                r_pu = r.r_pu,
+                x_pu = r.x_pu,
+                l = r.l,
+                v_from = r.v_from,
+                P = r.P,
+                Q = r.Q,
+                t = r.t,
+                gap = r.gap,
+                ratio = r.ratio,
+                reverse_flow = r.reverse_flow,
+                loading = r.loading,
+                is_near_ideal = is_near_ideal(fname, tname),
             ),
         )
     end
@@ -1185,7 +1345,15 @@ function run_gap_report_mode(args)
         df_new
     end
     CSV.write(csv_path, df_final)
-    println("wrote ", csv_path, " (", nrow(df_new), " offender rows for point ", point_id, ")")
+    println(
+        "wrote ",
+        csv_path,
+        " (",
+        nrow(df_new),
+        " offender rows for point ",
+        point_id,
+        ")",
+    )
     return nothing
 end
 

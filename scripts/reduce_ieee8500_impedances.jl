@@ -266,8 +266,11 @@ function parse_linecode_rx_by_name(linecodes_text::AbstractString, name::Abstrac
 
     line_pat = "New\\s+[Ll]inecode\\." * esc_name * "\\b[^\\n]*"
     lm = match(Regex(line_pat, "i"), linecodes_text)
-    lm === nothing &&
-        throw(ArgumentError("could not find a New Linecode.$(name) definition in the vendored text"))
+    lm === nothing && throw(
+        ArgumentError(
+            "could not find a New Linecode.$(name) definition in the vendored text",
+        ),
+    )
     line = lm.match
     mr1 = match(r"\br1=([\d.eE+-]+)"i, line)
     mx1 = match(r"\bx1=([\d.eE+-]+)"i, line)
@@ -275,13 +278,15 @@ function parse_linecode_rx_by_name(linecodes_text::AbstractString, name::Abstrac
         return (parse(Float64, mr1.captures[1]), parse(Float64, mx1.captures[1]))
     end
 
-    pat = "New\\s+[Ll]inecode\\." * esc_name * "\\b" *
-          ".*?~\\s*[Rr]matrix\\s*=\\s*\\[([^\\]]+)\\]" *
-          ".*?~\\s*[Xx]matrix\\s*=\\s*\\[([^\\]]+)\\]"
+    pat =
+        "New\\s+[Ll]inecode\\." *
+        esc_name *
+        "\\b" *
+        ".*?~\\s*[Rr]matrix\\s*=\\s*\\[([^\\]]+)\\]" *
+        ".*?~\\s*[Xx]matrix\\s*=\\s*\\[([^\\]]+)\\]"
     m = match(Regex(pat, "is"), linecodes_text)
-    m === nothing && throw(
-        ArgumentError("could not find an rmatrix/xmatrix block for linecode.$(name)"),
-    )
+    m === nothing &&
+        throw(ArgumentError("could not find an rmatrix/xmatrix block for linecode.$(name)"))
     rmat = parse_lower_triangular(m.captures[1])
     xmat = parse_lower_triangular(m.captures[2])
     return (fortescue_reduce(rmat), fortescue_reduce(xmat))
@@ -328,20 +333,21 @@ end
 Line-by-line (never a single big cross-field regex, so field ORDER in the source text does not
 matter) parse of every `New Line.*` statement in the vendored `Lines.dss` text, dispatched into
 four buckets:
-  1. ENABLED `switch=y` tie segments (38 of 43 confirmed) — bus pair only, no impedance parsed
-     (these get the SAME near-ideal treatment as regulators, assigned by the caller).
-  2. DISABLED `switch=y` tie segments (5 of 43 confirmed, explicit `enabled=False` in the source
-     text — real, authoritative normally-open ties) — bus pair only, EXCLUDED from the network
-     entirely (the IEEE-123 precedent: normally-open tie switches stay open, so the graph is a
-     clean tree). Without this split the reduction silently treats every switch as closed, which
-     produces `edges != N-1` at `Feeder` construction time (5-cycle over-count).
-  3. `Linecode=<name>` references (2,473 confirmed) — deferred Ω lookup, returned as
-     `MVLinecodeRef`.
-  4. Inline `r1=`/`x1=` records (`HVMV_Sub_connector` + the 9 raw `CAP_*` capacitor-connector
-     jumpers, 3 confirmed collision groups of 3 each) — real Ω computed directly here as
-     `ImpedanceEdge`.
-Throws loudly if any `New Line.*` statement matches none of the four shapes (never silently
-drops a record).
+
+ 1. ENABLED `switch=y` tie segments (38 of 43 confirmed) — bus pair only, no impedance parsed
+    (these get the SAME near-ideal treatment as regulators, assigned by the caller).
+ 2. DISABLED `switch=y` tie segments (5 of 43 confirmed, explicit `enabled=False` in the source
+    text — real, authoritative normally-open ties) — bus pair only, EXCLUDED from the network
+    entirely (the IEEE-123 precedent: normally-open tie switches stay open, so the graph is a
+    clean tree). Without this split the reduction silently treats every switch as closed, which
+    produces `edges != N-1` at `Feeder` construction time (5-cycle over-count).
+ 3. `Linecode=<name>` references (2,473 confirmed) — deferred Ω lookup, returned as
+    `MVLinecodeRef`.
+ 4. Inline `r1=`/`x1=` records (`HVMV_Sub_connector` + the 9 raw `CAP_*` capacitor-connector
+    jumpers, 3 confirmed collision groups of 3 each) — real Ω computed directly here as
+    `ImpedanceEdge`.
+    Throws loudly if any `New Line.*` statement matches none of the four shapes (never silently
+    drops a record).
 """
 function parse_mv_lines(text::AbstractString)
     linecode_recs = MVLinecodeRef[]
@@ -405,7 +411,8 @@ function parse_mv_lines(text::AbstractString)
         )
         mlen = match(r"[Ll]ength=([\d.]+)", raw)
         munits = match(r"[Uu]nits=(\S+)", raw)
-        mlen === nothing && throw(ArgumentError("inline r1=/x1= New Line missing Length=: $raw"))
+        mlen === nothing &&
+            throw(ArgumentError("inline r1=/x1= New Line missing Length=: $raw"))
         (munits === nothing || lowercase(munits.captures[1]) != "km") && throw(
             ArgumentError("expected units=km for an inline r1=/x1= MV line, got: $raw"),
         )
@@ -646,20 +653,20 @@ end
 Generic rename-and-drop step applying a merge map (from `resolve_merge_pairs`) to every parsed-but-
 not-yet-impedance-resolved MV structure, mutating each argument in place:
 
-  1. DROP the `linecode_recs`/`inline_recs` entries whose canonical bus pair is in `drop_pairs`
-     entirely (they never reach the impedance-computation loop — this is how the degenerate edges
-     disappear, never via a self-loop).
-  2. Rename `bus1_base`/`bus2_base` on every REMAINING `linecode_recs`/`inline_recs` entry, and
-     both elements of every `switch_pairs`/`disabled_switch_pairs`/`reg_edges` entry, through the
-     merge map (no-op for names absent from the map).
-  3. Rename `mv_base` ONLY (never `lv_base`) on every `xfmr_instances` entry.
-  4. Assert NO entry anywhere has `bus1_base == bus2_base` (or is a self-referential pair) after
-     renaming — throws loudly if one appears (would indicate an undetected pre-existing parallel
-     path the disjointness analysis did not anticipate; never silently drop it). A
-     post-rename PARALLEL edge (two distinct records landing on the same bus pair with genuinely
-     different impedance values) is caught downstream, loudly, by the existing `dedupe_edges`
-     assert-identical-or-throw mechanism when `mv_edges_raw`/LV edges are assembled — it never
-     silently averages or arbitrarily picks one value.
+ 1. DROP the `linecode_recs`/`inline_recs` entries whose canonical bus pair is in `drop_pairs`
+    entirely (they never reach the impedance-computation loop — this is how the degenerate edges
+    disappear, never via a self-loop).
+ 2. Rename `bus1_base`/`bus2_base` on every REMAINING `linecode_recs`/`inline_recs` entry, and
+    both elements of every `switch_pairs`/`disabled_switch_pairs`/`reg_edges` entry, through the
+    merge map (no-op for names absent from the map).
+ 3. Rename `mv_base` ONLY (never `lv_base`) on every `xfmr_instances` entry.
+ 4. Assert NO entry anywhere has `bus1_base == bus2_base` (or is a self-referential pair) after
+    renaming — throws loudly if one appears (would indicate an undetected pre-existing parallel
+    path the disjointness analysis did not anticipate; never silently drop it). A
+    post-rename PARALLEL edge (two distinct records landing on the same bus pair with genuinely
+    different impedance values) is caught downstream, loudly, by the existing `dedupe_edges`
+    assert-identical-or-throw mechanism when `mv_edges_raw`/LV edges are assembled — it never
+    silently averages or arbitrarily picks one value.
 """
 function apply_merge!(
     linecode_recs::Vector{MVLinecodeRef},
@@ -679,7 +686,13 @@ function apply_merge!(
         canonical_pair(r.bus1_base, r.bus2_base) in drop_set && continue
         push!(
             kept_linecode,
-            MVLinecodeRef(rn(r.bus1_base), rn(r.bus2_base), r.linecode, r.length_km, r.name),
+            MVLinecodeRef(
+                rn(r.bus1_base),
+                rn(r.bus2_base),
+                r.linecode,
+                r.length_km,
+                r.name,
+            ),
         )
     end
     empty!(linecode_recs)
@@ -688,7 +701,10 @@ function apply_merge!(
     kept_inline = ImpedanceEdge[]
     for r in inline_recs
         canonical_pair(r.bus1_base, r.bus2_base) in drop_set && continue
-        push!(kept_inline, ImpedanceEdge(rn(r.bus1_base), rn(r.bus2_base), r.r_ohm, r.x_ohm))
+        push!(
+            kept_inline,
+            ImpedanceEdge(rn(r.bus1_base), rn(r.bus2_base), r.r_ohm, r.x_ohm),
+        )
     end
     empty!(inline_recs)
     append!(inline_recs, kept_inline)
@@ -715,23 +731,33 @@ function apply_merge!(
 
     for r in linecode_recs
         r.bus1_base == r.bus2_base && throw(
-            ArgumentError("bus merge introduced a self-loop in linecode_recs at \"$(r.bus1_base)\""),
+            ArgumentError(
+                "bus merge introduced a self-loop in linecode_recs at \"$(r.bus1_base)\"",
+            ),
         )
     end
     for r in inline_recs
         r.bus1_base == r.bus2_base && throw(
-            ArgumentError("bus merge introduced a self-loop in inline_recs at \"$(r.bus1_base)\""),
+            ArgumentError(
+                "bus merge introduced a self-loop in inline_recs at \"$(r.bus1_base)\"",
+            ),
         )
     end
     for (a, b) in switch_pairs
-        a == b && throw(ArgumentError("bus merge introduced a self-loop in switch_pairs at \"$a\""))
+        a == b && throw(
+            ArgumentError("bus merge introduced a self-loop in switch_pairs at \"$a\""),
+        )
     end
     for (a, b) in disabled_switch_pairs
-        a == b &&
-            throw(ArgumentError("bus merge introduced a self-loop in disabled_switch_pairs at \"$a\""))
+        a == b && throw(
+            ArgumentError(
+                "bus merge introduced a self-loop in disabled_switch_pairs at \"$a\"",
+            ),
+        )
     end
     for (a, b) in reg_edges
-        a == b && throw(ArgumentError("bus merge introduced a self-loop in reg_edges at \"$a\""))
+        a == b &&
+            throw(ArgumentError("bus merge introduced a self-loop in reg_edges at \"$a\""))
     end
     return nothing
 end
@@ -841,14 +867,16 @@ end
 """
     assert_no_self_loops(keys_iter, context)
 
-Throws `ArgumentError` if any `(bus1_base, bus2_base)` pair in `keys_iter` has `bus1_base ==
-bus2_base`. Applied AFTER dedupe (zero self-loops exist in the real vendored
+Throws `ArgumentError` if any `(bus1_base, bus2_base)` pair in `keys_iter` has `bus1_base == bus2_base`. Applied AFTER dedupe (zero self-loops exist in the real vendored
 `Lines.dss`, but this is asserted rather than assumed).
 """
 function assert_no_self_loops(keys_iter, context::AbstractString)
     for (b1, b2) in keys_iter
-        b1 == b2 &&
-            throw(ArgumentError("self-loop detected at bus \"$b1\" in $context — check source data"))
+        b1 == b2 && throw(
+            ArgumentError(
+                "self-loop detected at bus \"$b1\" in $context — check source data",
+            ),
+        )
     end
     return nothing
 end
@@ -860,8 +888,7 @@ end
 """
     parse_triplex_lines(text) -> Vector{Tuple{String,String,String,Float64}}
 
-Parse every `New Line.*` statement in `Triplex_Lines.DSS`: `(bus1_base, bus2_base,
-linecode_lowercased, length_ft)`. ALL 1,177 records declare `units=ft` (asserted, not assumed) —
+Parse every `New Line.*` statement in `Triplex_Lines.DSS`: `(bus1_base, bus2_base, linecode_lowercased, length_ft)`. ALL 1,177 records declare `units=ft` (asserted, not assumed) —
 `Triplex_Linecodes.dss` rates its matrices in `units=kft` (ohms per 1000 ft), so the caller must
 divide `length_ft` by 1000 before multiplying by the reduced R1/X1 — this unit mismatch (ft vs
 kft) is easy to miss but is required for correct LV impedance values;
@@ -876,13 +903,23 @@ function parse_triplex_lines(text::AbstractString)
         mlc = match(r"[Ll]inecode=(\S+)", raw)
         mlen = match(r"[Ll]ength=([\d.]+)", raw)
         munits = match(r"[Uu]nits=(\S+)", raw)
-        (m1 === nothing || m2 === nothing || mlc === nothing || mlen === nothing || munits === nothing) &&
+        (
+            m1 === nothing ||
+            m2 === nothing ||
+            mlc === nothing ||
+            mlen === nothing ||
+            munits === nothing
+        ) &&
             throw(ArgumentError("Triplex_Lines.DSS record missing an expected field: $raw"))
-        lowercase(munits.captures[1]) == "ft" ||
-            throw(ArgumentError("expected units=ft for a Triplex_Lines.DSS record, got: $raw"))
+        lowercase(munits.captures[1]) == "ft" || throw(
+            ArgumentError("expected units=ft for a Triplex_Lines.DSS record, got: $raw"),
+        )
         b1 = parse_bus_base(m1.captures[1])
         b2 = parse_bus_base(m2.captures[1])
-        push!(recs, (b1, b2, lowercase(String(mlc.captures[1])), parse(Float64, mlen.captures[1])))
+        push!(
+            recs,
+            (b1, b2, lowercase(String(mlc.captures[1])), parse(Float64, mlen.captures[1])),
+        )
     end
     return recs
 end
@@ -902,8 +939,11 @@ function parse_loads(text::AbstractString)
         (mbus === nothing || mkw === nothing) &&
             throw(ArgumentError("New Load statement missing Bus1/kW: $raw"))
         bus = parse_bus_base(mbus.captures[1])
-        haskey(loads, bus) &&
-            throw(ArgumentError("duplicate load bus \"$bus\" in Loads.dss — expected exactly one load per SX bus"))
+        haskey(loads, bus) && throw(
+            ArgumentError(
+                "duplicate load bus \"$bus\" in Loads.dss — expected exactly one load per SX bus",
+            ),
+        )
         loads[bus] = parse(Float64, mkw.captures[1])
     end
     return loads
@@ -967,16 +1007,26 @@ function parse_xfmr_codes(text::AbstractString)
         mxhl = match(r"\bXhl=([\d.]+)"i, raw)
         mxht = match(r"\bXht=([\d.]+)"i, raw)
         mxlt = match(r"\bXlt=([\d.]+)"i, raw)
-        (mname === nothing || mkva === nothing || mrs === nothing || mxhl === nothing || mxht === nothing || mxlt === nothing) &&
-            throw(ArgumentError("New XfmrCode statement missing an expected field: $raw"))
+        (
+            mname === nothing ||
+            mkva === nothing ||
+            mrs === nothing ||
+            mxhl === nothing ||
+            mxht === nothing ||
+            mxlt === nothing
+        ) && throw(ArgumentError("New XfmrCode statement missing an expected field: $raw"))
         name = String(mname.captures[1])
         kva = parse(Float64, mkva.captures[1])
         rs1, rs2, rs3 = parse.(Float64, (mrs.captures[1], mrs.captures[2], mrs.captures[3]))
-        xhl, xht, xlt = parse.(Float64, (mxhl.captures[1], mxht.captures[1], mxlt.captures[1]))
+        xhl, xht, xlt =
+            parse.(Float64, (mxhl.captures[1], mxht.captures[1], mxlt.captures[1]))
         r_total_pct = rs1 + rs2 + rs3
         x_total_pct = 0.5 * (xhl + xht + xlt)
-        haskey(codes, name) &&
-            throw(ArgumentError("duplicate XfmrCode definition for \"$name\" in $(LOADXFMRCODES_DSS)"))
+        haskey(codes, name) && throw(
+            ArgumentError(
+                "duplicate XfmrCode definition for \"$name\" in $(LOADXFMRCODES_DSS)",
+            ),
+        )
         codes[name] = XfmrCode(r_total_pct, x_total_pct, kva)
     end
     return codes
@@ -997,8 +1047,11 @@ function parse_xfmr_instances(text::AbstractString)
         occursin(r"XfmrCode="i, raw) || continue
         mcode = match(r"XfmrCode=(\S+)"i, raw)
         mbuses = match(r"buses=\[\s*(\S+)\s+(\S+)\s+(\S+)\s*\]"i, raw)
-        (mcode === nothing || mbuses === nothing) &&
-            throw(ArgumentError("service-transformer New Transformer missing XfmrCode=/buses=: $raw"))
+        (mcode === nothing || mbuses === nothing) && throw(
+            ArgumentError(
+                "service-transformer New Transformer missing XfmrCode=/buses=: $raw",
+            ),
+        )
         mv_base = parse_bus_base(mbuses.captures[1])
         lv_base1 = parse_bus_base(mbuses.captures[2])
         lv_base2 = parse_bus_base(mbuses.captures[3])
@@ -1069,8 +1122,9 @@ function parse_transformer_bus_pairs(text::AbstractString)
         occursin(r"^\s*New\s+Transformer\."i, raw) || continue
         occursin(r"buses=\(", raw) || continue
         m = match(r"buses=\(\s*(\S+?)\s*,\s*(\S+?)\s*\)"i, raw)
-        m === nothing &&
-            throw(ArgumentError("regulator/substation New Transformer missing buses=(...): $raw"))
+        m === nothing && throw(
+            ArgumentError("regulator/substation New Transformer missing buses=(...): $raw"),
+        )
         b1 = parse_bus_base(m.captures[1])
         b2 = parse_bus_base(m.captures[2])
         push!(pairs, (b1, b2))
@@ -1099,7 +1153,9 @@ function build_regulator_edges(
     edges = Set{Tuple{String, String}}()
     for (b1, b2) in reg_pairs
         b1 == b2 && throw(
-            ArgumentError("self-loop in regulator/substation-transformer bus pair: ($b1, $b2)"),
+            ArgumentError(
+                "self-loop in regulator/substation-transformer bus pair: ($b1, $b2)",
+            ),
         )
         push!(edges, canonical_pair(b1, b2))
     end
@@ -1162,15 +1218,15 @@ function emit_output(
         io,
         "# NOTE: Master.dss redirects LineCodes2.DSS (Ohm matrices, Units=km) for MV lines — NOT",
     )
-    println(io, "# LineCodes.dss (a different, unrelated file bundled in the same upstream repo).")
+    println(
+        io,
+        "# LineCodes.dss (a different, unrelated file bundled in the same upstream repo).",
+    )
     println(io, "#")
     println(io, "# 3-winding center-tap service-transformer reduction:")
     println(io, "#     R_total% = %Rs[1] + %Rs[2] + %Rs[3]")
     println(io, "#     X_total% = 0.5 * (Xhl + Xht + Xlt)")
-    println(
-        io,
-        "# Derived and verified against OpenDSS's own Transformer.pas — not",
-    )
+    println(io, "# Derived and verified against OpenDSS's own Transformer.pas — not")
     println(
         io,
         "# a citable published formula. The star-equivalent decomposition is the basis of the",
@@ -1199,10 +1255,7 @@ function emit_output(
         io,
         "# this table — they are assigned the SAME near-ideal low-impedance treatment as",
     )
-    println(
-        io,
-        "# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time;",
-    )
+    println(io, "# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time;")
     println(io, "# tap changing is not modeled.")
     println(io, "#")
     println(
@@ -1218,14 +1271,8 @@ function emit_output(
         "# IEEE-123 precedent (normally-open ties stay open so the graph is a clean tree).",
     )
     println(io, "#")
-    println(
-        io,
-        "# BUS MERGE (replaces an earlier impedance-fabrication",
-    )
-    println(
-        io,
-        "# approach for this class): Lines.dss contains 2 New Line.* records with",
-    )
+    println(io, "# BUS MERGE (replaces an earlier impedance-fabrication")
+    println(io, "# approach for this class): Lines.dss contains 2 New Line.* records with")
     println(
         io,
         "# length=0.0003048 km (EXACTLY 1.000 ft) on a REAL linecode-referenced conductor —",
@@ -1254,23 +1301,14 @@ function emit_output(
         io,
         "# scripts/reduce_ieee8500_impedances.jl's detect_length_class_merge_pairs/",
     )
-    println(
-        io,
-        "# resolve_merge_pairs/apply_merge!; the exact casualty bus names,",
-    )
-    println(
-        io,
-        "# by design, appear NOWHERE below.",
-    )
+    println(io, "# resolve_merge_pairs/apply_merge!; the exact casualty bus names,")
+    println(io, "# by design, appear NOWHERE below.")
     println(io, "#")
     println(
         io,
         "# BUS MERGE for the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector",
     )
-    println(
-        io,
-        "# record — SUPERSEDING an earlier near-ideal",
-    )
+    println(io, "# record — SUPERSEDING an earlier near-ideal")
     println(
         io,
         "# value-reassignment): the record parses to a genuinely near-zero Ω value (r=1e-6,",
@@ -1287,22 +1325,10 @@ function emit_output(
         io,
         "# the single survivor bus \"HVMV_Sub_48332\" (lexicographic tie-break on an exact degree",
     )
-    println(
-        io,
-        "# tie) by",
-    )
-    println(
-        io,
-        "# reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges!;",
-    )
-    println(
-        io,
-        "# the casualty bus name,",
-    )
-    println(
-        io,
-        "# by design, appears NOWHERE below.",
-    )
+    println(io, "# tie) by")
+    println(io, "# reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges!;")
+    println(io, "# the casualty bus name,")
+    println(io, "# by design, appears NOWHERE below.")
     println(io)
     println(
         io,
@@ -1372,8 +1398,9 @@ before it ever reaches a fixture).
 function verify()
     loadxfmrcodes_text = read(LOADXFMRCODES_DSS, String)
     codes = parse_xfmr_codes(loadxfmrcodes_text)
-    length(codes) == 9 ||
-        throw(ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(codes))"))
+    length(codes) == 9 || throw(
+        ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(codes))"),
+    )
 
     haskey(codes, "CT5") ||
         throw(ArgumentError("expected an XfmrCode named \"CT5\" in $(LOADXFMRCODES_DSS)"))
@@ -1424,9 +1451,12 @@ function main()
     # --- MV: Lines.dss (parse only; impedance resolution deferred until AFTER the length-class
     #     bus-merge below, per detect_length_class_merge_pairs's own doc: it operates on
     #     linecode_recs BEFORE any per-km linecode impedance resolution) ---
-    linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs = parse_mv_lines(lines_text)
+    linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs =
+        parse_mv_lines(lines_text)
     length(switch_pairs) == 38 || throw(
-        ArgumentError("expected exactly 38 enabled switch=y ties, got $(length(switch_pairs))"),
+        ArgumentError(
+            "expected exactly 38 enabled switch=y ties, got $(length(switch_pairs))",
+        ),
     )
     length(disabled_switch_pairs) == 5 || throw(
         ArgumentError(
@@ -1439,8 +1469,9 @@ function main()
     #     (before the merge step) so xfmr_instances is available for degree counting
     #     and merge renaming BEFORE the length-class bus-merge below. ---
     xfmr_codes = parse_xfmr_codes(loadxfmrcodes_text)
-    length(xfmr_codes) == 9 ||
-        throw(ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(xfmr_codes))"))
+    length(xfmr_codes) == 9 || throw(
+        ArgumentError("expected exactly 9 XfmrCode definitions, got $(length(xfmr_codes))"),
+    )
     xfmr_instances = parse_xfmr_instances(loadxfmrcodes_text)
     length(xfmr_instances) == 1177 || throw(
         ArgumentError(
@@ -1497,11 +1528,15 @@ function main()
 
     # --- MV impedance resolution (surviving linecode_recs, post both bus-merges) + assembly ---
     mv_codes = sort!(unique(r.linecode for r in linecode_recs))
-    mv_linecode_rx = Dict(code => parse_linecode_rx_by_name(linecodes2_text, code) for code in mv_codes)
+    mv_linecode_rx =
+        Dict(code => parse_linecode_rx_by_name(linecodes2_text, code) for code in mv_codes)
     mv_edges_raw = ImpedanceEdge[]
     for r in linecode_recs
         R1, X1 = mv_linecode_rx[r.linecode]
-        push!(mv_edges_raw, ImpedanceEdge(r.bus1_base, r.bus2_base, R1 * r.length_km, X1 * r.length_km))
+        push!(
+            mv_edges_raw,
+            ImpedanceEdge(r.bus1_base, r.bus2_base, R1 * r.length_km, X1 * r.length_km),
+        )
     end
     append!(mv_edges_raw, inline_recs)
     mv_edges = dedupe_edges(mv_edges_raw)
@@ -1510,8 +1545,10 @@ function main()
     # --- LV: Triplex_Lines.DSS + Triplex_Linecodes.dss (kft base, ft length -> /1000 conversion) ---
     triplex_recs = parse_triplex_lines(triplex_lines_text)
     lv_codes = sort!(unique(r[3] for r in triplex_recs))
-    lv_linecode_rx =
-        Dict(code => parse_linecode_rx_by_name(triplex_linecodes_text, code) for code in lv_codes)
+    lv_linecode_rx = Dict(
+        code => parse_linecode_rx_by_name(triplex_linecodes_text, code) for
+        code in lv_codes
+    )
     lv_edges_raw = ImpedanceEdge[]
     for (b1, b2, code, length_ft) in triplex_recs
         R1, X1 = lv_linecode_rx[code]
@@ -1528,7 +1565,8 @@ function main()
     load_kw = parse_loads(loads_text)
     cap_kvar = parse_capacitors(capacitors_text)
 
-    outfile = emit_output(mv_edges, lv_edges, xfmr_edges, cap_kvar, load_kw, reg_edges, OUT_FILE)
+    outfile =
+        emit_output(mv_edges, lv_edges, xfmr_edges, cap_kvar, load_kw, reg_edges, OUT_FILE)
     println(
         "Wrote MV=$(length(mv_edges)) LV=$(length(lv_edges)) XFMR=$(length(xfmr_edges)) " *
         "REG=$(length(reg_edges)) CAP=$(length(cap_kvar)) LOAD=$(length(load_kw)) to $(outfile)",
