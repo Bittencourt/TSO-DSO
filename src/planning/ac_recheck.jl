@@ -79,9 +79,7 @@ Returns `(; ok, violations, p_import, ac_welfare, raw_status)`:
     limits-free AC optimum violates no limit beyond the measured tolerance (it is never
     hard-coded); `false` means "not certified by this check", not "physically
     infeasible";
-  - `violations::NamedTuple` — `(; n_thermal_violations::Int, max_overload_ratio::Float64,
-    n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
-    voltage_violated::Bool, ac_primal_violation::Float64, violation_tol::Float64)`.
+  - `violations::NamedTuple` — `(; n_thermal_violations::Int, max_overload_ratio::Float64, n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64, voltage_violated::Bool, ac_primal_violation::Float64, violation_tol::Float64)`.
     `max_overload_ratio` is `0.0` and `min_voltage`/`max_voltage` are `Inf`/`-Inf` only
     when the feeder has zero thermally-limited branches / zero non-root buses;
   - `p_import` — the AC model's frontier import for EVERY hour `1:T` (equal to
@@ -189,4 +187,3 @@ function ac_recheck_incumbent(
         raw_status = raw_status(oracle_ac.model),
     )
 end
-

@@ -109,4 +109,3 @@ function resume_from_checkpoint(dir::AbstractString = datadir("planning_checkpoi
     dict = wload(files[end])
     return (; iteration = dict["iteration"], state = dict["state"])
 end
-

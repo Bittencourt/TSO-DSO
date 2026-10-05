@@ -220,4 +220,3 @@ function solve_follower!(f::FollowerLP, z_trial::AbstractVector{<:Real})
         )
     end
 end
-

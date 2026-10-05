@@ -175,18 +175,20 @@ function solve_with_retry!(
             try
                 set_optimizer_attribute(model, k, v)  # post-build attribute change; no rebuild
             catch attr_err
-                throw(SolveFailedError(
-                    """
-                    solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
-                    but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
-                    Rungs ≥ 2 REQUIRE a Clarabel backend (never a cross-solver fallback) — refusing to continue:
-                      termination_status : $(termination_status(model))
-                      primal_status      : $(primal_status(model))
-                      dual_status        : $(dual_status(model))
-                      raw_status         : $(raw_status(model))
-                    """,
-                    model,
-                ))
+                throw(
+                    SolveFailedError(
+                        """
+                        solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
+                        but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
+                        Rungs ≥ 2 REQUIRE a Clarabel backend (never a cross-solver fallback) — refusing to continue:
+                          termination_status : $(termination_status(model))
+                          primal_status      : $(primal_status(model))
+                          dual_status        : $(dual_status(model))
+                          raw_status         : $(raw_status(model))
+                        """,
+                        model,
+                    ),
+                )
             end
         end
         try
@@ -202,17 +204,18 @@ function solve_with_retry!(
                 continue
             end
             # non-retryable status, OR budget exhausted: RAISE LOUDLY with full diagnostics
-            throw(SolveFailedError(
-                """
-                solve_with_retry!: exhausted $attempt attempt(s) — refusing to trust results:
-                  termination_status : $(ts)
-                  primal_status      : $(primal_status(model))
-                  dual_status        : $(dual_status(model))
-                  raw_status         : $(raw_status(model))
-                """,
-                model,
-            ))
+            throw(
+                SolveFailedError(
+                    """
+                    solve_with_retry!: exhausted $attempt attempt(s) — refusing to trust results:
+                      termination_status : $(ts)
+                      primal_status      : $(primal_status(model))
+                      dual_status        : $(dual_status(model))
+                      raw_status         : $(raw_status(model))
+                    """,
+                    model,
+                ),
+            )
         end
     end
 end
-

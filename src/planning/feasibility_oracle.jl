@@ -70,8 +70,7 @@ end
                              T::Int) -> FeasibilityOracle
 
 Build the slack-minimization feasibility oracle EXACTLY ONCE, reusing
-[`build_planning_oracle`](@ref)'s EXACT structure (boundary guards, `Model(select_optimizer(
-problem_class(pf)))`, the two SOC→nonconvex-quad cross-solver bridges, `ModelContext`,
+[`build_planning_oracle`](@ref)'s EXACT structure (boundary guards, `Model(select_optimizer( problem_class(pf)))`, the two SOC→nonconvex-quad cross-solver bridges, `ModelContext`,
 `contribute!(pf, ctx, feeder; T)`, the free-sign frontier `p_import[t]`/`q_import[t]`, the
 aggregator loop, the `:Rp`/`:Rq` balance closure with the `size(...) == (N,T)` guard) through
 the balance closure, with THREE differences:
@@ -243,4 +242,3 @@ function solve_feasibility_oracle!(
 
     return (; cost, v, u, z_k = copy(z_trial))
 end
-

@@ -297,8 +297,7 @@ end
     trace_summary(trace::BendersTrace) -> NamedTuple
 
 Summarize `trace` as
-`(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries, total_nogoods,
-n_inexact_iterations)`.
+`(; iters, final_LB, final_UB, final_gap, max_cuts, total_retries, total_nogoods, n_inexact_iterations)`.
 On an empty trace, returns `iters = 0` and all others as `NaN`/`0` sentinels.
 Otherwise `final_LB`/`final_UB`/`final_gap` are the LAST recorded row's values,
 `max_cuts = maximum(trace.n_cuts_trace)`, `total_retries = sum(trace.retry_count_trace)`

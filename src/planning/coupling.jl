@@ -478,8 +478,10 @@ function _resolve_without_presolve!(shared::SharedTransmission, i::Int)
     old = try
         MOI.get(inner, attr)
     catch err
-        err isa MOI.GetAttributeNotAllowed || err isa MOI.UnsupportedAttribute ||
-            _is_solver_failure(err) || rethrow()
+        err isa MOI.GetAttributeNotAllowed ||
+            err isa MOI.UnsupportedAttribute ||
+            _is_solver_failure(err) ||
+            rethrow()
         return nothing
     end
     MOI.set(inner, attr, "off")
