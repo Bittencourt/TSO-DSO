@@ -86,7 +86,7 @@
     end
 end
 
-@testitem "planning inexact policy: :reject appends the inexact trial's cuts but bars it from the incumbent, and converges certified-only " tags =
+@testitem "planning inexact policy: :reject appends the inexact trial's cuts but bars it from the incumbent, and converges certified-only" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
 
@@ -287,7 +287,7 @@ end
     end
 end
 
-@testitem "planning inexact policy: solve_planning_oracle! reports exactness explicitly and never skips the complementarity gate " tags =
+@testitem "planning inexact policy: solve_planning_oracle! reports exactness explicitly and never skips the complementarity gate" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
 

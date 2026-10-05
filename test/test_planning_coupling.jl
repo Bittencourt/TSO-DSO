@@ -257,7 +257,7 @@ end
     @test all(v -> !is_binary(v) && !is_integer(v), all_variables(shared.model))
 end
 
-@testitem "planning coupling: presolve-only INFEASIBLE without a Farkas ray is re-solved without presolve — tolerance-borderline trial returns the simplex's own verdict, results stay queryable, presolve restored " tags =
+@testitem "planning coupling: presolve-only INFEASIBLE without a Farkas ray is re-solved without presolve — tolerance-borderline trial returns the simplex's own verdict, results stay queryable, presolve restored" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_follower!, update_coupling!, write_back!

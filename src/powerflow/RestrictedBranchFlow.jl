@@ -81,9 +81,9 @@ using JuMP
 # NOT a defect in the Gan-Low modification-gap measurement mechanism itself — `ε_measured`
 # stays strictly positive and the same order of magnitude, only its measured value shifted
 # with the underlying physics. 1.25x safety multiplier retained unchanged (the
-# margin policy is untouched by this re-measurement) ⇒ new `_EXACT04_MEASURED_ε` =
+# margin policy is untouched by this re-measurement) ⇒ new `_MEASURED_EXACTNESS_ε` =
 # 0.012736910534731915 pu².
-const _EXACT04_MEASURED_ε = 0.010189528427785532 * 1.25
+const _MEASURED_EXACTNESS_ε = 0.010189528427785532 * 1.25
 
 """
     RestrictedBranchFlow <: AbstractPowerFlow
@@ -128,9 +128,9 @@ also accepts the SIMPLER, LESS POWERFUL OPF-ε special case (Section IV-D, eq. s
 (18)) — an ADDITIONAL shrink of `v`'s own upper bound by a scalar `ε`, proven a SUBSET of
 OPF-m (`F_{OPF-ε} ⊆ F_{OPF-m}`, paper's Fig. 9) and thus safe to compose (it only shrinks the
 feasible set further). Defaults to `0.0` (no shrink; OPF-m alone is Theorem-2-sufficient
-given C1). `_EXACT04_MEASURED_ε` remains available as a citable, measured value for a
+given C1). `_MEASURED_EXACTNESS_ε` remains available as a citable, measured value for a
 researcher who wants extra margin on top of OPF-m — pass
-`RestrictedBranchFlow(; ε = TSODSO._EXACT04_MEASURED_ε)` explicitly. A NEGATIVE `ε` is
+`RestrictedBranchFlow(; ε = TSODSO._MEASURED_EXACTNESS_ε)` explicitly. A NEGATIVE `ε` is
 rejected with an `ArgumentError` at construction — on both the kwarg and positional paths
 (a negative margin is a defect): applied via `set_upper_bound` it would LOOSEN the voltage bound,
 turning the genuine restriction into a relaxation, so a sign-typo'd "measured margin" is

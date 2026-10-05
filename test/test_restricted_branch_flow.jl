@@ -513,7 +513,8 @@ end
     # Valid inputs unchanged: default, zero, and a positive measured margin.
     @test RestrictedBranchFlow().ε == 0.0
     @test RestrictedBranchFlow(; ε = 0.0).ε == 0.0
-    @test RestrictedBranchFlow(TSODSO._EXACT04_MEASURED_ε).ε == TSODSO._EXACT04_MEASURED_ε
+    @test RestrictedBranchFlow(TSODSO._MEASURED_EXACTNESS_ε).ε ==
+          TSODSO._MEASURED_EXACTNESS_ε
     @test RestrictedBranchFlow(; ε = 1 // 100).ε == 0.01         # Real conversion kept
 end
 
