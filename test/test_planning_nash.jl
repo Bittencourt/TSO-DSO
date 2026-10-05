@@ -1341,7 +1341,11 @@ end
 @testitem "planning nash: solve_variational_equilibrium selects the UNIQUE VE on an asymmetric-c_inv fixture — hand-derived split, equal per-player shared multipliers, distinct from the diagonalization's GNE" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
-    using TSODSO: activate_distributor!, solve_planning_oracle!, solve_variational_equilibrium, write_back!
+    using TSODSO:
+        activate_distributor!,
+        solve_planning_oracle!,
+        solve_variational_equilibrium,
+        write_back!
     using JuMP: value
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)

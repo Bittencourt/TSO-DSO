@@ -181,7 +181,8 @@ end
             @test !occursin("exhausted 1 attempt", e.msg)
         end
     else
-        @info "fixture no longer retryable; skipping escalation branch" raw = raw_status(raw)
+        @info "fixture no longer retryable; skipping escalation branch" raw =
+            raw_status(raw)
     end
 
     # A non-solver exception raised inside the retried body (TypeError from `dual = nothing`

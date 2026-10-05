@@ -152,7 +152,10 @@
     end
     function brute_force(i)
         j = i == 1 ? 2 : 1
-        costs = [independent_cost(step * idx, result.z[j, 1], result.x_inv[j]) for idx in 0:(2^K - 1)]
+        costs = [
+            independent_cost(step * idx, result.z[j, 1], result.x_inv[j]) for
+            idx in 0:(2 ^ K - 1)
+        ]
         return (; best = minimum(costs), argbest = argmin(costs) - 1, costs)
     end
 
@@ -346,7 +349,10 @@ end
     # state moves by ω × residual each sweep and the residual halves. NO prefix of this
     # history may be reported as a cycle.
     damped = [entry(k, b, fill(0.5 - 0.5^(k + 1), 3), 0.5^k) for k in 1:12]
-    @test all(hit(damped[1:(k - 1)], b, damped[k].state, damped[k].residual; atol) === nothing for k in 2:12)
+    @test all(
+        hit(damped[1:(k - 1)], b, damped[k].state, damped[k].residual; atol) === nothing for
+        k in 2:12
+    )
 
     # (2) A genuine period-1 recurrence: same b, same state, same residual -> fires and
     # names the FIRST sweep the state was seen at.
@@ -425,7 +431,11 @@ end
     @test result.converged
     @test result.sweeps == 3
     # Measured: residuals [0.04, 0.04, 0.02, 0.02, 0.01, 0.01] to ~1e-17.
-    @test isapprox(result.trace.nash_residual_trace, [0.04, 0.04, 0.02, 0.02, 0.01, 0.01]; atol = 1e-9)
+    @test isapprox(
+        result.trace.nash_residual_trace,
+        [0.04, 0.04, 0.02, 0.02, 0.01, 0.01];
+        atol = 1e-9,
+    )
     @test isapprox(result.z, fill(0.495, 2, 1); atol = 1e-9)
     @test isapprox(result.x_inv, [0.2475, 0.2475]; atol = 1e-9)
     @test isapprox(result.UB, [-0.225, -0.225]; atol = 1e-9)

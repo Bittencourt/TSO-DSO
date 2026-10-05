@@ -101,7 +101,12 @@ end
 @testitem "planning master_integer: L-validity — L=α_op_lb+α_x_lb bounds the REAL oracle/follower across [0,y_max]" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
-    using TSODSO: build_follower, build_master_integer, build_planning_oracle, solve_follower!, solve_planning_oracle!
+    using TSODSO:
+        build_follower,
+        build_master_integer,
+        build_planning_oracle,
+        solve_follower!,
+        solve_planning_oracle!
 
     feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -274,7 +279,12 @@ end
     using JuMP: fix, optimize!, objective_value, @objective
 
     master = build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
     )
     L = master.L
     b_trial = [1.0, 0.0, 1.0, 0.0]
@@ -296,7 +306,12 @@ end
 
     # Test 3 (boundary): Q_nu == L exactly does NOT throw (the guard uses >=, not >).
     master2 = build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
     )
     L2 = master2.L
     add_ll_cut!(master2, b_trial, L2, L2)
@@ -308,7 +323,12 @@ end
     # appended cut is CLAMPED to Q_eff = L, so it stays VALID: before the clamp this
     # appended θ >= L + (k−1)·0.5 at Hamming distance k, cutting off every far corner.
     master3 = build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
     )
     L3 = master3.L
     Q_nu_borderline = L3 - 0.5
@@ -334,7 +354,12 @@ end
 
     # A Q_nu at or above L is installed unchanged (no clamp, no warning).
     master4 = build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
     )
     @test_logs add_ll_cut!(master4, b_trial, master4.L + 1.0, master4.L)
     @test master4.cuts[1].Q_nu == master4.L + 1.0
@@ -407,7 +432,13 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
     fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
-    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = fk,
+    )
 
     master = build_master_integer(;
         T = 1,
@@ -423,9 +454,8 @@ end
     solve_master!(master)
     @test termination_status(master.model) == MOI.OPTIMAL
 
-    expected_op = TSODSO.derive_alpha_op_lb(
-        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0,
-    )
+    expected_op =
+        TSODSO.derive_alpha_op_lb(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
     expected_x = TSODSO.derive_alpha_x_lb(; fk..., T = 1)
     @test lower_bound(master.α_op) == expected_op
     @test lower_bound(master.α_x) == expected_x
@@ -442,9 +472,22 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
     fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
-    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = fk,
+    )
 
-    d = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
+    d = TSODSO.alpha_op_lb_derivation(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = 1,
+        y_max = 8.0,
+    )
     slack = TSODSO.alpha_lb_margin(d.optimum, d.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
     function caught(f)
@@ -455,12 +498,20 @@ end
             return e
         end
     end
-    e = caught(() -> build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0,
-        α_op_lb = d.optimum + 2 * slack, α_x_lb = 0.0, bounds_ctx = bounds_ctx,
-    ))
+    e = caught(
+        () -> build_master_integer(;
+            T = 1,
+            K = 4,
+            c_y = 0.3,
+            y_max = 8.0,
+            α_op_lb = d.optimum + 2 * slack,
+            α_x_lb = 0.0,
+            bounds_ctx = bounds_ctx,
+        ),
+    )
     @test e isa ArgumentError
-    @test occursin("α_op_lb=", e.msg) && occursin("exceeds the derived relaxed minimum", e.msg)
+    @test occursin("α_op_lb=", e.msg) &&
+          occursin("exceeds the derived relaxed minimum", e.msg)
     @test occursin("$(d.optimum)", e.msg)
 end
 
@@ -518,11 +569,25 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
     fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
-    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = fk,
+    )
 
-    dop = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
+    dop = TSODSO.alpha_op_lb_derivation(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = 1,
+        y_max = 8.0,
+    )
     dx = TSODSO.alpha_x_lb_derivation(; fk..., T = 1)
-    sop = TSODSO.alpha_lb_margin(dop.optimum, dop.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+    sop =
+        TSODSO.alpha_lb_margin(dop.optimum, dop.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
     sx = TSODSO.alpha_lb_margin(dx.optimum, dx.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
     # A bound slightly ABOVE the reported optimum, but inside the measured slack, is
@@ -559,7 +624,12 @@ end
     # bounds, the bit-for-bit identical opt-out path) carries ZERO slack and ZERO clamp — the
     # installed value passes through bit-for-bit identical.
     plain = build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = 0.0,
     )
     @test TSODSO._accepted_lb_slack(plain, :op) == 0.0
     @test TSODSO._accepted_lb_slack(plain, :x) == 0.0
@@ -574,9 +644,19 @@ end
     using TSODSO: build_master_integer
 
     @test_throws ArgumentError build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = :atuo, α_x_lb = 0.0,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = :atuo,
+        α_x_lb = 0.0,
     )
     @test_throws ArgumentError build_master_integer(;
-        T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = :atuo,
+        T = 1,
+        K = 4,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = :atuo,
     )
 end

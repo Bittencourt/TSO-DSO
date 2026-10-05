@@ -103,14 +103,8 @@ end
     # z_trial must be FEASIBLE for the pinned network (see file-header note: z=0 is
     # infeasible for this fixture). The network's own unconstrained free-import optimum
     # (via the UNMODIFIED free path) is always feasible by construction — use it.
-    free = operational_oracle(
-        feeder,
-        LinDistFlow(),
-        aggs;
-        λ₀ = λ₀,
-        T = T,
-        allow_export = true,
-    )
+    free =
+        operational_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T, allow_export = true)
     zstar = value.(free.ctx.meta[:p_import])
 
     o = build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)
@@ -231,14 +225,8 @@ end
     # FEASIBLE z_trial values (see file-header note): the network's own unconstrained
     # free-import optimum, and a small positive perturbation of it (both empirically
     # verified feasible for this fixture; an arbitrary fixed offset like -0.02 is not).
-    free = operational_oracle(
-        feeder,
-        LinDistFlow(),
-        aggs;
-        λ₀ = λ₀,
-        T = T,
-        allow_export = true,
-    )
+    free =
+        operational_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T, allow_export = true)
     zstar = value.(free.ctx.meta[:p_import])
 
     o = build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)

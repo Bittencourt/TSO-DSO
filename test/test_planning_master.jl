@@ -182,7 +182,12 @@ end
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = λ₀,
-        follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+        follower_kwargs = (;
+            corridor_cap = 2.0,
+            x_inv_max = 2.0,
+            c_inv = 1.0,
+            c_op = [0.5],
+        ),
     )
 
     # α_op_lb/α_x_lb omitted entirely — the new :auto default.
@@ -216,7 +221,12 @@ end
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = λ₀,
-        follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+        follower_kwargs = (;
+            corridor_cap = 2.0,
+            x_inv_max = 2.0,
+            c_inv = 1.0,
+            c_op = [0.5],
+        ),
     )
 
     @test_throws ArgumentError build_master(;
@@ -243,7 +253,12 @@ end
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = λ₀,
-        follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+        follower_kwargs = (;
+            corridor_cap = 2.0,
+            x_inv_max = 2.0,
+            c_inv = 1.0,
+            c_op = [0.5],
+        ),
     )
 
     @test_throws ArgumentError build_master(;
@@ -268,7 +283,14 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
     λ₀ = fill(4.0, T)
 
-    d = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, y_max = 8.0)
+    d = TSODSO.alpha_op_lb_derivation(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+        y_max = 8.0,
+    )
     # Rejection compares against the UN-margined optimum
     # plus the measured, scale-aware slack — the same rule build_master applies.
     slack = TSODSO.alpha_lb_margin(d.optimum, d.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
@@ -303,11 +325,25 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
     fk = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
-    bounds_ctx = (; feeder = feeder, pf = LinDistFlow(), aggregators = [agg], λ₀ = λ₀, follower_kwargs = fk)
+    bounds_ctx = (;
+        feeder = feeder,
+        pf = LinDistFlow(),
+        aggregators = [agg],
+        λ₀ = λ₀,
+        follower_kwargs = fk,
+    )
 
-    dop = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = 1, y_max = 8.0)
+    dop = TSODSO.alpha_op_lb_derivation(
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = 1,
+        y_max = 8.0,
+    )
     dx = TSODSO.alpha_x_lb_derivation(; fk..., T = 1)
-    sop = TSODSO.alpha_lb_margin(dop.optimum, dop.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
+    sop =
+        TSODSO.alpha_lb_margin(dop.optimum, dop.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
     sx = TSODSO.alpha_lb_margin(dx.optimum, dx.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
     # A bound slightly ABOVE the reported optimum, but inside the measured slack, is
@@ -364,18 +400,32 @@ end
             return e
         end
     end
-    e_op = caught(() -> build_master(;
-        T = 1, c_y = 0.3, y_max = 8.0,
-        α_op_lb = dop.optimum + 2 * sop, α_x_lb = 0.0, bounds_ctx = bounds_ctx,
-    ))
+    e_op = caught(
+        () -> build_master(;
+            T = 1,
+            c_y = 0.3,
+            y_max = 8.0,
+            α_op_lb = dop.optimum + 2 * sop,
+            α_x_lb = 0.0,
+            bounds_ctx = bounds_ctx,
+        ),
+    )
     @test e_op isa ArgumentError
-    @test occursin("α_op_lb=", e_op.msg) && occursin("exceeds the derived relaxed minimum", e_op.msg)
-    e_x = caught(() -> build_master(;
-        T = 1, c_y = 0.3, y_max = 8.0,
-        α_op_lb = -50.0, α_x_lb = dx.optimum + 2 * sx, bounds_ctx = bounds_ctx,
-    ))
+    @test occursin("α_op_lb=", e_op.msg) &&
+          occursin("exceeds the derived relaxed minimum", e_op.msg)
+    e_x = caught(
+        () -> build_master(;
+            T = 1,
+            c_y = 0.3,
+            y_max = 8.0,
+            α_op_lb = -50.0,
+            α_x_lb = dx.optimum + 2 * sx,
+            bounds_ctx = bounds_ctx,
+        ),
+    )
     @test e_x isa ArgumentError
-    @test occursin("α_x_lb=", e_x.msg) && occursin("exceeds the derived relaxed minimum", e_x.msg)
+    @test occursin("α_x_lb=", e_x.msg) &&
+          occursin("exceeds the derived relaxed minimum", e_x.msg)
 end
 
 @testitem "planning master: an unknown Symbol bound is an ArgumentError, not a MethodError" tags =
@@ -385,8 +435,20 @@ end
 
     # The old `isa Union{Symbol,Real}` guard was
     # always true, so a typo reached `isless`/`Float64(::Symbol)` as a MethodError.
-    @test_throws ArgumentError build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = :atuo, α_x_lb = 0.0)
-    @test_throws ArgumentError build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = :atuo)
+    @test_throws ArgumentError build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = :atuo,
+        α_x_lb = 0.0,
+    )
+    @test_throws ArgumentError build_master(;
+        T = 1,
+        c_y = 0.3,
+        y_max = 8.0,
+        α_op_lb = -5.0,
+        α_x_lb = :atuo,
+    )
 end
 
 @testitem "planning master: derive_alpha_x_lb(::FollowerLP) dispatch agrees with the follower_kwargs path" tags =
@@ -394,7 +456,13 @@ end
     using TSODSO
     using TSODSO: build_follower
 
-    f = build_follower(; T = 1, corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
+    f = build_follower(;
+        T = 1,
+        corridor_cap = 2.0,
+        x_inv_max = 2.0,
+        c_inv = 1.0,
+        c_op = [0.5],
+    )
     a = TSODSO.derive_alpha_x_lb(f)
     b = TSODSO.derive_alpha_x_lb(;
         T = 1,
