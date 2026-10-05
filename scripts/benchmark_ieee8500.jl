@@ -560,11 +560,20 @@ silently presented as a precise per-call peak.
 `atol_exact` (2026-08-22 round-2 follow-up, quick task 260822-hld) is threaded straight through to
 `solve_admm`'s own `atol_exact` kwarg (the additive override seam quick task 260822-f0b built onto
 the FINAL consolidation `assert_socp_exact!` gate only — the mid-loop `check_exact = false` call is
-untouched). The caller ALWAYS passes `EXACTNESS_ATOL[fixture_sym]` — the SAME freshly-measured,
-per-fixture noise floor already used for the centralized point's own `exact_verdict` above — NEVER
-a literal chosen to make a point pass (T-25-12, anti-certificate-laundering): a point whose
-converged cone gap genuinely EXCEEDS its fixture's own measured floor still throws here exactly as
-it does today.
+untouched). Since Phase 35 (ARCH-10) `run_sweep_mode` passes one of three values:
+
+  - `nothing` (the default) — the library's HYBRID per-branch/hour floor
+    `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08·ref_b)`; stricter than the old flat `1e-6` where
+    `ref_b < 1000` (smax below ≈ 31.6 pu) and looser above it (up to ≈ `9.8e-6` near smax = 99);
+  - a user-supplied FINITE `--admm-atol` value — a flat floor the caller must justify with their
+    own measured noise floor (T-25-12, anti-certificate-laundering; non-finite values are
+    rejected at parse time);
+  - `Inf` — ONLY under the labelled `--admm-diagnostic-bypass` (T-35-04), whose row is never a
+    certificate (`admm_status` = `DIAGNOSTIC_BYPASS[:<status>]`).
+
+`EXACTNESS_ATOL[fixture_sym]` is NO LONGER passed here; it remains the centralized point's floor.
+`keep_ctx = true` returns `solve_admm`'s `dso_ctx` on BOTH `:converged` and `:budget_exceeded`
+exits — the caller must check `admm_status` before reading anything from it (CR-01).
 """
 function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol_exact::Union{Nothing, Real}; keep_ctx::Bool = false)
     t0 = time_ns()

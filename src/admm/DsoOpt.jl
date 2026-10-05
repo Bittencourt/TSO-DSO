@@ -536,11 +536,15 @@ gate THROWS and prices are refused. When `false` the gate is NOT run (and `atol_
 `atol_exact`/`rtol_exact` (2026-08-22 follow-up, quick task 260822-f0b) are an ADDITIVE override
 seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`nothing`/`1e-4`)
 are `assert_socp_exact!`'s own defaults (Phase 35, ARCH-10): `atol_exact = nothing` selects the
-hybrid per-branch/hour floor `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08*ref_b)`; an explicit `Real`
-is a flat bypass. ADMM points with gap in (2e-7, 1e-6] can now raise `CertificateError`. Every
-existing call site — including this function's own
-mid-loop `check_exact = false` calls, which never reach the branch that consults them — is
-byte-identical. This is a SEAM, not a default weakening (T-25-12, certificate-laundering): never
+hybrid per-branch/hour floor `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08*ref_b)` = `max(2e-7,
+1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Before Phase 35 the
+default was a FLAT `1e-6`, so `check_exact = true` callers relying on the default are NOT
+byte-identical: the gate is STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited
+branch whose hour's head-branch |S| is below ≈ 31.6 pu — a gap in `(2e-7, 1e-6]` now raises
+`CertificateError`) and LOOSER where `ref_b > 1000` (up to ≈ `9.8e-6` at smax just below
+`SMAX_NO_LIMIT = 99`, unbounded in principle on an unlimited branch with head flow above ≈ 31.6
+pu). Mid-loop `check_exact = false` calls never consult these kwargs and are unaffected.
+This is a SEAM, not a default weakening (T-25-12, certificate-laundering): never
 use it to make a point classify as exact that would otherwise be inexact under the project's own
 default gate. A caller overriding it is asserting they have their OWN independently measured
 noise floor for the tolerance they pass (mirrors how `scripts/benchmark_ieee8500.jl`'s

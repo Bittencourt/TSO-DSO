@@ -178,10 +178,24 @@ never a plausible-but-uncertified number silently returned as if it were the DAD
 
 An ADDITIVE override onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs, threaded
 ONLY into the FINAL consolidation [`solve_dso!`](@ref) call (the mid-loop `check_exact = false`
-call never reaches the gate, so there is nothing to thread there). Defaults are copied VERBATIM
-from `assert_socp_exact!`'s own current defaults (`src/models/exactness.jl:78`), matching this
-project's existing `rtol_exact` naming precedent (`solve_welfare`, `stochastic_welfare.jl`,
-`subproblem.jl`) — every existing caller of `solve_admm` is byte-identical at these defaults.
+call never reaches the gate, so there is nothing to thread there). The defaults (`nothing`/`1e-4`)
+equal `assert_socp_exact!`'s own defaults, following this project's `rtol_exact` naming precedent
+(`solve_welfare`, `stochastic_welfare.jl`, `subproblem.jl`).
+
+Since Phase 35 (ARCH-10) `atol_exact = nothing` selects the gate's HYBRID per-branch/hour floor
+`atol_b = max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08·ref_b)` = `max(2e-7, 1e-9·ref_b)` (`ref_b = smax²`
+for a thermally limited branch, else the head-branch `P²+Q²`); before Phase 35 the ADMM default was
+a FLAT `1e-6`. The verdict therefore CHANGED for existing callers relying on the default — it is
+NOT byte-identical:
+
+  - STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited branch in an hour where
+    the head-branch |S| is below ≈ 31.6 pu): the floor drops toward `2e-7`, so a consolidation
+    gap in `(2e-7, 1e-6]` now raises `CertificateError`;
+  - LOOSER where `ref_b > 1000`: up to ≈ `9.8e-6` on a limited branch with smax just below
+    `SMAX_NO_LIMIT = 99`, and unbounded in principle on an unlimited branch whose hour's head
+    flow exceeds ≈ 31.6 pu.
+
+An explicit `Real` `atol_exact` is a FLAT per-branch floor that bypasses the hybrid computation.
 This is a SEAM, not a default weakening (T-25-12, certificate-laundering): it must never be
 used to manufacture a passing verdict for a point that would otherwise be inexact under the
 project's own default gate. A caller overriding it is asserting they have their OWN
