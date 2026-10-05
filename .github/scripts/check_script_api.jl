@@ -199,9 +199,19 @@ or an exported/imported TSODSO submodule written unrooted (`ReactiveMode.OFF`) a
 by a local binding.
 """
 function chain_root(fs, s::Symbol)
-    s === :TSODSO && return MOD
+    if s === :TSODSO
+        haskey(fs.modalias, s) && return fs.modalias[s]        # `using TSODSO: TSODSO`
+        # A file with no TSODSO import at all is an `include`d helper: assume the includer binds it.
+        (!fs.touches || s in fs.bound) && return MOD
+        # Only `using TSODSO` / `import TSODSO` bind the name; `using TSODSO: x`,
+        # `import TSODSO.Sub` and `import TSODSO as T` do not (UndefVarError at runtime).
+        msg = "`TSODSO` is not bound in this file (only `using TSODSO: ...`-style imports); " *
+              "add `import TSODSO` or use an imported name"
+        any(e -> occursin(msg, e), fs.errors) || err!(fs, msg)
+        return nothing
+    end
+    s in fs.bound && return nothing                   # a local binding shadows a module alias
     haskey(fs.modalias, s) && return fs.modalias[s]
-    s in fs.bound && return nothing
     isdefined(MOD, s) || return nothing
     v = getfield(MOD, s)
     (v isa Module && v !== MOD && parentmodule(v) === MOD) || return nothing
@@ -592,6 +602,13 @@ function selftest()
         ("import TSODSO as T\ny = T.no_such_thing_xyz(1)", 1, "module alias chain"),
         ("import TSODSO.ReactiveMode as RM\nx = RM.LIVE\ny = RM.ON", 1, "submodule alias chain"),
         ("using TSODSO\nReactiveMode = (ON = 1,)\nx = ReactiveMode.ON", 0, "local shadows submodule"),
+        ("using TSODSO: solve_admm\ny = TSODSO.max_jump(t)", 1, "TSODSO unbound after using-list"),
+        ("import TSODSO: solve_admm\ny = TSODSO.max_jump(t)\nz = TSODSO.SOCP()", 1,
+         "TSODSO unbound after import-list (reported once)"),
+        ("import TSODSO.ReactiveMode\nx = TSODSO.ReactiveMode.OFF", 1, "TSODSO unbound after import A.B"),
+        ("import TSODSO\ny = TSODSO.max_jump(t)", 0, "import TSODSO binds the name"),
+        ("using TSODSO: TSODSO\ny = TSODSO.max_jump(t)", 0, "explicit using TSODSO: TSODSO"),
+        ("import TSODSO as T\nf(x::T) where {T} = T.a", 0, "type parameter shadows module alias"),
         # value (non-call) uses of a hidden function
         ("using TSODSO\ny = max_jump.(trs)", 1, "broadcast value use"),
         ("using TSODSO\ny = map(max_jump, trs)", 1, "higher-order value use"),
