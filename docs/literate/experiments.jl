@@ -142,7 +142,13 @@ end
 # LinDistFlow and AC have no SOC cone, so their `exact_maxgap` is `NaN` ("not
 # applicable"). Run the linearized formulation through the same entry point:
 
-s_lin = Scenario(name = "docs-lindistflow", feeder = :ieee13, pf = :lindistflow, seed = 1, T = 24)
+s_lin = Scenario(
+    name = "docs-lindistflow",
+    feeder = :ieee13,
+    pf = :lindistflow,
+    seed = 1,
+    T = 24,
+)
 res_lin = TSODSO.run(Centralized(), s_lin)
 (welfare = res_lin.welfare, exact_maxgap = res_lin.exact_maxgap)
 

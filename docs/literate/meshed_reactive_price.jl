@@ -264,7 +264,13 @@ gap_p = maximum(abs.(vec(r_admm.λ) .- p_central))
 gap_q = maximum(abs.(vec(r_admm.mu_q) .- q_central))
 gap_w = abs(r_admm.welfare - obj_bess) / max(abs(obj_bess), 1.0)
 
-(status = r_admm.status, iters = r_admm.iters, gap_p = gap_p, gap_q = gap_q, rel_gap_welfare = gap_w)
+(
+    status = r_admm.status,
+    iters = r_admm.iters,
+    gap_p = gap_p,
+    gap_q = gap_q,
+    rel_gap_welfare = gap_w,
+)
 
 #-
 
