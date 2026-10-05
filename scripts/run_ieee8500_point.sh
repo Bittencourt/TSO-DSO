@@ -29,8 +29,9 @@ mkdir -p "$RUNS"
 cd "$ROOT" || exit 2
 
 # --run-label is only understood by the benchmark harness (the profiler would reject it).
+# Compared by BASENAME (WR-04) so `./scripts/...` or an absolute path still gets the label.
 LABEL_ARGS=()
-if [ "$SCRIPT" = "scripts/benchmark_ieee8500.jl" ]; then
+if [ "$(basename "$SCRIPT")" = "benchmark_ieee8500.jl" ]; then
   LABEL_ARGS=(--run-label "$LABEL")
 fi
 
