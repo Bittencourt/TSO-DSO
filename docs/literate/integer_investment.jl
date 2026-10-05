@@ -252,7 +252,7 @@ lattice
 
 # ## Live-executed section — building the D-12-equivalent fixture
 #
-# The certified fixture (`Phase6Fixtures.two_bus_feeder()` +
+# The certified fixture (`TwoBusFixtures.two_bus_feeder()` +
 # `ToyDeviceFixture.ToyElasticDevice`) uses test-only structs unreachable from a
 # published docs page. Mirroring `stackelberg_benders.jl`'s own established pattern,
 # this page reconstructs the SAME economics with the PUBLIC `Deferrable` device: its

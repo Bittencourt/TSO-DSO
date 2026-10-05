@@ -33,7 +33,7 @@ cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 
 # ## Live solve — real-impedance IEEE-123, Phase-17-retuned population
 #
-# The population constants below are the Phase-17-retuned point (`test/fixtures_phase7.jl`),
+# The population constants below are the Phase-17-retuned point (`test/fixtures_ieee123.jl`),
 # reproduced here as plain `const`s so this page has no load-time dependency on a
 # `TestItems.@testmodule` (which expands to a no-op outside `TestItemRunner`'s AST-introspection
 # path). [`ieee123_modified`](@ref) is the real ingestion path documented on the

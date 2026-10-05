@@ -20,7 +20,7 @@ using TSODSO.JuMP
 # A small 3-bus radial feeder with low-impedance branches and tight voltage headroom, plus
 # aggregators whose PV back-feed is scaled into the over-voltage regime (`pv_scale = 1.2`, the
 # value the test suite settled on empirically). This is the SAME construction logic as the test
-# suite's `Phase4Fixtures` high-PV fixture, and the SAME fixture the previous page builds —
+# suite's `IEEE13Fixtures` high-PV fixture, and the SAME fixture the previous page builds —
 # inlined here VERBATIM because literate pages do not load test-only modules.
 
 const T = 24

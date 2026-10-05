@@ -2,7 +2,7 @@
 #
 # Seam: MPC-03/MPC-04 — end-to-end regression for run_mpc(scenario), the receding-horizon
 # closed-loop orchestrator (plan 21-05). Every item name contains "mpc_loop", tagged
-# [:mpc_loop], setup = [Phase21Fixtures]. Covers: (1) the happy-path CI fixture never
+# [:mpc_loop], setup = [MPCFixtures]. Covers: (1) the happy-path CI fixture never
 # escalating, a populated trace, and a finite regret; (2) the forced-inexact high-PV fixture
 # genuinely tripping the inline cone check and escalating through Phase-20's ladder WITHOUT
 # throwing (D-04); (3) s.mpc_step genuinely striding the resolve cadence — a measured
@@ -13,10 +13,10 @@
 # discovery/execution is deferred to the phase-closing plan 21-06.
 
 @testitem "mpc_loop: end-to-end closed loop on the happy-path CI fixture — trace populated, regret finite, never escalates (MPC-03)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
-    # SCENARIO_VALID_FEEDERS only covers :ieee13/:ieee123 — Phase21Fixtures' own 2-bus
+    # SCENARIO_VALID_FEEDERS only covers :ieee13/:ieee123 — MPCFixtures' own 2-bus
     # fixture is not addressable via Scenario. The default :ieee13/:default population at a
     # short T (T=9, the smallest value at which materialize.jl's :default population's
     # Deferrable device remains constructible — see mpc_loop.jl's own header deviation note)
@@ -48,7 +48,7 @@
 end
 
 @testitem "mpc_loop: forced-PV-shortfall genuinely diverges realized_welfare from forecast_settled_welfare (FIX-10)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
     # Phase 27 FIX-10: a nonzero mpc_forecast_error draw whose pv_factor inflates the
@@ -242,7 +242,7 @@ end
 end
 
 @testitem "mpc_loop: A6 clip invariant holds at run_mpc's REAL PVBattery call site, not just the isolated helper (WR-04, 27-REVIEW.md iteration 2)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
     # WR-04 (27-REVIEW.md, 2026-09-29, iteration 2): the CR-02 unit test above pins
@@ -305,24 +305,24 @@ end
 end
 
 @testitem "mpc_loop: forced-inexact window escalates through Phase-20's ladder WITHOUT throwing (MPC-04, D-04)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: build_mpc_window, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
 
     # Drive the SAME per-resolve certificate/escalation logic run_mpc's own loop calls
     # (_mpc_certify_and_price, factored out in plan 21-05 Task 2 for exactly this purpose)
-    # directly against Phase21Fixtures' high-PV fixture at the MEASURED pv_scale — this
+    # directly against MPCFixtures' high-PV fixture at the MEASURED pv_scale — this
     # fixture's custom 3-bus feeder is not addressable via Scenario, so run_mpc itself cannot
     # be called here; build_mpc_window/solve_mpc_window! are driven by hand, mirroring
     # test_mpc_terminal.jl's own driving pattern.
-    feeder = Phase21Fixtures.mpc_high_pv_feeder()
-    aggs = Phase21Fixtures.build_mpc_high_pv_aggregators(
+    feeder = MPCFixtures.mpc_high_pv_feeder()
+    aggs = MPCFixtures.build_mpc_high_pv_aggregators(
         feeder;
-        pv_scale = Phase21Fixtures.MPC_HIGH_PV_SCALE_MEASURED,
+        pv_scale = MPCFixtures.MPC_HIGH_PV_SCALE_MEASURED,
     )
-    H = Phase21Fixtures.H
-    λ₀ = Phase21Fixtures.mpc_lambda0()
+    H = MPCFixtures.H
+    λ₀ = MPCFixtures.mpc_lambda0()
 
     # PM-01 (phase 26-18): the DEFAULT ConvexBranchFlow() is now EXACT on this fixture (it is
     # Gan-Low's modified OPF, a restriction on the UPPER voltage band — see
@@ -381,18 +381,18 @@ end
 end
 
 @testitem "mpc_loop: escalation at t > 1 prices the CURRENT window — same t-sliced profiles, same measured state, never hours 1..H (CR-01)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: build_mpc_window, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
 
-    feeder = Phase21Fixtures.mpc_high_pv_feeder()
-    aggs = Phase21Fixtures.build_mpc_high_pv_aggregators(
+    feeder = MPCFixtures.mpc_high_pv_feeder()
+    aggs = MPCFixtures.build_mpc_high_pv_aggregators(
         feeder;
-        pv_scale = Phase21Fixtures.MPC_HIGH_PV_SCALE_MEASURED,
+        pv_scale = MPCFixtures.MPC_HIGH_PV_SCALE_MEASURED,
     )
-    H = Phase21Fixtures.H
-    λ₀ = Phase21Fixtures.mpc_lambda0()   # FLAT λ₀ — load-bearing for the regression below
+    H = MPCFixtures.H
+    λ₀ = MPCFixtures.mpc_lambda0()   # FLAT λ₀ — load-bearing for the regression below
 
     ms = Dict{Tuple{Int, Symbol}, Float64}()
     for agg in aggs, d in agg.devices
@@ -477,11 +477,11 @@ end
 end
 
 @testitem "mpc_loop: (bus, kind) state-keying invariant is asserted LOUDLY — duplicate buses / two same-kind stateful devices per bus throw (WR-05)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
 
     # The valid fixture population passes (one aggregator per bus, one device per state kind).
     @test TSODSO._mpc_assert_state_keying(aggs) === nothing
@@ -515,7 +515,7 @@ end
 end
 
 @testitem "mpc_loop: ladder terminal failure publishes :cert_failed with the reference fallback price — NEVER throws (CR-02, D-04, WR-04)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: MpcTrace, any_cert_failed, build_mpc_window, record!, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
@@ -527,13 +527,13 @@ end
     # deterministically exercising the SAME catch/ledger code paths a genuine tier failure
     # (assert_solved! retry exhaustion, assert_battery_complementarity!'s legitimate
     # negative-price throw) takes in production.
-    feeder = Phase21Fixtures.mpc_high_pv_feeder()
-    aggs = Phase21Fixtures.build_mpc_high_pv_aggregators(
+    feeder = MPCFixtures.mpc_high_pv_feeder()
+    aggs = MPCFixtures.build_mpc_high_pv_aggregators(
         feeder;
-        pv_scale = Phase21Fixtures.MPC_HIGH_PV_SCALE_MEASURED,
+        pv_scale = MPCFixtures.MPC_HIGH_PV_SCALE_MEASURED,
     )
-    H = Phase21Fixtures.H
-    λ₀ = Phase21Fixtures.mpc_lambda0()
+    H = MPCFixtures.H
+    λ₀ = MPCFixtures.mpc_lambda0()
 
     ms = Dict{Tuple{Int, Symbol}, Float64}()
     for agg in aggs, d in agg.devices
@@ -657,7 +657,7 @@ end
 end
 
 @testitem "mpc_loop: mpc_step genuinely strides the resolve cadence — NOT a silently-inert kwarg (D-03, checker revision 1)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
     # seed=1 (RESTORED — plan 27-09, USER DECISION 2026-09-29, reverting plan 27-08's own
@@ -720,7 +720,7 @@ end
 end
 
 @testitem "mpc_loop: AC truth settlement REPORTS a genuine thermal overload, never throws (FIX-10, plan 27-09)" tags =
-    [:mpc_loop] setup = [Phase21Fixtures] begin
+    [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
     # Plan 27-08's own escalated finding (see the forced-PV-shortfall item above and

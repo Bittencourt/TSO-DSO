@@ -6,7 +6,7 @@
 # "exact" so `occursin("exact", ti.name)` selects it. The self-contained items build a
 # fixed-value model directly (no dependence on the SOCP formulation), so they go live the
 # moment `assert_socp_exact!` lands; the high-PV item additionally needs ConvexBranchFlow
-# (04-02) and the shared Phase4Fixtures high-PV feeder.
+# (04-02) and the shared IEEE13Fixtures high-PV feeder.
 
 @testitem "exact: assert_socp_exact! throws on an inexact relaxation, refusing prices (PF-04)" tags =
     [:exact] begin
@@ -267,7 +267,7 @@ end
 end
 
 @testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags =
-    [:exact] setup = [Phase4Fixtures] begin
+    [:exact] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: problem_class
     using JuMP
@@ -277,9 +277,9 @@ end
     @test isdefined(TSODSO, :assert_socp_exact!)
 
     if isdefined(TSODSO, :ConvexBranchFlow) && isdefined(TSODSO, :assert_socp_exact!)
-        feeder = Phase4Fixtures.high_pv_feeder()
-        aggs = Phase4Fixtures.build_high_pv_aggregators(feeder)
-        λ₀ = Phase4Fixtures.mem_price_profile()
+        feeder = IEEE13Fixtures.high_pv_feeder()
+        aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder)
+        λ₀ = IEEE13Fixtures.mem_price_profile()
 
         pf = TSODSO.ConvexBranchFlow()
         # `allow_export = true`: a real feeder SELLS its reverse-flow PV surplus to the MEM at
@@ -292,7 +292,7 @@ end
             feeder,
             pf,
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             optimizer = select_optimizer(problem_class(pf)),
             allow_export = true,
@@ -313,10 +313,10 @@ end
         pv = ctx.pf_vars
         N = length(feeder.buses)
         B = length(feeder.branches)
-        @test any(value(pv.v[j, t]) > 1.0 + 1e-4 for j in 1:N, t in 1:Phase4Fixtures.T)
-        @test any(value(pv.P[b, t]) < -1e-3 for b in 1:B, t in 1:Phase4Fixtures.T)
+        @test any(value(pv.v[j, t]) > 1.0 + 1e-4 for j in 1:N, t in 1:IEEE13Fixtures.T)
+        @test any(value(pv.P[b, t]) < -1e-3 for b in 1:B, t in 1:IEEE13Fixtures.T)
         # ...and every bus stays within the squared-voltage cap (over-voltage, not a violation).
         vmax2 = maximum(feeder.buses[j].vmax^2 for j in 1:N)
-        @test all(value(pv.v[j, t]) <= vmax2 + 1e-6 for j in 1:N, t in 1:Phase4Fixtures.T)
+        @test all(value(pv.v[j, t]) <= vmax2 + 1e-6 for j in 1:N, t in 1:IEEE13Fixtures.T)
     end
 end

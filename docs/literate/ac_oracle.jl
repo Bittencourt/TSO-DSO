@@ -32,7 +32,7 @@ using TSODSO
 # A small 3-bus radial feeder with low-impedance branches and tight voltage headroom, plus
 # aggregators whose PV back-feed is scaled into the over-voltage regime (`pv_scale = 1.2`, the
 # value the test suite settled on empirically). This is the SAME construction logic as the test
-# suite's `Phase4Fixtures` high-PV fixture, inlined here because literate pages do not load
+# suite's `IEEE13Fixtures` high-PV fixture, inlined here because literate pages do not load
 # test-only modules.
 
 const T = 24
@@ -228,7 +228,7 @@ ctx_socp.meta[:socp_maxgap]
 # (project memory `v2.1-socp-inexactness-and-thesis-repro`), which is a GATE-1 (cone-residual)
 # phenomenon, not gate 2. That finding still reproduces, but only under `thesis_literal = true` at a
 # DIFFERENT, higher `pv_scale` on this or a related fixture (e.g. `pv_scale = 1.4` on this same
-# 3-bus feeder, cone ratio ≈ 1982, or Phase21Fixtures' `pv_scale = 3.0` MPC window, cone_maxratio ≈
+# 3-bus feeder, cone ratio ≈ 1982, or MPCFixtures' `pv_scale = 3.0` MPC window, cone_maxratio ≈
 # 9157–9166) — see `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` "Plan
 # 26-18". The two findings are mechanically distinct and must not be conflated: this page's own
 # `pv_scale = 1.2` gate-2 finding is a restriction-suboptimality property of the DEFAULT, while the

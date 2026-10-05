@@ -36,7 +36,7 @@ using Printf
 
 const T = 24
 
-# Both profiles are byte-identical to test/fixtures_phase4.jl / fixtures_phase7.jl.
+# Both profiles are byte-identical to test/fixtures_ieee13.jl / fixtures_ieee123.jl.
 const TEMP = Float64[
     19,
     18,
@@ -131,7 +131,7 @@ end
 with_vmax(f, vmax) =
     Feeder([Bus(b.id, b.vmin, vmax, b.is_root) for b in f.buses], f.branches, f.root)
 
-# ── Substrate A: the 3-bus high-PV stress fixture (test/fixtures_phase4.jl:184) ────────────────
+# ── Substrate A: the 3-bus high-PV stress fixture (test/fixtures_ieee13.jl:184) ────────────────
 # Low-impedance r=x=0.05 branches + a tight band: back-feed swings voltage fast, so the
 # overvoltage/reverse-flow mechanism that breaks SOC exactness can actually fire here.
 highpv_feeder(; vmax = 1.05) = Feeder(

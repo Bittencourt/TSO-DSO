@@ -23,7 +23,7 @@
 # `TSODSO._default_house`, which ALREADY accepts `pv_scale` as a keyword,
 # `build_population(:default, ...)` simply never varies it; (2) the local
 # `pvboom_stress_feeder`/`pvboom_stress_house` reproduction of the certified EXACT-04
-# fixture (test/fixtures_phase4.jl); (3) the `slice_aggregator` helper that carves a
+# fixture (test/fixtures_ieee13.jl); (3) the `slice_aggregator` helper that carves a
 # short sub-horizon out of an ALREADY-DRAWN Task-1 aggregator's own time series for the
 # planning-layer game. No `src/` file is touched, no model/solver code is added here.
 #
@@ -286,7 +286,7 @@ println("\n" * "="^96)
 println("PV-BOOM CASE STUDY — Part A2: the documented EXACT-04 finding, reproduced")
 println("="^96)
 
-# Verbatim reproduction of the certified 3-bus stress substrate (test/fixtures_phase4.jl
+# Verbatim reproduction of the certified 3-bus stress substrate (test/fixtures_ieee13.jl
 # `high_pv_feeder`/`build_high_pv_aggregators`/`_house_aggregator`, also cross-referenced
 # by test/test_ac_oracle.jl:180-260 and scripts/socp_applicability_sweep.jl:130-165).
 # Reproduced LOCALLY (this file, per this quick task's own scope note) rather than
@@ -376,7 +376,7 @@ inexact_hours = [row.t for row in ac_report.hours if !row.exact]
 
 isempty(inexact_hours) && error(
     "pv_boom_case_study: the EXACT-04 reproduction came back ALL-EXACT — this is a " *
-    "signal something has drifted from the certified test/fixtures_phase4.jl " *
+    "signal something has drifted from the certified test/fixtures_ieee13.jl " *
     "high_pv_feeder/build_high_pv_aggregators substrate (pv_scale=1.2, load_scale=0.2, " *
     "vmax=1.05). Per this task's own contract: stop and report the discrepancy rather " *
     "than silently accepting a different-looking result.",
@@ -695,7 +695,7 @@ open(findings_path, "w") do io
     println(
         io,
         "On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, " *
-        "vmax=1.05, r=x=0.05 branches — test/fixtures_phase4.jl high_pv_feeder / " *
+        "vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / " *
         "build_high_pv_aggregators), the SOC branch-flow relaxation is genuinely " *
         "INEXACT (EXACT-04) at $(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
     )

@@ -1,21 +1,21 @@
-# test/fixtures_phase19.jl
+# test/fixtures_four_quad_bess.jl
 #
 # Seam: Phase-19 acceptance-gate fixture (MESH-04/MESH-05). A TestItems `@testmodule` that
-# `test/test_admm_reactive.jl`'s NEW `:live` items consume via `setup = [Phase6Fixtures,
-# Phase19Fixtures]` (Phase6Fixtures MUST be listed FIRST in every consuming testitem's `setup`
-# array — TestItemRunner evaluates `option_setup` entries IN ORDER, so `Phase6Fixtures` is
+# `test/test_admm_reactive.jl`'s NEW `:live` items consume via `setup = [TwoBusFixtures,
+# FourQuadBESSFixtures]` (TwoBusFixtures MUST be listed FIRST in every consuming testitem's `setup`
+# array — TestItemRunner evaluates `option_setup` entries IN ORDER, so `TwoBusFixtures` is
 # already a sibling submodule of the shared test-setup parent by the time this module's OWN
-# `using ..Phase6Fixtures` runs; reversing the order would throw an `UndefVarError`).
+# `using ..TwoBusFixtures` runs; reversing the order would throw an `UndefVarError`).
 #
 # WHY THIS DEPARTS FROM THE PROJECT'S "self-contained @testmodule" CONVENTION (see
-# fixtures_phase6.jl/fixtures_phase7.jl's own header comments): those modules avoid a
+# fixtures_two_bus.jl/fixtures_ieee123.jl's own header comments): those modules avoid a
 # cross-`@testmodule` load-time dependency by taking `feeder` as an ARGUMENT and duplicating
 # any small shared helper locally. This module is EXPLICITLY instructed (plan 19-08, task 1) to
-# reuse `Phase6Fixtures.two_bus_feeder()`/`SEED_2BUS`/`LOAD_SCALE_2BUS`/`PV_SCALE_2BUS`/
+# reuse `TwoBusFixtures.two_bus_feeder()`/`SEED_2BUS`/`LOAD_SCALE_2BUS`/`PV_SCALE_2BUS`/
 # `RHO_2BUS`/`BATT_λ_*`/`temperature_profile()` DIRECTLY rather than redefine them — the whole
 # point is that the `:live` cross-validation runs on the IDENTICAL 2-bus fixture the project's
 # existing ADMM cross-validation tests already anchor on, never a re-derived copy that could
-# silently drift. `using ..Phase6Fixtures` (a relative import to the SIBLING submodule under
+# silently drift. `using ..TwoBusFixtures` (a relative import to the SIBLING submodule under
 # the shared TestItemRunner setup-module parent) is the mechanism that makes this safe: verified
 # directly against `TestItemRunner.jl`'s `ensure_evaled`/`run_testitem` source this session
 # (`Core.eval(test_setup_module_set.setupmodule, :(module $(name) end))` — every `@testmodule`,
@@ -51,7 +51,7 @@
 # (`obj_c ≈ -483.x` across seeds — the Thermostatic discomfort cost dominates, an expected
 # feature of this fixture's own parametrization, not a Phase-19 concern.) Every entry converges
 # in `iters = 2` — this near-lossless/interior/uncongested fixture (deliberately, per
-# `Phase6Fixtures`'s own design) is warm-started essentially AT its converged point (RESEARCH
+# `TwoBusFixtures`'s own design) is warm-started essentially AT its converged point (RESEARCH
 # Pattern: `λ` warm-starts at `-λ₀`), so a fast, small-iteration convergence is the EXPECTED,
 # correct outcome here, not evidence of a trivial/degenerate solve — `solve_admm`'s own
 # fail-loud maxiter cap (never silently returning early) is what makes a 2-iteration convergence
@@ -82,15 +82,15 @@
 # `Smax`, matching this fixture's own "interior, uncongested" design intent). `Emin/Emax/soc0 =
 # 0/0.08/0.04` is a plain 4× headroom band around the `Pch_max`-scaled throughput, mirroring the
 # existing `PVBattery`'s own `Emax ≈ 2×Pmax` discipline. `η = 0.95`, `Δt = 1.0` (hourly, matches
-# `T = 24`) and the SAME strict `λ_min < λ_med < λ_max` triple (`Phase6Fixtures.BATT_λ_*`) as the
+# `T = 24`) and the SAME strict `λ_min < λ_med < λ_max` triple (`TwoBusFixtures.BATT_λ_*`) as the
 # fixture's own `PVBattery` — required by the constructor (D-05) and consistent with reusing one
 # App. C price triple across every battery-like device in this fixture.
 
-@testmodule Phase19Fixtures begin
+@testmodule FourQuadBESSFixtures begin
     using TSODSO
     using TSODSO: SOCP, has_branch_current, problem_class
     using JuMP
-    using ..Phase6Fixtures
+    using ..TwoBusFixtures
 
     # FourQuadBESS device-scale constants for the 2-bus + 4Q-BESS variant (see the file header's
     # "FIXTURE SCALE" note for the derivation of each value).
@@ -120,19 +120,19 @@
     const BESS_SMAX_QBOUND = 0.008
 
     """
-        build_two_bus_aggregators_4q(feeder; seed=Phase6Fixtures.SEED_2BUS) -> Vector{<:Aggregator}
+        build_two_bus_aggregators_4q(feeder; seed=TwoBusFixtures.SEED_2BUS) -> Vector{<:Aggregator}
 
-    Mirrors [`Phase6Fixtures.build_two_bus_aggregators`](@ref) EXACTLY (same
+    Mirrors [`TwoBusFixtures.build_two_bus_aggregators`](@ref) EXACTLY (same
     Thermostatic/Deferrable/PVBattery triple, same seeded `generate_profiles` draw at
     `seed + bus`) PLUS one [`FourQuadBESS`](@ref) member at the SAME bus (MESH-04/05), on the
-    SAME [`Phase6Fixtures.two_bus_feeder`](@ref). Seeded ⇒ reproducible; takes `feeder` as an
-    argument (never calls `Phase6Fixtures.two_bus_feeder` at this module's load time).
+    SAME [`TwoBusFixtures.two_bus_feeder`](@ref). Seeded ⇒ reproducible; takes `feeder` as an
+    argument (never calls `TwoBusFixtures.two_bus_feeder` at this module's load time).
     """
-    function build_two_bus_aggregators_4q(feeder; seed::Integer = Phase6Fixtures.SEED_2BUS)
+    function build_two_bus_aggregators_4q(feeder; seed::Integer = TwoBusFixtures.SEED_2BUS)
         bus = 2
-        prof = generate_profiles(seed = seed + bus, T = Phase6Fixtures.T)
-        Ppv = Float64[Phase6Fixtures.PV_SCALE_2BUS * p for p in prof.pv]
-        Pdc = Float64[Phase6Fixtures.LOAD_SCALE_2BUS * d for d in prof.demand]
+        prof = generate_profiles(seed = seed + bus, T = TwoBusFixtures.T)
+        Ppv = Float64[TwoBusFixtures.PV_SCALE_2BUS * p for p in prof.pv]
+        Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * d for d in prof.demand]
 
         therm = Thermostatic(
             bus,
@@ -144,7 +144,7 @@
             0.0,
             1.0,
             0.5,
-            Phase6Fixtures.temperature_profile(),
+            TwoBusFixtures.temperature_profile(),
         )
         defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
         batt = PVBattery(
@@ -155,9 +155,9 @@
             0.0,
             0.2,
             0.1,
-            Phase6Fixtures.BATT_λ_MIN,
-            Phase6Fixtures.BATT_λ_MED,
-            Phase6Fixtures.BATT_λ_MAX,
+            TwoBusFixtures.BATT_λ_MIN,
+            TwoBusFixtures.BATT_λ_MED,
+            TwoBusFixtures.BATT_λ_MAX,
             Ppv,
         )
         bess = FourQuadBESS(
@@ -170,9 +170,9 @@
             BESS_EMIN,
             BESS_EMAX,
             BESS_SOC0,
-            Phase6Fixtures.BATT_λ_MIN,
-            Phase6Fixtures.BATT_λ_MED,
-            Phase6Fixtures.BATT_λ_MAX,
+            TwoBusFixtures.BATT_λ_MIN,
+            TwoBusFixtures.BATT_λ_MED,
+            TwoBusFixtures.BATT_λ_MAX,
         )
         return [Aggregator(bus, 0.90, AbstractDevice[therm, defer, batt, bess], Pdc)]
     end
@@ -180,11 +180,11 @@
     """
         two_bus_feeder_real_impedance() -> Feeder
 
-    The WR-02 μ-sign-pinning variant of [`Phase6Fixtures.two_bus_feeder`](@ref): identical
+    The WR-02 μ-sign-pinning variant of [`TwoBusFixtures.two_bus_feeder`](@ref): identical
     2-bus radial topology and voltage band, but with REAL (non-near-lossless) branch impedance
     `r = x = REAL_R_2BUS = 0.05` (50× the primary fixture's `1e-3`), so the reactive channel
     carries a genuine, priceable network cost. Built INSIDE the function (never at module load
-    time, threat T-06-01), mirroring `Phase6Fixtures.two_bus_feeder`'s own discipline.
+    time, threat T-06-01), mirroring `TwoBusFixtures.two_bus_feeder`'s own discipline.
     """
     function two_bus_feeder_real_impedance()
         buses = [
@@ -196,7 +196,7 @@
     end
 
     """
-        build_two_bus_aggregators_4q_qbound(feeder; seed=Phase6Fixtures.SEED_2BUS)
+        build_two_bus_aggregators_4q_qbound(feeder; seed=TwoBusFixtures.SEED_2BUS)
             -> Vector{<:Aggregator}
 
     The WR-02 μ-sign-pinning aggregator set: mirrors [`build_two_bus_aggregators_4q`](@ref)
@@ -210,12 +210,12 @@
     """
     function build_two_bus_aggregators_4q_qbound(
         feeder;
-        seed::Integer = Phase6Fixtures.SEED_2BUS,
+        seed::Integer = TwoBusFixtures.SEED_2BUS,
     )
         bus = 2
-        prof = generate_profiles(seed = seed + bus, T = Phase6Fixtures.T)
-        Ppv = Float64[Phase6Fixtures.PV_SCALE_2BUS * p for p in prof.pv]
-        Pdc = Float64[Phase6Fixtures.LOAD_SCALE_2BUS * d for d in prof.demand]
+        prof = generate_profiles(seed = seed + bus, T = TwoBusFixtures.T)
+        Ppv = Float64[TwoBusFixtures.PV_SCALE_2BUS * p for p in prof.pv]
+        Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * d for d in prof.demand]
 
         therm = Thermostatic(
             bus,
@@ -227,7 +227,7 @@
             0.0,
             1.0,
             0.5,
-            Phase6Fixtures.temperature_profile(),
+            TwoBusFixtures.temperature_profile(),
         )
         defer = Deferrable(bus, 8, 16, 1.0, 0.5, 0.5)
         batt = PVBattery(
@@ -238,9 +238,9 @@
             0.0,
             0.2,
             0.1,
-            Phase6Fixtures.BATT_λ_MIN,
-            Phase6Fixtures.BATT_λ_MED,
-            Phase6Fixtures.BATT_λ_MAX,
+            TwoBusFixtures.BATT_λ_MIN,
+            TwoBusFixtures.BATT_λ_MED,
+            TwoBusFixtures.BATT_λ_MAX,
             Ppv,
         )
         bess = FourQuadBESS(
@@ -253,9 +253,9 @@
             BESS_EMIN,
             BESS_EMAX,
             BESS_SOC0,
-            Phase6Fixtures.BATT_λ_MIN,
-            Phase6Fixtures.BATT_λ_MED,
-            Phase6Fixtures.BATT_λ_MAX,
+            TwoBusFixtures.BATT_λ_MIN,
+            TwoBusFixtures.BATT_λ_MED,
+            TwoBusFixtures.BATT_λ_MAX,
         )
         return [Aggregator(bus, 0.90, AbstractDevice[therm, defer, batt, bess], Pdc)]
     end

@@ -8,7 +8,7 @@
 # constraints up by name on a stochastic model.
 
 @testitem "close_balance: pre-migration fingerprint solve_welfare LinDistFlow + DC (ARCH-04)" tags =
-    [:balance] setup = [Phase3Fixtures] begin
+    [:balance] setup = [SmallRadialFixtures] begin
     using TSODSO
     using JuMP
 
@@ -29,13 +29,13 @@
     end
 
     function build(pf)
-        feeder = Phase3Fixtures.small_radial_feeder()
+        feeder = SmallRadialFixtures.small_radial_feeder()
         T = 3
         therm = Thermostatic(
-            2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Phase3Fixtures.Tout[1:T],
+            2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, SmallRadialFixtures.Tout[1:T],
         )
-        agg = Aggregator(2, 0.9, [therm], Phase3Fixtures.Pdc[1:T])
-        ctx, _, _ = solve_welfare(feeder, pf, [agg]; T = T, λ₀ = Phase3Fixtures.λ₀[1:T])
+        agg = Aggregator(2, 0.9, [therm], SmallRadialFixtures.Pdc[1:T])
+        ctx, _, _ = solve_welfare(feeder, pf, [agg]; T = T, λ₀ = SmallRadialFixtures.λ₀[1:T])
         return ctx.model
     end
 
@@ -53,7 +53,7 @@
 end
 
 @testitem "close_balance: pre-migration fingerprint solve_linear + mpc_window + stochastic + dso (ARCH-04)" tags =
-    [:balance] setup = [Phase21Fixtures, Phase22Fixtures, Phase6Fixtures] begin
+    [:balance] setup = [MPCFixtures, StochasticFixtures, TwoBusFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, build_stochastic_welfare, sub_seed
     using JuMP
@@ -85,25 +85,25 @@ end
         ctxl, _, _ = solve_linear(lf, LinDistFlow(), [load]; T = 1, λ₀ = [2.0])
         linear = (block_fp(ctxl.model, "balance_p"), block_fp(ctxl.model, "balance_q"))
 
-        mf = Phase21Fixtures.mpc_feeder()
-        maggs = Phase21Fixtures.build_mpc_aggregators(mf)
-        w = build_mpc_window(mf, ConvexBranchFlow(), maggs; H = Phase21Fixtures.H)
+        mf = MPCFixtures.mpc_feeder()
+        maggs = MPCFixtures.build_mpc_aggregators(mf)
+        w = build_mpc_window(mf, ConvexBranchFlow(), maggs; H = MPCFixtures.H)
         mpc = (block_fp(w.model, "balance_p"), block_fp(w.model, "balance_q"))
 
-        sf = Phase22Fixtures.stoch_feeder()
+        sf = StochasticFixtures.stoch_feeder()
         saggs = [
-            Phase22Fixtures.stoch_scenario_aggregators(
-                sf, sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, k)),
+            StochasticFixtures.stoch_scenario_aggregators(
+                sf, sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, k)),
             ) for k in 1:2
         ]
         r = build_stochastic_welfare(
-            sf, ConvexBranchFlow(), saggs; T = Phase22Fixtures.T, λ₀ = Phase22Fixtures.stoch_lambda0(),
+            sf, ConvexBranchFlow(), saggs; T = StochasticFixtures.T, λ₀ = StochasticFixtures.stoch_lambda0(),
         )
         stoch = type_fp(r.model)
 
-        df = Phase6Fixtures.two_bus_feeder()
-        daggs = Phase6Fixtures.build_two_bus_aggregators(df)
-        dso = build_dso_opt(df, daggs, Phase6Fixtures.T; ρ = Phase6Fixtures.RHO_2BUS, λ₀ = Phase6Fixtures.two_bus_lambda0())
+        df = TwoBusFixtures.two_bus_feeder()
+        daggs = TwoBusFixtures.build_two_bus_aggregators(df)
+        dso = build_dso_opt(df, daggs, TwoBusFixtures.T; ρ = TwoBusFixtures.RHO_2BUS, λ₀ = TwoBusFixtures.two_bus_lambda0())
         dsoc = (type_fp(dso.model), block_fp(dso.model, "balance_p"), block_fp(dso.model, "balance_q"))
         return (; linear, mpc, stoch, dsoc)
     end

@@ -1,14 +1,14 @@
-# test/fixtures_phase22.jl
+# test/fixtures_stochastic.jl
 #
 # Shared Phase-22 (stochastic PV/demand uncertainty) test fixture module (Wave 1). A
 # TestItems `@testmodule` that every downstream Phase-22 `@testitem` consumes via
-# `setup=[Phase22Fixtures]`. It provides a small, Deferrable-free, radial CI fixture that
+# `setup=[StochasticFixtures]`. It provides a small, Deferrable-free, radial CI fixture that
 # produces S disjoint-seeded scenario aggregator populations for a battery+thermostatic
 # house (D-12).
 #
 # SEAM: Phase-22 CI fixture (STOCH-01).
 #
-# CONTRACT (mirrors fixtures_phase21.jl's discipline): this module is SELF-CONTAINED, i.e. it
+# CONTRACT (mirrors fixtures_mpc.jl's discipline): this module is SELF-CONTAINED, i.e. it
 # makes NO top-level call to any symbol filled by a later Phase-22 wave. Every feeder-consuming
 # builder takes `feeder`/`seed` as an argument, so nothing here evaluates a not-yet-defined
 # symbol at module-load time; a partial-wave state cannot corrupt discovery.
@@ -32,7 +32,7 @@
 # `sub_seed(SEED_STOCH, Symbol(:oos_, h))` for `h in 1:H` — this module itself never calls
 # `sub_seed`, it only documents the convention every downstream plan must follow.
 
-@testmodule Phase22Fixtures begin
+@testmodule StochasticFixtures begin
     using TSODSO
 
     # Small day-ahead CI horizon — safe at any T since Deferrable is absent from this fixture.
@@ -48,7 +48,7 @@
     const BATT_λ_MAX = 8.9
 
     # Fixture scaling + tuning constants (all pinned ⇒ reproducible). A fresh literal, distinct
-    # from Phase21Fixtures.SEED_MPC.
+    # from MPCFixtures.SEED_MPC.
     const SEED_STOCH = 20260809
     const LOAD_SCALE_STOCH = 0.02
     const PV_SCALE_STOCH = 0.01
@@ -58,7 +58,7 @@
         temperature_profile(Tsteps::Int = T) -> Vector{Float64}
 
     The first `Tsteps` entries of the project's standard 24-hour ambient-temperature shape
-    (the exact digitized literal `fixtures_phase21.jl`'s own `temperature_profile()` uses),
+    (the exact digitized literal `fixtures_mpc.jl`'s own `temperature_profile()` uses),
     sliced/cycled to `Tsteps` via `mod1` (a `Tsteps > 24` request wraps rather than erroring).
     """
     function temperature_profile(Tsteps::Int = T)
@@ -95,7 +95,7 @@
         stoch_lambda0(Tsteps::Int = T) -> Vector{Float64}
 
     The flat MEM / wholesale price `λ₀ = LAMBDA0_STOCH` over `Tsteps` hours (mirrors
-    `Phase21Fixtures.mpc_lambda0`'s flat-price anchor convention).
+    `MPCFixtures.mpc_lambda0`'s flat-price anchor convention).
     """
     stoch_lambda0(Tsteps::Int = T) = fill(LAMBDA0_STOCH, Tsteps)
 
@@ -104,7 +104,7 @@
 
     The phase's small Deferrable-free CI substrate: a 2-bus radial fixture — root bus 1 (MEM
     frontier) + load bus 2, joined by ONE near-lossless, uncongested branch (mirrors
-    `Phase21Fixtures.mpc_feeder` exactly). Built INSIDE the function (never at module top
+    `MPCFixtures.mpc_feeder` exactly). Built INSIDE the function (never at module top
     level).
     """
     function stoch_feeder()
@@ -124,7 +124,7 @@
     ONE small seeded aggregator at bus 2 of the [`stoch_feeder`](@ref): a Thermostatic +
     PVBattery house (no Deferrable device — see file header), fed by a seeded
     `generate_profiles` draw offset by the target bus (`seed = seed + 2`, mirrors
-    `Phase21Fixtures._mpc_house_aggregator`'s per-bus-offset seeding convention), scaled small
+    `MPCFixtures._mpc_house_aggregator`'s per-bus-offset seeding convention), scaled small
     so the near-lossless short-`T` solve is FEASIBLE and INTERIOR.
 
     This function is called ONCE PER SCENARIO by every downstream plan with a DISJOINT `seed`

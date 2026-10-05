@@ -56,7 +56,7 @@ end
 # --- :mem price shape (EXP-01 §Pattern 1) ---
 #
 # The pinned 24-hour MEM / wholesale price `λ₀` (¢$/kWh-consistent) — the SAME digitized
-# shape as `test/fixtures_phase4.jl` `mem_price_profile()` / `test/fixtures_phase7.jl`
+# shape as `test/fixtures_ieee13.jl` `mem_price_profile()` / `test/fixtures_ieee123.jl`
 # `ieee123_lambda0()` (overnight trough → morning ramp → evening peak). Duplicated here
 # (rather than `using` the test fixture module) because `src/` must never depend on `test/`;
 # this is the SOURCE OF TRUTH the fixtures were originally digitized from. Positive and well
@@ -112,7 +112,7 @@ end
 
 # --- :default population shape (EXP-01 §Pattern 1 / RESEARCH read_first fixture SHAPEs) ---
 #
-# Reuses the fixtures_phase4/7 `_house_aggregator` residential-magnitude SHAPE (Thermostatic +
+# Reuses the fixtures_ieee13/7 `_house_aggregator` residential-magnitude SHAPE (Thermostatic +
 # Deferrable + PVBattery, seeded per-bus `generate_profiles`) but is not itself allowed to
 # `using` a test fixture module, so the construction is duplicated here as the canonical
 # `src/`-side implementation. The two feeder-scale calibrations (ieee13 @ 100 MVA base /
@@ -124,12 +124,12 @@ const _DEFAULT_BATT_λ_MIN = 3.8
 const _DEFAULT_BATT_λ_MED = 6.2
 const _DEFAULT_BATT_λ_MAX = 8.9
 
-# ieee13 (100 MVA base) residential scale — mirrors fixtures_phase4 GROUND_LOAD_SCALE/GROUND_PV_SCALE.
+# ieee13 (100 MVA base) residential scale — mirrors fixtures_ieee13 GROUND_LOAD_SCALE/GROUND_PV_SCALE.
 const _IEEE13_LOAD_SCALE = 0.005
 const _IEEE13_PV_SCALE = 0.03
 const _IEEE13_DEV_SCALE = 1.0
 
-# ieee123 (1 MVA feeder-scale base) residential scale — mirrors fixtures_phase7
+# ieee123 (1 MVA feeder-scale base) residential scale — mirrors fixtures_ieee123
 # LOAD_SCALE_IEEE123/PV_SCALE_IEEE123/DEV_SCALE_IEEE123.
 const _IEEE123_LOAD_SCALE = 0.03
 const _IEEE123_PV_SCALE = 0.06
@@ -177,7 +177,7 @@ The (struct-index) load buses of `feeder` (topology-only): the modified IEEE-123
 documented load/transit split (`ieee123_load_nodes`, 85 spot-load buses vs. ~37 zero-injection
 transit junctions handled by the DSO-OPT relaxation), so that split is used when
 `feeder_sym === :ieee123`; otherwise (`:ieee13` and any other radial fixture) every non-root
-bus is a load bus, mirroring `fixtures_phase4.build_ieee13_aggregators`.
+bus is a load bus, mirroring `fixtures_ieee13.build_ieee13_aggregators`.
 
 WR-03 fix: dispatches on the ALREADY-KNOWN, already-validated `Scenario.feeder::Symbol`
 selector rather than re-deriving "is this ieee123" from `length(feeder.buses)` — the previous
@@ -201,7 +201,7 @@ end
                    batt_pmax, batt_emax, batt_soc0) -> Aggregator
 
 Build one seeded residential `Aggregator` at `bus` (Thermostatic + Deferrable + PVBattery),
-mirroring the `fixtures_phase4`/`fixtures_phase7` `_house_aggregator` construction SHAPE.
+mirroring the `fixtures_ieee13`/`fixtures_ieee123` `_house_aggregator` construction SHAPE.
 `profiles` is accepted for signature symmetry with [`build_population`](@ref) but each house
 draws its OWN per-bus profile via `generate_profiles(seed = seed + bus, T)` — the SAME
 per-bus-seeded idiom the fixtures use — so no two houses share a profile draw and the whole

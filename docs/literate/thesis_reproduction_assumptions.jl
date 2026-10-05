@@ -43,7 +43,7 @@ cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 #
 # ## 4. The aggregator population re-tune
 #
-# `test/fixtures_phase7.jl` re-tunes the IEEE-123 aggregator population scale AFTER Phase 17
+# `test/fixtures_ieee123.jl` re-tunes the IEEE-123 aggregator population scale AFTER Phase 17
 # swapped in real impedances, because the ORIGINAL synthetic-impedance triple broke
 # `solve_welfare`'s SOCP-exactness gate outright on the real network (`assert_socp_exact!`
 # threw — worst gap ratio 1.378 > 1). The re-tune:

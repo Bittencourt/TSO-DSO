@@ -21,14 +21,14 @@
 #     contract (res.iters, res.welfare, res.exact_maxgap, res.λ vs centralized DLMP).
 
 @testitem "acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
-    [:acceptance] setup = [Phase4Fixtures] begin
+    [:acceptance] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
     # ── PINNED COMPUTED GOLDEN (reused verbatim from test/test_ieee13.jl's "ieee13 ground:
     # pinned computed golden regression + thesis v₉[16] cross-check" @testitem — NOT
     # re-derived here). See that file's header for the ground-truth calibration rationale
-    # (Phase4Fixtures.build_ieee13_ground_aggregators rescales the seeded shapes to a
+    # (IEEE13Fixtures.build_ieee13_ground_aggregators rescales the seeded shapes to a
     # residential magnitude so the head-branch-congested GLB-CVX solve is feasible and lands
     # in the thesis congestion-driven over-voltage regime).
     # Phase 26 gap-closure re-pin (PM-06) — kept byte-identical to test_ieee13.jl's Plan-26-17
@@ -43,8 +43,8 @@
     THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude — non-failing cross-check only
 
     feeder = TSODSO.ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # ── Centralized GLB-CVX SOCP solve through the oracle (exact relaxation + recovered DADP).
     res = operational_oracle(
@@ -115,15 +115,15 @@
 end
 
 @testitem "acceptance: IEEE-123 voltage — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
-    [:acceptance] setup = [Phase7Fixtures] begin
+    [:acceptance] setup = [IEEE123Fixtures] begin
     using TSODSO
     using TSODSO: SOCP
 
     feeder = ieee123_modified()
-    aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)
+    aggs = IEEE123Fixtures.build_ieee123_aggregators(feeder)
     load_buses = [a.bus for a in aggs]
-    Th = Phase7Fixtures.T
-    λ₀ = Phase7Fixtures.ieee123_lambda0()
+    Th = IEEE123Fixtures.T
+    λ₀ = IEEE123Fixtures.ieee123_lambda0()
 
     # ── Centralized ground truth: monolithic SOCP welfare + its DADP duals (ADMM-03 oracle),
     # identical to test_ieee123_admm.jl's cross-validation path.
@@ -145,20 +145,20 @@ end
     dlmp_c = reduce(vcat, (extract_dlmp(ctx_c; bus = b, T = Th)' for b in load_buses))
 
     # ── ADMM with the SAME per-unit adaptive-ρ config as the smaller feeders (scale-invariant,
-    # ADMM-02) — REUSING the identical Phase7Fixtures config constants, never retuned.
+    # ADMM-02) — REUSING the identical IEEE123Fixtures config constants, never retuned.
     res = solve_admm(
         feeder,
         ConvexBranchFlow(),
         aggs;
         T = Th,
         λ₀ = λ₀,
-        ρ = Phase7Fixtures.RHO0,
-        ε_abs = Phase7Fixtures.EPS_ABS,
-        ε_rel = Phase7Fixtures.EPS_REL,
-        τ = Phase7Fixtures.TAU,
-        μ = Phase7Fixtures.MU,
-        ρ_min = Phase7Fixtures.RHO_MIN,
-        ρ_max = Phase7Fixtures.RHO_MAX,
+        ρ = IEEE123Fixtures.RHO0,
+        ε_abs = IEEE123Fixtures.EPS_ABS,
+        ε_rel = IEEE123Fixtures.EPS_REL,
+        τ = IEEE123Fixtures.TAU,
+        μ = IEEE123Fixtures.MU,
+        ρ_min = IEEE123Fixtures.RHO_MIN,
+        ρ_max = IEEE123Fixtures.RHO_MAX,
         maxiter = 300,
         allow_export = true,
     )

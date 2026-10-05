@@ -50,7 +50,7 @@ using DrWatson: datadir
 # `tol` kwarg's inherited `1e-6` continuous relative-gap tolerance, so it can never be
 # mistaken for "reusing" that tolerance (the standing anti-certificate-laundering bar).
 #
-# EMPIRICALLY MEASURED (2026-08-23) on the D-12 fixture (`Phase6Fixtures.two_bus_feeder()`
+# EMPIRICALLY MEASURED (2026-08-23) on the D-12 fixture (`TwoBusFixtures.two_bus_feeder()`
 # + `ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)`, single aggregator, λ₀=[4.0],
 # T=1), solving the oracle (Clarabel SOCP) and follower (HiGHS LP) once each at a
 # representative interior trial `z = [1.0]` and reading each solver's OWN certified

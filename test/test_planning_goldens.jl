@@ -20,10 +20,10 @@
 #     regression (previously only asserted `>= 0 && isfinite`, never bounded).
 
 @testitem "planning goldens: N=1 certified Stackelberg equilibrium — gap gate then pinned golden regression (PVAL-02)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -56,7 +56,7 @@
 end
 
 @testitem "planning goldens: N=2 Nash equilibrium — convergence gate then pinned golden regression (PVAL-02)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
 
     shared = build_shared_transmission(;
@@ -70,7 +70,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -97,14 +97,14 @@ end
 end
 
 @testitem "planning goldens: N=2 multi-seed/multi-order probe — gating checks then spread-bound regression (PVAL-02)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],

@@ -161,7 +161,7 @@ end
 end
 
 @testitem "errors: certify_angle_recoverable! report=true does not throw; report=false throws CertificateError(kind = :angle)" setup =
-    [Phase23Fixtures] begin
+    [MeshFixtures] begin
     using TSODSO, Test
 
     function _catch(f)
@@ -173,13 +173,13 @@ end
         end
     end
 
-    aggs = Phase23Fixtures.mesh_aggregators()
-    λ₀ = Phase23Fixtures.mesh_lambda0()
+    aggs = MeshFixtures.mesh_aggregators()
+    λ₀ = MeshFixtures.mesh_lambda0()
     ctx, _, _ = solve_welfare(
-        Phase23Fixtures.mesh_feeder(:heterogeneous),
+        MeshFixtures.mesh_feeder(:heterogeneous),
         MeshedFlow(),
         aggs;
-        T = Phase23Fixtures.T_MESH,
+        T = MeshFixtures.T_MESH,
         λ₀ = λ₀,
     )
     @test _catch(() -> certify_angle_recoverable!(ctx; report = true)) === nothing
@@ -189,7 +189,7 @@ end
 end
 
 @testitem "errors: solve_admm maxiter=1 throws ConvergenceError(iterations = 1)" setup =
-    [Phase6Fixtures] tags = [:admm] begin
+    [TwoBusFixtures] tags = [:admm] begin
     using TSODSO, Test
 
     function _catch(f)
@@ -201,16 +201,16 @@ end
         end
     end
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
     e = _catch(
         () -> solve_admm(
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = Phase6Fixtures.T,
-            λ₀ = Phase6Fixtures.two_bus_lambda0(),
-            ρ = Phase6Fixtures.RHO_2BUS,
+            T = TwoBusFixtures.T,
+            λ₀ = TwoBusFixtures.two_bus_lambda0(),
+            ρ = TwoBusFixtures.RHO_2BUS,
             maxiter = 1,
             tol = 1e-12,
         ),

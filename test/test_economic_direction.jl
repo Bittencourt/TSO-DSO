@@ -9,7 +9,7 @@
 #
 # Every item name contains "econ" AND "direction" so either `occursin("econ", ti.name)` or
 # `occursin("direction", ti.name)` selects it. The fixtures come from the shared Phase-4
-# `Phase4Fixtures` @testmodule (high-PV over-generation + IEEE-13 head-branch congestion).
+# `IEEE13Fixtures` @testmodule (high-PV over-generation + IEEE-13 head-branch congestion).
 
 @testitem "econ direction: economic_direction_checks is defined and exported (PRICE-05)" tags =
     [:econ, :direction] begin
@@ -20,13 +20,13 @@
 end
 
 @testitem "econ direction: PV-glut window drives the DADP below wholesale λ₀ (PRICE-05)" tags =
-    [:econ, :direction] setup = [Phase4Fixtures] begin
+    [:econ, :direction] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # allow_export = true: the reverse-flow PV surplus is SOLD to the MEM (the SOC-exactness
     # enabler, PF-04). solve_welfare gates on the exactness certificate BEFORE any dual read,
@@ -35,7 +35,7 @@ end
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -48,25 +48,25 @@ end
     Λ = dual.(ctx.constraints[:balance_p])
     Np = size(Λ, 1)
     below = minimum(
-        Λ[j, t] - λ₀[t] for j in 1:Np for t in 1:Phase4Fixtures.T if j != feeder.root
+        Λ[j, t] - λ₀[t] for j in 1:Np for t in 1:IEEE13Fixtures.T if j != feeder.root
     )
     @test below < -1e-6
 end
 
 @testitem "econ direction: head-branch congestion drives the DADP above wholesale λ₀ (PRICE-05)" tags =
-    [:econ, :direction] setup = [Phase4Fixtures] begin
+    [:econ, :direction] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -79,25 +79,25 @@ end
     Λ = dual.(ctx.constraints[:balance_p])
     Np = size(Λ, 1)
     above = maximum(
-        Λ[j, t] - λ₀[t] for j in 1:Np for t in 1:Phase4Fixtures.T if j != feeder.root
+        Λ[j, t] - λ₀[t] for j in 1:Np for t in 1:IEEE13Fixtures.T if j != feeder.root
     )
     @test above > 1e-6
 end
 
 @testitem "econ direction: a backwards (sign-flipped) price signal makes the check THROW — non-vacuous (PRICE-05)" tags =
-    [:econ, :direction] setup = [Phase4Fixtures] begin
+    [:econ, :direction] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # --- PV glut: negating λ₀ inverts the expected below-wholesale relation ⇒ throw ---
-    fg = Phase4Fixtures.high_pv_feeder()
+    fg = IEEE13Fixtures.high_pv_feeder()
     ctxg, _, _ = solve_welfare(
         fg,
         ConvexBranchFlow(),
-        Phase4Fixtures.build_high_pv_aggregators(fg);
-        T = Phase4Fixtures.T,
+        IEEE13Fixtures.build_high_pv_aggregators(fg);
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -118,8 +118,8 @@ end
     ctxc, _, _ = solve_welfare(
         fc,
         ConvexBranchFlow(),
-        Phase4Fixtures.build_ieee13_ground_aggregators(fc);
-        T = Phase4Fixtures.T,
+        IEEE13Fixtures.build_ieee13_ground_aggregators(fc);
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )

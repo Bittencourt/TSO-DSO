@@ -7,28 +7,28 @@
 # `occursin("welfare", ti.name)` selects it.
 
 @testitem "welfare: solve_welfare + fixture health exist (OPT-01)" tags = [:welfare] setup =
-    [Phase3Fixtures] begin
+    [SmallRadialFixtures] begin
     using TSODSO
 
     # The shared fixture is healthy (exercises setup wiring): valid feeder + T=24 data.
-    feeder = Phase3Fixtures.small_radial_feeder()
+    feeder = SmallRadialFixtures.small_radial_feeder()
     @test feeder.root == 1
-    @test length(Phase3Fixtures.λ₀) == length(Phase3Fixtures.Pdc) == Phase3Fixtures.T == 24
+    @test length(SmallRadialFixtures.λ₀) == length(SmallRadialFixtures.Pdc) == SmallRadialFixtures.T == 24
 
     @test isdefined(TSODSO, :solve_welfare)
 end
 
 @testitem "welfare: end-to-end GLB-CVX optimum, reactive balance, battery complementarity (OPT-01, DEV-04)" tags =
-    [:welfare] setup = [Phase3Fixtures] begin
+    [:welfare] setup = [SmallRadialFixtures] begin
     using TSODSO
     using TSODSO: NLP
     using JuMP
 
-    T = Phase3Fixtures.T                       # 24
-    feeder = Phase3Fixtures.small_radial_feeder()
-    Tout = Phase3Fixtures.Tout
-    Pdc = Phase3Fixtures.Pdc
-    λ₀ = Phase3Fixtures.λ₀
+    T = SmallRadialFixtures.T                       # 24
+    feeder = SmallRadialFixtures.small_radial_feeder()
+    Tout = SmallRadialFixtures.Tout
+    Pdc = SmallRadialFixtures.Pdc
+    λ₀ = SmallRadialFixtures.λ₀
     φ = 0.9                                     # nonzero power factor ⇒ reactive load present
 
     # Seeded, reproducible PV profile (DATA-04) feeds the battery availability limit.
@@ -85,15 +85,15 @@ end
 end
 
 @testitem "welfare: DC + reactive aggregator solves active-only (WR-03, DEV-05)" tags =
-    [:welfare] setup = [Phase3Fixtures] begin
+    [:welfare] setup = [SmallRadialFixtures] begin
     using TSODSO
     using JuMP
 
-    T = Phase3Fixtures.T
-    feeder = Phase3Fixtures.small_radial_feeder()
-    Tout = Phase3Fixtures.Tout
-    Pdc = Phase3Fixtures.Pdc
-    λ₀ = Phase3Fixtures.λ₀
+    T = SmallRadialFixtures.T
+    feeder = SmallRadialFixtures.small_radial_feeder()
+    Tout = SmallRadialFixtures.Tout
+    Pdc = SmallRadialFixtures.Pdc
+    λ₀ = SmallRadialFixtures.λ₀
     φ = 0.9                                    # φ < 1 ⇒ the aggregator emits a reactive term
 
     prof = generate_profiles(seed = 20260718, T = T)
@@ -225,15 +225,15 @@ end
 # the price-transfer term p_agⱼ), and the aggregator `utility`. Name contains "welfare" and
 # "surplus" so either `occursin` filter selects it.
 @testitem "welfare surplus: solve_welfare stashes per-aggregator net injection + utility (PRICE-03)" tags =
-    [:welfare, :surplus] setup = [Phase3Fixtures] begin
+    [:welfare, :surplus] setup = [SmallRadialFixtures] begin
     using TSODSO
     using JuMP
 
-    T = Phase3Fixtures.T                       # 24
-    feeder = Phase3Fixtures.small_radial_feeder()
-    Tout = Phase3Fixtures.Tout
-    Pdc = Phase3Fixtures.Pdc
-    λ₀ = Phase3Fixtures.λ₀
+    T = SmallRadialFixtures.T                       # 24
+    feeder = SmallRadialFixtures.small_radial_feeder()
+    Tout = SmallRadialFixtures.Tout
+    Pdc = SmallRadialFixtures.Pdc
+    λ₀ = SmallRadialFixtures.λ₀
     φ = 0.9
 
     prof = generate_profiles(seed = 20260718, T = T)

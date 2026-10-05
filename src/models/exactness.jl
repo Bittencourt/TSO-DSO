@@ -184,7 +184,7 @@ protocol documented on that constant; the LARGER of the two terms applies per br
 explicit `atol::Real` BYPASSES the hybrid `max(τ_solver, ε*ref_b)` computation entirely —
 `atol_b = atol` is used as a FLAT floor for every branch, exactly as the pre-FIX-08 gate did.
 This preserves the 2 call sites that already pass a Phase-26-tuned explicit `atol`
-(`src/admm/DsoOpt.jl`, `test/fixtures_phase19.jl`) completely unaffected by this change.
+(`src/admm/DsoOpt.jl`, `test/fixtures_four_quad_bess.jl`) completely unaffected by this change.
 
 Why this gate exists (RESEARCH Pattern 4 / Pitfall 1): a strict cone at the optimum means the
 squared current `l` is a fictitious over-current and the recovered DADP duals are physically
@@ -253,7 +253,7 @@ function assert_socp_exact!(
     # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this gate's numeric check
     # only runs on a `ctx` whose formulation carries the branch-current variable (the
     # `has_branch_current(ctx.pf)` guard at this function's call site). The ONE currently-known
-    # multi-root-branch feeder, `Phase23Fixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
+    # multi-root-branch feeder, `MeshFixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
     # at buses 2/3, so its two root branches (1,2)/(1,3) DO carry different flow magnitudes by
     # construction), is exercised via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
     # /`test_mesh_flow.jl`. MeshedFlow delegates to the shared SOCP body, which stashes `:l`, so

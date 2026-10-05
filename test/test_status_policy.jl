@@ -27,7 +27,7 @@
 end
 
 @testitem "status policy: solve_stackelberg! and run_nash! status within vocabulary" tags =
-    [:status_policy, :planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:status_policy, :planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     V = TSODSO.STATUS_VOCABULARY
@@ -38,7 +38,7 @@ end
     function run_stackelberg()
         mktempdir() do dir
             return solve_stackelberg!(
-                Phase6Fixtures.two_bus_feeder(),
+                TwoBusFixtures.two_bus_feeder(),
                 LinDistFlow(),
                 [agg];
                 λ₀ = [4.0],
@@ -65,7 +65,7 @@ end
             c_op = [[0.5], [0.5]],
         )
         spec = (;
-            feeder = Phase6Fixtures.two_bus_feeder(),
+            feeder = TwoBusFixtures.two_bus_feeder(),
             pf = LinDistFlow(),
             aggregators = [agg],
             λ₀ = [4.0],
@@ -110,14 +110,14 @@ end
 end
 
 @testitem "status policy: DC + reactive aggregators pinned as documented degradation (no throw)" tags =
-    [:status_policy] setup = [Phase8Fixtures] begin
+    [:status_policy] setup = [ExperimentHarnessFixtures] begin
     using TSODSO, JuMP
 
     # Aggregators write reactive terms unconditionally; DCPowerFlow is active-only by design,
     # so the unclosed `:Rq` residual is a documented degradation, NOT a bug — no throw, no
     # status (Phase-33 has_reactive guard deferral decided as "pin, don't throw").
     function solve_dc()
-        s = TSODSO.Scenario(; Phase8Fixtures.minimal_scenario_kwargs()..., strategy = :admm)
+        s = TSODSO.Scenario(; ExperimentHarnessFixtures.minimal_scenario_kwargs()..., strategy = :admm)
         feeder, λ₀, aggs = TSODSO._materialize(s)
         return solve_welfare(feeder, DCPowerFlow(), aggs; T = 24, λ₀ = λ₀, allow_export = true)
     end

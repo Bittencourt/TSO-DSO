@@ -10,7 +10,7 @@
 # Fixture: the SAME N=2 corner-cap control fixture as
 # `test/test_planning_nash.jl`'s own pinned continuous golden (T=1, corridor_cap=2.0,
 # x_inv_max=[0.3,0.3], c_inv=[1.0,1.0], c_op=[[0.5],[0.5]], each distributor's own
-# feeder=Phase6Fixtures.two_bus_feeder(), pf=LinDistFlow(),
+# feeder=TwoBusFixtures.two_bus_feeder(), pf=LinDistFlow(),
 # agg=ToyElasticDevice(2,6.0,1.0,10.0) wrapped in Aggregator(2,0.9,[dev],[0.0]),
 # λ₀=[4.0], master_kwargs=(;c_y=0.3,y_max=8.0,α_op_lb=-5.0,α_x_lb=0.0)) — reused here
 # with `K=4` (lattice step `y_max/2^K = 0.5`) so the known continuous equilibrium
@@ -58,7 +58,7 @@
 # the full account.
 
 @testitem "planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation, BILEV-07)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     import JuMP
 
@@ -73,7 +73,7 @@
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -168,13 +168,13 @@
 end
 
 @testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_op_lb :auto or finite, α_x_lb finite — WR-02; no silently ignored master_kwargs/integer keys, derived α_x_lb — WR-06) — before any solve call" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -381,7 +381,7 @@ end
 end
 
 @testitem "planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (CR-01, live)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     shared = build_shared_transmission(;
@@ -395,7 +395,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],

@@ -248,7 +248,7 @@ end
 # fixture every time (the retry ladder never fires here) — so the new name no
 # longer claims otherwise.
 @testitem "planning hardening: load test — T=8 multi-iteration Benders run (measured 47-66 iters across environments), checkpoint machinery exercised at scale, retry-trace/log cross-check (load, benders)" tags =
-    [:planning, :slow] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using DrWatson: wload
     using Test: collect_test_logs
@@ -261,7 +261,7 @@ end
     # (never a new numeric constant) — except `α_op_lb`, loosened from -5.0 to
     # -50.0, a CORRECTNESS requirement at this scale (see header note).
     T = 8
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
     λ₀ = fill(4.0, T)

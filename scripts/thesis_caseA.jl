@@ -24,7 +24,7 @@
 # Figures land in  results/thesis_caseA/  (PDF + PNG).
 #
 # NOTE on scale: the repo's `:default` IEEE-13 population is a 1-house-per-bus RESCALED
-# proxy for the 784-house case (fixtures_phase4 SHAPE, per-unit-consistent magnitudes), so
+# proxy for the 784-house case (fixtures_ieee13 SHAPE, per-unit-consistent magnitudes), so
 # the ABSOLUTE welfare/$ numbers are not the thesis's published values — only the SHAPES,
 # the +25% RATIO, and the qualitative price/voltage behaviour are reproduced. This matches
 # the thesis's own framing (RESEARCH Pitfall 4: absolute welfare is figure-bound; the ratio

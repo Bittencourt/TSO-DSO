@@ -1,8 +1,8 @@
-# test/fixtures_phase23.jl
+# test/fixtures_mesh.jl
 #
 # Shared Phase-23 (meshed networks) test fixture module (Wave 2, plan 23-02). A TestItems
 # `@testmodule` that every downstream Phase-23 `@testitem` consumes via
-# `setup=[Phase23Fixtures]`. It provides the phase's ONE committed CI loop fixture (D-02): a
+# `setup=[MeshFixtures]`. It provides the phase's ONE committed CI loop fixture (D-02): a
 # 4-bus "diamond" (single independent cycle, nB=4 > N-1=3) with a TOGGLABLE impedance
 # profile -- `:uniform` and `:heterogeneous` on the SAME topology -- exercising both the
 # angle-recoverability certificate's recoverable and unrecoverable branches (plan 23-03,
@@ -10,7 +10,7 @@
 #
 # SEAM: Phase-23 CI fixture (MESH-02, prerequisite for MESH-03).
 #
-# CONTRACT (mirrors fixtures_phase22.jl's discipline): this module is SELF-CONTAINED, i.e. it
+# CONTRACT (mirrors fixtures_stochastic.jl's discipline): this module is SELF-CONTAINED, i.e. it
 # makes NO top-level call to any symbol filled by a later Phase-23 plan. Every feeder-
 # consuming builder takes arguments (`profile::Symbol`), so nothing here evaluates a
 # not-yet-defined symbol at module-load time.
@@ -108,7 +108,7 @@
 # safety margin from the 10x infeasibility cliff, and the RATIOS themselves are UNCHANGED
 # from the original literals (only their common magnitude scale differs).
 
-@testmodule Phase23Fixtures begin
+@testmodule MeshFixtures begin
     using TSODSO
 
     # Single-hour CI horizon -- this fixture is about the LOOP, not the horizon.

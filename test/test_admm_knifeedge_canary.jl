@@ -32,11 +32,11 @@
 #     Bit-stable across 3 fresh `julia --project=.` processes on Julia 1.12.5 in this worktree.
 
 @testitem "admm knife-edge canary: IEEE-13 mid-loop SOCP pinned trajectory (canary, admm)" setup =
-    [Phase8Fixtures] tags = [:admm, :canary] begin
+    [ExperimentHarnessFixtures] tags = [:admm, :canary] begin
     using TSODSO
     using Logging: with_logger, SimpleLogger, Warn
 
-    kw = Phase8Fixtures.minimal_scenario_kwargs()
+    kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
     s = TSODSO.Scenario(; kw..., strategy = :admm)
 
     # Capture ladder-escalation warnings via a plain SimpleLogger (no custom AbstractLogger

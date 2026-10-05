@@ -6,16 +6,16 @@
 # 21-01 widened, plus a build-time `terminal_soc` toggle (MPC-02). `solve_mpc_window!` is a
 # one-line delegation to `solve_with_retry!`. Items tagged `[:mpc_window]`, every name contains
 # "mpc_window" (occursin filter convention, mirrors test_planning_oracle.jl / test_mpc_trace.jl),
-# `setup = [Phase21Fixtures]`.
+# `setup = [MPCFixtures]`.
 
 @testitem "mpc_window: build_mpc_window guards (empty aggregators, H<1, bus range)" tags =
-    [:mpc_window] setup = [Phase21Fixtures] begin
+    [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
-    H = Phase21Fixtures.H
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
+    H = MPCFixtures.H
 
     # Empty aggregators: no priced load / no objective.
     @test_throws ArgumentError build_mpc_window(
@@ -51,14 +51,14 @@
 end
 
 @testitem "mpc_window: allow_export threads to the frontier — import-only lower bound when false, free-sign when true (WR-06)" tags =
-    [:mpc_window] setup = [Phase21Fixtures] begin
+    [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window
     using JuMP: has_lower_bound, lower_bound
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
-    H = Phase21Fixtures.H
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
+    H = MPCFixtures.H
 
     # Default (and explicit true): FREE-SIGN frontier — no lower bound on any p_import[τ].
     o_free = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H)
@@ -73,15 +73,15 @@ end
 end
 
 @testitem "mpc_window: build-once — num_variables/num_constraints invariant across re-solves at DIFFERENT soc0/Tin0/terminal-target/forecast-slice states (MPC-01)" tags =
-    [:mpc_window] setup = [Phase21Fixtures] begin
+    [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, solve_mpc_window!
     using JuMP:
         num_variables, num_constraints, set_parameter_value, set_objective_coefficient
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
-    H = Phase21Fixtures.H
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
+    H = MPCFixtures.H
 
     o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = true)
     @test o isa TSODSO.MpcWindow
@@ -157,14 +157,14 @@ end
 end
 
 @testitem "mpc_window: set_parameter_value on soc0 is NOT a no-op — the solved soc[1] trajectory genuinely moves (MPC-01)" tags =
-    [:mpc_window] setup = [Phase21Fixtures] begin
+    [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, solve_mpc_window!
     using JuMP: value, set_parameter_value, set_objective_coefficient
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
-    H = Phase21Fixtures.H
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
+    H = MPCFixtures.H
 
     # terminal_soc = false here isolates the IC-parameter effect from the terminal-target
     # constraint (the FINAL test item below covers the toggle's structural effect separately).
@@ -193,14 +193,14 @@ end
 end
 
 @testitem "mpc_window: terminal_soc toggle produces a STRUCTURALLY different model (MPC-02 mechanism)" tags =
-    [:mpc_window] setup = [Phase21Fixtures] begin
+    [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window
     using JuMP: num_constraints
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
-    H = Phase21Fixtures.H
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
+    H = MPCFixtures.H
 
     o_true = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = true)
     o_false =

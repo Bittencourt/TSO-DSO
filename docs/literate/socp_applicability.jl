@@ -36,7 +36,7 @@ using Printf
 
 const T = 24
 
-# Digitized profiles, byte-identical to `test/fixtures_phase4.jl` / `fixtures_phase7.jl`.
+# Digitized profiles, byte-identical to `test/fixtures_ieee13.jl` / `fixtures_ieee123.jl`.
 const TEMP = Float64[
     19,
     18,
@@ -116,7 +116,7 @@ end
 
 # ## Substrate A — the 3-bus high-PV stress fixture (computed live)
 #
-# A purpose-built fixture (`test/fixtures_phase4.jl`): low-impedance `r = x = 0.05` branches and a
+# A purpose-built fixture (`test/fixtures_ieee13.jl`): low-impedance `r = x = 0.05` branches and a
 # tight voltage band, so PV back-feed swings voltage fast and the overvoltage/reverse-flow mechanism
 # that breaks exactness can actually fire. Everything below runs at documentation build time.
 

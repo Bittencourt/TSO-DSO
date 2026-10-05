@@ -4,19 +4,19 @@
 # driven directly against plan 21-03's `build_mpc_window`/`solve_mpc_window!` primitives plus
 # this plan's own `propagate_soc` (D-05), BEFORE the full `run_mpc` orchestrator (plan 21-05)
 # exists. Every item name contains "mpc_terminal", tagged `[:mpc_terminal]`, `setup =
-# [Phase21Fixtures]`.
+# [MPCFixtures]`.
 #
 # DEVIATION (documented in 21-04-SUMMARY.md, Rule 1): the plan's own action sketch reads
-# `λ₀ = Phase21Fixtures.mpc_lambda0()` (a FLAT price). Measured empirically (a standalone probe
+# `λ₀ = MPCFixtures.mpc_lambda0()` (a FLAT price). Measured empirically (a standalone probe
 # script, not committed), a flat price on this fixture makes BOTH the disabled and enabled
 # receding-horizon loops converge to the SAME PV-driven Emax-saturated endpoint (the free PV
 # charging dominates and hits the hard `Emax` cap regardless of the terminal toggle), so
 # `dev_disabled`/`dev_enabled` are both ~1e-9-1e-10 solver-noise-floor numbers with NO
 # measurable separation — an ambiguous, non-demonstrative margin (T-21-11's own disposition:
 # widen the fixture rather than weaken the assertion). Per the plan's explicit permission to
-# "widen T/H's ratio or Phase21Fixtures's battery headroom" when ambiguous, the MINIMAL widening
+# "widen T/H's ratio or MPCFixtures's battery headroom" when ambiguous, the MINIMAL widening
 # used here is a non-flat, mid-horizon price SPIKE (`λ₀ = [4,4,4,9,4,4,4,4]`, hour 4 of 8) built
-# locally in this test file — `Phase21Fixtures.mpc_feeder`/`build_mpc_aggregators` (the feeder,
+# locally in this test file — `MPCFixtures.mpc_feeder`/`build_mpc_aggregators` (the feeder,
 # aggregators, battery/thermostatic headroom, and PV/demand ground truth) are all used
 # VERBATIM, unmodified. A price spike that falls INSIDE one interior window but OUTSIDE the
 # window immediately preceding it is exactly the informational asymmetry the terminal condition
@@ -38,20 +38,20 @@
 # `dev_enabled` still sits at the same ~1e-10-1e-11 solver-precision floor.
 
 @testitem "mpc_terminal: hard terminal-SOC condition prevents end-of-horizon dump/hoard, present when disabled (MPC-02)" tags =
-    [:mpc_terminal] setup = [Phase21Fixtures] begin
+    [:mpc_terminal] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, solve_mpc_window!
     using JuMP: value, set_parameter_value, set_objective_coefficient
 
-    feeder = Phase21Fixtures.mpc_feeder()
-    aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
-    T = Phase21Fixtures.T
-    H = Phase21Fixtures.H
+    feeder = MPCFixtures.mpc_feeder()
+    aggs = MPCFixtures.build_mpc_aggregators(feeder)
+    T = MPCFixtures.T
+    H = MPCFixtures.H
 
     # Non-flat, mid-horizon price spike (hour 4 of 8) — see file-header DEVIATION note: the
     # fixture's own flat `mpc_lambda0()` produces an ambiguous, noise-floor-only margin on this
     # feeder/aggregator pair; this is the minimal widening that makes the artifact measurable
-    # without touching Phase21Fixtures' feeder/aggregator/battery-headroom shapes at all.
+    # without touching MPCFixtures' feeder/aggregator/battery-headroom shapes at all.
     λ₀ = Float64[4.0, 4.0, 4.0, 9.0, 4.0, 4.0, 4.0, 4.0]
     @assert length(λ₀) == T
 

@@ -5,7 +5,7 @@
 # `JuMP.unregister`-decoupled scenario blocks on one shared `Model`, with nonanticipativity
 # equality constraints tying battery-like devices across scenarios and a per-scenario,
 # never-aggregated PF-04 exactness gate. Items tagged `[:stochastic_welfare]`, `setup =
-# [Phase22Fixtures]`, mirroring `test_mpc_window.jl`'s structure (occursin-filter
+# [StochasticFixtures]`, mirroring `test_mpc_window.jl`'s structure (occursin-filter
 # convention: every item name contains "stochastic_welfare"... here the FILE name already
 # carries that, tags are the discovery mechanism).
 #
@@ -26,20 +26,20 @@
 # uses two genuinely different buses, exactly as PLAN.md specifies.
 
 @testitem "stochastic_welfare: D-04 non-uniform probabilities genuinely change the objective, not silently uniform" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
 
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
 
     # Three DISJOINT-seeded in-sample scenarios (the documented calling convention in
-    # fixtures_phase22.jl's own header: sub_seed(SEED_STOCH, Symbol(:insample_, k))).
+    # fixtures_stochastic.jl's own header: sub_seed(SEED_STOCH, Symbol(:insample_, k))).
     scenario_aggs = [
-        Phase22Fixtures.stoch_scenario_aggregators(
+        StochasticFixtures.stoch_scenario_aggregators(
             feeder,
-            sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, k)),
+            sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, k)),
         ) for k in 1:3
     ]
 
@@ -61,12 +61,12 @@
 end
 
 @testitem "stochastic_welfare: D-06 PF-04 gate runs per scenario, never aggregated — an extreme scenario throws regardless of the other" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare
 
-    # A dedicated 3-bus lossy feeder (mirrors Phase21Fixtures.mpc_high_pv_feeder() exactly:
-    # r=x=0.05, no smax limit) — distinct from Phase22Fixtures' own near-lossless 2-bus CI
+    # A dedicated 3-bus lossy feeder (mirrors MPCFixtures.mpc_high_pv_feeder() exactly:
+    # r=x=0.05, no smax limit) — distinct from StochasticFixtures' own near-lossless 2-bus CI
     # substrate, needed here because a REAL structural inexactness (not a knife-edge) needs
     # real branch impedance to manifest under high PV.
     buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
@@ -225,17 +225,17 @@ end
 end
 
 @testitem "stochastic_welfare: structural congruence guard — a bus mismatch across scenarios throws ArgumentError" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
 
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
 
-    scenario1 = Phase22Fixtures.stoch_scenario_aggregators(
+    scenario1 = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, 1)),
+        sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, 1)),
     )
     # A second scenario whose aggregator sits at a DIFFERENT bus than scenario 1's — the
     # structural mismatch that would mispair the nonanticipativity walk (Task 1, D-03).
@@ -253,7 +253,7 @@ end
 end
 
 @testitem "stochastic_welfare: WR-10 (phase-22 review) — D-08 S=1 anchor against solve_welfare and the D-05 de-scaling property" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: SOCP, build_stochastic_welfare, sub_seed
 
@@ -264,12 +264,12 @@ end
     # inside ctx.objective, flipping a sign, or breaking the de-scaling
     # denominator would have silently corrupted every reported price while the whole
     # suite passed. Both properties are pinned here.
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :wr10_anchor),
+        sub_seed(StochasticFixtures.SEED_STOCH, :wr10_anchor),
     )
 
     # --- D-08 anchor: the 1-scenario extensive form reproduces the deterministic solve.
@@ -328,7 +328,7 @@ end
 end
 
 @testitem "stochastic_welfare: WR-09 (phase-22 review) — soc agrees across scenarios post-solve WITHOUT explicit (rank-deficient) soc tie rows" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
     using JuMP: value
@@ -339,14 +339,14 @@ end
     # equalities per battery making the equality block rank-deficient (an interior-point
     # conditioning hazard). The rows are dropped; this item pins the IMPLIED agreement:
     # the solved soc trajectories of two differently-seeded scenarios must still match.
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
 
     scenario_aggs = [
-        Phase22Fixtures.stoch_scenario_aggregators(
+        StochasticFixtures.stoch_scenario_aggregators(
             feeder,
-            sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, k)),
+            sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, k)),
         ) for k in 1:3
     ]
 
@@ -372,7 +372,7 @@ end
 end
 
 @testitem "stochastic_welfare: WR-04 (phase-22 review) — FourQuadBESS reactive dispatch q is nonanticipativity-tied (full first-stage battery schedule)" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
     using JuMP: value
@@ -382,13 +382,13 @@ end
     # first-stage, SHARED across scenarios" claim (D-03) held only for the active-power
     # half of the device. q is now tied too; this item pins it: two scenarios with
     # genuinely different PV/demand draws must report the IDENTICAL solved q trajectory.
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    L = Phase22Fixtures.LOAD_SCALE_STOCH
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    L = StochasticFixtures.LOAD_SCALE_STOCH
 
     house(seed) = begin
-        base = Phase22Fixtures.stoch_scenario_aggregators(feeder, seed)
+        base = StochasticFixtures.stoch_scenario_aggregators(feeder, seed)
         bess = FourQuadBESS(
             2,
             0.95,
@@ -399,9 +399,9 @@ end
             0.0,
             0.4 * L,
             0.2 * L,          # Emin, Emax, soc0
-            Phase22Fixtures.BATT_λ_MIN,
-            Phase22Fixtures.BATT_λ_MED,
-            Phase22Fixtures.BATT_λ_MAX,
+            StochasticFixtures.BATT_λ_MIN,
+            StochasticFixtures.BATT_λ_MED,
+            StochasticFixtures.BATT_λ_MAX,
         )
         [
             TSODSO.Aggregator(
@@ -413,8 +413,8 @@ end
         ]
     end
 
-    s1 = house(sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_a))
-    s2 = house(sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_b))
+    s1 = house(sub_seed(StochasticFixtures.SEED_STOCH, :wr04_a))
+    s2 = house(sub_seed(StochasticFixtures.SEED_STOCH, :wr04_b))
 
     r = build_stochastic_welfare(
         feeder,
@@ -438,21 +438,21 @@ end
 end
 
 @testitem "stochastic_welfare: WR-03 (phase-22 review) device-composition congruence guard — reordered or missing devices throw ArgumentError, never a silently-untied battery" tags =
-    [:stochastic_welfare] setup = [Phase22Fixtures] begin
+    [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
 
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
 
-    scenario1 = Phase22Fixtures.stoch_scenario_aggregators(
+    scenario1 = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, 1)),
+        sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, 1)),
     )
-    base2 = Phase22Fixtures.stoch_scenario_aggregators(
+    base2 = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, Symbol(:insample_, 2)),
+        sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, 2)),
     )
 
     # The fixture aggregator is [Thermostatic, PVBattery]. REVERSED, scenario 2's device

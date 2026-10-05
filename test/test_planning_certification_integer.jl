@@ -45,7 +45,7 @@
 # an ad-hoc script bypassing the runner entirely). Converting it to the `@testmodule`
 # below fixes BOTH problems at once: `@testmodule`s (unlike plain top-level functions)
 # ARE `using`-importable into a `@testitem`'s isolated module via `setup=[...]` (the
-# SAME established pattern this file already uses for `Phase6Fixtures`/
+# SAME established pattern this file already uses for `TwoBusFixtures`/
 # `ToyDeviceFixture`/`PlanningFixtures`), so ONE definition now serves BOTH `@testitem`s
 # below AND is genuinely exercised by the real TestItemRunner-driven suite gate (not
 # merely appearing to be tested while actually being inert).
@@ -309,11 +309,11 @@ end
 
 @testitem "planning certification integer: INT-03 exhaustive-enumeration certification of the D-12 tiny instance (D-15 certificates 1+2, D-16 visibility, D-11 non-blocker documented) -- FIXED in gap-closure 24-05.1 (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header" tags =
     [:planning] setup =
-    [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
+    [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
     using TSODSO: build_follower, build_master_integer, build_planning_oracle
     using TSODSO, Test
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -321,7 +321,7 @@ end
 
     # WR-04 consolidation (Phase 24 code review): enumerate_lattice now comes from the
     # shared EnumerateLatticeOracle @testmodule (file header) via setup=[...], the SAME
-    # `using`-import mechanism this file already uses for Phase6Fixtures/ToyDeviceFixture/
+    # `using`-import mechanism this file already uses for TwoBusFixtures/ToyDeviceFixture/
     # PlanningFixtures -- no more nested per-testitem copy of this logic.
 
     # D(x) -- the SAME hyperplane formula add_ll_cut! writes over master.b, evaluated at an
@@ -514,11 +514,11 @@ end
 end
 
 @testitem "planning certification integer: negative-control regression -- a deliberately WRONG known_optimum is rejected, never falsely converges via a stray gap<=tol match (plan-checker Blocker 2, closed for good)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, EnumerateLatticeOracle] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, EnumerateLatticeOracle] begin
     using TSODSO: build_follower, build_master_integer, build_planning_oracle
     using TSODSO, Test
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -597,11 +597,11 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning certification integer: T>1 joint corner_recourse matches T=2 dense-grid enumeration on a genuinely non-separable PVBattery fixture (FIX-06, Phase 27 plan 27-01)" tags =
-    [:planning] setup = [Phase6Fixtures, EnumerateLatticeOracle] begin
+    [:planning] setup = [TwoBusFixtures, EnumerateLatticeOracle] begin
     using TSODSO: build_follower, build_planning_oracle
     using TSODSO, Test
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
 
     # Genuinely non-separable across hours: PVBattery's soc[t+1] recursion (thesis 3.6,
     # src/devices/PVBattery.jl) couples hour 1's charge/discharge choice to hour 2's
@@ -668,11 +668,11 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning certification integer: T>1 joint corner_recourse survives the oracle-infeasible double-stall (CR-01, 27-REVIEW.md)" tags =
-    [:planning] setup = [Phase6Fixtures] begin
+    [:planning] setup = [TwoBusFixtures] begin
     using TSODSO: build_follower, build_planning_oracle, solve_follower!, solve_planning_oracle!
     using TSODSO, Test
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
 
     # Genuinely non-separable across hours (soc[t+1] recursion), SAME device as the T>1
     # certification test above. `corridor_cap`/`x_inv_max` deliberately WIDENED to 20.0

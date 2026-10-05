@@ -6,7 +6,7 @@
 # API; this file pins the physics). Every item name contains "dlmp" so
 # `@run_package_tests filter=ti->occursin("dlmp", ti.name)` selects it. Items are
 # self-contained where possible (an inline 2-bus feeder for the DADP sign / gate) and reuse
-# `setup=[Phase4Fixtures]` for the IEEE-13 ground and high-PV over-voltage solves.
+# `setup=[IEEE13Fixtures]` for the IEEE-13 ground and high-PV over-voltage solves.
 #
 # What is pinned:
 #   * PRICE-01 — `extract_dlmp` is the per-node/hour dual of `:balance_p`, POSITIVE and ≈ λ₀ on
@@ -108,44 +108,44 @@ end
 end
 
 @testitem "dlmp: extract_dlmp returns the (N,T) DADP matrix on the IEEE-13 ground solve (PRICE-01)" tags =
-    [:dlmp] setup = [Phase4Fixtures] begin
+    [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
 
     M = extract_dlmp(ctx)
-    @test size(M) == (length(feeder.buses), Phase4Fixtures.T)
+    @test size(M) == (length(feeder.buses), IEEE13Fixtures.T)
     @test all(isfinite, M)
     # The root row is the MEM price λ₀ (energy component); every entry is a real dual.
-    for t in 1:Phase4Fixtures.T
+    for t in 1:IEEE13Fixtures.T
         @test isapprox(M[feeder.root, t], λ₀[t]; atol = 1e-3)
     end
 end
 
 @testitem "dlmp: decompose_dlmp four components SUM to the DADP on IEEE-13 (congestion binds, PRICE-02)" tags =
-    [:dlmp] setup = [Phase4Fixtures] begin
+    [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -189,18 +189,18 @@ end
 end
 
 @testitem "dlmp: decompose_dlmp SUM holds and voltage is engaged on the high-PV over-voltage solve (PRICE-02)" tags =
-    [:dlmp] setup = [Phase4Fixtures] begin
+    [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -297,7 +297,7 @@ end
 end
 
 @testitem "dlmp: decompose_dlmp's cone/drop components are zero IFF their underlying multiplier is zero on IEEE-13 (PRICE-02, FIX-07)" tags =
-    [:dlmp] setup = [Phase4Fixtures] begin
+    [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -315,13 +315,13 @@ end
     # "nonzero" side is the one this test actually exercises — precisely the direction a
     # dropped/mis-signed accumulation term would violate.
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
     ctx, _obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )

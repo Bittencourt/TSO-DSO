@@ -491,7 +491,7 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
 
         # D-04's per-resolve, non-throwing certificate check + Phase-20 escalation ladder —
         # factored into a small internal helper (below) so a test can drive it DIRECTLY
-        # against a non-Scenario feeder/aggregator pair (e.g. Phase21Fixtures' high-PV
+        # against a non-Scenario feeder/aggregator pair (e.g. MPCFixtures' high-PV
         # fixture) without duplicating this logic. `measured_state`/`fe` are threaded in
         # (CR-01) so an escalation prices the SAME window [t, t+H-1] under the SAME
         # propagated state and forecast perturbation this resolve's main window just solved
@@ -805,7 +805,7 @@ day-ahead benchmarks were solved under.
 
 Internal helper (unexported): [`run_mpc`](@ref)'s per-resolve, non-throwing certificate check
 (D-04) + Phase-20 escalation ladder, factored out so a test can drive it DIRECTLY against a
-non-`Scenario` `feeder`/`mpc_aggs` pair (e.g. `Phase21Fixtures`' high-PV fixture) without
+non-`Scenario` `feeder`/`mpc_aggs` pair (e.g. `MPCFixtures`' high-PV fixture) without
 duplicating this logic — `run_mpc`'s own loop calls this EXACT function.
 
 An inline REIMPLEMENTATION of [`assert_socp_exact!`](@ref)'s own cone-residual formula, at

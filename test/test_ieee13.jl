@@ -9,7 +9,7 @@
 # The GLB-CVX SOCP solve on this feeder (OPT-02) and the thesis-number ground-truth
 # regression (OPT-02/OPT-03) ARE exercised by the "ground" @testitems below (added by
 # plan 04-06). Their names contain BOTH "ieee13" and "ground" so either `occursin`
-# filter selects them; they consume the Phase4Fixtures ground-truth calibration and run
+# filter selects them; they consume the IEEE13Fixtures ground-truth calibration and run
 # the full centralized SOCP solve through `operational_oracle`.
 
 @testitem "ieee13: ieee13_modified constructs radial — 11 buses, 10 branches, root at index 1 (DATA-03)" tags =
@@ -84,7 +84,7 @@ end
 # The thesis MEM price profile (Fig 4.5), exterior temperature (Fig 4.2), and per-house
 # device parametrization are only PLOTTED, and the 784-house / 112-per-node count is
 # internally inconsistent (A3), so the thesis inputs cannot be bit-reproduced. The shared
-# Phase4Fixtures magnitudes are normalized SHAPES (O(0.1..1) pu) that, at full scale, draw
+# IEEE13Fixtures magnitudes are normalized SHAPES (O(0.1..1) pu) that, at full scale, draw
 # ~90× the 0.0686 pu head limit ⇒ the congestion-constrained solve is INFEASIBLE. The
 # `build_ieee13_ground_aggregators` builder rescales those shapes to a residential
 # magnitude (GROUND_LOAD_SCALE / GROUND_PV_SCALE) so the solve is FEASIBLE and lands in the
@@ -108,14 +108,14 @@ end
 # INFEASIBLE (the root cannot absorb the reverse flow).
 
 @testitem "ieee13 ground: GLB-CVX SOCP solve is OPTIMAL, exact, cross-solver-consistent (OPT-02/OPT-03)" tags =
-    [:ieee13, :ground] setup = [Phase4Fixtures] begin
+    [:ieee13, :ground] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: NLP
     using JuMP
 
     feeder = TSODSO.ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
     @test length(λ₀) == 24
 
     # Full centralized GLB-CVX SOCP solve through the oracle (SOCP routing by the
@@ -172,7 +172,7 @@ end
 end
 
 @testitem "ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check (OPT-02/OPT-03)" tags =
-    [:ieee13, :ground] setup = [Phase4Fixtures] begin
+    [:ieee13, :ground] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -207,8 +207,8 @@ end
     const THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude (Open Q1 / A1) — cross-check only
 
     feeder = TSODSO.ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     res = operational_oracle(
         feeder,

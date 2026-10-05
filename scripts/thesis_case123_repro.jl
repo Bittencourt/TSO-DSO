@@ -75,9 +75,9 @@ const REPRO_QUALIFIER = "directional, public-data"
 cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 
 # -------------------------------------------------------------------------------------------
-# IEEE-123 population — re-implemented inline, verbatim from test/fixtures_phase7.jl (lines
+# IEEE-123 population — re-implemented inline, verbatim from test/fixtures_ieee123.jl (lines
 # 92-95, 178-264) and scripts/repro_stability_check.jl's own inline copy, since
-# `Phase7Fixtures` is a `TestItems.@testmodule` and expands to a no-op outside
+# `IEEE123Fixtures` is a `TestItems.@testmodule` and expands to a no-op outside
 # `TestItemRunner`'s AST-introspection path (a plain script `include` would not define it).
 # -------------------------------------------------------------------------------------------
 const T = 24
@@ -86,7 +86,7 @@ const BATT_λ_MIN = 3.8
 const BATT_λ_MED = 6.2
 const BATT_λ_MAX = 8.9
 
-# Phase-17-retuned population point (verbatim from test/fixtures_phase7.jl:92-95).
+# Phase-17-retuned population point (verbatim from test/fixtures_ieee123.jl:92-95).
 const SEED_IEEE123 = 20260719
 const LOAD_SCALE_IEEE123 = 0.05
 const PV_SCALE_IEEE123 = 0.12

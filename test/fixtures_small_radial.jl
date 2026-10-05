@@ -1,19 +1,19 @@
-# test/fixtures_phase3.jl
+# test/fixtures_small_radial.jl
 #
 # Shared Phase-3 test fixture (Wave 0). A TestItems `@testmodule` provides a small
 # valid radial feeder plus a deterministic T=24 multi-period parameter set that
 # the Wave-2/3 device, aggregator, and welfare integration `@testitem`s consume
-# via `setup=[Phase3Fixtures]`. It is intentionally solver-free and JuMP-free:
+# via `setup=[SmallRadialFixtures]`. It is intentionally solver-free and JuMP-free:
 # pure data so it stays cheap and stable across the whole phase.
 #
 # The horizon T=24 (hourly, Δt=1h) matches the thesis day-ahead horizon (RESEARCH
 # Assumption A1). Every parameter vector has length T so temporal-coupling device
 # models can index t = 1:T directly.
 
-@testmodule Phase3Fixtures begin
+@testmodule SmallRadialFixtures begin
     using TSODSO: Bus, Branch, Feeder
 
-    # Day-ahead hourly horizon (RESEARCH A1). Exported so items reference `Phase3Fixtures.T`.
+    # Day-ahead hourly horizon (RESEARCH A1). Exported so items reference `SmallRadialFixtures.T`.
     const T = 24
 
     """

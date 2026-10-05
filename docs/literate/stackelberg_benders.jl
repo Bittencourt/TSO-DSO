@@ -229,7 +229,7 @@ fig
 # as `IEEE13ShortHorizonFixtures`'s own T=4 recipe, parametrized by `T` this time. This
 # page imports `using TSODSO` ONLY (no test-only fixture module), so the day-ahead price
 # profile below is also redefined inline — the SAME digitized morning-ramp/evening-peak
-# shape `test/fixtures_phase4.jl`'s own `Phase4Fixtures.mem_price_profile()` uses (low
+# shape `test/fixtures_ieee13.jl`'s own `IEEE13Fixtures.mem_price_profile()` uses (low
 # overnight, moderate midday shoulder, evening peak), not imported from that test-only
 # module.
 

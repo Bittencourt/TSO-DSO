@@ -9,7 +9,7 @@
 # "planning" and "oracle" (occursin filter convention, mirrors test_planning_retry.jl /
 # test_planning_checkpoint.jl).
 #
-# z_trial FEASIBILITY NOTE: Phase6Fixtures's real 2-bus aggregator (Thermostatic +
+# z_trial FEASIBILITY NOTE: TwoBusFixtures's real 2-bus aggregator (Thermostatic +
 # Deferrable + PVBattery) has only a NARROW feasible import band around its own
 # unconstrained free-import optimum (its inelastic demand + bounded device flexibility do
 # not tolerate an arbitrary z, e.g. z=0 is INFEASIBLE for this fixture — empirically
@@ -19,14 +19,14 @@
 # construction, rather than an arbitrary fixed vector.
 
 @testitem "planning oracle: build_planning_oracle guards (empty aggregators, λ₀ length, bus range)" tags =
-    [:planning] setup = [Phase6Fixtures] begin
+    [:planning] setup = [TwoBusFixtures] begin
     using TSODSO
     using TSODSO: build_planning_oracle
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    T = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     # Empty aggregators: no priced load / no objective.
     @test_throws ArgumentError build_planning_oracle(
@@ -58,15 +58,15 @@
 end
 
 @testitem "planning oracle: build_planning_oracle is build-once (num_variables/num_constraints invariant across re-solves)" tags =
-    [:planning] setup = [Phase6Fixtures] begin
+    [:planning] setup = [TwoBusFixtures] begin
     using TSODSO
     using TSODSO: build_planning_oracle
     using JuMP: num_variables, num_constraints, set_parameter_value, optimize!
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    T = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     o = build_planning_oracle(feeder, LinDistFlow(), aggs; λ₀ = λ₀, T = T)
     @test o isa TSODSO.PlanningOracle
@@ -90,15 +90,15 @@ end
 end
 
 @testitem "planning oracle: solve_planning_oracle! returns (cost, π, π_s, dadp, ctx) NamedTuple shape" tags =
-    [:planning] setup = [Phase6Fixtures] begin
+    [:planning] setup = [TwoBusFixtures] begin
     using TSODSO
     using TSODSO: build_planning_oracle, solve_planning_oracle!
     using JuMP: value
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    T = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     # z_trial must be FEASIBLE for the pinned network (see file-header note: z=0 is
     # infeasible for this fixture). The network's own unconstrained free-import optimum
@@ -135,7 +135,7 @@ end
 # concave-quadratic utility `U(p) = a*p - (b/2)*p^2` (mirrors `Interruptible`'s eq. 3.10
 # shape, but DEV-05-conformant so it can sit under an `Aggregator`, unlike `Interruptible`
 # itself, which self-injects and predates DEV-05). Deliberately loose bounds keep its
-# price-responsive optimum STRICTLY INTERIOR at every hour — unlike Phase6Fixtures's real
+# price-responsive optimum STRICTLY INTERIOR at every hour — unlike TwoBusFixtures's real
 # aggregator (Thermostatic/Deferrable/PVBattery), whose comfort-band and battery-SOC
 # bounds actively BIND at the network's free-import optimum (empirically confirmed this
 # session: the real fixture's dual-sign test at z=zstar gives |π| up to ~1.5, not ≈0,
@@ -145,9 +145,9 @@ end
 # device bound anywhere in the loop). This toy device guarantees that non-degeneracy,
 # giving a clean, low-noise regression for the D-06 sign/monotonicity invariant — exactly
 # 10-RESEARCH.md Pitfall 1's own guidance: reuse the toy-case PATTERN (tiny feeder + one
-# aggregator + a known-analytic optimum, mirroring Phase6Fixtures's 2-bus dual-sign-anchor
+# aggregator + a known-analytic optimum, mirroring TwoBusFixtures's 2-bus dual-sign-anchor
 # shape), NOT a re-derivation of the document's specific numeric toy, and NOT
-# Phase6Fixtures's own aggregator.
+# TwoBusFixtures's own aggregator.
 @testmodule ToyDeviceFixture begin
     using TSODSO
     using JuMP
@@ -171,14 +171,14 @@ end
 end
 
 @testitem "planning oracle: dual-sign toy-case regression — π monotonically non-decreasing in z, zero at the unconstrained optimum (D-06)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_planning_oracle, solve_planning_oracle!
     using JuMP: value
 
-    feeder = Phase6Fixtures.two_bus_feeder()   # reuse the near-lossless 2-bus anchor shape
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()   # reuse the near-lossless 2-bus anchor shape
+    T = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     # a=6, b=1, λ₀=4 (flat) ⇒ unconstrained FOC a - b*p = λ₀ ⇒ p* = 2, strictly interior to
     # [0, Pmax=10] at every hour — no device bound ever binds (hand-derived, verified).
@@ -218,15 +218,15 @@ end
 end
 
 @testitem "planning oracle: solve_planning_oracle! re-solve is build-once (num_variables/num_constraints invariant)" tags =
-    [:planning] setup = [Phase6Fixtures] begin
+    [:planning] setup = [TwoBusFixtures] begin
     using TSODSO
     using TSODSO: build_planning_oracle, solve_planning_oracle!
     using JuMP: num_variables, num_constraints, value
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    T = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     # FEASIBLE z_trial values (see file-header note): the network's own unconstrained
     # free-import optimum, and a small positive perturbation of it (both empirically
@@ -253,15 +253,15 @@ end
 end
 
 @testitem "planning oracle: ConvexBranchFlow solve runs the PF-04 exactness gate and stashes socp_maxgap (CR-03)" tags =
-    [:planning] setup = [Phase6Fixtures] begin
+    [:planning] setup = [TwoBusFixtures] begin
     using TSODSO
     using TSODSO: SOCP, build_planning_oracle, solve_planning_oracle!
     using JuMP: value
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    T = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     # FEASIBLE z_trial (see file-header note), derived under the SAME formulation the
     # oracle is built on: the network's own unconstrained free-import optimum via the

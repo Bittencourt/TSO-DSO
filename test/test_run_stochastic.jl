@@ -7,17 +7,17 @@
 # (plan 22-02), then materializes `s.strategy.H_oos` held-out populations from a SECOND,
 # DISJOINT tag family and drives them through the build-once `StochasticOosHarness`
 # (plan 22-03), reporting the realized-vs-in-sample welfare gap. Items tagged
-# `[:run_stochastic]`, `setup = [Phase22Fixtures]` (this file's own items construct a
-# `Scenario` directly, on `:ieee13`/`:default` — `Phase22Fixtures`' custom 2-bus fixture is
+# `[:run_stochastic]`, `setup = [StochasticFixtures]` (this file's own items construct a
+# `Scenario` directly, on `:ieee13`/`:default` — `StochasticFixtures`' custom 2-bus fixture is
 # not addressable via `Scenario`, mirroring `test_mpc_loop.jl`'s own convention).
 #
-# T=9 (not `Phase22Fixtures.T=6`) is used throughout, per this phase's own checker-mandated
+# T=9 (not `StochasticFixtures.T=6`) is used throughout, per this phase's own checker-mandated
 # fix for the Deferrable T<9 pitfall on the `:ieee13`/`:default` population (RESEARCH.md
 # Pitfall 3 — `:default` bakes a Deferrable energy-budget window at construction time that
 # needs T>=9 to remain constructible).
 
 @testitem "run_stochastic: in-sample and held-out sub_seed families are disjoint (T-22-06)" tags =
-    [:run_stochastic] setup = [Phase22Fixtures] begin
+    [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: sub_seed
 
@@ -33,7 +33,7 @@
 end
 
 @testitem "run_stochastic: same-seed reproducibility (INFRA-04)" tags = [:run_stochastic] setup =
-    [Phase22Fixtures] begin
+    [StochasticFixtures] begin
     using TSODSO
 
     s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
@@ -47,7 +47,7 @@ end
 end
 
 @testitem "run_stochastic: WR-05 (phase-22 review) — an infeasible held-out pin is skipped-and-reported, never run-aborting" tags =
-    [:run_stochastic] setup = [Phase22Fixtures] begin
+    [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, sub_seed
     using JuMP: set_parameter_value
@@ -62,12 +62,12 @@ end
     # soc past Emax within one solve on this fixture — see this file-family's own
     # measured-envelope note in test_stochastic_oos_harness.jl's header) and asserts the
     # skip-and-report contract, then re-solves FEASIBLY on the same never-rebuilt model.
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :wr05_infeasible),
+        sub_seed(StochasticFixtures.SEED_STOCH, :wr05_infeasible),
     )
     h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
     pin = only(h.battery_pins)
@@ -91,7 +91,7 @@ end
 end
 
 @testitem "run_stochastic: WR-05 (phase-22 review) — oos result carries the infeasible_h mask (all-feasible fixture: all false)" tags =
-    [:run_stochastic] setup = [Phase22Fixtures] begin
+    [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
 
     s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
@@ -105,7 +105,7 @@ end
 end
 
 @testitem "run_stochastic: D-11 measurement-before-golden — repeated-run stability precedes the pinned literal" tags =
-    [:run_stochastic] setup = [Phase22Fixtures] begin
+    [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
 
     s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))

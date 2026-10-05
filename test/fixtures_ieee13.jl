@@ -1,7 +1,7 @@
-# test/fixtures_phase4.jl
+# test/fixtures_ieee13.jl
 #
 # Shared Phase-4 test fixture module (Wave 1). A TestItems `@testmodule` that the
-# Phase-4 `@testitem`s consume via `setup=[Phase4Fixtures]`. It provides the modified
+# Phase-4 `@testitem`s consume via `setup=[IEEE13Fixtures]`. It provides the modified
 # IEEE-13 aggregator builder, the digitized MEM price / exterior-temperature profiles,
 # and the high-PV / over-voltage stress fixture that the PF-04 exactness gate targets.
 #
@@ -22,10 +22,10 @@
 # thesis and only PLOTTED, so these are documented DIGITIZED approximations (RESEARCH
 # Open Q1); the tight ground-truth golden is pinned later behind a human-verify checkpoint.
 
-@testmodule Phase4Fixtures begin
+@testmodule IEEE13Fixtures begin
     using TSODSO
 
-    # Day-ahead hourly horizon (thesis A1). Exported so items reference `Phase4Fixtures.T`.
+    # Day-ahead hourly horizon (thesis A1). Exported so items reference `IEEE13Fixtures.T`.
     const T = 24
 
     # Battery price triple (App. C parametrization, thesis Table 4.x) in ¢$/kWh — STRICT

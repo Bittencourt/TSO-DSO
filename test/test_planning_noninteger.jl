@@ -34,7 +34,7 @@
 # this is not a gap in the tripwire's coverage.
 
 @testitem "planning PVAL-04: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
     using TSODSO: build_bilevel_kkt, build_feasibility_oracle, build_follower, build_master, build_master_integer, build_planning_oracle
     using JuMP: all_variables, is_binary, is_integer, num_constraints, VariableRef
@@ -42,7 +42,7 @@
 
     # Toy fixture (verbatim from test/test_planning_certification.jl lines 176-181, the
     # SAME instance already used elsewhere in the planning test suite).
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
 

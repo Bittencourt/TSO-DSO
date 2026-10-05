@@ -23,7 +23,7 @@
 # own terminal `else` in run_scenario is defensive-in-depth and is exercised transitively
 # (a Scenario with a bad strategy never constructs, so run_scenario is never reached with one).
 
-@testitem "EXP-01 scenario centralized" setup = [Phase8Fixtures] begin
+@testitem "EXP-01 scenario centralized" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     # RED until plan 08-02 (Scenario) / 08-03 (run_scenario) land.
@@ -31,7 +31,7 @@
     @test isdefined(TSODSO, :run_scenario)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         s = TSODSO.Scenario(; kw..., strategy = :centralized)
         r1 = TSODSO.run_scenario(s)
         r2 = TSODSO.run_scenario(s)   # same Scenario, same process
@@ -54,14 +54,14 @@
     end
 end
 
-@testitem "EXP-01 scenario admm" setup = [Phase8Fixtures] begin
+@testitem "EXP-01 scenario admm" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_scenario)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         s = TSODSO.Scenario(; kw..., strategy = :admm)
         r = TSODSO.run_scenario(s)
 
@@ -79,13 +79,13 @@ end
     end
 end
 
-@testitem "EXP-01 scenario strategy guard" setup = [Phase8Fixtures] begin
+@testitem "EXP-01 scenario strategy guard" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
 
     if isdefined(TSODSO, :Scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
 
         # A Scenario never silently underdetermines a run: every unknown selector throws
         # ArgumentError at construction (RESEARCH Pitfall 1 / 08-02 behavior).
@@ -96,15 +96,15 @@ end
     end
 end
 
-@testitem "EXP-02 sweep" setup = [Phase8Fixtures] begin
+@testitem "EXP-02 sweep" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_sweep)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_sweep)
-        Phase8Fixtures.with_tempdir() do dir
-            kw = Phase8Fixtures.minimal_scenario_kwargs()
+        ExperimentHarnessFixtures.with_tempdir() do dir
+            kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
             params = Dict(pairs(kw)..., :seed => collect(1:2))   # Vector -> dict_list expands
             scns = TSODSO.run_sweep(params; dir = dir)
 
@@ -113,19 +113,19 @@ end
     end
 end
 
-@testitem "EXP-02 sweep diff-friendly" setup = [Phase8Fixtures] begin
+@testitem "EXP-02 sweep diff-friendly" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :run_sweep)
     @test isdefined(TSODSO, :collate_summary)
 
     if isdefined(TSODSO, :run_sweep) && isdefined(TSODSO, :collate_summary)
-        Phase8Fixtures.with_tempdir() do dir
-            kw = Phase8Fixtures.minimal_scenario_kwargs()
+        ExperimentHarnessFixtures.with_tempdir() do dir
+            kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
             params = Dict(pairs(kw)..., :seed => collect(1:2))
             TSODSO.run_sweep(params; dir = dir)
 
-            Phase8Fixtures.with_tempdir() do outdir
+            ExperimentHarnessFixtures.with_tempdir() do outdir
                 c1 = joinpath(outdir, "s1.csv")
                 c2 = joinpath(outdir, "s2.csv")
                 TSODSO.collate_summary(dir, c1)
@@ -142,14 +142,14 @@ end
     end
 end
 
-@testitem "INFRA-04 same-seed repro" setup = [Phase8Fixtures] begin
+@testitem "INFRA-04 same-seed repro" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_scenario)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         s = TSODSO.Scenario(; kw..., strategy = :centralized)
         r1 = TSODSO.run_scenario(s)
         r2 = TSODSO.run_scenario(s)
@@ -160,14 +160,14 @@ end
     end
 end
 
-@testitem "INFRA-04 seed sensitivity" setup = [Phase8Fixtures] begin
+@testitem "INFRA-04 seed sensitivity" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_scenario)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         r1 =
             TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized, seed = 7))
         r2 =
@@ -182,14 +182,14 @@ end
 # (adaptive-ρ residual comparisons, iteration-count-dependent convergence checks) and is
 # exactly where non-determinism is most likely to leak in. run.jl's own docstring asserts
 # bit-for-bit identity holds for :admm too, but nothing verified it. Mirror both gates here.
-@testitem "INFRA-04 same-seed repro admm" setup = [Phase8Fixtures] begin
+@testitem "INFRA-04 same-seed repro admm" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_scenario)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         s = TSODSO.Scenario(; kw..., strategy = :admm)
         r1 = TSODSO.run_scenario(s)
         r2 = TSODSO.run_scenario(s)
@@ -203,14 +203,14 @@ end
     end
 end
 
-@testitem "INFRA-04 seed sensitivity admm" setup = [Phase8Fixtures] begin
+@testitem "INFRA-04 seed sensitivity admm" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_scenario)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_scenario)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         r1 = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :admm, seed = 7))
         r2 = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :admm, seed = 8))
 
@@ -271,7 +271,7 @@ end
     end
 end
 
-@testitem "INFRA-04 provenance tagsave" setup = [Phase8Fixtures] begin
+@testitem "INFRA-04 provenance tagsave" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DrWatson: wload
 
@@ -279,8 +279,8 @@ end
     @test isdefined(TSODSO, :run_and_store)
 
     if isdefined(TSODSO, :Scenario) && isdefined(TSODSO, :run_and_store)
-        Phase8Fixtures.with_tempdir() do dir
-            kw = Phase8Fixtures.minimal_scenario_kwargs()
+        ExperimentHarnessFixtures.with_tempdir() do dir
+            kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
             s = TSODSO.Scenario(; kw..., strategy = :centralized)
             TSODSO.run_and_store(s; dir = dir)
 
@@ -376,10 +376,10 @@ end
     @test occursin(r"_p[0-9a-f]{16}\.jld2$", f_n)
 end
 
-@testitem "ARCH-02 result_to_dict flat primitives" setup = [Phase8Fixtures] begin
+@testitem "ARCH-02 result_to_dict flat primitives" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
-    kw = Phase8Fixtures.minimal_scenario_kwargs()
+    kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
     rc = TSODSO.run_scenario(TSODSO.Scenario(; kw..., strategy = :centralized))
     d = TSODSO.result_to_dict(rc)
     @test d[:strategy] == :centralized
@@ -396,18 +396,18 @@ end
     @test all(v -> !(v isa TSODSO.AbstractStrategy), values(da))
 end
 
-@testitem "ARCH-02 run_and_store round-trip" setup = [Phase8Fixtures] begin
+@testitem "ARCH-02 run_and_store round-trip" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DrWatson: wload
 
     function roundtrip(dir, strat)
-        kw = Phase8Fixtures.minimal_scenario_kwargs()
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
         s = TSODSO.Scenario(; kw..., strategy = strat)
         TSODSO.run_and_store(s; dir = dir)
         return wload(joinpath(dir, TSODSO.scenario_filename(s)))
     end
 
-    Phase8Fixtures.with_tempdir() do dir
+    ExperimentHarnessFixtures.with_tempdir() do dir
         for (strat, lab) in ((:centralized, :centralized), (:admm, :admm))
             dict = roundtrip(dir, strat)
             for k in ("strategy", "pf", "welfare", "gitcommit", "julia_version")
@@ -418,18 +418,18 @@ end
     end
 end
 
-@testitem "ARCH-02 mixed-strategy sweep collate" setup = [Phase8Fixtures] begin
+@testitem "ARCH-02 mixed-strategy sweep collate" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DataFrames: DataFrame, nrow
     using CSV: CSV
 
-    Phase8Fixtures.with_tempdir() do dir
+    ExperimentHarnessFixtures.with_tempdir() do dir
         params = Dict(
             :name => "mix", :feeder => :ieee13, :strategy => [:centralized, :admm],
             :seed => 1, :T => 24,
         )
         TSODSO.run_sweep(params; dir = dir)
-        Phase8Fixtures.with_tempdir() do outdir
+        ExperimentHarnessFixtures.with_tempdir() do outdir
             c1 = joinpath(outdir, "a.csv")
             c2 = joinpath(outdir, "b.csv")
             df = TSODSO.collate_summary(dir, c1)

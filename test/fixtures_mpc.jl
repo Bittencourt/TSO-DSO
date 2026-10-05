@@ -1,14 +1,14 @@
-# test/fixtures_phase21.jl
+# test/fixtures_mpc.jl
 #
 # Shared Phase-21 (MPC / rolling-horizon) test fixture module (Wave 2). A TestItems
-# `@testmodule` that the Phase-21 `@testitem`s consume via `setup=[Phase21Fixtures]`. It
+# `@testmodule` that the Phase-21 `@testitem`s consume via `setup=[MPCFixtures]`. It
 # provides the phase's SHORT-`T` CI substrate (`mpc_feeder`/`build_mpc_aggregators`) and the
 # short-horizon high-PV forced-inexact fixture (`mpc_high_pv_feeder`/
 # `build_mpc_high_pv_aggregators`) a later wave's certificate-escalation test drives.
 #
 # SEAM: Phase-21 CI fixture (MPC-01..04).
 #
-# CONTRACT (mirrors fixtures_phase6.jl's discipline, not fixtures_phase19.jl's cross-reference
+# CONTRACT (mirrors fixtures_two_bus.jl's discipline, not fixtures_four_quad_bess.jl's cross-reference
 # — Phase 21 needs no Phase-6-specific reuse): this module is SELF-CONTAINED, i.e. it makes NO
 # top-level call to any symbol filled by a later Phase-21 wave. Every feeder-consuming builder
 # takes a `feeder` argument, so nothing here evaluates a not-yet-defined symbol at module-load
@@ -25,7 +25,7 @@
 # REPRODUCIBILITY: every aggregator flows from a seeded `generate_profiles` (StableRNGs), so
 # both fixtures regenerate bit-for-bit.
 
-@testmodule Phase21Fixtures begin
+@testmodule MPCFixtures begin
     using TSODSO
 
     # Short day-ahead CI horizon (Pitfall 5: T - H + 1 = 6 published receding-horizon steps).
@@ -48,7 +48,7 @@
         temperature_profile(Tsteps::Int = T) -> Vector{Float64}
 
     The first `Tsteps` entries of the project's standard 24-hour ambient-temperature shape
-    (the exact digitized literal `fixtures_phase6.jl`'s own `temperature_profile()` uses),
+    (the exact digitized literal `fixtures_two_bus.jl`'s own `temperature_profile()` uses),
     sliced/cycled to `Tsteps` via `mod1` (a `Tsteps > 24` request wraps rather than erroring).
     """
     function temperature_profile(Tsteps::Int = T)
@@ -85,7 +85,7 @@
         mpc_lambda0(Tsteps::Int = T) -> Vector{Float64}
 
     The flat MEM / wholesale price `λ₀ = LAMBDA0_MPC` over `Tsteps` hours (mirrors
-    `Phase6Fixtures.two_bus_lambda0`'s flat-price anchor convention).
+    `TwoBusFixtures.two_bus_lambda0`'s flat-price anchor convention).
     """
     mpc_lambda0(Tsteps::Int = T) = fill(LAMBDA0_MPC, Tsteps)
 
@@ -94,7 +94,7 @@
 
     The phase's short-`T` CI substrate: a 2-bus radial fixture — root bus 1 (MEM frontier) +
     load bus 2, joined by ONE near-lossless, uncongested branch (mirrors
-    `Phase6Fixtures.two_bus_feeder` exactly, so `ConvexBranchFlow` stays comfortably exact on
+    `TwoBusFixtures.two_bus_feeder` exactly, so `ConvexBranchFlow` stays comfortably exact on
     the happy-path fixture). Built INSIDE the function (never at module top level).
     """
     function mpc_feeder()
@@ -108,7 +108,7 @@
         return Feeder(buses, branches, 1)
     end
 
-    # Shared private house-aggregator builder (mirrors `Phase4Fixtures._house_aggregator`'s
+    # Shared private house-aggregator builder (mirrors `IEEE13Fixtures._house_aggregator`'s
     # shape): a Thermostatic + PVBattery house fed by a seeded `generate_profiles` draw,
     # deliberately excluding the scheduled-load device (Pitfall 8, see file header). Not
     # exported — an internal helper both public builders below share.
@@ -163,7 +163,7 @@
     PVBattery house (no scheduled-load device — Pitfall 8, see file header) fed by a seeded
     `generate_profiles` draw, scaled small (`LOAD_SCALE_MPC` demand, `PV_SCALE_MPC` PV, tiny
     battery) so the near-lossless short-`T` solve is FEASIBLE and INTERIOR — mirrors
-    `Phase6Fixtures.build_two_bus_aggregators`'s exact construction shape minus that third
+    `TwoBusFixtures.build_two_bus_aggregators`'s exact construction shape minus that third
     device. Seeded ⇒ reproducible; takes `feeder` as an argument so this module never touches
     a later-wave symbol at load time.
     """
@@ -189,7 +189,7 @@
         mpc_high_pv_feeder() -> Feeder
 
     A 3-bus radial fixture (root + two downstream buses), mirroring
-    `Phase4Fixtures.high_pv_feeder()` EXACTLY (branches `r=x=0.05`, `SMAX_NO_LIMIT`) — the
+    `IEEE13Fixtures.high_pv_feeder()` EXACTLY (branches `r=x=0.05`, `SMAX_NO_LIMIT`) — the
     substrate a later wave's forced-inexact certificate-escalation test drives. Built INSIDE
     the function (never at module top level).
     """
@@ -211,7 +211,7 @@
                                       Tsteps::Int = T) -> Vector{<:Aggregator}
 
     Aggregators for the [`mpc_high_pv_feeder`](@ref): mirrors
-    `Phase4Fixtures.build_high_pv_aggregators`'s shape (Thermostatic + PVBattery only, small
+    `IEEE13Fixtures.build_high_pv_aggregators`'s shape (Thermostatic + PVBattery only, small
     `load_scale`, tiny battery headroom) at this fixture's SHORT `Tsteps`/`H`. `pv_scale` has
     NO default — a later wave's task must MEASURE the `pv_scale` that genuinely trips the
     inline cone-residual check at this fixture's short horizon, per this project's "measured,
@@ -252,7 +252,7 @@
     # λ₀ = LAMBDA0_MPC, terminal_soc = false: a sharp knife-edge transition (consistent with
     # this project's own documented SOCP-exactness knife-edge under high-PV reverse flow)
     # between pv_scale=2.0 (maxratio ≈ 0.0036, comfortably certified) and pv_scale=2.5
-    # (maxratio ≈ 8510, ~8500× over the ratio>1 threshold). `Phase4Fixtures.high_pv_feeder`'s
+    # (maxratio ≈ 8510, ~8500× over the ratio>1 threshold). `IEEE13Fixtures.high_pv_feeder`'s
     # own reference point (`pv_scale=1.2`) does NOT transfer unchanged to this fixture's
     # shorter horizon/smaller feeder (measured: pv_scale=1.2 stays comfortably exact here,
     # maxratio ≈ 0.006 on this fixture) — RE-MEASURED, per this project's own discipline.

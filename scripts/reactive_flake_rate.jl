@@ -16,14 +16,14 @@
 #     live dual-ascent target to tune a ρ_q against). This is recorded as the finding, not
 #     re-derived from scratch.
 #
-# FIXTURE CONSTRUCTION NOTE: `Phase4Fixtures`/`Phase7Fixtures` are `TestItems.@testmodule`
+# FIXTURE CONSTRUCTION NOTE: `IEEE13Fixtures`/`IEEE123Fixtures` are `TestItems.@testmodule`
 # blocks. The standalone `TestItems.jl` package (as opposed to the `TestItemRunner`
 # introspection machinery) expands `@testmodule` to a no-op (`return nothing`) — so
-# `include("test/fixtures_phase7.jl")` from a plain script does NOT actually define
-# `Phase7Fixtures` outside the test-runner's special AST-introspection path. Per this plan's
+# `include("test/fixtures_ieee123.jl")` from a plain script does NOT actually define
+# `IEEE123Fixtures` outside the test-runner's special AST-introspection path. Per this plan's
 # own instruction, the population construction is therefore RE-IMPLEMENTED INLINE below,
-# copied verbatim from `test/fixtures_phase4.jl` (`build_ieee13_ground_aggregators`,
-# `mem_price_profile`) and `test/fixtures_phase7.jl` (`build_ieee123_aggregators`,
+# copied verbatim from `test/fixtures_ieee13.jl` (`build_ieee13_ground_aggregators`,
+# `mem_price_profile`) and `test/fixtures_ieee123.jl` (`build_ieee123_aggregators`,
 # `ieee123_lambda0`, and the shared adaptive-ρ config constants `RHO0`/`EPS_ABS`/`EPS_REL`/
 # `TAU`/`MU`/`RHO_MIN`/`RHO_MAX`), using the SAME underlying builders (`Aggregator`,
 # `Thermostatic`, `Deferrable`, `PVBattery`, `generate_profiles`) with the SAME seeds/scales,
@@ -40,7 +40,7 @@ using Dates
 const OUT = projectdir("results", "reactive_flake_rate")
 mkpath(OUT)
 
-# ---- Shared adaptive-ρ / per-unit-tolerance config (verbatim from test/fixtures_phase7.jl) ----
+# ---- Shared adaptive-ρ / per-unit-tolerance config (verbatim from test/fixtures_ieee123.jl) ----
 const T = 24
 const EPS_ABS = 1e-5
 const EPS_REL = 1e-4
@@ -54,12 +54,12 @@ const BATT_λ_MIN = 3.8
 const BATT_λ_MED = 6.2
 const BATT_λ_MAX = 8.9
 
-# IEEE-13 ground-truth calibration (verbatim from test/fixtures_phase4.jl)
+# IEEE-13 ground-truth calibration (verbatim from test/fixtures_ieee13.jl)
 const GROUND_LOAD_SCALE = 0.005
 const GROUND_PV_SCALE = 0.03
 const SEED_IEEE13 = 20260718
 
-# IEEE-123 population scaling (verbatim from test/fixtures_phase7.jl)
+# IEEE-123 population scaling (verbatim from test/fixtures_ieee123.jl)
 const SEED_IEEE123 = 20260719
 const LOAD_SCALE_IEEE123 = 0.03
 const PV_SCALE_IEEE123 = 0.06
@@ -69,7 +69,7 @@ const DEV_SCALE_IEEE123 = 0.05
     temperature_profile() -> Vector{Float64}
 
 Digitized 24h exterior-temperature profile (°C), verbatim copy shared by
-`test/fixtures_phase4.jl`/`test/fixtures_phase6.jl`/`test/fixtures_phase7.jl`.
+`test/fixtures_ieee13.jl`/`test/fixtures_two_bus.jl`/`test/fixtures_ieee123.jl`.
 """
 function temperature_profile()
     return Float64[
@@ -104,7 +104,7 @@ end
     mem_price_profile() -> Vector{Float64}
 
 Digitized 24h MEM/wholesale price λ₀ for IEEE-13, verbatim copy of
-`test/fixtures_phase4.jl`'s `mem_price_profile`.
+`test/fixtures_ieee13.jl`'s `mem_price_profile`.
 """
 function mem_price_profile()
     return Float64[
@@ -139,7 +139,7 @@ end
     ieee123_lambda0() -> Vector{Float64}
 
 Digitized 24h MEM/wholesale price λ₀ for IEEE-123, verbatim copy of
-`test/fixtures_phase7.jl`'s `ieee123_lambda0`.
+`test/fixtures_ieee123.jl`'s `ieee123_lambda0`.
 """
 function ieee123_lambda0()
     return Float64[
@@ -175,7 +175,7 @@ end
                        batt_pmax=0.5, batt_emax=2.0, batt_soc0=1.0) -> Aggregator
 
 One seeded Thermostatic + Deferrable + PVBattery aggregator, verbatim SHAPE of the
-`_house_aggregator` helper shared by `test/fixtures_phase4.jl`/`test/fixtures_phase7.jl`.
+`_house_aggregator` helper shared by `test/fixtures_ieee13.jl`/`test/fixtures_ieee123.jl`.
 """
 function _house_aggregator(
     bus;
@@ -225,7 +225,7 @@ end
     build_ieee13_ground_aggregators(feeder; seed=SEED_IEEE13) -> Vector{<:Aggregator}
 
 One aggregator per non-root bus, residential-scale (`GROUND_LOAD_SCALE`/`GROUND_PV_SCALE`),
-verbatim copy of `test/fixtures_phase4.jl`'s `build_ieee13_ground_aggregators` — the SAME
+verbatim copy of `test/fixtures_ieee13.jl`'s `build_ieee13_ground_aggregators` — the SAME
 population `test_admm_adaptive.jl`'s IEEE-13 leg exercises.
 """
 function build_ieee13_ground_aggregators(feeder; seed::Integer = SEED_IEEE13)
@@ -248,7 +248,7 @@ end
     build_ieee123_aggregators(feeder; seed=SEED_IEEE123) -> Vector{<:Aggregator}
 
 One seeded aggregator per LOAD node of the modified IEEE-123 feeder, verbatim copy of
-`test/fixtures_phase7.jl`'s `build_ieee123_aggregators` — the SAME population
+`test/fixtures_ieee123.jl`'s `build_ieee123_aggregators` — the SAME population
 `test_ieee123_admm.jl` exercises.
 """
 function build_ieee123_aggregators(feeder; seed::Integer = SEED_IEEE123)

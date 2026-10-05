@@ -149,7 +149,7 @@ end
 # ---------------------------------------------------------------------------------------
 # Plan 30-02 (BILEV-05): `:auto` α-bound derivation + build-time rejection. The new
 # @testitems below reuse the SAME two-bus/ToyElasticDevice toy fixture test_planning_oracle.jl's
-# own D-06 dual-sign regression already established (Phase6Fixtures + ToyDeviceFixture).
+# own D-06 dual-sign regression already established (TwoBusFixtures + ToyDeviceFixture).
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning master: explicit bounds with no bounds_ctx are byte-identical (regression guard)" tags =
@@ -167,12 +167,12 @@ end
 end
 
 @testitem "planning master: :auto resolves both epigraph bounds via a genuine relaxed solve" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master, solve_master!
     using JuMP: termination_status, MOI, lower_bound
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
@@ -202,11 +202,11 @@ end
 end
 
 @testitem "planning master: build-time rejection of an over-high explicit α_op_lb when bounds_ctx is supplied" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
@@ -229,11 +229,11 @@ end
 end
 
 @testitem "planning master: build-time rejection of an over-high explicit α_x_lb when bounds_ctx is supplied" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
@@ -256,14 +256,14 @@ end
 end
 
 @testitem "planning master: :auto derivation independently confirms test_planning_hardening.jl's own T=8 finding (α_op_lb=-5.0 invalid, α_op_lb=-50.0 valid)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     # EXACT T=8 fixture literals, verbatim from test_planning_hardening.jl's own header
     # comment (the "FIX" paragraph): dev=ToyElasticDevice(2,6.0,1.0,10.0), agg with zeros(8)
     # Pdc, λ₀=fill(4.0,8).
     T = 8
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
     λ₀ = fill(4.0, T)
@@ -284,7 +284,7 @@ end
 end
 
 @testitem "planning master: build-time rejection has real headroom, but an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master
     using JuMP: lower_bound
@@ -298,7 +298,7 @@ end
     # longer installed verbatim — it is CLAMPED DOWN to the certified :auto-equivalent
     # minimum d.bound (the same value :auto would install), closing the regression Plan
     # 31-01 found (the raw-install path inflated the reported LB above the true minimum).
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]
@@ -407,12 +407,12 @@ end
 end
 
 @testitem "planning master: α_x_lb build-time validation is honestly skipped when bounds_ctx.follower_kwargs is nothing (DistributorView-equivalent scope limit)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master
     using JuMP: lower_bound
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
     λ₀ = [4.0]

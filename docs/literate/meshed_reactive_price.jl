@@ -44,13 +44,13 @@ const T_MESH = 1
 const LAMBDA0_MESH = [4.0]
 
 ## Asymmetric pinned loads (never the degenerate symmetric case, D-10) — chosen so the
-## diamond's chord flow stays strictly nonzero, exactly `Phase23Fixtures`'s own committed
+## diamond's chord flow stays strictly nonzero, exactly `MeshFixtures`'s own committed
 ## values.
 const P2_LOAD = 0.30
 const P3_LOAD = 0.05
 
 ## Per-branch `(r, x)` literals, ordered `(1,2), (1,3), (2,4), (3,4)` — byte-identical to
-## `test/fixtures_phase23.jl`'s committed `Phase23Fixtures` module (reconstructed inline here,
+## `test/fixtures_mesh.jl`'s committed `MeshFixtures` module (reconstructed inline here,
 ## never `include()`d, mirroring every prior rung page's own self-contained construction).
 ## `:uniform` — R/X ratio 0.5 on all four branches. `:heterogeneous` — ratios
 ## 4.0 / ~0.167 / 1.0 / 2.0 (RESEARCH.md's own spike ratios), at 8x their original spike
@@ -80,7 +80,7 @@ end
 ## Plan 26-13 pin (PM-04, `26-POSTMERGE-TRIAGE.md` cluster G): both loads pin their OWN power
 ## factor to phi=1.0 (unity, zero reactive draw), overriding the aggregators' own phi=0.95,
 ## restoring this fixture's original MESH-02/03 zero-reactive-draw intent -- see
-## `test/fixtures_phase23.jl`'s `mesh_aggregators()` docstring (Plan 26-13) for the identical
+## `test/fixtures_mesh.jl`'s `mesh_aggregators()` docstring (Plan 26-13) for the identical
 ## pin and the discovered finding it documents: at phi=0.95, the `:uniform` profile's SOC
 ## relaxation becomes genuinely inexact on this diamond (cone ratio ~2711, gap ~0.0147).
 therm2 = Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, P2_LOAD, P2_LOAD, 0.5, [20.0]; φ = 1.0)
@@ -205,7 +205,7 @@ r_h.status == :angle_unrecoverable || error(
 #
 # Rebuild the bus-2 aggregator with a [`FourQuadBESS`](@ref) ADDED alongside its existing
 # `Thermostatic` (the project's standard battery price triple, byte-identical to
-# `test/fixtures_phase19.jl`'s own committed values), then re-solve the `:uniform` profile via
+# `test/fixtures_four_quad_bess.jl`'s own committed values), then re-solve the `:uniform` profile via
 # `MeshedFlow`:
 
 bess = FourQuadBESS(2, 0.95, 1.0, 0.05, 0.05, 0.08, 0.0, 0.2, 0.1, 3.8, 6.2, 8.9)
@@ -292,7 +292,7 @@ gap_w = abs(r_admm.welfare - obj_bess) / max(abs(obj_bess), 1.0)
 # (`r_u.worst_residual ≈ 0.0063` recoverable vs `r_h.worst_residual ≈ 0.0607` unrecoverable, a
 # `≈9.7x` separation, matching plan 23-03's own measurement exactly) come from scaling
 # `HETEROGENEOUS_RX`'s impedance MAGNITUDE 8x while holding its R/X RATIOS fixed — impedance
-# MAGNITUDE, not ratio spread, is the genuine lever (`test/fixtures_phase23.jl`'s own header
+# MAGNITUDE, not ratio spread, is the genuine lever (`test/fixtures_mesh.jl`'s own header
 # comment documents the full sweep). With the 4Q-BESS additionally present (Section 3), the
 # `:uniform` residual shifts slightly (to `≈0.0072`, the device's own reactive dispatch
 # perturbs the solved flows a little) but the certificate still certifies comfortably — the

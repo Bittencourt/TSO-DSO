@@ -1,7 +1,7 @@
-# test/fixtures_phase7.jl
+# test/fixtures_ieee123.jl
 #
 # Shared Phase-7 (ADMM convergence & scale) test fixture module (Wave 0). A TestItems
-# `@testmodule` that the Phase-7 `@testitem`s consume via `setup=[Phase7Fixtures]`. It provides
+# `@testmodule` that the Phase-7 `@testitem`s consume via `setup=[IEEE123Fixtures]`. It provides
 # the IEEE-123 seeded aggregator population (one house per LOAD node), the pinned λ₀ profile,
 # and the adaptive-ρ / per-unit-tolerance config constants (RESEARCH Patterns 3 & 4).
 #
@@ -14,11 +14,11 @@
 # REPRODUCIBILITY (threat T-06-06): every aggregator flows from a seeded `generate_profiles`
 # (StableRNGs), so the 123-node population regenerates bit-for-bit (RESEARCH Security Domain).
 #
-# SELF-CONTAINED: the house builder is inlined here (mirroring the Phase4Fixtures
+# SELF-CONTAINED: the house builder is inlined here (mirroring the IEEE13Fixtures
 # `_house_aggregator` SHAPE) so the module has no cross-`@testmodule` load-time dependency, the
-# same discipline `Phase6Fixtures` follows.
+# same discipline `TwoBusFixtures` follows.
 
-@testmodule Phase7Fixtures begin
+@testmodule IEEE123Fixtures begin
     using TSODSO
     using TSODSO: ieee123_load_nodes
 
@@ -173,7 +173,7 @@
                           batt_pmax=0.5, batt_emax=2.0, batt_soc0=1.0) -> Aggregator
 
     Build one aggregator at `bus` holding a Thermostatic + Deferrable + PVBattery, fed by a
-    seeded `generate_profiles` draw (reproducible), mirroring the Phase4Fixtures SHAPE. The
+    seeded `generate_profiles` draw (reproducible), mirroring the IEEE13Fixtures SHAPE. The
     battery uses the App. C price triple (strict `λ_min < λ_med < λ_max`).
     """
     function _house_aggregator(

@@ -23,7 +23,7 @@
 #   models are built ONCE (ADMM-03 — model shape is iteration-count-independent).
 
 @testitem "admm: cross-validation 2-bus welfare + DADP sign (crossval)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using TSODSO: SOCP
 
@@ -31,10 +31,10 @@
     @test isdefined(TSODSO, :solve_admm)
 
     if isdefined(TSODSO, :solve_admm)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
         load_bus = 2
 
         # Centralized ground truth (Phase 4/5): the monolithic SOCP welfare + its DADP duals.
@@ -66,7 +66,7 @@
             aggs;
             T = Th,
             λ₀ = λ₀,
-            ρ = Phase6Fixtures.RHO_2BUS,
+            ρ = TwoBusFixtures.RHO_2BUS,
             allow_export = true,
         )
 
@@ -77,7 +77,7 @@
 end
 
 @testitem "admm: cross-validation ieee13 welfare + DADP (crossval, ieee13)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
@@ -87,9 +87,9 @@ end
         # Reuse the Phase-4 IEEE-13 GROUND fixture + the exported modified feeder (allow_export
         # is mandatory — the priced frontier keeps the SOC relaxation exact, PF-04).
         feeder = ieee13_modified()
-        aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-        Th = Phase4Fixtures.T
-        λ₀ = Phase4Fixtures.mem_price_profile()
+        aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+        Th = IEEE13Fixtures.T
+        λ₀ = IEEE13Fixtures.mem_price_profile()
         load_buses = 2:length(feeder.buses)
 
         # ρ_ieee13 / tol_ieee13 — the IEEE-13 penalty/dual-step + primal-stop, DISTINCT from the
@@ -158,7 +158,7 @@ end
 end
 
 @testitem "admm: dual-ascent loop converges + fails loud on the cap (loop)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using TSODSO: SOCP
 
@@ -166,11 +166,11 @@ end
     @test isdefined(TSODSO, :solve_admm)
 
     if isdefined(TSODSO, :solve_admm)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
-        ρ = Phase6Fixtures.RHO_2BUS
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
+        ρ = TwoBusFixtures.RHO_2BUS
         maxiter = 200
         tol = 1e-5
 
@@ -280,7 +280,7 @@ end
 end
 
 @testitem "admm: build-once subproblems, no per-iteration rebuild (resolve)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -290,11 +290,11 @@ end
     if isdefined(TSODSO, :solve_admm) &&
        isdefined(TSODSO, :AgrOpt) &&
        isdefined(TSODSO, :DsoOpt)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
-        ρ = Phase6Fixtures.RHO_2BUS
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
+        ρ = TwoBusFixtures.RHO_2BUS
 
         # ADMM-03 (RESEARCH Pattern 3 / Pitfall 6): the subproblem JuMP models are built ONCE
         # outside the loop and only re-solved via `set_objective_coefficient` — NO variable or
@@ -332,7 +332,7 @@ end
 end
 
 @testitem "admm: final published primal certified — active-balance no hidden slack (crossval)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP: value
 
@@ -351,10 +351,10 @@ end
     @test isdefined(TSODSO, :solve_admm)
 
     if isdefined(TSODSO, :solve_admm)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
 
         res = solve_admm(
             feeder,
@@ -362,7 +362,7 @@ end
             aggs;
             T = Th,
             λ₀ = λ₀,
-            ρ = Phase6Fixtures.RHO_2BUS,
+            ρ = TwoBusFixtures.RHO_2BUS,
             maxiter = 200,
             allow_export = true,
         )

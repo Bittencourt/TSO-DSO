@@ -1,22 +1,22 @@
 # Seam: powerflow/MeshedFlow.jl (MESH-02). Driven green by plan 23-02.
 @testitem "MeshedFlow solves the loop fixture via solve_welfare on both impedance profiles (MESH-02)" setup =
-    [Phase23Fixtures] begin
+    [MeshFixtures] begin
     using TSODSO, Test
 
     for profile in (:uniform, :heterogeneous)
-        feeder = Phase23Fixtures.mesh_feeder(profile)
-        aggs = Phase23Fixtures.mesh_aggregators()
-        λ₀ = Phase23Fixtures.mesh_lambda0()
+        feeder = MeshFixtures.mesh_feeder(profile)
+        aggs = MeshFixtures.mesh_aggregators()
+        λ₀ = MeshFixtures.mesh_lambda0()
 
         # solve_welfare returns without throwing (assert_solved! + assert_socp_exact! both
         # pass on BOTH impedance profiles -- the existing cone-tightness gate cannot tell
         # them apart, per RESEARCH.md's Pitfall 14; that is exactly what plan 23-03's NEW
         # angle-recoverability certificate is for).
         ctx, w, dadp =
-            solve_welfare(feeder, MeshedFlow(), aggs; T = Phase23Fixtures.T_MESH, λ₀ = λ₀)
+            solve_welfare(feeder, MeshedFlow(), aggs; T = MeshFixtures.T_MESH, λ₀ = λ₀)
 
         @test ctx.meta[:formulation] == :MeshedFlow
-        @test length(dadp) == Phase23Fixtures.T_MESH
+        @test length(dadp) == MeshFixtures.T_MESH
         @test isfinite(w)
     end
 

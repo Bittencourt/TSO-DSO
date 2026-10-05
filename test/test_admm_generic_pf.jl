@@ -16,7 +16,7 @@
 end
 
 @testitem "admm generic pf: AC/DC and mis-pairs rejected with named ArgumentErrors" setup =
-    [Phase6Fixtures] tags = [:admm, :genericpf] begin
+    [TwoBusFixtures] tags = [:admm, :genericpf] begin
     using TSODSO
 
     function errof(f)
@@ -28,10 +28,10 @@ end
         end
     end
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    Th = Phase6Fixtures.T
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    Th = TwoBusFixtures.T
     for pf in (ACPowerFlow(), DCPowerFlow())
         e = errof(() -> solve_admm(feeder, pf, aggs; T = Th, λ₀ = λ₀, ρ = 5.0))
         @test e isa ArgumentError
@@ -63,14 +63,14 @@ end
 end
 
 @testitem "admm generic pf: Restricted/LinDist ADMM match centralized welfare; NaN maxgap for LinDist" setup =
-    [Phase6Fixtures] tags = [:admm, :genericpf] begin
+    [TwoBusFixtures] tags = [:admm, :genericpf] begin
     using TSODSO
     using TSODSO: SOCP
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
 
     function run_pair(pf)
         # near-lossless fixture: tighten the centralized SOCP gap exactly as test_admm.jl does
@@ -83,7 +83,7 @@ end
             feeder, pf, aggs; T = Th, λ₀ = λ₀, allow_export = true, optimizer = opt,
         )
         res = solve_admm(
-            feeder, pf, aggs; T = Th, λ₀ = λ₀, ρ = Phase6Fixtures.RHO_2BUS, allow_export = true,
+            feeder, pf, aggs; T = Th, λ₀ = λ₀, ρ = TwoBusFixtures.RHO_2BUS, allow_export = true,
         )
         return obj_c, res
     end
@@ -103,7 +103,7 @@ end
 end
 
 @testitem "admm generic pf: solve_agr! battery_on_violation kwarg is forwarded (default :error)" setup =
-    [Phase6Fixtures] tags = [:admm, :genericpf] begin
+    [TwoBusFixtures] tags = [:admm, :genericpf] begin
     using TSODSO
 
     function errof(f)
@@ -115,9 +115,9 @@ end
         end
     end
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
     agr = TSODSO.build_agr_opt(aggs[1], Th; ρ = 5.0)
     λj = fill(4.0, Th)
     cj = zeros(Th)
@@ -150,7 +150,7 @@ end
 end
 
 @testitem "admm generic pf: 4Q certificate policy mirrors the battery gate (SOCP strict, others report)" setup =
-    [Phase6Fixtures] tags = [:admm, :genericpf] begin
+    [TwoBusFixtures] tags = [:admm, :genericpf] begin
     using TSODSO
 
     stub(pf) = (; dso = (; ctx = (; pf = pf)))
@@ -162,9 +162,9 @@ end
     @test TSODSO._batt_on_violation(stub(ConvexBranchFlow())) === :error
 
     # the kwarg reaches solve_agr!'s 4Q gate (no 4Q device here -> no-op either way)
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
     agr = TSODSO.build_agr_opt(aggs[1], Th; ρ = 5.0)
     λj = fill(4.0, Th)
     cj = zeros(Th)

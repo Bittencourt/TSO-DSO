@@ -77,7 +77,7 @@ using JuMP
 # `PVBattery`/`Aggregator` codepath entirely), so ε moved: OLD ε_measured (base, pre-1.25x)
 # = 0.005811069127373614 pu² -> NEW ε_measured (base) = 0.010189528427785532 pu², measured
 # 2026-09-29 via `.planning/phases/26-network-device-model-correctness/
-# 26-08-repro-restricted-and-canary.jl` on `Phase4Fixtures.high_pv_feeder()` /
+# 26-08-repro-restricted-and-canary.jl` on `IEEE13Fixtures.high_pv_feeder()` /
 # `build_high_pv_aggregators(feeder; pv_scale=1.2)`. Cause: the cumulative effect of FIX-01
 # through FIX-05 (cpydrop sign flip, receiving-end thermal limit, full-horizon battery SOC
 # recursion, flexible-load reactive draw) on the AC oracle's optimal high-PV operating point,

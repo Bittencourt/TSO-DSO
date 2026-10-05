@@ -17,18 +17,18 @@
 #   src/experiments/run.jl
 #   src/experiments/store.jl
 #   src/experiments/sweep.jl
-#   test/fixtures_phase7.jl
+#   test/fixtures_ieee123.jl
 #   test/test_admm_adaptive.jl
 #   test/test_ieee123_admm.jl
 #   test/test_acceptance.jl
 #
 #   $ grep -rn "\bmu\b" src/ test/          # ASCII lowercase spelling -- NO MATCHES
 #   $ grep -rn "\bMU\b" src/ test/          # ASCII uppercase spelling (fixture const)
-#   test/fixtures_phase7.jl:49:    const MU = 10.0   # residual-balancing imbalance band
-#   test/fixtures_phase7.jl:245:        MU,
-#   test/test_admm_adaptive.jl:68:      mu = Phase7Fixtures.MU,
-#   test/test_ieee123_admm.jl:73:       mu = Phase7Fixtures.MU,
-#   test/test_acceptance.jl:132:        mu = Phase7Fixtures.MU,
+#   test/fixtures_ieee123.jl:49:    const MU = 10.0   # residual-balancing imbalance band
+#   test/fixtures_ieee123.jl:245:        MU,
+#   test/test_admm_adaptive.jl:68:      mu = IEEE123Fixtures.MU,
+#   test/test_ieee123_admm.jl:73:       mu = IEEE123Fixtures.MU,
+#   test/test_acceptance.jl:132:        mu = IEEE123Fixtures.MU,
 #
 # CONCLUSION (re-confirmed; matches 16-RESEARCH.md's "The mu Naming Collision -- Full Grep
 # Audit" section exactly -- nothing shifted since the same-day research pass): EVERY existing
@@ -36,7 +36,7 @@
 # Section-3.4.1 adaptive-rho residual-balancing IMBALANCE BAND (`solve_admm`'s
 # `μ::Real = 10.0` kwarg at solve_admm.jl:58,128, threaded through `Scenario.μ`'s golden-hash
 # `savename`-serialized struct field at Scenario.jl:106,190,211, `run.jl:140`'s
-# `μ = s.μ` pass-through, and `fixtures_phase7.jl:49`'s `const MU = 10.0`). It is a scalar
+# `μ = s.μ` pass-through, and `fixtures_ieee123.jl:49`'s `const MU = 10.0`). It is a scalar
 # TUNING KNOB controlling the `ρ ← τ·ρ` / `ρ ← ρ/τ` residual-balancing thresholds -- it is
 # NEVER a dual, price, or coupling variable anywhere in the codebase today. No second meaning
 # was found -- a clean, live grep, re-run directly against the CURRENT tree this session, not
@@ -89,10 +89,10 @@
 #       positive-path certificate proof, mirroring `test_admm.jl`'s `:balance_p` re-check item).
 
 @testitem "admm reactive: build_dso_opt reactive_consensus kwarg absent today, qag_dso coupling variable pinned once landed (reactive)" setup =
-    [Phase6Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): swapped to the
     # flexible-load-free `build_two_bus_aggregators_no_flex` -- the original
     # `build_two_bus_aggregators` fixture carries Thermostatic+Deferrable members that FIX-05
@@ -100,7 +100,7 @@
     # trips the widened WR-04 guard (Plan 26-12), which this testitem's `reactive_consensus =
     # true` call below does not intend to exercise (that guard behavior is covered separately
     # by "admm reactive: OFF/CERTIFIED with a q_inject-carrying device fails loud..." below).
-    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
+    aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
 
     # RED probe: does build_dso_opt accept the reactive_consensus kwarg yet? Non-crashing --
     # the 3-arg hasmethod kwarg form never calls the function, so this cannot throw even though
@@ -113,9 +113,9 @@
     @test has_kwarg   # RED until plan 16-02 lands the kwarg; GREEN and permanent afterward
 
     if has_kwarg
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
-        ρ = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
+        ρ = TwoBusFixtures.RHO_2BUS
 
         dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.CERTIFIED)
         @test haskey(dso.ctx.constraints, :balance_q)
@@ -126,13 +126,13 @@
 end
 
 @testitem "admm reactive: default reactive_consensus omitted is byte-identical to today (reactive)" setup =
-    [Phase6Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
     # POSITIVE regression -- passes NOW (no RED gate) and MUST stay green after plan 16-02/16-03
     # land: the DEFAULT path (reactive_consensus never passed) is UNCHANGED (REACT-03's core
     # non-regression guarantee, re-checked at every future plan's commit).
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): swapped to the
     # flexible-load-free `build_two_bus_aggregators_no_flex` -- the original
     # `build_two_bus_aggregators` fixture carries Thermostatic+Deferrable members that FIX-05
@@ -141,10 +141,10 @@ end
     # testitem's "the DEFAULT path is unchanged/OFF" REACT-03 assertion. The flexible-load-free
     # population restores the smart default's OFF resolution, matching what this testitem
     # actually intends to certify.
-    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
     @test dso.load_nodes == [2]
@@ -153,15 +153,15 @@ end
 end
 
 @testitem "admm reactive: converged reactive_consensus=ReactiveMode.CERTIFIED certifies :balance_q has no hidden slack (reactive)" setup =
-    [Phase6Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): flexible-load-free
     # fixture, same rationale as the two testitems above -- this item's explicit
     # `reactive_consensus = ReactiveMode.CERTIFIED` below would otherwise trip the widened WR-04 guard against
     # `build_two_bus_aggregators`'s now-`is_flexible_load` Thermostatic+Deferrable members.
-    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
+    aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
 
     # RED probe, same gate discipline as item (1) -- solve_admm's reactive_consensus kwarg.
     # POSITIVE assertion (see item (1)'s comment) -- RED before plan 16-02, GREEN permanently
@@ -174,9 +174,9 @@ end
     @test has_kwarg   # RED until plan 16-02 lands the kwarg; GREEN and permanent afterward
 
     if has_kwarg
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
-        ρ = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
+        ρ = TwoBusFixtures.RHO_2BUS
 
         res = solve_admm(
             feeder,
@@ -207,11 +207,11 @@ end
 # ==============================================================================================
 # Phase 19 (MESH-04/MESH-05, plan 19-08 Task 2): the phase acceptance-gate items for the LIVE
 # reactive dual-ascent mechanism (`reactive_consensus = ReactiveMode.LIVE`), on the primary, CI-gated
-# `Phase19Fixtures`-built 2-bus + FourQuadBESS fixture (D-13: NEVER IEEE-13 for this gate --
+# `FourQuadBESSFixtures`-built 2-bus + FourQuadBESS fixture (D-13: NEVER IEEE-13 for this gate --
 # IEEE-13 4Q-BESS supporting evidence is a SEPARATE, quarantined item in
-# test/test_ieee123_admm.jl). `setup = [Phase6Fixtures, Phase19Fixtures]` in THIS ORDER on every
-# item below -- `Phase19Fixtures`'s own `using ..Phase6Fixtures` (see fixtures_phase19.jl's
-# header) requires `Phase6Fixtures` to already be `ensure_evaled` first.
+# test/test_ieee123_admm.jl). `setup = [TwoBusFixtures, FourQuadBESSFixtures]` in THIS ORDER on every
+# item below -- `FourQuadBESSFixtures`'s own `using ..TwoBusFixtures` (see fixtures_four_quad_bess.jl's
+# header) requires `TwoBusFixtures` to already be `ensure_evaled` first.
 #
 # Every item name below contains "live" (independently filterable) AND "reactive" (so the
 # existing `occursin("reactive", ti.name)` quick-run filter, 16-VALIDATION.md, continues to
@@ -219,14 +219,14 @@ end
 # ==============================================================================================
 
 @testitem "admm reactive: :live mode converges on the 4Q-BESS fixture without hitting the fail-loud cap (reactive, live)" setup =
-    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures, FourQuadBESSFixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase19Fixtures.build_two_bus_aggregators_4q(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = FourQuadBESSFixtures.build_two_bus_aggregators_4q(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # `solve_admm` THROWS loudly on the maxiter cap (never returns a non-consensus iterate) --
     # simply reaching this line without an exception IS the convergence proof.
@@ -253,20 +253,20 @@ end
 end
 
 @testitem "admm reactive: :live welfare/λ/μ cross-validated against centralized solve_welfare, each own measured tolerance (reactive, live)" setup =
-    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures, FourQuadBESSFixtures] tags = [:admm, :reactive] begin
     using TSODSO
     using JuMP: dual
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase19Fixtures.build_two_bus_aggregators_4q(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = FourQuadBESSFixtures.build_two_bus_aggregators_4q(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # Centralized ground truth via the file-scope-safe `:cone`-collision workaround (see
-    # fixtures_phase19.jl's header -- solve_welfare itself cannot run directly on a
+    # fixtures_four_quad_bess.jl's header -- solve_welfare itself cannot run directly on a
     # FourQuadBESS-bearing aggregator today).
-    ctx_c, obj_c, balance_p_c, balance_q_c = Phase19Fixtures.centralized_welfare_4q(
+    ctx_c, obj_c, balance_p_c, balance_q_c = FourQuadBESSFixtures.centralized_welfare_4q(
         feeder,
         ConvexBranchFlow(),
         aggs;
@@ -290,14 +290,14 @@ end
     )
 
     # D-14 measurement-before-golden (T-19-18): each tolerance below was MEASURED independently
-    # on THIS exact fixture across a 5-seed sweep (see fixtures_phase19.jl's header docstring
+    # on THIS exact fixture across a 5-seed sweep (see fixtures_four_quad_bess.jl's header docstring
     # for the full table) -- NEVER one shared constant across welfare/λ/μ.
     #   welfare : atol = 1e-4   (measured max |Δwelfare| = 2.368e-5, ≈4.2x margin)
     @test isapprox(res.welfare, obj_c; atol = 1e-4)
     #   λ       : atol = 5e-5   (measured max |Δλ|₂       = 1.519e-5, ≈3.3x margin)
     @test isapprox(vec(res.λ), λ_c; atol = 5e-5)
     #   μ       : OLD atol = 1e-7 (measured max |Δμ|₂ = 1.610e-8, ≈6.2x margin, ORIGINAL
-    #             2026-08-08 measurement — see fixtures_phase19.jl's header table, now STALE).
+    #             2026-08-08 measurement — see fixtures_four_quad_bess.jl's header table, now STALE).
     #             NEW atol = 4e-7 (PM-05/26-16 re-measurement, 2026-09-28, against the CURRENT
     #             merged code through Plan 26-12: a fresh 5-seed sweep, SAME procedure/seeds
     #             (SEED_2BUS..SEED_2BUS+4) as the original D-14 measurement, gives max |Δμ|₂ =
@@ -322,7 +322,7 @@ end
 end
 
 @testitem "admm reactive: OFF/CERTIFIED with a q_inject-carrying device fails loud instead of silently dropping it (WR-04) (reactive)" setup =
-    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures, FourQuadBESSFixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
     # WR-04 (phase-19 code review): under OFF/CERTIFIED, build_dso_opt composes its reactive
@@ -330,11 +330,11 @@ end
     # network model (silently diverging from the centralized model, whose Aggregator DOES
     # write −Pdc·tanφ + q_inject into :Rq). The combination is new and undefined, so it must
     # fail LOUD, directing the caller to :live.
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase19Fixtures.build_two_bus_aggregators_4q(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = FourQuadBESSFixtures.build_two_bus_aggregators_4q(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # The guard's home seam: build_dso_opt, in the two remaining non-LIVE EXPLICIT spellings.
     #
@@ -387,7 +387,7 @@ end
 end
 
 @testitem "admm reactive: :live μ sign convention pinned against centralized dual(:balance_q) on REAL impedance (reactive, live)" setup =
-    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures, FourQuadBESSFixtures] tags = [:admm, :reactive] begin
     using TSODSO
     using JuMP: dual
 
@@ -397,14 +397,14 @@ end
     # have passed identically. This item pins the sign the way λ's was pinned: on a fixture
     # where |μ| is MATERIALLY above solver noise. That needs BOTH real impedance AND a BINDING
     # apparent-power cone (an interior free-q 4Q device drives its own bus's μ → 0 by
-    # first-order optimality regardless of impedance) -- see fixtures_phase19.jl's
+    # first-order optimality regardless of impedance) -- see fixtures_four_quad_bess.jl's
     # REAL_R_2BUS/BESS_SMAX_QBOUND constants-block comment for the fixture derivation and the
     # 5-seed measurement table (measurement-before-golden, D-14's discipline).
-    feeder = Phase19Fixtures.two_bus_feeder_real_impedance()
-    aggs = Phase19Fixtures.build_two_bus_aggregators_4q_qbound(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = FourQuadBESSFixtures.two_bus_feeder_real_impedance()
+    aggs = FourQuadBESSFixtures.build_two_bus_aggregators_4q_qbound(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # Centralized ground truth DIRECTLY via solve_welfare -- unlocked by WR-01's anonymous
     # device cone (no centralized_welfare_4q workaround needed on a new fixture).
@@ -449,7 +449,7 @@ end
 end
 
 @testitem "admm reactive: :live mechanism is genuinely live -- a differing input yields differing μ/q_devices, never a static no-op (reactive, live)" setup =
-    [Phase6Fixtures, Phase19Fixtures] tags = [:admm, :reactive] begin
+    [TwoBusFixtures, FourQuadBESSFixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
     # LinearAlgebra is NOT a declared test/[deps] entry anywhere in this project (grep-verified;
@@ -461,10 +461,10 @@ end
     # new test code).
     norm(x) = sqrt(sum(abs2, x))
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # The ONLY difference between the two runs: the seed feeding
     # `build_two_bus_aggregators_4q`'s `generate_profiles` draw (CR-01's own suggested
@@ -472,13 +472,13 @@ end
     # net reactive injection (the `qag_live` PINNING target, `qag_live == qag + q_inject`), so a
     # live mechanism MUST respond even though μ itself stays near-degenerate on this fixture
     # (see the cross-validation item above).
-    aggs1 = Phase19Fixtures.build_two_bus_aggregators_4q(
+    aggs1 = FourQuadBESSFixtures.build_two_bus_aggregators_4q(
         feeder;
-        seed = Phase6Fixtures.SEED_2BUS,
+        seed = TwoBusFixtures.SEED_2BUS,
     )
-    aggs2 = Phase19Fixtures.build_two_bus_aggregators_4q(
+    aggs2 = FourQuadBESSFixtures.build_two_bus_aggregators_4q(
         feeder;
-        seed = Phase6Fixtures.SEED_2BUS + 1,
+        seed = TwoBusFixtures.SEED_2BUS + 1,
     )
 
     res1 = solve_admm(
@@ -514,7 +514,7 @@ end
     stacked2 = vcat(vec(res2.mu_q), res2.q_devices[2])
 
     # Measured floor (this task's own sanity check, verified this session): two IDENTICAL-seed
-    # runs (aggs2 built with `seed = Phase6Fixtures.SEED_2BUS`, matching aggs1) reproduce
+    # runs (aggs2 built with `seed = TwoBusFixtures.SEED_2BUS`, matching aggs1) reproduce
     # BIT-FOR-BIT (norm diff == 0.0 exactly), correctly FAILING both assertions below -- i.e.
     # this liveness gate is NOT vacuously true. That check was reverted immediately after
     # confirming the expected failure; the committed code below always uses the two DISTINCT

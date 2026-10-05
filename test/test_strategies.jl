@@ -195,7 +195,7 @@ end
     @test r.scenario.strategy == ADMM(maxiter = 300)
 end
 
-@testitem "ARCH-02 run(MPC) common shape" tags = [:mpc_loop] setup = [Phase21Fixtures] begin
+@testitem "ARCH-02 run(MPC) common shape" tags = [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
     s = Scenario(name = "m", feeder = :ieee13, T = 9, strategy = MPC(H = 3, forecast_error = 0.0))
     r = run_mpc(s)
@@ -244,7 +244,7 @@ end
     end
 end
 
-@testitem "ARCH-02 run(st, s) dispatch uniformity" setup = [Phase21Fixtures] begin
+@testitem "ARCH-02 run(st, s) dispatch uniformity" setup = [MPCFixtures] begin
     using TSODSO, Test
     for st in (Centralized(), MPC(H = 3, forecast_error = 0.0), Stochastic(S = 3, H_oos = 5))
         s = Scenario(name = "u", feeder = :ieee13, T = 9, strategy = st)
@@ -257,13 +257,13 @@ end
     end
 end
 
-@testitem "ARCH-02 run_and_store round-trip for MPC and Stochastic" setup = [Phase8Fixtures] begin
+@testitem "ARCH-02 run_and_store round-trip for MPC and Stochastic" setup = [ExperimentHarnessFixtures] begin
     using TSODSO, Test
     using DrWatson: wload
 
     is_prim(v) = v isa Union{Number,Symbol,String,Bool,Missing,Nothing} ||
                  (v isa AbstractArray && eltype(v) <: Union{Number,Symbol,String,Bool})
-    Phase8Fixtures.with_tempdir() do dir
+    ExperimentHarnessFixtures.with_tempdir() do dir
         s_mpc = Scenario(
             name = "st-mpc", feeder = :ieee13, T = 9,
             strategy = MPC(H = 3, forecast_error = 0.0),

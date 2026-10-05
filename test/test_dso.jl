@@ -22,18 +22,18 @@
 #     `(length(load_nodes), T)`); `:balance_q` remains registered either way.
 
 @testitem "dso: build_dso_opt builds whole-network SOCP, reuses ConvexBranchFlow (2-bus)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
     @test isdefined(TSODSO, :build_dso_opt)
     @test isdefined(TSODSO, :DsoOpt)
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
     @test dso isa TSODSO.DsoOpt
@@ -62,7 +62,7 @@
 end
 
 @testitem "dso: build_dso_opt on IEEE-13 solves OPTIMAL — reactive closure feasible (ieee13)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
@@ -71,10 +71,10 @@ end
     # q_import at the root. An ACTIVE-ONLY closure would pin :Rq to zero at every load bus and
     # be INFEASIBLE — so a clean OPTIMAL solve here proves the reactive path is right.
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    Th = Phase4Fixtures.T
-    λ₀ = Phase4Fixtures.mem_price_profile()
-    ρ = Phase6Fixtures.RHO_2BUS
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    Th = IEEE13Fixtures.T
+    λ₀ = IEEE13Fixtures.mem_price_profile()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
 
@@ -91,14 +91,14 @@ end
 end
 
 @testitem "dso: build_dso_opt guards — empty aggs, λ₀ shape, root aggregator, out-of-range" setup =
-    [Phase7Fixtures, Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
+    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # Empty aggregators.
     @test_throws ArgumentError build_dso_opt(feeder, typeof(aggs)(), Th; ρ = ρ, λ₀ = λ₀)
@@ -114,11 +114,11 @@ end
     feeder3 = Feeder(buses3, branches3, 1)
 
     # Aggregator ON the root bus — the frontier carries no aggregator (thesis 3.47) → fail loud.
-    root_agg = Phase7Fixtures.build_ieee123_aggregators(feeder3; load_buses = [1])
+    root_agg = IEEE123Fixtures.build_ieee123_aggregators(feeder3; load_buses = [1])
     @test_throws ArgumentError build_dso_opt(feeder3, root_agg, Th; ρ = ρ, λ₀ = λ₀)
 
     # Aggregator on a bus OUTSIDE 1:N (bus 3 fed to the 2-bus feeder, N=2) → fail loud.
-    oob_agg = Phase7Fixtures.build_ieee123_aggregators(feeder3; load_buses = [3])
+    oob_agg = IEEE123Fixtures.build_ieee123_aggregators(feeder3; load_buses = [3])
     @test_throws ArgumentError build_dso_opt(feeder, oob_agg, Th; ρ = ρ, λ₀ = λ₀)
 
     # A genuine TRANSIT bus (aggregator only on bus 2, bus 3 zero-injection) is now ADMITTED
@@ -130,7 +130,7 @@ end
 end
 
 @testitem "dso: transit zero-injection bus admitted, balance closes, solves OPTIMAL (transit, dso)" setup =
-    [Phase7Fixtures, Phase6Fixtures, Phase4Fixtures] tags = [:dso, :phase7] begin
+    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :phase7] begin
     using TSODSO
     using JuMP
 
@@ -142,10 +142,10 @@ end
         [Branch(1, 2, 0.02, 0.02, SMAX_NO_LIMIT), Branch(2, 3, 0.02, 0.02, SMAX_NO_LIMIT)]
     feeder = Feeder(buses, branches, 1)
 
-    aggs = Phase7Fixtures.build_ieee123_aggregators(feeder; load_buses = [3])   # ONLY bus 3
-    Th = Phase7Fixtures.T
-    λ₀ = Phase7Fixtures.ieee123_lambda0()
-    ρ = Phase7Fixtures.RHO0
+    aggs = IEEE123Fixtures.build_ieee123_aggregators(feeder; load_buses = [3])   # ONLY bus 3
+    Th = IEEE123Fixtures.T
+    λ₀ = IEEE123Fixtures.ieee123_lambda0()
+    ρ = IEEE123Fixtures.RHO0
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
 
@@ -165,17 +165,17 @@ end
 end
 
 @testitem "dso: solve_dso! zero-price OPTIMAL returns pag_dso/p_import of right shape" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
     @test isdefined(TSODSO, :solve_dso!)
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
 
@@ -193,16 +193,16 @@ end
 end
 
 @testitem "dso: solve_dso! check_exact passes PF-04 gate on 2-bus and IEEE-13 (exact)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
 
     # --- 2-bus dual-sign anchor ---
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
     λ = Dict(j => zeros(Th) for j in dso.load_nodes)
@@ -215,9 +215,9 @@ end
 
     # --- IEEE-13 ground fixture (allow_export semantics; reactive closure exercised) ---
     feeder13 = ieee13_modified()
-    aggs13 = Phase4Fixtures.build_ieee13_ground_aggregators(feeder13)
-    T13 = Phase4Fixtures.T
-    λ₀13 = Phase4Fixtures.mem_price_profile()
+    aggs13 = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder13)
+    T13 = IEEE13Fixtures.T
+    λ₀13 = IEEE13Fixtures.mem_price_profile()
 
     dso13 = build_dso_opt(feeder13, aggs13, T13; ρ = ρ, λ₀ = λ₀13)
     λ13 = Dict(j => zeros(T13) for j in dso13.load_nodes)
@@ -228,15 +228,15 @@ end
 end
 
 @testitem "dso: build-once — num_variables/num_constraints unchanged across re-solves (resolve)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
 
@@ -258,7 +258,7 @@ end
 end
 
 @testitem "dso: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso, :phase7] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :phase7] begin
     using TSODSO
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
@@ -267,11 +267,11 @@ end
     @test isdefined(TSODSO, :set_rho!)
 
     if isdefined(TSODSO, :set_rho!)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
-        ρ0 = Phase6Fixtures.RHO_2BUS
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
+        ρ0 = TwoBusFixtures.RHO_2BUS
         ρ1 = 2.5 * ρ0                       # a genuine ρ change
 
         # MUTATE path: build at ρ0, set_rho!(dso, ρ1) — NO rebuild — then solve at ρ1.
@@ -308,11 +308,11 @@ end
 end
 
 @testitem "dso: reactive_consensus=ReactiveMode.CERTIFIED pins qag_dso coupling variable, zero-price primal-equivalent to default (reactive)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:dso, :reactive] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:dso, :reactive] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): this testitem's
     # ORIGINAL fixture, `build_two_bus_aggregators`, carries Thermostatic+Deferrable members
     # that FIX-05 (Plan 26-04) made `is_flexible_load`, so `build_dso_opt`'s smart default
@@ -322,10 +322,10 @@ end
     # works"). Swapped to the flexible-load-free `build_two_bus_aggregators_no_flex` (a
     # PVBattery-only population) to restore the original REACT-03 "default OFF vs explicit
     # CERTIFIED, physically equivalent" intent this testitem predates Phase 26 with.
-    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     # DEFAULT path: no qag_dso stashed (REACT-03 non-regression, re-pinned here too).
     dso_default = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)

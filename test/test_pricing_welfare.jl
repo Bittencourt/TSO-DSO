@@ -254,24 +254,24 @@ end
 end
 
 @testitem "welfare surplus accounting: IEEE-13 ground solve — social == prosumer + dso == objective (PRICE-03)" tags =
-    [:welfare, :surplus] setup = [Phase4Fixtures] begin
+    [:welfare, :surplus] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     ctx, obj, _dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
 
-    acct = welfare_accounting(ctx; T = Phase4Fixtures.T)
+    acct = welfare_accounting(ctx; T = IEEE13Fixtures.T)
 
     # The lossy IEEE-13 case: the identity still holds within rtol (transfer cancels; the loss
     # sits inside objective_value on both sides — Open Q2 resolved, no separate loss term needed).
@@ -282,7 +282,7 @@ end
 
     # Passing the true MEM price λ₀ (rather than recovering it from the root DADP) yields the
     # same split — the root DADP equals λ₀ at the priced-frontier optimum (KKT).
-    acct2 = welfare_accounting(ctx; T = Phase4Fixtures.T, λ₀ = λ₀)
+    acct2 = welfare_accounting(ctx; T = IEEE13Fixtures.T, λ₀ = λ₀)
     @test acct2.prosumer ≈ acct.prosumer rtol = 1e-4 atol = 1e-4
     @test acct2.dso ≈ acct.dso rtol = 1e-4 atol = 1e-4
 end
@@ -298,13 +298,13 @@ end
 # (thesis page 93, `FIT_λ_*` constants in fit.jl).
 # ---------------------------------------------------------------------------------------------
 @testitem "welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check (PRICE-03)" setup =
-    [Phase4Fixtures] tags = [:welfare, :surplus] begin
+    [IEEE13Fixtures] tags = [:welfare, :surplus] begin
     using TSODSO
     using TSODSO: Branch, Feeder
     using JuMP
 
-    T = Phase4Fixtures.T
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    T = IEEE13Fixtures.T
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # Modified IEEE-13 for the FIT counterfactual. The thesis FIT step is a PLAIN AC power flow
     # with network LIMITS NOT ENFORCED (fit.jl already relaxes the voltage band to [0.8,1.2];
@@ -319,7 +319,7 @@ end
         (b, br) in enumerate(base_feeder.branches)
     ]
     feeder = Feeder(base_feeder.buses, brs, base_feeder.root)
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
 
     # FIT baseline (05-03): FIT-OPT (3.24-3.28) + plain AC-PF, German-FIT prices 6.6/9.6/5.6
     # ¢$/kWh (page 93). Its `social_fit` is the denominator of the +25% headline ratio.

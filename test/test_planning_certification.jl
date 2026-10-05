@@ -168,12 +168,12 @@ end
 end
 
 @testitem "planning certification: solve_stackelberg! (Benders) agrees with the certified BilevelJuMP answer and hand enumeration — PVAL-01 permanent invariant" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, BilevelCertFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, BilevelCertFixture] begin
     using TSODSO, BilevelJuMP, JuMP
 
     # THE SAME toy instance as 11-02-PLAN.md's own convergence test
     # (test_planning_benders.jl) and as BilevelCertFixture's BilevelJuMP model.
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]

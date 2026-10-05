@@ -11,13 +11,13 @@
 # `occursin("battery", ti.name)` selects it.
 
 @testitem "battery: PVBattery device type exists over the T=24 fixture (DEV-04)" tags =
-    [:battery] setup = [Phase3Fixtures] begin
+    [:battery] setup = [SmallRadialFixtures] begin
     using TSODSO
 
     # The shared fixture is healthy (exercises setup wiring): a valid 3-bus feeder + T=24 PV profile.
-    feeder = Phase3Fixtures.small_radial_feeder()
+    feeder = SmallRadialFixtures.small_radial_feeder()
     @test length(feeder.buses) == 3
-    @test length(Phase3Fixtures.Ppv) == Phase3Fixtures.T == 24
+    @test length(SmallRadialFixtures.Ppv) == SmallRadialFixtures.T == 24
 
     # The no-binary PV+battery device (SOC 3.6-3.9, utility 3.15-3.20) exists (DEV-04).
     @test isdefined(TSODSO, :PVBattery)

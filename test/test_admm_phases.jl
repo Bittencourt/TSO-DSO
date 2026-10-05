@@ -29,13 +29,13 @@ end
 end
 
 @testitem "admm phases: _react_stack OFF is the active-only norms, LIVE the stacked form (admm_phases)" setup =
-    [Phase6Fixtures] tags = [:admm, :phases] begin
+    [TwoBusFixtures] tags = [:admm, :phases] begin
     using TSODSO
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     sq = (2.0, 3.0, 5.0, 7.0, 11.0)   # sq_r, sq_ds, sq_a, sq_pd, sq_λ
     p_p = 6
@@ -69,13 +69,13 @@ end
 end
 
 @testitem "admm phases: solve_admm propagates each reactive mode and converges (admm_phases)" setup =
-    [Phase6Fixtures] tags = [:admm, :phases] begin
+    [TwoBusFixtures] tags = [:admm, :phases] begin
     using TSODSO
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
-    Th = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-    ρ = Phase6Fixtures.RHO_2BUS
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
+    Th = TwoBusFixtures.T
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+    ρ = TwoBusFixtures.RHO_2BUS
 
     function run_mode(m)
         return solve_admm(

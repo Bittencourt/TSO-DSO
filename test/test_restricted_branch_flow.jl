@@ -19,13 +19,13 @@
 # `RestrictedBranchFlow` shrink kwarg (D-03/D-04).
 
 @testitem "restricted_branch_flow: v̂ ≥ v sign-relationship spot-check on the EXACT-04 fixture (phase 26-02 FIX-01/02)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # rtol_exact = 1.0: the SAME diagnostic override test_ac_oracle.jl's EXACT-04 item uses, so
     # the inexact SOCP solution is returned for inspection instead of refused by solve_welfare's
@@ -34,7 +34,7 @@
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         rtol_exact = 1.0,
@@ -43,7 +43,7 @@
     N = length(feeder.buses)
 
     mingap =
-        minimum(value(pv.v̂[j, t]) - value(pv.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T)
+        minimum(value(pv.v̂[j, t]) - value(pv.v[j, t]) for j in 1:N, t in 1:IEEE13Fixtures.T)
     @info "v̂-v min gap" mingap
 
     # Phase 26-02 (FIX-01/02): ConvexBranchFlow's corrected default exactness copy is an
@@ -57,20 +57,20 @@
 end
 
 @testitem "restricted_branch_flow: measured Gan-Low modification gap ε on the EXACT-04 fixture (D-03)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # A genuine AC-feasible operating point (RESEARCH.md "Measuring ε" recipe step 1).
     ctx_ac, cost_ac, _ = solve_welfare(
         feeder,
         ACPowerFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_local = true,
         allow_export = true,
@@ -88,11 +88,11 @@ end
     # confirming the two shadows are genuinely distinct mechanisms despite now sharing a
     # sign.
     @test minimum(
-        v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T
+        v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:IEEE13Fixtures.T
     ) >= -1e-9
 
     ε_measured =
-        maximum(v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:Phase4Fixtures.T)
+        maximum(v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:IEEE13Fixtures.T)
     @info "measured Gan-Low modification gap (before safety multiplier)" ε_measured
 
     # A nonzero, sensible modification gap. This exact printed value is what plan 20-02's
@@ -102,13 +102,13 @@ end
 end
 
 @testitem "restricted_branch_flow: RestrictedBranchFlow solves EXACT-04 through solve_welfare at PF-04's DEFAULT tolerance (OVR-01, free validation signal)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # Deliberately WITHOUT any rtol_exact override — the DEFAULT 1e-4 is what
     # assert_socp_exact! uses internally. This call must NOT throw — if it does, the
@@ -124,7 +124,7 @@ end
         feeder,
         RestrictedBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -141,7 +141,7 @@ end
 end
 
 @testitem "restricted_branch_flow: plain ConvexBranchFlow on EXACT-04 is UNCHANGED by RestrictedBranchFlow's existence (default-path regression)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
     import Ipopt
@@ -149,15 +149,15 @@ end
     # Deliberate duplication (not a call into test_ac_oracle.jl) so that a future accidental
     # edit to ConvexBranchFlow.jl's bound-setting loop — the one Task 1's anti-pattern warning
     # protects — is caught by TWO independent test files, not one.
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     ctx_socp, cost_socp, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         rtol_exact = 1.0,
@@ -167,7 +167,7 @@ end
         feeder,
         ACPowerFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_local = true,
         allow_export = true,
@@ -176,7 +176,7 @@ end
         feeder,
         ACPowerFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_local = true,
         allow_export = true,
@@ -227,19 +227,19 @@ end
 # genuine restriction whose bound actively excludes the true AC optimum — NOT a bug. The
 # assertions below test this revised, causally-diagnosed behavior.
 @testitem "restricted_branch_flow: assert_restriction_exact! certifies PHYSICAL AC-feasibility while reporting the genuine restriction-induced optimality loss + dispatch-mismatch on the binding EXACT-04 window (D-05, revised semantics)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     ctx_restricted, cost_restricted, _ = solve_welfare(
         feeder,
         RestrictedBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -247,7 +247,7 @@ end
         feeder,
         ACPowerFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_local = true,
         allow_export = true,
@@ -262,7 +262,7 @@ end
         feeder,
         ConvexBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         rtol_exact = 1.0,
@@ -327,12 +327,12 @@ end
     # unchanged as the comparator, since `assert_restriction_exact!`'s `ac_feasible` gate reads
     # ONLY the tested context's own cone residual (never ctx_ac's data), and its ONLY
     # structural requirement against ctx_ac is a matching T (unaffected by pv_scale).
-    aggs_synth = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.4)
+    aggs_synth = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.4)
     ctx_unrestricted_synth, cost_unrestricted_synth, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(; thesis_literal = true),
         aggs_synth;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         rtol_exact = 1.0,
@@ -350,7 +350,7 @@ end
 end
 
 @testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch (D-06)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: LP
     using JuMP
@@ -426,20 +426,20 @@ end
 # `ac_dual_fallback_price` itself is then called UNCONDITIONALLY (per the plan's own action
 # text) because THIS item exercises the fallback's OWN mechanics in isolation.
 @testitem "restricted_branch_flow: ac_dual_fallback_price triggers only after an observed certificate failure, carries price_status, and 2-seed agreement (D-09/D-10/D-11 CI subset)" tags =
-    [:restricted_branch_flow] setup = [Phase4Fixtures] begin
+    [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: ac_dual_fallback_price
     using JuMP
 
-    feeder = Phase4Fixtures.high_pv_feeder()
-    aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    feeder = IEEE13Fixtures.high_pv_feeder()
+    aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     ctx_restricted, cost_restricted, _ = solve_welfare(
         feeder,
         RestrictedBranchFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
     )
@@ -447,7 +447,7 @@ end
         feeder,
         ACPowerFlow(),
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_local = true,
         allow_export = true,
@@ -466,12 +466,12 @@ end
     # pv_scale = 1.4 aggregator set (`aggs_synth`, MEASURED to remain solvable while genuinely
     # cone-inexact under thesis_literal=true) feeds ONLY this synthetic-violation leg; `ctx_ac`
     # (solved at the original pv_scale = 1.2) is reused unchanged as the comparator.
-    aggs_synth = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.4)
+    aggs_synth = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.4)
     ctx_unrestricted_synth, cost_unrestricted_synth, _ = solve_welfare(
         feeder,
         ConvexBranchFlow(; thesis_literal = true),
         aggs_synth;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         rtol_exact = 1.0,
@@ -486,7 +486,7 @@ end
     result = ac_dual_fallback_price(
         feeder,
         aggs;
-        T = Phase4Fixtures.T,
+        T = IEEE13Fixtures.T,
         λ₀ = λ₀,
         allow_export = true,
         n_seeds = 2,

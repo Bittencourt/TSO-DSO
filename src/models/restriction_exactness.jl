@@ -149,7 +149,7 @@ function's own `report`/`error` branching in either case.
 
 **`cone_rtol`/`cone_atol` (the NEW certification-gate tolerance, measured on
 `ctx_restricted`'s OWN cone residual):** measured on the EXACT-04 fixture
-(`Phase4Fixtures.high_pv_feeder()`, `pv_scale = 1.2`, solved `RestrictedBranchFlow()`,
+(`IEEE13Fixtures.high_pv_feeder()`, `pv_scale = 1.2`, solved `RestrictedBranchFlow()`,
 `allow_export = true`), computing `gap[b,t] = |value(l[b,t])·value(v[from_b,t]) − (value(P[b,t])² + value(Q[b,t])²)|` directly over every branch-hour (2026-08-08): the
 observed absolute floor is `2.08e-8` (worst branch `b=2`, hour `t=19`) — reproducing plan
 20-02's `socp_maxgap` EXACTLY, confirming this certificate's independent computation agrees

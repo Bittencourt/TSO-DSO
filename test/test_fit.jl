@@ -72,15 +72,15 @@ end
 # `max_iter=1` Ipopt cannot converge in one iteration on ANY fixture, giving a reproducible
 # `ITERATION_LIMIT` regardless of the feeder.
 @testitem "fit: SITE 2 (FIT AC-PF) on_inexact=:error throws on a forced AC non-convergence, :report returns the diagnostic (FIX-09, plan 27-09)" tags =
-    [:fit] setup = [Phase4Fixtures] begin
+    [:fit] setup = [IEEE13Fixtures] begin
     using TSODSO, JuMP
 
     @test isdefined(TSODSO, :fit_baseline)
 
     if isdefined(TSODSO, :fit_baseline)
-        feeder = Phase4Fixtures.high_pv_feeder()
-        aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 2.0)
-        λ₀ = Phase4Fixtures.mem_price_profile()
+        feeder = IEEE13Fixtures.high_pv_feeder()
+        aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 2.0)
+        λ₀ = IEEE13Fixtures.mem_price_profile()
         crippled = TSODSO.select_optimizer(TSODSO.NLP(); max_iter = 1)
 
         err = try
@@ -88,7 +88,7 @@ end
                 feeder,
                 ConvexBranchFlow(),
                 aggs;
-                T = Phase4Fixtures.T,
+                T = IEEE13Fixtures.T,
                 λ₀ = λ₀,
                 on_inexact = :error,
                 _site2_ac_optimizer = crippled,
@@ -104,7 +104,7 @@ end
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             on_inexact = :error,
             _site2_ac_optimizer = crippled,
@@ -114,7 +114,7 @@ end
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             on_inexact = :report,
             _site2_ac_optimizer = crippled,
@@ -131,19 +131,19 @@ end
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             on_inexact = :error,
         )
         @test isfinite(ok.social_fit)
         @test ok.ac_status == MOI.LOCALLY_SOLVED
-        @test length(ok.ac_violations) == Phase4Fixtures.T
+        @test length(ok.ac_violations) == IEEE13Fixtures.T
 
         @test_throws ArgumentError fit_baseline(
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             on_inexact = :bogus,
         )

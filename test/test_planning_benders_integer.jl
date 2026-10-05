@@ -9,16 +9,16 @@
 # convention, mirrors test_planning_benders.jl).
 #
 # Toy fixture (D-12's canonical instance, same as test_planning_benders.jl /
-# test_planning_goldens.jl's N=1 golden): T=1, feeder=Phase6Fixtures.two_bus_feeder(),
+# test_planning_goldens.jl's N=1 golden): T=1, feeder=TwoBusFixtures.two_bus_feeder(),
 # λ₀=[4.0], dev=ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0),
 # agg=TSODSO.Aggregator(2, 0.9, [dev], [0.0]); follower corridor_cap=2.0, x_inv_max=2.0,
 # c_inv=1.0, c_op=[0.5]; master c_y=0.3, y_max=8.0, α_op_lb=-5.0, α_x_lb=0.0.
 
 @testitem "planning benders integer: master=nothing/known_optimum=nothing explicit -> byte-identical default path (PVAL-02 golden) + converged_now mutual exclusivity (Blocker 2 regression)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -82,11 +82,11 @@
 end
 
 @testitem "planning benders integer: build_master_integer through solve_stackelberg! end-to-end smoke (apply_integer_cuts! wiring, nogood_count/converged_via surfaced)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master_integer
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -246,7 +246,7 @@ end
 end
 
 @testitem "planning benders integer: T>1 joint corner search routes a certificate-less follower infeasibility to bisection — no NaN feasibility cut reaches the small master LP (WR-01, Phase 31 code review)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     # A follower whose FIRST infeasible verdict carries no certificate (the NaN sentinel
@@ -277,7 +277,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
     oracle = TSODSO.build_planning_oracle(
-        Phase6Fixtures.two_bus_feeder(),
+        TwoBusFixtures.two_bus_feeder(),
         LinDistFlow(),
         [agg];
         λ₀ = fill(4.0, T),

@@ -16,7 +16,7 @@
 # invariant across re-solves; only `set_objective_coefficient` mutates it).
 
 @testitem "agr: build_agr_opt builds per-node QP, solves OPTIMAL at zero price (agr)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP
 
@@ -25,11 +25,11 @@
     @test isdefined(TSODSO, :AgrOpt)
 
     if isdefined(TSODSO, :build_agr_opt) && isdefined(TSODSO, :AgrOpt)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
         agg = aggs[1]
-        Th = Phase6Fixtures.T
-        ρ = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        ρ = TwoBusFixtures.RHO_2BUS
 
         agr = build_agr_opt(agg, Th; ρ = ρ)
         @test agr isa AgrOpt
@@ -51,7 +51,7 @@
 end
 
 @testitem "agr: solve_agr! coefficient-update re-solve returns pag + utility (agr)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP
 
@@ -59,11 +59,11 @@ end
     @test isdefined(TSODSO, :solve_agr!)
 
     if isdefined(TSODSO, :solve_agr!)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
         agg = aggs[1]
-        Th = Phase6Fixtures.T
-        ρ = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        ρ = TwoBusFixtures.RHO_2BUS
 
         agr = build_agr_opt(agg, Th; ρ = ρ)
 
@@ -78,7 +78,7 @@ end
 end
 
 @testitem "agr: build-once — num_variables/num_constraints stable across re-solves (resolve)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
     using JuMP: num_variables, num_constraints
 
@@ -86,11 +86,11 @@ end
     @test isdefined(TSODSO, :solve_agr!)
 
     if isdefined(TSODSO, :solve_agr!) && isdefined(TSODSO, :build_agr_opt)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
         agg = aggs[1]
-        Th = Phase6Fixtures.T
-        ρ = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        ρ = TwoBusFixtures.RHO_2BUS
 
         agr = build_agr_opt(agg, Th; ρ = ρ)
 
@@ -113,18 +113,18 @@ end
 end
 
 @testitem "agr: price coefficient actually shifts the net injection (agr)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
 
     # RED until Task 2 adds solve_agr!.
     @test isdefined(TSODSO, :solve_agr!)
 
     if isdefined(TSODSO, :solve_agr!)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
         agg = aggs[1]
-        Th = Phase6Fixtures.T
-        ρ = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        ρ = TwoBusFixtures.RHO_2BUS
 
         agr = build_agr_opt(agg, Th; ρ = ρ)
 
@@ -137,7 +137,7 @@ end
 end
 
 @testitem "agr: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:admm, :phase7] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
@@ -146,11 +146,11 @@ end
     @test isdefined(TSODSO, :set_rho!)
 
     if isdefined(TSODSO, :set_rho!)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
         agg = aggs[1]
-        Th = Phase6Fixtures.T
-        ρ0 = Phase6Fixtures.RHO_2BUS
+        Th = TwoBusFixtures.T
+        ρ0 = TwoBusFixtures.RHO_2BUS
         ρ1 = 3.7 * ρ0                       # a genuine ρ change (τ-like ratchet)
 
         # A FIXED (λ_j, c_j) exercised on both paths so any difference is the ρ mutation alone.

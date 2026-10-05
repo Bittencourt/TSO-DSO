@@ -8,7 +8,7 @@
 # battery schedule while leaving PV/demand/ambient Parameters free to re-slide per held-out
 # scenario. `solve_stochastic_oos_step!` is a one-line `solve_with_retry!` delegation
 # (`dual = false` — STOCH-03's scope is the realized welfare only). Items tagged
-# `[:stochastic_oos_harness]`, `setup = [Phase22Fixtures]`, mirroring
+# `[:stochastic_oos_harness]`, `setup = [StochasticFixtures]`, mirroring
 # `test_mpc_window.jl`'s own build-once-invariance test convention (lines 75-131).
 #
 # Deviations (Rule 1 — verify-script feasibility fixes, discovered executing this task and
@@ -36,17 +36,17 @@
 #    directly: the SAME pin without the `Ppv_param` override throws `PRIMAL_INFEASIBLE`.
 
 @testitem "stochastic_oos_harness: build-once — num_variables/num_constraints invariant across heterogeneous re-solves (D-09)" tags =
-    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: num_variables, num_constraints, set_parameter_value
 
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :oos_1),
+        sub_seed(StochasticFixtures.SEED_STOCH, :oos_1),
     )
 
     h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
@@ -86,17 +86,17 @@
 end
 
 @testitem "stochastic_oos_harness: pin is genuinely binding, not vacuous (T-22-05)" tags =
-    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: value, set_parameter_value
 
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :oos_2),
+        sub_seed(StochasticFixtures.SEED_STOCH, :oos_2),
     )
 
     h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
@@ -133,7 +133,7 @@ end
 end
 
 @testitem "stochastic_oos_harness: CR-01 regression — a FourQuadBESS (no Ppv_param) builds, pins, and solves" tags =
-    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: objective_value
@@ -146,17 +146,17 @@ end
     # a mixed PVBattery + FourQuadBESS aggregator must build, expose ONE pin entry PER
     # battery-like device but a `ppv_handles` entry ONLY for the PV-carrying PVBattery,
     # and re-solve cleanly with both batteries pinned at the benign 0.0 default.
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :cr01_fourquad),
+        sub_seed(StochasticFixtures.SEED_STOCH, :cr01_fourquad),
     )
 
     # Same scale family as the fixture's own PVBattery (LOAD_SCALE_STOCH-relative), so
     # the near-lossless 2-bus solve stays feasible and interior.
-    L = Phase22Fixtures.LOAD_SCALE_STOCH
+    L = StochasticFixtures.LOAD_SCALE_STOCH
     bess = FourQuadBESS(
         2,                              # bus (the fixture's single load bus)
         0.95,                           # η
@@ -167,9 +167,9 @@ end
         0.0,                            # Emin
         0.4 * L,                        # Emax
         0.2 * L,                        # soc0
-        Phase22Fixtures.BATT_λ_MIN,
-        Phase22Fixtures.BATT_λ_MED,
-        Phase22Fixtures.BATT_λ_MAX,
+        StochasticFixtures.BATT_λ_MIN,
+        StochasticFixtures.BATT_λ_MED,
+        StochasticFixtures.BATT_λ_MAX,
     )
     agg = TSODSO.Aggregator(
         2,
@@ -191,7 +191,7 @@ end
 end
 
 @testitem "stochastic_oos_harness: WR-04 (phase-22 review) — FourQuadBESS q is pinned first-stage, never free held-out recourse" tags =
-    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: value, set_parameter_value
@@ -200,13 +200,13 @@ end
     # of the first-stage battery schedule under D-03), so the held-out re-score must PIN
     # the committed q too — a free q would grant the held-out solve reactive recourse
     # the in-sample commitment never had. This item pins the harness half of the fix.
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    L = Phase22Fixtures.LOAD_SCALE_STOCH
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    L = StochasticFixtures.LOAD_SCALE_STOCH
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :wr04_oos),
+        sub_seed(StochasticFixtures.SEED_STOCH, :wr04_oos),
     )
     bess = FourQuadBESS(
         2,
@@ -218,9 +218,9 @@ end
         0.0,
         0.4 * L,
         0.2 * L,
-        Phase22Fixtures.BATT_λ_MIN,
-        Phase22Fixtures.BATT_λ_MED,
-        Phase22Fixtures.BATT_λ_MAX,
+        StochasticFixtures.BATT_λ_MIN,
+        StochasticFixtures.BATT_λ_MED,
+        StochasticFixtures.BATT_λ_MAX,
     )
     agg = TSODSO.Aggregator(
         2,
@@ -246,16 +246,16 @@ end
 end
 
 @testitem "stochastic_oos_harness: build_stochastic_oos_harness boundary guards" tags =
-    [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
+    [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, sub_seed
 
-    feeder = Phase22Fixtures.stoch_feeder()
-    T = Phase22Fixtures.T
-    λ0 = Phase22Fixtures.stoch_lambda0()
-    aggs = Phase22Fixtures.stoch_scenario_aggregators(
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
         feeder,
-        sub_seed(Phase22Fixtures.SEED_STOCH, :oos_3),
+        sub_seed(StochasticFixtures.SEED_STOCH, :oos_3),
     )
 
     # Empty aggregators: no priced load / no objective.

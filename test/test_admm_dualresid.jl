@@ -20,7 +20,7 @@
 #     converged ledger satisfies the two-residual predicate at its final iterate.
 
 @testitem "admm dualresid: z-block dual residual + two-residual stop (dualresid, admm)" setup =
-    [Phase7Fixtures, Phase6Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures, TwoBusFixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using TSODSO: converged
 
@@ -28,10 +28,10 @@
     @test isdefined(TSODSO, :set_rho!)
 
     if isdefined(TSODSO, :set_rho!)
-        feeder = Phase6Fixtures.two_bus_feeder()
-        aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-        Th = Phase6Fixtures.T
-        λ₀ = Phase6Fixtures.two_bus_lambda0()
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        Th = TwoBusFixtures.T
+        λ₀ = TwoBusFixtures.two_bus_lambda0()
 
         res = solve_admm(
             feeder,
@@ -39,9 +39,9 @@
             aggs;
             T = Th,
             λ₀ = λ₀,
-            ρ = Phase7Fixtures.RHO0,
-            ε_abs = Phase7Fixtures.EPS_ABS,
-            ε_rel = Phase7Fixtures.EPS_REL,
+            ρ = IEEE123Fixtures.RHO0,
+            ε_abs = IEEE123Fixtures.EPS_ABS,
+            ε_rel = IEEE123Fixtures.EPS_REL,
             allow_export = true,
         )
         led = res.residuals
@@ -62,17 +62,17 @@
 end
 
 @testitem "admm dualresid: ledger two-residual converged predicate (dualresid, resid)" setup =
-    [Phase7Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using TSODSO: converged, record!
 
     # This item exercises the JuMP-free ledger contract directly (GREEN once plan 07-01 Task 2
     # lands the extended AdmmResiduals) — it does NOT depend on solve_admm, so it pins the
     # two-residual `converged` semantics the dual-residual stop relies on.
-    res = AdmmResiduals(2, Phase7Fixtures.T)
-    record!(res, 1, 1e-2, 1e-2, Phase7Fixtures.RHO0, 1e-4, 1e-4, 0.5)   # both above ε
+    res = AdmmResiduals(2, IEEE123Fixtures.T)
+    record!(res, 1, 1e-2, 1e-2, IEEE123Fixtures.RHO0, 1e-4, 1e-4, 0.5)   # both above ε
     @test converged(res, 1e-4, 1e-4) == false
-    record!(res, 2, 1e-5, 5e-5, Phase7Fixtures.RHO0, 1e-4, 1e-4, 1e-3)  # both below ε
+    record!(res, 2, 1e-5, 5e-5, IEEE123Fixtures.RHO0, 1e-4, 1e-4, 1e-3)  # both below ε
     @test converged(res, 1e-4, 1e-4) == true
     @test converged(res, 1e-4, 1e-6) == false                          # dual above ⇒ not converged
 end

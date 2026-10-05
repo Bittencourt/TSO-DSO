@@ -1,10 +1,10 @@
-# test/fixtures_phase6.jl
+# test/fixtures_two_bus.jl
 #
 # Shared Phase-6 (ADMM) test fixture module (Wave 0). A TestItems `@testmodule` that the
-# Phase-6 `@testitem`s consume via `setup=[Phase6Fixtures]`. It provides the NEW 2-bus
+# Phase-6 `@testitem`s consume via `setup=[TwoBusFixtures]`. It provides the NEW 2-bus
 # dual-SIGN-anchor feeder + its seeded aggregator, plus the pinned starting penalty `RHO_2BUS`
 # and the MEM price `λ₀`. The IEEE-13 ground case is NOT redefined here — the harness reuses
-# `Phase4Fixtures.build_ieee13_ground_aggregators` + the exported `ieee13_modified()` feeder
+# `IEEE13Fixtures.build_ieee13_ground_aggregators` + the exported `ieee13_modified()` feeder
 # directly (Wave-0 requirement: "reuse Phase 4/5 fixtures").
 #
 # CONTRACT (threat T-06-01): this module DEFINES functions and consts ONLY — it makes NO
@@ -22,11 +22,11 @@
 # matching `extract_dlmp`'s convention). Bus 2 is kept a NET CONSUMER (PV < load) so the sign
 # is unambiguous.
 
-@testmodule Phase6Fixtures begin
+@testmodule TwoBusFixtures begin
     using TSODSO
 
-    # Day-ahead hourly horizon (thesis A1), matching Phase4Fixtures.T. Exported so items
-    # reference `Phase6Fixtures.T`.
+    # Day-ahead hourly horizon (thesis A1), matching IEEE13Fixtures.T. Exported so items
+    # reference `TwoBusFixtures.T`.
     const T = 24
 
     # Battery price triple (App. C parametrization) in ¢$/kWh — STRICT ordering
@@ -50,7 +50,7 @@
         temperature_profile() -> Vector{Float64}
 
     The 24-hour exterior-temperature profile (°C) feeding the thermostatic-load ambient `Tout`,
-    a DIGITIZED approximation of thesis Fig 4.2 (same shape as Phase4Fixtures). Kept local so
+    a DIGITIZED approximation of thesis Fig 4.2 (same shape as IEEE13Fixtures). Kept local so
     this module is self-contained (no cross-`@testmodule` load-time dependency).
     """
     function temperature_profile()
@@ -115,7 +115,7 @@
         build_two_bus_aggregators(feeder; seed=SEED_2BUS) -> Vector{<:Aggregator}
 
     ONE small seeded aggregator at bus 2 of the [`two_bus_feeder`](@ref): a Thermostatic +
-    Deferrable + PVBattery house (the Phase4Fixtures `_house_aggregator` SHAPE) fed by a seeded
+    Deferrable + PVBattery house (the IEEE13Fixtures `_house_aggregator` SHAPE) fed by a seeded
     `generate_profiles` draw, scaled small (`LOAD_SCALE_2BUS` demand, `PV_SCALE_2BUS` PV, tiny
     battery) so the near-lossless 2-bus solve is FEASIBLE and INTERIOR (voltage un-binding) and
     bus 2 stays a NET CONSUMER (positive DADP). Seeded ⇒ reproducible (threat T-06-06); takes

@@ -70,7 +70,7 @@
 # restores the "copied verbatim from the committed findings.txt" provenance claim to true.
 
 @testitem "thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip (REPRO-01)" tags =
-    [:thesis_repro] setup = [Phase7Fixtures] begin
+    [:thesis_repro] setup = [IEEE123Fixtures] begin
     using TSODSO
     using TSODSO: SOCP
 
@@ -83,9 +83,9 @@
     const DSO_BAND_HI = 7.229422341375
 
     feeder = ieee123_modified()
-    aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)
-    Th = Phase7Fixtures.T
-    λ₀ = Phase7Fixtures.ieee123_lambda0()
+    aggs = IEEE123Fixtures.build_ieee123_aggregators(feeder)
+    Th = IEEE123Fixtures.T
+    λ₀ = IEEE123Fixtures.ieee123_lambda0()
 
     # ── DADP: centralized GLB-CVX welfare optimum (thesis 3.38) + its surplus split (3.46/3.47).
     # Phase 26 gap-closure (PM-05/cluster E): default tol_gap=1e-8 trips the PF-04 gate on this
@@ -150,7 +150,7 @@ end
 # S_max-AND-voltage-relaxed FIT solve (via the internal `TSODSO._fit_opt_solve` seam) when
 # `fit_baseline` throws.
 @testitem "thesis_repro: IEEE-13 congestion — DSO-surplus sign-flip qualitative cross-check (secondary, non-gated)" tags =
-    [:thesis_repro] setup = [Phase4Fixtures] begin
+    [:thesis_repro] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: problem_class
     using JuMP: value, Model, @variable, @constraint, @objective, optimize!
@@ -158,9 +158,9 @@ end
         Bus, Branch, SMAX_NO_LIMIT, ModelContext, register_constraint!, add_to_residual!
 
     feeder = TSODSO.ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
-    Th = Phase4Fixtures.T
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
+    Th = IEEE13Fixtures.T
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     # ── DADP: same seam as the primary item, on the congestion-driven IEEE-13 fixture.
     ctx, welfare_dadp, _ = solve_welfare(

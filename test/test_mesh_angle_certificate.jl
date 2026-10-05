@@ -1,17 +1,17 @@
 # Seam: models/mesh_angle_certificate.jl (MESH-03). Driven green by plan 23-03.
 @testitem "certify_angle_recoverable!: both fixture profiles, status/provenance/strict-mode (MESH-03/D-05/D-06/D-07)" setup =
-    [Phase23Fixtures] begin
+    [MeshFixtures] begin
     using TSODSO, Test
 
-    aggs = Phase23Fixtures.mesh_aggregators()
-    λ₀ = Phase23Fixtures.mesh_lambda0()
+    aggs = MeshFixtures.mesh_aggregators()
+    λ₀ = MeshFixtures.mesh_lambda0()
 
     # (a) :uniform certifies -- angles returned, :angle_certified, never a throw.
     ctx_u, _, _ = solve_welfare(
-        Phase23Fixtures.mesh_feeder(:uniform),
+        MeshFixtures.mesh_feeder(:uniform),
         MeshedFlow(),
         aggs;
-        T = Phase23Fixtures.T_MESH,
+        T = MeshFixtures.T_MESH,
         λ₀ = λ₀,
     )
     r_u = certify_angle_recoverable!(ctx_u; report = true)
@@ -22,10 +22,10 @@
     # (b) :heterogeneous reports :angle_unrecoverable under the DEFAULT report=true --
     # angles===nothing, NEVER throws.
     ctx_h, _, _ = solve_welfare(
-        Phase23Fixtures.mesh_feeder(:heterogeneous),
+        MeshFixtures.mesh_feeder(:heterogeneous),
         MeshedFlow(),
         aggs;
-        T = Phase23Fixtures.T_MESH,
+        T = MeshFixtures.T_MESH,
         λ₀ = λ₀,
     )
     r_h = certify_angle_recoverable!(ctx_h; report = true)
@@ -37,10 +37,10 @@
     # strict/throw mode, the one place this test directly exercises the divergence from the
     # certificate family's throw-by-default.
     ctx_h2, _, _ = solve_welfare(
-        Phase23Fixtures.mesh_feeder(:heterogeneous),
+        MeshFixtures.mesh_feeder(:heterogeneous),
         MeshedFlow(),
         aggs;
-        T = Phase23Fixtures.T_MESH,
+        T = MeshFixtures.T_MESH,
         λ₀ = λ₀,
     )
     @test_throws CertificateError certify_angle_recoverable!(ctx_h2; report = false)
@@ -85,7 +85,7 @@ end
 # machinery forces the cycle identity sum(eps_b*(r_b^2+x_b^2)*l_b) = 0, where eps_b is the
 # branch's STORED orientation relative to the cycle traversal; one flip turns the diamond's
 # even 2-2 eps split into 3-1, producing a structural cone gap (~4e-2, empirically measured)
-# that solve_welfare's assert_socp_exact! refuses -- the same mechanism fixtures_phase23.jl's
+# that solve_welfare's assert_socp_exact! refuses -- the same mechanism fixtures_mesh.jl's
 # header documents for the flipped triangle. The one physically-identical re-encoding that
 # PRESERVES the identity is the FULL root-inward reversal (every branch stored child->parent,
 # a global eps sign flip). That reversal also exercises CR-01 maximally: ALL THREE tree
@@ -93,15 +93,15 @@ end
 # correction carries the whole phasor recovery; branch 3 stays the chord (anchored at bus 4
 # instead of bus 2).
 @testitem "certify_angle_recoverable!: reversed-orientation re-encoding -- verdicts and phasors invariant (review CR-01/WR-03)" setup =
-    [Phase23Fixtures] begin
+    [MeshFixtures] begin
     using TSODSO, Test
 
-    # Full root-inward re-encoding of Phase23Fixtures.mesh_feeder (same buses, same (r,x)
+    # Full root-inward re-encoding of MeshFixtures.mesh_feeder (same buses, same (r,x)
     # literals, every branch stored child->parent).
     function reversed_mesh_feeder(profile::Symbol)
         rx =
-            profile == :uniform ? Phase23Fixtures.UNIFORM_RX :
-            Phase23Fixtures.HETEROGENEOUS_RX
+            profile == :uniform ? MeshFixtures.UNIFORM_RX :
+            MeshFixtures.HETEROGENEOUS_RX
         buses = [
             TSODSO.Bus(1, 0.95, 1.05, true),
             TSODSO.Bus(2, 0.90, 1.10, false),
@@ -117,21 +117,21 @@ end
         return TSODSO.MeshedFeeder(buses, branches, 1)
     end
 
-    λ₀ = Phase23Fixtures.mesh_lambda0()
+    λ₀ = MeshFixtures.mesh_lambda0()
     for profile in (:uniform, :heterogeneous)
         ctx_c, _, _ = solve_welfare(
-            Phase23Fixtures.mesh_feeder(profile),
+            MeshFixtures.mesh_feeder(profile),
             MeshedFlow(),
-            Phase23Fixtures.mesh_aggregators();
-            T = Phase23Fixtures.T_MESH,
+            MeshFixtures.mesh_aggregators();
+            T = MeshFixtures.T_MESH,
             λ₀ = λ₀,
         )
         r_c = certify_angle_recoverable!(ctx_c; report = true)
         ctx_r, _, _ = solve_welfare(
             reversed_mesh_feeder(profile),
             MeshedFlow(),
-            Phase23Fixtures.mesh_aggregators();
-            T = Phase23Fixtures.T_MESH,
+            MeshFixtures.mesh_aggregators();
+            T = MeshFixtures.T_MESH,
             λ₀ = λ₀,
         )
         r_r = certify_angle_recoverable!(ctx_r; report = true)

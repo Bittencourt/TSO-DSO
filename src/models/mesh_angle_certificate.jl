@@ -37,7 +37,7 @@ loop-inconsistent point (RESEARCH Pitfall 14). This is the ONLY certificate in t
 codebase that checks LOOP consistency — `assert_socp_exact!` (models/exactness.jl) is
 necessary but NOT sufficient on a mesh: both a genuine AC point and a loop-inconsistent one
 pass its per-branch cone gate identically (empirically confirmed on
-`Phase23Fixtures.mesh_feeder`: cone gaps `~1.6e-8` (`:uniform`) and `~1.8e-11`
+`MeshFixtures.mesh_feeder`: cone gaps `~1.6e-8` (`:uniform`) and `~1.8e-11`
 (`:heterogeneous`, this plan's D-08 magnitude-scaled literals — see "Tolerance provenance"
 below) — BOTH comfortably tight, yet only `:uniform` is angle-recoverable).
 
@@ -76,7 +76,7 @@ flip (byte-locked this phase, D-09 — negligible on its lightly-impedanced radi
 `~1e-5`; flagged for a follow-up plan rather than silently diverging from its "verbatim"
 claim). The chord-tracking addition: the instant a branch `b` is used to reach an unvisited
 bus, `tree_edges[b]` is marked `true`. Any branch never so marked is a **chord** — for the
-committed `Phase23Fixtures.mesh_feeder` diamond (`nB=4`, `N-1=3`) there is exactly one.
+committed `MeshFixtures.mesh_feeder` diamond (`nB=4`, `N-1=3`) there is exactly one.
 
 For every chord `b` (endpoints `(from, to)`, impedance `z_b`) and every hour `t`: using the
 chord's OWN solved `(P_b, Q_b)` (never traversal-sign-flipped — this evaluates the branch's
@@ -94,7 +94,7 @@ context handed to this function trivially certifies, since there is nothing to c
 `scale = maximum(abs, Vphasor)` (a magnitude reference over ALL bus phasors, all `t`).
 `recoverable = worst_residual <= atol + rtol*scale` — the SAME scale-free `atol + rtol·magnitude` combined-bound SHAPE every certificate in this codebase uses (WR-01),
 copied for STYLE consistency only; the VALUES below are measured fresh on
-`Phase23Fixtures`, never reused from a sibling certificate (D-08).
+`MeshFixtures`, never reused from a sibling certificate (D-08).
 
 # Output contract (D-07)
 
@@ -125,7 +125,7 @@ never stashed the marker (e.g. a plain `ConvexBranchFlow` context) honestly repo
 
 # Tolerance provenance (D-08 — measured fresh, never copied from a sibling certificate)
 
-Measured on `Phase23Fixtures.mesh_feeder` (`test/fixtures_phase23.jl`, the committed 4-bus
+Measured on `MeshFixtures.mesh_feeder` (`test/fixtures_mesh.jl`, the committed 4-bus
 diamond), both impedance profiles, solved via `MeshedFlow()` + `solve_welfare`
 (2026-08-10): the `:uniform` profile's raw `worst_residual` is `≈6.27e-3`; the
 `:heterogeneous` profile's raw `worst_residual` is `≈6.07e-2` — a genuine, measured
@@ -134,7 +134,7 @@ standalone toy-triangle spike observed (`1e-5`/`5.8e-3`, a DIFFERENT topology, D
 per-unit values, and — per plan 23-02's own finding — a simplified spike that omitted
 `ConvexBranchFlow`'s exactness-copy machinery; never reused here per D-08).
 
-**A genuine, topology-specific finding (documented in full in `test/fixtures_phase23.jl`'s
+**A genuine, topology-specific finding (documented in full in `test/fixtures_mesh.jl`'s
 header comment and this plan's SUMMARY):** on THIS diamond's two-parallel-2-hop-path
 topology (as opposed to the triangle's simple series ring), direct empirical measurement
 (sweeping R/X ratio spread, load asymmetry, and impedance scale independently, all while

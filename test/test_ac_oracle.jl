@@ -180,7 +180,7 @@ end
 end
 
 @testitem "ac_oracle: high-PV stress fixture surfaces the genuine SOCP/AC exactness finding at the exactness boundary (EXACT-04)" tags =
-    [:ac_oracle] setup = [Phase4Fixtures] begin
+    [:ac_oracle] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
     import Ipopt
@@ -189,7 +189,7 @@ end
     @test isdefined(TSODSO, :ACPowerFlow)
 
     if isdefined(TSODSO, :assert_ac_exact!) && isdefined(TSODSO, :ACPowerFlow)
-        feeder = Phase4Fixtures.high_pv_feeder()
+        feeder = IEEE13Fixtures.high_pv_feeder()
         # pv_scale = 1.2 is the EMPIRICALLY-FOUND value (RESEARCH Open Question 1's 1.0–2.0 range)
         # that pins bus voltage at V²max — see the ## Finding below. It is hard-coded (no search
         # loop) so the committed test is deterministic and reproducible.
@@ -223,11 +223,11 @@ end
         # under thesis_literal=true — the OPPOSITE of what this comment previously implied. (The
         # historic v2.1 "genuine cone-inexactness" finding is a SEPARATE phenomenon that still
         # reproduces, but only under thesis_literal=true at a DIFFERENT, higher pv_scale — e.g.
-        # pv_scale=1.4 on this fixture (ratio≈1982) or Phase21Fixtures' pv_scale=3.0 MPC window
+        # pv_scale=1.4 on this fixture (ratio≈1982) or MPCFixtures' pv_scale=3.0 MPC window
         # (cone_maxratio≈9157-9166) — see 26-FINDINGS.md "Plan 26-18".) Assertions below are
         # UNCHANGED — they were already passing for this now-correctly-documented reason.
-        aggs = Phase4Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
-        λ₀ = Phase4Fixtures.mem_price_profile()
+        aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
+        λ₀ = IEEE13Fixtures.mem_price_profile()
 
         # SOCP solve with rtol_exact = 1.0: a DELIBERATE, documented diagnostic override of
         # solve_welfare's OWN internal PF-04 gate (assert_socp_exact!), so the loose-relaxation
@@ -238,7 +238,7 @@ end
             feeder,
             ConvexBranchFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             allow_export = true,
             rtol_exact = 1.0,
@@ -249,7 +249,7 @@ end
             feeder,
             ACPowerFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             allow_local = true,
             allow_export = true,
@@ -261,7 +261,7 @@ end
             feeder,
             ACPowerFlow(),
             aggs;
-            T = Phase4Fixtures.T,
+            T = IEEE13Fixtures.T,
             λ₀ = λ₀,
             allow_local = true,
             allow_export = true,
@@ -321,7 +321,7 @@ end
         # under thesis_literal=true at pv_scale=1.2. The historic v2.1 "genuine SOC-relaxation
         # cone-inexactness" finding is a DIFFERENT phenomenon (gate 1, not gate 2) that still
         # reproduces, but only under thesis_literal=true at a higher pv_scale (e.g. 1.4+ on this
-        # fixture, or Phase21Fixtures' pv_scale=3.0 MPC window) — see 26-FINDINGS.md "Plan 26-18".
+        # fixture, or MPCFixtures' pv_scale=3.0 MPC window) — see 26-FINDINGS.md "Plan 26-18".
         # Narrated (gate-qualified) in docs/literate/ac_oracle.jl and restricted_branch_flow.jl.
     end
 end

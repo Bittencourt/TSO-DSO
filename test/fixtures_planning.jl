@@ -1,10 +1,10 @@
 # test/fixtures_planning.jl
 #
-# Seam: PVAL-02 — a dedicated, `fixtures_phase4.jl`-style `@testmodule` holding the
+# Seam: PVAL-02 — a dedicated, `fixtures_ieee13.jl`-style `@testmodule` holding the
 # permanent regression goldens for the planning layer's two certified/hand-checked
 # equilibria (N=1 Phase 11 BilevelJuMP certification, N=2 Phase 13 hand-checked Nash
 # equilibrium), plus loose upper bounds on the N=2 multi-seed/multi-order probe's
-# reported spread. This module DEFINES data only (mirrors fixtures_phase4.jl's own
+# reported spread. This module DEFINES data only (mirrors fixtures_ieee13.jl's own
 # T-04-08 contract): plain top-level `const`s, no top-level call to any TSODSO solve
 # entrypoint, consumed by test/test_planning_goldens.jl via `setup=[..., PlanningFixtures]`.
 

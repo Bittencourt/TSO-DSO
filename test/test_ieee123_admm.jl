@@ -18,7 +18,7 @@
 #     and the converged DSO-OPT is PF-04 exact (`exact_maxgap` small) at the binding-voltage point.
 
 @testitem "ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval)" setup =
-    [Phase7Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using TSODSO: SOCP
 
@@ -30,14 +30,14 @@
     if isdefined(TSODSO, :ieee123_modified) && isdefined(TSODSO, :set_rho!)
         feeder = ieee123_modified()
         N = length(feeder.buses)
-        Th = Phase7Fixtures.T
-        λ₀ = Phase7Fixtures.ieee123_lambda0()
+        Th = IEEE123Fixtures.T
+        λ₀ = IEEE123Fixtures.ieee123_lambda0()
 
         # One seeded aggregator per LOAD node (the 85 spot-load buses); the ~37 junction buses
         # carry NO aggregator and are handled as zero-injection TRANSIT nodes by the DSO-OPT
         # relaxation (plan 07-03, RESEARCH Pitfall 5). That the whole run below does NOT throw at
         # build_dso_opt IS the transit-handling certificate; assert the split is real up front.
-        aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)
+        aggs = IEEE123Fixtures.build_ieee123_aggregators(feeder)
         load_buses = [a.bus for a in aggs]
         @test length(load_buses) == 85                          # thesis Case-B spot-load count
         @test length(load_buses) < N - 1                        # ⇒ genuine transit buses exist (~37)
@@ -73,13 +73,13 @@
             aggs;
             T = Th,
             λ₀ = λ₀,
-            ρ = Phase7Fixtures.RHO0,
-            ε_abs = Phase7Fixtures.EPS_ABS,
-            ε_rel = Phase7Fixtures.EPS_REL,
-            τ = Phase7Fixtures.TAU,
-            μ = Phase7Fixtures.MU,
-            ρ_min = Phase7Fixtures.RHO_MIN,
-            ρ_max = Phase7Fixtures.RHO_MAX,
+            ρ = IEEE123Fixtures.RHO0,
+            ε_abs = IEEE123Fixtures.EPS_ABS,
+            ε_rel = IEEE123Fixtures.EPS_REL,
+            τ = IEEE123Fixtures.TAU,
+            μ = IEEE123Fixtures.MU,
+            ρ_min = IEEE123Fixtures.RHO_MIN,
+            ρ_max = IEEE123Fixtures.RHO_MAX,
             maxiter = 300,
             allow_export = true,
         )
@@ -108,15 +108,15 @@ end
 # real-impedance swap could silently turn the case numerically slack (e.g. staying inside
 # [0.95, 1.05] at every hour/bus) without any existing test noticing.
 @testitem "ieee123 admm: voltage-binding margin (ieee123, crossval)" setup =
-    [Phase7Fixtures] tags = [:admm, :phase7] begin
+    [IEEE123Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
     using TSODSO: SOCP
     using JuMP: value
 
     feeder = ieee123_modified()
-    aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)
-    Th = Phase7Fixtures.T
-    λ₀ = Phase7Fixtures.ieee123_lambda0()
+    aggs = IEEE123Fixtures.build_ieee123_aggregators(feeder)
+    Th = IEEE123Fixtures.T
+    λ₀ = IEEE123Fixtures.ieee123_lambda0()
 
     # Phase 26 gap-closure (PM-05/cluster E): same tol_gap calibration as the crossval item
     # above — default 1e-8 trips the PF-04 gate on this feeder (precision-floor artifact);
@@ -143,13 +143,13 @@ end
     # Originally-attempted starting thresholds: 0.92 (lower) / 1.08 (upper).
     #
     # ACTUAL, WIDENED thresholds (IMPED-03 finding, Plan 17-03): on the real-impedance feeder,
-    # the achievable regime is genuinely ASYMMETRIC. An exhaustive Phase7Fixtures population-scale
+    # the achievable regime is genuinely ASYMMETRIC. An exhaustive IEEE123Fixtures population-scale
     # search (LOAD_SCALE_IEEE123 x PV_SCALE_IEEE123, holding the SOCP relaxation exact) found the
     # lower band IS reachable (down to ~0.93 pu with load-only scaling) but the upper band is NOT:
     # any attempt to push the solved max materially above ~1.02-1.03 pu (via higher PV/reverse
     # flow) drives the SOC relaxation genuinely inexact (the SAME high-PV/reverse-flow exactness
     # boundary Phase 15's EXACT-04 finding documents at pv_scale=1.2 on the IEEE-13 stress fixture)
-    # BEFORE it can approach 1.08. The re-tuned population (see fixtures_phase7.jl) settles at the
+    # BEFORE it can approach 1.08. The re-tuned population (see fixtures_ieee123.jl) settles at the
     # best-available JOINT operating point: vmin_solved ~= 0.9487, vmax_solved ~= 1.0105 (observed
     # this session). Widened thresholds below are the ACTUAL observed values (never past the
     # (0.9, 1.1) sanity floor), so a future regression that makes the case LESS binding than this
@@ -166,7 +166,7 @@ end
 
 # Seam: MESH-04/MESH-05 (plan 19-08, Task 3) — IEEE-13 4Q-BESS SUPPORTING evidence only, D-13.
 # The PRIMARY, CI-gated evidence for MESH-05's live-convergence/cross-validation/liveness truths
-# lives on the `Phase19Fixtures` 2-bus fixture in `test/test_admm_reactive.jl` (items whose name
+# lives on the `FourQuadBESSFixtures` 2-bus fixture in `test/test_admm_reactive.jl` (items whose name
 # contains "live"); THIS item is deliberately NOT part of that primary evidence set and is
 # explicitly documented here as never intended to gate CI on its own. It previously ran under a
 # test-level bounded-retry wrapper (quick task 260726-vn2, `test/fixtures_retry.jl`) that was
@@ -177,18 +177,18 @@ end
 # matched by the file's own `(ieee123, crossval)`/`(ieee123, phase7)` tags above, so a
 # CI-gating filter selecting on those tags alone never picks this item up).
 @testitem "ieee13 admm 4q-bess: live reactive dual-ascent supporting evidence, NOT CI-gating (ieee13, 4q)" setup =
-    [Phase4Fixtures] tags = [:admm, :reactive] begin
+    [IEEE13Fixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
     # Reuse the SAME Phase-4 IEEE-13 GROUND fixture `test_admm.jl`'s own flaky crossval item
     # uses, MODIFIED ADDITIVELY: one `FourQuadBESS` appended to the first non-root bus's
     # aggregator's device list (mirroring how `test_ieee123_admm.jl`'s own items build their
     # aggregator set, just with one device added on top — never a fixture-file edit, since
-    # `Phase4Fixtures.jl` is out of this plan's `files_modified` scope).
+    # `IEEE13Fixtures.jl` is out of this plan's `files_modified` scope).
     feeder = ieee13_modified()
-    aggs = Phase4Fixtures.build_ieee13_ground_aggregators(feeder)
-    Th = Phase4Fixtures.T
-    λ₀ = Phase4Fixtures.mem_price_profile()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    Th = IEEE13Fixtures.T
+    λ₀ = IEEE13Fixtures.mem_price_profile()
 
     target = aggs[1]
     # Scaled to the SAME residential magnitude as this fixture's own battery
@@ -207,9 +207,9 @@ end
         0.0,
         0.01,
         0.005,
-        Phase4Fixtures.BATT_λ_MIN,
-        Phase4Fixtures.BATT_λ_MED,
-        Phase4Fixtures.BATT_λ_MAX,
+        IEEE13Fixtures.BATT_λ_MIN,
+        IEEE13Fixtures.BATT_λ_MED,
+        IEEE13Fixtures.BATT_λ_MAX,
     )
     aggs[1] = Aggregator(
         target.bus,

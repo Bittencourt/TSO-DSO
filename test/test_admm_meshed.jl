@@ -16,14 +16,14 @@
 # ADMM dual tolerance and floors at ~1e-5 (interior-point dual accuracy) -- never assert below that.
 
 @testitem "admm meshed: LIVE reactive ADMM matches centralized meshed prices + welfare (ARCH-06)" setup =
-    [Phase23Fixtures] tags = [:admm, :mesh, :reactive] begin
+    [MeshFixtures] tags = [:admm, :mesh, :reactive] begin
     using TSODSO, Test
     using JuMP: dual
 
-    feeder = Phase23Fixtures.mesh_feeder(:heterogeneous)
-    aggs = Phase23Fixtures.mesh_aggregators_phi(0.95)
-    λ₀ = Phase23Fixtures.mesh_lambda0()
-    T = Phase23Fixtures.T_MESH
+    feeder = MeshFixtures.mesh_feeder(:heterogeneous)
+    aggs = MeshFixtures.mesh_aggregators_phi(0.95)
+    λ₀ = MeshFixtures.mesh_lambda0()
+    T = MeshFixtures.T_MESH
 
     ctx_c, obj_c, _ = solve_welfare(feeder, MeshedFlow(), aggs; T = T, λ₀ = λ₀)
     p_c = [dual(ctx_c.constraints[:balance_p][j, 1]) for j in (2, 3)]
@@ -61,15 +61,15 @@
 end
 
 @testitem "admm meshed: ADMM dso_ctx certifies the angle verdict like the centralized ctx (ARCH-06)" setup =
-    [Phase23Fixtures] tags = [:admm, :mesh] begin
+    [MeshFixtures] tags = [:admm, :mesh] begin
     using TSODSO, Test
 
-    λ₀ = Phase23Fixtures.mesh_lambda0()
-    T = Phase23Fixtures.T_MESH
+    λ₀ = MeshFixtures.mesh_lambda0()
+    T = MeshFixtures.T_MESH
 
     function verdicts(profile)
-        feeder = Phase23Fixtures.mesh_feeder(profile)
-        aggs = Phase23Fixtures.mesh_aggregators_phi(1.0; bess = true)
+        feeder = MeshFixtures.mesh_feeder(profile)
+        aggs = MeshFixtures.mesh_aggregators_phi(1.0; bess = true)
         ctx_c, _, _ = solve_welfare(feeder, MeshedFlow(), aggs; T = T, λ₀ = λ₀)
         r = solve_admm(
             feeder,
@@ -103,13 +103,13 @@ end
 end
 
 @testitem "admm meshed: radial formulations x MeshedFeeder throw; MeshedFlow runs (ARCH-06, T-34-33)" setup =
-    [Phase23Fixtures] tags = [:admm, :mesh] begin
+    [MeshFixtures] tags = [:admm, :mesh] begin
     using TSODSO, Test
 
-    feeder = Phase23Fixtures.mesh_feeder(:heterogeneous)
-    aggs = Phase23Fixtures.mesh_aggregators_phi(0.95)
-    λ₀ = Phase23Fixtures.mesh_lambda0()
-    kw = (; T = Phase23Fixtures.T_MESH, λ₀ = λ₀, ρ = 10.0)
+    feeder = MeshFixtures.mesh_feeder(:heterogeneous)
+    aggs = MeshFixtures.mesh_aggregators_phi(0.95)
+    λ₀ = MeshFixtures.mesh_lambda0()
+    kw = (; T = MeshFixtures.T_MESH, λ₀ = λ₀, ρ = 10.0)
 
     for pf in (ConvexBranchFlow(), LinDistFlow())
         err = try

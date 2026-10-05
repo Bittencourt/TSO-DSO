@@ -18,11 +18,11 @@
 #     IEEE-123 fixture) survives near the exactness boundary Phase 17 documented (18-RESEARCH.md
 #     Pitfall 4 / Open Question 1).
 #
-# FIXTURE CONSTRUCTION NOTE (mirrors `reactive_flake_rate.jl`'s own header): `Phase7Fixtures` is
+# FIXTURE CONSTRUCTION NOTE (mirrors `reactive_flake_rate.jl`'s own header): `IEEE123Fixtures` is
 # a `TestItems.@testmodule` block. The standalone `TestItems.jl` package expands `@testmodule` to
-# a no-op outside `TestItemRunner`'s AST-introspection path, so `include("test/fixtures_phase7.jl")`
-# from a plain script does NOT actually define `Phase7Fixtures`. The population construction is
-# therefore RE-IMPLEMENTED INLINE below, copied verbatim from `test/fixtures_phase7.jl` (lines
+# a no-op outside `TestItemRunner`'s AST-introspection path, so `include("test/fixtures_ieee123.jl")`
+# from a plain script does NOT actually define `IEEE123Fixtures`. The population construction is
+# therefore RE-IMPLEMENTED INLINE below, copied verbatim from `test/fixtures_ieee123.jl` (lines
 # 92-95, 178-264: `temperature_profile`, `ieee123_lambda0`, `_house_aggregator`,
 # `build_ieee123_aggregators`, and the retuned scale constants), so the population here is
 # bit-for-bit identical to the one `test_ieee123_admm.jl`/18-RESEARCH.md's live probes exercise.
@@ -71,14 +71,14 @@ using Dates
 const OUT = projectdir("results", "repro_stability_check")
 mkpath(OUT)
 
-# ---- Shared config (verbatim from test/fixtures_phase7.jl) ------------------------------------
+# ---- Shared config (verbatim from test/fixtures_ieee123.jl) ------------------------------------
 const T = 24
 
 const BATT_λ_MIN = 3.8
 const BATT_λ_MED = 6.2
 const BATT_λ_MAX = 8.9
 
-# IEEE-123 population scaling, Phase-17-retuned point (verbatim from test/fixtures_phase7.jl:92-95).
+# IEEE-123 population scaling, Phase-17-retuned point (verbatim from test/fixtures_ieee123.jl:92-95).
 const SEED_IEEE123 = 20260719
 const LOAD_SCALE_IEEE123 = 0.05
 const PV_SCALE_IEEE123 = 0.12
@@ -118,7 +118,7 @@ end
     temperature_profile() -> Vector{Float64}
 
 Digitized 24h exterior-temperature profile (°C), verbatim copy of
-`test/fixtures_phase7.jl`'s `temperature_profile` (thesis Fig 4.2 shape).
+`test/fixtures_ieee123.jl`'s `temperature_profile` (thesis Fig 4.2 shape).
 """
 function temperature_profile()
     return Float64[
@@ -152,7 +152,7 @@ end
 """
     ieee123_lambda0() -> Vector{Float64}
 
-Digitized 24h MEM/wholesale price λ₀, verbatim copy of `test/fixtures_phase7.jl`'s
+Digitized 24h MEM/wholesale price λ₀, verbatim copy of `test/fixtures_ieee123.jl`'s
 `ieee123_lambda0`.
 """
 function ieee123_lambda0()
@@ -188,7 +188,7 @@ end
     _house_aggregator(feeder, bus; seed, φ, pv_scale=1.0, load_scale=1.0, dev_scale=1.0,
                       batt_pmax=0.5, batt_emax=2.0, batt_soc0=1.0) -> Aggregator
 
-Verbatim copy of `test/fixtures_phase7.jl`'s `_house_aggregator` (Thermostatic + Deferrable +
+Verbatim copy of `test/fixtures_ieee123.jl`'s `_house_aggregator` (Thermostatic + Deferrable +
 PVBattery, seeded `generate_profiles` draw).
 """
 function _house_aggregator(
@@ -241,7 +241,7 @@ end
                               load_scale=LOAD_SCALE_IEEE123, pv_scale=PV_SCALE_IEEE123,
                               dev_scale=DEV_SCALE_IEEE123) -> Vector{<:Aggregator}
 
-Verbatim SHAPE of `test/fixtures_phase7.jl`'s `build_ieee123_aggregators`, extended with
+Verbatim SHAPE of `test/fixtures_ieee123.jl`'s `build_ieee123_aggregators`, extended with
 explicit `load_scale`/`pv_scale`/`dev_scale` keyword overrides (defaulting to the Phase-17-
 retuned point) so the population-scale sweep below can rebuild the SAME population at a
 perturbed scale without touching the module constants.
@@ -362,7 +362,7 @@ end
 
 For each `δ`, rebuilds the IEEE-123 population at `load_scale = LOAD_SCALE_IEEE123*(1+δ)`,
 `pv_scale = PV_SCALE_IEEE123*(1+δ)`, `dev_scale = DEV_SCALE_IEEE123*(1+δ)` (the ratio to
-`LOAD_SCALE_IEEE123` held fixed, per `fixtures_phase7.jl`'s own convention), solves
+`LOAD_SCALE_IEEE123` held fixed, per `fixtures_ieee123.jl`'s own convention), solves
 `solve_welfare` + `welfare_accounting` + `fit_baseline` UNMODIFIED, and records the DADP/FIT
 DSO-surplus split. This is a genuinely NEW measurement (18-RESEARCH.md Pitfall 4 / Open
 Question 1) — not previously run anywhere in the repo.

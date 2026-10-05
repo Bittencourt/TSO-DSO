@@ -9,7 +9,7 @@
 # built from scratch — never a reuse of `PlanningOracle`/`FollowerLP`/`BendersMaster`,
 # per 30-CONTEXT.md's explicit instruction).
 #
-# CONTRACT (mirrors test/fixtures_phase4.jl's own convention): this module DEFINES
+# CONTRACT (mirrors test/fixtures_ieee13.jl's own convention): this module DEFINES
 # functions/constants ONLY — it makes NO top-level solve call. The feeder-consuming
 # builders take a `feeder` argument, so nothing here evaluates a not-yet-built network at
 # module-load time.
@@ -67,7 +67,7 @@
     const T = 4
 
     # The standard λ₀ (MEM/wholesale price) profile used by every probe/testitem in this
-    # module (length T=4, ¢$/kWh-consistent — same convention as fixtures_phase4.jl's own
+    # module (length T=4, ¢$/kWh-consistent — same convention as fixtures_ieee13.jl's own
     # mem_price_profile, just a 4-hour slice of a similar morning-shoulder magnitude).
     const LAMBDA0 = Float64[6.5, 6.2, 5.9, 5.7]
 
@@ -77,7 +77,7 @@
 
     One T=4 aggregator (PVBattery + Thermostatic only, never `Deferrable` —
     30-RESEARCH.md Pitfall 5) at `bus`, fed by a seeded `generate_profiles` draw (T=4,
-    NOT `Phase4Fixtures`'s T=24-locked helpers). The battery holds the STRICT App. C
+    NOT `IEEE13Fixtures`'s T=24-locked helpers). The battery holds the STRICT App. C
     price triple `λ_min=3.8 < λ_med=6.2 < λ_max=8.9` (the load-bearing no-binary
     guarantee).
     """
@@ -105,7 +105,7 @@
     One [`house_agg`](@ref) per non-root bus (`bus in 2:N`) on `feeder` — the
     T=4, tuned-feasible-at-z=0 IEEE-13 population documented in this file's own header
     comment. Takes `feeder` as an argument (never calls `ieee13_modified` at module-load
-    time, mirroring `fixtures_phase4.jl`'s own CONTRACT).
+    time, mirroring `fixtures_ieee13.jl`'s own CONTRACT).
     """
     function population(feeder; seed::Integer = 20260718)
         N = length(feeder.buses)

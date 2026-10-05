@@ -67,14 +67,14 @@ end
 end
 
 @testitem "admm exactness default: solve_admm default == atol_exact=nothing, overrides work (B)" setup =
-    [Phase6Fixtures, Phase4Fixtures] tags = [:exact, :admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:exact, :admm] begin
     using TSODSO
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
+    feeder = TwoBusFixtures.two_bus_feeder()
+    aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
     kw = (;
-        T = Phase6Fixtures.T,
-        λ₀ = Phase6Fixtures.two_bus_lambda0(),
-        ρ = Phase6Fixtures.RHO_2BUS,
+        T = TwoBusFixtures.T,
+        λ₀ = TwoBusFixtures.two_bus_lambda0(),
+        ρ = TwoBusFixtures.RHO_2BUS,
         allow_export = true,
     )
     r1 = solve_admm(feeder, ConvexBranchFlow(), aggs; kw...)

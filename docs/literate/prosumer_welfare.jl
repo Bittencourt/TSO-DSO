@@ -7,7 +7,7 @@
 # the numbers below cannot silently drift from the code (mirrors the `toy_dc.jl`
 # reproducibility-proof pattern, threat T-01-09). The horizon is deliberately short
 # (`T = 4`) for a fast, self-contained doc solve — this page is illustrative, not a
-# regression (the calibrated ground-truth fixture lives in `test/fixtures_phase4.jl`).
+# regression (the calibrated ground-truth fixture lives in `test/fixtures_ieee13.jl`).
 #
 # ## The device math
 #
@@ -148,7 +148,7 @@ profiles = generate_profiles(seed = 20260720, T = T)
 # ## Constructing the prosumer devices and rolling them into one aggregator
 #
 # Illustrative (not calibrated-fixture) parameters, mirroring the SHAPE of
-# `test/fixtures_phase4.jl`'s `_house_aggregator` — one of each device type at bus 2.
+# `test/fixtures_ieee13.jl`'s `_house_aggregator` — one of each device type at bus 2.
 
 Tout = [20.0, 24.0, 27.0, 23.0]                    # ambient temperature profile (°C), length T
 therm = Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)   # eqs 3.2-3.3

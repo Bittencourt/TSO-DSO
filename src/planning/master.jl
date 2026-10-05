@@ -107,7 +107,7 @@ margin actually applied is SCALE-AWARE and measured PER INSTANCE by
 [`alpha_lb_margin`](@ref): `max(ALPHA_LB_MARGIN, 10·gap, ALPHA_LB_RTOL·|optimum|)`, where
 `gap = |objective_value − dual_objective_value|` is the derive solve's OWN duality gap read
 at derivation time. This constant is only the floor of that formula. Original toy
-measurement (still the floor's justification): `Phase6Fixtures.two_bus_feeder()` +
+measurement (still the floor's justification): `TwoBusFixtures.two_bus_feeder()` +
 `ToyElasticDevice(2, 6.0, 1.0, 10.0)` at `T=1`, `λ₀=[4.0]`, `y_max=8.0`: oracle gap
 ≈ `2.8509e-9`, follower gap `= 0.0`, so `max(1e-6, 10*max_gap) = 1e-6`. Probe script:
 `JULIA_LOAD_PATH="test:.:@stdlib" julia probe_alpha_margin.jl`.

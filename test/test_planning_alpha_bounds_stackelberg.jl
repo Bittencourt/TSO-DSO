@@ -11,10 +11,10 @@
 # convention, mirrors test_planning_master.jl's own BILEV-05 items).
 
 @testitem "planning alpha bounds stackelberg: bounds_ctx validation rejects an over-high explicit α_op_lb at build time" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -45,13 +45,13 @@
 end
 
 @testitem "planning alpha bounds stackelberg: a valid explicit bound converges with zero regression" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     # test_planning_benders.jl's own T=1 toy fixture literal, reused VERBATIM — this is
     # the SAME call site 30-02-SUMMARY.md's own audit already confirmed valid
     # (α_op_lb=-5.0 accepted at T=1 by the new derivation formula).
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -85,7 +85,7 @@ end
 end
 
 @testitem "planning alpha bounds stackelberg: a pre-built follower with no sound α_x_lb derivation (DistributorView) is accepted, not rejected — α_op_lb is still validated" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!
 
@@ -104,7 +104,7 @@ end
     )
     activate_distributor!(shared, 1)
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]

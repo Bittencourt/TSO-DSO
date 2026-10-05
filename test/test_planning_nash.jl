@@ -160,10 +160,10 @@ end
 end
 
 @testitem "planning nash: solve_stackelberg! follower keyword is additive — existing Phase 11/12 call sites unchanged" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -194,11 +194,11 @@ end
 end
 
 @testitem "planning nash: solve_stackelberg! rejects follower + non-empty follower_kwargs together" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_follower
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -231,7 +231,7 @@ end
 # toy fixture, plan 13-02's own <toy_fixture>): T=1, corridor_cap=2.0,
 # x_inv_max=[0.3,0.3], c_inv=[1.0,1.0], c_op=[[0.5],[0.5]]; each distributor's own
 # operational side identical to the Phase-11 toy fixture (feeder=
-# Phase6Fixtures.two_bus_feeder(), pf=LinDistFlow(), agg=ToyElasticDevice(2,6.0,1.0,10.0)
+# TwoBusFixtures.two_bus_feeder(), pf=LinDistFlow(), agg=ToyElasticDevice(2,6.0,1.0,10.0)
 # wrapped in Aggregator(2,0.9,[dev],[0.0]), λ₀=[4.0],
 # master_kwargs=(;c_y=0.3,y_max=8.0,α_op_lb=-5.0,α_x_lb=0.0)). Since TestItemRunner
 # executes each `@testitem` in its own isolated module (no shared file-level helper
@@ -256,7 +256,7 @@ end
 # escape hatch is unused here).
 
 @testitem "planning nash: N=2 Gauss-Seidel converges to the hand-checked congested equilibrium (z=[0.6,0.6], x_inv=[0.3,0.3], capacity binding, PVAL-04 continuous-only companion check)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using JuMP: value, all_variables, is_binary, is_integer
 
@@ -271,7 +271,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -326,7 +326,7 @@ end
 end
 
 @testitem "planning nash: nested-tolerance guard rejects inner tol >= outer tol" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     shared = build_shared_transmission(;
@@ -340,7 +340,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -362,7 +362,7 @@ end
 end
 
 @testitem "planning nash: forward and reverse sweep orders agree on the symmetric N=2 fixture (Gauss-Seidel-vs-Jacobi timing regression, Pitfall 1)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     build_toy_shared() = build_shared_transmission(;
@@ -377,7 +377,7 @@ end
         dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
         agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
         spec = (;
-            feeder = Phase6Fixtures.two_bus_feeder(),
+            feeder = TwoBusFixtures.two_bus_feeder(),
             pf = LinDistFlow(),
             aggregators = [agg],
             λ₀ = [4.0],
@@ -418,7 +418,7 @@ end
 end
 
 @testitem "planning nash: intra-sweep write-back timing — distributor 2 reads distributor 1's JUST-updated z_1 within the same sweep, not the previous sweep's value (DIRECT regression, Revision 1)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_follower!, write_back!
     using JuMP: value, parameter_value
@@ -434,7 +434,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -476,7 +476,7 @@ end
 end
 
 @testitem "planning nash: max_sweeps exhaustion raises loudly, never a silent non-converged return" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     shared = build_shared_transmission(;
@@ -490,7 +490,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -525,7 +525,7 @@ end
 end
 
 @testitem "planning nash: damping ω=0.5 still converges (no cycling on this monotone fixture)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     shared = build_shared_transmission(;
@@ -539,7 +539,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -622,14 +622,14 @@ end
 # N=2-hand-checkable/N=3-probe-only scope split).
 
 @testitem "planning nash: N=2 gating probe — 3 seeds x 2 orders all converge, structural 'a converged equilibrium' language" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -717,7 +717,7 @@ end
 # optimum, constant across the continuum) for every seed.
 
 @testitem "planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero (BILEV-06a)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
@@ -732,7 +732,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -793,14 +793,14 @@ end
 end
 
 @testitem "planning nash: N=3 probe converges (no closed-form hand-check required, per CONTEXT.md's N=2-hand-checkable/N=3-probe-only scope)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -842,14 +842,14 @@ end
 end
 
 @testitem "planning nash: run_nash_probe propagates a non-converging probe run, never swallows it" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -888,14 +888,14 @@ end
 end
 
 @testitem "planning nash: run_nash_probe guards reject fewer than 3 seeds or fewer than 2 orders" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -943,7 +943,7 @@ end
 end
 
 @testitem "planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria (CR-01 regression, NASH-04 seed-liveness)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     build_toy_shared() = build_shared_transmission(;
@@ -958,7 +958,7 @@ end
         dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
         agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
         spec = (;
-            feeder = Phase6Fixtures.two_bus_feeder(),
+            feeder = TwoBusFixtures.two_bus_feeder(),
             pf = LinDistFlow(),
             aggregators = [agg],
             λ₀ = [4.0],
@@ -1198,7 +1198,7 @@ end
 # file.
 
 @testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (a strict subset of the GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation (BILEV-06b, CR-02)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_variational_equilibrium, write_back!
     using JuMP: value
@@ -1208,7 +1208,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -1282,14 +1282,14 @@ end
 end
 
 @testitem "planning nash: solve_variational_equilibrium agrees with the corner-cap control's pinned unique equilibrium — VE and GNE coincide when the equilibrium IS unique (BILEV-06b)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: solve_variational_equilibrium
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],
@@ -1341,7 +1341,7 @@ end
 # z = (0.7, 0.5), μ = (0.5, 0.7): player 2, moving against player 1's committed
 # capacity, pays its own 0.7 marginal — a GNE that is NOT the VE.
 @testitem "planning nash: solve_variational_equilibrium selects the UNIQUE VE on an asymmetric-c_inv fixture — hand-derived split, equal per-player shared multipliers, distinct from the diagonalization's GNE (CR-02)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_planning_oracle!, solve_variational_equilibrium, write_back!
     using JuMP: value
@@ -1349,7 +1349,7 @@ end
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     spec = (;
-        feeder = Phase6Fixtures.two_bus_feeder(),
+        feeder = TwoBusFixtures.two_bus_feeder(),
         pf = LinDistFlow(),
         aggregators = [agg],
         λ₀ = [4.0],

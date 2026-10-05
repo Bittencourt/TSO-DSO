@@ -1,7 +1,7 @@
-# test/fixtures_phase8.jl
+# test/fixtures_experiment_harness.jl
 #
 # Shared Phase-8 (experiment harness & reproducibility) test fixture module (Wave 0). A
-# TestItems `@testmodule` that the Phase-8 `@testitem`s consume via `setup=[Phase8Fixtures]`.
+# TestItems `@testmodule` that the Phase-8 `@testitem`s consume via `setup=[ExperimentHarnessFixtures]`.
 # Provides a minimal declarative Scenario-construction kwarg set (feeder = :ieee13, T = 24)
 # and a `with_tempdir` helper wrapping `mktempdir` for hermetic storage/sweep tests (RESEARCH
 # Pitfall 6).
@@ -15,12 +15,12 @@
 #
 # WHY T=24 (not a shorter "small" horizon): every seeded profile/device fixture this harness
 # orchestrates (temperature_profile, generate_profiles, the thesis MEM price shapes — RESEARCH
-# §Pattern 1 / fixtures_phase4/7) is pinned to the 24-hour day-ahead horizon (thesis A1); a
+# §Pattern 1 / fixtures_ieee13/7) is pinned to the 24-hour day-ahead horizon (thesis A1); a
 # shorter T would silently truncate those fixed-length daily arrays. T=24 IS the minimal
 # granularity this framework supports end-to-end, so it doubles as the "small T" a minimal
 # fixture wants.
 
-@testmodule Phase8Fixtures begin
+@testmodule ExperimentHarnessFixtures begin
     """
         minimal_scenario_kwargs() -> NamedTuple
 

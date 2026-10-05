@@ -10,7 +10,7 @@
 # (occursin filter convention, mirrors test_planning_follower.jl/test_planning_master.jl).
 #
 # Toy fixture (11-01-PLAN.md's own <toy_fixture> block, reused verbatim): T=1,
-# feeder=Phase6Fixtures.two_bus_feeder(), λ₀=[4.0],
+# feeder=TwoBusFixtures.two_bus_feeder(), λ₀=[4.0],
 # dev=ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0),
 # agg=TSODSO.Aggregator(2, 0.9, [dev], [0.0]); follower corridor_cap=2.0,
 # x_inv_max=2.0, c_inv=1.0, c_op=[0.5]; master c_y=0.3, y_max=8.0, α_op_lb=-5.0,
@@ -18,7 +18,7 @@
 #
 # `ToyDeviceFixture` is the `@testmodule` defined in test_planning_oracle.jl (the
 # SAME toy elastic device the oracle's own dual-sign/monotonicity regression uses)
-# — reused here via `setup = [Phase6Fixtures, ToyDeviceFixture]`, never redefined.
+# — reused here via `setup = [TwoBusFixtures, ToyDeviceFixture]`, never redefined.
 #
 # EXPECTED OPTIMUM — RE-DERIVED, NOT 11-01-PLAN.md's STATED y*=1.0/z*=1.0/cost=-0.2
 # (Task 2's own escape hatch: "if the converged values are qualitatively wrong ...
@@ -40,11 +40,11 @@
 # flagged in this plan's own SUMMARY.md as a deviation for the next plan to see.
 
 @testitem "planning benders: converges end-to-end with documented UB/LB gap, matches the re-derived analytic optimum (z*=0.7)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: solve_follower!, solve_planning_oracle!
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -115,10 +115,10 @@
 end
 
 @testitem "planning benders: feasibility-cut branch — an undeliverable master trial routes to a Farkas cut and the loop still converges (WR-04)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -176,10 +176,10 @@ end
 end
 
 @testitem "planning benders: tol/max_iter boundary guards reject NaN/negative tol and max_iter > 99_999 before any build call (IN-02/IN-03)" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
@@ -223,10 +223,10 @@ end
 end
 
 @testitem "planning benders: max_iter=1 raises loudly (ConvergenceError, 'exhausted'), never returns a non-converged result" tags =
-    [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
+    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
-    feeder = Phase6Fixtures.two_bus_feeder()
+    feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
     λ₀ = [4.0]
