@@ -223,7 +223,7 @@ gates its exactness check behind `check_exact`). `solve_admm` therefore passes
 converged re-solve — where it also uses the interior-point `τ_batt` (Clarabel is an IPM that
 co-activates the optimal face more, so the QP-tight `1e-6` under-tolerances the converged point
 at scale; `1e-3` matches the `problem_class`-aware SOCP-path τ in `solve_welfare`). Default
-`(check_battery = true, τ_batt = 1e-6)` preserves the plan-06-02 standalone behavior. `check_4q`
+`(check_battery = true, τ_batt = 1e-6)` preserves the standalone (non-ADMM) behavior. `check_4q`
 follows the SAME convergence-only discipline (mid-loop iterates are legitimately off-consensus).
 
 `strict` — the [`assert_solved!`](@ref) mode (mirrors [`solve_dso!`](@ref)). `strict = true` (the

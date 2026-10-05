@@ -170,9 +170,16 @@ def selftest():
         ("bare_nn", j(["", "40", "-", "01", " landed"])),
         ("bare_nn", j(["(", "07", "-", "12", ")"])),
         ("task", j(["Ta", "sk ", "12"])),
+        # Hyphenated plan form and trailing sentence/label punctuation.
+        ("plan", j(["the pl", "an-", "06", "-", "02", " standalone behavior"])),
+        ("plan", j(["At the pl", "an-", "07", "-", "05", " population"])),
+        ("bare_nn", j(["landed in ", "36", "-", "22", "."])),
+        ("bare_nn", j(["see ", "36", "-", "22", ":"])),
+        ("bare_nn", j(["(", "26", "-", "07", ": device_vars"])),
+        ("bare_nn", j(["", "36", "-", "21", "/22"])),
     ]
     negatives = ["3-phase", "T-24", "IEEE-8500", "IEEE-123", "2026-10-04", "0.10-0.12",
-                 "eq. 3.43", "(3.31)", "Gan-Low 2015",
+                 "eq. 3.43", "(3.31)", "Gan-Low 2015", "12:30-13:45", "0.10-0.12.",
                  "hours 17-20", "lines 69-74", "pp. 89-90", "iterations 23-24",
                  "c_op = [[0.5]]", "under memory pressure", "a research roadmap",
                  "the review of Farivar & Low", "Taskforce 12"]

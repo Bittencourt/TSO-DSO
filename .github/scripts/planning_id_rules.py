@@ -12,10 +12,13 @@ PFX = (r'(?:FIX|ARCH|CR|WR|IN|PM|BILEV|MESH|SCALE|SEAM|DATA|INFRA|PF|HYG|REACT|E
 
 _RAW = {
     'phase':    r'(?i)\bphases?[\s-]?\d+',
-    'plan':     r'(?i)\bplans?\s+\d{1,2}-\d{2}\b',
+    # `plan 06-02` and the hyphenated `plan-06-02` form.
+    'plan':     r'(?i)\bplans?[\s-]+\d{1,2}-\d{2}\b',
     # Any two-digit `NN-NN` (phases >= 40, plans >= 21 included); ascending, unpadded pairs
     # such as line/page/hour ranges (`23-24`, `89-90`, `17-20`) are filtered out below.
-    'bare_nn':  r'(?<![\w.:/\-])(\d\d)-(\d\d)(?![\d\w.:/\-])',
+    # Sentence/label punctuation after the pair still counts (`36-22.`, `36-22:`, `36-21/22`);
+    # decimals (`0.10-0.12`), clock times (`12:30-13:45`) and dates stay excluded.
+    'bare_nn':  r'(?<![\w.:/\-])(\d\d)-(\d\d)(?![\d\w\-])(?!/\D)(?!\.\d)(?!:\d)',
     'dec':      r'\b[Dd]-\d{1,2}\b',
     'reqid':    r'\b' + PFX + r'-\d{1,3}[a-z]?\b',
     'wave':     r'(?i)\bwaves?(?:[\s-]?\d)?\b',

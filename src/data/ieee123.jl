@@ -402,7 +402,7 @@ non-root buses are TRANSIT (zero-injection) junctions handled by the DSO-OPT tra
     congestion-driven ieee13 case).
   - The **head branch** (frontier terminal `150 → 149`) carries the thermal limit
     `S_max = 3.8 MVA ⇒ 3.8 pu` on the 1 MVA feeder-scale base, converted once via `to_pu_power`
-    on `IEEE123_BASE`. At the plan-07-05 population the ACTIVE binding constraint is the voltage
+    on `IEEE123_BASE`. At the standard test population the ACTIVE binding constraint is the voltage
     band (the long laterals hit `≈0.92` under load and `≈1.04` under PV reverse flow) rather than
     this head limit, so the case exercises the branch-flow / voltage physics, not just a scalar cap.
   - All interior branches use the `SMAX_NO_LIMIT = 99.0` pu sentinel (effectively unconstrained,
