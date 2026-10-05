@@ -61,7 +61,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
   `solve_admm` into named phases generic over any power flow, compose meshed + live reactive
   pricing, and apply one status/exception policy everywhere.
 
-- [ ] **Phase 35: IEEE-8500 Scale After Refactor** - Re-measure (or re-characterize) the IEEE-8500
+- [x] **Phase 35: IEEE-8500 Scale After Refactor** - Re-measure (or re-characterize) the IEEE-8500 (completed 2026-10-05)
   performance/memory headline point after the architecture changes.
 
 - [ ] **Phase 36: Code & Export Cleanup** - Strip process IDs from comments, delete inert stubs and
@@ -552,7 +552,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 35-05-PLAN.md — docs section + regenerated page, append-only SCALE-05 status notes, full-suite phase gate
+- [x] 35-05-PLAN.md — docs section + regenerated page, append-only SCALE-05 status notes, full-suite phase gate
 
 ### Phase 36: Code & Export Cleanup
 
@@ -616,7 +616,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
-| 35. IEEE-8500 Scale After Refactor | v4.0 | 4/5 | In Progress|  |
+| 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete   | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 

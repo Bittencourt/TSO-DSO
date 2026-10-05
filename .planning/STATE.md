@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
+status: verifying
 stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-05T00:52:47.174Z"
+last_updated: "2026-10-05T02:19:52.858Z"
 last_activity: 2026-10-05
 progress:
   total_phases: 12
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 86
-  completed_plans: 86
-  percent: 75
+  completed_plans: 87
+  percent: 83
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 Phase: 35 (IEEE-8500 Scale After Refactor) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
   Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
@@ -195,6 +195,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 31 P05 | 20min | 2 tasks | 8 files |
 | Phase 31 P06 | 35min | 2 tasks | 1 files |
 | Phase 35 P02 | 40m | 3 tasks | 4 files |
+| Phase 35 P05 | ~1h (+27m suite) | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -291,6 +292,8 @@ Recent decisions affecting current work:
   - ARCH-01/02 (Phase 32) is one coherent declarative-Scenario phase. ARCH-05 precedes ARCH-06
     within Phase 34 (solve_admm split before meshed+live-reactive composition). ARCH-10
     (Phase 35) runs after all architecture refactors (Phases 32-34).
+
+  - [Phase 35-05]: ARCH-10 Complete. ADMM gate defaults to hybrid floor; IEEE-8500 d=0.1 T=10 refused (ratio 568.95, genuine); memory wall between d=0.1 and 0.25 at T=24. Stale --quick golden re-pinned 137258/274570 (cause: P26 cfa7e6e soc T+1, 30f53e4 smax_rev). Phase-gate suite 32157/0/0/5.
 
   - HYG-01..03/07 (Phase 36, code/export cleanup) is sequenced after every refactor phase so
     comment/dead-code cleanup isn't redone; HYG-04..06/08 (Phase 37, test infra & repo hygiene)
@@ -505,7 +508,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-05T00:52:47.152Z
+Last session: 2026-10-05T02:19:52.835Z
 Stopped at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
 Resume file: None
 
