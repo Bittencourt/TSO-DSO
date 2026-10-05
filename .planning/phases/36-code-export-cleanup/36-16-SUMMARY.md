@@ -78,7 +78,7 @@ The classifier reported no MIXED lines in this plan's set. Thesis-equation and l
 - Plan step "record the pre-plan hash in `.planning/tmp/36/`": recorded as `p16_start.txt`.
 
 ## Targeted test
-Started after the last commit; result appended in a follow-up note if it differs from green.
+`julia --project=. test/test_benchmark_ieee8500.jl`: ALL TESTS PASSED (10/10 deterministic goldens on the --quick point, 34/34 harness flags, schema and rejections). `git status --short` clean afterwards (no `results/` changes).
 
 ## Known Stubs
 None.
