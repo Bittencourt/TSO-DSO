@@ -140,7 +140,7 @@ end;
 # was never actually derived from the paper's formula (a real risk this page's own threat model
 # flags, T-20-14), this page substitutes an honestly-scoped alternative: it LIVE-RECOMPUTES the
 # same measured modification gap `ε` that plan 20-01 first measured, using the identical recipe
-# (an independently-solved [`ACPowerFlow`](@ref) point, then [`recover_lossfree_shadow_voltage`](@ref)),
+# (an independently-solved [`ACPowerFlow`](@ref) point, then [`recover_lossfree_shadow_voltage`](@ref TSODSO.recover_lossfree_shadow_voltage)),
 # inlined here so the number can never silently drift from the code that produces it.
 
 ctx_ac_for_ε, _, _ = solve_welfare(
@@ -275,7 +275,7 @@ restriction_report.optimality_loss
 
 # ## Fallback semantics
 #
-# [`ac_dual_fallback_price`](@ref) is the documented fallback pricer for the case
+# [`ac_dual_fallback_price`](@ref TSODSO.ac_dual_fallback_price) is the documented fallback pricer for the case
 # `assert_restriction_exact!` genuinely FAILS its `ac_feasible` gate (D-09) — i.e. when even
 # OPF-m's restricted cone is not tight, so no dual price can be trusted as a genuine AC operating
 # point. It is a second, seeded, nonconvex re-solve of the SAME `ACPowerFlow()` path already

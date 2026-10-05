@@ -2,7 +2,7 @@
 #
 # This page is the PVAL-03 literate proof for the multi-distributor Nash equilibrium
 # seam (NASH-01/NASH-02/NASH-03/NASH-04): it executes the real
-# [`build_shared_transmission`](@ref)/[`run_nash!`](@ref)/[`run_nash_probe`](@ref)
+# [`build_shared_transmission`](@ref)/[`run_nash!`](@ref)/[`run_nash_probe`](@ref TSODSO.run_nash_probe)
 # hand-rolled Gauss-Seidel diagonalization end-to-end during the Documenter build, on
 # the SAME N=2 symmetric toy fixture `test/test_planning_nash.jl`'s own hand-checked
 # regression uses, so the numbers below are genuinely solved — never a hardcoded literal
@@ -47,18 +47,18 @@
 # own atomic best-response within that sweep, the Benders iteration count, converged
 # gap, retry count, and cuts rebuilt (each best-response starts its own cut store empty
 # — see [`build_shared_transmission`](@ref)'s own correctness argument for why stale
-# cuts across a `z_{-i}` change would be unsound). [`trace_summary`](@ref) rolls this
+# cuts across a `z_{-i}` change would be unsound). [`trace_summary`](@ref TSODSO.trace_summary) rolls this
 # ledger into one reporting `NamedTuple`.
 #
 # ## NASH-04 — never present one run as canonical
 #
 # Gauss-Seidel diagonalization has no general convergence/uniqueness proof, so this
-# project's own honesty gate, [`run_nash_probe`](@ref), runs `run_nash!` across MULTIPLE
+# project's own honesty gate, [`run_nash_probe`](@ref TSODSO.run_nash_probe), runs `run_nash!` across MULTIPLE
 # seeds and BOTH sweep orders and reports the MAXIMUM pairwise spread across every run —
 # never a mean, never a single hand-picked run. A caller presenting results to a human
 # MUST report a converged equilibrium alongside its measured spread, structurally never
 # implying diagonalization certified a single, unique answer (see
-# [`run_nash_probe`](@ref)'s own docstring for the full honesty argument).
+# [`run_nash_probe`](@ref TSODSO.run_nash_probe)'s own docstring for the full honesty argument).
 
 using TSODSO
 using TSODSO: run_nash_probe

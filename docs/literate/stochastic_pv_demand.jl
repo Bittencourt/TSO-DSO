@@ -58,10 +58,10 @@ s = Scenario(;
 #
 # [`run_stochastic`](@ref) materializes `s.strategy.S = 5` in-sample scenario populations from a
 # disjoint `sub_seed` tag family, solves the S-scenario extensive form via
-# [`build_stochastic_welfare`](@ref) (nonanticipativity-tying every battery-like device across
+# [`build_stochastic_welfare`](@ref TSODSO.build_stochastic_welfare) (nonanticipativity-tying every battery-like device across
 # scenarios, per-scenario PF-04 exactness gated INDEPENDENTLY, never aggregated — D-06), reads
 # the solved shared first-stage battery schedule off scenario 1's own device variables, then
-# builds the out-of-sample [`StochasticOosHarness`](@ref) EXACTLY ONCE against `s.strategy.H_oos
+# builds the out-of-sample [`StochasticOosHarness`](@ref TSODSO.StochasticOosHarness) EXACTLY ONCE against `s.strategy.H_oos
 # = 10` disjoint held-out scenarios, pins the harness's battery controls to the in-sample
 # optimum ONCE (D-09's build-once contract), and re-solves across all 10 held-out draws:
 

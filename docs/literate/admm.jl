@@ -49,7 +49,7 @@ using TSODSO
 using TSODSO: Bus, Branch, Feeder
 
 # **Scope of the formulation.** The demonstration below uses a radial feeder, but `solve_admm`
-# accepts any [`admm_supported`](@ref) formulation: `ConvexBranchFlow` (both variants),
+# accepts any [`admm_supported`](@ref TSODSO.admm_supported) formulation: `ConvexBranchFlow` (both variants),
 # `RestrictedBranchFlow`, `MeshedFlow` on a `MeshedFeeder`, and `LinDistFlow`; `ACPowerFlow` and
 # `DCPowerFlow` are rejected with an `ArgumentError`. The meshed live-reactive case is
 # cross-validated against the centralized solve on the Rung 10 page
@@ -180,7 +180,7 @@ end
 # Two additive commits, no tolerance or gate weakened:
 #
 #   - `f9d6ed7` routes [`solve_dso!`](@ref)'s MID-LOOP (`strict = false`) solve through
-#     [`solve_with_retry!`](@ref)`(dso.model; dual = false, allow_almost = true)` instead
+#     [`solve_with_retry!`](@ref TSODSO.solve_with_retry!)`(dso.model; dual = false, allow_almost = true)` instead
 #     of calling `assert_solved!` directly. `MOI.NUMERICAL_ERROR` was already a member of
 #     `RETRYABLE_STATUSES`; the mid-loop branch was simply bypassing the ladder the
 #     project already ships. Rescue lands at rung 2 (`static_regularization_constant =>

@@ -14,12 +14,12 @@
 # N1–N2 note's own problem numbers and this project's `src/planning/` code symbols:
 #
 #   - **Follower LP** `α(z)` (transmission-reinforcement investment, given a trial
-#     coupling flow `z`) — [`build_follower`](@ref) constructs it ONCE;
-#     [`solve_follower!`](@ref) re-solves it at each Benders trial.
+#     coupling flow `z`) — [`build_follower`](@ref TSODSO.build_follower) constructs it ONCE;
+#     [`solve_follower!`](@ref TSODSO.solve_follower!) re-solves it at each Benders trial.
 #   - **Benders master** (the leader's epigraph relaxation over `y`, accumulating
 #     optimality/feasibility cuts from both the follower and the operational oracle) —
-#     [`build_master`](@ref) constructs it ONCE; [`add_optimality_cut!`](@ref)/
-#     [`add_feasibility_cut!`](@ref) append cuts; [`solve_master!`](@ref) re-solves it.
+#     [`build_master`](@ref TSODSO.build_master) constructs it ONCE; [`add_optimality_cut!`](@ref TSODSO.add_optimality_cut!)/
+#     [`add_feasibility_cut!`](@ref TSODSO.add_feasibility_cut!) append cuts; [`solve_master!`](@ref TSODSO.solve_master!) re-solves it.
 #   - **The outer Benders loop** tying the two together against the REUSED v1
 #     operational welfare oracle — [`solve_stackelberg!`](@ref) (the entrypoint this
 #     page calls live below).
@@ -28,7 +28,7 @@
 #
 # | Planning-layer symbol | Operational-layer symbol | Where it lives |
 # |:-----------------------|:--------------------------|:----------------|
-# | `z` (the Benders trial coupling flow) | `p_import` at the oracle's frontier / the aggregator's own net import `p_ag` | `PlanningOracle`'s `pin[t]: p_import[t] == z[t]` ([`build_planning_oracle`](@ref)); the follower's own `coupling[t]: x_op[t] == z[t]` ([`build_follower`](@ref)) |
+# | `z` (the Benders trial coupling flow) | `p_import` at the oracle's frontier / the aggregator's own net import `p_ag` | `PlanningOracle`'s `pin[t]: p_import[t] == z[t]` ([`build_planning_oracle`](@ref TSODSO.build_planning_oracle)); the follower's own `coupling[t]: x_op[t] == z[t]` ([`build_follower`](@ref TSODSO.build_follower)) |
 # | `λ_j[t] ↔ π_s` (the coupling-constraint dual) | the DADP/DLMP the v1 operational layer already reports | the oracle's `pin` dual (`oracle_res.π`, the optimality-cut gradient) and the follower's own `coupling` dual (`follower_res.π_s`) |
 #
 # ## The Phase 11 empirical certification story (narrated, not re-executed)

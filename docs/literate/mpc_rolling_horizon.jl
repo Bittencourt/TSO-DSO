@@ -60,10 +60,10 @@ s = Scenario(;
 # `:default` population's `Deferrable` device — that produces `day_ahead_welfare` and the
 # reference DADP path, and the COMPARABLE benchmark over the same Deferrable-excluded device
 # set the closed loop controls, which the regret comparison reads (see section 3). It then
-# builds the receding-horizon [`MpcWindow`](@ref) ONCE, and re-solves it `19` times (once per
+# builds the receding-horizon [`MpcWindow`](@ref TSODSO.MpcWindow) ONCE, and re-solves it `19` times (once per
 # published hour, since `step = 1` here), dispatching Phase-20's own non-throwing
 # certificate/fallback ladder on every resolve and recording every published hour into an
-# [`MpcTrace`](@ref).
+# [`MpcTrace`](@ref TSODSO.MpcTrace).
 
 r = run_mpc(s)
 
@@ -91,7 +91,7 @@ round.(r.trace.dadp_trace; digits = 4)
 
 round.(r.trace.dadp_da_trace; digits = 4)
 
-# Step-to-step price jump ([`max_jump`](@ref)/[`mean_jump`](@ref), D-10's price-consistency
+# Step-to-step price jump ([`max_jump`](@ref TSODSO.max_jump)/[`mean_jump`](@ref TSODSO.mean_jump), D-10's price-consistency
 # norms) — the largest and average absolute price MOVE between two successive published hours:
 
 max_jump(r.trace)

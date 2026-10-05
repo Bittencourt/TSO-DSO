@@ -5,8 +5,8 @@
 # binary-expansion MILP investment master, the Laporte-Louveaux "no-good cut with a
 # value," the honest termination story, and a certification saga that caught (and then
 # fixed) three real, stacked defects in already-merged code. Every number below comes
-# from a LIVE call to [`build_master_integer`](@ref)/[`solve_stackelberg!`](@ref)/
-# [`solve_planning_oracle!`](@ref)/[`solve_follower!`](@ref) during the Documenter build
+# from a LIVE call to [`build_master_integer`](@ref TSODSO.build_master_integer)/[`solve_stackelberg!`](@ref)/
+# [`solve_planning_oracle!`](@ref TSODSO.solve_planning_oracle!)/[`solve_follower!`](@ref TSODSO.solve_follower!) during the Documenter build
 # (T-24-16) — never a literal copied from a test file — and this page imports ONLY
 # `TSODSO` (never importing `BilevelJuMP`, `HiGHS`, or `Ipopt`, T-24-17), mirroring
 # `stackelberg_benders.jl`'s own established discipline.
@@ -89,7 +89,7 @@ lattice
 # ```
 #
 # — written strictly over the RAW binaries `b_k` returned by
-# [`build_master_integer`](@ref), **never** over the derived expression `y_inv`
+# [`build_master_integer`](@ref TSODSO.build_master_integer), **never** over the derived expression `y_inv`
 # (substituting `y_inv`'s numeric value would silently break the whole combinatorial
 # argument — this is the single most important correctness constraint in the phase).
 # At the incumbent itself `D(b^ν) = 1`, so the cut reduces to `θ ≥ Q(b^ν)` — tight and
