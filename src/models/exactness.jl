@@ -84,6 +84,51 @@ const MEASURED_ε_FIX08 = 1.0e-9
 # floor and the per-branch relative floor applies.
 const TAU_SOLVER_FIX08 = 2.0e-7
 
+# WR-02 (35-REVIEW, Phase 35): the head-branch convention and the per-(branch, hour) cone-row
+# computation, factored out VERBATIM (same expressions, same evaluation order) from
+# `assert_socp_exact!` so the `hybrid_ratios` diagnostic shares them instead of re-implementing
+# them. Pure refactor: the gate's verdict, `maxgap`, `maxratio` and messages are unchanged.
+
+# FIX-08 head branch: the FIRST branch incident to `feeder.root` in EITHER storage orientation
+# (see the long rationale at the call site in `assert_socp_exact!`). `nothing` if none.
+_socp_head_branch(feeder) =
+    findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
+
+"""
+    _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver) -> NamedTuple
+
+Internal. The ONE per-(branch `b`, hour `t`) exactness computation used by both
+[`assert_socp_exact!`](@ref) and [`hybrid_ratios`](@ref): returns
+`(; lhs, rhs, gap, atol_b, ratio)` with `gap = |l·v_from − (P²+Q²)|`,
+`atol_b = atol === nothing ? max(τ_solver, ε·ref_b) : atol` and
+`ratio = gap / (atol_b + rtol·max(|lhs|, |rhs|))` (`ratio ≤ 1` iff the row is exact).
+"""
+@inline function _cone_row(pv, br, b::Int, t::Int, head_b::Int, rtol, atol, ε, τ_solver)
+    lhs = value(pv.l[b, t]) * value(pv.v[br.from, t])   # l·v_from  (thesis 3.39 RHS side)
+    rhs = value(pv.P[b, t])^2 + value(pv.Q[b, t])^2      # P² + Q²
+    gap = abs(lhs - rhs)
+    # FIX-08: per-branch reference scale `ref_b` — the branch's own thermal capacity
+    # squared if thermally limited, else the head branch's own flow magnitude squared
+    # (the network-scale reference for an interior/unconstrained branch).
+    ref_b =
+        br.smax < SMAX_NO_LIMIT ? br.smax^2 :
+        (value(pv.P[head_b, t])^2 + value(pv.Q[head_b, t])^2)
+    # isapprox-style COMBINED bound (WR-01): a branch is exact iff
+    # gap ≤ atol_b + rtol·max(|lhs|,|rhs|). The rtol term is the SCALE-FREE part (a fixed
+    # FRACTION of the cone magnitude, so the verdict is invariant to the per-unit base);
+    # the atol_b term is a HYBRID, PER-BRANCH floor (FIX-08, revised): the LARGER of a
+    # separately-measured ABSOLUTE solver-noise floor (`τ_solver`, covers Clarabel's own
+    # achievable cone-residual precision on a lightly-loaded/interior branch where `ref_b`
+    # itself is small) and a per-branch RELATIVE floor (`ε * ref_b`, scales with the
+    # branch's own thermal/flow scale for larger branches) — never masking a genuine
+    # strict cone on a load-bearing branch while still catching a slack cone that is large
+    # RELATIVE to a small branch's own scale. An explicit `atol` bypasses `τ_solver`/
+    # `ref_b`/`ε` entirely (backward-compat override, see `assert_socp_exact!`'s docstring).
+    atol_b = atol === nothing ? max(τ_solver, ε * ref_b) : atol
+    tol = atol_b + rtol * max(abs(lhs), abs(rhs))
+    return (; lhs, rhs, gap, atol_b, ratio = gap / tol)
+end
+
 """
     assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4,
                         atol::Union{Nothing,Real} = nothing, ε::Real = MEASURED_ε_FIX08,
@@ -223,7 +268,7 @@ function assert_socp_exact!(
     # full-suite run genuinely out of scope for this fix pass (per this pass's own instructions).
     # Revisit with a full-suite-verified `sum`/`max` change if/when a `ConvexBranchFlow` meshed
     # fixture with disparate root-branch flows is added.
-    head_b = findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
+    head_b = _socp_head_branch(feeder)
     head_b === nothing && throw(
         ArgumentError(
             "assert_socp_exact!: no branch incident to feeder.root=$(feeder.root) found " *
@@ -235,30 +280,11 @@ function assert_socp_exact!(
     maxgap = 0.0        # absolute cone residual (first-class reported output)
     maxratio = 0.0      # worst gap / (atol_b + rtol·magnitude) — ≤ 1 iff every branch is exact
     for (b, br) in enumerate(feeder.branches), t in 1:T
-        lhs = value(pv.l[b, t]) * value(pv.v[br.from, t])   # l·v_from  (thesis 3.39 RHS side)
-        rhs = value(pv.P[b, t])^2 + value(pv.Q[b, t])^2      # P² + Q²
-        gap = abs(lhs - rhs)
-        # FIX-08: per-branch reference scale `ref_b` — the branch's own thermal capacity
-        # squared if thermally limited, else the head branch's own flow magnitude squared
-        # (the network-scale reference for an interior/unconstrained branch).
-        ref_b =
-            br.smax < SMAX_NO_LIMIT ? br.smax^2 :
-            (value(pv.P[head_b, t])^2 + value(pv.Q[head_b, t])^2)
-        # isapprox-style COMBINED bound (WR-01): a branch is exact iff
-        # gap ≤ atol_b + rtol·max(|lhs|,|rhs|). The rtol term is the SCALE-FREE part (a fixed
-        # FRACTION of the cone magnitude, so the verdict is invariant to the per-unit base);
-        # the atol_b term is a HYBRID, PER-BRANCH floor (FIX-08, revised): the LARGER of a
-        # separately-measured ABSOLUTE solver-noise floor (`τ_solver`, covers Clarabel's own
-        # achievable cone-residual precision on a lightly-loaded/interior branch where `ref_b`
-        # itself is small) and a per-branch RELATIVE floor (`ε * ref_b`, scales with the
-        # branch's own thermal/flow scale for larger branches) — never masking a genuine
-        # strict cone on a load-bearing branch while still catching a slack cone that is large
-        # RELATIVE to a small branch's own scale. An explicit `atol` bypasses `τ_solver`/
-        # `ref_b`/`ε` entirely (backward-compat override, see docstring).
-        atol_b = atol === nothing ? max(τ_solver, ε * ref_b) : atol
-        tol = atol_b + rtol * max(abs(lhs), abs(rhs))
-        maxgap = max(maxgap, gap)
-        maxratio = max(maxratio, gap / tol)
+        # WR-02 (35-REVIEW): the per-(b,t) gap/floor/ratio arithmetic lives in `_cone_row`,
+        # shared VERBATIM with the `hybrid_ratios` diagnostic so the two can never drift.
+        row = _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver)
+        maxgap = max(maxgap, row.gap)
+        maxratio = max(maxratio, row.ratio)
     end
 
     maxratio <= 1 || throw(CertificateError(
@@ -404,34 +430,37 @@ function socp_gap_report(
 end
 
 """
-    hybrid_ratios(ctx::ModelContext; rtol::Real = 1e-4) -> Vector{NamedTuple}
+    hybrid_ratios(ctx::ModelContext; rtol = 1e-4, atol = nothing, ε = MEASURED_ε_FIX08,
+                  τ_solver = TAU_SOLVER_FIX08) -> Vector{NamedTuple}
 
-Phase 35 (ARCH-10) additive DIAGNOSTIC mirror of [`assert_socp_exact!`](@ref)'s default hybrid
-gate: per `(branch, hour)` row it reports `gap = |l·v_from − (P²+Q²)|`, the hybrid floor
-`atol_b = max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08·ref_b)`, `ratio = gap / (atol_b + rtol·|cone|)`
-(`ratio ≤ 1` iff the gate accepts that row), `r_pu`, and `loss_impact = r_pu·gap`. Rows are
-sorted worst-first (descending `ratio`). It is NEVER used to decide pass/fail (T-25-12:
-anti-certificate-laundering) -- it only explains which branches dominate a refusal.
+Phase 35 (ARCH-10) additive DIAGNOSTIC mirror of [`assert_socp_exact!`](@ref): per
+`(branch, hour)` row it reports `gap = |l·v_from − (P²+Q²)|`, the floor `atol_b` (default: the
+hybrid `max(τ_solver, ε·ref_b)`; a `Real` `atol` makes it flat, exactly as in the gate),
+`ratio = gap / (atol_b + rtol·|cone|)`, `r_pu`, and `loss_impact = r_pu·gap`. The kwargs and their
+defaults are IDENTICAL to `assert_socp_exact!`'s, and both functions compute every row through the
+same internal helper (WR-02, 35-REVIEW), so for the SAME kwargs `ratio ≤ 1` on every row iff the
+gate accepts — pass the kwargs the gate was run with to explain its verdict. Rows are sorted
+worst-first (descending `ratio`, ties by `(b, t)`). It is NEVER used to decide pass/fail
+(T-25-12: anti-certificate-laundering) -- it only explains which branches dominate a refusal.
 Reads the same `ctx.pf_vars`/`ctx.feeder`/`ctx.T` stash as `assert_socp_exact!`.
 """
-function hybrid_ratios(ctx::ModelContext; rtol::Real = 1e-4)
+function hybrid_ratios(
+    ctx::ModelContext;
+    rtol::Real = 1e-4,
+    atol::Union{Nothing, Real} = nothing,
+    ε::Real = MEASURED_ε_FIX08,
+    τ_solver::Real = TAU_SOLVER_FIX08,
+)
     pv = _require_pf_vars(ctx)
     feeder = _require_feeder(ctx)
     T = _require_T(ctx)
-    head_b = findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
+    head_b = _socp_head_branch(feeder)
     head_b === nothing && throw(
         ArgumentError("hybrid_ratios: no branch incident to feeder.root=$(feeder.root)"),
     )
     rows = NamedTuple[]
     for (b, br) in enumerate(feeder.branches), t in 1:T
-        lhs = value(pv.l[b, t]) * value(pv.v[br.from, t])
-        rhs = value(pv.P[b, t])^2 + value(pv.Q[b, t])^2
-        gap = abs(lhs - rhs)
-        ref_b =
-            br.smax < SMAX_NO_LIMIT ? br.smax^2 :
-            (value(pv.P[head_b, t])^2 + value(pv.Q[head_b, t])^2)
-        atol_b = max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08 * ref_b)
-        ratio = gap / (atol_b + rtol * max(abs(lhs), abs(rhs)))
+        row = _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver)
         push!(
             rows,
             (;
@@ -440,10 +469,10 @@ function hybrid_ratios(ctx::ModelContext; rtol::Real = 1e-4)
                 from = br.from,
                 to = br.to,
                 r_pu = br.r,
-                gap = gap,
-                atol_b = atol_b,
-                ratio = ratio,
-                loss_impact = br.r * gap,
+                gap = row.gap,
+                atol_b = row.atol_b,
+                ratio = row.ratio,
+                loss_impact = br.r * row.gap,
             ),
         )
     end

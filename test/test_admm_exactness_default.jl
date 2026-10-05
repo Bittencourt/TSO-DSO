@@ -90,4 +90,16 @@ end
     @test rN[1].r_pu == 2.4e-6
     @test isapprox(rN[1].loss_impact, 4e-9; rtol = 0.5)
     @test issorted([r.ratio for r in rN]; rev = true)
+    # WR-02 (35-REVIEW): hybrid_ratios takes the gate's own kwargs and agrees with its verdict
+    # for the SAME kwargs (both compute rows through the shared `_cone_row` helper).
+    ctxA = ExactDefaultHelpers.ctx_A()
+    rA_flat = TSODSO.hybrid_ratios(ctxA; atol = 1e-6)
+    @test rA_flat[1].atol_b == 1e-6
+    @test rA_flat[1].ratio > 1                     # gate with atol = 1e-6 refuses ctx_A ...
+    @test_throws CertificateError TSODSO.assert_socp_exact!(ctxA; atol = 1e-6)
+    rA_eps = TSODSO.hybrid_ratios(ctxA; ε = 1e-11)  # ... and a smaller ε drops the floor to τ
+    @test rA_eps[1].atol_b == TSODSO.TAU_SOLVER_FIX08
+    @test rA_eps[1].ratio > 1
+    @test_throws CertificateError TSODSO.assert_socp_exact!(ctxA; ε = 1e-11)
+    @test TSODSO.hybrid_ratios(ctxA; τ_solver = 1e-5)[1].atol_b == 1e-5
 end
