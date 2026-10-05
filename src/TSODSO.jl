@@ -43,246 +43,238 @@ module TSODSO
 
 import Compat: @compat
 
-# --- Units (owned by plan 01-02, INFRA-05) ---
+# --- Units ---
 include("units/PerUnit.jl")
 
-# --- Data model (owned by plan 01-02, DATA-01 / DATA-02) ---
+# --- Data model ---
 include("data/Feeder.jl")
 include("data/topology.jl")
 
-# --- Meshed feeder data model (plan 23-01, MESH-01) --- a SEPARATE struct from
-# `Feeder`, gated by `assert_connected` instead of `assert_radial` (D-01/D-09
-# lock: `Feeder`/`topology.jl` above are byte-unchanged). `mesh_topology.jl`
-# must load BEFORE `MeshedFeeder.jl` (its inner constructor calls
-# `assert_connected` at call time -- world-age resolution, mirroring
+# --- Meshed feeder data model --- a SEPARATE struct from `Feeder`, gated by
+# `assert_connected` instead of `assert_radial` (`Feeder`/`topology.jl` above are
+# UNCHANGED). `mesh_topology.jl` must load BEFORE `MeshedFeeder.jl` (its inner
+# constructor calls `assert_connected` at call time -- world-age resolution, mirroring
 # `Feeder.jl`/`topology.jl`'s own documented ordering note above).
 include("data/mesh_topology.jl")
 include("data/MeshedFeeder.jl")
 
-# --- Seeded profile generator (owned by plan 03-02, DATA-04) ---
+# --- Seeded profile generator ---
 include("data/profiles.jl")
 
-# --- Modified IEEE 13-node feeder fixture (owned by plan 04-03, DATA-03) ---
+# --- Modified IEEE 13-node feeder fixture ---
 include("data/ieee13.jl")
 
-# --- Modified IEEE 123-node feeder fixture (owned by plan 07-02, DATA-03 scale target) ---
-# STUB seam wired here by plan 07-01 (after ieee13.jl in the data block); filled by 07-02.
+# --- Modified IEEE 123-node feeder fixture (scale target) ---
 include("data/ieee123.jl")
 
-# --- IEEE-8500 scale-benchmark feeder fixtures (owned by plan 25-03, SCALE-01/02) ---
-# References IEEE123_SWITCH_R/IEEE123_SWITCH_X (D-13 near-ideal reuse), so must load AFTER
+# --- IEEE-8500 scale-benchmark feeder fixtures ---
+# References IEEE123_SWITCH_R/IEEE123_SWITCH_X (near-ideal switch reuse), so must load AFTER
 # ieee123.jl.
 include("data/ieee8500.jl")
 
-# --- Solver abstraction (owned by plan 01-03, INFRA-02) ---
+# --- Solver abstraction ---
 include("solver/ProblemClass.jl")
 include("solver/factory.jl")
 
-# --- Power-flow interface (owned by plan 01-03, PF-01) ---
-# Included BEFORE core/ModelContext.jl: the typed `ModelContext.pf` field (Plan 33-04) needs it first.
+# --- Power-flow interface ---
+# Included BEFORE core/ModelContext.jl: the typed `ModelContext.pf` field needs it first.
 include("powerflow/AbstractPowerFlow.jl")
 
-# --- Core (owned by plan 01-03, PF-01 residual seam / INFRA-03 status) ---
+# --- Core (residual seam and solve-status handling) ---
 include("core/ModelContext.jl")
 include("core/balance.jl")
 include("core/errors.jl")
 include("core/status.jl")
 
-# --- Power-flow formulations (owned by plan 02-02, PF-02) ---
+# --- Power-flow formulations ---
 include("powerflow/DCPowerFlow.jl")
 include("powerflow/LinDistFlow.jl")
 
-# --- SOCP Convex Branch Flow formulation (owned by plan 04-02, PF-03) ---
+# --- SOCP Convex Branch Flow formulation ---
 include("powerflow/ConvexBranchFlow.jl")
 
-# --- Independent nonconvex AC-OPF oracle (peer formulation, owned by plan 15-01, EXACT-01) ---
+# --- Independent nonconvex AC-OPF oracle (peer formulation) ---
 # Included immediately after ConvexBranchFlow.jl (it references the `_SMAX_NO_LIMIT` const that
 # file defines) and before problem_class_trait.jl; it adds `problem_class(::ACPowerFlow) = NLP()`.
 include("powerflow/ACPowerFlow.jl")
 
-# --- Gan-Low OPF-m restricted formulation, with optional OPF-ε margin (owned by plan
-# 20-02, OVR-01) --- included right after ACPowerFlow.jl: it delegates to
+# --- Gan-Low OPF-m restricted formulation, with optional OPF-ε margin ---
+# Included right after ACPowerFlow.jl: it delegates to
 # ConvexBranchFlow.contribute! and must load after it.
 include("powerflow/RestrictedBranchFlow.jl")
 
-# --- Meshed SOCP branch-flow formulation (owned by plan 23-02, MESH-02) --- delegates to
-# ConvexBranchFlow.contribute! (byte-identical constraint set -- ALREADY graph-generic, no
+# --- Meshed SOCP branch-flow formulation --- delegates to
+# ConvexBranchFlow.contribute! (bit-for-bit identical constraint set -- ALREADY graph-generic, no
 # new model-time math) and must load after it, mirroring RestrictedBranchFlow.jl's own
 # ordering rationale above.
 include("powerflow/MeshedFlow.jl")
 
-# --- Power-flow → problem-class routing trait (owned by plan 04-01, INFRA-02 / PF-03) ---
+# --- Power-flow → problem-class routing trait ---
 # Included AFTER the powerflow formulations (needs `AbstractPowerFlow`) and after
 # solver/ProblemClass.jl (needs `QP`): it maps a formulation to its solver problem class.
 include("solver/problem_class_trait.jl")
 
-# --- Devices (owned by plan 02-03, DEV-03) ---
+# --- Devices ---
 include("devices/AbstractDevice.jl")
 include("devices/Interruptible.jl")
 
-# --- Concrete prosumer devices (owned by plans 03-03 / 03-04) ---
-include("devices/Thermostatic.jl")   # DEV-01
-include("devices/Deferrable.jl")     # DEV-02
-include("devices/PVBattery.jl")      # DEV-04
-include("devices/FourQuadBESS.jl")   # plan 19-02, MESH-04
-include("devices/FixedCapacitor.jl") # plan 25-04, SCALE-03/D-10 (second q_inject consumer)
+# --- Concrete prosumer devices ---
+include("devices/Thermostatic.jl")
+include("devices/Deferrable.jl")
+include("devices/PVBattery.jl")
+include("devices/FourQuadBESS.jl")
+include("devices/FixedCapacitor.jl") # second q_inject consumer
 
-# --- Aggregator roll-up: the network-facing residual writer (plan 03-05, DEV-05) ---
+# --- Aggregator roll-up: the network-facing residual writer ---
 include("devices/Aggregator.jl")
 
-# --- Models (owned by plan 01-04 rung 0 / plan 02-04 rung 1 integration) ---
+# --- Models (rung 0 and rung 1 integration) ---
 include("models/toy_dc.jl")
 include("models/linear_solve.jl")
 
-# --- GLB-CVX centralized social-welfare solve (owned by plan 03-05, OPT-01) ---
+# --- GLB-CVX centralized social-welfare solve ---
 include("models/welfare_solve.jl")
 
-# --- SOCP relaxation exactness gate (owned by plan 04-05, PF-04) ---
+# --- SOCP relaxation exactness gate ---
 include("models/exactness.jl")
-include("models/complementarity_4q.jl")   # plan 19-05, MESH-04
+include("models/complementarity_4q.jl")
 
 # --- operational_oracle (frontier coupling dual wrapper) ---
 include("models/oracle.jl")
 
-# --- AC-exactness oracle post-processing (owned by plan 15-01/15-02, EXACT-01/02/03) ---
+# --- AC-exactness oracle post-processing ---
 # Sits beside models/exactness.jl: reads ModelContext.pf_vars populated by BOTH the SOCP
-# (ConvexBranchFlow) and AC (ACPowerFlow) solves. recover_voltage_angles (15-01) recovers true
-# voltage phasors; assert_ac_exact! (15-02) certifies the SOCP relaxation per-hour against the AC
+# (ConvexBranchFlow) and AC (ACPowerFlow) solves. recover_voltage_angles recovers true
+# voltage phasors; assert_ac_exact! certifies the SOCP relaxation per-hour against the AC
 # oracle. Included after models/oracle.jl and before the pricing/ block.
 include("models/ac_oracle.jl")
 
-# --- Angle-recoverability a-posteriori certificate (owned by plan 23-03, MESH-03) --- must
+# --- Angle-recoverability a-posteriori certificate --- must
 # load AFTER models/ac_oracle.jl: it generalizes that file's recover_voltage_angles BFS with
 # explicit chord tracking + a per-chord closure-residual check (the loop-consistency
-# mechanism a meshed MeshedFlow context needs, per RESEARCH.md's "silently loop-blind"
-# finding — recover_voltage_angles itself is left byte-unchanged, D-09-adjacent).
+# mechanism a meshed MeshedFlow context needs, since the plain BFS is silently
+# loop-blind -- recover_voltage_angles itself is left UNCHANGED).
 include("models/mesh_angle_certificate.jl")
 
-# --- Restricted-SOCP AC-feasibility + optimality-loss certificate (owned by plan 20-03, OVR-02) ---
+# --- Restricted-SOCP AC-feasibility + optimality-loss certificate ---
 # Must load AFTER models/ac_oracle.jl: assert_restriction_exact! calls assert_ac_exact! internally.
 include("models/restriction_exactness.jl")
 
-# --- Nonconvex-AC-dual fallback pricer (owned by plan 20-04, OVR-03) --- no ordering
-# dependency on restriction_exactness.jl (it never calls the certificate, D-09), placed
+# --- Nonconvex-AC-dual fallback pricer --- no ordering
+# dependency on restriction_exactness.jl (it never calls the certificate), placed
 # adjacent for readability. Reuses solve_welfare(..., ACPowerFlow(), ...) verbatim.
 include("models/ac_dual_fallback.jl")
 
-# --- MpcTrace: rolling-horizon price-consistency ledger (owned by plan 21-02, MPC-03) ---
+# --- MpcTrace: rolling-horizon price-consistency ledger ---
 # JuMP-free, no ordering dependency; placed beside the other models/ files.
 include("models/mpc_trace.jl")
 
-# --- MpcWindow: build-once receding-horizon window model (owned by plan 21-03, MPC-01/02) ---
+# --- MpcWindow: build-once receding-horizon window model ---
 # No ordering dependency on mpc_trace.jl (both models/ files, grouped for diff locality).
 include("models/mpc_window.jl")
 
-# --- Stochastic PV/demand two-stage extensive-form welfare builder (owned by plan 22-02, ---
-# STOCH-01/02) --- ORCHESTRATION over already-validated builders (ConvexBranchFlow/
+# --- Stochastic PV/demand two-stage extensive-form welfare builder ---
+# ORCHESTRATION over already-validated builders (ConvexBranchFlow/
 # ModelContext/exactness.jl/Aggregator/PVBattery, all already loaded above); no
-# ordering dependency beyond those. Placed immediately after mpc_window.jl per the plan.
+# ordering dependency beyond those. Placed immediately after mpc_window.jl.
 include("models/stochastic_welfare.jl")
 
 # --- Distribution pricing: DLMP decomposition, FIT baseline, checks, welfare accounting ---
-# Wired empty (comment-only) in plan 05-01, AFTER models/oracle.jl (each consumes a solved
-# ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each seam
-# is filled by exactly one Wave-2 plan, which declares its own exports.
-include("pricing/dlmp.jl")      # DLMP extraction + four-way decomposition (plan 05-02, PRICE-02)
-include("pricing/fit.jl")       # flat feed-in-tariff baseline (plan 05-03, PRICE-04)
-include("pricing/checks.jl")    # economic-direction price checks (plan 05-04, PRICE-05)
-include("pricing/welfare.jl")   # social = prosumer + DSO surplus split (plan 05-05, PRICE-03)
+# Loaded AFTER models/oracle.jl (each consumes a solved
+# ctx / the operational oracle). Dependency order: dlmp → fit → checks → welfare. Each file
+# declares its own exports.
+include("pricing/dlmp.jl")      # DLMP extraction + four-way decomposition
+include("pricing/fit.jl")       # flat feed-in-tariff baseline
+include("pricing/checks.jl")    # economic-direction price checks
+include("pricing/welfare.jl")   # social = prosumer + DSO surplus split
 
 # --- ADMM decomposition core: AGR-OPT / DSO-OPT subproblems + the dual-ascent loop ---
-# Wired (plan 06-01, this plan is the SOLE owner of this shared edit) AFTER the pricing seams
-# — ADMM is ORCHESTRATION over the already-validated Phase-1–5 builders (RESEARCH Pattern 4):
+# Loaded AFTER the pricing files
+# — ADMM is ORCHESTRATION over the already-validated welfare, pricing and device builders:
 # it consumes the solved-ctx / `extract_dlmp` seams and reuses device / `ConvexBranchFlow`
-# `contribute!` verbatim, so NO Phase-5 source file is modified. Dependency order: residuals
-# (pure data) → AgrOpt → DsoOpt → solve_admm (the loop consumes the other three). Each seam
-# file declares its own exports; residuals.jl is filled by this plan, the other three by
-# Waves 2–3, so those waves never touch TSODSO.jl.
-include("admm/residuals.jl")    # AdmmResiduals primal/dual residual ledger (plan 06-01, ADMM-01)
-include("admm/ReactiveMode.jl") # OFF/CERTIFIED/LIVE 3-state enum (plan 19-01, MESH-05)
-include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (plan 06-02, ADMM-01, thesis 3.46)
-include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (plan 06-03, ADMM-01, thesis 3.47)
-include("admm/admm_state.jl")   # AdmmState + reactive singleton dispatch hooks (plan 34-07, ARCH-05)
-include("admm/admm_phases.jl")  # _admm_build/_admm_iterate!/_adapt_rho! named phases (plan 34-07, ARCH-05)
-include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation (plan 06-04, ADMM-01/03/04)
+# `contribute!` verbatim, so NO pricing source file is modified. Dependency order: residuals
+# (pure data) → AgrOpt → DsoOpt → solve_admm (the loop consumes the other three). Each
+# file declares its own exports.
+include("admm/residuals.jl")    # AdmmResiduals primal/dual residual ledger
+include("admm/ReactiveMode.jl") # OFF/CERTIFIED/LIVE 3-state enum
+include("admm/AgrOpt.jl")       # per-node aggregator QP subproblem (thesis 3.46)
+include("admm/DsoOpt.jl")       # whole-network SOCP subproblem (thesis 3.47)
+include("admm/admm_state.jl")   # AdmmState + reactive singleton dispatch hooks
+include("admm/admm_phases.jl")  # _admm_build/_admm_iterate!/_adapt_rho! named phases
+include("admm/solve_admm.jl")   # hand-rolled dual-ascent loop + cross-validation
 
 # --- Planning-layer resilience primitives: escalating retry + iteration checkpointing ---
-# Wired (plan 10-01, this plan is the SOLE owner of this shared edit) AFTER admm/ and
-# models/oracle.jl — ORCHESTRATION over the already-validated welfare/ADMM builders
-# (RESEARCH Pattern 4): `solve_with_retry!` wraps `assert_solved!` (INFRA-03) verbatim, and
+# Loaded AFTER admm/ and
+# models/oracle.jl — ORCHESTRATION over the already-validated welfare/ADMM builders:
+# `solve_with_retry!` wraps `assert_solved!` verbatim, and
 # `checkpoint_iteration!`/`resume_from_checkpoint` reuse `store.jl`'s `@tagsave` idiom
-# verbatim. NO Phase 4-9 source file is modified (D-03/D-11). Phase 10-02's
-# `planning/subproblem.jl` (below) and Phase 13's `planning/coupling.jl` join this
-# directory. `planning/subproblem.jl` MUST load AFTER `retry.jl` (its
-# `solve_planning_oracle!` calls `solve_with_retry!`, D-08) — hence its position as the
-# THIRD line of this block, after `retry.jl` and `checkpoint.jl`. `planning/follower.jl`
-# (plan 11-01, PLAN-04) has NO load-time dependency on `subproblem.jl` (it is a wholly
+# verbatim. NO earlier source file is modified. `planning/subproblem.jl` MUST load AFTER
+# `retry.jl` (its `solve_planning_oracle!` calls `solve_with_retry!`) — hence its position
+# as the THIRD line of this block, after `retry.jl` and `checkpoint.jl`.
+# `planning/follower.jl` has NO load-time dependency on `subproblem.jl` (it is a wholly
 # separate LP with its own `FollowerLP` struct) but is positioned FOURTH, immediately
 # after `subproblem.jl`, purely for diff stability as the planning/ block grows.
-# `planning/master.jl` (plan 11-01, PLAN-05) is positioned FIFTH, after `follower.jl` —
-# plan 11-02's `benders.jl` needs both `follower.jl` and `master.jl` loaded first, hence
+# `planning/master.jl` is positioned FIFTH, after `follower.jl` —
+# `benders.jl` needs both `follower.jl` and `master.jl` loaded first, hence
 # `benders.jl` is positioned SIXTH (final) in this block: it is the outer loop consuming
 # all five prior planning/ files (`retry.jl`, `checkpoint.jl`, `subproblem.jl`,
 # `follower.jl`, `master.jl`) via `solve_planning_oracle!`/`solve_follower!`/
 # `solve_master!`/`checkpoint_iteration!` at call time.
-include("planning/retry.jl")        # solve_with_retry! wraps assert_solved! (plan 10-01, D-08/D-09)
-include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoint (plan 10-01, D-10)
-include("planning/trace.jl")        # BendersTrace convergence ledger (plan 12-01, roadmap criterion 2; zero load-time deps, no JuMP)
-include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle (plan 10-02, PLAN-01/02)
-include("planning/feasibility_oracle.jl") # FeasibilityOracle slack-min feasibility-cut oracle (plan 30-01, BILEV-04a)
-include("planning/ac_recheck.jl")   # ac_recheck_incumbent incumbent-only AC physics re-check (plan 30-01, BILEV-04b)
-include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs (plan 11-01, PLAN-04)
-include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows (plan 11-01, PLAN-05)
-include("planning/master_integer.jl") # BendersMasterInteger binary-expansion MILP master (plan 24-01, INT-01)
-include("planning/benders.jl")      # solve_stackelberg! outer Benders loop (plan 11-02, PLAN-06)
-# NEW, independent entry point (build-once + one-shot solve, no outer loop) for the
-# GENUINELY bilevel TSO-DSO variant (BILEV-01, plan 29-01) — needs only follower.jl's/
+include("planning/retry.jl")        # solve_with_retry! wraps assert_solved!
+include("planning/checkpoint.jl")   # checkpoint_iteration!/resume_from_checkpoint
+include("planning/trace.jl")        # BendersTrace convergence ledger (zero load-time deps, no JuMP)
+include("planning/subproblem.jl")   # PlanningOracle build-once z-pin oracle
+include("planning/feasibility_oracle.jl") # FeasibilityOracle slack-min feasibility-cut oracle
+include("planning/ac_recheck.jl")   # ac_recheck_incumbent incumbent-only AC physics re-check
+include("planning/follower.jl")     # FollowerLP transmission-reinforcement LP + Farkas certs
+include("planning/master.jl")       # BendersMaster build-once epigraph + persistent cut rows
+include("planning/master_integer.jl") # BendersMasterInteger binary-expansion MILP master
+include("planning/benders.jl")      # solve_stackelberg! outer Benders loop
+# Independent entry point (build-once + one-shot solve, no outer loop) for the
+# GENUINELY bilevel TSO-DSO variant — needs only follower.jl's/
 # master.jl's ALREADY-LOADED sibling files transitively (ModelContext, powerflow,
 # solver); it does not itself depend on follower.jl/master.jl/benders.jl at load time,
 # positioned here purely for diff-locality with the rest of planning/.
-include("planning/bilevel_kkt.jl")  # BilevelKKT / build_bilevel_kkt / solve_bilevel! (plan 29-01, BILEV-01)
-include("planning/coupling.jl")     # SharedTransmission per-distributor views (plan 13-01, NASH-01)
-include("planning/nash.jl")         # NashTrace/run_nash! outer Gauss-Seidel loop (plan 13-02, NASH-02/03/04)
+include("planning/bilevel_kkt.jl")  # BilevelKKT / build_bilevel_kkt / solve_bilevel!
+include("planning/coupling.jl")     # SharedTransmission per-distributor views
+include("planning/nash.jl")         # NashTrace/run_nash! outer Gauss-Seidel loop
 
-# --- Convergence diagnostics: plotting API stubs (owned by plan 07-01, ADMM-05) ---
-# Wired AFTER the admm/ seams — the plot functions consume the JuMP-free `AdmmResiduals`
+# --- Convergence diagnostics: plotting API stubs ---
+# Loaded AFTER the admm/ files — the plot functions consume the JuMP-free `AdmmResiduals`
 # ledger. The core declares only method-less generic functions + exports (NO CairoMakie
-# import); the CairoMakie-backed methods live in the TSODSOMakieExt weakdep extension
-# (plan 07-06), so `using TSODSO` stays plot-free (threat T-07-01).
+# import); the CairoMakie-backed methods live in the TSODSOMakieExt weakdep extension,
+# so `using TSODSO` stays plot-free.
 include("diagnostics/plots.jl")
 
 # --- Experiment harness: declarative Scenario -> swappable-strategy run -> sweep+provenance ---
-# Wired (plan 08-01, this plan is the SOLE owner of this shared edit) AFTER admm/ and
-# diagnostics/ — the harness is ORCHESTRATION over the already-validated Phase 1-7 builders
-# (RESEARCH Summary / Architectural Responsibility Map): run_scenario calls solve_welfare,
-# solve_admm, and extract_dlmp; nothing here modifies a Phase 1-7 source file. Dependency
+# Loaded AFTER admm/ and
+# diagnostics/ — the harness is ORCHESTRATION over the already-validated builders:
+# run_scenario calls solve_welfare,
+# solve_admm, and extract_dlmp; nothing here modifies an earlier source file. Dependency
 # order: Scenario (primitive selectors) -> materialize (selectors+seed -> feeder/λ₀/aggs) ->
 # run (strategy dispatch -> ScenarioResult) -> store (per-run @tagsave provenance) -> sweep
-# (dict_list expansion + diff-friendly CSV collation, consumes store's run_and_store). Each
-# seam is a comment-only STUB in this plan, filled file-disjointly by exactly one later plan
-# (08-02 Scenario+materialize, 08-03 run, 08-04 store+sweep), so Waves 2-4 never touch this file.
-# Phase 32 (ARCH-02): strategy types precede Scenario, which will hold an AbstractStrategy.
-include("experiments/strategies.jl")    # AbstractStrategy/Centralized/ADMM/MPC/Stochastic + run + supports_pf (plan 32-01)
-include("experiments/Scenario.jl")      # primitive-selector Scenario struct (plan 08-02, EXP-01)
-include("experiments/materialize.jl")   # sub_seed + build_feeder/price/population (plan 08-02, INFRA-04)
-include("experiments/run.jl")           # ScenarioResult + run_scenario dispatch (plan 08-03, EXP-01/INFRA-04)
-include("experiments/store.jl")         # run_and_store @tagsave provenance (plan 08-04, INFRA-04)
-include("experiments/sweep.jl")         # run_sweep + collate_summary diff-friendly CSV (plan 08-04, EXP-02)
+# (dict_list expansion + diff-friendly CSV collation, consumes store's run_and_store).
+# Strategy types precede Scenario, which holds an AbstractStrategy.
+include("experiments/strategies.jl")    # AbstractStrategy/Centralized/ADMM/MPC/Stochastic + run + supports_pf
+include("experiments/Scenario.jl")      # primitive-selector Scenario struct
+include("experiments/materialize.jl")   # sub_seed + build_feeder/price/population
+include("experiments/run.jl")           # ScenarioResult + run_scenario dispatch
+include("experiments/store.jl")         # run_and_store @tagsave provenance
+include("experiments/sweep.jl")         # run_sweep + collate_summary diff-friendly CSV
 
 # --- MPC / rolling-horizon / real-time pricing: run_mpc(scenario) closed-loop orchestrator ---
-# Wired LAST (plan 21-05, MPC-01..04) after experiments/sweep.jl: run_mpc is an INDEPENDENT
-# entry point (D-01, Pitfall 7) — it is NOT wired through run_scenario's strategy dispatch,
-# reads Scenario's additive mpc_* fields (plan 21-04) directly, and consumes MpcWindow/
-# MpcTrace (plans 21-02/21-03) plus Phase-20's certificate/fallback ladder.
+# Loaded LAST after experiments/sweep.jl: run_mpc is an INDEPENDENT
+# entry point — it is NOT wired through run_scenario's strategy dispatch,
+# reads Scenario's additive mpc_* fields directly, and consumes MpcWindow/
+# MpcTrace plus the restricted-SOCP certificate/fallback ladder.
 include("experiments/mpc_loop.jl")
 
-# --- Stochastic PV/demand uncertainty: run_stochastic(scenario) extensive-form + ---
-# out-of-sample orchestrator --- Wired LAST (plan 22-04, STOCH-01..03), after
-# experiments/mpc_loop.jl: run_stochastic is an INDEPENDENT entry point (D-01/D-02),
+# --- Stochastic PV/demand uncertainty: run_stochastic(scenario) extensive-form +
+# out-of-sample orchestrator --- Loaded LAST, after
+# experiments/mpc_loop.jl: run_stochastic is an INDEPENDENT entry point,
 # mirroring run_mpc's own positioning — it is NOT wired through run_scenario's strategy
-# dispatch, reads Scenario's additive stoch_* fields (plan 22-01) directly, and consumes
-# build_stochastic_welfare/build_stochastic_oos_harness/solve_stochastic_oos_step!
-# (plans 22-02/22-03).
+# dispatch, reads Scenario's additive stoch_* fields directly, and consumes
+# build_stochastic_welfare/build_stochastic_oos_harness/solve_stochastic_oos_step!.
 include("experiments/run_stochastic.jl")
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
