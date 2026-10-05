@@ -48,8 +48,7 @@ end
 # behind an `isdefined` guard so it goes live once ConvexBranchFlow exists (the
 # only unguarded assertion is the missing-symbol check). The existing DC↔LinDistFlow item
 # above is left UNCHANGED.
-@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (SOCP arm)" tags =
-    [:conformance] begin
+@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (SOCP arm)" tags = [:conformance] begin
     using TSODSO
     using TSODSO: problem_class
     using TSODSO: Bus, Branch, Feeder

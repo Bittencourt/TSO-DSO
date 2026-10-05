@@ -8,8 +8,7 @@
 # assertion is a missing-symbol `isdefined` check (never a runner crash); behavioral asserts
 # sit behind the `isdefined` guard so they go live automatically once the functions exist.
 
-@testitem "dlmp: extract_dlmp is defined and returns a per-hour price vector" tags =
-    [:dlmp] begin
+@testitem "dlmp: extract_dlmp is defined and returns a per-hour price vector" tags = [:dlmp] begin
     using TSODSO
 
     # The DLMP extractor must be defined.

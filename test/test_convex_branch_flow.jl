@@ -7,8 +7,7 @@
 # assertion is a missing-symbol `isdefined` check (never a runner crash); the behavioral
 # asserts sit behind an `isdefined` guard so they go live automatically once the type exists.
 
-@testitem "socp: ConvexBranchFlow is a defined AbstractPowerFlow subtype" tags =
-    [:socp] begin
+@testitem "socp: ConvexBranchFlow is a defined AbstractPowerFlow subtype" tags = [:socp] begin
     using TSODSO
 
     # The SOCP formulation must be defined.
@@ -19,8 +18,7 @@
     end
 end
 
-@testitem "socp: ConvexBranchFlow routes to the SOCP problem class" tags =
-    [:socp] begin
+@testitem "socp: ConvexBranchFlow routes to the SOCP problem class" tags = [:socp] begin
     using TSODSO
 
     # The generic trait already returns QP() for DC/LinDistFlow; ConvexBranchFlow
@@ -141,8 +139,7 @@ end
 # check depend on (src/solver/factory.jl). This item documents that
 # the solver factory required NO change — the pre-existing `select_optimizer(SOCP())`
 # suffices. Name contains "socp" so `occursin("socp", ti.name)` selects it.
-@testitem "socp: SOCP() routes to a Clarabel factory with tight gap" tags =
-    [:socp] begin
+@testitem "socp: SOCP() routes to a Clarabel factory with tight gap" tags = [:socp] begin
     using TSODSO
     using TSODSO: SOCP
     using JuMP

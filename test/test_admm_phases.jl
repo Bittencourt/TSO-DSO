@@ -10,7 +10,10 @@
     @test TSODSO._react_mode(TSODSO.ReactiveMode.OFF) isa TSODSO._ReactiveOff
     @test TSODSO._react_mode(TSODSO.ReactiveMode.CERTIFIED) isa TSODSO._ReactiveCertified
     @test TSODSO._react_mode(TSODSO.ReactiveMode.LIVE) isa TSODSO._ReactiveLive
-    @test all(m -> TSODSO._react_mode(m) isa TSODSO._ReactiveMode, instances(TSODSO.ReactiveMode.T))
+    @test all(
+        m -> TSODSO._react_mode(m) isa TSODSO._ReactiveMode,
+        instances(TSODSO.ReactiveMode.T),
+    )
 end
 
 @testitem "admm phases: _react_state allocates reactive arrays only under LIVE (admm_phases)" tags =
@@ -42,11 +45,26 @@ end
     ε_abs, ε_rel = 1e-4, 1e-3
 
     st_off = TSODSO._admm_build(
-        feeder, ConvexBranchFlow(), aggs, Th, λ₀, Float64(ρ), Float64(ρ),
-        TSODSO.ReactiveMode.OFF, TSODSO._ReactiveOff(),
+        feeder,
+        ConvexBranchFlow(),
+        aggs,
+        Th,
+        λ₀,
+        Float64(ρ),
+        Float64(ρ),
+        TSODSO.ReactiveMode.OFF,
+        TSODSO._ReactiveOff(),
     )
     @test st_off.react === nothing
-    out = TSODSO._react_stack(TSODSO._ReactiveOff(), st_off, nothing, sq..., p_p, ε_abs, ε_rel)
+    out = TSODSO._react_stack(
+        TSODSO._ReactiveOff(),
+        st_off,
+        nothing,
+        sq...,
+        p_p,
+        ε_abs,
+        ε_rel,
+    )
     ρf = st_off.ρf
     @test out[1] === sqrt(sq[1])
     @test out[2] === ρf * sqrt(sq[2])
@@ -54,8 +72,15 @@ end
     @test out[4] === sqrt(p_p) * ε_abs + ε_rel * sqrt(sq[5])
 
     st_live = TSODSO._admm_build(
-        feeder, ConvexBranchFlow(), aggs, Th, λ₀, Float64(ρ), Float64(ρ),
-        TSODSO.ReactiveMode.LIVE, TSODSO._ReactiveLive(),
+        feeder,
+        ConvexBranchFlow(),
+        aggs,
+        Th,
+        λ₀,
+        Float64(ρ),
+        Float64(ρ),
+        TSODSO.ReactiveMode.LIVE,
+        TSODSO._ReactiveLive(),
     )
     acc = (; sq_r_q = 0.5, sq_ds_q = 0.25, sq_b = 1.5, sq_qd = 2.5, sq_μq = 3.5)
     ρ_qf = st_live.react.ρ_qf
@@ -63,8 +88,7 @@ end
     @test o[1] === sqrt(sq[1] + acc.sq_r_q)
     @test o[2] === st_live.ρf * sqrt(sq[2]) + ρ_qf * sqrt(acc.sq_ds_q)
     @test o[3] ===
-          sqrt(2p_p) * ε_abs +
-          ε_rel * max(sqrt(sq[3] + acc.sq_b), sqrt(sq[4] + acc.sq_qd))
+          sqrt(2p_p) * ε_abs + ε_rel * max(sqrt(sq[3] + acc.sq_b), sqrt(sq[4] + acc.sq_qd))
     @test o[4] === sqrt(2p_p) * ε_abs + ε_rel * sqrt(sq[5] + acc.sq_μq)
 end
 
@@ -79,11 +103,21 @@ end
 
     function run_mode(m)
         return solve_admm(
-            feeder, ConvexBranchFlow(), aggs; T = Th, λ₀ = λ₀, ρ = ρ, maxiter = 200,
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = ρ,
+            maxiter = 200,
             reactive_consensus = m,
         )
     end
-    for (m, tag) in ((TSODSO.ReactiveMode.OFF, TSODSO.ReactiveMode.OFF), (TSODSO.ReactiveMode.CERTIFIED, TSODSO.ReactiveMode.CERTIFIED), (TSODSO.ReactiveMode.LIVE, TSODSO.ReactiveMode.LIVE))
+    for (m, tag) in (
+        (TSODSO.ReactiveMode.OFF, TSODSO.ReactiveMode.OFF),
+        (TSODSO.ReactiveMode.CERTIFIED, TSODSO.ReactiveMode.CERTIFIED),
+        (TSODSO.ReactiveMode.LIVE, TSODSO.ReactiveMode.LIVE),
+    )
         r = run_mode(m)
         @test r.reactive_consensus_mode == tag
         @test r.status == :converged
@@ -118,8 +152,9 @@ end
     @test !isempty(all_lines)
     @test !any(l -> occursin(r"\b(OFF|CERTIFIED|LIVE)\b", l), all_lines)
     @test !any(
-        l -> occursin(r"reactive\w*mode\w*\s*(==|!=|===|!==|\bin\b|∈|isequal)", l) ||
-             occursin(r"(==|!=|===|!==|\bin\b|∈)\s*reactive\w*mode", l),
+        l ->
+            occursin(r"reactive\w*mode\w*\s*(==|!=|===|!==|\bin\b|∈|isequal)", l) ||
+            occursin(r"(==|!=|===|!==|\bin\b|∈)\s*reactive\w*mode", l),
         all_lines,
     )
     joined = join(all_lines, "\n")
@@ -128,12 +163,12 @@ end
     end
 end
 
-@testitem "admm phases: certify/output hooks per mode (admm_phases)" tags =
-    [:admm, :phases] begin
+@testitem "admm phases: certify/output hooks per mode (admm_phases)" tags = [:admm, :phases] begin
     using TSODSO
     # OFF never touches the dso (stub accepted); OFF/CERTIFIED publish no reactive outputs.
     @test TSODSO._react_certify_q!(TSODSO._ReactiveOff(), nothing) === nothing
-    @test TSODSO._react_outputs(TSODSO._ReactiveOff(), nothing, nothing) == (nothing, nothing)
+    @test TSODSO._react_outputs(TSODSO._ReactiveOff(), nothing, nothing) ==
+          (nothing, nothing)
     @test TSODSO._react_outputs(TSODSO._ReactiveCertified(), nothing, nothing) ==
           (nothing, nothing)
     # CERTIFIED/LIVE certify against the dso (a stub dso must therefore be touched -> error).

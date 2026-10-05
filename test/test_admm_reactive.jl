@@ -85,8 +85,11 @@
     # the kwarg did not exist. POSITIVE assertion (mirrors the `isdefined(TSODSO, :set_rho!)`
     # idiom in test_dso.jl) -- a negated assertion here would flip to a permanent failure once the
     # kwarg exists, which is not the intended terminal state.
-    has_kwarg =
-        hasmethod(build_dso_opt, Tuple{typeof(feeder), typeof(aggs), Int}, (:reactive_consensus,))
+    has_kwarg = hasmethod(
+        build_dso_opt,
+        Tuple{typeof(feeder), typeof(aggs), Int},
+        (:reactive_consensus,),
+    )
     @test has_kwarg   # the reactive_consensus kwarg exists
 
     if has_kwarg
@@ -94,7 +97,14 @@
         λ₀ = TwoBusFixtures.two_bus_lambda0()
         ρ = TwoBusFixtures.RHO_2BUS
 
-        dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.CERTIFIED)
+        dso = build_dso_opt(
+            feeder,
+            aggs,
+            Th;
+            ρ = ρ,
+            λ₀ = λ₀,
+            reactive_consensus = ReactiveMode.CERTIFIED,
+        )
         @test haskey(dso.ctx.constraints, :balance_q)
         @test haskey(dso.ctx.meta, :qag_dso)
         qag_dso = dso.ctx.meta[:qag_dso]
@@ -356,7 +366,14 @@ end
     )
 
     # LIVE behavior unchanged: the same aggregator set still builds (qag coupling block live).
-    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.LIVE)
+    dso = build_dso_opt(
+        feeder,
+        aggs,
+        Th;
+        ρ = ρ,
+        λ₀ = λ₀,
+        reactive_consensus = ReactiveMode.LIVE,
+    )
     @test dso.qag !== nothing
 end
 

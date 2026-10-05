@@ -82,8 +82,7 @@ end
     @test isequal_canonical(ctx.objective, 2 * (a * p - (b / 2) * p^2))
 end
 
-@testitem "context: scalar add_to_residual! backward-compat preserved" tags =
-    [:context] begin
+@testitem "context: scalar add_to_residual! backward-compat preserved" tags = [:context] begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))

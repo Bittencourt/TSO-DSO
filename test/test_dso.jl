@@ -42,7 +42,7 @@
     @test dso.ctx.pf_vars !== nothing
     @test haskey(dso.ctx.pf_vars, :l)
 
-# feeder / T stashed for the exactness gate.
+    # feeder / T stashed for the exactness gate.
     @test dso.ctx.feeder === feeder
     @test dso.ctx.T == Th
 
@@ -332,8 +332,14 @@ end
     @test !haskey(dso_default.ctx.meta, :qag_dso)
 
     # reactive_consensus = ReactiveMode.CERTIFIED: genuine pinned coupling variable, right shape, :balance_q intact.
-    dso_reactive =
-        build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.CERTIFIED)
+    dso_reactive = build_dso_opt(
+        feeder,
+        aggs,
+        Th;
+        ρ = ρ,
+        λ₀ = λ₀,
+        reactive_consensus = ReactiveMode.CERTIFIED,
+    )
     @test haskey(dso_reactive.ctx.meta, :qag_dso)
     qag_dso = dso_reactive.ctx.meta[:qag_dso]
     @test size(qag_dso) == (length(dso_reactive.load_nodes), Th)

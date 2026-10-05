@@ -13,8 +13,7 @@
     @test isdefined(TSODSO, :Aggregator)
 end
 
-@testitem "aggregator: sole :Rp/:Rq writer at its bus (eqs. 3.21-3.23)" tags =
-    [:aggregator] begin
+@testitem "aggregator: sole :Rp/:Rq writer at its bus (eqs. 3.21-3.23)" tags = [:aggregator] begin
     using TSODSO
     using JuMP
 
@@ -162,7 +161,7 @@ end
     # contribute!'s (; vars = device_vars, ...) stash order
     for t in 1:T
         # Rq now carries a non-empty terms entry equal to the device's q[t] with
-    # coefficient 1.0, ON TOP OF the same untouched Pdc_param[t]*(−tanφ) term.
+        # coefficient 1.0, ON TOP OF the same untouched Pdc_param[t]*(−tanφ) term.
         @test isapprox(Rq_4q[bus, t].constant, 0.0; atol = 1e-9)
         @test isapprox(
             get(Rq_4q[bus, t].terms, res_4q.Pdc_param[t], 0.0),
@@ -173,7 +172,7 @@ end
         @test isapprox(get(Rq_4q[bus, t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
 
         # res.q_inject is an AffExpr REFERENCING that same q[t] variable, not a numeric
-    # constant — the load-bearing "genuinely wired" assertion.
+        # constant — the load-bearing "genuinely wired" assertion.
         @test res_4q.q_inject[t] isa AffExpr
         @test isapprox(get(res_4q.q_inject[t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
     end
@@ -225,19 +224,8 @@ end
 
     # (3) φ-OVERRIDE case: a Thermostatic with its OWN φ override inside an aggregator
     # with a DIFFERENT φ uses the device's override, not the aggregator's φ.
-    therm_ov = Thermostatic(
-        bus,
-        0.2,
-        0.05,
-        15.0,
-        30.0,
-        22.0,
-        0.0,
-        1.0,
-        0.5,
-        Tout;
-        φ = φ_override,
-    )
+    therm_ov =
+        Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout; φ = φ_override)
     agg_ov = Aggregator(bus, φ_agg, [therm_ov], fill(0.0, T))
     ctx_ov = ModelContext(Model())
     res_ov = contribute!(agg_ov, ctx_ov; T = T)
@@ -297,7 +285,11 @@ end
     res_ov = TSODSO.contribute!(agg_ov, ctx_ov; T = T)
     p_ov = res_ov.vars[1].p
     for t in 1:T
-        @test isapprox(get(res_ov.q_inject[t].terms, p_ov[t], 0.0), -tanφ_override; atol = 1e-9)
+        @test isapprox(
+            get(res_ov.q_inject[t].terms, p_ov[t], 0.0),
+            -tanφ_override;
+            atol = 1e-9,
+        )
     end
 
     # Construction-time guard parity: a supplied φ override outside (0,1] is rejected LOUDLY,

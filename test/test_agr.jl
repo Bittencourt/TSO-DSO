@@ -129,7 +129,7 @@ end
         agr = build_agr_opt(agg, Th; ρ = ρ)
 
         # A high consumption price must measurably move the flexible schedule (the price truly
-    # enters the QP via the pag[t] linear coefficient).
+        # enters the QP via the pag[t] linear coefficient).
         lo = solve_agr!(agr, zeros(Th), zeros(Th), ρ)
         hi = solve_agr!(agr, fill(20.0, Th), zeros(Th), ρ)
         @test !isapprox(collect(lo.pag), collect(hi.pag); atol = 1e-6)

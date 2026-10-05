@@ -57,7 +57,8 @@
         @test isapprox(vec(r.mu_q), q_c; atol = 5e-4)
         @test isapprox(r.welfare, obj_c; rtol = 1e-4)
     end
-    @info "meshed ADMM worst price gap" worst_gap = maximum(worst) headroom = 5e-4 / maximum(worst)
+    @info "meshed ADMM worst price gap" worst_gap = maximum(worst) headroom =
+        5e-4 / maximum(worst)
 end
 
 @testitem "admm meshed: ADMM dso_ctx certifies the angle verdict like the centralized ctx" setup =
@@ -96,7 +97,8 @@ end
     @test isapprox(au.worst_residual, cu.worst_residual; atol = 1e-4)
 
     ch, ah = verdicts(:heterogeneous)
-    @info "meshed ADMM angle heterogeneous" central = ch.worst_residual admm = ah.worst_residual
+    @info "meshed ADMM angle heterogeneous" central = ch.worst_residual admm =
+        ah.worst_residual
     @test ch.status == :angle_unrecoverable
     @test ah.status == ch.status
     @test isapprox(ah.worst_residual, ch.worst_residual; atol = 1e-4)

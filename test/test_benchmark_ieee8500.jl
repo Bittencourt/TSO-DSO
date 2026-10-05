@@ -63,7 +63,9 @@ row on every invocation (`run_sweep_mode`'s own key-based CSV upsert), so readin
 after the subprocess exits reflects THIS run, not a stale one from an earlier session.
 """
 function run_quick()
-    run(`julia --project=$PROJECT_ROOT $SCRIPT --fixture ieee8500-mv --quick --results-dir $RESULTS_DIR`)
+    run(
+        `julia --project=$PROJECT_ROOT $SCRIPT --fixture ieee8500-mv --quick --results-dir $RESULTS_DIR`,
+    )
     df = CSV.read(CSV_PATH, DataFrame)
     rows = filter(r -> r.fixture == "ieee8500-mv" && r.solver == "clarabel", df)
     @assert nrow(rows) == 1 "expected exactly 1 ieee8500-mv/clarabel row in $CSV_PATH after " *
@@ -175,7 +177,10 @@ end
     # (g) --topn < 1 rejected at parse time, before any solve
     for bad in ("0", "-3")
         dir_g = mktempdir()
-        ok, _ = run_harness(["--quick", "--admm-only", "--admm-diagnostic-bypass", "--topn", bad], dir_g)
+        ok, _ = run_harness(
+            ["--quick", "--admm-only", "--admm-diagnostic-bypass", "--topn", bad],
+            dir_g,
+        )
         @test !ok
         @test !isfile(joinpath(dir_g, "density_sweep.csv"))
     end
@@ -186,9 +191,22 @@ end
     # point with a smaller --topn leaves exactly that many rows, never a mix of the two runs.
     dir_h = mktempdir()
     hargs(n, label) = [
-        "--fixture", "ieee13", "--density", "0.1", "--t-horizon", "10", "--solver", "clarabel",
-        "--admm-only", "--admm-diagnostic-bypass", "--time-limit", "300", "--topn", n,
-        "--run-label", label,
+        "--fixture",
+        "ieee13",
+        "--density",
+        "0.1",
+        "--t-horizon",
+        "10",
+        "--solver",
+        "clarabel",
+        "--admm-only",
+        "--admm-diagnostic-bypass",
+        "--time-limit",
+        "300",
+        "--topn",
+        n,
+        "--run-label",
+        label,
     ]
     ok, _ = run_harness(hargs("5", "t35h1"), dir_h)
     @test ok

@@ -32,17 +32,33 @@
         feeder = SmallRadialFixtures.small_radial_feeder()
         T = 3
         therm = Thermostatic(
-            2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, SmallRadialFixtures.Tout[1:T],
+            2,
+            0.2,
+            0.05,
+            15.0,
+            30.0,
+            22.0,
+            0.0,
+            1.0,
+            0.5,
+            SmallRadialFixtures.Tout[1:T],
         )
         agg = Aggregator(2, 0.9, [therm], SmallRadialFixtures.Pdc[1:T])
-        ctx, _, _ = solve_welfare(feeder, pf, [agg]; T = T, λ₀ = SmallRadialFixtures.λ₀[1:T])
+        ctx, _, _ =
+            solve_welfare(feeder, pf, [agg]; T = T, λ₀ = SmallRadialFixtures.λ₀[1:T])
         return ctx.model
     end
 
     function run_all()
         return (
-            lin = (block_fp(build(LinDistFlow()), "balance_p"), block_fp(build(LinDistFlow()), "balance_q")),
-            dc = (block_fp(build(DCPowerFlow()), "balance_p"), block_fp(build(DCPowerFlow()), "balance_q")),
+            lin = (
+                block_fp(build(LinDistFlow()), "balance_p"),
+                block_fp(build(LinDistFlow()), "balance_q"),
+            ),
+            dc = (
+                block_fp(build(DCPowerFlow()), "balance_p"),
+                block_fp(build(DCPowerFlow()), "balance_q"),
+            ),
         )
     end
     fp = run_all()
@@ -74,7 +90,10 @@ end
     function type_fp(model)
         return (
             JuMP.num_constraints(model; count_variable_in_set_constraints = false),
-            sort!([string(F, " in ", S) for (F, S) in JuMP.list_of_constraint_types(model) if !(F <: JuMP.VariableRef)]),
+            sort!([
+                string(F, " in ", S) for
+                (F, S) in JuMP.list_of_constraint_types(model) if !(F <: JuMP.VariableRef)
+            ]),
         )
     end
 
@@ -93,18 +112,33 @@ end
         sf = StochasticFixtures.stoch_feeder()
         saggs = [
             StochasticFixtures.stoch_scenario_aggregators(
-                sf, sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, k)),
+                sf,
+                sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, k)),
             ) for k in 1:2
         ]
         r = build_stochastic_welfare(
-            sf, ConvexBranchFlow(), saggs; T = StochasticFixtures.T, λ₀ = StochasticFixtures.stoch_lambda0(),
+            sf,
+            ConvexBranchFlow(),
+            saggs;
+            T = StochasticFixtures.T,
+            λ₀ = StochasticFixtures.stoch_lambda0(),
         )
         stoch = type_fp(r.model)
 
         df = TwoBusFixtures.two_bus_feeder()
         daggs = TwoBusFixtures.build_two_bus_aggregators(df)
-        dso = build_dso_opt(df, daggs, TwoBusFixtures.T; ρ = TwoBusFixtures.RHO_2BUS, λ₀ = TwoBusFixtures.two_bus_lambda0())
-        dsoc = (type_fp(dso.model), block_fp(dso.model, "balance_p"), block_fp(dso.model, "balance_q"))
+        dso = build_dso_opt(
+            df,
+            daggs,
+            TwoBusFixtures.T;
+            ρ = TwoBusFixtures.RHO_2BUS,
+            λ₀ = TwoBusFixtures.two_bus_lambda0(),
+        )
+        dsoc = (
+            type_fp(dso.model),
+            block_fp(dso.model, "balance_p"),
+            block_fp(dso.model, "balance_q"),
+        )
         return (; linear, mpc, stoch, dsoc)
     end
     fp = run_all()
@@ -191,7 +225,8 @@ end
             err
         end
         @test e isa ErrorException
-        @test e.msg == "residual :Rp is (1, 1), expected (2, 1) — an index escaped the feeder"
+        @test e.msg ==
+              "residual :Rp is (1, 1), expected (2, 1) — an index escaped the feeder"
         e = try
             close_balance!(ctx, 2, 1; reactive = false, label = "scenario 3 ")
             nothing
