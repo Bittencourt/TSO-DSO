@@ -19,7 +19,7 @@
 #
 using JuMP
 
-# FIX-08 (Phase 27, plan 27-02): the per-branch relative exactness floor, HYBRID revision.
+# The per-branch relative exactness floor `ε` (HYBRID formula; see `TAU_SOLVER_EXACT`).
 #
 # Replaces the OLD flat `atol=1e-6` applied IDENTICALLY to every branch regardless of its
 # physical scale (a lightly-loaded branch with small `smax` could carry a slack cone LARGE
@@ -27,17 +27,17 @@ using JuMP
 # the `rtol` term alone cannot catch it). `atol_b = max(τ_solver, ε * ref_b)` replaces the flat
 # floor, with `ref_b = br.smax^2` for a thermally-limited branch (`br.smax < SMAX_NO_LIMIT`) or
 # the head-branch flow magnitude squared (`P_head^2 + Q_head^2`) for an interior/unlimited
-# branch (SOURCE: 27-RESEARCH.md "FIX-08 — Per-branch exactness floor", head-branch convention
+# branch (head-branch convention
 # `br.from == feeder.root` verified across ieee13.jl:80/ieee123.jl:404/ieee8500.jl:212).
 #
 # HISTORY — a PURE relative floor (`atol_b = ε*ref_b` alone) was tried FIRST and found
-# IRRECONCILABLE: `test/test_exactness.jl`'s pre-existing WR-01 regression item (`smax=10`
+# IRRECONCILABLE: `test/test_exactness.jl`'s existing regression item (`smax=10`
 # branch, injected `l=5e-6` gap, `ref_b=100`) needs `ε < 5e-8` to keep throwing, while the
 # IEEE-13 ground canonical fixture needs `ε ≳ 5e-5` to keep passing — three orders of magnitude
 # apart, because `ref_b = br.smax^2` (or the head branch's own flow magnitude for an interior
 # branch) scales with the NETWORK's own thermal/flow scale, not with Clarabel's actual
 # achievable cone-residual noise floor, which does NOT shrink with `smax`. This was escalated
-# in `27-FINDINGS.md`; the user's resolution (2026-09-29) is this HYBRID formula: `ε` stays
+# during the calibration; the resolution (2026-09-29) is this HYBRID formula: `ε` stays
 # small (< 5e-8, so the per-branch RELATIVE term still does its job on large-`smax` branches),
 # and a NEW, separately-measured ABSOLUTE floor `τ_solver` (Clarabel's own achievable cone
 # residual, with a documented margin — same measure-then-pin discipline as
@@ -58,31 +58,30 @@ using JuMP
 #   near-lossless smax=10 pair (test_pricing_dlmp.jl:20/226, test_pricing_welfare.jl:64)
 #                                                                              excess < 0 (every b,t)
 # Worst REQUIRED excess = 7.90e-8 (IEEE-123). `τ_solver = 2.0e-7` (≈2.53x margin over that
-# worst excess) was chosen so it ALSO stays below half the Task-2 synthetic regression's
+# worst excess) was chosen so it ALSO stays below half the synthetic regression's
 # injected gap (5e-7), the OTHER binding constraint (see Stage 2) — a strict 10x margin
 # (`KNOWN_OPTIMUM_ATOL`'s own convention) would give `7.9e-7`, which is ITSELF larger than the
 # synthetic regression's gap and would break requirement (2) below; `τ_solver=2e-7` is the
 # largest value found that satisfies BOTH sides with a documented (~2.4-2.5x) margin — see
-# 27-02-SUMMARY.md for the full sweep table and the reasoning for using a smaller-than-10x
-# margin here.
+# the reasoning for using a smaller-than-10x margin here.
 #
 # Stage 2 — verified, with `τ_solver = 2.0e-7` and `ε = 1.0e-9` (< 5e-8, so the RELATIVE term
 # still governs any future large-`smax` branch), on ALL THREE required outcomes:
-#   (1) test_exactness.jl's pre-existing WR-01 item (smax=10, l=5e-6 injected)   THROWS  (ratio≈24.9, 24.9x margin)
-#   (2) the Task-2 synthetic slack-cone-on-small-branch item (smax=0.01, l=5e-7) THROWS  (ratio≈2.50, 2.5x margin)
+#   (1) test_exactness.jl's existing smax=10 regression item (smax=10, l=5e-6 injected)   THROWS  (ratio≈24.9, 24.9x margin)
+#   (2) the synthetic slack-cone-on-small-branch item (smax=0.01, l=5e-7) THROWS  (ratio≈2.50, 2.5x margin)
 #   (3) every REQUIRED canonical/cluster-E fixture                              PASSES  (worst margin ≈2.43x, IEEE-123)
-# RESOLVED (27-FINDINGS.md updated from ESCALATED to RESOLVED — user chose hybrid, 2026-09-29).
-const MEASURED_ε_FIX08 = 1.0e-9
+# The hybrid formula was chosen on 2026-09-29.
+const MEASURED_REL_TOL_EXACT = 1.0e-9
 
-# FIX-08 hybrid (Phase 27, plan 27-02): the measured ABSOLUTE floor `τ_solver` — Clarabel's own
+# The hybrid formula's measured ABSOLUTE floor `τ_solver` — Clarabel's own
 # achievable cone-residual noise floor on a genuinely-exact solve, with a documented margin.
-# See `MEASURED_ε_FIX08`'s comment immediately above for the full 2-stage measurement protocol
+# See `MEASURED_REL_TOL_EXACT`'s comment immediately above for the full 2-stage measurement protocol
 # and the worst-excess sweep table (worst REQUIRED excess = 7.90e-8, IEEE-123; `τ_solver` set to
-# ≈2.53x that value, and independently verified to sit below half the Task-2 synthetic
+# ≈2.53x that value, and independently verified to sit below half the synthetic
 # regression's injected gap so requirement (2) — that regression correctly THROWS — still
 # holds). Used as `atol_b = max(τ_solver, ε * ref_b)` — the LARGER of the absolute solver-noise
 # floor and the per-branch relative floor applies.
-const TAU_SOLVER_FIX08 = 2.0e-7
+const TAU_SOLVER_EXACT = 2.0e-7
 
 # WR-02 (35-REVIEW, Phase 35): the head-branch convention and the per-(branch, hour) cone-row
 # computation, factored out VERBATIM (same expressions, same evaluation order) from
@@ -131,8 +130,8 @@ end
 
 """
     assert_socp_exact!(ctx::ModelContext; rtol::Real = 1e-4,
-                        atol::Union{Nothing,Real} = nothing, ε::Real = MEASURED_ε_FIX08,
-                        τ_solver::Real = TAU_SOLVER_FIX08)
+                        atol::Union{Nothing,Real} = nothing, ε::Real = MEASURED_REL_TOL_EXACT,
+                        τ_solver::Real = TAU_SOLVER_EXACT)
         -> maxgap::Float64
 
 Certify that the SOC branch-flow relaxation is EXACT at the solved point, and REFUSE
@@ -170,14 +169,14 @@ floor is still needed — but a SINGLE flat floor is scale-blind (a lightly-load
 small `smax` could carry a slack cone LARGE relative to its own thermal capacity yet still
 silently pass), while a PURE per-branch RELATIVE floor alone was found IRRECONCILABLE (a
 `smax=10` WR-01 regression fixture needs `ε<5e-8` to keep throwing, while the IEEE-13 ground
-canonical fixture needs `ε≳5e-5` to keep passing — see `MEASURED_ε_FIX08`'s comment for the
+canonical fixture needs `ε≳5e-5` to keep passing — see `MEASURED_REL_TOL_EXACT`'s comment for the
 full history). `atol_b = max(τ_solver, ε * ref_b)` fixes this: `ref_b = br.smax^2` for a
 thermally-limited branch (`br.smax < SMAX_NO_LIMIT`), or the head branch's flow magnitude
 squared (`value(P[head_b,t])^2 + value(Q[head_b,t])^2`, `head_b` = the branch with `br.from ==
 feeder.root`) for an interior/unlimited branch, since it carries no `smax` of its own to
-normalize against; `τ_solver` (default [`TAU_SOLVER_FIX08`](@ref)) is a separately-measured
+normalize against; `τ_solver` (default `TAU_SOLVER_EXACT`) is a separately-measured
 ABSOLUTE floor covering Clarabel's own achievable cone-residual noise floor, independent of
-`ref_b`. `ε` (default [`MEASURED_ε_FIX08`](@ref)) is MEASURED, not guessed, per the sweep
+`ref_b`. `ε` (default `MEASURED_REL_TOL_EXACT`) is MEASURED, not guessed, per the sweep
 protocol documented on that constant; the LARGER of the two terms applies per branch/hour.
 
 **Backward-compatible `atol` override (byte-identical to pre-FIX-08 behavior):** passing an
@@ -216,8 +215,8 @@ function assert_socp_exact!(
     ctx::ModelContext;
     rtol::Real = 1e-4,
     atol::Union{Nothing, Real} = nothing,
-    ε::Real = MEASURED_ε_FIX08,
-    τ_solver::Real = TAU_SOLVER_FIX08,
+    ε::Real = MEASURED_REL_TOL_EXACT,
+    τ_solver::Real = TAU_SOLVER_EXACT,
 )
     pv = _require_pf_vars(ctx)
     feeder = _require_feeder(ctx)
@@ -430,8 +429,8 @@ function socp_gap_report(
 end
 
 """
-    hybrid_ratios(ctx::ModelContext; rtol = 1e-4, atol = nothing, ε = MEASURED_ε_FIX08,
-                  τ_solver = TAU_SOLVER_FIX08) -> Vector{NamedTuple}
+    hybrid_ratios(ctx::ModelContext; rtol = 1e-4, atol = nothing, ε = MEASURED_REL_TOL_EXACT,
+                  τ_solver = TAU_SOLVER_EXACT) -> Vector{NamedTuple}
 
 Phase 35 (ARCH-10) additive DIAGNOSTIC mirror of [`assert_socp_exact!`](@ref): per
 `(branch, hour)` row it reports `gap = |l·v_from − (P²+Q²)|`, the floor `atol_b` (default: the
@@ -448,8 +447,8 @@ function hybrid_ratios(
     ctx::ModelContext;
     rtol::Real = 1e-4,
     atol::Union{Nothing, Real} = nothing,
-    ε::Real = MEASURED_ε_FIX08,
-    τ_solver::Real = TAU_SOLVER_FIX08,
+    ε::Real = MEASURED_REL_TOL_EXACT,
+    τ_solver::Real = TAU_SOLVER_EXACT,
 )
     pv = _require_pf_vars(ctx)
     feeder = _require_feeder(ctx)

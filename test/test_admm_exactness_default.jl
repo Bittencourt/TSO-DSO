@@ -140,7 +140,7 @@ end
     @test rA_flat[1].ratio > 1                     # gate with atol = 1e-6 refuses ctx_A ...
     @test_throws CertificateError TSODSO.assert_socp_exact!(ctxA; atol = 1e-6)
     rA_eps = TSODSO.hybrid_ratios(ctxA; ε = 1e-11)  # ... and a smaller ε drops the floor to τ
-    @test rA_eps[1].atol_b == TSODSO.TAU_SOLVER_FIX08
+    @test rA_eps[1].atol_b == TSODSO.TAU_SOLVER_EXACT
     @test rA_eps[1].ratio > 1
     @test_throws CertificateError TSODSO.assert_socp_exact!(ctxA; ε = 1e-11)
     @test TSODSO.hybrid_ratios(ctxA; τ_solver = 1e-5)[1].atol_b == 1e-5

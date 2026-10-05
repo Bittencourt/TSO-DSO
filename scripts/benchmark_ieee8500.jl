@@ -564,7 +564,7 @@ the FINAL consolidation `assert_socp_exact!` gate only — the mid-loop `check_e
 untouched). Since Phase 35 (ARCH-10) `run_sweep_mode` passes one of three values:
 
   - `nothing` (the default) — the library's HYBRID per-branch/hour floor
-    `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08·ref_b)`; stricter than the old flat `1e-6` where
+    `max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT·ref_b)`; stricter than the old flat `1e-6` where
     `ref_b < 1000` (smax below ≈ 31.6 pu) and looser above it (up to ≈ `9.8e-6` near smax = 99);
   - a user-supplied FINITE `--admm-atol` value — a flat floor the caller must justify with their
     own measured noise floor (T-25-12, anti-certificate-laundering; non-finite values are

@@ -535,7 +535,7 @@ gate THROWS and prices are refused. When `false` the gate is NOT run (and `atol_
 `atol_exact`/`rtol_exact` (2026-08-22 follow-up, quick task 260822-f0b) are an ADDITIVE override
 seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`nothing`/`1e-4`)
 are `assert_socp_exact!`'s own defaults (Phase 35, ARCH-10): `atol_exact = nothing` selects the
-hybrid per-branch/hour floor `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08*ref_b)` = `max(2e-7, 1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Before Phase 35 the
+hybrid per-branch/hour floor `max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT*ref_b)` = `max(2e-7, 1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Before Phase 35 the
 default was a FLAT `1e-6`, so `check_exact = true` callers relying on the default are NOT
 byte-identical: the gate is STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited
 branch whose hour's head-branch |S| is below ≈ 31.6 pu — a gap in `(2e-7, 1e-6]` now raises

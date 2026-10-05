@@ -180,7 +180,7 @@ equal `assert_socp_exact!`'s own defaults, following this project's `rtol_exact`
 (`solve_welfare`, `stochastic_welfare.jl`, `subproblem.jl`).
 
 Since Phase 35 (ARCH-10) `atol_exact = nothing` selects the gate's HYBRID per-branch/hour floor
-`atol_b = max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08·ref_b)` = `max(2e-7, 1e-9·ref_b)` (`ref_b = smax²`
+`atol_b = max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT·ref_b)` = `max(2e-7, 1e-9·ref_b)` (`ref_b = smax²`
 for a thermally limited branch, else the head-branch `P²+Q²`); before Phase 35 the ADMM default was
 a FLAT `1e-6`. The verdict therefore CHANGED for existing callers relying on the default — it is
 NOT byte-identical:
