@@ -187,6 +187,18 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 35 (IEEE-8500 Scale After Refactor) COMPLETE 2026-10-05.**
+ARCH-10 validated. The ADMM final consolidation (`solve_admm` → `_admm_certify` → `solve_dso!`) now
+defaults `atol_exact = nothing`, i.e. the same hybrid exactness floor `max(2e-7, 1e-9·ref_b)` as the
+centralized path (explicit values still override); `hybrid_ratios(ctx)` diagnostic shares the gate's
+per-row arithmetic; `CertificateError` carries optional `iterations`. At IEEE-8500 (d=0.1, T=10) ADMM
+converges in 8 iterations and the gate REFUSES the point — a genuine cone gap (ratio 569, worst branch
+`L2916620->N1136366`, loss impact ~4.4e-9 pu), honest refusal per user decision, no tolerance raised.
+Memory wall re-characterized: ADMM-only d=0.1 T=24 completes (11.52 GiB peak, still refused), d=0.25 T=24
+earlyoom-killed (10.4 GiB); ~3.4 GiB of the T=10 loop growth unattributed. Harness: per-point wrapper
+with OOM attribution, `--admm-only`/bypass/results-dir flags, staged memory profiler. Canary unchanged.
+Full suite 32177/0/0/5 after a 3-iteration code review. Next: Phase 36 (Code & Export Cleanup).
+
 **Phase 34 (ADMM Decomposition, Meshed Reactive & Status/Exception Policy) COMPLETE 2026-10-04.**
 ARCH-05/06/08/09 validated. `solve_admm` is a thin orchestrator over `_admm_build` / `_admm_iterate!` /
 `_adapt_rho!` / `_admm_certify` on a mutable `AdmmState`; reactive OFF/CERTIFIED/LIVE behaviour is
@@ -315,7 +327,7 @@ not deleted; and the IEEE-8500 benchmark that characterized a memory wall honest
 - **SCALE-STRETCH** — performance/memory-footprint engineering driven by the Phase 25 measurements:
   `solve_admm`'s hardcoded final-consolidation `assert_socp_exact!` at scale, and reaching a
   converged memory-feasible headline point. Deliberately separated from the benchmark justifying it.
-  *Phase 35 update (2026-10-04, ARCH-10): Superseded/updated by Phase 35 (2026-10-04, ARCH-10): after the v4.0 refactor the ADMM final-consolidation gate defaults to the hybrid floor; the ADMM-only headline point (IEEE-8500 d=0.1 T=10) now converges in 8 iterations and is REFUSED by the gate (CertificateError, hybrid ratio 568.95, worst branch L2916620->N1136366 gap 1.21e-4, loss impact ~4.4e-9 pu; genuine, no tolerance raised); d=0.1 T=24 completes (CertificateError, ratio 223.68, 12.08 GB peak, 678 s); d=0.25 T=24 is earlyoom-killed at 10.6 GiB anon RSS. Phase 25's OOM kills were at T=24 in combined centralized+ADMM processes. Memory wall now between d=0.1 and 0.25 at T=24 (15.9 GB host); dominant consumer is per-hour DSO solver state retained across the ADMM loop (~linear in T). Data: results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv; docs: 'Post-refactor measured results (Phase 35)' in docs/literate/ieee8500_scaling.jl. The original status above is unchanged.*
+  *Phase 35 update (2026-10-04, ARCH-10): Superseded/updated by Phase 35 (2026-10-04, ARCH-10): after the v4.0 refactor the ADMM final-consolidation gate defaults to the hybrid floor; the ADMM-only headline point (IEEE-8500 d=0.1 T=10) now converges in 8 iterations and is REFUSED by the gate (CertificateError, hybrid ratio 568.95, worst branch L2916620->N1136366 gap 1.21e-4, loss impact ~4.4e-9 pu; genuine, no tolerance raised); d=0.1 T=24 completes (CertificateError, ratio 223.68, 11.52 GiB peak, 678 s); d=0.25 T=24 is earlyoom-killed (10.4 GiB VmRSS). Phase 25's OOM kills were at T=24 in combined centralized+ADMM processes. Memory wall now between d=0.1 and 0.25 at T=24 (15.9 GB host); ~3.4 GiB of the T=10 loop growth is unattributed (per-hour DSO solver state is a hypothesis; ~linear in T). Data: results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv; docs: 'Post-refactor measured results (Phase 35)' in docs/literate/ieee8500_scaling.jl. The original status above is unchanged.*
 - **Phase-18 `fit_baseline` convergence** — `ALMOST_OPTIMAL` at 3/5 sweep points at `tol_gap=1e-10`
   (flake rate 13/20, reproduced across 3 runs); distinct from SOCP inexactness.
 - **Meshed + ADMM composition** — `solve_admm` is typed to `pf::ConvexBranchFlow`, so the literal
@@ -519,4 +531,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-04 — Phase 34 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-05 — Phase 35 complete (v4.0 Correctness & Depth)*
