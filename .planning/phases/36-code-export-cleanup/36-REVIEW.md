@@ -1,8 +1,9 @@
 ---
 phase: 36-code-export-cleanup
-reviewed: 2026-10-05T21:58:29Z
+reviewed: 2026-10-05T23:59:00Z
 depth: standard
-files_reviewed: 67
+iteration: 3
+files_reviewed: 71
 files_reviewed_list:
   - docs/make.jl
   - docs/src/api.md
@@ -71,235 +72,190 @@ files_reviewed_list:
   - test/test_planning_oracle.jl
   - test/test_pricing_dlmp.jl
   - test/test_reactive_mode.jl
+  - test/test_linear_solve.jl
+  - .github/scripts/check_script_api.jl
+  - scripts/reactive_flake_rate.jl
+  - scripts/demo_mpc_plots.jl
 findings:
-  critical: 2
-  warning: 5
-  info: 6
-  total: 13
+  critical: 0
+  warning: 3
+  info: 4
+  total: 7
 status: issues_found
 ---
 
-# Phase 36: Code Review Report
+# Phase 36: Code Review Report (iteration 3, final)
 
-**Reviewed:** 2026-10-05T21:58:29Z
+**Reviewed:** 2026-10-05T23:59:00Z
 **Depth:** standard
-**Files Reviewed:** 67
+**Files Reviewed:** 71
 **Status:** issues_found
 
 ## Narrative Findings (AI reviewer)
 
 ## Summary
 
-I reviewed the Phase 36 diff (`438e162^..HEAD`) for the 67 in-scope files. Checks covered:
+This is a re-review after fix commits `73dc1fa..64bd36d`. I checked each prior finding against probe inputs written to slip past it, not against the tool's own selftest. Everything ran on Julia 1.12.5 with the package loaded.
 
-- the API removals (oracle kwargs, `_coupling_dual` z-path, reactive Bool/Symbol shim, `DlmpDecomposition` aliases);
-- the `ReactiveMode` submodule;
-- the export trim and the `@compat public` block;
-- the new `.github/scripts` tooling and the CI wiring.
+**Status of the previous findings**
 
-I also cross-checked `scripts/`, `docs/literate/`, `ext/` and `bench/` against the live unexported/public name set, which I dumped from a loaded `TSODSO` on Julia 1.12.5.
+| ID | Status | Evidence |
+|----|--------|----------|
+| WR-01 (guard misses `plan-06-02` and `36-22.`) | Resolved | 24 probes. Hyphenated plan refs and trailing `.`, `:`, `,`, `;`, `)`, `/` are all caught. Decimals and clock times are still excluded. The guard reports `OK: 243 files`, and the selftest gives 36 positive, 20 negative and 10 fail-closed cases. Latent gaps remain (IN-02). |
+| WR-02 (`+=` binds the callee) | Resolved | `s += f(x)`, `global s += f(x)`, `v[1] += f(x)`, `a += f(x)` after destructuring and `.-=` are all flagged. A neighbouring assignment form still has the same bug (WR-02 below). |
+| WR-03 (unrooted `ReactiveMode.X`, `as` imports) | Resolved | Unrooted, rooted, `import TSODSO.ReactiveMode` and `import TSODSO.ReactiveMode: ON` typos are all flagged. |
+| WR-04 (`ast_equiv` fail-open, literal types) | Mostly resolved | A bad REF, a `REF:path` passed as REF, and a run from `src/` with relative paths all behave correctly. Type-strict `streq` is correct for `QuoteNode`, `-0.0` and `NaN`. One fail-open path remains under `--allow-new` (WR-01 below). |
+| WR-05 (flake script writes wrong findings) | Partially resolved | The all-failed run now aborts. Non-numerical errors are still counted as flakes, including Ctrl-C (WR-03 below). |
+| WR-06 (per-spec / per-path fail-closed) | Resolved | `run_tests_filtered.jl --selftest` passes, including the three mixed live-plus-dead cases. A dead filter fails in the preflight, before any test item runs. `check_planning_ids.py src typo` exits 2. |
+| IN-01 / IN-02 / IN-03 | Resolved | See the CI and test notes below. |
 
-The `src/` side of the change is sound:
-- `ReactiveMode.T` annotations, defaults and `normalize_reactive_mode` are consistent.
-- The `@compat public` list resolves: all 84 names are defined, and the multi-line form parses on 1.10.11.
-- `Base.isexported` exists on 1.10.
-- The ext modules qualify every unexported name.
-- `operational_oracle` and `_coupling_dual` have no leftover callers.
+**CI.yml semantics, checked by hand because actionlint is unavailable.** The YAML parses. Step order is checkout, setup-julia, cache, buildpkg (`id: buildpkg`), runtest, processcoverage, codecov, then the API check.
+- **The `if:` condition is correct.** `!cancelled() && steps.buildpkg.outcome == 'success'` contains a status-check function, so GitHub does not add an implicit `success()`.
+- **Test failure.** If `julia-runtest` fails, the API check still runs and the job stays red.
+- **Build failure.** If `buildpkg` fails or is skipped, the API check is skipped.
+- **Cancellation or timeout.** On cancel or a timeout, the API check is skipped.
+- **Shell.** `shell: bash` runs with `-eo pipefail`, so a selftest failure stops the full scan and fails the step.
+- **Julia 1.10.** The checker uses only `Base.isexported`, which exists on 1.10. The `PerUnitBase` selftest asserts 1 finding, which holds on every version.
 
-The defects are concentrated where the phase's own gates do not reach:
-- **Researcher scripts** are not run by the suite or the docs build. Two of them are now broken by the shim removal and the export trim.
-- **The planning-ID guard and the AST-equivalence tool** promise more than they check:
-  - Planning-artifact references (`STATE.md`, `ROADMAP`, `MEMORY.md`, memory files) still survive in `src/`.
-  - 12 `src/` files whose user-visible runtime strings changed were classed as "comment-only, AST-equal".
-- **The test runner** silently passes when a filter matches nothing.
-
-## Critical Issues
-
-### CR-01: `scripts/reactive_flake_rate.jl` is unrunnable: Bool-typed kwarg now receives `ReactiveMode.T`
-
-**File:** `scripts/reactive_flake_rate.jl:289` (callers at 343, 354, 363, 374)
-**Issue:** The migration rewrote the four call sites from `reactive_consensus = false/true` to `ReactiveMode.OFF/CERTIFIED`. It did not change the local helper's signature, which still declares `reactive_consensus::Bool`:
-
-```julia
-function count_failures(feeder, aggs, λ₀; reactive_consensus::Bool, n_repeats::Int = 20, seed_offset::Int = 0)
-...
-fail_13_false = count_failures(feeder13, aggs13, λ0_13; reactive_consensus = ReactiveMode.OFF, ...)
-```
-
-The first measurement throws `TypeError: in keyword argument reactive_consensus, expected Bool, got a value of type TSODSO.ReactiveMode.T` before any solve runs. `try/catch` cannot hide it because the failure happens at the call boundary, outside the `try`. No gate exercises `scripts/`: the suite, the docs build and the "0 sites" migration scan all missed it.
-
-The header comment (line 8, "`reactive_consensus ∈ (false, true)`") and the docstring at 274 are also stale.
-
-**Fix:**
-```julia
-function count_failures(feeder, aggs, λ₀; reactive_consensus::ReactiveMode.T, n_repeats::Int = 20, seed_offset::Int = 0)
-```
-Also update the header comment to `ReactiveMode.OFF` / `ReactiveMode.CERTIFIED`, and add a parse-and-load smoke check for `scripts/*.jl` (e.g. `include` under a `--dry-run` guard, or JET `report_file`) so the next export trim is caught.
-
-### CR-02: `scripts/demo_mpc_plots.jl` calls unexported `max_jump` / `mean_jump` unqualified
-
-**File:** `scripts/demo_mpc_plots.jl:126-127, 164-165, 184-185, 194-195, 203-204, 222+, 522`
-**Issue:** `max_jump` and `mean_jump` were removed from `export` in `src/models/mpc_trace.jl` and are now only `@compat public` (`src/TSODSO.jl:331-332`). The script's explicit import list (lines 43-49) brings in `any_cert_failed`, `build_feeder`, `build_mpc_window`, `build_population`, `build_price` and `solve_mpc_window!`, but not these two. The first `max_jump(r.trace)` at line 126 therefore throws `UndefVarError: max_jump not defined in Main`.
-
-`36-FINAL-GATES.md` records the unexport migration scan as "0 sites in 0 files", but this site was missed. A likely cause is that the NamedTuple form `max_jump = max_jump(r.trace)` at line 164 made the tool treat the name as a local binding.
-**Fix:**
-```julia
-using TSODSO:
-    any_cert_failed,
-    build_feeder,
-    build_mpc_window,
-    build_population,
-    build_price,
-    max_jump,
-    mean_jump,
-    solve_mpc_window!
-```
+**Other checks**
+- **`test_exports.jl`.** The new `ispublic` assertions sit inside the existing `@static if VERSION >= v"1.11"` guard.
+- **Docstring rewording.** `ast_equiv.jl 40b745f` reports EQUAL for `src/admm/AgrOpt.jl`, `src/data/ieee123.jl` and `test/test_linear_solve.jl`.
+- **Script scan.** `check_script_api.jl` passes its selftest (45 cases), and a full scan reports 39 files OK.
 
 ## Warnings
 
-### WR-01: The planning-ID scrub is incomplete and the guard has false-negative gaps
+### WR-01: `ast_equiv.jl --allow-new` accepts a path that exists neither at REF nor in the working tree
 
-**Files:** `.github/scripts/planning_id_rules.py:14-28`; surviving hits at `src/planning/nash.jl:1076`, `src/powerflow/MeshedFlow.jl:53`, `src/experiments/mpc_loop.jl:1399`, `src/pricing/dlmp.jl:253`, `test/test_planning_feasibility_oracle.jl:76`
-**Issue:** CONTEXT says comments citing planning artifacts by name are planning references and must be scrubbed and guarded. The `artifact` rule only covers `RESEARCH`, `CONTEXT.md`, `-SUMMARY`, `-REVIEW.md`, `.planning/`, `USER DECISION`, `code review`, `quick task` and `spike NNN`. These survive in rendered docstrings and comments, and the guard reports OK:
-- `nash.jl:1076`: "(STATE.md's own carried blocker)", in a docstring.
-- `MeshedFlow.jl:53`: "(the ROADMAP's hard constraint)", in a docstring.
-- `mpc_loop.jl:1399`: "(memory `v2.1-socp-inexactness-and-thesis-repro.md`)", a reference to a private Claude memory file.
-- `dlmp.jl:253`: "Review fix (2026-09-29): ..."
-- `test_planning_feasibility_oracle.jl:76`: "the repo's own MEMORY.md".
+**File:** `.github/scripts/ast_equiv.jl:148-154`
+**Issue:** `gitshow` returning `nothing` is read as "the file is new". The tool never checks that the file actually exists in the working tree. With `--allow-new`, a mistyped path is therefore certified.
 
-The numeric rules also have blind spots, all confirmed by probing the compiled regexes:
-- `bare_nn` caps the plan part at `(?:0\d|1\d|20)`, so `(36-21)` and `see 36-22` (both plans in this phase) pass.
-- Phases ≥ 40 pass, e.g. `40-01`.
-- `task` matches a single digit only, so `Task 12` passes.
+Reproduced:
+```
+$ julia .github/scripts/ast_equiv.jl --allow-new HEAD src/admm/AgrOpt.jl src/admm/Agropt_typo.jl
+EQUAL src/admm/AgrOpt.jl
+NEW src/admm/Agropt_typo.jl
+exit=0
+```
+- **With `--allow-new`:** this is the exact fail-open class that WR-04 set out to close. A typo'd or stale path passes, and the file the author meant to certify is never compared.
+- **Without `--allow-new`:** the same typo is mislabelled `NEW ... (absent at REF)` instead of "no such file". That points the user towards `--allow-new` as the remedy.
 
-**Fix:** Extend `artifact` with `STATE\.md|ROADMAP|REQUIREMENTS\.md|MEMORY\.md|-PLAN\.md|-VERIFICATION|FINDINGS\.md|\bmemory\s+`|[Rr]eview fix`. Widen `bare_nn` to `(?:[0-9]\d)-(?:[0-9]\d)` and keep its existing lookarounds; the negative selftests still pass because dates and decimals are excluded by the lookbehind. Change `task` to `\bTask\s+\d+\b`. Add the new forms to `--selftest` positives, then rewrite the five lines above.
-
-### WR-02: `ast_equiv.jl` blanks every string, so "AST-equal" does not prove "comment-only"
-
-**File:** `.github/scripts/ast_equiv.jl:8`
-**Issue:** `norm` maps every `String` to `""`, not only docstrings. That includes:
-- error, `@warn` and `@info` messages;
-- Dict and CSV keys;
-- regex bodies (`r"..."` is a macrocall with a String arg);
-- command literals (`` `...` ``);
-- `@printf` format strings.
-
-An `EQUAL` verdict therefore only proves the code is equal modulo all string literals. The "~170 files proven comment-only" classification inherits this weakness. Running `ast_equiv.jl --strings 438e162^` over `src/` shows runtime-string changes in 12 files that are outside this review's file list:
-
-`FourQuadBESS.jl`, `Scenario.jl`, `mpc_loop.jl` (16 strings, including the `run_mpc` `@warn` messages), `run_stochastic.jl`, `complementarity_4q.jl`, `mesh_angle_certificate.jl`, `restriction_exactness.jl`, `welfare_solve.jl`, `ConvexBranchFlow.jl`, `LinDistFlow.jl`, `checks.jl`, `welfare.jl`.
-
-The rewrites I inspected are benign. However, these files carry user-visible message changes and were excluded from logic review on a proof that does not cover them.
-**Fix:** Blank only docstrings in the default mode, and compare all other strings exactly. Alternatively, make the default mode fail when `collect_strings!` multisets differ, and keep the current behaviour behind an explicit `--ignore-strings` flag.
+**Fix:** Check the working tree before classifying a file as NEW:
 ```julia
-function norm(x; indoc=false)
-    x isa String && return indoc ? "" : x
-    x isa LineNumberNode && return nothing
-    x isa Expr || return x
-    d = isdoc(x)
-    Expr(x.head, (norm(a; indoc = d && i == 3) for (i, a) in enumerate(x.args) if !(a isa LineNumberNode))...)
+old = gitshow(root, ref, p)
+file = joinpath(root, p)
+if !isfile(file)
+    println(old === nothing ? "ERROR: $p0 exists neither at $ref nor in the working tree" :
+                              "MISSING $p (absent in working tree)")
+    bad = true
+    continue
+end
+if old === nothing
+    println("NEW $p", allow_new ? "" : " (absent at $ref; pass --allow-new to accept)")
+    allow_new || (bad = true)
+    continue
 end
 ```
-Note that the index shifts once the LineNumberNode is dropped, so compute `i` before filtering.
+Add a selftest case: `q("--allow-new", "HEAD", "nope.jl") == 1`.
 
-### WR-03: The deprecated `loss` / `voltage` names survive in `NamedTuple(::DlmpDecomposition)`
+### WR-02: `check_script_api.jl`: `local`/`global` assignments register the name as a function, so `local max_jump = max_jump(tr)` slips through
 
-**File:** `src/pricing/dlmp.jl:250-273`; `docs/src/status_policy.md:124-125`
-**Issue:** The Breaking-changes note says the deprecated `.loss` and `.voltage` properties are removed and tells users to use `.cone` and `.drop`. However, `Base.NamedTuple(d)` still produces keys `(:energy, :loss, :congestion, :voltage, :reactive, :total)`, and `test/test_pricing_dlmp.jl:577-585` pins that. The deprecated vocabulary therefore remains public, exported-type API through the conversion, and the user doc does not mention it.
-
-The conversion's docstring also still opens with a dated "Review fix (2026-09-29)" provenance line (see WR-01).
-**Fix:** Pick one of two options:
-- Remove the conversion along with the aliases and list it in status_policy §7.
-- Keep it as an explicitly legacy-shaped helper, rename it (e.g. `legacy_namedtuple(d)`) so `NamedTuple(d)` is not silently old-vocabulary, and document it under Breaking changes.
-
-### WR-04: The Rung-0 tutorial depends on names that are neither exported nor public
-
-**File:** `docs/literate/toy_dc.jl:31-34`; `src/TSODSO.jl:33-40`
-**Issue:** The first manual page now does `using TSODSO: I_base, PerUnitBase, Z_base`. All three were unexported in this phase and are not in any `@compat public` block; `Base.ispublic` is `false` for each. The new module docstring states that such names are "purely internal helpers ... carry no stability promise". The entry tutorial therefore teaches researchers to depend on non-API names. The same applies to `to_pu_impedance` and `to_pu_power`, which ingestion code is told to use (`src/units/PerUnit.jl` header).
-**Fix:** Add `PerUnitBase, Z_base, I_base, to_pu_impedance, to_pu_power` to a `@compat public` block (Units). Alternatively, rewrite the tutorial to avoid them.
-
-### WR-05: Tooling passes vacuously on an empty match set
-
-**Files:** `scripts/run_tests_filtered.jl:9-20`; `.github/scripts/check_planning_ids.py:128`; `.github/scripts/check_setup_names.py:14`
+**File:** `.github/scripts/check_script_api.jl:374-376`
 **Issue:**
-- `run_tests_filtered.jl` exits 0 when no `@testitem` matches the filters. This phase renamed `:phase7` / `:phase25` and the fixture files, so a stale `tag:phase7` or `file:old_name.jl` in a plan, CI job or note now "passes" while running nothing. This is the same green-on-nothing pattern as the TestItemRunner trap in project memory. A spec without `:` also dies with an opaque `BoundsError` from destructuring `split`.
-- `check_planning_ids.py` prints `OK: 0 files scanned` and exits 0 when the git scope is empty (wrong cwd, sparse checkout, or a typo'd path argument). That contradicts its "fail-closed" contract.
-- `check_setup_names.py` globs the relative path `test/**`, so from any cwd other than the repo root it reports "0 testmodules, 0 setup uses, 0 unresolved" and exits 0.
+- **The contract.** The header (lines 18-19) promises that "a call `f(...)` of such a name is flagged even if the file also binds `f` as a plain variable ... (the `max_jump = max_jump(tr)` pattern)". The plain `=` branch (line 367) honours this by binding with `fn = false`.
+- **The bug.** The `local`/`global`/`const` branch binds every `x = ...` with `fn = true` (line 376). That puts the name in `fbound`, which legitimises calls to it everywhere in the file.
+- **Probes.** Both of these report 0 findings, although each throws `UndefVarError` at runtime:
+  ```julia
+  using TSODSO
+  function g(tr)
+      local max_jump = max_jump(tr)
+  end
+  ```
+  ```julia
+  using TSODSO
+  global max_jump = max_jump(tr)
+  ```
+- **Why it is realistic.** `scripts/` uses `global x = ...` heavily (`demo_mpc_plots.jl:420-426`, `demo_flexibility_plots.jl:256`, `benders_toy.jl:157`). No current script hits this, so it is latent, but it is the same "an assignment form legitimises a hidden callee" class that WR-02 just fixed for `+=`.
 
-**Fix:**
+**Fix:** Only `const` (and an RHS that is a lambda or function) should count as a function binding:
 ```julia
-# run_tests_filtered.jl
-occursin(':', s) || error("filter spec must be tag:<sym> or file:<...>, got $s")
-# count matches before running; error if zero
+for a in A
+    if a isa Expr && a.head === :(=)
+        isfn = h === :const || (a.args[2] isa Expr && a.args[2].head in (:->, :function))
+        bind!(fs, a.args[1]; fn = isfn); ref!(fs, a.args[2])
+    else
+        h === :const ? ref!(fs, a) : bind!(fs, a)
+    end
+end
 ```
-```python
-# check_planning_ids.py, after computing `files`
-if not files:
-    print("ERROR: no in-scope files found", file=sys.stderr); return 2
-# check_setup_names.py
-os.chdir(subprocess.check_output(["git","rev-parse","--show-toplevel"], text=True).strip())
-if not mods: print("no @testmodule found"); sys.exit(2)
+Add the two probes above to the selftest, each expecting 1 finding.
+
+### WR-03: `reactive_flake_rate.jl` still counts non-numerical errors as flakes, including Ctrl-C
+
+**File:** `scripts/reactive_flake_rate.jl:329-333`
+**Issue:** The fix narrows the catch-all by exactly one type, `ArgumentError`. Every other exception still lands in `failures += 1` and is labelled a NUMERICAL_ERROR-class flake. That includes:
+- `InterruptException`. Ctrl-C during a solve is swallowed, counted as a flake, and the loop continues with the next repeat. A user who interrupts once mid-run gets a findings file with an inflated rate, and the script cannot be stopped cleanly.
+- Data-dependent `KeyError`, `BoundsError`, `DimensionMismatch` and `OutOfMemoryError` that hit some repeats but not all. The all-failed guard only catches errors that are 100% deterministic.
+
+Numerical failures are already typed in the package: `SolveFailedError` (`src/core/status.jl:55`) and `CertificateError` (`src/admm/solve_admm.jl:364-365`). Note also that the new all-failed guard rejects a genuine 100% numerical-failure rate, which is a legitimate (if alarming) measurement. With a typed catch, that guard is no longer needed to distinguish "broken setup" from "always flakes".
+
+**Fix:** Count only the numerical failure types and rethrow everything else:
+```julia
+catch e
+    (e isa TSODSO.SolveFailedError || e isa TSODSO.CertificateError) || rethrow()
+    failures += 1
+    @warn ...
+end
 ```
+Then either keep the all-failed guard as an explicit "100% numerical failure" message, or report it as a measured rate. It should no longer be a proxy for configuration errors.
 
 ## Info
 
-### IN-01: Scrub left dangling punctuation in a rendered docstring and a comment
+### IN-01: `check_script_api.jl` treats `TSODSO` as always bound, and module aliases override local bindings
 
-**File:** `src/pricing/dlmp.jl:285-286`; `src/planning/nash.jl:349`
+**File:** `.github/scripts/check_script_api.jl:201-203`
 **Issue:**
-- In `dlmp.jl`, the docstring paragraph now reads "...so a missing term is localizable\n). This 4-term reconstruction..." because "(RESEARCH Pitfall 2; threat T-05-02)" was removed down to just its closing parenthesis. It renders in the API Reference.
-- In `nash.jl`, the comment reads "progress (, iter 2)".
-
-**Fix:** Change the `dlmp.jl` line to "...so a missing term is localizable. This 4-term reconstruction...". Reword the `nash.jl` comment to "progress (from iteration 2)" or drop the parenthetical.
-
-### IN-02: The module docstring points to a non-existent "architecture" page
-
-**File:** `src/TSODSO.jl:39-40`
-**Issue:** The docstring says "See the API and architecture pages of the documentation". `docs/make.jl` has no architecture page; `docs/src` only has `index.md`, `api.md`, `status_policy.md` and `generated/`.
-**Fix:** Say "See the API Reference and the Status & Exception Policy pages", or add the page.
-
-### IN-03: Guard rules are prone to false positives on domain prose, and `Manifest.toml` is in scope
-
-**File:** `.github/scripts/planning_id_rules.py:16-19, 37`
-**Issue:**
-- `wave` matches any "wave" or "waves" word, case-insensitively ("square wave").
-- `dec` matches the power-market term "D-1" (day-ahead).
-- `bare_nn` matches hour ranges such as "17-20".
-- `SCOPE_EXTS` includes `.toml`, so the generated `test/Manifest.toml` is scanned. A package name or version could block a manifest re-resolve with a confusing guard failure.
-
-**Fix:** Require a digit for `wave` (`\bwaves?[\s-]?\d\b`). Exclude `Manifest.toml`. Accept allowlist entries for genuine domain terms.
-
-### IN-04: The CI planning-ID step is masked by formatter failures, and the selftest is not run
-
-**File:** `.github/workflows/CI.yml:107-109`
-**Issue:** The new step has no `if: always()`, so any formatter failure skips it and planning-ID hits only surface on the next push. `--selftest` is never executed in CI, so a regex regression in `planning_id_rules.py` would go unnoticed.
-**Fix:** Add `if: always()` and run `python3 .github/scripts/check_planning_ids.py --selftest && python3 .github/scripts/check_planning_ids.py`.
-
-### IN-05: Phase-specific constants in committed tooling, plus small robustness gaps
-
-**Files:** `.github/scripts/check_suite_log.py:13, 75-80`; `.github/scripts/suite_detached.sh:9-17`; `.github/scripts/format210.jl:11-13`; `.github/scripts/check_planning_ids.py:96-100`
-**Issue:**
-- **Hard-coded values.** `.planning/tmp/36`, `Broken == 5` and the canary literals are hard-coded in `.github/scripts`, outside the guard's scope, so these tools are single-use.
-- **`suite_detached.sh`:**
-  - It writes `$DONE` non-atomically (`echo $? > "$DONE"`), so `check_suite_log.py` can read an empty marker and report a spurious failure.
-  - Nothing prevents a second launch with the same LABEL while one is running (the orphan race noted in project memory).
-- **`check_suite_log.py`:** it verifies that the run is newer than HEAD, but not that the working tree was clean.
-- **`format210.jl`:** it `cd`s to the repo root before `format(ARGS)`, so relative paths given from a subdirectory resolve wrongly.
-- **`check_planning_ids.py`:** `--allowlist` or `--root` without a value yields `None`. For `--allowlist`, that ends in a `TypeError` traceback (exit 1, not 2).
+- `chain_root` returns `MOD` for `:TSODSO` unconditionally. After `using TSODSO: solve_admm` or `import TSODSO: solve_admm` alone, the name `TSODSO` is not bound. I verified the analogous case: `using LinearAlgebra: norm; LinearAlgebra.dot` throws `UndefVarError`. A later `TSODSO.max_jump(t)` therefore fails at runtime but passes the check (probe: 0 findings). No current script uses this form.
+- `haskey(fs.modalias, s)` is checked before `s in fs.bound`. So `import TSODSO as T` plus `f(x::T) where {T} = T.a` gives a false `T.a is not defined` finding.
 
 **Fix:**
-- Parameterize the phase directory and expectations through CLI flags.
-- Write the marker atomically (`echo $? > "$DONE.tmp" && mv "$DONE.tmp" "$DONE"`) and add a pidfile check.
-- Check `git status --porcelain` at launch.
-- Validate option arguments.
+- When `fs.touches` is true, return `MOD` only if `:TSODSO in fs.bound` or `:TSODSO in fs.imported`. Otherwise report "`TSODSO` is not bound (only `using TSODSO: ...`)".
+- Check `fs.bound` before `fs.modalias`, or accept the false positive and document it.
 
-### IN-06: The provenance docstring contradicts storing a TSODSO enum
+### IN-02: Planning-ID guard still misses `NN-NN-PLAN` / `NN-NN-NN`, `plan06-02` and Unicode-dash forms
 
-**File:** `src/experiments/store.jl:175-191` (consumer of the `ReactiveMode.T` change)
-**Issue:** `result_to_dict` says "Only primitives/arrays are stored ... so the JLD2 loads without TSODSO types". It then stores `res.reactive_consensus_mode`, which is a `TSODSO.ReactiveMode.T`. This phase changed that type's path, and status_policy §7 now has to warn that old files load "with a reconstructed type". This is a pre-existing contradiction, made concrete by the module move.
-**Fix:** Store `string(res.reactive_consensus_mode)` (e.g. `"LIVE"`) so stored artifacts are type-free and immune to future renames, and correct the docstring.
+**File:** `.github/scripts/planning_id_rules.py:16, 21`
+**Issue:** These probes all return no rule hit:
+- `see 36-22-PLAN for`. The `artifact` rule requires `-PLAN.md`, and `bare_nn` rejects a trailing `-`.
+- `in 36-22-01`
+- `plan06-02`
+- `plan 06–02` and `36–22` (en dash), and `36‑22` (non-breaking hyphen)
+
+A `git grep` sweep found no such site in the current tree, so this is latent. Adding Unicode dashes needs care, because the tree has many zero-padded en-dash hour ranges (`# 00–05 overnight trough`), and the ascending-unpadded veto would not cover them.
+
+**Fix:**
+- Extend `bare_nn` to allow a trailing `-` when it is followed by `PLAN`, `SUMMARY` or `\d\d`.
+- Make the `plan` separator `[\s\-‑–]*`.
+- Add positives for `36-22-PLAN` and `36-22-01`.
+
+### IN-03: The format job's planning-ID guard is skipped whenever formatting fails
+
+**File:** `.github/workflows/CI.yml:100-102`
+**Issue:** "Check for planning identifiers" has no `if:`. A format failure therefore skips the guard, and a planning ID introduced in the same push is only reported on the next run. This is the masking pattern that IN-02 fixed for the API check, and the step just above it already uses `if: always()`. This was not introduced in this iteration.
+**Fix:** Add `if: ${{ !cancelled() }}` to the guard step.
+
+### IN-04: Bindings in `check_script_api.jl` are file-global and flow-insensitive
+
+**File:** `.github/scripts/check_script_api.jl:83-84, 498-503`
+**Issue:** A binding anywhere in the file legitimises the name everywhere. Each of these probes reports 0 findings, but the code would fail at runtime:
+- `function outer(); max_jump(x) = 1; end` then a top-level `max_jump(tr)`.
+- A function argument named `max_jump` elsewhere, then `map(max_jump, trs)`.
+- A struct field named `SOCP`, then `select_optimizer(SOCP)`.
+
+This is a design limit rather than a regression, but the header reads as if these forms were covered.
+**Fix:** State the limitation in the header ("binding analysis is file-global; a name bound anywhere suppresses checks everywhere"). Alternatively, scope `bound`/`fbound` per top-level statement and per function body.
 
 ---
 
-_Reviewed: 2026-10-05T21:58:29Z_
+_Reviewed: 2026-10-05T23:59:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
