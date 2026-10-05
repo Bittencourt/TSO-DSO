@@ -1,11 +1,11 @@
 # # Rung 2a — Prosumer Devices, Aggregator Roll-Up & GLB-CVX Social Welfare
 #
-# This page is the EXP-03 literate proof for the device library: it executes the real
+# This page is the literate proof for the device library: it executes the real
 # [`solve_welfare`](@ref) end-to-end during the Documenter build over a full prosumer
 # device mix — a [`Thermostatic`](@ref) A/C load, a [`Deferrable`](@ref) shiftable task,
 # and a [`PVBattery`](@ref) — rolled into one [`Aggregator`](@ref) (thesis 3.21-3.23), so
 # the numbers below cannot silently drift from the code (mirrors the `toy_dc.jl`
-# reproducibility-proof pattern, threat T-01-09). The horizon is deliberately short
+# reproducibility-proof pattern). The horizon is deliberately short
 # (`T = 4`) for a fast, self-contained doc solve — this page is illustrative, not a
 # regression (the calibrated ground-truth fixture lives in `test/fixtures_ieee13.jl`).
 #
@@ -39,7 +39,7 @@
 # ```
 #
 # with the concave-quadratic soft-target utility `U(p) = -(b/2)\,(\sum_{t\in
-# \text{window}} p[t] - E)^2` (eq. 3.12) — a LIVE preference (WR-01: the upper budget is
+# \text{window}} p[t] - E)^2` (eq. 3.12) — a LIVE preference (the upper budget is
 # an inequality, not a hard equality) so the load reaches `E` when energy is cheap but
 # backs off when the network price is high.
 #
@@ -74,7 +74,7 @@
 # complementarity constraint — verified numerically post-solve by
 # [`assert_battery_complementarity!`](@ref) (called internally by `solve_welfare`).
 #
-# #### Finding (Plan 26-14, PM-02): App. C's no-binary argument implicitly assumes η=1
+# #### Finding: App. C's no-binary argument implicitly assumes η=1
 #
 # The strict `λ_min < λ_med < λ_max` ordering above is NOT sufficient on its own to rule out
 # simultaneous charge/discharge once the round-trip efficiency `η < 1` is accounted for. App.
@@ -87,21 +87,18 @@
 # ```
 #
 # so a GENUINE, KKT-consistent simultaneous charge/discharge CAN be the true welfare optimum —
-# this is a LATENT gap in App. C's own parametrization (not a bug introduced by any Phase-26
-# fix). The EXACT-04 high-PV AC (Ipopt) stress fixture demonstrates this concretely: at bus 2,
+# this is a LATENT gap in App. C's own parametrization (not a bug of the implementation). The high-PV AC (Ipopt) stress fixture demonstrates this concretely: at bus 2,
 # t=7 the solved point has `p_ch ≈ 0.00256`, `p_dch ≈ 0.00305`, verified to 4 digits against the
 # App. C KKT identity `(λ_med - DLMP)(1/η² - 1) = b_dch·p_dch + b_ch·p_ch/η²`. The SOCP path's
 # looser complementarity tolerance (`τ = 1e-3`) masks the identical effect; the AC/NLP path's
 # tighter tolerance (`τ = 1e-6`) catches it.
 #
 # Since this is a genuine optimum the AC oracle correctly found, not a solver bug, `solve_welfare`
-# (Plan 26-14) makes [`assert_battery_complementarity!`](@ref) REPORT it via `@warn` (log and
+# makes [`assert_battery_complementarity!`](@ref) REPORT it via `@warn` (log and
 # continue) on the AC/NLP call site instead of throwing — the SOCP call site is UNCHANGED and
-# still throws. No utility/model change is made in this phase; a backlog item exists for a
+# still throws. No utility/model change is made for this; it remains an open item for a
 # proper complementarity treatment (a binary/MPEC formulation, or an η-aware round-trip
 # penalty that makes simultaneous charge/discharge strictly dominated again even for `η < 1`).
-# See `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` for the tracked
-# finding.
 #
 # ### Aggregator roll-up — the sole network-facing writer
 #
@@ -133,7 +130,7 @@ using TSODSO: Bus, Branch, Feeder
 # ## Building a small radial feeder and one seeded profile draw
 #
 # A 2-bus radial feeder (root + one load bus) — the same minimal-radial shape used by
-# every earlier rung. `generate_profiles` (DATA-04) is a seeded, reproducible Markov-walk
+# every earlier rung. `generate_profiles` is a seeded, reproducible Markov-walk
 # profile generator (thesis §2.8): the SAME `seed` always regenerates bit-for-bit
 # identical `demand`/`pv` vectors.
 
@@ -166,7 +163,7 @@ agg = Aggregator(2, 0.9, [therm, defer, batt], profiles.demand)   # eqs 3.21-3.2
 # ## Solving the GLB-CVX centralized welfare (eq. 3.38)
 #
 # `ConvexBranchFlow()` routes to the SOCP backend; `allow_export = true` gives the
-# frontier a free-sign net exchange (the SOC-exactness enabler, PF-04) so a PV-heavy
+# frontier a free-sign net exchange (the SOC-exactness enabler) so a PV-heavy
 # hour can sell surplus to the MEM rather than dissipating it.
 
 λ₀ = fill(6.0, T)
@@ -182,7 +179,7 @@ objective
 
 dadp
 
-# And the PRICE-03 surplus stash — the per-aggregator net injection recorded during the
+# And the surplus stash — the per-aggregator net injection recorded during the
 # solve, one entry per aggregator (here: 1), each carrying a length-`T` net vector that
 # the next page's welfare accounting consumes:
 
@@ -202,7 +199,7 @@ length(ctx.meta[:agg_net])
 #    the PV+battery injection `pv_used − p_ch + p_dch`, the FIXED baseline demand `−Pdc`,
 #    and their sum, the aggregator net `p_ag` the network actually sees. On THIS fixture
 #    both flexible LOADS sit flat at zero (the two lines overlap on the axis): the
-#    deferrable's energy budget is a LIVE preference with `E_min = 0` (WR-01), and at
+#    deferrable's energy budget is a LIVE preference with `E_min = 0`, and at
 #    `λ₀ = 6` backing off entirely beats paying for the soft target — the flexibility
 #    story here is carried by the battery discharging against the priced frontier.
 # 2. **Thermostatic state (eqs. 3.2-3.3)** — the indoor temperature `Tin[t]` riding the
@@ -292,10 +289,10 @@ if Base.find_package("CairoMakie") !== nothing
         linestyle = :dash,
         linewidth = 1,
     )
-    ## `bvars.soc` is `T+1`-long since Phase 26 FIX-04 closed the battery SOC recursion
+    ## `bvars.soc` is `T+1`-long because the model closes the battery SOC recursion
     ## over the whole window (`soc[1:(T+1)]`, terminal target at `soc[T+1]`); truncate to
     ## the `T`-long `hours` axis, matching `scripts/demo_mpc_plots.jl`'s/`thesis_caseA.jl`'s
-    ## established convention for the identical situation (Phase 28 restatement).
+    ## established convention for the identical situation.
     scatterlines!(ax3, hours, value.(bvars.soc)[1:T]; color = :seagreen, label = "soc")
     axislegend(ax3; position = :rb, labelsize = 11)
     fig

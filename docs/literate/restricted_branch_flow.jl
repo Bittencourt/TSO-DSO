@@ -1,7 +1,7 @@
 # # Rung 3 — Overvoltage-Capable Relaxation: A Gan-Low OPF-m Restriction
 #
 # The previous page ("Rung 3: AC-Exactness Oracle") documented a genuine SOC-relaxation
-# inexactness on a high-PV, reverse-flow feeder (EXACT-04): the SOCP relaxation pins a bus
+# inexactness on a high-PV, reverse-flow feeder: the SOCP relaxation pins a bus
 # voltage at its squared upper bound and inflates a fictitious squared branch current
 # `l` so that `l·v > P²+Q²` strictly, and `solve_welfare` correctly REFUSES the resulting
 # prices under its default exactness gate. This page documents the mechanism that resolves
@@ -133,13 +133,12 @@ end;
 # fixture's impedances (`r = x = 0.05`), voltage lower bound (`v̲ = 0.95² = 0.9025`), and the
 # aggregators' upper bounds on net active/reactive injection. The paper's own worked linear-chain
 # example (Fig. 5 / eq. 7) reduces C1, for a 2-branch chain like this fixture's, to a single
-# nontrivial `2×2` matrix-vector inequality `A₁·u₂ > 0`. This project's own research pass into
-# the paper (`RESEARCH.md`, Open Question #2) did not independently re-derive that exact
+# nontrivial `2×2` matrix-vector inequality `A₁·u₂ > 0`. This project's own reading of
+# the paper did not independently re-derive that exact
 # worked-example formula with enough confidence to plug this fixture's specific PV-nameplate /
 # battery-discharge upper bounds into it here — rather than fabricate a numeric "C1 margin" that
-# was never actually derived from the paper's formula (a real risk this page's own threat model
-# flags, T-20-14), this page substitutes an honestly-scoped alternative: it LIVE-RECOMPUTES the
-# same measured modification gap `ε` that plan 20-01 first measured, using the identical recipe
+# was never actually derived from the paper's formula (a real risk), this page substitutes an honestly-scoped alternative: it LIVE-RECOMPUTES the
+# same measured modification gap `ε` that was first measured earlier, using the identical recipe
 # (an independently-solved [`ACPowerFlow`](@ref) point, then [`recover_lossfree_shadow_voltage`](@ref TSODSO.recover_lossfree_shadow_voltage)),
 # inlined here so the number can never silently drift from the code that produces it.
 
@@ -169,7 +168,7 @@ lemma1_mingap =
 # **This live `ε_measured` is a real, citable, non-fabricated number confirming the modification
 # gap is small and strictly positive on this fixture's actual parameters — consistent with C1
 # holding — but it is NOT a substitute for C1's own a-priori algebraic check.** This page states
-# explicitly, per RESEARCH.md's own honest-fallback recommendation: **C1's full symbolic
+# explicitly, as the honest fallback: **C1's full symbolic
 # verification on this fixture's specific injection bounds is DEFERRED**, not performed here. The
 # citable expectation that C1 holds is drawn from the literature, not an independent re-derivation
 # on this fixture: Gan-Low's own Section VI empirically finds C1 holds with a comfortable margin
@@ -215,9 +214,9 @@ ctx_restricted, cost_restricted, _ = solve_welfare(
     allow_export = true,
 )
 
-# ## The free PF-04 signal
+# ## The free exactness signal
 #
-# `assert_socp_exact!` (PF-04) is the EXISTING, UNMODIFIED cone-exactness gate — it needs no new
+# `assert_socp_exact!` is the EXISTING, UNMODIFIED cone-exactness gate — it needs no new
 # code to certify `RestrictedBranchFlow`'s solution, because `solve_welfare` already runs it
 # internally on every SOCP-class formulation and stashes the result under `ctx.meta[:socp_maxgap]`.
 # Contrast the unrestricted diagnostic solve's gap against the restricted solve's gap:
@@ -234,11 +233,11 @@ ctx_restricted.meta[:socp_maxgap]
 # zero new certificate code: OPF-m's structural `v̂_GL(s) ≤ v̄` constraint forces the SOC cone
 # itself tight, exactly as Theorem 2 predicts.
 
-# ## The OVR-02 certificate
+# ## The restriction-exactness certificate
 #
 # [`assert_restriction_exact!`](@ref) is a NEW, NAMED certificate (peer to `assert_socp_exact!`
 # and `assert_ac_exact!`) that certifies the PHYSICAL AC-feasibility of the restricted solution
-# (the same cone-tightness residual as PF-04, but with its OWN independently-measured
+# (the same cone-tightness residual as `assert_socp_exact!`, but with its OWN independently-measured
 # tolerances) and separately reports whether the restricted DISPATCH matches the independently-
 # solved AC optimum, plus the optimality loss versus an unrestricted bound. Called live here
 # with `report = true` so a genuine certificate failure would print a diagnostic instead of
@@ -266,7 +265,7 @@ restriction_report.optimality_loss
 # **Two DISTINCT questions, two DISTINCT, both now-measured answers on this fixture:**
 # `ac_feasible` asks "is the restricted solution a genuine, physically-realizable branch-flow
 # point?" — YES, because OPF-m's structural constraint forces the SOC cone tight (the same
-# signal the free PF-04 check above shows). `matches_ac_optimum` asks the STRICTLY HARDER
+# signal the free exactness check above shows). `matches_ac_optimum` asks the STRICTLY HARDER
 # question "does the restricted dispatch reproduce the SAME operating point the independent AC
 # oracle finds optimal?" — on this fixture the answer is NO during the high-PV window, because
 # Gan-Low's restriction is a genuine, provable feasible-set SUBSET (`F_{OPF-m} ⊆ F_OPF`) that
@@ -276,7 +275,7 @@ restriction_report.optimality_loss
 # ## Fallback semantics
 #
 # [`ac_dual_fallback_price`](@ref TSODSO.ac_dual_fallback_price) is the documented fallback pricer for the case
-# `assert_restriction_exact!` genuinely FAILS its `ac_feasible` gate (D-09) — i.e. when even
+# `assert_restriction_exact!` genuinely FAILS its `ac_feasible` gate — i.e. when even
 # OPF-m's restricted cone is not tight, so no dual price can be trusted as a genuine AC operating
 # point. It is a second, seeded, nonconvex re-solve of the SAME `ACPowerFlow()` path already
 # used above, from up to 5 distinct deterministic Ipopt convergence-strategy starts (default
@@ -288,26 +287,25 @@ restriction_report.optimality_loss
 # On THIS fixture `restriction_report.ac_feasible` is `true` (confirmed above), so the fallback
 # is NOT triggered here — deliberately: triggering a fallback that is not needed would misrepresent
 # what this fixture's mechanism actually requires. Its soundness is documented as evidence from
-# elsewhere in this phase instead: a quarantined 5-seed sweep on this same fixture (exercised via
-# a synthetic certificate-failure, `.planning/spikes/004-ovr-fallback-multistart/`) found all 5
+# elsewhere instead: a quarantined 5-seed sweep on this same fixture (exercised via
+# a synthetic certificate-failure) found all 5
 # seeds agree to `~1e-7` (`max_cost_spread ≈ 3.84e-7`, `max_dadp_spread ≈ 1.05e-7`) — strong
 # evidence the fallback mechanism itself is numerically stable and trustworthy on this fixture's
 # regime, for the fixtures/scenarios where OPF-m's own certificate genuinely does fail.
 
 # ## Finding
 #
-# EXACT-04 — the high-PV, reverse-flow feeder that the previous page found genuinely inexact
+# The high-PV, reverse-flow feeder that the previous page found genuinely inexact
 # under **gate 2** (`assert_ac_exact!`'s AC-dispatch comparison, under the plain
-# `ConvexBranchFlow()` default — see "## Restated in v4.0 (Phase 28)" below; **gate 1**,
+# `ConvexBranchFlow()` default — see "## Restated: gate 1 versus gate 2" below; **gate 1**,
 # `assert_socp_exact!`'s cone-residual check, is EXACT there, not inexact) — is now PRICEABLE via
 # a genuine restriction of the convex feasible set, not a relaxation hack: Gan-Low's OPF-m mechanism
 # (`v̂_GL(s) ≤ v̄`, Theorem 2) forces condition C2 to hold by construction, closing the SOC cone
-# to noise-floor scale (the free PF-04 signal above) with NO tunable parameter to search (D-03).
+# to noise-floor scale (the free exactness signal above) with NO tunable parameter to search.
 # This is a STRICTLY MORE POWERFUL result than the simpler OPF-ε special case this project's own
-# research first attempted: an exhaustive sweep of every feasible `ε` (documented in plan
-# 20-02's summary) found the bound-shrink mechanism alone could not close this fixture's gap at
+# research first attempted: an exhaustive sweep of every feasible `ε` (measured earlier) found the bound-shrink mechanism alone could not close this fixture's gap at
 # ANY feasible value — the residual stayed six orders of magnitude above the exactness gate even
-# at the largest feasible `ε`, because EXACT-04's dominant residual is driven by reverse power
+# at the largest feasible `ε`, because the fixture's dominant residual is driven by reverse power
 # flow, not primarily by voltage pinning at `v`'s own bound. That honest negative result is a
 # citable finding in its own right, not a discarded false start: OPF-ε remains available,
 # retained as an optional composable margin on top of OPF-m, for a researcher on a DIFFERENT
@@ -322,13 +320,12 @@ restriction_report.optimality_loss
 # itself fails, which does not happen on THIS fixture, but which the fallback's own quarantined
 # multi-seed evidence confirms is a sound, trustworthy pricer when it is needed.
 #
-# ## Restated in v4.0 (Phase 28)
+# ## Restated: gate 1 versus gate 2
 #
-# Earlier text on this page (mirroring `ac_oracle.jl`'s own earlier text, corrected in the same
-# phase) described the previous page's EXACT-04 disagreement as the plain SOC relaxation being
+# Earlier text on this page (mirroring `ac_oracle.jl`'s own earlier text, since corrected) described the previous page's disagreement as the plain SOC relaxation being
 # "genuinely, physically inexact" — language that reads as **gate 1** (`assert_socp_exact!`'s
-# cone-residual check). MEASURED this plan (28-03), directly reproducing `test_ac_oracle.jl`'s
-# EXACT-04 fixture under BOTH formulations at `pv_scale = 1.2`:
+# cone-residual check). MEASURED here, directly reproducing `test_ac_oracle.jl`'s
+# high-PV fixture under BOTH formulations at `pv_scale = 1.2`:
 #
 # | Formulation | Gate 1 (`socp_maxgap`) | Gate 1 verdict | Gate 2 (`inexact_hours`) | Gate 2 verdict |
 # |---|---|---|---|---|
@@ -336,8 +333,8 @@ restriction_report.optimality_loss
 # | `ConvexBranchFlow(; thesis_literal=true)` | 9.05e-9 | EXACT | `[]` (none) | EXACT |
 #
 # Gate 1 is EXACT under BOTH formulations on this fixture at this `pv_scale` (already established
-# by PM-01/26-18, `test_restricted_branch_flow.jl:314-320`, cited not re-derived — the very
-# `opfm_shadow_voltage` dual/`ac_feasible=true` mechanism this page's own "OVR-02 certificate"
+# by `test_restricted_branch_flow.jl:314-320`, cited not re-derived — the very
+# `opfm_shadow_voltage` dual/`ac_feasible=true` mechanism this page's own "restriction-exactness certificate"
 # section above demonstrates). What genuinely disagrees under the DEFAULT is **gate 2**
 # (`assert_ac_exact!`'s AC-dispatch comparison, the SAME mechanism `restriction_report`'s own
 # `matches_ac_optimum = false` reports above) — the plain, UNRESTRICTED `ConvexBranchFlow()`'s
@@ -345,12 +342,12 @@ restriction_report.optimality_loss
 # unrestricted relaxation, absent OPF-m's added `v̂_GL(s) ≤ v̄` constraint, is loose enough at these
 # hours that its own optimum sits at a DIFFERENT point than either OPF-m's restricted optimum or
 # the true AC optimum — even though its OWN cone residual is small (gate 1 exact). Under
-# `thesis_literal = true` on this SAME fixture, gate 2 is ALSO exact (measured this plan:
+# `thesis_literal = true` on this SAME fixture, gate 2 is ALSO exact (measured here:
 # `cost_socp = -921.27700` matches `cost_ac = -921.27699` within `rtol = 1e-4`) — this specific
 # gate-2 disagreement does NOT reproduce under `thesis_literal = true` at `pv_scale = 1.2`.
 #
-# This is NOT the historic v2.1 "SOCP knife-edge under high-PV reverse flow" finding (project
-# memory `v2.1-socp-inexactness-and-thesis-repro`), which is a gate-1 (cone-slack) phenomenon that
+# This is NOT the historic v2.1 "SOCP knife-edge under high-PV reverse flow" finding (the
+# earlier SOCP-inexactness study), which is a gate-1 (cone-slack) phenomenon that
 # reproduces only under `thesis_literal = true` at a higher `pv_scale` (e.g. `1.4` on this fixture,
-# ratio ≈ 1982) — see `.planning/phases/26-network-device-model-correctness/26-FINDINGS.md` "Plan
-# 26-18". Every "exact"/"inexact" claim above is now gate-qualified per Pitfall 3 discipline.
+# ratio ≈ 1982) — see the `ac_oracle` page.
+# Every "exact"/"inexact" claim above is gate-qualified.

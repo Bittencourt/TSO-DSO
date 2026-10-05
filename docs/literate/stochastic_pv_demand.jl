@@ -2,15 +2,15 @@
 #
 # Every prior "Models" page in this manual — including Rung 8's own receding-horizon closed
 # loop — solves exactly ONE realization of PV/demand and reports exactly ONE price path. This
-# page closes Phase 22 by demonstrating the genuinely different structure this framework now
+# page demonstrates the genuinely different structure this framework now
 # also supports: a **two-stage stochastic extensive form** — [`run_stochastic`](@ref) builds
 # `s.strategy.S` independently-seeded scenarios sharing a single first-stage battery schedule
-# (tied by explicit nonanticipativity equality constraints, D-02), solves ALL of them at once
+# (tied by explicit nonanticipativity equality constraints), solves ALL of them at once
 # on one shared `Model`, and reports the per-scenario day-ahead dynamic price (DADP) as the
 # PRIMARY output — the probability-weighted expectation across scenarios is a DERIVED SUMMARY,
-# never a constraint-backed price in its own right (D-05/D-07). The committed first-stage
+# never a constraint-backed price in its own right. The committed first-stage
 # schedule is then scored out-of-sample against `s.strategy.H_oos` disjoint held-out draws it
-# never saw during the in-sample solve (STOCH-03/D-09). Every number shown below is RECOMPUTED
+# never saw during the in-sample solve. Every number shown below is RECOMPUTED
 # live during this page's build, exactly like every prior rung page in this manual.
 
 using TSODSO
@@ -19,23 +19,23 @@ using TSODSO: sub_seed
 # ## Building the 9-hour, 5-scenario demonstration
 #
 # Like Rung 8's [`run_mpc`](@ref), [`run_stochastic`](@ref) has exactly ONE entry point
-# signature — `run_stochastic(s::Scenario)` (D-01/D-02's "independent sibling orchestrator";
+# signature — `run_stochastic(s::Scenario)` (an "independent sibling orchestrator";
 # it is NOT wired through `run_scenario`'s `:centralized`/`:admm` strategy dispatch). This page
 # therefore constructs a [`Scenario`](@ref) rather than hand-building a bespoke feeder, exactly
 # as `mpc_rolling_horizon.jl` does for its own entry point.
 #
-# `T = 9` mirrors the Pitfall-3 `:default`-population floor and keeps this page's live build
-# fast (a handful of seconds). `S = 5` is the upper end of the locked D-01 band
+# `T = 9` mirrors the `:default`-population floor and keeps this page's live build
+# fast (a handful of seconds). `S = 5` is the upper end of the supported band
 # (`3 <= S <= 5`) — the most scenarios this framework currently allows, chosen here so
 # the extensive form is genuinely demonstrative rather than a degenerate 2-scenario case.
 # `probabilities = [0.05, 0.15, 0.30, 0.30, 0.20]` is a genuinely non-uniform 5-vector
 # summing to 1: a "central scenarios more likely than extreme ones" bell shape, rising to a
 # peak at scenarios 3-4 and falling off toward scenarios 1 and 5 — the kind of asymmetric
-# weighting a uniform-probability demo would never exercise (D-04's own CI-fixture requirement
-# generalizes to this page too). `H_oos = 10` is the upper end of the locked D-10 band
+# weighting a uniform-probability demo would never exercise (the CI-fixture requirement
+# generalizes to this page too). `H_oos = 10` is the upper end of the supported band
 # (`5 <= H_oos <= 10`).
 #
-# **A documented numerical-sensitivity finding (mirrors 22-02's own D-08 discovery):** the
+# **A documented numerical-sensitivity finding (mirrors an earlier `tol_gap` discovery):** the
 # first uniformly-spaced probability vector tried while drafting this page
 # (`[0.1, 0.15, 0.2, 0.25, 0.3]`) tripped Clarabel's own convergence gate
 # (`ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT`) on this exact `T = 9` fixture — a genuine
@@ -43,7 +43,7 @@ using TSODSO: sub_seed
 # or `T = 12`, and other non-uniform vectors solve cleanly at `T = 9`). The bell-shaped vector
 # above was chosen, after sweeping several alternatives, specifically because it converges
 # `OPTIMAL` on this fixture — reported here in the same "report, don't hide numerical
-# fragility" spirit as plan 22-02's own `tol_gap` finding.
+# fragility" spirit as that `tol_gap` finding.
 
 const T = 9
 
@@ -59,11 +59,11 @@ s = Scenario(;
 # [`run_stochastic`](@ref) materializes `s.strategy.S = 5` in-sample scenario populations from a
 # disjoint `sub_seed` tag family, solves the S-scenario extensive form via
 # [`build_stochastic_welfare`](@ref TSODSO.build_stochastic_welfare) (nonanticipativity-tying every battery-like device across
-# scenarios, per-scenario PF-04 exactness gated INDEPENDENTLY, never aggregated — D-06), reads
+# scenarios, per-scenario exactness gated INDEPENDENTLY, never aggregated), reads
 # the solved shared first-stage battery schedule off scenario 1's own device variables, then
 # builds the out-of-sample [`StochasticOosHarness`](@ref TSODSO.StochasticOosHarness) EXACTLY ONCE against `s.strategy.H_oos
 # = 10` disjoint held-out scenarios, pins the harness's battery controls to the in-sample
-# optimum ONCE (D-09's build-once contract), and re-solves across all 10 held-out draws:
+# optimum ONCE (the build-once contract), and re-solves across all 10 held-out draws:
 
 r = run_stochastic(s)
 
@@ -77,7 +77,7 @@ length(r.in_sample.dadp)
 # via the SAME exported seeding seam `run_stochastic` itself uses —
 # `generate_profiles(seed = sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)))` — so
 # each curve below is BIT-IDENTICAL to the profile scenario `k` actually saw inside the
-# solve (INFRA-04's determinism is what makes this replay honest), at zero added solve
+# solve (seeded determinism is what makes this replay honest), at zero added solve
 # cost. One fixed color per scenario, reused by the DADP figure further down (identity
 # follows the entity across figures); the legend carries each scenario's non-uniform
 # probability weight. Same guarded-CairoMakie idiom as `admm.jl`/`socp_applicability.jl`;
@@ -118,7 +118,7 @@ if Base.find_package("CairoMakie") !== nothing
     fig
 end
 
-# ## 1. Per-scenario DADPs (PRIMARY output, D-02/D-05)
+# ## 1. Per-scenario DADPs (PRIMARY output)
 #
 # Every prior rung page reports ONE price path. Here, each of the 5 in-sample scenarios keeps
 # its OWN de-scaled DADP — the per-scenario constraint dual, never averaged before being
@@ -127,12 +127,12 @@ end
 
 [round.(r.in_sample.dadp[k]; digits = 4) for k in 1:s.strategy.S]
 
-# ## 2. Expected DADP — a DERIVED SUMMARY, never a constraint-backed price (D-07)
+# ## 2. Expected DADP — a DERIVED SUMMARY, never a constraint-backed price
 #
 # The probability-weighted expectation across the 5 vectors above is a convenient scalar
 # summary for reporting purposes, but it is NOT itself the dual of any constraint in the
 # extensive-form model — no scenario's agent ever faces this averaged price; each faces its
-# OWN scenario's DADP from section 1. D-07's caveat, restated here rather than left implicit:
+# OWN scenario's DADP from section 1. This caveat, restated here rather than left implicit:
 # treating this expectation as a real, tradeable price would silently discard the very
 # scenario-conditionality this model exists to represent.
 
@@ -148,7 +148,7 @@ round.(r.in_sample.expected_dadp; digits = 4)
 # exactly that, not a dramatic fan), so the RIGHT panel plots each scenario's DEVIATION
 # from the expectation, `λ_k[t] − E[λ][t]`: identically zero-spread at hour 1 (every
 # scenario's price floor binds the same way off-peak) and genuinely scenario-conditional
-# around the mid-horizon hours — the very structure D-07 warns the derived expectation
+# around the mid-horizon hours — the very structure the derived expectation
 # silently discards. No re-solve: this is `r.in_sample` verbatim.
 
 if Base.find_package("CairoMakie") !== nothing
@@ -160,14 +160,14 @@ if Base.find_package("CairoMakie") !== nothing
         xlabel = "hour t",
         ylabel = "DADP (price units)",
         xticks = 1:T,
-        title = "Per-scenario DADP (PRIMARY, D-05)",
+        title = "Per-scenario DADP (PRIMARY)",
     )
     axdev = Axis(
         fig[1, 2];
         xlabel = "hour t",
         ylabel = "λ_k[t] − E[λ][t] (price units)",
         xticks = 1:T,
-        title = "Deviation from the derived expectation (D-07)",
+        title = "Deviation from the derived expectation",
     )
     for k in 1:s.strategy.S
         scatterlines!(
@@ -198,7 +198,7 @@ if Base.find_package("CairoMakie") !== nothing
     fig
 end
 
-# ## 3. Per-scenario SOCP exactness (D-06, never aggregated)
+# ## 3. Per-scenario SOCP exactness (never aggregated)
 #
 # Each of the 5 scenarios' own convex branch-flow network copy is certified exact
 # INDEPENDENTLY — a single scenario's relaxation could in principle be inexact while every
@@ -210,7 +210,7 @@ r.in_sample.socp_maxgap
 # All 5 entries are comfortably within Clarabel's own solved tolerance on this fixture — every
 # scenario's network copy is genuinely SOCP-exact here, not merely "close enough on average".
 
-# ## 4. Out-of-sample realized-vs-in-sample welfare gap (STOCH-03/D-09)
+# ## 4. Out-of-sample realized-vs-in-sample welfare gap
 #
 # The committed first-stage battery schedule — fixed once from the in-sample solve above — is
 # re-scored against 10 disjoint held-out PV/demand/ambient draws it never saw during
@@ -233,7 +233,7 @@ r.oos.realized_welfare
 # ## Figure — in-sample expectation vs the 10 held-out re-scores
 #
 # The out-of-sample evaluation drawn draw-by-draw: one dot per FEASIBLE held-out scenario's
-# realized welfare (`r.oos.welfare_h` — a draw reported infeasible by WR-05's mask would
+# realized welfare (`r.oos.welfare_h` — a draw reported infeasible by the feasibility mask would
 # simply be absent, never plotted as a fabricated point), the solid line their uniform-weight
 # average (`realized_welfare`), and the dashed line the in-sample probability-weighted
 # expectation the gap is measured against. Dots (not zero-anchored bars): the ~539-unit
@@ -253,7 +253,7 @@ if Base.find_package("CairoMakie") !== nothing
         xlabel = "held-out draw h",
         ylabel = "welfare (objective units)",
         xticks = 1:s.strategy.H_oos,
-        title = "Committed first-stage schedule scored out-of-sample (STOCH-03/D-09)",
+        title = "Committed first-stage schedule scored out-of-sample",
     )
     hlines!(
         ax,
@@ -285,7 +285,7 @@ end
 # On this run, `welfare_gap` is small and POSITIVE — the committed first-stage schedule
 # performs slightly BETTER, on average, against the 10 held-out draws than the in-sample
 # extensive form's own probability-weighted expectation predicted (the opposite sign from the
-# stable, separately-measured D-11 golden value on the phase's own 3-scenario/5-held-out CI
+# stable, separately-measured golden value on the 3-scenario/5-held-out CI
 # fixture, `test/test_run_stochastic.jl`, which is small and NEGATIVE — this page does not
 # claim its own sign generalizes; both are honestly reported as measured on their own
 # fixtures). Relative to the ~539-unit scale of `in_sample.welfare` itself, the gap is a small

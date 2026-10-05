@@ -1,11 +1,11 @@
 # # Thesis Case A Reproduction — Real-Impedance IEEE-123
 #
-# This page live-executes the phase's headline finding: Palacios' PhD thesis (UNSJ/CONICET,
+# This page live-executes the headline finding: Palacios' PhD thesis (UNSJ/CONICET,
 # 2022) Case A `[CITED: thesis p.98, Case A]` reports that day-ahead dynamic pricing (DADP)
 # redistributes surplus from the DSO's transactive counterparty position toward the DSO itself —
 # "DSO surplus -\$2829 -> +\$439" — compared to a German feed-in-tariff (FIT) baseline. This page
 # reproduces that redistribution's **sign**, on real public OpenDSS-derived IEEE-123 impedances
-# (Phase 17) with reactive pricing available (Phase 16), calling the REAL
+# with reactive pricing available, calling the REAL
 # [`solve_welfare`](@ref), [`fit_baseline`](@ref), [`welfare_accounting`](@ref) and
 # [`decompose_dlmp`](@ref) entrypoints end-to-end — never a re-derivation, so the numbers below
 # cannot silently drift from the committed `src/` code (mirrors the
@@ -16,24 +16,23 @@
 # The thesis's headline is often quoted as a **+25% aggregate social-welfare ratio**
 # (`welfare_dadp / welfare_fit`). That ratio is NOT the claim on this page — dividing two
 # welfare numbers that can each be negative silently inverts the intended "DADP is better"
-# reading whenever the sign of the denominator flips (the promotion-source script's own Pitfall
-# 1 guard). The full metric caveat — including the actual small, fragile aggregate welfare delta
+# reading whenever the sign of the denominator flips (the guard in the promotion-source script). The full metric caveat — including the actual small, fragile aggregate welfare delta
 # measured on this fixture — is enumerated in the companion
 # [Thesis Reproduction — Assumptions & Reduction Chain](@ref) page; this page reports only the
 # robust, correctly-signed **DSO-surplus sign flip** as its terminal finding.
 #
 # ## The "directional, public-data" qualifier
 #
-# Every cited reproduction number on this page carries the fixed qualifier below (the phase's
-# one new convention) so a reader never mistakes a directional, public-data reproduction for an
+# Every cited reproduction number on this page carries the fixed qualifier below (a convention
+# specific to this page) so a reader never mistakes a directional, public-data reproduction for an
 # exact-figure claim:
 
 const REPRO_QUALIFIER = "directional, public-data"
 cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 
-# ## Live solve — real-impedance IEEE-123, Phase-17-retuned population
+# ## Live solve — real-impedance IEEE-123, re-tuned population
 #
-# The population constants below are the Phase-17-retuned point (`test/fixtures_ieee123.jl`),
+# The population constants below are the re-tuned point (`test/fixtures_ieee123.jl`),
 # reproduced here as plain `const`s so this page has no load-time dependency on a
 # `TestItems.@testmodule` (which expands to a no-op outside `TestItemRunner`'s AST-introspection
 # path). [`ieee123_modified`](@ref) is the real ingestion path documented on the
@@ -173,13 +172,13 @@ aggs = [
 
 # The DADP welfare optimum (GLB-CVX SOCP, thesis eq. 3.38) — a live, gated solve.
 #
-# Restated in v4.0 (Phase 28): at Clarabel's DEFAULT `tol_gap=1e-8`, this exact population
-# point trips `assert_socp_exact!` (measured this session: gap=4.384e-6, ratio=19.25 —
-# matching Phase 27's own F-27-05-2 measurement almost exactly). Task 1 of this plan measured
+# Note: at Clarabel's DEFAULT `tol_gap=1e-8`, this exact population
+# point trips `assert_socp_exact!` (measured: gap=4.384e-6, ratio=19.25 —
+# matching an earlier independent measurement almost exactly). Measurement showed
 # (not assumed) that this is the SAME precision-floor residual `test/test_thesis_repro.jl`'s
 # own committed golden already resolves via a tightened solver tolerance — verdict
 # PRECISION-ARTIFACT, not a genuine new inexactness — so the identical override is applied
-# here too (never by raising `τ_solver`/`ε`, per the locked "never hide it" policy):
+# here too (never by raising `τ_solver`/`ε`, per the "never hide it" policy):
 
 ctx, welfare_dadp, _ = solve_welfare(
     feeder,
@@ -195,10 +194,10 @@ acct = welfare_accounting(ctx; T = T)
 # The FIT counterfactual (German feed-in tariff, thesis eqs 3.24-3.28) — confirmed feasible on
 # this voltage-driven (not congestion-driven) fixture, unlike the IEEE-13 congestion case.
 #
-# Restated in v4.0 (Phase 28): `fit_baseline`'s OWN internal SITE-3 solve_welfare re-check
-# (on the voltage-relaxed feeder) ALSO trips PF-04 at the default tolerance (measured this
-# session: gap=8.207e-7, ratio=2.50 — matching `test_thesis_repro.jl`'s own header comment
-# almost exactly). Same PRECISION-ARTIFACT verdict, same tightened-tolerance fix, per Task 1:
+# Note: `fit_baseline`'s OWN internal `solve_welfare` re-check
+# (on the voltage-relaxed feeder) ALSO trips the exactness gate at the default tolerance (measured:
+# gap=8.207e-7, ratio=2.50 — matching `test_thesis_repro.jl`'s own header comment
+# almost exactly). Same PRECISION-ARTIFACT verdict, same tightened-tolerance fix:
 
 fb = fit_baseline(
     feeder,
@@ -210,34 +209,34 @@ fb = fit_baseline(
 )
 fit_dso = fb.social_fit - fb.prosumer_surplus
 
-# The reactive DLMP (Phase 16) — a distinct, un-summed price signal, available on this same
+# The reactive DLMP — a distinct, un-summed price signal, available on this same
 # plain `solve_welfare` ctx with no ADMM-only reactive-consensus mechanism involved:
 
 d = decompose_dlmp(ctx)
 mean_reactive_dlmp = mean(d.reactive)
 
-# ## Restated in v4.0 (Phase 28)
+# ## Restated after the model corrections
 #
-# Phases 26-27 changed the model underneath this page in ways that move its headline numbers.
-# Re-measured live this session (Phase 28, plan 28-02, Task 1/2) — not merely re-asserted:
+# Later model corrections changed the model underneath this page in ways that move its headline numbers.
+# Re-measured live — not merely re-asserted:
 #
-# | Quantity | OLD (pre-Phase-26/27, `results/repro_stability_check/findings.txt` 2026-08-23) | NEW (this page, live) | Named cause |
+# | Quantity | OLD (before the corrections, `results/repro_stability_check/findings.txt` 2026-08-23) | NEW (this page, live) | Named cause |
 # |---|---|---|---|
-# | `acct.dso` (DADP DSO surplus) | ≈ +3.725705 | ≈ +3.739374 | FIX-01/FIX-02 (Phase 26): default `ConvexBranchFlow()` switched from the old thesis-literal lower-band restriction to the Gan-Low upper-band restriction — a small (~0.4%), expected shift in the SOCP optimum, sign and rough magnitude unchanged |
-# | `fit_dso` (FIT DSO surplus) | ≈ -196.216447 | ≈ -286.107696 | FIX-09/FIX-10 (Phase 27, plan 27-09): `fit_baseline`'s internal settlement moved from a SOCP-based re-solve to a genuine physics-only `ACPowerFlow(; limits=false)` settlement — this changes the lossy frontier-exchange accounting inside `fb.social_fit` (measured: `fb.prosumer_surplus` itself is essentially UNCHANGED, -40857.497 -> -40857.497 to 8 significant figures — the drift is entirely in the network-settlement term, not the per-prosumer FIT-OPT schedule) |
+# | `acct.dso` (DADP DSO surplus) | ≈ +3.725705 | ≈ +3.739374 | Default-formulation change: default `ConvexBranchFlow()` switched from the old thesis-literal lower-band restriction to the Gan-Low upper-band restriction — a small (~0.4%), expected shift in the SOCP optimum, sign and rough magnitude unchanged |
+# | `fit_dso` (FIT DSO surplus) | ≈ -196.216447 | ≈ -286.107696 | Settlement change: `fit_baseline`'s internal settlement moved from a SOCP-based re-solve to a genuine physics-only `ACPowerFlow(; limits=false)` settlement — this changes the lossy frontier-exchange accounting inside `fb.social_fit` (measured: `fb.prosumer_surplus` itself is essentially UNCHANGED, -40857.497 -> -40857.497 to 8 significant figures — the drift is entirely in the network-settlement term, not the per-prosumer FIT-OPT schedule) |
 # | sign flip (`fit_dso<0`, `acct.dso>0`) | holds | **still holds** | unaffected by either change above — the redistribution DIRECTION this page's terminal finding certifies is unchanged |
 # | prosumer decrease (`acct.prosumer < fit_prosumer`) | holds | **still holds** | unaffected |
-# | exactness gate at DEFAULT `tol_gap=1e-8` | untested at this exact point pre-Phase-27 | THROWS on both the `solve_welfare` call (gap=4.384e-6, ratio=19.25) and `fit_baseline`'s SITE-3 (gap=8.207e-7, ratio=2.50) | Phase 27's FIX-08 hybrid-floor gate (`τ_solver=2e-7`) is TIGHTER than the pre-27 flat `atol=1e-6`; Task 1 of this plan MEASURED (per `exactness-gate-hybrid-floor` memory's own policy) that both residuals are the SAME precision-floor artifact the already-committed `test/test_thesis_repro.jl` golden resolves via a tightened solver `tol_gap` (3e-9 / 1e-9 respectively, applied above) — VERDICT: PRECISION-ARTIFACT, not genuine new inexactness, confirmed empirically this session, never by loosening `τ_solver`/`ε` |
+# | exactness gate at DEFAULT `tol_gap=1e-8` | untested at this exact point before the corrections | THROWS on both the `solve_welfare` call (gap=4.384e-6, ratio=19.25) and `fit_baseline`'s internal re-check (gap=8.207e-7, ratio=2.50) | The hybrid-floor gate (`τ_solver=2e-7`) is TIGHTER than the earlier flat `atol=1e-6`; measurement showed (following the "measure first" policy) that both residuals are the SAME precision-floor artifact the already-committed `test/test_thesis_repro.jl` golden resolves via a tightened solver `tol_gap` (3e-9 / 1e-9 respectively, applied above) — VERDICT: PRECISION-ARTIFACT, not genuine new inexactness, confirmed empirically, never by loosening `τ_solver`/`ε` |
 #
 # **A changed result is reported here as a finding, not hidden or silently re-pinned** — this is
-# the "restatement, not regression" framing CONTEXT.md's SC-2 decision requires. The DSO-surplus
+# the "restatement, not regression" framing this page follows. The DSO-surplus
 # sign flip (this page's actual terminal claim) is UNCHANGED by any of the above; only the FIT
 # counterfactual's absolute magnitude moved, for a well-understood, named reason.
 #
 # ## Terminal findings — the DSO-surplus sign flip
 #
 # `ctx.meta[:socp_maxgap]` certifies the SOC relaxation is exact at this pinned population
-# point (PF-04), so the duals recovered above (and hence the surplus split) are physically
+# point, so the duals recovered above (and hence the surplus split) are physically
 # meaningful:
 
 ctx.meta[:socp_maxgap]

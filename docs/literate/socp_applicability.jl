@@ -36,7 +36,7 @@ using Printf
 
 const T = 24
 
-# Digitized profiles, byte-identical to `test/fixtures_ieee13.jl` / `fixtures_ieee123.jl`.
+# Digitized profiles, bit-for-bit identical to `test/fixtures_ieee13.jl` / `fixtures_ieee123.jl`.
 const TEMP = Float64[
     19,
     18,
@@ -152,14 +152,14 @@ function house_3bus(bus; pv_scale, load_scale)
     )
 end
 
-# `rtol_exact = 1e6` neutralizes `solve_welfare`'s own PF-04 gate so an inexact solve is **returned**
+# `rtol_exact = 1e6` neutralizes `solve_welfare`'s own exactness gate so an inexact solve is **returned**
 # for classification instead of refused — the diagnostic-override pattern already used in
 # `test/test_ac_oracle.jl`. It changes no `src/` code and weakens nothing for any other caller.
 # Non-solved points are split by cause: `infeasible` is legitimate white space (the feeder cannot
 # serve that operating point inside its voltage band), a tripped model guard is genuinely
 # **unmeasured**. Neither is ever silently dropped.
 #
-# DUAL-MODE (restated in v4.0, Phase 28): every point is solved under BOTH `ConvexBranchFlow()`
+# DUAL-MODE: every point is solved under BOTH `ConvexBranchFlow()`
 # (the corrected default, Gan-Low direction) AND `ConvexBranchFlow(; thesis_literal=true)` (the OLD
 # literal copy) — a `formulation` field on every row records which. This is a **gate-1
 # (cone-residual) map only** — no AC/Ipopt oracle is involved anywhere on this page; see
@@ -237,12 +237,12 @@ end
 # which the mechanism cannot fire. (An earlier attempt at this map swept a network whose impedances
 # are too low to move voltage; it returned 111/111 exact and was pure artifact.)
 #
-# RESTATED IN v4.0 (PHASE 28): pre-Phase-28 this page asserted `pv=1.2` "inexact" under the (then
-# bare-default) `ConvexBranchFlow()`. Since Phase 26 flipped the default to the Gan-Low direction,
-# THIS SPECIFIC point (`pv=1.2, load=0.20, vmax=1.05` — EXACT-04's own calibrated fixture) is now
-# measured EXACT under **both** formulations (PM-01/26-18, cited not re-derived). This does **not**
-# mean the default is unconditionally cone-exact everywhere on the map below: MEASURED this plan
-# (28-03), 3/150 default grid points ARE genuinely cone-inexact (ratio 8196–9746, at OTHER,
+# NOTE: an earlier version of this page asserted `pv=1.2` "inexact" under the (then
+# bare-default) `ConvexBranchFlow()`. Since the default was flipped to the Gan-Low direction,
+# THIS SPECIFIC point (`pv=1.2, load=0.20, vmax=1.05` — the calibrated high-PV fixture) is now
+# measured EXACT under **both** formulations (cited from the restricted-branch-flow tests, not re-derived). This does **not**
+# mean the default is unconditionally cone-exact everywhere on the map below: MEASURED in the
+# dual-mode re-run, 3/150 default grid points ARE genuinely cone-inexact (ratio 8196–9746, at OTHER,
 # lower-load combinations, e.g. `vmax=1.05, load=0.1, pv=1.2`) — Gan-Low's construction is designed
 # to force cone-tightness, but this sweep finds it is not an unconditional guarantee at every
 # operating point; the default's inexact region is simply far RARER (3/150 here) than
@@ -278,7 +278,7 @@ c_inexact_thesis = ctl(rows_3bus, 1.4, 0.20, 1.05, :thesis_literal)
     c_exact_thesis.ratio
 )
 @printf(
-    "pv=1.2 (EXACT-04) default -> %s (ratio %.4g)   pv=1.2 thesis_literal -> %s (ratio %.4g)\n",
+    "pv=1.2 (high-PV control) default -> %s (ratio %.4g)   pv=1.2 thesis_literal -> %s (ratio %.4g)\n",
     c_exact04_default.class,
     c_exact04_default.ratio,
     c_exact04_thesis.class,
@@ -297,12 +297,12 @@ c_inexact_thesis = ctl(rows_3bus, 1.4, 0.20, 1.05, :thesis_literal)
 # ### The boundary, quantified
 #
 # Largest `pv_scale` still exact, per `(vmax, load)`, PER FORMULATION — this table now DIFFERS
-# materially between the two, which is itself the restated finding: the default's genuinely
-# cone-inexact region on this grid is small (3/150 points, MEASURED this plan) and its boundary is
+# materially between the two, which is itself the finding: the default's genuinely
+# cone-inexact region on this grid is small (3/150 points, MEASURED in the dual-mode re-run) and its boundary is
 # LARGELY (not entirely) governed by the App. C battery-complementarity guard tripping before the
 # cone would otherwise go inexact — but the guard is not the ONLY mechanism at play, since a few
 # points (e.g. `vmax=1.05, load=0.1, pv=1.2`) DO go genuinely cone-inexact under the default before
-# any guard fires. `thesis_literal=true`'s boundary is the ORIGINAL, pre-Phase-26 cone-exactness
+# any guard fires. `thesis_literal=true`'s boundary is the ORIGINAL, pre-correction cone-exactness
 # boundary this page originally characterized, now correctly re-attributed to it specifically.
 
 for (label, formulation) in (("default", :default), ("thesis_literal", :thesis_literal))
@@ -328,7 +328,7 @@ end
 # **Under `thesis_literal=true`, voltage headroom is the first-order control; load is
 # second-order** — each `+0.025` pu of headroom buys roughly `+0.2` of `pv_scale`, near-linearly,
 # while load moves the boundary by at most one grid step across its whole swept range (this is the
-# SAME boundary this page originally characterized, pre-Phase-26, now correctly attributed to
+# SAME boundary this page originally characterized, before the default changed, now correctly attributed to
 # `thesis_literal=true` rather than the default). **Under the default, most of the "boundary" in
 # this table is an App. C battery-complementarity guard artifact, not a cone-exactness boundary**
 # — the default stays cone-exact at almost every point it solves (MEASURED: 98/150 exact, 19/150
@@ -347,7 +347,7 @@ end
 # most important methodological point on this page. **A structural gap is a property of the optimum
 # and must PERSIST as the solver tolerance tightens. A numerical residual SHRINKS.**
 #
-# RESTATED IN v4.0 (PHASE 28): run on the CURRENT genuine negative control
+# NOTE: run on the CURRENT genuine negative control
 # (`thesis_literal=true`, `pv=1.4`) rather than the old default `pv=1.2` point (no longer inexact
 # under either formulation at THIS load level — see controls above). The default `pv=1.2` point is
 # included alongside for contrast: gate-1 EXACT here, and MEASURED to stay so as tolerance
@@ -357,7 +357,7 @@ end
 
 base_opt = select_optimizer(SOCP())
 for (label, thesis_literal, ps) in
-    (("default (pv=1.2, EXACT-04)", false, 1.2), ("thesis_literal (pv=1.4)", true, 1.4))
+    (("default (pv=1.2, high-PV control)", false, 1.2), ("thesis_literal (pv=1.4)", true, 1.4))
     formulation = thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
     println("\n", label, ":")
     for tol in (nothing, 1e-10)
@@ -400,9 +400,9 @@ end
 
 # ### Figure — the 3-bus applicability map
 #
-# RESTATED IN v4.0 (PHASE 28): TWO maps now, one per formulation — this is itself the finding.
+# NOTE: TWO maps, one per formulation — this is itself the finding.
 # `thesis_literal=true` reproduces the SAME boundary this page originally characterized
-# (pre-Phase-26); the default's map is almost entirely "exact" wherever it solves at all (MEASURED
+# (before the default changed); the default's map is almost entirely "exact" wherever it solves at all (MEASURED
 # 98/150), with MOST of the remaining non-exact cells being App. C guard/infeasible outcomes — an
 # UNRELATED mechanism, not a cone-exactness boundary — but a SMALL genuine cone-inexact region
 # does survive (3/150, ratio 8196–9746), visible as isolated red cells rather than a wide band.
@@ -492,7 +492,7 @@ function plot_3bus_map(rows_3bus, formulation, title_str)
             "guard tripped (unmeasured)",
             "infeasible (unserveable)",
             "voltage bound active",
-            "EXACT-04 control",
+            "high-PV control",
         ];
         orientation = :horizontal,
         framevisible = false,
@@ -541,14 +541,14 @@ end
 #     which writes `results/socp_applicability/ieee123_sweep.csv` — the exact file read below.
 #     Everything in Substrate A above, by contrast, was solved live at build time.
 #
-# Axes are multipliers on the Phase-17-retuned population point (`load 0.05 / pv 0.12`, seed
+# Axes are multipliers on the retuned population point (`load 0.05 / pv 0.12`, seed
 # `20260719`) — the point the thesis-reproduction pages use.
 #
 # Parsed with `Base` only: the docs environment pins a minimal dependency set, and a numeric table we
 # generate ourselves does not justify adding `CSV`/`DataFrames` to it and re-resolving
 # `docs/Manifest.toml` (which CI requires to stay in Julia-version lockstep).
 
-# DUAL-MODE (restated in v4.0, Phase 28): the committed CSV now carries a `formulation` column
+# DUAL-MODE: the committed CSV now carries a `formulation` column
 # (`default`/`thesis_literal`) — parsed below and used to split every report/figure by formulation.
 
 function read_sweep_csv(path)
@@ -610,7 +610,7 @@ end
 # **2. Reverse flow alone does not predict inexactness.** It is present at *every* solved point,
 # including every exact one. Reverse flow is the setting; the binding voltage cap is the cause.
 #
-# RESTATED IN v4.0 (PHASE 28): BOTH findings hold under BOTH formulations — MEASURED this plan,
+# NOTE: BOTH findings hold under BOTH formulations — MEASURED in the dual-mode re-run,
 # the voltage upper bound is never active at any solved point (`atvmax==0` everywhere) and
 # `vpeak` ranges IDENTICALLY (0.99969–1.01198 pu) under `ConvexBranchFlow()` (default) AND
 # `ConvexBranchFlow(; thesis_literal=true)`. Classification counts are also close (default:
@@ -640,18 +640,18 @@ end
 #     produce.
 #
 #     Another free tell, visible in the summary above: the exact/inexact band on this feeder is
-#     narrow — RESTATED IN v4.0 (PHASE 28), MEASURED per formulation: `0.8667 … 1.392` (default,
+#     narrow — MEASURED per formulation: `0.8667 … 1.392` (default,
 #     factor **1.6**) and `0.976 … 1.011` (thesis_literal, factor **1.04**, even narrower). On
 #     Substrate A it is `0.05103 … 8196` under the default (factor **~161000**) and wider still
 #     under thesis_literal — nothing comparable to IEEE-123's straddling band under EITHER
 #     formulation. A narrow band means the boundary's position is decided by where the threshold
 #     was put; a wide one means it isn't. The table below is a single (default-formulation)
-#     snapshot from an earlier run — not re-run dual-mode this plan, since the mechanism (solver
+#     snapshot from an earlier run — not re-run dual-mode, since the mechanism (solver
 #     noise scaling with problem size) is architecturally formulation-independent, confirmed by the
 #     near-identical dual-mode summary above.
 #
 #     **Mechanism:** the classifier's `atol = 1e-6` sits *at* Clarabel's achievable cone residual on a
-#     122-branch problem at the default `tol_gap = 1e-8`. The WR-01 idiom scales the threshold with
+#     122-branch problem at the default `tol_gap = 1e-8`. The usual relative-threshold idiom scales the threshold with
 #     quantity *magnitude* but **not** with solver *accuracy*, and accuracy degrades with problem size.
 #
 #     Tighten the **gap** tolerances (`tol_gap_abs`/`tol_gap_rel`) to discriminate. Tightening
@@ -673,7 +673,7 @@ end
 
 # ### Figure — the IEEE-123 map
 #
-# RESTATED IN v4.0 (PHASE 28): one map per formulation, mirroring Substrate A's dual-mode
+# NOTE: one map per formulation, mirroring Substrate A's dual-mode
 # treatment (gate 1, cone-residual, only — see the per-formulation numeric summary above for
 # whether the two substantively differ here).
 
@@ -775,9 +775,9 @@ end
 # ## What does not generalize — the point of showing two substrates
 #
 # Two findings that looked like properties of the *method* on Substrate A turned out to be properties
-# of that *fixture*. RESTATED IN v4.0 (PHASE 28), MEASURED per formulation (the 3-bus column below
+# of that *fixture*. MEASURED per formulation (the 3-bus column below
 # is `thesis_literal=true`, the formulation whose boundary this page originally characterized;
-# the default's own much-smaller inexact region, MEASURED this plan at ratio 8196–9746, would make
+# the default's own much-smaller inexact region, MEASURED in the dual-mode re-run at ratio 8196–9746, would make
 # an even wider band — see "The boundary, quantified" above):
 #
 # | claim on the 3-bus fixture (`thesis_literal=true`) | on real IEEE-123 (both formulations) |
@@ -790,21 +790,21 @@ end
 # failure-class separation) and the **caveat** (calibrate the noise floor per feeder) — not the
 # boundary values.
 #
-# ## Restated in v4.0 (Phase 28)
+# ## Dual-mode summary
 #
-# Summary of this plan's (28-03) dual-mode re-verification, gate-qualified (this entire page is
+# Summary of the dual-mode re-verification, gate-qualified (this entire page is
 # gate 1, cone-residual, only — see `docs/literate/ac_oracle.jl` for the separate gate-2 finding):
 #
-# - **Substrate A control point (`pv=1.2, load=0.20, vmax=1.05`, EXACT-04):** now measured EXACT
+# - **Substrate A control point (`pv=1.2, load=0.20, vmax=1.05`):** now measured EXACT
 #   under BOTH `ConvexBranchFlow()` (default) and `ConvexBranchFlow(; thesis_literal=true)` —
-#   PM-01/26-18, cited not re-derived. The pre-Phase-28 page asserted this point "inexact" under
-#   the (then bare-default) `ConvexBranchFlow()`, which described the OLD (pre-Phase-26) default.
+#   cited from the restricted-branch-flow tests, not re-derived. An earlier version of this page asserted this point "inexact" under
+#   the (then bare-default) `ConvexBranchFlow()`, which described the OLD default.
 # - **The default is NOT unconditionally cone-exact**, despite Gan-Low's construction being
 #   designed to force cone-tightness: MEASURED 3/150 default grid points on Substrate A are
 #   genuinely cone-inexact (ratio 8196–9746), at different (mostly lower-load) combinations than
-#   the EXACT-04 control point. This is a narrower, rarer exactness-failure region than
+#   the high-PV control point. This is a narrower, rarer exactness-failure region than
 #   `thesis_literal=true`'s (5/150, ratio 9727–9872) — not an absent one.
-# - **`thesis_literal=true` reproduces the ORIGINAL, pre-Phase-26 exactness boundary** this page
+# - **`thesis_literal=true` reproduces the ORIGINAL exactness boundary** this page
 #   was built to characterize — now correctly attributed to it specifically, not to the default.
 # - **Substrate B (real IEEE-123) shows no measurable formulation-dependent difference**: both
 #   formulations report near-identical classification counts, `vpeak` ranges, and noise-floor
@@ -824,5 +824,4 @@ end
 # every run; a drifted control is a warning, never a silent pass.
 #
 # Full investigation trails, including the inert-fixture false start and the per-stage failure
-# attribution work, are in `.planning/spikes/001-relaxation-validity-map/`,
-# `.../002-ieee123-validity-map/` and `.../003-phase18-fragility-tolerance/`.
+# attribution work, are kept with the sweep scripts and results.

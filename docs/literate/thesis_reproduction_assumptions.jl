@@ -36,15 +36,15 @@ cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 #
 # Regulators, capacitors, and switches are **not** actively modeled as real devices — they are
 # absorbed into the fixture's existing near-ideal switch-class impedance
-# (`IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` in `src/data/ieee123.jl`), per the phase's REQUIREMENTS
-# Out-of-Scope declaration. Only the 117 ordinary (non-switch) branches receive real per-segment
+# (`IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` in `src/data/ieee123.jl`), as an explicit
+# out-of-scope modeling choice. Only the 117 ordinary (non-switch) branches receive real per-segment
 # Ω data from `IEEE123_BRANCH_RX_OHMS`; the 5 switch/regulator-collapsed edges intentionally
 # keep their pre-existing synthetic near-ideal value.
 #
 # ## 4. The aggregator population re-tune
 #
-# `test/fixtures_ieee123.jl` re-tunes the IEEE-123 aggregator population scale AFTER Phase 17
-# swapped in real impedances, because the ORIGINAL synthetic-impedance triple broke
+# `test/fixtures_ieee123.jl` re-tunes the IEEE-123 aggregator population scale AFTER the
+# switch to real impedances, because the ORIGINAL synthetic-impedance triple broke
 # `solve_welfare`'s SOCP-exactness gate outright on the real network (`assert_socp_exact!`
 # threw — worst gap ratio 1.378 > 1). The re-tune:
 #
@@ -65,15 +65,15 @@ const LOAD_SCALE_IEEE123 = 0.05    # was 0.03 (synthetic-impedance point)
 const PV_SCALE_IEEE123 = 0.12      # was 0.06
 const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCALE held fixed
 
-# WHY: Phase 17's exhaustive population-scale search found the achievable regime on the real
+# WHY: an exhaustive population-scale search found the achievable regime on the real
 # feeder is genuinely **asymmetric** — the lower voltage band (drop toward 0.9 pu) transfers
 # reasonably well under load-scaling, but the upper band (rise toward 1.1 pu) does not; any
 # population scale pushing the solved max meaningfully above ~1.02-1.03 pu drives the SOC
 # relaxation genuinely inexact before reaching 1.08 pu (the same high-PV/reverse-flow
-# exactness boundary Phase 15's EXACT-04 finding documents on the IEEE-13 fixture).
+# exactness boundary documented on the IEEE-13 high-PV fixture).
 #
 # !!! warning "CORRECTED 2026-07-26 — the upper-band half of this claim needs re-measuring"
-#     Phase 17's search ran at the default `tol_gap = 1e-8`, where "drives the SOC relaxation
+#     The search ran at the default `tol_gap = 1e-8`, where "drives the SOC relaxation
 #     genuinely inexact" is **not distinguishable from solver noise** on this feeder (`atol = 1e-6`
 #     sits at Clarabel's achievable cone residual — Section 8). Two specific problems:
 #
@@ -83,7 +83,7 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 #       feeder across a 5.5× PV range (`vpeak` 0.9997-1.016 pu against caps 1.05-1.10), so there
 #       is no observed upper-band binding to be asymmetric about.
 #
-#     Phase 17's full search space was **not** re-swept, so this is recorded as *evidence
+#     The full search space was **not** re-swept, so this is recorded as *evidence
 #     undermined, needs re-measurement at tight tolerance* — not as refuted. The **lower**-band
 #     claim (`vmin_solved ≈ 0.9487` pu, load-driven) is real physics and is unaffected.
 #
@@ -112,17 +112,17 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # -\$2829 -> +\$439"). Dividing two welfare numbers that can each be negative
 # (`welfare_dadp` by `welfare_fit`) silently inverts the intended "DADP is better" reading
 # whenever the denominator's sign flips — this repo NEVER reports that ratio as a primary claim
-# (Pitfall 1, enforced mechanically in `scripts/thesis_case123_repro.jl` and both literate
-# pages). The sign flip, not the ratio magnitude, is this phase's actually-pinned,
+# (enforced mechanically in `scripts/thesis_case123_repro.jl` and both literate
+# pages). The sign flip, not the ratio magnitude, is the actually-pinned,
 # thesis-faithful signal.
 #
-# !!! warning "CORRECTED 2026-09-30 (Phase 28 code review FIX, CR-01) -- every figure in the paragraph above is STALE"
+# !!! warning "CORRECTED 2026-09-30 -- every figure in the paragraph above is STALE"
 #     The **≈+0.045%** aggregate-welfare-gap figure and the **`fit_dso ≈ -196.216447`**,
 #     **`acct.dso ≈ +3.725705`**, **`acct.prosumer ≈ -41039.129`** surplus figures quoted above
-#     are the PRE-Phase-26/27 values, contradicted by the "Restated in v4.0 (Phase 28)" table
-#     later on this same page (FIX-01/FIX-02, FIX-09/FIX-10). That table restates the three
+#     are the values from BEFORE the model corrections, contradicted by the "Restated after the model corrections" table
+#     later on this same page. That table restates the three
 #     surplus figures but the DERIVED aggregate-welfare-gap percentage was never recomputed
-#     anywhere in the Phase 28 restatement -- corrected here by actually running the current
+#     anywhere in the restatement -- corrected here by actually running the current
 #     `HEAD` code (never by re-deriving from the stale numbers above): `acct.dso ≈ +3.739374`,
 #     `acct.prosumer ≈ -41039.144`, `fit_dso ≈ -286.107696`, `fit_prosumer ≈ -40857.497`
 #     (matching the restated table below). Using this codebase's own identity
@@ -132,16 +132,16 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 #     above. The thesis's own +25% headline magnitude still does NOT transfer either way; the
 #     direction (small, positive, fragile) is unchanged, only the magnitude claim moves. The
 #     DSO-surplus sign flip and the prosumer-surplus decrease -- this paragraph's actual pinned
-#     claims -- are UNCHANGED. See the "Restated in v4.0 (Phase 28)" section below for the full
+#     claims -- are UNCHANGED. See the "Restated after the model corrections" section below for the full
 #     old->new table and named causes.
 #
-# ## 7. The asymmetric voltage-binding caveat (Phase 17)
+# ## 7. The asymmetric voltage-binding caveat
 #
 # The real-impedance IEEE-123 fixture's voltage constraint binds **asymmetrically**: the lower
 # band (toward 0.9 pu, driven by residential load) is strongly binding and transfers well across
 # population scales, while the upper band (toward 1.1 pu, driven by PV reverse-flow) is only
 # weakly/boundary-limited — pushing the population scale up to chase a stronger upper-band bind
-# drives the SOC relaxation inexact before the bound is even reached. Phase-17-retuned solves
+# drives the SOC relaxation inexact before the bound is even reached. solves at the re-tuned point
 # observe **vmin_solved ≈ 0.9487 pu, vmax_solved ≈ 1.0105 pu (directional, public-data)** — both
 # inside the feasible band, with real headroom on the lower side and comparatively little on the
 # upper side. Any future re-tune of this population must re-verify this asymmetry, not assume it
@@ -155,7 +155,7 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 #     limits the upper band does not, pending re-measurement at tight tolerance. The lower-band
 #     binding (`vmin_solved ≈ 0.9487` pu) is unaffected.
 #
-# ## 8. Plan 18-01's stability/sensitivity sweep — does the sign flip survive population-scale
+# ## 8. The stability/sensitivity sweep — does the sign flip survive population-scale
 #    perturbation?
 #
 # **Yes — at all five swept points.** (This section was CORRECTED on 2026-07-26; the original
@@ -177,11 +177,11 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # There is no boundary, no discontinuity and no knife edge in this neighbourhood.
 #
 # !!! warning "CORRECTED 2026-08-23 — `fit_dso` column above does NOT currently reproduce at all 5 points"
-#     Quick task `260823-gea` re-ran this exact measurement (fixed `scripts/repro_stability_check.jl`,
+#     A later re-run of this exact measurement (fixed `scripts/repro_stability_check.jl`,
 #     `tol_gap=1e-10`, 3 independent runs, all consistent) to close out the golden-band item below and
 #     found a partial non-reproduction: `solve_welfare`'s SOCP-exactness gate DOES still resolve 5/5
 #     (0/5 THREW, the `dadp_dso` column above is confirmed), but `fit_baseline`'s OWN internal nested
-#     solve — a separate call site, SITE 3 of the `optimizer` threading in `260726-mo7` — now fails
+#     solve — a separate call site of the `optimizer` threading — now fails
 #     with `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of the 5 points (`δ=-0.02, 0.00, +0.05`),
 #     leaving `fit_dso` (and hence the full sign-flip confirmation) measured at only 2 of 5 points
 #     today. This is a DIFFERENT numerical issue than the one this section originally diagnosed —
@@ -189,8 +189,8 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 #     environment drift (Clarabel/Julia patch versions) since the `run-after-kwarg.log` this table is
 #     sourced from was captured. The table above is left AS-IS (a historical record of that log), but
 #     should not be read as currently-reproducible in the `fit_dso` column without a fresh re-run.
-#     Closing this out needs a bounded, budgeted re-measurement in a future phase — not attempted here
-#     per this task's own measurement-before-golden discipline (an honest partial result is preferred
+#     Closing this out needs a bounded, budgeted re-measurement later — not attempted here
+#     per the measurement-before-golden discipline (an honest partial result is preferred
 #     over spending unbounded solver time chasing a clean 5/5 or quietly re-trying until one appears).
 #
 # **Why the original sweep concluded otherwise — the failures were NUMERICAL.**
@@ -207,7 +207,7 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # solves in one `try/catch`. Nothing was flaky — Clarabel is deterministic and the ratios
 # reproduce bit-for-bit; only the attribution was inferred.
 #
-# The golden magnitude band was **re-derived and re-pinned** by quick task `260823-gea`:
+# The golden magnitude band was **re-derived and re-pinned** by that re-run:
 # `DSO_BAND_LO=0.0, DSO_BAND_HI=7.211125525764296` in `test/test_thesis_repro.jl`, replacing the
 # original `5.58855710237937` that had been derived from the ONE point (`δ=0.0`) solving at the
 # time. The re-derivation turned on a distinction the old measurement script conflated: the
@@ -218,7 +218,7 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # starved by a stage irrelevant to it. With both fixed, `dso` is trustworthy at **5 of 5** swept
 # points (while only 2/5 clear all three stages), giving `1.5 × 4.807417 = 7.211125525764296`
 # from the fixed script at `REPRO_TOL_GAP=1e-10`. This coincides numerically with the `7.211`
-# previously projected in the planning notes, but is reached by the decoupling argument above —
+# previously projected earlier, but is reached by the decoupling argument above —
 # **not** by the refuted "the sweep solves 5/5 everywhere" assumption that figure was originally
 # extrapolated from. The band widens (`5.5886 → 7.2111`); the sign gate `DSO_BAND_LO = 0.0` and
 # every other assertion in that test are unchanged, and the pinned point (`|dso| = 3.7257`) sits
@@ -228,51 +228,49 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # at `tol_gap=1e-10` its nested solve returns `ALMOST_OPTIMAL`/`NEARLY_FEASIBLE_POINT` at 3 of 5
 # swept points (discrete flake rate 13/20 = 0.650, all 13 at that same stage, reproduced across
 # 3 runs), so the FULL sign-flip confirmation holds at 2 of 5 points, not 5 of 5 as
-# `260726-mo7`'s summary recorded.
+# the earlier record stated.
 #
 # ~~ORIGINAL (WRONG) VERDICT: "No — not confirmed … `sign_flip_survives: false` — ALL FOUR
 # non-zero perturbation points FAILED OUTRIGHT … the DSO-surplus sign flip is therefore confirmed
-# only at the exact Phase-17-retuned population point, NOT across a ±2-5% neighborhood."~~
+# only at the exact re-tuned population point, NOT across a ±2-5% neighborhood."~~
 #
-# Evidence: `.planning/spikes/003-phase18-fragility-tolerance/` (README + `run.log` before /
-# `run-after-kwarg.log` after), `.planning/spikes/002-ieee123-validity-map/` (the noise-floor
-# proof), commit `c099ee6` (the `optimizer` kwarg on `fit_baseline` that made the FIT
+# Evidence: the before/after run logs of the stability sweep and the IEEE-123 validity map (the
+# noise-floor proof), and commit `c099ee6` (the `optimizer` kwarg on `fit_baseline` that made the FIT
 # counterfactual conditionable at all). `scripts/repro_stability_check.jl`'s three-solve
 # `try/catch` has now been split per stage and the `optimizer` kwarg threaded through
-# (`260823-gea`), so a future population re-tune (or a future attempt at this golden-band
+# (see above), so a future population re-tune (or a future attempt at this golden-band
 # re-derivation, budgeted for the slower tight-tolerance solves) can re-run it directly with no
 # further prerequisite fix.
 #
-# ## Restated in v4.0 (Phase 28)
+# ## Restated after the model corrections
 #
-# Phases 26-27 changed the model underneath the [Thesis Case A Reproduction —
-# Real-Impedance IEEE-123](@ref) page's live solve, and this session (Phase 28, plan 28-02)
-# MEASURED (not merely re-asserted) what changed and why, per this plan's own locked
+# Later model corrections changed the [Thesis Case A Reproduction —
+# Real-Impedance IEEE-123](@ref) page's live solve, and the numbers below were
+# MEASURED (not merely re-asserted) to establish what changed and why, following the
 # "measure first" discipline:
 #
-# **1. The exactness gate is now genuinely tighter (FIX-08, Phase 27).** `assert_socp_exact!`
+# **1. The exactness gate is now genuinely tighter.** `assert_socp_exact!`
 # switched from a flat `atol=1e-6` to a per-branch hybrid floor
 # `atol_b = max(τ_solver=2e-7, ε·ref_b)`. At this page's exact population point, re-measured
-# live this session WITHOUT any override: `solve_welfare` trips the gate at
-# gap=4.384e-6/ratio=19.25, and `fit_baseline`'s internal SITE-3 re-check trips it at
+# live WITHOUT any override: `solve_welfare` trips the gate at
+# gap=4.384e-6/ratio=19.25, and `fit_baseline`'s internal final re-check trips it at
 # gap=8.207e-7/ratio=2.50. Per the `exactness-gate-hybrid-floor` project memory's own policy
-# ("never raise τ_solver/ε to hide it; measure a tighter solver `tol_gap` first"), Task 1 of
-# plan 28-02 measured that BOTH residuals are resolved cleanly by the SAME
+# ("never raise τ_solver/ε to hide it; measure a tighter solver `tol_gap` first"), measurement showed that BOTH residuals are resolved cleanly by the SAME
 # `tol_gap_abs=tol_gap_rel=3e-9` (`solve_welfare`) / `1e-9` (`fit_baseline`) overrides
 # `test/test_thesis_repro.jl`'s own committed golden already carries — VERDICT:
 # PRECISION-ARTIFACT for both, confirmed empirically, not a genuine new inexactness. Both
 # overrides are now threaded through the live docs page and `scripts/thesis_case123_repro.jl`.
 #
-# **2. `fit_dso`'s magnitude moved materially — FIX-09/FIX-10 (Phase 27, plan 27-09).**
-# `fit_baseline`'s internal settlement (SITE 2) moved from a SOCP-based re-solve to a genuine
-# physics-only `ACPowerFlow(; limits=false)` settlement (F-27-09-1). Measured old vs new at
+# **2. `fit_dso`'s magnitude moved materially.**
+# `fit_baseline`'s internal settlement moved from a SOCP-based re-solve to a genuine
+# physics-only `ACPowerFlow(; limits=false)` settlement. Measured old vs new at
 # this exact population point:
 #
-# | Quantity | OLD (findings.txt, 2026-08-23) | NEW (this session, live) |
+# | Quantity | OLD (findings.txt, 2026-08-23) | NEW (live) |
 # |---|---|---|
 # | `fit_dso` | ≈ -196.216447 | ≈ -286.107696 |
 # | `fb.prosumer_surplus` (`fit_prosumer`) | ≈ -40857.497 | ≈ -40857.497 (essentially unchanged, 8 sig. figs) |
-# | `acct.dso` (DADP side, unaffected by FIX-09/10) | ≈ +3.725705 | ≈ +3.739374 |
+# | `acct.dso` (DADP side, unaffected by the settlement change) | ≈ +3.725705 | ≈ +3.739374 |
 #
 # Since `fit_prosumer` itself barely moves, the entire `fit_dso` shift is attributable to
 # `fb.social_fit`'s lossy frontier-exchange accounting changing under the new AC-physics
@@ -281,17 +279,17 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # stays negative, `acct.dso` stays positive and within `test_thesis_repro.jl`'s
 # `DSO_BAND_HI=7.211125525764296` golden band (measured `acct.dso≈3.739`, comfortably inside).
 #
-# **3. The small `acct.dso` shift (+3.7257 -> +3.7394) is FIX-01/FIX-02 (Phase 26).** The
+# **3. The small `acct.dso` shift (+3.7257 -> +3.7394) comes from the default-formulation change.** The
 # default `ConvexBranchFlow()` switched from the old thesis-literal lower-band restriction to
-# the Gan-Low upper-band restriction (`26-FINDINGS.md`'s PM-01) — a small, expected shift in
+# the Gan-Low upper-band restriction — a small, expected shift in
 # the SOCP optimum on any fixture using the bare default, unrelated to the FIT-side change
 # above.
 #
 # **Restatement verdict, stated plainly per the locked "never hide a changed result" policy:**
 # a genuinely different number (`fit_dso`) is reported here as a FINDING with a named cause
-# (FIX-09/FIX-10's AC-settlement change), not silently re-pinned or masked by a tolerance
+# (the AC-settlement change), not silently re-pinned or masked by a tolerance
 # change. The reproduction's actual claim — the DSO-surplus sign flip and the prosumer
-# decrease — reproduces unchanged under the corrected Phase 26/27 model.
+# decrease — reproduces unchanged under the corrected model.
 #
 # ## Live-checked constants
 #

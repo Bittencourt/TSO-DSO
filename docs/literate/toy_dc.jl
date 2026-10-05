@@ -1,16 +1,16 @@
 # # Rung 0 — The Toy DC Walking Skeleton
 #
-# This page is the **reproducibility proof** for Phase 1: it executes the real
+# This page is the **reproducibility proof** of the walking skeleton: it executes the real
 # [`solve_toy_dc`](@ref) end-to-end during the Documenter build, so the numbers
-# below cannot silently drift from the code (threat T-01-09). It is deliberately
-# minimal — one page proving the docs pipeline works. Rich per-model math docs
-# arrive in Phase 9 (EXP-03).
+# below cannot silently drift from the code. It is deliberately
+# minimal — one page proving the docs pipeline works. The richer per-model math docs
+# are on the pages that follow.
 #
 # ## The per-unit base
 #
 # Every electrical quantity in the framework is **per-unit**: SI inputs are
 # converted to per-unit exactly once, at ingestion, and never mixed with SI
-# downstream (INFRA-05). Phase 1 ships a single documented placeholder base at a
+# downstream. The framework ships a single documented placeholder base at a
 # typical IEEE-13 distribution voltage level:
 #
 # ```math
@@ -24,7 +24,7 @@
 # I_\text{base} = \frac{S_\text{base}}{\sqrt{3}\, V_\text{base}}.
 # ```
 #
-# This placeholder is **superseded by real feeder fixtures in Phase 4** (DATA-03);
+# This placeholder is **superseded by the real feeder fixtures** used on later pages;
 # it exists here only so the toy model has a documented, sane per-unit context.
 
 using TSODSO
@@ -35,8 +35,7 @@ base = PerUnitBase(1.0, 4.16)          # S_base [MVA], V_base [kV]
 
 # ## The toy DC math
 #
-# Rung 0 is strictly **single-node, single-period** (RESEARCH Open-Question 2,
-# RESOLVED). There is one servable load $p_\text{load} \in [0, 1]$ (pu) and one
+# Rung 0 is strictly **single-node, single-period**. There is one servable load $p_\text{load} \in [0, 1]$ (pu) and one
 # import $p_\text{import} \ge 0$ (pu) drawn from the frontier node. The nodal
 # balance simply pins import to load,
 #
@@ -51,11 +50,11 @@ base = PerUnitBase(1.0, 4.16)          # S_base [MVA], V_base [kV]
 # ```
 #
 # Even though there is only one node, the balance is routed through the **shared
-# residual registry** `ctx.residuals[:nodal_balance]` (the PF-01 seam), so a
-# Phase-2 branch-flow formulation contributes into the *same* expression with no
+# residual registry** `ctx.residuals[:nodal_balance]` (the residual-seam contract), so a
+# branch-flow formulation contributes into the *same* expression with no
 # `if formulation ==` branching. The solve goes through the `assert_solved!`
-# status choke point (INFRA-03) and the balance's **dual** is the nodal price
-# (the DADP consumed from Phase 5 onward).
+# status choke point and the balance's **dual** is the nodal price
+# (the DADP consumed by the pricing pages).
 
 # ## Building and solving a trivial feeder
 #
@@ -82,7 +81,7 @@ objective
 
 price
 
-# And the PF-01 seam really was exercised: the shared residual registry holds the
+# And the residual seam really was exercised: the shared residual registry holds the
 # accumulated nodal-balance expression.
 
 haskey(ctx.residuals, :nodal_balance)

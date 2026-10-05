@@ -1,13 +1,13 @@
 # # Rung 7 — Nash Diagonalization & Shared Corridor
 #
-# This page is the PVAL-03 literate proof for the multi-distributor Nash equilibrium
-# seam (NASH-01/NASH-02/NASH-03/NASH-04): it executes the real
+# This page is the literate proof for the multi-distributor Nash equilibrium
+# seam: it executes the real
 # [`build_shared_transmission`](@ref)/[`run_nash!`](@ref)/[`run_nash_probe`](@ref TSODSO.run_nash_probe)
 # hand-rolled Gauss-Seidel diagonalization end-to-end during the Documenter build, on
 # the SAME N=2 symmetric toy fixture `test/test_planning_nash.jl`'s own hand-checked
 # regression uses, so the numbers below are genuinely solved — never a hardcoded literal
 # copied from a goldens/test file (mirrors the Rung 6 page's own reproducibility-proof
-# pattern, threat T-14-05).
+# pattern).
 #
 # ## The shared-corridor coupling model
 #
@@ -36,9 +36,9 @@
 # [`DistributorView`](@ref) standing in for a standalone follower), then `write_back!`s
 # the converged flow and investment before moving to the next distributor. Sweeps
 # repeat until the worst-distributor residual across a full sweep falls below
-# `tol_outer` (NASH-03) — there is NO general uniqueness/convergence guarantee for
-# Gauss-Seidel diagonalization on a genuinely coupled game, which is exactly why NASH-04
-# (below) exists.
+# `tol_outer` — there is NO general uniqueness/convergence guarantee for
+# Gauss-Seidel diagonalization on a genuinely coupled game, which is exactly why the
+# multi-start probe (below) exists.
 #
 # ## Two-level convergence diagnostics
 #
@@ -50,7 +50,7 @@
 # cuts across a `z_{-i}` change would be unsound). [`trace_summary`](@ref TSODSO.trace_summary) rolls this
 # ledger into one reporting `NamedTuple`.
 #
-# ## NASH-04 — never present one run as canonical
+# ## Never present one run as canonical
 #
 # Gauss-Seidel diagonalization has no general convergence/uniqueness proof, so this
 # project's own honesty gate, [`run_nash_probe`](@ref TSODSO.run_nash_probe), runs `run_nash!` across MULTIPLE
@@ -174,10 +174,10 @@ hlines!(ax_inv, [0.3]; label = "x_inv_max ceiling", color = :black, linestyle = 
 axislegend(ax_inv; position = :rb)
 fig_inv
 
-# ## NASH-04 — the multi-seed/multi-order honesty probe
+# ## The multi-seed/multi-order honesty probe
 #
 # A single `run_nash!` call above reached ONE converged point from ONE cold start.
-# NASH-04 requires reporting a converged equilibrium alongside a measured spread across
+# Honest reporting requires a converged equilibrium alongside a measured spread across
 # multiple seeds and sweep orders — never presenting that one run as definitive.
 # `run_nash_probe` repeats the SAME fixture from a cold start, a saturating start, and a
 # skewed start, in both `:forward` and `:reverse` sweep order:

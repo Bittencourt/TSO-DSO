@@ -1,12 +1,12 @@
 # # Rung 6 — Stackelberg-Benders (Planning)
 #
-# This page is the PVAL-03 literate proof for the planning layer's single-distributor
-# Stackelberg equilibrium (PLAN-04/PLAN-05/PLAN-06/PLAN-07/PVAL-01): it executes the real
+# This page is the literate proof for the planning layer's single-distributor
+# Stackelberg equilibrium: it executes the real
 # [`solve_stackelberg!`](@ref) hand-rolled Benders loop end-to-end during the Documenter
-# build, on a toy instance ECONOMICALLY EQUIVALENT to the one Phase 11's permanent
+# build, on a toy instance ECONOMICALLY EQUIVALENT to the one the permanent
 # certification regression uses, so the numbers below are a genuinely solved answer —
 # never a hardcoded literal copied from a goldens/test file (mirrors the `admm.jl`/
-# `pricing_dlmp.jl` reproducibility-proof pattern, threat T-14-05).
+# `pricing_dlmp.jl` reproducibility-proof pattern).
 #
 # ## The PSR problem-number map — planning-layer symbols
 #
@@ -31,7 +31,7 @@
 # | `z` (the Benders trial coupling flow) | `p_import` at the oracle's frontier / the aggregator's own net import `p_ag` | `PlanningOracle`'s `pin[t]: p_import[t] == z[t]` ([`build_planning_oracle`](@ref TSODSO.build_planning_oracle)); the follower's own `coupling[t]: x_op[t] == z[t]` ([`build_follower`](@ref TSODSO.build_follower)) |
 # | `λ_j[t] ↔ π_s` (the coupling-constraint dual) | the DADP/DLMP the v1 operational layer already reports | the oracle's `pin` dual (`oracle_res.π`, the optimality-cut gradient) and the follower's own `coupling` dual (`follower_res.π_s`) |
 #
-# ## The Phase 11 empirical certification story (narrated, not re-executed)
+# ## The empirical certification story (narrated, not re-executed)
 #
 # The leader/follower role assignment and the coupling-dual sign convention used by
 # [`solve_stackelberg!`](@ref) are NOT assumed — they were independently CERTIFIED in
@@ -65,8 +65,8 @@ using TSODSO: Bus, Branch, Feeder
 # eq. 3.12) is `U(p) = −(b/2)·(p − E)²`, which expands to `b·E·p − (b/2)·p² − (b/2)·E²` —
 # the elastic device's `a·p − (b/2)·p²` shape whenever `a = b·E`, PLUS the constant
 # `−(b/2)·E²`. `Deferrable`'s IMPLEMENTED utility KEEPS that constant — it is inherent in
-# the squared form (`Deferrable.jl` builds `-(b/2)*(Σp − E)^2` verbatim; RESEARCH A5 only
-# sanctions dropping eq. 3.12's separate additive constant `c`, NOT this expansion term).
+# the squared form (`Deferrable.jl` builds `-(b/2)*(Σp − E)^2` verbatim; only
+# dropping eq. 3.12's separate additive constant `c`, NOT this expansion term).
 # Setting `E = 6.0`, `b = 1.0` (so `a = b·E = 6.0`, matching the certified fixture's own
 # `a`) with a single-hour window `[1,1]` (`T = 1`) therefore reproduces the certified
 # fixture's economics UP TO AN ADDITIVE CONSTANT `(b/2)·E² = 18` on the leader's total
@@ -146,8 +146,8 @@ result.UB - 0.5 * 1.0 * 6.0^2
 # ## Benders convergence figure (CairoMakie)
 #
 # The canonical Benders picture, drawn from `result.trace` — the per-iteration
-# [`BendersTrace`](@ref) ledger `solve_stackelberg!` recorded WHILE it ran (plan 12-01,
-# `src/planning/trace.jl`) — so no additional solve happens here; both panels read only
+# [`BendersTrace`](@ref) ledger `solve_stackelberg!` recorded WHILE it ran
+# (`src/planning/trace.jl`) — so no additional solve happens here; both panels read only
 # the already-recorded, JuMP-free ledger. Left: the incumbent upper bound `UB` and the
 # relaxed master's lower bound `LB` close on each other as cuts accumulate. Right: the
 # relative gap `(UB − LB)/max(1, |UB|)` — the loop's OWN stopping quantity, never a
@@ -210,9 +210,9 @@ fig
 
 # ## Rung 6 at scale — a full day-ahead horizon on IEEE-13 (T=24)
 #
-# Everything above is a T=1 toy instance, chosen to stay byte-comparable to the
-# `test/test_planning_certification.jl` certification narrative. The phase-30 headline
-# result (BILEV-03, `test/test_planning_benders_ieee13.jl`) demonstrates
+# Everything above is a T=1 toy instance, chosen to stay directly comparable to the
+# `test/test_planning_certification.jl` certification narrative. The headline
+# result (`test/test_planning_benders_ieee13.jl`) demonstrates
 # `solve_stackelberg!` with the REAL `ConvexBranchFlow()` SOCP branch-flow formulation on
 # a realistic multi-bus, multi-period feeder (`ieee13_modified()`) at `T=4`; this section
 # extends that same demonstration to a full day-ahead horizon, `T=24`, confirming the
@@ -263,7 +263,7 @@ aggs24 = [house_agg_t24(bus; seed = 20260718) for bus in 2:N24]
 ]
 
 # `follower_kwargs24`/`master_kwargs24` are DELIBERATELY smaller than the T=4 headline
-# test's own kwargs (`y_max=0.05, corridor_cap=1.0`): a live probe this session found
+# test's own kwargs (`y_max=0.05, corridor_cap=1.0`): a live probe found
 # that configuration throws a genuine `assert_battery_complementarity!` violation at
 # `t=7` once the full 24-hour price swing is in play (OUT OF SCOPE for `inexact_policy`
 # — a complementarity violation, not an exactness-class throw, per `solve_stackelberg!`'s
@@ -271,7 +271,7 @@ aggs24 = [house_agg_t24(bus; seed = 20260718) for bus in 2:N24]
 # (`y_max=0.03`, `corridor_cap=0.5`, `x_inv_max=0.03`) keeps every Benders trial inside a
 # region where the battery's own complementarity gate holds throughout — confirmed
 # below by a full, live, error-free run. `master_kwargs24` again OMITS `α_op_lb`/
-# `α_x_lb` entirely (the `:auto` default, BILEV-05, same as the T=4 headline test).
+# `α_x_lb` entirely (the `:auto` default, same as the T=4 headline test).
 
 follower_kwargs24 =
     (; corridor_cap = 0.5, x_inv_max = 0.03, c_inv = 0.01, c_op = fill(0.01, 24))
@@ -293,17 +293,17 @@ result24 = solve_stackelberg!(
 
 # ## T=24 validation — real, observed numbers
 #
-# The converged relative UB/LB gap (measured THIS session: `iters=15`,
+# The converged relative UB/LB gap (measured on THIS run: `iters=15`,
 # `gap≈3.09e-7`, well inside `tol=1e-6`):
 
 result24.gap
 
-# The leader's converged flexibility investment `y` (measured this session: `0.015`,
+# The leader's converged flexibility investment `y` (measured on this run: `0.015`,
 # half of `y_max=0.03` — the master's own box did not bind at the optimum):
 
 result24.y
 
-# The converged coupling flow `z` across all 24 hours (measured this session: `0.015`
+# The converged coupling flow `z` across all 24 hours (measured on this run: `0.015`
 # pu during the overnight/morning/evening hours where importing is economic, `0.0`
 # during the midday hours where it is not):
 
@@ -313,7 +313,7 @@ result24.z
 
 result24.UB
 
-# The incumbent's exactness certificate (BILEV-04b; Phase 30 code review CR-02): the
+# The incumbent's exactness certificate: the
 # verdict of the very oracle solve that produced `UB`, its measured cone residual, and
 # whether `UB`/`gap` certify only the SOC relaxation. Measured 2026-10-01: `:exact`,
 # `incumbent_socp_maxgap ≈ 3.03e-9`, `ub_relaxation_only = false` — so `UB` is a genuine
@@ -329,8 +329,8 @@ result24.ac_report
 #
 # The SAME canonical Benders bounds/gap panels as the T=1 figure above, PLUS a THIRD
 # panel plotting `result24.trace.socp_maxgap_trace` — the per-iteration MEASURED SOCP
-# cone residual `max |l·v − (P²+Q²)|` (BILEV-04b, `src/planning/trace.jl`), recorded on
-# every row whose oracle solve ran the exactness gate (Phase 30 code review WR-05: it used
+# cone residual `max |l·v − (P²+Q²)|` (`src/planning/trace.jl`), recorded on
+# every row whose oracle solve ran the exactness gate (it used
 # to be a `NaN` placeholder on every exact row, which left this panel empty by
 # construction). `NaN` remains only on rows with no trusted oracle solve — here the
 # follower-feasibility-cut rows, iterations 2–13 — and is masked with the SAME
@@ -392,7 +392,7 @@ ax_cone24 = Axis(
     xlabel = "Benders iteration k",
     ylabel = "SOCP cone gap (socp_maxgap)",
     yscale = log10,
-    title = "T=24: incumbent cone-gap (BILEV-04b)",
+    title = "T=24: incumbent cone-gap",
 )
 scatterlines!(
     ax_cone24,

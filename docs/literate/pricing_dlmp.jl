@@ -1,13 +1,13 @@
 # # Rung 4 — DADP/DLMP Decomposition & Welfare Accounting
 #
-# This page is the EXP-03 literate proof for the pricing seam (PRICE-01/PRICE-02/
-# PRICE-03): it executes the real [`extract_dlmp`](@ref), [`decompose_dlmp`](@ref), and
+# This page is the literate proof for the pricing seam:
+# it executes the real [`extract_dlmp`](@ref), [`decompose_dlmp`](@ref), and
 # [`welfare_accounting`](@ref) end-to-end during the Documenter build over a genuine
 # solved [`ConvexBranchFlow`](@ref) point, so the numbers below cannot silently drift
-# from the code (mirrors the `toy_dc.jl` reproducibility-proof pattern, threat T-01-09).
+# from the code (mirrors the `toy_dc.jl` reproducibility-proof pattern).
 # Every component is reconstructed INDEPENDENTLY from a DISTINCT registered dual — never
 # hand-rolled dual extraction — and both `decompose_dlmp` and `welfare_accounting` carry
-# HARD internal assertions that throw on a dropped or mis-signed term (T-05-02/T-05-03),
+# HARD internal assertions that throw on a dropped or mis-signed term,
 # so reaching the displayed numbers below is itself part of the validation.
 #
 # ## The DADP — dual of the nodal active balance
@@ -21,9 +21,9 @@
 #
 # Positive `λ_j[t]` is the marginal cost of consuming one more unit at bus `j`, hour `t`.
 # [`extract_dlmp`](@ref) REFUSES to return a price (throws) if handed an `:l`-bearing
-# SOCP `ctx` that lacks the PF-04 exactness certificate `ctx.meta[:socp_maxgap]` — a
+# SOCP `ctx` that lacks the exactness certificate `ctx.meta[:socp_maxgap]` — a
 # strict (inexact) SOC relaxation makes `l` a fictitious over-current and any recovered
-# dual physically meaningless (threat T-05-01).
+# dual physically meaningless.
 #
 # ## The four-way decomposition
 #
@@ -65,7 +65,7 @@
 #
 # The `Σ_j λ_j·p_agⱼ` price-transfer CANCELS between the two settlements, so
 # `social == prosumer + dso == objective_value(ctx.model)` is the correctness net —
-# [`welfare_accounting`](@ref) throws if that identity is violated (threat T-05-03).
+# [`welfare_accounting`](@ref) throws if that identity is violated.
 
 using TSODSO
 using TSODSO: Bus, Branch, Feeder
@@ -89,7 +89,7 @@ agg3 = Aggregator(3, 0.9, [batt3], fill(0.2, T))
 # ## Solving the GLB-CVX welfare (eq. 3.38) on the SOCP branch-flow formulation
 #
 # `allow_export = true` gives the frontier a free-sign net exchange — the SOC-exactness
-# enabler (PF-04) that keeps the cone tight so the recovered duals are trustworthy.
+# enabler that keeps the cone tight so the recovered duals are trustworthy.
 
 λ₀ = fill(40.0, T)
 ctx, objective, dadp = solve_welfare(
