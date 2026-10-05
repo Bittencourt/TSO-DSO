@@ -226,8 +226,7 @@ function make_relaxed_oracle_model(
 )
     isempty(aggregators) &&
         throw(ArgumentError("make_relaxed_oracle_model needs at least one aggregator"))
-    length(λ₀) == T ||
-        throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+    length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
 
     N = length(feeder.buses)
     for (k, agg) in enumerate(aggregators)
@@ -301,8 +300,7 @@ genuine ONE-TIME relaxed solve of [`make_relaxed_oracle_model`](@ref) via
 relaxed minimum of `-welfare` over `p_import ∈ [0, y_max]^T` — a valid global lower bound
 on `-welfare(z)` for ANY `z` in that box (the box strictly contains every pinned trial;
 confirmed numerically, and valid even when the box
-SOCP is itself inexact). `gap` is that solve's own measured duality gap, `margin =
-alpha_lb_margin(optimum, gap)` (scale-aware), and `bound = optimum − margin` is the bound
+SOCP is itself inexact). `gap` is that solve's own measured duality gap, `margin = alpha_lb_margin(optimum, gap)` (scale-aware), and `bound = optimum − margin` is the bound
 `build_master` declares. `build_master`'s rejection compares an explicit bound against
 `optimum` (never against `bound`).
 """
@@ -314,7 +312,8 @@ function alpha_op_lb_derivation(
     T::Int,
     y_max::Real,
 )
-    model = make_relaxed_oracle_model(feeder, pf, aggregators; λ₀ = λ₀, T = T, y_max = y_max)
+    model =
+        make_relaxed_oracle_model(feeder, pf, aggregators; λ₀ = λ₀, T = T, y_max = y_max)
     solve_with_retry!(model; dual = true)
     optimum = -objective_value(model)
     gap = _measured_duality_gap(model)
@@ -555,7 +554,9 @@ function build_master(;
     # to Union{Symbol,Real}, so the guard must reject every Symbol OTHER than :auto (a
     # typo such as :atuo used to fall through to a MethodError deep in the resolution).
     (α_op_lb isa Real || α_op_lb === :auto) || throw(
-        ArgumentError("build_master: α_op_lb must be :auto or a Real, got $(repr(α_op_lb))"),
+        ArgumentError(
+            "build_master: α_op_lb must be :auto or a Real, got $(repr(α_op_lb))",
+        ),
     )
     (α_x_lb isa Real || α_x_lb === :auto) || throw(
         ArgumentError("build_master: α_x_lb must be :auto or a Real, got $(repr(α_x_lb))"),
@@ -619,7 +620,7 @@ function build_master(;
         )
         clamp_op = Float64(α_op_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
         slack_op = 0.0   # The installed bound is a genuine certified lower
-                          # bound by construction -- no runtime floor slack needed
+        # bound by construction -- no runtime floor slack needed
         α_eff
     else
         Float64(α_op_lb)
@@ -640,7 +641,8 @@ function build_master(;
         )
         _fk isa NamedTuple ? derive_alpha_x_lb(; _fk..., T = T) : derive_alpha_x_lb(_fk)
     elseif bounds_ctx !== nothing && _fk !== nothing
-        d = _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
+        d =
+            _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
             alpha_x_lb_derivation(_fk)
         slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)
         α_x_lb > d.optimum + slack && throw(
@@ -660,7 +662,7 @@ function build_master(;
         )
         clamp_x = Float64(α_x_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
         slack_x = 0.0   # The installed bound is a genuine certified lower
-                         # bound by construction -- no runtime floor slack needed
+        # bound by construction -- no runtime floor slack needed
         α_eff
     else
         # bounds_ctx === nothing (opt-out, bit-for-bit identical path), OR _fk === nothing (a
@@ -864,4 +866,3 @@ function solve_master!(
         LB = objective_value(master.model),
     )
 end
-

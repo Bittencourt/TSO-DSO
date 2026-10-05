@@ -371,4 +371,3 @@ function solve_planning_oracle!(
 
     return (; cost, π, π_s, dadp, ctx = o.ctx, exactness, socp_maxgap)
 end
-

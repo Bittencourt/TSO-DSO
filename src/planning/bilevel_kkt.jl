@@ -238,6 +238,7 @@ EXISTING call site (the corner fixture) is bit-for-bit unaffected; only
 the non-degenerate fixture passes a nonzero `q_op`.
 
 # Boundary guards (each throws `ArgumentError` naming the offending value, BEFORE any
+
 `@variable`/`@objective` assembly, mirroring `follower.jl`/`master.jl`):
 
   - `T >= 1`
@@ -317,9 +318,8 @@ function build_bilevel_kkt(
         ),
     )
 
-    corridor_cap > 0 || throw(
-        ArgumentError("build_bilevel_kkt needs corridor_cap > 0, got $corridor_cap"),
-    )
+    corridor_cap > 0 ||
+        throw(ArgumentError("build_bilevel_kkt needs corridor_cap > 0, got $corridor_cap"))
     x_inv_max > 0 ||
         throw(ArgumentError("build_bilevel_kkt needs x_inv_max > 0, got $x_inv_max"))
     c_inv >= 0 || throw(ArgumentError("build_bilevel_kkt needs c_inv >= 0, got $c_inv"))
@@ -342,8 +342,7 @@ function build_bilevel_kkt(
         throw(ArgumentError("pi_tariff has length $(length(pi_tariff)), expected T=$T"))
     length(q_op) == T ||
         throw(ArgumentError("q_op has length $(length(q_op)), expected T=$T"))
-    length(v_d) == T ||
-        throw(ArgumentError("v_d has length $(length(v_d)), expected T=$T"))
+    length(v_d) == T || throw(ArgumentError("v_d has length $(length(v_d)), expected T=$T"))
 
     all(q_op .>= 0) || throw(
         ArgumentError(
@@ -456,7 +455,11 @@ function build_bilevel_kkt(
 
     # ---- Leader objective — STRICTLY AFFINE (no quadratic term anywhere ---
     # in this single-level MILP's objective or constraints).
-    @objective(model, Min, c_y * y_inv + sum(pi_tariff[t] * z[t] - v_d[t] * d[t] for t in 1:T))
+    @objective(
+        model,
+        Min,
+        c_y * y_inv + sum(pi_tariff[t] * z[t] - v_d[t] * d[t] for t in 1:T)
+    )
 
     return BilevelKKT(
         model,
@@ -574,8 +577,8 @@ function _recover_kkt_certificate(
     # the derivation proves a certificate with every multiplier `<= m_ub_proven`
     # exists, so reaching `m_ub_proven` itself is admissible, not a symptom.
     proven = kkt.m_ub_proven
-    _lim(u) = u >= proven - atol_bound ? max(u - atol_bound, proven + atol_bound) :
-        u - atol_bound
+    _lim(u) =
+        u >= proven - atol_bound ? max(u - atol_bound, proven + atol_bound) : u - atol_bound
     lim = (;
         mu_cap = _lim.(ub.mu_cap),
         mu_lo = _lim.(ub.mu_lo),
@@ -681,8 +684,7 @@ end
 """
     solve_bilevel!(kkt::BilevelKKT) -> NamedTuple
 
-Solve the built-ONCE [`BilevelKKT`](@ref) `kkt` via a SINGLE `assert_solved!(kkt.model;
-dual = false)` call (MILP — post-SOS1-bridge binaries mean JuMP duals are not
+Solve the built-ONCE [`BilevelKKT`](@ref) `kkt` via a SINGLE `assert_solved!(kkt.model; dual = false)` call (MILP — post-SOS1-bridge binaries mean JuMP duals are not
 available/meaningful; `dual=false` here is the CORRECT, not a weakened, gate).
 
 Then runs the at-bound sanity check on a recovered KKT certificate, not on
@@ -780,4 +782,3 @@ function solve_bilevel!(kkt::BilevelKKT)
         model = kkt.model,
     )
 end
-

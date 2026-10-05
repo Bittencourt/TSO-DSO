@@ -293,7 +293,7 @@ function build_master_integer(;
         )
         clamp_op = Float64(α_op_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
         slack_op = 0.0   # The installed bound is a genuine certified lower
-                          # bound by construction -- no runtime floor slack needed
+        # bound by construction -- no runtime floor slack needed
         α_eff
     else
         Float64(α_op_lb)
@@ -315,7 +315,8 @@ function build_master_integer(;
         )
         _fk isa NamedTuple ? derive_alpha_x_lb(; _fk..., T = T) : derive_alpha_x_lb(_fk)
     elseif bounds_ctx !== nothing && _fk !== nothing
-        d = _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
+        d =
+            _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
             alpha_x_lb_derivation(_fk)
         slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)
         α_x_lb > d.optimum + slack && throw(
@@ -335,7 +336,7 @@ function build_master_integer(;
         )
         clamp_x = Float64(α_x_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
         slack_x = 0.0   # The installed bound is a genuine certified lower
-                         # bound by construction -- no runtime floor slack needed
+        # bound by construction -- no runtime floor slack needed
         α_eff
     else
         # bounds_ctx === nothing (opt-out, bit-for-bit identical path), OR _fk === nothing (a
@@ -861,4 +862,3 @@ function apply_integer_cuts!(master::BendersMasterInteger, lb_res, Q_nu)
     end
     return (; nogood_fired = stalled)
 end
-
