@@ -51,7 +51,11 @@ s = Scenario(;
     name = "stochastic-pv-demand-demo",
     feeder = :ieee13,
     T = T,
-    strategy = Stochastic(S = 5, probabilities = [0.05, 0.15, 0.30, 0.30, 0.20], H_oos = 10),
+    strategy = Stochastic(
+        S = 5,
+        probabilities = [0.05, 0.15, 0.30, 0.30, 0.20],
+        H_oos = 10,
+    ),
 )
 
 # ## Running the extensive form + out-of-sample evaluation

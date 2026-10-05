@@ -166,7 +166,8 @@ end
 # `docs/literate/ac_oracle.jl` for the separate gate-2 (AC-dispatch) finding.
 
 function sweep_3bus(pvs, lds, vms, thesis_literal::Bool)
-    formulation = thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
+    formulation =
+        thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
     formulation_label = thesis_literal ? :thesis_literal : :default
     rows = NamedTuple[]
     for vmax in vms, ls in lds, ps in pvs
@@ -225,7 +226,9 @@ rows_3bus = vcat(
     sweep_3bus(PV_3BUS, LOAD_3BUS, VMAX_3BUS, true),
 )
 
-for formulation in (:default, :thesis_literal), cls in ("exact", "inexact", "infeasible", "guard")
+for formulation in (:default, :thesis_literal),
+    cls in ("exact", "inexact", "infeasible", "guard")
+
     n = count(r -> r.formulation == formulation && r.class == cls, rows_3bus)
     n > 0 && @printf("%-16s %-11s %3d\n", formulation, cls, n)
 end
@@ -314,9 +317,9 @@ for (label, formulation) in (("default", :default), ("thesis_literal", :thesis_l
             ok = filter(
                 r ->
                     r.vmax == vm &&
-                        r.load == ls &&
-                        r.formulation == formulation &&
-                        r.class == "exact",
+                    r.load == ls &&
+                    r.formulation == formulation &&
+                    r.class == "exact",
                 rows_3bus,
             )
             print(@sprintf("%-12s", isempty(ok) ? "—" : string(maximum(r.pv for r in ok))))
@@ -356,9 +359,12 @@ end
 # `vmax=1.05, load=0.1, pv=1.2` — see "The boundary, quantified" above).
 
 base_opt = select_optimizer(SOCP())
-for (label, thesis_literal, ps) in
-    (("default (pv=1.2, high-PV control)", false, 1.2), ("thesis_literal (pv=1.4)", true, 1.4))
-    formulation = thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
+for (label, thesis_literal, ps) in (
+    ("default (pv=1.2, high-PV control)", false, 1.2),
+    ("thesis_literal (pv=1.4)", true, 1.4),
+)
+    formulation =
+        thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
     println("\n", label, ":")
     for tol in (nothing, 1e-10)
         opt =
@@ -576,7 +582,9 @@ rows_123 = read_sweep_csv(
     joinpath(pkgdir(TSODSO), "results", "socp_applicability", "ieee123_sweep.csv"),
 )
 
-for formulation in (:default, :thesis_literal), cls in ("exact", "inexact", "infeasible", "guard")
+for formulation in (:default, :thesis_literal),
+    cls in ("exact", "inexact", "infeasible", "guard")
+
     n = count(r -> r.formulation == formulation && r.class == cls, rows_123)
     n > 0 && @printf("%-16s %-11s %3d\n", formulation, cls, n)
 end

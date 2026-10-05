@@ -247,7 +247,8 @@ function house_agg_t24(
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
     therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, 24))
-    batt = PVBattery(bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0, 3.8, 6.2, 8.9, Ppv)
+    batt =
+        PVBattery(bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0, 3.8, 6.2, 8.9, Ppv)
     return Aggregator(bus, φ, [therm, batt], Pdc)
 end
 
@@ -256,10 +257,30 @@ N24 = length(feeder24.buses)
 aggs24 = [house_agg_t24(bus; seed = 20260718) for bus in 2:N24]
 
 λ0_24 = Float64[
-    3.8, 3.7, 3.6, 3.6, 3.7, 4.0,   # 00–05 overnight trough
-    4.8, 5.8, 6.5, 6.2, 5.9, 5.7,   # 06–11 morning ramp -> midday shoulder
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0,   # 12–17 afternoon rise -> evening peak
-    8.6, 7.4, 6.2, 5.2, 4.4, 4.0,   # 18–23 evening decline
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,   # 00–05 overnight trough
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,   # 06–11 morning ramp -> midday shoulder
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,   # 12–17 afternoon rise -> evening peak
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,   # 18–23 evening decline
 ]
 
 # `follower_kwargs24`/`master_kwargs24` are DELIBERATELY smaller than the T=4 headline
