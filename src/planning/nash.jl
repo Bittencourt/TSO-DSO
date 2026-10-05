@@ -430,8 +430,8 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
  3. parity re-solve (`solve_follower!(result_i.follower, result_i.z)`), then read
     `x_inv_i_converged = value(shared.x_inv[i])` — see this file's header for why this
     re-solve is load-bearing.
- 4. Compute distributor `i`'s Nash residual `residual_i = max(‖z_i^(k+1) − z_i^(k)‖∞,
-    |Δx_inv_i|)` against its previously COMMITTED `(z_i, x_inv_i)`.
+ 4. Compute distributor `i`'s Nash residual `residual_i = max(‖z_i^(k+1) − z_i^(k)‖∞, |Δx_inv_i|)` against
+    its previously COMMITTED `(z_i, x_inv_i)`.
  5. Compute the (possibly damped) write-back value `z_i_new` (`ω == 1.0` recovers plain
     undamped Gauss-Seidel, the locked default; `ω < 1` damps toward the PREVIOUS `z_i`).
     With `ω < 1` the follower is RE-SOLVED at the damped `z_i_new` and the MATCHING
@@ -491,8 +491,7 @@ instead of the continuous `BendersMaster` — built fresh every single best resp
 (never persisted across best responses or sweeps, mirroring this file's own "fresh cut
 store per best-response, by construction" header discipline). `α_op_lb` defaults to
 `:auto` (`get(integer, :α_op_lb, :auto)`), derived via the SAME `bounds_ctx` machinery
-`build_master`/`solve_stackelberg!` already use (`(; feeder, pf, aggregators, λ₀,
-follower_kwargs = nothing)` — `DistributorView`'s pooled-capacity coupling has no sound
+`build_master`/`solve_stackelberg!` already use (`(; feeder, pf, aggregators, λ₀, follower_kwargs = nothing)` — `DistributorView`'s pooled-capacity coupling has no sound
 per-object relaxed minimum, the SAME accepted, documented skip the continuous path
 already uses). `α_x_lb` defaults to the bound DERIVED from
 the follower cost's signs, `min(0, c_inv[i])·x_inv_max[i] + Σₜ min(0, c_op[i][t])·y_max`
@@ -537,6 +536,7 @@ oscillatory contraction) and cycling histories, and live on a damped converging 
 the old `b`-only key wrongly rejected (`test/test_planning_nash_integer.jl`).
 
 # Status and exceptions
+
 The returned `status` is `:converged` or `:converged_relaxation_only`. Throws
 `ArgumentError` (invalid inputs), `SolveFailedError`, `CertificateError` and
 `ConvergenceError` (non-converging diagonalization). See the [status & exception policy](@ref status-policy).
@@ -950,23 +950,25 @@ function run_nash!(
                     atol = cycle_atol,
                 )
                 if first_seen !== nothing
-                    throw(ConvergenceError(
-                        "run_nash!: integer diagonalization CYCLED — the full " *
-                        "committed state (joint binary state $joint_b, z, x_inv) " *
-                        "recurred at sweep $k (first seen at sweep $first_seen, " *
-                        "state atol=$cycle_atol) with no residual decrease " *
-                        "(residual=$residual_k, tol_outer=$tol_outer); " *
-                        "per-distributor states at the repeat: " *
-                        join(
-                            [
-                                "i=$i: b=$(integer_buffer[i]), z=$(z_prev[i, :]), " *
-                                "x_inv=$(x_inv_prev[i])" for i in 1:shared.N
-                            ],
-                            ", ",
-                        ) *
-                        " — refusing to silently continue toward max_sweeps";
-                        iterations = k,
-                    ))
+                    throw(
+                        ConvergenceError(
+                            "run_nash!: integer diagonalization CYCLED — the full " *
+                            "committed state (joint binary state $joint_b, z, x_inv) " *
+                            "recurred at sweep $k (first seen at sweep $first_seen, " *
+                            "state atol=$cycle_atol) with no residual decrease " *
+                            "(residual=$residual_k, tol_outer=$tol_outer); " *
+                            "per-distributor states at the repeat: " *
+                            join(
+                                [
+                                    "i=$i: b=$(integer_buffer[i]), z=$(z_prev[i, :]), " *
+                                    "x_inv=$(x_inv_prev[i])" for i in 1:shared.N
+                                ],
+                                ", ",
+                            ) *
+                            " — refusing to silently continue toward max_sweeps";
+                            iterations = k,
+                        ),
+                    )
                 end
             end
             push!(
@@ -993,13 +995,15 @@ function run_nash!(
             # Parameters and the pinned x_inv bounds; returning `converged = true`
             # over an untrusted solver state would poison every subsequent
             # value()/dual() query far from the cause.
-            is_solved_and_feasible(shared.model) || throw(SolveFailedError(
-                "run_nash!: final consistency re-solve of the fully-pinned shared " *
-                "model failed (termination_status=" *
-                "$(termination_status(shared.model))) — the converged state is " *
-                "not mutually feasible",
-                shared.model,
-            ))
+            is_solved_and_feasible(shared.model) || throw(
+                SolveFailedError(
+                    "run_nash!: final consistency re-solve of the fully-pinned shared " *
+                    "model failed (termination_status=" *
+                    "$(termination_status(shared.model))) — the converged state is " *
+                    "not mutually feasible",
+                    shared.model,
+                ),
+            )
             return (;
                 z = copy(z_prev),
                 x_inv = copy(x_inv_prev),
@@ -1021,12 +1025,14 @@ function run_nash!(
     end
 
     last_residual = last(trace.nash_residual_trace)
-    throw(ConvergenceError(
-        "run_nash!: exhausted $max_sweeps sweep(s) without converging (last recorded " *
-        "nash_residual=$last_residual, tol_outer=$tol_outer) — refusing to silently " *
-        "return a non-converged result";
-        iterations = max_sweeps,
-    ))
+    throw(
+        ConvergenceError(
+            "run_nash!: exhausted $max_sweeps sweep(s) without converging (last recorded " *
+            "nash_residual=$last_residual, tol_outer=$tol_outer) — refusing to silently " *
+            "return a non-converged result";
+            iterations = max_sweeps,
+        ),
+    )
 end
 
 export run_nash!
@@ -1251,7 +1257,6 @@ function run_nash_probe(
 
     return (; runs, spread, summary, n_runs)
 end
-
 
 # --- solve_variational_equilibrium — monolithic joint model selecting the variational
 # equilibrium (VE) inside a shared-constraint game's GNE continuum ---
@@ -1593,10 +1598,9 @@ function solve_variational_equilibrium(
             Float64(specs[i].master_kwargs.c_y) * y_inv[i] +
             c_inv[i] * x_inv[i] +
             sum(c_op[i][t] * z[i, t] for t in 1:T),
-        ) - (
-            value(ctxs[i].objective) -
-            sum(specs[i].λ₀[t] * value(z[i, t]) for t in 1:T)
-        ) for i in 1:N
+        ) -
+        (value(ctxs[i].objective) - sum(specs[i].λ₀[t] * value(z[i, t]) for t in 1:T))
+        for i in 1:N
     ]
 
     return (;
@@ -1608,4 +1612,3 @@ function solve_variational_equilibrium(
         model,
     )
 end
-

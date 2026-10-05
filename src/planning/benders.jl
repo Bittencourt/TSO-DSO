@@ -116,8 +116,12 @@ const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
 # included because Clarabel reports a near-certificate that way; the slack-min oracle's
 # `v > FEAS_CUT_V_TOL` check below is what actually confirms (or refutes, loudly) that z_k
 # is infeasible before any cut is appended.
-const ORACLE_INFEASIBLE_STATUSES =
-    (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE, MOI.ALMOST_INFEASIBLE)
+const ORACLE_INFEASIBLE_STATUSES = (
+    MOI.INFEASIBLE,
+    MOI.INFEASIBLE_OR_UNBOUNDED,
+    MOI.LOCALLY_INFEASIBLE,
+    MOI.ALMOST_INFEASIBLE,
+)
 
 # The oracle-infeasibility statuses that are NOT certified verdicts and must be CONFIRMED
 # by the slack-min `feas_oracle` before the corner search may treat the trial as +Inf
@@ -360,7 +364,12 @@ function _corner_recourse_ternary(
         # there so ternary search never dereferences a nonexistent .cost field and
         # still finds the true constrained minimum.
         fr.feasible || return Inf
-        orr = _oracle_or_infeasible(oracle, zvec; on_inexact = on_inexact, feas_oracle = feas_oracle)
+        orr = _oracle_or_infeasible(
+            oracle,
+            zvec;
+            on_inexact = on_inexact,
+            feas_oracle = feas_oracle,
+        )
         orr === nothing && return Inf   # genuine oracle infeasibility only
         return fr.cost - orr.cost
     end
@@ -508,8 +517,8 @@ function _corner_recourse_joint(
             # with an opaque error): route it to the no-certificate bisection fallback,
             # exactly like an oracle infeasibility.
             feas_cut =
-                isfinite(fr.v) && all(isfinite, fr.u) ? (; v = fr.v, u = fr.u, z_k = copy(z)) :
-                nothing
+                isfinite(fr.v) && all(isfinite, fr.u) ?
+                (; v = fr.v, u = fr.u, z_k = copy(z)) : nothing
             return (; Qz = Inf, gradQ = nothing, feas_cut)
         end
         # See the infeasible-trial handling in the docstring above: a GENUINE oracle-side
@@ -519,7 +528,12 @@ function _corner_recourse_joint(
         # complementarity violation, even an InterruptException) into +Inf, so the
         # minimum was taken over the remaining points only — an over-estimated Q_nu
         # and an invalid LL cut. Now only an infeasibility status maps to +Inf.
-        orr = _oracle_or_infeasible(oracle, z; on_inexact = on_inexact, feas_oracle = feas_oracle)
+        orr = _oracle_or_infeasible(
+            oracle,
+            z;
+            on_inexact = on_inexact,
+            feas_oracle = feas_oracle,
+        )
         orr === nothing && return (; Qz = Inf, gradQ = nothing, feas_cut = nothing)
         Qz = fr.cost - orr.cost
         gradQ = fr.π_s .+ orr.π   # elementwise, length T (docstring's dual-read pattern)
@@ -797,7 +811,8 @@ The build-time acceptance slack of `master`'s declared `:op`/`:x` epigraph lower
 [`BendersMaster`](@ref), `0.0` for any master type without that record (e.g.
 `BendersMasterInteger`, whose explicit bounds are never build-time validated).
 """
-_accepted_lb_slack(master::BendersMaster, label::Symbol) = getproperty(master.lb_slack, label)
+_accepted_lb_slack(master::BendersMaster, label::Symbol) =
+    getproperty(master.lb_slack, label)
 _accepted_lb_slack(master, label::Symbol) = 0.0
 
 """
@@ -857,7 +872,11 @@ cost on cost alone. The rule is therefore:
  3. Otherwise return `relax` (the caller labels it `ub_relaxation_only` and reports
     `exact` alongside, so a certified point is never thrown away).
 """
-function _select_incumbent(relax::NamedTuple, exact::Union{Nothing, NamedTuple}, converged::Function)
+function _select_incumbent(
+    relax::NamedTuple,
+    exact::Union{Nothing, NamedTuple},
+    converged::Function,
+)
     relax.exactness === :inexact || return relax
     exact !== nothing && converged(exact.UB) && return exact
     return relax
@@ -974,6 +993,7 @@ variantes de planejamento" for the full three-way comparison.
         checkpoint with `gap = NaN` and `feasible = false`, then `continue` — a
         feasibility cut NEVER updates `UB`; the oracle is NEVER solved on
         this branch.
+
       + Else: `oracle_res = solve_planning_oracle!(oracle, lb_res.z; on_inexact)` — only
         a follower-deliverable `z_k` ever reaches the oracle. `on_inexact = :throw` under
         `:strict`, `:report` otherwise; the oracle returns its exactness gate's verdict
@@ -990,8 +1010,7 @@ variantes de planejamento" for the full three-way comparison.
             the measured `v` (`feas_cut_v`) and `policy_action = :oracle_feasibility_cut`.
             A cut with
             `FEAS_CUT_V_NOISE < v ≤ FEAS_CUT_V_TOL` — the normal regime near a curved
-            boundary — is still VALID and is appended too (`policy_action =
-            :oracle_feasibility_cut_weak`); only a deterministic re-proposal of the same
+            boundary — is still VALID and is appended too (`policy_action = :oracle_feasibility_cut_weak`); only a deterministic re-proposal of the same
             `z_k` right after a weak cut, or `v ≤ FEAS_CUT_V_NOISE` (the two oracles
             genuinely disagree), raises a named error. See [`_feas_cut_class`](@ref). Any OTHER untrusted outcome
             (exhausted retry ladder, iteration limit, numerical error) is a solver
@@ -1115,14 +1134,14 @@ and the converged result is still returned (see
     call site, never silenced.
   - `ConvergenceError` if `max_iter` is exhausted without converging, naming the trace's
     last-recorded `LB`/`UB`/`gap` and the tolerance — refuses to silently
-    return a non-converged result. ALSO raised, immediately, when `inexact_policy =
-    :reject` re-encounters the identical SOCP-inexact trial it just rejected even though
+    return a non-converged result. ALSO raised, immediately, when `inexact_policy = :reject` re-encounters the identical SOCP-inexact trial it just rejected even though
     its cuts were appended (a named "`:reject` stalled" error). ALSO raised by the universal runtime epigraph floor
     guard (`_assert_epigraph_floor`) if ANY evaluated epigraph cost ever falls
     below its own declared lower bound — a genuine modeling bug, never a convergence
     issue.
 
 # Status and exceptions
+
 The returned `status` is `:converged` or `:converged_relaxation_only` (the UB certifies
 only the SOC relaxation). Throws: `ArgumentError` (invalid inputs), `SolveFailedError`
 (untrustworthy solver result), `CertificateError` (refused certificate), `ConvergenceError`
@@ -1234,7 +1253,7 @@ function solve_stackelberg!(
         follower                             # case 2: sound FollowerLP dispatch
     else
         nothing                              # case 3: no sound derivation (e.g. DistributorView) —
-                                              # documented scope limit, α_x_lb validation skipped
+        # documented scope limit, α_x_lb validation skipped
     end
     _bounds_ctx = (; feeder, pf, aggregators, λ₀, follower_kwargs = _follower_info)
 
@@ -1431,7 +1450,8 @@ function solve_stackelberg!(
                 "(its own noise floor) — the two oracles disagree about z_k, so no " *
                 "feasibility cut carries any information.",
             )
-            if feas_class === :weak && last_weak_feas_z !== nothing &&
+            if feas_class === :weak &&
+               last_weak_feas_z !== nothing &&
                maximum(abs, lb_res.z .- last_weak_feas_z) <= 1e-9
                 error(
                     "solve_stackelberg!: stalled near a curved feasibility boundary at " *
@@ -1500,18 +1520,20 @@ function solve_stackelberg!(
                 # `_corner_recourse_joint`'s own stall guard uses.
                 if last_rejected_z !== nothing &&
                    maximum(abs, lb_res.z .- last_rejected_z) <= 1e-9
-                    throw(ConvergenceError(
-                        "solve_stackelberg!: inexact_policy=:reject stalled at the " *
-                        "SOCP-inexact trial z=$(lb_res.z) (iteration $k, measured cone " *
-                        "gap maxgap=$(socp_maxgap_k)): its relaxation cuts were appended " *
-                        "and the master re-proposed the identical trial, so the " *
-                        "relaxation's optimum sits at this inexact point and no " *
-                        "certified incumbent can close the gap (best certified UB=$UB). " *
-                        "Use inexact_policy=:certify_incumbent to accept a " *
-                        "relaxation-only incumbent, or :strict to fail at the first " *
-                        "inexact solve.";
-                        iterations = k,
-                    ))
+                    throw(
+                        ConvergenceError(
+                            "solve_stackelberg!: inexact_policy=:reject stalled at the " *
+                            "SOCP-inexact trial z=$(lb_res.z) (iteration $k, measured cone " *
+                            "gap maxgap=$(socp_maxgap_k)): its relaxation cuts were appended " *
+                            "and the master re-proposed the identical trial, so the " *
+                            "relaxation's optimum sits at this inexact point and no " *
+                            "certified incumbent can close the gap (best certified UB=$UB). " *
+                            "Use inexact_policy=:certify_incumbent to accept a " *
+                            "relaxation-only incumbent, or :strict to fail at the first " *
+                            "inexact solve.";
+                            iterations = k,
+                        ),
+                    )
                 end
                 rejected_k = true
                 policy_action_k = :rejected
@@ -1629,7 +1651,8 @@ function solve_stackelberg!(
         end
         # the certified incumbent, updated only
         # by a certified iterate, compared only against other certified costs.
-        if oracle_res.exactness !== :inexact && (exact_inc === nothing || cost_k < exact_inc.UB)
+        if oracle_res.exactness !== :inexact &&
+           (exact_inc === nothing || cost_k < exact_inc.UB)
             exact_inc = (;
                 y = lb_res.y,
                 z = copy(lb_res.z),
@@ -1741,8 +1764,14 @@ function solve_stackelberg!(
             # ac_report, never allowed to discard the converged result.
             ac_report =
                 ub_relaxation_only ?
-                _incumbent_ac_report(feeder, aggregators, λ₀, T, z_best, incumbent_welfare) :
-                nothing
+                _incumbent_ac_report(
+                    feeder,
+                    aggregators,
+                    λ₀,
+                    T,
+                    z_best,
+                    incumbent_welfare,
+                ) : nothing
 
             # return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
             # (continuous path) or UB matches known_optimum exactly within
@@ -1790,13 +1819,15 @@ function solve_stackelberg!(
     last_LB = last(trace.LB_trace)
     last_UB = last(trace.UB_trace)
     last_gap = last(trace.gap_trace)
-    throw(ConvergenceError(
-        "solve_stackelberg!: exhausted $max_iter iteration(s) without converging " *
-        "(last recorded LB=$last_LB, UB=$last_UB, gap=$last_gap [gap may be NaN if the " *
-        "final iteration was a feasibility cut], tol=$tol) — refusing to silently " *
-        "return a non-converged result";
-        iterations = max_iter,
-    ))
+    throw(
+        ConvergenceError(
+            "solve_stackelberg!: exhausted $max_iter iteration(s) without converging " *
+            "(last recorded LB=$last_LB, UB=$last_UB, gap=$last_gap [gap may be NaN if the " *
+            "final iteration was a feasibility cut], tol=$tol) — refusing to silently " *
+            "return a non-converged result";
+            iterations = max_iter,
+        ),
+    )
 end
 
 export solve_stackelberg!
