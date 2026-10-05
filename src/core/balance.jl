@@ -1,4 +1,4 @@
-# Shared nodal-balance closing helper (ARCH-04). Loaded after core/ModelContext.jl because it
+# Shared nodal-balance closing helper. Loaded after core/ModelContext.jl because it
 # relies on `register_constraint!`.
 
 
@@ -25,8 +25,7 @@ Close the nodal residuals: build `Rp[j,t] == 0` (and, if `reactive`, `Rq[j,t] ==
 `j = 1:N`, `t = 1:T`, register them in `ctx.constraints` as `:balance_p` / `:balance_q`, and
 return `(balance_p, balance_q)` (`balance_q === nothing` when `reactive = false`).
 
-This is the single implementation of the block that every builder previously repeated
-(ARCH-04). Operation order is fixed and identical to the former inline blocks: `:Rp` size check,
+This is the single implementation of the block that every builder previously repeated. Operation order is fixed and identical to the former inline blocks: `:Rp` size check,
 `:Rp` constraints, register `:balance_p`, then (if `reactive`) `:Rq` size check, `:Rq`
 constraints, register `:balance_q`. JuMP/MOI constraint creation order is therefore unchanged.
 

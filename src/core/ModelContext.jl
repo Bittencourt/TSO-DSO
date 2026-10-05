@@ -1,7 +1,6 @@
 # src/core/ModelContext.jl
 #
-# SEAM: model context + residual registry (PF-01).
-# OWNER: plan 01-03.
+# SEAM: model context + residual registry.
 #
 # The mutable `ModelContext` owns the JuMP `Model` plus named registries:
 #   - `constraints` (name → ConstraintRef / array, for later `dual()` / DADP access),
@@ -9,13 +8,14 @@
 #                    `AbstractPowerFlow` formulations write into with no
 #                    `if formulation ==` branching),
 #   - `meta`        (experiment/result-specific keys; builder state lives in typed fields).
-# Phase 1 uses it trivially (one balance residual); the shape must support Phases 2–7.
+# The simplest use is one balance residual; the shape must also support indexed per-bus/time
+# residuals and the later layers.
 #
-# TWO ACCUMULATOR FLAVORS (Phase-2 extension, PF-02 / RESEARCH Pattern 4):
+# TWO ACCUMULATOR FLAVORS:
 #   1. AFFINE PRICE-BEARING RESIDUAL — the physical nodal balance is affine in the
 #      decision variables (P, Q, v, p_load), so the residual accumulators stay
-#      `AffExpr`. Phase 1 exposed a SCALAR `add_to_residual!(ctx, name, expr)`; Phase 2
-#      ADDS an INDEXED `add_to_residual!(ctx, name, i, t, expr)` backed by a lazily
+#      `AffExpr`. A SCALAR `add_to_residual!(ctx, name, expr)` is exposed, and an
+#      INDEXED `add_to_residual!(ctx, name, i, t, expr)` backed by a lazily
 #      grown `Matrix{AffExpr}` (bus × time). The dual of the pinned residual is the
 #      distribution price (DADP), so the value type is pinned to `AffExpr` — a
 #      non-affine (quadratic) term routed here fails LOUDLY via `convert(AffExpr, ·)`.
@@ -24,7 +24,7 @@
 #      flow through `add_to_residual!` (which would drop its curvature). It is
 #      accumulated separately as a `QuadExpr` in `ctx.objective` via
 #      `add_to_objective!`. Keeping the residual strictly affine and the objective
-#      quadratic is the load-bearing separation every downstream phase (3–7) reuses.
+#      quadratic is the load-bearing separation every downstream layer reuses.
 
 using JuMP
 
@@ -35,10 +35,10 @@ Mutable container coupling a JuMP `model` with named registries and typed builde
 
   - `constraints::Dict{Symbol,Any}` — constraint handles for later `dual()` / DADP access.
   - `residuals::Dict{Symbol,Any}`   — `AffExpr` accumulators; the shared nodal-balance
-    seam that power-flow formulations contribute into (PF-01/PF-02). Contributions ADD,
+    seam that power-flow formulations contribute into. Contributions ADD,
     never overwrite, so there is no `if formulation ==` branching anywhere. A residual
-    is either a SCALAR `AffExpr` (Phase-1 rung-0 seam) or an INDEXED `Matrix{AffExpr}`
-    (Phase-2 per-bus/time seam) — the physical balance is affine, so the value type is
+    is either a SCALAR `AffExpr` (rung-0 seam) or an INDEXED `Matrix{AffExpr}`
+    (per-bus/time seam) — the physical balance is affine, so the value type is
     always `AffExpr`.
   - `meta::Dict{Symbol,Any}`        — experiment/result-specific keys only (`p_import`,
     `q_import`, `socp_maxgap`, `price_provenance`, `qag_dso`, `problem_class`,
@@ -152,12 +152,12 @@ end
     add_to_residual!(ctx::ModelContext, name::Symbol, expr)
 
 ADD `expr` into the shared residual accumulator `ctx.residuals[name]` (creating it
-on first call). This is the PF-01 no-branching seam: every power-flow formulation
+on first call). This is the no-branching seam: every power-flow formulation
 contributes its branch/voltage terms into one shared nodal-balance expression by
 accumulation, never overwriting. Returns the updated accumulator.
 """
 function add_to_residual!(ctx::ModelContext, name::Symbol, expr)
-    # WR-04: a scalar accumulation must not silently collide with an INDEXED one of the
+    # A scalar accumulation must not silently collide with an INDEXED one of the
     # same name. If `name` already holds a `Matrix{AffExpr}`, adding a scalar `AffExpr`
     # would either error obscurely or (worse) corrupt the per-bus/time balance — reject
     # the accumulator-kind mismatch loudly instead.
@@ -175,7 +175,7 @@ end
 """
     add_to_residual!(ctx::ModelContext, name::Symbol, i::Int, t::Int, expr)
 
-INDEXED variant (PF-02): ADD `expr` into cell `(i, t)` of the per-bus/per-time
+INDEXED variant: ADD `expr` into cell `(i, t)` of the per-bus/per-time
 residual `Matrix{AffExpr}` held under `ctx.residuals[name]`, lazily allocating and
 growing the matrix as indices demand. New cells are initialized to `zero(AffExpr)`.
 Sizing is derived from the indices ALONE — no `ctx.feeder` is consulted, so the
@@ -187,7 +187,7 @@ fails loudly (it belongs in [`add_to_objective!`](@ref) instead). Returns the up
 `(i, t)` cell.
 """
 function add_to_residual!(ctx::ModelContext, name::Symbol, i::Int, t::Int, expr)
-    # WR-04: refuse to silently overwrite a pre-existing SCALAR accumulator of the same
+    # Refuse to silently overwrite a pre-existing SCALAR accumulator of the same
     # name. Previously a non-matrix value under `name` was discarded (a fresh 0×0 matrix
     # replaced it), losing the scalar contribution without warning — exactly the kind of
     # silent balance corruption this seam must never allow.

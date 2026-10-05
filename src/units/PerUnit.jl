@@ -1,18 +1,18 @@
 # src/units/PerUnit.jl
 #
-# Per-unit system (INFRA-05). One documented per-unit base; SI inputs are
+# Per-unit system. One documented per-unit base; SI inputs are
 # converted to per-unit ONCE at ingestion (before any struct is constructed),
 # then magnitude-sanity tripwires (explicit `throw(ArgumentError(...))`, NOT
 # `@assert`, so they are never elided under `-O`/`--check-bounds=no`) guard
-# against SI/pu mixing (RESEARCH Pattern 5, Pitfall 5). These bands are
+# against SI/pu mixing. These bands are
 # deliberately loud sanity
 # checks, not physics — an Ω value where pu is expected, or a voltage bound
 # outside [0.8, 1.2], fails immediately instead of producing a plausible-wrong
 # result downstream.
 #
-# Documented placeholder base (RESEARCH Open-Question 3 / Assumption A4):
+# Documented placeholder base:
 #     S_base = 1.0 MVA,  V_base = 4.16 kV   (IEEE-13-ish distribution level)
-# This placeholder is superseded by real feeder fixtures in Phase 4 (DATA-03).
+# This placeholder is superseded by the real feeder fixtures.
 #
 # NOTE: `to_pu_*` helpers live here, at ingestion, ONLY. They must never be
 # called inside a model builder (that would reintroduce the SI/pu mixing this
@@ -52,7 +52,7 @@ Convert an impedance in Ω to per-unit (÷ `Z_base`). Ingestion only.
 """
 to_pu_impedance(z_Ω, b::PerUnitBase) = z_Ω / Z_base(b)
 
-# --- Magnitude-sanity bands (heuristic tripwires, RESEARCH Assumption A2) ---
+# --- Magnitude-sanity bands (heuristic tripwires) ---
 const VOLTAGE_PU_MIN = 0.8
 const VOLTAGE_PU_MAX = 1.2
 const IMPEDANCE_PU_MAX = 5.0     # per-unit r, x expected well below this
@@ -62,7 +62,7 @@ const PRICE_MAX = 1.0e4          # $/MWh monetary sanity bound (prices kept in S
 """
     SMAX_NO_LIMIT
 
-Canonical "interior branch carries no binding thermal limit" sentinel (IN-01). A branch
+Canonical "interior branch carries no binding thermal limit" sentinel. A branch
 tagged with this apparent-power limit gets NO power cone in the SOCP formulation (it is
 effectively unconstrained). It must sit STRICTLY inside the `0 < smax < SMAX_PU_MAX` band
 that [`assert_magnitudes`](@ref) enforces, so it is deliberately just below `SMAX_PU_MAX`.
@@ -80,7 +80,7 @@ Assert a single per-unit voltage magnitude lies in the sanity band
 almost always means an SI quantity leaked in where a per-unit value was expected.
 
 Uses an explicit `throw` (not `@assert`) so the tripwire is never elided under
-`-O`/`--check-bounds=no`, matching `topology.jl`'s convention (WR-02).
+`-O`/`--check-bounds=no`, matching `topology.jl`'s convention.
 """
 function assert_magnitudes_voltage(v)
     VOLTAGE_PU_MIN ≤ v ≤ VOLTAGE_PU_MAX || throw(
@@ -95,14 +95,14 @@ end
 """
     assert_magnitudes(feeder)
 
-Loud magnitude tripwires over a constructed feeder (INFRA-05). Verifies every
+Loud magnitude tripwires over a constructed feeder. Verifies every
 bus voltage bound is in `[0.8, 1.2]` and ordered, every branch per-unit impedance
 is `0 ≤ r,x < 5`, and every branch apparent-power limit is `0 < smax < 100`.
 Throws `ArgumentError` (naming the offending bus/branch) on any out-of-band
 quantity.
 
 Uses explicit `throw`s (not `@assert`) so the tripwires are never elided under
-`-O`/`--check-bounds=no`, matching `topology.jl`'s convention (WR-02).
+`-O`/`--check-bounds=no`, matching `topology.jl`'s convention.
 
 Untyped on purpose: `Feeder` is defined in `data/Feeder.jl`, which is included
 *after* this file, so this method is duck-typed and resolved at call time.

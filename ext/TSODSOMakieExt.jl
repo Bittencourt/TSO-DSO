@@ -1,20 +1,19 @@
 # ext/TSODSOMakieExt.jl
 #
-# Package extension for CairoMakie convergence diagnostics (ADMM-05, opt-in viz).
-# OWNER: plan 07-01 SCAFFOLDS this module; plan 07-06 FILLS the method bodies.
+# Package extension for CairoMakie convergence diagnostics (opt-in viz).
 #
 # Loaded by Julia ONLY when both TSODSO and CairoMakie are present in the active
 # environment (weakdep + [extensions] gating — the modern replacement for Requires.jl,
 # mirroring ext/TSODSOGurobiExt.jl / ext/TSODSOMosekExt.jl). CairoMakie is NEVER a hard
 # dependency and stays removable: it appears only under [weakdeps] in Project.toml, so
 # the core `using TSODSO` and the headless CI test suite never import the heavy Makie
-# viz stack (threat T-07-01).
+# viz stack.
 #
-# FILLED by plan 07-06 (RESEARCH Pattern 6): the CairoMakie-backed methods for
+# The CairoMakie-backed methods for
 # `TSODSO.plot_convergence(res::TSODSO.AdmmResiduals; ...)` and
 # `TSODSO.plot_price_convergence(res::TSODSO.AdmmResiduals; ...)`. Each builds and RETURNS a
 # Makie `Figure` from the JuMP-free `AdmmResiduals` ledger ONLY — no JuMP, no solver, no
-# reach into optimization state (threat T-07-18). The methods dispatch on the core generic
+# reach into optimization state. The methods dispatch on the core generic
 # functions declared in src/diagnostics/plots.jl, mirroring how ext/TSODSOGurobiExt.jl /
 # ext/TSODSOMosekExt.jl add methods to the core solver-factory generic.
 module TSODSOMakieExt
@@ -25,7 +24,7 @@ using TSODSO, CairoMakie
 # (`== iters`), so a single x-range serves every series.
 _iters_axis(res::TSODSO.AdmmResiduals) = 1:(res.iters)
 
-# log10-axis guard (IN-04): the residual / price-gap traces are stored `abs(...)` / `ρ·r_norm`,
+# log10-axis guard: the residual / price-gap traces are stored `abs(...)` / `ρ·r_norm`,
 # so a value of EXACTLY 0.0 (e.g. `price_gap = ρ·r_norm` when `r_norm` hits 0, or a residual that
 # converges to exactly zero) maps to `log10(0) = -Inf`, which Makie rejects/drops — silently
 # breaking the thesis-grade figure. Clamp each plotted series to a small positive floor (`eps()`)
@@ -38,7 +37,7 @@ _logsafe(trace) = max.(trace, eps())
 Plot the ADMM primal `‖r‖` and dual `‖s‖` residual traces versus iteration on a
 log-scaled axis, overlaid with the per-unit `ε_pri` / `ε_dual` stopping-threshold lines
 (dashed) so convergence is read as the residual curves crossing below their thresholds
-(RESEARCH Pattern 6). Reads ONLY the JuMP-free `AdmmResiduals` traces. If `filename` is
+Reads ONLY the JuMP-free `AdmmResiduals` traces. If `filename` is
 given the figure is `save`d (vector PDF/SVG for thesis-grade output). Returns the `Figure`.
 """
 function TSODSO.plot_convergence(res::TSODSO.AdmmResiduals; filename = nothing)
@@ -79,8 +78,7 @@ end
 
 Plot the DADP price-convergence trajectory — the price move `‖Δλ‖` (`price_gap_trace`) on a
 log-scaled left axis — with the adaptive-ρ schedule (`rho_trace`) on a twin right axis, so
-the price move decaying while ρ balances the residuals is read at a glance (RESEARCH
-Pattern 6). Reads ONLY the JuMP-free `AdmmResiduals` traces. If `filename` is given the
+the price move decaying while ρ balances the residuals is read at a glance. Reads ONLY the JuMP-free `AdmmResiduals` traces. If `filename` is given the
 figure is `save`d. Returns the `Figure`.
 """
 function TSODSO.plot_price_convergence(res::TSODSO.AdmmResiduals; filename = nothing)
@@ -115,7 +113,7 @@ end
 """
     TSODSO.plot_nash_convergence(trace::TSODSO.NashTrace; filename = nothing) -> Makie.Figure
 
-Plot the TWO-LEVEL Nash diagonalization convergence trace (NASH-03, plan 13-02): the
+Plot the TWO-LEVEL Nash diagonalization convergence trace: the
 OUTER per-sweep max Nash residual (log-scaled left axis) — one point per completed
 sweep `k`, `maximum(trace.nash_residual_trace[trace.sweep_trace .== k])`, the
 worst-distributor residual within that sweep — overlaid with the INNER per-distributor

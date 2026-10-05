@@ -1,7 +1,6 @@
 # src/solver/ProblemClass.jl
 #
-# SEAM: problem-class taxonomy for solver dispatch (INFRA-02).
-# OWNER: plan 01-03.
+# SEAM: problem-class taxonomy for solver dispatch.
 #
 # A sealed set of problem classes expressed as SINGLETON TYPES under one abstract
 # type, so `select_optimizer` selects a solver by multiple dispatch (never an
@@ -15,8 +14,7 @@
 Abstract supertype for the mathematical class of an optimization model. Concrete
 singleton subtypes (`LP`, `MILP`, `QP`, `SOCP`, `NLP`) dispatch
 [`select_optimizer`](@ref) to the appropriate open-source solver factory. Models
-request a solver by problem class only — they never name a concrete solver
-(INFRA-02).
+request a solver by problem class only — they never name a concrete solver.
 """
 abstract type ProblemClass end
 
@@ -52,7 +50,7 @@ Marker type selecting the commercial Gurobi backend via
 [`commercial_optimizer`](@ref). The method that maps a `GurobiChoice` to an actual
 optimizer is added ONLY by the `TSODSOGurobiExt` package extension, which loads
 solely when the user has `Gurobi` in their environment. Gurobi is never a hard
-dependency (INFRA-02).
+dependency.
 """
 struct GurobiChoice end
 
@@ -69,8 +67,7 @@ struct MosekChoice end
     SCSChoice
 
 Marker type selecting the open-source, first-order SCS backend via a NEW, SEPARATE
-[`alternative_optimizer`](@ref) function — deliberately NEVER `commercial_optimizer`
-(D-20). Routing an open-source solver through a dispatch named/documented as
+[`alternative_optimizer`](@ref) function — deliberately NEVER `commercial_optimizer`. Routing an open-source solver through a dispatch named/documented as
 "commercial" would be a semantic mismatch: SCS is opt-in (a weakdep, never a hard
 dependency), but it is not a commercial/licensed backend like Gurobi or Mosek. The
 mapping method is added ONLY by the `TSODSOSCSExt` package extension, which loads

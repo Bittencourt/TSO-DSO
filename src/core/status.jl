@@ -1,7 +1,6 @@
 # src/core/status.jl
 #
-# SEAM: solve-status discipline (INFRA-03).
-# OWNER: plan 01-03.
+# SEAM: solve-status discipline.
 #
 # The SINGLE choke point wrapping `optimize!`. It delegates to JuMP's built-in
 # `is_solved_and_feasible(model; dual, allow_local=false)` — the modern idiom that
@@ -16,13 +15,13 @@ using JuMP
     assert_solved!(model::Model; dual::Bool = true, allow_local::Bool = false,
                    allow_almost::Bool = false)
 
-Optimize `model` and assert the result is trustworthy. This is the single INFRA-03
+Optimize `model` and assert the result is trustworthy. This is the single
 choke point: it calls `optimize!` then `is_solved_and_feasible(model; dual, allow_local)`
 and, on failure, throws a `SolveFailedError` with the full status diagnostics
 (`termination_status`, `primal_status`, `dual_status`, `raw_status`).
 
 `allow_local=false` (the default) rejects `LOCALLY_SOLVED` — correct for the convex
-core, where a local point is not acceptable (Pitfall 2). Pass `allow_local=true`
+core, where a local point is not acceptable. Pass `allow_local=true`
 only on a deliberately nonconvex experiment rung. `dual=true` additionally requires
 a feasible dual point (prices are duals). Returns `model` on success.
 
@@ -30,8 +29,7 @@ a feasible dual point (prices are duals). Returns `model` on success.
 Pass `allow_almost=true` ONLY for an intermediate re-solve whose DUALS are NOT read and
 whose PRIMAL only needs to be near-feasible — e.g. a mid-loop ADMM subproblem, where the
 interior-point conic backend may stop just shy of its (deliberately tight, centralized-grade)
-gap tolerance under the ρ-penalty, and the outer residual loop self-corrects (RESEARCH
-Pitfall 2/4). It accepts `termination_status ∈ {OPTIMAL, ALMOST_OPTIMAL}` with
+gap tolerance under the ρ-penalty, and the outer residual loop self-corrects. It accepts `termination_status ∈ {OPTIMAL, ALMOST_OPTIMAL}` with
 `primal_status ∈ {FEASIBLE_POINT, NEARLY_FEASIBLE_POINT}`. The FINAL/converged solve must
 still use the STRICT gate (`allow_almost=false`) so no near-feasible price is ever published.
 """
@@ -71,7 +69,7 @@ end
 Hidden-slack guard: recompute the left-hand side of an equality constraint `cref`
 from the solved variable values and assert it matches the constraint's right-hand
 side within `atol`. This catches a solver reporting `OPTIMAL` while silently
-violating the constraint within its loose feasibility tolerance (INFRA-03).
+violating the constraint within its loose feasibility tolerance.
 
 `cref` must reference a scalar equality constraint. Throws `CertificateError` (`kind = :no_slack`) with the observed LHS,
 RHS, and residual on violation. Returns the (signed) residual `lhs - rhs` on success.

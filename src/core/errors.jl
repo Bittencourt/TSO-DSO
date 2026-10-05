@@ -1,6 +1,6 @@
 # src/core/errors.jl
 #
-# SEAM: typed exception hierarchy (ARCH-08 / ARCH-09, phase 34).
+# SEAM: typed exception hierarchy.
 #
 # `ErrorException` is a concrete struct, so a `SolveFailedError` is NOT an
 # `ErrorException`. Catch sites that must keep treating both generations as solver
@@ -65,7 +65,7 @@ See the [status & exception policy](@ref status-policy).
 Policy role: an exactness / no-slack / complementarity certificate was refused.
 `kind` is a `Symbol` tagging which certificate failed. `iterations` records the iteration count
 of the iterative method whose result was refused, when known — e.g. [`solve_admm`](@ref) attaches
-its converged ADMM iteration count to a final-consolidation refusal (WR-07, 35-REVIEW), so a
+its converged ADMM iteration count to a final-consolidation refusal, so a
 caller can report how many iterations ran before the certificate was refused.
 """
 struct CertificateError <: TSODSOError

@@ -1,13 +1,13 @@
 # src/diagnostics/plots.jl
 #
-# SEAM: convergence-diagnostics plotting API (ADMM-05).
-# OWNER: plan 07-01 (this plan, Task 1) — declares the exported generic functions;
-# the CairoMakie-backed METHODS are filled by plan 07-06 in ext/TSODSOMakieExt.jl.
+# SEAM: convergence-diagnostics plotting API.
+# This file declares the exported generic functions;
+# the CairoMakie-backed METHODS live in ext/TSODSOMakieExt.jl.
 #
-# CORE STAYS PLOT-FREE (threat T-07-01): this file declares ONLY method-less generic
+# CORE STAYS PLOT-FREE: this file declares ONLY method-less generic
 # functions + their `export`s and imports NO CairoMakie — so `using TSODSO` and the
 # headless CI test suite never pull the heavy Makie viz stack. The plotting backend is a
-# WEAKDEP package extension (RESEARCH Pattern 6, mirroring ext/TSODSOGurobiExt.jl): Julia
+# WEAKDEP package extension (mirroring ext/TSODSOGurobiExt.jl): Julia
 # lights up the methods ONLY when CairoMakie is present in the active environment.
 #
 # The functions consume the JuMP-free `AdmmResiduals` ledger (src/admm/residuals.jl) —
@@ -18,9 +18,9 @@
 
 Plot the ADMM primal + dual residual traces (and the ε_pri / ε_dual threshold lines)
 versus iteration on a log-scaled axis. **Requires CairoMakie to be loaded** — the
-method lives in the `TSODSOMakieExt` package extension (plan 07-06); with only the core
+method lives in the `TSODSOMakieExt` package extension; with only the core
 package loaded this generic function has NO applicable method (a deliberate MethodError,
-keeping the core solve + headless CI plot-free, threat T-07-01).
+keeping the core solve + headless CI plot-free).
 """
 function plot_convergence end
 
@@ -29,7 +29,7 @@ function plot_convergence end
 
 Plot the DADP / price-convergence trajectory (the `price_gap_trace`, optionally with the
 adaptive-ρ schedule on a twin axis) versus iteration. **Requires CairoMakie to be
-loaded** — the method lives in the `TSODSOMakieExt` package extension (plan 07-06); with
+loaded** — the method lives in the `TSODSOMakieExt` package extension; with
 only the core package loaded this generic function has NO applicable method.
 """
 function plot_price_convergence end
@@ -37,15 +37,15 @@ function plot_price_convergence end
 """
     plot_nash_convergence(trace::NashTrace; filename=nothing)
 
-Plot the TWO-LEVEL Nash diagonalization convergence trace (NASH-03, plan 13-02): the
+Plot the TWO-LEVEL Nash diagonalization convergence trace: the
 OUTER per-sweep max Nash residual (log-scaled left axis, one point per completed
 sweep — the worst-distributor residual within that sweep) overlaid with the INNER
 per-distributor Benders best-response gap trajectory (right axis, one series per
 distributor) from a [`NashTrace`](@ref). **Requires CairoMakie to be loaded** — the
-method lives in the `TSODSOMakieExt` package extension (plan 13-02, mirroring plan
-07-06's own `plot_price_convergence` twin-axis idiom); with only the core package
+method lives in the `TSODSOMakieExt` package extension (mirroring the
+`plot_price_convergence` twin-axis idiom); with only the core package
 loaded this generic function has NO applicable method (a deliberate MethodError,
-keeping the core solve + headless CI plot-free, threat T-07-01 parity).
+keeping the core solve + headless CI plot-free).
 """
 function plot_nash_convergence end
 

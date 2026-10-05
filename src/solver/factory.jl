@@ -1,7 +1,6 @@
 # src/solver/factory.jl
 #
-# SEAM: the single solver factory (INFRA-02).
-# OWNER: plan 01-03.
+# SEAM: the single solver factory.
 #
 # This is the ONLY core file (besides the ext/* package extensions) that names
 # concrete solvers. `select_optimizer(::ProblemClass)` returns a JuMP-ready
@@ -10,7 +9,7 @@
 # (Gurobi/MosekTools) are reachable ONLY via the weakdep package extensions in
 # ext/, which add `commercial_optimizer` methods.
 #
-# RESEARCH Pitfall 1 correction to the CLAUDE.md perf note (VERIFIED 2026-07-18):
+# Correction to the project's perf note on `direct_model` (VERIFIED 2026-07-18):
 #   Clarabel is a `copy_to`-only solver (`supports_incremental_interface == false`).
 #   `direct_model(Clarabel.Optimizer())` ERRORS. Use a standard `Model(...)`
 #   (auto-wrapped in a CachingOptimizer) for anything Clarabel-backed. Reserve
@@ -26,7 +25,7 @@ import Ipopt
 # the factory's existing convention for Clarabel (`verbose => false`) and Ipopt
 # (`print_level => 0`). Previously the one unsilenced backend — its raw "Objective value
 # ... HiGHS run time" blocks leaked into test logs and into the Documenter-executed
-# planning literate pages (Phase 14 review WR-03). Nothing in src/ or test/ depends on
+# planning literate pages. Nothing in src/ or test/ depends on
 # HiGHS console output. (Comment deliberately sits ABOVE the docstring: a comment BETWEEN
 # a docstring and its definition detaches the docstring — verified on Julia 1.12.)
 """
@@ -48,32 +47,32 @@ A model file uses this as `Model(select_optimizer(LP()))` and never names a solv
 
 The `NLP` method additionally accepts backend attribute overrides as keyword arguments —
 `select_optimizer(NLP(); mu_strategy = "adaptive")` — layered on top of the factory's own
-base attributes. This is the INFRA-02 seam that lets callers (e.g.
-[`ac_dual_fallback_price`](@ref)'s D-11 multi-start loop, via
+base attributes. This is the seam that lets callers (e.g.
+[`ac_dual_fallback_price`](@ref)'s multi-start loop, via
 [`nlp_multistart_variants`](@ref)) vary the NLP backend's convergence strategy WITHOUT
-naming the concrete solver outside this file (review WR-04).
+naming the concrete solver outside this file.
 """
 select_optimizer(::LP) =
     optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "on", "output_flag" => false)
 
-# Phase 24 (24-RESEARCH.md Priority Finding 4, live-verified against the installed HiGHS
-# 1.24.1): the runtime default `mip_rel_gap = 1e-4` is NOT overridden by `output_flag =>
+# Live-verified against the installed HiGHS
+# 1.24.1: the runtime default `mip_rel_gap = 1e-4` is NOT overridden by `output_flag =>
 # false` alone — a MILP master could report `objective_value` up to 1e-4 RELATIVE short of
 # its own true optimum for the current cut set, silently laundering any later "exact lattice
-# termination" claim built on top of it (D-13). Set explicitly to `0.0`. `MILP()` had ZERO
-# call sites before this phase (confirmed repo-wide), so this changes no existing behavior.
+# termination" claim built on top of it. Set explicitly to `0.0`. `MILP()` had ZERO
+# call sites before this setting was added (confirmed repo-wide), so it changes no existing behavior.
 # Empirically verified (test/test_solver_factory_milp.jl) that `mip_rel_gap => 0.0` does NOT
 # stall branch-and-bound on this project's tiny toy instances.
 #
-# Phase 24 GAP-CLOSURE (plan 24-05.1): `mip_feasibility_tolerance` ALSO needed tightening
-# from HiGHS's runtime default (1e-6) — empirically confirmed (this session) to be the ROOT
+# `mip_feasibility_tolerance` ALSO needed tightening
+# from HiGHS's runtime default (1e-6) — empirically confirmed to be the ROOT
 # CAUSE of a genuine, DETERMINISTIC (bit-for-bit reproducible across runs, never flaky)
 # residual between the certified master's own reported incumbent (`result.UB`, from a REAL
 # `solve_follower!`/`solve_planning_oracle!` re-solve at the master's own trial `z`) and the
 # `test/test_planning_certification_integer.jl` enumeration harness's independently-computed
 # reference value: at the DEFAULT `mip_feasibility_tolerance = 1e-6`, HiGHS accepts a
 # continuous `z` up to ~1e-6 outside its own box bound `z <= y_inv` as "MIP-feasible" — at a
-# corner whose TRUE argmin sits exactly ON that box boundary (confirmed on the D-12 fixture:
+# corner whose TRUE argmin sits exactly ON that box boundary (confirmed on the integer-planning certification fixture:
 # `y_inv=0.5`, follower/oracle net cost strictly decreasing on `[0, y_inv]`, argmin at the
 # right endpoint), this ~1e-6 slack in the ACCEPTED `z` translates via the recourse
 # function's own local slope into an ~7e-8 residual in the reported cost — small, but larger
@@ -83,19 +82,19 @@ select_optimizer(::LP) =
 # `1e-9` (three orders of magnitude below the default, and one order below
 # `KNOWN_OPTIMUM_ATOL` itself) empirically closes the residual to ~1.6e-16 — machine
 # precision, not a coincidental near-miss — and lets the certified run converge CLEANLY
-# (`:clean`, zero no-good cuts) in 9 iterations, well inside the plan's own `max_iter = 50`
-# budget. This is `MILP()`-only, tuning HiGHS's OWN attribute vocabulary (24-CONTEXT.md's
-# own "Claude's Discretion": "MILP solver attribute tuning (HiGHS gap/threads/presolve) is
-# discretionary, provided nothing is hard-coded outside select_optimizer") — it does NOT
-# touch `KNOWN_OPTIMUM_ATOL`, `L`, or the LL-cut algebra, none of which this gap-closure wave
-# is authorized to weaken.
+# (`:clean`, zero no-good cuts) in 9 iterations, well inside the certified run's own `max_iter = 50`
+# budget. This is `MILP()`-only, tuning HiGHS's OWN attribute vocabulary (MILP solver
+# attribute tuning — HiGHS gap/threads/presolve — is discretionary, provided nothing is
+# hard-coded outside select_optimizer) — it does NOT
+# touch `KNOWN_OPTIMUM_ATOL`, `L`, or the LL-cut algebra, none of which may be weakened
+# by this setting.
 #
-# WR-03 (Phase 24 code review) — NOTE FOR ANY FUTURE MILP() CONSUMER: this
-# `mip_feasibility_tolerance = 1e-9` is set GLOBALLY here (INFRA-02's single-factory
+# NOTE FOR ANY FUTURE MILP() CONSUMER: this
+# `mip_feasibility_tolerance = 1e-9` is set GLOBALLY here (the single-factory
 # discipline gives no per-call-site override), but was tuned SOLELY against
-# `build_master_integer`'s own box constraint (`z <= y_inv`) on the D-12 certification
+# `build_master_integer`'s own box constraint (`z <= y_inv`) on the integer-planning certification
 # fixture — currently `MILP()`'s ONLY call site in the whole codebase (confirmed
-# repo-wide, 24-05.1). `1e-9` is three orders of magnitude below HiGHS's own runtime
+# repo-wide). `1e-9` is three orders of magnitude below HiGHS's own runtime
 # default (`1e-6`) and, on a LARGER/harder MILP (more binaries, worse-conditioned
 # constraint matrix), this tight a feasibility tolerance can measurably slow or stall
 # branch-and-bound (more nodes needed to certify feasibility to that precision) or, in
@@ -106,7 +105,7 @@ select_optimizer(::LP) =
 # `select_optimizer(::NLP; attrs...)`/`select_optimizer(::SOCP; attrs...)` above, which
 # layer caller-supplied attributes on top of the base set) over silently loosening this
 # shared default in place — this project's integer-investment exactness claim
-# (D-13/D-14) depends on `build_master_integer` keeping this exact value.
+# depends on `build_master_integer` keeping this exact value.
 select_optimizer(::MILP) = optimizer_with_attributes(
     HiGHS.Optimizer,
     "output_flag" => false,
@@ -119,17 +118,17 @@ select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose"
 # Tight gap tolerances: transactive prices ARE the duals, so accurate conic duals
 # matter. Clarabel's `tol_gap_abs`/`tol_gap_rel` default to 1e-8; set explicitly.
 #
-# Plan 22-02 (STOCH-01) deviation (Rule 1 — auto-fixed bug): keyword overrides, mirroring
+# Keyword overrides, mirroring
 # the `NLP` method's own established pattern below — layered ON TOP of the `tol_gap_abs/
 # rel = 1e-8` base (a duplicate key passed later wins in `optimizer_with_attributes`, so
 # callers can only ADD/OVERRIDE, never lose the base tightness unless they explicitly
-# override it). `select_optimizer(SOCP())` with NO kwargs stays BYTE-IDENTICAL to the prior
+# override it). `select_optimizer(SOCP())` with NO kwargs stays bit-for-bit identical to the base
 # behavior. Added because `build_stochastic_welfare`'s probability-weighted extensive-form
 # objective genuinely weakens each scenario's own loss-cost gradient (scaled by that
-# scenario's `probabilities[s]`), which — empirically verified this plan, on a near-lossless
+# scenario's `probabilities[s]`), which — empirically verified on a near-lossless
 # branch — can leave Clarabel's default `tol_gap=1e-8` interior-point iterate measurably
 # short of the SOC cone's true (unique, gradient-driven) tight point for a LOW-probability
-# scenario, tripping the PF-04 exactness gate on a genuinely tiny (not structural) residual.
+# scenario, tripping the exactness gate on a genuinely tiny (not structural) residual.
 # Tightening `tol_gap_abs/rel` resolves it (verified: 5.6e-6 → 4.8e-8 at the builder's chosen
 # `5e-10`) because the true optimum IS exactly cone-tight (any slack costs objective value,
 # however marginally) — a convergence-precision fix, not a tolerance-weakening of the
@@ -157,7 +156,7 @@ select_optimizer(::NLP; attrs...) = optimizer_with_attributes(
     nlp_multistart_variants() -> Vector{<:NamedTuple}
 
 The 5 distinct, DETERMINISTIC NLP-backend convergence-strategy variants used as "seeded
-starts" by [`ac_dual_fallback_price`](@ref)'s D-11 multi-start agreement evidence. Each
+starts" by [`ac_dual_fallback_price`](@ref)'s multi-start agreement evidence. Each
 entry is an attribute set to splat into [`select_optimizer`](@ref) —
 `select_optimizer(NLP(); variant...)` — and is documented as its DELTA from the factory's
 NLP base configuration (`print_level = 0` only, i.e. the backend's own defaults otherwise:
@@ -165,13 +164,13 @@ NLP base configuration (`print_level = 0` only, i.e. the backend's own defaults 
 
 Lives HERE (not in models/ac_dual_fallback.jl) because the attribute vocabulary is
 inherently backend-specific (Ipopt option names): this factory is the ONLY core file that
-names concrete solvers or their option vocabulary (INFRA-02, review WR-04). If the NLP
+names concrete solvers or their option vocabulary. If the NLP
 backend ever changes, this list changes WITH it in the same file — no model silently pins
 the old solver.
 
-Review WR-03: the previous variant 3, `(; mu_strategy = "monotone")`, was byte-identical to
+An earlier variant 3, `(; mu_strategy = "monotone")`, was identical to
 variant 1 ("monotone" IS the backend default) — a duplicate "seed" that always agreed with
-seed 1 exactly, silently overstating D-11's multi-start agreement evidence. All 5 variants
+seed 1 exactly, silently overstating the multi-start agreement evidence. All 5 variants
 are genuinely distinct solver configurations.
 """
 nlp_multistart_variants() = [
@@ -211,7 +210,7 @@ end
 Return a JuMP-ready optimizer factory for an OPEN-SOURCE alternative solver selected
 by `choice` (e.g. an [`SCSChoice`](@ref) marker) for problem class `pc`.
 
-This is a NEW, SEPARATE dispatch point from [`commercial_optimizer`](@ref) (D-20):
+This is a NEW, SEPARATE dispatch point from [`commercial_optimizer`](@ref):
 alternative solvers like SCS are opt-in weakdep extensions, exactly like the
 commercial backends, but they are NOT commercial/licensed software, so routing them
 through a function named/documented as "commercial" would be a semantic mismatch.

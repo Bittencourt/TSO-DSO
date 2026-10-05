@@ -1,7 +1,6 @@
 # ext/TSODSOGurobiExt.jl
 #
-# Package extension for the commercial Gurobi solver (INFRA-02, opt-in).
-# OWNER: plan 01-03.
+# Package extension for the commercial Gurobi solver (opt-in).
 #
 # Loaded by Julia ONLY when both TSODSO and Gurobi are present in the active
 # environment (weakdep + [extensions] gating — the modern replacement for

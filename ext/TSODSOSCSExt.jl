@@ -1,7 +1,6 @@
 # ext/TSODSOSCSExt.jl
 #
-# Package extension for the open-source, first-order SCS conic solver (INFRA-02,
-# D-20, opt-in). OWNER: plan 25-02.
+# Package extension for the open-source, first-order SCS conic solver (opt-in).
 #
 # Loaded by Julia ONLY when both TSODSO and SCS are present in the active
 # environment (weakdep + [extensions] gating — the modern replacement for
@@ -9,11 +8,11 @@
 # only under [weakdeps] in Project.toml.
 #
 # This module adds an `alternative_optimizer(::SCSChoice, pc)` method — deliberately
-# NOT `commercial_optimizer` (D-20): SCS is open-source, so routing it through a
+# NOT `commercial_optimizer`: SCS is open-source, so routing it through a
 # dispatch named/documented as "commercial" would be a semantic mismatch, even
 # though (like the commercial backends) it is an opt-in weakdep extension. SCS is
 # the Clarabel-vs-SCS crossover measurement's alternative first-order conic solver
-# (SCALE-04) — a large-scale/scouting fallback, NEVER used to certify SOCP
+# — a large-scale/scouting fallback, NEVER used to certify SOCP
 # exactness or to report final DADPs (CLAUDE.md "What NOT to Use").
 module TSODSOSCSExt
 
