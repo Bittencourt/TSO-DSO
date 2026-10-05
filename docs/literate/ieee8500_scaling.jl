@@ -222,6 +222,11 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # `density_sweep_full.csv`, or a per-run file in `runs/`) and, where the file has one, the row's
 # `run_label`.)*
 #
+# **Units.** All memory figures in this section are binary: 1 GiB = 2^30 bytes = 2^20 KiB = 1024 MiB. Raw
+# values are KiB for `/usr/bin/time` and `/proc` (`peak_rss_kb`, `VmRSS_kB`, kernel `anon-rss:...kB`) and
+# MiB for the harness's `admm_peak_rss_delta_mb`/`peak_rss_mb` (bytes / 2^20), earlyoom's `VmRSS ... MiB`
+# and `free -m`; each is converted by the matching power of 2 and the raw value is kept beside it.
+#
 # **1. Library default change.** `solve_admm`/`solve_dso!` now default `atol_exact` to `nothing`, i.e. the
 # ADMM final-consolidation gate uses the same per-branch hybrid floor as the centralized path
 # (`atol_b = max(2e-7, 1e-9*ref_b)`, relative term on the cone value). An explicit `Real` `atol_exact` keeps
@@ -253,45 +258,50 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # | ADMM outcome | `converged`, passed the flat gate | `ERROR:CertificateError` (prices REFUSED, ratio 568.95) |
 # | ADMM iterations | 8 | 8, taken from the `p35-diag-d0.1-T10` row (the gate-bypassed re-run of the same point, section 2); the head row was written before WR-07 and records the unknown sentinel `-1` |
 # | ADMM time (`admm_time_s`) | 227 s | 287 s |
-# | peak RSS | no harness-recorded peak (see below) | 6.21 GB (`point_resources.csv` `peak_rss_kb`, same `run_label`) |
-# | ADMM RSS delta (`admm_peak_rss_delta_mb`) | 3200 MiB | 4673 MiB |
+# | peak RSS | no harness-recorded peak (see below) | 5.92 GiB (6,205,808 KiB, `point_resources.csv` `peak_rss_kb`, same `run_label`) |
+# | ADMM RSS delta (`admm_peak_rss_delta_mb`) | 3.13 GiB (3,200.4 MiB) | 4.56 GiB (4,672.8 MiB) |
 #
 # The status change is **partly a gate change, not only a model or solver change**: v3.0 certified this
 # point under a flat tolerance about 5,000 times looser than the old `1e-6` default, while Phase 35 applies
 # the per-branch hybrid floor. The commit that wrote the v3.0 row (`262c983`) also records that the same
 # point, run under the then-default flat `1e-6` gate, raised "SOCP relaxation INEXACT" (cone gap
 # `1.3968e-4`) and converged only with the flat `4.97e-3` override; that failed run left no CSV row. So
-# under any gate near `1e-6` this point was already refused in v3.0. The v3.0 row is also NOT the IEEE-8500 d = 0.1, T = 10 row printed by the
-# precomputed table above: that one comes from `density_sweep_full.csv` and is an earlier 25-08 attempt of
+# under any gate near `1e-6` this point was already refused in v3.0. The v3.0 row is also NOT the
+# IEEE-8500 d = 0.1, T = 10 row printed by the precomputed table above: that one comes from `density_sweep_full.csv` and is an earlier 25-08 attempt of
 # the same point (`budget_exceeded` after 6 iterations, 153 s, under the old 120 s ADMM budget and
 # `clarabel_tol_gap = 1e-8`); the 8-iteration row is the re-run after the budget was raised to 1200 s, with
 # `clarabel_tol_gap = 1e-7`. The v3.0 "about 5.9 GB" peak sometimes quoted for this point is not a harness
 # measurement: it is the "~5.9GB" anon-rss observed by live monitoring during that earlier
-# `budget_exceeded` attempt, written into the `error_msg` of its `density_sweep_full.csv` row. The two RSS
+# `budget_exceeded` attempt, written into the `error_msg` of its `density_sweep_full.csv` row, with no
+# recorded unit convention. Read as GiB it is 5.9 GiB; read as decimal GB it is 5.49 GiB. Against the
+# Phase 35 peak of 5.92 GiB that is either +0.3% or +8%, from a different metric (anon-rss vs peak RSS) on a
+# different run, so **no peak-memory change between v3.0 and Phase 35 can be claimed from it**; the
+# difference is within the units and measurement uncertainty of that note. The two RSS
 # deltas are not like-for-like either: the v3.0 delta was taken after a centralized solve in the same
 # process, the Phase 35 delta in an ADMM-only process. The time and memory difference may also include load
 # from other processes on the shared host and extra GC calls added to the harness; it was not isolated.
 #
-# **4. Ladder and memory wall (15.9 GB host, earlyoom `-m 12`).** Peak RSS is `point_resources.csv`
-# `peak_rss_kb` (from `/usr/bin/time -v`); process wall is the "Elapsed" line of `runs/<run_label>.time`;
+# **4. Ladder and memory wall (15.5 GiB host: `free -m` total 15,908 MiB in `runs/*.free_before`; earlyoom
+# `-m 12`, i.e. SIGTERM at or below 12% available memory).** Peak RSS is `point_resources.csv` `peak_rss_kb` (from `/usr/bin/time -v`); process wall is the "Elapsed" line of `runs/<run_label>.time`;
 # `admm_time_s` is from `density_sweep.csv` (n/a for the killed point, whose row stayed `started`).
 #
 # | point (`run_label`) | outcome | peak RSS | process wall | `admm_time_s` |
 # |---|---|---|---|---|
 # | Phase 25, density 0.1 and 1.0, T = 24 (combined centralized+ADMM process; `density_sweep_full.csv` `OOM_KILLED` rows) | OOM kills | n/a | n/a | n/a |
-# | `p35-head-d0.1-T10` | `CertificateError` (ratio 568.95) | 6.21 GB | 335 s | 287 s |
-# | `p35-head-d0.1-T24` | ADMM completed, `CertificateError` (ratio 223.68) | 12.08 GB | 728 s | 678 s |
-# | `p35-head-d0.25-T24` | earlyoom SIGTERM at 10.6 GiB anon RSS (`runs/p35-head-d0.25-T24.oom_earlyoom`) | 12.64 GB | 213 s | n/a |
+# | `p35-head-d0.1-T10` | `CertificateError` (ratio 568.95) | 5.92 GiB (6,205,808 KiB) | 335 s | 287 s |
+# | `p35-head-d0.1-T24` | ADMM completed, `CertificateError` (ratio 223.68) | 11.52 GiB (12,079,316 KiB) | 728 s | 678 s |
+# | `p35-head-d0.25-T24` | earlyoom SIGTERM, `VmRSS 10641 MiB` (10.4 GiB) at the kill (`runs/p35-head-d0.25-T24.oom_earlyoom`) | 12.05 GiB (12,636,180 KiB) | 213 s | n/a |
 #
 # The wall now sits **between density 0.1 and 0.25 at T = 24**. Phase 25's OOM kills at T = 24 were in a
-# combined centralized+ADMM process; its density 0.1 T = 10 point fit (live-monitored anon-rss about 5.9 GB,
-# see section 3). The dominant consumer is
+# combined centralized+ADMM process; its density 0.1 T = 10 point fit (live-monitored anon-rss "~5.9GB", unit
+# not recorded, see section 3). The dominant consumer is
 # the per-hour DSO solver state retained across the ADMM loop. The staged profile of the SAME fixture and point
 # (`memory_profile.csv` rows with `fixture = ieee8500`, density 0.1, T = 10, written by run
 # `p35-prof-ieee8500-s3` in `point_resources.csv`) shows one `build_dso_opt` adding 0.23 GiB of VmRSS
 # (stage 1 to 2: 1,102,128 to 1,340,200 KiB) and the first `optimize!` a further 0.89 GiB (stage 2 to 3:
-# 1,340,200 to 2,269,900 KiB; VmHWM 2.40 GiB), while the whole T = 10 loop adds 4.67 GB and T = 24 adds
-# 10.4 GB, roughly linear in T. One build plus one solve therefore accounts for about a quarter of the T = 10
+# 1,340,200 to 2,269,900 KiB; VmHWM 2.40 GiB), while the whole T = 10 loop adds 4.56 GiB (4,672.8 MiB) and T = 24
+# adds 10.17 GiB (10,409.9 MiB) (`admm_peak_rss_delta_mb` of the two head rows in `density_sweep.csv`), roughly
+# linear in T. One build plus one solve therefore accounts for about a quarter of the T = 10
 # loop's growth; the rest is state kept across iterations. (The same CSV also keeps an earlier profile with
 # `fixture = ieee8500-mv`, the profiler's default, which measured 0.14 / 0.42 GiB on the 2,521-bus MV-only
 # feeder. It is a different fixture from the loop deltas above and is not used for this comparison.) No

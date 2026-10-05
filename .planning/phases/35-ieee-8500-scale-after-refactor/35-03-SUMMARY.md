@@ -78,3 +78,13 @@ runs `p35-prof-ieee8500-s2` / `-s3`, rows `fixture = ieee8500` in `memory_profil
 238,072 KiB (0.23 GiB) and the first optimize 929,700 KiB (0.89 GiB); stage-3 VmHWM is 2,515,692 KiB
 (2.40 GiB). The conclusion is unchanged: one build plus one solve is far below the 4.56 GiB
 (4,672.8 MiB) T = 10 ADMM-loop delta.
+
+## Correction (2026-10-05, 35-REVIEW iteration 2, WR-03: units)
+
+The "GB" figures above mix conventions (KiB / 10^6, MiB / 1000). Restated in GiB (2^30 bytes) from the raw
+values: diag peak 6,699,480 KiB = 6.39 GiB; head peak 6,205,808 KiB = 5.92 GiB; head ADMM delta 4,672.8 MiB
+= 4.56 GiB; v3.0 ADMM delta 3,200.4 MiB = 3.13 GiB. The v3.0 "about 5.9 GB" peak is a live-monitoring
+anon-rss note with no recorded unit (`density_sweep_full.csv`, error_msg of the budget_exceeded 25-08 row),
+not a harness peak from the 8-iteration run; read as GiB it is +0.3% against 5.92 GiB, read as GB +8%.
+The "+5%" peak-RSS growth in the table above is therefore withdrawn: no peak change can be claimed.
+

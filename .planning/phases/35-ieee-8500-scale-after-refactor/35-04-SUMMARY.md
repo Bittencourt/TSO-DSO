@@ -44,3 +44,11 @@ None.
 The "+151 MB build / +441 MB first optimize" figures quoted above came from the `ieee8500-mv` fixture. On the
 `ieee8500` fixture of this ladder they are 0.23 GiB and 0.89 GiB (`memory_profile.csv`, `fixture = ieee8500`);
 see the matching correction in 35-03-SUMMARY.md. The no-mitigation decision is unaffected.
+
+## Correction (2026-10-05, 35-REVIEW iteration 2, WR-03: units)
+
+In GiB (2^30 bytes) from the raw `peak_rss_kb` values: d=0.1 T=24 peak 12,079,316 KiB = 11.52 GiB; d=0.25 T=24
+peak 12,636,180 KiB = 12.05 GiB; RSS deltas 4,672.8 MiB = 4.56 GiB (T=10) and 10,409.9 MiB = 10.17 GiB
+(T=24). The earlyoom kill line reads `VmRSS 10641 MiB` (10.4 GiB), VmRSS rather than anon RSS. The host is
+15,908 MiB = 15.5 GiB (`free -m`). The Phase 25 T=10 "~5.9 GB" fit figure has no recorded unit.
+
