@@ -334,39 +334,43 @@ feeder123 = ieee123_modified()
 aggs123 = build_ieee123_aggregators(feeder123)
 λ0_123 = ieee123_lambda0()
 
-println("Running IEEE-13, reactive_consensus=false ($N_REPEATS repeats)...")
+println("Running IEEE-13, reactive_consensus=ReactiveMode.OFF ($N_REPEATS repeats)...")
 fail_13_false = count_failures(
     feeder13,
     aggs13,
     λ0_13;
-    reactive_consensus = false,
+    reactive_consensus = ReactiveMode.OFF,
     n_repeats = N_REPEATS,
 )
 
-println("Running IEEE-13, reactive_consensus=true ($N_REPEATS repeats)...")
+println(
+    "Running IEEE-13, reactive_consensus=ReactiveMode.CERTIFIED ($N_REPEATS repeats)...",
+)
 fail_13_true = count_failures(
     feeder13,
     aggs13,
     λ0_13;
-    reactive_consensus = true,
+    reactive_consensus = ReactiveMode.CERTIFIED,
     n_repeats = N_REPEATS,
 )
 
-println("Running IEEE-123, reactive_consensus=false ($N_REPEATS repeats)...")
+println("Running IEEE-123, reactive_consensus=ReactiveMode.OFF ($N_REPEATS repeats)...")
 fail_123_false = count_failures(
     feeder123,
     aggs123,
     λ0_123;
-    reactive_consensus = false,
+    reactive_consensus = ReactiveMode.OFF,
     n_repeats = N_REPEATS,
 )
 
-println("Running IEEE-123, reactive_consensus=true ($N_REPEATS repeats)...")
+println(
+    "Running IEEE-123, reactive_consensus=ReactiveMode.CERTIFIED ($N_REPEATS repeats)...",
+)
 fail_123_true = count_failures(
     feeder123,
     aggs123,
     λ0_123;
-    reactive_consensus = true,
+    reactive_consensus = ReactiveMode.CERTIFIED,
     n_repeats = N_REPEATS,
 )
 
@@ -471,16 +475,19 @@ open(report_path, "w") do io
         rate_123_true
     )
     println(io)
-    println(io, "=== Finding 1: Clarabel flake rate under reactive_consensus=true ===")
     println(
         io,
-        "IEEE-13:  baseline (reactive_consensus=false) rate = $(rate_13_false) ($(fail_13_false)/$N_REPEATS); ",
-        "Q-consensus (reactive_consensus=true) rate = $(rate_13_true) ($(fail_13_true)/$N_REPEATS).",
+        "=== Finding 1: Clarabel flake rate under reactive_consensus=ReactiveMode.CERTIFIED ===",
     )
     println(
         io,
-        "IEEE-123: baseline (reactive_consensus=false) rate = $(rate_123_false) ($(fail_123_false)/$N_REPEATS); ",
-        "Q-consensus (reactive_consensus=true) rate = $(rate_123_true) ($(fail_123_true)/$N_REPEATS).",
+        "IEEE-13:  baseline (reactive_consensus=ReactiveMode.OFF) rate = $(rate_13_false) ($(fail_13_false)/$N_REPEATS); ",
+        "Q-consensus (reactive_consensus=ReactiveMode.CERTIFIED) rate = $(rate_13_true) ($(fail_13_true)/$N_REPEATS).",
+    )
+    println(
+        io,
+        "IEEE-123: baseline (reactive_consensus=ReactiveMode.OFF) rate = $(rate_123_false) ($(fail_123_false)/$N_REPEATS); ",
+        "Q-consensus (reactive_consensus=ReactiveMode.CERTIFIED) rate = $(rate_123_true) ($(fail_123_true)/$N_REPEATS).",
     )
     delta13 = rate_13_true - rate_13_false
     delta123 = rate_123_true - rate_123_false
@@ -508,8 +515,8 @@ open(report_path, "w") do io
     if delta13 > 0.05 || delta123 > 0.05
         println(
             io,
-            "NOTE: the measured reactive_consensus=true flake rate is materially worse than the ",
-            "reactive_consensus=false baseline on at least one fixture (delta > 0.05). Per ",
+            "NOTE: the measured reactive_consensus=ReactiveMode.CERTIFIED flake rate is materially worse than the ",
+            "reactive_consensus=ReactiveMode.OFF baseline on at least one fixture (delta > 0.05). Per ",
             "16-RESEARCH.md's Pattern 1 (\"unconstrained\" alternative) / Pattern 3 (\"only ",
             "escalate if the empirical experiment shows the degenerate-target assumption ",
             "doesn't hold\"), a soft rho_q-penalized alternative to the current hard-pin ",

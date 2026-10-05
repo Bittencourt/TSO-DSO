@@ -22,7 +22,7 @@ function _admm_build(
     λ₀,
     ρf::Float64,
     ρ_qf::Float64,
-    mode::ReactiveMode,
+    mode::ReactiveMode.T,
     rmode::_ReactiveMode,
 )
     dso = build_dso_opt(
@@ -260,7 +260,7 @@ Returns the `solve_admm` result NamedTuple.
 function _admm_certify(
     st::AdmmState,
     rmode::_ReactiveMode,
-    mode::ReactiveMode,
+    mode::ReactiveMode.T,
     aggregators,
     λ₀,
     atol_exact,

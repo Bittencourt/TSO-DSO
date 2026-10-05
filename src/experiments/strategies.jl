@@ -194,7 +194,7 @@ struct ADMMDetails
     iters::Int
     final_r::Float64
     final_s::Float64
-    reactive_consensus_mode::ReactiveMode
+    reactive_consensus_mode::ReactiveMode.T
 end
 
 """

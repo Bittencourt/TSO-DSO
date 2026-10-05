@@ -233,7 +233,7 @@ end
         maxiter = 300,
         tol = tol_ieee13,
         allow_export = true,
-        reactive_consensus = :live,
+        reactive_consensus = ReactiveMode.LIVE,
     )
 
     @test res.iters < 300                # converged before the fail-loud cap (observed 101 iters)

@@ -75,7 +75,7 @@ end
         # reactive_consensus mode out to ScenarioResult; guard that it stays populated (not
         # `missing`, not silently dropped/renamed by a future refactor of solve_admm's return
         # tuple or ScenarioResult's field list).
-        @test r.reactive_consensus_mode isa TSODSO.ReactiveMode
+        @test r.reactive_consensus_mode isa TSODSO.ReactiveMode.T
     end
 end
 

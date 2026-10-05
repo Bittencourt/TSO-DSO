@@ -76,7 +76,7 @@ struct AgrOpt
 end
 
 """
-    build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = false, ρ_q::Real = ρ) -> AgrOpt
+    build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = ReactiveMode.OFF, ρ_q::Real = ρ) -> AgrOpt
 
 Build the AGR-OPT per-node subproblem for aggregator `agg` over horizon `T` (thesis eq. 3.46),
 ONCE, following RESEARCH Pattern 4 (option a — reuse `Aggregator.contribute!` verbatim):
@@ -93,10 +93,9 @@ ONCE, following RESEARCH Pattern 4 (option a — reuse `Aggregator.contribute!` 
  4. Expose the CONSTANT reactive injection `qag[t] = −Pdc[t]·tan(arccos φ)` (thesis 3.23) for the
     μ update — computed UNCONDITIONALLY, in every `reactive_mode` (never gated), since it is
     also the fixed component `qag_live` pins to under `LIVE`.
- 5. `reactive_mode` (MESH-05, mirrors [`build_dso_opt`](@ref)'s `reactive_consensus`): normalized
-    via [`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
-    `true → CERTIFIED`), a `Symbol` (`:off`/`:certified`/`:live`), or a [`ReactiveMode`](@ref)
-    directly.
+ 5. `reactive_mode` (MESH-05, mirrors [`build_dso_opt`](@ref)'s `reactive_consensus`): a
+    `ReactiveMode.T` (`ReactiveMode.OFF`, `ReactiveMode.CERTIFIED` or `ReactiveMode.LIVE`), validated
+    by `normalize_reactive_mode`; `Bool` and `Symbol` values throw `ArgumentError`.
       + `OFF`/`CERTIFIED` (default): BYTE-IDENTICAL to pre-Phase-19 — no `qag_live` variable is
         declared, `agr.qag_live === nothing`, the objective is unchanged.
       + `LIVE` (NEW — MESH-05): a genuine coupling variable `qag_live[t]` is declared and PINNED,
@@ -123,7 +122,7 @@ function build_agr_opt(
     agg::Aggregator,
     T::Int;
     ρ::Real,
-    reactive_mode = false,
+    reactive_mode = ReactiveMode.OFF,
     ρ_q::Real = ρ,
 )
     mode = normalize_reactive_mode(reactive_mode)
@@ -156,7 +155,7 @@ function build_agr_opt(
     # it (byte-identical built objective under those two modes).
     obj_expr = ctx.objective - 0.5 * ρ * sum(pag[t]^2 for t in 1:T)
     qag_live = nothing
-    if mode == LIVE
+    if mode == ReactiveMode.LIVE
         # NEW (MESH-05): qag_live[t] genuinely PINNED to the aggregator's TOTAL reactive
         # injection, mirroring pag's coupling constraint exactly. `qag[t] + res.q_inject[t]` is
         # precisely the expression Aggregator.contribute! writes into :Rq (thesis 3.23 + D-10).
@@ -195,7 +194,7 @@ indefinite bilinear the convex conic backend rejects — RESEARCH Pitfall 1).
 `μ_j`/`d_j`/`ρ_q` (MESH-05, NEW — the reactive analogs of `λ_j`/`c_j`/`ρ`): when `μ_j !== nothing`, in the SAME loop as the `pag[t]` update, `qag_live[t]`'s linear objective coefficient
 is set to `−μ_j[t] − ρ_q·d_j[t]`, mirroring the active-power update exactly. `agr.qag_live === nothing` (an `OFF`/`CERTIFIED`-built `AgrOpt`) while `μ_j !== nothing` is a CALLER ERROR — it
 throws `ArgumentError` rather than silently no-op-ing (which could mask a caller forgetting to
-build with `reactive_mode = :live`). `μ_j`/`d_j` are length-guarded against `agr.T` exactly like
+build with `reactive_mode = ReactiveMode.LIVE`). `μ_j`/`d_j` are length-guarded against `agr.T` exactly like
 `λ_j`/`c_j`. When `μ_j === nothing` (the default), the `qag_live` coefficient is left untouched —
 every existing call site's behavior is preserved verbatim.
 
@@ -267,12 +266,12 @@ function solve_agr!(
 
     # NEW (MESH-05): μ_j supplied but this AgrOpt has no live reactive coupling block ⇒ a caller
     # error (fail loud — never a silent no-op that could mask a caller forgetting to build with
-    # reactive_mode = :live).
+    # reactive_mode = ReactiveMode.LIVE).
     if μ_j !== nothing
         agr.qag_live !== nothing || throw(
             ArgumentError(
                 "solve_agr!: μ_j supplied but this AgrOpt was built without " *
-                "reactive_mode=:live",
+                "reactive_mode=ReactiveMode.LIVE",
             ),
         )
         length(μ_j) == agr.T || throw(
@@ -391,7 +390,7 @@ function set_rho_q!(agr::AgrOpt, ρ_q::Real)
     agr.qag_live !== nothing || throw(
         ArgumentError(
             "set_rho_q!: this AgrOpt was built without a live reactive coupling block " *
-            "(reactive_mode != :live); nothing to update",
+            "(reactive_mode != ReactiveMode.LIVE); nothing to update",
         ),
     )
     # Diagonal quadratic coeff of every qag_live[t]² set to −0.5ρ_q (Max objective, penalty

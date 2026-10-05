@@ -182,7 +182,7 @@ end
     @test r.iters isa Int
     @test r.iters >= 1
     @test r.final_r isa Float64
-    @test r.reactive_consensus_mode isa TSODSO.ReactiveMode
+    @test r.reactive_consensus_mode isa TSODSO.ReactiveMode.T
     @test r.iters == r.details.iters
     @test r.final_r == r.details.final_r
     @test r.final_s == r.details.final_s

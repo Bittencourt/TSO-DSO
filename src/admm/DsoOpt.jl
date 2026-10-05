@@ -34,7 +34,7 @@
 # dual-ascent) into :Rq; a free-sign `q_import` at the root supplies it; then :Rq is pinned to
 # zero at ALL nodes and registered as :balance_q.
 #
-# REACT-01 (Phase 16, `reactive_consensus::Bool = false` kwarg, default OFF): when `true`, the
+# REACT-01 (Phase 16, `reactive_consensus` kwarg, default OFF): when CERTIFIED, the
 # per-load-node CONSTANT `q_draw[j][t]` injected above is instead promoted to a genuine JuMP
 # coupling variable `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), PINNED to the same fixed
 # target via an explicit equality `qag_dso[j,t] == q_draw[j][t]` (registered `:qag_pin`) — this
@@ -155,8 +155,7 @@ end
     _any_flexible_reactive(aggregators) -> Bool
 
 PM-03 (post-merge triage, cluster D). Returns `true` iff ANY aggregator in `aggregators` has a
-`:devices` property containing at least one member for which `dv isa FourQuadBESS ||
-is_flexible_load(dv)` holds — i.e. a device whose reactive decision is NOT the constant
+`:devices` property containing at least one member for which `dv isa FourQuadBESS || is_flexible_load(dv)` holds — i.e. a device whose reactive decision is NOT the constant
 `-Pdc*tanφ` draw alone (a `FourQuadBESS`'s live `q_inject`, or a flexible-load member's
 `p_inject*tanφ` term the centralized `Aggregator.contribute!` folds into `:Rq` since FIX-05,
 plan 26-04/07). Shared (unexported — same `TSODSO` module) by both `build_dso_opt`'s and
@@ -175,7 +174,7 @@ end
 
 """
     build_dso_opt(feeder, aggregators, T::Int; ρ::Real, λ₀,
-                  reactive_consensus = _any_flexible_reactive(aggregators) ? LIVE : false,
+                  reactive_consensus = _any_flexible_reactive(aggregators) ? ReactiveMode.LIVE : ReactiveMode.OFF,
                   ρ_q::Real = ρ)
         -> DsoOpt
 
@@ -209,7 +208,7 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
       + REACTIVE: inject each load node's CONSTANT reactive draw `−Pdc·tan(acos φ)` (thesis 3.23,
         inelastic per A3) into `:Rq[j]`, `q_import` supplies the root; pin `:Rq[j,t] == 0` at all
         buses, register `:balance_q`. This is a FIXED constant (no μ dual-ascent — reactive is
-        not a consensus quantity). REACT-01 (`reactive_consensus = true`): promote this constant
+        not a consensus quantity). REACT-01 (`reactive_consensus = ReactiveMode.CERTIFIED`): promote this constant
         to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to the same fixed target via
         the registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — still a one-shot
         certified dual read, NOT a live consensus ascent (Assumption A1/A3).
@@ -232,8 +231,8 @@ every non-root bus is a load node, so both axes coincide and the model is unchan
 holds combined with a NORMALIZED `mode != LIVE` (WR-04, phase-26 review — the guard compares the
 value `normalize_reactive_mode(reactive_consensus)` resolves to, NEVER the caller's raw
 `reactive_consensus` keyword spelling; a maintainer must not "simplify" this to
-`reactive_consensus != :live`, which would be WRONG whenever `reactive_consensus` is passed as a
-`Bool`/`ReactiveMode` rather than the bare `Symbol :live`) (under `OFF`/`CERTIFIED` the reactive
+`reactive_consensus != ReactiveMode.LIVE`, which would be WRONG whenever `reactive_consensus` is passed as a
+`ReactiveMode.T`) (under `OFF`/`CERTIFIED` the reactive
 closure is the inelastic `−Pdc·tanφ` draw alone, so the device's reactive decision — a `FourQuadBESS`'s live
 `q_inject`, OR a flexible-load member's `p_inject·tanφ` term the centralized model folds into
 `:Rq` since FIX-05 — would be silently dropped from the network model — genuinely invalid inputs
@@ -242,25 +241,24 @@ to `LIVE` whenever [`_any_flexible_reactive`](@ref) finds such a member, so this
 fires on an EXPLICIT caller override to `OFF`/`CERTIFIED` against such a population — never on
 the default path.
 
-`reactive_consensus` (D-12, MESH-05): a 3-state mode normalized via
-[`normalize_reactive_mode`](@ref), accepting a `Bool` (back-compat: `false → OFF`,
-`true → CERTIFIED`), a `Symbol` (`:off`/`:certified`/`:live`), or a [`ReactiveMode`](@ref)
-directly. Its OWN DEFAULT (PM-03, post-merge triage cluster D) is now the CONTEXT-SENSITIVE
-expression `_any_flexible_reactive(aggregators) ? LIVE : false` — resolving to `LIVE` whenever
+`reactive_consensus` (D-12, MESH-05): a 3-state mode a
+`ReactiveMode.T` (`ReactiveMode.OFF`, `ReactiveMode.CERTIFIED` or `ReactiveMode.LIVE`), validated
+by `normalize_reactive_mode`; `Bool` and `Symbol` values throw `ArgumentError`. Its OWN DEFAULT (PM-03, post-merge triage cluster D) is now the CONTEXT-SENSITIVE
+expression `_any_flexible_reactive(aggregators) ? ReactiveMode.LIVE : ReactiveMode.OFF` — resolving to `LIVE` whenever
 ANY aggregator carries a `FourQuadBESS` or an `is_flexible_load` member, so ADMM's DSO-OPT
 matches the centralized `Aggregator`'s post-FIX-05 reactive draw WITHOUT the caller having to
-pass `reactive_consensus = :live` by hand; a population with NO such member still defaults to
-`false` (`OFF`), byte-identical to before PM-03.
+pass `reactive_consensus = ReactiveMode.LIVE` by hand; a population with NO such member still defaults to
+`ReactiveMode.OFF`, byte-identical to before PM-03.
 
-  - `OFF` (default when no flexible-load/FourQuadBESS member is present, `false`): step 4's
+  - `OFF` (default when no flexible-load/FourQuadBESS member is present): step 4's
     reactive injection is the byte-identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]`
     key exists).
-  - `CERTIFIED` (`true`): the constant is promoted to a genuine JuMP coupling variable
+  - `CERTIFIED`: the constant is promoted to a genuine JuMP coupling variable
     `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a
     registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual
     read, NOT a live consensus ascent (thesis A3: `q_draw` never moves, so no new
     ρ-penalty/residual is needed).
-  - `LIVE` (`:live`, NEW — MESH-05): `qag_dso[j,t]` is declared the SAME way as `CERTIFIED`
+  - `LIVE` (NEW — MESH-05): `qag_dso[j,t]` is declared the SAME way as `CERTIFIED`
     (stashed at `ctx.meta[:qag_dso]`), but NO `:qag_pin` equality is registered — it is left as
     a genuinely open coupling variable, carrying its own `0.5·ρ_q·Σ qag_dso[j,t]²` quadratic
     penalty in the objective (see `ρ_q` below), for plan 19-07's outer μ-dual-ascent loop to
@@ -277,7 +275,8 @@ function build_dso_opt(
     T::Int;
     ρ::Real,
     λ₀,
-    reactive_consensus = _any_flexible_reactive(aggregators) ? LIVE : false,
+    reactive_consensus = _any_flexible_reactive(aggregators) ? ReactiveMode.LIVE :
+                         ReactiveMode.OFF,
     ρ_q::Real = ρ,
     pf::AbstractPowerFlow = ConvexBranchFlow(),
 )
@@ -322,7 +321,7 @@ function build_dso_opt(
     # probe should move to a single contract-level trait). Since PM-03, this guard fires ONLY
     # on an EXPLICIT caller override to OFF/CERTIFIED (this function's own default now resolves
     # to LIVE whenever such a member is present, via `_any_flexible_reactive` above).
-    if mode != LIVE
+    if mode != ReactiveMode.LIVE
         for (k, agg) in enumerate(aggregators)
             if hasproperty(agg, :devices) &&
                any(dv -> dv isa FourQuadBESS || is_flexible_load(dv), agg.devices)
@@ -337,7 +336,7 @@ function build_dso_opt(
                         "device's reactive decision would be silently dropped from the " *
                         "network model (and under CERTIFIED the published dual(:balance_q) " *
                         "would be priced against a closure that no longer matches the " *
-                        "centralized model's). Pass reactive_consensus = :live " *
+                        "centralized model's). Pass reactive_consensus = ReactiveMode.LIVE " *
                         "(WR-04, phase-19 review; widened PM-03, post-merge triage).",
                     ),
                 )
@@ -417,13 +416,13 @@ function build_dso_opt(
     # (MESH-05, D-12) — never a shared branch with a conditional skip (T-19-06). A fixed
     # parameter under OFF/CERTIFIED (no μ dual-ascent — reactive is not a consensus quantity
     # there); a genuinely live coupling variable under LIVE.
-    if mode == OFF
+    if mode == ReactiveMode.OFF
         # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = false`: inject the CONSTANT
         # draw directly, no qag_dso variable, no ctx.meta[:qag_dso] key.
         for j in load_nodes, t in 1:T
             add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
         end
-    elseif mode == CERTIFIED
+    elseif mode == ReactiveMode.CERTIFIED
         # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = true` (REACT-01/REACT-03):
         # promote the constant to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to
         # the SAME fixed target via the registered equality `:qag_pin` — a one-shot certified
@@ -436,7 +435,7 @@ function build_dso_opt(
         @constraint(model, qag_pin[j = load_nodes, t = 1:T], qag_dso[j, t] == q_draw[j][t])
         register_constraint!(ctx, :qag_pin, qag_pin)
         ctx.meta[:qag_dso] = qag_dso
-    elseif mode == LIVE
+    elseif mode == ReactiveMode.LIVE
         # NEW (MESH-05): declare qag_dso the SAME way as CERTIFIED (same @variable call, same
         # :Rq injection, same ctx.meta[:qag_dso] stash), but register NO :qag_pin equality —
         # qag_dso stays a genuinely OPEN coupling variable, driven by plan 19-07's outer μ
@@ -475,7 +474,7 @@ function build_dso_opt(
     obj_expr =
         sum(λ₀[t] * p_import[t] for t in 1:T) +
         0.5 * ρ * sum(pag_dso[j, t]^2 for j in load_nodes, t in 1:T)
-    if mode == LIVE
+    if mode == ReactiveMode.LIVE
         obj_expr += 0.5 * ρ_q * sum(qag_dso[j, t]^2 for j in load_nodes, t in 1:T)
     end
     @objective(model, Min, obj_expr)
@@ -484,7 +483,7 @@ function build_dso_opt(
         model,
         ctx,
         pag_dso,
-        mode == LIVE ? qag_dso : nothing,
+        mode == ReactiveMode.LIVE ? qag_dso : nothing,
         p_import,
         load_nodes,
         T,
@@ -536,8 +535,7 @@ gate THROWS and prices are refused. When `false` the gate is NOT run (and `atol_
 `atol_exact`/`rtol_exact` (2026-08-22 follow-up, quick task 260822-f0b) are an ADDITIVE override
 seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`nothing`/`1e-4`)
 are `assert_socp_exact!`'s own defaults (Phase 35, ARCH-10): `atol_exact = nothing` selects the
-hybrid per-branch/hour floor `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08*ref_b)` = `max(2e-7,
-1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Before Phase 35 the
+hybrid per-branch/hour floor `max(TAU_SOLVER_FIX08, MEASURED_ε_FIX08*ref_b)` = `max(2e-7, 1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Before Phase 35 the
 default was a FLAT `1e-6`, so `check_exact = true` callers relying on the default are NOT
 byte-identical: the gate is STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited
 branch whose hour's head-branch |S| is below ≈ 31.6 pu — a gap in `(2e-7, 1e-6]` now raises
@@ -741,7 +739,7 @@ function set_rho_q!(dso::DsoOpt, ρ_q::Real)
     dso.qag !== nothing || throw(
         ArgumentError(
             "set_rho_q!: this DsoOpt was built without a live reactive coupling block " *
-            "(reactive_consensus != :live); nothing to update",
+            "(reactive_consensus != ReactiveMode.LIVE); nothing to update",
         ),
     )
     # Flatten the qag_dso DenseAxisArray (j over load_nodes × t) to a flat Vector{VariableRef},

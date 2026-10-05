@@ -13,7 +13,7 @@
 # Section 3 then combines this meshed loop with Phase 19's 4Q-BESS device to read a LIVE
 # reactive price directly off the meshed network's own centralized `:balance_q` dual
 # (MESH-06/D-04), then runs the decomposed meshed ADMM (`solve_admm(feeder, MeshedFlow(), aggs;
-# reactive_consensus = LIVE, ...)`) next to it and cross-validates the two live — closing the
+# reactive_consensus = ReactiveMode.LIVE, ...)`) next to it and cross-validates the two live — closing the
 # v3.0 MESH-06 advisory.
 #
 # Every number shown below is RECOMPUTED live during this page's build, exactly like every
@@ -241,7 +241,7 @@ q_dadp_bus2 = dual.(ctx_bess.constraints[:balance_q][2, :])
 
 # This is the CENTRALIZED reference for Phase 19's LIVE radial μ-ascent. The decomposed
 # counterpart now exists on the mesh too: `solve_admm(feeder, MeshedFlow(), aggs;
-# reactive_consensus = LIVE, ...)` iterates the reactive dual `μ_j[t]` to consensus, and it is
+# reactive_consensus = ReactiveMode.LIVE, ...)` iterates the reactive dual `μ_j[t]` to consensus, and it is
 # cross-validated against the centralized `dual.(ctx_bess.constraints[:balance_q][2, :])` just
 # computed (Phase 34, ARCH-06), closing the v3.0 MESH-06 advisory:
 
@@ -254,7 +254,7 @@ r_admm = solve_admm(
     ρ = 10.0,
     ε_abs = 1e-6,
     ε_rel = 1e-5,
-    reactive_consensus = LIVE,
+    reactive_consensus = ReactiveMode.LIVE,
     maxiter = 500,
 )
 

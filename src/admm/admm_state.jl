@@ -13,17 +13,21 @@
 
 using JuMP
 
-"Dispatch tag for the reactive-consensus mode (internal mirror of the public `ReactiveMode` enum)."
+"""
+Dispatch tag for the reactive-consensus mode (internal mirror of the public `ReactiveMode` enum).
+"""
 abstract type _ReactiveMode end
 struct _ReactiveOff <: _ReactiveMode end
 struct _ReactiveCertified <: _ReactiveMode end
 struct _ReactiveLive <: _ReactiveMode end
 
-"Map the public [`ReactiveMode`](@ref) enum to its singleton dispatch tag (total over the enum)."
-function _react_mode(m::ReactiveMode)
-    m == OFF && return _ReactiveOff()
-    m == CERTIFIED && return _ReactiveCertified()
-    m == LIVE && return _ReactiveLive()
+"""
+Map the public [`ReactiveMode`](@ref) enum to its singleton dispatch tag (total over the enum).
+"""
+function _react_mode(m::ReactiveMode.T)
+    m == ReactiveMode.OFF && return _ReactiveOff()
+    m == ReactiveMode.CERTIFIED && return _ReactiveCertified()
+    m == ReactiveMode.LIVE && return _ReactiveLive()
     throw(ArgumentError("unknown ReactiveMode $m"))
 end
 
@@ -52,7 +56,8 @@ whose `contribute!` yields the nodal-balance / `Rp,Rq` seam the ADMM coupling ne
 (ARCH-05). Mirrored at the symbol level by `supports_pf(::ADMM, ...)`.
 """
 admm_supported(::AbstractPowerFlow) = false
-admm_supported(::Union{ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, LinDistFlow}) = true
+admm_supported(::Union{ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, LinDistFlow}) =
+    true
 
 """
     _check_admm_pair!(fname::Symbol, feeder::AbstractFeeder, pf::AbstractPowerFlow)
@@ -67,12 +72,14 @@ function _check_admm_pair!(fname::Symbol, feeder::AbstractFeeder, pf::AbstractPo
             "ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, LinDistFlow)",
         ),
     )
-    feeder isa MeshedFeeder && !(pf isa MeshedFlow) && throw(
-        ArgumentError(
-            "$fname is radial-only for $(typeof(pf)); got a MeshedFeeder - use pf = MeshedFlow() " *
-            "for a meshed feeder",
-        ),
-    )
+    feeder isa MeshedFeeder &&
+        !(pf isa MeshedFlow) &&
+        throw(
+            ArgumentError(
+                "$fname is radial-only for $(typeof(pf)); got a MeshedFeeder - use pf = MeshedFlow() " *
+                "for a meshed feeder",
+            ),
+        )
     return nothing
 end
 
@@ -223,7 +230,8 @@ _react_dso_read(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState) = noth
 _react_dso_read(::_ReactiveLive, st::AdmmState) = value.(st.dso.qag)
 
 # ---- hook: reactive accumulators (Σ over j,t in the same order as the active ones) ---------------
-_react_accumulate!(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState, qag_dso) = nothing
+_react_accumulate!(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState, qag_dso) =
+    nothing
 
 function _react_accumulate!(::_ReactiveLive, st::AdmmState, qag_dso)
     ls = st.react
@@ -283,14 +291,14 @@ function _react_stack(
     s_norm = st.ρf * sqrt(sq_ds) + ρ_qf * sqrt(acc.sq_ds_q)
     p_total = p_p * 2
     ε_pri =
-        sqrt(p_total) * ε_abs +
-        ε_rel * max(sqrt(sq_a + acc.sq_b), sqrt(sq_pd + acc.sq_qd))
+        sqrt(p_total) * ε_abs + ε_rel * max(sqrt(sq_a + acc.sq_b), sqrt(sq_pd + acc.sq_qd))
     ε_dual = sqrt(p_total) * ε_abs + ε_rel * sqrt(sq_λ + acc.sq_μq)
     return r_norm, s_norm, ε_pri, ε_dual
 end
 
 # ---- hook: reactive dual-ascent step (μq += ρ_q (b − qag_dso); d = −qag_dso; snapshot) ----------
-_react_dual_step!(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState, qag_dso) = nothing
+_react_dual_step!(::Union{_ReactiveOff, _ReactiveCertified}, st::AdmmState, qag_dso) =
+    nothing
 
 function _react_dual_step!(::_ReactiveLive, st::AdmmState, qag_dso)
     ls = st.react
@@ -362,7 +370,8 @@ function _react_adapt_rho!(
 end
 
 # ---- hook: reactive default (smart PM-03 default, moved out of the solve_admm signature) --------
-_default_reactive_consensus(aggregators) = _any_flexible_reactive(aggregators) ? LIVE : false
+_default_reactive_consensus(aggregators) =
+    _any_flexible_reactive(aggregators) ? ReactiveMode.LIVE : ReactiveMode.OFF
 
 # ---- hook: `:balance_q` no-slack certificate (REACT-02) -----------------------------------------
 # OFF: `:balance_q` is the inelastic constant closure, intentionally NOT gated (REACT-03).

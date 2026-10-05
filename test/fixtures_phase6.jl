@@ -166,7 +166,7 @@
     `is_flexible_load` (Plan 26-04, FIX-05) nor a `q_inject`-carrying device (D-09), so
     `build_dso_opt`'s smart `reactive_consensus` default (Plan 26-12, PM-03,
     `_any_flexible_reactive`) resolves to OFF on this population, and an explicit
-    `reactive_consensus = true`/`:certified` override does NOT trip the widened WR-04
+    `reactive_consensus = ReactiveMode.CERTIFIED`/`:certified` override does NOT trip the widened WR-04
     fail-loud guard — restoring the pre-Phase-26 "default OFF, explicit CERTIFIED override
     works" REACT-0x testing intent that `build_two_bus_aggregators`'s Thermostatic+Deferrable
     members broke once PM-03's guard correctly began recognizing them as flexible loads.

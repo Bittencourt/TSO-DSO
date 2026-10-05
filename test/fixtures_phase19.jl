@@ -38,7 +38,7 @@
 # MEASUREMENT-BEFORE-GOLDEN (D-14, threat T-19-18): the welfare/λ/μ cross-validation tolerances
 # Task 2 pins were MEASURED on this exact fixture (`build_two_bus_aggregators_4q` at its
 # documented parameters below) across 5 seeds (`SEED_2BUS .. SEED_2BUS+4`), comparing
-# `centralized_welfare_4q` against `solve_admm(...; reactive_consensus = :live)`:
+# `centralized_welfare_4q` against `solve_admm(...; reactive_consensus = ReactiveMode.LIVE)`:
 #
 #   seed        |Δwelfare|        |Δλ|₂ (T=24)      |Δμ|₂ (T=24)     |λ_c|₂    μ_c/μ_admm norms
 #   20260719    2.191e-5          1.312e-5           1.338e-8         19.597   ~1.6e-8 / ~1.7e-8

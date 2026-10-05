@@ -42,7 +42,7 @@
             ρ = ρ₀,
             ε_abs = 1e-6,
             ε_rel = 1e-5,
-            reactive_consensus = LIVE,
+            reactive_consensus = ReactiveMode.LIVE,
             maxiter = 500,
         )
         dP = maximum(abs.(vec(r.λ) .- p_c))
@@ -51,7 +51,7 @@
         @info "ARCH-06 measured" ρ₀ iters = r.iters dP dQ dW
         push!(worst, max(dP, dQ))
         @test r.status == :converged
-        @test r.reactive_consensus_mode == LIVE
+        @test r.reactive_consensus_mode == ReactiveMode.LIVE
         @test r.exact_maxgap < 1e-6
         @test isapprox(vec(r.λ), p_c; atol = 5e-4)
         @test isapprox(vec(r.mu_q), q_c; atol = 5e-4)
@@ -80,7 +80,7 @@ end
             ρ = 10.0,
             ε_abs = 1e-6,
             ε_rel = 1e-5,
-            reactive_consensus = LIVE,
+            reactive_consensus = ReactiveMode.LIVE,
             maxiter = 500,
         )
         return (

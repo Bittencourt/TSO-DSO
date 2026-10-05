@@ -306,7 +306,7 @@ end
     end
 end
 
-@testitem "dso: reactive_consensus=true pins qag_dso coupling variable, zero-price primal-equivalent to default (reactive)" setup =
+@testitem "dso: reactive_consensus=ReactiveMode.CERTIFIED pins qag_dso coupling variable, zero-price primal-equivalent to default (reactive)" setup =
     [Phase6Fixtures, Phase4Fixtures] tags = [:dso, :reactive] begin
     using TSODSO
     using JuMP
@@ -316,7 +316,7 @@ end
     # ORIGINAL fixture, `build_two_bus_aggregators`, carries Thermostatic+Deferrable members
     # that FIX-05 (Plan 26-04) made `is_flexible_load`, so `build_dso_opt`'s smart default
     # (Plan 26-12, PM-03) now resolves to LIVE for that population and an explicit
-    # `reactive_consensus = true` now correctly trips the widened WR-04 guard — breaking BOTH
+    # `reactive_consensus = ReactiveMode.CERTIFIED` now correctly trips the widened WR-04 guard — breaking BOTH
     # of this testitem's original assumptions ("default is OFF", "explicit true/CERTIFIED
     # works"). Swapped to the flexible-load-free `build_two_bus_aggregators_no_flex` (a
     # PVBattery-only population) to restore the original REACT-03 "default OFF vs explicit
@@ -330,15 +330,15 @@ end
     dso_default = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
     @test !haskey(dso_default.ctx.meta, :qag_dso)
 
-    # reactive_consensus = true: genuine pinned coupling variable, right shape, :balance_q intact.
+    # reactive_consensus = ReactiveMode.CERTIFIED: genuine pinned coupling variable, right shape, :balance_q intact.
     dso_reactive =
-        build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true)
+        build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.CERTIFIED)
     @test haskey(dso_reactive.ctx.meta, :qag_dso)
     qag_dso = dso_reactive.ctx.meta[:qag_dso]
     @test size(qag_dso) == (length(dso_reactive.load_nodes), Th)
     @test haskey(dso_reactive.ctx.constraints, :balance_q)
 
-    # Zero-price solve on BOTH: the pin makes reactive_consensus=true physically EQUIVALENT to
+    # Zero-price solve on BOTH: the pin makes reactive_consensus=ReactiveMode.CERTIFIED physically EQUIVALENT to
     # the default path (proof the pin serves the true reactive demand exactly, not approximately).
     assert_solved!(dso_default.model; dual = true)
     assert_solved!(dso_reactive.model; dual = true)

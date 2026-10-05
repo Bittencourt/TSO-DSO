@@ -7,10 +7,10 @@
 @testitem "admm phases: _react_mode maps the enum totally onto the singleton tags (admm_phases)" tags =
     [:admm, :phases] begin
     using TSODSO
-    @test TSODSO._react_mode(TSODSO.OFF) isa TSODSO._ReactiveOff
-    @test TSODSO._react_mode(TSODSO.CERTIFIED) isa TSODSO._ReactiveCertified
-    @test TSODSO._react_mode(TSODSO.LIVE) isa TSODSO._ReactiveLive
-    @test all(m -> TSODSO._react_mode(m) isa TSODSO._ReactiveMode, instances(TSODSO.ReactiveMode))
+    @test TSODSO._react_mode(TSODSO.ReactiveMode.OFF) isa TSODSO._ReactiveOff
+    @test TSODSO._react_mode(TSODSO.ReactiveMode.CERTIFIED) isa TSODSO._ReactiveCertified
+    @test TSODSO._react_mode(TSODSO.ReactiveMode.LIVE) isa TSODSO._ReactiveLive
+    @test all(m -> TSODSO._react_mode(m) isa TSODSO._ReactiveMode, instances(TSODSO.ReactiveMode.T))
 end
 
 @testitem "admm phases: _react_state allocates reactive arrays only under LIVE (admm_phases)" tags =
@@ -43,7 +43,7 @@ end
 
     st_off = TSODSO._admm_build(
         feeder, ConvexBranchFlow(), aggs, Th, λ₀, Float64(ρ), Float64(ρ),
-        TSODSO.OFF, TSODSO._ReactiveOff(),
+        TSODSO.ReactiveMode.OFF, TSODSO._ReactiveOff(),
     )
     @test st_off.react === nothing
     out = TSODSO._react_stack(TSODSO._ReactiveOff(), st_off, nothing, sq..., p_p, ε_abs, ε_rel)
@@ -55,7 +55,7 @@ end
 
     st_live = TSODSO._admm_build(
         feeder, ConvexBranchFlow(), aggs, Th, λ₀, Float64(ρ), Float64(ρ),
-        TSODSO.LIVE, TSODSO._ReactiveLive(),
+        TSODSO.ReactiveMode.LIVE, TSODSO._ReactiveLive(),
     )
     acc = (; sq_r_q = 0.5, sq_ds_q = 0.25, sq_b = 1.5, sq_qd = 2.5, sq_μq = 3.5)
     ρ_qf = st_live.react.ρ_qf
@@ -83,11 +83,11 @@ end
             reactive_consensus = m,
         )
     end
-    for (m, tag) in ((TSODSO.OFF, TSODSO.OFF), (TSODSO.CERTIFIED, TSODSO.CERTIFIED), (TSODSO.LIVE, TSODSO.LIVE))
+    for (m, tag) in ((TSODSO.ReactiveMode.OFF, TSODSO.ReactiveMode.OFF), (TSODSO.ReactiveMode.CERTIFIED, TSODSO.ReactiveMode.CERTIFIED), (TSODSO.ReactiveMode.LIVE, TSODSO.ReactiveMode.LIVE))
         r = run_mode(m)
         @test r.reactive_consensus_mode == tag
         @test r.status == :converged
-        @test (r.mu_q === nothing) == (m != TSODSO.LIVE)
+        @test (r.mu_q === nothing) == (m != TSODSO.ReactiveMode.LIVE)
     end
 end
 

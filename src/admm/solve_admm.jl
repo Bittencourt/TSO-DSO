@@ -56,7 +56,7 @@ using JuMP
                T::Int = 24, λ₀, ρ, maxiter::Int = 200, tol::Real = 1e-5,
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
-               allow_export::Bool = true, reactive_consensus = false, ρ_q::Real = ρ,
+               allow_export::Bool = true, reactive_consensus = ReactiveMode.OFF, ρ_q::Real = ρ,
                time_limit_s::Union{Nothing,Real} = nothing)
         -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices,
               reactive_consensus_mode, status)
@@ -98,17 +98,16 @@ hard-coded scale-specific penalty (per-unit scale-invariance, ADMM-02). λ is th
 price and is NEVER rescaled on a ρ change. The `tol` keyword is RETAINED for call-site
 compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_rel`).
 
-# Reactive consensus (Phase 16, REACT-01/02 — `reactive_consensus::Bool = false`)
+# Reactive consensus (Phase 16, REACT-01/02 — `reactive_consensus`)
 
 Threaded straight into [`build_dso_opt`](@ref) — its OWN default is IDENTICAL to
-`build_dso_opt`'s (PM-03, post-merge triage cluster D): `_any_flexible_reactive(aggregators) ?
-LIVE : false`, applied BEFORE `normalize_reactive_mode` ever sees a bare sentinel, so a direct
+`build_dso_opt`'s (PM-03, post-merge triage cluster D): `_any_flexible_reactive(aggregators) ? LIVE : OFF`, applied BEFORE `normalize_reactive_mode` ever sees a bare sentinel, so a direct
 `solve_admm` caller who omits `reactive_consensus` gets the smart default too (`build_dso_opt`'s
 own smart default never fires for `solve_admm` callers, since this function always passes an
-already-normalized `mode` — see below). At the FALLBACK `false` (no flexible-load/FourQuadBESS
+already-normalized `mode` — see below). At the FALLBACK `OFF` (no flexible-load/FourQuadBESS
 member present), byte-identical to pre-Phase-16 behavior (REACT-03): the per-load-node reactive
-draw stays the constant `q_draw` and NO extra certificate runs. At `true` (an EXPLICIT caller
-choice — the smart default itself only ever resolves to `LIVE` or `false`, never `true`),
+draw stays the constant `q_draw` and NO extra certificate runs. At `CERTIFIED` (an EXPLICIT caller
+choice, since the smart default only ever resolves to `LIVE` or `OFF`),
 `build_dso_opt` promotes it to the pinned coupling variable `qag_dso[j,t]`
 (`ctx.meta[:qag_dso]`), and after the final consolidation solve this function additionally
 certifies `:balance_q` via [`assert_no_slack`](@ref) — mirroring the `:balance_p` certificate —
@@ -116,12 +115,10 @@ so its dual becomes trustworthy/publishable (e.g. as a reactive DLMP component).
 ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3: `qag_dso` is pinned to a
 fixed target that never moves, so convergence speed is materially unaffected).
 
-# Live reactive dual-ascent (Phase 19, MESH-05 — `reactive_consensus = :live`, `ρ_q::Real = ρ`)
+# Live reactive dual-ascent (Phase 19, MESH-05 — `reactive_consensus = ReactiveMode.LIVE`, `ρ_q::Real = ρ`)
 
-`reactive_consensus` now accepts a 3-state [`ReactiveMode`](@ref) (via
-[`normalize_reactive_mode`](@ref) — `Bool`/`Symbol`/`ReactiveMode` all accepted; `false → OFF`,
-`true → CERTIFIED`, back-compat preserved byte-identically for both). The NEW `LIVE` state
-(`:live`) makes `qag_dso[j,t]` a genuinely OPEN coupling variable — unpinned, unlike
+`reactive_consensus` now accepts a 3-state [`ReactiveMode`](@ref) (a
+`ReactiveMode.T`; `Bool` and `Symbol` values throw `ArgumentError`). The `LIVE` state makes `qag_dso[j,t]` a genuinely OPEN coupling variable — unpinned, unlike
 `CERTIFIED` — and drives it with a SECOND, jointly-converging dual-ascent block on the SAME
 outer loop, in EXACT mirror of the ACTIVE `λ`/`pag_dso` machinery above:
 
@@ -205,8 +202,7 @@ independently measured noise floor for the tolerance they pass, mirroring how
 
 # Returns
 
-`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices,
-reactive_consensus_mode, status)` where
+`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, reactive_consensus_mode, status)` where
 `status` is `:converged` on the normal path (ADDITIVE new field — every other field is
 UNCHANGED from before this plan) or `:budget_exceeded` on the new early-exit path above
 (see "Wall-clock budget"). `reactive_consensus_mode::ReactiveMode` (WR-01, phase-26 review) is
@@ -237,12 +233,12 @@ price (WR-03, phase-19 review).
   - `ArgumentError` (via [`build_dso_opt`](@ref) — WR-04, phase-19 review, WIDENED by PM-03,
     post-merge triage cluster D) when any aggregator carries a `q_inject`-bearing device
     (`FourQuadBESS`) OR an `is_flexible_load` member (Thermostatic/Deferrable/Interruptible,
-    FIX-05) while `reactive_consensus` is EXPLICITLY forced to something other than `:live`:
+    FIX-05) while `reactive_consensus` is EXPLICITLY forced to something other than `ReactiveMode.LIVE`:
     under `OFF`/`CERTIFIED` the DSO reactive closure is the inelastic `−Pdc·tanφ` draw alone, so
     the device's reactive decision would be silently dropped from the network model (and, under
     `CERTIFIED`, the certified `dual(:balance_q)` would be priced against a closure that no
     longer matches the centralized model's). Since PM-03, this only fires on an EXPLICIT
-    override — `reactive_consensus`'s own default already resolves to `:live` whenever such a
+    override — `reactive_consensus`'s own default already resolves to `ReactiveMode.LIVE` whenever such a
     member is present.
   - A loud `ConvergenceError` if `maxiter` is reached WITHOUT convergence AND WITHOUT the
     `time_limit_s` wall-clock budget having been exceeded first — the fail-loud cap that
@@ -255,6 +251,7 @@ price (WR-03, phase-19 review).
     count reached before the refusal (WR-07, 35-REVIEW).
 
 # Status and exceptions
+
 The returned `status` is `:converged` or `:budget_exceeded` (the caller-set
 `time_limit_s` budget). Invalid inputs throw `ArgumentError`; solver failures throw
 `SolveFailedError`; genuine non-convergence throws `ConvergenceError`. See the

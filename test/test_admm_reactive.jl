@@ -84,7 +84,7 @@
 #       to TODAY: `dso.load_nodes == [2]`, `:balance_q` registered, NO `:qag_dso` key in
 #       `ctx.meta`. Passes NOW, before plan 16-02, and must keep passing UNCHANGED afterward
 #       (REACT-03's core non-regression guarantee).
-#   (3) RED  -- after a converged `solve_admm(...; reactive_consensus = true)`, `assert_no_slack`
+#   (3) RED  -- after a converged `solve_admm(...; reactive_consensus = ReactiveMode.CERTIFIED)`, `assert_no_slack`
 #       on every entry of `dso_ctx.constraints[:balance_q]` must NOT throw (REACT-02's
 #       positive-path certificate proof, mirroring `test_admm.jl`'s `:balance_p` re-check item).
 
@@ -96,7 +96,7 @@
     # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): swapped to the
     # flexible-load-free `build_two_bus_aggregators_no_flex` -- the original
     # `build_two_bus_aggregators` fixture carries Thermostatic+Deferrable members that FIX-05
-    # made `is_flexible_load`, so an explicit `reactive_consensus = true` on it now correctly
+    # made `is_flexible_load`, so an explicit `reactive_consensus = ReactiveMode.CERTIFIED` on it now correctly
     # trips the widened WR-04 guard (Plan 26-12), which this testitem's `reactive_consensus =
     # true` call below does not intend to exercise (that guard behavior is covered separately
     # by "admm reactive: OFF/CERTIFIED with a q_inject-carrying device fails loud..." below).
@@ -117,7 +117,7 @@
         λ₀ = Phase6Fixtures.two_bus_lambda0()
         ρ = Phase6Fixtures.RHO_2BUS
 
-        dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = true)
+        dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.CERTIFIED)
         @test haskey(dso.ctx.constraints, :balance_q)
         @test haskey(dso.ctx.meta, :qag_dso)
         qag_dso = dso.ctx.meta[:qag_dso]
@@ -152,14 +152,14 @@ end
     @test !haskey(dso.ctx.meta, :qag_dso)   # no reactive coupling variable stashed on the default path
 end
 
-@testitem "admm reactive: converged reactive_consensus=true certifies :balance_q has no hidden slack (reactive)" setup =
+@testitem "admm reactive: converged reactive_consensus=ReactiveMode.CERTIFIED certifies :balance_q has no hidden slack (reactive)" setup =
     [Phase6Fixtures] tags = [:admm, :reactive] begin
     using TSODSO
 
     feeder = Phase6Fixtures.two_bus_feeder()
     # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): flexible-load-free
     # fixture, same rationale as the two testitems above -- this item's explicit
-    # `reactive_consensus = true` below would otherwise trip the widened WR-04 guard against
+    # `reactive_consensus = ReactiveMode.CERTIFIED` below would otherwise trip the widened WR-04 guard against
     # `build_two_bus_aggregators`'s now-`is_flexible_load` Thermostatic+Deferrable members.
     aggs = Phase6Fixtures.build_two_bus_aggregators_no_flex(feeder)
 
@@ -187,7 +187,7 @@ end
             ρ = ρ,
             maxiter = 200,
             allow_export = true,
-            reactive_consensus = true,
+            reactive_consensus = ReactiveMode.CERTIFIED,
         )
 
         # REACT-02's positive-path certificate: re-running assert_no_slack on the PUBLISHED
@@ -206,7 +206,7 @@ end
 
 # ==============================================================================================
 # Phase 19 (MESH-04/MESH-05, plan 19-08 Task 2): the phase acceptance-gate items for the LIVE
-# reactive dual-ascent mechanism (`reactive_consensus = :live`), on the primary, CI-gated
+# reactive dual-ascent mechanism (`reactive_consensus = ReactiveMode.LIVE`), on the primary, CI-gated
 # `Phase19Fixtures`-built 2-bus + FourQuadBESS fixture (D-13: NEVER IEEE-13 for this gate --
 # IEEE-13 4Q-BESS supporting evidence is a SEPARATE, quarantined item in
 # test/test_ieee123_admm.jl). `setup = [Phase6Fixtures, Phase19Fixtures]` in THIS ORDER on every
@@ -238,7 +238,7 @@ end
         λ₀ = λ₀,
         ρ = ρ,
         allow_export = true,
-        reactive_consensus = :live,
+        reactive_consensus = ReactiveMode.LIVE,
         maxiter = 500,
     )
 
@@ -285,7 +285,7 @@ end
         λ₀ = λ₀,
         ρ = ρ,
         allow_export = true,
-        reactive_consensus = :live,
+        reactive_consensus = ReactiveMode.LIVE,
         maxiter = 500,
     )
 
@@ -347,7 +347,7 @@ end
     # nothing left to catch on that path. OLD (pre-PM-03) assertion: `@test_throws
     # ArgumentError build_dso_opt(feeder, aggs, Th; ρ=ρ, λ₀=λ₀)`. NEW: confirms the smart
     # default resolves directly to LIVE (qag present), matching the explicit
-    # `reactive_consensus=:live` call at the bottom of this same testitem.
+    # `reactive_consensus=ReactiveMode.LIVE` call at the bottom of this same testitem.
     dso_default = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)   # smart default (PM-03) -> LIVE
     @test dso_default.qag !== nothing
     @test_throws ArgumentError build_dso_opt(
@@ -356,7 +356,7 @@ end
         Th;
         ρ = ρ,
         λ₀ = λ₀,
-        reactive_consensus = :certified,
+        reactive_consensus = ReactiveMode.CERTIFIED,
     )
     @test_throws ArgumentError build_dso_opt(
         feeder,
@@ -364,7 +364,7 @@ end
         Th;
         ρ = ρ,
         λ₀ = λ₀,
-        reactive_consensus = true,   # Bool back-compat → CERTIFIED
+        reactive_consensus = ReactiveMode.CERTIFIED,
     )
 
     # solve_admm inherits the guard via its build_dso_opt call — no 4Q-bearing run can slip
@@ -377,12 +377,12 @@ end
         λ₀ = λ₀,
         ρ = ρ,
         allow_export = true,
-        reactive_consensus = :certified,
+        reactive_consensus = ReactiveMode.CERTIFIED,
         maxiter = 500,
     )
 
     # LIVE behavior unchanged: the same aggregator set still builds (qag coupling block live).
-    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = :live)
+    dso = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀, reactive_consensus = ReactiveMode.LIVE)
     @test dso.qag !== nothing
 end
 
@@ -426,7 +426,7 @@ end
         λ₀ = λ₀,
         ρ = ρ,
         allow_export = true,
-        reactive_consensus = :live,
+        reactive_consensus = ReactiveMode.LIVE,
         maxiter = 500,
     )
     μ_a = vec(res.mu_q)
@@ -489,7 +489,7 @@ end
         λ₀ = λ₀,
         ρ = ρ,
         allow_export = true,
-        reactive_consensus = :live,
+        reactive_consensus = ReactiveMode.LIVE,
         maxiter = 500,
     )
     res2 = solve_admm(
@@ -500,7 +500,7 @@ end
         λ₀ = λ₀,
         ρ = ρ,
         allow_export = true,
-        reactive_consensus = :live,
+        reactive_consensus = ReactiveMode.LIVE,
         maxiter = 500,
     )
 
