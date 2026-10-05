@@ -271,6 +271,13 @@ end
 # ---- Flake-rate measurement -------------------------------------------------------------------
 
 """
+Report label for a reactive mode, e.g. `"ReactiveMode.OFF"`.
+"""
+mode_label(m::ReactiveMode.T) = "ReactiveMode.$(m)"
+const LABEL_OFF = mode_label(ReactiveMode.OFF)
+const LABEL_CERTIFIED = mode_label(ReactiveMode.CERTIFIED)
+
+"""
     count_failures(feeder, aggs, λ₀; reactive_consensus::ReactiveMode.T, n_repeats=20, seed_offset=0) -> Int
 
 Calls `solve_admm(feeder, ConvexBranchFlow(), aggs; T, λ₀, ρ=RHO0, ..., reactive_consensus)`
@@ -280,7 +287,14 @@ and `@warn`-logging it. The seeded fixtures (`build_ieee13_ground_aggregators`/
 varies a tiny (`1e-9`-scale) numerical jitter on λ₀ — enough to perturb the interior-point
 solver's exact iterate path (and thus exercise any conditioning-dependent flake) without
 changing the economically-meaningful problem data. Returns the number of caught failures
-(0 <= failures <= n_repeats).
+(0 <= failures < n_repeats).
+
+Fail-loud rules (a refused configuration is not a flake):
+
+  - an `ArgumentError` (a configuration refusal such as the `build_dso_opt` population guard) is
+    rethrown, never counted;
+  - if EVERY repeat failed, this throws instead of returning `n_repeats`: a 100% failure rate is
+    a broken setup, not a flake measurement, and no findings file must be written from it.
 """
 function count_failures(
     feeder,
@@ -313,10 +327,18 @@ function count_failures(
                 reactive_consensus = reactive_consensus,
             )
         catch e
+            e isa ArgumentError && rethrow()   # configuration refusal, not a flake
             failures += 1
             @warn "solve_admm failed during reactive-flake-rate measurement" repeat = i reactive_consensus exception =
                 (e, catch_backtrace())
         end
+    end
+    if failures == n_repeats
+        error(
+            "reactive_flake_rate: all $n_repeats repeats failed for " *
+            "reactive_consensus = $(mode_label(reactive_consensus)); this is a broken setup, not " *
+            "a flake measurement. Refusing to write findings (see the @warn logs above).",
+        )
     end
     return failures
 end
@@ -393,7 +415,7 @@ rate_123_true = fail_123_true / N_REPEATS
 @printf(
     "%-12s %-22s %8d %8d %8.3f\n",
     "IEEE-13",
-    "false",
+    LABEL_OFF,
     N_REPEATS,
     fail_13_false,
     rate_13_false
@@ -401,7 +423,7 @@ rate_123_true = fail_123_true / N_REPEATS
 @printf(
     "%-12s %-22s %8d %8d %8.3f\n",
     "IEEE-13",
-    "true",
+    LABEL_CERTIFIED,
     N_REPEATS,
     fail_13_true,
     rate_13_true
@@ -409,7 +431,7 @@ rate_123_true = fail_123_true / N_REPEATS
 @printf(
     "%-12s %-22s %8d %8d %8.3f\n",
     "IEEE-123",
-    "false",
+    LABEL_OFF,
     N_REPEATS,
     fail_123_false,
     rate_123_false
@@ -417,7 +439,7 @@ rate_123_true = fail_123_true / N_REPEATS
 @printf(
     "%-12s %-22s %8d %8d %8.3f\n",
     "IEEE-123",
-    "true",
+    LABEL_CERTIFIED,
     N_REPEATS,
     fail_123_true,
     rate_123_true
@@ -443,7 +465,7 @@ open(report_path, "w") do io
         io,
         "%-12s %-22s %8d %8d %8.3f\n",
         "IEEE-13",
-        "false",
+        LABEL_OFF,
         N_REPEATS,
         fail_13_false,
         rate_13_false
@@ -452,7 +474,7 @@ open(report_path, "w") do io
         io,
         "%-12s %-22s %8d %8d %8.3f\n",
         "IEEE-13",
-        "true",
+        LABEL_CERTIFIED,
         N_REPEATS,
         fail_13_true,
         rate_13_true
@@ -461,7 +483,7 @@ open(report_path, "w") do io
         io,
         "%-12s %-22s %8d %8d %8.3f\n",
         "IEEE-123",
-        "false",
+        LABEL_OFF,
         N_REPEATS,
         fail_123_false,
         rate_123_false
@@ -470,7 +492,7 @@ open(report_path, "w") do io
         io,
         "%-12s %-22s %8d %8d %8.3f\n",
         "IEEE-123",
-        "true",
+        LABEL_CERTIFIED,
         N_REPEATS,
         fail_123_true,
         rate_123_true
@@ -494,7 +516,7 @@ open(report_path, "w") do io
     delta123 = rate_123_true - rate_123_false
     println(
         io,
-        "Delta (true - false): IEEE-13 = $(delta13); IEEE-123 = $(delta123). ",
+        "Delta (CERTIFIED - OFF): IEEE-13 = $(delta13); IEEE-123 = $(delta123). ",
         "This is a citable finding, not a pass/fail gate ",
         "— the number itself is the deliverable, reported here neither ",
         "silently accepted nor silently \"fixed.\"",
