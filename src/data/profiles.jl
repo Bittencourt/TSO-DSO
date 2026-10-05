@@ -99,7 +99,6 @@ function markov_path(
     return path
 end
 
-
 # --- Default state→value tables and transition matrices (documented, overridable) ---
 #
 # These defaults describe a small, well-mixing 3-state chain for each series so the
@@ -198,18 +197,10 @@ function generate_profiles(;
         )
     end
     if any(<(0), demand_values)
-        throw(
-            ArgumentError(
-                "generate_profiles: demand_values must be non-negative",
-            ),
-        )
+        throw(ArgumentError("generate_profiles: demand_values must be non-negative"))
     end
     if any(<(0), pv_values)
-        throw(
-            ArgumentError(
-                "generate_profiles: pv_values must be non-negative",
-            ),
-        )
+        throw(ArgumentError("generate_profiles: pv_values must be non-negative"))
     end
 
     # Seed ONCE, thread the SAME rng through both walks — this is what makes the full

@@ -131,4 +131,3 @@ function assert_connected(buses, branches, root)
 
     return A
 end
-
