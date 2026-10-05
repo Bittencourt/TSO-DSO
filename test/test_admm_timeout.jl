@@ -24,6 +24,7 @@
 
 using Test
 using TSODSO
+using TSODSO: build_population, build_price
 
 # SEED = 20260718 matches test/fixtures_phase4.jl's `build_ieee13_ground_aggregators`
 # default seed EXACTLY — the "ground" congestion-driven per-bus profile draw that needs

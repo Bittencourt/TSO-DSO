@@ -110,6 +110,7 @@ end
 @testitem "ieee13 ground: GLB-CVX SOCP solve is OPTIMAL, exact, cross-solver-consistent (OPT-02/OPT-03)" tags =
     [:ieee13, :ground] setup = [Phase4Fixtures] begin
     using TSODSO
+    using TSODSO: NLP
     using JuMP
 
     feeder = TSODSO.ieee13_modified()

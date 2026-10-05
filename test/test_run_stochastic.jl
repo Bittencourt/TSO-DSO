@@ -19,6 +19,7 @@
 @testitem "run_stochastic: in-sample and held-out sub_seed families are disjoint (T-22-06)" tags =
     [:run_stochastic] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: sub_seed
 
     s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
 
@@ -48,6 +49,7 @@ end
 @testitem "run_stochastic: WR-05 (phase-22 review) — an infeasible held-out pin is skipped-and-reported, never run-aborting" tags =
     [:run_stochastic] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_oos_harness, sub_seed
     using JuMP: set_parameter_value
 
     # WR-05: a held-out draw whose PV falls below every in-sample draw at some hour makes

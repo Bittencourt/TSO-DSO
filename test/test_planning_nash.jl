@@ -196,6 +196,7 @@ end
 @testitem "planning nash: solve_stackelberg! rejects follower + non-empty follower_kwargs together" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_follower
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -419,6 +420,7 @@ end
 @testitem "planning nash: intra-sweep write-back timing — distributor 2 reads distributor 1's JUST-updated z_1 within the same sweep, not the previous sweep's value (DIRECT regression, Revision 1)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_follower!, write_back!
     using JuMP: value, parameter_value
 
     shared = build_shared_transmission(;
@@ -622,6 +624,7 @@ end
 @testitem "planning nash: N=2 gating probe — 3 seeds x 2 orders all converge, structural 'a converged equilibrium' language" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
@@ -716,6 +719,7 @@ end
 @testitem "planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero (BILEV-06a)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: run_nash_probe
 
     # S_min = (0.7+0.7)/corridor_cap = 0.7 — see this testitem's own header comment for
     # the full derivation. A `let`-scoped local (not a file-level `const`): TestItemRunner
@@ -791,6 +795,7 @@ end
 @testitem "planning nash: N=3 probe converges (no closed-form hand-check required, per CONTEXT.md's N=2-hand-checkable/N=3-probe-only scope)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
@@ -839,6 +844,7 @@ end
 @testitem "planning nash: run_nash_probe propagates a non-converging probe run, never swallows it" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
@@ -884,6 +890,7 @@ end
 @testitem "planning nash: run_nash_probe guards reject fewer than 3 seeds or fewer than 2 orders" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
@@ -1193,6 +1200,7 @@ end
 @testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (a strict subset of the GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation (BILEV-06b, CR-02)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_variational_equilibrium, write_back!
     using JuMP: value
 
     S_MIN = 0.7
@@ -1276,6 +1284,7 @@ end
 @testitem "planning nash: solve_variational_equilibrium agrees with the corner-cap control's pinned unique equilibrium — VE and GNE coincide when the equilibrium IS unique (BILEV-06b)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: solve_variational_equilibrium
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])
@@ -1334,6 +1343,7 @@ end
 @testitem "planning nash: solve_variational_equilibrium selects the UNIQUE VE on an asymmetric-c_inv fixture — hand-derived split, equal per-player shared multipliers, distinct from the diagonalization's GNE (CR-02)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_planning_oracle!, solve_variational_equilibrium, write_back!
     using JuMP: value
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)

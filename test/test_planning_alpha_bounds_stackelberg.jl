@@ -87,6 +87,7 @@ end
 @testitem "planning alpha bounds stackelberg: a pre-built follower with no sound α_x_lb derivation (DistributorView) is accepted, not rejected — α_op_lb is still validated" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: activate_distributor!
 
     # Mirrors test_planning_nash.jl's own N=2, T=1 toy fixture shape: distributor 1 is
     # the one actually solved against (activate_distributor!), distributor 2 stays
@@ -149,6 +150,7 @@ end
 @testitem "planning alpha bounds stackelberg: an explicit bound accepted inside the build-time slack is CLAMPED and never trips the runtime floor at the box argmax (Option A, Phase 31 WR-05/WR-03, Plan 31-07)" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
+    using TSODSO: build_master
     using JuMP: value, lower_bound
 
     # Phase 30 code review iteration 2 (WR-05). Build time accepts an explicit α_op_lb up

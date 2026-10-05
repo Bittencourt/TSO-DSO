@@ -72,6 +72,7 @@
 @testitem "thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip (REPRO-01)" tags =
     [:thesis_repro] setup = [Phase7Fixtures] begin
     using TSODSO
+    using TSODSO: SOCP
 
     # ── Pinned magnitude band (committed findings.txt "RECOMMENDED BAND:" line
     # -- DSO_BAND_LO=0.0, DSO_BAND_HI=7.229422341375 -- copied verbatim, never invented
@@ -151,6 +152,7 @@ end
 @testitem "thesis_repro: IEEE-13 congestion — DSO-surplus sign-flip qualitative cross-check (secondary, non-gated)" tags =
     [:thesis_repro] setup = [Phase4Fixtures] begin
     using TSODSO
+    using TSODSO: problem_class
     using JuMP: value, Model, @variable, @constraint, @objective, optimize!
     import TSODSO:
         Bus, Branch, SMAX_NO_LIMIT, ModelContext, register_constraint!, add_to_residual!

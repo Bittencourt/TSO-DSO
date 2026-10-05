@@ -12,6 +12,7 @@
 @testitem "ac_oracle: recover_voltage_angles matches the hand-derived 2-bus closed-form phasor (EXACT-01, angle-recovery validation gate)" tags =
     [:ac_oracle] begin
     using TSODSO
+    using TSODSO: LP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -132,6 +133,7 @@ end
 @testitem "ac_oracle: assert_ac_exact! throws ONLY on a structural T mismatch, never on a numeric gap (EXACT-03 divergence from assert_socp_exact!)" tags =
     [:ac_oracle] begin
     using TSODSO
+    using TSODSO: LP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 

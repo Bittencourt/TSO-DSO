@@ -88,6 +88,7 @@ end
 end
 
 @testitem "errors: assert_socp_exact! throws CertificateError(kind = :socp_exact)" begin
+    using TSODSO: SOCP
     using TSODSO, JuMP, Test
 
     function _catch(f)
@@ -129,6 +130,7 @@ end
 end
 
 @testitem "errors: assert_battery_complementarity! throws CertificateError(kind = :battery); :warn does not" begin
+    using TSODSO: SOCP
     using TSODSO, JuMP, Test
 
     function _catch(f)

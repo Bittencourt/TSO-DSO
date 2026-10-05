@@ -244,6 +244,7 @@ end
 
 @testitem "bilevel certification: production == BilevelJuMP StrongDualityMode == brute-force grid enumeration; all three != joint (BILEV-02)" tags =
     [:planning] setup = [PlanningFixtures, BilevelKKTCertFixture] begin
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP
 
     f = PlanningFixtures.bilevel_toy_fixture()

@@ -65,6 +65,7 @@ end
 @testitem "admm generic pf: Restricted/LinDist ADMM match centralized welfare; NaN maxgap for LinDist" setup =
     [Phase6Fixtures] tags = [:admm, :genericpf] begin
     using TSODSO
+    using TSODSO: SOCP
 
     feeder = Phase6Fixtures.two_bus_feeder()
     aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)

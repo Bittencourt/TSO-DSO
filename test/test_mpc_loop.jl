@@ -306,6 +306,7 @@ end
 
 @testitem "mpc_loop: forced-inexact window escalates through Phase-20's ladder WITHOUT throwing (MPC-04, D-04)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO: build_mpc_window, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
 
@@ -381,6 +382,7 @@ end
 
 @testitem "mpc_loop: escalation at t > 1 prices the CURRENT window — same t-sliced profiles, same measured state, never hours 1..H (CR-01)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO: build_mpc_window, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
 
@@ -514,6 +516,7 @@ end
 
 @testitem "mpc_loop: ladder terminal failure publishes :cert_failed with the reference fallback price — NEVER throws (CR-02, D-04, WR-04)" tags =
     [:mpc_loop] setup = [Phase21Fixtures] begin
+    using TSODSO: MpcTrace, any_cert_failed, build_mpc_window, record!, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
 

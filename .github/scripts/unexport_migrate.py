@@ -93,7 +93,23 @@ def imported(lines, rng):
     return got
 
 
+def selfcheck():
+    """Scratch file with `:SOCP`, a string mention and one real use must give 1 site."""
+    import os, subprocess, tempfile
+    src = 'x = :SOCP\ny = "SOCP in text"\nz = Symbol("SOCP")\nw = SOCP()\n'
+    with tempfile.TemporaryDirectory() as d:
+        f = os.path.join(d, "a.jl"); n = os.path.join(d, "n.txt")
+        open(f, "w").write(src); open(n, "w").write("SOCP\n")
+        out = subprocess.run([sys.executable, __file__, "scan", "--names", n, f],
+                             capture_output=True, text=True).stdout
+    ok = "1 sites in 1 files" in out
+    print("selfcheck:", "OK" if ok else "FAIL " + out)
+    return 0 if ok else 1
+
+
 def main(argv):
+    if argv[:1] == ["selfcheck"]:
+        return selfcheck()
     if len(argv) < 3 or argv[0] not in ("scan", "apply") or "--names" not in argv:
         print(__doc__)
         return 2

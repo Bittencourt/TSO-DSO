@@ -144,6 +144,7 @@ end
 @testitem "socp: SOCP() routes to a Clarabel factory with tight gap (INFRA-02)" tags =
     [:socp] begin
     using TSODSO
+    using TSODSO: SOCP
     using JuMP
 
     factory = select_optimizer(SOCP())          # must build without naming a solver here

@@ -40,6 +40,7 @@
 @testitem "mpc_terminal: hard terminal-SOC condition prevents end-of-horizon dump/hoard, present when disabled (MPC-02)" tags =
     [:mpc_terminal] setup = [Phase21Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window, solve_mpc_window!
     using JuMP: value, set_parameter_value, set_objective_coefficient
 
     feeder = Phase21Fixtures.mpc_feeder()

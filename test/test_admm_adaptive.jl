@@ -23,6 +23,7 @@
 @testitem "admm adaptive rho: set_rho! in-place quad-coeff, build-once invariant (adaptive, rho)" setup =
     [Phase7Fixtures, Phase6Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
+    using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
 
     # RED until Wave 2/3 (plan 07-03 lands set_rho!).
@@ -54,6 +55,7 @@ end
 @testitem "admm adaptive rho: scale-invariant convergence 2-bus AND ieee13 (adaptive, rho)" setup =
     [Phase7Fixtures, Phase6Fixtures, Phase4Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
+    using TSODSO: converged
 
     # RED until Wave 3 (adaptive-ρ policy, plan 07-04, guarded by the 07-03 set_rho! seam).
     @test isdefined(TSODSO, :set_rho!)

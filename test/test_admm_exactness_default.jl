@@ -2,6 +2,7 @@
 
 @testmodule ExactDefaultHelpers begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 

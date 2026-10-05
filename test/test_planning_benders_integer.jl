@@ -84,6 +84,7 @@ end
 @testitem "planning benders integer: build_master_integer through solve_stackelberg! end-to-end smoke (apply_integer_cuts! wiring, nogood_count/converged_via surfaced)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master_integer
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)

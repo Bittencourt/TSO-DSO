@@ -146,6 +146,7 @@ end
 @testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up (plan 25-04)" tags =
     [:phase25] begin
     using TSODSO
+    using TSODSO: build_population
 
     profiles = generate_profiles(; seed = 1, T = 24)
     feeder = TSODSO.ieee8500_modified()
@@ -217,6 +218,7 @@ end
 @testitem "ieee8500: build_population(:ieee13) is byte-identical to its pre-plan-25-04 golden (plan 25-04)" tags =
     [:phase25] begin
     using TSODSO
+    using TSODSO: build_population
 
     profiles = generate_profiles(; seed = 1, T = 24)
     pop = build_population(:default, ieee13_modified(), :ieee13, profiles, 42)
@@ -239,6 +241,7 @@ end
 @testitem "ieee8500: build_population(:ieee8500_mv) total-load conservation (plan 25-04)" tags =
     [:phase25] begin
     using TSODSO
+    using TSODSO: build_population
 
     profiles = generate_profiles(; seed = 1, T = 24)
     seed = 7

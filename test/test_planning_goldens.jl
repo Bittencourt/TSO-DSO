@@ -99,6 +99,7 @@ end
 @testitem "planning goldens: N=2 multi-seed/multi-order probe — gating checks then spread-bound regression (PVAL-02)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
+    using TSODSO: run_nash_probe
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], [0.0])

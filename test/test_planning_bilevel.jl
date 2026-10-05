@@ -12,6 +12,7 @@
 @testitem "bilevel: build_bilevel_kkt + solve_bilevel! reproduce the hand-derived corner (y*=0, z*=0, total=0)" tags =
     [:planning] setup = [PlanningFixtures] begin
     using TSODSO
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
 
     f = PlanningFixtures.bilevel_toy_fixture()
 
@@ -47,6 +48,7 @@ end
 @testitem "bilevel: build_bilevel_kkt boundary guards" tags = [:planning] setup =
     [PlanningFixtures] begin
     using TSODSO
+    using TSODSO: BilevelKKT, build_bilevel_kkt
 
     f = PlanningFixtures.bilevel_toy_fixture()
     base = (;
@@ -156,6 +158,7 @@ end
 
 @testitem "bilevel: solve_bilevel! validity check rejects a genuinely too-tight SOS1 bound" tags =
     [:planning] begin
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
     # DELIBERATE stress test of the Pitfall-3 at-bound check itself (never a claim
@@ -213,6 +216,7 @@ end
 
 @testitem "bilevel: follower's own x_inv <= x_inv_max carries a KKT multiplier (WR-01)" tags =
     [:planning] begin
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
     # Interior-fixture data (test_planning_certification_bilevel_interior.jl) with the
@@ -257,6 +261,7 @@ end
 
 @testitem "bilevel: m_ub is the closed-form dual bound, pinned on both fixtures (WR-03)" tags =
     [:planning] setup = [PlanningFixtures] begin
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
     # 29-REVIEW.md WR-03: the old solver-probe bound depended on Clarabel's arbitrary
@@ -317,6 +322,7 @@ end
 
 @testitem "bilevel: at-bound check accepts correct x_inv*=0 optima on a degenerate multiplier face (iteration-2 CR-01)" tags =
     [:planning] begin
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
     # 29-REVIEW.md iteration-2 CR-01. Interior-fixture data (a = pi_tariff - c_op = 1.5,
@@ -384,6 +390,7 @@ end
 
 @testitem "bilevel: returned multipliers are the canonical lexicographically minimal KKT certificate (iteration-2 WR-02)" tags =
     [:planning] setup = [PlanningFixtures] begin
+    using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
     # 29-REVIEW.md iteration-2 WR-02. On a degenerate active set the MILP's raw

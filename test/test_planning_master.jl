@@ -17,6 +17,7 @@
 
 @testitem "planning master: build_master guards (T, y_max, c_y)" tags = [:planning] begin
     using TSODSO
+    using TSODSO: build_master
 
     @test_throws ArgumentError build_master(;
         T = 0,
@@ -44,6 +45,7 @@ end
 @testitem "planning master: epigraph lower-bound regression — zero-cut first solve is OPTIMAL, never DUAL_INFEASIBLE" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master, solve_master!
     using JuMP: termination_status, MOI
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
@@ -57,6 +59,7 @@ end
 @testitem "planning master: persistent cut-row growth — num_constraints grows by exactly 1 per cut, num_variables never changes" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master
     using JuMP: num_variables, num_constraints
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
@@ -88,6 +91,7 @@ end
 @testitem "planning master: bogus-epigraph guard — add_optimality_cut! rejects any symbol other than :op/:x" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_optimality_cut!, build_master
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
 
@@ -97,6 +101,7 @@ end
 @testitem "planning master: shape-mismatch guards — grad_k/z_k/u_k length must equal T (T-11-03)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
 
@@ -109,6 +114,7 @@ end
 @testitem "planning master: finiteness guards — NaN/Inf cut inputs are rejected loudly BEFORE touching the model (WR-03)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master
     using JuMP: num_constraints
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
@@ -129,6 +135,7 @@ end
 @testitem "planning master: cut-validity structural check — the solved point never violates a known cut" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_optimality_cut!, build_master, solve_master!
     using JuMP: value
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
@@ -148,6 +155,7 @@ end
 @testitem "planning master: explicit bounds with no bounds_ctx are byte-identical (regression guard)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master, solve_master!
     using JuMP: termination_status, MOI
 
     master = build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
@@ -161,6 +169,7 @@ end
 @testitem "planning master: :auto resolves both epigraph bounds via a genuine relaxed solve" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master, solve_master!
     using JuMP: termination_status, MOI, lower_bound
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -195,6 +204,7 @@ end
 @testitem "planning master: build-time rejection of an over-high explicit α_op_lb when bounds_ctx is supplied" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -221,6 +231,7 @@ end
 @testitem "planning master: build-time rejection of an over-high explicit α_x_lb when bounds_ctx is supplied" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -275,6 +286,7 @@ end
 @testitem "planning master: build-time rejection has real headroom, but an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master
     using JuMP: lower_bound
 
     # Phase 30 code review (WR-03): the old rule rejected `α > (optimum − margin) + tol`
@@ -369,6 +381,7 @@ end
 @testitem "planning master: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master
 
     # Phase 30 code review iteration 2 (IN-03): the old `isa Union{Symbol,Real}` guard was
     # always true, so a typo reached `isless`/`Float64(::Symbol)` as a MethodError.
@@ -379,6 +392,7 @@ end
 @testitem "planning master: derive_alpha_x_lb(::FollowerLP) dispatch agrees with the follower_kwargs path" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_follower
 
     f = build_follower(; T = 1, corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5])
     a = TSODSO.derive_alpha_x_lb(f)
@@ -395,6 +409,7 @@ end
 @testitem "planning master: α_x_lb build-time validation is honestly skipped when bounds_ctx.follower_kwargs is nothing (DistributorView-equivalent scope limit)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master
     using JuMP: lower_bound
 
     feeder = Phase6Fixtures.two_bus_feeder()

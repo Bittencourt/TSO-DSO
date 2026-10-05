@@ -22,6 +22,7 @@
 @testitem "planning hardening: near-boundary z — deliverable-cap ± 1e-6 stays valid, cut store finite" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, build_follower, build_master, solve_follower!, solve_master!
     using JuMP: termination_status, MOI
 
     # Deliverable cap = corridor_cap * x_inv_max = 2.0 * 0.25 = 0.5 (the WR-04 fixture's
@@ -62,6 +63,7 @@ end
 @testitem "planning hardening: near-zero deliverable capacity (x_inv_max -> 1e-9) still yields a valid, finite feasibility cut" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, build_follower, build_master, solve_follower!, solve_master!
     using JuMP: termination_status, MOI
 
     # x_inv_max > 0 guard (build_follower) still passes; deliverable cap ≈ 2e-9,
@@ -94,6 +96,7 @@ end
 @testitem "planning hardening: repeated/duplicate Farkas cuts are tolerated — cut store stays finite and valid, LB monotone non-decreasing" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_follower, build_master, solve_follower!, solve_master!
     using JuMP: num_constraints, termination_status, MOI
 
     # Duplicates are TOLERATED (not deduped) — Claude's Discretion per 12-CONTEXT.md: the

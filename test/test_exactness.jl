@@ -11,6 +11,7 @@
 @testitem "exact: assert_socp_exact! throws on an inexact relaxation, refusing prices (PF-04)" tags =
     [:exact] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -52,6 +53,7 @@ end
 @testitem "exact: assert_socp_exact! passes and reports maxgap on an exact point (PF-04)" tags =
     [:exact] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -92,6 +94,7 @@ end
 @testitem "exact: relative gate refuses a base-shrunk cone slack an absolute τ would accept (WR-01)" tags =
     [:exact] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -138,6 +141,7 @@ end
 @testitem "exact: per-branch floor flags a slack cone on a small-smax branch the old flat atol missed (FIX-08)" tags =
     [:exact] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -184,6 +188,7 @@ end
 @testitem "exact: head-branch lookup is orientation-agnostic — ref_b matches forward vs reversed root branch (FIX-08, plan 27-07)" tags =
     [:exact] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -264,6 +269,7 @@ end
 @testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags =
     [:exact] setup = [Phase4Fixtures] begin
     using TSODSO
+    using TSODSO: problem_class
     using JuMP
 
     # RED until BOTH the SOCP formulation (04-02) and the exactness gate (04-05) land.

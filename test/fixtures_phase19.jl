@@ -88,6 +88,7 @@
 
 @testmodule Phase19Fixtures begin
     using TSODSO
+    using TSODSO: SOCP, has_branch_current, problem_class
     using JuMP
     using ..Phase6Fixtures
 

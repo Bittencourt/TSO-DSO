@@ -51,6 +51,7 @@ end
 @testitem "conformance: DC↔LinDistFlow↔SOCP interchange (crit 4, SOCP arm)" tags =
     [:conformance] begin
     using TSODSO
+    using TSODSO: problem_class
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 

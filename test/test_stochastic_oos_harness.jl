@@ -38,6 +38,7 @@
 @testitem "stochastic_oos_harness: build-once — num_variables/num_constraints invariant across heterogeneous re-solves (D-09)" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: num_variables, num_constraints, set_parameter_value
 
     feeder = Phase22Fixtures.stoch_feeder()
@@ -87,6 +88,7 @@ end
 @testitem "stochastic_oos_harness: pin is genuinely binding, not vacuous (T-22-05)" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: value, set_parameter_value
 
     feeder = Phase22Fixtures.stoch_feeder()
@@ -133,6 +135,7 @@ end
 @testitem "stochastic_oos_harness: CR-01 regression — a FourQuadBESS (no Ppv_param) builds, pins, and solves" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: objective_value
 
     # CR-01 (phase-22 review): the harness's battery-pin walk selected battery-like
@@ -190,6 +193,7 @@ end
 @testitem "stochastic_oos_harness: WR-04 (phase-22 review) — FourQuadBESS q is pinned first-stage, never free held-out recourse" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: value, set_parameter_value
 
     # WR-04: build_stochastic_welfare now ties q across in-sample scenarios (q is part
@@ -244,6 +248,7 @@ end
 @testitem "stochastic_oos_harness: build_stochastic_oos_harness boundary guards" tags =
     [:stochastic_oos_harness] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_oos_harness, sub_seed
 
     feeder = Phase22Fixtures.stoch_feeder()
     T = Phase22Fixtures.T

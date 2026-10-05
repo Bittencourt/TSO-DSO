@@ -130,6 +130,7 @@ end
 @testitem "planning feasibility oracle: THERMAL-infeasible pinned z produces a genuine feasibility cut" tags =
     [:planning] setup = [FeasibilityOracleFixtures] begin
     using TSODSO
+    using TSODSO: solve_master!
     using JuMP: num_constraints, value
 
     T = 1
@@ -195,6 +196,7 @@ end
 @testitem "planning feasibility oracle: VOLTAGE-infeasible pinned z (thermally-widened variant) produces a genuine feasibility cut" tags =
     [:planning] setup = [FeasibilityOracleFixtures] begin
     using TSODSO
+    using TSODSO: solve_master!
     using JuMP: num_constraints, value
 
     # Provenance (30-RESEARCH.md: "on the REAL unmodified feeder, thermal ALWAYS binds

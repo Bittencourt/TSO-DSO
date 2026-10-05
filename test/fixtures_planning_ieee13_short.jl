@@ -58,6 +58,7 @@
 # natural box mostly inside the `[-0.05, 0.05]` feasible-and-exact window above).
 
 @testmodule IEEE13ShortHorizonFixtures begin
+    using TSODSO: SOCP, solve_with_retry!
     using JuMP, TSODSO
 
     # Day-ahead short horizon for this fixture (Claude's discretion, T ∈ [3,6] per

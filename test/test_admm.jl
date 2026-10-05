@@ -25,6 +25,7 @@
 @testitem "admm: cross-validation 2-bus welfare + DADP sign (crossval)" setup =
     [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
+    using TSODSO: SOCP
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
     @test isdefined(TSODSO, :solve_admm)
@@ -159,6 +160,7 @@ end
 @testitem "admm: dual-ascent loop converges + fails loud on the cap (loop)" setup =
     [Phase6Fixtures, Phase4Fixtures] tags = [:admm] begin
     using TSODSO
+    using TSODSO: SOCP
 
     # RED until Wave 3 (plan 06-04) fills the ADMM dual-ascent loop.
     @test isdefined(TSODSO, :solve_admm)

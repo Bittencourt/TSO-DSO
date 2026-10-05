@@ -21,6 +21,7 @@
 @testitem "planning oracle: build_planning_oracle guards (empty aggregators, λ₀ length, bus range)" tags =
     [:planning] setup = [Phase6Fixtures] begin
     using TSODSO
+    using TSODSO: build_planning_oracle
 
     feeder = Phase6Fixtures.two_bus_feeder()
     aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
@@ -59,6 +60,7 @@ end
 @testitem "planning oracle: build_planning_oracle is build-once (num_variables/num_constraints invariant across re-solves)" tags =
     [:planning] setup = [Phase6Fixtures] begin
     using TSODSO
+    using TSODSO: build_planning_oracle
     using JuMP: num_variables, num_constraints, set_parameter_value, optimize!
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -90,6 +92,7 @@ end
 @testitem "planning oracle: solve_planning_oracle! returns (cost, π, π_s, dadp, ctx) NamedTuple shape" tags =
     [:planning] setup = [Phase6Fixtures] begin
     using TSODSO
+    using TSODSO: build_planning_oracle, solve_planning_oracle!
     using JuMP: value
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -170,6 +173,7 @@ end
 @testitem "planning oracle: dual-sign toy-case regression — π monotonically non-decreasing in z, zero at the unconstrained optimum (D-06)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_planning_oracle, solve_planning_oracle!
     using JuMP: value
 
     feeder = Phase6Fixtures.two_bus_feeder()   # reuse the near-lossless 2-bus anchor shape
@@ -216,6 +220,7 @@ end
 @testitem "planning oracle: solve_planning_oracle! re-solve is build-once (num_variables/num_constraints invariant)" tags =
     [:planning] setup = [Phase6Fixtures] begin
     using TSODSO
+    using TSODSO: build_planning_oracle, solve_planning_oracle!
     using JuMP: num_variables, num_constraints, value
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -250,6 +255,7 @@ end
 @testitem "planning oracle: ConvexBranchFlow solve runs the PF-04 exactness gate and stashes socp_maxgap (CR-03)" tags =
     [:planning] setup = [Phase6Fixtures] begin
     using TSODSO
+    using TSODSO: SOCP, build_planning_oracle, solve_planning_oracle!
     using JuMP: value
 
     feeder = Phase6Fixtures.two_bus_feeder()

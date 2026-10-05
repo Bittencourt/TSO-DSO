@@ -21,6 +21,7 @@ end
 @testitem "welfare: end-to-end GLB-CVX optimum, reactive balance, battery complementarity (OPT-01, DEV-04)" tags =
     [:welfare] setup = [Phase3Fixtures] begin
     using TSODSO
+    using TSODSO: NLP
     using JuMP
 
     T = Phase3Fixtures.T                       # 24

@@ -65,6 +65,7 @@ end
 
 @testitem "ieee123: relabel map + substation root spot-check (ieee123)" tags = [:phase7] begin
     using TSODSO
+    using TSODSO: ieee123_relabel_map
 
     # RED until Wave 2 (plan 07-02 fills the fixture + its documented relabel map).
     @test isdefined(TSODSO, :ieee123_modified)
@@ -91,6 +92,7 @@ end
 
 @testitem "ieee123: transit (zero-injection) bus count (ieee123)" tags = [:phase7] begin
     using TSODSO
+    using TSODSO: ieee123_load_nodes
 
     # RED until Wave 2 (plan 07-02 exposes the load/transit split).
     @test isdefined(TSODSO, :ieee123_modified)
@@ -118,6 +120,7 @@ end
 @testitem "ieee123: pinned real-impedance spot-check on branch (149,1) (ieee123)" tags =
     [:phase7] begin
     using TSODSO
+    using TSODSO: ieee123_relabel_map
 
     # Real per-segment Ω→pu impedance ingestion (plan 17-02, IMPED-02): branch (149,1)
     # (LineCode=1, Length=0.4) must convert via to_pu_impedance on IEEE123_BASE, not the

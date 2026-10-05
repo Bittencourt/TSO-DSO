@@ -42,6 +42,7 @@
 @testitem "planning benders: converges end-to-end with documented UB/LB gap, matches the re-derived analytic optimum (z*=0.7)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: solve_follower!, solve_planning_oracle!
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)

@@ -22,6 +22,7 @@
 @testitem "admm dualresid: z-block dual residual + two-residual stop (dualresid, admm)" setup =
     [Phase7Fixtures, Phase6Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
+    using TSODSO: converged
 
     # RED until Wave 3 (plan 07-04 dual-residual correction lands with the 07-03 set_rho! seam).
     @test isdefined(TSODSO, :set_rho!)
@@ -63,6 +64,7 @@ end
 @testitem "admm dualresid: ledger two-residual converged predicate (dualresid, resid)" setup =
     [Phase7Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
+    using TSODSO: converged, record!
 
     # This item exercises the JuMP-free ledger contract directly (GREEN once plan 07-01 Task 2
     # lands the extended AdmmResiduals) — it does NOT depend on solve_admm, so it pins the

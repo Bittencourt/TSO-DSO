@@ -36,6 +36,7 @@
 @testitem "planning PVAL-04: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
+    using TSODSO: build_bilevel_kkt, build_feasibility_oracle, build_follower, build_master, build_master_integer, build_planning_oracle
     using JuMP: all_variables, is_binary, is_integer, num_constraints, VariableRef
     import JuMP: MOI
 

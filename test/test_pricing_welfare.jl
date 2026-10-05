@@ -64,6 +64,7 @@ end
 @testitem "welfare surplus accounting: near-lossless 2-bus identity + finite magnitude-sane surpluses (PRICE-03)" tags =
     [:welfare, :surplus] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 

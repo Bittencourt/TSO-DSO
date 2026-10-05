@@ -48,6 +48,7 @@ end
 @testitem "planning trace: nogood_count explicit keyword is recorded and surfaced via trace_summary.total_nogoods" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: trace_summary
 
     t = BendersTrace()
     push!(
@@ -111,6 +112,7 @@ end
 @testitem "planning trace: empty-trace trace_summary reports total_nogoods = 0 sentinel" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: trace_summary
 
     t = BendersTrace()
     s = trace_summary(t)

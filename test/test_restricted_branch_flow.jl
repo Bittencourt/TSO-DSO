@@ -352,6 +352,7 @@ end
 @testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch (D-06)" tags =
     [:restricted_branch_flow] setup = [Phase4Fixtures] begin
     using TSODSO
+    using TSODSO: LP
     using JuMP
 
     feeder2 = Feeder(
@@ -427,6 +428,7 @@ end
 @testitem "restricted_branch_flow: ac_dual_fallback_price triggers only after an observed certificate failure, carries price_status, and 2-seed agreement (D-09/D-10/D-11 CI subset)" tags =
     [:restricted_branch_flow] setup = [Phase4Fixtures] begin
     using TSODSO
+    using TSODSO: ac_dual_fallback_price
     using JuMP
 
     feeder = Phase4Fixtures.high_pv_feeder()
@@ -546,6 +548,7 @@ end
 @testitem "restricted_branch_flow: CR-01 regression — reversed-orientation branch agrees exactly with parent→child in BOTH shadow-voltage code paths" tags =
     [:restricted_branch_flow] begin
     using TSODSO
+    using TSODSO: LP
     using JuMP
 
     r, x = 0.05, 0.04

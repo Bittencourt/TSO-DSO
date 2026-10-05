@@ -11,6 +11,7 @@
 @testitem "mpc_window: build_mpc_window guards (empty aggregators, H<1, bus range)" tags =
     [:mpc_window] setup = [Phase21Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window
 
     feeder = Phase21Fixtures.mpc_feeder()
     aggs = Phase21Fixtures.build_mpc_aggregators(feeder)
@@ -52,6 +53,7 @@ end
 @testitem "mpc_window: allow_export threads to the frontier — import-only lower bound when false, free-sign when true (WR-06)" tags =
     [:mpc_window] setup = [Phase21Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window
     using JuMP: has_lower_bound, lower_bound
 
     feeder = Phase21Fixtures.mpc_feeder()
@@ -73,6 +75,7 @@ end
 @testitem "mpc_window: build-once — num_variables/num_constraints invariant across re-solves at DIFFERENT soc0/Tin0/terminal-target/forecast-slice states (MPC-01)" tags =
     [:mpc_window] setup = [Phase21Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window, solve_mpc_window!
     using JuMP:
         num_variables, num_constraints, set_parameter_value, set_objective_coefficient
 
@@ -156,6 +159,7 @@ end
 @testitem "mpc_window: set_parameter_value on soc0 is NOT a no-op — the solved soc[1] trajectory genuinely moves (MPC-01)" tags =
     [:mpc_window] setup = [Phase21Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window, solve_mpc_window!
     using JuMP: value, set_parameter_value, set_objective_coefficient
 
     feeder = Phase21Fixtures.mpc_feeder()
@@ -191,6 +195,7 @@ end
 @testitem "mpc_window: terminal_soc toggle produces a STRUCTURALLY different model (MPC-02 mechanism)" tags =
     [:mpc_window] setup = [Phase21Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window
     using JuMP: num_constraints
 
     feeder = Phase21Fixtures.mpc_feeder()

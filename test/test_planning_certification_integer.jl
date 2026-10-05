@@ -64,6 +64,7 @@
 
 @testmodule EnumerateLatticeOracle begin
     using TSODSO
+    using TSODSO: solve_follower!, solve_planning_oracle!
 
     """
         enumerate_lattice(oracle, follower; K::Int = 4, y_max::Real = 8.0, c_y::Real = 0.3)
@@ -309,6 +310,7 @@ end
 @testitem "planning certification integer: INT-03 exhaustive-enumeration certification of the D-12 tiny instance (D-15 certificates 1+2, D-16 visibility, D-11 non-blocker documented) -- FIXED in gap-closure 24-05.1 (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header" tags =
     [:planning] setup =
     [Phase6Fixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
+    using TSODSO: build_follower, build_master_integer, build_planning_oracle
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -513,6 +515,7 @@ end
 
 @testitem "planning certification integer: negative-control regression -- a deliberately WRONG known_optimum is rejected, never falsely converges via a stray gap<=tol match (plan-checker Blocker 2, closed for good)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture, EnumerateLatticeOracle] begin
+    using TSODSO: build_follower, build_master_integer, build_planning_oracle
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -595,6 +598,7 @@ end
 
 @testitem "planning certification integer: T>1 joint corner_recourse matches T=2 dense-grid enumeration on a genuinely non-separable PVBattery fixture (FIX-06, Phase 27 plan 27-01)" tags =
     [:planning] setup = [Phase6Fixtures, EnumerateLatticeOracle] begin
+    using TSODSO: build_follower, build_planning_oracle
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -665,6 +669,7 @@ end
 
 @testitem "planning certification integer: T>1 joint corner_recourse survives the oracle-infeasible double-stall (CR-01, 27-REVIEW.md)" tags =
     [:planning] setup = [Phase6Fixtures] begin
+    using TSODSO: build_follower, build_planning_oracle, solve_follower!, solve_planning_oracle!
     using TSODSO, Test
 
     feeder = Phase6Fixtures.two_bus_feeder()

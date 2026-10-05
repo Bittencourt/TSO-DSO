@@ -55,6 +55,7 @@ end
 @testitem "close_balance: pre-migration fingerprint solve_linear + mpc_window + stochastic + dso (ARCH-04)" tags =
     [:balance] setup = [Phase21Fixtures, Phase22Fixtures, Phase6Fixtures] begin
     using TSODSO
+    using TSODSO: build_mpc_window, build_stochastic_welfare, sub_seed
     using JuMP
 
     function block_fp(model, prefix)
@@ -130,6 +131,7 @@ end
 @testitem "close_balance!: contract (reactive/DC, registration, anonymous, shapes) (ARCH-04)" tags =
     [:balance] begin
     using TSODSO
+    using TSODSO: close_balance!
     using JuMP
     const MOI = JuMP.MOI
 
@@ -216,6 +218,7 @@ end
 @testitem "close_balance: missing/ill-shaped residual and bad N/T raise ArgumentError (WR-05)" tags =
     [:balance] begin
     using TSODSO
+    using TSODSO: close_balance!
     using JuMP
 
     function check_missing()

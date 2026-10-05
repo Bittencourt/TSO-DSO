@@ -28,6 +28,7 @@
 @testitem "stochastic_welfare: D-04 non-uniform probabilities genuinely change the objective, not silently uniform" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_welfare, sub_seed
 
     feeder = Phase22Fixtures.stoch_feeder()
     T = Phase22Fixtures.T
@@ -62,6 +63,7 @@ end
 @testitem "stochastic_welfare: D-06 PF-04 gate runs per scenario, never aggregated — an extreme scenario throws regardless of the other" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_welfare
 
     # A dedicated 3-bus lossy feeder (mirrors Phase21Fixtures.mpc_high_pv_feeder() exactly:
     # r=x=0.05, no smax limit) — distinct from Phase22Fixtures' own near-lossless 2-bus CI
@@ -225,6 +227,7 @@ end
 @testitem "stochastic_welfare: structural congruence guard — a bus mismatch across scenarios throws ArgumentError" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_welfare, sub_seed
 
     feeder = Phase22Fixtures.stoch_feeder()
     T = Phase22Fixtures.T
@@ -252,6 +255,7 @@ end
 @testitem "stochastic_welfare: WR-10 (phase-22 review) — D-08 S=1 anchor against solve_welfare and the D-05 de-scaling property" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: SOCP, build_stochastic_welfare, sub_seed
 
     # WR-10: the phase's CENTRAL pricing math — the D-05 de-scaling
     # (dadp[s] = raw dual ./ probabilities[s], no sign flip) and the D-08 degenerate
@@ -326,6 +330,7 @@ end
 @testitem "stochastic_welfare: WR-09 (phase-22 review) — soc agrees across scenarios post-solve WITHOUT explicit (rank-deficient) soc tie rows" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_welfare, sub_seed
     using JuMP: value
 
     # WR-09: the tie loop used to add soc_s[t] == soc_1[t] for every t — rows EXACTLY
@@ -369,6 +374,7 @@ end
 @testitem "stochastic_welfare: WR-04 (phase-22 review) — FourQuadBESS reactive dispatch q is nonanticipativity-tied (full first-stage battery schedule)" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_welfare, sub_seed
     using JuMP: value
 
     # WR-04: the tie loop constrained p_ch/p_dch/soc only, so a FourQuadBESS's reactive
@@ -434,6 +440,7 @@ end
 @testitem "stochastic_welfare: WR-03 (phase-22 review) device-composition congruence guard — reordered or missing devices throw ArgumentError, never a silently-untied battery" tags =
     [:stochastic_welfare] setup = [Phase22Fixtures] begin
     using TSODSO
+    using TSODSO: build_stochastic_welfare, sub_seed
 
     feeder = Phase22Fixtures.stoch_feeder()
     T = Phase22Fixtures.T

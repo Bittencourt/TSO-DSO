@@ -80,6 +80,7 @@ end
 @testitem "aggregator: reactive_factor helper single-sources tan(acos φ) (IN-01)" tags =
     [:aggregator] begin
     using TSODSO
+    using TSODSO: reactive_factor
 
     # The single-sourced reactive-draw factor (IN-01) equals tan(arccos φ) = sqrt(1−φ²)/φ,
     # reused verbatim by the aggregator roll-up and both ADMM subproblems.

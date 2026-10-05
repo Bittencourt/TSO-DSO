@@ -20,6 +20,7 @@
 @testitem "ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval)" setup =
     [Phase7Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
+    using TSODSO: SOCP
 
     # RED until Waves 2–4 (fixture 07-02, adaptive-ρ/transit 07-03, two-residual stop 07-04,
     # end-to-end green 07-05).
@@ -109,6 +110,7 @@ end
 @testitem "ieee123 admm: voltage-binding margin (ieee123, crossval)" setup =
     [Phase7Fixtures] tags = [:admm, :phase7] begin
     using TSODSO
+    using TSODSO: SOCP
     using JuMP: value
 
     feeder = ieee123_modified()

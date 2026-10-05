@@ -7,6 +7,7 @@
 
 @testitem "mpc_trace: empty ledger predicates and construction (MPC-03)" tags = [:mpc_trace] begin
     using TSODSO
+    using TSODSO: MpcTrace, any_cert_failed, max_jump, mean_jump
 
     t = MpcTrace()
     @test t.steps == 0
@@ -25,6 +26,7 @@ end
 @testitem "mpc_trace: record! sequential-k fail-loud guard (mirrors AdmmResiduals)" tags =
     [:mpc_trace] begin
     using TSODSO
+    using TSODSO: MpcTrace, record!
 
     t = MpcTrace()
     record!(t, 1, 5.0, 5.0, :certified_convex_dual)
@@ -43,6 +45,7 @@ end
 @testitem "mpc_trace: jump/cumulative-deviation/cert-status derived correctly across N steps (MPC-03 price-consistency metrics)" tags =
     [:mpc_trace] begin
     using TSODSO
+    using TSODSO: MpcTrace, any_cert_failed, max_jump, mean_jump, record!
 
     t = MpcTrace()
     record!(t, 1, 4.0, 4.0, :certified_convex_dual)

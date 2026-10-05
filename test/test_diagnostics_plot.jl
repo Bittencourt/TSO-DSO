@@ -38,6 +38,7 @@ end
 
 @testitem "diagnostics resid: ledger records the traces the plots consume (diag, resid, plot)" begin
     using TSODSO
+    using TSODSO: record!
 
     res = AdmmResiduals(11, 24)
     @test res.iters == 0

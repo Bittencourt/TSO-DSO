@@ -17,6 +17,7 @@
 @testitem "planning master_integer: build_master_integer guards (T, K, y_max, c_y)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master_integer
 
     @test_throws ArgumentError build_master_integer(;
         T = 0,
@@ -55,6 +56,7 @@ end
 @testitem "planning master_integer: zero-cut first solve is OPTIMAL (MILP analog of Pitfall M1)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master_integer, solve_master!
     using JuMP: termination_status, MOI
 
     master = build_master_integer(;
@@ -76,6 +78,7 @@ end
 @testitem "planning master_integer: D-02 lattice reachability — all-ones corner reaches y_max*(1-2^-K), never y_max" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master_integer, solve_master!
     using JuMP: fix, optimize!, value
 
     master = build_master_integer(;
@@ -98,6 +101,7 @@ end
 @testitem "planning master_integer: L-validity (Assumption A1) — L=α_op_lb+α_x_lb bounds the REAL oracle/follower across [0,y_max]" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_follower, build_master_integer, build_planning_oracle, solve_follower!, solve_planning_oracle!
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -167,6 +171,7 @@ end
 @testitem "planning master_integer: persistent cut-row growth — reused continuous cuts append rows, never columns (RESEARCH.md Finding 2)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master_integer
     using JuMP: num_variables, num_constraints
 
     # Mirrors test_planning_master.jl's own "persistent cut-row growth" pattern — the
@@ -205,6 +210,7 @@ end
 @testitem "planning master_integer: add_ll_cut! exhaustive K=4 16x16-corner tightness/slackness (24-RESEARCH.md Priority Finding 1)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_ll_cut!, build_master_integer
     using JuMP: fix, optimize!, value, unfix
 
     K = 4
@@ -265,6 +271,7 @@ end
 @testitem "planning master_integer: add_ll_cut! enforces its own Q_nu >= L precondition (WR-02)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_ll_cut!, build_master_integer
     using JuMP: fix, optimize!, objective_value, @objective
 
     master = build_master_integer(;
@@ -338,6 +345,7 @@ end
 @testitem "planning master_integer: add_nogood_cut! forbids exact re-visitation, leaves other corners feasible" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: add_nogood_cut!, build_master_integer
     using JuMP: fix, optimize!, termination_status, MOI, unfix
 
     master = build_master_integer(;
@@ -377,6 +385,7 @@ end
 
 @testitem "planning master_integer: :auto requires bounds_ctx" tags = [:planning] begin
     using TSODSO
+    using TSODSO: build_master_integer
 
     @test_throws ArgumentError build_master_integer(;
         T = 1,
@@ -391,6 +400,7 @@ end
 @testitem "planning master_integer: :auto resolves both epigraph bounds via a genuine relaxed solve, matching derive_alpha_op_lb/derive_alpha_x_lb directly" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master_integer, solve_master!
     using JuMP: termination_status, MOI, lower_bound
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -426,6 +436,7 @@ end
 @testitem "planning master_integer: build-time rejection of an over-high explicit α_op_lb when bounds_ctx is supplied" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master_integer
 
     feeder = Phase6Fixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -457,6 +468,7 @@ end
 @testitem "planning master_integer: honest skip for DistributorView-shaped followers (bounds_ctx.follower_kwargs = nothing)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master_integer
     using JuMP: lower_bound
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -499,6 +511,7 @@ end
 @testitem "planning master_integer: _accepted_lb_slack is always 0.0 — an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
     [:planning] setup = [Phase6Fixtures, ToyDeviceFixture] begin
     using TSODSO
+    using TSODSO: build_master_integer
     using JuMP: lower_bound
 
     feeder = Phase6Fixtures.two_bus_feeder()
@@ -559,6 +572,7 @@ end
 @testitem "planning master_integer: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_master_integer
 
     @test_throws ArgumentError build_master_integer(;
         T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = :atuo, α_x_lb = 0.0,

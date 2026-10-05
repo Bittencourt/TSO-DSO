@@ -16,6 +16,7 @@
 @testitem "planning follower: build_follower guards (T, corridor_cap, x_inv_max, c_op length)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_follower
 
     @test_throws ArgumentError build_follower(;
         T = 0,
@@ -50,6 +51,7 @@ end
 @testitem "planning follower: build_follower is build-once (num_variables/num_constraints invariant across re-solves)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_follower, solve_follower!
     using JuMP: num_variables, num_constraints, set_parameter_value, optimize!
 
     f = build_follower(;
@@ -73,6 +75,7 @@ end
 
 @testitem "planning follower: feasible branch — cost/shape at z=[1.0]" tags = [:planning] begin
     using TSODSO
+    using TSODSO: build_follower, solve_follower!
 
     f = build_follower(;
         T = 1,
@@ -92,6 +95,7 @@ end
 @testitem "planning follower: Farkas-certificate regression — negative z (corridor cannot deliver reverse flow)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_follower, solve_follower!
 
     f = build_follower(;
         T = 1,
@@ -110,6 +114,7 @@ end
 @testitem "planning follower: Farkas-certificate regression — z exceeds max capacity (corridor_cap*x_inv_max=4.0)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_follower, solve_follower!
 
     f = build_follower(;
         T = 1,
@@ -128,6 +133,7 @@ end
 @testitem "planning follower: dual-sign/slope regression — m_f=1.0 slope, sign pinned by direct measurement" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: build_follower, solve_follower!
 
     f = build_follower(;
         T = 1,

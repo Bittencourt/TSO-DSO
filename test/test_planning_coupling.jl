@@ -136,6 +136,7 @@ end
 @testitem "planning coupling: build-once invariant across activate!/update_coupling!/write_back!" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_follower!, update_coupling!, write_back!
     using JuMP: num_variables, num_constraints
 
     shared = build_shared_transmission(;
@@ -163,6 +164,7 @@ end
 @testitem "planning coupling: feasible branch — distributor 1 delivers z=0.4 against a frozen, partially-committed distributor 2 (capacity dual nonzero, Pitfall 3 regression; asymmetric fixture makes a broken write_back! pin a true cost discriminator, Revision 1)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_follower!, write_back!
     using JuMP: dual
 
     shared = build_shared_transmission(;
@@ -192,6 +194,7 @@ end
 @testitem "planning coupling: infeasible branch — distributor 1 exceeds remaining pooled headroom (Farkas certificate; independently discriminates a broken write_back! pin via the asymmetric ceiling headroom, Revision 1)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_follower!, write_back!
 
     shared = build_shared_transmission(;
         N = 2,
@@ -214,6 +217,7 @@ end
 @testitem "planning coupling: activate_distributor! restores investment freedom after write_back! pinned it" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: activate_distributor!, write_back!
     using JuMP: lower_bound, upper_bound
 
     shared = build_shared_transmission(;
@@ -257,6 +261,7 @@ end
 @testitem "planning coupling: presolve-only INFEASIBLE without a Farkas ray is re-solved without presolve — tolerance-borderline trial returns the simplex's own verdict, results stay queryable, presolve restored (WR-01, Phase 31 code review)" tags =
     [:planning] begin
     using TSODSO
+    using TSODSO: activate_distributor!, solve_follower!, update_coupling!, write_back!
     using JuMP: optimize!, termination_status, dual_status, value, get_attribute, MOI
 
     # MEASURED 2026-10-02 (the integer-Nash fixture of test_planning_nash_integer.jl):

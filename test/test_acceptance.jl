@@ -117,6 +117,7 @@ end
 @testitem "acceptance: IEEE-123 voltage — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
     [:acceptance] setup = [Phase7Fixtures] begin
     using TSODSO
+    using TSODSO: SOCP
 
     feeder = ieee123_modified()
     aggs = Phase7Fixtures.build_ieee123_aggregators(feeder)

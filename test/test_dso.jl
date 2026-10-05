@@ -260,6 +260,7 @@ end
 @testitem "dso: set_rho! mutate-then-solve equals fresh build at ρ, build-once (rho, adaptive)" setup =
     [Phase6Fixtures, Phase4Fixtures] tags = [:dso, :phase7] begin
     using TSODSO
+    using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
 
     # RED until Task 1 (this plan) adds set_rho!.

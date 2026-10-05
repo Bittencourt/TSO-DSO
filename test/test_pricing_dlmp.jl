@@ -20,6 +20,7 @@
 @testitem "dlmp: extract_dlmp on a lossless 2-bus is positive and ≈ λ₀ (energy-only, PRICE-01)" tags =
     [:dlmp] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -228,6 +229,7 @@ end
 @testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus (PRICE-02)" tags =
     [:dlmp] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -353,6 +355,7 @@ end
 @testitem "dlmp: DlmpDecomposition exposes .cone/.drop only (no .loss/.voltage aliases)" tags =
     [:dlmp] begin
     using TSODSO
+    using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
@@ -390,6 +393,7 @@ end
 @testitem "dlmp: reactive price is degenerate at the root and finite/economically-consistent at a load bus on a lossy 2-bus (REACT-02)" tags =
     [:dlmp] begin
     using TSODSO
+    using TSODSO: reactive_factor
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 

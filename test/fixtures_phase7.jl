@@ -20,6 +20,7 @@
 
 @testmodule Phase7Fixtures begin
     using TSODSO
+    using TSODSO: ieee123_load_nodes
 
     # Day-ahead hourly horizon (thesis A1), matching Phase4/6Fixtures.T.
     const T = 24
