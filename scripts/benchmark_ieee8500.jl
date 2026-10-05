@@ -92,6 +92,7 @@ using DrWatson
 @quickactivate "TSODSO"
 
 using TSODSO
+using TSODSO: SOCP, build_feeder, build_population, build_price, ieee123_load_nodes, ieee8500_load_nodes, ieee8500_mv_load_buses, ieee8500_mv_relabel_map, ieee8500_relabel_map, socp_gap_report
 using JuMP
 using CSV, DataFrames
 using Printf

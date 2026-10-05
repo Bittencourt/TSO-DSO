@@ -28,6 +28,7 @@
 # it exists here only so the toy model has a documented, sane per-unit context.
 
 using TSODSO
+using TSODSO: I_base, PerUnitBase, Z_base
 
 base = PerUnitBase(1.0, 4.16)          # S_base [MVA], V_base [kV]
 (Z_base = Z_base(base), I_base = I_base(base))   # derived bases

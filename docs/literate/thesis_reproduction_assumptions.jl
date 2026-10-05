@@ -300,6 +300,7 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ≈ 0.0833; ratio to LOAD_SCA
 # live against the real feeder and the values this page cites.
 
 using TSODSO
+using TSODSO: ieee123_load_nodes
 
 feeder = ieee123_modified()
 n_load_nodes = length(ieee123_load_nodes())

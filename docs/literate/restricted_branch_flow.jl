@@ -12,6 +12,7 @@
 # shown below is RECOMPUTED live during this page's build, exactly like the previous page.
 
 using TSODSO
+using TSODSO: recover_lossfree_shadow_voltage
 using TSODSO.JuMP
 
 # ## Building the high-PV stress fixture

@@ -33,6 +33,7 @@
 # central solver factory.
 
 using TSODSO
+using TSODSO: build_feeder, build_price
 
 # ## A single declarative run
 #

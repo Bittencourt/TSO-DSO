@@ -17,6 +17,7 @@
 # rung page in this manual.
 
 using TSODSO
+using TSODSO: any_cert_failed, max_jump, mean_jump
 
 # ## Building the 24-hour demonstration scenario
 #

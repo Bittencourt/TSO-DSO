@@ -52,6 +52,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: SOCP, ieee123_load_nodes
 using CairoMakie
 using Printf
 using Statistics

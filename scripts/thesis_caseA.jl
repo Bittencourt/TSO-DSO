@@ -33,6 +33,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: SOCP, build_feeder, build_population, build_price, problem_class, sub_seed
 using CairoMakie
 using Printf
 using Statistics

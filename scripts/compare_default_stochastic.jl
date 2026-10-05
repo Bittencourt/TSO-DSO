@@ -17,6 +17,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: sub_seed
 using CairoMakie
 using Statistics
 

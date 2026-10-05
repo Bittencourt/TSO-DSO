@@ -23,6 +23,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: build_feeder, build_price
 using CairoMakie
 using Printf
 using Statistics

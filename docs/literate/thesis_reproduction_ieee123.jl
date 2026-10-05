@@ -40,6 +40,7 @@ cite_repro(x) = "$x ($REPRO_QUALIFIER)"
 # [IEEE-123 Real Impedances — Public-Data Reduction](@ref) page.
 
 using TSODSO
+using TSODSO: SOCP, ieee123_load_nodes
 using Statistics
 
 const T = 24

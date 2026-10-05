@@ -29,6 +29,7 @@ using DrWatson
 @quickactivate "TSODSO"
 
 using TSODSO
+using TSODSO: SOCP, ieee123_load_nodes
 using JuMP
 using CSV, DataFrames
 using Printf

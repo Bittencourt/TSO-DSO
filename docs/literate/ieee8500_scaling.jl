@@ -27,6 +27,7 @@
 # is smoothed into the other.
 
 using TSODSO
+using TSODSO: SOCP, build_feeder, build_population, build_price, ieee8500_mv_load_buses
 ## `TSODSO.JuMP`, not bare `using JuMP`: JuMP is already a TSODSO dependency, and the docs
 ## environment pins a deliberately minimal set (see the no-CSV/DataFrames note further down).
 using TSODSO.JuMP

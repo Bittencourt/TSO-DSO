@@ -40,6 +40,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: any_cert_failed, build_feeder, build_mpc_window, build_population, build_price, solve_mpc_window!
 using TSODSO: propagate_soc, propagate_tin, draw_forecast_error, sub_seed  # unexported MPC seams
 using CairoMakie
 using Printf

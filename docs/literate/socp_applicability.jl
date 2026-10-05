@@ -26,6 +26,7 @@
 # The classical exactness conditions (Farivar & Low 2013; Gan et al. 2015) turn on exactly those.
 
 using TSODSO
+using TSODSO: SOCP
 ## `TSODSO.JuMP` rather than `using JuMP`: the docs environment pins a deliberately minimal
 ## dependency set, and JuMP is already loaded as a dependency of TSODSO — so this reaches `value`
 ## and `optimizer_with_attributes` without adding a dep and re-resolving `docs/Manifest.toml`

@@ -33,6 +33,7 @@ using DrWatson
 @quickactivate "TSODSO"
 
 using TSODSO
+using TSODSO: build_feeder, build_price, sub_seed
 using JuMP
 using CSV, DataFrames
 using Printf

@@ -42,6 +42,7 @@
 # boundary.
 
 using TSODSO
+using TSODSO: build_follower, build_master_integer, build_planning_oracle, solve_follower!, solve_planning_oracle!
 
 K = 4
 y_max = 8.0

@@ -14,6 +14,7 @@
 # live during this page's build, exactly like every prior rung page in this manual.
 
 using TSODSO
+using TSODSO: sub_seed
 
 # ## Building the 9-hour, 5-scenario demonstration
 #

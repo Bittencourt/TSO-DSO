@@ -23,6 +23,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: LP
 using JuMP
 using JuMP: value
 using CairoMakie

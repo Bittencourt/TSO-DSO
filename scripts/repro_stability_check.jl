@@ -62,6 +62,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: ieee123_load_nodes
 using JuMP
 using Clarabel
 using Printf

@@ -61,6 +61,7 @@
 # [`run_nash_probe`](@ref)'s own docstring for the full honesty argument).
 
 using TSODSO
+using TSODSO: run_nash_probe
 using TSODSO: Bus, Branch, Feeder
 
 # ## Building the N=2 symmetric toy fixture

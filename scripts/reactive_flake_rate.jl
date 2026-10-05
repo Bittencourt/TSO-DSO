@@ -33,6 +33,7 @@
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
+using TSODSO: ieee123_load_nodes
 using Printf
 using Dates
 

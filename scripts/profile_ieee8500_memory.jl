@@ -1,3 +1,4 @@
+using TSODSO: build_feeder, build_price
 # scripts/profile_ieee8500_memory.jl
 #
 # Staged memory profile of ONE IEEE-8500 point (phase 35, ARCH-10 SC2). One stage-set per process,
