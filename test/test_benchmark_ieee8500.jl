@@ -13,7 +13,7 @@
 #   julia --project=. test/test_benchmark_ieee8500.jl
 #
 # STABILITY-BEFORE-GOLDEN (Phase 22 D-11's measurement-before-golden convention): the `--quick`
-# point (`julia --project=. scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick`) was
+# point (`julia --project=. scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick --results-dir $RESULTS_DIR`) was
 # run **3 times** during this plan's authoring, confirmed 2026-08-21, on the quiet post-wave-3
 # machine — every run produced IDENTICAL `model_vars` (137594), `model_cons` (275118),
 # `termination_status` ("OPTIMAL"), `admm_status` ("budget_exceeded"), and `admm_iters` (1). See
@@ -48,8 +48,10 @@ using CSV, DataFrames
 
 const PROJECT_ROOT = normpath(joinpath(@__DIR__, ".."))
 const SCRIPT = joinpath(PROJECT_ROOT, "scripts", "benchmark_ieee8500.jl")
-const CSV_PATH =
-    joinpath(PROJECT_ROOT, "results", "ieee8500_benchmark", "density_sweep.csv")
+# Phase 35 (35-05): the --quick runs write into a tmpdir via --results-dir so the committed
+# results/ieee8500_benchmark CSVs are never touched (previously run_quick() upserted into them).
+const RESULTS_DIR = mktempdir()
+const CSV_PATH = joinpath(RESULTS_DIR, "density_sweep.csv")
 
 """
     run_quick() -> DataFrameRow
@@ -62,7 +64,7 @@ row on every invocation (`run_sweep_mode`'s own key-based CSV upsert), so readin
 after the subprocess exits reflects THIS run, not a stale one from an earlier session.
 """
 function run_quick()
-    run(`julia --project=$PROJECT_ROOT $SCRIPT --fixture ieee8500-mv --quick`)
+    run(`julia --project=$PROJECT_ROOT $SCRIPT --fixture ieee8500-mv --quick --results-dir $RESULTS_DIR`)
     df = CSV.read(CSV_PATH, DataFrame)
     rows = filter(r -> r.fixture == "ieee8500-mv" && r.solver == "clarabel", df)
     @assert nrow(rows) == 1 "expected exactly 1 ieee8500-mv/clarabel row in $CSV_PATH after " *
@@ -92,8 +94,15 @@ end
     # re-confirmed stable across this file's own 2-run check on the FURTHER-reduced topology
     # before updating. Asserts ONLY the three deterministic quantities D-16 names (ADMM iteration
     # count, model variable/constraint dimensions, solver termination status) — NEVER wall time.
-    @test r2.model_vars == 137144
-    @test r2.model_cons == 274218
+    # RE-PINNED 2026-10-04 (plan 35-05) with a MEASURED cause (bisected by running --quick at
+    # candidate commits): the fixture topology did NOT change; v4.0 Phase 26 model fixes did.
+    #   cfa7e6e (26-03, battery soc extended to T+1 with full-horizon recursion):
+    #       137144/274218 -> 137258/274560 (+114 vars, +342 cons: one extra soc state per battery).
+    #   30f53e4 (26-05, FIX-03 receiving-end apparent-power cone :smax_rev):
+    #       274560 -> 274570 (+10 cons = one cone per hour, T=10).
+    # Result 137258 / 274570; 2-run stability re-confirmed by Test 1 above.
+    @test r2.model_vars == 137258
+    @test r2.model_cons == 274570
     @test r2.termination_status == "OPTIMAL"
     @test r2.admm_status == "budget_exceeded"
     @test r2.admm_iters == 1
