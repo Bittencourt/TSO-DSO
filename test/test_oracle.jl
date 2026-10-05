@@ -1,13 +1,8 @@
-# Seam: models/oracle.jl (OPT-03 / SEAM-01). operational_oracle + extension-interface stubs.
-#
-# Plan 04-04 turns these green by defining
-# `operational_oracle(feeder, pf, aggregators; λ₀, T, z, role, objective_hook,
-# horizon_state) -> (; cost, π, dadp, ctx)` — a thin wrapper over `solve_welfare` exposing
-# the frontier coupling dual plus the SEAM-01 stub kwargs. Item names contain "oracle" so
-# `occursin("oracle", ti.name)` selects them. The bodies use the already-existing
-# LinDistFlow formulation (NOT the SOCP cone), so each depends ONLY on 04-04 landing — they
-# build their feeder/aggregator inline (no Phase4Fixtures / SOCP coupling), keeping this
-# Wave-2 test independent of 04-02/04-03. Ground-truth numbers are 04-06's job, not here.
+# operational_oracle: `operational_oracle(feeder, pf, aggregators; λ₀, T, role,
+# allow_export) -> (; cost, π, dadp, ctx)` is a thin wrapper over `solve_welfare` exposing
+# the frontier coupling dual. Item names contain "oracle" so `occursin("oracle", ti.name)`
+# selects them. The bodies use the LinDistFlow formulation and build their
+# feeder/aggregator inline.
 
 @testitem "oracle: operational_oracle returns (cost, π, dadp, ctx) with finite prices (OPT-03/SEAM-01)" tags =
     [:oracle] begin
@@ -27,18 +22,14 @@
     agg = Aggregator(2, 0.9, [defer], fill(0.1, T))     # a single minimal aggregator
     λ₀ = fill(2.0, T)
 
-    # Exercise EVERY SEAM-01 stub kwarg (z coupling flow, leader/follower role,
-    # multi-scenario objective hook, rolling-horizon initial state) on a LinDistFlow solve.
+    # Exercise the role kwarg on a LinDistFlow solve.
     res = operational_oracle(
         feeder,
         LinDistFlow(),
         [agg];
         λ₀ = λ₀,
         T = T,
-        z = nothing,
         role = :follower,
-        objective_hook = identity,
-        horizon_state = nothing,
     )
 
     # Shape: a NamedTuple carrying (cost, π, dadp, ctx).
@@ -57,7 +48,7 @@
     @test all(isfinite, res.dadp)
 end
 
-@testitem "oracle: SEAM-01 stub kwargs are inert — :leader role returns the same shape (SEAM-01)" tags =
+@testitem "oracle: the :leader role returns the same shape (OPT-03)" tags =
     [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -72,19 +63,15 @@ end
     agg = Aggregator(2, 0.9, [defer], fill(0.1, T))
     λ₀ = fill(2.0, T)
 
-    # Passing the explicit Stackelberg :leader role (PSR: distributor = leader) plus the
-    # other three SEAM-01 stubs must SUCCEED and return the identical (; cost, π, dadp, ctx)
-    # shape — the stubs are inert in Phase 4 (no partial planning behavior, threat T-04-13).
+    # The explicit Stackelberg :leader role (distributor = leader) must succeed and return
+    # the identical (; cost, π, dadp, ctx) shape.
     res = operational_oracle(
         feeder,
         LinDistFlow(),
         [agg];
         λ₀ = λ₀,
         T = T,
-        z = nothing,
         role = :leader,
-        objective_hook = identity,
-        horizon_state = nothing,
     )
 
     @test res isa NamedTuple
@@ -105,8 +92,7 @@ end
     )
 end
 
-@testitem "oracle: a non-nothing z-pin fails LOUDLY, never a silent proxy dual (WR-03/SEAM-01)" tags =
-    [:oracle] begin
+@testitem "oracle: removed keyword arguments raise MethodError" tags = [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -120,23 +106,15 @@ end
     agg = Aggregator(2, 0.9, [defer], fill(0.1, T))
     λ₀ = fill(2.0, T)
 
-    # WR-03: the z-pin (frontier import == z) is a PLAN-01/02 (Phase 8/9) extension that is NOT
-    # wired into solve_welfare in Phase 4. Passing a non-nothing z must THROW (not silently
-    # return the UNPINNED frontier DADP as a proxy behind a disabled @debug), so a future
-    # planning caller can never mistake an unpinned proxy for a genuine pinned coupling price
-    # (threat T-04-13: NO silent partial pinning).
-    @test_throws ArgumentError operational_oracle(
-        feeder,
-        LinDistFlow(),
-        [agg];
-        λ₀ = λ₀,
-        T = T,
-        z = fill(0.05, T),
-    )
+    @test_throws MethodError operational_oracle(
+        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, objective_hook = nothing)
+    @test_throws MethodError operational_oracle(
+        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, horizon_state = nothing)
+    @test_throws MethodError operational_oracle(
+        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, z = nothing)
 
-    # The free-coupling (z = nothing) path still returns a finite frontier coupling dual —
-    # the loud guard did not break the supported Phase-4 behavior.
-    res = operational_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, z = nothing)
+    # The free-coupling path still returns a finite frontier coupling dual.
+    res = operational_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T)
     @test length(res.π) == T
     @test all(isfinite, res.π)
 end

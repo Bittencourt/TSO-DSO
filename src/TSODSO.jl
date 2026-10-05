@@ -109,7 +109,7 @@ include("models/welfare_solve.jl")
 include("models/exactness.jl")
 include("models/complementarity_4q.jl")   # plan 19-05, MESH-04
 
-# --- operational_oracle + SEAM-01 extension stubs (owned by plan 04-04, OPT-03 / SEAM-01) ---
+# --- operational_oracle (frontier coupling dual wrapper) ---
 include("models/oracle.jl")
 
 # --- AC-exactness oracle post-processing (owned by plan 15-01/15-02, EXACT-01/02/03) ---

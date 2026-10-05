@@ -15,7 +15,7 @@
 # not tolerate an arbitrary z, e.g. z=0 is INFEASIBLE for this fixture — empirically
 # verified this session). Every test below therefore derives its z_trial from the
 # network's OWN unconstrained free-import optimum (via the unmodified free path,
-# `operational_oracle(...; z = nothing, allow_export = true)`), which is feasible by
+# `operational_oracle(...; allow_export = true)`), which is feasible by
 # construction, rather than an arbitrary fixed vector.
 
 @testitem "planning oracle: build_planning_oracle guards (empty aggregators, λ₀ length, bus range)" tags =
@@ -106,7 +106,6 @@ end
         aggs;
         λ₀ = λ₀,
         T = T,
-        z = nothing,
         allow_export = true,
     )
     zstar = value.(free.ctx.meta[:p_import])
@@ -183,7 +182,7 @@ end
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(T))
 
     # The network's OWN unconstrained free-import optimum, via the UNMODIFIED free path
-    # (z = nothing, allow_export = true — the same free-sign frontier shape
+    # (allow_export = true — the same free-sign frontier shape
     # build_planning_oracle builds). This is the toy-case anchor, NOT an assumed docstring
     # formula (10-RESEARCH.md Pitfall 1).
     free = operational_oracle(
@@ -192,7 +191,6 @@ end
         [agg];
         λ₀ = λ₀,
         T = T,
-        z = nothing,
         allow_export = true,
     )
     zstar = value.(free.ctx.meta[:p_import])
@@ -215,25 +213,6 @@ end
     @test all(res_plus.π .>= res_star.π .- 1e-6) && all(res_star.π .>= res_minus.π .- 1e-6)
 end
 
-@testitem "planning oracle: free-path parity — operational_oracle's z !== nothing guard is untouched (D-03)" tags =
-    [:planning] setup = [Phase6Fixtures] begin
-    using TSODSO
-
-    feeder = Phase6Fixtures.two_bus_feeder()
-    aggs = Phase6Fixtures.build_two_bus_aggregators(feeder)
-    T = Phase6Fixtures.T
-    λ₀ = Phase6Fixtures.two_bus_lambda0()
-
-    @test_throws ArgumentError operational_oracle(
-        feeder,
-        LinDistFlow(),
-        aggs;
-        λ₀ = λ₀,
-        T = T,
-        z = fill(0.05, T),
-    )
-end
-
 @testitem "planning oracle: solve_planning_oracle! re-solve is build-once (num_variables/num_constraints invariant)" tags =
     [:planning] setup = [Phase6Fixtures] begin
     using TSODSO
@@ -253,7 +232,6 @@ end
         aggs;
         λ₀ = λ₀,
         T = T,
-        z = nothing,
         allow_export = true,
     )
     zstar = value.(free.ctx.meta[:p_import])

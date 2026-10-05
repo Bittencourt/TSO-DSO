@@ -4,8 +4,7 @@
 # through D-07/D-11).
 # OWNER: plan 10-02.
 #
-# Turns the SEAM-01 `z`-pin stub (`src/models/oracle.jl`'s `_coupling_dual` — UNMODIFIED
-# here, D-03) into a live, build-once JuMP subproblem: `build_planning_oracle` constructs
+# A live, build-once JuMP subproblem: `build_planning_oracle` constructs
 # the welfare-shaped model EXACTLY ONCE with `z[t]` as a genuine JuMP `Parameter` and
 # `p_import[t] == z[t]` as a named `pin[t]` constraint (D-01), reusing
 # `contribute!(pf, ctx, feeder; T)` / `contribute!(agg, ctx; T)` verbatim (the SAME
@@ -104,8 +103,7 @@ Build the planning-layer oracle subproblem (thesis-welfare-shaped, mirrors
     `DsoOpt`/`solve_welfare` before each `@constraint`; `:balance_p` is always
     registered, `:balance_q` only when `reactive`.
  7. THE NEW SEAM: `z[t] in Parameter(0.0)` and the named pin `p_import[t] == z[t]`
-    (D-01/D-11) — the live coupling constraint superseding the SEAM-01 `ArgumentError`
-    stub in `_coupling_dual`.
+    (D-01/D-11) — the live coupling constraint of the pinned form.
  8. `@objective(model, Max, ctx.objective - Σ_t λ₀[t]*p_import[t])` — identical
     shape to `solve_welfare`'s welfare objective (thesis eq. 3.38).
 

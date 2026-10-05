@@ -8,12 +8,9 @@
 # PURE ADDITIVE ORCHESTRATION over already-validated building blocks (`contribute!`,
 # `ModelContext`, `assert_solved!`, `assert_socp_exact!`, `assert_battery_complementarity!`).
 #
-# D-02's honest SEAM-01 resolution note: `models/oracle.jl`'s `objective_hook` stub (inert
-# since Phase 4) is INSUFFICIENT for this axis — it only transforms `ctx.objective`
-# on ONE already-built `ctx`, and has no argument through which to express per-scenario
-# DUPLICATION of the network + device layer. Building S independently-`contribute!`d
-# scenario blocks needs a genuinely new orchestration entry point, hence this sibling
-# module rather than a `objective_hook` wiring.
+# Per-scenario duplication of the network and device layer needs a dedicated orchestration
+# entry point: building S independently-`contribute!`d scenario blocks cannot be expressed
+# by transforming the objective of one already-built context, hence this sibling module.
 #
 # The genuinely new mechanical fact this file's construction depends on (RESEARCH.md
 # Pattern 1, empirically verified): `contribute!(::ConvexBranchFlow, ctx, feeder; T)`

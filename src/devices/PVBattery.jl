@@ -245,7 +245,7 @@ automatically under MPC re-solves). Any other `Symbol` throws `ArgumentError`.
 
 `soc0` and `Ppv_param` (MPC-01 seam, D-01/D-03) are genuine JuMP `Parameter` handles for
 the SOC initial condition and the per-step PV-availability profile, respectively — a
-future receding-horizon window (SEAM-01's `horizon_state` stub) re-targets them via
+receding-horizon window re-targets them via
 `set_parameter_value`/`set_parameter_value.` WITHOUT rebuilding any constraint. Both
 default to the EXACT prior literal value (`parameter_value(soc0) == d.soc0`,
 `parameter_value.(Ppv_param) == d.Ppv[1:T]`), so no caller that never calls
