@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: verifying
-stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-05T02:19:52.858Z"
+status: ready_to_plan
+stopped_at: Phase 35 complete (5/5) — ready to discuss Phase 36
+last_updated: 2026-10-05T04:51:55.399Z
 last_activity: 2026-10-05
 progress:
   total_phases: 12
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 35 — IEEE-8500 Scale After Refactor
+**Current focus:** Phase 36 — code & export cleanup
 
 ## Current Position
 
-Phase: 35 (IEEE-8500 Scale After Refactor) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
+Phase: 36
+Plan: Not started
+Status: Ready to plan
   Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
@@ -100,7 +100,7 @@ blanket "deferred work" — most of what `audit-open` flagged is not open work a
 |----------|------|---------|
 | quick_task | 16 tasks, all reported `status: missing` | **NOT open work.** All 16 have committed SUMMARY.md files and appear in the Quick Tasks Completed table above with commit hashes. `audit-open` flags them only because this repo's quick-task SUMMARY frontmatter carries `quick_id`/`subsystem`/`tags`/dependency-graph fields but no `status:` field, which the audit expects. A frontmatter-convention gap in the tooling contract, not unfinished work. Worth fixing in the template rather than in 16 files. |
 | verification_gap | Phase 25 `25-VERIFICATION.md` status `gaps_found` | **Accurate and deliberately left as-is.** SCALE-04 was closed 2026-08-24 (see `25-SCALE-04-CLOSURE.md`), but SCALE-05 genuinely remains: the ~40x headline IEEE-8500 fixture was OOM-killed at every density, so solve time / ADMM iterations / exactness at headline scale were never measured. The researcher ACCEPTED this as an honest non-measurement at milestone close. The status field is not being edited to look clean — the gap is real, it is simply accepted. |
-| verification_gap (Phase 35 update, 2026-10-04) | SCALE-05 headline | Superseded/updated by Phase 35 (2026-10-04, ARCH-10): after the v4.0 refactor the ADMM final-consolidation gate defaults to the hybrid floor; the ADMM-only headline point (IEEE-8500 d=0.1 T=10) now converges in 8 iterations and is REFUSED by the gate (CertificateError, hybrid ratio 568.95, worst branch L2916620->N1136366 gap 1.21e-4, loss impact ~4.4e-9 pu; genuine, no tolerance raised); d=0.1 T=24 completes (CertificateError, ratio 223.68, 12.08 GB peak, 678 s); d=0.25 T=24 is earlyoom-killed at 10.6 GiB anon RSS. Phase 25's OOM kills were at T=24 in combined centralized+ADMM processes. Memory wall now between d=0.1 and 0.25 at T=24 (15.9 GB host); dominant consumer is per-hour DSO solver state retained across the ADMM loop (~linear in T). Data: results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv; docs: 'Post-refactor measured results (Phase 35)' in docs/literate/ieee8500_scaling.jl. The original status above is unchanged. |
+| verification_gap (Phase 35 update, 2026-10-04) | SCALE-05 headline | Superseded/updated by Phase 35 (2026-10-04, ARCH-10): after the v4.0 refactor the ADMM final-consolidation gate defaults to the hybrid floor; the ADMM-only headline point (IEEE-8500 d=0.1 T=10) now converges in 8 iterations and is REFUSED by the gate (CertificateError, hybrid ratio 568.95, worst branch L2916620->N1136366 gap 1.21e-4, loss impact ~4.4e-9 pu; genuine, no tolerance raised); d=0.1 T=24 completes (CertificateError, ratio 223.68, 11.52 GiB peak, 678 s ADMM / 728 s process); d=0.25 T=24 is earlyoom-killed (VmRSS 10641 MiB = 10.4 GiB). Phase 25's OOM kills were at T=24 in combined centralized+ADMM processes. Memory wall now between d=0.1 and 0.25 at T=24 (15.9 GB host). One DSO build+first solve adds ~1.1 GiB; the remaining ~3.4 GiB of the T=10 solve_admm delta is UNATTRIBUTED (per-hour DSO solver state is a hypothesis; growth ~linear in T from the T=10/T=24 pair). Units GiB (corrected in the Phase 35 code review). Data: results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv; docs: 'Post-refactor measured results (Phase 35)' in docs/literate/ieee8500_scaling.jl. The original status above is unchanged. |
 
 Genuinely open, carried past v3.0 (not blocking the close):
 
@@ -120,7 +120,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 173 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 178 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -174,6 +174,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 32 | 7 | - | - |
 | 33 | 11 | - | - |
 | 34 | 12 | - | - |
+| 35 | 5 | - | - |
 
 **Recent Trend:**
 
