@@ -1,0 +1,5 @@
+run_label,rc,peak_rss_kb,oom_source,mem_avail_before_mb,swap_used_before_mb,other_julia_procs,started_at,args
+p35-prof-s2,0,1301832,none,8356,2106,0,2026-10-04 21:07:47,"--density 0.1 --t-horizon 10 --stage 2"
+p35-prof-s3,0,1788896,none,10414,1739,0,2026-10-04 21:08:33,"--density 0.1 --t-horizon 10 --stage 3"
+p35-diag-d0.1-T10,0,6699480,none,10866,1554,0,2026-10-04 21:09:44,"--fixture ieee8500 --admm-only --admm-diagnostic-bypass --density 0.1 --t-horizon 10"
+p35-head-d0.1-T10,0,6205808,none,10463,1554,0,2026-10-04 21:15:34,"--fixture ieee8500 --admm-only --density 0.1 --t-horizon 10"
