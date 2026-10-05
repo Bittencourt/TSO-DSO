@@ -1,21 +1,19 @@
 # src/pricing/checks.jl
 #
-# SEAM: economic-direction price checks (PRICE-05).
-# OWNER: plan 05-04.
+# SEAM: economic-direction price checks.
 #
-# Empty (comment-only) stub wired onto the include graph in plan 05-01. Plan 05-04 fills
-# it and declares its own `export`s. It will export:
+# This file declares its own `export`s. It exports:
 #   - `economic_direction_checks(ctx; ...)` — assert the DLMP moves in the ECONOMICALLY
 #     CORRECT direction in the canonical regimes: prices rise into a congestion / import
 #     window and fall (can go negative) in a PV-glut / reverse-flow / over-voltage window,
 #     i.e. the congestion and voltage DLMP components carry the expected sign.
 #
-# Consumes the decomposed DLMP (plan 05-02) — pure post-processing over a solved ctx.
+# Consumes the decomposed DLMP — pure post-processing over a solved ctx.
 #
-# INDEPENDENCE (Wave-2 parallelism): this module reads the DADP DIRECTLY from the registered
+# INDEPENDENCE: this module reads the DADP DIRECTLY from the registered
 # `:balance_p` active nodal-balance dual (`dual.(ctx.constraints[:balance_p])`) — the SAME
-# primitive `extract_dlmp` uses — so it does NOT depend on `dlmp.jl` (owned by the parallel
-# plan 05-02) and can be developed/tested in the same wave.
+# primitive `extract_dlmp` uses — so it does NOT depend on `dlmp.jl` (a sibling module)
+# and can be developed/tested separately.
 
 using JuMP
 
@@ -26,7 +24,7 @@ using JuMP
 
 Assert the distribution price (the DADP `λ_j[t]` = dual of the registered `:balance_p` active
 nodal balance) moves in the ECONOMICALLY-CORRECT direction relative to the wholesale price
-`λ₀` (PRICE-05). This is the qualitative economic-correctness net that catches a BACKWARDS
+`λ₀`. This is the qualitative economic-correctness net that catches a BACKWARDS
 price signal — an internally-consistent (sum-to-price / surplus-identity) yet economically
 INVERTED price from a dual-sign or attribution bug — which the additive checks cannot see.
 
@@ -40,8 +38,8 @@ Two canonical regimes (thesis Fig 4.5 / 4.6, node 9):
     power worth MORE than the reference (Fig 4.6, node 9 @ 22:00 > MEM).
 
 The DADP is read DIRECTLY as `dual.(ctx.constraints[:balance_p])` (a `bus × time` matrix — the
-same primitive `extract_dlmp` uses), keeping this module INDEPENDENT of `dlmp.jl` for parallel
-Wave-2 execution. The per-hour comparison is aligned `λ_j[t]` vs `λ₀[t]`, so the extremum over
+same primitive `extract_dlmp` uses), keeping this module INDEPENDENT of `dlmp.jl` for separate
+development and testing. The per-hour comparison is aligned `λ_j[t]` vs `λ₀[t]`, so the extremum over
 the horizon lands AT the regime-active hours without hard-coding them (non-vacuous: the
 extremum must exceed `tol` in the expected direction).
 
@@ -56,14 +54,14 @@ extremum must exceed `tol` in the expected direction).
   - `dadp = nothing` — optional DADP override (a `Vector` single-bus series or a `bus × time`
     `Matrix`); when supplied it REPLACES the `:balance_p` read. Used to prove non-vacuity (feed a
     sign-flipped DADP and watch the check throw); the default path always reads `:balance_p`.
-  - `T::Integer = _require_T(ctx)` — horizon; `length(λ₀) == T` is a loud shape guard (T-05-11).
+  - `T::Integer = _require_T(ctx)` — horizon; `length(λ₀) == T` is a loud shape guard.
   - `tol::Real = 1e-6` — strict-inequality slack separating a genuine excursion from dual noise.
 
 Returns `(; pv_glut_ok, congestion_ok)` — whether a strict below-/above-wholesale excursion
 was observed. THROWS `ArgumentError` (never `@assert`, which `-O` can elide) on a horizon shape
 mismatch, an unknown `regime`, a missing `:balance_p` registration, or — for an explicit
-`regime` — a backwards price signal. Run only on a `ctx` produced by `solve_welfare` (its PF-04
-exactness gate is what makes the dual trustworthy; threat T-05-01).
+`regime` — a backwards price signal. Run only on a `ctx` produced by `solve_welfare` (its
+exactness gate is what makes the dual trustworthy).
 """
 function economic_direction_checks(
     ctx::ModelContext;
@@ -79,11 +77,11 @@ function economic_direction_checks(
             "economic_direction_checks: regime must be :auto, :pv_glut, or :congestion; got :$regime",
         ),
     )
-    # T-05-11 shape guard: a λ₀ / horizon mismatch would mis-align the per-hour comparison —
+    # Shape guard: a λ₀ / horizon mismatch would mis-align the per-hour comparison —
     # fail LOUDLY before any indexing (never @assert, threat convention).
     length(λ₀) == T || throw(
         ArgumentError(
-            "economic_direction_checks: λ₀ has length $(length(λ₀)), expected T=$T (shape guard, T-05-11)",
+            "economic_direction_checks: λ₀ has length $(length(λ₀)), expected T=$T (shape guard)",
         ),
     )
 
@@ -95,7 +93,7 @@ function economic_direction_checks(
         haskey(ctx.constraints, :balance_p) || throw(
             ArgumentError(
                 "economic_direction_checks: ctx has no registered :balance_p — pass a ctx " *
-                "produced by solve_welfare (its exactness-gated DADP dual; threat T-05-01)",
+                "produced by solve_welfare (its exactness-gated DADP dual)",
             ),
         )
         balance_p = ctx.constraints[:balance_p]

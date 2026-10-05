@@ -1,7 +1,6 @@
 # src/pricing/dlmp.jl
 #
-# SEAM: DLMP extraction + four-way decomposition (PRICE-01 / PRICE-02).
-# OWNER: plan 05-02.
+# SEAM: DLMP extraction + four-way decomposition.
 #
 # Pure convex-duality POST-PROCESSING over a solved `ModelContext` from
 # `solve_welfare(feeder, ConvexBranchFlow(), aggs; allow_export=true)`. Reads duals only;
@@ -10,11 +9,11 @@
 #   * `extract_dlmp(ctx)`    — the day-ahead dynamic price / DLMP: the dual of the nodal
 #     ACTIVE-power balance (thesis eq. 3.31), per node per hour. Positive = marginal cost of
 #     consumption (sign pinned by the 2-bus regression). REFUSES prices (throws) on an
-#     UNGATED SOCP ctx — one carrying a squared-current `:l` but no PF-04 exactness
+#     UNGATED SOCP ctx — one carrying a squared-current `:l` but no exactness
 #     certificate `ctx.meta[:socp_maxgap]` — because a strict SOC relaxation makes `l` a
-#     fictitious over-current and the recovered duals physically meaningless (PF-04).
+#     fictitious over-current and the recovered duals physically meaningless.
 #
-#   * `extract_reactive_dlmp(ctx)` — the reactive nodal price (REACT-02): the dual of the
+#   * `extract_reactive_dlmp(ctx)` — the reactive nodal price: the dual of the
 #     nodal REACTIVE-power balance `:balance_q` (thesis eq. 3.23's network closure), per node
 #     per hour. Mirrors `extract_dlmp`'s shape/gate exactly, plus a presence guard since a
 #     DC/active-only formulation never registers `:balance_q`. This is a SEPARATE price
@@ -24,12 +23,12 @@
 #     drop that provably SUMS to the nodal price, PLUS the reactive price as a 5th,
 #     UN-summed field (`reactive`). The thesis gives the active split only qualitatively
 #     (Fig 4.5/4.6), so each component is reconstructed INDEPENDENTLY from a DISTINCT
-#     registered dual (RESEARCH strategy B — cone is NOT the leftover) and a HARD
+#     registered dual (strategy B — cone is NOT the leftover) and a HARD
 #     relative-tolerance assertion checks `energy+cone+congestion+drop ≈ dual(balance_p)`
 #     per node/hour, throwing with the worst per-node residual so a dropped term is
-#     localizable (RESEARCH Pitfall 2). `reactive` is documented and citable but is NOT part
-#     of this 4-term active-price reconstruction (REACT-02; distinct component, distinct unit
-#     of account). [FIX-07, phase 27] `cone`/`drop` are named after what they mathematically
+#     localizable. `reactive` is documented and citable but is NOT part
+#     of this 4-term active-price reconstruction (distinct component, distinct unit
+#     of account). `cone`/`drop` are named after what they mathematically
 #     ARE (the rotated-SOC cone-slot multiplier, thesis 3.39, and the voltage-drop/copy-drop
 #     multiplier, thesis 3.33/3.43).
 #
@@ -43,7 +42,7 @@
 # SOC dual (3.39; slot 3 is the P-slot), and smax_dualᵦ is the apparent-power SOC dual (3.36;
 # slot 2 is the P-slot, present only where a real limit binds — the head branch). Because the
 # feeder is a radial TREE, node j has a unique path root→j; summing the increment telescopes
-# to λ_j − λ_0, attributing (FIX-07, phase 27: fields named `cone`/`drop` after what they ARE,
+# to λ_j − λ_0, attributing (fields are named `cone`/`drop` after what they ARE,
 # not the misleading `loss`/`voltage` they were previously called):
 #   energy = λ_0 (root MEM price, same at every node),
 #   cone   = Σ_path −cone_dual[3]        (the rotated-SOC cone-slot multiplier, 3.39),
@@ -55,17 +54,17 @@
 #                                          v/v̂ bound pressure, 3.33/3.43; 0 when no voltage
 #                                          headroom is engaged).
 #
-# [Phase 26 / FIX-03 congestion follow-up, plan 26-10] `:smax_rev` (thesis 3.37, the
-# RECEIVING-end apparent-power cone added by plan 26-05) was NOT read by the congestion term
-# above until this plan. On IEEE-13, PV back-feed at t=9-16 makes the receiving-end cone bind
+# [Congestion follow-up] `:smax_rev` (thesis 3.37, the
+# RECEIVING-end apparent-power cone added to `ConvexBranchFlow`) was initially NOT read by the congestion term
+# above. On IEEE-13, PV back-feed at t=9-16 makes the receiving-end cone bind
 # on the limited head branch INSTEAD OF the sending-end one, so the old sending-end-only
 # `cong_b` went to ~0 in that window and the hard sum-to-price assertion failed (residual 6.23
 # at bus 10, t=9). Fixed by adding a SOFT-guarded (`haskey`) read of `dual(:smax_rev[b,t])[2]`
 # into `cong_b`, SAME sign convention as the sending-end term (empirically verified: the worst
 # residual on the IEEE-13 back-feed window dropped to machine precision, 3.55e-15, at the
-# chosen sign — see `26-10-SUMMARY.md`).
+# chosen sign).
 #
-# [Phase 26 / FIX-01-02 re-certification, plan 26-06] Phase 26 flipped `ConvexBranchFlow`'s
+# [Re-certification] `ConvexBranchFlow`'s default was flipped:
 # default `cpydrop` coefficient (v̂ ≥ v, the Gan-Low direction) — only the coefficient of the
 # branch's OWN r·l / x·l loss term inside cpydrop changed; P's own coefficient (the quantity
 # this file's KKT-stationarity derivation actually depends on) did NOT change. This formula
@@ -77,30 +76,30 @@
 #   - voltage-engaged:     the high-PV over-voltage solve (`test_pricing_dlmp.jl`'s
 #     "SUM holds and voltage is engaged" item) — worst residual 1.8e-15;
 #   - uncongested/in-bound: a lossy, uncongested, in-bound 2-bus (Deferrable load, r=0.01,
-#     x=0.02, smax=10 — the SAME fixture as this plan's own `<verify>` smoke test) —
+#     x=0.02, smax=10 — the SAME fixture as the smoke test) —
 #     residual 2.2e-16, congestion/voltage both ≈1e-13 (≈0), matching the intended regime of
 #     `test_pricing_dlmp.jl`'s "≈0 congestion/voltage on an uncongested in-bound 2-bus" item.
 # The THIRD item's own PVBattery-based fixture could not be re-exercised as originally written:
-# bisection (see phase 26 `deferred-items.md`) confirms a PRE-EXISTING, UNRELATED SOCP-exactness
-# regression introduced by Plan 26-03's battery SOC-horizon fix (commit cfa7e6e, FIX-04) breaks
+# bisection (see `deferred-items.md`) confirms a PRE-EXISTING, UNRELATED SOCP-exactness
+# regression introduced by the battery SOC-horizon fix (commit cfa7e6e) breaks
 # that specific fixture's `assert_socp_exact!` gate before `decompose_dlmp` is ever reached —
 # confirmed NOT caused by this file's cpydrop-consuming formula or by the cpydrop sign flip
 # itself (the flip alone, commit f677965, leaves that fixture exact to residual 0.0). Out of
-# this plan's file scope (`src/pricing/dlmp.jl` only); logged, not fixed, here.
+# this file's scope (`src/pricing/dlmp.jl` only); logged, not fixed, here.
 #
-# Consumes ONLY the additive Phase-4 seam registered by plan 05-01 (`:cone`, `:vdrop`,
+# Consumes ONLY the additive seam registered by the branch-flow formulation (`:cone`, `:vdrop`,
 # `:cpydrop`, `:smax`, and `ctx.pf_vars`) plus the always-present `:balance_p` — no
 # change to `solve_welfare` or the power-flow formulations.
 
 using JuMP
 
 # ---------------------------------------------------------------------------------------------
-# Price-refusal gate (PF-04). A dual is a valid price ONLY if the SOCP exactness gate certified
+# Price-refusal gate. A dual is a valid price ONLY if the SOCP exactness gate certified
 # the cone. `solve_welfare` runs `assert_socp_exact!` (stashing `ctx.meta[:socp_maxgap]`)
 # whenever the formulation carries a squared current `:l`; if that certificate is ABSENT on an
 # `:l`-bearing ctx the solve was never gated (or was hand-built bypassing the gate) and its
-# DADP duals must be REFUSED, not returned (RESEARCH Anti-Pattern "reading the DADP before the
-# exactness gate"; threat T-05-01). DC/LinDistFlow ctxs carry no `:l` and are priced normally.
+# DADP duals must be REFUSED, not returned (Anti-Pattern "reading the DADP before the
+# exactness gate"). DC/LinDistFlow ctxs carry no `:l` and are priced normally.
 # ---------------------------------------------------------------------------------------------
 function _assert_priceable(ctx::ModelContext)
     haskey(ctx.constraints, :balance_p) || throw(
@@ -113,11 +112,11 @@ function _assert_priceable(ctx::ModelContext)
        !haskey(ctx.meta, :socp_maxgap)
         throw(
             ArgumentError(
-                "extract_dlmp: refusing to price an UNGATED SOCP ctx — the PF-04 exactness " *
+                "extract_dlmp: refusing to price an UNGATED SOCP ctx — the exactness " *
                 "certificate `ctx.meta[:socp_maxgap]` is ABSENT while a squared-current `:l` " *
                 "is present, so the SOC relaxation was never certified exact. A strict cone " *
                 "makes `l` a fictitious over-current and the DADP duals physically meaningless " *
-                "(thesis 3.43-3.45; PF-04 gate — see assert_socp_exact!).",
+                "(thesis 3.43-3.45; see assert_socp_exact!).",
             ),
         )
     end
@@ -128,13 +127,13 @@ end
     extract_dlmp(ctx; bus = nothing, T = nothing) -> Matrix{Float64} | Vector{Float64}
 
 The day-ahead dynamic price (DADP / DLMP) — the dual of the nodal ACTIVE-power balance
-(thesis eq. 3.31), per node per hour (PRICE-01). Positive = marginal cost of consumption at
-that node/hour (sign pinned by the 2-bus hand-solved regression, RESEARCH Pitfall 1).
+(thesis eq. 3.31), per node per hour. Positive = marginal cost of consumption at
+that node/hour (sign pinned by the 2-bus hand-solved regression).
 
 Requires a `ctx` from `solve_welfare(...)`, which gates every dual behind `assert_solved!`
-AND — for a SOCP formulation — the PF-04 exactness certificate. This function REFUSES prices
+AND — for a SOCP formulation — the exactness certificate. This function REFUSES prices
 (throws an `ArgumentError`, never `@assert`) if handed an `:l`-bearing SOCP ctx that lacks
-`ctx.meta[:socp_maxgap]` (ungated / inexact cone; threat T-05-01).
+`ctx.meta[:socp_maxgap]` (ungated / inexact cone).
 
 With `bus === nothing` (default) it returns the full `(N_buses, T)` DADP matrix
 `dual.(ctx.constraints[:balance_p])`. Passing `bus` returns that bus's length-`T` price
@@ -154,12 +153,12 @@ end
 """
     extract_reactive_dlmp(ctx; bus = nothing, T = nothing) -> Matrix{Float64} | Vector{Float64}
 
-The reactive nodal price (REACT-02) — the dual of the nodal REACTIVE-power balance
+The reactive nodal price — the dual of the nodal REACTIVE-power balance
 `:balance_q` (thesis eq. 3.23's network closure), per node per hour. A SEPARATE price
 signal from [`extract_dlmp`](@ref)'s active DADP — never summed into it, never folded into
 `decompose_dlmp`'s `total`.
 
-Requires a `ctx` from `solve_welfare(...)`, gated by the SAME `_assert_priceable` PF-04
+Requires a `ctx` from `solve_welfare(...)`, gated by the SAME `_assert_priceable`
 exactness certificate `extract_dlmp` requires (this function REFUSES prices on an ungated
 SOCP ctx exactly like `extract_dlmp`). Additionally throws `ArgumentError` (never `KeyError`)
 if `ctx` has no registered `:balance_q` — a DC/active-only formulation (e.g. `DCPowerFlow`)
@@ -171,7 +170,7 @@ With `bus === nothing` (default) it returns the full `(N_buses, T)` reactive-pri
 vector (`T` defaults to the full horizon; a shorter `T` keeps the leading hours `1:T` and
 truncates the trailing ones). The root's price is expected to be DEGENERATE (≈0): the
 root's `q_import` is a free-sign, zero-objective-coefficient frontier variable, so its own
-KKT stationarity condition forces `dual(:balance_q[root,t]) ≡ 0` (RESEARCH "Free slack,
+KKT stationarity condition forces `dual(:balance_q[root,t]) ≡ 0` ("Free slack,
 precisely located" — no reactive energy market exists at the substation in this model).
 """
 function extract_reactive_dlmp(ctx::ModelContext; bus = nothing, T = nothing)
@@ -192,8 +191,8 @@ end
 
 # ---------------------------------------------------------------------------------------------
 # Radial path root→j: walk the tree's parent pointers (feeder.branches are parent→child, N−1
-# of them on a validated radial feeder — DATA-02 `assert_radial`). No graph library needed
-# (RESEARCH "Don't Hand-Roll"). Returns the branch indices on the unique path, root-first.
+# of them on a validated radial feeder — `assert_radial`). No graph library needed
+# ("Don't Hand-Roll"). Returns the branch indices on the unique path, root-first.
 # ---------------------------------------------------------------------------------------------
 function _path_branches(feeder, j::Int)
     child_branch = Dict{Int, Int}()
@@ -205,7 +204,7 @@ function _path_branches(feeder, j::Int)
     while cur != feeder.root
         haskey(child_branch, cur) || error(
             "decompose_dlmp: bus $cur has no parent branch — feeder is not the expected " *
-            "radial tree (DATA-02)",
+            "radial tree",
         )
         b = child_branch[cur]
         push!(path, b)
@@ -215,7 +214,7 @@ function _path_branches(feeder, j::Int)
 end
 
 # P-slot of the apparent-power SOC dual (thesis 3.36), or 0.0 where the branch carries no
-# binding limit (its (b,t) key is absent from the sparse `:smax` container — RESEARCH A5).
+# binding limit (its (b,t) key is absent from the sparse `:smax` container — A5).
 function _smax_P(smax, keyset::Set{Tuple{Int, Int}}, b::Int, t::Int)
     (b, t) in keyset || return 0.0
     return dual(smax[b, t])[2]      # SecondOrderCone dual [smax, P, Q]; slot 2 = P
@@ -228,7 +227,7 @@ The return type of [`decompose_dlmp`](@ref): the five-component (plus `total`) D
 decomposition. `A` is `Matrix{Float64}` for the full-`(N_buses, T)` shape (`bus === nothing`)
 or a `Vector{Float64}` for the `bus`-sliced shape — the SAME struct is reused for both.
 
-Fields (thesis-traceable multiplier identity, FIX-07 — named after what each component
+Fields (thesis-traceable multiplier identity — named after what each component
 mathematically IS, not a downstream physical effect):
 
   - `energy::A`     — the root MEM price `dual(:balance_p[root,t])`, SAME at every node (≈λ₀);
@@ -236,7 +235,7 @@ mathematically IS, not a downstream physical effect):
   - `drop::A`       — the voltage-drop/copy-drop multiplier (thesis 3.33/3.43);
   - `congestion::A` — the thermal-limit dual (thesis 3.36 sending-end / 3.37 receiving-end);
   - `reactive::A`   — the reactive nodal price (`dual(:balance_q)`), a SEPARATE, UN-summed
-    signal (REACT-02), never folded into `total`;
+    signal, never folded into `total`;
   - `total::A`      — the reference DADP (`dual(:balance_p)`); `energy+cone+congestion+drop`
     reconstructs this within `decompose_dlmp`'s hard sum-to-price tolerance.
 """
@@ -252,7 +251,7 @@ end
 """
     NamedTuple(d::DlmpDecomposition) -> NamedTuple
 
-WR-01 fix (27-REVIEW.md, 2026-09-29): before Phase 27's FIX-07 rename, `decompose_dlmp`
+Review fix (2026-09-29): before the `cone`/`drop` rename, `decompose_dlmp`
 returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage,
 reactive, total)`. Any consumer that used genuine `NamedTuple`-only semantics on that return
 value (`Tuple(nt)`/`values(nt)`/`collect(nt)`, or positional destructuring) now hits a
@@ -279,14 +278,14 @@ end
     decompose_dlmp(ctx; bus = nothing, T = nothing, rtol = 1e-5, atol = 1e-7)
         -> DlmpDecomposition
 
-Four-way DLMP decomposition (PRICE-02): split the nodal ACTIVE price into **energy + cone +
+Four-way DLMP decomposition: split the nodal ACTIVE price into **energy + cone +
 congestion + drop** components that provably SUM to the DADP, PLUS a 5th, UN-summed
-`reactive` field (REACT-02). Each active component is reconstructed INDEPENDENTLY from a
-DISTINCT registered dual (RESEARCH strategy B — cone is NOT the leftover, so a dropped
+`reactive` field. Each active component is reconstructed INDEPENDENTLY from a
+DISTINCT registered dual (strategy B — cone is NOT the leftover, so a dropped
 congestion/drop term cannot hide), then a HARD relative-tolerance assertion checks
 `energy + cone + congestion + drop ≈ total` per node/hour and `total ≈ extract_dlmp(ctx)`,
 throwing (never `@assert`) with the worst per-node residual so a missing term is localizable
-(RESEARCH Pitfall 2; threat T-05-02). This 4-term reconstruction and its assertion are
+). This 4-term reconstruction and its assertion are
 UNCHANGED by the `reactive` field — `reactive` is a SEPARATE price signal (the dual of
 `:balance_q`), never folded into `total` or the sum-to-price check.
 
@@ -296,19 +295,19 @@ Components (each summed over the unique radial path root→j; derivation in the 
   - `cone`       = `Σ_path −dual(:cone[b,t])[3]`   — the rotated-SOC cone-slot multiplier
     (thesis 3.39);
   - `congestion` = `Σ_path (−dual(:smax[b,t])[2] − dual(:smax_rev[b,t])[2])` — thermal
-    congestion, SENDING-end (3.36) PLUS RECEIVING-end (3.37, FIX-03/26-05; soft-guarded —
+    congestion, SENDING-end (3.36) PLUS RECEIVING-end (3.37; soft-guarded —
     reads 0 if `:smax_rev` is absent from `ctx`) — 0 off the head branch, from either end;
   - `drop`       = `Σ_path −2·r·(dual(:vdrop) + dual(:cpydrop))` — the voltage-drop/copy-drop
     multiplier (thesis 3.33/3.43; 0 with unengaged voltage headroom);
-  - `reactive`   = `extract_reactive_dlmp(ctx)`    — the reactive nodal price (REACT-02;
-    `dual(:balance_q[j,t])`), a documented, citable 5th component, DISTINCT from and NEVER
+  - `reactive`   = `extract_reactive_dlmp(ctx)`    — the reactive nodal price
+    (`dual(:balance_q[j,t])`), a documented, citable 5th component, DISTINCT from and NEVER
     summed into `total`;
   - `total`      = `extract_dlmp(ctx)`             — the reference DADP (active price only).
 
 Each field is named after the multiplier it provably is, not a downstream physical effect.
 
-Inherits the PF-04 exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP ctx is
-refused). Requires the SOCP branch-flow handles registered by plan 05-01 (`:cone`, `:vdrop`,
+Inherits the exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP ctx is
+refused). Requires the SOCP branch-flow handles registered by `ConvexBranchFlow` (`:cone`, `:vdrop`,
 `:cpydrop`, `:smax`); throws a clear `ArgumentError` on a formulation that lacks them. Since
 these handles are `ConvexBranchFlow`-only, any ctx that reaches `decompose_dlmp` always also
 carries `:balance_q` (registered unconditionally on that formulation), so `reactive` needs no
@@ -331,7 +330,7 @@ function decompose_dlmp(
             ArgumentError(
                 "decompose_dlmp: ctx is missing the registered :$name dual — the four-way " *
                 "split needs the SOCP ConvexBranchFlow handles (thesis 3.39/3.33/3.43/3.36; " *
-                "registered by plan 05-01). Was this solved with ConvexBranchFlow()?",
+                "registered by the formulation). Was this solved with ConvexBranchFlow()?",
             ),
         )
     end
@@ -342,12 +341,12 @@ function decompose_dlmp(
     root = feeder.root
 
     cone_constr = ctx.constraints[:cone]      # constraint container (renamed from `cone` to
-    # avoid shadowing the `cone` COMPONENT accumulator matrix built below, FIX-07)
+    # avoid shadowing the `cone` COMPONENT accumulator matrix built below)
     vdrop = ctx.constraints[:vdrop]
     cpydrop = ctx.constraints[:cpydrop]
     smax = ctx.constraints[:smax]
     smaxkeys = Set{Tuple{Int, Int}}(Tuple(k) for k in eachindex(smax))
-    # FIX-03/26-05 (plan 26-10): `:smax_rev` (thesis 3.37, the RECEIVING-end apparent-power
+    # `:smax_rev` (thesis 3.37, the RECEIVING-end apparent-power
     # cone) is registered under the IDENTICAL `B[b].smax < _SMAX_NO_LIMIT` filter as `:smax`
     # (ConvexBranchFlow.jl), so `smaxkeys` (already built from `:smax`) applies unchanged to
     # `:smax_rev` too. Soft-guarded (not added to the hard required-containers loop above)
@@ -369,8 +368,8 @@ function decompose_dlmp(
     for b in 1:nB, t in 1:Tfull
         r = feeder.branches[b].r
         cone_b[b, t] = -dual(cone_constr[b, t])[3]                 # 3.39 P-slot (cone)
-        # 3.36 P-slot (sending-end congestion) PLUS 3.37 P-slot (receiving-end congestion,
-        # FIX-03/26-05, plan 26-10) — same sign convention (SAME cone shape, SAME filter),
+        # 3.36 P-slot (sending-end congestion) PLUS 3.37 P-slot (receiving-end
+        # congestion) — same sign convention (SAME cone shape, SAME filter),
         # empirically verified against the hard sum-to-price assertion below on IEEE-13's
         # PV back-feed window (t=9-16, bus 10) where :smax_rev binds and :smax is slack.
         cong_b[b, t] =
@@ -392,11 +391,11 @@ function decompose_dlmp(
         end
     end
 
-    # HARD sum-to-nodal-price assertion (RESEARCH Success Criterion #2 / Pitfall 2). Relative-
+    # HARD sum-to-nodal-price assertion. Relative-
     # tolerance, mirroring `assert_socp_exact!`'s scale-free `atol + rtol·max(...)` style. This
     # is the correctness NET: because each component came from a DISTINCT dual, a dropped or
     # mis-signed term produces an O(price) residual here rather than shipping a silently-wrong
-    # split (threat T-05-02). The THROW path exists and fires whenever the reconstruction fails;
+    # split. The THROW path exists and fires whenever the reconstruction fails;
     # on a genuine exact SOCP optimum the residual is ~machine-epsilon.
     worst_res = 0.0
     worst_j = 0
@@ -415,10 +414,10 @@ function decompose_dlmp(
         "decompose_dlmp: four-way split does NOT reconstruct the nodal DADP — worst residual " *
         "|energy+cone+congestion+drop − dual(balance_p)| = $worst_res at (bus=$worst_j, " *
         "t=$worst_t) exceeds tol=$tol (atol=$atol, rtol=$rtol). A component is missing or " *
-        "mis-signed (RESEARCH Pitfall 2; thesis 3.31/3.33/3.36/3.39/3.43; threat T-05-02).",
+        "mis-signed (thesis 3.31/3.33/3.36/3.39/3.43).",
     )
 
-    reactive = extract_reactive_dlmp(ctx)               # (N, Tfull) reactive price (REACT-02)
+    reactive = extract_reactive_dlmp(ctx)               # (N, Tfull) reactive price
 
     bus === nothing && return DlmpDecomposition(energy, cone, drop, congestion, reactive, total)
     Tsel = T === nothing ? Tfull : Int(T)

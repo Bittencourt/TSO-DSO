@@ -1,7 +1,6 @@
 # src/models/linear_solve.jl
 #
 # SEAM: rung-1 linear central-assembly model (integration).
-# OWNER: plan 02-04.
 #
 # The rung-1 counterpart of `models/toy_dc.jl`: builds a `ModelContext`, lets a chosen
 # `AbstractPowerFlow` (DC or LinDistFlow) and the feeder's devices each `contribute!`
@@ -10,7 +9,7 @@
 # its dual — the distribution price / DADP — is recoverable), sets the welfare
 # objective from `ctx.objective` minus the priced frontier import, and solves as
 # the `QP()` factory backend through `assert_solved!(...; dual = true)`. Central, single-solve
-# assembly; the ADMM decomposition lands in Phase 6.
+# assembly; the ADMM decomposition is a separate layer.
 #
 using JuMP
 
@@ -25,11 +24,11 @@ the shared nodal-balance residual:
 
  1. build `Model(select_optimizer(QP()))` — the concave-quadratic device utility makes the
     welfare a QP, routed by problem class to the accurate-dual conic backend (prices ARE
-    duals); this file NEVER names a concrete solver (INFRA-02);
+    duals); this file NEVER names a concrete solver;
  2. wrap it in a [`ModelContext`](@ref); stash `feeder`/`T` in `ctx.meta`;
  3. let the power-flow formulation `contribute!` its branch/voltage terms into
     `ctx.residuals[:Rp]` (and `:Rq` for `LinDistFlow`); each device `contribute!`s its
-    Variant-2 aggregatable-device tuple `(; vars, p_inject, utility)` (DEV-05), and this
+    Variant-2 aggregatable-device tuple `(; vars, p_inject, utility)`, and this
     ASSEMBLY writes the returned `p_inject` into `:Rp` and the returned `utility` into
     `ctx.objective` itself, generically for ANY such device — the returned `vars`
     are stashed under `ctx.meta[:device_vars]`;
@@ -42,12 +41,12 @@ the shared nodal-balance residual:
     registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
  6. maximize welfare `Σ utility − λ₀ᵀ·p_import` (thesis eq. 3.38 shape);
  7. solve through [`assert_solved!`](@ref)`(...; dual = true, allow_local = false)` — the
-    dual is read ONLY after this OPTIMAL gate (Pitfall 5, threat T-02-05).
+    dual is read ONLY after this OPTIMAL gate.
 
 The returned `dadp` is the dual of the ACTIVE balance `:balance_p` at the FIRST device's
 bus (the priced load bus) over the horizon — the first distribution price (DADP). Its
 sign follows the toy-DC convention (frontier import positive, load negative ⇒ positive
-price = marginal cost, threat T-02-01). Returns `(ctx, objective_value, dadp)`.
+price = marginal cost). Returns `(ctx, objective_value, dadp)`.
 """
 function solve_linear(
     feeder::AbstractFeeder,
@@ -56,26 +55,26 @@ function solve_linear(
     T::Int = 1,
     λ₀,
 )
-    # WR-01: an empty `devices` has no priced load — `ctx.objective` stays zero
+    # an empty `devices` has no priced load — `ctx.objective` stays zero
     # (a silent zero-welfare solve) and `devices[1].bus` would
     # `BoundsError`. The rung-1 model is defined around at least the priced load, so
     # reject the empty case up front with a clear message instead of a cryptic crash.
     isempty(devices) &&
         throw(ArgumentError("solve_linear needs at least one device (the priced load)"))
 
-    # WR-02: λ₀ is consumed as `λ₀[t]` for t = 1:T. A shorter vector `BoundsError`s deep in
+    # λ₀ is consumed as `λ₀[t]` for t = 1:T. A shorter vector `BoundsError`s deep in
     # objective assembly; a SCALAR λ₀ silently "works" only at T=1 and breaks for T>1. For
     # a reproducible bench a shape mismatch must fail at the boundary with a clear message.
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
 
-    model = Model(select_optimizer(QP()))   # concave-quad utility ⇒ QP factory backend (INFRA-02)
+    model = Model(select_optimizer(QP()))   # concave-quad utility ⇒ QP factory backend
     ctx = ModelContext(model)
     ctx.feeder = feeder
     ctx.T = T
 
     Np = length(feeder.buses)
 
-    # CR-01: every device must sit on a real feeder bus. A device at `bus > Np` grows
+    # every device must sit on a real feeder bus. A device at `bus > Np` grows
     # `:Rp` beyond the balance-closure loop (rows `1:Np`), so its `−p` injection is never
     # pinned to zero and silently vanishes from the network balance — the solver then
     # manufactures welfare from power sourced nowhere (verified: welfare 10.0 vs 2.0). For
@@ -87,13 +86,13 @@ function solve_linear(
 
     # Formulation: subtract branch/voltage terms into :Rp (and :Rq for LinDistFlow).
     contribute!(pf, ctx, feeder; T = T)
-    # Devices: each is a Variant-2 aggregatable device (DEV-05) — it builds its own
+    # Devices: each is a Variant-2 aggregatable device — it builds its own
     # variables/constraints and returns `(; vars, p_inject, utility)`, writing NOTHING
     # itself. This assembly is the network-facing writer here (mirroring Aggregator's own
     # roll-up shape): explicitly add each device's signed injection into :Rp and its
     # utility into ctx.objective, generalizing to ANY Variant-2-contract device
     # with a `.bus` field (not just Interruptible specifically). Stash the returned
-    # per-device `vars` for post-solve inspection (IN-02).
+    # per-device `vars` for post-solve inspection.
     device_vars = Any[]
     for d in devices
         res = contribute!(d, ctx; T = T)
@@ -117,22 +116,22 @@ function solve_linear(
     # the formulation type. :Rp is always populated; :Rq only when the chosen
     # formulation wrote it (LinDistFlow), detected via haskey. Swapping DC↔LinDistFlow
     # changes which residuals exist, and this same loop closes both (criterion 4).
-    # CR-01: assert no residual row escaped the feeder before pinning it. If `:Rp` is any
+    # assert no residual row escaped the feeder before pinning it. If `:Rp` is any
     # bigger than `(Np, T)` an index slipped past the bus range and the closure loop below
     # would leave that row unpinned (a free injection) — fail loudly instead of solving a
     # silently-wrong optimum.
     # (`has_reactive(pf)` is the formulation trait; devices write only :Rp, so it equals the pre-device value.)
-    # WR-03 INVARIANT (Phase-2 scope, deliberately NOT a reactive implementation):
+    # INVARIANT (scope, deliberately NOT a reactive implementation):
     # unlike :Rp, this assembly injects NO reactive frontier source at the root. Pinning
     # :Rq at every bus therefore forces Q ≡ 0 across the feeder. That is CORRECT here
-    # only because no Phase-2 device injects reactive power (Interruptible carries no
+    # only because no device injects reactive power (Interruptible carries no
     # reactive term), so :Rq holds branch-flow Q variables ALONE and the root reactive
     # balance `−Σ Q_out == 0` is satisfiable by Q ≡ 0. This is an ASSEMBLY-level seam
     # gap, distinct from the accepted "reactive-load deferred" device note: the moment a
-    # reactive load/source lands (Phase 3), closing :Rq here becomes infeasible (or
+    # reactive load/source lands, closing :Rq here becomes infeasible (or
     # silently zeroes the reactive draw) UNLESS a free-sign `q_import[t]` frontier
     # variable is injected at `feeder.root` BEFORE this closure, mirroring `p_import` and
-    # stashed under `ctx.meta[:q_import]`. Do not add a reactive load in Phase 2 without
+    # stashed under `ctx.meta[:q_import]`. Do not add a reactive load without
     # also adding that frontier source.
     balance_p, balance_q = close_balance!(ctx, Np, T; reactive = has_reactive(pf))
 
@@ -140,11 +139,11 @@ function solve_linear(
     welfare = ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T)
     @objective(model, Max, welfare)
 
-    # INFRA-03 gate: never trust (or read) a dual before an OPTIMAL+feasible solve
-    # (Pitfall 5, threat T-02-05). assert_solved! raises loudly otherwise.
+    # Gate: never trust (or read) a dual before an OPTIMAL+feasible solve
+    # assert_solved! raises loudly otherwise.
     assert_solved!(model; dual = true, allow_local = false)
 
-    # DADP = dual of the ACTIVE balance at the priced (first-device) bus (Pitfall 5).
+    # DADP = dual of the ACTIVE balance at the priced (first-device) bus.
     priced = devices[1].bus
     dadp = dual.(balance_p[priced, :])
     return ctx, objective_value(model), dadp

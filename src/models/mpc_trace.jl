@@ -1,14 +1,13 @@
 # src/models/mpc_trace.jl
 #
-# SEAM: MpcTrace — the rolling-horizon price-consistency ledger (MPC-03).
-# OWNER: plan 21-02.
+# SEAM: MpcTrace — the rolling-horizon price-consistency ledger.
 #
 # A pure data / bookkeeping type — NO JuMP, NO solves — mirroring `AdmmResiduals`
-# (`src/admm/residuals.jl`) so both the rolling-horizon orchestrator (Wave 3/4's `mpc_loop.jl`)
+# (`src/admm/residuals.jl`) so both the rolling-horizon orchestrator (`mpc_loop.jl`)
 # and a future CairoMakie plotting extension or the literate rung page can consume it WITHOUT
 # pulling JuMP or a solver.
 #
-# WHAT IT RECORDS (D-09 / D-10, MPC-03's "step-to-step price jumps, cumulative deviation"
+# WHAT IT RECORDS (the "step-to-step price jumps, cumulative deviation"
 # requirement):
 #
 #     dadp[k]        the published real-time DADP at rolling step k
@@ -18,8 +17,8 @@
 #                        the day-ahead path)
 #     cert_status[k] a Symbol tagging the step's certificate/fallback outcome
 #                     (`:certified_convex_dual`, `:certified_convex_dual_restricted` — the
-#                     restricted-tier rescue's OWN provenance, WR-04 — `:local_ac_dual`,
-#                     `:cert_failed`, per D-04's fallback ladder — only the literal
+#                     restricted-tier rescue's OWN provenance — `:local_ac_dual`,
+#                     `:cert_failed`, per the fallback ladder — only the literal
 #                     `:cert_failed` symbol counts as a genuine failure for
 #                     `any_cert_failed`)
 #
@@ -31,7 +30,7 @@
 
 A mutable, JuMP-free ledger of a rolling-horizon MPC run's per-step published DADP,
 step-to-step price jump, cumulative deviation from the day-ahead DADP path, and per-step
-certificate/fallback status (MPC-03).
+certificate/fallback status.
 
 Fields:
 
@@ -44,8 +43,8 @@ Fields:
   - `cum_deviation_trace::Vector{Float64}` — the running cumulative deviation
     `Σ |dadp[k] − dadp_da[k]|` from the day-ahead DADP path.
   - `cert_status_trace::Vector{Symbol}` — the certificate/fallback outcome tag recorded at each
-    step (D-04's ladder: `:certified_convex_dual`, `:certified_convex_dual_restricted` — the
-    restricted-tier rescue, WR-04 — `:local_ac_dual`, `:cert_failed`).
+    step (ladder: `:certified_convex_dual`, `:certified_convex_dual_restricted` — the
+    restricted-tier rescue — `:local_ac_dual`, `:cert_failed`).
   - `steps::Int` — the number of recorded steps (`== length(dadp_trace) == …`).
 
 All five traces are kept EQUAL LENGTH (`== steps`). Construct empty via
@@ -130,8 +129,8 @@ mean_jump(trace::MpcTrace) = trace.steps == 0 ? 0.0 : sum(trace.jump_trace) / tr
 
 `true` iff any recorded step's certificate/fallback status is the literal `:cert_failed`
 symbol. Returns `false` on an empty ledger. Only `:cert_failed` counts as a failure —
-`:certified_convex_dual_restricted` (the restricted-tier rescue, WR-04) and `:local_ac_dual`
-are SUCCESSFUL escalations (D-04's ladder semantics), not failures.
+`:certified_convex_dual_restricted` (the restricted-tier rescue) and `:local_ac_dual`
+are SUCCESSFUL escalations (ladder semantics), not failures.
 """
 any_cert_failed(trace::MpcTrace) =
     trace.steps == 0 ? false : any(==(:cert_failed), trace.cert_status_trace)

@@ -1,13 +1,12 @@
 # src/models/welfare_solve.jl
 #
-# SEAM: GLB-CVX centralized social-welfare solve (OPT-01).
-# OWNER: plan 03-05.
+# SEAM: GLB-CVX centralized social-welfare solve.
 #
 # Generalizes `linear_solve.jl` to a multi-aggregator centralized welfare
-# maximization over the Phase-2 LinDistFlow model at horizon T=24 (thesis eq.
+# maximization over the LinDistFlow model at horizon T=24 (thesis eq.
 # 3.38). Assembles each aggregator's :Rp/:Rq injections and utility, adds a
 # non-negative priced frontier import p_import[t] and -- only when the formulation
-# provides a reactive channel (WR-03) -- a FREE-SIGN reactive frontier q_import[t] at
+# provides a reactive channel -- a FREE-SIGN reactive frontier q_import[t] at
 # feeder.root (without it, pinning :Rq at every bus with reactive load present is
 # infeasible; a DC active-only run has no reactive channel, so aggregator reactive
 # terms are left unclosed), closes the nodal-balance residuals to zero, and
@@ -32,10 +31,10 @@ GENERALIZES [`solve_linear`](@ref) from a single device list to multiple aggrega
 horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
 
  1. builds `Model(optimizer)` — `optimizer` defaults to `select_optimizer(problem_class(pf))`,
-    so the solver factory is chosen BY FORMULATION TRAIT (RESEARCH Pattern 5): DC/LinDistFlow
+    so the solver factory is chosen BY FORMULATION TRAIT: DC/LinDistFlow
     route to the `QP()` backend, while `ConvexBranchFlow` routes to the tight-gap `SOCP()`
     backend (`tol_gap_abs/rel = 1e-8`, which the DADP accuracy and exactness check depend on).
-    Both are Clarabel, and this file NEVER names a concrete solver (INFRA-02, no
+    Both are Clarabel, and this file NEVER names a concrete solver (no
     `if formulation ==` branch). Cross-solver checks pass a different factory (e.g.
     `select_optimizer(NLP())`) plus `allow_local = true`;
  2. wraps it in a [`ModelContext`](@ref); stashes `feeder`/`T`;
@@ -47,47 +46,47 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
     under `ctx.meta[:p_import]`). By default it is IMPORT-ONLY (`p_import ≥ 0`, buy from the
     MEM). With `allow_export = true` it is FREE-SIGN (`>0` buy, `<0` sell surplus to the MEM
     at the same λ₀) — the physically-complete transmission frontier that lets a high-PV feeder
-    export its reverse-flow surplus. Priced export is the SOC-EXACTNESS enabler (PF-04): it
+    export its reverse-flow surplus. Priced export is the SOC-EXACTNESS enabler: it
     makes the welfare objective strictly decreasing in the loss current `l` (every unit of `l`
     costs export revenue), so the SOC cone `l·v ≥ P²+Q²` stays TIGHT in the over-voltage /
     reverse-flow regime instead of going slack (inexact). Import-only leaves losses-vs-
     curtailment welfare-equivalent, breaking that condition. It also adds — ONLY when the
     formulation provides a reactive channel
-    (WR-03) — a FREE-SIGN reactive frontier import `q_import[t]` (no lower bound, stashed
+    — a FREE-SIGN reactive frontier import `q_import[t]` (no lower bound, stashed
     under `ctx.meta[:q_import]`), BOTH BEFORE closing the residuals. Without the free-sign
     `q_import`, pinning `:Rq` at every bus with a reactive load present is INFEASIBLE (or
     silently zeroes the reactive draw) — the MEM/substation supplies reactive power at the
-    frontier (RESEARCH Pitfall 2);
+    frontier;
  5. closes `:Rp` always and `:Rq` only when the POWER-FLOW FORMULATION provides a reactive
     channel — captured as `reactive = haskey(ctx.residuals, :Rq)` RIGHT AFTER the
-    formulation contributes and BEFORE any aggregator writes (WR-03). This keys off the
+    formulation contributes and BEFORE any aggregator writes. This keys off the
     formulation's capability, not a formulation flag: LinDistFlow closes `:Rq`; a DC
     (active-only) run leaves any aggregator reactive terms unclosed. Both closures are
     registered (`:balance_p` / `:balance_q`) so their duals are recoverable;
  6. maximizes welfare `Σ aggregator utility − λ₀ᵀ·p_import` (thesis eq. 3.38);
  7. solves through [`assert_solved!`](@ref)`(...; dual = true, allow_local, allow_almost)` —
     the OPTIMAL (or, for a nonconvex cross-check, LOCALLY_SOLVED) gate before any dual is
-    trusted. `allow_almost` (FIX-09, Phase 27 plan 27-05) defaults `false` (STRICT gate,
-    byte-identical to every pre-existing call site) and is forwarded VERBATIM to
+    trusted. `allow_almost` defaults `false` (STRICT gate,
+    bit-for-bit identical to every pre-existing call site) and is forwarded VERBATIM to
     `assert_solved!`'s own `allow_almost` — see that function's docstring for the precondition
     it sanctions ("an intermediate re-solve whose DUALS are NOT read"). Passing `true` here
     does NOT bypass step 8/9 below (they still run on whatever primal was accepted); it is the
     caller's responsibility to independently verify precision before trusting `objective_value`
-    when `allow_almost = true` accepted a near-feasible point (`fit_baseline`'s SITE-3
+    when `allow_almost = true` accepted a near-feasible point (`fit_baseline`'s cross-check
     cross-check is the ONE intended caller, gated behind its own measured gap bound);
- 8. runs the PF-04 EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
+ 8. runs the EXACTNESS GATE [`assert_socp_exact!`](@ref)`(ctx; rtol = rtol_exact)` — but
     ONLY when the formulation stashed a squared-current `:l` in `ctx.pf_vars` (i.e. a SOCP
     cone is present). It sits strictly AFTER `assert_solved!` and BEFORE any `dual()` read, so
     physically-meaningless duals from a STRICT (inexact) relaxation are REFUSED (thrown) rather
-    than returned (threats T-04-01/T-04-03). `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
+    than returned. `maxgap` is stashed under `ctx.meta[:socp_maxgap]`.
     DC/LinDistFlow stash no `:l` and skip this untouched. `rtol_exact` (default 1e-4) is a
-    RELATIVE, base-free cone-slack tolerance (WR-01) and is a DISTINCT quantity from the
-    battery-check `τ` — never conflated (Pitfall 2);
+    RELATIVE, base-free cone-slack tolerance and is a DISTINCT quantity from the
+    battery-check `τ` — never conflated;
  9. runs the MANDATORY App. C post-solve battery complementarity check via
     [`assert_battery_complementarity!`](@ref): for every battery stashed under
     `ctx.agg_device_vars`, asserts the SCALE-FREE relative test
     `value(p_ch[t])·value(p_dch[t]) < τ·Pmax²` for all `t`, throwing loudly on violation
-    (RESEARCH Pitfall 1, threat T-03-13; WR-02). Normalizing by the battery's rated power²
+    Normalizing by the battery's rated power²
     makes the gate's protective strength INVARIANT to the per-unit base — an absolute product
     threshold weakens quadratically as the base grows and can silently admit a genuine
     simultaneous charge/discharge. The RELATIVE tolerance `τ` is PROBLEM-CLASS-AWARE by
@@ -102,7 +101,7 @@ FIRST aggregator's bus (the distribution price / DADP over the horizon).
 
 Throws `ArgumentError` on empty `aggregators`, `length(λ₀) != T`, or an aggregator bus
 outside `1:length(feeder.buses)` — the boundary guards that keep a shape mismatch from
-becoming a cryptic deep crash or a silently-wrong optimum (RESEARCH Pitfall 4).
+becoming a cryptic deep crash or a silently-wrong optimum.
 """
 function solve_welfare(
     feeder::AbstractFeeder,
@@ -115,17 +114,17 @@ function solve_welfare(
     τ::Real = (problem_class(pf) isa SOCP ? 1e-3 : 1e-6),
     rtol_exact::Real = 1e-4,
     allow_export::Bool = false,
-    # FIX-09 (Phase 27, plan 27-05): a NEW, narrowly-scoped kwarg forwarded VERBATIM to
+    # a NEW, narrowly-scoped kwarg forwarded VERBATIM to
     # assert_solved!'s own allow_almost (src/core/status.jl). Defaults false everywhere, so
     # EVERY existing call site (the planning subproblem/AgrOpt, stochastic_welfare, every
-    # test) is byte-identical. See assert_solved!'s own docstring for the precondition this
+    # test) is bit-for-bit identical. See assert_solved!'s own docstring for the precondition this
     # sanctions ("an intermediate re-solve whose DUALS are NOT read") — the ONLY intended
-    # caller is fit_baseline's SITE-3 cross-check, which discards this function's `dadp`
+    # caller is fit_baseline's cross-check, which discards this function's `dadp`
     # return value and gates acceptance behind its OWN measured, named primal-dual gap bound
     # (FIT_SITE3_ALMOST_GAP_TOL) BEFORE trusting `objective_value` (see src/pricing/fit.jl).
     allow_almost::Bool = false,
 )
-    # Boundary guards (RESEARCH Pitfall 4): empty aggregators ⇒ no priced load / no
+    # Boundary guards: empty aggregators ⇒ no priced load / no
     # objective; a λ₀ shape mismatch ⇒ BoundsError deep in objective assembly. Fail here.
     isempty(aggregators) &&
         throw(ArgumentError("solve_welfare needs at least one aggregator"))
@@ -133,7 +132,7 @@ function solve_welfare(
 
     model = Model(optimizer)                 # QP() factory by default; never names a solver
 
-    # Cross-solver enablement (RESEARCH Pitfall 4): register the OPT-IN
+    # Cross-solver enablement: register the OPT-IN
     # RotatedSecondOrderCone / SecondOrderCone → nonconvex-quadratic bridges so a smooth-NLP
     # backend (Ipopt, via `select_optimizer(NLP())` + `allow_local = true`) can INDEPENDENTLY
     # re-solve the SOCP ConvexBranchFlow model as a cross-check. These bridges are DORMANT for
@@ -142,7 +141,7 @@ function solve_welfare(
     # cannot take the cone directly, reformulating `l·v ≥ P²+Q²` into the smooth quadratic
     # constraint Ipopt handles. They are no-ops for the cone-free DC/LinDistFlow (QP) paths.
     # Registered here (not in the factory) because bridges attach to the JuMP `Model`, not the
-    # optimizer attributes, and this file is the sole model builder (INFRA-02 preserved: still
+    # optimizer attributes, and this file is the sole model builder (still
     # no concrete solver named).
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.RSOCtoNonConvexQuadBridge)
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
@@ -155,7 +154,7 @@ function solve_welfare(
 
     # Every aggregator must sit on a real feeder bus, else its injection grows :Rp beyond
     # the balance-closure range and vanishes from the network balance (welfare from
-    # nowhere) — fail loudly, mirroring solve_linear's CR-01 device guard.
+    # nowhere) — fail loudly, mirroring solve_linear's device guard.
     for (k, agg) in enumerate(aggregators)
         1 <= agg.bus <= Np || throw(
             ArgumentError("aggregator[$k] bus=$(agg.bus) is outside feeder buses 1:$Np"),
@@ -165,7 +164,7 @@ function solve_welfare(
     # Formulation: branch/voltage terms into :Rp (and :Rq for LinDistFlow).
     contribute!(pf, ctx, feeder; T = T)
 
-    # WR-03: whether a REACTIVE channel exists is decided by the POWER-FLOW FORMULATION,
+    # whether a REACTIVE channel exists is decided by the POWER-FLOW FORMULATION,
     # not by the aggregators. Capture it HERE — right after the formulation contributes but
     # BEFORE any aggregator writes — so it reflects the formulation's capability alone:
     # LinDistFlow allocates :Rq (reactive modeled); DCPowerFlow is active-only and never
@@ -182,11 +181,11 @@ function solve_welfare(
     # ctx.objective. Each aggregator is the sole :Rp/:Rq writer at its bus. (On a DC
     # run the aggregators still write :Rq, but it is left unclosed below — active-only.)
     #
-    # PRICE-03 (05-01): PURELY ADDITIVE surplus stash. Capture each `contribute!` return
+    # PURELY ADDITIVE surplus stash. Capture each `contribute!` return
     # (previously discarded) and record, per aggregator, its NET active injection
     # `net[t] = p_inject[t] − Pdc[t]` (EXACTLY the expression written to :Rp at agg.bus, thesis
     # 3.22) plus the returned `utility` QuadExpr. Under a solved ctx the welfare accounting
-    # (plan 05-05) splits social = prosumer + DSO surplus: the prosumer surplus is
+    # The pricing layer splits social = prosumer + DSO surplus: the prosumer surplus is
     # `Σ_j U_agⱼ − Σ_j Σ_t λ_j[t]·net_j[t]` (thesis eqs. 3.46/3.47), where the price-transfer
     # term needs the per-aggregator net injection `p_agⱼ[t]` (= net[t] here) and `Σ_j U_agⱼ`
     # remains sourced from `value(ctx.objective)`. Recording it does NOT alter the
@@ -203,13 +202,13 @@ function solve_welfare(
     # Frontier imports at the root, injected BEFORE closing the residuals. p_import is
     # priced and non-negative (active draw from the MEM). q_import is FREE-SIGN so the
     # reactive load closes feasibly instead of forcing Q ≡ 0 — added ONLY when the
-    # formulation provides a reactive channel (WR-03; a DC run has no reactive balance).
+    # formulation provides a reactive channel (a DC run has no reactive balance).
     # Active frontier exchange at the root, priced at λ₀. By default it is IMPORT-ONLY
     # (`p_import[t] ≥ 0`, buy from the MEM) — the rung-0…rung-2 behavior. With
     # `allow_export = true` it becomes a FREE-SIGN net exchange (`>0` buy, `<0` sell surplus
     # to the MEM at the same λ₀) — a physically-complete transmission frontier that lets a
     # high-PV feeder EXPORT its reverse-flow surplus instead of dissipating it. That export
-    # sink is the SOC-exactness enabler (PF-04): with import-only, shedding surplus via line
+    # sink is the SOC-exactness enabler: with import-only, shedding surplus via line
     # losses (`−r·l`) versus PV curtailment is welfare-equivalent, so the objective is NOT
     # strictly decreasing in the loss current `l` and the SOC cone can go slack (inexact) in
     # the over-voltage / reverse-flow regime. Priced export makes every unit of `l` cost real
@@ -243,20 +242,20 @@ function solve_welfare(
     welfare = ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T)
     @objective(model, Max, welfare)
 
-    # OPTIMAL gate: never read a dual (price) before a trusted solve (threat T-03-14).
-    # `allow_almost` (FIX-09) is forwarded VERBATIM and defaults false — byte-identical to
+    # OPTIMAL gate: never read a dual (price) before a trusted solve.
+    # `allow_almost` is forwarded VERBATIM and defaults false — bit-for-bit identical to
     # before this kwarg existed on every call site that omits it.
     assert_solved!(model; dual = true, allow_local = allow_local, allow_almost = allow_almost)
 
-    # PF-04 EXACTNESS GATE (RESEARCH Pattern 4; threats T-04-01 / T-04-03): the headline
+    # EXACTNESS GATE: the headline
     # correctness gate. It MUST run AFTER assert_solved! (a trusted primal) and BEFORE any
     # dual (price) is read, so a physically-meaningless dual from a STRICT (inexact) SOC
-    # relaxation is refused rather than returned (RESEARCH Anti-Pattern "reading the DADP
+    # relaxation is refused rather than returned (Anti-Pattern "reading the DADP
     # before the exactness gate"). It is DATA-DRIVEN on the presence of the squared-current
     # variable `:l` in the formulation's `pf_vars` stash: only ConvexBranchFlow stashes `:l`,
     # so DC/LinDistFlow (no cone, no `:l`) skip this untouched — no `if formulation ==`
     # branching. `rtol_exact` (default 1e-4) is a RELATIVE, base-free cone-slack tolerance
-    # (WR-01): normalizing the residual by the cone magnitude keeps the gate's protective
+    # normalizing the residual by the cone magnitude keeps the gate's protective
     # strength invariant to the per-unit base, unlike the old absolute threshold. It is
     # DELIBERATELY DISTINCT from the battery-check `τ` — a different physical quantity, do not
     # conflate them. `maxgap` (the absolute residual) is stashed under `ctx.meta[:socp_maxgap]`
@@ -265,16 +264,15 @@ function solve_welfare(
         ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx; rtol = rtol_exact)
     end
 
-    # App. C MANDATORY post-solve battery complementarity (RESEARCH Pitfall 1, threat
-    # T-03-13): with λ_min < λ_med < λ_max there is no binary/complementarity constraint,
+    # App. C MANDATORY post-solve battery complementarity: with λ_min < λ_med < λ_max there is no binary/complementarity constraint,
     # so p_ch·p_dch = 0 must be VERIFIED numerically at the welfare optimum. The check is a
-    # SCALE-FREE relative test (WR-02) — see `assert_battery_complementarity!`.
+    # SCALE-FREE relative test — see `assert_battery_complementarity!`.
     #
-    # Plan 26-14 (PM-02): App. C's "no simultaneous charge/discharge" argument implicitly
+    # App. C's "no simultaneous charge/discharge" argument implicitly
     # assumes η=1. For η<1, whenever DLMP < λ_med and both legs are small, an SOC-neutral
     # round trip earns (λ_med−DLMP)(1−η²) > 0, so a GENUINE, KKT-consistent simultaneous
     # charge/discharge CAN be the true optimum on the AC (NLP/Ipopt) oracle path — this is a
-    # latent gap in App. C's own parametrization, not a Plan 26-04 bug (see 26-FINDINGS.md).
+    # latent gap in App. C's own parametrization, not a bug (see the audit notes).
     # The AC/NLP oracle therefore REPORTS (never throws on) a violation via `:warn`; every
     # other (SOCP) call site is COMPLETELY unaffected and keeps the default `:error` (still
     # throws, byte-for-byte the same message).
@@ -292,33 +290,32 @@ end
                                      on_violation::Symbol = :error)
 
 Verify the App. C no-binary battery complementarity `p_ch[t]·p_dch[t] = 0` numerically at a
-solved point (RESEARCH Pitfall 1, threat T-03-13). There is NO `p_ch·p_dch == 0` constraint in
+solved point. There is NO `p_ch·p_dch == 0` constraint in
 the model — the strict `λ_min < λ_med < λ_max` parametrization alone makes simultaneous
 charge/discharge dominated — so this post-solve certificate is the only thing that catches a
 degenerate co-activation.
 
 `on_violation` selects what happens on a violation:
-  - `:error` (default) — throw, byte-for-byte the same message as before Plan 26-14. Used by
+  - `:error` (default) — throw, bit-for-bit the same message as before. Used by
     EVERY call site except the AC/NLP path in `solve_welfare` (`src/planning/subproblem.jl`,
     `src/admm/AgrOpt.jl`, `src/models/stochastic_welfare.jl` all pass only `τ`/`T` and so get
     this default, unchanged).
   - `:warn` — log the SAME message via `@warn` and CONTINUE (every violating `(bus, t)` pair
     is reported, not just the first). `solve_welfare` passes this ONLY on the AC/NLP
-    (non-SOCP) path. Plan 26-14 (PM-02) found that App. C's "no simultaneous
+    (non-SOCP) path. It was found that App. C's "no simultaneous
     charge/discharge" argument implicitly assumes η=1: for η<1, whenever DLMP < λ_med and
     both legs are small, an SOC-neutral round trip earns `(λ_med−DLMP)(1−η²) > 0`, so a
     GENUINE, KKT-consistent simultaneous charge/discharge CAN be the true optimum — verified
-    to 4 digits against the App. C KKT identity on the EXACT-04 high-PV AC fixture (bus 2,
+    to 4 digits against the App. C KKT identity on the high-PV AC fixture (bus 2,
     t=7). This is a LATENT model-parametrization gap in App. C itself, not a solver bug, so
-    the AC oracle must not hard-fail on an optimum it correctly found; see the dated finding
-    in `26-FINDINGS.md` and `docs/literate/prosumer_welfare.jl` for the backlog item (a
+    the AC oracle must not hard-fail on an optimum it correctly found; see `docs/literate/prosumer_welfare.jl` for the backlog item (a
     proper complementarity treatment — binary/MPEC or an η-aware round-trip penalty — is
-    deferred, NOT done in this plan). The SOCP path's own call site is UNCHANGED and still
+    deferred, NOT done here). The SOCP path's own call site is UNCHANGED and still
     throws (its looser `τ=1e-3` masks the identical effect, so no equivalent finding fires
     there).
   - any other value — throws an `ArgumentError` (fail loud on programmer error).
 
-WR-02 — the test is RELATIVE (scale-free), not an absolute product threshold. For each
+The test is RELATIVE (scale-free), not an absolute product threshold. For each
 battery it normalizes the product by the square of the device's rated charge/discharge power
 `Pmax` (recovered from the JuMP variable's upper bound) and flags
 
@@ -338,7 +335,7 @@ QP path — and this function never loosens the QP path (its `Pmax²`-scaled thr
 old absolute one for every `Pmax ≤ 1`). Iterates `ctx.agg_device_vars` (skips
 non-battery device stashes) and is a no-op when no batteries were registered.
 
-BATTERY-ACTIVE-POWER-ONLY (MESH-04, T-19-11): this check's loop condition excludes any
+BATTERY-ACTIVE-POWER-ONLY: this check's loop condition excludes any
 device that ALSO carries a reactive decision variable (`:q`) — such a device (currently
 only `FourQuadBESS`) has its OWN peer certificate,
 [`assert_4q_complementarity!`](@ref) (`complementarity_4q.jl`), with its OWN
@@ -368,7 +365,7 @@ function assert_battery_complementarity!(
                     msg =
                         "Battery complementarity violated at bus $bus, t=$t: " *
                         "p_ch·p_dch = $prod ≥ τ·Pmax² = $(τ * scale²) " *
-                        "(relative τ=$τ, Pmax≈$pmax; App. C, threat T-03-13)"
+                        "(relative τ=$τ, Pmax≈$pmax; App. C)"
                     if on_violation === :error
                         throw(CertificateError(msg; kind = :battery))
                     else

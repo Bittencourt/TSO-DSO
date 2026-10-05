@@ -36,13 +36,13 @@ layer can query, returning a `NamedTuple`:
 
 The solve routes to the right open-source solver by
 `select_optimizer(problem_class(pf))` — a `ConvexBranchFlow` oracle solves as SOCP, a
-`LinDistFlow`/DC oracle as QP — so this wrapper NEVER names a concrete solver (INFRA-02).
+`LinDistFlow`/DC oracle as QP — so this wrapper NEVER names a concrete solver.
 
 `allow_export` (default `false`) is passed straight through to [`solve_welfare`](@ref): with
 `false` the frontier import is IMPORT-ONLY (`p_import ≥ 0`), with `true` it becomes a
 free-sign net exchange that lets a high-PV feeder EXPORT its reverse-flow surplus to the
-MEM. Priced export is the SOC-exactness enabler in the over-voltage / reverse-flow regime
-(PF-04), so a congestion-driven over-voltage ground-truth solve (thesis Fig 4.4) requires
+MEM. Priced export is the SOC-exactness enabler in the over-voltage / reverse-flow regime,
+so a congestion-driven over-voltage ground-truth solve (thesis Fig 4.4) requires
 `allow_export = true` to stay both feasible and exact.
 
 # Extension slots
@@ -79,7 +79,7 @@ function operational_oracle(
     )
 
     # Route to the formulation's problem class (QP for DC/LinDistFlow, SOCP for the
-    # ConvexBranchFlow) — never naming a concrete solver (INFRA-02). This is the ONLY
+    # ConvexBranchFlow) — never naming a concrete solver. This is the ONLY
     # solve; `solve_welfare` already gates the dual read behind `assert_solved!`.
     ctx, cost, dadp = solve_welfare(
         feeder,
