@@ -53,11 +53,22 @@ end
     ]
     mesh = TSODSO.MeshedFeeder(bus3, loop, 1)
     # pair check runs BEFORE the empty-aggregators guard
-    e = errof(() -> solve_admm(mesh, ConvexBranchFlow(), Aggregator[]; T = 1, λ₀ = [4.0], ρ = 10.0))
+    e = errof(
+        () -> solve_admm(
+            mesh,
+            ConvexBranchFlow(),
+            Aggregator[];
+            T = 1,
+            λ₀ = [4.0],
+            ρ = 10.0,
+        ),
+    )
     @test e isa ArgumentError
     @test occursin("solve_admm", e.msg) && occursin("MeshedFeeder", e.msg)
     # (MeshedFeeder, MeshedFlow) passes the pair check and reaches the next guard
-    e = errof(() -> solve_admm(mesh, MeshedFlow(), Aggregator[]; T = 1, λ₀ = [4.0], ρ = 10.0))
+    e = errof(
+        () -> solve_admm(mesh, MeshedFlow(), Aggregator[]; T = 1, λ₀ = [4.0], ρ = 10.0),
+    )
     @test e isa ArgumentError
     @test occursin("at least one aggregator", e.msg)
 end
@@ -80,10 +91,22 @@ end
             select_optimizer(TSODSO.problem_class(pf))
         end
         _, obj_c, _ = solve_welfare(
-            feeder, pf, aggs; T = Th, λ₀ = λ₀, allow_export = true, optimizer = opt,
+            feeder,
+            pf,
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            allow_export = true,
+            optimizer = opt,
         )
         res = solve_admm(
-            feeder, pf, aggs; T = Th, λ₀ = λ₀, ρ = TwoBusFixtures.RHO_2BUS, allow_export = true,
+            feeder,
+            pf,
+            aggs;
+            T = Th,
+            λ₀ = λ₀,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
         )
         return obj_c, res
     end
@@ -123,7 +146,8 @@ end
     cj = zeros(Th)
     # default behaviour unchanged (no throw on a non-co-activated population)
     @test errof(() -> TSODSO.solve_agr!(agr, λj, cj, 5.0)) === nothing
-    @test errof(() -> TSODSO.solve_agr!(agr, λj, cj, 5.0; battery_on_violation = :warn)) === nothing
+    @test errof(() -> TSODSO.solve_agr!(agr, λj, cj, 5.0; battery_on_violation = :warn)) ===
+          nothing
     # the kwarg reaches assert_battery_complementarity! (invalid value is rejected there)
     e = errof(() -> TSODSO.solve_agr!(agr, λj, cj, 5.0; battery_on_violation = :bogus))
     @test e isa ArgumentError
@@ -190,7 +214,12 @@ end
 
     agr_err = TSODSO.build_agr_opt(agg, 2; ρ = ρ)
     @test_throws CertificateError TSODSO.solve_agr!(
-        agr_err, λj, cj, ρ; check_4q = true, report_4q = false,
+        agr_err,
+        λj,
+        cj,
+        ρ;
+        check_4q = true,
+        report_4q = false,
     )
 
     agr_rep = TSODSO.build_agr_opt(agg, 2; ρ = ρ)

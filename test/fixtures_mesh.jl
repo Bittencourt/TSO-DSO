@@ -245,10 +245,32 @@
     the centralized solve itself throws `SOCP relaxation INEXACT` (the finding above).
     """
     function mesh_aggregators_phi(φ::Real; bess::Bool = false)
-        therm2 =
-            Thermostatic(2, 0.0, 1.0, 20.0, 20.0, 20.0, P2_LOAD, P2_LOAD, 0.5, [20.0]; φ = φ)
-        therm3 =
-            Thermostatic(3, 0.0, 1.0, 20.0, 20.0, 20.0, P3_LOAD, P3_LOAD, 0.5, [20.0]; φ = φ)
+        therm2 = Thermostatic(
+            2,
+            0.0,
+            1.0,
+            20.0,
+            20.0,
+            20.0,
+            P2_LOAD,
+            P2_LOAD,
+            0.5,
+            [20.0];
+            φ = φ,
+        )
+        therm3 = Thermostatic(
+            3,
+            0.0,
+            1.0,
+            20.0,
+            20.0,
+            20.0,
+            P3_LOAD,
+            P3_LOAD,
+            0.5,
+            [20.0];
+            φ = φ,
+        )
         devs2 = AbstractDevice[therm2]
         bess && push!(
             devs2,

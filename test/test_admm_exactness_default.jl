@@ -42,11 +42,27 @@
         @variable(model, p_import[1:1])
         fix(p_import[1], 0.0; force = true)
         pag = Matrix{VariableRef}(undef, 0, 1)
-        return TSODSO.DsoOpt(model, ctx, pag, pag, p_import, Int[], 1, ctx.feeder, 1.0, [0.0])
+        return TSODSO.DsoOpt(
+            model,
+            ctx,
+            pag,
+            pag,
+            p_import,
+            Int[],
+            1,
+            ctx.feeder,
+            1.0,
+            [0.0],
+        )
     end
     final_gate!(dso; kw...) = solve_dso!(
-        dso, Dict{Int, Vector{Float64}}(), Dict{Int, Vector{Float64}}(), 1.0;
-        check_exact = true, strict = false, kw...,
+        dso,
+        Dict{Int, Vector{Float64}}(),
+        Dict{Int, Vector{Float64}}(),
+        1.0;
+        check_exact = true,
+        strict = false,
+        kw...,
     )
 end
 
@@ -86,7 +102,14 @@ end
     @test r1.exact_maxgap > 0
     # Take the `try` EXPRESSION's value (TestItemRunner scoping; see test_planning_certification_integer.jl).
     err = try
-        solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = 1e-30, rtol_exact = 0.0)
+        solve_admm(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            kw...,
+            atol_exact = 1e-30,
+            rtol_exact = 0.0,
+        )
         nothing
     catch e
         e
@@ -111,7 +134,11 @@ end
     dM = H.dso_from(H.ctx_M())
     @test_throws CertificateError H.final_gate!(dM)
     @test dM.ctx.meta[:socp_atol_exact] === nothing
-    @test isapprox(H.final_gate!(H.dso_from(H.ctx_M()); atol_exact = 1e-6).exact_maxgap, 5e-7; rtol = 1e-3)
+    @test isapprox(
+        H.final_gate!(H.dso_from(H.ctx_M()); atol_exact = 1e-6).exact_maxgap,
+        5e-7;
+        rtol = 1e-3,
+    )
     # (A) smax = 90, gap 5e-6: the default ACCEPTS (old flat 1e-6 refused).
     dA = H.dso_from(H.ctx_A())
     @test isapprox(H.final_gate!(dA).exact_maxgap, 5e-6; rtol = 1e-3)

@@ -95,7 +95,19 @@
         Ppv = Float64[pv_scale * p for p in prof.pv]
         Pdc = Float64[load_scale * d for d in prof.demand]
         therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
-        batt = PVBattery(bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0, 3.8, 6.2, 8.9, Ppv)
+        batt = PVBattery(
+            bus,
+            0.95,
+            1.0,
+            batt_pmax,
+            0.0,
+            batt_emax,
+            batt_soc0,
+            3.8,
+            6.2,
+            8.9,
+            Ppv,
+        )
         return Aggregator(bus, φ, [therm, batt], Pdc)
     end
 
@@ -164,7 +176,8 @@
         c_inv::Real,
         c_op::AbstractVector{<:Real},
     )
-        length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+        length(λ₀) == T ||
+            throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
         length(c_op) == T ||
             throw(ArgumentError("c_op has length $(length(c_op)), expected T=$T"))
         isempty(aggregators) &&
@@ -187,7 +200,7 @@
             add_to_residual!(ctx, :Rp, feeder.root, t, z[t])
         end
 
-    # Ordering note (mirrors build_planning_oracle): capture `reactive` immediately
+        # Ordering note (mirrors build_planning_oracle): capture `reactive` immediately
         # after the formulation contributes, before any aggregator writes.
         reactive = haskey(ctx.residuals, :Rq)
         if reactive
@@ -219,11 +232,11 @@
         @objective(
             model,
             Max,
-            ctx.objective - sum(λ₀[t] * z[t] for t in 1:T) - c_y * y_inv -
-            c_inv * x_inv - sum(c_op[t] * z[t] for t in 1:T)
+            ctx.objective - sum(λ₀[t] * z[t] for t in 1:T) - c_y * y_inv - c_inv * x_inv -
+            sum(c_op[t] * z[t] for t in 1:T)
         )
 
-    # Review finding: `dual = true` so the solver's OWN duality gap is
+        # Review finding: `dual = true` so the solver's OWN duality gap is
         # certified and readable, and the joint model checks its OWN cone exactness —
         # otherwise the cross-check would compare one relaxation against another.
         solve_with_retry!(model; dual = true)

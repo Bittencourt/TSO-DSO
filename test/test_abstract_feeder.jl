@@ -28,7 +28,11 @@
     mesh = TSODSO.MeshedFeeder(bus3, loop, 1)
     @test mesh isa TSODSO.AbstractFeeder{Float64}
     # disconnected: bus 3 unreachable
-    @test_throws ArgumentError TSODSO.MeshedFeeder(bus3, [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0)], 1)
+    @test_throws ArgumentError TSODSO.MeshedFeeder(
+        bus3,
+        [TSODSO.Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
 end
 
 @testitem "abstract feeder: invalid formulation x MeshedFeeder pairs throw; valid pairs build" tags =
@@ -61,9 +65,24 @@ end
                occursin(name, err.msg) &&
                occursin("MeshedFeeder", err.msg)
     end
-    @test_throws ArgumentError TSODSO.contribute!(TSODSO.RestrictedBranchFlow(0.0), freshctx(), mesh; T = 1)
-    @test_throws ArgumentError TSODSO.contribute!(TSODSO.ConvexBranchFlow(), freshctx(), mesh; T = 1)
-    @test_throws ArgumentError TSODSO.contribute!(TSODSO.LinDistFlow(), freshctx(), mesh; T = 1)
+    @test_throws ArgumentError TSODSO.contribute!(
+        TSODSO.RestrictedBranchFlow(0.0),
+        freshctx(),
+        mesh;
+        T = 1,
+    )
+    @test_throws ArgumentError TSODSO.contribute!(
+        TSODSO.ConvexBranchFlow(),
+        freshctx(),
+        mesh;
+        T = 1,
+    )
+    @test_throws ArgumentError TSODSO.contribute!(
+        TSODSO.LinDistFlow(),
+        freshctx(),
+        mesh;
+        T = 1,
+    )
     @test check_throw(TSODSO.RestrictedBranchFlow(0.0), "RestrictedBranchFlow")
     @test check_throw(TSODSO.ConvexBranchFlow(), "ConvexBranchFlow")
     @test check_throw(TSODSO.LinDistFlow(), "LinDistFlow")
@@ -112,7 +131,8 @@ end
     @test TSODSO.has_branch_current(nothing) == false
 end
 
-@testitem "abstract feeder: radial-only ADMM entry points reject a MeshedFeeder" tags = [:feeder] begin
+@testitem "abstract feeder: radial-only ADMM entry points reject a MeshedFeeder" tags =
+    [:feeder] begin
     using TSODSO
 
     function _check()
@@ -127,10 +147,18 @@ end
             TSODSO.Branch(3, 1, 0.01, 0.02, 10.0),
         ]
         mesh = TSODSO.MeshedFeeder(bus3, loop, 1)
-        for (f, name) in ((TSODSO.solve_admm, "solve_admm"), (TSODSO.build_dso_opt, "build_dso_opt"))
+        for (f, name) in
+            ((TSODSO.solve_admm, "solve_admm"), (TSODSO.build_dso_opt, "build_dso_opt"))
             err = try
                 if f === TSODSO.solve_admm
-                    f(mesh, TSODSO.ConvexBranchFlow(), TSODSO.Aggregator[]; T = 2, λ₀ = [4.0, 4.0], ρ = 10.0)
+                    f(
+                        mesh,
+                        TSODSO.ConvexBranchFlow(),
+                        TSODSO.Aggregator[];
+                        T = 2,
+                        λ₀ = [4.0, 4.0],
+                        ρ = 10.0,
+                    )
                 else
                     f(mesh, TSODSO.Aggregator[], 2; ρ = 10.0, λ₀ = [4.0, 4.0])
                 end
@@ -146,9 +174,23 @@ end
         for f in (TSODSO.solve_admm, TSODSO.build_dso_opt)
             err = try
                 if f === TSODSO.solve_admm
-                    f(mesh, TSODSO.MeshedFlow(), TSODSO.Aggregator[]; T = 2, λ₀ = [4.0, 4.0], ρ = 10.0)
+                    f(
+                        mesh,
+                        TSODSO.MeshedFlow(),
+                        TSODSO.Aggregator[];
+                        T = 2,
+                        λ₀ = [4.0, 4.0],
+                        ρ = 10.0,
+                    )
                 else
-                    f(mesh, TSODSO.Aggregator[], 2; ρ = 10.0, λ₀ = [4.0, 4.0], pf = TSODSO.MeshedFlow())
+                    f(
+                        mesh,
+                        TSODSO.Aggregator[],
+                        2;
+                        ρ = 10.0,
+                        λ₀ = [4.0, 4.0],
+                        pf = TSODSO.MeshedFlow(),
+                    )
                 end
                 nothing
             catch e
@@ -158,8 +200,14 @@ end
             @test occursin("at least one aggregator", err.msg)
             @test !occursin("radial-only", err.msg)
         end
-        @test hasmethod(TSODSO.solve_admm, Tuple{TSODSO.Feeder,TSODSO.ConvexBranchFlow,Vector{TSODSO.Aggregator}})
-        @test hasmethod(TSODSO.build_dso_opt, Tuple{TSODSO.Feeder,Vector{TSODSO.Aggregator},Int})
+        @test hasmethod(
+            TSODSO.solve_admm,
+            Tuple{TSODSO.Feeder, TSODSO.ConvexBranchFlow, Vector{TSODSO.Aggregator}},
+        )
+        @test hasmethod(
+            TSODSO.build_dso_opt,
+            Tuple{TSODSO.Feeder, Vector{TSODSO.Aggregator}, Int},
+        )
     end
     _check()
 end

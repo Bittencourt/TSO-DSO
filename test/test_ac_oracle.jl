@@ -69,8 +69,7 @@
     end
 end
 
-@testitem "ac_oracle: assert_ac_exact! is defined" tags =
-    [:ac_oracle] begin
+@testitem "ac_oracle: assert_ac_exact! is defined" tags = [:ac_oracle] begin
     using TSODSO
 
     # assert_ac_exact! is defined alongside recover_voltage_angles in this

@@ -74,14 +74,15 @@
     a cheap sanity check.
 
     # Hand-derived expectations (VERIFIED, not blindly trusted, by a
+
     # direct-script run — re-derive independently if a discrepancy appears, exactly
+
     # like this file's own N1_Y_HAND note)
 
       - BILEVEL (production `solve_bilevel!` on this fixture): since the follower's
         response is `x_inv=z=0` regardless of `y_inv` (strict per-unit cost
         dominance, not solver-dependent), the leader's own objective reduces to
-        `c_y*y_inv` alone, minimized at `y_inv=0` ⇒ `y*=0, x_inv*=0, z*=[0.0],
-        d*=[0.0], total*=0.0`.
+        `c_y*y_inv` alone, minimized at `y_inv=0` ⇒ `y*=0, x_inv*=0, z*=[0.0], d*=[0.0], total*=0.0`.
       - JOINT (single planner, true costs, no tariff — see the bilevel certification test for the actual
         reference model): `z` is bounded by `d_max=2.0` (network-tied `d[t]=z[t]`
         exactly, lossless single-branch feeder) and by `corridor_cap*x_inv`; net

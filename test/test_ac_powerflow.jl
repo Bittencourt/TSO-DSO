@@ -20,8 +20,7 @@
     end
 end
 
-@testitem "ac_powerflow: ACPowerFlow routes to the NLP problem class" tags =
-    [:ac_powerflow] begin
+@testitem "ac_powerflow: ACPowerFlow routes to the NLP problem class" tags = [:ac_powerflow] begin
     using TSODSO
 
     # The generic trait returns QP() for DC/LinDistFlow; ConvexBranchFlow adds

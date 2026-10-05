@@ -368,7 +368,7 @@ end
         )
 
         # The active nodal balance of the PUBLISHED converged primal is satisfied with no hidden
-    # slack — the runtime certificate. `assert_no_slack` (the same gate solve_admm runs)
+        # slack — the runtime certificate. `assert_no_slack` (the same gate solve_admm runs)
         # recomputes each residual from the solved variables and returns `lhs − rhs`; RE-running it
         # here on the returned context must not throw and must be ≈ 0.
         balance_p = res.dso_ctx.constraints[:balance_p]
