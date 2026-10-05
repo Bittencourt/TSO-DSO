@@ -20,6 +20,18 @@
 #   4. removed APIs: `reactive_consensus` typed `::Bool`/`::Symbol` or passed a Bool/Symbol
 #      literal; the removed `operational_oracle` keywords (`objective_hook`, `horizon_state`,
 #      `z`); `.loss`/`.voltage` on a receiver whose name looks like a DLMP decomposition.
+#
+# Scope limits (by design; this is a lint, not a compiler):
+#   - binding analysis is FILE-GLOBAL and flow-insensitive: a name bound ANYWHERE in the file
+#     (a function argument, a struct field, a loop variable, a method defined inside another
+#     function) suppresses the hidden-name check for that name EVERYWHERE in the file. So
+#     `function outer(); max_jump(x) = 1; end` followed by a top-level `max_jump(tr)`, or an
+#     argument named `max_jump` elsewhere followed by `map(max_jump, trs)`, or a struct field
+#     `SOCP` followed by `select_optimizer(SOCP)`, are NOT flagged. The call-position rule in 3.
+#     only overrides PLAIN-variable bindings (`x = ...`, `local`/`global x = ...`, NamedTuple keys).
+#   - `include`d files are scanned on their own; a file with no TSODSO import is assumed to be
+#     a helper whose includer brings TSODSO into scope.
+#   - only names owned by TSODSO are checked; other packages' APIs are not.
 # Exit: 0 clean, 1 findings, 2 usage error / nothing scanned (fail-closed).
 
 using TSODSO
