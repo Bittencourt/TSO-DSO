@@ -22,6 +22,9 @@
 
     @test CertificateError("x").kind === :unspecified
     @test CertificateError("x"; kind = :slack).kind === :slack
+    @test CertificateError("x").iterations === nothing
+    @test CertificateError("x"; kind = :socp_exact, iterations = 8).iterations == 8
+    @test CertificateError("x", :slack).iterations === nothing
     @test ConvergenceError("x").iterations === nothing
     @test ConvergenceError("x"; iterations = 7).iterations == 7
 end

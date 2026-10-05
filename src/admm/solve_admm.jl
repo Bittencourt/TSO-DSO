@@ -249,6 +249,9 @@ price (WR-03, phase-19 review).
     exceeded first, this throw is SKIPPED — the honest `status = :budget_exceeded` return
     (see "Wall-clock budget" above) replaces it; that path is not itself a genuine
     non-convergence, so it is not fail-loud.
+  - `CertificateError` when a final-consolidation certificate (PF-04 exactness, battery, 4Q,
+    no-slack) refuses the CONVERGED point; its `iterations` field carries the ADMM iteration
+    count reached before the refusal (WR-07, 35-REVIEW).
 
 # Status and exceptions
 The returned `status` is `:converged` or `:budget_exceeded` (the caller-set
@@ -354,7 +357,15 @@ function solve_admm(
         )
     end
 
-    return _admm_certify(st, rmode, mode, aggregators, λ₀, atol_exact, rtol_exact)
+    # WR-07 (35-REVIEW): a certificate refused at the final consolidation (e.g. the PF-04 exactness
+    # gate) comes AFTER the loop converged; attach that iteration count to the error so callers can
+    # still report it. Same message and `kind` — the refusal itself is unchanged.
+    return try
+        _admm_certify(st, rmode, mode, aggregators, λ₀, atol_exact, rtol_exact)
+    catch err
+        (err isa CertificateError && err.iterations === nothing) || rethrow()
+        throw(CertificateError(err.msg; kind = err.kind, iterations = residuals.iters))
+    end
 end
 
 export solve_admm

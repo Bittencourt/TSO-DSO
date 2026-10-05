@@ -597,8 +597,13 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol
     catch err
         msg = sprint(showerror, err)
         # Failure rows keep their evidence: iterations from the exception when it carries them
-        # (ConvergenceError.iterations), else NaN; wall time / peak RSS are added below.
-        iters = err isa TSODSO.ConvergenceError && err.iterations !== nothing ? err.iterations : NaN
+        # (ConvergenceError.iterations, or CertificateError.iterations — solve_admm attaches its
+        # converged iteration count to a final-gate refusal, WR-07), else the Int sentinel -1
+        # (the same "unknown" value docs/literate/ieee8500_scaling.jl maps unparsable cells to;
+        # rows written before WR-07 carry NaN). Wall time / peak RSS are added below.
+        iters =
+            (err isa TSODSO.ConvergenceError || err isa TSODSO.CertificateError) &&
+            err.iterations !== nothing ? err.iterations : -1
         (;
             admm_status = "ERROR:" * string(nameof(typeof(err))),
             admm_iters = iters,

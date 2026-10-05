@@ -65,15 +65,18 @@ end
     @test r1.exact_maxgap == r2.exact_maxgap
     # The throw assertion below is only meaningful because the consolidation gap is > 0.
     @test r1.exact_maxgap > 0
-    @test_throws CertificateError solve_admm(
-        feeder,
-        ConvexBranchFlow(),
-        aggs;
-        kw...,
-        atol_exact = 1e-30,
-        rtol_exact = 0.0,
-    )
-    r3 = solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = Inf)
+    # Take the `try` EXPRESSION's value (TestItemRunner scoping; see test_planning_certification_integer.jl).
+    err = try
+        solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = 1e-30, rtol_exact = 0.0)
+        nothing
+    catch e
+        e
+    end
+    @test err isa CertificateError
+    @test err.kind === :socp_exact
+    # WR-07 (35-REVIEW): the final-gate refusal carries the converged ADMM iteration count.
+    @test err.iterations == r1.iters
+    r3 =solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = Inf)
     @test r3.iters == r1.iters
 end
 

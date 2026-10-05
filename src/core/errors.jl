@@ -59,18 +59,26 @@ function SolveFailedError(msg::AbstractString)
 end
 
 """
-    CertificateError(msg; kind = :unspecified) <: TSODSOError
+    CertificateError(msg; kind = :unspecified, iterations = nothing) <: TSODSOError
 
 See the [status & exception policy](@ref status-policy).
 Policy role: an exactness / no-slack / complementarity certificate was refused.
-`kind` is a `Symbol` tagging which certificate failed.
+`kind` is a `Symbol` tagging which certificate failed. `iterations` records the iteration count
+of the iterative method whose result was refused, when known — e.g. [`solve_admm`](@ref) attaches
+its converged ADMM iteration count to a final-consolidation refusal (WR-07, 35-REVIEW), so a
+caller can report how many iterations ran before the certificate was refused.
 """
 struct CertificateError <: TSODSOError
     msg::String
     kind::Symbol
+    iterations::Union{Nothing,Int}
 end
-CertificateError(msg::AbstractString; kind::Symbol = :unspecified) =
-    CertificateError(String(msg), kind)
+CertificateError(msg::AbstractString, kind::Symbol) = CertificateError(String(msg), kind, nothing)
+CertificateError(
+    msg::AbstractString;
+    kind::Symbol = :unspecified,
+    iterations::Union{Nothing,Int} = nothing,
+) = CertificateError(String(msg), kind, iterations)
 
 """
     ConvergenceError(msg; iterations = nothing) <: TSODSOError
