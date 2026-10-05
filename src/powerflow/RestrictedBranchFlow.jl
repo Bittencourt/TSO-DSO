@@ -1,9 +1,8 @@
 # src/powerflow/RestrictedBranchFlow.jl
 #
-# SEAM: Gan-Low OPF-m / OPF-ε restricted-feasible-set formulation (OVR-01).
-# OWNER: plan 20-02.
+# SEAM: Gan-Low OPF-m / OPF-ε restricted-feasible-set formulation.
 #
-# A genuine feasible-set RESTRICTION (never a relaxation tightening; D-01) implementing
+# A genuine feasible-set RESTRICTION (never a relaxation tightening) implementing
 # Gan, Li, Topcu & Low's (2015) "Modified OPF" construction (Theorem 2 / Section IV):
 # impose the DIRECT constraint `v̂_GL(s) ≤ v̄` — the loss-free shadow voltage (Definition 3,
 # eq. 18; the SAME quantity `recover_lossfree_shadow_voltage` computes as post-processing in
@@ -12,37 +11,36 @@
 # existing `v ≤ v̄` alone — so the modified problem ("OPF-m") is a genuine subset of the
 # original OPF's feasible set, and Theorem 2 proves "SOCP-m is exact if C1 holds," with NO
 # dependence on the optimal solution's own location (unlike the base Theorem 1, whose
-# condition C2 fails exactly in the over-voltage regime EXACT-04 documents).
+# condition C2 fails exactly in the over-voltage regime documented by the high-PV reference fixture).
 #
-# Phase 26-02 (FIX-01/02) note: `ConvexBranchFlow`'s OWN exactness-copy `v̂` default was
+# Note: `ConvexBranchFlow`'s OWN exactness-copy `v̂` default was
 # corrected to the Gan-Low direction (`v̂ ≥ v`) — see `src/powerflow/ConvexBranchFlow.jl`.
 # This file's `v̂_GL(s)` (built independently below, via a tree-wide subtree-loss
 # accumulation) is a SEPARATE, complementary, strictly TIGHTER restriction than
 # `ConvexBranchFlow`'s per-branch `v̂` and remains independently needed for the
-# over-voltage/EXACT-04 regime; it does not read `ConvexBranchFlow`'s `v̂` variable at all
+# over-voltage regime of the high-PV reference fixture; it does not read `ConvexBranchFlow`'s `v̂` variable at all
 # (confirmed: this file only reads `pv.v`, `pv.P`, `pv.Q`, `pv.l` from `ctx.pf_vars`).
 #
-# ## Escalation history (Rule 4 / plan 20-02 checkpoint, resolved by roadmap-owner decision)
+# ## Escalation history
 #
-# The FIRST implementation of this file (commit 704f029) implemented only the SIMPLER
+# The FIRST implementation of this file implemented only the SIMPLER
 # special case OPF-ε (shrink `v`'s own upper bound by a single measured scalar `ε`,
 # Section IV-D eq. surrounding (18)) — proven a SUBSET of OPF-m (`F_{OPF-ε} ⊆ F_{OPF-m}`,
-# paper's Fig. 9), needing zero new constraints. Exhaustive empirical testing on the EXACT-04
-# fixture (documented in `20-02-SUMMARY.md`) found this did NOT close the SOCP exactness gap
+# paper's Fig. 9), needing zero new constraints. Exhaustive empirical testing on the high-PV
+# reference fixture found this did NOT close the SOCP exactness gap
 # at ANY feasible `ε` (residual stayed `≈1.6` even at the largest feasible `ε≈0.17`, versus
-# the `<1e-5` gate; the problem goes `INFEASIBLE` above `ε≈0.18`). Root cause: EXACT-04's
+# the `<1e-5` gate; the problem goes `INFEASIBLE` above `ε≈0.18`). Root cause: the high-PV fixture's
 # dominant residual is REVERSE-FLOW-driven (branch 2, negative `P`), not primarily a
 # voltage-pinning-at-`v`'s-own-bound effect — the OPF-ε special case does not target this.
 #
-# The roadmap owner directed implementing the FULLER OPF-m mechanism directly (this file, as
-# rewritten): the direct `v̂_GL(s) ≤ v̄` constraint, rather than the simpler bound-shrink. This
-# is NOT a violation of D-03's "no auto-tuning/bisection loop" constraint — OPF-m has NO free
+# The FULLER OPF-m mechanism was therefore implemented directly (this file): the direct `v̂_GL(s) ≤ v̄` constraint, rather than the simpler bound-shrink. This
+# is NOT an auto-tuning/bisection loop — OPF-m has NO free
 # parameter to search; it is a purely STRUCTURAL constraint derived from the existing decision
-# variables. See `20-02-SUMMARY.md` for the full empirical record (including whether OPF-m
-# itself succeeds or the plan honestly pivots to the D-09/D-10 AC-dual fallback).
+# variables. See the test file for the empirical record (including whether OPF-m
+# itself succeeds or the AC-dual fallback is needed).
 #
 # Dispatched through the EXISTING `solve_welfare` entrypoint with ZERO change to that file —
-# the exact `ACPowerFlow` v2.1 precedent (D-02): the `SOCP()` problem-class trait defined
+# the exact `ACPowerFlow` v2.1 precedent: the `SOCP()` problem-class trait defined
 # below routes `solve_welfare`'s default `optimizer` kwarg to `select_optimizer(SOCP())`
 # (the same tight-tolerance Clarabel factory `ConvexBranchFlow` already uses), and the rest
 # of `solve_welfare` is formulation-agnostic. Selection is PURELY by Julia dispatch on the
@@ -50,7 +48,7 @@
 #
 # `contribute!` DELEGATES to `contribute!(ConvexBranchFlow(), ctx, feeder; T)` first
 # (identical SOC cone + exactness copy + apparent-power cone + balance accumulation —
-# correctness-drift avoidance per RESEARCH.md's explicit recommendation to delegate rather
+# correctness-drift avoidance: delegate rather
 # than duplicate), then ADDS the new `v̂_GL(s) ≤ v̄` constraint (OPF-m) and, OPTIONALLY (off by
 # default; composes if a nonzero `ε` kwarg is supplied), shrinks `v`'s own upper bound
 # (OPF-ε) as an EXTRA margin on top. Both are genuine feasible-set RESTRICTIONS — composing
@@ -58,32 +56,31 @@
 
 using JuMP
 
-# The Gan-Low "modification gap" ε (Definition 3, eq. 18), measured on the EXACT-04 fixture
-# (test/test_restricted_branch_flow.jl, plan 20-01 Task 2): ε_measured = 0.005811069127373614
-# pu²; 1.25× safety multiplier ⇒ ε = 0.007263836409217017 pu² (D-03/D-07 provenance — never
+# The Gan-Low "modification gap" ε (Definition 3, eq. 18), measured on the high-PV reference fixture
+# (test/test_restricted_branch_flow.jl): ε_measured = 0.005811069127373614
+# pu²; 1.25× safety multiplier ⇒ ε = 0.007263836409217017 pu² (provenance — never
 # re-derive without updating this comment). Retained as a NAMED, citable constant for
 # researchers who want to COMPOSE the OPF-ε margin on top of OPF-m (see `RestrictedBranchFlow`
 # docstring) — it is NOT the default any more (OPF-m needs no such margin; Theorem 2 holds
 # unconditionally on C2 once the `v̂_GL(s) ≤ v̄` constraint is present).
 #
-# Phase 26 gap-closure re-measurement (Plan 26-08, SC-6): Plan 26-14's App. C
+# Re-measurement: the App. C
 # throw-to-diagnostic conversion (`assert_battery_complementarity!`'s `on_violation=:warn` on
-# the AC/NLP oracle path) unblocked re-measuring this constant on the SAME EXACT-04 fixture,
+# the AC/NLP oracle path) unblocked re-measuring this constant on the SAME high-PV fixture,
 # since the AC oracle solve that measures `ε` used to throw on this fixture's genuine App. C
-# eta<1 simultaneous charge/discharge violation (bus 2, t=7) before Plan 26-14 landed. The
+# eta<1 simultaneous charge/discharge violation (bus 2, t=7) before that conversion. The
 # operating point the AC oracle now returns (with the diagnostic `@warn` instead of a throw)
-# is a DIFFERENT AC-feasible point than whatever the pre-Phase-26 measurement used (that
-# measurement itself pre-dates FIX-01..05 and was taken against an older `ConvexBranchFlow`/
+# is a DIFFERENT AC-feasible point than whatever the earlier measurement used (that
+# measurement itself pre-dates the network/device model corrections and was taken against an older `ConvexBranchFlow`/
 # `PVBattery`/`Aggregator` codepath entirely), so ε moved: OLD ε_measured (base, pre-1.25x)
 # = 0.005811069127373614 pu² -> NEW ε_measured (base) = 0.010189528427785532 pu², measured
-# 2026-09-29 via `.planning/phases/26-network-device-model-correctness/
-# 26-08-repro-restricted-and-canary.jl` on `IEEE13Fixtures.high_pv_feeder()` /
-# `build_high_pv_aggregators(feeder; pv_scale=1.2)`. Cause: the cumulative effect of FIX-01
-# through FIX-05 (cpydrop sign flip, receiving-end thermal limit, full-horizon battery SOC
+# 2026-09-29 on `IEEE13Fixtures.high_pv_feeder()` /
+# `build_high_pv_aggregators(feeder; pv_scale=1.2)`. Cause: the cumulative effect of those
+# corrections (cpydrop sign flip, receiving-end thermal limit, full-horizon battery SOC
 # recursion, flexible-load reactive draw) on the AC oracle's optimal high-PV operating point,
 # NOT a defect in the Gan-Low modification-gap measurement mechanism itself — `ε_measured`
 # stays strictly positive and the same order of magnitude, only its measured value shifted
-# with the underlying physics. 1.25x safety multiplier retained unchanged (D-03/D-07's own
+# with the underlying physics. 1.25x safety multiplier retained unchanged (the
 # margin policy is untouched by this re-measurement) ⇒ new `_EXACT04_MEASURED_ε` =
 # 0.012736910534731915 pu².
 const _EXACT04_MEASURED_ε = 0.010189528427785532 * 1.25
@@ -99,17 +96,17 @@ peer [`AbstractPowerFlow`](@ref) subtype, drop-in interchangeable with
 argument to [`solve_welfare`](@ref) touches neither device nor assembly code — there is no
 `if formulation ==` branching anywhere).
 
-Purpose (OVR-01): resolve the genuine SOCP-relaxation inexactness the v2.1 EXACT-04 finding
-documented in the high-PV / reverse-flow / over-voltage regime. Prior to phase 26-02
-(FIX-01/02), `ConvexBranchFlow`'s default exactness copy (`v̂`, thesis 3.43/3.45) was
+Purpose: resolve the genuine SOCP-relaxation inexactness the v2.1 high-PV finding
+documented in the high-PV / reverse-flow / over-voltage regime. Before the exactness-copy sign
+was corrected, `ConvexBranchFlow`'s default exactness copy (`v̂`, thesis 3.43/3.45) was
 defect-affected and provably a *lower*-bound shadow on the true voltage (`v ≥ v̂`
-everywhere, confirmed numerically by plan 20-01 Task 1) — the OPPOSITE sign relationship
+everywhere, confirmed numerically) — the OPPOSITE sign relationship
 from Gan-Low's *upper*-bound shadow (`v ≤ v̂_GL(s)`), so it was structurally incapable of
-helping the over-voltage case. Phase 26-02 corrected `ConvexBranchFlow`'s DEFAULT to the
+helping the over-voltage case. The corrected `ConvexBranchFlow` DEFAULT uses the
 Gan-Low direction (`v̂ ≥ v`), but this file's `v̂_GL(s)` is a SEPARATE, complementary,
 tree-wide (whole-subtree loss-free) restriction — strictly TIGHTER than
 `ConvexBranchFlow`'s now-corrected per-branch `v̂` — still independently needed for the
-over-voltage/EXACT-04 regime, and it does not read `ConvexBranchFlow`'s `v̂` variable at
+over-voltage regime of the high-PV fixture, and it does not read `ConvexBranchFlow`'s `v̂` variable at
 all. This formulation adds the genuinely new, complementary Gan-Low restriction.
 
 **Mechanism (OPF-m, the PRIMARY restriction, always active):** for every non-root bus `i`
@@ -123,7 +120,7 @@ variable is introduced). It then adds `@constraint(model, v̂_GL(s)[i,t] <= v̄_
 branch-flow equations with `ℓ ≥ 0`, this new constraint is STRICTLY MORE RESTRICTIVE than
 the existing `v ≤ v̄` alone (it is redundant only if `v̂_GL(s)` happens to already sit at or
 below `v̄` — exactly the over-voltage regime where it does NOT, and where it does its work).
-Theorem 2 (verbatim, RESEARCH.md): *"SOCP-m is exact if C1 holds"* — unconditionally on C2,
+Theorem 2 (verbatim): *"SOCP-m is exact if C1 holds"* — unconditionally on C2,
 because this constraint forces C2 to hold by construction.
 
 **Optional composable margin (`ε` field, OFF by default):** `RestrictedBranchFlow(; ε=...)`
@@ -135,31 +132,31 @@ given C1). `_EXACT04_MEASURED_ε` remains available as a citable, measured value
 researcher who wants extra margin on top of OPF-m — pass
 `RestrictedBranchFlow(; ε = TSODSO._EXACT04_MEASURED_ε)` explicitly. A NEGATIVE `ε` is
 rejected with an `ArgumentError` at construction — on both the kwarg and positional paths
-(review WR-06 / T-20-12): applied via `set_upper_bound` it would LOOSEN the voltage bound,
-turning D-01's genuine restriction into a relaxation, so a sign-typo'd "measured margin" is
+(a negative margin is a defect): applied via `set_upper_bound` it would LOOSEN the voltage bound,
+turning the genuine restriction into a relaxation, so a sign-typo'd "measured margin" is
 refused loudly, never silently treated as `ε = 0`.
 
-Caveat (RESEARCH.md Assumptions Log; escalation history above): even OPF-m's exactness
+Caveat (see the escalation history above): even OPF-m's exactness
 guarantee is CONDITIONAL on C1 holding for the fixture at hand — C1 is checkable a priori
-(depends only on `(r,x,p̄,q̄,v̲)`) but was NOT re-verified analytically for the EXACT-04
-fixture's specific reverse-flow-heavy regime in this plan; see `20-02-SUMMARY.md` for the
+(depends only on `(r,x,p̄,q̄,v̲)`) but was NOT re-verified analytically for the high-PV
+fixture's specific reverse-flow-heavy regime; see `test/test_restricted_branch_flow.jl` for the
 empirical verdict on this exact fixture.
 """
 struct RestrictedBranchFlow <: AbstractPowerFlow
     ε::Float64
 
-    # Review WR-06 / T-20-12: validate in the INNER constructor (suppressing the
+    # Validate in the INNER constructor (suppressing the
     # auto-generated non-validating one) so the positional path RestrictedBranchFlow(x)
     # is guarded exactly like the kwarg path — no silent handling of invalid input. A
     # negative ε applied via set_upper_bound would LOOSEN the voltage bound, converting
-    # D-01's "genuine restriction, never a relaxation" contract into a relaxation; the
+    # the "genuine restriction, never a relaxation" contract into a relaxation; the
     # previous `pf.ε > 0` gate in contribute! silently treated a sign-typo'd margin as
     # ε = 0 instead of refusing it.
     function RestrictedBranchFlow(ε::Real)
         ε >= 0 || throw(
             ArgumentError(
                 "RestrictedBranchFlow ε must be ≥ 0 (a negative ε would LOOSEN the " *
-                "voltage bound, violating D-01's genuine-restriction contract); got $ε",
+                "voltage bound, violating the genuine-restriction contract); got $ε",
             ),
         )
         return new(Float64(ε))
@@ -176,7 +173,7 @@ OPF-m shadow-voltage restriction `v̂_GL(s) ≤ v̄` (Theorem 2, Section IV) and
 if `pf.ε > 0`), compose the simpler OPF-ε bound-shrink on top (Section IV-D).
 
 Delegates `contribute!(ConvexBranchFlow(), ctx, feeder; T = T)` FIRST (correctness-drift
-avoidance per RESEARCH.md's explicit recommendation to delegate rather than duplicate the
+avoidance: delegate rather than duplicate the
 SOC cone / exactness copy / apparent-power cone / balance accumulation). Reads
 `ctx.pf_vars` (the `(; v, v̂, P, Q, l)` stash `ConvexBranchFlow.contribute!` just
 populated).
@@ -192,24 +189,24 @@ JuMP expressions (no new variable):
 
 Then adds `@constraint(ctx.model, v̂_GL[i,t] <= feeder.buses[i].vmax^2)` for every non-root
 `i,t`, registered under `:opfm_shadow_voltage` (dual available for future diagnostics, though
-this plan's certificate does not require it).
+the exactness certificate does not require it).
 
 **OPF-ε (optional, composes on top, OFF by default):** if `pf.ε > 0`, ALSO shrinks `v`'s own
 upper bound to `vmax² − pf.ε`, mirroring the escalation history's original mechanism — this
 is a strictly-more-restrictive addition (safe to compose per `F_{OPF-ε} ⊆ F_{OPF-m}`), never
-applied to `v̂`'s bound (`ConvexBranchFlow`'s `cpydrop` copy, thesis 3.43). Since phase 26-02
-(FIX-01/02), `ConvexBranchFlow`'s DEFAULT `v̂` satisfies `v̂ ≥ v` (the Gan-Low direction) — a
+applied to `v̂`'s bound (`ConvexBranchFlow`'s `cpydrop` copy, thesis 3.43). The corrected
+`ConvexBranchFlow` DEFAULT `v̂` satisfies `v̂ ≥ v` (the Gan-Low direction) — a
 DIFFERENT, complementary shadow from this file's own tree-wide `v̂_GL(s)`; shrinking
 `ConvexBranchFlow`'s `v̂` bound here would still be a no-op at best, a silent
 double-restriction at worst, so it remains untouched.
 
 After both mechanisms are wired, stashes `ctx.meta[:restriction_ε] = pf.ε` and
-`ctx.meta[:formulation] = :RestrictedBranchFlow` (D-08 provenance, consumed by plan 20-03's
+`ctx.meta[:formulation] = :RestrictedBranchFlow` (provenance, consumed by the exactness
 certificate). Returns `ctx`.
 """
 function contribute!(::RestrictedBranchFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
     throw(ArgumentError("RestrictedBranchFlow requires a radial Feeder, got MeshedFeeder " *
-        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair per ARCH-03"))
+        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)"))
 end
 
 function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
@@ -220,7 +217,7 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder
 
     # Optional OPF-ε companion margin (Section IV-D) — OFF by default (pf.ε == 0.0). Shrinks
     # ONLY v's own bound. Do NOT touch v̂'s bound (ConvexBranchFlow's cpydrop copy, thesis
-    # 3.43): since phase 26-02 (FIX-01/02) ConvexBranchFlow's DEFAULT v̂ satisfies v̂ ≥ v (the
+    # 3.43): the corrected ConvexBranchFlow DEFAULT v̂ satisfies v̂ ≥ v (the
     # Gan-Low direction) — a DIFFERENT, complementary shadow from this file's own tree-wide
     # v̂_GL(s) — shrinking it here would still be a no-op at best, a silent
     # double-restriction at worst.
@@ -243,8 +240,8 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder
         push!(children[br.to], (br.from, -b))
     end
     # `parent_of[c]` / SIGNED `branch_of_child[c]` (positive = stored parent→child, negative
-    # = stored REVERSED): a stored Branch(from, to, …) need not point parent→child (review
-    # CR-01), exactly as recover_voltage_angles / recover_lossfree_shadow_voltage document.
+    # = stored REVERSED): a stored Branch(from, to, …) need not point parent→child),
+    # exactly as recover_voltage_angles / recover_lossfree_shadow_voltage document.
     order = Int[feeder.root]
     children_of = [Int[] for _ in 1:N]
     parent_of = Dict{Int, Int}()
@@ -267,7 +264,7 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder
 
     opfm_constraints = Any[]
     for t in 1:T
-        # (1) Reverse-BFS closed-subtree loss accumulation, AFFINE in l — byte-identical
+        # (1) Reverse-BFS closed-subtree loss accumulation, AFFINE in l — bit-for-bit identical
         # formula to recover_lossfree_shadow_voltage's LossInclR/LossInclX.
         LossInclR = Dict{Int, AffExpr}()
         LossInclX = Dict{Int, AffExpr}()
@@ -289,9 +286,9 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder
             LossInclX[i] = accX
         end
 
-        # (2) Forward recursion from the root, AFFINE in P, Q, l — byte-identical formula to
+        # (2) Forward recursion from the root, AFFINE in P, Q, l — bit-for-bit identical formula to
         # recover_lossfree_shadow_voltage's v̂_GL recursion, INCLUDING its orientation
-        # handling (review CR-01): the parent voltage comes from the TREE parent (never
+        # handling (a defect fixed earlier): the parent voltage comes from the TREE parent (never
         # br.from), and for a branch stored REVERSED (bsigned < 0, br.from == i) the
         # parent-side flow toward i is the branch's receiving end at the parent, negated:
         # r·ℓ − P (never a bare −P, which would drop the feeding branch's own loss).
@@ -318,15 +315,15 @@ function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder
     end
     register_constraint!(ctx, :opfm_shadow_voltage, opfm_constraints)
 
-    ctx.meta[:restriction_ε] = pf.ε             # D-08 provenance
-    ctx.meta[:formulation] = :RestrictedBranchFlow   # D-08 provenance
+    ctx.meta[:restriction_ε] = pf.ε             # provenance
+    ctx.meta[:formulation] = :RestrictedBranchFlow   # provenance
     ctx.pf = pf
     return ctx
 end
 
 # Route the restricted formulation to the SAME tight-gap Clarabel factory ConvexBranchFlow
 # uses (a MORE-SPECIFIC method on the `problem_class` trait; multiple dispatch, no solver
-# change, no `if formulation ==` branching, no model names a concrete solver — INFRA-02).
+# change, no `if formulation ==` branching, no model names a concrete solver).
 problem_class(::RestrictedBranchFlow) = SOCP()
 
 export RestrictedBranchFlow

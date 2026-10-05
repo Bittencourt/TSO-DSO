@@ -1,14 +1,13 @@
 # src/powerflow/LinDistFlow.jl
 #
-# SEAM: LinDistFlow (linear branch-flow) power-flow formulation (PF-02).
-# OWNER: plan 02-02.
+# SEAM: LinDistFlow (linear branch-flow) power-flow formulation.
 #
 # An `AbstractPowerFlow` subtype implementing the dispatched `contribute!` contract:
 # it writes the loss-less linear branch-flow terms — active AND reactive nodal
 # balance plus the linear voltage-drop relation — into `ctx.residuals[:Rp]` and
-# `ctx.residuals[:Rq]` via the indexed `add_to_residual!` seam (PF-02). Traces thesis
+# `ctx.residuals[:Rq]` via the indexed `add_to_residual!` seam. Traces thesis
 # eqs. 3.31–3.33 (nodal balances / branch flows) and the exactness copy 3.43 / 3.45
-# (the LinDistFlow relaxation that later becomes the SOCP cone in Phase 4).
+# (the LinDistFlow relaxation that becomes the SOCP cone in `ConvexBranchFlow`).
 #
 # Selection is PURELY by Julia dispatch on the singleton type `LinDistFlow` — no
 # formulation-flag branching anywhere.
@@ -21,14 +20,14 @@ using JuMP
 Loss-less linear branch-flow (LinDistFlow) formulation with squared-voltage-magnitude
 variables. It is the DistFlow model (thesis eqs. 3.31–3.33) with the current/loss terms
 (`r·ℓ`, `x·ℓ`, `(r²+x²)·ℓ`) dropped — the l→0 specialization that yields the linear
-voltage drop 3.43 (and, in Phase 4, becomes the SOCP cone 3.39/3.45). It creates branch
+voltage drop 3.43 (and, in `ConvexBranchFlow`, becomes the SOCP cone 3.39/3.45). It creates branch
 active/reactive flows `P[b,t]`/`Q[b,t]` and a squared-voltage variable `v[j,t] = |V_j|²`,
 contributes the per-bus active balance into `ctx.residuals[:Rp]` (3.31) and the reactive
 balance into `ctx.residuals[:Rq]` (3.32), and adds the loss-less voltage-drop constraint
 `vdrop` (3.43). Contrast with [`DCPowerFlow`](@ref), which is active-only (no `:Rq`,
 no voltage). Swapping between the two touches neither device nor assembly code.
 
-Pitfall 1 (off-by-square voltage): `v` is the SQUARE of the magnitude, so the bounds
+Off-by-square voltage: `v` is the SQUARE of the magnitude, so the bounds
 are `vmin²`/`vmax²` and the root is fixed at `1.0` (= 1.0²).
 """
 struct LinDistFlow <: AbstractPowerFlow end
@@ -42,7 +41,7 @@ Creates, on `ctx.model`:
 
   - `v[j,t]` — squared voltage magnitude `|V_j|²` (thesis 3.33 variable), with the root
     fixed at `1.0` and every other bus bounded by the SQUARED magnitude limits
-    `vmin²`/`vmax²` (thesis 3.45; Pitfall 1 — square the magnitude bounds);
+    `vmin²`/`vmax²` (thesis 3.45; square the magnitude bounds);
   - `P[b,t]`, `Q[b,t]` — branch active/reactive flows (parent→child), `t = 1:T`;
   - `vdrop[b,t]` — the loss-less voltage-drop constraint
     `v[br.to,t] == v[br.from,t] − 2·(r·P[b,t] + x·Q[b,t])` (thesis 3.43, l→0).
@@ -51,11 +50,11 @@ Then accumulates the per-bus active balance (inflow − outflow of `P`) into
 `ctx.residuals[:Rp]` (thesis 3.31, loss-less) and the reactive balance (inflow −
 outflow of `Q`) into `ctx.residuals[:Rq]` (thesis 3.32), both via the INDEXED
 `add_to_residual!`. Stashes `ctx.pf_vars = (; v, P, Q)` for post-solve
-inspection / the Phase-4 exactness check. Returns `ctx`.
+inspection / the exactness check. Returns `ctx`.
 """
 function contribute!(::LinDistFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
     throw(ArgumentError("LinDistFlow requires a radial Feeder, got MeshedFeeder " *
-        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair per ARCH-03"))
+        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)"))
 end
 
 function contribute!(pf::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
@@ -71,7 +70,7 @@ function contribute!(pf::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int 
     # Root (frontier) squared voltage fixed to the reference 1.0² (thesis: v_0 fixed).
     fix.(v[feeder.root, :], 1.0; force = true)
 
-    # Squared voltage bounds for the non-root buses (thesis 3.45; Pitfall 1: SQUARE the
+    # Squared voltage bounds for the non-root buses (thesis 3.45; SQUARE the
     # magnitude pu bounds — vmin²/vmax²). The root is fixed above, so it takes no bounds.
     for j in 1:N, t in 1:T
         j == feeder.root && continue
@@ -99,7 +98,7 @@ function contribute!(pf::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int 
         add_to_residual!(ctx, :Rq, j, t, qin - qout)
     end
 
-    ctx.pf_vars = (; v, P, Q)   # stash for post-solve inspection / Phase-4 exactness
+    ctx.pf_vars = (; v, P, Q)   # stash for post-solve inspection / exactness
     ctx.pf = pf
     return ctx
 end
