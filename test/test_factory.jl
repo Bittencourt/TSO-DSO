@@ -1,5 +1,5 @@
-# Seam: solver/factory.jl + solver/ProblemClass.jl (INFRA-02). RED until plan 01-03.
-@testitem "factory: select_optimizer(::ProblemClass) yields a working solver factory (INFRA-02)" begin
+# Seam: solver/factory.jl + solver/ProblemClass.jl.
+@testitem "factory: select_optimizer(::ProblemClass) yields a working solver factory" begin
     using TSODSO, JuMP
 
     # ProblemClass singletons dispatch the factory; no model file names a solver.

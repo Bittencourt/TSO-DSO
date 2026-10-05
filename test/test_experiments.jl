@@ -1,32 +1,28 @@
 # test/test_experiments.jl
 #
-# Seam: src/experiments/ — the Phase-8 experiment harness (EXP-01 declarative Scenario +
-# swappable solve strategy, EXP-02 parameter sweep + diff-friendly storage, INFRA-04
-# provenance + bit-for-bit reproducibility).
+# Seam: src/experiments/ — the experiment harness (declarative Scenario +
+# swappable solve strategy, parameter sweep + diff-friendly storage, provenance +
+# bit-for-bit reproducibility).
 #
-# RED @testitem harness (Wave 0 of Phase 8). Waves 2-4 (plans 08-02 Scenario/materialize,
-# 08-03 run_scenario, 08-04 store/sweep) turn these green by IMPLEMENTING src/experiments/
-# {Scenario,materialize,run,store,sweep}.jl — this file is NEVER edited to go green; the
-# documented contract below (RESEARCH Patterns 1-3 + the 08-02/03/04 PLAN <verify> commands)
-# IS the target API. Every item name is prefixed "EXP-01"/"EXP-02"/"INFRA-04" and contains an
-# 08-VALIDATION filter substring (scenario, sweep, provenance/tagsave, repro/bitfor) so
-# `occursin(<substring>, ti.name)` selects the right subset per task.
+# The documented contract below is the target API of src/experiments/
+# {Scenario,materialize,run,store,sweep}.jl. Every item name is prefixed "experiments:"
+# and contains a filter substring (scenario, sweep, provenance/tagsave, repro/bitfor) so
+# `occursin(<substring>, ti.name)` selects the right subset.
 #
 # GUARD (a missing symbol must fail cleanly, never crash the runner): every behavioral body
-# sits behind an `isdefined(TSODSO, :symbol)` check — mirroring the Phase-6 test_admm.jl
-# RED-then-green precedent. While RED the sole failing assertion is the isdefined check
-# itself; the behavioral asserts go live automatically once the later wave lands the symbol.
+# sits behind an `isdefined(TSODSO, :symbol)` check, mirroring the test_admm.jl
+# precedent. If a symbol is missing the sole failing assertion is the isdefined check
+# itself; the behavioral asserts go live automatically once the symbol exists.
 #
-# NOTE on the strategy guard: 08-02 validates feeder/strategy/price/population AT Scenario
+# NOTE on the strategy guard: Scenario validates feeder/strategy/price/population AT Scenario
 # CONSTRUCTION (throws ArgumentError before a bad selector can ever reach run_scenario), so
-# "EXP-01 scenario strategy guard" below exercises the Scenario-level guard directly; 08-03's
-# own terminal `else` in run_scenario is defensive-in-depth and is exercised transitively
+# "experiments: scenario strategy guard" below exercises the Scenario-level guard directly; the
+# terminal `else` in run_scenario is defensive-in-depth and is exercised transitively
 # (a Scenario with a bad strategy never constructs, so run_scenario is never reached with one).
 
-@testitem "EXP-01 scenario centralized" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: scenario centralized" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
-    # RED until plan 08-02 (Scenario) / 08-03 (run_scenario) land.
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_scenario)
 
@@ -41,12 +37,12 @@
         @test r1.exact_maxgap isa Real
         @test ismissing(r1.iters)              # centralized has no ADMM iteration count
 
-        # WR-05 (phase-26 review, iteration 2): :centralized has no ADMM reactive-consensus
-        # concept, so the WR-01 provenance field must stay `missing` here (regression guard for
+        # :centralized has no ADMM reactive-consensus
+        # concept, so the provenance field must stay `missing` here (regression guard for
         # src/experiments/run.jl's `reactive_consensus_mode = missing` centralized branch).
         @test ismissing(r1.reactive_consensus_mode)
 
-        # INFRA-04 bit-for-bit: same Scenario+seed -> identical through the full solve
+        # Bit-for-bit: same Scenario+seed -> identical through the full solve
         # (single-thread Clarabel, same process; timings are EXCLUDED, never compared).
         @test r1.welfare == r2.welfare
         @test r1.dadp == r2.dadp
@@ -54,7 +50,7 @@
     end
 end
 
-@testitem "EXP-01 scenario admm" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: scenario admm" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -71,7 +67,7 @@ end
         @test r.iters isa Integer && r.iters >= 1
         @test !ismissing(r.final_r) && !ismissing(r.final_s)
 
-        # WR-05 (phase-26 review, iteration 2): the WR-01 fix threads solve_admm's RESOLVED
+        # The provenance field threads solve_admm's RESOLVED
         # reactive_consensus mode out to ScenarioResult; guard that it stays populated (not
         # `missing`, not silently dropped/renamed by a future refactor of solve_admm's return
         # tuple or ScenarioResult's field list).
@@ -79,7 +75,7 @@ end
     end
 end
 
-@testitem "EXP-01 scenario strategy guard" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: scenario strategy guard" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -88,7 +84,7 @@ end
         kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
 
         # A Scenario never silently underdetermines a run: every unknown selector throws
-        # ArgumentError at construction (RESEARCH Pitfall 1 / 08-02 behavior).
+        # ArgumentError at construction.
         @test_throws ArgumentError TSODSO.Scenario(; kw..., feeder = :bogus)
         @test_throws ArgumentError TSODSO.Scenario(; kw..., strategy = :bogus)
         @test_throws ArgumentError TSODSO.Scenario(; kw..., price = :bogus)
@@ -96,7 +92,7 @@ end
     end
 end
 
-@testitem "EXP-02 sweep" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: sweep" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -113,7 +109,7 @@ end
     end
 end
 
-@testitem "EXP-02 sweep diff-friendly" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: sweep diff-friendly" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :run_sweep)
@@ -131,9 +127,9 @@ end
                 TSODSO.collate_summary(dir, c1)
                 TSODSO.collate_summary(dir, c2)
 
-                # Diff-friendly (RESEARCH Pattern 3): fixed column order + deterministic sort
+                # Diff-friendly: fixed column order + deterministic sort
                 # + NO absolute :path column -> two collations of the SAME runs are
-                # byte-identical (no git churn); :gitcommit is kept.
+                # bit-for-bit identical (no git churn); :gitcommit is kept.
                 @test read(c1, String) == read(c2, String)
                 header = first(split(read(c1, String), "\n"))
                 @test !occursin("path", header)
@@ -142,7 +138,7 @@ end
     end
 end
 
-@testitem "INFRA-04 same-seed repro" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: same-seed repro" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -160,7 +156,7 @@ end
     end
 end
 
-@testitem "INFRA-04 seed sensitivity" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: seed sensitivity" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -177,12 +173,12 @@ end
     end
 end
 
-# WR-05 fix: the same-seed/seed-sensitivity INFRA-04 gates above only ever exercised the
+# The same-seed/seed-sensitivity gates above only ever exercised the
 # :centralized strategy; :admm is the iterative, floating-point-order-sensitive path
 # (adaptive-ρ residual comparisons, iteration-count-dependent convergence checks) and is
 # exactly where non-determinism is most likely to leak in. run.jl's own docstring asserts
 # bit-for-bit identity holds for :admm too, but nothing verified it. Mirror both gates here.
-@testitem "INFRA-04 same-seed repro admm" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: same-seed repro admm" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -203,7 +199,7 @@ end
     end
 end
 
-@testitem "INFRA-04 seed sensitivity admm" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: seed sensitivity admm" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -218,10 +214,10 @@ end
     end
 end
 
-@testitem "WR-01 (phase-22 review): Scenario copies stoch_probabilities — caller mutation cannot bypass validation" begin
+@testitem "experiments: Scenario copies stoch_probabilities — caller mutation cannot bypass validation" begin
     using TSODSO
 
-    # WR-01: the inner constructor validated stoch_probabilities then passed the SAME
+    # The inner constructor validated stoch_probabilities then passed the SAME
     # array to new(...) — an aliasing hole through which a caller could mutate the
     # validated vector after construction (p[1] = 99.0 ⇒ sum 99.8, every invariant
     # silently gone while savename/hash/reproducibility stay keyed to the stale check).
@@ -234,14 +230,14 @@ end
     @test s.strategy.probabilities !== p
 end
 
-@testitem "WR-02 (phase-22 review): scenario_filename identifies the probability vector" begin
+@testitem "experiments: scenario_filename identifies the probability vector" begin
     using TSODSO
 
-    # WR-02: stoch_probabilities::Vector{Float64} is outside DrWatson's default_allowed
+    # stoch_probabilities::Vector{Float64} is outside DrWatson's default_allowed
     # filter and is silently DROPPED from the bare savename, so two Scenarios differing
-    # ONLY in their weighting (this phase's own D-04 uniform-vs-non-uniform comparison)
+    # ONLY in their weighting (the uniform-vs-non-uniform comparison)
     # previously rendered the IDENTICAL filename. scenario_filename now folds a stable
-    # digest of a NON-uniform vector into the name; the uniform case stays byte-identical
+    # digest of a NON-uniform vector into the name; the uniform case stays bit-for-bit identical
     # to the pre-fix name (uniform is fully determined by the stoch_S field the name
     # already carries).
     s_uniform = Scenario(name = "wr02", strategy = Stochastic())             # default uniform
@@ -271,7 +267,7 @@ end
     end
 end
 
-@testitem "INFRA-04 provenance tagsave" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: provenance tagsave" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DrWatson: wload
 
@@ -284,24 +280,22 @@ end
             s = TSODSO.Scenario(; kw..., strategy = :centralized)
             TSODSO.run_and_store(s; dir = dir)
 
-            # CR-01 fix: `run_and_store` now saves under `TSODSO.scenario_filename(s)`
+            # `run_and_store` saves under `TSODSO.scenario_filename(s)`
             # (lossless float formatting, avoids DrWatson's lossy default sigdigits=3
             # rounding colliding two distinguishable ADMM-knob Scenarios onto one filename).
             #
-            # Rule 1 fix (plan 22-05, discovered by this phase's own closing acceptance
-            # gate): this item used to re-derive `savename(s, "jld2"; digits = 10)` directly
+            # This item must not re-derive `savename(s, "jld2"; digits = 10)` directly
             # instead of calling `scenario_filename` — EXACTLY the "second,
             # independently-maintained call site" `scenario_filename`'s own docstring warns
-            # is how WR-06 happened. It silently diverged once `scenario_filename` grew its
-            # own NAME_MAX-safety fallback (this same plan's `store.jl` fix): the bare
-            # `savename` string this item reconstructed no longer matched the ACTUAL
-            # filename `run_and_store` used, throwing the SAME `ENAMETOOLONG` this plan's
-            # `store.jl` fix was meant to resolve. Calling the single source of truth
+            # is how divergence happens: once `scenario_filename` grew its
+            # own NAME_MAX-safety fallback, a re-derived
+            # bare `savename` string no longer matched the ACTUAL
+            # filename `run_and_store` used, throwing `ENAMETOOLONG`. Calling the single source of truth
             # directly (as `run_and_store` itself does) fixes it for good.
             f = joinpath(dir, TSODSO.scenario_filename(s))
             @test isfile(f)
 
-            # NOTE (Rule 1 fix, 08-04): `wload` on a `.jld2` always round-trips through
+            # NOTE: `wload` on a `.jld2` always round-trips through
             # JLD2's generic `FileIO.save`/`load`, which stores every dict key as a JLD2
             # variable NAME (a `String`) regardless of the in-memory key type passed to
             # `@tagsave` — verified live against DrWatson 2.19.1 / JLD2 0.6.5: a
@@ -320,7 +314,7 @@ end
     end
 end
 
-@testitem "ARCH-02 filename identity" begin
+@testitem "experiments: filename identity" begin
     using TSODSO
 
     base = (name = "id", seed = 1, T = 24)
@@ -376,7 +370,7 @@ end
     @test occursin(r"_p[0-9a-f]{16}\.jld2$", f_n)
 end
 
-@testitem "ARCH-02 result_to_dict flat primitives" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: result_to_dict flat primitives" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
     kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
@@ -396,7 +390,7 @@ end
     @test all(v -> !(v isa TSODSO.AbstractStrategy), values(da))
 end
 
-@testitem "ARCH-02 run_and_store round-trip" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: run_and_store round-trip" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DrWatson: wload
 
@@ -418,7 +412,7 @@ end
     end
 end
 
-@testitem "ARCH-02 mixed-strategy sweep collate" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: mixed-strategy sweep collate" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DataFrames: DataFrame, nrow
     using CSV: CSV
@@ -444,7 +438,7 @@ end
     end
 end
 
-@testitem "REVIEW WR-05 over-length filename fallback uses the stable FNV digest" begin
+@testitem "experiments: over-length filename fallback uses the stable FNV digest" begin
     using TSODSO, Test
     s = Scenario(name = "w5-" * repeat("x", 400), feeder = :ieee13)
     f = TSODSO.scenario_filename(s)

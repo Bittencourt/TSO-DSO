@@ -1,16 +1,15 @@
-# Seam: pricing/fit.jl (PRICE-04). Flat feed-in-tariff (FIT) baseline counterfactual.
+# Seam: pricing/fit.jl. Flat feed-in-tariff (FIT) baseline counterfactual.
 #
-# RED @testitem harness (Wave 1 of Phase 5). Plan 05-03 turns these green by defining
+# @testitems for
 # `fit_baseline` (re-solve the operational welfare under a flat feed-in tariff and return the
 # baseline welfare / prices + the DLMP-vs-FIT efficiency ratio). Every item name contains
-# "fit" so `occursin("fit", ti.name)` selects it. While RED the sole failing assertion is a
-# missing-symbol `isdefined` check; the behavioral asserts sit behind the `isdefined` guard.
+# "fit" so `occursin("fit", ti.name)` selects it. The behavioral asserts sit behind an
+# `isdefined` guard so a missing symbol fails cleanly.
 
-@testitem "fit: fit_baseline is defined and returns a finite baseline welfare (PRICE-04)" tags =
+@testitem "fit: fit_baseline is defined and returns a finite baseline welfare" tags =
     [:fit] begin
     using TSODSO
 
-    # RED until plan 05-03 defines the FIT baseline.
     @test isdefined(TSODSO, :fit_baseline)
 
     if isdefined(TSODSO, :fit_baseline)
@@ -30,11 +29,10 @@
     end
 end
 
-@testitem "fit: the DLMP-vs-FIT efficiency ratio is a finite positive scalar (PRICE-04)" tags =
+@testitem "fit: the DLMP-vs-FIT efficiency ratio is a finite positive scalar" tags =
     [:fit] begin
     using TSODSO
 
-    # RED until plan 05-03 exposes the efficiency ratio.
     @test isdefined(TSODSO, :fit_baseline)
 
     if isdefined(TSODSO, :fit_baseline)
@@ -55,15 +53,14 @@ end
     end
 end
 
-# FIX-09 (Phase 27, plan 27-05; T-27-12): `fit_baseline`'s FIT AC-PF step (SITE 2) previously
+# `fit_baseline`'s FIT AC-PF step (SITE 2) previously
 # called ONLY `assert_solved!` — never `assert_socp_exact!` — so a genuinely inexact SOC
 # relaxation there silently returned an uncertified `social_fit`/`ratio`.
 #
-# UPDATED SEMANTICS (plan 27-09, USER DECISION 2026-09-29): SITE 2 is no longer a fixed-
+# SEMANTICS: SITE 2 is no longer a fixed-
 # dispatch SOC relaxation gated by `assert_socp_exact!` — it is a genuine AC power flow,
 # PHYSICS ONLY (`ACPowerFlow(; limits = false)`), because the OLD fixed-dispatch SOC re-solve
-# was found STRUCTURALLY inexact on a real fixture (IEEE-123 REPRO-01, gap≈211,
-# `27-wave2-suite.log`) — fixing every injection leaves the loss current free with nothing to
+# was found STRUCTURALLY inexact on a real fixture (IEEE-123, gap≈211) — fixing every injection leaves the loss current free with nothing to
 # pin it. There is no longer a "cone slack" for `on_inexact` to certify; it now gates a
 # genuine Ipopt NON-CONVERGENCE instead. Rather than searching for a fixture that happens to
 # make the physics-only AC power flow genuinely non-solvable (fragile, feeder-specific), this
@@ -71,7 +68,7 @@ end
 # `_site2_ac_optimizer` (mirrors `run_mpc`'s own `_truth_settlement` idiom) — a crippled
 # `max_iter=1` Ipopt cannot converge in one iteration on ANY fixture, giving a reproducible
 # `ITERATION_LIMIT` regardless of the feeder.
-@testitem "fit: SITE 2 (FIT AC-PF) on_inexact=:error throws on a forced AC non-convergence, :report returns the diagnostic (FIX-09, plan 27-09)" tags =
+@testitem "fit: SITE 2 (FIT AC-PF) on_inexact=:error throws on a forced AC non-convergence, :report returns the diagnostic" tags =
     [:fit] setup = [IEEE13Fixtures] begin
     using TSODSO, JuMP
 

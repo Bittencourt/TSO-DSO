@@ -1,17 +1,16 @@
 # test/test_ieee123.jl
 #
-# Seam: the modified IEEE 123-node feeder fixture (DATA-03 scale target, RESEARCH Pitfall 4).
+# Seam: the modified IEEE 123-node feeder fixture (the scale target).
 #
-# RED @testitem harness (Wave 0 of Phase 7). Plan 07-02 turns these green by IMPLEMENTING
-# `ieee123_modified()` (thesis App. E, per-unit, radial, relabeled to contiguous ids). The tests
-# are NEVER edited to go green. Every item name contains "ieee123" so `occursin("ieee123", ti.name)`
+# @testitem harness for
+# `ieee123_modified()` (thesis App. E, per-unit, radial, relabeled to contiguous ids). Every item name contains "ieee123" so `occursin("ieee123", ti.name)`
 # selects them.
 #
-# RED SIGNAL (never a runner crash): the sole failing assertion is
+# GUARD (never a runner crash): the sole failing assertion if the fixture is missing is
 # `isdefined(TSODSO, :ieee123_modified)`; every structural assert sits BEHIND that guard.
 #
 # CONTRACT pinned here (the Feeder invariants `assert_radial` / `assert_magnitudes` enforce):
-#   - radial: `length(branches) == length(buses) − 1` (tie switches open, RESEARCH Pitfall 4).
+#   - radial: `length(branches) == length(buses) − 1` (tie switches open).
 #   - contiguous ids: `bus.id == position` for every bus (the framework relabel convention).
 #   - a single root at the substation/frontier terminal (thesis 150), all other buses non-root.
 #   - voltage-constrained band V ∈ [0.9, 1.1] (thesis Case B, looser than IEEE-13).
@@ -19,7 +18,6 @@
 @testitem "ieee123: fixture is radial, contiguous, single-root (ieee123)" tags = [:ieee123] begin
     using TSODSO
 
-    # RED until Wave 2 (plan 07-02 fills the ieee123_modified fixture).
     @test isdefined(TSODSO, :ieee123_modified)
 
     if isdefined(TSODSO, :ieee123_modified)
@@ -41,7 +39,6 @@ end
 @testitem "ieee123: voltage band + per-unit magnitude sanity (ieee123)" tags = [:ieee123] begin
     using TSODSO
 
-    # RED until Wave 2 (plan 07-02).
     @test isdefined(TSODSO, :ieee123_modified)
 
     if isdefined(TSODSO, :ieee123_modified)
@@ -67,7 +64,6 @@ end
     using TSODSO
     using TSODSO: ieee123_relabel_map
 
-    # RED until Wave 2 (plan 07-02 fills the fixture + its documented relabel map).
     @test isdefined(TSODSO, :ieee123_modified)
     @test isdefined(TSODSO, :ieee123_relabel_map)
 
@@ -94,7 +90,6 @@ end
     using TSODSO
     using TSODSO: ieee123_load_nodes
 
-    # RED until Wave 2 (plan 07-02 exposes the load/transit split).
     @test isdefined(TSODSO, :ieee123_modified)
     @test isdefined(TSODSO, :ieee123_load_nodes)
 
@@ -111,7 +106,7 @@ end
         # thesis Case B ships 85 spot-load nodes; the rest of the non-root buses are TRANSIT.
         @test length(load_nodes) == 85
 
-        # the fixture genuinely exercises the transit path plan 07-03 relaxes: > 0 transit buses.
+        # the fixture genuinely exercises the transit path the DSO-OPT relaxes: > 0 transit buses.
         transit = N - 1 - length(load_nodes)
         @test transit > 0
     end
@@ -122,7 +117,7 @@ end
     using TSODSO
     using TSODSO: ieee123_relabel_map
 
-    # Real per-segment Ω→pu impedance ingestion (plan 17-02, IMPED-02): branch (149,1)
+    # Real per-segment Ω→pu impedance ingestion: branch (149,1)
     # (LineCode=1, Length=0.4) must convert via to_pu_impedance on IEEE123_BASE, not the
     # retired uniform synthetic scalar.
     @test isdefined(TSODSO, :ieee123_modified)

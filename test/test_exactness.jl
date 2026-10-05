@@ -1,21 +1,20 @@
-# Seam: models/exactness.jl (PF-04). The SOCP relaxation exactness price-refusal gate.
+# Seam: models/exactness.jl. The SOCP relaxation exactness price-refusal gate.
 #
-# RED @testitem harness (Wave 1). Plan 04-05 turns these green by defining
+# @testitem harness for
 # `assert_socp_exact!(ctx; τ)` — the post-solve invariant `max|l·v − (P²+Q²)| < τ` that
 # THROWS (refusing prices) when the relaxation is inexact. Every item name contains
 # "exact" so `occursin("exact", ti.name)` selects it. The self-contained items build a
 # fixed-value model directly (no dependence on the SOCP formulation), so they go live the
 # moment `assert_socp_exact!` lands; the high-PV item additionally needs ConvexBranchFlow
-# (04-02) and the shared IEEE13Fixtures high-PV feeder.
+# and the shared IEEE13Fixtures high-PV feeder.
 
-@testitem "exact: assert_socp_exact! throws on an inexact relaxation, refusing prices (PF-04)" tags =
+@testitem "exact: assert_socp_exact! throws on an inexact relaxation, refusing prices" tags =
     [:exact] begin
     using TSODSO
     using TSODSO: SOCP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
-    # RED until plan 04-05 defines the checker.
     @test isdefined(TSODSO, :assert_socp_exact!)
 
     if isdefined(TSODSO, :assert_socp_exact!)
@@ -32,7 +31,7 @@
         @variable(model, Q[1:B, 1:T])
         @variable(model, l[1:B, 1:T])
         # A GROSSLY inexact point: l·v_from = 1·1 = 1 ≫ P²+Q² = 0  ⇒  gap = 1, and the
-        # RELATIVE cone slack gap/max(|lhs|,|rhs|) ≈ 1 ≫ rtol (WR-01: scale-free gate).
+        # RELATIVE cone slack gap/max(|lhs|,|rhs|) ≈ 1 ≫ rtol (scale-free gate).
         fix.(v, 1.0; force = true)
         fix.(v̂, 1.0; force = true)
         fix.(P, 0.0; force = true)
@@ -50,7 +49,7 @@
     end
 end
 
-@testitem "exact: assert_socp_exact! passes and reports maxgap on an exact point (PF-04)" tags =
+@testitem "exact: assert_socp_exact! passes and reports maxgap on an exact point" tags =
     [:exact] begin
     using TSODSO
     using TSODSO: SOCP
@@ -91,7 +90,7 @@ end
     end
 end
 
-@testitem "exact: relative gate refuses a base-shrunk cone slack an absolute τ would accept (WR-01)" tags =
+@testitem "exact: relative gate refuses a base-shrunk cone slack an absolute τ would accept" tags =
     [:exact] begin
     using TSODSO
     using TSODSO: SOCP
@@ -117,7 +116,7 @@ end
         # cone residual is 5e-6 — BELOW the legacy absolute τ = 1e-5, so the old gate would
         # have SILENTLY ACCEPTED this fictitious over-current (the scale-dependence hazard on a
         # large per-unit base). The RELATIVE slack, however, is ≈ 1 (the cone is fully strict),
-        # so the WR-01 gate correctly REFUSES prices regardless of the magnitude.
+        # so the relative gate correctly REFUSES prices regardless of the magnitude.
         fix.(v, 1.0; force = true)
         fix.(v̂, 1.0; force = true)
         fix.(P, 0.0; force = true)
@@ -138,7 +137,7 @@ end
     end
 end
 
-@testitem "exact: per-branch floor flags a slack cone on a small-smax branch the old flat atol missed (FIX-08)" tags =
+@testitem "exact: per-branch floor flags a slack cone on a small-smax branch the old flat atol missed" tags =
     [:exact] begin
     using TSODSO
     using TSODSO: SOCP
@@ -159,8 +158,8 @@ end
     @variable(model, l[1:B, 1:T])
     # An injected gap of 5e-7 — BELOW the OLD flat atol=1e-6 (the legacy gate would have
     # silently PASSED this), but LARGE relative to this branch's own ref_b = smax^2 = 1e-4
-    # (relative slack 5e-7 / 1e-4 = 5e-3): exactly the scale-blind-floor regression FIX-08
-    # closes (a fine-grained lateral's slack cone silently accepted because the flat atol was
+    # (relative slack 5e-7 / 1e-4 = 5e-3): exactly the scale-blind-floor regression the per-branch
+    # floor closes (a fine-grained lateral's slack cone silently accepted because the flat atol was
     # calibrated against head-branch-scale fixtures, not this branch's own thermal scale).
     fix.(v, 1.0; force = true)
     fix.(v̂, 1.0; force = true)
@@ -185,7 +184,7 @@ end
     @test_throws Exception TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)
 end
 
-@testitem "exact: head-branch lookup is orientation-agnostic — ref_b matches forward vs reversed root branch (FIX-08, plan 27-07)" tags =
+@testitem "exact: head-branch lookup is orientation-agnostic — ref_b matches forward vs reversed root branch" tags =
     [:exact] begin
     using TSODSO
     using TSODSO: SOCP
@@ -197,7 +196,7 @@ end
     # BOTH branches are unlimited, `ref_b` for BOTH falls back to the head branch's OWN flow
     # magnitude squared (`head_flow_mag2`) — this item checks that value is IDENTICAL whether
     # the head branch is stored `br.from==root` (forward) or `br.to==root` (reversed, the
-    # `test_mesh_angle_certificate.jl` CR-01/WR-03 "reversed-orientation" convention).
+    # `test_mesh_angle_certificate.jl` "reversed-orientation" convention).
     #
     # `ref_b = 20^2 + 10^2 = 500` is chosen LARGE enough that `ε*ref_b = 1e-9*500 = 5e-7`
     # STRICTLY EXCEEDS the absolute floor `τ_solver = 2e-7` (2.5x) — i.e. the relative term
@@ -266,13 +265,12 @@ end
     @test isapprox(maxgap_fwd, 3.5e-7; rtol = 1e-6)
 end
 
-@testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused (PF-04)" tags =
+@testitem "exact: high-PV / over-voltage SOCP solve stays exact, prices NOT refused" tags =
     [:exact] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: problem_class
     using JuMP
 
-    # RED until BOTH the SOCP formulation (04-02) and the exactness gate (04-05) land.
     @test isdefined(TSODSO, :ConvexBranchFlow)
     @test isdefined(TSODSO, :assert_socp_exact!)
 
@@ -286,7 +284,7 @@ end
         # λ₀. That priced export sink is the SOC-exactness enabler — it makes welfare strictly
         # decreasing in the loss current `l`, so the cone stays tight in the over-voltage
         # regime (import-only would leave losses-vs-curtailment welfare-equivalent → slack
-        # cone → refused prices). solve_welfare runs the PF-04 gate internally BEFORE the dual
+        # cone → refused prices). solve_welfare runs the exactness gate internally BEFORE the dual
         # read; reaching this line at all means prices were NOT refused.
         ctx, obj, dadp = solve_welfare(
             feeder,

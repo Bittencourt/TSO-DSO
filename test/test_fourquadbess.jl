@@ -1,21 +1,21 @@
-# Seam: devices/FourQuadBESS.jl (MESH-04). Standalone 4Q battery + inverter, no binaries.
+# Seam: devices/FourQuadBESS.jl. Standalone 4Q battery + inverter, no binaries.
 #
-# Plan 19-02 turns these green. The headline correctness risk of the phase: the App. C
+# The headline correctness risk: the App. C
 # no-binary argument (`PVBattery.jl:42-57`) is a PURE ACTIVE-POWER, 1-D argument and does
 # NOT automatically transfer once a genuine P-Q apparent-power cone and asymmetric
-# grid-charging caps are introduced (RESEARCH.md's "Complementarity Derivation Skeleton").
-# Task 1 covers construction + guard-rejection only; Task 2 (this same file, extended)
-# covers `contribute!`'s variable/cone/return shape. The post-solve numeric certificate
-# itself is plan 19-05's `assert_4q_complementarity!` and is NOT tested here. Every item
+# grid-charging caps are introduced.
+# The first group of items covers construction + guard-rejection; the later groups
+# cover `contribute!`'s variable/cone/return shape and the post-solve numeric certificate
+# `assert_4q_complementarity!`. Every item
 # name contains "fourquadbess" so `occursin("fourquadbess", ti.name)` selects it.
 
-@testitem "fourquadbess: FourQuadBESS device type exists (MESH-04)" tags = [:fourquadbess] begin
+@testitem "fourquadbess: FourQuadBESS device type exists" tags = [:fourquadbess] begin
     using TSODSO
 
     @test isdefined(TSODSO, :FourQuadBESS)
 end
 
-@testitem "fourquadbess: construction succeeds with valid, distinct caps + strict λ ordering (D-01/D-02)" tags =
+@testitem "fourquadbess: construction succeeds with valid, distinct caps + strict λ ordering" tags =
     [:fourquadbess] begin
     using TSODSO
 
@@ -24,18 +24,18 @@ end
     @test good() isa TSODSO.AbstractDevice
     @test good() isa TSODSO.FourQuadBESS{Float64}
 
-    # IN-01: a mixed-type call promotes to a common Float64 rather than MethodError.
+    # A mixed-type call promotes to a common Float64 rather than MethodError.
     mixed = TSODSO.FourQuadBESS(2, 0.95, 1, 4, 5, 6, 0, 10, 2, 1, 4, 9)
     @test mixed isa TSODSO.FourQuadBESS{Float64}
     @test mixed.Pch_max === 4.0
     @test mixed.Pdch_max === 5.0
 end
 
-@testitem "fourquadbess: constructor rejects non-positive Pch_max/Pdch_max independently (D-04)" tags =
+@testitem "fourquadbess: constructor rejects non-positive Pch_max/Pdch_max independently" tags =
     [:fourquadbess] begin
     using TSODSO
 
-    # Pch_max <= 0 must throw INDEPENDENTLY of Pdch_max's value (asymmetric caps, D-04).
+    # Pch_max <= 0 must throw INDEPENDENTLY of Pdch_max's value (asymmetric caps).
     @test_throws ArgumentError TSODSO.FourQuadBESS(
         2,
         0.95,
@@ -231,9 +231,9 @@ end
         9.0,
     )  # λ_med < λ_min
 
-    # CR-01: a NON-STRICT ordering (any equality) is rejected — same rationale as
+    # A NON-STRICT ordering (any equality) is rejected — same rationale as
     # `PVBattery` (the INTERNAL 1-D dominance argument still needs it for a fixed net p;
-    # see Task 2's re-derivation docstring for why this is still load-bearing here).
+    # see the re-derivation docstring in `FourQuadBESS.jl` for why this is still load-bearing here).
     @test_throws ArgumentError TSODSO.FourQuadBESS(
         2,
         0.95,
@@ -278,7 +278,7 @@ end
     )  # all equal
 end
 
-@testitem "fourquadbess: contribute! creates the expected variables + bounds (D-01/D-02/D-04)" tags =
+@testitem "fourquadbess: contribute! creates the expected variables + bounds" tags =
     [:fourquadbess] begin
     using TSODSO, JuMP
 
@@ -292,7 +292,7 @@ end
     p_ch, p_dch, soc, q = res.vars.p_ch, res.vars.p_dch, res.vars.soc, res.vars.q
     @test length(p_ch) == T
     @test length(p_dch) == T
-    # Phase 26 FIX-04: this golden MOVED from T to T + 1 — soc now closes the SOC recursion
+    # This golden is T + 1 (not T): soc closes the SOC recursion
     # over the WHOLE horizon (t = 1:T), linking hour-T charge/discharge into the horizon.
     @test length(soc) == T + 1
     @test length(q) == T
@@ -303,25 +303,25 @@ end
         @test upper_bound(p_dch[t]) == d.Pdch_max
         @test lower_bound(soc[t]) == d.Emin
         @test upper_bound(soc[t]) == d.Emax
-        # q is FREE inside the cone (D-03): no explicit variable bound.
+        # q is FREE inside the cone: no explicit variable bound.
         @test !has_lower_bound(q[t])
         @test !has_upper_bound(q[t])
     end
-    # soc[T + 1] (Phase 26 FIX-04) carries the SAME Emin/Emax band as every other soc entry.
+    # soc[T + 1] carries the SAME Emin/Emax band as every other soc entry.
     @test lower_bound(soc[T + 1]) == d.Emin
     @test upper_bound(soc[T + 1]) == d.Emax
 end
 
-@testitem "fourquadbess: soc0=Emin + hour-T discharge incentive drives p_dch[T] to zero (FIX-04)" tags =
+@testitem "fourquadbess: soc0=Emin + hour-T discharge incentive drives p_dch[T] to zero" tags =
     [:fourquadbess] begin
     using TSODSO, JuMP
 
-    # Phase 26 FIX-04 regression: soc is now T+1 long with the recursion closing over the
+    # Regression: soc is T+1 long with the recursion closing over the
     # WHOLE horizon (t = 1:T), so p_dch[T] always appears in a constraint.
     #
-    # Deviation (Rule 1 — fixture fix, discovered executing this task): UNLIKE PVBattery
+    # Fixture note: UNLIKE PVBattery
     # (whose charge is physically capped at zero by Ppv ≡ 0, Assumption A6), FourQuadBESS
-    # may charge from the GRID (D-02, no PV-availability limit) and its App. C utility
+    # may charge from the GRID (no PV-availability limit) and its App. C utility
     # gives a genuine, price-independent marginal benefit to charging whenever there is
     # bound headroom — so with the SAME literal fixture PVBattery uses, FourQuadBESS
     # rationally pre-charges at hours 1:(T-1) (paying a real, book-kept utility cost) to
@@ -349,13 +349,12 @@ end
     @test value(res.vars.p_dch[T]) < 1e-6
 end
 
-@testitem "fourquadbess: contribute! has NO pv_used/Ppv coupling anywhere (D-01/D-02)" tags =
+@testitem "fourquadbess: contribute! has NO pv_used/Ppv coupling anywhere" tags =
     [:fourquadbess] begin
     using TSODSO
 
-    # D-01/D-02: no PV coupling anywhere in the source file (grep-verified, mirrors the
-    # plan's acceptance criterion — checked here so it is a live regression, not just a
-    # one-time human grep).
+    # No PV coupling anywhere in the source file (a source grep, checked here so it
+    # is a live regression, not just a one-time human grep).
     src_path =
         joinpath(dirname(dirname(pathof(TSODSO))), "src", "devices", "FourQuadBESS.jl")
     src = read(src_path, String)
@@ -363,7 +362,7 @@ end
     @test !occursin("Ppv", src)
 end
 
-@testitem "fourquadbess: contribute! ties Smax/net-p/q into a SecondOrderCone (D-03/D-04)" tags =
+@testitem "fourquadbess: contribute! ties Smax/net-p/q into a SecondOrderCone" tags =
     [:fourquadbess] begin
     using TSODSO, JuMP
 
@@ -398,7 +397,7 @@ end
     @test isapprox(value(soc[1]), d.soc0; atol = 1e-6)
 end
 
-@testitem "fourquadbess: contribute! returns the widened contract with q_inject (D-09)" tags =
+@testitem "fourquadbess: contribute! returns the widened contract with q_inject" tags =
     [:fourquadbess] begin
     using TSODSO, JuMP
 
@@ -413,11 +412,11 @@ end
     @test res.utility isa QuadExpr
     @test length(res.p_inject) == T
     @test all(x -> x isa AffExpr, res.p_inject)
-    @test res.q_inject === res.vars.q               # same object, D-09
+    @test res.q_inject === res.vars.q               # same object
     @test propertynames(res) == (:vars, :p_inject, :q_inject, :utility)
 end
 
-@testitem "fourquadbess: contribute! widens soc0 to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+@testitem "fourquadbess: contribute! widens soc0 to a genuine Parameter, bit-for-bit identical default" tags =
     [:fourquadbess] begin
     using TSODSO, JuMP
 
@@ -429,7 +428,7 @@ end
     d = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
     res = TSODSO.contribute!(d, ctx; T = T)
 
-    # (a) Byte-identical default: soc0's Parameter value equals the ORIGINAL literal.
+    # (a) Bit-for-bit identical default: soc0's Parameter value equals the ORIGINAL literal.
     @test parameter_value(res.vars.soc0) == 2.0
 
     # (b) set_parameter_value changes the value with NO new variable/constraint added.
@@ -441,13 +440,13 @@ end
     @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
 end
 
-# Plan 19-05: assert_4q_complementarity! (MESH-04 clause 2) + the OLD
+# assert_4q_complementarity! + the OLD
 # assert_battery_complementarity!'s tightened mutual-exclusivity guard. The shared
-# harness below mirrors the plan's standalone-solve pattern: one FourQuadBESS, its OWN
+# harness below uses a standalone-solve pattern: one FourQuadBESS, its OWN
 # ModelContext, SOCP()/Clarabel, and a manually-populated ctx.agg_device_vars
 # stash (this fixture bypasses Aggregator on purpose, to isolate the certificate).
 
-@testitem "fourquadbess: assert_4q_complementarity! exists, is exported, callable with only ctx (D-07)" tags =
+@testitem "fourquadbess: assert_4q_complementarity! exists, is exported, callable with only ctx" tags =
     [:fourquadbess, :complementarity] begin
     using TSODSO, JuMP
 
@@ -479,7 +478,7 @@ end
     @test TSODSO.assert_4q_complementarity!(ctx2) == 0.0
 end
 
-@testitem "fourquadbess: assert_battery_complementarity! silently skips a FourQuadBESS-only stash (T-19-11)" tags =
+@testitem "fourquadbess: assert_battery_complementarity! silently skips a FourQuadBESS-only stash" tags =
     [:fourquadbess, :complementarity] begin
     using TSODSO, JuMP
 
@@ -509,11 +508,11 @@ end
     @test TSODSO.assert_battery_complementarity!(ctx; τ = 1e-9) === nothing
 end
 
-@testitem "fourquadbess: assert_4q_complementarity! defaults are scale-aware at per-unit device scale (CR-01)" tags =
+@testitem "fourquadbess: assert_4q_complementarity! defaults are scale-aware at per-unit device scale" tags =
     [:fourquadbess, :complementarity] begin
     using TSODSO, JuMP
 
-    # CR-01 regression (phase-19 code review): the ORIGINAL flat `atol = 1e-6` floor dominated
+    # Regression: the ORIGINAL flat `atol = 1e-6` floor dominated
     # the `atol + rtol·scale²` tolerance at the committed per-unit fixture scales (scale² = 4e-4
     # on the 2-bus fixture, 6.25e-6 on the IEEE-13 one), so simultaneous legs of up to ~40% of
     # an IEEE-13-scale device's rating slid under the certificate. The re-measured defaults
@@ -552,13 +551,13 @@ end
     @test TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-5)) <= 1.0
 end
 
-@testitem "fourquadbess: assert_4q_complementarity! throws on the honest D-08 boundary; report=true neutralizes it" tags =
+@testitem "fourquadbess: assert_4q_complementarity! throws on the honest boundary; report=true neutralizes it" tags =
     [:fourquadbess, :complementarity] begin
     using TSODSO, JuMP
 
-    # Deliberately-constructed negative-effective-price + grid-charging fixture (D-08):
+    # Deliberately-constructed negative-effective-price + grid-charging fixture:
     # a large, in-band-exceeding frontier price rewards grid-charging up to Pch_max
-    # (D-02: no PV-availability limit on charge) while a TIGHT upper SOC band (Emax
+    # (no PV-availability limit on charge) while a TIGHT upper SOC band (Emax
     # only 0.2 above soc0) cannot accommodate that charge without a compensating
     # discharge -- since η<1 makes VENTING a large charge via a SMALL discharge cheap
     # (asymmetric round-trip efficiency, the derivation's step 3), the solved optimum
@@ -566,7 +565,7 @@ end
     # harness's own sign convention (objective = utility - λ_test*Σp_inject, so a unit
     # of DISCHARGE/injection nets an EFFECTIVE price of -λ_test at the device), the
     # large positive λ_test here means discharging faces a genuinely NEGATIVE effective
-    # per-unit price at the binding period -- exactly the regime D-08 predicts the
+    # per-unit price at the binding period -- exactly the regime in which the
     # certificate legitimately (not buggily) refuses.
     d = TSODSO.FourQuadBESS(2, 0.5, 1.0, 8.0, 8.0, 12.0, 0.0, 1.5, 1.3, 1.0, 4.0, 9.0)
     model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
@@ -583,7 +582,7 @@ end
     prod1 = value(res.vars.p_ch[1]) * value(res.vars.p_dch[1])
     @test prod1 > 1.0   # genuine, large co-activation -- not solver noise
 
-    # (b) throws by default (Task 1's measured rtol/atol defaults).
+    # (b) throws by default (the measured rtol/atol defaults).
     @test_throws CertificateError TSODSO.assert_4q_complementarity!(ctx)
 
     # (c) report = true neutralizes the SAME violating fixture -- no exception, and the

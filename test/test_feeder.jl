@@ -1,5 +1,5 @@
-# Seam: data/Feeder.jl (DATA-01). Driven green by plan 01-02.
-@testitem "feeder: immutable JuMP-free feeder constructs from valid radial data (DATA-01)" begin
+# Seam: data/Feeder.jl.
+@testitem "feeder: immutable JuMP-free feeder constructs from valid radial data" begin
     using TSODSO
 
     # A trivial two-bus radial feeder: one root (frontier) bus, one leaf, one branch.
@@ -27,8 +27,8 @@
 
     # Construction rejects an out-of-band MAGNITUDE feeder on the LIVE path:
     # topology is valid, but bus voltage 1.5 pu is outside [0.8, 1.2], so the
-    # `assert_magnitudes` tripwire fires during `Feeder(...)` (INFRA-05). The
-    # tripwire is an explicit throw (ArgumentError), not @assert (WR-02).
+    # `assert_magnitudes` tripwire fires during `Feeder(...)`. The
+    # tripwire is an explicit throw (ArgumentError), not @assert.
     bad_mag_buses = [
         TSODSO.Bus(1, 0.95, 1.5, true),    # vmax 1.5 pu is implausible
         TSODSO.Bus(2, 0.95, 1.05, false),

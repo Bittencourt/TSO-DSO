@@ -1,18 +1,17 @@
-# Seam: data/ieee13.jl (DATA-03) — the modified IEEE 13-node built-in fixture.
+# Seam: data/ieee13.jl — the modified IEEE 13-node built-in fixture.
 #
-# Fixture-level @testitems (driven GREEN by plan 04-03). They assert that
+# Fixture-level @testitems. They assert that
 # `ieee13_modified()` constructs as a radial, magnitude-valid, per-unit `Feeder`
 # and that its topology matches thesis Table 4.1 under the node `k` → struct
 # index `k+1` shift. Item names contain "ieee13" so the `occursin(...)` filter
 # selects them.
 #
-# The GLB-CVX SOCP solve on this feeder (OPT-02) and the thesis-number ground-truth
-# regression (OPT-02/OPT-03) ARE exercised by the "ground" @testitems below (added by
-# plan 04-06). Their names contain BOTH "ieee13" and "ground" so either `occursin`
+# The GLB-CVX SOCP solve on this feeder and the thesis-number ground-truth
+# regression ARE exercised by the "ground" @testitems below. Their names contain BOTH "ieee13" and "ground" so either `occursin`
 # filter selects them; they consume the IEEE13Fixtures ground-truth calibration and run
 # the full centralized SOCP solve through `operational_oracle`.
 
-@testitem "ieee13: ieee13_modified constructs radial — 11 buses, 10 branches, root at index 1 (DATA-03)" tags =
+@testitem "ieee13: ieee13_modified constructs radial — 11 buses, 10 branches, root at index 1" tags =
     [:ieee13] begin
     using TSODSO
 
@@ -27,7 +26,7 @@
     @test eltype(feeder.branches) == TSODSO.Branch{Float64}   # per-unit Float64 fixture
 end
 
-@testitem "ieee13: fixture magnitudes & topology match thesis Table 4.1 (DATA-03)" tags =
+@testitem "ieee13: fixture magnitudes & topology match thesis Table 4.1" tags =
     [:ieee13] begin
     using TSODSO
 
@@ -44,12 +43,12 @@ end
     @test head.smax ≈ 0.0686
 
     # Interior branches are effectively unconstrained but STRICTLY inside the
-    # 0 < smax < 100 magnitude band (99.0 sentinel, Open Q2 / Assumption A4).
+    # 0 < smax < 100 magnitude band (99.0 sentinel).
     interior = feeder.branches[2:end]
     @test all(br -> br.smax == 99.0, interior)
     @test all(br -> 0 < br.smax < 100.0, feeder.branches)
 
-    # IN-01: the interior sentinel is SINGLE-SOURCED. The fixture alias, the formulation's
+    # The interior sentinel is SINGLE-SOURCED. The fixture alias, the formulation's
     # internal constant, and the canonical `SMAX_NO_LIMIT` must all be the SAME value — this
     # is the equality that the two previously-duplicated `99.0` literals silently relied on.
     @test TSODSO.IEEE13_INTERIOR_SMAX === TSODSO.SMAX_NO_LIMIT
@@ -71,19 +70,19 @@ end
 end
 
 # ----------------------------------------------------------------------------------------
-# GROUND-TRUTH SOLVE + REGRESSION (OPT-02 / OPT-03) — plan 04-06.
+# GROUND-TRUTH SOLVE + REGRESSION.
 #
 # The centralized GLB-CVX social-welfare solve every later rung (pricing, ADMM) is
 # validated against. The full ConvexBranchFlow SOCP is solved on the modified IEEE-13
-# feeder through `operational_oracle`, proven OPTIMAL + EXACT (PF-04 gate) +
+# feeder through `operational_oracle`, proven OPTIMAL + EXACT (exactness gate) +
 # cross-solver-consistent (Clarabel-SOCP vs Ipopt-NLP), and a COMPUTED golden is pinned as
 # the primary reproducibility anchor. The thesis figure `v₉[16] ≈ 1.0493` is a documented
-# APPROXIMATE cross-check (RESEARCH Open Q1 / Assumption A1), NOT a hard exact-match gate.
+# APPROXIMATE cross-check, NOT a hard exact-match gate.
 #
-# ── The ground-truth CALIBRATION (RESEARCH Open Q1 / A2–A3) ────────────────────────────
+# ── The ground-truth CALIBRATION ────────────────────────────
 # The thesis MEM price profile (Fig 4.5), exterior temperature (Fig 4.2), and per-house
 # device parametrization are only PLOTTED, and the 784-house / 112-per-node count is
-# internally inconsistent (A3), so the thesis inputs cannot be bit-reproduced. The shared
+# internally inconsistent, so the thesis inputs cannot be bit-reproduced. The shared
 # IEEE13Fixtures magnitudes are normalized SHAPES (O(0.1..1) pu) that, at full scale, draw
 # ~90× the 0.0686 pu head limit ⇒ the congestion-constrained solve is INFEASIBLE. The
 # `build_ieee13_ground_aggregators` builder rescales those shapes to a residential
@@ -92,7 +91,7 @@ end
 # the afternoon PV peak, driving a genuine over-voltage on the long node-9 lateral. This is
 # a DOCUMENTED calibration, not the thesis inputs — hence a pinned COMPUTED golden.
 #
-# ── Assumption A1 (|V| = √v) ──────────────────────────────────────────────────────────
+# ── |V| = √v ──────────────────────────────────────────────────────────
 # `ctx.pf_vars.v` is the SQUARED voltage v = |V|², so the voltage MAGNITUDE is
 # `|V| = sqrt(value(v[bus, t]))`. The thesis y-axis (Fig 4.4, "Tensión [p.u.]") plots the
 # MAGNITUDE, so `v₉[16] ≈ 1.0493` is compared against `sqrt(v)`, NOT the squared variable.
@@ -103,11 +102,11 @@ end
 #
 # ── Why `allow_export = true` ─────────────────────────────────────────────────────────
 # The PV surplus reverse-flows to the frontier; priced export is the SOC-exactness enabler
-# (PF-04) that keeps the cone `l·v = P²+Q²` tight in the over-voltage regime. Import-only
+# that keeps the cone `l·v = P²+Q²` tight in the over-voltage regime. Import-only
 # leaves losses-vs-curtailment welfare-equivalent (cone can go slack / inexact) and here is
 # INFEASIBLE (the root cannot absorb the reverse flow).
 
-@testitem "ieee13 ground: GLB-CVX SOCP solve is OPTIMAL, exact, cross-solver-consistent (OPT-02/OPT-03)" tags =
+@testitem "ieee13 ground: GLB-CVX SOCP solve is OPTIMAL, exact, cross-solver-consistent" tags =
     [:ieee13, :ground] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: NLP
@@ -121,7 +120,7 @@ end
     # Full centralized GLB-CVX SOCP solve through the oracle (SOCP routing by the
     # problem_class trait ⇒ Clarabel; allow_export lets the PV surplus reach the MEM so the
     # cone stays exact — see header). The oracle RETURNED, so `solve_welfare` passed
-    # `assert_solved!` (OPTIMAL) AND the PF-04 exactness gate (else it would have thrown).
+    # `assert_solved!` (OPTIMAL) AND the exactness gate (else it would have thrown).
     res = operational_oracle(
         feeder,
         ConvexBranchFlow(),
@@ -136,7 +135,7 @@ end
     @test isfinite(res.cost)
     @test abs(res.cost) < 1e6
 
-    # The exactness gate RAN and PASSED: max|l·v − (P²+Q²)| well under τ = 1e-5 (PF-04).
+    # The exactness gate RAN and PASSED: max|l·v − (P²+Q²)| well under τ = 1e-5.
     @test haskey(ctx.meta, :socp_maxgap)
     @test ctx.meta[:socp_maxgap] < 1e-5
 
@@ -148,12 +147,12 @@ end
     @test length(res.π) == 24
     @test all(isfinite, res.π)
 
-    # A1 sanity: `v` is the SQUARED voltage, so |V₉[16]| = sqrt(v[10, 16]) (node 9 → index
+    # Sanity: `v` is the SQUARED voltage, so |V₉[16]| = sqrt(v[10, 16]) (node 9 → index
     # 10). The over-voltage regime puts it above 1.0 but strictly below the 1.05 pu cap.
     v9_16 = sqrt(value(ctx.pf_vars.v[10, 16]))
     @test 1.0 < v9_16 < 1.05
 
-    # Cross-solver sanity (RESEARCH Pitfall 4): re-solve the SAME assembly through the NLP
+    # Cross-solver sanity: re-solve the SAME assembly through the NLP
     # factory (Ipopt) with `allow_local = true` (Ipopt reports LOCALLY_SOLVED on this convex
     # problem) and `allow_export = true`. The RSOC→nonconvex-quadratic bridge (registered in
     # solve_welfare) lets Ipopt take the cone. A doubled current from a bad cone scaling would
@@ -171,7 +170,7 @@ end
     @test isapprox(res.cost, obj2; rtol = 1e-3, atol = 1e-3)
 end
 
-@testitem "ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check (OPT-02/OPT-03)" tags =
+@testitem "ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check" tags =
     [:ieee13, :ground] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -181,30 +180,30 @@ end
     # Clarabel≈Ipopt) on the documented ground-truth calibration. They are the ground truth
     # every later rung is validated against; a live solve must reproduce them to ~1e-4, which
     # catches numerical drift (a solver bump, a formulation regression, a fixture change).
-    # They are COMPUTED values, NOT the thesis figures — the thesis inputs are figure-bound
-    # (Open Q1); the thesis `v₉[16] ≈ 1.0493` is a separate APPROXIMATE cross-check below.
+    # They are COMPUTED values, NOT the thesis figures — the thesis inputs are figure-bound;
+    # the thesis `v₉[16] ≈ 1.0493` is a separate APPROXIMATE cross-check below.
     #
     # `v` is the SQUARED voltage ⇒ |V₉[16]| = sqrt(v[10, 16]); node 9 → struct index 10; the
     # welfare has a documented (large) gap to the thesis social-welfare $1819 because the
-    # MEM/temperature profiles and house counts are figure-bound (A2/A3).
-    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
-    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
-    # see 26-POSTMERGE-TRIAGE.md. OLD 1.0436080536 -> NEW 1.03604426055989.
+    # MEM/temperature profiles and house counts are figure-bound.
+    # Re-pinned after model corrections — the battery soc[T+1] closure dominates; the
+    # flexible-load reactive draw and the :smax_rev back-feed limit also contribute.
+    # OLD 1.0436080536 -> NEW 1.03604426055989.
     const GOLDEN_V9_16 = 1.03604426055989   # |V₉[16]| = sqrt(v[10,16]); v[10,16]² ≈ 1.0891178
-    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
-    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
-    # see 26-POSTMERGE-TRIAGE.md. OLD -4823.1598620624 -> NEW -4823.496124912337 (still within
+    # Re-pinned after model corrections — the battery soc[T+1] closure dominates; the
+    # flexible-load reactive draw and the :smax_rev back-feed limit also contribute.
+    # OLD -4823.1598620624 -> NEW -4823.496124912337 (still within
     # rtol 1e-4 of the old value; re-pinned anyway per SC-6's no-silent-re-pin discipline).
     const GOLDEN_WELFARE = -4823.496124912337 # GLB-CVX welfare optimum (computed; ≠ thesis $1819)
-    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
-    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
-    # see 26-POSTMERGE-TRIAGE.md. OLD 1.4024313925 -> NEW 0.3938281171438668.
+    # Re-pinned after model corrections — the battery soc[T+1] closure dominates; the
+    # flexible-load reactive draw and the :smax_rev back-feed limit also contribute.
+    # OLD 1.4024313925 -> NEW 0.3938281171438668.
     const GOLDEN_DADP16 = 0.3938281171438668 # first-aggregator DADP at hour 16
-    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 (battery soc[T+1]) dominant, FIX-05
-    # (flexible-load reactive draw) and FIX-03 (:smax_rev back-feed limit) also contribute;
-    # see 26-POSTMERGE-TRIAGE.md. OLD 96.7166853441 -> NEW 86.84596646996015.
+    # Re-pinned after model corrections — the battery soc[T+1] closure dominates; the
+    # flexible-load reactive draw and the :smax_rev back-feed limit also contribute.
+    # OLD 96.7166853441 -> NEW 86.84596646996015.
     const GOLDEN_SUM_DADP = 86.84596646996015 # Σ_t DADP — a horizon-wide summary of the price vector
-    const THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude (Open Q1 / A1) — cross-check only
+    const THESIS_V9_16 = 1.0493             # thesis Fig 4.4 magnitude — cross-check only
 
     feeder = TSODSO.ieee13_modified()
     aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder; seed = 20260718)
@@ -220,7 +219,7 @@ end
     )
     ctx = res.ctx
 
-    # |V₉[16]| — sqrt because `v` is |V|² (A1); struct index 10 = thesis node 9, t = 16.
+    # |V₉[16]| — sqrt because `v` is |V|²; struct index 10 = thesis node 9, t = 16.
     v9_16 = sqrt(value(ctx.pf_vars.v[10, 16]))
 
     # ── HARD regression assertions on the COMPUTED golden (~1e-4 anchor) ────────────────
@@ -229,18 +228,18 @@ end
     @test isapprox(res.dadp[16], GOLDEN_DADP16; atol = 1e-3)
     @test isapprox(sum(res.dadp), GOLDEN_SUM_DADP; rtol = 1e-4)
 
-    # ── APPROXIMATE thesis cross-check — NON-FAILING (plan-checker W#2) ──────────────────
+    # ── APPROXIMATE thesis cross-check — NON-FAILING ──────────────────
     # Emit the exact gap to the thesis magnitude ALWAYS (visible in the test log), so a
     # figure-bound profile difference is observable without ever reddening the suite.
     gap = abs(v9_16 - THESIS_V9_16)
-    @info "ieee13 ground: thesis v₉[16] cross-check (Assumption A1)" v9_16 = v9_16 thesis =
-        THESIS_V9_16 gap = gap note = "gap is expected & documented (Open Q1: inputs figure-bound)"
+    @info "ieee13 ground: thesis v₉[16] cross-check" v9_16 = v9_16 thesis =
+        THESIS_V9_16 gap = gap note = "gap is expected & documented (inputs figure-bound)"
 
     # A `broken` @test NEVER fails the suite: it reports Broken when the tight tolerance is
-    # unmet and Pass when it is met. Phase 26 gap-closure re-pin (PM-06): gap moved from
-    # ≈0.0057 (Pass) to ≈0.0133 (Broken) — FIX-04/05's real physics changes (flexible-load
+    # unmet and Pass when it is met. After the model corrections the gap moved from
+    # ≈0.0057 (Pass) to ≈0.0133 (Broken) — the real physics changes (flexible-load
     # reactive draw + battery soc[T+1] linking) lower node-9's voltage further from the
-    # figure-bound thesis magnitude; see 26-POSTMERGE-TRIAGE.md. This gives a suite-visible
+    # figure-bound thesis magnitude. This gives a suite-visible
     # marker of the approximate match WITHOUT a spurious red from a figure-bound input
     # difference. Only the COMPUTED golden above uses tight HARD assertions.
     @test gap < 1e-2 broken = (gap >= 1e-2)

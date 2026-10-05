@@ -1,9 +1,9 @@
 # test/test_ieee8500.jl
 #
-# Seam: the IEEE-8500 scale-benchmark feeder fixtures (SCALE-01/02, plan 25-03). Construction/
+# Seam: the IEEE-8500 scale-benchmark feeder fixtures Construction/
 # invariant tests for BOTH committed fixtures (headline `ieee8500_modified`, MV-only control
-# `ieee8500_mv_modified`, D-02), plus the pinned corrected-transformer regression trap (T-25-07)
-# and the D-06 measured-impedance-spread reporting requirement.
+# `ieee8500_mv_modified`), plus the pinned corrected-transformer regression trap
+# and the measured-impedance-spread reporting requirement.
 #
 # HYBRID FILE (repo-established pattern, VALIDATION.md): `@testitem` blocks for TestItemRunner
 # discovery under `Pkg.test()`, PLUS a standalone `if abspath(PROGRAM_FILE) == @__FILE__ ... end`
@@ -81,7 +81,7 @@ end
     [:ieee8500] begin
     using TSODSO
 
-    # Regression trap (T-25-07): a future accidental revert to the superseded 2-winding
+    # Regression trap: a future accidental revert to the superseded 2-winding
     # placeholder formula (%Rs[1]+%Rs[2], bare Xhl) would give r_pct=1.8/x_pct=2.04, which at
     # S_base=0.5 MVA and CT5's kva=5 (ratio 500/5=100) yields r=1.80/x=2.04 pu — NOT 3.00/2.72 —
     # so this assertion fails loudly on a regression.
@@ -123,7 +123,7 @@ end
     @test all(1 <= m <= length(mv_feeder.buses) for m in mv_loads)
 end
 
-@testitem "ieee8500: D-06 measured per-unit impedance spread is reported (ieee8500)" tags =
+@testitem "ieee8500: measured per-unit impedance spread is reported" tags =
     [:ieee8500] begin
     using TSODSO
 
@@ -134,16 +134,16 @@ end
     spread_orders = log10(measured_max_pu / measured_min_pu)
 
     println(
-        "D-06 measured per-unit impedance spread: min=$(measured_min_pu) pu, " *
+        "measured per-unit impedance spread: min=$(measured_min_pu) pu, " *
         "max=$(measured_max_pu) pu, spread=$(spread_orders) orders of magnitude",
     )
 
-    # Loose, on-purpose sanity floor (D-06: report the measured spread, never engineer it
+    # Loose, on-purpose sanity floor (report the measured spread, never engineer it
     # away) — NOT a pinned regression value.
     @test spread_orders > 3.0
 end
 
-@testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up (plan 25-04)" tags =
+@testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up" tags =
     [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
@@ -157,7 +157,7 @@ end
     houses = pop[1:(end - 4)]
     caps = pop[(end - 3):end]
 
-    # Every house aggregator has exactly 3 devices (D-04: Thermostatic + Deferrable +
+    # Every house aggregator has exactly 3 devices (Thermostatic + Deferrable +
     # PVBattery, no device-count axis introduced alongside the density sweep).
     for h in houses
         @test length(h.devices) == 3
@@ -166,7 +166,7 @@ end
         @test count(d -> d isa TSODSO.PVBattery, h.devices) == 1
     end
 
-    # The 4 capacitor aggregators (D-12): Pdc == zeros(T), exactly one FixedCapacitor each.
+    # The 4 capacitor aggregators: Pdc == zeros(T), exactly one FixedCapacitor each.
     T = length(profiles.demand)
     for c in caps
         @test c.Pdc == zeros(T)
@@ -175,7 +175,7 @@ end
     end
 end
 
-@testitem "ieee8500: FixedCapacitor contribute! + DEV-05 sole-:Rq-writer invariant (plan 25-04)" tags =
+@testitem "ieee8500: FixedCapacitor contribute! + sole-:Rq-writer invariant" tags =
     [:ieee8500] begin
     using TSODSO, JuMP
 
@@ -201,7 +201,7 @@ end
         @test isempty(JuMP.linear_terms(out.p_inject[t]))
     end
 
-    # DEV-05 structural regression (T-25-10): Aggregator must remain the SOLE :Rq writer —
+    # Structural regression: Aggregator must remain the SOLE :Rq writer —
     # no `add_to_residual!(..., :Rq, ...)` call may exist outside Aggregator.jl.
     devices_dir = joinpath(dirname(pathof(TSODSO)), "devices")
     offenders = String[]
@@ -215,7 +215,7 @@ end
     @test isempty(offenders)
 end
 
-@testitem "ieee8500: build_population(:ieee13) is byte-identical to its pre-plan-25-04 golden (plan 25-04)" tags =
+@testitem "ieee8500: build_population(:ieee13) is bit-for-bit identical to its golden" tags =
     [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
@@ -223,7 +223,7 @@ end
     profiles = generate_profiles(; seed = 1, T = 24)
     pop = build_population(:default, ieee13_modified(), :ieee13, profiles, 42)
 
-    # Golden snapshot measured ONCE against the pre-plan-25-04 build_population output
+    # Golden snapshot measured ONCE against the build_population output
     # (before the :ieee8500/:ieee8500_mv branches were added to materialize.jl) — a
     # regression trap for the must-not-break invariant, not just "still runs without error."
     golden_bus_phi = [(agg.bus, agg.φ) for agg in pop]
@@ -238,7 +238,7 @@ end
     end
 end
 
-@testitem "ieee8500: build_population(:ieee8500_mv) total-load conservation (plan 25-04)" tags =
+@testitem "ieee8500: build_population(:ieee8500_mv) total-load conservation" tags =
     [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
@@ -319,20 +319,20 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @test isapprox(br.x, 2.72; atol = 1e-2)
         end
 
-        @testset "(6) D-06 measured per-unit impedance spread is reported" begin
+        @testset "(6) measured per-unit impedance spread is reported" begin
             feeder = TSODSO.ieee8500_modified()
             vals = [v for br in feeder.branches for v in (br.r, br.x) if v > 0]
             measured_min_pu = minimum(vals)
             measured_max_pu = maximum(vals)
             spread_orders = log10(measured_max_pu / measured_min_pu)
             println(
-                "D-06 measured per-unit impedance spread: min=$(measured_min_pu) pu, " *
+                "measured per-unit impedance spread: min=$(measured_min_pu) pu, " *
                 "max=$(measured_max_pu) pu, spread=$(spread_orders) orders of magnitude",
             )
             @test spread_orders > 3.0
         end
 
-        @testset "(7) build_population(:ieee8500) house/capacitor roll-up (plan 25-04)" begin
+        @testset "(7) build_population(:ieee8500) house/capacitor roll-up" begin
             profiles = generate_profiles(; seed = 1, T = 24)
             feeder = TSODSO.ieee8500_modified()
             pop = build_population(:default, feeder, :ieee8500, profiles, 7)
@@ -357,7 +357,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
         end
 
-        @testset "(8) FixedCapacitor contribute! + DEV-05 sole-:Rq-writer invariant (plan 25-04)" begin
+        @testset "(8) FixedCapacitor contribute! + sole-:Rq-writer invariant" begin
             model = JuMP.Model()
             ctx = TSODSO.ModelContext(model)
             T = 4
@@ -392,7 +392,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @test isempty(offenders)
         end
 
-        @testset "(9) build_population(:ieee13) byte-identical golden (plan 25-04)" begin
+        @testset "(9) build_population(:ieee13) bit-for-bit identical golden" begin
             profiles = generate_profiles(; seed = 1, T = 24)
             pop = build_population(:default, ieee13_modified(), :ieee13, profiles, 42)
 
@@ -408,7 +408,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
         end
 
-        @testset "(10) build_population(:ieee8500_mv) total-load conservation (plan 25-04)" begin
+        @testset "(10) build_population(:ieee8500_mv) total-load conservation" begin
             profiles = generate_profiles(; seed = 1, T = 24)
             seed = 7
             T = 24
