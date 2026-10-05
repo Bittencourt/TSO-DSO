@@ -182,12 +182,20 @@ def selftest():
         ("bare_nn", j(["see ", "36", "-", "22", ":"])),
         ("bare_nn", j(["(", "26", "-", "07", ": device_vars"])),
         ("bare_nn", j(["", "36", "-", "21", "/22"])),
+        # Continued ids and glued / Unicode-dash plan references.
+        ("bare_nn", j(["see ", "36", "-", "22", "-PL", "AN for"])),
+        ("bare_nn", j(["in ", "36", "-", "22", "-", "01"])),
+        ("bare_nn", j(["", "36", "-", "22", "-SUM", "MARY"])),
+        ("plan", j(["pl", "an", "06", "-", "02"])),
+        ("plan", j(["pl", "an ", "06", "\u2013", "02"])),
+        ("plan", j(["pl", "an ", "06", "\u2011", "02"])),
     ]
     negatives = ["3-phase", "T-24", "IEEE-8500", "IEEE-123", "2026-10-04", "0.10-0.12",
                  "eq. 3.43", "(3.31)", "Gan-Low 2015", "12:30-13:45", "0.10-0.12.",
                  "hours 17-20", "lines 69-74", "pp. 89-90", "iterations 23-24",
                  "c_op = [[0.5]]", "under memory pressure", "a research roadmap",
-                 "the review of Farivar & Low", "Taskforce 12"]
+                 "the review of Farivar & Low", "Taskforce 12", "IEEE-8500-node",
+                 "# 00\u201305 overnight trough", "explanation 06-02x", "hours 17-20-22"]
     ok = True
     for rule, text in list(positives.items()) + extra_positives:
         if not R.RULES[rule].search(text):

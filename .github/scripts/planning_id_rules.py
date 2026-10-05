@@ -12,13 +12,18 @@ PFX = (r'(?:FIX|ARCH|CR|WR|IN|PM|BILEV|MESH|SCALE|SEAM|DATA|INFRA|PF|HYG|REACT|E
 
 _RAW = {
     'phase':    r'(?i)\bphases?[\s-]?\d+',
-    # `plan 06-02` and the hyphenated `plan-06-02` form.
-    'plan':     r'(?i)\bplans?[\s-]+\d{1,2}-\d{2}\b',
+    # `plan 06-02`, the hyphenated `plan-06-02`, the glued `plan06-02` and Unicode-dash forms
+    # (`plan 06\u201302`, non-breaking hyphen) of a plan reference.
+    'plan':     r'(?i)\bplans?[\s\-\u2011\u2013]*\d{1,2}[\-\u2011\u2013]\d{2}\b',
     # Any two-digit `NN-NN` (phases >= 40, plans >= 21 included); ascending, unpadded pairs
     # such as line/page/hour ranges (`23-24`, `89-90`, `17-20`) are filtered out below.
     # Sentence/label punctuation after the pair still counts (`36-22.`, `36-22:`, `36-21/22`);
     # decimals (`0.10-0.12`), clock times (`12:30-13:45`) and dates stay excluded.
-    'bare_nn':  r'(?<![\w.:/\-])(\d\d)-(\d\d)(?![\d\w\-])(?!/\D)(?!\.\d)(?!:\d)',
+    # A trailing `-` still counts when it continues a planning artifact/task id
+    # (`36-22-PLAN`, `36-22-SUMMARY`, `36-22-01`). Bare Unicode-dash pairs (`36\u201322`) are
+    # deliberately NOT matched: the tree has many zero-padded en-dash hour ranges.
+    'bare_nn':  (r'(?<![\w.:/\-])(\d\d)-(\d\d)(?![\d\w])(?!-(?!PLAN|SUMMARY|\d\d))'
+                 r'(?!/\D)(?!\.\d)(?!:\d)'),
     'dec':      r'\b[Dd]-\d{1,2}\b',
     'reqid':    r'\b' + PFX + r'-\d{1,3}[a-z]?\b',
     'wave':     r'(?i)\bwaves?(?:[\s-]?\d)?\b',
