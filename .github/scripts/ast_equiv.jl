@@ -13,12 +13,13 @@
 #                       with --strings to list them. Exit 1 on any DIFF.
 #   --strings         : informational list of added/removed non-docstring string literals
 #   --literals        : compare sorted multiset of numeric literals (Number leaves)
-#   --allow-new       : a path absent at REF prints NEW and is accepted (default: failure)
+#   --allow-new       : a path absent at REF but present in the working tree prints NEW and is
+#                       accepted (default: failure); a path absent in both is always an ERROR
 #
 # Fail-closed: an unknown/unresolvable REF, a path outside the repository, or a path absent at
 # REF (without --allow-new) is never reported as success. Paths may be absolute or relative to
 # the current directory; they are mapped to repository-root-relative paths for `git show`.
-# Exit: 0 all EQUAL; 1 any DIFF/MISSING/NEW; 2 usage error, bad REF or path outside the repo.
+# Exit: 0 all EQUAL; 1 any DIFF/MISSING/NEW/nonexistent path; 2 usage error, bad REF or path outside the repo.
 
 # Docstring attachment: `"doc" f` lowers to `Core.@doc "doc" f` (GlobalRef) and an explicit
 # `@doc "doc" f` keeps the Symbol; in both the docstring is args[3] (after the LineNumberNode).
@@ -147,12 +148,19 @@ function main(args)
         nchecked += 1
         old = gitshow(root, ref, p)
         file = joinpath(root, p)
+        # Working-tree existence is checked FIRST: a path absent both at REF and on disk is a
+        # typo/stale path, never a NEW file (even under --allow-new).
+        if !isfile(file)
+            println(old === nothing ? "ERROR: $p0 exists neither at $ref nor in the working tree" :
+                                      "MISSING $p (absent in working tree)")
+            bad = true
+            continue
+        end
         if old === nothing
             println("NEW $p", allow_new ? "" : " (absent at $ref; pass --allow-new to accept)")
             allow_new || (bad = true)
             continue
         end
-        isfile(file) || (println("MISSING $p (absent in working tree)"); bad = true; continue)
         new = read(file, String)
         eo, en = Meta.parseall(old), Meta.parseall(new)
         if mode === :ast || mode === :astall
@@ -221,6 +229,8 @@ function selftest()
         check("new file fails", q("HEAD", "b.jl"), 1)
         check("new file allowed", q("--allow-new", "HEAD", "b.jl"), 0)
         check("no jl paths", q("HEAD", "README.md"), 2)
+        check("nonexistent path fails", q("HEAD", "nope.jl"), 1)
+        check("nonexistent path fails under --allow-new", q("--allow-new", "HEAD", "nope.jl"), 1)
         write(joinpath(d, "a.jl"), "x = 1.0\n")
         check("literal type change", q("HEAD", "a.jl"), 1)
         write(joinpath(d, "a.jl"), "# comment\nx = 1\n")
