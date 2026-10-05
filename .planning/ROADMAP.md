@@ -544,7 +544,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 35-03-PLAN.md — measurements: memory profile, SC1 bypass diagnostic, headline density 0.1 T=10 post-refactor
+- [x] 35-03-PLAN.md — measurements: memory profile, SC1 bypass diagnostic, headline density 0.1 T=10 post-refactor
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -616,7 +616,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 32. Declarative Power-Flow & Strategy Dispatch | v4.0 | 7/7 | Complete    | 2026-10-03 |
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
-| 35. IEEE-8500 Scale After Refactor | v4.0 | 2/5 | In Progress|  |
+| 35. IEEE-8500 Scale After Refactor | v4.0 | 3/5 | In Progress|  |
 | 36. Code & Export Cleanup | v4.0 | 0/TBD | Not started | - |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 
