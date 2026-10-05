@@ -281,20 +281,25 @@ const LABEL_CERTIFIED = mode_label(ReactiveMode.CERTIFIED)
     count_failures(feeder, aggs, λ₀; reactive_consensus::ReactiveMode.T, n_repeats=20, seed_offset=0) -> Int
 
 Calls `solve_admm(feeder, ConvexBranchFlow(), aggs; T, λ₀, ρ=RHO0, ..., reactive_consensus)`
-`n_repeats` times inside a `try/catch`, incrementing a failure counter on any caught exception
-and `@warn`-logging it. The seeded fixtures (`build_ieee13_ground_aggregators`/
+`n_repeats` times inside a `try/catch`, incrementing a failure counter on a caught NUMERICAL
+failure and `@warn`-logging it. The seeded fixtures (`build_ieee13_ground_aggregators`/
 `build_ieee123_aggregators`) are fully deterministic given a fixed seed, so each repeat instead
 varies a tiny (`1e-9`-scale) numerical jitter on λ₀ — enough to perturb the interior-point
 solver's exact iterate path (and thus exercise any conditioning-dependent flake) without
 changing the economically-meaningful problem data. Returns the number of caught failures
-(0 <= failures < n_repeats).
+(0 <= failures <= n_repeats).
 
-Fail-loud rules (a refused configuration is not a flake):
+What counts as a flake (typed catch, everything else fails loud):
 
-  - an `ArgumentError` (a configuration refusal such as the `build_dso_opt` population guard) is
-    rethrown, never counted;
-  - if EVERY repeat failed, this throws instead of returning `n_repeats`: a 100% failure rate is
-    a broken setup, not a flake measurement, and no findings file must be written from it.
+  - ONLY `TSODSO.SolveFailedError` (an untrustworthy solver status such as Clarabel
+    `NUMERICAL_ERROR`, wrapped by `assert_solved!`) and `TSODSO.CertificateError` (a refused
+    final-consolidation certificate) are counted as NUMERICAL_ERROR-class flakes;
+  - every other exception is rethrown and aborts the run before any findings file is written:
+    `InterruptException` (Ctrl-C stops the script cleanly), `ArgumentError` (a configuration
+    refusal such as the `build_dso_opt` population guard), `ConvergenceError`, and data/code
+    errors (`KeyError`, `BoundsError`, `DimensionMismatch`, `OutOfMemoryError`, ...);
+  - a 100% numerical-failure rate is therefore a genuine (if alarming) measurement: it is
+    reported as such, with a loud `@warn`, rather than treated as a configuration error.
 """
 function count_failures(
     feeder,
@@ -327,18 +332,18 @@ function count_failures(
                 reactive_consensus = reactive_consensus,
             )
         catch e
-            e isa ArgumentError && rethrow()   # configuration refusal, not a flake
+            # Only typed numerical failures are flakes; Ctrl-C, configuration refusals and
+            # code/data errors propagate (never counted, never written to the findings file).
+            (e isa TSODSO.SolveFailedError || e isa TSODSO.CertificateError) || rethrow()
             failures += 1
             @warn "solve_admm failed during reactive-flake-rate measurement" repeat = i reactive_consensus exception =
                 (e, catch_backtrace())
         end
     end
     if failures == n_repeats
-        error(
-            "reactive_flake_rate: all $n_repeats repeats failed for " *
-            "reactive_consensus = $(mode_label(reactive_consensus)); this is a broken setup, not " *
-            "a flake measurement. Refusing to write findings (see the @warn logs above).",
-        )
+        @warn "reactive_flake_rate: 100% numerical failure rate — all $n_repeats repeats raised " *
+              "SolveFailedError/CertificateError for reactive_consensus = " *
+              "$(mode_label(reactive_consensus)) (measured, not a configuration error)"
     end
     return failures
 end
