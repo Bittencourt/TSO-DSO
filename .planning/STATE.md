@@ -4,13 +4,13 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-05T10:54:55.136Z"
-last_activity: 2026-10-05 -- Phase 36 planning complete
+last_updated: "2026-10-05T11:01:58.157Z"
+last_activity: 2026-10-05
 progress:
   total_phases: 12
   completed_phases: 10
   total_plans: 108
-  completed_plans: 87
+  completed_plans: 88
   percent: 81
 ---
 
@@ -21,19 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 36 — code & export cleanup
+**Current focus:** Phase 36 — Code & Export Cleanup
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: 36 (Code & Export Cleanup) — EXECUTING
+Plan: 2 of 22
 Status: Ready to execute
   Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
   `/gsd-secure-phase` not run for Phases 29–34 (security enforcement default-on).
   Remaining v4.0 phases: 35 (IEEE-8500 scale), 36 (code & export cleanup), 37 (test infra & hygiene).
-Last activity: 2026-10-05 -- Phase 36 planning complete
+Last activity: 2026-10-05
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
