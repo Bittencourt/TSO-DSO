@@ -212,7 +212,7 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
  5. `@objective(model, Min, Σ_t λ₀[t]·p_import[t] + 0.5·ρ·Σ_{j,t} pag_dso[j,t]²)` — the FIXED
     ρ-penalty built ONCE. Each ADMM iteration mutates only the LINEAR coefficient of each
     `pag_dso[j,t]` via `set_objective_coefficient` (see [`solve_dso!`](@ref)) — no rebuild.
-λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
+    λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
     bilinear `λ·pag` the conic backend rejects).
 
 Load nodes are the aggregator buses (the root carries no aggregator). A non-root bus WITHOUT an
