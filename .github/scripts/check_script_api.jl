@@ -373,7 +373,12 @@ function ref!(fs, x)
         else
             for a in A
                 if a isa Expr && a.head === :(=)
-                    bind!(fs, a.args[1]; fn = true); ref!(fs, a.args[2])
+                    # Only `const` or a lambda/function RHS binds a callable. `local`/`global`
+                    # `x = f(...)` binds a plain variable: its RHS call is a USE, so
+                    # `local max_jump = max_jump(tr)` is still flagged.
+                    rhs = a.args[2]
+                    isfn = h === :const || (rhs isa Expr && rhs.head in (:->, :function))
+                    bind!(fs, a.args[1]; fn = isfn); ref!(fs, rhs)
                 else
                     h === :const ? ref!(fs, a) : bind!(fs, a)
                 end
@@ -570,6 +575,12 @@ function selftest()
          "compound += does not legitimise later calls"),
         ("using TSODSO\nv = zeros(3)\nv .-= max_jump.(t)", 1, "broadcast compound .-="),
         ("using TSODSO\ns = 0\ns += 1\nprintln(s)", 0, "compound on a local is fine"),
+        # local/global assignment binds a variable, never a function
+        ("using TSODSO\nfunction g(tr)\n    local max_jump = max_jump(tr)\nend", 1,
+         "local x = x(...) RHS call"),
+        ("using TSODSO\nglobal max_jump = max_jump(tr)", 1, "global x = x(...) RHS call"),
+        ("using TSODSO\nglobal h = x -> 2x\ny = h(1)", 0, "global lambda binds a callable"),
+        ("using TSODSO\nconst h = identity\ny = h(1)", 0, "const binds a callable"),
         # unrooted / aliased submodule chains and renamed imports
         ("using TSODSO\nx = ReactiveMode.ON", 1, "unrooted submodule typo"),
         ("using TSODSO\nsolve_admm(a, b; reactive_consensus = ReactiveMode.Live)", 1,
