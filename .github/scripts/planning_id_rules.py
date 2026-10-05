@@ -33,9 +33,11 @@ RULES = {k: re.compile(v) for k, v in _RAW.items()}
 THESIS_MIXED = re.compile(r'\(3\.\d{2}\)|(?i:thesis\s+3\.\d)|(?i:\beqs?\.? ?3\.\d)')
 
 SCOPE_ROOTS = ["src", "ext", "test", "scripts", "docs/literate", "docs/make.jl",
-               "docs/src", "README.md", ".github/workflows"]
+               "docs/src", "README.md", ".github/workflows/CI.yml"]
 SCOPE_EXTS = {".jl", ".py", ".sh", ".md", ".yml", ".toml"}
 EXCLUDE_PREFIXES = [".planning/"]
+# Roots restricted to a narrower extension set (docs/src: Markdown pages only).
+ROOT_EXTS = {"docs/src": {".md"}}
 
 
 def repo_root():
@@ -53,6 +55,9 @@ def iter_scope_files(paths=None):
         if not any(f == r or f.startswith(r.rstrip("/") + "/") for r in SCOPE_ROOTS):
             continue
         if not any(f.endswith(e) for e in SCOPE_EXTS):
+            continue
+        narrow = [e for r, e in ROOT_EXTS.items() if f.startswith(r + "/")]
+        if narrow and not any(f.endswith(x) for x in narrow[0]):
             continue
         if paths:
             ps = [p.rstrip("/") for p in paths]

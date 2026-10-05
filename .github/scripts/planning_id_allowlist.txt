@@ -1,0 +1,2 @@
+# Planning-identifier guard allowlist: path<TAB>regex-fragment<TAB>reason (one per line).
+# Intentionally empty: every hit is fixed by rewording, not exempted.
