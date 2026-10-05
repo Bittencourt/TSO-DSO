@@ -4,13 +4,13 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-04T23:40:51.370Z"
-last_activity: 2026-10-04
+last_updated: "2026-10-05T00:07:06.804Z"
+last_activity: 2026-10-05
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 86
-  completed_plans: 83
+  completed_plans: 84
   percent: 75
 ---
 
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 35 (IEEE-8500 Scale After Refactor) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
   Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
   `/gsd-secure-phase` not run for Phases 29–34 (security enforcement default-on).
   Remaining v4.0 phases: 35 (IEEE-8500 scale), 36 (code & export cleanup), 37 (test infra & hygiene).
-Last activity: 2026-10-04
+Last activity: 2026-10-05
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -193,6 +193,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 31 P04 | 95min | 2 tasks | 3 files |
 | Phase 31 P05 | 20min | 2 tasks | 8 files |
 | Phase 31 P06 | 35min | 2 tasks | 1 files |
+| Phase 35 P02 | 40m | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -266,6 +267,7 @@ Recent decisions affecting current work:
 - [Phase 31]: 31-05 docs refresh: integer-extension deviation documented as two independent axes (target variable y_inv/N2 vs x_inv/N1; mechanism Laporte-Louveaux vs Lagrangian relaxation)
 - [Phase 31]: User force-added (git add -f) the two refreshed writeup PDFs despite the project-wide .gitignore convention (track .typ source, regenerate PDF); .gitignore itself left untouched
 - [Phase 31]: 31-06 (phase close): golden-move audit exit 0 (base 36e3c1e); consolidated 31-FINDINGS.md; orchestrator certified full suite 31190/0/0/5 (+99 over Phase-30, zero regressions, zero new broken); post-certification code review found 2 OPEN critical findings (CR-01 integer cycle-detection false positive, CR-02 vacuous VE selection on the shipped interior-cap fixture) -- user stopped autonomous mode before a fix round, so phase is test-certified but explicitly NOT marked verified
+- [Phase 35]: 35-02: harness ADMM gate = hybrid floor; --admm-atol finite only; Inf only in labelled DIAGNOSTIC_BYPASS
 
 ### Roadmap Evolution
 
@@ -502,7 +504,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-04T23:40:51.312Z
+Last session: 2026-10-05T00:07:01.860Z
 Stopped at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
 Resume file: None
 
