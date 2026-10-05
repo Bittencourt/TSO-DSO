@@ -1,13 +1,13 @@
 # src/admm/DsoOpt.jl
 #
-# SEAM: DSO-OPT — the whole-network SOCP ADMM subproblem (ADMM-01).
-# OWNER: plan 06-03 (Wave 2).
+# SEAM: DSO-OPT — the whole-network SOCP ADMM subproblem.
+# Declares its own exports per the include-graph convention.
 #
-# WHAT IT IS (RESEARCH Pattern 4 / thesis eq. 3.47):
+# WHAT IT IS (thesis eq. 3.47):
 #   The network subproblem that REUSES `ConvexBranchFlow.contribute!` verbatim (P, Q, v, v̂,
 #   l, cone, vdrop, cpydrop, smax, :Rp/:Rq) plus the priced FREE-SIGN frontier import — the
-#   SOC-exactness enabler (PF-04). Block 2 of the 2-block split derived from the single
-#   augmented Lagrangian (RESEARCH Pattern 1):
+#   SOC-exactness enabler. Block 2 of the 2-block split derived from the single
+#   augmented Lagrangian:
 #
 #       min_{P,Q,v,v̂,l,p_import,q_import,pag_dso}
 #             Σ_t λ₀[t]·p_import[t]                            (frontier active cost)
@@ -21,10 +21,10 @@
 #
 #   `pag_dso_j := −netflow_j` is an explicit coupling variable so the objective touches a
 #   SINGLE variable per (j,t) — the key that makes `set_objective_coefficient` a one-call
-#   update (ADMM-03). Solver via `select_optimizer(SOCP())` (INFRA-02); gated on
-#   `assert_solved!(...; dual=true)` (INFRA-03). `assert_socp_exact!(dso.ctx)` runs on the
-#   CONVERGED solve only (PF-04, RESEARCH Pitfall 3) — never mid-loop (early iterates are
-#   legitimately inexact). Never model λ_j as a `Parameter` (Pitfall 1).
+#   update. Solver via `select_optimizer(SOCP())`; gated on
+#   `assert_solved!(...; dual=true)`. `assert_socp_exact!(dso.ctx)` runs on the
+#   CONVERGED solve only — never mid-loop (early iterates are
+#   legitimately inexact). Never model λ_j as a `Parameter`.
 #
 # REACTIVE CLOSURE (mirrors the centralized `solve_welfare` SOCP path): `ConvexBranchFlow`
 # sets `reactive = true` (allocates :Rq at every bus), so the whole-network Q balance MUST be
@@ -34,13 +34,13 @@
 # dual-ascent) into :Rq; a free-sign `q_import` at the root supplies it; then :Rq is pinned to
 # zero at ALL nodes and registered as :balance_q.
 #
-# REACT-01 (Phase 16, `reactive_consensus` kwarg, default OFF): when CERTIFIED, the
+# Reactive consensus (`reactive_consensus` kwarg, default OFF): when CERTIFIED, the
 # per-load-node CONSTANT `q_draw[j][t]` injected above is instead promoted to a genuine JuMP
 # coupling variable `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), PINNED to the same fixed
 # target via an explicit equality `qag_dso[j,t] == q_draw[j][t]` (registered `:qag_pin`) — this
 # is a ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3: `AgrOpt.qag`/
 # `q_draw` never moves, so no ρ-penalty is needed). The DEFAULT (`false`) path is
-# BYTE-IDENTICAL to today (REACT-03); `:balance_q`'s own registration is UNCHANGED either way.
+# bit-for-bit identical to the pre-reactive-consensus build;  `:balance_q`'s own registration is UNCHANGED either way.
 
 using JuMP
 
@@ -55,11 +55,11 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
 # Fields
 
   - `model::Model` — the SOCP model, built once (`select_optimizer(SOCP())`); re-solved via
-    `set_objective_coefficient` only (ADMM-03, never rebuilt).
+    `set_objective_coefficient` only (never rebuilt).
   - `ctx::ModelContext` — the shared context; `ctx.pf_vars` carries `:l` (the SOC cone is
-    present), `ctx.feeder`/`[:T]` feed the PF-04 exactness gate, `:socp_maxgap` is
-    stashed after a `check_exact` solve, and `:ladder_baseline` (RESET-01, quick task
-    260825-eme) holds the AS-BUILT Clarabel conditioning-ladder attributes snapshotted once by
+    present), `ctx.feeder`/`[:T]` feed the SOC exactness gate, `:socp_maxgap` is
+    stashed after a `check_exact` solve, and `:ladder_baseline` (see the ladder reset in
+    `solve_dso!`) holds the AS-BUILT Clarabel conditioning-ladder attributes snapshotted once by
     `_snapshot_ladder_attrs` in `build_dso_opt`; `solve_dso!` reads it back to restore the
     model to this baseline immediately before every `check_exact = true` (FINAL/converged)
     solve.
@@ -71,12 +71,12 @@ The built-ONCE whole-network `DSO-OPT` SOCP subproblem (thesis eq. 3.47), block 
     the SAME `qag_dso` container stashed at `ctx.meta[:qag_dso]`, carrying its own
     `0.5·ρ_q·qag[j,t]²` quadratic objective penalty, mutated in place by [`set_rho_q!`](@ref).
   - `p_import` — the FREE-SIGN active frontier exchange `p_import[t]` at `feeder.root` (>0 buy,
-    <0 sell surplus to the MEM at λ₀); priced export is the SOC-exactness enabler (PF-04).
+    <0 sell surplus to the MEM at λ₀); priced export is the SOC-exactness enabler.
   - `load_nodes::Vector{Int}` — the non-root buses carrying an aggregator (== every non-root bus,
     guarded at build time); the `j` axis of `pag`.
   - `T::Int` — the day-ahead horizon (thesis A1).
   - `feeder` — the network the SOCP is built on.
-  - `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE (IN-01): under adaptive ρ the
+  - `ρ::Float64` — the INITIAL penalty ρ₀ captured at build time. NOTE: under adaptive ρ the
     LIVE penalty lives ONLY in the model's quadratic objective coefficients (mutated by
     [`set_rho!`](@ref)); this immutable field is NEVER updated, so after the first ρ adaptation it
     holds ρ₀, not the current penalty. Do not read it as "the current ρ". Currently unused elsewhere.
@@ -98,15 +98,15 @@ end
 """
     _snapshot_ladder_attrs(model::Model) -> Dict{String,Any}
 
-RESET-01 (quick task 260825-eme). Read back the current value of each of the 4 Clarabel
+Ladder reset helper: read back the current value of each of the 4 Clarabel
 conditioning-ladder attributes named by [`LADDER_ATTR_NAMES`](@ref) directly from `model` via
 `get_optimizer_attribute`, and return them as a `Dict`. Called EXACTLY ONCE, inside
 `build_dso_opt`, immediately after the model is constructed and BEFORE any solve or
 `solve_with_retry!` escalation can possibly have touched it — so the returned Dict captures
 the genuine AS-BUILT factory configuration of the selected backend (e.g. Clarabel's own
 defaults `static_regularization_constant = 1.0e-8`, etc.), never a value hardcoded in this
-file. If the backend does not expose a given attribute (e.g. a non-Clarabel factory swap,
-`INFRA-02`), that key is simply omitted from the Dict rather than raising — a graceful
+file. If the backend does not expose a given attribute (e.g. after a non-Clarabel
+solver-factory swap), that key is simply omitted from the Dict rather than raising — a graceful
 degradation so `solve_dso!` keeps working under any factory backend; `_restore_ladder_attrs!`
 below then no-ops for the missing key instead of failing the build.
 """
@@ -118,7 +118,7 @@ function _snapshot_ladder_attrs(model::Model)
         catch
             # Backend doesn't expose this Clarabel-specific attribute — omit it; restore
             # then no-ops for this key instead of failing the build (graceful degradation,
-            # INFRA-02: solve_dso! must keep working under any factory backend).
+            # solve_dso! must keep working under any factory backend).
         end
     end
     return baseline
@@ -127,9 +127,9 @@ end
 """
     _restore_ladder_attrs!(model::Model, baseline::Dict{String,Any}) -> Nothing
 
-RESET-01 (quick task 260825-eme). Write each `(name, value)` pair in `baseline` back onto
-`model` via `set_optimizer_attribute`, undoing whatever `solve_with_retry!` escalation (WR-01:
-STICKY, never restored on its own) may have accumulated on the model since it was built.
+Ladder reset helper: write each `(name, value)` pair in `baseline` back onto
+`model` via `set_optimizer_attribute`, undoing whatever `solve_with_retry!` escalation
+(STICKY, never restored on its own) may have accumulated on the model since it was built.
 Called from `solve_dso!` immediately before the FINAL/converged (`check_exact = true`) solve,
 so the published solve always runs at the AS-BUILT baseline captured once by
 `_snapshot_ladder_attrs` in `build_dso_opt`, never an inherited mid-loop escalation.
@@ -154,11 +154,11 @@ end
 """
     _any_flexible_reactive(aggregators) -> Bool
 
-PM-03 (post-merge triage, cluster D). Returns `true` iff ANY aggregator in `aggregators` has a
+Returns `true` iff ANY aggregator in `aggregators` has a
 `:devices` property containing at least one member for which `dv isa FourQuadBESS || is_flexible_load(dv)` holds — i.e. a device whose reactive decision is NOT the constant
 `-Pdc*tanφ` draw alone (a `FourQuadBESS`'s live `q_inject`, or a flexible-load member's
-`p_inject*tanφ` term the centralized `Aggregator.contribute!` folds into `:Rq` since FIX-05,
-plan 26-04/07). Shared (unexported — same `TSODSO` module) by both `build_dso_opt`'s and
+`p_inject*tanφ` term the centralized `Aggregator.contribute!` folds into `:Rq` in the centralized model).
+Shared (unexported — same `TSODSO` module) by both `build_dso_opt`'s and
 `solve_admm`'s smart `reactive_consensus` default below, so a caller of EITHER function who does
 not pass `reactive_consensus` explicitly gets `LIVE` whenever such a member is present, keeping
 ADMM's DSO-OPT subproblem matched to the centralized model's reactive draw by default. Returns
@@ -181,14 +181,12 @@ end
 Build the whole-network `DSO-OPT` SOCP (thesis eq. 3.47) ONCE, reusing the validated
 [`ConvexBranchFlow`](@ref) branch-flow builder verbatim and mirroring the centralized
 [`solve_welfare`](@ref) frontier + balance-closure path, but closing each LOAD node with an
-explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. Steps
-(RESEARCH Pattern 4):
+explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. Steps:
 
- 1. `model = Model(select_optimizer(SOCP()))` (INFRA-02 — never names a concrete solver);
+ 1. `model = Model(select_optimizer(SOCP()))` (never names a concrete solver);
     register the `RSOCtoNonConvexQuad` / `SOCtoNonConvexQuad` cross-solver bridges exactly as
     `solve_welfare`; wrap in a [`ModelContext`](@ref); stash `ctx.feeder` / `[:T]` for
-    the PF-04 gate, and `ctx.meta[:ladder_baseline] = _snapshot_ladder_attrs(model)`
-    (RESET-01, quick task 260825-eme) — taken at THIS exact point, before any solve or
+    the SOC exactness gate, and `ctx.meta[:ladder_baseline] = _snapshot_ladder_attrs(model)`, taken at THIS exact point, before any solve or
     `solve_with_retry!` escalation can have touched the model, so it captures the genuine
     as-built factory conditioning rather than a hardcoded Clarabel default; `solve_dso!`
     restores it before every FINAL/converged solve.
@@ -198,8 +196,7 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
  3. Add the FREE-SIGN priced frontier `p_import[t]` (active, 3.31) and `q_import[t]` (reactive,
     3.32) at `feeder.root`, injected into `:Rp[root]` / `:Rq[root]` (mirrors
     `solve_welfare(...; allow_export = true)`). Priced export makes the objective strictly
-    decreasing in the loss current `l`, keeping the SOC cone TIGHT (exact) under reverse flow
-    (PF-04, RESEARCH Pitfall 3).
+    decreasing in the loss current `l`, keeping the SOC cone TIGHT (exact) under reverse flow.
  4. Close BOTH balances (mirroring the centralized SOCP so ADMM welfare + duals match on
     IEEE-13):
       + ACTIVE: for each load node `j` introduce `pag_dso[j,t]` and inject it into `:Rp[j]`;
@@ -208,65 +205,64 @@ explicit coupling variable `pag_dso_j[t]` instead of an aggregator injection. St
       + REACTIVE: inject each load node's CONSTANT reactive draw `−Pdc·tan(acos φ)` (thesis 3.23,
         inelastic per A3) into `:Rq[j]`, `q_import` supplies the root; pin `:Rq[j,t] == 0` at all
         buses, register `:balance_q`. This is a FIXED constant (no μ dual-ascent — reactive is
-        not a consensus quantity). REACT-01 (`reactive_consensus = ReactiveMode.CERTIFIED`): promote this constant
+        not a consensus quantity). Certified mode (`reactive_consensus = ReactiveMode.CERTIFIED`): promote this constant
         to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to the same fixed target via
         the registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — still a one-shot
         certified dual read, NOT a live consensus ascent (Assumption A1/A3).
  5. `@objective(model, Min, Σ_t λ₀[t]·p_import[t] + 0.5·ρ·Σ_{j,t} pag_dso[j,t]²)` — the FIXED
     ρ-penalty built ONCE. Each ADMM iteration mutates only the LINEAR coefficient of each
-    `pag_dso[j,t]` via `set_objective_coefficient` (see [`solve_dso!`](@ref)) — no rebuild
-    (ADMM-03). λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
-    bilinear `λ·pag` the conic backend rejects; RESEARCH Pitfall 1).
+    `pag_dso[j,t]` via `set_objective_coefficient` (see [`solve_dso!`](@ref)) — no rebuild.
+λ_j is a plain `Float64` coefficient, NEVER a JuMP `Parameter` (an indefinite
+    bilinear `λ·pag` the conic backend rejects).
 
 Load nodes are the aggregator buses (the root carries no aggregator). A non-root bus WITHOUT an
-aggregator is admitted as a physically-valid ZERO-INJECTION TRANSIT node (plan 07-03, RESEARCH
-Pitfall 5): it carries no coupling variable and no reactive draw, and its `:Rp`/`:Rq` is pinned to
+aggregator is admitted as a physically-valid ZERO-INJECTION TRANSIT node: it carries no coupling variable and no reactive draw, and its `:Rp`/`:Rq` is pinned to
 zero via `balance_p`/`balance_q` (closed at all `N` buses) — the correct zero-injection closure
 that lets IEEE-123 (~37 junction buses) build. `load_nodes` (the ADMM coupling axis) is thereby
 DECOUPLED from "all non-root buses" (the balance-closure axis); on the 2-bus / IEEE-13 fixtures
 every non-root bus is a load node, so both axes coincide and the model is unchanged. Throws
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
-`1:length(feeder.buses)`, an aggregator ON the root, or — WR-04, phase-19 review, WIDENED by PM-03
-(post-merge triage cluster D) — a device for which `dv isa FourQuadBESS || is_flexible_load(dv)`
-holds combined with a NORMALIZED `mode != LIVE` (WR-04, phase-26 review — the guard compares the
+`1:length(feeder.buses)`, an aggregator ON the root, or — widened by the flexible-device probe
+— a device for which `dv isa FourQuadBESS || is_flexible_load(dv)`
+holds combined with a NORMALIZED `mode != LIVE` (the guard compares the
 value `normalize_reactive_mode(reactive_consensus)` resolves to, NEVER the caller's raw
 `reactive_consensus` keyword spelling; a maintainer must not "simplify" this to
 `reactive_consensus != ReactiveMode.LIVE`, which would be WRONG whenever `reactive_consensus` is passed as a
 `ReactiveMode.T`) (under `OFF`/`CERTIFIED` the reactive
 closure is the inelastic `−Pdc·tanφ` draw alone, so the device's reactive decision — a `FourQuadBESS`'s live
 `q_inject`, OR a flexible-load member's `p_inject·tanφ` term the centralized model folds into
-`:Rq` since FIX-05 — would be silently dropped from the network model — genuinely invalid inputs
-still fail loud). Since PM-03, `reactive_consensus`'s OWN default (see signature above) resolves
+`:Rq` in the centralized model — would be silently dropped from the network model — genuinely invalid inputs
+still fail loud). `reactive_consensus`'s OWN default (see signature above) resolves
 to `LIVE` whenever [`_any_flexible_reactive`](@ref) finds such a member, so this guard now only
 fires on an EXPLICIT caller override to `OFF`/`CERTIFIED` against such a population — never on
 the default path.
 
-`reactive_consensus` (D-12, MESH-05): a 3-state mode a
+`reactive_consensus`: a 3-state mode a
 `ReactiveMode.T` (`ReactiveMode.OFF`, `ReactiveMode.CERTIFIED` or `ReactiveMode.LIVE`), validated
-by `normalize_reactive_mode`; `Bool` and `Symbol` values throw `ArgumentError`. Its OWN DEFAULT (PM-03, post-merge triage cluster D) is now the CONTEXT-SENSITIVE
+by `normalize_reactive_mode`; `Bool` and `Symbol` values throw `ArgumentError`. Its OWN DEFAULT is the CONTEXT-SENSITIVE
 expression `_any_flexible_reactive(aggregators) ? ReactiveMode.LIVE : ReactiveMode.OFF` — resolving to `LIVE` whenever
 ANY aggregator carries a `FourQuadBESS` or an `is_flexible_load` member, so ADMM's DSO-OPT
-matches the centralized `Aggregator`'s post-FIX-05 reactive draw WITHOUT the caller having to
+matches the centralized `Aggregator`'s reactive draw WITHOUT the caller having to
 pass `reactive_consensus = ReactiveMode.LIVE` by hand; a population with NO such member still defaults to
-`ReactiveMode.OFF`, byte-identical to before PM-03.
+`ReactiveMode.OFF`, unchanged from the previous default.
 
   - `OFF` (default when no flexible-load/FourQuadBESS member is present): step 4's
-    reactive injection is the byte-identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]`
+    reactive injection is the bit-for-bit identical constant `q_draw[j][t]` (no `ctx.meta[:qag_dso]`
     key exists).
   - `CERTIFIED`: the constant is promoted to a genuine JuMP coupling variable
     `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`), pinned to the SAME fixed target via a
     registered equality `:qag_pin` (`qag_dso[j,t] == q_draw[j][t]`) — a one-shot certified dual
     read, NOT a live consensus ascent (thesis A3: `q_draw` never moves, so no new
     ρ-penalty/residual is needed).
-  - `LIVE` (NEW — MESH-05): `qag_dso[j,t]` is declared the SAME way as `CERTIFIED`
+  - `LIVE` (NEW): `qag_dso[j,t]` is declared the SAME way as `CERTIFIED`
     (stashed at `ctx.meta[:qag_dso]`), but NO `:qag_pin` equality is registered — it is left as
     a genuinely open coupling variable, carrying its own `0.5·ρ_q·Σ qag_dso[j,t]²` quadratic
-    penalty in the objective (see `ρ_q` below), for plan 19-07's outer μ-dual-ascent loop to
+    penalty in the objective (see `ρ_q` below), for the outer μ-dual-ascent loop to
     drive.
 
-`ρ_q::Real = ρ` (MESH-05): the FIXED quadratic penalty weight for the `LIVE` reactive coupling
+`ρ_q::Real = ρ`: the FIXED quadratic penalty weight for the `LIVE` reactive coupling
 block, mirroring `ρ`'s role for the active `pag_dso` block. Defaults to tracking `ρ` unless the
-caller overrides it (plan 19-07 adapts it independently via [`set_rho_q!`](@ref)). Unused
+caller overrides it (the outer loop adapts it independently via [`set_rho_q!`](@ref)). Unused
 (never referenced) under `OFF`/`CERTIFIED`.
 """
 function build_dso_opt(
@@ -304,12 +300,12 @@ function build_dso_opt(
         )
     end
 
-    # WR-04 (phase-19 code review), WIDENED by PM-03 (post-merge triage cluster D): under
+    # Guard against silently dropping device-level reactive decisions: under
     # OFF/CERTIFIED this model's reactive closure target `q_draw[j][t]` is composed from the
     # INELASTIC `−Pdc·tanφ` term ALONE (thesis 3.23, below), so a DEVICE-carried reactive
-    # decision — the widened D-09 `q_inject` contract (`FourQuadBESS`), OR a flexible-load
+    # decision — the `q_inject` contract (`FourQuadBESS`), OR a flexible-load
     # member's `p_inject·tanφ` term (Thermostatic/Deferrable/Interruptible, `is_flexible_load`
-    # trait, Plan 26-04/07's FIX-05) — would be silently DROPPED from the network model, while
+    # trait's reactive draw) — would be silently DROPPED from the network model, while
     # the centralized model's `Aggregator.contribute!` DOES write it into `:Rq` — a silent
     # semantic divergence. Under CERTIFIED that divergence would additionally be laundered
     # through the `:balance_q` no-slack certificate into a PUBLISHED reactive dual priced
@@ -318,7 +314,7 @@ function build_dso_opt(
     # or the centralized `Aggregator`'s flexible-load `:Rq` roll-up) includes the device's
     # reactive decision. The probe now covers `dv isa FourQuadBESS || is_flexible_load(dv)` —
     # a future `q_inject`-carrying OR reactive-drawing device must extend this guard (or the
-    # probe should move to a single contract-level trait). Since PM-03, this guard fires ONLY
+    # probe should move to a single contract-level trait). This guard fires ONLY
     # on an EXPLICIT caller override to OFF/CERTIFIED (this function's own default now resolves
     # to LIVE whenever such a member is present, via `_any_flexible_reactive` above).
     if mode != ReactiveMode.LIVE
@@ -329,7 +325,7 @@ function build_dso_opt(
                     ArgumentError(
                         "build_dso_opt: aggregator[$k] (bus $(agg.bus)) carries a " *
                         "FourQuadBESS or flexible-load (is_flexible_load) member — a " *
-                        "device-level reactive decision (q_inject, D-09, or the FIX-05 " *
+                        "device-level reactive decision (q_inject, or the " *
                         "p_inject·tanφ flexible-load draw) — but reactive_consensus " *
                         "normalizes to $(mode), not LIVE. Under OFF/CERTIFIED the DSO " *
                         "reactive closure is the inelastic −Pdc·tanφ draw alone, so the " *
@@ -337,14 +333,14 @@ function build_dso_opt(
                         "network model (and under CERTIFIED the published dual(:balance_q) " *
                         "would be priced against a closure that no longer matches the " *
                         "centralized model's). Pass reactive_consensus = ReactiveMode.LIVE " *
-                        "(WR-04, phase-19 review; widened PM-03, post-merge triage).",
+                        "(or omit it to use the context-sensitive default).",
                     ),
                 )
             end
         end
     end
 
-    # TRANSIT-NODE RELAXATION (plan 07-03, RESEARCH Pitfall 5): DECOUPLE the ADMM coupling axis
+    # TRANSIT-NODE RELAXATION: DECOUPLE the ADMM coupling axis
     # (`load_nodes` = aggregator buses) from the balance-closure axis (all non-root buses). A
     # non-root bus WITHOUT an aggregator is a physically-valid ZERO-INJECTION TRANSIT node (a
     # junction / lateral tap): it carries NO coupling variable and NO reactive draw, so its
@@ -368,7 +364,7 @@ function build_dso_opt(
                 "(thesis 3.22/3.23)",
             ),
         )
-        tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced (IN-01)
+        tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced
         q = q_draw[agg.bus]
         for t in 1:T
             q[t] += -agg.Pdc[t] * tanφ
@@ -379,14 +375,14 @@ function build_dso_opt(
 
     # Cross-solver enablement (mirror solve_welfare): the SOC→nonconvex-quad bridges are
     # DORMANT for the primary conic path (the SOCP backend takes the cones natively) and only
-    # activate when a smooth-NLP backend re-solves the SOCP as a cross-check. INFRA-02 intact.
+    # activate when a smooth-NLP backend re-solves the SOCP as a cross-check. No concrete solver is named.
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.RSOCtoNonConvexQuadBridge)
     JuMP.add_bridge(model, JuMP.MOI.Bridges.Constraint.SOCtoNonConvexQuadBridge)
 
     ctx = ModelContext(model)
     ctx.feeder = feeder
     ctx.T = T
-    # RESET-01 (quick task 260825-eme): snapshot the AS-BUILT ladder conditioning NOW —
+    # Snapshot the AS-BUILT ladder conditioning NOW —
     # before any solve or `solve_with_retry!` escalation can have touched the model — so
     # `solve_dso!`'s FINAL/converged solve can restore TO THIS later, never to a hardcoded
     # Clarabel default.
@@ -413,21 +409,21 @@ function build_dso_opt(
     end
 
     # (4b) REACTIVE load-node closure (thesis 3.23), 3 EXPLICIT branches keyed on `mode`
-    # (MESH-05, D-12) — never a shared branch with a conditional skip (T-19-06). A fixed
+    # — never a shared branch with a conditional skip. A fixed
     # parameter under OFF/CERTIFIED (no μ dual-ascent — reactive is not a consensus quantity
     # there); a genuinely live coupling variable under LIVE.
     if mode == ReactiveMode.OFF
-        # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = false`: inject the CONSTANT
+        # Bit-for-bit identical to the original `reactive_consensus = false` build: inject the CONSTANT
         # draw directly, no qag_dso variable, no ctx.meta[:qag_dso] key.
         for j in load_nodes, t in 1:T
             add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
         end
     elseif mode == ReactiveMode.CERTIFIED
-        # BYTE-IDENTICAL to pre-Phase-19 `reactive_consensus = true` (REACT-01/REACT-03):
+        # Bit-for-bit identical to the original `reactive_consensus = true` build:
         # promote the constant to a genuine JuMP coupling variable `qag_dso[j,t]`, PINNED to
         # the SAME fixed target via the registered equality `:qag_pin` — a one-shot certified
         # dual read, NOT a live consensus ascent (Assumption A1/A3: q_draw never moves). The
-        # `:qag_pin` registration is UNCONDITIONAL in this branch (T-19-07 — never skip it).
+        # `:qag_pin` registration is UNCONDITIONAL in this branch (never skip it).
         @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
             add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
@@ -436,9 +432,9 @@ function build_dso_opt(
         register_constraint!(ctx, :qag_pin, qag_pin)
         ctx.meta[:qag_dso] = qag_dso
     elseif mode == ReactiveMode.LIVE
-        # NEW (MESH-05): declare qag_dso the SAME way as CERTIFIED (same @variable call, same
+        # NEW: declare qag_dso the SAME way as CERTIFIED (same @variable call, same
         # :Rq injection, same ctx.meta[:qag_dso] stash), but register NO :qag_pin equality —
-        # qag_dso stays a genuinely OPEN coupling variable, driven by plan 19-07's outer μ
+        # qag_dso stays a genuinely OPEN coupling variable, driven by the outer μ
         # dual-ascent loop and carrying its own ρ_q-scaled quadratic penalty (see (5) below).
         @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
@@ -449,7 +445,7 @@ function build_dso_opt(
         error("unreachable: normalize_reactive_mode returned an unhandled ReactiveMode")
     end
 
-    # (4b') TRANSIT-NODE ZERO INJECTION (RESEARCH Pitfall 5): each non-root, non-load bus is a
+    # (4b') TRANSIT-NODE ZERO INJECTION: each non-root, non-load bus is a
     # physical zero-injection junction — inject a pinned 0 into its :Rp/:Rq so `balance_p`/
     # `balance_q` (below, at all N buses) close it as a zero-injection node rather than leaving
     # it out of the coupling. A documentary no-op on feeders with no transit bus (2-bus/IEEE-13:
@@ -470,7 +466,7 @@ function build_dso_opt(
     # per iteration via set_objective_coefficient — the ρ/2 quadratic below is never touched.
     # Under LIVE ONLY, an ADDITIONAL 0.5·ρ_q·Σ qag_dso[j,t]² term is folded into the SAME
     # accumulator BEFORE the single @objective call, so OFF/CERTIFIED literally never construct
-    # or touch the ρ_q term (byte-identical built objective under those two modes).
+    # or touch the ρ_q term (bit-for-bit identical built objective under those two modes).
     obj_expr =
         sum(λ₀[t] * p_import[t] for t in 1:T) +
         0.5 * ρ * sum(pag_dso[j, t]^2 for j in load_nodes, t in 1:T)
@@ -498,19 +494,18 @@ end
         -> (; pag_dso, p_import, exact_maxgap)
 
 Re-solve the built-ONCE `DSO-OPT` (thesis eq. 3.47) for one ADMM iteration by mutating ONLY
-the LINEAR objective coefficient of each coupling variable `pag_dso[j,t]` — no JuMP rebuild
-(ADMM-03, RESEARCH Pattern 3 / Pitfall 6). For each load node `j` and time `t` it calls
+the LINEAR objective coefficient of each coupling variable `pag_dso[j,t]` — no JuMP rebuild. For each load node `j` and time `t` it calls
 
     set_objective_coefficient(dso.model, dso.pag[j,t], −λ[j][t] − ρ·a[j][t])
 
 (the FIXED `0.5·ρ·pag²` quadratic penalty from `build_dso_opt` is left UNTOUCHED), then gates
-the solve on [`assert_solved!`](@ref)`(...; dual = true)` (INFRA-03) before any dual is read.
+the solve on [`assert_solved!`](@ref)`(...; dual = true)` before any dual is read.
 The MID-LOOP (`strict = false`) solve instead routes through
-[`solve_with_retry!`](@ref)`(...; dual = false, allow_almost = true)` — the same INFRA-03 gate,
+[`solve_with_retry!`](@ref)`(...; dual = false, allow_almost = true)` — the same solve-status gate,
 wrapped in the Clarabel conditioning ladder, because that solve reads NO duals (see the
-inline rationale at the call site and `.planning/debug/ieee13-admm-numerical-error.md`).
+inline rationale at the call site and the IEEE-13 numerical-error note in the docs).
 
-RESET-01 (quick task 260825-eme): `check_exact = true` — the FINAL/converged consolidation
+`check_exact = true` — the FINAL/converged consolidation
 call — ALSO now resets the Clarabel conditioning ladder to the as-built snapshot
 (`dso.ctx.meta[:ladder_baseline]`, taken once by `build_dso_opt`) immediately before the
 solve, REGARDLESS of `strict`. This runs BEFORE the `strict`/`else` dispatch below, so it
@@ -522,29 +517,29 @@ to run at the factory's own configuration.
 `λ` and `a` are indexable by the load-node bus id, each yielding a length-`T` price / target
 profile (`λ[j][t]`, `a[j][t]`): `λ` is the current DADP estimate, `a` the AGR-OPT consensus
 target. λ_j is a plain scalar coefficient, NEVER a JuMP `Parameter` (an indefinite bilinear
-`λ·pag` the conic backend rejects; RESEARCH Pitfall 1).
+`λ·pag` the conic backend rejects).
 
 `check_exact` is the CONVERGENCE flag. When `true` (only the final, converged solve — mid-loop
-iterates are legitimately inexact and would throw, RESEARCH Pitfall 3) it runs the PF-04
+iterates are legitimately inexact and would throw) it runs the SOC
 exactness gate [`assert_socp_exact!`](@ref)`(dso.ctx; rtol = rtol_exact, atol = atol_exact)`,
 stashing the returned `maxgap` under `dso.ctx.meta[:socp_maxgap]`; a STRICT (inexact) cone means
 `l` is a fictitious over-current and the recovered prices are physically meaningless, so the
 gate THROWS and prices are refused. When `false` the gate is NOT run (and `atol_exact`/
 `rtol_exact` are inert — never consulted).
 
-`atol_exact`/`rtol_exact` (2026-08-22 follow-up, quick task 260822-f0b) are an ADDITIVE override
+`atol_exact`/`rtol_exact` (2026-08-22 follow-up) are an ADDITIVE override
 seam onto [`assert_socp_exact!`](@ref)'s own `atol`/`rtol` kwargs. Their defaults (`nothing`/`1e-4`)
-are `assert_socp_exact!`'s own defaults (Phase 35, ARCH-10): `atol_exact = nothing` selects the
-hybrid per-branch/hour floor `max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT*ref_b)` = `max(2e-7, 1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Before Phase 35 the
+are `assert_socp_exact!`'s own defaults: `atol_exact = nothing` selects the
+hybrid per-branch/hour floor `max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT*ref_b)` = `max(2e-7, 1e-9·ref_b)`; an explicit `Real` is a flat per-branch floor that bypasses it. Previously the
 default was a FLAT `1e-6`, so `check_exact = true` callers relying on the default are NOT
-byte-identical: the gate is STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited
+bit-for-bit identical: the gate is STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited
 branch whose hour's head-branch |S| is below ≈ 31.6 pu — a gap in `(2e-7, 1e-6]` now raises
 `CertificateError`) and LOOSER where `ref_b > 1000` (up to ≈ `9.8e-6` at smax just below
 `SMAX_NO_LIMIT = 99`, unbounded in principle on an unlimited branch with head flow above ≈ 31.6
 pu). Mid-loop `check_exact = false` calls never consult these kwargs and are unaffected. A
 `check_exact = true` call records the `atol_exact` it judged with in
 `dso.ctx.meta[:socp_atol_exact]` (before the gate runs, so also on a refusal).
-This is a SEAM, not a default weakening (T-25-12, certificate-laundering): never
+This is a SEAM, not a default weakening (certificate-laundering): never
 use it to make a point classify as exact that would otherwise be inexact under the project's own
 default gate. A caller overriding it is asserting they have their OWN independently measured
 noise floor for the tolerance they pass (mirrors how `scripts/benchmark_ieee8500.jl`'s
@@ -564,26 +559,26 @@ function solve_dso!(
     atol_exact::Union{Nothing, Real} = nothing,
     rtol_exact::Real = 1e-4,
 )
-    # ADMM-03 build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]
+    # Build-once re-solve: mutate ONLY the linear coefficient of each pag_dso[j,t]
     # (one scalar call per (j,t)); the ρ/2 quadratic penalty built in build_dso_opt is fixed.
     for j in dso.load_nodes, t in 1:dso.T
         set_objective_coefficient(dso.model, dso.pag[j, t], -λ[j][t] - ρ * a[j][t])
     end
 
-    # RESET-01 (quick task 260825-eme): reset the Clarabel conditioning ladder to the
+    # Reset the Clarabel conditioning ladder to the
     # AS-BUILT snapshot (`dso.ctx.meta[:ladder_baseline]`, taken once in `build_dso_opt`)
     # immediately before the FINAL/converged solve. Gated on `check_exact`, NOT `strict`:
     # `solve_admm`'s actual production final-consolidation call passes `strict = false`
-    # (see the WR-01 PUBLISHED-PRIMAL CERTIFICATE block in `solve_admm.jl` — it
+    # (see the PUBLISHED-PRIMAL CERTIFICATE block in `solve_admm.jl` — it
     # deliberately relies on the PHYSICAL `:balance_p` no-slack gate rather than a bare
     # `dual = true` solver label), so gating on `strict` alone would never fire on the path
     # this fix exists to protect. `check_exact` is this function's OWN pre-existing "is
-    # this the final/converged call" flag (RESEARCH Pitfall 3 — every mid-loop iterate
+    # this the final/converged call" flag (every mid-loop iterate
     # passes it `false`), so it is the correct signal regardless of which `strict` branch
     # is about to run below, and it fires EXACTLY ONCE per `solve_admm` run — mid-loop
     # iterations (`check_exact = false`) are UNTOUCHED, so a `solve_with_retry!` escalation
     # applied mid-loop stays STICKY across them exactly as before (no wasted per-iteration
-    # re-failure; see `.planning/debug/ieee13-admm-numerical-error.md`).
+    # re-failure).
     if check_exact
         _restore_ladder_attrs!(
             dso.model,
@@ -591,18 +586,18 @@ function solve_dso!(
         )
     end
 
-    # INFRA-03: never trust a dual (price) before a trusted primal solve. `strict = true` (the
+    # Never trust a dual (price) before a trusted primal solve. `strict = true` (the
     # default, and ALWAYS used on the final/converged solve) requires a fully OPTIMAL, dual-
     # feasible point. `strict = false` is the MID-LOOP mode: the DSO subproblem's DUALS are never
     # read in ADMM (the transactive price is the outer multiplier λ, not `dual(balance_p)`), so an
     # ALMOST_OPTIMAL / NEARLY_FEASIBLE primal — the interior-point backend stopping just shy of its
     # centralized-grade gap under the ρ-penalty — is acceptable at an intermediate iterate (the
-    # residual loop self-corrects; RESEARCH Pitfall 2/4). The converged solve is still STRICT.
+    # residual loop self-corrects). The converged solve is still STRICT.
     if strict
         assert_solved!(dso.model; dual = true)
     else
-        # CONDITIONING LADDER on the MID-LOOP solve ONLY (debug session
-        # `.planning/debug/ieee13-admm-numerical-error.md`). On IEEE-13 the mid-loop DSO-OPT
+        # CONDITIONING LADDER on the MID-LOOP solve ONLY.
+        # On IEEE-13 the mid-loop DSO-OPT
         # sits on a numerical knife-edge once adaptive-ρ has doubled from ρ₀ = 100 to ρ = 200
         # (τ = 2; this is NOT the ρ_max = 1e4 clamp, just one climb step) and the residuals are
         # within ~1.5-2x of tolerance: Clarabel's DEFAULT static regularization is not
@@ -620,7 +615,7 @@ function solve_dso!(
         # SCOPE — the LADDER IS WIRED ONLY ON THIS BRANCH. This paragraph describes the
         # `strict = true` branch's OWN behaviour for any caller that selects it (e.g. direct
         # test calls in `test/test_dso.jl`) — `solve_admm`'s own final-consolidation call in
-        # production actually passes `strict = false` (see the RESET-01 comment above the
+        # production actually passes `strict = false` (see the ladder-reset comment above the
         # `strict`/`else` dispatch for why the reset fix does not depend on which branch runs).
         # The `strict = true` FINAL/converged solve above deliberately keeps the BARE
         # `assert_solved!(…; dual = true)` STRICT gate: it is the solve whose result is
@@ -631,18 +626,18 @@ function solve_dso!(
         # (`solve_with_retry!`'s new `allow_almost` kwarg defaults to `false`, so no other
         # caller's behaviour changes).
         #
-        # HONEST CAVEAT (CORRECTED, RESET-01, quick task 260825-eme) — escalation is STILL
+        # HONEST CAVEAT (CORRECTED) — escalation is STILL
         # STICKY WITHIN the mid-loop iterations after a rescue (`solve_with_retry!`'s documented
-        # WR-01 contract: `set_optimizer_attribute` mutates the model PERMANENTLY and is never
+        # contract: `set_optimizer_attribute` mutates the model PERMANENTLY and is never
         # restored on its own); `dso` is BUILD-ONCE, so once a mid-loop rescue escalates to
         # rung 2, the REMAINING mid-loop iterations run at
         # `static_regularization_constant = 1e-6` — intentional, unchanged. It NO LONGER
         # reaches the final/converged solve: `solve_dso!` now resets the ladder to the as-built
-        # snapshot before every `check_exact = true` call (see the RESET-01 block above this
+        # snapshot before every `check_exact = true` call (see the ladder-reset block above this
         # `if strict` dispatch). The PREVIOUS version of this comment claimed the escalation
-        # "reaches the final `strict = true` solve" — that claim was corrected during quick task
-        # 260825-eme's planning: `solve_admm.jl`'s actual final-consolidation call passes
-        # `strict = false`, which is exactly why the RESET-01 fix is gated on `check_exact`
+        # "reaches the final `strict = true` solve" — that claim was later corrected: 
+        # `solve_admm.jl`'s actual final-consolidation call passes
+        # `strict = false`, which is exactly why the ladder reset is gated on `check_exact`
         # rather than `strict`. The mid-loop stickiness itself is bounded and measured, not
         # overlooked:
         #   * the ADMM transactive price is the OUTER multiplier λ (`dadp == λ` in
@@ -656,16 +651,16 @@ function solve_dso!(
         #     include A/B) and -4822.903625595291 (1.12.7, native convergence) — a ~2e-9
         #     relative spread the natively-converging builds already exhibit among themselves,
         #     at an IDENTICAL 58 iterations;
-        #   * the final solve still runs the full STRICT gate AND the PF-04 exactness gate, now
-        #     preceded by the RESET-01 restore.
+        #   * the final solve still runs the full STRICT gate AND the SOC exactness gate, now
+        #     preceded by the ladder restore.
         solve_with_retry!(dso.model; dual = false, allow_almost = true)
     end
 
-    # PF-04 EXACTNESS GATE — CONVERGENCE ONLY (RESEARCH Pitfall 3). Runs strictly AFTER
+    # SOC EXACTNESS GATE — CONVERGENCE ONLY. Runs strictly AFTER
     # assert_solved! and refuses prices (throws) if the SOC cone is inexact; stashes maxgap.
     # Mid-loop iterates skip this — they are legitimately inexact and would throw spuriously.
     if check_exact && has_branch_current(dso.ctx)
-        # WR-06 (35-REVIEW): record the gate floor this certificate was judged with (`nothing` =
+        # Record the gate floor this certificate was judged with (`nothing` =
         # hybrid floor, a `Real` = flat override) BEFORE the gate runs, so the default that
         # actually reached the gate is traceable — and testable — even when the gate refuses.
         dso.ctx.meta[:socp_atol_exact] = atol_exact
@@ -684,8 +679,8 @@ end
     set_rho!(dso::DsoOpt, ρ::Real) -> DsoOpt
 
 Mutate the FIXED quadratic penalty weight of the built-ONCE DSO-OPT in place when the adaptive-ρ
-loop (07-04) changes ρ — WITHOUT rebuilding the JuMP model (ADMM-04 build-once preserved,
-RESEARCH Pattern 1). DSO-OPT is `Min λ₀ᵀp_import + (ρ/2)·Σ_{j,t} pag_dso[j,t]²`, so the diagonal
+loop changes ρ — WITHOUT rebuilding the JuMP model (build-once preserved).
+DSO-OPT is `Min λ₀ᵀp_import + (ρ/2)·Σ_{j,t} pag_dso[j,t]²`, so the diagonal
 quadratic coefficient of every `pag_dso[j,t]²` is `+0.5ρ` (Min objective — MIRROR of the AGR-OPT
 `−0.5ρ`). Flatten the `pag` coupling container to a `Vector{VariableRef}` and set them all in one
 BATCH call:
@@ -693,16 +688,16 @@ BATCH call:
     set_objective_coefficient(dso.model, v, v, fill(0.5ρ, length(v)))
 
 The 4-arg (quadratic) `set_objective_coefficient(model, x, x, c)` sets the coefficient of `x²`
-to `c` directly (JuMP 1.30.1 absorbs the MOI `0.5·xᵀQx` canonicalization — VERIFIED, RESEARCH
-Pattern 1 / objective.jl:629,712). The mutation is stored in the `CachingOptimizer` and re-applied
+to `c` directly (JuMP 1.30.1 absorbs the MOI `0.5·xᵀQx` canonicalization — verified in the JuMP source,
+objective.jl:629,712). The mutation is stored in the `CachingOptimizer` and re-applied
 on the next `optimize!`, identical mechanism to the LINEAR `set_objective_coefficient` update
 [`solve_dso!`](@ref) already runs each iteration — so `num_variables`/`num_constraints` are
 INVARIANT (no rebuild) and a mutate-then-solve is EQUIVALENT to a fresh build at the new ρ.
 
-CONTRACT for the caller (07-04): call `set_rho!` ONLY when ρ actually changed and in LOCKSTEP
-with the linear coefficient update `−λ[j][t] − ρ·a[j][t]` (same ρ — Pitfall 1: penalty ρ and
+CONTRACT for the caller: call `set_rho!` ONLY when ρ actually changed and in LOCKSTEP
+with the linear coefficient update `−λ[j][t] − ρ·a[j][t]` (same ρ: penalty ρ and
 ascent ρ must not diverge). Never model ρ (or λ) as a JuMP `Parameter`. Keep ρ strictly POSITIVE
-(convexity guard, Pitfall 6: ρ > 0 ⇒ DSO stays convex-Min); the adaptive policy clamps
+(convexity guard: ρ > 0 ⇒ DSO stays convex-Min); the adaptive policy clamps
 ρ ∈ `[ρ_min, ρ_max]`. Returns `dso`.
 """
 function set_rho!(dso::DsoOpt, ρ::Real)
@@ -710,7 +705,7 @@ function set_rho!(dso::DsoOpt, ρ::Real)
     # by indexing over its KNOWN axes — `collect` on a Vector-axis DenseAxisArray is unsupported.
     v = VariableRef[dso.pag[j, t] for j in dso.load_nodes for t in 1:dso.T]
     # Diagonal quadratic coeff of every pag_dso[j,t]² set to +0.5ρ (Min objective, penalty added).
-    # BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    # BATCH form — one MOI modification list; no rebuild.
     set_objective_coefficient(dso.model, v, v, fill(0.5 * ρ, length(v)))
     return dso
 end
@@ -719,7 +714,7 @@ end
     set_rho_q!(dso::DsoOpt, ρ_q::Real) -> DsoOpt
 
 Mutate the FIXED quadratic penalty weight of the built-ONCE `LIVE` reactive coupling block in
-place — the exact `set_rho!` PEER for the reactive `qag` block (MESH-05, plan 19-07's outer
+place — the exact `set_rho!` PEER for the reactive `qag` block (the outer
 μ-dual-ascent loop adapts `ρ_q` independently of `ρ`). DSO-OPT under `LIVE` carries an
 ADDITIONAL `Min ... + (ρ_q/2)·Σ_{j,t} qag[j,t]²` term (see `build_dso_opt`'s objective
 assembly), so the diagonal quadratic coefficient of every `qag[j,t]²` is `+0.5ρ_q`. Flatten the
@@ -746,7 +741,7 @@ function set_rho_q!(dso::DsoOpt, ρ_q::Real)
     # mirroring set_rho!'s exact flatten-then-one-call shape.
     v = VariableRef[dso.qag[j, t] for j in dso.load_nodes for t in 1:dso.T]
     # Diagonal quadratic coeff of every qag[j,t]² set to +0.5ρ_q (Min objective, penalty added).
-    # BATCH form — one MOI modification list; no rebuild (RESEARCH Pattern 1).
+    # BATCH form — one MOI modification list; no rebuild.
     set_objective_coefficient(dso.model, v, v, fill(0.5 * ρ_q, length(v)))
     return dso
 end

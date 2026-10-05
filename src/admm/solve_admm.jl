@@ -1,11 +1,11 @@
 # src/admm/solve_admm.jl
 #
-# SEAM: solve_admm — the hand-rolled dual-ascent ADMM loop (ADMM-01 / ADMM-03 / ADMM-04).
-# OWNER: plan 06-04 (Wave 3). Declares its own `export`s per the include-graph convention.
+# SEAM: solve_admm — the hand-rolled dual-ascent ADMM loop.
+# Declares its own `export`s per the include-graph convention.
 #
-# THE OUTER ORCHESTRATOR (RESEARCH Pattern 2 / thesis eq. 3.31 dual update, 3.46/3.47 blocks).
-# Builds the per-node AGR-OPT[j] (plan 06-02, thesis 3.46) and the whole-network DSO-OPT
-# (plan 06-03, thesis 3.47) subproblems ONCE, then alternates their coefficient-update solves
+# THE OUTER ORCHESTRATOR (thesis eq. 3.31 dual update, 3.46/3.47 blocks).
+# Builds the per-node AGR-OPT[j] (thesis 3.46) and the whole-network DSO-OPT
+# (thesis 3.47) subproblems ONCE, then alternates their coefficient-update solves
 # and takes one gradient-ascent step on the coupling price each iteration (hand-rolled per
 # CLAUDE.md — no Coluna/StructJuMP):
 #
@@ -15,7 +15,7 @@
 #         netflow target   c_j[t]     = netflow_j[t] = −value(pag_dso_j[t])           (for next AGR)
 #         dual ascent      λ_j[t] ←  λ_j[t] + ρ·R_{p,j}[t]                            (thesis: λ ← λ + ρ·R)
 #
-# SIGN DERIVATION (RESEARCH Pattern 1 / Pitfall 5 — the ONE augmented Lagrangian, NOT the
+# SIGN DERIVATION (the ONE augmented Lagrangian, NOT the
 # thesis-3.47 printed sign). From the single MAX augmented Lagrangian of the centralized GLB-CVX
 #     L_ρ = Σ_j U_ag,j − λ₀ᵀp_import − Σ_j λ_jᵀ R_{p,j} − (ρ/2) Σ_j ‖R_{p,j}‖²,
 #           R_{p,j} = netflow_j + pag_j        (the physical balance 3.31)
@@ -26,28 +26,28 @@
 # "c_j = value(pag_dso_j)" is sign-ambiguous; this derivation is the authority). At the DSO
 # optimum the internal balance dual β_j satisfies β_j = λ_j at consensus (pag_dso_j = a_j), so
 # the recovered λ_j equals the centralized DADP `dual(balance_p[j])` with the SAME sign — pinned
-# strictly-POSITIVE on the near-lossless uncongested 2-bus fixture (RESEARCH Pattern 2).
+# strictly-POSITIVE on the near-lossless uncongested 2-bus fixture.
 #
-# BUILD-ONCE / RE-SOLVE (ADMM-03, RESEARCH Pattern 3 / Pitfall 6): AGR-OPT and DSO-OPT are built
+# BUILD-ONCE / RE-SOLVE: AGR-OPT and DSO-OPT are built
 # ONCE outside the loop; the loop mutates ONLY scalar objective coefficients via
 # `set_objective_coefficient` (inside `solve_agr!`/`solve_dso!`) — NO JuMP model is constructed
 # inside the loop, so num_variables/num_constraints are iteration-count-independent. (Clarabel is
-# copy_to-only, so the per-iteration re-copy still happens and warm starts are a no-op — RESEARCH
-# Pitfall 4; the ADMM-03 win is eliminating the JuMP-side REBUILD, not solver warm starts.)
+# copy_to-only, so the per-iteration re-copy still happens and warm starts are a no-op —
+# the win is eliminating the JuMP-side REBUILD, not solver warm starts.)
 #
-# STOPPING / FAIL-LOUD (RESEARCH Pattern 2/3 / Pitfall 2): stop on BOTH the Boyd 2-norm PRIMAL
+# STOPPING / FAIL-LOUD: stop on BOTH the Boyd 2-norm PRIMAL
 # residual ‖r‖₂ = ‖a − pag_dso‖₂ ≤ ε_pri AND the z-block DUAL residual ‖s‖₂ = ρ·‖Δ(pag_dso)‖₂ ≤
 # ε_dual, with per-unit-normalized thresholds ε_pri = √p·ε_abs + ε_rel·max(‖a‖,‖pag_dso‖) / ε_dual
 # = √p·ε_abs + ε_rel·‖λ‖ (p = n = n_load_nodes·T). A primal-only stop is the textbook
 # false-convergence bug — the dual side (the price has stopped moving) is MANDATORY. Hitting
 # `maxiter` WITHOUT both residuals below threshold THROWS loudly (naming ‖r‖/ε_pri/‖s‖/ε_dual) —
-# NEVER returns the last iterate silently. The centralized cross-validation (ADMM-04) is the
+# NEVER returns the last iterate silently. The centralized cross-validation is the
 # outer false-convergence net.
 #
-# CONVERGENCE OUTPUTS: at convergence a FINAL DSO solve runs the PF-04 exactness gate
+# CONVERGENCE OUTPUTS: at convergence a FINAL DSO solve runs the SOC exactness gate
 # (`solve_dso!(...; check_exact=true)` → `assert_socp_exact!`), welfare is recomputed from PRIMAL
 # values (Σ value(U_ag) − Σ_t λ₀[t]·value(p_import) — NOT the penalized subproblem objective,
-# RESEARCH Pattern 5), and the converged coupling price is returned as the DADP.
+# as the penalized objective is not the welfare), and the converged coupling price is returned as the DADP.
 
 using JuMP
 
@@ -62,12 +62,12 @@ using JuMP
               reactive_consensus_mode, status)
 
 Solve the operational GLB-CVX social-welfare problem by hand-rolled 2-block ADMM (thesis
-eqs. 3.46/3.47), the Phase-6 DECOMPOSED counterpart of the centralized [`solve_welfare`](@ref).
+eqs. 3.46/3.47), the DECOMPOSED counterpart of the centralized [`solve_welfare`](@ref).
 Recovers the SAME welfare AND the SAME day-ahead dynamic prices (DADPs) as the monolithic
-optimum — the load-bearing correctness gate (ADMM-04), since the transactive prices ARE the
-duals of the nodal balance (RESEARCH Pattern 5).
+optimum — the load-bearing correctness gate, since the transactive prices ARE the
+duals of the nodal balance.
 
-# Algorithm (RESEARCH System Architecture Diagram)
+# Algorithm
 
  1. BUILD ONCE (outside the loop): one [`build_agr_opt`](@ref) per aggregator and one
     [`build_dso_opt`](@ref); initialize the coupling price `λ_j` (per load node) to `λ₀` (a
@@ -75,37 +75,37 @@ duals of the nodal balance (RESEARCH Pattern 5).
     target `c_j` and the AGR-consensus target `a_j` to zeros, and an [`AdmmResiduals`](@ref).
  2. Iterate `k = 1:maxiter`: solve each [`solve_agr!`](@ref) with coeff `−λ_j − ρ·c_j` collecting
     `a_j = pag_j`; solve [`solve_dso!`](@ref) with coeff `−λ_j − ρ·a_j` (mid-loop `check_exact = false`) collecting `pag_dso_j`; compute the Boyd PRIMAL residual `‖r‖₂ = ‖a − pag_dso‖₂` and the
-    z-block DUAL residual `‖s‖₂ = ρ·‖pag_dso − pag_dso_prev‖₂` (RESEARCH Pattern 2), the per-unit
+    z-block DUAL residual `‖s‖₂ = ρ·‖pag_dso − pag_dso_prev‖₂`, the per-unit
     thresholds `ε_pri`/`ε_dual` (Pattern 3), and the price move `‖Δλ‖₂`; [`record!`](@ref) the
     extended trace tuple; take the UNSCALED dual step `λ_j ← λ_j + ρ·R_{p,j}` (λ is NEVER rescaled on
     a ρ change), refresh the netflow target `c_j = −pag_dso_j`, and snapshot `pag_dso_prev = pag_dso`.
     Stop when [`converged`](@ref)`(residuals, ε_pri, ε_dual)` — BOTH `‖r‖ ≤ ε_pri` AND `‖s‖ ≤ ε_dual`
     (a primal-only stop is the textbook false-convergence bug).
-    After the step, ADAPT ρ by residual balancing (RESEARCH Pattern 4, Boyd §3.4.1): `ρ ← τ·ρ` if
+    After the step, ADAPT ρ by residual balancing (Boyd §3.4.1): `ρ ← τ·ρ` if
     the primal lags (`‖r‖ > μ‖s‖`), `ρ ← ρ/τ` if the dual lags (`‖s‖ > μ‖r‖`), clamped to
     `[ρ_min, ρ_max]`; on an actual change call [`set_rho!`](@ref) on the DSO-OPT and every AGR-OPT so
     the quadratic penalty tracks ρ WITHOUT a rebuild (build-once preserved). ρ FREEZES once both
     residuals fall within `10×` their thresholds (Boyd's fixed-ρ convergence tail).
- 3. On convergence: a FINAL [`solve_dso!`](@ref)`(...; check_exact = true)` runs the PF-04 gate
+ 3. On convergence: a FINAL [`solve_dso!`](@ref)`(...; check_exact = true)` runs the SOC exactness gate
     [`assert_socp_exact!`](@ref) (`exact_maxgap`); recompute `welfare = Σ_j value(U_ag,j) − Σ_t λ₀[t]·value(p_import[t])` from PRIMALS; set `dadp = λ`.
 
-# Adaptive ρ (RESEARCH Pattern 4 — the Phase-7 upgrade of the Phase-6 fixed ρ)
+# Adaptive ρ (replaces a fixed ρ)
 
-The `ρ` keyword is now the INITIAL penalty ρ₀ (all Phase-6 call sites keep working). ρ then adapts
+The `ρ` keyword is now the INITIAL penalty ρ₀ (call sites written for a fixed ρ keep working). ρ then adapts
 by per-unit residual balancing (`τ`, `μ`) and is clamped to `[ρ_min, ρ_max]`, so the SAME
 `(ε_abs, ε_rel, τ, μ, ρ_min, ρ_max)` converge the 2-bus, IEEE-13 AND IEEE-123 cases WITHOUT any
-hard-coded scale-specific penalty (per-unit scale-invariance, ADMM-02). λ is the UNSCALED physical
+hard-coded scale-specific penalty (per-unit scale-invariance). λ is the UNSCALED physical
 price and is NEVER rescaled on a ρ change. The `tol` keyword is RETAINED for call-site
 compatibility but is superseded by the per-unit two-residual stop (`ε_abs`/`ε_rel`).
 
-# Reactive consensus (Phase 16, REACT-01/02 — `reactive_consensus`)
+# Reactive consensus (`reactive_consensus`)
 
 Threaded straight into [`build_dso_opt`](@ref) — its OWN default is IDENTICAL to
-`build_dso_opt`'s (PM-03, post-merge triage cluster D): `_any_flexible_reactive(aggregators) ? LIVE : OFF`, applied BEFORE `normalize_reactive_mode` ever sees a bare sentinel, so a direct
+`build_dso_opt`'s: `_any_flexible_reactive(aggregators) ? LIVE : OFF`, applied BEFORE `normalize_reactive_mode` ever sees a bare sentinel, so a direct
 `solve_admm` caller who omits `reactive_consensus` gets the smart default too (`build_dso_opt`'s
 own smart default never fires for `solve_admm` callers, since this function always passes an
 already-normalized `mode` — see below). At the FALLBACK `OFF` (no flexible-load/FourQuadBESS
-member present), byte-identical to pre-Phase-16 behavior (REACT-03): the per-load-node reactive
+member present), bit-for-bit identical to the behavior without reactive consensus: the per-load-node reactive
 draw stays the constant `q_draw` and NO extra certificate runs. At `CERTIFIED` (an EXPLICIT caller
 choice, since the smart default only ever resolves to `LIVE` or `OFF`),
 `build_dso_opt` promotes it to the pinned coupling variable `qag_dso[j,t]`
@@ -115,7 +115,7 @@ so its dual becomes trustworthy/publishable (e.g. as a reactive DLMP component).
 ONE-SHOT certified dual read, NOT a live μ dual-ascent loop (thesis A3: `qag_dso` is pinned to a
 fixed target that never moves, so convergence speed is materially unaffected).
 
-# Live reactive dual-ascent (Phase 19, MESH-05 — `reactive_consensus = ReactiveMode.LIVE`, `ρ_q::Real = ρ`)
+# Live reactive dual-ascent (`reactive_consensus = ReactiveMode.LIVE`, `ρ_q::Real = ρ`)
 
 `reactive_consensus` now accepts a 3-state [`ReactiveMode`](@ref) (a
 `ReactiveMode.T`; `Bool` and `Symbol` values throw `ArgumentError`). The `LIVE` state makes `qag_dso[j,t]` a genuinely OPEN coupling variable — unpinned, unlike
@@ -126,36 +126,36 @@ outer loop, in EXACT mirror of the ACTIVE `λ`/`pag_dso` machinery above:
     identifier is the adaptive-ρ residual-balancing imbalance band, `μ::Real = 10.0` above; the
     internal state uses the distinct name `μq`) is dual-ascended alongside `λ`, with its OWN
     penalty weight `ρ_q` (defaults to tracking `ρ`, adapted independently thereafter).
-  - JOINT STACKED STOPPING RULE (Boyd §3.3's multi-block caveat; RESEARCH Pitfall 17): the primal/
+  - JOINT STACKED STOPPING RULE (Boyd §3.3's multi-block caveat): the primal/
     dual residuals and per-unit thresholds are computed as ONE stacked norm over BOTH the active
     (`λ`/`pag_dso`) and reactive (`μ`/`qag_dso`) coupling axes, feeding a SINGLE
     [`record!`](@ref)/[`converged`](@ref) call — NEVER two independent per-block checks (a
     textbook false-convergence bug on a two-block ADMM). `ρ` and `ρ_q` adapt INDEPENDENTLY of
     each other (each block balances its OWN normalized residuals), since a shared ρ would be
     badly scaled for the typically much-smaller reactive channel.
-  - SIGN CONVENTION (empirically verified this plan, on a 2-bus + `FourQuadBESS` fixture with
+  - SIGN CONVENTION (empirically verified on a 2-bus + `FourQuadBESS` fixture with
     REAL — non-near-lossless — impedance, mirroring EXACTLY how `λ`'s sign was originally pinned
     above): the internal `μq` converges to the NEGATED `dual(:balance_q[j])` — the SAME
     relationship `λ` has to `dual(:balance_p[j])` — consistent with the P↔Q structural symmetry
     of the single augmented Lagrangian (the reactive block is built by the IDENTICAL
     AGR-fixes-target / DSO-renames-coupling-variable construction, merely on the `Rq`/`qag_dso`
     axis). The reported `mu_q` (see Returns) is therefore the NEGATED internal `μq`, mirroring
-    `λ_mat = -λ` exactly. (`mu_q` is the return-key handle the phase-16 naming audit RESERVED
+    `λ_mat = -λ` exactly. (`mu_q` is the return-key handle the naming audit of the reactive tests RESERVED
     for exactly this quantity — `test_admm_reactive.jl`'s grep-audit header; a bare-`μ` return
     key would collide with the `μ::Real = 10.0` adaptive-ρ band kwarg in this very signature,
-    the phase-19 review's WR-03.)
+    as a review of the reactive mode found.)
   - The final consolidation block ALSO wires the NEW 4Q complementarity certificate
     ([`assert_4q_complementarity!`](@ref) via `solve_agr!`'s `check_4q` kwarg) for any aggregator
     whose devices genuinely include a `FourQuadBESS` — INDEPENDENT of `reactive_consensus`, since
     the App. C-style `p_ch·p_dch ≈ 0` property is a property of the DEVICE, not of whether its
     reactive coupling happens to be pinned or live.
-  - CROSS-VALIDATION SCOPE (D-03): comparing a `LIVE` run against the centralized [`solve_welfare`](@ref)
+  - CROSS-VALIDATION SCOPE: comparing a `LIVE` run against the centralized [`solve_welfare`](@ref)
     compares welfare, `λ`, AND `μ` — but NEVER an individual `FourQuadBESS`'s `q` trajectory. When
     the reactive nodal dual `μ ≈ 0` (a near-lossless/uncongested reactive channel, an HONEST
     feature of the model, not a bug), a device's own P-Q split inside its apparent-power cone can
     be non-unique/degenerate — pinning a non-unique quantity would be meaningless.
 
-# Wall-clock budget (Phase 25, D-18 — `time_limit_s::Union{Nothing,Real} = nothing`)
+# Wall-clock budget (`time_limit_s::Union{Nothing,Real} = nothing`)
 
 An OPTIONAL wall-clock budget for the WHOLE consensus loop, checked once per iteration
 immediately AFTER the convergence check and BEFORE the dual-ascent update. The DEFAULT
@@ -169,7 +169,7 @@ mid-loop point). Instead it returns EARLY with `status = :budget_exceeded` and
 — a `nothing` price is a deliberate signal that no certified transactive price exists yet,
 never a plausible-but-uncertified number silently returned as if it were the DADP.
 
-# Exactness-gate override seam (2026-08-22 follow-up, quick task 260822-f0b —
+# Exactness-gate override seam (2026-08-22 follow-up —
 
 `atol_exact::Union{Nothing, Real} = nothing, rtol_exact::Real = 1e-4`)
 
@@ -179,11 +179,11 @@ call never reaches the gate, so there is nothing to thread there). The defaults 
 equal `assert_socp_exact!`'s own defaults, following this project's `rtol_exact` naming precedent
 (`solve_welfare`, `stochastic_welfare.jl`, `subproblem.jl`).
 
-Since Phase 35 (ARCH-10) `atol_exact = nothing` selects the gate's HYBRID per-branch/hour floor
+`atol_exact = nothing` selects the gate's HYBRID per-branch/hour floor
 `atol_b = max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT·ref_b)` = `max(2e-7, 1e-9·ref_b)` (`ref_b = smax²`
-for a thermally limited branch, else the head-branch `P²+Q²`); before Phase 35 the ADMM default was
+for a thermally limited branch, else the head-branch `P²+Q²`); previously the ADMM default was
 a FLAT `1e-6`. The verdict therefore CHANGED for existing callers relying on the default — it is
-NOT byte-identical:
+NOT bit-for-bit identical:
 
   - STRICTER where `ref_b < 1000` (smax below ≈ 31.6 pu, or an unlimited branch in an hour where
     the head-branch |S| is below ≈ 31.6 pu): the floor drops toward `2e-7`, so a consolidation
@@ -193,8 +193,8 @@ NOT byte-identical:
     flow exceeds ≈ 31.6 pu.
 
 An explicit `Real` `atol_exact` is a FLAT per-branch floor that bypasses the hybrid computation.
-The value that reached the gate is recorded in `dso_ctx.meta[:socp_atol_exact]` (WR-06).
-This is a SEAM, not a default weakening (T-25-12, certificate-laundering): it must never be
+The value that reached the gate is recorded in `dso_ctx.meta[:socp_atol_exact]`.
+This is a SEAM, not a default weakening (certificate-laundering): it must never be
 used to manufacture a passing verdict for a point that would otherwise be inexact under the
 project's own default gate. A caller overriding it is asserting they have their OWN
 independently measured noise floor for the tolerance they pass, mirroring how
@@ -204,51 +204,51 @@ independently measured noise floor for the tolerance they pass, mirroring how
 
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, reactive_consensus_mode, status)` where
 `status` is `:converged` on the normal path (ADDITIVE new field — every other field is
-UNCHANGED from before this plan) or `:budget_exceeded` on the new early-exit path above
-(see "Wall-clock budget"). `reactive_consensus_mode::ReactiveMode` (WR-01, phase-26 review) is
+UNCHANGED from the earlier return value) or `:budget_exceeded` on the new early-exit path above
+(see "Wall-clock budget"). `reactive_consensus_mode::ReactiveMode` is
 the RESOLVED mode this call actually ran with — ALWAYS present on both the `:converged` and
-`:budget_exceeded` paths, so a caller relying on the smart PM-03 default (`reactive_consensus`
+`:budget_exceeded` paths, so a caller relying on the smart default (`reactive_consensus`
 omitted) can recover which mode fired without re-deriving `_any_flexible_reactive` itself.
 `λ == dadp`
 is the `(n_load_nodes, T)` converged DADP matrix (row `i` ↔ the `i`-th load node in ascending bus
 order, matching `extract_dlmp(centralized)[load_buses, :]`), `dso_ctx` is the converged DSO-OPT
-[`ModelContext`](@ref) (its `.model` shape is iteration-count-independent — ADMM-03), and
-`exact_maxgap` the certified SOC cone residual (PF-04). `mu_q`/`q_devices` are STABLE keys, ALWAYS
-present in the returned `NamedTuple` (Claude's Discretion, MESH-05 D-11): under `OFF`/`CERTIFIED`
+[`ModelContext`](@ref) (its `.model` shape is iteration-count-independent), and
+`exact_maxgap` the certified SOC cone residual. `mu_q`/`q_devices` are STABLE keys, ALWAYS
+present in the returned `NamedTuple`: under `OFF`/`CERTIFIED`
 both are `nothing` (mirrors this file's own `exact_maxgap` convention — always a key, `nothing`
 until populated); under `LIVE`, `mu_q` is the `(n_load_nodes, T)` converged reactive-price matrix
 (SAME ascending-bus-order convention as `λ_mat`, sign-corrected per the empirical finding above)
 and `q_devices::Dict{Int,Vector{Float64}}` holds each `FourQuadBESS`'s converged length-`T` `q`
 trajectory, keyed by bus. The key is `mu_q`, NEVER bare `μ`: the same signature carries the
-`μ::Real = 10.0` adaptive-ρ residual-balancing band kwarg, and the phase-16 naming audit
+`μ::Real = 10.0` adaptive-ρ residual-balancing band kwarg, and the naming audit
 (`test_admm_reactive.jl`'s header) reserves `mu_q` as THE code handle for the extracted reactive
-price (WR-03, phase-19 review).
+price.
 
 # Throws
 
   - `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, a non-positive `maxiter`
     (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
-    1:1 node↔aggregator coupling this Phase-6 loop assumes; multi-aggregator-per-bus netflow
-    splitting is a Phase-7 generalization).
-  - `ArgumentError` (via [`build_dso_opt`](@ref) — WR-04, phase-19 review, WIDENED by PM-03,
-    post-merge triage cluster D) when any aggregator carries a `q_inject`-bearing device
+    1:1 node↔aggregator coupling this loop assumes; multi-aggregator-per-bus netflow
+    splitting is a possible generalization).
+  - `ArgumentError` (via [`build_dso_opt`](@ref) — guards against silently dropping device-level reactive decisions;
+    widened to flexible-load devices) when any aggregator carries a `q_inject`-bearing device
     (`FourQuadBESS`) OR an `is_flexible_load` member (Thermostatic/Deferrable/Interruptible,
-    FIX-05) while `reactive_consensus` is EXPLICITLY forced to something other than `ReactiveMode.LIVE`:
+    reactive draw) while `reactive_consensus` is EXPLICITLY forced to something other than `ReactiveMode.LIVE`:
     under `OFF`/`CERTIFIED` the DSO reactive closure is the inelastic `−Pdc·tanφ` draw alone, so
     the device's reactive decision would be silently dropped from the network model (and, under
     `CERTIFIED`, the certified `dual(:balance_q)` would be priced against a closure that no
-    longer matches the centralized model's). Since PM-03, this only fires on an EXPLICIT
+    longer matches the centralized model's). This only fires on an EXPLICIT
     override — `reactive_consensus`'s own default already resolves to `ReactiveMode.LIVE` whenever such a
     member is present.
   - A loud `ConvergenceError` if `maxiter` is reached WITHOUT convergence AND WITHOUT the
     `time_limit_s` wall-clock budget having been exceeded first — the fail-loud cap that
-    refuses to return a non-consensus iterate (RESEARCH Pitfall 2). When `time_limit_s` IS
+    refuses to return a non-consensus iterate. When `time_limit_s` IS
     exceeded first, this throw is SKIPPED — the honest `status = :budget_exceeded` return
     (see "Wall-clock budget" above) replaces it; that path is not itself a genuine
     non-convergence, so it is not fail-loud.
-  - `CertificateError` when a final-consolidation certificate (PF-04 exactness, battery, 4Q,
+  - `CertificateError` when a final-consolidation certificate (SOC exactness, battery, 4Q,
     no-slack) refuses the CONVERGED point; its `iterations` field carries the ADMM iteration
-    count reached before the refusal (WR-07, 35-REVIEW).
+    count reached before the refusal.
 
 # Status and exceptions
 
@@ -285,30 +285,30 @@ function solve_admm(
     # A degenerate horizon (T = 0, with a length-0 λ₀ that would pass the shape guard below) makes
     # the coupling-entry count p = length(load_nodes)·T == 0, so ε_pri = ε_dual = 0 AND every
     # residual sum is 0 — `converged` then returns true on iteration 1 and the loop reports a
-    # NONSENSICAL "converged" result for an empty problem (IN-03). Reject it up front.
+    # NONSENSICAL "converged" result for an empty problem. Reject it up front.
     T >= 1 || throw(ArgumentError("solve_admm needs T ≥ 1 (got T=$T)"))
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
     # A non-positive iteration budget never enters the loop, so the residual trace stays empty and
-    # the fail-loud cap below would itself throw an opaque BoundsError on `last(...)` (WR-01). Reject
+    # the fail-loud cap below would itself throw an opaque BoundsError on `last(...)`. Reject
     # it here with a CLEAR message instead — maxiter ≥ 1 is the minimum to even attempt consensus.
     maxiter >= 1 ||
         throw(ArgumentError("solve_admm needs maxiter ≥ 1 (got maxiter=$maxiter)"))
     allow_export || throw(
         ArgumentError(
             "solve_admm requires allow_export=true (the free-sign priced frontier is the " *
-            "SOC-exactness enabler, PF-04; import-only is out of Phase-6 scope)",
+            "SOC-exactness enabler; import-only is not supported)",
         ),
     )
 
     ρf = Float64(ρ)
     ρ_qf = Float64(ρ_q)
-    # MESH-05 (D-12): normalize ONCE — the SINGLE source of truth for OFF/CERTIFIED/LIVE threaded
+    # Normalize ONCE — the SINGLE source of truth for OFF/CERTIFIED/LIVE threaded
     # symmetrically into build_dso_opt AND every build_agr_opt. The reactive coupling multiplier is
     # `μq` inside the state, NEVER bare `μ` (the adaptive-ρ band kwarg; test_admm_reactive grep audit).
     mode = normalize_reactive_mode(reactive_consensus)
     rmode = _react_mode(mode)
 
-    # ---- BUILD ONCE (ADMM-03) + ITERATE (ARCH-05 named phases; see admm_phases.jl) --------------
+    # ---- BUILD ONCE + ITERATE (named phases; see admm_phases.jl) --------------
     st = _admm_build(feeder, pf, aggregators, T, λ₀, ρf, ρ_qf, mode, rmode)
     _admm_iterate!(st, rmode, maxiter, ε_abs, ε_rel, τ, μ, ρ_min, ρ_max, time_limit_s)
 
@@ -318,8 +318,8 @@ function solve_admm(
     agr_by_bus = st.agr_by_bus
     λ, a, util = st.λ, st.a, st.util
 
-    # ---- FAIL LOUD on the maxiter cap (RESEARCH Pitfall 2) — never return a non-consensus point.
-    # Phase 25 (D-18): fires ONLY on genuine non-convergence — NEITHER converged NOR an honest
+    # ---- FAIL LOUD on the maxiter cap — never return a non-consensus point.
+    # Fires ONLY on genuine non-convergence — NEITHER converged NOR an honest
     # wall-clock budget exit.
     if !st.converged_flag && !st.budget_exceeded_flag
         throw(
@@ -329,12 +329,12 @@ function solve_admm(
                 "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
                 "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$(st.ρf)). Retune the adaptive-ρ config " *
                 "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
-                "optimum and is refused (thesis §2.6; RESEARCH Pitfall 2).";
+                "optimum and is refused (thesis §2.6).";
                 iterations = maxiter,
             ),
         )
     elseif st.budget_exceeded_flag
-        # ---- HONEST early exit on the wall-clock budget (Phase 25, D-18). SKIPS the final
+        # ---- HONEST early exit on the wall-clock budget. SKIPS the final
         # consolidation pass below — it assumes a converged iterate and runs the battery/4Q/
         # exactness certificates, which are meaningless on a mid-loop, non-consensus point.
         # `welfare`/`dadp`/`λ`/`exact_maxgap`/`mu_q` are `nothing` BY DESIGN: a `:budget_exceeded`
@@ -350,12 +350,12 @@ function solve_admm(
             exact_maxgap = nothing,
             mu_q = nothing,
             q_devices = Dict{Int, Vector{Float64}}(),
-            reactive_consensus_mode = mode,   # WR-01: resolved mode recoverable even on early exit
+            reactive_consensus_mode = mode,   # resolved mode recoverable even on early exit
             status = :budget_exceeded,
         )
     end
 
-    # WR-07 (35-REVIEW): a certificate refused at the final consolidation (e.g. the PF-04 exactness
+    # A certificate refused at the final consolidation (e.g. the SOC exactness
     # gate) comes AFTER the loop converged; attach that iteration count to the error so callers can
     # still report it. Same message and `kind` — the refusal itself is unchanged.
     return try

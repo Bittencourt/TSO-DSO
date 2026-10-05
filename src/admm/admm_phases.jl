@@ -1,7 +1,7 @@
 # src/admm/admm_phases.jl
 #
-# SEAM: the named internal phases of `solve_admm` (Phase 34, ARCH-05): `_admm_build`,
-# `_admm_iterate!`, `_adapt_rho!` (certification `_admm_certify` follows in a later plan).
+# SEAM: the named internal phases of `solve_admm`: `_admm_build`,
+# `_admm_iterate!`, `_adapt_rho!`, `_admm_certify` (the final certification pass).
 # Code is MOVED from the former monolithic loop; see admm_state.jl for the floating-point order
 # contract (statement order per iteration: AGR -> LIVE dso.qag coefficients -> solve_dso! ->
 # accumulate -> record! -> converged? -> budget? -> dual step -> ρ adapt -> ρ_q adapt;
@@ -10,7 +10,7 @@
 using JuMP
 
 """
-BUILD ONCE (ADMM-03): one AGR-OPT per aggregator and the whole-network DSO-OPT, the 1:1
+BUILD ONCE: one AGR-OPT per aggregator and the whole-network DSO-OPT, the 1:1
 node<->aggregator guards, the residual ledger and the initial [`AdmmState`](@ref). No JuMP model is
 constructed after this returns.
 """
@@ -37,12 +37,12 @@ function _admm_build(
     )
     load_nodes = dso.load_nodes                       # ascending non-root aggregator buses
 
-    # 1:1 node<->aggregator coupling (multi-aggregator-per-bus is a Phase-7 generalization).
+    # 1:1 node<->aggregator coupling (multi-aggregator-per-bus is a possible generalization).
     length(aggregators) == length(load_nodes) || throw(
         ArgumentError(
             "solve_admm assumes one aggregator per load node (got $(length(aggregators)) " *
             "aggregators for $(length(load_nodes)) load nodes); multi-aggregator-per-bus " *
-            "coupling is a Phase-7 extension",
+            "coupling is not supported",
         ),
     )
     agr_by_bus = Dict{Int, AgrOpt}()
@@ -91,7 +91,7 @@ function _admm_build(
 end
 
 """
-Residual-balancing adaptive ρ (Boyd §3.4.1; RESEARCH Pattern 4) on the ACTIVE-block-only
+Residual-balancing adaptive ρ (Boyd §3.4.1) on the ACTIVE-block-only
 normalized residuals, then the independent reactive ρ_q hook. `set_rho!` on the DSO first, then
 each AGR in `load_nodes` order, only on an actual change. λ is never rescaled.
 """
@@ -210,7 +210,7 @@ function _admm_iterate!(
             break
         end
 
-        # Wall-clock budget (Phase 25, D-18): after the convergence check, before the dual step.
+        # Wall-clock budget: after the convergence check, before the dual step.
         if time_limit_s !== nothing && (time_ns() - st.t0_wall_ns) / 1.0e9 > time_limit_s
             st.budget_exceeded_flag = true
             break
@@ -249,12 +249,12 @@ end
 
 """
 CERTIFICATION phase (moved verbatim from the former monolithic `solve_admm`): the converged
-consolidation pass running the PHYSICAL gates (RESEARCH Pitfall 3 / Pattern 5, WR-01 / INFRA-03):
+consolidation pass running the PHYSICAL gates:
 AGR re-solve per load node with the battery (`τ_batt = 1e-3`) and 4Q (`rtol_4q = 1e-3`,
 `atol_4q = 1e-7`) complementarity certificates (interior-point-loosened, `strict = false`), the
-final DSO solve with the PF-04 SOC exactness gate, the ACTIVE `:balance_p` no-slack certificate, the
+final DSO solve with the SOC exactness gate, the ACTIVE `:balance_p` no-slack certificate, the
 reactive `:balance_q` certificate hook, then welfare from PRIMALS and the published DADP
-(`λ_mat = −λ`, RESEARCH Pitfall 5: the reported price is the NEGATED internal multiplier).
+(`λ_mat = −λ`: the reported price is the NEGATED internal multiplier).
 Returns the `solve_admm` result NamedTuple.
 """
 function _admm_certify(
@@ -301,7 +301,7 @@ function _admm_certify(
     st.p_import = p_import
     st.exact_maxgap = exact_maxgap
 
-    # WR-01 PUBLISHED-PRIMAL CERTIFICATE (INFRA-03): label-independent ACTIVE nodal-balance
+    # PUBLISHED-PRIMAL CERTIFICATE: label-independent ACTIVE nodal-balance
     # no-slack gate (thesis 3.31); `welfare` and the DADP are published from this primal.
     let balance_p = dso.ctx.constraints[:balance_p]
         for j in 1:size(balance_p, 1), t in 1:size(balance_p, 2)
@@ -309,7 +309,7 @@ function _admm_certify(
         end
     end
 
-    # REACT-02: `:balance_q` no-slack certificate for CERTIFIED/LIVE (OFF: intentionally not gated).
+    # `:balance_q` no-slack certificate for CERTIFIED/LIVE (OFF: intentionally not gated).
     _react_certify_q!(rmode, dso)
 
     # Welfare recomputed from PRIMALS (Σ U_ag − λ₀ᵀp_import — NOT the penalized objective).
@@ -318,7 +318,7 @@ function _admm_certify(
     # Converged DADP in ascending-bus order (matches extract_dlmp(centralized)[load_buses, :]).
     λ_mat = reduce(vcat, (permutedims(-λ[j]) for j in load_nodes))
 
-    # `mu_q`/`q_devices`: STABLE keys, `nothing` unless LIVE (MESH-05 D-11; never bare `μ`, WR-03).
+    # `mu_q`/`q_devices`: STABLE keys, `nothing` unless LIVE (never bare `μ`).
     mu_q_mat, q_devices = _react_outputs(rmode, st, agr_by_bus)
 
     return (;
@@ -331,7 +331,7 @@ function _admm_certify(
         exact_maxgap = exact_maxgap,
         mu_q = mu_q_mat,
         q_devices = q_devices,
-        # WR-01 (phase-26 review): the RESOLVED mode this call actually ran with.
+        # The RESOLVED mode this call actually ran with.
         reactive_consensus_mode = mode,
         status = :converged,
     )

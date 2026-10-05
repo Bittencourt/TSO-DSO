@@ -1,7 +1,7 @@
 # src/admm/admm_state.jl
 #
 # SEAM: AdmmState + reactive-mode singleton dispatch for the decomposed `solve_admm`
-# (Phase 34, ARCH-05). Internal, unexported.
+# Internal, unexported.
 #
 # FLOATING-POINT ORDER CONTRACT (binding; ADMM knife-edge canary iters = 56, welfare
 # -4823.66604824162 must stay bit-identical): every statement here is MOVED from the former
@@ -52,8 +52,8 @@ Trait: can `pf` drive the decentralized ADMM (`solve_admm`/`build_dso_opt`)? `tr
 [`ConvexBranchFlow`](@ref) (both variants), [`RestrictedBranchFlow`](@ref), [`MeshedFlow`](@ref)
 and [`LinDistFlow`](@ref); `false` for everything else (`ACPowerFlow`, `DCPowerFlow`, ...).
 DSO-OPT delegates network construction to the formulation's `contribute!`, so any formulation
-whose `contribute!` yields the nodal-balance / `Rp,Rq` seam the ADMM coupling needs is supported
-(ARCH-05). Mirrored at the symbol level by `supports_pf(::ADMM, ...)`.
+whose `contribute!` yields the nodal-balance / `Rp,Rq` seam the ADMM coupling needs is supported.
+Mirrored at the symbol level by `supports_pf(::ADMM, ...)`.
 """
 admm_supported(::AbstractPowerFlow) = false
 admm_supported(::Union{ConvexBranchFlow, RestrictedBranchFlow, MeshedFlow, LinDistFlow}) =
@@ -368,12 +368,12 @@ function _react_adapt_rho!(
     return nothing
 end
 
-# ---- hook: reactive default (smart PM-03 default, moved out of the solve_admm signature) --------
+# ---- hook: reactive default (smart default, moved out of the solve_admm signature) --------
 _default_reactive_consensus(aggregators) =
     _any_flexible_reactive(aggregators) ? ReactiveMode.LIVE : ReactiveMode.OFF
 
-# ---- hook: `:balance_q` no-slack certificate (REACT-02) -----------------------------------------
-# OFF: `:balance_q` is the inelastic constant closure, intentionally NOT gated (REACT-03).
+# ---- hook: `:balance_q` no-slack certificate -----------------------------------------
+# OFF: `:balance_q` is the inelastic constant closure, intentionally NOT gated.
 _react_certify_q!(::_ReactiveOff, dso) = nothing
 
 function _react_certify_q!(::Union{_ReactiveCertified, _ReactiveLive}, dso)
@@ -394,7 +394,7 @@ function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)
     T = st.T
     # SIGN CONVENTION: internal `μq[j]` converges to the NEGATED `dual(:balance_q[j])` (same
     # relationship as `λ` to `dual(:balance_p)`); reported `mu_q` is the negation, in the same
-    # ascending-bus order as `λ_mat`. D-03: never compare an individual FourQuadBESS `q` trajectory.
+    # ascending-bus order as `λ_mat`. Never compare an individual FourQuadBESS `q` trajectory.
     mu_q_mat = reduce(vcat, (permutedims(-st.react.μq[j]) for j in load_nodes))
     q_devices = Dict{Int, Vector{Float64}}()
     for j in load_nodes
