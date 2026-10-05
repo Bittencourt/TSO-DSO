@@ -1739,7 +1739,7 @@ uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
 [[deps.TSODSO]]
-deps = ["CSV", "Clarabel", "DataFrames", "DrWatson", "HiGHS", "Ipopt", "JuMP", "SparseArrays", "StableRNGs"]
+deps = ["CSV", "Clarabel", "Compat", "DataFrames", "DrWatson", "HiGHS", "Ipopt", "JuMP", "SparseArrays", "StableRNGs"]
 path = ".."
 uuid = "67a63935-f442-4b9a-93c0-a55ebfb6d374"
 version = "0.1.0"
@@ -1748,11 +1748,13 @@ version = "0.1.0"
     TSODSOGurobiExt = "Gurobi"
     TSODSOMakieExt = "CairoMakie"
     TSODSOMosekExt = "MosekTools"
+    TSODSOSCSExt = "SCS"
 
     [deps.TSODSO.weakdeps]
     CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
     Gurobi = "2e9cd046-0924-5485-92f1-d5272153d98b"
     MosekTools = "1ec41992-ff65-5c91-ac43-2df89e9693a4"
+    SCS = "c946c3f1-0d1f-5ce8-9dea-7daa1f7e2d13"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]

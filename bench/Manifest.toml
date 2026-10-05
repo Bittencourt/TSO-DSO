@@ -749,7 +749,7 @@ uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
 [[deps.TSODSO]]
-deps = ["CSV", "Clarabel", "DataFrames", "DrWatson", "HiGHS", "Ipopt", "JuMP", "SparseArrays", "StableRNGs"]
+deps = ["CSV", "Clarabel", "Compat", "DataFrames", "DrWatson", "HiGHS", "Ipopt", "JuMP", "SparseArrays", "StableRNGs"]
 path = ".."
 uuid = "67a63935-f442-4b9a-93c0-a55ebfb6d374"
 version = "0.1.0"
