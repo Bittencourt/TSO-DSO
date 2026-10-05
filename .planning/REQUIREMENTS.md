@@ -130,7 +130,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 
 ### Hygiene (HYG)
 
-- [x] **HYG-01**: Source comments and docstrings contain no plan, wave, task, decision or
+- [ ] **HYG-01**: Source comments and docstrings contain no plan, wave, task, decision or
   review-finding IDs (such as `plan 04-02`, `D-09`, `WR-01`, `Pitfall 7`, `byte-identical`), and a
   CI grep guard enforces this. Thesis-equation and literature references stay.
 - [ ] **HYG-02**: The inert SEAM-01 stubs (`operational_oracle`'s ignored `objective_hook` and
@@ -199,7 +199,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | ARCH-08 | Phase 34 | Complete |
 | ARCH-09 | Phase 34 | Complete |
 | ARCH-10 | Phase 35 | Complete |
-| HYG-01 | Phase 36 | Complete |
+| HYG-01 | Phase 36 | Pending |
 | HYG-02 | Phase 36 | Pending |
 | HYG-03 | Phase 36 | Complete |
 | HYG-07 | Phase 36 | Complete |
