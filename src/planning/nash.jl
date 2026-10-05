@@ -1,21 +1,18 @@
 # src/planning/nash.jl
 #
 # SEAM: run_nash! — the outer Gauss-Seidel diagonalization loop over N distributors'
-# already-hardened Benders best-responses (NASH-02/03/04). This file grows across two
-# plans in this phase: plan 13-02 owns `NashTrace` (this task) and `run_nash!` (Task 2)
-# plus `plot_nash_convergence`'s wiring (Task 3); a future plan may add
-# `run_nash_probe` (NASH-04's multi-seed/multi-order gate).
-# OWNER: plan 13-02 (Tasks 1-2: NashTrace + run_nash!; Task 3 wires plot_nash_convergence
-# in src/diagnostics/plots.jl + ext/TSODSOMakieExt.jl, consuming NashTrace from here).
+# already-hardened Benders best-responses. This file holds `NashTrace`, `run_nash!`,
+# and `run_nash_probe` (the multi-seed/multi-order gate); `plot_nash_convergence`
+# (src/diagnostics/plots.jl + ext/TSODSOMakieExt.jl) consumes `NashTrace` from here.
 #
 # THREE STRUCTURAL DIVERGENCES FROM THIS FILE'S CLOSEST ANALOGS (state explicitly, in
-# prose, per 13-PATTERNS.md's own convention that every new ledger/orchestrator restate
+# prose, following the convention that every new ledger/orchestrator restates
 # why it is NOT a copy of its nearest sibling):
 #
 #  (1) UNLIKE `solve_stackelberg!`'s single-level loop (`benders.jl`), `run_nash!` is an
 #      OUTER loop whose body IS a full `solve_stackelberg!` call — this file builds NO
-#      JuMP model of its own. Every genuinely new JuMP model this phase needs
-#      (`SharedTransmission`) already lives in `coupling.jl` (plan 13-01); `nash.jl` is
+#      JuMP model of its own. Every genuinely new JuMP model it needs
+#      (`SharedTransmission`) already lives in `coupling.jl`; `nash.jl` is
 #      pure orchestration over `solve_stackelberg!` + `coupling.jl`'s lifecycle
 #      functions (`activate_distributor!`/`write_back!`), never a solver call of its own.
 #
@@ -25,20 +22,19 @@
 #      iterations, retries, cut count). This lets `plot_nash_convergence` reconstruct
 #      BOTH the outer per-sweep max-residual curve (reduce-by-`max` over
 #      `distributor_trace` within a `sweep_trace` group) and the inner per-distributor
-#      Benders-gap trajectory from the SAME ledger, without a second parallel struct
-#      (13-PATTERNS.md Pattern 3).
+#      Benders-gap trajectory from the SAME ledger, without a second parallel struct.
 #
 #  (3) `NashTrace.benders_gap_trace` is ALWAYS finite — UNLIKE `BendersTrace.gap_trace`,
 #      which carries a legitimate `NaN` sentinel on every feasibility-cut-branch row.
 #      A row is only ever pushed here from a CONVERGED `solve_stackelberg!` result
-#      (Task 2's `run_nash!`): a best-response that fails to converge within ITS OWN
-#      `max_iter` budget raises loudly INSIDE `solve_stackelberg!` itself (D-10) and
+#      (`run_nash!`): a best-response that fails to converge within ITS OWN
+#      `max_iter` budget raises loudly INSIDE `solve_stackelberg!` itself and
 #      never reaches `push!` here — there is no partial/failed-best-response row to
 #      record a `NaN` gap for.
 #
-# FRESH CUT STORE PER BEST-RESPONSE, BY CONSTRUCTION (CONTEXT.md's locked
-# "correctness-first" decision; the full cut-invalidation math argument is embedded
-# verbatim in `coupling.jl`'s own header, plan 13-01): `run_nash!` (Task 2) NEVER
+# FRESH CUT STORE PER BEST-RESPONSE, BY CONSTRUCTION (a correctness-first
+# decision; the full cut-invalidation math argument is embedded
+# verbatim in `coupling.jl`'s own header): `run_nash!` NEVER
 # persists a `BendersMaster`/cut store across best-responses. Every call to
 # `solve_stackelberg!` builds its own `oracle`/`follower`/`master` from scratch
 # (`benders.jl`'s own "BUILD ONCE, outside the [Benders] loop" discipline still holds —
@@ -62,7 +58,7 @@ using DrWatson: datadir
 """
     NashTrace
 
-A mutable, JuMP-free two-level convergence ledger (NASH-03) for `run_nash!`'s outer
+A mutable, JuMP-free two-level convergence ledger for `run_nash!`'s outer
 Gauss-Seidel sweep: ONE ROW PER `(sweep, distributor)` PAIR (see this file's header,
 divergence (2), for why this is NOT `BendersTrace`'s one-row-per-iteration shape).
 
@@ -72,24 +68,24 @@ Fields:
   - `distributor_trace::Vector{Int}` — which distributor `i` this row's best-response
     belongs to.
   - `nash_residual_trace::Vector{Float64}` — this distributor's own Nash residual at
-    this sweep (`max(‖z_i^(k+1) - z_i^(k)‖∞, |Δx_inv_i|)`, `run_nash!`'s own formula,
-    Task 2). NOT guarded for finiteness (see below).
+    this sweep (`max(‖z_i^(k+1) - z_i^(k)‖∞, |Δx_inv_i|)`, `run_nash!`'s own formula).
+    NOT guarded for finiteness (see below).
   - `benders_iters_trace::Vector{Int}` — the embedded inner-loop summary:
     `result.iters` from this distributor's `solve_stackelberg!` best-response.
   - `benders_gap_trace::Vector{Float64}` — the embedded inner-loop summary:
     `result.gap`. ALWAYS finite (see this file's header, divergence (3)) — NOT
     guarded for finiteness, since a `NaN`/`Inf` here would only arise from a
-    `solve_stackelberg!` internal bug already covered by Phase 11/12's own regression
+    `solve_stackelberg!` internal bug already covered by that function's own regression
     suite (mirrors `BendersTrace.UB_trace`'s own "legitimate-but-not-contractually-
     guaranteed" precedent, `trace.jl`'s header).
   - `benders_retries_trace::Vector{Int}` — the embedded inner-loop summary:
     `trace_summary(result.trace).total_retries`.
-  - `cuts_rebuilt_trace::Vector{Int}` — instrumented per CONTEXT.md's own "surface the
-    rebuild-cost finding, don't silently retain" decision: `length(result.master.cuts)`,
+  - `cuts_rebuilt_trace::Vector{Int}` — instrumented to surface the
+    rebuild cost rather than silently retain it: `length(result.master.cuts)`,
     the number of cuts this best-response's FRESH master accumulated before converging
     (every best-response starts this count at 0 — see this file's header).
   - `order_trace::Vector{Symbol}` — `:forward`/`:reverse`, which sweep order this row
-    belongs to (needed for a future multi-order probe, NASH-04, to slice its own trace
+    belongs to (needed for the multi-order probe to slice its own trace
     back out of a shared ledger).
   - `iters::Int` — the number of recorded rows (`== length(sweep_trace) == …`).
 
@@ -189,7 +185,7 @@ returns `false` until the sweep completes. Returns `false` on an empty ledger
 `N < 1` (an invalid sweep width is a caller bug, never a soft `false`).
 
 This method is THE one convergence definition for the outer Gauss-Seidel loop:
-`run_nash!` calls it directly (WR-04) rather than re-implementing the window
+`run_nash!` calls it directly rather than re-implementing the window
 arithmetic inline, so the exported method and the loop's actual convergence test can
 never drift apart.
 """
@@ -233,32 +229,31 @@ end
 
 export NashTrace
 
-# --- run_nash! — the outer Gauss-Seidel diagonalization loop (NASH-02, plan 13-02 Task 2) ---
+# --- run_nash! — the outer Gauss-Seidel diagonalization loop ---
 #
-# THIS IS THE PHASE'S OWN NOVEL ORCHESTRATION LAYER (see this file's header,
+# THIS IS THE NOVEL ORCHESTRATION LAYER (see this file's header,
 # divergence (1)): the loop body IS a full `solve_stackelberg!` call — this function
 # builds NO JuMP model, no oracle, no follower, no master of its own. It only:
 #   (a) toggles `SharedTransmission`'s bound-pins via `activate_distributor!`/
-#       `write_back!` (coupling.jl, plan 13-01),
+#       `write_back!` (coupling.jl),
 #   (b) calls `solve_stackelberg!` fresh, once per distributor per sweep, passing a
-#       `DistributorView` as the new `follower` keyword (Task 1's additive extension),
+#       `DistributorView` as the `follower` keyword (an additive extension),
 #   (c) records the two-level `NashTrace` ledger.
 #
-# GAUSS-SEIDEL, NEVER JACOBI (13-RESEARCH.md Pitfall 1 / 13-PATTERNS.md's own explicit
-# anti-pattern warning): `write_back!` fires IMMEDIATELY after each distributor's
+# GAUSS-SEIDEL, NEVER JACOBI: `write_back!` fires IMMEDIATELY after each distributor's
 # best-response converges — BEFORE the next distributor in `sweep_order` is processed
 # — so a later distributor in the SAME sweep reads its predecessor's JUST-updated
 # `z`/`x_inv`, never a stale previous-sweep snapshot. This is regressed both indirectly
 # (forward/reverse agreement, testitem 7) and directly (intra-sweep parameter-state
 # inspection, testitem 7b).
 #
-# NESTED-TOLERANCE GUARD (13-CONTEXT.md locked decision / 13-RESEARCH.md Pitfall 2):
+# NESTED-TOLERANCE GUARD:
 # every distributor's own inner Benders `tol` must be STRICTLY TIGHTER than the outer
 # `tol_outer`, enforced here as a code-level `ArgumentError` — never merely documented
 # — before any solve call. Without this, the outer residual test could "converge" on
 # inner-solve noise rather than a genuine fixed point.
 #
-# CR-01 PARITY (`test_planning_benders.jl`'s own incumbent-consistency regression,
+# PARITY (`test_planning_benders.jl`'s own incumbent-consistency regression,
 # reused here one level up): `solve_stackelberg!` returns the INCUMBENT `(y_best,
 # z_best)`, which may differ from the actual LAST master trial solved against the
 # shared model — so `value(shared.x_inv[i])` immediately after `solve_stackelberg!`
@@ -271,8 +266,8 @@ export NashTrace
     _integer_alpha_x_lb(shared::SharedTransmission, i::Int, y_max::Real) -> Float64
 
 A valid lower bound on distributor `i`'s follower cost slice
-`c_inv[i]·x_inv[i] + Σₜ c_op[i][t]·x_op[i,t]` for `run_nash!`'s integer path (Phase 31
-code review, WR-06): `x_inv[i] ∈ [0, x_inv_max[i]]` and `x_op[i,t] = z[i,t] ∈ [0, y_max]`
+`c_inv[i]·x_inv[i] + Σₜ c_op[i][t]·x_op[i,t]` for `run_nash!`'s integer path:
+`x_inv[i] ∈ [0, x_inv_max[i]]` and `x_op[i,t] = z[i,t] ∈ [0, y_max]`
 (the master box `z <= y_inv <= y_max`), so each term is bounded below by
 `min(0, coefficient) × its upper bound`. Exactly `0.0` when every cost is nonnegative —
 the previous hard-coded default — and still valid when a cost is negative, where `0.0`
@@ -286,8 +281,7 @@ end
 """
     _integer_cycle_hit(history, joint_b, state, residual; atol) -> Union{Nothing, Int}
 
-The integer-diagonalization cycle predicate of [`run_nash!`](@ref) (Phase 31 code
-review, CR-01). `history` holds one `(; sweep, joint_b, state, residual)` entry per
+The integer-diagonalization cycle predicate of [`run_nash!`](@ref). `history` holds one `(; sweep, joint_b, state, residual)` entry per
 earlier completed sweep, where `state = vcat(vec(z), x_inv)` is the FULL committed
 continuous state and `residual` is that sweep's worst-distributor Nash residual.
 Returns the `sweep` of the first entry that the current sweep REPEATS, or `nothing`.
@@ -298,8 +292,7 @@ An entry is repeated only when ALL three hold:
     exact);
  2. the committed continuous state recurs, `maximum(abs.(state .- h.state)) <= atol`;
  3. there was no progress at all, `residual >= h.residual` — NO tolerance slack: any
-    strict residual decrease between the matched sweeps vetoes the match (iteration-2
-    review, CR-01).
+    strict residual decrease between the matched sweeps vetoes the match.
 
 Why the binaries alone are NOT a cycle (the bug this predicate fixes): binaries
 routinely settle sweeps before `z`/`x_inv` do, so a `b`-only key flagged every
@@ -308,11 +301,11 @@ damping `ω = 0.5`, where the residual halves each sweep at a fixed `b`. Conditi
 rejects such runs when consecutive sweeps move the committed state by more than
 `atol`, and condition 3 rejects every trajectory whose residual strictly decreased
 between the matched sweeps (the residual of a genuine cycle recurs; that of a
-converging run decreases). The same lesson as Phase 24's own inner stall guard
-(`apply_integer_cuts!`): a revisit with materially different continuous state is
+converging run decreases). The same lesson as the inner stall guard of
+`apply_integer_cuts!`: a revisit with materially different continuous state is
 refinement progress, never a stall.
 
-Why condition 3 carries NO `atol` slack (iteration-2 review, CR-01): `history` is
+Why condition 3 carries NO `atol` slack: `history` is
 scanned for ANY earlier sweep, not just the previous one, so condition 2 alone does not
 separate a converging run from a recurrence. An OSCILLATORY contraction — committed
 state `s_k = s* + c^k e` with `c ∈ (-1, 0)`, which a negative-slope Gauss-Seidel sweep
@@ -353,7 +346,7 @@ function _integer_cycle_hit(
         h.joint_b == joint_b || continue
         length(h.state) == length(state) || continue
         maximum(abs.(state .- h.state)) <= atol || continue
-        residual >= h.residual || continue  # no slack: any decrease = progress (CR-01, iter 2)
+        residual >= h.residual || continue  # no slack: any decrease = progress (, iter 2)
         return h.sweep
     end
     return nothing
@@ -366,15 +359,15 @@ end
               checkpoint_dir::AbstractString = datadir("nash_checkpoints"),
               inexact_policy::Symbol = :strict) -> NamedTuple
 
-Run the outer Gauss-Seidel diagonalization loop (NASH-02) over `shared.N` distributors,
+Run the outer Gauss-Seidel diagonalization loop over `shared.N` distributors,
 each atomic best-response a FULL `solve_stackelberg!` convergence (never a partial
-pass) against a fresh, per-distributor `DistributorView` of `shared` (`coupling.jl`,
-plan 13-01). Each element of `specs` supplies, per distributor `i`: `feeder`, `pf`,
+pass) against a fresh, per-distributor `DistributorView` of `shared` (`coupling.jl`).
+Each element of `specs` supplies, per distributor `i`: `feeder`, `pf`,
 `aggregators`, `λ₀`, `master_kwargs` (all required — mirrors `solve_stackelberg!`'s own
 split), and OPTIONALLY `tol` (default `1e-6`) and `max_iter` (default `100`) via
 `get(spec, :tol, 1e-6)`/`get(spec, :max_iter, 100)`.
 
-**GNE-multiplicity caveat (Phase 31, BILEV-06).** This loop converges to A generalized
+**GNE-multiplicity caveat.** This loop converges to A generalized
 Nash equilibrium (GNE) of the shared-constraint game, not necessarily the UNIQUE one —
 on a fixture whose shared capacity row is the only binding coupling (interior individual
 investment caps), a whole continuum of GNEs can exist (see [`run_nash_probe`](@ref)'s
@@ -388,16 +381,16 @@ fixture the VE set is the whole split segment `x_inv_1 + x_inv_2 = 0.7`, `z = (0
 contains free-riding GNEs `x_inv_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]`, with unequal
 multipliers (see that function's docstring).
 
-**`inexact_policy` (Phase 30 code review iteration 2, CR-01).** Forwarded UNCHANGED to
+**`inexact_policy`.** Forwarded UNCHANGED to
 every inner `solve_stackelberg!` best response. It defaults to `:strict` here, NOT to
-`solve_stackelberg!`'s own `:certify_incumbent` default: before Phase 30 every inner
+`solve_stackelberg!`'s own `:certify_incumbent` default: historically every inner
 best response threw at the first SOCP-inexact oracle solve, and a Nash sweep must keep
 that fail-loud guarantee unless the caller opts out explicitly. With a non-`:strict`
 policy an inner best response can certify only the SOC relaxation
 (`result_i.ub_relaxation_only`). That is never committed silently: every best
 response's exactness certificate is collected on the returned `certificates` vector,
 and `any_relaxation_only` flags the run as a whole (see Returns). On a formulation with
-no cone (DC/LinDistFlow, every pre-Phase-30 Nash fixture) the policy has no effect.
+no cone (DC/LinDistFlow) the policy has no effect.
 
 # Algorithm
 
@@ -407,10 +400,10 @@ guards-before-build discipline, each a distinct `ArgumentError`): `length(specs)
 infeasible); `order in (:forward, :reverse)`; `max_sweeps >= 1`; `0 < ω <= 1`;
 `isfinite(tol_outer) && tol_outer > 0`; the NESTED-TOLERANCE guard — for every `spec`,
 `get(spec, :tol, 1e-6) < tol_outer`, naming the offending distributor index, its own
-`tol`, and `tol_outer` (13-CONTEXT.md locked, 13-RESEARCH.md Pitfall 2); and the
+`tol`, and `tol_outer`; and the
 SEED-CONSISTENCY guards below.
 
-SEEDING THE GAME STATE (CR-01 — load-bearing for NASH-04's multi-seed probe): BEFORE
+SEEDING THE GAME STATE (load-bearing for the multi-seed probe): BEFORE
 the first sweep, the seed is COMMITTED into the shared model's own state via
 `write_back!(shared, j, z0[j,:], x_inv0[j])` for every distributor `j` — every `z`
 Parameter set to its seeded flow AND every `x_inv[j]` bound-pinned at a consistent
@@ -418,7 +411,7 @@ seeded investment — so the FIRST best-response of every run genuinely plays ag
 the seed, never the build-time all-zeros default. Without this, `z0` would only
 initialize the residual baseline `z_prev`, every run's first best-response would face
 the identical all-zeros state, and the returned equilibrium would be bitwise identical
-across seeds — rendering `run_nash_probe`'s seed dimension (NASH-04's honesty gate)
+across seeds — rendering `run_nash_probe`'s seed dimension (the honesty gate)
 structurally vacuous. `x_inv0` (optional length-`shared.N` vector) supplies the seeded
 investments; when omitted (`nothing`, the default) each entry is derived as the
 MINIMAL exactly-supporting investment `maximum(z0[j,:]) / shared.corridor_cap`.
@@ -434,7 +427,7 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
  1. `activate_distributor!(shared, i)` — restore `i`'s own investment freedom.
  2. `solve_stackelberg!(...; follower = DistributorView(shared, i), follower_kwargs = NamedTuple())` — a FRESH oracle/follower/master triple built from scratch inside
     `solve_stackelberg!` (fresh cut store BY CONSTRUCTION, see this file's header).
- 3. CR-01 parity re-solve (`solve_follower!(result_i.follower, result_i.z)`), then read
+ 3. parity re-solve (`solve_follower!(result_i.follower, result_i.z)`), then read
     `x_inv_i_converged = value(shared.x_inv[i])` — see this file's header for why this
     re-solve is load-bearing.
  4. Compute distributor `i`'s Nash residual `residual_i = max(‖z_i^(k+1) − z_i^(k)‖∞,
@@ -452,7 +445,7 @@ For each sweep `k = 1:max_sweeps`, for each distributor `i` in `sweep_order` (`1
     subdirectory (never colliding with each distributor's own inner Benders checkpoints,
     already nested under `sweep_k/distributor_i`).
 
-After each sweep completes, convergence is decided by `is_converged(trace, tol_outer, shared.N)` — THE one convergence definition (WR-04), never an inline re-implementation
+After each sweep completes, convergence is decided by `is_converged(trace, tol_outer, shared.N)` — THE one convergence definition, never an inline re-implementation
 — i.e. the just-completed sweep's own worst-distributor residual is `<= tol_outer`; on
 convergence returns `(; z, x_inv, UB, converged = true, sweeps, outer_residual, trace, shared, order)`.
 
@@ -467,8 +460,7 @@ never a stale loop-local) — never silently returns a non-converged result.
     `integer` kwarg whose `K` is not a positive `Integer`, whose `α_op_lb` is not
     `:auto` or a finite `Real`, or whose `α_x_lb` is not a finite `Real`), before any
     solve call.
-  - `ConvergenceError` if `max_sweeps` is exhausted without converging, OR (Phase 31,
-    BILEV-07, `integer !== nothing` only) if the integer diagonalization cycles (the
+  - `ConvergenceError` if `max_sweeps` is exhausted without converging, OR (`integer !== nothing` only) if the integer diagonalization cycles (the
     full committed state — joint binary state, `z` and `x_inv` — recurs across sweeps
     with no residual decrease, without converging) — reports the full cycle shape (see
     "Cycle detection" below).
@@ -483,7 +475,7 @@ sweep's own worst-distributor residual, `trace::NashTrace` is the full two-level
 ledger, `shared` is the (mutated) `SharedTransmission` this run committed its final
 state to, and `order` is the sweep order actually used.
 
-Two trailing, additive certificate fields (Phase 30 code review iteration 2, CR-01):
+Two trailing, additive certificate fields:
 `certificates::Vector{NamedTuple}` has one row per best response actually solved, in
 solve order, `(; sweep, distributor, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, ac_report)` copied from that `solve_stackelberg!` result; and
 A trailing `status` is `:converged` or `:converged_relaxation_only` (iff `any_relaxation_only`; see `STATUS_VOCABULARY.run_nash`).
@@ -491,7 +483,7 @@ A trailing `status` is `:converged` or `:converged_relaxation_only` (iff `any_re
 `any_relaxation_only::Bool` is `true` iff any best response of ANY sweep (not only the
 final one) certified the SOC relaxation only. Under the default `inexact_policy = :strict` it is always `false` (an inexact solve throws instead).
 
-**`integer` (Phase 31, BILEV-07).** `Union{Nothing, NamedTuple} = nothing`. When supplied
+**`integer`.** `Union{Nothing, NamedTuple} = nothing`. When supplied
 (e.g. `integer = (; K = 4)`), every distributor's best response in the
 sweep loop uses a FRESH [`build_master_integer`](@ref) (binary-expansion MILP master,
 `K` binary blocks, that distributor's own `spec.master_kwargs.c_y`/`y_max` reused)
@@ -502,7 +494,7 @@ store per best-response, by construction" header discipline). `α_op_lb` default
 `build_master`/`solve_stackelberg!` already use (`(; feeder, pf, aggregators, λ₀,
 follower_kwargs = nothing)` — `DistributorView`'s pooled-capacity coupling has no sound
 per-object relaxed minimum, the SAME accepted, documented skip the continuous path
-already uses). `α_x_lb` defaults (WR-06, Phase 31 code review) to the bound DERIVED from
+already uses). `α_x_lb` defaults to the bound DERIVED from
 the follower cost's signs, `min(0, c_inv[i])·x_inv_max[i] + Σₜ min(0, c_op[i][t])·y_max`
 (`_integer_alpha_x_lb`; `0.0` for nonnegative costs) — a valid lower bound on
 distributor `i`'s cost slice whatever the signs, so `L = α_op_lb + α_x_lb` stays a valid
@@ -510,14 +502,14 @@ Laporte-Louveaux floor; an explicit `integer.α_x_lb` is the caller's responsibi
 Guards BEFORE any solve call: `integer.K` a positive `Integer`; `integer.α_op_lb` (if
 supplied) `:auto` or a finite `Real`; `integer.α_x_lb` (if supplied) a finite `Real` (no
 `:auto` on this path — omit it for the derived default); NaN/±Inf/other values raise an
-`ArgumentError` (WR-02, Phase 31 code review iteration 2); `integer` keys within `(:K, :α_op_lb, :α_x_lb)`; and every
+`ArgumentError`; `integer` keys within `(:K, :α_op_lb, :α_x_lb)`; and every
 `spec.master_kwargs` supplying `c_y`/`y_max` and NOTHING else — an `α_op_lb`/`α_x_lb`
 placed in `master_kwargs` (which the continuous path honours) is rejected with an
 `ArgumentError` pointing at `integer`, never silently ignored. When `integer === nothing` (the default), the
-continuous path is BYTE-IDENTICAL to every pre-Phase-31 call (this kwarg's mere
+continuous path is BIT-FOR-BIT IDENTICAL to every call made before this keyword existed (this kwarg's mere
 presence/default never touches the existing `master_kwargs = spec.master_kwargs` call).
 
-**Cycle detection (Phase 31, BILEV-07; corrected by the Phase-31 code review, CR-01),
+**Cycle detection,
 active only when `integer !== nothing`.** Each distributor's own converged binary
 investment state `b_i` (recovered EXACTLY from `result_i.y` via the lattice step
 `spec.master_kwargs.y_max / 2^K`, `Base.digits`) is accumulated, in FIXED canonical
@@ -564,7 +556,7 @@ function run_nash!(
 )
     # ---- Boundary guards (mirror solve_stackelberg!'s own guards-before-build
     # discipline): fail here, not deep in the sweep loop. ----------------------------
-    # CR-01 (Phase 30 code review iteration 2): validated HERE, before any solve, so a
+    # validated HERE, before any solve, so a
     # typo never surfaces from inside the first best response.
     inexact_policy in (:strict, :reject, :certify_incumbent) || throw(
         ArgumentError(
@@ -590,7 +582,7 @@ function run_nash!(
     0 < ω <= 1 || throw(ArgumentError("run_nash!: ω must satisfy 0 < ω <= 1, got $ω"))
     isfinite(tol_outer) && tol_outer > 0 ||
         throw(ArgumentError("run_nash!: tol_outer must be finite and > 0, got $tol_outer"))
-    # NESTED-TOLERANCE guard (13-CONTEXT.md locked, 13-RESEARCH.md Pitfall 2): every
+    # NESTED-TOLERANCE guard: every
     # distributor's own inner tol must be STRICTLY TIGHTER than the outer tolerance —
     # otherwise the outer residual test could "converge" on inner-solve noise.
     for (idx, spec) in enumerate(specs)
@@ -603,7 +595,7 @@ function run_nash!(
         )
     end
 
-    # BILEV-07 (Phase 31, plan 31-04): the `integer` kwarg's own boundary guard, before
+    # the `integer` kwarg's own boundary guard, before
     # any solve call — mirrors this function's own guards-before-build discipline.
     if integer !== nothing
         (haskey(integer, :K) && integer.K isa Integer && integer.K >= 1) || throw(
@@ -612,7 +604,7 @@ function run_nash!(
                 "$(get(integer, :K, nothing))",
             ),
         )
-        # WR-02 (Phase 31 code review iteration 2): validate BOTH epigraph bounds here,
+        # validate BOTH epigraph bounds here,
         # before any solve. `α_op_lb` is forwarded to `build_master_integer`, whose
         # explicit-bound branch would accept NaN (`NaN > optimum + slack` is false; then
         # `min(NaN, bound) === NaN` is installed) and install -Inf (surfacing only after
@@ -637,7 +629,7 @@ function run_nash!(
                 ),
             )
         end
-        # WR-06 (Phase 31 code review): never silently ignore a caller's input. The
+        # never silently ignore a caller's input. The
         # integer branch reads ONLY c_y/y_max from each spec's master_kwargs and only
         # K/α_op_lb/α_x_lb from `integer`; anything else (notably an α bound placed in
         # master_kwargs, which the continuous path would honour) is rejected here.
@@ -668,7 +660,7 @@ function run_nash!(
         end
     end
 
-    # ---- SEED-CONSISTENCY guards (CR-01): the seed is about to be COMMITTED into the
+    # ---- SEED-CONSISTENCY guards: the seed is about to be COMMITTED into the
     # shared model's own state (below), so it must be a feasible corridor state —
     # fail here, loudly, never as an opaque solver failure inside sweep 1. ----------
     all(isfinite, z0) || throw(ArgumentError("run_nash!: z0 must be entrywise finite"))
@@ -721,11 +713,11 @@ function run_nash!(
     x_inv_prev = copy(x_inv0_vec)
     trace = NashTrace()
     ub_prev = fill(NaN, shared.N)
-    # CR-01 (Phase 30 code review iteration 2): one exactness certificate per best
+    # one exactness certificate per best
     # response, so a relaxation-only best response is never committed silently.
     certificates = NamedTuple[]
     sweep_order = order === :forward ? (1:(shared.N)) : (shared.N:-1:1)
-    # BILEV-07 (Phase 31, plan 31-04; CR-01 of the Phase-31 code review): cycle
+    # Cycle
     # bookkeeping, active only when integer !== nothing. One entry per completed sweep:
     # the joint binary state (the concatenation, in FIXED canonical distributor order
     # 1:shared.N, of every distributor's own exact b::Vector{Int}), the FULL committed
@@ -738,11 +730,11 @@ function run_nash!(
     }[]
     cycle_atol = ω * tol_outer / 2
 
-    # ---- CR-01 (load-bearing, do NOT skip): commit the seed into the shared model's
+    # ---- (load-bearing, do NOT skip): commit the seed into the shared model's
     # OWN state — every distributor's z Parameter AND a consistent bound-pinned x_inv
     # — so the first best-response of the sweep genuinely plays against the seed, not
     # the build-time all-zeros default. Without this write, the multi-seed dimension
-    # of run_nash_probe (NASH-04) is structurally vacuous: every run's trajectory —
+    # of run_nash_probe is structurally vacuous: every run's trajectory —
     # and returned equilibrium — would be identical regardless of seed.
     # `activate_distributor!` unpins each distributor in turn inside the sweep,
     # exactly as for any later committed state. ---------------------------------------
@@ -751,7 +743,7 @@ function run_nash!(
     end
 
     for k in 1:max_sweeps
-        # BILEV-07: a fresh per-sweep buffer for this sweep's joint binary state,
+        # a fresh per-sweep buffer for this sweep's joint binary state,
         # indexed by distributor i (FIXED canonical order 1:shared.N, independent of
         # sweep_order) — only populated when integer !== nothing.
         integer_buffer =
@@ -759,13 +751,13 @@ function run_nash!(
         for i in sweep_order
             spec = specs[i]
             activate_distributor!(shared, i)
-            # BILEV-07 (Phase 31, plan 31-04): when integer !== nothing, every
+            # when integer !== nothing, every
             # distributor's best response builds a FRESH build_master_integer (never
             # persisted across best responses or sweeps, mirroring this file's own
             # "fresh cut store per best-response" discipline) and passes it via
             # solve_stackelberg!'s existing master= keyword; master_kwargs MUST then be
-            # empty (D-08's own mutual-exclusivity guard). The continuous
-            # (integer === nothing) branch is BYTE-IDENTICAL to before this kwarg
+            # empty (the mutual-exclusivity guard). The continuous
+            # (integer === nothing) branch is BIT-FOR-BIT IDENTICAL to before this kwarg
             # existed.
             result_i = if integer === nothing
                 solve_stackelberg!(
@@ -780,7 +772,7 @@ function run_nash!(
                     max_iter = get(spec, :max_iter, 100),
                     checkpoint_dir = joinpath(checkpoint_dir, "sweep_$k", "distributor_$i"),
                     follower = DistributorView(shared, i),
-                    # CR-01: :strict by default — the pre-Phase-30 fail-loud semantics.
+                    # :strict by default — fail-loud semantics.
                     inexact_policy = inexact_policy,
                 )
             else
@@ -790,7 +782,7 @@ function run_nash!(
                     c_y = spec.master_kwargs.c_y,
                     y_max = spec.master_kwargs.y_max,
                     α_op_lb = get(integer, :α_op_lb, :auto),
-                    # WR-06: the default is DERIVED from the cost signs, never an
+                    # the default is DERIVED from the cost signs, never an
                     # assumed 0.0 (see `_integer_alpha_x_lb`).
                     α_x_lb = get(
                         integer,
@@ -818,18 +810,18 @@ function run_nash!(
                     checkpoint_dir = joinpath(checkpoint_dir, "sweep_$k", "distributor_$i"),
                     follower = DistributorView(shared, i),
                     master = imaster,
-                    # CR-01: :strict by default — the pre-Phase-30 fail-loud semantics.
+                    # :strict by default — the fail-loud semantics.
                     inexact_policy = inexact_policy,
                 )
             end
             if integer !== nothing
-                # BILEV-07: recover distributor i's own exact binary state from the
+                # recover distributor i's own exact binary state from the
                 # incumbent y_inv on the lattice (see this function's own docstring —
                 # corner_recourse/ll_cut_recourse guarantee the incumbent sits EXACTLY
                 # on the lattice for the integer path).
                 step_i = spec.master_kwargs.y_max / 2.0^integer.K
                 idx_i = round(Int, result_i.y / step_i)
-                # IN-05 (Phase 31 code review): never decode an off-lattice or
+                # never decode an off-lattice or
                 # out-of-range y — `digits(...; pad = K)` silently returns MORE than K
                 # digits for idx >= 2^K, which would corrupt the joint state key. The
                 # tolerance is the MIP integrality tolerance (1e-6) propagated through
@@ -856,19 +848,19 @@ function run_nash!(
                 ),
             )
 
-            # CR-01 parity (load-bearing, do NOT skip): solve_stackelberg! returns the
+            # parity (load-bearing, do NOT skip): solve_stackelberg! returns the
             # INCUMBENT (y_best, z_best), which may differ from the last master trial
             # actually solved against the shared model — this re-solve makes
             # value(shared.x_inv[i]) correspond to the incumbent result_i.z.
             f_res = solve_follower!(result_i.follower, result_i.z)
-            # WR-01: solve_follower!(::DistributorView, ...) has a documented
+            # solve_follower!(::DistributorView, ...) has a documented
             # three-way contract and can return (; feasible = false, v, u) WITHOUT
             # raising. Left unchecked, the infeasible branch would let the next line
             # read value(...) off a solver state with no primal result (an opaque
             # OptimizeNotCalled/no-result error far from the cause) and write_back!
             # would then pin garbage. Fail loudly at the seam instead.
             f_res.feasible || error(
-                "run_nash!: CR-01 parity re-solve at incumbent z for distributor " *
+                "run_nash!: parity re-solve at incumbent z for distributor " *
                 "$i returned infeasible — the shared model's committed state is " *
                 "inconsistent with this distributor's own incumbent best-response",
             )
@@ -881,7 +873,7 @@ function run_nash!(
 
             z_i_new = ω == 1.0 ? result_i.z : (1 - ω) .* z_prev[i, :] .+ ω .* result_i.z
 
-            # WR-02: with ω < 1 the damped z_i_new differs from the undamped
+            # with ω < 1 the damped z_i_new differs from the undamped
             # result_i.z that x_inv_i_converged was solved for — committing the
             # inconsistent pair (z damped, x_inv undamped) can exceed the pooled
             # pinned capacity whenever damping moves z upward, rendering the shared
@@ -931,14 +923,14 @@ function run_nash!(
             )
         end
 
-        # WR-04: is_converged(trace, ...) is THE one convergence definition — never
+        # is_converged(trace, ...) is THE one convergence definition — never
         # re-implement its window arithmetic inline, or the exported method and the
         # loop's actual convergence test drift independently. The sweep just
         # completed, so the trailing shared.N rows below ARE exactly is_converged's
         # own by-sweep-index window (reporting only).
         sweep_converged = is_converged(trace, tol_outer, shared.N)
 
-        # BILEV-07 (Phase 31, plan 31-04; CR-01 of the Phase-31 code review): cycle
+        # Cycle
         # detection, active only when integer !== nothing. The key is the FULL
         # committed state, never the binaries alone: binaries routinely settle sweeps
         # before the continuous z/x_inv do (e.g. under damping ω < 1 the residual
@@ -995,7 +987,7 @@ function run_nash!(
             # freedom is already pinned; HiGHS presolves it away) and leaves `shared`
             # in a genuinely solved state consistent with the returned equilibrium.
             optimize!(shared.model)
-            # WR-03: fail-loud solve discipline (project-wide — every other solve in
+            # fail-loud solve discipline (project-wide — every other solve in
             # this codebase is gated). A fully-pinned model can still terminate
             # non-OPTIMAL on tolerance-level inconsistency between the pinned z
             # Parameters and the pinned x_inv bounds; returning `converged = true`
@@ -1018,10 +1010,10 @@ function run_nash!(
                 trace,
                 shared,
                 order,
-                # CR-01 (Phase 30 code review iteration 2): trailing, additive.
+                # trailing, additive.
                 certificates,
                 any_relaxation_only = any(c -> c.ub_relaxation_only, certificates),
-                # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.run_nash).
+                # Documented status vocabulary (STATUS_VOCABULARY.run_nash).
                 status = any(c -> c.ub_relaxation_only, certificates) ?
                          :converged_relaxation_only : :converged,
             )
@@ -1039,13 +1031,11 @@ end
 
 export run_nash!
 
-# --- run_nash_probe — multi-seed/multi-order gate + honest spread reporting (NASH-04,
-# plan 13-03 Task 1) ---
+# --- run_nash_probe — multi-seed/multi-order gate + honest spread reporting ---
 #
-# THIS IS THE HONESTY GATE THE ENTIRE PHASE EXISTS TO IMPLEMENT (STATE.md's own carried
-# blocker — Gauss-Seidel Nash diagonalization has NO general uniqueness/convergence
-# guarantee): `run_nash_probe` repeats `run_nash!` across a hand-picked matrix of
-# initial-`z` seeds x sweep orders, asserts EVERY combination converges (a phase-gating
+# THIS IS THE HONESTY GATE (Gauss-Seidel Nash diagonalization has NO general
+# uniqueness/convergence guarantee): `run_nash_probe` repeats `run_nash!` across a hand-picked matrix of
+# initial-`z` seeds x sweep orders, asserts EVERY combination converges (a gating
 # regression — a single non-converging probe run must fail loudly, never a soft
 # warning), and reports the observed equilibrium SPREAD across runs — never averaging,
 # collapsing, or silently presenting one run as "the" equilibrium.
@@ -1059,10 +1049,10 @@ export run_nash!
 # ZERO-ARGUMENT FACTORY, called ONCE per (seed, order) pair — never a pre-built instance
 # passed in and reused.
 #
-# NO try/catch AROUND run_nash!, BY DESIGN (T-13-10): a non-converging probe run's
+# NO try/catch AROUND run_nash!, BY DESIGN: a non-converging probe run's
 # `ConvergenceError` (raised internally by `run_nash!` on `max_sweeps` exhaustion) must
 # propagate directly out of `run_nash_probe` to the caller — this is the gating
-# regression NASH-04's own success criterion requires, not a defect to be caught and
+# regression the probe's success criterion requires, not a defect to be caught and
 # summarized away as "mostly converged".
 
 """
@@ -1074,7 +1064,7 @@ export run_nash!
     NamedTuple
 
 Probe `run_nash!`'s Gauss-Seidel diagonalization across every `(seed, order)` combination
-in the seed/order matrix (NASH-04), asserting EVERY combination converges (a phase-gating
+in the seed/order matrix, asserting EVERY combination converges (a phase-gating
 regression — see this section's header) and reporting the observed equilibrium spread —
 structurally as "a converged equilibrium (never "the equilibrium"), since Gauss-Seidel
 diagonalization carries no general uniqueness guarantee (STATE.md's own carried blocker).
@@ -1082,25 +1072,24 @@ diagonalization carries no general uniqueness guarantee (STATE.md's own carried 
 `build_shared` is a ZERO-ARGUMENT closure/function returning a FRESH `SharedTransmission`
 (e.g. `() -> build_shared_transmission(; N=2, T=1, ...)`), called ONCE per `(seed, order)`
 combination — NEVER reused across combinations. `activate_distributor!`/`write_back!`
-(this file's own `run_nash!`, `coupling.jl` plan 13-01) mutate a `SharedTransmission`
+(this file's own `run_nash!`, `coupling.jl`) mutate a `SharedTransmission`
 DESTRUCTIVELY; reusing one `shared` instance across probe runs would silently leak state
 from one run into the next, corrupting the "independent probe run" premise this
 function's own gating contract depends on.
 
-Every seed GENUINELY initializes the shared game state (CR-01): `run_nash!` commits each
+Every seed GENUINELY initializes the shared game state: `run_nash!` commits each
 seed's `z0` — plus the minimal exactly-supporting per-distributor investment — into the
 fresh `SharedTransmission` BEFORE its first sweep, so distinct seeds genuinely produce
 distinct sweep-1 states. The seed dimension of this probe matrix is live (a
 seed-dependent equilibrium IS detectable in the reported spread), never a mere
 residual-baseline relabel.
 
-**Seed shape (Phase 31, BILEV-06a): bare matrix OR `(; z0, x_inv0)` NamedTuple.** Each
+**Seed shape: bare matrix OR `(; z0, x_inv0)` NamedTuple.** Each
 entry of `seeds` is EITHER a bare `z0::AbstractMatrix{<:Real}` (the original, unchanged
-shape every pre-Phase-31 caller uses) OR a `(; z0, x_inv0)` NamedTuple that ALSO supplies
+shape) OR a `(; z0, x_inv0)` NamedTuple that ALSO supplies
 `run_nash!`'s own `x_inv0` keyword. This is additive and backward-compatible: a bare
-matrix forwards `x_inv0 = nothing` to `run_nash!`, which is byte-identical to every
-pre-Phase-31 call. **Why this extension is necessary** (31-RESEARCH.md's own "CRITICAL
-FINDING", restated here): `run_nash!`'s DEFAULT `x_inv0` derivation
+matrix forwards `x_inv0 = nothing` to `run_nash!`, which is bit-for-bit identical to a call
+without this extension. **Why this extension is necessary:** `run_nash!`'s DEFAULT `x_inv0` derivation
 (`maximum(z0[j,:])/corridor_cap`, used whenever `x_inv0` is omitted) always seeds the
 MINIMAL exactly-supporting investment for whatever `z0` is chosen — by construction this
 default has ZERO slack, so on a shared-constraint game whose continuum of generalized Nash
@@ -1115,8 +1104,8 @@ continuum.
 
 # Boundary guards (before any `run_nash!` call)
 
-  - `length(seeds) >= 3` — CONTEXT.md's locked "≥3 seeds" minimum.
-  - `length(orders) >= 2` — CONTEXT.md's locked "2 sweep orders" minimum.
+  - `length(seeds) >= 3` — the minimum of 3 seeds.
+  - `length(orders) >= 2` — the minimum of 2 sweep orders.
   - every entry of `orders` `in (:forward, :reverse)`.
 
 # Algorithm
@@ -1126,7 +1115,7 @@ For every `(seed_name, seed_z0)` in `pairs(seeds)` crossed with every `order` in
 behavior); a `(; z0, x_inv0)` NamedTuple forwards `z0 = seed_z0.z0, x_inv0 = get(seed_z0, :x_inv0, nothing)`. Build a FRESH `shared_run = build_shared()`, call `run_nash!(specs, shared_run; z0 = z0_arg, x_inv0 = x_inv0_arg, tol_outer, max_sweeps, order, checkpoint_dir = joinpath(checkpoint_dir, "\$(seed_name)_\$(order)"))` — with NO
 `try`/`catch` around the call (see this section's header; a non-converging run's
 `ConvergenceError` propagates directly out of this function, by design). Collect `(; seed = seed_name, order, result)` for every combination. `inexact_policy` is forwarded
-to every `run_nash!` call (default `:strict`, Phase 30 code review iteration 2, CR-01);
+to every `run_nash!` call (default `:strict`);
 each run's own `certificates`/`any_relaxation_only` stay on its `result`.
 
 After every combination converges (by construction — any non-convergence already
@@ -1134,14 +1123,14 @@ propagated and exited this function before this point is reached), compute the p
 spread over all `n_runs = length(seeds) * length(orders)` collected runs as the MAXIMUM
 pairwise distance across every unordered pair (all `binomial(n_runs, 2)` combinations) —
 NEVER a mean/variance or other statistical summary that could understate an outlier run
-(13-RESEARCH.md Pattern 4's own explicit rationale):
+(the explicit rationale for the maximum):
 
   - `z_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.z .- runs[b].result.z))`.
   - `x_inv_spread`: maximum over all pairs of `maximum(abs.(runs[a].result.x_inv .- runs[b].result.x_inv))`.
   - `cost_spread`: maximum over all pairs of `abs(sum(runs[a].result.UB) - sum(runs[b].result.UB))` (system-level total cost = the sum of every distributor's
     own converged `UB`, already returned by `run_nash!`).
 
-**On an investment-split GNE continuum (Phase 31, BILEV-06a), `z_spread` near-zero while
+**On an investment-split GNE continuum, `z_spread` near-zero while
 `x_inv_spread` is large is a CORRECT, EXPECTED property of that continuum — never a probe
 bug.** On such a game every point of the continuum pairs the SAME unconstrained-optimum
 flow `z` with a DIFFERENT split of the pooled investment `x_inv`; a caller probing this
@@ -1159,15 +1148,15 @@ true BY CONSTRUCTION — no variable is ever interpolated immediately adjacent t
 
 Callers presenting equilibrium results to a human MUST use `summary` (or construct an
 equally honest string reporting spread across every run) — never pick `runs[1]` (or any
-other single run) and label it definitive. This is NASH-04's own "never present one run as
-canonical" mandate, discharged here in code (T-13-08).
+other single run) and label it definitive. This is the "never present one run as
+canonical" mandate, discharged here in code.
 
 # Throws
 
   - `ArgumentError` if `length(seeds) < 3`, `length(orders) < 2`, or any `orders` entry is
     not `:forward`/`:reverse` — before any `run_nash!` call.
   - `ConvergenceError`, propagated UNCAUGHT from the underlying `run_nash!` call, if ANY
-    `(seed, order)` combination fails to converge within `max_sweeps` (T-13-10 — never
+    `(seed, order)` combination fails to converge within `max_sweeps` (never
     swallowed or summarized as "mostly converged").
 """
 function run_nash_probe(
@@ -1184,13 +1173,13 @@ function run_nash_probe(
     # fail here, not deep inside the probe matrix. --------------------------------
     length(seeds) >= 3 || throw(
         ArgumentError(
-            "run_nash_probe: seeds must contain >= 3 entries (CONTEXT.md's locked " *
+            "run_nash_probe: seeds must contain >= 3 entries (the required " *
             "minimum), got $(length(seeds))",
         ),
     )
     length(orders) >= 2 || throw(
         ArgumentError(
-            "run_nash_probe: orders must contain >= 2 entries (CONTEXT.md's locked " *
+            "run_nash_probe: orders must contain >= 2 entries (the required " *
             "minimum), got $(length(orders))",
         ),
     )
@@ -1206,8 +1195,8 @@ function run_nash_probe(
     # SharedTransmission (see this section's header: never reuse one across runs). ----
     runs = Vector{NamedTuple}()
     for (seed_name, seed_z0) in pairs(seeds)
-        # Phase 31 (BILEV-06a) seed dispatch: a bare matrix (every pre-Phase-31 caller)
-        # forwards x_inv0 = nothing, byte-identical to before this dispatch existed; a
+        # Seed dispatch: a bare matrix (the original seed shape)
+        # forwards x_inv0 = nothing, bit-for-bit identical to before this dispatch existed; a
         # `(; z0, x_inv0)` NamedTuple forwards BOTH to run_nash!, whose own `x_inv0`
         # keyword already exists — see this function's own docstring for WHY the
         # z0-only default seed cannot expose an investment-split GNE continuum.
@@ -1216,7 +1205,7 @@ function run_nash_probe(
             (seed_z0, nothing)
         for order in orders
             shared_run = build_shared()
-            # Deliberately NOT wrapped in a try/rescue block here, BY DESIGN (T-13-10):
+            # Deliberately NOT wrapped in a try/rescue block here, BY DESIGN:
             # a non-converging run's ConvergenceError propagates directly out of
             # run_nash_probe.
             result = run_nash!(
@@ -1228,7 +1217,7 @@ function run_nash_probe(
                 max_sweeps = max_sweeps,
                 order = order,
                 checkpoint_dir = joinpath(checkpoint_dir, "$(seed_name)_$(order)"),
-                inexact_policy = inexact_policy,   # CR-01: forwarded, :strict default
+                inexact_policy = inexact_policy,   # forwarded, :strict default
             )
             push!(runs, (; seed = seed_name, order, result))
         end
@@ -1265,11 +1254,10 @@ end
 
 
 # --- solve_variational_equilibrium — monolithic joint model selecting the variational
-# equilibrium (VE) inside a shared-constraint game's GNE continuum (BILEV-06b, plan 31-03
-# Task 2) ---
+# equilibrium (VE) inside a shared-constraint game's GNE continuum ---
 #
-# WHY A MONOLITHIC JOINT SOLVE, NOT A DECOMPOSITION (31-RESEARCH.md's own GNE-structure
-# argument, restated here): the shared-transmission game is a textbook Rosen (1965)
+# WHY A MONOLITHIC JOINT SOLVE, NOT A DECOMPOSITION (the GNE-structure
+# argument): the shared-transmission game is a textbook Rosen (1965)
 # shared-constraint game — every player's own problem is individually convex, objectives
 # are STRICTLY additively separable (no cross-player term anywhere — confirmed by direct
 # read of `build_shared_transmission`'s own objective and each distributor's own
@@ -1282,7 +1270,7 @@ end
 # to iterate toward a GNE when a direct joint solve is intractable at scale (out of scope
 # here; `run_nash!` remains the iterative path).
 #
-# UNIQUENESS IS NOT AUTOMATIC (Phase 31 code review, CR-02): Rosen's uniqueness theorem
+# UNIQUENESS IS NOT AUTOMATIC: Rosen's uniqueness theorem
 # needs diagonal strict concavity, which a game LINEAR in `x_inv` lacks. The VE is
 # unique iff the joint problem's optimum is. On the symmetric interior-cap fixture
 # (`c_inv = [1, 1]`) the joint objective depends on `x_inv` only through `Σᵢ x_inv[i]`,
@@ -1293,21 +1281,20 @@ end
 # the segment (`x_inv_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]`, `x_inv_i = (1.9 − p)/2`;
 # e.g. `x_inv = (0.95, 0)`, `z = (0.7, 1.2)`, multipliers `(0.5, ≈0)`) with UNEQUAL
 # multipliers, which the VE excludes — so the VE still selects, just not a single
-# point (iteration-2 review, WR-01). With
+# point. With
 # asymmetric `c_inv` the joint optimum buys capacity from the cheapest player only, the
 # VE is unique, and it genuinely SELECTS one point of a GNE continuum whose other points
-# carry player-specific multipliers (`test/test_planning_nash.jl`, CR-02 testitem).
+# carry player-specific multipliers (`test/test_planning_nash.jl`, testitem).
 #
-# PATTERN REUSE (31-PATTERNS.md): this function generalizes
+# PATTERN REUSE: this function generalizes
 # `test/fixtures_planning_ieee13_short.jl`'s own `solve_joint_reference` — the
-# "independently-built monolithic joint model" cross-check Phase 30 used for its
-# single-distributor BILEV-03 certification — from N=1 to N players sharing ONE pooled
+# "independently-built monolithic joint model" cross-check used for the
+# single-distributor certification — from N=1 to N players sharing ONE pooled
 # `capacity[t]` row (mirroring `coupling.jl`'s own `build_shared_transmission`, but with
 # every `x_inv[i]`/`z[i,:]` kept GENUINELY FREE throughout, never bound-pinned via
 # `activate_distributor!`/`write_back!`).
 #
-# SIMPLIFICATION vs `build_shared_transmission` (documented per the plan's own
-# instruction): `build_shared_transmission`'s `x_op[i,t]` is tied to `z[i,t]` by an
+# SIMPLIFICATION vs `build_shared_transmission` (documented): `build_shared_transmission`'s `x_op[i,t]` is tied to `z[i,t]` by an
 # identity coupling row (`coupling[i,t]: x_op[i,t] == z[i,t]`) ONLY because
 # `DistributorView`'s per-distributor best-response needs its OWN dualizable coupling row
 # to drive Benders cuts. A monolithic joint solve has no such need — it is solved in one
@@ -1316,7 +1303,7 @@ end
 # variable entirely. This changes no economics, only drops a variable
 # `build_shared_transmission` needs for its own per-distributor-dualizable design.
 #
-# PVAL-04 scope note: every `@variable` below is continuous (investment, flow, reactive
+# scope note: every `@variable` below is continuous (investment, flow, reactive
 # channel) — no binary/integer variable is introduced anywhere in this function.
 
 """
@@ -1328,11 +1315,11 @@ end
 
 Compute a variational equilibrium (VE) — a generalized Nash equilibrium (GNE) whose
 shared-row multiplier is identical across every player — of an `N`-distributor
-shared-transmission game via ONE direct, monolithic joint JuMP solve (BILEV-06b). See
+shared-transmission game via ONE direct, monolithic joint JuMP solve. See
 this section's header for why a single convex solve suffices to CHARACTERIZE the VE on
 this game (Rosen's shared-constraint-game theory), never an iterative decomposition.
 
-**Uniqueness (Phase 31 code review, CR-02).** The returned VE is unique only when the
+**Uniqueness.** The returned VE is unique only when the
 joint problem's optimum is. On the symmetric interior-cap fixture (`c_inv = [1, 1]`,
 `test/test_planning_nash.jl`) it is NOT: the joint problem sees only `Σᵢ x_inv[i]`, so
 the VE set is the whole split segment `x_inv_1 + x_inv_2 = 0.7`, `z = (0.7, 0.7)`, every
@@ -1341,10 +1328,10 @@ point of that face (measured: the analytic centre `(0.35, 0.35)`). The GNE set i
 STRICTLY larger than the VE set even there: it also contains free-riding GNEs
 `x_inv_j = 0`, `z_j = 1.2 − p`, `p ∈ [0, 0.5]` (e.g. `x_inv = (0.95, 0)`,
 `z = (0.7, 1.2)`, multipliers `(0.5, ≈0)`), whose unequal multipliers the VE excludes
-(iteration-2 review, WR-01). With asymmetric `c_inv` (e.g. `[1.0, 1.4]`) the VE is unique —
+With asymmetric `c_inv` (e.g. `[1.0, 1.4]`) the VE is unique —
 the cheaper player builds all the capacity, `x_inv = (0.7, 0)` — and differs from the
 GNE that `run_nash!` reaches from `z0 = 0`, `x_inv = (0.35, 0.25)`, whose players carry
-unequal multipliers `(0.5, 0.7)` (hand-derived and regression-tested in the CR-02
+unequal multipliers `(0.5, 0.7)` (hand-derived and regression-tested in the
 testitem of `test/test_planning_nash.jl`).
 
 `specs` is the SAME shape [`run_nash!`](@ref) already accepts: each entry supplies, per
@@ -1374,7 +1361,7 @@ free `z[i,t]` with box constraints `0 <= z[i,t] <= y_inv[i]` (mirrors
 `solve_joint_reference`'s own `box_lo`/`box_hi`). `z[i,t]` is reused DIRECTLY as the
 frontier import (`add_to_residual!(ctx_i, :Rp, specs[i].feeder.root, t, z[i,t])`,
 mirroring `solve_joint_reference`'s own "z reused directly" simplification). Immediately
-after `contribute!(specs[i].pf, ctx_i, specs[i].feeder; T)`, `reactive_i = has_reactive(specs[i].pf)` is captured (WR-03 ordering, mirrors
+after `contribute!(specs[i].pf, ctx_i, specs[i].feeder; T)`, `reactive_i = has_reactive(specs[i].pf)` is captured (ordering, mirrors
 `build_planning_oracle`); when `reactive_i`, a free `zq[i,t]` is added into `:Rq`. Each
 distributor's own aggregators then `contribute!` into `ctx_i`, and distributor `i`'s own
 `balance_p[i]`/`balance_q[i]` residual-closing constraints are added — per-distributor,
@@ -1482,12 +1469,11 @@ function solve_variational_equilibrium(
         ctx_i.feeder = specs[i].feeder
         ctx_i.T = T
         ctx_i.meta[:problem_class] = classes[i]
-        # Rule 1 (bug, discovered during execution): every `AbstractPowerFlow.contribute!`
+        # Every `AbstractPowerFlow.contribute!`
         # method (e.g. LinDistFlow/ConvexBranchFlow) registers ITS OWN formulation-level
         # variables/constraints under FIXED, NAMED symbols (`:v`, `:P`, `:Q`, `:vdrop`, ...)
         # directly on `ctx_i.model` — unlike `Aggregator`'s own device loop, which already
-        # switched to ANONYMOUS registration for exactly this reason (plan 21-05, this
-        # file's sibling fix). A second distributor's `contribute!` call on the SAME
+        # switched to ANONYMOUS registration for exactly this reason (a sibling fix). A second distributor's `contribute!` call on the SAME
         # shared `model` would collide ("An object of name v is already attached to this
         # model"), since JuMP's object-dictionary registration is MODEL-scoped, not
         # ctx-scoped. Capture the model's object-dictionary keys immediately before/after
@@ -1522,7 +1508,7 @@ function solve_variational_equilibrium(
             add_to_residual!(ctx_i, :Rp, specs[i].feeder.root, t, z_i[t])
         end
 
-        # WR-03 ordering (mirrors build_planning_oracle/solve_joint_reference): capture
+        # ordering (mirrors build_planning_oracle/solve_joint_reference): capture
         # `reactive_i` IMMEDIATELY after the formulation contributes, BEFORE any
         # aggregator writes.
         reactive_i = has_reactive(specs[i].pf)

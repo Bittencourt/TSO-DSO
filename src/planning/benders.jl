@@ -1,12 +1,11 @@
 # src/planning/benders.jl
 #
 # SEAM: solve_stackelberg! — the outer Benders orchestration loop wiring the reused
-# operational oracle (PlanningOracle, Phase 10), the new transmission-reinforcement
-# follower (FollowerLP, plan 11-01), and the new Benders master (BendersMaster, plan
-# 11-01) into a single-distributor Stackelberg equilibrium (PLAN-06).
-# OWNER: plan 11-02.
+# operational oracle (PlanningOracle), the new transmission-reinforcement
+# follower (FollowerLP), and the new Benders master (BendersMaster) into a
+# single-distributor Stackelberg equilibrium.
 #
-# HONEST RELABELLING (Phase 29, BILEV-01 API decision, comment/docstring-only diff):
+# HONEST RELABELLING (API decision):
 # despite its "Stackelberg" name, `solve_stackelberg!` solves THE INTEGRATED PROBLEM,
 # BENDERS-DECOMPOSED, not a genuinely bilevel game — see `solve_stackelberg!`'s own
 # docstring below and `src/planning/bilevel_kkt.jl`'s module header for the genuinely
@@ -18,39 +17,36 @@
 # constructors once each, then re-solves them at each Benders trial `z_k` via their own
 # solve_*! entry points.
 #
-# CONVERGENCE CRITERION IS STRUCTURALLY DIFFERENT FROM ADMM's residual test (11-RESEARCH.md
-# Pattern 2 / Pitfall 7): the UB/LB relative gap `(UB - LB) / max(1, |UB|) <= tol` (locked
+# CONVERGENCE CRITERION IS STRUCTURALLY DIFFERENT FROM ADMM's residual test: the UB/LB relative gap `(UB - LB) / max(1, |UB|) <= tol` (locked
 # default 1e-6), never `AdmmResiduals`.
 #
-# SIGN CONVENTION CONSUMED VERBATIM FROM PLAN 11-01 (`<sign_convention>` note, NOT
+# SIGN CONVENTION CONSUMED VERBATIM FROM THE FOLLOWER MODEL (NOT
 # re-derived here): the oracle's `:op` epigraph cut uses `cost_k = -oracle_res.cost`,
 # `grad_k = oracle_res.π` (UNNEGATED) — `solve_planning_oracle!` returns a MAX-sense
-# welfare value and its already-negated-Max-dual gradient (Phase 10 D-06); the master's
+# welfare value and its already-negated-Max-dual gradient; the master's
 # epigraph is a MIN-sense cost-to-go, hence the negation on `cost_k` only. The follower's
 # `:x` epigraph cut uses `cost_k = follower_res.cost` and `grad_k = follower_res.π_s` EXACTLY
-# as `solve_follower!` returns them (its own empirically-pinned positive dual sign, plan
-# 11-01 Task 1) — no further sign transformation.
+# as `solve_follower!` returns them (its own empirically-pinned positive dual sign) — no further sign transformation.
 #
-# EVERY CUT-PRODUCING SOLVE ROUTES THROUGH THE CORRECT GATE (CONTEXT.md's Amendment
-# (revision 1)): `solve_planning_oracle!`/`solve_master!` are gated internally by
-# `solve_with_retry!`/strict `assert_solved!` (D-08); `solve_follower!` is called DIRECTLY
+# EVERY CUT-PRODUCING SOLVE ROUTES THROUGH THE CORRECT GATE: `solve_planning_oracle!`/`solve_master!` are gated internally by
+# `solve_with_retry!`/strict `assert_solved!`; `solve_follower!` is called DIRECTLY
 # here — NEVER wrapped in `solve_with_retry!` — because its infeasible branch must be
-# OBSERVED, not retried away, or the Farkas certificate PLAN-04 requires is unreachable.
+# OBSERVED, not retried away, or the Farkas certificate it requires is unreachable.
 #
-# CHECKPOINTING (D-10): `checkpoint_iteration!` fires EXACTLY ONCE per Benders iteration,
-# from both the feasibility-cut branch and the optimality-cut branch (T-11-06: a
+# CHECKPOINTING: `checkpoint_iteration!` fires EXACTLY ONCE per Benders iteration,
+# from both the feasibility-cut branch and the optimality-cut branch (a
 # feasibility cut never updates `UB` — the loop `continue`s immediately after checkpointing,
 # skipping the `UB = min(...)` line entirely).
 
 using JuMP
 using DrWatson: datadir
 
-# D-13/D-14 (Phase 24, plan 24-04): a NEW, dedicated termination threshold for the
+# A NEW, dedicated termination threshold for the
 # lattice-exact `known_optimum` certification fallback — deliberately DISTINCT from the
 # `tol` kwarg's inherited `1e-6` continuous relative-gap tolerance, so it can never be
 # mistaken for "reusing" that tolerance (the standing anti-certificate-laundering bar).
 #
-# EMPIRICALLY MEASURED (2026-08-23) on the D-12 fixture (`TwoBusFixtures.two_bus_feeder()`
+# EMPIRICALLY MEASURED (2026-08-23) on the two-bus fixture (`TwoBusFixtures.two_bus_feeder`
 # + `ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)`, single aggregator, λ₀=[4.0],
 # T=1), solving the oracle (Clarabel SOCP) and follower (HiGHS LP) once each at a
 # representative interior trial `z = [1.0]` and reading each solver's OWN certified
@@ -62,14 +58,14 @@ using DrWatson: datadir
 # `max(gap_oracle, gap_follower) = 3.957388639008741e-9`, which is NOT comfortably below
 # `1e-10` (the 10x-margin-under-1e-9 threshold the measurement protocol calls for) — so a
 # hardcoded `1e-9` would sit BELOW the solver's own achieved precision on this fixture,
-# exactly the failure mode quick task `260823-gea` found in `fit_baseline`. Per the
+# exactly the failure mode found earlier in `fit_baseline`. Per the
 # measurement formula `max(1e-9, 10 * max(gap_oracle, gap_follower))`, the constant is set
 # to the measured value below, not a hopeful guess.
 const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
 
 # ---------------------------------------------------------------------------------------
-# Phase 24 GAP-CLOSURE (plan 24-05.1) — the fix for the LL-cut Q_nu defect plan 24-05's
-# certification (D-15) found in already-merged plan 24-03/24-04 code: `apply_integer_cuts!`
+# Fix for the LL-cut Q_nu defect found by the enumeration-backed certification in the
+# earlier integer-cut code: `apply_integer_cuts!`
 # was being handed the recourse EVALUATED AT WHATEVER z THE MASTER'S CURRENT TRIAL
 # HAPPENED TO PICK (`follower_res.cost - oracle_res.cost` at `lb_res.z`), not the TRUE,
 # EXACTLY-MINIMIZED per-corner recourse `Q(y_inv(b^ν)) = min_{z∈[0,y_inv]}
@@ -79,13 +75,13 @@ const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
 # ---------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------
-# Phase 27 (plan 27-01, FIX-06) — the T>1 generalization of corner_recourse: replaces the
+# The T>1 generalization of corner_recourse: replaces the
 # scalar `fill(z, T)` surrogate with a genuine joint T-dimensional convex minimization
 # `Q(y_inv) = min_{z∈[0,y_inv]^T} [follower_cost(z) - oracle_welfare(z)]`, via a Kelley's
 # cutting-plane ("bundle") loop reusing the SAME solve_follower!/solve_planning_oracle!
 # dual reads already used by the outer Benders loop's own :x/:op cuts (benders.jl:299-301/
-# 530-533) as a first-order (value+gradient) oracle for Q. See 27-RESEARCH.md's
-# "Architecture Patterns FIX-06" for the full derivation this implements.
+# 530-533) as a first-order (value+gradient) oracle for Q. The bundle
+# loop is Kelley's cutting-plane method applied to the convex function Q.
 # ---------------------------------------------------------------------------------------
 
 # EMPIRICALLY MEASURED (2026-09-29) on a T=2 PVBattery-bearing (genuinely non-separable
@@ -104,7 +100,7 @@ const KNOWN_OPTIMUM_ATOL = 3.957388639008741e-8
 # gate is set to the measured value below.
 const JOINT_RECOURSE_GAP_TOL = 1.2219521394740696e-7
 
-# CR-01 fix (27-REVIEW.md, 2026-09-29): bound on how many successive bisection halvings
+# Bound on how many successive bisection halvings
 # the oracle-infeasible-no-certificate stall guard (below) will attempt before giving up
 # and raising a diagnostic error, rather than silently making zero progress forever. Not a
 # measured tolerance like JOINT_RECOURSE_GAP_TOL above -- it is a hard IEEE-754 double
@@ -114,7 +110,7 @@ const JOINT_RECOURSE_GAP_TOL = 1.2219521394740696e-7
 # of `iters` and independent of the fixture's scale.
 const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
 
-# WR-01 (Phase 30 code review): the termination statuses that make an oracle throw a
+# The termination statuses that make an oracle throw a
 # GENUINE infeasibility of the pinned z_k (routed to the oracle-feasibility-cut branch).
 # Anything else untrusted is a solver failure and is rethrown. `ALMOST_INFEASIBLE` is
 # included because Clarabel reports a near-certificate that way; the slack-min oracle's
@@ -123,8 +119,7 @@ const JOINT_RECOURSE_BISECT_MAX_DEPTH = 64
 const ORACLE_INFEASIBLE_STATUSES =
     (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE, MOI.ALMOST_INFEASIBLE)
 
-# WR-01 (Phase 31 code review carry-over, 30-REVIEW.md) + WR-05 (Phase 31 code review):
-# the oracle-infeasibility statuses that are NOT certified verdicts and must be CONFIRMED
+# The oracle-infeasibility statuses that are NOT certified verdicts and must be CONFIRMED
 # by the slack-min `feas_oracle` before the corner search may treat the trial as +Inf
 # (see `_oracle_or_infeasible`). `ALMOST_INFEASIBLE` is a reduced-accuracy
 # near-certificate; `LOCALLY_INFEASIBLE` is a local solver's (e.g. Ipopt's) verdict that
@@ -135,10 +130,10 @@ const ORACLE_INFEASIBLE_STATUSES =
 # the network flows are fixed by the balance rows) — an explicit modelling assumption.
 const CORNER_UNCONFIRMED_STATUSES = (MOI.ALMOST_INFEASIBLE, MOI.LOCALLY_INFEASIBLE)
 
-# WR-01 (Phase 30 code review): minimum slack-min value `v` for an oracle feasibility cut
+# Minimum slack-min value `v` for an oracle feasibility cut
 # `v + u'(z - z_k) <= 0` to be appended. At z = z_k the cut reads `v <= 0`, so it separates
 # z_k from the master only if `v` exceeds the master's own primal feasibility tolerance.
-# MEASURED 2026-10-01 (scratchpad probe_wr01.jl), `solve_feasibility_oracle!` on
+# MEASURED 2026-10-01 (offline probe), `solve_feasibility_oracle!` on
 # ConvexBranchFlow `ieee13_modified()`:
 #   - noise floor at relaxation-FEASIBLE pins (T=4 IEEE13ShortHorizonFixtures population at
 #     uniform z ∈ {0, 0.02, 0.05, 0.06}; T=1 single-Thermostatic population at
@@ -151,7 +146,7 @@ const CORNER_UNCONFIRMED_STATUSES = (MOI.ALMOST_INFEASIBLE, MOI.LOCALLY_INFEASIB
 # floor, and ~39x below the smallest genuine v measured.
 const FEAS_CUT_V_TOL = 1.0e-6
 
-# WR-06 (Phase 30 code review iteration 2): the NOISE floor below which a slack-min value
+# The NOISE floor below which a slack-min value
 # `v` is indistinguishable from zero. Same measurement as FEAS_CUT_V_TOL above: |v| <=
 # 2.4e-10 at every relaxation-FEASIBLE pin probed (T=4 and T=1, so no growth with T was
 # observed over that range — `v` sums |s| over the T hours, and the per-instance noise
@@ -163,8 +158,7 @@ const FEAS_CUT_V_NOISE = 2.4e-9
 """
     _feas_cut_class(v::Real) -> Symbol
 
-Classify the slack-min value `v` at an oracle-infeasible trial `z_k` (Phase 30 code review
-iteration 2, WR-06):
+Classify the slack-min value `v` at an oracle-infeasible trial `z_k`:
 
   - `:separating` if `v > FEAS_CUT_V_TOL` — the cut `v + u'(z − z_k) ≤ 0` excludes `z_k`
     with headroom over the master's feasibility tolerance (the iteration-1 rule);
@@ -194,15 +188,15 @@ the REAL, already-built `oracle`/`follower` (the SAME production
 `solve_planning_oracle!`/`solve_follower!` entrypoints used everywhere else in the
 Benders loop — never rebuilt, never a closed-form shortcut).
 
-**T==1/T>1 dispatch (Phase 27, plan 27-01, FIX-06):**
+**T==1/T>1 dispatch:**
 
   - `T == 1` calls the EXISTING deterministic ternary-search body, UNCHANGED, byte-for-
-    byte identical to its pre-Phase-27 output (see [`_corner_recourse_ternary`](@ref)) —
+    byte identical to its output before the `T > 1` generalization (see [`_corner_recourse_ternary`](@ref)) —
     mirrors `test/test_planning_certification_integer.jl`'s own `enumerate_lattice`
     reference implementation's `Qfun`/`ternary_min` technique EXACTLY (that file's logic,
     promoted from test-only certification code into production so `add_ll_cut!`'s caller
     finally honors its own documented precondition, `Q_nu = Q(b^ν)`, "never estimated
-    here" — Phase 24 gap-closure 24-05.1). `Q` is convex in `z` whenever the oracle's
+    here"). `Q` is convex in `z` whenever the oracle's
     welfare is concave and the follower's cost is convex — the SAME convexity argument
     `add_optimality_cut!`'s own docstring already establishes for `Q(y_inv)` over the
     continuous relaxation — so ternary search on `[0, y_inv]` converges to the true
@@ -214,12 +208,11 @@ Benders loop — never rebuilt, never a closed-form shortcut).
     independent boxes). Any aggregator with a `PVBattery`/`FourQuadBESS`/`Deferrable`
     member couples hours via `soc[t+1]`, so `oracle_welfare(z)` is in general NOT
     separable across `t` — pinning a single scalar trial across all `T` hours (the
-    pre-Phase-27 `fill(z, T)` surrogate, now REMOVED for `T > 1`) silently gives the
-    WRONG answer on exactly this common case (27-RESEARCH.md Pitfall FIX-06-1). The two
+    earlier `fill(z, T)` surrogate, now REMOVED for `T > 1`) silently gives the
+    WRONG answer on exactly this common case. The two
     dispatch branches are DELIBERATELY not unified into one algebraically-equivalent
     body: different floating-point trajectories would break the `T == 1` byte-identity
-    requirement even where mathematically equivalent (27-RESEARCH.md "T=1 byte-identical
-    requirement").
+    requirement even where mathematically equivalent.
 
 Both branches treat a follower-infeasible trial `z` (`solve_follower!`'s genuine
 `feasible = false` branch) as `+Inf` in the extended-value sense (the SAME Rule-1 device
@@ -229,10 +222,10 @@ nonempty.
 
 `y_inv <= 0` collapses the feasible region to the single point `z = zeros(T)` — the
 recourse there is GENUINELY COMPUTED (one real solve of `follower`/`oracle`), never
-assumed to be `0.0` (CR-01, Phase 24 code review) — see `docs/literate/integer_investment.jl`'s
+assumed to be `0.0` — see `docs/literate/integer_investment.jl`'s
 own independently-found fix for the historical rationale.
 
-**`on_inexact` (Phase 30 code review iteration 2, CR-02).** Forwarded UNCHANGED to every
+**`on_inexact`.** Forwarded UNCHANGED to every
 `solve_planning_oracle!` call of both branches. `solve_stackelberg!` passes `:throw`
 under `inexact_policy = :strict` and `:report` otherwise, so the corner search honours
 the SAME policy as the outer trial. Under `:report` an SOCP-inexact trial contributes its
@@ -242,7 +235,7 @@ the true one. The Laporte-Louveaux cut built from it under-estimates the true re
 at that corner, so it stays valid (a weaker cut, never an invalid one). An oracle throw
 is classified, never swallowed: only an untrusted solve whose termination status is in
 `ORACLE_INFEASIBLE_STATUSES` — and, for `CORNER_UNCONFIRMED_STATUSES`, confirmed by a
-`:separating` slack-min verdict (see [`_oracle_or_infeasible`](@ref), WR-05) — is
+`:separating` slack-min verdict (see [`_oracle_or_infeasible`](@ref)) — is
 treated as `+Inf` (outside the oracle's feasible set,
 which is convex in `z`, so `Q` stays an extended-value convex function). Every other
 throw — an exactness verdict under `:throw`, a battery-complementarity violation, an
@@ -284,7 +277,7 @@ end
 """
     _oracle_or_infeasible(oracle, z; on_inexact, feas_oracle = nothing) -> NamedTuple or nothing
 
-The corner search's ONE oracle entry point (Phase 30 code review iteration 2, CR-02):
+The corner search's ONE oracle entry point:
 `solve_planning_oracle!(oracle, z; on_inexact)`, except that a throw from an UNTRUSTED
 solve whose termination status is a CERTIFIED infeasibility verdict
 (`ORACLE_INFEASIBLE_STATUSES` minus `CORNER_UNCONFIRMED_STATUSES`) returns `nothing`
@@ -293,7 +286,7 @@ non-`ErrorException`s (e.g. `InterruptException`), throws from a TRUSTED solve (
 exactness gate under `:throw`, battery complementarity), and untrusted solves with any
 other status (a solver failure, not a property of `z`).
 
-**WR-01 (Phase 31 code review carry-over, 30-REVIEW.md):** `MOI.ALMOST_INFEASIBLE` is a
+`MOI.ALMOST_INFEASIBLE` is a
 REDUCED-ACCURACY near-certificate, not a confirmed infeasibility — mapping it straight to
 `+Inf` (the pre-fix behavior) can over-estimate `Q_nu` and make the caller's
 Laporte-Louveaux cut invalid. It is now CONFIRMED via the same slack-min `feas_oracle`
@@ -302,7 +295,7 @@ the status is unconfirmed and the throw is rethrown (fail loud, never silently `
 a `feas_oracle` supplied, `solve_feasibility_oracle!(feas_oracle, z).v` is classified via
 [`_feas_cut_class`](@ref).
 
-**WR-05 (Phase 31 code review):** only a `:separating` verdict confirms the infeasibility
+Only a `:separating` verdict confirms the infeasibility
 and returns `nothing`; `:weak` and `:disagree` both rethrow. This is deliberately STRICTER
 than `solve_stackelberg!`'s outer catch, where a `:weak` cut is still a VALID cut to
 append: here the verdict is turned into `Q(z) = +Inf`, and a `:weak` `z` sits within the
@@ -321,7 +314,7 @@ function _oracle_or_infeasible(oracle, z; on_inexact::Symbol, feas_oracle = noth
         ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
         if ts in CORNER_UNCONFIRMED_STATUSES
             feas_oracle === nothing && rethrow()   # unconfirmed verdict: fail loud
-            # WR-05 (Phase 31 code review): ONLY a :separating slack-min value confirms.
+            # ONLY a :separating slack-min value confirms.
             # A :weak value (FEAS_CUT_V_NOISE < v <= FEAS_CUT_V_TOL) puts z within the
             # master's own feasibility tolerance of the boundary — mapping it to +Inf
             # could drop a near-boundary minimizer, over-estimate Q_nu and make the LL
@@ -337,18 +330,18 @@ end
     _corner_recourse_ternary(oracle, follower, y_inv::Real, T::Int; iters::Int = 100,
                              on_inexact::Symbol = :throw) -> Float64
 
-The PRE-PHASE-27 `T == 1` ternary-search body, copied VERBATIM (byte-for-byte identical
+The `T == 1` ternary-search body, copied VERBATIM (byte-for-byte identical
 floating-point trajectory) into its own named function per [`corner_recourse`](@ref)'s
-dispatch — see that function's docstring for the full WR-01/CR-01 rationale. Never called
-with `T != 1` (the `fill(z, T)` scalar-pinning here is exactly the surrogate FIX-06 removes
+dispatch — see that function's docstring for the full rationale. Never called
+with `T != 1` (the `fill(z, T)` scalar-pinning here is exactly the surrogate removed
 for `T > 1`; it remains correct-by-definition at `T == 1`, where pinning the single scalar
 `z` across "all `T` periods" is a no-op).
 
-Phase 30 code review iteration 2 (CR-02): `on_inexact` is forwarded to the oracle, and a
+`on_inexact` is forwarded to the oracle, and a
 genuinely oracle-INFEASIBLE trial (see [`_oracle_or_infeasible`](@ref)) is `+Inf`, like
 a follower-infeasible one. Before, every oracle throw aborted the search. That
 `+Inf` path only engages where the old code threw, so every trajectory that used to
-complete is byte-identical.
+complete is bit-for-bit identical.
 """
 function _corner_recourse_ternary(
     oracle,
@@ -368,11 +361,11 @@ function _corner_recourse_ternary(
         # still finds the true constrained minimum.
         fr.feasible || return Inf
         orr = _oracle_or_infeasible(oracle, zvec; on_inexact = on_inexact, feas_oracle = feas_oracle)
-        orr === nothing && return Inf   # CR-02: genuine oracle infeasibility only
+        orr === nothing && return Inf   # genuine oracle infeasibility only
         return fr.cost - orr.cost
     end
 
-    # WR-01 (Phase 24 code review): fail LOUDLY rather than silently propagate a
+    # fail LOUDLY rather than silently propagate a
     # divergence. The follower is documented to always be feasible at z=0, so
     # Q(y_inv) can never legitimately be non-finite for y_inv >= 0 -- a non-finite
     # result here is proof of a search bug, not a legitimate value.
@@ -381,12 +374,12 @@ function _corner_recourse_ternary(
             ErrorException(
                 "corner_recourse: recourse evaluated to a non-finite value at z=$z " *
                 "(y_inv=$y_inv) -- the follower is documented to always be feasible " *
-                "at z=0, so this should be unreachable; report as a bug (WR-01 " *
-                "regression, Phase 24 code review).",
+                "at z=0, so this should be unreachable; report as a bug " *
+                "(zero-corner feasibility regression).",
             ),
         )
 
-    # Phase 24 code-review fix (CR-01): compute the zero-corner recourse for real via
+    # Compute the zero-corner recourse for real via
     # Qfun(0.0) instead of assuming it is 0.0 -- see the docstring above for the full
     # rationale. This is exact by construction (Qfun is the same function used by the
     # ternary search below), not a special-cased approximation.
@@ -401,7 +394,7 @@ function _corner_recourse_ternary(
         m1 = lo + (hi - lo) / 3
         m2 = hi - (hi - lo) / 3
         f1, f2 = Qfun(m1), Qfun(m2)
-        # WR-01 fix (see docstring): a double-infinite tie must shrink from the right
+        # (see docstring): a double-infinite tie must shrink from the right
         # (toward the guaranteed-feasible z=0 anchor), never fall through to the
         # ordinary else-branch (lo = m1), which would walk away from feasibility and
         # diverge on a bounded interval.
@@ -442,15 +435,15 @@ Each outer iteration rebuilds a SMALL cutting-plane master LP FRESH — `Min θ`
 CHEAP, T-variable, at-most-`iters`-row bookkeeping LP, deliberately NOT the expensive
 build-once model this project's "build once, re-solve many" convention protects (the
 oracle/follower themselves ARE build-once, re-solved via `set_parameter_value.`; only
-THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan discretion).
+THIS small inner-loop LP is rebuilt per outer iteration, by design).
 
-**Infeasible-trial handling (27-RESEARCH.md Pitfall FIX-06-2, generalized):**
+**Infeasible-trial handling:**
 
   - A FOLLOWER-infeasible trial (`solve_follower!`'s genuine `feasible = false` branch,
     e.g. a `y_inv` large enough that some `z` in the hypercube exceeds the follower's own
     deliverable capacity `corridor_cap * x_inv_max`) contributes NO epigraph cut (an
     `Inf` affine minorant is meaningless) — but its GENUINE Farkas certificate
-    (`fr.v`, `fr.u`; WR-01 of the Phase-31 code review: only when both are finite — a
+    (`fr.v`, `fr.u`; only when both are finite — a
     certificate-less infeasibility, `solve_follower!(::DistributorView)`'s NaN sentinel,
     is handled exactly like the ORACLE-infeasible case below, by bisection)
     IS added as a REAL linear feasibility cut to the small master,
@@ -462,8 +455,8 @@ THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan dis
     no reason — the SAME certificate already computed for the caller's own feasibility-
     cut branch is reused here at zero extra cost.
   - An ORACLE-infeasible trial (`solve_planning_oracle!` throwing from an untrusted
-    solve with a status in `ORACLE_INFEASIBLE_STATUSES` — Phase 30 code review iteration 2,
-    CR-02: every other throw is rethrown, see [`_oracle_or_infeasible`](@ref) — e.g. a
+    solve with a status in `ORACLE_INFEASIBLE_STATUSES`;
+    every other throw is rethrown, see [`_oracle_or_infeasible`](@ref) — e.g. a
     genuine network-balance infeasibility unreachable via the follower's own, purely economic,
     capacity model; CONFIRMED to occur on realistic non-separable battery fixtures
     whenever the follower-feasible box extends beyond what the NETWORK can physically
@@ -471,10 +464,10 @@ THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan dis
     available here (`solve_planning_oracle!` has no structured infeasible return), so it
     contributes NO cut of ANY kind. If the SAME trial is proposed twice in a row this way
     (a genuine stall — the master has zero new information to move away from it), a
-    T-dimensional generalization of the ternary search's own WR-01 double-infinite
+    T-dimensional generalization of the ternary search's own double-infinite
     tie-break applies: bisect toward the guaranteed-feasible incumbent `z_best` (the SAME
     "shrink toward the known-feasible anchor" principle, one dimension per coordinate
-    instead of one). CR-01 fix (27-REVIEW.md): this bisection is genuinely ITERATIVE, not
+    instead of one). This bisection is genuinely ITERATIVE, not
     single-shot — if a midpoint is *itself* oracle-infeasible with no certificate, the
     bracket shrinks toward `z_best` and a NEW midpoint is tried, up to
     `JOINT_RECOURSE_BISECT_MAX_DEPTH` halvings, before giving up with a diagnostic error
@@ -485,9 +478,9 @@ THIS small inner-loop LP is rebuilt per outer iteration, by design, per plan dis
     for no reason whenever it isn't.
 
 `y_inv <= 0` collapses `[0, y_inv]^T` to the single point `z = zeros(T)` — genuinely
-computed (never assumed `0.0`), matching [`_corner_recourse_ternary`](@ref)'s own CR-01
+computed (never assumed `0.0`), matching [`_corner_recourse_ternary`](@ref)'s own
 treatment. The FIRST trial (before any master solve) is always `z = zeros(T)` (the
-guaranteed-feasible WR-01 anchor), so at least one finite epigraph cut always exists
+guaranteed-feasible anchor), so at least one finite epigraph cut always exists
 before the loop's first master solve.
 
 Terminates when `UB − LB <= JOINT_RECOURSE_GAP_TOL` (a MEASURED, not guessed, constant —
@@ -509,7 +502,7 @@ function _corner_recourse_joint(
     function evaluate(z::Vector{Float64})
         fr = solve_follower!(follower, z)
         if !fr.feasible
-            # WR-01 (Phase 31 code review): a follower may confirm infeasibility WITHOUT
+            # A follower may confirm infeasibility WITHOUT
             # a certificate (`solve_follower!(::DistributorView)`'s NaN sentinel). A NaN
             # cut must never reach the small master LP (JuMP rejects a NaN coefficient
             # with an opaque error): route it to the no-certificate bisection fallback,
@@ -519,9 +512,9 @@ function _corner_recourse_joint(
                 nothing
             return (; Qz = Inf, gradQ = nothing, feas_cut)
         end
-        # Pitfall FIX-06-2 generalized (docstring above): a GENUINE oracle-side
+        # See the infeasible-trial handling in the docstring above: a GENUINE oracle-side
         # infeasibility is extended-value +Inf, exactly like a follower infeasibility,
-        # but carries no certificate. CR-02 (Phase 30 code review iteration 2): this
+        # but carries no certificate. This
         # used to be a bare `catch` that turned EVERY throw (an exactness verdict, a
         # complementarity violation, even an InterruptException) into +Inf, so the
         # minimum was taken over the remaining points only — an over-estimated Q_nu
@@ -533,7 +526,7 @@ function _corner_recourse_joint(
         return (; Qz, gradQ, feas_cut = nothing)
     end
 
-    # WR-01 T-dimensional analogue: fail LOUDLY rather than silently propagate a
+    # T-dimensional analogue: fail LOUDLY rather than silently propagate a
     # divergence -- the anchor z=zeros(T) is documented to always be follower- AND
     # oracle-feasible, so a non-finite result there is proof of a search bug.
     check_finite(Qv::Real, z::AbstractVector) =
@@ -542,12 +535,12 @@ function _corner_recourse_joint(
                 "_corner_recourse_joint: recourse evaluated to a non-finite value at " *
                 "z=$z (y_inv=$y_inv, T=$T) -- the anchor z=zeros(T) is documented to " *
                 "always be follower- and oracle-feasible, so this should be " *
-                "unreachable; report as a bug (T-dimensional generalization of WR-01, " *
-                "Phase 27 FIX-06).",
+                "unreachable; report as a bug (T-dimensional zero-corner feasibility " *
+                "regression).",
             ),
         )
 
-    # CR-01 T-dimensional analogue: y_inv <= 0 collapses [0, y_inv]^T to the single
+    # T-dimensional analogue: y_inv <= 0 collapses [0, y_inv]^T to the single
     # point z = zeros(T) -- genuinely COMPUTED via evaluate, never assumed.
     if y_inv <= 0
         r0 = evaluate(zeros(T))
@@ -559,7 +552,7 @@ function _corner_recourse_joint(
     cuts = Tuple{Vector{Float64}, Float64, Vector{Float64}}[]        # (z_k, Q_k, gradQ_k)
     feas_cuts = Tuple{Float64, Vector{Float64}, Vector{Float64}}[]   # (v_k, u_k, z_k)
 
-    # WR-01 T-dimensional anchor: the FIRST trial is zeros(T), the guaranteed-feasible
+    # T-dimensional anchor: the FIRST trial is zeros(T), the guaranteed-feasible
     # point -- at least one finite epigraph cut always exists before the first master
     # solve.
     z_trial = zeros(T)
@@ -616,7 +609,7 @@ function _corner_recourse_joint(
             # point), bisect toward the guaranteed-feasible incumbent z_best instead of
             # spinning until `iters` exhausts for no reason.
             #
-            # CR-01 fix (27-REVIEW.md): a SINGLE bisection step is not guaranteed to
+            # a SINGLE bisection step is not guaranteed to
             # land on a feasible/certified midpoint -- the midpoint itself can ALSO be
             # oracle-infeasible with no certificate. The old single-shot version added
             # NO cut in that case and reset last_skipped to the SAME z_next, so the
@@ -702,17 +695,17 @@ Dispatched Q_nu resolver for the Laporte-Louveaux cut, mirroring
     `lb_res` (never re-solves either model). Exists purely to keep the `benders.jl` call
     site uniform across both master types — this value is never actually consumed
     downstream, since `apply_integer_cuts!(::BendersMaster, ...)` is itself a true no-op.
-    The continuous path is therefore BYTE-IDENTICAL to its pre-fix behavior.
+    The continuous path is therefore BIT-FOR-BIT IDENTICAL to its pre-fix behavior.
   - `ll_cut_recourse(master::BendersMasterInteger, oracle, follower, lb_res, Q_nu_iterate)`
     — computes the TRUE per-corner minimized recourse via [`corner_recourse`](@ref) at the
     incumbent trial's OWN `y_inv = lb_res.y`. This is exact by construction: `lb_res.b` is
     binary at a genuine MILP optimum, so `lb_res.y` is the DETERMINISTIC value of the
     `y_inv` expression evaluated at that exact `b` (never a relaxed/fractional value) —
     `y_inv(b^ν)`, not an independent re-derivation. `on_inexact` is forwarded to
-    [`corner_recourse`](@ref) (Phase 30 code review iteration 2, CR-02), so the corner
+    [`corner_recourse`](@ref), so the corner
     search honours the caller's `inexact_policy` instead of always throwing.
 
-**THE FIX (Phase 24 gap-closure, plan 24-05.1):** the caller previously passed
+**THE FIX:** the caller previously passed
 `Q_nu_iterate` straight through to `add_ll_cut!` — the recourse evaluated AT WHATEVER `z`
 the master's current trial happened to pick, only an UPPER BOUND on `Q(y_inv(b^ν))` in
 general (the master's box only guarantees `z <= y_inv`, not `z` = the minimizer). This
@@ -751,11 +744,11 @@ end
     _assert_epigraph_floor(cost_k::Real, lb::Real, label::Symbol; gap::Real = NaN,
                            accepted_slack::Real = 0.0)
 
-Phase 30 (BILEV-05, plan 30-04): a UNIVERSAL, bound-source-independent runtime sanity
+A UNIVERSAL, bound-source-independent runtime sanity
 check — `error(...)`s if `cost_k < lb - tol`, naming `label` (`:op`/`:x`), the evaluated
 `cost_k`, the declared `lb` and the tolerance used.
 
-The tolerance is SCALE-AWARE and measured per evaluation (Phase 30 code review, WR-04):
+The tolerance is SCALE-AWARE and measured per evaluation:
 `tol = alpha_lb_margin(cost_k, gap; floor = ALPHA_LB_REJECTION_TOL)` =
 `max(1e-6, 10·gap, ALPHA_LB_RTOL·|cost_k|)`, where `gap` is the measured duality gap of the
 solve that produced `cost_k` (the oracle's own Clarabel gap; `NaN` — no gap term — for the
@@ -765,7 +758,7 @@ apart, and at `|W| ≈ 609` (IEEE-13 T=4) or larger the interior-point solver's 
 precision is covered instead of a T=1-toy absolute `1e-6` (which could fire as a
 "modeling bug" on pure solver noise near the box argmax).
 
-`accepted_slack` (Phase 30 code review iteration 2, WR-05) is the build-time acceptance
+`accepted_slack` is the build-time acceptance
 slack of the bound in force (`BendersMaster.lb_slack`, read via `_accepted_lb_slack`):
 `tol` becomes `alpha_lb_margin(...) + accepted_slack`, so build-time acceptance and this
 runtime check apply ONE validity rule and a bound `build_master` accepted can never fire
@@ -776,8 +769,8 @@ Called UNCONDITIONALLY on `solve_stackelberg!`'s optimality branch, regardless o
 `master.α_op`/`master.α_x`'s declared lower bound came from `:auto`, an explicit `Real`, or
 was build-time-validated via `bounds_ctx` at all — a genuine lower bound, by definition,
 can never exceed an actually-achieved cost at a feasible point. If this ever fires, it is
-proof of a modeling bug in the derivation or declaration of that bound (BILEV-05's own
-core-value risk), never a legitimate convergence edge case to special-case away.
+proof of a modeling bug in the derivation or declaration of that bound (the
+core-value risk of the planning layer), never a legitimate convergence edge case to special-case away.
 """
 function _assert_epigraph_floor(
     cost_k::Real,
@@ -789,7 +782,7 @@ function _assert_epigraph_floor(
     tol = alpha_lb_margin(cost_k, gap; floor = ALPHA_LB_REJECTION_TOL) + accepted_slack
     cost_k < lb - tol && error(
         "solve_stackelberg!: epigraph $label evaluated to cost_k=$cost_k, below its " *
-        "OWN declared lower bound lb=$lb (tol=$tol, measured gap=$gap) — BILEV-05: this " *
+        "OWN declared lower bound lb=$lb (tol=$tol, measured gap=$gap) — this " *
         "is a genuine modeling bug (an invalid declared lower bound), not a convergence " *
         "issue. Never silently accepted.",
     )
@@ -799,8 +792,8 @@ end
 """
     _accepted_lb_slack(master, label::Symbol) -> Float64
 
-The build-time acceptance slack of `master`'s declared `:op`/`:x` epigraph lower bound
-(WR-05, Phase 30 code review iteration 2): `master.lb_slack[label]` for a
+The build-time acceptance slack of `master`'s declared `:op`/`:x` epigraph lower bound:
+`master.lb_slack[label]` for a
 [`BendersMaster`](@ref), `0.0` for any master type without that record (e.g.
 `BendersMasterInteger`, whose explicit bounds are never build-time validated).
 """
@@ -810,8 +803,7 @@ _accepted_lb_slack(master, label::Symbol) = 0.0
 """
     _incumbent_ac_report(feeder, aggregators, λ₀, T::Int, z, socp_welfare::Real) -> NamedTuple
 
-The `ac_report` of a converged, relaxation-only incumbent (Phase 30 code review iteration
-2, WR-03). Runs [`ac_recheck_incumbent`](@ref) at `z` and extends its report with
+The `ac_report` of a converged, relaxation-only incumbent. Runs [`ac_recheck_incumbent`](@ref) at `z` and extends its report with
 `socp_welfare`, `welfare_gap = socp_welfare − ac_welfare` and `error = nothing`.
 
 The AC re-check is a DIAGNOSTIC of an already-converged result — the slowest and least
@@ -846,7 +838,7 @@ end
     _select_incumbent(relax::NamedTuple, exact::Union{Nothing,NamedTuple},
                       converged::Function) -> NamedTuple
 
-The incumbent ORDERING rule (Phase 30 code review iteration 2, WR-01). `relax` is the
+The incumbent ORDERING rule. `relax` is the
 running-minimum-cost incumbent over ALL accepted iterates (the one whose cost is the
 loop's `UB`, which drives convergence); `exact` is the running-minimum-cost incumbent
 over the CERTIFIED iterates only (oracle verdict `:exact` or `:not_applicable`), or
@@ -883,22 +875,22 @@ end
 
 Solve the single-distributor Stackelberg equilibrium (flexibility-investment leader vs.
 transmission-reinforcement follower, operational welfare oracle) end-to-end via a
-hand-rolled Benders loop (PLAN-06), converging to a documented relative UB/LB gap
-tolerance or raising loudly on iteration-cap exhaustion (D-10).
+hand-rolled Benders loop, converging to a documented relative UB/LB gap
+tolerance or raising loudly on iteration-cap exhaustion.
 
-**Honest relabelling (Phase 29, BILEV-01 API decision):** this function solves THE
+**Honest relabelling (API decision):** this function solves THE
 INTEGRATED PROBLEM, BENDERS-DECOMPOSED — the follower's own true cost is fed directly
 into the leader's Benders epigraph, which is only valid because leader and follower
 share the same underlying objective here (there is no separate tariff wedge). It is
 NOT a genuinely bilevel game, despite the "Stackelberg" name. For a genuinely bilevel
 TSO-DSO variant, where the follower minimizes its OWN cost `c(z) - pi_tariff*z` that
 differs from the leader's own valuation of `z`, see
-[`solve_bilevel!`](@ref)/[`build_bilevel_kkt`](@ref) (`src/planning/bilevel_kkt.jl`,
-plan 29-01) — a single-level KKT-MILP, not a Benders loop, because plain Benders is
+[`solve_bilevel!`](@ref)/[`build_bilevel_kkt`](@ref) (`src/planning/bilevel_kkt.jl`)
+— a single-level KKT-MILP, not a Benders loop, because plain Benders is
 invalid on that genuinely divergent-objective game (see that file's module header). For
 the N>1 shared-constraint case (multiple distributors sharing one pooled transmission
 corridor), see [`run_nash!`](@ref)/[`solve_variational_equilibrium`](@ref)
-(`src/planning/nash.jl`, Phase 13/31) — a generalized Nash equilibrium (GNE) among `N`
+(`src/planning/nash.jl`) — a generalized Nash equilibrium (GNE) among `N`
 copies of THIS function's own per-distributor best response, not a single integrated
 problem. See `docs/writeups/modelo_stackelberg_dso_unico.typ`'s "Taxonomia dos
 variantes de planejamento" for the full three-way comparison.
@@ -909,20 +901,20 @@ variantes de planejamento" for the full three-way comparison.
     each `ArgumentError` BEFORE any build call.
 
  2. BUILD ONCE, outside the loop: `oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)`,
-    `feas_oracle = build_feasibility_oracle(feeder, pf, aggregators; T = T)` (BILEV-04a,
-    plan 30-01/30-04, unconditional — the second, built-ONCE slack-minimization
+    `feas_oracle = build_feasibility_oracle(feeder, pf, aggregators; T = T)`
+    (unconditional — the second, built-ONCE slack-minimization
     feasibility oracle consumed by the oracle-feasibility-cut branch below),
     `follower = follower === nothing ? build_follower(; follower_kwargs..., T = T) : follower`,
     `master = master === nothing ? build_master(; master_kwargs..., bounds_ctx = _bounds_ctx, T = T) : master`
-    (BILEV-05, plan 30-04 — `bounds_ctx` now ALWAYS populated, see below). No
+    (`bounds_ctx` is ALWAYS populated, see below). No
     `build_*`/`Model(` call appears anywhere inside this function OTHER THAN these
     conditional/unconditional builder calls, ALL of which still execute strictly BEFORE
     the `for k in 1:max_iter` loop below — the loop itself never constructs a model.
 
-    **`bounds_ctx` wiring (BILEV-05, plan 30-04, UNCONDITIONAL):** `solve_stackelberg!`
+    **`bounds_ctx` wiring (UNCONDITIONAL):** `solve_stackelberg!`
     is the project's ONE public, validated entry point into the integrated Benders loop,
     and always has `feeder`/`pf`/`aggregators`/`λ₀` in scope — so `α_op_lb` (whether
-    `:auto` or an explicit `Real` inside `master_kwargs`) is now validated at build time
+    `:auto` or an explicit `Real` inside `master_kwargs`) is validated at build time
     on EVERY `master === nothing` call path, not only when `:auto` is explicitly
     requested. `α_x_lb` is likewise validated whenever the follower information supports
     a sound derivation — a `follower_kwargs` `NamedTuple` or a pre-built `FollowerLP` —
@@ -936,11 +928,11 @@ variantes de planejamento" for the full three-way comparison.
     universal runtime floor guard (`_assert_epigraph_floor`, defined above) remains
     active as defense-in-depth for that case.
 
-    **`follower` keyword (plan 13-02, additive/non-breaking — mirrors the
+    **`follower` keyword (additive/non-breaking — mirrors the
     `attempts_out::Union{Nothing,Ref{Int}}` precedent in `master.jl`/`retry.jl`):**
-    defaults to `nothing`, in which case behavior is BYTE-IDENTICAL to every Phase 11/12
-    call site (a fresh `FollowerLP` is built from `follower_kwargs` exactly as before). When
-    a caller (Phase 13's `run_nash!`) instead supplies a pre-built per-distributor view
+    defaults to `nothing`, in which case behavior is BIT-FOR-BIT IDENTICAL to a call
+    without this keyword (a fresh `FollowerLP` is built from `follower_kwargs` exactly as before). When
+    a caller (`run_nash!`) instead supplies a pre-built per-distributor view
     object (e.g. `coupling.jl`'s `DistributorView`, duck-typed via its own
     `solve_follower!(view, z_trial)` method), that object is used DIRECTLY in place of a
     freshly-built `FollowerLP` — no follower is built by this function at all in that case.
@@ -948,31 +940,31 @@ variantes de planejamento" for the full three-way comparison.
     simultaneously is rejected with an `ArgumentError` (ambiguous — which one wins is never
     silently decided).
 
-    **`master` keyword (Phase 24, plan 24-04, additive/non-breaking — D-08, mirrors the
+    **`master` keyword (additive/non-breaking — mirrors the
     `follower` seam immediately above VERBATIM in structure):** defaults to `nothing`, in
-    which case behavior is BYTE-IDENTICAL to every prior call site (a fresh `BendersMaster`
+    which case behavior is BIT-FOR-BIT IDENTICAL to a call without this keyword (a fresh `BendersMaster`
     is built from `master_kwargs` exactly as before). When a caller instead supplies a
-    pre-built master (e.g. a `BendersMasterInteger` from `build_master_integer`, Phase 24's
+    pre-built master (e.g. a `BendersMasterInteger` from `build_master_integer`, the
     binary-expansion MILP master), that object is used DIRECTLY in place of a
     freshly-built `BendersMaster` — no master is built by this function at all in that case.
     Supplying BOTH a non-`nothing` `master` AND a non-empty `master_kwargs` simultaneously is
     rejected with an `ArgumentError`, mirroring the `follower`/`follower_kwargs` guard.
     `BendersMasterInteger` now carries its own `bounds_ctx`/`:auto`/`lb_slack` validation
-    (Phase 31, plan 31-02 — ported verbatim from `build_master`'s own machinery) and a
-    build-time `lb_clamped` field (Phase 31 WR-03, plan 31-07, Option A), so a caller
+    (ported verbatim from `build_master`'s own machinery) and a
+    build-time `lb_clamped` field, so a caller
     supplying a pre-built integer master gets the SAME build-time bound
     validation/clamping discipline as the continuous path, not an unvalidated raw bound.
 
-    **`known_optimum` keyword (Phase 24, plan 24-04, D-13/D-14):** defaults to `nothing`, in
+    **`known_optimum` keyword:** defaults to `nothing`, in
     which case the loop's termination gate is unchanged (`gap <= tol`). When a caller
-    supplies a finite value (the enumeration-backed certification harness, plan 24-05), the
+    supplies a finite value (the enumeration-backed certification harness), the
     loop instead terminates on an EXCLUSIVE exact-match test against `known_optimum` (see
     `converged_now` in the iteration loop below) — never an `||` with `gap <= tol`.
 
  3. Iterate `k = 1:max_iter`: `lb_res = solve_master!(master)` (the Benders lower bound and
     trial `z_k`); `follower_res = solve_follower!(follower, lb_res.z)` (DIRECT call — never
-    `solve_with_retry!`-wrapped, per plan 11-01's follower contract) — the follower's
-    feasibility check runs BEFORE any oracle solve (WR-01): an undeliverable trial `z_k`
+    `solve_with_retry!`-wrapped, per the follower contract) — the follower's
+    feasibility check runs BEFORE any oracle solve: an undeliverable trial `z_k`
     (the master's box allows `z` up to `y_max`, beyond `corridor_cap * x_inv_max`) is
     routed to the feasibility-cut branch instead of reaching the oracle, whose
     exactness/complementarity gates can throw at extreme pinned `z`.
@@ -980,38 +972,35 @@ variantes de planejamento" for the full three-way comparison.
       + If `!follower_res.feasible`: append a feasibility cut
         (`add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)`),
         checkpoint with `gap = NaN` and `feasible = false`, then `continue` — a
-        feasibility cut NEVER updates `UB` (T-11-06); the oracle is NEVER solved on
+        feasibility cut NEVER updates `UB`; the oracle is NEVER solved on
         this branch.
       + Else: `oracle_res = solve_planning_oracle!(oracle, lb_res.z; on_inexact)` — only
         a follower-deliverable `z_k` ever reaches the oracle. `on_inexact = :throw` under
         `:strict`, `:report` otherwise; the oracle returns its exactness gate's verdict
         as an EXPLICIT field (`oracle_res.exactness`), and its battery-complementarity
-        gate runs on EVERY returned result, inexact or not (Phase 30 code review,
-        CR-01/CR-03 — the verdict is never inferred from a stashed side-effect key, and
+        gate runs on EVERY returned result, inexact or not
+        — the verdict is never inferred from a stashed side-effect key, and
         no result can bypass the complementarity gate):
 
           * A throw from an UNTRUSTED solve whose termination status is a genuine
             infeasibility verdict (`ORACLE_INFEASIBLE_STATUSES`) routes to the
             oracle-feasibility-cut branch: `feas_oracle` (built once above) produces a
-            `(v, u)` cut pair (`solve_feasibility_oracle!`/`add_feasibility_cut!`, plan
-            30-01), which is appended only if `v > FEAS_CUT_V_TOL` (so it really
-            separates `z_k`), the loop `continue`s WITHOUT updating `UB` (T-11-06
-            analogue), and the trace row records the oracle's REAL termination status,
+            `(v, u)` cut pair (`solve_feasibility_oracle!`/`add_feasibility_cut!`), which is appended only if `v > FEAS_CUT_V_TOL` (so it really
+            separates `z_k`), the loop `continue`s WITHOUT updating `UB`, and the trace row records the oracle's REAL termination status,
             the measured `v` (`feas_cut_v`) and `policy_action = :oracle_feasibility_cut`.
-            Phase 30 code review iteration 2 (WR-06): a cut with
+            A cut with
             `FEAS_CUT_V_NOISE < v ≤ FEAS_CUT_V_TOL` — the normal regime near a curved
             boundary — is still VALID and is appended too (`policy_action =
             :oracle_feasibility_cut_weak`); only a deterministic re-proposal of the same
             `z_k` right after a weak cut, or `v ≤ FEAS_CUT_V_NOISE` (the two oracles
             genuinely disagree), raises a named error. See [`_feas_cut_class`](@ref). Any OTHER untrusted outcome
             (exhausted retry ladder, iteration limit, numerical error) is a solver
-            failure and is rethrown unchanged (Phase 30 code review, WR-01).
+            failure and is rethrown unchanged.
           * A throw from a TRUSTED solve can only be a post-solve gate (battery
             complementarity on any formulation, or exactness under `:strict`) — OUT OF
             SCOPE for the feasibility branch, propagated UNCHANGED with its own message.
           * A returned result with `exactness === :inexact` dispatches on
-            `inexact_policy` (BILEV-04b). `:reject` (Phase 30 code review iteration 2,
-            WR-02) APPENDS the trial's `:op`/`:x` relaxation cuts — they under-estimate
+            `inexact_policy`. `:reject` APPENDS the trial's `:op`/`:x` relaxation cuts — they under-estimate
             the relaxed, hence also the true, value function whatever the exactness
             verdict, so `LB` stays valid and the master moves on — but BARS the trial
             from updating `UB` or becoming the incumbent (trace row
@@ -1020,63 +1009,61 @@ variantes de planejamento" for the full three-way comparison.
             re-proposes the identical rejected trial on the very next iteration, the
             relaxation's optimum sits at that inexact point and no certified incumbent
             can close the gap there; that repeat raises a named "`:reject` stalled"
-            `ConvergenceError` at once instead of exhausting `max_iter` (the WR-06
+            `ConvergenceError` at once instead of exhausting `max_iter` (the stall
             backstop). `:certify_incumbent` (the default) accepts the relaxation's cut
             AND lets the trial compete for the incumbent, recording
             `policy_action = :certified_incumbent` and the measured `socp_maxgap` on
             the trace (see "Incumbent ordering" below).
 
         On a successful (or `:certify_incumbent`-accepted) solve: the universal
-        runtime epigraph floor guard (`_assert_epigraph_floor`, BILEV-05) checks
+        runtime epigraph floor guard (`_assert_epigraph_floor`) checks
         `-oracle_res.cost >= lower_bound(master.α_op) - tol` and
         `follower_res.cost >= lower_bound(master.α_x) - tol`, UNCONDITIONALLY,
         regardless of how either bound was derived; then append the oracle's `:op`
         optimality cut (`cost_k = -oracle_res.cost`,
-        `grad_k = oracle_res.π`, the plan-11-01-derived sign convention) and the
+        `grad_k = oracle_res.π`, the sign convention derived in the follower model) and the
         follower's `:x` optimality cut (`cost_k = follower_res.cost`,
         `grad_k = follower_res.π_s`, used as-is); compute the iterate's TRUE cost
         `cost_k = master.c_y * lb_res.y + follower_res.cost - oracle_res.cost`; if
         `cost_k < UB`, update the INCUMBENT `UB = cost_k`, `y_best = lb_res.y`,
         `z_best = copy(lb_res.z)` — the `(y, z)` pair that ACHIEVED the running-minimum
-        `UB` is stored, never just the bound (CR-01: convergence can trigger at an
+        `UB` is stored, never just the bound (convergence can trigger at an
         iterate whose own cuts have not yet tightened the master, so the LAST iterate
         is not certified by `UB`; the incumbent is); compute
         `gap = (UB - lb_res.LB) / max(1, abs(UB))`; checkpoint with
         `feasible = true`; on this branch ALSO call
-        `apply_integer_cuts!(master, lb_res, Q_nu)` (Phase 24, plan 24-04 — a TRUE no-op
+        `apply_integer_cuts!(master, lb_res, Q_nu)` (a TRUE no-op
         for `BendersMaster`, real Laporte-Louveaux/no-good logic for
         `BendersMasterInteger`, `Q_nu = follower_res.cost - oracle_res.cost`); compute
         `converged_now = known_optimum === nothing ? (gap <= tol) : isapprox(UB, known_optimum; atol = KNOWN_OPTIMUM_ATOL)`
-        — an EXCLUSIVE branch, NEVER an `||` of the two criteria (D-13/D-14: reusing the
+        — an EXCLUSIVE branch, NEVER an `||` of the two criteria (reusing the
         continuous loop's inherited `tol` on the certified `known_optimum` path would be
         exactly the "certificate laundering" this mechanism exists to forbid); if
         `converged_now`, return the converged result at the INCUMBENT `(y_best, z_best)`.
 
  4. If `max_iter` is exhausted without `converged_now`, raise a loud `ConvergenceError` naming
-    the exhausted iteration count and the last observed gap (D-10) — never silently return
+    the exhausted iteration count and the last observed gap — never silently return
     a non-converged result.
 
 # Returns
 
 On convergence, `(; y, z, UB, LB, gap, iters, oracle, follower, master, trace, nogood_count, converged_via, ac_report, incumbent_exactness, incumbent_socp_maxgap, ub_relaxation_only, exact_incumbent, status)`
 where `y = y_best` (the INCUMBENT leader investment — the iterate that achieved `UB`, so
-the returned point's true cost equals `UB` and the convergence certificate applies to it,
-CR-01), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
+the returned point's true cost equals `UB` and the convergence certificate applies to it), `z = z_best` (the incumbent coupling flow), `UB`/`LB` are the converged
 upper/lower bounds, `gap` is the converged relative gap (a REPORTING quantity — on the
 `known_optimum`-supplied path, convergence is certified by the exact-match test, not by
 `gap`), `iters` is the convergence iteration count, `oracle`/`follower`/`master` are the
-build-once subproblem handles (for further inspection by the caller/certification gate,
-plan 11-03), `trace::BendersTrace` (plan 12-01, additive) is the per-iteration
+build-once subproblem handles (for further inspection by the caller/certification gate), `trace::BendersTrace` is the per-iteration
 convergence ledger — one row per iteration on both the feasibility-cut and
 optimality-cut branches, including the GENUINE per-iteration retry count and both
 retry-gated subproblems' termination statuses (never a log-scrape estimate), and
-`nogood_count`/`converged_via` (Phase 24, plan 24-04, D-16, additive) surface the total
+`nogood_count`/`converged_via` surface the total
 number of no-good anti-stall cuts fired (`nogood_count`, always `0` on the continuous
 path) and the convergence attribution (`converged_via`, `:clean` if `nogood_count == 0`
 else `:nogood_assisted`) — a nonzero `nogood_count` never fails the run, it is reported,
 never silently absorbed.
 
-**Incumbent exactness certificate (Phase 30 code review, CR-02, additive trailing
+**Incumbent exactness certificate (additive trailing
 fields).** `incumbent_exactness ∈ (:exact, :inexact, :not_applicable)` is the exactness
 verdict of the very oracle solve that produced `UB` (`:not_applicable` for DC/
 LinDistFlow, where no cone exists — "not checked", never "certified exact");
@@ -1088,7 +1075,7 @@ LOWER estimate of the incumbent's physical cost, not an upper bound on the physi
 problem (the `LB` stays valid either way — relaxation cuts under-estimate the true value
 function). This state is reachable only under `inexact_policy = :certify_incumbent`.
 
-**Incumbent ordering (Phase 30 code review iteration 2, WR-01).** An inexact iterate's
+**Incumbent ordering.** An inexact iterate's
 cost is a LOWER estimate of its physical cost, so it is never compared with a certified
 cost on cost alone. The loop keeps two incumbents: the running-minimum over all accepted
 iterates (its cost is the `UB` that drives convergence) and the running-minimum over
@@ -1100,7 +1087,7 @@ certified iterate as `(; y, z, UB, gap, exactness, socp_maxgap)` — its `gap` i
 PHYSICAL optimality gap, since its `UB` is a true upper bound — or `nothing` if no iterate
 was certified. When the returned point is certified, `exact_incumbent` is that same point.
 
-`ac_report` (BILEV-04b, plan 30-04) is `nothing` unless `ub_relaxation_only`, in which
+`ac_report` is `nothing` unless `ub_relaxation_only`, in which
 case it is [`ac_recheck_incumbent`](@ref)'s report at `z_best` —
 `(; ok, violations, p_import, ac_welfare, raw_status)`, where `ok` is `false` whenever the
 limits-DROPPED, re-optimized AC dispatch violates a thermal/voltage limit beyond the
@@ -1111,28 +1098,27 @@ drops the limits, so the gap is a diagnostic of how far the relaxation sits from
 physics at `z_best`, not a certified error bound) and `error` (`nothing` on success). If
 the AC re-check itself fails (Ipopt does not converge), that failure is REPORTED in
 `ac_report` (`ok = false`, `raw_status = "AC_RECHECK_FAILED"`, `error` = the message)
-and the converged result is still returned (Phase 30 code review iteration 2, WR-03; see
+and the converged result is still returned (see
 [`_incumbent_ac_report`](@ref)). NEVER thrown, never silently passed.
 
 # Throws
 
   - `ArgumentError` on `T < 1`, `max_iter < 1`, `length(λ₀) != T`, a non-finite/non-positive
     `tol`, `max_iter > 99_999`, a non-`nothing` `follower` supplied together with a
-    non-empty `follower_kwargs` (plan 13-02), a non-`nothing` `master` supplied together
-    with a non-empty `master_kwargs` (Phase 24, plan 24-04, D-08), a non-`nothing`
-    `known_optimum` that is not finite (Phase 24, plan 24-04, D-13/D-14), or an
-    `inexact_policy` outside `(:strict, :reject, :certify_incumbent)` (Phase 30, BILEV-04b,
-    plan 30-04) — before any build call (IN-02/IN-03). ALSO raised (now, BILEV-05, plan
-    30-04 — unconditionally, on EVERY `master === nothing` build) if an explicit
+    non-empty `follower_kwargs`, a non-`nothing` `master` supplied together
+    with a non-empty `master_kwargs`, a non-`nothing`
+    `known_optimum` that is not finite, or an
+    `inexact_policy` outside `(:strict, :reject, :certify_incumbent)` — before any build call. ALSO raised
+    (unconditionally, on EVERY `master === nothing` build) if an explicit
     `α_op_lb`/`α_x_lb` inside `master_kwargs` exceeds `build_master`'s own derived minimum
     (see that function's docstring) — a found-invalid bound is a genuine bug to fix at its
     call site, never silenced.
   - `ConvergenceError` if `max_iter` is exhausted without converging, naming the trace's
-    last-recorded `LB`/`UB`/`gap` and the tolerance (D-10, IN-01) — refuses to silently
+    last-recorded `LB`/`UB`/`gap` and the tolerance — refuses to silently
     return a non-converged result. ALSO raised, immediately, when `inexact_policy =
     :reject` re-encounters the identical SOCP-inexact trial it just rejected even though
-    its cuts were appended (a named "`:reject` stalled" error — WR-06/WR-02). ALSO raised by the universal runtime epigraph floor
-    guard (`_assert_epigraph_floor`, BILEV-05) if ANY evaluated epigraph cost ever falls
+    its cuts were appended (a named "`:reject` stalled" error). ALSO raised by the universal runtime epigraph floor
+    guard (`_assert_epigraph_floor`) if ANY evaluated epigraph cost ever falls
     below its own declared lower bound — a genuine modeling bug, never a convergence
     issue.
 
@@ -1160,7 +1146,7 @@ function solve_stackelberg!(
 )
     # ---- Boundary guards (mirror solve_admm): fail here, not deep in the loop ----------------
     T >= 1 || throw(ArgumentError("solve_stackelberg! needs T >= 1 (got T=$T)"))
-    # Phase 30 (BILEV-04b, plan 30-04): inexact_policy must be one of the three
+    # `inexact_policy` must be one of the three
     # documented dispatches — fail here, alongside the other boundary checks, BEFORE
     # any build call (never deep inside the loop's oracle-throw disambiguation).
     inexact_policy in (:strict, :reject, :certify_incumbent) || throw(
@@ -1173,13 +1159,13 @@ function solve_stackelberg!(
         ArgumentError("solve_stackelberg! needs max_iter >= 1 (got max_iter=$max_iter)"),
     )
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
-    # IN-02 (plan 12-01): a NaN/negative tol silently guarantees exhaustion (every
+    # A NaN/negative tol silently guarantees exhaustion (every
     # gap <= tol comparison is false for NaN) — fail-loud is preserved but the
     # diagnosis is misleading; guard it here alongside the other boundary checks.
     isfinite(tol) && tol > 0 || throw(
         ArgumentError("solve_stackelberg! needs tol to be finite and > 0 (got tol=$tol)"),
     )
-    # IN-03 (plan 12-01): checkpoint_iteration! enforces iter ∈ 0:99999 (5-digit
+    # `checkpoint_iteration!` enforces iter ∈ 0:99999 (5-digit
     # zero-padded filename contract, src/planning/checkpoint.jl) — fail HERE, not
     # deep inside checkpoint_iteration! after 99,999 wasted iterations.
     max_iter <= 99_999 || throw(
@@ -1189,7 +1175,7 @@ function solve_stackelberg!(
             "max_iter=$max_iter",
         ),
     )
-    # plan 13-02: the additive `follower` keyword and `follower_kwargs` are mutually
+    # The additive `follower` keyword and `follower_kwargs` are mutually
     # exclusive — supplying both would silently pick one and discard the other; fail
     # loudly instead, before any build call.
     follower === nothing ||
@@ -1200,7 +1186,7 @@ function solve_stackelberg!(
                 "(got follower=$follower, follower_kwargs=$follower_kwargs)",
             ),
         )
-    # Phase 24, plan 24-04 (D-08): the additive `master` keyword and `master_kwargs` are
+    # The additive `master` keyword and `master_kwargs` are
     # mutually exclusive — mirrors the `follower`/`follower_kwargs` guard immediately above
     # VERBATIM in structure; supplying both would silently pick one and discard the other.
     master === nothing ||
@@ -1211,7 +1197,7 @@ function solve_stackelberg!(
                 "(got master=$master, master_kwargs=$master_kwargs)",
             ),
         )
-    # Phase 24, plan 24-04 (D-13/D-14): a non-nothing known_optimum must be finite — a
+    # A non-nothing known_optimum must be finite — a
     # NaN/Inf value would make every isapprox(UB, known_optimum; ...) comparison silently
     # false, guaranteeing max_iter exhaustion with a misleading diagnosis (same rationale
     # as the tol finiteness guard above).
@@ -1228,25 +1214,24 @@ function solve_stackelberg!(
     # loop. No `build_*`/`Model(` call appears below this point — the loop only re-solves
     # via `solve_planning_oracle!`/`solve_follower!`/`solve_master!` and appends cut rows.
     oracle = build_planning_oracle(feeder, pf, aggregators; λ₀ = λ₀, T = T)
-    # BILEV-04a (plan 30-01/30-04): the second, built-ONCE slack-minimization
+    # The second, built-ONCE slack-minimization
     # feasibility oracle — unconditional, cheap (an LP/SOCP feasible whenever some
-    # p_import admits the network, WR-02), never built inside the loop.
+    # p_import admits the network), never built inside the loop.
     feas_oracle = build_feasibility_oracle(feeder, pf, aggregators; T = T)
 
-    # BILEV-05 (plan 30-04, checker BLOCKER 1 + BLOCKER 2 fix): ALWAYS construct a
+    # ALWAYS construct a
     # populated bounds_ctx — never conditional on α_op_lb/α_x_lb being :auto, and NEVER
     # throwing merely because a pre-built `follower` is supplied (solve_stackelberg! is
     # the project's ONE public, validated entry point into the integrated Benders loop;
     # feeder/pf/aggregators/λ₀ are always in scope here). Computed from the ORIGINAL
     # `follower`/`follower_kwargs` arguments BEFORE the reassignment immediately below —
     # a pre-built follower's TYPE (not the post-reassignment FollowerLP-or-not value)
-    # determines which of the three α_x_lb derivability cases applies (see this plan's
-    # own <interfaces>/Task 2 <action> for the full three-way argument, especially why
-    # DistributorView's pooled-capacity coupling has NO sound per-object derivation).
+    # determines which of the three α_x_lb derivability cases applies (DistributorView's
+    # pooled-capacity coupling has NO sound per-object derivation).
     _follower_info = if follower === nothing
         follower_kwargs                      # case 1: NamedTuple, unchanged derivation path
     elseif follower isa FollowerLP
-        follower                             # case 2: sound FollowerLP dispatch (plan 30-02)
+        follower                             # case 2: sound FollowerLP dispatch
     else
         nothing                              # case 3: no sound derivation (e.g. DistributorView) —
                                               # documented scope limit, α_x_lb validation skipped
@@ -1259,41 +1244,40 @@ function solve_stackelberg!(
         build_master(; master_kwargs..., bounds_ctx = _bounds_ctx, T = T) : master
 
     UB = Inf
-    # CR-01: the INCUMBENT — the (y, z) iterate that achieved the running-minimum UB.
+    # The INCUMBENT — the (y, z) iterate that achieved the running-minimum UB.
     # Convergence (LB rising to meet an OLDER iterate's UB) must return THIS pair, never
     # the current iterate, whose own cuts may not yet bound it: the excess of the last
     # iterate's true cost over UB is NOT bounded by tol.
     y_best = NaN
     z_best = fill(NaN, T)
-    # CR-02 (Phase 30 code review): the incumbent's own exactness certificate, set
+    # The incumbent's own exactness certificate, set
     # together with (y_best, z_best) — see the incumbent update in the loop.
     incumbent_exactness = :not_applicable
     incumbent_socp_maxgap = NaN
     incumbent_welfare = NaN
-    # WR-01 (Phase 30 code review iteration 2): the best CERTIFIED iterate (oracle
+    # the best CERTIFIED iterate (oracle
     # verdict :exact/:not_applicable), tracked separately from the running-minimum
     # incumbent above, so a relaxation-only iterate can never silently discard it.
     # See `_select_incumbent` for the ordering applied at convergence.
     exact_inc = nothing
     gap = NaN
-    # plan 12-01: the purpose-built Benders convergence ledger (roadmap criterion 2) —
+    # The purpose-built Benders convergence ledger —
     # built alongside the other accumulator state, immediately before the loop.
     trace = BendersTrace()
-    # Phase 24, plan 24-04 (D-16): running total of no-good anti-stall cut firings across
+    # Running total of no-good anti-stall cut firings across
     # the whole run — always 0 on the continuous path (apply_integer_cuts! is a true no-op
     # for BendersMaster). Surfaced on the returned NamedTuple, never a silent count.
     nogood_total = 0
-    # WR-06 (Phase 30 code review) / WR-02 (iteration 2): the trial rejected on the
-    # IMMEDIATELY preceding iteration under `inexact_policy = :reject` (or `nothing`).
+    # The trial rejected on the IMMEDIATELY preceding iteration under `inexact_policy = :reject` (or `nothing`).
     # A rejection appends its relaxation cuts, so a deterministic re-proposal of the SAME
     # trial means the relaxation's optimum sits there — detected below and turned into an
     # immediate, named error instead of silently burning the rest of the iteration budget.
     last_rejected_z = nothing
-    # WR-06 (iteration 2): the trial at which the IMMEDIATELY preceding iteration appended
+    # The trial at which the IMMEDIATELY preceding iteration appended
     # a WEAK oracle feasibility cut (see `_feas_cut_class`), or `nothing`.
     last_weak_feas_z = nothing
     for k in 1:max_iter
-        # WR-01/IN-04 (phase 12 review): solve_time_trace records ONLY the wall-clock
+        # `solve_time_trace` records ONLY the wall-clock
         # seconds spent inside this iteration's solve calls (master + follower, plus
         # the oracle on the optimality branch) — NEVER checkpoint_iteration!'s JLD2
         # write + git provenance shell-outs, which on the toy fixtures dominate
@@ -1302,27 +1286,27 @@ function solve_stackelberg!(
         # a time()-based span negative and trip push!'s solve_time >= 0 guard mid-run.
         t_solve = 0.0
         # The Ref solve_master! overwrites with the actual attempt count via its new
-        # attempts_out keyword (plan 12-01); Ref(1) is a safe initial value in case a
+        # attempts_out keyword; Ref(1) is a safe initial value in case a
         # future call site ever omits the keyword, though this call site always passes it.
         master_attempts = Ref(1)
         t0_ns = time_ns()
         lb_res = solve_master!(master; attempts_out = master_attempts)
         t_solve += (time_ns() - t0_ns) / 1.0e9
-        # CR-01 (phase 12 review): capture the master's GENUINE post-solve termination
+        # Capture the master's GENUINE post-solve termination
         # status HERE — before solve_follower! and before any add_*_cut! call. The
         # master is a CACHING-mode model, and JuMP's add_constraint sets
         # is_model_dirty = true, after which termination_status short-circuits to the
         # :OPTIMIZE_NOT_CALLED sentinel; querying at the trace-push sites (after the
         # cut appends) would record that sentinel on every row of every run.
         master_status_k = Symbol(termination_status(master.model))
-        # WR-01: the follower's feasibility check runs FIRST — before any oracle solve.
+        # The follower's feasibility check runs FIRST — before any oracle solve.
         # The master's box allows z up to y_max, beyond the follower's deliverable
         # capacity (corridor_cap * x_inv_max); at such extreme trial z the oracle's own
-        # exactness/complementarity gates can throw (subproblem.jl CR-03), crashing the
+        # exactness/complementarity gates can throw (subproblem.jl), crashing the
         # loop at the exact moment a feasibility cut was the designed recovery. Routing
         # infeasible extremes to the feasibility-cut branch below also avoids a wasted
         # oracle solve per infeasible iteration.
-        # DIRECT call — NEVER solve_with_retry!-wrapped (plan 11-01's follower contract):
+        # DIRECT call — NEVER solve_with_retry!-wrapped (the follower contract):
         # the infeasible branch must be OBSERVED on the un-retried solve, or the Farkas
         # certificate is unreachable.
         t0_ns = time_ns()
@@ -1330,7 +1314,7 @@ function solve_stackelberg!(
         t_solve += (time_ns() - t0_ns) / 1.0e9
 
         if !follower_res.feasible
-            # WR-01 (Phase 31 code review): a confirmed infeasibility without a Farkas
+            # A confirmed infeasibility without a Farkas
             # certificate (`solve_follower!(::DistributorView)`'s NaN sentinel, after its
             # own presolve-free re-solve) carries no cut, and this loop has no other way
             # to exclude z_k — fail with a named diagnosis rather than add_feasibility_cut!'s
@@ -1341,7 +1325,7 @@ function solve_stackelberg!(
                 "even after a presolve-free re-solve — no feasibility cut can exclude " *
                 "z_k, so the Benders loop cannot continue",
             )
-            last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
+            last_rejected_z = nothing   # a cut was added — the master moved on
             last_weak_feas_z = nothing
             add_feasibility_cut!(master, follower_res.v, follower_res.u, lb_res.z)
             checkpoint_iteration!(
@@ -1349,9 +1333,9 @@ function solve_stackelberg!(
                 k;
                 dir = checkpoint_dir,
             )
-            # plan 12-01: feasibility-branch trace row. oracle_status defaults to the
+            # Feasibility-branch trace row. oracle_status defaults to the
             # :not_solved sentinel because the oracle is never reached on this branch
-            # (WR-01 ordering); retry_count is the master's NET retries this iteration
+            # (ordering); retry_count is the master's NET retries this iteration
             # (the only retry-gated solve that ran on this branch).
             push!(
                 trace,
@@ -1361,31 +1345,31 @@ function solve_stackelberg!(
                 gap = NaN,
                 cut_type = :feasibility,
                 n_cuts = length(master.cuts),
-                # CR-01: the status captured immediately after solve_master!, before
+                # The status captured immediately after solve_master!, before
                 # add_feasibility_cut! dirtied the model.
                 master_status = master_status_k,
                 oracle_status = :not_solved,
                 retry_count = master_attempts[] - 1,
                 solve_time = t_solve,
             )
-            continue   # T-11-06: a feasibility cut NEVER updates UB
+            continue   # a feasibility cut NEVER updates UB
         end
 
-        # Only a follower-deliverable z_k ever reaches the oracle (WR-01 ordering above).
+        # Only a follower-deliverable z_k ever reaches the oracle (ordering above).
         oracle_attempts = Ref(1)
-        # Per-iteration policy bookkeeping (Phase 30, BILEV-04b): overwritten below only
+        # Per-iteration policy bookkeeping: overwritten below only
         # on the branches that actually engage inexact_policy; :none on every ordinary
         # success path, mirroring every other sentinel default in this loop.
         policy_action_k = :none
         t0_ns = time_ns()
-        # Phase 30 code review (CR-01/CR-03): the exactness verdict is an EXPLICIT return
+        # The exactness verdict is an EXPLICIT return
         # field of solve_planning_oracle! (`exactness`), never inferred from which side
         # effects a throw left behind. Under `:strict` the oracle's own `:throw` mode
-        # rethrows the gate's error unchanged (byte-identical to pre-Phase-30). Under
+        # rethrows the gate's error unchanged (bit-for-bit identical to the plain strict path). Under
         # `:reject`/`:certify_incumbent` the `:report` mode returns the inexact result —
         # and the battery-complementarity gate still runs on it inside the oracle, so a
         # complementarity violation ALWAYS throws and can never become a cut, a UB, or an
-        # incumbent (CR-01). The catch below therefore only ever sees a genuine
+        # incumbent. The catch below therefore only ever sees a genuine
         # solve failure or an out-of-scope gate throw (complementarity, or exactness under
         # `:strict`); the latter are rethrown UNCHANGED.
         oracle_res = try
@@ -1399,9 +1383,9 @@ function solve_stackelberg!(
             _is_solver_failure(e) || rethrow()
             # A throw from a TRUSTED solve can only come from a post-solve gate
             # (complementarity, or exactness under :strict) — never an infeasibility.
-            # Propagate it with its own diagnosis (CR-03: no reclassification).
+            # Propagate it with its own diagnosis (no reclassification).
             is_solved_and_feasible(oracle.model; dual = true) && rethrow()
-            # WR-01 (Phase 30 code review): ONLY a genuine infeasibility verdict goes to
+            # ONLY a genuine infeasibility verdict goes to
             # the feasibility-cut branch. Every other untrusted outcome — the retry
             # ladder exhausted on SLOW_PROGRESS/NUMERICAL_ERROR/ITERATION_LIMIT, a
             # foreign-backend attribute rejection, ... — is a solver failure, not a
@@ -1411,15 +1395,14 @@ function solve_stackelberg!(
             oracle_ts in ORACLE_INFEASIBLE_STATUSES || rethrow()
             # The trusted-solve gate failed with an infeasibility verdict -> route to the
             # oracle-feasibility-cut branch: the second, built-ONCE slack-minimization
-            # oracle (plan 30-01) produces a genuine (v, u) Benders feasibility-cut pair
+            # oracle produces a genuine (v, u) Benders feasibility-cut pair
             # for this pinned z_k — the loop recovers instead of crashing, mirroring the
-            # EXISTING follower-feasibility-cut branch's own "never update UB" discipline
-            # (T-11-06).
+            # EXISTING follower-feasibility-cut branch's own "never update UB" discipline.
             t_solve += (time_ns() - t0_ns) / 1.0e9
-            # WR-02 (Phase 30 code review): the slack-min model is feasible only if SOME
+            # The slack-min model is feasible only if SOME
             # p_import admits the network, so it can fail too — never let its error mask
             # the original oracle infeasibility. Rethrow with BOTH diagnoses and z_k.
-            # IN-02 (iteration 2): this solve is timed and its retries are counted.
+            # This solve is timed and its retries are counted.
             fo_attempts = Ref(1)
             t0_fo_ns = time_ns()
             fo_res = try
@@ -1436,7 +1419,7 @@ function solve_stackelberg!(
                 )
             end
             t_solve += (time_ns() - t0_fo_ns) / 1.0e9
-            # WR-01 / WR-06 (iteration 2): the cut evaluates to exactly `v` at z_k. It is
+            # The cut evaluates to exactly `v` at z_k. It is
             # VALID for any v >= 0 (convexity of the slack-min value), but separates z_k
             # beyond the master's tolerance only for v > FEAS_CUT_V_TOL. See
             # `_feas_cut_class` for the measured three-way rule.
@@ -1446,7 +1429,7 @@ function solve_stackelberg!(
                 "(iteration $k), but the slack-minimization feasibility oracle measures " *
                 "only v=$(fo_res.v) <= FEAS_CUT_V_NOISE=$(FEAS_CUT_V_NOISE) of slack there " *
                 "(its own noise floor) — the two oracles disagree about z_k, so no " *
-                "feasibility cut carries any information (WR-01/WR-06).",
+                "feasibility cut carries any information.",
             )
             if feas_class === :weak && last_weak_feas_z !== nothing &&
                maximum(abs, lb_res.z .- last_weak_feas_z) <= 1e-9
@@ -1455,11 +1438,11 @@ function solve_stackelberg!(
                     "z_k=$(lb_res.z) (iteration $k): the previous iteration appended a " *
                     "weak oracle feasibility cut there (FEAS_CUT_V_NOISE < v <= " *
                     "FEAS_CUT_V_TOL), the master re-proposed the identical trial, and the " *
-                    "slack-min oracle again measures only v=$(fo_res.v) (WR-06).",
+                    "slack-min oracle again measures only v=$(fo_res.v).",
                 )
             end
             last_weak_feas_z = feas_class === :weak ? copy(lb_res.z) : nothing
-            last_rejected_z = nothing   # WR-06: a cut was added — the master moved on
+            last_rejected_z = nothing   # a cut was added — the master moved on
             add_feasibility_cut!(master, fo_res.v, fo_res.u, lb_res.z)
             checkpoint_iteration!(
                 (; k, LB = lb_res.LB, UB, gap = NaN, z_k = lb_res.z, feasible = false),
@@ -1476,31 +1459,31 @@ function solve_stackelberg!(
                 n_cuts = length(master.cuts),
                 master_status = master_status_k,
                 oracle_status = Symbol(oracle_ts),
-                # IN-02 (iteration 2): the master's and the feasibility oracle's retries.
+                # The master's and the feasibility oracle's retries.
                 # The FAILED oracle solve's own attempts are not observable here
                 # (solve_with_retry! sets attempts_out only on success), so they are not
                 # counted: a lower bound on this row's true retry count.
                 retry_count = (master_attempts[] - 1) + (fo_attempts[] - 1),
                 solve_time = t_solve,
-                # WR-06 (iteration 2): a weak (valid, possibly non-separating) cut is
+                # A weak (valid, possibly non-separating) cut is
                 # labelled distinctly, and the measured v is recorded on every
                 # oracle-feasibility row so the regime can be measured.
                 policy_action = feas_class === :weak ? :oracle_feasibility_cut_weak :
                                 :oracle_feasibility_cut,
                 feas_cut_v = fo_res.v,
             )
-            continue   # T-11-06: an oracle feasibility cut NEVER updates UB
+            continue   # an oracle feasibility cut NEVER updates UB
         end
         t_solve += (time_ns() - t0_ns) / 1.0e9
-        # WR-05 (Phase 30 code review): the measured cone residual is recorded on EVERY
+        # The measured cone residual is recorded on EVERY
         # row whose oracle solve ran the exactness gate (exact or inexact) — NaN only when
         # the gate does not apply (no `:l` stash: DC/LinDistFlow).
         socp_maxgap_k = oracle_res.socp_maxgap
 
-        # BILEV-04b policy dispatch on the EXPLICIT verdict. `:strict` never reaches an
+        # policy dispatch on the EXPLICIT verdict. `:strict` never reaches an
         # :inexact result (the oracle threw above). The result has already passed the
         # battery-complementarity gate whatever its exactness verdict.
-        # WR-02 (Phase 30 code review iteration 2): `rejected_k` marks an inexact trial
+        # `rejected_k` marks an inexact trial
         # under `:reject`. Its relaxation cuts ARE appended below (they under-estimate
         # the relaxed — hence also the true — value function whatever the exactness
         # verdict, so LB stays valid and the master moves on), but it is barred from
@@ -1539,25 +1522,25 @@ function solve_stackelberg!(
                 policy_action_k = :certified_incumbent
             end
         end
-        # Phase 24 gap-closure (plan 24-05.1): capture oracle.model's GENUINE
+        # Capture oracle.model's GENUINE
         # termination status HERE, immediately after ITS OWN solve at lb_res.z —
-        # mirrors master_status_k's own CR-01 capture-before-mutation discipline
+        # mirrors master_status_k's own capture-before-mutation discipline
         # above. `ll_cut_recourse` below (BendersMasterInteger path only) re-solves
         # oracle/follower at OTHER z trials during its internal ternary search;
         # querying termination_status(oracle.model) AFTER that point would silently
         # report the LAST ternary-search trial's status instead of lb_res.z's own.
         oracle_status_k = Symbol(termination_status(oracle.model))
 
-        # Phase 30 (BILEV-05, plan 30-04): the UNIVERSAL runtime epigraph floor guard —
+        # The UNIVERSAL runtime epigraph floor guard —
         # unconditional, independent of whether master.α_op/master.α_x's declared lower
         # bound came from :auto, an explicit Real, or was build-time-validated at all,
         # and independent of inexact_policy. oracle_res/follower_res have passed every
         # post-solve gate here (an :inexact oracle_res only under :certify_incumbent,
         # and it too has passed battery complementarity).
-        # WR-05 (iteration 2) / Option A (plan 31-07): the guard's tolerance adds the
-        # build-time acceptance slack of each bound (`_accepted_lb_slack`). Since 31-07
-        # clamps every accepted explicit bound to the certified minimum at build time,
-        # that slack is always 0.0 on both master types (IN-02, Phase 31 code review) —
+        # The guard's tolerance adds the
+        # build-time acceptance slack of each bound (`_accepted_lb_slack`). Because
+        # build time clamps every accepted explicit bound to the certified minimum at build time,
+        # that slack is always 0.0 on both master types —
         # the term is kept only as a seam, it widens nothing.
         _assert_epigraph_floor(
             -oracle_res.cost,
@@ -1573,28 +1556,28 @@ function solve_stackelberg!(
             accepted_slack = _accepted_lb_slack(master, :x),
         )
 
-        # WR-06/WR-02: remember a rejected trial for the stall backstop above; any other
+        # Remember a rejected trial for the stall backstop above; any other
         # optimality iteration resets it.
         last_rejected_z = rejected_k ? copy(lb_res.z) : nothing
-        last_weak_feas_z = nothing   # WR-06: optimality cuts are added — the master moves on
-        # Oracle's :op cut — plan 11-01's <sign_convention> derivation, reused verbatim:
+        last_weak_feas_z = nothing   # optimality cuts are added — the master moves on
+        # Oracle's :op cut — sign convention of the follower model, reused verbatim:
         # cost_k = -oracle_res.cost, grad_k = oracle_res.π (UNNEGATED).
         add_optimality_cut!(master, :op, -oracle_res.cost, oracle_res.π, lb_res.z)
         # Follower's :x cut — used exactly as solve_follower! returns it.
         add_optimality_cut!(master, :x, follower_res.cost, follower_res.π_s, lb_res.z)
 
-        # Phase 24, plan 24-04: apply_integer_cuts! fires generically on the optimality
+        # apply_integer_cuts! fires generically on the optimality
         # branch — a TRUE no-op for BendersMaster (touches zero fields of lb_res, always
         # returns nogood_fired = false), real Laporte-Louveaux (always) + no-good
-        # (on detected stall) logic for BendersMasterInteger (plan 24-03).
+        # (on detected stall) logic for BendersMasterInteger.
         #
         # Q_nu_iterate: the recourse EXCLUDING the leader's own c_y*y term, evaluated AT
         # THE CURRENT ITERATE z = lb_res.z — exactly cost_k below, minus that term. This
         # is NOT what add_ll_cut! requires (see ll_cut_recourse immediately below).
         Q_nu_iterate = follower_res.cost - oracle_res.cost
 
-        # Phase 24 GAP-CLOSURE (plan 24-05.1) — THE FIX for the defect plan 24-05's
-        # certification (D-15) found in this already-merged wiring: add_ll_cut!'s own
+        # THE FIX for the defect the enumeration-backed certification found in
+        # this wiring: add_ll_cut!'s own
         # documented precondition is the EXACT, per-corner MINIMIZED recourse
         # Q(y_inv(b^ν)) = min_{z∈[0,y_inv]}[follower_cost(z) − oracle_welfare(z)], never
         # the recourse AT WHATEVER z THE MASTER'S CURRENT TRIAL HAPPENED TO PICK
@@ -1605,14 +1588,14 @@ function solve_stackelberg!(
         # test/test_planning_certification_integer.jl's file header for the full
         # diagnosis this fix resolves. `ll_cut_recourse` is a TRUE no-op for
         # BendersMaster (returns Q_nu_iterate UNCHANGED, touches ZERO oracle/follower
-        # state — the continuous path is BYTE-IDENTICAL to before this fix); for
+        # state — the continuous path is BIT-FOR-BIT IDENTICAL to before this fix); for
         # BendersMasterInteger it performs the real minimization via the SAME
         # deterministic ternary-search technique as
         # test_planning_certification_integer.jl's own `enumerate_lattice` reference
         # implementation, reusing the REAL, already-built `oracle`/`follower` (never
         # rebuilt, never a closed-form shortcut).
         t0_ns = time_ns()
-        # CR-02 (Phase 30 code review iteration 2): the corner search runs under the
+        # the corner search runs under the
         # SAME policy as the outer trial — :throw under :strict, :report otherwise.
         Q_nu = ll_cut_recourse(
             master,
@@ -1628,15 +1611,15 @@ function solve_stackelberg!(
         integer_cut_res = apply_integer_cuts!(master, lb_res, Q_nu)
         integer_cut_res.nogood_fired && (nogood_total += 1)
 
-        # CR-01: track the incumbent, not just the bound — store the (y, z) pair that
+        # track the incumbent, not just the bound — store the (y, z) pair that
         # achieved the running-minimum UB so the converged return is the certified point.
         cost_k = master.c_y * lb_res.y + Q_nu_iterate
-        # WR-02: a rejected (inexact, :reject) trial never updates UB or the incumbent.
+        # a rejected (inexact, :reject) trial never updates UB or the incumbent.
         if !rejected_k && cost_k < UB
             UB = cost_k
             y_best = lb_res.y
             z_best = copy(lb_res.z)
-            # CR-02/WR-10 (Phase 30 code review): the incumbent's exactness certificate is
+            # the incumbent's exactness certificate is
             # the verdict of the VERY solve that produced UB — recorded here, never
             # re-derived later by a second solve (whose sticky retry attributes could
             # disagree with this one).
@@ -1644,7 +1627,7 @@ function solve_stackelberg!(
             incumbent_socp_maxgap = oracle_res.socp_maxgap
             incumbent_welfare = oracle_res.cost
         end
-        # WR-01 (Phase 30 code review iteration 2): the certified incumbent, updated only
+        # the certified incumbent, updated only
         # by a certified iterate, compared only against other certified costs.
         if oracle_res.exactness !== :inexact && (exact_inc === nothing || cost_k < exact_inc.UB)
             exact_inc = (;
@@ -1663,11 +1646,11 @@ function solve_stackelberg!(
             k;
             dir = checkpoint_dir,
         )
-        # plan 12-01: optimality-branch trace row. retry_count sums BOTH retry-gated
+        # Optimality-branch trace row. retry_count sums BOTH retry-gated
         # solves' net retries this iteration (master's and the oracle's), since both
         # actually ran; oracle_status records the oracle's own genuine termination
-        # status (never the :not_solved sentinel on this branch). nogood_count (Phase 24,
-        # plan 24-04, D-16) records THIS iteration's no-good firing (0 or 1) — always 0 on
+        # status (never the :not_solved sentinel on this branch). nogood_count
+        # records THIS iteration's no-good firing (0 or 1) — always 0 on
         # the continuous path.
         push!(
             trace,
@@ -1677,10 +1660,10 @@ function solve_stackelberg!(
             gap = gap,
             cut_type = :optimality,
             n_cuts = length(master.cuts),
-            # CR-01: the status captured immediately after solve_master!, before the
+            # the status captured immediately after solve_master!, before the
             # add_optimality_cut! calls dirtied the model. oracle_status_k was captured
             # immediately after the oracle's OWN solve at lb_res.z, BEFORE
-            # ll_cut_recourse's (Phase 24 gap-closure, plan 24-05.1) BendersMasterInteger
+            # ll_cut_recourse's BendersMasterInteger
             # branch potentially re-solves oracle.model at OTHER z trials during its
             # internal ternary search — querying termination_status(oracle.model) HERE
             # instead would silently report the LAST such trial's status.
@@ -1689,21 +1672,21 @@ function solve_stackelberg!(
             retry_count = (master_attempts[] - 1) + (oracle_attempts[] - 1),
             solve_time = t_solve,
             nogood_count = integer_cut_res.nogood_fired ? 1 : 0,
-            # Phase 30 (BILEV-04b, plan 30-04): :none on the ordinary success path,
+            # :none on the ordinary success path,
             # :certified_incumbent when inexact_policy's :certify_incumbent branch fired.
-            # socp_maxgap is the MEASURED cone residual whenever the gate ran (WR-05).
+            # socp_maxgap is the MEASURED cone residual whenever the gate ran.
             policy_action = policy_action_k,
             socp_maxgap = socp_maxgap_k,
         )
 
-        # Phase 24, plan 24-04 (D-13/D-14, plan-checker Blocker 2): an EXCLUSIVE branch,
+        # An EXCLUSIVE branch,
         # NEVER an `||` of the two criteria — reusing `tol` on the `known_optimum`-supplied
         # (certified) path would silently reintroduce the continuous loop's tolerance on
         # exactly the path this mechanism exists to keep tolerance-free. When
-        # known_optimum === nothing, this reduces EXACTLY to `gap <= tol`, byte-identical
-        # to the pre-Phase-24 behavior.
+        # known_optimum === nothing, this reduces EXACTLY to `gap <= tol`, bit-for-bit identical
+        # to the plain continuous criterion.
         # The convergence test as a function of an upper bound, so the SAME test can be
-        # applied to the certified incumbent (WR-01, `_select_incumbent`).
+        # applied to the certified incumbent (`_select_incumbent`).
         LB_k = lb_res.LB
         converged_at(UBx) =
             known_optimum === nothing ? ((UBx - LB_k) / max(1, abs(UBx)) <= tol) :
@@ -1711,7 +1694,7 @@ function solve_stackelberg!(
         converged_now = converged_at(UB)
 
         if converged_now
-            # WR-01 (Phase 30 code review iteration 2): apply the documented incumbent
+            # apply the documented incumbent
             # ordering. Only when the running-minimum incumbent is relaxation-only AND
             # the certified incumbent is itself converged does the returned point change.
             chosen = _select_incumbent(
@@ -1745,7 +1728,7 @@ function solve_stackelberg!(
                     exact_inc.exactness,
                     exact_inc.socp_maxgap,
                 )
-            # BILEV-04b (plan 30-04) + CR-02/WR-10 (Phase 30 code review): the AC
+            # + the AC
             # re-check runs ONCE, at the converged incumbent, iff the incumbent's OWN
             # recorded verdict is :inexact — only reachable under :certify_incumbent
             # (:strict throws on any inexact solve; :reject never lets an inexact iterate
@@ -1754,14 +1737,14 @@ function solve_stackelberg!(
             # carries the SOCP welfare at the same z so the relaxation error in UB is
             # measured, not just flagged.
             ub_relaxation_only = incumbent_exactness === :inexact
-            # WR-03 (iteration 2): a failure of this diagnostic is REPORTED on
+            # a failure of this diagnostic is REPORTED on
             # ac_report, never allowed to discard the converged result.
             ac_report =
                 ub_relaxation_only ?
                 _incumbent_ac_report(feeder, aggregators, λ₀, T, z_best, incumbent_welfare) :
                 nothing
 
-            # CR-01: return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
+            # return the INCUMBENT — c(y_best, z_best) = UB <= LB + tol*max(1,|UB|)
             # (continuous path) or UB matches known_optimum exactly within
             # KNOWN_OPTIMUM_ATOL (certified path); the current iterate (lb_res.y,
             # lb_res.z) carries no such guarantee.
@@ -1776,31 +1759,31 @@ function solve_stackelberg!(
                 follower,
                 master,
                 trace,
-                # Phase 24, plan 24-04 (D-16): appended AFTER every existing field so
+                # Appended AFTER every existing field so
                 # every prior caller destructuring by name is unaffected (NamedTuple
                 # field access is name-based, never position-based).
                 nogood_count = nogood_total,
                 converged_via = nogood_total > 0 ? :nogood_assisted : :clean,
-                # BILEV-04b (plan 30-04): a NEW, TRAILING, additive field — `nothing`
+                # A TRAILING, additive field — `nothing`
                 # unless the incumbent is SOCP-inexact, then the populated AC re-check
                 # report (see the docstring's Returns section).
                 ac_report,
-                # CR-02 (Phase 30 code review): the incumbent's exactness certificate.
+                # The incumbent's exactness certificate.
                 # When ub_relaxation_only is true, UB/gap certify the SOC RELAXATION
                 # only — UB is then not an upper bound on the physical problem.
                 incumbent_exactness,
                 incumbent_socp_maxgap,
                 ub_relaxation_only,
-                # WR-01 (Phase 30 code review iteration 2): the best certified incumbent,
+                # The best certified incumbent,
                 # `nothing` if no iterate was certified (trailing, additive).
                 exact_incumbent,
-                # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.solve_stackelberg).
+                # Documented status vocabulary (STATUS_VOCABULARY.solve_stackelberg).
                 status = ub_relaxation_only ? :converged_relaxation_only : :converged,
             )
         end
     end
 
-    # IN-01 (plan 12-01): read the exhaustion diagnostic from the TRACE's last recorded
+    # Read the exhaustion diagnostic from the TRACE's last recorded
     # row, never a loop-local variable that can be stale/NaN if the final iterations
     # were all feasibility branches — every iteration pushes exactly one trace row on
     # either branch, so trace.iters == max_iter and last(...) is always well-defined here.
