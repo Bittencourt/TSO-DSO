@@ -1,5 +1,5 @@
-# Seam: units/PerUnit.jl (INFRA-05). Driven green by plan 01-02.
-@testitem "perunit: convert-once at ingestion + magnitude-sanity bands (INFRA-05)" begin
+# Seam: units/PerUnit.jl.
+@testitem "perunit: convert-once at ingestion + magnitude-sanity bands" begin
     using TSODSO
 
     # Documented placeholder base: S_base = 1.0 MVA, V_base = 4.16 kV (IEEE-13-ish).
@@ -20,7 +20,7 @@
 
     # Magnitude-sanity checks must FIRE (loud ArgumentError tripwire — an
     # explicit throw, not @assert, so it survives `-O`/`--check-bounds=no`) on
-    # out-of-band voltages — both too low (SI leaked in) and too high (WR-02).
+    # out-of-band voltages — both too low (SI leaked in) and too high.
     @test_throws ArgumentError TSODSO.assert_magnitudes_voltage(0.1)
     @test_throws ArgumentError TSODSO.assert_magnitudes_voltage(1.5)
 end

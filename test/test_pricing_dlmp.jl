@@ -1,23 +1,23 @@
 # test/test_pricing_dlmp.jl
 #
-# Seam: pricing/dlmp.jl (PRICE-01 / PRICE-02). DLMP extraction + four-way decomposition.
+# Seam: pricing/dlmp.jl. DLMP extraction + four-way decomposition.
 #
-# The BEHAVIORAL @testitems for plan 05-02 (the RED harness `test_dlmp.jl` pins the module
+# The BEHAVIORAL @testitems (the harness `test_dlmp.jl` pins the module
 # API; this file pins the physics). Every item name contains "dlmp" so
 # `@run_package_tests filter=ti->occursin("dlmp", ti.name)` selects it. Items are
 # self-contained where possible (an inline 2-bus feeder for the DADP sign / gate) and reuse
 # `setup=[IEEE13Fixtures]` for the IEEE-13 ground and high-PV over-voltage solves.
 #
 # What is pinned:
-#   * PRICE-01 — `extract_dlmp` is the per-node/hour dual of `:balance_p`, POSITIVE and ≈ λ₀ on
-#     a lossless uncongested interior 2-bus (sign regression, RESEARCH Pitfall 1); it REFUSES
-#     (throws) an ungated SOCP ctx that lacks the PF-04 exactness certificate (threat T-05-01).
-#   * PRICE-02 — `decompose_dlmp` splits the DADP into energy/loss/congestion/voltage that SUM
+#   * `extract_dlmp` is the per-node/hour dual of `:balance_p`, POSITIVE and ≈ λ₀ on
+#     a lossless uncongested interior 2-bus (sign regression); it REFUSES
+#     (throws) an ungated SOCP ctx that lacks the exactness certificate.
+#   * `decompose_dlmp` splits the DADP into energy/loss/congestion/voltage that SUM
 #     to the nodal price within a relative tolerance on IEEE-13 (congestion binds at the head)
 #     AND the high-PV over-voltage solve (voltage engaged); congestion/voltage ≈ 0 on the
 #     uncongested in-bound 2-bus.
 
-@testitem "dlmp: extract_dlmp on a lossless 2-bus is positive and ≈ λ₀ (energy-only, PRICE-01)" tags =
+@testitem "dlmp: extract_dlmp on a lossless 2-bus is positive and ≈ λ₀ (energy-only)" tags =
     [:dlmp] begin
     using TSODSO
     using TSODSO: SOCP
@@ -36,11 +36,11 @@
     λ₀ = fill(40.0, T)
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-    # D-26-01 (Plan 26-10): this near-lossless (r=x=1e-6) fixture's loss current `l`'s
+    # This near-lossless (r=x=1e-6) fixture's loss current `l`'s
     # objective weight (r·λ) is tiny enough that Clarabel's default `tol_gap=1e-8` stops
-    # short of the true (exact) cone-tight optimum, tripping the PF-04 gate on a genuine
-    # precision-floor artifact (gate ratio 4.04 at 1e-8; 6.3e-6 at 5e-10 — see
-    # `26-10-SUMMARY.md`). Tightened per the `stochastic_welfare.jl` `5e-10` precedent
+    # short of the true (exact) cone-tight optimum, tripping the exactness gate on a genuine
+    # precision-floor artifact (gate ratio 4.04 at 1e-8; 6.3e-6 at 5e-10).
+    # Tightened per the `stochastic_welfare.jl` `5e-10` precedent
     # (src/models/stochastic_welfare.jl); `assert_socp_exact!`'s own atol/rtol are untouched.
     ctx, _obj, _dadp = solve_welfare(
         feeder,
@@ -64,7 +64,7 @@
     @test extract_dlmp(ctx; bus = 2, T = T) ≈ M[2, :]
 end
 
-@testitem "dlmp: extract_dlmp REFUSES an ungated SOCP ctx (PF-04 gate, PRICE-01)" tags =
+@testitem "dlmp: extract_dlmp REFUSES an ungated SOCP ctx (exactness gate)" tags =
     [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -72,7 +72,7 @@ end
 
     # A SOCP-SHAPED ctx (its `pf_vars` carries a squared current `:l`) that was NEVER certified
     # exact (no `ctx.meta[:socp_maxgap]`). extract_dlmp must throw rather than price a possibly-
-    # inexact cone whose duals are physically meaningless (threat T-05-01). The guard fires
+    # inexact cone whose duals are physically meaningless. The guard fires
     # before any dual is read, so no solve is needed.
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
@@ -91,7 +91,7 @@ end
 
     @test_throws ArgumentError extract_dlmp(ctx)
 
-    # Stashing the PF-04 certificate lifts the refusal: with `:socp_maxgap` present the ctx is
+    # Stashing the exactness certificate lifts the refusal: with `:socp_maxgap` present the ctx is
     # priceable and the guard passes (the subsequent dual read is a separate solve concern,
     # exercised by the solved 2-bus / IEEE-13 items). The guard is the ONLY thing standing
     # between an inexact cone and a shipped price.
@@ -107,7 +107,7 @@ end
     @test TSODSO._assert_priceable(ctx2) === nothing
 end
 
-@testitem "dlmp: extract_dlmp returns the (N,T) DADP matrix on the IEEE-13 ground solve (PRICE-01)" tags =
+@testitem "dlmp: extract_dlmp returns the (N,T) DADP matrix on the IEEE-13 ground solve" tags =
     [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -133,7 +133,7 @@ end
     end
 end
 
-@testitem "dlmp: decompose_dlmp four components SUM to the DADP on IEEE-13 (congestion binds, PRICE-02)" tags =
+@testitem "dlmp: decompose_dlmp four components SUM to the DADP on IEEE-13 (congestion binds)" tags =
     [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -171,7 +171,7 @@ end
     )
     @test d.total ≈ total
 
-    # PARALLEL, non-summed finite-check on `d.reactive` (REACT-02): a SEPARATE price signal
+    # PARALLEL, non-summed finite-check on `d.reactive`: a SEPARATE price signal
     # from the 4-term active reconstruction above — checked for finiteness only, deliberately
     # NOT folded into the sum-to-nodal-price assertion (which stays exactly 4-term).
     for f in (d.energy, d.cone, d.congestion, d.drop, d.reactive)
@@ -188,7 +188,7 @@ end
     @test any(abs(d.congestion[j, t]) > 1e-2 for j in 1:N, t in 1:T)
 end
 
-@testitem "dlmp: decompose_dlmp SUM holds and voltage is engaged on the high-PV over-voltage solve (PRICE-02)" tags =
+@testitem "dlmp: decompose_dlmp SUM holds and voltage is engaged on the high-PV over-voltage solve" tags =
     [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -226,7 +226,7 @@ end
     @test any(abs(d.drop[j, t]) > 1e-8 for j in 1:N, t in 1:T)
 end
 
-@testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus (PRICE-02)" tags =
+@testitem "dlmp: decompose_dlmp has ≈0 congestion/voltage on an uncongested in-bound 2-bus" tags =
     [:dlmp] begin
     using TSODSO
     using TSODSO: SOCP
@@ -234,9 +234,8 @@ end
     using JuMP
 
     # Lossless, UN-BINDING (smax=10 ≫ flow ~0.1-0.2 — the branch IS a `:smax`/`:smax_rev`-
-    # bearing LIMITED branch (smax=10 < SMAX_NO_LIMIT=99.0, per 26-POSTMERGE-TRIAGE.md's
-    # "Latent issues found"; corrected label, Plan 26-10 — the prior "uncongested" wording
-    # conflated "no cone registered" with "cone registered but slack"), in-bound (voltage
+    # bearing LIMITED branch (smax=10 < SMAX_NO_LIMIT=99.0, so "uncongested" would be
+    # a misnomer — it conflates "no cone registered" with "cone registered but slack"), in-bound (voltage
     # un-binding) 2-bus: only the ENERGY component survives — congestion ≈ 0 (both cones
     # slack), voltage ≈ 0, and the total ≈ energy ≈ λ₀.
     feeder = Feeder(
@@ -248,7 +247,7 @@ end
     λ₀ = fill(40.0, T)
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
-    # D-26-01 (Plan 26-10): SAME near-lossless precision-floor artifact as this file's
+    # SAME near-lossless precision-floor artifact as this file's
     # earlier "extract_dlmp ... energy-only" item (identical fixture) — tightened tol_gap,
     # see that item's comment for the full explanation. assert_socp_exact!'s own atol/rtol
     # are untouched.
@@ -274,10 +273,10 @@ end
             rtol = 1e-6,
         ) for j in 1:N, t in 1:T
     )
-    # FIX-07 (phase 27): the old "d.drop ≈ 0 when [voltage] in-bound" claim conflated the
+    # The old "d.drop ≈ 0 when [voltage] in-bound" claim conflated the
     # `:vdrop`/`:cpydrop` EQUALITY-constraint dual (drop's underlying multiplier, always
     # "active" as an equality) with the voltage INEQUALITY bound multiplier (v/v̂ ≤ V²max) — no
-    # longer the same statement post-Phase-26 (PM-01: the exactness copy is a genuine
+    # longer the same statement since the exactness copy is a genuine
     # RESTRICTION, not a relaxation). REMOVED here; the CORRECT zero-iff-multiplier-zero
     # property is verified separately below, on a realistic-impedance (IEEE-13) fixture.
     for t in 1:T
@@ -296,14 +295,14 @@ end
     end
 end
 
-@testitem "dlmp: decompose_dlmp's cone/drop components are zero IFF their underlying multiplier is zero on IEEE-13 (PRICE-02, FIX-07)" tags =
+@testitem "dlmp: decompose_dlmp's cone/drop components are zero IFF their underlying multiplier is zero on IEEE-13" tags =
     [:dlmp] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
-    # FIX-07 (phase 27): replaces the removed "d.drop ≈ 0 when [voltage] in-bound" claim (see
+    # Replaces the removed "d.drop ≈ 0 when [voltage] in-bound" claim (see
     # the 2-bus item above), which conflated the drop EQUALITY-constraint dual with the voltage
-    # INEQUALITY bound multiplier — no longer the same statement post-Phase-26 (PM-01). The
+    # INEQUALITY bound multiplier — no longer the same statement. The
     # CORRECT property: `d.cone[j,t]`/`d.drop[j,t]` is a SUM of per-branch terms over j's root
     # path (`-dual(:cone[b,t])[3]` / `-2r(dual(:vdrop[b,t])+dual(:cpydrop[b,t]))`), so it is
     # ZERO IFF EVERY branch on that path has its underlying multiplier at zero. Verified on the
@@ -311,7 +310,7 @@ end
     # branch), NOT the toy near-lossless 2-bus other items use. The root bus (empty root→root
     # path) gives the trivial "zero" side of the IFF (a vacuously-true empty product == the
     # component's exact 0.0 by construction); every non-root bus/hour on this fixture has BOTH
-    # multipliers genuinely nonzero (confirmed by this plan's own measurement script), so the
+    # multipliers genuinely nonzero (confirmed by a measurement script), so the
     # "nonzero" side is the one this test actually exercises — precisely the direction a
     # dropped/mis-signed accumulation term would violate.
     feeder = ieee13_modified()
@@ -390,7 +389,7 @@ end
     @test !hasproperty(dv, :voltage)
 end
 
-@testitem "dlmp: reactive price is degenerate at the root and finite/economically-consistent at a load bus on a lossy 2-bus (REACT-02)" tags =
+@testitem "dlmp: reactive price is degenerate at the root and finite/economically-consistent at a load bus on a lossy 2-bus" tags =
     [:dlmp] begin
     using TSODSO
     using TSODSO: reactive_factor
@@ -424,8 +423,8 @@ end
     d = decompose_dlmp(ctx)
 
     # (a) The root's reactive price is DEGENERATE (≈0): the free-sign, zero-objective-
-    # coefficient `q_import`'s own KKT stationarity forces its dual to exactly zero (RESEARCH
-    # "Free slack, precisely located").
+    # coefficient `q_import`'s own KKT stationarity forces its dual to exactly zero (the free
+    # slack is precisely located).
     for t in 1:T
         @test isapprox(d.reactive[1, t], 0.0; atol = 1e-6)
     end
@@ -435,9 +434,9 @@ end
         @test isfinite(d.reactive[2, t])
     end
 
-    # Finite-difference economic-consistency pin (RESEARCH Pitfall 6/7 discipline — a
+    # Finite-difference economic-consistency pin (a
     # hand-computed sanity check, not a further closed-form KKT re-derivation of the reactive
-    # price itself, per Assumption A1's minimal one-shot-price scope): perturb the SAME
+    # price itself, within the minimal one-shot-price scope): perturb the SAME
     # aggregator's power factor by a small δ, re-solve, and confirm the welfare objective's
     # change matches Σ_t d.reactive[2, t] * (q1[t] - q0[t]) to first order, where q0/q1 are the
     # aggregator's reactive-demand values before/after the perturbation computed via the SAME
@@ -461,13 +460,13 @@ end
     @test isapprox(predicted_Δobj, actual_Δobj; atol = 1e-8, rtol = 5e-2)
 end
 
-@testitem "dlmp: decompose_dlmp's congestion term is materially driven by :smax_rev in the receiving-end-binding PV back-feed regime (WR-02, phase-26 review)" tags =
+@testitem "dlmp: decompose_dlmp's congestion term is materially driven by :smax_rev in the receiving-end-binding PV back-feed regime" tags =
     [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
-    # WR-02 (phase-26 review): the FIX-03 receiving-end cone (:smax_rev, thesis 3.37) was, until
+    # The receiving-end cone (:smax_rev, thesis 3.37) was, until
     # this item, exercised directly at the ConvexBranchFlow/ACPowerFlow level
     # (test_convex_branch_flow.jl's/test_ac_powerflow.jl's `mag_rev > 100*mag_fwd` PV-back-feed
     # items) but NEVER through decompose_dlmp itself in a fixture where :smax_rev actually binds
@@ -481,14 +480,14 @@ end
     # aggregator (Ppv=2.0 ≫ smax=0.5) and a negligible inelastic load/battery — the "elastic
     # PV/Aggregator idiom" (an unconstrained-by-price generator that wants to export as much as
     # the network allows under `allow_export=true`), mirroring test_convex_branch_flow.jl's own
-    # FIX-03 fixture intent but driven through the ACTUAL solve_welfare + Aggregator + PVBattery
+    # receiving-end fixture intent but driven through the ACTUAL solve_welfare + Aggregator + PVBattery
     # production path (decompose_dlmp requires a real solved ctx: `ctx.feeder`,
-    # `:balance_p`, and the PF-04 exactness certificate — none of which the raw-JuMP
+    # `:balance_p`, and the exactness certificate — none of which the raw-JuMP
     # ConvexBranchFlow-only fixture provides). Calibrated empirically (this item's own
     # `<verify>` script): at this smax the sending-end cone is essentially SLACK
     # (mag_fwd ~ 1e-10) while the receiving-end cone BINDS (mag_rev ~ 5.4), so :smax_rev is the
     # ONLY materially nonzero congestion driver in this fixture, isolating exactly the term
-    # WR-02 flags as under-tested.
+    # was under-tested.
     r, x, smax = 0.05, 0.05, 0.5
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.05, false)],
@@ -513,12 +512,12 @@ end
     )
 
     # Confirm the fixture actually lands in the intended regime BEFORE trusting decompose_dlmp's
-    # own reconstruction of it (mirrors test_convex_branch_flow.jl's FIX-03 item exactly).
+    # own reconstruction of it (mirrors test_convex_branch_flow.jl's receiving-end item exactly).
     d_fwd = [dual(ctx.constraints[:smax][1, t]) for t in 1:T]
     d_rev = [dual(ctx.constraints[:smax_rev][1, t]) for t in 1:T]
     mag_fwd = [sqrt(sum(abs2, d_fwd[t])) for t in 1:T]
     mag_rev = [sqrt(sum(abs2, d_rev[t])) for t in 1:T]
-    @info "WR-02 PV back-feed + decompose_dlmp" mag_fwd mag_rev
+    @info "PV back-feed + decompose_dlmp" mag_fwd mag_rev
     for t in 1:T
         @test mag_rev[t] > 1e-3                # receiving-end cone BINDS
         @test mag_fwd[t] < 1e-6                # sending-end cone stays SLACK
@@ -542,10 +541,10 @@ end
     )
     @test d.total ≈ total
 
-    # THE load-bearing WR-02 assertion: congestion at the load bus is MATERIALLY nonzero (not a
+    # THE load-bearing assertion: congestion at the load bus is MATERIALLY nonzero (not a
     # numerical artifact) and is driven by :smax_rev specifically — the sending-end :smax dual's
     # OWN contribution to congestion is negligible by comparison, so this fixture genuinely
-    # exercises the receiving-end term the dlmp.jl header (plan 26-10) describes.
+    # exercises the receiving-end term the dlmp.jl header describes.
     for t in 1:T
         @test abs(d.congestion[2, t]) > 1e-2
         cong_from_smax = abs(dual(ctx.constraints[:smax][1, t])[2])
@@ -554,11 +553,11 @@ end
     end
 end
 
-@testitem "dlmp: DlmpDecomposition's NamedTuple(...) conversion restores the pre-FIX-07 field names/order (WR-01, 27-REVIEW.md)" tags =
+@testitem "dlmp: DlmpDecomposition's NamedTuple(...) conversion restores the earlier field names/order" tags =
     [:dlmp] begin
     using TSODSO, Test
 
-    # WR-01 (27-REVIEW.md, 2026-09-29): before Phase 27's FIX-07 rename, `decompose_dlmp`
+    # Before the field rename, `decompose_dlmp`
     # returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage,
     # reactive, total)`. `DlmpDecomposition` (the NEW return type) is a `struct`, not a
     # `NamedTuple` — a caller that used genuine `NamedTuple`-only semantics (`Tuple(nt)`,
@@ -577,7 +576,7 @@ end
     )
 
     nt = NamedTuple(d)
-    # EXACT pre-FIX-07 field order: (energy, loss, congestion, voltage, reactive, total) —
+    # EXACT earlier field order: (energy, loss, congestion, voltage, reactive, total) —
     # note `congestion`/`voltage` are POSITIONALLY TRANSPOSED relative to the new struct's
     # own `(energy, cone, drop, congestion, reactive, total)` field order (DlmpDecomposition's
     # own docstring); this conversion must NOT merely reorder-by-name into the new order.
@@ -589,7 +588,7 @@ end
     @test nt.reactive == [5.0]
     @test nt.total == [6.0]
 
-    # `Tuple`/`values`/`collect` — the genuine NamedTuple-only operations WR-01 is about —
+    # `Tuple`/`values`/`collect` — the genuine NamedTuple-only operations this conversion exists for —
     # now work again via the conversion, in the OLD positional order.
     @test Tuple(nt) == ([1.0], [2.0], [4.0], [3.0], [5.0], [6.0])
     @test collect(values(nt)) == [[1.0], [2.0], [4.0], [3.0], [5.0], [6.0]]

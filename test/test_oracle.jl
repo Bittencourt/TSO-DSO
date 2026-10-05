@@ -4,7 +4,7 @@
 # selects them. The bodies use the LinDistFlow formulation and build their
 # feeder/aggregator inline.
 
-@testitem "oracle: operational_oracle returns (cost, π, dadp, ctx) with finite prices (OPT-03/SEAM-01)" tags =
+@testitem "oracle: operational_oracle returns (cost, π, dadp, ctx) with finite prices" tags =
     [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -48,7 +48,7 @@
     @test all(isfinite, res.dadp)
 end
 
-@testitem "oracle: the :leader role returns the same shape (OPT-03)" tags =
+@testitem "oracle: the :leader role returns the same shape" tags =
     [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder

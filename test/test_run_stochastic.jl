@@ -1,22 +1,21 @@
 # test/test_run_stochastic.jl
 #
-# Seam: src/experiments/run_stochastic.jl (STOCH-01..03, plan 22-04). `run_stochastic`
+# Seam: src/experiments/run_stochastic.jl `run_stochastic`
 # generalizes `run_mpc`'s independent-entry-point SHAPE to the two-stage stochastic
 # extensive-form + out-of-sample evaluation: it materializes `s.strategy.S` in-sample scenario
-# populations from a DISJOINT `sub_seed` tag family, solves `build_stochastic_welfare`
-# (plan 22-02), then materializes `s.strategy.H_oos` held-out populations from a SECOND,
-# DISJOINT tag family and drives them through the build-once `StochasticOosHarness`
-# (plan 22-03), reporting the realized-vs-in-sample welfare gap. Items tagged
+# populations from a DISJOINT `sub_seed` tag family, solves `build_stochastic_welfare`,
+# then materializes `s.strategy.H_oos` held-out populations from a SECOND,
+# DISJOINT tag family and drives them through the build-once `StochasticOosHarness`,
+# reporting the realized-vs-in-sample welfare gap. Items tagged
 # `[:run_stochastic]`, `setup = [StochasticFixtures]` (this file's own items construct a
 # `Scenario` directly, on `:ieee13`/`:default` — `StochasticFixtures`' custom 2-bus fixture is
 # not addressable via `Scenario`, mirroring `test_mpc_loop.jl`'s own convention).
 #
-# T=9 (not `StochasticFixtures.T=6`) is used throughout, per this phase's own checker-mandated
-# fix for the Deferrable T<9 pitfall on the `:ieee13`/`:default` population (RESEARCH.md
-# Pitfall 3 — `:default` bakes a Deferrable energy-budget window at construction time that
+# T=9 (not `StochasticFixtures.T=6`) is used throughout, to avoid the Deferrable T<9 pitfall on
+# the `:ieee13`/`:default` population (`:default` bakes a Deferrable energy-budget window at construction time that
 # needs T>=9 to remain constructible).
 
-@testitem "run_stochastic: in-sample and held-out sub_seed families are disjoint (T-22-06)" tags =
+@testitem "run_stochastic: in-sample and held-out sub_seed families are disjoint" tags =
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: sub_seed
@@ -32,7 +31,7 @@
     @test isempty(intersect(insample_seeds, oos_seeds))
 end
 
-@testitem "run_stochastic: same-seed reproducibility (INFRA-04)" tags = [:run_stochastic] setup =
+@testitem "run_stochastic: same-seed reproducibility" tags = [:run_stochastic] setup =
     [StochasticFixtures] begin
     using TSODSO
 
@@ -46,13 +45,13 @@ end
     @test r1.oos.welfare_gap == r2.oos.welfare_gap
 end
 
-@testitem "run_stochastic: WR-05 (phase-22 review) — an infeasible held-out pin is skipped-and-reported, never run-aborting" tags =
+@testitem "run_stochastic: an infeasible held-out pin is skipped-and-reported, never run-aborting" tags =
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, sub_seed
     using JuMP: set_parameter_value
 
-    # WR-05: a held-out draw whose PV falls below every in-sample draw at some hour makes
+    # A held-out draw whose PV falls below every in-sample draw at some hour makes
     # the pinned p_ch collide with p_ch ≤ pv_used ≤ Ppv_h — a genuine PRIMAL_INFEASIBLE
     # that solve_with_retry! (correctly) refuses to retry. Before this fix that single
     # unlucky draw aborted the whole run_stochastic call after the expensive extensive-
@@ -86,11 +85,11 @@ end
     @test !infeas_ok
     @test isfinite(w_ok)
 
-    # ARCH-09: a non-solver error (programming error) is NOT skipped — it propagates.
+    # A non-solver error (programming error) is NOT skipped — it propagates.
     @test_throws MethodError TSODSO._stoch_solve_held_out!(nothing, 3)
 end
 
-@testitem "run_stochastic: WR-05 (phase-22 review) — oos result carries the infeasible_h mask (all-feasible fixture: all false)" tags =
+@testitem "run_stochastic: oos result carries the infeasible_h mask (all-feasible fixture: all false)" tags =
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
 
@@ -100,11 +99,11 @@ end
     @test length(r.oos.infeasible_h) == s.strategy.H_oos
     @test all(.!r.oos.infeasible_h)
     @test all(isfinite, r.oos.welfare_h)
-    # With nothing infeasible, realized_welfare keeps its pre-WR-05 definition exactly.
+    # With nothing infeasible, realized_welfare keeps its original definition exactly.
     @test r.oos.realized_welfare == sum(r.oos.welfare_h) / s.strategy.H_oos
 end
 
-@testitem "run_stochastic: D-11 measurement-before-golden — repeated-run stability precedes the pinned literal" tags =
+@testitem "run_stochastic: measurement-before-golden — repeated-run stability precedes the pinned literal" tags =
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
 
@@ -112,25 +111,25 @@ end
 
     # THREE fresh calls (never a cached result) with the SAME s — bit-for-bit stability,
     # exploiting this project's own deterministic-seeded-draw guarantee. This assertion MUST
-    # be textually BEFORE the pinned golden literal below (D-11's measurement-before-golden
+    # be textually BEFORE the pinned golden literal below (the measurement-before-golden
     # ordering) — never the reverse.
     r1 = run_stochastic(s)
     r2 = run_stochastic(s)
     r3 = run_stochastic(s)
     @test r1.oos.welfare_gap == r2.oos.welfare_gap == r3.oos.welfare_gap
 
-    # D-11: the golden literal below was pinned ONLY AFTER the stability assertion above
+    # The golden literal below was pinned ONLY AFTER the stability assertion above
     # passed in this SAME test run.
     #
-    # RE-PINNED for the WR-09 fix (phase-22 review): dropping the (S−1)·T exactly-
+    # RE-PINNED after dropping the (S−1)·T exactly-
     # redundant soc tie rows changes Clarabel's constraint matrix (better-conditioned,
     # same mathematical optimum), shifting the converged iterate within solver tolerance
     # — the previous golden -0.025156091170856598 moved by ~8e-6 RELATIVE to
-    # -0.02515629356082627. Re-measured per the D-11 measurement-before-golden
+    # -0.02515629356082627. Re-measured per the measurement-before-golden
     # discipline: 3 fresh same-process run_stochastic calls, bit-for-bit identical,
     # BEFORE this literal was written.
     #
-    # Julia-1.12 cross-version finding (quick task 260824-vdh): this golden was CI-failing
+    # Julia-1.12 cross-version finding: this golden was CI-failing
     # on the "Julia 1.12 - ubuntu-latest" job only (1.10 and 1.11 pass). Root cause is a
     # genuine cross-Julia-minor-version Clarabel converged-iterate shift, not a bug or a
     # flaky test — three fresh same-process run_stochastic(s) calls per version, same
@@ -146,20 +145,20 @@ end
     # CI's own 1.12 runners additionally observed two distinct values across two different
     # commits: -0.025156313755701376 (commit 304db38 — matches the local 1.12.7 measurement
     # exactly) and -0.02515643735591766 (commit 3b73633). The golden -0.02515629356082627
-    # above was correct and unchanged on Julia 1.10/1.11 UNTIL Plan 26-09 (gap-closure)
-    # landed. Cross-commit variation on the SAME Julia version (304db38 vs 3b73633, both
+    # above was correct and unchanged on Julia 1.10/1.11 UNTIL the device-correctness
+    # fixes below landed. Cross-commit variation on the SAME Julia version (304db38 vs 3b73633, both
     # 1.12) is a separately-tracked IEEE-13 numerical-knife-edge finding, noted here as
     # context only — this tolerance is meant to absorb solver-tolerance noise across
     # environments, not to paper over that structural finding.
     #
-    # RE-PINNED (Plan 26-09, phase 26 gap-closure): OLD -0.02515629356082627 ->
-    # NEW -0.018591711034105174. Cause: Plan 26-09 fixed the Prev/Qrev/smax_rev
-    # JuMP name-collision in build_stochastic_welfare's per-scenario unregister list
-    # (26-POSTMERGE-TRIAGE.md cluster A) — this scenario build previously errored before
-    # reaching a golden at all; the device-correctness fixes from Plans 26-03..05
+    # RE-PINNED: OLD -0.02515629356082627 ->
+    # NEW -0.018591711034105174. Cause: the Prev/Qrev/smax_rev
+    # JuMP name-collision in build_stochastic_welfare's per-scenario unregister list was fixed
+    # — this scenario build previously errored before
+    # reaching a golden at all; the device-correctness fixes
     # (battery SOC horizon linking, receiving-end thermal limit, flexible-load reactive
     # draw) independently move this welfare gap too, once the collision no longer masks
-    # them. Re-measured live in this worktree per D-11 (three fresh same-process
+    # them. Re-measured live (three fresh same-process
     # run_stochastic(s) calls, bit-for-bit stable, BEFORE this literal was written — see
     # the stability assertion above). `rtol = 1e-4` retained to absorb the same
     # cross-Julia-minor-version solver-tolerance noise documented above.

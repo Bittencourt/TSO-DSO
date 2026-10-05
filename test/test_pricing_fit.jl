@@ -1,20 +1,20 @@
 # test/test_pricing_fit.jl
 #
-# Seam: pricing/fit.jl (PRICE-03, the FIT baseline half). The thesis-faithful FIT-OPT
-# (3.24-3.28) + plain AC-PF counterfactual `fit_baseline`, driven GREEN by plan 05-03.
+# Seam: pricing/fit.jl (the FIT baseline half). The thesis-faithful FIT-OPT
+# (3.24-3.28) + plain AC-PF counterfactual `fit_baseline`.
 #
-# Every @testitem name contains "fit" (NOTE 09-REVIEW WR-02: this is documentation/
+# Every @testitem name contains "fit" (this is documentation/
 # organizational metadata only — `test/runtests.jl`'s `@run_package_tests` passes no
 # `filter` keyword, so there is no active `occursin("fit", ti.name)`-based selection
 # mechanism wired up today; running `Pkg.test()` always runs the entire suite). These
-# items are the plan's own richer contract (the flow-split identities, the FIT social
+# items are the richer contract (the flow-split identities, the FIT social
 # welfare, seeded reproducibility, and the "voltage limit NOT enforced" structural
-# distinction) — complementary to the coarse Wave-1 RED harness in test/test_fit.jl.
+# distinction) — complementary to the coarse harness in test/test_fit.jl.
 
 # A small seeded fixture: a 3-bus radial feeder (root + two load buses), each load bus
 # holding an aggregator with a Deferrable flexible load + a PVBattery (whose PV the FIT-OPT
 # keeps and whose battery it drops). Built purely from `generate_profiles(seed=…)`, so two
-# builds with the same seed are bit-for-bit identical (INFRA-04).
+# builds with the same seed are bit-for-bit identical.
 @testmodule FitFixtures begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -82,7 +82,7 @@ end
     [:fit] begin
     using TSODSO
 
-    # Named module constants (thesis page 93), in the SAME ¢$/kWh unit as λ₀ (Pitfall 5).
+    # Named module constants (thesis page 93), in the SAME ¢$/kWh unit as λ₀.
     @test TSODSO.FIT_λ_IMPORT == 6.6
     @test TSODSO.FIT_λ_EXPORT == 9.6
     @test TSODSO.FIT_λ_SELF == 5.6
@@ -104,13 +104,13 @@ end
     @test res.social_fit == res.welfare        # `welfare` is the alias the harness reads
     @test isfinite(res.prosumer_surplus)
     # Efficiency ratio social_DADP / social_fit is finite and positive (a self-contained
-    # cross-check; the authoritative +25% headline ≈ 1.25 is computed by 05-05).
+    # cross-check; the authoritative +25% headline ≈ 1.25 is computed in test_pricing_welfare.jl).
     @test isfinite(res.ratio)
     @test res.ratio > 0
     @test length(res.fit_flows) == length(aggs)
 end
 
-@testitem "fit: fit_baseline is reproducible bit-for-bit under a fixed seed (T-05-09)" setup =
+@testitem "fit: fit_baseline is reproducible bit-for-bit under a fixed seed" setup =
     [FitFixtures] tags = [:fit] begin
     using TSODSO
 
@@ -155,7 +155,7 @@ end
     res = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T)
 
     # The baseline ctx is marked as the FIT counterfactual, structurally distinct from a
-    # DADP welfare ctx (no battery, voltage limit relaxed — Assumption A4 / Open Q3).
+    # DADP welfare ctx (no battery, voltage limit relaxed).
     @test res.ctx.meta[:fit_baseline] === true
 
     # The AC-PF ran on a voltage-RELAXED feeder: the original tight band [0.95, 1.05] is
@@ -172,19 +172,19 @@ end
 end
 
 # ---------------------------------------------------------------------------------------------
-# EXP-04 regression golden: FIT-vs-DADP ratio on this file's OWN small `FitFixtures` scenario.
+# Regression golden: FIT-vs-DADP ratio on this file's OWN small `FitFixtures` scenario.
 #
 # DISTINCT from and ADDITIVE to `test/test_pricing_welfare.jl`'s `RATIO_GOLDEN` (which pins the
 # ratio on the larger IEEE-13 ground scenario) — this pins `fit_baseline`'s own self-contained
 # efficiency indicator `res.ratio = social_dadp / social_fit` (computed internally by
 # `fit_baseline`, per its docstring) on the small 3-bus fixture this file already owns, giving
-# EXP-04 a FIT-focused regression independent of the IEEE-13 fixture. `FIT_RATIO_GOLDEN` was
+# the FIT baseline a FIT-focused regression independent of the IEEE-13 fixture. `FIT_RATIO_GOLDEN` was
 # captured from the FIRST trusted solve on the fixed seed (20260718) — the same "first trusted
 # solve" convention every other golden in this codebase follows (cf. test/test_ieee13.jl's
 # header comment). Deterministic under the fixed seed (the "reproducible bit-for-bit" @testitem
 # above already proves this).
 # ---------------------------------------------------------------------------------------------
-@testitem "fit: FIT-vs-DADP ratio regression golden (EXP-04)" setup = [FitFixtures] tags =
+@testitem "fit: FIT-vs-DADP ratio regression golden" setup = [FitFixtures] tags =
     [:fit] begin
     using TSODSO
 
@@ -196,23 +196,23 @@ end
 
     # PRIMARY reproducibility anchor: the COMPUTED ratio pinned as a golden (tight rtol),
     # captured from the first trusted solve on this fixture's fixed seed.
-    # Phase 26 gap-closure re-pin (PM-06) — FIX-04 closed PVBattery's free hour-T discharge
+    # Re-pinned after PVBattery's free hour-T discharge was closed
     # on this T=4 fixture. OLD 0.6428101637491034 -> NEW 0.772018581825438.
     FIT_RATIO_GOLDEN = 0.772018581825438
     @test isapprox(res.ratio, FIT_RATIO_GOLDEN; rtol = 1e-4)
 end
 
 # ---------------------------------------------------------------------------------------------
-# Quick task 260726-mo7 — the `optimizer` kwarg (spike 003).
+# The `optimizer` kwarg.
 #
 # `fit_baseline` runs THREE internal solves: the per-prosumer FIT-OPT, the FIT AC-PF, and the
 # nested `solve_welfare` that forms the efficiency ratio. Before this kwarg each hardcoded
 # `select_optimizer(problem_class(pf))`, so a caller could not condition the solver — and the
-# nested solve_welfare's PF-04 gate (assert_socp_exact!) could refuse prices for purely numerical
-# reasons with no recourse (spike 003: atol=1e-6 sits at Clarabel's cone residual on a large
+# nested solve_welfare's exactness gate (assert_socp_exact!) could refuse prices for purely numerical
+# reasons with no recourse (atol=1e-6 sits at Clarabel's cone residual on a large
 # feeder at the default tol_gap=1e-8).
 # ---------------------------------------------------------------------------------------------
-@testitem "fit: the optimizer kwarg defaults byte-identically to the problem-class factory" setup =
+@testitem "fit: the optimizer kwarg defaults bit-for-bit identically to the problem-class factory" setup =
     [FitFixtures] tags = [:fit] begin
     using TSODSO
 
@@ -246,7 +246,7 @@ end
     pf = ConvexBranchFlow()
 
     # NO solver is named here: the constructor is taken from the project's own factory and only
-    # re-parameterized, so this test keeps working if the factory ever swaps backends (INFRA-02).
+    # re-parameterized, so this test keeps working if the factory ever swaps backends.
     base = TSODSO.select_optimizer(TSODSO.problem_class(pf))
     # One interior-point iteration cannot reach optimality, so `assert_solved!` must refuse. Were
     # the kwarg silently ignored, this would SOLVE — the throw is what proves the caller's
@@ -266,7 +266,7 @@ end
     )
 end
 
-@testitem "fit: tightening solver tolerance preserves the optimum (spike 003 use case)" setup =
+@testitem "fit: tightening solver tolerance preserves the optimum (use case)" setup =
     [FitFixtures] tags = [:fit] begin
     using TSODSO
     using JuMP
@@ -294,12 +294,12 @@ end
     )
 
     # Tightening convergence must NOT move the optimum — it only shrinks residuals. This is the
-    # property spike 003 relied on to show the Phase 18-01 exactness failures were numerical.
+    # property used to show the earlier exactness failures were numerical.
     @test isapprox(tight.social_fit, loose.social_fit; rtol = 1e-6)
     @test isapprox(tight.ratio, loose.ratio; rtol = 1e-6)
 end
 
-@testitem "fit: source tripwire — no solver factory is hardcoded inside fit_baseline's BODY (plan 27-09 updates the count)" tags =
+@testitem "fit: source tripwire — no solver factory is hardcoded inside fit_baseline's BODY" tags =
     [:fit] begin
     using TSODSO
 
@@ -308,7 +308,7 @@ end
     @test idx !== nothing
     full = src[first(idx):end]
 
-    # Plan 27-09 (USER DECISION 2026-09-29): SITE 2's AC-PF is a DIFFERENT problem class (NLP)
+    # The second site's AC-PF is a DIFFERENT problem class (NLP)
     # from the `optimizer` kwarg's SOCP/QP factory, so it needs its OWN kwarg default
     # (`_site2_ac_optimizer`) — a SECOND, LEGITIMATE `select_optimizer(` call, not a regression.
     # The tripwire's real invariant is narrower than "exactly one call anywhere": no

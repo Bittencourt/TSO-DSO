@@ -1,16 +1,16 @@
-# Seam: devices/PVBattery.jl (DEV-04). PV + battery (BESS), no binaries.
+# Seam: devices/PVBattery.jl. PV + battery (BESS), no binaries.
 #
-# Plan 03-04 turns these green. The headline correctness risk of the phase: the
+# The headline correctness risk of the seam: the
 # no-binary battery. App. C (pp. 166-168) proves that with λ_min ≤ λ_med ≤ λ_max the
 # concave charge utility + convex discharge cost make simultaneous charge/discharge
 # strictly dominated, so p_ch·p_dch = 0 at the optimum WITHOUT any complementarity
 # constraint or binary. Because NO constraint forbids it, correctness rests entirely on
 # the parametrization — so the mandatory post-solve numeric assertion
-# `value(p_ch[t])·value(p_dch[t]) < τ` (RESEARCH Pitfall 1) is exercised here on a
+# `value(p_ch[t])·value(p_dch[t]) < τ` is exercised here on a
 # standalone convex-QP solve. Every item name contains "battery" so
 # `occursin("battery", ti.name)` selects it.
 
-@testitem "battery: PVBattery device type exists over the T=24 fixture (DEV-04)" tags =
+@testitem "battery: PVBattery device type exists over the T=24 fixture" tags =
     [:battery] setup = [SmallRadialFixtures] begin
     using TSODSO
 
@@ -19,11 +19,11 @@
     @test length(feeder.buses) == 3
     @test length(SmallRadialFixtures.Ppv) == SmallRadialFixtures.T == 24
 
-    # The no-binary PV+battery device (SOC 3.6-3.9, utility 3.15-3.20) exists (DEV-04).
+    # The no-binary PV+battery device (SOC 3.6-3.9, utility 3.15-3.20) exists.
     @test isdefined(TSODSO, :PVBattery)
 end
 
-@testitem "battery: PVBattery constructor guards reject the App. C / physics violations (DEV-04)" tags =
+@testitem "battery: PVBattery constructor guards reject the App. C / physics violations" tags =
     [:battery] begin
     using TSODSO
 
@@ -33,7 +33,7 @@ end
     @test good() isa TSODSO.AbstractDevice
     @test good() isa TSODSO.PVBattery{Float64}
 
-    # λ_med OUTSIDE [λ_min, λ_max] — the load-bearing App. C guard (threat T-03-09).
+    # λ_med OUTSIDE [λ_min, λ_max] — the load-bearing App. C guard.
     @test_throws ArgumentError TSODSO.PVBattery(
         2,
         0.95,
@@ -61,7 +61,7 @@ end
         Ppv,
     )  # λ_med < λ_min
 
-    # CR-01: a NON-STRICT ordering (any equality) is rejected — equality zeroes a utility
+    # A NON-STRICT ordering (any equality) is rejected — equality zeroes a utility
     # curvature and admits SOC-draining p_ch·p_dch > 0 co-optima, breaking the App. C
     # no-binary guarantee. Only STRICT λ_min < λ_med < λ_max is admissible.
     @test_throws ArgumentError TSODSO.PVBattery(
@@ -175,14 +175,14 @@ end
         Ppv,
     )
 
-    # IN-01: a mixed-type call (a Float64 η among integer args, Int-eltype Ppv) promotes
+    # A mixed-type call (a Float64 η among integer args, Int-eltype Ppv) promotes
     # to a common Float64 rather than MethodError.
     mixed = TSODSO.PVBattery(2, 0.95, 1, 5, 0, 10, 2, 1, 4, 9, [5, 5, 5, 5])
     @test mixed isa TSODSO.PVBattery{Float64}
     @test mixed.Pmax === 5.0
 end
 
-@testitem "battery: standalone convex-QP solve holds p_ch·p_dch < τ with ZERO binaries (App. C, DEV-04)" tags =
+@testitem "battery: standalone convex-QP solve holds p_ch·p_dch < τ with ZERO binaries (App. C)" tags =
     [:battery] begin
     using TSODSO, JuMP
 
@@ -211,12 +211,12 @@ end
     price = [2.0, 2.0, 20.0, 20.0]
     @objective(model, Max, res.utility + sum(price[t] * res.p_inject[t] for t in 1:T))
 
-    # INFRA-03 gate: trust results only on OPTIMAL + feasible primal AND dual (prices are duals).
+    # Solve gate: trust results only on OPTIMAL + feasible primal AND dual (prices are duals).
     TSODSO.assert_solved!(model; dual = true, allow_local = false)
 
     p_ch, p_dch, soc = res.vars.p_ch, res.vars.p_dch, res.vars.soc
 
-    # === App. C mandatory numeric verification (RESEARCH Pitfall 1) ===
+    # === App. C mandatory numeric verification ===
     # No constraint forbids p_ch·p_dch > 0; the parametrization alone must drive it to 0.
     τ = 1e-6
     for t in 1:T
@@ -231,26 +231,26 @@ end
     # SOC initial condition (3.9 IC) holds at the solution.
     @test isapprox(value(soc[1]), 2.0; atol = 1e-6)
 
-    # === Zero-binary / zero-integer invariant (threat T-03-10) ===
-    # Adding a binary or complementarity constraint would break QP convexity + Phase-5
-    # pricing. RESEARCH §Anti-Patterns forbids it — assert it never happened.
+    # === Zero-binary / zero-integer invariant ===
+    # Adding a binary or complementarity constraint would break QP convexity + the
+    # downstream pricing (duals) — assert it never happened.
     vars = all_variables(model)
-    # p_ch, p_dch, pv_used (WR-04) = 3T, PLUS soc which is now T+1 long (Phase 26 FIX-04:
-    # this golden MOVED from 5T + 1 to 5T + 2 — soc grew by one variable to close the SOC
-    # recursion over the whole horizon), PLUS the MPC-01 Parameter widening: soc0 (1
+    # p_ch, p_dch, pv_used = 3T, PLUS soc which is now T+1 long (the horizon-closing
+    # fix: this golden MOVED from 5T + 1 to 5T + 2 — soc grew by one variable to close the SOC
+    # recursion over the whole horizon), PLUS the Parameter widening: soc0 (1
     # Parameter) + Ppv_param (T Parameters) — Parameters ARE VariableRefs in JuMP, counted
     # here too: 3T + (T+1) + 1 + T = 5T + 2, even though their DEFAULT solved behavior is
-    # byte-identical.
+    # bit-for-bit identical.
     @test length(vars) == 5T + 2
     @test count(is_binary, vars) == 0
     @test count(is_integer, vars) == 0
 
-    # WR-04: the curtailment variable exists and is available for surplus PV to be dumped.
+    # The curtailment variable exists and is available for surplus PV to be dumped.
     @test haskey(res.vars, :pv_used)
     @test length(res.vars.pv_used) == T
 end
 
-@testitem "battery: contribute! widens soc0/Ppv_param to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+@testitem "battery: contribute! widens soc0/Ppv_param to a genuine Parameter, bit-for-bit identical default" tags =
     [:battery] begin
     using TSODSO, JuMP
 
@@ -262,7 +262,7 @@ end
     bat = TSODSO.PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, Ppv)
     res = TSODSO.contribute!(bat, ctx; T = T)
 
-    # (a) Byte-identical default: every new Parameter's value equals the ORIGINAL literal.
+    # (a) bit-for-bit identical default: every new Parameter's value equals the ORIGINAL literal.
     @test parameter_value(res.vars.soc0) == 2.0
     @test all(parameter_value.(res.vars.Ppv_param) .== Ppv)
 
@@ -278,18 +278,18 @@ end
     @test num_constraints(model; count_variable_in_set_constraints = true) == nc0
 
     # (c) The old literal-bound code path is genuinely gone: pv_used carries NO upper
-    # bound anymore (the PV limit moved to a Ppv_param-backed constraint, Pitfall 4).
+    # bound anymore (the PV limit moved to a Ppv_param-backed constraint).
     @test has_upper_bound(res.vars.pv_used[1]) == false
 end
 
-@testitem "battery: soc0=Emin + hour-T discharge incentive drives p_dch[T] to zero (FIX-04)" tags =
+@testitem "battery: soc0=Emin + hour-T discharge incentive drives p_dch[T] to zero" tags =
     [:battery] begin
     using TSODSO, JuMP
 
-    # Phase 26 FIX-04 regression: soc is now T+1 long with the recursion closing over the
+    # Regression: soc is now T+1 long with the recursion closing over the
     # WHOLE horizon (t = 1:T), so p_dch[T] always appears in a constraint. Starting at
     # soc0 = Emin with zero PV availability (no charging headroom, physically enforced by
-    # Ppv ≡ 0 — Assumption A6, charge from PV only) and a heavy hour-T discharge incentive,
+    # Ppv ≡ 0 — charge from PV only) and a heavy hour-T discharge incentive,
     # the optimal p_dch[T] must be driven to (numerically) zero — the bound
     # soc[T+1] >= Emin makes any further discharge infeasible.
     T = 3

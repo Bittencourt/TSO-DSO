@@ -1,24 +1,23 @@
 # test/test_restricted_branch_flow.jl
 #
-# Seam: overvoltage-capable relaxation restriction mechanism (OVR-01..04). Every item name
+# Seam: overvoltage-capable relaxation restriction mechanism. Every item name
 # contains "restricted_branch_flow" so `occursin("restricted_branch_flow", ti.name)` selects
 # the whole file.
 #
-# The FIRST @testitem below is the analytic spot-check for the CORRECTED (phase 26-02,
-# FIX-01/02) thesis exactness copy (`v̂`, thesis 3.43/3.45, `ConvexBranchFlow.jl`'s DEFAULT
+# The FIRST @testitem below is the analytic spot-check for the CORRECTED
+# thesis exactness copy (`v̂`, thesis 3.43/3.45, `ConvexBranchFlow.jl`'s DEFAULT
 # `thesis_literal=false`): `v̂ ≥ v` everywhere (the Gan-Low direction), matching Gan-Low's
 # UPPER-bound shadow `v ≤ v̂_GL(s)` in kind (though `ConvexBranchFlow`'s `v̂` is a per-branch
-# local sign flip, not the tree-wide `v̂_GL(s)` below). Prior to phase 26-02, this test
-# encoded the OPPOSITE (defective, thesis-literal) relationship `v ≥ v̂` as
-# "RESEARCH Assumption A1" — that assumption described the PRE-fix state and is now
-# superseded; see `.planning/phases/26-network-device-model-correctness/26-RESEARCH.md`.
+# local sign flip, not the tree-wide `v̂_GL(s)` below). Before the exactness copy was corrected, this test
+# encoded the OPPOSITE (defective, thesis-literal) relationship `v ≥ v̂`; that
+# relationship described the earlier state and is now superseded.
 #
 # The SECOND @testitem measures the Gan–Low "modification gap" ε (Definition 3, eq. 18) on a
 # genuine AC-feasible operating point via the new `recover_lossfree_shadow_voltage` helper
-# (src/models/ac_oracle.jl) — a MEASURED, never-searched default for plan 20-02's
-# `RestrictedBranchFlow` shrink kwarg (D-03/D-04).
+# (src/models/ac_oracle.jl) — a MEASURED, never-searched default for the
+# `RestrictedBranchFlow` shrink kwarg.
 
-@testitem "restricted_branch_flow: v̂ ≥ v sign-relationship spot-check on the EXACT-04 fixture (phase 26-02 FIX-01/02)" tags =
+@testitem "restricted_branch_flow: v̂ ≥ v sign-relationship spot-check on the high-PV fixture" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -27,9 +26,9 @@
     aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
     λ₀ = IEEE13Fixtures.mem_price_profile()
 
-    # rtol_exact = 1.0: the SAME diagnostic override test_ac_oracle.jl's EXACT-04 item uses, so
+    # rtol_exact = 1.0: the SAME diagnostic override test_ac_oracle.jl's high-PV fixture item uses, so
     # the inexact SOCP solution is returned for inspection instead of refused by solve_welfare's
-    # own internal PF-04 gate. This is a read of v/v̂, not a claim about exactness.
+    # own internal exactness gate. This is a read of v/v̂, not a claim about exactness.
     ctx, cost, dadp = solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -46,17 +45,17 @@
         minimum(value(pv.v̂[j, t]) - value(pv.v[j, t]) for j in 1:N, t in 1:IEEE13Fixtures.T)
     @info "v̂-v min gap" mingap
 
-    # Phase 26-02 (FIX-01/02): ConvexBranchFlow's corrected default exactness copy is an
+    # ConvexBranchFlow's corrected default exactness copy is an
     # UPPER-bound shadow (v̂ ≥ v), the Gan-Low direction — matching the thesis's own stated
     # intent (citing Gan-Low 2015) that v ≤ V²max becomes redundant once v̂ ≤ V²max is
-    # imposed. This assertion FLIPPED from the pre-fix golden (which encoded the opposite,
-    # defective `v ≥ v̂` relationship as "RESEARCH Assumption A1") — see
-    # 26-RESEARCH.md for the telescoping-sum proof. If this assertion ever fails, the
+    # imposed. This assertion FLIPPED from the earlier golden (which encoded the opposite,
+    # defective `v ≥ v̂` relationship); the corrected direction follows from a
+    # telescoping-sum argument. If this assertion ever fails, the
     # cpydrop sign-flip fix (src/powerflow/ConvexBranchFlow.jl) has regressed.
     @test mingap >= -1e-9
 end
 
-@testitem "restricted_branch_flow: measured Gan-Low modification gap ε on the EXACT-04 fixture (D-03)" tags =
+@testitem "restricted_branch_flow: measured Gan-Low modification gap ε on the high-PV fixture" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -65,7 +64,7 @@ end
     aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
     λ₀ = IEEE13Fixtures.mem_price_profile()
 
-    # A genuine AC-feasible operating point (RESEARCH.md "Measuring ε" recipe step 1).
+    # A genuine AC-feasible operating point (step 1 of the ε-measuring recipe).
     ctx_ac, cost_ac, _ = solve_welfare(
         feeder,
         ACPowerFlow(),
@@ -80,7 +79,7 @@ end
     pv_ac = ctx_ac.pf_vars
     N = length(feeder.buses)
 
-    # Lemma 1 sanity check: Gan-Low's v ≤ v̂(s) always holds. Since phase 26-02 (FIX-01/02)
+    # Lemma 1 sanity check: Gan-Low's v ≤ v̂(s) always holds. With the corrected exactness copy
     # this is the SAME direction as the first @testitem's ConvexBranchFlow v̂ ≥ v (both are
     # upper-bound shadows), but a DIFFERENT, tree-wide (whole-subtree loss-free) magnitude —
     # v̂_GL(s) here is the literal Gan-Low Definition-3 quantity computed post-solve from the
@@ -95,13 +94,13 @@ end
         maximum(v̂_GL[j, t] - value(pv_ac.v[j, t]) for j in 1:N, t in 1:IEEE13Fixtures.T)
     @info "measured Gan-Low modification gap (before safety multiplier)" ε_measured
 
-    # A nonzero, sensible modification gap. This exact printed value is what plan 20-02's
-    # RestrictedBranchFlow default kwarg will hardcode (times a documented safety multiplier per
-    # D-03's "measured, not searched" requirement), with a citation back to this test item.
+    # A nonzero, sensible modification gap. This exact printed value is what the
+    # RestrictedBranchFlow default kwarg hardcodes (times a documented safety multiplier, per
+    # the "measured, not searched" requirement), with a citation back to this test item.
     @test ε_measured > 0.0
 end
 
-@testitem "restricted_branch_flow: RestrictedBranchFlow solves EXACT-04 through solve_welfare at PF-04's DEFAULT tolerance (OVR-01, free validation signal)" tags =
+@testitem "restricted_branch_flow: RestrictedBranchFlow solves the high-PV fixture through solve_welfare at the exactness gate's DEFAULT tolerance (free validation signal)" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -112,9 +111,9 @@ end
 
     # Deliberately WITHOUT any rtol_exact override — the DEFAULT 1e-4 is what
     # assert_socp_exact! uses internally. This call must NOT throw — if it does, the
-    # restriction did not close the gap and the plan has failed at the most basic level.
+    # restriction did not close the gap and the restriction has failed at the most basic level.
     #
-    # ESCALATION NOTE (see 20-02-SUMMARY.md): the SIMPLER OPF-ε special case (shrink v's own
+    # ESCALATION NOTE: the SIMPLER OPF-ε special case (shrink v's own
     # bound by a single measured scalar ε) was tried FIRST and empirically found NOT to close
     # this gap at any feasible ε on this fixture (reverse-flow-driven residual, not
     # voltage-pinning-driven). RestrictedBranchFlow now implements the FULLER Gan-Low OPF-m
@@ -129,25 +128,25 @@ end
         allow_export = true,
     )
 
-    # RESEARCH.md's prediction: the residual should collapse from EXACT-04's documented
+    # Expected: the residual should collapse from the high-PV fixture's documented
     # ≈10.4 to the benign-feeder scale ~1e-7; 1e-5 is a safe order-of-magnitude gate, not a
     # tight pin. Measured (OPF-m): ≈2.08e-8.
-    @info "RestrictedBranchFlow socp_maxgap on EXACT-04" ctx.meta[:socp_maxgap]
+    @info "RestrictedBranchFlow socp_maxgap on the high-PV fixture" ctx.meta[:socp_maxgap]
     @test ctx.meta[:socp_maxgap] < 1e-5
 
-    # D-08 provenance stash from Task 1.
+    # Provenance stash.
     @test ctx.meta[:formulation] == :RestrictedBranchFlow
     @test ctx.meta[:restriction_ε] >= 0.0
 end
 
-@testitem "restricted_branch_flow: plain ConvexBranchFlow on EXACT-04 is UNCHANGED by RestrictedBranchFlow's existence (default-path regression)" tags =
+@testitem "restricted_branch_flow: plain ConvexBranchFlow on the high-PV fixture is UNCHANGED by RestrictedBranchFlow's existence (default-path regression)" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
     import Ipopt
 
     # Deliberate duplication (not a call into test_ac_oracle.jl) so that a future accidental
-    # edit to ConvexBranchFlow.jl's bound-setting loop — the one Task 1's anti-pattern warning
+    # edit to ConvexBranchFlow.jl's bound-setting loop — the one the anti-pattern warning
     # protects — is caught by TWO independent test files, not one.
     feeder = IEEE13Fixtures.high_pv_feeder()
     aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
@@ -204,29 +203,28 @@ end
     @test diagnosed
 end
 
-# --- Plan 20-03: assert_restriction_exact! (OVR-02 headline validity gate) ---
+# --- assert_restriction_exact! (headline validity gate) ---
 #
-# ORCHESTRATOR-REVISED SEMANTICS (documented in 20-03-SUMMARY.md's "## Addendum
-# (orchestrator revision)" section): the FIRST implementation of `assert_restriction_exact!`
+# REVISED SEMANTICS: the FIRST implementation of `assert_restriction_exact!`
 # defined `ac_feasible` as "the restricted dispatch MATCHES the independently-solved
 # AC-optimal dispatch," which forces `optimality_loss ≈ 0` whenever `ac_feasible = true` —
-# internally incoherent with D-05's "certify AC-feasibility AND report optimality loss in
+# internally incoherent with the contract "certify AC-feasibility AND report optimality loss in
 # ONE call" (the loss clause only has meaning for a feasible-but-suboptimal point).
 # `assert_restriction_exact!` NOW certifies PHYSICAL AC-feasibility of the restricted
 # solution itself (the SAME per-branch, per-hour cone-tightness residual
 # `assert_socp_exact!` gates, with THIS certificate's OWN measured `cone_rtol`/`cone_atol`)
 # and DEMOTES the AC-oracle dispatch-match comparison to a separate diagnostic field,
-# `matches_ac_optimum`. On the FULL EXACT-04 fixture (`pv_scale = 1.2`): the restricted
-# solution's OWN cone is tight (`ac_feasible = true`, reproducing plan 20-02's
-# `socp_maxgap = 2.08e-8`), but OPF-m's added `v̂_GL(s) ≤ v̄` constraint (Lemma 1: v ≤
-# v̂_GL(s) always, so it is a genuine feasible-set RESTRICTION, D-01) ACTIVELY BINDS during
-# EXACT-04's high-PV window (hours 9-12, 14-15 — confirmed below via a large nonzero dual on
+# `matches_ac_optimum`. On the FULL high-PV fixture (`pv_scale = 1.2`): the restricted
+# solution's OWN cone is tight (`ac_feasible = true`, reproducing the
+# `socp_maxgap = 2.08e-8` measured above), but OPF-m's added `v̂_GL(s) ≤ v̄` constraint (Lemma 1: v ≤
+# v̂_GL(s) always, so it is a genuine feasible-set RESTRICTION) ACTIVELY BINDS during
+# the fixture's high-PV window (hours 9 through 12 and 14 through 15 — confirmed below via a large nonzero dual on
 # `ctx.constraints[:opfm_shadow_voltage]`), so the restricted optimum genuinely diverges from
 # the independently-solved AC optimum there — `matches_ac_optimum = false`, with a
 # substantial NEGATIVE `optimality_loss`. This is the EXPECTED, PROVABLE consequence of a
 # genuine restriction whose bound actively excludes the true AC optimum — NOT a bug. The
 # assertions below test this revised, causally-diagnosed behavior.
-@testitem "restricted_branch_flow: assert_restriction_exact! certifies PHYSICAL AC-feasibility while reporting the genuine restriction-induced optimality loss + dispatch-mismatch on the binding EXACT-04 window (D-05, revised semantics)" tags =
+@testitem "restricted_branch_flow: assert_restriction_exact! certifies PHYSICAL AC-feasibility while reporting the genuine restriction-induced optimality loss + dispatch-mismatch on the binding high-PV window (revised semantics)" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -252,9 +250,9 @@ end
         allow_local = true,
         allow_export = true,
     )
-    # The unrestricted (inexact) SOCP diagnostic bound (D-05's "optimality loss vs the
+    # The unrestricted (inexact) SOCP diagnostic bound (the "optimality loss vs the
     # unrestricted SOCP bound"), via the SAME rtol_exact = 1.0 override test_ac_oracle.jl's
-    # EXACT-04 item uses. UNCHANGED by PM-01/phase 26-18: this leg is the "optimality loss vs
+    # high-PV fixture item uses. UNCHANGED by the synthetic-violation fixture: this leg is the "optimality loss vs
     # the unrestricted SOCP bound" diagnostic, not the synthetic-violation leg below — the
     # DEFAULT ConvexBranchFlow() remains correct here regardless of which voltage band it
     # restricts, since RestrictedBranchFlow's feasible set stays a genuine subset either way.
@@ -276,13 +274,13 @@ end
 
     # Default (report = false): must NOT throw — the restricted solution's OWN cone is
     # tight, so it IS certified physically AC-feasible even though it will NOT match the AC
-    # optimum (D-05's coherence fix: a feasible-but-suboptimal point can still certify).
+    # optimum (the coherence fix: a feasible-but-suboptimal point can still certify).
     report = assert_restriction_exact!(
         ctx_restricted,
         ctx_ac;
         unrestricted_cost = cost_unrestricted,
     )
-    @info "assert_restriction_exact! on EXACT-04 (revised semantics: physical feasibility + dispatch-mismatch diagnostic)" report.ac_feasible report.matches_ac_optimum report.optimality_loss
+    @info "assert_restriction_exact! on the high-PV fixture (revised semantics: physical feasibility + dispatch-mismatch diagnostic)" report.ac_feasible report.matches_ac_optimum report.optimality_loss
 
     @test report isa NamedTuple
     @test !(report isa Bool)
@@ -293,32 +291,31 @@ end
     # binding window — the honest finding this certificate now correctly demotes to a
     # separate field rather than using it as the certification gate.
     @test report.matches_ac_optimum == false
-    # D-05: optimality_loss is a NAMED field, always populated when unrestricted_cost is
+    # optimality_loss is a NAMED field, always populated when unrestricted_cost is
     # supplied, and — since RestrictedBranchFlow's feasible set is a genuine SUBSET of the
     # unrestricted SOCP relaxation's — must be <= 0 (restricted welfare can never exceed the
     # unrestricted bound).
     @test report.optimality_loss !== nothing
     @test report.optimality_loss <= 1e-6
-    # T-20-08: the provenance marker reflects the PHYSICAL-feasibility verdict (ac_feasible),
+    # The provenance marker reflects the PHYSICAL-feasibility verdict (ac_feasible),
     # never the matches_ac_optimum diagnostic.
     @test ctx_restricted.meta[:price_provenance].status == :certified_convex_dual
     @test ctx_restricted.meta[:price_provenance].formulation == :RestrictedBranchFlow
     @test ctx_restricted.meta[:price_provenance].certificate == :assert_restriction_exact!
 
     # Synthetic violation of the NEW physical-feasibility gate: an UNRESTRICTED
-    # ConvexBranchFlow context on this SAME fixture (rtol_exact = 1.0 neutralizes PF-04 so
+    # ConvexBranchFlow context on this SAME fixture (rtol_exact = 1.0 neutralizes exactness gate so
     # the genuinely cone-INEXACT solution is returned rather than refused) must FAIL
     # ac_feasible — confirming the certificate now actually gates cone-tightness rather than
     # trivially passing any solved context.
     #
-    # PM-01 (phase 26-18): at EXACT-04's own pv_scale = 1.2, BOTH ConvexBranchFlow()'s DEFAULT
+    # At the high-PV fixture's own pv_scale = 1.2, BOTH ConvexBranchFlow()'s DEFAULT
     # (Gan-Low direction) AND ConvexBranchFlow(; thesis_literal=true) (the OLD literal copy)
     # are genuinely cone-EXACT on this small 3-bus/2-branch fixture (MEASURED: v's OWN
     # always-imposed V²max bound alone is sufficient to force cone-tightness on a path this
     # short, regardless of which voltage band the exactness-copy v̂ restricts — see
-    # ConvexBranchFlow.jl's PM-01 docstring addendum and 26-FINDINGS.md's "Plan 26-18"
-    # section) — so this fixture's own pv_scale can no longer force the synthetic violation
-    # this gate needs. Per PM-01's own locked alternative ("... or a new fixture"), a SEPARATE,
+    # ConvexBranchFlow.jl's docstring addendum) — so this fixture's own pv_scale can no longer force the synthetic violation
+    # this gate needs. The alternative ("... or a new fixture") is a SEPARATE,
     # higher-pv_scale aggregator set (`aggs_synth`, MEASURED per this project's own discipline
     # to remain solvable while pushing ConvexBranchFlow(; thesis_literal=true) genuinely
     # cone-inexact — ratio ≈ 1982 at pv_scale = 1.4, well past the App. C battery-
@@ -341,15 +338,15 @@ end
         assert_restriction_exact!(ctx_unrestricted_synth, ctx_ac; report = true)
     @test report_unrestricted.ac_feasible == false
     @test ctx_unrestricted_synth.meta[:price_provenance].status == :cert_failed
-    # Review WR-01: the provenance formulation is READ from ctx.meta[:formulation] (the
-    # D-08 marker RestrictedBranchFlow.contribute! stashes), never fabricated by the
+    # The provenance formulation is READ from ctx.meta[:formulation] (the
+    # marker RestrictedBranchFlow.contribute! stashes), never fabricated by the
     # certificate — a plain ConvexBranchFlow context (which stashes no marker) reports
     # :unknown, not a false :RestrictedBranchFlow.
     @test ctx_unrestricted_synth.meta[:price_provenance].formulation == :unknown
     @test_throws Exception assert_restriction_exact!(ctx_unrestricted_synth, ctx_ac)
 end
 
-@testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch (D-06)" tags =
+@testitem "restricted_branch_flow: assert_restriction_exact! throws by default and neutralizes under report=true on a structural T-mismatch" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: LP
@@ -382,10 +379,10 @@ end
     ctx1 = fixed_ctx(1)
     ctx2 = fixed_ctx(2)
 
-    # Default (report = false): throws, per D-06.
+    # Default (report = false): throws.
     @test_throws Exception assert_restriction_exact!(ctx1, ctx2)
 
-    # Review WR-02 / T-20-08: a STALE :certified_convex_dual marker from a prior call on a
+    # A STALE :certified_convex_dual marker from a prior call on a
     # reused ctx must NOT survive the structural-mismatch throw path (assert_ac_exact!
     # raises BEFORE the final stash runs) — the certificate scrubs the marker as its first
     # action, so after the throw the reused ctx carries no marker at all.
@@ -407,25 +404,23 @@ end
     @test_throws Exception assert_restriction_exact!(ctx1, ctx2; report = true)
 end
 
-# --- Plan 20-04: ac_dual_fallback_price (OVR-03 nonconvex-AC-dual fallback) ---
+# --- ac_dual_fallback_price (nonconvex-AC-dual fallback) ---
 #
-# ORCHESTRATOR-NOTE ADAPTATION (documented in 20-04-SUMMARY.md's Deviations section): the
-# plan's own Task 2 action text checks
+# NOTE: an obvious design would check
 # `assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)` BEFORE calling the
-# fallback, to "demonstrate the trigger discipline." On the EXACT-04 fixture (pv_scale =
-# 1.2), `RestrictedBranchFlow`'s OWN cone certifies `ac_feasible = true` (plan 20-03's
-# orchestrator-revised semantics) — so reading `ctx_restricted`'s cert here never actually
+# fallback, to "demonstrate the trigger discipline." On the high-PV fixture (pv_scale =
+# 1.2), `RestrictedBranchFlow`'s OWN cone certifies `ac_feasible = true` (the
+# revised semantics above) — so reading `ctx_restricted`'s cert here never actually
 # FAILS, and "demonstrating trigger discipline" against an always-passing cert alone would
 # be vacuous. This item demonstrates BOTH sides genuinely: (a) the PASSING case on
-# `ctx_restricted` (the real reason the fallback is NOT needed for EXACT-04 itself), and (b)
+# `ctx_restricted` (the real reason the fallback is NOT needed for the high-PV fixture itself), and (b)
 # a GENUINELY FAILING case using an UNRESTRICTED `ConvexBranchFlow` context on the SAME
-# fixture (`rtol_exact = 1.0` neutralizes PF-04 so the cone-INEXACT solution is returned
-# rather than refused — the SAME synthetic-violation pattern plan 20-03's testitem 5 uses),
+# fixture (`rtol_exact = 1.0` neutralizes exactness gate so the cone-INEXACT solution is returned
+# rather than refused — the SAME synthetic-violation pattern the certificate item above uses),
 # where `cert_failing.ac_feasible == false` / `price_provenance.status == :cert_failed` is
-# the genuine D-09 trigger condition a real caller must gate the fallback on.
-# `ac_dual_fallback_price` itself is then called UNCONDITIONALLY (per the plan's own action
-# text) because THIS item exercises the fallback's OWN mechanics in isolation.
-@testitem "restricted_branch_flow: ac_dual_fallback_price triggers only after an observed certificate failure, carries price_status, and 2-seed agreement (D-09/D-10/D-11 CI subset)" tags =
+# the genuine trigger condition a real caller must gate the fallback on.
+# `ac_dual_fallback_price` itself is then called UNCONDITIONALLY because THIS item exercises the fallback's OWN mechanics in isolation.
+@testitem "restricted_branch_flow: ac_dual_fallback_price triggers only after an observed certificate failure, carries price_status, and 2-seed agreement (CI subset)" tags =
     [:restricted_branch_flow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using TSODSO: ac_dual_fallback_price
@@ -453,16 +448,15 @@ end
         allow_export = true,
     )
 
-    # (a) The PASSING case (plan 20-03's revised semantics): D-09 does NOT actually require
-    # the fallback on EXACT-04's RestrictedBranchFlow solve itself.
+    # (a) The PASSING case (revised semantics): the trigger does NOT actually require
+    # the fallback on the high-PV fixture's RestrictedBranchFlow solve itself.
     cert = assert_restriction_exact!(ctx_restricted, ctx_ac; report = true)
     @test cert.ac_feasible == true
 
-    # (b) A GENUINELY FAILING case (mirrors plan 20-03's testitem 5's synthetic violation):
-    # the unrestricted ConvexBranchFlow context, cone-inexact at rtol_exact = 1.0. PM-01
-    # (phase 26-18): at this fixture's OWN pv_scale = 1.2, BOTH ConvexBranchFlow() directions
+    # (b) A GENUINELY FAILING case (mirrors the synthetic violation above):
+    # the unrestricted ConvexBranchFlow context, cone-inexact at rtol_exact = 1.0. At this fixture's OWN pv_scale = 1.2, BOTH ConvexBranchFlow() directions
     # (default AND thesis_literal=true) are genuinely cone-EXACT — see the identical,
-    # fully-explained rationale comment in the D-05 testitem above. A SEPARATE, higher
+    # fully-explained rationale comment in the item above. A SEPARATE, higher
     # pv_scale = 1.4 aggregator set (`aggs_synth`, MEASURED to remain solvable while genuinely
     # cone-inexact under thesis_literal=true) feeds ONLY this synthetic-violation leg; `ctx_ac`
     # (solved at the original pv_scale = 1.2) is reused unchanged as the comparator.
@@ -480,7 +474,7 @@ end
     @test cert_failing.ac_feasible == false
     @test ctx_unrestricted_synth.meta[:price_provenance].status == :cert_failed
 
-    # D-09: the fallback below is called REGARDLESS of `cert.ac_feasible` here ONLY because
+    # The fallback below is called REGARDLESS of `cert.ac_feasible` here ONLY because
     # this test exercises the fallback's OWN mechanics in isolation — a real caller must gate
     # this call on `cert.ac_feasible == false`, exactly as (b) above documents.
     result = ac_dual_fallback_price(
@@ -502,14 +496,14 @@ end
     @test all(isfinite, result.dadp)
 end
 
-# --- Review WR-06: negative ε is rejected loudly (T-20-12, no silent handling) ---
+# --- negative ε is rejected loudly (no silent handling) ---
 #
 # A negative ε applied via set_upper_bound would LOOSEN the voltage bound (a relaxation,
-# violating D-01's genuine-restriction contract); the previous `pf.ε > 0` gate in
+# violating the genuine-restriction contract); the previous `pf.ε > 0` gate in
 # contribute! silently treated a sign-typo'd margin as ε = 0. Construction now throws an
 # ArgumentError on BOTH the kwarg and positional paths (inner-constructor validation, so
 # the non-validating auto-generated constructor no longer exists).
-@testitem "restricted_branch_flow: WR-06 negative ε throws ArgumentError at construction (kwarg AND positional)" tags =
+@testitem "restricted_branch_flow: negative ε throws ArgumentError at construction (kwarg AND positional)" tags =
     [:restricted_branch_flow] begin
     using TSODSO
 
@@ -523,12 +517,12 @@ end
     @test RestrictedBranchFlow(; ε = 1 // 100).ε == 0.01         # Real conversion kept
 end
 
-# --- Review CR-01: branch-orientation regression (reversed-stored branch is a LEGAL feeder) ---
+# --- branch-orientation regression (reversed-stored branch is a LEGAL feeder) ---
 #
 # `assert_radial` (data/topology.jl) validates only tree-ness/connectivity, never orientation:
 # a `Branch(from, to, …)` stored child→parent is a fully legal `Feeder` everywhere else in the
 # framework (`ConvexBranchFlow`'s DistFlow drop/cone/balances are written in the branch's own
-# direction). Review CR-01 found BOTH copies of the Gan-Low shadow recursion — the
+# direction). Both copies of the Gan-Low shadow recursion — the
 # post-processing `recover_lossfree_shadow_voltage` (src/models/ac_oracle.jl) and the
 # model-build OPF-m constraint loop (`RestrictedBranchFlow.contribute!`) — silently assumed
 # `br.from` is the tree parent: reversed orientation read an UNINITIALIZED parent voltage
@@ -542,10 +536,10 @@ end
 # physical point is: ℓ_rev = ℓ (squared current magnitude is direction-independent),
 # P_rev = −(P_fwd − r·ℓ), Q_rev = −(Q_fwd − x·ℓ) — the branch's own sending end at the child
 # is the negated RECEIVING end of the parent→child encoding (this project charges the loss
-# r·ℓ at the branch's own `to` end, ConvexBranchFlow Pitfall 6). This algebra also
+# r·ℓ at the branch's own `to` end, as ConvexBranchFlow does). This algebra also
 # discriminates the CORRECT reversed-branch flow (`r·ℓ − P_rev` at the parent side) from the
 # tempting bare sign flip `−P_rev`, which would be off by the feeding branch's own loss.
-@testitem "restricted_branch_flow: CR-01 regression — reversed-orientation branch agrees exactly with parent→child in BOTH shadow-voltage code paths" tags =
+@testitem "restricted_branch_flow: regression — reversed-orientation branch agrees exactly with parent→child in BOTH shadow-voltage code paths" tags =
     [:restricted_branch_flow] begin
     using TSODSO
     using TSODSO: LP

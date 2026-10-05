@@ -1,4 +1,4 @@
-# Seam: powerflow/DCPowerFlow.jl + powerflow/LinDistFlow.jl (PF-02). Owned by plan 02-02.
+# Seam: powerflow/DCPowerFlow.jl + powerflow/LinDistFlow.jl.
 #
 # These @testitems exercise the two concrete `AbstractPowerFlow` formulations against a
 # BARE `ModelContext` (no assembly, no device) — they assert only that each formulation
@@ -7,8 +7,8 @@
 #   - LinDistFlow  → :Rp + :Rq + squared-voltage variable + the loss-less 3.43 drop.
 # The item names contain "powerflow" / "lindistflow" so the occursin filters match.
 
-# --- Task 1: DCPowerFlow (active-only) ------------------------------------------------
-@testitem "powerflow: DCPowerFlow contributes active-only :Rp per-bus residual by dispatch (PF-02)" tags =
+# DCPowerFlow (active-only) ------------------------------------------------
+@testitem "powerflow: DCPowerFlow contributes active-only :Rp per-bus residual by dispatch" tags =
     [:powerflow] begin
     using TSODSO, JuMP
 
@@ -38,7 +38,7 @@
     @test isequal_canonical(ctx.residuals[:Rp][3, 1], 1.0 * P[2, 1])       # leaf: +inflow
 end
 
-@testitem "powerflow: DCPowerFlow indexes over the horizon T (per-bus, per-time) (PF-02)" tags =
+@testitem "powerflow: DCPowerFlow indexes over the horizon T (per-bus, per-time)" tags =
     [:powerflow] begin
     using TSODSO, JuMP
 
@@ -54,8 +54,8 @@ end
     @test isequal_canonical(ctx.residuals[:Rp][2, 3], 1.0 * P[1, 3])   # leaf inflow at t=3
 end
 
-# --- Task 2: LinDistFlow (loss-less branch flow + squared voltage) --------------------
-@testitem "lindistflow: LinDistFlow contributes :Rp+:Rq, squared-voltage bounds, root fix, 3.43 drop (PF-02)" tags =
+# LinDistFlow (loss-less branch flow + squared voltage) --------------------
+@testitem "lindistflow: LinDistFlow contributes :Rp+:Rq, squared-voltage bounds, root fix, 3.43 drop" tags =
     [:lindistflow] begin
     using TSODSO, JuMP
 
@@ -82,11 +82,11 @@ end
     P = ctx.model[:P]
     Q = ctx.model[:Q]
 
-    # Root squared voltage fixed at 1.0 (= 1.0²); Pitfall 1: v is |V|².
+    # Root squared voltage fixed at 1.0 (= 1.0²); v is |V|² (squared magnitude).
     @test is_fixed(v[feeder.root, 1])
     @test fix_value(v[feeder.root, 1]) ≈ 1.0
 
-    # Non-root squared voltage bounds are the SQUARE of the magnitude pu bounds (Pitfall 1).
+    # Non-root squared voltage bounds are the SQUARE of the magnitude pu bounds.
     @test lower_bound(v[2, 1]) ≈ 0.92^2
     @test upper_bound(v[2, 1]) ≈ 1.08^2
     @test lower_bound(v[3, 1]) ≈ 0.93^2
@@ -101,7 +101,7 @@ end
     @test length(ctx.model[:vdrop]) == length(branches) * 1
 end
 
-@testitem "lindistflow: 2-bus loss-less identity p_import == p_load (PF-02)" tags =
+@testitem "lindistflow: 2-bus loss-less identity p_import == p_load" tags =
     [:lindistflow] begin
     using TSODSO, JuMP
 
