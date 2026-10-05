@@ -1,25 +1,24 @@
 # src/experiments/run_stochastic.jl
 #
-# SEAM: stochastic extensive-form closed orchestrator (STOCH-01..03).
-# OWNER: plan 22-04.
+# SEAM: stochastic extensive-form closed orchestrator.
 #
 # `run_stochastic(s::Scenario)` reads its knobs from `Scenario.strategy::Stochastic`
-# (Phase 32) and is also reachable via `TSODSO.run(::Stochastic, s)`. It:
+# and is also reachable via `TSODSO.run(::Stochastic, s)`. It:
 #
 #  1. materializes `st.S` in-sample scenario aggregator populations from a DISJOINT
 #     `sub_seed` tag family (`:stoch_insample_profiles_k`/`:stoch_insample_population_k`);
-#  2. solves the S-scenario extensive form via `build_stochastic_welfare` (plan 22-02);
+#  2. solves the S-scenario extensive form via `build_stochastic_welfare`;
 #  3. reads the SOLVED, shared first-stage battery schedule off scenario 1's own device vars
 #     (every scenario's battery is nonanticipativity-tied to it, so scenario 1's copy IS the
 #     shared schedule);
 #  4. materializes `st.H_oos` held-out scenario aggregator populations from a SECOND,
 #     DISJOINT `sub_seed` tag family (`:stoch_oos_profiles_h`/`:stoch_oos_population_h`);
-#  5. builds the out-of-sample harness EXACTLY ONCE (`build_stochastic_oos_harness`, plan
-#     22-03) against held-out scenario 1's aggregator list as the device STRUCTURE template,
+#  5. builds the out-of-sample harness EXACTLY ONCE (`build_stochastic_oos_harness`)
+#     against held-out scenario 1's aggregator list as the device STRUCTURE template,
 #     pins the harness's battery controls to the in-sample optimum ONCE — before the
-#     held-out loop (D-09's build-once contract) — then re-slides every held-out scenario's
+#     held-out loop (the build-once contract) — then re-slides every held-out scenario's
 #     own PV/demand/ambient data and re-solves via `solve_stochastic_oos_step!`; and
-#  6. reports the realized-vs-in-sample welfare gap (STOCH-03).
+#  6. reports the realized-vs-in-sample welfare gap.
 #
 # `λ₀` is computed ONCE, from in-sample scenario 1's own profile draw, and reused for every
 # in-sample AND held-out scenario: `:mem`'s shape is deterministic and profile-independent
@@ -47,7 +46,7 @@ end
     _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
         -> (welfare::Float64, infeasible::Bool)
 
-Internal helper (unexported; WR-05 fix, phase-22 review): re-solve the pinned harness for
+Internal helper (unexported): re-solve the pinned harness for
 held-out scenario `h_index`, converting a GENUINE primal infeasibility into an honest
 `(NaN, true)` skip-and-report instead of aborting the whole [`run_stochastic`](@ref) call.
 
@@ -73,8 +72,8 @@ function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
         @warn "run_stochastic: held-out scenario $h_index is INFEASIBLE against the " *
               "committed first-stage schedule (its PV/demand draw cannot support the " *
               "pinned p_ch/p_dch at some hour) — recorded as welfare_h = NaN, " *
-              "infeasible_h = true, and EXCLUDED from realized_welfare (WR-05 " *
-              "skip-and-report, never silent)" termination_status = ts
+              "infeasible_h = true, and EXCLUDED from realized_welfare " *
+              "(skip-and-report, never silent)" termination_status = ts
         return NaN, true
     end
 end
@@ -86,34 +85,33 @@ The result additionally carries a trailing `status` (`:solved` or `:oos_infeasib
 see `STATUS_VOCABULARY.run_stochastic`).
 
 Drive the FULL two-stage stochastic extensive-form + out-of-sample evaluation for `s`
-(STOCH-01..03): materialize `st.S` in-sample scenario aggregator populations, solve the
+materialize `st.S` in-sample scenario aggregator populations, solve the
 extensive form via [`build_stochastic_welfare`](@ref), then drive
 [`build_stochastic_oos_harness`](@ref)/[`solve_stochastic_oos_step!`](@ref) across
 `st.H_oos` held-out scenarios — pinning the first-stage battery schedule to the
-in-sample optimum ONCE (D-09's build-once contract, never rebuilding across the held-out
-loop) — and reporting the realized-vs-in-sample welfare gap (D-09/D-10).
+in-sample optimum ONCE (the build-once contract, never rebuilding across the held-out
+loop) — and reporting the realized-vs-in-sample welfare gap.
 
 # Guards
 
 Unlike [`run_mpc`](@ref)'s cross-field `mpc_H > T` check, this function needs NO additional
 guard beyond what [`Scenario`](@ref)'s own constructor already enforces:
-`stoch_S`/`stoch_H_oos`/`stoch_probabilities` are independently bounded at construction
-(D-01/D-04/D-10), with no cross-field interaction to re-check here.
+`stoch_S`/`stoch_H_oos`/`stoch_probabilities` are independently bounded at construction, with no cross-field interaction to re-check here.
 
-ONE documented runtime failure mode (WR-05 fix, phase-22 review): a held-out draw can be
+ONE documented runtime failure mode: a held-out draw can be
 genuinely INFEASIBLE against the committed first-stage schedule (the classic
 committed-first-stage evaluation problem — see [`_stoch_solve_held_out!`](@ref)). Such a
 scenario is skipped-and-reported (`welfare_h[h] = NaN`, `infeasible_h[h] = true`, plus a
 `@warn`), never allowed to abort the run and never silently absorbed; every OTHER solve
 failure still rethrows loudly.
 
-# Materialization (seed disjointness, D-01/D-02)
+# Materialization (seed disjointness)
 
 Both scenario families flow through [`sub_seed`](@ref)`(s.seed, tag)` with DISJOINT tag
 prefixes — in-sample scenario `k` uses `Symbol(:stoch_insample_profiles_, k)` /
 `Symbol(:stoch_insample_population_, k)`; held-out scenario `h` uses the disjoint
 `Symbol(:stoch_oos_profiles_, h)` / `Symbol(:stoch_oos_population_, h)` — so no held-out
-scenario ever replays an in-sample draw (T-22-06). `λ₀` is materialized ONCE, from in-sample
+scenario ever replays an in-sample draw. `λ₀` is materialized ONCE, from in-sample
 scenario 1's own profile draw, and reused verbatim for every in-sample and held-out scenario
 (the `:mem` price shape is deterministic and profile-independent).
 
@@ -124,24 +122,24 @@ A `NamedTuple` `(; in_sample, oos)`:
   - `in_sample::NamedTuple` — `(; welfare, dadp, expected_dadp, probabilities, socp_maxgap)`,
     read verbatim off [`build_stochastic_welfare`](@ref)'s own return value: `welfare` is the
     probability-weighted in-sample expected-welfare objective; `dadp`/`expected_dadp` are the
-    per-scenario de-scaled DADP and its probability-weighted expectation (D-05/D-07).
+    per-scenario de-scaled DADP and its probability-weighted expectation.
   - `oos::NamedTuple` — `(; welfare_h, infeasible_h, realized_welfare, welfare_gap)`:
     `welfare_h[h]` is the held-out scenario `h`'s realized objective value (the fixed
     first-stage schedule re-scored against that scenario's own exogenous draw), or `NaN`
-    when that draw is genuinely INFEASIBLE against the committed schedule (WR-05 fix,
-    phase-22 review — the committed-first-stage evaluation problem: a held-out PV draw
+    when that draw is genuinely INFEASIBLE against the committed schedule (the
+    committed-first-stage evaluation problem: a held-out PV draw
     below every in-sample draw at some hour collides with the pinned `p_ch`; see
     [`_stoch_solve_held_out!`](@ref)); `infeasible_h::Vector{Bool}` marks exactly those
     skipped-and-reported scenarios (a `@warn` is also emitted per skip — never silent);
     `realized_welfare` is the uniform-weight average over the FEASIBLE held-out scenarios
     only (`NaN` if every held-out draw is infeasible — an honestly unusable evaluation,
     never a fabricated number); `welfare_gap = realized_welfare - in_sample.welfare` is
-    the D-09 realized-vs-in-sample gap (also `NaN` in that all-infeasible case). When no
+    the realized-vs-in-sample gap (also `NaN` in that all-infeasible case). When no
     held-out draw is infeasible — every existing fixture — `realized_welfare` and
-    `welfare_gap` are BIT-IDENTICAL to the pre-WR-05 definition.
+    `welfare_gap` are BIT-IDENTICAL to the earlier definition (before infeasible draws were skipped-and-reported).
 
 Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-identical
-`in_sample.welfare`/`oos.welfare_gap` (INFRA-04, mirrors [`run_mpc`](@ref)'s own same-seed
+`in_sample.welfare`/`oos.welfare_gap` (mirrors [`run_mpc`](@ref)'s own same-seed
 guarantee) — every stochastic draw flows through a seeded, independent `sub_seed` sub-stream,
 never the global RNG.
 """
@@ -154,7 +152,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
     pf = build_powerflow(s)
 
     # --- 2. In-sample scenario populations, one per k in 1:st.S, from a DISJOINT
-    # `sub_seed` tag family (T-22-06). λ₀ is computed ONCE, from scenario 1's own profile
+    # `sub_seed` tag family. λ₀ is computed ONCE, from scenario 1's own profile
     # draw, and reused verbatim for every scenario (see file header). ----------------------
     scenario_aggs = Vector{Vector{Aggregator}}(undef, st.S)
     λ₀ = Float64[]
@@ -175,7 +173,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
         )
     end
 
-    # --- 3. Solve the S-scenario extensive form (STOCH-01/STOCH-02, plan 22-02). -----------
+    # --- 3. Solve the S-scenario extensive form. -----------
     r = build_stochastic_welfare(
         feeder,
         pf,
@@ -193,7 +191,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
     for (bus, varlist) in r.ctxs[1].agg_device_vars
         for v in varlist
             if haskey(v, :soc0)
-                # WR-04 fix (phase-22 review): a FourQuadBESS's reactive dispatch q is
+                # A FourQuadBESS's reactive dispatch q is
                 # first-stage too (tied across scenarios by build_stochastic_welfare),
                 # so the committed schedule read here carries it for pinning below.
                 if haskey(v, :q)
@@ -217,7 +215,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
     end
 
     # --- 5. MATERIALIZE the held-out scenario populations, one per h in 1:st.H_oos,
-    # from a SECOND, DISJOINT `sub_seed` tag family (T-22-06). ------------------------------
+    # from a SECOND, DISJOINT `sub_seed` tag family. ------------------------------
     held_out_aggs = Vector{Vector{Aggregator}}(undef, st.H_oos)
     for h in 1:st.H_oos
         profiles_h = generate_profiles(;
@@ -233,12 +231,12 @@ function _run_stochastic(s::Scenario, st::Stochastic)
         )
     end
 
-    # --- 6. Build the out-of-sample harness EXACTLY ONCE (D-09), against held-out scenario
+    # --- 6. Build the out-of-sample harness EXACTLY ONCE, against held-out scenario
     # 1's aggregator LIST as the device STRUCTURE template — every held-out population
     # shares the SAME bus/device composition (structural congruence, `build_population`'s
     # own convention: device count/bus order depend only on `feeder`/`population`, never on
     # the seed). Pin the harness's battery controls to the in-sample optimum ONCE, before
-    # the held-out loop (D-09's build-once contract). --------------------------------------
+    # the held-out loop (the build-once contract). --------------------------------------
     h_oos = build_stochastic_oos_harness(
         feeder,
         pf,
@@ -250,15 +248,15 @@ function _run_stochastic(s::Scenario, st::Stochastic)
 
     for pin in h_oos.battery_pins
         batt = only(b for b in in_sample_battery if b.bus == pin.bus)
-        # WR-05 nit (phase-22 review): the committed values are raw value.() reads, so
+        # The committed values are raw value.() reads, so
         # interior-point noise can return p_ch = -1e-12 — pinning that against the
         # device's own p_ch ≥ 0 bound is a needless infeasibility risk. Free insurance:
         # clamp the (mathematically nonnegative) active pins at 0. q stays unclamped
         # (free-sign by construction).
         set_parameter_value.(pin.pin_p_ch, clamp.(batt.p_ch, 0.0, Inf))
         set_parameter_value.(pin.pin_p_dch, clamp.(batt.p_dch, 0.0, Inf))
-        # WR-04 fix (phase-22 review): pin the committed reactive dispatch too when the
-        # device carries one (FourQuadBESS) — q is first-stage under D-03, and the
+        # Pin the committed reactive dispatch too when the
+        # device carries one (FourQuadBESS) — q is first-stage, and the
         # in-sample entry above is guaranteed to carry :q whenever the harness pin does
         # (both walks key off the same device vars shape).
         haskey(pin, :pin_q) && set_parameter_value.(pin.pin_q, batt.q)
@@ -266,7 +264,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
 
     # --- 7. Held-out loop: re-slide every held-out scenario's own PV/demand/ambient data
     # onto the (never-rebuilt) harness and re-solve. A held-out draw that is genuinely
-    # INFEASIBLE against the committed first-stage schedule (WR-05, phase-22 review) is
+    # INFEASIBLE against the committed first-stage schedule is
     # skipped-and-reported (welfare_h = NaN + infeasible_h mask + @warn), never allowed to
     # abort the whole run after the expensive extensive-form solve, and never silent. ------
     welfare_h = Vector{Float64}(undef, st.H_oos)
@@ -290,8 +288,8 @@ function _run_stochastic(s::Scenario, st::Stochastic)
         welfare_h[h], infeasible_h[h] = _stoch_solve_held_out!(h_oos, h)
     end
 
-    # --- 8. D-09's realized-vs-in-sample welfare gap: uniform-weight average across the
-    # FEASIBLE held-out scenarios (WR-05: an infeasible draw is reported via the
+    # --- 8. the realized-vs-in-sample welfare gap: uniform-weight average across the
+    # FEASIBLE held-out scenarios (an infeasible draw is reported via the
     # infeasible_h mask + NaN entry, never averaged in and never fabricated) minus the
     # in-sample extensive form's own expected-welfare objective value. When nothing is
     # infeasible — every existing fixture — this is bit-identical to sum(welfare_h)/H. ------
@@ -308,7 +306,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
             socp_maxgap = r.socp_maxgap,
         ),
         oos = (; welfare_h, infeasible_h, realized_welfare, welfare_gap),
-        # Phase 34 ARCH-08: documented status vocabulary (STATUS_VOCABULARY.run_stochastic).
+        # Documented status vocabulary (STATUS_VOCABULARY.run_stochastic).
         status = _stochastic_status(infeasible_h),
     )
 end

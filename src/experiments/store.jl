@@ -1,26 +1,25 @@
 # src/experiments/store.jl
 #
-# SEAM: run_and_store — @tagsave per-run JLD2 + provenance stamp (EXP-02 / INFRA-04).
-# OWNER: plan 08-04 (this plan) fills the 08-01 comment-only stub.
+# SEAM: run_and_store — @tagsave per-run JLD2 + provenance stamp.
 #
-# `run_and_store(s::Scenario; dir)` calls `run_scenario(s)` (08-03, PATH-FREE), builds a
+# `run_and_store(s::Scenario; dir)` calls `run_scenario(s)` (PATH-FREE), builds a
 # Symbol-keyed provenance dict via `result_to_dict`, and `@tagsave`s it to a per-run JLD2
-# named `scenario_filename(s)` under `dir` (CR-01 fix: `digits = 10` avoids
+# named `scenario_filename(s)` under `dir` (`digits = 10` avoids
 # DrWatson's lossy default float rounding colliding two distinguishable ADMM-knob Scenarios;
 # `safe = true` additionally routes through `safesave` so any residual collision appends
 # `_1`/`_2`... rather than silently overwriting). `@tagsave` stamps the saved dict with
 # `:gitcommit` (+ `:gitpatch` on a dirty tree, since `storepatch = true`) and `:script`.
 #
-# NOTE (RESEARCH Pitfall 2 — the CLAUDE.md imprecision corrected by research): `@tagsave`
+# NOTE (a common misreading is that the Manifest is embedded): `@tagsave`
 # stamps the git COMMIT, not the Manifest. It does NOT embed `Project.toml`/`Manifest.toml`
 # contents. The actual environment pin is the COMMITTED, version-specific `Manifest.toml`
-# (INFRA-01) *at that commit* — `:gitcommit` + the committed Manifest together fully determine
+# *at that commit* — `:gitcommit` + the committed Manifest together fully determine
 # the resolved package versions. `:julia_version => string(VERSION)` is stored alongside to
 # cover the one gap the Manifest itself doesn't pin: which Julia binary ran the solve.
 #
 # `dir` is an EXPLICIT keyword (default `datadir("sims")`) so tests pass `mktempdir()` and stay
-# hermetic (RESEARCH Pitfall 6) — `run_scenario` itself stays path-free; persistence lives only
-# here. The per-run JLD2 is NEVER committed (data/ is gitignored, 08-01).
+# hermetic — `run_scenario` itself stays path-free; persistence lives only
+# here. The per-run JLD2 is NEVER committed (data/ is gitignored).
 
 using DrWatson: @tagsave, datadir, savename
 
@@ -29,7 +28,7 @@ using DrWatson: @tagsave, datadir, savename
 
 Internal (unexported): a DETERMINISTIC, Julia-version-stable 64-bit FNV-1a digest of a
 byte iterable, rendered as exactly 16 zero-padded lowercase hex characters. Used by
-[`scenario_filename`](@ref) (phase-22 review WR-02) to fold `probabilities` — a
+[`scenario_filename`](@ref) to fold `probabilities` — a
 `Vector{Float64}` DrWatson's `default_allowed` filter silently DROPS from `savename` —
 back into the filename. Deliberately NOT `Base.hash`, whose value is only stable within
 a single Julia version (this project tests 1.10 LTS and 1.11+), and dependency-free (no
@@ -134,7 +133,7 @@ drops) a `_p<digest>` component is folded in before `.jld2`: a deterministic, Ju
 FNV-1a over the raw `Float64` bytes ([`_stable_hex64`](@ref)) — a filename disambiguator, NOT a
 security hash. Uniform vectors add nothing (they are determined by `stoch_S`).
 
-NOTE: filename STRINGS changed in phase 32 (prefixed knob names, `strategy=`, `pf=`), orphaning
+NOTE: filename STRINGS were changed when the selector set was restructured (prefixed knob names, `strategy=`, `pf=`), orphaning
 older `data/sims` artifacts (gitignored, never committed). The NAME_MAX = 255-byte guard is kept
 (rarely hit now): an over-long name is truncated on a UTF-8 boundary and suffixed with
 `_h<_stable_hex64(codeunits(full))>` (16-hex FNV-1a, stable across Julia versions); no information is lost because [`result_to_dict`](@ref) stamps every selector
@@ -176,7 +175,7 @@ non-ADMM), `:julia_version = string(VERSION)`, for MPC `:regret`/`:steps`, and f
 `:welfare_gap`. Only primitives/arrays are stored — never strategy objects, `MpcTrace`,
 NamedTuples or details structs — so the JLD2 loads without TSODSO types.
 
-NOTE (WR-01, phase-26 review): `reactive_consensus_mode` is the RESOLVED `ReactiveMode` for
+NOTE: `reactive_consensus_mode` is the RESOLVED `ReactiveMode` for
 ADMM, stamped so the artifact is self-describing.
 """
 function result_to_dict(res::ScenarioResult)
@@ -207,12 +206,12 @@ named `scenario_filename(s)` under `dir` (default `datadir("sims")`, gitignored)
 The saved dict carries every field from [`result_to_dict`](@ref) PLUS `:gitcommit` (+
 `:gitpatch` on a dirty tree) and `:script`, stamped by `@tagsave` itself (`storepatch = true`).
 
-Takes `dir` as an EXPLICIT keyword so tests can pass `mktempdir()` and stay hermetic
-(RESEARCH Pitfall 6) — never rely on `datadir()` resolving under the test environment.
+Takes `dir` as an EXPLICIT keyword so tests can pass `mktempdir()` and stay hermetic —
+never rely on `datadir()` resolving under the test environment.
 Returns the `ScenarioResult` (the same in-memory value `run_scenario` produced); the JLD2
 write is a side effect, never re-loaded by this function.
 
-NOTE (CR-01 fix): `savename`'s DEFAULT float formatting rounds `AbstractFloat` fields to
+NOTE: `savename`'s DEFAULT float formatting rounds `AbstractFloat` fields to
 `sigdigits = 3`, which can collapse two `Scenario`s differing only in a sub-percent ADMM float
 knob (`ρ`/`ε_abs`/`ε_rel`/`τ_ratio`/`μ`) onto the IDENTICAL filename — verified directly
 against this repo's pinned DrWatson (2.19.1): `ρ = 100.1/100.2/100.4` all produced
@@ -223,11 +222,11 @@ that are truly float-identical to 10 digits but differ in a field `default_allow
 Together these close the "silently overwrites a prior run's JLD2" data-loss risk this function
 previously had.
 
-NOTE (Rule 1 fix, 08-04): `@tagsave`'s `gitpath` keyword defaults to `DrWatson.projectdir()`,
+NOTE: `@tagsave`'s `gitpath` keyword defaults to `DrWatson.projectdir()`,
 which resolves from the CURRENTLY ACTIVE project — under `Pkg.test()` that is a temporary
 sandbox directory Pkg generates for the test run, NOT this package's actual git checkout, so
 `gitdescribe` silently finds "not a Git repository" and `:gitcommit` is never stamped
-(discovered running this plan's own INFRA-04 provenance testitem through `Pkg.test()`).
+(observed when running the provenance testitem through `Pkg.test()`).
 `gitpath` is pinned here to `pkgdir(@__MODULE__)` — the actual on-disk source directory of the
 `TSODSO` package (always the real git checkout, however the file is dev-installed/sandboxed)
 — so `:gitcommit` is stamped reliably both in a plain REPL/script run AND under `Pkg.test()`.

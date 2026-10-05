@@ -1,7 +1,7 @@
 # src/experiments/Scenario.jl
 #
-# SEAM: Scenario — the immutable declarative scenario spec (EXP-01), restructured in Phase 32
-# (ARCH-01/ARCH-02) around a primitive `pf::Symbol` power-flow selector and a
+# SEAM: Scenario — the immutable declarative scenario spec, restructured
+# around a primitive `pf::Symbol` power-flow selector and a
 # `strategy::AbstractStrategy` field (strategies.jl) instead of one flat bag of strategy knobs.
 #
 # Every field except `strategy` is a PRIMITIVE selector (Symbol/Int/Float64/Bool/String), so the
@@ -11,11 +11,11 @@
 # outside `default_allowed`), so on-disk filename identity is restored by `scenario_filename`
 # (store.jl), which flattens the strategy. Never use a bare `savename(s, ...)` as an on-disk
 # identity key; every storage call site must also pass `digits = 10` and `safe = true`
-# (CR-01: default `sigdigits = 3` float rounding can collapse sub-percent-different floats).
+# (default `sigdigits = 3` float rounding can collapse sub-percent-different floats).
 #
 # Validation is a CONSTRUCTION invariant (mirrors `Thermostatic`/`PVBattery`/`Aggregator`):
-# an explicit inner constructor `throw`s `ArgumentError` (never `@assert`, threat T-03-04
-# convention), so a `Scenario` can never silently underdetermine a run (threat T-08-05).
+# an explicit inner constructor `throw`s `ArgumentError` (never `@assert`, per the
+# error-handling convention), so a `Scenario` can never silently underdetermine a run.
 # Strategy-knob validation lives in the strategy constructors (strategies.jl).
 
 """
@@ -33,7 +33,7 @@ const SCENARIO_VALID_STRATEGIES = (:centralized, :admm, :mpc, :stochastic)
 """
 Valid `pf` (power-flow formulation) selectors a `Scenario` may name (dispatch target:
 `build_powerflow`, materialize.jl). `MeshedFlow` and `DCPowerFlow` are intentionally NOT
-selectable (Phase 32 CONTEXT).
+selectable.
 """
 const SCENARIO_VALID_PFS = (:convex_branch_flow, :restricted_branch_flow, :lindistflow, :ac)
 
@@ -50,7 +50,7 @@ const SCENARIO_VALID_POPULATIONS = (:default,)
 """
     Scenario
 
-An immutable declarative experiment specification (EXP-01). Selectors are primitives; the
+An immutable declarative experiment specification. Selectors are primitives; the
 solve strategy is a strategy struct (see [`AbstractStrategy`](@ref)).
 
 # Fields

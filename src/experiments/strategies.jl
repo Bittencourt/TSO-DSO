@@ -1,6 +1,6 @@
 # src/experiments/strategies.jl
 #
-# Solve strategies as types (Phase 32, ARCH-02). A strategy carries its own knobs and validates
+# Solve strategies as types. A strategy carries its own knobs and validates
 # them in its constructor; `TSODSO.run(strategy, scenario)` is the package-owned generic entry
 # point. This file also owns the valid strategy x power-flow matrix (`supports_pf`) and the typed
 # strategy-specific result `details` structs (defined here because run.jl is included before

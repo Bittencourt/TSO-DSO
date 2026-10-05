@@ -1,25 +1,24 @@
 # src/experiments/materialize.jl
 #
-# SEAM: deterministic selector → object materialization (EXP-01 / INFRA-04).
-# OWNER: plan 08-02 (this plan).
+# SEAM: deterministic selector → object materialization.
 #
-# Deterministically reconstructs the heavy Phase 1–7 objects (feeder, λ₀, aggregators) from
+# Deterministically reconstructs the heavy objects (feeder, λ₀, aggregators) from
 # a `Scenario`'s primitive selectors + its master `seed`, reusing `ieee13_modified` /
 # `ieee123_modified` / `generate_profiles` / `Aggregator` verbatim — this is orchestration,
-# NO new model, NO solver named anywhere (INFRA-02). `sub_seed` derives INDEPENDENT
-# deterministic sub-streams from the master seed (RESEARCH Pitfall 5) so `:profiles` and
+# NO new model, NO solver named anywhere. `sub_seed` derives INDEPENDENT
+# deterministic sub-streams from the master seed so `:profiles` and
 # `:population` never accidentally couple or collide; every stochastic draw flows through a
 # freshly-seeded `generate_profiles` call (itself backed by a `StableRNGs.LehmerRNG`), NEVER
-# the global RNG / `Random.seed!`. Kept dependency-light (no DrWatson) so EXP-01 is testable
-# without the storage layer (plan 08-04).
+# the global RNG / `Random.seed!`. Kept dependency-light (no DrWatson) so scenario materialization is testable
+# without the storage layer.
 
 """
     sub_seed(master::Integer, tag::Symbol) -> Int
 
 Derive an INDEPENDENT deterministic sub-seed from a `Scenario`'s master `seed` and a stream
-tag (e.g. `:profiles`, `:population`), per RESEARCH Pitfall 5. Two different tags on the SAME
+tag (e.g. `:profiles`, `:population`). Two different tags on the SAME
 master produce DIFFERENT sub-seeds (independent, non-colliding sub-streams); the SAME
-`(master, tag)` pair always produces the SAME sub-seed (deterministic — INFRA-04). Never
+`(master, tag)` pair always produces the SAME sub-seed (deterministic). Never
 touches the global RNG: this is a pure `hash` derivation, not a draw.
 """
 sub_seed(master::Integer, tag::Symbol) = Int(hash((master, tag)) % typemax(UInt32))
@@ -28,11 +27,10 @@ sub_seed(master::Integer, tag::Symbol) = Int(hash((master, tag)) % typemax(UInt3
     build_feeder(sym::Symbol) -> Feeder{Float64}
 
 Materialize the feeder named by `sym`: `:ieee13` → [`ieee13_modified`](@ref), `:ieee123` →
-[`ieee123_modified`](@ref), `:ieee8500` → [`ieee8500_modified`](@ref) (SCALE-01 headline
-full MV+LV), `:ieee8500_mv` → [`ieee8500_mv_modified`](@ref) (SCALE-02 MV-only control,
-D-02 — a SEPARATE builder, not an `mv_only=true` keyword argument). Throws `ArgumentError`
-on any other selector (a `Scenario`'s own constructor already guards this — RESEARCH
-§Pattern 1 — but `build_feeder` guards again as a seam that may be called directly).
+[`ieee123_modified`](@ref), `:ieee8500` → [`ieee8500_modified`](@ref) (headline
+full MV+LV), `:ieee8500_mv` → [`ieee8500_mv_modified`](@ref) (MV-only control,
+a SEPARATE builder, not an `mv_only=true` keyword argument). Throws `ArgumentError`
+on any other selector (a `Scenario`'s own constructor already guards this, but `build_feeder` guards again as a seam that may be called directly).
 """
 function build_feeder(sym::Symbol)
     if sym === :ieee13
@@ -53,7 +51,7 @@ function build_feeder(sym::Symbol)
     end
 end
 
-# --- :mem price shape (EXP-01 §Pattern 1) ---
+# --- :mem price shape ---
 #
 # The pinned 24-hour MEM / wholesale price `λ₀` (¢$/kWh-consistent) — the SAME digitized
 # shape as `test/fixtures_ieee13.jl` `mem_price_profile()` / `test/fixtures_ieee123.jl`
@@ -110,7 +108,7 @@ function build_price(sym::Symbol, T::Int, profiles)
     end
 end
 
-# --- :default population shape (EXP-01 §Pattern 1 / RESEARCH read_first fixture SHAPEs) ---
+# --- :default population shape ---
 #
 # Reuses the fixtures_ieee13/7 `_house_aggregator` residential-magnitude SHAPE (Thermostatic +
 # Deferrable + PVBattery, seeded per-bus `generate_profiles`) but is not itself allowed to
@@ -136,7 +134,7 @@ const _IEEE123_PV_SCALE = 0.06
 const _IEEE123_DEV_SCALE = 0.05
 
 # The 24-hour exterior-temperature profile (°C) feeding the thermostatic ambient `Tout`, the
-# SAME digitized shape as the Phase4/7 fixtures (thesis Fig 4.2). Cyclically repeated to any
+# SAME digitized shape as the earlier fixtures (thesis Fig 4.2). Cyclically repeated to any
 # horizon `T` (see `_temperature_profile`), matching the `_MEM_PRICE_PROFILE_24H` convention.
 const _TEMPERATURE_PROFILE_24H = Float64[
     19,
@@ -179,7 +177,7 @@ transit junctions handled by the DSO-OPT relaxation), so that split is used when
 `feeder_sym === :ieee123`; otherwise (`:ieee13` and any other radial fixture) every non-root
 bus is a load bus, mirroring `fixtures_ieee13.build_ieee13_aggregators`.
 
-WR-03 fix: dispatches on the ALREADY-KNOWN, already-validated `Scenario.feeder::Symbol`
+Dispatches on the ALREADY-KNOWN, already-validated `Scenario.feeder::Symbol`
 selector rather than re-deriving "is this ieee123" from `length(feeder.buses)` — the previous
 bus-count heuristic would silently mis-scale for any future feeder fixture that happens to
 share IEEE-123's bus count (no `ArgumentError`, no warning, just a quietly wrong load/transit
@@ -205,7 +203,7 @@ mirroring the `fixtures_ieee13`/`fixtures_ieee123` `_house_aggregator` construct
 `profiles` is accepted for signature symmetry with [`build_population`](@ref) but each house
 draws its OWN per-bus profile via `generate_profiles(seed = seed + bus, T)` — the SAME
 per-bus-seeded idiom the fixtures use — so no two houses share a profile draw and the whole
-population is deterministic in `seed` (a global-RNG leak would break this, RESEARCH Pitfall 5;
+population is deterministic in `seed` (a global-RNG leak would break this;
 `generate_profiles` itself threads a fresh `StableRNGs.LehmerRNG`, never `Random.seed!`).
 """
 function _default_house(
@@ -257,24 +255,24 @@ end
 """
     _ieee8500_house(bus, kw_pu, profiles, seed, T) -> Aggregator
 
-A per-bus-REAL-MAGNITUDE sibling of [`_default_house`](@ref) for the IEEE-8500 fixtures
-(D-03) — a genuinely NEW code path, NOT a parameterized modification of `_default_house`
-(RESEARCH Pitfall 4). `kw_pu::Float64` is the bus's OWN real per-load kW, ALREADY converted
-to per-unit power (`to_pu_power`, D-03/D-05) by the caller — it takes the place of
+A per-bus-REAL-MAGNITUDE sibling of [`_default_house`](@ref) for the IEEE-8500 fixtures,
+a genuinely NEW code path, NOT a parameterized modification of `_default_house`.
+`kw_pu::Float64` is the bus's OWN real per-load kW, ALREADY converted
+to per-unit power (`to_pu_power`) by the caller — it takes the place of
 `_default_house`'s tuned `load_scale * d` scalar multiply: `Pdc = kw_pu * d` for each
 seeded demand-profile sample `d` (the seeded profile SHAPE still modulates the fixed real
 magnitude; only the magnitude source differs from `_default_house`).
 
 The device-construction body below is copied VERBATIM from `_default_house` (same
-`Thermostatic`/`Deferrable`/`PVBattery` calls, same `_DEFAULT_BATT_λ_*` constants — D-04:
+`Thermostatic`/`Deferrable`/`PVBattery` calls, same `_DEFAULT_BATT_λ_*` constants:
 the 3-device house stays fixed, no device-count axis is introduced alongside the density
-sweep), with `dev_scale = 1.0` FIXED inline — D-03 explicitly rejects a tuned
+sweep), with `dev_scale = 1.0` FIXED inline (no tuned
 `_IEEE8500_DEV_SCALE`-style constant for this fixture, unlike the `_IEEE13_*`/`_IEEE123_*`
-scale triples `_default_house` takes as arguments.
+scale triples `_default_house` takes as arguments).
 """
 function _ieee8500_house(bus::Int, kw_pu::Float64, profiles, seed::Integer, T::Int)
     prof = generate_profiles(; seed = seed + bus, T = T)   # per-bus, deterministic in `seed`
-    dev_scale = 1.0   # D-03: no tuned _IEEE8500_DEV_SCALE constant for this fixture
+    dev_scale = 1.0   # no tuned _IEEE8500_DEV_SCALE constant for this fixture
     Ppv = Float64[kw_pu * p for p in prof.pv]
     Pdc = Float64[kw_pu * d for d in prof.demand]
 
@@ -319,26 +317,26 @@ without taking `T` as a separate argument. Deterministic in `seed`: two calls wi
 `seed` return structurally identical aggregators (same per-bus profile draws); a DIFFERENT seed
 changes every house. Throws `ArgumentError` on any other selector.
 
-WR-03 fix: `feeder_sym` (the caller's already-validated `Scenario.feeder` selector) now
+`feeder_sym` (the caller's already-validated `Scenario.feeder` selector) now
 disambiguates the IEEE-13 vs IEEE-123 residential scale directly, instead of re-deriving it
 from `length(feeder.buses) == length(ieee123_relabel_map())` — a structural coincidence that a
 future feeder fixture sharing IEEE-123's bus count would silently, wrongly match.
 
-# IEEE-8500 real-per-load-kW path (D-03, plan 25-04)
+# IEEE-8500 real-per-load-kW path
 
 For `feeder_sym in (:ieee8500, :ieee8500_mv)`, the `:ieee13`/`:ieee123` tuned-scalar path
 above is BYPASSED entirely (this branch never runs for those two selectors — the
 `:ieee13`/`:ieee123` branch is left completely untouched, must-not-break): each house uses
 its OWN real per-load kW from `Loads.dss` (`IEEE8500_LOAD_KW`, already `to_pu_power`-
 converted) via [`_ieee8500_house`](@ref), never a tuned scalar-multiplier module-level
-constant (D-03). `:ieee8500` looks up `IEEE8500_LOAD_KW` directly by the bus's own SX name (the
+constant. `:ieee8500` looks up `IEEE8500_LOAD_KW` directly by the bus's own SX name (the
 table is keyed EXCLUSIVELY by SX/LV load-bus names); `:ieee8500_mv` has NO direct SX->MV
 table, so it walks SX -> X (triplex) -> MV (service transformer) explicitly, summing every
-service transformer's real kW onto its host MV bus (D-02's "each load aggregated onto its
-MV node" — the aggregation multiple transformers hanging off one MV bus require). Both
-paths additionally APPEND 4 `Aggregator`s (one per `ieee8500_capacitor_buses()` entry, D-12)
+service transformer's real kW onto its host MV bus (each load aggregated onto its
+MV node — the aggregation multiple transformers hanging off one MV bus require). Both
+paths additionally APPEND 4 `Aggregator`s (one per `ieee8500_capacitor_buses()` entry)
 wrapping a single `FixedCapacitor` each at zero inelastic demand (`Pdc = zeros(T)`),
-preserving DEV-05 (`Aggregator` stays the SOLE `:Rp`/`:Rq` writer — `FixedCapacitor` itself
+so `Aggregator` stays the SOLE `:Rp`/`:Rq` writer (`FixedCapacitor` itself
 never touches `ctx.residuals`).
 """
 function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, seed::Integer)
@@ -366,7 +364,7 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
             )
         else
             # No direct SX->MV table exists: walk SX -> X (triplex) -> MV (service
-            # transformer) explicitly (D-02's cross-transformer summation).
+            # transformer) explicitly (cross-transformer summation).
             x_to_sx_name = Dict{String, String}()
             for (a, b) in keys(IEEE8500_LV_BRANCH_RX_OHMS)
                 sx_name, x_name = startswith(a, "SX") ? (a, b) : (b, a)
@@ -402,7 +400,7 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
         cap_relabel =
             feeder_sym === :ieee8500 ? ieee8500_relabel_map() : ieee8500_mv_relabel_map()
         cap_houses = [
-            # D-12: Pdc=0 (zero inelastic demand), so φ's exact value is a formal
+            # Pdc=0 (zero inelastic demand), so φ's exact value is a formal
             # placeholder — the load-power-factor reactive term (-Pdc*tanφ) vanishes
             # identically since Pdc is the zero vector; φ=0.90 is chosen only to satisfy
             # Aggregator's (0,1] constructor guard.
@@ -483,7 +481,7 @@ Materialize the power-flow formulation named by `s.pf`:
 | `:lindistflow`            | `LinDistFlow()`                                     |
 | `:ac`                     | `ACPowerFlow()` (default `limits = true`)           |
 
-The default scenario yields an object `===` the pre-phase hard-coded `ConvexBranchFlow()`, so
+The default scenario yields an object `===` the earlier hard-coded `ConvexBranchFlow()`, so
 numeric goldens stay bit-identical. `:ac` is the researcher's responsibility on large feeders
 (only `:ieee13` has been measured).
 """

@@ -1,18 +1,15 @@
 # src/experiments/run.jl
 #
-# SEAM: ScenarioResult + `TSODSO.run` strategy method dispatch + normalization (EXP-01 / INFRA-04,
-# reshaped in Phase 32 / ARCH-01, ARCH-02).
+# SEAM: ScenarioResult + `TSODSO.run` strategy method dispatch + normalization.
 #
-# Phase 32 turns the former symbol dispatch into METHOD dispatch on the strategy type:
+# Dispatch is METHOD dispatch on the strategy type:
 # `run(::Centralized, s)` -> `solve_welfare` + `extract_dlmp`, `run(::ADMM, s)` -> `solve_admm`,
 # each normalized into one comparable `ScenarioResult` (common fields + typed `details`). The
 # power-flow formulation comes from `build_powerflow(s)` — nothing is hard-coded. `run_scenario`
 # stays as a thin wrapper. MPC/Stochastic methods live in mpc_loop.jl / run_stochastic.jl.
 #
-# PURE ORCHESTRATION over already-validated builders — no new model, no solver named anywhere
-# (INFRA-02). Because the seed is threaded end-to-end (`sub_seed`) and the conic path is
-# single-threaded, a same-Scenario same-seed run is bit-for-bit identical within one process
-# (INFRA-04). Timings are recorded but EXCLUDED from every equality comparison.
+# PURE ORCHESTRATION over already-validated builders — no new model, no solver named anywhere. Because the seed is threaded end-to-end (`sub_seed`) and the conic path is
+# single-threaded, a same-Scenario same-seed run is bit-for-bit identical within one process. Timings are recorded but EXCLUDED from every equality comparison.
 #
 # `run` is PATH-FREE — it returns a `ScenarioResult`, never writes a file (see `store.jl`).
 
@@ -60,7 +57,7 @@ function Base.propertynames(r::ScenarioResult, private::Bool = false)
     return (fieldnames(ScenarioResult)..., _ADMM_FORWARDED...)
 end
 
-# Shared, UNCHANGED materialize sequence (seeds / sub_seed tags / call order: INFRA-04).
+# Shared, UNCHANGED materialize sequence (seeds / sub_seed tags / call order).
 function _materialize(s::Scenario)
     feeder = build_feeder(s.feeder)
     profiles = generate_profiles(; seed = sub_seed(s.seed, :profiles), T = s.T)
@@ -153,7 +150,7 @@ run(s::Scenario) = run(s.strategy, s)
 
 Thin wrapper over `TSODSO.run(s.strategy, s)` (dispatch is method dispatch on the strategy type).
 PATH-FREE: never writes to disk (see [`run_and_store`](@ref)). Same-seed runs in one process
-return `==`-identical `welfare`/`dadp`/`exact_maxgap` (INFRA-04); `elapsed` is excluded.
+return `==`-identical `welfare`/`dadp`/`exact_maxgap`; `elapsed` is excluded.
 """
 run_scenario(s::Scenario) = run(s.strategy, s)
 
