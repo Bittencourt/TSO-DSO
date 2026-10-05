@@ -757,7 +757,8 @@ Sweep flags:
   --time-limit <s>   --t-horizon <int>   --clarabel-tol <f>   --quick
   --admm-only                 skip the centralized model (one point per process)
   --admm-atol <finite float>  flat ADMM gate override (default: library hybrid floor)
-  --admm-diagnostic-bypass    (needs --admm-only) atol_exact=Inf + hybrid_ratios CSV; row = DIAGNOSTIC_BYPASS
+  --admm-diagnostic-bypass    (needs --admm-only) atol_exact=Inf + hybrid_ratios CSV (converged
+                              runs only); row = DIAGNOSTIC_BYPASS, else DIAGNOSTIC_BYPASS:<status>
   --topn <int>                rows kept in hybrid_diagnostic.csv (default 20)
   --run-label <str>           label column (join key with point_resources.csv)
   --results-dir <path>        output directory (or env TSODSO_IEEE8500_RESULTS_DIR)
@@ -892,15 +893,20 @@ function run_sweep_mode(args)
 
         diag = (; diag_max_ratio = NaN, diag_worst_branch = "", diag_loss_impact_max = NaN)
         if bypass
-            admm_status_out = "DIAGNOSTIC_BYPASS"
-            if apoint.dso_ctx !== nothing
+            # CR-01 (35-REVIEW): the diagnostic runs ONLY on a CONVERGED consolidation. A
+            # `:budget_exceeded` exit also returns a `dso_ctx`, but it holds the last mid-loop,
+            # non-consensus iterate (solve_admm.jl skips consolidation there), so ratios from it
+            # are meaningless. Every other outcome keeps its real status behind the
+            # `DIAGNOSTIC_BYPASS:` prefix (e.g. `DIAGNOSTIC_BYPASS:budget_exceeded`).
+            if apoint.dso_ctx !== nothing && apoint.admm_status == "converged"
+                admm_status_out = "DIAGNOSTIC_BYPASS"
                 name_of = bus_name_lookup(fixture_sym)
                 hr = TSODSO.hybrid_ratios(apoint.dso_ctx)
                 top = hr[1:min(topn, length(hr))]
                 drows = [
                     (;
                         fixture = fixture_str, density = density, T_horizon = T_horizon,
-                        b = r.b, t = r.t, from_id = r.from, to_id = r.to,
+                        admm_status = apoint.admm_status, b = r.b, t = r.t, from_id = r.from, to_id = r.to,
                         from_name = name_of(r.from), to_name = name_of(r.to), r_pu = r.r_pu,
                         gap = r.gap, atol_b = r.atol_b, ratio = r.ratio,
                         loss_impact = r.loss_impact, run_label = run_label,

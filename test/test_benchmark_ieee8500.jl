@@ -163,6 +163,15 @@ end
     @test ok
     @test occursin("--admm-diagnostic-bypass", msg)
     @test isempty(readdir(dir_e))
+
+    # (f) CR-01 (35-REVIEW): the diagnostic bypass on a NON-converged run (the --quick point
+    # always ends budget_exceeded) keeps the real status and writes no hybrid diagnostic.
+    dir_f = mktempdir()
+    ok, _ = run_harness(["--quick", "--admm-only", "--admm-diagnostic-bypass"], dir_f)
+    @test ok
+    rf = only(eachrow(CSV.read(joinpath(dir_f, "density_sweep.csv"), DataFrame)))
+    @test rf.admm_status == "DIAGNOSTIC_BYPASS:budget_exceeded"
+    @test !isfile(joinpath(dir_f, "hybrid_diagnostic.csv"))
 end
 
 println("test_benchmark_ieee8500.jl: ALL TESTS PASSED")
