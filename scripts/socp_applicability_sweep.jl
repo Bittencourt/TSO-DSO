@@ -22,8 +22,8 @@
 #
 #   julia --project=. scripts/socp_applicability_sweep.jl ieee123 --tol-ladder
 #
-# Provenance of the committed CSVs in results/socp_applicability/ and the full findings:
-# .planning/spikes/001-relaxation-validity-map/ and .../002-ieee123-validity-map/.
+# Provenance of the committed CSVs in results/socp_applicability/ and the full findings: see
+# docs/literate/socp_applicability.jl.
 
 using DrWatson
 @quickactivate "TSODSO"
@@ -36,7 +36,7 @@ using Printf
 
 const T = 24
 
-# Both profiles are byte-identical to test/fixtures_ieee13.jl / fixtures_ieee123.jl.
+# Both profiles are bit-for-bit identical to test/fixtures_ieee13.jl / fixtures_ieee123.jl.
 const TEMP = Float64[
     19,
     18,
@@ -99,7 +99,7 @@ mkpath(OUT)
     cone_stats(ctx, feeder; atol=1e-6, rtol=1e-4)
 
 The same per-branch cone residual `|l·v − (P²+Q²)|` that `src/models/exactness.jl` computes, with
-the scale-free WR-01 bound, plus the binding-set / reverse-flow diagnostics that make a map
+the scale-free combined bound, plus the binding-set / reverse-flow diagnostics that make a map
 INTERPRETABLE (also free). `maxratio ≤ 1` is the exactness classification.
 """
 function cone_stats(ctx, feeder; atol = 1e-6, rtol = 1e-4)
@@ -164,7 +164,7 @@ function highpv_house(bus; pv_scale, load_scale)
     )
 end
 
-# ── Substrate B: real IEEE-123 impedances, Phase-17-retuned population ─────────────────────────
+# ── Substrate B: real IEEE-123 impedances, retuned population ─────────────────────────
 const IEEE123_BASE = (load = 0.05, pv = 0.12, dev = 0.05 * (0.05 / 0.03), seed = 20260719)
 
 function ieee123_house(bus; pv_scale, load_scale, dev_scale)
@@ -197,8 +197,8 @@ end
 
 Classify every grid point UNDER BOTH `ConvexBranchFlow()` (the corrected Gan-Low default,
 `thesis_literal=false`) AND `ConvexBranchFlow(; thesis_literal=true)` (the OLD literal copy) — a
-`formulation` column (`:default`/`:thesis_literal`) records which. Restated in v4.0 (Phase 28):
-since Phase 26 flipped the DEFAULT to the Gan-Low direction (`v̂ ≥ v`), the DEFAULT's own
+`formulation` column (`:default`/`:thesis_literal`) records which. Restated after the model corrections:
+since the DEFAULT was flipped to the Gan-Low direction (`v̂ ≥ v`), the DEFAULT's own
 exactness boundary shrinks dramatically on this grid (MEASURED highpv substrate: 98/150 exact vs
 `thesis_literal=true`'s 104/150 — comparable order of magnitude), but it does **not vanish**:
 MEASURED 3/150 default points are genuinely cone-INEXACT (ratio 8196–9746, e.g.
@@ -249,11 +249,11 @@ function sweep(substrate::Symbol; optimizer = nothing)
     total = 2 * length(vms) * length(lds) * length(pvs)
     i = 0
     for thesis_literal in (false, true)
-        # DUAL-MODE (Phase 28, Task 3): the two bare-`ConvexBranchFlow()` call sites this task
-        # edits are HERE and in `tol_ladder` below. `rtol_exact` neutralized so an inexact solve is
+        # DUAL-MODE: the two bare-`ConvexBranchFlow()` call sites
+        # are HERE and in `tol_ladder` below. `rtol_exact` neutralized so an inexact solve is
         # RETURNED for classification instead of refused (the diagnostic override pattern of
         # test/test_ac_oracle.jl:181-187). This changes no src/ code and does not weaken the
-        # shipped PF-04 gate for any other caller.
+        # shipped exactness gate for any other caller.
         socp_formulation =
             thesis_literal ? ConvexBranchFlow(; thesis_literal = true) : ConvexBranchFlow()
         formulation_label = thesis_literal ? :thesis_literal : :default
@@ -335,8 +335,8 @@ end
 
 NUMERICAL-vs-STRUCTURAL discriminator. Re-solves the given `(vmax, load, pv, thesis_literal)`
 points at progressively tighter solver tolerances, under whichever formulation each point
-specifies (dual-mode, Phase 28 Task 3 — the SECOND bare-`ConvexBranchFlow()` call site this task
-edits, mirroring `sweep`'s formulation selection). A structural relaxation gap is a property of
+specifies (dual-mode — the SECOND bare-`ConvexBranchFlow()` call site,
+mirroring `sweep`'s formulation selection). A structural relaxation gap is a property of
 the OPTIMUM and must PERSIST; a convergence residual SHRINKS. Print the objective alongside to
 confirm the optimum did not move.
 """
@@ -425,7 +425,7 @@ function report(df::DataFrame, label::AbstractString, path::AbstractString)
         )
         println(
             io,
-            "NO AC/Ipopt oracle involved (this is a GATE-1/cone-residual map only — see",
+            "NO AC/Ipopt oracle involved (this is a gate-1/cone-residual map only — see",
         )
         println(
             io,
@@ -435,10 +435,10 @@ function report(df::DataFrame, label::AbstractString, path::AbstractString)
             io,
             "rtol_exact neutralized so inexact solves are returned for classification",
         )
-        println(io, "rather than refused by the PF-04 gate.\n")
+        println(io, "rather than refused by the exactness gate.\n")
         println(
             io,
-            "DUAL-MODE (Phase 28, Task 3): every grid point solved under BOTH",
+            "DUAL-MODE: every grid point solved under BOTH",
         )
         println(
             io,
@@ -519,19 +519,19 @@ function main(args)
             "3-bus high-PV stress fixture (r=x=0.05, vmin=0.95)",
             joinpath(OUT, "highpv_3bus_findings.txt"),
         )
-        # Controls, RESTATED IN v4.0 (PHASE 28, dual-mode, gate-1/cone-residual only — Pitfall 3):
-        # pre-Phase-28 this block asserted pv=1.2 -> "expect inexact" under the (then bare-default)
-        # ConvexBranchFlow(). Since Phase 26 flipped the default to the Gan-Low direction, THIS
-        # SPECIFIC point (pv=1.2, load=0.20, vmax=1.05 — EXACT-04's own calibrated fixture) is now
-        # measured EXACT under BOTH formulations (PM-01/26-18, `test_restricted_branch_flow.jl:
+        # Controls, RESTATED after the model corrections (dual-mode, gate-1/cone-residual only):
+        # previously this block asserted pv=1.2 -> "expect inexact" under the (then bare-default)
+        # ConvexBranchFlow(). Since the default was flipped to the Gan-Low direction, THIS
+        # SPECIFIC point (pv=1.2, load=0.20, vmax=1.05 — the high-PV exactness fixture's own calibration) is now
+        # measured EXACT under BOTH formulations (`test_restricted_branch_flow.jl:
         # 314-320` — cited not re-derived; confirmed by this sweep itself below). This does NOT mean
         # the default is unconditionally cone-exact everywhere on the broader grid below — MEASURED
-        # this plan: 3/150 default points ARE genuinely cone-inexact (ratio 8196–9746, at DIFFERENT,
+        # here: 3/150 default points ARE genuinely cone-inexact (ratio 8196–9746, at DIFFERENT,
         # lower-load combinations than this control point), so the default has its own (far rarer)
         # exactness boundary, not a blanket theoretical guarantee. The genuine negative control used
         # here (a KNOWN, still-reproducing cone-inexact point at THIS control's own load/vmax) is a
-        # property of `thesis_literal=true` specifically, at a HIGHER pv_scale — measured this plan
-        # (28-03) at pv=1.4 (ratio in the thousands; the default hits an unrelated App. C
+        # property of `thesis_literal=true` specifically, at a HIGHER pv_scale — measured
+        # at pv=1.4 (ratio in the thousands; the default hits an unrelated App. C
         # battery-complementarity guard at this same pv_scale/load/vmax, so it is not a comparable
         # point for the default AT THIS load level). A sweep that cannot reproduce a KNOWN-inexact
         # point cannot be trusted when it reports "all exact" — that outcome is indistinguishable
@@ -557,7 +557,7 @@ function main(args)
             e_thesis.class
         )
         @printf(
-            "          pv=1.2 (EXACT-04) default -> %s (expect exact, PM-01/26-18)   pv=1.2 thesis_literal -> %s (expect exact, PM-01/26-18)\n",
+            "          pv=1.2 default -> %s (expect exact)   pv=1.2 thesis_literal -> %s (expect exact)\n",
             x04_default.class,
             x04_thesis.class
         )
@@ -570,13 +570,13 @@ function main(args)
         e_thesis.class == "exact" ||
             @warn "positive control (thesis_literal) drifted" e_thesis.class e_thesis.maxratio
         x04_default.class == "exact" ||
-            @warn "EXACT-04 default control drifted from PM-01/26-18" x04_default.class x04_default.maxratio
+            @warn "high-PV default control drifted from its measured exact verdict" x04_default.class x04_default.maxratio
         x04_thesis.class == "exact" ||
-            @warn "EXACT-04 thesis_literal control drifted from PM-01/26-18" x04_thesis.class x04_thesis.maxratio
+            @warn "high-PV thesis_literal control drifted from its measured exact verdict" x04_thesis.class x04_thesis.maxratio
         x_thesis.class == "inexact" ||
             @warn "negative control (thesis_literal, pv=1.4) drifted" x_thesis.class x_thesis.maxratio
-        # Dual-mode ladder points (Phase 28 Task 3): pv=1.2 under the DEFAULT — gate 1 EXACT,
-        # ratio should PERSIST tiny as tol tightens (PM-01/26-18). pv=1.4 under thesis_literal=true
+        # Dual-mode ladder points: pv=1.2 under the DEFAULT — gate 1 EXACT,
+        # ratio should PERSIST tiny as tol tightens. pv=1.4 under thesis_literal=true
         # — the genuinely cone-inexact point THIS sweep measures (ratio in the thousands; the
         # default hits an unrelated App. C battery-complementarity guard at this pv_scale on this
         # exact load/vmax combination, so it is not a comparable ladder point here).
@@ -594,12 +594,12 @@ function main(args)
         CSV.write(joinpath(OUT, "ieee123_sweep.csv"), df)
         report(
             df,
-            "real IEEE-123 OpenDSS positive-sequence impedances, Phase-17-retuned population",
+            "real IEEE-123 OpenDSS positive-sequence impedances, retuned population",
             joinpath(OUT, "ieee123_findings.txt"),
         )
-        # Dual-mode ladder points (Phase 28 Task 3): both kept on the DEFAULT (unchanged from
-        # pre-Phase-28 behavior) — no thesis_literal=true genuinely-inexact IEEE-123 point has
-        # been independently measured this plan; the sweep's own dual-mode grid above (both
+        # Dual-mode ladder points: both kept on the DEFAULT (unchanged from
+        # the earlier behavior) — no thesis_literal=true genuinely-inexact IEEE-123 point has
+        # been independently measured; the sweep's own dual-mode grid above (both
         # formulations, every grid point) is the authoritative IEEE-123 map either way.
         ladder && tol_ladder(:ieee123, [(1.05, 1.05, 0.7, false), (1.10, 0.95, 0.4, false)])
     end

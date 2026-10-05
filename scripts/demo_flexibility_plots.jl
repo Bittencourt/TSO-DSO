@@ -202,7 +202,7 @@ for flex in FLEX_LEVELS
         aggs;
         T = T,
         λ₀ = λ₀,
-        allow_export = true,                    # priced export = SOC-exactness enabler (PF-04)
+        allow_export = true,                    # priced export = SOC-exactness enabler
         # At low `flex` the batteries are tiny (Pmax ∝ flex), so the scale-free relative
         # complementarity test `p_ch·p_dch < τ·Pmax²` becomes borderline-numerical even when
         # simultaneous charge/discharge is physically negligible (<0.2% of Pmax²). A modestly

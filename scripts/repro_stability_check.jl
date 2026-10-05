@@ -1,22 +1,20 @@
 # scripts/repro_stability_check.jl
 #
-# Phase 18 (directional thesis reproduction) — the REPRO-02-mandated stability/sensitivity
+# Directional thesis reproduction — the stability/sensitivity
 # measurement, run and its findings committed BEFORE any golden band is pinned in
-# `test/test_thesis_repro.jl` (Plan 18-02). Mirrors `scripts/reactive_flake_rate.jl`'s
-# DrWatson scaffold / try-catch flake-counter / committed-findings shape exactly (18-RESEARCH.md
-# Validation Architecture, Wave 0 Gaps).
+# `test/test_thesis_repro.jl`. Mirrors `scripts/reactive_flake_rate.jl`'s
+# DrWatson scaffold / try-catch flake-counter / committed-findings shape exactly.
 #
-# Two measurements, NEITHER previously done anywhere in the repo (18-RESEARCH.md Pitfall 5):
+# Two measurements, NEITHER previously done anywhere in the repo:
 #
-# (a) Discrete Clarabel flake rate at the EXACT Phase-17-retuned IEEE-123 population point
+# (a) Discrete Clarabel flake rate at the EXACT retuned IEEE-123 population point
 #     (`LOAD_SCALE_IEEE123=0.05`, `PV_SCALE_IEEE123=0.12`) — does the solve occasionally THROW
 #     rather than return a slightly different number (mirrors `reactive_flake_rate.jl`'s
 #     `count_failures`, N>=20 repeats, tiny λ₀ jitter).
 # (b) A NEW population-scale sensitivity sweep (±2-5% on `LOAD_SCALE_IEEE123`/`PV_SCALE_IEEE123`,
 #     `DEV_SCALE_IEEE123` ratio held fixed) probing whether the DSO-surplus sign flip discovered
-#     by 18-RESEARCH.md (FIT dso < 0 -> DADP dso > 0, on the real-impedance, Phase-17-retuned
-#     IEEE-123 fixture) survives near the exactness boundary Phase 17 documented (18-RESEARCH.md
-#     Pitfall 4 / Open Question 1).
+#     earlier (FIT dso < 0 -> DADP dso > 0, on the real-impedance, retuned
+#     IEEE-123 fixture) survives near the exactness boundary documented for this fixture.
 #
 # FIXTURE CONSTRUCTION NOTE (mirrors `reactive_flake_rate.jl`'s own header): `IEEE123Fixtures` is
 # a `TestItems.@testmodule` block. The standalone `TestItems.jl` package expands `@testmodule` to
@@ -25,36 +23,36 @@
 # therefore RE-IMPLEMENTED INLINE below, copied verbatim from `test/fixtures_ieee123.jl` (lines
 # 92-95, 178-264: `temperature_profile`, `ieee123_lambda0`, `_house_aggregator`,
 # `build_ieee123_aggregators`, and the retuned scale constants), so the population here is
-# bit-for-bit identical to the one `test_ieee123_admm.jl`/18-RESEARCH.md's live probes exercise.
+# bit-for-bit identical to the one `test_ieee123_admm.jl` and the live probes exercise.
 #
-# HONEST-MEASUREMENT MANDATE (threat T-18-02): if the DSO-surplus sign flip does NOT survive
+# HONEST-MEASUREMENT MANDATE: if the DSO-surplus sign flip does NOT survive
 # every swept point, this script reports `sign_flip_survives: false` honestly — it never narrows
 # the sweep range, drops the failing point, or otherwise edits itself to force a passing
 # appearance. A negative result is a legitimate, documented outcome.
 #
-# PER-STAGE ATTRIBUTION + `optimizer` KWARG (quick task 260823-gea): the original version of this
+# PER-STAGE ATTRIBUTION + `optimizer` KWARG: the original version of this
 # script wrapped `solve_welfare` -> `welfare_accounting` -> `fit_baseline` in ONE `try/catch` per
-# point, in both `count_failures` and `sweep_population_scale`. Spike 003 found this misattributed
+# point, in both `count_failures` and `sweep_population_scale`. An earlier investigation found this misattributed
 # 2 of 4 sweep "failures" — they were actually `assert_socp_exact!` throwing inside `solve_welfare`
 # at the default `tol_gap = 1e-8`, not failures of the later stages the single catch-all made them
 # look like. Each function now runs three SEQUENTIAL per-stage `try/catch` blocks (short-circuiting
 # to skip later stages once one fails), so a failure is attributable to exactly one of
 # `solve_welfare`/`welfare_accounting`/`fit_baseline`. Both functions also accept an `optimizer`
 # keyword (mirroring `fit_baseline`/`solve_welfare`'s own "only compute/pass the override when the
-# caller actually gave one" discipline, INFRA-02), driven at the top level by an optional
+# caller actually gave one" discipline), driven at the top level by an optional
 # `REPRO_TOL_GAP` environment variable: unset means the script's numeric behavior is BYTE-FOR-BYTE
 # unchanged from before this fix (no `optimizer` kwarg is ever passed downstream); set, it builds a
-# `Clarabel.Optimizer` with `tol_gap_abs`/`tol_gap_rel` pinned to that value (same attribute pair as
-# `.planning/spikes/003-phase18-fragility-tolerance/check.jl`), letting the sweep be re-run at a
+# `Clarabel.Optimizer` with `tol_gap_abs`/`tol_gap_rel` pinned to that value (the same attribute pair as the
+# earlier tolerance-probe), letting the sweep be re-run at a
 # tightened tolerance (e.g. `REPRO_TOL_GAP=1e-10`) without editing source.
 #
-# `REPRO_MAX_ITER` (FIX-09, Phase 27 plan 27-05): a SECOND, INDEPENDENT env-var override, mirroring
+# `REPRO_MAX_ITER`: a SECOND, INDEPENDENT env-var override, mirroring
 # `REPRO_TOL_GAP`'s exact mechanism, extending the SAME `REPRO_OPTIMIZER` builder (COMBINABLE with
 # `REPRO_TOL_GAP` — both may be set together, e.g. `REPRO_TOL_GAP=1e-10 REPRO_MAX_ITER=2000`). It
 # pins Clarabel's `max_iter` attribute (default 200, confirmed via `Clarabel.Settings().max_iter`)
-# so the documented `fit_baseline` `ALMOST_OPTIMAL` flake at `tol_gap=1e-10` (13/20 baseline,
-# `.planning/notes/socp-validity-envelope.md`) can be tested against the UNTRIED "slow convergence,
-# not a genuine conditioning wall" hypothesis (RESEARCH FIX-09, Pitfall FIX-09-1) — distinguishing
+# so the documented `fit_baseline` `ALMOST_OPTIMAL` flake at `tol_gap=1e-10` (13/20 baseline)
+# can be tested against the UNTRIED "slow convergence,
+# not a genuine conditioning wall" hypothesis — distinguishing
 # it from the IEEE-8500 precedent where NEITHER a looser NOR a tighter `tol_gap` fixed a genuine
 # conditioning wall. Unset (the default): byte-for-byte unchanged from before this change (no
 # `max_iter` attribute is ever passed downstream).
@@ -78,23 +76,23 @@ const BATT_λ_MIN = 3.8
 const BATT_λ_MED = 6.2
 const BATT_λ_MAX = 8.9
 
-# IEEE-123 population scaling, Phase-17-retuned point (verbatim from test/fixtures_ieee123.jl:92-95).
+# IEEE-123 population scaling, retuned point (verbatim from test/fixtures_ieee123.jl:92-95).
 const SEED_IEEE123 = 20260719
 const LOAD_SCALE_IEEE123 = 0.05
 const PV_SCALE_IEEE123 = 0.12
 const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ratio to LOAD_SCALE held fixed
 
-# Optional solver-tolerance override (quick task 260823-gea): unset REPRO_TOL_GAP => `nothing` =>
+# Optional solver-tolerance override: unset REPRO_TOL_GAP => `nothing` =>
 # every downstream call keeps its own default `optimizer` factory (byte-for-byte unchanged path).
 # Set REPRO_TOL_GAP=<tol> => a Clarabel optimizer pinned to that tol_gap_abs/tol_gap_rel, same
-# attribute pair as spike 003's `check.jl`, threaded into `count_failures`/`sweep_population_scale`.
+# attribute pair as the earlier tolerance-probe, threaded into `count_failures`/`sweep_population_scale`.
 #
-# REPRO_MAX_ITER (FIX-09, Phase 27 plan 27-05): a SECOND, INDEPENDENT override on the SAME
+# REPRO_MAX_ITER: a SECOND, INDEPENDENT override on the SAME
 # builder, combinable with REPRO_TOL_GAP (both may be set together). Unset => no `max_iter`
 # attribute is ever passed downstream (byte-for-byte unchanged). Set REPRO_MAX_ITER=<n> => pins
 # Clarabel's `max_iter` attribute (default 200) to `<n>`, testing whether the documented
 # `fit_baseline` ALMOST_OPTIMAL flake at tol_gap=1e-10 is slow-convergence (fixable by more
-# iterations) rather than a genuine conditioning wall (RESEARCH FIX-09 root-cause protocol).
+# iterations) rather than a genuine conditioning wall.
 const REPRO_OPTIMIZER = let tol_str = get(ENV, "REPRO_TOL_GAP", nothing),
     max_iter_str = get(ENV, "REPRO_MAX_ITER", nothing)
 
@@ -242,7 +240,7 @@ end
                               dev_scale=DEV_SCALE_IEEE123) -> Vector{<:Aggregator}
 
 Verbatim SHAPE of `test/fixtures_ieee123.jl`'s `build_ieee123_aggregators`, extended with
-explicit `load_scale`/`pv_scale`/`dev_scale` keyword overrides (defaulting to the Phase-17-
+explicit `load_scale`/`pv_scale`/`dev_scale` keyword overrides (defaulting to the
 retuned point) so the population-scale sweep below can rebuild the SAME population at a
 perturbed scale without touching the module constants.
 """
@@ -278,12 +276,12 @@ end
         -> (; failures::Int, by_stage::Dict{Symbol,Int})
 
 Calls `solve_welfare` -> `welfare_accounting` -> `fit_baseline` `n_repeats` times, each stage in
-its OWN `try/catch` (quick task 260823-gea — the original single catch-all misattributed which
-stage actually threw, per spike 003 Finding 1), short-circuiting to skip later stages once one
+its OWN `try/catch` (the original single catch-all misattributed which
+stage actually threw), short-circuiting to skip later stages once one
 fails since they consume the previous stage's output. `by_stage` is zero-initialized for all three
 stage keys so the caller can always report a full breakdown, even when a stage never failed.
 Mirrors `reactive_flake_rate.jl:273-310`'s `count_failures`, adapted to the DADP/FIT/DSO-split
-seam this phase measures instead of `solve_admm`. Each repeat perturbs λ₀ by a tiny (`1e-9`-scale)
+seam measured here instead of `solve_admm`. Each repeat perturbs λ₀ by a tiny (`1e-9`-scale)
 numerical jitter — enough to perturb the interior-point solver's exact iterate path without
 changing the economically-meaningful problem data. `optimizer`, when given, is threaded into every
 `solve_welfare`/`fit_baseline` call (not `welfare_accounting`, which takes no optimizer); when
@@ -364,15 +362,12 @@ For each `δ`, rebuilds the IEEE-123 population at `load_scale = LOAD_SCALE_IEEE
 `pv_scale = PV_SCALE_IEEE123*(1+δ)`, `dev_scale = DEV_SCALE_IEEE123*(1+δ)` (the ratio to
 `LOAD_SCALE_IEEE123` held fixed, per `fixtures_ieee123.jl`'s own convention), solves
 `solve_welfare` + `welfare_accounting` + `fit_baseline` UNMODIFIED, and records the DADP/FIT
-DSO-surplus split. This is a genuinely NEW measurement (18-RESEARCH.md Pitfall 4 / Open
-Question 1) — not previously run anywhere in the repo.
+DSO-surplus split. This is a genuinely NEW measurement — not previously run anywhere in the repo.
 
-Each point runs the three stages SEQUENTIALLY, each in its OWN `try/catch` (quick task
-260823-gea — Rule-1 fix, discovered live: at `δ=-0.05` the SOCP relaxation genuinely goes
+Each point runs the three stages SEQUENTIALLY, each in its OWN `try/catch` (a fix discovered live: at `δ=-0.05` the SOCP relaxation genuinely goes
 INEXACT — `assert_socp_exact!` throws inside `solve_welfare` — exactly the near-boundary risk
-18-RESEARCH.md's Pitfall 4 documented as a live possibility, not a hypothetical; the original
-single catch-all could not distinguish this from a `welfare_accounting`/`fit_baseline` failure,
-per spike 003 Finding 1). A failing point is recorded as `(; δ, failed_stage, error_msg)` —
+documented as a live possibility, not a hypothetical; the original
+single catch-all could not distinguish this from a `welfare_accounting`/`fit_baseline` failure). A failing point is recorded as `(; δ, failed_stage, error_msg)` —
 `failed_stage = :none` on full success, else the symbol of the stage that threw — rather than
 crashing the whole sweep; an uncaught exception here would silently produce ZERO findings, which
 is a worse honesty failure than reporting the point as failed. `sign_flip_survives` (computed by
@@ -467,8 +462,8 @@ function sweep_population_scale(
             # already succeeded, so `acct.dso` / `acct.prosumer` / `ctx.meta[:socp_maxgap]` are
             # trustworthy for such a point even though `fit_dso` is not. Record them instead of
             # discarding them as NaN: `fit_baseline`'s nested solve is ORTHOGONAL to the DADP
-            # DSO surplus, and the golden band is derived over `dso` alone (quick task
-            # 260823-gea). Only genuinely-unavailable fields stay NaN.
+            # DSO surplus, and the golden band is derived over `dso` alone.
+            # Only genuinely-unavailable fields stay NaN.
             dso_ok = failed_stage == :fit_baseline && acct !== nothing
             push!(
                 results,
@@ -494,7 +489,7 @@ end
 const N_REPEATS = 20
 
 println(
-    "Building IEEE-123 population at the Phase-17-retuned point (seed=$SEED_IEEE123)...",
+    "Building IEEE-123 population at the retuned point (seed=$SEED_IEEE123)...",
 )
 feeder = ieee123_modified()
 aggs = build_ieee123_aggregators(feeder)
@@ -519,7 +514,7 @@ dso_band_lo = 0.0
 # The band rule is `1.5 * max|dso|`, and `dso` (the DADP DSO surplus) comes from
 # solve_welfare + welfare_accounting. `fit_baseline` is needed for `fit_dso`/the sign-flip
 # check, NOT for `dso` — so gating the band on fit_baseline success would gate it on a stage
-# it does not depend on (quick task 260823-gea). Filter on dso-trustworthiness instead.
+# it does not depend on. Filter on dso-trustworthiness instead.
 successful = filter(r -> r.failed_stage == :none, results)
 dso_trustworthy = filter(r -> r.failed_stage in (:none, :fit_baseline) && !isnan(r.dso), results)
 dso_band_hi =
@@ -536,12 +531,12 @@ report_path = joinpath(OUT, "findings.txt")
 open(report_path, "w") do io
     println(
         io,
-        "Phase 18 (directional thesis reproduction) — Repro Stability Check (REPRO-02)",
+        "Directional thesis reproduction — Repro Stability Check",
     )
     println(io, "Measured: ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), " UTC-local")
     println(
         io,
-        "Fixture: ieee123_modified() (real Phase-17 impedances), seed=$SEED_IEEE123",
+        "Fixture: ieee123_modified() (real impedances), seed=$SEED_IEEE123",
     )
     println(
         io,
@@ -556,10 +551,10 @@ open(report_path, "w") do io
     println(io, "failures_by_stage = ", cf.by_stage)
     println(
         io,
-        "This is a citable phase finding, not a pass/fail gate (mirrors ",
+        "This is a citable finding, not a pass/fail gate (mirrors ",
         "scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, ",
         "reported here neither silently accepted nor silently \"fixed.\" The per-stage breakdown ",
-        "(quick task 260823-gea) makes any future misattribution of WHICH call failed structurally ",
+        "makes any future misattribution of WHICH call failed structurally ",
         "impossible to reintroduce.",
     )
     println(io)
@@ -616,8 +611,8 @@ open(report_path, "w") do io
             io,
             "The DSO-surplus sign flip (FIT dso < 0 -> DADP dso > 0) AND the prosumer-surplus ",
             "decrease (DADP prosumer < FIT prosumer) hold at EVERY swept point (delta in ",
-            "[$swept_deltas]). This is the robustness evidence 18-RESEARCH.md's Open ",
-            "Question 1 / Pitfall 4 required before pinning a golden magnitude band.",
+            "[$swept_deltas]). This is the robustness evidence required ",
+            "before pinning a golden magnitude band.",
         )
     elseif any_failed
         failed_deltas =
@@ -626,11 +621,11 @@ open(report_path, "w") do io
             io,
             "HONEST NEGATIVE RESULT: the sweep point(s) delta=[$failed_deltas] FAILED OUTRIGHT — ",
             "solve_welfare's SOCP-exactness gate (assert_socp_exact!) THREW rather than returning ",
-            "a comparable welfare/surplus split, exactly the near-boundary risk 18-RESEARCH.md's ",
-            "Pitfall 4 documented (Phase 17's own finding: this population regime sits on a genuine ",
-            "asymmetric exactness knife-edge). Per this script's own mandate (threat T-18-02), this ",
+            "a comparable welfare/surplus split, exactly the near-boundary risk ",
+            "previously documented (this population regime sits on a genuine ",
+            "asymmetric exactness knife-edge). Per this script's own mandate, this ",
             "is reported as-is — the sweep range was NOT narrowed and the failing point was NOT ",
-            "omitted to force a passing appearance. Plan 18-03 must carry this forward as an ",
+            "omitted to force a passing appearance. The assumption page must carry this forward as an ",
             "assumption-page caveat: the DSO-surplus sign-flip finding is NOT population-scale-",
             "robust in the direction(s) that go inexact; the golden band below is derived ONLY from ",
             "the points that solved successfully and should be read with that caveat attached.",
@@ -640,9 +635,9 @@ open(report_path, "w") do io
             io,
             "HONEST NEGATIVE RESULT: the DSO-surplus sign flip and/or the prosumer-surplus ",
             "decrease did NOT survive at every swept point (see the table above for the failing ",
-            "delta(s)). Per this script's own mandate (threat T-18-02), this is reported as-is — ",
+            "delta(s)). Per this script's own mandate, this is reported as-is — ",
             "the sweep range was NOT narrowed and no failing point was omitted to force a ",
-            "passing appearance. Plan 18-03 must carry this forward as an assumption-page caveat ",
+            "passing appearance. The assumption page must carry this forward as a caveat ",
             "on the reproduction's population-scale robustness.",
         )
     end
@@ -665,7 +660,7 @@ open(report_path, "w") do io
         "sign gate); DSO_BAND_HI = 1.5 * max(|dso|) over the swept points whose `dso` is ",
         "TRUSTWORTHY (solve_welfare + welfare_accounting both succeeded) — deliberately NOT gated ",
         "on fit_baseline, whose nested solve is orthogonal to `dso` and whose failure therefore ",
-        "says nothing about whether a `dso` value is sound (quick task 260823-gea). The 1.5 is a ",
+        "says nothing about whether a `dso` value is sound. The 1.5 is a ",
         "50% safety-margin multiplier above the largest trustworthy magnitude, so the pinned ",
         "golden band tolerates ordinary Clarabel/Julia-patch-level numerical drift without being ",
         "so wide it stops meaning anything.",

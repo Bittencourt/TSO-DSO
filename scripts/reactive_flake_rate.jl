@@ -1,18 +1,18 @@
 # scripts/reactive_flake_rate.jl
 #
-# Phase 16 (reactive-power consensus) — the phase's two REQUIRED empirical measurements
-# (16-RESEARCH.md Pitfall 5 / Open Questions 1-2), run as a re-runnable DrWatson-convention
+# Reactive-power consensus — the two REQUIRED empirical measurements
+# (flake rate and the rho vs rho_q question), run as a re-runnable DrWatson-convention
 # script, NOT a `@testitem` (long-running, N>=20 repeats x 2 fixtures x 2 modes = 80+ solves).
 #
 # (a) Measures the Clarabel `NUMERICAL_ERROR`-class flake rate of `solve_admm` under
 #     `reactive_consensus ∈ (false, true)` on BOTH IEEE-13 and IEEE-123 (N>=20 repeats each,
 #     80+ solves total), comparing the Q-consensus path against a same-session baseline on
-#     the IDENTICAL fixtures/seeds — never assuming v1.0's (or the Phase-12 toy fixture's)
-#     rate transfers (STATE.md's explicit flag).
-# (b) Records the Open-Question-1 (rho vs rho_q) finding directly from Plan 16-02's ACTUAL
+#     the IDENTICAL fixtures/seeds — never assuming the earlier toy fixture's
+#     rate transfers.
+# (b) Records the rho vs rho_q finding directly from the ACTUAL
 #     shipped mechanism: `qag_dso[j,t]` is pinned via a hard equality (`:qag_pin`,
-#     `qag_dso[j,t] == q_draw[j][t]`) with NO quadratic ρ-penalty term of its own (16-RESEARCH
-#     Assumption A1/A3 — the pinned target `b_j = agr.qag[j][t]` never moves, so there is no
+#     `qag_dso[j,t] == q_draw[j][t]`) with NO quadratic ρ-penalty term of its own (the
+#     fixed-target assumption — the pinned target `b_j = agr.qag[j][t]` never moves, so there is no
 #     live dual-ascent target to tune a ρ_q against). This is recorded as the finding, not
 #     re-derived from scratch.
 #
@@ -20,8 +20,8 @@
 # blocks. The standalone `TestItems.jl` package (as opposed to the `TestItemRunner`
 # introspection machinery) expands `@testmodule` to a no-op (`return nothing`) — so
 # `include("test/fixtures_ieee123.jl")` from a plain script does NOT actually define
-# `IEEE123Fixtures` outside the test-runner's special AST-introspection path. Per this plan's
-# own instruction, the population construction is therefore RE-IMPLEMENTED INLINE below,
+# `IEEE123Fixtures` outside the test-runner's special AST-introspection path. The
+# population construction is therefore RE-IMPLEMENTED INLINE below,
 # copied verbatim from `test/fixtures_ieee13.jl` (`build_ieee13_ground_aggregators`,
 # `mem_price_profile`) and `test/fixtures_ieee123.jl` (`build_ieee123_aggregators`,
 # `ieee123_lambda0`, and the shared adaptive-ρ config constants `RHO0`/`EPS_ABS`/`EPS_REL`/
@@ -425,7 +425,7 @@ rate_123_true = fail_123_true / N_REPEATS
 
 report_path = joinpath(OUT, "flake_rate_findings.txt")
 open(report_path, "w") do io
-    println(io, "Phase 16 Reactive-Power Consensus — Clarabel Flake-Rate Measurement")
+    println(io, "Reactive-Power Consensus — Clarabel Flake-Rate Measurement")
     println(io, "Measured: ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), " UTC-local")
     println(io, "Repeats per cell: N = $N_REPEATS (80 solves total)")
     println(io)
@@ -495,40 +495,40 @@ open(report_path, "w") do io
     println(
         io,
         "Delta (true - false): IEEE-13 = $(delta13); IEEE-123 = $(delta123). ",
-        "This is a citable phase finding, not a pass/fail gate (16-RESEARCH.md Pitfall 5 / ",
-        "Open Question 2) — the number itself is the deliverable, reported here neither ",
+        "This is a citable finding, not a pass/fail gate ",
+        "— the number itself is the deliverable, reported here neither ",
         "silently accepted nor silently \"fixed.\"",
     )
     println(io)
-    println(io, "=== Finding 2: rho vs rho_q (Open Question 1) ===")
+    println(io, "=== Finding 2: rho vs rho_q ===")
     println(
         io,
-        "Plan 16-02's shipped mechanism pins `qag_dso[j,t]` via a HARD EQUALITY (`:qag_pin`, ",
+        "The shipped mechanism pins `qag_dso[j,t]` via a HARD EQUALITY (`:qag_pin`, ",
         "`qag_dso[j,t] == q_draw[j][t]`) with NO quadratic rho-penalty term of its own ",
-        "(16-RESEARCH Assumption A1/A3: the pinned target `b_j = agr.qag[j][t]` never moves — ",
+        "(the fixed-target assumption: the pinned target `b_j = agr.qag[j][t]` never moves — ",
         "AgrOpt.qag is a fixed constant, per thesis A3 DERs-are-active-only, so there is no ",
         "genuine reactive DER decision to iterate on). Consequently the question \"shared rho ",
         "vs a distinct rho_q\" DOES NOT APPLY to the actual shipped mechanism: there is no ",
         "rho-penalty weight of any kind on the reactive coupling constraint to tune, shared or ",
-        "distinct. This is recorded as the finding rather than re-derived from scratch, per ",
-        "16-RESEARCH.md's own resolution of Open Question 1 against the Plan 16-02 SUMMARY.",
+        "distinct. This is recorded as the finding rather than re-derived from scratch, by ",
+        "design.",
     )
     if delta13 > 0.05 || delta123 > 0.05
         println(
             io,
             "NOTE: the measured reactive_consensus=ReactiveMode.CERTIFIED flake rate is materially worse than the ",
             "reactive_consensus=ReactiveMode.OFF baseline on at least one fixture (delta > 0.05). Per ",
-            "16-RESEARCH.md's Pattern 1 (\"unconstrained\" alternative) / Pattern 3 (\"only ",
+            "the guidance for the \"unconstrained\" alternative (\"only ",
             "escalate if the empirical experiment shows the degenerate-target assumption ",
             "doesn't hold\"), a soft rho_q-penalized alternative to the current hard-pin ",
-            "mechanism would be the natural follow-up — explicitly OUT OF SCOPE for this phase.",
+            "mechanism would be the natural follow-up — explicitly OUT OF SCOPE here.",
         )
     else
         println(
             io,
             "The measured deltas are small (<= 0.05) on both fixtures — no evidence the ",
-            "degenerate-target assumption (A1/A3) fails to hold at this scale. No follow-up ",
-            "rho_q escalation (16-RESEARCH.md Pattern 3) is warranted from this measurement.",
+            "degenerate-target assumption (fixed target) fails to hold at this scale. No follow-up ",
+            "rho_q escalation is warranted from this measurement.",
         )
     end
 end

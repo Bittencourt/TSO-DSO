@@ -2,7 +2,7 @@
 #
 # Demo: the RECEDING-HORIZON CLOSED LOOP (MPC) — an example case + rich diagnostics.
 #
-# Phase 21's `run_mpc(s::Scenario)` re-solves a fixed-length window model (`MpcWindow`, built
+# `run_mpc(s::Scenario)` re-solves a fixed-length window model (`MpcWindow`, built
 # ONCE) every `step` hours, publishes only the first interval's DADP dual, propagates the
 # measured battery/temperature state on the nominal plant, and benchmarks itself against a
 # perfect-foresight day-ahead optimum over the SAME information set. This script runs ONE
@@ -24,11 +24,11 @@
 #   4. mpc_welfare_regret   — the information-set-fair welfare comparison and the published
 #      vs day-ahead price-tracking scatter.
 #
-# Restated in v4.0 (Phase 28): `r.realized_welfare`/`r.regret` printed and plotted below are now
-# TRUTH-SETTLED (Phase 27 FIX-10, USER DECISION 2026-09-29) — clipped PVBattery charge/export to
-# TRUE (unperturbed) PV availability (Assumption A6), throw-not-clamp state propagation, and a
+# Restated after the model corrections: `r.realized_welfare`/`r.regret` printed and plotted below are now
+# TRUTH-SETTLED — clipped PVBattery charge/export to
+# TRUE (unperturbed) PV availability (an explicit modeling assumption), throw-not-clamp state propagation, and a
 # genuine AC power flow, physics only (`ACPowerFlow(; limits = false)`, Ipopt), for the frontier
-# import — never the window's own pre-Phase-27 forecast-consistent belief. That OLD number
+# import — never the window's own forecast-consistent belief. That OLD number
 # survives as `r.forecast_settled_welfare`, a diagnostic never plotted as the headline here.
 # `r.settlement_violations` (one entry per published hour) reports any thermal/voltage overload
 # under the relaxed operating band directly from the AC settlement's own solved P/Q/l/v — a
@@ -59,7 +59,7 @@ saveboth(name, fig) =
 # The baseline example case — the SAME fixture as the docs' Rung-8 literate page
 # (docs/literate/mpc_rolling_horizon.jl, whose build verified all 19 resolves certify at the
 # first tier on seed=1): full 24-hour day-ahead horizon on the IEEE-13 feeder with the
-# default residential population, a 6-hour receding window re-solved hourly, D-06's hard
+# default residential population, a 6-hour receding window re-solved hourly, the hard
 # terminal-SOC equality ON, and a genuinely nonzero ±8% seeded PV/demand forecast error.
 const T = 24
 const H = 6
@@ -70,9 +70,9 @@ s_base = Scenario(;
     feeder = :ieee13,
     T = T,
     strategy = MPC(H = H, step = 1, terminal_soc = true, forecast_error = FE),  # step=1: re-solve every real hour
-)                               # seed defaults to 1 (deterministic, INFRA-04)
+)                               # seed defaults to 1 (deterministic)
 
-# Certificate-provenance → color (run_mpc's D-04 ladder statuses).
+# Certificate-provenance → color (run_mpc's ladder statuses).
 const CERT_COLORS = Dict(
     :certified_convex_dual => :crimson,
     :certified_convex_dual_restricted => :darkorange,
@@ -97,12 +97,12 @@ println("="^78)
 println("\n[1/4] Baseline example case: run_mpc (2 day-ahead benchmarks + 19 window resolves)...")
 r = run_mpc(s_base)
 
-pub_hours = 1:r.steps                      # published hours are ALWAYS 1:T-H+1 (Pitfall 5)
+pub_hours = 1:r.steps                      # published hours are ALWAYS 1:T-H+1
 statuses = unique(r.trace.cert_status_trace)
 println("  steps published : $(r.steps)  (= T - H + 1)")
 @printf("  day-ahead welfare (FULL population, 24 h) : %12.5f\n", r.day_ahead_welfare)
-@printf("  realized welfare  (closed loop, %d h, TRUTH-SETTLED, FIX-10) : %12.5f\n", r.steps, r.realized_welfare)
-@printf("  forecast_settled_welfare (OLD pre-Phase-27 diagnostic)      : %12.5f\n", r.forecast_settled_welfare)
+@printf("  realized welfare  (closed loop, %d h, TRUTH-SETTLED) : %12.5f\n", r.steps, r.realized_welfare)
+@printf("  forecast_settled_welfare (OLD forecast-consistent diagnostic) : %12.5f\n", r.forecast_settled_welfare)
 @printf("  regret (info-set-fair, same %d h horizon)  : %12.5f\n", r.steps, r.regret)
 @printf("  price jumps  max = %8.4f   mean = %8.4f\n", max_jump(r.trace), mean_jump(r.trace))
 @printf("  final cumulative |RTP - DA| deviation     : %12.5f\n", last(r.trace.cum_deviation_trace))
@@ -110,7 +110,7 @@ println("  certificate statuses: ",
     join(["$(count(==(st), r.trace.cert_status_trace))× $(CERT_LABELS[st])" for st in statuses], ", "))
 any_cert_failed(r.trace) && println("  ⚠ at least one resolve exhausted the escalation ladder")
 n_settlement_overload = count(v -> v.n_thermal_violations > 0 || v.voltage_violated, r.settlement_violations)
-println("  settlement_violations (AC truth diagnostic, plan 27-09): $n_settlement_overload / $(r.steps) ",
+println("  settlement_violations (AC truth diagnostic): $n_settlement_overload / $(r.steps) ",
     "published hours report a thermal/voltage overload under the relaxed operating band")
 
 # ===========================================================================================
@@ -211,7 +211,7 @@ let s = s_base
     end
 
     # Recording handles at the published bus (the default population hosts exactly one
-    # :soc-kind and one :Tin-kind device per bus — WR-05's asserted invariant).
+    # :soc-kind and one :Tin-kind device per bus — an asserted invariant).
     vl = o.ctx.agg_device_vars[bus]
     v_soc = only(vv for vv in vl if haskey(vv, :soc))
     v_tin = only(vv for vv in vl if haskey(vv, :Tin0))
@@ -246,7 +246,7 @@ let s = s_base
             set_parameter_value.(handle.Pdc_param,
                 Float64[agg.Pdc[t + τ - 1] * fe.demand_factor for τ in 1:s.strategy.H])
         end
-        # Slide λ₀ via set_objective_coefficient — NEVER a Parameter (Pitfall 2).
+        # Slide λ₀ via set_objective_coefficient — NEVER a Parameter.
         for τ in 1:s.strategy.H
             set_objective_coefficient(o.model, o.p_import[τ], -λ₀[t + τ - 1])
         end
@@ -358,7 +358,7 @@ let
 
     # (c) step-to-step price jumps with max/mean norms.
     ax3 = Axis(fig[3, 1]; xlabel = "published hour t", ylabel = "price jump |λ_t − λ_{t−1}|",
-        title = "(c) Step-to-step price jumps, with max/mean norms (D-10)", titlealign = :left,
+        title = "(c) Step-to-step price jumps, with max/mean norms", titlealign = :left,
         xticks = 2:2:r.steps)
     barplot!(ax3, pub_hours, r.trace.jump_trace; color = (:purple, 0.55))
     hlines!(ax3, max_jump(r.trace); color = :black, linestyle = :dash, linewidth = 1.4,
@@ -417,13 +417,13 @@ let
         xticks = 2:2:T)
     hspan!(axb, rec_batt.Emin, rec_batt.Emax; color = (:gray, 0.15), label = "structural band [Emin, Emax]")
     for (i, p) in enumerate(fe_plans)
-        # SOC is a STATE (stock), recorded at H+1 points (Plan 26-03/FIX-04 closes soc[1:(H+1)]
+        # SOC is a STATE (stock), recorded at H+1 points (closes soc[1:(H+1)]
         # unconditionally): soc_plan[1] is the IC at hour p.t, soc_plan[H+1] the terminal state
         # AT hour p.t+H — one more x-point than the H-length FLOW variables (price/import/Tin)
-        # plotted elsewhere on this figure. Restated in v4.0 (Phase 28): this length grew from H
-        # to H+1 when FIX-04 (phase 26) closed the SOC recursion over the whole window; this
-        # plotting code was never updated to match until now (a genuine DimensionMismatch,
-        # Rule 1 bug fix, this plan).
+        # plotted elsewhere on this figure. This length grew from H
+        # to H+1 when the SOC recursion was closed over the whole window; this
+        # plotting code was not updated to match at first (a genuine DimensionMismatch,
+        # now fixed).
         lines!(axb, p.t:(p.t + H), p.soc_plan; color = (pcol(i), 0.30), linewidth = 1.2)
     end
     lines!(axb, 1:T, rec_da_soc; color = :dodgerblue, linestyle = :dash, linewidth = 1.8,
@@ -432,7 +432,7 @@ let
         label = "realized SOC (propagated on applied controls)")
     scatter!(axb, applied_t, applied_soc; color = :crimson, markersize = 6)
     scatter!(axb, [p.t + H for p in fe_plans], [p.terminal for p in fe_plans];
-        color = :black, marker = :diamond, markersize = 9, label = "terminal-SOC target (D-06 pin)")
+        color = :black, marker = :diamond, markersize = 9, label = "terminal-SOC target (pin)")
     axislegend(axb; position = :rt, labelsize = 9, framevisible = false)
 
     # (c) planned vs realized indoor temperature ------------------------------------------------

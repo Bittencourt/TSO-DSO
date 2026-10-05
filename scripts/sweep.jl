@@ -1,17 +1,17 @@
 # scripts/sweep.jl
 #
-# Runnable entry point (RESEARCH §Pattern 4): a researcher edits the `params` Dict below and
+# Runnable entry point: a researcher edits the `params` Dict below and
 # runs this script to launch a full parameter sweep + collate the diff-friendly committed
 # CSV summary under `results/sweeps/`.
 #
 # `@quickactivate "TSODSO"` walks UP from this file to find the repo-root `Project.toml`
-# (named "TSODSO") and activates it. Do NOT call `initialize_project` (RESEARCH Pattern 4).
+# (named "TSODSO") and activates it. Do NOT call `initialize_project`.
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
 
 # Edit these selectors to declare a sweep — Vector-valued entries expand (dict_list), scalar
-# entries stay fixed (RESEARCH §Pattern 2). Then run:
+# entries stay fixed. Then run:
 #     julia --project=. scripts/sweep.jl
 params = Dict(
     :name => "sweep-demo",

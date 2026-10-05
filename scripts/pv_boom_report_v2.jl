@@ -1,6 +1,6 @@
 # scripts/pv_boom_report_v2.jl
 #
-# Review-hardened v2 of the PV-boom case study HTML report (quick task 260807-bv8).
+# Review-hardened v2 of the PV-boom case study HTML report.
 # Starts from scripts/pv_boom_report.jl's mechanics (data loading, figures, tables,
 # live-computed Section-4 numbers) — copied verbatim in substance, never `include()`d —
 # and layers on six review-hardening additions: source-file/line citations next to every
@@ -113,7 +113,7 @@ uri3 = figure_to_data_uri(fig3)
 # ── Section 4 richly-interpreted numbers — computed directly from the loaded results
 # dict / sweep rows (never hardcoded/re-typed from findings.txt, so they can never drift
 # from the actual data this run loaded). Every number below carries a `.provenance` span
-# in the final assembly (Task 2) reading "computed from results.jld2". ──────────────────
+# in the final assembly reading "computed from results.jld2". ──────────────────
 baseline_idx = findfirst(r -> r.pv_mult == 0.0 && r.status == "ok", sweep)
 baseline_row = baseline_idx === nothing ? nothing : sweep[baseline_idx]
 
@@ -198,12 +198,11 @@ sweep_table = sweep_table_html(sweep)
 nash_table = nash_table_html(nash_result)
 
 # ═════════════════════════════════════════════════════════════════════════════════════
-# NEW REVIEW-HARDENING CONTENT (quick task 260807-bv8) — four additions not present in
+# NEW REVIEW-HARDENING CONTENT — four additions not present in
 # v1: a notation/symbols glossary, an inline SVG architecture diagram, a consolidated
 # honest-limitations section, and a CSS fragment (source-citation/provenance spans,
-# semantic-landmark spacing, print, dark mode). Not yet wired into a final `html_string`
-# — Task 2 ports v1's five narrative sections (with source-citation + provenance spans
-# added), wires all of this together, and writes `results/pv_boom/report_v2.html`.
+# semantic-landmark spacing, print, dark mode). These pieces are wired together with v1's five narrative sections (with source-citation + provenance spans
+# added) in the final `html_string`, which writes `results/pv_boom/report_v2.html`.
 # ═════════════════════════════════════════════════════════════════════════════════════
 
 notation_table_html = """
@@ -294,10 +293,10 @@ limitations_html = """
 gathered here in one place — none softened, none new.</p>
 <ol>
 <li><strong>Welfare-level meaninglessness.</strong> Every device utility has its additive
-thesis constant <code>c</code> deliberately dropped (RESEARCH A5, stated in every device
+thesis constant <code>c</code> deliberately dropped (stated in every device
 docstring); only welfare DELTAS between scenarios and DUALS (prices) are economically
 meaningful, never the reported level in isolation.</li>
-<li><strong>EXACT-04 SOC inexactness under high-PV reverse flow.</strong> The certified
+<li><strong>SOC inexactness under high-PV reverse flow.</strong> The certified
 3-bus stress fixture (<code>pv_scale=1.2</code>, <code>load_scale=0.2</code>,
 <code>vmax=1.05</code>) shows the SOC relaxation genuinely INEXACT at
 <b>$(ac_stress.n_inexact_hours) of 24 hours</b>
@@ -352,7 +351,7 @@ extra_style_html = """
 """
 
 # ═════════════════════════════════════════════════════════════════════════════════════
-# Sections 1-5 (quick task 260807-bv8, Task 2) — same substance/wording as
+# Sections 1-5 — same substance/wording as
 # scripts/pv_boom_report.jl (v1), with source-citation spans (`.src`, next to every
 # `.eqref`) added to every equation and provenance spans (`.provenance`) added to every
 # quoted Section-4 result number. Never `include()`s or shares an HTML string constant
@@ -427,7 +426,7 @@ AND the exact source file/line(s) it was transcribed from.</p>
 <code>p_import[t]</code> is the power bought (or, when <code>allow_export=true</code> — used
 throughout this case study — sold) at the transmission root, priced at the wholesale/MEM
 price λ₀[t]. Making the frontier free-sign rather than import-only is the
-<strong>SOC-exactness enabler</strong> (finding PF-04): it makes the objective strictly
+<strong>SOC-exactness enabler</strong>: it makes the objective strictly
 decreasing in the branch loss current <code>l</code>, which is what keeps the SOC relaxation
 cone tight (exact) instead of slack in the over-voltage / reverse-flow regime a PV boom
 produces.</p>
@@ -601,7 +600,7 @@ post-solve complementarity check itself lives at
 <strong>Educational caveat — every welfare LEVEL below is not economically meaningful on its
 own.</strong> All four device utilities above have their additive thesis constant
 <code>c</code> DELIBERATELY DROPPED (every device docstring in this codebase states this
-explicitly as "RESEARCH A5"). Dropping an additive constant does not change the optimum, the
+explicitly). Dropping an additive constant does not change the optimum, the
 prices (duals), or any DELTA between scenarios — but it does mean the reported welfare LEVEL
 is only approximately "(energy import bill) + (residual discomfort)", a large negative number
 with no independent economic meaning. This is exactly why every welfare figure reported in
@@ -651,7 +650,7 @@ EQUALITY at the optimum, the relaxed solution corresponds to a physically-achiev
 branch-flow operating point. When it holds as a STRICT inequality, the relaxed solution is a
 fictitious, physically-meaningless operating point — any prices (duals) recovered from it
 would be economically meaningless, which is exactly why this framework REFUSES to price an
-ungated, inexact SOCP solve (see <code>src/pricing/dlmp.jl</code>'s PF-04 gate).</p>
+ungated, inexact SOCP solve (see <code>src/pricing/dlmp.jl</code>'s exactness gate).</p>
 
 <h3>2.4 The day-ahead dynamic price (DADP/DLMP) and its 4-way decomposition</h3>
 <p>The distribution price at every bus and hour is not postulated — it is the dual of the
@@ -749,7 +748,7 @@ the one point already documented and validated for the default <code>:ieee13</co
 <code>:default</code> calibration (per <code>Scenario.jl</code>'s own docstring). This is
 repo precedent, not a fresh tuning choice.</p>
 
-<h3>3.4 The EXACT-04 stress fixture</h3>
+<h3>3.4 The high-PV stress fixture</h3>
 <p>Every one of the 6 IEEE-13 sweep points above stayed SOCP-exact (<code>exact_maxgap</code>
 on the order of 1e-8 to 1e-9 — see Section 4's sweep table). To reproduce the documented
 knife-edge condition where the SOC relaxation genuinely loses tightness, a SEPARATE,
@@ -770,7 +769,7 @@ reported in Section 4 comes from the independent AC-power-flow oracle's own stan
 <h3>3.5 The planning-layer Nash game</h3>
 <p>Two IEEE-13-scale distributors play a Stackelberg-Nash investment game over a shared
 transmission-reinforcement corridor: a low-PV "baseline" and a "boom" distributor, over the
-afternoon PV-peak sub-horizon hours 13-18 (<code>T_planning = 6</code>).</p>
+afternoon PV-peak sub-horizon hours 13 through 18 (<code>T_planning = 6</code>).</p>
 
 <div class="finding">
 <strong>Honest deviation, stated plainly:</strong> the originally-intended baseline
@@ -813,7 +812,7 @@ O(1e-9) across all 6 <code>pv_mult</code> points
 $exact_maxgaps_html
 <p><strong>Why it matters:</strong> the SOC branch-flow relaxation is certified exact on the
 entire IEEE-13 sweep — this is precisely why a separate, deliberately engineered stress
-fixture (Section 4.4, EXACT-04) was needed to see genuine inexactness; IEEE-13 alone never
+fixture (Section 4.4) was needed to see genuine inexactness; IEEE-13 alone never
 shows it.</p>
 
 <h3>4.3 The four-way DLMP decomposition</h3>
@@ -852,9 +851,9 @@ paths (no shared code beyond the device builders) agreeing to this precision is 
 meaningful cross-validation — a silent bug in either path would show up as a LARGE gap, not
 a tiny one.</p>
 
-<h3>4.5 EXACT-04: the SOC relaxation genuinely breaks on the stress fixture</h3>
+<h3>4.5 High-PV exactness boundary: the SOC relaxation genuinely breaks on the stress fixture</h3>
 <div class="finding">
-<b>The documented EXACT-04 finding, reproduced:</b> on the certified 3-bus high-PV stress
+<b>The documented high-PV exactness finding, reproduced:</b> on the certified 3-bus high-PV stress
 fixture (Section 3.4's parameters), the SOC branch-flow relaxation is genuinely INEXACT at
 <b>$(ac_stress.n_inexact_hours) of 24 hours</b>
 <span class="provenance">(computed from results.jld2)</span> (obj_gap =

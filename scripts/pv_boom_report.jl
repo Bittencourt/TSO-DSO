@@ -192,12 +192,11 @@ sweep_table = sweep_table_html(sweep)
 nash_table = nash_table_html(nash_result)
 
 # ═════════════════════════════════════════════════════════════════════════════════════
-# NEW EDUCATIONAL CONTENT (quick task 260807-7nz) — four narrative section bodies.
+# NEW EDUCATIONAL CONTENT — four narrative section bodies.
 # Native <math> MathML only (no KaTeX/MathJax/CDN); every equation and parameter value
 # below is transcribed VERBATIM from the source files/findings.txt cited inline — never
-# invented, never re-derived. Not yet wired into `html_string` (Task 2 finishes
-# `section5_repro_html`, rewrites the results-interpretation content, and assembles the
-# final template).
+# invented, never re-derived. These bodies are assembled into `html_string` together with
+# `section5_repro_html` and the results-interpretation content.
 # ═════════════════════════════════════════════════════════════════════════════════════
 
 section1_framing_html = """
@@ -263,7 +262,7 @@ solves, in the order a reader needs them, each tagged with its exact thesis equa
 <code>p_import[t]</code> is the power bought (or, when <code>allow_export=true</code> — used
 throughout this case study — sold) at the transmission root, priced at the wholesale/MEM
 price λ₀[t]. Making the frontier free-sign rather than import-only is the
-<strong>SOC-exactness enabler</strong> (finding PF-04): it makes the objective strictly
+<strong>SOC-exactness enabler</strong>: it makes the objective strictly
 decreasing in the branch loss current <code>l</code>, which is what keeps the SOC relaxation
 cone tight (exact) instead of slack in the over-voltage / reverse-flow regime a PV boom
 produces.</p>
@@ -419,7 +418,7 @@ verified numerically after every solve instead.</p>
 <strong>Educational caveat — every welfare LEVEL below is not economically meaningful on its
 own.</strong> All four device utilities above have their additive thesis constant
 <code>c</code> DELIBERATELY DROPPED (every device docstring in this codebase states this
-explicitly as "RESEARCH A5"). Dropping an additive constant does not change the optimum, the
+explicitly). Dropping an additive constant does not change the optimum, the
 prices (duals), or any DELTA between scenarios — but it does mean the reported welfare LEVEL
 is only approximately "(energy import bill) + (residual discomfort)", a large negative number
 with no independent economic meaning. This is exactly why every welfare figure reported in
@@ -466,7 +465,7 @@ EQUALITY at the optimum, the relaxed solution corresponds to a physically-achiev
 branch-flow operating point. When it holds as a STRICT inequality, the relaxed solution is a
 fictitious, physically-meaningless operating point — any prices (duals) recovered from it
 would be economically meaningless, which is exactly why this framework REFUSES to price an
-ungated, inexact SOCP solve (see <code>src/pricing/dlmp.jl</code>'s PF-04 gate).</p>
+ungated, inexact SOCP solve (see <code>src/pricing/dlmp.jl</code>'s exactness gate).</p>
 
 <h3>2.4 The day-ahead dynamic price (DADP/DLMP) and its 4-way decomposition</h3>
 <p>The distribution price at every bus and hour is not postulated — it is the dual of the
@@ -560,7 +559,7 @@ the one point already documented and validated for the default <code>:ieee13</co
 <code>:default</code> calibration (per <code>Scenario.jl</code>'s own docstring). This is
 repo precedent, not a fresh tuning choice.</p>
 
-<h3>3.4 The EXACT-04 stress fixture</h3>
+<h3>3.4 The high-PV stress fixture</h3>
 <p>Every one of the 6 IEEE-13 sweep points above stayed SOCP-exact (<code>exact_maxgap</code>
 on the order of 1e-8 to 1e-9 — see Section 4's sweep table). To reproduce the documented
 knife-edge condition where the SOC relaxation genuinely loses tightness, a SEPARATE,
@@ -581,7 +580,7 @@ reported in Section 4 comes from the independent AC-power-flow oracle's own stan
 <h3>3.5 The planning-layer Nash game</h3>
 <p>Two IEEE-13-scale distributors play a Stackelberg-Nash investment game over a shared
 transmission-reinforcement corridor: a low-PV "baseline" and a "boom" distributor, over the
-afternoon PV-peak sub-horizon hours 13-18 (<code>T_planning = 6</code>).</p>
+afternoon PV-peak sub-horizon hours 13 through 18 (<code>T_planning = 6</code>).</p>
 
 <div class="finding">
 <strong>Honest deviation, stated plainly:</strong> the originally-intended baseline
@@ -625,7 +624,7 @@ O(1e-9) across all 6 <code>pv_mult</code> points:</p>
 $exact_maxgaps_html
 <p><strong>Why it matters:</strong> the SOC branch-flow relaxation is certified exact on the
 entire IEEE-13 sweep — this is precisely why a separate, deliberately engineered stress
-fixture (Section 4.4, EXACT-04) was needed to see genuine inexactness; IEEE-13 alone never
+fixture (Section 4.4) was needed to see genuine inexactness; IEEE-13 alone never
 shows it.</p>
 
 <h3>4.3 The four-way DLMP decomposition</h3>
@@ -660,9 +659,9 @@ paths (no shared code beyond the device builders) agreeing to this precision is 
 meaningful cross-validation — a silent bug in either path would show up as a LARGE gap, not
 a tiny one.</p>
 
-<h3>4.5 EXACT-04: the SOC relaxation genuinely breaks on the stress fixture</h3>
+<h3>4.5 High-PV exactness boundary: the SOC relaxation genuinely breaks on the stress fixture</h3>
 <div class="finding">
-<b>The documented EXACT-04 finding, reproduced:</b> on the certified 3-bus high-PV stress
+<b>The documented high-PV exactness finding, reproduced:</b> on the certified 3-bus high-PV stress
 fixture (Section 3.4's parameters), the SOC branch-flow relaxation is genuinely INEXACT at
 <b>$(ac_stress.n_inexact_hours) of 24 hours</b> (obj_gap =
 $(round(ac_stress.obj_gap; sigdigits=4)), socp_maxgap =

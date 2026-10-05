@@ -6,7 +6,7 @@
 #   Part A  — the operational layer: a PV-penetration sweep of `solve_welfare` +
 #             `extract_dlmp`/`decompose_dlmp`, cross-checked against the declarative
 #             `Scenario`/`run_scenario` entry point and against `solve_admm` (ADMM).
-#   Part A2 — the documented SOCP/AC exactness boundary (EXACT-04), reproduced verbatim
+#   Part A2 — the documented SOCP/AC exactness boundary, reproduced verbatim
 #             on its certified 3-bus stress substrate — never re-derived/re-tuned.
 #   Part B  — the planning layer: two IEEE-13-scale distributor specs (a low-PV
 #             "baseline" at pv_mult=0.7 and a "boom" distributor reusing Part A's own
@@ -15,14 +15,14 @@
 #             shared transmission-reinforcement corridor (`run_nash!`), reporting the
 #             converged investment response.
 #
-# PURE ORCHESTRATION (per this quick task's own scope note): every heavy call routes
+# PURE ORCHESTRATION (by design): every heavy call routes
 # through the already-validated public API (`Scenario`/`run_scenario`, `solve_welfare`,
 # `solve_admm`, `extract_dlmp`/`decompose_dlmp`, `ACPowerFlow`/`assert_ac_exact!`,
 # `build_shared_transmission`/`run_nash!`). The ONLY new logic is: (1) the
 # `pv_boom_population` PV-penetration wrapper — a thin re-parametrization of
 # `TSODSO._default_house`, which ALREADY accepts `pv_scale` as a keyword,
 # `build_population(:default, ...)` simply never varies it; (2) the local
-# `pvboom_stress_feeder`/`pvboom_stress_house` reproduction of the certified EXACT-04
+# `pvboom_stress_feeder`/`pvboom_stress_house` reproduction of the certified high-PV exactness
 # fixture (test/fixtures_ieee13.jl); (3) the `slice_aggregator` helper that carves a
 # short sub-horizon out of an ALREADY-DRAWN Task-1 aggregator's own time series for the
 # planning-layer game. No `src/` file is touched, no model/solver code is added here.
@@ -47,7 +47,7 @@ const PV_MULTS = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
 const BASE_SEED = 20260806
 const T_FULL = 24
 
-# ── Part A — the ONE new "glue" function this task adds ────────────────────────────────
+# ── Part A — the ONE new "glue" function this script adds ────────────────────────────────
 #
 # `pv_boom_population` mirrors `TSODSO.build_population`'s `:default` body EXACTLY (same
 # `_load_buses`, same `_IEEE13_LOAD_SCALE`/`_IEEE123_LOAD_SCALE` etc., same battery
@@ -280,16 +280,16 @@ CSV.write(projectdir("results", "pv_boom", "summary.csv"), summary_df)
 println("wrote ", projectdir("results", "pv_boom", "summary.csv"))
 
 # ════════════════════════════════════════════════════════════════════════════════════
-# Part A2 — the known SOCP/AC exactness boundary (EXACT-04), REPRODUCED, never re-derived
+# Part A2 — the known SOCP/AC exactness boundary, REPRODUCED, never re-derived
 # ════════════════════════════════════════════════════════════════════════════════════
 println("\n" * "="^96)
-println("PV-BOOM CASE STUDY — Part A2: the documented EXACT-04 finding, reproduced")
+println("PV-BOOM CASE STUDY — Part A2: the documented high-PV exactness finding, reproduced")
 println("="^96)
 
 # Verbatim reproduction of the certified 3-bus stress substrate (test/fixtures_ieee13.jl
 # `high_pv_feeder`/`build_high_pv_aggregators`/`_house_aggregator`, also cross-referenced
 # by test/test_ac_oracle.jl:180-260 and scripts/socp_applicability_sweep.jl:130-165).
-# Reproduced LOCALLY (this file, per this quick task's own scope note) rather than
+# Reproduced LOCALLY (this file) rather than
 # `using` the test fixture module (src/ and scripts/ must never depend on test/).
 function pvboom_stress_feeder(; vmax::Real = 1.05)
     return Feeder(
@@ -344,8 +344,8 @@ stress_aggs = [
 ]
 λ0_stress = build_price(:mem, T_FULL, nothing)   # :mem ignores `profiles`
 
-# SOCP solve with `rtol_exact=1.0`: the ONE documented diagnostic override this plan
-# authorizes (see this file's own module-level constraint list) — it changes ZERO code
+# SOCP solve with `rtol_exact=1.0`: the ONE documented diagnostic override
+# allowed here (see this file's own module-level constraint list) — it changes ZERO code
 # in `solve_welfare`/`welfare_solve.jl`. The ACTUAL exactness verdict below comes from
 # `assert_ac_exact!`'s own standard `rtol=1e-4`, never from this loosened internal gate.
 ctx_socp, cost_socp, _ = solve_welfare(
@@ -371,21 +371,21 @@ ac_report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
 inexact_hours = [row.t for row in ac_report.hours if !row.exact]
 
 @printf("  obj_gap (SOCP - AC)     = %.6e\n", ac_report.obj_gap)
-@printf("  socp_maxgap (PF-04)     = %.6e\n", ctx_socp.meta[:socp_maxgap])
+@printf("  socp_maxgap             = %.6e\n", ctx_socp.meta[:socp_maxgap])
 @printf("  inexact hours           = %d / %d  %s\n", length(inexact_hours), T_FULL, inexact_hours)
 
 isempty(inexact_hours) && error(
-    "pv_boom_case_study: the EXACT-04 reproduction came back ALL-EXACT — this is a " *
+    "pv_boom_case_study: the high-PV exactness reproduction came back ALL-EXACT — this is a " *
     "signal something has drifted from the certified test/fixtures_ieee13.jl " *
     "high_pv_feeder/build_high_pv_aggregators substrate (pv_scale=1.2, load_scale=0.2, " *
-    "vmax=1.05). Per this task's own contract: stop and report the discrepancy rather " *
+    "vmax=1.05). Per this script's contract: stop and report the discrepancy rather " *
     "than silently accepting a different-looking result.",
 )
-println("  -> the documented EXACT-04 finding, reproduced: the SOCP relaxation is " *
+println("  -> the documented high-PV exactness finding, reproduced: the SOCP relaxation is " *
         "genuinely INEXACT at $(length(inexact_hours)) hour(s) on the certified stress fixture.")
 
 # ════════════════════════════════════════════════════════════════════════════════════
-# Part B — feeding the boom into the planning layer (NASH-01/02)
+# Part B — feeding the boom into the planning layer
 # ════════════════════════════════════════════════════════════════════════════════════
 println("\n" * "="^96)
 println("PV-BOOM CASE STUDY — Part B: planning-layer Stackelberg-Nash investment response")
@@ -397,8 +397,8 @@ println("="^96)
 # smaller T; slicing the ALREADY-materialized arrays is the only way to reuse the exact
 # same drawn realization).
 #
-# Deviation (Rule 1, discovered during execution — a genuine STRUCTURAL finding, not a
-# tuning knob): the plan's own suggested "baseline" distributor is pv_mult=0.0 (ZERO PV).
+# Note (discovered while running — a genuine STRUCTURAL finding, not a
+# tuning knob): the naive "baseline" distributor is pv_mult=0.0 (ZERO PV).
 # `solve_stackelberg!`'s Benders master ALWAYS proposes z=0 as its very FIRST trial (no
 # cuts yet ⇒ the epigraph variables sit at their free lower bounds ⇒ z is forced to its
 # own box lower bound, 0) — and ONLY the follower's shell transmission-corridor LP gates
@@ -415,8 +415,8 @@ println("="^96)
 # methodology as the Part-A sweep, just not one of the 6 headline `PV_MULTS` sweep
 # points) rather than the plan's suggested `0.0` — preserving the intended "low PV vs PV
 # boom" contrast against `pv_mult = 2.5` while keeping the game playable under
-# `solve_stackelberg!`'s existing (unmodified, per this task's own `src/`-untouched
-# scope) Benders design. This is reported here, in `findings.txt`, and in the SUMMARY —
+# `solve_stackelberg!`'s existing (unmodified; `src/` is untouched
+# here) Benders design. This is reported here and in `findings.txt` —
 # never silently substituted.
 const BASELINE_PV_MULT = 0.7
 const BOOM_PV_MULT = 2.5
@@ -430,7 +430,7 @@ Build a NEW `Aggregator` (Thermostatic + Deferrable + PVBattery) whose time-seri
 (`Tout`, `Ppv`, `Pdc`) are sliced to `hrs` from `agg`'s OWN already-drawn arrays — no new
 `generate_profiles` call — keeping every scalar device parameter identical.
 
-Deviation (Rule 1, discovered during execution): the Deferrable's `t_start`/`t_end`
+Note (discovered while running): the Deferrable's `t_start`/`t_end`
 window (`8:16` in the full T=24 horizon, per `_default_house`) is itself a set of
 absolute hour INDICES, so it cannot be copied verbatim into a T_planning=6 sub-horizon
 (`Deferrable`'s own `contribute!` guard throws when `t_end > T`). It is re-expressed in
@@ -510,7 +510,7 @@ aggs_boom_sliced =
     [slice_aggregator(a, PLANNING_HOURS, T_PLANNING) for a in aggs_by_mult[BOOM_PV_MULT]]
 
 # Anchor the shared-model calibration to already-known quantities (master.jl's own
-# Pitfall M1 contract: an aggressively low α_op_lb/α_x_lb is always SAFE, only slower to
+# contract: an aggressively low α_op_lb/α_x_lb is always SAFE, only slower to
 # tighten): read each distributor's own sliced-horizon welfare + peak frontier-import
 # magnitude via a quick `solve_welfare` call, mirroring how Part A itself solves.
 function distributor_calibration(aggs, λ0)
@@ -545,7 +545,7 @@ calib_boom = distributor_calibration(aggs_boom_sliced, λ0_planning)
     calib_boom.local_price
 )
 
-# Deviation (Rule 1, discovered during execution): this IEEE-13-scale planning game has
+# Note (discovered while running): this IEEE-13-scale planning game has
 # never been exercised at this scale before (every prior `test_planning_nash.jl` fixture
 # is a hand-derived toy 2-bus feeder). The FIRST calibration attempt below
 # (corridor_cap=1.0, x_inv_max[i]=3×peak_import[i], y_max[i]=3×peak_import[i],
@@ -646,7 +646,7 @@ println("  z[2,:] (boom)          = ", nash_result.z[2, :])
 nash_summary = TSODSO.trace_summary(nash_result.trace)
 println("  trace summary          = ", nash_summary)
 
-# ── Persist Task 2's additions into the SAME results.jld2 (never overwrite Task 1) ────
+# ── Persist the planning-layer additions into the SAME results.jld2 (never overwrite earlier keys) ──
 existing = DrWatson.wload(datadir("pv_boom", "results.jld2"))
 existing["nash_result"] = (;
     z = nash_result.z,
@@ -690,21 +690,21 @@ open(findings_path, "w") do io
         admm_result.iters
     )
     println(io)
-    println(io, "Part A2 — the documented EXACT-04 finding, reproduced")
+    println(io, "Part A2 — the documented high-PV exactness finding, reproduced")
     println(io, "-"^80)
     println(
         io,
         "On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, " *
         "vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / " *
         "build_high_pv_aggregators), the SOC branch-flow relaxation is genuinely " *
-        "INEXACT (EXACT-04) at $(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
+        "INEXACT at $(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
     )
     @printf(io, "obj_gap (SOCP welfare - AC welfare) = %.6e\n", ac_report.obj_gap)
-    @printf(io, "socp_maxgap (PF-04, loosened rtol_exact=1.0 diagnostic)   = %.6e\n", ctx_socp.meta[:socp_maxgap])
+    @printf(io, "socp_maxgap (loosened rtol_exact=1.0 diagnostic)   = %.6e\n", ctx_socp.meta[:socp_maxgap])
     println(
         io,
         "This is the ONE documented diagnostic-override reproduction this case study " *
-        "showcases (EXACT-04) — never re-derived or re-tuned from the certified fixture.",
+        "showcases — never re-derived or re-tuned from the certified fixture.",
     )
     println(io)
     println(io, "Part B — planning-layer Stackelberg-Nash investment response")

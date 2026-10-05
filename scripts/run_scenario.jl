@@ -1,12 +1,12 @@
 # scripts/run_scenario.jl
 #
-# Runnable entry point (RESEARCH §Pattern 4): a researcher edits the `Scenario(...)` call
+# Runnable entry point: a researcher edits the `Scenario(...)` call
 # below and runs this script to launch a single declarative run + provenance-stamped storage.
 #
 # `@quickactivate "TSODSO"` walks UP from this file to find the repo-root `Project.toml`
 # (named "TSODSO") and activates it — so `projectdir()` == repo root and `datadir()` ==
 # `<repo>/data`. Do NOT call `initialize_project` (that scaffolds a NEW project and would
-# fight this existing package layout, RESEARCH Pattern 4).
+# fight this existing package layout).
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO

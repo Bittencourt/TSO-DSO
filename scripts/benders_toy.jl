@@ -113,7 +113,7 @@ for k in 1:MAXITER
     z_k = value(z)
     y_k = value(y)
 
-    # (a) FOLLOWER feasibility check FIRST (WR-01: never send an undeliverable z to the oracle)
+    # (a) FOLLOWER feasibility check FIRST (never send an undeliverable z to the oracle)
     fres = follower(z_k)
     if !fres.feasible
         push!(trace.feas_cuts, Z_CAP_MAX)
