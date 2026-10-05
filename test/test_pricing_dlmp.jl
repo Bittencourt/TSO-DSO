@@ -350,15 +350,14 @@ end
     end
 end
 
-@testitem "dlmp: DlmpDecomposition's deprecated .loss/.voltage aliases still work and return the identical .cone/.drop value (FIX-07)" tags =
+@testitem "dlmp: DlmpDecomposition exposes .cone/.drop only (no .loss/.voltage aliases)" tags =
     [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
-    # Suite-level regression for the Base.getproperty deprecation shim (src/pricing/dlmp.jl):
-    # confirms BOTH the full-matrix (`bus === nothing`) and `bus`-sliced return shapes honor
-    # the alias identically, on an existing fixture already built earlier in this file.
+    # Both the full-matrix (`bus === nothing`) and `bus`-sliced return shapes expose only
+    # the multiplier-named fields.
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
         [Branch(1, 2, 1e-6, 1e-6, 10.0)],
@@ -379,12 +378,13 @@ end
     )
 
     d = decompose_dlmp(ctx)
-    @test d.loss == d.cone
-    @test d.voltage == d.drop
+    @test hasproperty(d, :cone) && hasproperty(d, :drop)
+    @test !hasproperty(d, :loss)
+    @test !hasproperty(d, :voltage)
 
     dv = decompose_dlmp(ctx; bus = 2, T = T)
-    @test dv.loss == dv.cone
-    @test dv.voltage == dv.drop
+    @test !hasproperty(dv, :loss)
+    @test !hasproperty(dv, :voltage)
 end
 
 @testitem "dlmp: reactive price is degenerate at the root and finite/economically-consistent at a load bus on a lossy 2-bus (REACT-02)" tags =
@@ -590,10 +590,8 @@ end
     @test Tuple(nt) == ([1.0], [2.0], [4.0], [3.0], [5.0], [6.0])
     @test collect(values(nt)) == [[1.0], [2.0], [4.0], [3.0], [5.0], [6.0]]
 
-    # propertynames introspection includes the deprecated virtual properties Base.getproperty
-    # still serves, so `propertynames(d)` never looks incomplete relative to what field access
-    # actually accepts.
+    # propertynames lists exactly the struct fields.
     pn = propertynames(d)
     @test :cone in pn && :drop in pn
-    @test :loss in pn && :voltage in pn   # deprecated aliases, still discoverable
+    @test !(:loss in pn) && !(:voltage in pn)
 end

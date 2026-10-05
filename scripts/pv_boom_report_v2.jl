@@ -80,9 +80,9 @@ ax2 = Axis(
     title = "4-way DLMP decomposition at bus $stressed_bus, pv_mult=$(highest_row.pv_mult)",
 )
 energy_v = decomp.energy[stressed_bus, :]
-loss_v = decomp.loss[stressed_bus, :]
+loss_v = decomp.cone[stressed_bus, :]
 congestion_v = decomp.congestion[stressed_bus, :]
-voltage_v = decomp.voltage[stressed_bus, :]
+voltage_v = decomp.drop[stressed_bus, :]
 stack1 = energy_v
 stack2 = stack1 .+ loss_v
 stack3 = stack2 .+ congestion_v

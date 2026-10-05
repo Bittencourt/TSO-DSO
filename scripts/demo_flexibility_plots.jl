@@ -423,9 +423,9 @@ end
 let
     r = records[baseline_idx]
     energy = vec(mean(r.decomp.energy[load_buses, :]; dims = 1))
-    loss = vec(mean(r.decomp.loss[load_buses, :]; dims = 1))
+    loss = vec(mean(r.decomp.cone[load_buses, :]; dims = 1))
     congestion = vec(mean(r.decomp.congestion[load_buses, :]; dims = 1))
-    voltage = vec(mean(r.decomp.voltage[load_buses, :]; dims = 1))
+    voltage = vec(mean(r.decomp.drop[load_buses, :]; dims = 1))
 
     fig = Figure(; size = (900, 500))
     fig[0, 1] = Label(

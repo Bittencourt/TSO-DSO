@@ -31,7 +31,7 @@
 #     of this 4-term active-price reconstruction (REACT-02; distinct component, distinct unit
 #     of account). [FIX-07, phase 27] `cone`/`drop` are named after what they mathematically
 #     ARE (the rotated-SOC cone-slot multiplier, thesis 3.39, and the voltage-drop/copy-drop
-#     multiplier, thesis 3.33/3.43); `.loss`/`.voltage` remain as deprecated aliases.
+#     multiplier, thesis 3.33/3.43).
 #
 # Decomposition derivation (KKT stationarity of the branch active flow P_b, empirically
 # certified to machine precision on the 2-bus / IEEE-13 / high-PV solves). For branch
@@ -232,19 +232,13 @@ Fields (thesis-traceable multiplier identity, FIX-07 — named after what each c
 mathematically IS, not a downstream physical effect):
 
   - `energy::A`     — the root MEM price `dual(:balance_p[root,t])`, SAME at every node (≈λ₀);
-  - `cone::A`       — the rotated-SOC cone-slot multiplier (thesis 3.39; formerly `loss`);
-  - `drop::A`       — the voltage-drop/copy-drop multiplier (thesis 3.33/3.43; formerly
-    `voltage`);
+  - `cone::A`       — the rotated-SOC cone-slot multiplier (thesis 3.39);
+  - `drop::A`       — the voltage-drop/copy-drop multiplier (thesis 3.33/3.43);
   - `congestion::A` — the thermal-limit dual (thesis 3.36 sending-end / 3.37 receiving-end);
   - `reactive::A`   — the reactive nodal price (`dual(:balance_q)`), a SEPARATE, UN-summed
     signal (REACT-02), never folded into `total`;
   - `total::A`      — the reference DADP (`dual(:balance_p)`); `energy+cone+congestion+drop`
     reconstructs this within `decompose_dlmp`'s hard sum-to-price tolerance.
-
-`.loss` and `.voltage` remain accessible as ONE-TIME `Base.depwarn`-deprecated aliases for
-`.cone`/`.drop` respectively (never erroring, returning the identical value) — kept for
-backward compatibility with existing consumers, removal scheduled for Phase 36 (Code & Export
-Cleanup).
 """
 struct DlmpDecomposition{A}
     energy::A
@@ -254,34 +248,6 @@ struct DlmpDecomposition{A}
     reactive::A
     total::A
 end
-
-function Base.getproperty(d::DlmpDecomposition, s::Symbol)
-    if s === :loss
-        Base.depwarn(
-            "DlmpDecomposition.loss is deprecated, use .cone (the rotated-SOC cone-slot " *
-            "multiplier, thesis 3.39) -- removal scheduled for Phase 36",
-            :decompose_dlmp,
-        )
-        return getfield(d, :cone)
-    elseif s === :voltage
-        Base.depwarn(
-            "DlmpDecomposition.voltage is deprecated, use .drop (the voltage-drop/copy-drop " *
-            "multiplier, thesis 3.33/3.43) -- removal scheduled for Phase 36",
-            :decompose_dlmp,
-        )
-        return getfield(d, :drop)
-    else
-        return getfield(d, s)
-    end
-end
-
-# WR-01 fix (27-REVIEW.md, 2026-09-29): `DlmpDecomposition` is a plain `struct`, not a
-# `NamedTuple` (unlike its pre-Phase-27 return type) — `propertynames` would otherwise omit
-# the deprecated `.loss`/`.voltage` virtual properties `Base.getproperty` above still serves,
-# which could confuse introspection (`propertynames(d)`, REPL tab-completion) into looking
-# incomplete relative to what `getproperty` actually accepts.
-Base.propertynames(::DlmpDecomposition, ::Bool = false) =
-    (:energy, :cone, :drop, :congestion, :reactive, :total, :loss, :voltage)
 
 """
     NamedTuple(d::DlmpDecomposition) -> NamedTuple
@@ -339,10 +305,7 @@ Components (each summed over the unique radial path root→j; derivation in the 
     summed into `total`;
   - `total`      = `extract_dlmp(ctx)`             — the reference DADP (active price only).
 
-FIX-07 (phase 27): these fields were previously named `loss`/`voltage` — misleading, since
-they name each component after a downstream PHYSICAL EFFECT rather than the multiplier it
-provably IS. `.loss`/`.voltage` remain accessible as deprecated aliases (see
-[`DlmpDecomposition`](@ref)) so existing consumers keep working unchanged.
+Each field is named after the multiplier it provably is, not a downstream physical effect.
 
 Inherits the PF-04 exactness gate from [`extract_dlmp`](@ref) (an ungated SOCP ctx is
 refused). Requires the SOCP branch-flow handles registered by plan 05-01 (`:cone`, `:vdrop`,

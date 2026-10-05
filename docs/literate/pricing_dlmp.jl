@@ -49,13 +49,6 @@
 # `decompose_dlmp` asserts `energy + cone + congestion + drop ≈ dual(balance_p)` at
 # every (bus, hour) — a HARD relative-tolerance gate, never a soft check.
 #
-# !!! note "Deprecated field names (FIX-07, phase 27)"
-#     `decompose_dlmp` returned a `.loss`/`.voltage`-named NamedTuple prior to phase 27; those
-#     names are now `.cone`/`.drop` respectively (renamed after what each component
-#     mathematically IS, not a downstream physical effect). `.loss`/`.voltage` remain
-#     accessible as deprecated aliases (one-time `Base.depwarn`, never erroring) — removal is
-#     scheduled for Phase 36 (Code & Export Cleanup).
-#
 # ## Welfare accounting — social = prosumer + DSO surplus
 #
 # The solved GLB-CVX social welfare (eq. 3.38) splits into a prosumer surplus and a DSO

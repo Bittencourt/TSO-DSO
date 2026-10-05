@@ -348,9 +348,9 @@ end
 # representative stack; the congestion term dominates at the head branch under load.
 let
     energy = vec(mean(decomp.energy[load_buses, :]; dims = 1))
-    loss = vec(mean(decomp.loss[load_buses, :]; dims = 1))
+    loss = vec(mean(decomp.cone[load_buses, :]; dims = 1))
     congestion = vec(mean(decomp.congestion[load_buses, :]; dims = 1))
-    voltage = vec(mean(decomp.voltage[load_buses, :]; dims = 1))
+    voltage = vec(mean(decomp.drop[load_buses, :]; dims = 1))
 
     fig = Figure(; size = (950, 500))
     fig[0, 1] = Label(
