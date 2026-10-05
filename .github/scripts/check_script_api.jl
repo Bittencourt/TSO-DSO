@@ -7,7 +7,9 @@
 # Each file is parsed with `Meta.parseall` (never `include`d) and checked against the LOADED
 # TSODSO module:
 #   1. parse errors;
-#   2. `using/import TSODSO: x` and `TSODSO.a.b` chains must resolve;
+#   2. `using/import TSODSO: x` (also `x as y`), `import TSODSO.Sub as S` and dotted chains
+#      must resolve: `TSODSO.a.b`, alias chains `T.a`, and unrooted submodule chains such as
+#      `ReactiveMode.OFF` (a TSODSO submodule in scope via `using TSODSO` or an import);
 #   3. a bare (unqualified, not imported, not locally bound) identifier owned by TSODSO or one
 #      of its submodules that `using TSODSO` does NOT bring into scope (unexported / `public`
 #      names such as `max_jump`, `SOCP`, `I_base`, `ReactiveMode.OFF` written as `OFF`);
@@ -79,13 +81,14 @@ mutable struct FileScan
     bound::Set{Symbol}        # names bound anywhere in the file (vars, args, fields, ...)
     fbound::Set{Symbol}       # names bound as functions / types / modules / consts
     imported::Set{Symbol}     # names explicitly imported from TSODSO (or a submodule)
+    modalias::Dict{Symbol,Module}  # local names bound to TSODSO / a submodule (`import TSODSO as T`)
     refs::Dict{Symbol,Int}    # value-position references -> first line
     calls::Dict{Symbol,Int}   # call-position references -> first line
     errors::Vector{String}
     line::Int
 end
-FileScan(p) = FileScan(p, Set{Symbol}(), Set{Symbol}(), Set{Symbol}(), Dict{Symbol,Int}(),
-                       Dict{Symbol,Int}(), String[], 0)
+FileScan(p) = FileScan(p, Set{Symbol}(), Set{Symbol}(), Set{Symbol}(), Dict{Symbol,Module}(),
+                       Dict{Symbol,Int}(), Dict{Symbol,Int}(), String[], 0)
 
 err!(fs, msg) = push!(fs.errors, "$(fs.path):$(fs.line): $msg")
 
@@ -183,53 +186,94 @@ function dotted(x)
     return parts
 end
 
+"""
+Module a dotted chain starting at `s` is rooted at, or `nothing` when `s` is not a TSODSO module
+in scope: `TSODSO` itself, a local alias (`import TSODSO as T`, `using TSODSO: ReactiveMode as RM`),
+or an exported/imported TSODSO submodule written unrooted (`ReactiveMode.OFF`) and not shadowed
+by a local binding.
+"""
+function chain_root(fs, s::Symbol)
+    s === :TSODSO && return MOD
+    haskey(fs.modalias, s) && return fs.modalias[s]
+    s in fs.bound && return nothing
+    isdefined(MOD, s) || return nothing
+    v = getfield(MOD, s)
+    (v isa Module && v !== MOD && parentmodule(v) === MOD) || return nothing
+    (Base.isexported(MOD, s) || s in fs.imported) || return nothing
+    return v
+end
+
 function check_qualified!(fs, parts)
-    parts[1] === :TSODSO || return
-    m = MOD
-    for (i, p) in enumerate(parts[2:end])
-        if !(m isa Module)
-            return                                  # field access on a value: stop
-        end
-        if !isdefined(m, p)
-            err!(fs, "`$(join(parts[1:i+1], "."))` is not defined (removed or renamed API)")
+    m = chain_root(fs, parts[1])
+    m === nothing && return
+    for i in 2:length(parts)
+        m isa Module || return                      # field access on a value: stop
+        if !isdefined(m, parts[i])
+            err!(fs, "`$(join(parts[1:i], "."))` is not defined (removed or renamed API)")
             return
+        end
+        m = getfield(m, parts[i])
+    end
+end
+
+# Resolve a `TSODSO.a.b` module path from a using/import statement (reports a missing link).
+function resolve_path!(fs, path)
+    m = MOD
+    for p in path[2:end]
+        if !(m isa Module) || !isdefined(m, p)
+            err!(fs, "`$(join(path, "."))` is not defined (removed or renamed API)")
+            return nothing
         end
         m = getfield(m, p)
     end
+    return m
+end
+
+# `x`, `x as y`, `@m` items of a `using A: ...` list -> (imported name, local name).
+function import_item(b)
+    inner, alias = b isa Expr && b.head === :as ? (b.args[1], b.args[2]) : (b, nothing)
+    n = inner isa Expr && inner.head === :. ? inner.args[end] : inner
+    n isa Symbol || return nothing
+    return n, (alias isa Symbol ? alias : n)
 end
 
 function handle_using!(fs, x)
     for a in x.args
-        if a isa Expr && a.head === :(:)           # using A.B: x, y
+        if a isa Expr && a.head === :(:)           # using A.B: x, y as z
             path = a.args[1].args
-            names_ = [b.args[1] for b in a.args[2:end] if b isa Expr && b.head === :.]
+            items = filter(!isnothing, map(import_item, a.args[2:end]))
             if !isempty(path) && path[1] === :TSODSO
-                m = MOD
-                for p in path[2:end]
-                    isdefined(m, p) || (err!(fs, "`$(join(path, "."))` is not defined"); m = nothing; break)
-                    m = getfield(m, p)
-                end
-                for n in names_
+                m = resolve_path!(fs, path)
+                for (n, local_name) in items
                     if m isa Module && !isdefined(m, n)
-                        err!(fs, "`using $(join(path, ".")): $n` — `$n` is not defined (removed or renamed API)")
+                        err!(fs, "`$(x.head) $(join(path, ".")): $n` — `$n` is not defined " *
+                                 "(removed or renamed API)")
                     end
-                    push!(fs.imported, n)
+                    push!(fs.imported, local_name)
+                    if m isa Module && isdefined(m, n) && getfield(m, n) isa Module
+                        fs.modalias[local_name] = getfield(m, n)
+                    end
                 end
             else
-                foreach(n -> push!(fs.bound, n), names_)
+                foreach(it -> push!(fs.bound, it[2]), items)
             end
-        elseif a isa Expr && a.head === :as
-            push!(fs.bound, a.args[2])
+        elseif a isa Expr && a.head === :as        # import A.B as C
+            inner, alias = a.args
+            path = inner isa Expr && inner.head === :. ? inner.args : Any[]
+            if !isempty(path) && path[1] === :TSODSO
+                m = resolve_path!(fs, path)
+                m isa Module && (fs.modalias[alias] = m)
+                push!(fs.imported, alias)
+            else
+                push!(fs.bound, alias)
+            end
         elseif a isa Expr && a.head === :.
             path = a.args
             if !isempty(path) && path[1] === :TSODSO && length(path) > 1
-                m = MOD
-                for p in path[2:end]
-                    isdefined(m, p) || (err!(fs, "`$(join(path, "."))` is not defined"); break)
-                    m = getfield(m, p)
-                end
+                m = resolve_path!(fs, path)
                 # `using TSODSO.ReactiveMode` brings that submodule's exports (none) + its name
                 push!(fs.imported, path[end])
+                m isa Module && (fs.modalias[path[end]] = m)
                 if m isa Module && x.head === :using
                     for n in names(m)
                         Base.isexported(m, n) && push!(fs.imported, n)
@@ -492,6 +536,17 @@ function selftest()
          "compound += does not legitimise later calls"),
         ("using TSODSO\nv = zeros(3)\nv .-= max_jump.(t)", 1, "broadcast compound .-="),
         ("using TSODSO\ns = 0\ns += 1\nprintln(s)", 0, "compound on a local is fine"),
+        # unrooted / aliased submodule chains and renamed imports
+        ("using TSODSO\nx = ReactiveMode.ON", 1, "unrooted submodule typo"),
+        ("using TSODSO\nsolve_admm(a, b; reactive_consensus = ReactiveMode.Live)", 1,
+         "unrooted submodule wrong case"),
+        ("using TSODSO\nx = ReactiveMode.CERTIFIED", 0, "unrooted submodule ok"),
+        ("using TSODSO\nx = TSODSO.ReactiveMode.ON", 1, "rooted submodule typo"),
+        ("using TSODSO: no_such_thing_xyz as q", 1, "renamed import of removed name"),
+        ("using TSODSO: max_jump as mj\ny = mj(tr)", 0, "renamed import ok"),
+        ("import TSODSO as T\ny = T.no_such_thing_xyz(1)", 1, "module alias chain"),
+        ("import TSODSO.ReactiveMode as RM\nx = RM.LIVE\ny = RM.ON", 1, "submodule alias chain"),
+        ("using TSODSO\nReactiveMode = (ON = 1,)\nx = ReactiveMode.ON", 0, "local shadows submodule"),
     ]
     exported, subs = exported_set(), submodules()
     bad = 0
