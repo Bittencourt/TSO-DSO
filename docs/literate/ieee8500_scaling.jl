@@ -215,9 +215,12 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 
 # ## Post-refactor measured results (Phase 35)
 #
-# *(Appended 2026-10-04, requirement ARCH-10. The v3.0 text above is kept as history; where it says the
-# headline point "did not converge", read it together with this section. Figures below are copied from
-# `results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv`.)*
+# *(Appended 2026-10-04, requirement ARCH-10; provenance tightened 2026-10-05. The v3.0 text above is kept as
+# history; where it says the headline point "did not converge", read it together with this section. Every
+# figure below names its source: a file in `results/ieee8500_benchmark/` (`density_sweep.csv`,
+# `hybrid_diagnostic.csv`, `point_resources.csv`, `memory_profile.csv`, `memory_wall_recharacterization.csv`,
+# `density_sweep_full.csv`, or a per-run file in `runs/`) and, where the file has one, the row's
+# `run_label`.)*
 #
 # **1. Library default change.** `solve_admm`/`solve_dso!` now default `atol_exact` to `nothing`, i.e. the
 # ADMM final-consolidation gate uses the same per-branch hybrid floor as the centralized path
@@ -226,36 +229,63 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # default is stricter than the old flat `1e-6` except on branches with `smax` of 32-99 pu, so a
 # `CertificateError` can now newly appear for a gap in (2e-7, 1e-6]. This is a deliberate behaviour change.
 #
-# **2. SC1 diagnostic (density 0.1, T = 10, gate bypassed with `--admm-diagnostic-bypass`).** The ADMM run
-# converged in 8 iterations. The worst branch is `L2916620 -> N1136366` (b = 1325, t = 3): `r_pu = 2.40e-6`,
-# cone gap `1.21e-4`, `atol_b = 2.0e-7`, hybrid ratio **568.95**. All 20 recorded rows have ratio > 1.
-# The largest loss-weighted impact `r_pu * gap` is `4.4e-9` pu, so the economic effect is negligible, but
-# the certificate refusal is **genuine**: these are near-ideal (very low resistance) branches where the
-# relaxation gap is not certified at the floor. No tolerance was raised and no branch was excluded.
+# **2. SC1 diagnostic (density 0.1, T = 10, gate bypassed with `--admm-diagnostic-bypass`).** Source:
+# `density_sweep.csv` row `run_label = p35-diag-d0.1-T10` (`solver = admm_bypass`,
+# `admm_atol_used = Inf(DIAGNOSTIC_BYPASS)`), and the 20 `hybrid_diagnostic.csv` rows with the same
+# `run_label`. The ADMM run converged in 8 iterations (`admm_iters` of that row). The worst branch is
+# `L2916620 -> N1136366` (b = 1325, t = 3; first `hybrid_diagnostic.csv` row): `r_pu = 2.40e-6`, cone gap
+# `1.21e-4`, `atol_b = 2.0e-7`, hybrid ratio **568.95** (also the row's `diag_max_ratio`). All 20 recorded
+# rows have ratio > 1 (the smallest is 289.06). The largest loss-weighted impact `r_pu * gap` over **all**
+# branch-hours is `4.4e-9` pu: the row's `diag_loss_impact_max`, which the harness computes as the maximum
+# of `loss_impact = r_pu * gap` over every `hybrid_ratios` row. The 20 rows kept in `hybrid_diagnostic.csv`
+# are the 20 largest *ratios*, not the largest impacts; their own `loss_impact` column peaks at `2.9e-10`.
+# Either way the economic effect is negligible, but the certificate refusal is **genuine**: these are
+# near-ideal (very low resistance) branches where the relaxation gap is not certified at the floor. No
+# tolerance was raised and no branch was excluded.
 #
 # **3. Headline re-measurement (density 0.1, T = 10, ADMM-only, library hybrid gate).**
 #
-# | metric | v3.0 (25-08) | Phase 35 |
+# | metric | v3.0 | Phase 35 |
 # |---|---|---|
-# | status | centralized `ALMOST_OPTIMAL` | `ERROR:CertificateError` (prices REFUSED, ratio 568.95) |
-# | ADMM iterations | 8 | 8 |
-# | wall time | 227 s | 287 s |
-# | peak RSS | about 5.9 GB | 6.21 GB (delta 4.67 GB) |
+# | source row | `density_sweep.csv`, key `(ieee8500, 0.1, clarabel, T_horizon = 10)`, no `run_label` (written 2026-08-22 by quick task 260822-hld, commit `262c983`) | `density_sweep.csv`, `run_label = p35-head-d0.1-T10` |
+# | centralized | `ALMOST_OPTIMAL`, refused by `assert_solved!` | not run (`--admm-only`) |
+# | ADMM gate | flat `atol_exact = 4.97e-3` (`admm_atol_used = 0.004969`, the old `IEEE8500_EXACT_ATOL`) | library hybrid floor (`admm_atol_used = hybrid`, `atol_b` as low as 2e-7) |
+# | ADMM outcome | `converged`, passed the flat gate | `ERROR:CertificateError` (prices REFUSED, ratio 568.95) |
+# | ADMM iterations | 8 | 8, taken from the `p35-diag-d0.1-T10` row (the gate-bypassed re-run of the same point, section 2); the head row was written before WR-07 and records the unknown sentinel `-1` |
+# | ADMM time (`admm_time_s`) | 227 s | 287 s |
+# | peak RSS | no harness-recorded peak (see below) | 6.21 GB (`point_resources.csv` `peak_rss_kb`, same `run_label`) |
+# | ADMM RSS delta (`admm_peak_rss_delta_mb`) | 3200 MiB | 4673 MiB |
 #
-# The time and memory difference may include load from other processes on the shared host and extra GC
-# calls added to the harness; it was not isolated.
+# The status change is **partly a gate change, not only a model or solver change**: v3.0 certified this
+# point under a flat tolerance about 5,000 times looser than the old `1e-6` default, while Phase 35 applies
+# the per-branch hybrid floor. The commit that wrote the v3.0 row (`262c983`) also records that the same
+# point, run under the then-default flat `1e-6` gate, raised "SOCP relaxation INEXACT" (cone gap
+# `1.3968e-4`) and converged only with the flat `4.97e-3` override; that failed run left no CSV row. So
+# under any gate near `1e-6` this point was already refused in v3.0. The v3.0 row is also NOT the IEEE-8500 d = 0.1, T = 10 row printed by the
+# precomputed table above: that one comes from `density_sweep_full.csv` and is an earlier 25-08 attempt of
+# the same point (`budget_exceeded` after 6 iterations, 153 s, under the old 120 s ADMM budget and
+# `clarabel_tol_gap = 1e-8`); the 8-iteration row is the re-run after the budget was raised to 1200 s, with
+# `clarabel_tol_gap = 1e-7`. The v3.0 "about 5.9 GB" peak sometimes quoted for this point is not a harness
+# measurement: it is the "~5.9GB" anon-rss observed by live monitoring during that earlier
+# `budget_exceeded` attempt, written into the `error_msg` of its `density_sweep_full.csv` row. The two RSS
+# deltas are not like-for-like either: the v3.0 delta was taken after a centralized solve in the same
+# process, the Phase 35 delta in an ADMM-only process. The time and memory difference may also include load
+# from other processes on the shared host and extra GC calls added to the harness; it was not isolated.
 #
-# **4. Ladder and memory wall (15.9 GB host, earlyoom `-m 12`).**
+# **4. Ladder and memory wall (15.9 GB host, earlyoom `-m 12`).** Peak RSS is `point_resources.csv`
+# `peak_rss_kb` (from `/usr/bin/time -v`); process wall is the "Elapsed" line of `runs/<run_label>.time`;
+# `admm_time_s` is from `density_sweep.csv` (n/a for the killed point, whose row stayed `started`).
 #
-# | point | outcome | peak RSS | wall |
-# |---|---|---|---|
-# | Phase 25, density 0.1 and 1.0, T = 24 (combined centralized+ADMM process) | OOM kills | n/a | n/a |
-# | Phase 35 d = 0.1, T = 10 | `CertificateError` (ratio 568.95) | 6.21 GB | 287 s |
-# | Phase 35 d = 0.1, T = 24 | ADMM completed, `CertificateError` (ratio 223.68) | 12.08 GB | 678 s |
-# | Phase 35 d = 0.25, T = 24 | earlyoom SIGTERM at 10.6 GiB anon RSS | 12.64 GB | 213 s |
+# | point (`run_label`) | outcome | peak RSS | process wall | `admm_time_s` |
+# |---|---|---|---|---|
+# | Phase 25, density 0.1 and 1.0, T = 24 (combined centralized+ADMM process; `density_sweep_full.csv` `OOM_KILLED` rows) | OOM kills | n/a | n/a | n/a |
+# | `p35-head-d0.1-T10` | `CertificateError` (ratio 568.95) | 6.21 GB | 335 s | 287 s |
+# | `p35-head-d0.1-T24` | ADMM completed, `CertificateError` (ratio 223.68) | 12.08 GB | 728 s | 678 s |
+# | `p35-head-d0.25-T24` | earlyoom SIGTERM at 10.6 GiB anon RSS (`runs/p35-head-d0.25-T24.oom_earlyoom`) | 12.64 GB | 213 s | n/a |
 #
 # The wall now sits **between density 0.1 and 0.25 at T = 24**. Phase 25's OOM kills at T = 24 were in a
-# combined centralized+ADMM process; its density 0.1 T = 10 point fit (about 5.9 GB). The dominant consumer is
+# combined centralized+ADMM process; its density 0.1 T = 10 point fit (live-monitored anon-rss about 5.9 GB,
+# see section 3). The dominant consumer is
 # the per-hour DSO solver state retained across the ADMM loop. The staged profile of the SAME fixture and point
 # (`memory_profile.csv` rows with `fixture = ieee8500`, density 0.1, T = 10, written by run
 # `p35-prof-ieee8500-s3` in `point_resources.csv`) shows one `build_dso_opt` adding 0.23 GiB of VmRSS
