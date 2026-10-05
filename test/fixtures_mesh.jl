@@ -1,28 +1,27 @@
 # test/fixtures_mesh.jl
 #
-# Shared Phase-23 (meshed networks) test fixture module (Wave 2, plan 23-02). A TestItems
-# `@testmodule` that every downstream Phase-23 `@testitem` consumes via
-# `setup=[MeshFixtures]`. It provides the phase's ONE committed CI loop fixture (D-02): a
+# Shared test fixture module for the meshed-network tests. A TestItems
+# `@testmodule` that every meshed-network `@testitem` consumes via
+# `setup=[MeshFixtures]`. It provides the ONE committed CI loop fixture: a
 # 4-bus "diamond" (single independent cycle, nB=4 > N-1=3) with a TOGGLABLE impedance
 # profile -- `:uniform` and `:heterogeneous` on the SAME topology -- exercising both the
-# angle-recoverability certificate's recoverable and unrecoverable branches (plan 23-03,
-# D-10) without any knife-edge parameter search.
+# angle-recoverability certificate's recoverable and unrecoverable branches
+# without any knife-edge parameter search.
 #
-# SEAM: Phase-23 CI fixture (MESH-02, prerequisite for MESH-03).
+# SEAM: meshed-network CI fixture (prerequisite for the angle-recoverability certificate tests).
 #
 # CONTRACT (mirrors fixtures_stochastic.jl's discipline): this module is SELF-CONTAINED, i.e. it
-# makes NO top-level call to any symbol filled by a later Phase-23 plan. Every feeder-
+# makes NO top-level call to any symbol that may be defined later. Every feeder-
 # consuming builder takes arguments (`profile::Symbol`), so nothing here evaluates a
 # not-yet-defined symbol at module-load time.
 #
-# TOPOLOGY DEVIATION FROM THE PLAN TEXT (Rule 1/3 auto-fix, within Claude's Discretion per
-# CONTEXT.md's "exact loop-fixture topology/parameters" list; documented in full in the
-# 23-02-SUMMARY.md "Deviations" section):
+# TOPOLOGY CHOICE (a 3-bus triangle is not usable; chosen at the discretion of the
+# fixture design for the exact loop-fixture topology/parameters):
 #
-# The plan's <interfaces> block described a literal 3-bus TRIANGLE (branches (1,2),(2,3),
-# (3,1)). Direct testing during this plan's execution found that topology MATHEMATICALLY
+# A literal 3-bus TRIANGLE (branches (1,2),(2,3),
+# (3,1)) was tried first. Direct testing found that topology MATHEMATICALLY
 # INCOMPATIBLE with `MeshedFlow`'s pure delegation to `ConvexBranchFlow.contribute!` (exactly
-# as Task 1 specifies, with ZERO new constraint code): `ConvexBranchFlow`'s exactness-copy
+# as designed, with ZERO new constraint code): `ConvexBranchFlow`'s exactness-copy
 # mechanism (`v̂`, thesis 3.43/3.45) fixes BOTH `v[root]` and `v̂[root]` to the SAME value
 # (1.0). Applying the `v` recursion (thesis 3.33, loss coefficient `+(r²+x²)l`) and the `v̂`
 # recursion (thesis 3.43, loss coefficient `-2(r²+x²)l`) around ANY closed cycle each forces
@@ -42,22 +41,22 @@
 # `ε` as 2-vs-1, never an even balance, so one branch's `l` is always PINNED to the sum of
 # the other two rather than free to seek its own cone-tight value.
 #
-# A 4-bus DIAMOND (root=1 branching to 2 and 3, both merging at 4 -- RESEARCH.md's own
+# A 4-bus DIAMOND (root=1 branching to 2 and 3, both merging at 4 -- an
 # explicitly-suggested alternative topology, "e.g. a 4-bus 'diamond'... or the literal 3-bus
 # triangle spiked above") is an EVEN-length cycle (1→2→4→3→1) whose natural branch storage
 # `(1,2),(1,3),(2,4),(3,4)` splits `ε` evenly (+1,+1,-1,-1): the forced identity becomes
 # `(r₁₂²+x₁₂²)l₁₂ + (r₂₄²+x₂₄²)l₂₄ = (r₁₃²+x₁₃²)l₁₃ + (r₃₄²+x₃₄²)l₃₄` -- a genuine,
 # non-degenerate BALANCE between the two parallel paths (the physically-correct KVL
 # condition for two paths in parallel), not an artificial zero-forcing or an inflated-slack
-# pin. Empirically verified (this plan, both profiles, default `rtol_exact = 1e-4`): cone
+# pin. Empirically verified (both profiles, default `rtol_exact = 1e-4`): cone
 # gaps of `1.6e-8` (`:uniform`) and `1.8e-9` (`:heterogeneous`) -- both PASS
-# `assert_socp_exact!` cleanly, matching RESEARCH.md's own empirical claim that cone-
+# `assert_socp_exact!` cleanly, matching the empirical expectation that cone-
 # tightness is UNINFORMATIVE on a mesh (tight for both profiles alike) and the TRUE
-# discriminator is the future angle-recoverability certificate (plan 23-03), never the
-# existing cone gate alone (Pitfall 14). This is NOT a knife-edge parameter search (Pitfall
-# 15/D-10): it is a discrete topology choice explicitly sanctioned by both D-02 ("3-4 bus,
-# single loop") and RESEARCH.md's own suggested alternative, made ONCE, before any numeric
-# tuning -- the R/X literals themselves are still the exact ratios RESEARCH's spike measured
+# discriminator is the angle-recoverability certificate, never the
+# existing cone gate alone. This is NOT a knife-edge parameter search
+# (a topology choice is not a numeric search): it is a discrete topology choice sanctioned by the requirement of a "3-4 bus,
+# single loop" fixture and the suggested alternative, made ONCE, before any numeric
+# tuning -- the R/X literals themselves are still the exact ratios a preliminary toy-triangle measurement found
 # (4.0, ~0.167, 1.0, plus one more heterogeneous branch at 2.0 for the diamond's 4th edge).
 #
 # FIXTURE DESIGN: buses 1 (root), 2, 3 (the two parallel-path buses), 4 (the merge bus that
@@ -66,30 +65,29 @@
 # chord flow strictly nonzero -- never the degenerate symmetric case. Two impedance profiles
 # on the SAME topology:
 #   - :uniform        -- all four branches r=0.01,x=0.02 (R/X ratio 0.5 everywhere) --
-#                        the RECOVERABLE case (plan 23-03 measures worst_residual ~6.27e-3
+#                        the RECOVERABLE case (the certificate measures worst_residual ~6.27e-3
 #                        on this exact fixture, certified).
 #   - :heterogeneous  -- branch(1,2) r=0.32,x=0.08 (ratio 4.0), branch(1,3) r=0.08,x=0.48
 #                        (ratio ~0.167), branch(2,4) r=0.16,x=0.16 (ratio 1.0), branch(3,4)
 #                        r=0.24,x=0.12 (ratio 2.0) -- exercising the certificate's
-#                        UNRECOVERABLE branch (plan 23-03).
+#                        UNRECOVERABLE branch.
 # All branches carry smax = SMAX_NO_LIMIT (this fixture is about the LOOP, not congestion).
 # Bus voltage bounds at 2/3/4 are wide (0.90-1.10 pu) so the small pinned loads never bind a
 # voltage constraint -- isolating the loop/angle question from the overvoltage question.
 #
-# HETEROGENEOUS_RX MAGNITUDE DEVIATION FROM PLAN 23-02's ORIGINAL LITERALS (Rule 1/3
-# auto-fix, within Claude's Discretion per CONTEXT.md's "exact loop-fixture
-# topology/parameters" list AND this plan's orchestrator-authorized "adjust the profile
-# parameters ... until both certificate branches are genuinely exercised" instruction;
-# documented in full in the 23-03-SUMMARY.md "Deviations" section):
+# HETEROGENEOUS_RX MAGNITUDE CHANGE FROM THE ORIGINAL LITERALS (adjusted
+# at the fixture author's discretion
+# so that both certificate branches are genuinely exercised
+# by adjusting the profile parameters):
 #
-# Plan 23-03's `certify_angle_recoverable!` measurement (D-08) found that on THIS diamond,
+# The `certify_angle_recoverable!` measurement found that on THIS diamond,
 # with the ORIGINAL `(0.04,0.01),(0.01,0.06),(0.02,0.02),(0.03,0.015)` heterogeneous
 # literals, the angle-recovery residual (0.00697) is essentially the SAME ORDER OF
 # MAGNITUDE as the `:uniform` profile's residual (0.00627) -- NOT the multi-order-of-
-# magnitude separation RESEARCH.md's toy-triangle spike predicted. Direct empirical
+# magnitude separation the toy-triangle measurement predicted. Direct empirical
 # measurement (sweeping R/X ratio spread, load asymmetry, and impedance scale
-# independently, all while keeping the SOCP cone tight -- see 23-03-SUMMARY.md for the
-# full sweep) established that on this diamond's PARALLEL-TWO-PATH topology (unlike the
+# independently, all while keeping the SOCP cone tight;
+# the full sweep established that on this diamond's PARALLEL-TWO-PATH topology (unlike the
 # triangle's simple series ring), the angle-recovery residual for THIS load-asymmetry
 # level is dominated by `residual ≈ 0.05 · (impedance scale) · (chord-flow magnitude)`,
 # essentially INDEPENDENT of R/X RATIO heterogeneity across the range that keeps the SOCP
@@ -100,10 +98,10 @@
 # linearly with that scale, reaching ~0.0607 -- a ~9.7x separation from `:uniform`'s fixed
 # 0.00627 floor, safely inside the region before the SOCP becomes genuinely INFEASIBLE at
 # 10x (empirically confirmed: 10x already breaks cone-exactness; 12x+ is outright
-# INFEASIBLE). This is a genuinely different, topology-specific finding from RESEARCH.md's
+# INFEASIBLE). This is a genuinely different, topology-specific finding from the
 # triangle-based mechanism (which used a simplified spike lacking ConvexBranchFlow's
-# exactness-copy machinery, per plan 23-02's own Assumption-A1 finding) -- not a
-# knife-edge parameter search (D-10/Pitfall 15): the SCALE lever was swept broadly and
+# exactness-copy machinery, as found while building this fixture) -- not a
+# knife-edge parameter search: the SCALE lever was swept broadly and
 # monotonically (1x-9.5x, cone tight throughout) before settling on 8x for a comfortable
 # safety margin from the 10x infeasibility cliff, and the RATIOS themselves are UNCHANGED
 # from the original literals (only their common magnitude scale differs).
@@ -121,12 +119,12 @@
     const P3_LOAD = 0.05
 
     # Per-branch (r, x) literals for BOTH impedance profiles, ordered (1,2), (1,3), (2,4),
-    # (3,4) -- see file header for why this 4-bus diamond, not the plan's literal 3-bus
+    # (3,4) -- see file header for why this 4-bus diamond, not a literal 3-bus
     # triangle, is the committed topology. Ratios: uniform = 0.5 everywhere; heterogeneous =
-    # 4.0, ~0.167, 1.0, 2.0 (RESEARCH.md's own spike ratios) at 8x the spike's original
-    # MAGNITUDE -- plan 23-03's D-08 measurement found the ratio spread alone does not
+    # 4.0, ~0.167, 1.0, 2.0 (the toy-triangle measurement's ratios) at 8x the original
+    # MAGNITUDE -- the certificate measurement found the ratio spread alone does not
     # separate the certificate's two branches on this diamond; see the file header's
-    # "HETEROGENEOUS_RX MAGNITUDE DEVIATION" note for the full derivation.
+    # "HETEROGENEOUS_RX MAGNITUDE CHANGE" note for the full derivation.
     const UNIFORM_RX = [(0.01, 0.02), (0.01, 0.02), (0.01, 0.02), (0.01, 0.02)]
     const HETEROGENEOUS_RX = [(0.32, 0.08), (0.08, 0.48), (0.16, 0.16), (0.24, 0.12)]
 
@@ -185,25 +183,24 @@
     LOSS-MINIMIZING SOCP over the loop.
 
     Both `Thermostatic` members PIN their own power factor to `φ = 1.0` (thesis eq. 3.23's
-    per-device override, Plan 26-04) -- i.e. UNITY power factor, zero reactive draw --
-    overriding the aggregators' own `φ = 0.95`. This is a Plan 26-13 gap-closure fix
-    (`26-POSTMERGE-TRIAGE.md` cluster G / PM-04), restoring this fixture's ORIGINAL
-    MESH-02/03 intent: isolating the angle-recoverability certificate from any reactive-power
+    per-device override) -- i.e. UNITY power factor, zero reactive draw --
+    overriding the aggregators' own `φ = 0.95`. This is a later correction
+    restoring this fixture's ORIGINAL
+    intent: isolating the angle-recoverability certificate from any reactive-power
     effect. That original intent was implicit (Thermostatic loads drew no reactive power at
-    all before FIX-05/Plan 26-04 made `is_flexible_load(::Thermostatic) == true`
+    all before `is_flexible_load(::Thermostatic) == true` was made
     unconditionally); the `φ = 1.0` pin here makes it explicit and permanent instead of
-    leaving it as an accident of the pre-FIX-05 device contract.
+    leaving it as an accident of the earlier device contract.
 
-    **Discovered finding (Plan 26-13, RECORDED not silently fixed away):** at the
+    **Discovered finding (RECORDED not silently fixed away):** at the
     aggregators' own native `φ = 0.95` (i.e. WITHOUT this pin), the `:uniform` impedance
     profile's SOC relaxation becomes GENUINELY inexact on this diamond -- measured cone ratio
     ≈2711, gap ≈0.0147, persistent across a Clarabel `tol_gap` ladder (so it is a real
     relaxation gap, not solver-precision noise). The `:heterogeneous` profile stays exact
     throughout. In other words: reactive load breaks SOCP exactness on this specific
-    uniform-R/X meshed diamond topology. This is NOT a bug and NOT in scope for a fix in this
-    phase -- it is Plan 26-13's own discovered consequence of FIX-05 (Plan 26-04) on a mesh
-    topology, left for future research (see `26-POSTMERGE-TRIAGE.md` cluster G and the
-    Phase-26 CONTEXT.md PM-04 decision).
+    uniform-R/X meshed diamond topology. This is NOT a bug and NOT in scope for a fix here
+    -- it is a discovered consequence of the flexible-load change on a mesh
+    topology, left for future research.
     """
     function mesh_aggregators()
         therm2 = Thermostatic(
@@ -242,10 +239,10 @@
     loads `P2_LOAD` / `P3_LOAD`) but with the reactive power factor `φ` as a parameter, and with
     an optional `FourQuadBESS` (bus 2) appended to the bus-2 aggregator when `bess = true`.
 
-    Plan 34-10 (ARCH-06): `φ = 0.95` is used ONLY with the `:heterogeneous` profile -- it gives a
+    Note: `φ = 0.95` is used ONLY with the `:heterogeneous` profile -- it gives a
     clearly non-degenerate centralized reactive price (`dual(:balance_q)` ~ 0.2511 / 0.1354 at
     buses 2/3), whereas `φ = 1.0` pins the reactive price to ~0. Uniform `φ = 0.95` is NOT usable:
-    the centralized solve itself throws `SOCP relaxation INEXACT` (the Plan 26-13 finding above).
+    the centralized solve itself throws `SOCP relaxation INEXACT` (the finding above).
     """
     function mesh_aggregators_phi(φ::Real; bess::Bool = false)
         therm2 =

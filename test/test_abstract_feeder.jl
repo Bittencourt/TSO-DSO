@@ -1,5 +1,5 @@
-# Seam: AbstractFeeder supertype, formulation x feeder validity, formulation traits (ARCH-03/ARCH-07).
-# Plan 33-02 appends ADMM-on-meshed assertions to this file.
+# Seam: AbstractFeeder supertype, formulation x feeder validity, formulation traits.
+# Also covers ADMM-on-meshed assertions.
 
 @testitem "abstract feeder: both feeders subtype AbstractFeeder; constructors still gate" tags =
     [:feeder] begin

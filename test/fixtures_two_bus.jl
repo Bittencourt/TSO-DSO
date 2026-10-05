@@ -1,21 +1,21 @@
 # test/fixtures_two_bus.jl
 #
-# Shared Phase-6 (ADMM) test fixture module (Wave 0). A TestItems `@testmodule` that the
-# Phase-6 `@testitem`s consume via `setup=[TwoBusFixtures]`. It provides the NEW 2-bus
+# Shared test fixture module for the ADMM tests. A TestItems `@testmodule` that the
+# ADMM `@testitem`s consume via `setup=[TwoBusFixtures]`. It provides the 2-bus
 # dual-SIGN-anchor feeder + its seeded aggregator, plus the pinned starting penalty `RHO_2BUS`
 # and the MEM price `λ₀`. The IEEE-13 ground case is NOT redefined here — the harness reuses
 # `IEEE13Fixtures.build_ieee13_ground_aggregators` + the exported `ieee13_modified()` feeder
-# directly (Wave-0 requirement: "reuse Phase 4/5 fixtures").
+# directly (the harness reuses the IEEE-13 fixtures).
 #
-# CONTRACT (threat T-06-01): this module DEFINES functions and consts ONLY — it makes NO
-# top-level call to any symbol filled by a LATER Phase-6 wave (the AGR-OPT / DSO-OPT / loop
+# CONTRACT: this module DEFINES functions and consts ONLY — it makes NO
+# top-level call to any symbol that might be defined later (the AGR-OPT / DSO-OPT / loop
 # seams). The feeder-consuming builder takes a `feeder` argument, so nothing here evaluates a
-# not-yet-defined symbol at module-load time; a partial-wave state cannot corrupt discovery.
+# not-yet-defined symbol at module-load time; a partially-implemented state cannot corrupt discovery.
 #
-# REPRODUCIBILITY (threat T-06-06): the 2-bus aggregator flows from a seeded `generate_profiles`
-# (StableRNGs), so it regenerates bit-for-bit (RESEARCH Security Domain).
+# REPRODUCIBILITY: the 2-bus aggregator flows from a seeded `generate_profiles`
+# (StableRNGs), so it regenerates bit-for-bit.
 #
-# DUAL-SIGN ANCHOR (RESEARCH Pattern 2 / Pitfall 5): the 2-bus branch is NEAR-LOSSLESS
+# DUAL-SIGN ANCHOR: the 2-bus branch is NEAR-LOSSLESS
 # (r,x ≈ 0) and UNCONGESTED (`SMAX_NO_LIMIT`), so at the interior optimum the load-bus DADP
 # `λ_2 ≈ λ₀ > 0` — the analytically-known, strictly-POSITIVE price (marginal cost of
 # consumption) against which the recovered ADMM `λ` sign is pinned (positive = consumption cost,
@@ -30,7 +30,7 @@
     const T = 24
 
     # Battery price triple (App. C parametrization) in ¢$/kWh — STRICT ordering
-    # λ_min < λ_med < λ_max is the no-binary guarantee (CR-01), same values as Phase 4.
+    # λ_min < λ_med < λ_max is the no-binary guarantee, same values as the IEEE-13 fixture.
     const BATT_λ_MIN = 3.8
     const BATT_λ_MED = 6.2
     const BATT_λ_MAX = 8.9
@@ -41,9 +41,9 @@
     const PV_SCALE_2BUS = 0.005         # PV < load ⇒ bus 2 stays a NET CONSUMER (positive DADP)
     const LAMBDA0_2BUS = 4.0            # flat MEM price λ₀ (¢$/kWh-consistent, positive, in-band)
 
-    # Pinned starting penalty/dual-step ρ for the 2-bus (RESEARCH Pitfall 2: O(1)–O(10) at the
-    # 100 MVA-base pu scale, NOT the thesis's 1000). The Wave-3 loop's `ρ` keyword defaults from
-    # this; adaptive-ρ is Phase 7. Empirically retunable (06-VALIDATION Manual-Only).
+    # Pinned starting penalty/dual-step ρ for the 2-bus (O(1)–O(10) at the
+    # 100 MVA-base pu scale, NOT the thesis's 1000). The loop's `ρ` keyword defaults from
+    # this; adaptive-ρ is handled separately. Empirically retunable.
     const RHO_2BUS = 5.0
 
     """
@@ -98,7 +98,7 @@
     formulation) + one load bus 2, joined by a SINGLE NEAR-LOSSLESS branch 1→2 (r = x = 1e-3,
     so losses are negligible and `λ_2 ≈ λ₀`) carrying the `SMAX_NO_LIMIT` sentinel (uncongested,
     no thermal cone). Radial by construction; built INSIDE the function (never at module top
-    level, threat T-06-01).
+    level).
     """
     function two_bus_feeder()
         buses = [
@@ -118,8 +118,8 @@
     Deferrable + PVBattery house (the IEEE13Fixtures `_house_aggregator` SHAPE) fed by a seeded
     `generate_profiles` draw, scaled small (`LOAD_SCALE_2BUS` demand, `PV_SCALE_2BUS` PV, tiny
     battery) so the near-lossless 2-bus solve is FEASIBLE and INTERIOR (voltage un-binding) and
-    bus 2 stays a NET CONSUMER (positive DADP). Seeded ⇒ reproducible (threat T-06-06); takes
-    the feeder as an argument so the module never touches a later-wave ADMM symbol at load time.
+    bus 2 stays a NET CONSUMER (positive DADP). Seeded ⇒ reproducible; takes
+    the feeder as an argument so the module never touches an ADMM symbol at load time.
     """
     function build_two_bus_aggregators(feeder; seed::Integer = SEED_2BUS)
         bus = 2
@@ -159,17 +159,16 @@
     """
         build_two_bus_aggregators_no_flex(feeder; seed=SEED_2BUS) -> Vector{<:Aggregator}
 
-    Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): a genuinely
-    FLEXIBLE-LOAD-FREE variant of [`build_two_bus_aggregators`](@ref) — a PVBattery-ONLY
+    A genuinely FLEXIBLE-LOAD-FREE variant of [`build_two_bus_aggregators`](@ref) — a PVBattery-ONLY
     aggregator at bus 2 of the [`two_bus_feeder`](@ref) (same seed/PV/battery sizing;
     the Thermostatic/Deferrable members are dropped). `PVBattery` is neither
-    `is_flexible_load` (Plan 26-04, FIX-05) nor a `q_inject`-carrying device (D-09), so
-    `build_dso_opt`'s smart `reactive_consensus` default (Plan 26-12, PM-03,
-    `_any_flexible_reactive`) resolves to OFF on this population, and an explicit
-    `reactive_consensus = ReactiveMode.CERTIFIED`/`:certified` override does NOT trip the widened WR-04
-    fail-loud guard — restoring the pre-Phase-26 "default OFF, explicit CERTIFIED override
-    works" REACT-0x testing intent that `build_two_bus_aggregators`'s Thermostatic+Deferrable
-    members broke once PM-03's guard correctly began recognizing them as flexible loads.
+    `is_flexible_load` nor a `q_inject`-carrying device, so
+    `build_dso_opt`'s smart `reactive_consensus` default (`_any_flexible_reactive`)
+    resolves to OFF on this population, and an explicit
+    `reactive_consensus = ReactiveMode.CERTIFIED`/`:certified` override does NOT trip the widened
+    fail-loud guard — restoring the earlier "default OFF, explicit CERTIFIED override
+    works" testing intent that `build_two_bus_aggregators`'s Thermostatic+Deferrable
+    members broke once the guard correctly began recognizing them as flexible loads.
     """
     function build_two_bus_aggregators_no_flex(feeder; seed::Integer = SEED_2BUS)
         bus = 2

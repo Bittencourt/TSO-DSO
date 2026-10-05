@@ -1,20 +1,20 @@
 # test/fixtures_mpc.jl
 #
-# Shared Phase-21 (MPC / rolling-horizon) test fixture module (Wave 2). A TestItems
-# `@testmodule` that the Phase-21 `@testitem`s consume via `setup=[MPCFixtures]`. It
-# provides the phase's SHORT-`T` CI substrate (`mpc_feeder`/`build_mpc_aggregators`) and the
+# Shared test fixture module for the MPC / rolling-horizon tests. A TestItems
+# `@testmodule` that the MPC `@testitem`s consume via `setup=[MPCFixtures]`. It
+# provides the SHORT-`T` CI substrate (`mpc_feeder`/`build_mpc_aggregators`) and the
 # short-horizon high-PV forced-inexact fixture (`mpc_high_pv_feeder`/
-# `build_mpc_high_pv_aggregators`) a later wave's certificate-escalation test drives.
+# `build_mpc_high_pv_aggregators`) the certificate-escalation test drives.
 #
-# SEAM: Phase-21 CI fixture (MPC-01..04).
+# SEAM: MPC CI fixture.
 #
 # CONTRACT (mirrors fixtures_two_bus.jl's discipline, not fixtures_four_quad_bess.jl's cross-reference
-# — Phase 21 needs no Phase-6-specific reuse): this module is SELF-CONTAINED, i.e. it makes NO
-# top-level call to any symbol filled by a later Phase-21 wave. Every feeder-consuming builder
+# — the MPC tests need no ADMM-fixture reuse): this module is SELF-CONTAINED, i.e. it makes NO
+# top-level call to any symbol that may be defined later. Every feeder-consuming builder
 # takes a `feeder` argument, so nothing here evaluates a not-yet-defined symbol at module-load
-# time; a partial-wave state cannot corrupt discovery.
+# time; a partially-implemented state cannot corrupt discovery.
 #
-# DELIBERATE EXCLUSION (RESEARCH Pitfall 8): this module never includes the project's
+# DELIBERATE EXCLUSION: this module never includes the project's
 # scheduled-energy-budget flexible-load device (the third member of the Thermostatic/
 # PV-battery/scheduled-load trio used elsewhere in the test suite). That device's
 # within-window energy budget resets every window under a rolling horizon, which is
@@ -28,7 +28,7 @@
 @testmodule MPCFixtures begin
     using TSODSO
 
-    # Short day-ahead CI horizon (Pitfall 5: T - H + 1 = 6 published receding-horizon steps).
+    # Short day-ahead CI horizon (T - H + 1 = 6 published receding-horizon steps).
     const T = 8
     # Fixed window length — build-once, never rebuilt across the published steps.
     const H = 3
@@ -110,7 +110,7 @@
 
     # Shared private house-aggregator builder (mirrors `IEEE13Fixtures._house_aggregator`'s
     # shape): a Thermostatic + PVBattery house fed by a seeded `generate_profiles` draw,
-    # deliberately excluding the scheduled-load device (Pitfall 8, see file header). Not
+    # deliberately excluding the scheduled-load device (see file header). Not
     # exported — an internal helper both public builders below share.
     function _mpc_house_aggregator(
         feeder,
@@ -160,12 +160,12 @@
         build_mpc_aggregators(feeder; seed::Integer = SEED_MPC, Tsteps::Int = T) -> Vector{<:Aggregator}
 
     ONE small seeded aggregator at bus 2 of the [`mpc_feeder`](@ref): a Thermostatic +
-    PVBattery house (no scheduled-load device — Pitfall 8, see file header) fed by a seeded
+    PVBattery house (no scheduled-load device, see file header) fed by a seeded
     `generate_profiles` draw, scaled small (`LOAD_SCALE_MPC` demand, `PV_SCALE_MPC` PV, tiny
     battery) so the near-lossless short-`T` solve is FEASIBLE and INTERIOR — mirrors
     `TwoBusFixtures.build_two_bus_aggregators`'s exact construction shape minus that third
     device. Seeded ⇒ reproducible; takes `feeder` as an argument so this module never touches
-    a later-wave symbol at load time.
+    a later symbol at load time.
     """
     function build_mpc_aggregators(feeder; seed::Integer = SEED_MPC, Tsteps::Int = T)
         bus = 2
@@ -190,7 +190,7 @@
 
     A 3-bus radial fixture (root + two downstream buses), mirroring
     `IEEE13Fixtures.high_pv_feeder()` EXACTLY (branches `r=x=0.05`, `SMAX_NO_LIMIT`) — the
-    substrate a later wave's forced-inexact certificate-escalation test drives. Built INSIDE
+    substrate the forced-inexact certificate-escalation test drives. Built INSIDE
     the function (never at module top level).
     """
     function mpc_high_pv_feeder()
@@ -213,9 +213,9 @@
     Aggregators for the [`mpc_high_pv_feeder`](@ref): mirrors
     `IEEE13Fixtures.build_high_pv_aggregators`'s shape (Thermostatic + PVBattery only, small
     `load_scale`, tiny battery headroom) at this fixture's SHORT `Tsteps`/`H`. `pv_scale` has
-    NO default — a later wave's task must MEASURE the `pv_scale` that genuinely trips the
+    NO default — the test must MEASURE the `pv_scale` that genuinely trips the
     inline cone-residual check at this fixture's short horizon, per this project's "measured,
-    not guessed" discipline; that measurement is documented in that wave's own plan/summary,
+    not guessed" discipline; that measurement is documented in the test that uses it,
     not here.
     """
     function build_mpc_high_pv_aggregators(
@@ -242,7 +242,7 @@
         ]
     end
 
-    # MEASURED (plan 21-05, Task 2 — "measured, not guessed" discipline): the pv_scale that
+    # MEASURED ("measured, not guessed" discipline): the pv_scale that
     # reliably trips the inline cone-residual check (rtol=1e-4, atol=1e-6, run_mpc's own
     # per-resolve formula) on THIS fixture's short H=3 window, sliced from a Tsteps=T=8 PV
     # draw (`build_mpc_high_pv_aggregators(mpc_high_pv_feeder(); pv_scale, Tsteps = T)`, then

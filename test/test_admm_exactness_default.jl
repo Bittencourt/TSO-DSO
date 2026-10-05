@@ -1,4 +1,4 @@
-# Phase 35 (ARCH-10): ADMM consolidation exactness gate defaults to the hybrid floor.
+# ADMM consolidation exactness gate defaults to the hybrid floor.
 
 @testmodule ExactDefaultHelpers begin
     using TSODSO
@@ -30,11 +30,11 @@
 
     ctx_A() = fixed_ctx(Branch(1, 2, 0.01, 0.02, 90.0), 1.0, 5.0e-6)
     ctx_N() = fixed_ctx(Branch(1, 2, 2.4e-6, 5.6e-6, TSODSO.SMAX_NO_LIMIT), 1.06, 1.7e-3)
-    # WR-06: gap 5e-7 on an unlimited branch with zero head flow -> hybrid floor τ = 2e-7
+    # Gap 5e-7 on an unlimited branch with zero head flow -> hybrid floor τ = 2e-7
     # refuses (ratio ≈ 2.5) while the old flat 1e-6 would accept (ratio ≈ 0.5).
     ctx_M() = fixed_ctx(Branch(1, 2, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT), 1.0, 5.0e-7)
 
-    # WR-06: wrap a fixed-value ctx as a coupling-free `DsoOpt` (no load nodes), so the REAL
+    # Wrap a fixed-value ctx as a coupling-free `DsoOpt` (no load nodes), so the REAL
     # `solve_dso!(...; check_exact = true)` final-gate path runs on a controlled cone gap.
     function dso_from(ctx)
         ctx.pf = ConvexBranchFlow()
@@ -93,17 +93,17 @@ end
     end
     @test err isa CertificateError
     @test err.kind === :socp_exact
-    # WR-07 (35-REVIEW): the final-gate refusal carries the converged ADMM iteration count.
+    # The final-gate refusal carries the converged ADMM iteration count.
     @test err.iterations == r1.iters
     r3 = solve_admm(feeder, ConvexBranchFlow(), aggs; kw..., atol_exact = Inf)
     @test r3.iters == r1.iters
-    # WR-06 (35-REVIEW): the gate floor that REACHED the final gate is recorded. Fails if the
+    # The gate floor that REACHED the final gate is recorded. Fails if the
     # solve_admm default reverts to a flat 1e-6 (the 2-bus gap ~8e-9 cannot tell them apart).
     @test r1.dso_ctx.meta[:socp_atol_exact] === nothing
     @test r3.dso_ctx.meta[:socp_atol_exact] == Inf
 end
 
-@testitem "admm exactness default: solve_dso! final gate defaults to the hybrid floor (WR-06)" setup =
+@testitem "admm exactness default: solve_dso! final gate defaults to the hybrid floor" setup =
     [ExactDefaultHelpers] tags = [:exact, :admm] begin
     using TSODSO
     H = ExactDefaultHelpers
@@ -132,7 +132,7 @@ end
     @test rN[1].r_pu == 2.4e-6
     @test isapprox(rN[1].loss_impact, 4e-9; rtol = 0.5)
     @test issorted([r.ratio for r in rN]; rev = true)
-    # WR-02 (35-REVIEW): hybrid_ratios takes the gate's own kwargs and agrees with its verdict
+    # hybrid_ratios takes the gate's own kwargs and agrees with its verdict
     # for the SAME kwargs (both compute rows through the shared `_cone_row` helper).
     ctxA = ExactDefaultHelpers.ctx_A()
     rA_flat = TSODSO.hybrid_ratios(ctxA; atol = 1e-6)

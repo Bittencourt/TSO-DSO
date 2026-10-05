@@ -1,28 +1,28 @@
 # test/fixtures_stochastic.jl
 #
-# Shared Phase-22 (stochastic PV/demand uncertainty) test fixture module (Wave 1). A
-# TestItems `@testmodule` that every downstream Phase-22 `@testitem` consumes via
+# Shared test fixture module for the stochastic PV/demand uncertainty tests. A
+# TestItems `@testmodule` that every stochastic `@testitem` consumes via
 # `setup=[StochasticFixtures]`. It provides a small, Deferrable-free, radial CI fixture that
 # produces S disjoint-seeded scenario aggregator populations for a battery+thermostatic
-# house (D-12).
+# house.
 #
-# SEAM: Phase-22 CI fixture (STOCH-01).
+# SEAM: stochastic CI fixture.
 #
 # CONTRACT (mirrors fixtures_mpc.jl's discipline): this module is SELF-CONTAINED, i.e. it
-# makes NO top-level call to any symbol filled by a later Phase-22 wave. Every feeder-consuming
+# makes NO top-level call to any symbol that may be defined later. Every feeder-consuming
 # builder takes `feeder`/`seed` as an argument, so nothing here evaluates a not-yet-defined
-# symbol at module-load time; a partial-wave state cannot corrupt discovery.
+# symbol at module-load time; a partially-implemented state cannot corrupt discovery.
 #
-# DELIBERATE EXCLUSION OF DEFERRABLE (D-12/RESEARCH Pitfall 3): this module never includes the
-# project's scheduled-energy-budget flexible-load device. For THIS phase the reasoning is
-# different from Phase 21's rolling-horizon-reset confusion: the extensive-form builder (plan
-# 22-02) duplicates each aggregator ONCE PER IN-SAMPLE SCENARIO under nonanticipativity ties
+# DELIBERATE EXCLUSION OF DEFERRABLE: this module never includes the
+# project's scheduled-energy-budget flexible-load device. Here the reasoning is
+# different from the MPC fixture's rolling-horizon-reset confusion: the extensive-form builder
+# duplicates each aggregator ONCE PER IN-SAMPLE SCENARIO under nonanticipativity ties
 # across independently-built battery copies, so an S-way duplication of a Deferrable's
 # within-window energy budget would multiply an already-nontrivial modeling cost across every
-# scenario for no fixture-scale benefit. Unlike Phase 21, this fixture carries NO small-T
+# scenario for no fixture-scale benefit. Unlike the MPC fixture, this fixture carries NO small-T
 # Deferrable constraint at all, since Deferrable is excluded entirely — `T = 6` is safe purely
 # as a small day-ahead horizon, not because of any device-specific minimum-T requirement
-# (RESEARCH Pitfall 3 flags that `:default` population needs T>=9 on `:ieee13`; this
+# (the `:default` population needs T>=9 on `:ieee13`; this
 # hand-built, Deferrable-free 2-bus fixture avoids that constraint by construction).
 #
 # REPRODUCIBILITY: every aggregator flows from a seeded `generate_profiles` (StableRNGs), so
@@ -37,8 +37,8 @@
 
     # Small day-ahead CI horizon — safe at any T since Deferrable is absent from this fixture.
     const T = 6
-    # Locked D-01/D-10 bands this fixture's constants mirror (not enforced here; Scenario.jl
-    # itself is the enforcement point — plan 22-01 Task 1).
+    # Locked scenario bands this fixture's constants mirror (not enforced here; Scenario.jl
+    # itself is the enforcement point).
     const S_INSAMPLE = 3
     const H_OOS = 5
 

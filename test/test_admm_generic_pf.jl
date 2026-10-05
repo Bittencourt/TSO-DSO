@@ -1,6 +1,6 @@
 # test/test_admm_generic_pf.jl
 #
-# Phase 34 Plan 09 (ARCH-05/06 prerequisite): formulation-generic solve_admm/build_dso_opt via the
+# Formulation-generic solve_admm/build_dso_opt via the
 # `admm_supported` trait, the (topology, formulation) pair check, the LinDistFlow NaN exactness gap
 # and the additive `battery_on_violation` kwarg of `solve_agr!`.
 
@@ -174,11 +174,11 @@ end
     end
 end
 
-@testitem "admm generic pf: solve_agr! 4Q gate on a real co-activating FourQuadBESS (report_4q warns vs throws, IN-07)" tags =
+@testitem "admm generic pf: solve_agr! 4Q gate on a real co-activating FourQuadBESS (report_4q warns vs throws)" tags =
     [:admm, :genericpf] begin
     using TSODSO, JuMP, Logging
 
-    # D-08 boundary fixture (same device as test_fourquadbess.jl's honest-boundary item): a
+    # Boundary fixture (same device as test_fourquadbess.jl's honest-boundary item): a
     # large positive frontier price λ plus a tight upper SOC band makes the AGR-OPT optimum
     # co-activate p_ch AND p_dch (measured p_ch·p_dch ≈ 15.6 >> tol 6.4e-3), i.e. a REAL
     # violation reached through solve_agr!'s own call path, not a hand-set solution.

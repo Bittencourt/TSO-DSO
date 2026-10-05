@@ -1,22 +1,22 @@
-# Seam: models/ac_oracle.jl (EXACT-01 angle recovery now; EXACT-02/03 assert_ac_exact! lands
-# in plan 15-02 — RED-guarded here). Every item name contains "ac_oracle" so
+# Seam: models/ac_oracle.jl (angle recovery and the assert_ac_exact! AC exactness oracle).
+# Every item name contains "ac_oracle" so
 # `occursin("ac_oracle", ti.name)` selects it.
 #
-# The 2-bus angle-recovery item is the BLOCKING analytic validation gate flagged in STATE.md:
-# `recover_voltage_angles` is the one genuinely-new piece of math this phase adds, so it must
+# The 2-bus angle-recovery item is the BLOCKING analytic validation gate:
+# `recover_voltage_angles` is the one genuinely-new piece of math in the AC oracle, so it must
 # match a hand-derived closed-form complex phasor on the trivial 2-bus fixture BEFORE any later
-# plan trusts it on IEEE-13/123. While RED (plan 15-01 Task 3 not yet landed) the behavioral
+# step trusts it on IEEE-13/123. The behavioral
 # asserts sit behind an `isdefined` guard so they go live automatically; the assert_ac_exact!
-# RED-guard is intentionally red until plan 15-02.
+# guard item checks the symbol is defined.
 
-@testitem "ac_oracle: recover_voltage_angles matches the hand-derived 2-bus closed-form phasor (EXACT-01, angle-recovery validation gate)" tags =
+@testitem "ac_oracle: recover_voltage_angles matches the hand-derived 2-bus closed-form phasor (angle-recovery validation gate)" tags =
     [:ac_oracle] begin
     using TSODSO
     using TSODSO: LP
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
-    # RED until plan 15-01 Task 3 defines the phasor recursion.
+    # The phasor recursion must be defined.
     @test isdefined(TSODSO, :recover_voltage_angles)
 
     if isdefined(TSODSO, :recover_voltage_angles)
@@ -69,16 +69,16 @@
     end
 end
 
-@testitem "ac_oracle: assert_ac_exact! is defined (RED-guard for plan 15-02)" tags =
+@testitem "ac_oracle: assert_ac_exact! is defined" tags =
     [:ac_oracle] begin
     using TSODSO
 
-    # GREEN once plan 15-02 defines assert_ac_exact! alongside recover_voltage_angles in this
+    # assert_ac_exact! is defined alongside recover_voltage_angles in this
     # same file.
     @test isdefined(TSODSO, :assert_ac_exact!)
 end
 
-@testitem "ac_oracle: assert_ac_exact! reports all-exact on a KNOWN-exact 2-bus solve, never throws, never resolves to a Bool (EXACT-02/EXACT-03)" tags =
+@testitem "ac_oracle: assert_ac_exact! reports all-exact on a KNOWN-exact 2-bus solve, never throws, never resolves to a Bool" tags =
     [:ac_oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -94,7 +94,7 @@ end
         device = Deferrable(2, 1, 1, 0.5, 1.0, 1.0)
         agg = Aggregator(2, 0.95, [device], [0.2])
 
-        # BOTH contexts from the SAME feeder/agg/λ₀/T/allow_export local variables (Pitfall 3
+        # BOTH contexts from the SAME feeder/agg/λ₀/T/allow_export local variables (identical-data
         # guard: identical problem data, each independently re-optimized).
         ctx_socp, cost_socp, _ = solve_welfare(
             feeder,
@@ -116,7 +116,7 @@ end
 
         report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
 
-        # The report is a per-hour NamedTuple, NEVER a bare Bool (EXACT-03 — a gap must surface
+        # The report is a per-hour NamedTuple, NEVER a bare Bool (a gap must surface
         # as an inspectable finding, not collapse to pass/fail).
         @test report isa NamedTuple
         @test report.hours isa Vector
@@ -130,7 +130,7 @@ end
     end
 end
 
-@testitem "ac_oracle: assert_ac_exact! throws ONLY on a structural T mismatch, never on a numeric gap (EXACT-03 divergence from assert_socp_exact!)" tags =
+@testitem "ac_oracle: assert_ac_exact! throws ONLY on a structural T mismatch, never on a numeric gap (divergence from assert_socp_exact!)" tags =
     [:ac_oracle] begin
     using TSODSO
     using TSODSO: LP
@@ -175,11 +175,11 @@ end
         @test_throws ArgumentError TSODSO.assert_ac_exact!(ctx1, ctx2; rtol = 1e-4)
         # Any test asserting a throw on a HIGH-PV/inexact fixture (as opposed to this
         # structural-mismatch fixture) is a signal the design has drifted toward the wrong shape —
-        # see plan 15-03's stress test, which is a POSITIVE (non-throwing) assertion.
+        # see the high-PV stress test, which is a POSITIVE (non-throwing) assertion.
     end
 end
 
-@testitem "ac_oracle: high-PV stress fixture surfaces the genuine SOCP/AC exactness finding at the exactness boundary (EXACT-04)" tags =
+@testitem "ac_oracle: high-PV stress fixture surfaces the genuine SOCP/AC exactness finding at the exactness boundary" tags =
     [:ac_oracle] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
@@ -190,19 +190,19 @@ end
 
     if isdefined(TSODSO, :assert_ac_exact!) && isdefined(TSODSO, :ACPowerFlow)
         feeder = IEEE13Fixtures.high_pv_feeder()
-        # pv_scale = 1.2 is the EMPIRICALLY-FOUND value (RESEARCH Open Question 1's 1.0–2.0 range)
+        # pv_scale = 1.2 is the EMPIRICALLY-FOUND value (within a 1.0–2.0 search range)
         # that pins bus voltage at V²max — see the ## Finding below. It is hard-coded (no search
         # loop) so the committed test is deterministic and reproducible.
         #
-        # RESTATED IN v4.0 (PHASE 28, dual-mode gate-2 re-verification, Pitfall 3 discipline):
+        # Restated after the dual-mode gate-2 re-verification (identical-data discipline):
         # this comment previously claimed pv_scale=1.2 drove the SOC relaxation into a state of
         # genuine cone INEXACTness — that describes GATE 1 (assert_socp_exact!'s cone-residual
-        # check) and is now FALSE under the default: PM-01/26-18 (test_restricted_branch_flow.jl:
-        # 314-320, 26-FINDINGS.md "Plan
-        # 26-18") already MEASURED both ConvexBranchFlow() (default) and ConvexBranchFlow(;
+        # check) and is now FALSE under the default: measured in test_restricted_branch_flow.jl:
+        # 314-320, which
+        # already MEASURED both ConvexBranchFlow() (default) and ConvexBranchFlow(;
         # thesis_literal=true) genuinely cone-EXACT on this SAME fixture (ratios 0.017/0.002).
-        # Directly re-measured this plan (28-03): socp_maxgap = 2.59e-8 (default) / 9.05e-9
-        # (thesis_literal=true), both orders of magnitude under the FIX-08 hybrid floor
+        # Directly re-measured: socp_maxgap = 2.59e-8 (default) / 9.05e-9
+        # (thesis_literal=true), both orders of magnitude under the hybrid exactness floor
         # (atol_b = max(2e-7, ...)) — gate 1 is EXACT under BOTH formulations at this pv_scale.
         #
         # What this testitem's assertions below ACTUALLY exercise is GATE 2
@@ -213,24 +213,24 @@ end
         # MECHANISM is restriction-induced dispatch-suboptimality, not cone slack: the default is
         # Gan-Low's modified-OPF RESTRICTION (`v̂ ≤ V²max` binds during the high-PV window), which
         # can be cone-exact (its own solution is physically self-consistent) while still excluding
-        # the true AC optimum from its own feasible set (PM-01/26-18). Directly re-measured this
-        # plan (28-03) under `ConvexBranchFlow(; thesis_literal=true)` on this SAME fixture: gate 2
+        # the true AC optimum from its own feasible set. Directly re-measured
+        # under `ConvexBranchFlow(; thesis_literal=true)` on this SAME fixture: gate 2
         # is ALSO EXACT there (`inexact_hours = []`, cost_socp = -921.27700 vs cost_ac = -921.27699
         # — matching within 1e-4), because the thesis-literal copy's own optimum coincides with the
-        # true AC optimum at pv_scale=1.2 (consistent with 26-18's "-921.277 matches the true AC
+        # true AC optimum at pv_scale=1.2 (consistent with the earlier "-921.277 matches the true AC
         # optimum exactly"). So on THIS fixture at pv_scale=1.2, gate-2 inexactness is a property of
         # the DEFAULT restriction, not of "the SOC relaxation" generically, and does NOT reproduce
         # under thesis_literal=true — the OPPOSITE of what this comment previously implied. (The
         # historic v2.1 "genuine cone-inexactness" finding is a SEPARATE phenomenon that still
         # reproduces, but only under thesis_literal=true at a DIFFERENT, higher pv_scale — e.g.
         # pv_scale=1.4 on this fixture (ratio≈1982) or MPCFixtures' pv_scale=3.0 MPC window
-        # (cone_maxratio≈9157-9166) — see 26-FINDINGS.md "Plan 26-18".) Assertions below are
+        # (cone_maxratio≈9157-9166).) Assertions below are
         # UNCHANGED — they were already passing for this now-correctly-documented reason.
         aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
         λ₀ = IEEE13Fixtures.mem_price_profile()
 
         # SOCP solve with rtol_exact = 1.0: a DELIBERATE, documented diagnostic override of
-        # solve_welfare's OWN internal PF-04 gate (assert_socp_exact!), so the loose-relaxation
+        # solve_welfare's OWN internal exactness gate (assert_socp_exact!), so the loose-relaxation
         # solution is RETURNED for comparison instead of refused. It changes ZERO code in
         # welfare_solve.jl. The milestone's ACTUAL exactness verdict comes from assert_ac_exact!'s
         # own standard rtol = 1e-4 below, NEVER from this loosened internal gate.
@@ -256,7 +256,7 @@ end
         )
         # SECOND AC start with a different Ipopt interior-point strategy — genuine
         # solver-trajectory diversity WITHOUT touching solve_welfare's signature (the local-optimum
-        # guard, Pitfall 2).
+        # guard, local-optimum check).
         ctx_ac2, cost_ac2, _ = solve_welfare(
             feeder,
             ACPowerFlow(),
@@ -271,7 +271,7 @@ end
                 "mu_strategy" => "adaptive",
             ),
         )
-        # Local-optimum guard (Pitfall 2): if this ever fails on a future solver upgrade it flags a
+        # Local-optimum guard: if this ever fails on a future solver upgrade it flags a
         # LOCAL-OPTIMUM finding distinct from an exactness finding, and must NOT be conflated with
         # the assert_ac_exact! comparison below.
         @test isapprox(cost_ac, cost_ac2; rtol = 1e-3, atol = 1e-3)
@@ -284,7 +284,7 @@ end
         inexact_hours = [row.t for row in report.hours if !row.exact]
         @test !isempty(inexact_hours)
 
-        # Diagnose the disagreement (Pitfall 4): it must be INVESTIGATED, not merely asserted
+        # Diagnose the disagreement: it must be INVESTIGATED, not merely asserted
         # non-empty. For AT LEAST ONE inexact hour, either a bus voltage is pinned at/near V²max OR
         # a branch carries reverse (PV back-feed) flow — the voltage-binding / reverse-flow regime
         # where SOC exactness is documented to fail (Farivar & Low 2013; Gan, Li, Topcu & Low 2015).
@@ -302,26 +302,26 @@ end
             voltage_bound_hit || reverse_flow
         end
         @test diagnosed
-        # DOCUMENTED FINDING (EXACT-04), RESTATED IN v4.0 (PHASE 28): at pv_scale = 1.2, under the
+        # DOCUMENTED FINDING, restated after the dual-mode re-verification: at pv_scale = 1.2, under the
         # DEFAULT ConvexBranchFlow() this testitem solves, GATE 2 (`assert_ac_exact!`'s per-hour
         # AC-dispatch comparison) goes genuinely inexact over the high-PV afternoon window (hours
         # 6–15), with bus voltage pinned at V²max = 1.1025 and reverse (PV back-feed) branch flow.
         # GATE 1 (`assert_socp_exact!`'s cone-residual check, `ctx_socp.meta[:socp_maxgap]`) is NOT
         # the mechanism here — it is EXACT under the default (measured socp_maxgap ≈ 2.6e-8, well
-        # under the FIX-08 hybrid floor; PM-01/26-18). The genuine mechanism is Gan-Low's
+        # under the hybrid exactness floor). The genuine mechanism is Gan-Low's
         # modified-OPF RESTRICTION actively binding (`v̂ ≤ V²max`) during this window, which
         # excludes the true AC optimum (cost_socp = -921.754 vs cost_ac = -921.277) from the
         # restricted formulation's own feasible set — a restriction-induced dispatch-suboptimality,
         # not a slack/loose cone. The two independent AC starts agree (no local-optimum artifact),
         # so the gap is a genuine formulation property, not solver noise.
         #
-        # Directly re-measured this plan (28-03) under `ConvexBranchFlow(; thesis_literal=true)` on
+        # Directly re-measured under `ConvexBranchFlow(; thesis_literal=true)` on
         # this SAME fixture: GATE 2 is ALSO EXACT there (inexact_hours = [], cost_socp = -921.27700
         # matching cost_ac = -921.27699 within 1e-4) — this gate-2 inexactness does NOT reproduce
         # under thesis_literal=true at pv_scale=1.2. The historic v2.1 "genuine SOC-relaxation
         # cone-inexactness" finding is a DIFFERENT phenomenon (gate 1, not gate 2) that still
         # reproduces, but only under thesis_literal=true at a higher pv_scale (e.g. 1.4+ on this
-        # fixture, or MPCFixtures' pv_scale=3.0 MPC window) — see 26-FINDINGS.md "Plan 26-18".
+        # fixture, or MPCFixtures' pv_scale=3.0 MPC window).
         # Narrated (gate-qualified) in docs/literate/ac_oracle.jl and restricted_branch_flow.jl.
     end
 end

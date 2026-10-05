@@ -1,18 +1,18 @@
-# Seam: powerflow/ACPowerFlow.jl (EXACT-01). Independent nonconvex AC-OPF peer formulation.
+# Seam: powerflow/ACPowerFlow.jl. Independent nonconvex AC-OPF peer formulation.
 #
-# RED test-item harness (Wave 0). Plan 15-01 Task 2 turns these green by defining
+# Test-item harness for
 # `ACPowerFlow <: AbstractPowerFlow` (the DistFlow branch-flow physics UNRELAXED: the true
 # nonconvex equality `l·v = P²+Q²` instead of the rotated-SOC inequality, and no LinDistFlow
 # exactness copy) and `problem_class(::ACPowerFlow) = NLP()`. Every item name contains
-# "ac_powerflow" so `occursin("ac_powerflow", ti.name)` selects it. While RED the sole failing
+# "ac_powerflow" so `occursin("ac_powerflow", ti.name)` selects it. The first
 # assertion is a missing-symbol `isdefined` check (never a runner crash); the behavioral
-# asserts sit behind an `isdefined` guard so they go live automatically once 15-01 Task 2 lands.
+# asserts sit behind an `isdefined` guard so they go live automatically once the type exists.
 
-@testitem "ac_powerflow: ACPowerFlow is a defined AbstractPowerFlow subtype (EXACT-01)" tags =
+@testitem "ac_powerflow: ACPowerFlow is a defined AbstractPowerFlow subtype" tags =
     [:ac_powerflow] begin
     using TSODSO
 
-    # RED until plan 15-01 Task 2 defines the AC-OPF peer formulation.
+    # The AC-OPF peer formulation must be defined.
     @test isdefined(TSODSO, :ACPowerFlow)
 
     if isdefined(TSODSO, :ACPowerFlow)
@@ -20,12 +20,12 @@
     end
 end
 
-@testitem "ac_powerflow: ACPowerFlow routes to the NLP problem class (EXACT-01 / INFRA-02)" tags =
+@testitem "ac_powerflow: ACPowerFlow routes to the NLP problem class" tags =
     [:ac_powerflow] begin
     using TSODSO
 
-    # The generic trait returns QP() for DC/LinDistFlow (plan 04-01); ConvexBranchFlow adds
-    # SOCP() (plan 04-02). Plan 15-01 adds the more-specific `problem_class(::ACPowerFlow) =
+    # The generic trait returns QP() for DC/LinDistFlow; ConvexBranchFlow adds
+    # SOCP(). ACPowerFlow adds the more-specific `problem_class(::ACPowerFlow) =
     # NLP()` so the true nonconvex equality cone routes to the Ipopt factory.
     @test isdefined(TSODSO, :ACPowerFlow)
 
@@ -34,7 +34,7 @@ end
     end
 end
 
-@testitem "ac_powerflow: contribute! stashes pf_vars WITHOUT the exactness copy v̂ (EXACT-01)" tags =
+@testitem "ac_powerflow: contribute! stashes pf_vars WITHOUT the exactness copy v̂" tags =
     [:ac_powerflow] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -70,19 +70,18 @@ end
     end
 end
 
-# PM-07 (26-15): PV back-feed fixture mirroring test_convex_branch_flow.jl's own FIX-03
-# regression (26-05) — but on ACPowerFlow's UNRELAXED nonconvex formulation, solved by Ipopt
+# PV back-feed fixture mirroring test_convex_branch_flow.jl's own
+# back-feed regression — but on ACPowerFlow's UNRELAXED nonconvex formulation, solved by Ipopt
 # rather than Clarabel. Under reverse flow (P < 0), the receiving-end power (P−r·l, Q−x·l) has
 # LARGER magnitude than the sending-end power (P,Q) because the loss term `−r·l` REINFORCES
-# rather than cancels the already-negative P (26-RESEARCH.md), so a branch limit sized to just
+# rather than cancels the already-negative P, so a branch limit sized to just
 # admit the forward magnitude can still be violated on the receiving end under back-feed. The
-# SAME `r=0.03, x=0.02, smax=0.3976601762564117` fixture Plan 26-05 validated is reused here —
+# SAME `r=0.03, x=0.02, smax=0.3976601762564117` fixture validated in the SOCP back-feed test is reused here —
 # ACPowerFlow shares the identical branch-flow physics (just unrelaxed), so the same fixture
 # drives the same qualitative binding/slack asymmetry. Since Ipopt (not a conic solver) is the
-# backend, the raw dual MAGNITUDES differ from Plan 26-05's SOCP test; only the QUALITATIVE
-# ratio (receiving-end dual dominates sending-end dual) is asserted, per the plan's own
-# guidance.
-@testitem "ac_powerflow: PV back-feed binds the receiving-end limit (:smax_rev) while the sending-end limit (:smax) stays slack (PM-07)" tags =
+# backend, the raw dual MAGNITUDES differ from the SOCP test; only the QUALITATIVE
+# ratio (receiving-end dual dominates sending-end dual) is asserted.
+@testitem "ac_powerflow: PV back-feed binds the receiving-end limit (:smax_rev) while the sending-end limit (:smax) stays slack" tags =
     [:ac_powerflow] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -100,13 +99,13 @@ end
     TSODSO.contribute!(TSODSO.ACPowerFlow(), ctx, feeder; T = 1)
     pv = ctx.pf_vars
 
-    # Near-unity power factor (φ ≈ 0.999999), the same real-power back-feed isolation Plan
-    # 26-05's ConvexBranchFlow test uses.
+    # Near-unity power factor (φ ≈ 0.999999), the same real-power back-feed isolation
+    # the SOCP ConvexBranchFlow test uses.
     φ = 0.999999
     tanφ = sqrt(1 - φ^2) / φ
     @constraint(model, pv.Q[1, 1] == pv.P[1, 1] * tanφ)
 
-    # Warm start (Rule 3, blocking-issue auto-fix): Ipopt's default all-zero start sits at a
+    # Warm start (needed for convergence): Ipopt's default all-zero start sits at a
     # DEGENERATE KKT point of the `l·v = P²+Q²` equality (thesis 3.39 unrelaxed) — the
     # constraint's gradient in (P,Q) vanishes at P=Q=0, so the interior-point method reports
     # ALMOST_LOCALLY_SOLVED / NEARLY_FEASIBLE_POINT at the trivial P≈0 solution instead of

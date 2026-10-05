@@ -1,6 +1,6 @@
 # test/fixtures_four_quad_bess.jl
 #
-# Seam: Phase-19 acceptance-gate fixture (MESH-04/MESH-05). A TestItems `@testmodule` that
+# Seam: acceptance-gate fixture for the four-quadrant BESS / meshed reactive path. A TestItems `@testmodule` that
 # `test/test_admm_reactive.jl`'s NEW `:live` items consume via `setup = [TwoBusFixtures,
 # FourQuadBESSFixtures]` (TwoBusFixtures MUST be listed FIRST in every consuming testitem's `setup`
 # array — TestItemRunner evaluates `option_setup` entries IN ORDER, so `TwoBusFixtures` is
@@ -10,20 +10,20 @@
 # WHY THIS DEPARTS FROM THE PROJECT'S "self-contained @testmodule" CONVENTION (see
 # fixtures_two_bus.jl/fixtures_ieee123.jl's own header comments): those modules avoid a
 # cross-`@testmodule` load-time dependency by taking `feeder` as an ARGUMENT and duplicating
-# any small shared helper locally. This module is EXPLICITLY instructed (plan 19-08, task 1) to
+# any small shared helper locally. This module is EXPLICITLY designed to
 # reuse `TwoBusFixtures.two_bus_feeder()`/`SEED_2BUS`/`LOAD_SCALE_2BUS`/`PV_SCALE_2BUS`/
 # `RHO_2BUS`/`BATT_λ_*`/`temperature_profile()` DIRECTLY rather than redefine them — the whole
 # point is that the `:live` cross-validation runs on the IDENTICAL 2-bus fixture the project's
 # existing ADMM cross-validation tests already anchor on, never a re-derived copy that could
 # silently drift. `using ..TwoBusFixtures` (a relative import to the SIBLING submodule under
 # the shared TestItemRunner setup-module parent) is the mechanism that makes this safe: verified
-# directly against `TestItemRunner.jl`'s `ensure_evaled`/`run_testitem` source this session
+# directly against `TestItemRunner.jl`'s `ensure_evaled`/`run_testitem` source in an earlier check
 # (`Core.eval(test_setup_module_set.setupmodule, :(module $(name) end))` — every `@testmodule`,
 # including this one, is eval'd as a child of the SAME shared parent, so a sibling reference
 # resolves once that sibling has ALREADY been `ensure_evaled`).
 #
-# CONE-NAME-COLLISION: RESOLVED AT SOURCE (WR-01, phase-19 code review; originally
-# deferred-items.md / plan 19-07's finding). `FourQuadBESS.contribute!`'s device-level
+# CONE-NAME-COLLISION: RESOLVED AT SOURCE (originally
+# a deferred finding). `FourQuadBESS.contribute!`'s device-level
 # apparent-power cone is now ANONYMOUS (it claims no JuMP object-dictionary name), so a
 # `FourQuadBESS`-bearing aggregator set composes directly with `ConvexBranchFlow`'s named
 # network `:cone` in ONE shared model — the former test-only `JuMP.unregister(model, :cone)`
@@ -31,12 +31,12 @@
 # in behavior): it reproduces `solve_welfare`'s exact step sequence (thesis eq. 3.38) using
 # ONLY `solve_welfare`'s own PUBLIC seams (`contribute!`, `add_to_residual!`,
 # `register_constraint!`, `assert_solved!`, `assert_socp_exact!`,
-# `assert_battery_complementarity!`), and the phase's D-14 measured cross-validation
+# `assert_battery_complementarity!`), and the measured cross-validation
 # tolerances below were pinned against THIS exact replica — swapping it for a direct
 # `solve_welfare` call would invalidate that measurement provenance for zero test value.
 #
-# MEASUREMENT-BEFORE-GOLDEN (D-14, threat T-19-18): the welfare/λ/μ cross-validation tolerances
-# Task 2 pins were MEASURED on this exact fixture (`build_two_bus_aggregators_4q` at its
+# MEASUREMENT-BEFORE-GOLDEN: the welfare/λ/μ cross-validation tolerances
+# the tests pin were MEASURED on this exact fixture (`build_two_bus_aggregators_4q` at its
 # documented parameters below) across 5 seeds (`SEED_2BUS .. SEED_2BUS+4`), comparing
 # `centralized_welfare_4q` against `solve_admm(...; reactive_consensus = ReactiveMode.LIVE)`:
 #
@@ -49,20 +49,20 @@
 #   max         2.368e-5          1.519e-5           1.610e-8
 #
 # (`obj_c ≈ -483.x` across seeds — the Thermostatic discomfort cost dominates, an expected
-# feature of this fixture's own parametrization, not a Phase-19 concern.) Every entry converges
+# feature of this fixture's own parametrization, not a modeling concern.) Every entry converges
 # in `iters = 2` — this near-lossless/interior/uncongested fixture (deliberately, per
-# `TwoBusFixtures`'s own design) is warm-started essentially AT its converged point (RESEARCH
-# Pattern: `λ` warm-starts at `-λ₀`), so a fast, small-iteration convergence is the EXPECTED,
+# `TwoBusFixtures`'s own design) is warm-started essentially AT its converged point (`λ`
+# warm-starts at `-λ₀`), so a fast, small-iteration convergence is the EXPECTED,
 # correct outcome here, not evidence of a trivial/degenerate solve — `solve_admm`'s own
 # fail-loud maxiter cap (never silently returning early) is what makes a 2-iteration convergence
 # trustworthy.
 #
-# D-03 DEGENERACY, CONFIRMED EMPIRICALLY (not merely cited): `|Δμ|` sits at ~1e-8, essentially
+# DEGENERACY, CONFIRMED EMPIRICALLY (not merely cited): `|Δμ|` sits at ~1e-8, essentially
 # AT Clarabel's own dual-accuracy noise floor — both the centralized `dual(:balance_q)` and the
 # `:live` internal `μq`-derived `μ` converge to ≈0 on this near-lossless (`r=x=1e-3`),
 # SMAX_NO_LIMIT branch: there is no genuine reactive network cost to price here (an HONEST
-# feature of the near-lossless/uncongested 2-bus fixture, exactly as `solve_admm.jl`'s own D-03
-# docstring note anticipates). The chosen tolerances below (Task 2) are each independently
+# feature of the near-lossless/uncongested 2-bus fixture, exactly as `solve_admm.jl`'s own degeneracy
+# docstring note anticipates). The chosen tolerances below are each independently
 # derived from THESE measured numbers, with a ≈3-6× safety margin over the observed max gap —
 # NEVER one shared constant, and the μ tolerance is deliberately an ABSOLUTE (not relative) floor
 # since μ itself is ≈0 (a relative comparison against ≈0 is meaningless):
@@ -73,9 +73,9 @@
 #
 # FIXTURE SCALE (mirrors `LOAD_SCALE_2BUS = 0.02`/`PV_SCALE_2BUS = 0.005`'s own sizing
 # discipline): `Pch_max = Pdch_max = 0.02` sits at the SAME magnitude as the fixture's inelastic
-# demand (not `PVBattery`'s own `Pmax = 0.1`, which — empirically verified this session, an
+# demand (not `PVBattery`'s own `Pmax = 0.1`, which — empirically verified, an
 # earlier 10×-larger candidate — let the 4Q-BESS's discharge occasionally FLIP bus 2 into a
-# net-EXPORTER at a negative effective price, tripping the HONEST D-08 grid-charging boundary
+# net-EXPORTER at a negative effective price, tripping the HONEST grid-charging boundary
 # certificate (`assert_4q_complementarity!`) rather than staying comfortably interior). `Smax =
 # 0.03` gives `√(Smax²−Pch_max²) ≈ 0.0224` of REACTIVE headroom at the ACTIVE bound — comfortably
 # inside the apparent-power cone at every hour, keeping the 2-bus solve INTERIOR (never binding
@@ -83,7 +83,7 @@
 # 0/0.08/0.04` is a plain 4× headroom band around the `Pch_max`-scaled throughput, mirroring the
 # existing `PVBattery`'s own `Emax ≈ 2×Pmax` discipline. `η = 0.95`, `Δt = 1.0` (hourly, matches
 # `T = 24`) and the SAME strict `λ_min < λ_med < λ_max` triple (`TwoBusFixtures.BATT_λ_*`) as the
-# fixture's own `PVBattery` — required by the constructor (D-05) and consistent with reusing one
+# fixture's own `PVBattery` — required by the constructor and consistent with reusing one
 # App. C price triple across every battery-like device in this fixture.
 
 @testmodule FourQuadBESSFixtures begin
@@ -101,20 +101,20 @@
     const BESS_EMAX = 0.08
     const BESS_SOC0 = 0.04
 
-    # μ-SIGN-PINNING fixture constants (WR-02, phase-19 code review). The primary fixture above
+    # μ-SIGN-PINNING fixture constants. The primary fixture above
     # is DELIBERATELY near-lossless (`r = x = 1e-3`) and interior (`Smax = 0.03` never binds),
-    # so its reactive dual μ is degenerate ≈ 1e-8 (D-03) — a sign flip in `solve_admm`'s
+    # so its reactive dual μ is degenerate ≈ 1e-8 — a sign flip in `solve_admm`'s
     # published reactive price would pass every assertion on it. Pinning the sign needs BOTH:
     #   - REAL impedance (`r = x = 0.05`, 50× the near-lossless branch) so reactive flow has a
     #     genuine marginal network cost, AND
     #   - a BINDING apparent-power cone (`Smax = 0.008` < the ~0.0097 pu peak reactive draw at
     #     φ = 0.90): a 4Q device whose free `q` sits INTERIOR in its cone drives its own bus's
-    #     μ to ≈ 0 by first-order optimality (q is costless, D-03), regardless of impedance —
+    #     μ to ≈ 0 by first-order optimality (q is costless), regardless of impedance —
     #     the cone must bind for |μ| to rise above solver noise at the device's bus.
     # MEASURED (2026-08-08, seeds 20260719..20260723, this exact fixture): 2–13 of 24 hours
     # carry |μ_c| > 1e-5 (13 at the default seed), sign-agreement between the :live `res` μ and
     # the centralized `dual(:balance_q)` on EVERY such hour, max|Δμ| ≤ 5.5e-5 while the FLIPPED
-    # sign would differ by ≥ 2.3e-3 (≥ 42×) — ADMM converges in 3 iters, PF-04 maxgap ≤ 1.3e-10.
+    # sign would differ by ≥ 2.3e-3 (≥ 42×) — ADMM converges in 3 iters, exactness maxgap ≤ 1.3e-10.
     const REAL_R_2BUS = 0.05
     const REAL_X_2BUS = 0.05
     const BESS_SMAX_QBOUND = 0.008
@@ -124,7 +124,7 @@
 
     Mirrors [`TwoBusFixtures.build_two_bus_aggregators`](@ref) EXACTLY (same
     Thermostatic/Deferrable/PVBattery triple, same seeded `generate_profiles` draw at
-    `seed + bus`) PLUS one [`FourQuadBESS`](@ref) member at the SAME bus (MESH-04/05), on the
+    `seed + bus`) PLUS one [`FourQuadBESS`](@ref) member at the SAME bus, on the
     SAME [`TwoBusFixtures.two_bus_feeder`](@ref). Seeded ⇒ reproducible; takes `feeder` as an
     argument (never calls `TwoBusFixtures.two_bus_feeder` at this module's load time).
     """
@@ -180,11 +180,11 @@
     """
         two_bus_feeder_real_impedance() -> Feeder
 
-    The WR-02 μ-sign-pinning variant of [`TwoBusFixtures.two_bus_feeder`](@ref): identical
+    The μ-sign-pinning variant of [`TwoBusFixtures.two_bus_feeder`](@ref): identical
     2-bus radial topology and voltage band, but with REAL (non-near-lossless) branch impedance
     `r = x = REAL_R_2BUS = 0.05` (50× the primary fixture's `1e-3`), so the reactive channel
     carries a genuine, priceable network cost. Built INSIDE the function (never at module load
-    time, threat T-06-01), mirroring `TwoBusFixtures.two_bus_feeder`'s own discipline.
+    time), mirroring `TwoBusFixtures.two_bus_feeder`'s own discipline.
     """
     function two_bus_feeder_real_impedance()
         buses = [
@@ -199,7 +199,7 @@
         build_two_bus_aggregators_4q_qbound(feeder; seed=TwoBusFixtures.SEED_2BUS)
             -> Vector{<:Aggregator}
 
-    The WR-02 μ-sign-pinning aggregator set: mirrors [`build_two_bus_aggregators_4q`](@ref)
+    The μ-sign-pinning aggregator set: mirrors [`build_two_bus_aggregators_4q`](@ref)
     EXACTLY (same Thermostatic/Deferrable/PVBattery triple, same seeded draw, same
     `FourQuadBESS` charge/discharge/SOC parameters) EXCEPT the apparent-power cone bound is
     `BESS_SMAX_QBOUND = 0.008` — deliberately BELOW the aggregator's ~0.0097 pu peak reactive
@@ -268,12 +268,12 @@
     A TEST-ONLY replica of [`solve_welfare`](@ref)'s exact step sequence (thesis eq. 3.38),
     written entirely against `solve_welfare`'s own PUBLIC seams. Originally required because a
     `FourQuadBESS`-bearing `aggregators` crashed `solve_welfare` on the `:cone` name collision;
-    that collision is FIXED at source (WR-01 — the device cone is anonymous now), and this
-    replica is KEPT because the phase's D-14 measured cross-validation tolerances were pinned
+    that collision is FIXED at source (the device cone is anonymous now), and this
+    replica is KEPT because the measured cross-validation tolerances were pinned
     against it (see this file's header comment). Every step mirrors `solve_welfare` verbatim:
     the free-sign frontier
-    `p_import`/`q_import` (added ONLY when the formulation provides a reactive channel, WR-03),
-    closing `:balance_p`/`:balance_q`, `assert_solved!` before any dual read, the PF-04
+    `p_import`/`q_import` (added ONLY when the formulation provides a reactive channel),
+    closing `:balance_p`/`:balance_q`, `assert_solved!` before any dual read, the exactness
     `assert_socp_exact!` gate (data-driven on `:l`'s presence, BEFORE any dual read), and the
     mandatory App. C `assert_battery_complementarity!` post-solve check (`τ`
     PROBLEM-CLASS-AWARE, mirroring `solve_welfare`'s own default).

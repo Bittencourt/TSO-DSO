@@ -1,26 +1,26 @@
 # test/fixtures_ieee13.jl
 #
-# Shared Phase-4 test fixture module (Wave 1). A TestItems `@testmodule` that the
-# Phase-4 `@testitem`s consume via `setup=[IEEE13Fixtures]`. It provides the modified
+# Shared test fixture module for the IEEE-13 operational tests. A TestItems `@testmodule` that the
+# IEEE-13 `@testitem`s consume via `setup=[IEEE13Fixtures]`. It provides the modified
 # IEEE-13 aggregator builder, the digitized MEM price / exterior-temperature profiles,
-# and the high-PV / over-voltage stress fixture that the PF-04 exactness gate targets.
+# and the high-PV / over-voltage stress fixture that the exactness gate targets.
 #
-# CONTRACT (threat T-04-08): this module DEFINES functions and consts ONLY — it makes NO
-# top-level call to any symbol filled by a later Phase-4 wave (e.g. `ieee13_modified`,
+# CONTRACT: this module DEFINES functions and consts ONLY — it makes NO
+# top-level call to any symbol that might be defined later (e.g. `ieee13_modified`,
 # `ConvexBranchFlow`, `operational_oracle`). The feeder-consuming builders take a `feeder`
 # argument, so nothing here evaluates a not-yet-defined symbol at module-load time; a
-# partial-wave state therefore cannot corrupt test discovery.
+# partially-implemented state therefore cannot corrupt test discovery.
 #
-# REPRODUCIBILITY (threat T-04-06): every profile / aggregator flows from a seeded
+# REPRODUCIBILITY: every profile / aggregator flows from a seeded
 # `generate_profiles` (StableRNGs), so the high-PV stress fixture regenerates bit-for-bit.
 #
-# UNITS (RESEARCH Pitfall 3): the MEM price profile is kept in the SAME monetary unit as
+# UNITS: the MEM price profile is kept in the SAME monetary unit as
 # the device price coefficients (¢$/kWh-consistent, cf. the battery triple
 # λ_max=8.9 / λ_med=6.2 / λ_min=3.8), so no objective term dwarfs another.
 #
 # The MEM price (Fig 4.5) and temperature (Fig 4.2) profiles are figure-bound in the
-# thesis and only PLOTTED, so these are documented DIGITIZED approximations (RESEARCH
-# Open Q1); the tight ground-truth golden is pinned later behind a human-verify checkpoint.
+# thesis and only PLOTTED, so these are documented DIGITIZED approximations
+# (the input gap is described below); the tight ground-truth golden is pinned separately.
 
 @testmodule IEEE13Fixtures begin
     using TSODSO
@@ -29,7 +29,7 @@
     const T = 24
 
     # Battery price triple (App. C parametrization, thesis Table 4.x) in ¢$/kWh — STRICT
-    # ordering λ_min < λ_med < λ_max is the load-bearing no-binary guarantee (CR-01).
+    # ordering λ_min < λ_med < λ_max is the load-bearing no-binary guarantee.
     const BATT_λ_MIN = 3.8
     const BATT_λ_MED = 6.2
     const BATT_λ_MAX = 8.9
@@ -38,7 +38,7 @@
         mem_price_profile() -> Vector{Float64}
 
     The 24-hour MEM / wholesale price `λ₀` (¢\$/kWh-consistent), a DIGITIZED approximation
-    of thesis Fig 4.5 (Open Q1): low overnight, a morning ramp, a moderate midday shoulder,
+    of thesis Fig 4.5: low overnight, a morning ramp, a moderate midday shoulder,
     and an evening peak. Positive and well within the `PerUnit.PRICE_MAX` sanity bound.
     """
     function mem_price_profile()
@@ -74,7 +74,7 @@
         temperature_profile() -> Vector{Float64}
 
     The 24-hour exterior-temperature profile (°C), a DIGITIZED approximation of thesis
-    Fig 4.2 (Open Q1): a dawn minimum and an afternoon peak. Feeds the thermostatic-load
+    Fig 4.2: a dawn minimum and an afternoon peak. Feeds the thermostatic-load
     ambient `Tout`; it may exceed the comfort band (it is ambient, not the setpoint).
     """
     function temperature_profile()
@@ -165,8 +165,8 @@
     One aggregator per NON-root bus (indices `2:length(feeder.buses)` — the 10 thesis load
     nodes 1..10) on the modified IEEE-13 feeder, each holding Thermostatic + Deferrable +
     PVBattery with the App. C price triple and a load power factor `φ = 0.90 ∈ [0.85, 0.95]`.
-    Seeded and reproducible (threat T-04-06). Takes the feeder as an argument so this module
-    never calls `ieee13_modified` at load time (threat T-04-08).
+    Seeded and reproducible. Takes the feeder as an argument so this module
+    never calls `ieee13_modified` at load time.
     """
     function build_ieee13_aggregators(feeder; seed::Integer = 20260718)
         N = length(feeder.buses)
@@ -178,7 +178,7 @@
 
     A small 3-bus radial fixture (root + two downstream load buses) with low-impedance
     branches and tight voltage headroom — the substrate for the high-PV / over-voltage,
-    reverse-power-flow regime that stresses SOC-relaxation exactness (RESEARCH Pitfall 1).
+    reverse-power-flow regime that stresses SOC-relaxation exactness.
     Constructed inside the function (never at module top level).
     """
     function high_pv_feeder()
@@ -199,7 +199,7 @@
 
     Aggregators for the [`high_pv_feeder`](@ref): a seeded PV back-feed that exceeds the small
     local load, so the surplus REVERSE-FLOWS toward the root and pushes the bus voltages ABOVE
-    nominal (over-voltage). Calibrated to the EXACT over-voltage regime the PF-04 gate targets:
+    nominal (over-voltage). Calibrated to the EXACT over-voltage regime the exactness gate targets:
     with the priced frontier export (`solve_welfare(...; allow_export = true)`) the surplus is
     sold to the MEM rather than dissipated, so the SOC relaxation stays TIGHT — voltage climbs
     to ≈`1.04` pu (genuine over-voltage / reverse power flow) while remaining strictly BELOW the
@@ -210,14 +210,14 @@
     relaxation holds under reverse flow so long as the UPPER voltage bound does not STRICTLY
     bind. An over-scaled back-feed pins voltage at `V²max` (the bound binds), which is the one
     regime where SOC exactness genuinely fails — the solver then dumps surplus into a fictitious
-    loss current `l` (`l·v > P²+Q²`) and the PF-04 gate correctly REFUSES the resulting prices.
+    loss current `l` (`l·v > P²+Q²`) and the exactness gate correctly REFUSES the resulting prices.
     `pv_scale = 0.5` (against the seeded PV shape, a small `load_scale = 0.2`, and a tiny
     battery) lands the peak at ≈`1.04` pu — clear over-voltage with headroom below the cap.
-    Fixed default seed ⇒ reproducible (threat T-04-06).
+    Fixed default seed ⇒ reproducible.
 
     The `pv_scale` kwarg defaults to `0.5` (the documented ≈1.04 pu EXACT regime,
     `test_exactness.jl`'s own high-PV case); a caller-supplied `pv_scale ≫ 0.5` pins voltage at
-    `V²max` — the one regime where SOC exactness genuinely fails (EXACT-04, plan 15-03).
+    `V²max` — the one regime where SOC exactness genuinely fails (the high-PV exactness finding).
     """
     function build_high_pv_aggregators(
         feeder;
@@ -240,15 +240,15 @@
         ]
     end
 
-    # --- Ground-truth calibration (OPT-02/OPT-03, RESEARCH Open Q1 / Assumptions A2–A3) ---
+    # --- Ground-truth calibration (figure-bound input gap, house-count inconsistency) ---
     #
     # The head-branch thermal limit S_max,(0,1) = 6.86 MVA ⇒ 0.0686 pu on the 100 MVA base,
     # while EVERY device / demand magnitude in this module is O(0.1..1) pu (a normalized
     # per-node SHAPE, not a residential magnitude). The full-magnitude `build_ieee13_aggregators`
     # therefore draws ≈6.3 pu at the peak hour — ~90× the head limit — so the congestion-
-    # constrained GLB-CVX solve is INFEASIBLE. That is the figure-bound-input gap flagged in
-    # RESEARCH Open Q1 (the thesis MEM/temperature profiles and per-house device
-    # parametrization are only PLOTTED) and the house-count inconsistency A3 (784 houses /
+    # constrained GLB-CVX solve is INFEASIBLE. That is the figure-bound-input gap
+    # (the thesis MEM/temperature profiles and per-house device
+    # parametrization are only PLOTTED) and the house-count inconsistency (784 houses /
     # 112-per-node ⇒ a residential feeder is a small fraction of the 100 MVA base).
     #
     # `GROUND_LOAD_SCALE` / `GROUND_PV_SCALE` rescale the seeded SHAPES to a physically
@@ -259,23 +259,23 @@
     # PV is scaled ABOVE load (`0.03` vs `0.005`) so the surplus reverse-flows to the frontier —
     # the exact over-voltage / reverse-power regime the LinDistFlow exactness copy targets, and
     # the reason the ground solve needs `allow_export = true` (priced export keeps the SOC cone
-    # tight/exact; PF-04). These are a DOCUMENTED CALIBRATION, not the thesis inputs — the
+    # tight/exact). These are a DOCUMENTED CALIBRATION, not the thesis inputs — the
     # ground-truth regression pins the resulting COMPUTED golden (a reproducibility anchor) and
-    # cross-checks the thesis `v₉[16] ≈ 1.0493` as an APPROXIMATE magnitude, per Open Q1.
+    # cross-checks the thesis `v₉[16] ≈ 1.0493` as an APPROXIMATE magnitude.
     const GROUND_LOAD_SCALE = 0.005
     const GROUND_PV_SCALE = 0.03
 
     """
         build_ieee13_ground_aggregators(feeder; seed=20260718) -> Vector{<:Aggregator}
 
-    The modified IEEE-13 aggregators calibrated for the OPT-02/OPT-03 GROUND-TRUTH solve:
+    The modified IEEE-13 aggregators calibrated for the ground-truth solve:
     one aggregator per non-root bus, identical SHAPE to [`build_ieee13_aggregators`](@ref) but
     rescaled to a residential magnitude (`GROUND_LOAD_SCALE` demand / battery, `GROUND_PV_SCALE`
     PV) so the head-branch-congested GLB-CVX solve is FEASIBLE and lands in the thesis
     congestion-driven over-voltage regime (`v₉[16]`, thesis Fig 4.4). Seeded and reproducible
-    (threat T-04-06); takes the feeder as an argument (never calls `ieee13_modified` at load
-    time, threat T-04-08). Requires `allow_export = true` at the solve (the PV surplus exports
-    to the MEM; priced export is the SOC-exactness enabler, PF-04).
+    (reproducible); takes the feeder as an argument (never calls `ieee13_modified` at load
+    time). Requires `allow_export = true` at the solve (the PV surplus exports
+    to the MEM; priced export is the SOC-exactness enabler).
     """
     function build_ieee13_ground_aggregators(feeder; seed::Integer = 20260718)
         N = length(feeder.buses)
