@@ -436,25 +436,17 @@ function report(df::DataFrame, label::AbstractString, path::AbstractString)
             "rtol_exact neutralized so inexact solves are returned for classification",
         )
         println(io, "rather than refused by the exactness gate.\n")
-        println(
-            io,
-            "DUAL-MODE: every grid point solved under BOTH",
-        )
-        println(
-            io,
-            "ConvexBranchFlow() (default, Gan-Low direction) AND",
-        )
-        println(
-            io,
-            "ConvexBranchFlow(; thesis_literal=true) (OLD literal copy) — see the",
-        )
+        println(io, "DUAL-MODE: every grid point solved under BOTH")
+        println(io, "ConvexBranchFlow() (default, Gan-Low direction) AND")
+        println(io, "ConvexBranchFlow(; thesis_literal=true) (OLD literal copy) — see the")
         println(io, "`formulation` column and the per-formulation breakdown below.\n")
         for g in groupby(df, [:formulation, :class])
             @printf(io, "  %-16s %-12s %d\n", g.formulation[1], g.class[1], nrow(g))
         end
-        for (formulation_label, s_all) in
-            (("default", filter(r -> r.formulation == :default, df)),
-                ("thesis_literal", filter(r -> r.formulation == :thesis_literal, df)))
+        for (formulation_label, s_all) in (
+            ("default", filter(r -> r.formulation == :default, df)),
+            ("thesis_literal", filter(r -> r.formulation == :thesis_literal, df)),
+        )
             s = filter(r -> r.status == "SOLVED", s_all)
             isempty(s) && continue
             @printf(io, "\n--- formulation = %s ---\n", formulation_label)
@@ -540,9 +532,9 @@ function main(args)
             filter(
                 r ->
                     r.pv == ps &&
-                        r.load == ls &&
-                        r.vmax == vm &&
-                        r.formulation == formulation_sym,
+                    r.load == ls &&
+                    r.vmax == vm &&
+                    r.formulation == formulation_sym,
                 eachrow(df),
             ),
         )

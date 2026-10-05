@@ -93,24 +93,25 @@ const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)   # ratio to LOAD_SCALE held fixe
 # Clarabel's `max_iter` attribute (default 200) to `<n>`, testing whether the documented
 # `fit_baseline` ALMOST_OPTIMAL flake at tol_gap=1e-10 is slow-convergence (fixable by more
 # iterations) rather than a genuine conditioning wall.
-const REPRO_OPTIMIZER = let tol_str = get(ENV, "REPRO_TOL_GAP", nothing),
-    max_iter_str = get(ENV, "REPRO_MAX_ITER", nothing)
+const REPRO_OPTIMIZER =
+    let tol_str = get(ENV, "REPRO_TOL_GAP", nothing),
+        max_iter_str = get(ENV, "REPRO_MAX_ITER", nothing)
 
-    if tol_str === nothing && max_iter_str === nothing
-        nothing
-    else
-        attrs = Pair{String,Any}["verbose" => false]
-        if tol_str !== nothing
-            tol = parse(Float64, tol_str)
-            push!(attrs, "tol_gap_abs" => tol)
-            push!(attrs, "tol_gap_rel" => tol)
+        if tol_str === nothing && max_iter_str === nothing
+            nothing
+        else
+            attrs = Pair{String, Any}["verbose" => false]
+            if tol_str !== nothing
+                tol = parse(Float64, tol_str)
+                push!(attrs, "tol_gap_abs" => tol)
+                push!(attrs, "tol_gap_rel" => tol)
+            end
+            if max_iter_str !== nothing
+                push!(attrs, "max_iter" => parse(Int, max_iter_str))
+            end
+            optimizer_with_attributes(Clarabel.Optimizer, attrs...)
         end
-        if max_iter_str !== nothing
-            push!(attrs, "max_iter" => parse(Int, max_iter_str))
-        end
-        optimizer_with_attributes(Clarabel.Optimizer, attrs...)
     end
-end
 
 """
     temperature_profile() -> Vector{Float64}
@@ -298,11 +299,8 @@ function count_failures(
 )
     opt_kwargs = optimizer === nothing ? NamedTuple() : (; optimizer)
     failures = 0
-    by_stage = Dict{Symbol,Int}(
-        :solve_welfare => 0,
-        :welfare_accounting => 0,
-        :fit_baseline => 0,
-    )
+    by_stage =
+        Dict{Symbol, Int}(:solve_welfare => 0, :welfare_accounting => 0, :fit_baseline => 0)
     for i in 1:n_repeats
         jitter = 1e-9 * (i + seed_offset)
         λ₀_i = λ₀ .+ jitter
@@ -433,7 +431,14 @@ function sweep_population_scale(
         fb = nothing
         if failed_stage == :none
             try
-                fb = fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0, opt_kwargs...)
+                fb = fit_baseline(
+                    feeder,
+                    ConvexBranchFlow(),
+                    aggs;
+                    T = T,
+                    λ₀ = λ0,
+                    opt_kwargs...,
+                )
             catch e
                 failed_stage = :fit_baseline
                 error_msg = sprint(showerror, e)
@@ -474,8 +479,7 @@ function sweep_population_scale(
                     fit_dso = NaN,
                     prosumer = dso_ok ? acct.prosumer : NaN,
                     fit_prosumer = NaN,
-                    socp_maxgap =
-                        dso_ok && ctx !== nothing ? ctx.meta[:socp_maxgap] : NaN,
+                    socp_maxgap = dso_ok && ctx !== nothing ? ctx.meta[:socp_maxgap] : NaN,
                     error_msg = error_msg,
                 ),
             )
@@ -488,9 +492,7 @@ end
 
 const N_REPEATS = 20
 
-println(
-    "Building IEEE-123 population at the retuned point (seed=$SEED_IEEE123)...",
-)
+println("Building IEEE-123 population at the retuned point (seed=$SEED_IEEE123)...")
 feeder = ieee123_modified()
 aggs = build_ieee123_aggregators(feeder)
 λ0 = ieee123_lambda0()
@@ -516,7 +518,8 @@ dso_band_lo = 0.0
 # check, NOT for `dso` — so gating the band on fit_baseline success would gate it on a stage
 # it does not depend on. Filter on dso-trustworthiness instead.
 successful = filter(r -> r.failed_stage == :none, results)
-dso_trustworthy = filter(r -> r.failed_stage in (:none, :fit_baseline) && !isnan(r.dso), results)
+dso_trustworthy =
+    filter(r -> r.failed_stage in (:none, :fit_baseline) && !isnan(r.dso), results)
 dso_band_hi =
     isempty(dso_trustworthy) ? NaN : 1.5 * maximum(abs(r.dso) for r in dso_trustworthy)
 
@@ -529,15 +532,9 @@ println("sign_flip_survives: ", sign_flip_survives)
 
 report_path = joinpath(OUT, "findings.txt")
 open(report_path, "w") do io
-    println(
-        io,
-        "Directional thesis reproduction — Repro Stability Check",
-    )
+    println(io, "Directional thesis reproduction — Repro Stability Check")
     println(io, "Measured: ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"), " UTC-local")
-    println(
-        io,
-        "Fixture: ieee123_modified() (real impedances), seed=$SEED_IEEE123",
-    )
+    println(io, "Fixture: ieee123_modified() (real impedances), seed=$SEED_IEEE123")
     println(
         io,
         "Retuned point: LOAD_SCALE_IEEE123=$LOAD_SCALE_IEEE123, PV_SCALE_IEEE123=$PV_SCALE_IEEE123, ",

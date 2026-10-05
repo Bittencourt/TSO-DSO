@@ -158,11 +158,9 @@ for pv_mult in PV_MULTS
         "  pv_mult=%.2f -> %-6s%s\n",
         pv_mult,
         row.status,
-        row.status == "ok" ? @sprintf(
-            "  welfare=%.6f  exact_maxgap=%.3e",
-            row.welfare,
-            row.exact_maxgap,
-        ) : "  (" * first(row.reason, 120) * ")"
+        row.status == "ok" ?
+        @sprintf("  welfare=%.6f  exact_maxgap=%.3e", row.welfare, row.exact_maxgap,) :
+        "  (" * first(row.reason, 120) * ")"
     )
 end
 flush(stdout)
@@ -210,13 +208,12 @@ dadp_match = isapprox(scenario_result.dadp, direct_dadp1; rtol = 1e-6, atol = 1e
     dadp_match,
     maximum(abs.(scenario_result.dadp .- direct_dadp1))
 )
-welfare_match && dadp_match ||
-    error(
-        "pv_boom_case_study: the declarative Scenario/run_scenario leg does NOT " *
-        "reproduce the direct pv_mult=1.0 sweep point to tolerance — the two code " *
-        "paths have drifted apart (this must never happen: same seed, same T, same " *
-        "population).",
-    )
+welfare_match && dadp_match || error(
+    "pv_boom_case_study: the declarative Scenario/run_scenario leg does NOT " *
+    "reproduce the direct pv_mult=1.0 sweep point to tolerance — the two code " *
+    "paths have drifted apart (this must never happen: same seed, same T, same " *
+    "population).",
+)
 
 # ── Part A, ADMM cross-check @ pv_mult=1.0 ONLY ────────────────────────────────────────
 #
@@ -241,7 +238,11 @@ welfare_gap_rel = abs(admm_result.welfare - row1.welfare) / abs(row1.welfare)
 centralized_dadp_at_loads = row1.dlmp[load_buses1, :]
 dadp_maxgap = maximum(abs.(admm_result.dadp .- centralized_dadp_at_loads))
 @printf("  centralized welfare = %.6f\n", row1.welfare)
-@printf("  ADMM welfare        = %.6f  (relative gap = %.3e)\n", admm_result.welfare, welfare_gap_rel)
+@printf(
+    "  ADMM welfare        = %.6f  (relative gap = %.3e)\n",
+    admm_result.welfare,
+    welfare_gap_rel
+)
 @printf("  ADMM iters          = %d\n", admm_result.iters)
 @printf("  max|DADP_admm - DADP_centralized| = %.3e\n", dadp_maxgap)
 
@@ -265,15 +266,15 @@ println("\nwrote ", datadir("pv_boom", "results.jld2"))
 
 mkpath(projectdir("results", "pv_boom"))
 baseline_idx = findfirst(r -> r.pv_mult == 0.0, sweep_rows)
-baseline_welfare = sweep_rows[baseline_idx].status == "ok" ? sweep_rows[baseline_idx].welfare : NaN
+baseline_welfare =
+    sweep_rows[baseline_idx].status == "ok" ? sweep_rows[baseline_idx].welfare : NaN
 summary_df = DataFrame(
     pv_mult = Float64[r.pv_mult for r in sweep_rows],
     status = String[r.status for r in sweep_rows],
     welfare = Float64[r.status == "ok" ? r.welfare : NaN for r in sweep_rows],
     exact_maxgap = Float64[r.status == "ok" ? r.exact_maxgap : NaN for r in sweep_rows],
     welfare_delta_vs_baseline = Float64[
-        r.status == "ok" && isfinite(baseline_welfare) ? r.welfare - baseline_welfare : NaN for
-        r in sweep_rows
+        r.status == "ok" && isfinite(baseline_welfare) ? r.welfare - baseline_welfare : NaN for r in sweep_rows
     ],
 )
 CSV.write(projectdir("results", "pv_boom", "summary.csv"), summary_df)
@@ -283,7 +284,9 @@ println("wrote ", projectdir("results", "pv_boom", "summary.csv"))
 # Part A2 — the known SOCP/AC exactness boundary, REPRODUCED, never re-derived
 # ════════════════════════════════════════════════════════════════════════════════════
 println("\n" * "="^96)
-println("PV-BOOM CASE STUDY — Part A2: the documented high-PV exactness finding, reproduced")
+println(
+    "PV-BOOM CASE STUDY — Part A2: the documented high-PV exactness finding, reproduced",
+)
 println("="^96)
 
 # Verbatim reproduction of the certified 3-bus stress substrate (test/fixtures_ieee13.jl
@@ -372,7 +375,12 @@ inexact_hours = [row.t for row in ac_report.hours if !row.exact]
 
 @printf("  obj_gap (SOCP - AC)     = %.6e\n", ac_report.obj_gap)
 @printf("  socp_maxgap             = %.6e\n", ctx_socp.meta[:socp_maxgap])
-@printf("  inexact hours           = %d / %d  %s\n", length(inexact_hours), T_FULL, inexact_hours)
+@printf(
+    "  inexact hours           = %d / %d  %s\n",
+    length(inexact_hours),
+    T_FULL,
+    inexact_hours
+)
 
 isempty(inexact_hours) && error(
     "pv_boom_case_study: the high-PV exactness reproduction came back ALL-EXACT — this is a " *
@@ -381,8 +389,10 @@ isempty(inexact_hours) && error(
     "vmax=1.05). Per this script's contract: stop and report the discrepancy rather " *
     "than silently accepting a different-looking result.",
 )
-println("  -> the documented high-PV exactness finding, reproduced: the SOCP relaxation is " *
-        "genuinely INEXACT at $(length(inexact_hours)) hour(s) on the certified stress fixture.")
+println(
+    "  -> the documented high-PV exactness finding, reproduced: the SOCP relaxation is " *
+    "genuinely INEXACT at $(length(inexact_hours)) hour(s) on the certified stress fixture.",
+)
 
 # ════════════════════════════════════════════════════════════════════════════════════
 # Part B — feeding the boom into the planning layer
@@ -629,13 +639,15 @@ for (attempt_idx, (margin, α_margin, c_op_frac)) in enumerate(attempts)
         global last_err = e
         println(
             "  attempt $attempt_idx (margin=$margin, α_margin=$α_margin, " *
-            "c_op_frac=$c_op_frac) -> FAILED: " * first(sprint(showerror, e), 200),
+            "c_op_frac=$c_op_frac) -> FAILED: " *
+            first(sprint(showerror, e), 200),
         )
     end
 end
 nash_result === nothing && error(
     "pv_boom_case_study: run_nash! failed to converge across every calibration " *
-    "attempt tried — last error: " * sprint(showerror, last_err),
+    "attempt tried — last error: " *
+    sprint(showerror, last_err),
 )
 
 @printf("\n  converged             = %s\n", nash_result.converged)
@@ -672,13 +684,22 @@ open(findings_path, "w") do io
     println(io, "-"^80)
     for r in sweep_rows
         if r.status == "ok"
-            @printf(io, "  pv_mult=%.2f  welfare=%.6f  exact_maxgap=%.3e\n", r.pv_mult, r.welfare, r.exact_maxgap)
+            @printf(
+                io,
+                "  pv_mult=%.2f  welfare=%.6f  exact_maxgap=%.3e\n",
+                r.pv_mult,
+                r.welfare,
+                r.exact_maxgap
+            )
         else
             @printf(io, "  pv_mult=%.2f  FAILED: %s\n", r.pv_mult, first(r.reason, 200))
         end
     end
     println(io)
-    println(io, "Declarative Scenario/run_scenario cross-check @ pv_mult=1.0: welfare_match=$welfare_match, dadp_match=$dadp_match")
+    println(
+        io,
+        "Declarative Scenario/run_scenario cross-check @ pv_mult=1.0: welfare_match=$welfare_match, dadp_match=$dadp_match",
+    )
     println(io)
     @printf(
         io,
@@ -700,7 +721,11 @@ open(findings_path, "w") do io
         "INEXACT at $(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
     )
     @printf(io, "obj_gap (SOCP welfare - AC welfare) = %.6e\n", ac_report.obj_gap)
-    @printf(io, "socp_maxgap (loosened rtol_exact=1.0 diagnostic)   = %.6e\n", ctx_socp.meta[:socp_maxgap])
+    @printf(
+        io,
+        "socp_maxgap (loosened rtol_exact=1.0 diagnostic)   = %.6e\n",
+        ctx_socp.meta[:socp_maxgap]
+    )
     println(
         io,
         "This is the ONE documented diagnostic-override reproduction this case study " *

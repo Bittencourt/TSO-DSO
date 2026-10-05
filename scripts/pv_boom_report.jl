@@ -43,7 +43,10 @@ for bus in 1:N_buses
     bus_range[bus] = maximum(vals) - minimum(vals)
 end
 stressed_bus = argmax(bus_range)
-println("Representative stressed bus (largest total-price spread across pv_mult) = ", stressed_bus)
+println(
+    "Representative stressed bus (largest total-price spread across pv_mult) = ",
+    stressed_bus,
+)
 
 T_full = size(first(ok_rows).dlmp, 2)
 hours = 1:T_full
@@ -91,7 +94,14 @@ band!(ax2, hours, zeros(T_full), stack1; color = (:steelblue, 0.7), label = "ene
 band!(ax2, hours, stack1, stack2; color = (:orange, 0.7), label = "loss")
 band!(ax2, hours, stack2, stack3; color = (:firebrick, 0.7), label = "congestion")
 band!(ax2, hours, stack3, stack4; color = (:seagreen, 0.7), label = "voltage")
-lines!(ax2, hours, decomp.total[stressed_bus, :]; color = :black, linestyle = :dash, label = "total (DADP)")
+lines!(
+    ax2,
+    hours,
+    decomp.total[stressed_bus, :];
+    color = :black,
+    linestyle = :dash,
+    label = "total (DADP)",
+)
 axislegend(ax2; position = :rt)
 
 # ── Figure 3: ADMM convergence (reuses the generic TSODSO.plot_convergence — never
@@ -138,7 +148,12 @@ end
 exact_maxgaps_html = let io = IOBuffer()
     println(io, "<ul>")
     for r in ok_rows
-        @printf(io, "<li><code>pv_mult=%.1f</code>: exact_maxgap = %.3e</li>\n", r.pv_mult, r.exact_maxgap)
+        @printf(
+            io,
+            "<li><code>pv_mult=%.1f</code>: exact_maxgap = %.3e</li>\n",
+            r.pv_mult,
+            r.exact_maxgap
+        )
     end
     println(io, "</ul>")
     String(take!(io))
@@ -156,7 +171,10 @@ nash_differentiated =
 function sweep_table_html(rows)
     io = IOBuffer()
     println(io, "<table>")
-    println(io, "<tr><th>pv_mult</th><th>status</th><th>welfare</th><th>exact_maxgap</th></tr>")
+    println(
+        io,
+        "<tr><th>pv_mult</th><th>status</th><th>welfare</th><th>exact_maxgap</th></tr>",
+    )
     for r in rows
         if r.status == "ok"
             println(
@@ -165,7 +183,10 @@ function sweep_table_html(rows)
                 "<td>$(round(r.exact_maxgap; sigdigits=4))</td></tr>",
             )
         else
-            println(io, "<tr><td>$(r.pv_mult)</td><td>$(r.status)</td><td colspan=2>$(first(r.reason, 80))</td></tr>")
+            println(
+                io,
+                "<tr><td>$(r.pv_mult)</td><td>$(r.status)</td><td colspan=2>$(first(r.reason, 80))</td></tr>",
+            )
         end
     end
     println(io, "</table>")

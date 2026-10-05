@@ -70,25 +70,38 @@ s_stoch = Scenario(;
     feeder = :ieee13,
     seed = SEED,
     T = T,
-    strategy = Stochastic(S = 5, probabilities = [0.05, 0.15, 0.30, 0.30, 0.20], H_oos = 10),
+    strategy = Stochastic(
+        S = 5,
+        probabilities = [0.05, 0.15, 0.30, 0.30, 0.20],
+        H_oos = 10,
+    ),
 )
 
 println()
 println("="^72)
-println("STOCHASTIC (S = 5 extensive form + 10 held-out) — feeder :ieee13, T = $T, seed = $SEED")
+println(
+    "STOCHASTIC (S = 5 extensive form + 10 held-out) — feeder :ieee13, T = $T, seed = $SEED",
+)
 println("="^72)
 t_stoch = @elapsed r_stoch = run_stochastic(s_stoch)
 
 inS = r_stoch.in_sample
 println("probabilities      = ", inS.probabilities)
 println("in-sample welfare  = ", round(inS.welfare; digits = 6), "  (probability-weighted)")
-println("SOCP exact maxgap  = ", round(maximum(inS.socp_maxgap); digits = 6),
-    "  (max over scenarios; each gated independently)")
+println(
+    "SOCP exact maxgap  = ",
+    round(maximum(inS.socp_maxgap); digits = 6),
+    "  (max over scenarios; each gated independently)",
+)
 println()
 println("Per-scenario DADP at the priced bus (PRIMARY output):")
 for k in eachindex(inS.dadp)
-    println("  scenario $k (p = ", inS.probabilities[k], "): ",
-        round.(inS.dadp[k]; digits = 4))
+    println(
+        "  scenario $k (p = ",
+        inS.probabilities[k],
+        "): ",
+        round.(inS.dadp[k]; digits = 4),
+    )
 end
 println()
 println("Expected DADP (DERIVED summary, not a real price):")
@@ -96,10 +109,16 @@ println("  ", round.(inS.expected_dadp; digits = 4))
 println()
 println("Out-of-sample (committed battery schedule vs 10 unseen draws):")
 oos = r_stoch.oos
-println("  realized welfare  = ", round(oos.realized_welfare; digits = 6),
-    "  (mean over feasible held-out draws)")
-println("  welfare gap       = ", round(oos.welfare_gap; digits = 6),
-    "  (realized − in-sample)")
+println(
+    "  realized welfare  = ",
+    round(oos.realized_welfare; digits = 6),
+    "  (mean over feasible held-out draws)",
+)
+println(
+    "  welfare gap       = ",
+    round(oos.welfare_gap; digits = 6),
+    "  (realized − in-sample)",
+)
 println("  infeasible draws  = ", count(oos.infeasible_h), " / ", length(oos.infeasible_h))
 println("solve time         = ", round(t_stoch; digits = 2), " s")
 
@@ -170,7 +189,13 @@ ax2 = Axis(
     title = "Deviation from E[DADP] (scenario spread)",
 )
 for k in 1:S
-    lines!(ax2, 1:T, inS.dadp[k] .- inS.expected_dadp; color = scen_colors[k], linewidth = 1.6)
+    lines!(
+        ax2,
+        1:T,
+        inS.dadp[k] .- inS.expected_dadp;
+        color = scen_colors[k],
+        linewidth = 1.6,
+    )
 end
 lines!(
     ax2,
@@ -212,8 +237,21 @@ axdem = Axis(
 )
 for k in 1:S
     lab = "scenario $k (p = $(inS.probabilities[k]))"
-    scatterlines!(axpv, 1:T, scen_profiles[k].pv; color = scen_colors[k], label = lab, markersize = 5)
-    scatterlines!(axdem, 1:T, scen_profiles[k].demand; color = scen_colors[k], markersize = 5)
+    scatterlines!(
+        axpv,
+        1:T,
+        scen_profiles[k].pv;
+        color = scen_colors[k],
+        label = lab,
+        markersize = 5,
+    )
+    scatterlines!(
+        axdem,
+        1:T,
+        scen_profiles[k].demand;
+        color = scen_colors[k],
+        markersize = 5,
+    )
 end
 Legend(fig2[1, 3], axpv; framevisible = false, labelsize = 11)
 saveboth("scenario_fan", fig2)
@@ -382,12 +420,8 @@ summary_df = DataFrame(
 )
 CSV.write(joinpath(OUT, "summary.csv"), summary_df)
 
-dadp_tidy = DataFrame(
-    source = String[],
-    probability = Float64[],
-    hour = Int[],
-    dadp = Float64[],
-)
+dadp_tidy =
+    DataFrame(source = String[], probability = Float64[], hour = Int[], dadp = Float64[])
 for t in 1:T
     push!(dadp_tidy, ("default", NaN, t, r_def.dadp[1, t]))
 end
