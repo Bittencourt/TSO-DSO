@@ -133,7 +133,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [x] **HYG-01**: Source comments and docstrings contain no plan, wave, task, decision or
   review-finding IDs (such as `plan 04-02`, `D-09`, `WR-01`, `Pitfall 7`, `byte-identical`), and a
   CI grep guard enforces this. Thesis-equation and literature references stay.
-- [ ] **HYG-02**: The inert SEAM-01 stubs (`operational_oracle`'s ignored `objective_hook` and
+- [x] **HYG-02**: The inert SEAM-01 stubs (`operational_oracle`'s ignored `objective_hook` and
   `horizon_state`, and the superseded `z` path) and the reactive-mode Bool/Symbol back-compat shim
   are removed.
 - [x] **HYG-03**: The export list is trimmed and generic names (`OFF`, `LIVE`, `CERTIFIED`, `LP`,
@@ -200,7 +200,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | ARCH-09 | Phase 34 | Complete |
 | ARCH-10 | Phase 35 | Complete |
 | HYG-01 | Phase 36 | Complete |
-| HYG-02 | Phase 36 | Pending |
+| HYG-02 | Phase 36 | Complete |
 | HYG-03 | Phase 36 | Complete |
 | HYG-07 | Phase 36 | Complete |
 | HYG-04 | Phase 37 | Pending |

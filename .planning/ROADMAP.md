@@ -64,7 +64,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 - [x] **Phase 35: IEEE-8500 Scale After Refactor** - Re-measure (or re-characterize) the IEEE-8500 (completed 2026-10-05)
   performance/memory headline point after the architecture changes.
 
-- [ ] **Phase 36: Code & Export Cleanup** - Strip process IDs from comments, delete inert stubs and
+- [x] **Phase 36: Code & Export Cleanup** - Strip process IDs from comments, delete inert stubs and (completed 2026-10-05)
   back-compat shims, trim exports, and rename fixtures after their content.
 
 - [ ] **Phase 37: Test Infrastructure & Repo Hygiene** - Add a JET CI check, split fast/slow tests,
@@ -663,7 +663,7 @@ Plans:
 
 **Wave 22** *(blocked on Wave 21 completion)*
 
-- [ ] 36-22-PLAN.md — Final gates: formatter, guard, docs build, full suite, evidence
+- [x] 36-22-PLAN.md — Final gates: formatter, guard, docs build, full suite, evidence
 
 ### Phase 37: Test Infrastructure & Repo Hygiene
 
@@ -706,7 +706,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
-| 36. Code & Export Cleanup | v4.0 | 21/22 | In Progress|  |
+| 36. Code & Export Cleanup | v4.0 | 22/22 | Complete   | 2026-10-05 |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
