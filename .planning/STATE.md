@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: verifying
-stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-05T21:50:31.884Z"
+status: ready_to_plan
+stopped_at: Phase 36 complete (22/22) — ready to discuss Phase 37
+last_updated: 2026-10-05T23:39:24.503Z
 last_activity: 2026-10-05
 progress:
   total_phases: 12
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 36 — Code & Export Cleanup
+**Current focus:** Phase 37 — test infrastructure & repo hygiene
 
 ## Current Position
 
-Phase: 36 (Code & Export Cleanup) — EXECUTING
-Plan: 22 of 22
-Status: Phase complete — ready for verification
+Phase: 37
+Plan: Not started
+Status: Ready to plan
   Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
@@ -120,7 +120,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 178 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 200 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -175,6 +175,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 33 | 11 | - | - |
 | 34 | 12 | - | - |
 | 35 | 5 | - | - |
+| 36 | 22 | - | - |
 
 **Recent Trend:**
 
