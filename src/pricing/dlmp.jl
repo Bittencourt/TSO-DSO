@@ -80,7 +80,7 @@
 #     residual 2.2e-16, congestion/voltage both ≈1e-13 (≈0), matching the intended regime of
 #     `test_pricing_dlmp.jl`'s "≈0 congestion/voltage on an uncongested in-bound 2-bus" item.
 # The THIRD item's own PVBattery-based fixture could not be re-exercised as originally written:
-# bisection (see `deferred-items.md`) confirms a PRE-EXISTING, UNRELATED SOCP-exactness
+# bisection confirms a PRE-EXISTING, UNRELATED SOCP-exactness
 # regression introduced by the battery SOC-horizon fix (commit cfa7e6e) breaks
 # that specific fixture's `assert_socp_exact!` gate before `decompose_dlmp` is ever reached —
 # confirmed NOT caused by this file's cpydrop-consuming formula or by the cpydrop sign flip
@@ -250,7 +250,7 @@ end
 """
     NamedTuple(d::DlmpDecomposition) -> NamedTuple
 
-Review fix (2026-09-29): before the `cone`/`drop` rename, `decompose_dlmp`
+Before the `cone`/`drop` rename, `decompose_dlmp`
 returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage, reactive, total)`. Any consumer that used genuine `NamedTuple`-only semantics on that return
 value (`Tuple(nt)`/`values(nt)`/`collect(nt)`, or positional destructuring) now hits a
 `MethodError` against `DlmpDecomposition` (a plain `struct`) instead — a LOUD failure, never

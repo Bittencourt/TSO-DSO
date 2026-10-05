@@ -199,7 +199,7 @@ end
 # header) requires `TwoBusFixtures` to already be `ensure_evaled` first.
 #
 # Every item name below contains "live" (independently filterable) AND "reactive" (so the
-# existing `occursin("reactive", ti.name)` quick-run filter, 16-VALIDATION.md, continues to
+# existing `occursin("reactive", ti.name)` quick-run filter continues to
 # select the FULL reactive-consensus family: OFF/CERTIFIED items above, LIVE items here).
 # ==============================================================================================
 

@@ -731,7 +731,7 @@ const _DEFAULT_TIME_LIMIT_S = "1200"               # per-point cap
 # (43s JuMP assembly + 33s solve — assembly is NOT solver-time-limit-bounded, so a smaller
 # `--time-limit` cannot shrink it) and `solve_admm`'s BUILD-ONCE phase (before the wall-clock
 # loop even starts checking `time_limit_s`) alone costs ~13s — together already eating most of
-# the 120s `25-VALIDATION.md` feedback-latency budget before ANY solver iteration, on top of
+# the 120s quick-check feedback-latency budget before ANY solver iteration, on top of
 # Julia's own package-import/JIT overhead (measured ~40-45s for this harness's dependency set,
 # fixed regardless of problem size). Combined with `T_QUICK` below (which shrinks the DOMINANT
 # network-size cost), a 5s ADMM cap keeps the WHOLE --quick invocation's total WALL time
@@ -746,7 +746,7 @@ const _QUICK_TIME_LIMIT_S = "5"
 # shrinks by lowering `--time-limit` alone (network-size cost is separable from AGR-OPT
 # fan-out cost, and neither is separable from T). At `T=24` the centralized point alone measured
 # ~76s wall (43s assembly + 33s solve) on ieee8500-mv/density=0.1, and `solve_admm`'s build phase
-# alone measured ~42s — together already exceeding VALIDATION.md's 120s max-feedback-latency
+# alone measured ~42s — together already exceeding the 120s quick-check max-feedback-latency
 # budget BEFORE any solver time. `--quick` uses a SHORTER `T_QUICK`-hour horizon (still passed
 # through the SAME code path as the general sweep — no separate quick-only logic branch) to keep
 # the WHOLE invocation comfortably under 120s; the general (non-quick) sweep keeps the full T=24.
@@ -920,7 +920,7 @@ function run_sweep_mode(args)
         ),
     )
     densities = if quick
-        # --quick: the EXACT VALIDATION.md-documented CI-affordable single point — the smallest
+        # --quick: the documented CI-affordable single point — the smallest
         # density on the smallest IEEE-8500 fixture, Clarabel only, with the tighter
         # _QUICK_TIME_LIMIT_S cap above (an explicit --time-limit still overrides it).
         fixture_str = "ieee8500-mv"

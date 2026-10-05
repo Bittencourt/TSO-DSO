@@ -13,21 +13,50 @@ PFX = (r'(?:FIX|ARCH|CR|WR|IN|PM|BILEV|MESH|SCALE|SEAM|DATA|INFRA|PF|HYG|REACT|E
 _RAW = {
     'phase':    r'(?i)\bphases?[\s-]?\d+',
     'plan':     r'(?i)\bplans?\s+\d{1,2}-\d{2}\b',
-    'bare_nn':  r'(?<![\w.:/\-])(?:0\d|[12]\d|3\d)-(?:0\d|1\d|20)(?![\d\w.:/\-])',
+    # Any two-digit `NN-NN` (phases >= 40, plans >= 21 included); ascending, unpadded pairs
+    # such as line/page/hour ranges (`23-24`, `89-90`, `17-20`) are filtered out below.
+    'bare_nn':  r'(?<![\w.:/\-])(\d\d)-(\d\d)(?![\d\w.:/\-])',
     'dec':      r'\b[Dd]-\d{1,2}\b',
     'reqid':    r'\b' + PFX + r'-\d{1,3}[a-z]?\b',
     'wave':     r'(?i)\bwaves?(?:[\s-]?\d)?\b',
-    'task':     r'\bTask\s+\d\b',
+    'task':     r'\bTask\s+\d+\b',
     'tid':      r'\bT-\d{2}-\d{2}\b',
     'quick':    r'\b26\d{4}-[0-9a-z]{3}\b',
     'fixnn':    r'_FIX\d+',
     'byteid':   r'(?i)byte-?identical',
     'pitfall':  r'\bPitfall\s+[A-Z]?\d+',
     'artifact': (r'\bRESEARCH(?:\.md)?\b|CONTEXT\.md|-SUMMARY|-REVIEW\.md|\.planning/'
-                 r'|USER DECISION|[Cc]ode[- ]review|quick task|\bspike\s+\d{3}'),
+                 r'|USER DECISION|[Cc]ode[- ]review|quick task|\bspike\s+\d{3}'
+                 r'|STATE\.md|\bROADMAP|REQUIREMENTS\.md|MEMORY\.md|-PLAN\.md|-VERIFICATION'
+                 r'|FINDINGS\.md|(?i:\bmemory\s+(?:file\s+|note\s+)?`)|\[\[[a-z][a-z0-9.]*-[a-z0-9.\-]+\]\]'
+                 r'|[Rr]eview[- ]fix|deferred-items|-UAT\b|UAT\.md|VALIDATION\.md|DISCUSSION-LOG'),
     'fxfile':   r'Phase\d+Fixtures|fixtures_phase\d+|:phase\d+',
 }
-RULES = {k: re.compile(v) for k, v in _RAW.items()}
+
+
+def _is_range(m):
+    """`a-b` with a < b and no zero padding reads as a numeric range, not a planning id."""
+    a, b = m.group(1), m.group(2)
+    return int(a) < int(b) and not a.startswith("0") and not b.startswith("0")
+
+
+class _Filtered:
+    """Compiled regex whose matches are additionally vetoed by a predicate."""
+
+    def __init__(self, pattern, veto):
+        self.rx = re.compile(pattern)
+        self.pattern = pattern
+        self.veto = veto
+
+    def search(self, text):
+        for m in self.rx.finditer(text):
+            if not self.veto(m):
+                return m
+        return None
+
+
+_VETO = {'bare_nn': _is_range}
+RULES = {k: (_Filtered(v, _VETO[k]) if k in _VETO else re.compile(v)) for k, v in _RAW.items()}
 
 # Strict thesis-equation pattern: lines matching it AND a rule are flagged MIXED.
 THESIS_MIXED = re.compile(r'\(3\.\d{2}\)|(?i:thesis\s+3\.\d)|(?i:\beqs?\.? ?3\.\d)')

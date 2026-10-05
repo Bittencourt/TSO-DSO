@@ -1396,7 +1396,7 @@ function _mpc_truth_import_socp_reference(
     # the residual UNCHANGED (~0.00043), and an ADDED dominant quadratic `l` regularizer (tried
     # up to weight 100, well past where it would swamp the linear loss term) does not reduce it
     # either — matching this project's own documented "SOCP relaxation genuinely inexact under
-    # high-PV reverse flow" finding (memory `v2.1-socp-inexactness-and-thesis-repro.md`). Per
+    # high-PV reverse flow" finding. Per
     # the LOCKED "never raise τ_solver/ε to hide it" policy, this was NOT hidden by a tolerance
     # change; the affected test item was instead given a MEASURED substitute `seed=5` (which
     # passes cleanly under EITHER objective — confirmed by direct measurement — and still

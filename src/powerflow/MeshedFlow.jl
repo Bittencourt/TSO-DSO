@@ -50,7 +50,7 @@ constraint-writing code exists here: direct code reading of `ConvexBranchFlow.co
 Kirchhoff sum over EVERY branch, correct for any graph (tree or not) -- no BFS, no
 parent/child recursion, no tree-order assumption anywhere in that file.
 
-**Why "explicit cycle/loop consistency" (the ROADMAP's hard constraint) is NOT a
+**Why "explicit cycle/loop consistency" (a hard design constraint) is NOT a
 constraint added here:** a genuine loop-closure condition is a nonconvex trigonometric
 identity in voltage ANGLES -- and this branch-flow model has already eliminated angles as
 decision variables (the angle-relaxation step every Baran-Wu/DistFlow SOCP formulation

@@ -191,7 +191,7 @@ end
         # `import Pkg`: Pkg is not a declared test dependency and the `Pkg.test()`
         # sandbox restricts the load path, so `import Pkg` throws
         # "Package Pkg not found in current path" — measured live when this diagnostics
-        # branch first executed under `Pkg.test()` (2026-08-10 review-fix suite run,
+        # branch first executed under `Pkg.test()` (2026-08-10 suite run,
         # which ALSO re-confirmed the no-trip flake reproduces in the sandbox). The
         # whole block is exception-guarded: diagnostics must never ERROR the item.
         resolved = try

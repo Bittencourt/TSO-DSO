@@ -57,7 +57,7 @@ const CSV_PATH = joinpath(RESULTS_DIR, "density_sweep.csv")
 
 Runs `julia --project=<repo root> scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick`
 as a REAL SUBPROCESS (never `include`d in-process — this is a genuine end-to-end check of the
-harness AS A USER INVOKES IT, matching `25-VALIDATION.md`'s documented quick command exactly),
+harness AS A USER INVOKES IT, matching the documented quick command exactly),
 then parses the resulting `density_sweep.csv`'s row for the `(fixture="ieee8500-mv", solver="clarabel")` key `--quick` always produces. `main(ARGS)` overwrites/replaces this exact
 row on every invocation (`run_sweep_mode`'s own key-based CSV upsert), so reading the row back
 after the subprocess exits reflects THIS run, not a stale one from an earlier session.

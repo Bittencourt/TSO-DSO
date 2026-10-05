@@ -112,6 +112,10 @@ def main(argv):
             files = walk_root(root)
             if paths:
                 files = [f for f in files if any(f == p or f.startswith(p.rstrip("/") + "/") for p in paths)]
+        if not files:
+            # Fail closed: an empty scope (wrong cwd, sparse checkout, typo'd path) is not "clean".
+            raise GuardError("no in-scope files found to scan"
+                             + (f" under {' '.join(paths)}" if paths else ""))
         entries = load_allowlist(allow)
         hits = scan(root_dir, files, entries)
     except (GuardError, subprocess.CalledProcessError, OSError) as exc:
@@ -147,10 +151,33 @@ def selftest():
         "artifact": j(["RESEA", "RCH", ".md"]),
         "fxfile": j(["Phase", "9", "Fixtures"]),
     }
+    # Additional positive forms per rule (artifact citations, plans >= 21, phases >= 40,
+    # multi-digit task numbers).
+    extra_positives = [
+        ("artifact", j(["(STA", "TE.md's own blocker)"])),
+        ("artifact", j(["the ROAD", "MAP's hard constraint"])),
+        ("artifact", j(["see the repo's MEM", "ORY.md"])),
+        ("artifact", j(["(memory `v2.1-socp-", "inexactness.md`)"])),
+        ("artifact", j(["[[testitem-", "try-scoping-trap]]"])),
+        ("artifact", j(["Rev", "iew fix (2026-09-29): ..."])),
+        ("artifact", j(["2026-08-10 rev", "iew-fix suite run"])),
+        ("artifact", j(["see `deferred", "-items.md`"])),
+        ("artifact", j(["filter, 16-VALI", "DATION.md, continues"])),
+        ("artifact", j(["REQUIRE", "MENTS.md"])),
+        ("artifact", j(["36-22-PL", "AN.md"])),
+        ("bare_nn", j(["(", "36", "-", "21", ")"])),
+        ("bare_nn", j(["see ", "36", "-", "22"])),
+        ("bare_nn", j(["", "40", "-", "01", " landed"])),
+        ("bare_nn", j(["(", "07", "-", "12", ")"])),
+        ("task", j(["Ta", "sk ", "12"])),
+    ]
     negatives = ["3-phase", "T-24", "IEEE-8500", "IEEE-123", "2026-10-04", "0.10-0.12",
-                 "eq. 3.43", "(3.31)", "Gan-Low 2015"]
+                 "eq. 3.43", "(3.31)", "Gan-Low 2015",
+                 "hours 17-20", "lines 69-74", "pp. 89-90", "iterations 23-24",
+                 "c_op = [[0.5]]", "under memory pressure", "a research roadmap",
+                 "the review of Farivar & Low", "Taskforce 12"]
     ok = True
-    for rule, text in positives.items():
+    for rule, text in list(positives.items()) + extra_positives:
         if not R.RULES[rule].search(text):
             print(f"SELFTEST FAIL: rule {rule} did not match {text!r}")
             ok = False
@@ -184,13 +211,14 @@ def selftest():
             ("stale allowlist entry exits 1", run({"a.jl": "x = 1\n"}, "a.jl\tzzz\treason\n"), 1),
             ("malformed allowlist exits 2", run({"a.jl": "x = 1\n"}, "only-one-field\n"), 2),
             ("undecodable file exits 2", run({"a.jl": b"\xff\xfe\xfa bad\n"}), 2),
+            ("empty scope exits 2", run({"notes.txt": "out of scope\n"}), 2),
         ]
     for name, got, want in cases:
         if got != want:
             print(f"SELFTEST FAIL: {name}: got {got}, want {want}")
             ok = False
     if ok:
-        print(f"selftest OK: {len(positives)} positive, {len(negatives)} negative, "
+        print(f"selftest OK: {len(positives) + len(extra_positives)} positive, {len(negatives)} negative, "
               f"{len(cases)} fail-closed case(s)")
         return 0
     return 1

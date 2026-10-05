@@ -5,10 +5,10 @@
 # `ieee8500_mv_modified`), plus the pinned corrected-transformer regression trap
 # and the measured-impedance-spread reporting requirement.
 #
-# HYBRID FILE (repo-established pattern, VALIDATION.md): `@testitem` blocks for TestItemRunner
+# HYBRID FILE (repo-established pattern): `@testitem` blocks for TestItemRunner
 # discovery under `Pkg.test()`, PLUS a standalone `if abspath(PROGRAM_FILE) == @__FILE__ ... end`
 # block at the bottom replicating the core assertions as plain `Test.jl` so
-# `julia --project=. test/test_ieee8500.jl` (VALIDATION.md's documented quick command) runs
+# `julia --project=. test/test_ieee8500.jl` (the documented quick command) runs
 # WITHOUT TestItemRunner (this project's recorded sibling-worktree-contamination trap:
 # `julia --project=. -e '... @run_package_tests ...'` resolves the test root via cwd).
 #
@@ -265,7 +265,7 @@ end
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Standalone plain-script block (VALIDATION.md quick command): replicates assertions
+# Standalone plain-script block (quick command): replicates assertions
 # (1)-(4) and (6) above as plain @test calls, runnable via `julia --project=. test/test_ieee8500.jl`
 # WITHOUT TestItemRunner.
 # ─────────────────────────────────────────────────────────────────────────────────────────

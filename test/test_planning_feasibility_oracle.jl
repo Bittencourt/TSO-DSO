@@ -73,8 +73,8 @@
     top-level `try x = ...; catch e; x = e; end` runs under Julia's soft-scope rules and
     can silently leave the OUTER `x` binding untouched (treated as a new local inside the
     try block), which would otherwise mimic a genuine "no exception was thrown" result
-    even when one was (a documented project trap — see the repo's own MEMORY.md "TestItem
-    try-scoping trap"). A function body does not have this hazard.
+    even when one was (a known `@testitem` try-scoping trap). A function body does not
+    have this hazard.
     """
     function try_solve_planning_oracle(oracle, z)
         try

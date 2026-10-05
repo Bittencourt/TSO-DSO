@@ -1073,7 +1073,7 @@ Probe `run_nash!`'s Gauss-Seidel diagonalization across every `(seed, order)` co
 in the seed/order matrix, asserting EVERY combination converges (a phase-gating
 regression — see this section's header) and reporting the observed equilibrium spread —
 structurally as "a converged equilibrium (never "the equilibrium"), since Gauss-Seidel
-diagonalization carries no general uniqueness guarantee (STATE.md's own carried blocker).
+diagonalization carries no general uniqueness guarantee (a known open limitation).
 
 `build_shared` is a ZERO-ARGUMENT closure/function returning a FRESH `SharedTransmission`
 (e.g. `() -> build_shared_transmission(; N=2, T=1, ...)`), called ONCE per `(seed, order)`
