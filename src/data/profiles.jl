@@ -1,22 +1,21 @@
 # src/data/profiles.jl
 #
-# SEAM: seeded first-order Markov profile generator (DATA-04).
-# OWNER: plan 03-02.
+# SEAM: seeded first-order Markov profile generator.
 #
 # Data-layer ONLY — pure, JuMP-free reproducible profile synthesis. Given a
 # row-stochastic transition matrix, an initial state, a state->value map, a
 # horizon, and an EXPLICIT `AbstractRNG` (a `StableRNGs.LehmerRNG` seeded once by
 # the caller — never the global RNG), produces inelastic-demand and PV profiles
-# that regenerate bit-for-bit across Julia 1.10/1.11/1.12 (INFRA-04). Same seed ->
+# that regenerate bit-for-bit across Julia 1.10/1.11/1.12. Same seed ->
 # identical profiles. These profiles enter the welfare solve as PARAMETERS, not
-# decisions (RESEARCH Pattern 4; thesis §2.8).
+# decisions (thesis §2.8).
 
 using StableRNGs
 
 # `StableRNGs` is a hard dependency (Project.toml) and re-uses the stdlib `Random`
 # abstract interface. We reach the `AbstractRNG` supertype THROUGH `StableRNGs`
 # (`StableRNGs.Random.AbstractRNG`) rather than `import Random`, because `Random` is
-# not a direct dependency of `TSODSO` and adding it is out of this plan's scope.
+# not a direct dependency of `TSODSO` and adding it is out of scope.
 # Accepting the `AbstractRNG` supertype (not a concrete `LehmerRNG`) keeps the walk
 # generic, while the reproducibility contract is upheld by the CALLER seeding a
 # `StableRNGs.LehmerRNG` — the only stream that is stable across Julia versions.
@@ -32,9 +31,8 @@ next state given the current state `s`). Returns the length-`steps` state path a
 Each step draws a single `u = rand(rng)` and selects the next state by the standard
 inverse-CDF (cumulative-sum) categorical draw over row `P[s, :]`. Threading an EXPLICIT
 `rng` — a `StableRNGs.LehmerRNG` seeded once by the caller — is what makes the walk
-reproducible bit-for-bit across Julia versions (INFRA-04, threat T-03-03). NEVER use the
-global RNG / `Random.seed!` here: the stdlib stream is not stable across Julia minors
-(RESEARCH Anti-Patterns).
+reproducible bit-for-bit across Julia versions. NEVER use the
+global RNG / `Random.seed!` here: the stdlib stream is not stable across Julia minors.
 
 # Arguments
 
@@ -44,7 +42,7 @@ global RNG / `Random.seed!` here: the stdlib stream is not stable across Julia m
   - `rng::AbstractRNG` — an explicit RNG; seed a `StableRNGs.LehmerRNG(seed)` for reproducibility.
 
 Throws `ArgumentError` (project convention: throw LOUDLY, never `@assert`, which `-O` can
-elide — threat T-03-04) when `P` is not square, when any row does not sum to 1 within
+elide) when `P` is not square, when any row does not sum to 1 within
 tolerance, when `s0` is out of range, or when `steps < 1`.
 """
 function markov_path(
@@ -53,7 +51,7 @@ function markov_path(
     steps::Int,
     rng::StableRNGs.Random.AbstractRNG,
 )
-    # --- Validate the transition matrix and walk parameters LOUDLY (threat T-03-04) ---
+    # --- Validate the transition matrix and walk parameters LOUDLY ---
     n, m = size(P)
     if n != m
         throw(
@@ -81,7 +79,7 @@ function markov_path(
         end
     end
 
-    # --- First-order Markov walk (RESEARCH Pattern 4; thesis §2.8) ---
+    # --- First-order Markov walk (thesis §2.8) ---
     path = Vector{Int}(undef, steps)
     s = s0
     @inbounds for k in 1:steps
@@ -106,7 +104,7 @@ end
 #
 # These defaults describe a small, well-mixing 3-state chain for each series so the
 # generated profiles are non-trivial and reproducible. All magnitudes are in per-unit
-# (RESEARCH Pitfall 4 / threat T-03-05): demand lives in a [0.3, 0.9] pu band; PV maps
+# Demand lives in a [0.3, 0.9] pu band; PV maps
 # an irradiance state in [0.2, 1.0] pu through a diurnal daylight envelope, so night
 # hours are ~0 and the peak stays ≤ 1 pu. Callers may override every matrix/table.
 
@@ -130,7 +128,7 @@ const _DEFAULT_PV_VALUES = [0.2, 0.6, 1.0]         # cloudy / partly / clear irr
 A deterministic daylight envelope over the `T`-step horizon: zero outside a daytime
 window (roughly the middle half of the day) and a smooth half-sine bell peaking at solar
 noon. Multiplying a non-negative irradiance state by this non-negative envelope keeps PV
-output non-negative (threat T-03-05) and makes night hours ≈ 0, matching the thesis §2.8
+output non-negative and makes night hours ≈ 0, matching the thesis §2.8
 convention of aggregating a sub-daily pattern to the hourly optimization resolution.
 """
 function _pv_diurnal_envelope(T::Int)
@@ -151,23 +149,23 @@ end
                        s0_demand::Int=1, s0_pv::Int=1) -> NamedTuple
 
 Generate seeded, reproducible hourly inelastic-demand and PV profiles of length `T`
-(default `T=24`) as a `NamedTuple` `(; demand, pv)` of per-unit vectors (DATA-04, thesis
+(default `T=24`) as a `NamedTuple` `(; demand, pv)` of per-unit vectors (thesis
 §2.8). Both series are produced PURELY — no JuMP, no decision variables — and enter the
-welfare solve only as parameters (Assumption A4).
+welfare solve only as parameters.
 
 A single `StableRNGs.LehmerRNG(seed)` is created ONCE and threaded through [`markov_path`](@ref)
 for both chains, so the whole result is deterministic in `seed`: two calls with the same
-`seed` (and same arguments) return `==` vectors bit-for-bit (INFRA-04, threat T-03-03),
+`seed` (and same arguments) return `==` vectors bit-for-bit,
 while a different `seed` produces a different profile. The RNG is never the global RNG /
-`Random.seed!` — that stream is not stable across Julia versions (RESEARCH Anti-Patterns).
+`Random.seed!` — that stream is not stable across Julia versions.
 
 `demand` maps the demand state path through `demand_values` (per-unit load levels). `pv`
 maps the PV state path through `pv_values` (per-unit irradiance levels) and scales it by a
-diurnal daylight envelope, so PV is non-negative and ≈ 0 at night (threat T-03-05).
+diurnal daylight envelope, so PV is non-negative and ≈ 0 at night.
 
 Throws `ArgumentError` when `T < 1`, when a `*_values` table length does not match its
 transition matrix, or when any value table has a negative entry (a negative magnitude
-would silently enter the solve — threat T-03-05). Matrix/range validation is delegated to
+would silently enter the solve). Matrix/range validation is delegated to
 [`markov_path`](@ref).
 """
 function generate_profiles(;
@@ -202,20 +200,20 @@ function generate_profiles(;
     if any(<(0), demand_values)
         throw(
             ArgumentError(
-                "generate_profiles: demand_values must be non-negative (threat T-03-05)",
+                "generate_profiles: demand_values must be non-negative",
             ),
         )
     end
     if any(<(0), pv_values)
         throw(
             ArgumentError(
-                "generate_profiles: pv_values must be non-negative (threat T-03-05)",
+                "generate_profiles: pv_values must be non-negative",
             ),
         )
     end
 
     # Seed ONCE, thread the SAME rng through both walks — this is what makes the full
-    # returned NamedTuple deterministic in `seed` (INFRA-04). markov_path validates each
+    # returned NamedTuple deterministic in `seed`. markov_path validates each
     # matrix (square + row-stochastic) and the initial states.
     rng = StableRNGs.LehmerRNG(seed)
     demand_states = markov_path(P_demand, s0_demand, T, rng)

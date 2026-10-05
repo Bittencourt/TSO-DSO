@@ -1,39 +1,38 @@
 # src/data/ieee123.jl
 #
-# SEAM: modified IEEE 123-node feeder built-in fixture (DATA-03, scale target).
-# OWNER: plan 07-01 wired this into the include graph; plan 07-02 FILLS it.
+# SEAM: modified IEEE 123-node feeder built-in fixture (scale target).
 #
-# NAMING (IN-02): "IEEE 123-node" is the HISTORICAL name of the source test feeder, NOT a
+# NAMING: "IEEE 123-node" is the HISTORICAL name of the source test feeder, NOT a
 # guaranteed bus count — exactly as ieee13.jl warns for the 13-node case. The MODIFIED thesis
 # Case B (App. E, p.170) relabels the non-contiguous IEEE terminals to the framework's contiguous
 # `bus.id == 1-based position` convention and keeps only the RADIAL branch set (the 4 normally-open
 # tie switches stay open), so `edges == N − 1`. Read "123-node" as the lineage of the fixture.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────────
-# DATA PROVENANCE / TRANSCRIPTION NOTE (threat T-07-05, ACCEPTED in the plan):
+# DATA PROVENANCE / TRANSCRIPTION NOTE (accepted risk):
 #
 #   * TOPOLOGY (which terminal feeds which) is transcribed from the canonical IEEE-123 node test
 #     feeder — the same radial structure the thesis's modified Case B is built on: one substation
 #     frontier (terminal 150) feeding long radial laterals through the closed switches/regulators
 #     (150-149, 13-152, 18-135, 60-160, 97-197) with the four normally-open tie switches
-#     (54-94, 151-300, 250-251, 450-451) OPEN so the graph is a clean tree (RESEARCH Pitfall 4,
-#     Assumption A2). This structure is the load-bearing content the fixture must ship.
+#     (54-94, 151-300, 250-251, 450-451) OPEN so the graph is a clean tree.
+#     This structure is the load-bearing content the fixture must ship.
 #
-#   * PER-UNIT R/X MAGNITUDES are REAL (plan 17-02, IMPED-02), not the earlier representative
+#   * PER-UNIT R/X MAGNITUDES are REAL, not the earlier representative
 #     placeholder: non-switch branch impedances are now sourced from the public IEEE-123 OpenDSS
 #     test-case data (positive-sequence Fortescue-reduced R1/X1 × segment length, in Ohms),
 #     reduced by `scripts/reduce_ieee123_impedances.jl` into the generated, committed
 #     `src/data/ieee123_impedances.jl` (see that file's own provenance header for source URL and
 #     fetch date). The Ω→pu conversion happens ONCE at ingestion here, via `to_pu_impedance`
 #     (`src/units/PerUnit.jl:53`) — never inside the reduction script. Switch/regulator segments
-#     (`IEEE123_SWITCH_EDGES`) intentionally keep their existing near-ideal synthetic value
-#     (RESEARCH Assumption A2), not a real one. Numerical fidelity beyond the magnitude tripwires
-#     is still cross-validated at the centralized-SOCP level (T-07-05's load-bearing net).
+#     (`IEEE123_SWITCH_EDGES`) intentionally keep their existing near-ideal synthetic value,
+#     not a real one. Numerical fidelity beyond the magnitude tripwires
+#     is still cross-validated at the centralized-SOCP level (the load-bearing safety net for the transcription risk).
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 #
 # The ~37 non-load junction (transit / zero-injection) buses this fixture exposes via
-# `ieee123_load_nodes` are handled by the DSO-OPT transit-node relaxation (plan 07-03,
-# RESEARCH Pitfall 5), NOT here — this file only ships the topology and the load/transit split.
+# `ieee123_load_nodes` are handled by the DSO-OPT transit-node relaxation,
+# NOT here — this file only ships the topology and the load/transit split.
 
 using SparseArrays
 
@@ -47,10 +46,10 @@ The single documented per-unit base for the modified IEEE-123 fixture (thesis Ca
 order of magnitude, not the 100 MVA transmission base) is chosen deliberately so the
 distribution quantities (nodal injections, branch flows, the SOC cone `l·v ≈ P²+Q²`) land at
 `O(0.1–1)` pu instead of `O(1e-3)` pu. At the transmission-scale 100 MVA base every 4.16 kV
-distribution quantity is `~1e-3` pu, which sits at the numerical noise floor of BOTH the PF-04
+distribution quantity is `~1e-3` pu, which sits at the numerical noise floor of BOTH the
 exactness gate (its `atol = 1e-6` cone-slack floor becomes comparable to the cone itself) and
 Clarabel's conditioning under the ADMM ρ-penalty — making convergence + exactness fragile at
-scale (plan 07-05 finding). The feeder-scale base keeps the cone magnitude several orders above
+scale. The feeder-scale base keeps the cone magnitude several orders above
 the exactness floor (robustly exact) and the SOCP well-conditioned (ADMM converges in tens of
 iterations). The head-branch apparent-power limit is the only SI quantity converted here (once,
 at ingestion) through `to_pu_power`; the branch r/x are supplied already in per-unit
@@ -59,7 +58,7 @@ at ingestion) through `to_pu_power`; the branch r/x are supplied already in per-
 const IEEE123_BASE = PerUnitBase(1.0, 4.16)
 
 """
-Thesis terminal chosen as the MEM/substation frontier (root); RESEARCH Open-Q1: the no-parent node.
+Thesis terminal chosen as the MEM/substation frontier (root): the no-parent node.
 """
 const IEEE123_ROOT_TERMINAL = 150
 
@@ -69,10 +68,10 @@ Head-branch (substation/frontier) apparent-power limit, thesis Case B `S_max,01 
 const IEEE123_HEAD_SMAX_MVA = 3.8
 
 # Switch/regulator segments keep their near-ideal (tiny, strictly-positive pu) synthetic value
-# (RESEARCH Assumption A2) — real data is not used here since these are near-ideal by design, not
+# — real data is not used here since these are near-ideal by design, not
 # ordinary line segments. Non-switch branch impedances now come from `IEEE123_BRANCH_RX_OHMS`
 # (`ieee123_impedances.jl`, included above), converted Ω→pu at ingestion in `ieee123_modified()`
-# (plan 17-02, IMPED-02). CALIBRATION (plan 07-05): the feeder-scale 1 MVA base keeps the solved
+# CALIBRATION: the feeder-scale 1 MVA base keeps the solved
 # voltages inside the Case-B band `V∈[0.9,1.1]` while still binding it (under-voltage on the long
 # load laterals, over-voltage under midday PV reverse flow) — a genuinely voltage-constrained
 # scale case, not a slack one.
@@ -214,9 +213,9 @@ Closed switch/regulator segments (near-ideal impedance); the tie switches are ex
 const IEEE123_SWITCH_EDGES = Set([(150, 149), (13, 152), (18, 135), (60, 160), (97, 197)])
 
 # Spot-load terminals of the modified IEEE-123 (thesis Case B: "85 load nodes"). Every OTHER
-# non-root terminal is a TRANSIT (zero-injection) junction bus — the path plan 07-03's DSO-OPT
-# relaxation must handle (RESEARCH Pitfall 5). This is the topological load/transit split, NOT
-# the aggregator population (that stays in the test/population layer, RESEARCH Open-Q2).
+# non-root terminal is a TRANSIT (zero-injection) junction bus — the path the DSO-OPT
+# relaxation must handle. This is the topological load/transit split, NOT
+# the aggregator population (that stays in the test/population layer).
 const IEEE123_LOAD_TERMINALS = [
     1,
     2,
@@ -309,7 +308,7 @@ const IEEE123_LOAD_TERMINALS = [
     ieee123_relabel_map() -> Dict{Int,Int}
 
 The documented `thesis_terminal → 1..N` relabeling that makes `bus.id == 1-based position`
-(the framework indexing convention; RESEARCH Pitfall 4). The rule is deterministic:
+(the framework indexing convention). The rule is deterministic:
 
   - the root frontier terminal (`IEEE123_ROOT_TERMINAL == 150`) maps to struct index `1`;
   - every OTHER terminal maps to `1 + its rank` in ASCENDING numeric order.
@@ -340,7 +339,7 @@ The (relabeled, sorted) struct indices of the 85 spot-load buses of the modified
 (thesis Case B). Their complement among the non-root buses is the set of TRANSIT
 (zero-injection) junction buses — so the transit count is
 `length(buses) − 1 − length(ieee123_load_nodes())` (≈ 37). Exposed here so the population layer
-(`build_ieee123_aggregators`) and the DSO-OPT transit relaxation (plan 07-03) can split the
+(`build_ieee123_aggregators`) and the DSO-OPT transit relaxation can split the
 aggregator-coupling axis from the balance-closure axis without re-deriving the topology.
 """
 function ieee123_load_nodes()
@@ -349,7 +348,7 @@ function ieee123_load_nodes()
 end
 
 # Sparse node-branch incidence self-check (CLAUDE.md perf: SparseArrays for the topology). A
-# genuine transcription tripwire on the error-prone hand-built branch list (threat T-07-05):
+# genuine transcription tripwire on the error-prone hand-built branch list:
 # every branch column must hold exactly one +1 (from) and one −1 (to), so all column sums are 0
 # and `nnz == 2·B`. `assert_radial` re-derives its own incidence for the tree checks; this one
 # guards the RELABEL step before the data reaches the constructor.
@@ -380,7 +379,7 @@ end
 
 Build the modified IEEE 123-node voltage-constrained test feeder (thesis Case B, App. E) as an
 immutable, radial-validated, per-unit `Feeder` on the `IEEE123_BASE` (1 MVA / 4.16 kV — the
-Phase-7 feeder-scale base chosen for SOC cone-slack robustness, matching `IEEE123_BASE` and the
+feeder-scale base chosen for SOC cone-slack robustness, matching `IEEE123_BASE` and the
 file header; NOT a 100 MVA transmission base).
 
 # Topology (123 buses, 122 radial branches)
@@ -389,13 +388,13 @@ The non-contiguous IEEE terminals are relabeled to contiguous `1..N` by `ieee123
 (root frontier terminal 150 → struct index 1; every other terminal → `1 + rank` in ascending
 order), so `bus.id` equals its 1-based position. Only the RADIAL branch set is kept — the four
 normally-open tie switches (`54-94, 151-300, 250-251, 450-451`) stay open — giving a clean tree
-with `edges == N − 1` (RESEARCH Pitfall 4). The frontier terminal 150 (the node with no parent)
-is the single root (RESEARCH Open-Q1).
+with `edges == N − 1`. The frontier terminal 150 (the node with no parent)
+is the single root.
 
 # Load / transit split
 
 `ieee123_load_nodes()` gives the 85 spot-load buses (thesis "85 load nodes"); the remaining ~37
-non-root buses are TRANSIT (zero-injection) junctions handled by plan 07-03's DSO-OPT relaxation.
+non-root buses are TRANSIT (zero-injection) junctions handled by the DSO-OPT transit-node relaxation.
 
 # Magnitudes
 
@@ -408,16 +407,16 @@ non-root buses are TRANSIT (zero-injection) junctions handled by plan 07-03's DS
     this head limit, so the case exercises the branch-flow / voltage physics, not just a scalar cap.
   - All interior branches use the `SMAX_NO_LIMIT = 99.0` pu sentinel (effectively unconstrained,
     strictly inside the `0 < smax < 100` band).
-  - Non-switch branch r/x are REAL per-segment impedances (plan 17-02, IMPED-02), sourced from
+  - Non-switch branch r/x are REAL per-segment impedances, sourced from
     the public IEEE-123 OpenDSS test-case data and converted Ω→pu via `to_pu_impedance` (see
     `IEEE123_BRANCH_RX_OHMS` / the DATA PROVENANCE note at the top of this file). Switch/regulator
     segments keep their near-ideal synthetic value (`IEEE123_SWITCH_R`/`IEEE123_SWITCH_X`).
 
-`Feeder(buses, branches, root)` runs `assert_radial` (DATA-02) and `assert_magnitudes` (INFRA-05)
-before returning, so an invalid feeder can never exist (DATA-03).
+`Feeder(buses, branches, root)` runs `assert_radial` and `assert_magnitudes`
+before returning, so an invalid feeder can never exist.
 """
 function ieee123_modified()
-    vmin, vmax = 0.9, 1.1                      # thesis Case B band (RESEARCH fixture skeleton)
+    vmin, vmax = 0.9, 1.1                      # thesis Case B band
     remap = ieee123_relabel_map()
     N = length(remap)
 
@@ -445,7 +444,7 @@ function ieee123_modified()
 end
 
 """
-Alias for `ieee123_modified` (RESEARCH fixture skeleton naming).
+Alias for `ieee123_modified`.
 """
 build_ieee123() = ieee123_modified()
 

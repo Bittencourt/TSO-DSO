@@ -13,28 +13,28 @@
 # NOTE: Master.dss redirects LineCodes2.DSS (Ohm matrices, Units=km) for MV lines — NOT
 # LineCodes.dss (a different, unrelated file bundled in the same upstream repo).
 #
-# 3-winding center-tap service-transformer reduction (D-05 REVISED):
+# 3-winding center-tap service-transformer reduction:
 #     R_total% = %Rs[1] + %Rs[2] + %Rs[3]
 #     X_total% = 0.5 * (Xhl + Xht + Xlt)
-# Derived and verified against OpenDSS's own Transformer.pas this research session — not
-# a citable published formula (Assumption A1). See 25-RESEARCH.md Architecture Patterns
-# §1 for the full star-equivalent-decomposition derivation.
+# Derived and verified against OpenDSS's own Transformer.pas — not
+# a citable published formula. The star-equivalent decomposition is the basis of the
+# derivation.
 #
 # Values are per-segment SERIES IMPEDANCE IN OHMS (MV/LV branches, positive-sequence
 # Fortescue-averaged) or PERCENT ON THE TRANSFORMER'S OWN kVA BASE (transformer edges) —
 # NEITHER is per-unit. Converted once at ingestion in ieee8500_modified() via
-# to_pu_impedance (D-09) — never inside this reduction script.
+# to_pu_impedance — never inside this reduction script.
 #
 # Regulator/switch segments (IEEE8500_REGULATOR_EDGES) carry NO real impedance value in
 # this table — they are assigned the SAME near-ideal low-impedance treatment as
-# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time (D-13, Assumption A2 analog);
+# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time;
 # tap changing is not modeled.
 #
 # 5 of the source's 43 switch=y Lines.dss records carry an explicit enabled=False
 # (genuine normally-open tie switches) and are EXCLUDED entirely from this set — the
 # IEEE-123 precedent (normally-open ties stay open so the graph is a clean tree).
 #
-# BUS MERGE (quick task 260822-pxb, 2026-08-22, REPLACES an earlier impedance-fabrication
+# BUS MERGE (replaces an earlier impedance-fabrication
 # approach for this class): Lines.dss contains 2 New Line.* records with
 # length=0.0003048 km (EXACTLY 1.000 ft) on a REAL linecode-referenced conductor —
 # LN5473436-1 (bus2=L2674047, 3PH_H-397_ACSR) and LN6259981-1 (bus2=L3178969,
@@ -43,19 +43,16 @@
 # apart are electrically the SAME node, so each pair is MERGED (never given a fabricated
 # impedance value) onto the degree-rule survivor named above (L2674047, L3178969) — see
 # scripts/reduce_ieee8500_impedances.jl's detect_length_class_merge_pairs/
-# resolve_merge_pairs/apply_merge!, and 25-DATA-PROVENANCE.md for the full record
-# (including the exact casualty bus names, which by design appear NOWHERE below).
+# resolve_merge_pairs/apply_merge!; the exact casualty bus names, by design, appear NOWHERE below.
 #
 # BUS MERGE for the substation Low Side Bus busbar tie (Lines.dss's HVMV_Sub_connector
-# record — quick task 260822-pxb, 2026-08-22, SUPERSEDING an earlier D-13 near-ideal
+# record — SUPERSEDING an earlier near-ideal
 # value-reassignment): the record parses to a genuinely near-zero Ω value (r=1e-6,
 # x=1e-5, a modeling placeholder for a non-physical busbar tie, not a physical line) that
 # structurally breaks LinDistFlow SOC-exactness, so its 2 named endpoints are MERGED into
 # the single survivor bus "HVMV_Sub_48332" (lexicographic tie-break on an exact degree
-# tie) by reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges! — see
-# .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1 and
-# 25-DATA-PROVENANCE.md for the full before/after record (including the casualty bus
-# name, which by design appears NOWHERE below).
+# tie) by reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges!; the casualty bus
+# name, by design, appears NOWHERE below.
 
 const IEEE8500_MV_BRANCH_RX_OHMS = Dict{Tuple{String, String}, Tuple{Float64, Float64}}(
     ("190-7361", "M1089120") => (0.008973963591198668, 0.0028914370841719994),

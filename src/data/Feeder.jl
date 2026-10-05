@@ -1,10 +1,10 @@
 # src/data/Feeder.jl
 #
-# Immutable, JuMP-free feeder data model (DATA-01). Concretely-typed parametrized
+# Immutable, JuMP-free feeder data model. Concretely-typed parametrized
 # structs holding PER-UNIT numbers only — no solver or JuMP knowledge lives here.
 # Construction is the validation gate: the outer `Feeder(...)` constructor runs
-# BOTH the radial-topology invariant (`assert_radial`, DATA-02) AND the per-unit
-# magnitude tripwires (`assert_magnitudes`, INFRA-05) before returning, so an
+# BOTH the radial-topology invariant (`assert_radial`) AND the per-unit
+# magnitude tripwires (`assert_magnitudes`) before returning, so an
 # invalid feeder can never exist. Structs are immutable: validation is a
 # construction invariant, never re-checked or mutated afterwards.
 #
@@ -13,7 +13,7 @@
 # called from inside the constructor body, so they resolve at call time (world
 # age), not at definition time — no forward-declaration is needed.
 #
-# Convention (Phase 1): bus `id` equals its 1-based position in `buses`.
+# Convention: bus `id` equals its 1-based position in `buses`.
 
 """
     Bus{T<:Real}
@@ -45,7 +45,7 @@ end
 """
     AbstractFeeder{T<:Real}
 
-Abstract supertype of every feeder topology (ARCH-03). Contract: each subtype
+Abstract supertype of every feeder topology. Contract: each subtype
 exposes the fields `buses::Vector{Bus{T}}`, `branches::Vector{Branch{T}}` and
 `root::Int`. There are NO accessor functions; consumers read the fields directly.
 Each concrete struct validates in its own inner constructor (`Feeder`:
@@ -58,7 +58,7 @@ abstract type AbstractFeeder{T <: Real} end
 
 An immutable radial feeder: its `buses`, `branches`, and the index `root` of the
 single frontier bus. Construction runs BOTH invariants — `assert_radial`
-(DATA-02) and `assert_magnitudes` (INFRA-05) — inside the inner constructor, so
+and `assert_magnitudes` — inside the inner constructor, so
 an invalid feeder can never exist. Build one via `Feeder(buses, branches, root)`.
 
 Validation lives in the INNER constructor deliberately: defining an inner
@@ -76,8 +76,8 @@ struct Feeder{T <: Real} <: AbstractFeeder{T}
         root::Int,
     ) where {T <: Real}
         feeder = new{T}(buses, branches, root)
-        assert_radial(feeder.buses, feeder.branches, feeder.root)  # DATA-02 topology invariant
-        assert_magnitudes(feeder)                                  # INFRA-05 magnitude invariant
+        assert_radial(feeder.buses, feeder.branches, feeder.root)  # topology invariant
+        assert_magnitudes(feeder)                                  # magnitude invariant
         return feeder
     end
 end
@@ -88,8 +88,8 @@ end
 Construct a feeder, inferring `T` from the bus/branch element type and enforcing
 both construction invariants before returning:
 
-  - `assert_radial(buses, branches, root)` — radial tree (DATA-02); and
-  - `assert_magnitudes(feeder)` — per-unit magnitude sanity (INFRA-05).
+  - `assert_radial(buses, branches, root)` — radial tree; and
+  - `assert_magnitudes(feeder)` — per-unit magnitude sanity.
 
 Throws `ArgumentError` on a non-tree feeder and (also `ArgumentError`) on
 out-of-band magnitudes. Both fire on this live path, so any downstream consumer

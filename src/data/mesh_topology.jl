@@ -1,6 +1,6 @@
 # src/data/mesh_topology.jl
 #
-# Mesh (connected, not-necessarily-radial) validation (MESH-01, plan 23-01). A
+# Mesh (connected, not-necessarily-radial) validation. A
 # meshed feeder need not be a tree: `nB >= N` is allowed (loops are the whole
 # point). This file is `data/topology.jl`'s `assert_radial` MINUS the tree-
 # specific edge-count theorem (`B == N - 1`) -- every other check (root range,
@@ -8,16 +8,16 @@
 # root/is_root agreement) is kept VERBATIM, since those checks are already
 # graph-generic and never assumed acyclicity.
 #
-# `data/topology.jl`/`assert_radial`/`Feeder` are BYTE-UNCHANGED by this file
-# (D-01/D-09 lock): this is a wholly separate validator for a wholly separate
+# `data/topology.jl`/`assert_radial`/`Feeder` are UNCHANGED by this file:
+# this is a wholly separate validator for a wholly separate
 # struct (`MeshedFeeder`, `data/MeshedFeeder.jl`).
 #
 # No Graphs.jl dependency: connectivity is the same ~15-line BFS over a
-# hand-built adjacency list `assert_radial` uses (RESEARCH "Don't Hand-Roll").
+# hand-built adjacency list `assert_radial` uses.
 # The sparse node-branch incidence is returned as a convenience, mirroring
 # `assert_radial`'s own return contract.
 #
-# Convention (Phase 1, inherited): bus `id` equals its 1-based position in
+# Convention (inherited): bus `id` equals its 1-based position in
 # `buses`; the incidence/adjacency are indexed by that position.
 
 using SparseArrays
@@ -47,7 +47,7 @@ function assert_connected(buses, branches, root)
     # (1) Root must index a real bus (guards the BFS/adjacency access below).
     1 ≤ root ≤ N || throw(ArgumentError("Feeder root $root is out of range 1:$N."))
 
-    # (2) Positional convention (WR-03): every `bus.id` MUST equal its 1-based
+    # (2) Positional convention: every `bus.id` MUST equal its 1-based
     #     position. All incidence/adjacency indexing is BY POSITION, and the
     #     framework assumes `bus.id` equals that position -- a mislabeled or
     #     reordered `buses` would index inconsistently with `bus.id` the moment
@@ -55,7 +55,7 @@ function assert_connected(buses, branches, root)
     all(i -> buses[i].id == i, eachindex(buses)) ||
         throw(ArgumentError("Bus ids must equal their 1-based position in `buses`."))
 
-    # Branch endpoints must reference real buses (IN-02). Checked explicitly here
+    # Branch endpoints must reference real buses. Checked explicitly here
     # so an out-of-range endpoint gives a clear domain message instead of the
     # cryptic "row index out of range" that `SparseArrays.sparse` would raise
     # below (both are ArgumentError, so the exception-type contract is unchanged).
@@ -122,7 +122,7 @@ function assert_connected(buses, branches, root)
     #     bus must be the one at position `root`. Otherwise the stored frontier
     #     index and the frontier flag silently disagree -- a silent-wrong hazard
     #     for any layer that reads `feeder.root` in one place and scans `is_root`
-    #     in another (WR-01).
+    #     in another.
     buses[root].is_root || throw(
         ArgumentError(
             "Malformed mesh feeder: root index $root does not point to the is_root-flagged bus.",

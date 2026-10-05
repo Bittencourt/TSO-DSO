@@ -1,18 +1,18 @@
 # src/data/topology.jl
 #
-# Radial (tree) validation (DATA-02). A feeder must be a radial tree: for a
+# Radial (tree) validation. A feeder must be a radial tree: for a
 # simple connected graph, `edges == nodes - 1` AND connected ⟺ tree (acyclic,
 # single component) — so an explicit cycle search is unnecessary. We additionally
 # require exactly one designated frontier (root) bus.
 #
 # Validation runs at `Feeder` construction (see data/Feeder.jl) and a non-tree
 # feeder raises a clear `ArgumentError`. No Graphs.jl dependency: connectivity is
-# a ~15-line BFS over a hand-built adjacency list (RESEARCH "Don't Hand-Roll").
+# a ~15-line BFS over a hand-built adjacency list.
 # The sparse node-branch incidence is returned as a convenience for callers that
 # want it; the `Feeder` constructor uses `assert_radial` for validation only and
 # does not store `A` (a later layer that needs incidence recomputes or caches it).
 #
-# Convention (Phase 1): bus `id` equals its 1-based position in `buses`, matching
+# Convention: bus `id` equals its 1-based position in `buses`, matching
 # the thesis fixtures; the incidence/adjacency are indexed by that position.
 
 using SparseArrays
@@ -46,7 +46,7 @@ function assert_radial(buses, branches, root)
     # (2) Root must index a real bus (guards the BFS/adjacency access below).
     1 ≤ root ≤ N || throw(ArgumentError("Feeder root $root is out of range 1:$N."))
 
-    # (3) Positional convention (WR-03): every `bus.id` MUST equal its 1-based
+    # (3) Positional convention: every `bus.id` MUST equal its 1-based
     #     position. All incidence/adjacency indexing is BY POSITION, and the
     #     framework assumes `bus.id` equals that position — a mislabeled or
     #     reordered `buses` would index inconsistently with `bus.id` the moment
@@ -54,7 +54,7 @@ function assert_radial(buses, branches, root)
     all(i -> buses[i].id == i, eachindex(buses)) ||
         throw(ArgumentError("Bus ids must equal their 1-based position in `buses`."))
 
-    # Branch endpoints must reference real buses (IN-02). Checked explicitly here
+    # Branch endpoints must reference real buses. Checked explicitly here
     # so an out-of-range endpoint gives a clear domain message instead of the
     # cryptic "row index out of range" that `SparseArrays.sparse` would raise
     # below (both are ArgumentError, so the exception-type contract is unchanged).
@@ -116,7 +116,7 @@ function assert_radial(buses, branches, root)
     #     bus must be the one at position `root`. Otherwise the stored frontier
     #     index and the frontier flag silently disagree — a silent-wrong hazard
     #     for any layer that reads `feeder.root` in one place and scans `is_root`
-    #     in another (WR-01).
+    #     in another.
     buses[root].is_root || throw(
         ArgumentError("Feeder root index $root does not point to the is_root-flagged bus."),
     )

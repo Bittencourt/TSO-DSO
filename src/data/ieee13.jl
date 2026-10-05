@@ -1,9 +1,8 @@
 # src/data/ieee13.jl
 #
-# SEAM: modified IEEE 13-node feeder built-in fixture (DATA-03).
-# OWNER: plan 04-03.
+# SEAM: modified IEEE 13-node feeder built-in fixture.
 #
-# NAMING (IN-02): "IEEE 13-node" is the HISTORICAL name of the source test feeder, NOT a bus
+# NAMING: "IEEE 13-node" is the HISTORICAL name of the source test feeder, NOT a bus
 # count. The MODIFIED thesis case collapses it to 11 buses (root MEM node 0 + 10 load nodes)
 # and 10 radial branches — see the node→index table below. Read "13-node" as the lineage of
 # the fixture, not its size.
@@ -15,8 +14,8 @@
 # apparent-power limit `S_max,(0,1) = 6.86 MVA ⇒ 0.0686 pu`. Interior branches carry no
 # binding thermal limit in the thesis (congestion-driven at the head), so they use the
 # canonical `SMAX_NO_LIMIT` pu sentinel that honours the STRICT `0 < smax < 100` magnitude
-# band in units/PerUnit.jl (RESEARCH Open Q2). Construction runs `assert_radial` +
-# `assert_magnitudes`, so an invalid feeder can never be returned (DATA-03).
+# band in units/PerUnit.jl. Construction runs `assert_radial` +
+# `assert_magnitudes`, so an invalid feeder can never be returned.
 
 """
     IEEE13_BASE
@@ -33,16 +32,16 @@ const IEEE13_BASE = PerUnitBase(100.0, 13.2)
 
 Per-unit apparent-power sentinel for the non-head (interior) branches. The thesis
 gives no explicit thermal limit on interior branches — the modified IEEE-13 case is
-congestion-driven at the head branch only (Assumption A4 / Open Q2). We therefore
+congestion-driven at the head branch only (a modeling assumption). We therefore
 mark interior branches as effectively unconstrained with a large sentinel that is
 STRICTLY below the `SMAX_PU_MAX = 100.0` magnitude tripwire in units/PerUnit.jl.
 
-IN-01: this is an ALIAS of the canonical `SMAX_NO_LIMIT` (units/PerUnit.jl) — the SAME
+This is an ALIAS of the canonical `SMAX_NO_LIMIT` (units/PerUnit.jl) — the SAME
 constant the `ConvexBranchFlow` formulation checks against when deciding to drop a branch's
 power cone. Sourcing both from one definition removes the fragile "two independent `99.0`
 literals must stay equal" coupling (a test asserts the alias holds).
 
-NOTE: the RESEARCH code sketch used `100.0`, which FAILS the strict `0 < smax < 100`
+NOTE: a limit of `100.0` would FAIL the strict `0 < smax < 100`
 band at `Feeder` construction. `SMAX_NO_LIMIT = 99.0` is the largest round value that both
 passes the tripwire and stays far above any physical interior flow, so only the head branch
 binds.
@@ -59,7 +58,7 @@ immutable, radial-validated, per-unit `Feeder` on the `IEEE13_BASE` (100 MVA / 1
 
 Bus `id` equals its 1-based position, so **thesis node `k` maps to struct index `k+1`**
 (the root MEM frontier, thesis node 0, is struct index 1). The full node→index map — a
-reference for the ground-truth regression (plan 04-06), e.g. thesis node 9 = struct
+reference for the ground-truth regression, e.g. thesis node 9 = struct
 index 10:
 
 | thesis node  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9  | 10 |
@@ -80,10 +79,10 @@ Branches (thesis `from,to` — `r[pu]`, `x[pu]`), shifted `k → k+1` on constru
   - The **head branch** (thesis `0→1`, struct index `1→2`) carries the single binding
     thermal limit `S_max = 6.86 MVA ⇒ 0.0686 pu` (converted once via `to_pu_power`).
   - Interior branches use the `IEEE13_INTERIOR_SMAX = 99.0` pu sentinel — effectively
-    unconstrained, and strictly inside the magnitude band (Assumption A4 / Open Q2).
+    unconstrained, and strictly inside the magnitude band.
 
-`Feeder(buses, branches, 1)` runs `assert_radial` (DATA-02) and `assert_magnitudes`
-(INFRA-05) before returning, so the fixture is validated by construction (DATA-03).
+`Feeder(buses, branches, 1)` runs `assert_radial` and `assert_magnitudes`
+before returning, so the fixture is validated by construction.
 """
 function ieee13_modified()
     vmin, vmax = 0.95, 1.05
@@ -91,7 +90,7 @@ function ieee13_modified()
 
     # SI→pu ONCE at ingestion: head-branch limit 6.86 MVA on the 100 MVA base ⇒ 0.0686 pu.
     s_head = to_pu_power(6.86, IEEE13_BASE)                 # == 0.0686 pu
-    s_int = IEEE13_INTERIOR_SMAX                            # 99.0 pu sentinel (Open Q2)
+    s_int = IEEE13_INTERIOR_SMAX                            # 99.0 pu sentinel
 
     # (thesis_from, thesis_to, r_pu, x_pu, smax_pu) — node k shifts to struct index k+1.
     raw = [
