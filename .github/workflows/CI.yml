@@ -116,6 +116,10 @@ jobs:
         shell: bash
         run: python3 .github/scripts/check_content_loss.py HEAD
       - name: Check for planning identifiers
+        # !cancelled(): a formatting failure above must not mask a planning identifier
+        # introduced in the same push (same rationale as the API check in the test job).
+        # It cannot turn a red job green; it only controls whether this step RUNS.
+        if: ${{ !cancelled() }}
         shell: bash
         run: python3 .github/scripts/check_planning_ids.py
 
