@@ -83,8 +83,7 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
     `v̂_j = v̂_i − 2{r(P−rl) + x(Q−xl)}` (the Gan-Low direction, `v̂ ≥ v` — Gan-Low's
     MODIFIED OPF, a conservative RESTRICTION on the upper voltage band, exact by theorem,
     with a measurable (~0.05% on the high-PV reference fixture) welfare loss — see the verdict below). Opt-in
-    (`thesis_literal=true`): the LITERAL transcribed formula `v̂_j = v̂_i − 2{r(P+rl) +
-    x(Q+xl)}` (`v̂ ≤ v`, a RESTRICTION on the LOWER band instead, kept only for reproducing
+    (`thesis_literal=true`): the LITERAL transcribed formula `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}` (`v̂ ≤ v`, a RESTRICTION on the LOWER band instead, kept only for reproducing
     the thesis's own defective algebra). NEITHER form is a genuine relaxation. Both written
     purely in the ORIGINAL `P, Q, l` plus the single copy `v̂` (no separate `P̂/Q̂`);
   - 3.45 — squared-magnitude voltage bounds `V²min ≤ v, v̂ ≤ V²max` on BOTH `v` and `v̂`.
@@ -213,13 +212,22 @@ end
 Invalid formulation x feeder pair: always throws `ArgumentError`. Use `MeshedFlow`.
 """
 function contribute!(::ConvexBranchFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
-    throw(ArgumentError("ConvexBranchFlow requires a radial Feeder, got MeshedFeeder " *
-        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)"))
+    throw(
+        ArgumentError(
+            "ConvexBranchFlow requires a radial Feeder, got MeshedFeeder " *
+            "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)",
+        ),
+    )
 end
 
 # INTERNAL shared SOCP body (byte-for-byte the former public `contribute!` body); also used by
 # `RestrictedBranchFlow` and `MeshedFlow`, which must NOT go through the radial-only public method.
-function _contribute_convex!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::AbstractFeeder; T::Int = 1)
+function _contribute_convex!(
+    pf::ConvexBranchFlow,
+    ctx::ModelContext,
+    feeder::AbstractFeeder;
+    T::Int = 1,
+)
     m = ctx.model
     B = feeder.branches
     N = length(feeder.buses)
@@ -301,7 +309,8 @@ function _contribute_convex!(pf::ConvexBranchFlow, ctx::ModelContext, feeder::Ab
         m,
         cpydrop[b = 1:nB, t = 1:T],
         v̂[B[b].to, t] ==
-        v̂[B[b].from, t] - 2 * (
+        v̂[B[b].from, t] -
+        2 * (
             B[b].r * (pf.thesis_literal ? P[b, t] + B[b].r * l[b, t] : Prev[b, t]) +
             B[b].x * (pf.thesis_literal ? Q[b, t] + B[b].x * l[b, t] : Qrev[b, t])
         )

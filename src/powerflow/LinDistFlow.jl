@@ -53,8 +53,12 @@ outflow of `Q`) into `ctx.residuals[:Rq]` (thesis 3.32), both via the INDEXED
 inspection / the exactness check. Returns `ctx`.
 """
 function contribute!(::LinDistFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
-    throw(ArgumentError("LinDistFlow requires a radial Feeder, got MeshedFeeder " *
-        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)"))
+    throw(
+        ArgumentError(
+            "LinDistFlow requires a radial Feeder, got MeshedFeeder " *
+            "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)",
+        ),
+    )
 end
 
 function contribute!(pf::LinDistFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)

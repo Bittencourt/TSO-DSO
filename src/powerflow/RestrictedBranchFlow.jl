@@ -205,11 +205,20 @@ After both mechanisms are wired, stashes `ctx.meta[:restriction_ε] = pf.ε` and
 certificate). Returns `ctx`.
 """
 function contribute!(::RestrictedBranchFlow, ::ModelContext, ::MeshedFeeder; T::Int = 1)
-    throw(ArgumentError("RestrictedBranchFlow requires a radial Feeder, got MeshedFeeder " *
-        "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)"))
+    throw(
+        ArgumentError(
+            "RestrictedBranchFlow requires a radial Feeder, got MeshedFeeder " *
+            "(use MeshedFlow for meshed topologies) -- invalid formulation x feeder pair (a radial formulation needs a radial feeder)",
+        ),
+    )
 end
 
-function contribute!(pf::RestrictedBranchFlow, ctx::ModelContext, feeder::Feeder; T::Int = 1)
+function contribute!(
+    pf::RestrictedBranchFlow,
+    ctx::ModelContext,
+    feeder::Feeder;
+    T::Int = 1,
+)
     _contribute_convex!(ConvexBranchFlow(), ctx, feeder; T = T)
 
     pv = _require_pf_vars(ctx)
