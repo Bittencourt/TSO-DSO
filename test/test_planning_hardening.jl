@@ -1,21 +1,21 @@
 # test/test_planning_hardening.jl
 #
-# Seam: phase-12 cut-store & Benders master robustness hardening pass — deepens
-# PLAN-05 (persistent cut accumulation) and PLAN-06 (UB/LB gap convergence
-# detection) from Phase 11 at realistic scale; owns NO new requirement IDs.
+# Seam: cut-store & Benders master robustness hardening pass — deepens
+# the persistent cut accumulation and the UB/LB gap convergence
+# detection tests at realistic scale.
 # Items tagged `[:planning]`, names contain "planning" and "hardening"
 # (occursin filter convention, mirrors test_planning_master.jl).
 #
 # Each `@testitem` here operates at the MASTER level (via `build_master`/
 # `add_feasibility_cut!`/`add_optimality_cut!`/`solve_master!` and
 # `build_follower`/`solve_follower!` directly) — NOT the full `solve_stackelberg!`
-# loop, per 12-CONTEXT.md's scope for these degenerate feasibility-cut edge cases.
+# loop, matching the scope of these degenerate feasibility-cut edge cases.
 #
-# Fixture note: cases (a)/(c) reuse test_planning_benders.jl's own WR-04 fixture
+# Fixture note: cases (a)/(c) reuse test_planning_benders.jl's own feasibility-branch fixture
 # (corridor_cap=2.0, x_inv_max=0.25 ⇒ deliverable cap 0.5) so the near-boundary trial
 # z=0.5±1e-6 straddles a KNOWN, already-certified feasible/infeasible boundary. The
-# offset is 1e-6, NOT 1e-9: MEASURED this session (not assumed — 10-RESEARCH.md
-# Pitfall 4 "measure, don't guess" convention) that HiGHS's own default feasibility
+# offset is 1e-6, NOT 1e-9: MEASURED (not assumed — the
+# "measure, don't guess" convention) that HiGHS's own default feasibility
 # tolerance accepts a 1e-9 boundary violation as still feasible on this fixture, so it
 # does not reliably split into a feasible/infeasible pair; 1e-6 does.
 
@@ -25,12 +25,12 @@
     using TSODSO: add_feasibility_cut!, build_follower, build_master, solve_follower!, solve_master!
     using JuMP: termination_status, MOI
 
-    # Deliverable cap = corridor_cap * x_inv_max = 2.0 * 0.25 = 0.5 (the WR-04 fixture's
-    # own cap, test_planning_benders.jl). MEASURED (not assumed — 10-RESEARCH.md
-    # Pitfall 4 "measure, don't guess" convention): HiGHS's own default feasibility
+    # Deliverable cap = corridor_cap * x_inv_max = 2.0 * 0.25 = 0.5 (the feasibility-branch fixture's
+    # own cap, test_planning_benders.jl). MEASURED (not assumed — the
+    # "measure, don't guess" convention): HiGHS's own default feasibility
     # tolerance (~1e-7/1e-8) accepts a boundary violation of 1e-9 as still feasible, so
     # a ±1e-9 offset does NOT reliably split into a feasible/infeasible pair on THIS
-    # fixture. Empirically verified this session: ±1e-6 reliably reproduces BOTH
+    # fixture. Empirically verified: ±1e-6 reliably reproduces BOTH
     # branches (feasible below, a genuine Farkas certificate above).
     f = build_follower(;
         T = 1,
@@ -99,7 +99,7 @@ end
     using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_follower, build_master, solve_follower!, solve_master!
     using JuMP: num_constraints, termination_status, MOI
 
-    # Duplicates are TOLERATED (not deduped) — Claude's Discretion per 12-CONTEXT.md: the
+    # Duplicates are TOLERATED (not deduped) — a deliberate choice: the
     # simpler option (no dedup code change to add_feasibility_cut!) is chosen, as long as
     # the store stays valid (each row independently finite, LP still solves OPTIMAL) even
     # with redundant rows appended.
@@ -153,17 +153,16 @@ end
 end
 
 # --------------------------------------------------------------------------------
-# Task 1 (revision 2): load test — T=8 multi-iteration Benders run with checkpoint
-# machinery exercised at scale and a retry-trace/log cross-check. The prior
-# revision's `>=50 iterations` framing and "retry ... machinery active" claim are
-# both retired below — see the REVISION 2 note after the FIX/RUNTIME NOTE
+# Load test — T=8 multi-iteration Benders run with checkpoint
+# machinery exercised at scale and a retry-trace/log cross-check. An earlier
+# version's `>=50 iterations` framing and "retry ... machinery active" claim are
+# both retired below — see the note on the iteration floor after the FIX/RUNTIME NOTE
 # paragraphs.
 #
-# FIXTURE-SHAPE DEVIATION (documented per 12-CONTEXT.md's own explicit Claude's
-# Discretion: "Load-test fixture parameterization (how to force slow convergence:
-# tolerance, fixture shape)"): the plan's own <interfaces> block instructs reuse of
-# test_planning_benders.jl's T=1 literals VERBATIM and to force >=50 iterations by
-# TIGHTENING `tol` alone. EMPIRICALLY MEASURED this session (never assumed): on the
+# FIXTURE-SHAPE NOTE (load-test fixture parameterization: how to force slow convergence,
+# tolerance versus fixture shape): the obvious design reuses
+# test_planning_benders.jl's T=1 literals VERBATIM and forces >=50 iterations by
+# TIGHTENING `tol` alone. EMPIRICALLY MEASURED (never assumed): on the
 # literal T=1 fixture, the master's cutting-plane gap trajectory hits a HARD,
 # bit-exact floor of ~4.8995e-8 after only 16 iterations and NEVER moves again, no
 # matter how many further iterations run (verified out to 300) — because a T=1
@@ -200,42 +199,42 @@ end
 # condition gives `z* = 11.2/8 = 1.4` and `total(1.4) = -7.84` — EXACTLY the
 # numbers the production Benders loop converges to. Still the cheap toy
 # `two_bus_feeder()` + `LinDistFlow()` oracle throughout (never the full modified
-# 123-node-class SOCP oracle, per CONTEXT.md's explicit prohibition) — 8 tiny
+# 123-node-class SOCP oracle, which is prohibited here) — 8 tiny
 # per-period LPs/QP, not a large solve.
 #
-# RUNTIME NOTE (Claude's Discretion, `[:slow]` tag): measured ~33s wall-clock for
+# RUNTIME NOTE (`[:slow]` tag): measured ~33s wall-clock for
 # this ONE item (66 Benders iterations x 3 small subproblem solves each, each
 # printing HiGHS's default verbose solver log) — comfortably pushes the file's
 # total `:planning` quick-run past the ~2-minute budget alongside the other three
 # edge-case items in this file, so this item carries the extra `:slow` tag,
 # mirroring `test_ieee123_admm.jl`'s `[:admm, :ieee123]` two-tag precedent.
 #
-# REVISION 2 (this quick task, 260826-cjh): the old `result.iters` `>= 50`
-# assertion and this item's name were both retired as environment-fragile. CI
-# run 32950768236 failed on Julia 1.11 with `result.iters == 47` on this
-# byte-identical T=8 fixture. This is NOT a regression: zero `src/` changes and
+# NOTE ON THE ITERATION FLOOR: the old `result.iters` `>= 50`
+# assertion and this item's name were both retired as environment-fragile. A CI
+# run on Julia 1.11 failed with `result.iters == 47` on this
+# bit-for-bit identical T=8 fixture. This is NOT a regression: zero `src/` changes and
 # this file itself unchanged between the last green commit and the failing one;
 # only test-suite MEMBERSHIP shifted (one item deleted, one added elsewhere),
 # which shifted TestItemRunner's worker scheduling and, with it, the Benders
 # cutting-plane trajectory, even though nothing about the model changed.
 #
-# MEASURED spread of `result.iters` for this byte-identical T=8 fixture:
+# MEASURED spread of `result.iters` for this bit-for-bit identical T=8 fixture:
 #   66  the value that originally tuned T=8, "comfortably inside 50:100"
 #   55  local Julia 1.11.9, clean detached worktree, run 1, suite PASSED
 #   55  local Julia 1.11.9, clean detached worktree, run 2, suite PASSED
-#   47  CI Julia 1.11 runner 32950768236, FAILED against the old `>=50` bound
+#   47  CI Julia 1.11 runner, FAILED against the old `>=50` bound
 #
 # CONCLUSION: deterministic within one environment, ranging 47..66 across
 # environments, with the old threshold of 50 sitting inside that spread (~10%
 # margin on a quantity that itself moves ~30%). The CI failure is not locally
 # reproducible (this machine's Julia 1.11 always yields 55), so it could not be
-# fixed by iterating locally until a number passes. LOCKED USER DECISION: assert
+# fixed by iterating locally until a number passes. DECISION: assert
 # the load test's intent directly rather than using a tight iteration count as a
 # proxy — do not re-tune to a new magic number close to 47.
 #
 # The replacement floor (`result.iters >= 30`, below) is a STRUCTURAL threshold,
 # not a re-tuned one: 30 is ~1.9x the T=1 fixture's hard trivial-convergence floor
-# of 16 (see FIXTURE-SHAPE DEVIATION paragraph above), and ~36% below the lowest
+# of 16 (see FIXTURE-SHAPE NOTE paragraph above), and ~36% below the lowest
 # `result.iters` ever measured for T=8 (47) — generous headroom in both
 # directions, unlike the old bound's ~10% margin. This floor still catches the
 # regression class this task guards against: a hypothetical bug that made this
@@ -247,7 +246,7 @@ end
 # active" clause was false — `total_retries_from_trace` measures `0` on this
 # fixture every time (the retry ladder never fires here) — so the new name no
 # longer claims otherwise.
-@testitem "planning hardening: load test — T=8 multi-iteration Benders run (measured 47-66 iters across environments), checkpoint machinery exercised at scale, retry-trace/log cross-check (load, benders)" tags =
+@testitem "planning hardening: load test — T=8 multi-iteration Benders run (measured 47 to 66 iters across environments), checkpoint machinery exercised at scale, retry-trace/log cross-check (load, benders)" tags =
     [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using DrWatson: wload
@@ -286,8 +285,8 @@ end
             )
         end
 
-        # --- empirical retry-rate measurement (STATE.md "measure, don't assume" blocker) ---
-        # AUTHORITATIVE source: BendersTrace.retry_count_trace (plan 12-01's
+        # --- empirical retry-rate measurement ("measure, don't assume") ---
+        # AUTHORITATIVE source: BendersTrace.retry_count_trace (the
         # attempts_out mechanism) — never a log-scrape estimate.
         total_retries_from_trace = sum(result.trace.retry_count_trace)
         # INDEPENDENT witness: every solve_with_retry! escalation @warn captured
@@ -295,16 +294,14 @@ end
         n_retry_warnings =
             count(l -> occursin("solve_with_retry!: attempt", l.message), logs)
         @info "planning hardening load test: empirical retry rate" total_retries_from_trace n_retry_warnings result.iters
-        # The cross-check (plan-checker blocker fix, revision 1): the per-iteration
+        # The cross-check: the per-iteration
         # trace and the independently captured log stream must agree EXACTLY.
         @test total_retries_from_trace == n_retry_warnings
-        # REMOVED this revision (260826-cjh) as VACUOUS: `total_retries_from_trace
+        # Deliberately NOT asserted (VACUOUS): `total_retries_from_trace
         # >= 0` and `all(result.trace.retry_count_trace .>= 0)` were both
         # non-negativity checks on a sum/elements of a non-negative counter vector
         # and can never fail — they looked like coverage but asserted nothing.
-        # Precedent for the same removal pattern: test_planning_certification_
-        # integer.jl commit d53db27.
-
+        
         # --- convergence + iteration-count bound (never exhausts) ---
         @test result.gap <= tol
         # Replaces the old `result.iters` `>= 50` bound — see the REVISION 2 note
@@ -317,7 +314,7 @@ end
         @test all(diff(result.trace.n_cuts_trace) .>= 0)
         @test result.trace.n_cuts_trace[end] == length(result.master.cuts)
 
-        # --- checkpoint round-trip at scale (T-12-07): mid/high iteration k_check ---
+        # --- checkpoint round-trip at scale: mid/high iteration k_check ---
         k_check = min(50, result.iters)
         path_check = joinpath(dir, "iter_$(lpad(k_check, 5, '0')).jld2")
         @test isfile(path_check)

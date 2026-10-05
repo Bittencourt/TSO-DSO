@@ -1,6 +1,6 @@
 # test/test_planning_coupling.jl
 #
-# Seam: src/planning/coupling.jl (NASH-01). `SharedTransmission` +
+# Seam: src/planning/coupling.jl (shared corridor). `SharedTransmission` +
 # `build_shared_transmission` build the N-distributor shared corridor
 # EXACTLY ONCE; `activate_distributor!`/`update_coupling!`/`write_back!`
 # mutate it via Parameter/bound updates only (never a rebuild);
@@ -9,8 +9,7 @@
 # Items tagged `[:planning]`, names contain "planning" and "coupling"
 # (occursin filter convention, mirrors test_planning_follower.jl).
 #
-# Shared N=2 toy fixture (ASYMMETRIC per Revision 1, plan-checker pass
-# 2026-07-23) used by every @testitem below: T=1, corridor_cap=2.0,
+# Shared N=2 toy fixture (ASYMMETRIC by design) used by every @testitem below: T=1, corridor_cap=2.0,
 # x_inv_max=[0.3, 0.5], c_inv=[1.0, 3.0], c_op=[[0.5], [0.5]].
 #
 # Rationale for the asymmetric design (replacing an original symmetric
@@ -49,7 +48,7 @@
 # from the correctly-pinned 0.4. Testitem 3 below asserts the
 # correctly-pinned value (0.4); a regression to the OLD symmetric/
 # at-ceiling fixture would have silently passed even with a broken pin —
-# this is exactly the gap Revision 1 closes.
+# this is exactly the gap the asymmetric design closes.
 #
 # The SAME asymmetric headroom independently discriminates the infeasible
 # branch too: distributor 1's request z_1=0.61 exceeds the correctly-pinned
@@ -161,7 +160,7 @@ end
     @test num_constraints(shared.model; count_variable_in_set_constraints = true) == nc0
 end
 
-@testitem "planning coupling: feasible branch — distributor 1 delivers z=0.4 against a frozen, partially-committed distributor 2 (capacity dual nonzero, Pitfall 3 regression; asymmetric fixture makes a broken write_back! pin a true cost discriminator, Revision 1)" tags =
+@testitem "planning coupling: feasible branch — distributor 1 delivers z=0.4 against a frozen, partially-committed distributor 2 (capacity dual nonzero; asymmetric fixture makes a broken write_back! pin a true cost discriminator)" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_follower!, write_back!
@@ -191,7 +190,7 @@ end
     @test abs(dual(shared.model[:capacity][1])) > 1e-8
 end
 
-@testitem "planning coupling: infeasible branch — distributor 1 exceeds remaining pooled headroom (Farkas certificate; independently discriminates a broken write_back! pin via the asymmetric ceiling headroom, Revision 1)" tags =
+@testitem "planning coupling: infeasible branch — distributor 1 exceeds remaining pooled headroom (Farkas certificate; independently discriminates a broken write_back! pin via the asymmetric ceiling headroom)" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_follower!, write_back!
@@ -241,7 +240,7 @@ end
 # NOTE: consolidated coverage of all 4 planning-layer builders now also lives in
 # test/test_planning_noninteger.jl; this SharedTransmission-only check is kept as
 # redundant post-build coverage (harmless, not removed).
-@testitem "planning coupling: PVAL-04 continuous-only regression — no binary/integer variable anywhere in the shared model" tags =
+@testitem "planning coupling: continuous-only regression — no binary/integer variable anywhere in the shared model" tags =
     [:planning] begin
     using TSODSO
     using JuMP: all_variables, is_binary, is_integer
@@ -258,7 +257,7 @@ end
     @test all(v -> !is_binary(v) && !is_integer(v), all_variables(shared.model))
 end
 
-@testitem "planning coupling: presolve-only INFEASIBLE without a Farkas ray is re-solved without presolve — tolerance-borderline trial returns the simplex's own verdict, results stay queryable, presolve restored (WR-01, Phase 31 code review)" tags =
+@testitem "planning coupling: presolve-only INFEASIBLE without a Farkas ray is re-solved without presolve — tolerance-borderline trial returns the simplex's own verdict, results stay queryable, presolve restored " tags =
     [:planning] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_follower!, update_coupling!, write_back!
@@ -268,7 +267,7 @@ end
     # with distributor 2 pinned at (z, x_inv) = (0.5, 0.25) and x_inv_max = 0.3, the
     # pooled capacity leaves distributor 1 at most 0.6. A trial z_1 = 0.6000001 violates
     # it by 1e-7 — exactly HiGHS's primal feasibility tolerance. HiGHS PRESOLVE declares
-    # it INFEASIBLE with NO dual ray (dual_status NO_SOLUTION), which before WR-01 became
+    # it INFEASIBLE with NO dual ray (dual_status NO_SOLUTION), which previously became
     # the NaN sentinel and a dead end for every cut-needing caller; the presolve-free
     # simplex re-solve declares it OPTIMAL (x_inv_1 = 0.30000005, within tolerance).
     shared = build_shared_transmission(;

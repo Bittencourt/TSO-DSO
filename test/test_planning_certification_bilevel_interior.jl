@@ -1,9 +1,9 @@
 # test/test_planning_certification_bilevel_interior.jl
 #
-# Seam: BILEV-02 BLOCKER-1 remediation (Phase 29 plan 29-04) — the checker's
-# fixture-adequacy finding on the initial BILEV-02 plan set.
+# Seam: interior-fixture certification of `TSODSO.solve_bilevel!` — closes the
+# fixture-adequacy gap of the degenerate corner fixture.
 #
-# (a) WHY THIS FILE EXISTS. Plan 29-02's `test_planning_certification_bilevel.jl`
+# (a) WHY THIS FILE EXISTS. `test_planning_certification_bilevel.jl`
 # certifies `TSODSO.solve_bilevel!` on `PlanningFixtures.bilevel_toy_fixture()`
 # (`q_op=[0.0]`) — a fixture where `pi_tariff[1]-c_op[1] = -0.3 < 0` for EVERY
 # `y_inv >= 0`, so the follower's response is the SAME degenerate corner
@@ -12,7 +12,7 @@
 # one of that fixture's three oracles: it never exercises genuine leader-follower
 # INTERACTION, and its SOS1 coupling pair `[slack_y, rho_y]` is never observed in
 # its "inactive" branch. This file adds a SECOND, NON-DEGENERATE fixture
-# (`q_op=[1.0] > 0`, via plan 29-01's BLOCKER-1-added `q_op` keyword — `q_op=0`
+# (`q_op=[1.0] > 0`, via the `q_op` keyword of the KKT builder — `q_op=0`
 # recovers the corner fixture exactly, so this is a pure additive extension, never
 # a modification of it) where the follower's optimal response `z*(y_inv)` is a
 # genuine TWO-BRANCH function of `y_inv`: linear/coupling-bound for small `y_inv`,
@@ -20,10 +20,10 @@
 # complementarity SWITCHING, not a single always-zero corner.
 #
 # (b) SELF-CONTAINED BY DESIGN — this file does NOT import or extend
-# `test/fixtures_planning.jl` or plan 29-02's `test_planning_certification_bilevel.jl`
+# `test/fixtures_planning.jl` or `test_planning_certification_bilevel.jl`
 # (its own `@testmodule BilevelInteriorCertFixture` defines every fixture constant
-# and oracle function locally). This keeps plan 29-04 parallel-wave-safe against
-# plan 29-02 (both depend only on plan 29-01).
+# and oracle function locally). This keeps the file independent of the corner
+# certification file (both depend only on the KKT builder).
 #
 # (c) HAND-DERIVATION (the analytic target the live solve below must reproduce —
 # if the live solve disagrees, THIS comment/the golden consts below must be
@@ -31,13 +31,13 @@
 # established convention).
 #
 # Fixture: T=1, same 2-bus (root=1/load=2, r=x=1e-3, smax=99.0) lossless feeder
-# shape as plan 29-01's corner fixture, built fresh here for self-containment.
+# shape as the corner fixture, built fresh here for self-containment.
 # `corridor_cap=10.0`, `x_inv_max=10.0`, `c_inv=0.2`, `c_op=[0.5]`,
 # `pi_tariff=[2.0]`, `q_op=[1.0]`, `c_y=0.05`, `y_max=5.0`, `v_d=[3.0]`,
 # `d_max=10.0`, `agg_bus=2`. `x_inv_max`/`d_max` are deliberately LARGE relative to
 # every quantity actually reached (never bind on this fixture, verified below).
-# The production KKT carries its own `rho_max` multiplier for `x_inv <= x_inv_max`
-# (29-REVIEW.md WR-01). That pair is exercised separately in
+# The production KKT carries its own `rho_max` multiplier for `x_inv <= x_inv_max`.
+# That pair is exercised separately in
 # test/test_planning_bilevel.jl ("x_inv_max binds").
 #
 # Follower's own problem (given fixed `y_inv`, T=1, dropping the time index):
@@ -92,12 +92,12 @@
 # follower never responds, so a naive/broken solver would also collapse to `y=0`)
 # — `|total*-0.0| = 1.4726` and `|z*-0.0| = 1.48`, both clearly resolvable.
 #
-# (d) SAME BilevelJuMP IMPLEMENTATION NOTE AS PLAN 29-02 — the oracle hand-derives
+# (d) SAME BilevelJuMP IMPLEMENTATION NOTE AS THE CORNER FILE — the oracle hand-derives
 # the lossless 2-bus network algebra directly (`d == z`) rather than reusing
 # `contribute!`/`ModelContext` inside a `BilevelModel`, for the same
 # fixture-specific reason (single root-to-load branch, no current/loss terms).
 #
-# INFRA-02 exception (mirrors plan 29-02's own documented exception): this file
+# Solver-factory exception (mirrors the corner certification file's documented exception): this file
 # imports `HiGHS, Ipopt, BilevelJuMP, JuMP` directly, because BilevelJuMP/Ipopt are
 # validation-oracle-only, test-only dependencies (never imported by `src/`).
 
@@ -163,7 +163,7 @@
     `c_y*y + pi_tariff[1]*z - v_d[1]*d`, and return the grid point achieving the
     MINIMUM total.
 
-    Leader-level semantics match production (29-REVIEW.md WR-07): the lossless
+        Leader-level semantics match production: the lossless
     network forces `d = z`. A follower response with `z > dmax`, or a bus-2 squared
     voltage `1 - 2e-3*z` outside `[0.95^2, 1.05^2]`, makes that `y` INFEASIBLE for
     the leader (`continue`), never feasible-but-curtailed. The follower's response
@@ -275,8 +275,8 @@
         )
     end
 
-    # --- BILEV-02 BLOCKER-1 golden constants (Task 2) ------------------------------
-    # Pinned from a LIVE, measured solve this session (see this file's header
+    # --- Golden constants ------------------------------------------------------------
+    # Pinned from a LIVE, measured solve (see this file's header
     # derivation comment (c) for the full analytic argument — EMPIRICALLY CONFIRMED,
     # not blindly trusted: the direct-script reproduction under a stacked
     # JULIA_LOAD_PATH="test:.:@stdlib" measured production y=0.148, x_inv=0.148,
@@ -294,10 +294,10 @@
     const RHO_Y_BELOW_HAND = 9.8
     const RHO_Y_ABOVE_HAND = 0.0
 
-    # GAP_FLOOR_INTERIOR / Z_GAP_FLOOR_INTERIOR — T-29-07 mitigation: derived from
+    # GAP_FLOOR_INTERIOR / Z_GAP_FLOOR_INTERIOR — derived from
     # MEASURED solver-precision quantities (10x the production MILP's own
-    # `select_optimizer(MILP())` `mip_feasibility_tolerance=1e-9`, memory
-    # `highs-exactness-defaults`), NEVER as a fraction of the ~1.59/~0.995
+    # `select_optimizer(MILP())` `mip_feasibility_tolerance=1e-9`),
+    # NEVER as a fraction of the ~1.59/~0.995
     # hand-derived gaps they validate. Both gaps sit many orders of magnitude above
     # this floor.
     const GAP_FLOOR_INTERIOR = 1e-6
@@ -333,7 +333,7 @@
         Z_GAP_FLOOR_INTERIOR
 end
 
-@testitem "bilevel certification (interior fixture): production == BilevelJuMP StrongDualityMode == brute-force grid; production != joint; production != z≡0 stub (BILEV-02 BLOCKER-1)" tags =
+@testitem "bilevel certification (interior fixture): production == BilevelJuMP StrongDualityMode == brute-force grid; production != joint; production != z≡0 stub" tags =
     [:planning] setup = [BilevelInteriorCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP
@@ -341,7 +341,7 @@ end
     F = BilevelInteriorCertFixture
     feeder = F._interior_feeder()
 
-    # --- Production (TSODSO.solve_bilevel!, plan 29-01's single-level KKT-MILP) ---
+    # --- Production (TSODSO.solve_bilevel!, the single-level KKT-MILP) ---
     kkt = build_bilevel_kkt(
         feeder,
         LinDistFlow();
@@ -382,7 +382,7 @@ end
     jt = F.build_joint_reference_interior()
 
     # --- Production reproduces the named golden interior optimum ---
-    # atol MEASURED this session: HiGHS's own achieved precision on this fixture's
+    # atol MEASURED in the recorded run: HiGHS's own achieved precision on this fixture's
     # embedded SOS1-bridged MILP (see file header derivation comment (c)).
     atol_hand = 1e-4
     @test isapprox(prod.y, F.INTERIOR_Y_HAND; atol = atol_hand)
@@ -397,16 +397,15 @@ end
     @test isapprox(jt.total, F.JOINT_TOTAL_HAND_INTERIOR; atol = atol_hand)
 
     # --- Three-way agreement: production == BilevelJuMP == brute-force ---
-    # atol_bilevel MEASURED this session: BilevelJuMP StrongDualityMode (Ipopt, an
+    # atol_bilevel MEASURED in the recorded run: BilevelJuMP StrongDualityMode (Ipopt, an
     # NLP strong-duality reformulation of a QP lower level) converges to this
-    # fixture's genuinely INTERIOR optimum with its own interior-point residual —
-    # see this plan's SUMMARY for the measured value.
+    # fixture's genuinely INTERIOR optimum with its own interior-point residual.
     atol_bilevel = 1e-3
     @test isapprox(prod.y, bj.y_inv; atol = atol_bilevel)
     @test isapprox(prod.z[1], bj.z; atol = atol_bilevel)
     @test isapprox(prod.total_cost, objective_value(bj.model); atol = atol_bilevel)
 
-    # atol_bruteforce MEASURED this session: production (HiGHS MILP embedding the
+    # atol_bruteforce MEASURED in the recorded run: production (HiGHS MILP embedding the
     # follower's OWN KKT conditions) vs brute-force (Clarabel QP re-solving the
     # follower's own problem per grid point) — two structurally DIFFERENT solves
     # of the SAME convex problem, not bit-identical like the LP corner fixture.
@@ -417,7 +416,7 @@ end
 
     # The FINE-ONLY grid (no salted point) resolves the optimum on its own: its
     # achieving point sits within one grid spacing of the hand-derived kink
-    # (29-REVIEW.md WR-04 — the earlier version tested the salted `bf.y`, which
+    # (an earlier version tested the salted `bf.y`, which
     # contains 0.148 exactly, so it passed by construction).
     @test abs(bf_fine_only.y - F.INTERIOR_Y_HAND) <= grid_spacing
 
@@ -444,8 +443,8 @@ end
     r_at_one = F.solve_follower_at(1.0)
     @test abs(r_at_one.z - 0.0) > F.Z_GAP_FLOOR_INTERIOR
 
-    # --- SOS1 branch-switch assertion (checker-mandated, explicit) ---
-    # r_below/r_above ARE the >= 2 grid points the checker requires, demonstrating
+    # --- SOS1 branch-switch assertion (explicit) ---
+    # r_below/r_above ARE the >= 2 grid points the check requires, demonstrating
     # the [slack_y, rho_y] SOS1 pair genuinely switching between its two branches
     # (not a single always-inactive or always-active corner).
     r_below = F.solve_follower_at(0.05)   # BELOW the 0.148 threshold: coupling BINDS
@@ -459,7 +458,7 @@ end
     @test isapprox(r_above.x_inv, F.INTERIOR_XINV_HAND; atol = 1e-4)
     @test isapprox(r_above.rho_y, F.RHO_Y_ABOVE_HAND; atol = 1e-6)
 
-    # --- SOS1 branch-switch + z≡0 guard on the PRODUCTION MILP (29-REVIEW.md WR-05) ---
+    # --- SOS1 branch-switch + z≡0 guard on the PRODUCTION MILP ---
     # The block above only exercises the oracle QP. The production optimum sits
     # exactly at the kink y = 0.148 (slack_y = 0 AND rho_y = 0, degenerate), so it
     # never shows [slack_y, rho_y] in a strict branch. Fix the leader decision in the
@@ -502,14 +501,14 @@ end
     end
 end
 
-@testitem "bilevel certification (interior fixture, d_max binds): the embedded network coupling restricts the leader (WR-07)" tags =
+@testitem "bilevel certification (interior fixture, d_max binds): the embedded network coupling restricts the leader" tags =
     [:planning] setup = [BilevelInteriorCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP
 
-    # 29-REVIEW.md WR-07: on the base fixtures d_max and the voltage limits are
-    # slack, so oracle agreement says nothing about the embedded LinDistFlow coupling
-    # (CONTEXT "Option B"). Here d_max = 1.0 binds the follower's response.
+    # On the base fixtures d_max and the voltage limits are
+    # slack, so oracle agreement says nothing about the embedded LinDistFlow coupling.
+    # Here d_max = 1.0 binds the follower's response.
     #
     # Hand derivation: the follower's response is unchanged (it never sees d_max):
     # z(y) = 10y for y < 0.148, z = 1.48 for y >= 0.148. The network forces
@@ -563,12 +562,12 @@ end
     @test isapprox(prod.total_cost, bf.total; atol = 9.95 * step(fine_grid))
 end
 
-@testitem "bilevel certification (T=2 interior fixture): shared-x_inv stationarity sum over t; production == BilevelJuMP == brute-force (WR-08)" tags =
+@testitem "bilevel certification (T=2 interior fixture): shared-x_inv stationarity sum over t; production == BilevelJuMP == brute-force" tags =
     [:planning] setup = [BilevelInteriorCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP, Ipopt
 
-    # 29-REVIEW.md WR-08: every other production call uses T = 1, so the
+    # Every other production call uses T = 1, so the
     # `sum(mu_cap[t] for t in 1:T)` in statio_x and the per-t SOS1 loops were never
     # exercised. T = 2 fixture with DISTINCT tariffs, both periods delivering
     # (pi_tariff[t] - c_op[t] > c_inv/corridor_cap = 0.02 for both t):

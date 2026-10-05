@@ -1,12 +1,12 @@
 # test/test_planning_ieee13_short_fixture.jl
 #
-# Seam: BILEV-03 (Phase 30, plan 30-03) — smoke test for the
+# Seam: smoke test for the
 # `IEEE13ShortHorizonFixtures` fixture module (`test/fixtures_planning_ieee13_short.jl`):
 # confirms the independently-built monolithic joint-reference solver
 # (`solve_joint_reference`, NEVER a reuse of `PlanningOracle`/`FollowerLP`/
 # `BendersMaster`) solves on the fixture's own tuned T=4 IEEE-13 population and returns a
-# finite optimum. Plan 30-05 (wave 3) consumes this SAME fixture module via
-# `setup=[IEEE13ShortHorizonFixtures]` for the BILEV-03 convergence `@testitem` itself.
+# finite optimum. The end-to-end Benders convergence `@testitem` consumes this SAME fixture module via
+# `setup=[IEEE13ShortHorizonFixtures]`.
 
 @testitem "planning ieee13 short fixture: solve_joint_reference solves and returns a finite optimum" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin

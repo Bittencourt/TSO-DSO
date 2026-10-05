@@ -1,15 +1,14 @@
 # test/test_planning_feasibility_oracle.jl
 #
-# Seam: src/planning/feasibility_oracle.jl (BILEV-04a, plan 30-01). Two @testitems, each
-# built via the relax-one-constraint-at-a-time ablation (30-RESEARCH.md Architecture
-# Pattern 1) to CONFIRM, not assume, the kind of infeasibility each fixture's pinned z
+# Seam: src/planning/feasibility_oracle.jl (feasibility cuts). Two @testitems, each
+# built via the relax-one-constraint-at-a-time ablation to CONFIRM, not assume, the kind of infeasibility each fixture's pinned z
 # exercises, before asserting `build_feasibility_oracle`/`solve_feasibility_oracle!`
 # produce a genuine, nonzero-cost `(v, u)` cut pair consumable by the EXISTING
 # `add_feasibility_cut!`.
 #
-# A T=1, non-`Deferrable` population (`Thermostatic`/`PVBattery` only — 30-RESEARCH.md
-# Pitfall 5: `Deferrable`'s window is HARDCODED for T=24-shaped fixtures) is used
-# throughout, mirroring the verified recipe in 30-RESEARCH.md's Code Examples section.
+# A T=1, non-`Deferrable` population (`Thermostatic`/`PVBattery` only —
+# `Deferrable`'s window is HARDCODED for T=24-shaped fixtures) is used
+# throughout, mirroring the verified recipe.
 
 @testmodule FeasibilityOracleFixtures begin
     using TSODSO
@@ -19,7 +18,7 @@
 
     Replace every branch's thermal rating with `smax` (a large, strictly-inside-the-
     magnitude-band sentinel), leaving topology/r/x/voltage bounds untouched — the
-    relax-one-constraint-at-a-time ablation (30-RESEARCH.md Architecture Pattern 1) used to
+    relax-one-constraint-at-a-time ablation used to
     confirm/refute THERMAL causation of a given infeasible pinned z.
     """
     function widen_smax(feeder; smax = 90.0)
@@ -93,7 +92,7 @@
     (`pmax`/`emax` scaled well above `small_house_agg`'s population) — the VOLTAGE
     fixture's population, sized so a large uniform import pin (`z` on the order of the
     whole network's rating) is physically deliverable by the DEVICES, isolating the
-    network's own voltage limit as the binding constraint (30-RESEARCH.md Pitfall 1: an
+    network's own voltage limit as the binding constraint (an
     infeasibility caused by insufficient device capacity, not the network, would be a
     mislabeled fixture).
     """
@@ -139,7 +138,7 @@ end
     λ₀ = [6.0]
     z = [0.07]                                              # just above the head-branch limit
 
-    # --- Ablation (30-RESEARCH.md Pattern 1): confirm THERMAL causation BEFORE trusting
+    # --- Ablation: confirm THERMAL causation BEFORE trusting
     # this fixture's label. On the UNMODIFIED feeder, z=0.07 is a genuine MOI.INFEASIBLE.
     oracle0 = TSODSO.build_planning_oracle(feeder, TSODSO.ConvexBranchFlow(), [agg]; λ₀ = λ₀, T = T)
     err0 = FeasibilityOracleFixtures.try_solve_planning_oracle(oracle0, z)
@@ -157,7 +156,7 @@ end
     errS = FeasibilityOracleFixtures.try_solve_planning_oracle(oracleS, z)
     @test errS === nothing || !occursin("INFEASIBLE", sprint(showerror, errS))
 
-    # --- The actual BILEV-04a assertion: the feasibility oracle, run on the UNMODIFIED
+    # --- The actual assertion: the feasibility oracle, run on the UNMODIFIED
     # (genuinely thermally infeasible) feeder at the SAME z, produces a nonzero-cost cut.
     fo = TSODSO.build_feasibility_oracle(feeder, TSODSO.ConvexBranchFlow(), [agg]; T = T)
     r = TSODSO.solve_feasibility_oracle!(fo, z)
@@ -175,7 +174,7 @@ end
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
     @test nc1 == nc0 + 1
 
-    # --- WR-08 (Phase 30 code review): pin the cut's SIGN and VALIDITY, not just its
+    # --- Pin the cut's SIGN and VALIDITY, not just its
     # shape. Every assertion above also holds for the wrong sign u = −π. Measured
     # 2026-10-01 on this fixture: v = 8.27e-3, u = +0.99999999645 at z_k = 0.07.
     # z_feas = 0.02 is relaxation-FEASIBLE for this population (the pinned oracle
@@ -199,9 +198,9 @@ end
     using TSODSO: solve_master!
     using JuMP: num_constraints, value
 
-    # Provenance (30-RESEARCH.md: "on the REAL unmodified feeder, thermal ALWAYS binds
-    # first as z grows" — a genuinely voltage-only infeasibility needs a THERMALLY-WIDENED
-    # variant with ample battery capacity, confirmed this session by direct probe):
+    # Provenance (on the REAL unmodified feeder, thermal ALWAYS binds
+    # first as z grows — a genuinely voltage-only infeasibility needs a THERMALLY-WIDENED
+    # variant with ample battery capacity, confirmed by direct probe):
     #
     #   T=1, feeder = widen_smax(ieee13_modified(); smax=90.0), 10 aggregators (one per
     #   non-root bus, Thermostatic + PVBattery(pmax=5.0, emax=50.0)), λ₀=[6.0].
@@ -212,7 +211,7 @@ end
     #   The SAME z=0.5, SAME feeder, with voltage ALSO widened to [0.8,1.2]:
     #     solve_planning_oracle! SOLVES (feasible primal) but is SOCP-INEXACT
     #     ("SOCP relaxation INEXACT: worst gap/(...) = 6717.75 > 1").
-    #   This is the clean voltage-only signature (30-RESEARCH.md's own confirmed recipe):
+    #   This is the clean voltage-only signature (the confirmed recipe):
     #   widening thermal limits does nothing (already widened); widening voltage ALONE
     #   turns the genuine infeasibility into a non-infeasible (inexact) failure mode.
 
@@ -236,7 +235,7 @@ end
     errSV = FeasibilityOracleFixtures.try_solve_planning_oracle(oracleSV, z)
     @test errSV === nothing || !occursin("INFEASIBLE", sprint(showerror, errSV))
 
-    # --- The actual BILEV-04a assertion, on the smax-widened/REAL-voltage (genuinely
+    # --- The actual assertion, on the smax-widened/REAL-voltage (genuinely
     # voltage-infeasible) feeder.
     fo = TSODSO.build_feasibility_oracle(feederS, TSODSO.ConvexBranchFlow(), aggs; T = T)
     r = TSODSO.solve_feasibility_oracle!(fo, z)
@@ -251,7 +250,7 @@ end
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
     @test nc1 == nc0 + 1
 
-    # --- WR-08: sign/validity pin on the VOLTAGE cut too. Measured 2026-10-01:
+    # --- Sign/validity pin on the VOLTAGE cut too. Measured 2026-10-01:
     # v = 0.1737, u = +0.99999999988 at z_k = 0.5; z_feas = 0.0 is feasible AND
     # SOCP-exact on this smax-widened feeder.
     z_feas = [0.0]
@@ -266,13 +265,13 @@ end
     @test cut(r.u, value.(master.z)) <= 1e-7
 end
 
-# --- Plan 30-04 Task 3: "loop still converges" — solve_stackelberg! end-to-end --------
+# --- "Loop still converges" — solve_stackelberg! end-to-end --------
 #
-# BILEV-04a's own acceptance criterion is not just "a cut CAN be produced" (the two
+# The acceptance criterion is not just "a cut CAN be produced" (the two
 # items above) but "the Benders LOOP survives a genuine oracle infeasibility and still
 # converges". Both items below drive `solve_stackelberg!` (never a direct oracle probe)
 # on the SAME feeder/population this file's own two ablation items above already use,
-# with `y_max`/costs chosen (measured this session) so the master's NATURAL trial
+# with `y_max`/costs chosen (measured) so the master's NATURAL trial
 # sequence — not a synthetic forced z — passes through a genuine `MOI.INFEASIBLE` early
 # on, confirmed via the SAME relax-one-constraint ablation technique used above.
 
@@ -280,7 +279,7 @@ end
     [:planning] setup = [FeasibilityOracleFixtures] begin
     using TSODSO
 
-    # HONEST FINDING (measured this session, not assumed): with this minimal
+    # HONEST FINDING (measured, not assumed): with this minimal
     # single-Thermostatic, no-DER population, the master's FIRST trial (z=0, the
     # zero-cut LP's own degenerate starting point) is ALSO genuinely infeasible — but
     # for a DIFFERENT, non-thermal reason (no local generation at all to balance even
@@ -290,7 +289,7 @@ end
     # above uses (z=0.1/0.08/0.07 all genuinely `MOI.INFEASIBLE` on the UNMODIFIED
     # feeder; widening `smax` alone turns each into a non-infeasible failure mode).
     # `solve_stackelberg!`'s oracle-feasibility-cut branch is, BY DESIGN, agnostic to
-    # WHICH kind of genuine infeasibility it recovers from (BILEV-04a never inspects
+    # WHICH kind of genuine infeasibility it recovers from (it never inspects
     # the error message) — this run therefore exercises the branch on BOTH causes in
     # the SAME 6-iteration run, a STRONGER regression than a narrowly-thermal-only one.
     T = 1
@@ -317,7 +316,7 @@ end
 
         @test result.gap <= 1.0e-5
         @test :oracle_feasibility_cut in result.trace.policy_action_trace
-        # A feasibility cut never updates UB (T-11-06 analogue) — every
+        # A feasibility cut never updates UB — every
         # :oracle_feasibility_cut row must carry gap = NaN (the feasibility-branch
         # sentinel, never the converged-iteration's own finite gap).
         for (action, gap) in
@@ -331,7 +330,7 @@ end
     [:planning] setup = [FeasibilityOracleFixtures] begin
     using TSODSO
 
-    # HONEST FINDING (measured this session): this 10-aggregator, ample-battery
+    # HONEST FINDING (measured): this 10-aggregator, ample-battery
     # population is largely self-sufficient at z=0 under ORDINARY investment
     # economics (c_y/c_inv/c_op at this file's usual magnitudes), so it converges
     # trivially at y=0 without ever exploring the extreme-z region where voltage

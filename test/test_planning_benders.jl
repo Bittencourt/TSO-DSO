@@ -1,15 +1,15 @@
 # test/test_planning_benders.jl
 #
-# Seam: src/planning/benders.jl (PLAN-06). `solve_stackelberg!` (Task 1) wires the
-# reused operational oracle (PlanningOracle, Phase 10), the new transmission-
-# reinforcement follower (FollowerLP, plan 11-01), and the new Benders master
-# (BendersMaster, plan 11-01) into a single hand-rolled Benders loop, converging
-# end-to-end on the Phase-11 toy fixture within a documented relative UB/LB gap
+# Seam: src/planning/benders.jl. `solve_stackelberg!` wires the
+# reused operational oracle (PlanningOracle), the transmission-
+# reinforcement follower (FollowerLP), and the Benders master
+# (BendersMaster) into a single hand-rolled Benders loop, converging
+# end-to-end on the toy fixture within a documented relative UB/LB gap
 # tolerance, checkpointing every iteration, and raising loudly on iteration-cap
 # exhaustion. Items tagged `[:planning]`, names contain "planning" and "benders"
 # (occursin filter convention, mirrors test_planning_follower.jl/test_planning_master.jl).
 #
-# Toy fixture (11-01-PLAN.md's own <toy_fixture> block, reused verbatim): T=1,
+# Toy fixture (reused verbatim): T=1,
 # feeder=TwoBusFixtures.two_bus_feeder(), λ₀=[4.0],
 # dev=ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0),
 # agg=TSODSO.Aggregator(2, 0.9, [dev], [0.0]); follower corridor_cap=2.0,
@@ -20,24 +20,23 @@
 # SAME toy elastic device the oracle's own dual-sign/monotonicity regression uses)
 # — reused here via `setup = [TwoBusFixtures, ToyDeviceFixture]`, never redefined.
 #
-# EXPECTED OPTIMUM — RE-DERIVED, NOT 11-01-PLAN.md's STATED y*=1.0/z*=1.0/cost=-0.2
-# (Task 2's own escape hatch: "if the converged values are qualitatively wrong ...
-# that is a genuine bug ... [otherwise] widen atol and document why", NOT force a
+# EXPECTED OPTIMUM — RE-DERIVED, NOT the originally stated y*=1.0/z*=1.0/cost=-0.2
+# (if the converged values are qualitatively wrong ... that is a genuine bug ...
+# [otherwise] widen atol and document why; do NOT force a
 # match by changing benders.jl's cut-sign logic). On THIS exact fixture, the
 # leader's total minimization (with y == z at the minimal-investment optimum, since
 # c_y > 0 and the box is z <= y_inv with no benefit to slack) is the UNCONSTRAINED
 # convex quadratic `total(z) = c_y*z + m_f*z - welfare(z)` with
-# `welfare(z) = (a-λ₀)*z - (b/2)*z^2 = 2z - 0.5z^2` (11-01-PLAN.md's own closed
-# form) and `m_f = 1.0` (11-01-PLAN.md's own follower marginal cost): substituting,
+# `welfare(z) = (a-λ₀)*z - (b/2)*z^2 = 2z - 0.5z^2` (closed
+# form) and `m_f = 1.0` (the follower marginal cost): substituting,
 # `total(z) = 0.5*z^2 - 0.7*z`, whose first-order condition `z - 0.7 = 0` gives
 # `z* = (a - λ₀ - c_y - m_f)/b = (6 - 4 - 0.3 - 1.0)/1.0 = 0.7`, NOT `1.0`
-# (verified: `total(0.7) = -0.245 < total(1.0) = -0.2`, i.e. 11-01-PLAN.md's stated
-# z*=1.0 is not even a local minimizer of the fixture IT defines — an arithmetic
-# slip in that plan's own <toy_fixture> block, not a defect in this plan's
+# (verified: `total(0.7) = -0.245 < total(1.0) = -0.2`, i.e. z*=1.0
+# is not even a local minimizer of this fixture — an arithmetic
+# slip in the originally stated optimum, not a defect in
 # `solve_stackelberg!`). This test asserts against the RE-DERIVED, verified
-# `y* = z* = 0.7`; plan 11-03's BilevelJuMP certification gate should
-# independently re-derive (not blindly reuse) 11-01-PLAN.md's stated numbers —
-# flagged in this plan's own SUMMARY.md as a deviation for the next plan to see.
+# `y* = z* = 0.7`; the BilevelJuMP certification gate should
+# independently re-derive (not blindly reuse) the originally stated numbers.
 
 @testitem "planning benders: converges end-to-end with documented UB/LB gap, matches the re-derived analytic optimum (z*=0.7)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
@@ -66,13 +65,13 @@
         )
 
         @test result.gap <= 1e-6
-        # Re-derived analytic optimum z* = 0.7 (see file header) — NOT 11-01-PLAN.md's
+        # Re-derived analytic optimum z* = 0.7 (see file header) — NOT the originally
         # stated z*=1.0, which is not a stationary point of this fixture's own cost
         # function.
         @test isapprox(result.y, 0.7; atol = 1e-3)
         @test isapprox(result.z[1], 0.7; atol = 1e-3)
 
-        # CR-01 incumbent regression: the RETURNED (y, z) must be the point CERTIFIED by
+        # Incumbent regression: the RETURNED (y, z) must be the point CERTIFIED by
         # UB — its true cost c_y*y + φ_x(z) - W(z), recomputed by re-solving both
         # subproblems at the returned z, equals result.UB. Returning the last master
         # iterate instead of the incumbent breaks this identity by an amount NOT bounded
@@ -89,7 +88,7 @@
         )
         @test length(checkpoint_files) == result.iters
 
-        # plan 12-01: BendersTrace assertions — structurally distinct from
+        # BendersTrace assertions — structurally distinct from
         # AdmmResiduals (single relative-gap scalar), including the GENUINE
         # per-iteration retry_count and both retry-gated subproblems' statuses.
         @test result.trace isa TSODSO.BendersTrace
@@ -103,7 +102,7 @@
         # The LAST row is :optimality (per the assertion above), so the oracle was
         # solved and its status recorded, never the sentinel.
         @test result.trace.oracle_status_trace[end] != :not_solved
-        # CR-01/WR-02 regression (phase 12 review): master_status_trace must record
+        # Regression: master_status_trace must record
         # the GENUINE post-solve termination status, captured BEFORE any add_*_cut!
         # dirties the CACHING-mode master model — a dirty model short-circuits
         # termination_status to :OPTIMIZE_NOT_CALLED, turning the ledger column into
@@ -114,7 +113,7 @@
     end
 end
 
-@testitem "planning benders: feasibility-cut branch — an undeliverable master trial routes to a Farkas cut and the loop still converges (WR-04)" tags =
+@testitem "planning benders: feasibility-cut branch — an undeliverable master trial routes to a Farkas cut and the loop still converges" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -126,7 +125,7 @@ end
     # BELOW both the unconstrained optimum z* = 0.7 (see file header) and the master's
     # early cut-driven trials, so the Benders loop MUST pass through at least one
     # follower-infeasible trial z_k > 0.5 and recover via the production feasibility-cut
-    # branch (WR-04: previously structurally unreachable in every end-to-end test).
+    # branch (previously structurally unreachable in every end-to-end test).
     follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 0.25, c_inv = 1.0, c_op = [0.5])
     master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
 
@@ -154,7 +153,7 @@ end
         @test isapprox(result.y, 0.5; atol = 1e-3)
         @test isapprox(result.z[1], 0.5; atol = 1e-3)
 
-        # Checkpoint invariant holds ACROSS feasibility iterations too (T-11-06 interplay):
+        # Checkpoint invariant holds ACROSS feasibility iterations too:
         # checkpoint_iteration! fires exactly once per iteration on BOTH branches.
         checkpoint_files = filter(
             f -> occursin(r"^iter_\d{5}\.jld2$", basename(f)),
@@ -162,7 +161,7 @@ end
         )
         @test length(checkpoint_files) == result.iters
 
-        # plan 12-01: BendersTrace assertions on the feasibility-branch fixture —
+        # BendersTrace assertions on the feasibility-branch fixture —
         # matching the existing production feasibility-cut assertion above.
         @test count(==(:feasibility), result.trace.cut_type_trace) >= 1
         # Cut-store growth is monotone non-decreasing, never shrinks.
@@ -175,7 +174,7 @@ end
     end
 end
 
-@testitem "planning benders: tol/max_iter boundary guards reject NaN/negative tol and max_iter > 99_999 before any build call (IN-02/IN-03)" tags =
+@testitem "planning benders: tol/max_iter boundary guards reject NaN/negative tol and max_iter > 99_999 before any build call" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -253,7 +252,7 @@ end
         end
         @test err isa ConvergenceError
         @test occursin("exhausted", err.msg)
-        # IN-01 (plan 12-01): the message now sources from the trace, not a stale
+        # The message now sources from the trace, not a stale
         # loop-local gap.
         @test occursin("last recorded LB", err.msg)
     end

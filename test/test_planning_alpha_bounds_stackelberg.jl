@@ -1,14 +1,14 @@
 # test/test_planning_alpha_bounds_stackelberg.jl
 #
-# Seam: src/planning/benders.jl's `solve_stackelberg!` (BILEV-05, plan 30-04 Task 2) —
-# the UNCONDITIONAL `bounds_ctx` wiring. Covers the three acceptance-criteria items this
-# plan's own PLAN.md Task 2 specifies: (1) an absurdly-high explicit `α_op_lb` is
+# Seam: src/planning/benders.jl's `solve_stackelberg!` (bounds derivation) —
+# the UNCONDITIONAL `bounds_ctx` wiring. Covers three acceptance items:
+# (1) an absurdly-high explicit `α_op_lb` is
 # REJECTED at build time, BEFORE any Benders iteration runs; (2) a pre-existing valid
 # explicit bound still converges with zero regression; (3) a pre-built `follower` with NO
 # sound `α_x_lb` derivation (`DistributorView`, `run_nash!`'s own production path) is
 # ACCEPTED, not rejected, while `α_op_lb` remains validated regardless of follower type.
 # Items tagged `[:planning]`, names contain "planning" and "alpha" (occursin filter
-# convention, mirrors test_planning_master.jl's own BILEV-05 items).
+# convention, mirrors the bound items of test_planning_master.jl).
 
 @testitem "planning alpha bounds stackelberg: bounds_ctx validation rejects an over-high explicit α_op_lb at build time" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
@@ -49,7 +49,7 @@ end
     using TSODSO
 
     # test_planning_benders.jl's own T=1 toy fixture literal, reused VERBATIM — this is
-    # the SAME call site 30-02-SUMMARY.md's own audit already confirmed valid
+    # the SAME call site already confirmed valid
     # (α_op_lb=-5.0 accepted at T=1 by the new derivation formula).
     feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -74,10 +74,10 @@ end
 
         @test result.gap <= 1e-6
         # LinDistFlow never stashes :l, so solve_planning_oracle! never throws from
-        # exactness there — the AC-recheck-at-convergence hook (BILEV-04b) must find the
+        # exactness there — the AC-recheck-at-convergence hook must find the
         # incumbent genuinely exact and report ac_report = nothing.
         @test result.ac_report === nothing
-        # CR-02/IN-04: on LinDistFlow the exactness gate never runs — "not checked",
+        # On LinDistFlow the exactness gate never runs — "not checked",
         # reported as such, never as "certified exact".
         @test result.incumbent_exactness === :not_applicable
         @test !result.ub_relaxation_only
@@ -111,7 +111,7 @@ end
 
     mktempdir() do dir
         # A valid explicit bound, pre-built DistributorView follower: must NOT throw —
-        # checker BLOCKER 2's fix (solve_stackelberg! never rejects a pre-built follower)
+        # (solve_stackelberg! never rejects a pre-built follower)
         # — and must still converge.
         result = solve_stackelberg!(
             feeder,
@@ -130,7 +130,7 @@ end
     end
 
     # SAME pre-built-follower call, but an absurdly-high α_op_lb: α_op_lb's build-time
-    # validation is UNCONDITIONAL regardless of the follower type (checker BLOCKER 1) —
+    # validation is UNCONDITIONAL regardless of the follower type —
     # this must STILL throw ArgumentError, confirming α_x_lb's honest skip for
     # DistributorView does NOT also silently skip α_op_lb's own check.
     @test_throws ArgumentError solve_stackelberg!(
@@ -147,16 +147,16 @@ end
     )
 end
 
-@testitem "planning alpha bounds stackelberg: an explicit bound accepted inside the build-time slack is CLAMPED and never trips the runtime floor at the box argmax (Option A, Phase 31 WR-05/WR-03, Plan 31-07)" tags =
+@testitem "planning alpha bounds stackelberg: an explicit bound accepted inside the build-time slack is CLAMPED and never trips the runtime floor at the box argmax" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
     using TSODSO: build_master
     using JuMP: value, lower_bound
 
-    # Phase 30 code review iteration 2 (WR-05). Build time accepts an explicit α_op_lb up
+    # Build time accepts an explicit α_op_lb up
     # to optimum + S; the runtime floor used to test only against the pinned solve's own
-    # tolerance tol_k, which is far smaller than S. MEASURED 2026-10-01 (scratchpad
-    # fix2/probe_wr05.jl), IEEE13ShortHorizonFixtures T=4, ConvexBranchFlow, y_max=0.05:
+    # tolerance tol_k, which is far smaller than S. MEASURED 2026-10-01,
+    # IEEE13ShortHorizonFixtures T=4, ConvexBranchFlow, y_max=0.05:
     #   derivation: optimum = 609.0096500784123, gap = 1.525e-6, S = 1.525e-5;
     #   pinned oracle at the box argmax (z ≈ [0.00544, 0, 0, 0.05], SOCP-exact):
     #   cost_k = optimum − 1.68e-7, gap_k = 1.94e-7, tol_k = 6.09e-6.
@@ -176,7 +176,7 @@ end
     fk = (; corridor_cap = 1.0, x_inv_max = 0.05, c_inv = 0.01, c_op = fill(0.01, T))
     bounds_ctx = (; feeder, pf, aggregators = aggs, λ₀, follower_kwargs = fk)
     m = build_master(; T = T, c_y = 0.01, y_max = y_max, α_op_lb = α, α_x_lb = 0.0, bounds_ctx)
-    # Option A (Phase 31 WR-03, Plan 31-07): the accepted-but-in-slack bound is CLAMPED
+    # The accepted-but-in-slack bound is CLAMPED
     # down to the certified minimum d.bound, NEVER installed at the raw requested α.
     @test lower_bound(m.α_op) == d.bound
     @test m.lb_clamped.op ≈ α - d.bound
@@ -199,7 +199,7 @@ end
     # that the finding is genuine and demonstrable is KEPT UNCHANGED (the raw, unclamped α
     # is passed directly, never lower_bound(m.α_op)).
     @test_throws ErrorException TSODSO._assert_epigraph_floor(cost_k, α, :op; gap = gk)
-    # Option A (Phase 31 WR-03, Plan 31-07): the PRODUCTION path uses the INSTALLED
+    # The PRODUCTION path uses the INSTALLED
     # (clamped) bound lower_bound(m.α_op), never the raw α — with accepted_slack = 0.0
     # (the default, since _accepted_lb_slack now always returns 0.0), no error fires.
     @test TSODSO._assert_epigraph_floor(

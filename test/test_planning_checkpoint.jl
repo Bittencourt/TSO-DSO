@@ -1,6 +1,6 @@
 # test/test_planning_checkpoint.jl
 #
-# Seam: src/planning/checkpoint.jl (D-10). Two @testitems (setup = [ExperimentHarnessFixtures] for
+# Seam: src/planning/checkpoint.jl (checkpoint). Two @testitems (setup = [ExperimentHarnessFixtures] for
 # `with_tempdir`, tagged [:planning]):
 #   1. round-trip: checkpoint_iteration! writes a JLD2 file that resume_from_checkpoint
 #      reads back, with `state` round-tripping through the wload/JLD2 contract;
@@ -40,7 +40,7 @@ end
     end
 end
 
-@testitem "planning checkpoint: iter outside 0:99999 raises ArgumentError (WR-03 filename contract)" tags =
+@testitem "planning checkpoint: iter outside 0:99999 raises ArgumentError (filename contract)" tags =
     [:planning] setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
@@ -67,7 +67,7 @@ end
     end
 end
 
-@testitem "planning checkpoint: re-saving the same iteration resumes the FRESH state, never the safesave backup (CR-02)" tags =
+@testitem "planning checkpoint: re-saving the same iteration resumes the FRESH state, never the safesave backup" tags =
     [:planning] setup = [ExperimentHarnessFixtures] begin
     using TSODSO
 
@@ -82,7 +82,7 @@ end
         TSODSO.checkpoint_iteration!((; z = [1.0], cost = 1.0), 2; dir = dir)
         TSODSO.checkpoint_iteration!((; z = [9.0], cost = 9.0), 2; dir = dir)
 
-        # safesave preserved the first save as a backup (T-10-02: never silently
+        # safesave preserved the first save as a backup (never silently
         # overwrite) ...
         @test isfile(joinpath(dir, "iter_00002_#1.jld2"))
 

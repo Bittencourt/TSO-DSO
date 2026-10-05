@@ -1,7 +1,7 @@
 # test/test_planning_certification_bilevel.jl
 #
-# Seam: BILEV-02 (Phase 29 plan 29-02) — certify the genuinely bilevel production
-# solver `TSODSO.solve_bilevel!` (plan 29-01, `src/planning/bilevel_kkt.jl`) against
+# Seam: certify the genuinely bilevel production
+# solver `TSODSO.solve_bilevel!` (`src/planning/bilevel_kkt.jl`) against
 # TWO independent oracles on the IDENTICAL locked toy fixture
 # `PlanningFixtures.bilevel_toy_fixture()`:
 #
@@ -16,7 +16,7 @@
 # other, while ALL THREE genuinely DIFFER from a fourth "joint" (single-planner,
 # no-tariff) reference model by a MEASURED margin well above solver precision.
 #
-# (a) WHY THIS CLOSES THE 2026-09-28 QUALITY-AUDIT GAP: the existing Phase-11
+# (a) WHY THIS CLOSES A CERTIFICATION GAP: the existing
 # `BilevelCertFixture` (test_planning_certification.jl) cannot distinguish
 # Stackelberg-via-Benders from joint optimization, because that fixture's
 # Upper-level objective LITERALLY REPEATS the Lower level's own cost
@@ -25,8 +25,8 @@
 # what the follower optimizes and what the leader cares about). THIS fixture has a
 # genuine wedge — the follower is paid an exogenous `pi_tariff` strictly BELOW its
 # own true cost `c_op`, so its private optimum diverges from the network's own
-# valuation `v_d` — this is exactly the BILEV-01/02 "genuinely bilevel" property
-# the audit flagged as unclosed.
+# valuation `v_d` — this is exactly the "genuinely bilevel" property
+# that the earlier fixture failed to exercise.
 #
 # (b) IMPLEMENTATION NOTE — the BilevelJuMP oracle below does NOT reuse
 # `contribute!(LinDistFlow(), ...)`/`ModelContext` (those write plain
@@ -42,8 +42,8 @@
 # integration pattern — a future contributor must not assume it generalizes to a
 # multi-branch or lossy feeder.
 #
-# INFRA-02 exception (mirrors test_planning_certification.jl's own documented
-# exception, Pitfall B3): `BilevelModel`'s own constructor contract requires a
+# Solver-factory exception (mirrors test_planning_certification.jl's own documented
+# exception): `BilevelModel`'s own constructor contract requires a
 # bare zero-arg solver constructor (`Ipopt.Optimizer`), not an
 # `OptimizerWithAttributes` from the project's own solver-factory abstraction.
 # This file — like test_planning_certification.jl — imports `HiGHS, Ipopt`
@@ -57,13 +57,12 @@
         build_toy_bilevel_jump(; corridor_cap, x_inv_max, c_inv, c_op, pi_tariff, c_y,
                                y_max, v_d, d_max, r, x, vmin2, vmax2)
 
-    Certification oracle #1 (BILEV-02): a hand-derived MPEC for the IDENTICAL
+    Certification oracle #1: a hand-derived MPEC for the IDENTICAL
     2-bus/T=1 toy fixture, built via `BilevelModel(Ipopt.Optimizer, mode =
     BilevelJuMP.StrongDualityMode())` — a DIFFERENT complementarity mode than
-    production's SOS1-bridge MILP (29-RESEARCH.md Open Question 2 / T-29-05:
-    `SOS1Mode`/`IndicatorMode` empirically fail on HiGHS with
+    production's SOS1-bridge MILP (`SOS1Mode`/`IndicatorMode` empirically fail on HiGHS with
     `BridgeRequiresFiniteDomainError`; `StrongDualityMode` is the proven-working
-    mode from the Phase-11 fixture).
+    mode from the toy fixture of test_planning_certification.jl).
 
     Upper level (the DSO leader): `y_inv` (bounded `<= y_max`), `v2` (the squared
     voltage at bus 2, bounded `vmin2 <= v2 <= vmax2`), `d` (the served elastic
@@ -71,7 +70,7 @@
     `<= x_inv_max`), `z` (free `>= 0`). Lower objective
     `c_inv*x_inv + (c_op - pi_tariff)*z`. Lower constraints: `invest_op: z <=
     corridor_cap*x_inv`, `coupling_cap: x_inv <= y_inv` (the INVERTED coupling vs.
-    the existing Phase-11 `FollowerLP` — leader bounds investment, follower is
+    the existing `FollowerLP` — leader bounds investment, follower is
     free on `z`). Upper constraints: `v2 == 1.0 - 2*(r*z + x*0)` (Q=0 identically —
     no reactive injection anywhere in this fixture) and `d == z` (the exact
     lossless network-coupling equation, see file header note (b)). Upper
@@ -112,7 +111,7 @@
         brute_force_bilevel(; y_grid, corridor_cap, x_inv_max, c_inv, c_op, pi_tariff,
                             c_y, v_d, d_max)
 
-    Certification oracle #2 (BILEV-02): brute-force enumeration over the leader's
+    Certification oracle #2: brute-force enumeration over the leader's
     feasible investment grid `y_grid`. At each grid point `y`, builds a THROWAWAY
     `Model(select_optimizer(TSODSO.LP()))` with the follower's OWN LP (identical
     to production's follower cost/constraints, but with `y` as a FIXED upper
@@ -120,7 +119,7 @@
     grid point achieving the minimum LEADER total cost
     `c_y*y + pi_tariff*z_star - v_d*d_star`.
 
-    Leader-level semantics match production (29-REVIEW.md WR-07): the lossless
+    Leader-level semantics match production: the lossless
     network forces `d = z`, so `d_star = z_star`. A follower response with
     `z_star > d_max`, or a bus-2 squared voltage `1 - 2*r*z_star` outside
     `[vmin2, vmax2]`, makes that `y` INFEASIBLE for the leader (`continue`). It is
@@ -182,7 +181,7 @@
     subject to `x_inv <= y_inv`, `z[t] <= corridor_cap*x_inv`, and the network
     balance closed exactly like `solve_bilevel!` (`balance_p`/`balance_q` == 0).
     This is the reference this fixture's bilevel answer must genuinely DIFFER
-    from (BILEV-02).
+    from.
     """
     function build_joint_reference(;
         feeder,
@@ -242,14 +241,14 @@
     end
 end
 
-@testitem "bilevel certification: production == BilevelJuMP StrongDualityMode == brute-force grid enumeration; all three != joint (BILEV-02)" tags =
+@testitem "bilevel certification: production == BilevelJuMP StrongDualityMode == brute-force grid enumeration; all three != joint" tags =
     [:planning] setup = [PlanningFixtures, BilevelKKTCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP
 
     f = PlanningFixtures.bilevel_toy_fixture()
 
-    # --- Production (TSODSO.solve_bilevel!, plan 29-01's single-level KKT-MILP) ---
+    # --- Production (TSODSO.solve_bilevel!, the single-level KKT-MILP) ---
     kkt = build_bilevel_kkt(
         f.feeder,
         LinDistFlow();
@@ -290,7 +289,7 @@ end
     # 201 points over [0, y_max] is sufficient to resolve the true optimum here:
     # with q_op=0 the follower's response is a STEP function of y_inv (bang-bang,
     # not a smooth curve), and this fixture's true optimum sits exactly AT the
-    # grid's own y=0.0 endpoint (measured this session: every y in the grid gives
+    # grid's own y=0.0 endpoint (measured in the recorded run: every y in the grid gives
     # the SAME follower response x_inv=z=0, since pi_tariff < c_op dominates for
     # every y >= 0) — so ANY grid including y=0.0 finds the true minimum, not just
     # a fine one.
@@ -333,7 +332,7 @@ end
     @test isapprox(jt.total, PlanningFixtures.JOINT_TOTAL_HAND; atol = 1e-9)
 
     # --- Three-way agreement: production == BilevelJuMP == brute-force ---
-    # atol=1e-3 MEASURED this session: BilevelJuMP StrongDualityMode (Ipopt, an NLP
+    # atol=1e-3 MEASURED in the recorded run: BilevelJuMP StrongDualityMode (Ipopt, an NLP
     # strong-duality reformulation) converges to this fixture's y*=z*=0.0 corner
     # with a residual of ~1e-7 (Ipopt's own interior-point noise floor approaching
     # a corner solution, not a genuine disagreement) — 1e-3 sits 4 orders of
@@ -353,12 +352,12 @@ end
     @test isapprox(prod.z[1], bf.z; atol = atol_bruteforce)
     @test isapprox(prod.total_cost, bf.total; atol = atol_bruteforce)
 
-    # --- Genuine bilevel != joint divergence (T-29-04 mitigation) ---
+    # --- Genuine bilevel != joint divergence ---
     # PlanningFixtures.BILEV_GAP_FLOOR is derived from a MEASURED solver-precision
     # quantity: 10x the production MILP's own `select_optimizer(MILP())`
-    # mip_feasibility_tolerance (1e-9, memory highs-exactness-defaults) — NEVER as
-    # a fraction of the observed ~3.9/~2.0 gaps themselves (29-RESEARCH.md Pitfall
-    # 6). See fixtures_planning.jl's own derivation comment for the full argument.
+    # mip_feasibility_tolerance (1e-9) — NEVER as
+    # a fraction of the observed ~3.9/~2.0 gaps themselves. See fixtures_planning.jl's own
+    # derivation comment for the full argument.
     @test abs(prod.total_cost - jt.total) > PlanningFixtures.BILEV_GAP_FLOOR
     @test abs(prod.z[1] - jt.z[1]) > PlanningFixtures.BILEV_GAP_FLOOR
 end

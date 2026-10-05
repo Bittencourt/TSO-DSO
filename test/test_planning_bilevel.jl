@@ -1,12 +1,12 @@
 # test/test_planning_bilevel.jl
 #
-# Seam: src/planning/bilevel_kkt.jl (BILEV-01, Phase 29 plan 29-01). Unit and
+# Seam: src/planning/bilevel_kkt.jl. Unit and
 # boundary-guard `@testitem`s for `build_bilevel_kkt`/`solve_bilevel!` — a ONE-SHOT
 # MILP solve, not an iterative Benders loop (no `BendersTrace`/checkpoint assertions
 # needed, mirrors test_planning_benders.jl's own unit-level shape).
 #
 # Verified via a direct Julia/Test.jl script under `--project=.` BEFORE relying on
-# TestItemRunner (memory: `gsd-plan-verify-testitemrunner-trap` — TestItemRunner does
+# TestItemRunner (TestItemRunner does
 # NOT resolve under `--project=.`).
 
 @testitem "bilevel: build_bilevel_kkt + solve_bilevel! reproduce the hand-derived corner (y*=0, z*=0, total=0)" tags =
@@ -37,7 +37,7 @@
     # Measured, not hand-picked: HiGHS's own achieved precision on this fixture (see
     # fixtures_planning.jl's bilevel_toy_fixture derivation comment for the hand-derived
     # corner y*=0, z*=0, total*=0.0). 1e-6 is comfortably above the fixture's own
-    # measured residual (see this plan's SUMMARY for the measured value).
+    # measured residual.
     atol = 1e-6
     @test isapprox(result.y, 0.0; atol = atol)
     @test isapprox(result.x_inv, 0.0; atol = atol)
@@ -108,7 +108,7 @@ end
         T = f.T,
     )
 
-    # pf = ACPowerFlow() (NLP-class network — WR-02: must be rejected by the allowlist
+    # pf = ACPowerFlow() (NLP-class network — must be rejected by the allowlist
     # guard as an ArgumentError, not fail later inside JuMP with an ErrorException)
     @test_throws ArgumentError build_bilevel_kkt(
         f.feeder,
@@ -117,7 +117,7 @@ end
         T = f.T,
     )
 
-    # pf = DCPowerFlow() (affine but untested here — WR-02 allowlist rejects it)
+    # pf = DCPowerFlow() (affine but untested here — the allowlist rejects it)
     @test_throws ArgumentError build_bilevel_kkt(
         f.feeder,
         DCPowerFlow();
@@ -134,7 +134,7 @@ end
         follower_integer = true,
     )
 
-    # q_op = [-1.0] (BLOCKER-1 revision — negative curvature, must throw)
+    # q_op = [-1.0] (negative curvature, must throw)
     @test_throws ArgumentError build_bilevel_kkt(
         f.feeder,
         LinDistFlow();
@@ -143,7 +143,7 @@ end
         q_op = [-1.0],
     )
 
-    # safety < 1 (iteration-2 WR-01): the closed-form bound is tight, so a factor below
+    # safety < 1: the closed-form bound is tight, so a factor below
     # 1 could cut off the true optimum undetectably. safety = 1 itself is accepted.
     @test_throws ArgumentError build_bilevel_kkt(
         f.feeder,
@@ -161,15 +161,15 @@ end
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
-    # DELIBERATE stress test of the Pitfall-3 at-bound check itself (never a claim
-    # about the production default). 29-REVIEW.md WR-06: the earlier version used
+    # DELIBERATE stress test of the at-bound check itself (never a claim
+    # about the production default). An earlier version used
     # safety = 1e-9, which made the MILP INFEASIBLE, so assert_solved! threw
     # "Solve failed" first and the at-bound branch was never reached.
     #
     # Here the model stays FEASIBLE but a dual binds. Interior-fixture data with the
     # leader fixed at y_inv = 0.05 (below the 0.148 kink) forces the follower's
     # coupling dual to rho_y = 14.8 - 100*0.05 = 9.8 exactly (x_inv = 0.05 > 0, so the
-    # multiplier is unique). Iteration-2 WR-01 forbids safety < 1, so the under-sized
+    # multiplier is unique). safety < 1 is forbidden, so the under-sized
     # bound is made by hand: build with safety = 1 (m_ub = 14.8), then
     # set_upper_bound(rho_y, 9.8). rho_y must sit AT that bound in every valid KKT
     # certificate, and solve_bilevel! must reject it.
@@ -214,7 +214,7 @@ end
     @test isapprox(r.rho_y, 9.8; atol = 1e-6)
 end
 
-@testitem "bilevel: follower's own x_inv <= x_inv_max carries a KKT multiplier (WR-01)" tags =
+@testitem "bilevel: follower's own x_inv <= x_inv_max carries a KKT multiplier" tags =
     [:planning] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
@@ -226,7 +226,7 @@ end
     # Hand-derived multipliers: slack_y = 0.9 > 0, so rho_y = 0;
     # mu_cap = (pi_tariff - c_op) - q_op*z = 1.5 - 1.0 = 0.5;
     # rho_max = corridor_cap*mu_cap - c_inv = 10*0.5 - 0.2 = 4.8.
-    # Before the WR-01 fix (no rho_max in statio_x) this model was INFEASIBLE.
+    # Before rho_max was added to statio_x this model was INFEASIBLE.
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
         [Branch(1, 2, 1e-3, 1e-3, 99.0)],
@@ -259,12 +259,12 @@ end
     @test isapprox(r.rho_max, 4.8; atol = atol)
 end
 
-@testitem "bilevel: m_ub is the closed-form dual bound, pinned on both fixtures (WR-03)" tags =
+@testitem "bilevel: m_ub is the closed-form dual bound, pinned on both fixtures" tags =
     [:planning] setup = [PlanningFixtures] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
-    # 29-REVIEW.md WR-03: the old solver-probe bound depended on Clarabel's arbitrary
+    # The old solver-probe bound depended on Clarabel's arbitrary
     # point on an unbounded dual face (m_ub = 9544.4 on the interior fixture). The
     # closed-form bound (_follower_kkt_dual_bound) is pinned EXACTLY here, so any
     # drift is visible. Hand values (safety = 10):
@@ -320,12 +320,12 @@ end
     @test abs((10.0 - r.x_inv) * r.rho_max) < 1e-6
 end
 
-@testitem "bilevel: at-bound check accepts correct x_inv*=0 optima on a degenerate multiplier face (iteration-2 CR-01)" tags =
+@testitem "bilevel: at-bound check accepts correct x_inv*=0 optima on a degenerate multiplier face" tags =
     [:planning] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
-    # 29-REVIEW.md iteration-2 CR-01. Interior-fixture data (a = pi_tariff - c_op = 1.5,
+    # Interior-fixture data (a = pi_tariff - c_op = 1.5,
     # so the follower is profitable), in three variants where the leader prefers NO
     # delivery and the follower therefore cannot invest (y* = x_inv* = z* = 0):
     #   v_d = [1.0]   : the leader pays pi_tariff = 2.0 for a unit it values at 1.0;
@@ -380,7 +380,7 @@ end
     for (label, kw, fix_y0) in cases, safety in (10.0, 1.0)
         r, err = run_case(kw, fix_y0, safety)
         @test err === nothing
-        r === nothing && (@info "CR-01 regression threw" label safety err; continue)
+        r === nothing && (@info "regression: solve threw" label safety err; continue)
         @test isapprox(r.y, 0.0; atol = atol)
         @test isapprox(r.x_inv, 0.0; atol = atol)
         @test isapprox(r.z[1], 0.0; atol = atol)
@@ -388,12 +388,12 @@ end
     end
 end
 
-@testitem "bilevel: returned multipliers are the canonical lexicographically minimal KKT certificate (iteration-2 WR-02)" tags =
+@testitem "bilevel: returned multipliers are the canonical lexicographically minimal KKT certificate" tags =
     [:planning] setup = [PlanningFixtures] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, JuMP
 
-    # 29-REVIEW.md iteration-2 WR-02. On a degenerate active set the MILP's raw
+    # On a degenerate active set the MILP's raw
     # multipliers are an arbitrary vertex (corner fixture: HiGHS returned mu_cap = 0.5,
     # mu_lo = 0.8). solve_bilevel! now returns the lexicographic certificate
     # (min Σ(mu_cap + mu_lo), then min Σrho, then min rho_y). Hand values, with

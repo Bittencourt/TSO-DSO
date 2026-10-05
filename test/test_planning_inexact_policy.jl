@@ -1,12 +1,12 @@
 # test/test_planning_inexact_policy.jl
 #
 # Seam: src/planning/benders.jl's `solve_stackelberg!` `inexact_policy` dispatch
-# (BILEV-04b, plan 30-04 Task 3). The 3-policy matrix (`:strict`/`:reject`/
+# (inexact-policy handling). The 3-policy matrix (`:strict`/`:reject`/
 # `:certify_incumbent`) at a MEASURED, naturally-occurring SOCP-inexact pin — never a
 # synthetic forced case.
 #
-# FIXTURE (measured THIS session, JULIA_LOAD_PATH="test:.:@stdlib" julia probe.jl,
-# reusing plan 30-03's own `IEEE13ShortHorizonFixtures` population/feeder
+# FIXTURE (measured, JULIA_LOAD_PATH="test:.:@stdlib" julia probe.jl,
+# reusing the `IEEE13ShortHorizonFixtures` population/feeder
 # `test/fixtures_planning_ieee13_short.jl`, T=4): `solve_stackelberg!` on the UNMODIFIED
 # `ieee13_modified()` with this population, `ConvexBranchFlow()`,
 # `follower_kwargs = (; corridor_cap=1.0, x_inv_max=0.1, c_inv=1e-6, c_op=fill(1e-6,T))`,
@@ -21,7 +21,7 @@
 # | iter | outcome                                                                |
 # |------|-------------------------------------------------------------------------|
 # | 1    | optimality, EXACT (z=0, the fixture's own documented z=0 anchor)        |
-# | 2,3  | GENUINE `MOI.INFEASIBLE` -> `:oracle_feasibility_cut` (BILEV-04a fires NATURALLY on this realistic multi-bus fixture, confirming Task 2's branch works beyond its own purpose-built fixtures) |
+# | 2,3  | GENUINE `MOI.INFEASIBLE` -> `:oracle_feasibility_cut` (the oracle feasibility cut fires NATURALLY on this realistic multi-bus fixture, confirming the branch works beyond its own purpose-built fixtures) |
 # | 4,5  | optimality, EXACT                                                       |
 # | 6    | GENUINE `MOI.INFEASIBLE` -> `:oracle_feasibility_cut`                   |
 # | 7,8  | SOCP-INEXACT (maxgap ≈ 1.7e-3–1.8e-3) -> policy dispatch fires HERE     |
@@ -36,8 +36,8 @@
 #
 # `max_iter=10` for `:strict` (throws at iteration 7) and `max_iter=20`/`50` for
 # `:certify_incumbent`/`:reject` (both converge at iteration 11 — `:reject` appends the
-# inexact trials' cuts since the Phase 30 code review iteration 2, WR-02) keep every item's solve time small (a handful of cheap IEEE-13 T=4 SOCP
-# re-solves, ~tens of ms each per 30-RESEARCH.md's own measurement).
+# inexact trials' cuts since a later fix) keep every item's solve time small (a handful of cheap IEEE-13 T=4 SOCP
+# re-solves, ~tens of ms each, as measured).
 #
 # Items tagged `[:planning]`, names contain "planning" and "inexact" (occursin filter
 # convention, mirrors this phase's other new test files).
@@ -57,7 +57,7 @@
         (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
 
     mktempdir() do dir
-        # :strict must reproduce TODAY's byte-identical throw (the exactness-class error
+        # :strict must reproduce the unchanged throw (the exactness-class error
         # `assert_socp_exact!` raises directly) — never silently swallowed, never a
         # DIFFERENT error (e.g. the "exhausted" message `:reject` would raise instead).
         caught = nothing
@@ -81,13 +81,13 @@
         @test caught !== nothing
         @test caught isa CertificateError
         # Not over-constraining the FULL message (brittle) — just confirming it is
-        # genuinely the SOCP-exactness gate's own error (PF-04), not some other failure
+        # genuinely the SOCP-exactness gate's own error, not some other failure
         # (e.g. a genuine infeasibility or the :reject-style "exhausted" message).
         @test occursin("SOCP relaxation INEXACT", caught.msg)
     end
 end
 
-@testitem "planning inexact policy: :reject appends the inexact trial's cuts but bars it from the incumbent, and converges certified-only (T-30-09, WR-02 iter 2)" tags =
+@testitem "planning inexact policy: :reject appends the inexact trial's cuts but bars it from the incumbent, and converges certified-only " tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
 
@@ -101,13 +101,13 @@ end
     master_kwargs =
         (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
 
-    # Phase 30 code review iteration 2 (WR-02). `:reject` used to append NO cut at an
+    # `:reject` used to append NO cut at an
     # inexact trial, so the master re-proposed it and the run could only ever stall.
     # Now the trial's relaxation cuts are appended (valid lower bounds whatever the
     # exactness verdict) and only its access to UB / the incumbent is barred. The master
     # therefore follows EXACTLY the same trajectory as under :certify_incumbent; only
     # UB differs while an inexact trial would have been the running minimum. MEASURED
-    # 2026-10-01 (scratchpad fix2/probe_wr02.jl), both policies: iters = 11,
+    # 2026-10-01, both policies: iters = 11,
     # UB = 609.0155321155983, LB = 608.9819521916484, the same exact incumbent; rows
     # 7, 8, 10 are the inexact trials (:rejected here); UB_trace[10] = 609.043154704391
     # under :reject vs 609.0392231361435 (a relaxation-only value) under
@@ -149,15 +149,15 @@ end
     @test rr.z ≈ rc.z
 end
 
-@testitem "planning inexact policy: :reject fails fast when the relaxation's optimum is itself inexact (WR-06 backstop, WR-02 iter 2)" tags =
+@testitem "planning inexact policy: :reject fails fast when the relaxation's optimum is itself inexact (backstop)" tags =
     [:planning] begin
     using TSODSO
 
-    # The CR-02 T=1 fixture below (λ₀ = [-1.0]): every feasible pin above the 0.01 load is
+    # The T=1 fixture below (λ₀ = [-1.0]): every feasible pin above the 0.01 load is
     # SOCP-inexact and the relaxation's optimum is the box corner z = y_max = 0.04. Under
     # :reject the corner's cuts are appended, the master re-proposes the identical corner
     # (the relaxation's optimum), and no certified incumbent can close the gap there.
-    # MEASURED 2026-10-01 (scratchpad fix2/probe_wr01.jl, POL=reject): the stall fires at
+    # MEASURED 2026-10-01 (reject policy): the stall fires at
     # iteration 5 at z = [0.04], best certified UB = 12.240262587779437 (the certified
     # boundary point z ≈ 0.010039) — 4 completed iterations, far short of max_iter = 30.
     T = 1
@@ -236,7 +236,7 @@ end
 
         @test result.gap <= 1.0e-4
 
-        # WR-05 (Phase 30 code review): the measured cone gap is recorded on EVERY
+        # The measured cone gap is recorded on EVERY
         # optimality row (exact and inexact), NaN only on feasibility-cut rows. The
         # inexact (certified) rows' gaps must sit far above the exact rows' gaps
         # (measured 2026-10-01: inexact 1.71e-3–2.40e-3, exact <= 1.41e-8 on this run).
@@ -258,25 +258,24 @@ end
         # iteration is itself genuinely SOCP-EXACT — the inexact trials were transient,
         # mid-run excursions the policy survived, not the incumbent's own final state.
         # ac_report is therefore nothing here (documented: the "incumbent itself is
-        # exact" case, not the "populated report" case — both are valid per BILEV-04b,
-        # this fixture happens to land in the former).
+        # exact" case, not the "populated report" case — both are valid, this fixture happens to land in the former).
         @test result.ac_report === nothing
-        # CR-02: the explicit certificate agrees — the incumbent's own solve was exact,
+        # The explicit certificate agrees — the incumbent's own solve was exact,
         # so UB/gap are NOT relaxation-only here.
         @test result.incumbent_exactness === :exact
         @test !result.ub_relaxation_only
-        # WR-01 (iteration 2): the returned point is certified, so the certified
+        # The returned point is certified, so the certified
         # incumbent IS the returned point.
         @test result.exact_incumbent !== nothing
         @test result.exact_incumbent.UB == result.UB
         @test result.exact_incumbent.z == result.z
         @test result.exact_incumbent.gap == result.gap
 
-        # BILEV-04a cross-check (Task 2 regression, confirmed NATURALLY on this
-        # realistic multi-bus fixture, not just plan 30-01's own purpose-built ones):
+        # Oracle-feasibility-cut cross-check (confirmed NATURALLY on this
+        # realistic multi-bus fixture, not just on the purpose-built ones):
         # the SAME run also hits a genuine MOI.INFEASIBLE trial along the way.
         @test :oracle_feasibility_cut in result.trace.policy_action_trace
-        # WR-06 (iteration 2): the measured slack-min v is recorded on every oracle
+        # The measured slack-min v is recorded on every oracle
         # feasibility row (NaN elsewhere); on this run every such cut is separating.
         fc = findall(a -> a in (:oracle_feasibility_cut, :oracle_feasibility_cut_weak), tr.policy_action_trace)
         @test all(i -> tr.feas_cut_v_trace[i] > TSODSO.FEAS_CUT_V_TOL, fc)
@@ -284,11 +283,11 @@ end
     end
 end
 
-@testitem "planning inexact policy: solve_planning_oracle! reports exactness explicitly and never skips the complementarity gate (CR-01/CR-03)" tags =
+@testitem "planning inexact policy: solve_planning_oracle! reports exactness explicitly and never skips the complementarity gate " tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
 
-    # Phase 30 code review (CR-01/CR-03). The measured pins come from
+    # The measured pins come from
     # IEEE13ShortHorizonFixtures' own header sweep map: uniform z = 0.0 is feasible and
     # SOCP-exact, uniform z = 0.06 is feasible but measurably SOCP-INEXACT.
     feeder = TSODSO.ieee13_modified()
@@ -313,7 +312,7 @@ end
     @test isfinite(r0.socp_maxgap)
     @test oracle.ctx.meta[:socp_maxgap] == r0.socp_maxgap
 
-    # 2. Inexact pin, default :throw mode: the gate's own error, byte-identical.
+    # 2. Inexact pin, default :throw mode: the gate's own error, bit-for-bit identical.
     e1 = caught(() -> TSODSO.solve_planning_oracle!(oracle, fill(0.06, T)))
     @test e1 isa CertificateError
     @test occursin("SOCP relaxation INEXACT", e1.msg)
@@ -321,13 +320,13 @@ end
     @test !haskey(oracle.ctx.meta, :socp_maxgap)
 
     # 3. Inexact pin, :report mode: the verdict is RETURNED, with the measured residual,
-    # and no PF-04 certificate is stashed on the inexact ctx.
+    # and no exactness certificate is stashed on the inexact ctx.
     r2 = TSODSO.solve_planning_oracle!(oracle, fill(0.06, T); on_inexact = :report)
     @test r2.exactness === :inexact
     @test r2.socp_maxgap > 0
     @test !haskey(oracle.ctx.meta, :socp_maxgap)
 
-    # 4. CR-01: the battery-complementarity gate still runs on an inexact :report result.
+    # 4. The battery-complementarity gate still runs on an inexact :report result.
     # A negative relative τ makes every product p_ch·p_dch ≥ τ·Pmax² (the gate's own
     # monotone threshold), so the gate MUST throw if it runs at all; before the fix the
     # inexact path skipped it entirely.
@@ -342,7 +341,7 @@ end
     @test e3 isa CertificateError
     @test occursin("Battery complementarity violated", e3.msg)
 
-    # 5. CR-03: a formulation with no `:l` stash (LinDistFlow) reports :not_applicable —
+    # 5. A formulation with no `:l` stash (LinDistFlow) reports :not_applicable —
     # the exactness gate never ran, so no cone residual is read (the old disambiguation
     # called socp_relaxation_gap here and died with a FieldError on `pv.l`), and its
     # complementarity throw propagates with its OWN message.
@@ -368,14 +367,14 @@ end
     )
 end
 
-@testitem "planning inexact policy: an SOCP-inexact incumbent is labelled relaxation-only and gets a populated AC report end-to-end (CR-02)" tags =
+@testitem "planning inexact policy: an SOCP-inexact incumbent is labelled relaxation-only and gets a populated AC report end-to-end" tags =
     [:planning] begin
     using TSODSO
 
-    # Phase 30 code review (CR-02): the FIRST test that drives the populated-`ac_report`
+    # The FIRST test that drives the populated-`ac_report`
     # path through `solve_stackelberg!` itself (every other item's incumbent is exact).
     #
-    # FIXTURE (measured 2026-10-01, scratchpad probe_cr02b.jl): the single-Thermostatic
+    # FIXTURE (measured 2026-10-01): the single-Thermostatic
     # T=1 population on the UNMODIFIED `ieee13_modified()` at a NEGATIVE wholesale price
     # λ₀ = [-1.0] (an oversupply hour — the network is PAID to import). The pinned SOC
     # relaxation then prefers to "dissipate" the extra import in a slack cone, so every
@@ -409,9 +408,9 @@ end
         @test result.incumbent_exactness === :inexact
         @test result.ub_relaxation_only
         @test result.incumbent_socp_maxgap > 1.0e-3     # measured 1.74e-2
-        # WR-01 (iteration 2): the run DID visit one certified point — iteration 2 at
-        # z ≈ 0.010039, right at the load boundary (measured 2026-10-01, scratchpad
-        # fix2/probe_wr01.jl: UB 12.240262587779437, socp_maxgap 6.6e-11). It used to be
+        # The run DID visit one certified point — iteration 2 at
+        # z ≈ 0.010039, right at the load boundary (measured 2026-10-01:
+        # UB 12.240262587779437, socp_maxgap 6.6e-11). It used to be
         # displaced silently by the cheaper relaxation-only iterates. It is now reported
         # alongside, with its own PHYSICAL gap against the same LB (measured 2.37e-3),
         # and is not returned as the main point because that gap exceeds tol.
@@ -437,25 +436,25 @@ end
         @test rep.ok                                   # measured: no limit violated
         # The relaxation error in UB is MEASURED: SOCP vs AC welfare at the same z.
         @test isfinite(rep.socp_welfare) && isfinite(rep.ac_welfare)
-        # IN-04 (iteration 2): the old `welfare_gap == socp_welfare − ac_welfare` check only
+        # The old `welfare_gap == socp_welfare − ac_welfare` check only
         # restated the definition. Pin the measured magnitude instead: |welfare_gap| ≈ 3e-10
         # at z = 0.04 (the AC optimum matches the relaxation's welfare there).
         @test abs(rep.welfare_gap) < 1.0e-6
-        # WR-03 (iteration 2): the AC re-check succeeded, so no failure is recorded.
+        # The AC re-check succeeded, so no failure is recorded.
         @test rep.error === nothing
     end
 end
 
-@testitem "planning inexact policy: the integer-master corner search honours the policy and only maps genuine infeasibility to +Inf (CR-02 iter 2)" tags =
+@testitem "planning inexact policy: the integer-master corner search honours the policy and only maps genuine infeasibility to +Inf" tags =
     [:planning] setup = [IEEE13ShortHorizonFixtures] begin
     using TSODSO
     import JuMP: MOI, termination_status
 
-    # Phase 30 code review iteration 2 (CR-02). `corner_recourse` (the Laporte-Louveaux
+    # `corner_recourse` (the Laporte-Louveaux
     # Q_nu evaluator) used to call the oracle in `:throw` mode whatever the outer policy,
     # and its T>1 branch wrapped it in a bare `catch` that turned EVERY throw into +Inf —
     # so an SOCP-inexact trial silently dropped out of the minimization and Q_nu came out
-    # too high (an invalid LL cut). MEASURED 2026-10-01 (scratchpad fix2/probe_cr02b.jl),
+    # too high (an invalid LL cut). MEASURED 2026-10-01,
     # T=4 IEEE13ShortHorizonFixtures population, follower (corridor_cap=1, x_inv_max=0.1,
     # c_inv=c_op=1e-6):
     #   y_inv=0.05: :throw and :report both 609.009650006013 (the box stays exact);
@@ -506,11 +505,11 @@ end
     @test TSODSO.corner_recourse(oracle, fol, 0.05, T) ≈ q05 atol = TSODSO.JOINT_RECOURSE_GAP_TOL
 end
 
-@testitem "planning inexact policy: incumbent ordering never lets a relaxation-only iterate displace a converged certified one (WR-01 iter 2)" tags =
+@testitem "planning inexact policy: incumbent ordering never lets a relaxation-only iterate displace a converged certified one" tags =
     [:planning] begin
     using TSODSO
 
-    # Phase 30 code review iteration 2 (WR-01): the ordering rule `_select_incumbent`,
+    # The ordering rule `_select_incumbent`,
     # tested on its own (a pure function of the two incumbents and the convergence test).
     exact = (; y = 0.0, z = [0.0], UB = 10.0, exactness = :exact)
     relax_inexact = (; y = 0.0, z = [0.1], UB = 9.99995, exactness = :inexact)
@@ -530,11 +529,11 @@ end
     @test TSODSO._select_incumbent(relax_inexact, nothing, conv) === relax_inexact
 end
 
-@testitem "planning inexact policy: the oracle-feasibility-cut v rule degrades gracefully near a curved boundary (WR-06 iter 2)" tags =
+@testitem "planning inexact policy: the oracle-feasibility-cut v rule degrades gracefully near a curved boundary" tags =
     [:planning] begin
     using TSODSO
 
-    # Phase 30 code review iteration 2 (WR-06): `_feas_cut_class` is the measured
+    # `_feas_cut_class` is the measured
     # three-way rule (see FEAS_CUT_V_TOL / FEAS_CUT_V_NOISE: noise <= 2.4e-10 at feasible
     # pins, smallest genuine v measured 3.86e-5). A v between the noise floor and the
     # separation tolerance used to abort the run; it is now a valid, appended "weak" cut.

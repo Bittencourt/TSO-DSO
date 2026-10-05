@@ -1,12 +1,12 @@
 # test/test_planning_goldens.jl
 #
-# Seam: PVAL-02 — permanent regression infrastructure for the two one-off validation
-# results that, until this plan, existed only as inline consts scattered across
-# test/test_planning_certification.jl (the N=1 Phase 11 BilevelJuMP certification) and
-# test/test_planning_nash.jl (the N=2 Phase 13 hand-checked Nash equilibrium). This file
+# Seam: permanent regression infrastructure for the two one-off validation
+# results that previously existed only as inline consts scattered across
+# test/test_planning_certification.jl (the N=1 BilevelJuMP certification) and
+# test/test_planning_nash.jl (the N=2 hand-checked Nash equilibrium). This file
 # does NOT duplicate or re-execute test/test_planning_certification.jl's BilevelJuMP
-# certification (PVAL-01 stays in-suite, untouched, in the same `Pkg.test` gate) — it
-# adds the DEDICATED PVAL-02 goldens module (test/fixtures_planning.jl) and re-asserts
+# certification (which stays in-suite, untouched, in the same `Pkg.test` gate) — it
+# adds the DEDICATED goldens module (test/fixtures_planning.jl) and re-asserts
 # each production entrypoint's own convergence/gap gate BEFORE comparing the result
 # against the pinned golden value, mirroring test/test_acceptance.jl's own
 # consolidates-without-duplicating, gate-before-golden convention.
@@ -19,7 +19,7 @@
 #     z/x_inv golden, and the `run_nash_probe` gating checks + a NEWLY BOUNDED spread
 #     regression (previously only asserted `>= 0 && isfinite`, never bounded).
 
-@testitem "planning goldens: N=1 certified Stackelberg equilibrium — gap gate then pinned golden regression (PVAL-02)" tags =
+@testitem "planning goldens: N=1 certified Stackelberg equilibrium — gap gate then pinned golden regression" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
 
@@ -45,7 +45,7 @@
         )
     end
 
-    # GATE first (PVAL-02 assertion ordering, T-14-01): the production Benders loop's
+    # GATE first (assertion ordering): the production Benders loop's
     # OWN convergence gate must hold before the pinned golden is even consulted.
     @test result.gap <= 1e-6
 
@@ -55,7 +55,7 @@
     @test isapprox(result.UB, PlanningFixtures.N1_OBJ_HAND; atol = 1e-3)
 end
 
-@testitem "planning goldens: N=2 Nash equilibrium — convergence gate then pinned golden regression (PVAL-02)" tags =
+@testitem "planning goldens: N=2 Nash equilibrium — convergence gate then pinned golden regression" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
 
@@ -87,7 +87,7 @@ end
         checkpoint_dir = mktempdir(),
     )
 
-    # GATE first (PVAL-02 assertion ordering, T-14-01): `run_nash!`'s own convergence
+    # GATE first (assertion ordering): `run_nash!`'s own convergence
     # flag must hold before the pinned golden is even consulted.
     @test result.converged
 
@@ -96,7 +96,7 @@ end
     @test isapprox(result.x_inv, PlanningFixtures.N2_XINV_HAND; atol = 1e-3)
 end
 
-@testitem "planning goldens: N=2 multi-seed/multi-order probe — gating checks then spread-bound regression (PVAL-02)" tags =
+@testitem "planning goldens: N=2 multi-seed/multi-order probe — gating checks then spread-bound regression" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
     using TSODSO: run_nash_probe
@@ -122,7 +122,7 @@ end
             c_op = [[0.5], [0.5]],
         )
 
-    # Hand-picked per 13-RESEARCH.md Pattern 4 (identical to test_planning_nash.jl's own
+    # Hand-picked (identical to test_planning_nash.jl's own
     # probe fixture): a cold start, a symmetric-capacity-split guess, and an asymmetric
     # start favoring distributor 1.
     seeds = (;
@@ -142,9 +142,9 @@ end
         checkpoint_dir = mktempdir(),
     )
 
-    # GATE first (PVAL-02 assertion ordering, T-14-01): every probe run must have
+    # GATE first (assertion ordering): every probe run must have
     # actually converged, and the structural "a converged equilibrium" honesty language
-    # (NASH-04) must hold, before the pinned spread bounds are even consulted.
+    # must hold, before the pinned spread bounds are even consulted.
     @test result.n_runs == 6
     @test all(r -> r.result.converged, result.runs)
     @test occursin("a converged equilibrium", result.summary)

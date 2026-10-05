@@ -1,14 +1,13 @@
 # test/test_planning_follower.jl
 #
-# Seam: src/planning/follower.jl (PLAN-04). `FollowerLP` + `build_follower` (Task 1)
+# Seam: src/planning/follower.jl (follower). `FollowerLP` + `build_follower`
 # build the transmission-reinforcement follower LP EXACTLY ONCE; `solve_follower!`
 # returns a feasible cost+dual for a deliverable z and a GENUINE HiGHS Farkas
 # certificate for an infeasible z (never a penalized-slack shortcut). Items tagged
 # `[:planning]`, names contain "planning" and "follower" (occursin filter
 # convention, mirrors test_planning_retry.jl / test_planning_oracle.jl).
 #
-# Toy fixture (11-01-PLAN.md's own <toy_fixture> block, reused verbatim in plans
-# 11-02/11-03): T=1, corridor_cap=2.0, x_inv_max=2.0 (max deliverable = 4.0),
+# Toy fixture (reused verbatim by the Benders and certification tests): T=1, corridor_cap=2.0, x_inv_max=2.0 (max deliverable = 4.0),
 # c_inv=1.0, c_op=[0.5]. The follower's marginal cost of delivering one more unit
 # of z is the CONSTANT m_f = c_inv/corridor_cap + c_op[1] = 1.0 for any feasible
 # z ∈ [0, 4.0] (the LP always invests exactly x_inv = z/corridor_cap — no slack).
@@ -151,8 +150,8 @@ end
 
     @test isapprox(abs(res1.π_s[1]), 1.0; atol = 1e-6)
 
-    # Sign pinned by DIRECT MEASUREMENT (10-RESEARCH.md Pitfall 1's own "measure,
-    # don't guess" methodology, run once this session): dual.(f.coupling)[1] was
+    # Sign pinned by DIRECT MEASUREMENT (the "measure,
+    # don't guess" methodology, run once): dual.(f.coupling)[1] was
     # OBSERVED to be +1.0 (POSITIVE) at both z=[1.0] and z=[1.5] — increasing
     # z[t] increases the follower's Min-sense marginal cost at rate m_f=1.0, and
     # JuMP reports the coupling[t]: x_op[t] == z[t] equality's dual with that
