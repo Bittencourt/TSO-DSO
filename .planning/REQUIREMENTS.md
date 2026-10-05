@@ -145,7 +145,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [ ] **HYG-06**: Known flakes (Clarabel `NUMERICAL_ERROR` on IEEE-13 ADMM, the stochastic-welfare
   flake) are fixed or quarantined with `@test_broken` or retry-and-report, so a green suite means
   green.
-- [ ] **HYG-07**: Test fixture files and tags are named after their content, not the planning
+- [x] **HYG-07**: Test fixture files and tags are named after their content, not the planning
   phase (no `fixtures_phaseN`, `:phaseN`).
 - [ ] **HYG-08**: `scripts/` has an index. One-off and superseded scripts are archived, and the
   `pv_boom_report*` duplication is merged into shared code. The redundant root `Manifest.toml`
@@ -202,7 +202,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | HYG-01 | Phase 36 | Pending |
 | HYG-02 | Phase 36 | Pending |
 | HYG-03 | Phase 36 | Complete |
-| HYG-07 | Phase 36 | Pending |
+| HYG-07 | Phase 36 | Complete |
 | HYG-04 | Phase 37 | Pending |
 | HYG-05 | Phase 37 | Pending |
 | HYG-06 | Phase 37 | Pending |
