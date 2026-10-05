@@ -5,10 +5,10 @@
 # script, NOT a `@testitem` (long-running, N>=20 repeats x 2 fixtures x 2 modes = 80+ solves).
 #
 # (a) Measures the Clarabel `NUMERICAL_ERROR`-class flake rate of `solve_admm` under
-#     `reactive_consensus ∈ (false, true)` on BOTH IEEE-13 and IEEE-123 (N>=20 repeats each,
-#     80+ solves total), comparing the Q-consensus path against a same-session baseline on
-#     the IDENTICAL fixtures/seeds — never assuming the earlier toy fixture's
-#     rate transfers.
+#     `reactive_consensus ∈ (ReactiveMode.OFF, ReactiveMode.CERTIFIED)` on BOTH IEEE-13 and
+#     IEEE-123 (N>=20 repeats each, 80+ solves total), comparing the Q-consensus path against
+#     a same-session baseline on the IDENTICAL fixtures/seeds — never assuming the earlier toy
+#     fixture's rate transfers.
 # (b) Records the rho vs rho_q finding directly from the ACTUAL
 #     shipped mechanism: `qag_dso[j,t]` is pinned via a hard equality (`:qag_pin`,
 #     `qag_dso[j,t] == q_draw[j][t]`) with NO quadratic ρ-penalty term of its own (the
@@ -271,7 +271,7 @@ end
 # ---- Flake-rate measurement -------------------------------------------------------------------
 
 """
-    count_failures(feeder, aggs, λ₀; reactive_consensus, n_repeats=20, seed_offset=0) -> Int
+    count_failures(feeder, aggs, λ₀; reactive_consensus::ReactiveMode.T, n_repeats=20, seed_offset=0) -> Int
 
 Calls `solve_admm(feeder, ConvexBranchFlow(), aggs; T, λ₀, ρ=RHO0, ..., reactive_consensus)`
 `n_repeats` times inside a `try/catch`, incrementing a failure counter on any caught exception
@@ -286,7 +286,7 @@ function count_failures(
     feeder,
     aggs,
     λ₀;
-    reactive_consensus::Bool,
+    reactive_consensus::ReactiveMode.T,
     n_repeats::Int = 20,
     seed_offset::Int = 0,
 )
