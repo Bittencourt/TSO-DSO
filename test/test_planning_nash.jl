@@ -1,9 +1,9 @@
 # test/test_planning_nash.jl
 #
-# Seam: src/planning/nash.jl (NASH-02/03/04). Task 1 (this section): `NashTrace`'s
+# Seam: src/planning/nash.jl. First section: `NashTrace`'s
 # push!/is_converged/trace_summary round-trip contract, plus the regression proving
-# `solve_stackelberg!`'s new additive `follower` keyword (src/planning/benders.jl,
-# plan 13-02) is byte-identical/non-breaking for every Phase 11/12 call site. Items
+# `solve_stackelberg!`'s new additive `follower` keyword (src/planning/benders.jl)
+# is bit-for-bit identical/non-breaking for every earlier call site. Items
 # tagged `[:planning]`, names contain "planning" and "nash" (occursin filter
 # convention, mirrors test_planning_benders.jl/test_planning_coupling.jl).
 
@@ -70,7 +70,7 @@
     @test summary.total_benders_retries == 1
     @test summary.total_cuts_rebuilt == 7
 
-    # WR-04 regressions: an invalid sweep width throws (a caller bug, never a soft
+    # Regressions: an invalid sweep width throws (a caller bug, never a soft
     # false)...
     @test_throws ArgumentError TSODSO.is_converged(trace, 1e-4, 0)
     @test_throws ArgumentError TSODSO.is_converged(trace, 1e-4, -1)
@@ -159,7 +159,7 @@ end
     @test trace.iters == 0
 end
 
-@testitem "planning nash: solve_stackelberg! follower keyword is additive — existing Phase 11/12 call sites unchanged" tags =
+@testitem "planning nash: solve_stackelberg! follower keyword is additive — existing call sites unchanged" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -171,8 +171,8 @@ end
     master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0)
 
     mktempdir() do dir
-        # No `follower` keyword supplied at all — must be BYTE-IDENTICAL to the
-        # pre-plan-13-02 Phase 11/12 regression (test_planning_benders.jl's own
+        # No `follower` keyword supplied at all — must be BIT-FOR-BIT IDENTICAL to the
+        # earlier regression (test_planning_benders.jl's own
         # first testitem).
         result = solve_stackelberg!(
             feeder,
@@ -225,12 +225,12 @@ end
     )
 end
 
-# --- Task 2: run_nash! — the outer Gauss-Seidel loop --------------------------------
+# --- run_nash! — the outer Gauss-Seidel loop --------------------------------
 #
-# Shared N=2 SYMMETRIC toy fixture used by testitems 5-9 below (extends the Phase-11
-# toy fixture, plan 13-02's own <toy_fixture>): T=1, corridor_cap=2.0,
+# Shared N=2 SYMMETRIC toy fixture used by the testitems below (extends the
+# basic toy fixture): T=1, corridor_cap=2.0,
 # x_inv_max=[0.3,0.3], c_inv=[1.0,1.0], c_op=[[0.5],[0.5]]; each distributor's own
-# operational side identical to the Phase-11 toy fixture (feeder=
+# operational side identical to the basic toy fixture (feeder=
 # TwoBusFixtures.two_bus_feeder(), pf=LinDistFlow(), agg=ToyElasticDevice(2,6.0,1.0,10.0)
 # wrapped in Aggregator(2,0.9,[dev],[0.0]), λ₀=[4.0],
 # master_kwargs=(;c_y=0.3,y_max=8.0,α_op_lb=-5.0,α_x_lb=0.0)). Since TestItemRunner
@@ -252,10 +252,10 @@ end
 # is DECREASING on [0,0.6], so the tightest feasible z=0.6 is optimal. At z_i=0.6, the
 # follower's own required investment is EXACTLY x_inv_max[i]=0.3 (verified:
 # x_inv[i]=(z_i+z_j)/corridor_cap - x_inv_j=(0.6+0.6)/2.0-0.3=0.3), a genuine fixed
-# point — no re-tuning contingency needed for this symmetric fixture (Revision 1's own
+# point — no re-tuning contingency needed for this symmetric fixture (the re-tuning
 # escape hatch is unused here).
 
-@testitem "planning nash: N=2 Gauss-Seidel converges to the hand-checked congested equilibrium (z=[0.6,0.6], x_inv=[0.3,0.3], capacity binding, PVAL-04 continuous-only companion check)" tags =
+@testitem "planning nash: N=2 Gauss-Seidel converges to the hand-checked congested equilibrium (z=[0.6,0.6], x_inv=[0.3,0.3], capacity binding, continuous-only companion check)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using JuMP: value, all_variables, is_binary, is_integer
@@ -293,8 +293,7 @@ end
     @test isapprox(result.z, [0.6, 0.6]; atol = 1e-3)
     @test isapprox(result.x_inv, [0.3, 0.3]; atol = 1e-3)
 
-    # Deviation (Rule 1, discovered during execution): the PLAN's own literal
-    # assertion checks `abs(dual(shared.model[:capacity][1])) > 1e-8`, but by the time
+    # Note: the naive assertion would check `abs(dual(shared.model[:capacity][1])) > 1e-8`, but by the time
     # run_nash! returns, write_back! has bound-pinned BOTH distributors' x_inv[i] to a
     # SINGLE point (lb == ub) and BOTH z[i,:] are pinned Parameters — every variable in
     # shared.model is simultaneously fixed, so the LP has ZERO remaining degrees of
@@ -315,7 +314,7 @@ end
     total_capacity = 2.0 * sum(value(shared.x_inv[i]) for i in 1:2)
     @test isapprox(total_flow, total_capacity; atol = 1e-6)
 
-    # Revision 1, checker-added: PVAL-04 continuous-only companion check — run_nash!'s
+    # Continuous-only companion check — run_nash!'s
     # own write-back/activate cycle never introduces a binary/integer variable into the
     # shared model it mutates.
     # NOTE: consolidated coverage of all 4 planning-layer builders now also lives in
@@ -361,7 +360,7 @@ end
     )
 end
 
-@testitem "planning nash: forward and reverse sweep orders agree on the symmetric N=2 fixture (Gauss-Seidel-vs-Jacobi timing regression, Pitfall 1)" tags =
+@testitem "planning nash: forward and reverse sweep orders agree on the symmetric N=2 fixture (Gauss-Seidel-vs-Jacobi timing regression)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -417,7 +416,7 @@ end
     @test isapprox(result_fwd.z, result_rev.z; atol = 1e-3)
 end
 
-@testitem "planning nash: intra-sweep write-back timing — distributor 2 reads distributor 1's JUST-updated z_1 within the same sweep, not the previous sweep's value (DIRECT regression, Revision 1)" tags =
+@testitem "planning nash: intra-sweep write-back timing — distributor 2 reads distributor 1's JUST-updated z_1 within the same sweep, not the previous sweep's value (DIRECT regression)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_follower!, write_back!
@@ -562,7 +561,7 @@ end
     @test isapprox(result.z, [0.6, 0.6]; atol = 1e-2)
 end
 
-# --- Task 3: plot_nash_convergence — core stub + CairoMakie extension method --------
+# --- plot_nash_convergence — core stub + CairoMakie extension method --------
 #
 # Mirrors test_diagnostics_plot.jl's own separate-process CairoMakie idiom EXACTLY
 # (skip-with-message when CairoMakie is not installed — a weakdep, not a hard test
@@ -613,13 +612,13 @@ end
     end
 end
 
-# --- Task 1 (plan 13-03): run_nash_probe — multi-seed/multi-order gate + honest spread
-# reporting (NASH-04). Reuses the same N=2 symmetric toy fixture as testitems 5-9 above
+# --- run_nash_probe — multi-seed/multi-order gate + honest spread
+# reporting. Reuses the same N=2 symmetric toy fixture as the testitems above
 # (build_shared_transmission N=2, T=1, corridor_cap=2.0, x_inv_max=[0.3,0.3],
 # c_inv=[1.0,1.0], c_op=[[0.5],[0.5]]; each distributor's own operational side identical
-# to the Phase-11 toy fixture) plus a genuinely new N=3 corridor extension for the
-# probe-only (no closed-form hand-check required, per CONTEXT.md's own
-# N=2-hand-checkable/N=3-probe-only scope split).
+# to the basic toy fixture) plus a genuinely new N=3 corridor extension for the
+# probe-only (no closed-form hand-check required: the scope split is
+# N=2-hand-checkable/N=3-probe-only).
 
 @testitem "planning nash: N=2 gating probe — 3 seeds x 2 orders all converge, structural 'a converged equilibrium' language" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
@@ -647,7 +646,7 @@ end
             c_op = [[0.5], [0.5]],
         )
 
-    # Hand-picked per 13-RESEARCH.md Pattern 4: a cold start, a symmetric-capacity-split
+    # Hand-picked: a cold start, a symmetric-capacity-split
     # guess (the hand-checked equilibrium's own candidate ballpark), and an asymmetric
     # start favoring distributor 1.
     seeds = (;
@@ -675,40 +674,39 @@ end
     @test result.spread.x_inv_spread >= 0.0 && isfinite(result.spread.x_inv_spread)
     @test result.spread.cost_spread >= 0.0 && isfinite(result.spread.cost_spread)
 
-    # Phase 31 (BILEV-06a), Task 1's own "Test 2 (control, unique equilibrium unaffected)":
-    # this corner-cap fixture is NOT modified by this plan — re-asserted here as a
+    # Control (unique equilibrium unaffected):
+    # this corner-cap fixture is NOT modified — re-asserted here as a
     # regression that bare-matrix seeds (this testitem's own unchanged call shape) still
     # report an at-or-below-solver-noise spread (unique equilibrium, no split continuum).
-    # MEASURED 2026-10-02 (scratchpad probe_interior_gne.jl, this exact fixture/seeds):
+    # MEASURED 2026-10-02 (probe on this exact fixture/seeds):
     # z_spread ≈ 1.11e-16, x_inv_spread = 0.0, cost_spread = 0.0 — comfortably inside a
     # 1e-6 floor (>> machine epsilon, << the interior-cap fixture's own ~0.7 spread below).
     @test result.spread.x_inv_spread < 1e-6
     @test result.spread.z_spread < 1e-6
 end
 
-# --- Task 1 (plan 31-03, BILEV-06a): interior-investment-cap GNE fixture — a genuine 1-D
+# --- Interior-investment-cap GNE fixture — a genuine 1-D
 # continuum of generalized Nash equilibria (GNE), certified via run_nash_probe's own
-# Phase-31 seed-dispatch extension (bare matrix OR (;z0,x_inv0) NamedTuple).
+# seed-dispatch extension (bare matrix OR (;z0,x_inv0) NamedTuple).
 #
-# HAND-DERIVED GNE INTERVAL (31-RESEARCH.md "Concrete fixture numbers", independently
+# HAND-DERIVED GNE INTERVAL (independently
 # re-derivable from the corner-cap control's own "HAND-DERIVED EQUILIBRIUM" comment
 # above): each distributor's UNCONSTRAINED Stackelberg optimum is z_i*=0.7 (same
 # marginal follower cost m_f = c_inv[i]/corridor_cap + c_op[i] = 1.0/2.0+0.5 = 1.0 as the
 # corner-cap fixture). The MINIMAL total investment supporting BOTH distributors at their
 # unconstrained optimum is S_min = (0.7+0.7)/corridor_cap = 0.7. With
 # x_inv_max=[1.0,1.0] (margin 0.3 above S_min, safely non-binding everywhere on the
-# interval — Pitfall 4: a modest margin, not a de facto Inf), the GNE set contains
+# interval — a modest margin, not a de facto Inf), the GNE set contains
 # {(x_inv_1, 0.7 - x_inv_1) : x_inv_1 ∈ [0, 0.7]}, each paired with (z_1,z_2) ≈ (0.7,0.7)
 # (constant across the continuum, since c_inv[i] > 0 strictly makes each player minimize
-# its OWN x_inv_i at the SAME marginal cost regardless of the split — see 31-RESEARCH.md
-# "Why a continuum exists here specifically" for the full derivation). It is NOT the
+# its OWN x_inv_i at the SAME marginal cost regardless of the split — the continuum exists
+# here specifically because of this). It is NOT the
 # whole GNE set: free-riding GNEs off this segment also exist (x_inv_j = 0,
 # z_j = 1.2 − p, p ∈ [0, 0.5], x_inv_i = (1.9 − p)/2 — e.g. x_inv = (0.95, 0),
-# z = (0.7, 1.2), multipliers (0.5, ≈0); iteration-2 review, WR-01). The segment is the
+# z = (0.7, 1.2), multipliers (0.5, ≈0)). The segment is the
 # part this testitem exercises (and, with the common multiplier 0.5, the VE set).
 #
-# WHY z0-ONLY SEEDS CANNOT EXPOSE THIS CONTINUUM (31-RESEARCH.md's own "CRITICAL
-# FINDING", restated in run_nash_probe's own docstring): run_nash!'s default x_inv0
+# WHY z0-ONLY SEEDS CANNOT EXPOSE THIS CONTINUUM (restated in run_nash_probe's own docstring): run_nash!'s default x_inv0
 # derivation (maximum(z0[j,:])/corridor_cap) always seeds the MINIMAL exactly-supporting
 # investment for whatever z0 is chosen — zero slack by construction — so every z0/order
 # combination converges to the BIT-IDENTICAL point regardless of seed. Seeds below are
@@ -716,7 +714,7 @@ end
 # interval, not just touching it) with the SAME z0 = [0.7,0.7] (the unconstrained
 # optimum, constant across the continuum) for every seed.
 
-@testitem "planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero (BILEV-06a)" tags =
+@testitem "planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
@@ -774,7 +772,7 @@ end
     @test occursin("a converged equilibrium", result.summary)
     @test !occursin("the equilibrium", result.summary)
 
-    # MEASURED 2026-10-02 (scratchpad probe_interior_gne.jl, this exact fixture/seeds):
+    # MEASURED 2026-10-02 (probe on this exact fixture/seeds):
     # x_inv_spread ≈ 0.6999 (the interval's own full width S_min=0.7, confirming every
     # seed genuinely landed on a DISTINCT point of the continuum); z_spread ≈ 5.8e-4
     # (outer-tol_outer-scale Benders inner-loop noise, ~1000x smaller than x_inv_spread);
@@ -792,7 +790,7 @@ end
     end
 end
 
-@testitem "planning nash: N=3 probe converges (no closed-form hand-check required, per CONTEXT.md's N=2-hand-checkable/N=3-probe-only scope)" tags =
+@testitem "planning nash: N=3 probe converges (no closed-form hand-check required, N=2 is hand-checkable and N=3 is probe-only)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
@@ -942,7 +940,7 @@ end
     )
 end
 
-@testitem "planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria (CR-01 regression, NASH-04 seed-liveness)" tags =
+@testitem "planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -985,7 +983,7 @@ end
     # settles on the genuinely DIFFERENT asymmetric equilibrium z ≈ [0.7, 0.0]
     # (distributor 2 is then forced to hold x_inv_2 = 0.3 just to keep distributor
     # 1's pinned 0.7 deliverable, leaving z_2 <= 0 — the free-riding structure).
-    # BEFORE the CR-01 fix the seed never entered the shared model's state, so this
+    # BEFORE the fix the seed never entered the shared model's state, so this
     # run was bitwise identical to run A — this regression pins seed-liveness and
     # can never regress silently.
     result_hot = run_nash!(
@@ -1016,14 +1014,14 @@ end
 
     # ...and the CONVERGED equilibria themselves differ — the seed dimension of the
     # probe matrix is live (a seed-dependent equilibrium IS detectable), exactly what
-    # NASH-04's honesty gate exists to guarantee.
+    # the honesty gate exists to guarantee.
     @test isapprox(result_cold.z, [0.6, 0.6]; atol = 1e-3)
     @test isapprox(result_cold.x_inv, [0.3, 0.3]; atol = 1e-3)
     @test isapprox(result_hot.z, [0.7, 0.0]; atol = 1e-3)
     @test isapprox(result_hot.x_inv, [0.05, 0.3]; atol = 1e-3)
     @test maximum(abs.(result_cold.z .- result_hot.z)) > 0.05
 
-    # Run C (WR-05): differs from run B ONLY in z0 — the SAME explicit x_inv0 — so any
+    # Run C: differs from run B ONLY in z0 — the SAME explicit x_inv0 — so any
     # trajectory/equilibrium fork between B and C can come ONLY from the z-Parameter
     # half of the seed commit (`set_parameter_value.(shared.z[j,:], z0[j,:])` inside
     # run_nash!'s pre-sweep write_back! loop), the exact dimension run_nash_probe
@@ -1045,7 +1043,7 @@ end
     # keeping the investment pinning, distributor 1 would see z_2 = 0 at pins
     # [_, 0.3] and run C would replay run B EXACTLY — sweep-1 residual 0.7 and
     # free-riding equilibrium [0.7, 0.0] — so BOTH assertion families below fail
-    # loudly on precisely that partial-CR-01 recurrence. (Full deletion of the seed
+    # loudly on precisely that partial recurrence of the bug. (Full deletion of the seed
     # loop is already pinned by run B's own assertions above.)
     result_hotz = run_nash!(
         build_toy_specs(),
@@ -1096,20 +1094,20 @@ end
     )
 end
 
-# Phase 30 code review iteration 2 (CR-01): run_nash! must keep its pre-Phase-30
+# run_nash! must keep its original
 # fail-loud semantics by default (inexact_policy = :strict, forwarded to every inner
 # solve_stackelberg!), and when a caller opts into :certify_incumbent every best
 # response's exactness certificate must be surfaced on the result, never dropped.
 #
-# FIXTURE (measured 2026-10-01, scratchpad fix2/probe_nash.jl): the single-Thermostatic
-# T=1 IEEE-13 population at λ₀ = [-1.0] from test_planning_inexact_policy.jl's CR-02
-# item, duplicated into an N=2 symmetric Nash game (build_shared_transmission needs
+# FIXTURE (measured 2026-10-01): the single-Thermostatic
+# T=1 IEEE-13 population at λ₀ = [-1.0] from test_planning_inexact_policy.jl's
+# relaxation-only-incumbent item, duplicated into an N=2 symmetric Nash game (build_shared_transmission needs
 # N >= 2). Every feasible pin above the 0.01 load is SOCP-inexact there, so each best
 # response sits at the inexact box corner z = y_max = 0.04. Measured: :strict throws the
 # exactness gate's own "SOCP relaxation INEXACT" error inside sweep 1; :certify_incumbent
 # converges in 2 sweeps (~13 s) with z = [0.04, 0.04] and all 4 certificates :inexact
 # (incumbent maxgap 1.74e-2).
-@testitem "planning nash: inexact_policy defaults to :strict and certificates surface relaxation-only best responses (CR-01)" tags =
+@testitem "planning nash: inexact_policy defaults to :strict and certificates surface relaxation-only best responses" tags =
     [:planning] begin
     using TSODSO
 
@@ -1154,7 +1152,7 @@ end
         inexact_policy = :ignore,
     )
 
-    # Default (:strict): the pre-Phase-30 loud failure, with the gate's own message.
+    # Default (:strict): the original loud failure, with the gate's own message.
     e = caught(() -> run_nash!(specs, mk(); z0 = zeros(2, 1), checkpoint_dir = mktempdir()))
     @test e isa CertificateError
     @test occursin("SOCP relaxation INEXACT", e.msg)
@@ -1178,12 +1176,12 @@ end
     @test [(c.sweep, c.distributor) for c in r.certificates] == [(k, i) for k in 1:(r.sweeps) for i in 1:2]
 end
 
-# --- Task 2 (plan 31-03, BILEV-06b): solve_variational_equilibrium — monolithic joint
+# --- solve_variational_equilibrium — monolithic joint
 # model for the variational equilibrium (VE), run on the interior-cap fixture's own GNE
 # continuum (see the testitem above for the HAND-DERIVED GNE INTERVAL derivation this
 # section reuses verbatim: S_min = 0.7, x_inv_1 ∈ [0, 0.7], z_1 ≈ z_2 ≈ 0.7).
 #
-# CORRECTED by the Phase-31 code review (CR-02; iteration-2 WR-01): on THIS symmetric
+# NOTE: on THIS symmetric
 # fixture the VE is NOT unique. With c_inv = [1, 1] the joint objective and every
 # constraint depend on x_inv only through x_inv_1 + x_inv_2, so the joint optimal face is
 # the whole split segment, and every point of the segment carries the SAME shared
@@ -1197,7 +1195,7 @@ end
 # face. The UNIQUE-VE selection test is the asymmetric-c_inv testitem at the end of this
 # file.
 
-@testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (a strict subset of the GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation (BILEV-06b, CR-02)" tags =
+@testitem "planning nash: solve_variational_equilibrium on the symmetric interior-cap fixture returns A point of the non-unique VE face (a strict subset of the GNE set) — joint solve, shared multiplier 0.5, no-profitable-deviation" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_variational_equilibrium, write_back!
@@ -1281,7 +1279,7 @@ end
     end
 end
 
-@testitem "planning nash: solve_variational_equilibrium agrees with the corner-cap control's pinned unique equilibrium — VE and GNE coincide when the equilibrium IS unique (BILEV-06b)" tags =
+@testitem "planning nash: solve_variational_equilibrium agrees with the corner-cap control's pinned unique equilibrium — VE and GNE coincide when the equilibrium IS unique" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: solve_variational_equilibrium
@@ -1297,7 +1295,7 @@ end
     )
     specs = [spec, spec]
 
-    # Test 4 (control fixture, byte-identical structural sanity): the corner-cap fixture
+    # Test 4 (control fixture, structural sanity): the corner-cap fixture
     # (x_inv_max=[0.3,0.3]) has a UNIQUE equilibrium (testitem "N=2 Gauss-Seidel converges
     # to the hand-checked congested equilibrium" above), so VE and GNE coincide — the
     # SAME atol=1e-3 that pinned testitem uses.
@@ -1315,7 +1313,7 @@ end
     @test all(isfinite, ve.π_capacity)
 end
 
-# --- Phase 31 code review (CR-02): a fixture on which the VE is UNIQUE and genuinely
+# --- A fixture on which the VE is UNIQUE and genuinely
 # SELECTS one point of a GNE continuum. On the symmetric interior-cap fixture above
 # (c_inv = [1, 1]) the joint objective depends on x_inv only through x_inv_1 + x_inv_2,
 # so every point of the split segment carries the SAME shared multiplier (0.5) — that
@@ -1340,7 +1338,7 @@ end
 # Gauss-Seidel from z0 = 0 (either order) instead lands on the GNE x_inv = (0.35, 0.25),
 # z = (0.7, 0.5), μ = (0.5, 0.7): player 2, moving against player 1's committed
 # capacity, pays its own 0.7 marginal — a GNE that is NOT the VE.
-@testitem "planning nash: solve_variational_equilibrium selects the UNIQUE VE on an asymmetric-c_inv fixture — hand-derived split, equal per-player shared multipliers, distinct from the diagonalization's GNE (CR-02)" tags =
+@testitem "planning nash: solve_variational_equilibrium selects the UNIQUE VE on an asymmetric-c_inv fixture — hand-derived split, equal per-player shared multipliers, distinct from the diagonalization's GNE" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: activate_distributor!, solve_planning_oracle!, solve_variational_equilibrium, write_back!
@@ -1407,7 +1405,7 @@ end
     # Each player's OWN shared-row multiplier from a run_nash!-style best response
     # (solve_stackelberg! with follower = DistributorView, the other player pinned at
     # the VE) equals −π_capacity: the VE's defining property, checked per player
-    # against the joint solve's single multiplier. NOTE (iteration-2 review, IN-01):
+    # against the joint solve's single multiplier. NOTE:
     # own_multiplier(z) = 1.2 − z is a fixed function of z on this fixture, so this
     # check is a REPARAMETRIZATION of the `z ≈ 0.7` assertion (same BR_ATOL), not
     # independent evidence — it documents the identification μ_i ↔ z-stationarity and

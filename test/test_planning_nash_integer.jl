@@ -1,9 +1,9 @@
 # test/test_planning_nash_integer.jl
 #
 # Seam: src/planning/nash.jl's `run_nash!` new `integer::Union{Nothing,NamedTuple} =
-# nothing` kwarg (Phase 31, BILEV-07, plan 31-04) — threading genuine binary-expansion
-# integer investment (`src/planning/master_integer.jl`'s `build_master_integer`, Phase
-# 24) through the N-distributor Gauss-Seidel diagonalization. Items tagged `[:planning]`,
+# nothing` kwarg — threading genuine binary-expansion
+# integer investment (`src/planning/master_integer.jl`'s `build_master_integer`)
+# through the N-distributor Gauss-Seidel diagonalization. Items tagged `[:planning]`,
 # names contain "planning" and "nash" and "integer" (occursin filter convention, mirrors
 # `test/test_planning_benders_integer.jl`).
 #
@@ -17,35 +17,33 @@
 # (z=[0.6,0.6], x_inv=[0.3,0.3]) is a documented reference point for where the INTEGER
 # equilibrium is expected to land (the nearest lattice point at or below the continuous
 # optimum). Unlike the continuous fixture, `master_kwargs` here carries ONLY `c_y`/
-# `y_max`: since the Phase-31 code review (WR-06) the integer path REJECTS any other
+# `y_max`: the integer path REJECTS any other
 # master_kwargs key (an α bound there used to be silently ignored); epigraph bounds go in
 # `integer = (; K, α_op_lb, α_x_lb)` (defaults `:auto` and the sign-derived `0.0`).
 #
-# EMPIRICALLY MEASURED (2026-10-02, scratchpad probe_nash_integer.jl/probe_bruteforce.jl,
+# EMPIRICALLY MEASURED (2026-10-02, probe scripts under
 # `julia --project=.`, no TestItemRunner): `run_nash!(specs, shared; z0=zeros(2,1),
 # tol_outer=1e-4, max_sweeps=10, integer=(;K=4), checkpoint_dir=...)` converges in 2
 # sweeps (~67s wall time for 4 best-responses total, each a K=4 MILP best response —
-# noticeably slower than the continuous fixture's own sub-second convergence per
-# 31-RESEARCH.md's own runtime-impact flag) to `z=[0.5,0.5]`, `x_inv=[0.25,0.25]`,
+# noticeably slower than the continuous fixture's own sub-second convergence) to `z=[0.5,0.5]`, `x_inv=[0.25,0.25]`,
 # `UB=[-0.225,-0.225]` (both distributors, by the fixture's own symmetry) — the nearest
 # lattice point AT OR BELOW the continuous optimum `z=0.6` (lattice points are
 # `{0,0.5,1.0,...,7.5}`; `0.5` is the largest point `<= 0.6`). The per-player
 # brute-force sweep below (Test 2, the load-bearing item) independently confirms this is
-# a genuine equilibrium — since the Phase-31 code review (WR-03) with a separately
+# a genuine equilibrium — with a separately
 # hand-written QP per lattice point, never production `corner_recourse`: diff between
 # the reported `UB[i]` and the brute-forced best of all 16 lattice points is `2.2e-9`
 # for BOTH distributors, and the equilibrium itself is pinned against its hand
 # derivation (Test 1b).
 #
-# RULE 1 AUTO-FIX (found during this plan's own execution, see 31-04-SUMMARY.md for the
-# full account): `solve_follower!(::DistributorView, ...)` (`src/planning/coupling.jl`)
+# INFEASIBILITY FIX (found while developing this path):
+# `solve_follower!(::DistributorView, ...)` (`src/planning/coupling.jl`)
 # previously raised an un-named, generic `ErrorException` whenever HiGHS confirmed a
 # genuine primal infeasibility (`MOI.INFEASIBLE`) via presolve WITHOUT ever computing a
 # Farkas dual ray (`dual_status` stays `NO_SOLUTION`) — a real, previously-unreachable
-# code path this plan's `corner_recourse` ternary search (exploring trial `z` values far
+# code path the `corner_recourse` ternary search (exploring trial `z` values far
 # beyond what the shared model's own OTHER-distributor-pinned capacity ever permits)
-# triggers routinely. Fixed by adding a third, additive branch, refined by the Phase-31
-# code review (WR-01, 381644a): a `MOI.INFEASIBLE` without a certificate first RE-SOLVES
+# triggers routinely. Fixed by adding a third, additive branch, later refined (commit 381644a): a `MOI.INFEASIBLE` without a certificate first RE-SOLVES
 # the shared model ONCE WITH PRESOLVE OFF (set and restored on the inner optimizer) and
 # returns that solve's own trusted outcome — feasible, or a genuine certificate. Only if
 # that still yields neither does it return the sentinel `(; feasible = false, v = NaN,
@@ -57,7 +55,7 @@
 # `src/planning/coupling.jl`'s `solve_follower!(::DistributorView, ...)` docstring for
 # the full account.
 
-@testitem "planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation, BILEV-07)" tags =
+@testitem "planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     import JuMP
@@ -83,11 +81,11 @@
     z0 = zeros(2, 1)
     K = 4
 
-    # Test 1 (wiring smoke test, Task 1's own <behavior>): `run_nash!` with the new
+    # Test 1 (wiring smoke test): `run_nash!` with the new
     # `integer` kwarg runs end-to-end — no MethodError/UndefVarError. Called WITHOUT a
-    # try/catch, mirroring every OTHER Nash testitem in this phase's own "fail loud, no
-    # try/catch around run_nash!" convention (T-13-10) — empirically confirmed
-    # (scratchpad probes, this file's own header) to converge RELIABLY on this fixture,
+    # try/catch, mirroring every OTHER Nash testitem's own "fail loud, no
+    # try/catch around run_nash!" convention — empirically confirmed
+    # (probes recorded in this file's header) to converge RELIABLY on this fixture,
     # so asserting convergence directly is the honest claim, not a hedge.
     result = run_nash!(
         specs,
@@ -100,7 +98,7 @@
     )
     @test result.converged
 
-    # Test 1b (WR-03, Phase 31 code review): PIN the hand-derived lattice equilibrium.
+    # Test 1b: PIN the hand-derived lattice equilibrium.
     # Player i's cost at master lattice point y (step y_max/2^K = 0.5), the other
     # player j pinned at (z_j, x_inv_j): the pooled row z_i + z_j <= 2(x_i + x_j) with
     # x_i <= 0.3 caps z_i at 0.6 + 2x_j − z_j, and the follower's cheapest support is
@@ -116,8 +114,8 @@
     @test isapprox(result.x_inv, [0.25, 0.25]; atol = 1e-9)
     @test isapprox(result.UB, [-0.225, -0.225]; atol = 1e-9)
 
-    # Test 2 (brute-force certification, THE load-bearing item; made INDEPENDENT by
-    # WR-03): for EACH distributor i, hold the other player's (z_j, x_inv_j) at the
+    # Test 2 (brute-force certification, THE load-bearing item, made INDEPENDENT):
+    # for EACH distributor i, hold the other player's (z_j, x_inv_j) at the
     # reported equilibrium and evaluate player i's FULL cost at every one of its 2^K = 16
     # lattice points with a FRESH, hand-written JuMP model per point (one solve each) —
     # never production `corner_recourse`, `build_planning_oracle`, `DistributorView` or
@@ -167,7 +165,7 @@
     end
 end
 
-@testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_op_lb :auto or finite, α_x_lb finite — WR-02; no silently ignored master_kwargs/integer keys, derived α_x_lb — WR-06) — before any solve call" tags =
+@testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_op_lb :auto or finite, α_x_lb finite; no silently ignored master_kwargs/integer keys, derived α_x_lb) — before any solve call" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
@@ -216,7 +214,7 @@ end
         integer = (; K = 4, α_x_lb = Inf),
         checkpoint_dir = mktempdir(),
     )
-    # WR-02 (Phase 31 code review iteration 2): BOTH epigraph bounds are validated at
+    # BOTH epigraph bounds are validated at
     # the boundary with an ArgumentError, before any solve. α_op_lb: :auto or a finite
     # Real only — NaN would otherwise be installed by build_master_integer's explicit
     # branch and -Inf would surface only after a full inner Benders loop. α_x_lb: a
@@ -240,7 +238,7 @@ end
         )
     end
 
-    # WR-06 (Phase 31 code review): inputs the integer path does not read are rejected,
+    # Inputs the integer path does not read are rejected,
     # never silently ignored. (a) an α bound in master_kwargs (honoured by the
     # continuous path, ignored by the integer master) names `integer` as the fix:
     spec_alpha = merge(spec, (; master_kwargs = (; c_y = 0.3, y_max = 8.0, α_op_lb = -5.0)))
@@ -276,8 +274,8 @@ end
         checkpoint_dir = mktempdir(),
     )
 
-    # WR-06: the DERIVED default α_x_lb — 0.0 for nonnegative costs (this file's
-    # fixture, byte-identical to the old hard-coded default) and the sign-aware bound
+    # The DERIVED default α_x_lb — 0.0 for nonnegative costs (this file's
+    # fixture, bit-for-bit identical to the old hard-coded default) and the sign-aware bound
     # min(0,c_inv)·x_inv_max + Σ_t min(0,c_op[t])·y_max otherwise.
     @test TSODSO._integer_alpha_x_lb(build_fresh_shared(), 1, 8.0) == 0.0
     shared_neg = build_shared_transmission(;
@@ -292,14 +290,14 @@ end
     @test TSODSO._integer_alpha_x_lb(shared_neg, 2, 8.0) == 0.0
 end
 
-# Cycle detection (Phase 31 code review, CR-01). The original detector keyed a cycle on
+# Cycle detection. The original detector keyed a cycle on
 # the joint binary state ALONE and raised a false "CYCLED" error on any run that needed
 # three or more sweeps with a stable `b` (reproduced: this file's fixture with `ω = 0.5`).
 # Two testitems below replace the old standalone `Dict` replication, which never called
 # production code:
 #   (a) the PRODUCTION predicate `TSODSO._integer_cycle_hit` on synthetic histories — a
 #       damped converging history and a sign-flipping oscillatory contraction (both must
-#       NOT fire; the latter is the iteration-2 review's CR-01 repro) and genuine
+#       NOT fire; the latter is a known repro) and genuine
 #       period-1/period-2 cycles (must fire);
 #   (b) a LIVE damped `run_nash!(...; integer = (; K = 4), ω = 0.5)` run on this file's
 #       fixture that must converge (the old detector threw at sweep 2).
@@ -307,7 +305,7 @@ end
 # the summed cost is a potential that exact Gauss-Seidel best responses cannot cycle on
 # ABSENT TIES (see `run_nash!`'s docstring, "Cycle detection"; the interior-cap fixtures
 # do have tied best responses) — a stated limitation, not a gap papered over.
-@testitem "planning nash integer: cycle predicate keys on the full committed state — fires on genuine recurrences, never on a converging damped history (CR-01)" tags =
+@testitem "planning nash integer: cycle predicate keys on the full committed state — fires on genuine recurrences, never on a converging damped history" tags =
     [:planning] begin
     using TSODSO
 
@@ -367,12 +365,12 @@ end
     # (5) Same b, continuous state moved by more than atol -> progress, not a cycle.
     @test hit(h1, b, st .+ 2atol, 0.3; atol) === nothing
     # (6) Same b and state but a strictly smaller residual -> progress, not a cycle —
-    # with NO tolerance slack (iteration-2 review, CR-01): even a decrease far below
+    # with NO tolerance slack: even a decrease far below
     # atol vetoes the match.
     @test hit(h1, b, copy(st), 0.3 - 2atol; atol) === nothing
     @test hit(h1, b, copy(st), 0.3 - 1e-12; atol) === nothing
 
-    # (7) Iteration-2 review CR-01 regression: an OSCILLATORY contraction (sign-flipping
+    # (7) Regression: an OSCILLATORY contraction (sign-flipping
     # geometric history, step factor c = -0.9, ω = 1, tol_outer = 1e-4, b fixed) returns
     # within atol of its state two sweeps earlier while the residual drops by less than
     # atol; the former `residual >= h.residual - atol` slack reported a FALSE cycle at
@@ -380,7 +378,7 @@ end
     @test oscillatory_history_never_flagged(hit)
 end
 
-@testitem "planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (CR-01, live)" tags =
+@testitem "planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (live)" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 

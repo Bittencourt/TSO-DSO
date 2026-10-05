@@ -1,6 +1,6 @@
 # test/test_planning_retry.jl
 #
-# Seam: src/planning/retry.jl (D-08/D-09). Two @testitems:
+# Seam: src/planning/retry.jl. Two @testitems:
 #   1. a recoverable (retryable-status) failure escalates and either recovers to OPTIMAL
 #      or raises loudly naming the exhausted attempt count;
 #   2. a genuinely infeasible model is NEVER retried — it raises immediately on attempt 1.
@@ -11,11 +11,11 @@
 
     # Deliberately ill-conditioned SOCP: alternating cone-component coefficient magnitudes
     # spread by 1e16 (>= 1e6, mirroring the project's documented per-unit-base cone-slack
-    # numerical sensitivity, STATE.md carried blocker) combined with a tight `max_iter` (the
+    # numerical sensitivity) combined with a tight `max_iter` (the
     # ladder in `solve_with_retry!` never touches `max_iter`, so this fixture reproduces a
-    # retryable failure on EVERY attempt — empirically verified this session, 10-RESEARCH.md
-    # Pitfall 4: measure, do not guess). Built via `TSODSO.select_optimizer(TSODSO.SOCP())`
-    # (INFRA-02 — never name a solver outside the factory), then `max_iter` tightened via
+    # retryable failure on EVERY attempt — empirically verified: measure,
+    # do not guess). Built via `TSODSO.select_optimizer(TSODSO.SOCP())`
+    # (never name a solver outside the factory), then `max_iter` tightened via
     # `set_optimizer_attribute` post-build, exactly the idiom `solve_with_retry!` itself uses.
     function build_ill_conditioned_model(; scale = 1e8, max_iter = 5)
         model = Model(TSODSO.select_optimizer(TSODSO.SOCP()))
@@ -31,7 +31,7 @@
     end
 
     # FIRST measure (raw optimize!, no wrapper) what the fixture actually produces on
-    # attempt 1 — do not assume (Pitfall 4). WR-04: the fixture's FAILURE is the stable
+    # attempt 1 — do not assume. The fixture's FAILURE is the stable
     # property to hard-assert; the SPECIFIC failure status is solver-version-dependent
     # (a Clarabel upgrade may well report MOI.ITERATION_LIMIT for a max_iter = 5 stop,
     # which the ladder deliberately refuses to retry). Gate the escalation branch on the
@@ -55,13 +55,13 @@
             @test occursin("exhausted", e.msg)
         end
 
-        # CR-01 regression: a budget LARGER than the ladder (max_attempts = 10 > 4 rungs)
+        # Regression: a budget LARGER than the ladder (max_attempts = 10 > 4 rungs)
         # must clamp to the ladder length — the wrapper must NEVER fall off the end
         # returning `nothing` after a failed final rung (previously `attempt < max_attempts`
         # held on rung 4, `continue`d, and the loop silently ended; the caller then read
         # duals from a model whose last solve FAILED). Either it recovers (returns the
         # Model) or it raises the loud exhaustion error — `nothing` is the one outcome
-        # D-10 forbids.
+        # that is forbidden.
         overshoot_model = build_ill_conditioned_model()
         try
             ret = TSODSO.solve_with_retry!(overshoot_model; max_attempts = 10)
@@ -72,9 +72,9 @@
             @test occursin("exhausted", e.msg)
         end
 
-        # plan 12-01: attempts_out regression — the GENUINE attempt count the wrapper's
+        # attempts_out regression — the GENUINE attempt count the wrapper's
         # own ladder reached, never an assumed/log-scraped estimate. Mirrors the
-        # existing try/catch idiom above (WR-04: a solver upgrade degrades this to an
+        # existing try/catch idiom above (a solver upgrade degrades this to an
         # informative skip, never a spurious red).
         attempts_model = build_ill_conditioned_model()
         attempts_ref = Ref(0)
@@ -87,18 +87,18 @@
             @test occursin("exhausted", e.msg)
         end
     else
-        @info "ill-conditioned fixture no longer produces a retryable status; skipping escalation branch (WR-04)" raw_ts raw =
+        @info "ill-conditioned fixture no longer produces a retryable status; skipping escalation branch" raw_ts raw =
             raw_status(raw_model)
     end
 end
 
-@testitem "planning retry: max_attempts < 1 raises ArgumentError before any solve (CR-01)" tags =
+@testitem "planning retry: max_attempts < 1 raises ArgumentError before any solve" tags =
     [:planning] begin
     using TSODSO, JuMP
 
     # max_attempts <= 0 previously made the ladder slice empty: the loop never ran,
     # optimize! was never called, and the function silently returned `nothing` — the
-    # silent-skip outcome D-10 forbids. It must now fail loudly BEFORE touching the model.
+    # silent-skip outcome that is forbidden. It must now fail loudly BEFORE touching the model.
     trivial = Model(TSODSO.select_optimizer(TSODSO.LP()))
     @variable(trivial, x >= 0)
     @objective(trivial, Min, x)

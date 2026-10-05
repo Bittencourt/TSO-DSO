@@ -1,28 +1,28 @@
 # test/test_planning_noninteger.jl
 #
-# Seam: PVAL-04 (v2.0 requirement) — the continuous-only-scope invariant that PLAN-INT-01
-# (integer/discrete investment) is explicitly deferred to a future milestone. This file
+# Seam: the continuous-only-scope invariant for the planning layer (integer/discrete
+# investment is handled by the separate integer master). This file
 # CONSOLIDATES the existing partial SharedTransmission-only no-binaries checks
 # (test/test_planning_coupling.jl ~line 237, test/test_planning_nash.jl ~line 320) into ONE
 # registry-based `@testitem` that covers all FOUR planning-layer subproblem builders
 # (`build_planning_oracle`, `build_follower`, `build_master`, `build_shared_transmission`),
-# per 14-CONTEXT.md's PVAL-04 decision: "a dedicated @testitem that BUILDS every
+# per the design decision: "a dedicated @testitem that BUILDS every
 # planning-layer model via its public builder and asserts zero is_binary/is_integer
 # variables — semantic check, not a grep lint."
 #
 # The two existing partial checks are KEPT, not removed (see the cross-reference comments
-# added to those files by this same plan) — test_planning_nash.jl's check additionally
+# in those files) — test_planning_nash.jl's check additionally
 # covers the POST-run_nash!-mutation state, a genuinely different code path than a fresh
 # build.
 #
-# Tripwire (hardened per Phase 14 review WR-01): a RECURSIVE source-scan over src/planning/
+# Tripwire (hardened): a RECURSIVE source-scan over src/planning/
 # collects every long- OR short-form `build_\w+` definition (docstring lines excluded),
 # unioned with a syntax-independent semantic channel (every EXPORTED `build_*` symbol not on
 # the documented operational-layer allowlist), and asserts the found set equals this
 # registry's key set — so a future new builder file/function cannot silently ship without
-# this guard (T-14-04, Repudiation).
+# this guard.
 #
-# Plan 30-02 (BILEV-05) adds four one-time, discard-after-use relaxed-derivation helpers to
+# Four one-time, discard-after-use relaxed-derivation helpers exist in
 # `src/planning/master.jl` (`make_relaxed_oracle_model`, `derive_alpha_op_lb`,
 # `make_relaxed_follower_model`, `derive_alpha_x_lb`). These are deliberately named WITHOUT a
 # `build_` prefix and are NOT planning-layer subproblem builders in this registry's sense —
@@ -33,14 +33,14 @@
 # registry's scope — the source-scan's `build_\w+` regex correctly never discovers them, and
 # this is not a gap in the tripwire's coverage.
 
-@testitem "planning PVAL-04: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
+@testitem "planning noninteger: no-binaries guard covers all four planning-layer builders + source-scan tripwire" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures] begin
     using TSODSO
     using TSODSO: build_bilevel_kkt, build_feasibility_oracle, build_follower, build_master, build_master_integer, build_planning_oracle
     using JuMP: all_variables, is_binary, is_integer, num_constraints, VariableRef
     import JuMP: MOI
 
-    # Toy fixture (verbatim from test/test_planning_certification.jl lines 176-181, the
+    # Toy fixture (verbatim from test/test_planning_certification.jl, the
     # SAME instance already used elsewhere in the planning test suite).
     feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -50,7 +50,7 @@
         "build_planning_oracle" =>
             () ->
                 build_planning_oracle(feeder, LinDistFlow(), [agg]; λ₀ = [4.0], T = 1).model,
-        # Plan 30-01 (BILEV-04a): the slack-minimization feasibility oracle is a genuinely
+        # The slack-minimization feasibility oracle is a genuinely
         # binary-free LP/SOCP (free-sign s_plus/s_minus, no investment/complementarity
         # structure) — NOT added to EXEMPT.
         "build_feasibility_oracle" =>
@@ -80,13 +80,13 @@
                 c_inv = [1.0, 1.0],
                 c_op = [[0.5], [0.5]],
             ).model,
-        # Phase 24 (INT-01/INT-04), plan 24-02 Task 2: `build_master_integer` is a
+        # `build_master_integer` is a
         # PLANNING-layer builder that is DELIBERATELY, correctly NOT binary-free (the
-        # binary-expansion investment master, D-01/D-05) — the opposite case from
+        # binary-expansion investment master) — the opposite case from
         # `operational_builders` below (builders that live outside src/planning/ and are
-        # correctly binary-free). It MUST still be registered here (D-07's source-scan
+        # correctly binary-free). It MUST still be registered here (the source-scan
         # tripwire requires it — omission fails the tripwire loudly), but it is carried on
-        # the explicit `EXEMPT` allowlist immediately below (D-06: a per-builder
+        # the explicit `EXEMPT` allowlist immediately below (a per-builder
         # carve-out, never a conditional one).
         "build_master_integer" =>
             () -> build_master_integer(;
@@ -97,7 +97,7 @@
                 α_op_lb = -5.0,
                 α_x_lb = 0.0,
             ).model,
-        # Phase 29 (BILEV-01): `build_bilevel_kkt` is a PLANNING-layer builder whose
+        # `build_bilevel_kkt` is a PLANNING-layer builder whose
         # follower complementarity is modelled as `MOI.SOS1` pairs, NOT binary/integer
         # variables — the SOS1ToMILPBridge introduces binaries only at solve time. So at
         # the JuMP-model level it is genuinely binary-free and is NOT on `EXEMPT`; the
@@ -125,8 +125,8 @@
             end,
     )
 
-    # D-06: the PVAL-04 exemption is a per-builder carve-out, not a conditional one.
-    # D-07: the source-scan tripwire below still discovers "build_master_integer" — this
+    # The exemption is a per-builder carve-out, not a conditional one.
+    # The source-scan tripwire below still discovers "build_master_integer" — this
     # EXEMPT set only changes what the no-binaries assertion DOES with that registry key,
     # never whether it is discovered/registered.
     EXEMPT = Set(["build_master_integer"])
@@ -143,15 +143,15 @@
         model = build()
         offenders = [v for v in all_variables(model) if is_binary(v) || is_integer(v)]
         if name in EXEMPT
-            # T-24-05 (Repudiation) mitigation: this is a VERIFIED statement, not a blind
-            # skip — this builder genuinely introduces binaries on purpose (D-01/D-05). If
+            # This is a VERIFIED statement, not a blind
+            # skip — this builder genuinely introduces binaries on purpose. If
             # it ever stops being integer, this fails loudly rather than silently masking a
             # regression where build_master_integer accidentally becomes binary-free.
             @test !isempty(offenders) || error(
-                "EXEMPT builder $(name) unexpectedly introduced ZERO binary/integer variables — the PVAL-04 exemption is now stale/wrong",
+                "EXEMPT builder $(name) unexpectedly introduced ZERO binary/integer variables — the exemption is now stale/wrong",
             )
         else
-            # Deviation (Rule 1 - bug): `@test cond "message"` is not valid Test.jl syntax
+            # `@test cond "message"` is not valid Test.jl syntax
             # (base Test's @test macro does not accept a bare trailing string as a custom
             # failure message — verified directly against Julia 1.12's Test stdlib). The
             # fail-loud requirement (name the offending builder AND variables) is instead
@@ -163,17 +163,17 @@
         end
     end
 
-    # Phase 29: the bilevel builder's complementarity lives in SOS1 constraints.
+    # The bilevel builder's complementarity lives in SOS1 constraints.
     @test num_constraints(
         registry["build_bilevel_kkt"](),
         Vector{VariableRef},
         MOI.SOS1{Float64},
     ) > 0
 
-    # Source-scan tripwire (T-14-04): a future new build_* function under src/planning/
+    # Source-scan tripwire: a future new build_* function under src/planning/
     # cannot silently skip this registry — the found-set must equal the registry's keys.
     #
-    # Hardened (Phase 14 review WR-01) against the silent false-negative shapes of the
+    # Hardened against the silent false-negative shapes of the
     # original single-regex `readdir` scan:
     #   1. SHORT-FORM definitions (`build_x(...) = ...`) — the `function` keyword is now
     #      optional in the regex.
@@ -217,28 +217,26 @@
         "build_feeder",      # experiments/materialize.jl — scenario materializer
         "build_price",       # experiments/materialize.jl — scenario materializer
         "build_population",  # experiments/materialize.jl — scenario materializer
-        "build_powerflow",   # experiments/materialize.jl — Phase-32 pf-selector materializer
-        # (ARCH-01): maps a Scenario's primitive `pf` selector to an
+        "build_powerflow",   # experiments/materialize.jl — pf-selector materializer
+        # maps a Scenario's primitive `pf` selector to an
         # AbstractPowerFlow instance; builds no JuMP model, so it is an
         # OPERATIONAL-layer helper, never a planning-layer builder —
         # added here per this file's own tripwire contract.
-        "build_mpc_window",  # models/mpc_window.jl — Phase-21 receding-horizon window
-        # builder (MPC-01); an OPERATIONAL-layer builder (build-once
+        "build_mpc_window",  # models/mpc_window.jl — receding-horizon window
+        # builder; an OPERATIONAL-layer builder (build-once
         # welfare-shaped window, no binaries/integers by construction,
         # same as every other welfare-shaped builder), never a
         # planning-layer (Benders/Stackelberg-Nash) builder — consciously
         # added here per this file's own documented tripwire contract.
-        "build_stochastic_welfare",     # models/stochastic_welfare.jl — Phase-22 S-scenario
-        # extensive-form welfare builder (STOCH-01/STOCH-02,
-        # plan 22-02); an OPERATIONAL-layer builder (same
+        "build_stochastic_welfare",     # models/stochastic_welfare.jl — S-scenario
+        # extensive-form welfare builder; an OPERATIONAL-layer builder (same
         # welfare-shaped, no-binaries-by-construction family
         # as build_mpc_window above), never a planning-layer
         # builder — added here per this file's own tripwire
-        # contract (discovered by plan 22-05's own closing
-        # acceptance gate: this builder's export alone tripped
+        # contract (this builder's export alone tripped
         # this test's semantic channel without this entry).
-        "build_stochastic_oos_harness",  # models/stochastic_welfare.jl — Phase-22 out-of-
-        # sample re-solve harness (STOCH-03, plan 22-03);
+        "build_stochastic_oos_harness",  # models/stochastic_welfare.jl — out-of-
+        # sample re-solve harness;
         # same OPERATIONAL-layer disposition and rationale as
         # build_stochastic_welfare immediately above.
     ])

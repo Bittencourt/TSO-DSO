@@ -1,18 +1,18 @@
 # test/test_planning_master_integer.jl
 #
-# Seam: src/planning/master_integer.jl (Phase 24, INT-01). `BendersMasterInteger` +
+# Seam: src/planning/master_integer.jl (integer master). `BendersMasterInteger` +
 # `build_master_integer` build the leader's binary-expansion MILP master EXACTLY ONCE —
 # a completely separate sibling of the continuous `BendersMaster`/`build_master`
-# (master.jl, D-05), never touching it. Items tagged `[:planning]`, names contain
+# (master.jl), never touching it. Items tagged `[:planning]`, names contain
 # "planning" and "master" (occursin filter convention, mirrors test_planning_master.jl).
 #
-# Toy fixture (same D-12 canonical instance as test_planning_master.jl / the N=1 golden):
+# Toy fixture (same canonical instance as test_planning_master.jl / the N=1 golden):
 # T=1, c_y=0.3, y_max=8.0, K=4, α_op_lb=-5.0, α_x_lb=0.0.
 #
-# Phase 31 (BILEV-07): build_master_integer gains build_master's own :auto/bounds_ctx/
+# build_master_integer also has build_master's own :auto/bounds_ctx/
 # lb_slack machinery (ported verbatim from master.jl) — the @testitems below (after the
-# pre-existing regression suite) mirror test_planning_master.jl's own bounds_ctx test
-# pattern (lines 144-397), adapted for the integer master.
+# original regression suite) mirror test_planning_master.jl's own bounds_ctx test
+# pattern (its bounds_ctx items), adapted for the integer master.
 
 @testitem "planning master_integer: build_master_integer guards (T, K, y_max, c_y)" tags =
     [:planning] begin
@@ -53,7 +53,7 @@
     )
 end
 
-@testitem "planning master_integer: zero-cut first solve is OPTIMAL (MILP analog of Pitfall M1)" tags =
+@testitem "planning master_integer: zero-cut first solve is OPTIMAL (MILP analog of the continuous zero-cut solve)" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: build_master_integer, solve_master!
@@ -75,7 +75,7 @@ end
     @test length(r.b) == 4
 end
 
-@testitem "planning master_integer: D-02 lattice reachability — all-ones corner reaches y_max*(1-2^-K), never y_max" tags =
+@testitem "planning master_integer: lattice reachability — all-ones corner reaches y_max*(1-2^-K), never y_max" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: build_master_integer, solve_master!
@@ -98,7 +98,7 @@ end
     @test !isapprox(value(master.y_inv), 8.0; atol = 1e-6)
 end
 
-@testitem "planning master_integer: L-validity (Assumption A1) — L=α_op_lb+α_x_lb bounds the REAL oracle/follower across [0,y_max]" tags =
+@testitem "planning master_integer: L-validity — L=α_op_lb+α_x_lb bounds the REAL oracle/follower across [0,y_max]" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_follower, build_master_integer, build_planning_oracle, solve_follower!, solve_planning_oracle!
@@ -127,15 +127,15 @@ end
     )
 
     # Sweep z spanning the full [0, y_max=8.0] domain against the REAL oracle/follower
-    # entrypoints (not the archived closed form) — Assumption A1 closed by measurement.
+    # entrypoints (not the archived closed form) — L-validity closed by measurement.
     #
     # MEASURED FINDING (not assumed): at z=8.0 the follower is INFEASIBLE on this exact
-    # D-12 fixture — its own corridor capacity `corridor_cap * x_inv_max = 2.0 * 2.0 = 4.0`
+    # canonical fixture — its own corridor capacity `corridor_cap * x_inv_max = 2.0 * 2.0 = 4.0`
     # caps deliverable flow INDEPENDENTLY of the master's y_inv/y_max. This is not a bug:
-    # 24-RESEARCH.md's Priority Finding 1 documents this exact mechanism as "orthogonal to
+    # this exact mechanism is "orthogonal to
     # LL-cut applicability" — the master's own trial z (bounded by y_inv, not by the
     # follower's own capacity) can propose a z the follower cannot deliver, firing the
-    # EXISTING feasibility-cut branch (untouched by this phase). Q(z) — and hence L's bound
+    # EXISTING feasibility-cut branch (untouched by the integer master). Q(z) — and hence L's bound
     # on it — is only defined/required at z where the follower IS feasible (where an
     # optimality cut, not a feasibility cut, would be generated); z=0 is always feasible by
     # construction (complete recourse), which is what LL-cut applicability actually needs.
@@ -155,20 +155,20 @@ end
             # sampled z (the only points at which Q(z) is even defined).
             @test master.L <= -oracle_res.cost + follower_res.cost
         else
-            # solve_follower!'s own contract (T-11-01/WR-03) already enforces isfinite(v) &&
+            # solve_follower!'s own contract already enforces isfinite(v) &&
             # v > 0 for a genuine Farkas certificate before returning — reaching this branch
             # at all confirms a VALID feasibility cut would be generated here, exactly the
-            # mechanism RESEARCH.md documents as orthogonal to A1/LL-cut validity.
+            # mechanism that is orthogonal to the L-validity/LL-cut validity.
             @test isfinite(follower_res.v) && follower_res.v > 0
         end
     end
 
-    # complete recourse (RESEARCH.md Priority Finding 1): z=0 is ALWAYS feasible for the
-    # follower, independent of y_inv — the concrete anchor A1's LL-cut applicability needs.
+    # complete recourse: z=0 is ALWAYS feasible for the
+    # follower, independent of y_inv — the concrete anchor the LL-cut applicability needs.
     @test solve_follower!(follower, [0.0]).feasible
 end
 
-@testitem "planning master_integer: persistent cut-row growth — reused continuous cuts append rows, never columns (RESEARCH.md Finding 2)" tags =
+@testitem "planning master_integer: persistent cut-row growth — reused continuous cuts append rows, never columns" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master_integer
@@ -176,8 +176,7 @@ end
 
     # Mirrors test_planning_master.jl's own "persistent cut-row growth" pattern — the
     # MILP analog of the continuous regression, exercising the SAME add_optimality_cut!/
-    # add_feasibility_cut! algebra now overloaded for BendersMasterInteger (plan 24-02
-    # Task 1).
+    # add_feasibility_cut! algebra now overloaded for BendersMasterInteger .
     master = build_master_integer(;
         T = 1,
         K = 4,
@@ -207,7 +206,7 @@ end
     @test master.cuts[2].kind == :feasibility
 end
 
-@testitem "planning master_integer: add_ll_cut! exhaustive K=4 16x16-corner tightness/slackness (24-RESEARCH.md Priority Finding 1)" tags =
+@testitem "planning master_integer: add_ll_cut! exhaustive K=4 16x16-corner tightness/slackness" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: add_ll_cut!, build_master_integer
@@ -226,7 +225,7 @@ end
 
     corner(i) = Float64[(i >> k) & 1 for k in 0:(K - 1)]
 
-    # THE CUT MUST BE WRITTEN OVER THE RAW b_k (Pitfall 1) -- exhaustively proven here by
+    # THE CUT MUST BE WRITTEN OVER THE RAW b_k -- exhaustively proven here by
     # re-deriving D(b') independently of add_ll_cut!'s own internals (closed-form
     # arithmetic on the SAME algebra the function implements), for every one of the
     # 2^K = 16 incumbents x every one of the 15 OTHER corners: 16x16 = 256 pairs total.
@@ -234,7 +233,7 @@ end
         b_nu = corner(i)
         master = build_fixture()
         L = master.L
-        @test master.L == -5.0   # A1 (24-01), reused, not re-derived here
+        @test master.L == -5.0   # L-validity, reused, not re-derived here
 
         add_ll_cut!(master, b_nu, Q_nu, L)
         @test length(master.cuts) == 1
@@ -268,7 +267,7 @@ end
     end
 end
 
-@testitem "planning master_integer: add_ll_cut! enforces its own Q_nu >= L precondition (WR-02)" tags =
+@testitem "planning master_integer: add_ll_cut! enforces its own Q_nu >= L precondition" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: add_ll_cut!, build_master_integer
@@ -305,7 +304,7 @@ end
     @test master2.cuts[1].kind == :ll
 
     # Test custom atol: a Q_nu that violates the DEFAULT atol but is within a looser,
-    # explicitly supplied atol does not throw — and (WR-04, Phase 31 code review) the
+    # explicitly supplied atol does not throw — and the
     # appended cut is CLAMPED to Q_eff = L, so it stays VALID: before the clamp this
     # appended θ >= L + (k−1)·0.5 at Hamming distance k, cutting off every far corner.
     master3 = build_master_integer(;
@@ -378,7 +377,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# Phase 31 (BILEV-07): build_master_integer's new bounds_ctx/lb_slack machinery, ported
+# build_master_integer's bounds_ctx/lb_slack machinery, ported
 # verbatim from build_master (master.jl). Toy fixture mirrors test_planning_master.jl's
 # own two-bus/ToyElasticDevice bounds_ctx tests.
 # ---------------------------------------------------------------------------------------
@@ -508,7 +507,7 @@ end
     )
 end
 
-@testitem "planning master_integer: _accepted_lb_slack is always 0.0 — an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
+@testitem "planning master_integer: _accepted_lb_slack is always 0.0 — an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master_integer
@@ -557,8 +556,8 @@ end
     @test master.lb_clamped.x > 0.0
 
     # Regression: a BendersMasterInteger built WITHOUT bounds_ctx (explicit, unvalidated
-    # bounds, the byte-identical opt-out path) carries ZERO slack and ZERO clamp — the
-    # installed value passes through byte-identical.
+    # bounds, the bit-for-bit identical opt-out path) carries ZERO slack and ZERO clamp — the
+    # installed value passes through bit-for-bit identical.
     plain = build_master_integer(;
         T = 1, K = 4, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = 0.0,
     )
@@ -569,7 +568,7 @@ end
     @test lower_bound(plain.α_x) == 0.0
 end
 
-@testitem "planning master_integer: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
+@testitem "planning master_integer: an unknown Symbol bound is an ArgumentError, not a MethodError" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: build_master_integer

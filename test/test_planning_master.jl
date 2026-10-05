@@ -1,15 +1,15 @@
 # test/test_planning_master.jl
 #
-# Seam: src/planning/master.jl (PLAN-05). `BendersMaster` + `build_master` (Task 2)
+# Seam: src/planning/master.jl (master LP). `BendersMaster` + `build_master`
 # build the leader's own LP (investment + coupling flow + TWO epigraph terms
 # α_op/α_x) EXACTLY ONCE, with a DOCUMENTED, DERIVED finite epigraph lower bound
-# declared at build time (11-RESEARCH.md Pitfall M1). `add_optimality_cut!`/
+# declared at build time. `add_optimality_cut!`/
 # `add_feasibility_cut!` append persistent constraint rows — never rebuilt.
 # `solve_master!` routes through `solve_with_retry!` (never `assert_solved!`
 # directly). Items tagged `[:planning]`, names contain "planning" and "master"
 # (occursin filter convention, mirrors test_planning_follower.jl).
 #
-# Toy fixture (11-01-PLAN.md's own <toy_fixture> block): T=1, c_y=0.3, y_max=8.0,
+# Toy fixture: T=1, c_y=0.3, y_max=8.0,
 # α_op_lb=-5.0 (conservative margin below the oracle's own analytic max welfare
 # of 2.0 on this fixture), α_x_lb=0.0 (the follower's cost is a sum of
 # nonnegative coefficients times nonnegative variables, trivially bounded below
@@ -98,7 +98,7 @@ end
     @test_throws ArgumentError add_optimality_cut!(master, :bogus, 1.0, [1.0], [1.0])
 end
 
-@testitem "planning master: shape-mismatch guards — grad_k/z_k/u_k length must equal T (T-11-03)" tags =
+@testitem "planning master: shape-mismatch guards — grad_k/z_k/u_k length must equal T" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master
@@ -111,7 +111,7 @@ end
     @test_throws ArgumentError add_feasibility_cut!(master, 3.0, [1.0], [1.0, 1.0])
 end
 
-@testitem "planning master: finiteness guards — NaN/Inf cut inputs are rejected loudly BEFORE touching the model (WR-03)" tags =
+@testitem "planning master: finiteness guards — NaN/Inf cut inputs are rejected loudly BEFORE touching the model" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: add_feasibility_cut!, add_optimality_cut!, build_master
@@ -147,12 +147,12 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# Plan 30-02 (BILEV-05): `:auto` α-bound derivation + build-time rejection. The new
+# `:auto` α-bound derivation + build-time rejection. The
 # @testitems below reuse the SAME two-bus/ToyElasticDevice toy fixture test_planning_oracle.jl's
-# own D-06 dual-sign regression already established (TwoBusFixtures + ToyDeviceFixture).
+# own dual-sign regression already established (TwoBusFixtures + ToyDeviceFixture).
 # ---------------------------------------------------------------------------------------
 
-@testitem "planning master: explicit bounds with no bounds_ctx are byte-identical (regression guard)" tags =
+@testitem "planning master: explicit bounds with no bounds_ctx are bit-for-bit identical (regression guard)" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: build_master, solve_master!
@@ -269,7 +269,7 @@ end
     λ₀ = fill(4.0, T)
 
     d = TSODSO.alpha_op_lb_derivation(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, y_max = 8.0)
-    # Phase 30 code review (WR-03): rejection compares against the UN-margined optimum
+    # Rejection compares against the UN-margined optimum
     # plus the measured, scale-aware slack — the same rule build_master applies.
     slack = TSODSO.alpha_lb_margin(d.optimum, d.gap; floor = TSODSO.ALPHA_LB_REJECTION_TOL)
 
@@ -283,21 +283,21 @@ end
     @test d.margin >= TSODSO.ALPHA_LB_MARGIN
 end
 
-@testitem "planning master: build-time rejection has real headroom, but an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim (Option A, Phase 31 WR-03, Plan 31-07)" tags =
+@testitem "planning master: build-time rejection has real headroom, but an accepted in-slack bound is CLAMPED to the certified minimum, never installed verbatim" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_master
     using JuMP: lower_bound
 
-    # Phase 30 code review (WR-03): the old rule rejected `α > (optimum − margin) + tol`
+    # The old rule rejected `α > (optimum − margin) + tol`
     # with margin == tol == 1e-6, i.e. `α > optimum` — ZERO tolerance: a user bound equal
     # to the true minimum was rejected whenever the solver reported its optimum slightly
     # low, and α_x_lb = 0.0 on a 0.0-minimum follower was accepted only because
     # -1e-6 + 1e-6 == 0.0 in floating point. Now: reject iff α > optimum + slack.
-    # Phase 31 WR-03 (Plan 31-07, Option A): an ACCEPTED bound inside the slack band is no
+    # An ACCEPTED bound inside the slack band is no
     # longer installed verbatim — it is CLAMPED DOWN to the certified :auto-equivalent
-    # minimum d.bound (the same value :auto would install), closing the regression Plan
-    # 31-01 found (the raw-install path inflated the reported LB above the true minimum).
+    # minimum d.bound (the same value :auto would install), closing a regression
+    # (the raw-install path inflated the reported LB above the true minimum).
     feeder = TwoBusFixtures.two_bus_feeder()
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
     agg = TSODSO.Aggregator(2, 0.9, [dev], zeros(1))
@@ -326,7 +326,7 @@ end
     @test lower_bound(m.α_op) == dop.bound
     @test lower_bound(m.α_x) == dx.bound
     # The installed bound can never exceed the TRUE relaxed minimum — the regression this
-    # plan closes.
+    # clamping closes.
     @test lower_bound(m.α_op) <= dop.optimum
     @test lower_bound(m.α_x) <= dx.optimum
     # The clamp amount is recorded, never silently discarded.
@@ -337,7 +337,7 @@ end
     # Option A: lb_slack is always zero now — no residual runtime floor slack is needed.
     @test m.lb_slack == (; op = 0.0, x = 0.0)
 
-    # Byte-identical regression: a bound already AT OR BELOW the certified minimum (every
+    # Bit-for-bit identical regression: a bound already AT OR BELOW the certified minimum (every
     # pre-existing call site's own -50.0/-5.0-style literals) passes through UNCHANGED —
     # zero clamp fired.
     m_unclamped = build_master(;
@@ -354,7 +354,7 @@ end
     @test m_unclamped.lb_slack == (; op = 0.0, x = 0.0)
 
     # Beyond the slack, both are still rejected — the rejection ceiling is UNCHANGED by
-    # Option A — and the error names the bound that was rejected (IN-04, iteration 2: an
+    # the clamping rule — and the error names the bound that was rejected (an
     # unrelated ArgumentError must not pass).
     function caught(f)
         try
@@ -378,12 +378,12 @@ end
     @test occursin("α_x_lb=", e_x.msg) && occursin("exceeds the derived relaxed minimum", e_x.msg)
 end
 
-@testitem "planning master: an unknown Symbol bound is an ArgumentError, not a MethodError (IN-03)" tags =
+@testitem "planning master: an unknown Symbol bound is an ArgumentError, not a MethodError" tags =
     [:planning] begin
     using TSODSO
     using TSODSO: build_master
 
-    # Phase 30 code review iteration 2 (IN-03): the old `isa Union{Symbol,Real}` guard was
+    # The old `isa Union{Symbol,Real}` guard was
     # always true, so a typo reached `isless`/`Float64(::Symbol)` as a MethodError.
     @test_throws ArgumentError build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = :atuo, α_x_lb = 0.0)
     @test_throws ArgumentError build_master(; T = 1, c_y = 0.3, y_max = 8.0, α_op_lb = -5.0, α_x_lb = :atuo)

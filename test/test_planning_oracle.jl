@@ -1,10 +1,10 @@
 # test/test_planning_oracle.jl
 #
-# Seam: src/planning/subproblem.jl (PLAN-01/PLAN-02, D-01/D-02/D-04/D-05/D-06/D-07/D-11).
-# `PlanningOracle` + `build_planning_oracle` (Task 1) turn the SEAM-01 `z`-pin stub into a
+# Seam: src/planning/subproblem.jl.
+# `PlanningOracle` + `build_planning_oracle` turn the `z`-pin stub into a
 # live, build-once JuMP subproblem carrying a genuine `Parameter`-typed `z[t]` and a named
-# `pin[t]: p_import[t] == z[t]` constraint. `solve_planning_oracle!` (Task 2) re-solves it
-# via the plan 10-01 retry wrapper and returns the pin's dual `π` (length-T) plus its
+# `pin[t]: p_import[t] == z[t]` constraint. `solve_planning_oracle!` re-solves it
+# via the retry wrapper and returns the pin's dual `π` (length-T) plus its
 # duration-weighted reconciliation `π_s`. Items tagged `[:planning]`, names contain
 # "planning" and "oracle" (occursin filter convention, mirrors test_planning_retry.jl /
 # test_planning_checkpoint.jl).
@@ -13,7 +13,7 @@
 # Deferrable + PVBattery) has only a NARROW feasible import band around its own
 # unconstrained free-import optimum (its inelastic demand + bounded device flexibility do
 # not tolerate an arbitrary z, e.g. z=0 is INFEASIBLE for this fixture — empirically
-# verified this session). Every test below therefore derives its z_trial from the
+# verified). Every test below therefore derives its z_trial from the
 # network's OWN unconstrained free-import optimum (via the unmodified free path,
 # `operational_oracle(...; allow_export = true)`), which is feasible by
 # construction, rather than an arbitrary fixed vector.
@@ -75,7 +75,7 @@ end
     nc0 = num_constraints(o.model; count_variable_in_set_constraints = true)
 
     # Two set_parameter_value + optimize! cycles at DIFFERENT z_trial vectors — build-once,
-    # no rebuild (D-11). This task's own acceptance criterion checks ONLY the model SHAPE
+    # no rebuild. The acceptance criterion checks ONLY the model SHAPE
     # (num_variables/num_constraints), not solve feasibility, so raw optimize! (no
     # assert_solved! gate) is used directly, exactly mirroring test_dso.jl's build-once
     # invariance shape.
@@ -117,7 +117,7 @@ end
     res = solve_planning_oracle!(o, zstar)
 
     @test res isa NamedTuple
-    # Phase 30 code review (CR-01/CR-03): two ADDITIVE trailing fields — the exactness
+    # Two ADDITIVE trailing fields — the exactness
     # gate's explicit verdict and its measured cone residual. The original five keys keep
     # their names and order.
     @test keys(res) == (:cost, :π, :π_s, :dadp, :ctx, :exactness, :socp_maxgap)
@@ -130,21 +130,21 @@ end
     @test all(isfinite, res.dadp)
 end
 
-# A minimal AGGREGATABLE toy device (DEV-05 contract: contribute! returns
+# A minimal AGGREGATABLE toy device (aggregatable-device contract: contribute! returns
 # `(; vars, p_inject, utility)`, writes NOTHING to ctx itself) with a SEPARABLE
 # concave-quadratic utility `U(p) = a*p - (b/2)*p^2` (mirrors `Interruptible`'s eq. 3.10
-# shape, but DEV-05-conformant so it can sit under an `Aggregator`, unlike `Interruptible`
-# itself, which self-injects and predates DEV-05). Deliberately loose bounds keep its
+# shape, but conformant to that contract so it can sit under an `Aggregator`, unlike `Interruptible`
+# itself, which self-injects and predates that contract). Deliberately loose bounds keep its
 # price-responsive optimum STRICTLY INTERIOR at every hour — unlike TwoBusFixtures's real
 # aggregator (Thermostatic/Deferrable/PVBattery), whose comfort-band and battery-SOC
-# bounds actively BIND at the network's free-import optimum (empirically confirmed this
-# session: the real fixture's dual-sign test at z=zstar gives |π| up to ~1.5, not ≈0,
+# bounds actively BIND at the network's free-import optimum (empirically confirmed:
+# the real fixture's dual-sign test at z=zstar gives |π| up to ~1.5, not ≈0,
 # because TWO structurally-redundant equality constraints touch p_import[t]
 # — `balance_p[root,t]` and `pin[t]` — and their dual SPLIT is uniquely pinned only when
 # every OTHER coupled variable's own KKT stationarity is non-degenerate, i.e. no active
 # device bound anywhere in the loop). This toy device guarantees that non-degeneracy,
-# giving a clean, low-noise regression for the D-06 sign/monotonicity invariant — exactly
-# 10-RESEARCH.md Pitfall 1's own guidance: reuse the toy-case PATTERN (tiny feeder + one
+# giving a clean, low-noise regression for the sign/monotonicity invariant — the
+# guidance is to reuse the toy-case PATTERN (tiny feeder + one
 # aggregator + a known-analytic optimum, mirroring TwoBusFixtures's 2-bus dual-sign-anchor
 # shape), NOT a re-derivation of the document's specific numeric toy, and NOT
 # TwoBusFixtures's own aggregator.
@@ -170,7 +170,7 @@ end
     export ToyElasticDevice
 end
 
-@testitem "planning oracle: dual-sign toy-case regression — π monotonically non-decreasing in z, zero at the unconstrained optimum (D-06)" tags =
+@testitem "planning oracle: dual-sign toy-case regression — π monotonically non-decreasing in z, zero at the unconstrained optimum" tags =
     [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: build_planning_oracle, solve_planning_oracle!
@@ -188,7 +188,7 @@ end
     # The network's OWN unconstrained free-import optimum, via the UNMODIFIED free path
     # (allow_export = true — the same free-sign frontier shape
     # build_planning_oracle builds). This is the toy-case anchor, NOT an assumed docstring
-    # formula (10-RESEARCH.md Pitfall 1).
+    # formula.
     free = operational_oracle(
         feeder,
         LinDistFlow(),
@@ -212,7 +212,7 @@ end
     @test all(res_plus.π .>= -1e-6)
 
     # Elementwise monotonicity: π(z) is NON-DECREASING in z (the empirically-verified
-    # negated-Max-dual convention, D-06) — this operationalizes 10-RESEARCH.md Pitfall 1's
+    # negated-Max-dual convention) — this operationalizes the
     # toy-case PATTERN on a real PlanningOracle solve, not an assumed docstring formula.
     @test all(res_plus.π .>= res_star.π .- 1e-6) && all(res_star.π .>= res_minus.π .- 1e-6)
 end
@@ -252,7 +252,7 @@ end
     @test num_constraints(o.model; count_variable_in_set_constraints = true) == nc0
 end
 
-@testitem "planning oracle: ConvexBranchFlow solve runs the PF-04 exactness gate and stashes socp_maxgap (CR-03)" tags =
+@testitem "planning oracle: ConvexBranchFlow solve runs the exactness gate and stashes socp_maxgap" tags =
     [:planning] setup = [TwoBusFixtures] begin
     using TSODSO
     using TSODSO: SOCP, build_planning_oracle, solve_planning_oracle!
@@ -268,16 +268,16 @@ end
     # UNMODIFIED free path. `allow_export = true` mirrors the ADMM 2-bus cross-validation
     # item — the free-sign frontier is the exact shape build_planning_oracle builds, and
     # the priced frontier is the SOC-exactness enabler that keeps the FREE solve exact
-    # (PF-04), so its optimum is a known-exact pin point.
+    # (the exactness gate), so its optimum is a known-exact pin point.
     #
-    # PM-05/26-16 (CSB-num): this is the SAME Phase6 two-bus precision-floor fixture as
+    # This is the SAME two-bus precision-floor fixture as
     # test_admm.jl's :27/:127 crossval items — Clarabel's default `tol_gap=1e-8` trips the
-    # PF-04 gate at ratio ~4.00 even though the TRUE optimum is exact (ratio 1.4e-3 at
-    # `1e-10`, objective unchanged to >=6 sig digits; 26-POSTMERGE-TRIAGE.md cluster E). Calls
+    # exactness gate at ratio ~4.00 even though the TRUE optimum is exact (ratio 1.4e-3 at
+    # `1e-10`, objective unchanged to >=6 sig digits). Calls
     # `solve_welfare` DIRECTLY here instead of via `operational_oracle` (which this testitem
     # used previously) SOLELY because `operational_oracle` hardcodes
     # `optimizer = select_optimizer(problem_class(pf))` with no override seam — it is not
-    # itself modified by this gap-closure plan. Only `ctx.meta[:p_import]` (the same field
+    # itself modified. Only `ctx.meta[:p_import]` (the same field
     # `operational_oracle` itself reads to build `zstar`) is used below, so this is a
     # behavior-preserving call-site substitution, not a change to what is exercised.
     ctx_free, _, _ = solve_welfare(
@@ -291,9 +291,9 @@ end
     )
     zstar = value.(ctx_free.meta[:p_import])
 
-    # Phase 27 plan 27-07 (Task 2): a SECOND precision-floor artifact on this SAME 2-bus
+    # A SECOND precision-floor artifact on this SAME 2-bus
     # fixture, now on the `build_planning_oracle`/`solve_planning_oracle!` path — under
-    # FIX-08's hybrid floor (τ_solver=2e-7), the DEFAULT `tol_gap=1e-8` trips PF-04 at ratio
+    # the hybrid floor (τ_solver=2e-7), the DEFAULT `tol_gap=1e-8` trips the exactness gate at ratio
     # ≈2.19 (max gap 4.47e-7, just above τ_solver). MEASURED ladder (tol_gap_abs=tol_gap_rel,
     # direct execution of this exact fixture body):
     #   1e-8  -> THROWS (ratio 2.19, gap 4.47e-7)
@@ -302,7 +302,7 @@ end
     #   5e-10, 1e-10, 5e-11 -> PASSES, IDENTICAL gap (4.4787537614767174e-9) to 1e-9
     #   1e-11 -> PASSES, gap drops further to 4.29e-10 (solver-precision floor)
     # `1e-9` is the LOOSEST rung clearing the gate with ample margin — used here via the NEW
-    # `optimizer` kwarg (Task 2's byte-identical-default seam) added to
+    # `optimizer` kwarg (a bit-for-bit identical-default seam) of
     # `build_planning_oracle`.
     o = build_planning_oracle(
         feeder,
@@ -313,7 +313,7 @@ end
         optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9),
     )
 
-    # The SOCP arm of the CR-03 gate is ARMED on this oracle: ConvexBranchFlow stashed the
+    # The SOCP arm of the gate is ARMED on this oracle: ConvexBranchFlow stashed the
     # squared-current `:l` under `ctx.pf_vars` (the exact haskey chain
     # solve_planning_oracle! branches on), and no exactness certificate exists yet.
     @test o.ctx.pf_vars !== nothing

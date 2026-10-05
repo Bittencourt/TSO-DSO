@@ -1,16 +1,15 @@
 # test/test_planning_trace.jl
 #
-# Seam: src/planning/trace.jl -- BendersTrace (plan 12-01), extended additively in
-# Phase 24 plan 24-03 (D-16) with a `nogood_count_trace` column. Items tagged
+# Seam: src/planning/trace.jl -- BendersTrace, extended additively with a `nogood_count_trace` column. Items tagged
 # `[:planning]`, names contain "planning" and "trace" (occursin filter convention).
 #
-# No dedicated BendersTrace unit-test file existed before this plan (verified via
+# No dedicated BendersTrace unit-test file existed before this file (verified via
 # `grep -rn "BendersTrace(" test/*.jl` returning zero direct constructions --
 # BendersTrace is otherwise only exercised indirectly through solve_stackelberg!'s
 # returned `result.trace` in test_planning_benders.jl). This file is the first
 # direct, standalone `push!`/`trace_summary` regression.
 
-@testitem "planning trace: nogood_count additive column -- omitted keyword records 0, byte-identical to pre-24-03 behavior" tags =
+@testitem "planning trace: nogood_count additive column -- omitted keyword records 0, bit-for-bit identical to the earlier behavior" tags =
     [:planning] begin
     using TSODSO
 
