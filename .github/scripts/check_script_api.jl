@@ -528,7 +528,11 @@ function selftest()
         ("using TSODSO\nx = dec.loss", 1, "DLMP .loss"),
         ("using TSODSO\nx = df.loss", 0, "non-DLMP .loss"),
         ("using TSODSO\nfor max_jump in 1:3\n    println(max_jump)\nend", 0, "loop var"),
-        ("using TSODSO\nb = PerUnitBase(1.0, 4.16)", -1, "units helper (depends on public set)"),
+        # `public` (declared via @compat public, every Julia version) is NOT `export`: a bare
+        # public name after `using TSODSO` is an UndefVarError at runtime, so it is flagged.
+        ("using TSODSO\nb = PerUnitBase(1.0, 4.16)", 1, "bare public-not-exported name"),
+        ("using TSODSO\nb = TSODSO.PerUnitBase(1.0, 4.16)", 0, "qualified public name"),
+        ("using TSODSO: PerUnitBase\nb = PerUnitBase(1.0, 4.16)", 0, "imported public name"),
         ("x = (", 1, "parse error"),
         # compound assignment: the RHS is a use, never a definition
         ("using TSODSO\ns = 0\ns += max_jump(t)", 1, "compound += RHS call"),
@@ -547,12 +551,15 @@ function selftest()
         ("import TSODSO as T\ny = T.no_such_thing_xyz(1)", 1, "module alias chain"),
         ("import TSODSO.ReactiveMode as RM\nx = RM.LIVE\ny = RM.ON", 1, "submodule alias chain"),
         ("using TSODSO\nReactiveMode = (ON = 1,)\nx = ReactiveMode.ON", 0, "local shadows submodule"),
+        # value (non-call) uses of a hidden function
+        ("using TSODSO\ny = max_jump.(trs)", 1, "broadcast value use"),
+        ("using TSODSO\ny = map(max_jump, trs)", 1, "higher-order value use"),
+        ("using TSODSO\nf = max_jump", 1, "function-as-value binding"),
     ]
     exported, subs = exported_set(), submodules()
     bad = 0
     for (src, want, label) in cases
         got = length(scan_source("<selftest:$label>", src; exported, subs))
-        want < 0 && continue
         if got != want
             bad += 1
             println("SELFTEST FAIL [$label]: expected $want finding(s), got $got")
