@@ -374,4 +374,3 @@ function draw_forecast_error(seed::Integer, t::Integer, magnitude::Real)
 
     return (; pv_factor, demand_factor)
 end
-

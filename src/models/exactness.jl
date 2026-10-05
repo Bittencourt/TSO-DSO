@@ -170,8 +170,7 @@ silently pass), while a PURE per-branch RELATIVE floor alone was found IRRECONCI
 canonical fixture needs `ε≳5e-5` to keep passing — see `MEASURED_REL_TOL_EXACT`'s comment for the
 full history). `atol_b = max(τ_solver, ε * ref_b)` fixes this: `ref_b = br.smax^2` for a
 thermally-limited branch (`br.smax < SMAX_NO_LIMIT`), or the head branch's flow magnitude
-squared (`value(P[head_b,t])^2 + value(Q[head_b,t])^2`, `head_b` = the branch with `br.from ==
-feeder.root`) for an interior/unlimited branch, since it carries no `smax` of its own to
+squared (`value(P[head_b,t])^2 + value(Q[head_b,t])^2`, `head_b` = the branch with `br.from == feeder.root`) for an interior/unlimited branch, since it carries no `smax` of its own to
 normalize against; `τ_solver` (default `TAU_SOLVER_EXACT`) is a separately-measured
 ABSOLUTE floor covering Clarabel's own achievable cone-residual noise floor, independent of
 `ref_b`. `ε` (default `MEASURED_REL_TOL_EXACT`) is MEASURED, not guessed, per the sweep
@@ -201,8 +200,7 @@ the solver's own scaling).
 Reads `ctx.pf_vars` (the `(; v, v̂, P, Q, l)` stash), `ctx.feeder`, and
 `ctx.T`. Uses an explicit `CertificateError` (never `@assert`, which is elided under `-O`), per
 project convention (`src/core/status.jl`). Throws `ArgumentError` if `feeder` has NO branch
-incident to `feeder.root` in either storage orientation (`br.from == feeder.root` OR `br.to ==
-feeder.root`) — a malformed/non-radial feeder fails loudly here, never
+incident to `feeder.root` in either storage orientation (`br.from == feeder.root` OR `br.to == feeder.root`) — a malformed/non-radial feeder fails loudly here, never
 silently using branch 1 as a fallback head branch. A feeder whose root fans out to MULTIPLE
 branches (a legitimate meshed topology, e.g. `test_mesh_angle_certificate.jl`'s 4-bus diamond)
 deterministically takes the FIRST match (by branch index) — this mirrors the earlier code's
@@ -284,13 +282,15 @@ function assert_socp_exact!(
         maxratio = max(maxratio, row.ratio)
     end
 
-    maxratio <= 1 || throw(CertificateError(
-        "SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=$maxratio > 1 " *
-        "(rtol=$rtol, atol=$(atol === nothing ? "max(τ_solver=$τ_solver, ε*ref_b, ε=$ε)" : atol); " *
-        "max abs |l·v−(P²+Q²)|=$maxgap) — " *
-        "prices REFUSED (thesis 3.43-3.45)";
-        kind = :socp_exact,
-    ))
+    maxratio <= 1 || throw(
+        CertificateError(
+            "SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=$maxratio > 1 " *
+            "(rtol=$rtol, atol=$(atol === nothing ? "max(τ_solver=$τ_solver, ε*ref_b, ε=$ε)" : atol); " *
+            "max abs |l·v−(P²+Q²)|=$maxgap) — " *
+            "prices REFUSED (thesis 3.43-3.45)";
+            kind = :socp_exact,
+        ),
+    )
     return maxgap
 end
 

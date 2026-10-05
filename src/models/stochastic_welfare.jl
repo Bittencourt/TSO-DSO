@@ -295,8 +295,20 @@ function build_stochastic_welfare(
             # container kind, so expressions unregister identically to constraints. Without
             # these three, the SECOND scenario's `contribute!` throws "object of name Prev
             # is already attached to this model".
-            for name in
-                (:v, :v̂, :P, :Q, :l, :cone, :vdrop, :cpydrop, :smax, :Prev, :Qrev, :smax_rev)
+            for name in (
+                :v,
+                :v̂,
+                :P,
+                :Q,
+                :l,
+                :cone,
+                :vdrop,
+                :cpydrop,
+                :smax,
+                :Prev,
+                :Qrev,
+                :smax_rev,
+            )
                 JuMP.unregister(model, name)
             end
         end
@@ -393,10 +405,9 @@ function build_stochastic_welfare(
         model,
         Max,
         sum(
-            probabilities[s] * (
-                ctxs[s].objective -
-                sum(λ₀[t] * ctxs[s].meta[:p_import][t] for t in 1:T)
-            ) for s in 1:S
+            probabilities[s] *
+            (ctxs[s].objective - sum(λ₀[t] * ctxs[s].meta[:p_import][t] for t in 1:T)) for
+            s in 1:S
         )
     )
 
@@ -455,7 +466,6 @@ function build_stochastic_welfare(
         socp_maxgap,
     )
 end
-
 
 # The out-of-sample harness — a SEPARATE, smaller build-once model than the
 # S-scenario extensive form above.
@@ -739,4 +749,3 @@ function.
 function solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int = 4)
     return solve_with_retry!(h.model; max_attempts = max_attempts, dual = false)
 end
-
