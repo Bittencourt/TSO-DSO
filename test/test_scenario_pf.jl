@@ -1,14 +1,14 @@
-# ARCH-01 test file: Scenario `pf` selector construction + `build_powerflow` materialization.
+# Test file: Scenario `pf` selector construction + `build_powerflow` materialization.
 # All items are solver-free. Plan 03 appends run-time per-pf items.
 
-@testitem "ARCH-01 build_powerflow default is ConvexBranchFlow()" begin
+@testitem "scenario_pf: build_powerflow default is ConvexBranchFlow()" begin
     using TSODSO
     pf = TSODSO.build_powerflow(Scenario(name = "x"))
     @test pf === ConvexBranchFlow()
     @test Scenario(name = "x").pf === :convex_branch_flow
 end
 
-@testitem "ARCH-01 build_powerflow per selector" begin
+@testitem "scenario_pf: build_powerflow per selector" begin
     using TSODSO
     lit = TSODSO.build_powerflow(
         Scenario(name = "x", pf = :convex_branch_flow, pf_thesis_literal = true),
@@ -25,7 +25,7 @@ end
     @test ac == ACPowerFlow()
 end
 
-@testitem "ARCH-01 pf construction guards" begin
+@testitem "scenario_pf: pf construction guards" begin
     using TSODSO
     function throws_arg(f)
         return try
@@ -47,7 +47,7 @@ end
             @test throws_arg(() -> Scenario(name = "x", strategy = st, pf = pf))
         end
     end
-    # ADMM (Plan 34-09) is formulation-generic: convex (also thesis-literal), restricted, LinDist
+    # ADMM is formulation-generic: convex (also thesis-literal), restricted, LinDist
     @test throws_arg(() -> Scenario(name = "x", strategy = :admm, pf = :ac))
     for pf in (:restricted_branch_flow, :lindistflow)
         @test Scenario(name = "x", strategy = :admm, pf = pf).pf === pf
@@ -63,7 +63,7 @@ end
     end
 end
 
-@testitem "ARCH-01 strategy x pf matrix agrees with supports_pf" begin
+@testitem "scenario_pf: strategy x pf matrix agrees with supports_pf" begin
     using TSODSO
     function constructs(st, pf, lit)
         return try
@@ -87,14 +87,14 @@ end
     end
 end
 
-@testitem "ARCH-01 _powerflow_from_selector terminal branch throws" begin
+@testitem "scenario_pf: _powerflow_from_selector terminal branch throws" begin
     using TSODSO
     @test_throws ArgumentError TSODSO._powerflow_from_selector(:bogus, false, 0.0)
 end
 
-# ---- Run-time ARCH-01 items (Plan 32-03): ieee13, T = 24, seed = 1 ----
+# ---- Run-time items: ieee13, T = 24, seed = 1 ----
 
-@testitem "ARCH-01 default pf bit-identical to direct solve" begin
+@testitem "scenario_pf: default pf bit-identical to direct solve" begin
     using TSODSO, Test
     s = Scenario(name = "pf-default", feeder = :ieee13, seed = 1, T = 24)
     feeder = TSODSO.build_feeder(s.feeder)
@@ -114,7 +114,7 @@ end
     @test r.exact_maxgap == Float64(ctx.meta[:socp_maxgap])
 end
 
-@testitem "ARCH-01 restricted and thesis_literal honoured" begin
+@testitem "scenario_pf: restricted and thesis_literal honoured" begin
     using TSODSO, Test
     base = TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
     s_r = Scenario(name = "r", feeder = :ieee13, seed = 1, T = 24, pf = :restricted_branch_flow)
@@ -130,7 +130,7 @@ end
     end
 end
 
-@testitem "ARCH-01 lindistflow: NaN maxgap, no KeyError" begin
+@testitem "scenario_pf: lindistflow: NaN maxgap, no KeyError" begin
     using TSODSO, Test
     s = Scenario(name = "ldf", feeder = :ieee13, seed = 1, T = 24, pf = :lindistflow)
     r = TSODSO.run(Centralized(), s)
@@ -140,7 +140,7 @@ end
     @test size(r.dadp, 1) > 0
 end
 
-@testitem "ARCH-01 ac: NaN maxgap, allow_local honoured" begin
+@testitem "scenario_pf: ac: NaN maxgap, allow_local honoured" begin
     using TSODSO, Test
     base = TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
     r = TSODSO.run(Centralized(), Scenario(name = "ac", feeder = :ieee13, seed = 1, T = 24, pf = :ac))
@@ -149,7 +149,7 @@ end
     @test isapprox(r.welfare, base.welfare; rtol = 1e-3)
 end
 
-@testitem "ARCH-01 wrapper equivalence" begin
+@testitem "scenario_pf: wrapper equivalence" begin
     using TSODSO, Test
     s = Scenario(name = "w", feeder = :ieee13, seed = 1, T = 24)
     a = run_scenario(s)

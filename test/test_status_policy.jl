@@ -1,9 +1,9 @@
 # test/test_status_policy.jl
 #
-# Seam: ARCH-08 status-vs-throw policy (Phase 34, plan 05). `STATUS_VOCABULARY` is the single
+# Seam: status-vs-throw policy. `STATUS_VOCABULARY` is the single
 # source of the per-entry-point `status::Symbol` vocabulary; every entry point's returned status
 # must lie inside its documented vocabulary. Also pins (WITHOUT a throw) the DC + reactive
-# aggregators behaviour that closed the Phase-33 `has_reactive` guard deferral.
+# aggregators behaviour behind the `has_reactive` guard deferral.
 
 @testitem "status policy: STATUS_VOCABULARY table and pure status helpers" tags = [:status_policy] begin
     using TSODSO
@@ -115,7 +115,7 @@ end
 
     # Aggregators write reactive terms unconditionally; DCPowerFlow is active-only by design,
     # so the unclosed `:Rq` residual is a documented degradation, NOT a bug — no throw, no
-    # status (Phase-33 has_reactive guard deferral decided as "pin, don't throw").
+    # status (the has_reactive guard deferral is decided as "pin, don't throw").
     function solve_dc()
         s = TSODSO.Scenario(; ExperimentHarnessFixtures.minimal_scenario_kwargs()..., strategy = :admm)
         feeder, λ₀, aggs = TSODSO._materialize(s)

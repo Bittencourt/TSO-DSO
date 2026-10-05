@@ -1,7 +1,7 @@
-# ARCH-02 strategy-layer test file. Later plans append dispatch / legacy-kwarg / flat-field items.
+# Strategy-layer test file: dispatch, legacy-kwarg and flat-field items.
 # All items here are solver-free.
 
-@testitem "ARCH-02 strategy defaults" begin
+@testitem "strategies: strategy defaults" begin
     using TSODSO
     a = ADMM()
     @test a.ρ == 100.0
@@ -22,7 +22,7 @@
     @test st.probabilities == fill(1 / 3, 3)
 end
 
-@testitem "ARCH-02 strategy validation" begin
+@testitem "strategies: strategy validation" begin
     using TSODSO
     @test_throws ArgumentError ADMM(ρ = 0.0)
     @test_throws ArgumentError ADMM(ρ = -1.0)
@@ -44,7 +44,7 @@ end
     @test_throws ArgumentError Stochastic(probabilities = [0.5, 0.3, 0.3])
 end
 
-@testitem "ARCH-02 stochastic probabilities copy" begin
+@testitem "strategies: stochastic probabilities copy" begin
     using TSODSO
     p = [0.5, 0.3, 0.2]
     st = Stochastic(probabilities = p)
@@ -54,7 +54,7 @@ end
     @test st.probabilities[1] == 0.5
 end
 
-@testitem "ARCH-02 strategy value equality" begin
+@testitem "strategies: strategy value equality" begin
     using TSODSO
     @test ADMM(ρ = 50.0) == ADMM(ρ = 50.0)
     @test hash(ADMM(ρ = 50.0)) == hash(ADMM(ρ = 50.0))
@@ -69,7 +69,7 @@ end
     @test Stochastic() == Stochastic(probabilities = [1 / 3, 1 / 3, 1 / 3])
 end
 
-@testitem "ARCH-02 supports_pf matrix" begin
+@testitem "strategies: supports_pf matrix" begin
     using TSODSO
     cases = [(:convex_branch_flow, false), (:convex_branch_flow, true),
         (:restricted_branch_flow, false), (:lindistflow, false), (:ac, false)]
@@ -87,7 +87,7 @@ end
     @test TSODSO.supported_pfs(Stochastic()) == (:convex_branch_flow,)
 end
 
-@testitem "ARCH-02 run is package-owned" begin
+@testitem "strategies: run is package-owned" begin
     using TSODSO
     @test TSODSO.run !== Base.run
     @test !(:run in names(TSODSO))
@@ -96,7 +96,7 @@ end
     end
 end
 
-@testitem "ARCH-02 Scenario has no flat strategy fields" begin
+@testitem "strategies: Scenario has no flat strategy fields" begin
     using TSODSO
     @test fieldnames(Scenario) == (
         :name, :feeder, :seed, :T, :population, :price, :allow_export,
@@ -109,7 +109,7 @@ end
     @test !hasproperty(s, :maxiter)
 end
 
-@testitem "ARCH-02 legacy kwargs map identically" begin
+@testitem "strategies: legacy kwargs map identically" begin
     using TSODSO
     @test Scenario(name = "x", strategy = :admm, ρ = 50.0, maxiter = 10) ==
           Scenario(name = "x", strategy = ADMM(ρ = 50.0, maxiter = 10))
@@ -126,7 +126,7 @@ end
     @test Scenario(name = "x").strategy == Centralized()
 end
 
-@testitem "ARCH-02 foreign and contradictory knobs throw ArgumentError" begin
+@testitem "strategies: foreign and contradictory knobs throw ArgumentError" begin
     using TSODSO
     @test_throws ArgumentError Scenario(name = "x", mpc_H = 3)
     @test_throws ArgumentError Scenario(name = "x", strategy = :admm, mpc_H = 3)
@@ -135,14 +135,14 @@ end
     @test_throws ArgumentError Scenario(name = "x", strategy = :stochastic, mpc_H = 2)
 end
 
-@testitem "ARCH-02 unknown strategy symbol, kwarg and feeder throw ArgumentError" begin
+@testitem "strategies: unknown strategy symbol, kwarg and feeder throw ArgumentError" begin
     using TSODSO
     @test_throws ArgumentError Scenario(name = "x", strategy = :bogus)
     @test_throws ArgumentError Scenario(name = "x", bogus = 1)
     @test_throws ArgumentError Scenario(name = "x", feeder = :ieee14)
 end
 
-@testitem "ARCH-02 Scenario value equality" begin
+@testitem "strategies: Scenario value equality" begin
     using TSODSO
     a = Scenario(name = "x", strategy = :admm, ρ = 50.0)
     b = Scenario(name = "x", strategy = ADMM(ρ = 50.0))
@@ -153,16 +153,16 @@ end
     @test a != Scenario(name = "x", strategy = ADMM(ρ = 51.0))
 end
 
-@testitem "ARCH-02 with_strategy re-validates" begin
+@testitem "strategies: with_strategy re-validates" begin
     using TSODSO
     s = TSODSO.with_strategy(Scenario(name = "x"), ADMM())
     @test s.strategy == ADMM()
     @test_throws ArgumentError TSODSO.with_strategy(Scenario(name = "x", pf = :ac), ADMM())
 end
 
-# ---- Run-time ARCH-02 result-shape items (Plan 32-03) ----
+# ---- Run-time result-shape items ----
 
-@testitem "ARCH-02 ScenarioResult shape Centralized" begin
+@testitem "strategies: ScenarioResult shape Centralized" begin
     using TSODSO, Test
     r = TSODSO.run(Centralized(), Scenario(name = "cen", feeder = :ieee13, seed = 1, T = 24))
     @test ismissing(r.iters)
@@ -175,7 +175,7 @@ end
     @test r.dadp isa Matrix{Float64}
 end
 
-@testitem "ARCH-02 ScenarioResult shape ADMM" begin
+@testitem "strategies: ScenarioResult shape ADMM" begin
     using TSODSO, Test
     r = TSODSO.run(Scenario(name = "adm", feeder = :ieee13, seed = 1, T = 24, strategy = ADMM()))
     @test r.details isa TSODSO.ADMMDetails
@@ -189,13 +189,13 @@ end
     @test r.reactive_consensus_mode == r.details.reactive_consensus_mode
 end
 
-@testitem "ARCH-02 run(st, s) explicit strategy wins" begin
+@testitem "strategies: run(st, s) explicit strategy wins" begin
     using TSODSO, Test
     r = TSODSO.run(ADMM(maxiter = 300), Scenario(name = "x", feeder = :ieee13, seed = 1, T = 24))
     @test r.scenario.strategy == ADMM(maxiter = 300)
 end
 
-@testitem "ARCH-02 run(MPC) common shape" tags = [:mpc_loop] setup = [MPCFixtures] begin
+@testitem "strategies: run(MPC) common shape" tags = [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
     s = Scenario(name = "m", feeder = :ieee13, T = 9, strategy = MPC(H = 3, forecast_error = 0.0))
     r = run_mpc(s)
@@ -209,7 +209,7 @@ end
     @test res.details.steps == r.steps
 end
 
-@testitem "ARCH-02 run(Stochastic) common shape" begin
+@testitem "strategies: run(Stochastic) common shape" begin
     using TSODSO, Test
     s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
     r = run_stochastic(s)
@@ -222,7 +222,7 @@ end
     @test res.details isa TSODSO.StochasticDetails
 end
 
-@testitem "ARCH-02 run_mpc/run_stochastic fallback to defaults" begin
+@testitem "strategies: run_mpc/run_stochastic fallback to defaults" begin
     using TSODSO, Test
     r_def = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9))
     r_exp = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic()))
@@ -230,7 +230,7 @@ end
     @test run_mpc(Scenario(name = "m", feeder = :ieee13, T = 9)).steps == 9 - 6 + 1
 end
 
-@testitem "ARCH-02 MPC/Stochastic reject non-convex pf at construction" begin
+@testitem "strategies: MPC/Stochastic reject non-convex pf at construction" begin
     using TSODSO, Test
     for st in (MPC(), Stochastic())
         @test_throws ArgumentError Scenario(name = "x", feeder = :ieee13, pf = :lindistflow, strategy = st)
@@ -244,7 +244,7 @@ end
     end
 end
 
-@testitem "ARCH-02 run(st, s) dispatch uniformity" setup = [MPCFixtures] begin
+@testitem "strategies: run(st, s) dispatch uniformity" setup = [MPCFixtures] begin
     using TSODSO, Test
     for st in (Centralized(), MPC(H = 3, forecast_error = 0.0), Stochastic(S = 3, H_oos = 5))
         s = Scenario(name = "u", feeder = :ieee13, T = 9, strategy = st)
@@ -257,7 +257,7 @@ end
     end
 end
 
-@testitem "ARCH-02 run_and_store round-trip for MPC and Stochastic" setup = [ExperimentHarnessFixtures] begin
+@testitem "strategies: run_and_store round-trip for MPC and Stochastic" setup = [ExperimentHarnessFixtures] begin
     using TSODSO, Test
     using DrWatson: wload
 
@@ -308,7 +308,7 @@ end
     end
 end
 
-@testitem "ARCH-02 four strategies four filenames" begin
+@testitem "strategies: four strategies four filenames" begin
     using TSODSO, Test
     strategies = (Centralized(), ADMM(), MPC(), Stochastic())
     names = [
@@ -319,21 +319,21 @@ end
     @test all(endswith(".jld2"), names)
 end
 
-@testitem "REVIEW WR-01 run_mpc/run_stochastic re-validate strategy x pf" begin
+@testitem "strategies: run_mpc/run_stochastic re-validate strategy x pf" begin
     using TSODSO, Test
     s = Scenario(name = "w1", feeder = :ieee13, T = 9, pf = :lindistflow)
     @test_throws ArgumentError run_mpc(s)
     @test_throws ArgumentError run_stochastic(s)
 end
 
-@testitem "REVIEW WR-02 ADMM rejects non-finite knobs" begin
+@testitem "strategies: ADMM rejects non-finite knobs" begin
     using TSODSO, Test
     for k in (:ρ, :ε_abs, :ε_rel, :τ_ratio, :μ), v in (NaN, Inf)
         @test_throws ArgumentError ADMM(; (k => v,)...)
     end
 end
 
-@testitem "REVIEW WR-03 negative zero is normalized (== implies same hash)" begin
+@testitem "strategies: negative zero is normalized (== implies same hash)" begin
     using TSODSO, Test
     a = Scenario(name = "z", feeder = :ieee13, pf = :restricted_branch_flow, pf_ε = -0.0)
     b = Scenario(name = "z", feeder = :ieee13, pf = :restricted_branch_flow, pf_ε = 0.0)
@@ -343,7 +343,7 @@ end
     @test hash(MPC(forecast_error = -0.0)) == hash(MPC(forecast_error = 0.0))
 end
 
-@testitem "REVIEW WR-04 post-construction probability mutation is caught at run time" begin
+@testitem "strategies: post-construction probability mutation is caught at run time" begin
     using TSODSO, Test
     st = Stochastic(probabilities = [0.5, 0.3, 0.2])
     st.probabilities[1] = 0.9    # bypasses constructor validation (sum != 1)

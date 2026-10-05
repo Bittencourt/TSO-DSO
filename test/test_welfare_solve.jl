@@ -1,12 +1,12 @@
-# Seam: models/welfare_solve.jl (OPT-01, DEV-04). GLB-CVX centralized social-welfare solve.
+# Seam: models/welfare_solve.jl. GLB-CVX centralized social-welfare solve.
 #
-# Plan 03-05 turns this green: the end-to-end multi-device GLB-CVX solve — aggregators
+# The end-to-end multi-device GLB-CVX solve — aggregators
 # rolling Thermostatic/Deferrable/PVBattery devices onto a LinDistFlow feeder with
-# seeded T=24 profiles — to a global optimum, plus the WR-03 reactive-root fix and the
+# seeded T=24 profiles — to a global optimum, plus the reactive-root fix and the
 # App. C battery-complementarity check (p_ch·p_dch < τ). The name contains "welfare" so
 # `occursin("welfare", ti.name)` selects it.
 
-@testitem "welfare: solve_welfare + fixture health exist (OPT-01)" tags = [:welfare] setup =
+@testitem "welfare: solve_welfare + fixture health exist" tags = [:welfare] setup =
     [SmallRadialFixtures] begin
     using TSODSO
 
@@ -18,7 +18,7 @@
     @test isdefined(TSODSO, :solve_welfare)
 end
 
-@testitem "welfare: end-to-end GLB-CVX optimum, reactive balance, battery complementarity (OPT-01, DEV-04)" tags =
+@testitem "welfare: end-to-end GLB-CVX optimum, reactive balance, battery complementarity" tags =
     [:welfare] setup = [SmallRadialFixtures] begin
     using TSODSO
     using TSODSO: NLP
@@ -31,7 +31,7 @@ end
     λ₀ = SmallRadialFixtures.λ₀
     φ = 0.9                                     # nonzero power factor ⇒ reactive load present
 
-    # Seeded, reproducible PV profile (DATA-04) feeds the battery availability limit.
+    # Seeded, reproducible PV profile feeds the battery availability limit.
     prof = generate_profiles(seed = 20260718, T = T)
 
     # An aggregator holding a Thermostatic + a Deferrable + a PV-battery at one bus.
@@ -47,13 +47,13 @@ end
     ctx, obj, dadp = solve_welfare(feeder, LinDistFlow(), aggs; T = T, λ₀ = λ₀)
 
     # OPTIMAL: solve_welfare passed assert_solved! (else it would have thrown). Welfare is
-    # finite; a magnitude sanity bound catches a unit/scale blowup (RESEARCH Pitfall 3).
+    # finite; a magnitude sanity bound catches a unit/scale blowup.
     @test isfinite(obj)
     @test abs(obj) < 1e6
     @test length(dadp) == T
     @test all(isfinite, dadp)
 
-    # WR-03 fix works: the free-sign q_import unblocked :Rq, so the reactive load is
+    # The reactive-root fix works: the free-sign q_import unblocked :Rq, so the reactive load is
     # actually served (a regression here would be INFEASIBLE or an all-zero reactive draw).
     q_import = ctx.meta[:q_import]
     @test any(t -> abs(value(q_import[t])) > 1e-6, 1:T)
@@ -69,7 +69,7 @@ end
         @test value(v.p_ch[t]) * value(v.p_dch[t]) < 1e-6
     end
 
-    # --- Cross-solver sanity: Clarabel-QP vs Ipopt-NLP objective agree (Pitfall 4) ---
+    # --- Cross-solver sanity: Clarabel-QP vs Ipopt-NLP objective agree ---
     # Re-solve the SAME assembly through the NLP factory (allow_local for Ipopt's
     # LOCALLY_SOLVED status on this convex problem) and check the welfare matches.
     _ctx2, obj2, _dadp2 = solve_welfare(
@@ -84,7 +84,7 @@ end
     @test isapprox(obj, obj2; rtol = 1e-4, atol = 1e-4)
 end
 
-@testitem "welfare: DC + reactive aggregator solves active-only (WR-03, DEV-05)" tags =
+@testitem "welfare: DC + reactive aggregator solves active-only" tags =
     [:welfare] setup = [SmallRadialFixtures] begin
     using TSODSO
     using JuMP
@@ -105,7 +105,7 @@ end
     end
     aggs = [make_agg(2), make_agg(3)]          # reactive aggregators on NON-root load buses
 
-    # WR-03: DCPowerFlow provides NO reactive channel, yet the aggregators still emit their
+    # DCPowerFlow provides NO reactive channel, yet the aggregators still emit their
     # reactive term into :Rq. Previously balance_q was pinned to zero at every non-root
     # reactive bus ⇒ INFEASIBLE. Now the reactive channel is keyed off the FORMULATION, so a
     # DC study models active power only and SOLVES (the DC↔LinDistFlow interchange holds).
@@ -134,7 +134,7 @@ end
     end
 end
 
-@testitem "welfare: high-PV surplus is curtailed rather than infeasible (WR-04, DEV-04)" tags =
+@testitem "welfare: high-PV surplus is curtailed rather than infeasible" tags =
     [:welfare, :battery] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -152,12 +152,12 @@ end
     λ₀ = fill(40.0, T)
     Ppv = fill(100.0, T)        # MASSIVE PV — far beyond load or battery/storage capacity
 
-    # STRICT λ ordering (CR-01) for the no-binary guarantee; tiny Pmax/SOC so the battery
+    # STRICT λ ordering for the no-binary guarantee; tiny Pmax/SOC so the battery
     # cannot soak up the surplus — the ONLY recourse is PV curtailment.
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
     agg = Aggregator(2, 0.9, [batt], Pdc)
 
-    # WR-04: PV is curtailable, so the surplus is dumped rather than forcing the
+    # PV is curtailable, so the surplus is dumped rather than forcing the
     # (export-less, p_import ≥ 0) root balance INFEASIBLE. Without pv_used this solve had no
     # recourse for the surplus and failed.
     ctx, obj, _dadp = solve_welfare(feeder, LinDistFlow(), [agg]; T = T, λ₀ = λ₀)
@@ -170,7 +170,7 @@ end
     @test any(t -> value(battery_vars.pv_used[t]) < Ppv[t] - 1e-3, 1:T)
 end
 
-@testitem "welfare: battery complementarity is a base-free relative test (WR-02)" tags =
+@testitem "welfare: battery complementarity is a base-free relative test" tags =
     [:welfare, :battery] begin
     using TSODSO, JuMP
 
@@ -219,12 +219,12 @@ end
     @test assert_battery_complementarity!(ctx_clean; τ = 1e-3) === nothing
 end
 
-# PRICE-03 (05-01): the per-aggregator net-injection + utility stash the welfare-accounting
-# surplus split (plan 05-05) consumes. A solved welfare ctx must carry `ctx.meta[:agg_net]` —
+# The per-aggregator net-injection + utility stash the welfare-accounting
+# surplus split consumes. A solved welfare ctx must carry `ctx.meta[:agg_net]` —
 # one entry per aggregator, each a NamedTuple with `bus`, a length-T `net` (= p_inject − Pdc,
 # the price-transfer term p_agⱼ), and the aggregator `utility`. Name contains "welfare" and
 # "surplus" so either `occursin` filter selects it.
-@testitem "welfare surplus: solve_welfare stashes per-aggregator net injection + utility (PRICE-03)" tags =
+@testitem "welfare surplus: solve_welfare stashes per-aggregator net injection + utility" tags =
     [:welfare, :surplus] setup = [SmallRadialFixtures] begin
     using TSODSO
     using JuMP

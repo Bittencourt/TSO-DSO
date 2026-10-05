@@ -1,20 +1,19 @@
 # test/test_stochastic_oos_harness.jl
 #
-# Seam: src/models/stochastic_welfare.jl (STOCH-03, D-09). `StochasticOosHarness` +
+# Seam: src/models/stochastic_welfare.jl. `StochasticOosHarness` +
 # `build_stochastic_oos_harness` generalize `MpcWindow`'s build-once/`Parameter`-pin shape
-# (`src/models/mpc_window.jl`'s anonymous `soc[H + 1] == terminal_param` idiom; Phase 26
-# FIX-04 retargeted this from `soc[H]` once the device's own `soc` vector grew to `1:(H+1)`)
+# (`src/models/mpc_window.jl`'s anonymous `soc[H + 1] == terminal_param` idiom; it was
+# retargeted from `soc[H]` once the device's own `soc` vector grew to `1:(H+1)`)
 # from a single terminal target to the FULL `p_ch`/`p_dch` trajectory, pinning a caller-supplied in-sample
 # battery schedule while leaving PV/demand/ambient Parameters free to re-slide per held-out
 # scenario. `solve_stochastic_oos_step!` is a one-line `solve_with_retry!` delegation
-# (`dual = false` — STOCH-03's scope is the realized welfare only). Items tagged
+# (`dual = false` — the scope is the realized welfare only). Items tagged
 # `[:stochastic_oos_harness]`, `setup = [StochasticFixtures]`, mirroring
 # `test_mpc_window.jl`'s own build-once-invariance test convention (lines 75-131).
 #
-# Deviations (Rule 1 — verify-script feasibility fixes, discovered executing this task and
-# Task 1 before it):
+# Design notes (feasibility fixes found while building this file):
 #
-# 1. PLAN.md's own Task 1 `<verify>` script pins `p_ch` at `0.0005 * trial` for `trial in
+# 1. A naive verification script that pins `p_ch` at `0.0005 * trial` for `trial in
 #    1:3` while NEVER resetting the battery's own `soc0` Parameter (this harness exposes no
 #    handle for it — Pattern 5's documented "pin only p_ch/p_dch, never soc" choice, and
 #    `soc0` is deliberately NOT one of `battery_pins`' fields). On THIS fixture (`Pmax=0.002,
@@ -35,7 +34,7 @@
 #    `Ppv_param` is also raised (`p_ch[t] ≤ pv_used[t] ≤ Ppv_param[t]`, eq. 3.7) — verified
 #    directly: the SAME pin without the `Ppv_param` override throws `PRIMAL_INFEASIBLE`.
 
-@testitem "stochastic_oos_harness: build-once — num_variables/num_constraints invariant across heterogeneous re-solves (D-09)" tags =
+@testitem "stochastic_oos_harness: build-once — num_variables/num_constraints invariant across heterogeneous re-solves" tags =
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
@@ -85,7 +84,7 @@
     @test num_constraints(h.model; count_variable_in_set_constraints = true) == nc0
 end
 
-@testitem "stochastic_oos_harness: pin is genuinely binding, not vacuous (T-22-05)" tags =
+@testitem "stochastic_oos_harness: pin is genuinely binding, not vacuous" tags =
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
@@ -132,13 +131,13 @@ end
     @test !all(isapprox.(value.(vbatt.p_ch), valsA; atol = 1e-6))
 end
 
-@testitem "stochastic_oos_harness: CR-01 regression — a FourQuadBESS (no Ppv_param) builds, pins, and solves" tags =
+@testitem "stochastic_oos_harness: regression — a FourQuadBESS (no Ppv_param) builds, pins, and solves" tags =
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: objective_value
 
-    # CR-01 (phase-22 review): the harness's battery-pin walk selected battery-like
+    # The harness's battery-pin walk selected battery-like
     # devices by `haskey(v, :soc0)` and then read `v.Ppv_param` UNCONDITIONALLY —
     # crashing (`type NamedTuple has no field Ppv_param`) on a FourQuadBESS, whose
     # `contribute!` returns `vars = (; p_ch, p_dch, soc, q, soc0)` with no PV Parameter,
@@ -190,14 +189,14 @@ end
     @test isfinite(objective_value(h.model))
 end
 
-@testitem "stochastic_oos_harness: WR-04 (phase-22 review) — FourQuadBESS q is pinned first-stage, never free held-out recourse" tags =
+@testitem "stochastic_oos_harness: FourQuadBESS q is pinned first-stage, never free held-out recourse" tags =
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
     using JuMP: value, set_parameter_value
 
-    # WR-04: build_stochastic_welfare now ties q across in-sample scenarios (q is part
-    # of the first-stage battery schedule under D-03), so the held-out re-score must PIN
+    # build_stochastic_welfare ties q across in-sample scenarios (q is part
+    # of the first-stage battery schedule), so the held-out re-score must PIN
     # the committed q too — a free q would grant the held-out solve reactive recourse
     # the in-sample commitment never had. This item pins the harness half of the fix.
     feeder = StochasticFixtures.stoch_feeder()

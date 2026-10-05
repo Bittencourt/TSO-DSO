@@ -1,31 +1,30 @@
 # test/test_stochastic_welfare.jl
 #
-# Seam: src/models/stochastic_welfare.jl (STOCH-01/STOCH-02). `build_stochastic_welfare`
+# Seam: src/models/stochastic_welfare.jl. `build_stochastic_welfare`
 # generalizes `solve_welfare`'s single-network build to S independently-`contribute!`d,
 # `JuMP.unregister`-decoupled scenario blocks on one shared `Model`, with nonanticipativity
 # equality constraints tying battery-like devices across scenarios and a per-scenario,
-# never-aggregated PF-04 exactness gate. Items tagged `[:stochastic_welfare]`, `setup =
+# never-aggregated exactness gate. Items tagged `[:stochastic_welfare]`, `setup =
 # [StochasticFixtures]`, mirroring `test_mpc_window.jl`'s structure (occursin-filter
 # convention: every item name contains "stochastic_welfare"... here the FILE name already
 # carries that, tags are the discovery mechanism).
 #
-# Deviation (Rule 1 — plan-inconsistency fix, discovered executing this task): PLAN.md's
-# own Task 2 <verify> script places scenario 1's aggregator at bus 2 and scenario 2's at
+# Design note (an inconsistency found while building this file): a naive construction places scenario 1's aggregator at bus 2 and scenario 2's at
 # bus 3 (a single aggregator each, at DIFFERENT buses) and expects the pair to build/solve
-# cleanly, tripping ONLY the PF-04 exactness gate (`ErrorException`) at an extreme
-# `pv_scale`. That construction is incompatible with Task 1's OWN structural-congruence
+# cleanly, tripping ONLY the exactness gate (`ErrorException`) at an extreme
+# `pv_scale`. That construction is incompatible with the structural-congruence
 # guard (`build_stochastic_welfare` throws `ArgumentError` on a scenario/scenario-1 bus
 # mismatch — a guard that is itself load-bearing: without it, the nonanticipativity walk
 # would hit an unhandled `KeyError` on a genuinely-absent bus, worse than a clean
 # `ArgumentError`). Item 2 below places BOTH scenarios' single aggregator at the SAME bus
 # (bus 2) instead — this satisfies the structural-congruence guard while preserving the
-# test's actual intent (D-06: PF-04 gates a per-scenario NETWORK copy — `l`/`v`/`P`/`Q` are
+# test's actual intent (exactness gates a per-scenario NETWORK copy — `l`/`v`/`P`/`Q` are
 # never tied across scenarios, only the battery schedule is — so scenario 2's own network
 # can still be driven independently inexact by an extreme `pv_scale` regardless of the
 # battery tie). Item 3 (the structural-congruence guard itself) is UNAFFECTED and still
-# uses two genuinely different buses, exactly as PLAN.md specifies.
+# uses two genuinely different buses.
 
-@testitem "stochastic_welfare: D-04 non-uniform probabilities genuinely change the objective, not silently uniform" tags =
+@testitem "stochastic_welfare: non-uniform probabilities genuinely change the objective, not silently uniform" tags =
     [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
@@ -60,7 +59,7 @@
     @test !(r_weighted.welfare ≈ r_uniform.welfare)
 end
 
-@testitem "stochastic_welfare: D-06 PF-04 gate runs per scenario, never aggregated — an extreme scenario throws regardless of the other" tags =
+@testitem "stochastic_welfare: exactness gate runs per scenario, never aggregated — an extreme scenario throws regardless of the other" tags =
     [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare
@@ -76,10 +75,10 @@ end
     T = 6
     λ0 = fill(4.0, T)
 
-    # Same device composition (Thermostatic + PVBattery) and — Rule 1 fix (see file header)
+    # Same device composition (Thermostatic + PVBattery) and — per the file-header design note
     # — the SAME bus (2) for BOTH scenarios' aggregator, so build_stochastic_welfare's own
     # structural-congruence guard never fires; the two scenarios differ only in seed and
-    # pv_scale, which is all D-06 needs (each scenario's l/v/P/Q network copy is per-scenario
+    # pv_scale, which is all this item needs (each scenario's l/v/P/Q network copy is per-scenario
     # regardless of the shared bus).
     house(pv_scale, seed) = (
         prof = generate_profiles(seed = seed, T = T);
@@ -92,7 +91,7 @@ end
 
     s1 = house(0.5, 301)   # modest, comfortably-exact pv_scale
 
-    # Scenario 1 ALONE solves OPTIMAL and passes its own PF-04 gate.
+    # Scenario 1 ALONE solves OPTIMAL and passes its own exactness gate.
     s1solo = build_stochastic_welfare(
         f,
         ConvexBranchFlow(),
@@ -104,7 +103,7 @@ end
     @test isfinite(s1solo.welfare)
 
     # SCAN (never guess) candidate pv_scales for scenario 2 until one genuinely TRIPS the
-    # PF-04 gate (an ErrorException from assert_socp_exact!, never an ArgumentError).
+    # exactness gate (an ErrorException from assert_socp_exact!, never an ArgumentError).
     #
     # MEASURED (this task, "measured, not guessed" discipline): pv_scale=1.0 stays exact
     # (maxratio ≈ 1, comfortably certified); pv_scale=2.0 is a genuine STRUCTURAL
@@ -140,7 +139,7 @@ end
     # below.
     tripped, trip_pv_scale, outcomes =
         let tripped = false, trip_pv_scale = NaN, outcomes = String[]
-            # WR-06/WR-07: per-scale record, so a no-trip run self-diagnoses
+            # Per-scale record, so a no-trip run self-diagnoses
             for pv_scale in
                 (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
                 s2 = house(pv_scale, 302)
@@ -160,7 +159,7 @@ end
                     )
                 catch e
                     TSODSO._is_solver_failure(e) || rethrow()
-                    # WR-06 fix (phase-22 review): ONLY the PF-04 gate counts as a trip. At least
+                    # ONLY the exactness gate counts as a trip. At least
                     # four distinct failures inside build_stochastic_welfare raise a bare
                     # ErrorException (assert_solved! on any non-OPTIMAL status — including the
                     # ALMOST_OPTIMAL this fixture family is demonstrably prone to — the internal
@@ -181,7 +180,7 @@ end
             (tripped, trip_pv_scale, outcomes)
         end
     if !tripped
-        # WR-06/WR-07: retained as a general-purpose self-diagnosis in case the gate
+        # Retained as a general-purpose self-diagnosis in case the gate
         # genuinely fails to trip for an unrelated reason in the future — the per-scale
         # outcomes distinguish "solved-and-exact everywhere" (data/environment
         # difference) from "solver failures masked the gate" (convergence class), and the
@@ -203,7 +202,7 @@ end
         catch err
             ["<version introspection unavailable: $(sprint(showerror, err))>"]
         end
-        @info "D-06 scan NEVER tripped the PF-04 gate — self-diagnosis follows" resolved outcomes
+        @info "scan NEVER tripped the exactness gate — self-diagnosis follows" resolved outcomes
     end
     @test tripped
     @test trip_pv_scale == 2.0
@@ -238,7 +237,7 @@ end
         sub_seed(StochasticFixtures.SEED_STOCH, Symbol(:insample_, 1)),
     )
     # A second scenario whose aggregator sits at a DIFFERENT bus than scenario 1's — the
-    # structural mismatch that would mispair the nonanticipativity walk (Task 1, D-03).
+    # structural mismatch that would mispair the nonanticipativity walk.
     scenario2 =
         [TSODSO.Aggregator(1, scenario1[1].φ, scenario1[1].devices, scenario1[1].Pdc)]
 
@@ -252,13 +251,13 @@ end
     )
 end
 
-@testitem "stochastic_welfare: WR-10 (phase-22 review) — D-08 S=1 anchor against solve_welfare and the D-05 de-scaling property" tags =
+@testitem "stochastic_welfare: S=1 anchor against solve_welfare and the de-scaling property" tags =
     [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: SOCP, build_stochastic_welfare, sub_seed
 
-    # WR-10: the phase's CENTRAL pricing math — the D-05 de-scaling
-    # (dadp[s] = raw dual ./ probabilities[s], no sign flip) and the D-08 degenerate
+    # The CENTRAL pricing math — the de-scaling
+    # (dadp[s] = raw dual ./ probabilities[s], no sign flip) and the degenerate
     # anchor (S=1 with probabilities=[1.0] reproduces solve_welfare) — was 'empirically
     # verified' in comments but had NO committed regression test: moving probabilities[s]
     # inside ctx.objective, flipping a sign, or breaking the de-scaling
@@ -272,13 +271,13 @@ end
         sub_seed(StochasticFixtures.SEED_STOCH, :wr10_anchor),
     )
 
-    # --- D-08 anchor: the 1-scenario extensive form reproduces the deterministic solve.
+    # --- S=1 anchor: the 1-scenario extensive form reproduces the deterministic solve.
     # (Same model shape and construction order by design; the two default optimizers
     # differ only in tol_gap — 1e-8 vs the stochastic builder's 5e-10 — so the comparison
     # is a tight ≈, not ==.)
     #
-    # Phase 27 plan 27-07 (Task 2): under FIX-08's hybrid floor (τ_solver=2e-7), this
-    # DETERMINISTIC anchor's DEFAULT `tol_gap=1e-8` trips PF-04 at ratio ≈2.52 (max gap
+    # Under the hybrid exactness floor (τ_solver=2e-7), this
+    # DETERMINISTIC anchor's DEFAULT `tol_gap=1e-8` trips exactness gate at ratio ≈2.52 (max gap
     # 5.14e-7, just above τ_solver). MEASURED ladder (tol_gap_abs=tol_gap_rel, direct
     # execution of this exact fixture body):
     #   1e-8  -> THROWS (ratio 2.52, gap 5.14e-7)
@@ -309,7 +308,7 @@ end
     # With p = 1 the de-scaling denominator is inert and the expectation collapses.
     @test r1.dadp[1] == r1.expected_dadp
 
-    # --- D-05 de-scaling property: the SAME scenario data duplicated at weights
+    # --- De-scaling property: the SAME scenario data duplicated at weights
     # [0.3, 0.7] must report (probability-INVARIANT) equal per-scenario prices — the
     # raw duals ARE p_s-scaled, and dividing by probabilities[s] removes exactly that.
     r2 = build_stochastic_welfare(
@@ -323,17 +322,17 @@ end
     @test all(isapprox.(r2.dadp[1], r2.dadp[2]; rtol = 1e-5, atol = 1e-8))
     # And both agree with the deterministic anchor price for the identical data.
     @test all(isapprox.(r2.dadp[1], dadp_det; rtol = 1e-4, atol = 1e-7))
-    # The expectation (D-07 derived summary) then equals the common per-scenario price.
+    # The expectation (derived summary) then equals the common per-scenario price.
     @test all(isapprox.(r2.expected_dadp, r2.dadp[1]; rtol = 1e-5, atol = 1e-8))
 end
 
-@testitem "stochastic_welfare: WR-09 (phase-22 review) — soc agrees across scenarios post-solve WITHOUT explicit (rank-deficient) soc tie rows" tags =
+@testitem "stochastic_welfare: soc agrees across scenarios post-solve WITHOUT explicit (rank-deficient) soc tie rows" tags =
     [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
     using JuMP: value
 
-    # WR-09: the tie loop used to add soc_s[t] == soc_1[t] for every t — rows EXACTLY
+    # The tie loop used to add soc_s[t] == soc_1[t] for every t — rows EXACTLY
     # linearly dependent on each copy's own soc[1] == soc0 + SOC recursion given the
     # p_ch/p_dch ties (same η, same soc0 Parameter value), i.e. (S−1)·T redundant
     # equalities per battery making the equality block rank-deficient (an interior-point
@@ -371,15 +370,15 @@ end
     end
 end
 
-@testitem "stochastic_welfare: WR-04 (phase-22 review) — FourQuadBESS reactive dispatch q is nonanticipativity-tied (full first-stage battery schedule)" tags =
+@testitem "stochastic_welfare: FourQuadBESS reactive dispatch q is nonanticipativity-tied (full first-stage battery schedule)" tags =
     [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
     using JuMP: value
 
-    # WR-04: the tie loop constrained p_ch/p_dch/soc only, so a FourQuadBESS's reactive
+    # The tie loop constrained p_ch/p_dch/soc only, so a FourQuadBESS's reactive
     # dispatch q stayed a free per-scenario recourse variable — the "battery schedule is
-    # first-stage, SHARED across scenarios" claim (D-03) held only for the active-power
+    # first-stage, SHARED across scenarios" claim held only for the active-power
     # half of the device. q is now tied too; this item pins it: two scenarios with
     # genuinely different PV/demand draws must report the IDENTICAL solved q trajectory.
     feeder = StochasticFixtures.stoch_feeder()
@@ -437,7 +436,7 @@ end
     @test all(isapprox.(value.(v2.p_dch), value.(v1.p_dch); atol = 1e-6))
 end
 
-@testitem "stochastic_welfare: WR-03 (phase-22 review) device-composition congruence guard — reordered or missing devices throw ArgumentError, never a silently-untied battery" tags =
+@testitem "stochastic_welfare: device-composition congruence guard — reordered or missing devices throw ArgumentError, never a silently-untied battery" tags =
     [:stochastic_welfare] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_welfare, sub_seed
@@ -456,7 +455,7 @@ end
     )
 
     # The fixture aggregator is [Thermostatic, PVBattery]. REVERSED, scenario 2's device
-    # at index 1 is a battery while scenario 1's is a Thermostatic — before the WR-03 fix
+    # at index 1 is a battery while scenario 1's is a Thermostatic — before the composition guard existed
     # the tie walk's `haskey(v1, :soc0) || continue` marker (keyed to SCENARIO 1) skipped
     # index 1 entirely, leaving scenario 2's battery SILENTLY UNTIED: a scenario-specific
     # (clairvoyant) recourse variable quietly corrupting the two-stage welfare and every

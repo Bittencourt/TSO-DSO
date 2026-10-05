@@ -1,13 +1,13 @@
-# Seam: devices/Thermostatic.jl (DEV-01). Thermostatic (A/C) flexible load.
+# Seam: devices/Thermostatic.jl. Thermostatic (A/C) flexible load.
 #
-# Plan 03-03 turns these green. The `Thermostatic` device is the AGGREGATABLE variant of
-# the device contract (aggregator-as-writer, DEV-05): `contribute!` builds its own
+# The `Thermostatic` device is the AGGREGATABLE variant of
+# the device contract (aggregator-as-writer): `contribute!` builds its own
 # variables + temporal-coupling constraints on `ctx.model` and RETURNS
 # `(; vars, p_inject, utility)` — it writes NOTHING to `ctx.residuals` and calls NO
 # `add_to_objective!`. Every @testitem name contains "thermostatic" so
 # `occursin("thermostatic", ti.name)` selects them.
 
-@testitem "thermostatic: device type exists (DEV-01)" tags = [:thermostatic] begin
+@testitem "thermostatic: device type exists" tags = [:thermostatic] begin
     using TSODSO
 
     # Recursion 3.2-3.3, comfort band, concave utility 3.11.
@@ -15,7 +15,7 @@
     @test TSODSO.Thermostatic <: TSODSO.AbstractDevice
 end
 
-@testitem "thermostatic: rejects non-concave utility and inconsistent bounds (DEV-01)" tags =
+@testitem "thermostatic: rejects non-concave utility and inconsistent bounds" tags =
     [:thermostatic] begin
     using TSODSO
 
@@ -80,7 +80,7 @@ end
         Tout,
     )
 
-    # WR-02 physical-sign guards on the recursion (eq. 3.2 Tin[t+1]=Tin[t]+α(Tout−Tin)−β·p):
+    # Physical-sign guards on the recursion (eq. 3.2 Tin[t+1]=Tin[t]+α(Tout−Tin)−β·p):
     #   α ≥ 0 (a negative ambient coupling reverses heat flow — non-physical).
     @test_throws ArgumentError TSODSO.Thermostatic(
         3,
@@ -120,7 +120,7 @@ end
         Tout,
     )  # β == 0
 
-    # WR-02 comfort-band IC guard (mirrors PVBattery soc0): Tin0 must start inside [Tmin,Tmax].
+    # Comfort-band IC guard (mirrors PVBattery soc0): Tin0 must start inside [Tmin,Tmax].
     @test_throws ArgumentError TSODSO.Thermostatic(
         3,
         0.2,
@@ -149,13 +149,13 @@ end
     @test TSODSO.Thermostatic(3, 0.2, 0.5, 20.0, 24.0, 20.0, 0.0, 5.0, 1.0, Tout) isa
           TSODSO.Thermostatic
 
-    # IN-01 promotion: a mixed-type call (integer among Float64s) promotes rather than MethodError.
+    # Promotion: a mixed-type call (integer among Float64s) promotes rather than MethodError.
     mixed = TSODSO.Thermostatic(3, 0, 0.5, 20.0, 24.0, 22.0, 0, 5.0, 1.0, Tout)
     @test mixed isa TSODSO.Thermostatic{Float64}
     @test mixed.Pmin === 0.0
 end
 
-@testitem "thermostatic: aggregatable contribute! returns terms, writes NOTHING, holds no feeder (DEV-01)" tags =
+@testitem "thermostatic: aggregatable contribute! returns terms, writes NOTHING, holds no feeder" tags =
     [:thermostatic] begin
     using TSODSO, JuMP
 
@@ -207,7 +207,7 @@ end
     @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
 end
 
-@testitem "thermostatic: recursion 3.2 and IC hold at the solved optimum (DEV-01)" tags =
+@testitem "thermostatic: recursion 3.2 and IC hold at the solved optimum" tags =
     [:thermostatic] begin
     using TSODSO, JuMP
 
@@ -235,7 +235,7 @@ end
     end
 end
 
-@testitem "thermostatic: contribute! validates the ambient profile length (DEV-01)" tags =
+@testitem "thermostatic: contribute! validates the ambient profile length" tags =
     [:thermostatic] begin
     using TSODSO, JuMP
 
@@ -245,7 +245,7 @@ end
     @test_throws ArgumentError TSODSO.contribute!(d, ctx; T = 8)
 end
 
-@testitem "thermostatic: contribute! widens Tin0/Tout_param to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+@testitem "thermostatic: contribute! widens Tin0/Tout_param to a genuine Parameter, bit-for-bit identical default" tags =
     [:thermostatic] begin
     using TSODSO, JuMP
 
@@ -258,7 +258,7 @@ end
     d = TSODSO.Thermostatic(3, 0.2, 0.5, Tmin, Tmax, 22.0, Pmin, Pmax, 1.0, Tout)
     res = TSODSO.contribute!(d, ctx; T = T)
 
-    # (a) Byte-identical default: every new Parameter's value equals the ORIGINAL literal.
+    # (a) bit-for-bit identical default: every new Parameter's value equals the ORIGINAL literal.
     # Tout_param covers ONLY t = 1:(T-1) — the recursion never reads Tout[T].
     @test parameter_value(res.vars.Tin0) == 22.0
     @test all(parameter_value.(res.vars.Tout_param) .== Tout[1:(T - 1)])

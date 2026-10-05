@@ -1,16 +1,16 @@
 # test/test_solver_factory_milp.jl
 #
-# Seam: src/solver/factory.jl (INFRA-02), `select_optimizer(::MILP())`. Phase 24
-# (24-RESEARCH.md Priority Finding 4) requires `mip_rel_gap => 0.0` so the planning
-# layer's later "exact lattice termination" claim (D-13) is not silently undermined by
+# Seam: src/solver/factory.jl, `select_optimizer(::MILP())`. The planning
+# layer requires `mip_rel_gap => 0.0` so the planning
+# layer's later "exact lattice termination" claim is not silently undermined by
 # a loose INNER MILP gap. This file lives at the solver-factory seam but is tagged
 # `[:planning]` because MILP exactness is the planning layer's own solver dependency —
 # no other tier in this project currently consumes `MILP()`.
 #
 # Pure factory-level smoke test: a tiny standalone binary-knapsack MILP, NOT reusing
-# any planning fixture (24-01-PLAN.md Task 1).
+# any planning fixture.
 
-@testitem "solver factory: select_optimizer(::MILP()) sets mip_rel_gap=>0.0 and solves a tiny knapsack exactly (INT-01)" tags =
+@testitem "solver factory: select_optimizer(::MILP()) sets mip_rel_gap=>0.0 and solves a tiny knapsack exactly" tags =
     [:planning] begin
     using TSODSO
     using JuMP
@@ -31,7 +31,7 @@
     @test isapprox(value(x[2]), 1.0; atol = 1e-6)
     @test isapprox(value(x[3]), 0.0; atol = 1e-6)
 
-    # (b) RESEARCH.md Common Pitfall 2 / Assumption A2's "quick empirical check": mip_rel_gap
+    # (b) Quick empirical check: mip_rel_gap
     # => 0.0 must NOT stall branch-and-bound on this tiny instance. If it ever does (a
     # non-OPTIMAL status), that would be a finding to document plainly in factory.jl's own
     # comment (fall back to a small positive mip_rel_gap, e.g. 1e-9) — not something to

@@ -43,7 +43,7 @@ end
     @test !p(InterruptException())
 end
 
-@testitem "errors: assert_solved! / assert_no_slack typed throws, byte-identical text" begin
+@testitem "errors: assert_solved! / assert_no_slack typed throws, bit-for-bit identical text" begin
     using TSODSO, JuMP, HiGHS, Test
     const MOI = JuMP.MOI
 

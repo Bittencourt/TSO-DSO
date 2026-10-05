@@ -1,5 +1,5 @@
-# Seam: core/status.jl (INFRA-03). RED until plan 01-03 fills the stub.
-@testitem "status: assert_solved! passes optimal, fails loudly on non-optimal (INFRA-03)" begin
+# Seam: core/status.jl.
+@testitem "status: assert_solved! passes optimal, fails loudly on non-optimal" begin
     using TSODSO, JuMP
 
     # An OPTIMAL solve passes the choke-point wrapper.
