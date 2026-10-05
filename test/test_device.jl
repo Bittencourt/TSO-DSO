@@ -1,10 +1,10 @@
-# Seam: devices/Interruptible.jl (DEV-03). Device contract + first concrete device.
+# Seam: devices/Interruptible.jl. Device contract + first concrete device.
 #
 # These items prove the device↔network decoupling (success criterion 2): the device is
 # constructed and contributes with NO `Feeder` ever built. The name contains "device"
 # so the `occursin("device", ti.name)` runner filter selects them.
 
-@testitem "device: Interruptible rejects a non-concave utility (b <= 0) at construction (DEV-03)" tags =
+@testitem "device: Interruptible rejects a non-concave utility (b <= 0) at construction" tags =
     [:device] begin
     using TSODSO
 
@@ -18,13 +18,13 @@
     # Inconsistent bounds are also rejected.
     @test_throws ArgumentError TSODSO.Interruptible(2, 5.0, 0.0, 4.0, 1.0)
 
-    # IN-01: a mixed-type call (integer 0 among Float64s) promotes rather than MethodError.
+    # A mixed-type call (integer 0 among Float64s) promotes rather than MethodError.
     mixed = TSODSO.Interruptible(2, 0, 5.0, 4.0, 1.0)
     @test mixed isa TSODSO.Interruptible{Float64}
     @test mixed.Pmin === 0.0
 end
 
-@testitem "device: Interruptible contributes a bounded var, returns the aggregatable (; vars, p_inject, utility) contract, and writes NOTHING itself — with NO feeder (DEV-03, FIX-05)" tags =
+@testitem "device: Interruptible contributes a bounded var, returns the aggregatable (; vars, p_inject, utility) contract, and writes NOTHING itself — with NO feeder" tags =
     [:device] begin
     using TSODSO, JuMP
 
@@ -39,7 +39,7 @@ end
     res = TSODSO.contribute!(load, ctx; T = T)
 
     # (0) Aggregatable (Variant-2) contract: the NamedTuple shape, mirroring the
-    # Deferrable/Thermostatic pattern (26-07, FIX-05) — Interruptible writes NOTHING
+    # Deferrable/Thermostatic pattern — Interruptible writes NOTHING
     # itself; the Aggregator is the sole :Rp/:Rq writer.
     @test propertynames(res) == (:vars, :p_inject, :utility)
     @test isempty(ctx.residuals)
@@ -55,7 +55,7 @@ end
     end
 
     # (2) The returned p_inject is NEGATIVE (−p) — a consumed load reduces net
-    #     injection (Pitfall 2, toy_dc sign convention).
+    #     injection (toy_dc sign convention).
     p = res.vars.p
     @test length(res.p_inject) == T
     for t in 1:T

@@ -1,14 +1,14 @@
 # test/test_agr.jl
 #
 # Seam: src/admm/AgrOpt.jl — the AGR-OPT per-node aggregator/device ADMM subproblem
-# (ADMM-01 / ADMM-03, thesis eq. 3.46). Block 1 of the 2-block ADMM split.
+# (thesis eq. 3.46). Block 1 of the 2-block ADMM split.
 #
 # @testitem harness for the AGR-OPT subproblem. Every item name contains "agr" so
-# `occursin("agr", ti.name)` selects them (06-VALIDATION filter substring); the build-once
+# `occursin("agr", ti.name)` selects them (test-name filter substring); the build-once
 # proof item additionally carries "resolve". Behavioral asserts sit BEHIND an `isdefined`
-# guard so the runner never crashes while a symbol is still RED (mirrors test_admm.jl).
+# guard so the runner never crashes while a symbol is still undefined (mirrors test_admm.jl).
 #
-# CONTRACT pinned here (RESEARCH Pattern 4 / thesis 3.22/3.23/3.46):
+# CONTRACT pinned here (thesis 3.22/3.23/3.46):
 #   build_agr_opt(agg::Aggregator, T; ρ) -> AgrOpt          # build-once per-node QP
 #   solve_agr!(agr::AgrOpt, λ_j, c_j, ρ) -> (; pag, utility) # coefficient-update re-solve
 # The subproblem reuses `Aggregator.contribute!` (and the device builders) VERBATIM — it is
@@ -20,7 +20,7 @@
     using TSODSO
     using JuMP
 
-    # RED until Task 1 (this plan) fills src/admm/AgrOpt.jl.
+    # build_agr_opt/AgrOpt must be defined (src/admm/AgrOpt.jl).
     @test isdefined(TSODSO, :build_agr_opt)
     @test isdefined(TSODSO, :AgrOpt)
 
@@ -55,7 +55,7 @@ end
     using TSODSO
     using JuMP
 
-    # RED until Task 2 (this plan) adds solve_agr!.
+    # solve_agr! must be defined.
     @test isdefined(TSODSO, :solve_agr!)
 
     if isdefined(TSODSO, :solve_agr!)
@@ -82,7 +82,7 @@ end
     using TSODSO
     using JuMP: num_variables, num_constraints
 
-    # RED until Task 2 adds solve_agr!.
+    # solve_agr! must be defined.
     @test isdefined(TSODSO, :solve_agr!)
 
     if isdefined(TSODSO, :solve_agr!) && isdefined(TSODSO, :build_agr_opt)
@@ -94,7 +94,7 @@ end
 
         agr = build_agr_opt(agg, Th; ρ = ρ)
 
-        # ADMM-03 build-once proof: only `set_objective_coefficient` mutates the model, so
+        # Build-once proof: only `set_objective_coefficient` mutates the model, so
         # re-solving with DIFFERENT (λ_j, c_j) never changes its variable/constraint count.
         nv0 = num_variables(agr.model)
         nc0 = num_constraints(agr.model; count_variable_in_set_constraints = true)
@@ -116,7 +116,7 @@ end
     [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
     using TSODSO
 
-    # RED until Task 2 adds solve_agr!.
+    # solve_agr! must be defined.
     @test isdefined(TSODSO, :solve_agr!)
 
     if isdefined(TSODSO, :solve_agr!)
@@ -129,7 +129,7 @@ end
         agr = build_agr_opt(agg, Th; ρ = ρ)
 
         # A high consumption price must measurably move the flexible schedule (the price truly
-        # enters the QP via the pag[t] linear coefficient — RESEARCH Pattern 3).
+    # enters the QP via the pag[t] linear coefficient).
         lo = solve_agr!(agr, zeros(Th), zeros(Th), ρ)
         hi = solve_agr!(agr, fill(20.0, Th), zeros(Th), ρ)
         @test !isapprox(collect(lo.pag), collect(hi.pag); atol = 1e-6)
@@ -142,7 +142,7 @@ end
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
 
-    # RED until Task 1 (this plan) adds set_rho!.
+    # set_rho! must be defined.
     @test isdefined(TSODSO, :set_rho!)
 
     if isdefined(TSODSO, :set_rho!)
@@ -162,7 +162,7 @@ end
         nv0 = num_variables(agr_mut.model)
         nc0 = num_constraints(agr_mut.model; count_variable_in_set_constraints = true)
         set_rho!(agr_mut, ρ1)
-        # Build-once (ADMM-04): a ρ change mutates ONLY objective coefficients — shape invariant.
+        # Build-once: a ρ change mutates ONLY objective coefficients — shape invariant.
         @test num_variables(agr_mut.model) == nv0
         @test num_constraints(agr_mut.model; count_variable_in_set_constraints = true) ==
               nc0

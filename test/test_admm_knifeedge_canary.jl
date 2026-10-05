@@ -4,12 +4,12 @@
 # iteration 28 (ρ = 200, one τ = 2 doubling from ρ₀ = 100). Which side of the edge a given build
 # lands on is decided by floating-point/codegen perturbation — an unreachable `include`, a Julia
 # PATCH bump — never by run-to-run noise; each (tree × Julia version) pair is deterministic. The
-# production fix (`solve_dso!`'s mid-loop branch now routed through `solve_with_retry!`,
-# RESET-01) makes every toolchain tested converge, so a bare "did it converge" assertion is no
+# production fix (`solve_dso!`'s mid-loop branch now routed through `solve_with_retry!`),
+# makes every toolchain tested converge, so a bare "did it converge" assertion is no
 # longer informative on its own — a FUTURE flip needs a test that pins the actual trajectory
 # (iteration count + welfare) so it fails LOUDLY and is attributable to a commit, instead of
-# resurfacing months later as a mystery flake. Full history, every measured number, and the fix:
-# .planning/debug/resolved/ieee13-admm-numerical-error.md
+# resurfacing months later as a mystery flake. The measured numbers and the fix are
+# summarized in the re-pin log below.
 #
 # FINDING (documented here verbatim so a future reader doesn't have to re-derive it):
 # `solve_with_retry!` DOES accept an `attempts_out::Union{Nothing,Ref{Int}}` keyword for exactly
@@ -23,12 +23,12 @@
 # with a plain `Logging.SimpleLogger` on the test side only (strictly additive).
 #
 # RE-PIN LOG (append an entry here every time the pinned trajectory below is re-measured — do
-# NOT silently overwrite without a log entry, per SC-6):
-#   - 2026-09-29 (Plan 26-20, Phase 26 gap-closure): r.iters 58 -> 56, welfare
-#     -4822.903616694139 -> -4823.66604824162. Cause: Plan 26-12 (PM-03) made
+# NOT silently overwrite without a log entry):
+#   - 2026-09-29 (live-reactive-default change): r.iters 58 -> 56, welfare
+#     -4822.903616694139 -> -4823.66604824162. Cause: the live-reactive-default change made
 #     `solve_admm`/`build_dso_opt` default `reactive_consensus` to LIVE whenever a flexible-load
 #     member is present, which this fixture's IEEE-13 population has; re-measured strictly AFTER
-#     26-12 landed per its own explicit ordering requirement (26-POSTMERGE-TRIAGE.md cluster F).
+#     the default change landed, per its explicit ordering requirement.
 #     Bit-stable across 3 fresh `julia --project=.` processes on Julia 1.12.5 in this worktree.
 
 @testitem "admm knife-edge canary: IEEE-13 mid-loop SOCP pinned trajectory (canary, admm)" setup =
@@ -55,28 +55,28 @@
     @info "IEEE-13 ADMM knife-edge canary" iters = r.iters welfare = r.welfare escalations =
         escalations
 
-    # PINNED — re-measured 2026-09-29 (Phase 26 gap-closure, Plan 26-20), bit-stable across 3
+    # PINNED — re-measured 2026-09-29 (live-reactive-default change), bit-stable across 3
     # fresh `julia --project=.` processes on Julia 1.12.5. OLD -> NEW: r.iters 58 -> 56. CAUSE:
-    # Plan 26-12's (PM-03) live-reactive-default fix makes `solve_admm`/`build_dso_opt` default
+    # The live-reactive-default fix makes `solve_admm`/`build_dso_opt` default
     # `reactive_consensus` to LIVE whenever any aggregator carries a flexible-load member (this
     # fixture's IEEE-13 population does), engaging DSO-OPT's reactive-consensus coupling on every
-    # ADMM iteration and moving the mid-loop SOCP's numerical-knife-edge trajectory; Plan 26-05's
-    # `:smax_rev` cone addition also contributed to earlier trajectory shifts (see
-    # 26-POSTMERGE-TRIAGE.md, cluster F). Prior pin (58 / -4822.903616694139) was itself a
-    # re-measurement after 26-02's cpydrop sign fix and 26-05's :smax_rev addition; this is the
-    # FIRST re-measurement after 26-12 landed, per PM-03's explicit "re-pin only after this"
-    # ordering requirement. A future flip means the trajectory moved again, not a flake: see the
-    # resolved debug doc's "known-good welfare references" table for the historical
-    # cross-environment comparison (pre-26-12 only; not yet re-run cross-environment post-26-12).
+    # ADMM iteration and moving the mid-loop SOCP's numerical-knife-edge trajectory; the earlier
+    # `:smax_rev` cone addition also contributed to earlier trajectory shifts.
+    # Prior pin (58 / -4822.903616694139) was itself a
+    # re-measurement after the cpydrop sign fix and the :smax_rev addition; this is the
+    # FIRST re-measurement after the default change landed, per its explicit "re-pin only after this"
+    # ordering requirement. A future flip means the trajectory moved again, not a flake. The
+    # historical cross-environment comparison was made
+    # before the default change only; not yet re-run cross-environment afterwards.
     @test r.iters == 56
 
     # rtol=1e-6/atol=1e-3 band UNCHANGED from the prior pin — its stated rationale (empirically
     # tight enough to flag a genuine trajectory change, loose enough to absorb legitimate
-    # toolchain spread) still applies; this plan re-measured only on the single Julia 1.12.5
+    # toolchain spread) still applies; the re-pin was measured only on the single Julia 1.12.5
     # toolchain available in this worktree (3 fresh processes, bit-identical), not the full
     # multi-version matrix the original margin was derived from — the band is kept AS-IS rather
-    # than re-derived from a partial cross-environment sample (see SUMMARY for the reasoning).
-    # OLD -> NEW welfare: -4822.903616694139 -> -4823.66604824162 (same PM-03 cause as r.iters
+    # than re-derived from a partial cross-environment sample.
+    # OLD -> NEW welfare: -4822.903616694139 -> -4823.66604824162 (same cause as r.iters
     # above).
     @test isapprox(r.welfare, -4823.66604824162; rtol = 1e-6, atol = 1e-3)
 

@@ -1,19 +1,19 @@
-# Seam: devices/Aggregator.jl (DEV-05). Aggregator roll-up, the network-facing writer.
+# Seam: devices/Aggregator.jl. Aggregator roll-up, the network-facing writer.
 #
-# Plan 03-05 turns this green: the `Aggregator` rolls its member devices into ONE
+# The `Aggregator` rolls its member devices into ONE
 # nodal net active injection, ONE nodal net reactive injection (from its power
 # factor, thesis eq. 3.23), and ONE summed utility (eq. 3.21), and is the SOLE
 # :Rp/:Rq writer at its bus — devices stay network-agnostic. The name contains
 # "aggregator" so `occursin("aggregator", ti.name)` selects it.
 
-@testitem "aggregator: roll-up type exists (DEV-05)" tags = [:aggregator] begin
+@testitem "aggregator: roll-up type exists" tags = [:aggregator] begin
     using TSODSO
 
     # The aggregator that sums devices into nodal net P/Q + utility (3.21-3.23).
     @test isdefined(TSODSO, :Aggregator)
 end
 
-@testitem "aggregator: sole :Rp/:Rq writer at its bus (DEV-05, eqs. 3.21-3.23)" tags =
+@testitem "aggregator: sole :Rp/:Rq writer at its bus (eqs. 3.21-3.23)" tags =
     [:aggregator] begin
     using TSODSO
     using JuMP
@@ -55,10 +55,10 @@ end
     end
 
     # Reactive is PURELY the inelastic-demand power-factor term (DERs active-only, A3):
-    # q = −P_dc·tan(arccos φ). MPC-01 (D-08) widened Pdc into a genuine Parameter
+    # q = −P_dc·tan(arccos φ). The MPC seam widened Pdc into a genuine Parameter
     # (Pdc_param), so this is now an AffExpr TERM referencing Pdc_param[t] with
     # coefficient −tanφ (constant 0.0) rather than a bare numeric constant — the
-    # byte-identical-default invariant is on the EVALUATED value (Parameter defaults to
+    # bit-for-bit-identical-default invariant is on the EVALUATED value (Parameter defaults to
     # the exact prior literal `Pdc[t]`), not on the raw `.constant`/`.terms` shape.
     tanφ = sqrt(1 - φ^2) / φ
     for t in 1:T
@@ -77,12 +77,12 @@ end
     @test any(v -> haskey(v, :p_ch) && haskey(v, :p_dch), ctx.agg_device_vars[bus])
 end
 
-@testitem "aggregator: reactive_factor helper single-sources tan(acos φ) (IN-01)" tags =
+@testitem "aggregator: reactive_factor helper single-sources tan(acos φ)" tags =
     [:aggregator] begin
     using TSODSO
     using TSODSO: reactive_factor
 
-    # The single-sourced reactive-draw factor (IN-01) equals tan(arccos φ) = sqrt(1−φ²)/φ,
+    # The single-sourced reactive-draw factor equals tan(arccos φ) = sqrt(1−φ²)/φ,
     # reused verbatim by the aggregator roll-up and both ADMM subproblems.
     @test isdefined(TSODSO, :reactive_factor)
     for φ in (0.85, 0.9, 0.95, 1.0)
@@ -93,7 +93,7 @@ end
     @test reactive_factor(1.0) == 0.0
 end
 
-@testitem "aggregator: q_inject byte-identity (no 4Q) + FourQuadBESS summation (MESH-04, D-09/D-10)" tags =
+@testitem "aggregator: q_inject bit-for-bit identity (no 4Q) + FourQuadBESS summation" tags =
     [:aggregator] begin
     using TSODSO
     using JuMP
@@ -105,24 +105,24 @@ end
     Tout = fill(25.0, T)
     Ppv = fill(0.2, T)
 
-    # (a) BYTE-IDENTITY: a FRESH PVBattery-only aggregator — a member with NEITHER a
+    # (a) BIT-FOR-BIT IDENTITY: a FRESH PVBattery-only aggregator — a member with NEITHER a
     # genuine `q_inject` field NOR `is_flexible_load(d) == true` (PVBattery is
     # active-only per Assumption A3), so :Rq's device-reactive contribution must be
-    # zero per t. MPC-01 (D-08) widened Pdc into a genuine Parameter (Pdc_param), so the
+    # zero per t. The MPC seam widened Pdc into a genuine Parameter (Pdc_param), so the
     # inelastic-demand term is now an AffExpr TERM referencing Pdc_param[t] (coefficient
-    # −tanφ, constant 0.0) rather than a bare numeric constant — the byte-identical-
+    # −tanφ, constant 0.0) rather than a bare numeric constant — the bit-for-bit-identical-
     # default invariant is on the EVALUATED value (Pdc_param defaults to the exact prior
     # literal Pdc[t]), not on the raw `.constant`/`.terms` shape.
     #
-    # DEVIATION (FIX-05, plan 26-04): this sub-case previously used a Thermostatic +
-    # PVBattery pair (mirroring the "sole :Rp/:Rq writer" fixture). Since FIX-05 makes
+    # NOTE (flexible-load reactive draw): this sub-case previously used a Thermostatic +
+    # PVBattery pair (mirroring the "sole :Rp/:Rq writer" fixture). Since the flexible-load change makes
     # `is_flexible_load(::Thermostatic) == true`, a Thermostatic member NOW correctly
     # draws q = p*tanφ into q_inject (thesis eq. 3.23) — so `q_inject[t] == zero(AffExpr)`
     # is no longer the right assertion for a Thermostatic-bearing aggregator. Swapped to
     # a SECOND `PVBattery` (both active-only, neither carries `q_inject` nor is a
-    # flexible load) to keep testing the ORIGINAL "no q_inject field present" byte-
-    # identity property this sub-case is actually about, independent of FIX-05's new
-    # flexible-load reactive draw (covered separately by the new FIX-05 @testitem below).
+    # flexible load) to keep testing the ORIGINAL "no q_inject field present" bit-for-bit
+    # identity property this sub-case is actually about, independent of the new
+    # flexible-load reactive draw (covered separately by the flexible-load @testitem below).
     batt = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
     batt2 = PVBattery(bus, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, Ppv)
 
@@ -146,8 +146,8 @@ end
     # (b) SUMMATION: an aggregator with a Thermostatic plus a FourQuadBESS (valid
     # asymmetric Pch_max/Pdch_max/Smax/η/λ triple) — proving the roll-up genuinely wires
     # the device's own q[t] variable into :Rq and into the returned q_inject total
-    # (CR-01: tests passing != mechanism live), ADDITIVELY alongside the Thermostatic's
-    # own FIX-05 power-factor reactive draw (a DIFFERENT AffExpr term, on p_therm[t] —
+    # (tests passing != mechanism live), ADDITIVELY alongside the Thermostatic's
+    # own power-factor reactive draw (a DIFFERENT AffExpr term, on p_therm[t] —
     # the assertions below target ONLY the q_var[t] coefficient, so they hold whether or
     # not the Thermostatic term is also present).
     therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
@@ -162,7 +162,7 @@ end
     # contribute!'s (; vars = device_vars, ...) stash order
     for t in 1:T
         # Rq now carries a non-empty terms entry equal to the device's q[t] with
-        # coefficient 1.0, ON TOP OF the same untouched Pdc_param[t]*(−tanφ) term (D-10).
+    # coefficient 1.0, ON TOP OF the same untouched Pdc_param[t]*(−tanφ) term.
         @test isapprox(Rq_4q[bus, t].constant, 0.0; atol = 1e-9)
         @test isapprox(
             get(Rq_4q[bus, t].terms, res_4q.Pdc_param[t], 0.0),
@@ -173,13 +173,13 @@ end
         @test isapprox(get(Rq_4q[bus, t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
 
         # res.q_inject is an AffExpr REFERENCING that same q[t] variable, not a numeric
-        # constant — the load-bearing "genuinely wired" assertion (T-19-09).
+    # constant — the load-bearing "genuinely wired" assertion.
         @test res_4q.q_inject[t] isa AffExpr
         @test isapprox(get(res_4q.q_inject[t].terms, q_var[t], 0.0), 1.0; atol = 1e-9)
     end
 end
 
-@testitem "aggregator: flexible-load members (Thermostatic/Deferrable) draw q = p*tanφ into :Rq (FIX-05)" tags =
+@testitem "aggregator: flexible-load members (Thermostatic/Deferrable) draw q = p*tanφ into :Rq" tags =
     [:aggregator] begin
     using TSODSO
     using JuMP
@@ -194,7 +194,7 @@ end
 
     # (1) A Thermostatic ALONE in a minimal aggregator uses the AGGREGATOR's φ (no
     # per-device override set). Its own p[t] draws q = p*tanφ into :Rq (thesis eq. 3.23,
-    # FIX-05) — inspect the AffExpr terms map exactly like the q_inject byte-identity
+    # power-factor draw) — inspect the AffExpr terms map exactly like the q_inject bit-for-bit identity
     # item above.
     therm = Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, Tout)
     agg_therm = Aggregator(bus, φ_agg, [therm], fill(0.0, T))
@@ -251,7 +251,7 @@ end
     end
 end
 
-@testitem "aggregator: Interruptible (converted Variant-2, 26-07) draws q = p*tanφ into :Rq (FIX-05)" tags =
+@testitem "aggregator: Interruptible (converted Variant-2) draws q = p*tanφ into :Rq" tags =
     [:aggregator] begin
     using TSODSO
     using JuMP
@@ -262,9 +262,9 @@ end
     tanφ = TSODSO.reactive_factor(φ)
 
     # Interruptible converted from self-injecting (Variant-1) to the aggregatable
-    # Variant-2 contract in plan 26-07 — it can now sit under an Aggregator exactly like
+    # Variant-2 contract — it can now sit under an Aggregator exactly like
     # Thermostatic/Deferrable, and its own consumption draws power-factor reactive power
-    # (thesis eq. 3.23, FIX-05).
+    # (thesis eq. 3.23).
     load = TSODSO.Interruptible(bus, 0.0, 5.0, 4.0, 1.0)
     agg = TSODSO.Aggregator(bus, φ, [load], fill(0.0, T))
     ctx = TSODSO.ModelContext(Model())
@@ -276,7 +276,7 @@ end
     @test TSODSO.is_flexible_load(load) == true
 end
 
-@testitem "aggregator: Interruptible's own φ override takes precedence over agg.φ (WR-03, phase-26 review)" tags =
+@testitem "aggregator: Interruptible's own φ override takes precedence over agg.φ" tags =
     [:aggregator] begin
     using TSODSO
     using JuMP
@@ -306,7 +306,7 @@ end
     @test_throws ArgumentError TSODSO.Interruptible(bus, 0.0, 5.0, 4.0, 1.0; φ = 1.5)
 end
 
-@testitem "aggregator: constructor + horizon guards (DEV-05)" tags = [:aggregator] begin
+@testitem "aggregator: constructor + horizon guards" tags = [:aggregator] begin
     using TSODSO
     using JuMP
 
@@ -326,7 +326,7 @@ end
     @test_throws ArgumentError contribute!(short, ModelContext(Model()); T = T)
 end
 
-@testitem "aggregator: contribute! widens Pdc to a genuine Parameter, byte-identical default (MPC-01 seam)" tags =
+@testitem "aggregator: contribute! widens Pdc to a genuine Parameter, bit-for-bit identical default (MPC seam)" tags =
     [:aggregator] begin
     using TSODSO
     using JuMP
@@ -346,7 +346,7 @@ end
     ctx = ModelContext(model)
     res = contribute!(agg, ctx; T = T)
 
-    # (a) Byte-identical default: every Pdc_param entry equals the ORIGINAL literal Pdc[t].
+    # (a) Bit-for-bit identical default: every Pdc_param entry equals the ORIGINAL literal Pdc[t].
     @test all(parameter_value.(res.Pdc_param) .== Pdc)
 
     # (b) set_parameter_value changes the value with NO new variable/constraint added

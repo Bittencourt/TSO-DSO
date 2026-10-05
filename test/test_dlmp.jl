@@ -1,18 +1,18 @@
-# Seam: pricing/dlmp.jl (PRICE-02). DLMP extraction + four-way decomposition.
+# Seam: pricing/dlmp.jl. DLMP extraction + four-way decomposition.
 #
-# RED @testitem harness (Wave 1 of Phase 5). Plan 05-02 turns these green by defining
+# @testitem harness for
 # `extract_dlmp` (read the λ_j[t] dual of the registered :balance_p) and `decompose_dlmp`
 # (split into energy/loss/voltage/congestion using the :cone/:vdrop/:cpydrop/:smax duals
-# registered in plan 05-01, with the sum-to-nodal-price identity as the net). Every item name
-# contains "dlmp" so `occursin("dlmp", ti.name)` selects it. While RED the sole failing
+# registered by the convex branch flow, with the sum-to-nodal-price identity as the net). Every item name
+# contains "dlmp" so `occursin("dlmp", ti.name)` selects it. The first
 # assertion is a missing-symbol `isdefined` check (never a runner crash); behavioral asserts
-# sit behind the `isdefined` guard so they go live automatically once 05-02 lands.
+# sit behind the `isdefined` guard so they go live automatically once the functions exist.
 
-@testitem "dlmp: extract_dlmp is defined and returns a per-hour price vector (PRICE-02)" tags =
+@testitem "dlmp: extract_dlmp is defined and returns a per-hour price vector" tags =
     [:dlmp] begin
     using TSODSO
 
-    # RED until plan 05-02 defines the DLMP extractor.
+    # The DLMP extractor must be defined.
     @test isdefined(TSODSO, :extract_dlmp)
 
     if isdefined(TSODSO, :extract_dlmp)
@@ -43,10 +43,10 @@
     end
 end
 
-@testitem "dlmp: decompose_dlmp components sum to the nodal price (PRICE-02)" tags = [:dlmp] begin
+@testitem "dlmp: decompose_dlmp components sum to the nodal price" tags = [:dlmp] begin
     using TSODSO
 
-    # RED until plan 05-02 defines the four-way decomposition.
+    # The four-way decomposition must be defined.
     @test isdefined(TSODSO, :decompose_dlmp)
 
     if isdefined(TSODSO, :decompose_dlmp) && isdefined(TSODSO, :extract_dlmp)

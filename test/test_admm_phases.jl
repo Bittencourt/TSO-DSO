@@ -1,6 +1,6 @@
 # test/test_admm_phases.jl
 #
-# Phase 34 Plan 07 (ARCH-05): unit tests for the named solve_admm phases and the singleton-dispatched
+# Unit tests for the named solve_admm phases and the singleton-dispatched
 # reactive hooks (src/admm/admm_state.jl, src/admm/admm_phases.jl). Goldens live in test_admm*.jl and
 # the knife-edge canary; this file pins only dispatch/propagation behaviour.
 

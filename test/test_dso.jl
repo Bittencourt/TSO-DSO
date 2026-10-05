@@ -1,9 +1,9 @@
 # test/test_dso.jl
 #
-# Seam: src/admm/DsoOpt.jl — the whole-network DSO-OPT SOCP ADMM subproblem (ADMM-01/03,
-# thesis eq. 3.47). Plan 06-03 (Wave 2) turns these GREEN by implementing `build_dso_opt` /
+# Seam: src/admm/DsoOpt.jl — the whole-network DSO-OPT SOCP ADMM subproblem
+# (thesis eq. 3.47). These test `build_dso_opt` /
 # `solve_dso!`. Every item name contains "dso" so `occursin("dso", ti.name)` selects them; the
-# build-once item carries "resolve" (06-VALIDATION filter substring).
+# build-once item carries "resolve" (test-name filter substring).
 #
 # CONTRACT pinned here:
 #   build_dso_opt(feeder, aggregators, T; ρ, λ₀) -> DsoOpt
@@ -13,10 +13,10 @@
 #     closure would be infeasible at φ = 0.90).
 #   solve_dso!(dso, λ, a, ρ; check_exact) -> (; pag_dso, p_import, exact_maxgap)
 #     updates ONLY the linear coefficient of each `pag[j,t]` (set_objective_coefficient) and,
-#     on convergence (check_exact=true), runs the PF-04 exactness gate.
+#     on convergence (check_exact=true), runs the exactness gate.
 #
-#   build_dso_opt(feeder, aggregators, T; ρ, λ₀, reactive_consensus::Bool = false) (Phase 16,
-#     REACT-01): at the DEFAULT `false`, byte-identical to today (no `ctx.meta[:qag_dso]` key).
+#   build_dso_opt(feeder, aggregators, T; ρ, λ₀, reactive_consensus::Bool = false):
+#     at the DEFAULT `false`, bit-for-bit identical to the earlier behavior (no `ctx.meta[:qag_dso]` key).
 #     At `true`, promotes the per-load-node CONSTANT reactive draw to a genuine, PINNED JuMP
 #     coupling variable `qag_dso[j,t]` (stashed at `ctx.meta[:qag_dso]`, shape
 #     `(length(load_nodes), T)`); `:balance_q` remains registered either way.
@@ -42,7 +42,7 @@
     @test dso.ctx.pf_vars !== nothing
     @test haskey(dso.ctx.pf_vars, :l)
 
-    # feeder / T stashed for the PF-04 exactness gate.
+# feeder / T stashed for the exactness gate.
     @test dso.ctx.feeder === feeder
     @test dso.ctx.T == Th
 
@@ -105,7 +105,7 @@ end
     # λ₀ shape mismatch.
     @test_throws ArgumentError build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀[1:(Th - 1)])
 
-    # GENUINELY-invalid buses STILL fail loud — the transit relaxation (plan 07-03 / Pitfall 5)
+    # GENUINELY-invalid buses STILL fail loud — the transit relaxation
     # only admits VALID zero-injection nodes, never a mislocated aggregator.
     buses3 =
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)]
@@ -122,7 +122,7 @@ end
     @test_throws ArgumentError build_dso_opt(feeder, oob_agg, Th; ρ = ρ, λ₀ = λ₀)
 
     # A genuine TRANSIT bus (aggregator only on bus 2, bus 3 zero-injection) is now ADMITTED
-    # (Pitfall 5 relaxation) — build succeeds and the coupling axis excludes the transit node.
+    # (transit relaxation) — build succeeds and the coupling axis excludes the transit node.
     dso3 = build_dso_opt(feeder3, aggs, Th; ρ = ρ, λ₀ = λ₀)
     @test dso3.load_nodes == [2]                       # coupling axis = aggregator buses only
     @test haskey(dso3.ctx.constraints, :balance_p)     # balance still closed at all N buses
@@ -134,9 +134,9 @@ end
     using TSODSO
     using JuMP
 
-    # SMALL SYNTHETIC feeder (NOT ieee123_modified — that is a parallel-wave stub at 07-03 time):
+    # SMALL SYNTHETIC feeder (NOT ieee123_modified):
     # root(1) → transit(2, NO aggregator) → load(3, aggregator). Bus 2 is a genuine zero-injection
-    # junction the Phase-6 guard rejected; plan 07-03 admits it (RESEARCH Pitfall 5).
+    # junction the earlier guard rejected; the transit relaxation admits it.
     buses = [Bus(1, 0.95, 1.05, true), Bus(2, 0.9, 1.1, false), Bus(3, 0.9, 1.1, false)]
     branches =
         [Branch(1, 2, 0.02, 0.02, SMAX_NO_LIMIT), Branch(2, 3, 0.02, 0.02, SMAX_NO_LIMIT)]
@@ -192,7 +192,7 @@ end
     @test res.exact_maxgap === nothing   # gate not run mid-loop
 end
 
-@testitem "dso: solve_dso! check_exact passes PF-04 gate on 2-bus and IEEE-13 (exact)" setup =
+@testitem "dso: solve_dso! check_exact passes the exactness gate on 2-bus and IEEE-13 (exact)" setup =
     [TwoBusFixtures, IEEE13Fixtures] tags = [:dso] begin
     using TSODSO
     using JuMP
@@ -210,7 +210,7 @@ end
 
     res = solve_dso!(dso, λ, a, ρ; check_exact = true)   # convergence call
     @test res.exact_maxgap !== nothing
-    @test res.exact_maxgap < 1e-3                          # PF-04: SOC cone tight (exact)
+    @test res.exact_maxgap < 1e-3                          # SOC cone tight (exact)
     @test haskey(dso.ctx.meta, :socp_maxgap)
 
     # --- IEEE-13 ground fixture (allow_export semantics; reactive closure exercised) ---
@@ -224,7 +224,7 @@ end
     a13 = Dict(j => zeros(T13) for j in dso13.load_nodes)
 
     res13 = solve_dso!(dso13, λ13, a13, ρ; check_exact = true)
-    @test res13.exact_maxgap < 1e-3                        # PF-04 exact on the radial feeder
+    @test res13.exact_maxgap < 1e-3                        # exact on the radial feeder
 end
 
 @testitem "dso: build-once — num_variables/num_constraints unchanged across re-solves (resolve)" setup =
@@ -252,7 +252,7 @@ end
     a2 = Dict(j => fill(0.03, Th) for j in dso.load_nodes)
     solve_dso!(dso, λ2, a2, ρ)
 
-    # ADMM-03: the model shape is INVARIANT across re-solves (no rebuild).
+    # The model shape is INVARIANT across re-solves (no rebuild).
     @test num_variables(dso.model) == nv0
     @test num_constraints(dso.model; count_variable_in_set_constraints = true) == nc0
 end
@@ -263,7 +263,7 @@ end
     using TSODSO: set_rho!
     using JuMP: num_variables, num_constraints
 
-    # RED until Task 1 (this plan) adds set_rho!.
+    # set_rho! must be defined.
     @test isdefined(TSODSO, :set_rho!)
 
     if isdefined(TSODSO, :set_rho!)
@@ -283,7 +283,7 @@ end
         nv0 = num_variables(dso_mut.model)
         nc0 = num_constraints(dso_mut.model; count_variable_in_set_constraints = true)
         set_rho!(dso_mut, ρ1)
-        # Build-once (ADMM-04): a ρ change mutates ONLY objective coefficients — shape invariant.
+        # Build-once: a ρ change mutates ONLY objective coefficients — shape invariant.
         @test num_variables(dso_mut.model) == nv0
         @test num_constraints(dso_mut.model; count_variable_in_set_constraints = true) ==
               nc0
@@ -313,21 +313,21 @@ end
     using JuMP
 
     feeder = TwoBusFixtures.two_bus_feeder()
-    # Phase 26 gap-closure (Plan 26-08, downstream of PM-03/Plan 26-12): this testitem's
+    # This testitem's
     # ORIGINAL fixture, `build_two_bus_aggregators`, carries Thermostatic+Deferrable members
-    # that FIX-05 (Plan 26-04) made `is_flexible_load`, so `build_dso_opt`'s smart default
-    # (Plan 26-12, PM-03) now resolves to LIVE for that population and an explicit
-    # `reactive_consensus = ReactiveMode.CERTIFIED` now correctly trips the widened WR-04 guard — breaking BOTH
+    # that the flexible-load change made `is_flexible_load`, so `build_dso_opt`'s smart default
+    # now resolves to LIVE for that population and an explicit
+    # `reactive_consensus = ReactiveMode.CERTIFIED` now correctly trips the widened guard — breaking BOTH
     # of this testitem's original assumptions ("default is OFF", "explicit true/CERTIFIED
     # works"). Swapped to the flexible-load-free `build_two_bus_aggregators_no_flex` (a
-    # PVBattery-only population) to restore the original REACT-03 "default OFF vs explicit
-    # CERTIFIED, physically equivalent" intent this testitem predates Phase 26 with.
+    # PVBattery-only population) to restore the original "default OFF vs explicit
+    # CERTIFIED, physically equivalent" intent this testitem was written with.
     aggs = TwoBusFixtures.build_two_bus_aggregators_no_flex(feeder)
     Th = TwoBusFixtures.T
     λ₀ = TwoBusFixtures.two_bus_lambda0()
     ρ = TwoBusFixtures.RHO_2BUS
 
-    # DEFAULT path: no qag_dso stashed (REACT-03 non-regression, re-pinned here too).
+    # DEFAULT path: no qag_dso stashed (non-regression, re-pinned here too).
     dso_default = build_dso_opt(feeder, aggs, Th; ρ = ρ, λ₀ = λ₀)
     @test !haskey(dso_default.ctx.meta, :qag_dso)
 

@@ -1,8 +1,8 @@
-# Seam: admm/solve_admm.jl x MeshedFeeder/MeshedFlow x live reactive consensus (ARCH-06,
-# Plan 34-10). Meshed ADMM with LIVE reactive pricing cross-validated against the centralized
-# meshed `solve_welfare` (`dual(:balance_p)` / `dual(:balance_q)`); closes the v3.0 MESH-06 advisory.
+# Seam: admm/solve_admm.jl x MeshedFeeder/MeshedFlow x live reactive consensus.
+# Meshed ADMM with LIVE reactive pricing cross-validated against the centralized
+# meshed `solve_welfare` (`dual(:balance_p)` / `dual(:balance_q)`).
 #
-# MEASURED TOLERANCES (memory `highs-exactness-defaults`: measure, never pick). Fixture: Phase-23
+# MEASURED TOLERANCES (HiGHS exactness defaults: measure, never pick). Fixture: meshed
 # diamond, `:heterogeneous` profile, Thermostatic phi = 0.95 (centralized reactive price
 # 0.2511 / 0.1354 at buses 2/3), eps = (eps_abs 1e-6, eps_rel 1e-5), T = 1, lambda0 = 4.0.
 # Observed (max over buses 2,3; max|dP| active price, max|dQ| reactive price, |dW| welfare):
@@ -15,7 +15,7 @@
 # welfare rtol = 1e-4. Research-table worst price gap across rho0 was 6.1e-5; the gap tracks the
 # ADMM dual tolerance and floors at ~1e-5 (interior-point dual accuracy) -- never assert below that.
 
-@testitem "admm meshed: LIVE reactive ADMM matches centralized meshed prices + welfare (ARCH-06)" setup =
+@testitem "admm meshed: LIVE reactive ADMM matches centralized meshed prices + welfare" setup =
     [MeshFixtures] tags = [:admm, :mesh, :reactive] begin
     using TSODSO, Test
     using JuMP: dual
@@ -28,7 +28,7 @@
     ctx_c, obj_c, _ = solve_welfare(feeder, MeshedFlow(), aggs; T = T, λ₀ = λ₀)
     p_c = [dual(ctx_c.constraints[:balance_p][j, 1]) for j in (2, 3)]
     q_c = [dual(ctx_c.constraints[:balance_q][j, 1]) for j in (2, 3)]
-    # Non-vacuity (T-34-32): the reactive reference is clearly nonzero.
+    # Non-vacuity: the reactive reference is clearly nonzero.
     @test all(>(0.05), q_c)
 
     worst = Float64[]
@@ -48,7 +48,7 @@
         dP = maximum(abs.(vec(r.λ) .- p_c))
         dQ = maximum(abs.(vec(r.mu_q) .- q_c))
         dW = abs(r.welfare - obj_c)
-        @info "ARCH-06 measured" ρ₀ iters = r.iters dP dQ dW
+        @info "meshed ADMM measured" ρ₀ iters = r.iters dP dQ dW
         push!(worst, max(dP, dQ))
         @test r.status == :converged
         @test r.reactive_consensus_mode == ReactiveMode.LIVE
@@ -57,10 +57,10 @@
         @test isapprox(vec(r.mu_q), q_c; atol = 5e-4)
         @test isapprox(r.welfare, obj_c; rtol = 1e-4)
     end
-    @info "ARCH-06 worst price gap" worst_gap = maximum(worst) headroom = 5e-4 / maximum(worst)
+    @info "meshed ADMM worst price gap" worst_gap = maximum(worst) headroom = 5e-4 / maximum(worst)
 end
 
-@testitem "admm meshed: ADMM dso_ctx certifies the angle verdict like the centralized ctx (ARCH-06)" setup =
+@testitem "admm meshed: ADMM dso_ctx certifies the angle verdict like the centralized ctx" setup =
     [MeshFixtures] tags = [:admm, :mesh] begin
     using TSODSO, Test
 
@@ -90,19 +90,19 @@ end
     end
 
     cu, au = verdicts(:uniform)
-    @info "ARCH-06 angle uniform" central = cu.worst_residual admm = au.worst_residual
+    @info "meshed ADMM angle uniform" central = cu.worst_residual admm = au.worst_residual
     @test cu.status == :angle_certified
     @test au.status == cu.status
     @test isapprox(au.worst_residual, cu.worst_residual; atol = 1e-4)
 
     ch, ah = verdicts(:heterogeneous)
-    @info "ARCH-06 angle heterogeneous" central = ch.worst_residual admm = ah.worst_residual
+    @info "meshed ADMM angle heterogeneous" central = ch.worst_residual admm = ah.worst_residual
     @test ch.status == :angle_unrecoverable
     @test ah.status == ch.status
     @test isapprox(ah.worst_residual, ch.worst_residual; atol = 1e-4)
 end
 
-@testitem "admm meshed: radial formulations x MeshedFeeder throw; MeshedFlow runs (ARCH-06, T-34-33)" setup =
+@testitem "admm meshed: radial formulations x MeshedFeeder throw; MeshedFlow runs" setup =
     [MeshFixtures] tags = [:admm, :mesh] begin
     using TSODSO, Test
 

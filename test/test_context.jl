@@ -1,5 +1,5 @@
-# Seam: core/ModelContext.jl (PF-01 residual registry). RED until plan 01-03.
-@testitem "context: ModelContext residual registry accumulates with no branching (PF-01)" begin
+# Seam: core/ModelContext.jl (residual registry).
+@testitem "context: ModelContext residual registry accumulates with no branching" begin
     using TSODSO, JuMP
 
     model = Model(TSODSO.select_optimizer(TSODSO.LP()))
@@ -17,8 +17,8 @@
     @test ctx.constraints[:balance] === c
 end
 
-# Seam: core/ModelContext.jl indexed residual accumulator (PF-02). Owned by plan 02-01.
-@testitem "context: indexed add_to_residual! accumulates per (bus,t) as AffExpr (PF-02)" tags =
+# Seam: core/ModelContext.jl indexed residual accumulator.
+@testitem "context: indexed add_to_residual! accumulates per (bus,t) as AffExpr" tags =
     [:context] begin
     using TSODSO, JuMP
 
@@ -32,11 +32,11 @@ end
     @test isequal_canonical(ctx.residuals[:Rp][2, 1], 5.0 * p)
 
     # The price-bearing residual is pinned to Matrix{AffExpr} — a non-affine term
-    # entering here must fail loudly (T-02-07), so the value type is invariant.
+    # entering here must fail loudly, so the value type is invariant.
     @test ctx.residuals[:Rp] isa Matrix{AffExpr}
 end
 
-@testitem "context: indexed add_to_residual! grows the matrix with no feeder present (PF-02)" tags =
+@testitem "context: indexed add_to_residual! grows the matrix with no feeder present" tags =
     [:context] begin
     using TSODSO, JuMP
 
@@ -59,7 +59,7 @@ end
     @test ctx.residuals[:Rp] isa Matrix{AffExpr}
 end
 
-@testitem "context: add_to_objective! accumulates a QuadExpr and retains curvature (PF-02)" tags =
+@testitem "context: add_to_objective! accumulates a QuadExpr and retains curvature" tags =
     [:context] begin
     using TSODSO, JuMP
 
@@ -69,7 +69,7 @@ end
 
     a, b = 3.0, 2.0
     # Concave-quadratic utility must NOT flow through add_to_residual! (which drops
-    # curvature via convert(AffExpr, ·)). It goes to the WELFARE accumulator (T-02-02).
+    # curvature via convert(AffExpr, ·)). It goes to the WELFARE accumulator.
     TSODSO.add_to_objective!(ctx, a * p - (b / 2) * p^2)
     @test !isempty(ctx.objective.terms)
     @test ctx.objective isa QuadExpr
@@ -82,7 +82,7 @@ end
     @test isequal_canonical(ctx.objective, 2 * (a * p - (b / 2) * p^2))
 end
 
-@testitem "context: scalar add_to_residual! backward-compat preserved (PF-01)" tags =
+@testitem "context: scalar add_to_residual! backward-compat preserved" tags =
     [:context] begin
     using TSODSO, JuMP
 
@@ -90,7 +90,7 @@ end
     @variable(model, p >= 0)
     ctx = TSODSO.ModelContext(model)
 
-    # The Phase-1 scalar seam (used by toy_dc) is unchanged: name → AffExpr accumulator.
+    # The original scalar seam (used by toy_dc) is unchanged: name → AffExpr accumulator.
     TSODSO.add_to_residual!(ctx, :nodal_balance, p)
     TSODSO.add_to_residual!(ctx, :nodal_balance, -1.0 * p)
     @test haskey(ctx.residuals, :nodal_balance)
@@ -98,10 +98,10 @@ end
     @test isequal_canonical(ctx.residuals[:nodal_balance], zero(AffExpr))
 end
 
-# Seam: core/ModelContext.jl — WR-04. Mixing a SCALAR and an INDEXED accumulator on the
+# Seam: core/ModelContext.jl. Mixing a SCALAR and an INDEXED accumulator on the
 # same residual name must fail loudly (either direction), never silently overwrite/lose a
 # contribution. Distinct names for the two kinds keep working.
-@testitem "context: scalar/indexed accumulator-kind collision throws both ways (WR-04)" tags =
+@testitem "context: scalar/indexed accumulator-kind collision throws both ways" tags =
     [:context] begin
     using TSODSO, JuMP
 
@@ -126,7 +126,7 @@ end
     @test ctx3.residuals[:indexed_name] isa Matrix{AffExpr}
 end
 
-@testitem "context: typed defaults, objective accumulation, checked accessors (ARCH-07)" tags =
+@testitem "context: typed defaults, objective accumulation, checked accessors" tags =
     [:context] begin
     using TSODSO, JuMP
 

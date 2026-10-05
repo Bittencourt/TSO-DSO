@@ -1,13 +1,13 @@
-# Seam: src/core/balance.jl (ARCH-04). Pre-migration constraint-order fingerprints (captured on
-# the builders as they were BEFORE Plan 33-05 migrates them onto `close_balance!`) plus the
+# Seam: src/core/balance.jl. Pre-migration constraint-order fingerprints (captured on
+# the builders as they were BEFORE they were migrated onto `close_balance!`) plus the
 # helper-contract tests.
 #
 # NOTE: the stochastic extensive builder's balance constraints are currently UNNAMED and become
-# `balance_p[j,t]`-named after Plan 33-05, so its fingerprint intentionally checks counts / types
+# `balance_p[j,t]`-named after the migration, so its fingerprint intentionally checks counts / types
 # only, not names. Audit (grep `constraint_by_name` in src/ test/): no consumer looks balance
 # constraints up by name on a stochastic model.
 
-@testitem "close_balance: pre-migration fingerprint solve_welfare LinDistFlow + DC (ARCH-04)" tags =
+@testitem "close_balance: pre-migration fingerprint solve_welfare LinDistFlow + DC" tags =
     [:balance] setup = [SmallRadialFixtures] begin
     using TSODSO
     using JuMP
@@ -52,7 +52,7 @@
     @test fp.dc[2] === nothing      # DC leaves :Rq unclosed
 end
 
-@testitem "close_balance: pre-migration fingerprint solve_linear + mpc_window + stochastic + dso (ARCH-04)" tags =
+@testitem "close_balance: pre-migration fingerprint solve_linear + mpc_window + stochastic + dso" tags =
     [:balance] setup = [MPCFixtures, StochasticFixtures, TwoBusFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, build_stochastic_welfare, sub_seed
@@ -112,7 +112,7 @@ end
     @test fp.linear[2] == ("balance_q[1,1]", "balance_q[2,1]", 4, 5, 2, true)
     @test fp.mpc[1] == ("balance_p[1,1]", "balance_p[2,3]", 14, 19, 6, true)
     @test fp.mpc[2] == ("balance_q[1,1]", "balance_q[2,3]", 20, 25, 6, true)
-    # Stochastic extensive form: counts + type pairs only (balance constraints unnamed pre-33-05).
+    # Stochastic extensive form: counts + type pairs only (balance constraints unnamed before migration).
     @test fp.stoch[1] == 146
     @test fp.stoch[2] == [
         "JuMP.AffExpr in MathOptInterface.EqualTo{Float64}",
@@ -128,7 +128,7 @@ end
     @test fp.dsoc[3] == ("balance_q[1,1]", "balance_q[2,24]", 97, 144, 48, true)
 end
 
-@testitem "close_balance!: contract (reactive/DC, registration, anonymous, shapes) (ARCH-04)" tags =
+@testitem "close_balance!: contract (reactive/DC, registration, anonymous, shapes)" tags =
     [:balance] begin
     using TSODSO
     using TSODSO: close_balance!
@@ -215,7 +215,7 @@ end
     t4()
 end
 
-@testitem "close_balance: missing/ill-shaped residual and bad N/T raise ArgumentError (WR-05)" tags =
+@testitem "close_balance: missing/ill-shaped residual and bad N/T raise ArgumentError" tags =
     [:balance] begin
     using TSODSO
     using TSODSO: close_balance!

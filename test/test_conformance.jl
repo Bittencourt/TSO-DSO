@@ -1,4 +1,4 @@
-# Seam: interface-conformance — the DC↔LinDistFlow swap contract (PF-02, criterion 4).
+# Seam: interface-conformance — the DC↔LinDistFlow swap contract.
 #
 # This is success criterion 4 made into an automated test: the SAME device vector and the
 # SAME `solve_linear` call, invoked once with `DCPowerFlow()` and once with `LinDistFlow()`
@@ -40,22 +40,22 @@
     @test obj_ldf ≈ expected_obj atol = 1e-6
 end
 
-# Seam: the SOCP arm of the interchange contract (PF-03, criterion 4). RED @testitem
-# (Wave 1) turned green by plan 04-02: the SAME solve call swapped to `ConvexBranchFlow()`
+# Seam: the SOCP arm of the interchange contract. The @testitem
+# checks that the SAME solve call swapped to `ConvexBranchFlow()`
 # must still solve and expose a finite DADP — the third formulation drops into the residual
 # seam by dispatch alone, no `if formulation ==` branch. The item name contains
 # "conformance" so `occursin("conformance", ti.name)` selects it; the behavioral block sits
-# behind an `isdefined` guard so it goes live once ConvexBranchFlow lands (while RED the
-# sole failing assertion is the missing-symbol check). The existing DC↔LinDistFlow item
+# behind an `isdefined` guard so it goes live once ConvexBranchFlow exists (the
+# only unguarded assertion is the missing-symbol check). The existing DC↔LinDistFlow item
 # above is left UNCHANGED.
-@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (crit 4, SOCP arm)" tags =
+@testitem "conformance: DC↔LinDistFlow↔SOCP interchange (SOCP arm)" tags =
     [:conformance] begin
     using TSODSO
     using TSODSO: problem_class
     using TSODSO: Bus, Branch, Feeder
     using JuMP
 
-    # RED until plan 04-02 defines the SOCP Convex Branch Flow formulation.
+    # The SOCP Convex Branch Flow formulation must be defined.
     @test isdefined(TSODSO, :ConvexBranchFlow)
 
     if isdefined(TSODSO, :ConvexBranchFlow)

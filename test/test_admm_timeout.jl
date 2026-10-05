@@ -1,7 +1,7 @@
 # test/test_admm_timeout.jl
 #
 # Plain Test.jl script (NOT `@testitem`) for `solve_admm`'s `time_limit_s` wall-clock exit
-# (D-18, Phase 25). Run directly: `julia --project=. test/test_admm_timeout.jl`.
+# Run directly: `julia --project=. test/test_admm_timeout.jl`.
 #
 # Deliberately NOT a TestItemRunner `@testitem`: this project's recorded trap is that
 # TestItemRunner invoked via `julia --project=. -e '... @run_package_tests ...'` (a `-e`
@@ -47,8 +47,8 @@ pf = ConvexBranchFlow()
 # single AGR-OPT/DSO-OPT solve pair takes measurably more than 1e-9s (Test 2).
 const RHO = 100.0
 
-@testset "solve_admm time_limit_s (D-18)" begin
-    # Test 1: the PRE-EXISTING behavior (time_limit_s absent/nothing) is BYTE-IDENTICAL —
+@testset "solve_admm time_limit_s" begin
+    # Test 1: the pre-existing behavior (time_limit_s absent/nothing) is UNCHANGED —
     # the fail-loud cap still throws on a budget too small to reach consensus, exactly as
     # test/test_admm.jl's "fails loud on the cap" testitem pins.
     @test_throws Exception solve_admm(
@@ -90,7 +90,7 @@ const RHO = 100.0
     @test res_budget.residuals isa TSODSO.AdmmResiduals
 
     # Test 3: normal convergence (no time limit) now ALSO carries status == :converged, with
-    # every OTHER field unchanged from today (byte-identical additive field).
+    # every OTHER field unchanged from today (bit-for-bit identical additive field).
     res_ok = solve_admm(
         feeder,
         pf,

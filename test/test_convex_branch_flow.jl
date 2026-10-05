@@ -1,17 +1,17 @@
-# Seam: powerflow/ConvexBranchFlow.jl (PF-03). SOCP Convex Branch Flow formulation.
+# Seam: powerflow/ConvexBranchFlow.jl. SOCP Convex Branch Flow formulation.
 #
-# RED @testitem harness (Wave 1). Plan 04-02 turns these green by defining
+# @testitem harness for
 # `ConvexBranchFlow <: AbstractPowerFlow` (the DistFlow SOC relaxation + LinDistFlow
 # exactness copy) and `problem_class(::ConvexBranchFlow) = SOCP()`. Every item name
-# contains "socp" so `occursin("socp", ti.name)` selects it. While RED the sole failing
+# contains "socp" so `occursin("socp", ti.name)` selects it. The first
 # assertion is a missing-symbol `isdefined` check (never a runner crash); the behavioral
-# asserts sit behind an `isdefined` guard so they go live automatically once 04-02 lands.
+# asserts sit behind an `isdefined` guard so they go live automatically once the type exists.
 
-@testitem "socp: ConvexBranchFlow is a defined AbstractPowerFlow subtype (PF-03)" tags =
+@testitem "socp: ConvexBranchFlow is a defined AbstractPowerFlow subtype" tags =
     [:socp] begin
     using TSODSO
 
-    # RED until plan 04-02 defines the SOCP formulation.
+    # The SOCP formulation must be defined.
     @test isdefined(TSODSO, :ConvexBranchFlow)
 
     if isdefined(TSODSO, :ConvexBranchFlow)
@@ -19,11 +19,11 @@
     end
 end
 
-@testitem "socp: ConvexBranchFlow routes to the SOCP problem class (PF-03 / INFRA-02)" tags =
+@testitem "socp: ConvexBranchFlow routes to the SOCP problem class" tags =
     [:socp] begin
     using TSODSO
 
-    # The generic trait already returns QP() for DC/LinDistFlow (plan 04-01); plan 04-02
+    # The generic trait already returns QP() for DC/LinDistFlow; ConvexBranchFlow
     # adds the more-specific `problem_class(::ConvexBranchFlow) = SOCP()` so the cone routes
     # to the tight-gap Clarabel factory.
     @test isdefined(TSODSO, :ConvexBranchFlow)
@@ -33,7 +33,7 @@ end
     end
 end
 
-@testitem "socp: contribute! stashes pf_vars with the SOC/exactness variables (PF-03)" tags =
+@testitem "socp: contribute! stashes pf_vars with the SOC/exactness variables" tags =
     [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -54,7 +54,7 @@ end
         TSODSO.contribute!(TSODSO.ConvexBranchFlow(), ctx, feeder; T = 1)
 
         # The SOCP formulation must stash the squared-voltage v, its exactness copy v̂, the
-        # branch flows P/Q, and the squared current l for the PF-04 exactness checker.
+        # branch flows P/Q, and the squared current l for the exactness checker.
         @test ctx.pf_vars !== nothing
         pv = ctx.pf_vars
         for k in (:v, :v̂, :P, :Q, :l)
@@ -67,9 +67,9 @@ end
     end
 end
 
-# FIX-01/02 (phase 26-02): ConvexBranchFlow()'s DEFAULT (thesis_literal=false) exactness copy
+# The DEFAULT (thesis_literal=false) exactness copy of ConvexBranchFlow()
 # must satisfy v̂ ≥ v (the Gan-Low direction) at the solution.
-@testitem "socp: default ConvexBranchFlow() satisfies v̂ ≥ v (FIX-01/02)" tags = [:socp] begin
+@testitem "socp: default ConvexBranchFlow() satisfies v̂ ≥ v" tags = [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -97,14 +97,14 @@ end
     @test mingap >= -1e-9   # v̂ ≥ v everywhere (Gan-Low direction)
 end
 
-# FIX-02 load-bearing/redundant bound check: under the CORRECTED direction, `v̂ ≤ V²max` is
+# Load-bearing/redundant bound check: under the CORRECTED direction, `v̂ ≤ V²max` is
 # the LOAD-BEARING (exactness-driving) bound and `v ≤ V²max` is redundant (implied by
 # `v ≤ v̂ ≤ V²max`) — matching ConvexBranchFlow's corrected docstring claim. Demonstrated by
 # maximizing the squared branch current `l` (which increases `v̂` TWICE as fast as `v` per
 # unit `l`, since both start from the SAME root value and `v̂`'s copy-drop coefficient on `l`
 # is `2(r²+x²)` vs `v`'s true-drop coefficient `(r²+x²)`): the solve must hit `v̂`'s own
 # upper bound strictly BEFORE `v`'s, leaving `v`'s bound slack.
-@testitem "socp: default ConvexBranchFlow() has v̂ ≤ V²max load-bearing, v ≤ V²max redundant (FIX-02)" tags =
+@testitem "socp: default ConvexBranchFlow() has v̂ ≤ V²max load-bearing, v ≤ V²max redundant" tags =
     [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -136,12 +136,12 @@ end
     @test v2 < vmax2 - 1e-3                  # v ≤ V²max is SLACK (redundant)
 end
 
-# GREEN confirmation (no factory edit needed): the `SOCP()` problem class already routes to
+# Confirmation (no factory edit needed): the `SOCP()` problem class already routes to
 # a Clarabel factory with the tight duality-gap tolerances the DADP accuracy / exactness
-# check depend on (src/solver/factory.jl, plan 01-03). This item documents that Phase-4
-# required NO change to the solver factory — the pre-existing `select_optimizer(SOCP())`
+# check depend on (src/solver/factory.jl). This item documents that
+# the solver factory required NO change — the pre-existing `select_optimizer(SOCP())`
 # suffices. Name contains "socp" so `occursin("socp", ti.name)` selects it.
-@testitem "socp: SOCP() routes to a Clarabel factory with tight gap (INFRA-02)" tags =
+@testitem "socp: SOCP() routes to a Clarabel factory with tight gap" tags =
     [:socp] begin
     using TSODSO
     using TSODSO: SOCP
@@ -156,13 +156,13 @@ end
     @test occursin("Clarabel", string(solver_name(model)))
 end
 
-# PRICE-02 (05-01): the four branch-flow constraint duals the DLMP decomposition consumes
+# The four branch-flow constraint duals the DLMP decomposition consumes
 # (voltage-drop 3.33, copy-drop 3.43, rotated cone 3.39, apparent-power limit 3.36) must be
 # recoverable BY NAME from a solved ctx. This item builds `contribute!` on a lossy radial
 # feeder and asserts each handle is registered under ctx.constraints. The `:smax` container is
 # BRANCH-INDEXED (keyed by branch index b, time t) with the SAME `smax < _SMAX_NO_LIMIT` filter
-# as before, so only genuinely-limited branches carry a cone (feasible set byte-identical).
-@testitem "socp: contribute! registers the branch-flow duals for DLMP (:vdrop/:cpydrop/:cone/:smax) (PRICE-02)" tags =
+# as before, so only genuinely-limited branches carry a cone (feasible set bit-for-bit identical).
+@testitem "socp: contribute! registers the branch-flow duals for DLMP (:vdrop/:cpydrop/:cone/:smax)" tags =
     [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -170,7 +170,7 @@ end
 
     # A 3-bus radial feeder: branch 1 carries a genuine apparent-power limit (smax=0.05, so
     # `smax < _SMAX_NO_LIMIT`) so the `:smax` container is non-empty; branch 2 is at the
-    # no-limit sentinel so it gets NO apparent-power cone (byte-identical to the prior loop).
+    # no-limit sentinel so it gets NO apparent-power cone (identical to the prior loop).
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)],
         [Branch(1, 2, 0.01, 0.02, 0.05), Branch(2, 3, 0.01, 0.02, TSODSO._SMAX_NO_LIMIT)],
@@ -198,21 +198,21 @@ end
     end
 end
 
-# FIX-03 (26-05): PV back-feed fixture — the receiving-end apparent-power cone (:smax_rev,
+# PV back-feed fixture — the receiving-end apparent-power cone (:smax_rev,
 # thesis 3.37) must bind while the sending-end cone (:smax, thesis 3.36) stays slack. Under
 # reverse flow (P < 0, power flowing from the load bus back toward the root), the
 # receiving-end power (P−r·l, Q−x·l) has LARGER magnitude than the sending-end power (P,Q)
 # because the loss term `−r·l` REINFORCES (adds to) rather than cancels the already-negative
 # P — i.e. `|P − r·l| = |P| + r·l > |P|` when `P < 0` and `l ≥ 0` — so a branch limit sized to
 # just admit the forward magnitude can still be violated on the receiving end under back-feed
-# (26-RESEARCH.md). Exercises ConvexBranchFlow's OWN registered `:smax`/`:smax_rev` constraint
+# Exercises ConvexBranchFlow's OWN registered `:smax`/`:smax_rev` constraint
 # containers directly (mirrors this file's existing direct-fix/direct-objective @testitem
-# convention above, e.g. the FIX-01/02 items), maximizing the export `−P[1,1]` at near-unity
+# convention above, e.g. the v̂ items), maximizing the export `−P[1,1]` at near-unity
 # power factor — the elastic PV/Aggregator idiom (an unconstrained-by-price generator that
 # wants to export as much as the network allows) an independent standalone raw-JuMP replica
-# of this exact fixture (this plan's own `<verify>` script) validates the fixture's `smax`
+# of this exact fixture (a verification script) validates the fixture's `smax`
 # choice against.
-@testitem "socp: PV back-feed binds the receiving-end cone (:smax_rev) while the sending-end cone (:smax) stays slack (FIX-03)" tags =
+@testitem "socp: PV back-feed binds the receiving-end cone (:smax_rev) while the sending-end cone (:smax) stays slack" tags =
     [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -220,7 +220,7 @@ end
 
     # 2-bus radial feeder; `smax` sits strictly between the natural forward apparent-power
     # magnitude (~0.393) and the natural reverse magnitude (~0.400) at the chosen export
-    # level (validated fixture; see 26-05-PLAN.md Task 2's independent derivation).
+    # level (validated fixture; independently derived).
     r, x, smax = 0.03, 0.02, 0.3976601762564117
     feeder = Feeder(
         [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.05, false)],

@@ -1,13 +1,13 @@
-# Seam: devices/Deferrable.jl (DEV-02). Deferrable (shiftable) flexible load.
+# Seam: devices/Deferrable.jl. Deferrable (shiftable) flexible load.
 #
-# Plan 03-03 turns these green. The `Deferrable` device is the AGGREGATABLE variant of
-# the device contract (aggregator-as-writer, DEV-05): `contribute!` builds its own
+# The `Deferrable` device is the AGGREGATABLE variant of
+# the device contract (aggregator-as-writer): `contribute!` builds its own
 # per-hour power variables + the energy-within-window budget constraint on `ctx.model`
 # and RETURNS `(; vars, p_inject, utility)` — it writes NOTHING to `ctx.residuals` and
 # calls NO `add_to_objective!`. Every @testitem name contains "deferrable" so
 # `occursin("deferrable", ti.name)` selects them.
 
-@testitem "deferrable: device type exists (DEV-02)" tags = [:deferrable] begin
+@testitem "deferrable: device type exists" tags = [:deferrable] begin
     using TSODSO
 
     # Energy-window coupling 3.4-3.5, concave utility 3.12.
@@ -15,7 +15,7 @@
     @test TSODSO.Deferrable <: TSODSO.AbstractDevice
 end
 
-@testitem "deferrable: rejects non-concave utility and infeasible/inconsistent window (DEV-02)" tags =
+@testitem "deferrable: rejects non-concave utility and infeasible/inconsistent window" tags =
     [:deferrable] begin
     using TSODSO
 
@@ -38,13 +38,13 @@ end
     # Negative budget rejected.
     @test_throws ArgumentError TSODSO.Deferrable(3, 2, 4, -1.0, 5.0, 1.0)
 
-    # IN-01 promotion: a mixed-type call (integer budget among Float64s) promotes.
+    # Promotion: a mixed-type call (integer budget among Float64s) promotes.
     mixed = TSODSO.Deferrable(3, 2, 4, 6, 5.0, 1.0)
     @test mixed isa TSODSO.Deferrable{Float64}
     @test mixed.E === 6.0
 end
 
-@testitem "deferrable: aggregatable contribute! returns terms, writes NOTHING, holds no feeder (DEV-02)" tags =
+@testitem "deferrable: aggregatable contribute! returns terms, writes NOTHING, holds no feeder" tags =
     [:deferrable] begin
     using TSODSO, JuMP
 
@@ -86,7 +86,7 @@ end
         end
     end
 
-    # Energy-window budget (WR-01, thesis eq. 3.4): it is an INEQUALITY upper bound
+    # Energy-window budget (thesis eq. 3.4): it is an INEQUALITY upper bound
     # `Σ p ≤ E`, NOT a hard equality — exactly one affine LessThan constraint beyond the
     # variable bounds, and NO affine equality (the earlier `== E` pin is gone).
     @test num_constraints(model, AffExpr, MOI.LessThan{Float64}) == 1
@@ -97,7 +97,7 @@ end
     @test isempty(ctx.objective.terms) && iszero(ctx.objective.aff)
 end
 
-@testitem "deferrable: energy-window budget 3.4 binds at the solved optimum (DEV-02)" tags =
+@testitem "deferrable: energy-window budget 3.4 binds at the solved optimum" tags =
     [:deferrable] begin
     using TSODSO, JuMP
 
@@ -114,7 +114,7 @@ end
 
     p = out.vars.p
     S = sum(value(p[t]) for t in t_start:t_end)
-    # Energy budget (WR-01, thesis eq. 3.4): the total NEVER exceeds the E upper bound.
+    # Energy budget (thesis eq. 3.4): the total NEVER exceeds the E upper bound.
     @test S <= E + 1e-6
     # With utility ALONE as the objective the soft target (eq. 3.12, peak at Σ p = E) is
     # reached. It is a FLAT maximum at the constraint boundary, so an interior-point QP
@@ -126,7 +126,7 @@ end
     @test isapprox(value(p[T]), 0.0; atol = 1e-6)
 end
 
-@testitem "deferrable: b shapes the price-responsive allocation (WR-01, thesis 3.4/3.12)" tags =
+@testitem "deferrable: b shapes the price-responsive allocation (thesis 3.4/3.12)" tags =
     [:deferrable] begin
     using TSODSO, JuMP
 
@@ -136,7 +136,7 @@ end
 
     # Maximize (soft target − priced consumption). Closed form of the total over the window:
     #   f(S) = −(b/2)(S−E)² − price·S  ⇒  argmax S* = E − price/b   (clamped to [0, E]).
-    # This is only possible because the budget is now the INEQUALITY Σ p ≤ E (WR-01): under
+    # This is only possible because the budget is now the INEQUALITY Σ p ≤ E: under
     # the old hard equality Σ p == E the total was pinned to E and `b` could not move it.
     function solve_total(b)
         model = Model(TSODSO.select_optimizer(TSODSO.QP()))
@@ -161,7 +161,7 @@ end
     @test isapprox(S_large, E - price / 8.0; atol = 1e-4)
 end
 
-@testitem "deferrable: contribute! validates the window fits the horizon (DEV-02)" tags =
+@testitem "deferrable: contribute! validates the window fits the horizon" tags =
     [:deferrable] begin
     using TSODSO, JuMP
 
@@ -171,7 +171,7 @@ end
     @test_throws ArgumentError TSODSO.contribute!(d, ctx; T = 4)
 end
 
-@testitem "deferrable: E_min must-complete floor binds under high price (DEV-02, thesis 3.4)" tags =
+@testitem "deferrable: E_min must-complete floor binds under high price (thesis 3.4)" tags =
     [:deferrable] begin
     using TSODSO, JuMP
 
