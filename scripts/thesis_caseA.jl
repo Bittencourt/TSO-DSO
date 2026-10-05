@@ -27,7 +27,7 @@
 # proxy for the 784-house case (fixtures_ieee13 SHAPE, per-unit-consistent magnitudes), so
 # the ABSOLUTE welfare/$ numbers are not the thesis's published values — only the SHAPES,
 # the +25% RATIO, and the qualitative price/voltage behaviour are reproduced. This matches
-# the thesis's own framing (RESEARCH Pitfall 4: absolute welfare is figure-bound; the ratio
+# the thesis's own framing (absolute welfare is figure-bound; the ratio
 # is the trustworthy claim).
 
 using DrWatson
@@ -85,7 +85,7 @@ dadp = extract_dlmp(ctx_dadp)[load_buses, :]       # (n_load, T) — the day-ahe
 decomp = decompose_dlmp(ctx_dadp)                    # (; energy, loss, congestion, voltage, total)
 acct = welfare_accounting(ctx_dadp; T = T)         # (; social, dso, prosumer)
 pimp = Float64[value.(ctx_dadp.meta[:p_import])...]   # frontier exchange p₀ (TSO↔DSO), length T
-maxgap = ctx_dadp.meta[:socp_maxgap]                 # PF-04 SOC-exactness certificate
+maxgap = ctx_dadp.meta[:socp_maxgap]                 # SOC-exactness certificate
 
 println("  welfare (social) = $(round(welfare_dadp; digits=4))")
 println(
@@ -148,7 +148,7 @@ println("  welfare (FIT)    = $(round(welfare_fit; digits=4))")
 # -------------------------------------------------------------------------------------------
 # 2. Voltage profile — squared magnitude |V|² → |V| (sqrt), per bus per hour.
 #    Thesis Fig 4.4: the worst bus sits near the 1.05 pu upper bound around the evening peak
-#    (reports v₉[16]≈1.0493). pv.v[j,t] is the squared magnitude (Pitfall 1).
+#    (reports v₉[16]≈1.0493). pv.v[j,t] is the squared magnitude.
 # -------------------------------------------------------------------------------------------
 pv = ctx_dadp.pf_vars
 vmag = zeros(length(FEEDER.buses), T)
@@ -174,10 +174,10 @@ therm9_p = Float64[value.(v9[1].p)...]
 defer9_p = Float64[value.(v9[2].p)...]
 batt9_ch = Float64[value.(v9[3].p_ch)...]
 batt9_dch = Float64[value.(v9[3].p_dch)...]
-# Phase 26 FIX-04 made `soc` T+1 long (closes the horizon on soc[T+1]); this plotting script
+# `soc` is T+1 long (closes the horizon on soc[T+1]); this plotting script
 # pre-dates that change. Mirroring scripts/demo_mpc_plots.jl:173's own established convention
 # for this exact situation (`[value(v.soc[t]) for t in 1:s.T]`), take only the first T points
-# so the length matches every other per-hour series plotted alongside it (Rule 1 — this is a
+# so the length matches every other per-hour series plotted alongside it (this is a
 # genuine consumer-side bug, not a modeling change: the T+1th point, soc AFTER hour T's
 # dispatch, is simply not plotted on this hourly-indexed figure).
 batt9_soc = Float64[value.(v9[3].soc)...][1:T]

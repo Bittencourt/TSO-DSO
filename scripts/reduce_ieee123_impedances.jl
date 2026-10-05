@@ -6,7 +6,7 @@
 # R1/X1 pair via Fortescue-averaging, and (in default mode) emits a committed Julia source
 # file at `src/data/ieee123_impedances.jl` with per-segment series impedance in Ohms, keyed
 # by the EXISTING `IEEE123_EDGES` terminal pairs already in `src/data/ieee123.jl` — topology
-# is read as plain text and never re-derived (IMPED-01/IMPED-02).
+# is read as plain text and never re-derived.
 #
 # Zero package dependencies (no `using` statements anywhere in this file): the parser is
 # Base + stdlib PCRE regex only, so `Project.toml [deps]` is untouched by this script.
@@ -21,8 +21,8 @@ const LINECODES_DSS = joinpath(SCRIPT_DIR, "data", "IEEELineCodes.DSS")
 const IEEE123_JL = joinpath(SCRIPT_DIR, "..", "src", "data", "ieee123.jl")
 const OUT_FILE = joinpath(SCRIPT_DIR, "..", "src", "data", "ieee123_impedances.jl")
 
-# Pinned sanity value (RESEARCH.md "Architecture Patterns > Pattern 2", independently
-# re-derived from the live upstream file content this research session).
+# Pinned sanity value (independently re-derived from the
+# live upstream file content).
 const LINECODE1_R1_EXPECTED = 0.057967
 const LINECODE1_X1_EXPECTED = 0.118756
 const SANITY_ATOL = 1.0e-5
@@ -54,7 +54,7 @@ AND the internal regulator-secondary-node suffix (`"9r"` -> 9, `"25r"` -> 25, `"
 that appears on a handful of `Bus1=` fields feeding regulators — the existing, already-
 collapsed `IEEE123_EDGES` fixture keys on the bare terminal number, not the regulator-node
 alias, so this normalization is required for the (p, c) lookup in Step 3 to succeed at all
-(RESEARCH Pitfall 3: the fixture already collapses these internal regulator nodes).
+(the fixture already collapses these internal regulator nodes).
 """
 function parse_terminal(tok::AbstractString)
     m = match(r"^(\d+)", tok)
@@ -70,10 +70,10 @@ end
     parse_line_records(master_text) -> Vector{LineRecord}
 
 Regex-parse every `New Line.<name> ... Bus1=... Bus2=... LineCode=... Length=...` statement
-in the vendored master file text (verified pattern, RESEARCH.md "Code Examples"). Statements
+in the vendored master file text (verified pattern). Statements
 without a `LineCode=` field (the `New Line.Sw1`..`Sw8` switch/tie definitions, which specify
 `r1=`/`x1=` directly instead) simply do not match and are silently excluded — exactly the
-switch/regulator segments this reduction must not touch (Common Pitfall 3, Assumption A2).
+switch/regulator segments this reduction must not touch.
 The regex intentionally has no dotall flag, so `.` never crosses a newline: each match stays
 confined to its own single-line statement.
 """
@@ -97,7 +97,7 @@ end
 
 The SET of distinct `LineCode=` values actually referenced by `New Line.*` statements,
 sorted ascending. Only these must ever be parsed out of the shared `IEEELineCodes.DSS`
-file — never the full 29 (Common Pitfall 2: that file bundles line codes for four
+file — never the full 29 (that file bundles line codes for four
 different IEEE test feeders; 17 of the 29 belong to the 13/34/4-node cases, not this one).
 """
 function referenced_linecodes(records::Vector{LineRecord})
@@ -143,7 +143,7 @@ end
 Positive-sequence Fortescue-averaging reduction of an `n×n` (n=1,2,3) symmetric line-code
 impedance matrix: `R1 = mean(diag) - mean(offdiag)` (identically for X1, given the xmatrix).
 For `n == 1` there is no off-diagonal at all — short-circuits directly to `mat[1,1]`, no
-reduction needed for a single-phase linecode (RESEARCH.md "Architecture Patterns > Pattern 2").
+reduction needed for a single-phase linecode.
 """
 function fortescue_reduce(mat::AbstractMatrix{<:Real})
     n = size(mat, 1)
@@ -209,7 +209,7 @@ end
     parse_edges(ieee123_text) -> Vector{Tuple{Int,Int}}
 
 Regex-extract the `IEEE123_EDGES` tuple list literally out of `src/data/ieee123.jl`'s TEXT
-(never `using TSODSO`, never a duplicate hardcoded copy — RESEARCH.md interfaces contract).
+(never `using TSODSO`, never a duplicate hardcoded copy).
 """
 function parse_edges(ieee123_text::AbstractString)
     m = match(Regex("const\\s+IEEE123_EDGES\\s*=\\s*\\[(.*?)\\]", "s"), ieee123_text)
@@ -228,7 +228,7 @@ end
 
 Regex-extract the `IEEE123_SWITCH_EDGES` set literally out of `src/data/ieee123.jl`'s TEXT —
 these 5 near-ideal switch/regulator segments are excluded from the real-impedance lookup
-entirely (Assumption A2: they keep their existing near-ideal synthetic value).
+entirely (they keep their existing near-ideal synthetic value).
 """
 function parse_switch_edges(ieee123_text::AbstractString)
     m = match(
@@ -252,8 +252,8 @@ end
 
 Look up the `New Line.*` record matching edge `(p, c)` in EITHER bus order (the raw file's
 own listing order does not always match `IEEE123_EDGES`'s (parent, child) order). Throws
-loudly on a lookup miss rather than silently defaulting (Common Pitfall 3's explicit warning
-sign: "a lookup failure ... must throw loudly at script run time").
+loudly on a lookup miss rather than silently defaulting (a lookup failure
+must throw loudly at script run time).
 """
 function find_line_record(records::Vector{LineRecord}, p::Int, c::Int)
     for r in records
@@ -272,7 +272,7 @@ end
 
 For every `edges` tuple NOT in `switch_edges`, look up its raw line record, compute
 `z_Ω = R1 × Length` / `x_Ω = X1 × Length` with NO length-unit conversion factor (OpenDSS's
-own no-op default when `Units=` is unset anywhere in the file chain — Common Pitfall 1), and
+own no-op default when `Units=` is unset anywhere in the file chain), and
 return both the Ω table and a linecode/length metadata table (for the emitted comment).
 """
 function build_branch_rx_ohms(

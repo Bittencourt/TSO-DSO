@@ -1,7 +1,7 @@
 using TSODSO: build_feeder, build_price
 # scripts/profile_ieee8500_memory.jl
 #
-# Staged memory profile of ONE IEEE-8500 point (phase 35, ARCH-10 SC2). One stage-set per process,
+# Staged memory profile of ONE IEEE-8500 point (staged peak-memory measurement). One stage-set per process,
 # ideally under scripts/run_ieee8500_point.sh (SCRIPT=scripts/profile_ieee8500_memory.jl).
 #
 #   julia --project=. scripts/profile_ieee8500_memory.jl --density 0.1 --t-horizon 10 --stage 2
@@ -87,7 +87,7 @@ function profile_main(args)
     df = DataFrame(ROWS)
     if isfile(path)
         old = CSV.read(path, DataFrame)
-        # 35-REVIEW iter-2 WR-02: pre-fixture-column rows were all `ieee8500-mv` (the default).
+        # pre-fixture-column rows were all `ieee8500-mv` (the default).
         hasproperty(old, :fixture) || (old.fixture = fill("ieee8500-mv", nrow(old)))
         k(r) = (string(r.fixture), r.density, r.T, r.stage, r.name)
         nk = Set(k(r) for r in eachrow(df))

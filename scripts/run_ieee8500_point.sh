@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Per-process wrapper for ONE IEEE-8500 measurement point (phase 35, ARCH-10).
+# Per-process wrapper for ONE IEEE-8500 measurement point.
 #
 # usage: scripts/run_ieee8500_point.sh <label> -- <benchmark args...>
 #   SCRIPT=scripts/profile_ieee8500_memory.jl scripts/run_ieee8500_point.sh <label> -- <profiler args...>
@@ -29,7 +29,7 @@ mkdir -p "$RUNS"
 cd "$ROOT" || exit 2
 
 # --run-label is only understood by the benchmark harness (the profiler would reject it).
-# Compared by BASENAME (WR-04) so `./scripts/...` or an absolute path still gets the label.
+# Compared by BASENAME so `./scripts/...` or an absolute path still gets the label.
 LABEL_ARGS=()
 if [ "$(basename "$SCRIPT")" = "benchmark_ieee8500.jl" ]; then
   LABEL_ARGS=(--run-label "$LABEL")
@@ -43,7 +43,7 @@ OTHER_JULIA="$(pgrep -c -x julia 2>/dev/null || true)"
 OTHER_JULIA="${OTHER_JULIA:-0}"
 
 # The child records its OWN pid and then `exec`s julia (same pid), so OOM log lines can be matched
-# to THIS point's process rather than to any process killed on the host meanwhile (WR-03).
+# to THIS point's process rather than to any process killed on the host meanwhile.
 PIDFILE="$RUNS/$LABEL.pid"
 rm -f "$PIDFILE"
 /usr/bin/time -v -o "$RUNS/$LABEL.time" bash -c 'echo $$ > "$0"; exec "$@"' "$PIDFILE" \
@@ -58,7 +58,7 @@ EARLY="$(journalctl -u earlyoom --since "$START" --no-pager 2>/dev/null | grep -
 printf '%s\n' "$KERN" > "$RUNS/$LABEL.oom_kernel"
 printf '%s\n' "$EARLY" > "$RUNS/$LABEL.oom_earlyoom"
 
-# WR-03 (35-REVIEW): the journals above are host-wide (other julia processes are expected here, see
+# The journals above are host-wide (other julia processes are expected here, see
 # other_julia_procs), so the full logs are kept as evidence but an OOM is ATTRIBUTED to this point
 # only when (a) the point actually failed (RC != 0) AND (b) a log line names THIS point's pid.
 #   oom_source = kernel | earlyoom      — RC != 0 and that killer's log names CHILD_PID

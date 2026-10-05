@@ -5,11 +5,11 @@
 # and sha256-verified 2026-08-21), reduces MV/LV line-code impedance matrices to positive-sequence
 # R1/X1 pairs via Fortescue-averaging (same method as `reduce_ieee123_impedances.jl`), reduces the
 # 9 3-winding center-tap service-transformer codes via a balanced-load star-equivalent decomposition
-# (D-05 REVISED, Assumption A1), and (in default mode) emits a committed Julia source file at
+# (derived from OpenDSS's Transformer.pas), and (in default mode) emits a committed Julia source file at
 # `src/data/ieee8500_impedances.jl` with per-segment series impedance in Ohms (MV/LV branches) or
 # percent-on-own-kVA-base (transformer edges) — topology is read as plain text and never re-derived.
 #
-# This fixture has two pitfalls IEEE-123 never had (see 25-RESEARCH.md Architecture Patterns §3):
+# This fixture has two pitfalls IEEE-123 never had:
 #   1. Phase-suffix-collapse introduces genuine PARALLEL EDGES (3 confirmed capacitor-jumper
 #      collisions + 4 regulator banks) that must be assert-identical-then-deduped, never averaged.
 #   2. The 3-winding center-tap transformer reduction is `R_total=ΣRs[1:3]`,
@@ -18,7 +18,7 @@
 # Regulator/switch segments (voltage regulators + the substation transformer + the 38 ENABLED
 # `switch=y` tie segments in Lines.dss) carry NO real impedance value in the emitted table — they
 # get the SAME near-ideal low-impedance treatment as `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at
-# fixture-build time (D-13, Assumption A2 analog); tap changing is not modeled. The remaining 5 of
+# fixture-build time; tap changing is not modeled. The remaining 5 of
 # 43 `switch=y` records carry an explicit `enabled=False` in the source text — genuine,
 # authoritative normally-open tie switches — and are EXCLUDED from `IEEE8500_REGULATOR_EDGES`
 # entirely, mirroring `ieee123.jl`'s treatment of its 4 normally-open tie switches (kept out of
@@ -27,24 +27,24 @@
 # `enabled=False` records yields a fully connected tree over all 4,873 buses with `edges == 4872 ==
 # buses - 1`, matching `assert_radial`'s edge-count theorem exactly.
 #
-# Three degenerate segments are resolved by a topological BUS-MERGE (quick task 260822-pxb,
-# 2026-08-22 — see `detect_length_class_merge_pairs`/`merge_near_zero_mv_edges!` below and
-# .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1): 2 genuine 1-ft
+# Three degenerate segments are resolved by a topological BUS-MERGE (see
+# `detect_length_class_merge_pairs`/`merge_near_zero_mv_edges!` below):
+# 2 genuine 1-ft
 # real-conductor bus-split segments (`length=0.0003048 km`, an exact imperial round-trip), and
 # `HVMV_Sub_connector` (the substation Low Side Bus busbar tie, `r_ohm=1e-6` — a modeling
 # placeholder, not a physical line, that structurally breaks LinDistFlow SOC-exactness). Unlike
-# the D-13 near-ideal treatment below (which keeps a bus pair but reassigns its impedance value),
+# the near-ideal treatment below (which keeps a bus pair but reassigns its impedance value),
 # a bus-merge REMOVES the degenerate pair entirely: the two buses are collapsed into one survivor
 # (chosen by a remaining-degree rule, lexicographic tie-break), and the casualty bus name never
-# appears in the generated table (SUPERSEDES an earlier D-13-style value-reassignment for the
-# connector specifically — see deferred-items.md item 1 for the full before/after history).
+# appears in the generated table (SUPERSEDES an earlier near-ideal value-reassignment for the
+# connector specifically).
 #
-# WIDENED (quick task 260822-rle, 2026-08-22): the length-class bus-merge threshold widened from
+# WIDENED (2026-08-22): the length-class bus-merge threshold widened from
 # an exact 1.000 ft match to a documented, float-safe sub-metre bound
 # (`MV_SUBMETRE_LENGTH_KM_BOUND`), catching 6 further real-conductor line-split segments beyond
 # the original 2 — `LN5837496-1`, `LN6268990-2`, `LN5486729-1`, `LN5927299-1`, `LN5472394-1`,
 # `LN5865233-1` (see `detect_length_class_merge_pairs`'s own docstring for the full list, lengths,
-# and survivors). This widening was prompted by 260822-pxb's own finding that SOCP-exactness
+# and survivors). This widening was prompted by the finding that SOCP-exactness
 # dominance transferred to, rather than resolved by, the original 2-pair merge — the new dominant
 # offender (`M1069310<->M1069311`) turned out to be another sub-metre real-conductor split of the
 # SAME phenomenon class, just below the old threshold. The 53 `length=0.001` km records (43
@@ -74,22 +74,20 @@ const CAPACITORS_DSS = joinpath(DATA_DIR, "Capacitors.dss")
 const REGULATORS_DSS = joinpath(DATA_DIR, "Regulators.dss")
 const OUT_FILE = joinpath(SCRIPT_DIR, "..", "src", "data", "ieee8500_impedances.jl")
 
-# Provenance (Task 1, `25-DATA-PROVENANCE.md`) — hardcoded per that task's emit_output guidance
-# ("read back... via regex, or hardcode the SHA task 1 resolved").
+# Provenance — hardcoded SHA of the vendored upstream commit
+# (resolved when the data was vendored).
 const PINNED_COMMIT_SHA = "3b208397160213cae4a9e2d0a7d1aa3528ce26e1"
 const FETCH_VERIFIED_DATE = "2026-08-21"
 
-# Pinned sanity value for the transformer-reduction formula (RESEARCH.md Architecture Patterns §1,
-# Common Pitfalls §2): CT5 (`%Rs=[0.6,1.2,1.2]`, `Xhl=Xht=2.04`, `Xlt=1.36`) reduces to
+# Pinned sanity value for the transformer-reduction formula: CT5 (`%Rs=[0.6,1.2,1.2]`, `Xhl=Xht=2.04`, `Xlt=1.36`) reduces to
 # `R_total=3.00%`, `X_total=2.72%` under the CONFIRMED (not the superseded placeholder) formula.
 const CT5_R_PCT_EXPECTED = 3.00
 const CT5_X_PCT_EXPECTED = 2.72
 const SANITY_ATOL = 1.0e-2
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Substation busbar-tie connector: bus-MERGE treatment (SUPERSEDES the D-13 near-ideal reshape)
-# (phase-25 gap-closure, 2026-08-21, deferred-items.md item 1 — SUPERSEDED 2026-08-22 by quick
-# task 260822-pxb; see 25-DATA-PROVENANCE.md and deferred-items.md item 1 for the full history)
+# Substation busbar-tie connector: bus-MERGE treatment (supersedes the earlier near-ideal reshape)
+# (2026-08-22; the 2026-08-21 near-ideal reshape is superseded)
 # ─────────────────────────────────────────────────────────────────────────────────────────
 #
 # `Lines.dss`'s `HVMV_Sub_connector` record (`bus1=_HVMV_Sub_LSB bus2=HVMV_Sub_48332
@@ -100,11 +98,11 @@ const SANITY_ATOL = 1.0e-2
 # PHYSICAL JUSTIFICATION: a substation busbar tie is not a physical conductor run at all — by
 # definition it is a single physical node exposed as two named terminals. Unlike a
 # voltage-regulator bank, the substation transformer, or a genuine `switch=y` tie (all of which
-# ARE distinct physical devices, correctly given the near-ideal low-impedance treatment, D-13,
-# Assumption A2 analog — see Step 5 below), the busbar tie has no device between its two named
+# ARE distinct physical devices, correctly given the near-ideal low-impedance treatment —
+# see Step 5 below), the busbar tie has no device between its two named
 # buses at all. A bus-MERGE is therefore STRICTLY MORE FAITHFUL than assigning it ANY impedance
 # value, however small: it removes the non-physical element entirely instead of inventing a
-# resistance for it. (The prior D-13 near-ideal reshape assigned `r=0.09330 Ω`/`x=0.04665 Ω`, a
+# resistance for it. (The prior near-ideal reshape assigned `r=0.09330 Ω`/`x=0.04665 Ω`, a
 # ~93,000x inflation over the literal parsed value — a reasonable interim stopgap, now superseded.)
 #
 # SOC-EXACTNESS GRADIENT ARGUMENT (why this edge needed special handling at all — unchanged; only
@@ -113,15 +111,15 @@ const SANITY_ATOL = 1.0e-2
 # squared-current variable `l` to its tight minimal value at the optimum. At this fixture's own
 # per-unit base (`S_base=0.5 MVA`, `V_base=12.47 kV` — matches `src/data/ieee8500.jl`'s
 # `IEEE8500_MV_BASE`), the literal parsed value is `r≈3.2e-9 pu` — six orders of magnitude below
-# this project's own D-13 near-ideal convention (`IEEE123_SWITCH_R=3e-4 pu`/
+# this project's own near-ideal convention (`IEEE123_SWITCH_R=3e-4 pu`/
 # `IEEE123_SWITCH_X=1.5e-4 pu`, `src/data/ieee123.jl:79-80`). On a branch this close to zero-r the
 # loss gradient is essentially absent, so the SOCP cone residual on THIS one branch did not shrink
 # as solver tolerance tightened under the ORIGINAL (pre-fix) parse (measured: tol=1e-6 gap=0.4960
 # -> tol=1e-8 gap=0.1796, STALLING then NaN at tighter rungs) — a STRUCTURAL relaxation failure,
-# not shrinking numerical noise. A bus-merge resolves this MORE completely than the D-13 reshape
+# not shrinking numerical noise. A bus-merge resolves this MORE completely than the near-ideal reshape
 # did: there is no longer any near-zero-r edge at all to contribute a stalling cone residual. Full
-# before/after record: deferred-items.md item 1 (both the original reshape and this superseding
-# merge) and this quick task's SUMMARY.
+# before/after record: both the original reshape and this superseding
+# merge.
 #
 # MECHANISM: detected via the SAME literal near-zero-`r_ohm` threshold as before
 # (`MV_NEAR_ZERO_R_THRESHOLD_OHM`), then MERGED using the SAME generic bus-merge machinery as the
@@ -164,8 +162,7 @@ end
     canonical_pair(b1, b2) -> Tuple{String,String}
 
 Order-independent bus-pair key (lexicographically sorted), used throughout for deduping
-phase-collapsed parallel edges (RESEARCH.md Code Examples "Deduplicating phase-collapsed parallel
-edges").
+phase-collapsed parallel edges.
 """
 canonical_pair(b1::AbstractString, b2::AbstractString) = b1 < b2 ? (b1, b2) : (b2, b1)
 
@@ -182,7 +179,7 @@ end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
 # Shared matrix reduction — COPIED VERBATIM from scripts/reduce_ieee123_impedances.jl
-# (RESEARCH.md confirms direct transfer, same Ω-matrix pipe-delimited lower-triangular form)
+# (direct transfer, same Ω-matrix pipe-delimited lower-triangular form)
 # ─────────────────────────────────────────────────────────────────────────────────────────
 
 """
@@ -299,7 +296,7 @@ end
 
 One parsed MV `New Line.*` statement that references a `Linecode=<name>` — bus tokens already
 phase-stripped to their base name, length in km (the file's own declared `Units=km`). `name` is
-the record's own `New Line.<name>` identifier (added quick task 260822-rle, 2026-08-22, solely to
+the record's own `New Line.<name>` identifier (added 2026-08-22, solely to
 support the `CAP_`-prefix belt-and-braces guard in `detect_length_class_merge_pairs`; renaming
 never touches this field, only the bus endpoints).
 """
@@ -332,13 +329,12 @@ Line-by-line (never a single big cross-field regex, so field ORDER in the source
 matter) parse of every `New Line.*` statement in the vendored `Lines.dss` text, dispatched into
 four buckets:
   1. ENABLED `switch=y` tie segments (38 of 43 confirmed) — bus pair only, no impedance parsed
-     (D-13: these get the SAME near-ideal treatment as regulators, assigned by the caller).
+     (these get the SAME near-ideal treatment as regulators, assigned by the caller).
   2. DISABLED `switch=y` tie segments (5 of 43 confirmed, explicit `enabled=False` in the source
      text — real, authoritative normally-open ties) — bus pair only, EXCLUDED from the network
      entirely (the IEEE-123 precedent: normally-open tie switches stay open, so the graph is a
      clean tree). Without this split the reduction silently treats every switch as closed, which
-     produces `edges != N-1` at `Feeder` construction time (5-cycle over-count) — see plan 25-03's
-     Task 1 deviation note.
+     produces `edges != N-1` at `Feeder` construction time (5-cycle over-count).
   3. `Linecode=<name>` references (2,473 confirmed) — deferred Ω lookup, returned as
      `MVLinecodeRef`.
   4. Inline `r1=`/`x1=` records (`HVMV_Sub_connector` + the 9 raw `CAP_*` capacitor-connector
@@ -434,8 +430,8 @@ function parse_mv_lines(text::AbstractString)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Zero-length bus-merge (quick task 260822-pxb, 2026-08-22; WIDENED to sub-metre by quick task
-# 260822-rle, 2026-08-22) — REPLACES impedance fabrication with a topological bus MERGE for
+# Zero-length bus-merge (2026-08-22; WIDENED to sub-metre
+# 2026-08-22) — REPLACES impedance fabrication with a topological bus MERGE for
 # genuinely degenerate real-conductor line-split segments.
 # ─────────────────────────────────────────────────────────────────────────────────────────
 #
@@ -453,12 +449,12 @@ end
 # and `0.0003048` km is a suspicious EXACT round number in imperial units, unlike this fixture's
 # other short-but-non-round real MV segments (`0.000259836`, `0.000383926`, `0.000560638`,
 # `0.000658611`, `0.000731906`, `0.000842188` km — no evidence ties these to the measured
-# SOCP-exactness failure this task addresses; left untouched, "next tier"). The 53
+# SOCP-exactness failure addressed here; left untouched, "next tier"). The 53
 # `length=0.001 km` inline `r1=1.0/x1=1.0` records (`CAP_*`-style capacitor-jumper/stub markers)
 # are a DIFFERENT class entirely — deliberately artificial placeholder markers, not real short
 # conductor spans — and are explicitly NOT merged in this pass either.
 #
-# WIDENED to a sub-metre bound (quick task 260822-rle, 2026-08-22): after the above 2-pair merge,
+# WIDENED to a sub-metre bound (2026-08-22): after the above 2-pair merge,
 # SOCP-exactness dominance transferred to `M1069310<->M1069311` (`LN5486729-1`, 0.560638 m,
 # `-N`-split-suffixed) rather than resolving — direct evidence the exact-1.000-ft threshold was
 # narrower than the phenomenon it targeted. A fresh grep of `Lines.dss` found exactly 8
@@ -498,8 +494,8 @@ const MV_SUBMETRE_LENGTH_KM_EPS = 1.0e-6
 
 Scan `linecode_recs` (pre-impedance-resolution `MVLinecodeRef`s) for any entry whose `length_km`
 is strictly below `MV_SUBMETRE_LENGTH_KM_BOUND - MV_SUBMETRE_LENGTH_KM_EPS` (sub-metre, with a 1mm
-float-safety margin — widened from the original exact-1.000-ft `isapprox` match, quick task
-260822-rle, 2026-08-22); collect the canonical bus pair for each match.
+float-safety margin — widened from the original exact-1.000-ft `isapprox` match,
+2026-08-22); collect the canonical bus pair for each match.
 
 For every matched record, asserts `!startswith(r.name, "CAP_")` before collecting its pair,
 throwing a loud `ArgumentError` naming the offending record if it ever fires. This is a
@@ -659,7 +655,7 @@ not-yet-impedance-resolved MV structure, mutating each argument in place:
   3. Rename `mv_base` ONLY (never `lv_base`) on every `xfmr_instances` entry.
   4. Assert NO entry anywhere has `bus1_base == bus2_base` (or is a self-referential pair) after
      renaming — throws loudly if one appears (would indicate an undetected pre-existing parallel
-     path this task's disjointness analysis did not anticipate; never silently drop it). A
+     path the disjointness analysis did not anticipate; never silently drop it). A
      post-rename PARALLEL edge (two distinct records landing on the same bus pair with genuinely
      different impedance values) is caught downstream, loudly, by the existing `dedupe_edges`
      assert-identical-or-throw mechanism when `mv_edges_raw`/LV edges are assembled — it never
@@ -744,8 +740,8 @@ end
     merge_near_zero_mv_edges!(linecode_recs, inline_recs, switch_pairs, disabled_switch_pairs,
                                xfmr_instances, reg_edges, degree) -> Dict{String,String}
 
-SUPERSEDES the prior D-13 near-ideal VALUE-REASSIGNMENT treatment (deferred-items.md item 1,
-2026-08-21) with a bus-MERGE (quick task 260822-pxb, 2026-08-22) — see the file-header comment
+SUPERSEDES the prior near-ideal VALUE-REASSIGNMENT treatment (2026-08-21)
+with a bus-MERGE (2026-08-22) — see the file-header comment
 above ("Substation busbar-tie connector: bus-MERGE treatment") for the full physical/
 SOC-exactness-gradient justification, unchanged; only the mechanism changed.
 
@@ -782,7 +778,7 @@ function merge_near_zero_mv_edges!(
             "expected EXACTLY 1 degenerate near-zero-impedance MV segment (r_ohm < " *
             "$(MV_NEAR_ZERO_R_THRESHOLD_OHM) Ω) eligible for a merge, got $(length(pairs)): " *
             "$(pairs) — the vendored source may have changed; re-verify the intended scope of " *
-            "this treatment (deferred-items.md item 1) before proceeding, do not silently widen it",
+            "this treatment before proceeding, do not silently widen it",
         ),
     )
     merge_map = resolve_merge_pairs(pairs, degree)
@@ -804,7 +800,7 @@ function merge_near_zero_mv_edges!(
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Step 2: assert-identical-then-dedupe (Pitfall 1 — parallel edges after phase-suffix collapse)
+# Step 2: assert-identical-then-dedupe (parallel edges after phase-suffix collapse)
 # ─────────────────────────────────────────────────────────────────────────────────────────
 
 """
@@ -812,8 +808,8 @@ end
 
 Build the `(from,to)` -> `[records]` multimap keyed by the SORTED bus-pair; for any key with >1
 record, assert ALL copies have identical `r_ohm`/`x_ohm` (within `rtol=1e-6`) and throw loudly
-if not — NEVER average, NEVER arbitrarily pick (T-25-03). Keeps exactly one value per key.
-RESEARCH.md Code Examples "Deduplicating phase-collapsed parallel edges", generalized from
+if not — NEVER average, NEVER arbitrarily pick. Keeps exactly one value per key.
+Generalized from
 `LineRecord` to the shared `ImpedanceEdge` type so this same function serves BOTH the MV and LV
 dedupe steps.
 """
@@ -846,7 +842,7 @@ end
     assert_no_self_loops(keys_iter, context)
 
 Throws `ArgumentError` if any `(bus1_base, bus2_base)` pair in `keys_iter` has `bus1_base ==
-bus2_base`. Applied AFTER dedupe (RESEARCH.md confirms zero self-loops exist in the real vendored
+bus2_base`. Applied AFTER dedupe (zero self-loops exist in the real vendored
 `Lines.dss`, but this is asserted rather than assumed).
 """
 function assert_no_self_loops(keys_iter, context::AbstractString)
@@ -868,7 +864,7 @@ Parse every `New Line.*` statement in `Triplex_Lines.DSS`: `(bus1_base, bus2_bas
 linecode_lowercased, length_ft)`. ALL 1,177 records declare `units=ft` (asserted, not assumed) —
 `Triplex_Linecodes.dss` rates its matrices in `units=kft` (ohms per 1000 ft), so the caller must
 divide `length_ft` by 1000 before multiplying by the reduced R1/X1 — this unit mismatch (ft vs
-kft) is NOT flagged in 25-RESEARCH.md's prose but is required for correct LV impedance values;
+kft) is easy to miss but is required for correct LV impedance values;
 omitting it would silently inflate every LV branch impedance by 1000x.
 """
 function parse_triplex_lines(text::AbstractString)
@@ -894,7 +890,7 @@ end
 """
     parse_loads(text) -> Dict{String,Float64}
 
-Parse `Loads.dss`'s 1,177 `New Load.*` records into `SX-bus-base -> real kW` (D-03). Throws if
+Parse `Loads.dss`'s 1,177 `New Load.*` records into `SX-bus-base -> real kW`. Throws if
 any bus base repeats (exactly one load per SX bus is expected).
 """
 function parse_loads(text::AbstractString)
@@ -935,13 +931,13 @@ function parse_capacitors(text::AbstractString)
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Step 4: 3-winding center-tap service-transformer reduction (D-05 REVISED, Assumption A1)
+# Step 4: 3-winding center-tap service-transformer reduction (star-equivalent decomposition)
 # ─────────────────────────────────────────────────────────────────────────────────────────
 
 """
     XfmrCode
 
-A reduced `XfmrCode` definition: `r_pct`/`x_pct` on the transformer's OWN kVA base (D-09: no
+A reduced `XfmrCode` definition: `r_pct`/`x_pct` on the transformer's OWN kVA base (no
 pu-conversion here), and `kva` (the code's own rating, read from `kVAs=[...]`'s first entry — all
 three windings share the same kVA rating in this fixture).
 """
@@ -955,11 +951,11 @@ end
     parse_xfmr_codes(text) -> Dict{String,XfmrCode}
 
 Parse `LoadXfmrCodes.dss`'s 9 `New XfmrCode.*` definitions and reduce each via the CONFIRMED
-(post-research) 3-winding balanced center-tap formula:
+3-winding balanced center-tap formula:
 `R_total% = %Rs[1]+%Rs[2]+%Rs[3]`, `X_total% = 0.5*(Xhl+Xht+Xlt)` — NOT the superseded
-2-winding placeholder (`%Rs[1]+%Rs[2]`, bare `Xhl`) that under-counted both R and X (Common
-Pitfalls §2). Derived and verified against OpenDSS's own `Transformer.pas` this research session
-— not lifted from a citable published formula (Assumption A1).
+2-winding placeholder (`%Rs[1]+%Rs[2]`, bare `Xhl`) that under-counted both R and X.
+Derived and verified against OpenDSS's own `Transformer.pas`
+— not lifted from a citable published formula.
 """
 function parse_xfmr_codes(text::AbstractString)
     codes = Dict{String, XfmrCode}()
@@ -1053,7 +1049,7 @@ function build_xfmr_edges(
 end
 
 # ─────────────────────────────────────────────────────────────────────────────────────────
-# Step 5: Regulators / substation transformer / switch ties -> near-ideal edge set (D-13)
+# Step 5: Regulators / substation transformer / switch ties -> near-ideal edge set
 # ─────────────────────────────────────────────────────────────────────────────────────────
 
 """
@@ -1064,8 +1060,8 @@ substation-transformer syntax — DISTINCT from the service-transformer `buses=[
 syntax handled by `parse_xfmr_instances`) into phase-stripped `(bus1_base, bus2_base)` pairs.
 Works against BOTH `Regulators.dss` (VREG2/VREG3/VREG4, 3 single-phase records each) and
 `Transformers.dss` (`FEEDER_REG`, 3 single-phase records, PLUS the single 3-phase `HVMV_Sub`
-substation transformer record) — same call site, same function, per D-13's "regulator banks plus
-the substation transformer" requirement.
+substation transformer record) — same call site, same function (regulator banks plus
+the substation transformer).
 """
 function parse_transformer_bus_pairs(text::AbstractString)
     pairs = Tuple{String, String}[]
@@ -1088,8 +1084,7 @@ end
 Collapse the regulator-bank/substation-transformer pairs (3 raw phase records per bank ->
 1 edge each, VREG2/VREG3/VREG4/FEEDER_REG + the single-record HVMV_Sub substation transformer)
 AND the 38 ENABLED `switch=y` tie-segment pairs from `Lines.dss` into ONE `Set{Tuple{String,String}}`
-— D-13's "Regulator and switch segments carry the... near-ideal low-impedance treatment (Assumption
-A2 analog)" applies uniformly to both categories, so both land in the same emitted set. The caller
+— the near-ideal low-impedance treatment applies uniformly to both categories, so both land in the same emitted set. The caller
 passes only the ENABLED switch pairs (`switch_pairs`, not `disabled_switch_pairs`) — the 5
 `enabled=False` normally-open ties never reach this function, matching `ieee123.jl`'s exclusion of
 its 4 normally-open tie switches. A plain `Set` naturally collapses the regulator banks' 3
@@ -1169,18 +1164,18 @@ function emit_output(
     )
     println(io, "# LineCodes.dss (a different, unrelated file bundled in the same upstream repo).")
     println(io, "#")
-    println(io, "# 3-winding center-tap service-transformer reduction (D-05 REVISED):")
+    println(io, "# 3-winding center-tap service-transformer reduction:")
     println(io, "#     R_total% = %Rs[1] + %Rs[2] + %Rs[3]")
     println(io, "#     X_total% = 0.5 * (Xhl + Xht + Xlt)")
     println(
         io,
-        "# Derived and verified against OpenDSS's own Transformer.pas this research session — not",
+        "# Derived and verified against OpenDSS's own Transformer.pas — not",
     )
     println(
         io,
-        "# a citable published formula (Assumption A1). See 25-RESEARCH.md Architecture Patterns",
+        "# a citable published formula. The star-equivalent decomposition is the basis of the",
     )
-    println(io, "# §1 for the full star-equivalent-decomposition derivation.")
+    println(io, "# derivation.")
     println(io, "#")
     println(
         io,
@@ -1194,7 +1189,7 @@ function emit_output(
         io,
         "# NEITHER is per-unit. Converted once at ingestion in ieee8500_modified() via",
     )
-    println(io, "# to_pu_impedance (D-09) — never inside this reduction script.")
+    println(io, "# to_pu_impedance — never inside this reduction script.")
     println(io, "#")
     println(
         io,
@@ -1206,7 +1201,7 @@ function emit_output(
     )
     println(
         io,
-        "# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time (D-13, Assumption A2 analog);",
+        "# IEEE123_SWITCH_R/IEEE123_SWITCH_X at fixture-build time;",
     )
     println(io, "# tap changing is not modeled.")
     println(io, "#")
@@ -1225,7 +1220,7 @@ function emit_output(
     println(io, "#")
     println(
         io,
-        "# BUS MERGE (quick task 260822-pxb, 2026-08-22, REPLACES an earlier impedance-fabrication",
+        "# BUS MERGE (replaces an earlier impedance-fabrication",
     )
     println(
         io,
@@ -1261,11 +1256,11 @@ function emit_output(
     )
     println(
         io,
-        "# resolve_merge_pairs/apply_merge!, and 25-DATA-PROVENANCE.md for the full record",
+        "# resolve_merge_pairs/apply_merge!; the exact casualty bus names,",
     )
     println(
         io,
-        "# (including the exact casualty bus names, which by design appear NOWHERE below).",
+        "# by design, appear NOWHERE below.",
     )
     println(io, "#")
     println(
@@ -1274,7 +1269,7 @@ function emit_output(
     )
     println(
         io,
-        "# record — quick task 260822-pxb, 2026-08-22, SUPERSEDING an earlier D-13 near-ideal",
+        "# record — SUPERSEDING an earlier near-ideal",
     )
     println(
         io,
@@ -1294,19 +1289,19 @@ function emit_output(
     )
     println(
         io,
-        "# tie) by reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges! — see",
+        "# tie) by",
     )
     println(
         io,
-        "# .planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md item 1 and",
+        "# reduce_ieee8500_impedances.jl's merge_near_zero_mv_edges!;",
     )
     println(
         io,
-        "# 25-DATA-PROVENANCE.md for the full before/after record (including the casualty bus",
+        "# the casualty bus name,",
     )
     println(
         io,
-        "# name, which by design appears NOWHERE below).",
+        "# by design, appears NOWHERE below.",
     )
     println(io)
     println(
@@ -1370,9 +1365,9 @@ end
 
 Self-check mode (`--verify`): parses `LoadXfmrCodes.dss`'s `XfmrCode` definitions and asserts the
 `CT5` code's reduced `(R_total_pct, X_total_pct)` matches the pinned sanity pair within
-`SANITY_ATOL`, throwing `ArgumentError` otherwise (Common Pitfalls §2 — the whole point of this
+`SANITY_ATOL`, throwing `ArgumentError` otherwise (the whole point of this
 gate is to catch a regression to the superseded, silently-under-counting placeholder formula
-before it ever reaches a fixture, per T-25-02).
+before it ever reaches a fixture).
 """
 function verify()
     loadxfmrcodes_text = read(LOADXFMRCODES_DSS, String)
@@ -1441,7 +1436,7 @@ function main()
     )
 
     # --- Service transformers: LoadXfmrCodes.dss (9 codes + 1,177 instances) — parsed EARLY
-    #     (quick task 260822-pxb reordering) so xfmr_instances is available for degree counting
+    #     (before the merge step) so xfmr_instances is available for degree counting
     #     and merge renaming BEFORE the length-class bus-merge below. ---
     xfmr_codes = parse_xfmr_codes(loadxfmrcodes_text)
     length(xfmr_codes) == 9 ||
@@ -1453,8 +1448,8 @@ function main()
         ),
     )
 
-    # --- Regulators + substation transformer + switch ties (D-13, near-ideal, no real Z here) —
-    #     ALSO parsed EARLY (quick task 260822-pxb reordering) so the LOGICAL (phase-deduplicated)
+    # --- Regulators + substation transformer + switch ties (near-ideal, no real Z here) —
+    #     ALSO parsed EARLY so the LOGICAL (phase-deduplicated)
     #     reg_edges Set is available for degree counting BEFORE the length-class bus-merge below
     #     (a 3-phase regulator bank must count once here, not 3x, relative to an ordinary MV line
     #     record — see compute_bus_degrees's own doc). ---
@@ -1464,7 +1459,7 @@ function main()
     )
     reg_edges = build_regulator_edges(reg_pairs, switch_pairs)
 
-    # --- Quick task 260822-pxb: length-class zero-length bus-merge (replaces impedance
+    # --- Length-class zero-length bus-merge (replaces impedance
     #     fabrication for the 2 genuine 1-ft real-conductor bus-split segments). Mutates
     #     linecode_recs/inline_recs/switch_pairs/disabled_switch_pairs/xfmr_instances/reg_edges
     #     IN PLACE before any of them are used further. The SAME pre-merge `degree` map is reused
@@ -1487,8 +1482,8 @@ function main()
         "$(sort!(collect(length_class_merge_map)))",
     )
 
-    # --- Quick task 260822-pxb: near-zero-r substation busbar-tie connector bus-merge (SUPERSEDES
-    #     the D-13 near-ideal value-reassignment treatment) — see merge_near_zero_mv_edges!'s own
+    # --- Near-zero-r substation busbar-tie connector bus-merge (SUPERSEDES
+    #     the near-ideal value-reassignment treatment) — see merge_near_zero_mv_edges!'s own
     #     doc and the file-header comment above for the full justification. ---
     merge_near_zero_mv_edges!(
         linecode_recs,

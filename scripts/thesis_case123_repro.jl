@@ -1,48 +1,46 @@
 # scripts/thesis_case123_repro.jl
 #
-# Phase 18 (directional thesis reproduction) — the REPRO-01 promotion-source script: the
+# Directional thesis reproduction — the promotion-source script: the
 # IEEE-123 real-impedance DADP-vs-FIT reproduction of the thesis's headline DSO-surplus welfare
-# result, on Phase 17's real, Fortescue-reduced impedances + the Phase-17-retuned population,
-# with reactive pricing available via `decompose_dlmp(ctx).reactive` (Phase 16). Mirrors
+# result, on real, Fortescue-reduced impedances + the retuned population,
+# with reactive pricing available via `decompose_dlmp(ctx).reactive`. Mirrors
 # `scripts/thesis_caseA.jl`'s DrWatson scaffold and figure conventions on this new fixture.
 #
-# WHAT THIS DOES NOT CLAIM (18-RESEARCH.md's central honesty finding, carried forward here):
+# WHAT THIS DOES NOT CLAIM (the central honesty finding):
 # the thesis's headline +25% AGGREGATE-WELFARE-RATIO MAGNITUDE does NOT reproduce on real public
 # IEEE-123 data — the aggregate welfare gap here is small (≈+0.2630% on this fixture — CORRECTED
-# Phase 28 code review FIX, CR-01, from the stale pre-Phase-26/27 ≈+0.045% figure; see this
+# from the stale ≈+0.045% figure computed before the model corrections; see this
 # script's own live `welfare_delta_pct` below and
 # docs/literate/thesis_reproduction_assumptions.jl Section 6's correction box for the
-# recomputation) and reported below ONLY as an explicitly-labeled fragile SECONDARY number, never the primary claim (Pitfall
-# 1: `welfare_dadp / welfare_fit` sign-inverts on negative welfare and must never be the headline
+# recomputation) and reported below ONLY as an explicitly-labeled fragile SECONDARY number, never the primary claim (
+# `welfare_dadp / welfare_fit` sign-inverts on negative welfare and must never be the headline
 # metric). What DOES reproduce, robustly and correctly-signed, is the DSO-SURPLUS SIGN FLIP: the
 # FIT baseline's DSO surplus is negative, the DADP optimum's DSO surplus is positive — the same
 # directional finding as the thesis's own Case A ("DSO surplus -$2829 -> +$439"), on a real,
 # public-data feeder rather than a thesis-figure-calibrated one. Every cited number below carries
 # the fixed "directional, public-data" qualifier so a reader never mistakes this directional
-# reproduction for an exact-figure claim (18-PATTERNS.md).
+# reproduction for an exact-figure claim.
 #
-# CORRECTED 2026-07-26: Plan 18-01 reported (scripts/repro_stability_check.jl,
+# CORRECTED 2026-07-26: an earlier run reported (scripts/repro_stability_check.jl,
 # results/repro_stability_check/findings.txt) that this sign flip was confirmed ONLY at the exact
-# Phase-17-retuned population point, because a +/-2-5% perturbation made `assert_socp_exact!`
+# retuned population point, because a +/-2-5% perturbation made `assert_socp_exact!`
 # throw (`sign_flip_survives: false`). THAT IS REFUTED — the throws were solver under-convergence
 # at the default tol_gap=1e-8, not a physical exactness boundary. Re-measured at tol_gap=1e-10 all
 # 5 swept points solve and ALL show the sign flip, with both surpluses monotone in population
-# scale. See docs/literate/thesis_reproduction_assumptions.jl Section 8 and
-# .planning/spikes/003-phase18-fragility-tolerance/.
+# scale. See docs/literate/thesis_reproduction_assumptions.jl Section 8.
 #
 # This script still runs ONLY at the exact pinned point and does not re-run the sweep.
 #
-# RESTATED IN v4.0 (Phase 28, plan 28-02; welfare-gap % corrected by plan 28-05's code review
-# FIX, CR-01): Phases 26-27 changed the model underneath this
+# RESTATED after the model corrections: the model changed underneath this
 # script — see the `solve_welfare`/`fit_baseline` call sites below for the measured
-# PRECISION-ARTIFACT tol_gap overrides this required (Task 1's empirical verdict, never a
-# guess), and `docs/literate/thesis_reproduction_ieee123.jl`'s own "Restated in v4.0" table
+# PRECISION-ARTIFACT tol_gap overrides this required (an empirical verdict, never a
+# guess), and `docs/literate/thesis_reproduction_ieee123.jl`'s own restatement table
 # for the full old-vs-new headline-number restatement (`fit_dso` moved materially due to
-# FIX-09/FIX-10's physics-only AC settlement of `fit_baseline`; the DSO-surplus SIGN FLIP
-# itself is unaffected). NOTE: plan 28-02 restated the three surplus figures but never
-# recomputed the DERIVED aggregate-welfare-gap percentage, leaving this header's own
-# "≈+0.045%" text stale even though `fit_dso` had moved materially — caught by the phase's own
-# code review (CR-01). Recomputed by actually running this script: the CURRENT value is
+# the physics-only AC settlement of `fit_baseline`; the DSO-surplus SIGN FLIP
+# itself is unaffected). NOTE: the three surplus figures were restated but the
+# DERIVED aggregate-welfare-gap percentage was not recomputed at first, leaving this header's own
+# "≈+0.045%" text stale even though `fit_dso` had moved materially — caught in review.
+# Recomputed by actually running this script: the CURRENT value is
 # ≈+0.2630%, about 5.9x the stale figure; direction unchanged (small, positive, fragile).
 #
 # Run:
@@ -68,7 +66,7 @@ saveboth(name, fig) =
     (save(joinpath(OUT, "$name.pdf"), fig); save(joinpath(OUT, "$name.png"), fig))
 
 # -------------------------------------------------------------------------------------------
-# The "directional, public-data" qualifier — the ONE new convention this phase introduces.
+# The "directional, public-data" qualifier — the ONE new convention this script introduces.
 # Apply to every printed/cited reproduction number below (18-PATTERNS.md).
 # -------------------------------------------------------------------------------------------
 const REPRO_QUALIFIER = "directional, public-data"
@@ -86,7 +84,7 @@ const BATT_λ_MIN = 3.8
 const BATT_λ_MED = 6.2
 const BATT_λ_MAX = 8.9
 
-# Phase-17-retuned population point (verbatim from test/fixtures_ieee123.jl:92-95).
+# Retuned population point (verbatim from test/fixtures_ieee123.jl:92-95).
 const SEED_IEEE123 = 20260719
 const LOAD_SCALE_IEEE123 = 0.05
 const PV_SCALE_IEEE123 = 0.12
@@ -218,7 +216,7 @@ function build_ieee123_aggregators(
 end
 
 # -------------------------------------------------------------------------------------------
-# Case 123 scenario — real-impedance modified IEEE-123, Phase-17-retuned population, 24h.
+# Case 123 scenario — real-impedance modified IEEE-123, retuned population, 24h.
 # -------------------------------------------------------------------------------------------
 const FEEDER = ieee123_modified()
 const PF = ConvexBranchFlow()
@@ -237,12 +235,10 @@ println("=" ^ 72)
 #    congestion-driven infeasibility — no manual S_max-relaxed FIT solve needed here).
 # -------------------------------------------------------------------------------------------
 println("\n[1/2] Solving the DADP welfare optimum (GLB-CVX SOCP, eq 3.38)...")
-# Restated in v4.0 (Phase 28, plan 28-02, Task 2 — Rule 1 auto-fix): this call site, run
-# WITHOUT any override, was measured this session (identical population/call signature to
-# Task 1's (b) measurement) to trip `assert_socp_exact!` (gap=4.384e-6, ratio=19.25 — the
-# SAME precision-floor residual Task 1 verdicted PRECISION-ARTIFACT). Not explicitly listed
-# in this plan's own interfaces section (which named only the fit_baseline call site here),
-# but empirically necessary for this script to run without throwing — the identical
+# Restated after the model corrections: this call site, run
+# WITHOUT any override, was measured (identical population/call signature to the
+# fit_baseline measurement below) to trip `assert_socp_exact!` (gap=4.384e-6, ratio=19.25 — the
+# SAME precision-floor residual verdicted PRECISION-ARTIFACT). Empirically necessary for this script to run without throwing — the identical
 # `tol_gap_abs=tol_gap_rel=3e-9` override applied to `docs/literate/thesis_reproduction_ieee123.jl`'s
 # solve_welfare call is applied here too (never a NEW, invented tolerance).
 ctx, welfare_dadp, _ = solve_welfare(
@@ -255,12 +251,12 @@ ctx, welfare_dadp, _ = solve_welfare(
     optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9),
 )
 acct = welfare_accounting(ctx; T = T)          # (; social, dso, prosumer)
-maxgap = ctx.meta[:socp_maxgap]                # PF-04 SOC-exactness certificate
+maxgap = ctx.meta[:socp_maxgap]                # SOC-exactness certificate
 
 println("\n[2/2] Solving the FIT baseline (German feed-in tariff, eqs 3.24-3.28)...")
-# Restated in v4.0 (Phase 28, plan 28-02, Task 1): this call site, run WITHOUT any override,
-# was measured this session to trip `assert_socp_exact!` inside `fit_baseline`'s internal
-# SITE-3 solve_welfare re-check (gap=8.207e-7, ratio=2.50 — IDENTICAL to the same measured
+# Restated after the model corrections: this call site, run WITHOUT any override,
+# was measured to trip `assert_socp_exact!` inside `fit_baseline`'s internal
+# solve_welfare re-check (gap=8.207e-7, ratio=2.50 — IDENTICAL to the same measured
 # residual `docs/literate/thesis_reproduction_ieee123.jl` and `test/test_thesis_repro.jl`'s
 # own committed golden already resolve). VERDICT: PRECISION-ARTIFACT, not genuine new
 # inexactness — the identical `tol_gap_abs=tol_gap_rel=1e-9` override is applied here too,
@@ -275,9 +271,9 @@ fb = fit_baseline(
 )
 fit_dso = fb.social_fit - fb.prosumer_surplus
 
-# ── Reactive DLMP (Phase 16, decompose_dlmp(ctx).reactive) — a plain solve_welfare ctx already
+# ── Reactive DLMP (decompose_dlmp(ctx).reactive) — a plain solve_welfare ctx already
 # carries the reactive channel; NO ADMM-only reactive-consensus dual-ascent kwarg is needed or
-# accepted here (Pitfall 3 — that mechanism belongs solely to the ADMM decomposition path, never
+# accepted here (that mechanism belongs solely to the ADMM decomposition path, never
 # threaded into this centralized solve_welfare seam).
 d = decompose_dlmp(ctx)
 
@@ -309,7 +305,7 @@ println(
 )
 
 # -------------------------------------------------------------------------------------------
-# HEADLINE (primary): the DSO-surplus sign flip. NEVER the aggregate welfare ratio (Pitfall 1 —
+# HEADLINE (primary): the DSO-surplus sign flip. NEVER the aggregate welfare ratio (
 # dividing the DADP welfare by the FIT welfare sign-inverts silently on negative welfare and is
 # never printed here as the primary metric).
 # -------------------------------------------------------------------------------------------
@@ -331,12 +327,12 @@ println(
     "  This mirrors the thesis's own Case A framing (\"DSO surplus -\$2829 -> +\$439\") — the ",
     "sign of the redistribution, not its magnitude, is the reproducible claim on this real, ",
     "public-data feeder (see docs/literate/thesis_reproduction_assumptions.jl for the full ",
-    "caveat chain). The sign flip is ALSO population-scale robust: 18-01's original ",
+    "caveat chain). The sign flip is ALSO population-scale robust: the original ",
     "sign_flip_survives=false was a solver-tolerance artifact; at tol_gap=1e-10 all 5 swept ",
     "+/-2-5% points solve and all show the flip (corrected 2026-07-26).",
 )
 
-# SECONDARY, fragile: the aggregate welfare delta (never the ratio — Pitfall 1). Reported thin,
+# SECONDARY, fragile: the aggregate welfare delta (never the ratio). Reported thin,
 # explicitly labeled fragile, and never used to drive any assertion below.
 welfare_delta_pct = 100 * (welfare_dadp - fb.social_fit) / abs(fb.social_fit)
 println(

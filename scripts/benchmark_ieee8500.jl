@@ -1,27 +1,27 @@
 # scripts/benchmark_ieee8500.jl
 #
-# IEEE-8500-SCALE benchmark harness (SCALE-04/SCALE-05, phase 25 plan 25-05, D-14).
+# IEEE-8500-scale benchmark harness (noise-floor calibration and density sweep).
 #
-# A fixture-parametrized SCRIPT (D-14: not an exported src/ module — measuring is not a
+# A fixture-parametrized SCRIPT (not an exported src/ module — measuring is not a
 # framework capability) with TWO modes, mirroring scripts/socp_applicability_sweep.jl's /
 # scripts/repro_stability_check.jl's DrWatson scaffold + try/catch-per-point + committed-CSV
 # conventions exactly:
 #
 #   1. `--calibrate-noise-floor --fixture <name> [--tolerances <comma-list>]
 #      [--calibration-density <float>] [--t-horizon <int>]`
-#      Task 1 (SCALE-05): re-solve a SMALL benign (low-density, non-congested) point on the
+#      Re-solve a SMALL benign (low-density, non-congested) point on the
 #      requested fixture across a tightening `tol_gap_abs=tol_gap_rel` ladder, measuring the
 #      RAW cone residual via `socp_relaxation_gap` (never `assert_socp_exact!`, to avoid
 #      throwing mid-calibration) at each rung. The floor is the LAST ladder point where the
 #      residual still genuinely improved (>1%) over the previous point — tightening further
 #      only chases the solver's own numerical noise, not a real relaxation gap. This is
-#      spike-002's prescribed method (`.planning/spikes/MANIFEST.md`), applied FRESH to each
-#      IEEE-8500 fixture — NEVER reusing IEEE-13/123's tolerance (anti-certificate-laundering,
-#      T-25-12). `--calibration-density <float>` (2026-08-22 round-2 follow-up, quick task
-#      260822-hld) overrides the ladder point's density; absent, `CALIBRATION_DENSITY = 0.05`
-#      (byte-identical to today). `--t-horizon <int>` overrides the ladder point's horizon, with
+#      documented noise-floor method, applied FRESH to each
+#      IEEE-8500 fixture — NEVER reusing IEEE-13/123's tolerance (anti-certificate-laundering).
+#      `--calibration-density <float>` overrides the ladder point's density; absent,
+#      `CALIBRATION_DENSITY = 0.05`
+#      (unchanged). `--t-horizon <int>` overrides the ladder point's horizon, with
 #      the SAME `>= T_HORIZON_FLOOR` validation `run_sweep_mode` enforces; absent, `T = 24`
-#      (byte-identical to today). Both are recorded in the committed CSV's `density`/`t_horizon`
+#      (unchanged). Both are recorded in the committed CSV's `density`/`t_horizon`
 #      columns — PROVENANCE HONESTY: a floor is never silently implied to have been measured at a
 #      point it was not.
 #
@@ -29,36 +29,36 @@
 #      --density <comma-list> --solver {clarabel,scs,both} --time-limit <seconds>
 #      [--t-horizon <int>] [--clarabel-tol <float>] [--quick]`
 #      Sweeps a (fixture × density × solver) grid, solving EACH point both CENTRALIZED and via
-#      ADMM, and reports EVERY attempted point (including timeouts and non-convergence, D-18) —
-#      never silently dropping one (T-25-11). `--quick` forces the exact CI-affordable single
-#      point this phase's `25-VALIDATION.md` documents: `ieee8500-mv`, the smallest density,
-#      Clarabel only. `--t-horizon <int>` (gap-closure task) overrides the horizon used for
+#      ADMM, and reports EVERY attempted point (including timeouts and non-convergence) —
+#      never silently dropping one. `--quick` forces the exact CI-affordable single
+#      point the validation plan documents: `ieee8500-mv`, the smallest density,
+#      Clarabel only. `--t-horizon <int>` overrides the horizon used for
 #      BOTH the centralized and ADMM points (recorded in the committed CSV's `T_horizon`
 #      column); absent, behaviour is unchanged (`quick ? T_QUICK : T`). Rejects values below
 #      the floor of 10 (see `T_HORIZON_FLOOR`'s own comment) rather than silently clamping.
-#      `--clarabel-tol <float>` (2026-08-22 follow-up, quick task 260822-f0b) overrides
+#      `--clarabel-tol <float>` overrides
 #      Clarabel's `tol_gap_abs`/`tol_gap_rel` for the CENTRALIZED point only; absent, behaviour
 #      is `DEFAULT_CLARABEL_TOL_GAP[fixture_sym]` — `1e-7` (a MEASURED, achievable floor) for
-#      `:ieee8500` only, `1e-8` (today's unconditional value, byte-identical) for every other
+#      `:ieee8500` only, `1e-8` (the unconditional value, unchanged) for every other
 #      fixture. The value actually used is always recorded in the CSV's `clarabel_tol_gap`
 #      column.
-#      (2026-08-22 round-2 follow-up, quick task 260822-hld) The SAME per-fixture
+#      The SAME per-fixture
 #      `EXACTNESS_ATOL[fixture_sym]` used for the centralized `exact_verdict` is now ALSO
 #      threaded into `run_admm_point`'s `solve_admm(...; atol_exact = ...)` call (the additive
-#      gate-override seam quick task 260822-f0b built) — recorded in the CSV's
-#      `admm_atol_used` column. This is anti-certificate-laundering-SAFE threading (T-25-12):
+#      gate-override seam) — recorded in the CSV's
+#      `admm_atol_used` column. This is anti-certificate-laundering-SAFE threading:
 #      the value is always a FRESHLY MEASURED noise floor, never a literal chosen to pass a
 #      specific point, and a converged point whose cone gap genuinely exceeds its fixture's
 #      own floor still throws exactly as before.
 #
 #   3. `--gap-report --fixture <name> --density <float> [--t-horizon <int>] [--clarabel-tol <float>]
-#      [--topn <int>]` (quick task 260822-oi7, IEEE-8500 SOCP-inexactness root-cause diagnostic).
+#      [--topn <int>]` (IEEE-8500 SOCP-inexactness root-cause diagnostic).
 #      CENTRALIZED-ONLY (no ADMM: the cone residual is a property of the centralized solution, and
 #      skipping ADMM also avoids its multi-minute cost). Reuses the SAME seeding/density-filtering/
 #      tolerance machinery as the density-sweep mode above (`FIXTURE_MAP`, `density_filtered_
 #      population`, `DEFAULT_CLARABEL_TOL_GAP`, `T_HORIZON_FLOOR`, `_SWEEP_SEED`) so it describes
 #      THE SAME point the sweep would measure at the same (fixture, density, T_horizon,
-#      clarabel_tol). Calls the new `socp_gap_report` on the resulting `ctx`, joins bus NAMES + D-13
+#      clarabel_tol). Calls the new `socp_gap_report` on the resulting `ctx`, joins bus NAMES + near-ideal
 #      near-ideal-edge membership (IEEE-8500 fixtures only — this script layer, NOT
 #      `src/models/exactness.jl`, which stays fixture-agnostic), and appends to a NEW committed
 #      `results/ieee8500_benchmark/socp_gap_report.csv` tagged with a `point` identifier column
@@ -72,8 +72,8 @@
 #   julia scripts/benchmark_ieee8500.jl --fixture ieee13 --density 1.0 --solver clarabel --time-limit 5
 #   julia --project=. scripts/benchmark_ieee8500.jl --gap-report --fixture ieee8500-mv --density 0.1
 #
-# 2026-10-04 (phase 35 plan 35-02, ARCH-10) -- append-only note, the T-25-12 history above is kept:
-#   * ADMM now runs with `atol_exact = nothing` (the library HYBRID floor, plan 35-01) unless
+# 2026-10-04 -- append-only note, the anti-certificate-laundering history above is kept:
+#   * ADMM now runs with `atol_exact = nothing` (the library HYBRID floor) unless
 #     `--admm-atol <finite float>` is given; the per-fixture `EXACTNESS_ATOL` remains ONLY as the
 #     CSV-comparability threshold of the centralized `exact_verdict` column, it no longer gates ADMM.
 #   * `--admm-only` skips the centralized model entirely (one point per process).
@@ -86,7 +86,7 @@
 #   * `main(ARGS)` only runs when this file is the program entry point (never on `include`).
 #
 # Provenance of the committed CSVs in results/ieee8500_benchmark/:
-# .planning/phases/25-ieee-8500-scalability-benchmark/25-05-SUMMARY.md.
+# Provenance of the committed CSVs in results/ieee8500_benchmark/: docs/literate/ieee8500_scaling.jl.
 
 using DrWatson
 @quickactivate "TSODSO"
@@ -105,9 +105,9 @@ const T = 24
 const OUT_REF = Ref(get(ENV, "TSODSO_IEEE8500_RESULTS_DIR", projectdir("results", "ieee8500_benchmark")))
 out_dir() = OUT_REF[]
 
-# CLI string -> feeder selector map (`build_feeder`'s own symbol vocabulary, D-14). Note the
+# CLI string -> feeder selector map (`build_feeder`'s own symbol vocabulary). Note the
 # CLI spells the MV-only control with a HYPHEN ("ieee8500-mv") while `build_feeder`/
-# `build_population`'s own Symbol uses an UNDERSCORE (`:ieee8500_mv`, D-02 — a SEPARATE
+# `build_population`'s own Symbol uses an UNDERSCORE (`:ieee8500_mv` — a SEPARATE
 # builder, not an `mv_only=true` keyword).
 const FIXTURE_MAP = Dict(
     "ieee13" => :ieee13,
@@ -116,26 +116,26 @@ const FIXTURE_MAP = Dict(
     "ieee8500" => :ieee8500,
 )
 
-# ── Task 1: calibrated per-fixture SOCP-exactness noise floors (SCALE-05, T-25-12) ─────────────
+# ── Calibrated per-fixture SOCP-exactness noise floors ─────────────────────────────────────────
 #
 # `assert_socp_exact!`'s PROJECT-WIDE existing default `atol = 1e-6` (already validated on the
 # IEEE-13/123 fixtures by prior phases) is kept for those two — recalibrating an ALREADY-
-# VALIDATED fixture is not this plan's concern. The two NEW IEEE-8500 fixtures get their OWN
+# VALIDATED fixture is not this script's concern. The two NEW IEEE-8500 fixtures get their OWN
 # FRESH measurement below (never inherit the IEEE-13/123 value — anti-certificate-laundering).
 #
-# RE-MEASURED 2026-08-21 (phase-25 gap-closure task, after `scripts/reduce_ieee8500_impedances.jl`
-# applied the D-13 near-ideal treatment to the degenerate `HVMV_Sub_48332 -> _HVMV_Sub_LSB` MV
+# RE-MEASURED 2026-08-21 (after `scripts/reduce_ieee8500_impedances.jl`
+# applied the near-ideal treatment to the degenerate `HVMV_Sub_48332 -> _HVMV_Sub_LSB` MV
 # busbar-tie connector) via `--calibrate-noise-floor` (full 5-rung ladder [1e-6,1e-7,1e-8,1e-9,
 # 1e-10]), committed at `results/ieee8500_benchmark/noise_floor_calibration.csv`. See that CSV,
-# `.planning/phases/25-ieee-8500-scalability-benchmark/deferred-items.md` item 1 (RESOLVED), and
-# this gap-closure task's own `25-07-SUMMARY.md` for the full per-rung trace and before/after.
+# and the benchmark documentation page (the earlier plateau is resolved),
+# for the full per-rung trace and before/after.
 #
-# WHAT CHANGED FROM THE ORIGINAL (plan 25-05) MEASUREMENT: `HVMV_Sub_48332 -> _HVMV_Sub_LSB`
+# WHAT CHANGED FROM THE ORIGINAL MEASUREMENT: `HVMV_Sub_48332 -> _HVMV_Sub_LSB`
 # (`IEEE8500_MV_BRANCH_RX_OHMS[("HVMV_Sub_48332", "_HVMV_Sub_LSB")]`) used to carry a literal
 # near-zero Ω value (`1e-6 Ω`/`1e-5 Ω`, `r≈3.2e-9 pu`) that structurally broke the LinDistFlow
 # SOC-exactness gradient — the residual PLATEAUED instead of shrinking as `tol_gap` tightened.
 # `reduce_ieee8500_impedances.jl`'s `reshape_near_zero_mv_edges!` now reassigns that ONE edge's
-# r/x VALUES (same bus pair, same table) to the D-13 near-ideal Ω-equivalent of
+# r/x VALUES (same bus pair, same table) to the near-ideal Ω-equivalent of
 # `IEEE123_SWITCH_R`/`IEEE123_SWITCH_X` at this fixture's own MV base (`r=0.09330 Ω`,
 # `x=0.04665 Ω`). The re-measured floor now GENUINELY SHRINKS as `tol_gap` tightens (both
 # fixtures improve rung-over-rung before failing `ALMOST_OPTIMAL` at the tightest rungs) —
@@ -147,12 +147,12 @@ const FIXTURE_MAP = Dict(
 # HONEST CAVEAT (still true after this fix — do NOT read this as "ADMM consolidation now
 # works"): both re-measured floors are still `~1e-3` scale, which STILL exceeds `solve_admm`'s
 # hardcoded final-consolidation `assert_socp_exact!` call's PROJECT DEFAULT `atol=1e-6` (no
-# override parameter exists on `solve_admm` — see deferred-items.md item 3, still OPEN). A
+# override parameter exists on `solve_admm`; still open). A
 # genuinely CONVERGED, CONSOLIDATED ADMM point on either IEEE-8500 fixture can still throw at
 # that gate. This fix closes the STRUCTURAL relaxation failure; it does NOT close the numerical
 # gap between the noise floor and the project's existing `1e-6` default gate.
-const IEEE8500_MV_EXACT_ATOL = 0.0011460285861373265   # re-measured 2026-08-21 (post D-13 fix), ladder floor at tol=1e-8 (rungs 1e-9/1e-10 failed ALMOST_OPTIMAL)
-const IEEE8500_EXACT_ATOL = 0.004969145122458496       # re-measured 2026-08-21 (post D-13 fix), ladder floor at tol=1e-7 (rungs 1e-8/1e-9/1e-10 failed ALMOST_OPTIMAL)
+const IEEE8500_MV_EXACT_ATOL = 0.0011460285861373265   # re-measured 2026-08-21 (after the near-ideal fix), ladder floor at tol=1e-8 (rungs 1e-9/1e-10 failed ALMOST_OPTIMAL)
+const IEEE8500_EXACT_ATOL = 0.004969145122458496       # re-measured 2026-08-21 (after the near-ideal fix), ladder floor at tol=1e-7 (rungs 1e-8/1e-9/1e-10 failed ALMOST_OPTIMAL)
 
 const EXACTNESS_ATOL = Dict(
     :ieee13 => 1.0e-6,                    # assert_socp_exact!'s existing project default
@@ -162,7 +162,7 @@ const EXACTNESS_ATOL = Dict(
 )
 
 # `assert_socp_exact!`'s existing `rtol = 1e-4` default is LEFT UNCHANGED for the IEEE-8500
-# fixtures too (Task 1's action text: "unless the measured evidence argues otherwise"). The
+# fixtures too (unless the measured evidence argues otherwise). The
 # measured ladder below (see the committed CSV) shows the residual shrinking smoothly to a
 # stable floor with no sign of a magnitude-dependent structural gap that would call for a
 # different rtol, so the existing project-wide relative-tolerance term is reused as-is; only
@@ -170,22 +170,22 @@ const EXACTNESS_ATOL = Dict(
 # exactness verdict below (`exact_verdict`) is a simpler ABSOLUTE `maxgap <= atol` comparison
 # (it only has `socp_relaxation_gap`'s raw maxgap, not the full ratio `assert_socp_exact!`
 # computes) — a stricter, honest proxy for "is this point at/below the fixture's own noise
-# floor", not a re-implementation of the full WR-01 combined bound.
+# floor", not a re-implementation of the full combined bound.
 const DEFAULT_RTOL = 1.0e-4
 
-# Clarabel's / SCS's own REQUESTED tolerances for the D-21 DADP-drift diagnostic (RESEARCH
-# Pitfall 5: never imply these two numbers are comparable — they are different solvers' own
+# Clarabel's / SCS's own REQUESTED tolerances for the DADP-drift diagnostic (never
+# imply these two numbers are comparable — they are different solvers' own
 # internal convergence criteria, reported ALONGSIDE the drift, not as a shared threshold).
 const CLARABEL_TOL_GAP = 1.0e-8   # src/solver/factory.jl's select_optimizer(SOCP()) default
 const SCS_EPS_ABS_DEFAULT = 1.0e-4   # SCS.jl's own documented default eps_abs (jump-dev/SCS.jl)
 
-# 2026-08-22 follow-up (quick task 260822-f0b, `25-VERIFICATION.md`): the sweep's ONE completed
+# 2026-08-22 follow-up: the sweep's ONE completed
 # row on the true headline fixture (`:ieee8500`) came back `ALMOST_OPTIMAL` because it solved at
 # the unconditional `CLARABEL_TOL_GAP = 1e-8` above — a tolerance
 # `results/ieee8500_benchmark/noise_floor_calibration.csv` ALREADY measured to fail on `:ieee8500`
 # (`ieee8500, 1e-8 -> NaN`; `ieee8500, 1e-7 -> 0.0049691451`, the last rung that still resolved).
 # `IEEE8500_CLARABEL_TOL_GAP` below is that MEASURED, achievable value — never a guess. The other
-# three fixtures keep reusing `CLARABEL_TOL_GAP` unchanged (byte-identical to today; their own
+# three fixtures keep reusing `CLARABEL_TOL_GAP` unchanged (their own
 # noise-floor ladders never showed a comparable failure at 1e-8).
 const IEEE8500_CLARABEL_TOL_GAP = 1.0e-7   # MEASURED floor (see noise_floor_calibration.csv, ieee8500 row)
 
@@ -196,7 +196,7 @@ const DEFAULT_CLARABEL_TOL_GAP = Dict{Symbol,Float64}(
     :ieee8500 => IEEE8500_CLARABEL_TOL_GAP,
 )
 
-# SCS is an OPTIONAL weakdep (ext/TSODSOSCSExt.jl, plan 25-02) — NOT installed by default.
+# SCS is an OPTIONAL weakdep (ext/TSODSOSCSExt.jl) — NOT installed by default.
 # `Base.find_package` is the standard way to check installability without eagerly importing (and
 # erroring on) a package that may not be present. When unavailable, every SCS-comparison call
 # below degrades to an honest `"scs_unavailable"` row rather than crashing the harness.
@@ -205,7 +205,7 @@ if SCS_AVAILABLE
     @eval import SCS
 end
 
-# ── Shared: deterministic density-filtered population (Task 2, D-01) ───────────────────────────
+# ── Shared: deterministic density-filtered population ──────────────────────────────────────────
 
 """
     _harness_load_buses(feeder, feeder_sym::Symbol) -> Vector{Int}
@@ -229,12 +229,12 @@ end
 """
     sample_density_buses(rng, buses::Vector{Int}, density::Real) -> Vector{Int}
 
-The density-sweep SAMPLING RULE (D-01, documented here per Task 2's instruction): a deterministic
+The density-sweep SAMPLING RULE: a deterministic
 seeded sample of `round(Int, density*length(buses))` (clamped to `[1, length(buses)]`) buses,
 drawn via a `StableRNGs.Random.randperm` permutation on the caller's OWN explicit `rng` (never
-`Random.seed!`/the global RNG — RESEARCH Pitfall 5) and returned SORTED ascending for a
+`Random.seed!`/the global RNG) and returned SORTED ascending for a
 deterministic, reviewable subset regardless of `randperm`'s own internal order. `density >= 1.0`
-short-circuits to every bus (byte-identical order), the D-01 "network-size cost separable from
+short-circuits to every bus (identical order), the "network-size cost separable from
 AGR-OPT fan-out cost" upper end of the grid.
 """
 function sample_density_buses(rng, buses::Vector{Int}, density::Real)
@@ -249,7 +249,7 @@ end
 
 Builds the FULL population via [`build_population`](@ref) (unchanged — no new population
 selector), then keeps only the aggregators at the density-sampled bus subset
-([`sample_density_buses`](@ref)) — PLUS, unconditionally, any capacitor `Aggregator` (D-12's 4
+([`sample_density_buses`](@ref)) — PLUS, unconditionally, any capacitor `Aggregator` (the 4
 promoted zero-inelastic-demand `FixedCapacitor` buses on the IEEE-8500 fixtures): those are grid
 infrastructure, not the population/fan-out axis the density sweep varies, so they are never
 subject to density subsampling.
@@ -264,26 +264,26 @@ function density_filtered_population(feeder, feeder_sym, profiles, seed, density
     )
 end
 
-# ── Task 1: noise-floor calibration mode ────────────────────────────────────────────────────────
+# ── Noise-floor calibration mode ────────────────────────────────────────────────────────────────
 
 const CALIBRATION_SEED = 20260821
-const CALIBRATION_DENSITY = 0.05   # "SMALL benign (low-density, non-congested)" per Task 1's action
+const CALIBRATION_DENSITY = 0.05   # "SMALL benign (low-density, non-congested)" calibration point
 
 """
     run_calibration(fixture_sym, fixture_label, tolerances, density, T_horizon) -> (rows, floor_tol, floor_gap)
 
 Re-solves a SMALL benign point on `fixture_sym` across the given `tol_gap_abs=tol_gap_rel`
-ladder (swept together per spike-002's method), calling `socp_relaxation_gap` (never
+ladder (swept together per the documented method), calling `socp_relaxation_gap` (never
 `assert_socp_exact!`) after EACH solve. The floor is the LAST ladder point where the residual
 still improved by MORE THAN 1% over the previous point — tightening further is chasing solver
 noise, not a real gap.
 
-`density`/`T_horizon` (2026-08-22 round-2 follow-up, quick task 260822-hld): the ladder point's
+`density`/`T_horizon`: the ladder point's
 own density and horizon, now explicit CALLER-supplied parameters rather than the hardcoded
 `CALIBRATION_DENSITY`/module-level `T` — `run_calibrate_mode` passes `CALIBRATION_DENSITY`/`T`
 absent an explicit `--calibration-density`/`--t-horizon` override, so every EXISTING invocation
-is byte-identical. Both are recorded verbatim in the returned rows' `density`/`t_horizon` columns
-— PROVENANCE HONESTY (this quick task's own hard constraint): a floor measured at one
+is bit-for-bit identical. Both are recorded verbatim in the returned rows' `density`/`t_horizon` columns
+— PROVENANCE HONESTY: a floor measured at one
 (density, T_horizon) point must never be silently implied to have been measured at another.
 """
 function run_calibration(
@@ -311,7 +311,7 @@ function run_calibration(
     good_gaps = Float64[]
     for tol in tolerances
         opt = select_optimizer(SOCP(); tol_gap_abs = tol, tol_gap_rel = tol)
-        # Rule 1 (own-script bug fix, discovered live): at a large IEEE-8500 scale a benign point
+        # Own-script bug fix (discovered live): at a large IEEE-8500 scale a benign point
         # can carry a genuinely near-zero-impedance real branch (see the comment on
         # IEEE8500_MV_EXACT_ATOL/IEEE8500_EXACT_ATOL below) that makes the interior-point solve
         # numerically ILL-CONDITIONED at the tightest ladder rungs — Clarabel legitimately reports
@@ -329,7 +329,7 @@ function run_calibration(
                 λ₀ = λ0,
                 optimizer = opt,
                 allow_export = true,
-                rtol_exact = 1.0e6,   # neutralize the PF-04 throw — this is a calibration run, not a gate
+                rtol_exact = 1.0e6,   # neutralize the exactness throw — this is a calibration run, not a gate
             )
             socp_relaxation_gap(ctx)
         catch err
@@ -377,9 +377,9 @@ function run_calibrate_mode(args)
     tol_str = parse_kv_flag(args, "--tolerances", "1e-6,1e-7,1e-8,1e-9,1e-10")
     tolerances = Float64[parse(Float64, s) for s in split(tol_str, ",")]
 
-    # `--calibration-density` (2026-08-22 round-2 follow-up, quick task 260822-hld): an explicit
-    # override of the ladder's own "SMALL benign (low-density, non-congested)" point (Task 1's
-    # action text), ABSENT of which behaviour is `CALIBRATION_DENSITY = 0.05` — byte-identical to
+    # `--calibration-density`: an explicit
+    # override of the ladder's own "SMALL benign (low-density, non-congested)" point,
+    # ABSENT of which behaviour is `CALIBRATION_DENSITY = 0.05` — bit-for-bit identical to
     # every rung already committed in `noise_floor_calibration.csv`.
     calibration_density_str = parse_kv_flag(args, "--calibration-density", nothing)
     calibration_density =
@@ -389,7 +389,7 @@ function run_calibrate_mode(args)
     # `--t-horizon` (2026-08-22 round-2 follow-up): calibrate mode now honours the SAME explicit
     # horizon override `run_sweep_mode` already supports, with the SAME `>= T_HORIZON_FLOOR`
     # validation (refusing rather than silently clamping — see `T_HORIZON_FLOOR`'s own comment).
-    # Absent, behaviour is the module-level `T = 24` — byte-identical to every rung already
+    # Absent, behaviour is the module-level `T = 24` — bit-for-bit identical to every rung already
     # committed in `noise_floor_calibration.csv`.
     t_horizon_str = parse_kv_flag(args, "--t-horizon", nothing)
     calibration_t_horizon = if t_horizon_str === nothing
@@ -431,12 +431,12 @@ function run_calibrate_mode(args)
         # (2026-08-22 round-2 follow-up) key on (fixture, density, t_horizon), not `fixture` alone
         # — now that a fixture can be calibrated at more than one (density, T_horizon) point, a
         # bare-fixture key would silently WIPE OUT a prior measurement at a DIFFERENT point
-        # instead of only replacing the one this invocation re-measured (T-25-11 spirit: never
+        # instead of only replacing the one this invocation re-measured (never
         # silently drop a previously-measured row).
         key(r) = (r.fixture, r.density, r.t_horizon)
         new_keys = Set(key(r) for r in eachrow(df_new))
         # `cols = :union`: same schema-evolution safety as `run_sweep_mode`'s own upsert below —
-        # see that vcat's comment for the full rationale (Rule 1 bug fix).
+        # see that vcat's comment for the full rationale.
         vcat(filter(r -> !(key(r) in new_keys), df_old), df_new; cols = :union)
     else
         df_new
@@ -453,7 +453,7 @@ function run_calibrate_mode(args)
     return nothing
 end
 
-# ── Task 2: density-sweep harness ───────────────────────────────────────────────────────────────
+# ── Density-sweep harness ───────────────────────────────────────────────────────────────────────
 
 """
     extract_termination_status(msg::AbstractString) -> Union{String,Nothing}
@@ -461,7 +461,7 @@ end
 Best-effort extraction of the `termination_status : XXXX` line `assert_solved!`
 (`src/core/status.jl`) embeds in its error message — the ONLY way this harness recovers the REAL
 MOI termination status from a caught exception, since `solve_welfare` does not return its `ctx`
-on a throw (D-19: recording the real status — e.g. Clarabel's known-standing-debt
+on a throw (recording the real status — e.g. Clarabel's known-standing-debt
 `NUMERICAL_ERROR` — is the whole point of this column). Returns `nothing` on a message that does
 not match (a genuinely different failure, e.g. a boundary `ArgumentError`); the caller then falls
 back to the exception's own TYPE NAME, mirroring `scripts/socp_applicability_sweep.jl`'s
@@ -475,18 +475,18 @@ end
 """
     run_centralized_point(feeder, aggs, λ0, atol, time_limit, T_horizon; clarabel_tol) -> NamedTuple
 
-Solves the CENTRALIZED welfare problem at Clarabel's native `time_limit` (D-18), wrapped in
+Solves the CENTRALIZED welfare problem at Clarabel's native `time_limit`, wrapped in
 try/catch so one bad point never kills the sweep (mirrors `socp_applicability_sweep.jl`). Timing
 is split via JuMP/MOI's OWN `solve_time(model)` (the solver's self-reported wall time) into
 `solve_time_s` (the backend's own number) and `assembly_time_s = total - solve_time_s` (JuMP-side
-build + housekeeping) — D-19's "assembly vs solver" split, achieved WITHOUT instrumenting
-`src/models/welfare_solve.jl` (out of this plan's `<files>` scope). `rtol_exact = 1e6` neutralizes
-the internal PF-04 throw (mirrors `socp_applicability_sweep.jl`) so a genuinely OPTIMAL-but-
-inexact point is RETURNED for this harness's OWN `exact_verdict` classification (against Task 1's
+build + housekeeping) — the "assembly vs solver" split, achieved WITHOUT instrumenting
+`src/models/welfare_solve.jl`. `rtol_exact = 1e6` neutralizes
+the internal exactness throw (mirrors `socp_applicability_sweep.jl`) so a genuinely OPTIMAL-but-
+inexact point is RETURNED for this harness's OWN `exact_verdict` classification (against the
 freshly calibrated `atol`) rather than refused. On `TIME_LIMIT` the row is reported as
-`"budget_exceeded"` (D-18 language) rather than the raw MOI status string.
+`"budget_exceeded"` rather than the raw MOI status string.
 
-`clarabel_tol` (2026-08-22 follow-up, quick task 260822-f0b) sets Clarabel's own
+`clarabel_tol` sets Clarabel's own
 `tol_gap_abs`/`tol_gap_rel` for this centralized solve — caller passes
 `DEFAULT_CLARABEL_TOL_GAP[fixture_sym]` absent an explicit `--clarabel-tol` override (mirrors
 `run_calibrate_mode`'s own `select_optimizer(SOCP(); tol_gap_abs = tol, tol_gap_rel = tol)`
@@ -547,34 +547,34 @@ end
 """
     run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon, atol_exact) -> NamedTuple
 
-Solves the SAME point via `solve_admm(...; time_limit_s = time_limit)` (plan 25-02's D-18 wall-
+Solves the SAME point via `solve_admm(...; time_limit_s = time_limit)` (the wall-
 clock exit), wrapped in try/catch (a genuine non-convergence with NO time budget throws loudly,
 per `solve_admm`'s own fail-loud maxiter cap — an honest, reportable outcome, not a harness bug).
-Peak memory is sampled via `Sys.maxrss()` before/after (D-19; no new micro-benchmarking
-package dependency added for this, per RESEARCH's "Don't Hand-Roll"). NOTE: `Sys.maxrss()` is a MONOTONIC, WHOLE-PROCESS high-water
+Peak memory is sampled via `Sys.maxrss()` before/after (no new micro-benchmarking
+package dependency added for this). NOTE: `Sys.maxrss()` is a MONOTONIC, WHOLE-PROCESS high-water
 mark, not a per-call current usage — the reported delta is the INCREMENTAL growth in the
 process's peak RSS attributable to (at most) this call; once the process has already peaked on an
 earlier, larger point, a later smaller point's delta legitimately reads ~0. This is the honest
 limitation of the plan's own prescribed "sampled before/after" method, documented here rather than
 silently presented as a precise per-call peak.
 
-`atol_exact` (2026-08-22 round-2 follow-up, quick task 260822-hld) is threaded straight through to
-`solve_admm`'s own `atol_exact` kwarg (the additive override seam quick task 260822-f0b built onto
+`atol_exact` is threaded straight through to
+`solve_admm`'s own `atol_exact` kwarg (the additive override seam built onto
 the FINAL consolidation `assert_socp_exact!` gate only — the mid-loop `check_exact = false` call is
-untouched). Since Phase 35 (ARCH-10) `run_sweep_mode` passes one of three values:
+untouched). `run_sweep_mode` passes one of three values:
 
   - `nothing` (the default) — the library's HYBRID per-branch/hour floor
     `max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT·ref_b)`; stricter than the old flat `1e-6` where
     `ref_b < 1000` (smax below ≈ 31.6 pu) and looser above it (up to ≈ `9.8e-6` near smax = 99);
   - a user-supplied FINITE `--admm-atol` value — a flat floor the caller must justify with their
-    own measured noise floor (T-25-12, anti-certificate-laundering; non-finite values are
+    own measured noise floor (anti-certificate-laundering; non-finite values are
     rejected at parse time);
-  - `Inf` — ONLY under the labelled `--admm-diagnostic-bypass` (T-35-04), whose row is never a
+  - `Inf` — ONLY under the labelled `--admm-diagnostic-bypass`, whose row is never a
     certificate (`admm_status` = `DIAGNOSTIC_BYPASS[:<status>]`).
 
 `EXACTNESS_ATOL[fixture_sym]` is NO LONGER passed here; it remains the centralized point's floor.
 `keep_ctx = true` returns `solve_admm`'s `dso_ctx` on BOTH `:converged` and `:budget_exceeded`
-exits — the caller must check `admm_status` before reading anything from it (CR-01).
+exits — the caller must check `admm_status` before reading anything from it.
 """
 function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol_exact::Union{Nothing, Real}; keep_ctx::Bool = false)
     t0 = time_ns()
@@ -599,9 +599,9 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol
         msg = sprint(showerror, err)
         # Failure rows keep their evidence: iterations from the exception when it carries them
         # (ConvergenceError.iterations, or CertificateError.iterations — solve_admm attaches its
-        # converged iteration count to a final-gate refusal, WR-07), else the Int sentinel -1
+        # converged iteration count to a final-gate refusal), else the Int sentinel -1
         # (the same "unknown" value docs/literate/ieee8500_scaling.jl maps unparsable cells to;
-        # rows written before WR-07 carried NaN, normalized to -1 by `upsert_sweep_rows`, WR-04 iter 2).
+        # rows written before then carried NaN, normalized to -1 by `upsert_sweep_rows`).
         # Wall time / peak RSS are added below.
         iters =
             (err isa TSODSO.ConvergenceError || err isa TSODSO.CertificateError) &&
@@ -625,10 +625,10 @@ end
 """
     run_scs_comparison(feeder, aggs, λ0, dadp_clarabel, T_horizon) -> NamedTuple
 
-The D-20/D-21 Clarabel-vs-SCS crossover: solves the SAME centralized point via
+The Clarabel-vs-SCS crossover: solves the SAME centralized point via
 `TSODSO.alternative_optimizer(TSODSO.SCSChoice(), TSODSO.SOCP())` and reports the DADP-drift
 diagnostic `norm(dadp_scs .- dadp_clarabel)` ALONGSIDE both solvers' own requested tolerance
-(`CLARABEL_TOL_GAP`/`SCS_EPS_ABS_DEFAULT` — RESEARCH Pitfall 5: never implying the two numbers are
+(`CLARABEL_TOL_GAP`/`SCS_EPS_ABS_DEFAULT` — never implying the two numbers are
 comparable). Gracefully degrades to `"scs_unavailable"` when the SCS weakdep is not installed
 (`SCS_AVAILABLE`), and to `"skipped_no_clarabel_dadp"` when the base Clarabel point itself never
 produced a DADP to compare against (a failed/timed-out Clarabel point) — this diagnostic is a
@@ -660,9 +660,9 @@ function run_scs_comparison(feeder, aggs, λ0, dadp_clarabel, T_horizon::Int)
     end
 end
 
-const _DEFAULT_DENSITY_GRID = "0.1,0.25,0.5,1.0"   # D-01's illustrative grid (Claude's discretion)
-# 2026-08-22 follow-up (quick task 260822-f0b, `25-VERIFICATION.md`): raised from the original
-# "120" (D-18's original per-point cap). The headline T=10 point hit `budget_exceeded` after
+const _DEFAULT_DENSITY_GRID = "0.1,0.25,0.5,1.0"   # illustrative grid
+# 2026-08-22 follow-up: raised from the original
+# "120" (the original per-point cap). The headline T=10 point hit `budget_exceeded` after
 # only 6 ADMM iterations at ~20s/iteration under the OLD 120s cap — far too short to observe
 # convergence. ADMM elsewhere in this project has been observed converging anywhere from ~4
 # iterations (near-lossless 2-bus/low-density cases) up to the ~55-99 iteration range on
@@ -670,11 +670,11 @@ const _DEFAULT_DENSITY_GRID = "0.1,0.25,0.5,1.0"   # D-01's illustrative grid (C
 # iterations at ρ=100). At ~20s/iteration, 1200s (20 minutes) covers ~60 iterations of pure
 # solve time with margin left for JuMP assembly/build-once overhead, comfortably spanning the
 # observed range without being open-ended. This ONLY affects invocations that don't pass an
-# explicit `--time-limit`; `_QUICK_TIME_LIMIT_S` below (and everything `--quick`/the D-16
+# explicit `--time-limit`; `_QUICK_TIME_LIMIT_S` below (and everything `--quick`/the
 # goldens depend on) is UNTOUCHED — `run_sweep_mode`'s own `quick ? _QUICK_TIME_LIMIT_S :
 # _DEFAULT_TIME_LIMIT_S` never consults this constant under `--quick`.
-const _DEFAULT_TIME_LIMIT_S = "1200"               # D-18's per-point cap (Claude's discretion)
-# --quick's OWN tighter cap (Claude's discretion, measured 2026-08-21 on a quiet 4-core machine).
+const _DEFAULT_TIME_LIMIT_S = "1200"               # per-point cap
+# --quick's OWN tighter cap (measured 2026-08-21 on a quiet 4-core machine).
 # At the FULL T=24 horizon, ieee8500-mv/density=0.1's CENTRALIZED point alone costs ~76s wall
 # (43s JuMP assembly + 33s solve — assembly is NOT solver-time-limit-bounded, so a smaller
 # `--time-limit` cannot shrink it) and `solve_admm`'s BUILD-ONCE phase (before the wall-clock
@@ -684,14 +684,14 @@ const _DEFAULT_TIME_LIMIT_S = "1200"               # D-18's per-point cap (Claud
 # fixed regardless of problem size). Combined with `T_QUICK` below (which shrinks the DOMINANT
 # network-size cost), a 5s ADMM cap keeps the WHOLE --quick invocation's total WALL time
 # (imports + centralized + ADMM) comfortably under 120s (measured ≈70-80s) while still being
-# long enough to distinguish "hit the cap mid-loop" from "never even reached the loop" (D-18's
+# long enough to distinguish "hit the cap mid-loop" from "never even reached the loop" (the
 # honest `budget_exceeded` early exit).
 const _QUICK_TIME_LIMIT_S = "5"
-# --quick's OWN tighter horizon (Claude's discretion, measured 2026-08-21 on a quiet 4-core
+# --quick's OWN tighter horizon (measured 2026-08-21 on a quiet 4-core
 # machine): the JuMP model-assembly cost (branch/voltage vars+constraints, `T*n_branches`) and
 # `solve_admm`'s BUILD-ONCE phase (BEFORE the wall-clock loop even starts checking
 # `_QUICK_TIME_LIMIT_S`) are both dominated by NETWORK size at the full `T=24` horizon — NEITHER
-# shrinks by lowering `--time-limit` alone (D-01: network-size cost is separable from AGR-OPT
+# shrinks by lowering `--time-limit` alone (network-size cost is separable from AGR-OPT
 # fan-out cost, and neither is separable from T). At `T=24` the centralized point alone measured
 # ~76s wall (43s assembly + 33s solve) on ieee8500-mv/density=0.1, and `solve_admm`'s build phase
 # alone measured ~42s — together already exceeding VALIDATION.md's 120s max-feedback-latency
@@ -699,26 +699,26 @@ const _QUICK_TIME_LIMIT_S = "5"
 # through the SAME code path as the general sweep — no separate quick-only logic branch) to keep
 # the WHOLE invocation comfortably under 120s; the general (non-quick) sweep keeps the full T=24.
 # T_QUICK=10 (not smaller): _ieee8500_house's Deferrable window is `Deferrable(bus, min(8,T),
-# min(16,T), 1.0, 0.5, 0.5)` (src/experiments/materialize.jl, plan 25-04 — out of THIS plan's
-# <files> scope to change), whose energy-budget guard requires `E=1.0 <= Pmax*window_length =
+# min(16,T), 1.0, 0.5, 0.5)` (src/experiments/materialize.jl, not changed by this
+# benchmark script), whose energy-budget guard requires `E=1.0 <= Pmax*window_length =
 # 0.5*(min(16,T)-min(8,T)+1)`. At `T<9` this collapses to `window_length=1` (E=1.0 > 0.5*1,
 # infeasible — discovered live: T_QUICK=4 threw `ArgumentError` at population-construction
-# time, a Rule-1 bug in THIS choice, not in materialize.jl). `T_QUICK=10` gives
+# time, a bug in THIS choice, not in materialize.jl). `T_QUICK=10` gives
 # `window_length=3` (capacity 1.5 ≥ 1.0), the smallest horizon that keeps every :ieee13/:ieee123/
 # :ieee8500/:ieee8500_mv population buildable while still cutting T=24's assembly/build cost.
 const T_QUICK = 10
 const _SWEEP_SEED = 20260821
 
-# Floor for the general (non-quick) sweep's own `--t-horizon` override (gap-closure task,
-# deferred-items.md item 4: "plan 25-05's T_QUICK precedent could be generalized beyond
-# --quick"). REUSES T_QUICK's own already-measured floor rather than re-deriving a separate
+# Floor for the general (non-quick) sweep's own `--t-horizon` override (the
+# T_QUICK precedent, generalized beyond
+# --quick). REUSES T_QUICK's own already-measured floor rather than re-deriving a separate
 # constant: `_ieee8500_house`'s fixed `Deferrable(bus, min(8,T), min(16,T), 1.0, 0.5, 0.5)`
-# energy-budget guard (`src/experiments/materialize.jl`, plan 25-04 — out of this task's
-# `<files>` scope) requires `E=1.0 <= Pmax*window_length = 0.5*(min(16,T)-min(8,T)+1)`, which
+# energy-budget guard (`src/experiments/materialize.jl`, not changed by this
+# script) requires `E=1.0 <= Pmax*window_length = 0.5*(min(16,T)-min(8,T)+1)`, which
 # collapses to `window_length=1` (infeasible, `E=1.0 > 0.5`) below `T=9` — `T_QUICK=4` threw
-# `ArgumentError` at population-construction time when this was first discovered (25-05-SUMMARY).
+# `ArgumentError` at population-construction time when this was first discovered.
 # `T_HORIZON_FLOOR=10` (not 9) matches `T_QUICK`'s own already-validated value exactly, so a
-# `--t-horizon 10` invocation is byte-identical in horizon to `--quick`'s own T_horizon.
+# `--t-horizon 10` invocation is bit-for-bit identical in horizon to `--quick`'s own T_horizon.
 const T_HORIZON_FLOOR = T_QUICK
 
 function parse_kv_flag(args, flag::String, default)
@@ -731,7 +731,7 @@ end
 
 has_flag(args, flag::String) = flag in args
 
-# 35-REVIEW iter-2 WR-04: `admm_iters` is an Int column. Rows written before WR-07 carried NaN,
+# `admm_iters` is an Int column. Rows written before then carried NaN,
 # which made `CSV.read` infer Float64 for the whole column, and `vcat` with a new Int column then
 # promotes everything to Float64 (`8.0`). Normalize on every write: missing stays missing (a
 # `started` row), a non-finite value maps to the documented unknown sentinel -1, anything else is
@@ -761,8 +761,8 @@ function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
         df_old = CSV.read(csv_path, DataFrame)
         keyfn(r) = (r.fixture, r.density, r.solver, hasproperty(r, :T_horizon) ? r.T_horizon : missing)
         new_keys = Set(keyfn(r) for r in eachrow(df_new))
-        # `cols = :union` (Rule 1 bug fix, 2026-08-22): schema-evolving upsert must not throw on
-        # rows written under an older column set, nor drop them (T-25-11).
+        # `cols = :union` (2026-08-22 fix): schema-evolving upsert must not throw on
+        # rows written under an older column set, nor drop them.
         vcat(filter(r -> !(keyfn(r) in new_keys), df_old), df_new; cols = :union)
     else
         df_new
@@ -772,7 +772,7 @@ function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
     return nothing
 end
 
-# 35-REVIEW iter-2 WR-05: `hybrid_diagnostic.csv` is replaced PER POINT, not per (b, t) row.
+# `hybrid_diagnostic.csv` is replaced PER POINT, not per (b, t) row.
 # Every existing row of the same `(fixture, density, T_horizon)` is dropped before the new run's
 # rows are appended, so a re-run with a different worst set or a smaller `--topn` cannot leave the
 # file mixing two runs' rows for one point. `ddf_new === nothing` (a non-converged bypass) only
@@ -834,7 +834,7 @@ function run_sweep_mode(args)
         throw(ArgumentError("--admm-diagnostic-bypass requires --admm-only"))
     run_label = parse_kv_flag(args, "--run-label", "")
     topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
-    # WR-08 (35-REVIEW): reject at parse time, never after a multi-minute solve.
+    # reject at parse time, never after a multi-minute solve.
     topn >= 1 || throw(ArgumentError("--topn must be >= 1 (got $topn)"))
     admm_atol_str = parse_kv_flag(args, "--admm-atol", nothing)
     admm_atol = if admm_atol_str === nothing
@@ -843,7 +843,7 @@ function run_sweep_mode(args)
         v = parse(Float64, admm_atol_str)
         isfinite(v) || throw(
             ArgumentError(
-                "--admm-atol must be finite (got $v); the Inf bypass exists ONLY as --admm-diagnostic-bypass (T-35-04)",
+                "--admm-atol must be finite (got $v); the Inf bypass exists ONLY as --admm-diagnostic-bypass",
             ),
         )
         v
@@ -876,7 +876,7 @@ function run_sweep_mode(args)
         throw(ArgumentError("unknown --solver $solver_str; expected clarabel, scs, or both"))
     solver_sym = Symbol(solver_str)
 
-    # `--t-horizon` (gap-closure task, deferred-items.md item 4): an explicit CLI override of
+    # `--t-horizon` an explicit CLI override of
     # the horizon, ABSENT of which behaviour is EXACTLY today's `quick ? T_QUICK : T` (no
     # existing invocation changes). Rejects (never silently clamps) anything below
     # `T_HORIZON_FLOOR` — see that constant's own comment for why T=10 is the smallest safe
@@ -897,7 +897,7 @@ function run_sweep_mode(args)
         )
         v
     end
-    # `--clarabel-tol` (2026-08-22 follow-up, quick task 260822-f0b): an explicit CLI override of
+    # `--clarabel-tol`: an explicit CLI override of
     # Clarabel's `tol_gap_abs`/`tol_gap_rel` for the centralized point, ABSENT of which behaviour
     # is `DEFAULT_CLARABEL_TOL_GAP[fixture_sym]` — see that Dict's own comment for provenance.
     clarabel_tol_str = parse_kv_flag(args, "--clarabel-tol", nothing)
@@ -950,13 +950,13 @@ function run_sweep_mode(args)
         end
         GC.gc()   # drop the centralized model before the ADMM stage (peak-RSS attribution)
         # ρ0=100.0: pv_boom_case_study.jl's validated initial penalty. ADMM gate: hybrid floor
-        # (`nothing`) unless --admm-atol; Inf ONLY in the labelled diagnostic bypass (T-35-04).
+        # (`nothing`) unless --admm-atol; Inf ONLY in the labelled diagnostic bypass.
         gate_atol = bypass ? Inf : admm_atol
         apoint = run_admm_point(feeder, aggs, λ0, 100.0, time_limit, T_horizon, gate_atol; keep_ctx = bypass)
 
         diag = (; diag_max_ratio = NaN, diag_worst_branch = "", diag_loss_impact_max = NaN)
         if bypass
-            # CR-01 (35-REVIEW): the diagnostic runs ONLY on a CONVERGED consolidation. A
+            # the diagnostic runs ONLY on a CONVERGED consolidation. A
             # `:budget_exceeded` exit also returns a `dso_ctx`, but it holds the last mid-loop,
             # non-consensus iterate (solve_admm.jl skips consolidation there), so ratios from it
             # are meaningless. Every other outcome keeps its real status behind the
@@ -979,7 +979,7 @@ function run_sweep_mode(args)
                     joinpath(out_dir(), "hybrid_diagnostic.csv"), fixture_str, density, T_horizon,
                     DataFrame(drows),
                 )
-                w = hr[1]   # the worst row, independent of topn (WR-08)
+                w = hr[1]   # the worst row, independent of topn
                 diag = (;
                     diag_max_ratio = w.ratio,
                     diag_worst_branch = string(name_of(w.from), "->", name_of(w.to)),
@@ -988,7 +988,7 @@ function run_sweep_mode(args)
                 println("  DIAGNOSTIC_BYPASS (NOT a certificate): max hybrid ratio = ", w.ratio)
             else
                 admm_status_out = "DIAGNOSTIC_BYPASS:" * apoint.admm_status
-                # WR-05 (iter 2): a non-converged re-run of the point records NO ratios, so it
+                # a non-converged re-run of the point records NO ratios, so it
                 # must also remove the earlier run's rows; otherwise `density_sweep.csv` says
                 # `diag_max_ratio = NaN` while `hybrid_diagnostic.csv` still holds old ratios.
                 replace_diagnostic_rows(
@@ -1046,7 +1046,7 @@ function run_sweep_mode(args)
             error_msg = combined_err,
         )
         push!(rows, row)
-        # WR-05 (35-REVIEW): persist THIS point's completed row immediately (same key replaces its
+        # persist THIS point's completed row immediately (same key replaces its
         # `started` row), so a kill/exception on a LATER point of a multi-density invocation
         # cannot leave this fully measured point recorded as `started`. The end-of-sweep upsert
         # below is kept for idempotence only.
@@ -1064,7 +1064,7 @@ function run_sweep_mode(args)
 
     csv_path = joinpath(out_dir(), "density_sweep.csv")
     df_new = DataFrame(rows)
-    upsert_sweep_rows(csv_path, df_new)   # idempotent: every row was already upserted per point (WR-05)
+    upsert_sweep_rows(csv_path, df_new)   # idempotent: every row was already upserted per point
 
     println("\n", "="^96)
     println("RUN SUMMARY (this invocation)")
@@ -1084,12 +1084,12 @@ function run_sweep_mode(args)
     return nothing
 end
 
-# ── Task 2 (quick task 260822-oi7): per-branch SOCP gap diagnostic ─────────────────────────────
+# ── Per-branch SOCP gap diagnostic ─────────────────────────────────────────────────────────────
 #
 # CENTRALIZED-ONLY (no ADMM — the cone residual is a property of the centralized solution).
 # Reuses `density_filtered_population`/`FIXTURE_MAP`/`_SWEEP_SEED`/`DEFAULT_CLARABEL_TOL_GAP`/
 # `T_HORIZON_FLOOR` so this describes THE SAME point `run_sweep_mode` would measure at the same
-# (fixture, density, T_horizon, clarabel_tol). `rtol_exact = 1e6` neutralizes the internal PF-04
+# (fixture, density, T_horizon, clarabel_tol). `rtol_exact = 1e6` neutralizes the internal exactness
 # throw exactly like `run_centralized_point` does — never `allow_almost` (src/core/status.jl's
 # strict final-solve policy is untouched: a genuinely `ALMOST_OPTIMAL` point still throws here,
 # is reported as an error row's `error_msg`, and is not force-classified).
@@ -1121,7 +1121,7 @@ function run_gap_report_mode(args)
                    parse(Float64, clarabel_tol_str)
 
     topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
-    # WR-08 (35-REVIEW): reject at parse time, never after a multi-minute solve.
+    # reject at parse time, never after a multi-minute solve.
     topn >= 1 || throw(ArgumentError("--topn must be >= 1 (got $topn)"))
 
     feeder = build_feeder(fixture_sym)
@@ -1143,7 +1143,7 @@ function run_gap_report_mode(args)
 
     offenders = socp_gap_report(ctx; topn = topn)
 
-    # Fixture-specific bus-NAME join + D-13 near-ideal membership — script layer only
+    # Fixture-specific bus-NAME join + near-ideal membership — script layer only
     # (exactness.jl stays fixture-agnostic). `missing` for fixtures with no String relabel map.
     name_of, near_ideal_edges = if fixture_sym === :ieee8500
         inv = Dict(id => name for (name, id) in ieee8500_relabel_map())
