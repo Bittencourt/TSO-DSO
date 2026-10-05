@@ -137,6 +137,9 @@ function read_sweep_csv(path)
     idx = Dict(strip(h) => i for (i, h) in enumerate(header))
     ncols = length(header)
     num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+    ## `admm_iters` is written as an Int, but older harness runs wrote it as a Float (`8.0`) and
+    ## failure rows as `NaN`/`-1`: accept all three, mapping anything unparsable or non-finite to -1.
+    iters_cell(s) = (v = num(s); isfinite(v) ? round(Int, v) : -1)
     return map(lines[2:end]) do ln
         f = split(ln, ','; limit = ncols)
         (;
@@ -149,7 +152,7 @@ function read_sweep_csv(path)
             termination_status = strip(f[idx["termination_status"]]),
             exact_verdict = strip(f[idx["exact_verdict"]]),
             admm_status = strip(f[idx["admm_status"]]),
-            admm_iters = something(tryparse(Int, f[idx["admm_iters"]]), -1),
+            admm_iters = iters_cell(f[idx["admm_iters"]]),
             admm_peak_rss_delta_mb = num(f[idx["admm_peak_rss_delta_mb"]]),
         )
     end

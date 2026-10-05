@@ -600,7 +600,8 @@ function run_admm_point(feeder, aggs, λ0, ρ0, time_limit, T_horizon::Int, atol
         # (ConvergenceError.iterations, or CertificateError.iterations — solve_admm attaches its
         # converged iteration count to a final-gate refusal, WR-07), else the Int sentinel -1
         # (the same "unknown" value docs/literate/ieee8500_scaling.jl maps unparsable cells to;
-        # rows written before WR-07 carry NaN). Wall time / peak RSS are added below.
+        # rows written before WR-07 carried NaN, normalized to -1 by `upsert_sweep_rows`, WR-04 iter 2).
+        # Wall time / peak RSS are added below.
         iters =
             (err isa TSODSO.ConvergenceError || err isa TSODSO.CertificateError) &&
             err.iterations !== nothing ? err.iterations : -1
@@ -729,6 +730,29 @@ end
 
 has_flag(args, flag::String) = flag in args
 
+# 35-REVIEW iter-2 WR-04: `admm_iters` is an Int column. Rows written before WR-07 carried NaN,
+# which made `CSV.read` infer Float64 for the whole column, and `vcat` with a new Int column then
+# promotes everything to Float64 (`8.0`). Normalize on every write: missing stays missing (a
+# `started` row), a non-finite value maps to the documented unknown sentinel -1, anything else is
+# converted to Int (iteration counts are integral; `Int(8.0)` is exact, a fractional value throws).
+function _admm_iters_int(x)
+    ismissing(x) && return missing
+    if x isa AbstractString
+        v = tryparse(Float64, x)
+        v === nothing && return -1
+        x = v
+    end
+    x isa AbstractFloat && !isfinite(x) && return -1
+    return Int(x)
+end
+
+function normalize_admm_iters!(df::DataFrame)
+    if hasproperty(df, :admm_iters)
+        df.admm_iters = Union{Missing, Int}[_admm_iters_int(x) for x in df.admm_iters]
+    end
+    return df
+end
+
 # Schema-evolving, key-based upsert of density_sweep rows (see the `cols = :union` note below).
 # Key includes `T_horizon` so rows measured at different horizons never clobber each other.
 function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
@@ -742,6 +766,7 @@ function upsert_sweep_rows(csv_path::AbstractString, df_new::DataFrame)
     else
         df_new
     end
+    normalize_admm_iters!(df_final)
     CSV.write(csv_path, df_final)
     return nothing
 end
