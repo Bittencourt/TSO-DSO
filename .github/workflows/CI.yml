@@ -104,6 +104,9 @@ jobs:
         if: always()
         shell: bash
         run: python3 .github/scripts/check_content_loss.py HEAD
+      - name: Check for planning identifiers
+        shell: bash
+        run: python3 .github/scripts/check_planning_ids.py
 
   docs:
     name: Documentation build (Documenter + Literate)
