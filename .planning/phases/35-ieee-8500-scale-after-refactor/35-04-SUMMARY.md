@@ -38,3 +38,9 @@ Preflight before each point: no other julia process, available memory 10.3 to 11
 None.
 
 ## Self-Check: PASSED
+
+## Correction (2026-10-05, 35-REVIEW iteration 2, WR-02)
+
+The "+151 MB build / +441 MB first optimize" figures quoted above came from the `ieee8500-mv` fixture. On the
+`ieee8500` fixture of this ladder they are 0.23 GiB and 0.89 GiB (`memory_profile.csv`, `fixture = ieee8500`);
+see the matching correction in 35-03-SUMMARY.md. The no-mitigation decision is unaffected.

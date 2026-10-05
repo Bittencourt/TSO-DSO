@@ -68,3 +68,13 @@ The time and memory delta may include contention from the other load on the shar
 None.
 
 ## Self-Check: PASSED
+
+## Correction (2026-10-05, 35-REVIEW iteration 2, WR-02)
+
+The staged profile above ran with the profiler's default `--fixture ieee8500-mv` (2,521 buses), not the
+4,875-bus `ieee8500` fixture of the headline loop deltas. It was re-run on `ieee8500` (density 0.1, T = 10,
+runs `p35-prof-ieee8500-s2` / `-s3`, rows `fixture = ieee8500` in `memory_profile.csv`, which now has a
+`fixture` column; the old rows are kept and labelled `ieee8500-mv`). On the matched fixture the build adds
+238,072 KiB (0.23 GiB) and the first optimize 929,700 KiB (0.89 GiB); stage-3 VmHWM is 2,515,692 KiB
+(2.40 GiB). The conclusion is unchanged: one build plus one solve is far below the 4.56 GiB
+(4,672.8 MiB) T = 10 ADMM-loop delta.

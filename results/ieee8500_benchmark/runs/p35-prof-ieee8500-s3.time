@@ -1,0 +1,23 @@
+	Command being timed: "bash -c echo $$ > "$0"; exec "$@" /tmp/sv-35-reviewfix-9Wh6kH/results/ieee8500_benchmark/runs/p35-prof-ieee8500-s3.pid julia --project=. scripts/profile_ieee8500_memory.jl --fixture ieee8500 --density 0.1 --t-horizon 10 --stage 3"
+	User time (seconds): 91.73
+	System time (seconds): 2.19
+	Percent of CPU this job got: 108%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:26.53
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 2515692
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 991541
+	Voluntary context switches: 214
+	Involuntary context switches: 2348
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 32
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

@@ -6,7 +6,9 @@
 #   julia --project=. scripts/profile_ieee8500_memory.jl --density 0.1 --t-horizon 10 --stage 2
 #
 # Prints one TSV line per stage: `stage  name  VmRSS_kB  VmHWM_kB  gc_live_MB`, and upserts the rows
-# into results/ieee8500_benchmark/memory_profile.csv keyed by (density, T, stage).
+# into results/ieee8500_benchmark/memory_profile.csv keyed by (fixture, density, T, stage, name).
+# `--fixture` defaults to `ieee8500-mv`; pass `--fixture ieee8500` to profile the full 4,875-bus feeder.
+# Rows written before the `fixture` column existed were all `ieee8500-mv` runs and are backfilled as such.
 # Stages: 0 after `using`; 1 feeder + population; 2 build_dso_opt (no solve); 3 first optimize! of
 # the DSO model (T <= 10 ONLY); 4 after GC.gc() and again after malloc_trim; 5 after building AgrOpts.
 # Read-only with respect to src/.
@@ -28,13 +30,14 @@ end
 const ROWS = NamedTuple[]
 DENSITY = 0.1
 T_H = 10
+FIXTURE = "ieee8500-mv"
 
 function report(stage::Int, name::String)
     rss, hwm = proc_status_kb("VmRSS"), proc_status_kb("VmHWM")
     live = Base.gc_live_bytes() / 2^20
     println(stage, "\t", name, "\t", rss, "\t", hwm, "\t", round(live; digits = 1))
     flush(stdout)
-    push!(ROWS, (; density = DENSITY, T = T_H, stage = stage, name = name, VmRSS_kB = rss, VmHWM_kB = hwm, gc_live_MB = live))
+    push!(ROWS, (; fixture = FIXTURE, density = DENSITY, T = T_H, stage = stage, name = name, VmRSS_kB = rss, VmHWM_kB = hwm, gc_live_MB = live))
     return nothing
 end
 
@@ -44,6 +47,7 @@ function profile_main(args)
     max_stage = parse(Int, parse_kv_flag(args, "--stage", "2"))
     fixture_str = parse_kv_flag(args, "--fixture", "ieee8500-mv")
     haskey(FIXTURE_MAP, fixture_str) || throw(ArgumentError("unknown --fixture $fixture_str"))
+    global FIXTURE = fixture_str
     max_stage >= 3 && T_H > 10 &&
         throw(ArgumentError("stage >= 3 (optimize!) is only allowed with --t-horizon <= 10"))
     T_H < T_HORIZON_FLOOR && throw(ArgumentError("--t-horizon below floor $T_HORIZON_FLOOR"))
@@ -82,10 +86,13 @@ function profile_main(args)
     df = DataFrame(ROWS)
     if isfile(path)
         old = CSV.read(path, DataFrame)
-        k(r) = (r.density, r.T, r.stage, r.name)
+        # 35-REVIEW iter-2 WR-02: pre-fixture-column rows were all `ieee8500-mv` (the default).
+        hasproperty(old, :fixture) || (old.fixture = fill("ieee8500-mv", nrow(old)))
+        k(r) = (string(r.fixture), r.density, r.T, r.stage, r.name)
         nk = Set(k(r) for r in eachrow(df))
         df = vcat(filter(r -> !(k(r) in nk), old), df; cols = :union)
     end
+    select!(df, :fixture, Not(:fixture))
     CSV.write(path, df)
     return nothing
 end

@@ -256,8 +256,15 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 #
 # The wall now sits **between density 0.1 and 0.25 at T = 24**. Phase 25's OOM kills at T = 24 were in a
 # combined centralized+ADMM process; its density 0.1 T = 10 point fit (about 5.9 GB). The dominant consumer is
-# the per-hour DSO solver state retained across the ADMM loop: one build adds only 151 MB and the first
-# optimize 441 MB, while the whole T = 10 loop adds 4.67 GB and T = 24 adds 10.4 GB, roughly linear in T. No
+# the per-hour DSO solver state retained across the ADMM loop. The staged profile of the SAME fixture and point
+# (`memory_profile.csv` rows with `fixture = ieee8500`, density 0.1, T = 10, written by run
+# `p35-prof-ieee8500-s3` in `point_resources.csv`) shows one `build_dso_opt` adding 0.23 GiB of VmRSS
+# (stage 1 to 2: 1,102,128 to 1,340,200 KiB) and the first `optimize!` a further 0.89 GiB (stage 2 to 3:
+# 1,340,200 to 2,269,900 KiB; VmHWM 2.40 GiB), while the whole T = 10 loop adds 4.67 GB and T = 24 adds
+# 10.4 GB, roughly linear in T. One build plus one solve therefore accounts for about a quarter of the T = 10
+# loop's growth; the rest is state kept across iterations. (The same CSV also keeps an earlier profile with
+# `fixture = ieee8500-mv`, the profiler's default, which measured 0.14 / 0.42 GiB on the 2,521-bus MV-only
+# feeder. It is a different fixture from the loop deltas above and is not used for this comparison.) No
 # `src/` memory mitigation was adopted (none was both dominant and provably bit-identical).
 #
 # **5. Protocol.** ADMM-only (`--admm-only`), one measurement point per process, each wrapped with peak-RSS

@@ -5,3 +5,5 @@ p35-diag-d0.1-T10,0,6699480,none,10866,1554,0,2026-10-04 21:09:44,"--fixture iee
 p35-head-d0.1-T10,0,6205808,none,10463,1554,0,2026-10-04 21:15:34,"--fixture ieee8500 --admm-only --density 0.1 --t-horizon 10"
 p35-head-d0.1-T24,0,12079316,none,10334,1553,0,2026-10-04 21:22:20,"--fixture ieee8500 --admm-only --density 0.1 --t-horizon 24"
 p35-head-d0.25-T24,143,12636180,earlyoom,11483,2643,0,2026-10-04 21:42:29,"--fixture ieee8500 --admm-only --density 0.25 --t-horizon 24"
+p35-prof-ieee8500-s2,0,1408116,none,10623,2418,0,2026-10-05 00:14:29,"--fixture ieee8500 --density 0.1 --t-horizon 10 --stage 2"
+p35-prof-ieee8500-s3,0,2515692,none,10565,2418,0,2026-10-05 00:15:48,"--fixture ieee8500 --density 0.1 --t-horizon 10 --stage 3"
