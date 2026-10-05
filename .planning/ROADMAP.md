@@ -577,27 +577,92 @@ refactored codebase.
 **Plans**: 22 plans (sequential, one per wave)
 
 Plans:
+**Wave 1**
+
 - [ ] 36-01-PLAN.md — Verification tooling (AST/thesis/ID classifiers, migrator, multi-spec runner, detached-suite recipe) and baseline
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 36-02-PLAN.md — Remove operational_oracle stub kwargs/z path and DlmpDecomposition aliases
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 36-03-PLAN.md — Remove reactive Bool/Symbol shim; scope ReactiveMode in a module; full suite
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 36-04-PLAN.md — Compat dep, export trim, public block, module docstring, export snapshot test
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 36-05-PLAN.md — Migrate tests to the trimmed exports; full suite
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 36-06-PLAN.md — Migrate scripts/docs, ReactiveMode docs, Breaking changes note, docs build
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 36-07-PLAN.md — Rename fixtures and tags after content; full suite
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 36-08-PLAN.md — FIX08 constant rename; scrub planning/benders.jl and nash.jl
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 36-09-PLAN.md — Scrub remaining src/planning
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 36-10-PLAN.md — Scrub src/models and src/pricing
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 36-11-PLAN.md — Scrub src/admm and src/powerflow
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 36-12-PLAN.md — Scrub src/experiments, core, solver, units, diagnostics, ext
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [ ] 36-13-PLAN.md — Scrub src/devices and src/data (incl. ieee8500_impedances.jl); full-suite checkpoint for the src scrub stage
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
 - [ ] 36-14-PLAN.md — Scrub src/TSODSO.jl, docs/make.jl, docs/src, README, CI comments
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
 - [ ] 36-15-PLAN.md — Scrub docs/literate
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
 - [ ] 36-16-PLAN.md — Scrub scripts/
+
+**Wave 17** *(blocked on Wave 16 completion)*
+
 - [ ] 36-17-PLAN.md — Scrub tests part 1 (fixtures, runtests, test_a-d)
+
+**Wave 18** *(blocked on Wave 17 completion)*
+
 - [ ] 36-18-PLAN.md — Scrub tests part 2 (test_e-m)
+
+**Wave 19** *(blocked on Wave 18 completion)*
+
 - [ ] 36-19-PLAN.md — Scrub tests part 3 (test_planning_*)
+
+**Wave 20** *(blocked on Wave 19 completion)*
+
 - [ ] 36-20-PLAN.md — Scrub tests part 4 (rest), whole-test verification and full-suite checkpoint
+
+**Wave 21** *(blocked on Wave 20 completion)*
+
 - [ ] 36-21-PLAN.md — CI planning-ID guard (fail-closed) and workflow wiring
+
+**Wave 22** *(blocked on Wave 21 completion)*
+
 - [ ] 36-22-PLAN.md — Final gates: formatter, guard, docs build, full suite, evidence
 
 ### Phase 37: Test Infrastructure & Repo Hygiene
