@@ -782,6 +782,8 @@ function run_sweep_mode(args)
         throw(ArgumentError("--admm-diagnostic-bypass requires --admm-only"))
     run_label = parse_kv_flag(args, "--run-label", "")
     topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
+    # WR-08 (35-REVIEW): reject at parse time, never after a multi-minute solve.
+    topn >= 1 || throw(ArgumentError("--topn must be >= 1 (got $topn)"))
     admm_atol_str = parse_kv_flag(args, "--admm-atol", nothing)
     admm_atol = if admm_atol_str === nothing
         nothing
@@ -932,7 +934,7 @@ function run_sweep_mode(args)
                     )
                 end
                 CSV.write(dpath, ddf)
-                w = top[1]
+                w = hr[1]   # the worst row, independent of topn (WR-08)
                 diag = (;
                     diag_max_ratio = w.ratio,
                     diag_worst_branch = string(name_of(w.from), "->", name_of(w.to)),
@@ -1067,6 +1069,8 @@ function run_gap_report_mode(args)
                    parse(Float64, clarabel_tol_str)
 
     topn = parse(Int, parse_kv_flag(args, "--topn", "20"))
+    # WR-08 (35-REVIEW): reject at parse time, never after a multi-minute solve.
+    topn >= 1 || throw(ArgumentError("--topn must be >= 1 (got $topn)"))
 
     feeder = build_feeder(fixture_sym)
     profiles = generate_profiles(; seed = _SWEEP_SEED, T = T_horizon)

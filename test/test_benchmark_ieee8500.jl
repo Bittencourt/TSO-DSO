@@ -172,6 +172,14 @@ end
     rf = only(eachrow(CSV.read(joinpath(dir_f, "density_sweep.csv"), DataFrame)))
     @test rf.admm_status == "DIAGNOSTIC_BYPASS:budget_exceeded"
     @test !isfile(joinpath(dir_f, "hybrid_diagnostic.csv"))
+
+    # (g) WR-08 (35-REVIEW): --topn < 1 rejected at parse time, before any solve
+    for bad in ("0", "-3")
+        dir_g = mktempdir()
+        ok, _ = run_harness(["--quick", "--admm-only", "--admm-diagnostic-bypass", "--topn", bad], dir_g)
+        @test !ok
+        @test !isfile(joinpath(dir_g, "density_sweep.csv"))
+    end
 end
 
 println("test_benchmark_ieee8500.jl: ALL TESTS PASSED")
