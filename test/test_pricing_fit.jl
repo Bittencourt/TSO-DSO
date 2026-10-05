@@ -184,8 +184,7 @@ end
 # header comment). Deterministic under the fixed seed (the "reproducible bit-for-bit" @testitem
 # above already proves this).
 # ---------------------------------------------------------------------------------------------
-@testitem "fit: FIT-vs-DADP ratio regression golden" setup = [FitFixtures] tags =
-    [:fit] begin
+@testitem "fit: FIT-vs-DADP ratio regression golden" setup = [FitFixtures] tags = [:fit] begin
     using TSODSO
 
     T = FitFixtures.T

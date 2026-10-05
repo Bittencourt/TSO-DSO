@@ -9,8 +9,7 @@
 # test dependency (test/Project.toml) precisely so the reproducibility assertion
 # can pin an explicit, version-stable RNG stream.
 
-@testitem "profile: markov_path seeded walk + row-stochastic guards" tags =
-    [:profile] begin
+@testitem "profile: markov_path seeded walk + row-stochastic guards" tags = [:profile] begin
     using TSODSO
     using StableRNGs
 

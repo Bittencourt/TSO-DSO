@@ -425,8 +425,7 @@ end
     )
     @test isfinite(r.welfare)
 
-    q_of(ctx) =
-        only(v for (bus, vl) in ctx.agg_device_vars for v in vl if haskey(v, :q))
+    q_of(ctx) = only(v for (bus, vl) in ctx.agg_device_vars for v in vl if haskey(v, :q))
     v1 = q_of(r.ctxs[1])
     v2 = q_of(r.ctxs[2])
 

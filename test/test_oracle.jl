@@ -23,14 +23,7 @@
     λ₀ = fill(2.0, T)
 
     # Exercise the role kwarg on a LinDistFlow solve.
-    res = operational_oracle(
-        feeder,
-        LinDistFlow(),
-        [agg];
-        λ₀ = λ₀,
-        T = T,
-        role = :follower,
-    )
+    res = operational_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, role = :follower)
 
     # Shape: a NamedTuple carrying (cost, π, dadp, ctx).
     @test res isa NamedTuple
@@ -48,8 +41,7 @@
     @test all(isfinite, res.dadp)
 end
 
-@testitem "oracle: the :leader role returns the same shape" tags =
-    [:oracle] begin
+@testitem "oracle: the :leader role returns the same shape" tags = [:oracle] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
 
@@ -65,14 +57,7 @@ end
 
     # The explicit Stackelberg :leader role (distributor = leader) must succeed and return
     # the identical (; cost, π, dadp, ctx) shape.
-    res = operational_oracle(
-        feeder,
-        LinDistFlow(),
-        [agg];
-        λ₀ = λ₀,
-        T = T,
-        role = :leader,
-    )
+    res = operational_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, role = :leader)
 
     @test res isa NamedTuple
     @test keys(res) == (:cost, :π, :dadp, :ctx)
@@ -107,11 +92,29 @@ end
     λ₀ = fill(2.0, T)
 
     @test_throws MethodError operational_oracle(
-        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, objective_hook = nothing)
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+        objective_hook = nothing,
+    )
     @test_throws MethodError operational_oracle(
-        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, horizon_state = nothing)
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+        horizon_state = nothing,
+    )
     @test_throws MethodError operational_oracle(
-        feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T, z = nothing)
+        feeder,
+        LinDistFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+        z = nothing,
+    )
 
     # The free-coupling path still returns a finite frontier coupling dual.
     res = operational_oracle(feeder, LinDistFlow(), [agg]; λ₀ = λ₀, T = T)

@@ -13,7 +13,10 @@
     # The shared fixture is healthy (exercises setup wiring): valid feeder + T=24 data.
     feeder = SmallRadialFixtures.small_radial_feeder()
     @test feeder.root == 1
-    @test length(SmallRadialFixtures.λ₀) == length(SmallRadialFixtures.Pdc) == SmallRadialFixtures.T == 24
+    @test length(SmallRadialFixtures.λ₀) ==
+          length(SmallRadialFixtures.Pdc) ==
+          SmallRadialFixtures.T ==
+          24
 
     @test isdefined(TSODSO, :solve_welfare)
 end
@@ -84,8 +87,8 @@ end
     @test isapprox(obj, obj2; rtol = 1e-4, atol = 1e-4)
 end
 
-@testitem "welfare: DC + reactive aggregator solves active-only" tags =
-    [:welfare] setup = [SmallRadialFixtures] begin
+@testitem "welfare: DC + reactive aggregator solves active-only" tags = [:welfare] setup =
+    [SmallRadialFixtures] begin
     using TSODSO
     using JuMP
 

@@ -239,8 +239,7 @@ end
     qvals = fill(0.05 * L, T)
     set_parameter_value.(pin.pin_q, qvals)
     solve_stochastic_oos_step!(h)
-    vbess =
-        only(v for (bus, vl) in h.ctx.agg_device_vars for v in vl if haskey(v, :q))
+    vbess = only(v for (bus, vl) in h.ctx.agg_device_vars for v in vl if haskey(v, :q))
     @test all(isapprox.(value.(vbess.q), qvals; atol = 1e-6))
 end
 

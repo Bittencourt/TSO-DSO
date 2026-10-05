@@ -5,7 +5,8 @@
 # must lie inside its documented vocabulary. Also pins (WITHOUT a throw) the DC + reactive
 # aggregators behaviour behind the `has_reactive` guard deferral.
 
-@testitem "status policy: STATUS_VOCABULARY table and pure status helpers" tags = [:status_policy] begin
+@testitem "status policy: STATUS_VOCABULARY table and pure status helpers" tags =
+    [:status_policy] begin
     using TSODSO
 
     V = TSODSO.STATUS_VOCABULARY
@@ -43,7 +44,12 @@ end
                 [agg];
                 λ₀ = [4.0],
                 T = 1,
-                follower_kwargs = (; corridor_cap = 2.0, x_inv_max = 2.0, c_inv = 1.0, c_op = [0.5]),
+                follower_kwargs = (;
+                    corridor_cap = 2.0,
+                    x_inv_max = 2.0,
+                    c_inv = 1.0,
+                    c_op = [0.5],
+                ),
                 master_kwargs = master_kwargs,
                 tol = 1e-6,
                 max_iter = 100,
@@ -103,7 +109,12 @@ end
     @test m.status == :certified   # happy path: every step first tier
 
     st = run_stochastic(
-        Scenario(name = "status_stoch", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5)),
+        Scenario(
+            name = "status_stoch",
+            feeder = :ieee13,
+            T = 9,
+            strategy = Stochastic(S = 3, H_oos = 5),
+        ),
     )
     @test st.status in V.run_stochastic
     @test st.status == (any(st.oos.infeasible_h) ? :oos_infeasible_skipped : :solved)
@@ -117,9 +128,19 @@ end
     # so the unclosed `:Rq` residual is a documented degradation, NOT a bug — no throw, no
     # status (the has_reactive guard deferral is decided as "pin, don't throw").
     function solve_dc()
-        s = TSODSO.Scenario(; ExperimentHarnessFixtures.minimal_scenario_kwargs()..., strategy = :admm)
+        s = TSODSO.Scenario(;
+            ExperimentHarnessFixtures.minimal_scenario_kwargs()...,
+            strategy = :admm,
+        )
         feeder, λ₀, aggs = TSODSO._materialize(s)
-        return solve_welfare(feeder, DCPowerFlow(), aggs; T = 24, λ₀ = λ₀, allow_export = true)
+        return solve_welfare(
+            feeder,
+            DCPowerFlow(),
+            aggs;
+            T = 24,
+            λ₀ = λ₀,
+            allow_export = true,
+        )
     end
     ctx, obj, _ = solve_dc()
     @test termination_status(ctx.model) == MOI.OPTIMAL

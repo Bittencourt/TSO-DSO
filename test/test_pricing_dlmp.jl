@@ -64,8 +64,7 @@
     @test extract_dlmp(ctx; bus = 2, T = T) ≈ M[2, :]
 end
 
-@testitem "dlmp: extract_dlmp REFUSES an ungated SOCP ctx (exactness gate)" tags =
-    [:dlmp] begin
+@testitem "dlmp: extract_dlmp REFUSES an ungated SOCP ctx (exactness gate)" tags = [:dlmp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
     using JuMP
@@ -337,14 +336,13 @@ end
         for t in hours
             drop_mult_zero = all(
                 isapprox(dual(ctx.constraints[:vdrop][b, t]), 0.0; atol = mult_atol) &&
-                isapprox(dual(ctx.constraints[:cpydrop][b, t]), 0.0; atol = mult_atol) for
-                b in pth
+                    isapprox(dual(ctx.constraints[:cpydrop][b, t]), 0.0; atol = mult_atol) for b in pth
             )
             @test isapprox(d.drop[j, t], 0.0; atol = comp_atol) == drop_mult_zero
 
             cone_mult_zero = all(
-                isapprox(dual(ctx.constraints[:cone][b, t])[3], 0.0; atol = mult_atol) for
-                b in pth
+                isapprox(dual(ctx.constraints[:cone][b, t])[3], 0.0; atol = mult_atol)
+                for b in pth
             )
             @test isapprox(d.cone[j, t], 0.0; atol = comp_atol) == cone_mult_zero
         end

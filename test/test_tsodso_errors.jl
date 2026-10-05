@@ -8,7 +8,8 @@
         @test T <: Exception
         @test !(T <: ErrorException)
     end
-    for e in (SolveFailedError("boom a"), CertificateError("boom b"), ConvergenceError("boom c"))
+    for e in
+        (SolveFailedError("boom a"), CertificateError("boom b"), ConvergenceError("boom c"))
         @test e.msg isa String
         @test sprint(showerror, e) == e.msg
     end
@@ -82,7 +83,10 @@ end
     e2 = _catch(() -> assert_no_slack(m2, c; atol = -1.0))
     @test e2 isa CertificateError
     @test e2.kind === :no_slack
-    @test startswith(e2.msg, "Hidden constraint slack detected — refusing to trust results:\n")
+    @test startswith(
+        e2.msg,
+        "Hidden constraint slack detected — refusing to trust results:\n",
+    )
     @test endswith(e2.msg, "(atol = -1.0)\n")
     @test sprint(showerror, e2) == e2.msg
 end
@@ -152,12 +156,15 @@ end
     @objective(model, Max, 0.0)
     optimize!(model)
     append!(get!(ctx.agg_device_vars, 2, Vector{Any}()), [(; p_ch, p_dch)])
-    e = _catch(() -> TSODSO.assert_battery_complementarity!(ctx; τ = 1e-6, on_violation = :error))
+    e = _catch(
+        () -> TSODSO.assert_battery_complementarity!(ctx; τ = 1e-6, on_violation = :error),
+    )
     @test e isa CertificateError
     @test e.kind === :battery
     @test occursin("Battery complementarity violated", e.msg)
-    @test _catch(() -> TSODSO.assert_battery_complementarity!(ctx; τ = 1e-6, on_violation = :warn)) ===
-          nothing
+    @test _catch(
+        () -> TSODSO.assert_battery_complementarity!(ctx; τ = 1e-6, on_violation = :warn),
+    ) === nothing
 end
 
 @testitem "errors: certify_angle_recoverable! report=true does not throw; report=false throws CertificateError(kind = :angle)" setup =

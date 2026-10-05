@@ -20,13 +20,19 @@
     using TSODSO
     using TSODSO: sub_seed
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
 
     # Independently re-derive the SAME two seed families run_stochastic itself derives
     # internally, using the SAME sub_seed(s.seed, tag) idiom and DISJOINT tag prefixes.
     insample_seeds =
         [sub_seed(s.seed, Symbol(:stoch_insample_profiles_, k)) for k in 1:s.strategy.S]
-    oos_seeds = [sub_seed(s.seed, Symbol(:stoch_oos_profiles_, h)) for h in 1:s.strategy.H_oos]
+    oos_seeds =
+        [sub_seed(s.seed, Symbol(:stoch_oos_profiles_, h)) for h in 1:s.strategy.H_oos]
 
     @test isempty(intersect(insample_seeds, oos_seeds))
 end
@@ -35,7 +41,12 @@ end
     [StochasticFixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
 
     r1 = run_stochastic(s)
     r2 = run_stochastic(s)
@@ -93,7 +104,12 @@ end
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
     r = run_stochastic(s)
 
     @test length(r.oos.infeasible_h) == s.strategy.H_oos
@@ -107,7 +123,12 @@ end
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
 
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
 
     # THREE fresh calls (never a cached result) with the SAME s — bit-for-bit stability,
     # exploiting this project's own deterministic-seeded-draw guarantee. This assertion MUST

@@ -59,8 +59,10 @@ end
     @test ADMM(ρ = 50.0) == ADMM(ρ = 50.0)
     @test hash(ADMM(ρ = 50.0)) == hash(ADMM(ρ = 50.0))
     @test ADMM(ρ = 50.0) != ADMM(ρ = 60.0)
-    @test Stochastic(probabilities = [0.5, 0.3, 0.2]) == Stochastic(probabilities = [0.5, 0.3, 0.2])
-    @test hash(Stochastic(probabilities = [0.5, 0.3, 0.2])) == hash(Stochastic(probabilities = [0.5, 0.3, 0.2]))
+    @test Stochastic(probabilities = [0.5, 0.3, 0.2]) ==
+          Stochastic(probabilities = [0.5, 0.3, 0.2])
+    @test hash(Stochastic(probabilities = [0.5, 0.3, 0.2])) ==
+          hash(Stochastic(probabilities = [0.5, 0.3, 0.2]))
     @test MPC(H = 3) != MPC(H = 4)
     @test MPC(H = 3) == MPC(H = 3)
     @test hash(MPC(H = 3)) == hash(MPC(H = 3))
@@ -71,8 +73,13 @@ end
 
 @testitem "strategies: supports_pf matrix" begin
     using TSODSO
-    cases = [(:convex_branch_flow, false), (:convex_branch_flow, true),
-        (:restricted_branch_flow, false), (:lindistflow, false), (:ac, false)]
+    cases = [
+        (:convex_branch_flow, false),
+        (:convex_branch_flow, true),
+        (:restricted_branch_flow, false),
+        (:lindistflow, false),
+        (:ac, false),
+    ]
     for (pf, tl) in cases
         @test TSODSO.supports_pf(Centralized(), pf, tl)
         expected = pf === :convex_branch_flow && !tl
@@ -99,8 +106,17 @@ end
 @testitem "strategies: Scenario has no flat strategy fields" begin
     using TSODSO
     @test fieldnames(Scenario) == (
-        :name, :feeder, :seed, :T, :population, :price, :allow_export,
-        :pf, :pf_thesis_literal, :pf_ε, :strategy,
+        :name,
+        :feeder,
+        :seed,
+        :T,
+        :population,
+        :price,
+        :allow_export,
+        :pf,
+        :pf_thesis_literal,
+        :pf_ε,
+        :strategy,
     )
     s = Scenario(name = "x")
     @test !hasproperty(s, :ρ)
@@ -164,7 +180,10 @@ end
 
 @testitem "strategies: ScenarioResult shape Centralized" begin
     using TSODSO, Test
-    r = TSODSO.run(Centralized(), Scenario(name = "cen", feeder = :ieee13, seed = 1, T = 24))
+    r = TSODSO.run(
+        Centralized(),
+        Scenario(name = "cen", feeder = :ieee13, seed = 1, T = 24),
+    )
     @test ismissing(r.iters)
     @test ismissing(r.final_r)
     @test ismissing(r.final_s)
@@ -177,7 +196,9 @@ end
 
 @testitem "strategies: ScenarioResult shape ADMM" begin
     using TSODSO, Test
-    r = TSODSO.run(Scenario(name = "adm", feeder = :ieee13, seed = 1, T = 24, strategy = ADMM()))
+    r = TSODSO.run(
+        Scenario(name = "adm", feeder = :ieee13, seed = 1, T = 24, strategy = ADMM()),
+    )
     @test r.details isa TSODSO.ADMMDetails
     @test r.iters isa Int
     @test r.iters >= 1
@@ -191,13 +212,21 @@ end
 
 @testitem "strategies: run(st, s) explicit strategy wins" begin
     using TSODSO, Test
-    r = TSODSO.run(ADMM(maxiter = 300), Scenario(name = "x", feeder = :ieee13, seed = 1, T = 24))
+    r = TSODSO.run(
+        ADMM(maxiter = 300),
+        Scenario(name = "x", feeder = :ieee13, seed = 1, T = 24),
+    )
     @test r.scenario.strategy == ADMM(maxiter = 300)
 end
 
 @testitem "strategies: run(MPC) common shape" tags = [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
-    s = Scenario(name = "m", feeder = :ieee13, T = 9, strategy = MPC(H = 3, forecast_error = 0.0))
+    s = Scenario(
+        name = "m",
+        feeder = :ieee13,
+        T = 9,
+        strategy = MPC(H = 3, forecast_error = 0.0),
+    )
     r = run_mpc(s)
     res = TSODSO.run(s.strategy, s)
     @test res isa TSODSO.ScenarioResult
@@ -211,7 +240,12 @@ end
 
 @testitem "strategies: run(Stochastic) common shape" begin
     using TSODSO, Test
-    s = Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic(S = 3, H_oos = 5))
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
     r = run_stochastic(s)
     res = TSODSO.run(s.strategy, s)
     @test res isa TSODSO.ScenarioResult
@@ -225,7 +259,9 @@ end
 @testitem "strategies: run_mpc/run_stochastic fallback to defaults" begin
     using TSODSO, Test
     r_def = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9))
-    r_exp = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic()))
+    r_exp = run_stochastic(
+        Scenario(name = "t", feeder = :ieee13, T = 9, strategy = Stochastic()),
+    )
     @test r_def.in_sample.welfare == r_exp.in_sample.welfare
     @test run_mpc(Scenario(name = "m", feeder = :ieee13, T = 9)).steps == 9 - 6 + 1
 end
@@ -233,20 +269,37 @@ end
 @testitem "strategies: MPC/Stochastic reject non-convex pf at construction" begin
     using TSODSO, Test
     for st in (MPC(), Stochastic())
-        @test_throws ArgumentError Scenario(name = "x", feeder = :ieee13, pf = :lindistflow, strategy = st)
-        @test_throws ArgumentError Scenario(name = "x", feeder = :ieee13, pf = :ac, strategy = st)
         @test_throws ArgumentError Scenario(
-            name = "x", feeder = :ieee13, pf = :restricted_branch_flow, strategy = st,
+            name = "x",
+            feeder = :ieee13,
+            pf = :lindistflow,
+            strategy = st,
         )
         @test_throws ArgumentError Scenario(
-            name = "x", feeder = :ieee13, pf_thesis_literal = true, strategy = st,
+            name = "x",
+            feeder = :ieee13,
+            pf = :ac,
+            strategy = st,
+        )
+        @test_throws ArgumentError Scenario(
+            name = "x",
+            feeder = :ieee13,
+            pf = :restricted_branch_flow,
+            strategy = st,
+        )
+        @test_throws ArgumentError Scenario(
+            name = "x",
+            feeder = :ieee13,
+            pf_thesis_literal = true,
+            strategy = st,
         )
     end
 end
 
 @testitem "strategies: run(st, s) dispatch uniformity" setup = [MPCFixtures] begin
     using TSODSO, Test
-    for st in (Centralized(), MPC(H = 3, forecast_error = 0.0), Stochastic(S = 3, H_oos = 5))
+    for st in
+        (Centralized(), MPC(H = 3, forecast_error = 0.0), Stochastic(S = 3, H_oos = 5))
         s = Scenario(name = "u", feeder = :ieee13, T = 9, strategy = st)
         res = TSODSO.run(s.strategy, s)
         @test res isa TSODSO.ScenarioResult
@@ -257,19 +310,25 @@ end
     end
 end
 
-@testitem "strategies: run_and_store round-trip for MPC and Stochastic" setup = [ExperimentHarnessFixtures] begin
+@testitem "strategies: run_and_store round-trip for MPC and Stochastic" setup =
+    [ExperimentHarnessFixtures] begin
     using TSODSO, Test
     using DrWatson: wload
 
-    is_prim(v) = v isa Union{Number,Symbol,String,Bool,Missing,Nothing} ||
-                 (v isa AbstractArray && eltype(v) <: Union{Number,Symbol,String,Bool})
+    is_prim(v) =
+        v isa Union{Number, Symbol, String, Bool, Missing, Nothing} ||
+        (v isa AbstractArray && eltype(v) <: Union{Number, Symbol, String, Bool})
     ExperimentHarnessFixtures.with_tempdir() do dir
         s_mpc = Scenario(
-            name = "st-mpc", feeder = :ieee13, T = 9,
+            name = "st-mpc",
+            feeder = :ieee13,
+            T = 9,
             strategy = MPC(H = 3, forecast_error = 0.0),
         )
         s_sto = Scenario(
-            name = "st-sto", feeder = :ieee13, T = 9,
+            name = "st-sto",
+            feeder = :ieee13,
+            T = 9,
             strategy = Stochastic(S = 3, H_oos = 5),
         )
         run_and_store(s_mpc; dir = dir)

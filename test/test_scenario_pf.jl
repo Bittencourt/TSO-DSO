@@ -98,13 +98,23 @@ end
     using TSODSO, Test
     s = Scenario(name = "pf-default", feeder = :ieee13, seed = 1, T = 24)
     feeder = TSODSO.build_feeder(s.feeder)
-    profiles = TSODSO.generate_profiles(; seed = TSODSO.sub_seed(s.seed, :profiles), T = s.T)
+    profiles =
+        TSODSO.generate_profiles(; seed = TSODSO.sub_seed(s.seed, :profiles), T = s.T)
     λ₀ = TSODSO.build_price(s.price, s.T, profiles)
     aggs = TSODSO.build_population(
-        s.population, feeder, s.feeder, profiles, TSODSO.sub_seed(s.seed, :population),
+        s.population,
+        feeder,
+        s.feeder,
+        profiles,
+        TSODSO.sub_seed(s.seed, :population),
     )
     ctx, welfare, _ = TSODSO.solve_welfare(
-        feeder, TSODSO.ConvexBranchFlow(), aggs; T = s.T, λ₀ = λ₀, allow_export = s.allow_export,
+        feeder,
+        TSODSO.ConvexBranchFlow(),
+        aggs;
+        T = s.T,
+        λ₀ = λ₀,
+        allow_export = s.allow_export,
     )
     load_buses = sort!([a.bus for a in aggs])
     dadp = Matrix{Float64}(TSODSO.extract_dlmp(ctx)[load_buses, :])
@@ -116,8 +126,15 @@ end
 
 @testitem "scenario_pf: restricted and thesis_literal honoured" begin
     using TSODSO, Test
-    base = TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
-    s_r = Scenario(name = "r", feeder = :ieee13, seed = 1, T = 24, pf = :restricted_branch_flow)
+    base =
+        TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
+    s_r = Scenario(
+        name = "r",
+        feeder = :ieee13,
+        seed = 1,
+        T = 24,
+        pf = :restricted_branch_flow,
+    )
     s_t = Scenario(name = "t", feeder = :ieee13, seed = 1, T = 24, pf_thesis_literal = true)
     @test TSODSO.build_powerflow(s_r) isa TSODSO.RestrictedBranchFlow
     @test TSODSO.build_powerflow(s_t) isa TSODSO.ConvexBranchFlow
@@ -142,8 +159,12 @@ end
 
 @testitem "scenario_pf: ac: NaN maxgap, allow_local honoured" begin
     using TSODSO, Test
-    base = TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
-    r = TSODSO.run(Centralized(), Scenario(name = "ac", feeder = :ieee13, seed = 1, T = 24, pf = :ac))
+    base =
+        TSODSO.run(Centralized(), Scenario(name = "b", feeder = :ieee13, seed = 1, T = 24))
+    r = TSODSO.run(
+        Centralized(),
+        Scenario(name = "ac", feeder = :ieee13, seed = 1, T = 24, pf = :ac),
+    )
     @test isfinite(r.welfare)
     @test isnan(r.exact_maxgap)
     @test isapprox(r.welfare, base.welfare; rtol = 1e-3)

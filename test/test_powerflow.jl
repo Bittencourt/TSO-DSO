@@ -101,8 +101,7 @@ end
     @test length(ctx.model[:vdrop]) == length(branches) * 1
 end
 
-@testitem "lindistflow: 2-bus loss-less identity p_import == p_load" tags =
-    [:lindistflow] begin
+@testitem "lindistflow: 2-bus loss-less identity p_import == p_load" tags = [:lindistflow] begin
     using TSODSO, JuMP
 
     # 2-bus radial: node 1 = frontier/root (v fixed 1.0), node 2 = load. LinDistFlow is

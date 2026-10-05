@@ -10,8 +10,8 @@
 # standalone convex-QP solve. Every item name contains "battery" so
 # `occursin("battery", ti.name)` selects it.
 
-@testitem "battery: PVBattery device type exists over the T=24 fixture" tags =
-    [:battery] setup = [SmallRadialFixtures] begin
+@testitem "battery: PVBattery device type exists over the T=24 fixture" tags = [:battery] setup =
+    [SmallRadialFixtures] begin
     using TSODSO
 
     # The shared fixture is healthy (exercises setup wiring): a valid 3-bus feeder + T=24 PV profile.
