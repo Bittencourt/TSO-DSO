@@ -116,6 +116,11 @@ def main(argv):
             # Fail closed: an empty scope (wrong cwd, sparse checkout, typo'd path) is not "clean".
             raise GuardError("no in-scope files found to scan"
                              + (f" under {' '.join(paths)}" if paths else ""))
+        # Per-path fail-closed: one typo'd/stale path must not hide behind a valid one.
+        dead = [p for p in paths
+                if not any(f == p.rstrip("/") or f.startswith(p.rstrip("/") + "/") for f in files)]
+        if dead:
+            raise GuardError(f"no in-scope files found under: {' '.join(dead)}")
         entries = load_allowlist(allow)
         hits = scan(root_dir, files, entries)
     except (GuardError, subprocess.CalledProcessError, OSError) as exc:
@@ -194,7 +199,7 @@ def selftest():
             print(f"SELFTEST FAIL: negative {text!r} matched {hit}")
             ok = False
     # Fail-closed scenarios on temporary trees.
-    def run(files, allowlist=None):
+    def run(files, allowlist=None, paths=()):
         with tempfile.TemporaryDirectory() as d:
             for name, content in files.items():
                 p = os.path.join(d, name)
@@ -205,7 +210,7 @@ def selftest():
             al = os.path.join(d, "allow.tsv")
             with open(al, "w") as fh:
                 fh.write(allowlist or "")
-            return main(["--root", d, "--allowlist", al])
+            return main(["--root", d, "--allowlist", al, *paths])
     import io
     import contextlib
     buf = io.StringIO()
@@ -219,6 +224,11 @@ def selftest():
             ("malformed allowlist exits 2", run({"a.jl": "x = 1\n"}, "only-one-field\n"), 2),
             ("undecodable file exits 2", run({"a.jl": b"\xff\xfe\xfa bad\n"}), 2),
             ("empty scope exits 2", run({"notes.txt": "out of scope\n"}), 2),
+            ("valid path exits 0", run({"src/a.jl": "x = 1\n"}, paths=["src"]), 0),
+            ("one dead path among valid ones exits 2",
+             run({"src/a.jl": "x = 1\n"}, paths=["src", "typo"]), 2),
+            ("dead file path exits 2",
+             run({"src/a.jl": "x = 1\n"}, paths=["src/a.jl", "src/b.jl"]), 2),
         ]
     for name, got, want in cases:
         if got != want:
