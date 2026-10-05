@@ -117,4 +117,3 @@ function ac_dual_fallback_price(
         agreement_report,
     )
 end
-

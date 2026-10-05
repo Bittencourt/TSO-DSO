@@ -282,18 +282,18 @@ IEEE-123 point (measured gap≈211, ratio≈9993), because FIXING
 every injection leaves the loss current `l` free with no objective term able to pin it (unlike
 a genuine welfare solve, where the network itself chooses `l`). SITE 2 now:
 
-  1. Solves the ORIGINAL fixed-dispatch model on `pf` — UNCHANGED code — but ONLY as a
-     warm-start SEED for step 2 (its own exactness is irrelevant; it is discarded).
-  2. When `pf` has a cone (`:l` stashed), builds a FRESH `ACPowerFlow(; limits = false)`
-     model (Ipopt) with the IDENTICAL fixed injections, warm-started from step 1's own solved
-     `P`/`Q`/`l`/`v` (the documented remedy for Ipopt's degenerate all-zero-start KKT
-     point, `src/experiments/mpc_loop.jl`'s `_mpc_truth_import_acpf` uses the SAME idiom).
-     `limits = false` means `:smax`/`:smax_rev`/the operating voltage band are OMITTED — the
-     settlement requires only that a genuine AC solution EXISTS, never that it also respect an
-     operating limit (any violation is REPORTED via `ac_violations`, never refused).
-  3. When `pf` has no cone (DC/LinDistFlow, no `:l` stashed), step 1's own solve IS the final
-     settlement — bit-for-bit identical to the earlier behavior (data-driven, no `if formulation ==`
-     branching, mirroring `solve_welfare`'s own `has_branch_current(ctx.pf)` gate).
+ 1. Solves the ORIGINAL fixed-dispatch model on `pf` — UNCHANGED code — but ONLY as a
+    warm-start SEED for step 2 (its own exactness is irrelevant; it is discarded).
+ 2. When `pf` has a cone (`:l` stashed), builds a FRESH `ACPowerFlow(; limits = false)`
+    model (Ipopt) with the IDENTICAL fixed injections, warm-started from step 1's own solved
+    `P`/`Q`/`l`/`v` (the documented remedy for Ipopt's degenerate all-zero-start KKT
+    point, `src/experiments/mpc_loop.jl`'s `_mpc_truth_import_acpf` uses the SAME idiom).
+    `limits = false` means `:smax`/`:smax_rev`/the operating voltage band are OMITTED — the
+    settlement requires only that a genuine AC solution EXISTS, never that it also respect an
+    operating limit (any violation is REPORTED via `ac_violations`, never refused).
+ 3. When `pf` has no cone (DC/LinDistFlow, no `:l` stashed), step 1's own solve IS the final
+    settlement — bit-for-bit identical to the earlier behavior (data-driven, no `if formulation ==`
+    branching, mirroring `solve_welfare`'s own `has_branch_current(ctx.pf)` gate).
 
 `on_inexact::Symbol` is now the REPORTING switch for a genuine AC non-convergence at step 2
 (mirroring the project-standard `on_violation` idiom, `assert_battery_complementarity!`,
@@ -334,8 +334,7 @@ converges the cone properly at an unchanged optimum.
 **Root-caused, bounded `ALMOST_OPTIMAL` fallback on SITE 3 ONLY.** At a tightened `tol_gap` (e.g. `1e-10`), the NESTED `solve_welfare` cross-
 check has a DOCUMENTED, root-caused intermittent `ALMOST_OPTIMAL` flake on some fixtures — a
 measured, genuine Clarabel numerical-precision conditioning wall (confirmed via the `max_iter`
-root-cause protocol: Clarabel's OWN iteration trace is bit-for-bit identical at `max_iter ∈ {200, 400,
-2000}`, ruling out slow convergence; see [`FIT_SITE3_ALMOST_GAP_TOL`](@ref)'s comment). SITE 3 (and ONLY SITE 3) now retries once with `allow_almost = true` on that
+root-cause protocol: Clarabel's OWN iteration trace is bit-for-bit identical at `max_iter ∈ {200, 400, 2000}`, ruling out slow convergence; see [`FIT_SITE3_ALMOST_GAP_TOL`](@ref)'s comment). SITE 3 (and ONLY SITE 3) now retries once with `allow_almost = true` on that
 SPECIFIC failure class and accepts the near-feasible `social_dadp` ONLY if the retry's OWN
 measured primal-dual gap clears the named `FIT_SITE3_ALMOST_GAP_TOL`; otherwise the original
 exception still propagates. This is safe because `social_dadp`'s underlying `dadp` (the dual
@@ -368,8 +367,7 @@ Returns a `NamedTuple`:
   - `ac_violations`    — a length-`T` `Vector` of per-hour thermal/voltage
     DIAGNOSTICS (see [`_fit_ac_settlement_violations`](@ref)) recomputed from SITE 2's own
     solved `P`/`Q`/`l`/`v` — NEVER a gate, `fit_baseline` never refuses the counterfactual for
-    exceeding an operating limit. `nothing` when `pf` has no cone, or when `on_inexact =
-    :report` caught a genuine AC non-convergence (no solved values to compute it from).
+    exceeding an operating limit. `nothing` when `pf` has no cone, or when `on_inexact = :report` caught a genuine AC non-convergence (no solved values to compute it from).
 
 Reproducibility: the whole computation is DETERMINISTIC in its
 inputs; when the `aggregators` are built from seeded `generate_profiles(seed=…)`, two calls
@@ -496,7 +494,11 @@ function fit_baseline(
     end
 
     # Close the nodal balances (register so the ctx exposes :balance_p like a normal solve).
-    @constraint(seed_model, balance_p[j = 1:Np, t = 1:T], seed_ctx.residuals[:Rp][j, t] == 0)
+    @constraint(
+        seed_model,
+        balance_p[j = 1:Np, t = 1:T],
+        seed_ctx.residuals[:Rp][j, t] == 0
+    )
     register_constraint!(seed_ctx, :balance_p, balance_p)
     if seed_reactive
         @constraint(
@@ -736,9 +738,7 @@ power `|S_rev| = sqrt((P−r·l)²+(Q−x·l)²)` directly from the solved value
 as OVERLOADED at hour `t` whenever `max(|S_fwd|, |S_rev|) / smax > 1`. For every non-root bus,
 recovers `|V_j| = sqrt(v_j)` and counts it OUT-OF-BAND whenever it falls outside `[vmin, vmax]`.
 
-Returns a length-`T` `Vector` of `(; t, n_thermal_violations::Int, max_overload_ratio::Float64,
-n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
-voltage_violated::Bool)` — one entry per hour, mirroring `_mpc_settlement_violations`'s field
+Returns a length-`T` `Vector` of `(; t, n_thermal_violations::Int, max_overload_ratio::Float64, n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64, voltage_violated::Bool)` — one entry per hour, mirroring `_mpc_settlement_violations`'s field
 set (with `t` in place of `abs_hour`, since SITE 2 has no absolute-hour concept). Deliberately
 NOT shared code with `_mpc_settlement_violations` (single-hour `T=1` there, general `T` here) —
 kept as two small, independently-readable functions rather than one over-parametrized one.

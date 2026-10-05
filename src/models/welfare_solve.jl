@@ -245,7 +245,12 @@ function solve_welfare(
     # OPTIMAL gate: never read a dual (price) before a trusted solve.
     # `allow_almost` is forwarded VERBATIM and defaults false — bit-for-bit identical to
     # before this kwarg existed on every call site that omits it.
-    assert_solved!(model; dual = true, allow_local = allow_local, allow_almost = allow_almost)
+    assert_solved!(
+        model;
+        dual = true,
+        allow_local = allow_local,
+        allow_almost = allow_almost,
+    )
 
     # EXACTNESS GATE: the headline
     # correctness gate. It MUST run AFTER assert_solved! (a trusted primal) and BEFORE any
@@ -296,6 +301,7 @@ charge/discharge dominated — so this post-solve certificate is the only thing 
 degenerate co-activation.
 
 `on_violation` selects what happens on a violation:
+
   - `:error` (default) — throw, bit-for-bit the same message as before. Used by
     EVERY call site except the AC/NLP path in `solve_welfare` (`src/planning/subproblem.jl`,
     `src/admm/AgrOpt.jl`, `src/models/stochastic_welfare.jl` all pass only `τ`/`T` and so get
@@ -349,8 +355,11 @@ function assert_battery_complementarity!(
     T::Int = _require_T(ctx),
     on_violation::Symbol = :error,
 )
-    on_violation in (:error, :warn) ||
-        throw(ArgumentError("assert_battery_complementarity!: invalid on_violation=$(repr(on_violation)), expected :error or :warn"))
+    on_violation in (:error, :warn) || throw(
+        ArgumentError(
+            "assert_battery_complementarity!: invalid on_violation=$(repr(on_violation)), expected :error or :warn",
+        ),
+    )
     !isempty(ctx.agg_device_vars) || return nothing
     for (bus, varlist) in ctx.agg_device_vars
         for v in varlist

@@ -134,4 +134,3 @@ are SUCCESSFUL escalations (ladder semantics), not failures.
 """
 any_cert_failed(trace::MpcTrace) =
     trace.steps == 0 ? false : any(==(:cert_failed), trace.cert_status_trace)
-

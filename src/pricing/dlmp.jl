@@ -108,8 +108,7 @@ function _assert_priceable(ctx::ModelContext)
             "welfare ModelContext (thesis eq. 3.31)",
         ),
     )
-    if has_branch_current(ctx) &&
-       !haskey(ctx.meta, :socp_maxgap)
+    if has_branch_current(ctx) && !haskey(ctx.meta, :socp_maxgap)
         throw(
             ArgumentError(
                 "extract_dlmp: refusing to price an UNGATED SOCP ctx — the exactness " *
@@ -252,8 +251,7 @@ end
     NamedTuple(d::DlmpDecomposition) -> NamedTuple
 
 Review fix (2026-09-29): before the `cone`/`drop` rename, `decompose_dlmp`
-returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage,
-reactive, total)`. Any consumer that used genuine `NamedTuple`-only semantics on that return
+returned a plain `NamedTuple` with field order `(energy, loss, congestion, voltage, reactive, total)`. Any consumer that used genuine `NamedTuple`-only semantics on that return
 value (`Tuple(nt)`/`values(nt)`/`collect(nt)`, or positional destructuring) now hits a
 `MethodError` against `DlmpDecomposition` (a plain `struct`) instead — a LOUD failure, never
 a silent field-order mismatch, but still a breaking change for such a call site (none found
@@ -419,7 +417,8 @@ function decompose_dlmp(
 
     reactive = extract_reactive_dlmp(ctx)               # (N, Tfull) reactive price
 
-    bus === nothing && return DlmpDecomposition(energy, cone, drop, congestion, reactive, total)
+    bus === nothing &&
+        return DlmpDecomposition(energy, cone, drop, congestion, reactive, total)
     Tsel = T === nothing ? Tfull : Int(T)
     rows = 1:Tsel
     return DlmpDecomposition(
