@@ -631,7 +631,7 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 36-14-PLAN.md — Scrub src/TSODSO.jl, docs/make.jl, docs/src, README, CI comments
+- [x] 36-14-PLAN.md — Scrub src/TSODSO.jl, docs/make.jl, docs/src, README, CI comments
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
@@ -706,7 +706,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
-| 36. Code & Export Cleanup | v4.0 | 13/22 | In Progress|  |
+| 36. Code & Export Cleanup | v4.0 | 14/22 | In Progress|  |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
