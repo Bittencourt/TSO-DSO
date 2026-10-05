@@ -1,10 +1,7 @@
 # src/models/ac_oracle.jl
 #
-# SEAM: AC-exactness oracle post-processing (EXACT-01/02/03); OVR-01/OVR-03 modification-gap
-# measurement (plan 20-01).
-# OWNER: plan 15-01 (recover_voltage_angles); plan 15-02 (assert_ac_exact!, added to this
-#        same file next); plan 20-01 (recover_lossfree_shadow_voltage, OVR-01/OVR-03
-#        modification-gap measurement).
+# SEAM: AC-exactness oracle post-processing and modification-gap measurement
+# (recover_voltage_angles, assert_ac_exact!, recover_lossfree_shadow_voltage).
 #
 # A NEW sibling to models/exactness.jl (NOT a modification of it). This file holds the pure
 # post-processing over an already-solved branch-flow point — no new JuMP variable, no solver
@@ -13,15 +10,15 @@
 #   - `recover_voltage_angles(ctx)` — a BFS Baran–Wu complex-phasor recursion that recovers the
 #     TRUE voltage phasors (magnitude AND angle) from the magnitude-only squared-voltage state
 #     `v = |V|²` a solved SOCP/AC branch-flow model carries. This is the ONE genuinely-new piece
-#     of math this phase adds (STATE.md flag), so it is validated NUMERICALLY against a
+#     of math this file adds, so it is validated NUMERICALLY against a
 #     hand-derived closed-form phasor on the trivial 2-bus fixture (test/test_ac_oracle.jl) —
-#     a BLOCKING analytic gate — BEFORE any later plan trusts it on a larger feeder.
+#     a BLOCKING analytic gate — BEFORE it is trusted on a larger feeder.
 #
-#   - `assert_ac_exact!(ctx_socp, ctx_ac)` (plan 15-02) — the per-hour SOCP-vs-AC certification.
+#   - `assert_ac_exact!(ctx_socp, ctx_ac)` — the per-hour SOCP-vs-AC certification.
 #     It is the peer to `assert_socp_exact!` (models/exactness.jl) with the SAME
-#     `atol + rtol·magnitude` scale-free tolerance philosophy (WR-01) but the OPPOSITE
+#     `atol + rtol·magnitude` scale-free tolerance philosophy but the OPPOSITE
 #     failure-mode contract: it compares TWO independently-trusted solved contexts and NEVER
-#     raises on a numerical disagreement (EXACT-03) — a genuine per-hour gap is this milestone's
+#     raises on a numerical disagreement — a genuine per-hour gap is the project's
 #     most valuable finding, not a defect to refuse. It raises ONLY on a STRUCTURAL mismatch
 #     (differing horizon `T`, missing `pf_vars` keys).
 #
@@ -57,10 +54,10 @@ a SIGNED branch index (positive = the branch's own `(from,to)` direction, negati
 reverse) and flips the sign of `S` when traversing the branch backwards, so `S` is always the
 power flowing toward the child `j`.
 
-Validation (STATE.md blocking flag / threat T-15-05): a sign or conjugate error would silently
+Validation: a sign or conjugate error would silently
 produce a wrong angle with no solver error to warn you, so this recursion is certified against a
 hand-derived closed-form 2-bus phasor (`V₂ = 0.998 − 0.0015im` at the fixture point) by
-`test/test_ac_oracle.jl` BEFORE any later plan (or later milestone phase) trusts it on
+`test/test_ac_oracle.jl` BEFORE it is trusted on
 IEEE-13/123.
 """
 function recover_voltage_angles(ctx::ModelContext)
@@ -117,8 +114,7 @@ end
 Compute Gan, Li, Topcu & Low's (2015) loss-free "shadow" squared voltage `v̂_GL(s)`
 (Definition 3 / eq. (18) of *"Exact Convex Relaxation of Optimal Power Flow in Radial
 Networks,"* IEEE TAC 60(1):72–87) from an already-solved branch-flow `ModelContext`, and this
-project's `.planning/phases/20-overvoltage-capable-relaxation/20-RESEARCH.md` "Measuring ε"
-section.
+project's overvoltage-capable-relaxation "Measuring ε" section.
 
 Pure POST-PROCESSING over an already-solved `(v, P, Q, l)` point — it creates no JuMP
 variable and invokes no solver, and writes nothing back to `ctx`. It reads
@@ -135,7 +131,7 @@ These are two genuinely DISTINCT mechanisms; do not conflate them.
 
 Method (unrolling the branch-flow recursion against THIS project's actual `:Rp`/`:Rq`
 balance convention — loss charged at the child, `pin[j] − pout[j] = −inj[j]` — rather than
-RESEARCH.md's "Measuring ε" pseudo-code literally, which stated the accumulated-loss sign
+the original "Measuring ε" pseudo-code literally, which stated the accumulated-loss sign
 backwards relative to that convention; corrected here and re-derived from the balance
 equations directly, then validated by the Lemma-1 sanity check below): build a ROOTED
 parent/child tree via one BFS traversal from `feeder.root`. For each time `t`: (1) a
@@ -152,7 +148,7 @@ identical for the lossless model with the SAME injections `inj[j]`) confirms `P[
 telescopes to exactly the total loss in the CLOSED subtree rooted at `j` (the branch entering
 `j` plus everything strictly below it) — hence the minus sign and the inclusive accumulation.
 
-Branch orientation (review CR-01): a stored `Branch(from, to, …)` need NOT point
+Branch orientation: a stored `Branch(from, to, …)` need NOT point
 parent→child — `assert_radial` (data/topology.jl) validates only tree-ness, never
 orientation, exactly as the sibling [`recover_voltage_angles`](@ref) documents. The BFS
 therefore keeps each child's TREE PARENT and the SIGNED branch index (positive = the
@@ -165,10 +161,10 @@ loss at the branch's own `to` end), negated. With that `A[i]` in hand the SAME t
 above holds verbatim (`A[j] = Σ_{m∈children(j)} A[m] + r_{b*}·ℓ_{b*} − inj[j]` for any mix
 of orientations), so `P̌ = A[i] − LossInclR[i]` is uniform. A bare sign flip `−P[b]` alone
 would be off by the feeding branch's own `r·ℓ[b]` — this is verified against a
-byte-identical reversed-orientation re-encoding of the same physical point in
-`test/test_restricted_branch_flow.jl`'s CR-01 regression `@testitem`.
+bit-for-bit identical reversed-orientation re-encoding of the same physical point in
+`test/test_restricted_branch_flow.jl`'s regression `@testitem`.
 
-Validation (threat T-20-02): a sign or accumulation bug here would silently produce a wrong
+Validation: a sign or accumulation bug here would silently produce a wrong
 `ε`. `test/test_restricted_branch_flow.jl`'s second `@testitem` sanity-checks Lemma 1
 (`v̂_GL ≥ v` everywhere) numerically on a solved `ACPowerFlow` context BEFORE trusting the
 measured `ε` for anything downstream.
@@ -185,7 +181,7 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
     # `order` (root first), `children_of[i]` (tree children of bus i), `parent_of[c]` (the tree
     # parent of child c), and `branch_of_child[c]` (the SIGNED index of the branch connecting
     # child c to its tree parent: positive = stored parent→child, negative = stored REVERSED —
-    # mirroring recover_voltage_angles's signed-index convention, review CR-01).
+    # mirroring recover_voltage_angles's signed-index convention).
     children = [Tuple{Int, Int}[] for _ in 1:N]
     for (b, br) in enumerate(feeder.branches)
         push!(children[br.from], (br.to, b))
@@ -239,7 +235,7 @@ function recover_lossfree_shadow_voltage(ctx::ModelContext)
         # equals the flow toward i (measured at the PARENT side, in the parent→child sense)
         # MINUS the total loss in i's own closed subtree (see docstring derivation). The
         # parent voltage is read from the TREE parent, never br.from — a stored branch need
-        # not point parent→child (review CR-01), so for a REVERSED branch (bsigned < 0,
+        # not point parent→child, so for a REVERSED branch (bsigned < 0,
         # br.from == i) the parent-side flow toward i is the branch's receiving end at the
         # parent, negated: r·ℓ − P (never a bare −P, which would drop the feeding branch's
         # own loss).
@@ -273,10 +269,10 @@ both built from the IDENTICAL problem data and each independently re-optimized (
 "same operating point" contract) — on per-hour objective, voltage, and branch-flow gaps.
 
 This is a NEW sibling to [`assert_socp_exact!`](@ref) (models/exactness.jl): it reuses the SAME
-scale-free `atol + rtol·magnitude` tolerance philosophy (WR-01), but has the OPPOSITE
+scale-free `atol + rtol·magnitude` tolerance philosophy, but has the OPPOSITE
 failure-mode contract. `assert_socp_exact!` THROWS to refuse physically-meaningless prices from
 a single strict cone; `assert_ac_exact!` compares TWO independently-trusted solves and MUST
-NEVER raise on a genuine numerical disagreement (EXACT-03) — a relaxation gap is the milestone's
+NEVER raise on a genuine numerical disagreement — a relaxation gap is the project's
 most valuable possible finding, to be INVESTIGATED (reverse-flow / voltage-binding state), not
 suppressed. The ONLY exception path here is a STRUCTURAL mismatch (differing horizon `T`) — a
 signal the two contexts are not the same operating point, which makes any "gap" uninformative.
@@ -305,7 +301,7 @@ function assert_ac_exact!(
 )
     # The ONLY exception path: a STRUCTURAL mismatch. A differing horizon T means the two solves
     # are not the same operating point, so any per-hour "gap" would be meaningless — refuse that
-    # (EXACT-03: a NUMERIC disagreement, by contrast, is reported, never raised).
+    # (a NUMERIC disagreement, by contrast, is reported, never raised).
     T = _require_T(ctx_socp)
     T == ctx_ac.T || throw(ArgumentError(
         "assert_ac_exact!: T mismatch ($T vs $(ctx_ac.T)) — " *
@@ -324,7 +320,7 @@ function assert_ac_exact!(
         vgap = maximum(abs(value(pv_s.v[j, t]) - value(pv_a.v[j, t])) for j in 1:N)
         pgap = maximum(abs(value(pv_s.P[b, t]) - value(pv_a.P[b, t])) for b in 1:nB)
         qgap = maximum(abs(value(pv_s.Q[b, t]) - value(pv_a.Q[b, t])) for b in 1:nB)
-        # SCALE-FREE reference magnitudes (WR-01), taken from the SOCP side.
+        # SCALE-FREE reference magnitudes, taken from the SOCP side.
         vmag = maximum(abs(value(pv_s.v[j, t])) for j in 1:N)
         pmag = maximum(abs(value(pv_s.P[b, t])) for b in 1:nB)
         # The SAME combined bound assert_socp_exact! uses — atol floor + rtol·magnitude — applied

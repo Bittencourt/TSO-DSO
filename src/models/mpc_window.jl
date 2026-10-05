@@ -1,15 +1,13 @@
 # src/models/mpc_window.jl
 #
-# SEAM: build-once receding-horizon window model (MPC-01/MPC-02).
-# OWNER: plan 21-03.
+# SEAM: build-once receding-horizon window model.
 #
-# `welfare_solve.jl`/`oracle.jl` are byte-for-byte UNMODIFIED by this file (D-01/D-03): this
+# `welfare_solve.jl`/`oracle.jl` are byte-for-byte UNMODIFIED by this file: this
 # module mirrors `PlanningOracle`'s build-once/`Parameter`-re-solve SHAPE
 # (`src/planning/subproblem.jl`, the ONLY existing build-once model in this codebase) —
-# generalized from a single `z`-pin to the full set of per-step-varying inputs plan 21-01
-# widened: battery/thermostatic initial conditions (`soc0`/`Tin0`), PV/ambient/demand forecast
+# generalized from a single `z`-pin to the full set of per-step-varying inputs: battery/thermostatic initial conditions (`soc0`/`Tin0`), PV/ambient/demand forecast
 # slices (`Ppv_param`/`Tout_param`/`Pdc_param`), and an optional hard terminal-SOC target
-# (MPC-02, D-06). D-02's "each window solves the centralized `solve_welfare` problem" is read
+# The requirement "each window solves the centralized `solve_welfare` problem" is read
 # here as describing the MATH shape (centralized welfare, not ADMM decomposition) — this
 # builder NEVER calls `solve_welfare` itself, exactly as `PlanningOracle` already mirrors that
 # shape one level up in the planning layer rather than literally calling the function.
@@ -17,9 +15,9 @@
 # `build_mpc_window` builds the fixed-length `[τ=1:H]` window model EXACTLY ONCE; a caller
 # re-solves it many times via `set_parameter_value!`/`set_parameter_value.` on the returned
 # `ic_handles`/`agg_pdc_handles` Parameter handles plus `set_objective_coefficient` on
-# `p_import` (the frontier price `λ₀`, NEVER a Parameter — Pitfall 2), with
+# `p_import` (the frontier price `λ₀`, NEVER a Parameter), with
 # `num_variables`/`num_constraints` provably UNCHANGED across every re-solve. `solve_mpc_window!`
-# is a one-line delegation to `solve_with_retry!` (plan 10-01) — the SOLE solve entry point —
+# is a one-line delegation to `solve_with_retry!` — the SOLE solve entry point —
 # and never adds a variable or constraint.
 
 using JuMP
@@ -27,9 +25,9 @@ using JuMP
 """
     MpcWindow{F}
 
-The built-ONCE receding-horizon window model (MPC-01/MPC-02): the welfare-shaped model
+The built-ONCE receding-horizon window model: the welfare-shaped model
 (mirrors [`PlanningOracle`](@ref)'s build-once SHAPE, generalized from a single `z`-pin to the
-full set of per-step device Parameters plan 21-01 widened) over a FIXED window length `H`.
+full set of per-step device Parameters) over a FIXED window length `H`.
 
 # Fields
 
@@ -39,25 +37,25 @@ full set of per-step device Parameters plan 21-01 widened) over a FIXED window l
     rebuilt.
   - `ctx::ModelContext` — the shared context; `ctx.constraints[:balance_p]` (and `:balance_q`
     when the formulation provides a reactive channel) carries the DADP duals.
-  - `H::Int` — the FIXED window length `[τ=1:H]` (Pitfall 5: never shrinks across re-solves).
+  - `H::Int` — the FIXED window length `[τ=1:H]` (never shrinks across re-solves).
   - `agg_bus::Int` — the first aggregator's bus (`aggregators[1].bus`), mirroring
     `PlanningOracle`'s DADP reporting convention.
   - `feeder::F` — the network the window is built on.
   - `p_import::Vector{VariableRef}` — the frontier active exchange `p_import[τ]`: FREE-SIGN
     (export allowed) when built with `allow_export = true` (the default), IMPORT-ONLY
     (`p_import[τ] ≥ 0`) when `allow_export = false` — mirroring `solve_welfare`'s own kwarg
-    exactly (WR-06: the window must honor the SAME export semantics the day-ahead benchmark
+    exactly (the window must honor the SAME export semantics the day-ahead benchmark
     was solved under, else regret compares an export-allowed loop against a no-export
-    benchmark). NEVER wrapped in a `Parameter` (Pitfall 2). A caller slides the frontier
+    benchmark). NEVER wrapped in a `Parameter`. A caller slides the frontier
     price `λ₀` via `set_objective_coefficient(o.model, o.p_import[τ], -λ0_window[τ])`.
   - `ic_handles::Vector{<:NamedTuple}` — one entry per stateful device:
     `(; bus::Int, kind::Symbol, ic_param, terminal_param)`, `kind ∈ (:soc, :Tin)`.
-    `terminal_param` is `nothing` unless `kind == :soc && terminal_soc` (D-07: Thermostatic's
+    `terminal_param` is `nothing` unless `kind == :soc && terminal_soc` (Thermostatic's
     `:Tin` entries NEVER carry a terminal target).
   - `agg_pdc_handles::Vector{<:NamedTuple}` — one entry per aggregator: `(; bus::Int, Pdc_param)`, the per-step inelastic-demand forecast Parameter.
   - `terminal_soc::Bool` — the build-time toggle recorded for introspection; `true` means every
     `:soc`-kind `ic_handles` entry carries a live hard equality `soc[H + 1] == terminal_param`
-    (Phase 26 FIX-04: the device's own `soc` vector is now `1:(H+1)` long, so the terminal
+    (the device's own `soc` vector is now `1:(H+1)` long, so the terminal
     target is `soc[H + 1]`, not `soc[H]`).
 """
 struct MpcWindow{F <: AbstractFeeder}
@@ -78,12 +76,12 @@ end
                      H::Int, terminal_soc::Bool = true, allow_export::Bool = true)
         -> MpcWindow
 
-Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model EXACTLY ONCE
-(MPC-01), mirroring [`build_planning_oracle`](@ref)'s build-once SHAPE:
+Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model EXACTLY ONCE,
+mirroring [`build_planning_oracle`](@ref)'s build-once SHAPE:
 
  1. Boundary guards (mirror `build_planning_oracle`): empty `aggregators`, `H < 1`, or an
     aggregator bus outside `1:length(feeder.buses)` each throw `ArgumentError` before any
-    model assembly. (Phase 26 FIX-04: the former WR-03 `H == 1` terminal-toggle guard is GONE
+    model assembly. (the former `H == 1` terminal-toggle guard is GONE
     — since the device's own `soc` vector is now `1:(H+1)` long, the terminal target
     `soc[H + 1]` is a DIFFERENT index from the IC `soc[1]` even at `H = 1`, so the double-pin
     collision this guard existed to prevent no longer arises structurally.)
@@ -93,37 +91,37 @@ Build the fixed-length `[τ=1:H]` welfare-shaped receding-horizon window model E
  3. `contribute!(pf, ctx, feeder; T = H)` — VERBATIM reuse of the validated power-flow builder.
  4. A frontier `p_import[τ = 1:H]` at `feeder.root`, injected into `:Rp[root]` — FREE-SIGN
     (export allowed) when `allow_export = true` (the default, mirroring `PlanningOracle`'s
-    Open-Question-1 resolution), IMPORT-ONLY (`≥ 0`) when `allow_export = false`, mirroring
-    `solve_welfare`'s own kwarg exactly (WR-06: a `Scenario(allow_export = false)` run must
+    same convention), IMPORT-ONLY (`≥ 0`) when `allow_export = false`, mirroring
+    `solve_welfare`'s own kwarg exactly (a `Scenario(allow_export = false)` run must
     solve its windows under the SAME no-export frontier its day-ahead benchmark honors).
     `reactive = haskey(ctx.residuals, :Rq)` is captured IMMEDIATELY after, BEFORE
-    any aggregator write (WR-03 ordering); if `reactive`, a FREE-SIGN `q_import[τ=1:H]` too
+    any aggregator write (ordering matters); if `reactive`, a FREE-SIGN `q_import[τ=1:H]` too
     (free-sign in BOTH cases, exactly as `solve_welfare` builds it).
  5. Each aggregator `contribute!`s its net injection + utility; its returned `Pdc_param`
     (returned at the Aggregator's OWN top level, not nested inside `res.vars`) is captured into
     `agg_pdc_handles`. `ctx.agg_device_vars` is populated as a SIDE EFFECT of this SAME
-    `contribute!` call (plan 21-01's widened `soc0`/`Tin0`/`Ppv_param`/`Tout_param` Parameters).
+    `contribute!` call (widened `soc0`/`Tin0`/`Ppv_param`/`Tout_param` Parameters).
  6. Residuals are closed with the same defensive `size(...) == (N, H)` guard as
     `build_planning_oracle` before each `@constraint`; `:balance_p` is always registered,
     `:balance_q` only when `reactive`.
  7. `ctx.agg_device_vars` is walked to populate `ic_handles`: every device carrying a
     `soc0` Parameter (PVBattery, FourQuadBESS) gets a `:soc`-kind entry; every device carrying
     a `Tin0` Parameter (Thermostatic) gets a `:Tin`-kind entry with `terminal_param = nothing`
-    ALWAYS (D-07: no terminal condition on thermostatic temperature, ever). When
+    ALWAYS (no terminal condition on thermostatic temperature, ever). When
     `terminal_soc = true`, every `:soc`-kind entry ALSO gets a hard equality
-    `soc[H + 1] == terminal_param` (Phase 26 FIX-04: the device's own `soc` vector is now
+    `soc[H + 1] == terminal_param` (the device's own `soc` vector is now
     `1:(H+1)` long, so the terminal target is `soc[H + 1]`, a DIFFERENT index from the IC
     `soc[1]` even at `H = 1`) against a NEW anonymous Parameter defaulting to the device's own
-    IC value (a benign, always-overridden default) — the ONE build-time toggle this plan
-    permits (MPC-02, D-06). When `terminal_soc = false`, no such constraint exists in the model
+    IC value (a benign, always-overridden default) — the ONE build-time toggle this builder
+    permits. When `terminal_soc = false`, no such constraint exists in the model
     at all — a genuinely different model, never a silent no-op.
  8. `p_import`'s objective coefficient is set to a PLACEHOLDER `0.0` at build time — the caller
-    (Wave 4) ALWAYS calls `set_objective_coefficient` before the first solve. `p_import`/`λ₀`
-    is NEVER wrapped in a `Parameter` here (Pitfall 2: a `Parameter`-times-variable bilinear
+    (the receding-horizon driver) ALWAYS calls `set_objective_coefficient` before the first solve. `p_import`/`λ₀`
+    is NEVER wrapped in a `Parameter` here (a `Parameter`-times-variable bilinear
     term is not representable in this convex QP/SOCP shape).
 
 Returns an [`MpcWindow`](@ref). `welfare_solve.jl`/`oracle.jl` are NOT modified by this
-function (D-01/D-03) — it is a wholly NEW module reusing their builders verbatim, and it NEVER
+function — it is a wholly NEW module reusing their builders verbatim, and it NEVER
 calls `solve_welfare` internally.
 """
 function build_mpc_window(
@@ -138,7 +136,7 @@ function build_mpc_window(
     isempty(aggregators) &&
         throw(ArgumentError("build_mpc_window needs at least one aggregator"))
     H >= 1 || throw(ArgumentError("build_mpc_window requires H ≥ 1, got H=$H"))
-    # Phase 26 FIX-04: the former WR-03 `H == 1` terminal-toggle guard is REMOVED. It existed
+    # The former `H == 1` terminal-toggle guard is REMOVED. It existed
     # because the terminal toggle added BOTH `soc[1] == soc0` (the IC Parameter) and
     # `soc[H] == terminal_param` on the SAME variable at H=1 — infeasible whenever the measured
     # state differs from the terminal target. Now that PVBattery/FourQuadBESS's own `soc`
@@ -171,8 +169,8 @@ function build_mpc_window(
     contribute!(pf, ctx, feeder; T = H)
 
     # Frontier active exchange at the root: FREE-SIGN (export allowed) by default, mirroring
-    # PlanningOracle's Open-Question-1 resolution; IMPORT-ONLY (≥ 0) when allow_export =
-    # false, mirroring solve_welfare's own kwarg exactly (WR-06 — the window honors the SAME
+    # PlanningOracle's same convention; IMPORT-ONLY (≥ 0) when allow_export =
+    # false, mirroring solve_welfare's own kwarg exactly (the window honors the SAME
     # export semantics the day-ahead benchmark was solved under).
     if allow_export
         @variable(model, p_import[τ = 1:H])
@@ -184,7 +182,7 @@ function build_mpc_window(
     end
     ctx.meta[:p_import] = p_import
 
-    # WR-03 ordering: capture `reactive` IMMEDIATELY after the formulation contributes, BEFORE
+    # Ordering: capture `reactive` IMMEDIATELY after the formulation contributes, BEFORE
     # any aggregator writes (mirrors build_planning_oracle/solve_welfare).
     reactive = has_reactive(pf)
 
@@ -197,7 +195,7 @@ function build_mpc_window(
     end
 
     # Aggregators: net active/reactive injections + utility. Capture each aggregator's
-    # top-level Pdc_param handle (plan 21-01's widened per-step inelastic-demand Parameter) —
+    # top-level Pdc_param handle (widened per-step inelastic-demand Parameter) —
     # ctx.agg_device_vars is populated as a SIDE EFFECT of this SAME contribute! call.
     agg_pdc_handles = NamedTuple[]
     for agg in aggregators
@@ -208,10 +206,10 @@ function build_mpc_window(
     # Close :Rp always; :Rq only when the formulation provides a reactive channel.
     close_balance!(ctx, N, H; reactive = reactive)
 
-    # Walk ctx.agg_device_vars to populate ic_handles (MPC-01 seam consumption): every
+    # Walk ctx.agg_device_vars to populate ic_handles (seam consumption): every
     # device carrying a soc0 Parameter (PVBattery, FourQuadBESS) gets a :soc-kind entry, every
     # device carrying a Tin0 Parameter (Thermostatic) gets a :Tin-kind entry. terminal_param
-    # stays `nothing` for :Tin ALWAYS (D-07). Anonymous per-device Parameter/constraint (unique
+    # stays `nothing` for :Tin ALWAYS. Anonymous per-device Parameter/constraint (unique
     # `base_name`, never a shared object-dictionary symbol) so multiple battery-like devices
     # compose in one window without a name collision — the same discipline FourQuadBESS's
     # anonymous apparent-power cone already establishes in this codebase.
@@ -226,7 +224,7 @@ function build_mpc_window(
                             base_name = "soc_terminal_bus$(bus)",
                             set = Parameter(parameter_value(v.soc0)),
                         )
-                        # Phase 26 FIX-04: target soc[H + 1], not soc[H] — the device's own
+                        # target soc[H + 1], not soc[H] — the device's own
                         # soc vector is now 1:(H+1) long (see the struct docstring above).
                         @constraint(model, v.soc[H + 1] == term)
                         push!(
@@ -255,9 +253,9 @@ function build_mpc_window(
         end
     end
 
-    # PLACEHOLDER objective coefficient on p_import (Pitfall 2: λ₀ is NEVER a Parameter — it
+    # PLACEHOLDER objective coefficient on p_import (λ₀ is NEVER a Parameter — it
     # slides via set_objective_coefficient, mirroring AgrOpt.jl's own documented avoidance of
-    # the Parameter-times-variable bilinear failure). The caller (Wave 4) ALWAYS calls
+    # the Parameter-times-variable bilinear failure). The caller (the receding-horizon driver) ALWAYS calls
     # set_objective_coefficient before the first solve; 0.0 is never itself a modeling claim.
     @objective(model, Max, ctx.objective - sum(0.0 * p_import[τ] for τ in 1:H))
 
@@ -278,7 +276,7 @@ end
     solve_mpc_window!(o::MpcWindow; max_attempts::Int = 4,
                       attempts_out::Union{Nothing,Ref{Int}} = nothing) -> Model
 
-Re-solve the built-ONCE [`MpcWindow`](@ref) `o` via [`solve_with_retry!`](@ref) (plan 10-01) —
+Re-solve the built-ONCE [`MpcWindow`](@ref) `o` via [`solve_with_retry!`](@ref) —
 the SOLE solve entry point — a ONE-LINE delegation that NEVER adds a variable or constraint to
 `o.model`. Callers mutate `o.ic_handles`/`o.agg_pdc_handles` via
 `set_parameter_value`/`set_parameter_value.` and `o.p_import` via `set_objective_coefficient`
@@ -300,7 +298,7 @@ end
 """
     propagate_soc(soc::Real, p_ch1::Real, p_dch1::Real, η::Real, Δt::Real) -> Float64
 
-Nominal-plant, JuMP-free re-derivation of the NEXT measured battery SOC (D-05), evaluated
+Nominal-plant, JuMP-free re-derivation of the NEXT measured battery SOC, evaluated
 OUTSIDE the optimizer on the REALIZED (solved) first-interval controls `p_ch1`/`p_dch1` — never
 re-solving anything, a pure arithmetic re-derivation of the SAME SOC recursion `PVBattery`/
 `FourQuadBESS` already encode inside the JuMP model (thesis eq. 3.6):
@@ -309,9 +307,9 @@ re-solving anything, a pure arithmetic re-derivation of the SAME SOC recursion `
 soc + (η * p_ch1 - p_dch1 / η) * Δt
 ```
 
-D-05's "apply each step's first-interval optimal controls to the ground-truth device dynamics"
+The "apply each step's first-interval optimal controls to the ground-truth device dynamics"
 reading: this function IS that application, called once per receding-horizon step by the
-(future, plan 21-05) `run_mpc` orchestrator and this plan's own MPC-02 regression.
+(future) `run_mpc` orchestrator and the regression test.
 """
 function propagate_soc(soc::Real, p_ch1::Real, p_dch1::Real, η::Real, Δt::Real)
     return soc + (η * p_ch1 - p_dch1 / η) * Δt
@@ -320,7 +318,7 @@ end
 """
     propagate_tin(Tin::Real, p1::Real, α::Real, β::Real, Tout_true::Real) -> Float64
 
-Nominal-plant, JuMP-free re-derivation of the NEXT measured indoor temperature (D-05), evaluated
+Nominal-plant, JuMP-free re-derivation of the NEXT measured indoor temperature, evaluated
 OUTSIDE the optimizer on the REALIZED (solved) first-interval control `p1`, mirroring the SAME
 RC/ETP recursion `Thermostatic` already encodes inside the JuMP model (thesis eq. 3.2):
 
@@ -329,7 +327,7 @@ Tin + α * (Tout_true - Tin) - β * p1
 ```
 
 `Tout_true` MUST be the GROUND-TRUTH ambient value at that absolute hour, never the
-forecast-perturbed slice the window's OWN optimizer saw when choosing `p1` — D-05's "model
+forecast-perturbed slice the window's OWN optimizer saw when choosing `p1` — "model
 mismatch enters only via forecast error" reading means the physical recursion always uses
 truth; only the optimizer's CHOICE of `p1` was made under a forecast.
 """
@@ -340,16 +338,16 @@ end
 """
     draw_forecast_error(seed::Integer, t::Integer, magnitude::Real) -> NamedTuple
 
-Seeded, INDEPENDENT bounded multiplicative perturbation of PV and demand (D-08), returning
+Seeded, INDEPENDENT bounded multiplicative perturbation of PV and demand, returning
 `(; pv_factor, demand_factor)`. Throws `ArgumentError` unless `0 <= magnitude < 1` (mirrors
 `Scenario`'s own guard — defensive-in-depth, this function may be called directly).
 
 `magnitude == 0` short-circuits to the deterministic no-op `(; pv_factor = 1.0, demand_factor = 1.0)` for EVERY `seed`/`t` (avoids a wasted RNG construction on the no-error path). Otherwise,
 derives TWO INDEPENDENT sub-seeds via [`sub_seed`](@ref) with FRESH, per-step tags
 (`:mpc_forecast_pv_<t>`/`:mpc_forecast_demand_<t>`) — never the `:profiles`/`:population` tags
-(Pitfall 5's independent-stream discipline) — constructs a FRESH `StableRNGs.LehmerRNG` from
+(independent-stream discipline) — constructs a FRESH `StableRNGs.LehmerRNG` from
 each derived seed, and draws `factor = 1.0 + magnitude * (2 * rand(rng) - 1)` from each,
-independently, so the draw is genuinely regenerated per absolute hour `t` (D-08: "regenerated
+independently, so the draw is genuinely regenerated per absolute hour `t` ("regenerated
 per step"). Never reseeds or touches the global/default RNG.
 """
 function draw_forecast_error(seed::Integer, t::Integer, magnitude::Real)

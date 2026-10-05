@@ -1,9 +1,8 @@
 # src/models/mesh_angle_certificate.jl
 #
-# SEAM: angle-recoverability a-posteriori certificate (MESH-03).
-# OWNER: plan 23-03.
+# SEAM: angle-recoverability a-posteriori certificate.
 #
-# A NEW sibling to models/ac_oracle.jl (NOT a modification of it — RESEARCH's own
+# A NEW sibling to models/ac_oracle.jl (NOT a modification of it — the earlier analysis's own
 # "Critical codebase finding": `recover_voltage_angles` is SILENTLY loop-blind, its
 # `visited[j] && continue` BFS guard drops the exact branch that would close a cycle with
 # no error). This file generalizes that BFS with EXPLICIT chord tracking plus a per-chord
@@ -11,13 +10,13 @@
 # angle-recovery condition ("the implied angle differences sum to zero mod 2π around each
 # cycle," arXiv:1204.4865) — the ONLY mechanism that can distinguish a genuine AC operating
 # point from a loop-inconsistent one on a meshed context, since both pass the EXISTING
-# per-branch cone gate (`assert_socp_exact!`) identically (RESEARCH Pitfall 14, empirically
-# reproduced on this fixture in plan 23-02).
+# per-branch cone gate (`assert_socp_exact!`) identically (empirically
+# reproduced on this fixture).
 #
 # `certify_angle_recoverable!` is REPORT-BY-DEFAULT (`report::Bool = true`), a DELIBERATE,
 # DOCUMENTED divergence from this codebase's certificate-family convention
 # (`assert_socp_exact!`, `assert_ac_exact!`, `assert_restriction_exact!` all throw by
-# default) — because "unrecoverable" is a first-class SCIENTIFIC FINDING here (D-05), not a
+# default) — because "unrecoverable" is a first-class SCIENTIFIC FINDING here, not a
 # defect to refuse by default the way a strict SOC cone is. An opt-in `report = false`
 # strict/throw mode still exists for a caller that wants the family's usual hard gate.
 #
@@ -33,15 +32,15 @@ Certify that a solved meshed branch-flow `ModelContext`'s implied voltage-ANGLE 
 RECOVERABLE — i.e. that the magnitude-only `(v,P,Q,l)` SOCP solution corresponds to a
 genuine, angle-consistent AC operating point (Farivar-Low's angle-recovery condition,
 Gan-Low's operationalization), not merely a per-branch-cone-tight but globally
-loop-inconsistent point (RESEARCH Pitfall 14). This is the ONLY certificate in this
+loop-inconsistent point. This is the ONLY certificate in this
 codebase that checks LOOP consistency — `assert_socp_exact!` (models/exactness.jl) is
 necessary but NOT sufficient on a mesh: both a genuine AC point and a loop-inconsistent one
 pass its per-branch cone gate identically (empirically confirmed on
 `MeshFixtures.mesh_feeder`: cone gaps `~1.6e-8` (`:uniform`) and `~1.8e-11`
-(`:heterogeneous`, this plan's D-08 magnitude-scaled literals — see "Tolerance provenance"
+(`:heterogeneous`, this certificate's magnitude-scaled literals — see "Tolerance provenance"
 below) — BOTH comfortably tight, yet only `:uniform` is angle-recoverable).
 
-# Report-by-default (D-05 — the deliberate family divergence)
+# Report-by-default (the deliberate family divergence)
 
 Every OTHER certificate in this codebase (`assert_socp_exact!`, `assert_ac_exact!`,
 `assert_restriction_exact!`) THROWS by default: a strict SOC cone, an AC-vs-SOCP mismatch
@@ -49,17 +48,17 @@ handled elsewhere, or a physically-infeasible restricted point are treated as DE
 refuse. Here, "unrecoverable" is not a defect — the SOCP relaxation is provably ALWAYS
 conic-feasible on a mesh (Low, arXiv:1405.0814: "for mesh networks, the conic relaxation is
 always exact but the angle relaxation may not be exact") and an unrecoverable verdict is
-itself the MESH-03 finding: the solved objective remains a valid UPPER BOUND on the true AC
-welfare optimum (D-07; see the Output contract below — review 23 CR-02), worth reporting,
+itself the finding: the solved objective remains a valid UPPER BOUND on the true AC
+welfare optimum (see the Output contract below), worth reporting,
 not an error worth aborting a run over. `report::Bool = true` therefore `@warn`s (never throws) on an unrecoverable verdict by default; passing
 `report = false` restores the family's usual throw-by-default contract for a caller that
 wants a hard gate.
 
-# Algorithm (D-06 — genuine cycle-consistency, never the per-branch cone alone)
+# Algorithm (genuine cycle-consistency, never the per-branch cone alone)
 
 Generalizes [`recover_voltage_angles`](@ref)'s traversal (`src/models/ac_oracle.jl:66-112`
 — a DFS, despite that file's "BFS" label: `pop!` on a `Vector` is LIFO; any spanning tree
-suffices, review IN-01) with EXPLICIT chord tracking, mirroring its signed bidirectional
+suffices) with EXPLICIT chord tracking, mirroring its signed bidirectional
 adjacency (`children[i]` = list of `(neighbor, ±branch_index)`) and its phasor recursion
 for a tree edge `i → j` carrying branch `b` (impedance `z = r+jx`, complex power `S`
 flowing toward `j`): `V_j = V_i − z·conj(S)/conj(V_i)`. A branch traversed WITH its stored
@@ -68,11 +67,11 @@ orientation contributes its own sending-end flow, `S = S_b = P_b + jQ_b` (measur
 the negated RECEIVING-end flow `S = −(S_b − z·ℓ_b)` — the flow toward the child, measured
 at the parent, which here is the branch's own `to` end where this project charges the loss
 (`ConvexBranchFlow`'s KCL convention). A bare sign flip `−S_b` alone would be off by the
-branch's own `|z|²·ℓ_b/|V|` per backward edge — the Phase-20 CR-01 bug class (see
+branch's own `|z|²·ℓ_b/|V|` per backward edge — the same bug class as (see
 [`recover_lossfree_shadow_voltage`](@ref)'s "Branch orientation" note), material on this
 fixture's `:heterogeneous` impedances (`~0.002–0.015`, the same order as the certified
-residuals; review 23 CR-01). NOTE: `recover_voltage_angles` itself still carries the bare
-flip (byte-locked this phase, D-09 — negligible on its lightly-impedanced radial fixtures,
+residuals). NOTE: `recover_voltage_angles` itself still carries the bare
+flip (left untouched here — negligible on its lightly-impedanced radial fixtures,
 `~1e-5`; flagged for a follow-up plan rather than silently diverging from its "verbatim"
 claim). The chord-tracking addition: the instant a branch `b` is used to reach an unvisited
 bus, `tree_edges[b]` is marked `true`. Any branch never so marked is a **chord** — for the
@@ -92,11 +91,11 @@ vs. via the chord is exactly the identity.
 radial and has no chords at all — a degenerate but well-defined certification: a radial
 context handed to this function trivially certifies, since there is nothing to check).
 `scale = maximum(abs, Vphasor)` (a magnitude reference over ALL bus phasors, all `t`).
-`recoverable = worst_residual <= atol + rtol*scale` — the SAME scale-free `atol + rtol·magnitude` combined-bound SHAPE every certificate in this codebase uses (WR-01),
+`recoverable = worst_residual <= atol + rtol*scale` — the SAME scale-free `atol + rtol·magnitude` combined-bound SHAPE every certificate in this codebase uses,
 copied for STYLE consistency only; the VALUES below are measured fresh on
-`MeshFixtures`, never reused from a sibling certificate (D-08).
+`MeshFixtures`, never reused from a sibling certificate.
 
-# Output contract (D-07)
+# Output contract
 
   - **Recoverable** (`status = :angle_certified`): `angles` is the full `(N,T)`
     `Matrix{ComplexF64}` of traversal-recovered voltage phasors, certified consistent with every
@@ -108,31 +107,31 @@ copied for STYLE consistency only; the VALUES below are measured fresh on
     welfare, and the relaxation's feasible set CONTAINS every genuine AC operating point, so
     the maximum over the larger set can only be ≥ the true AC maximum, `W_SOCP ≥ W_AC` — the
     welfare-maximization mirror of Low's minimization statement (arXiv:1405.0814), where a
-    relaxation's optimum lower-bounds the true minimum cost. Review 23 CR-02: an earlier
+    relaxation's optimum lower-bounds the true minimum cost. An earlier
     revision stated "lower bound", the exactly wrong direction for a maximization).
 
 `ctx.meta[:price_provenance]` is stashed UNCONDITIONALLY (both paths), scrubbing any stale
-marker FIRST (mirrors `restriction_exactness.jl`'s T-20-08 discipline — before anything
+marker FIRST (mirrors `restriction_exactness.jl`'s discipline — before anything
 that can throw):
 
     ctx.meta[:price_provenance] = (; formulation = get(ctx.meta, :formulation, :unknown),
         certificate = :certify_angle_recoverable!, status)
 
-`formulation` is READ from `ctx.meta[:formulation]` (never hardcoded, T-23-06) — the marker
+`formulation` is READ from `ctx.meta[:formulation]` (never hardcoded) — the marker
 `MeshedFlow.contribute!` stashed for exactly this purpose; a context whose formulation
 never stashed the marker (e.g. a plain `ConvexBranchFlow` context) honestly reports
 `formulation = :unknown`, never a fabricated `:MeshedFlow`.
 
-# Tolerance provenance (D-08 — measured fresh, never copied from a sibling certificate)
+# Tolerance provenance (measured fresh, never copied from a sibling certificate)
 
 Measured on `MeshFixtures.mesh_feeder` (`test/fixtures_mesh.jl`, the committed 4-bus
 diamond), both impedance profiles, solved via `MeshedFlow()` + `solve_welfare`
 (2026-08-10): the `:uniform` profile's raw `worst_residual` is `≈6.27e-3`; the
 `:heterogeneous` profile's raw `worst_residual` is `≈6.07e-2` — a genuine, measured
-**≈9.7×** separation, NOT the multi-order-of-magnitude gap RESEARCH.md's unrelated
+**≈9.7×** separation, NOT the multi-order-of-magnitude gap of an unrelated
 standalone toy-triangle spike observed (`1e-5`/`5.8e-3`, a DIFFERENT topology, DIFFERENT
-per-unit values, and — per plan 23-02's own finding — a simplified spike that omitted
-`ConvexBranchFlow`'s exactness-copy machinery; never reused here per D-08).
+per-unit values, and — per an earlier finding — a simplified spike that omitted
+`ConvexBranchFlow`'s exactness-copy machinery; never reused here).
 
 **A genuine, topology-specific finding (documented in full in `test/fixtures_mesh.jl`'s
 header comment and this plan's SUMMARY):** on THIS diamond's two-parallel-2-hop-path
@@ -154,7 +153,7 @@ the recoverable floor" sizing discipline, which here would collide with the
 above): `atol = 0.01` and `rtol = 0.01` (the fixture's phasor `scale ≈ 1.0` per-unit, so
 the combined bound `atol + rtol·scale ≈ 0.02` sits at the log-midpoint
 `√(0.00627·0.0607) ≈ 0.0195` of the two floors). The decision variable is the COMBINED
-bound, never each addend individually — review 23 WR-01 caught an earlier revision that
+bound, never each addend individually — an earlier revision that
 centered each `0.02` addend at the geometric mean separately, leaving the combined bound
 at `≈0.04` (2× the log-midpoint) with an asymmetric `≈6.4×`/`≈1.5×` margin split, one
 solver-noise drift away from a silent verdict flip on the thin side. At the corrected
@@ -162,12 +161,12 @@ defaults the margins are BALANCED: the `:uniform` profile certifies `≈3.2×` b
 bound (`0.00627 ≪ 0.02`) and the `:heterogeneous` profile's `worst_residual` (`≈0.0607`)
 sits `≈3.0×` ABOVE it — either measured floor may drift ~3× (solver version bump, MOI
 bridge change, Clarabel tolerance change) before a committed verdict flips.
-`recoverable = false` on `:heterogeneous` remains the honest structural gap (D-10),
+`recoverable = false` on `:heterogeneous` remains the honest structural gap,
 shipped as the deliverable, never chased away by further parameter tuning.
 
 Reads `ctx.feeder`, `ctx.T`, `ctx.pf_vars` (the `(; v, v̂, P, Q, l)`
 stash `ConvexBranchFlow.contribute!` populates — `MeshedFlow` delegates to it verbatim,
-plan 23-02) — identical inputs to [`recover_voltage_angles`](@ref). Uses an explicit
+the fixture) — identical inputs to [`recover_voltage_angles`](@ref). Uses an explicit
 `CertificateError`/`@warn(...)` (never `@assert`, elided under `-O`), per project convention
 (`src/core/status.jl`).
 """
@@ -177,7 +176,7 @@ function certify_angle_recoverable!(
     rtol::Real = 0.01,
     report::Bool = true,
 )
-    # T-20-08-style discipline (review WR-02): scrub any stale provenance marker FIRST,
+    # Same discipline as `restriction_exactness.jl`: scrub any stale provenance marker FIRST,
     # before anything that can throw.
     delete!(ctx.meta, :price_provenance)
 
@@ -196,16 +195,16 @@ function certify_angle_recoverable!(
     end
 
     # Recover phasors along a DFS spanning tree (pop! on a Vector is LIFO -- a depth-first
-    # walk, review IN-01; any spanning tree suffices) using recover_voltage_angles's
+    # walk; any spanning tree suffices) using recover_voltage_angles's
     # recursion with TWO deliberate changes relative to ac_oracle.jl:
-    #  (1) chord tracking (RESEARCH's algorithm spec): tree_edges[b] = true is marked the
+    #  (1) chord tracking: tree_edges[b] = true is marked the
     #      instant branch b is used to reach an unvisited bus. tree_edges is purely
     #      topological (independent of t, since the traversal order never depends on the
     #      solved values), so re-marking it identically on every t is harmless.
-    #  (2) backward-edge flow correction (review 23 CR-01): a branch traversed AGAINST its
+    #  (2) backward-edge flow correction: a branch traversed AGAINST its
     #      stored orientation uses the negated RECEIVING-end flow -(S_b - z*l_b), never the
-    #      bare flip -S_b that recover_voltage_angles still carries (byte-locked this
-    #      phase, D-09; flagged for follow-up) -- see the docstring's Algorithm section.
+    #      bare flip -S_b that recover_voltage_angles still carries (left untouched
+    #      here; flagged for follow-up) -- see the docstring's Algorithm section.
     tree_edges = falses(nB)
     Vphasor = Matrix{ComplexF64}(undef, N, T)
     for t in 1:T
@@ -228,9 +227,9 @@ function certify_angle_recoverable!(
                     # Receiving-end flow at the parent (the loss z·l is charged at the
                     # branch's own `to` end), negated toward the child: −(S_b − z·l_b).
                     # A bare sign flip −S_b alone would be off by the branch's own
-                    # |z|²·l_b/|V| — the Phase-20 CR-01 lesson
+                    # |z|²·l_b/|V| — the same lesson as in `ac_oracle.jl`
                     # (recover_lossfree_shadow_voltage's "Branch orientation" note), here
-                    # in the phasor domain (review 23 CR-01).
+                    # in the phasor domain.
                     -(Complex(value(pv.P[b, t]), value(pv.Q[b, t])) - z * value(pv.l[b, t]))
                 end
                 Vphasor[j, t] = Vphasor[i, t] - z * conj(S) / conj(Vphasor[i, t])
@@ -245,7 +244,7 @@ function certify_angle_recoverable!(
     # future multi-loop fixture (MESH-STRETCH).
     chords = findall(!, tree_edges)
 
-    # Per-chord closure residual (D-06's genuine cycle-consistency check): evaluate the
+    # Per-chord closure residual (genuine cycle-consistency check): evaluate the
     # chord's OWN defining branch-flow equation using its OWN solved (P,Q) -- never
     # traversal-sign-flipped, this is the branch's own (from -> to) direction by
     # construction -- from the tree-recovered phasor at its `from` endpoint, and compare to
@@ -267,14 +266,14 @@ function certify_angle_recoverable!(
         end
     end
 
-    # Magnitude reference over ALL bus phasors, all t (WR-01's scale-free philosophy).
+    # Magnitude reference over ALL bus phasors, all t (scale-free philosophy).
     scale = maximum(abs, Vphasor)
     recoverable = worst <= atol + rtol * scale
     status = recoverable ? :angle_certified : :angle_unrecoverable
     angles = recoverable ? Vphasor : nothing
 
-    # D-08-style provenance, stashed UNCONDITIONALLY (both the pass and fail path), keyed
-    # on the recoverability verdict. formulation is READ, never hardcoded (T-23-06).
+    # Provenance, stashed UNCONDITIONALLY (both the pass and fail path), keyed
+    # on the recoverability verdict. formulation is READ, never hardcoded.
     ctx.meta[:price_provenance] = (;
         formulation = get(ctx.meta, :formulation, :unknown),
         certificate = :certify_angle_recoverable!,
@@ -289,7 +288,7 @@ function certify_angle_recoverable!(
             "atol=$atol, rtol=$rtol, scale=$scale): the SOCP welfare objective is a valid " *
             "UPPER BOUND on the true AC welfare optimum only (the relaxation maximizes " *
             "over a superset of the AC-feasible points, so W_SOCP >= W_AC), NOT a " *
-            "certified AC operating point (Gan-Low angle-recovery condition; MESH-03)."
+            "certified AC operating point (Gan-Low angle-recovery condition)."
         report ? (@warn msg) : throw(CertificateError(msg; kind = :angle))
     end
 
