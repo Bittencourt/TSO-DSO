@@ -46,6 +46,8 @@ using TSODSO:
     build_mpc_window,
     build_population,
     build_price,
+    max_jump,
+    mean_jump,
     solve_mpc_window!
 using TSODSO: propagate_soc, propagate_tin, draw_forecast_error, sub_seed  # unexported MPC seams
 using CairoMakie
