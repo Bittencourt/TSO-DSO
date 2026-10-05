@@ -1,8 +1,9 @@
 ---
 phase: 35-ieee-8500-scale-after-refactor
-reviewed: 2026-10-05T02:22:12Z
+reviewed: 2026-10-05T13:00:00Z
 depth: standard
-files_reviewed: 10
+iteration: 3
+files_reviewed: 12
 files_reviewed_list:
   - docs/literate/ieee8500_scaling.jl
   - scripts/benchmark_ieee8500.jl
@@ -11,178 +12,112 @@ files_reviewed_list:
   - scripts/run_tests_filtered.jl
   - src/admm/DsoOpt.jl
   - src/admm/solve_admm.jl
+  - src/core/errors.jl
   - src/models/exactness.jl
   - test/test_admm_exactness_default.jl
   - test/test_benchmark_ieee8500.jl
+  - test/test_tsodso_errors.jl
 findings:
-  critical: 1
-  warning: 8
-  info: 5
-  total: 14
+  critical: 0
+  warning: 2
+  info: 3
+  total: 5
 status: issues_found
 ---
 
-# Phase 35: Code Review Report
+# Phase 35: Code Review Report (iteration 3, final)
 
-**Reviewed:** 2026-10-05T02:22:12Z
+**Reviewed:** 2026-10-05T13:00:00Z
 **Depth:** standard
-**Files Reviewed:** 10
+**Files Reviewed:** 12
 **Status:** issues_found
 
 ## Summary
 
-I reviewed the Phase 35 diff (`03f8dbc..HEAD`). It covers the ADMM `atol_exact = nothing` default, the `hybrid_ratios` diagnostic, the harness flags (`--admm-only`, `--admm-diagnostic-bypass`, `--results-dir`, `--run-label`), the per-point wrapper, the memory profiler, and the new tests.
+This is a re-review of the Phase 35 diff (`03f8dbc..HEAD`), focused on the iteration-2 fix commits `aa6277e`, `85d2fe9`, `037b0b1`, `8d2c395` and `c5b5468`. None of these commits touches `src/`, so the library verdicts from iteration 2 still hold: the gate is arithmetic-identical, `CertificateError` is backward-compatible, and the WR-06 tests pin the default. This pass checked the harness and profiler code changes, the new test (h), and every figure that the rewritten docs section quotes from the committed `results/ieee8500_benchmark/` files.
 
-The library change itself is small and correct: `nothing` flows through to `assert_socp_exact!`'s hybrid branch. The defects are in four other areas:
-- **Mislabelled diagnostic results.** The bypass path can compute and report hybrid ratios from a non-converged iterate.
-- **Stale docstrings.** Several docstrings still promise "byte-identical defaults", which is now false.
-- **Wrong outcome attribution in the wrapper.** It reads the system-wide journal, so it can blame an OOM it did not cause.
-- **Tests that miss the change.** No test pins the actual default change at the `solve_admm` level.
+**Prior findings (iteration 2):**
 
-## Critical Issues
+| ID | Verdict | Evidence |
+|---|---|---|
+| WR-01 | Resolved | Every number in docs sections 2–4 matches its named row; see the spot-check list below. The v3.0 row is byte-identical to its state at `262c983`. That commit's message confirms the gap of 1.3968e-4 under the flat gate, the 8 iterations and `admm_atol_used = 0.0049691`. The 1200 s budget comes from `748fc50`. |
+| WR-02 | Resolved, with one new attribution problem (WR-01 below) | `memory_profile.csv` now has a `fixture` column. The MV rows are backfilled correctly (`p35-prof-s{2,3}` passed no `--fixture`, and the profiler default was already `ieee8500-mv`). The `ieee8500` rows match `runs/p35-prof-ieee8500-s3.time` (stage-3 VmHWM 2,515,692 = `Maximum resident set size`). |
+| WR-03 | Resolved, with one carried-over error (WR-02 below) | All converted values check out: 6205808/2^20 = 5.92, 12079316/2^20 = 11.52, 12636180/2^20 = 12.05, 4672.77/1024 = 4.56, 10409.89/1024 = 10.17, 5154.18/1024 = 5.03, 3200.44/1024 = 3.13, 10641/1024 = 10.4, 15908/1024 = 15.5, 6699480/2^20 = 6.39, 5.9e9/2^30 = 5.49, +0.3%/+8%. |
+| WR-04 | Resolved | Diffing `density_sweep.csv` between `ffe30ce` and `HEAD` cell by cell shows only `admm_iters` cells changing: 14 `X.0 → X` and 2 `NaN → -1` (the two pre-WR-07 head rows). No other cell changed and the row count is the same (17). `normalize_admm_iters!` runs on every write, and the docs parser `iters_cell` accepts `8`, `8.0`, `NaN` and `""`. |
+| WR-05 | Resolved | `replace_diagnostic_rows` replaces rows per `(fixture, density, T_horizon)`, including on non-converged re-runs. Test (h) covers the converged branch and the `--topn` shrink. Test (f) still passes (no file is created when there is nothing to write). |
 
-### CR-01: The diagnostic bypass reports hybrid ratios from a non-converged ADMM iterate and hides `budget_exceeded`
+**Spot-checked docs figures, all correct against the named source:**
+- **Hybrid diagnostic rows:** 568.95, b = 1325, t = 3, `r_pu` 2.40e-6, gap 1.21e-4, `atol_b` 2e-7, minimum ratio 289.06, maximum `loss_impact` 2.9e-10.
+- **Sweep diagnostic columns:** `diag_loss_impact_max` 4.4e-9.
+- **Process wall times** (`runs/*.time`): 335 s (5:35.13), 728 s (12:07.62), 213 s (3:33.02).
+- **`admm_time_s`:** 287 / 678 / 227 s.
+- **Profile deltas:** stage 1→2 = 238,072 KiB (0.23 GiB); stage 2→3 = 929,700 KiB (0.89 GiB); MV 0.14 / 0.42 GiB.
+- **Gate ratios:** 4.97e-3 / 1e-6 ≈ 4,969, quoted as "about 5,000x".
+- **v3.0 `density_sweep_full.csv` row:** `budget_exceeded`, 6 iterations, 153.3 s, `tol_gap` 1e-8, "~5.9GB".
 
-**File:** `scripts/benchmark_ieee8500.jl:891-929` (and `src/admm/solve_admm.jl:321-340`)
-**Issue:** `run_admm_point(...; keep_ctx = true)` returns `r.dso_ctx` whenever `solve_admm` returns, and that includes the `:budget_exceeded` early exit. That path deliberately skips consolidation and returns `dso_ctx = dso.ctx` holding the last mid-loop, non-consensus solve. `solve_admm.jl:322-327` says certificates are "meaningless on a mid-loop, non-consensus point."
-
-The bypass branch only checks `apoint.dso_ctx !== nothing`. So on a budget exit it:
-- runs `hybrid_ratios` on that iterate,
-- writes the rows to `hybrid_diagnostic.csv`,
-- fills `diag_max_ratio`/`diag_worst_branch`,
-- sets `admm_status_out = "DIAGNOSTIC_BYPASS"`, which overwrites the real `"budget_exceeded"` status.
-
-The CSV row then cannot be told apart from a converged diagnostic. A ratio from an unconverged point would be read as a statement about the converged relaxation gap, which is the kind of claim `ieee8500_scaling.jl` section 2 makes ("The ADMM run converged in 8 iterations ... ratio 568.95"). This is a research-data integrity defect in the evidence chain for ARCH-10.
-
-**Fix:** Run the diagnostic only on a converged result, and always keep the real status:
-```julia
-if bypass
-    if apoint.dso_ctx !== nothing && apoint.admm_status == "converged"
-        admm_status_out = "DIAGNOSTIC_BYPASS"
-        # ... hybrid_ratios / CSV ...
-    else
-        admm_status_out = "DIAGNOSTIC_BYPASS:" * apoint.admm_status   # e.g. ...:budget_exceeded
-    end
-```
-Also add an `admm_status` column to the `hybrid_diagnostic.csv` rows.
+Two problems remain in the memory-wall evidence chain. Both are attributions that the data do not support, not arithmetic errors.
 
 ## Warnings
 
-### WR-01: Docstrings still promise byte-identical defaults after the default changed
+### WR-01: "The rest is state kept across iterations" is not supported by the profile, because AgrOpt construction is part of the loop delta but was never measured
 
-**File:** `src/admm/solve_admm.jl:180-183`, `src/admm/DsoOpt.jl:537-543`, `scripts/benchmark_ieee8500.jl:560-567`
-**Issue:**
-- `solve_admm`'s seam docstring still says the defaults are "copied VERBATIM from `assert_socp_exact!`'s own current defaults (`src/models/exactness.jl:78`) ... every existing caller of `solve_admm` is byte-identical at these defaults." Phase 35 changed the default from `1e-6` to `nothing` exactly so that callers are not byte-identical: gaps in (2e-7, 1e-6] now throw, and gaps up to about 9.8e-6 on branches with smax near 99 now pass. The `exactness.jl:78` line reference is also stale; the function is at line 170.
-- The new `DsoOpt.jl` text contradicts itself: "can now raise `CertificateError`" is followed by "Every existing call site ... is byte-identical".
-- The `run_admm_point` docstring still says "The caller ALWAYS passes `EXACTNESS_ATOL[fixture_sym]`". It now passes `nothing`, a user `--admm-atol`, or `Inf`.
+**File:** `docs/literate/ieee8500_scaling.jl:297-305`; `results/ieee8500_benchmark/memory_wall_recharacterization.csv:7-8` (`dominant_consumer` column)
+**Issue:** The `037b0b1`/`85d2fe9` rewrite adds a quantitative conclusion: "One build plus one solve therefore accounts for about a quarter of the T = 10 loop's growth; the rest is state kept across iterations". It keeps the earlier claim that "the dominant consumer is the per-hour DSO solver state retained across the ADMM loop". The comparison does not isolate that.
+- **The loop delta covers more than the DSO.** `admm_peak_rss_delta_mb` is `Sys.maxrss()` after `solve_admm` minus `Sys.maxrss()` before it (`scripts/benchmark_ieee8500.jl:580, 619-621`). So the delta includes everything `solve_admm` allocates, not only DSO iterations:
+  - building **one AgrOpt per aggregator** (`n_agg = 122` at this point; `src/admm/solve_admm.jl` docstring, "one `build_agr_opt` per aggregator");
+  - their first solves;
+  - the final `check_exact = true` consolidation.
+- **The profile cannot split that remainder.** The profiler has a stage 5 (`after_agr_opts`, `scripts/profile_ieee8500_memory.jl:79-82`), but no committed run reached it. The `ieee8500` rows stop at stage 3. The remaining ~3.4 GiB therefore cannot be assigned to "state kept across iterations" rather than to 122 AgrOpt models and solver workspaces.
+- **The profile data cut against the "dominant" claim.** One DSO build plus solve is ~25% of the delta. Nothing measured shows the DSO is the dominant consumer.
+- **The metrics differ.** The profile figures are VmRSS deltas between stages. The loop delta is a peak (HWM) delta. Measured as VmHWM from stage 1 to stage 3, the profile gives 1,261,504 KiB (1.20 GiB), not 1.12 GiB.
+- **"Linear in nodes" is unmeasured.** `memory_wall_recharacterization.csv` repeats "ADMM-loop retained per-hour DSO solver state (linear in T and in nodes)". The "in nodes" part was never measured; only one density completed at T = 24.
 
-In a project where traceability of gate semantics is a hard requirement (T-25-12), wrong docstrings are a defect.
-**Fix:** Rewrite all three docstrings to describe the new behaviour: the default is the hybrid floor, it is stricter below smax ≈ 31.6 pu, and it is looser above that. Drop the "byte-identical" claim and the line-number reference.
-
-### WR-02: `hybrid_ratios` re-implements the gate formula and ignores the gate's parameters
-
-**File:** `src/models/exactness.jl:417-451`
-**Issue:** The function is documented as a "mirror" of `assert_socp_exact!`'s default gate, but it copy-pastes the `head_b`, `ref_b`, `atol_b` and `tol` computation instead of sharing it. It also hard-codes `TAU_SOLVER_FIX08`/`MEASURED_ε_FIX08` and takes no `atol`, `ε` or `τ_solver` kwargs. Two consequences:
-- If the gate formula changes later (for example the `head_b` convention discussed at exactness.jl:190-225), the diagnostic silently drifts.
-- A caller that ran the gate with non-default `ε`/`τ_solver`/`atol` gets ratios that do not match the verdict. The docstring promises "`ratio ≤ 1` iff the gate accepts that row".
-
-**Fix:** Move the per-(b,t) computation into one private helper, for example `_cone_rows(ctx; rtol, atol, ε, τ_solver)`, that both functions call. `assert_socp_exact!` then reduces to `maximum(r.ratio) <= 1`. Give `hybrid_ratios` the same kwargs with the same defaults.
-
-### WR-03: The wrapper blames this point for any OOM kill on the host during the run window
-
-**File:** `scripts/run_ieee8500_point.sh:47-58`
-**Issue:** `journalctl -k --since "$START" | grep "oom-kill|Killed process"` and `journalctl -u earlyoom | grep "sending|killing|SIGTERM"` match kills of any process. The wrapper itself records `other_julia_procs`, so other processes are expected on this host. The classification is `[ "$RC" -eq 137 ] || [ -n "$KERN" ]`, which means:
-- a point that finished with RC=0 is labelled `oom_source=kernel` if anything else was OOM-killed during it;
-- a point that died with 143 for an unrelated reason is labelled `earlyoom`.
-
-`point_resources.csv` feeds the memory-wall table in the docs.
-**Fix:** Only attribute an OOM when `RC != 0`, and match the child PID or command (`julia`, or the PID captured via `$!` when the command is backgrounded and waited on):
-```bash
-if [ "$RC" -ne 0 ]; then
-  if [ "$RC" -eq 137 ] && grep -q "$CHILD_PID" <<<"$KERN"; then OOM_SOURCE=kernel
-  elif grep -q "$CHILD_PID" <<<"$EARLY"; then OOM_SOURCE=earlyoom; fi
-fi
+This feeds the decision "No `src/` memory mitigation was adopted" and the ARCH-10 memory-wall narrative, so the attribution needs to be accurate.
+**Fix:** Either measure the remainder: run `scripts/run_ieee8500_point.sh p35-prof-ieee8500-s5 -- --fixture ieee8500 --density 0.1 --t-horizon 10 --stage 5` and state the stage 3→5 AgrOpt contribution. Or weaken the text to what is measured:
 ```
+# One DSO build plus its first solve accounts for about a quarter of the T = 10 loop's peak growth
+# (VmRSS 1.12 GiB; VmHWM 1.20 GiB). The remainder (AgrOpt construction for the 122 aggregators,
+# their solves, per-iteration state, and the final consolidation) was not decomposed; no single
+# dominant consumer is established by this profile.
+```
+Make the same change to the `dominant_consumer` cells of the head rows, and drop "and in nodes".
 
-### WR-04: `--run-label` is passed only when SCRIPT is literally `scripts/benchmark_ieee8500.jl`
+### WR-02: The Phase-25 headline anon-rss range includes an `ieee8500-mv` kill
 
-**File:** `scripts/run_ieee8500_point.sh:32-35`
-**Issue:** The check is an exact string comparison. With `SCRIPT=./scripts/benchmark_ieee8500.jl` or an absolute path, the harness runs without `--run-label`, so `run_label` is empty in `density_sweep.csv`. The join key with `point_resources.csv` is then lost without any warning.
-**Fix:** Compare the basename, `[ "$(basename "$SCRIPT")" = "benchmark_ieee8500.jl" ]`, or make the profiler accept and ignore `--run-label`.
-
-### WR-05: In multi-point runs, completed rows are written only at the end of the sweep
-
-**File:** `scripts/benchmark_ieee8500.jl:866-876, 991-993`
-**Issue:** Each point upserts a `started` row before solving, but completed rows are collected in `rows` and written once after the loop. In a multi-density invocation (allowed: `--density 0.1,0.25`), a kill or exception on point k leaves every earlier, fully measured point saved only as `admm_status = "started"`. Two things go wrong:
-- Completed measurements are lost.
-- They are recorded as if they were in progress when the kill happened, which contradicts the comment "a kill mid-solve leaves a trace; the completion upsert replaces it."
-
-An exception thrown after `run_admm_point` (for example in `hybrid_ratios` or a CSV write) has the same effect.
-**Fix:** Upsert each completed `row` right after `push!(rows, row)`, for example `upsert_sweep_rows(csv_path_sweep, DataFrame([row]))`, and keep the final write for idempotence only.
-
-### WR-06: The new tests do not detect the Phase 35 default change
-
-**File:** `test/test_admm_exactness_default.jl:35-79`
-**Issue:**
-- Test (A) checks `assert_socp_exact!`'s default. That default was already `nothing` before Phase 35, so (A) passes on the pre-change code too.
-- Test (B) compares `solve_admm(...)` against `solve_admm(...; atol_exact = nothing)`, which only tests that the default equals itself. If the 2-bus consolidation gap is below 2e-7, both `1e-6` and `nothing` accept it and give identical results, so reverting the default to `1e-6` would still pass every test.
-
-Nothing checks that the `solve_admm`/`solve_dso!` default reaches the hybrid branch.
-**Fix:** Add a regression check that tells the two defaults apart. One option is to assert on the method default directly. A better option is to call the final gate through `solve_dso!` (or `_admm_certify`) on a ctx like `ctx_A()`/`ctx_N()`: assert that it throws for a gap in (2e-7, 1e-6] on an `SMAX_NO_LIMIT` branch, and that it passes for gap 5e-6 at smax = 90. Both outcomes are the reverse of the old flat `1e-6`.
-
-### WR-07: Rows refused by the gate (`CertificateError`) lose their iteration count
-
-**File:** `scripts/benchmark_ieee8500.jl:588-597`
-**Issue:** The new failure path keeps `iterations` only for `ConvergenceError`. `CertificateError` has no `iterations` field (`src/core/errors.jl:68-71`), so the main Phase 35 outcome (`ERROR:CertificateError` after ADMM converged) records `admm_iters = NaN`. The docs table still reports "ADMM iterations 8" for that row, a number the harness's own CSV cannot back up. Also, `admm_iters` is now an Int/NaN mix, while `docs/literate/ieee8500_scaling.jl:152` parses it with `tryparse(Int, ...)` and maps NaN to -1.
-**Fix:** Either have `solve_admm` attach the iteration count to the gate failure (wrap it and rethrow with context), or record iterations through a residual-tracking callback. Use one sentinel consistently, for example `-1` or `missing`.
-
-### WR-08: `--topn 0` (or negative) crashes after the full ADMM solve
-
-**File:** `scripts/benchmark_ieee8500.jl:774, 899, 920`
-**Issue:** `top = hr[1:min(topn, length(hr))]` is empty when `topn <= 0`, and `w = top[1]` then throws a `BoundsError`. This happens after a run that can take several minutes and 12 GB. The completed point is lost and its `started` row stays behind (see WR-05).
-**Fix:** Validate at parse time: `topn >= 1 || throw(ArgumentError("--topn must be >= 1"))`. Take `w = hr[1]` rather than `top[1]`.
+**File:** `results/ieee8500_benchmark/memory_wall_recharacterization.csv:2` (row `phase25-head-d0.1-a`, `notes` column)
+**Issue:** The `8d2c395` unit fix rewrote this cell as "kernel anon-rss 6991636-9753068 KiB (6.67-9.30 GiB) across the density_sweep_full.csv OOM rows". The row describes the 4,875-bus `ieee8500` headline fixture, but 9,753,068 KiB is the anon-rss of the **`ieee8500-mv` density 1.0** OOM row in `density_sweep_full.csv`. The three `ieee8500` OOM rows record 6,991,636, 8,548,328 and 8,393,224 KiB, which is 6.67–8.15 GiB. The pre-fix text "6.8-9.75" had the same cross-fixture mix; the fix converted its units but kept the wrong upper bound. This is the same class of defect as iteration-2 WR-02: a figure from one fixture attributed to the other.
+**Fix:**
+```
+kernel anon-rss 6991636-8548328 KiB (6.67-8.15 GiB) across the three ieee8500 OOM rows of density_sweep_full.csv
+```
+If the 15.5 GiB host context needs the all-fixture maximum (9.30 GiB, `ieee8500-mv` d = 1.0), quote it separately with its fixture named.
 
 ## Info
 
-### IN-01: The docs' "except on branches with smax of 32-99 pu" statement is incomplete
+### IN-06: `memory_wall_recharacterization.csv` still calls `admm_time_s` "wall"
 
-**File:** `docs/literate/ieee8500_scaling.jl:221-223`
-**Issue:**
-- `SMAX_NO_LIMIT = 99.0`, and branches at that sentinel use the head-branch flow as `ref_b`, not `smax²`. The looser-than-`1e-6` range is therefore smax in [31.6, 99) plus every unlimited branch in hours where |S_head| > 31.6 pu.
-- The statement also omits that the new default is looser (up to about 9.8x) on those branches, not only stricter elsewhere.
+**File:** `results/ieee8500_benchmark/memory_wall_recharacterization.csv:7` (row `p35-head-d0.1-T24`, `notes` column: "677 s wall")
+**Issue:** The WR-01 fix split process wall time (728 s, `runs/p35-head-d0.1-T24.time`) from `admm_time_s` (677.5 s, which the docs round to 678 s). This CSV cell still labels the `admm_time_s` value as "wall" and truncates it to 677, so the committed evidence contradicts the docs table at `docs/literate/ieee8500_scaling.jl:292`.
+**Fix:** Write `admm_time_s 678 s; process wall 728 s`.
 
-**Fix:** Correct the sentence.
+### IN-07: The docs say the head row "records" -1, but that value came from the repair, not the harness
 
-### IN-02: `run_tests_filtered.jl` does not validate its arguments
+**File:** `docs/literate/ieee8500_scaling.jl:259`
+**Issue:** "the head row was written before WR-07 and records the unknown sentinel `-1`". The harness wrote `NaN`. The `-1` comes from the one-off `normalize_admm_iters!` repair in `aa6277e`. This is minor, but this section is explicitly about provenance.
+**Fix:** "...was written before WR-07 with `NaN`, normalized to the unknown sentinel `-1` by the WR-04 repair (`aa6277e`)".
 
-**File:** `scripts/run_tests_filtered.jl:5-7`
-**Issue:** If arguments are missing, `ARGS[1]`/`ARGS[2]` throws a `BoundsError`, and a spec without `:` throws a destructuring error. The usage message is never printed.
-**Fix:** Check `length(ARGS) == 2 && occursin(':', ARGS[2])` and print the usage line otherwise.
+### IN-08: Stale-row removal on a non-converged re-run is untested, and the committed diagnostic file predates its schema
 
-### IN-03: The `hybrid_ratios` sort assertion checks nothing
+**File:** `scripts/benchmark_ieee8500.jl:990-996`; `test/test_benchmark_ieee8500.jl:184-208`; `results/ieee8500_benchmark/hybrid_diagnostic.csv`
+**Issue:** Test (h) covers the converged replace path. The other half of the WR-05 fix is not exercised: a non-converged bypass of a point that already has rows must delete them (`replace_diagnostic_rows(..., nothing)`). Test (f) runs in a fresh directory, so it only covers the case where no file exists. Separately, the committed `hybrid_diagnostic.csv` still has no `admm_status` column, as the fix report acknowledges. Its 20 rows come from the converged `p35-diag-d0.1-T10` run, but the file does not say so.
+**Fix:** In (f), seed `dir_f/hybrid_diagnostic.csv` with one row for the `--quick` point plus one row for another point. Assert that after the run only the other point's row remains. Optionally add an `admm_status = converged` column to the committed file.
 
-**File:** `test/test_admm_exactness_default.jl:91`
-**Issue:** `issorted(...)` runs on the single-row result of `ctx_N()`, so it is always true.
-**Fix:** Build a 2+-branch or T>1 ctx so the descending-ratio ordering is actually checked.
+## Carried over (not re-raised)
 
-### IN-04: An empty array expansion under `set -u` fails on bash < 4.4
-
-**File:** `scripts/run_ieee8500_point.sh:44`
-**Issue:** `"${LABEL_ARGS[@]}"` with an empty array is an "unbound variable" error on bash 4.3 and older, which is the profiler path.
-**Fix:** Use `${LABEL_ARGS[@]+"${LABEL_ARGS[@]}"}`.
-
-### IN-05: Peak-RSS columns are process-lifetime values
-
-**File:** `scripts/benchmark_ieee8500.jl:600-606`; `scripts/profile_ieee8500_memory.jl:83`
-**Issue:**
-- `peak_rss_mb = Sys.maxrss()` is the process high-water mark. Without `--admm-only` it includes the centralized model.
-- In multi-point runs, `admm_peak_rss_delta_mb` reads about 0 after the first point because maxrss only ever increases.
-- Separately, the profiler only honours the env var for its output directory, not `--results-dir`.
-
-**Fix:** Document the columns as process-lifetime values, or refuse multi-point runs when RSS columns matter. Add `--results-dir` handling to the profiler.
+Iteration-2 IN-01 through IN-05 are still open and unchanged; no fix commit touched them, and none is worse. One addition to IN-01: `docs/literate/ieee8500_scaling.jl:234` ("stricter ... except on branches with `smax` of 32-99 pu") also leaves out the looser case on unlimited branches whose head flow is above ≈ 31.6 pu. `src/admm/solve_admm.jl:191-196` and `src/admm/DsoOpt.jl:541-545` both state that case correctly.
 
 ---
 
-_Reviewed: 2026-10-05T02:22:12Z_
+_Reviewed: 2026-10-05T13:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
