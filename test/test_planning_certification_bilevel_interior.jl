@@ -123,8 +123,11 @@
     rebuilt fresh by every function/testitem in this file (self-containment,
     file header note (b)).
     """
-    _interior_feeder() =
-        Feeder([Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)], [Branch(1, 2, 1e-3, 1e-3, 99.0)], 1)
+    _interior_feeder() = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 1e-3, 1e-3, 99.0)],
+        1,
+    )
 
     """
         solve_follower_at(y::Real) -> NamedTuple
@@ -164,6 +167,7 @@
     MINIMUM total.
 
         Leader-level semantics match production: the lossless
+
     network forces `d = z`. A follower response with `z > dmax`, or a bus-2 squared
     voltage `1 - 2e-3*z` outside `[0.95^2, 1.05^2]`, makes that `y` INFEASIBLE for
     the leader (`continue`), never feasible-but-curtailed. The follower's response
@@ -190,8 +194,7 @@
     """
         build_interior_bilevel_jump() -> NamedTuple
 
-    Certification oracle #1: `BilevelModel(Ipopt.Optimizer, mode =
-    BilevelJuMP.StrongDualityMode())` — a hand-derived MPEC with a QUADRATIC
+    Certification oracle #1: `BilevelModel(Ipopt.Optimizer, mode = BilevelJuMP.StrongDualityMode())` — a hand-derived MPEC with a QUADRATIC
     lower-level objective (Ipopt/NLP handles the strong-duality equality of a
     convex QP lower level natively). `dmax` defaults to the fixture's `d_max`.
     """
@@ -648,9 +651,8 @@ end
     @objective(
         Lower(bjm),
         Min,
-        kw.c_inv * x_inv + sum(
-            (kw.c_op[t] - kw.pi_tariff[t]) * z[t] + 0.5 * kw.q_op[t] * z[t]^2 for t in 1:T
-        )
+        kw.c_inv * x_inv +
+        sum((kw.c_op[t] - kw.pi_tariff[t]) * z[t] + 0.5 * kw.q_op[t] * z[t]^2 for t in 1:T)
     )
     @constraint(Upper(bjm), [t = 1:T], v2[t] == 1.0 - 2 * (1e-3 * z[t]))
     @constraint(Upper(bjm), [t = 1:T], d[t] == z[t])

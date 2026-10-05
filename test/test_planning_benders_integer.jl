@@ -225,7 +225,11 @@ end
     # feas_oracle it rethrows; with a :separating confirmation it returns `nothing`;
     # with a :weak one it rethrows.
     fake6 = make_fake_oracle_wr01(MOI.LOCALLY_INFEASIBLE)
-    @test_throws ErrorException TSODSO._oracle_or_infeasible(fake6, [0.1]; on_inexact = :throw)
+    @test_throws ErrorException TSODSO._oracle_or_infeasible(
+        fake6,
+        [0.1];
+        on_inexact = :throw,
+    )
     @test TSODSO._oracle_or_infeasible(
         fake6,
         [0.1];
@@ -260,7 +264,8 @@ end
         nan_left::Int
     end
     function TSODSO.solve_follower!(f::OnceNaNFollower, z::AbstractVector{<:Real})
-        all(<=(0.6), z) && return (; feasible = true, cost = 0.5 * sum(z), π_s = fill(0.5, f.T))
+        all(<=(0.6), z) &&
+            return (; feasible = true, cost = 0.5 * sum(z), π_s = fill(0.5, f.T))
         if f.nan_left > 0
             f.nan_left -= 1
             return (; feasible = false, v = NaN, u = fill(NaN, f.T))

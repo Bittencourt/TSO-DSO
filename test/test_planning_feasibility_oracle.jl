@@ -140,7 +140,13 @@ end
 
     # --- Ablation: confirm THERMAL causation BEFORE trusting
     # this fixture's label. On the UNMODIFIED feeder, z=0.07 is a genuine MOI.INFEASIBLE.
-    oracle0 = TSODSO.build_planning_oracle(feeder, TSODSO.ConvexBranchFlow(), [agg]; λ₀ = λ₀, T = T)
+    oracle0 = TSODSO.build_planning_oracle(
+        feeder,
+        TSODSO.ConvexBranchFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+    )
     err0 = FeasibilityOracleFixtures.try_solve_planning_oracle(oracle0, z)
     @test err0 !== nothing
     @test occursin("INFEASIBLE", sprint(showerror, err0))
@@ -151,8 +157,13 @@ end
     # mode" => X was the binding cause). The widened solve is not required to be exact —
     # only to STOP being genuinely infeasible.
     feederS = FeasibilityOracleFixtures.widen_smax(feeder; smax = 90.0)
-    oracleS =
-        TSODSO.build_planning_oracle(feederS, TSODSO.ConvexBranchFlow(), [agg]; λ₀ = λ₀, T = T)
+    oracleS = TSODSO.build_planning_oracle(
+        feederS,
+        TSODSO.ConvexBranchFlow(),
+        [agg];
+        λ₀ = λ₀,
+        T = T,
+    )
     errS = FeasibilityOracleFixtures.try_solve_planning_oracle(oracleS, z)
     @test errS === nothing || !occursin("INFEASIBLE", sprint(showerror, errS))
 
@@ -168,7 +179,8 @@ end
     # The cut is consumable by the EXISTING add_feasibility_cut! in the SAME shape, and
     # grows the master's persistent row count by exactly 1 (mirrors
     # test_planning_master.jl's own growth-counting idiom).
-    master = TSODSO.build_master(; T = T, c_y = 0.3, y_max = 1.0, α_op_lb = -50.0, α_x_lb = 0.0)
+    master =
+        TSODSO.build_master(; T = T, c_y = 0.3, y_max = 1.0, α_op_lb = -50.0, α_x_lb = 0.0)
     nc0 = num_constraints(master.model; count_variable_in_set_constraints = true)
     TSODSO.add_feasibility_cut!(master, r.v, r.u, r.z_k)
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
@@ -225,13 +237,24 @@ end
     z = [0.5]
 
     # --- Ablation: confirm VOLTAGE causation (not thermal, not device-capacity).
-    oracleS = TSODSO.build_planning_oracle(feederS, TSODSO.ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+    oracleS = TSODSO.build_planning_oracle(
+        feederS,
+        TSODSO.ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = T,
+    )
     errS = FeasibilityOracleFixtures.try_solve_planning_oracle(oracleS, z)
     @test errS !== nothing
     @test occursin("INFEASIBLE", sprint(showerror, errS))
 
-    oracleSV =
-        TSODSO.build_planning_oracle(feederSV, TSODSO.ConvexBranchFlow(), aggs; λ₀ = λ₀, T = T)
+    oracleSV = TSODSO.build_planning_oracle(
+        feederSV,
+        TSODSO.ConvexBranchFlow(),
+        aggs;
+        λ₀ = λ₀,
+        T = T,
+    )
     errSV = FeasibilityOracleFixtures.try_solve_planning_oracle(oracleSV, z)
     @test errSV === nothing || !occursin("INFEASIBLE", sprint(showerror, errSV))
 
@@ -244,7 +267,8 @@ end
     @test length(r.u) == T
     @test r.z_k == z
 
-    master = TSODSO.build_master(; T = T, c_y = 0.3, y_max = 2.0, α_op_lb = -500.0, α_x_lb = 0.0)
+    master =
+        TSODSO.build_master(; T = T, c_y = 0.3, y_max = 2.0, α_op_lb = -500.0, α_x_lb = 0.0)
     nc0 = num_constraints(master.model; count_variable_in_set_constraints = true)
     TSODSO.add_feasibility_cut!(master, r.v, r.u, r.z_k)
     nc1 = num_constraints(master.model; count_variable_in_set_constraints = true)
@@ -319,8 +343,7 @@ end
         # A feasibility cut never updates UB — every
         # :oracle_feasibility_cut row must carry gap = NaN (the feasibility-branch
         # sentinel, never the converged-iteration's own finite gap).
-        for (action, gap) in
-            zip(result.trace.policy_action_trace, result.trace.gap_trace)
+        for (action, gap) in zip(result.trace.policy_action_trace, result.trace.gap_trace)
             action === :oracle_feasibility_cut && @test isnan(gap)
         end
     end
@@ -352,8 +375,7 @@ end
     y_max = 1.0
     follower_kwargs =
         (; corridor_cap = 1.0, x_inv_max = y_max, c_inv = 1.0e-6, c_op = fill(1.0e-6, T))
-    master_kwargs =
-        (; c_y = 1.0e-6, y_max = y_max, α_op_lb = -500.0, α_x_lb = -5.0)
+    master_kwargs = (; c_y = 1.0e-6, y_max = y_max, α_op_lb = -500.0, α_x_lb = -5.0)
 
     mktempdir() do dir
         result = TSODSO.solve_stackelberg!(
@@ -371,8 +393,7 @@ end
 
         @test result.gap <= 1.0e-4
         @test :oracle_feasibility_cut in result.trace.policy_action_trace
-        for (action, gap) in
-            zip(result.trace.policy_action_trace, result.trace.gap_trace)
+        for (action, gap) in zip(result.trace.policy_action_trace, result.trace.gap_trace)
             action === :oracle_feasibility_cut && @test isnan(gap)
         end
     end

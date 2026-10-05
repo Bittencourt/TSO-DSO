@@ -41,7 +41,13 @@
     @test r.violations.violation_tol == 10 * r.violations.ac_primal_violation
 
     # A z_incumbent of the wrong length is rejected before any build.
-    @test_throws ArgumentError TSODSO.ac_recheck_incumbent(feeder, [agg], λ₀, T, [0.02, 0.0])
+    @test_throws ArgumentError TSODSO.ac_recheck_incumbent(
+        feeder,
+        [agg],
+        λ₀,
+        T,
+        [0.02, 0.0],
+    )
 end
 
 @testitem "planning ac_recheck: a pin overloading the head branch reports (never throws) a populated violation" tags =
@@ -87,10 +93,17 @@ end
     # "FAILED to reach LOCALLY_SOLVED" SolveFailedError).
     T = 1
     feeder = TSODSO.ieee13_modified()
-    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    therm =
+        TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
     agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
 
-    @test_throws TSODSO.SolveFailedError TSODSO.ac_recheck_incumbent(feeder, [agg], [-1.0], T, [0.0])
+    @test_throws TSODSO.SolveFailedError TSODSO.ac_recheck_incumbent(
+        feeder,
+        [agg],
+        [-1.0],
+        T,
+        [0.0],
+    )
     r = TSODSO._incumbent_ac_report(feeder, [agg], [-1.0], T, [0.0], 12.0)
     @test !r.ok
     @test r.raw_status == "AC_RECHECK_FAILED"
@@ -99,5 +112,12 @@ end
     @test r.socp_welfare == 12.0
     @test occursin("FAILED to reach LOCALLY_SOLVED", r.error)
     # A malformed call is NOT a tooling failure: it still propagates.
-    @test_throws ArgumentError TSODSO._incumbent_ac_report(feeder, [agg], [-1.0], T, [0.0, 0.0], 12.0)
+    @test_throws ArgumentError TSODSO._incumbent_ac_report(
+        feeder,
+        [agg],
+        [-1.0],
+        T,
+        [0.0, 0.0],
+        12.0,
+    )
 end

@@ -53,8 +53,7 @@
 
     follower_kwargs =
         (; corridor_cap = 1.0, x_inv_max = 0.1, c_inv = 1.0e-6, c_op = fill(1.0e-6, T))
-    master_kwargs =
-        (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
+    master_kwargs = (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
 
     mktempdir() do dir
         # :strict must reproduce the unchanged throw (the exactness-class error
@@ -98,8 +97,7 @@ end
 
     follower_kwargs =
         (; corridor_cap = 1.0, x_inv_max = 0.1, c_inv = 1.0e-6, c_op = fill(1.0e-6, T))
-    master_kwargs =
-        (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
+    master_kwargs = (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
 
     # `:reject` used to append NO cut at an
     # inexact trial, so the master re-proposed it and the run could only ever stall.
@@ -162,7 +160,8 @@ end
     # boundary point z ≈ 0.010039) — 4 completed iterations, far short of max_iter = 30.
     T = 1
     feeder = TSODSO.ieee13_modified()
-    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    therm =
+        TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
     agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
 
     function caught(f)
@@ -214,8 +213,7 @@ end
 
     follower_kwargs =
         (; corridor_cap = 1.0, x_inv_max = 0.1, c_inv = 1.0e-6, c_op = fill(1.0e-6, T))
-    master_kwargs =
-        (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
+    master_kwargs = (; c_y = 1.0e-6, y_max = 0.07, α_op_lb = -2000.0, α_x_lb = -10.0)
 
     mktempdir() do dir
         # :certify_incumbent is the DEFAULT — omitted here deliberately to also confirm
@@ -243,7 +241,10 @@ end
         tr = result.trace
         opt_rows = findall(==(:optimality), tr.cut_type_trace)
         @test all(i -> isfinite(tr.socp_maxgap_trace[i]), opt_rows)
-        @test all(i -> isnan(tr.socp_maxgap_trace[i]), findall(==(:feasibility), tr.cut_type_trace))
+        @test all(
+            i -> isnan(tr.socp_maxgap_trace[i]),
+            findall(==(:feasibility), tr.cut_type_trace),
+        )
         inexact_rows = findall(==(:certified_incumbent), tr.policy_action_trace)
         exact_rows = filter(i -> tr.policy_action_trace[i] === :none, opt_rows)
         @test !isempty(inexact_rows) && !isempty(exact_rows)
@@ -277,7 +278,10 @@ end
         @test :oracle_feasibility_cut in result.trace.policy_action_trace
         # The measured slack-min v is recorded on every oracle
         # feasibility row (NaN elsewhere); on this run every such cut is separating.
-        fc = findall(a -> a in (:oracle_feasibility_cut, :oracle_feasibility_cut_weak), tr.policy_action_trace)
+        fc = findall(
+            a -> a in (:oracle_feasibility_cut, :oracle_feasibility_cut_weak),
+            tr.policy_action_trace,
+        )
         @test all(i -> tr.feas_cut_v_trace[i] > TSODSO.FEAS_CUT_V_TOL, fc)
         @test all(i -> isnan(tr.feas_cut_v_trace[i]), setdiff(1:(tr.iters), fc))
     end
@@ -386,7 +390,8 @@ end
     # (max_overload_ratio≈0.648, |V|≈0.9846), ac_welfare≈socp_welfare (gap≈3e-10).
     T = 1
     feeder = TSODSO.ieee13_modified()
-    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    therm =
+        TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
     agg = TSODSO.Aggregator(2, 0.9, [therm], fill(0.01, T))
 
     mktempdir() do dir
@@ -396,7 +401,12 @@ end
             [agg];
             λ₀ = [-1.0],
             T = T,
-            follower_kwargs = (; corridor_cap = 1.0, x_inv_max = 0.2, c_inv = 0.01, c_op = [0.01]),
+            follower_kwargs = (;
+                corridor_cap = 1.0,
+                x_inv_max = 0.2,
+                c_inv = 0.01,
+                c_op = [0.01],
+            ),
             master_kwargs = (; c_y = 0.01, y_max = 0.04),   # :auto α bounds
             tol = 1.0e-6,
             max_iter = 30,
@@ -485,11 +495,14 @@ end
 
     # Classification: an infeasibility verdict is `nothing`; an inexact verdict is a
     # result under :report and the gate's own throw under :throw.
-    @test TSODSO._oracle_or_infeasible(oracle, fill(0.07, T); on_inexact = :report) === nothing
+    @test TSODSO._oracle_or_infeasible(oracle, fill(0.07, T); on_inexact = :report) ===
+          nothing
     @test termination_status(oracle.model) in TSODSO.ORACLE_INFEASIBLE_STATUSES
     r06 = TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :report)
     @test r06 !== nothing && r06.exactness === :inexact
-    e06 = caught(() -> TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :throw))
+    e06 = caught(
+        () -> TSODSO._oracle_or_infeasible(oracle, fill(0.06, T); on_inexact = :throw),
+    )
     @test e06 isa CertificateError && occursin("SOCP relaxation INEXACT", e06.msg)
 
     # T>1 joint corner search: :throw now fails loud instead of silently skipping the
@@ -502,7 +515,8 @@ end
     # A larger box can only lower the minimum (the [0, 0.05]^4 box is inside [0, 0.06]^4).
     @test q06 <= q05 + TSODSO.JOINT_RECOURSE_GAP_TOL
     # The exact box is unaffected by the policy.
-    @test TSODSO.corner_recourse(oracle, fol, 0.05, T) ≈ q05 atol = TSODSO.JOINT_RECOURSE_GAP_TOL
+    @test TSODSO.corner_recourse(oracle, fol, 0.05, T) ≈ q05 atol =
+        TSODSO.JOINT_RECOURSE_GAP_TOL
 end
 
 @testitem "planning inexact policy: incumbent ordering never lets a relaxation-only iterate displace a converged certified one" tags =

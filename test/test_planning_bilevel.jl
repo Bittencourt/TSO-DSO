@@ -66,12 +66,7 @@ end
     )
 
     # T=0
-    @test_throws ArgumentError build_bilevel_kkt(
-        f.feeder,
-        LinDistFlow();
-        base...,
-        T = 0,
-    )
+    @test_throws ArgumentError build_bilevel_kkt(f.feeder, LinDistFlow(); base..., T = 0)
 
     # mismatched length(c_op)
     @test_throws ArgumentError build_bilevel_kkt(
@@ -110,20 +105,10 @@ end
 
     # pf = ACPowerFlow() (NLP-class network — must be rejected by the allowlist
     # guard as an ArgumentError, not fail later inside JuMP with an ErrorException)
-    @test_throws ArgumentError build_bilevel_kkt(
-        f.feeder,
-        ACPowerFlow();
-        base...,
-        T = f.T,
-    )
+    @test_throws ArgumentError build_bilevel_kkt(f.feeder, ACPowerFlow(); base..., T = f.T)
 
     # pf = DCPowerFlow() (affine but untested here — the allowlist rejects it)
-    @test_throws ArgumentError build_bilevel_kkt(
-        f.feeder,
-        DCPowerFlow();
-        base...,
-        T = f.T,
-    )
+    @test_throws ArgumentError build_bilevel_kkt(f.feeder, DCPowerFlow(); base..., T = f.T)
 
     # follower_integer = true (unsupported)
     @test_throws ArgumentError build_bilevel_kkt(
@@ -469,8 +454,9 @@ end
         @test isapprox(r.rho_lo, rl; atol = atol)
         @test isapprox(r.rho_max, rm; atol = atol)
         a = kw.pi_tariff[1] - kw.c_op[1]
-        @test abs(kw.c_inv - kw.corridor_cap * r.mu_cap[1] + r.rho_y + r.rho_max - r.rho_lo) <
-              atol
+        @test abs(
+            kw.c_inv - kw.corridor_cap * r.mu_cap[1] + r.rho_y + r.rho_max - r.rho_lo,
+        ) < atol
         @test abs(-a + kw.q_op[1] * r.z[1] + r.mu_cap[1] - r.mu_lo[1]) < atol
     end
 end

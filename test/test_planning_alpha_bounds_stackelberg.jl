@@ -175,7 +175,14 @@ end
 
     fk = (; corridor_cap = 1.0, x_inv_max = 0.05, c_inv = 0.01, c_op = fill(0.01, T))
     bounds_ctx = (; feeder, pf, aggregators = aggs, λ₀, follower_kwargs = fk)
-    m = build_master(; T = T, c_y = 0.01, y_max = y_max, α_op_lb = α, α_x_lb = 0.0, bounds_ctx)
+    m = build_master(;
+        T = T,
+        c_y = 0.01,
+        y_max = y_max,
+        α_op_lb = α,
+        α_x_lb = 0.0,
+        bounds_ctx,
+    )
     # The accepted-but-in-slack bound is CLAMPED
     # down to the certified minimum d.bound, NEVER installed at the raw requested α.
     @test lower_bound(m.α_op) == d.bound

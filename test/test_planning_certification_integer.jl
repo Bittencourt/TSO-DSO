@@ -668,7 +668,8 @@ end
 
 @testitem "planning certification integer: T>1 joint corner_recourse survives the oracle-infeasible double-stall" tags =
     [:planning] setup = [TwoBusFixtures] begin
-    using TSODSO: build_follower, build_planning_oracle, solve_follower!, solve_planning_oracle!
+    using TSODSO:
+        build_follower, build_planning_oracle, solve_follower!, solve_planning_oracle!
     using TSODSO, Test
 
     feeder = TwoBusFixtures.two_bus_feeder()

@@ -58,8 +58,7 @@
                                y_max, v_d, d_max, r, x, vmin2, vmax2)
 
     Certification oracle #1: a hand-derived MPEC for the IDENTICAL
-    2-bus/T=1 toy fixture, built via `BilevelModel(Ipopt.Optimizer, mode =
-    BilevelJuMP.StrongDualityMode())` — a DIFFERENT complementarity mode than
+    2-bus/T=1 toy fixture, built via `BilevelModel(Ipopt.Optimizer, mode = BilevelJuMP.StrongDualityMode())` — a DIFFERENT complementarity mode than
     production's SOS1-bridge MILP (`SOS1Mode`/`IndicatorMode` empirically fail on HiGHS with
     `BridgeRequiresFiniteDomainError`; `StrongDualityMode` is the proven-working
     mode from the toy fixture of test_planning_certification.jl).
@@ -68,8 +67,7 @@
     voltage at bus 2, bounded `vmin2 <= v2 <= vmax2`), `d` (the served elastic
     demand, bounded `<= d_max`). Lower level (the TSO follower): `x_inv` (bounded
     `<= x_inv_max`), `z` (free `>= 0`). Lower objective
-    `c_inv*x_inv + (c_op - pi_tariff)*z`. Lower constraints: `invest_op: z <=
-    corridor_cap*x_inv`, `coupling_cap: x_inv <= y_inv` (the INVERTED coupling vs.
+    `c_inv*x_inv + (c_op - pi_tariff)*z`. Lower constraints: `invest_op: z <= corridor_cap*x_inv`, `coupling_cap: x_inv <= y_inv` (the INVERTED coupling vs.
     the existing `FollowerLP` — leader bounds investment, follower is
     free on `z`). Upper constraints: `v2 == 1.0 - 2*(r*z + x*0)` (Q=0 identically —
     no reactive injection anywhere in this fixture) and `d == z` (the exact
@@ -174,8 +172,7 @@
 
     The TRUE single-planner optimum — no tariff, no follower, no KKT/
     complementarity at all: a single LP (`select_optimizer(LP())`) reusing the
-    SAME embedded LinDistFlow network as production (`contribute!(LinDistFlow(),
-    ctx, feeder; T)`, since this is a plain `Model`/`ModelContext`, not a
+    SAME embedded LinDistFlow network as production (`contribute!(LinDistFlow(), ctx, feeder; T)`, since this is a plain `Model`/`ModelContext`, not a
     `BilevelModel`), directly minimizing
     `c_y*y_inv + c_inv*x_inv + sum(c_op[t]*z[t] - v_d[t]*d[t] for t in 1:T)`
     subject to `x_inv <= y_inv`, `z[t] <= corridor_cap*x_inv`, and the network

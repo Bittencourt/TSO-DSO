@@ -140,7 +140,8 @@
         # joint model's own.
         TSODSO.solve_planning_oracle!(result.oracle, result.z)
         oracle_gap = abs(
-            objective_value(result.oracle.model) - dual_objective_value(result.oracle.model),
+            objective_value(result.oracle.model) -
+            dual_objective_value(result.oracle.model),
         )
         ε = 10 * max(oracle_gap, joint.gap)
         @test isfinite(ε) && ε < 1.0e-4
