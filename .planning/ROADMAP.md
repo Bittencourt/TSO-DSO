@@ -607,7 +607,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 36-08-PLAN.md — FIX08 constant rename; scrub planning/benders.jl and nash.jl
+- [x] 36-08-PLAN.md — FIX08 constant rename; scrub planning/benders.jl and nash.jl
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -706,7 +706,7 @@ honestly, and the repo's scripts/manifests are tidy.
 | 33. Shared Abstractions — Feeder, Balance, Model Context | v4.0 | 11/11 | Complete    | 2026-10-04 |
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
-| 36. Code & Export Cleanup | v4.0 | 7/22 | In Progress|  |
+| 36. Code & Export Cleanup | v4.0 | 8/22 | In Progress|  |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
