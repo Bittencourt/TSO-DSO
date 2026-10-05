@@ -37,7 +37,7 @@ exported. Advanced building blocks (problem-class singletons, per-unit base help
 planning components, exactness helpers, experiment builders, ...) are declared `public`:
 they are documented and stable but must be qualified, e.g. `TSODSO.SOCP()`. Purely
 internal helpers are reachable as `TSODSO.name` and carry no stability promise. See the API
-and architecture pages of the documentation.
+Reference and the Status & exception policy pages of the documentation.
 """
 module TSODSO
 
