@@ -203,5 +203,10 @@
             n -> Base.ispublic(TSODSO, n) && !Base.isexported(TSODSO, n),
             (:PerUnitBase, :Z_base, :I_base, :to_pu_impedance, :to_pu_power),
         )
+        # Doc-linked return type of `build_mpc_window` and the ADMM capability trait.
+        @test all(
+            n -> Base.ispublic(TSODSO, n) && !Base.isexported(TSODSO, n),
+            (:MpcWindow, :admm_supported),
+        )
     end
 end

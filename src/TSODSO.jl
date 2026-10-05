@@ -325,11 +325,12 @@ ac_dual_fallback_price
 # Pricing.
 @compat public extract_reactive_dlmp
 
-# ADMM penalty control.
-@compat public set_rho!, set_rho_q!
+# ADMM capability trait and penalty control.
+@compat public admm_supported, set_rho!, set_rho_q!
 
 # MPC and stochastic building blocks.
 @compat public MpcTrace,
+MpcWindow,
 any_cert_failed,
 max_jump,
 mean_jump,
