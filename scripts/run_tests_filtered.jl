@@ -1,15 +1,20 @@
-# Runner for TestItemRunner with a tag/file filter (avoids the `julia -e` trap).
-# Usage: julia -t2 scripts/run_tests_filtered.jl <abs-repo-root> tag:<sym> | file:<basename>
+# Runner for TestItemRunner with tag/file filters (avoids the `julia -e` trap).
+# Usage: julia -t2 scripts/run_tests_filtered.jl <abs-repo-root> SPEC [SPEC...]
+#   SPEC = tag:<sym> | file:<basename>[,<basename>...]   (several specs are OR-combined)
 using TestItemRunner
 
 root = ARGS[1]
-spec = ARGS[2]
-kind, val = split(spec, ":"; limit = 2)
-flt = if kind == "tag"
-    ti -> Symbol(val) in ti.tags
-elseif kind == "file"
-    ti -> basename(ti.filename) == val
-else
-    error("filter spec must be tag:<sym> or file:<basename>, got $spec")
+specs = ARGS[2:end]
+isempty(specs) && error("filter spec must be tag:<sym> or file:<a.jl[,b.jl]>, got none")
+preds = map(specs) do s
+    kind, val = split(s, ":"; limit = 2)
+    if kind == "tag"
+        ti -> Symbol(val) in ti.tags
+    elseif kind == "file"
+        files = split(val, ",")
+        ti -> basename(ti.filename) in files
+    else
+        error("filter spec must be tag:<sym> or file:<a.jl[,b.jl]>, got $s")
+    end
 end
-TestItemRunner.run_tests(joinpath(root, "test"); filter = flt)
+TestItemRunner.run_tests(joinpath(root, "test"); filter = ti -> any(p -> p(ti), preds))
