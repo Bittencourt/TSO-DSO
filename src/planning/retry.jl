@@ -1,21 +1,19 @@
 # src/planning/retry.jl
 #
-# SEAM: escalating-retry wrapper around `assert_solved!` (D-08/D-09).
-# OWNER: plan 10-01.
+# SEAM: escalating-retry wrapper around `assert_solved!`.
 #
-# `solve_with_retry!` wraps the project's SOLE INFRA-03 choke point (`assert_solved!`,
+# `solve_with_retry!` wraps the project's SOLE choke point (`assert_solved!`,
 # src/core/status.jl, UNMODIFIED here) with a bounded, escalating Clarabel-conditioning
-# ladder. It exists because the oracle this phase builds (plan 10-02) re-solves the same
-# model many times inside a future Benders loop, amplifying the documented intermittent
-# Clarabel `NUMERICAL_ERROR` (STATE.md carried blocker). Per D-09/CLAUDE.md, it NEVER falls
+# ladder. It exists because the planning oracle re-solves the same
+# model many times inside the Benders loop, amplifying the documented intermittent
+# Clarabel `NUMERICAL_ERROR`. By design (see CLAUDE.md), it NEVER falls
 # back to SCS — only Clarabel's own post-build conditioning attributes are escalated via
-# `set_optimizer_attribute` (no `@variable`/`@constraint`, no rebuild). Per D-10, on budget
+# `set_optimizer_attribute` (no `@variable`/`@constraint`, no rebuild). On budget
 # exhaustion OR a genuinely non-retryable status it raises LOUDLY, reusing `assert_solved!`'s
 # exact 4-line diagnostic format plus the exhausted attempt count — never a silent fallback.
 #
 # `termination_status(model)`/`raw_status(model)` remain queryable inside a `catch` block
-# AFTER `assert_solved!` throws its typed `SolveFailedError` (verified, 10-RESEARCH.md
-# Pitfall 3) — this wrapper re-queries them, it does not receive a typed exception.
+# AFTER `assert_solved!` throws its typed `SolveFailedError` (verified) — this wrapper re-queries them, it does not receive a typed exception.
 
 using JuMP
 
@@ -26,8 +24,8 @@ Termination statuses that indicate a numerical-conditioning artifact (not a genu
 modeling failure) and are therefore eligible for the escalating retry ladder in
 [`solve_with_retry!`](@ref): `MOI.NUMERICAL_ERROR`, `MOI.SLOW_PROGRESS`,
 `MOI.ALMOST_OPTIMAL`. Anything else — in particular `MOI.INFEASIBLE`,
-`MOI.INFEASIBLE_OR_UNBOUNDED`, `MOI.DUAL_INFEASIBLE` — is NEVER retried (10-RESEARCH.md
-Anti-Pattern: retrying a genuine infeasibility wastes the attempt budget and can mask a
+`MOI.INFEASIBLE_OR_UNBOUNDED`, `MOI.DUAL_INFEASIBLE` — is NEVER retried (anti-pattern:
+retrying a genuine infeasibility wastes the attempt budget and can mask a
 real modeling/master-side bug).
 """
 const RETRYABLE_STATUSES = (MOI.NUMERICAL_ERROR, MOI.SLOW_PROGRESS, MOI.ALMOST_OPTIMAL)
@@ -41,8 +39,8 @@ Single source of truth for the 4 Clarabel-specific optimizer attribute names the
 `"iterative_refinement_max_iter"` and `"equilibrate_max_iter"`; rung 4 additionally sets
 `"dynamic_regularization_eps"` (restating everything the lower rungs touch, per the ladder's
 own complete-attribute-set convention). Any caller that needs to snapshot/restore these
-attributes around the ladder's documented WR-01 stickiness contract (see
-`src/admm/DsoOpt.jl`'s `build_dso_opt`/`solve_dso!`, quick task 260825-eme) reads this
+attributes around the ladder's documented stickiness contract (see
+`src/admm/DsoOpt.jl`'s `build_dso_opt`/`solve_dso!`) reads this
 constant instead of re-listing the 4 strings itself.
 """
 const LADDER_ATTR_NAMES = (
@@ -58,11 +56,11 @@ const LADDER_ATTR_NAMES = (
                       attempts_out::Union{Nothing,Ref{Int}} = nothing) -> Model
 
 Solve `model` via [`assert_solved!`](@ref) (STRICT gate by default — `allow_almost = false`,
-per D-06/CLAUDE.md "duals only from a STRICT solve"), retrying with progressively
+per CLAUDE.md "duals only from a STRICT solve"), retrying with progressively
 escalated Clarabel conditioning settings if the FIRST (or any subsequent) attempt reports
 a status in [`RETRYABLE_STATUSES`](@ref). Never rebuilds the model (`num_variables`/
 `num_constraints` are unchanged — only `set_optimizer_attribute` calls are issued) and
-never falls back to a different solver (D-09).
+never falls back to a different solver.
 
 The escalation ladder has 4 rungs (`max_attempts` caps how many are actually tried;
 `max_attempts < 1` throws `ArgumentError` up front, and any value beyond the ladder
@@ -74,7 +72,7 @@ length is CLAMPED to it — the effective budget is `min(max_attempts, 4)`):
  3. adds `iterative_refinement_max_iter => 100, equilibrate_max_iter => 50`
  4. `static_regularization_constant => 1e-5, dynamic_regularization_eps => 1e-11, iterative_refinement_max_iter => 200, equilibrate_max_iter => 50` (last resort)
 
-Escalated attributes are STICKY — a deliberate, explicit contract (WR-01):
+Escalated attributes are STICKY — a deliberate, explicit contract:
 `set_optimizer_attribute` mutates the model PERMANENTLY and this function never restores
 pre-call values. Once a call escalates to rung `k`, every LATER `solve_with_retry!` call
 on the same model starts its rung 1 from the rung-`k` conditioning. For a build-once
@@ -86,11 +84,11 @@ lower rung touches (e.g. rung 4 restates `equilibrate_max_iter => 50` from rung 
 within one call no rung runs with a leftover from a lower rung it does not itself state.
 
 Rungs ≥ 2 set CLARABEL-SPECIFIC raw attributes (this wrapper never falls back to another
-solver, D-09). The wrapper itself is solver-generic API: on a non-Clarabel backend (e.g.
+solver). The wrapper itself is solver-generic API: on a non-Clarabel backend (e.g.
 HiGHS, Ipopt) that rejects an escalation attribute, the rejection is converted into the
 same loud 4-line diagnostic `error(...)` — naming the backend and the offending
-attribute — rather than propagating as a raw, undiagnosed unknown-option exception
-(WR-02). Attempt 1 applies no attributes, so any backend can use the single-attempt path.
+attribute — rather than propagating as a raw, undiagnosed unknown-option exception.
+Attempt 1 applies no attributes, so any backend can use the single-attempt path.
 
 If a retryable status is hit and attempts remain, `@warn`s with the attempt number and
 `raw_status(model)`, then escalates to the next rung. If the status is NOT in
@@ -98,17 +96,17 @@ If a retryable status is hit and attempts remain, `@warn`s with the attempt numb
 no escalation is ever applied to a real modeling failure. If the budget is exhausted, it
 raises a final loud `error(...)` reusing `assert_solved!`'s exact diagnostic format
 (`termination_status`, `primal_status`, `dual_status`, `raw_status`) plus the exhausted
-attempt count (D-10: raise loudly, never silent-corrupt, never silent-skip). The retry
+attempt count (raise loudly, never silent-corrupt, never silent-skip). The retry
 decision is LADDER-aware (`attempt < min(max_attempts, 4)`), so the final AVAILABLE rung
 always terminates in either `return assert_solved!(...)` or the loud `error(...)` —
 this function can NEVER fall off the end returning `nothing` after a failed solve
-(CR-01: that would let a caller silently read duals from an untrusted model).
+(that would let a caller silently read duals from an untrusted model).
 
 `allow_almost` is forwarded VERBATIM to [`assert_solved!`](@ref)'s own `allow_almost`
-keyword (plan: debug `ieee13-admm-numerical-error`). It defaults to `false` — the STRICT
+keyword (added to resolve an intermittent ADMM numerical error on the IEEE-13 fixture). It defaults to `false` — the STRICT
 gate — so every pre-existing call site that omits it (the planning master/subproblem, the
 MPC window, the stochastic welfare/OOS harnesses; none pass this keyword) behaves
-BYTE-IDENTICALLY to before this keyword existed. Pass `allow_almost = true` ONLY where
+BIT-FOR-BIT IDENTICALLY to before this keyword existed. Pass `allow_almost = true` ONLY where
 `assert_solved!` itself sanctions it: an intermediate re-solve whose DUALS are NOT read
 and whose primal only needs to be near-feasible (the mid-loop ADMM DSO-OPT subproblem —
 see `solve_dso!`). It is deliberately independent of `dual`: `dual = false` merely stops
@@ -126,7 +124,7 @@ When `attempts_out` is a `Ref{Int}`, it is set to the attempt number (1-indexed)
 which the solve succeeded — never touched on the exhaustion/non-retryable-error path,
 since that path never returns. Defaults to `nothing` (a pure no-op) so every existing
 call site that omits this keyword compiles and behaves IDENTICALLY to before this
-keyword existed (plan 12-01, plan-checker blocker fix revision 1).
+keyword existed.
 """
 function solve_with_retry!(
     model::Model;
@@ -135,11 +133,11 @@ function solve_with_retry!(
     allow_almost::Bool = false,
     attempts_out::Union{Nothing, Ref{Int}} = nothing,
 )
-    # CR-01 guard: max_attempts <= 0 would make the ladder slice empty, skip the loop
+    # Guard: max_attempts <= 0 would make the ladder slice empty, skip the loop
     # entirely, and silently return `nothing` without EVER calling optimize! — the exact
-    # silent-skip outcome D-10 forbids. Fail loudly before touching the model.
+    # silent-skip outcome that must never happen. Fail loudly before touching the model.
     max_attempts >= 1 || throw(ArgumentError("max_attempts must be ≥ 1, got $max_attempts"))
-    # WR-01: escalation is STICKY across calls (attributes persist on the model; see
+    # Escalation is STICKY across calls (attributes persist on the model; see
     # docstring contract). Every rung ≥ 2 is therefore a COMPLETE attribute set restating
     # everything any lower rung touches, so within one call no rung runs with an unstated
     # leftover from a lower rung.
@@ -158,7 +156,7 @@ function solve_with_retry!(
             "equilibrate_max_iter" => 50,                            # restated from rung 3 (complete set)
         ),                                                           # attempt 4: last resort
     ]
-    # CR-01: the retry decision below MUST be ladder-aware (`attempt < n_attempts`, the
+    # The retry decision below MUST be ladder-aware (`attempt < n_attempts`, the
     # number of rungs actually AVAILABLE), never budget-aware (`attempt < max_attempts`).
     # With a budget larger than the ladder (e.g. max_attempts = 5), a retryable failure on
     # the last rung would satisfy `4 < 5`, `continue`, end the loop, and fall off the end
@@ -168,9 +166,9 @@ function solve_with_retry!(
     n_attempts = min(max_attempts, length(ladder))
     for (attempt, settings) in enumerate(ladder[1:n_attempts])
         for (k, v) in settings
-            # WR-02: rungs ≥ 2 set Clarabel-specific raw attributes, but this wrapper is
+            # Rungs ≥ 2 set Clarabel-specific raw attributes, but this wrapper is
             # exported as solver-generic API. A foreign backend (HiGHS, Ipopt, ...) that
-            # rejects the attribute must produce the D-10 loud diagnostic — naming the
+            # rejects the attribute must produce the loud diagnostic — naming the
             # backend and the offending attribute — not a raw, undiagnosed unknown-option
             # exception mid-escalation. (Escalation only runs after attempt 1 solved and
             # failed retryably, so the model statuses below are queryable.)
@@ -181,7 +179,7 @@ function solve_with_retry!(
                     """
                     solve_with_retry!: escalation rung $attempt sets the Clarabel-specific attribute "$k",
                     but the backend ($(solver_name(model))) rejected it: $(sprint(showerror, attr_err))
-                    Rungs ≥ 2 REQUIRE a Clarabel backend (D-09: never a cross-solver fallback) — refusing to continue:
+                    Rungs ≥ 2 REQUIRE a Clarabel backend (never a cross-solver fallback) — refusing to continue:
                       termination_status : $(termination_status(model))
                       primal_status      : $(primal_status(model))
                       dual_status        : $(dual_status(model))
@@ -203,7 +201,7 @@ function solve_with_retry!(
                     raw_status(model)
                 continue
             end
-            # non-retryable status, OR budget exhausted: RAISE LOUDLY with full diagnostics (D-10)
+            # non-retryable status, OR budget exhausted: RAISE LOUDLY with full diagnostics
             throw(SolveFailedError(
                 """
                 solve_with_retry!: exhausted $attempt attempt(s) — refusing to trust results:

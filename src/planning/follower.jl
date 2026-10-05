@@ -1,36 +1,33 @@
 # src/planning/follower.jl
 #
-# SEAM: transmission-reinforcement follower LP with genuine Farkas certificates
-# (PLAN-04).
-# OWNER: plan 11-01.
+# SEAM: transmission-reinforcement follower LP with genuine Farkas certificates.
 #
 # A genuinely NEW, small, declarative transmission-corridor LP — distinct from the
-# reused operational `PlanningOracle` (subproblem.jl, Phase 10, unmodified). Built
+# reused operational `PlanningOracle` (subproblem.jl, unmodified). Built
 # EXACTLY ONCE via `build_follower`; `solve_follower!` re-solves it at a Benders
 # trial `z_trial` via `set_parameter_value.` only (never a rebuild), mirroring
 # `subproblem.jl`'s build-once/`Parameter` idiom.
 #
-# NO PENALIZED-SLACK SHORTCUT (CONTEXT.md locked decision, PLAN-04 success
-# criterion 1): an infeasible `z_trial` must return a GENUINE HiGHS Farkas/dual-ray
+# NO PENALIZED-SLACK SHORTCUT (a locked design requirement): an infeasible `z_trial` must return a GENUINE HiGHS Farkas/dual-ray
 # certificate (`dual_status(model) == MOI.INFEASIBILITY_CERTIFICATE`), never a
 # hand-rolled "always feasible" heuristic.
 #
-# CONTEXT.md's Amendment (revision 1) — scoped exclusion: `solve_follower!` calls
+# Scoped exclusion: `solve_follower!` calls
 # `optimize!` DIRECTLY, never the escalating retry wrapper (`src/planning/retry.jl`).
 # That wrapper's `RETRYABLE_STATUSES` deliberately never includes `MOI.INFEASIBLE`/
 # `MOI.INFEASIBILITY_CERTIFICATE` — retrying a genuine infeasibility would silently
-# discard the Farkas certificate this file's own success criterion requires. The
+# discard the Farkas certificate this file's own design requirement demands. The
 # certificate only exists on the UN-RETRIED, directly-observed infeasible solve.
 # The master's and the oracle's own cut-producing solves remain fully gated by the
 # retry wrapper's strict solved-and-feasible check (never `allow_almost`) — this
-# amendment narrows scope to the follower's infeasible branch only.
+# exclusion narrows scope to the follower's infeasible branch only.
 
 using JuMP
 
 """
     FollowerLP{Z,C}
 
-The built-ONCE transmission-reinforcement follower LP (PLAN-04): a minimal
+The built-ONCE transmission-reinforcement follower LP: a minimal
 PSR-note-faithful LP that invests in corridor capacity (`x_inv`) and delivers an
 operating flow (`x_op[t]`) equal to the Benders trial `z[t]` via a named coupling
 constraint, whose dual is the follower's own coupling-dual `π_s` (feasible branch)
@@ -39,10 +36,10 @@ or whose Farkas ray is the feasibility-cut coefficient (infeasible branch).
 # Fields
 
   - `model::Model` — the follower LP, built ONCE via `Model(select_optimizer(LP()))`
-    (INFRA-02 — never `Model(HiGHS.Optimizer)` directly); re-solved via
+    (never `Model(HiGHS.Optimizer)` directly); re-solved via
     `set_parameter_value.(f.z, ...)` + `optimize!` only, never rebuilt.
   - `x_inv::VariableRef` — the corridor-reinforcement investment (continuous, no
-    binary/integer variable anywhere in this file, per PVAL-04's continuous-only
+    binary/integer variable anywhere in this file, per the continuous-only
     scope).
   - `x_op::Vector{VariableRef}` — the length-T operating flow delivered by the
     corridor.
@@ -77,7 +74,7 @@ Build the transmission-reinforcement follower LP EXACTLY ONCE:
     `length(c_op) == T` — each throws `ArgumentError` naming the offending value,
     BEFORE any `@variable`/`@objective` assembly (mirrors `subproblem.jl`'s
     boundary-guard-before-objective-assembly discipline).
- 2. `model = Model(select_optimizer(LP()))` — INFRA-02, the sole solver-naming
+ 2. `model = Model(select_optimizer(LP()))`, the sole solver-naming
     seam; never `Model(HiGHS.Optimizer)` directly.
  3. `0 <= x_inv <= x_inv_max` (continuous investment) and `x_op[t] >= 0`
     (continuous operation) — no binary/integer variable anywhere.
@@ -86,7 +83,7 @@ Build the transmission-reinforcement follower LP EXACTLY ONCE:
  5. `invest_op[t]: x_op[t] <= corridor_cap * x_inv` — the corridor's own capacity
     constraint.
  6. `coupling[t]: x_op[t] == z[t]` — the named coupling constraint whose dual
-    (feasible branch) is the follower's own `π_s`, PLAN-04's literal scope.
+    (feasible branch) is the follower's own `π_s`.
  7. `Min c_inv*x_inv + Σ_t c_op[t]*x_op[t]` — the follower's own cost objective.
 
 Returns a [`FollowerLP`](@ref).
@@ -107,7 +104,7 @@ function build_follower(;
     length(c_op) == T ||
         throw(ArgumentError("c_op has length $(length(c_op)), expected T=$T"))
 
-    model = Model(select_optimizer(LP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
+    model = Model(select_optimizer(LP()))   # never Model(HiGHS.Optimizer) directly
 
     @variable(model, 0 <= x_inv <= x_inv_max)
     @variable(model, x_op[t = 1:T] >= 0)
@@ -138,8 +135,7 @@ Re-solve the built-ONCE [`FollowerLP`](@ref) `f` at the Benders trial `z_trial`
 NOT the escalating retry wrapper / strict solved-and-feasible gate (`src/planning/retry.jl`) —
 because `RETRYABLE_STATUSES` deliberately excludes `MOI.INFEASIBLE`/
 `MOI.INFEASIBILITY_CERTIFICATE`; retrying a genuine infeasibility would silently
-discard the Farkas certificate this function's infeasible branch must return
-(CONTEXT.md's Amendment (revision 1)).
+discard the Farkas certificate this function's infeasible branch must return.
 
 Two mutually exclusive, exhaustively-checked branches:
 
@@ -150,7 +146,7 @@ Two mutually exclusive, exhaustively-checked branches:
     GENUINE HiGHS Farkas/dual ray, never a penalized-slack heuristic): returns
     `(; feasible = false, v, u)` where `v = dual_objective_value(f.model)` and
     `u = dual.(f.coupling)` (the certificate vector, restricted to the coupling
-    rows) — both `isfinite` AND `v > 0`, ENFORCED in production (WR-03/IN-06): a
+    rows) — both `isfinite` AND `v > 0`, ENFORCED in production: a
     non-finite OR non-positive certificate raises loudly here instead of
     poisoning the master's persistent cut set downstream with a vacuous cut
     that would fail to exclude `z_k` (a feasibility cut
@@ -158,7 +154,7 @@ Two mutually exclusive, exhaustively-checked branches:
 
 Any OTHER outcome (neither a trusted solve nor a genuine certificate) raises
 loudly, naming `termination_status`/`dual_status` — this function refuses to
-silently default an ambiguous outcome to either feasible or infeasible (T-11-01).
+silently default an ambiguous outcome to either feasible or infeasible.
 
 Throws `ArgumentError` when `length(z_trial) != f.T` (a shape mismatch must fail
 loudly before `set_parameter_value.` — never silently truncate/pad).
@@ -170,7 +166,7 @@ function solve_follower!(f::FollowerLP, z_trial::AbstractVector{<:Real})
     set_parameter_value.(f.z, z_trial)   # mutate the Parameter, no rebuild
 
     # Deliberate departure from the escalating retry wrapper / strict solved gate
-    # (CONTEXT.md Amendment (revision 1)): the infeasible branch below must be
+    # The infeasible branch below must be
     # OBSERVED on the UN-RETRIED solve, never retried away, or the Farkas
     # certificate is unreachable. RETRYABLE_STATUSES excludes
     # INFEASIBLE/INFEASIBILITY_CERTIFICATE by design (retry.jl).
@@ -180,27 +176,27 @@ function solve_follower!(f::FollowerLP, z_trial::AbstractVector{<:Real})
         return (; feasible = true, cost = objective_value(f.model), π_s = dual.(f.coupling))
     elseif dual_status(f.model) == MOI.INFEASIBILITY_CERTIFICATE
         # GENUINE HiGHS Farkas/dual ray — never a penalized-slack "always feasible"
-        # shortcut (PLAN-04 success criterion 1, T-11-01).
+        # shortcut.
         #
-        # WR-05 SOLVER-VERSION NOTE: certificate availability with the factory's
-        # `presolve => "on"` (src/solver/factory.jl, INFRA-02) is a HiGHS
+        # SOLVER-VERSION NOTE: certificate availability with the factory's
+        # `presolve => "on"` (src/solver/factory.jl) is a HiGHS
         # implementation detail, not an API contract — historically HiGHS withholds
         # the dual ray unless simplex ran on the un-presolved LP. This branch is
         # VERIFIED to receive MOI.INFEASIBILITY_CERTIFICATE for both infeasible
         # regimes of this LP against the EXACT-pinned HiGHS 1.24.1
-        # (test/Project.toml `HiGHS = "= 1.24.1"`, WR-02). If a HiGHS upgrade ever
+        # (test/Project.toml `HiGHS = "= 1.24.1"`). If a HiGHS upgrade ever
         # lands here as the loud `else`-branch error instead, apply the documented
-        # fallback (11-RESEARCH.md Pitfall F1): set the follower-model-local
+        # fallback: set the follower-model-local
         # attribute `set_optimizer_attribute(model, "presolve", "off")` in
         # `build_follower` — cost-free at this LP's scale and safe (never touches
         # any other model's presolve).
         v = dual_objective_value(f.model)
         u = dual.(f.coupling)
-        # WR-03: ENFORCE the documented "both isfinite" certificate guarantee here,
+        # ENFORCE the documented "both isfinite" certificate guarantee here,
         # in production — the Benders loop feeds (v, u) straight into
         # add_feasibility_cut!, and a NaN/Inf certificate would otherwise only be
         # caught by the master's own guard with a less diagnosable error.
-        # IN-06 (plan 12-01): also require v > 0 — the feasibility cut
+        # Also require v > 0 — the feasibility cut
         # v + Σ u*(z - z_k) <= 0 only excludes the trial point z_k when v > 0 (at
         # z = z_k it reduces to v <= 0); a genuine certificate has v > 0 by
         # definition, and a degenerate v <= 0 certificate would append a vacuous

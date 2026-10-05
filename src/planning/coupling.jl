@@ -1,24 +1,20 @@
 # src/planning/coupling.jl
 #
-# SEAM: shared transmission-reinforcement corridor coupling N distributors
-# (NASH-01).
-# OWNER: plan 13-01.
+# SEAM: shared transmission-reinforcement corridor coupling N distributors.
 #
-# The ONE genuinely NEW shared JuMP model this phase introduces: a build-once
+# The ONE genuinely NEW shared JuMP model this file introduces: a build-once
 # transmission-reinforcement corridor whose delivered-flow rows are owned
 # individually by each of N distributors (`x_op[i, t]`, `coupling[i, t]:
 # x_op[i,t] == z[i,t]`, one row per distributor per hour, each independently
 # dualizable — directly generalizing `follower.jl`'s single-distributor
 # `coupling[t]` row to N rows), but whose CAPACITY is POOLED across all N
 # distributors via one shared `capacity[t]` row — this pooled row is the
-# single genuinely new coupling constraint NASH-01 exists for; without it
+# single genuinely new coupling constraint this file exists for; without it
 # there would be N independent corridors, not a shared one.
 #
-# DELIBERATE DEPARTURE FROM 13-RESEARCH.md's Pattern 1 sketch: CONTEXT.md
-# (this phase's locked, post-research user decision) OVERRIDES
-# 13-RESEARCH.md's tentative design of one shared scalar `x_inv` with an
-# `[ASSUMED]` equal-split `cost_share` vector (13-RESEARCH.md Assumptions Log
-# A1, Open Question 2). This file instead implements PER-DISTRIBUTOR
+# DELIBERATE DEPARTURE FROM THE SIMPLER SKETCH: a locked design decision OVERRIDES
+# the tentative design of one shared scalar `x_inv` with an
+# `[ASSUMED]` equal-split `cost_share` vector. This file instead implements PER-DISTRIBUTOR
 # INVESTMENT OWNERSHIP: each distributor `i` owns its own reinforcement
 # investment `x_inv[i]` and pays its own `c_inv[i]*x_inv[i]`; the effective
 # pooled corridor capacity is `corridor_cap * Σᵢ x_inv[i]`. This resolves the
@@ -26,10 +22,10 @@
 # leaves open, in favor of the game-theoretically cleaner model where each
 # distributor's best response prices only its own investment — the SHARED
 # object is the aggregate capacity, not the cost split. Document this
-# override here (not 13-RESEARCH.md's sketch) for thesis traceability.
+# override here (not the sketch) for thesis traceability.
 #
-# CUT-INVALIDATION MATH ARGUMENT (embedded verbatim from 13-RESEARCH.md
-# Pattern 1, since it justifies why nash.jl (plan 13-02) must give every
+# CUT-INVALIDATION MATH ARGUMENT (embedded from the design notes,
+# since it justifies why nash.jl must give every
 # atomic best-response a fresh Benders cut store):
 #
 # > Within ONE atomic best-response (fixed `z_{-i}`), the follower's value
@@ -37,7 +33,7 @@
 # > a parametric LP whose RHS is affine in `z_i` alone at fixed `z_{-i}`), so
 # > Benders cuts computed at successive trial points `z_i^(1), z_i^(2), ...`
 # > within that best-response remain valid supporting hyperplanes of
-# > `V_i(·; z_{-i})` for every `z_i` — this is exactly why Phase 11/12's
+# > `V_i(·; z_{-i})` for every `z_i` — this is exactly why the
 # > persistent (never-rebuilt) cut store across BENDERS ITERATIONS is
 # > correct, and it is unchanged here. However, `V_i(z_i; z_{-i})` is a
 # > genuinely DIFFERENT function of `z_i` for a different `z_{-i}` — the
@@ -50,16 +46,16 @@
 # > Retaining stale cuts across a `z_{-i}` change therefore risks a master
 # > that converges to a POINT THAT IS NOT THE TRUE BEST RESPONSE to the
 # > current `z_{-i}` — silently wrong, not just slow. This is why every
-# > atomic best-response in this phase starts its master's cut store EMPTY
-# > (CONTEXT.md's locked "correctness-first" decision): validity is certain
+# > atomic best-response starts its master's cut store EMPTY
+# > (the "correctness-first" design decision): validity is certain
 # > by construction, at the cost of re-deriving cuts on every best-response
-# > (instrumented in `NashTrace` as the rebuild-cost finding this phase is
-# > asked to surface, not silently retain). A future phase MAY revisit
+# > (instrumented in `NashTrace` as the rebuild-cost finding the
+# > design is meant to surface, not silently retain). A future extension MAY revisit
 # > cut-reuse if it can prove `V_i` is monotonically non-decreasing (or
 # > otherwise boundable) in `z_{-i}` on this specific corridor model — not
-# > attempted here (Deferred Ideas).
+# > attempted here.
 #
-# PVAL-04 continuous-only scope: no binary/integer variable exists anywhere
+# Continuous-only scope: no binary/integer variable exists anywhere
 # in this file — every `@variable` call below is continuous, regression-
 # tested directly in test/test_planning_coupling.jl.
 
@@ -69,22 +65,22 @@ using JuMP
     SharedTransmission{Z,C}
 
 The built-ONCE, N-distributor shared transmission-reinforcement corridor
-(NASH-01): `N` individually-dualizable per-distributor coupling rows
+`N` individually-dualizable per-distributor coupling rows
 (`coupling[i, t]: x_op[i,t] == z[i,t]`) plus ONE pooled capacity row
 (`capacity[t]: Σᵢ x_op[i,t] <= corridor_cap * Σᵢ x_inv[i]`) — the single
-genuinely new shared constraint this phase introduces. Generalizes
+genuinely new shared constraint this file introduces. Generalizes
 [`FollowerLP`](@ref) (`src/planning/follower.jl`) from 1 distributor to `N`,
-with per-distributor investment ownership (CONTEXT.md's locked decision —
-see this file's header for the departure from 13-RESEARCH.md's tentative
+with per-distributor investment ownership (a locked design decision —
+see this file's header for the departure from the tentative
 single-shared-`x_inv` sketch).
 
 # Fields
 
   - `model::Model` — built ONCE via `Model(select_optimizer(LP()))`
-    (INFRA-02 — never `Model(HiGHS.Optimizer)` directly); re-solved via
+    (never `Model(HiGHS.Optimizer)` directly); re-solved via
     `set_parameter_value.` only, never rebuilt.
   - `x_inv::Vector{VariableRef}` — length `N`, one continuous investment
-    variable PER DISTRIBUTOR (PVAL-04: no binary/integer anywhere).
+    variable PER DISTRIBUTOR (no binary/integer anywhere).
   - `x_op::Matrix{VariableRef}` — `N × T`, distributor `i`'s delivered flow
     at hour `t`.
   - `z::Z` — the `N × T` `Parameter`-typed coupling-flow array (the SAME
@@ -96,7 +92,7 @@ single-shared-`x_inv` sketch).
     constraint container, one independently-dualizable row per
     distributor per hour.
   - `N::Int` — number of distributors (`N >= 2`; a "shared" model with
-    `N=1` has nothing to share, NASH-01's own success criterion).
+    `N=1` has nothing to share).
   - `T::Int` — horizon.
   - `corridor_cap::Float64` — per-unit-investment pooled capacity
     coefficient.
@@ -104,7 +100,7 @@ single-shared-`x_inv` sketch).
     upper bound.
   - `c_inv::Vector{Float64}` — length `N`, per-distributor investment
     unit cost (each distributor pays `c_inv[i]*x_inv[i]` — the
-    per-distributor-ownership departure from RESEARCH.md's equal-split
+    per-distributor-ownership departure from the equal-split
     sketch).
   - `c_op::Vector{Vector{Float64}}` — length `N`, each length `T`,
     per-distributor operating cost.
@@ -137,17 +133,17 @@ Build the shared transmission-reinforcement corridor EXACTLY ONCE:
     `c_op[i]` with `length == T` — each throws a distinct `ArgumentError`
     naming the offending value/index, BEFORE any `@variable`/`@objective`
     assembly (mirrors `build_follower`'s discipline exactly).
- 2. `model = Model(select_optimizer(LP()))` — INFRA-02, the sole
+ 2. `model = Model(select_optimizer(LP()))`, the sole
     solver-naming seam; never `Model(HiGHS.Optimizer)` directly.
  3. `0 <= x_inv[i] <= x_inv_max[i]` (continuous, per distributor) and
-    `x_op[i,t] >= 0` — no binary/integer variable anywhere (PVAL-04).
+    `x_op[i,t] >= 0` — no binary/integer variable anywhere.
  4. `z[i,t] in Parameter(0.0)` — the SAME `Parameter` idiom as
     `follower.jl`/`subproblem.jl`, generalized to two indices.
  5. `coupling[i,t]: x_op[i,t] == z[i,t]` — `N*T` individually-dualizable
     rows, one per distributor per hour (generalizes `follower.jl`'s single
     `coupling[t]` row).
  6. `capacity[t]: Σᵢ x_op[i,t] <= corridor_cap * Σᵢ x_inv[i]` — the ONE
-    genuinely new pooled row NASH-01 exists for: every distributor's
+    genuinely new pooled row this file exists for: every distributor's
     delivered flow competes for one shared, aggregate corridor capacity.
  7. `Min Σᵢ c_inv[i]*x_inv[i] + Σᵢ Σₜ c_op[i][t]*x_op[i,t]`.
 
@@ -165,7 +161,7 @@ bound-pinning mechanism `activate_distributor!`/`write_back!` implement.
 Immediately after building, EVERY distributor's `x_inv[i]` is pinned at
 exactly `0.0` (`set_upper_bound(x_inv[i], 0.0)`; the lower bound is already
 `0.0` from the `@variable` declaration) — the build-time "nobody has taken a
-turn yet" default state. `nash.jl` (plan 13-02) unpins the sweep's first
+turn yet" default state. `nash.jl` unpins the sweep's first
 distributor via [`activate_distributor!`](@ref) before its first
 best-response.
 
@@ -206,14 +202,14 @@ function build_shared_transmission(;
             throw(ArgumentError("c_op[$i] has length $(length(c_op[i])), expected T=$T"))
     end
 
-    model = Model(select_optimizer(LP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
+    model = Model(select_optimizer(LP()))   # never Model(HiGHS.Optimizer) directly
 
     @variable(model, 0 <= x_inv[i = 1:N] <= x_inv_max[i])
     @variable(model, x_op[i = 1:N, t = 1:T] >= 0)
     @variable(model, z[i = 1:N, t = 1:T] in Parameter(0.0))   # SAME Parameter idiom as follower.jl
 
     @constraint(model, coupling[i = 1:N, t = 1:T], x_op[i, t] == z[i, t])
-    # The ONE genuinely new pooled row NASH-01 exists for:
+    # The ONE genuinely new pooled row this file exists for:
     @constraint(
         model,
         capacity[t = 1:T],
@@ -336,7 +332,7 @@ end
     DistributorView
 
 Thin per-distributor handle passed as `solve_stackelberg!`'s new `follower`
-argument (plan 13-02): pairs the one shared model with the specific
+argument: pairs the one shared model with the specific
 distributor `i` whose own row [`solve_follower!`](@ref)`(::DistributorView, ...)` should drive and read.
 
 # Fields
@@ -366,17 +362,16 @@ Three mutually exclusive, exhaustively-checked branches:
     deliberately NOT `objective_value(shared.model)` (which would include
     every OTHER, currently-fixed distributor's constant cost contribution
     and pollute the hand-checkable per-distributor cost/incumbent tracking
-    `solve_stackelberg!`'s CR-01 discipline depends on) — and `π_s = dual.(shared.coupling[i,:])` (length-T, restricted to distributor `i`'s
+    `solve_stackelberg!`'s discipline depends on) — and `π_s = dual.(shared.coupling[i,:])` (length-T, restricted to distributor `i`'s
     own rows).
   - INFEASIBLE WITH A CERTIFICATE (`dual_status(shared.model) == MOI.INFEASIBILITY_CERTIFICATE`,
     a GENUINE HiGHS Farkas/dual ray): returns `(; feasible = false, v, u)`
     where `v = dual_objective_value(shared.model)` and `u = dual.(shared.coupling[i,:])` (restricted to distributor `i`'s own rows
-    only) — both ENFORCED `isfinite` AND `v > 0` in production (WR-03/IN-06
-    parity with `follower.jl`): a non-finite or non-positive certificate
+    only) — both ENFORCED `isfinite` AND `v > 0` in production
+    (parity with `follower.jl`): a non-finite or non-positive certificate
     raises loudly here instead of poisoning a downstream Benders master's
     persistent cut set with a vacuous cut.
-  - INFEASIBLE WITHOUT A CERTIFICATE (Phase 31, BILEV-07; WR-01 of the Phase-31
-    code review): `termination_status(shared.model) == MOI.INFEASIBLE` but no Farkas
+  - INFEASIBLE WITHOUT A CERTIFICATE: `termination_status(shared.model) == MOI.INFEASIBLE` but no Farkas
     ray — HiGHS presolve's verdict, reached without the dual simplex. Measured on the
     integer-Nash fixture, every such case was a tolerance-borderline trial (a `1e-7`
     capacity violation, HiGHS's own feasibility tolerance). The model is first
@@ -392,7 +387,7 @@ Three mutually exclusive, exhaustively-checked branches:
     (no cut can be formed, so no recovery is possible there).
 
 Any OTHER outcome raises loudly, naming `termination_status`/
-`primal_status`/`dual_status`/`raw_status` (T-11-01 parity).
+`primal_status`/`dual_status`/`raw_status` (same as `follower.jl`).
 
 Throws `ArgumentError` when `length(z_trial) != view.shared.T`.
 """
@@ -417,7 +412,7 @@ function solve_follower!(view::DistributorView, z_trial::AbstractVector{<:Real})
     res === nothing || return res
 
     if termination_status(shared.model) == MOI.INFEASIBLE
-        # Phase 31 (BILEV-07) + WR-01 of the Phase-31 code review: INFEASIBLE without a
+        # INFEASIBLE without a
         # Farkas ray is HiGHS presolve's verdict (it never ran the dual simplex).
         # MEASURED 2026-10-02 on the integer-Nash fixture: every such case was a
         # tolerance-borderline trial (z = 0.6000001 against a capacity of 0.6, a 1e-7
@@ -457,7 +452,7 @@ function _classify_shared_solve(shared::SharedTransmission, i::Int)
         # feasible" shortcut (parity with follower.jl's own contract).
         v = dual_objective_value(shared.model)
         u = dual.(shared.coupling[i, :])
-        # WR-03/IN-06 parity: ENFORCE the "both isfinite, v > 0" certificate
+        # Parity with follower.jl: ENFORCE the "both isfinite, v > 0" certificate
         # guarantee here, in production.
         isfinite(v) && v > 0 && all(isfinite, u) || error(
             "solve_follower!(::DistributorView): HiGHS returned a non-finite or " *
@@ -469,8 +464,8 @@ function _classify_shared_solve(shared::SharedTransmission, i::Int)
     return nothing
 end
 
-# WR-01 (Phase 31 code review): one re-solve of `shared.model` with presolve OFF, the
-# documented HiGHS fallback for a missing dual ray (follower.jl, WR-05 note). The
+# One re-solve of `shared.model` with presolve OFF, the
+# documented HiGHS fallback for a missing dual ray (follower.jl note). The
 # attribute is set and restored on the INNER optimizer (`unsafe_backend`) on purpose:
 # JuMP's `set_attribute` marks the model dirty, which would make the results just read
 # unqueryable (`OptimizeNotCalled`) for callers that read `value(shared.x_inv[i])`

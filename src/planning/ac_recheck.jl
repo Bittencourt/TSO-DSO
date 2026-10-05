@@ -1,14 +1,13 @@
 # src/planning/ac_recheck.jl
 #
-# SEAM: incumbent-only AC physics re-check (BILEV-04b infra half, plan 30-01).
-# OWNER: plan 30-01.
+# SEAM: incumbent-only AC physics re-check (infra half).
 #
-# CONTEXT.md's SOCP-inexactness policy (BILEV-04b): when the Benders loop's incumbent
+# SOCP-inexactness policy: when the Benders loop's incumbent
 # turns out SOCP-inexact, a physical AC re-check via `ACPowerFlow(; limits = false)` is run
-# ONCE (never per-iteration — measured ~15s/solve vs ~30ms for the SOCP, 30-RESEARCH.md
-# Pattern 2) and its violation is REPORTED on the result — never thrown, never silently
+# ONCE (never per-iteration — measured ~15s/solve vs ~30ms for the SOCP)
+# and its violation is REPORTED on the result — never thrown, never silently
 # passed. This file provides that re-check, mirroring `src/experiments/mpc_loop.jl`'s
-# `_mpc_truth_import_acpf` (lines 1557+), the ONLY path confirmed this session (30-RESEARCH.md)
+# `_mpc_truth_import_acpf` (lines 1557+), the ONLY path confirmed
 # to accept Ipopt's genuine `LOCALLY_SOLVED` success: `solve_planning_oracle!`/
 # `solve_with_retry!` both reject `LOCALLY_SOLVED` unconditionally (no `allow_local`
 # passthrough), so this function bypasses BOTH entirely, calling
@@ -32,9 +31,9 @@ using JuMP
         -> (; ok::Bool, violations, p_import::Vector{Float64}, ac_welfare::Float64,
               raw_status)
 
-The incumbent-only AC physics re-check (BILEV-04b infra half).
+The incumbent-only AC physics re-check (infra half).
 
-**What this checks (Phase 30 code review, WR-09).** It does NOT replay the SOCP
+**What this checks.** It does NOT replay the SOCP
 incumbent's own dispatch or prices. It builds a FRESH
 [`PlanningOracle`](@ref)-shaped model via
 `build_planning_oracle(feeder, ACPowerFlow(; limits = false), aggregators; λ₀ = λ₀, T = T)`
@@ -44,7 +43,7 @@ the welfare dispatch under exact AC physics with the feeder's thermal/voltage li
 DROPPED. The question it answers is: "at the incumbent's coupling flow `z`, does the
 limits-free AC-optimal dispatch respect the ORIGINAL feeder's `smax`/`vmin`/`vmax`?"
 
-**What `ok` does and does not mean (Phase 30 code review iteration 2, WR-04).** The AC
+**What `ok` does and does not mean.** The AC
 model is never told about the limits and re-optimizes welfare, so it will cross any limit
 that binds whenever doing so raises welfare. `ok = false` is therefore a violation
 INDICATOR — "the limits-free AC optimum at `z` violates a limit; the incumbent is NOT
@@ -54,18 +53,18 @@ most often exactly where a limit binds. `ok = true` is evidence, not proof, of
 realizability (Ipopt certifies a LOCAL optimum of a nonconvex model). A genuine
 feasibility test would solve `ACPowerFlow(; limits = true)` at the pinned `z` (a
 `LOCALLY_SOLVED` there would show a limit-respecting AC dispatch exists). That is not done
-here: BILEV-04b (30-CONTEXT.md) fixes this diagnostic to `ACPowerFlow(; limits = false)`,
+here: the design fixes this diagnostic to `ACPowerFlow(; limits = false)`,
 and a limits-respecting feasibility solve is left as a possible extension.
 
 The solve calls `assert_solved!(oracle_ac.model; dual = false, allow_local = true)`
 DIRECTLY — NEVER `solve_planning_oracle!`/`solve_with_retry!` (both reject Ipopt's
-`LOCALLY_SOLVED` and have no `allow_local` passthrough, confirmed 30-RESEARCH.md). A
+`LOCALLY_SOLVED` and have no `allow_local` passthrough). A
 THROWN `SolveFailedError` from it (Ipopt non-convergence — a tooling failure, not a
 physical violation) is re-thrown with a clearer message naming `z_incumbent`.
 
 Violations are computed DIRECTLY from `oracle_ac.ctx.pf_vars` (`P`, `Q`, `l`, `v`)
 against the ORIGINAL `feeder`, over EVERY branch/hour and bus/hour pair, BEYOND a
-per-instance MEASURED tolerance (Phase 30 code review, CR-02): `δ` is the maximum primal
+per-instance MEASURED tolerance: `δ` is the maximum primal
 constraint violation of the solved AC model itself (`primal_feasibility_report`, read at
 runtime — measured 2.0e-9 to 9.9e-9 on `ieee13_modified()` T=1/T=4 pins, 2026-10-01), and
 a branch counts as overloaded iff `max(s_fwd, s_rev) > smax + 10δ`, a bus as out of band iff
@@ -79,20 +78,20 @@ Returns `(; ok, violations, p_import, ac_welfare, raw_status)`:
   - `ok = n_thermal_violations == 0 && n_voltage_violations == 0` — `true` ONLY when the
     limits-free AC optimum violates no limit beyond the measured tolerance (it is never
     hard-coded); `false` means "not certified by this check", not "physically
-    infeasible" (WR-04);
+    infeasible";
   - `violations::NamedTuple` — `(; n_thermal_violations::Int, max_overload_ratio::Float64,
     n_voltage_violations::Int, min_voltage::Float64, max_voltage::Float64,
     voltage_violated::Bool, ac_primal_violation::Float64, violation_tol::Float64)`.
     `max_overload_ratio` is `0.0` and `min_voltage`/`max_voltage` are `Inf`/`-Inf` only
     when the feeder has zero thermally-limited branches / zero non-root buses;
-  - `p_import` — the AC model's frontier import for EVERY hour `1:T` (WR-09; equal to
+  - `p_import` — the AC model's frontier import for EVERY hour `1:T` (equal to
     `z_incumbent` up to the pin's own residual);
   - `ac_welfare` — the AC model's optimal welfare `objective_value(oracle_ac.model)`, so a
     caller can compare it with the SOCP welfare at the same `z` (limits are dropped here,
     so this is a diagnostic, not a bound);
   - `raw_status` — Ipopt's own status string.
 
-Throws `ArgumentError` when `length(z_incumbent) != T` (WR-09), before any build.
+Throws `ArgumentError` when `length(z_incumbent) != T`, before any build.
 """
 function ac_recheck_incumbent(
     feeder,
@@ -124,14 +123,14 @@ function ac_recheck_incumbent(
             SolveFailedError(
                 "ac_recheck_incumbent: AC power-flow re-check FAILED to reach " *
                 "LOCALLY_SOLVED at the incumbent z=$(z_incumbent) — a genuine Ipopt " *
-                "non-convergence (tooling failure), never a reported physical violation " *
-                "(BILEV-04b). Original error: $(sprint(showerror, e))",
+                "non-convergence (tooling failure), never a reported physical violation. " *
+                "Original error: $(sprint(showerror, e))",
                 oracle_ac.model,
             ),
         )
     end
 
-    # CR-02: the per-instance measured noise floor — the solved AC model's own maximum
+    # The per-instance measured noise floor — the solved AC model's own maximum
     # primal constraint violation (an empty report means every constraint holds exactly).
     feas_report = primal_feasibility_report(oracle_ac.model)
     δ = isempty(feas_report) ? 0.0 : Float64(maximum(values(feas_report)))

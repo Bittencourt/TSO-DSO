@@ -1,10 +1,9 @@
 # src/planning/trace.jl
 #
-# SEAM: BendersTrace — the Benders convergence ledger (roadmap criterion 2 / PLAN-06
+# SEAM: BendersTrace — the Benders convergence ledger (roadmap criterion 2
 # deepening). A purpose-built per-iteration diagnostics struct for `solve_stackelberg!`,
 # explicitly NOT a copy of `src/admm/residuals.jl`'s `AdmmResiduals` dual-ascent
-# residual-based stopping criterion (12-PATTERNS.md Pitfall).
-# OWNER: plan 12-01.
+# residual-based stopping criterion.
 #
 # WHY THIS IS STRUCTURALLY DIFFERENT FROM AdmmResiduals: ADMM's ledger tests TWO
 # independent residual norms (a consensus-violation trace and its Boyd z-block
@@ -20,20 +19,19 @@
 # `Int`/`Float64`/`Symbol` — never a `VariableRef`/`Model` — so this file has zero
 # load-time solver dependency and loads as early as `admm/residuals.jl` does.
 #
-# WHY TWO RETRY-GATED SUBPROBLEM-STATUS COLUMNS BUT NO THIRD (plan-checker warning fix,
-# revision 1): `master_status_trace` and `oracle_status_trace` both exist because BOTH
+# WHY TWO RETRY-GATED SUBPROBLEM-STATUS COLUMNS BUT NO THIRD: `master_status_trace` and `oracle_status_trace` both exist because BOTH
 # the master (`solve_master!`) and the oracle (`solve_planning_oracle!`) are gated by
-# `solve_with_retry!` (D-08) — a genuine, queryable termination status worth recording
+# `solve_with_retry!` — a genuine, queryable termination status worth recording
 # every time either subproblem actually solves. The follower (`solve_follower!`) has NO
-# analogous column: per plan 11-01's contract (CONTEXT.md's Amendment, revision 1), the
+# analogous column: by the follower contract, the
 # follower is called DIRECTLY, never `solve_with_retry!`-wrapped — its infeasible branch
 # must be OBSERVED immediately (the genuine HiGHS Farkas certificate), not retried away.
 # `follower_res.feasible`/the Farkas guard already surfaces that outcome synchronously at
 # every iteration; there is no retry-gated termination status to parallel `master_status`/
 # `oracle_status` with, so no third per-row status column exists here.
 #
-# WHY `retry_count_trace` IS SOURCED FROM A GENUINE MECHANISM, NEVER A LOG-SCRAPE ESTIMATE
-# (plan-checker blocker fix, revision 1): `solve_with_retry!` (`src/planning/retry.jl`)
+# WHY `retry_count_trace` IS SOURCED FROM A GENUINE MECHANISM, NEVER A LOG-SCRAPE ESTIMATE:
+# `solve_with_retry!` (`src/planning/retry.jl`)
 # gains a non-breaking `attempts_out::Union{Nothing,Ref{Int}}` keyword that the wrapper
 # itself sets, on its OWN single successful-return path, to the attempt number (1-indexed)
 # the solve succeeded on. `benders.jl` reads that Ref back (`attempts_out[] - 1` = net
@@ -60,8 +58,8 @@ Fields:
     field, structurally distinct from `AdmmResiduals`'s primal/dual residual pair).
   - `cut_type_trace::Vector{Symbol}` — `:optimality` or `:feasibility`, the branch taken
     at this iteration (`push!` also accepts `:rejected`, the pre-iteration-2 label of a
-    `:reject` row; since the Phase 30 code review iteration 2, WR-02, a rejected trial's
-    cuts are appended and its row is `:optimality` with `policy_action = :rejected`).
+    `:reject` row; a rejected trial's
+    cuts are now appended and its row is `:optimality` with `policy_action = :rejected`).
   - `n_cuts_trace::Vector{Int}` — `length(master.cuts)` immediately after this
     iteration's cut was appended (cut-store growth instrumentation, read-only off
     `BendersMaster.cuts`, never a new mutator).
@@ -69,52 +67,51 @@ Fields:
     after this iteration's master solve (the master is retry-gated on EVERY iteration).
   - `oracle_status_trace::Vector{Symbol}` — `Symbol(termination_status(oracle.model))`
     on an optimality-branch row (the oracle solved), or the sentinel `:not_solved` on a
-    feasibility-branch row (the oracle is never reached, WR-01 ordering) — see the file
+    feasibility-branch row (the oracle is never reached) — see the file
     header for why there is no analogous follower column.
   - `retry_count_trace::Vector{Int}` — the NET retries (attempts beyond the first)
     actually consumed at this iteration by whichever retry-gated subproblem(s) ran
     (master-only on the feasibility branch; master + oracle on the optimality branch),
     sourced from `solve_with_retry!`'s own `attempts_out` mechanism (see file header) —
     never an assumed/log-scraped estimate. `0` is the normal, no-retry case.
-  - `nogood_count_trace::Vector{Int}` — Phase 24 (INT-02, D-16, plan 24-03), ADDITIVE:
-    the number of D-16 anti-stall no-good cuts fired at this iteration (`0` on every
+  - `nogood_count_trace::Vector{Int}` — ADDITIVE:
+    the number of anti-stall no-good cuts fired at this iteration (`0` on every
     continuous-path row and on every integer-path row where `apply_integer_cuts!`
     did NOT detect a stall — see `master_integer.jl`). `push!`'s `nogood_count` keyword
     defaults to `0` so every PRE-EXISTING `benders.jl` call site (which omits this
-    keyword entirely) keeps compiling and records `0` here, byte-identical to its
-    behavior before this field existed. Never invisible (D-16's "never invisible"
+    keyword entirely) keeps compiling and records `0` here, bit-for-bit identical to its
+    behavior before this field existed. Never invisible (the "never invisible"
     requirement) — surfaced via `trace_summary`'s `total_nogoods`.
   - `solve_time_trace::Vector{Float64}` — monotonic-clock (`time_ns`) wall seconds
     spent inside this iteration's solve calls ONLY (master + follower, plus the
     oracle on an optimality-branch row); cut appends, `checkpoint_iteration!`'s
-    JLD2/git-provenance I/O, and trace bookkeeping are EXCLUDED (WR-01, phase 12
-    review). Non-negative, finite.
-  - `socp_maxgap_trace::Vector{Float64}` — Phase 30 (BILEV-04b, plan 30-04), ADDITIVE:
+    JLD2/git-provenance I/O, and trace bookkeeping are EXCLUDED. Non-negative, finite.
+  - `socp_maxgap_trace::Vector{Float64}` — ADDITIVE:
     the measured SOC-relaxation cone residual `max |l·v − (P²+Q²)|` at this
     iteration's pinned `z_k`, recorded on EVERY row whose oracle solve ran the
     exactness gate — exact rows AND inexact (`:certified_incumbent`/`:rejected`) rows
-    (Phase 30 code review, WR-05; it used to be recorded only on the policy rows). `NaN`
+    (it used to be recorded only on the policy rows). `NaN`
     on rows where the gate does not apply: feasibility-cut rows (no trusted oracle
     solve) and every row of a DC/LinDistFlow run (no `:l` stash) — a legitimate
     sentinel, mirroring `gap_trace`'s own NaN convention, never guarded away. A finite
     entry is therefore NOT by itself a sign of inexactness — read `policy_action_trace`
     for the verdict.
-  - `policy_action_trace::Vector{Symbol}` — Phase 30 (BILEV-04b, plan 30-04),
+  - `policy_action_trace::Vector{Symbol}` —
     ADDITIVE: which `inexact_policy` branch (if any) fired at this iteration —
     `:certified_incumbent` (the oracle returned an explicit `:inexact` verdict under
     `inexact_policy = :certify_incumbent`; the relaxation's cuts were appended and the
     trial competed for the incumbent), `:rejected` (an `:inexact` verdict under
     `:reject`; the relaxation's cuts were appended but the trial was barred from UB and
-    the incumbent — WR-02, iteration 2), `:oracle_feasibility_cut` (an untrusted oracle
+    the incumbent), `:oracle_feasibility_cut` (an untrusted oracle
     solve whose status is in `ORACLE_INFEASIBLE_STATUSES` — INFEASIBLE,
     INFEASIBLE_OR_UNBOUNDED, LOCALLY_INFEASIBLE, ALMOST_INFEASIBLE — routed to the
-    feasibility-oracle-cut branch, BILEV-04a, with a separating cut),
-    `:oracle_feasibility_cut_weak` (the same, with a valid but weak cut — WR-06,
-    iteration 2), or the default `:none` (no policy branch fired — the ordinary
+    feasibility-oracle-cut branch, with a separating cut),
+    `:oracle_feasibility_cut_weak` (the same, with a valid but weak cut),
+    or the default `:none` (no policy branch fired — the ordinary
     success/follower-feasibility path). No validity-restriction guard beyond its
     `Symbol` type, mirroring `oracle_status_trace`'s own lenient treatment — this is
     a diagnostics column, not a correctness gate.
-  - `feas_cut_v_trace::Vector{Float64}` — Phase 30 code review iteration 2 (WR-06),
+  - `feas_cut_v_trace::Vector{Float64}` —
     ADDITIVE: the slack-minimization value `v` measured at `z_k` on every ORACLE
     feasibility-cut row (`:oracle_feasibility_cut` / `:oracle_feasibility_cut_weak`), so
     the near-boundary regime is measurable; `NaN` on every other row (including follower
@@ -192,10 +189,10 @@ skipped iteration, mirroring `AdmmResiduals`'s own `_assert_sequential` idiom.
 Guards (each a distinct `ArgumentError`, fired BEFORE any field is mutated):
 
   - `cut_type in (:optimality, :feasibility, :rejected)` — any other symbol is rejected.
-    `:rejected` (Phase 30, BILEV-04b, plan 30-04, ADDITIVE) was the row kind of
+    `:rejected` (ADDITIVE) was the row kind of
     `solve_stackelberg!`'s `inexact_policy = :reject` branch while a rejection appended no
-    cut; it stays accepted, but since the Phase 30 code review iteration 2 (WR-02)
-    `solve_stackelberg!` records rejected trials as `:optimality` rows with
+    cut; it stays accepted, but
+    `solve_stackelberg!` now records rejected trials as `:optimality` rows with
     `policy_action = :rejected`.
   - `isfinite(LB)` — `LB` is always a real LP objective value; unlike `UB`/`gap` it has
     no legitimate non-finite state.
@@ -204,29 +201,28 @@ Guards (each a distinct `ArgumentError`, fired BEFORE any field is mutated):
   - `retry_count >= 0` — a count of ACTUAL retries consumed this iteration (see
     `benders.jl`'s instrumentation for exactly how it is computed); `0` is the normal,
     no-retry case, not an edge case to special-case away.
-  - `nogood_count >= 0` (Phase 24, D-16, mirrors `retry_count`'s own guard) — the number
-    of D-16 anti-stall no-good cuts fired at this iteration.
+  - `nogood_count >= 0` (mirrors `retry_count`'s own guard) — the number
+    of anti-stall no-good cuts fired at this iteration.
 
 `UB`/`gap` are DELIBERATELY NOT guarded for finiteness: `UB = Inf` (before any
 optimality iteration) and `gap = NaN` (every feasibility-branch row) are legitimate
 sentinel values, not defects to reject. `oracle_status` needs no additional guard
 beyond its `Symbol` type — it is either the sentinel `:not_solved` (feasibility-branch
 default) or a genuine termination-status symbol (optimality branch), mirroring
-`master_status`'s own unvalidated-`Symbol` treatment. `policy_action` (Phase 30,
-BILEV-04b, plan 30-04, ADDITIVE) likewise carries NO validity-restriction guard — it
+`master_status`'s own unvalidated-`Symbol` treatment. `policy_action` (ADDITIVE) likewise carries NO validity-restriction guard — it
 mirrors `oracle_status`'s own lenient `Symbol` treatment, a diagnostics column, never a
 correctness gate.
 
-**`nogood_count` is ADDITIVE (Phase 24, plan 24-03): defaults to `0`.** Every
+**`nogood_count` is ADDITIVE: defaults to `0`.** Every
 PRE-EXISTING `benders.jl` call site omits this keyword entirely and keeps compiling,
-recording `0` here — byte-identical to its behavior before this keyword existed.
+recording `0` here — bit-for-bit identical to its behavior before this keyword existed.
 
-**`feas_cut_v` is ADDITIVE (Phase 30 code review iteration 2, WR-06): defaults to `NaN`.**
+**`feas_cut_v` is ADDITIVE: defaults to `NaN`.**
 
-**`socp_maxgap`/`policy_action` are ADDITIVE (Phase 30, BILEV-04b, plan 30-04): default
+**`socp_maxgap`/`policy_action` are ADDITIVE: default
 to `NaN`/`:none`.** Every PRE-EXISTING `benders.jl` call site (and every call site in
-this file's own pre-30-04 history) omits both keywords entirely and keeps compiling,
-recording the sentinel pair here — byte-identical to its behavior before these fields
+this file's own earlier history) omits both keywords entirely and keeps compiling,
+recording the sentinel pair here — bit-for-bit identical to its behavior before these fields
 existed.
 
 Returns `trace`.
@@ -306,17 +302,16 @@ n_inexact_iterations)`.
 On an empty trace, returns `iters = 0` and all others as `NaN`/`0` sentinels.
 Otherwise `final_LB`/`final_UB`/`final_gap` are the LAST recorded row's values,
 `max_cuts = maximum(trace.n_cuts_trace)`, `total_retries = sum(trace.retry_count_trace)`
-— the EMPIRICAL retry count (plan-checker blocker fix, revision 1): a plain,
+— the EMPIRICAL retry count: a plain,
 always-computed sum over the per-iteration column, never an aggregate log-scrape
-estimate — and `total_nogoods = sum(trace.nogood_count_trace)` (Phase 24, D-16,
-plan 24-03, ADDITIVE, mirrors `total_retries`'s own `sum(...)` pattern exactly):
-D-16's "never invisible" requirement for the count of anti-stall no-good cuts fired
+estimate — and `total_nogoods = sum(trace.nogood_count_trace)` (ADDITIVE,
+mirrors `total_retries`'s own `sum(...)` pattern exactly):
+the "never invisible" requirement for the count of anti-stall no-good cuts fired
 across the whole run. `m > 0` here is informational only — it never fails a run;
-`solve_stackelberg!` (plan 24-04) downgrades its own `converged_via` attribution to
-`:nogood_assisted` when `total_nogoods > 0`. `n_inexact_iterations` (Phase 30,
-BILEV-04b, plan 30-04, ADDITIVE) counts the rows whose `policy_action_trace` entry is
+`solve_stackelberg!` downgrades its own `converged_via` attribution to
+`:nogood_assisted` when `total_nogoods > 0`. `n_inexact_iterations` (ADDITIVE) counts the rows whose `policy_action_trace` entry is
 `:certified_incumbent` or `:rejected` — the iterations where the oracle's exactness gate
-returned an INEXACT verdict (Phase 30 code review, WR-05: it no longer relies on a NaN
+returned an INEXACT verdict (it no longer relies on a NaN
 sentinel in `socp_maxgap_trace`, which now carries the measured gap on exact rows too) —
 `0` on an empty trace and on every run where those branches never fired.
 """

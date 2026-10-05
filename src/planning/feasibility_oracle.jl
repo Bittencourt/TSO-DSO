@@ -1,16 +1,15 @@
 # src/planning/feasibility_oracle.jl
 #
-# SEAM: build-once slack-minimization feasibility oracle (BILEV-04a, plan 30-01).
-# OWNER: plan 30-01.
+# SEAM: build-once slack-minimization feasibility oracle.
 #
-# CONTEXT.md's explicit, locked decision (Phase 30): "No Farkas-ray extraction from solver
+# By an explicit, locked design decision: "No Farkas-ray extraction from solver
 # certificates." When a pinned `z_trial` makes the REAL `PlanningOracle` (subproblem.jl)
 # genuinely `MOI.INFEASIBLE` (voltage- or thermally-caused), this file builds a SECOND,
 # independent, built-ONCE oracle whose pin is RELAXED into an equality with free-sign slack:
 # `p_import[t] == z[t] + s_plus[t] - s_minus[t]`, minimizing `Σ_t (s_plus[t] + s_minus[t])`
 # (an L1 slack-min). The slack frees ONLY `p_import`, so this model is feasible iff SOME
 # `p_import` trajectory admits the network + device constraints — NOT unconditionally
-# (Phase 30 code review, WR-02): an import-independent voltage violation or unmeetable
+# an import-independent voltage violation or unmeetable
 # device minimums make it infeasible too, and `solve_stackelberg!` then reports both
 # errors. Its pin's dual is read EXACTLY like `PlanningOracle`'s own pin
 # dual, yielding a valid Benders feasibility-cut pair `(v, u)` in the SAME shape
@@ -22,7 +21,7 @@
 # `build_planning_oracle` (subproblem.jl) — the ONLY structural differences are (a) no `λ₀`
 # kwarg / no economic objective (this oracle has no welfare sense, only a feasibility
 # diagnostic), (b) the relaxed pin with free-sign slack variables, (c) the L1 slack-min
-# objective. Routes its solve through `solve_with_retry!` (D-08, the SOLE solve entry point)
+# objective. Routes its solve through `solve_with_retry!` (the SOLE solve entry point)
 # — never raw `optimize!`. A solve failure here is either numerical or the "no
 # `p_import` admits the network at all" case above.
 
@@ -31,7 +30,7 @@ using JuMP
 """
     FeasibilityOracle{Z,PC,PI,SP,SM,F}
 
-The built-ONCE slack-minimization feasibility oracle (BILEV-04a): mirrors
+The built-ONCE slack-minimization feasibility oracle: mirrors
 [`PlanningOracle`](@ref)'s field shape minus `agg_bus`/`λ₀` (this oracle has no economic
 objective), with the RELAXED pin's free-sign slack variables `s_plus`/`s_minus` added.
 
@@ -70,7 +69,7 @@ end
                              aggregators::AbstractVector{<:Aggregator};
                              T::Int) -> FeasibilityOracle
 
-Build the slack-minimization feasibility oracle EXACTLY ONCE (BILEV-04a), reusing
+Build the slack-minimization feasibility oracle EXACTLY ONCE, reusing
 [`build_planning_oracle`](@ref)'s EXACT structure (boundary guards, `Model(select_optimizer(
 problem_class(pf)))`, the two SOC→nonconvex-quad cross-solver bridges, `ModelContext`,
 `contribute!(pf, ctx, feeder; T)`, the free-sign frontier `p_import[t]`/`q_import[t]`, the
@@ -82,8 +81,8 @@ the balance closure, with THREE differences:
     `s_plus[t] >= 0`, `s_minus[t] >= 0`, `z[t] in Parameter(0.0)`,
     `pin[t]: p_import[t] == z[t] + s_plus[t] - s_minus[t]`;
  3. The objective is the L1 slack-min `Min Σ_t (s_plus[t] + s_minus[t])` — a genuinely
-    LINEAR term composing fine inside the SOCP-constrained model under Clarabel (confirmed,
-    RESEARCH.md Open Question 1 RESOLVED — no separate epigraph reformulation needed).
+    LINEAR term composing fine inside the SOCP-constrained model under Clarabel (confirmed;
+    no separate epigraph reformulation needed).
 
 Throws `ArgumentError` on an empty `aggregators` or an aggregator bus outside
 `1:length(feeder.buses)`, mirroring `build_planning_oracle`'s own boundary-guard discipline
@@ -155,7 +154,7 @@ function build_feasibility_oracle(
         register_constraint!(ctx, :balance_q, balance_q)
     end
 
-    # THE RELAXED SEAM (BILEV-04a): z as a genuine JuMP Parameter (the TRIAL pin, not a
+    # THE RELAXED SEAM: z as a genuine JuMP Parameter (the TRIAL pin, not a
     # welfare optimization variable), relaxed into an equality via free-sign slack.
     @variable(model, s_plus[t = 1:T] >= 0)
     @variable(model, s_minus[t = 1:T] >= 0)
@@ -174,10 +173,10 @@ end
 
 Re-solve the built-ONCE [`FeasibilityOracle`](@ref) `fo` at the coupling-flow trial
 `z_trial` (`set_parameter_value.` only, never a rebuild) via [`solve_with_retry!`](@ref)
-(D-08, the SOLE solve entry point). The slack frees only `p_import` (`s_plus`/`s_minus`
+(the SOLE solve entry point). The slack frees only `p_import` (`s_plus`/`s_minus`
 absorb any mismatch between `p_import` and `z_trial`), so this LP/SOCP is feasible iff SOME
 `p_import` trajectory admits the network + device constraints — feasible for every
-`z_trial` in that case, but NOT unconditionally (Phase 30 code review, WR-02): an
+`z_trial` in that case, but NOT unconditionally: an
 import-independent voltage violation or device minimums no import can meet make it
 infeasible too, and `solve_with_retry!` then throws. No exactness/battery-complementarity
 gate is applied (this is a diagnostic probe, not a cut-producing optimality subproblem).
@@ -192,15 +191,15 @@ Returns `(; cost, v, u, z_k)`:
   - `v` — set equal to `cost` (the SAME scalar `add_feasibility_cut!`'s `v_k` expects);
   - `u` — the length-T feasibility-cut gradient, `u = π` where `π = dual.(fo.pin)` — the
     RAW pin dual, UN-negated. **EMPIRICALLY VERIFIED SIGN** (not an assumed formula,
-    mirroring `solve_planning_oracle!`'s own D-06 precedent, and the OPPOSITE conclusion
+    mirroring `solve_planning_oracle!`'s own precedent, and the OPPOSITE conclusion
     from a naive copy of that precedent — see below): solved on `ieee13_modified()`
-    (T=1, the house_agg-style population from this plan's test fixtures) at the anchor
-    `z_k = 0.08` (measured THERMALLY infeasible on the real feeder, 30-RESEARCH.md's
+    (T=1, the house_agg-style population from the test fixtures) at the anchor
+    `z_k = 0.08` (measured THERMALLY infeasible on the real feeder;
     measured map: `MOI.INFEASIBLE` for `z >= 0.0686`), the raw pin dual was
     `π ≈ +0.99999999839` and `v_k = cost ≈ 0.01827` (a genuinely positive, nonzero slack).
     Plugging BOTH candidate signs into the cut inequality `v_k + u'(z - z_k) <= 0`
     (plain arithmetic, no JuMP) across the FULL measured feasible/infeasible map
-    (`z ∈ {0.0, 0.01, 0.02, 0.05, 0.0686, 0.08, 0.09}`, 30-RESEARCH.md's own table) showed:
+    (`z ∈ {0.0, 0.01, 0.02, 0.05, 0.0686, 0.08, 0.09}`) showed:
     `u = +π` HOLDS (`<= 0`, not excluded) at every KNOWN-FEASIBLE `z ∈ {0.0,...,0.05}` and
     is VIOLATED (`> 0`, excluded) at every KNOWN-INFEASIBLE `z ∈ {0.0686, 0.08, 0.09}` —
     the cut exactly reproduces the real thermal threshold. `u = -π` was checked and found
@@ -214,8 +213,7 @@ Returns `(; cost, v, u, z_k)`:
   - `z_k` — `copy(z_trial)`, the trial point this cut is anchored at (mirrors
     `add_feasibility_cut!`'s own `z_k` argument).
 
-`attempts_out` is forwarded unchanged to `solve_with_retry!` (Phase 30 code review
-iteration 2, IN-02; additive, `nothing` by default) so `solve_stackelberg!` can report this
+`attempts_out` is forwarded unchanged to `solve_with_retry!` (additive, `nothing` by default) so `solve_stackelberg!` can report this
 solve's genuine retries on its trace.
 """
 function solve_feasibility_oracle!(
@@ -229,8 +227,8 @@ function solve_feasibility_oracle!(
 
     set_parameter_value.(fo.z, z_trial)   # no rebuild
 
-    # D-08: solve_with_retry! is the SOLE solve entry point. Feasible iff some p_import
-    # admits the network (WR-02) — a failure here is numerical or that structural case.
+    # solve_with_retry! is the SOLE solve entry point. Feasible iff some p_import
+    # admits the network — a failure here is numerical or that structural case.
     solve_with_retry!(
         fo.model;
         max_attempts = max_attempts,
