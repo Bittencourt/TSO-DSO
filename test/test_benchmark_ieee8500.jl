@@ -99,4 +99,61 @@ end
     @test r2.admm_iters == 1
 end
 
+# ── Phase 35 plan 35-02 (appended 2026-10-04; the goldens above are untouched) ──────────────────
+# Flag parsing / row schema / typed-exception plumbing of the harness. EVERY subprocess redirects
+# its outputs with `--results-dir <mktempdir()>` so committed CSVs are never touched. Wall time is
+# never asserted. `--admm-atol 1e-30` asserts only the recorded `admm_atol_used` (the quick point may
+# end budget_exceeded before reaching the gate; the library-level CertificateError is covered by
+# test/test_admm_exactness_default.jl).
+
+"Run the harness as a subprocess; returns (success::Bool, stdout_stderr::String)."
+function run_harness(args::Vector{String}, dir::String)
+    out = IOBuffer()
+    cmd = `julia --project=$PROJECT_ROOT $SCRIPT $args --results-dir $dir`
+    proc = run(pipeline(ignorestatus(cmd); stdout = out, stderr = out))
+    return success(proc), String(take!(out))
+end
+
+@testset "phase 35-02 harness flags, schema, rejections" begin
+    # (a) --quick --admm-only: no centralized model, hybrid default, run label recorded
+    dir_a = mktempdir()
+    ok, _ = run_harness(["--quick", "--admm-only", "--run-label", "t35a"], dir_a)
+    @test ok
+    df = CSV.read(joinpath(dir_a, "density_sweep.csv"), DataFrame)
+    @test nrow(df) == 1
+    ra = only(eachrow(df))
+    @test ra.termination_status == "skipped_admm_only"
+    @test string(ra.admm_atol_used) == "hybrid"
+    @test string(ra.run_label) == "t35a"
+    @test ra.admm_status != "started"   # the started row was replaced on completion
+
+    # (b) explicit finite --admm-atol is recorded verbatim
+    dir_b = mktempdir()
+    ok, _ = run_harness(["--quick", "--admm-only", "--admm-atol", "1e-30"], dir_b)
+    @test ok
+    rb = only(eachrow(CSV.read(joinpath(dir_b, "density_sweep.csv"), DataFrame)))
+    @test parse(Float64, string(rb.admm_atol_used)) == 1.0e-30
+
+    # (c) non-finite --admm-atol rejected (T-35-04), before any solve
+    for bad in ("Inf", "nan")
+        dir_c = mktempdir()
+        ok, _ = run_harness(["--quick", "--admm-only", "--admm-atol", bad], dir_c)
+        @test !ok
+        @test !isfile(joinpath(dir_c, "density_sweep.csv"))
+    end
+
+    # (d) bypass requires --admm-only
+    dir_d = mktempdir()
+    ok, _ = run_harness(["--quick", "--admm-diagnostic-bypass"], dir_d)
+    @test !ok
+    @test !isfile(joinpath(dir_d, "density_sweep.csv"))
+
+    # (e) --help exits 0 and writes nothing
+    dir_e = mktempdir()
+    ok, msg = run_harness(["--help"], dir_e)
+    @test ok
+    @test occursin("--admm-diagnostic-bypass", msg)
+    @test isempty(readdir(dir_e))
+end
+
 println("test_benchmark_ieee8500.jl: ALL TESTS PASSED")
