@@ -136,7 +136,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [ ] **HYG-02**: The inert SEAM-01 stubs (`operational_oracle`'s ignored `objective_hook` and
   `horizon_state`, and the superseded `z` path) and the reactive-mode Bool/Symbol back-compat shim
   are removed.
-- [ ] **HYG-03**: The export list is trimmed and generic names (`OFF`, `LIVE`, `CERTIFIED`, `LP`,
+- [x] **HYG-03**: The export list is trimmed and generic names (`OFF`, `LIVE`, `CERTIFIED`, `LP`,
   `QP`, `SOCP`, `NLP`, `MILP`, `record!`, `converged`) are namespaced or unexported. The top-module
   docstring describes the module as it is now.
 - [ ] **HYG-04**: A JET check runs in CI over the package, in report mode with an agreed baseline.
@@ -201,7 +201,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | ARCH-10 | Phase 35 | Complete |
 | HYG-01 | Phase 36 | Pending |
 | HYG-02 | Phase 36 | Pending |
-| HYG-03 | Phase 36 | Pending |
+| HYG-03 | Phase 36 | Complete |
 | HYG-07 | Phase 36 | Pending |
 | HYG-04 | Phase 37 | Pending |
 | HYG-05 | Phase 37 | Pending |
