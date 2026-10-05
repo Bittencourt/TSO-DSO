@@ -4,9 +4,9 @@
 # a closed form. The FOC of `max a·p − (b/2)p² − λ₀·p` is `a − b·p − λ₀ = 0`, so the
 # served power is `p* = (a − λ₀)/b`; loss-less ⇒ the frontier import equals the load and
 # the nodal-balance dual at the load bus (the DADP) equals the frontier price λ₀. Both
-# expectations are DERIVED from the fixture coefficients in the test body (crit 3, WR-04),
-# never a hard-coded magic number, and the dual sign is asserted positive (Pitfall 2).
-@testitem "linear: 2-bus loss-less first price DADP=λ₀ and p*=(a−λ₀)/b (crit 3, price)" tags =
+# expectations are DERIVED from the fixture coefficients in the test body,
+# never a hard-coded magic number, and the dual sign is asserted positive.
+@testitem "linear: 2-bus loss-less first price DADP=λ₀ and p*=(a−λ₀)/b (price)" tags =
     [:linear] begin
     using TSODSO, JuMP
 
@@ -40,11 +40,11 @@
     @test value(p[1]) ≈ expected_p atol = 1e-6                     # p* = (a−λ₀)/b
 end
 
-# Seam: models/linear_solve.jl — CR-01. A device whose `bus` exceeds the feeder is
+# Seam: models/linear_solve.jl — out-of-range bus. A device whose `bus` exceeds the feeder is
 # silently dropped from the nodal balance (its `−p` injection never gets pinned to zero),
 # manufacturing welfare from power sourced nowhere. Assembly must reject it LOUDLY. This
 # also re-confirms a fully valid solve still recovers welfare 2.0 / DADP 2.0.
-@testitem "linear: out-of-range device bus throws; valid solve still gives welfare/DADP (CR-01)" tags =
+@testitem "linear: out-of-range device bus throws; valid solve still gives welfare/DADP" tags =
     [:linear] begin
     using TSODSO, JuMP
 
@@ -72,10 +72,10 @@ end
     @test dadp[1] ≈ 2.0 atol = 1e-6                    # DADP == λ₀
 end
 
-# Seam: models/linear_solve.jl — WR-01. An empty `devices` vector previously produced a
+# Seam: models/linear_solve.jl — empty devices. An empty `devices` vector previously produced a
 # bare `KeyError` on `ctx.objective` (and a `BoundsError` on `devices[1]`). It must
 # reject with a clear message instead.
-@testitem "linear: empty devices vector throws a clear error (WR-01)" tags = [:linear] begin
+@testitem "linear: empty devices vector throws a clear error" tags = [:linear] begin
     using TSODSO, JuMP
 
     buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
@@ -91,10 +91,10 @@ end
     )
 end
 
-# Seam: models/linear_solve.jl — WR-02. A λ₀ whose length disagrees with T must fail at
+# Seam: models/linear_solve.jl — λ₀ length. A λ₀ whose length disagrees with T must fail at
 # the boundary with a clear message, not silently work only at T=1 (scalar) or BoundsError
 # deep in objective assembly (short vector).
-@testitem "linear: λ₀ length mismatch against T throws (WR-02)" tags = [:linear] begin
+@testitem "linear: λ₀ length mismatch against T throws" tags = [:linear] begin
     using TSODSO, JuMP
 
     buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]

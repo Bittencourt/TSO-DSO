@@ -1,5 +1,5 @@
-# Seam: powerflow/MeshedFlow.jl (MESH-02). Driven green by plan 23-02.
-@testitem "MeshedFlow solves the loop fixture via solve_welfare on both impedance profiles (MESH-02)" setup =
+# Seam: powerflow/MeshedFlow.jl.
+@testitem "MeshedFlow solves the loop fixture via solve_welfare on both impedance profiles" setup =
     [MeshFixtures] begin
     using TSODSO, Test
 
@@ -10,7 +10,7 @@
 
         # solve_welfare returns without throwing (assert_solved! + assert_socp_exact! both
         # pass on BOTH impedance profiles -- the existing cone-tightness gate cannot tell
-        # them apart, per RESEARCH.md's Pitfall 14; that is exactly what plan 23-03's NEW
+        # them apart; that is exactly what the
         # angle-recoverability certificate is for).
         ctx, w, dadp =
             solve_welfare(feeder, MeshedFlow(), aggs; T = MeshFixtures.T_MESH, λ₀ = λ₀)
@@ -20,8 +20,8 @@
         @test isfinite(w)
     end
 
-    # D-09-adjacent defense-in-depth check, at the FLOW level (mirrors plan 23-01's D-09
-    # regression at the DATA level): the SAME 4-branch diamond edge list that MeshedFeeder
+    # Defense-in-depth check at the FLOW level (mirrors the regression at the
+    # DATA level in test_mesh_feeder.jl): the SAME 4-branch diamond edge list that MeshedFeeder
     # accepts (nB=4 > N-1=3, a genuine loop) still makes `Feeder` throw `ArgumentError` --
     # the radial gate is untouched, even after MeshedFlow has been exercised through
     # solve_welfare above.

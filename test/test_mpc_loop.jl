@@ -1,27 +1,23 @@
 # test/test_mpc_loop.jl
 #
-# Seam: MPC-03/MPC-04 — end-to-end regression for run_mpc(scenario), the receding-horizon
-# closed-loop orchestrator (plan 21-05). Every item name contains "mpc_loop", tagged
+# Seam: end-to-end regression for run_mpc(scenario), the receding-horizon
+# closed-loop orchestrator. Every item name contains "mpc_loop", tagged
 # [:mpc_loop], setup = [MPCFixtures]. Covers: (1) the happy-path CI fixture never
 # escalating, a populated trace, and a finite regret; (2) the forced-inexact high-PV fixture
-# genuinely tripping the inline cone check and escalating through Phase-20's ladder WITHOUT
-# throwing (D-04); (3) s.mpc_step genuinely striding the resolve cadence — a measured
-# behavioral difference, never a silently-inert kwarg (D-03, checker revision 1).
-#
-# Per this project's mandatory testing constraint, this file's bodies were each verified as
-# standalone plain Test.jl scripts under --project=. before being committed here — TestItemRunner
-# discovery/execution is deferred to the phase-closing plan 21-06.
+# genuinely tripping the inline cone check and escalating through the escalation ladder WITHOUT
+# throwing; (3) s.mpc_step genuinely striding the resolve cadence — a measured
+# behavioral difference, never a silently-inert kwarg.
 
-@testitem "mpc_loop: end-to-end closed loop on the happy-path CI fixture — trace populated, regret finite, never escalates (MPC-03)" tags =
+@testitem "mpc_loop: end-to-end closed loop on the happy-path CI fixture — trace populated, regret finite, never escalates" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
     # SCENARIO_VALID_FEEDERS only covers :ieee13/:ieee123 — MPCFixtures' own 2-bus
     # fixture is not addressable via Scenario. The default :ieee13/:default population at a
     # short T (T=9, the smallest value at which materialize.jl's :default population's
-    # Deferrable device remains constructible — see mpc_loop.jl's own header deviation note)
+    # Deferrable device remains constructible — see mpc_loop.jl's own header note)
     # and mpc_H=3 genuinely reproduces a comparably small, fast CI-scale closed loop, so this
-    # item drives run_mpc directly (the plan's preferred path) rather than duplicating the
+    # item drives run_mpc directly rather than duplicating the
     # loop mechanics by hand.
     s = Scenario(;
         name = "mpc_loop_happy",
@@ -39,7 +35,7 @@
     @test all(isfinite, r.day_ahead_dadp)
     @test length(r.trace.dadp_trace) == r.steps
 
-    # Phase 27 FIX-10 zero-forecast-error byte-identity invariant (permanent regression): no
+    # Zero-forecast-error bit-for-bit identity invariant (permanent regression): no
     # clip ever engages (the window's own PV-limit constraint already bounds the solved p_ch
     # by the UNPERTURBED Ppv[abs_hour]), and the truth power-flow re-solve reproduces the
     # window's own solved dispatch exactly, since the fixed injections match what the window
@@ -47,30 +43,27 @@
     @test isapprox(r.realized_welfare, r.forecast_settled_welfare; atol = 1e-6)
 end
 
-@testitem "mpc_loop: forced-PV-shortfall genuinely diverges realized_welfare from forecast_settled_welfare (FIX-10)" tags =
+@testitem "mpc_loop: forced-PV-shortfall genuinely diverges realized_welfare from forecast_settled_welfare" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
-    # Phase 27 FIX-10: a nonzero mpc_forecast_error draw whose pv_factor inflates the
+    # A nonzero mpc_forecast_error draw whose pv_factor inflates the
     # window's belief of available PV forces the solved p_ch above the device's TRUE
     # (unperturbed) Ppv[abs_hour] on at least one applied hour — the A6 clip then genuinely
     # changes both the settled welfare and the AC-settled frontier import versus the
     # forecast-consistent number.
     #
-    # seed=1 (RESTORED — plan 27-09, USER DECISION 2026-09-29, reverting plan 27-08's own
-    # seed-5 DEVIATION): plans 27-03/27-07 originally chose seed 5 to dodge a SOCP-relaxation
-    # exactness knife-edge in the (now-superseded) SOCP truth-resolve; plan 27-08's AC
-    # power-flow settlement removed that knife-edge but then MEASURED that the DEFAULT
-    # seed=1 threw a GENUINE Ipopt `LOCALLY_INFEASIBLE` at abs_hour=5 under the LIMITED AC
-    # settlement — confirmed (by re-solving with :smax/:smax_rev REMOVED) that a feasible AC
-    # point EXISTS but exceeds the head branch's `smax=0.0686` rating at both ends. Plan
-    # 27-09's "physics only" decision decouples the truth plant's AC-SOLVABILITY requirement
-    # from the feeder's OPERATING limits: `_mpc_truth_import_acpf` no longer writes
+    # seed=1: the default seed. (A different seed was once used to dodge a SOCP-relaxation
+    # exactness knife-edge in a since-superseded SOCP truth-resolve.) The AC power-flow
+    # settlement originally threw a GENUINE Ipopt `LOCALLY_INFEASIBLE` at abs_hour=5 under a
+    # LIMITED AC settlement — confirmed (by re-solving with :smax/:smax_rev REMOVED) that a
+    # feasible AC point EXISTS but exceeds the head branch's `smax=0.0686` rating at both
+    # ends. The "physics only" settlement decouples the truth plant's AC-SOLVABILITY
+    # requirement from the feeder's OPERATING limits: `_mpc_truth_import_acpf` does not write
     # :smax/:smax_rev at all (`ACPowerFlow(; limits = false)`), so this SAME seed=1 dispatch
-    # now reaches `LOCALLY_SOLVED` cleanly — the genuine overload plan 27-08 found is
-    # reported via `r.settlement_violations`, never thrown. See the new `@testitem` below
-    # ("AC truth settlement REPORTS a genuine thermal overload, never throws (FIX-10, plan
-    # 27-09)") for the citable regression.
+    # reaches `LOCALLY_SOLVED` cleanly — the genuine overload is reported via
+    # `r.settlement_violations`, never thrown. See the `@testitem` "AC truth settlement
+    # REPORTS a genuine thermal overload, never throws" below for the citable regression.
     s = Scenario(;
         name = "mpc_loop_fix10_shortfall",
         feeder = :ieee13,
@@ -87,18 +80,17 @@ end
     @test !isapprox(r.realized_welfare, r.forecast_settled_welfare; atol = 1e-9)
 end
 
-@testitem "mpc_loop: true-state propagation THROWS (never clamps) on a genuine out-of-band SOC/temperature event (FIX-10)" tags =
+@testitem "mpc_loop: true-state propagation THROWS (never clamps) on a genuine out-of-band SOC/temperature event" tags =
     [:mpc_loop] begin
     using TSODSO, Test
 
-    # Phase 27 FIX-10's throw-not-clamp guard (`_mpc_assert_true_state_inband`, internal,
+    # The throw-not-clamp guard (`_mpc_assert_true_state_inband`, internal,
     # unexported) is exercised DIRECTLY here — mirroring this file's OWN established pattern
     # of testing `run_mpc`'s internal MPC helpers directly (`_mpc_certify_and_price`,
     # `_mpc_escalation_aggregators`, `_mpc_assert_state_keying`, above) rather than only
-    # end-to-end. Claude's discretion (27-03-PLAN.md's "at Claude's discretion" fixture
-    # latitude): an EXTENSIVE empirical search (>150 (T, mpc_H, seed, mpc_forecast_error)
+    # end-to-end. An EXTENSIVE empirical search (>150 (T, mpc_H, seed, mpc_forecast_error)
     # combinations, T up to 24, mpc_forecast_error up to 0.99, mpc_terminal_soc both
-    # settings — see 27-03-SUMMARY.md) found NO (seed, mpc_forecast_error) combination on
+    # settings) found NO (seed, mpc_forecast_error) combination on
     # the default :ieee13/:default population that trips a genuine SOC/temperature
     # out-of-band event through `run_mpc` BEFORE also tripping the (separate, pre-existing)
     # SOCP exactness gate — the battery's own headroom (`Emax=2·load_scale`,
@@ -139,18 +131,18 @@ end
     )
 end
 
-@testitem "mpc_loop: A6 truth-settlement clips BOTH p_ch and pv_used to true PV, never crediting phantom PV energy (CR-02, 27-REVIEW.md)" tags =
+@testitem "mpc_loop: A6 truth-settlement clips BOTH p_ch and pv_used to true PV, never crediting phantom PV energy" tags =
     [:mpc_loop] begin
     using TSODSO, Test
 
-    # CR-02 regression (27-REVIEW.md, 2026-09-29): the PRE-FIX truth-settlement block
+    # Regression: the PRE-FIX truth-settlement block
     # clipped only `p_ch` to the device's TRUE (unperturbed) PV availability, leaving
     # `pv_used` — which feeds `net_p`/`p_inject` and hence the AC truth-settled frontier
     # import — UNCLIPPED. Under a forecast draw with `fe.pv_factor > 1` (the window
     # believes MORE PV is available than truly exists — CONFIRMED to occur at several
     # hours of `test_mpc_loop.jl`'s own existing "forced-PV-shortfall" fixture,
     # `seed=1, mpc_forecast_error=0.3`: `draw_forecast_error(1, t, 0.3).pv_factor` measured
-    # 2026-09-29 as 1.25/1.06/1.13/1.04/1.28/1.06 at t=1/2/3/6/7/9 respectively), this let
+    # as 1.25/1.06/1.13/1.04/1.28/1.06 at t=1/2/3/6/7/9 respectively), this let
     # `realized_welfare`/`p_import_true` be credited with PV energy the true plant cannot
     # physically supply. Fixed by extracting the clip into `_mpc_pvbattery_true_clip`
     # (internal, unexported) and applying it to BOTH quantities identically — exercised
@@ -159,11 +151,11 @@ end
     # above) with HAND-derived numbers, so the fix is checked exactly rather than only
     # qualitatively.
     #
-    # PRE-FIX vs POST-FIX (confirmed BY HAND, 2026-09-29, via `git stash` on
+    # PRE-FIX vs POST-FIX (confirmed BY HAND by temporarily reverting the fix in
     # `src/experiments/mpc_loop.jl` and re-running this exact body): pre-fix,
     # `_mpc_pvbattery_true_clip` does not exist (`UndefVarError`) — the semantic
     # equivalent, "PRE-FIX" `pv_used_true = pv_used` (no clip at all), is checked
-    # explicitly below and FAILS the CR-02 invariant at this fixture's numbers.
+    # explicitly below and FAILS the invariant at this fixture's numbers.
     @test isdefined(TSODSO, :_mpc_pvbattery_true_clip)
 
     # A fe.pv_factor > 1 device-level scenario: the window solved p_ch=3.0, pv_used=4.0
@@ -174,7 +166,7 @@ end
     p_ch, pv_used, Ppv_true, p_dch = 3.0, 4.0, 2.0, 0.5
     clip = TSODSO._mpc_pvbattery_true_clip(p_ch, pv_used, Ppv_true)
 
-    # The core CR-02 invariant (exactly what 27-REVIEW.md's Fix section asks for): NEITHER
+    # The core invariant: NEITHER
     # realized quantity may exceed the TRUE PV availability, checked for BOTH p_ch_true
     # AND pv_used_true individually (the PRE-FIX bug was pv_used_true alone violating
     # this).
@@ -225,7 +217,7 @@ end
 
     # The realized NET PV contribution to settlement (`net_p`'s `pv_used_true - p_ch_true +
     # p_dch` term, mirroring run_mpc's own accumulation) under the FIX vs. the PRE-FIX
-    # (unclipped pv_used) formula — demonstrating the actual bug CR-02 describes: the
+    # (unclipped pv_used) formula — demonstrating the actual bug: the
     # device UTILITY term (above) was already correct pre-fix (it never reads pv_used
     # directly), but the NET INJECTION accounting was not.
     net_p_prefix_bug = pv_used - clip.p_ch_true + p_dch          # PRE-FIX: pv_used UNCLIPPED
@@ -235,21 +227,21 @@ end
     @test net_p_postfix < net_p_prefix_bug
     # The PRE-FIX value physically implies MORE net PV injection than the true plant's
     # entire PV availability could support net of charging -- exactly the "phantom PV
-    # energy" CR-02 describes. The POST-FIX value never can (by construction, since
+    # energy". The POST-FIX value never can (by construction, since
     # pv_used_true <= Ppv_true always).
     @test net_p_prefix_bug > Ppv_true - clip.p_ch_true + p_dch
     @test net_p_postfix == Ppv_true - clip.p_ch_true + p_dch
 end
 
-@testitem "mpc_loop: A6 clip invariant holds at run_mpc's REAL PVBattery call site, not just the isolated helper (WR-04, 27-REVIEW.md iteration 2)" tags =
+@testitem "mpc_loop: A6 clip invariant holds at run_mpc's REAL PVBattery call site, not just the isolated helper" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
-    # WR-04 (27-REVIEW.md, 2026-09-29, iteration 2): the CR-02 unit test above pins
+    # The unit test above pins
     # `_mpc_pvbattery_true_clip`'s own correctness in isolation but never drives `run_mpc`'s
     # actual PVBattery truth-settlement call site (`src/experiments/mpc_loop.jl`, the
     # `net_p += pv_used_true - p_ch_true + p_dch1` line) — so a future edit silently
-    # reverting THAT line back to the pre-CR-02 unclipped `pv_used1` would leave every
+    # reverting THAT line back to the pre-fix unclipped `pv_used1` would leave every
     # then-committed test green. This item closes that gap by driving `run_mpc`'s PUBLIC
     # path directly and reading `r.pvbattery_truth_trace` — a per-applied-hour,
     # per-PVBattery-device diagnostic added SOLELY for this test (`net_p_delta` is captured
@@ -257,16 +249,16 @@ end
     # re-derivation) — so the assertion below is provably sensitive to a revert of that
     # exact line.
     #
-    # SAME "forced-PV-shortfall" fixture as the existing FIX-10/CR-02 items above
+    # SAME "forced-PV-shortfall" fixture as the existing items above
     # (seed=1, mpc_forecast_error=0.3): `draw_forecast_error(1, t, 0.3).pv_factor` was
-    # measured (see the CR-02 item's own comment) to exceed 1 at several resolves
+    # measured (see the item above) to exceed 1 at several resolves
     # (t=1/2/3/6/7/9), i.e. the window's belief genuinely overstates true PV availability —
-    # the exact regime CR-02/WR-04 concern.
+    # the exact regime of concern.
     #
-    # CONFIRMED BY HAND (2026-09-29): reverting ONLY the accumulation line
+    # CONFIRMED BY HAND: reverting ONLY the accumulation line
     # `net_p += pv_used_true - p_ch_true + p_dch1` back to
     # `net_p += pv_used1 - p_ch_true + p_dch1` (a temporary in-place edit, restored
-    # immediately after, never committed — no `git stash` used) makes the invariant
+    # immediately after, never committed) makes the invariant
     # assertion below FAIL (`pv_used_actually_summed > Ppv_true` at abs_hour=3, bus=2,
     # `0.003531... > 0.003126...`); against the current (fixed) source, it passes.
     s = Scenario(;
@@ -290,7 +282,7 @@ end
         # clip helper's own output, so this is genuinely a check of the CALL SITE, not the
         # helper in isolation.
         pv_used_actually_summed = entry.net_p_delta + entry.p_ch_true - entry.p_dch
-        # The exact CR-02/WR-04 invariant: the self-consumption/export value actually fed
+        # The exact invariant: the self-consumption/export value actually fed
         # into the settled net PV-battery injection can never exceed the device's TRUE
         # (unperturbed) PV availability this hour — this is what FAILS if the real call site
         # reverts to the unclipped `pv_used1` under `fe.pv_factor > 1`.
@@ -304,14 +296,14 @@ end
     end
 end
 
-@testitem "mpc_loop: forced-inexact window escalates through Phase-20's ladder WITHOUT throwing (MPC-04, D-04)" tags =
+@testitem "mpc_loop: forced-inexact window escalates through the escalation ladder WITHOUT throwing" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: build_mpc_window, solve_mpc_window!
     using TSODSO, Test
     using JuMP: set_parameter_value, set_objective_coefficient
 
     # Drive the SAME per-resolve certificate/escalation logic run_mpc's own loop calls
-    # (_mpc_certify_and_price, factored out in plan 21-05 Task 2 for exactly this purpose)
+    # (_mpc_certify_and_price, factored out for exactly this purpose)
     # directly against MPCFixtures' high-PV fixture at the MEASURED pv_scale — this
     # fixture's custom 3-bus feeder is not addressable via Scenario, so run_mpc itself cannot
     # be called here; build_mpc_window/solve_mpc_window! are driven by hand, mirroring
@@ -324,9 +316,9 @@ end
     H = MPCFixtures.H
     λ₀ = MPCFixtures.mpc_lambda0()
 
-    # PM-01 (phase 26-18): the DEFAULT ConvexBranchFlow() is now EXACT on this fixture (it is
+    # The DEFAULT ConvexBranchFlow() is EXACT on this fixture (it is
     # Gan-Low's modified OPF, a restriction on the UPPER voltage band — see
-    # ConvexBranchFlow.jl's PM-01 docstring addendum), so it no longer forces the inexactness
+    # the ConvexBranchFlow.jl docstring), so it no longer forces the inexactness
     # this escalation-ladder test needs; thesis_literal=true (the OLD, lower-band-restricting
     # copy) is re-forced here as the explicit opt-in that reproduces the original trigger.
     o = build_mpc_window(
@@ -352,7 +344,7 @@ end
     end
     solve_mpc_window!(o)
 
-    # CR-01: _mpc_certify_and_price now REQUIRES the resolve's measured state + forecast
+    # _mpc_certify_and_price REQUIRES the resolve's measured state + forecast
     # draw so an escalation prices the SAME window the failed resolve solved. At t = 1 with
     # the initial device state and no forecast error, these are the devices' own literals.
     ms = Dict{Tuple{Int, Symbol}, Float64}()
@@ -362,25 +354,25 @@ end
     end
     fe = (; pv_factor = 1.0, demand_factor = 1.0)
 
-    # Pre-condition check (reusing Task 2's own verify-script methodology, not just trusting
+    # Pre-condition check (measured directly, not just trusting
     # the constant): the measured pv_scale genuinely trips the inline check on THIS solve.
     result =
         TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
 
     @test result.cone_maxratio > 1     # the pre-condition: this call's inline check DID fail
-    # escalation resolved it — WR-04: the restricted-tier rescue carries its OWN symbol,
+    # escalation resolved it — the restricted-tier rescue carries its OWN symbol,
     # DISTINCT from a first-tier :certified_convex_dual certification.
     @test result.cert_status in (:certified_convex_dual_restricted, :local_ac_dual)
     @test length(result.price_vec) == H
     @test all(isfinite, result.price_vec)
-    # The call above completing (no exception propagated to this point) IS the D-04 assertion
+    # The call above completing (no exception propagated to this point) IS the never-throw assertion
     # — a bare @test wrapping a call that throws would itself error out of this test item, so
     # simply reaching this line already demonstrates the never-throw contract; the explicit
     # `@test true` below documents that intent for a human reader.
     @test true   # never threw
 end
 
-@testitem "mpc_loop: escalation at t > 1 prices the CURRENT window — same t-sliced profiles, same measured state, never hours 1..H (CR-01)" tags =
+@testitem "mpc_loop: escalation at t > 1 prices the CURRENT window — same t-sliced profiles, same measured state, never hours 1..H" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: build_mpc_window, solve_mpc_window!
     using TSODSO, Test
@@ -403,7 +395,7 @@ end
 
     # 1. UNIT regression on the window-slicing helper itself: the escalation aggregators must
     # carry the t-sliced, forecast-perturbed profiles and the measured state as their plain
-    # struct fields (which the fresh escalation model's Parameters DEFAULT to, plan 21-01).
+    # struct fields (which the fresh escalation model's Parameters DEFAULT to).
     fe2 = (; pv_factor = 1.1, demand_factor = 0.9)
     ms2 = Dict{Tuple{Int, Symbol}, Float64}()
     for agg in aggs
@@ -417,7 +409,7 @@ end
     @test batt.soc0 == 0.001                                            # measured, not d.soc0
     therm0 = only(d for d in aggs[1].devices if d isa Thermostatic)
     therm = only(d for d in esc[1].devices if d isa Thermostatic)
-    @test therm.Tout == Float64[therm0.Tout[3 + τ - 1] for τ in 1:H]    # t-sliced, UNPERTURBED (D-05)
+    @test therm.Tout == Float64[therm0.Tout[3 + τ - 1] for τ in 1:H]    # t-sliced, UNPERTURBED
     @test therm.Tin0 == 24.0                                            # measured, not d.Tin0
     @test esc[1].Pdc == Float64[aggs[1].Pdc[3 + τ - 1] * 0.9 for τ in 1:H]
 
@@ -427,7 +419,7 @@ end
     # solved hours 1..H with construction-time ICs, so with this FLAT λ₀ its published price
     # was IDENTICAL at every t; the fixed escalation prices the t-window, so the two prices
     # MUST differ (the PV slices differ across the two windows).
-    # PM-01 (phase 26-18): re-forced with thesis_literal=true — see the identical rationale
+    # Re-forced with thesis_literal=true — see the identical rationale
     # comment in the testitem above (the default is now exact on this fixture).
     o = build_mpc_window(
         feeder,
@@ -473,10 +465,10 @@ end
         @test all(isfinite, r.price_vec)
         prices[t] = r.price_vec
     end
-    @test prices[1] != prices[4]   # the CR-01 regression: t-window-distinct escalation price
+    @test prices[1] != prices[4]   # regression: t-window-distinct escalation price
 end
 
-@testitem "mpc_loop: (bus, kind) state-keying invariant is asserted LOUDLY — duplicate buses / two same-kind stateful devices per bus throw (WR-05)" tags =
+@testitem "mpc_loop: (bus, kind) state-keying invariant is asserted LOUDLY — duplicate buses / two same-kind stateful devices per bus throw" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
@@ -514,7 +506,7 @@ end
     @test_throws ArgumentError TSODSO._mpc_assert_state_keying(two_soc)
 end
 
-@testitem "mpc_loop: ladder terminal failure publishes :cert_failed with the reference fallback price — NEVER throws (CR-02, D-04, WR-04)" tags =
+@testitem "mpc_loop: ladder terminal failure publishes :cert_failed with the reference fallback price — NEVER throws" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: MpcTrace, any_cert_failed, build_mpc_window, record!, solve_mpc_window!
     using TSODSO, Test
@@ -542,7 +534,7 @@ end
     end
     fe = (; pv_factor = 1.0, demand_factor = 1.0)
 
-    # PM-01 (phase 26-18): re-forced with thesis_literal=true — see the identical rationale
+    # Re-forced with thesis_literal=true — see the identical rationale
     # comment in the first escalation-ladder testitem above (the default is now exact on this
     # fixture, so the terminal :cert_failed tier's own pre-condition needs the explicit opt-in).
     o = build_mpc_window(
@@ -572,7 +564,7 @@ end
     fallback_ref = Float64[2.0 + 0.1 * t for t in eachindex(λ₀)]   # distinguishable slice
 
     # BOTH tiers fail → the terminal :cert_failed with the fallback_price window slice —
-    # reaching this line at all (no exception propagated) IS the D-04 assertion.
+    # reaching this line at all (no exception propagated) IS the never-throw assertion.
     result = TSODSO._mpc_certify_and_price(
         feeder,
         aggs,
@@ -590,7 +582,7 @@ end
     @test result.price_vec == fallback_ref[2:(2 + H - 1)]   # the t-sliced reference policy
 
     # The terminal failure must SURFACE in the ledger: any_cert_failed is no longer
-    # structurally vacuous (WR-04).
+    # structurally vacuous.
     trace = MpcTrace()
     record!(trace, 1, result.price_vec[1], 4.0, result.cert_status)
     @test any_cert_failed(trace)
@@ -611,7 +603,7 @@ end
     @test length(result_t3.price_vec) == H
     @test all(isfinite, result_t3.price_vec)
 
-    # ARCH-09: the tier catches admit ONLY SolveFailedError / CertificateError. Programming
+    # The tier catches admit ONLY SolveFailedError / CertificateError. Programming
     # errors injected through either seam propagate; typed failures are ledgered as before.
     # (try/catch wrapped in functions: @testitem top-level scope trap.)
     function _call(; kw...)
@@ -656,24 +648,22 @@ end
     end
 end
 
-@testitem "mpc_loop: mpc_step genuinely strides the resolve cadence — NOT a silently-inert kwarg (D-03, checker revision 1)" tags =
+@testitem "mpc_loop: mpc_step genuinely strides the resolve cadence — NOT a silently-inert kwarg" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
-    # seed=1 (RESTORED — plan 27-09, USER DECISION 2026-09-29, reverting plan 27-08's own
-    # seed-5 DEVIATION). History: plan 27-07 originally chose seed 5 here because the
-    # DEFAULT `seed=1` tripped the (now-superseded) SOCP truth-resolve's `assert_socp_exact!`
-    # gate — a structural SOCP relaxation inexactness under compounding forecast-error-driven
-    # state drift, head branch loading measured ≈98% of its `smax=0.0686` thermal limit. Plan
-    # 27-08's AC power-flow settlement removed that SOCP knife-edge but then MEASURED that
-    # `seed=1, mpc_step=2` threw a GENUINE Ipopt `LOCALLY_INFEASIBLE` at abs_hour=4 under the
-    # LIMITED AC settlement (confirmed by re-solving with :smax/:smax_rev REMOVED: a feasible
-    # AC point exists but exceeds the head branch's thermal rating). Plan 27-09's "physics
-    # only" decision decouples the truth plant's AC-SOLVABILITY requirement from the feeder's
-    # OPERATING limits: `_mpc_truth_import_acpf` no longer writes :smax/:smax_rev at all
-    # (`ACPowerFlow(; limits = false)`), so this SAME seed=1 dispatch now reaches
+    # seed=1: the default seed. (A different seed was once used because the DEFAULT `seed=1`
+    # tripped a since-superseded SOCP truth-resolve's `assert_socp_exact!` gate — a
+    # structural SOCP relaxation inexactness under compounding forecast-error-driven state
+    # drift, head branch loading measured ≈98% of its `smax=0.0686` thermal limit.) A
+    # LIMITED AC power-flow settlement then threw a GENUINE Ipopt `LOCALLY_INFEASIBLE` for
+    # `seed=1, mpc_step=2` at abs_hour=4 (confirmed by re-solving with :smax/:smax_rev
+    # REMOVED: a feasible AC point exists but exceeds the head branch's thermal rating). The
+    # "physics only" settlement decouples the truth plant's AC-SOLVABILITY requirement from
+    # the feeder's OPERATING limits: `_mpc_truth_import_acpf` does not write :smax/:smax_rev
+    # at all (`ACPowerFlow(; limits = false)`), so this SAME seed=1 dispatch reaches
     # `LOCALLY_SOLVED` cleanly — the genuine overload is reported via
-    # `r.settlement_violations`, never thrown (see the new `@testitem` below).
+    # `r.settlement_violations`, never thrown (see the `@testitem` below).
     base = (;
         name = "mpc_loop_stride",
         feeder = :ieee13,
@@ -695,14 +685,14 @@ end
     s_bad = Scenario(; base..., strategy = MPC(; mpc_base..., H = 3, step = 5))
     @test_throws ArgumentError run_mpc(s_bad)
 
-    # WR-02: with stateful devices (every :default population), mpc_step == mpc_H would
+    # With stateful devices (every :default population), mpc_step == mpc_H would
     # apply the window's dynamics-UNCOVERED H-th control (the recursions cover τ ≤ H−1),
     # which can drive the propagated measured state out of bounds and crash the NEXT
     # resolve — rejected loudly up front: mpc_step must be ≤ mpc_H − 1.
     s_free_lunch = Scenario(; base..., strategy = MPC(; mpc_base..., H = 3, step = 3))
     @test_throws ArgumentError run_mpc(s_free_lunch)
 
-    # WR-07: the window cannot exceed the day-ahead horizon — a Scenario-level
+    # The window cannot exceed the day-ahead horizon — a Scenario-level
     # misconfiguration must throw HERE, not as a cryptic device-level "profile too short"
     # deep inside build_mpc_window (or a silent zero-resolve run).
     s_long_window = Scenario(; base..., strategy = MPC(; mpc_base..., H = 12))   # T = 9 < mpc_H = 12
@@ -710,7 +700,7 @@ end
 
     @info "mpc_loop mpc_step stride measured difference" r_step1.realized_welfare r_step2.realized_welfare r_step1.regret r_step2.regret r_step1.trace.dadp_trace r_step2.trace.dadp_trace
 
-    # LOAD-BEARING assertion (D-03, checker revision 1): mpc_step must produce a genuinely
+    # LOAD-BEARING assertion: mpc_step must produce a genuinely
     # different closed-loop trajectory, not merely a different `steps` bookkeeping value.
     # Measured directly (never assumed): at mpc_forecast_error=0.05 on this fixture, the two
     # runs' realized_welfare AND dadp_trace both differ (see @info above for the measured
@@ -719,25 +709,23 @@ end
     @test r_step1.trace.dadp_trace != r_step2.trace.dadp_trace
 end
 
-@testitem "mpc_loop: AC truth settlement REPORTS a genuine thermal overload, never throws (FIX-10, plan 27-09)" tags =
+@testitem "mpc_loop: AC truth settlement REPORTS a genuine thermal overload, never throws" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO, Test
 
-    # Plan 27-08's own escalated finding (see the forced-PV-shortfall item above and
-    # 27-08-SUMMARY.md "Findings"): the DEFAULT `seed=1` on the forced-PV-shortfall fixture
+    # The DEFAULT `seed=1` on the forced-PV-shortfall fixture (see the item above)
     # (T=9, mpc_H=3, mpc_forecast_error=0.3) drives the realized/clipped dispatch at
     # abs_hour=5 into a point that GENUINELY exceeds the head branch's `smax=0.0686` thermal
-    # rating once served by the TRUE (unrelaxed) AC equality. Under plan 27-08's LIMITED AC
-    # settlement, Ipopt correctly reported `LOCALLY_INFEASIBLE` there and
-    # `_mpc_truth_import_acpf` threw. Plan 27-09 (USER DECISION 2026-09-29) decouples the
-    # truth plant's AC-SOLVABILITY requirement from the feeder's OPERATING limits
-    # (`ACPowerFlow(; limits = false)`): the SAME seed=1 dispatch now reaches
-    # `LOCALLY_SOLVED` cleanly (confirming plan 27-08's own diagnosis — it was the
+    # rating once served by the TRUE (unrelaxed) AC equality. Under a LIMITED AC settlement,
+    # Ipopt correctly reported `LOCALLY_INFEASIBLE` there and `_mpc_truth_import_acpf` threw.
+    # The "physics only" settlement decouples the truth plant's AC-SOLVABILITY requirement
+    # from the feeder's OPERATING limits (`ACPowerFlow(; limits = false)`): the SAME seed=1
+    # dispatch reaches `LOCALLY_SOLVED` cleanly (confirming the diagnosis — it was the
     # `:smax` constraint refusing it, not a genuine AC non-solvability), and the overload is
     # surfaced as a `settlement_violations` diagnostic instead of a thrown exception. This is
     # a REAL fixture, not a synthetic stand-in: it doubles as the citable regression for "the
     # settlement never refuses on a limit violation" AND documents the genuine head-branch
-    # overload the OLD SOCP relaxation was silently absorbing (27-07/27-08's own finding).
+    # overload the OLD SOCP relaxation was silently absorbing.
     s = Scenario(;
         name = "mpc_loop_fix10_shortfall",
         feeder = :ieee13,
@@ -746,7 +734,7 @@ end
         seed = 1,
     )
 
-    r = run_mpc(s)   # NEVER throws under plan 27-09's physics-only settlement
+    r = run_mpc(s)   # NEVER throws under the physics-only settlement
     @test isfinite(r.realized_welfare)
     @test length(r.settlement_violations) == r.steps
 

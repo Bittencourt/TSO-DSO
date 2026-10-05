@@ -1,4 +1,4 @@
-# Seam: typed ModelContext fill by the six formulations + trait agreement (ARCH-07).
+# Seam: typed ModelContext fill by the six formulations + trait agreement.
 
 @testitem "model context: ctx.pf records the real formulation for all six" tags = [:context] begin
     using TSODSO, JuMP
@@ -81,7 +81,7 @@ end
     @test !(isempty(ctx.objective.terms) && iszero(ctx.objective.aff))
 end
 
-@testitem "model context: trait/pf_vars consistency guard and DC stash reset (WR-01)" tags = [:context] begin
+@testitem "model context: trait/pf_vars consistency guard and DC stash reset" tags = [:context] begin
     using TSODSO, JuMP
 
     feeder = TSODSO.Feeder(
@@ -124,7 +124,7 @@ end
     @test dc_resets() == (true, true)
 end
 
-@testitem "model context: _require_T rejects non-positive T (IN-03)" tags = [:context] begin
+@testitem "model context: _require_T rejects non-positive T" tags = [:context] begin
     using TSODSO, JuMP
     ctx = TSODSO.ModelContext(Model())
     @test_throws ArgumentError TSODSO._require_T(ctx)
@@ -134,7 +134,7 @@ end
     @test TSODSO._require_T(ctx) == 3
 end
 
-@testitem "welfare_accounting: refuses a ctx with no aggregator contributions (WR-03)" tags = [:context] begin
+@testitem "welfare_accounting: refuses a ctx with no aggregator contributions" tags = [:context] begin
     using TSODSO, JuMP
     ctx = TSODSO.ModelContext(Model())
     ctx.meta[:agg_net] = Any[]

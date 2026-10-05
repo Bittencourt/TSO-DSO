@@ -1,11 +1,11 @@
 # test/test_mpc_trace.jl
 #
-# Seam: src/models/mpc_trace.jl (MPC-03). Permanent @testitem coverage for MpcTrace, the
+# Seam: src/models/mpc_trace.jl. Permanent @testitem coverage for MpcTrace, the
 # JuMP-free rolling-horizon price-consistency ledger (mirrors AdmmResiduals's own record!/
 # converged @testitem coverage, test_admm_dualresid.jl). Every item name contains "mpc_trace"
 # so `occursin("mpc_trace", ti.name)` selects the whole file, tagged `tags = [:mpc_trace]`.
 
-@testitem "mpc_trace: empty ledger predicates and construction (MPC-03)" tags = [:mpc_trace] begin
+@testitem "mpc_trace: empty ledger predicates and construction" tags = [:mpc_trace] begin
     using TSODSO
     using TSODSO: MpcTrace, any_cert_failed, max_jump, mean_jump
 
@@ -42,7 +42,7 @@ end
     @test t.dadp_trace == [5.0]
 end
 
-@testitem "mpc_trace: jump/cumulative-deviation/cert-status derived correctly across N steps (MPC-03 price-consistency metrics)" tags =
+@testitem "mpc_trace: jump/cumulative-deviation/cert-status derived correctly across N steps" tags =
     [:mpc_trace] begin
     using TSODSO
     using TSODSO: MpcTrace, any_cert_failed, max_jump, mean_jump, record!

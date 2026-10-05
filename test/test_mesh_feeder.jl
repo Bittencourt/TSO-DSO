@@ -1,5 +1,5 @@
-# Seam: data/mesh_topology.jl + data/MeshedFeeder.jl (MESH-01). Driven green by plan 23-01.
-@testitem "mesh_topology: assert_connected accepts a cyclic feeder; MeshedFeeder mirrors Feeder's shape (MESH-01/D-09)" begin
+# Seam: data/mesh_topology.jl + data/MeshedFeeder.jl.
+@testitem "mesh_topology: assert_connected accepts a cyclic feeder; MeshedFeeder mirrors Feeder's shape" begin
     using TSODSO
 
     # Valid tree (for the checks assert_connected shares with assert_radial):
@@ -12,7 +12,7 @@
 
     # NEW cyclic-accept case: a 3-bus triangle, nB = 3 > N - 1 = 2 -- this is
     # exactly the topology `assert_radial` rejects on the edge-count check
-    # alone, but `assert_connected` MUST accept it (MESH-01, no tree
+    # alone, but `assert_connected` MUST accept it (no tree
     # requirement).
     cyc_buses = [
         TSODSO.Bus(1, 0.95, 1.05, true),
@@ -43,11 +43,11 @@
     @test_throws ArgumentError TSODSO.assert_connected(tworoot_buses, ok_branches, 1)
 
     # (3) Root index / is_root flag DISAGREE: exactly one root bus, connected,
-    #     but the `root` argument points at the non-flagged bus (WR-01).
+    #     but the `root` argument points at the non-flagged bus.
     mismatch_buses = [TSODSO.Bus(1, 0.95, 1.05, true), TSODSO.Bus(2, 0.95, 1.05, false)]
     @test_throws ArgumentError TSODSO.assert_connected(mismatch_buses, ok_branches, 2)
 
-    # (4) Positional convention violated (WR-03): connected + one root, but the
+    # (4) Positional convention violated: connected + one root, but the
     #     bus ids do not equal their 1-based positions.
     mislabeled_buses = [TSODSO.Bus(2, 0.95, 1.05, true), TSODSO.Bus(3, 0.95, 1.05, false)]
     @test_throws ArgumentError TSODSO.assert_connected(mislabeled_buses, ok_branches, 1)
@@ -59,7 +59,7 @@
     # (6) Root out of range.
     @test_throws ArgumentError TSODSO.assert_connected(cyc_buses, cyc_branches, 9)
 
-    # D-09 regression: the IDENTICAL 3-branch triangle edge list makes
+    # Regression: the IDENTICAL 3-branch triangle edge list makes
     # `Feeder` throw `ArgumentError` (the radial gate was never weakened)
     # while `MeshedFeeder` succeeds on the same input.
     @test_throws ArgumentError TSODSO.Feeder(cyc_buses, cyc_branches, 1)
@@ -67,7 +67,7 @@
 
     # Duck-typing check: MeshedFeeder exposes the exact same field shape
     # Feeder does, so solve_welfare's duck-typed feeder access works
-    # unmodified (RESEARCH Assumption A4).
+    # unmodified.
     @test hasproperty(mf, :buses) && hasproperty(mf, :branches) && hasproperty(mf, :root)
     @test mf.root == 1
     @test length(mf.buses) == 3

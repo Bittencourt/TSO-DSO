@@ -1,5 +1,5 @@
-# Seam: models/mesh_angle_certificate.jl (MESH-03). Driven green by plan 23-03.
-@testitem "certify_angle_recoverable!: both fixture profiles, status/provenance/strict-mode (MESH-03/D-05/D-06/D-07)" setup =
+# Seam: models/mesh_angle_certificate.jl.
+@testitem "certify_angle_recoverable!: both fixture profiles, status/provenance/strict-mode" setup =
     [MeshFixtures] begin
     using TSODSO, Test
 
@@ -33,7 +33,7 @@
     @test r_h.status == :angle_unrecoverable
     @test r_h.angles === nothing
 
-    # (c) The SAME :heterogeneous call with report=false THROWS -- D-05's documented opt-in
+    # (c) The SAME :heterogeneous call with report=false THROWS -- the documented opt-in
     # strict/throw mode, the one place this test directly exercises the divergence from the
     # certificate family's throw-by-default.
     ctx_h2, _, _ = solve_welfare(
@@ -64,23 +64,23 @@
     @test ctx_plain.meta[:price_provenance].certificate == :certify_angle_recoverable!
 
     # (e) Residual ordering: :heterogeneous sits multiple orders-of-magnitude (measured
-    # ~9.7x, D-08) above :uniform's -- the honest structural gap (D-10), never a knife-edge.
+    # ~9.7x) above :uniform's -- the honest structural gap, never a knife-edge.
     @test r_h.worst_residual > 5 * r_u.worst_residual
 
     # ctx.meta[:price_provenance] correctly names the SOLVED formulation on the MeshedFlow
-    # paths (never fabricated, T-23-06).
+    # paths (never fabricated).
     @test ctx_u.meta[:price_provenance].formulation == :MeshedFlow
     @test ctx_h.meta[:price_provenance].formulation == :MeshedFlow
     @test ctx_u.meta[:price_provenance].certificate == :certify_angle_recoverable!
 end
 
-# Review 23 CR-01/WR-03 regression: the certificate's verdict and recovered phasor field
+# Regression: the certificate's verdict and recovered phasor field
 # must be invariant to branch STORAGE orientation (physically meaningless, unconstrained by
-# assert_connected) -- the Phase-20 CR-01 discipline (ac_oracle.jl's "Branch orientation"
-# note, enforced for the radial shadow voltage in test/test_restricted_branch_flow.jl),
+# assert_connected) -- the same discipline as ac_oracle.jl's "Branch orientation"
+# note (enforced for the radial shadow voltage in test/test_restricted_branch_flow.jl),
 # applied to the new signed-orientation traversal.
 #
-# DEVIATION from the review's literal suggestion (flip branch 3 alone): a SINGLE flipped
+# Why not flip branch 3 alone: a SINGLE flipped
 # branch is NOT solver-equivalent on this diamond. ConvexBranchFlow's exactness-copy
 # machinery forces the cycle identity sum(eps_b*(r_b^2+x_b^2)*l_b) = 0, where eps_b is the
 # branch's STORED orientation relative to the cycle traversal; one flip turns the diamond's
@@ -88,11 +88,11 @@ end
 # that solve_welfare's assert_socp_exact! refuses -- the same mechanism fixtures_mesh.jl's
 # header documents for the flipped triangle. The one physically-identical re-encoding that
 # PRESERVES the identity is the FULL root-inward reversal (every branch stored child->parent,
-# a global eps sign flip). That reversal also exercises CR-01 maximally: ALL THREE tree
+# a global eps sign flip). That reversal also exercises the orientation handling maximally: ALL THREE tree
 # edges are traversed backwards (bsigned < 0), so the -(S_b - z*l_b) receiving-end
 # correction carries the whole phasor recovery; branch 3 stays the chord (anchored at bus 4
 # instead of bus 2).
-@testitem "certify_angle_recoverable!: reversed-orientation re-encoding -- verdicts and phasors invariant (review CR-01/WR-03)" setup =
+@testitem "certify_angle_recoverable!: reversed-orientation re-encoding -- verdicts and phasors invariant" setup =
     [MeshFixtures] begin
     using TSODSO, Test
 
@@ -143,7 +143,7 @@ end
         # Residuals: the reversal necessarily flips the chord's anchor endpoint (its own
         # defining equation is evaluated from bus 4 instead of bus 2), a second-order
         # anchor effect measured at ~6e-4 relative (:uniform) and ~2.0e-2 relative
-        # (:heterogeneous, 8x impedances) AFTER the CR-01 fix -- so exact equality is not
+        # (:heterogeneous, 8x impedances) AFTER the orientation fix -- so exact equality is not
         # achievable; the bounds below hold with margin post-fix and would NOT catch the
         # bare-flip bug through the residual alone (the exactness-copy identity makes the
         # per-edge |z|^2*l errors telescope to ~zero around the cycle). The sharp

@@ -1,9 +1,8 @@
 # test/test_mpc_window.jl
 #
-# Seam: src/models/mpc_window.jl (MPC-01/MPC-02). `MpcWindow` + `build_mpc_window` (Task 1)
+# Seam: src/models/mpc_window.jl. `MpcWindow` + `build_mpc_window` 
 # generalize `PlanningOracle`'s build-once/`Parameter`-re-solve shape from a single `z`-pin to
-# the full set of per-step device Parameters (soc0/Tin0/Ppv_param/Tout_param/Pdc_param) plan
-# 21-01 widened, plus a build-time `terminal_soc` toggle (MPC-02). `solve_mpc_window!` is a
+# the full set of per-step device Parameters (soc0/Tin0/Ppv_param/Tout_param/Pdc_param), plus a build-time `terminal_soc` toggle. `solve_mpc_window!` is a
 # one-line delegation to `solve_with_retry!`. Items tagged `[:mpc_window]`, every name contains
 # "mpc_window" (occursin filter convention, mirrors test_planning_oracle.jl / test_mpc_trace.jl),
 # `setup = [MPCFixtures]`.
@@ -28,7 +27,7 @@
     # H < 1.
     @test_throws ArgumentError build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = 0)
 
-    # Phase 26 FIX-04: the former WR-03 double-pin (terminal_soc = true at H = 1 pinning
+    # The former double-pin (terminal_soc = true at H = 1 pinning
     # soc[1] both as the IC and the terminal target) no longer exists — the device's own
     # `soc` vector is now `1:(H+1)` long, so the terminal target `soc[H + 1]` is a DIFFERENT
     # index from `soc[1]` even at `H = 1`. H = 1, terminal_soc = true now builds successfully.
@@ -50,7 +49,7 @@
     )
 end
 
-@testitem "mpc_window: allow_export threads to the frontier — import-only lower bound when false, free-sign when true (WR-06)" tags =
+@testitem "mpc_window: allow_export threads to the frontier — import-only lower bound when false, free-sign when true" tags =
     [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window
@@ -72,7 +71,7 @@ end
     @test all(lower_bound(o_imp.p_import[τ]) == 0.0 for τ in 1:H)
 end
 
-@testitem "mpc_window: build-once — num_variables/num_constraints invariant across re-solves at DIFFERENT soc0/Tin0/terminal-target/forecast-slice states (MPC-01)" tags =
+@testitem "mpc_window: build-once — num_variables/num_constraints invariant across re-solves at DIFFERENT soc0/Tin0/terminal-target/forecast-slice states" tags =
     [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, solve_mpc_window!
@@ -156,7 +155,7 @@ end
     @test num_constraints(o.model; count_variable_in_set_constraints = true) == nc0
 end
 
-@testitem "mpc_window: set_parameter_value on soc0 is NOT a no-op — the solved soc[1] trajectory genuinely moves (MPC-01)" tags =
+@testitem "mpc_window: set_parameter_value on soc0 is NOT a no-op — the solved soc[1] trajectory genuinely moves" tags =
     [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window, solve_mpc_window!
@@ -192,7 +191,7 @@ end
     @test !(socB ≈ socA)
 end
 
-@testitem "mpc_window: terminal_soc toggle produces a STRUCTURALLY different model (MPC-02 mechanism)" tags =
+@testitem "mpc_window: terminal_soc toggle produces a STRUCTURALLY different model" tags =
     [:mpc_window] setup = [MPCFixtures] begin
     using TSODSO
     using TSODSO: build_mpc_window
