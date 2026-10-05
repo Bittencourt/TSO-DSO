@@ -161,6 +161,13 @@ function check_reactive_decl!(fs, a)
     end
 end
 
+"""Updating assignment heads: `+=`, `-=`, `^=`, `.+=`, `.=`, ... (never plain `=`)."""
+function is_update_assign(h::Symbol)
+    s = String(h)
+    return h !== :(=) && endswith(s, "=") && length(s) >= 2 &&
+           s ∉ ("==", "!=", "<=", ">=", "===", "!==", "=>", ":=")
+end
+
 callee_name(f) = f isa Symbol ? f :
                  (f isa Expr && f.head === :. && f.args[2] isa QuoteNode) ? f.args[2].value : nothing
 
@@ -283,7 +290,13 @@ function ref!(fs, x)
                           (A[1].head === :(::) && A[1].args[1] isa Expr && A[1].args[1].head === :call)))
         bind_signature!(fs, A[1])                    # short-form method definition
         ref!(fs, A[2])
-    elseif h in (:(=), :const, :local, :global) || (h in (:+=, :-=, :*=, :/=) && A[1] isa Symbol)
+    elseif is_update_assign(h)
+        # `s += f(x)`, `s .*= g(y)`, `v[i] -= h(z)`: the LHS is (re)bound, the RHS is a USE.
+        # Never route the RHS through `bind!` (a call there would read as a method definition
+        # and legitimise the callee for the whole file).
+        A[1] isa Symbol ? bind!(fs, A[1]) : ref!(fs, A[1])
+        foreach(a -> ref!(fs, a), A[2:end])
+    elseif h in (:(=), :const, :local, :global)
         if h === :(=)
             bind!(fs, A[1]; fn = false)
             ref!(fs, A[2])
@@ -473,6 +486,12 @@ function selftest()
         ("using TSODSO\nfor max_jump in 1:3\n    println(max_jump)\nend", 0, "loop var"),
         ("using TSODSO\nb = PerUnitBase(1.0, 4.16)", -1, "units helper (depends on public set)"),
         ("x = (", 1, "parse error"),
+        # compound assignment: the RHS is a use, never a definition
+        ("using TSODSO\ns = 0\ns += max_jump(t)", 1, "compound += RHS call"),
+        ("using TSODSO\ntotal = 0\ntotal += max_jump(tr)\ny = max_jump(tr2)", 1,
+         "compound += does not legitimise later calls"),
+        ("using TSODSO\nv = zeros(3)\nv .-= max_jump.(t)", 1, "broadcast compound .-="),
+        ("using TSODSO\ns = 0\ns += 1\nprintln(s)", 0, "compound on a local is fine"),
     ]
     exported, subs = exported_set(), submodules()
     bad = 0
