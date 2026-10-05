@@ -1,8 +1,7 @@
 # src/planning/bilevel_kkt.jl
 #
 # SEAM: build_bilevel_kkt / solve_bilevel! — the GENUINELY bilevel TSO-DSO planning
-# variant (BILEV-01, Phase 29 plan 29-01).
-# OWNER: plan 29-01.
+# variant.
 #
 # (a) THIS IS A GENUINELY BILEVEL GAME. The DSO LEADER chooses investment `y_inv` and
 # embeds its OWN LinDistFlow network valuation of the follower's delivered quantity
@@ -20,9 +19,9 @@
 # the leader's cost-to-go. That assumption holds only when the follower and leader
 # share the SAME objective in `z` (the integrated-problem case) — it is FALSE
 # whenever `pi_tariff` differs from the leader's own marginal valuation, which is
-# exactly this phase's whole point. Never reuse `add_optimality_cut!`/`BendersMaster`
+# exactly this variant's whole point. Never reuse `add_optimality_cut!`/`BendersMaster`
 # for this variant "for consistency" — the two problems have genuinely different
-# mathematical structure (29-RESEARCH.md Pitfall 1).
+# mathematical structure.
 #
 # (c) THE PRODUCTION METHOD IS A ONE-SHOT SINGLE-LEVEL KKT/MPCC MILP — no outer loop,
 # no re-solve, unlike every other file in `planning/`. Built via
@@ -30,33 +29,32 @@
 #
 # (d) The follower's complementarity conditions are reformulated via `MOI.SOS1` pairs,
 # relying on JuMP/MOI's automatic `SOS1ToMILPBridge` (MOI 1.51.2, verified against the
-# pinned HiGHS 1.24.1 in 29-RESEARCH.md). Every paired variable/expression needs a
-# FINITE bound, derived in closed form (`_follower_kkt_dual_bound`), never guessed
-# (29-RESEARCH.md Pattern 2, Pitfall 3).
+# pinned HiGHS 1.24.1). Every paired variable/expression needs a
+# FINITE bound, derived in closed form (`_follower_kkt_dual_bound`), never guessed.
 #
-# (e) THE DSO'S OWN LEADER WELFARE IS AN EMBEDDED LinDistFlow NETWORK (CONTEXT.md's
-# post-research amendment, Option B — NOT a fixed linear coefficient), reusing
+# (e) THE DSO'S OWN LEADER WELFARE IS AN EMBEDDED LinDistFlow NETWORK
+# (NOT a fixed linear coefficient), reusing
 # `contribute!(pf, ctx, feeder; T)` verbatim, plus a directly-written linear
 # elastic-demand variable `d` (NOT the full Aggregator/AbstractDevice roll-up — that
 # machinery always produces a QuadExpr utility via `add_to_objective!`, and ANY
 # quadratic term anywhere in this MILP's objective/constraints makes it an unsolvable
-# MIQP for HiGHS, 29-RESEARCH.md Pitfall 5).
+# MIQP for HiGHS).
 #
 # (f) THE COUPLING DIRECTION IS INVERTED versus the existing `FollowerLP`
-# (29-RESEARCH.md Pattern 3) — the leader bounds the follower's investment
+# — the leader bounds the follower's investment
 # (`x_inv <= y_inv`) and the follower freely CHOOSES its own `z`, the opposite of
 # `FollowerLP`'s `x_op[t] == z[t]` equality-pin. This is a deliberately NEW
 # struct/file, never a parametrized reuse of `FollowerLP`.
 #
-# (g) BLOCKER-1 REVISION (checker feedback on the initial plan): the follower ALSO
+# (g) THE FOLLOWER ALSO
 # optionally carries a convex QUADRATIC curvature term in its own per-unit operating
-# cost (`0.5*q_op[t]*z[t]^2`, `q_op[t] >= 0`, per CONTEXT.md's locked "Follower convex
-# LP/QP" decision). This term NEVER appears verbatim anywhere in this single-level
-# MILP (only its LINEAR gradient does, inside `statio_z`, per Pitfall 5's "strictly
+# cost (`0.5*q_op[t]*z[t]^2`, `q_op[t] >= 0`, per the "Follower convex
+# LP/QP" design choice). This term NEVER appears verbatim anywhere in this single-level
+# MILP (only its LINEAR gradient does, inside `statio_z`, per the "strictly
 # affine" rule) but it is what makes a genuinely NON-DEGENERATE certification fixture
-# possible (plan 29-04): with `q_op[t] = 0` (the default, `zeros(T)`), the follower's
-# response to the leader's `y_inv` is bang-bang (the original corner fixture, plan
-# 29-02); with `q_op[t] > 0`, the follower's response is a continuous, piecewise
+# possible: with `q_op[t] = 0` (the default, `zeros(T)`), the follower's
+# response to the leader's `y_inv` is bang-bang (the original corner fixture);
+# with `q_op[t] > 0`, the follower's response is a continuous, piecewise
 # function of `y_inv` that reaches a genuine INTERIOR optimum once `y_inv` is relaxed
 # enough — the leader-coupling SOS1 pair `[slack_y, rho_y]` is observed ACTIVE for
 # small `y_inv` and INACTIVE once the follower's own unconstrained optimum is reached,
@@ -68,7 +66,7 @@ using JuMP
     BilevelKKT{Z,MC,D,ML}
 
 The built-ONCE single-level KKT-MILP for the genuinely bilevel TSO-DSO game
-(BILEV-01): the DSO LEADER's investment `y_inv` + embedded LinDistFlow network
+the DSO LEADER's investment `y_inv` + embedded LinDistFlow network
 welfare, folded together with the TSO FOLLOWER's own KKT conditions (stationarity +
 SOS1 complementarity) into ONE JuMP `Model`, solved by a SINGLE `optimize!` call — no
 outer loop, unlike every other `planning/` file.
@@ -76,7 +74,7 @@ outer loop, unlike every other `planning/` file.
 # Fields
 
   - `model::Model` — the single-level KKT-MILP, built ONCE via
-    `Model(select_optimizer(MILP()))` (INFRA-02).
+    `Model(select_optimizer(MILP()))`.
   - `y_inv::VariableRef` — the leader's investment decision.
   - `x_inv::VariableRef` — the follower's own investment decision (bounded above by
     `y_inv` via the `slack_y >= 0` / SOS1 complementarity pair, NOT an equality pin).
@@ -89,7 +87,7 @@ outer loop, unlike every other `planning/` file.
   - `rho_y::VariableRef` — the follower's own dual on `x_inv <= y_inv`.
   - `rho_lo::VariableRef` — the follower's own dual on `x_inv >= 0`.
   - `rho_max::VariableRef` — the follower's own dual on `x_inv <= x_inv_max`
-    (29-REVIEW.md WR-01: `x_inv_max` is a bound in the FOLLOWER's own problem, so it
+    (`x_inv_max` is a bound in the FOLLOWER's own problem, so it
     needs its own multiplier and SOS1 pair, not just a variable bound).
   - `mu_lo::ML` (`Vector{VariableRef}`, length `T`) — the follower's own dual on
     `z[t] >= 0`.
@@ -103,8 +101,8 @@ outer loop, unlike every other `planning/` file.
   - `corridor_cap::Float64`, `x_inv_max::Float64`, `c_inv::Float64`,
     `margin::Vector{Float64}` (`pi_tariff - c_op`), `q_op::Vector{Float64}` — the
     follower's own data. `solve_bilevel!` needs it to rebuild the follower's KKT
-    stationarity at the solved primal and recover a KKT certificate (29-REVIEW.md
-    iteration-2 CR-01, see [`_recover_kkt_certificate`](@ref)).
+    stationarity at the solved primal and recover a KKT certificate
+    (see [`_recover_kkt_certificate`](@ref)).
 """
 struct BilevelKKT{Z, MC, D, ML}
     model::Model
@@ -131,7 +129,7 @@ end
     _follower_kkt_dual_bound(; corridor_cap, c_inv, c_op, pi_tariff, T, safety) -> Float64
 
 Derive, IN CLOSED FORM, the single shared upper bound `m_ub` for every complementarity
-dual in the KKT block (29-REVIEW.md CR-01/WR-03 fix). The bound is valid for EVERY
+dual in the KKT block. The bound is valid for EVERY
 leader decision `y_inv in [0, y_max]`, and it does not depend on any solver's choice of
 dual point.
 
@@ -224,10 +222,10 @@ end
                       follower_integer::Bool = false, safety::Real = 10.0)
         -> BilevelKKT
 
-Build the genuinely bilevel single-level KKT-MILP EXACTLY ONCE (BILEV-01). See this
+Build the genuinely bilevel single-level KKT-MILP EXACTLY ONCE. See this
 file's module header for the full "why single-level KKT, why not Benders" rationale.
 
-**Bilevel semantics (29-REVIEW.md WR-07).** The reformulation is the OPTIMISTIC
+**Bilevel semantics.** The reformulation is the OPTIMISTIC
 bilevel problem. The single MILP minimizes over the leader decision AND the
 follower's KKT points jointly, so when the follower has several optimal responses the
 leader effectively picks the one it prefers. Leader-level constraints on follower
@@ -235,23 +233,23 @@ variables are COUPLING constraints: the network balance (`d = z` on a lossless
 feeder), `d <= d_max` and the LinDistFlow voltage bounds. A leader decision whose
 follower response violates them is infeasible, not feasible-but-curtailed.
 
-`q_op` (BLOCKER-1 revision) is a NEW keyword defaulting to `zeros(T)`, so every
-EXISTING call site (the plan 29-02 corner fixture) is byte-for-bit unaffected; only
-plan 29-04's non-degenerate fixture passes a nonzero `q_op`.
+`q_op` is a NEW keyword defaulting to `zeros(T)`, so every
+EXISTING call site (the corner fixture) is bit-for-bit unaffected; only
+the non-degenerate fixture passes a nonzero `q_op`.
 
 # Boundary guards (each throws `ArgumentError` naming the offending value, BEFORE any
 `@variable`/`@objective` assembly, mirroring `follower.jl`/`master.jl`):
 
   - `T >= 1`
   - `pf isa LinDistFlow` — an allowlist: only the strictly affine LinDistFlow network
-    is supported (CONTEXT.md locked decision: DSO network LinDistFlow (LP) only). Any
+    is supported (by design the DSO network is LinDistFlow (LP) only). Any
     SOCP, NLP (`ACPowerFlow`) or other formulation is rejected up front, since a
     nonlinear term would make this an MIQP/MINLP that HiGHS cannot solve.
-  - `follower_integer` — an integer follower is not supported in this phase
-    (continuous-only investment, 29-RESEARCH.md Open Question 3).
+  - `follower_integer` — an integer follower is not supported
+    (continuous-only investment).
   - `corridor_cap > 0`, `x_inv_max > 0`, `c_inv >= 0`, `c_y >= 0`, `y_max > 0`,
     `d_max > 0`, `safety >= 1` (the closed-form dual bound is tight, so a factor
-    below 1 can silently cut off the true optimum; 29-REVIEW.md iteration-2 WR-01).
+    below 1 can silently cut off the true optimum).
   - `length(c_op) == T`, `length(pi_tariff) == T`, `length(q_op) == T`,
     `length(v_d) == T`.
   - `all(q_op .>= 0)` — `q_op` is the follower's own per-unit QUADRATIC curvature
@@ -265,17 +263,17 @@ plan 29-04's non-degenerate fixture passes a nonzero `q_op`.
 
 Then derives the shared SOS1 complementarity bound in closed form via
 [`_follower_kkt_dual_bound`](@ref), builds `Model(select_optimizer(MILP()))`,
-embeds the LinDistFlow network (`contribute!(pf, ctx, feeder; T=T)`, CONTEXT.md
-Option B), declares the leader/follower KKT variables, the follower's KKT
+embeds the LinDistFlow network (`contribute!(pf, ctx, feeder; T=T)`),
+declares the leader/follower KKT variables, the follower's KKT
 stationarity (linear equalities), the complementarity slacks + SOS1 pairs, the
 network coupling (the follower's delivered `z` enters at `feeder.root`, the leader's
 own served demand `d` draws at `agg_bus`), and the leader's STRICTLY AFFINE objective
 `c_y*y_inv + sum(pi_tariff[t]*z[t] - v_d[t]*d[t] for t in 1:T)`.
 
 MEASURES, does not assume, whether the shared `select_optimizer(::MILP)` tolerances
-solve this new MILP cleanly to `MOI.OPTIMAL` (29-RESEARCH.md Pitfall 4) — the shared
+solve this new MILP cleanly to `MOI.OPTIMAL` — the shared
 default is used as-is here; `select_optimizer(::MILP)` is extended with a
-keyword-passthrough seam ONLY if measurement (Task 2's fixture) shows it is
+keyword-passthrough seam ONLY if measurement on the certification fixture shows it is
 insufficient.
 
 Returns a [`BilevelKKT`](@ref).
@@ -301,20 +299,20 @@ function build_bilevel_kkt(
     # ---- Boundary guards FIRST — fail here, not deep in objective assembly. ----------
     T >= 1 || throw(ArgumentError("build_bilevel_kkt needs T >= 1, got T=$T"))
 
-    # ALLOWLIST, not an SOCP denylist (29-REVIEW.md WR-02): ACPowerFlow (NLP) and any
+    # ALLOWLIST, not an SOCP denylist: ACPowerFlow (NLP) and any
     # QP-class formulation would put a nonlinear term into this MILP and fail deep in
     # JuMP/HiGHS; DCPowerFlow is untested/undocumented here.
     pf isa LinDistFlow || throw(
         ArgumentError(
             "build_bilevel_kkt supports only LinDistFlow (a strictly affine network; " *
-            "CONTEXT.md locked decision: DSO network LinDistFlow (LP) only) — got " *
+            "the DSO network must be LinDistFlow (LP)) — got " *
             "$(typeof(pf))",
         ),
     )
     follower_integer && throw(
         ArgumentError(
-            "build_bilevel_kkt: an integer follower is not supported in this phase " *
-            "(continuous-only investment, 29-RESEARCH.md Open Question 3) — pass " *
+            "build_bilevel_kkt: an integer follower is not supported " *
+            "(continuous-only investment) — pass " *
             "follower_integer=false",
         ),
     )
@@ -328,7 +326,7 @@ function build_bilevel_kkt(
     c_y >= 0 || throw(ArgumentError("build_bilevel_kkt needs c_y >= 0, got $c_y"))
     y_max > 0 || throw(ArgumentError("build_bilevel_kkt needs y_max > 0, got $y_max"))
     d_max > 0 || throw(ArgumentError("build_bilevel_kkt needs d_max > 0, got $d_max"))
-    # 29-REVIEW.md iteration-2 WR-01: the closed-form bound is TIGHT (e.g. the interior
+    # The closed-form bound is TIGHT (e.g. the interior
     # fixture's rho_y(y=0) equals it exactly), so any safety < 1 can silently cut off
     # the true optimum, which no post-solve check can detect.
     safety >= 1 || throw(
@@ -365,7 +363,7 @@ function build_bilevel_kkt(
         ),
     )
 
-    # ---- Derive the shared SOS1 complementarity bound in CLOSED FORM (CR-01). --------
+    # ---- Derive the shared SOS1 complementarity bound in CLOSED FORM. --------
     m_ub = _follower_kkt_dual_bound(;
         corridor_cap = corridor_cap,
         c_inv = c_inv,
@@ -376,14 +374,14 @@ function build_bilevel_kkt(
     )
 
     # ---- Build ONCE: the single-level KKT-MILP. -------------------------------------
-    model = Model(select_optimizer(MILP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
+    model = Model(select_optimizer(MILP()))   # never Model(HiGHS.Optimizer) directly
     ctx = ModelContext(model)
     ctx.feeder = feeder
     ctx.T = T
 
-    contribute!(pf, ctx, feeder; T = T)   # the embedded LinDistFlow network (Option B)
+    contribute!(pf, ctx, feeder; T = T)   # the embedded LinDistFlow network 
 
-    # WR-03-style capability capture (mirrors solve_welfare): whether a REACTIVE channel
+    # Capability capture (mirrors solve_welfare): whether a REACTIVE channel
     # exists is decided by the FORMULATION, captured right after it contributes.
     reactive = has_reactive(pf)
 
@@ -395,12 +393,12 @@ function build_bilevel_kkt(
     @variable(model, 0 <= mu_cap[t = 1:T] <= m_ub)
     @variable(model, 0 <= rho_y <= m_ub)
     @variable(model, 0 <= rho_lo <= m_ub)
-    @variable(model, 0 <= rho_max <= m_ub)   # WR-01: dual on the follower's x_inv <= x_inv_max
+    @variable(model, 0 <= rho_max <= m_ub)   # dual on the follower's x_inv <= x_inv_max
     @variable(model, 0 <= mu_lo[t = 1:T] <= m_ub)
 
     # ---- Follower KKT stationarity (linear equalities). -----------------------------
     # d/d(x_inv): x_inv is a SINGLE scalar shared across every t's cap constraint, so its
-    # stationarity sums mu_cap over t. `rho_max` (WR-01) is the multiplier of the
+    # stationarity sums mu_cap over t. `rho_max` is the multiplier of the
     # follower's own `x_inv <= x_inv_max`; without it, a leader decision
     # `y_inv > x_inv_max` whose follower response hits `x_inv_max` has no feasible
     # KKT completion and the MILP wrongly declares it infeasible.
@@ -413,7 +411,7 @@ function build_bilevel_kkt(
     # constant literal coefficient q_op[t]) — this is the linear KKT stationarity
     # condition of the follower's own quadratic cost, which never itself appears
     # verbatim in this file's objective/constraints. With q_op[t]=0 this reduces
-    # byte-for-byte to the original (pre-BLOCKER-1) equation.
+    # bit-for-bit to the original equation.
     @constraint(
         model,
         statio_z[t = 1:T],
@@ -456,7 +454,7 @@ function build_bilevel_kkt(
         register_constraint!(ctx, :balance_q, balance_q)
     end
 
-    # ---- Leader objective — STRICTLY AFFINE (Pitfall 5: no quadratic term anywhere ---
+    # ---- Leader objective — STRICTLY AFFINE (no quadratic term anywhere ---
     # in this single-level MILP's objective or constraints).
     @objective(model, Min, c_y * y_inv + sum(pi_tariff[t] * z[t] - v_d[t] * d[t] for t in 1:T))
 
@@ -486,7 +484,7 @@ end
     _recover_kkt_certificate(kkt::BilevelKKT; act_tol = 1e-6, atol_bound = 1e-6)
         -> NamedTuple
 
-Post-solve KKT-certificate recovery (29-REVIEW.md iteration-2 CR-01). It fixes the
+Post-solve KKT-certificate recovery. It fixes the
 solved primal `(y_inv, x_inv, z)` of the single-level MILP and solves a small LP over
 the follower's multipliers `(mu_cap, mu_lo, rho_y, rho_lo, rho_max) >= 0`. The LP
 contains the follower's two stationarity equations (`statio_x`, `statio_z[t]`) at the
@@ -517,7 +515,7 @@ and the limit is:
 `s* <= 0` means some valid certificate respects every limit. `s* > 0` means none does,
 and the multipliers with `multiplier_i - lim_i = s*` are the ones pressing on the box.
 
-# Canonical multipliers (29-REVIEW.md iteration-2 WR-02)
+# Canonical multipliers
 
 When `s* <= 0`, the same LP then computes the LEXICOGRAPHICALLY MINIMAL valid
 certificate inside the box:
@@ -586,7 +584,7 @@ function _recover_kkt_certificate(
         rho_max = _lim(ub.rho_max),
     )
 
-    cert = Model(select_optimizer(LP()))   # INFRA-02
+    cert = Model(select_optimizer(LP()))
     @variable(cert, mc[1:T] >= 0)
     @variable(cert, ml[1:T] >= 0)
     @variable(cert, ry >= 0)
@@ -637,7 +635,7 @@ function _recover_kkt_certificate(
         rho_max = value(rm),
     )
 
-    # Canonical certificate (29-REVIEW.md iteration-2 WR-02), only once the check can
+    # Canonical certificate, only once the check can
     # pass. Lexicographic minimization inside the MILP's own box (widened to `lim`
     # where the proven-bound exception applies, so the stage is feasible whenever
     # s* <= 0):
@@ -687,8 +685,8 @@ Solve the built-ONCE [`BilevelKKT`](@ref) `kkt` via a SINGLE `assert_solved!(kkt
 dual = false)` call (MILP — post-SOS1-bridge binaries mean JuMP duals are not
 available/meaningful; `dual=false` here is the CORRECT, not a weakened, gate).
 
-Then runs the Pitfall-3 at-bound sanity check on a recovered KKT certificate, not on
-HiGHS's own multiplier vertex (29-REVIEW.md iteration-2 CR-01). With the solved primal
+Then runs the at-bound sanity check on a recovered KKT certificate, not on
+HiGHS's own multiplier vertex. With the solved primal
 fixed, [`_recover_kkt_certificate`](@ref) finds the valid follower KKT certificate
 (stationarity plus complementarity on the solved active set) that stays farthest from
 the multipliers' box bounds. The check fails, as a hard error and never a warning, only
@@ -703,7 +701,7 @@ box face (for example `rho_y = m_ub`) even though a certificate well inside the 
 exists. That falsely rejected correct optima such as "the leader prefers no delivery".
 Raising `safety` could not help, because the vertex scales with `m_ub`.
 
-This check is NECESSARY, NOT SUFFICIENT (29-REVIEW.md iteration-1 CR-01; Pineda &
+This check is NECESSARY, NOT SUFFICIENT (Pineda &
 Morales 2019, "Solving linear bilevel problems using big-Ms: not all that glitters is
 gold"). If `m_ub` were too small, the true optimum would be cut off. The MILP would
 then return the best remaining leader decision, whose certificate can sit strictly
@@ -713,7 +711,7 @@ every `y_inv in [0, y_max]` (`build_bilevel_kkt` rejects `safety < 1`). This che
 bound that is provably too tight at the returned point, for example one tightened by a
 caller via `set_upper_bound`.
 
-**Taxonomy cross-reference (Phase 31, BILEV-08):** this is the GENUINE bilevel
+**Taxonomy cross-reference:** this is the GENUINE bilevel
 variant among the three planning-layer variants this project ships — see
 `docs/writeups/modelo_stackelberg_dso_unico.typ`'s "Taxonomia dos variantes de
 planejamento" section for the full comparison against [`solve_stackelberg!`](@ref)
@@ -723,7 +721,7 @@ GNE/VE, `src/planning/nash.jl`).
 
 Returns `(; y, x_inv, z, d, total_cost, mu_cap, rho_y, rho_lo, rho_max, mu_lo, model)`.
 
-**Returned multipliers (29-REVIEW.md iteration-2 WR-02).** `mu_cap`, `mu_lo`, `rho_y`,
+**Returned multipliers.** `mu_cap`, `mu_lo`, `rho_y`,
 `rho_lo` and `rho_max` are NOT the MILP's raw multiplier values. Those are an arbitrary
 vertex of the multiplier face whenever it is degenerate (`x_inv = 0`, or
 `y_inv = x_inv = x_inv_max`). They can also change with the HiGHS version or presolve
@@ -737,8 +735,8 @@ the raw MILP values from `kkt.mu_cap` etc. if needed.
 function solve_bilevel!(kkt::BilevelKKT)
     assert_solved!(kkt.model; dual = false)
 
-    # Pitfall-3 validity check (mandatory, never skipped), run on the recovered
-    # certificate (CR-01, iteration 2). A multiplier at its bound in EVERY valid
+    # At-bound validity check (mandatory, never skipped), run on the recovered
+    # certificate. A multiplier at its bound in EVERY valid
     # certificate proves the bound is too tight at this point.
     atol_bound = 1e-6
     cert = _recover_kkt_certificate(kkt; atol_bound = atol_bound)

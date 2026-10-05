@@ -1,49 +1,47 @@
 # src/planning/master.jl
 #
-# SEAM: build-once Benders master with persistent optimality/feasibility cut rows
-# (PLAN-05).
-# OWNER: plan 11-01.
+# SEAM: build-once Benders master with persistent optimality/feasibility cut rows.
 #
-# PERSISTENT ROWS, NEVER REBUILT (CONTEXT.md locked decision): `build_master`
+# PERSISTENT ROWS, NEVER REBUILT (locked decision): `build_master`
 # constructs the leader's own LP (continuous investment `y_inv` + coupling flow
 # `z[t]` + TWO epigraph variables `α_op`/`α_x`, one per Benders-cutting subproblem
 # — the oracle's welfare-as-cost contribution and the follower's transmission
-# cost, respectively, per 11-RESEARCH.md's resolved multi-cut structure)
+# cost, respectively, per resolved multi-cut structure)
 # EXACTLY ONCE. `add_optimality_cut!`/`add_feasibility_cut!` append NEW
 # `@constraint` rows to the EXISTING model handle — mirroring `DsoOpt`'s own
 # mutate-without-rebuild idiom (`set_rho!`), though here rows are ADDED rather
 # than coefficients mutated. `solve_master!` routes through `solve_with_retry!`
-# (plan 10-01) — NEVER the SOLE INFRA-03 choke point directly — so every
+# — never the choke point called directly — so every
 # cut-producing solve on the master is gated by that choke point's own strict
-# solved-and-feasible contract (never `allow_almost=true`), D-08, mirroring the
+# solved-and-feasible contract (never `allow_almost=true`), mirroring the
 # oracle's own discipline.
 #
-# THE ONE GENUINELY NEW PIECE (11-RESEARCH.md Pitfall M1, no in-repo analog): the
+# THE ONE GENUINELY NEW PIECE (no in-repo analog): the
 # epigraph variables carry a DOCUMENTED, DERIVED finite lower bound
 # (`α_op >= α_op_lb`, `α_x >= α_x_lb`) declared AT BUILD TIME, before any cut
 # exists. Without this, the master's very first solve (zero cuts) has a free `α`
 # in a `Min` objective and is `MOI.DUAL_INFEASIBLE` — not a modeling bug, but a
 # well-known first-iteration Benders footgun this file avoids by construction.
 #
-# PLAN 30-02 (BILEV-05) EXTENSION: `α_op_lb`/`α_x_lb` gain a THIRD option beyond an
+# ALPHA-BOUND EXTENSION: `α_op_lb`/`α_x_lb` gain a THIRD option beyond an
 # explicit `Real` — the `:auto` `Symbol`, resolved via a genuine ONE-TIME relaxed solve
 # (never a closed-form shortcut), plus an opt-in build-time REJECTION of an explicit bound
 # that exceeds the derived minimum. This file (not a new `alpha_bounds.jl`) hosts the
 # derivation helpers (`make_relaxed_oracle_model`/`derive_alpha_op_lb`/
 # `make_relaxed_follower_model`/`derive_alpha_x_lb`) — a new file would require an
-# unrelated `src/TSODSO.jl` include-line edit that conflicts with plan 30-01's own wave-1
+# unrelated `src/TSODSO.jl` include-line edit that conflicts with the
 # new files (`feasibility_oracle.jl`, `ac_recheck.jl`) touching the same include block;
 # co-locating the helpers in the file that already consumes them (`build_master`) avoids
-# that cross-plan file conflict entirely. The machinery is OPT-IN via a new `bounds_ctx`
+# that file conflict entirely. The machinery is OPT-IN via a new `bounds_ctx`
 # keyword: every pre-existing call site (explicit `α_op_lb`/`α_x_lb` `Real`s, no
-# `bounds_ctx`) stays BYTE-IDENTICAL — no relaxed model is built, no rejection check runs.
+# `bounds_ctx`) stays BIT-FOR-BIT IDENTICAL — no relaxed model is built, no rejection check runs.
 
 using JuMP
 
 """
     BendersMaster{Y,Z,AOP,AX}
 
-The built-ONCE Benders master (PLAN-05): the leader's own LP — continuous
+The built-ONCE Benders master: the leader's own LP — continuous
 investment `y_inv`, coupling flow `z[t]`, and TWO epigraph variables `α_op`
 (the oracle's welfare-as-cost cut) and `α_x` (the follower's transmission-cost
 cut) — with cuts appended as persistent `@constraint` rows, never rebuilt.
@@ -51,12 +49,11 @@ cut) — with cuts appended as persistent `@constraint` rows, never rebuilt.
 # Fields
 
   - `model::Model` — the master LP, built ONCE via `Model(select_optimizer(LP()))`
-    (INFRA-02); mutated ONLY by appending new `@constraint` rows (cuts), never
+    mutated ONLY by appending new `@constraint` rows (cuts), never
     rebuilt.
   - `y_inv::Y` — the leader's flexibility-investment variable
     (`0 <= y_inv <= y_max`).
-  - `z::Z` — the length-T coupling flow (`0 <= z[t] <= y_inv`, per
-    11-RESEARCH.md Pitfall O1 — the box is `[0, y_inv]`, not `[-y_inv, y_inv]`,
+  - `z::Z` — the length-T coupling flow (`0 <= z[t] <= y_inv`; the box is `[0, y_inv]`, not `[-y_inv, y_inv]`,
     since `z` represents a physically nonnegative delivered import flow on this
     fixture's corridor).
   - `α_op::AOP` — the oracle's own epigraph variable (`α_op >= α_op_lb`).
@@ -64,21 +61,18 @@ cut) — with cuts appended as persistent `@constraint` rows, never rebuilt.
   - `T::Int` — the horizon.
   - `c_y::Float64` — the leader's flexibility-investment unit cost.
   - `cuts::Vector{Any}` — a bookkeeping log of every cut appended (NamedTuples
-    tagged `kind = :optimality`/`:feasibility`), for cut-validity testing in
-    plan 11-02; not consumed by `solve_master!` itself.
+    tagged `kind = :optimality`/`:feasibility`), for cut-validity testing;
+    not consumed by `solve_master!` itself.
   - `lb_slack::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — ALWAYS `(; op=0.0, x=0.0)`
-    since Phase 31 WR-03 (Plan 31-07, Option A). Phase 30 code review iteration 2 (WR-05)
-    originally recorded here how far ABOVE its derived relaxed optimum each declared
+    The original design recorded here how far ABOVE its derived relaxed optimum each declared
     epigraph lower bound was ALLOWED to be when `build_master` accepted it, and widened the
-    runtime floor guard's own tolerance by that amount. Option A (WR-03) supersedes that
-    design: `build_master` now CLAMPS any accepted-but-slack explicit bound DOWN to the
+    runtime floor guard's own tolerance by that amount. The current
+    design supersedes that: `build_master` now CLAMPS any accepted-but-slack explicit bound DOWN to the
     certified `:auto`-equivalent minimum at BUILD TIME (see `lb_clamped` below), so the
     INSTALLED bound can never sit above the true relaxed minimum — the runtime floor guard
     needs no widening at all, and this field is kept only so `_accepted_lb_slack`'s dispatch
-    and `_assert_epigraph_floor`'s `accepted_slack` keyword (both `benders.jl`, UNTOUCHED by
-    Plan 31-07) keep a uniform interface across master types.
-  - `lb_clamped::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — Phase 31 WR-03 (Plan
-    31-07, Option A): how far DOWN an accepted explicit epigraph lower bound was moved to
+    and `_assert_epigraph_floor`'s `accepted_slack` keyword (both in `benders.jl`) keep a uniform interface across master types.
+  - `lb_clamped::NamedTuple{(:op, :x), Tuple{Float64, Float64}}` — how far DOWN an accepted explicit epigraph lower bound was moved to
     reach the certified `:auto`-equivalent minimum (`d.bound`). `0.0` for every pre-existing
     call site (a bound already at or below `d.bound`), for an `:auto` bound, and for an
     unvalidated explicit bound (`bounds_ctx === nothing` or `follower_kwargs === nothing`);
@@ -101,8 +95,8 @@ end
 """
     ALPHA_LB_MARGIN
 
-ABSOLUTE FLOOR (plan 30-02, BILEV-05) of the safety margin subtracted from a derived
-`α_op_lb`/`α_x_lb` relaxed-solve optimum. Since the Phase 30 code review (WR-04) the
+ABSOLUTE FLOOR of the safety margin subtracted from a derived
+`α_op_lb`/`α_x_lb` relaxed-solve optimum. The
 margin actually applied is SCALE-AWARE and measured PER INSTANCE by
 [`alpha_lb_margin`](@ref): `max(ALPHA_LB_MARGIN, 10·gap, ALPHA_LB_RTOL·|optimum|)`, where
 `gap = |objective_value − dual_objective_value|` is the derive solve's OWN duality gap read
@@ -117,7 +111,7 @@ const ALPHA_LB_MARGIN = 1e-6
 """
     ALPHA_LB_RTOL
 
-RELATIVE term (Phase 30 code review, WR-04) of the scale-aware α-bound margin/tolerance
+RELATIVE term of the scale-aware α-bound margin/tolerance
 `max(1e-6, 10·gap, ALPHA_LB_RTOL·|value|)`. Set to `1e-8`, Clarabel's configured relative
 duality-gap tolerance `tol_gap_rel` in this project's solver factory (`select_optimizer`
 for `SOCP()`; Clarabel's own default for `QP()`): an interior-point optimum is only
@@ -136,8 +130,8 @@ const ALPHA_LB_RTOL = 1e-8
 """
     ALPHA_LB_REJECTION_TOL
 
-ABSOLUTE FLOOR (plan 30-02, BILEV-05) of the build-time rejection slack and of the runtime
-epigraph-floor tolerance. Phase 30 code review (WR-03): a user bound is rejected iff it
+ABSOLUTE FLOOR of the build-time rejection slack and of the runtime
+epigraph-floor tolerance: a user bound is rejected iff it
 exceeds the UN-margined relaxed optimum by more than
 `max(ALPHA_LB_REJECTION_TOL, 10·gap, ALPHA_LB_RTOL·|optimum|)` (see
 [`alpha_lb_margin`](@ref)) — previously the rejection threshold was
@@ -148,14 +142,14 @@ a user bound equal to the true minimum sits at most `gap` above `optimum` and is
 with at least `9·gap` (and at least `1e-6 − gap`) to spare. Floor value `1e-6`, the same
 toy measurement as [`ALPHA_LB_MARGIN`](@ref).
 
-**Build-time clamp supersedes runtime widening (Phase 31 WR-03, Plan 31-07, Option A).**
-Phase 30 code review iteration 2 (WR-05) originally handled an accepted-but-slack bound by
+**Build-time clamp supersedes runtime widening.**
+An earlier design handled an accepted-but-slack bound by
 WIDENING the runtime floor guard: accepting bounds up to `optimum + S` (`S` the slack above)
 meant accepting bounds that could sit up to `S + gap` above the TRUE minimum, so the runtime
 guard's tolerance `tol_k` was augmented by a recorded `lb_slack = S + |gap|` to keep
-`cost_k < α − (tol_k + lb_slack)` sound. Measurement during Plan 31-01 found this widened
+`cost_k < α − (tol_k + lb_slack)` sound. Measurement found this widened
 formula breaks the project's own flagship pinned Benders goldens at the standard
-`tol=1e-6` (`31-01-SUMMARY.md`'s Deviations), so Option A (Plan 31-07) replaces it entirely:
+`tol=1e-6` (measured when the widening was tried), so the build-time clamp replaces it entirely:
 `build_master`/`build_master_integer` now CLAMP any accepted explicit bound DOWN to
 `optimum − margin` (`d.bound`, the SAME value an `:auto` bound installs) whenever the
 request lies strictly above it; a bound already at or below that minimum (every
@@ -171,8 +165,8 @@ const ALPHA_LB_REJECTION_TOL = 1e-6
 """
     alpha_lb_margin(optimum::Real, gap::Real; floor::Real = ALPHA_LB_MARGIN) -> Float64
 
-The scale-aware, per-instance-measured margin/tolerance of the α-bound machinery (Phase 30
-code review, WR-03/WR-04): `max(floor, 10·gap, ALPHA_LB_RTOL·|optimum|)`. `gap` is the
+The scale-aware, per-instance-measured margin/tolerance of the α-bound machinery:
+`max(floor, 10·gap, ALPHA_LB_RTOL·|optimum|)`. `gap` is the
 MEASURED duality gap of the solve that produced `optimum` (a non-finite `gap` — a backend
 that does not report a dual objective — contributes nothing; the other two terms remain).
 """
@@ -204,7 +198,7 @@ end
                               λ₀, T::Int, y_max::Real) -> Model
 
 ONE-TIME, discard-after-use relaxed oracle model for [`derive_alpha_op_lb`](@ref)
-(BILEV-05): reuses [`build_planning_oracle`](@ref)'s EXACT assembly (boundary guards,
+reuses [`build_planning_oracle`](@ref)'s EXACT assembly (boundary guards,
 `Model(select_optimizer(problem_class(pf)))`, the two SOC→nonconvex-quad cross-solver
 bridges, `contribute!(pf, ctx, feeder; T)`, the aggregator loop, the `:Rp`/`:Rq` balance
 closure with its `size(...) == (N,T)` guard) with ONE structural difference: `p_import[t]`
@@ -216,7 +210,7 @@ builds an INDEPENDENT model, never reuses [`PlanningOracle`](@ref).
 Objective: `Max ctx.objective - Σ_t λ₀[t]*p_import[t]` — identical shape to
 `build_planning_oracle`'s welfare objective, just over the free box instead of a fixed pin.
 
-Deliberately named WITHOUT a `build_` prefix: `test/test_planning_noninteger.jl`'s PVAL-04
+Deliberately named WITHOUT a `build_` prefix: `test/test_planning_noninteger.jl`'s
 source-scan tripwire greps for the substring `build_\\w+`, and this is a one-time,
 discard-after-use derivation helper (built once, solved once, discarded), not a
 planning-layer subproblem builder in that registry's sense — see that file's own header
@@ -301,16 +295,16 @@ end
                            λ₀, T::Int, y_max::Real)
         -> (; optimum, gap, margin, bound)
 
-The full, measured `α_op_lb` derivation (BILEV-05; Phase 30 code review WR-03/WR-04): a
+The full, measured `α_op_lb` derivation: a
 genuine ONE-TIME relaxed solve of [`make_relaxed_oracle_model`](@ref) via
-[`solve_with_retry!`](@ref) (D-08). `optimum = -objective_value(model)` is the UN-margined
+[`solve_with_retry!`](@ref). `optimum = -objective_value(model)` is the UN-margined
 relaxed minimum of `-welfare` over `p_import ∈ [0, y_max]^T` — a valid global lower bound
 on `-welfare(z)` for ANY `z` in that box (the box strictly contains every pinned trial;
-confirmed numerically, 30-RESEARCH.md Architecture Pattern 3, and valid even when the box
+confirmed numerically, and valid even when the box
 SOCP is itself inexact). `gap` is that solve's own measured duality gap, `margin =
 alpha_lb_margin(optimum, gap)` (scale-aware), and `bound = optimum − margin` is the bound
 `build_master` declares. `build_master`'s rejection compares an explicit bound against
-`optimum` (never against `bound` — WR-03).
+`optimum` (never against `bound`).
 """
 function alpha_op_lb_derivation(
     feeder::AbstractFeeder,
@@ -334,9 +328,9 @@ end
                        λ₀, T::Int, y_max::Real,
                        margin::Union{Nothing,Real} = nothing) -> Float64
 
-Derive `α_op_lb` (BILEV-05): the `bound` of [`alpha_op_lb_derivation`](@ref), i.e.
+Derive `α_op_lb`: the `bound` of [`alpha_op_lb_derivation`](@ref), i.e.
 `optimum − margin` with the scale-aware, per-instance-measured margin
-[`alpha_lb_margin`](@ref) by default (Phase 30 code review, WR-04); an explicit `margin`
+[`alpha_lb_margin`](@ref) by default; an explicit `margin`
 overrides it.
 """
 function derive_alpha_op_lb(
@@ -357,14 +351,14 @@ end
                                 c_inv::Real, c_op::AbstractVector{<:Real}) -> Model
 
 ONE-TIME, discard-after-use relaxed follower model for [`derive_alpha_x_lb`](@ref)
-(BILEV-05): mirrors [`build_follower`](@ref)'s assembly through `invest_op`, but DROPS the
+mirrors [`build_follower`](@ref)'s assembly through `invest_op`, but DROPS the
 `z`/`coupling` constraint entirely — `x_op[t]` is bounded only by
 `x_op[t] <= corridor_cap*x_inv`, never pinned to any trial `z`. Its unconstrained minimum
 over this larger feasible region is therefore a valid lower bound on the TRUE
 (coupling-constrained) follower cost for any feasible `z`.
 
 Deliberately named WITHOUT a `build_` prefix — see [`make_relaxed_oracle_model`](@ref)'s
-docstring for the PVAL-04 exemption rationale (same applies here).
+docstring for the exemption rationale (same applies here).
 """
 function make_relaxed_follower_model(;
     T::Int,
@@ -400,9 +394,9 @@ end
                           c_op::AbstractVector{<:Real}) -> (; optimum, gap, margin, bound)
     alpha_x_lb_derivation(f::FollowerLP) -> (; optimum, gap, margin, bound)
 
-The full, measured `α_x_lb` derivation (BILEV-05; Phase 30 code review WR-03/WR-04): a
+The full, measured `α_x_lb` derivation: a
 genuine ONE-TIME relaxed solve of [`make_relaxed_follower_model`](@ref) (never a hard-coded
-`0.0` shortcut — RESEARCH.md Open Question 3), `optimum = objective_value(model)` (the
+`0.0` shortcut), `optimum = objective_value(model)` (the
 UN-margined relaxed minimum), its measured duality `gap`, the scale-aware `margin`, and
 `bound = optimum − margin`. The `FollowerLP` method extracts `corridor_cap`/`x_inv_max`/`T`
 off the struct and `c_inv`/`c_op` via `coefficient(objective_function(f.model), ·)` — sound
@@ -410,7 +404,7 @@ because `FollowerLP`'s structure is an EXACT match for `make_relaxed_follower_mo
 assumptions — and calls the keyword method, so both agree by construction. Deliberately
 NOT extended to `src/planning/coupling.jl`'s `DistributorView` (pooled capacity row: no
 sound per-distributor relaxed minimum at `solve_stackelberg!`'s build-once boundary, full
-argument in plan 30-04 Task 2); `build_master` then honestly SKIPS `α_x_lb`'s build-time
+argument elsewhere); `build_master` then honestly SKIPS `α_x_lb`'s build-time
 check and the universal runtime floor guard remains the defense-in-depth.
 """
 function alpha_x_lb_derivation(;
@@ -453,8 +447,8 @@ end
                       margin::Union{Nothing,Real} = nothing) -> Float64
     derive_alpha_x_lb(f::FollowerLP; margin::Union{Nothing,Real} = nothing) -> Float64
 
-Derive `α_x_lb` (BILEV-05): the `bound` of [`alpha_x_lb_derivation`](@ref) (scale-aware
-measured margin by default, Phase 30 code review WR-04; an explicit `margin` overrides it).
+Derive `α_x_lb`: the `bound` of [`alpha_x_lb_derivation`](@ref) (scale-aware
+measured margin by default; an explicit `margin` overrides it).
 """
 function derive_alpha_x_lb(;
     T::Int,
@@ -491,34 +485,31 @@ Build the Benders master LP EXACTLY ONCE:
  1. Boundary guards — `T >= 1`, `y_max > 0`, `c_y >= 0` — each throws
     `ArgumentError` naming the offending value, BEFORE any `@variable`/
     `@objective` assembly.
- 2. `model = Model(select_optimizer(LP()))` — INFRA-02, the sole solver-naming
+ 2. `model = Model(select_optimizer(LP()))`, the sole solver-naming
     seam.
  3. `0 <= y_inv <= y_max` (continuous investment) and unconstrained `z[1:T]`
     (boxed below) — no binary/integer variable anywhere.
  4. `α_op >= α_op_lb` and `α_x >= α_x_lb` — the DOCUMENTED, DERIVED finite
-    epigraph lower bounds (11-RESEARCH.md Pitfall M1) declared HERE, at build
+    epigraph lower bounds declared HERE, at build
     time, never added "later".
  5. `box_lo[t]: z[t] >= 0`, `box_hi[t]: z[t] <= y_inv` — `z` is a physically
-    nonnegative delivered import flow bounded by the leader's own investment
-    (11-RESEARCH.md Pitfall O1).
+    nonnegative delivered import flow bounded by the leader's own investment.
  6. `Min c_y*y_inv + α_op + α_x` — the leader's own objective: investment cost
     plus both epigraph cost-to-go terms.
 
-**BILEV-05 (plan 30-02): `α_op_lb`/`α_x_lb` are `Union{Symbol,Real}`, defaulting to
+**`α_op_lb`/`α_x_lb` are `Union{Symbol,Real}`, defaulting to
 `:auto`.** `:auto` resolves via a genuine one-time relaxed solve
 ([`derive_alpha_op_lb`](@ref)/[`derive_alpha_x_lb`](@ref)) — this REQUIRES `bounds_ctx` to
 be supplied. An explicit `Real` is accepted unconditionally when `bounds_ctx === nothing`
-(the byte-identical, zero-regression path every pre-existing call site uses: NO relaxed
+(the bit-for-bit identical, zero-regression path every pre-existing call site uses: NO relaxed
 model is built, NO rejection check runs). When `bounds_ctx` IS supplied alongside an
 explicit `Real`, that explicit value is VALIDATED against the derived minimum: a bound
 that exceeds the UN-margined relaxed optimum by more than the measured slack
-`alpha_lb_margin(optimum, gap; floor = rejection_tol)` throws `ArgumentError` (Phase 30
-code review, WR-03 — see [`ALPHA_LB_REJECTION_TOL`](@ref)) — an invalid (too-tight)
+`alpha_lb_margin(optimum, gap; floor = rejection_tol)` throws `ArgumentError` (see [`ALPHA_LB_REJECTION_TOL`](@ref)) — an invalid (too-tight)
 declared lower bound would otherwise silently produce a WRONG converged answer (see
-`test_planning_hardening.jl`'s own T=8 finding, 30-RESEARCH.md Pitfall 4). An ACCEPTED
+`test_planning_hardening.jl`'s own T=8 finding). An ACCEPTED
 bound that lies strictly above the certified `:auto`-equivalent minimum `d.bound` (inside
-the acceptance slack band) is CLAMPED DOWN to `d.bound` at build time (Phase 31 WR-03, Plan
-31-07, Option A), never installed at the raw requested value — the clamp amount is recorded
+the acceptance slack band) is CLAMPED DOWN to `d.bound` at build time, never installed at the raw requested value — the clamp amount is recorded
 on [`BendersMaster.lb_clamped`](@ref).
 
 `bounds_ctx`'s expected shape: `(; feeder, pf, aggregators, λ₀, follower_kwargs)`, where
@@ -532,13 +523,13 @@ by a POOLED row shared across distributors). When `follower_kwargs === nothing`,
 `:auto` in that case is a hard `ArgumentError` (nothing to derive from), while an explicit
 `α_x_lb` passes through UNVALIDATED at build time; `α_op_lb` on the SAME call remains fully
 resolved/validated via `bounds_ctx` regardless of `follower_kwargs`'s value. The universal
-runtime floor guard (plan 30-04, `benders.jl`) remains active as defense-in-depth for the
+runtime floor guard (`benders.jl`) remains active as defense-in-depth for the
 skipped case.
 
-**Design decision (30-02-PLAN.md's own `<objective>`):** this machinery is OPT-IN via
+**Design decision:** this machinery is OPT-IN via
 `bounds_ctx`, not wired unconditionally — every one of the ~90 pre-existing call sites
 across 10 test files passes explicit `Real` `α_op_lb`/`α_x_lb` and omits `bounds_ctx`; those
-calls remain byte-identical (confirmed by code inspection: the `bounds_ctx === nothing`
+calls remain bit-for-bit identical (confirmed by code inspection: the `bounds_ctx === nothing`
 branch below never calls `derive_alpha_op_lb`/`derive_alpha_x_lb`).
 
 Returns a [`BendersMaster`](@ref) with an empty `cuts` log.
@@ -560,7 +551,7 @@ function build_master(;
     (α_op_lb === :auto || α_x_lb === :auto) &&
         bounds_ctx === nothing &&
         throw(ArgumentError("build_master: α_op_lb/α_x_lb = :auto requires bounds_ctx"))
-    # IN-03 (Phase 30 code review iteration 2): the keyword type already restricts these
+    # The keyword type already restricts these
     # to Union{Symbol,Real}, so the guard must reject every Symbol OTHER than :auto (a
     # typo such as :atuo used to fall through to a MethodError deep in the resolution).
     (α_op_lb isa Real || α_op_lb === :auto) || throw(
@@ -570,21 +561,21 @@ function build_master(;
         ArgumentError("build_master: α_x_lb must be :auto or a Real, got $(repr(α_x_lb))"),
     )
 
-    # WR-05 (Phase 30 code review iteration 2): the acceptance slack actually granted to
+    # The acceptance slack actually granted to
     # each declared bound, carried to the runtime floor guard (see ALPHA_LB_REJECTION_TOL).
-    # Phase 31 WR-03 (Plan 31-07, Option A): both ALWAYS stay 0.0 now — any accepted bound
+    # Both ALWAYS stay 0.0 — any accepted bound
     # is clamped down to a genuine certified minimum at build time (see clamp_op/clamp_x
     # below), so no runtime floor slack is ever needed again.
     slack_op = 0.0
     slack_x = 0.0
-    # Phase 31 WR-03 (Plan 31-07, Option A): how far DOWN an accepted explicit bound was
+    # How far DOWN an accepted explicit bound was
     # moved to reach the certified minimum (0.0 unless clamping actually fired).
     clamp_op = 0.0
     clamp_x = 0.0
 
-    # BILEV-05 resolution: α_op_lb. :auto always derives; an explicit bound is validated
+    # Resolution of α_op_lb. :auto always derives; an explicit bound is validated
     # ONLY when bounds_ctx is supplied (the opt-in design decision above) — the
-    # bounds_ctx === nothing branch is the byte-identical, zero-regression path.
+    # bounds_ctx === nothing branch is the bit-for-bit identical, zero-regression path.
     α_op_lb_resolved = if α_op_lb === :auto
         derive_alpha_op_lb(
             bounds_ctx.feeder,
@@ -603,7 +594,7 @@ function build_master(;
             T = T,
             y_max = y_max,
         )
-        # WR-03: compare against the UN-margined optimum plus a measured, scale-aware
+        # Compare against the UN-margined optimum plus a measured, scale-aware
         # slack (see ALPHA_LB_REJECTION_TOL's derivation) — never `bound + tol`, which
         # cancelled to the raw optimum and left no tolerance at all.
         slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)
@@ -615,26 +606,26 @@ function build_master(;
                 "(see test_planning_hardening.jl's own T=8 finding)",
             ),
         )
-        # Phase 31 WR-03 (Plan 31-07, Option A): clamp an accepted-but-slack bound DOWN to
+        # Clamp an accepted-but-slack bound DOWN to
         # the certified :auto-equivalent minimum d.bound, rather than installing the raw
-        # requested value and widening the runtime certificate (Option B, rejected per
-        # 31-01-SUMMARY.md's own finding — it breaks the project's flagship pinned goldens).
+        # requested value and widening the runtime certificate (rejected: measured to break
+        # the project's flagship pinned goldens).
         α_eff = min(Float64(α_op_lb), d.bound)
         α_eff < Float64(α_op_lb) && @warn(
             "build_master: α_op_lb=$α_op_lb lies within the acceptance slack above the " *
             "derived minimum $(d.bound); installing the certified bound $α_eff instead " *
-            "(Option A, Phase 31 WR-03)",
+            "(clamped to the certified minimum)",
             maxlog = 1,
         )
         clamp_op = Float64(α_op_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
-        slack_op = 0.0   # Option A: the installed bound is a genuine certified lower
+        slack_op = 0.0   # The installed bound is a genuine certified lower
                           # bound by construction -- no runtime floor slack needed
         α_eff
     else
         Float64(α_op_lb)
     end
 
-    # BILEV-05 resolution: α_x_lb. Three-way dispatch on bounds_ctx.follower_kwargs: a
+    # Resolution of α_x_lb. Three-way dispatch on bounds_ctx.follower_kwargs: a
     # NamedTuple, a FollowerLP, or nothing (no sound derivation for this follower type,
     # e.g. DistributorView — skip the rejection check, accept the explicit value as-is;
     # :auto in this branch is a hard error, since there is nothing to derive from).
@@ -651,7 +642,7 @@ function build_master(;
     elseif bounds_ctx !== nothing && _fk !== nothing
         d = _fk isa NamedTuple ? alpha_x_lb_derivation(; _fk..., T = T) :
             alpha_x_lb_derivation(_fk)
-        slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)   # WR-03
+        slack = alpha_lb_margin(d.optimum, d.gap; floor = rejection_tol)
         α_x_lb > d.optimum + slack && throw(
             ArgumentError(
                 "build_master: α_x_lb=$α_x_lb exceeds the derived relaxed minimum " *
@@ -659,36 +650,36 @@ function build_master(;
                 "$(d.gap)) — would silently produce a wrong-converged answer",
             ),
         )
-        # Phase 31 WR-03 (Plan 31-07, Option A): mirror the α_op_lb clamp above.
+        # Mirror the α_op_lb clamp above.
         α_eff = min(Float64(α_x_lb), d.bound)
         α_eff < Float64(α_x_lb) && @warn(
             "build_master: α_x_lb=$α_x_lb lies within the acceptance slack above the " *
             "derived minimum $(d.bound); installing the certified bound $α_eff instead " *
-            "(Option A, Phase 31 WR-03)",
+            "(clamped to the certified minimum)",
             maxlog = 1,
         )
         clamp_x = Float64(α_x_lb) - α_eff   # >= 0.0; the amount clamped (0.0 if none)
-        slack_x = 0.0   # Option A: the installed bound is a genuine certified lower
+        slack_x = 0.0   # The installed bound is a genuine certified lower
                          # bound by construction -- no runtime floor slack needed
         α_eff
     else
-        # bounds_ctx === nothing (opt-out, byte-identical path), OR _fk === nothing (a
+        # bounds_ctx === nothing (opt-out, bit-for-bit identical path), OR _fk === nothing (a
         # pre-built follower with no sound derivation, e.g. DistributorView) — accept the
         # explicit value unvalidated at build time; the universal runtime floor guard
-        # (plan 30-04, benders.jl) remains the defense-in-depth check.
+        # (benders.jl) remains the defense-in-depth check.
         Float64(α_x_lb)
     end
 
-    model = Model(select_optimizer(LP()))   # INFRA-02: never Model(HiGHS.Optimizer) directly
+    model = Model(select_optimizer(LP()))   # never Model(HiGHS.Optimizer) directly
 
     @variable(model, 0 <= y_inv <= y_max)
     @variable(model, z[t = 1:T])
-    # Pitfall M1: FINITE epigraph lower bounds declared AT BUILD TIME — the very
+    # FINITE epigraph lower bounds declared AT BUILD TIME — the very
     # first (zero-cut) solve depends on this, not an edge case to defer.
     @variable(model, α_op >= α_op_lb_resolved)
     @variable(model, α_x >= α_x_lb_resolved)
 
-    # Pitfall O1: z is a physically nonnegative delivered import flow on this
+    # z is a physically nonnegative delivered import flow on this
     # fixture's corridor, bounded above by the leader's own investment — the box
     # is [0, y_inv], not [-y_inv, y_inv].
     @constraint(model, box_lo[t = 1:T], z[t] >= 0)
@@ -716,7 +707,7 @@ end
                         z_k::AbstractVector{<:Real}) -> BendersMaster
 
 Append ONE new persistent optimality-cut row to `master.model` — NEVER a
-rebuild — of the Phase-10 D-05 form:
+rebuild — of the form:
 
 ```
 α >= cost_k + Σ_t grad_k[t] * (z[t] - z_k[t])
@@ -724,7 +715,7 @@ rebuild — of the Phase-10 D-05 form:
 
 where `α` is `master.α_op` if `epigraph === :op` or `master.α_x` if
 `epigraph === :x`. This function is sign-agnostic: it takes whatever
-`cost_k`/`grad_k` the caller supplies (plan 11-02's `benders.jl` is responsible
+`cost_k`/`grad_k` the caller supplies ( `benders.jl` is responsible
 for the oracle's own `cost_k = -oracle_res.cost`, `grad_k = oracle_res.π` sign
 convention documented in this plan's `<sign_convention>` block; the follower's
 `cost_k = follower_res.cost`, `grad_k = follower_res.π_s` is used as-is).
@@ -733,7 +724,7 @@ Throws `ArgumentError` if `epigraph` is anything other than `:op`/`:x`, if
 `length(grad_k) != master.T` or `length(z_k) != master.T`, or if `cost_k`,
 any `grad_k[t]`, or any `z_k[t]` is non-finite (NaN/Inf) — a malformed cut
 triple must fail loudly BEFORE corrupting the master's persistent constraint
-set (T-11-03/WR-03: a NaN/Inf row appended to the build-once model is
+set (a NaN/Inf row appended to the build-once model is
 unremovable and silently poisons every later solve).
 
 Logs `(; kind = :optimality, epigraph, cost_k, grad_k, z_k)` to `master.cuts` and
@@ -753,7 +744,7 @@ function add_optimality_cut!(
         throw(ArgumentError("grad_k has length $(length(grad_k)), expected T=$(master.T)"))
     length(z_k) == master.T ||
         throw(ArgumentError("z_k has length $(length(z_k)), expected T=$(master.T)"))
-    # WR-03: finiteness guard — a NaN/Inf cut row would permanently poison the
+    # Finiteness guard — a NaN/Inf cut row would permanently poison the
     # build-once master (rows are never removed); fail loudly BEFORE @constraint.
     isfinite(cost_k) ||
         throw(ArgumentError("add_optimality_cut!: cost_k must be finite, got $cost_k"))
@@ -795,8 +786,7 @@ v_k + Σ_t u_k[t] * (z[t] - z_k[t]) <= 0
 ```
 
 Throws `ArgumentError` if `length(u_k) != master.T` or `length(z_k) != master.T`,
-or if `v_k`, any `u_k[t]`, or any `z_k[t]` is non-finite (NaN/Inf)
-(T-11-03/WR-03).
+or if `v_k`, any `u_k[t]`, or any `z_k[t]` is non-finite (NaN/Inf).
 
 Logs `(; kind = :feasibility, v_k, u_k, z_k)` to `master.cuts` and returns
 `master`.
@@ -811,7 +801,7 @@ function add_feasibility_cut!(
         throw(ArgumentError("u_k has length $(length(u_k)), expected T=$(master.T)"))
     length(z_k) == master.T ||
         throw(ArgumentError("z_k has length $(length(z_k)), expected T=$(master.T)"))
-    # WR-03: finiteness guard — mirror add_optimality_cut!'s own discipline; a
+    # Finiteness guard — mirror add_optimality_cut!'s own discipline; a
     # NaN/Inf feasibility row is just as unremovable and just as poisonous.
     isfinite(v_k) ||
         throw(ArgumentError("add_feasibility_cut!: v_k must be finite, got $v_k"))
@@ -840,14 +830,14 @@ end
     solve_master!(master::BendersMaster; max_attempts::Int = 4,
                  attempts_out::Union{Nothing,Ref{Int}} = nothing) -> NamedTuple
 
-Re-solve the built-ONCE [`BendersMaster`](@ref) via `solve_with_retry!` (D-08) —
-NEVER the SOLE INFRA-03 choke point directly — so every cut-producing solve on
+Re-solve the built-ONCE [`BendersMaster`](@ref) via `solve_with_retry!` —
+NEVER the choke point called directly — so every cut-producing solve on
 the master is gated by that choke point's own strict solved-and-feasible
 contract (never `allow_almost=true`). The very first (zero-cut) solve returns
 `MOI.OPTIMAL`, never `MOI.DUAL_INFEASIBLE`, because `build_master` already
-declared finite epigraph lower bounds (Pitfall M1).
+declared finite epigraph lower bounds.
 
-`attempts_out` is forwarded UNCHANGED to `solve_with_retry!` (plan 12-01, additive —
+`attempts_out` is forwarded UNCHANGED to `solve_with_retry!` (additive —
 defaults to `nothing`, a pure no-op for every pre-existing call site).
 
 Returns `(; y, z, LB)` where `y = value(master.y_inv)`, `z = value.(master.z)`,
@@ -859,8 +849,8 @@ function solve_master!(
     max_attempts::Int = 4,
     attempts_out::Union{Nothing, Ref{Int}} = nothing,
 )
-    # D-08: solve_with_retry! is the SOLE solve entry point on the master, mirroring
-    # the oracle's own discipline — NEVER the INFRA-03 choke point called directly.
+    # solve_with_retry! is the SOLE solve entry point on the master, mirroring
+    # the oracle's own discipline — NEVER the choke point called directly.
     solve_with_retry!(
         master.model;
         max_attempts = max_attempts,
