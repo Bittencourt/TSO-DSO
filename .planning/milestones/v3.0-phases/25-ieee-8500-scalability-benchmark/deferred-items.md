@@ -447,3 +447,7 @@ magnitude below the D-13 near-ideal convention `3e-4` pu) is left open for a fut
 `~1e-4` scale, still far above `1e-6`); this task never claimed otherwise — the comparison above
 is against each fixture's own separately-calibrated floor, as in every prior measurement in this
 item.
+
+## Items 3 and 4 - Superseded/updated by Phase 35 (2026-10-04)
+
+Superseded/updated by Phase 35 (2026-10-04, ARCH-10): after the v4.0 refactor the ADMM final-consolidation gate defaults to the hybrid floor; the ADMM-only headline point (IEEE-8500 d=0.1 T=10) now converges in 8 iterations and is REFUSED by the gate (CertificateError, hybrid ratio 568.95, worst branch L2916620->N1136366 gap 1.21e-4, loss impact ~4.4e-9 pu; genuine, no tolerance raised); d=0.1 T=24 completes (CertificateError, ratio 223.68, 12.08 GB peak, 678 s); d=0.25 T=24 is earlyoom-killed at 10.6 GiB anon RSS. Phase 25's OOM kills were at T=24 in combined centralized+ADMM processes. Memory wall now between d=0.1 and 0.25 at T=24 (15.9 GB host); dominant consumer is per-hour DSO solver state retained across the ADMM loop (~linear in T). Data: results/ieee8500_benchmark/{hybrid_diagnostic,point_resources,memory_wall_recharacterization}.csv; docs: 'Post-refactor measured results (Phase 35)' in docs/literate/ieee8500_scaling.jl. The original status above is unchanged.

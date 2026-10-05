@@ -126,6 +126,8 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   memory-feasible headline point is measured, or the wall is re-characterized after the
   architecture changes.
 
+  *Phase 35 evidence (2026-10-04): SC1 met by the library hybrid-floor default plus a documented genuine-refusal proof (ratio 568.95); SC2 met by the re-characterized memory wall (35-03/35-04). See docs/literate/ieee8500_scaling.jl 'Post-refactor measured results (Phase 35)'.*
+
 ### Hygiene (HYG)
 
 - [ ] **HYG-01**: Source comments and docstrings contain no plan, wave, task, decision or
