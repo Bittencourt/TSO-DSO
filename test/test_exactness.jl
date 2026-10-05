@@ -207,7 +207,11 @@ end
     # resolves to 500 in EITHER orientation.
     function build_ctx(head_branch_forward::Bool)
         feeder = Feeder(
-            [Bus(1, 0.95, 1.05, true), Bus(2, 0.90, 1.10, false), Bus(3, 0.90, 1.10, false)],
+            [
+                Bus(1, 0.95, 1.05, true),
+                Bus(2, 0.90, 1.10, false),
+                Bus(3, 0.90, 1.10, false),
+            ],
             head_branch_forward ?
             [
                 Branch(1, 2, 0.01, 0.02, TSODSO.SMAX_NO_LIMIT),

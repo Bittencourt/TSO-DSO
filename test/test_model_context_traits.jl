@@ -49,7 +49,9 @@ end
     function check(pf, feeder)
         ctx = TSODSO.ModelContext(Model())
         TSODSO.contribute!(pf, ctx, feeder; T = 1)
-        bc = TSODSO.has_branch_current(pf) == (ctx.pf_vars !== nothing && haskey(ctx.pf_vars, :l))
+        bc =
+            TSODSO.has_branch_current(pf) ==
+            (ctx.pf_vars !== nothing && haskey(ctx.pf_vars, :l))
         rq = TSODSO.has_reactive(pf) == haskey(ctx.residuals, :Rq)
         dc = pf isa TSODSO.DCPowerFlow ? ctx.pf_vars === nothing : ctx.pf_vars !== nothing
         return bc, rq, dc
@@ -81,7 +83,8 @@ end
     @test !(isempty(ctx.objective.terms) && iszero(ctx.objective.aff))
 end
 
-@testitem "model context: trait/pf_vars consistency guard and DC stash reset" tags = [:context] begin
+@testitem "model context: trait/pf_vars consistency guard and DC stash reset" tags =
+    [:context] begin
     using TSODSO, JuMP
 
     feeder = TSODSO.Feeder(
@@ -134,7 +137,8 @@ end
     @test TSODSO._require_T(ctx) == 3
 end
 
-@testitem "welfare_accounting: refuses a ctx with no aggregator contributions" tags = [:context] begin
+@testitem "welfare_accounting: refuses a ctx with no aggregator contributions" tags =
+    [:context] begin
     using TSODSO, JuMP
     ctx = TSODSO.ModelContext(Model())
     ctx.meta[:agg_net] = Any[]

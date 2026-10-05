@@ -60,8 +60,7 @@
     # silently drives this mini-loop INFEASIBLE.
     soc_da = Dict(
         bus => [value(v.soc[t]) for t in 1:(T + 1)] for
-        (bus, varlist) in ctx_da.agg_device_vars for
-        v in varlist if haskey(v, :soc)
+        (bus, varlist) in ctx_da.agg_device_vars for v in varlist if haskey(v, :soc)
     )
 
     # The fixture's single aggregator's battery device — its own `soc0`/`η`/`Δt` literals are
@@ -103,10 +102,7 @@
                 # 1:(T - H + 1)) guarantees t + H <= T + 1 at every visited t, and
                 # soc_da_bus is now built over 1:(T + 1), so every index here is in-bounds
                 # by construction.
-                set_parameter_value(
-                    soc_handle.terminal_param,
-                    soc_da_bus[t + H],
-                )
+                set_parameter_value(soc_handle.terminal_param, soc_da_bus[t + H])
             end
             # TRUE ground-truth slices (no forecast error — isolate the terminal-condition
             # effect alone).

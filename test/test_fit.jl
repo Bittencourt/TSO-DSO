@@ -6,8 +6,7 @@
 # "fit" so `occursin("fit", ti.name)` selects it. The behavioral asserts sit behind an
 # `isdefined` guard so a missing symbol fails cleanly.
 
-@testitem "fit: fit_baseline is defined and returns a finite baseline welfare" tags =
-    [:fit] begin
+@testitem "fit: fit_baseline is defined and returns a finite baseline welfare" tags = [:fit] begin
     using TSODSO
 
     @test isdefined(TSODSO, :fit_baseline)
@@ -29,8 +28,7 @@
     end
 end
 
-@testitem "fit: the DLMP-vs-FIT efficiency ratio is a finite positive scalar" tags =
-    [:fit] begin
+@testitem "fit: the DLMP-vs-FIT efficiency ratio is a finite positive scalar" tags = [:fit] begin
     using TSODSO
 
     @test isdefined(TSODSO, :fit_baseline)

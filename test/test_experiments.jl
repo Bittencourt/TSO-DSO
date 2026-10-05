@@ -241,7 +241,8 @@ end
     # to the pre-fix name (uniform is fully determined by the stoch_S field the name
     # already carries).
     s_uniform = Scenario(name = "wr02", strategy = Stochastic())             # default uniform
-    s_uniform_explicit = Scenario(name = "wr02", strategy = Stochastic(probabilities = fill(1 / 3, 3)))
+    s_uniform_explicit =
+        Scenario(name = "wr02", strategy = Stochastic(probabilities = fill(1 / 3, 3)))
     s_a = Scenario(name = "wr02", strategy = Stochastic(probabilities = [0.2, 0.3, 0.5]))
     s_b = Scenario(name = "wr02", strategy = Stochastic(probabilities = [0.5, 0.3, 0.2]))
 
@@ -342,20 +343,26 @@ end
         push!(v, Scenario(; base..., pf = :restricted_branch_flow, pf_ε = 1e-3))
         push!(v, Scenario(; base..., pf = :restricted_branch_flow, pf_ε = 2e-3))
         for kw in (
-            (ρ = 7.0,), (ε_abs = 2e-4,), (ε_rel = 2e-3,), (maxiter = 150,), (τ_ratio = 3.0,), (μ = 5.0,),
+            (ρ = 7.0,),
+            (ε_abs = 2e-4,),
+            (ε_rel = 2e-3,),
+            (maxiter = 150,),
+            (τ_ratio = 3.0,),
+            (μ = 5.0,),
         )
             push!(v, Scenario(; base..., strategy = ADMM(; kw...)))
         end
         push!(v, Scenario(; base..., strategy = ADMM()))
-        for kw in (
-            (H = 8,), (step = 2,), (terminal_soc = false,), (forecast_error = 0.1,),
-        )
+        for kw in ((H = 8,), (step = 2,), (terminal_soc = false,), (forecast_error = 0.1,))
             push!(v, Scenario(; base..., strategy = MPC(; kw...)))
         end
         push!(v, Scenario(; base..., strategy = MPC()))
         push!(v, Scenario(; base..., strategy = Stochastic(S = 4)))
         push!(v, Scenario(; base..., strategy = Stochastic(H_oos = 6)))
-        push!(v, Scenario(; base..., strategy = Stochastic(probabilities = [0.2, 0.3, 0.5])))
+        push!(
+            v,
+            Scenario(; base..., strategy = Stochastic(probabilities = [0.2, 0.3, 0.5])),
+        )
         return v
     end
     vs = variants()
@@ -365,7 +372,9 @@ end
     @test all(f -> sizeof(f) <= 255, fs)
 
     f_u = TSODSO.scenario_filename(Scenario(; base..., strategy = Stochastic()))
-    f_n = TSODSO.scenario_filename(Scenario(; base..., strategy = Stochastic(probabilities = [0.2, 0.3, 0.5])))
+    f_n = TSODSO.scenario_filename(
+        Scenario(; base..., strategy = Stochastic(probabilities = [0.2, 0.3, 0.5])),
+    )
     @test !occursin("_p", replace(f_u, "_population" => "", "_price" => "", "_pf" => ""))
     @test occursin(r"_p[0-9a-f]{16}\.jld2$", f_n)
 end
@@ -419,8 +428,11 @@ end
 
     ExperimentHarnessFixtures.with_tempdir() do dir
         params = Dict(
-            :name => "mix", :feeder => :ieee13, :strategy => [:centralized, :admm],
-            :seed => 1, :T => 24,
+            :name => "mix",
+            :feeder => :ieee13,
+            :strategy => [:centralized, :admm],
+            :seed => 1,
+            :T => 24,
         )
         TSODSO.run_sweep(params; dir = dir)
         ExperimentHarnessFixtures.with_tempdir() do outdir

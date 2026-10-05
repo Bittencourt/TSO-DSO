@@ -542,7 +542,9 @@ end
 
     # (a) IEEE-13 device scale (Pch_max = 0.0025), legs at 40% of rating — the review's cited
     #     escape (product 1e-6 vs old tol ≈ 1e-6, ratio ≈ 1): now ratio ≈ 94, must THROW.
-    @test_throws CertificateError TSODSO.assert_4q_complementarity!(pinned_ctx(0.0025, 1e-3))
+    @test_throws CertificateError TSODSO.assert_4q_complementarity!(
+        pinned_ctx(0.0025, 1e-3),
+    )
     # (b) 2-bus device scale (Pch_max = 0.02), legs at 5% of rating — the review's other cited
     #     escape: now ratio ≈ 20, must THROW.
     @test_throws CertificateError TSODSO.assert_4q_complementarity!(pinned_ctx(0.02, 1e-3))

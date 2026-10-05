@@ -26,8 +26,7 @@
     @test eltype(feeder.branches) == TSODSO.Branch{Float64}   # per-unit Float64 fixture
 end
 
-@testitem "ieee13: fixture magnitudes & topology match thesis Table 4.1" tags =
-    [:ieee13] begin
+@testitem "ieee13: fixture magnitudes & topology match thesis Table 4.1" tags = [:ieee13] begin
     using TSODSO
 
     feeder = TSODSO.ieee13_modified()
@@ -232,8 +231,8 @@ end
     # Emit the exact gap to the thesis magnitude ALWAYS (visible in the test log), so a
     # figure-bound profile difference is observable without ever reddening the suite.
     gap = abs(v9_16 - THESIS_V9_16)
-    @info "ieee13 ground: thesis v₉[16] cross-check" v9_16 = v9_16 thesis =
-        THESIS_V9_16 gap = gap note = "gap is expected & documented (inputs figure-bound)"
+    @info "ieee13 ground: thesis v₉[16] cross-check" v9_16 = v9_16 thesis = THESIS_V9_16 gap =
+        gap note = "gap is expected & documented (inputs figure-bound)"
 
     # A `broken` @test NEVER fails the suite: it reports Broken when the tight tolerance is
     # unmet and Pass when it is met. After the model corrections the gap moved from

@@ -2,7 +2,11 @@
     using TSODSO
 
     # Built from pieces so this file never matches itself.
-    legacy_re = Regex("meta(\\[\\s*:|,\\s*:)(" * join(["pf_vars", "feeder", "T", "objective", "agg_device_vars"], "|") * ")\\b")
+    legacy_re = Regex(
+        "meta(\\[\\s*:|,\\s*:)(" *
+        join(["pf_vars", "feeder", "T", "objective", "agg_device_vars"], "|") *
+        ")\\b",
+    )
     mirror_tag = "TRANSIENT" * "-MIRROR"
     root = abspath(joinpath(dirname(pathof(TSODSO)), ".."))
     me = abspath(@__FILE__)
@@ -20,7 +24,9 @@
                     abspath(p) == me && continue
                     counter === nothing || (counter[] += 1)
                     for (i, line) in enumerate(eachline(p))
-                        m = rx_or_str isa Regex ? occursin(rx_or_str, line) : occursin(rx_or_str, line)
+                        m =
+                            rx_or_str isa Regex ? occursin(rx_or_str, line) :
+                            occursin(rx_or_str, line)
                         m && push!(hits, "$(relpath(p, root)):$i: $(strip(line))")
                     end
                 end
@@ -30,7 +36,13 @@
     end
 
     nfiles = Ref(0)
-    hits = scan(["src", "test", "docs/literate", "scripts", "docs/src"], [".jl", ".md"], legacy_re; skip_generated = true, counter = nfiles)
+    hits = scan(
+        ["src", "test", "docs/literate", "scripts", "docs/src"],
+        [".jl", ".md"],
+        legacy_re;
+        skip_generated = true,
+        counter = nfiles,
+    )
     # Non-vacuity: a missing directory (`isdir(dir) || continue`) must not make the gate pass.
     @test nfiles[] > 50
     @test isempty(hits) || (@info("legacy meta keys found", hits); false)
@@ -40,7 +52,11 @@
 end
 
 @testitem "ModelContext migration gate: scanner is not vacuous" tags = [:context] begin
-    legacy_re = Regex("meta(\\[\\s*:|,\\s*:)(" * join(["pf_vars", "feeder", "T", "objective", "agg_device_vars"], "|") * ")\\b")
+    legacy_re = Regex(
+        "meta(\\[\\s*:|,\\s*:)(" *
+        join(["pf_vars", "feeder", "T", "objective", "agg_device_vars"], "|") *
+        ")\\b",
+    )
     @test occursin(legacy_re, "x = ctx.meta[:pf_vars]")
     @test occursin(legacy_re, "haskey(ctx.meta, :feeder)")
     @test occursin(legacy_re, "get(ctx.meta, :T, 1)")

@@ -123,8 +123,7 @@ end
     @test all(1 <= m <= length(mv_feeder.buses) for m in mv_loads)
 end
 
-@testitem "ieee8500: measured per-unit impedance spread is reported" tags =
-    [:ieee8500] begin
+@testitem "ieee8500: measured per-unit impedance spread is reported" tags = [:ieee8500] begin
     using TSODSO
 
     feeder = TSODSO.ieee8500_modified()
@@ -143,8 +142,7 @@ end
     @test spread_orders > 3.0
 end
 
-@testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up" tags =
-    [:ieee8500] begin
+@testitem "ieee8500: build_population(:ieee8500) house/capacitor roll-up" tags = [:ieee8500] begin
     using TSODSO
     using TSODSO: build_population
 

@@ -30,7 +30,11 @@
 
     function feeder()
         return Feeder(
-            [Bus(1, VMIN, VMAX, true), Bus(2, VMIN, VMAX, false), Bus(3, VMIN, VMAX, false)],
+            [
+                Bus(1, VMIN, VMAX, true),
+                Bus(2, VMIN, VMAX, false),
+                Bus(3, VMIN, VMAX, false),
+            ],
             [Branch(1, 2, R, X, 10.0), Branch(2, 3, R, X, 10.0)],
             1,
         )
@@ -52,8 +56,15 @@ end
     aggs = ExactnessVerdictFixtures.aggregators()
 
     # (a) AC-feasible ground truth (Ipopt).
-    ctx_ac, _, _ =
-        solve_welfare(feeder, ACPowerFlow(), aggs; T = 1, λ₀ = [1.0], allow_local = true, allow_export = true)
+    ctx_ac, _, _ = solve_welfare(
+        feeder,
+        ACPowerFlow(),
+        aggs;
+        T = 1,
+        λ₀ = [1.0],
+        allow_local = true,
+        allow_export = true,
+    )
     @test ctx_ac isa TSODSO.ModelContext
 
     # (b) DEFAULT ConvexBranchFlow() (corrected, Gan-Low direction) must remain feasible on

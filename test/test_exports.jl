@@ -39,7 +39,17 @@
     @test exported == keep
 
     removed_groups = (
-        (:LP, :QP, :SOCP, :NLP, :MILP, :GurobiChoice, :MosekChoice, :SCSChoice, :problem_class),
+        (
+            :LP,
+            :QP,
+            :SOCP,
+            :NLP,
+            :MILP,
+            :GurobiChoice,
+            :MosekChoice,
+            :SCSChoice,
+            :problem_class,
+        ),
         (:record!, :converged, :set_rho!, :set_rho_q!, :admm_supported),
         (:OFF, :CERTIFIED, :LIVE, :normalize_reactive_mode),
         (:I_base, :Z_base, :PerUnitBase, :to_pu_impedance, :to_pu_power),
@@ -52,11 +62,18 @@
     @test TSODSO.SOCP() isa TSODSO.ProblemClass
     @test isdefined(TSODSO, :record!)
     @test isdefined(TSODSO, :converged)
-    @test all(n -> isdefined(TSODSO, n), Symbol.(readlines(joinpath(pkgdir(TSODSO), ".github", "scripts", "unexported_names.txt"))))
+    @test all(
+        n -> isdefined(TSODSO, n),
+        Symbol.(
+            readlines(
+                joinpath(pkgdir(TSODSO), ".github", "scripts", "unexported_names.txt"),
+            ),
+        ),
+    )
 
     # No name is exported from two different source files.
     function export_owners(root)
-        owners = Dict{Symbol,Set{String}}()
+        owners = Dict{Symbol, Set{String}}()
         function walk(e, file)
             e isa Expr || return nothing
             if e.head === :export

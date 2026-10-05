@@ -99,9 +99,7 @@ end
     # Full root-inward re-encoding of MeshFixtures.mesh_feeder (same buses, same (r,x)
     # literals, every branch stored child->parent).
     function reversed_mesh_feeder(profile::Symbol)
-        rx =
-            profile == :uniform ? MeshFixtures.UNIFORM_RX :
-            MeshFixtures.HETEROGENEOUS_RX
+        rx = profile == :uniform ? MeshFixtures.UNIFORM_RX : MeshFixtures.HETEROGENEOUS_RX
         buses = [
             TSODSO.Bus(1, 0.95, 1.05, true),
             TSODSO.Bus(2, 0.90, 1.10, false),

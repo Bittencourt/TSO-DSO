@@ -104,7 +104,8 @@ end
 
     # In-band (including the documented `tol=1e-6` solver-precision slack): never throws.
     @test TSODSO._mpc_assert_true_state_inband(0.0, 0.01, 0.01, "SOC", 2, 5) === nothing
-    @test TSODSO._mpc_assert_true_state_inband(0.0, 0.01 + 5e-7, 0.01, "SOC", 2, 5) === nothing
+    @test TSODSO._mpc_assert_true_state_inband(0.0, 0.01 + 5e-7, 0.01, "SOC", 2, 5) ===
+          nothing
     @test TSODSO._mpc_assert_true_state_inband(15.0, 22.0, 30.0, "temperature", 3, 7) ===
           nothing
 
@@ -560,7 +561,8 @@ end
     end
     solve_mpc_window!(o)
 
-    boom = (args...; kwargs...) -> throw(SolveFailedError("forced tier failure (test seam)"))
+    boom =
+        (args...; kwargs...) -> throw(SolveFailedError("forced tier failure (test seam)"))
     fallback_ref = Float64[2.0 + 0.1 * t for t in eachindex(λ₀)]   # distinguishable slice
 
     # BOTH tiers fail → the terminal :cert_failed with the fallback_price window slice —
@@ -608,7 +610,14 @@ end
     # (try/catch wrapped in functions: @testitem top-level scope trap.)
     function _call(; kw...)
         return TSODSO._mpc_certify_and_price(
-            feeder, aggs, o, λ₀, 2; measured_state = ms, fe = fe, kw...,
+            feeder,
+            aggs,
+            o,
+            λ₀,
+            2;
+            measured_state = ms,
+            fe = fe,
+            kw...,
         )
     end
     function _thrown(; kw...)
@@ -630,10 +639,8 @@ end
         # tier 2 seam
         @test _thrown(_solve_welfare = thrower(E)) isa typeof(E)
         # tier 3 seam (tier 2 forced to a typed failure so tier 3 is reached)
-        @test _thrown(
-            _solve_welfare = boom,
-            _ac_dual_fallback_price = thrower(E),
-        ) isa typeof(E)
+        @test _thrown(_solve_welfare = boom, _ac_dual_fallback_price = thrower(E)) isa
+              typeof(E)
     end
     @test _thrown(_solve_welfare = thrower(InterruptException())) isa InterruptException
 
@@ -664,12 +671,7 @@ end
     # at all (`ACPowerFlow(; limits = false)`), so this SAME seed=1 dispatch reaches
     # `LOCALLY_SOLVED` cleanly — the genuine overload is reported via
     # `r.settlement_violations`, never thrown (see the `@testitem` below).
-    base = (;
-        name = "mpc_loop_stride",
-        feeder = :ieee13,
-        T = 9,
-        seed = 1,
-    )
+    base = (; name = "mpc_loop_stride", feeder = :ieee13, T = 9, seed = 1)
     mpc_base = (H = 3, terminal_soc = true, forecast_error = 0.05)
     s_step1 = Scenario(; base..., strategy = MPC(; mpc_base..., step = 1))
     s_step2 = Scenario(; base..., strategy = MPC(; mpc_base..., step = 2))
