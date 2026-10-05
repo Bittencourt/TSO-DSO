@@ -346,7 +346,7 @@ function _integer_cycle_hit(
         h.joint_b == joint_b || continue
         length(h.state) == length(state) || continue
         maximum(abs.(state .- h.state)) <= atol || continue
-        residual >= h.residual || continue  # no slack: any decrease = progress (, iter 2)
+        residual >= h.residual || continue  # no slack: any decrease = progress from iter 2
         return h.sweep
     end
     return nothing

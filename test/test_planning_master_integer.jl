@@ -181,7 +181,7 @@ end
 
     # Mirrors test_planning_master.jl's own "persistent cut-row growth" pattern — the
     # MILP analog of the continuous regression, exercising the SAME add_optimality_cut!/
-    # add_feasibility_cut! algebra now overloaded for BendersMasterInteger .
+    # add_feasibility_cut! algebra now overloaded for BendersMasterInteger.
     master = build_master_integer(;
         T = 1,
         K = 4,

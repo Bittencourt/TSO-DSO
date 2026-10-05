@@ -283,8 +283,8 @@ congestion + drop** components that provably SUM to the DADP, PLUS a 5th, UN-sum
 DISTINCT registered dual (strategy B — cone is NOT the leftover, so a dropped
 congestion/drop term cannot hide), then a HARD relative-tolerance assertion checks
 `energy + cone + congestion + drop ≈ total` per node/hour and `total ≈ extract_dlmp(ctx)`,
-throwing (never `@assert`) with the worst per-node residual so a missing term is localizable
-). This 4-term reconstruction and its assertion are
+throwing (never `@assert`) with the worst per-node residual so a missing term is
+localizable. This 4-term reconstruction and its assertion are
 UNCHANGED by the `reactive` field — `reactive` is a SEPARATE price signal (the dual of
 `:balance_q`), never folded into `total` or the sum-to-price check.
 
