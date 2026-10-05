@@ -33,11 +33,11 @@ swappable open-source solvers.
 # API policy
 
 The researcher-facing entry points, data, device, model, result and error types are
-exported. Advanced building blocks (problem-class singletons, planning components,
-exactness helpers, experiment builders, ...) are declared `public`: they are documented
-and stable but must be qualified, e.g. `TSODSO.SOCP()`. Purely internal helpers are
-reachable as `TSODSO.name` and carry no stability promise. See the API and
-architecture pages of the documentation.
+exported. Advanced building blocks (problem-class singletons, per-unit base helpers,
+planning components, exactness helpers, experiment builders, ...) are declared `public`:
+they are documented and stable but must be qualified, e.g. `TSODSO.SOCP()`. Purely
+internal helpers are reachable as `TSODSO.name` and carry no stability promise. See the API
+and architecture pages of the documentation.
 """
 module TSODSO
 
@@ -279,6 +279,9 @@ include("experiments/run_stochastic.jl")
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
 # Declared with Compat's `@compat public` so that `public` also works on Julia 1.10.
+
+# Units: the per-unit base and its ingestion-time conversion helpers.
+@compat public PerUnitBase, Z_base, I_base, to_pu_impedance, to_pu_power
 
 # Solver abstraction: problem-class singletons and optimizer selection.
 @compat public LP,

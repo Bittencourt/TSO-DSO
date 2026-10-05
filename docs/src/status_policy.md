@@ -118,10 +118,11 @@ fails loudly instead of silently changing behavior.
   are reached as `TSODSO.name` or `using TSODSO: name`. They fall into these groups: the
   problem-class singletons (`LP`, `QP`, `SOCP`, `NLP`, `MILP`), optimizer-choice helpers,
   planning building blocks, MPC and stochastic building blocks, exactness helpers, fixture
-  node helpers, experiment builders, and the per-unit helpers and internal constants. The
-  advanced-API names are declared `public` and remain documented in the [API Reference](api.md);
-  on Julia 1.11 and later use `Base.isexported` to inspect the exported set, since `names`
-  also lists `public` names.
+  node helpers, experiment builders, the per-unit base helpers (`PerUnitBase`, `Z_base`,
+  `I_base`, `to_pu_impedance`, `to_pu_power`) and internal constants. The advanced-API names,
+  including the per-unit base helpers, are declared `public` and remain documented in the
+  [API Reference](api.md); on Julia 1.11 and later use `Base.isexported` to inspect the
+  exported set, since `names` also lists `public` names.
 - **`DlmpDecomposition` aliases.** The deprecated `.loss` and `.voltage` properties are
   removed; use `.cone` and `.drop`. `NamedTuple(d)` keeps the historical positional order but
   now uses the same names: its keys are `(energy, cone, congestion, drop, reactive, total)`

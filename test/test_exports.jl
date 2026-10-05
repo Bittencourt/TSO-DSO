@@ -198,5 +198,10 @@
         @test !Base.isexported(TSODSO, :SOCP)
         @test Base.ispublic(TSODSO, :solve_follower!)
         @test !Base.isexported(TSODSO, :record!)
+        # Per-unit base helpers used by the Rung-0 tutorial are public API.
+        @test all(
+            n -> Base.ispublic(TSODSO, n) && !Base.isexported(TSODSO, n),
+            (:PerUnitBase, :Z_base, :I_base, :to_pu_impedance, :to_pu_power),
+        )
     end
 end
