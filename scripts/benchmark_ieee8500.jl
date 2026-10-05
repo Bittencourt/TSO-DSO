@@ -992,6 +992,11 @@ function run_sweep_mode(args)
             error_msg = combined_err,
         )
         push!(rows, row)
+        # WR-05 (35-REVIEW): persist THIS point's completed row immediately (same key replaces its
+        # `started` row), so a kill/exception on a LATER point of a multi-density invocation
+        # cannot leave this fully measured point recorded as `started`. The end-of-sweep upsert
+        # below is kept for idempotence only.
+        upsert_sweep_rows(csv_path_sweep, DataFrame([row]))
 
         @printf(
             "  centralized=%-16s admm=%-16s exact=%-8s total_time=%.3fs\n",
@@ -1005,7 +1010,7 @@ function run_sweep_mode(args)
 
     csv_path = joinpath(out_dir(), "density_sweep.csv")
     df_new = DataFrame(rows)
-    upsert_sweep_rows(csv_path, df_new)
+    upsert_sweep_rows(csv_path, df_new)   # idempotent: every row was already upserted per point (WR-05)
 
     println("\n", "="^96)
     println("RUN SUMMARY (this invocation)")
