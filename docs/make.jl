@@ -56,7 +56,7 @@ end
 
 makedocs(;
     sitename = "TSODSO",
-    modules = [TSODSO],
+    modules = [TSODSO, TSODSO.ReactiveMode],
     authors = "Pedro Bittencourt",
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", nothing) == "true",

@@ -102,3 +102,28 @@ handlers widened to `_is_solver_failure` (`src/planning/retry.jl`, `benders.jl` 
 Reactive terms of aggregators on an active-only formulation (DC) are intentionally unclosed:
 this is a documented degradation with no throw and no status, pinned by
 `test/test_status_policy.jl`.
+
+## 7. Breaking changes
+
+This release trims the API surface and removes several deprecated forms. Everything below
+fails loudly instead of silently changing behavior.
+
+- **Orchestration keywords.** `operational_oracle` no longer accepts the keywords
+  `objective_hook`, `horizon_state` and `z`; passing any of them raises a `MethodError`.
+- **Reactive mode.** `ReactiveMode` is now a module. The only accepted values are
+  `ReactiveMode.OFF`, `ReactiveMode.CERTIFIED` and `ReactiveMode.LIVE` (type
+  `ReactiveMode.T`). The earlier `Bool` and `Symbol` forms raise an `ArgumentError`, and the bare
+  names `OFF`, `CERTIFIED`, `LIVE` and `normalize_reactive_mode` are no longer exported.
+- **Unexported names.** The exported surface shrank from 192 names to 90. The removed names
+  are reached as `TSODSO.name` or `using TSODSO: name`. They fall into these groups: the
+  problem-class singletons (`LP`, `QP`, `SOCP`, `NLP`, `MILP`), optimizer-choice helpers,
+  planning building blocks, MPC and stochastic building blocks, exactness helpers, fixture
+  node helpers, experiment builders, and the per-unit helpers and internal constants. The
+  advanced-API names are declared `public` and remain documented in the [API Reference](api.md);
+  on Julia 1.11 and later use `Base.isexported` to inspect the exported set, since `names`
+  also lists `public` names.
+- **`DlmpDecomposition` aliases.** The deprecated `.loss` and `.voltage` properties are
+  removed; use `.cone` and `.drop`.
+- **Stored simulation provenance.** The type path of the reactive mode changed, so locally
+  stored simulation provenance files written before this change load the mode with a
+  reconstructed type.

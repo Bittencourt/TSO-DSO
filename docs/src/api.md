@@ -12,6 +12,7 @@ CurrentModule = TSODSO
 
 ```@docs
 TSODSO
+TSODSO.ReactiveMode
 ```
 
 ## Solver Abstraction
@@ -92,6 +93,16 @@ Order = [:type, :constant, :function]
 ```@autodocs
 Modules = [TSODSO]
 Pages = ["admm/ReactiveMode.jl", "admm/AgrOpt.jl", "admm/DsoOpt.jl", "admm/residuals.jl", "admm/admm_state.jl", "admm/admm_phases.jl", "admm/solve_admm.jl"]
+Order = [:type, :constant, :function]
+```
+
+### Reactive coupling mode
+
+`ReactiveMode` is a submodule holding the enum type `ReactiveMode.T` and its members
+`ReactiveMode.OFF`, `ReactiveMode.CERTIFIED` and `ReactiveMode.LIVE`.
+
+```@autodocs
+Modules = [TSODSO.ReactiveMode]
 Order = [:type, :constant, :function]
 ```
 
