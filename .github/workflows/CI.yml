@@ -38,13 +38,7 @@ jobs:
       - uses: julia-actions/cache@v2
       # Prove clean-checkout resolution against the committed Manifest.
       - uses: julia-actions/julia-buildpkg@v1
-      # scripts/ and docs/literate/ are not run by the suite: parse them and check every
-      # TSODSO identifier against the loaded API surface (no solver runs).
-      - name: Check scripts and literate docs against the API surface
-        shell: bash
-        run: |
-          julia --project=. --startup-file=no .github/scripts/check_script_api.jl --selftest
-          julia --project=. --startup-file=no .github/scripts/check_script_api.jl
+        id: buildpkg
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v4
@@ -52,6 +46,16 @@ jobs:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+      # scripts/ and docs/literate/ are not run by the suite: parse them and check every
+      # TSODSO identifier against the loaded API surface (no solver runs). Placed AFTER the
+      # test suite and run whenever the package built, so a script finding still fails the
+      # job but never skips (and hides) the suite's own results, and vice versa.
+      - name: Check scripts and literate docs against the API surface
+        if: ${{ !cancelled() && steps.buildpkg.outcome == 'success' }}
+        shell: bash
+        run: |
+          julia --project=. --startup-file=no .github/scripts/check_script_api.jl --selftest
+          julia --project=. --startup-file=no .github/scripts/check_script_api.jl
 
   format:
     name: Format check (JuliaFormatter)

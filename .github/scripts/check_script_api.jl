@@ -12,7 +12,9 @@
 #      `ReactiveMode.OFF` (a TSODSO submodule in scope via `using TSODSO` or an import);
 #   3. a bare (unqualified, not imported, not locally bound) identifier owned by TSODSO or one
 #      of its submodules that `using TSODSO` does NOT bring into scope (unexported / `public`
-#      names such as `max_jump`, `SOCP`, `I_base`, `ReactiveMode.OFF` written as `OFF`);
+#      names such as `max_jump`, `SOCP`, `I_base`, `ReactiveMode.OFF` written as `OFF`); in a
+#      file that only does `import TSODSO` / `import TSODSO: a, b` (no plain `using TSODSO`),
+#      a bare EXPORTED name that was not imported is flagged too;
 #      a call `f(...)` of such a name is flagged even if the file also binds `f` as a plain
 #      variable or NamedTuple key (the `max_jump = max_jump(tr)` pattern);
 #   4. removed APIs: `reactive_consensus` typed `::Bool`/`::Symbol` or passed a Bool/Symbol
@@ -82,13 +84,17 @@ mutable struct FileScan
     fbound::Set{Symbol}       # names bound as functions / types / modules / consts
     imported::Set{Symbol}     # names explicitly imported from TSODSO (or a submodule)
     modalias::Dict{Symbol,Module}  # local names bound to TSODSO / a submodule (`import TSODSO as T`)
+    touches::Bool             # the file imports anything from TSODSO (any using/import form)
+    using_all::Bool           # the file has a plain `using TSODSO` (exports in scope)
+    using_mods::Set{Symbol}   # other modules brought in by a plain `using X` (export shadowing)
     refs::Dict{Symbol,Int}    # value-position references -> first line
     calls::Dict{Symbol,Int}   # call-position references -> first line
     errors::Vector{String}
     line::Int
 end
 FileScan(p) = FileScan(p, Set{Symbol}(), Set{Symbol}(), Set{Symbol}(), Dict{Symbol,Module}(),
-                       Dict{Symbol,Int}(), Dict{Symbol,Int}(), String[], 0)
+                       false, false, Set{Symbol}(), Dict{Symbol,Int}(), Dict{Symbol,Int}(),
+                       String[], 0)
 
 err!(fs, msg) = push!(fs.errors, "$(fs.path):$(fs.line): $msg")
 
@@ -243,6 +249,7 @@ function handle_using!(fs, x)
             path = a.args[1].args
             items = filter(!isnothing, map(import_item, a.args[2:end]))
             if !isempty(path) && path[1] === :TSODSO
+                fs.touches = true
                 m = resolve_path!(fs, path)
                 for (n, local_name) in items
                     if m isa Module && !isdefined(m, n)
@@ -261,6 +268,7 @@ function handle_using!(fs, x)
             inner, alias = a.args
             path = inner isa Expr && inner.head === :. ? inner.args : Any[]
             if !isempty(path) && path[1] === :TSODSO
+                fs.touches = true
                 m = resolve_path!(fs, path)
                 m isa Module && (fs.modalias[alias] = m)
                 push!(fs.imported, alias)
@@ -269,7 +277,12 @@ function handle_using!(fs, x)
             end
         elseif a isa Expr && a.head === :.
             path = a.args
-            if !isempty(path) && path[1] === :TSODSO && length(path) > 1
+            if path == Any[:TSODSO]
+                fs.touches = true
+                x.head === :using && (fs.using_all = true)    # `using TSODSO` (exports in scope)
+                push!(fs.bound, :TSODSO)
+            elseif !isempty(path) && path[1] === :TSODSO && length(path) > 1
+                fs.touches = true
                 m = resolve_path!(fs, path)
                 # `using TSODSO.ReactiveMode` brings that submodule's exports (none) + its name
                 push!(fs.imported, path[end])
@@ -281,9 +294,18 @@ function handle_using!(fs, x)
                 end
             elseif !isempty(path)
                 push!(fs.bound, path[end])
+                x.head === :using && path[1] !== :. && push!(fs.using_mods, path[end])
             end
         end
     end
+end
+
+# Is `s` exported by another loaded module the file brings in with a plain `using X`?
+function exported_elsewhere(fs, s)
+    for m in values(Base.loaded_modules)
+        nameof(m) in fs.using_mods && isdefined(m, s) && Base.isexported(m, s) && return true
+    end
+    return false
 end
 
 function check_call_kws!(fs, x)
@@ -479,6 +501,14 @@ function scan_source(path, src; exported = exported_set(), subs = submodules())
         # Bound as a variable/key only does not legitimise CALLING a hidden TSODSO name.
         local_ok = is_call ? s in fs.fbound : s in fs.bound
         local_ok && continue
+        if s in exported && fs.touches && !fs.using_all && s !== :TSODSO &&
+           !(isdefined(Base, s) || isdefined(Core, s)) && !exported_elsewhere(fs, s)
+            # `import TSODSO` / `import TSODSO: a, b` do not bring the exports into scope.
+            fs.line = is_call ? fs.calls[s] : line
+            err!(fs, "`$s` is exported by TSODSO but this file has no `using TSODSO` (only an " *
+                     "`import` form): add `using TSODSO`, import `$s`, or qualify it")
+            continue
+        end
         home = hidden_home(s, exported, subs)
         home === nothing && continue
         fs.line = is_call ? fs.calls[s] : line
@@ -555,6 +585,15 @@ function selftest()
         ("using TSODSO\ny = max_jump.(trs)", 1, "broadcast value use"),
         ("using TSODSO\ny = map(max_jump, trs)", 1, "higher-order value use"),
         ("using TSODSO\nf = max_jump", 1, "function-as-value binding"),
+        # exports are in scope only after a plain `using TSODSO`
+        ("import TSODSO\nx = solve_admm(a, b)", 1, "import-only bare export"),
+        ("import TSODSO: ieee13_modified\nf = ieee13_modified()\nx = solve_admm(f, b)", 1,
+         "import-list bare export"),
+        ("import TSODSO: solve_admm\nx = solve_admm(a, b)", 0, "import-list explicit name"),
+        ("import TSODSO\nx = TSODSO.solve_admm(a, b)", 0, "import-only qualified"),
+        ("using TSODSO\nimport TSODSO: max_jump\nx = solve_admm(a, b)", 0, "using + import"),
+        ("using TSODSO, Printf\nx = solve_admm(a, b)", 0, "using list"),
+        ("x = solve_admm(a, b)", 0, "no TSODSO import (included helper)"),
     ]
     exported, subs = exported_set(), submodules()
     bad = 0
