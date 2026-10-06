@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
+stopped_at: "Phase 37 executing — plan 37-08 complete (JET baseline 33 -> 11); next 37-09 CI wiring"
 last_updated: "2026-10-06T13:35:42.074Z"
 last_activity: 2026-10-06
 progress:
