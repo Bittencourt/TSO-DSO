@@ -683,7 +683,22 @@ honestly, and the repo's scripts/manifests are tidy.
   4. `scripts/` has an index; one-off and superseded scripts are archived; `pv_boom_report*`
      duplication is merged into shared code; the redundant root `Manifest.toml` is dropped or its
      purpose documented; `.planning/tmp/` is untracked.
-**Plans**: TBD
+**Plans:** 13 plans
+
+Plans:
+- [ ] 37-01-PLAN.md — Hygiene foundation: untrack/ignore .planning/tmp, drop root Manifest.toml, fix 4 docs @ref + ieee8500 docstring
+- [ ] 37-02-PLAN.md — runtests.jl: TSODSO_TEST_SET fast/slow/all, test/-only discovery, allowed-Broken guard, count-sets check
+- [ ] 37-03-PLAN.md — FlakeRetry helper + unit test, fresh-process flake harness, archive reactive_flake_rate + API-check skip
+- [ ] 37-04-PLAN.md — Instrumented full run on Julia 1.12.7: per-item timings and measured :slow list
+- [ ] 37-05-PLAN.md — Apply :slow tags, gate the 1.12.7 FIT item (@test_broken), ieee8500 wrapper or manual decision
+- [ ] 37-06-PLAN.md — Flake harness 20x on 1.12.5 and 1.12.7, findings and evidence-based quarantine
+- [ ] 37-07-PLAN.md — scripts/jet_check.jl ratchet + justified baseline
+- [ ] 37-08-PLAN.md — Optional value-preserving JET cleanups with bit-identity proof (or revert)
+- [ ] 37-09-PLAN.md — CI: fast env + JET job, slow.yml nightly/dispatch, local fast-set run
+- [ ] 37-10-PLAN.md — PV-boom fixture re-tune (script-level), re-run case study, regenerate results (checkpoint)
+- [ ] 37-11-PLAN.md — pv_boom report merge into shared lib + single report, v1 archived, HTML equivalence proof
+- [ ] 37-12-PLAN.md — scripts/README.md index, index drift guard in CI, README testing section
+- [ ] 37-13-PLAN.md — Phase gate: full runs on 1.12.5 and 1.12.7, all static guards, FINAL-GATES evidence
 
 ## Progress
 
