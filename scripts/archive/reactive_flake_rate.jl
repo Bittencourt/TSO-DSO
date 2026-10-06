@@ -1,3 +1,4 @@
+# ARCHIVED: uses the pre-ReactiveMode Bool API; superseded by scripts/flake_rate.jl. Kept for history, not maintained.
 # scripts/reactive_flake_rate.jl
 #
 # Reactive-power consensus — the two REQUIRED empirical measurements

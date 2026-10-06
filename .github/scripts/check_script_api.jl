@@ -545,6 +545,9 @@ function scan_source(path, src; exported = exported_set(), subs = submodules())
     return fs.errors
 end
 
+"""True when any path component of `rel` (relative to the scanned root) is named `archive`."""
+is_archived(rel::AbstractString) = "archive" in splitpath(rel)
+
 function collect_files(root, args)
     targets = isempty(args) ? ["scripts", "docs/literate"] : args
     files = String[]
@@ -552,7 +555,8 @@ function collect_files(root, args)
         p = isabspath(t) ? t : joinpath(root, t)
         if isdir(p)
             for (d, _, fs) in walkdir(p), f in fs
-                endswith(f, ".jl") && push!(files, joinpath(d, f))
+                full = joinpath(d, f)
+                endswith(f, ".jl") && !is_archived(relpath(full, p)) && push!(files, full)
             end
         elseif isfile(p) && endswith(p, ".jl")
             push!(files, p)
@@ -642,6 +646,16 @@ function selftest()
         if got != want
             bad += 1
             println("SELFTEST FAIL [$label]: expected $want finding(s), got $got")
+        end
+    end
+    for (rel, want, label) in [
+        ("archive/old.jl", true, "archive path excluded"),
+        ("sub/archive/old.jl", true, "nested archive path excluded"),
+        ("flake_rate.jl", false, "non-archive path included"),
+    ]
+        if is_archived(rel) != want
+            bad += 1
+            println("SELFTEST FAIL [$label]")
         end
     end
     println(bad == 0 ? "selftest OK ($(length(cases)) cases)" : "selftest: $bad failure(s)")

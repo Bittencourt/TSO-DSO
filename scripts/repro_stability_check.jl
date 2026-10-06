@@ -2,7 +2,7 @@
 #
 # Directional thesis reproduction — the stability/sensitivity
 # measurement, run and its findings committed BEFORE any golden band is pinned in
-# `test/test_thesis_repro.jl`. Mirrors `scripts/reactive_flake_rate.jl`'s
+# `test/test_thesis_repro.jl`. Mirrors `scripts/archive/reactive_flake_rate.jl`'s
 # DrWatson scaffold / try-catch flake-counter / committed-findings shape exactly.
 #
 # Two measurements, NEITHER previously done anywhere in the repo:
@@ -549,7 +549,7 @@ open(report_path, "w") do io
     println(
         io,
         "This is a citable finding, not a pass/fail gate (mirrors ",
-        "scripts/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, ",
+        "scripts/archive/reactive_flake_rate.jl's own framing) — the number itself is the deliverable, ",
         "reported here neither silently accepted nor silently \"fixed.\" The per-stage breakdown ",
         "makes any future misattribution of WHICH call failed structurally ",
         "impossible to reintroduce.",
