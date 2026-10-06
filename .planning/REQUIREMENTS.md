@@ -206,7 +206,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | HYG-04 | Phase 37 | Pending |
 | HYG-05 | Phase 37 | Pending |
 | HYG-06 | Phase 37 | Pending |
-| HYG-08 | Phase 37 | Complete |
+| HYG-08 | Phase 37 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 37 total
