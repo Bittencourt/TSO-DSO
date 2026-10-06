@@ -9,7 +9,7 @@ Source: one detached run, `TSODSO_TEST_VERBOSE=1 TSODSO_TEST_SET=all`, `julia +1
 | 1.12.5 baseline (pre-phase) | 32205 | 0 | 5 | |
 | 1.12.7 observed (this run) | 32218 | 1 | 4 | 32223 |
 
-Canary reached: `iters = 56`, `welfare = -4823.666048218671` (golden -4823.66604824162 agrees to about 7e-12 relative, inside the pinned tolerance; the canary item passed). Items selected: 510 in 98 files (506 per `--count-sets` in plan 02 plus the 4 items of `test/test_flake_retry.jl` from plan 03). The "guards" testset also ran and passed.
+Canary reached: `iters = 56`, `welfare = -4823.666048218671` (golden -4823.66604824162 agrees to about 5e-12 relative, inside the pinned tolerance; the canary item passed). Items selected: 510 in 98 files (506 per `--count-sets` in plan 02 plus the 4 items of `test/test_flake_retry.jl` from plan 03). The "guards" testset also ran and passed.
 
 Deltas (Pass +13, Error +1, Broken -1):
 - +16 passes: the 4 `test_flake_retry.jl` items (plan 03, 16 passes).
