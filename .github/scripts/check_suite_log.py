@@ -85,8 +85,11 @@ def main(argv):
     if not skip_canary:
         if not re.search(r"iters\s*=\s*56\b", text):
             fail("canary iters = 56 not found")
-        if not re.search(r"welfare\s*=\s*-4823\.66604824162\b", text):
-            fail("canary welfare = -4823.66604824162 not found")
+        # The printed welfare differs from the golden in the last digits across Julia
+        # patches (about 5e-12 relative); the canary item itself pins the tolerance.
+        vals = [float(v) for v in re.findall(r"\bwelfare\s*=\s*(-4823\.\d+)", text)]
+        if not any(abs(v + 4823.66604824162) <= 1e-9 * 4823.66604824162 for v in vals):
+            fail("canary welfare = -4823.66604824162 (rel 1e-9) not found")
     with open(f"{T}/{label}.totals", "w") as fh:
         fh.write(" ".join(f"{k}={g(k)}" for k in ("Pass", "Fail", "Error", "Broken", "Total")) + "\n")
     if other:
