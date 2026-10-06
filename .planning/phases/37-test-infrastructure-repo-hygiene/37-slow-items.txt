@@ -1,0 +1,37 @@
+# :slow items per 37-TIMINGS.md rule: file total >= 30 s AND item >= 5 s; canary and Aqua excluded.
+# file | exact @testitem name | seconds (Julia 1.12.7, -t2, single instrumented run)
+test/test_admm.jl | admm: cross-validation ieee13 welfare + DADP (crossval, ieee13) | 141.9
+test/test_ieee123_admm.jl | ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval) | 139.7
+test/test_acceptance.jl | acceptance: IEEE-123 voltage — exact relaxation + DADP + ADMM≈centralized (SC3) | 136.6
+test/test_acceptance.jl | acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3) | 100.6
+test/test_admm_adaptive.jl | admm adaptive rho: scale-invariant convergence 2-bus AND ieee13 (adaptive, rho) | 79.9
+test/test_planning_certification_bilevel_interior.jl | bilevel certification (interior fixture): production == BilevelJuMP StrongDualityMode == brute-force grid; production != joint; production != z≡0 stub | 63.4
+test/test_ieee123_admm.jl | ieee13 admm 4q-bess: live reactive dual-ascent supporting evidence, NOT CI-gating (ieee13, 4q) | 50.4
+test/test_thesis_repro.jl | thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip | 39.0
+test/test_experiments.jl | experiments: seed sensitivity admm | 35.1
+test/test_experiments.jl | experiments: mixed-strategy sweep collate | 33.2
+test/test_experiments.jl | experiments: same-seed repro admm | 29.8
+test/test_strategies.jl | strategies: run(st, s) explicit strategy wins | 28.4
+test/test_planning_master_integer.jl | planning master_integer: L-validity — L=α_op_lb+α_x_lb bounds the REAL oracle/follower across [0,y_max] | 28.2
+test/test_strategies.jl | strategies: ScenarioResult shape ADMM | 27.6
+test/test_planning_certification_integer.jl | planning certification integer: negative-control regression -- a deliberately WRONG known_optimum is rejected, never falsely converges via a stray gap<=tol match | 23.7
+test/test_planning_nash.jl | planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero | 21.3
+test/test_ieee123_admm.jl | ieee123 admm: voltage-binding margin (ieee123, crossval) | 18.6
+test/test_planning_certification_integer.jl | planning certification integer: exhaustive-enumeration certification of the canonical tiny instance (certificates 1+2, no-good visibility, secondary-certificate non-blocker documented) -- FIXED (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header | 18.1
+test/test_planning_nash_integer.jl | planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation) | 18.0
+test/test_experiments.jl | experiments: scenario admm | 17.1
+test/test_experiments.jl | experiments: sweep diff-friendly | 16.5
+test/test_experiments.jl | experiments: result_to_dict flat primitives | 16.0
+test/test_planning_certification_bilevel_interior.jl | bilevel certification (T=2 interior fixture): shared-x_inv stationarity sum over t; production == BilevelJuMP == brute-force | 15.6
+test/test_experiments.jl | experiments: run_and_store round-trip | 15.6
+test/test_planning_nash_integer.jl | planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (live) | 15.0
+test/test_planning_certification_bilevel_interior.jl | bilevel certification (interior fixture, d_max binds): the embedded network coupling restricts the leader | 13.2
+test/test_planning_nash.jl | planning nash: N=3 probe converges (no closed-form hand-check required, N=2 is hand-checkable and N=3 is probe-only) | 11.1
+test/test_strategies.jl | strategies: run(Stochastic) common shape | 10.9
+test/test_planning_nash.jl | planning nash: damping ω=0.5 still converges (no cycling on this monotone fixture) | 10.2
+test/test_planning_nash.jl | planning nash: N=2 gating probe — 3 seeds x 2 orders all converge, structural 'a converged equilibrium' language | 7.7
+test/test_planning_nash_integer.jl | planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_op_lb :auto or finite, α_x_lb finite; no silently ignored master_kwargs/integer keys, derived α_x_lb) — before any solve call | 7.4
+test/test_experiments.jl | experiments: sweep | 6.8
+test/test_planning_nash.jl | planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria | 6.0
+test/test_strategies.jl | strategies: run_mpc/run_stochastic fallback to defaults | 5.8
+test/test_planning_certification_integer.jl | planning certification integer: T>1 joint corner_recourse matches T=2 dense-grid enumeration on a genuinely non-separable PVBattery fixture | 5.4
