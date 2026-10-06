@@ -683,7 +683,7 @@ honestly, and the repo's scripts/manifests are tidy.
   4. `scripts/` has an index; one-off and superseded scripts are archived; `pv_boom_report*`
      duplication is merged into shared code; the redundant root `Manifest.toml` is dropped or its
      purpose documented; `.planning/tmp/` is untracked.
-**Plans:** 7/13 plans executed
+**Plans:** 8/13 plans executed
 
 Plans:
 **Wave 1**
@@ -716,7 +716,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 37-08-PLAN.md — Optional value-preserving JET cleanups with bit-identity proof (or revert)
+- [x] 37-08-PLAN.md — Optional value-preserving JET cleanups with bit-identity proof (or revert)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -760,7 +760,7 @@ Plans:
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
-| 37. Test Infrastructure & Repo Hygiene | v4.0 | 7/13 | In Progress|  |
+| 37. Test Infrastructure & Repo Hygiene | v4.0 | 8/13 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 
