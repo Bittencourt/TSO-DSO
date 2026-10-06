@@ -1,0 +1,22 @@
+== flake_rate run 20261006T105826 ==
+fit_baseline [julia 1.12.5, fresh]: n=20 pass=0 rate=0.000 solve_failed=0 labels: none
+ieee13_admm [julia 1.12.5, fresh]: n=20 pass=20 rate=1.000 solve_failed=0 labels: none
+stochastic_welfare [julia 1.12.5, fresh]: n=20 pass=20 rate=1.000 solve_failed=0 labels: none
+== flake_rate run 20261006T114935 ==
+fit_baseline [julia 1.12.7, fresh]: n=20 pass=0 rate=0.000 solve_failed=20 labels: ALMOST_OPTIMAL=20 ALMOST_SOLVED=20
+ieee13_admm [julia 1.12.7, fresh]: n=20 pass=20 rate=1.000 solve_failed=0 labels: none
+stochastic_welfare [julia 1.12.7, fresh]: n=20 pass=20 rate=1.000 solve_failed=0 labels: none
+
+== Phase 37 plan 06: measured decision (20 fresh-process repeats per target, Julia 1.12.5 and 1.12.7) ==
+Wilson 95% upper bound on the failure rate for 0/20 failures: 16.1% (so a flake rarer than ~1 in 6 is not excluded).
+Regimes distinguished by solve_label only: fit_baseline 1.12.5 = solved (20/20), 1.12.7 = solve_failed:ALMOST_OPTIMAL (20/20).
+
+ieee13_admm: 1.12.5 20/20 pass, 1.12.7 20/20 pass; label histogram (NUMERICAL_ERROR, ALMOST_*, SLOW_PROGRESS, ConvergenceError) all zero.
+  Historical Phase-16 numbers (NUMERICAL_ERROR 11/20 OFF, 3/20 CERTIFIED) were measured on the old Bool-API code and do not reproduce at current defaults.
+  Decision: no reproducible flake at current defaults; quarantine nothing, no retry applied.
+stochastic_welfare: 1.12.5 20/20 pass, 1.12.7 20/20 pass; no solver-status labels.
+  Decision: no reproducible flake at current defaults; quarantine nothing, no retry applied.
+fit_baseline: 1.12.5 20/20 broken (conditional thesis cross-check Broken, solve_label=solved); 1.12.7 20/20 broken
+  (gated @test_broken, solve_label=solve_failed:ALMOST_OPTIMAL; ALMOST_OPTIMAL=20 ALMOST_SOLVED=20). Fully deterministic on each patch.
+  Decision: already gated by plan 37-05 (@test_broken + allowed list); no further change; not a flake.
+The with_solve_retry helper stays available and unit-tested but is applied nowhere. No test or src edits.
