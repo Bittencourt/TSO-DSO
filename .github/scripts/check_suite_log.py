@@ -2,6 +2,9 @@
 """Validate a detached run started by suite_detached.sh.
 
 Usage: check_suite_log.py LABEL [--mode suite|docs] [--wait SECONDS] [--same-pass-as OTHER]
+                          [--broken N] [--skip-canary]
+  --broken N      expected Broken count in the totals row (default 5)
+  --skip-canary   do not require the canary iters/welfare lines (short logs)
 Exit 0 ok, 3 still running, 1 failed requirement.
 """
 import os
@@ -26,6 +29,8 @@ def main(argv):
     mode = argv[argv.index("--mode") + 1] if "--mode" in argv else "suite"
     wait = min(int(argv[argv.index("--wait") + 1]), 540) if "--wait" in argv else 0
     other = argv[argv.index("--same-pass-as") + 1] if "--same-pass-as" in argv else None
+    nbroken = int(argv[argv.index("--broken") + 1]) if "--broken" in argv else 5
+    skip_canary = "--skip-canary" in argv
     root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
     os.chdir(root)
     done, log, start = f"{T}/{label}.done", f"{T}/{label}.log", f"{T}/{label}.start"
@@ -72,12 +77,13 @@ def main(argv):
     print("totals:", {k: g(k) for k in ("Pass", "Fail", "Error", "Broken", "Total")})
     if g("Fail") != 0 or g("Error") != 0:
         fail("fail/error is nonzero")
-    if g("Broken") != 5:
-        fail(f"broken is {g('Broken')}, expected 5")
-    if not re.search(r"iters\s*=\s*56\b", text):
-        fail("canary iters = 56 not found")
-    if not re.search(r"welfare\s*=\s*-4823\.66604824162\b", text):
-        fail("canary welfare = -4823.66604824162 not found")
+    if g("Broken") != nbroken:
+        fail(f"broken is {g('Broken')}, expected {nbroken}")
+    if not skip_canary:
+        if not re.search(r"iters\s*=\s*56\b", text):
+            fail("canary iters = 56 not found")
+        if not re.search(r"welfare\s*=\s*-4823\.66604824162\b", text):
+            fail("canary welfare = -4823.66604824162 not found")
     with open(f"{T}/{label}.totals", "w") as fh:
         fh.write(" ".join(f"{k}={g(k)}" for k in ("Pass", "Fail", "Error", "Broken", "Total")) + "\n")
     if other:
