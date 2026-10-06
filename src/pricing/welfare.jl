@@ -149,7 +149,7 @@ function welfare_accounting(
     # NOT part of the physical accounting.
     dso = (_transfer_flip ? transfer : -transfer) - mem_cost
 
-    social = objective_value(ctx.model)               # GLB-CVX optimum (3.38)
+    social = _objective(ctx.model)               # GLB-CVX optimum (3.38)
 
     # Magnitude-sanity guard: finite and within the per-unit band
     # (¢$/kWh-consistent prices × horizon × buses) — a clean power-of-ten unit slip fails here.

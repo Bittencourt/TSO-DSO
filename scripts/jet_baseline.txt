@@ -5,37 +5,17 @@
 
 # Group 1: `JuMP.objective_value` is inferred as `Union{Float64, Vector{Float64}}` (the vector
 # method belongs to multi-objective models). Every model here is single-objective, so the
-# Vector branch is unreachable; the reports are union-split artifacts of that inference.
-MethodErrorReport | TSODSO._measured_duality_gap | master.jl | no matching method found `-(::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO._oracle_or_infeasible | benders.jl | no matching method found `_feas_cut_class(::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO._recover_kkt_certificate | bilevel_kkt.jl | no matching method found `abs(::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO._run_mpc | mpc_loop.jl | no matching method found `Float64(::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO.alpha_op_lb_derivation | master.jl | no matching method found `-(::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.alpha_op_lb_derivation | master.jl | no matching method found `alpha_lb_margin(::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.alpha_x_lb_derivation | master.jl | no matching method found `-(::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.alpha_x_lb_derivation | master.jl | no matching method found `alpha_lb_margin(::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.assert_ac_exact! | ac_oracle.jl | no matching method found `-(::Vector{Float64}, ::Float64)`, `-(::Float64, ::Vector{Float64})` (2/4 union split)
-MethodErrorReport | TSODSO.build_master | master.jl | no matching method found `kwcall(::NamedTuple{(:floor,), <:Tuple{Real}}, ::typeof(TSODSO.alpha_lb_margin), ::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.build_master_integer | master_integer.jl | no matching method found `kwcall(::NamedTuple{(:floor,), <:Tuple{Real}}, ::typeof(TSODSO.alpha_lb_margin), ::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.build_stochastic_welfare | stochastic_welfare.jl | no matching method found `Float64(::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO.fit_baseline | fit.jl | no matching method found `-(::Vector{Float64}, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.run | run.jl | no matching method found `Float64(::Vector{Float64})` (1/2 union split)
+# Vector branch is unreachable; the reports are union-split artifacts of that inference. Call
+# sites go through the `_objective` helper (a `::Float64` assertion), which collapses the former
+# per-caller reports into the single `_objective` entry (the assertion's own convert check).
+MethodErrorReport | TSODSO._objective | factory.jl | no matching method found `convert(::Type{Float64}, ::Vector{Float64})`
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `kwcall(::NamedTuple{(:atol,), <:Tuple{Any}}, ::typeof(TSODSO._integer_cycle_hit), ::Vector{@NamedTuple{sweep::Int64, joint_b::Vector{Int64}, state::Vector{Float64}, residual::Float64}}, ::Vector{Any}, ::Any, ::Float64)` (1/2 union split)
-MethodErrorReport | TSODSO.solve_stackelberg! | benders.jl | no matching method found `_feas_cut_class(::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO.solve_stackelberg! | benders.jl | no matching method found `_incumbent_ac_report(::AbstractFeeder, ::AbstractVector{<:Aggregator}, ::Any, ::Int64, ::Any, ::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO.solve_stackelberg! | benders.jl | no matching method found `add_feasibility_cut!(::Any, ::Vector{Float64}, ::Vector{Float64}, ::Any)` (1/2 union split)
-MethodErrorReport | TSODSO.solve_stackelberg! | benders.jl | no matching method found `add_optimality_cut!(::Any, ::Symbol, ::Vector{Float64}, ::Vector{Float64}, ::Any)` (1/2 union split)
-MethodErrorReport | TSODSO.solve_stackelberg! | benders.jl | no matching method found `kwcall(::@NamedTuple{gap::Float64, accepted_slack::Float64}, ::typeof(TSODSO._assert_epigraph_floor), ::Vector{Float64}, ::Any, ::Symbol)` (1/2 union split)
-MethodErrorReport | TSODSO.welfare_accounting | welfare.jl | no matching method found `_fit_ratio(::Vector{Float64}, ::Any)` (1/2 union split)
-MethodErrorReport | TSODSO.welfare_accounting | welfare.jl | no matching method found `abs(::Vector{Float64})` (1/2 union split)
-MethodErrorReport | TSODSO.welfare_accounting | welfare.jl | no matching method found `isfinite(::Vector{Float64})` (1/2 union split)
 
 # Group 2: `Union{Nothing, T}` struct fields / `findfirst` results used after an earlier
 # `!== nothing` (or `μ_j !== nothing`) guard that inference does not carry across the call
 # boundary; the Nothing branch cannot reach the reported call.
 MethodErrorReport | TSODSO._mpc_truth_import_acpf | mpc_loop.jl | no matching method found `_mpc_settlement_violations(::AbstractFeeder, ::Nothing, ::Int64)` (1/2 union split)
 MethodErrorReport | TSODSO.fit_baseline | fit.jl | no matching method found `_fit_ac_settlement_violations(::Feeder, ::Nothing, ::Int64)` (1/2 union split)
-MethodErrorReport | TSODSO.has_branch_current | ModelContext.jl | no matching method found `haskey(::Nothing, ::Symbol)` (1/2 union split)
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `+(::Int64, ::Nothing)` (1/2 union split)
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `iterate(::Nothing)`
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `setindex!(::Nothing, ::Any, ::Int64)` (1/2 union split)

@@ -63,7 +63,7 @@ silent skip.
 function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
     try
         solve_stochastic_oos_step!(h_oos)
-        return objective_value(h_oos.model), false
+        return _objective(h_oos.model), false
     catch e
         e isa SolveFailedError || rethrow()
         ts = termination_status(h_oos.model)

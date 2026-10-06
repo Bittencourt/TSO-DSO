@@ -602,7 +602,7 @@ function _corner_recourse_joint(
                 mmodel,
             ),
         )
-        LB = objective_value(mmodel)
+        LB = _objective(mmodel)
         z_next = value.(zz)
 
         r = evaluate(z_next)

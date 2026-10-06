@@ -272,7 +272,7 @@ function assert_restriction_exact!(
 
     optimality_loss =
         unrestricted_cost === nothing ? nothing :
-        objective_value(ctx_restricted.model) - Float64(unrestricted_cost)
+        _objective(ctx_restricted.model) - Float64(unrestricted_cost)
 
     # Provenance is stashed UNCONDITIONALLY on both the pass and fail path (a
     # stale :certified_convex_dual marker must never survive a later failed certification on

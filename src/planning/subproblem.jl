@@ -367,7 +367,7 @@ function solve_planning_oracle!(
     π = dual.(o.pin)                                    # length-T pin dual
     π_s = sum(Δt * π[t] for t in 1:o.T)                 # duration-weighted, reporting-only
     dadp = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])
-    cost = objective_value(o.model)
+    cost = _objective(o.model)
 
     return (; cost, π, π_s, dadp, ctx = o.ctx, exactness, socp_maxgap)
 end

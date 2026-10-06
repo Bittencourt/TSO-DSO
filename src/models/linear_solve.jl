@@ -146,7 +146,7 @@ function solve_linear(
     # DADP = dual of the ACTIVE balance at the priced (first-device) bus.
     priced = devices[1].bus
     dadp = dual.(balance_p[priced, :])
-    return ctx, objective_value(model), dadp
+    return ctx, _objective(model), dadp
 end
 
 export solve_linear

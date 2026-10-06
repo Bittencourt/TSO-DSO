@@ -441,7 +441,7 @@ function solve_master!(
     return (;
         y = value(master.y_inv),
         z = value.(master.z),
-        LB = objective_value(master.model),
+        LB = _objective(master.model),
         b = value.(master.b),
     )
 end

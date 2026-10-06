@@ -57,7 +57,7 @@ function solve_toy_dc(feeder::AbstractFeeder)
 
     assert_solved!(model; dual = true, allow_local = false)  # choke point
 
-    return ctx, objective_value(model), dual(balance)        # dual ready for pricing
+    return ctx, _objective(model), dual(balance)        # dual ready for pricing
 end
 
 # --- Parameter pattern (wired-but-unused; for ADMM re-solves) -----------

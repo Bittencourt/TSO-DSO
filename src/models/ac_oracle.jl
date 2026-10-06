@@ -333,7 +333,7 @@ function assert_ac_exact!(
 
     # Welfare gap between the relaxed (SOCP) and the true nonconvex (AC) optimum. NO error/throw
     # anywhere below the T-mismatch guard — a per-hour gap surfaces in `rows`, never as a raise.
-    obj_gap = objective_value(ctx_socp.model) - objective_value(ctx_ac.model)
+    obj_gap = _objective(ctx_socp.model) - _objective(ctx_ac.model)
     return (; obj_gap, hours = rows)
 end
 

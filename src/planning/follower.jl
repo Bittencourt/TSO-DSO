@@ -173,7 +173,7 @@ function solve_follower!(f::FollowerLP, z_trial::AbstractVector{<:Real})
     optimize!(f.model)
 
     if is_solved_and_feasible(f.model; dual = true)
-        return (; feasible = true, cost = objective_value(f.model), π_s = dual.(f.coupling))
+        return (; feasible = true, cost = _objective(f.model), π_s = dual.(f.coupling))
     elseif dual_status(f.model) == MOI.INFEASIBILITY_CERTIFICATE
         # GENUINE HiGHS Farkas/dual ray — never a penalized-slack "always feasible"
         # shortcut.

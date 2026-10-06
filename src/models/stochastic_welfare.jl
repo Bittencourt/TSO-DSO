@@ -460,7 +460,7 @@ function build_stochastic_welfare(
         model,
         ctxs,
         probabilities = collect(Float64, probabilities),
-        welfare = Float64(objective_value(model)),
+        welfare = Float64(_objective(model)),
         dadp = Vector{Vector{Float64}}(dadp),
         expected_dadp = Vector{Float64}(expected_dadp),
         socp_maxgap,

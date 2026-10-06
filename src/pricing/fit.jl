@@ -240,7 +240,7 @@ function _fit_opt_solve(
         ctx,
         per_agg,
         total_utility = value(total_utility),
-        prosumer_surplus = objective_value(model),
+        prosumer_surplus = _objective(model),
     )
 end
 
@@ -698,7 +698,7 @@ function fit_baseline(
             allow_export = true,
             allow_almost = true,
         )
-        gap = abs(objective_value(retry_ctx.model) - dual_objective_value(retry_ctx.model))
+        gap = abs(_objective(retry_ctx.model) - dual_objective_value(retry_ctx.model))
         gap <= FIT_SITE3_ALMOST_GAP_TOL || rethrow(e)
         (retry_ctx, retry_obj, retry_dadp)
     end

@@ -189,7 +189,7 @@ function _measured_duality_gap(model)
         err isa InterruptException && rethrow()
         return NaN   # backend reports no dual objective: unmeasured, never 0.0
     end
-    return Float64(abs(objective_value(model) - dobj))
+    return Float64(abs(_objective(model) - dobj))
 end
 
 """
@@ -315,7 +315,7 @@ function alpha_op_lb_derivation(
     model =
         make_relaxed_oracle_model(feeder, pf, aggregators; λ₀ = λ₀, T = T, y_max = y_max)
     solve_with_retry!(model; dual = true)
-    optimum = -objective_value(model)
+    optimum = -_objective(model)
     gap = _measured_duality_gap(model)
     margin = alpha_lb_margin(optimum, gap)
     return (; optimum, gap, margin, bound = optimum - margin)
@@ -421,7 +421,7 @@ function alpha_x_lb_derivation(;
         c_op = c_op,
     )
     solve_with_retry!(model; dual = true)
-    optimum = objective_value(model)
+    optimum = _objective(model)
     gap = _measured_duality_gap(model)
     margin = alpha_lb_margin(optimum, gap)
     return (; optimum, gap, margin, bound = optimum - margin)
@@ -860,9 +860,5 @@ function solve_master!(
         attempts_out = attempts_out,
     )
 
-    return (;
-        y = value(master.y_inv),
-        z = value.(master.z),
-        LB = objective_value(master.model),
-    )
+    return (; y = value(master.y_inv), z = value.(master.z), LB = _objective(master.model))
 end

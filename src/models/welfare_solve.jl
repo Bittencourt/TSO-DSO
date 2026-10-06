@@ -287,7 +287,7 @@ function solve_welfare(
     # DADP = dual of the ACTIVE balance at the first aggregator's bus over the horizon.
     priced = aggregators[1].bus
     dadp = dual.(balance_p[priced, :])
-    return ctx, objective_value(model), dadp
+    return ctx, _objective(model), dadp
 end
 
 """

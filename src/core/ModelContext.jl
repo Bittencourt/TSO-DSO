@@ -130,7 +130,8 @@ skipping the exactness gate.
 """
 function has_branch_current(ctx::ModelContext)
     declared = has_branch_current(ctx.pf)
-    actual = ctx.pf_vars !== nothing && haskey(ctx.pf_vars, :l)
+    pfv = ctx.pf_vars
+    actual = pfv !== nothing && haskey(pfv, :l)
     declared == actual || throw(
         ArgumentError(
             "ModelContext: has_branch_current($(typeof(ctx.pf))) = $declared but pf_vars " *

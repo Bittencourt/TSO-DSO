@@ -235,7 +235,7 @@ function solve_feasibility_oracle!(
         attempts_out = attempts_out,
     )
 
-    cost = objective_value(fo.model)
+    cost = _objective(fo.model)
     π = dual.(fo.pin)
     v = cost
     u = π   # EMPIRICALLY VERIFIED sign (un-negated raw pin dual) — see docstring above.

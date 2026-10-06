@@ -231,3 +231,13 @@ function alternative_optimizer(choice, pc::ProblemClass)
 end
 
 export select_optimizer
+
+"""
+    _objective(model) -> Float64
+
+`JuMP.objective_value(model)` with a `Float64` return assertion. Every model in this package is
+single-objective, so the scalar method is the only one that can run; the assertion only tells
+type inference what JuMP's multi-objective `Vector{Float64}` method would otherwise widen it to.
+Value-preserving: no conversion happens for a `Float64` result.
+"""
+_objective(model::JuMP.AbstractModel)::Float64 = JuMP.objective_value(model)

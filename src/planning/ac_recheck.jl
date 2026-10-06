@@ -183,7 +183,7 @@ function ac_recheck_incumbent(
         ok = n_thermal == 0 && n_voltage == 0,
         violations,
         p_import = [value(oracle_ac.p_import[t]) for t in 1:T],
-        ac_welfare = objective_value(oracle_ac.model),
+        ac_welfare = _objective(oracle_ac.model),
         raw_status = raw_status(oracle_ac.model),
     )
 end

@@ -666,7 +666,7 @@ function _recover_kkt_certificate(
                 "x_inv=$xv, z=$zv)",
             )
             k == length(stages) && break   # read the values before modifying again
-            v = objective_value(cert)
+            v = _objective(cert)
             @constraint(cert, stage_obj <= v + 1e-9 * max(1.0, abs(v)))
         end
         canonical = (;
@@ -773,7 +773,7 @@ function solve_bilevel!(kkt::BilevelKKT)
         x_inv = value(kkt.x_inv),
         z = value.(kkt.z),
         d = value.(kkt.d),
-        total_cost = objective_value(kkt.model),
+        total_cost = _objective(kkt.model),
         mu_cap = cert.canonical.mu_cap,
         rho_y = cert.canonical.rho_y,
         rho_lo = cert.canonical.rho_lo,
