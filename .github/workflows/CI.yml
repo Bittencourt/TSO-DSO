@@ -36,10 +36,15 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
-      # Prove clean-checkout resolution against the committed Manifest.
+      # Prove clean-checkout resolution against the committed per-Julia-minor
+      # Manifest-v1.x.toml (there is no root Manifest.toml; Pkg picks the file
+      # matching the running minor version).
       - uses: julia-actions/julia-buildpkg@v1
         id: buildpkg
       - uses: julia-actions/julia-runtest@v1
+        env:
+          # Per-push CI runs the fast set only; the nightly `slow` workflow runs the rest.
+          TSODSO_TEST_SET: fast
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v4
         with:
@@ -56,6 +61,31 @@ jobs:
         run: |
           julia --project=. --startup-file=no .github/scripts/check_script_api.jl --selftest
           julia --project=. --startup-file=no .github/scripts/check_script_api.jl
+
+  jet:
+    name: JET (Julia 1.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate environments
+        shell: bash
+        run: |
+          julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+          julia --project=test --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+      - name: JET against the committed baseline
+        shell: bash
+        env:
+          JULIA_LOAD_PATH: "@:${{ github.workspace }}/test:@stdlib"
+        run: |
+          julia --project=. --startup-file=no -t2 scripts/jet_check.jl --selftest
+          julia --project=. --startup-file=no -t2 scripts/jet_check.jl
 
   format:
     name: Format check (JuliaFormatter)
