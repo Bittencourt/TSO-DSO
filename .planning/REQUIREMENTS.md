@@ -147,7 +147,7 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
   green.
 - [x] **HYG-07**: Test fixture files and tags are named after their content, not the planning
   phase (no `fixtures_phaseN`, `:phaseN`).
-- [x] **HYG-08**: `scripts/` has an index. One-off and superseded scripts are archived, and the
+- [ ] **HYG-08**: `scripts/` has an index. One-off and superseded scripts are archived, and the
   `pv_boom_report*` duplication is merged into shared code. The redundant root `Manifest.toml`
   is dropped or its purpose documented, and `.planning/tmp/` is untracked.
 
