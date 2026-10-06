@@ -686,18 +686,56 @@ honestly, and the repo's scripts/manifests are tidy.
 **Plans:** 13 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 37-01-PLAN.md — Hygiene foundation: untrack/ignore .planning/tmp, drop root Manifest.toml, fix 4 docs @ref + ieee8500 docstring
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 37-02-PLAN.md — runtests.jl: TSODSO_TEST_SET fast/slow/all, test/-only discovery, allowed-Broken guard, count-sets check
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 37-03-PLAN.md — FlakeRetry helper + unit test, fresh-process flake harness, archive reactive_flake_rate + API-check skip
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 37-04-PLAN.md — Instrumented full run on Julia 1.12.7: per-item timings and measured :slow list
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 37-05-PLAN.md — Apply :slow tags, gate the 1.12.7 FIT item (@test_broken), ieee8500 wrapper or manual decision
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 37-06-PLAN.md — Flake harness 20x on 1.12.5 and 1.12.7, findings and evidence-based quarantine
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 37-07-PLAN.md — scripts/jet_check.jl ratchet + justified baseline
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 37-08-PLAN.md — Optional value-preserving JET cleanups with bit-identity proof (or revert)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 37-09-PLAN.md — CI: fast env + JET job, slow.yml nightly/dispatch, local fast-set run
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 37-10-PLAN.md — PV-boom fixture re-tune (script-level), re-run case study, regenerate results (checkpoint)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 37-11-PLAN.md — pv_boom report merge into shared lib + single report, v1 archived, HTML equivalence proof
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 37-12-PLAN.md — scripts/README.md index, index drift guard in CI, README testing section
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [ ] 37-13-PLAN.md — Phase gate: full runs on 1.12.5 and 1.12.7, all static guards, FINAL-GATES evidence
 
 ## Progress
