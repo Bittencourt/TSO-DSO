@@ -334,7 +334,7 @@ converges the cone properly at an unchanged optimum.
 **Root-caused, bounded `ALMOST_OPTIMAL` fallback on SITE 3 ONLY.** At a tightened `tol_gap` (e.g. `1e-10`), the NESTED `solve_welfare` cross-
 check has a DOCUMENTED, root-caused intermittent `ALMOST_OPTIMAL` flake on some fixtures — a
 measured, genuine Clarabel numerical-precision conditioning wall (confirmed via the `max_iter`
-root-cause protocol: Clarabel's OWN iteration trace is bit-for-bit identical at `max_iter ∈ {200, 400, 2000}`, ruling out slow convergence; see [`FIT_SITE3_ALMOST_GAP_TOL`](@ref)'s comment). SITE 3 (and ONLY SITE 3) now retries once with `allow_almost = true` on that
+root-cause protocol: Clarabel's OWN iteration trace is bit-for-bit identical at `max_iter ∈ {200, 400, 2000}`, ruling out slow convergence; see `FIT_SITE3_ALMOST_GAP_TOL`'s comment). SITE 3 (and ONLY SITE 3) now retries once with `allow_almost = true` on that
 SPECIFIC failure class and accepts the near-feasible `social_dadp` ONLY if the retry's OWN
 measured primal-dual gap clears the named `FIT_SITE3_ALMOST_GAP_TOL`; otherwise the original
 exception still propagates. This is safe because `social_dadp`'s underlying `dadp` (the dual

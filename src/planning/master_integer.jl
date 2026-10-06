@@ -189,7 +189,7 @@ function reuses verbatim.** An ACCEPTED bound that lies strictly above the certi
 `:auto`-equivalent minimum `d.bound` (inside the acceptance slack band) is CLAMPED DOWN
 to `d.bound` at build time, never installed at the
 raw requested value — the clamp amount is recorded on
-[`BendersMasterInteger.lb_clamped`](@ref), the identical verbatim port of
+`BendersMasterInteger.lb_clamped`, the identical verbatim port of
 `build_master`'s own clamp transformation.
 
 Returns a [`BendersMasterInteger`](@ref) with an empty `cuts` log, an empty
@@ -810,7 +810,7 @@ ONE call site (wired into `solve_stackelberg!`):
     then checks whether `key = round.(Int, b_trial)` has already been visited
     (`master.visited`'s anti-stall bookkeeping) AND, if so, whether the
     CURRENT `z` trial (`lb_res.z`) matches the RECORDED `z` from that corner's
-    LAST visit within [`stall_z_atol`](@ref)`(master)` (scale-hardened, see its own
+    LAST visit within ```stall_z_atol``(master)``` (scale-hardened, see its own
     docstring) — only THAT combination (same
     corner, unchanged `z`) is a genuine STALL, triggering
     `add_nogood_cut!(master, b_trial)`. `master.visited[key]` is updated to

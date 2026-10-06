@@ -509,7 +509,7 @@ declared lower bound would otherwise silently produce a WRONG converged answer (
 `test_planning_hardening.jl`'s own T=8 finding). An ACCEPTED
 bound that lies strictly above the certified `:auto`-equivalent minimum `d.bound` (inside
 the acceptance slack band) is CLAMPED DOWN to `d.bound` at build time, never installed at the raw requested value — the clamp amount is recorded
-on [`BendersMaster.lb_clamped`](@ref).
+on `BendersMaster.lb_clamped`.
 
 `bounds_ctx`'s expected shape: `(; feeder, pf, aggregators, λ₀, follower_kwargs)`, where
 `follower_kwargs` is ONE of: a `NamedTuple` with `corridor_cap`/`x_inv_max`/`c_inv`/`c_op`

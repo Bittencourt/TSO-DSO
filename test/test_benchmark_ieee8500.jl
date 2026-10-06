@@ -56,11 +56,15 @@ const CSV_PATH = joinpath(RESULTS_DIR, "density_sweep.csv")
     run_quick() -> DataFrameRow
 
 Runs `julia --project=<repo root> scripts/benchmark_ieee8500.jl --fixture ieee8500-mv --quick`
-as a REAL SUBPROCESS (never `include`d in-process — this is a genuine end-to-end check of the
-harness AS A USER INVOKES IT, matching the documented quick command exactly),
-then parses the resulting `density_sweep.csv`'s row for the `(fixture="ieee8500-mv", solver="clarabel")` key `--quick` always produces. `main(ARGS)` overwrites/replaces this exact
-row on every invocation (`run_sweep_mode`'s own key-based CSV upsert), so reading the row back
-after the subprocess exits reflects THIS run, not a stale one from an earlier session.
+as a REAL SUBPROCESS.
+It is never `include`d in-process.
+This is a genuine end-to-end check of the harness AS A USER INVOKES IT.
+It matches the documented quick command exactly.
+
+Then parses the resulting `density_sweep.csv`.
+The row of interest is the `(fixture="ieee8500-mv", solver="clarabel")` key that `--quick` always produces.
+`main(ARGS)` overwrites/replaces this exact row on every invocation (`run_sweep_mode`'s own key-based CSV upsert).
+So reading the row back after the subprocess exits reflects THIS run, not a stale one from an earlier session.
 """
 function run_quick()
     run(
@@ -116,7 +120,9 @@ end
 # end budget_exceeded before reaching the gate; the library-level CertificateError is covered by
 # test/test_admm_exactness_default.jl).
 
-"Run the harness as a subprocess; returns (success::Bool, stdout_stderr::String)."
+"""
+Run the harness as a subprocess; returns (success::Bool, stdout_stderr::String).
+"""
 function run_harness(args::Vector{String}, dir::String)
     out = IOBuffer()
     cmd = `julia --project=$PROJECT_ROOT $SCRIPT $args --results-dir $dir`
