@@ -36,6 +36,37 @@
 # is a cheap, OPTIONAL, non-authoritative check;
 # it had known false positives and false negatives
 # and is never a substitute for the grep above.
-using TestItemRunner
+#
+# Selection / guards (HYG-05, HYG-06): `TSODSO_TEST_SET` = fast | slow | all (unset = all;
+# any other value is an error). `TSODSO_TEST_VERBOSE=1` passes verbose=true so per-item
+# Time is printed. `TSODSO_TEST_FILES=a.jl,b.jl` restricts to those basenames (short runs).
+# Only items under test/ are selected, a zero selection fails, and any Broken/skipped
+# record not listed in test/expected_broken.txt fails the run.
+using TestItemRunner, Test
+include(joinpath(@__DIR__, "runner_support.jl"))
 
-@run_package_tests
+function tso_run_all()
+    set = test_set_from_env()
+    test_dir = @__DIR__
+    selected = Ref(0)
+    filt = function (ti)
+        m = tso_selected(ti, set, test_dir)
+        m && (selected[] += 1)
+        return m
+    end
+    verbose = get(ENV, "TSODSO_TEST_VERBOSE", "") == "1"
+    allowed = read_expected_broken(joinpath(test_dir, "expected_broken.txt"))
+    @testset "TSODSO" begin
+        outer = Test.get_testset()
+        @run_package_tests filter = filt verbose = verbose
+        @testset "guards" begin
+            @test selected[] > 0
+            recs = broken_records(outer)
+            bad = [r for r in recs if !is_allowed(r, allowed)]
+            foreach(r -> println("UNEXPECTED ", r.kind, " record: ", r.where, " :: ", r.expr), bad)
+            @test isempty(bad)
+        end
+    end
+end
+
+tso_run_all()
