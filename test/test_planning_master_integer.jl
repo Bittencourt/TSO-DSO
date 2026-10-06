@@ -99,7 +99,7 @@ end
 end
 
 @testitem "planning master_integer: L-validity — L=α_op_lb+α_x_lb bounds the REAL oracle/follower across [0,y_max]" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO:
         build_follower,

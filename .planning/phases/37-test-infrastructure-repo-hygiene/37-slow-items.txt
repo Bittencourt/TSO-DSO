@@ -35,3 +35,4 @@ test/test_experiments.jl | experiments: sweep | 6.8
 test/test_planning_nash.jl | planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria | 6.0
 test/test_strategies.jl | strategies: run_mpc/run_stochastic fallback to defaults | 5.8
 test/test_planning_certification_integer.jl | planning certification integer: T>1 joint corner_recourse matches T=2 dense-grid enumeration on a genuinely non-separable PVBattery fixture | 5.4
+test/test_toy_dc.jl | quality: Aqua persistent tasks (no tasks left running after precompile) | 552.3

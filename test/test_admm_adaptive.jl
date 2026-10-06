@@ -53,7 +53,7 @@
 end
 
 @testitem "admm adaptive rho: scale-invariant convergence 2-bus AND ieee13 (adaptive, rho)" setup =
-    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :adaptive] begin
+    [IEEE123Fixtures, TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :adaptive, :slow] begin
     using TSODSO
     using TSODSO: converged
 

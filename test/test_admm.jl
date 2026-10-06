@@ -77,7 +77,7 @@
 end
 
 @testitem "admm: cross-validation ieee13 welfare + DADP (crossval, ieee13)" setup =
-    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm, :slow] begin
     using TSODSO
 
     # solve_admm must be defined (the ADMM dual-ascent loop).

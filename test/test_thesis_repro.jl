@@ -69,7 +69,7 @@
 # restores the "copied verbatim from the committed findings.txt" provenance claim to true.
 
 @testitem "thesis_repro: IEEE-123 real-impedance DADP-vs-FIT — DSO-surplus sign flip" tags =
-    [:thesis_repro] setup = [IEEE123Fixtures] begin
+    [:thesis_repro, :slow] setup = [IEEE123Fixtures] begin
     using TSODSO
     using TSODSO: SOCP
 

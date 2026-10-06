@@ -56,7 +56,7 @@
 # the full account.
 
 @testitem "planning nash integer: N=2 run_nash! with integer=(;K=4) converges + per-player brute-force certification (no profitable unilateral deviation)" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     import JuMP
 
@@ -169,7 +169,7 @@
 end
 
 @testitem "planning nash integer: integer kwarg boundary guards (K must be a positive Integer; α_op_lb :auto or finite, α_x_lb finite; no silently ignored master_kwargs/integer keys, derived α_x_lb) — before any solve call" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     dev = ToyDeviceFixture.ToyElasticDevice(2, 6.0, 1.0, 10.0)
@@ -385,7 +385,7 @@ end
 end
 
 @testitem "planning nash integer: damped ω=0.5 integer run converges — no false CYCLED error while b is stable and z/x_inv still move (live)" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     shared = build_shared_transmission(;

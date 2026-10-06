@@ -50,7 +50,7 @@
     end
 end
 
-@testitem "experiments: scenario admm" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: scenario admm" setup = [ExperimentHarnessFixtures] tags = [:slow] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -92,7 +92,7 @@ end
     end
 end
 
-@testitem "experiments: sweep" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: sweep" setup = [ExperimentHarnessFixtures] tags = [:slow] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -109,7 +109,8 @@ end
     end
 end
 
-@testitem "experiments: sweep diff-friendly" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: sweep diff-friendly" setup = [ExperimentHarnessFixtures] tags =
+    [:slow] begin
     using TSODSO
 
     @test isdefined(TSODSO, :run_sweep)
@@ -178,7 +179,8 @@ end
 # (adaptive-ρ residual comparisons, iteration-count-dependent convergence checks) and is
 # exactly where non-determinism is most likely to leak in. run.jl's own docstring asserts
 # bit-for-bit identity holds for :admm too, but nothing verified it. Mirror both gates here.
-@testitem "experiments: same-seed repro admm" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: same-seed repro admm" setup = [ExperimentHarnessFixtures] tags =
+    [:slow] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -199,7 +201,8 @@ end
     end
 end
 
-@testitem "experiments: seed sensitivity admm" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: seed sensitivity admm" setup = [ExperimentHarnessFixtures] tags =
+    [:slow] begin
     using TSODSO
 
     @test isdefined(TSODSO, :Scenario)
@@ -379,7 +382,8 @@ end
     @test occursin(r"_p[0-9a-f]{16}\.jld2$", f_n)
 end
 
-@testitem "experiments: result_to_dict flat primitives" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: result_to_dict flat primitives" setup = [ExperimentHarnessFixtures] tags =
+    [:slow] begin
     using TSODSO
 
     kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
@@ -399,7 +403,8 @@ end
     @test all(v -> !(v isa TSODSO.AbstractStrategy), values(da))
 end
 
-@testitem "experiments: run_and_store round-trip" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: run_and_store round-trip" setup = [ExperimentHarnessFixtures] tags =
+    [:slow] begin
     using TSODSO
     using DrWatson: wload
 
@@ -421,7 +426,8 @@ end
     end
 end
 
-@testitem "experiments: mixed-strategy sweep collate" setup = [ExperimentHarnessFixtures] begin
+@testitem "experiments: mixed-strategy sweep collate" setup = [ExperimentHarnessFixtures] tags =
+    [:slow] begin
     using TSODSO
     using DataFrames: DataFrame, nrow
     using CSV: CSV

@@ -307,7 +307,7 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning certification integer: exhaustive-enumeration certification of the canonical tiny instance (certificates 1+2, no-good visibility, secondary-certificate non-blocker documented) -- FIXED (Q_nu recourse, stall/no-good over-eagerness, MILP feasibility tolerance), see file header" tags =
-    [:planning] setup =
+    [:planning, :slow] setup =
     [TwoBusFixtures, ToyDeviceFixture, PlanningFixtures, EnumerateLatticeOracle] begin
     using TSODSO: build_follower, build_master_integer, build_planning_oracle
     using TSODSO, Test
@@ -513,7 +513,7 @@ end
 end
 
 @testitem "planning certification integer: negative-control regression -- a deliberately WRONG known_optimum is rejected, never falsely converges via a stray gap<=tol match" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture, EnumerateLatticeOracle] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture, EnumerateLatticeOracle] begin
     using TSODSO: build_follower, build_master_integer, build_planning_oracle
     using TSODSO, Test
 
@@ -596,7 +596,7 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testitem "planning certification integer: T>1 joint corner_recourse matches T=2 dense-grid enumeration on a genuinely non-separable PVBattery fixture" tags =
-    [:planning] setup = [TwoBusFixtures, EnumerateLatticeOracle] begin
+    [:planning, :slow] setup = [TwoBusFixtures, EnumerateLatticeOracle] begin
     using TSODSO: build_follower, build_planning_oracle
     using TSODSO, Test
 

@@ -524,7 +524,7 @@ end
 end
 
 @testitem "planning nash: damping ω=0.5 still converges (no cycling on this monotone fixture)" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     shared = build_shared_transmission(;
@@ -621,7 +621,7 @@ end
 # N=2-hand-checkable/N=3-probe-only).
 
 @testitem "planning nash: N=2 gating probe — 3 seeds x 2 orders all converge, structural 'a converged equilibrium' language" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
@@ -715,7 +715,7 @@ end
 # optimum, constant across the continuum) for every seed.
 
 @testitem "planning nash: interior-cap fixture (x_inv_max=[1.0,1.0]) exposes a genuine GNE continuum — x_inv_spread exceeds a measured floor, z_spread stays near-zero" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
@@ -791,7 +791,7 @@ end
 end
 
 @testitem "planning nash: N=3 probe converges (no closed-form hand-check required, N=2 is hand-checkable and N=3 is probe-only)" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
     using TSODSO: run_nash_probe
 
@@ -941,7 +941,7 @@ end
 end
 
 @testitem "planning nash: z0/x_inv0 seeds genuinely enter the shared game state — distinct seeds produce distinct sweep-1 trajectories and can reach distinct equilibria" tags =
-    [:planning] setup = [TwoBusFixtures, ToyDeviceFixture] begin
+    [:planning, :slow] setup = [TwoBusFixtures, ToyDeviceFixture] begin
     using TSODSO
 
     build_toy_shared() = build_shared_transmission(;

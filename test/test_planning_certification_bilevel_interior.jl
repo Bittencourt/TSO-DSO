@@ -337,7 +337,7 @@
 end
 
 @testitem "bilevel certification (interior fixture): production == BilevelJuMP StrongDualityMode == brute-force grid; production != joint; production != z≡0 stub" tags =
-    [:planning] setup = [BilevelInteriorCertFixture] begin
+    [:planning, :slow] setup = [BilevelInteriorCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP
 
@@ -505,7 +505,7 @@ end
 end
 
 @testitem "bilevel certification (interior fixture, d_max binds): the embedded network coupling restricts the leader" tags =
-    [:planning] setup = [BilevelInteriorCertFixture] begin
+    [:planning, :slow] setup = [BilevelInteriorCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP
 
@@ -566,7 +566,7 @@ end
 end
 
 @testitem "bilevel certification (T=2 interior fixture): shared-x_inv stationarity sum over t; production == BilevelJuMP == brute-force" tags =
-    [:planning] setup = [BilevelInteriorCertFixture] begin
+    [:planning, :slow] setup = [BilevelInteriorCertFixture] begin
     using TSODSO: build_bilevel_kkt, solve_bilevel!
     using TSODSO, BilevelJuMP, JuMP, Ipopt
 

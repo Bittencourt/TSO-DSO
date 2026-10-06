@@ -17,7 +17,7 @@
 #     and the converged DSO-OPT is exact (`exact_maxgap` small) at the binding-voltage point.
 
 @testitem "ieee123 admm: end-to-end converge + DADP cross-validation (ieee123, crossval)" setup =
-    [IEEE123Fixtures] tags = [:admm, :ieee123] begin
+    [IEEE123Fixtures] tags = [:admm, :ieee123, :slow] begin
     using TSODSO
     using TSODSO: SOCP
 
@@ -105,7 +105,7 @@ end
 # real-impedance swap could silently turn the case numerically slack (e.g. staying inside
 # [0.95, 1.05] at every hour/bus) without any existing test noticing.
 @testitem "ieee123 admm: voltage-binding margin (ieee123, crossval)" setup =
-    [IEEE123Fixtures] tags = [:admm, :ieee123] begin
+    [IEEE123Fixtures] tags = [:admm, :ieee123, :slow] begin
     using TSODSO
     using TSODSO: SOCP
     using JuMP: value
@@ -171,7 +171,7 @@ end
 # matched by the file's own ieee123/crossval tags above, so a
 # CI-gating filter selecting on those tags alone never picks this item up).
 @testitem "ieee13 admm 4q-bess: live reactive dual-ascent supporting evidence, NOT CI-gating (ieee13, 4q)" setup =
-    [IEEE13Fixtures] tags = [:admm, :reactive] begin
+    [IEEE13Fixtures] tags = [:admm, :reactive, :slow] begin
     using TSODSO
 
     # Reuse the SAME IEEE-13 GROUND fixture `test_admm.jl`'s own flaky crossval item

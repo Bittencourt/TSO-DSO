@@ -32,5 +32,16 @@ end
 
     # StableRNGs is now genuinely loaded by src/data/profiles.jl, so the
     # stale-deps ignore is no longer needed.
-    Aqua.test_all(TSODSO)
+    # persistent_tasks is split out: it precompiles the package in a fresh process (about
+    # 552 s of the original 582 s item) and runs in the :slow item below.
+    Aqua.test_all(TSODSO; persistent_tasks = false)
+end
+
+# The Aqua persistent-tasks check alone (Aqua 0.8 `Aqua.test_persistent_tasks`). Together with the
+# item above this is exactly the former `Aqua.test_all(TSODSO)`: coverage unchanged.
+@testitem "quality: Aqua persistent tasks (no tasks left running after precompile)" tags =
+    [:slow] begin
+    using TSODSO, Aqua
+
+    Aqua.test_persistent_tasks(TSODSO)
 end

@@ -194,7 +194,7 @@ end
     @test r.dadp isa Matrix{Float64}
 end
 
-@testitem "strategies: ScenarioResult shape ADMM" begin
+@testitem "strategies: ScenarioResult shape ADMM" tags = [:slow] begin
     using TSODSO, Test
     r = TSODSO.run(
         Scenario(name = "adm", feeder = :ieee13, seed = 1, T = 24, strategy = ADMM()),
@@ -210,7 +210,7 @@ end
     @test r.reactive_consensus_mode == r.details.reactive_consensus_mode
 end
 
-@testitem "strategies: run(st, s) explicit strategy wins" begin
+@testitem "strategies: run(st, s) explicit strategy wins" tags = [:slow] begin
     using TSODSO, Test
     r = TSODSO.run(
         ADMM(maxiter = 300),
@@ -238,7 +238,7 @@ end
     @test res.details.steps == r.steps
 end
 
-@testitem "strategies: run(Stochastic) common shape" begin
+@testitem "strategies: run(Stochastic) common shape" tags = [:slow] begin
     using TSODSO, Test
     s = Scenario(
         name = "t",
@@ -256,7 +256,7 @@ end
     @test res.details isa TSODSO.StochasticDetails
 end
 
-@testitem "strategies: run_mpc/run_stochastic fallback to defaults" begin
+@testitem "strategies: run_mpc/run_stochastic fallback to defaults" tags = [:slow] begin
     using TSODSO, Test
     r_def = run_stochastic(Scenario(name = "t", feeder = :ieee13, T = 9))
     r_exp = run_stochastic(

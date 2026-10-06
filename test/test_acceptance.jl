@@ -21,7 +21,7 @@
 #     contract (res.iters, res.welfare, res.exact_maxgap, res.λ vs centralized DLMP).
 
 @testitem "acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
-    [:acceptance] setup = [IEEE13Fixtures] begin
+    [:acceptance, :slow] setup = [IEEE13Fixtures] begin
     using TSODSO
     using JuMP
 
@@ -115,7 +115,7 @@
 end
 
 @testitem "acceptance: IEEE-123 voltage — exact relaxation + DADP + ADMM≈centralized (SC3)" tags =
-    [:acceptance] setup = [IEEE123Fixtures] begin
+    [:acceptance, :slow] setup = [IEEE123Fixtures] begin
     using TSODSO
     using TSODSO: SOCP
 
