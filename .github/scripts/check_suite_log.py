@@ -3,7 +3,10 @@
 
 Usage: check_suite_log.py LABEL [--mode suite|docs] [--wait SECONDS] [--same-pass-as OTHER]
                           [--broken N] [--skip-canary]
-  --broken N      expected Broken count in the totals row (default 5)
+  --broken N      expected Broken count in the totals row (default 5). The expected count is
+                  per Julia patch: use the BROKEN_* value recorded for that patch in
+                  .planning/phases/37-test-infrastructure-repo-hygiene/37-TIMINGS.md
+                  (1.12.5: BROKEN_1.12.5=5; post-gate 1.12.7: BROKEN_1.12.7_EXPECTED_POSTGATE=5).
   --skip-canary   do not require the canary iters/welfare lines (short logs)
 Exit 0 ok, 3 still running, 1 failed requirement.
 """
