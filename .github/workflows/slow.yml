@@ -1,0 +1,45 @@
+name: slow
+
+# Full test suite (fast + slow items). Scheduled workflows run only from the
+# default branch. The set is `all` unless dispatched with another `test_set`.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      test_set:
+        description: 'Which test set to run'
+        type: choice
+        options:
+          - all
+          - slow
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - full suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.10'
+          - '1.12'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        env:
+          TSODSO_TEST_SET: ${{ inputs.test_set || 'all' }}
