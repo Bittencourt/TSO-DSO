@@ -1,7 +1,11 @@
 # Julia package .gitignore
 #
-# NOTE (INFRA-01 / RESEARCH Pitfall 3): Manifest.toml is intentionally COMMITTED
-# for reproducible clean-checkout resolution. Do NOT add Manifest.toml here.
+# Reproducibility: dependency resolution is pinned by the committed per-minor manifests
+# Manifest-v1.10.toml, Manifest-v1.11.toml and Manifest-v1.12.toml, which Pkg selects
+# automatically by Julia minor version (selection verified on Julia 1.10.11; earlier 1.10
+# patches are unverified). There is deliberately no unversioned root Manifest.toml.
+# test/, docs/ and bench/ keep single unversioned manifests that stay tracked.
+# A future Julia minor without a versioned manifest resolves fresh.
 
 # Per-run experiment artifacts (JLD2 via DrWatson datadir/tagsave) — binary, non-diffable
 # (RESEARCH 08 Pitfall 3). The diff-friendly, committed counterpart is results/ (CSV summaries).
@@ -41,5 +45,5 @@
 
 # Authored writeups: track the Typst source, ignore the compiled PDF (regenerable via `typst compile`)
 /docs/writeups/*.pdf
-/.planning/tmp/36/
+/.planning/tmp/
 __pycache__/
