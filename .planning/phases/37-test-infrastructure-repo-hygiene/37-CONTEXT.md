@@ -56,8 +56,7 @@ welfare = -4823.66604824162) and goldens never re-pinned. Current full suite: 32
 
 ### Repo hygiene (HYG-08) + leftovers
 - `scripts/README.md` index (purpose, how to run, outputs, status). `git mv` to `scripts/archive/`:
-  `reactive_flake_rate.jl`, `run_scenario.jl` (first check whether its battery-complementarity failure
-  is a stale fixture — fix if trivial, else archive with a note). Keep `benders_toy.jl` and
+  `reactive_flake_rate.jl` (run_scenario.jl: see Research Refinements — left in place, todo filed). Keep `benders_toy.jl` and
   `compare_default_stochastic.jl` (docs-referenced). `check_script_api.jl` skips `scripts/archive/`.
 - pv_boom: extract shared helpers (figure data URI, sweep/nash tables, …) into
   `scripts/lib/pv_boom_common.jl`; v2 becomes the single `pv_boom_report.jl` using it; archive v1;
@@ -69,6 +68,42 @@ welfare = -4823.66604824162) and goldens never re-pinned. Current full suite: 32
 - Phase 36 leftovers: fix the `test/test_benchmark_ieee8500.jl` docstring so JuliaFormatter is clean
   (content-loss check OK); fix the 4 docs `@ref` warnings; wire `test_benchmark_ieee8500.jl` as a
   `:slow` testitem wrapper or document it as manual.
+
+### Research Refinements (37-RESEARCH.md + user decisions 2026-10-06 — supersede looser wording above)
+- JET (1.12 only; test manifest pins JET 0.11.6; ~61 s warm, ~204 s cold precompile): 33 normalized
+  signatures, none a genuine bug. Optional value-preserving cleanups allowed (e.g. `_objective(model)::Float64`
+  helper clearing ~22 signatures; local copy of `ctx.pf_vars`) ONLY if goldens + canary stay bit-identical;
+  otherwise baseline with justification. Normalization strips line numbers and `#name#NNN` gensyms.
+- TestItemRunner: discovery roots at the repo root → filter `startswith(ti.filename, test_dir)`; filter
+  gets `(filename, name, tags)`; use space-separated `@run_package_tests filter=f verbose=true` (comma
+  form mis-parses). Broken-set guard: wrap `run_tests` in an outer `@testset` and assert observed
+  broken ⊆ allowed list.
+- :slow candidates: 13 files ≥ 30 s in p05.log (79 % of runtime); beware first-file compile bias —
+  confirm with one instrumented `verbose=true` full run.
+- USER (1.12.7): CI's floating '1.12' resolves to 1.12.7 where the "+25% FIT ratio golden" item fails
+  deterministically (`fit_baseline` ALMOST_OPTIMAL → SolveFailedError); passes on 1.12.5. Handle with
+  a version/outcome-gated `@test_broken` + reason, measured on both patches in the flake harness,
+  backlog note. No src change. The instrumented full run on 1.12.7 reveals any further 1.12.7-only
+  failures — handle identically and report.
+- Flake harness: fresh process per repeat (~81–144 s each, compile-dominated); 20× ≈ 48 min serial /
+  ~25 min with 2 jobs. Retry-and-report must retry the SOLVE, not the `@test` (shared `@testmodule`
+  helper + `atexit` summary).
+- Root `Manifest.toml`: DROP (1.10.11/1.11.9/1.12.7 each select `Manifest-v1.x.toml`); document the
+  minimum 1.10 patch assumption; update the `.gitignore` comment.
+- USER (PV-boom): RE-TUNE the boom fixture NOW so `pv_boom_case_study.jl` passes the exactness gate
+  again (fixture/scenario data in the script, NOT a src model change; document the calibration
+  rationale and what changed vs the original boom scenario, honestly — if no physically sensible
+  re-tune passes the gate, stop and report rather than loosening any gate/tolerance). Re-run the case
+  study, regenerate `data/pv_boom/results.jld2` (with cone/drop keys) and `results/pv_boom/summary.csv`,
+  then merge report code into `scripts/lib/pv_boom_common.jl` + single `pv_boom_report.jl` (v1
+  archived) and regenerate the HTML.
+- USER (seed 42): NOT in this phase — investigate as a separate debug task (todo filed). Leave
+  `scripts/run_scenario.jl` unchanged; README index lists it with status "fails at seed 42 (battery
+  complementarity gate) — under investigation".
+- Docs @ref warnings: replace the 4 links (fit.jl:337, master.jl:512, master_integer.jl:192, :813) with
+  plain code spans. ieee8500 harness docstring: reflow the long `run_quick()` paragraph so
+  JuliaFormatter 2.10 + content-loss check are clean; wire it as a `:slow` subprocess testitem only if
+  its runtime is acceptable (measure), else document as manual in the scripts README.
 
 ### Claude's Discretion
 - Exact JET normalization format; per-item timing method; flake harness CLI; README layout; shared-lib
