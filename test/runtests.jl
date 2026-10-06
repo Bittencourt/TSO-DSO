@@ -37,7 +37,7 @@
 # it had known false positives and false negatives
 # and is never a substitute for the grep above.
 #
-# Selection / guards (HYG-05, HYG-06): `TSODSO_TEST_SET` = fast | slow | all (unset = all;
+# Selection and guards: `TSODSO_TEST_SET` = fast | slow | all (unset = all;
 # any other value is an error). `TSODSO_TEST_VERBOSE=1` passes verbose=true so per-item
 # Time is printed. `TSODSO_TEST_FILES=a.jl,b.jl` restricts to those basenames (short runs).
 # Only items under test/ are selected, a zero selection fails, and any Broken/skipped
