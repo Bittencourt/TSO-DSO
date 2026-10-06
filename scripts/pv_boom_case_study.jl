@@ -27,6 +27,39 @@
 # short sub-horizon out of an ALREADY-DRAWN Task-1 aggregator's own time series for the
 # planning-layer game. No `src/` file is touched, no model/solver code is added here.
 #
+# CALIBRATION (planning-layer sub-horizon re-tune; the ONLY fixture change)
+#
+#   Original boom scenario : Part B sub-horizon PLANNING_HOURS = 13:18 (T_PLANNING = 6).
+#   Current scenario       : PLANNING_HOURS = 11:16 (T_PLANNING = 6, same length).
+#   Unchanged              : every PV multiplier (sweep 0.0..2.5, baseline 0.7, boom 2.5),
+#                            the population/seed methodology, devices, feeder, prices, the
+#                            planning-game bound ladder and cost parameters.
+#
+#   Why the original window now fails: since the exactness-copy correction, the planning
+#   oracle's first Benders trial (z = 0, no frontier import) is gated on the SOC relaxation
+#   being exact. For the 2.5x boom distributor the last hour of 13:18 (hour 18) is the
+#   evening surplus-to-deficit crossover: boom PV (about 10x the aggregate demand through
+#   midday) is curtailed at zero value, so the marginal price collapses to about zero
+#   (about 5e-5 versus lambda0 = 9) and reactive circulation on the feeder head makes branch
+#   dissipation free; the cone goes slack there (max |l*v - (P^2+Q^2)| = 1.8e-3, gap/bound
+#   about 4.7e3). Hours 13:17 of the same solve are exact (gap <= 1.1e-7) and the low-PV
+#   baseline is exact on every window tested. The failure is independent of the bound ladder
+#   (identical on all three attempts), i.e. a property of the fixture, not of the bounds.
+#   Window 12:17 fails the same way; 11:16 converges on the first attempt.
+#
+#   Why 11:16 is physically sensible: it is still a contiguous six-hour block around the
+#   solar peak (hours 11-16), in which the boom distributor has PV roughly 0.2-0.5 p.u.
+#   against demand about 0.03 p.u. (boom character: strong local surplus, reverse-flow
+#   pressure at z = 0), and the deferrable window 8:16 of the default house is covered
+#   entirely (local hours 1:6). It drops only the evening ramp, where the pinned-import
+#   oracle sits at a degenerate zero-price crossover that no investment signal depends on.
+#   Retained: the high-PV versus low-PV contrast (0.7 vs 2.5) and the qualitative outcome
+#   (converged in one sweep, investments not differentiated at this calibration, reported
+#   as found). Lost: the evening-ramp hours 17-18 are no longer in the planning game.
+#
+#   No exactness gate, tolerance or src/ model was changed: the exactness arguments
+#   (rtol_exact, assert_ac_exact! rtol/atol, tol_outer) are untouched.
+#
 #   julia --project=. scripts/pv_boom_case_study.jl
 #
 using DrWatson
@@ -401,8 +434,9 @@ println("\n" * "="^96)
 println("PV-BOOM CASE STUDY — Part B: planning-layer Stackelberg-Nash investment response")
 println("="^96)
 
-# Short contiguous afternoon PV-peak sub-horizon (materialize.jl's own documented
-# afternoon-peak window), sliced from Task-1-methodology populations — NO new profile
+# Short contiguous midday PV-peak sub-horizon (hours 11:16; see the "Calibration" header
+# of this file for why it is not the earlier 13:18 window), sliced from Task-1-methodology
+# populations — NO new profile
 # draw (generate_profiles is a Markov transition, not re-sliceable by re-calling it at a
 # smaller T; slicing the ALREADY-materialized arrays is the only way to reuse the exact
 # same drawn realization).
@@ -430,7 +464,7 @@ println("="^96)
 # never silently substituted.
 const BASELINE_PV_MULT = 0.7
 const BOOM_PV_MULT = 2.5
-const PLANNING_HOURS = 13:18
+const PLANNING_HOURS = 11:16
 const T_PLANNING = length(PLANNING_HOURS)
 
 """
@@ -445,8 +479,8 @@ window (`8:16` in the full T=24 horizon, per `_default_house`) is itself a set o
 absolute hour INDICES, so it cannot be copied verbatim into a T_planning=6 sub-horizon
 (`Deferrable`'s own `contribute!` guard throws when `t_end > T`). It is re-expressed in
 the sub-horizon's own local indexing (`t - (first(hrs)-1)`, clamped to `1:T_planning`),
-which for `hrs = 13:18` keeps the genuine overlap of the original 8:16 window with the
-13:16 sub-range (local hours 1:4) — i.e. this is a coordinate change, not a parameter
+which for `hrs = 11:16` keeps the genuine overlap of the original 8:16 window with the
+11:16 sub-range (local hours 1:6) — i.e. this is a coordinate change, not a parameter
 retune: the deferrable task is still elastic across the SAME physical hours the original
 window covered, restricted to the shorter horizon this game is played over.
 """
@@ -738,7 +772,7 @@ open(findings_path, "w") do io
         io,
         "Two IEEE-13-scale distributors — 'baseline' (pv_mult=$(BASELINE_PV_MULT)) and " *
         "'boom' (pv_mult=$(BOOM_PV_MULT)) — built via the SAME pv_boom_population/" *
-        "BASE_SEED methodology as Part A, sliced to the afternoon PV-peak sub-horizon " *
+        "BASE_SEED methodology as Part A, sliced to the midday PV-peak sub-horizon " *
         "hours $(first(PLANNING_HOURS)):$(last(PLANNING_HOURS)) — play a Gauss-Seidel " *
         "Stackelberg-Nash investment game over a shared transmission-reinforcement " *
         "corridor (run_nash!).",
@@ -768,7 +802,7 @@ open(findings_path, "w") do io
             io,
             "The boom distributor's converged investment differs from the baseline's " *
             "(a genuine, distributor-differentiated investment response to the higher " *
-            "PV-penetration afternoon flow).",
+            "PV-penetration midday flow).",
         )
     end
 end
