@@ -683,7 +683,7 @@ honestly, and the repo's scripts/manifests are tidy.
   4. `scripts/` has an index; one-off and superseded scripts are archived; `pv_boom_report*`
      duplication is merged into shared code; the redundant root `Manifest.toml` is dropped or its
      purpose documented; `.planning/tmp/` is untracked.
-**Plans:** 4/13 plans executed
+**Plans:** 5/13 plans executed
 
 Plans:
 **Wave 1**
@@ -704,7 +704,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 37-05-PLAN.md — Apply :slow tags, gate the 1.12.7 FIT item (@test_broken), ieee8500 wrapper or manual decision
+- [x] 37-05-PLAN.md — Apply :slow tags, gate the 1.12.7 FIT item (@test_broken), ieee8500 wrapper or manual decision
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -760,7 +760,7 @@ Plans:
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
-| 37. Test Infrastructure & Repo Hygiene | v4.0 | 4/13 | In Progress|  |
+| 37. Test Infrastructure & Repo Hygiene | v4.0 | 5/13 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 
