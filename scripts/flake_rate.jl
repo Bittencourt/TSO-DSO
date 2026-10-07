@@ -13,6 +13,10 @@
 #
 # Targets: ieee13_admm, stochastic_welfare, fit_baseline.
 # Outputs: <outdir>/<UTC timestamp>_<julia VERSION>.csv and <outdir>/findings.txt (appended).
+# Outcomes: pass | broken | fail | error | no_items. `no_items` = the child's filter selected
+# zero @testitems (or they recorded zero results); it never counts as a pass, the child exits
+# 1, and the parent exits 1 after writing the CSV when any run had that outcome.
+# Works on Julia 1.10 (Tuple-returning `Test.get_test_counts`) and 1.11+ (`TestCounts`).
 # The real test items are run, so this measures the current defaults of the live code.
 
 using Dates
@@ -69,8 +73,17 @@ function solve_label(text::AbstractString)
     return "solved"
 end
 
-"""Outcome precedence: fail/error > broken > pass."""
-function outcome_of(fails::Integer, errors::Integer, broken::Integer)
+"""Outcome precedence: no_items > error > fail > broken > pass. `no_items` means the child's
+filter selected zero @testitems (or they recorded zero results): nothing was measured, so it
+must never count as a pass."""
+function outcome_of(
+    fails::Integer,
+    errors::Integer,
+    broken::Integer;
+    selected::Integer = 1,
+    total::Integer = 1,
+)
+    (selected == 0 || total == 0) && return "no_items"
     errors > 0 && return "error"
     fails > 0 && return "fail"
     broken > 0 && return "broken"
@@ -142,6 +155,22 @@ function selftest()
     @assert solve_label(clean) == "solved"
     @assert outcome_of(0, 0, 0) == "pass" && outcome_of(0, 0, 1) == "broken"
     @assert outcome_of(1, 0, 1) == "fail" && outcome_of(0, 1, 1) == "error"
+    @assert outcome_of(0, 0, 0; selected = 0, total = 0) == "no_items"
+    @assert outcome_of(0, 0, 0; selected = 1, total = 0) == "no_items"
+    @assert outcome_of(0, 1, 0; selected = 0) == "no_items"
+    np = parse_child_line("FLAKE_RESULT target=x outcome=no_items passes=0 fails=0 errors=0 broken=0 secs=0.1 version=1.10.11\n")
+    @assert np !== nothing && np.outcome == "no_items"
+    # Test.get_test_counts: Tuple on Julia 1.10, TestCounts struct on 1.11+.
+    @assert counts_from((1, 2, 3, 4, 10, 20, 30, 40, 0.5)) ==
+            (passes = 11, fails = 22, errors = 33, broken = 44)
+    tsc = Test.@testset "counts probe" begin
+        @test true
+        @test_broken false
+        Test.@testset "inner" begin
+            @test true
+        end
+    end
+    @assert counts_from(Test.get_test_counts(tsc)) == (passes = 2, fails = 0, errors = 0, broken = 1)
     line = "noise\nFLAKE_RESULT target=fit_baseline outcome=broken passes=9 fails=0 errors=0 broken=1 secs=12.5 version=1.12.5\n"
     p = parse_child_line(line)
     @assert p.outcome == "broken" && p.passes == 9 && p.version == "1.12.5"
@@ -197,9 +226,31 @@ function run_items(target)
     return Base.invokelatest(_run_items, target)
 end
 
+"""`(passes, fails, errors, broken)` (own + cumulative) from `Test.get_test_counts`, which
+returns a plain Tuple `(passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken,
+duration)` on Julia 1.10 and a `Test.TestCounts` struct on 1.11+."""
+function counts_from(c)
+    if c isa Tuple
+        np, nf, ne, nb, ncp, ncf, nce, ncb = c[1:8]
+        return (passes = np + ncp, fails = nf + ncf, errors = ne + nce, broken = nb + ncb)
+    end
+    return (
+        passes = c.passes + c.cumulative_passes,
+        fails = c.fails + c.cumulative_fails,
+        errors = c.errors + c.cumulative_errors,
+        broken = c.broken + c.cumulative_broken,
+    )
+end
+
 function _run_items(target)
     TIR = getfield(Main, :TestItemRunner)
-    filt = item_filter(target)
+    match_filter = item_filter(target)
+    nsel = Ref(0)
+    filt = function (ti)
+        m = match_filter(ti)
+        m && (nsel[] += 1)
+        return m
+    end
     ts_ref = Ref{Any}(nothing)
     t0 = time()
     try
@@ -211,24 +262,21 @@ function _run_items(target)
         e isa Test.TestSetException || rethrow()
     end
     secs = time() - t0
-    c = Test.get_test_counts(ts_ref[])
-    return (
-        passes = c.passes + c.cumulative_passes,
-        fails = c.fails + c.cumulative_fails,
-        errors = c.errors + c.cumulative_errors,
-        broken = c.broken + c.cumulative_broken,
-        secs = secs,
-    )
+    c = counts_from(Test.get_test_counts(ts_ref[]))
+    return (; c..., secs = secs, selected = nsel[])
 end
+
+total_of(r) = r.passes + r.fails + r.errors + r.broken
 
 function child_main(target)
     r = run_items(target)
-    outcome = outcome_of(r.fails, r.errors, r.broken)
+    outcome = outcome_of(r.fails, r.errors, r.broken; selected = r.selected, total = total_of(r))
     @printf(
         "FLAKE_RESULT target=%s outcome=%s passes=%d fails=%d errors=%d broken=%d secs=%.1f version=%s\n",
         target, outcome, r.passes, r.fails, r.errors, r.broken, r.secs, string(VERSION)
     )
-    return nothing
+    outcome == "no_items" && println(stderr, "flake_rate: target $target selected $(r.selected) item(s) and recorded $(total_of(r)) result(s); nothing measured")
+    return outcome == "no_items" ? 1 : 0
 end
 
 function spawn_child(target, log)
@@ -314,7 +362,9 @@ function parent_main(args)
         end
         text = read(log, String)
         parsed = (
-            target = t, outcome = outcome_of(r.fails, r.errors, r.broken), passes = r.passes,
+            target = t,
+            outcome = outcome_of(r.fails, r.errors, r.broken; selected = r.selected, total = total_of(r)),
+            passes = r.passes,
             fails = r.fails, errors = r.errors, broken = r.broken, secs = r.secs,
             version = string(VERSION),
         )
@@ -332,18 +382,23 @@ function parent_main(args)
     end
     print(txt)
     println("wrote $csv")
-    return nothing
+    nno = count(r -> r.outcome == "no_items", rows)
+    if nno > 0
+        println(stderr, "flake_rate: $nno run(s) selected no test items (outcome=no_items); exit 1")
+        return 1
+    end
+    return 0
 end
 
 function main(args)
     if "--selftest" in args
         selftest()
+        return 0
     elseif (i = findfirst(==("--child"), args)) !== nothing
-        child_main(args[i+1])
+        return child_main(args[i+1])
     else
-        parent_main(args)
+        return parent_main(args)
     end
-    return nothing
 end
 
-abspath(PROGRAM_FILE) == (@__FILE__) && main(ARGS)
+abspath(PROGRAM_FILE) == (@__FILE__) && exit(main(ARGS))
