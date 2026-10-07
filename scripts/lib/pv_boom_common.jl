@@ -34,30 +34,45 @@ function pv_boom_load_results(path)
         sweep,
         admm_crosscheck = results["admm_crosscheck"],
         nash_result = results["nash_result"],
-        ac_stress = results["ac_stress"],
+        ac_stress = pv_boom_a2_check(results["ac_stress"]),
         ok_rows,
         planning_hours = pv_boom_planning_hours(results, results["nash_result"]),
     )
 end
 
 """
-Wording threshold only (no gate): see [`pv_boom_a2_model_mismatch`](@ref).
-"""
-const PV_BOOM_A2_WORDING_TOL = 1e-6
+    pv_boom_a2_check(ac_stress)
 
+Error unless the Part A2 results carry the SOCP-vs-AC diagnostic the current case study writes
+(`case`, `cause_measured`, `summary` and the v̂-bound re-solve numbers). An older results.jld2
+lacks them; its wording cannot be reconstructed, so re-run the case study.
 """
-    pv_boom_a2_model_mismatch(ac_stress) -> Bool
+function pv_boom_a2_check(ac_stress)
+    need = (
+        :obj_gap,
+        :socp_maxgap,
+        :n_inexact_hours,
+        :inexact_hours,
+        :vhat_bound_hours,
+        :no_vhat_ub_obj_gap,
+        :no_vhat_ub_share,
+        :case,
+        :cause_measured,
+        :summary,
+    )
+    missing_keys = [k for k in need if !hasproperty(ac_stress, k)]
+    isempty(missing_keys) || error(
+        "pv_boom_report: results.jld2 \"ac_stress\" lacks $(missing_keys) (it predates the " *
+        "Part A2 diagnostic); re-run scripts/pv_boom_case_study.jl to regenerate it",
+    )
+    ac_stress.case in ("all_exact", "not_relaxation", "tight_differ", "inexact") ||
+        error("pv_boom_report: unknown Part A2 case $(repr(ac_stress.case))")
+    return ac_stress
+end
 
-True when the Part A2 stress-fixture comparison cannot be read as relaxation inexactness:
-`obj_gap = SOCP welfare - AC welfare` is negative, i.e. the AC solve (a local NLP solve with
-`allow_local = true`) reached a higher welfare than its own convex relaxation, which is
-impossible for the same problem solved to optimality. Mirrors the case study's own wording
-rule; it selects report text only.
-"""
-pv_boom_a2_model_mismatch(ac_stress) = ac_stress.obj_gap < -PV_BOOM_A2_WORDING_TOL
-
-"""True when the SOC cone is tight in the stress-fixture SOCP solution (wording only)."""
-pv_boom_a2_cone_tight(ac_stress) = ac_stress.socp_maxgap <= PV_BOOM_A2_WORDING_TOL
+"""Minimal HTML escaping for result text embedded in the report."""
+pv_boom_html_escape(s::AbstractString) =
+    replace(String(s), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
 
 """
     pv_boom_planning_hours(results, nash_result) -> UnitRange{Int}

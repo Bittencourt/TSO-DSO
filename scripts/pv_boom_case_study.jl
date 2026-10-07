@@ -6,8 +6,8 @@
 #   Part A  — the operational layer: a PV-penetration sweep of `solve_welfare` +
 #             `extract_dlmp`/`decompose_dlmp`, cross-checked against the declarative
 #             `Scenario`/`run_scenario` entry point and against `solve_admm` (ADMM).
-#   Part A2 — the documented SOCP/AC exactness boundary, reproduced verbatim
-#             on its certified 3-bus stress substrate — never re-derived/re-tuned.
+#   Part A2 — SOCP vs AC on the certified 3-bus high-PV stress substrate (fixture copied
+#             verbatim, never re-tuned), with a diagnostic of why the two disagree.
 #   Part B  — the planning layer: two IEEE-13-scale distributor specs (a low-PV
 #             "baseline" at pv_mult=0.7 and a "boom" distributor reusing Part A's own
 #             already-swept pv_mult=2.5 population — see Part B's own Deviation note for
@@ -319,12 +319,10 @@ CSV.write(projectdir("results", "pv_boom", "summary.csv"), summary_df)
 println("wrote ", projectdir("results", "pv_boom", "summary.csv"))
 
 # ════════════════════════════════════════════════════════════════════════════════════
-# Part A2 — the known SOCP/AC exactness boundary, REPRODUCED, never re-derived
+# Part A2 — SOCP vs AC on the high-PV stress fixture (fixture copied, never re-derived)
 # ════════════════════════════════════════════════════════════════════════════════════
 println("\n" * "="^96)
-println(
-    "PV-BOOM CASE STUDY — Part A2: the documented high-PV exactness finding, reproduced",
-)
+println("PV-BOOM CASE STUDY — Part A2: SOCP vs AC on the high-PV stress fixture")
 println("="^96)
 
 # Verbatim reproduction of the certified 3-bus stress substrate (test/fixtures_ieee13.jl
@@ -385,10 +383,12 @@ stress_aggs = [
 ]
 λ0_stress = build_price(:mem, T_FULL, nothing)   # :mem ignores `profiles`
 
-# SOCP solve with `rtol_exact=1.0`: the ONE documented diagnostic override
+# SOCP solve with `rtol_exact=1.0`: the ONE documented override of a solve argument
 # allowed here (see this file's own module-level constraint list) — it changes ZERO code
-# in `solve_welfare`/`welfare_solve.jl`. The ACTUAL exactness verdict below comes from
-# `assert_ac_exact!`'s own standard `rtol=1e-4`, never from this loosened internal gate.
+# in `solve_welfare`/`welfare_solve.jl`. The SOCP-vs-AC comparison below comes from
+# `assert_ac_exact!`'s own standard `rtol=1e-4`, never from this loosened internal gate. The
+# v̂-bound deletion further below is a post-solve diagnostic re-solve, reported separately;
+# it does not change the obj_gap / socp_maxgap / inexact-hour numbers above it.
 ctx_socp, cost_socp, _ = solve_welfare(
     stress_feeder,
     ConvexBranchFlow(),
@@ -410,47 +410,169 @@ ctx_ac, cost_ac, _ = solve_welfare(
 
 ac_report = TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6)
 inexact_hours = [row.t for row in ac_report.hours if !row.exact]
+a2_socp_maxgap = ctx_socp.meta[:socp_maxgap]
 
 @printf("  obj_gap (SOCP - AC)     = %.6e\n", ac_report.obj_gap)
-@printf("  socp_maxgap             = %.6e\n", ctx_socp.meta[:socp_maxgap])
+@printf("  socp_maxgap             = %.6e\n", a2_socp_maxgap)
 @printf(
     "  inexact hours           = %d / %d  %s\n",
     length(inexact_hours),
     T_FULL,
     inexact_hours
 )
+# All-exact is a reportable outcome (e.g. after the two models are reconciled), not an
+# error: the wording below covers it.
 
-isempty(inexact_hours) && error(
-    "pv_boom_case_study: the high-PV exactness reproduction came back ALL-EXACT — this is a " *
-    "signal something has drifted from the certified test/fixtures_ieee13.jl " *
-    "high_pv_feeder/build_high_pv_aggregators substrate (pv_scale=1.2, load_scale=0.2, " *
-    "vmax=1.05). Per this script's contract: stop and report the discrepancy rather " *
-    "than silently accepting a different-looking result.",
-)
-# WORDING ONLY (no gate, no tolerance): how the Part A2 numbers may be described. The SOCP
-# solve is a convex relaxation of the AC problem and the objective is welfare (Max), so for the
-# SAME problem the SOCP welfare can never be below the AC welfare (obj_gap >= 0). A negative
-# obj_gap means the two solves are not the same problem solved to optimality (the AC solve here
-# is a local NLP solve with `allow_local = true`), so the per-hour SOCP-vs-AC gaps cannot be read
-# as the relaxation's own gap. `socp_maxgap` small = the SOC cone is tight in the SOCP solution.
-const A2_WORDING_TOL = 1e-6
-a2_model_mismatch = ac_report.obj_gap < -A2_WORDING_TOL
-a2_cone_tight = ctx_socp.meta[:socp_maxgap] <= A2_WORDING_TOL
-if a2_model_mismatch
-    println(
-        "  -> the SOCP and AC solutions differ at $(length(inexact_hours)) hour(s), but this " *
-        "is NOT shown to be relaxation inexactness: obj_gap < 0 (the AC solve beat its own " *
-        "convex relaxation) and the SOC cone is " *
-        (a2_cone_tight ? "tight" : "not tight") *
-        " (socp_maxgap = $(ctx_socp.meta[:socp_maxgap])); the two solves are not the same " *
-        "problem solved to optimality. UNRESOLVED: reconcile the models.",
-    )
-else
-    println(
-        "  -> the documented high-PV exactness finding, reproduced: the SOCP relaxation is " *
-        "genuinely INEXACT at $(length(inexact_hours)) hour(s) on the certified stress fixture.",
-    )
+# ── Diagnostic: is the SOCP a relaxation of this AC model? (no src change) ────────────────
+# Both solves MAXIMIZE welfare and obj_gap = SOCP welfare − AC welfare. If the SOCP model were
+# a relaxation of the AC model, every AC-feasible point (a local AC optimum included) would be
+# SOCP-feasible, so obj_gap >= 0. A negative obj_gap therefore means the SOCP model as
+# configured cuts off AC-feasible points. Candidate: the exactness-copy bound v̂ ≤ vmax²
+# (ConvexBranchFlow, thesis 3.45), which the AC model does not have. Measured here three ways:
+#   (1) hours where that bound is active in the SOCP solution;
+#   (2) the v̂ the SOCP's copy recursion (cpydrop, default thesis_literal = false:
+#       v̂_to = v̂_from − 2(r(P − r l) + x(Q − x l)), v̂_root = 1) assigns to the AC point, and the
+#       hours where it exceeds vmax² (the AC point is then infeasible for the SOCP);
+#   (3) a re-solve of the SAME SOCP model with only the v̂ upper bounds deleted, compared
+#       with the AC solve again. This mutates the local JuMP model only (ctx_socp is not used
+#       after this block except for these diagnostic values); no src/, gate or tolerance
+#       changes.
+const A2_BOUND_TOL = 1e-6   # "bound active" / "bound exceeded" test; wording only
+a2_pvs, a2_pva = ctx_socp.pf_vars, ctx_ac.pf_vars
+a2_nonroot = [j for j in eachindex(stress_feeder.buses) if j != stress_feeder.root]
+a2_vmax2 = Dict(j => stress_feeder.buses[j].vmax^2 for j in a2_nonroot)
+a2_vhat_bound_hours = [
+    t for t in 1:T_FULL if
+    any(j -> value(a2_pvs.v̂[j, t]) >= a2_vmax2[j] - A2_BOUND_TOL, a2_nonroot)
+]
+a2_ac_v_at_vmax_hours = [
+    t for t in 1:T_FULL if
+    any(j -> value(a2_pva.v[j, t]) >= a2_vmax2[j] - A2_BOUND_TOL, a2_nonroot)
+]
+function a2_ac_implied_vhat(t)
+    vh = Dict(stress_feeder.root => 1.0)
+    for (b, br) in enumerate(stress_feeder.branches)
+        haskey(vh, br.from) ||
+            error("pv_boom_case_study: stress feeder branches are not listed root-first")
+        P, Q, l = value(a2_pva.P[b, t]), value(a2_pva.Q[b, t]), value(a2_pva.l[b, t])
+        vh[br.to] = vh[br.from] - 2 * (br.r * (P - br.r * l) + br.x * (Q - br.x * l))
+    end
+    return vh
 end
+a2_ac_vhat = [a2_ac_implied_vhat(t) for t in 1:T_FULL]
+a2_ac_vhat_max = maximum(maximum(a2_ac_vhat[t][j] for j in a2_nonroot) for t in 1:T_FULL)
+a2_ac_vhat_violation_hours =
+    [t for t in 1:T_FULL if any(j -> a2_ac_vhat[t][j] > a2_vmax2[j] + A2_BOUND_TOL, a2_nonroot)]
+for j in a2_nonroot, t in 1:T_FULL
+    delete_upper_bound(a2_pvs.v̂[j, t])
+end
+optimize!(ctx_socp.model)
+a2_cf_status = string(termination_status(ctx_socp.model))
+a2_cf_ok = a2_cf_status == "OPTIMAL"
+a2_cf_obj_gap = a2_cf_ok ? objective_value(ctx_socp.model) - objective_value(ctx_ac.model) : NaN
+a2_cf_cone_maxgap =
+    a2_cf_ok ?
+    maximum(
+        abs(
+            value(a2_pvs.l[b, t]) * value(a2_pvs.v[br.from, t]) - value(a2_pvs.P[b, t])^2 -
+            value(a2_pvs.Q[b, t])^2,
+        ) for (b, br) in enumerate(stress_feeder.branches), t in 1:T_FULL
+    ) : NaN
+a2_cf_inexact_hours =
+    a2_cf_ok ?
+    [
+        row.t for row in
+        TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6).hours if
+        !row.exact
+    ] : Int[]
+# Share of the negative gap that deleting the v̂ bound removes.
+a2_cf_share =
+    a2_cf_ok && ac_report.obj_gap != 0 ? 1 - abs(a2_cf_obj_gap) / abs(ac_report.obj_gap) :
+    NaN
+
+@printf("  v̂ ≤ vmax² active (SOCP)  = hours %s\n", a2_vhat_bound_hours)
+@printf("  AC v at vmax²            = hours %s\n", a2_ac_v_at_vmax_hours)
+@printf(
+    "  AC-implied v̂ > vmax²     = hours %s (max %.6f vs vmax² %.6f)\n",
+    a2_ac_vhat_violation_hours,
+    a2_ac_vhat_max,
+    maximum(values(a2_vmax2))
+)
+@printf(
+    "  without v̂ ≤ vmax²: status %s, obj_gap %.6e, cone maxgap %.3e, inexact hours %s\n",
+    a2_cf_status,
+    a2_cf_obj_gap,
+    a2_cf_cone_maxgap,
+    a2_cf_inexact_hours
+)
+
+# WORDING ONLY (no gate, no tolerance). Cases:
+#   all-exact             : SOCP and AC agree at every hour.
+#   not_relaxation        : obj_gap < 0 — the SOCP optimum is WORSE than the AC solution, so
+#                           the SOCP model is not a relaxation of the AC model as configured;
+#                           the cause is "measured" only when deleting the v̂ bound removes at
+#                           least 99.9% of the gap, otherwise "not established".
+#   tight, obj_gap >= 0   : the solutions differ but the cone is tight (the SOCP point satisfies
+#                           the AC branch equations): not relaxation inexactness.
+#   not tight, obj_gap >= 0 : the only case worded as the SOC relaxation being INEXACT.
+const A2_WORDING_TOL = 1e-6
+const A2_CAUSE_SHARE = 0.999
+a2_all_exact = isempty(inexact_hours)
+a2_not_relaxation = ac_report.obj_gap < -A2_WORDING_TOL
+a2_cone_tight = a2_socp_maxgap <= A2_WORDING_TOL
+a2_cause_measured =
+    a2_not_relaxation && a2_cf_ok && !isempty(a2_vhat_bound_hours) &&
+    a2_cf_share >= A2_CAUSE_SHARE
+a2_case =
+    a2_all_exact ? "all_exact" :
+    a2_not_relaxation ? "not_relaxation" : a2_cone_tight ? "tight_differ" : "inexact"
+a2_cone_txt =
+    (a2_cone_tight ? "tight" : "NOT tight") * " (socp_maxgap = $(@sprintf("%.3e", a2_socp_maxgap)))"
+a2_summary = if a2_all_exact
+    "SOCP and AC agree at all $T_FULL hours (assert_ac_exact! rtol = 1e-4); the SOC cone is " *
+    a2_cone_txt * "."
+elseif a2_not_relaxation
+    "SOCP and AC differ at $(length(inexact_hours))/$T_FULL hours $inexact_hours, and the " *
+    "SOCP optimum is WORSE than the AC solution (obj_gap = SOCP welfare - AC welfare = " *
+    "$(@sprintf("%.4e", ac_report.obj_gap)) < 0; both maximize welfare). So the SOCP model " *
+    "as configured is NOT a relaxation of this AC model on this fixture: a relaxation's " *
+    "optimum cannot be below any AC-feasible point, so local versus global AC optimality " *
+    "cannot produce this. The SOC cone is " * a2_cone_txt * ", so this is not evidence " *
+    "of SOC relaxation inexactness. " *
+    (
+        a2_cause_measured ?
+        "Measured cause: the exactness-copy bound v̂ <= vmax^2 " *
+        "(src/powerflow/ConvexBranchFlow.jl, thesis 3.45), which the AC model does not " *
+        "have. It is active in the SOCP solution at hours $a2_vhat_bound_hours; the AC " *
+        "solution sits at v = vmax^2 at hours $a2_ac_v_at_vmax_hours, and the v̂ the SOCP " *
+        "copy recursion assigns to the AC point exceeds vmax^2 at hours " *
+        "$a2_ac_vhat_violation_hours (max $(@sprintf("%.6f", a2_ac_vhat_max)) vs vmax^2 = " *
+        "$(@sprintf("%.6f", maximum(values(a2_vmax2))))), so the AC point is infeasible for " *
+        "the SOCP there. Re-solving the same SOCP with only the v̂ upper bounds deleted " *
+        "(diagnostic in this script; no src change) moves obj_gap to " *
+        "$(@sprintf("%.3e", a2_cf_obj_gap)) ($(@sprintf("%.3f", 100 * a2_cf_share))% of the " *
+        "gap removed; cone maxgap $(@sprintf("%.3e", a2_cf_cone_maxgap))) and leaves " *
+        (
+            isempty(a2_cf_inexact_hours) ? "no hour where SOCP and AC differ." :
+            "$(length(a2_cf_inexact_hours)) hour(s) $a2_cf_inexact_hours where SOCP and AC " *
+            "still differ (not diagnosed further)."
+        ) :
+        "Cause not established; candidate: the exactness-copy bound v̂ <= vmax^2 " *
+        "(src/powerflow/ConvexBranchFlow.jl, thesis 3.45), absent from the AC model. " *
+        "Diagnostic: v̂ bound active at hours $a2_vhat_bound_hours; deleting it gives " *
+        "status $a2_cf_status, obj_gap $(@sprintf("%.3e", a2_cf_obj_gap))."
+    ) * " UNRESOLVED in the model: reconcile the two before citing an exactness verdict here."
+elseif a2_cone_tight
+    "SOCP and AC differ at $(length(inexact_hours))/$T_FULL hours $inexact_hours with " *
+    "obj_gap = $(@sprintf("%.4e", ac_report.obj_gap)) >= 0, but the SOC cone is " *
+    a2_cone_txt * ": the SOCP point satisfies the AC branch equations, so the difference is " *
+    "not SOC relaxation inexactness (cause not established)."
+else
+    "The SOC branch-flow relaxation is INEXACT on this fixture: SOCP and AC differ at " *
+    "$(length(inexact_hours))/$T_FULL hours $inexact_hours, obj_gap = " *
+    "$(@sprintf("%.4e", ac_report.obj_gap)) >= 0, and the SOC cone is " * a2_cone_txt * "."
+end
+println("  -> ", a2_summary)
 
 # ════════════════════════════════════════════════════════════════════════════════════
 # Part B — feeding the boom into the planning layer
@@ -729,7 +851,21 @@ existing["planning_hours"] = collect(PLANNING_HOURS)  # read by pv_boom_report.j
 existing["ac_stress"] = (;
     obj_gap = ac_report.obj_gap,
     n_inexact_hours = length(inexact_hours),
-    socp_maxgap = ctx_socp.meta[:socp_maxgap],
+    inexact_hours = inexact_hours,
+    socp_maxgap = a2_socp_maxgap,
+    vhat_bound_hours = a2_vhat_bound_hours,
+    ac_v_at_vmax_hours = a2_ac_v_at_vmax_hours,
+    ac_vhat_violation_hours = a2_ac_vhat_violation_hours,
+    ac_vhat_max = a2_ac_vhat_max,
+    vmax2 = maximum(values(a2_vmax2)),
+    no_vhat_ub_status = a2_cf_status,
+    no_vhat_ub_obj_gap = a2_cf_obj_gap,
+    no_vhat_ub_cone_maxgap = a2_cf_cone_maxgap,
+    no_vhat_ub_inexact_hours = a2_cf_inexact_hours,
+    no_vhat_ub_share = a2_cf_share,
+    case = a2_case,              # all_exact | not_relaxation | tight_differ | inexact
+    cause_measured = a2_cause_measured,
+    summary = a2_summary,        # the evidence sentence written to findings.txt
 )
 DrWatson.wsave(datadir("pv_boom", "results.jld2"), existing)
 println("\nupdated ", datadir("pv_boom", "results.jld2"), " with nash_result/ac_stress")
@@ -771,48 +907,18 @@ open(findings_path, "w") do io
         admm_result.iters
     )
     println(io)
-    println(io, "Part A2 — the documented high-PV exactness finding, reproduced")
+    println(io, "Part A2 — SOCP vs AC on the high-PV stress fixture")
     println(io, "-"^80)
-    fixture_txt =
-        "On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, " *
-        "vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / " *
-        "build_high_pv_aggregators), "
-    if a2_model_mismatch
-        println(
-            io,
-            fixture_txt *
-            "the SOCP solution and the AC solution differ (assert_ac_exact! per-hour " *
-            "v/P gaps above rtol=1e-4) at $(length(inexact_hours))/$T_FULL hours: " *
-            "$inexact_hours. This is NOT evidence that the SOC relaxation is inexact here: " *
-            "the SOC cone is " *
-            (a2_cone_tight ? "TIGHT" : "NOT tight") *
-            " in the SOCP solution (socp_maxgap below), and obj_gap (SOCP welfare - AC " *
-            "welfare) is NEGATIVE, i.e. the AC solve reached a higher welfare than its own " *
-            "convex relaxation, which cannot happen if both solve the same problem to " *
-            "optimality. The AC solve is a local NLP solve (ACPowerFlow, allow_local = true) " *
-            "while the SOCP solve is not, so the two are a different model/solve and the " *
-            "per-hour gaps measure that mismatch, not the relaxation gap. UNRESOLVED: " *
-            "reconcile the two solves before citing this as an exactness finding.",
-        )
-    else
-        println(
-            io,
-            fixture_txt *
-            "the SOC branch-flow relaxation is genuinely INEXACT at " *
-            "$(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
-        )
-    end
-    @printf(io, "obj_gap (SOCP welfare - AC welfare) = %.6e\n", ac_report.obj_gap)
-    @printf(
-        io,
-        "socp_maxgap (loosened rtol_exact=1.0 diagnostic)   = %.6e\n",
-        ctx_socp.meta[:socp_maxgap]
-    )
     println(
         io,
-        "This is the ONE documented diagnostic-override reproduction this case study " *
-        "showcases — never re-derived or re-tuned from the certified fixture.",
+        "On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, " *
+        "vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / " *
+        "build_high_pv_aggregators; SOCP solved with the documented rtol_exact=1.0 " *
+        "diagnostic override, AC with ACPowerFlow): " * a2_summary,
     )
+    @printf(io, "obj_gap (SOCP welfare - AC welfare) = %.6e\n", ac_report.obj_gap)
+    @printf(io, "socp_maxgap                         = %.6e\n", a2_socp_maxgap)
+    @printf(io, "obj_gap without v̂ <= vmax^2         = %.6e  (%s)\n", a2_cf_obj_gap, a2_cf_status)
     println(io)
     println(io, "Part B — planning-layer Stackelberg-Nash investment response")
     println(io, "-"^80)
