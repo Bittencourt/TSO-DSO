@@ -19,8 +19,10 @@ at exactly that location is reported. Tokens rooted elsewhere (`src/`, `test/`, 
 `.github/`, ...) are ignored.
 Mislocation check: in the first column of the `## Scripts` table no entry may be under
 `archive/`, and in the first column of the `## Archive` table every entry must be under
-`archive/`. Exit codes: 0 complete; 1 missing, stale or mislocated entries; 2 internal/IO
-error.
+`archive/`. Both headings must exist (exactly `## Scripts` and `## Archive`): a renamed or
+deleted heading would make the mislocation check a silent no-op, so it is reported as MISSING
+SECTION. Exit codes: 0 complete; 1 missing, stale or mislocated entries or a missing section;
+2 internal/IO error.
 """
 import re
 import subprocess
@@ -86,6 +88,16 @@ def stale_entries(files, readme_text):
         if tok not in stale:
             stale.append(tok)
     return stale
+
+
+# Section headings the mislocation check keys on; each must be present verbatim.
+REQUIRED_SECTIONS = ("Scripts", "Archive")
+
+
+def missing_sections(readme_text):
+    """Required `## <name>` headings (see REQUIRED_SECTIONS) absent from the readme."""
+    present = {line[3:].strip() for line in readme_text.splitlines() if line.startswith("## ")}
+    return [s for s in REQUIRED_SECTIONS if s not in present]
 
 
 def mislocated_entries(readme_text):
@@ -161,6 +173,13 @@ def selftest():
     assert mislocated_entries(tables) == [("archive/old.jl", "Scripts"),
                                           ("lib/b.jl", "Archive")], mislocated_entries(tables)
     assert mislocated_entries("## Scripts\n| `a.jl` | `archive/x.jl` in purpose |\n") == []
+    # Reviewer probe (iteration 3): a renamed heading must not turn the check into a no-op.
+    assert missing_sections(tables) == []
+    renamed = tables.replace("## Scripts", "## Active scripts")
+    assert mislocated_entries(renamed) == [("lib/b.jl", "Archive")]
+    assert missing_sections(renamed) == ["Scripts"], missing_sections(renamed)
+    assert missing_sections("no headings at all") == ["Scripts", "Archive"]
+    assert missing_sections("### Scripts\n## Archive\n") == ["Scripts"]
     print("check_scripts_index selftest: OK")
     return 0
 
@@ -180,6 +199,7 @@ def main(argv):
     miss = missing_entries(files, text)
     stale = stale_entries(files, text)
     misloc = mislocated_entries(text)
+    nosec = missing_sections(text)
     for f in miss:
         print(f"NOT INDEXED: {f} (add it to {README} by its path relative to scripts/)")
     for t in stale:
@@ -187,7 +207,10 @@ def main(argv):
     for t, sec in misloc:
         print(f"MISLOCATED: {t} is in the '## {sec}' table of {README}, which does not "
               f"match its archive/ status")
-    if miss or stale or misloc:
+    for sec in nosec:
+        print(f"MISSING SECTION: {README} has no '## {sec}' heading; the archive-status "
+              f"(mislocation) check cannot run without it")
+    if miss or stale or misloc or nosec:
         return 1
     print(f"scripts index complete ({len(files)} tracked files checked)")
     return 0
