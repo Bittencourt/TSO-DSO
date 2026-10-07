@@ -87,6 +87,12 @@ end
 
         maxgap = TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)   # returns the abs gap; must not throw
         @test maxgap < 1e-5
+
+        # The shared non-throwing kernel agrees with the gate and the diagnostic.
+        chk = TSODSO._socp_cone_check(ctx)
+        @test chk.maxgap == TSODSO.assert_socp_exact!(ctx)
+        @test chk.maxratio == maximum(x.ratio for x in TSODSO.hybrid_ratios(ctx))
+        @test chk.maxratio <= 1
     end
 end
 
@@ -182,6 +188,20 @@ end
     # ...but the NEW per-branch default floor (ε * ref_b, ref_b = smax^2 = 1e-4) correctly
     # THROWS: the cone is slack by ~5x the branch's own scale-relative floor.
     @test_throws Exception TSODSO.assert_socp_exact!(ctx; rtol = 1e-4)
+
+    # The shared kernel REPORTS the slack cone without throwing, while the gate still refuses
+    # it with the same certificate kind and message.
+    chk = TSODSO._socp_cone_check(ctx)
+    @test chk.maxratio > 1
+    err = @test_throws CertificateError TSODSO.assert_socp_exact!(ctx)
+    @test err.value.kind === :socp_exact
+    @test occursin(
+        "SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=",
+        sprint(showerror, err.value),
+    )
+    # The documented flat-floor override is reproduced identically through the kernel.
+    @test TSODSO._socp_cone_check(ctx; atol = 1e-6).maxratio ==
+          maximum(x.ratio for x in TSODSO.hybrid_ratios(ctx; atol = 1e-6))
 end
 
 @testitem "exact: head-branch lookup is orientation-agnostic — ref_b matches forward vs reversed root branch" tags =
