@@ -211,12 +211,14 @@ exported symbol fails the build.
 
 Any other value is an error. CI on push and pull request runs `fast`; the `slow` workflow
 runs everything on Julia 1.10 and 1.12 on every push to `main`, nightly, and on manual
-dispatch.
+dispatch. Each push to `main` has its own concurrency group (keyed on the pushed commit), so
+no push's full-suite run is cancelled or replaced by a later one; a burst of merges runs in
+parallel. A single push carrying several commits is tested at its head commit.
 
 The end-to-end correctness gates (the IEEE-13 and IEEE-123 SC3 acceptance items, the ADMM
 cross-validation items and the planning certification items) are tagged `:slow`. Pull
 requests therefore run only `fast`, and those gates first run when the change lands on
-`main`, where every merge triggers the full suite.
+`main`, where every push triggers its own full-suite run.
 `TSODSO_TEST_VERBOSE=1` prints per-item timing. `TSODSO_TEST_FILES=a.jl,b.jl` restricts a
 run to those test files (entries are trimmed; a name that matches no test item fails the
 run). Discovery is rooted at `test/` (`TestItemRunner.run_tests(test_dir)`), so files

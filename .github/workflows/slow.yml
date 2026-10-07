@@ -4,6 +4,13 @@ name: slow
 # :slow end-to-end correctness gates run on each merge), nightly, and on manual
 # dispatch. Scheduled workflows run only from the default branch. The set is
 # `all` unless dispatched with another `test_set`.
+#
+# Each push gets its own concurrency group (keyed on the pushed commit SHA), so
+# a burst of merges runs one full suite per push, in parallel; no push run is
+# queued behind, replaced or cancelled by another. A push that carries several
+# commits tests its head commit. Scheduled and dispatched runs share a group per
+# event type and ref; within that group a newer pending run replaces an older
+# pending one (GitHub keeps at most one pending run per group).
 on:
   push:
     branches: [main]
@@ -23,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && format('push-{0}', github.sha) || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: false
 
 jobs:
