@@ -7,12 +7,20 @@
 #   julia --project=. scripts/jet_check.jl --selftest   logic test, no JET analysis, any Julia
 #
 # Each report is reduced to a normalized signature `kind | function | file | message head`
-# (no line numbers, `#name#NNN` gensyms stripped, duplicates collapsed). The check fails when
-# a current signature is missing from the baseline (NEW) or a baseline signature is no longer
-# reported (FIXED: remove it from the baseline so the ratchet only tightens).
+# (no line numbers, `#name#NNN` gensyms stripped). Signatures are compared as MULTISETS: a
+# signature listed k times in the baseline allows exactly k current reports with that
+# signature, so a second report that normalizes to an already-baselined signature is NEW.
+# The check fails when the current count of a signature exceeds its baseline count (NEW), when
+# it is lower (FIXED: remove the surplus line(s) so the ratchet only tightens), or when the
+# baseline still contains the UNJUSTIFIED marker (every entry must sit in a justified group).
 # The report accessors used here (`print_report_message`, `vst`, `get_reports`) are JET
-# internals pinned by the test manifest (JET 0.11.x).
-# Exit: 0 clean, 1 differences, 2 unsupported Julia / usage error.
+# internals pinned by the test manifest (JET 0.11.x). Signatures embed inferred type strings,
+# so the CI job pins the exact Julia patch recorded in the baseline header; bump both together.
+# Exit (check): 0 clean; 1 NEW/FIXED differences or UNJUSTIFIED entries; 2 unsupported Julia /
+#   usage error.
+# Exit (--update): 0 when the rewritten baseline has no UNJUSTIFIED entries; 1 when it does
+#   (the file IS written; move those lines into a justified group, or fix the code, before
+#   committing, since the check would fail on them).
 
 const BASELINE_DEFAULT = joinpath(@__DIR__, "jet_baseline.txt")
 const UNJUSTIFIED_MARK = "# UNJUSTIFIED (new signatures: add a justification or fix the code)"
@@ -42,7 +50,7 @@ function current_signatures()
         Base.invokelatest(JET.print_report_message, io, r)
         push!(sigs, normalize_signature(kind, fn, string(fr.file), String(take!(io))))
     end
-    return sort!(unique(sigs))
+    return sort!(sigs)  # duplicates kept: the ratchet compares multisets
 end
 
 """Signature lines of a baseline file (blank and `#` lines ignored)."""
@@ -58,20 +66,42 @@ end
 
 read_baseline(path) = isfile(path) ? parse_baseline(readlines(path)) : String[]
 
-"""`(new, fixed)`: current-minus-baseline and baseline-minus-current, both sorted."""
-function diff_signatures(current, baseline)
-    c, b = Set(current), Set(baseline)
-    return sort!(collect(setdiff(c, b))), sort!(collect(setdiff(b, c)))
+"""Multiset of signatures: `Dict(signature => count)`."""
+function countmap_sigs(sigs)
+    d = Dict{String,Int}()
+    for s in sigs
+        d[String(s)] = get(d, String(s), 0) + 1
+    end
+    return d
 end
+
+"""`(new, fixed)` as MULTISET differences (current-minus-baseline and baseline-minus-current):
+a signature appears once per surplus occurrence. Both sorted."""
+function diff_signatures(current, baseline)
+    c, b = countmap_sigs(current), countmap_sigs(baseline)
+    new, fixed = String[], String[]
+    for (s, n) in c
+        append!(new, fill(s, max(n - get(b, s, 0), 0)))
+    end
+    for (s, n) in b
+        append!(fixed, fill(s, max(n - get(c, s, 0), 0)))
+    end
+    return sort!(new), sort!(fixed)
+end
+
+"""True iff the baseline lines contain the UNJUSTIFIED marker."""
+has_unjustified(lines) = any(l -> strip(l) == UNJUSTIFIED_MARK, lines)
 
 """Header (leading `#`/blank lines) plus justification groups of an existing baseline file.
 
 Returns `(lines_out)`: comment/justification lines are kept in place, signature lines still
-current are kept in their group, vanished ones dropped, new ones appended under the
-UNJUSTIFIED marker."""
+current are kept in their group (one baseline line per current occurrence; surplus lines of a
+signature whose count dropped are removed), vanished ones dropped, and the remaining current
+occurrences appended under the UNJUSTIFIED marker. Signature lines directly under the marker
+are not kept in place (they are re-appended under a fresh marker); a `#` comment line after
+the marker ends the unjustified block, so a group justified below the marker keeps its lines."""
 function rewrite_baseline_lines(old_lines, current)
-    cur = Set(current)
-    kept = Set{String}()
+    left = countmap_sigs(current)
     out = String[]
     in_unjust = false
     for l in old_lines
@@ -80,14 +110,17 @@ function rewrite_baseline_lines(old_lines, current)
             in_unjust = true
             continue
         end
-        if isempty(s) || startswith(s, "#")
+        if startswith(s, "#")
+            in_unjust = false
             push!(out, String(l))
-        elseif s in cur && !in_unjust
+        elseif isempty(s)
+            push!(out, String(l))
+        elseif !in_unjust && get(left, s, 0) > 0
             push!(out, String(s))
-            push!(kept, String(s))
+            left[String(s)] -= 1
         end
     end
-    newsigs = sort!(collect(setdiff(cur, kept)))
+    newsigs = sort!(reduce(vcat, [fill(s, n) for (s, n) in left]; init = String[]))
     if !isempty(newsigs)
         while !isempty(out) && isempty(strip(out[end]))
             pop!(out)
@@ -152,8 +185,15 @@ function selftest()
     # diff
     new, fixed = diff_signatures(["a", "b"], ["b", "c"])
     chk(new == ["a"] && fixed == ["c"], "diff wrong: $new $fixed")
-    n2, f2 = diff_signatures(["a", "b", "a"], ["b", "a"])
-    chk(isempty(n2) && isempty(f2), "equal sets must give empty diff")
+    n2, f2 = diff_signatures(["a", "b", "a"], ["b", "a", "a"])
+    chk(isempty(n2) && isempty(f2), "equal multisets must give empty diff")
+    # multiplicity: a duplicate of a baselined signature is NEW; a dropped duplicate is FIXED
+    n3, f3 = diff_signatures(["a", "b", "a"], ["b", "a"])
+    chk(n3 == ["a"] && isempty(f3), "duplicate current report not NEW: $n3 $f3")
+    n4, f4 = diff_signatures(["a"], ["a", "a"])
+    chk(isempty(n4) && f4 == ["a"], "dropped duplicate not FIXED: $n4 $f4")
+    chk(has_unjustified(["x", "  " * UNJUSTIFIED_MARK]) && !has_unjustified(["x", "# y"]),
+        "unjustified marker detection wrong")
     # baseline parse
     chk(parse_baseline(["# c", "", "  x  ", "#y", "z"]) == ["x", "z"], "baseline parse wrong")
     # update: preserves comments and justification, drops fixed, marks new
@@ -165,6 +205,16 @@ function selftest()
     chk(ui !== nothing && r[ui+1] == "fresh", "new signature not under UNJUSTIFIED marker")
     r2 = rewrite_baseline_lines(r, ["keep", "keep2", "fresh"])
     chk(UNJUSTIFIED_MARK in r2 && "fresh" in r2, "rerun must keep unjustified entry")
+    # multiset update: a second occurrence is appended as unjustified; a dropped one removed
+    r3 = rewrite_baseline_lines(["# g", "keep", "keep"], ["keep", "keep", "keep"])
+    chk(count(==("keep"), r3) == 3 && r3[end] == "keep" && UNJUSTIFIED_MARK in r3,
+        "extra occurrence not appended as unjustified: $r3")
+    r4 = rewrite_baseline_lines(["# g", "keep", "keep"], ["keep"])
+    chk(count(==("keep"), r4) == 1 && !(UNJUSTIFIED_MARK in r4), "surplus line not dropped: $r4")
+    # a group justified BELOW the marker (marker left in place) keeps its lines
+    r5 = rewrite_baseline_lines(["# g", "keep", UNJUSTIFIED_MARK, "# Group 9: why", "late"],
+                                ["keep", "late"])
+    chk(r5 == ["# g", "keep", "# Group 9: why", "late"], "justified-below-marker group lost: $r5")
     foreach(f -> println("SELFTEST FAIL: ", f), failures)
     isempty(failures) && println("selftest OK: normalize, diff, baseline parse/rewrite")
     return isempty(failures)
@@ -187,6 +237,11 @@ function main(args)
     if "--update" in args
         write_baseline(path, cur)
         println("jet_check: wrote $(length(cur)) signatures to $path")
+        if has_unjustified(readlines(path))
+            println("UNJUSTIFIED entries written: move them into a justified group (or fix the ",
+                    "code) before committing; exit 1")
+            return 1
+        end
         return 0
     end
     version_warning(path)
@@ -202,10 +257,12 @@ function main(args)
         println("FIXED signatures (no longer reported: remove them from the baseline):")
         foreach(s -> println("  - ", s), fixed)
     end
-    if isfile(path) && any(==(UNJUSTIFIED_MARK), strip.(readlines(path)))
-        println("WARNING: baseline still contains UNJUSTIFIED entries")
+    unjust = isfile(path) && has_unjustified(readlines(path))
+    if unjust
+        println("FAIL: baseline contains UNJUSTIFIED entries (justify each in a group, or fix ",
+                "the code)")
     end
-    return (isempty(new) && isempty(fixed)) ? 0 : 1
+    return (isempty(new) && isempty(fixed) && !unjust) ? 0 : 1
 end
 
 exit(main(ARGS))

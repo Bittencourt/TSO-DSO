@@ -1,23 +1,31 @@
 # JET baseline: normalized signatures `kind | function | file | message head`.
 # Fixed reports must be removed from this file (the check fails on stale entries).
+# Compared as a multiset: a signature listed k times allows exactly k reports (no line
+# numbers in a signature, so one source line inferred in two contexts reports twice).
+# The CI JET job pins the Julia patch below; bump it together with `jet_check.jl --update`.
 # Header versions: JET 0.11.6, Julia 1.12.7
 # Every group below is a false positive: no entry is an undefined name or a wrong-arity call.
 
 # Group 1: `JuMP.objective_value` is inferred as `Union{Float64, Vector{Float64}}` (the vector
 # method belongs to multi-objective models). Every model here is single-objective, so the
 # Vector branch is unreachable; the reports are union-split artifacts of that inference. Call
-# sites go through the `_objective` helper (a `::Float64` assertion), which collapses the former
-# per-caller reports into the single `_objective` entry (the assertion's own convert check).
+# sites go through the `_objective` helper (a `::Float64` return-type annotation, i.e. a
+# convert plus typeassert), which collapses the former per-caller reports into the single
+# `_objective` entry (the annotation's own `convert` check).
 MethodErrorReport | TSODSO._objective | factory.jl | no matching method found `convert(::Type{Float64}, ::Vector{Float64})`
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `kwcall(::NamedTuple{(:atol,), <:Tuple{Any}}, ::typeof(TSODSO._integer_cycle_hit), ::Vector{@NamedTuple{sweep::Int64, joint_b::Vector{Int64}, state::Vector{Float64}, residual::Float64}}, ::Vector{Any}, ::Any, ::Float64)` (1/2 union split)
 
 # Group 2: `Union{Nothing, T}` struct fields / `findfirst` results used after an earlier
 # `!== nothing` (or `μ_j !== nothing`) guard that inference does not carry across the call
-# boundary; the Nothing branch cannot reach the reported call.
+# boundary; the Nothing branch cannot reach the reported call. The `setindex!(::Nothing, ...)`
+# line is listed twice: JET reports the same `integer_buffer[i] = ...` statement in
+# `run_nash!` (nash.jl, guarded by the `integer !== nothing` branch) from two inference
+# contexts.
 MethodErrorReport | TSODSO._mpc_truth_import_acpf | mpc_loop.jl | no matching method found `_mpc_settlement_violations(::AbstractFeeder, ::Nothing, ::Int64)` (1/2 union split)
 MethodErrorReport | TSODSO.fit_baseline | fit.jl | no matching method found `_fit_ac_settlement_violations(::Feeder, ::Nothing, ::Int64)` (1/2 union split)
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `+(::Int64, ::Nothing)` (1/2 union split)
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `iterate(::Nothing)`
+MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `setindex!(::Nothing, ::Any, ::Int64)` (1/2 union split)
 MethodErrorReport | TSODSO.run_nash! | nash.jl | no matching method found `setindex!(::Nothing, ::Any, ::Int64)` (1/2 union split)
 MethodErrorReport | TSODSO.solve_agr! | AgrOpt.jl | no matching method found `getindex(::Nothing, ::Int64)` (1/2 union split)
 
