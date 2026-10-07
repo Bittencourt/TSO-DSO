@@ -109,3 +109,34 @@ The knife-edge canary (iters = 56, welfare = -4823.66604824162) is never re-pinn
 - W3: literate pages for `solve_bilevel!`, `solve_variational_equilibrium`, integer `run_nash!`.
 - Phase 29 WR-01/IN-01 (bilevel certificate recovery reads cached coefficients; `_ub` ignores `is_fixed`).
 </deferred>
+
+### Research Refinements (38-RESEARCH.md + user decisions 2026-10-07 — supersede looser wording above)
+- MPC gate: extract ONE non-throwing internal helper (e.g. `_socp_cone_check`) from
+  `assert_socp_exact!`'s loop; `assert_socp_exact!`, the MPC first tier and the OOS step all use it.
+  Measured: 0 verdict flips on 1.12.5 (happy-path worst ratio 0.938, 6.6% margin); 1 flip on 1.12.7
+  (forced-PV-shortfall t=4, 0.233 → 1.165, escalates to restricted tier, run `:degraded`,
+  `dadp_trace[4]` 0.008895250684 → 0.008894113604; no asserted value moves) — document as an
+  explained move. Regression point: high-PV fixture `pv_scale = 1.2` + `l[2,1] ≥ l* + 5e-7`
+  (old 0.499 certify, new 2.457 escalate, both patches).
+- USER (W6): **Exclude + report.** `solve_stochastic_oos_step!` throws `CertificateError` on an
+  inexact held-out solve; `_stoch_solve_held_out!` catches it, records the draw as
+  skipped-and-reported with a NEW status (as infeasible draws already are), and excludes it from
+  `realized_welfare`/`welfare_gap` via an `inexact_h` mask. The docs page states how many draws
+  were excluded (measured 5/10 on 1.12.5, 2/10 on 1.12.7 for its S=5, H_oos=10 scenario). The four
+  direct harness unit tests pass an explicit `tol_gap = 5e-10` optimizer (all ratios < 0.5). Measure
+  and document the effect on `compare_default_stochastic` (seed-42 compare script + Portuguese
+  writeup); explained moves accepted. The CI golden (worst ratio 0.366) must not move.
+  Status vocabulary / `status_policy.md` updated for the new status.
+- Timeout test: 2 fast `@testitem`s (47 s cold / 12 s warm; Phase 37 in-suite rule ⇒ fast);
+  counts become all=513 fast=476 slow=37.
+- W5: validate in the `Scenario` inner constructor beside the pf check (covers `with_strategy`,
+  `run_sweep`).
+- W4: store the reactive mode as a Symbol (e.g. `:LIVE`); docstring matches.
+- W7: `check_setup_names.py` (+ `--selftest`) in the CI format job.
+- USER (W2): FRAMEWORK_GUIDE sweep **fixes model text too** — the ~10 now-false model statements
+  (reverse-direction limit 3.37, exactness-copy direction, gate tolerance, terminal SOC pin, truth
+  settlement, integer planning, test count) are corrected with a short note citing the version
+  that changed it; §5.1 exactness-copy derivation gets a corrective note, not a rewrite. Plus all
+  API findings (~35 unqualified unexported names, 2 Symbol reactive modes, ~10 DLMP loss/voltage,
+  ~12 old Scenario API, 19 planning IDs, 3 check_script_api findings). Verified once with scratch
+  checks; no new CI guard over the guide. Embedded images untouched.
