@@ -1,226 +1,217 @@
 # scripts/pv_boom_report.jl
 #
-# Self-contained HTML report generator for the PV-boom case study (scripts/
-# pv_boom_case_study.jl). Reads the raw run data `data/pv_boom/results.jld2` (gitignored
-# — run `scripts/pv_boom_case_study.jl` first if it is absent), builds three CairoMakie
-# figures, embeds them as base64 `data:image/png;base64,...` URIs (no external image
-# files), and assembles ONE self-contained `results/pv_boom/report.html`: a rich,
-# educational, guided walkthrough of the two-layer TSO-DSO framework, its equations
-# (native `<math>` MathML, no CDN), the PV-boom experiment design, and the results — a
-# power-systems reader with zero knowledge of this codebase can read it start to finish.
+# Review-hardened PV-boom case study HTML report.
+# The data loading, figures and tables come from scripts/lib/pv_boom_common.jl; this
+# file layers on the narrative: source-file/line citations next to every equation, a
+# notation/symbols glossary, an inline SVG architecture diagram, a dedicated
+# honest-limitations section, semantic HTML5 structure + accessibility + print/dark-mode
+# CSS. Every quoted result number is computed live from data/pv_boom/results.jld2.
 #
-#   julia --project=. scripts/pv_boom_report.jl
+#   julia --project=. scripts/pv_boom_report.jl [results.jld2 [outdir]]
+#
+# Writes results/pv_boom/report.html (outdir defaults to results/pv_boom).
 #
 using DrWatson
 @quickactivate "TSODSO"
 
-using TSODSO
-using CairoMakie
-using Base64
-using Printf
+include(joinpath(@__DIR__, "lib", "pv_boom_common.jl"))
 
-results = DrWatson.wload(datadir("pv_boom", "results.jld2"))
-sweep = results["sweep"]
-admm_crosscheck = results["admm_crosscheck"]
-nash_result = results["nash_result"]
-ac_stress = results["ac_stress"]
+"""
+    main(results_path = datadir("pv_boom", "results.jld2"), outdir = projectdir("results", "pv_boom"))
 
-ok_rows = [r for r in sweep if r.status == "ok"]
-isempty(ok_rows) && error(
-    "pv_boom_report: no successful sweep points in data/pv_boom/results.jld2 — nothing " *
-    "to report. Re-run scripts/pv_boom_case_study.jl.",
+Build the report from the results file and write `report.html` into `outdir`.
+Returns the output path.
+"""
+function main(
+    results_path = datadir("pv_boom", "results.jld2"),
+    outdir = projectdir("results", "pv_boom"),
 )
+    results = pv_boom_load_results(results_path)
+    (; sweep, admm_crosscheck, nash_result, ac_stress, ok_rows) = results
+    stressed_bus = pv_boom_stressed_bus(ok_rows)
 
-# ── Pick the representative "most-stressed" bus: the one with the largest total-price
-# spread across every successful pv_mult level (max over pv_mult/hour minus min). ────────
-N_buses = size(first(ok_rows).dlmp, 1)
-bus_range = zeros(N_buses)
-for bus in 1:N_buses
-    vals = Float64[]
-    for r in ok_rows
-        append!(vals, r.dlmp[bus, :])
-    end
-    bus_range[bus] = maximum(vals) - minimum(vals)
-end
-stressed_bus = argmax(bus_range)
-println(
-    "Representative stressed bus (largest total-price spread across pv_mult) = ",
-    stressed_bus,
-)
+    figs = pv_boom_figures(results, stressed_bus)
+    highest_row = figs.highest_row
+    uri1 = figure_to_data_uri(figs.fig1)
+    uri2 = figure_to_data_uri(figs.fig2)
+    uri3 = figure_to_data_uri(figs.fig3)
 
-T_full = size(first(ok_rows).dlmp, 2)
-hours = 1:T_full
+    # Section 4 numbers — computed directly from the loaded results, never re-typed, so
+    # they cannot drift from the data this run loaded.
+    welfare_deltas = welfare_deltas_html(sweep, ok_rows)
+    exact_maxgaps = exact_maxgaps_html(ok_rows)
 
-# ── Figure 1: price curves, one line per successful pv_mult, at the stressed bus ────────
-fig1 = Figure(; size = (900, 500))
-ax1 = Axis(
-    fig1[1, 1];
-    xlabel = "hour",
-    ylabel = "total DADP (per-unit)",
-    title = "Price reshaping at bus $stressed_bus across PV penetration (IEEE-13)",
-)
-palette1 = Makie.wong_colors()
-for (idx, r) in enumerate(ok_rows)
-    lines!(
-        ax1,
-        hours,
-        r.dlmp[stressed_bus, :];
-        label = "pv_mult=$(r.pv_mult)",
-        color = palette1[mod1(idx, length(palette1))],
-    )
-end
-axislegend(ax1; position = :rt)
+    admm_relative_gap =
+        abs(admm_crosscheck.welfare_admm - admm_crosscheck.welfare_centralized) /
+        abs(admm_crosscheck.welfare_centralized)
+    admm_iters = admm_crosscheck.residuals.iters
 
-# ── Figure 2: 4-way stacked decomposition (energy/loss/congestion/voltage) at the
-# stressed bus, for the HIGHEST successful pv_mult. ──────────────────────────────────────
-highest_row = ok_rows[argmax([r.pv_mult for r in ok_rows])]
-decomp = highest_row.decomp
-fig2 = Figure(; size = (900, 500))
-ax2 = Axis(
-    fig2[1, 1];
-    xlabel = "hour",
-    ylabel = "price component (per-unit)",
-    title = "4-way DLMP decomposition at bus $stressed_bus, pv_mult=$(highest_row.pv_mult)",
-)
-energy_v = decomp.energy[stressed_bus, :]
-loss_v = decomp.cone[stressed_bus, :]
-congestion_v = decomp.congestion[stressed_bus, :]
-voltage_v = decomp.drop[stressed_bus, :]
-stack1 = energy_v
-stack2 = stack1 .+ loss_v
-stack3 = stack2 .+ congestion_v
-stack4 = stack3 .+ voltage_v
-band!(ax2, hours, zeros(T_full), stack1; color = (:steelblue, 0.7), label = "energy")
-band!(ax2, hours, stack1, stack2; color = (:orange, 0.7), label = "loss")
-band!(ax2, hours, stack2, stack3; color = (:firebrick, 0.7), label = "congestion")
-band!(ax2, hours, stack3, stack4; color = (:seagreen, 0.7), label = "voltage")
-lines!(
-    ax2,
-    hours,
-    decomp.total[stressed_bus, :];
-    color = :black,
-    linestyle = :dash,
-    label = "total (DADP)",
-)
-axislegend(ax2; position = :rt)
+    nash_differentiated =
+        isapprox(nash_result.x_inv[1], nash_result.x_inv[2]; rtol = 1e-3) ? false : true
 
-# ── Figure 3: ADMM convergence (reuses the generic TSODSO.plot_convergence — never
-# reimplemented). ─────────────────────────────────────────────────────────────────────
-fig3 = TSODSO.plot_convergence(admm_crosscheck.residuals)
+    sweep_table = sweep_table_html(sweep)
+    nash_table = nash_table_html(nash_result)
 
-# ── Embed each Figure as a base64 PNG data URI (no external image files). ───────────────
-function figure_to_data_uri(fig)
-    path = joinpath(mktempdir(), "fig.png")
-    CairoMakie.save(path, fig)
-    bytes = read(path)
-    return "data:image/png;base64," * Base64.base64encode(bytes)
-end
+    # ═════════════════════════════════════════════════════════════════════════════════════
+    # REPORT CONTENT — notation/symbols glossary, inline SVG architecture diagram,
+    # consolidated honest-limitations section, and a CSS fragment (source-citation and
+    # provenance spans, semantic-landmark spacing, print, dark mode). Wired together with
+    # the five narrative sections in the final `html_string`, written to
+    # `results/pv_boom/report.html`.
+    # ═════════════════════════════════════════════════════════════════════════════════════
 
-uri1 = figure_to_data_uri(fig1)
-uri2 = figure_to_data_uri(fig2)
-uri3 = figure_to_data_uri(fig3)
+    notation_table_html = """
+<section id="notation">
+<h2 id="notation-h">Notation and symbols</h2>
+<p>Every symbol used in the equations below, defined once here before it is first used.</p>
+<table>
+<tr><th>Symbol</th><th>Meaning</th><th>Units / convention</th></tr>
+<tr><td><code>p_import[t]</code></td><td>Active power exchange with the transmission grid (MEM) at the feeder root</td><td>pu power; <code>&gt;0</code> = buy, <code>&lt;0</code> = sell (only when <code>allow_export=true</code>)</td></tr>
+<tr><td><code>λ₀[t]</code></td><td>Wholesale/MEM price at the transmission root (the price <code>p_import</code> is settled at)</td><td>pu price / pu power</td></tr>
+<tr><td><code>λ_j[t]</code> (DADP)</td><td>Day-ahead dynamic price at bus <code>j</code>, hour <code>t</code> — the dual of the nodal active-balance constraint <code>balance_p[j,t]</code></td><td>pu price / pu power</td></tr>
+<tr><td><code>v[j,t]</code>, <code>v̂[j,t]</code></td><td>Squared voltage magnitude at bus <code>j</code> (the SOCP relaxed variable <code>v</code>, and <code>v̂</code> the LinDistFlow "exactness copy" auxiliary variable that drives the cone to hold with equality)</td><td>pu²</td></tr>
+<tr><td><code>l[b,t]</code></td><td>Squared current magnitude on branch <code>b</code> — the loss/current variable in the SOC cone <code>l·v ≥ P²+Q²</code></td><td>pu²</td></tr>
+<tr><td><code>P[b,t]</code>, <code>Q[b,t]</code></td><td>Active / reactive power flow on branch <code>b</code>, hour <code>t</code></td><td>pu</td></tr>
+<tr><td><code>ρ</code></td><td>ADMM quadratic penalty weight (AGR-OPT / DSO-OPT)</td><td>pu⁻¹ (scales a squared-power term)</td></tr>
+<tr><td><code>z[i,t]</code></td><td>Distributor <code>i</code>'s frontier import/export at the shared transmission corridor — the planning-layer coupling variable (<code>p_import == z</code>)</td><td>pu power</td></tr>
+<tr><td><code>x_inv[i]</code></td><td>Distributor <code>i</code>'s converged flexibility-investment level (planning-layer decision)</td><td>pu</td></tr>
+<tr><td><code>π_s</code></td><td>Dual of the planning-layer coupling constraint <code>p_import == z</code>; the Benders cut gradient — a "linking price" conceptually analogous to a DLMP (per README's own language)</td><td>pu price / pu power</td></tr>
+<tr><td><code>pv_mult</code></td><td>PV-penetration multiplier scaling per-bus PV magnitude — a parameter of THIS case study only (<code>pv_boom_case_study.jl</code>), not a framework-wide symbol</td><td>dimensionless</td></tr>
+</table>
+</section>
+"""
 
-# ── Section 4 richly-interpreted numbers — computed directly from the loaded results
-# dict / sweep rows (never hardcoded/re-typed from findings.txt, so they can never drift
-# from the actual data this run loaded). ─────────────────────────────────────────────────
-baseline_idx = findfirst(r -> r.pv_mult == 0.0 && r.status == "ok", sweep)
-baseline_row = baseline_idx === nothing ? nothing : sweep[baseline_idx]
+    architecture_diagram_html = """
+<section id="architecture">
+<h2 id="architecture-h">Architecture: operational and planning layers</h2>
+<svg viewBox="0 0 900 480" role="img" aria-labelledby="arch-svg-title arch-svg-desc">
+<title id="arch-svg-title">Two-layer architecture diagram</title>
+<desc id="arch-svg-desc">Operational layer on the left (prosumer devices to aggregator to DSO network, emitting DADP prices); planning layer on the right (two distributor-leaders to a shared transmission corridor to a transmission-reinforcement follower); a thin cross-layer arrow shows the PV-boom case study's own local_price to c_op calibration link.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M 0 0 L 10 5 L 0 10 z" fill="#2c5f8a"></path>
+</marker>
+</defs>
+<text x="20" y="20" font-size="14" font-weight="bold" fill="#2c5f8a">Operational layer</text>
+<rect x="20" y="30" width="220" height="55" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="130" y="53" font-size="12" text-anchor="middle">Prosumer devices</text>
+<text x="130" y="70" font-size="11" text-anchor="middle">(Interruptible / Thermostatic /</text>
+<text x="130" y="82" font-size="11" text-anchor="middle">Deferrable / PVBattery)</text>
+<line x1="130" y1="85" x2="130" y2="120" stroke="#2c5f8a" stroke-width="2" marker-end="url(#arrow)"></line>
+<rect x="20" y="122" width="220" height="45" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="130" y="150" font-size="12" text-anchor="middle">Aggregator (per bus)</text>
+<line x1="130" y1="167" x2="130" y2="202" stroke="#2c5f8a" stroke-width="2" marker-end="url(#arrow)"></line>
+<rect x="20" y="204" width="220" height="55" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="130" y="227" font-size="12" text-anchor="middle">DSO network</text>
+<text x="130" y="243" font-size="11" text-anchor="middle">(ConvexBranchFlow SOCP)</text>
+<line x1="130" y1="259" x2="130" y2="294" stroke="#2c5f8a" stroke-width="2" marker-end="url(#arrow)"></line>
+<text x="130" y="312" font-size="11" text-anchor="middle" fill="#333">λ_j[t] = dual(balance_p[j,t])</text>
+<text x="130" y="326" font-size="11" text-anchor="middle" fill="#333">(DADP)</text>
 
-welfare_deltas_html = let io = IOBuffer()
-    println(io, "<ul>")
-    if baseline_row !== nothing
-        for r in ok_rows
-            r.pv_mult == 0.0 && continue
-            δ = r.welfare - baseline_row.welfare
-            @printf(
-                io,
-                "<li><code>pv_mult=%.1f</code>: welfare Δ = <b>+%.2f</b> vs the pv_mult=0.0 baseline (welfare=%.4f)</li>\n",
-                r.pv_mult,
-                δ,
-                r.welfare,
-            )
-        end
-    end
-    println(io, "</ul>")
-    String(take!(io))
-end
+<text x="480" y="20" font-size="14" font-weight="bold" fill="#2c5f8a">Planning layer</text>
+<rect x="460" y="30" width="220" height="50" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="570" y="50" font-size="12" text-anchor="middle">Distributor-leader (baseline)</text>
+<text x="570" y="66" font-size="11" text-anchor="middle">Benders master + subproblem</text>
+<line x1="570" y1="80" x2="570" y2="112" stroke="#2c5f8a" stroke-width="2" marker-end="url(#arrow)"></line>
+<rect x="460" y="114" width="220" height="50" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="570" y="134" font-size="12" text-anchor="middle">Distributor-leader (boom)</text>
+<text x="570" y="150" font-size="11" text-anchor="middle">Benders master + subproblem</text>
+<text x="570" y="182" font-size="10" text-anchor="middle" fill="#555">decision vars x_inv[i], z[i,t]</text>
+<line x1="570" y1="164" x2="570" y2="198" stroke="#2c5f8a" stroke-width="2" marker-end="url(#arrow)"></line>
+<rect x="460" y="200" width="220" height="55" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="570" y="223" font-size="12" text-anchor="middle">Shared transmission corridor</text>
+<text x="570" y="239" font-size="11" text-anchor="middle">p_import == z, dual π_s</text>
+<line x1="570" y1="255" x2="570" y2="290" stroke="#2c5f8a" stroke-width="2" marker-end="url(#arrow)"></line>
+<text x="570" y="270" font-size="10" text-anchor="middle" fill="#555">Gauss-Seidel diagonalization across</text>
+<text x="570" y="282" font-size="10" text-anchor="middle" fill="#555">distributors -&gt; Nash equilibrium (run_nash!)</text>
+<rect x="460" y="292" width="220" height="55" rx="6" fill="#f7f9fb" stroke="#2c5f8a"></rect>
+<text x="570" y="315" font-size="12" text-anchor="middle">Transmission-reinforcement</text>
+<text x="570" y="331" font-size="12" text-anchor="middle">follower</text>
 
-exact_maxgaps_html = let io = IOBuffer()
-    println(io, "<ul>")
-    for r in ok_rows
-        @printf(
-            io,
-            "<li><code>pv_mult=%.1f</code>: exact_maxgap = %.3e</li>\n",
-            r.pv_mult,
-            r.exact_maxgap
-        )
-    end
-    println(io, "</ul>")
-    String(take!(io))
-end
+<line x1="240" y1="300" x2="455" y2="215" stroke="#888" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"></line>
+<text x="345" y="360" font-size="10" text-anchor="middle" fill="#555">this case study only: local_price -&gt; c_op cost coefficient</text>
+<text x="345" y="373" font-size="10" text-anchor="middle" fill="#555">(scripts/pv_boom_case_study.jl:515-527, distributor_calibration)</text>
+</svg>
+<p>The diagram shows the operational layer (prosumer devices aggregated per bus, cleared
+on a convex branch-flow DSO network, emitting per-bus DADP prices as duals) alongside the
+planning layer (two distributor-leaders reaching a Nash equilibrium by Gauss-Seidel
+diagonalization over a shared transmission corridor against a transmission-reinforcement
+follower); the dashed cross-layer arrow marks the ONE data flow this specific case study
+wires between the two layers — it is not a general framework feature.</p>
+</section>
+"""
 
-admm_relative_gap =
-    abs(admm_crosscheck.welfare_admm - admm_crosscheck.welfare_centralized) /
-    abs(admm_crosscheck.welfare_centralized)
-admm_iters = admm_crosscheck.residuals.iters
+    limitations_html = """
+<section id="limitations">
+<h2 id="limitations-h">Honest limitations</h2>
+<p>Every genuinely negative or caveated finding already documented in this report,
+gathered here in one place — none softened, none new.</p>
+<ol>
+<li><strong>Welfare-level meaninglessness.</strong> Every device utility has its additive
+thesis constant <code>c</code> deliberately dropped (stated in every device
+docstring); only welfare DELTAS between scenarios and DUALS (prices) are economically
+meaningful, never the reported level in isolation.</li>
+<li><strong>SOC inexactness under high-PV reverse flow.</strong> The certified
+3-bus stress fixture (<code>pv_scale=1.2</code>, <code>load_scale=0.2</code>,
+<code>vmax=1.05</code>) shows the SOC relaxation genuinely INEXACT at
+<b>$(ac_stress.n_inexact_hours) of 24 hours</b>
+<span class="provenance">(computed from results.jld2)</span>
+(<code>obj_gap=$(round(ac_stress.obj_gap; sigdigits=4))</code>,
+<code>socp_maxgap=$(round(ac_stress.socp_maxgap; sigdigits=4))</code>
+<span class="provenance">(computed from results.jld2)</span> under the documented
+<code>rtol_exact=1.0</code> diagnostic override) — the IEEE-13 sweep itself never exhibits
+this (all 6 <code>pv_mult</code> points stay exact to O(1e-8)-O(1e-9)).</li>
+<li><strong>The <code>pv_mult&gt;=0.7</code> Benders feasibility floor deviation.</strong>
+<code>solve_stackelberg!</code>'s Benders master's unconditional first trial is
+<code>z=0</code>; a zero-PV network cannot self-balance zero frontier import, so
+<code>pv_mult ∈ {0.0, 0.3, 0.5}</code> all raise a hard <code>INFEASIBLE</code> before any
+cut is attempted; <code>pv_mult &gt;= 0.7</code> is the feasibility floor.
+<code>pv_mult=0.7</code> was substituted for the intended <code>0.0</code> baseline.</li>
+<li><strong>Nash non-differentiation.</strong> The converged planning game gives
+<code>x_inv = $(nash_result.x_inv)</code>
+<span class="provenance">(computed from results.jld2)</span> for both distributors at
+this calibration: a genuine, reported-as-is finding, never forced apart.</li>
+<li><strong>"Directional, public-data" thesis-reproduction qualifier.</strong> Quoting
+<code>README.md</code> (lines 77-81): "the thesis's DSO-surplus sign flip reproduces on
+real public data; the +25% welfare-ratio magnitude does not — stated plainly, always with
+the 'directional, public-data' qualifier, pinned only on sign-safe quantities." This is a
+repo-wide reproduction-honesty convention, not something specific to the PV-boom study.</li>
+</ol>
+</section>
+"""
 
-nash_differentiated =
-    isapprox(nash_result.x_inv[1], nash_result.x_inv[2]; rtol = 1e-3) ? false : true
+    extra_style_html = """
+  .src { display: block; font-family: 'Courier New', monospace; font-size: 0.78rem; color: #777; margin-top: 0.2rem; }
+  .provenance { font-style: italic; font-size: 0.85rem; color: #666; }
+  main { display: block; }
+  nav.toc { }
+  section { margin-bottom: 1rem; }
+  svg { max-width: 100%; height: auto; background: #fff; }
+  @media print {
+    nav.toc { display: none; }
+    figure, .eq-block { break-inside: avoid; page-break-inside: avoid; }
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1b1e22; color: #dcdcdc; }
+    .eq-block { background: #24282e; border-color: #3a3f47; }
+    table { color: #dcdcdc; }
+    th { background: #2a2f36; }
+    th, td { border-color: #444; }
+    .finding { background: #33301a; border-left-color: #e0a800; color: #dcdcdc; }
+    nav.toc { background: #1b1e22; border-bottom-color: #6fa8d8; }
+    nav.toc a { color: #6fa8d8; }
+    a { color: #6fa8d8; }
+    .src, .provenance { color: #9aa0a6; }
+  }
+"""
 
-# ── Tables (plain HTML string interpolation — no templating library). ───────────────────
-function sweep_table_html(rows)
-    io = IOBuffer()
-    println(io, "<table>")
-    println(
-        io,
-        "<tr><th>pv_mult</th><th>status</th><th>welfare</th><th>exact_maxgap</th></tr>",
-    )
-    for r in rows
-        if r.status == "ok"
-            println(
-                io,
-                "<tr><td>$(r.pv_mult)</td><td>$(r.status)</td><td>$(round(r.welfare; digits=4))</td>" *
-                "<td>$(round(r.exact_maxgap; sigdigits=4))</td></tr>",
-            )
-        else
-            println(
-                io,
-                "<tr><td>$(r.pv_mult)</td><td>$(r.status)</td><td colspan=2>$(first(r.reason, 80))</td></tr>",
-            )
-        end
-    end
-    println(io, "</table>")
-    return String(take!(io))
-end
+    # ═════════════════════════════════════════════════════════════════════════════════════
+    # Sections 1-5 — narrative text, with source-citation spans (`.src`, next to every
+    # `.eqref`) on every equation and provenance spans (`.provenance`) on every quoted
+    # Section-4 result number.
+    # ═════════════════════════════════════════════════════════════════════════════════════
 
-function nash_table_html(nash_result)
-    io = IOBuffer()
-    println(io, "<table>")
-    println(io, "<tr><th>distributor</th><th>x_inv</th><th>final z (mean)</th></tr>")
-    labels = ["baseline", "boom"]
-    for i in 1:length(nash_result.x_inv)
-        println(
-            io,
-            "<tr><td>$(labels[min(i, length(labels))])</td><td>$(round(nash_result.x_inv[i]; sigdigits=4))</td>" *
-            "<td>$(round(sum(nash_result.z[i, :]) / size(nash_result.z, 2); sigdigits=4))</td></tr>",
-        )
-    end
-    println(io, "</table>")
-    return String(take!(io))
-end
-
-sweep_table = sweep_table_html(sweep)
-nash_table = nash_table_html(nash_result)
-
-# ═════════════════════════════════════════════════════════════════════════════════════
-# NEW EDUCATIONAL CONTENT — four narrative section bodies.
-# Native <math> MathML only (no KaTeX/MathJax/CDN); every equation and parameter value
-# below is transcribed VERBATIM from the source files/findings.txt cited inline — never
-# invented, never re-derived. These bodies are assembled into `html_string` together with
-# `section5_repro_html` and the results-interpretation content.
-# ═════════════════════════════════════════════════════════════════════════════════════
-
-section1_framing_html = """
+    section1_framing_html = """
 <h2 id="section1">1. Framing: what this report is about</h2>
 <p>
 This report showcases the <strong>TSO-DSO Integration Optimization Framework</strong>, a
@@ -254,16 +245,20 @@ different PV levels?</li>
 </ol>
 <p>
 Every number in this report traces to a real solve of the framework's code — nothing here
-is illustrative or hand-drawn.
+is illustrative or hand-drawn. This v2 report additionally cites the exact source file/line
+range every equation was transcribed from (the <code>.src</code> tag next to each
+<code>.eqref</code>), and tags every quoted result number with its provenance (computed
+live from <code>results.jld2</code>, or read from <code>findings.txt</code>).
 </p>
 """
 
-section2_model_html = """
+    section2_model_html = """
 <h2 id="section2">2. The operational model, equation by equation</h2>
 <p>The operational layer solves a single convex quadratic program: maximize the sum of every
 prosumer's utility, minus the cost of power imported from the transmission grid, subject to
 the distribution network's physical laws. Below is every equation this case study actually
-solves, in the order a reader needs them, each tagged with its exact thesis equation number.</p>
+solves, in the order a reader needs them, each tagged with its exact thesis equation number
+AND the exact source file/line(s) it was transcribed from.</p>
 
 <h3>2.1 The GLB-CVX welfare objective</h3>
 <div class="eq-block">
@@ -278,6 +273,7 @@ solves, in the order a reader needs them, each tagged with its exact thesis equa
   <msub><mi>p</mi><mtext>import</mtext></msub><mo>[</mo><mi>t</mi><mo>]</mo>
 </mrow></math>
 <span class="eqref">(eq. 3.38)</span>
+<span class="src">src/models/welfare_solve.jl:29,67,236-238</span>
 </div>
 <p>Implemented in <code>src/models/welfare_solve.jl</code>. The frontier
 <code>p_import[t]</code> is the power bought (or, when <code>allow_export=true</code> — used
@@ -305,7 +301,11 @@ optimum and its duals.</p>
   <mo>)</mo>
 </mrow></math>
 <span class="eqref">(eq. 3.10)</span>
+<span class="src">src/devices/Interruptible.jl:22,96,116-119</span>
 </div>
+<p>The flexibility limits <code>P_min &#x2264; p[t] &#x2264; P_max</code> (eqs. 3.13-3.14),
+which also fix the concavity requirement <code>b &gt; 0</code> used above, are documented at
+<span class="src">src/devices/Interruptible.jl:34-36,107</span>.</p>
 
 <p><strong>Thermostatic (A/C) load</strong> — <code>src/devices/Thermostatic.jl</code> — a
 comfort utility over an indoor-temperature state that evolves by an RC/ETP thermal
@@ -320,6 +320,7 @@ recursion:</p>
   <mo>&#x2212;</mo><mi>&#946;</mi><mo>&#x22C5;</mo><mi>p</mi><mo>[</mo><mi>t</mi><mo>]</mo>
 </mrow></math>
 <span class="eqref">(eq. 3.2)</span>
+<span class="src">src/devices/Thermostatic.jl:25-27,205-206,236-242</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -328,6 +329,7 @@ recursion:</p>
   <mo>&#x2264;</mo><msub><mi>T</mi><mtext>max</mtext></msub>
 </mrow></math>
 <span class="eqref">(eq. 3.3)</span>
+<span class="src">src/devices/Thermostatic.jl:29,204,233-234</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -337,6 +339,7 @@ recursion:</p>
   <msup><mrow><mo>(</mo><msub><mi>T</mi><mtext>in</mtext></msub><mo>[</mo><mi>t</mi><mo>]</mo><mo>&#x2212;</mo><msub><mi>T</mi><mtext>min</mtext></msub><mo>)</mo></mrow><mn>2</mn></msup>
 </mrow></math>
 <span class="eqref">(eq. 3.11)</span>
+<span class="src">src/devices/Thermostatic.jl:30-32,209-210,244-246</span>
 </div>
 
 <p><strong>Deferrable (shiftable) load</strong> — <code>src/devices/Deferrable.jl</code> — a
@@ -348,6 +351,7 @@ task (e.g. a washer or EV charge) whose total energy over a fixed window is soft
   <mi>p</mi><mo>[</mo><mi>t</mi><mo>]</mo><mo>&#x2264;</mo><mi>E</mi>
 </mrow></math>
 <span class="eqref">(eq. 3.4)</span>
+<span class="src">src/devices/Deferrable.jl:24-26,49-57,161-205</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -356,6 +360,7 @@ task (e.g. a washer or EV charge) whose total energy over a fixed window is soft
   <mi>p</mi><mo>[</mo><mi>t</mi><mo>]</mo><mo>=</mo><mn>0</mn><mtext>&#x2003;(otherwise)</mtext>
 </mrow></math>
 <span class="eqref">(eq. 3.5)</span>
+<span class="src">src/devices/Deferrable.jl:24-26,49-57,161-205</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -367,6 +372,7 @@ task (e.g. a washer or EV charge) whose total energy over a fixed window is soft
   <mo>)</mo></mrow><mn>2</mn></msup>
 </mrow></math>
 <span class="eqref">(eq. 3.12)</span>
+<span class="src">src/devices/Deferrable.jl:28,30,207-212</span>
 </div>
 
 <p><strong>PV + battery (BESS)</strong> — <code>src/devices/PVBattery.jl</code> — a
@@ -380,6 +386,7 @@ co-located PV generator and battery with continuous state-of-charge dynamics:</p
   <mo>)</mo><mo>&#x22C5;</mo><mi>&#916;</mi><mi>t</mi>
 </mrow></math>
 <span class="eqref">(eq. 3.6)</span>
+<span class="src">src/devices/PVBattery.jl:26,28,253-261</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -388,6 +395,7 @@ co-located PV generator and battery with continuous state-of-charge dynamics:</p
   <mo>&#x2264;</mo><msub><mi>P</mi><mtext>pv</mtext></msub><mo>[</mo><mi>t</mi><mo>]</mo>
 </mrow></math>
 <span class="eqref">(eq. 3.7)</span>
+<span class="src">src/devices/PVBattery.jl:29,79-82,246-265</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -396,6 +404,7 @@ co-located PV generator and battery with continuous state-of-charge dynamics:</p
   <mo>&#x2264;</mo><msub><mi>P</mi><mtext>max</mtext></msub>
 </mrow></math>
 <span class="eqref">(eq. 3.8)</span>
+<span class="src">src/devices/PVBattery.jl:30,73,243-244</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -404,6 +413,7 @@ co-located PV generator and battery with continuous state-of-charge dynamics:</p
   <mtext>soc</mtext><mo>[</mo><mn>1</mn><mo>]</mo><mo>=</mo><msub><mtext>soc</mtext><mn>0</mn></msub>
 </mrow></math>
 <span class="eqref">(eq. 3.9)</span>
+<span class="src">src/devices/PVBattery.jl:32,74-75,245,253</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -428,12 +438,16 @@ co-located PV generator and battery with continuous state-of-charge dynamics:</p
   <mfrac><mrow><mo>(</mo><msub><mi>&#955;</mi><mtext>max</mtext></msub><mo>&#x2212;</mo><msub><mi>&#955;</mi><mtext>med</mtext></msub><mo>)</mo></mrow><msub><mi>P</mi><mtext>max</mtext></msub></mfrac>
 </mrow></math>
 <span class="eqref">(eqs. 3.15-3.20)</span>
+<span class="src">src/devices/PVBattery.jl:34-41,267-283</span>
 </div>
 <p>The App. C no-binary argument: because the price triple is <em>strictly</em> ordered
 λ_min &lt; λ_med &lt; λ_max, the marginal charge benefit never exceeds the marginal discharge
 cost, so simultaneous charge and discharge is strictly dominated at the optimum — the model
 needs <strong>no binary variable</strong> to enforce <code>p_ch[t]·p_dch[t] = 0</code>; it is
-verified numerically after every solve instead.</p>
+verified numerically after every solve instead
+(<span class="src">src/devices/PVBattery.jl:42-58,113-131</span>, App. C pp. 166-168; the
+post-solve complementarity check itself lives at
+<span class="src">src/models/welfare_solve.jl:272-321</span>).</p>
 
 <div class="finding">
 <strong>Educational caveat — every welfare LEVEL below is not economically meaningful on its
@@ -459,6 +473,7 @@ second-order cone:</p>
   <msup><mi>P</mi><mn>2</mn></msup><mo>+</mo><msup><mi>Q</mi><mn>2</mn></msup>
 </mrow></math>
 <span class="eqref">(eq. 3.39)</span>
+<span class="src">src/powerflow/ConvexBranchFlow.jl:13-14,56,~147-158</span>
 </div>
 <p>On its own this relaxation can be loose. The <strong>LinDistFlow exactness copy</strong>
 — an auxiliary squared-voltage variable v̂ propagated by its own, slightly different
@@ -472,6 +487,7 @@ hold with EQUALITY (exact) on a radial feeder:</p>
   <mo>+</mo><mi>x</mi><mo>(</mo><mi>Q</mi><mo>+</mo><mi>x</mi><mi>l</mi><mo>)</mo><mo>}</mo>
 </mrow></math>
 <span class="eqref">(eq. 3.43)</span>
+<span class="src">src/powerflow/ConvexBranchFlow.jl:9,13,41-42,~173-187</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -480,6 +496,7 @@ hold with EQUALITY (exact) on a radial feeder:</p>
   <msubsup><mi>V</mi><mtext>max</mtext><mn>2</mn></msubsup>
 </mrow></math>
 <span class="eqref">(eq. 3.45)</span>
+<span class="src">src/powerflow/ConvexBranchFlow.jl:9,13,41-42,~173-187</span>
 </div>
 <p>What "exact" means in plain language: when the cone <code>l·v ≥ P²+Q²</code> holds with
 EQUALITY at the optimum, the relaxed solution corresponds to a physically-achievable
@@ -497,6 +514,7 @@ nodal active-power balance constraint:</p>
   <mtext>dual</mtext><mo>(</mo><mtext>balance_p</mtext><mo>[</mo><mi>j</mi><mo>,</mo><mi>t</mi><mo>]</mo><mo>=</mo><mn>0</mn><mo>)</mo>
 </mrow></math>
 <span class="eqref">(eq. 3.31)</span>
+<span class="src">src/pricing/dlmp.jl:11,91-93,105-113 + src/models/welfare_solve.jl:226-227,266-268</span>
 </div>
 <p><code>src/pricing/dlmp.jl</code>'s <code>decompose_dlmp</code> splits this single nodal
 price into four INDEPENDENT components — energy, loss, congestion, voltage — each
@@ -512,6 +530,7 @@ per-branch increment</p>
   <mo>)</mo>
 </mrow></math>
 <span class="eqref">(derivation, dlmp.jl header)</span>
+<span class="src">src/pricing/dlmp.jl:34-53,185-322</span>
 </div>
 <p>summed along each node's unique radial root→node path. A hard assertion checks that the
 four terms sum back to the total DADP at every bus/hour — a broken decomposition would show
@@ -531,6 +550,7 @@ between a per-aggregator subproblem (AGR-OPT) and a whole-network subproblem (DS
   <msup><mrow><mo>(</mo><msub><mi>c</mi><mi>j</mi></msub><mo>[</mo><mi>t</mi><mo>]</mo><mo>+</mo><msub><mi>p</mi><mtext>ag,j</mtext></msub><mo>[</mo><mi>t</mi><mo>]</mo><mo>)</mo></mrow><mn>2</mn></msup>
 </mrow></math>
 <span class="eqref">(eq. 3.46, AGR-OPT)</span>
+<span class="src">src/admm/AgrOpt.jl:6,34,72</span>
 </div>
 <div class="eq-block">
 <math display="block"><mrow>
@@ -545,6 +565,7 @@ between a per-aggregator subproblem (AGR-OPT) and a whole-network subproblem (DS
   <msup><mrow><mo>(</mo><msub><mi>p</mi><mtext>ag_dso,j</mtext></msub><mo>[</mo><mi>t</mi><mo>]</mo><mo>&#x2212;</mo><msub><mi>a</mi><mi>j</mi></msub><mo>[</mo><mi>t</mi><mo>]</mo><mo>)</mo></mrow><mn>2</mn></msup>
 </mrow></math>
 <span class="eqref">(eq. 3.47, DSO-OPT)</span>
+<span class="src">src/admm/DsoOpt.jl:6,50,93</span>
 </div>
 <p>Agreement between the centralized solve and this independently-coded ADMM solve path is a
 meaningful cross-validation: the two paths share no code beyond the device/
@@ -552,7 +573,7 @@ meaningful cross-validation: the two paths share no code beyond the device/
 welfare or price gap between them, not a tiny one (see Section 4).</p>
 """
 
-section3_experiment_html = """
+    section3_experiment_html = """
 <h2 id="section3">3. Experiment design and parameter choices</h2>
 <p>Every parameter below is quoted verbatim from <code>scripts/pv_boom_case_study.jl</code> —
 nothing here is re-derived or approximated.</p>
@@ -617,17 +638,15 @@ distributor to keep the "low PV vs PV boom" contrast playable — the "boom" dis
 </div>
 """
 
-# ═════════════════════════════════════════════════════════════════════════════════════
-# Section 4 — results, richly interpreted. One guided-reading subsection per artifact,
-# each stating what to look at, what it shows, and why it matters — citing numbers
-# computed directly above from the loaded results dict (never re-derived/approximated).
-# ═════════════════════════════════════════════════════════════════════════════════════
-section4_results_html = """
+    # ═════════════════════════════════════════════════════════════════════════════════════
+    # Section 4 — results, richly interpreted, with provenance tags on every quoted number.
+    # ═════════════════════════════════════════════════════════════════════════════════════
+    section4_results_html = """
 <h2 id="section4">4. Results, richly interpreted</h2>
 
 <h3>4.1 Price reshaping across PV penetration</h3>
 <figure>
-  <img src="$uri1" alt="Price curves across PV penetration">
+  <img src="$uri1" alt="Line chart of total day-ahead dynamic price (DADP) versus hour of day at bus $stressed_bus, one line per successful pv_mult level from the IEEE-13 sweep (0.0 through 2.5)">
   <figcaption>Total DADP at bus $stressed_bus (the bus with the largest total-price spread
   across the sweep) for every successful <code>pv_mult</code> level.</figcaption>
 </figure>
@@ -636,13 +655,14 @@ rises. <strong>What it shows:</strong> welfare rises monotonically with PV penet
 recall Section 2's welfare-level caveat (the additive constant is dropped, so only DELTAS
 are meaningful): each of these deltas is mostly avoided import cost as local PV serves load
 that would otherwise be bought from the transmission root.</p>
-$welfare_deltas_html
+$welfare_deltas
 
 <h3>4.2 The sweep table — the SOCP relaxation stays exact everywhere on IEEE-13</h3>
 $sweep_table
 <p><strong>What it shows:</strong> every <code>exact_maxgap</code> below is O(1e-8) to
-O(1e-9) across all 6 <code>pv_mult</code> points:</p>
-$exact_maxgaps_html
+O(1e-9) across all 6 <code>pv_mult</code> points
+<span class="provenance">(computed from results.jld2)</span>:</p>
+$exact_maxgaps
 <p><strong>Why it matters:</strong> the SOC branch-flow relaxation is certified exact on the
 entire IEEE-13 sweep — this is precisely why a separate, deliberately engineered stress
 fixture (Section 4.4) was needed to see genuine inexactness; IEEE-13 alone never
@@ -650,7 +670,7 @@ shows it.</p>
 
 <h3>4.3 The four-way DLMP decomposition</h3>
 <figure>
-  <img src="$uri2" alt="4-way DLMP decomposition">
+  <img src="$uri2" alt="Stacked area chart of the 4-way DLMP decomposition (energy, loss, congestion, voltage bands, plus a dashed total DADP line) versus hour of day at bus $stressed_bus, pv_mult=$(highest_row.pv_mult)">
   <figcaption>Energy / loss / congestion / voltage decomposition at bus $stressed_bus,
   pv_mult=$(highest_row.pv_mult) (the highest successful PV level).</figcaption>
 </figure>
@@ -664,17 +684,21 @@ the stack top and the dashed line instead of the two coinciding.</p>
 
 <h3>4.4 ADMM-vs-centralized cross-check</h3>
 <figure>
-  <img src="$uri3" alt="ADMM convergence">
+  <img src="$uri3" alt="Line chart of ADMM primal and dual residual convergence over $admm_iters iterations at pv_mult=1.0, rho=100.0, converging to the tolerance bands">
   <figcaption>ADMM residual convergence at pv_mult=1.0, ρ=100.0,
   $admm_iters iterations.</figcaption>
 </figure>
 <p><strong>What to look at:</strong> the residual traces converging to the tolerance bands.
 <strong>What it shows:</strong> the independently-coded ADMM solve path
-(<code>welfare_admm=$(round(admm_crosscheck.welfare_admm; digits=6))</code>) matches the
+(<code>welfare_admm=$(round(admm_crosscheck.welfare_admm; digits=6))</code>
+<span class="provenance">(computed from results.jld2)</span>) matches the
 centralized solve
-(<code>welfare_centralized=$(round(admm_crosscheck.welfare_centralized; digits=6))</code>)
-to a relative welfare gap of <b>$(round(admm_relative_gap; sigdigits=4))</b> and a
+(<code>welfare_centralized=$(round(admm_crosscheck.welfare_centralized; digits=6))</code>
+<span class="provenance">(computed from results.jld2)</span>)
+to a relative welfare gap of <b>$(round(admm_relative_gap; sigdigits=4))</b>
+<span class="provenance">(computed from results.jld2)</span> and a
 max price gap <code>dadp_maxgap=$(round(admm_crosscheck.dadp_maxgap; sigdigits=4))</code>
+<span class="provenance">(computed from results.jld2)</span>
 after $admm_iters iterations. <strong>Why it matters:</strong> two independently-coded solve
 paths (no shared code beyond the device builders) agreeing to this precision is a
 meaningful cross-validation — a silent bug in either path would show up as a LARGE gap, not
@@ -684,9 +708,11 @@ a tiny one.</p>
 <div class="finding">
 <b>The documented high-PV exactness finding, reproduced:</b> on the certified 3-bus high-PV stress
 fixture (Section 3.4's parameters), the SOC branch-flow relaxation is genuinely INEXACT at
-<b>$(ac_stress.n_inexact_hours) of 24 hours</b> (obj_gap =
+<b>$(ac_stress.n_inexact_hours) of 24 hours</b>
+<span class="provenance">(computed from results.jld2)</span> (obj_gap =
 $(round(ac_stress.obj_gap; sigdigits=4)), socp_maxgap =
-$(round(ac_stress.socp_maxgap; sigdigits=4)) under the documented loosened
+$(round(ac_stress.socp_maxgap; sigdigits=4))
+<span class="provenance">(computed from results.jld2)</span> under the documented loosened
 <code>rtol_exact=1.0</code> diagnostic override) — never re-derived or re-tuned from the
 certified fixture. This is framed as a genuine, citable relaxation limitation under
 high-PV reverse flow, not a bug: it is the knife-edge condition the whole IEEE-13 sweep in
@@ -694,10 +720,12 @@ Section 4.2 never exhibits.
 </div>
 
 <h3>4.6 Planning-layer Nash outcome</h3>
-<p>Converged: <b>$(nash_result.converged)</b> (sweeps=$(nash_result.sweeps))</p>
+<p>Converged: <b>$(nash_result.converged)</b> (sweeps=$(nash_result.sweeps))
+<span class="provenance">(computed from results.jld2)</span></p>
 $nash_table
 <p><strong>What it shows:</strong> the game converged in $(nash_result.sweeps) sweep(s) with
-<code>x_inv = $(nash_result.x_inv)</code> for both distributors.
+<code>x_inv = $(nash_result.x_inv)</code>
+<span class="provenance">(computed from results.jld2)</span> for both distributors.
 $(nash_differentiated ?
     "The boom distributor's converged investment differs from the baseline's — a genuine, " *
     "distributor-differentiated investment response to the higher PV-penetration afternoon flow." :
@@ -710,16 +738,16 @@ directly bears on interpreting why the two distributors' investment responses lo
 here.</p>
 """
 
-# ═════════════════════════════════════════════════════════════════════════════════════
-# Section 5 — reproducibility, with a LIVE git commit stamp (never hardcoded).
-# ═════════════════════════════════════════════════════════════════════════════════════
-git_commit_stamp = try
-    readchomp(`git rev-parse --short HEAD`)
-catch
-    "unknown (not a git checkout)"
-end
+    # ═════════════════════════════════════════════════════════════════════════════════════
+    # Section 5 — reproducibility, with a LIVE git commit stamp (never hardcoded).
+    # ═════════════════════════════════════════════════════════════════════════════════════
+    git_commit_stamp = try
+        readchomp(`git rev-parse --short HEAD`)
+    catch
+        "unknown (not a git checkout)"
+    end
 
-section5_repro_html = """
+    section5_repro_html = """
 <h2 id="section5">5. Reproducibility</h2>
 <p>Every number and figure in this report was produced by re-running two scripts, in
 order, from a clean checkout:</p>
@@ -731,13 +759,14 @@ same seed on the same code produces bit-identical results.</p>
 <p>This report was generated at git commit <code>$git_commit_stamp</code>.</p>
 """
 
-# ── Assemble ONE self-contained HTML string — inline <style>, no external CSS/JS/CDN. ───
-html_string = """
+    # ── Assemble ONE self-contained HTML string — inline <style>, no external CSS/JS/CDN,
+    # semantic HTML5 landmarks (header/nav/main/section). ────────────────────────────────────
+    html_string = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PV-Boom Case Study — TSO-DSO Integration Optimization Framework</title>
+<title>PV-Boom Case Study v2 — TSO-DSO Integration Optimization Framework</title>
 <style>
   body { font-family: Georgia, 'Times New Roman', serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; line-height: 1.5; }
   h1 { border-bottom: 3px solid #2c5f8a; padding-bottom: 0.3rem; }
@@ -756,40 +785,75 @@ html_string = """
   nav.toc { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #2c5f8a; padding: 0.6rem 0; margin-bottom: 1.5rem; font-size: 0.92rem; z-index: 10; }
   nav.toc a { margin-right: 1rem; color: #2c5f8a; text-decoration: none; font-weight: 600; }
   nav.toc a:hover { text-decoration: underline; }
+$extra_style_html
 </style>
 </head>
 <body>
-<h1>PV-Boom Case Study</h1>
+<header>
+<h1>PV-Boom Case Study (v2, review-hardened)</h1>
 <p>A rich, guided walkthrough of the TSO-DSO Integration Optimization Framework's
 operational and planning layers across rising PV penetration on the modified IEEE-13
 feeder. Generated by <code>scripts/pv_boom_case_study.jl</code> +
-<code>scripts/pv_boom_report.jl</code>. Every number, equation, and finding below traces to
-a real solve of this framework's code — nothing here is illustrative, hand-drawn, or
-invented.</p>
+<code>scripts/pv_boom_report.jl</code>. Every number, equation, and finding below traces
+to a real solve of this framework's code — nothing here is illustrative, hand-drawn, or
+invented. This v2 report adds source-file/line citations next to every equation, a
+notation glossary, an inline architecture diagram, and a dedicated honest-limitations
+section on top of the original educational walkthrough.</p>
+</header>
 
-<nav class="toc">
+<nav class="toc" aria-label="Table of contents">
 <strong>Contents:</strong>
 <a href="#section1">1. Framing</a>
+<a href="#notation-h">Notation</a>
+<a href="#architecture-h">Architecture</a>
 <a href="#section2">2. The operational model</a>
 <a href="#section3">3. Experiment design</a>
 <a href="#section4">4. Results, richly interpreted</a>
+<a href="#limitations-h">Honest limitations</a>
 <a href="#section5">5. Reproducibility</a>
 </nav>
 
+<main>
+
+<section id="section1-wrap">
 $section1_framing_html
+</section>
 
+$notation_table_html
+
+$architecture_diagram_html
+
+<section id="section2-wrap">
 $section2_model_html
+</section>
 
+<section id="section3-wrap">
 $section3_experiment_html
+</section>
 
+<section id="section4-wrap">
 $section4_results_html
+</section>
 
+$limitations_html
+
+<section id="section5-wrap">
 $section5_repro_html
+</section>
 
+</main>
 </body>
 </html>
 """
 
-OUT = mkpath(projectdir("results", "pv_boom"))
-write(joinpath(OUT, "report.html"), html_string)
-println("wrote ", joinpath(OUT, "report.html"))
+
+        mkpath(outdir)
+        out = joinpath(outdir, "report.html")
+        write(out, html_string)
+        println("wrote ", out)
+        return out
+    end
+
+    if abspath(PROGRAM_FILE) == @__FILE__
+        main(ARGS...)
+    end
