@@ -139,10 +139,10 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 - [x] **HYG-03**: The export list is trimmed and generic names (`OFF`, `LIVE`, `CERTIFIED`, `LP`,
   `QP`, `SOCP`, `NLP`, `MILP`, `record!`, `converged`) are namespaced or unexported. The top-module
   docstring describes the module as it is now.
-- [ ] **HYG-04**: A JET check runs in CI over the package, in report mode with an agreed baseline.
-- [ ] **HYG-05**: Tests carry a `:slow` tag. CI runs a fast job on every push and the slow suite
+- [x] **HYG-04**: A JET check runs in CI over the package, in report mode with an agreed baseline.
+- [x] **HYG-05**: Tests carry a `:slow` tag. CI runs a fast job on every push and the slow suite
   in a separate or nightly job.
-- [ ] **HYG-06**: Known flakes (Clarabel `NUMERICAL_ERROR` on IEEE-13 ADMM, the stochastic-welfare
+- [x] **HYG-06**: Known flakes (Clarabel `NUMERICAL_ERROR` on IEEE-13 ADMM, the stochastic-welfare
   flake) are fixed or quarantined with `@test_broken` or retry-and-report, so a green suite means
   green.
 - [x] **HYG-07**: Test fixture files and tags are named after their content, not the planning
@@ -203,9 +203,9 @@ published v2.1/v3.0 finding, the finding is restated, not hidden.
 | HYG-02 | Phase 36 | Complete |
 | HYG-03 | Phase 36 | Complete |
 | HYG-07 | Phase 36 | Complete |
-| HYG-04 | Phase 37 | Pending |
-| HYG-05 | Phase 37 | Pending |
-| HYG-06 | Phase 37 | Pending |
+| HYG-04 | Phase 37 | Complete |
+| HYG-05 | Phase 37 | Complete |
+| HYG-06 | Phase 37 | Complete |
 | HYG-08 | Phase 37 | Complete |
 
 **Coverage:**

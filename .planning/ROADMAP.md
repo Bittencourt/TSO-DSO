@@ -67,7 +67,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 - [x] **Phase 36: Code & Export Cleanup** - Strip process IDs from comments, delete inert stubs and (completed 2026-10-05)
   back-compat shims, trim exports, and rename fixtures after their content.
 
-- [ ] **Phase 37: Test Infrastructure & Repo Hygiene** - Add a JET CI check, split fast/slow tests,
+- [x] **Phase 37: Test Infrastructure & Repo Hygiene** - Add a JET CI check, split fast/slow tests, (completed 2026-10-07)
   fix or quarantine known flakes, and tidy scripts/manifests.
 
 ## Phase Details
@@ -683,7 +683,7 @@ honestly, and the repo's scripts/manifests are tidy.
   4. `scripts/` has an index; one-off and superseded scripts are archived; `pv_boom_report*`
      duplication is merged into shared code; the redundant root `Manifest.toml` is dropped or its
      purpose documented; `.planning/tmp/` is untracked.
-**Plans:** 12/13 plans executed
+**Plans:** 13/13 plans complete
 
 Plans:
 **Wave 1**
@@ -736,7 +736,7 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 37-13-PLAN.md — Phase gate: full runs on 1.12.5 and 1.12.7, all static guards, FINAL-GATES evidence
+- [x] 37-13-PLAN.md — Phase gate: full runs on 1.12.5 and 1.12.7, all static guards, FINAL-GATES evidence
 
 ## Progress
 
@@ -760,7 +760,7 @@ Plans:
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
-| 37. Test Infrastructure & Repo Hygiene | v4.0 | 12/13 | In Progress|  |
+| 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete   | 2026-10-07 |
 
 ## Deferred / Future-Milestone Notes
 
