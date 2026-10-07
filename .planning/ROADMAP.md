@@ -766,12 +766,12 @@ are closed: every SOCP price certificate uses the same hybrid exactness floor, e
   4. Hardening: `Scenario(strategy=ADMM(), allow_export=false)` fails at construction; the
      out-of-sample stochastic re-solve (`solve_stochastic_oos_step!`) runs the shared exactness
      gate with a visible failure mode; `check_setup_names.py` runs in CI.
-**Plans:** 10 plans
+**Plans:** 1/10 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 38-01-PLAN.md — Shared non-throwing exactness kernel `_socp_cone_check`; `assert_socp_exact!` delegates (no verdict change) + parity assertions
+- [x] 38-01-PLAN.md — Shared non-throwing exactness kernel `_socp_cone_check`; `assert_socp_exact!` delegates (no verdict change) + parity assertions
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -832,7 +832,7 @@ Plans:
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete    | 2026-10-07 |
-| 38. Close v4.0 Audit Gaps | v4.0 | 0/0 | Not started | - |
+| 38. Close v4.0 Audit Gaps | v4.0 | 1/10 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 
