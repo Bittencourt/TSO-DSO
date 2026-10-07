@@ -17,7 +17,7 @@
 # flexibility reshapes prices, welfare, congestion, and the system net-demand profile.
 #
 # Run:
-#     julia --project=. scripts/demo_flexibility_plots.jl
+#     JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/demo_flexibility_plots.jl  # CairoMakie via docs env; see scripts/README.md
 # Figures land in  results/demo_flexibility_plots/  (PDF + PNG).
 
 using DrWatson

@@ -20,7 +20,7 @@
 #   (5) Surplus split (prosumer vs DSO) under DADP vs FIT.
 #
 # Run:
-#     julia --project=. scripts/thesis_caseA.jl
+#     JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/thesis_caseA.jl  # CairoMakie via docs env; see scripts/README.md
 # Figures land in  results/thesis_caseA/  (PDF + PNG).
 #
 # NOTE on scale: the repo's `:default` IEEE-13 population is a 1-house-per-bus RESCALED

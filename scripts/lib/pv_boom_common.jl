@@ -9,6 +9,8 @@
 #
 using DrWatson
 using TSODSO
+# CairoMakie is only a weak dependency of TSODSO: run the report with the docs env stacked
+# on the load path (`JULIA_LOAD_PATH="docs:.:@stdlib"`; see scripts/README.md).
 using CairoMakie
 using Base64
 using Printf

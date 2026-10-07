@@ -6,23 +6,32 @@ Authored analysis, reproduction and tooling scripts. Every tracked file under `s
 when the index names a file that does not exist.
 
 Paths are relative to the repository root. "Test env" means the test directory on the load
-path: `JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia --project=. ...`.
+path: `JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia --project=. ...`. "Figure env" means the
+docs environment stacked in front of the package, because CairoMakie is only a weak dependency
+of the package (the root project lists it under `[weakdeps]` only) and `docs/Project.toml` is the
+committed environment that carries it: instantiate it once with
+`julia --project=docs -e 'using Pkg; Pkg.instantiate()'`, then run
+`JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/<script>.jl` from the repository
+root. Plain `julia --project=. ...` fails for these scripts with `Package CairoMakie not
+found in current path` unless CairoMakie happens to be in your global `@v1.x` environment;
+the explicit load path leaves that environment out, so the command does not depend on it.
+`docs/Manifest.toml` is resolved with Julia 1.12.5 (the patch the CI docs job pins).
 
 ## Scripts
 
 | Script | Purpose | How to run | Outputs | Status |
 |--------|---------|------------|---------|--------|
 | `benchmark_ieee8500.jl` | IEEE-8500-scale benchmark harness: noise-floor calibration and density sweep | `julia --project=. scripts/benchmark_ieee8500.jl --calibrate-noise-floor --fixture ieee8500-mv` (see header for the sweep mode) | CSVs under `results/ieee8500_benchmark/` | Maintained; long-running |
-| `benders_toy.jl` | Visual step-by-step toy of Benders decomposition (one scalar decision) | `julia --project=. scripts/benders_toy.jl` | Figures (CairoMakie) | Kept; referenced by the documentation |
-| `compare_default_stochastic.jl` | Default (deterministic) vs two-stage stochastic solve on the same IEEE-13 network and seed | `julia --project=. scripts/compare_default_stochastic.jl` | Console comparison | Kept; referenced by the documentation |
-| `demo_flexibility_plots.jl` | Day-ahead scenario with parametrized flexibility: DADP, 4-way DLMP decomposition, welfare split | `julia --project=. scripts/demo_flexibility_plots.jl` | Figures | Maintained demo |
-| `demo_mpc_plots.jl` | Receding-horizon (MPC) closed-loop example with diagnostics and sweeps | `julia --project=. scripts/demo_mpc_plots.jl` | Figures | Maintained demo |
+| `benders_toy.jl` | Visual step-by-step toy of Benders decomposition (one scalar decision) | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/benders_toy.jl` | Figures (CairoMakie) | Kept; referenced by the documentation |
+| `compare_default_stochastic.jl` | Default (deterministic) vs two-stage stochastic solve on the same IEEE-13 network and seed | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/compare_default_stochastic.jl` | Console comparison | Kept; referenced by the documentation |
+| `demo_flexibility_plots.jl` | Day-ahead scenario with parametrized flexibility: DADP, 4-way DLMP decomposition, welfare split | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/demo_flexibility_plots.jl` | Figures | Maintained demo |
+| `demo_mpc_plots.jl` | Receding-horizon (MPC) closed-loop example with diagnostics and sweeps | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/demo_mpc_plots.jl` | Figures | Maintained demo |
 | `flake_rate.jl` | Fresh-process flake-rate harness: runs selected test items N times, each in a new Julia process, recording outcome, solver status labels and Julia version | Test env, `julia --project=. -t2 scripts/flake_rate.jl [--repeats N] [--jobs J] [--targets a,b] [--inprocess N] [--outdir DIR] [--force]`; `--selftest` for the logic test | `results/flake_rate/`; outcome `no_items` (exit 1) when a target selects no test item | Maintained; Julia 1.10+ |
 | `jet_baseline.txt` | Committed baseline of normalized JET report signatures (12 entries, a multiset: one line per allowed report) | Data file read and rewritten by `jet_check.jl` | n/a | Maintained; recorded on Julia 1.12.7, the patch the CI JET job pins |
 | `jet_check.jl` | JET ratchet: current static-inference reports must equal the baseline as a multiset; UNJUSTIFIED entries fail | Test env, `julia +1.12 --project=. -t2 scripts/jet_check.jl`; `--update` rewrites the baseline (exit 1 if it wrote UNJUSTIFIED entries); `--baseline PATH`; `--selftest` (no JET, any Julia) | Exit code, NEW/FIXED signature list | Maintained; the real check is Julia 1.12 only |
 | `profile_ieee8500_memory.jl` | Staged peak-memory profile of one IEEE-8500 point | `SCRIPT=scripts/profile_ieee8500_memory.jl scripts/run_ieee8500_point.sh <label> -- --density 0.1 --t-horizon 10 --stage 2` | `results/ieee8500_benchmark/memory_profile.csv` | Maintained |
 | `pv_boom_case_study.jl` | PV-boom narrative case study: PV-penetration sweep (operational layer), SOCP-vs-AC comparison on a high-PV stress fixture (with a diagnostic of why they disagree), and a two-distributor Stackelberg-Nash game (planning layer) | `julia --project=. scripts/pv_boom_case_study.jl` | `data/pv_boom/results.jld2` (gitignored) | Maintained. The planning sub-horizon was re-tuned to hours 11:16 so the planning part passes the exactness gate; see the CALIBRATION note in the file header |
-| `pv_boom_report.jl` | Single review-hardened HTML report for the PV-boom case study | `julia --project=. scripts/pv_boom_report.jl [results.jld2 [outdir]]` (run the case study first) | `results/pv_boom/report.html` | Maintained; replaces the earlier two-script layout |
+| `pv_boom_report.jl` | Single review-hardened HTML report for the PV-boom case study | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/pv_boom_report.jl [results.jld2 [outdir]]` (run the case study first) | `results/pv_boom/report.html` | Maintained; replaces the earlier two-script layout |
 | `lib/pv_boom_common.jl` | Shared helpers for the report (results loading, figures, base64 embedding, HTML fragments) | Not run directly; `include`d by `pv_boom_report.jl` | n/a | Maintained shared code |
 | `reduce_ieee123_impedances.jl` | Dependency-free Fortescue reduction of the vendored OpenDSS IEEE-123 data to positive-sequence R1/X1 | `julia scripts/reduce_ieee123_impedances.jl` | `src/data/ieee123_impedances.jl` | Maintained |
 | `reduce_ieee8500_impedances.jl` | Same reduction for the 10 vendored IEEE-8500 files, including service transformers | `julia scripts/reduce_ieee8500_impedances.jl` | `src/data/ieee8500_impedances.jl` | Maintained |
@@ -32,8 +41,8 @@ path: `JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia --project=. ...`.
 | `run_tests_filtered.jl` | Test runner with tag and file filters (avoids the `julia -e` trap) | Test env, `julia -t2 scripts/run_tests_filtered.jl <abs-repo-root> tag:<sym> file:<basename>[,...]`; `--count-sets [--strict]` prints fast/slow/all counts; `--selftest` | Test results / counts | Maintained; fails closed on a spec that selects nothing |
 | `socp_applicability_sweep.jl` | Sweep of the (PV x load x Vmax) grid classifying where the SOC relaxation is exact | `julia --project=. scripts/socp_applicability_sweep.jl [highpv]` | Committed findings artifact | Maintained |
 | `sweep.jl` | Runnable entry point for a parameter sweep with collated CSV summary | `julia --project=. scripts/sweep.jl` | `results/sweeps/` | Maintained |
-| `thesis_case123_repro.jl` | Directional thesis reproduction on real IEEE-123 impedances (DADP vs FIT) | `julia --project=. scripts/thesis_case123_repro.jl` | Figures and findings | Maintained; the +25% magnitude does not reproduce |
-| `thesis_caseA.jl` | Thesis Case A reproduction on the modified IEEE-13 feeder | `julia --project=. scripts/thesis_caseA.jl` | Figures and findings | Maintained |
+| `thesis_case123_repro.jl` | Directional thesis reproduction on real IEEE-123 impedances (DADP vs FIT) | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/thesis_case123_repro.jl` | Figures and findings | Maintained; the +25% magnitude does not reproduce |
+| `thesis_caseA.jl` | Thesis Case A reproduction on the modified IEEE-13 feeder | Figure env, `JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/thesis_caseA.jl` | Figures and findings | Maintained |
 
 ## Archive
 

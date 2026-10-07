@@ -35,7 +35,7 @@
 # diagnostic, never a refusal gate.
 #
 # Run:
-#     julia --project=. scripts/demo_mpc_plots.jl
+#     JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/demo_mpc_plots.jl  # CairoMakie via docs env; see scripts/README.md
 
 using DrWatson
 @quickactivate "TSODSO"

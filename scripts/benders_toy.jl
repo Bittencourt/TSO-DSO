@@ -17,7 +17,7 @@
 # falls → converge on the relative gap (UB−LB)/max(1,|UB|) ≤ tol. Exactly `solve_stackelberg!`.
 #
 # Run:
-#     julia --project=. scripts/benders_toy.jl
+#     JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/benders_toy.jl  # CairoMakie via docs env; see scripts/README.md
 # Figures land in  results/benders_toy/  (PDF + PNG).
 
 using DrWatson

@@ -7,7 +7,10 @@
 # honest-limitations section, semantic HTML5 structure + accessibility + print/dark-mode
 # CSS. Every quoted result number is computed live from data/pv_boom/results.jld2.
 #
-#   julia --project=. scripts/pv_boom_report.jl [results.jld2 [outdir]]
+#   JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/pv_boom_report.jl [results.jld2 [outdir]]
+#
+# CairoMakie is a weak dependency of TSODSO; the docs env (docs/Project.toml) supplies it.
+# Instantiate it once: julia --project=docs -e 'using Pkg; Pkg.instantiate()'. See scripts/README.md.
 #
 # Writes results/pv_boom/report.html (outdir defaults to results/pv_boom).
 #
@@ -774,7 +777,7 @@ here.</p>
 <p>Every number and figure in this report was produced by re-running two scripts, in
 order, from a clean checkout:</p>
 <pre><code>julia --project=. scripts/pv_boom_case_study.jl
-julia --project=. scripts/pv_boom_report.jl</code></pre>
+JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/pv_boom_report.jl</code></pre>
 <p><code>BASE_SEED = 20260806</code> anchors every random draw (profiles, population) via a
 <code>sub_seed</code> derivation, so both scripts are byte-reproducible end to end: the
 same seed on the same code produces bit-identical results.</p>

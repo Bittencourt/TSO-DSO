@@ -44,7 +44,7 @@
 # ≈+0.2630%, about 5.9x the stale figure; direction unchanged (small, positive, fragile).
 #
 # Run:
-#     julia --project=. scripts/thesis_case123_repro.jl
+#     JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/thesis_case123_repro.jl  # CairoMakie via docs env; see scripts/README.md
 # Figures land in  results/thesis_case123_repro/  (PDF + PNG).
 
 using DrWatson

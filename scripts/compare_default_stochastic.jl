@@ -6,7 +6,7 @@
 # horizon T = 9 (the :default population floor; also the T at which the demo probability
 # vector is known to converge cleanly).
 #
-# Run:  julia --project=. scripts/compare_default_stochastic.jl
+# Run:  JULIA_LOAD_PATH="docs:.:@stdlib" julia --project=. scripts/compare_default_stochastic.jl  # CairoMakie via docs env; see scripts/README.md
 #
 # NOTE on comparability: run_scenario materializes its single profile draw from
 # sub_seed(seed, :profiles) while run_stochastic materializes its S in-sample draws from a
