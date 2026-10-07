@@ -41,6 +41,25 @@ function pv_boom_load_results(path)
 end
 
 """
+Wording threshold only (no gate): see [`pv_boom_a2_model_mismatch`](@ref).
+"""
+const PV_BOOM_A2_WORDING_TOL = 1e-6
+
+"""
+    pv_boom_a2_model_mismatch(ac_stress) -> Bool
+
+True when the Part A2 stress-fixture comparison cannot be read as relaxation inexactness:
+`obj_gap = SOCP welfare - AC welfare` is negative, i.e. the AC solve (a local NLP solve with
+`allow_local = true`) reached a higher welfare than its own convex relaxation, which is
+impossible for the same problem solved to optimality. Mirrors the case study's own wording
+rule; it selects report text only.
+"""
+pv_boom_a2_model_mismatch(ac_stress) = ac_stress.obj_gap < -PV_BOOM_A2_WORDING_TOL
+
+"""True when the SOC cone is tight in the stress-fixture SOCP solution (wording only)."""
+pv_boom_a2_cone_tight(ac_stress) = ac_stress.socp_maxgap <= PV_BOOM_A2_WORDING_TOL
+
+"""
     pv_boom_planning_hours(results, nash_result) -> UnitRange{Int}
 
 The Part B planning sub-horizon (hours of the day) the Nash game was solved on. Read from the

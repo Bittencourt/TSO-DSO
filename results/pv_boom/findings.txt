@@ -3,12 +3,12 @@ PV-BOOM CASE STUDY — findings
 
 Part A — PV-penetration operational sweep (IEEE-13, T=24)
 --------------------------------------------------------------------------------
-  pv_mult=0.00  welfare=-4830.132496  exact_maxgap=1.043e-09
-  pv_mult=0.50  welfare=-4826.027703  exact_maxgap=6.222e-09
-  pv_mult=1.00  welfare=-4823.645333  exact_maxgap=1.239e-08
-  pv_mult=1.50  welfare=-4823.138495  exact_maxgap=3.477e-08
-  pv_mult=2.00  welfare=-4822.929234  exact_maxgap=2.547e-08
-  pv_mult=2.50  welfare=-4822.791218  exact_maxgap=1.029e-08
+  pv_mult=0.00  welfare=-4830.132496  exact_maxgap=1.062e-09
+  pv_mult=0.50  welfare=-4826.027703  exact_maxgap=6.247e-09
+  pv_mult=1.00  welfare=-4823.645333  exact_maxgap=1.235e-08
+  pv_mult=1.50  welfare=-4823.138495  exact_maxgap=2.476e-08
+  pv_mult=2.00  welfare=-4822.929234  exact_maxgap=2.542e-08
+  pv_mult=2.50  welfare=-4822.791218  exact_maxgap=1.013e-08
 
 Declarative Scenario/run_scenario cross-check @ pv_mult=1.0: welfare_match=true, dadp_match=true
 
@@ -16,9 +16,9 @@ ADMM cross-check @ pv_mult=1.0 (ρ=100.0): welfare_centralized=-4823.645333 welf
 
 Part A2 — the documented high-PV exactness finding, reproduced
 --------------------------------------------------------------------------------
-On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / build_high_pv_aggregators), the SOC branch-flow relaxation is genuinely INEXACT at 10/24 hours: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15].
+On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / build_high_pv_aggregators), the SOCP solution and the AC solution differ (assert_ac_exact! per-hour v/P gaps above rtol=1e-4) at 10/24 hours: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]. This is NOT evidence that the SOC relaxation is inexact here: the SOC cone is TIGHT in the SOCP solution (socp_maxgap below), and obj_gap (SOCP welfare - AC welfare) is NEGATIVE, i.e. the AC solve reached a higher welfare than its own convex relaxation, which cannot happen if both solve the same problem to optimality. The AC solve is a local NLP solve (ACPowerFlow, allow_local = true) while the SOCP solve is not, so the two are a different model/solve and the per-hour gaps measure that mismatch, not the relaxation gap. UNRESOLVED: reconcile the two solves before citing this as an exactness finding.
 obj_gap (SOCP welfare - AC welfare) = -4.773415e-01
-socp_maxgap (loosened rtol_exact=1.0 diagnostic)   = 2.586680e-08
+socp_maxgap (loosened rtol_exact=1.0 diagnostic)   = 2.584788e-08
 This is the ONE documented diagnostic-override reproduction this case study showcases — never re-derived or re-tuned from the certified fixture.
 
 Part B — planning-layer Stackelberg-Nash investment response

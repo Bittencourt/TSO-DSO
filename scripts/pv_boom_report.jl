@@ -52,6 +52,59 @@ function main(
     sweep_table = sweep_table_html(sweep)
     nash_table = nash_table_html(nash_result)
 
+    # Part A2 wording follows the evidence (see pv_boom_a2_model_mismatch): a negative
+    # obj_gap means the SOCP-vs-AC comparison is not a relaxation-exactness verdict.
+    a2_mismatch = pv_boom_a2_model_mismatch(ac_stress)
+    a2_cone = pv_boom_a2_cone_tight(ac_stress) ? "tight" : "not tight"
+    a2_nums =
+        "<code>obj_gap=$(round(ac_stress.obj_gap; sigdigits=4))</code>, " *
+        "<code>socp_maxgap=$(round(ac_stress.socp_maxgap; sigdigits=4))</code> " *
+        "<span class=\"provenance\">(computed from results.jld2)</span>"
+    a2_limitation =
+        a2_mismatch ?
+        "<strong>Unresolved SOCP-vs-AC disagreement on the high-PV stress fixture.</strong> " *
+        "On the certified 3-bus stress fixture (<code>pv_scale=1.2</code>, " *
+        "<code>load_scale=0.2</code>, <code>vmax=1.05</code>) the SOCP and AC solutions " *
+        "differ at <b>$(ac_stress.n_inexact_hours) of 24 hours</b> ($a2_nums), but this is " *
+        "NOT shown to be relaxation inexactness: the SOC cone is $a2_cone in the SOCP " *
+        "solution, and the negative <code>obj_gap</code> means the AC solve (a local NLP " *
+        "solve with <code>allow_local = true</code>) beat its own convex relaxation, which " *
+        "is impossible for the same problem solved to optimality. The two solves must be " *
+        "reconciled before this can be cited. The IEEE-13 sweep itself stays exact at all " *
+        "6 <code>pv_mult</code> points (O(1e-8)-O(1e-9))." :
+        "<strong>SOC inexactness under high-PV reverse flow.</strong> The certified " *
+        "3-bus stress fixture (<code>pv_scale=1.2</code>, <code>load_scale=0.2</code>, " *
+        "<code>vmax=1.05</code>) shows the SOC relaxation genuinely INEXACT at " *
+        "<b>$(ac_stress.n_inexact_hours) of 24 hours</b> ($a2_nums, under the documented " *
+        "<code>rtol_exact=1.0</code> diagnostic override) — the IEEE-13 sweep itself never " *
+        "exhibits this (all 6 <code>pv_mult</code> points stay exact to O(1e-8)-O(1e-9))."
+    a2_heading =
+        a2_mismatch ?
+        "High-PV stress fixture: SOCP and AC disagree, but not as a relaxation gap" :
+        "High-PV exactness boundary: the SOC relaxation genuinely breaks on the stress fixture"
+    a2_finding =
+        a2_mismatch ?
+        "<b>What the stress-fixture comparison shows, stated plainly:</b> on the certified " *
+        "3-bus high-PV stress fixture (Section 3.4's parameters), the SOCP solution and the " *
+        "AC-power-flow solution differ (per-hour voltage/flow gaps above " *
+        "<code>assert_ac_exact!</code>'s <code>rtol = 1e-4</code>) at " *
+        "<b>$(ac_stress.n_inexact_hours) of 24 hours</b> ($a2_nums). This is NOT evidence " *
+        "that the SOC relaxation is inexact here. The SOC cone is $a2_cone in the SOCP " *
+        "solution, and <code>obj_gap</code> (SOCP welfare minus AC welfare) is negative: the " *
+        "AC solve reached a higher welfare than its own convex relaxation, which cannot " *
+        "happen if both solve the same problem to optimality. The AC solve is a local NLP " *
+        "solve (<code>ACPowerFlow</code>, <code>allow_local = true</code>) while the SOCP " *
+        "solve is not, so the per-hour gaps measure a model/solve mismatch, not the " *
+        "relaxation gap. <b>Unresolved:</b> the two solves must be reconciled before this " *
+        "is cited as an exactness finding." :
+        "<b>The documented high-PV exactness finding, reproduced:</b> on the certified 3-bus " *
+        "high-PV stress fixture (Section 3.4's parameters), the SOC branch-flow relaxation " *
+        "is genuinely INEXACT at <b>$(ac_stress.n_inexact_hours) of 24 hours</b> ($a2_nums " *
+        "under the documented loosened <code>rtol_exact=1.0</code> diagnostic override) — " *
+        "never re-derived or re-tuned from the certified fixture. This is framed as a " *
+        "genuine, citable relaxation limitation under high-PV reverse flow, not a bug: it is " *
+        "the knife-edge condition the whole IEEE-13 sweep in Section 4.2 never exhibits."
+
     # ═════════════════════════════════════════════════════════════════════════════════════
     # REPORT CONTENT — notation/symbols glossary, inline SVG architecture diagram,
     # consolidated honest-limitations section, and a CSS fragment (source-citation and
@@ -151,16 +204,7 @@ gathered here in one place — none softened, none new.</p>
 thesis constant <code>c</code> deliberately dropped (stated in every device
 docstring); only welfare DELTAS between scenarios and DUALS (prices) are economically
 meaningful, never the reported level in isolation.</li>
-<li><strong>SOC inexactness under high-PV reverse flow.</strong> The certified
-3-bus stress fixture (<code>pv_scale=1.2</code>, <code>load_scale=0.2</code>,
-<code>vmax=1.05</code>) shows the SOC relaxation genuinely INEXACT at
-<b>$(ac_stress.n_inexact_hours) of 24 hours</b>
-<span class="provenance">(computed from results.jld2)</span>
-(<code>obj_gap=$(round(ac_stress.obj_gap; sigdigits=4))</code>,
-<code>socp_maxgap=$(round(ac_stress.socp_maxgap; sigdigits=4))</code>
-<span class="provenance">(computed from results.jld2)</span> under the documented
-<code>rtol_exact=1.0</code> diagnostic override) — the IEEE-13 sweep itself never exhibits
-this (all 6 <code>pv_mult</code> points stay exact to O(1e-8)-O(1e-9)).</li>
+<li>$a2_limitation</li>
 <li><strong>The <code>pv_mult&gt;=0.7</code> Benders feasibility floor deviation.</strong>
 <code>solve_stackelberg!</code>'s Benders master's unconditional first trial is
 <code>z=0</code>; a zero-PV network cannot self-balance zero frontier import, so
@@ -604,7 +648,7 @@ repo precedent, not a fresh tuning choice.</p>
 <h3>3.4 The high-PV stress fixture</h3>
 <p>Every one of the 6 IEEE-13 sweep points above stayed SOCP-exact (<code>exact_maxgap</code>
 on the order of 1e-8 to 1e-9 — see Section 4's sweep table). To reproduce the documented
-knife-edge condition where the SOC relaxation genuinely loses tightness, a SEPARATE,
+knife-edge condition where the SOC relaxation can lose tightness, a SEPARATE,
 deliberately engineered 3-bus stress fixture is used instead of hoping the IEEE-13 sweep
 itself goes inexact:</p>
 <ul>
@@ -667,7 +711,7 @@ O(1e-9) across all 6 <code>pv_mult</code> points
 $exact_maxgaps
 <p><strong>Why it matters:</strong> the SOC branch-flow relaxation is certified exact on the
 entire IEEE-13 sweep — this is precisely why a separate, deliberately engineered stress
-fixture (Section 4.4) was needed to see genuine inexactness; IEEE-13 alone never
+fixture (Section 4.5) was needed to probe inexactness; IEEE-13 alone never
 shows it.</p>
 
 <h3>4.3 The four-way DLMP decomposition</h3>
@@ -706,19 +750,9 @@ paths (no shared code beyond the device builders) agreeing to this precision is 
 meaningful cross-validation — a silent bug in either path would show up as a LARGE gap, not
 a tiny one.</p>
 
-<h3>4.5 High-PV exactness boundary: the SOC relaxation genuinely breaks on the stress fixture</h3>
+<h3>4.5 $a2_heading</h3>
 <div class="finding">
-<b>The documented high-PV exactness finding, reproduced:</b> on the certified 3-bus high-PV stress
-fixture (Section 3.4's parameters), the SOC branch-flow relaxation is genuinely INEXACT at
-<b>$(ac_stress.n_inexact_hours) of 24 hours</b>
-<span class="provenance">(computed from results.jld2)</span> (obj_gap =
-$(round(ac_stress.obj_gap; sigdigits=4)), socp_maxgap =
-$(round(ac_stress.socp_maxgap; sigdigits=4))
-<span class="provenance">(computed from results.jld2)</span> under the documented loosened
-<code>rtol_exact=1.0</code> diagnostic override) — never re-derived or re-tuned from the
-certified fixture. This is framed as a genuine, citable relaxation limitation under
-high-PV reverse flow, not a bug: it is the knife-edge condition the whole IEEE-13 sweep in
-Section 4.2 never exhibits.
+$a2_finding
 </div>
 
 <h3>4.6 Planning-layer Nash outcome</h3>

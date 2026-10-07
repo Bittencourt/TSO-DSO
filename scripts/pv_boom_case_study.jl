@@ -60,6 +60,11 @@
 #   No exactness gate, tolerance or src/ model was changed: the exactness arguments
 #   (rtol_exact, assert_ac_exact! rtol/atol, tol_outer) are untouched.
 #
+#   Part A moved too, but NOT because of this re-tune (Part A does not use PLANNING_HOURS):
+#   the Part A welfare at pv_mult >= 1.0 and the ADMM cross-check (iters 42 -> 92,
+#   dadp_maxgap 0.064 -> 0.18) differ between the findings committed before the re-tune and
+#   those committed with it because of upstream src model changes made between the two runs.
+#
 #   julia --project=. scripts/pv_boom_case_study.jl
 #
 using DrWatson
@@ -422,10 +427,30 @@ isempty(inexact_hours) && error(
     "vmax=1.05). Per this script's contract: stop and report the discrepancy rather " *
     "than silently accepting a different-looking result.",
 )
-println(
-    "  -> the documented high-PV exactness finding, reproduced: the SOCP relaxation is " *
-    "genuinely INEXACT at $(length(inexact_hours)) hour(s) on the certified stress fixture.",
-)
+# WORDING ONLY (no gate, no tolerance): how the Part A2 numbers may be described. The SOCP
+# solve is a convex relaxation of the AC problem and the objective is welfare (Max), so for the
+# SAME problem the SOCP welfare can never be below the AC welfare (obj_gap >= 0). A negative
+# obj_gap means the two solves are not the same problem solved to optimality (the AC solve here
+# is a local NLP solve with `allow_local = true`), so the per-hour SOCP-vs-AC gaps cannot be read
+# as the relaxation's own gap. `socp_maxgap` small = the SOC cone is tight in the SOCP solution.
+const A2_WORDING_TOL = 1e-6
+a2_model_mismatch = ac_report.obj_gap < -A2_WORDING_TOL
+a2_cone_tight = ctx_socp.meta[:socp_maxgap] <= A2_WORDING_TOL
+if a2_model_mismatch
+    println(
+        "  -> the SOCP and AC solutions differ at $(length(inexact_hours)) hour(s), but this " *
+        "is NOT shown to be relaxation inexactness: obj_gap < 0 (the AC solve beat its own " *
+        "convex relaxation) and the SOC cone is " *
+        (a2_cone_tight ? "tight" : "not tight") *
+        " (socp_maxgap = $(ctx_socp.meta[:socp_maxgap])); the two solves are not the same " *
+        "problem solved to optimality. UNRESOLVED: reconcile the models.",
+    )
+else
+    println(
+        "  -> the documented high-PV exactness finding, reproduced: the SOCP relaxation is " *
+        "genuinely INEXACT at $(length(inexact_hours)) hour(s) on the certified stress fixture.",
+    )
+end
 
 # ════════════════════════════════════════════════════════════════════════════════════
 # Part B — feeding the boom into the planning layer
@@ -748,13 +773,35 @@ open(findings_path, "w") do io
     println(io)
     println(io, "Part A2 — the documented high-PV exactness finding, reproduced")
     println(io, "-"^80)
-    println(
-        io,
+    fixture_txt =
         "On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, " *
         "vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / " *
-        "build_high_pv_aggregators), the SOC branch-flow relaxation is genuinely " *
-        "INEXACT at $(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
-    )
+        "build_high_pv_aggregators), "
+    if a2_model_mismatch
+        println(
+            io,
+            fixture_txt *
+            "the SOCP solution and the AC solution differ (assert_ac_exact! per-hour " *
+            "v/P gaps above rtol=1e-4) at $(length(inexact_hours))/$T_FULL hours: " *
+            "$inexact_hours. This is NOT evidence that the SOC relaxation is inexact here: " *
+            "the SOC cone is " *
+            (a2_cone_tight ? "TIGHT" : "NOT tight") *
+            " in the SOCP solution (socp_maxgap below), and obj_gap (SOCP welfare - AC " *
+            "welfare) is NEGATIVE, i.e. the AC solve reached a higher welfare than its own " *
+            "convex relaxation, which cannot happen if both solve the same problem to " *
+            "optimality. The AC solve is a local NLP solve (ACPowerFlow, allow_local = true) " *
+            "while the SOCP solve is not, so the two are a different model/solve and the " *
+            "per-hour gaps measure that mismatch, not the relaxation gap. UNRESOLVED: " *
+            "reconcile the two solves before citing this as an exactness finding.",
+        )
+    else
+        println(
+            io,
+            fixture_txt *
+            "the SOC branch-flow relaxation is genuinely INEXACT at " *
+            "$(length(inexact_hours))/$T_FULL hours: $inexact_hours.",
+        )
+    end
     @printf(io, "obj_gap (SOCP welfare - AC welfare) = %.6e\n", ac_report.obj_gap)
     @printf(
         io,
