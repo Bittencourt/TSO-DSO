@@ -11,8 +11,11 @@
 # signature listed k times in the baseline allows exactly k current reports with that
 # signature, so a second report that normalizes to an already-baselined signature is NEW.
 # The check fails when the current count of a signature exceeds its baseline count (NEW), when
-# it is lower (FIXED: remove the surplus line(s) so the ratchet only tightens), or when the
-# baseline still contains the UNJUSTIFIED marker (every entry must sit in a justified group).
+# it is lower (FIXED: remove the surplus line(s) so the ratchet only tightens), or when an
+# entry is unjustified: the baseline still contains the UNJUSTIFIED marker, or a signature line
+# is not inside a justified group (a `# Group ...` comment block followed directly, with no
+# blank line, by its signature lines). So deleting only the marker line does not justify the
+# lines that were under it.
 # The report accessors used here (`print_report_message`, `vst`, `get_reports`) are JET
 # internals pinned by the test manifest (JET 0.11.x). Signatures embed inferred type strings,
 # so the CI job pins the exact Julia patch recorded in the baseline header; bump both together.
@@ -91,6 +94,33 @@ end
 
 """True iff the baseline lines contain the UNJUSTIFIED marker."""
 has_unjustified(lines) = any(l -> strip(l) == UNJUSTIFIED_MARK, lines)
+
+"""
+Signature lines of a baseline that are not inside a justified group. A group starts at a
+comment line beginning with `# Group` (its justification may continue on further `#` lines)
+and covers the signature lines that follow it directly; a blank line, the UNJUSTIFIED marker,
+or a `#` line after the group's signature lines ends it. Any signature line outside a group
+is returned.
+"""
+function unjustified_signatures(lines)
+    out = String[]
+    state = :none  # :none | :comment (in a `# Group` comment block) | :sigs (its signatures)
+    for l in lines
+        s = strip(l)
+        if isempty(s) || s == UNJUSTIFIED_MARK
+            state = :none
+        elseif startswith(s, "# Group")
+            state = :comment
+        elseif startswith(s, "#")
+            state = state == :comment ? :comment : :none
+        elseif state == :none
+            push!(out, String(s))
+        else
+            state = :sigs
+        end
+    end
+    return out
+end
 
 """Header (leading `#`/blank lines) plus justification groups of an existing baseline file.
 
@@ -215,6 +245,19 @@ function selftest()
     r5 = rewrite_baseline_lines(["# g", "keep", UNJUSTIFIED_MARK, "# Group 9: why", "late"],
                                 ["keep", "late"])
     chk(r5 == ["# g", "keep", "# Group 9: why", "late"], "justified-below-marker group lost: $r5")
+    # justification is structural: deleting only the marker line leaves its lines unjustified
+    grp = ["# header", "", "# Group 1: why", "# more why", "a", "b", ""]
+    chk(isempty(unjustified_signatures(grp)), "justified group reported: $(grp)")
+    chk(unjustified_signatures(vcat(grp, ["", UNJUSTIFIED_MARK, "c"])) == ["c"],
+        "signature under the marker not unjustified")
+    chk(unjustified_signatures(vcat(grp, ["c"])) == ["c"],
+        "marker deleted: signature after a blank line counted as justified")
+    chk(unjustified_signatures(["# header", "x"]) == ["x"], "signature under the header justified")
+    chk(unjustified_signatures(["# Group 1: w", "a", "# note", "x"]) == ["x"],
+        "signature after a non-Group comment counted as justified")
+    real = joinpath(@__DIR__, "jet_baseline.txt")
+    chk(isempty(unjustified_signatures(readlines(real))),
+        "committed baseline has unjustified signature lines: $(unjustified_signatures(readlines(real)))")
     foreach(f -> println("SELFTEST FAIL: ", f), failures)
     isempty(failures) && println("selftest OK: normalize, diff, baseline parse/rewrite")
     return isempty(failures)
@@ -237,7 +280,8 @@ function main(args)
     if "--update" in args
         write_baseline(path, cur)
         println("jet_check: wrote $(length(cur)) signatures to $path")
-        if has_unjustified(readlines(path))
+        wl = readlines(path)
+        if has_unjustified(wl) || !isempty(unjustified_signatures(wl))
             println("UNJUSTIFIED entries written: move them into a justified group (or fix the ",
                     "code) before committing; exit 1")
             return 1
@@ -257,10 +301,13 @@ function main(args)
         println("FIXED signatures (no longer reported: remove them from the baseline):")
         foreach(s -> println("  - ", s), fixed)
     end
-    unjust = isfile(path) && has_unjustified(readlines(path))
+    blines = isfile(path) ? readlines(path) : String[]
+    loose = unjustified_signatures(blines)
+    unjust = has_unjustified(blines) || !isempty(loose)
     if unjust
-        println("FAIL: baseline contains UNJUSTIFIED entries (justify each in a group, or fix ",
-                "the code)")
+        println("FAIL: baseline contains UNJUSTIFIED entries (justify each in a `# Group` ",
+                "comment block directly above its lines, or fix the code)")
+        foreach(s -> println("  ? ", s), loose)
     end
     return (isempty(new) && isempty(fixed) && !unjust) ? 0 : 1
 end
