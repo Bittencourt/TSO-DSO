@@ -83,11 +83,19 @@ def main(argv):
     if g("Broken") != nbroken:
         fail(f"broken is {g('Broken')}, expected {nbroken}")
     if not skip_canary:
-        if not re.search(r"iters\s*=\s*56\b", text):
-            fail("canary iters = 56 not found")
+        # Anchor on the canary item's own @info block (test_admm_knifeedge_canary.jl), so
+        # another item printing a similar iters/welfare line cannot satisfy the check.
+        blocks = re.findall(
+            r"Info: IEEE-13 ADMM knife-edge canary[^\n]*\n((?:[│|][^\n]*\n)*[└][^\n]*)", text
+        )
+        if not blocks:
+            fail("canary @info block 'IEEE-13 ADMM knife-edge canary' not found")
+        canary = "\n".join(blocks)
+        if not re.search(r"iters\s*=\s*56\b", canary):
+            fail("canary iters = 56 not found in the canary @info block")
         # The printed welfare differs from the golden in the last digits across Julia
         # patches (about 5e-12 relative); the canary item itself pins the tolerance.
-        vals = [float(v) for v in re.findall(r"\bwelfare\s*=\s*(-4823\.\d+)", text)]
+        vals = [float(v) for v in re.findall(r"\bwelfare\s*=\s*(-4823\.\d+)", canary)]
         if not any(abs(v + 4823.66604824162) <= 1e-9 * 4823.66604824162 for v in vals):
             fail("canary welfare = -4823.66604824162 (rel 1e-9) not found")
     with open(f"{T}/{label}.totals", "w") as fh:
