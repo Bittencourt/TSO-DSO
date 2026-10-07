@@ -236,9 +236,12 @@ JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia --project=. -t2 scripts/run_tests_fi
 baseline `scripts/jet_baseline.txt` (12 signature lines). It is a ratchet over a multiset:
 each baseline line allows one report, so a new report fails even when it normalizes to an
 already-listed signature, and a fixed one must be removed from the baseline (`--update`
-rewrites it). The check also fails while the baseline still has an UNJUSTIFIED block, and
-`--update` exits 1 when it writes one. It runs on Julia 1.12 only; the CI job pins the patch
-recorded in the baseline header (1.12.7), so bump both together.
+rewrites it). The check also fails while the baseline still has an UNJUSTIFIED block, or
+when any signature line is not directly under a `# Group ...` comment block (the block may
+run over several `#` lines, but no blank line may separate it from its signatures);
+`--update` exits 1 when the baseline it writes has either problem. It runs on Julia 1.12
+only; the CI job pins the patch recorded in the baseline header (1.12.7), so bump both
+together.
 
 **Flake harness.** `scripts/flake_rate.jl` repeats selected test items in fresh Julia
 processes and records outcomes and solver status labels. The measured result was 20 of 20
