@@ -212,7 +212,9 @@ exported symbol fails the build.
 Any other value is an error. CI on push and pull request runs `fast`; the nightly `slow`
 workflow (also manually dispatchable) runs everything on Julia 1.10 and 1.12.
 `TSODSO_TEST_VERBOSE=1` prints per-item timing. `TSODSO_TEST_FILES=a.jl,b.jl` restricts a
-run to those test files. The IEEE-8500 harness test is manual only (about 15 minutes,
+run to those test files (entries are trimmed; a name that matches no test item fails the
+run). Discovery is rooted at `test/` (`TestItemRunner.run_tests(test_dir)`), so files
+outside it, such as agent worktrees under `.claude/worktrees/`, are never parsed. The IEEE-8500 harness test is manual only (about 15 minutes,
 2.7 GB peak); see `scripts/README.md`.
 
 **Filtered runs.** `scripts/run_tests_filtered.jl` runs by tag or file with the test
@@ -232,11 +234,15 @@ processes and records outcomes and solver status labels. The measured result was
 clean runs on each of two Julia 1.12 patches (a Wilson 95% upper bound on the flake rate of
 about 16%).
 
-**Known broken items.** The suite records expected `@test_broken` items in
-`test/expected_broken.txt`; any unlisted Broken or skipped record fails the run. The
-`fit_baseline` item (`welfare surplus accounting: +25% FIT ratio golden ...`) is gated on a
-`SolveFailedError` with an `ALMOST_*` solver status: observed on Julia 1.12.7, not observed
-on 1.12.5, other patches unmeasured. Expected `Broken` totals for the full suite: 5 on
+**Known broken items.** The suite records expected Broken and skipped results in
+`test/expected_broken.txt`, one line per test site: `kind | item | test expression |
+reason`. Each line allows one record with exactly that item and printed test expression, so
+any unlisted record fails the run, including a new `@test_broken` inside an item that is
+already listed. The `fit_baseline` item (`welfare surplus accounting: +25% FIT ratio golden
+...`) is gated on one specific failure: a `SolveFailedError` with termination
+`ALMOST_OPTIMAL` and primal `NEARLY_FEASIBLE_POINT`, raised by the seed AC power-flow solve
+inside `fit_baseline`. It was observed on Julia 1.12.7, not on 1.12.5; other patches are
+unmeasured. Any other status, or the same status from another solve, fails the item. Expected `Broken` totals for the full suite: 5 on
 1.12.5 and 5 on 1.12.7 (with the gate); the fast set contributes 4.
 
 ## Environments and manifests

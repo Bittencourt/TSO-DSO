@@ -17,12 +17,25 @@ function test_set_from_env()
 end
 
 """
-Optional basename restriction from `TSODSO_TEST_FILES` (comma-separated); empty = none.
+Optional basename restriction from `TSODSO_TEST_FILES` (comma-separated, entries trimmed);
+empty = none. An empty entry (e.g. a trailing comma) throws. Callers must also fail when a
+requested name matches no item (see `unmatched_files`).
 """
 function test_files_from_env()
     s = get(ENV, "TSODSO_TEST_FILES", "")
-    return isempty(s) ? String[] : String.(split(s, ","))
+    isempty(strip(s)) && return String[]
+    files = String.(strip.(split(s, ",")))
+    any(isempty, files) && throw(
+        ErrorException("TSODSO_TEST_FILES=$(repr(s)) has an empty entry; use a.jl,b.jl"),
+    )
+    return files
 end
+
+"""
+Requested file names (from `TSODSO_TEST_FILES`) whose hit count is zero, i.e. names that match
+no `@testitem` under test/ (a typo, or a renamed file).
+"""
+unmatched_files(hits::AbstractDict) = sort!([f for (f, n) in hits if n == 0])
 
 _under(file::AbstractString, dir::AbstractString) =
     startswith(normpath(file), rstrip(normpath(dir), '/') * "/")
@@ -41,6 +54,13 @@ function tso_selected(
     set == "all" && return true
     return (set == "slow") == (:slow in ti.tags)
 end
+
+"""
+Path depth of the `@testitem` testset below the outermost testset handed to
+`broken_records`: `TSODSO / Package / <file> / <item>` under TestItemRunner 1.1.5 as driven
+by test/runtests.jl (`run_tests(test_dir)` inside `@testset "TSODSO"`).
+"""
+const ITEM_DEPTH = 4
 
 """
 Recursively collect every `Test.Broken` as `(; where, path, kind, expr)`.
@@ -67,23 +87,57 @@ function broken_records(ts, path::Vector{String} = String[])
 end
 
 """
-Parse expected_broken.txt into a set of `(kind, item name)` pairs.
+Identity of one Broken/skipped record: `(kind, item, test)`. `item` is the path component at
+`item_depth` (the `@testitem` name; "" when the record sits above item level) and `test` is
+the printed test expression, prefixed by any nested `@testset` names below the item
+(`nested / ... / expr`).
+"""
+function record_key(rec; item_depth::Int = ITEM_DEPTH)
+    item = length(rec.path) >= item_depth ? rec.path[item_depth] : ""
+    nested = length(rec.path) > item_depth ? rec.path[(item_depth + 1):end] : String[]
+    test = join(vcat(nested, [string(rec.expr)]), " / ")
+    return (rec.kind, item, test)
+end
+
+"""
+Parse expected_broken.txt (`kind | item | test | reason`, fields separated by " | ") into a
+multiset `Dict((kind, item, test) => allowed count)`. Listing the same
+`(kind, item, test)` on k lines allows k such records in one run.
 """
 function read_expected_broken(path::AbstractString)
-    out = Set{Tuple{String, String}}()
+    out = Dict{Tuple{String, String, String}, Int}()
     for line in eachline(path)
         l = strip(line)
         (isempty(l) || startswith(l, "#")) && continue
-        parts = strip.(split(l, "|"; limit = 3))
-        length(parts) == 3 || error("bad expected_broken line: $(repr(line))")
+        parts = strip.(split(l, " | "; limit = 4))
+        (length(parts) == 4 && all(!isempty, parts[1:3])) || error(
+            "bad expected_broken line (need kind | item | test | reason): $(repr(line))",
+        )
         parts[1] in ("broken", "skipped") ||
             error("bad kind in expected_broken line: $(repr(line))")
-        push!(out, (String(parts[1]), String(parts[2])))
+        k = (String(parts[1]), String(parts[2]), String(parts[3]))
+        out[k] = get(out, k, 0) + 1
     end
     return out
 end
 
 """
-True iff the record's path contains an item name allowed for its kind.
+Records not covered by the allowed multiset: each record consumes one allowance for its
+exact `(kind, item, test)` key; a record with no allowance left is returned. So a NEW
+`@test_broken` (or `broken=` / `@test_skip`) inside an allowed item, a second firing of an
+allowed site beyond its listed count, or a record in a nested testset all fail.
 """
-is_allowed(rec, allowed) = any(n -> (rec.kind, n) in allowed, rec.path)
+function unexpected_records(recs, allowed::AbstractDict; item_depth::Int = ITEM_DEPTH)
+    left = Dict(allowed)
+    bad = eltype(recs)[]
+    for r in recs
+        k = record_key(r; item_depth)
+        n = get(left, k, 0)
+        if n > 0
+            left[k] = n - 1
+        else
+            push!(bad, r)
+        end
+    end
+    return bad
+end

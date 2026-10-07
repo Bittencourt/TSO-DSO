@@ -1,8 +1,8 @@
 # Test entrypoint.
 #
-# TestItemRunner discovers every `@testitem` under `test/` (and `src/`) and runs
-# each in its own isolated module. The src/
-# seams are exercised by the per-feature items.
+# TestItemRunner discovers every `@testitem` and `@testsetup` under `test/` (only:
+# `run_tests(test_dir)` is called with test/ as its root, see below) and runs each item in
+# its own isolated module. The src/ seams are exercised by the per-feature items.
 # The runner infrastructure itself must stay healthy (failures, not a crash).
 #
 # Soft-scope-ambiguity bugs inside @testitem bodies (durable detection-method note,
@@ -39,18 +39,36 @@
 #
 # Selection and guards: `TSODSO_TEST_SET` = fast | slow | all (unset = all;
 # any other value is an error). `TSODSO_TEST_VERBOSE=1` passes verbose=true so per-item
-# Time is printed. `TSODSO_TEST_FILES=a.jl,b.jl` restricts to those basenames (short runs).
-# Only items under test/ are selected, a zero selection fails, and any Broken/skipped
-# record not listed in test/expected_broken.txt fails the run.
+# Time is printed. `TSODSO_TEST_FILES=a.jl,b.jl` restricts to those basenames (short runs;
+# entries are trimmed, and a name that matches no item under test/ fails the run).
+# A zero selection fails, and any Broken/skipped record not listed in
+# test/expected_broken.txt fails the run. That list is keyed per test site
+# `(kind, item, test expression)` with a count, so a NEW `@test_broken` / `broken=` /
+# `@test_skip` inside an already-allowed item also fails.
+#
+# Discovery root: `TestItemRunner.run_tests(test_dir)` rather than `@run_package_tests`.
+# TestItemRunner 1.1.5 `walkdir`s and PARSES every `.jl` file below its root before the
+# filter runs, and a later-walked `@testsetup` of the same name silently replaces an
+# earlier one. Rooting discovery at test/ keeps agent worktrees (`.claude/worktrees/`),
+# planning notes, `scripts/` and `results/` out of the parse entirely. Side effect: test/ has
+# no package name, so a `@testitem` gets the default `using Test` but NOT an implicit
+# `using TSODSO` (every item that needs TSODSO imports it explicitly). Item testsets are
+# named by their path relative to test/ (`test_x.jl`, not `test/test_x.jl`).
 using TestItemRunner, Test
 include(joinpath(@__DIR__, "runner_support.jl"))
 
 function tso_run_all()
     set = test_set_from_env()
     test_dir = @__DIR__
+    files = test_files_from_env()
+    file_hits = Dict(f => 0 for f in files)
     selected = Ref(0)
     filt = function (ti)
-        m = tso_selected(ti, set, test_dir)
+        b = basename(ti.filename)
+        if haskey(file_hits, b) && _under(ti.filename, test_dir)
+            file_hits[b] += 1
+        end
+        m = tso_selected(ti, set, test_dir; files)
         m && (selected[] += 1)
         return m
     end
@@ -58,13 +76,26 @@ function tso_run_all()
     allowed = read_expected_broken(joinpath(test_dir, "expected_broken.txt"))
     @testset "TSODSO" begin
         outer = Test.get_testset()
-        @run_package_tests filter = filt verbose = verbose
+        TestItemRunner.run_tests(test_dir; filter = filt, verbose = verbose)
         @testset "guards" begin
             @test selected[] > 0
+            dead = unmatched_files(file_hits)
+            foreach(f -> println("TSODSO_TEST_FILES entry matches no @testitem: ", f), dead)
+            @test isempty(dead)
             recs = broken_records(outer)
-            bad = [r for r in recs if !is_allowed(r, allowed)]
+            bad = unexpected_records(recs, allowed)
             foreach(
-                r -> println("UNEXPECTED ", r.kind, " record: ", r.where, " :: ", r.expr),
+                r -> println(
+                    "UNEXPECTED ",
+                    r.kind,
+                    " record: ",
+                    r.where,
+                    " :: ",
+                    r.expr,
+                    "  (key ",
+                    repr(record_key(r)),
+                    ")",
+                ),
                 bad,
             )
             @test isempty(bad)

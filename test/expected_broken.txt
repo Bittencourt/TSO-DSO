@@ -1,12 +1,19 @@
 # Allowed Broken / skipped records for the TSODSO test run (HYG-06).
-# Format: kind | testitem name | reason      (kind = broken | skipped)
-# The runtests.jl check is "observed subset-of allowed": conditional `broken=` sites only
-# record a Broken result when their condition fires, and fast/slow subsets see different
-# items, so an allowed entry that is not observed is fine. An observed record whose
-# (kind, item name) is not listed here fails the run. Each item appears once.
-broken | thesis_repro: IEEE-13 congestion — DSO-surplus sign-flip qualitative cross-check (secondary, non-gated) | conditional broken= on the secondary sign-flip cross-check (line 256)
-broken | ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check | conditional broken= on the thesis v9[16] gap cross-check (line 244)
-broken | acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3) | conditional broken= on the thesis cross-check gap (line 114)
-broken | welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check | thesis cross-check conditional broken= (gap >= 0.1, fires on 1.12.5, gap about 0.25) when the solve succeeds; fit_baseline seed AC-PF solve ending ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT recorded as broken instead (observed on 1.12.7; not on 1.12.5; other patches unmeasured); no src change
-skipped | planning nash: plot_nash_convergence core stays plot-free, ext returns a Makie Figure when CairoMakie is loaded (plot, makie, nash) | CairoMakie not in the test environment
-skipped | diagnostics plot: ext returns a Makie Figure when CairoMakie is loaded (plot, makie) | CairoMakie not in the test environment
+# Format: kind | testitem name | test | reason      (fields separated by " | ")
+#   kind = broken | skipped
+#   test = the printed test expression (`string(orig_expr)`, e.g. `gap < 0.01` for
+#          `@test gap < 1e-2 broken = ...`), prefixed by any nested @testset names below the
+#          item as `nested / ... / expr`.
+# Each line allows ONE record with exactly that (kind, item, test); repeat the line to allow
+# more. The runtests.jl check is "observed multiset is covered by allowed": conditional
+# `broken=` sites only record a Broken result when their condition fires, and fast/slow
+# subsets see different items, so an allowed entry that is not observed is fine. Any other
+# record fails the run, including a NEW `@test_broken` / `broken=` / `@test_skip` inside an
+# item listed here.
+broken | thesis_repro: IEEE-13 congestion — DSO-surplus sign-flip qualitative cross-check (secondary, non-gated) | sign_flip_holds | conditional broken= on the secondary sign-flip cross-check (test_thesis_repro.jl)
+broken | ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check | gap < 0.01 | conditional broken= on the thesis v9[16] gap cross-check (test_ieee13.jl)
+broken | acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3) | gap < 0.01 | conditional broken= on the thesis cross-check gap (test_acceptance.jl)
+broken | welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check | gap < 0.1 | thesis cross-check conditional broken= (gap >= 0.1, fires on 1.12.5, gap about 0.25) when the solve succeeds; no src change
+broken | welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check | false | gated @test_broken: fit_baseline seed AC-PF solve ending ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT (observed on 1.12.7; not on 1.12.5; other patches unmeasured); no src change
+skipped | planning nash: plot_nash_convergence core stays plot-free, ext returns a Makie Figure when CairoMakie is loaded (plot, makie, nash) | Base.find_package("CairoMakie") !== nothing | CairoMakie not in the test environment
+skipped | diagnostics plot: ext returns a Makie Figure when CairoMakie is loaded (plot, makie) | Base.find_package("CairoMakie") !== nothing | CairoMakie not in the test environment
