@@ -62,25 +62,21 @@ pv_boom_a2_cone_tight(ac_stress) = ac_stress.socp_maxgap <= PV_BOOM_A2_WORDING_T
 """
     pv_boom_planning_hours(results, nash_result) -> UnitRange{Int}
 
-The Part B planning sub-horizon (hours of the day) the Nash game was solved on. Read from the
-`"planning_hours"` key the case study writes into results.jld2; a results file written before
-that key existed falls back to the `const PLANNING_HOURS = a:b` constant in
-scripts/pv_boom_case_study.jl. Either way the window must have exactly
-`size(nash_result.z, 2)` hours (the horizon actually solved), otherwise this errors rather
-than let the report describe a window the data does not match.
+The Part B planning sub-horizon (hours of the day) the Nash game was solved on, read from the
+`"planning_hours"` key the case study writes into results.jld2. A results file without that key
+predates it and errors: its window cannot be recovered from the data (the current
+`PLANNING_HOURS` constant in scripts/pv_boom_case_study.jl may describe a different run, and an
+older 13:18 run has the same length as the current 11:16 window). The window must also have
+exactly `size(nash_result.z, 2)` hours (the horizon actually solved), otherwise this errors
+rather than let the report describe a window the data does not match.
 """
 function pv_boom_planning_hours(results, nash_result)
-    hours = if haskey(results, "planning_hours")
-        collect(Int, results["planning_hours"])
-    else
-        src = read(joinpath(dirname(@__DIR__), "pv_boom_case_study.jl"), String)
-        m = match(r"^const PLANNING_HOURS = (\d+):(\d+)"m, src)
-        m === nothing && error(
-            "pv_boom_report: results.jld2 has no \"planning_hours\" and " *
-            "scripts/pv_boom_case_study.jl has no `const PLANNING_HOURS = a:b` line",
-        )
-        collect(parse(Int, m[1]):parse(Int, m[2]))
-    end
+    haskey(results, "planning_hours") || error(
+        "pv_boom_report: results.jld2 has no \"planning_hours\" key, so it predates that key " *
+        "and its planning window is unknown; re-run scripts/pv_boom_case_study.jl to " *
+        "regenerate it",
+    )
+    hours = collect(Int, results["planning_hours"])
     (!isempty(hours) && hours == first(hours):last(hours)) ||
         error("pv_boom_report: planning hours $(hours) are not a contiguous range")
     T_solved = size(nash_result.z, 2)
