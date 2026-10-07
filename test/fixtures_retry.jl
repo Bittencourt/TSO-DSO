@@ -7,6 +7,12 @@
 # return them; the caller runs its `@test`s on the returned value, outside the retry path.
 # Every retry is logged with `@info`, the last error is rethrown once `tries` is exhausted,
 # and a grep-able `RETRY SUMMARY` line is printed at process exit.
+#
+# STATUS: reserved. No production test item uses `with_solve_retry` yet (the flake harness
+# measured 20/20 clean runs on the targeted items), so only test/test_flake_retry.jl
+# exercises it. Note for a future consumer: the default `retry_on` includes
+# `ConvergenceError`; for a deterministic ADMM run a retry repeats the same failure, so pass
+# an explicit `retry_on` without it unless the solve is genuinely nondeterministic.
 
 @testmodule FlakeRetry begin
     using TSODSO
