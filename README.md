@@ -164,7 +164,7 @@ Plus a full API reference for the ~130-symbol public surface.
 - **Traceability**: every constraint maps to a numbered thesis/PSR equation, documented
   beside the code in literate pages.
 - **Reproducibility**: declarative `Scenario`s, seeded data generation, DrWatson-stamped
-  result storage (git commit + Manifest), pinned environments.
+  result storage (git commit + Manifest), per-minor pinned environments.
 
 ## Repository layout
 
@@ -189,17 +189,63 @@ src/
   diagnostics/  plotting stubs (CairoMakie via package extension)
 ext/            CairoMakie / Gurobi / Mosek package extensions
 docs/           Documenter + Literate sources (the rung ladder) + Typst writeups
-scripts/        authored analysis & reproduction scripts (offline, seeded)
+scripts/        authored analysis & reproduction scripts (offline, seeded); see scripts/README.md
 test/           ~2,350 tests: unit, golden regressions, acceptance gates, guards
 ```
 
-## Testing & regression posture
+## Testing and checks
 
 `Pkg.test()` runs the full gate: unit tests, **pinned computed goldens** (gate-then-golden:
 validity gates asserted before pinned values), the BilevelJuMP certification case, the
 IEEE-13/123 acceptance regressions, the no-binaries guard, Aqua + JET quality checks.
 CI additionally builds the docs with `checkdocs = :exports` strict — an undocumented
 exported symbol fails the build.
+
+**Selecting a test set.** `TSODSO_TEST_SET` chooses which items run:
+
+| Value | Runs |
+|-------|------|
+| unset or `all` | every item (what plain `Pkg.test()` does) |
+| `fast` | items not tagged `:slow` (about 474 items, roughly 9 minutes locally) |
+| `slow` | only the `:slow` items (37) |
+
+Any other value is an error. CI on push and pull request runs `fast`; the nightly `slow`
+workflow (also manually dispatchable) runs everything on Julia 1.10 and 1.12.
+`TSODSO_TEST_VERBOSE=1` prints per-item timing. `TSODSO_TEST_FILES=a.jl,b.jl` restricts a
+run to those test files. The IEEE-8500 harness test is manual only (about 15 minutes,
+2.7 GB peak); see `scripts/README.md`.
+
+**Filtered runs.** `scripts/run_tests_filtered.jl` runs by tag or file with the test
+directory on the load path:
+
+```
+JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia --project=. -t2 scripts/run_tests_filtered.jl "$PWD" file:test_admm.jl
+```
+
+**JET ratchet.** `scripts/jet_check.jl` compares static-inference reports with the committed
+baseline `scripts/jet_baseline.txt` (11 signatures). It is a ratchet: a new report fails,
+a fixed one must be removed from the baseline (`--update` rewrites it). It runs on
+Julia 1.12 only.
+
+**Flake harness.** `scripts/flake_rate.jl` repeats selected test items in fresh Julia
+processes and records outcomes and solver status labels. The measured result was 20 of 20
+clean runs on each of two Julia 1.12 patches (a Wilson 95% upper bound on the flake rate of
+about 16%).
+
+**Known broken items.** The suite records expected `@test_broken` items in
+`test/expected_broken.txt`; any unlisted Broken or skipped record fails the run. The
+`fit_baseline` item (`welfare surplus accounting: +25% FIT ratio golden ...`) is gated on a
+`SolveFailedError` with an `ALMOST_*` solver status: observed on Julia 1.12.7, not observed
+on 1.12.5, other patches unmeasured. Expected `Broken` totals for the full suite: 5 on
+1.12.5 and 5 on 1.12.7 (with the gate); the fast set contributes 4.
+
+## Environments and manifests
+
+There is deliberately no root `Manifest.toml`. Resolved environments are committed per
+Julia minor version: `Manifest-v1.10.toml`, `Manifest-v1.11.toml` and
+`Manifest-v1.12.toml`, which Pkg selects automatically. They were verified on Julia
+1.10.11, 1.11.9 and 1.12.x; the assumption is the minimum patch of each minor, and a newer
+Julia minor resolves fresh from `Project.toml`.
 
 ## Status
 
