@@ -235,9 +235,11 @@ export select_optimizer
 """
     _objective(model) -> Float64
 
-`JuMP.objective_value(model)` with a `Float64` return assertion. Every model in this package is
-single-objective, so the scalar method is the only one that can run; the assertion only tells
-type inference what JuMP's multi-objective `Vector{Float64}` method would otherwise widen it to.
-Value-preserving: no conversion happens for a `Float64` result.
+`JuMP.objective_value(model)` with a `::Float64` return-type annotation, which Julia applies as
+`convert(Float64, x)` followed by a typeassert (not a bare assertion). Every model in this
+package is single-objective, so the scalar method is the only one that can run; the annotation
+only narrows what JuMP's multi-objective `Vector{Float64}` method would otherwise widen the
+inferred type to. Value-preserving: `convert` is the identity for a `Float64` result. A
+multi-objective model would fail here with a `convert` `MethodError`.
 """
 _objective(model::JuMP.AbstractModel)::Float64 = JuMP.objective_value(model)
