@@ -795,7 +795,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 38-07-PLAN.md — Scenario rejects ADMM with allow_export=false at construction; stored reactive mode as Symbol; status_policy §7
+- [ ] 38-07-PLAN.md — Scenario rejects ADMM with allow_export=false at construction; stored reactive mode as Symbol + stored OOS exclusion counts/status; status_policy §7
 
 **Wave 8** *(blocked on Wave 7 completion)*
 

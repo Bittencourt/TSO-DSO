@@ -766,9 +766,12 @@ spans = [(m.start(), html.unescape(re.sub(r"<[^>]+>", "", m.group(1))))
 | A3 | The timeout items will measure < 30 s inside a full verbose suite (compile shared with earlier ADMM items) | Finding 2 | Low. If ≥ 30 s, tag `:slow`; the counts table covers both outcomes |
 | A4 | `scripts/compare_default_stochastic.jl` (seed 42) and its Portuguese writeup may show inexact draws under W6 | Finding 3 | Medium. Unmeasured; if inexact draws are excluded from `realized_welfare`, the writeup's cited gap (-0.0360) could change |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does W2's "full API sweep" include the semantic v3.0/v4.0 contradictions (Finding 7 H)?**
+All four were resolved by the user decisions recorded in 38-CONTEXT.md "Research Refinements" (2026-10-07).
+
+1. **(RESOLVED) Does W2's "full API sweep" include the semantic v3.0/v4.0 contradictions (Finding 7 H)?**
+   - Resolution: yes. USER (W2): the sweep fixes model text too; the ~10 false statements get a short note naming the version that changed them; §5.1 gets a corrective note, not a rewrite (plan 09).
    - What we know: the success criterion says "swept against the current API (every stale usage
      fixed)", and the phase goal says "prose no longer contradicts the code". The H items are not
      API names but are factually false now (3.37, copy direction, gate tolerance, terminal pin,
@@ -776,7 +779,8 @@ spans = [(m.start(), html.unescape(re.sub(r"<[^>]+>", "", m.group(1))))
    - Recommendation: fix the one-line factual items directly. For §5.1 (copy derivation), add a
      short corrective note naming the Gan–Low default and the `thesis_literal = true` opt-in rather
      than rewriting the derivation. Confirm scope with the user if the plan grows.
-2. **W6 variant: exclude inexact held-out draws from `realized_welfare`, or keep them and only flag?**
+2. **(RESOLVED) W6 variant: exclude inexact held-out draws from `realized_welfare`, or keep them and only flag?**
+   - Resolution: USER (W6) chose "Exclude + report": the step throws `CertificateError`, `_stoch_solve_held_out!` records the draw with a new status, and an `inexact_h` mask excludes it (plans 04, 05).
    - Exclude: `welfare_gap` is certified, as CONTEXT intends, and mirrors the infeasible skip. But
      the docs-page numbers then depend on the patch (5 vs 2 excluded), and the compare-script
      writeup may move.
@@ -784,10 +788,14 @@ spans = [(m.start(), html.unescape(re.sub(r"<[^>]+>", "", m.group(1))))
      "certified".
    - Recommendation: exclude, keep `welfare_h[h]` finite (not NaN) with an `inexact_h` mask, and
      add the new status. The golden fixture is unaffected either way (all exact on both patches).
-3. **Add the guide to a CI guard?** Optional. The data-URI-stripping variant of the planning-ID
+3. **(RESOLVED) Add the guide to a CI guard?**
+   - Resolution: no. Research Refinements: "verified once with scratch checks; no new CI guard over the guide" (plans 08, 09).
+   Optional. The data-URI-stripping variant of the planning-ID
    guard is about 10 lines. Recommendation: no new CI guard this phase. Do the one-off scratch
    verification and record it in the SUMMARY.
-4. **`:slow` measurement context for the timeout items** — recommend the Phase 37 rule (in-suite,
+4. **(RESOLVED) `:slow` measurement context for the timeout items**
+   - Resolution: Research Refinements: two fast items under the Phase 37 in-suite rule; counts move by +2 items (plan 06); the gate re-measures in-suite time (plan 10).
+   — recommend the Phase 37 rule (in-suite,
    verbose); see A3.
 
 ## Environment Availability
