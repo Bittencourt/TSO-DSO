@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: verifying
-stopped_at: Phase 31 verified (UAT 5/5, suite 31260/0/0/5); next is Phase 32 — `/gsd-autonomous --from 32`
-last_updated: "2026-10-07T01:52:10.724Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 37 was final phase)
+last_updated: 2026-10-07T10:47:49.185Z
 last_activity: 2026-10-07
 progress:
   total_phases: 12
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 37 — Test Infrastructure & Repo Hygiene
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 37 (Test Infrastructure & Repo Hygiene) — EXECUTING
-Plan: 13 of 13
-Status: Phase complete — ready for verification
-  Latest certified full suite: 32148 passed / 0 failed / 0 errored / 5 broken at 874c44a (59m25s);
+Phase: 37
+Plan: Not started
+Status: Milestone complete
+  Latest certified full suite: 32224 passed / 0 failed / 0 errored / 5 broken at 19f3fba (Julia 1.12.5; 32219/0/0/5 on 1.12.7);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
-  Phase 34 code review closed with 0 open findings (3 iterations; IN-06/07/08 fixed at user request).
-  `/gsd-secure-phase` not run for Phases 29–34 (security enforcement default-on).
-  Remaining v4.0 phases: 35 (IEEE-8500 scale), 36 (code & export cleanup), 37 (test infra & hygiene).
+  Phase 37 verified 4/4 (GitHub-side CI run is the one open manual check).
+  `/gsd-secure-phase` not run for Phases 29–37 (security enforcement default-on).
+  All v4.0 phases (28–37) complete; next: milestone audit.
 Last activity: 2026-10-07
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
@@ -120,7 +120,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 200 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 213 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -176,6 +176,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 34 | 12 | - | - |
 | 35 | 5 | - | - |
 | 36 | 22 | - | - |
+| 37 | 13 | - | - |
 
 **Recent Trend:**
 

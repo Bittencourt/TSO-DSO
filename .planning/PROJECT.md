@@ -187,6 +187,18 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 37 (Test Infrastructure & Repo Hygiene) COMPLETE 2026-10-07.**
+HYG-04/05/06/08 validated. JET runs in CI (Julia 1.12.7) as a ratchet against `scripts/jet_baseline.txt`
+(12 justified signatures; `_objective(model)::Float64` cleared ~22). `TSODSO_TEST_SET=fast|slow|all`
+splits 511 items into 474 fast / 37 `:slow` (canary stays fast); CI runs the fast set on 1.10/1.11/1.12,
+`slow.yml` runs the full suite on push to main, nightly and dispatch. Discovery is restricted to `test/`;
+`test/expected_broken.txt` guards every Broken/skip site. Flake harness (`scripts/flake_rate.jl`) found
+0/20 failures on 1.12.5 and 1.12.7, so nothing quarantined; the deterministic 1.12.7 `fit_baseline`
+ALMOST_OPTIMAL failure is a gated `@test_broken` (backlog todo). `scripts/README.md` index, archive,
+shared `scripts/lib/pv_boom_common.jl` + single report; PV-boom planning hours re-tuned 13:18 → 11:16
+(gate passes again); root `Manifest.toml` dropped; `.planning/tmp/` untracked. Full suite
+32224/0/0/5 (1.12.5) and 32219/0/0/5 (1.12.7), canary unchanged. Open: GitHub-side CI run (manual).
+
 **Phase 36 (Code & Export Cleanup) COMPLETE 2026-10-05.**
 HYG-01/02/03/07 validated. Planning/review IDs scrubbed from all source, tests, scripts and docs
 (~6,500 lines, rationale kept as prose, thesis refs intact, every edit proven code-neutral by an AST
@@ -542,4 +554,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-05 — Phase 36 complete (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-07 — Phase 37 complete; all v4.0 phases done (v4.0 Correctness & Depth)*

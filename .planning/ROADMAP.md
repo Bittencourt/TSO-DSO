@@ -760,7 +760,7 @@ Plans:
 | 34. ADMM Decomposition, Meshed Reactive & Status/Exception Policy | v4.0 | 12/12 | Complete    | 2026-10-04 |
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
-| 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete   | 2026-10-07 |
+| 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete    | 2026-10-07 |
 
 ## Deferred / Future-Milestone Notes
 
