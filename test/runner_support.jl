@@ -32,8 +32,9 @@ function test_files_from_env()
 end
 
 """
-Requested file names (from `TSODSO_TEST_FILES`) whose hit count is zero, i.e. names that match
-no `@testitem` under test/ (a typo, or a renamed file).
+Requested file names (from `TSODSO_TEST_FILES`) whose hit count is zero, i.e. names none of
+whose `@testitem`s under test/ is selected by the active set (a typo, a renamed file, or a file
+whose items are all outside `TSODSO_TEST_SET`).
 """
 unmatched_files(hits::AbstractDict) = sort!([f for (f, n) in hits if n == 0])
 

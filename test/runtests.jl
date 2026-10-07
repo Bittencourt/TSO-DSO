@@ -40,7 +40,8 @@
 # Selection and guards: `TSODSO_TEST_SET` = fast | slow | all (unset = all;
 # any other value is an error). `TSODSO_TEST_VERBOSE=1` passes verbose=true so per-item
 # Time is printed. `TSODSO_TEST_FILES=a.jl,b.jl` restricts to those basenames (short runs;
-# entries are trimmed, and a name that matches no item under test/ fails the run).
+# entries are trimmed, and a name none of whose items under test/ is in the active set fails
+# the run).
 # A zero selection fails, and any Broken/skipped record not listed in
 # test/expected_broken.txt fails the run. That list is keyed per test site
 # `(kind, item, test expression)` with a count, so a NEW `@test_broken` / `broken=` /
@@ -70,12 +71,14 @@ function tso_run_all()
     file_hits = Dict(f => 0 for f in files)
     selected = Ref(0)
     filt = function (ti)
-        b = basename(ti.filename)
-        if haskey(file_hits, b) && _under(ti.filename, test_dir)
-            file_hits[b] += 1
-        end
         m = tso_selected(ti, set, test_dir; files)
-        m && (selected[] += 1)
+        if m
+            selected[] += 1
+            # A file name counts as matched only when the active set selects one of its
+            # items, so `TSODSO_TEST_SET=fast TSODSO_TEST_FILES=slow_only.jl,...` fails.
+            b = basename(ti.filename)
+            haskey(file_hits, b) && (file_hits[b] += 1)
+        end
         return m
     end
     verbose = get(ENV, "TSODSO_TEST_VERBOSE", "") == "1"

@@ -220,8 +220,8 @@ cross-validation items and the planning certification items) are tagged `:slow`.
 requests therefore run only `fast`, and those gates first run when the change lands on
 `main`, where every push triggers its own full-suite run.
 `TSODSO_TEST_VERBOSE=1` prints per-item timing. `TSODSO_TEST_FILES=a.jl,b.jl` restricts a
-run to those test files (entries are trimmed; a name that matches no test item fails the
-run). Discovery is rooted at `test/` (`TestItemRunner.run_tests(test_dir)`), so files
+run to those test files (entries are trimmed; a name with no test item in the selected
+`TSODSO_TEST_SET` fails the run). Discovery is rooted at `test/` (`TestItemRunner.run_tests(test_dir)`), so files
 outside it, such as agent worktrees under `.claude/worktrees/`, are never parsed. The IEEE-8500 harness test is manual only (about 15 minutes,
 2.7 GB peak); see `scripts/README.md`.
 
