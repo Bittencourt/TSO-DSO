@@ -766,10 +766,48 @@ are closed: every SOCP price certificate uses the same hybrid exactness floor, e
   4. Hardening: `Scenario(strategy=ADMM(), allow_export=false)` fails at construction; the
      out-of-sample stochastic re-solve (`solve_stochastic_oos_step!`) runs the shared exactness
      gate with a visible failure mode; `check_setup_names.py` runs in CI.
-**Plans:** 0 plans
+**Plans:** 10 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 38 to break down)
+**Wave 1**
+
+- [ ] 38-01-PLAN.md — Shared non-throwing exactness kernel `_socp_cone_check`; `assert_socp_exact!` delegates (no verdict change) + parity assertions
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 38-02-PLAN.md — MPC first tier through the kernel: measure old/new ratios on 1.12.5/1.12.7 first, regression item (flat floor accepts, hybrid refuses, escalates), docstrings, explained 1.12.7 move
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 38-03-PLAN.md — Stale prose: run_mpc/run_stochastic dispatch (TSODSO.jl + two literate pages) and "inline atol=1e-6" MPC comments in tests/fixtures/literate
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 38-04-PLAN.md — OOS exactness gate: step throws CertificateError, orchestrator skips-and-reports (`inexact_h`, `:oos_inexact_skipped`), tests (5e-10 optimizer in mechanics items), golden unchanged
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 38-05-PLAN.md — OOS reporting: status_policy.md, stochastic literate page live excluded-draw count, compare_default_stochastic script + writeup + results re-run
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 38-06-PLAN.md — Orphan ADMM timeout test -> two fast @testitems (`:budget_exceeded`, typed ConvergenceError); check_setup_names in CI format job
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 38-07-PLAN.md — Scenario rejects ADMM with allow_export=false at construction; stored reactive mode as Symbol; status_policy §7
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 38-08-PLAN.md — FRAMEWORK_GUIDE.html API + planning-ID sweep (scripted, count-asserting, images untouched) + README listing
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 38-09-PLAN.md — FRAMEWORK_GUIDE.html model-text corrections with version notes (3.37, copy direction, gate floor, terminal pin, truth settlement, integer planning, MPC tier 1, OOS gate)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 38-10-PLAN.md — Phase gate: static guards, count-sets, JET 1.12.7, full runs 1.12.5 then 1.12.7, docs build, 38-FINAL-GATES.md
 
 ## Progress
 
