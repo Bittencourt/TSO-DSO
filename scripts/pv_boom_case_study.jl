@@ -700,6 +700,7 @@ existing["nash_result"] = (;
     converged = nash_result.converged,
     sweeps = nash_result.sweeps,
 )
+existing["planning_hours"] = collect(PLANNING_HOURS)  # read by pv_boom_report.jl
 existing["ac_stress"] = (;
     obj_gap = ac_report.obj_gap,
     n_inexact_hours = length(inexact_hours),

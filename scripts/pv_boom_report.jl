@@ -27,7 +27,7 @@ function main(
     outdir = projectdir("results", "pv_boom"),
 )
     results = pv_boom_load_results(results_path)
-    (; sweep, admm_crosscheck, nash_result, ac_stress, ok_rows) = results
+    (; sweep, admm_crosscheck, nash_result, ac_stress, ok_rows, planning_hours) = results
     stressed_bus = pv_boom_stressed_bus(ok_rows)
 
     figs = pv_boom_figures(results, stressed_bus)
@@ -130,7 +130,7 @@ function main(
 
 <line x1="240" y1="300" x2="455" y2="215" stroke="#888" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"></line>
 <text x="345" y="360" font-size="10" text-anchor="middle" fill="#555">this case study only: local_price -&gt; c_op cost coefficient</text>
-<text x="345" y="373" font-size="10" text-anchor="middle" fill="#555">(scripts/pv_boom_case_study.jl:515-527, distributor_calibration)</text>
+<text x="345" y="373" font-size="10" text-anchor="middle" fill="#555">(scripts/pv_boom_case_study.jl, distributor_calibration)</text>
 </svg>
 <p>The diagram shows the operational layer (prosumer devices aggregated per bus, cleared
 on a convex branch-flow DSO network, emitting per-bus DADP prices as duals) alongside the
@@ -622,7 +622,9 @@ reported in Section 4 comes from the independent AC-power-flow oracle's own stan
 <h3>3.5 The planning-layer Nash game</h3>
 <p>Two IEEE-13-scale distributors play a Stackelberg-Nash investment game over a shared
 transmission-reinforcement corridor: a low-PV "baseline" and a "boom" distributor, over the
-afternoon PV-peak sub-horizon hours 13 through 18 (<code>T_planning = 6</code>).</p>
+PV-peak sub-horizon hours $(first(planning_hours)) through $(last(planning_hours))
+(<code>T_planning = $(length(planning_hours))</code>)
+<span class="provenance">(computed from results.jld2)</span>.</p>
 
 <div class="finding">
 <strong>Honest deviation, stated plainly:</strong> the originally-intended baseline
@@ -728,7 +730,8 @@ $nash_table
 <span class="provenance">(computed from results.jld2)</span> for both distributors.
 $(nash_differentiated ?
     "The boom distributor's converged investment differs from the baseline's — a genuine, " *
-    "distributor-differentiated investment response to the higher PV-penetration afternoon flow." :
+    "distributor-differentiated investment response to the higher PV-penetration flow over " *
+    "hours $(first(planning_hours)) through $(last(planning_hours))." :
     "<b>Honest finding, stated plainly:</b> the two distributors' converged investments did " *
     "NOT differentiate at this calibration — reported as-is, never forced apart."
 )

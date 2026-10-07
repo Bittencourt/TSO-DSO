@@ -17,8 +17,10 @@ using Printf
     pv_boom_load_results(path) -> NamedTuple
 
 Load the case-study results file and return
-`(; sweep, admm_crosscheck, nash_result, ac_stress, ok_rows)`, where `ok_rows` are the
-sweep rows with `status == "ok"`. Errors if there is no successful sweep point.
+`(; sweep, admm_crosscheck, nash_result, ac_stress, ok_rows, planning_hours)`, where `ok_rows`
+are the sweep rows with `status == "ok"` and `planning_hours` is the Part B planning
+sub-horizon (see [`pv_boom_planning_hours`](@ref)). Errors if there is no successful sweep
+point.
 """
 function pv_boom_load_results(path)
     results = DrWatson.wload(path)
@@ -34,7 +36,41 @@ function pv_boom_load_results(path)
         nash_result = results["nash_result"],
         ac_stress = results["ac_stress"],
         ok_rows,
+        planning_hours = pv_boom_planning_hours(results, results["nash_result"]),
     )
+end
+
+"""
+    pv_boom_planning_hours(results, nash_result) -> UnitRange{Int}
+
+The Part B planning sub-horizon (hours of the day) the Nash game was solved on. Read from the
+`"planning_hours"` key the case study writes into results.jld2; a results file written before
+that key existed falls back to the `const PLANNING_HOURS = a:b` constant in
+scripts/pv_boom_case_study.jl. Either way the window must have exactly
+`size(nash_result.z, 2)` hours (the horizon actually solved), otherwise this errors rather
+than let the report describe a window the data does not match.
+"""
+function pv_boom_planning_hours(results, nash_result)
+    hours = if haskey(results, "planning_hours")
+        collect(Int, results["planning_hours"])
+    else
+        src = read(joinpath(dirname(@__DIR__), "pv_boom_case_study.jl"), String)
+        m = match(r"^const PLANNING_HOURS = (\d+):(\d+)"m, src)
+        m === nothing && error(
+            "pv_boom_report: results.jld2 has no \"planning_hours\" and " *
+            "scripts/pv_boom_case_study.jl has no `const PLANNING_HOURS = a:b` line",
+        )
+        collect(parse(Int, m[1]):parse(Int, m[2]))
+    end
+    (!isempty(hours) && hours == first(hours):last(hours)) ||
+        error("pv_boom_report: planning hours $(hours) are not a contiguous range")
+    T_solved = size(nash_result.z, 2)
+    length(hours) == T_solved || error(
+        "pv_boom_report: planning window $(first(hours)):$(last(hours)) has " *
+        "$(length(hours)) hours but the stored Nash result has $T_solved; re-run " *
+        "scripts/pv_boom_case_study.jl",
+    )
+    return first(hours):last(hours)
 end
 
 """
