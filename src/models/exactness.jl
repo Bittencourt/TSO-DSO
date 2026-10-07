@@ -88,7 +88,7 @@ const TAU_SOLVER_EXACT = 2.0e-7
 # them. Pure refactor: the gate's verdict, `maxgap`, `maxratio` and messages are unchanged.
 
 # The head branch: the FIRST branch incident to `feeder.root` in EITHER storage orientation
-# (see the long rationale at the call site in `assert_socp_exact!`). `nothing` if none.
+# (see the long rationale inside `_socp_cone_check`). `nothing` if none.
 _socp_head_branch(feeder) =
     findfirst(br -> br.from == feeder.root || br.to == feeder.root, feeder.branches)
 
@@ -125,6 +125,98 @@ Internal. The ONE per-(branch `b`, hour `t`) exactness computation used by both
     atol_b = atol === nothing ? max(τ_solver, ε * ref_b) : atol
     tol = atol_b + rtol * max(abs(lhs), abs(rhs))
     return (; lhs, rhs, gap, atol_b, ratio = gap / tol)
+end
+
+"""
+    _socp_cone_check(ctx::ModelContext; rtol::Real = 1e-4,
+                     atol::Union{Nothing,Real} = nothing, ε::Real = MEASURED_REL_TOL_EXACT,
+                     τ_solver::Real = TAU_SOLVER_EXACT)
+        -> (; maxgap::Float64, maxratio::Float64)
+
+Internal. The ONE non-throwing exactness evaluation: shared by [`assert_socp_exact!`](@ref)
+(which throws on `maxratio > 1`), the MPC per-resolve first-tier certificate and the
+stochastic out-of-sample step. Never re-implement the cone formula elsewhere.
+
+Loops every branch `b` and hour `t ∈ 1:T` through `_cone_row` and returns
+`maxgap = maxₜ,ᵦ |l·v_from − (P²+Q²)|` and
+`maxratio = maxₜ,ᵦ gap / (atol_b + rtol·max(|lhs|, |rhs|))` (`maxratio ≤ 1` iff every row is
+exact). Same defaults and floor semantics as `assert_socp_exact!`. Throws `ArgumentError` only
+if no branch is incident to `feeder.root` (malformed/non-radial feeder).
+"""
+function _socp_cone_check(
+    ctx::ModelContext;
+    rtol::Real = 1e-4,
+    atol::Union{Nothing, Real} = nothing,
+    ε::Real = MEASURED_REL_TOL_EXACT,
+    τ_solver::Real = TAU_SOLVER_EXACT,
+)
+    pv = _require_pf_vars(ctx)
+    feeder = _require_feeder(ctx)
+    T = _require_T(ctx)
+
+    # The head branch — the FIRST branch incident to
+    # feeder.root in EITHER storage orientation (`br.from == feeder.root` OR `br.to ==
+    # feeder.root`) — is the network-scale reference for INTERIOR (SMAX_NO_LIMIT-sentinel)
+    # branches, computed ONCE before the loop. Orientation-agnostic per the
+    # storage-orientation discipline (`test_mesh_angle_certificate.jl`'s reversed-orientation
+    # regression, ac_oracle.jl's "Branch orientation" note): a branch's stored `(from, to)`
+    # direction is a book-keeping choice, not a physical constraint (assert_connected places
+    # no requirement on which end is "from"), so a feeder root-inward-reversed relative to the
+    # OLD `br.from`-only convention (every branch stored child->parent) must resolve to the
+    # SAME (index-wise) head branch. `ref_b` below reads `P[head_b,t]^2 + Q[head_b,t]^2`, which
+    # is orientation-INVARIANT (squared), so no sign correction is needed once the right branch
+    # index is found.
+    #
+    # DEVIATION from a literal "throw on >1 match" reading of the plan's must_haves prose:
+    # kept `findfirst` (not `findall`+uniqueness), i.e. tolerate MULTIPLE root-incident
+    # branches by deterministically taking the FIRST one found (mirrors the OLD `br.from`-only
+    # code's own tolerance — it never checked for uniqueness either). A meshed feeder's root CAN
+    # legitimately fan out to more than one branch (e.g. `test_mesh_angle_certificate.jl`'s own
+    # 4-bus diamond: `mesh_feeder`'s root=1 has TWO branches with `br.from==1`, and this is the
+    # CURRENTLY-PASSING, unmodified forward-orientation fixture — not malformed). Requiring
+    # strict uniqueness would newly THROW on that pre-existing, already-green fixture (a
+    # regression), not just on a genuinely malformed feeder. Only a ZERO-match feeder (no branch
+    # touches the root at all) is malformed/non-radial and fails loudly.
+    #
+    # Review note (2026-09-29): the concern raised is that on a
+    # meshed feeder with MULTIPLE root-incident branches carrying materially different flow
+    # magnitudes, `findfirst`'s branch-STORAGE-ORDER-dependent choice could under/over-state the
+    # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this gate's numeric check
+    # only runs on a `ctx` whose formulation carries the branch-current variable (the
+    # `has_branch_current(ctx.pf)` guard at this function's call site). The ONE currently-known
+    # multi-root-branch feeder, `MeshFixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
+    # at buses 2/3, so its two root branches (1,2)/(1,3) DO carry different flow magnitudes by
+    # construction), is exercised via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
+    # /`test_mesh_flow.jl`. MeshedFlow delegates to the shared SOCP body, which stashes `:l`, so
+    # `solve_welfare(MeshedFlow)` DOES run this gate (`assert_socp_exact!` passes in test_mesh_flow).
+    # Its `head_b`/`ref_b` logic therefore DOES run on that fixture, and the gate passes there
+    # in the current suite, so that scale-choice concern is not a currently observed defect
+    # (no verdict flips), but it is unproven for other disparate-flow meshed fixtures.
+    # Left as `findfirst` rather than `sum`/`max`-over-root-branches (the
+    # review's own alternative fix) because that numeric change would touch `ref_b` — and hence
+    # the exactness PASS/FAIL verdict — for EVERY interior branch on EVERY feeder in the suite
+    # (this gate is called from 30+ src/test/docs sites), and verifying no regression requires a
+    # full-suite run genuinely out of scope for this fix pass (per this pass's own instructions).
+    # Revisit with a full-suite-verified `sum`/`max` change if/when a `ConvexBranchFlow` meshed
+    # fixture with disparate root-branch flows is added.
+    head_b = _socp_head_branch(feeder)
+    head_b === nothing && throw(
+        ArgumentError(
+            "SOCP exactness check: no branch incident to feeder.root=$(feeder.root) found " *
+            "(checked br.from == root OR br.to == root) — malformed/non-radial feeder",
+        ),
+    )
+
+    maxgap = 0.0        # absolute cone residual (first-class reported output)
+    maxratio = 0.0      # worst gap / (atol_b + rtol·magnitude) — ≤ 1 iff every branch is exact
+    for (b, br) in enumerate(feeder.branches), t in 1:T
+        # the per-(b,t) gap/floor/ratio arithmetic lives in `_cone_row`,
+        # shared VERBATIM with the `hybrid_ratios` diagnostic so the two can never drift.
+        row = _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver)
+        maxgap = max(maxgap, row.gap)
+        maxratio = max(maxratio, row.ratio)
+    end
+    return (; maxgap, maxratio)
 end
 
 """
@@ -214,57 +306,10 @@ function assert_socp_exact!(
     ε::Real = MEASURED_REL_TOL_EXACT,
     τ_solver::Real = TAU_SOLVER_EXACT,
 )
-    pv = _require_pf_vars(ctx)
+    # Keep this gate's own documented zero-match error text; the kernel below repeats the
+    # lookup with a caller-neutral message for its other consumers.
     feeder = _require_feeder(ctx)
-    T = _require_T(ctx)
-
-    # The head branch — the FIRST branch incident to
-    # feeder.root in EITHER storage orientation (`br.from == feeder.root` OR `br.to ==
-    # feeder.root`) — is the network-scale reference for INTERIOR (SMAX_NO_LIMIT-sentinel)
-    # branches, computed ONCE before the loop. Orientation-agnostic per the
-    # storage-orientation discipline (`test_mesh_angle_certificate.jl`'s reversed-orientation
-    # regression, ac_oracle.jl's "Branch orientation" note): a branch's stored `(from, to)`
-    # direction is a book-keeping choice, not a physical constraint (assert_connected places
-    # no requirement on which end is "from"), so a feeder root-inward-reversed relative to the
-    # OLD `br.from`-only convention (every branch stored child->parent) must resolve to the
-    # SAME (index-wise) head branch. `ref_b` below reads `P[head_b,t]^2 + Q[head_b,t]^2`, which
-    # is orientation-INVARIANT (squared), so no sign correction is needed once the right branch
-    # index is found.
-    #
-    # DEVIATION from a literal "throw on >1 match" reading of the plan's must_haves prose:
-    # kept `findfirst` (not `findall`+uniqueness), i.e. tolerate MULTIPLE root-incident
-    # branches by deterministically taking the FIRST one found (mirrors the OLD `br.from`-only
-    # code's own tolerance — it never checked for uniqueness either). A meshed feeder's root CAN
-    # legitimately fan out to more than one branch (e.g. `test_mesh_angle_certificate.jl`'s own
-    # 4-bus diamond: `mesh_feeder`'s root=1 has TWO branches with `br.from==1`, and this is the
-    # CURRENTLY-PASSING, unmodified forward-orientation fixture — not malformed). Requiring
-    # strict uniqueness would newly THROW on that pre-existing, already-green fixture (a
-    # regression), not just on a genuinely malformed feeder. Only a ZERO-match feeder (no branch
-    # touches the root at all) is malformed/non-radial and fails loudly.
-    #
-    # Review note (2026-09-29): the concern raised is that on a
-    # meshed feeder with MULTIPLE root-incident branches carrying materially different flow
-    # magnitudes, `findfirst`'s branch-STORAGE-ORDER-dependent choice could under/over-state the
-    # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this gate's numeric check
-    # only runs on a `ctx` whose formulation carries the branch-current variable (the
-    # `has_branch_current(ctx.pf)` guard at this function's call site). The ONE currently-known
-    # multi-root-branch feeder, `MeshFixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
-    # at buses 2/3, so its two root branches (1,2)/(1,3) DO carry different flow magnitudes by
-    # construction), is exercised via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
-    # /`test_mesh_flow.jl`. MeshedFlow delegates to the shared SOCP body, which stashes `:l`, so
-    # `solve_welfare(MeshedFlow)` DOES run this gate (`assert_socp_exact!` passes in test_mesh_flow).
-    # Its `head_b`/`ref_b` logic therefore DOES run on that fixture, and the gate passes there
-    # in the current suite, so that scale-choice concern is not a currently observed defect
-    # (no verdict flips), but it is unproven for other disparate-flow meshed fixtures.
-    # Left as `findfirst` rather than `sum`/`max`-over-root-branches (the
-    # review's own alternative fix) because that numeric change would touch `ref_b` — and hence
-    # the exactness PASS/FAIL verdict — for EVERY interior branch on EVERY feeder in the suite
-    # (this gate is called from 30+ src/test/docs sites), and verifying no regression requires a
-    # full-suite run genuinely out of scope for this fix pass (per this pass's own instructions).
-    # Revisit with a full-suite-verified `sum`/`max` change if/when a `ConvexBranchFlow` meshed
-    # fixture with disparate root-branch flows is added.
-    head_b = _socp_head_branch(feeder)
-    head_b === nothing && throw(
+    _socp_head_branch(feeder) === nothing && throw(
         ArgumentError(
             "assert_socp_exact!: no branch incident to feeder.root=$(feeder.root) found " *
             "(checked br.from == root OR br.to == root) — malformed/non-radial feeder " *
@@ -272,15 +317,8 @@ function assert_socp_exact!(
         ),
     )
 
-    maxgap = 0.0        # absolute cone residual (first-class reported output)
-    maxratio = 0.0      # worst gap / (atol_b + rtol·magnitude) — ≤ 1 iff every branch is exact
-    for (b, br) in enumerate(feeder.branches), t in 1:T
-        # the per-(b,t) gap/floor/ratio arithmetic lives in `_cone_row`,
-        # shared VERBATIM with the `hybrid_ratios` diagnostic so the two can never drift.
-        row = _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver)
-        maxgap = max(maxgap, row.gap)
-        maxratio = max(maxratio, row.ratio)
-    end
+    # The per-(branch, hour) loop lives in the shared non-throwing kernel.
+    (; maxgap, maxratio) = _socp_cone_check(ctx; rtol, atol, ε, τ_solver)
 
     maxratio <= 1 || throw(
         CertificateError(
