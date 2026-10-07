@@ -6,14 +6,21 @@ Usage:
   check_scripts_index.py --selftest   run built-in positive/negative cases
 
 Every tracked path under scripts/ (except scripts/README.md) must appear in scripts/README.md
-as a whole path token (inside a backticked span): either its path relative to scripts/
-(`lib/b.jl`), the same path with a `scripts/` prefix, or its bare basename when that basename
-is unique among tracked scripts/ files. Matching is by whole token, never by substring, so
-`pv_boom_report.jl` does not index `archive/pv_boom_report.jl` or `boom_report.jl`.
+as a whole path token (inside a backticked span) giving its full location: its path relative
+to scripts/ (`lib/b.jl`, `archive/c.jl`) or the same path with a `scripts/` prefix. A bare
+basename (`a.jl`) names only a file directly under scripts/ (`scripts/a.jl`), never one in a
+subdirectory, so a script moved to `archive/` whose index row still says `old.jl` is reported
+both as NOT INDEXED (`scripts/archive/old.jl`) and as STALE (`old.jl`). Matching is by whole
+token, never by substring, so `pv_boom_report.jl` does not index `archive/pv_boom_report.jl`
+or `boom_report.jl`.
 Stale check: a path token with a script-like extension that is bare, `scripts/`-prefixed, or
 relative to scripts/ (`lib/`, `archive/`, `data/` vendored OpenDSS) and names no tracked file
-is reported. Tokens rooted elsewhere (`src/`, `test/`, `results/`, `.github/`, ...) are
-ignored. Exit codes: 0 complete; 1 missing or stale entries; 2 internal/IO error.
+at exactly that location is reported. Tokens rooted elsewhere (`src/`, `test/`, `results/`,
+`.github/`, ...) are ignored.
+Mislocation check: in the first column of the `## Scripts` table no entry may be under
+`archive/`, and in the first column of the `## Archive` table every entry must be under
+`archive/`. Exit codes: 0 complete; 1 missing, stale or mislocated entries; 2 internal/IO
+error.
 """
 import re
 import subprocess
@@ -49,48 +56,59 @@ def _rel(f):
     return f[len("scripts/"):]
 
 
+def _tok_rel(tok):
+    return tok[len("scripts/"):] if tok.startswith("scripts/") else tok
+
+
 def missing_entries(files, readme_text):
-    """Tracked files not named in the readme by a whole token (see module docstring)."""
+    """Tracked files not named in the readme by their full scripts/-relative path (a bare
+    basename counts only for a file directly under scripts/; see module docstring)."""
     tracked = [f for f in files if f.startswith("scripts/") and f != README]
-    toks = set(readme_tokens(readme_text))
-    rel_toks = {t[len("scripts/"):] if t.startswith("scripts/") else t for t in toks}
-    base_count = {}
-    for f in tracked:
-        b = f.rsplit("/", 1)[-1]
-        base_count[b] = base_count.get(b, 0) + 1
-    out = []
-    for f in tracked:
-        rel = _rel(f)
-        base = rel.rsplit("/", 1)[-1]
-        if rel in rel_toks:
-            continue
-        if base_count[base] == 1 and base in toks:
-            continue
-        out.append(f)
-    return out
+    rel_toks = {_tok_rel(t) for t in readme_tokens(readme_text)}
+    return [f for f in tracked if _rel(f) not in rel_toks]
 
 
 def stale_entries(files, readme_text):
     """Script-like path tokens in the readme that name no tracked scripts/ file."""
     rels = {_rel(f) for f in files if f.startswith("scripts/")}
-    bases = {r.rsplit("/", 1)[-1] for r in rels}
     stale = []
     for tok in readme_tokens(readme_text):
         if not _STALE_EXT.search(tok) or tok.startswith(_EXTERNAL):
             continue
-        rel = tok[len("scripts/"):] if tok.startswith("scripts/") else tok
-        if "/" in rel:
-            if rel in rels:
-                continue
-            # `data/...` is also the repo-root data/ directory; only vendored OpenDSS files
-            # are known to live under scripts/data/.
-            if rel.startswith("data/") and not re.search(r"\.(?:dss|DSS)$", rel):
-                continue
-        elif rel in bases:
+        rel = _tok_rel(tok)
+        # A bare token names scripts/<tok> only; a relative token names exactly that path.
+        if rel in rels:
+            continue
+        # `data/...` is also the repo-root data/ directory; only vendored OpenDSS files
+        # are known to live under scripts/data/.
+        if rel.startswith("data/") and not re.search(r"\.(?:dss|DSS)$", rel):
             continue
         if tok not in stale:
             stale.append(tok)
     return stale
+
+
+def mislocated_entries(readme_text):
+    """First-column entries of the `## Scripts` table that point into archive/, and of the
+    `## Archive` table that do not. Returns `(token, section)` pairs."""
+    out = []
+    section = None
+    for line in readme_text.splitlines():
+        if line.startswith("## "):
+            section = line[3:].strip()
+            continue
+        if section not in ("Scripts", "Archive") or not line.startswith("|"):
+            continue
+        cells = line.split("|")
+        if len(cells) < 3 or re.fullmatch(r"\s*:?-+:?\s*", cells[1]):
+            continue
+        for span in re.findall(r"`([^`\n]*)`", cells[1]):
+            for tok in _TOKEN.findall(span):
+                rel = _tok_rel(tok.rstrip("."))
+                in_archive = rel.startswith("archive/")
+                if (section == "Scripts") == in_archive:
+                    out.append((tok, section))
+    return out
 
 
 def selftest():
@@ -125,6 +143,24 @@ def selftest():
     # Fenced blocks count; a `file:` filter value is not a path token.
     assert missing_entries(files, "`lib/b.jl` `archive/c.jl`\n```\njulia scripts/a.jl\n```\n") == []
     assert stale_entries(files, "```\nrun.jl file:test_x.jl\n```\n") == ["run.jl"]
+    # Reviewer probe (iteration 2): a script moved to archive/ whose active-table row still
+    # names it by its bare basename is both NOT INDEXED and STALE.
+    moved = ["scripts/archive/old.jl", README]
+    assert missing_entries(moved, "Active: `old.jl` runs X") == ["scripts/archive/old.jl"]
+    assert stale_entries(moved, "Active: `old.jl` runs X") == ["old.jl"]
+    assert missing_entries(moved, "`archive/old.jl`") == []
+    assert stale_entries(moved, "`scripts/archive/old.jl`") == []
+    # A bare basename never indexes a subdirectory file, even when it is unique.
+    assert missing_entries(["scripts/lib/b.jl", README], "`b.jl`") == ["scripts/lib/b.jl"]
+    assert stale_entries(["scripts/lib/b.jl", README], "`b.jl`") == ["b.jl"]
+    # Mislocated: archive/ path left in the active table, or an active path in the archive table.
+    tables = ("## Scripts\n\n| Script | Purpose |\n|---|---|\n| `a.jl` | x |\n"
+              "| `archive/old.jl` | still listed as active |\n\n"
+              "## Archive\n\n| Script | Reason |\n|---|---|\n| `archive/c.jl` | gone |\n"
+              "| `lib/b.jl` | wrong table |\n")
+    assert mislocated_entries(tables) == [("archive/old.jl", "Scripts"),
+                                          ("lib/b.jl", "Archive")], mislocated_entries(tables)
+    assert mislocated_entries("## Scripts\n| `a.jl` | `archive/x.jl` in purpose |\n") == []
     print("check_scripts_index selftest: OK")
     return 0
 
@@ -143,11 +179,15 @@ def main(argv):
     files = [f for f in res.stdout.splitlines() if f]
     miss = missing_entries(files, text)
     stale = stale_entries(files, text)
+    misloc = mislocated_entries(text)
     for f in miss:
-        print(f"NOT INDEXED: {f} (add it to {README})")
+        print(f"NOT INDEXED: {f} (add it to {README} by its path relative to scripts/)")
     for t in stale:
-        print(f"STALE ENTRY: {t} is named in {README} but is not a tracked file")
-    if miss or stale:
+        print(f"STALE ENTRY: {t} is named in {README} but no tracked file is at that path")
+    for t, sec in misloc:
+        print(f"MISLOCATED: {t} is in the '## {sec}' table of {README}, which does not "
+              f"match its archive/ status")
+    if miss or stale or misloc:
         return 1
     print(f"scripts index complete ({len(files)} tracked files checked)")
     return 0
