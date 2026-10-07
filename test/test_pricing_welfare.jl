@@ -322,19 +322,43 @@ end
 
     # FIT baseline: FIT-OPT (3.24-3.28) + plain AC-PF, German-FIT prices 6.6/9.6/5.6
     # ¢$/kWh (page 93). Its `social_fit` is the denominator of the +25% headline ratio.
-    # GATED SOLVE (outcome-conditioned, no Julia-version condition). On Julia 1.12.7 the FIT-OPT
-    # solve ends with an ALMOST_* termination status and `assert_solved!` throws
-    # `SolveFailedError` (observed on 1.12.7; not on 1.12.5; other patches unmeasured; deterministic;
-    # backlog todo filed, src behaviour intentionally unchanged). The helper returns the caught
-    # error ONLY for that outcome; any other error propagates and any other status still fails.
+    # GATED SOLVE (outcome-conditioned, no Julia-version condition). On Julia 1.12.7 the
+    # plain AC-PF seed solve inside `fit_baseline` (the `assert_solved!(seed_model; dual = false)`
+    # call in src/pricing/fit.jl) ends with termination ALMOST_OPTIMAL, primal
+    # NEARLY_FEASIBLE_POINT (Clarabel raw status ALMOST_SOLVED), and `assert_solved!` throws
+    # `SolveFailedError` (observed on 1.12.7; not on 1.12.5; other patches unmeasured;
+    # deterministic; backlog todo filed, src behaviour intentionally unchanged).
+    # The helper returns the caught error ONLY for that exact outcome AT that exact site:
+    #   - termination_status == ALMOST_OPTIMAL (NOT any other ALMOST_* code such as
+    #     ALMOST_INFEASIBLE / ALMOST_DUAL_INFEASIBLE / ALMOST_LOCALLY_SOLVED),
+    #   - primal_status == NEARLY_FEASIBLE_POINT,
+    #   - raised by `assert_solved!` called DIRECTLY from `fit_baseline` (the seed AC-PF solve),
+    #     not from `_fit_opt_solve` (FIT-OPT) or any other solve in the call tree.
+    # Any other error, status or site propagates and fails the item.
     # LIMITATION: the ratio golden and the thesis cross-check below both need `fit_baseline`'s
     # result, so on the gated path neither signal is available (the cross-check is lost there).
+    function fit_gate_site_ok(bt)
+        frames = stacktrace(bt)
+        is_status_frame(f) = endswith(String(f.file), "status.jl")
+        i = findfirst(
+            f -> is_status_frame(f) && occursin("assert_solved!", String(f.func)),
+            frames,
+        )
+        i === nothing && return false
+        j = findnext(f -> !is_status_frame(f), frames, i)
+        j === nothing && return false
+        caller = frames[j]
+        return endswith(String(caller.file), joinpath("pricing", "fit.jl")) &&
+               occursin("fit_baseline", String(caller.func))
+    end
     function solve_fit_gated()
         try
             return fit_baseline(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ₀)
         catch err
             if err isa SolveFailedError &&
-               startswith(string(err.termination_status), "ALMOST_")
+               err.termination_status == MOI.ALMOST_OPTIMAL &&
+               err.primal_status == MOI.NEARLY_FEASIBLE_POINT &&
+               fit_gate_site_ok(catch_backtrace())
                 return err
             end
             rethrow()
@@ -343,10 +367,10 @@ end
     fit_outcome = solve_fit_gated()
 
     if fit_outcome isa SolveFailedError
-        @info "fit_baseline solve failed with ALMOST_* status; recording gated @test_broken (observed on 1.12.7; not on 1.12.5; other patches unmeasured)" julia =
+        @info "fit_baseline seed AC-PF solve ended ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT; recording gated @test_broken (observed on 1.12.7; not on 1.12.5; other patches unmeasured)" julia =
             VERSION termination_status = fit_outcome.termination_status primal_status =
             fit_outcome.primal_status raw_status = fit_outcome.raw_status
-        @test_broken false  # fit_baseline solve failed with ALMOST_* status (observed on Julia 1.12.7; deterministic; backlog); golden and thesis cross-check unavailable
+        @test_broken false  # fit_baseline seed AC-PF solve ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT (observed on Julia 1.12.7; deterministic; backlog); golden and thesis cross-check unavailable
     else
         base = fit_outcome
 

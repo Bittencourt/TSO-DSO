@@ -7,6 +7,6 @@
 broken | thesis_repro: IEEE-13 congestion — DSO-surplus sign-flip qualitative cross-check (secondary, non-gated) | conditional broken= on the secondary sign-flip cross-check (line 256)
 broken | ieee13 ground: pinned computed golden regression + thesis v₉[16] cross-check | conditional broken= on the thesis v9[16] gap cross-check (line 244)
 broken | acceptance: IEEE-13 congestion — exact relaxation + DADP + ADMM≈centralized (SC3) | conditional broken= on the thesis cross-check gap (line 114)
-broken | welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check | thesis cross-check conditional broken= (gap >= 0.1, fires on 1.12.5, gap about 0.25) when the solve succeeds; solve failure with ALMOST_* status recorded as broken instead (observed on 1.12.7; not on 1.12.5; other patches unmeasured); no src change
+broken | welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check | thesis cross-check conditional broken= (gap >= 0.1, fires on 1.12.5, gap about 0.25) when the solve succeeds; fit_baseline seed AC-PF solve ending ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT recorded as broken instead (observed on 1.12.7; not on 1.12.5; other patches unmeasured); no src change
 skipped | planning nash: plot_nash_convergence core stays plot-free, ext returns a Makie Figure when CairoMakie is loaded (plot, makie, nash) | CairoMakie not in the test environment
 skipped | diagnostics plot: ext returns a Makie Figure when CairoMakie is loaded (plot, makie) | CairoMakie not in the test environment
