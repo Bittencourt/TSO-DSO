@@ -157,18 +157,24 @@ end
 """
 Logic test of the expected-broken guard (`record_key` / `unexpected_records` /
 `read_expected_broken`) and of `TSODSO_TEST_FILES` parsing, on synthetic testset trees laid
-out like test/runtests.jl's `TSODSO / Package / <file> / <item> [/ nested...]`.
+out like test/runtests.jl's `TSODSO / Package / <file> / <item> [/ nested...]` (TestItemRunner
+1.1.5), plus the deeper 1.3.x directory-tree layouts (`.../ <dir> / <file> / <item>` and a
+collapsed `<dir>/<file>`), which must yield the same keys.
 """
 function guard_selftest()
     failures = String[]
     chk(c, msg) = c || push!(failures, msg)
     # Synthetic tree: entries are (item, nested testset names, Broken test_type, expr).
-    function tree(entries)
+    function tree(entries; filepath = ["test_x.jl"])
         root = Test.DefaultTestSet("TSODSO")
         pkg = Test.DefaultTestSet("Package")
-        file = Test.DefaultTestSet("test_x.jl")
         push!(root.results, pkg)
-        push!(pkg.results, file)
+        file = pkg
+        for comp in filepath
+            c = Test.DefaultTestSet(comp)
+            push!(file.results, c)
+            file = c
+        end
         for (item, nested, kind, ex) in entries
             cur = Test.DefaultTestSet(item)
             push!(file.results, cur)
@@ -200,6 +206,20 @@ function guard_selftest()
         "nested testset named like an allowed item was accepted")
     chk(nbad([(A, String[], :skipped, :(gap < 1e-2))]) == 1, "skip at a broken-only site accepted")
     chk(nbad([("other item", String[], :test, :(gap < 1e-2))]) == 1, "unlisted item accepted")
+    # Item level is found structurally, so deeper 1.3.x layouts give the same keys.
+    for fp in (["sub", "test_x.jl"], ["sub/test_x.jl"], ["a", "b", "test_x.jl"])
+        nbad_fp(e) = length(unexpected_records(broken_records(tree(e; filepath = fp)), allowed))
+        chk(nbad_fp([site]) == 0, "allowed site rejected under file layout $(fp)")
+        chk(nbad_fp([site, (A, String[], :test, :(other_check))]) == 1,
+            "new record accepted under file layout $(fp)")
+        chk(nbad_fp([(A, ["inner"], :test, :(gap < 1e-2))]) == 1,
+            "nested record accepted under file layout $(fp)")
+    end
+    # A record above item level (no `.jl` component) gets item "".
+    above = Test.DefaultTestSet("TSODSO")
+    push!(above.results, Test.Broken(:test, :(x)))
+    chk(record_key(only(broken_records(above))) == ("broken", "", "x"),
+        "record above item level not keyed with an empty item")
     # The printed expression of a real `broken=` record matches the documented key format.
     probe = @testset "probe item" begin
         gap = 0.25

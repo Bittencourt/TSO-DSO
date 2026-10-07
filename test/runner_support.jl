@@ -56,11 +56,24 @@ function tso_selected(
 end
 
 """
-Path depth of the `@testitem` testset below the outermost testset handed to
-`broken_records`: `TSODSO / Package / <file> / <item>` under TestItemRunner 1.1.5 as driven
-by test/runtests.jl (`run_tests(test_dir)` inside `@testset "TSODSO"`).
+    item_index(path) -> Union{Int, Nothing}
+
+Position of the `@testitem` testset in a Broken record's testset `path`, found structurally
+rather than at a fixed depth: the item is the child of the first testset below the root whose
+description ends in `.jl` (the per-file testset). This does not depend on the TestItemRunner
+version's layout: 1.1.5 (resolved by test/Manifest.toml, Julia 1.12) names each file testset
+by its path relative to test/ under a flat `TSODSO / Package / <file> / <item>`, while 1.3.x
+(what `Pkg.test` re-resolves to on Julia 1.10, where that manifest is not used) builds a
+directory tree (`... / <dir> / <file> / <item>`, or a collapsed `<dir>/<file>`), which puts
+the item one level deeper when test/ has a subdirectory with several files. Returns `nothing`
+for a record above item level (no file component, or nothing below it).
 """
-const ITEM_DEPTH = 4
+function item_index(path::AbstractVector{<:AbstractString})
+    for i in 2:(length(path) - 1)
+        endswith(path[i], ".jl") && return i + 1
+    end
+    return nothing
+end
 
 """
 Recursively collect every `Test.Broken` as `(; where, path, kind, expr)`.
@@ -87,12 +100,13 @@ function broken_records(ts, path::Vector{String} = String[])
 end
 
 """
-Identity of one Broken/skipped record: `(kind, item, test)`. `item` is the path component at
-`item_depth` (the `@testitem` name; "" when the record sits above item level) and `test` is
-the printed test expression, prefixed by any nested `@testset` names below the item
-(`nested / ... / expr`).
+Identity of one Broken/skipped record: `(kind, item, test)`. `item` is the `@testitem` name
+(the path component at `item_depth`, by default located by [`item_index`](@ref); "" when the
+record sits above item level) and `test` is the printed test expression, prefixed by any
+nested `@testset` names below the item (`nested / ... / expr`).
 """
-function record_key(rec; item_depth::Int = ITEM_DEPTH)
+function record_key(rec; item_depth::Union{Int, Nothing} = item_index(rec.path))
+    item_depth === nothing && return (rec.kind, "", string(rec.expr))
     item = length(rec.path) >= item_depth ? rec.path[item_depth] : ""
     nested = length(rec.path) > item_depth ? rec.path[(item_depth + 1):end] : String[]
     test = join(vcat(nested, [string(rec.expr)]), " / ")
@@ -127,11 +141,11 @@ exact `(kind, item, test)` key; a record with no allowance left is returned. So 
 `@test_broken` (or `broken=` / `@test_skip`) inside an allowed item, a second firing of an
 allowed site beyond its listed count, or a record in a nested testset all fail.
 """
-function unexpected_records(recs, allowed::AbstractDict; item_depth::Int = ITEM_DEPTH)
+function unexpected_records(recs, allowed::AbstractDict)
     left = Dict(allowed)
     bad = eltype(recs)[]
     for r in recs
-        k = record_key(r; item_depth)
+        k = record_key(r)
         n = get(left, k, 0)
         if n > 0
             left[k] = n - 1

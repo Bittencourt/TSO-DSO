@@ -46,14 +46,20 @@
 # `(kind, item, test expression)` with a count, so a NEW `@test_broken` / `broken=` /
 # `@test_skip` inside an already-allowed item also fails.
 #
+# TestItemRunner version per CI leg: test/Manifest.toml (resolved on Julia 1.12) pins
+# TestItemRunner 1.1.5, which the Julia 1.12 leg uses; on Julia 1.10 `Pkg.test` re-resolves
+# the test sandbox and loads TestItemRunner 1.3.x (1.3.2 measured on 1.10.11). The two lay
+# out item testsets differently, so the expected-broken guard locates the item level
+# structurally (`item_index` in runner_support.jl), not at a fixed depth.
+#
 # Discovery root: `TestItemRunner.run_tests(test_dir)` rather than `@run_package_tests`.
-# TestItemRunner 1.1.5 `walkdir`s and PARSES every `.jl` file below its root before the
-# filter runs, and a later-walked `@testsetup` of the same name silently replaces an
-# earlier one. Rooting discovery at test/ keeps agent worktrees (`.claude/worktrees/`),
+# TestItemRunner (1.1.5 and 1.3.x) `walkdir`s and PARSES every `.jl` file below its root
+# before the filter runs, and a later-walked `@testsetup` of the same name silently replaces
+# an earlier one. Rooting discovery at test/ keeps agent worktrees (`.claude/worktrees/`),
 # planning notes, `scripts/` and `results/` out of the parse entirely. Side effect: test/ has
 # no package name, so a `@testitem` gets the default `using Test` but NOT an implicit
-# `using TSODSO` (every item that needs TSODSO imports it explicitly). Item testsets are
-# named by their path relative to test/ (`test_x.jl`, not `test/test_x.jl`).
+# `using TSODSO` (every item that needs TSODSO imports it explicitly). File testsets are
+# named relative to test/ (`test_x.jl`, not `test/test_x.jl`).
 using TestItemRunner, Test
 include(joinpath(@__DIR__, "runner_support.jl"))
 
