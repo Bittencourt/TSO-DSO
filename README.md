@@ -209,21 +209,14 @@ exported symbol fails the build.
 | `fast` | items not tagged `:slow` (about 474 items, roughly 9 minutes locally) |
 | `slow` | only the `:slow` items (37) |
 
-Any other value is an error. CI on push and pull request runs `fast`; the nightly `slow`
-workflow (also manually dispatchable) runs everything on Julia 1.10 and 1.12.
+Any other value is an error. CI on push and pull request runs `fast`; the `slow` workflow
+runs everything on Julia 1.10 and 1.12 on every push to `main`, nightly, and on manual
+dispatch.
 
-**Tradeoff: core gates are nightly only (open decision).** The end-to-end correctness gates
-are tagged `:slow`: the IEEE-13 and IEEE-123 SC3 acceptance items (exact relaxation + DADP +
-ADMM≈centralized), the ADMM cross-validation items and the planning certification items. So
-no per-push or pull-request run executes them. A change that breaks the headline result
-merges green, and the first signal is the next nightly run on `main` (scheduled runs use the
-default branch only). This is the cost of the shorter per-push run. Two ways to close the
-gap without changing the item tags were considered, and neither is applied yet:
-- add a `push: branches: [main]` trigger to `.github/workflows/slow.yml`, so every merge
-  runs the full suite (PRs still run only `fast`);
-- move the IEEE-13 SC3 acceptance item (about 101 s locally) and the IEEE-13 ADMM
-  cross-validation item (about 142 s) back into `fast`, adding about 4 minutes to every
-  push and PR run.
+The end-to-end correctness gates (the IEEE-13 and IEEE-123 SC3 acceptance items, the ADMM
+cross-validation items and the planning certification items) are tagged `:slow`. Pull
+requests therefore run only `fast`, and those gates first run when the change lands on
+`main`, where every merge triggers the full suite.
 `TSODSO_TEST_VERBOSE=1` prints per-item timing. `TSODSO_TEST_FILES=a.jl,b.jl` restricts a
 run to those test files (entries are trimmed; a name that matches no test item fails the
 run). Discovery is rooted at `test/` (`TestItemRunner.run_tests(test_dir)`), so files
