@@ -6,7 +6,7 @@
 - ✅ **v2.0 Stackelberg-Nash TSO–DSO Planning Game** — Phases 10–14 (shipped 2026-07-24)
 - ✅ **v2.1 Validation & Reproduction** — Phases 15–18 (shipped 2026-07-26)
 - ✅ **v3.0 Research Extension Rungs** — Phases 19–25 (shipped 2026-08-24)
-- 🚧 **v4.0 Correctness & Depth** — Phases 26–37 (in progress)
+- 🚧 **v4.0 Correctness & Depth** — Phases 26–38 (in progress)
 
 Full phase details, decisions, and per-phase artifacts for shipped milestones are archived in
 [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md),
@@ -69,6 +69,9 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 
 - [x] **Phase 37: Test Infrastructure & Repo Hygiene** - Add a JET CI check, split fast/slow tests, (completed 2026-10-07)
   fix or quarantine known flakes, and tidy scripts/manifests.
+
+- [ ] **Phase 38: Close v4.0 Audit Gaps** - Route MPC's first-tier certificate through the hybrid
+  exactness floor, run the orphan ADMM timeout test in the suite, fix stale prose.
 
 ## Phase Details
 
@@ -738,10 +741,36 @@ Plans:
 
 - [x] 37-13-PLAN.md — Phase gate: full runs on 1.12.5 and 1.12.7, all static guards, FINAL-GATES evidence
 
+### Phase 38: Close v4.0 Audit Gaps
+
+**Goal**: The cross-phase gaps found by the v4.0 milestone audit (`.planning/v4.0-MILESTONE-AUDIT.md`)
+are closed: every SOCP price certificate uses the same hybrid exactness floor, every test under
+`test/` runs in some suite, and prose no longer contradicts the code.
+**Depends on**: Phase 37
+**Requirements**: FIX-08, FIX-10, ARCH-08, HYG-05 (gap closure; no new requirements)
+**Success Criteria** (what must be TRUE):
+
+  1. MPC's first-tier certificate (`_mpc_certify_and_price`) computes its cone ratio through the
+     library's shared per-branch arithmetic (`_cone_row` / `hybrid_ratios`), stays non-throwing,
+     and a test shows a point the old flat `1e-6` tolerance accepted but the hybrid floor refuses
+     now escalates; goldens and the knife-edge canary (iters = 56, welfare = -4823.66604824162)
+     are unchanged, or any moved MPC golden is explained and approved, never silently re-pinned.
+
+  2. `test/test_admm_timeout.jl` runs as a `@testitem` in the suite (tagged `:slow` if measured
+     ≥ 30 s) and checks `solve_admm`'s `:budget_exceeded` status; the count-sets check covers it.
+
+  3. Stale prose is corrected: the "run_mpc/run_stochastic NOT wired through strategy dispatch"
+     notes (`src/TSODSO.jl`, two literate pages), the `store.jl` primitives-only docstring, and
+     `docs/writeups/FRAMEWORK_GUIDE.html`'s removed `reactive_consensus = :live` usage.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 38 to break down)
+
 ## Progress
 
 **Execution Order:** Phases execute in numeric order within v4.0: 26 → 27 → 28 → 29 → 30 → 31 →
-32 → 33 → 34 → 35 → 36 → 37.
+32 → 33 → 34 → 35 → 36 → 37 → 38.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|-----------------|--------|-----------|
@@ -761,6 +790,7 @@ Plans:
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete    | 2026-10-07 |
+| 38. Close v4.0 Audit Gaps | v4.0 | 0/0 | Not started | - |
 
 ## Deferred / Future-Milestone Notes
 
