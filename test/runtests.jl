@@ -44,7 +44,7 @@
 # the run).
 # A zero selection fails, and any Broken/skipped record not listed in
 # test/expected_broken.txt fails the run. That list is keyed per test site
-# `(kind, item, test expression)` with a count, so a NEW `@test_broken` / `broken=` /
+# `(kind, file, item, test expression)` with a count, so a NEW `@test_broken` / `broken=` /
 # `@test_skip` inside an already-allowed item also fails.
 #
 # TestItemRunner version per CI leg: test/Manifest.toml (resolved on Julia 1.12) pins

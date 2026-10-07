@@ -189,8 +189,8 @@ function guard_selftest()
     end
     A = "allowed item"
     allowed = Dict(
-        ("broken", A, "gap < 0.01") => 1,
-        ("skipped", "skip item", "x !== nothing") => 1,
+        ("broken", "test_x.jl", A, "gap < 0.01") => 1,
+        ("skipped", "test_x.jl", "skip item", "x !== nothing") => 1,
     )
     nbad(entries) = length(unexpected_records(broken_records(tree(entries)), allowed))
     site = (A, String[], :test, :(gap < 1e-2))
@@ -206,6 +206,9 @@ function guard_selftest()
         "nested testset named like an allowed item was accepted")
     chk(nbad([(A, String[], :skipped, :(gap < 1e-2))]) == 1, "skip at a broken-only site accepted")
     chk(nbad([("other item", String[], :test, :(gap < 1e-2))]) == 1, "unlisted item accepted")
+    # The same item name in another file does not share the original's allowance.
+    chk(length(unexpected_records(broken_records(tree([site]; filepath = ["test_y.jl"])),
+            allowed)) == 1, "same-named item in another file used the allowance")
     # Item level is found structurally, so deeper 1.3.x layouts give the same keys.
     for fp in (["sub", "test_x.jl"], ["sub/test_x.jl"], ["a", "b", "test_x.jl"])
         nbad_fp(e) = length(unexpected_records(broken_records(tree(e; filepath = fp)), allowed))
@@ -218,7 +221,7 @@ function guard_selftest()
     # A record above item level (no `.jl` component) gets item "".
     above = Test.DefaultTestSet("TSODSO")
     push!(above.results, Test.Broken(:test, :(x)))
-    chk(record_key(only(broken_records(above))) == ("broken", "", "x"),
+    chk(record_key(only(broken_records(above))) == ("broken", "", "", "x"),
         "record above item level not keyed with an empty item")
     # The printed expression of a real `broken=` record matches the documented key format.
     probe = @testset "probe item" begin
@@ -227,15 +230,18 @@ function guard_selftest()
         @test_broken false
     end
     keys_ = [record_key(r; item_depth = 1) for r in broken_records(probe)]
-    chk(keys_ == [("broken", "probe item", "gap < 0.01"), ("broken", "probe item", "false")],
+    chk(keys_ == [("broken", "", "probe item", "gap < 0.01"),
+            ("broken", "", "probe item", "false")],
         "real broken record keys differ from the documented format: $(keys_)")
     # File parsing: duplicate lines add allowances; malformed lines throw.
     mktempdir() do d
         f = joinpath(d, "eb.txt")
-        write(f, "# c\nbroken | it | a || b | why\nbroken | it | a || b | again\n")
+        write(f, "# c\nbroken | f.jl | it | a || b | why\nbroken | f.jl | it | a || b | again\n")
         eb = read_expected_broken(f)
-        chk(eb == Dict(("broken", "it", "a || b") => 2), "expected_broken parse wrong: $(eb)")
-        for bad in ("broken | it | why\n", "maybe | it | x | why\n", "broken |  | x | why\n")
+        chk(eb == Dict(("broken", "f.jl", "it", "a || b") => 2),
+            "expected_broken parse wrong: $(eb)")
+        for bad in ("broken | f.jl | it | why\n", "maybe | f.jl | it | x | why\n",
+                    "broken | f.jl |  | x | why\n", "broken | it | x | y | why\n")
             write(f, bad)
             ok = try
                 read_expected_broken(f)

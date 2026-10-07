@@ -246,8 +246,8 @@ clean runs on each of two Julia 1.12 patches (a Wilson 95% upper bound on the fl
 about 16%).
 
 **Known broken items.** The suite records expected Broken and skipped results in
-`test/expected_broken.txt`, one line per test site: `kind | item | test expression |
-reason`. Each line allows one record with exactly that item and printed test expression, so
+`test/expected_broken.txt`, one line per test site: `kind | file | item | test expression |
+reason`. Each line allows one record with exactly that file, item and printed test expression, so
 any unlisted record fails the run, including a new `@test_broken` inside an item that is
 already listed. The `fit_baseline` item (`welfare surplus accounting: +25% FIT ratio golden
 ...`) is gated on one specific failure: a `SolveFailedError` with termination

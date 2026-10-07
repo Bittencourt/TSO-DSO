@@ -370,7 +370,7 @@ end
         @info "fit_baseline seed AC-PF solve ended ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT; recording gated @test_broken (observed on 1.12.7; not on 1.12.5; other patches unmeasured)" julia =
             VERSION termination_status = fit_outcome.termination_status primal_status =
             fit_outcome.primal_status raw_status = fit_outcome.raw_status
-        @test_broken false  # fit_baseline seed AC-PF solve ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT (observed on Julia 1.12.7; deterministic; backlog); golden and thesis cross-check unavailable
+        @test_broken !(fit_outcome isa SolveFailedError)  # fit_baseline seed AC-PF solve ALMOST_OPTIMAL / NEARLY_FEASIBLE_POINT (observed on Julia 1.12.7; deterministic; backlog); golden and thesis cross-check unavailable
     else
         base = fit_outcome
 

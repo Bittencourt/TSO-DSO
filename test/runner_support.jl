@@ -101,36 +101,43 @@ function broken_records(ts, path::Vector{String} = String[])
 end
 
 """
-Identity of one Broken/skipped record: `(kind, item, test)`. `item` is the `@testitem` name
-(the path component at `item_depth`, by default located by [`item_index`](@ref); "" when the
-record sits above item level) and `test` is the printed test expression, prefixed by any
-nested `@testset` names below the item (`nested / ... / expr`).
+Identity of one Broken/skipped record: `(kind, file, item, test)`. `item` is the `@testitem`
+name (the path component at `item_depth`, by default located by [`item_index`](@ref)),
+`file` is the basename of the file testset just above it (TestItemRunner allows the same
+item name in two files, so the file keeps a copied item from sharing the original's
+allowance), and `test` is the printed test expression, prefixed by any nested `@testset`
+names below the item (`nested / ... / expr`). `file` and `item` are "" for a record above
+item level.
 """
 function record_key(rec; item_depth::Union{Int, Nothing} = item_index(rec.path))
-    item_depth === nothing && return (rec.kind, "", string(rec.expr))
+    item_depth === nothing && return (rec.kind, "", "", string(rec.expr))
+    file = 2 <= item_depth <= length(rec.path) + 1 ? basename(rec.path[item_depth - 1]) : ""
     item = length(rec.path) >= item_depth ? rec.path[item_depth] : ""
     nested = length(rec.path) > item_depth ? rec.path[(item_depth + 1):end] : String[]
     test = join(vcat(nested, [string(rec.expr)]), " / ")
-    return (rec.kind, item, test)
+    return (rec.kind, file, item, test)
 end
 
 """
-Parse expected_broken.txt (`kind | item | test | reason`, fields separated by " | ") into a
-multiset `Dict((kind, item, test) => allowed count)`. Listing the same
-`(kind, item, test)` on k lines allows k such records in one run.
+Parse expected_broken.txt (`kind | file | item | test | reason`, fields separated by " | ")
+into a multiset `Dict((kind, file, item, test) => allowed count)`. `file` is the test file's
+basename. Listing the same `(kind, file, item, test)` on k lines allows k such records in one
+run.
 """
 function read_expected_broken(path::AbstractString)
-    out = Dict{Tuple{String, String, String}, Int}()
+    out = Dict{NTuple{4, String}, Int}()
     for line in eachline(path)
         l = strip(line)
         (isempty(l) || startswith(l, "#")) && continue
-        parts = strip.(split(l, " | "; limit = 4))
-        (length(parts) == 4 && all(!isempty, parts[1:3])) || error(
-            "bad expected_broken line (need kind | item | test | reason): $(repr(line))",
-        )
+        parts = strip.(split(l, " | "; limit = 5))
+        (length(parts) == 5 && all(!isempty, parts[1:4]) && endswith(parts[2], ".jl")) ||
+            error(
+                "bad expected_broken line (need kind | file.jl | item | test | reason): " *
+                repr(line),
+            )
         parts[1] in ("broken", "skipped") ||
             error("bad kind in expected_broken line: $(repr(line))")
-        k = (String(parts[1]), String(parts[2]), String(parts[3]))
+        k = (String(parts[1]), String(parts[2]), String(parts[3]), String(parts[4]))
         out[k] = get(out, k, 0) + 1
     end
     return out
@@ -138,7 +145,7 @@ end
 
 """
 Records not covered by the allowed multiset: each record consumes one allowance for its
-exact `(kind, item, test)` key; a record with no allowance left is returned. So a NEW
+exact `(kind, file, item, test)` key; a record with no allowance left is returned. So a NEW
 `@test_broken` (or `broken=` / `@test_skip`) inside an allowed item, a second firing of an
 allowed site beyond its listed count, or a record in a nested testset all fail.
 """
