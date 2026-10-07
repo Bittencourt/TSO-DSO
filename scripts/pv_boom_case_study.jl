@@ -523,6 +523,23 @@ a2_cone_tight = a2_socp_maxgap <= A2_WORDING_TOL
 a2_cause_measured =
     a2_not_relaxation && a2_cf_ok && !isempty(a2_vhat_bound_hours) &&
     a2_cf_share >= A2_CAUSE_SHARE
+# The bound-deleted residual, classified with the SAME A2_WORDING_TOL rule as obj_gap
+# (wording only; no threshold is changed or added).
+a2_cf_not_relaxation = a2_cf_ok && a2_cf_obj_gap < -A2_WORDING_TOL
+a2_cf_rel = a2_cf_ok ? abs(a2_cf_obj_gap) / abs(objective_value(ctx_ac.model)) : NaN
+a2_cf_residual_txt =
+    "The residual $(@sprintf("%.3e", a2_cf_obj_gap)) (relative " *
+    "$(@sprintf("%.1e", a2_cf_rel)) to |AC welfare|) is " *
+    (
+        a2_cf_not_relaxation ?
+        "ABOVE (in magnitude) this script's own not-a-relaxation threshold (obj_gap < -" *
+        "$(@sprintf("%.0e", A2_WORDING_TOL))), so by the same rule the bound-deleted SOCP is " *
+        "still not a relaxation of the AC model: the v̂ bound explains almost all of the gap " *
+        "but does not close it." :
+        "within this script's not-a-relaxation threshold (obj_gap >= -" *
+        "$(@sprintf("%.0e", A2_WORDING_TOL))), so by the same rule the bound-deleted SOCP is " *
+        "not classified as worse than the AC solution."
+    )
 a2_case =
     a2_all_exact ? "all_exact" :
     a2_not_relaxation ? "not_relaxation" : a2_cone_tight ? "tight_differ" : "inexact"
@@ -556,7 +573,7 @@ elseif a2_not_relaxation
             isempty(a2_cf_inexact_hours) ? "no hour where SOCP and AC differ." :
             "$(length(a2_cf_inexact_hours)) hour(s) $a2_cf_inexact_hours where SOCP and AC " *
             "still differ (not diagnosed further)."
-        ) :
+        ) * " " * a2_cf_residual_txt :
         "Cause not established; candidate: the exactness-copy bound v̂ <= vmax^2 " *
         "(src/powerflow/ConvexBranchFlow.jl, thesis 3.45), absent from the AC model. " *
         "Diagnostic: v̂ bound active at hours $a2_vhat_bound_hours; deleting it gives " *
