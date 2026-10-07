@@ -152,6 +152,14 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: python3 .github/scripts/check_planning_ids.py
+      - name: Scripts index selftest
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python3 .github/scripts/check_scripts_index.py --selftest
+      - name: Check scripts index is complete
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python3 .github/scripts/check_scripts_index.py
 
   docs:
     name: Documentation build (Documenter + Literate)
