@@ -747,21 +747,25 @@ Plans:
 are closed: every SOCP price certificate uses the same hybrid exactness floor, every test under
 `test/` runs in some suite, and prose no longer contradicts the code.
 **Depends on**: Phase 37
-**Requirements**: FIX-08, FIX-10, ARCH-08, HYG-05 (gap closure; no new requirements)
+**Requirements**: FIX-08, FIX-10, ARCH-02, ARCH-08, HYG-02, HYG-03, HYG-05 (gap closure; no new requirements)
 **Success Criteria** (what must be TRUE):
 
   1. MPC's first-tier certificate (`_mpc_certify_and_price`) computes its cone ratio through the
      library's shared per-branch arithmetic (`_cone_row` / `hybrid_ratios`), stays non-throwing,
      and a test shows a point the old flat `1e-6` tolerance accepted but the hybrid floor refuses
      now escalates; goldens and the knife-edge canary (iters = 56, welfare = -4823.66604824162)
-     are unchanged, or any moved MPC golden is explained and approved, never silently re-pinned.
+     is unchanged; any moved MPC golden is documented with its old/new ratio (user-approved policy).
 
   2. `test/test_admm_timeout.jl` runs as a `@testitem` in the suite (tagged `:slow` if measured
      ≥ 30 s) and checks `solve_admm`'s `:budget_exceeded` status; the count-sets check covers it.
 
   3. Stale prose is corrected: the "run_mpc/run_stochastic NOT wired through strategy dispatch"
      notes (`src/TSODSO.jl`, two literate pages), the `store.jl` primitives-only docstring, and
-     `docs/writeups/FRAMEWORK_GUIDE.html`'s removed `reactive_consensus = :live` usage.
+     `docs/writeups/FRAMEWORK_GUIDE.html` swept against the current API (every stale usage fixed).
+
+  4. Hardening: `Scenario(strategy=ADMM(), allow_export=false)` fails at construction; the
+     out-of-sample stochastic re-solve (`solve_stochastic_oos_step!`) runs the shared exactness
+     gate with a visible failure mode; `check_setup_names.py` runs in CI.
 **Plans:** 0 plans
 
 Plans:
