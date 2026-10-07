@@ -63,7 +63,10 @@ function tso_run_all()
             @test selected[] > 0
             recs = broken_records(outer)
             bad = [r for r in recs if !is_allowed(r, allowed)]
-            foreach(r -> println("UNEXPECTED ", r.kind, " record: ", r.where, " :: ", r.expr), bad)
+            foreach(
+                r -> println("UNEXPECTED ", r.kind, " record: ", r.where, " :: ", r.expr),
+                bad,
+            )
             @test isempty(bad)
         end
     end

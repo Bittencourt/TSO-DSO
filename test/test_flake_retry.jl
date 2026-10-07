@@ -3,8 +3,8 @@
 # Unit tests for the FlakeRetry helper (test/fixtures_retry.jl) using deterministic fake
 # solves. The helper is not applied to any production item here.
 
-@testitem "flake retry: two retryable failures then success returns the value" tags = [:flake] setup =
-    [FlakeRetry] begin
+@testitem "flake retry: two retryable failures then success returns the value" tags =
+    [:flake] setup = [FlakeRetry] begin
     using TSODSO
     using JuMP: MOI
     FlakeRetry.reset_retry_records!()
@@ -12,7 +12,13 @@
     f = function ()
         n[] += 1
         n[] < 3 && throw(
-            TSODSO.SolveFailedError("x", MOI.NUMERICAL_ERROR, MOI.NO_SOLUTION, MOI.NO_SOLUTION, ""),
+            TSODSO.SolveFailedError(
+                "x",
+                MOI.NUMERICAL_ERROR,
+                MOI.NO_SOLUTION,
+                MOI.NO_SOLUTION,
+                "",
+            ),
         )
         return 42.0
     end
@@ -21,7 +27,8 @@
     @test FlakeRetry.retry_records() == [("t1", 3)]
 end
 
-@testitem "flake retry: three failures rethrow the last error" tags = [:flake] setup = [FlakeRetry] begin
+@testitem "flake retry: three failures rethrow the last error" tags = [:flake] setup =
+    [FlakeRetry] begin
     using TSODSO
     FlakeRetry.reset_retry_records!()
     n = Ref(0)
@@ -41,7 +48,8 @@ end
     @test_throws TSODSO.ConvergenceError FlakeRetry.with_solve_retry(f)
 end
 
-@testitem "flake retry: non-retryable errors are rethrown immediately" tags = [:flake] setup = [FlakeRetry] begin
+@testitem "flake retry: non-retryable errors are rethrown immediately" tags = [:flake] setup =
+    [FlakeRetry] begin
     using TSODSO
     using JuMP: MOI
     FlakeRetry.reset_retry_records!()
@@ -49,7 +57,13 @@ end
     infeas = function ()
         n[] += 1
         throw(
-            TSODSO.SolveFailedError("x", MOI.INFEASIBLE, MOI.NO_SOLUTION, MOI.NO_SOLUTION, ""),
+            TSODSO.SolveFailedError(
+                "x",
+                MOI.INFEASIBLE,
+                MOI.NO_SOLUTION,
+                MOI.NO_SOLUTION,
+                "",
+            ),
         )
     end
     @test_throws TSODSO.SolveFailedError FlakeRetry.with_solve_retry(infeas; label = "inf")
@@ -64,7 +78,8 @@ end
     @test FlakeRetry.retry_records() == [("inf", 1), ("other", 1)]
 end
 
-@testitem "flake retry: tries and retry_on keywords are honoured" tags = [:flake] setup = [FlakeRetry] begin
+@testitem "flake retry: tries and retry_on keywords are honoured" tags = [:flake] setup =
+    [FlakeRetry] begin
     using TSODSO
     FlakeRetry.reset_retry_records!()
     n = Ref(0)
@@ -72,7 +87,11 @@ end
         n[] += 1
         throw(TSODSO.ConvergenceError("c"))
     end
-    @test_throws TSODSO.ConvergenceError FlakeRetry.with_solve_retry(f; tries = 5, label = "five")
+    @test_throws TSODSO.ConvergenceError FlakeRetry.with_solve_retry(
+        f;
+        tries = 5,
+        label = "five",
+    )
     @test n[] == 5
     k = Ref(0)
     g = function ()

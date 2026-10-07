@@ -12,10 +12,12 @@
     using TSODSO
     using JuMP: MOI
 
-    const RECORDS = Tuple{String,Int}[]
+    const RECORDS = Tuple{String, Int}[]
     const HOOK_REGISTERED = Ref(false)
 
-    """Is `e` a failure the helper may retry (typed, numerical, never infeasibility)."""
+    """
+    Is `e` a failure the helper may retry (typed, numerical, never infeasibility).
+    """
     function retryable(e, retry_on)::Bool
         any(T -> e isa T, retry_on) || return false
         e isa TSODSO.SolveFailedError &&
@@ -65,7 +67,8 @@
             try
                 result = f()
             catch e
-                retryable(e, retry_on) || (push!(RECORDS, (String(label), attempt)); rethrow())
+                retryable(e, retry_on) ||
+                    (push!(RECORDS, (String(label), attempt)); rethrow())
                 err = e
             end
             if err === nothing
