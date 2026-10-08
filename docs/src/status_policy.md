@@ -156,3 +156,21 @@ fails loudly instead of silently changing behavior.
   without it. Stochastic results also store `oos_inexact_draws`, `oos_infeasible_draws` and
   `oos_status`, so a held-out draw excluded from `welfare_gap` is visible in the stored
   artifact.
+- **Held-out step certifies exactness.** `TSODSO.solve_stochastic_oos_step!` (declared
+  `public`) used to return the model after every successful re-solve. It now runs the shared
+  SOCP exactness gate and throws `CertificateError` (`kind = :socp_exact`) on an inexact
+  re-solve, leaving the model solved. A custom out-of-sample loop or script that calls it
+  directly must catch that error (as `run_stochastic` does) or it aborts.
+- **ADMM requires export at construction.** `Scenario(strategy = ADMM(), allow_export = false)`
+  now throws `ArgumentError` when the scenario is constructed, including through
+  `with_strategy` and the legacy `:admm` strategy. A `run_sweep` grid that crosses ADMM with
+  `allow_export = [true, false]` therefore throws while the grid is expanded, before any
+  scenario in the sweep runs; it used to fail only when that one scenario was solved.
+- **Tighter MPC first-tier certificate.** The per-resolve cone check of `run_mpc` used a flat
+  absolute floor of `1e-6`; it now uses the same per-branch hybrid floor as
+  `assert_socp_exact!`, `max(2e-7, 1e-9·ref_b)`. A resolve that used to certify at the first
+  tier can now escalate to the restricted or local-AC tier, which changes that step's entry in
+  `cert_status_trace`, can turn the run `status` from `:certified` into `:degraded`, and
+  publishes the escalated tier's price in `dadp_trace`. Dispatch, regret and welfare are not
+  affected, since escalation only re-prices. On the IEEE-13 forced-shortfall fixture this
+  flips one step on Julia 1.12.7 and none on 1.12.5.
