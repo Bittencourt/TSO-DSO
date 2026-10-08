@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 38-08-PLAN.md (FRAMEWORK_GUIDE.html swept against the current API by a count-asserting scripted replacer, images byte-identical, 0 planning IDs; guide listed in docs/writeups/README.md); next is 38-09
-last_updated: "2026-10-08T01:27:05.585Z"
+stopped_at: Completed 38-09-PLAN.md (FRAMEWORK_GUIDE.html model text corrected with version notes: 3.37, Gan-Low copy note in 5.1, hybrid gate floor, soc[H+1] pin, MPC truth settlement and shared first tier, integer planning, OOS gate, test count; images unchanged, 0 planning IDs); next is 38-10
+last_updated: "2026-10-08T01:34:59.081Z"
 last_activity: 2026-10-08
 progress:
   total_phases: 13
   completed_phases: 12
   total_plans: 131
-  completed_plans: 130
+  completed_plans: 131
   percent: 92
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 38 (Close v4.0 Audit Gaps) — EXECUTING
-Plan: 8 of 10 complete (38-01..38-08 done; next 38-09)
+Plan: 9 of 10 complete (38-01..38-09 done; next 38-10)
 Status: Gap closure after v4.0 milestone audit (gaps_found)
   Latest certified full suite: 32224 passed / 0 failed / 0 errored / 5 broken at 19f3fba (Julia 1.12.5; 32219/0/0/5 on 1.12.7);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
@@ -204,6 +204,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 38 P04 | 50min | 3 tasks | 7 files |
 | Phase 38 P05 | 40min | 2 tasks | 15 files |
 | Phase 38 P06 | 15min | 2 tasks | 3 files |
+| Phase 38 P09 | 30min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -280,6 +281,7 @@ Recent decisions affecting current work:
 - [Phase 35]: 35-02: harness ADMM gate = hybrid floor; --admm-atol finite only; Inf only in labelled DIAGNOSTIC_BYPASS
 - [Phase 38]: 38-01: _socp_cone_check is the single non-throwing cone-exactness kernel; assert_socp_exact! delegates to it (verdict/message/return unchanged)
 - [Phase 38]: 38-02: MPC first tier = _socp_cone_check(o.ctx).maxratio (hybrid floor); shortfall-fixture t=4 escalation on 1.12.7 accepted as a measured explained move (no test asserts it); happy-path worst ratio 0.938 kept, tau not raised
+- [Phase 38]: 38-09: guide model-text fixes carry "(Changed in vX.Y: ...)" notes; 5.1 derivation kept (thesis-literal) with one corrective paragraph; gate constants written as math, not internal names
 
 ### Roadmap Evolution
 
@@ -521,8 +523,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-08T01:27:05.563Z
-Stopped at: Completed 38-08-PLAN.md
+Last session: 2026-10-08T01:34:59.058Z
+Stopped at: Completed 38-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
