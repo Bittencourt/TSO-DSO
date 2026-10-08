@@ -280,6 +280,13 @@ function _run_stochastic(s::Scenario, st::Stochastic)
         allow_export = s.allow_export,
     )
 
+    # Snapshot the harness's as-built solver conditioning BEFORE any solve. A retry
+    # escalation inside `solve_with_retry!` is sticky on the model; restoring this baseline
+    # before every held-out re-solve (below) keeps each draw's exactness verdict independent
+    # of whether an EARLIER draw escalated, so the held-out evaluation does not depend on draw
+    # order.
+    ladder_baseline = _snapshot_ladder_attrs(h_oos.model)
+
     for pin in h_oos.battery_pins
         batt = only(b for b in in_sample_battery if b.bus == pin.bus)
         # The committed values are raw value.() reads, so
@@ -322,6 +329,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
             set_parameter_value.(pdc.Pdc_param, agg.Pdc[1:s.T])
         end
 
+        _restore_ladder_attrs!(h_oos.model, ladder_baseline)   # draw-order independence
         welfare_h[h], infeasible_h[h], inexact_h[h] = _stoch_solve_held_out!(h_oos, h)
         if !infeasible_h[h]
             socp_maxratio_h[h] = get(h_oos.ctx.meta, :socp_maxratio, NaN)

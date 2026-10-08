@@ -100,9 +100,10 @@ end
 
 Ladder reset helper: read back the current value of each of the 4 Clarabel
 conditioning-ladder attributes named by [`LADDER_ATTR_NAMES`](@ref) directly from `model` via
-`get_optimizer_attribute`, and return them as a `Dict`. Called EXACTLY ONCE, inside
-`build_dso_opt`, immediately after the model is constructed and BEFORE any solve or
-`solve_with_retry!` escalation can possibly have touched it — so the returned Dict captures
+`get_optimizer_attribute`, and return them as a `Dict`. Called EXACTLY ONCE per model, immediately
+after the model is constructed and BEFORE any solve or `solve_with_retry!` escalation can possibly
+have touched it (inside `build_dso_opt`, and in `run_stochastic` on the out-of-sample harness,
+which restores the snapshot before every held-out re-solve) — so the returned Dict captures
 the genuine AS-BUILT factory configuration of the selected backend (e.g. Clarabel's own
 defaults `static_regularization_constant = 1.0e-8`, etc.), never a value hardcoded in this
 file. If the backend does not expose a given attribute (e.g. after a non-Clarabel
@@ -133,6 +134,8 @@ Ladder reset helper: write each `(name, value)` pair in `baseline` back onto
 Called from `solve_dso!` immediately before the FINAL/converged (`check_exact = true`) solve,
 so the published solve always runs at the AS-BUILT baseline captured once by
 `_snapshot_ladder_attrs` in `build_dso_opt`, never an inherited mid-loop escalation.
+`run_stochastic` also calls it before every held-out re-solve of the out-of-sample harness, so
+no draw inherits an escalation from an earlier draw.
 `set_optimizer_attribute` invalidates any prior solution held by the model, but that is
 harmless here because the very next statement in `solve_dso!` re-solves it. If the backend
 rejects restoring a given attribute, that key is skipped rather than raising — no solve
