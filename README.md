@@ -27,15 +27,19 @@ branch-flow (DistFlow/SOCP) distribution network, solved centrally **and** distr
 by hand-rolled ADMM. The day-ahead dynamic price (DADP/DLMP) emerges as the **dual of the
 nodal active-power balance** — prices are never postulated, always recovered from duals.
 
-- Branch-flow power flow behind one swappable residual seam: DC, LinDistFlow, and SOCP
-  Convex Branch Flow with the LinDistFlow exactness copy — the SOC relaxation is
-  **validated exact** on radial fixtures (IEEE 13 & 123).
-- Prosumer device library (thermostatic, deferrable, interruptible, PV+battery — all
-  convex, no binaries) rolled up by aggregators into nodal net power + utility.
+- Branch-flow power flow behind one swappable residual seam: DC, LinDistFlow, SOCP
+  Convex Branch Flow, an overvoltage-capable restriction, and a nonconvex AC peer. The
+  default SOCP uses the Gan–Low exactness copy (a restriction of the upper voltage band;
+  the literal thesis copy stays available as `thesis_literal = true`), and every published
+  price passes a per-branch **exactness certificate** before it is released.
+- Prosumer device library (thermostatic, deferrable, interruptible, PV+battery, four-quadrant
+  BESS — all convex, no binaries) rolled up by aggregators into nodal net active and
+  reactive power + utility.
 - Two selectable solve strategies — centralized monolithic and ADMM (`AGR-OPT`/`DSO-OPT`)
   — cross-validated against each other on IEEE 13 (congestion) and IEEE 123 (voltage).
-- DADP/DLMP extraction with a 4-way decomposition (energy / loss / congestion / voltage),
-  welfare and surplus accounting, feed-in-tariff baseline comparison.
+- DADP/DLMP extraction with a 4-way decomposition (energy / cone / congestion / drop, i.e.
+  marginal loss and voltage terms named by their multipliers), a certified reactive DLMP,
+  welfare and surplus accounting, and a feed-in-tariff baseline settled against AC physics.
 
 ### 🏗 Planning layer (v2.0) — Stackelberg–Nash TSO–DSO investment game
 
@@ -58,8 +62,9 @@ via Gauss-Seidel diagonalization** over a shared transmission corridor.
 - **Honest non-uniqueness reporting**: `run_nash_probe` re-solves across ≥3 seeds × 2
   sweep orders and reports "**a** converged equilibrium (spread: …)" — never "the"
   equilibrium. The never-"the" rule is encoded in code, not prose.
-- Continuous-only scope is **enforced by an automated no-binaries guard** over every
-  planning-layer subproblem builder (registry + tripwire, negative-tested).
+- Continuous planning builders are **guarded by an automated no-binaries check**
+  (registry + tripwire); the integer investment master is the one explicit, self-verifying
+  exemption (see below).
 
 ### 🔬 Validation & reproduction (v2.1) — hardening both layers
 
@@ -78,6 +83,39 @@ Every downstream extension rests on validated, citable ground:
   on real public data; the +25% welfare-ratio magnitude does **not** — stated plainly,
   always with the "directional, public-data" qualifier, pinned only on sign-safe
   quantities.
+
+### 🧭 Research extension rungs (v3.0)
+
+- **Overvoltage-capable restriction** (`RestrictedBranchFlow`) for high-PV regimes where the
+  SOC relaxation is not exact, with an AC-certified validity certificate.
+- **MPC / rolling-horizon RTP**: receding-horizon solves over stateful devices, benchmarked
+  against perfect foresight, with an escalation ladder when a step's certificate fails.
+- **Stochastic PV/demand**: two-stage extensive form over seeded scenarios, per-scenario
+  DADPs as the primary price, never-aggregated per-scenario exactness, out-of-sample
+  evaluation.
+- **Meshed networks + four-quadrant BESS**, with an angle-recoverability certificate.
+- **Discrete/integer investment** via binary expansion and Laporte–Louveaux cuts, certified
+  against exhaustive lattice enumeration.
+- **IEEE-8500 scale benchmark** (public balanced case, ~4.9k buses) with an honestly
+  reported memory wall.
+
+### ✅ Correctness & depth (v4.0)
+
+- **Model correctness audit closed**: Gan–Low copy direction, receiving-end apparent-power
+  limit (thesis 3.37), whole-horizon storage state with a terminal pin, power-factor
+  reactive draw for flexible loads; every moved golden re-derived with its cause recorded.
+- **One exactness gate everywhere**: a hybrid per-branch floor
+  `max(2e-7, 1e-9·ref_b)` (rtol `1e-4`) shared by the centralized, ADMM, MPC and
+  out-of-sample stochastic certificates. MPC and FIT settlement use a limits-free AC power
+  flow as the truth plant.
+- **Genuine bilevel planning**: a one-shot KKT-MILP bilevel TSO–DSO game certified by three
+  independent oracles, SOCP-in-the-loop Benders on IEEE-13, generalized-Nash /
+  variational-equilibrium selection, and integer investment for N>1 distributors.
+- **Declarative architecture**: `Scenario` + typed strategies dispatched by `TSODSO.run`, a
+  strategy × power-flow validity matrix, shared feeder/balance/model-context abstractions,
+  typed errors and one documented status vocabulary.
+- **Hygiene**: a curated API (90 exported names plus `public` qualified names), JET ratchet
+  in CI, fast/slow test split, guarded expected-broken list, indexed scripts.
 
 ## Quickstart
 
@@ -102,8 +140,10 @@ res = TSODSO.run(s.strategy, s)   # → welfare, DADP prices, exactness gap, ADM
 Strategies: `Centralized()`, `ADMM(...)`, `MPC(...)`, `Stochastic(...)`. The power-flow
 formulation is selected with `pf` (`:convex_branch_flow` default, `:restricted_branch_flow`
 with `pf_ε`, `:lindistflow`, `:ac`; `pf_thesis_literal` for the default). `Centralized`
-accepts all four; ADMM/MPC/Stochastic accept only the default convex formulation until the
-ADMM generalisation phase. The legacy flat-kwarg form (`strategy = :admm, ρ = ...`) remains valid.
+accepts all four; `ADMM` accepts all but `:ac`; `MPC` and `Stochastic` accept only the
+default convex formulation. Invalid combinations (including `ADMM` with
+`allow_export = false`) are rejected when the `Scenario` is built. The legacy flat-kwarg form
+(`strategy = :admm, ρ = ...`) remains valid.
 
 **Solve a small Stackelberg–Nash planning game** (N=2 distributors, shared corridor):
 
@@ -135,6 +175,7 @@ to the thesis/PSR equations it encodes:
 | 1–2 | LinDistFlow | thesis 3.31–3.33, 3.43 |
 | 3 | SOCP + Exactness | thesis 3.39, 3.43–3.45 |
 | 3 | AC-Exactness Oracle | Farivar & Low (2013), Gan et al. (2015); nonconvex AC peer |
+| 3 | Overvoltage-Capable Restriction | high-PV regime, AC-certified validity |
 | 3 | Devices + GLB-CVX | thesis 3.2–3.23, 3.38 |
 | 4 | DADP/DLMP Pricing | thesis 3.31, 3.46–3.47 |
 | 5 | ADMM Decomposition | thesis 3.46–3.47 |
@@ -142,10 +183,19 @@ to the thesis/PSR equations it encodes:
 | — | Thesis Reproduction — IEEE-123 | thesis Case B, directional/public-data |
 | — | Thesis Reproduction — Assumptions | full assumption/reduction chain |
 | — | SOC Relaxation Applicability | measured exactness-boundary maps |
+| — | Scaling to IEEE-8500 | public balanced case, density sweep |
+| — | MPC / Rolling-Horizon RTP | receding horizon, escalation ladder |
+| — | Stochastic PV/Demand Uncertainty | two-stage extensive form, out-of-sample gate |
+| — | Meshed Networks + Live Reactive Price | angle recoverability, reactive DLMP |
+| — | The Experiment Harness | `Scenario`, strategies, sweeps, storage |
+| — | Status & Exception Policy | status vocabulary, typed errors |
 | 6 | Stackelberg–Benders (planning) | PSR N1–N2 note; BilevelJuMP certification |
 | 7 | Nash Diagonalization & Shared Corridor | PSR N1–N2 note, multi-distributor |
+| — | Discrete/Integer Investment Expansion | binary expansion, Laporte–Louveaux cuts |
 
-Plus a full API reference for the ~130-symbol public surface.
+Plus a full API reference for the public surface (90 exported names and the `public`
+names reached as `TSODSO.x`). Longer Portuguese writeups and the framework guide live in
+`docs/writeups/`.
 
 ## Design principles
 
@@ -183,14 +233,16 @@ src/
   pricing/      DADP/DLMP extraction, 4-way decomposition, welfare accounting
   admm/         AGR-OPT / DSO-OPT decomposition (build / iterate / ρ-adapt / certify phases),
                 formulation-generic incl. meshed + live reactive pricing, adaptive ρ
-  planning/     oracle, follower LP, Benders master + loop, SharedTransmission, Nash
+  planning/     oracle, follower LP, Benders master + loop (continuous and integer),
+                bilevel KKT-MILP, SharedTransmission, Nash + variational equilibrium
   experiments/  declarative Scenario (pf selector + typed strategies) / TSODSO.run /
                 sweeps / DrWatson storage
   diagnostics/  plotting stubs (CairoMakie via package extension)
 ext/            CairoMakie / Gurobi / Mosek package extensions
 docs/           Documenter + Literate sources (the rung ladder) + Typst writeups
 scripts/        authored analysis & reproduction scripts (offline, seeded); see scripts/README.md
-test/           ~2,350 tests: unit, golden regressions, acceptance gates, guards
+test/           ~32,000 assertions in ~520 test items: unit, golden regressions,
+                acceptance gates, guards
 ```
 
 ## Testing and checks
@@ -206,8 +258,8 @@ exported symbol fails the build.
 | Value | Runs |
 |-------|------|
 | unset or `all` | every item (what plain `Pkg.test()` does) |
-| `fast` | items not tagged `:slow` (about 474 items, roughly 9 minutes locally) |
-| `slow` | only the `:slow` items (37) |
+| `fast` | items not tagged `:slow` (about 484 items, roughly 9 minutes locally) |
+| `slow` | only the `:slow` items (38) |
 
 Any other value is an error. CI on push and pull request runs `fast`; the `slow` workflow
 runs everything on Julia 1.10 and 1.12 on every push to `main`, nightly, and on manual
@@ -215,7 +267,7 @@ dispatch. Each push to `main` has its own concurrency group (keyed on the pushed
 no push's full-suite run is cancelled or replaced by a later one; a burst of merges runs in
 parallel. A single push carrying several commits is tested at its head commit.
 
-The end-to-end correctness gates (the IEEE-13 and IEEE-123 SC3 acceptance items, the ADMM
+The end-to-end correctness gates (the IEEE-13 and IEEE-123 acceptance items, the ADMM
 cross-validation items and the planning certification items) are tagged `:slow`. Pull
 requests therefore run only `fast`, and those gates first run when the change lands on
 `main`, where every push triggers its own full-suite run.
@@ -274,7 +326,14 @@ Julia minor resolves fresh from `Project.toml`.
 | v1.0 Operational Transactive-Energy Core | rungs 0–5, DADP/DLMP, ADMM | ✅ shipped 2026-07-20 |
 | v2.0 Stackelberg-Nash TSO–DSO Planning Game | rungs 6–7, Benders + Nash | ✅ shipped 2026-07-24 |
 | v2.1 Validation & Reproduction | AC oracle, reactive DLMP, real IEEE-123 impedances, directional thesis reproduction | ✅ shipped 2026-07-26 |
-| v3.0 Research Extension Rungs | overvoltage-capable relaxation, MPC/rolling-horizon/RTP, stochastic scenarios, meshed + 4Q-BESS, integer investment expansion | 📋 scoped 2026-07-26 |
+| v3.0 Research Extension Rungs | overvoltage-capable restriction, MPC/rolling-horizon/RTP, stochastic scenarios, meshed + 4Q-BESS, integer investment, IEEE-8500 benchmark | ✅ shipped 2026-08-24 |
+| v4.0 Correctness & Depth | model-correctness audit fixes, shared exactness gate, genuine bilevel planning, declarative `Scenario`/strategy architecture, API and test hygiene | ✅ shipped 2026-10-08 |
+
+At the v4.0 release the full suite passes locally on Julia 1.12 (about 32,000 assertions,
+0 failures, 5 documented expected-broken items), and CI is green on Julia 1.10, 1.11 and 1.12. The next milestone is not yet scoped. Known open items:
+a battery-complementarity failure of the default demo at seed 42, a solver-status issue in
+`fit_baseline` on Julia 1.12.7 (tracked as expected-broken), and an open research question on
+the LinDistFlow-copy voltage bound under reverse flow.
 
 ## Theory sources
 
