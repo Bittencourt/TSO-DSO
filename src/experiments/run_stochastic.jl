@@ -172,6 +172,16 @@ A `NamedTuple` `(; in_sample, oos)`:
     skipped, `realized_welfare` and `welfare_gap` are unchanged from the plain average over
     all draws.
 
+# Solver precision of the held-out re-solves
+
+The held-out harness is built with the factory default optimizer (Clarabel
+`tol_gap_abs = tol_gap_rel = 1e-8`), while the in-sample extensive form is solved at `5e-10`.
+The number of draws the exactness gate refuses is therefore solver- and version-dependent
+(the refused residuals sit just above the gate's solver floor), and so are `realized_welfare`
+and `welfare_gap` whenever a draw is excluded. Compare against the mean over all feasible
+draws (`welfare_h[.!infeasible_h]`) to see the effect of an exclusion. See the
+[status & exception policy](@ref status-policy).
+
 Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-identical
 `in_sample.welfare`/`oos.welfare_gap` (mirrors [`run_mpc`](@ref)'s own same-seed
 guarantee) — every stochastic draw flows through a seeded, independent `sub_seed` sub-stream,

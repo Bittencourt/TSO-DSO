@@ -63,6 +63,23 @@ gate (`CertificateError` of kind `:socp_exact`); that draw keeps its welfare val
 `welfare_h` but is flagged in `inexact_h` and excluded from `realized_welfare`/`welfare_gap`;
 it takes precedence over `:oos_infeasible_skipped`, and the masks carry the full detail.
 
+**The excluded-draw count is solver- and version-dependent.** The held-out re-solves use the
+factory default Clarabel duality-gap tolerance (`tol_gap_abs = tol_gap_rel = 1e-8`), while the
+in-sample extensive form (`build_stochastic_welfare`) is solved at `5e-10`. The refused draws
+sit just above the gate's solver floor, so how many are refused depends on the solver build:
+the documentation's IEEE-13 scenario (`T = 9`, `S = 5`, `H_oos = 10`) excludes 5 of 10 draws on
+Julia 1.12.5 and 2 of 10 on 1.12.7. Whenever a draw is excluded, `realized_welfare` and
+`welfare_gap` average a different subset of draws on different builds, and that subset is the
+draws the gate certified, which need not be representative. Running the harness at the
+in-sample `5e-10` was measured and not adopted: it moves the stored stochastic reference values,
+and on that scenario it still refuses 4 of 10 draws on Julia 1.12.5 (a different subset than
+the 5 refused at the default), so it does not remove the dependence. To judge
+the effect of an exclusion, compare `welfare_gap` with the mean over all feasible draws,
+`sum(welfare_h[.!infeasible_h]) / count(.!infeasible_h) - in_sample.welfare`; on the same
+scenario that all-draw gap is stable (0.01687 on Julia 1.12.5 under every variant measured),
+while the certified-only gap ranged from -0.0028 to 0.0341. A caller that needs to tell skips
+apart should read the `inexact_h`/`infeasible_h` masks and counts, not `status` alone.
+
 ## 4. Handler rule
 
 Catch blocks are narrowed to the documented failure modes:
