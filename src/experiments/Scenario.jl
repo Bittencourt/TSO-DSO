@@ -97,7 +97,8 @@ supplied, never by comparing against defaults).
 
 `ArgumentError` on: unknown `feeder`/`price`/`population`/`pf`/strategy selector; `T < 1` or
 `seed < 1`; `pf_ε` not finite and `≥ 0`; a `pf_*` option foreign to the chosen `pf`; a strategy x
-`pf` combination rejected by `supports_pf`; any invalid strategy knob. The foreign-`pf_*` checks
+`pf` combination rejected by `supports_pf`; strategy `ADMM` with `allow_export = false`
+(`solve_admm` supports only the free-sign priced frontier); any invalid strategy knob. The foreign-`pf_*` checks
 are judged against the neutral defaults (`pf_ε != 0.0`, `pf_thesis_literal == true`) because the
 inner constructor cannot see which keywords were supplied.
 
@@ -197,6 +198,15 @@ struct Scenario
                 ArgumentError(
                     "Scenario: strategy $(nameof(typeof(strategy))) does not support " *
                     "pf=$(repr(pf))$lit; supported pf selectors: $(supported_pfs(strategy))",
+                ),
+            )
+        end
+        if strategy isa ADMM && !allow_export
+            throw(
+                ArgumentError(
+                    "Scenario: strategy ADMM requires allow_export = true (the free-sign " *
+                    "priced frontier is the SOC-exactness enabler; import-only is not " *
+                    "supported by solve_admm)",
                 ),
             )
         end
