@@ -488,10 +488,10 @@ end
 # == term)` idiom (`src/models/mpc_window.jl` was retargeted from `soc[H]`
 # to `soc[H + 1]` once the device's own `soc` vector grew to `1:(H+1)`), generalized from a
 # single terminal target to the FULL per-step `p_ch`/`p_dch` trajectory.
-# `solve_stochastic_oos_step!` is a
-# one-line `solve_with_retry!` delegation with `dual = false` — this harness never reports
-# a per-scenario DADP (the scope is the realized welfare only, bounded away from
-# the in-sample pricing).
+# `solve_stochastic_oos_step!` re-solves via `solve_with_retry!` with `dual = false` (this
+# harness never reports a per-scenario DADP; the scope is the realized welfare only, bounded
+# away from the in-sample pricing), then runs the shared SOCP exactness gate: it records the
+# worst cone gap and ratio in `ctx.meta` and throws `CertificateError` on an inexact solve.
 
 """
     StochasticOosHarness{F}
