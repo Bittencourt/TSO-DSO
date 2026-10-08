@@ -96,3 +96,59 @@ MPC consumer runs after the change (Julia 1.12.5 filtered runner): `file:test_mp
 376 Pass; `file:test_status_policy.jl,test_mpc_terminal.jl,test_mpc_window.jl` 10 items / 45 Pass;
 `file:test_strategies.jl` (all 26 items, including the `:slow` "fallback to defaults") 415 Pass.
 Formatter (`format210.jl`) produced no changes.
+
+## Stochastic OOS ratios (hybrid gate)
+
+Measured BEFORE the OOS code change (HEAD 0b58ec9) with a scratch-only monkey-patch of
+`solve_stochastic_oos_step!` (session scratchpad `p38/oos_measure2.jl`, never under the repo) that
+logs the worst hybrid ratio `maximum(hybrid_ratios(h.ctx)).ratio` of every successful held-out
+re-solve without changing behaviour. Default harness optimizer (`tol_gap = 1e-8`) unless noted.
+"Predicted" = mean of `welfare_h` over draws that are feasible AND exact (ratio ≤ 1), minus
+`in_sample.welfare`, i.e. the value the exclude-and-report rule will publish.
+
+| fixture | 1.12.5 per-solve ratios (refused) | 1.12.7 per-solve ratios (refused) |
+|---------|-----------------------------------|-----------------------------------|
+| CI golden `T=9, Stochastic(S=3, H_oos=5)` (= default `Stochastic()` at T=9) | 0.236, 0.290, 0.184, 0.118, 0.366 (**0/5**) | 0.350, 0.214, 0.257, 0.116, 0.283 (**0/5**) |
+| docs page `T=9, S=5, p=[.05,.15,.30,.30,.20], H_oos=10` | 0.859, 0.677, 0.590, **1.308**, 0.885, **1.022**, **1.137**, 0.292, **1.634**, **1.072** (**5/10**) | 0.847, 0.860, 0.583, **1.941**, **1.084**, 0.978, 0.723, 0.672, 0.838, 0.679 (**2/10**) |
+| compare script `scripts/compare_default_stochastic.jl` (seed 42, same S/p/H_oos as docs) | 0.125, 0.303, 0.388, 0.302, 0.104, 0.182, 0.083, 0.478, 0.246, 0.362 (**0/10**) | 0.126, 0.266, 0.230, 0.232, 0.101, 0.177, 0.092, 0.332, 0.176, 0.520 (**0/10**) |
+| harness build-once (3 pin cycles) | **1.129**, **10.57**, 0.651 | same |
+| harness pin-binding (2 solves) | **51.23**, **50.41** | same |
+| harness FourQuadBESS (no Ppv_param) | 0.373 | same |
+| harness FourQuadBESS q pin | **1.489** | same |
+| run_stochastic infeasible -> recover | 1st INFEASIBLE (no ratio); recovery **7.294** | same |
+
+Welfare under exclusion (current value -> predicted):
+
+| fixture | patch | status now -> predicted | `realized_welfare` now -> predicted | `welfare_gap` now -> predicted |
+|---------|-------|-------------------------|-------------------------------------|--------------------------------|
+| CI golden | 1.12.5 | `:solved` -> `:solved` | -538.80426085285922 -> unchanged | -0.018591711034105174 -> **unchanged** |
+| CI golden | 1.12.7 | `:solved` -> `:solved` | -538.80426081613405 -> unchanged | -0.018591674331901231 -> **unchanged** |
+| docs page | 1.12.5 | `:solved` -> `:oos_inexact_skipped` | -538.79909522353591 -> -538.78303068258083 (5 usable) | 0.016867421597680732 -> 0.032931962552765981 |
+| docs page | 1.12.7 | `:solved` -> `:oos_inexact_skipped` | -538.79909539186974 -> -538.7899694697544 (8 usable) | 0.016867253255441028 -> 0.025993175370786048 |
+| compare script (seed 42) | 1.12.5 | `:solved` -> `:solved` | -538.78688296455698 -> unchanged | -0.032394888164958502 -> unchanged |
+| compare script (seed 42) | 1.12.7 | `:solved` -> `:solved` | -538.78688300533611 -> unchanged | -0.032394929060160393 -> unchanged |
+
+The CI golden refuses no draw on either patch (worst 0.366 / 0.350), so its pin
+(`-0.018591711034105174`, rtol 1e-4) and `:solved` status cannot move. The compare script refuses
+nothing on either patch (worst 0.478 / 0.520): its numbers do not move. The docs page is the one
+explained move: 5/10 (1.12.5) vs 2/10 (1.12.7) draws excluded; the page must report the count
+live. The refused docs rows are cone violations of 2.05-3.88e-7, just above τ_solver = 2e-7
+(research diagnosis: solver-accuracy floor on the pinned-dispatch problem). No τ/ε was raised.
+
+Direct-harness fixtures at the tightened optimizer `select_optimizer(SOCP(); tol_gap_abs = 5e-10,
+tol_gap_rel = 5e-10)` (`OOS_TOL=5e-10`, harness only):
+
+| fixture | 1.12.5 | 1.12.7 |
+|---------|--------|--------|
+| build-once | 0.0119, 0.4964, 0.0088 | 0.0119, 0.4964, 0.0088 |
+| pin-binding | 0.3889, 0.3538 | 0.3889, 0.3538 |
+| FourQuadBESS | 0.0056 | 0.0056 |
+| FourQuadBESS q pin | 0.0370 | 0.0370 |
+| infeasible -> recover | 1st still INFEASIBLE `(NaN, true)`; recovery 0.0778 | same; recovery 0.0777 |
+
+So the infeasible -> recover item can switch to the tightened optimizer: its first solve stays
+INFEASIBLE and its recovery is exact.
+
+Baseline before the test edits (HEAD, 1.12.5 filtered run,
+`file:test_stochastic_oos_harness.jl,test_run_stochastic.jl,test_status_policy.jl`): 14 @testitems
+(5 + 5 + 4) / **56 Pass**.
