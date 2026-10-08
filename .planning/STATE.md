@@ -4,7 +4,7 @@ milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
 stopped_at: Completed 38-10-PLAN.md (phase gate: 1.12.5 Pass 32304 and 1.12.7 Pass 32299, both 0/0/Broken 5 = baseline + 80 itemized; canary iters 56; count-sets 517/480/37/99; JET 0 NEW; docs OK; all guards green; 38-VALIDATION signed off); next is /gsd-verify-work 38
-last_updated: "2026-10-08T02:51:07.162Z"
+last_updated: "2026-10-08T02:51:35.389Z"
 last_activity: 2026-10-08
 progress:
   total_phases: 13
@@ -283,6 +283,8 @@ Recent decisions affecting current work:
 - [Phase 38]: 38-01: _socp_cone_check is the single non-throwing cone-exactness kernel; assert_socp_exact! delegates to it (verdict/message/return unchanged)
 - [Phase 38]: 38-02: MPC first tier = _socp_cone_check(o.ctx).maxratio (hybrid floor); shortfall-fixture t=4 escalation on 1.12.7 accepted as a measured explained move (no test asserts it); happy-path worst ratio 0.938 kept, tau not raised
 - [Phase 38]: 38-09: guide model-text fixes carry "(Changed in vX.Y: ...)" notes; 5.1 derivation kept (thesis-literal) with one corrective paragraph; gate constants written as math, not internal names
+- [Phase 38]: Phase 38 gate: 1.12.5 Pass 32304 / 1.12.7 Pass 32299 (0/0/Broken 5) = Phase 37 baseline + 80, every unit itemized in 38-FINAL-GATES.md; count-sets all=517 fast=480 slow=37 files=99
+- [Phase 38]: Phase 38: on 1.12.7 the MPC shortfall fixture (scenario B, t=4) escalates to the restricted tier under the hybrid floor (ratio 1.165); re-price only, no asserted value moves; documented explained move
 
 ### Roadmap Evolution
 
