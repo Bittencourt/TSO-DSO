@@ -373,6 +373,74 @@ end
     @test true   # never threw
 end
 
+@testitem "mpc_loop: first-tier certificate applies the hybrid exactness floor — a light-branch slack the flat 1e-6 floor accepted now escalates" tags =
+    [:mpc_loop] setup = [MPCFixtures] begin
+    using TSODSO: build_mpc_window, solve_mpc_window!
+    using TSODSO, Test
+    using JuMP: set_parameter_value, set_objective_coefficient, @constraint, value
+
+    # The per-resolve first-tier certificate must use the SAME per-(branch, hour) arithmetic
+    # and defaults as assert_socp_exact! — in particular the per-branch hybrid floor
+    # atol_b = max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT·ref_b), not a flat atol = 1e-6.
+    # On a light interior branch the flat 1e-6 floor is ~5x looser than atol_b (τ_solver =
+    # 2e-7 dominates there), so a genuine cone slack of a few 1e-7 slipped through it.
+    #
+    # Fixture: MPCFixtures' high-PV feeder at pv_scale = 1.2 under the DEFAULT
+    # ConvexBranchFlow(), which is exact at this point (measured hybrid ratio ≈ 0.011). A slack
+    # δ = 5e-7 is then forced on branch 2 (the light interior branch 2->3) at τ = 1. Measured on
+    # Julia 1.12.5 and 1.12.7: old flat-floor ratio ≈ 0.499, hybrid ratio ≈ 2.457 — about a
+    # 2x margin on each side of 1, so the old floor accepts and the hybrid floor refuses.
+    feeder = MPCFixtures.mpc_high_pv_feeder()
+    aggs = MPCFixtures.build_mpc_high_pv_aggregators(feeder; pv_scale = 1.2)
+    H = MPCFixtures.H
+    λ₀ = MPCFixtures.mpc_lambda0()
+
+    o = build_mpc_window(feeder, ConvexBranchFlow(), aggs; H = H, terminal_soc = false)
+    for agg in aggs
+        varlist = o.ctx.agg_device_vars[agg.bus]
+        for (d, v) in zip(agg.devices, varlist)
+            haskey(v, :Ppv_param) && set_parameter_value.(v.Ppv_param, d.Ppv[1:H])
+            haskey(v, :Tout_param) && set_parameter_value.(v.Tout_param, d.Tout[1:(H - 1)])
+        end
+    end
+    for handle in o.agg_pdc_handles
+        agg = only(a for a in aggs if a.bus == handle.bus)
+        set_parameter_value.(handle.Pdc_param, agg.Pdc[1:H])
+    end
+    for τ in 1:H
+        set_objective_coefficient(o.model, o.p_import[τ], -λ₀[τ])
+    end
+    solve_mpc_window!(o)
+
+    # t = 1, initial device state, no forecast error: the devices' own literals.
+    ms = Dict{Tuple{Int, Symbol}, Float64}()
+    for agg in aggs, d in agg.devices
+        hasproperty(d, :soc0) && (ms[(agg.bus, :soc)] = Float64(d.soc0))
+        hasproperty(d, :Tin0) && (ms[(agg.bus, :Tin)] = Float64(d.Tin0))
+    end
+    fe = (; pv_factor = 1.0, demand_factor = 1.0)
+
+    # Pre-condition: the unperturbed window certifies at the first tier.
+    r0 = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
+    @test r0.cert_status === :certified_convex_dual
+
+    # Force a 5e-7 cone slack on the light branch and re-solve.
+    l0 = value(o.ctx.pf_vars.l[2, 1])
+    @constraint(o.model, o.ctx.pf_vars.l[2, 1] >= l0 + 5e-7)
+    solve_mpc_window!(o)
+
+    old_ratio = maximum(x.ratio for x in TSODSO.hybrid_ratios(o.ctx; atol = 1e-6))
+    @test old_ratio <= 1     # the old flat 1e-6 floor accepts this point
+
+    r = TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
+    # Parity: the first tier reports exactly the library's hybrid-floor ratio.
+    @test r.cone_maxratio == maximum(x.ratio for x in TSODSO.hybrid_ratios(o.ctx))
+    @test r.cone_maxratio > 1     # the hybrid floor refuses it
+    @test r.cert_status === :certified_convex_dual_restricted
+    @test length(r.price_vec) == H
+    @test all(isfinite, r.price_vec)
+end
+
 @testitem "mpc_loop: escalation at t > 1 prices the CURRENT window — same t-sliced profiles, same measured state, never hours 1..H" tags =
     [:mpc_loop] setup = [MPCFixtures] begin
     using TSODSO: build_mpc_window, solve_mpc_window!
