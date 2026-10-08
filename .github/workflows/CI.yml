@@ -157,6 +157,14 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: python3 .github/scripts/check_planning_ids.py
+      - name: Check @testitem setup names resolve
+        # Every `setup = [...]` name must match a defined @testmodule; selftest first so a
+        # broken checker cannot pass vacuously.
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          python3 .github/scripts/check_setup_names.py --selftest
+          python3 .github/scripts/check_setup_names.py
       - name: Scripts index selftest
         if: ${{ !cancelled() }}
         shell: bash
