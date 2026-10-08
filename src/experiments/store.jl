@@ -194,7 +194,8 @@ function result_to_dict(res::ScenarioResult)
     d[:final_r] = res.final_r
     d[:final_s] = res.final_s
     d[:reactive_consensus_mode] =
-        ismissing(res.reactive_consensus_mode) ? missing : Symbol(res.reactive_consensus_mode)
+        ismissing(res.reactive_consensus_mode) ? missing :
+        Symbol(res.reactive_consensus_mode)
     d[:julia_version] = string(VERSION)
     det = res.details
     if det isa MPCDetails
