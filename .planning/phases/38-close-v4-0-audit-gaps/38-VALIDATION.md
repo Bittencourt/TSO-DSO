@@ -1,9 +1,9 @@
 ---
 phase: 38
 slug: close-v4-0-audit-gaps
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-07
 ---
 
@@ -17,7 +17,7 @@ created: 2026-10-07
 | Framework | Test (stdlib) + TestItemRunner 1.1.5 (`@testitem`, `@testmodule` setups) |
 | Config file | `test/runtests.jl` (discovery rooted at `test/`), `test/runner_support.jl`, `test/expected_broken.txt` |
 | Quick run command | `JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia +release --project=. -t2 scripts/run_tests_filtered.jl "$PWD" file:<basename.jl>` |
-| Discovery/count check | `... scripts/run_tests_filtered.jl "$PWD" --count-sets --strict` (baseline all=511 fast=474 slow=37 files=98) |
+| Discovery/count check | `... scripts/run_tests_filtered.jl "$PWD" --count-sets --strict` (baseline all=511 fast=474 slow=37 files=98; final all=517 fast=480 slow=37 files=99) |
 | Full suite command | `.github/scripts/suite_detached.sh p38_1125` (default `julia --project=. -e 'import Pkg; Pkg.test()'`; for 1.12.7 pass `julia +1.12 --project=. -e 'import Pkg; Pkg.test()'`) then `python3 .github/scripts/check_suite_log.py p38_1125 --broken 5` |
 
 ### Phase Requirements → Test Map
@@ -41,11 +41,11 @@ created: 2026-10-07
 - **Phase gate:** full suite on 1.12.5 then 1.12.7 (sequential, never concurrent), docs build, JET on 1.12.7, all guards. Canary log lines must show iters = 56 and welfare = -4823.66604824162.
 
 ### Wave 0 Gaps
-- [ ] New `@testitem` for the MPC regression point and parity (test_mpc_loop.jl).
-- [ ] test_admm_timeout.jl converted into `@testitem`(s).
-- [ ] W5 assertions (test_strategies.jl or test_scenario_pf.jl).
-- [ ] W6 tests: harness-level inexact flag (pin-binding fixture at default tolerance gives a robust ratio of about 51), `_stochastic_status` pure-helper cases, updated vocabulary pin.
-- [ ] W4 no-solve round-trip item.
+- [x] New `@testitem` for the MPC regression point and parity (test_mpc_loop.jl).
+- [x] test_admm_timeout.jl converted into `@testitem`(s).
+- [x] W5 assertions (test_strategies.jl or test_scenario_pf.jl).
+- [x] W6 tests: harness-level inexact flag (pin-binding fixture at default tolerance gives a robust ratio of about 51), `_stochastic_status` pure-helper cases, updated vocabulary pin.
+- [x] W4 no-solve round-trip item.
 No framework install needed.
 
 ## Manual-Only Verifications
@@ -57,7 +57,7 @@ No framework install needed.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-10-07 (plan 38-10 phase gate: every row green; evidence in 38-FINAL-GATES.md — 1.12.5 Pass 32304 and 1.12.7 Pass 32299, both 0/0/Broken 5, canary iters 56, count-sets all=517 fast=480 slow=37 files=99, JET 0 NEW / 0 FIXED, docs OK)
