@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 38-01-PLAN.md (shared _socp_cone_check kernel); next is 38-02
-last_updated: "2026-10-07T23:53:16.362Z"
+stopped_at: Completed 38-02-PLAN.md (MPC first tier through the shared hybrid-floor kernel); next is 38-03
+last_updated: "2026-10-08T00:19:21.008Z"
 last_activity: 2026-10-07
 progress:
   total_phases: 13
   completed_phases: 12
   total_plans: 131
-  completed_plans: 123
+  completed_plans: 124
   percent: 92
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 38 (Close v4.0 Audit Gaps) — EXECUTING
-Plan: 1 of 10 complete (38-01 done; next 38-02)
+Plan: 2 of 10 complete (38-01, 38-02 done; next 38-03)
 Status: Gap closure after v4.0 milestone audit (gaps_found)
   Latest certified full suite: 32224 passed / 0 failed / 0 errored / 5 broken at 19f3fba (Julia 1.12.5; 32219/0/0/5 on 1.12.7);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
@@ -200,6 +200,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 35 P02 | 40m | 3 tasks | 4 files |
 | Phase 35 P05 | ~1h (+27m suite) | 3 tasks | 7 files |
 | Phase 38 P01 | 10min | 2 tasks | 3 files |
+| Phase 38 P02 | 45min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -275,6 +276,7 @@ Recent decisions affecting current work:
 - [Phase 31]: 31-06 (phase close): golden-move audit exit 0 (base 36e3c1e); consolidated 31-FINDINGS.md; orchestrator certified full suite 31190/0/0/5 (+99 over Phase-30, zero regressions, zero new broken); post-certification code review found 2 OPEN critical findings (CR-01 integer cycle-detection false positive, CR-02 vacuous VE selection on the shipped interior-cap fixture) -- user stopped autonomous mode before a fix round, so phase is test-certified but explicitly NOT marked verified
 - [Phase 35]: 35-02: harness ADMM gate = hybrid floor; --admm-atol finite only; Inf only in labelled DIAGNOSTIC_BYPASS
 - [Phase 38]: 38-01: _socp_cone_check is the single non-throwing cone-exactness kernel; assert_socp_exact! delegates to it (verdict/message/return unchanged)
+- [Phase 38]: 38-02: MPC first tier = _socp_cone_check(o.ctx).maxratio (hybrid floor); shortfall-fixture t=4 escalation on 1.12.7 accepted as a measured explained move (no test asserts it); happy-path worst ratio 0.938 kept, tau not raised
 
 ### Roadmap Evolution
 
@@ -516,8 +518,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-07T23:53:03.020Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-10-08T00:19:20.971Z
+Stopped at: Completed 38-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
