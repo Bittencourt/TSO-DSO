@@ -23,9 +23,6 @@ human_verification:
   - test: "Review the refreshed compare_default_stochastic results and Portuguese writeup (38-05, commit f6626b7)"
     expected: "Researcher accepts the regenerated seed-42 numbers (welfare_gap -0.0323948881649585, 0/10 refused)"
     why_human: "Research judgement on a published artifact refresh"
-  - test: "Optional: re-run the docs build (and JET) once at HEAD"
-    expected: "docs OK, 0 'Cannot resolve @ref'; JET 0 NEW"
-    why_human: "The p38-docs-final build and the JET gate both predate the review-fix commits 32af868..69eaefe. Those commits touched run_stochastic.jl (new docstring section with @ref status-policy, which does resolve: anchor at docs/src/status_policy.md:1), status_policy.md and the stochastic literate page. Low risk, but not re-measured."
 ---
 
 # Phase 38: Close v4.0 Audit Gaps Verification Report
@@ -125,7 +122,7 @@ No orphaned requirements: all seven are claimed by the phase plans.
 1. **GitHub Actions run.** Push a branch and confirm the 1.10/1.11/1.12 matrix, the jet job, the format job (with `check_setup_names.py`) and slow.yml all pass. Expected: all green. Why human: needs hosted runners. Near-τ margins are the risk.
 2. **FRAMEWORK_GUIDE prose spot-check.** Compare each 38-09 correction against src/ and status_policy.md. Expected: accurate. Why human: prose judgement.
 3. **38-05 compare-script refresh.** Review the regenerated seed-42 results and the Portuguese writeup. Why human: research judgement.
-4. **Optional re-measure.** Run the docs build and JET once at HEAD. They were measured before the review-fix commits, which only touched docstrings/docs plus a small run_stochastic change. Low risk.
+4. **Resolved:** the docs build and JET were re-run at HEAD (p38-docs-postfix: docs OK, 0 unresolved @ref; JET 0 NEW / 0 FIXED); see 38-FINAL-GATES.md. Original note: They were measured before the review-fix commits, which only touched docstrings/docs plus a small run_stochastic change. Low risk.
 
 ### Accepted Deviations
 

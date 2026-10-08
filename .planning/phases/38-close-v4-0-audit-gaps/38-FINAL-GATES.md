@@ -247,3 +247,7 @@ one fast `@testitem` (+21 pass). Re-run on Julia 1.12.5 at HEAD (clean tree, no 
 test_stochastic_oos_harness 74 → 95). One FlakeRetry summary line (an existing retry-and-report
 guarded solve), as in earlier runs. The 1.12.7 run was not repeated; the fixes are value-preserving
 on all measured scenarios (38-REVIEW-FIX.md). Count-sets: all=518 fast=481 slow=37.
+
+Docs + JET re-run at HEAD after the review fixes: `suite_detached.sh p38-docs-postfix julia +release
+--project=docs docs/make.jl` → `.done` 0, `docs OK`, 0 `Cannot resolve @ref`; then
+`scripts/jet_check.jl` on `+1.12` → `12 current, 12 baseline, 0 NEW, 0 FIXED`, exit 0.
