@@ -367,6 +367,13 @@ end
         @test haskey(d_mpc, "regret")
         @test haskey(d_mpc, "steps")
         @test haskey(d_sto, "welfare_gap")
+        # The out-of-sample exclusion counts and status are stored, so an excluded held-out
+        # draw stays visible in the artifact; this fixture refuses and drops no draw.
+        @test d_sto["oos_inexact_draws"] === 0
+        @test d_sto["oos_infeasible_draws"] === 0
+        @test d_sto["oos_status"] === :solved
+        @test !haskey(d_mpc, "oos_status")
+        @test ismissing(d_mpc["reactive_consensus_mode"])
         @test isfinite(d_mpc["welfare"])
         @test isfinite(d_sto["welfare"])
         for d in (d_mpc, d_sto)
@@ -384,6 +391,34 @@ end
         @test haskey(d_sto, "stoch_S")
         @test !haskey(d_sto, "mpc_H")
     end
+end
+
+@testitem "strategies: stored reactive mode is a plain Symbol" begin
+    using TSODSO, Test
+    using DrWatson: wsave, wload
+    # No solve: hand-built results with the ScenarioResult field order
+    # (scenario, welfare, dadp, exact_maxgap, elapsed, details).
+    det = TSODSO.ADMMDetails(1, 0.0, 0.0, TSODSO.ReactiveMode.LIVE)
+    r = TSODSO.ScenarioResult(
+        Scenario(; name = "x", strategy = ADMM()),
+        0.0,
+        zeros(1, 1),
+        0.0,
+        0.0,
+        det,
+    )
+    r_c = TSODSO.ScenarioResult(Scenario(; name = "x"), 0.0, zeros(1, 1), 0.0, 0.0, nothing)
+    d = TSODSO.result_to_dict(r)
+    @test d[:reactive_consensus_mode] === :LIVE
+    @test ismissing(TSODSO.result_to_dict(r_c)[:reactive_consensus_mode])
+    # JLD2 round trip with String keys, as run_and_store's @tagsave writes them.
+    loaded = mktempdir() do dir
+        f = joinpath(dir, "r.jld2")
+        wsave(f, Dict(string(k) => v for (k, v) in d))
+        return wload(f)["reactive_consensus_mode"]
+    end
+    @test loaded isa Symbol
+    @test loaded === :LIVE
 end
 
 @testitem "strategies: four strategies four filenames" begin
