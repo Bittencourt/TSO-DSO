@@ -51,3 +51,47 @@ unmodified `Manifest-v1.10.toml` / `Manifest-v1.11.toml`, scratch scripts only.
 
 Nothing was recorded as "not measurable locally", so no cross-version item is a CI risk beyond the
 Actions run itself (see MANUAL).
+
+## Full run, Julia 1.12.5
+
+Launched at HEAD 958cc98 (Task 1 commit), clean tree, no other Julia process:
+`TSODSO_TEST_SET=all TSODSO_TEST_VERBOSE=1 .github/scripts/suite_detached.sh p38-full125 julia +release --project=. -t2 -e 'import Pkg; Pkg.test()'`.
+`.start` 1791423708 > HEAD commit time 1791423696 (not stale). `.done` = 0. Wall time 28m20s.
+`python3 .github/scripts/check_suite_log.py p38-full125 --broken 5` printed `suite OK` before any later
+commit; `.totals`: `Pass=32304 Fail=0 Error=0 Broken=5 Total=32309`.
+
+Canary @info block: `iters = 56`, `welfare = -4823.66604824162`, `escalations = 0`.
+`grep -c 'soft scope is ambiguous'` = 0.
+
+EXPECTED_PASS_1125=32304
+
+### Pass arithmetic, 1.12.5
+
+| plan | file(s) | items | Pass delta | what |
+|---|---|---:|---:|---|
+| baseline | — | 511 | 32224 | Phase 37 verified run on 1.12.5 (37-VERIFICATION.md: 32223 at plan 37-13 + 1 for `@test isempty(dead)` in the `guards` testset, review fix IN-02) |
+| 38-01 | test/test_exactness.jl | +0 | +8 | kernel parity assertions inside 2 existing items (20 -> 28) |
+| 38-02 | test/test_mpc_loop.jl | +1 | +7 | hybrid-floor regression + parity item (369 -> 376) |
+| 38-04 | test_stochastic_oos_harness.jl, test_run_stochastic.jl, test_status_policy.jl | +1 | +18 | inexact-refusal item (+7), run_stochastic 3-tuple flags / recovery ratio / masks (+7), `_stochastic_status` 2-mask cases (+4) (56 -> 74) |
+| 38-06 | test/test_admm_timeout.jl | +2 | +19 | plain script converted to 2 fast `:admm` items (12 budget + 7 convergence assertions; 0 -> 19) |
+| 38-07 T1 | test/test_strategies.jl | +1 | +7 | ADMM x `allow_export = false` rejection, no solve (415 -> 422) |
+| 38-07 T2 | test/test_strategies.jl | +1 | +21 | stored Symbol reactive mode item (+4), run_and_store round-trip extension (+5 direct, +12 `is_prim` loop) (422 -> 443) |
+| **total** | | **+6 -> 517** | **+80** | 32224 + 80 = **32304** |
+
+Observed 32304, delta 0: every unit is accounted for by the ledger. Plans 38-03, 38-05, 38-08 and 38-09
+changed no assertion (comment edits in test/fixtures_mpc.jl and test/test_ac_oracle.jl only; docs,
+scripts, writeups). Broken 5 = baseline. Total 32309 = 32304 + 5.
+
+### Log observations, 1.12.5
+
+- `run_mpc: per-resolve cone check failed` warnings: **7** (Phase 37 run: 6). Six come from the high-PV
+  `pv_scale = 3.0` forced-inexact fixtures (forced-inexact, escalation at t > 1, ladder terminal
+  failure x3), now reporting the hybrid-floor ratio 9177.66 / 9172.54 instead of the old flat-floor
+  9156.55 / 9166.37 (same as the ledger's High-PV row; the verdict is unchanged). The seventh is the new
+  38-02 regression item (t = 1, `cone_maxratio = 2.457082735245664`, `:certified_convex_dual_restricted`),
+  which escalates by design. No happy-path MPC item escalates (scenario A's worst ratio is 0.938 on this
+  patch). `EVERY escalation tier failed` warnings: 3, same as Phase 37.
+- `admm_timeout` items: `TSODSO_TEST_VERBOSE=1` printed only the outer `TSODSO` totals row (no per-item
+  rows), so the run has no in-suite per-item timing. 38-06 measured the file at 55.4 s isolated cold
+  (including compile) and about 13 s warm in-suite, under the 30 s `:slow` threshold; the items stay fast.
+  No code change.
