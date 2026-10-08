@@ -9,6 +9,7 @@ relied on) so the gate plan can reconcile the full-suite totals against the per-
 | plan | file | @testitems before -> after | Pass before -> after (1.12.5 filtered run) | note |
 |------|------|----------------------------|--------------------------------------------|------|
 | 38-01 | test/test_exactness.jl | 6 -> 6 | 20 -> 28 | +8 kernel parity assertions inside 2 existing items; combined filtered run with test_admm_exactness_default.jl: 62/62 |
+| 38-02 | test/test_mpc_loop.jl | 11 -> 12 | 369 -> 376 | +1 item (hybrid-floor regression + parity, 7 assertions); RED run: 3 failed / 4 passed in the new item against the old inline loop |
 
 ## MPC first-tier ratios (old flat 1e-6 vs hybrid)
 

@@ -96,7 +96,7 @@ A `NamedTuple`
 
   - `trace::MpcTrace` — every published hour's DADP, day-ahead reference DADP, price jump,
     cumulative deviation, and certificate/fallback status. The status is one of
-    `:certified_convex_dual` (first-tier inline cone check passed),
+    `:certified_convex_dual` (first-tier shared exactness check passed),
     `:certified_convex_dual_restricted` (restricted-tier rescue — the price is the OPF-m
     RESTRICTED solve's dual, a distinct provenance), `:local_ac_dual`
     (nonconvex-AC-dual fallback tier), or the TERMINAL `:cert_failed` (every escalation tier
@@ -792,11 +792,12 @@ escalation ladder, factored out so a test can drive it DIRECTLY against a
 non-`Scenario` `feeder`/`mpc_aggs` pair (e.g. `MPCFixtures`' high-PV fixture) without
 duplicating this logic — `run_mpc`'s own loop calls this EXACT function.
 
-An inline REIMPLEMENTATION of [`assert_socp_exact!`](@ref)'s own cone-residual formula, at
-ITS SAME `rtol=1e-4`/`atol=1e-6` defaults (the ONE place this file deliberately copies a
-tolerance — this is the IDENTICAL physical quantity at the IDENTICAL default, not a new
-certificate; NEVER delegates to the throwing `assert_socp_exact!` itself, and NEVER a bare
-`try`/`catch` around it). `o` MUST already be solved (i.e. [`solve_mpc_window!`](@ref) called)
+The first-tier check evaluates the library's shared exactness kernel (`_socp_cone_check`, the
+same `_cone_row` arithmetic and the same defaults as [`assert_socp_exact!`](@ref): `rtol = 1e-4`
+and the per-branch hybrid floor `atol_b = max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT·ref_b)`)
+WITHOUT throwing — it NEVER delegates to the throwing `assert_socp_exact!` itself, and NEVER
+wraps it in a `try`/`catch`. `feeder` must be the window's own feeder (`o.ctx.feeder`), else an
+`ArgumentError` is thrown. `o` MUST already be solved (i.e. [`solve_mpc_window!`](@ref) called)
 at window-local positions `τ = 1:o.H` before calling this. `t` is the resolve's ABSOLUTE start
 hour (used to slice `λ₀` AND every device/demand profile for the escalation branch, and to
 name the resolve in the `@warn` message — never used to index `o`, which is always
@@ -811,7 +812,7 @@ forecast perturbation — so both are threaded from `run_mpc`'s loop into
 plain fields (hence whose fresh-model Parameter DEFAULTS) carry exactly those values. They
 are required (no silent defaults) so a caller can never accidentally price the wrong state.
 
-On a certified step: `cert_status = :certified_convex_dual`, `price_vec = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed inline check:
+On a certified step: `cert_status = :certified_convex_dual`, `price_vec = dual.(o.ctx.constraints[:balance_p][o.agg_bus, :])` (length `o.H`). On a failed first-tier check:
 escalates through its OWN ladder (never invents a new tolerance) — a ONE-OFF
 [`RestrictedBranchFlow`](@ref)`()` solve + [`ACPowerFlow`](@ref)`()` cross-solve +
 [`assert_restriction_exact!`](@ref)`(...; report = true)`, publishing `cert_status = :certified_convex_dual_restricted` on a rescue (a DISTINCT symbol from the first-tier
@@ -828,7 +829,7 @@ Each escalation tier runs inside a `catch` that routes its DOCUMENTED failure mo
 returned status instead of propagating out of `run_mpc` mid-loop: `assert_solved!` retry
 exhaustion (`SolveFailedError`) and `assert_battery_complementarity!`'s legitimate
 negative-effective-price throw (`FourQuadBESS.jl`'s step-3 derivation — the very regime that
-trips the inline cone check; `CertificateError`). The tiers admit ONLY `SolveFailedError` /
+trips the first-tier cone check; `CertificateError`). The tiers admit ONLY `SolveFailedError` /
 `CertificateError`; everything else (`MethodError`, `BoundsError`, `ArgumentError`,
 `KeyError`, ...) propagates. `InterruptException` is ALWAYS rethrown. The
 restricted-tier `solve_welfare` is called with `rtol_exact = Inf`, neutralizing ITS internal
@@ -863,15 +864,12 @@ function _mpc_certify_and_price(
     _solve_welfare = solve_welfare,
     _ac_dual_fallback_price = ac_dual_fallback_price,
 )
-    pv = _require_pf_vars(o.ctx)
-    cone_maxratio = 0.0
-    for (b, br) in enumerate(feeder.branches), τ in 1:(o.H)
-        lhs = value(pv.l[b, τ]) * value(pv.v[br.from, τ])
-        rhs = value(pv.P[b, τ])^2 + value(pv.Q[b, τ])^2
-        gap = abs(lhs - rhs)
-        tol = 1e-6 + 1e-4 * max(abs(lhs), abs(rhs))
-        cone_maxratio = max(cone_maxratio, gap / tol)
-    end
+    o.ctx.feeder === feeder || throw(
+        ArgumentError("_mpc_certify_and_price: feeder must be the window's own feeder"),
+    )
+    # First-tier certificate: the SAME per-(branch, hour) arithmetic and defaults as
+    # assert_socp_exact! (shared _socp_cone_check -> _cone_row), evaluated without throwing.
+    cone_maxratio = _socp_cone_check(o.ctx).maxratio
     step_certified = cone_maxratio <= 1     # NEVER throws here
 
     if step_certified
@@ -901,7 +899,7 @@ function _mpc_certify_and_price(
         # instead of propagating out of run_mpc mid-loop (losing the trace accumulated so
         # far). The documented throwers inside a tier: assert_solved! retry exhaustion,
         # assert_battery_complementarity! (LEGITIMATELY throws in the negative-effective-
-        # price / high-PV regime — exactly the regime that trips the inline cone check,
+        # price / high-PV regime — exactly the regime that trips the first-tier cone check,
         # FourQuadBESS.jl's step-3 derivation), and assert_ac_exact!'s structural guards.
         # InterruptException is ALWAYS rethrown (a user Ctrl-C is never a certificate
         # verdict). If BOTH tiers fail, the terminal `:cert_failed` status (the symbol
