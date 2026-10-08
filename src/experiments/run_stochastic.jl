@@ -187,7 +187,14 @@ Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-ident
 guarantee) — every stochastic draw flows through a seeded, independent `sub_seed` sub-stream,
 never the global RNG.
 """
-function _run_stochastic(s::Scenario, st::Stochastic)
+function _run_stochastic(
+    s::Scenario,
+    st::Stochastic;
+    # Internal test seam: the per-draw held-out solve. Production always uses
+    # `_stoch_solve_held_out!`; a test may wrap it (same signature and return contract) to
+    # force a deterministic refusal on chosen draws and check the aggregation below.
+    solve_held_out! = _stoch_solve_held_out!,
+)
     _check_probabilities(st.S, st.probabilities)   # `probabilities` is mutable post-construction
     # --- 1. MATERIALIZE, verbatim per run_mpc's/run_scenario's own materialization block
     # (mirrors `src/experiments/mpc_loop.jl`): feeder/pf built ONCE, reused for every
@@ -340,7 +347,7 @@ function _run_stochastic(s::Scenario, st::Stochastic)
         end
 
         _restore_ladder_attrs!(h_oos.model, ladder_baseline)   # draw-order independence
-        welfare_h[h], infeasible_h[h], inexact_h[h] = _stoch_solve_held_out!(h_oos, h)
+        welfare_h[h], infeasible_h[h], inexact_h[h] = solve_held_out!(h_oos, h)
         if !infeasible_h[h]
             socp_maxratio_h[h] = get(h_oos.ctx.meta, :socp_maxratio, NaN)
         end

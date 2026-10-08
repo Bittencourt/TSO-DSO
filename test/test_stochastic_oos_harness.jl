@@ -41,8 +41,9 @@
 #    gap/(atol_b + rtol·|cone|) ratios up to ≈ 51 on the pin-binding solves); at 5e-10 every
 #    one of these solves measures ≤ 0.5. This is the same tolerance and the same rationale as
 #    the in-sample builder `build_stochastic_welfare` (a convergence-precision fix, not a gate
-#    weakening: the gate's own τ/ε are untouched). The harness DEFAULT optimizer is unchanged;
-#    the refusal item below exercises it on purpose.
+#    weakening: the gate's own τ/ε are untouched). The harness DEFAULT optimizer is unchanged.
+#    The refusal item below also uses the tightened optimizer and forces a deterministic cone
+#    slack, so it does not depend on how imprecise the default solve happens to be.
 
 @testitem "stochastic_oos_harness: build-once — num_variables/num_constraints invariant across heterogeneous re-solves" tags =
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
@@ -165,14 +166,17 @@ end
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
     using TSODSO
     using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
-    using JuMP: set_parameter_value
+    using JuMP: @constraint, set_parameter_value, value
 
-    # The pin-binding fixture above, but with the harness DEFAULT optimizer (tol_gap = 1e-8).
-    # Measured: its held-out solve leaves a cone residual whose worst
-    # gap/(atol_b + rtol·|cone|) ratio is ≈ 51 (the shared exactness gate refuses > 1). The
-    # step must throw the typed certificate refusal, and the orchestrator helper must turn
-    # exactly that refusal into a reported, excluded draw — not an aborted run and not a
-    # silently averaged number.
+    # The pin-binding fixture above at the tightened optimizer, where the held-out solve is
+    # exact (measured worst gap/(atol_b + rtol·|cone|) ratio 0.389). A constraint then forces
+    # the squared current of the only branch at hour 1 at least δ = 5e-6 above its exact
+    # value: the cone residual is then about δ, far above the gate's solver floor (measured
+    # ratio ≈ 25). The step must throw the typed certificate refusal, and the orchestrator
+    # helper must turn exactly that refusal into a reported, excluded draw, not an aborted run
+    # and not a silently averaged number.
+    oos_opt =
+        TSODSO.select_optimizer(TSODSO.SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10)
     feeder = StochasticFixtures.stoch_feeder()
     T = StochasticFixtures.T
     λ0 = StochasticFixtures.stoch_lambda0()
@@ -181,13 +185,26 @@ end
         sub_seed(StochasticFixtures.SEED_STOCH, :oos_2),
     )
 
-    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    h = build_stochastic_oos_harness(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ0,
+        optimizer = oos_opt,
+    )
 
     pin = only(h.battery_pins)
     ppv = only(h.ppv_handles)
     set_parameter_value.(ppv.Ppv_param, fill(0.01, T))
     set_parameter_value.(pin.pin_p_ch, fill(0.0003, T))
     set_parameter_value.(pin.pin_p_dch, zeros(T))
+
+    solve_stochastic_oos_step!(h)
+    @test h.ctx.meta[:socp_maxratio] <= 1
+
+    l = h.ctx.pf_vars.l
+    @constraint(h.model, l[1, 1] >= value(l[1, 1]) + 5e-6)
 
     err = @test_throws CertificateError solve_stochastic_oos_step!(h)
     @test err.value.kind === :socp_exact

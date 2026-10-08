@@ -143,6 +143,75 @@ end
     @test r.oos.realized_welfare == sum(r.oos.welfare_h) / s.strategy.H_oos
 end
 
+@testitem "run_stochastic: a refused held-out draw is reported with :oos_inexact_skipped and excluded end to end" tags =
+    [:run_stochastic] setup = [StochasticFixtures] begin
+    using TSODSO
+    using JuMP: @constraint, delete, value
+
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
+    r0 = run_stochastic(s)   # every draw certified (see the mask item above)
+
+    # A deterministic refusal on chosen draws, through the real exactness gate and the real
+    # skip-and-report conversion: certify the draw, then force the squared current of the
+    # least-loaded branch at hour 1 at least δ = 5e-6 above its exact value (cone residual
+    # about δ, far above the gate's solver floor; measured ratio ≈ 25 on draw 2), re-solve,
+    # and delete the constraint again so the next draw sees the unmodified harness.
+    function forced_slack(targets; δ = 5e-6)
+        return function (h_oos, i)
+            i in targets || return TSODSO._stoch_solve_held_out!(h_oos, i)
+            TSODSO.solve_stochastic_oos_step!(h_oos)
+            l = h_oos.ctx.pf_vars.l
+            b = argmin([value(l[k, 1]) for k in 1:length(h_oos.feeder.branches)])
+            con = @constraint(h_oos.model, l[b, 1] >= value(l[b, 1]) + δ)
+            res = TSODSO._stoch_solve_held_out!(h_oos, i)
+            delete(h_oos.model, con)
+            return res
+        end
+    end
+
+    # One refused draw: reported, excluded, and only the usable draws are averaged.
+    r = TSODSO._run_stochastic(s, s.strategy; solve_held_out! = forced_slack((2,)))
+    usable = [1, 3, 4, 5]
+    @test r.status === :oos_inexact_skipped
+    @test r.oos.inexact_h == [false, true, false, false, false]
+    @test !any(r.oos.infeasible_h)
+    @test r.oos.socp_maxratio_h[2] > 1
+    @test all(<=(1), r.oos.socp_maxratio_h[usable])
+    @test isfinite(r.oos.welfare_h[2])   # kept for reporting, not averaged
+    @test r.in_sample.welfare == r0.in_sample.welfare
+    @test r.oos.welfare_h[usable] == r0.oos.welfare_h[usable]
+    @test r.oos.realized_welfare == sum(r.oos.welfare_h[usable]) / length(usable)
+    @test r.oos.realized_welfare != sum(r.oos.welfare_h) / s.strategy.H_oos
+    @test r.oos.welfare_gap == r.oos.realized_welfare - r.in_sample.welfare
+
+    # A refused and an infeasible draw together: the inexact status takes precedence and both
+    # draws are excluded.
+    with_infeasible(inner, bad) =
+        (h_oos, i) -> i in bad ? (NaN, true, false) : inner(h_oos, i)
+    r2 = TSODSO._run_stochastic(
+        s,
+        s.strategy;
+        solve_held_out! = with_infeasible(forced_slack((2,)), (4,)),
+    )
+    @test r2.status === :oos_inexact_skipped
+    @test r2.oos.inexact_h == [false, true, false, false, false]
+    @test r2.oos.infeasible_h == [false, false, false, true, false]
+    @test isnan(r2.oos.socp_maxratio_h[4])
+    @test r2.oos.realized_welfare == sum(r2.oos.welfare_h[[1, 3, 5]]) / 3
+
+    # Every draw refused: no usable draw, so no fabricated number.
+    r3 = TSODSO._run_stochastic(s, s.strategy; solve_held_out! = forced_slack(1:5))
+    @test r3.status === :oos_inexact_skipped
+    @test all(r3.oos.inexact_h)
+    @test isnan(r3.oos.realized_welfare)
+    @test isnan(r3.oos.welfare_gap)
+end
+
 @testitem "run_stochastic: measurement-before-golden — repeated-run stability precedes the pinned literal" tags =
     [:run_stochastic] setup = [StochasticFixtures] begin
     using TSODSO
