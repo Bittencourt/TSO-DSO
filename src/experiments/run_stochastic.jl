@@ -153,8 +153,7 @@ A `NamedTuple` `(; in_sample, oos)`:
     read verbatim off [`build_stochastic_welfare`](@ref)'s own return value: `welfare` is the
     probability-weighted in-sample expected-welfare objective; `dadp`/`expected_dadp` are the
     per-scenario de-scaled DADP and its probability-weighted expectation.
-  - `oos::NamedTuple` — `(; welfare_h, infeasible_h, inexact_h, socp_maxratio_h,
-    realized_welfare, welfare_gap)`:
+  - `oos::NamedTuple` — `(; welfare_h, infeasible_h, inexact_h, socp_maxratio_h, realized_welfare, welfare_gap)`:
     `welfare_h[h]` is the held-out scenario `h`'s realized objective value (the fixed
     first-stage schedule re-scored against that scenario's own exogenous draw), or `NaN`
     when that draw is genuinely INFEASIBLE against the committed schedule (the
@@ -368,7 +367,8 @@ end
 names the more serious skip; the masks carry the full per-draw detail. The one-argument form
 assumes no inexact draw.
 """
-_stochastic_status(infeasible_h) = _stochastic_status(infeasible_h, falses(length(infeasible_h)))
+_stochastic_status(infeasible_h) =
+    _stochastic_status(infeasible_h, falses(length(infeasible_h)))
 function _stochastic_status(infeasible_h, inexact_h)
     any(inexact_h) && return :oos_inexact_skipped
     any(infeasible_h) && return :oos_infeasible_skipped
