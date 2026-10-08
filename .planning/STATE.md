@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: executing
-stopped_at: Completed 38-10-PLAN.md (phase gate: 1.12.5 Pass 32304 and 1.12.7 Pass 32299, both 0/0/Broken 5 = baseline + 80 itemized; canary iters 56; count-sets 517/480/37/99; JET 0 NEW; docs OK; all guards green; 38-VALIDATION signed off); next is /gsd-verify-work 38
-last_updated: "2026-10-08T02:51:35.389Z"
+status: milestone_complete
+stopped_at: Milestone complete (Phase 38 was final phase)
+last_updated: 2026-10-08T04:21:21.808Z
 last_activity: 2026-10-08
 progress:
   total_phases: 13
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-22)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 38 — Close v4.0 Audit Gaps
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 38 (Close v4.0 Audit Gaps) — ALL PLANS COMPLETE (awaiting verification)
-Plan: 10 of 10 complete (38-01..38-10 done; next /gsd-verify-work 38)
-Status: Phase gate green (38-FINAL-GATES.md); v4.0 audit gaps closed locally, GitHub-side CI is the open manual check
-  Latest certified full suite: 32304 passed / 0 failed / 0 errored / 5 broken at 958cc98 (Julia 1.12.5; 32299/0/0/5 on 1.12.7 at 806c4cd);
+Phase: 38 (Close v4.0 Audit Gaps) — COMPLETE (verified 4/4, human_needed: GitHub CI, guide prose spot-check, compare refresh review)
+Plan: 10 of 10 complete
+Status: All v4.0 phases complete; milestone re-audit next
+  Latest certified full suite: 32325 passed / 0 failed / 0 errored / 5 broken after the Phase 38 review fixes (Julia 1.12.5, p38-postfix125; gate runs 32304 on 1.12.5 at 958cc98, 32299/0/0/5 on 1.12.7 at 806c4cd);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 37 verified 4/4 (GitHub-side CI run is the one open manual check).
   `/gsd-secure-phase` not run for Phases 29–37 (security enforcement default-on).
@@ -120,7 +120,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 213 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 223 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -177,6 +177,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 35 | 5 | - | - |
 | 36 | 22 | - | - |
 | 37 | 13 | - | - |
+| 38 | 10 | - | - |
 
 **Recent Trend:**
 

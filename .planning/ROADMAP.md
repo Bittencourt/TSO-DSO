@@ -832,7 +832,7 @@ Plans:
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete    | 2026-10-07 |
-| 38. Close v4.0 Audit Gaps | v4.0 | 10/10 | Complete   | 2026-10-08 |
+| 38. Close v4.0 Audit Gaps | v4.0 | 10/10 | Complete    | 2026-10-08 |
 
 ## Deferred / Future-Milestone Notes
 
