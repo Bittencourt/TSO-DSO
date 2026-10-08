@@ -46,10 +46,11 @@ Collate every per-run JLD2 artifact under `dir` (written by [`run_and_store`](@r
 All THREE diff-friendly rules are mandatory:
 
  1. **Fixed column order** — an EXPLICIT `select` on
-    `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ, :welfare, :exact_maxgap, :iters, :final_r, :final_s, :gitcommit]` (the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
+    `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :pf, :pf_thesis_literal, :pf_ε, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ, :mpc_H, :mpc_step, :mpc_terminal_soc, :mpc_forecast_error, :stoch_S, :stoch_H_oos, :welfare, :exact_maxgap, :iters, :final_r, :final_s, :oos_inexact_draws, :oos_infeasible_draws, :oos_status, :gitcommit]` (the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
     now kept alongside the result columns, so the collated CSV — like the per-run JLD2, since
-    `result_to_dict` persists `struct2dict(s)` — is self-describing without re-loading the
-    `Scenario` even for a non-default `:admm` sweep), intersected with the columns actually
+    `result_to_dict` persists the flat `_scenario_identity(s; style = :record)` selectors and
+    active-strategy knobs — is self-describing without re-loading the `Scenario` even for a
+    non-default `:admm` sweep), intersected with the columns actually
     present (tolerant of a `:centralized`-only sweep where `:iters`/`:final_r`/`:final_s` are
     still columns of `missing`, since they were populated as `missing` per-run — the intersect
     guard exists for robustness against any future column-set drift, not for these expected
@@ -75,7 +76,9 @@ All THREE diff-friendly rules are mandatory:
     so the override must be `String`, not `Symbol`, entries).
 
 In a mixed-strategy sweep, knob keys absent from a run's JLD2 (inactive strategy) surface as
-`missing` cells; `sort!` places `missing` last deterministically. `:stoch_probabilities` is
+`missing` cells; `sort!` places `missing` last deterministically. The same holds for the
+Stochastic-only result columns `:oos_inexact_draws`, `:oos_infeasible_draws` and `:oos_status`,
+which make a held-out draw excluded from `welfare_gap` visible in the collated CSV. `:stoch_probabilities` is
 deliberately NOT a column (a vector is not CSV-friendly; its digest lives in the filename).
 
 Two `collate_summary` calls over the SAME run directory produce bit-for-bit identical CSV files
@@ -113,6 +116,9 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
         :iters,
         :final_r,
         :final_s,
+        :oos_inexact_draws,
+        :oos_infeasible_draws,
+        :oos_status,
         :gitcommit,
     ]
     present = Symbol.(names(df))

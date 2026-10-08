@@ -172,13 +172,18 @@ flatten helper as [`scenario_filename`](@ref) (`style = :record`): the common se
 (`name`, `feeder`, `seed`, `T`, `population`, `price`, `allow_export`), `:pf`,
 `:pf_thesis_literal`, `:pf_ε`, lowercase `:strategy`, and the legacy flat knob keys of the
 ACTIVE strategy only (`:ρ ... :μ` / `:mpc_*` / `:stoch_*`); plus `welfare`, `dadp`,
-`exact_maxgap`, `iters`, `final_r`, `final_s`, `reactive_consensus_mode` (`missing` for
-non-ADMM), `:julia_version = string(VERSION)`, for MPC `:regret`/`:steps`, and for Stochastic
-`:welfare_gap`. Only primitives/arrays are stored — never strategy objects, `MpcTrace`,
-NamedTuples or details structs — so the JLD2 loads without TSODSO types.
+`exact_maxgap`, `iters`, `final_r`, `final_s`, `reactive_consensus_mode`,
+`:julia_version = string(VERSION)`, for MPC `:regret`/`:steps`, and for Stochastic
+`:welfare_gap`, `:oos_inexact_draws`, `:oos_infeasible_draws` (`Int` counts of held-out draws
+excluded from `welfare_gap` because the exactness gate refused the re-solve or it was
+infeasible) and `:oos_status` (the run status `Symbol`, e.g. `:solved` or
+`:oos_inexact_skipped`). Only primitives/arrays are stored — never strategy objects, enums,
+`MpcTrace`, NamedTuples or details structs — so the JLD2 loads without TSODSO types.
 
-NOTE: `reactive_consensus_mode` is the RESOLVED `ReactiveMode` for
-ADMM, stamped so the artifact is self-describing.
+NOTE: `reactive_consensus_mode` is the RESOLVED `ReactiveMode` of an ADMM run, stored as its
+`Symbol` name (`:OFF`, `:CERTIFIED`, `:LIVE`), and `missing` for non-ADMM runs. Files written
+by earlier versions hold the `ReactiveMode.T` enum instead: they load as the enum with TSODSO
+loaded and as a reconstructed type without it.
 """
 function result_to_dict(res::ScenarioResult)
     d = _scenario_identity(res.scenario; style = :record)
@@ -188,7 +193,8 @@ function result_to_dict(res::ScenarioResult)
     d[:iters] = res.iters
     d[:final_r] = res.final_r
     d[:final_s] = res.final_s
-    d[:reactive_consensus_mode] = res.reactive_consensus_mode
+    d[:reactive_consensus_mode] =
+        ismissing(res.reactive_consensus_mode) ? missing : Symbol(res.reactive_consensus_mode)
     d[:julia_version] = string(VERSION)
     det = res.details
     if det isa MPCDetails
@@ -196,6 +202,9 @@ function result_to_dict(res::ScenarioResult)
         d[:steps] = det.steps
     elseif det isa StochasticDetails
         d[:welfare_gap] = det.oos.welfare_gap
+        d[:oos_inexact_draws] = count(det.oos.inexact_h)
+        d[:oos_infeasible_draws] = count(det.oos.infeasible_h)
+        d[:oos_status] = _stochastic_status(det.oos.infeasible_h, det.oos.inexact_h)
     end
     return d
 end

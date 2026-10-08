@@ -133,6 +133,9 @@ fails loudly instead of silently changing behavior.
   removed; use `.cone` and `.drop`. `NamedTuple(d)` keeps the historical positional order but
   now uses the same names: its keys are `(energy, cone, congestion, drop, reactive, total)`
   instead of `(energy, loss, congestion, voltage, reactive, total)`.
-- **Stored simulation provenance.** The type path of the reactive mode changed, so locally
-  stored simulation provenance files written before this change load the mode with a
-  reconstructed type.
+- **Stored simulation provenance.** The reactive mode is stored as a Symbol (`:OFF`,
+  `:CERTIFIED`, `:LIVE`; `missing` for non-ADMM runs). Files written by earlier versions store
+  the enum; they load as `ReactiveMode.T` with TSODSO loaded and as a reconstructed type
+  without it. Stochastic results also store `oos_inexact_draws`, `oos_infeasible_draws` and
+  `oos_status`, so a held-out draw excluded from `welfare_gap` is visible in the stored
+  artifact.
