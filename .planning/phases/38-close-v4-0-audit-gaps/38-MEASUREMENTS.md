@@ -11,6 +11,7 @@ relied on) so the gate plan can reconcile the full-suite totals against the per-
 | 38-01 | test/test_exactness.jl | 6 -> 6 | 20 -> 28 | +8 kernel parity assertions inside 2 existing items; combined filtered run with test_admm_exactness_default.jl: 62/62 |
 | 38-02 | test/test_mpc_loop.jl | 11 -> 12 | 369 -> 376 | +1 item (hybrid-floor regression + parity, 7 assertions); RED run: 3 failed / 4 passed in the new item against the old inline loop |
 | 38-04 | test/test_stochastic_oos_harness.jl + test/test_run_stochastic.jl + test/test_status_policy.jl | 14 -> 15 (5->6, 5, 4) | 56 -> 74 | +1 item (inexact refusal, 7 assertions); +7 in run_stochastic items (3-tuple flags, recovery ratio, inexact_h/socp_maxratio_h mask); +4 `_stochastic_status` 2-mask cases; golden pin unchanged |
+| 38-06 | test/test_admm_timeout.jl | 0 (plain script, never discovered) -> 2 | 0 (not run by the suite) -> 19 | script converted to 2 fast `:admm` items (1 + 11 budget assertions; 7 convergence assertions); cap assertion tightened `Exception` -> `ConvergenceError`; isolated cold filtered run 55.4 s (incl. compile); no `:slow` tag (warm in-suite ≈ 13 s < 30 s). `--count-sets --strict` before: `all=513 fast=476 slow=37 files=98 canary=1 outside=0`; after: `all=515 fast=478 slow=37 files=99 canary=1 outside=0`; `test/expected_broken.txt` unchanged (no Broken) |
 
 ## MPC first-tier ratios (old flat 1e-6 vs hybrid)
 
