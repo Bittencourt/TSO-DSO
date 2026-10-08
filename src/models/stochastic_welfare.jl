@@ -740,12 +740,43 @@ end
 """
     solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int = 4) -> Model
 
-Re-solve the built-ONCE [`StochasticOosHarness`](@ref) `h` via [`solve_with_retry!`](@ref)
-— a ONE-LINE delegation that NEVER adds a variable or constraint to `h.model`. `dual = false`: this harness never reports a per-scenario DADP (the scope is the realized
-welfare only). Callers mutate `h.battery_pins`/`h.ppv_handles`/`h.tout_handles`/
-`h.agg_pdc_handles` via `set_parameter_value`/`set_parameter_value.` BEFORE calling this
-function.
+Re-solve the built-ONCE [`StochasticOosHarness`](@ref) `h` via [`solve_with_retry!`](@ref),
+then certify the held-out solve with the SOCP exactness gate. `dual = false`: this harness
+never reports a per-scenario DADP (the scope is the realized welfare only). Callers mutate
+`h.battery_pins`/`h.ppv_handles`/`h.tout_handles`/`h.agg_pdc_handles` via
+`set_parameter_value`/`set_parameter_value.` BEFORE calling this function. It NEVER adds a
+variable or constraint to `h.model` (the build-once contract).
+
+# Exactness gate
+
+When the formulation carries the branch-current variable (`has_branch_current(h.ctx)`), every
+successful re-solve runs the same shared cone check as [`assert_socp_exact!`](@ref), with the
+same library defaults (`rtol = 1e-4`, the per-branch hybrid floor
+`atol_b = max(τ_solver, ε·ref_b)`). The worst absolute cone gap and the worst
+gap/(atol_b + rtol·|cone|) ratio are stored in `h.ctx.meta[:socp_maxgap]` and
+`h.ctx.meta[:socp_maxratio]`. If the ratio exceeds 1 the held-out welfare is not certified and
+the function throws `CertificateError(...; kind = :socp_exact)`; the model is left solved, so
+a caller can still read (and report) its objective. [`run_stochastic`](@ref) turns exactly this
+refusal into a skip-and-report draw.
+
+The harness default optimizer is unchanged (`select_optimizer(problem_class(pf))`); a caller
+that needs a tighter interior-point solve passes `optimizer` to
+[`build_stochastic_oos_harness`](@ref). The gate's own tolerances are never relaxed here.
 """
 function solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int = 4)
-    return solve_with_retry!(h.model; max_attempts = max_attempts, dual = false)
+    m = solve_with_retry!(h.model; max_attempts = max_attempts, dual = false)
+    if has_branch_current(h.ctx)
+        c = _socp_cone_check(h.ctx)
+        h.ctx.meta[:socp_maxgap] = c.maxgap
+        h.ctx.meta[:socp_maxratio] = c.maxratio
+        c.maxratio > 1 && throw(
+            CertificateError(
+                "held-out re-solve: SOCP relaxation INEXACT: worst " *
+                "gap/(atol_b+rtol·|cone|)=$(c.maxratio) > 1 (max abs " *
+                "|l·v−(P²+Q²)|=$(c.maxgap)) — the held-out welfare is not certified";
+                kind = :socp_exact,
+            ),
+        )
+    end
+    return m
 end

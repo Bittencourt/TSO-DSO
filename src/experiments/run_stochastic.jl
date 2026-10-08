@@ -17,8 +17,10 @@
 #     against held-out scenario 1's aggregator list as the device STRUCTURE template,
 #     pins the harness's battery controls to the in-sample optimum ONCE — before the
 #     held-out loop (the build-once contract) — then re-slides every held-out scenario's
-#     own PV/demand/ambient data and re-solves via `solve_stochastic_oos_step!`; and
-#  6. reports the realized-vs-in-sample welfare gap.
+#     own PV/demand/ambient data and re-solves via `solve_stochastic_oos_step!` (which
+#     certifies each held-out solve with the shared SOCP exactness gate); and
+#  6. reports the realized-vs-in-sample welfare gap over the feasible AND exact held-out
+#     draws (infeasible or inexact draws are skipped-and-reported, never averaged in).
 #
 # `λ₀` is computed ONCE, from in-sample scenario 1's own profile draw, and reused for every
 # in-sample AND held-out scenario: `:mem`'s shape is deterministic and profile-independent
@@ -44,11 +46,19 @@ end
 
 """
     _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
-        -> (welfare::Float64, infeasible::Bool)
+        -> (welfare::Float64, infeasible::Bool, inexact::Bool)
 
-Internal helper (unexported): re-solve the pinned harness for
-held-out scenario `h_index`, converting a GENUINE primal infeasibility into an honest
-`(NaN, true)` skip-and-report instead of aborting the whole [`run_stochastic`](@ref) call.
+Internal helper (unexported): re-solve the pinned harness for held-out scenario `h_index`,
+converting the two documented held-out failure modes into an honest skip-and-report instead of
+aborting the whole [`run_stochastic`](@ref) call:
+
+  - a GENUINE primal infeasibility returns `(NaN, true, false)`;
+  - an INEXACT held-out solve (the step's exactness gate refused it:
+    `CertificateError` with `kind === :socp_exact`) returns
+    `(objective, false, true)`. The objective is reported per draw but the caller
+    EXCLUDES it from `realized_welfare`, because it is not certified.
+
+A successful, certified solve returns `(objective, false, false)`. Each skip emits a `@warn`.
 
 Why infeasibility is a REAL, expected failure mode here (the classic committed-first-stage
 evaluation problem): the in-sample optimal `p_ch[t]` satisfies `p_ch[t] ≤ pv_used_s[t] ≤ Ppv_s[t]` for every IN-SAMPLE scenario, but a held-out draw whose PV at some hour falls
@@ -56,15 +66,29 @@ below every in-sample draw makes the pinned equality `p_ch[t] == pin` collide wi
 scenario's own `p_ch[t] ≤ pv_used[t] ≤ Ppv_h[t]` — a genuine `PRIMAL_INFEASIBLE` that
 [`solve_with_retry!`](@ref) correctly refuses to retry. Low-probability on the small-PV CI
 fixtures, likely under scaled-up PV. Only the infeasibility statuses (`INFEASIBLE`,
-`INFEASIBLE_OR_UNBOUNDED`, `LOCALLY_INFEASIBLE`) are converted — every other solve failure
-(numerical error, unboundedness, exhausted retry ladder) still rethrows LOUDLY, never a
-silent skip.
+`INFEASIBLE_OR_UNBOUNDED`, `LOCALLY_INFEASIBLE`) are converted.
+
+Why inexactness is one too: on the pinned-dispatch held-out problem the interior-point solve
+can leave cone residuals just above the gate's solver floor (measured on IEEE-13, T = 9: a
+few held-out draws in ten, with violations of 2-4e-7 against τ_solver = 2e-7, not fixed by
+tightening the solver tolerances). Aborting the run would discard the expensive in-sample
+solve; averaging the draw in would publish an uncertified number.
+
+Every OTHER error (any other solve failure, any other certificate kind, a programming error)
+still rethrows LOUDLY, never a silent skip.
 """
 function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
     try
         solve_stochastic_oos_step!(h_oos)
-        return _objective(h_oos.model), false
+        return _objective(h_oos.model), false, false
     catch e
+        if e isa CertificateError && e.kind === :socp_exact
+            ratio = get(h_oos.ctx.meta, :socp_maxratio, NaN)
+            @warn "run_stochastic: held-out scenario $h_index: SOCP relaxation inexact " *
+                  "(cone ratio $ratio > 1) — recorded with inexact_h = true and EXCLUDED " *
+                  "from realized_welfare (skip-and-report, never silent)"
+            return _objective(h_oos.model), false, true
+        end
         e isa SolveFailedError || rethrow()
         ts = termination_status(h_oos.model)
         ts in (MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.LOCALLY_INFEASIBLE) ||
@@ -74,15 +98,15 @@ function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
               "pinned p_ch/p_dch at some hour) — recorded as welfare_h = NaN, " *
               "infeasible_h = true, and EXCLUDED from realized_welfare " *
               "(skip-and-report, never silent)" termination_status = ts
-        return NaN, true
+        return NaN, true, false
     end
 end
 
 """
     run_stochastic(s::Scenario) -> NamedTuple
 
-The result additionally carries a trailing `status` (`:solved` or `:oos_infeasible_skipped`,
-see `STATUS_VOCABULARY.run_stochastic`).
+The result additionally carries a trailing `status` (`:solved`, `:oos_infeasible_skipped` or
+`:oos_inexact_skipped`, see `STATUS_VOCABULARY.run_stochastic`).
 
 Drive the FULL two-stage stochastic extensive-form + out-of-sample evaluation for `s`
 materialize `st.S` in-sample scenario aggregator populations, solve the
@@ -94,16 +118,22 @@ loop) — and reporting the realized-vs-in-sample welfare gap.
 
 # Guards
 
-Unlike [`run_mpc`](@ref)'s cross-field `mpc_H > T` check, this function needs NO additional
-guard beyond what [`Scenario`](@ref)'s own constructor already enforces:
-`stoch_S`/`stoch_H_oos`/`stoch_probabilities` are independently bounded at construction, with no cross-field interaction to re-check here.
+Unlike [`run_mpc`](@ref), which checks `MPC.H > T` against the scenario horizon, this function
+needs NO cross-field guard: `Stochastic(S, probabilities, H_oos)` validates its own knobs at
+construction, and `_check_probabilities` re-checks `probabilities` here in case the vector was
+mutated after construction.
 
-ONE documented runtime failure mode: a held-out draw can be
-genuinely INFEASIBLE against the committed first-stage schedule (the classic
-committed-first-stage evaluation problem — see [`_stoch_solve_held_out!`](@ref)). Such a
-scenario is skipped-and-reported (`welfare_h[h] = NaN`, `infeasible_h[h] = true`, plus a
-`@warn`), never allowed to abort the run and never silently absorbed; every OTHER solve
-failure still rethrows loudly.
+TWO documented runtime failure modes, both skipped-and-reported (a `@warn` per draw, never
+allowed to abort the run and never silently absorbed; see [`_stoch_solve_held_out!`](@ref)):
+
+  - a held-out draw can be genuinely INFEASIBLE against the committed first-stage schedule
+    (the classic committed-first-stage evaluation problem): `welfare_h[h] = NaN`,
+    `infeasible_h[h] = true`;
+  - a held-out re-solve can be refused by the SOCP exactness gate (inexact relaxation):
+    `welfare_h[h]` keeps the uncertified objective for reporting, `inexact_h[h] = true`.
+
+Every OTHER failure still throws: any other solve failure, and the in-sample exactness refusal
+(`CertificateError` from [`build_stochastic_welfare`](@ref)).
 
 # Materialization (seed disjointness)
 
@@ -123,20 +153,25 @@ A `NamedTuple` `(; in_sample, oos)`:
     read verbatim off [`build_stochastic_welfare`](@ref)'s own return value: `welfare` is the
     probability-weighted in-sample expected-welfare objective; `dadp`/`expected_dadp` are the
     per-scenario de-scaled DADP and its probability-weighted expectation.
-  - `oos::NamedTuple` — `(; welfare_h, infeasible_h, realized_welfare, welfare_gap)`:
+  - `oos::NamedTuple` — `(; welfare_h, infeasible_h, inexact_h, socp_maxratio_h,
+    realized_welfare, welfare_gap)`:
     `welfare_h[h]` is the held-out scenario `h`'s realized objective value (the fixed
     first-stage schedule re-scored against that scenario's own exogenous draw), or `NaN`
     when that draw is genuinely INFEASIBLE against the committed schedule (the
     committed-first-stage evaluation problem: a held-out PV draw
     below every in-sample draw at some hour collides with the pinned `p_ch`; see
     [`_stoch_solve_held_out!`](@ref)); `infeasible_h::Vector{Bool}` marks exactly those
-    skipped-and-reported scenarios (a `@warn` is also emitted per skip — never silent);
-    `realized_welfare` is the uniform-weight average over the FEASIBLE held-out scenarios
-    only (`NaN` if every held-out draw is infeasible — an honestly unusable evaluation,
+    skipped-and-reported scenarios; `inexact_h::Vector{Bool}` marks the draws whose
+    re-solve the SOCP exactness gate refused (their `welfare_h` entry is kept, uncertified,
+    for reporting); `socp_maxratio_h::Vector{Float64}` is each draw's worst cone ratio
+    (gap/(atol_b + rtol·|cone|), > 1 means refused; `NaN` for an infeasible draw or a
+    formulation without branch current). A `@warn` is emitted per skip — never silent.
+    `realized_welfare` is the uniform-weight average over the held-out draws that are
+    FEASIBLE AND EXACT only (`NaN` if there are none — an honestly unusable evaluation,
     never a fabricated number); `welfare_gap = realized_welfare - in_sample.welfare` is
-    the realized-vs-in-sample gap (also `NaN` in that all-infeasible case). When no
-    held-out draw is infeasible — every existing fixture — `realized_welfare` and
-    `welfare_gap` are BIT-IDENTICAL to the earlier definition (before infeasible draws were skipped-and-reported).
+    the realized-vs-in-sample gap (also `NaN` in that case). When no held-out draw is
+    skipped, `realized_welfare` and `welfare_gap` are unchanged from the plain average over
+    all draws.
 
 Reproducible: two calls with the SAME `Scenario` (same `seed`) return `==`-identical
 `in_sample.welfare`/`oos.welfare_gap` (mirrors [`run_mpc`](@ref)'s own same-seed
@@ -264,11 +299,14 @@ function _run_stochastic(s::Scenario, st::Stochastic)
 
     # --- 7. Held-out loop: re-slide every held-out scenario's own PV/demand/ambient data
     # onto the (never-rebuilt) harness and re-solve. A held-out draw that is genuinely
-    # INFEASIBLE against the committed first-stage schedule is
-    # skipped-and-reported (welfare_h = NaN + infeasible_h mask + @warn), never allowed to
-    # abort the whole run after the expensive extensive-form solve, and never silent. ------
+    # INFEASIBLE against the committed first-stage schedule (welfare_h = NaN +
+    # infeasible_h mask + @warn) or whose re-solve the exactness gate refuses (inexact_h
+    # mask + @warn) is skipped-and-reported, never allowed to abort the whole run after the
+    # expensive extensive-form solve, and never silent. ------------------------------------
     welfare_h = Vector{Float64}(undef, st.H_oos)
     infeasible_h = fill(false, st.H_oos)
+    inexact_h = fill(false, st.H_oos)
+    socp_maxratio_h = fill(NaN, st.H_oos)
     for h in 1:st.H_oos
         aggs_h = held_out_aggs[h]
 
@@ -285,16 +323,20 @@ function _run_stochastic(s::Scenario, st::Stochastic)
             set_parameter_value.(pdc.Pdc_param, agg.Pdc[1:s.T])
         end
 
-        welfare_h[h], infeasible_h[h] = _stoch_solve_held_out!(h_oos, h)
+        welfare_h[h], infeasible_h[h], inexact_h[h] = _stoch_solve_held_out!(h_oos, h)
+        if !infeasible_h[h]
+            socp_maxratio_h[h] = get(h_oos.ctx.meta, :socp_maxratio, NaN)
+        end
     end
 
     # --- 8. the realized-vs-in-sample welfare gap: uniform-weight average across the
-    # FEASIBLE held-out scenarios (an infeasible draw is reported via the
-    # infeasible_h mask + NaN entry, never averaged in and never fabricated) minus the
-    # in-sample extensive form's own expected-welfare objective value. When nothing is
-    # infeasible — every existing fixture — this is bit-identical to sum(welfare_h)/H. ------
-    n_feasible = count(!, infeasible_h)
-    realized_welfare = n_feasible == 0 ? NaN : sum(welfare_h[.!infeasible_h]) / n_feasible
+    # FEASIBLE AND EXACT held-out scenarios (an infeasible or inexact draw is reported via
+    # its mask, never averaged in and never fabricated) minus the in-sample extensive
+    # form's own expected-welfare objective value. When nothing is skipped this is the same
+    # expression as sum(welfare_h)/H. -------------------------------------------------------
+    usable = .!(infeasible_h .| inexact_h)
+    n_usable = count(usable)
+    realized_welfare = n_usable == 0 ? NaN : sum(welfare_h[usable]) / n_usable
     welfare_gap = realized_welfare - r.welfare
 
     return (;
@@ -305,18 +347,33 @@ function _run_stochastic(s::Scenario, st::Stochastic)
             probabilities = r.probabilities,
             socp_maxgap = r.socp_maxgap,
         ),
-        oos = (; welfare_h, infeasible_h, realized_welfare, welfare_gap),
+        oos = (;
+            welfare_h,
+            infeasible_h,
+            inexact_h,
+            socp_maxratio_h,
+            realized_welfare,
+            welfare_gap,
+        ),
         # Documented status vocabulary (STATUS_VOCABULARY.run_stochastic).
-        status = _stochastic_status(infeasible_h),
+        status = _stochastic_status(infeasible_h, inexact_h),
     )
 end
 
 """
-    _stochastic_status(infeasible_h) -> Symbol
+    _stochastic_status(infeasible_h[, inexact_h]) -> Symbol
 
-`:oos_infeasible_skipped` iff any held-out scenario was skipped-and-reported, else `:solved`.
+`:oos_inexact_skipped` iff any held-out re-solve was refused by the exactness gate, else
+`:oos_infeasible_skipped` iff any held-out draw was infeasible, else `:solved`. The status
+names the more serious skip; the masks carry the full per-draw detail. The one-argument form
+assumes no inexact draw.
 """
-_stochastic_status(infeasible_h) = any(infeasible_h) ? :oos_infeasible_skipped : :solved
+_stochastic_status(infeasible_h) = _stochastic_status(infeasible_h, falses(length(infeasible_h)))
+function _stochastic_status(infeasible_h, inexact_h)
+    any(inexact_h) && return :oos_inexact_skipped
+    any(infeasible_h) && return :oos_infeasible_skipped
+    return :solved
+end
 
 """
     run_stochastic(s::Scenario) -> NamedTuple
@@ -326,9 +383,12 @@ for a non-Stochastic strategy). NamedTuple contract unchanged.
 
 # Status and exceptions
 
-The returned `status` is `:solved` or `:oos_infeasible_skipped` (a held-out scenario was
-skipped and reported). Only a `SolveFailedError` on an INFEASIBLE status is skipped; every
-other failure throws. See the [status & exception policy](@ref status-policy).
+The returned `status` is `:solved`, `:oos_infeasible_skipped` (a held-out draw was infeasible
+and was skipped and reported) or `:oos_inexact_skipped` (a held-out re-solve was refused by the
+SOCP exactness gate and was skipped and reported; takes precedence when both occur). Only a
+`SolveFailedError` on an INFEASIBLE status and a held-out `CertificateError` of kind
+`:socp_exact` are skipped; every other failure throws, including the in-sample exactness
+refusal. See the [status & exception policy](@ref status-policy).
 """
 function run_stochastic(s::Scenario)
     st = s.strategy isa Stochastic ? s.strategy : Stochastic()

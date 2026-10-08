@@ -112,14 +112,17 @@ Single source of truth (not exported) for the `status::Symbol` each entry point'
 carries. The status-vs-throw policy page and `test/test_status_policy.jl` both consume it.
 `run_mpc`: `:certified` (every step first tier), `:degraded` (a restricted/local-AC step,
 none failed), `:cert_failed`. Stackelberg/Nash: `:converged_relaxation_only` iff the UB
-certifies only the SOC relaxation.
+certifies only the SOC relaxation. `run_stochastic`: `:solved` (every held-out draw feasible and
+exact), `:oos_infeasible_skipped` (a held-out draw was infeasible against the committed
+schedule), `:oos_inexact_skipped` (a held-out re-solve was refused by the SOCP exactness gate;
+takes precedence). Skipped draws are excluded from the realized welfare and flagged per draw.
 """
 const STATUS_VOCABULARY = (
     solve_admm = (:converged, :budget_exceeded),
     solve_stackelberg = (:converged, :converged_relaxation_only),
     run_nash = (:converged, :converged_relaxation_only),
     run_mpc = (:certified, :degraded, :cert_failed),
-    run_stochastic = (:solved, :oos_infeasible_skipped),
+    run_stochastic = (:solved, :oos_infeasible_skipped, :oos_inexact_skipped),
 )
 
 export TSODSOError, SolveFailedError, CertificateError, ConvergenceError
