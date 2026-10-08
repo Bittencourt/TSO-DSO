@@ -348,9 +348,11 @@ leader's strategy.
   \[
     \ell_{ij}[t] \;\ge\; \frac{P_{ij}[t]^2 + Q_{ij}[t]^2}{v_i[t]},
   \]
-  and a parallel loss-less <em>LinDistFlow</em> constraint copy (the Gan–Low exactness device,
+  and a parallel <em>LinDistFlow</em>-style constraint copy (the Gan–Low exactness device,
   thesis eqs. 3.43–3.45) makes the relaxation provably tight at the optimum on radial feeders —
-  so the convex solution is the true AC solution, not a fiction.</li>
+  so the convex solution is the true AC solution, not a fiction. <em>(Changed in v4.0: the
+  default copy now follows the Gan–Low direction, which makes the model a slight restriction of
+  the upper voltage band rather than a pure relaxation; see Section 5.1.)</em></li>
   <li><strong>The objective</strong> — social welfare: total prosumer utility minus the DSO's
   purchase cost at the wholesale (MEM) price \(\lambda_0[t]\) at the substation bus \(j=0\), the
   TSO–DSO frontier:
@@ -634,7 +636,7 @@ oracle; Gurobi/Mosek only as weakdep-gated fallbacks. Reproducibility rides on
 <strong>DrWatson</strong> (seeded scenarios, provenance-stamped storage with the git commit, pinned
 <code>Manifest.toml</code>), documentation on <strong>Documenter + Literate</strong> (every model
 page executes its real solves at build time), figures on <strong>CairoMakie</strong>, and the
-~2,800-test suite combines unit tests, pinned "gate-then-golden" regressions, certification cases,
+test suite (about 32,000 assertions in over 500 test items as of v4.0) combines unit tests, pinned "gate-then-golden" regressions, certification cases,
 and Aqua/JET quality checks.
 </p>
 
@@ -796,13 +798,16 @@ plus this definition. (Time index \(t\) suppressed for clarity; every equation h
     <em>Code note:</em> the implementation adds the cone (3.36) <em>only</em> on branches with a
     genuine limit (the thesis's cases constrain only the head branch); interior branches carry a
     documented no-limit sentinel (<code>SMAX_NO_LIMIT</code>) and get no cone, so cases stay
-    congestion-driven at the head rather than over-constrained by fictitious interior limits. The
-    thesis's separate reverse-direction limit (3.37) is not implemented as a second constraint —
-    (3.36) already bounds \(P^2 + Q^2\) symmetrically in sign.</p>
+    congestion-driven at the head rather than over-constrained by fictitious interior limits. On
+    the same limited branches the thesis's receiving-end limit (3.37),
+    \((P_{ij} - r_{ij}\ell_{ij})^2 + (Q_{ij} - x_{ij}\ell_{ij})^2 \le S_{\max,ij}^2\), is a second
+    constraint (<code>:smax_rev</code>): a PV back-feed can violate it while (3.36) stays slack.
+    <em>(Changed in v4.0: earlier versions omitted (3.37), arguing that (3.36) already bounds
+    \(P^2 + Q^2\) symmetrically in sign.)</em></p>
   </li>
 </ol>
 
-<p><strong>Summary.</strong> The exact branch-flow model is (3.31)–(3.36): all constraints are
+<p><strong>Summary.</strong> The exact branch-flow model is (3.31)–(3.37): all constraints are
 <em>linear</em> in \((P, Q, v, \ell)\) except the single quadratic equality (3.34). An optimization
 over this feasible set is nonconvex — solvers can only promise local optima, and the duals of a
 local solution carry no global price meaning. That is unacceptable for a framework whose entire
@@ -954,6 +959,19 @@ the thesis: the copy is written purely in the original \(P, Q, \ell\) plus the s
 \(\hat v\) (no separate \(\hat P, \hat Q\) flow network is instantiated), and the copy's root is
 fixed to the same reference \(\hat v_0 = 1.0\).</p>
 
+<p><em>Correction (changed in v4.0).</em> The derivation above transcribes the thesis's literal
+copy, \(\hat P = P + r\ell\), \(\hat Q = Q + x\ell\). Telescoped along the root-to-\(j\) path it
+gives \(\hat v \le v\), so it restricts the <em>lower</em> voltage band — the opposite of the
+thesis's own adjacent claim (citing Gan–Low) that the copy makes \(v \le V_{\max}^2\) redundant.
+Since v4.0 the default copy follows the Gan–Low direction, \(\hat P = P - r\ell\),
+\(\hat Q = Q - x\ell\): its drop carries \(+2(r^2+x^2)\,\ell\), more than the true drop's
+\(+(r^2+x^2)\,\ell\), so \(\hat v \ge v\) and the load-bearing bound is
+\(\hat v \le V_{\max}^2\), which presses \(\ell\) down until the cone closes. That default is
+Gan–Low's modified OPF: a conservative restriction of the upper voltage band, exact by theorem,
+with a small measured welfare loss (about 0.05% on the high-PV reference fixture). Neither copy is
+a genuine relaxation. <code>ConvexBranchFlow(; thesis_literal = true)</code> reproduces the
+thesis form.</p>
+
 <p>Honesty requires the next sentence: the thesis presents the copy as <em>guaranteeing</em>
 equality at the optimum. The repo's own experiments (Section 6) show that claim has boundaries —
 so the copy is treated as a steering device, and whether the cone actually closed is checked, every
@@ -968,13 +986,21 @@ time, by the gate below.</p>
   \mathrm{gap}[b,t] \;=\; \bigl|\, \ell_{b}[t]\, v_{i(b)}[t] \;-\; \bigl(P_{b}[t]^2 + Q_{b}[t]^2\bigr) \bigr|
 \]
 
-<p>and requires, per branch (an isapprox-style, scale-free combined bound; defaults
-\(r_{\text{tol}} = 10^{-4}\), \(a_{\text{tol}} = 10^{-6}\)):</p>
+<p>and requires, per branch (an isapprox-style, scale-free combined bound; default
+\(r_{\text{tol}} = 10^{-4}\)):</p>
 
 \[
-  \mathrm{gap}[b,t] \;\le\; a_{\text{tol}} \;+\; r_{\text{tol}}\cdot
-  \max\bigl(|\ell v|,\ |P^2+Q^2|\bigr) .
+  \mathrm{gap}[b,t] \;\le\; a_{b} \;+\; r_{\text{tol}}\cdot
+  \max\bigl(|\ell v|,\ |P^2+Q^2|\bigr),
+  \qquad a_{b} \;=\; \max\bigl(\tau_{\text{solver}},\ \varepsilon\cdot\mathrm{ref}_b\bigr) .
 \]
+
+<p>The absolute floor \(a_b\) is set per branch: \(\mathrm{ref}_b = S_{\max,b}^2\) on a thermally
+limited branch, otherwise the head branch's own \(P^2+Q^2\) at that hour;
+\(\tau_{\text{solver}} = 2\times10^{-7}\) is a measured solver-noise floor and
+\(\varepsilon = 10^{-9}\) a measured relative floor. An explicit <code>atol</code> keyword still
+imposes one flat floor on every branch. <em>(Changed in v4.0: earlier versions used a single flat
+\(a_{\text{tol}} = 10^{-6}\) for every branch.)</em></p>
 
 <p>The relative term makes the verdict invariant to the per-unit base (the gap is in pu², so a
 purely absolute tolerance would judge the same physical slack differently on a 1 MVA vs 100 MVA
@@ -1035,6 +1061,13 @@ solution for study. The boundary is also a <strong>knife-edge</strong>: the mile
 exact↔inexact transition non-monotonic near the boundary, with small population-scale perturbations
 (±2–5%) flipping the classification — which is why price results in that regime are reported as
 directional, not magnitude-exact.</p>
+
+<p><em>Changed in v4.0:</em> after the v4.0 model fixes (among them the Gan–Low default copy of
+Section 5.1) this \(1.2\times\) PV point is cone-exact under both the default and the
+thesis-literal copy. Genuine cone-inexactness still reproduces, but only with
+<code>ConvexBranchFlow(; thesis_literal = true)</code> at a higher PV scale (\(1.4\times\) on the
+same 3-bus feeder). In the 3-bus sweep the default is cone-inexact at 3 of 150 grid points, the
+thesis-literal copy at 5 of 150. The applicability map below predates these changes.</p>
 
 <p><strong>Mapping the applicability region.</strong> Since the detector is free (the certificate is
 computed from the SOCP solution it already has — no oracle needed), the repo sweeps the
@@ -2357,10 +2390,12 @@ through the declared forecast-error channel, never through the deterministic win
   <li><strong>Publish and apply</strong> the first \(n_{\mathrm{apply}} = \min(\Delta, H,
   \dots)\) hours: record the published real-time price \(\lambda^{\mathrm{RTP}}_j[t]\)
   (window position \(\tau=1,\dots\)) into the trace alongside the day-ahead reference at the same
-  absolute hour, accumulate realized welfare from the applied controls, and
+  absolute hour, settle realized welfare for the applied controls against the AC truth plant
+  (see caveats), and
   <strong>propagate the measured state</strong> hour by hour — SOC through the charge/discharge
   recursion, indoor temperature through the thermal recursion anchored on the <em>ground-truth</em>
-  ambient (state propagation is truth-anchored even though settlement is not; see caveats).</li>
+  ambient. <em>(Changed in v4.0: settlement is truth-anchored too, not only state
+  propagation.)</em></li>
   <li><strong>Regret</strong>, at the end: realized welfare minus the day-ahead benchmark's welfare
   <em>restricted to the same published \(k = T-H+1\) decision hours and the same device set</em>.
   The published-hour count is always \(T - H + 1\) regardless of \(\Delta\) — a larger step only
@@ -2379,7 +2414,7 @@ cost/penalty term):
 </p>
 
 \[
-\mathrm{soc}[H] \;=\; \mathrm{soc}^{\mathrm{DA}}\bigl[\min(t + H - 1,\; T)\bigr]
+\mathrm{soc}[H+1] \;=\; \mathrm{soc}^{\mathrm{DA}}[t + H]
 \tag{6.1}
 \]
 
@@ -2391,10 +2426,15 @@ and the regret benchmark on the same information footing. The toggle is build-ti
 <code>MPC(terminal_soc = false)</code> the constraint genuinely does not exist in the model — a
 different model, not a silent no-op — and the framework's tests carry the A/B negative control
 showing the dump/hoard pathology it prevents (a measured ~35,530× separation margin on the test
-fixture). Guards: the pin requires \(H \ge 2\) (at \(H = 1\) it would double-pin
-\(\mathrm{soc}[1]\) against the IC), and with stateful devices the step must satisfy
-\(\Delta \le H - 1\), because the window's \(H\)-th control carries no modeled state consequence —
-applying it can drive the propagated state out of bounds and make the next resolve infeasible.
+fixture). The battery's SOC vector spans \(H+1\) states (its recursion closes over every window
+hour), so the pin sits on \(\mathrm{soc}[H+1]\), the state after the window, a different index
+from the initial condition \(\mathrm{soc}[1]\), and any \(H \ge 1\) is accepted. With thermostatic
+(temperature-stateful) devices the step must still satisfy \(\Delta \le H - 1\): the
+indoor-temperature recursion covers only \(\tau \le H - 1\), so the window's \(H\)-th control
+carries no modeled temperature consequence — applying it can drive the propagated state out of
+bounds and make the next resolve infeasible. <em>(Changed in v4.0: the pin was
+\(\mathrm{soc}[H] = \mathrm{soc}^{\mathrm{DA}}[\min(t+H-1, T)]\) with an \(H \ge 2\) guard, and
+the \(\Delta \le H - 1\) rule also applied to batteries.)</em>
 </p>
 
 <h4>The certificate / fallback ladder</h4>
@@ -2406,9 +2446,11 @@ closed loop must never die mid-day:
 </p>
 
 <ol>
-  <li><strong>Tier 1 — inline cone check</strong>: the same per-branch cone-residual formula as the
-  centralized exactness gate, at the same tolerances (rtol \(10^{-4}\), atol \(10^{-6}\)), but
-  computed inline without throwing. Pass ⇒ status <code>:certified_convex_dual</code>, price
+  <li><strong>Tier 1 — shared exactness check</strong>: the library's shared exactness check,
+  with the same per-branch arithmetic and the same defaults as <code>assert_socp_exact!</code>
+  (\(r_{\text{tol}} = 10^{-4}\) and the hybrid per-branch floor \(a_b\) of Section 5.2), evaluated
+  without throwing. <em>(Changed in v4.0: this tier used to carry its own inline copy of the
+  formula with a flat \(a_{\text{tol}} = 10^{-6}\).)</em> Pass ⇒ status <code>:certified_convex_dual</code>, price
   \(= \mathrm{dual}(\texttt{balance\_p})\) of the window itself.</li>
   <li><strong>Tier 2 — restricted rescue</strong>: a one-off solve of the same window under the
   <code>RestrictedBranchFlow</code> formulation plus an AC cross-solve and its own exactness
@@ -2425,19 +2467,23 @@ closed loop must never die mid-day:
 
 <p>
 On the demonstration fixture every one of the 19 resolves certifies at Tier 1; the deeper tiers
-are exercised in the test suite on a deliberately forced-inexact high-PV fixture (cone ratio
-≈9157× over threshold), not fabricated on the docs page.
+are exercised in the test suite on a deliberately forced-inexact high-PV fixture (first-tier
+cone ratio ≈ 9.2×10³ over threshold under the shared exactness check), not fabricated on the docs page.
 </p>
 
 <h4>Honest caveats</h4>
 
 <ul>
-  <li><strong>Settlement is forecast-consistent, not truth-settled.</strong> Realized welfare
-  charges the window's <em>own solved</em> \(p_{\mathrm{import}}[\tau]\) — the import that balanced
-  the perturbed forecast the optimizer saw — not a re-settled import against the ground truth. Under
-  large forecast error a small <em>positive</em> regret is therefore possible as an artifact of
-  this documented convention, not a free lunch. (Only state propagation is truth-anchored.)
-  Truth-re-settlement is explicitly deferred.</li>
+  <li><strong>Realized welfare is settled against the truth plant.</strong> Each applied hour's
+  PV-battery charge and self-consumption are clipped to the true (unperturbed) PV availability, and
+  the frontier import is re-settled by an AC power flow
+  (<code>ACPowerFlow(; limits = false)</code>, physics only) with every device's realized
+  injection fixed, so <code>realized_welfare</code> and <code>regret</code> are truth-settled.
+  Thermal or voltage overloads under the true AC physics are reported per published hour in
+  <code>settlement_violations</code>, never refused. The window's own forecast-consistent number,
+  which charges the import that balanced the perturbed forecast the optimizer saw, survives as the
+  diagnostic <code>forecast_settled_welfare</code>. <em>(Changed in v4.0: earlier versions
+  settled only against the forecast and deferred truth settlement.)</em></li>
   <li><strong>The window structurally cannot host a <code>Deferrable</code> device</strong> (its
   energy-budget window is baked against the full day). The closed loop and the regret benchmark
   both run over a Deferrable-excluded population; the separately reported full-population
@@ -2597,9 +2643,15 @@ scenario-conditionality the model exists to represent. SOCP exactness is likewis
   <em>once</em> (active pins clamped at 0 to absorb interior-point noise like
   \(p_{\mathrm{ch}} = -10^{-12}\)), then for each held-out draw slide only the PV/demand/ambient
   data Parameters and re-solve — build-once, re-solve \(H_{\mathrm{oos}}\) times.</li>
+  <li>Gate every held-out re-solve with the same shared SOCP exactness check as the in-sample
+  solve (Section 5.2's per-branch arithmetic and defaults). An inexact draw keeps its uncertified
+  welfare in <code>welfare_h</code> for reporting but is flagged in <code>inexact_h</code> and
+  excluded from the average below. <em>(Changed in v4.0: held-out re-solves were previously
+  scored without an exactness check.)</em></li>
   <li>Report \(\;\texttt{welfare\_gap} = \frac{1}{|F|}\sum_{h \in F} W_h \;-\;
   W_{\mathrm{in\text{-}sample}}\;\) — the uniform-weight average realized welfare over the
-  <em>feasible</em> held-out draws \(F\), minus the in-sample expected-welfare objective.</li>
+  usable held-out draws \(F\) (feasible <em>and</em> exact), minus the in-sample
+  expected-welfare objective.</li>
 </ol>
 
 <p>
@@ -2607,7 +2659,9 @@ A held-out draw can be genuinely <em>infeasible</em> against the committed sched
 committed-first-stage evaluation problem: if a held-out PV draw at some hour falls below every
 in-sample draw, the pinned \(p_{\mathrm{ch}}[t]\) collides with that draw's own PV availability
 bound. Such a draw is skipped-and-reported (NaN welfare, an infeasibility mask, a warning), never
-silently absorbed and never allowed to abort the run.
+silently absorbed and never allowed to abort the run. The run's <code>status</code> records both
+cases: <code>:oos_infeasible_skipped</code> for an infeasible draw and
+<code>:oos_inexact_skipped</code> (which takes precedence) for a draw the exactness check refused.
 </p>
 
 <h4>Honest caveats</h4>
@@ -2677,7 +2731,8 @@ absent, never plotted as a fabricated point. The tiny distance between the two h
   extensive form, non-anticipativity ties, per-scenario dual de-scaling) and
   <code>TSODSO.StochasticOosHarness</code>.</li>
   <li><code>src/experiments/run_stochastic.jl</code> — <code>run_stochastic</code>: seeded scenario
-  materialization, schedule commitment, the held-out loop, the infeasibility mask.</li>
+  materialization, schedule commitment, the held-out loop, the infeasibility and inexactness
+  masks.</li>
   <li><code>src/data/profiles.jl</code> — the seeded first-order Markov profile generator.</li>
   <li>Docs page <strong>"Rung 9: Stochastic PV/Demand Uncertainty"</strong>
   (<code>docs/literate/stochastic_pv_demand.jl</code>).</li>
@@ -3197,9 +3252,12 @@ x_{op}[t] = z[t] \quad (\text{dual } \pi_s[t]), \\
 One corridor, one continuous investment variable, capacity proportional to investment. The coupling
 row's dual \(\pi_s[t]\) is the marginal reinforcement cost of the profile &mdash; the PSR note's
 \(\pi_s\), the same mathematical object, feeding the \(\alpha_x\) optimality cut directly. The
-model is <strong>continuous-only by enforced design</strong>: no binary or integer variable exists
-anywhere in <code>src/planning/</code>, and a permanent regression guards this (the PSR note's
-integer extension, problems 8&ndash;9, is a tracked deferral &mdash; see the <a href="#planning-scope">scope section</a>).
+model is <strong>continuous by design</strong>: none of its subproblem builders creates a binary
+or integer variable, and a permanent regression guards this. Integer investment lives in a separate
+builder, a binary-expansion MILP master (<code>TSODSO.build_master_integer</code>, returning a
+<code>TSODSO.BendersMasterInteger</code>) with Laporte&ndash;Louveaux cuts, the one builder the
+guard exempts &mdash; see the <a href="#planning-scope">scope section</a>. <em>(Changed in v3.0:
+integer investment was added; v4.0 extended it to the multi-distributor Nash loop.)</em>
 </p>
 
 <p>
@@ -3351,10 +3409,17 @@ and a deliberately narrow one. Its known boundaries, stated plainly:
 </p>
 
 <ul>
-<li><strong>Continuous investment only.</strong> No binary/integer variable exists anywhere in
-<code>src/planning/</code> (regression-enforced). The PSR note's integer extension &mdash; integer
-reinforcement with binary-expanded interconnection flow, solved via Lagrangian/integer L-shaped
-cuts in the SDDiP family (its problems 8&ndash;9) &mdash; is a tracked deferral,
+<li><strong>Integer investment only on the distributor side.</strong> The continuous Benders
+master and the other planning subproblem builders carry no binary/integer variable
+(regression-enforced, with one per-builder exemption). The distributor's investment can instead be
+binary-expanded: <code>TSODSO.build_master_integer</code> builds a MILP master with
+Laporte&ndash;Louveaux cuts, certified against exhaustive lattice enumeration (docs page
+"Rung 11 — Discrete/Integer Investment Expansion"), and
+<code>run_nash!(...; integer = (; K))</code> uses it for every distributor's best response.
+<em>(Changed in v3.0 for the single-distributor loop and in v4.0 for the Nash loop: earlier text
+said no integer variable exists anywhere in the planning layer.)</em> The rest of the PSR note's
+integer extension &mdash; integer reinforcement with binary-expanded interconnection flow, solved
+via Lagrangian cuts in the SDDiP family (its problems 8&ndash;9) &mdash; is a tracked deferral,
 not an omission.</li>
 <li><strong>A single stylized corridor.</strong> The transmission side has no internal network
 (the note's demand-balance blocks 1c/2c are the documented deliberate deviation); a real
@@ -3744,9 +3809,11 @@ optimum.
 Numeric results that matter are pinned as goldens under a <strong>gate-then-golden</strong>
 discipline: the validity gates (exactness, convergence, certificate status) are asserted first, and
 only then is the pinned value compared — so a golden can never quietly enshrine an invalid solve.
-The ~2,800-test suite also carries guards that defend scope decisions mechanically: an automated
+The suite (about 32,000 assertions in over 500 test items as of v4.0; earlier text said
+~2,800 tests) also carries guards that defend scope decisions mechanically: an automated
 no-binaries guard with a source-level tripwire over every planning-layer subproblem builder
-(negative-tested — the guard is proven to fire), a known solver <em>incapacity</em> pinned as an
+(negative-tested — the guard is proven to fire; the integer master is its one explicit
+exemption), a known solver <em>incapacity</em> pinned as an
 asserted negative regression, and acceptance gates over the end-to-end IEEE-13/123 runs.
 </p>
 
