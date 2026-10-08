@@ -95,8 +95,8 @@ _socp_head_branch(feeder) =
 """
     _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver) -> NamedTuple
 
-Internal. The ONE per-(branch `b`, hour `t`) exactness computation used by both
-[`assert_socp_exact!`](@ref) and [`hybrid_ratios`](@ref): returns
+Internal. The ONE per-(branch `b`, hour `t`) exactness computation used by
+[`assert_socp_exact!`](@ref), [`hybrid_ratios`](@ref) and [`socp_gap_report`](@ref): returns
 `(; lhs, rhs, gap, atol_b, ratio)` with `gap = |l·v_from − (P²+Q²)|`,
 `atol_b = atol === nothing ? max(τ_solver, ε·ref_b) : atol` and
 `ratio = gap / (atol_b + rtol·max(|lhs|, |rhs|))` (`ratio ≤ 1` iff the row is exact).
@@ -126,6 +126,19 @@ Internal. The ONE per-(branch `b`, hour `t`) exactness computation used by both
     tol = atol_b + rtol * max(abs(lhs), abs(rhs))
     return (; lhs, rhs, gap, atol_b, ratio = gap / tol)
 end
+
+"""
+    _ratio_phrase(r) -> String
+
+Internal. The ratio clause of every SOCP-exactness refusal message:
+`"gap/(atol_b+rtol·|cone|)=<r> > 1"` when `r` is finite, else
+`"gap/(atol_b+rtol·|cone|) is non-finite (NaN cone value)"`. A `NaN` ratio (any `NaN` cone
+value; `max` propagates it) is refused by the `<= 1` checks, and must not be reported as
+`"NaN > 1"`, which reads as a false comparison.
+"""
+_ratio_phrase(r::Real) =
+    isfinite(r) ? "gap/(atol_b+rtol·|cone|)=$r > 1" :
+    "gap/(atol_b+rtol·|cone|) is non-finite (NaN cone value)"
 
 """
     _socp_cone_check(ctx::ModelContext; rtol::Real = 1e-4,
@@ -326,7 +339,7 @@ function assert_socp_exact!(
 
     maxratio <= 1 || throw(
         CertificateError(
-            "SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=$maxratio > 1 " *
+            "SOCP relaxation INEXACT: worst $(_ratio_phrase(maxratio)) " *
             "(rtol=$rtol, atol=$(atol === nothing ? "max(τ_solver=$τ_solver, ε*ref_b, ε=$ε)" : atol); " *
             "max abs |l·v−(P²+Q²)|=$maxgap) — " *
             "prices REFUSED (thesis 3.43-3.45)";
@@ -381,21 +394,34 @@ end
 
 # Diagnostic-only, NON-THROWING sibling built for the IEEE-8500
 # inexactness root-cause investigation. Like `socp_relaxation_gap` above, `assert_socp_exact!`
-# is left UNCHANGED — this re-walks the SAME per-branch/per-time gap loop and returns the
+# is left UNCHANGED — this re-walks the SAME per-branch/per-time loop (each row through
+# `_cone_row`, so its floor and ratio match the gate's for the same kwargs) and returns the
 # worst offenders with enough detail to discriminate structural (near-zero `r_pu`) / physical
 # (reverse flow, `P<0`) / numerical (scattered, no pattern) causes, WITHOUT importing any
 # fixture-specific knowledge (bus names, edge membership) into this file — those joins
 # belong in the calling script (`scripts/benchmark_ieee8500.jl`).
 """
-    socp_gap_report(ctx::ModelContext; topn::Int = 20, rtol::Real = 1e-4, atol::Real = 1e-6)
+    socp_gap_report(ctx::ModelContext; topn::Int = 20, rtol::Real = 1e-4,
+                    atol::Union{Nothing,Real} = nothing, ε::Real = MEASURED_REL_TOL_EXACT,
+                    τ_solver::Real = TAU_SOLVER_EXACT)
         -> Vector{<:NamedTuple}
 
-Diagnostic-only, NON-THROWING sibling of [`assert_socp_exact!`](@ref) / [`socp_relaxation_gap`](@ref)
-(neither is touched by this addition). Re-walks the SAME per-branch, per-time SOC-cone gap
-computation and returns the `topn` WORST `(branch, time)` rows, sorted by absolute gap descending,
-with enough detail to discriminate the candidate inexactness mechanisms (structural modeling
-convention / physical reverse flow / numerical conditioning) WITHOUT importing any fixture-specific
-knowledge (bus names, edge membership) — those joins are the CALLER's job.
+Diagnostic-only, NON-THROWING sibling of [`assert_socp_exact!`](@ref) / [`socp_relaxation_gap`](@ref).
+Re-walks the SAME per-branch, per-time SOC-cone gap computation and returns the `topn` WORST
+`(branch, time)` rows, sorted by absolute gap descending, with enough detail to discriminate the
+candidate inexactness mechanisms (structural modeling convention / physical reverse flow /
+numerical conditioning) WITHOUT importing any fixture-specific knowledge (bus names, edge
+membership) — those joins are the CALLER's job.
+
+Floor semantics are IDENTICAL to `assert_socp_exact!` (every row is computed by the same internal
+per-row helper, never a re-implemented formula):
+
+  - `atol = nothing` (the default) uses the hybrid per-branch floor
+    `atol_b = max(τ_solver, ε·ref_b)` — the gate's own default;
+  - a `Real` `atol` is a FLAT override `atol_b = atol` for every row, exactly as in the gate.
+
+So for the SAME kwargs a row's `ratio > 1` is exactly what would have made `assert_socp_exact!`
+throw.
 
 Each row is a `NamedTuple` with:
 
@@ -411,9 +437,8 @@ Each row is a `NamedTuple` with:
     quantities at branch `b`, time `t`;
   - `t::Int`            — the timestep;
   - `gap::Float64`      — `|l·v_from - (P²+Q²)|`, IDENTICAL formula to `assert_socp_exact!`;
-  - `ratio::Float64`    — `gap / (atol + rtol·max(|lhs|,|rhs|))`, the SAME combined bound
-    `assert_socp_exact!` uses, so rows are comparable across branches/fixtures/per-unit bases
-    (a `ratio > 1` is exactly what would have thrown);
+  - `ratio::Float64`    — `gap / (atol_b + rtol·max(|lhs|,|rhs|))`, the SAME combined bound
+    `assert_socp_exact!` uses, so rows are comparable across branches/fixtures/per-unit bases;
   - `reverse_flow::Bool` — `P < 0`, the PHYSICAL discriminator;
   - `loading::Union{Float64,Missing}` — `sqrt(P²+Q²)/smax`, or `missing` when
     `br.smax == SMAX_NO_LIMIT` (dividing by the 99.0 pu sentinel would fabricate a meaningless
@@ -421,17 +446,24 @@ Each row is a `NamedTuple` with:
 
 Ties in `gap` are broken by `(b,t)` ascending for a deterministic row order. `topn` is clamped to
 the number of `(branch,time)` pairs actually scanned. Reads the same `ctx.pf_vars` /
-`ctx.feeder` / `ctx.T` stash as `assert_socp_exact!`.
+`ctx.feeder` / `ctx.T` stash as `assert_socp_exact!`. Throws `ArgumentError` if no branch is
+incident to `feeder.root` (malformed/non-radial feeder), as [`hybrid_ratios`](@ref) does.
 """
 function socp_gap_report(
     ctx::ModelContext;
     topn::Int = 20,
     rtol::Real = 1e-4,
-    atol::Real = 1e-6,
+    atol::Union{Nothing, Real} = nothing,
+    ε::Real = MEASURED_REL_TOL_EXACT,
+    τ_solver::Real = TAU_SOLVER_EXACT,
 )
     pv = _require_pf_vars(ctx)
     feeder = _require_feeder(ctx)
     T = _require_T(ctx)
+    head_b = _socp_head_branch(feeder)
+    head_b === nothing && throw(
+        ArgumentError("socp_gap_report: no branch incident to feeder.root=$(feeder.root)"),
+    )
 
     rows = NamedTuple[]
     for (b, br) in enumerate(feeder.branches), t in 1:T
@@ -439,10 +471,7 @@ function socp_gap_report(
         v_from = value(pv.v[br.from, t])
         P = value(pv.P[b, t])
         Q = value(pv.Q[b, t])
-        lhs = l * v_from
-        rhs = P^2 + Q^2
-        gap = abs(lhs - rhs)
-        tol = atol + rtol * max(abs(lhs), abs(rhs))
+        row = _cone_row(pv, br, b, t, head_b, rtol, atol, ε, τ_solver)
         loading = br.smax == SMAX_NO_LIMIT ? missing : sqrt(P^2 + Q^2) / br.smax
         push!(
             rows,
@@ -457,8 +486,8 @@ function socp_gap_report(
                 P = P,
                 Q = Q,
                 t = t,
-                gap = gap,
-                ratio = gap / tol,
+                gap = row.gap,
+                ratio = row.ratio,
                 reverse_flow = P < 0.0,
                 loading = loading,
             ),

@@ -85,7 +85,8 @@ function _stoch_solve_held_out!(h_oos::StochasticOosHarness, h_index::Integer)
         if e isa CertificateError && e.kind === :socp_exact
             ratio = get(h_oos.ctx.meta, :socp_maxratio, NaN)
             @warn "run_stochastic: held-out scenario $h_index: SOCP relaxation inexact " *
-                  "(cone ratio $ratio > 1) — recorded with inexact_h = true and EXCLUDED " *
+                  "(cone ratio $(_ratio_phrase(ratio))) — recorded with inexact_h = true " *
+                  "and EXCLUDED " *
                   "from realized_welfare (skip-and-report, never silent)"
             return _objective(h_oos.model), false, true
         end

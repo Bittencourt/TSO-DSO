@@ -342,3 +342,78 @@ end
         @test all(value(pv.v[j, t]) <= vmax2 + 1e-6 for j in 1:N, t in 1:IEEE13Fixtures.T)
     end
 end
+
+@testitem "exact: socp_gap_report uses the gate's hybrid floor by default, a Real atol stays flat" tags =
+    [:exact] begin
+    using TSODSO
+    using TSODSO: SOCP, SMAX_NO_LIMIT
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # 3-bus chain, root = 1: a small-smax head branch (ref_b = smax^2 = 1e-4) and an unlimited
+    # interior branch (ref_b = head-branch flow magnitude). Both carry a small injected gap, so
+    # the hybrid floor and the old flat 1e-6 floor give different ratios.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false), Bus(3, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 0.01), Branch(2, 3, 0.01, 0.02, SMAX_NO_LIMIT)],
+        1,
+    )
+    T, N, B = 2, 3, 2
+    model = Model(select_optimizer(SOCP()))
+    @variable(model, v[1:N, 1:T])
+    @variable(model, v̂[1:N, 1:T])
+    @variable(model, P[1:B, 1:T])
+    @variable(model, Q[1:B, 1:T])
+    @variable(model, l[1:B, 1:T])
+    fix.(v, 1.0; force = true)
+    fix.(v̂, 1.0; force = true)
+    fix.(Q, 0.0; force = true)
+    Pv = [0.005 0.006; 0.003 -0.002]
+    lv = [2.5e-5+5.0e-7 3.6e-5+2.0e-7; 9.0e-6+3.0e-7 4.0e-6+1.0e-7]
+    for b in 1:B, t in 1:T
+        fix(P[b, t], Pv[b, t]; force = true)
+        fix(l[b, t], lv[b, t]; force = true)
+    end
+    @objective(model, Max, 0)
+    optimize!(model)
+
+    ctx = TSODSO.ModelContext(model)
+    ctx.feeder = feeder
+    ctx.T = T
+    ctx.pf_vars = (; v, v̂, P, Q, l)
+
+    hyb = Dict((r.b, r.t) => r.ratio for r in TSODSO.hybrid_ratios(ctx))
+    rep = TSODSO.socp_gap_report(ctx)
+    @test length(rep) == B * T
+    @test all(r.ratio == hyb[(r.b, r.t)] for r in rep)
+    # the report's worst ratio is exactly the gate's verdict quantity
+    @test maximum(r.ratio for r in rep) == TSODSO._socp_cone_check(ctx).maxratio
+
+    # An explicit flat atol reproduces the earlier flat-floor formula row by row.
+    flat = TSODSO.socp_gap_report(ctx; atol = 1e-6)
+    flat_ratio(r) = r.gap / (1e-6 + 1e-4 * max(abs(r.l * r.v_from), abs(r.P^2 + r.Q^2)))
+    @test all(isapprox(r.ratio, flat_ratio(r); rtol = 1e-12) for r in flat)
+    hyb_flat = Dict((r.b, r.t) => r.ratio for r in TSODSO.hybrid_ratios(ctx; atol = 1e-6))
+    @test all(r.ratio == hyb_flat[(r.b, r.t)] for r in flat)
+    # non-vacuous: the two floors disagree on at least one row
+    @test any(r.ratio != hyb[(r.b, r.t)] for r in flat)
+    # row order and the remaining fields are unchanged: gap-descending, topn clamps
+    @test issorted([-r.gap for r in rep])
+    @test length(TSODSO.socp_gap_report(ctx; topn = 1)) == 1
+    @test rep[1].loading isa Float64 || rep[1].loading === missing
+end
+
+@testitem "exact: refusal ratio text names a NaN ratio as non-finite, never 'NaN > 1'" tags =
+    [:exact] begin
+    using TSODSO
+
+    nan_txt = TSODSO._ratio_phrase(NaN)
+    @test occursin("non-finite", nan_txt)
+    @test !occursin("NaN >", nan_txt)
+    @test !occursin("> 1", nan_txt)
+    @test occursin("non-finite", TSODSO._ratio_phrase(Inf))
+
+    fin_txt = TSODSO._ratio_phrase(2.5)
+    @test fin_txt == "gap/(atol_b+rtol·|cone|)=2.5 > 1"
+    @test !occursin("non-finite", fin_txt)
+end

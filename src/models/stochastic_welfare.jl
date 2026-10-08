@@ -774,7 +774,7 @@ function solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int =
         c.maxratio <= 1 || throw(
             CertificateError(
                 "held-out re-solve: SOCP relaxation INEXACT: worst " *
-                "gap/(atol_b+rtol·|cone|)=$(c.maxratio) > 1 (max abs " *
+                "$(_ratio_phrase(c.maxratio)) (max abs " *
                 "|l·v−(P²+Q²)|=$(c.maxgap)) — the held-out welfare is not certified";
                 kind = :socp_exact,
             ),

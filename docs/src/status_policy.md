@@ -128,8 +128,10 @@ this is a documented degradation with no throw and no status, pinned by
 
 ## 7. Breaking changes
 
-This release trims the API surface and removes several deprecated forms. Everything below
-fails loudly instead of silently changing behavior.
+This release trims the API surface and removes several deprecated forms. Most entries below
+raise an error instead of silently changing behavior. The tighter MPC first-tier certificate is
+the exception: it does not throw, but re-prices an affected resolve with a `@warn` and can change
+the run `status`.
 
 - **Orchestration keywords.** `operational_oracle` no longer accepts the keywords
   `objective_hook`, `horizon_state` and `z`; passing any of them raises a `MethodError`.
