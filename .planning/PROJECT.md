@@ -187,6 +187,17 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 
 ## Current State
 
+**Phase 38 (Close v4.0 Audit Gaps) COMPLETE 2026-10-08.**
+Closes the v4.0 audit blockers. The MPC first-tier certificate now uses the shared hybrid exactness floor
+(`_socp_cone_check`, same arithmetic as `assert_socp_exact!`; regression item escalates a point the old flat
+1e-6 accepted; one explained price move on 1.12.7 only). `test/test_admm_timeout.jl` is two fast
+`@testitem`s covering `:budget_exceeded`. Held-out stochastic draws are now cone-gated: inexact draws are
+excluded and reported as `:oos_inexact_skipped` (held-out solves stay at tol_gap 1e-8 vs 5e-10 in-sample,
+documented; tightening would move the CI golden). `Scenario` rejects ADMM + `allow_export=false`; reactive
+mode stored as a Symbol; `check_setup_names.py` in CI; stale dispatch prose and FRAMEWORK_GUIDE.html API/model
+text corrected. Full suite 32325/0/0/5 (1.12.5, after review fixes), canary unchanged, JET 0 NEW, docs OK.
+Open (manual): GitHub-side CI run, guide prose spot-check, review of refreshed compare_default_stochastic.
+
 **Phase 37 (Test Infrastructure & Repo Hygiene) COMPLETE 2026-10-07.**
 HYG-04/05/06/08 validated. JET runs in CI (Julia 1.12.7) as a ratchet against `scripts/jet_baseline.txt`
 (12 justified signatures; `_objective(model)::Float64` cleared ~22). `TSODSO_TEST_SET=fast|slow|all`
@@ -554,4 +565,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-07 — Phase 37 complete; all v4.0 phases done (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-08 — Phase 38 complete; v4.0 audit gaps closed (v4.0 Correctness & Depth)*
