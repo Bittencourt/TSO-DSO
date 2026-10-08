@@ -44,3 +44,55 @@ Regression point (high-PV feeder, `pv_scale = 1.2`, default `ConvexBranchFlow()`
 | 3e-7 | 1.12.5 / 1.12.7 | 0.00231 / 0.0114 ; 0.00226 / 0.0111 | 0.3008 / 0.3007 | 1.4804 / 1.4798 | `:certified_convex_dual` | `:certified_convex_dual_restricted` (scratch NEW-mode decision) |
 | **5e-7** | 1.12.5 / 1.12.7 | (same) | **0.4993 / 0.4992** | **2.4571 / 2.4566** | `:certified_convex_dual` | `:certified_convex_dual_restricted` (pinned by the new test item) |
 | 7e-7 | 1.12.5 / 1.12.7 | (same) | 0.7024 / 0.7024 | 3.4562 / 3.4560 | `:certified_convex_dual` | `:certified_convex_dual_restricted` (scratch NEW-mode decision) |
+
+## MPC explained moves
+
+Shortfall fixture `Scenario(; name = "mpc_loop_fix10_shortfall", feeder = :ieee13, T = 9, seed = 1,
+strategy = MPC(H = 3, step = 1, terminal_soc = true, forecast_error = 0.3))`, run with the
+committed code (after) and with the pre-change `_mpc_certify_and_price` re-instated verbatim from
+commit 134c096 (before), scratch scripts only.
+
+| quantity | 1.12.7 before | 1.12.7 after | 1.12.5 before = after |
+|----------|---------------|--------------|-----------------------|
+| first-tier ratio at t=4 | 0.233 (old flat floor) | 1.165 (hybrid floor; b=6, τ=3, gap 2.333e-7) | 0.157 -> 0.771 (stays ≤ 1) |
+| `cert_status_trace[4]` | `:certified_convex_dual` | `:certified_convex_dual_restricted` | `:certified_convex_dual` |
+| `status` | `:certified` | `:degraded` | `:certified` |
+| `dadp_trace[4]` | 0.008895250684296654 | 0.008894113604359186 | 0.008895156229228245 |
+| other `dadp_trace` entries | — | bit-identical to before | unchanged |
+| `regret` | -0.0469747761931103 | -0.0469747761931103 | -0.04697206392881981 |
+| `realized_welfare` | -468.9958511666502 | -468.9958511666502 | -468.995848451271 |
+| `forecast_settled_welfare` | -468.8911819809952 | -468.8911819809952 | -468.8911822070599 |
+
+Explanation: on 1.12.7 the t=4 window has a 2.333e-7 cone residual on an interior branch. The old
+flat 1e-6 floor accepted it; the hybrid floor (atol_b = τ_solver = 2e-7 on that branch) refuses
+it, so the resolve escalates to the restricted tier, whose dual is published instead. Escalation
+only re-prices: the applied dispatch, regret and both welfare figures are unchanged. **No test
+asserts these values** — the scenario name appears only in test/test_mpc_loop.jl (forced-PV
+shortfall, "A6 call site", "AC truth settlement REPORTS" items), none of which reads `status`,
+`cert_status_trace` or `dadp_trace`. On 1.12.5 nothing moves.
+
+Margin note: the happy-path fixture's worst hybrid ratio is **0.938 on 1.12.5** (t=4, b=9, gap
+1.879e-7), a 6.6 % margin under its "never escalates" assertion (0.323 on 1.12.7). τ is NOT raised.
+
+## Cross-version (1.10 / 1.11) MPC checks
+
+`juliaup status`: channels 1.10 (1.10.11) and 1.11 (1.11.9) installed; both environments
+(`Manifest-v1.10.toml`, `Manifest-v1.11.toml`) loaded without modification. Committed code, scratch
+script only (the MPCFixtures constructors loaded from test/fixtures_mpc.jl as a plain module; a
+logging-only hook records the shipped first-tier ratio, decisions untouched).
+
+| check | 1.10.11 | 1.11.9 | asserted by the new test item |
+|-------|---------|--------|-------------------------------|
+| regression point, unperturbed | `:certified_convex_dual`, ratio 0.0114 | `:certified_convex_dual`, ratio 0.0114 | `=== :certified_convex_dual` |
+| regression point, 5e-7 slack: old flat ratio | 0.4993 | 0.4993 | `<= 1` |
+| regression point, 5e-7 slack: hybrid ratio / `cone_maxratio` (parity) | 2.4571 / 2.4571 (exact equality) | 2.4571 / 2.4571 (exact equality) | `==`, `> 1` |
+| regression point, 5e-7 slack: cert_status, prices | `:certified_convex_dual_restricted`, 3 finite | `:certified_convex_dual_restricted`, 3 finite | `===`, length H, all finite |
+| scenario A (happy) status / per-step certs | `:certified`, 7 × `:certified_convex_dual` | `:certified`, 7 × `:certified_convex_dual` | "never escalates" |
+| scenario A worst hybrid ratio | 0.9383 (t=4) | 0.9383 (t=4) | — (6.6 % margin, same as 1.12.5) |
+
+Every assertion holds on 1.10 and 1.11; nothing marked as a MANUAL CI risk.
+
+MPC consumer runs after the change (Julia 1.12.5 filtered runner): `file:test_mpc_loop.jl` 12 items /
+376 Pass; `file:test_status_policy.jl,test_mpc_terminal.jl,test_mpc_window.jl` 10 items / 45 Pass;
+`file:test_strategies.jl` (all 26 items, including the `:slow` "fallback to defaults") 415 Pass.
+Formatter (`format210.jl`) produced no changes.
