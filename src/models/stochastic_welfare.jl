@@ -769,7 +769,9 @@ function solve_stochastic_oos_step!(h::StochasticOosHarness; max_attempts::Int =
         c = _socp_cone_check(h.ctx)
         h.ctx.meta[:socp_maxgap] = c.maxgap
         h.ctx.meta[:socp_maxratio] = c.maxratio
-        c.maxratio > 1 && throw(
+        # `<= 1 ||`, never `> 1 &&`: a NaN ratio (any NaN cone value; `max` propagates
+        # NaN) must be refused, exactly as `assert_socp_exact!` refuses it.
+        c.maxratio <= 1 || throw(
             CertificateError(
                 "held-out re-solve: SOCP relaxation INEXACT: worst " *
                 "gap/(atol_b+rtol·|cone|)=$(c.maxratio) > 1 (max abs " *

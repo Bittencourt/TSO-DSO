@@ -140,7 +140,9 @@ stochastic out-of-sample step. Never re-implement the cone formula elsewhere.
 Loops every branch `b` and hour `t ∈ 1:T` through `_cone_row` and returns
 `maxgap = maxₜ,ᵦ |l·v_from − (P²+Q²)|` and
 `maxratio = maxₜ,ᵦ gap / (atol_b + rtol·max(|lhs|, |rhs|))` (`maxratio ≤ 1` iff every row is
-exact). Same defaults and floor semantics as `assert_socp_exact!`. Throws `ArgumentError` only
+exact). `maxratio` is `NaN` if any cone value is `NaN` (`max` propagates `NaN`), so every
+consumer must certify with `maxratio <= 1` (which refuses `NaN`), never with `!(maxratio > 1)`
+or `maxratio > 1 && ...` (which would accept it). Same defaults and floor semantics as `assert_socp_exact!`. Throws `ArgumentError` only
 if no branch is incident to `feeder.root` (malformed/non-radial feeder).
 """
 function _socp_cone_check(
