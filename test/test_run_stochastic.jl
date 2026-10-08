@@ -278,3 +278,59 @@ end
     # cross-Julia-minor-version solver-tolerance noise documented above.
     @test r1.oos.welfare_gap ≈ -0.018591711034105174 rtol = 1e-4
 end
+
+@testitem "run_stochastic: each held-out draw starts from the as-built solver ladder" tags =
+    [:run_stochastic] setup = [StochasticFixtures] begin
+    using TSODSO
+    using JuMP: get_optimizer_attribute, set_optimizer_attribute
+
+    s = Scenario(
+        name = "t",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
+
+    # The first conditioning-ladder attribute the backend exposes (nothing if none).
+    function exposed_ladder_attr(model)
+        for name in TSODSO.LADDER_ATTR_NAMES
+            ok = try
+                get_optimizer_attribute(model, name)
+                true
+            catch
+                false
+            end
+            ok && return name
+        end
+        return nothing
+    end
+    sentinel_for(v) = iszero(v) ? one(v) : 10 * v
+
+    # Wrap the real held-out solve: record the attribute's value at the START of each draw,
+    # solve, then leave the attribute at a different sentinel value, as a sticky retry
+    # escalation would. The orchestrator must restore the as-built value before the next draw.
+    attr = Ref{Union{Nothing, String}}(nothing)
+    seen = Any[]
+    sentinels = Any[]
+    function mutating_solve(h_oos, i)
+        attr[] === nothing && (attr[] = exposed_ladder_attr(h_oos.model))
+        attr[] === nothing && return TSODSO._stoch_solve_held_out!(h_oos, i)
+        v = get_optimizer_attribute(h_oos.model, attr[])
+        push!(seen, v)
+        res = TSODSO._stoch_solve_held_out!(h_oos, i)
+        push!(sentinels, sentinel_for(v))
+        set_optimizer_attribute(h_oos.model, attr[], sentinel_for(v))
+        return res
+    end
+
+    r = TSODSO._run_stochastic(s, s.strategy; solve_held_out! = mutating_solve)
+    @test attr[] !== nothing
+    @test length(seen) == s.strategy.H_oos
+    baseline = first(seen)
+    @test baseline !== missing
+    # non-vacuous: the sentinel left behind by every draw differs from the baseline
+    @test all(!=(baseline), sentinels)
+    # every draw, including draws 2..H_oos that follow a mutated one, starts at the baseline
+    @test all(==(baseline), seen)
+    @test r.status === :solved
+end
