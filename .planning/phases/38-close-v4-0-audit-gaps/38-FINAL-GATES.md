@@ -236,3 +236,14 @@ exactly baseline + 80 with every unit itemized; canary iters 56 on both; count-s
 JET 0 NEW / 0 FIXED; docs build `docs OK` with 0 unresolved @ref; all guards and selftests pass. The
 only behaviour move is the documented 1.12.7 MPC scenario B re-price and the stochastic docs page
 exclusions. Phase 38 success criteria 1-4 are met locally; the MANUAL items above remain GitHub-side.
+
+## Post-review re-run (after code-review fixes 32af868..69eaefe)
+
+The review fixes touched `src/` (held-out gate `<= 1`, per-draw solver-conditioning restore) and added
+one fast `@testitem` (+21 pass). Re-run on Julia 1.12.5 at HEAD (clean tree, no other Julia process):
+`TSODSO_TEST_SET=all .github/scripts/suite_detached.sh p38-postfix125 julia +release --project=. -t2 -e 'import Pkg; Pkg.test()'`.
+`.done` = 0, `check_suite_log.py p38-postfix125 --broken 5` → `suite OK`;
+`Pass=32325 Fail=0 Error=0 Broken=5 Total=32330` = 32304 + 21 (test_run_stochastic /
+test_stochastic_oos_harness 74 → 95). One FlakeRetry summary line (an existing retry-and-report
+guarded solve), as in earlier runs. The 1.12.7 run was not repeated; the fixes are value-preserving
+on all measured scenarios (38-REVIEW-FIX.md). Count-sets: all=518 fast=481 slow=37.
