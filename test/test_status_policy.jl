@@ -14,7 +14,7 @@
     @test V.solve_stackelberg == (:converged, :converged_relaxation_only)
     @test V.run_nash == (:converged, :converged_relaxation_only)
     @test V.run_mpc == (:certified, :degraded, :cert_failed)
-    @test V.run_stochastic == (:solved, :oos_infeasible_skipped)
+    @test V.run_stochastic == (:solved, :oos_infeasible_skipped, :oos_inexact_skipped)
 
     @test TSODSO._mpc_status([:certified_convex_dual, :certified_convex_dual]) == :certified
     @test TSODSO._mpc_status([:certified_convex_dual, :certified_convex_dual_restricted]) ==
@@ -25,6 +25,13 @@
 
     @test TSODSO._stochastic_status([false, false]) == :solved
     @test TSODSO._stochastic_status([false, true]) == :oos_infeasible_skipped
+    # Two-mask form: an inexact (refused) held-out draw takes precedence; the masks carry
+    # the full per-draw detail.
+    @test TSODSO._stochastic_status([false, false], [false, true]) == :oos_inexact_skipped
+    @test TSODSO._stochastic_status([true, false], [false, true]) == :oos_inexact_skipped
+    @test TSODSO._stochastic_status([true, false], [false, false]) ==
+          :oos_infeasible_skipped
+    @test TSODSO._stochastic_status([false], [false]) == :solved
 end
 
 @testitem "status policy: solve_stackelberg! and run_nash! status within vocabulary" tags =
@@ -117,7 +124,10 @@ end
         ),
     )
     @test st.status in V.run_stochastic
-    @test st.status == (any(st.oos.infeasible_h) ? :oos_infeasible_skipped : :solved)
+    @test st.status == (
+        any(st.oos.inexact_h) ? :oos_inexact_skipped :
+        any(st.oos.infeasible_h) ? :oos_infeasible_skipped : :solved
+    )
 end
 
 @testitem "status policy: DC + reactive aggregators pinned as documented degradation (no throw)" tags =

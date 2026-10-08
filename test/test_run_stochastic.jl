@@ -72,6 +72,14 @@ end
     # soc past Emax within one solve on this fixture — see this file-family's own
     # measured-envelope note in test_stochastic_oos_harness.jl's header) and asserts the
     # skip-and-report contract, then re-solves FEASIBLY on the same never-rebuilt model.
+    #
+    # The harness uses the tightened optimizer (tol_gap 5e-10, the in-sample builder's own
+    # tolerance): at the default 1e-8 the recovery solve on this near-lossless 2-bus fixture
+    # is refused by the held-out exactness gate (measured worst ratio ≈ 7.3); at 5e-10 the
+    # first solve is still INFEASIBLE and the recovery measures ≈ 0.08, so this item checks
+    # the infeasibility path and an exact recovery.
+    oos_opt =
+        TSODSO.select_optimizer(TSODSO.SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10)
     feeder = StochasticFixtures.stoch_feeder()
     T = StochasticFixtures.T
     λ0 = StochasticFixtures.stoch_lambda0()
@@ -79,22 +87,32 @@ end
         feeder,
         sub_seed(StochasticFixtures.SEED_STOCH, :wr05_infeasible),
     )
-    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    h = build_stochastic_oos_harness(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ0,
+        optimizer = oos_opt,
+    )
     pin = only(h.battery_pins)
 
     # Genuinely infeasible pin: soc0 + 5·η·0.001 = 0.00875 > Emax = 0.008.
     set_parameter_value.(pin.pin_p_ch, fill(0.001, T))
     set_parameter_value.(pin.pin_p_dch, zeros(T))
-    w_bad, infeas_bad = TSODSO._stoch_solve_held_out!(h, 1)
+    w_bad, infeas_bad, inexact_bad = TSODSO._stoch_solve_held_out!(h, 1)
     @test infeas_bad
     @test isnan(w_bad)
+    @test inexact_bad === false
 
     # The SAME (build-once, never-rebuilt) harness recovers with a feasible pin — the
     # skip path leaves the model reusable for the remaining held-out scenarios.
     set_parameter_value.(pin.pin_p_ch, zeros(T))
-    w_ok, infeas_ok = TSODSO._stoch_solve_held_out!(h, 2)
+    w_ok, infeas_ok, inexact_ok = TSODSO._stoch_solve_held_out!(h, 2)
     @test !infeas_ok
     @test isfinite(w_ok)
+    @test inexact_ok === false
+    @test h.ctx.meta[:socp_maxratio] <= 1
 
     # A non-solver error (programming error) is NOT skipped — it propagates.
     @test_throws MethodError TSODSO._stoch_solve_held_out!(nothing, 3)
@@ -115,7 +133,13 @@ end
     @test length(r.oos.infeasible_h) == s.strategy.H_oos
     @test all(.!r.oos.infeasible_h)
     @test all(isfinite, r.oos.welfare_h)
-    # With nothing infeasible, realized_welfare keeps its original definition exactly.
+    # Every held-out re-solve of this fixture passes the exactness gate (measured worst
+    # ratio 0.366 on 1.12.5, 0.350 on 1.12.7), so nothing is excluded as inexact either.
+    @test length(r.oos.inexact_h) == s.strategy.H_oos
+    @test all(.!r.oos.inexact_h)
+    @test length(r.oos.socp_maxratio_h) == s.strategy.H_oos
+    @test all(<=(1), r.oos.socp_maxratio_h)
+    # With nothing skipped, realized_welfare keeps its original definition exactly.
     @test r.oos.realized_welfare == sum(r.oos.welfare_h) / s.strategy.H_oos
 end
 

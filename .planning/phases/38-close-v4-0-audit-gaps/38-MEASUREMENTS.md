@@ -152,3 +152,10 @@ INFEASIBLE and its recovery is exact.
 Baseline before the test edits (HEAD, 1.12.5 filtered run,
 `file:test_stochastic_oos_harness.jl,test_run_stochastic.jl,test_status_policy.jl`): 14 @testitems
 (5 + 5 + 4) / **56 Pass**.
+
+38-04 RED run (tests written, src unchanged; 1.12.5 filtered, same three files): 15 @testitems,
+49 Pass / 2 Fail / 14 Error. Failures for the intended reasons: the step does not throw
+(`No exception thrown`), the vocabulary lacks `:oos_inexact_skipped`, `_stochastic_status` has no
+2-mask method, `_stoch_solve_held_out!` returns a 2-tuple (BoundsError on the 3rd element) and
+`oos` has no `inexact_h`/`socp_maxratio_h`. The infeasible -> recover item uses the tightened
+optimizer (measured above: first solve still INFEASIBLE, recovery exact).

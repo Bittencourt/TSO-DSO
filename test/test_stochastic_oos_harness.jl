@@ -6,8 +6,9 @@
 # retargeted from `soc[H]` once the device's own `soc` vector grew to `1:(H+1)`)
 # from a single terminal target to the FULL `p_ch`/`p_dch` trajectory, pinning a caller-supplied in-sample
 # battery schedule while leaving PV/demand/ambient Parameters free to re-slide per held-out
-# scenario. `solve_stochastic_oos_step!` is a one-line `solve_with_retry!` delegation
-# (`dual = false` — the scope is the realized welfare only). Items tagged
+# scenario. `solve_stochastic_oos_step!` re-solves via `solve_with_retry!` (`dual = false` —
+# the scope is the realized welfare only) and then runs the shared SOCP exactness gate,
+# refusing an inexact held-out solve with a `CertificateError`. Items tagged
 # `[:stochastic_oos_harness]`, `setup = [StochasticFixtures]`, mirroring
 # `test_mpc_window.jl`'s own build-once-invariance test convention (lines 75-131).
 #
@@ -33,6 +34,15 @@
 #    across every `t` (this test's whole point) is infeasible at any night hour unless
 #    `Ppv_param` is also raised (`p_ch[t] ≤ pv_used[t] ≤ Ppv_param[t]`, eq. 3.7) — verified
 #    directly: the SAME pin without the `Ppv_param` override throws `PRIMAL_INFEASIBLE`.
+# 3. The mechanics items below (build-once, pin-binding, FourQuadBESS q pin) build the harness
+#    with an explicitly tightened optimizer, `select_optimizer(SOCP(); tol_gap_abs = 5e-10,
+#    tol_gap_rel = 5e-10)`. On this near-lossless 2-bus fixture the default `tol_gap = 1e-8`
+#    leaves cone residuals that the held-out exactness gate refuses (measured worst
+#    gap/(atol_b + rtol·|cone|) ratios up to ≈ 51 on the pin-binding solves); at 5e-10 every
+#    one of these solves measures ≤ 0.5. This is the same tolerance and the same rationale as
+#    the in-sample builder `build_stochastic_welfare` (a convergence-precision fix, not a gate
+#    weakening: the gate's own τ/ε are untouched). The harness DEFAULT optimizer is unchanged;
+#    the refusal item below exercises it on purpose.
 
 @testitem "stochastic_oos_harness: build-once — num_variables/num_constraints invariant across heterogeneous re-solves" tags =
     [:stochastic_oos_harness] setup = [StochasticFixtures] begin
@@ -48,7 +58,17 @@
         sub_seed(StochasticFixtures.SEED_STOCH, :oos_1),
     )
 
-    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    # Tightened optimizer: see file header note 3 (mechanics item, not an accuracy test).
+    oos_opt =
+        TSODSO.select_optimizer(TSODSO.SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10)
+    h = build_stochastic_oos_harness(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ0,
+        optimizer = oos_opt,
+    )
     @test h isa TSODSO.StochasticOosHarness
 
     nv0 = num_variables(h.model)
@@ -98,7 +118,17 @@ end
         sub_seed(StochasticFixtures.SEED_STOCH, :oos_2),
     )
 
-    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+    # Tightened optimizer: see file header note 3 (mechanics item, not an accuracy test).
+    oos_opt =
+        TSODSO.select_optimizer(TSODSO.SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10)
+    h = build_stochastic_oos_harness(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ0,
+        optimizer = oos_opt,
+    )
 
     pin = only(h.battery_pins)
     ppv = only(h.ppv_handles)
@@ -129,6 +159,47 @@ end
     solve_stochastic_oos_step!(h)
     @test all(isapprox.(value.(vbatt.p_ch), valsB; atol = 1e-6))
     @test !all(isapprox.(value.(vbatt.p_ch), valsA; atol = 1e-6))
+end
+
+@testitem "stochastic_oos_harness: an inexact held-out re-solve is refused and skipped-and-reported, never silently averaged" tags =
+    [:stochastic_oos_harness] setup = [StochasticFixtures] begin
+    using TSODSO
+    using TSODSO: build_stochastic_oos_harness, solve_stochastic_oos_step!, sub_seed
+    using JuMP: set_parameter_value
+
+    # The pin-binding fixture above, but with the harness DEFAULT optimizer (tol_gap = 1e-8).
+    # Measured: its held-out solve leaves a cone residual whose worst
+    # gap/(atol_b + rtol·|cone|) ratio is ≈ 51 (the shared exactness gate refuses > 1). The
+    # step must throw the typed certificate refusal, and the orchestrator helper must turn
+    # exactly that refusal into a reported, excluded draw — not an aborted run and not a
+    # silently averaged number.
+    feeder = StochasticFixtures.stoch_feeder()
+    T = StochasticFixtures.T
+    λ0 = StochasticFixtures.stoch_lambda0()
+    aggs = StochasticFixtures.stoch_scenario_aggregators(
+        feeder,
+        sub_seed(StochasticFixtures.SEED_STOCH, :oos_2),
+    )
+
+    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), aggs; T = T, λ₀ = λ0)
+
+    pin = only(h.battery_pins)
+    ppv = only(h.ppv_handles)
+    set_parameter_value.(ppv.Ppv_param, fill(0.01, T))
+    set_parameter_value.(pin.pin_p_ch, fill(0.0003, T))
+    set_parameter_value.(pin.pin_p_dch, zeros(T))
+
+    err = @test_throws CertificateError solve_stochastic_oos_step!(h)
+    @test err.value.kind === :socp_exact
+    @test h.ctx.meta[:socp_maxratio] > 1
+    @test h.ctx.meta[:socp_maxgap] > 0
+
+    # Orchestrator conversion: (welfare, infeasible = false, inexact = true), welfare finite
+    # (reported per draw, excluded from the realized average by the caller).
+    w, infeas, inexact = TSODSO._stoch_solve_held_out!(h, 1)
+    @test inexact === true
+    @test infeas === false
+    @test isfinite(w)
 end
 
 @testitem "stochastic_oos_harness: regression — a FourQuadBESS (no Ppv_param) builds, pins, and solves" tags =
@@ -228,7 +299,17 @@ end
         aggs[1].Pdc,
     )
 
-    h = build_stochastic_oos_harness(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = λ0)
+    # Tightened optimizer: see file header note 3 (mechanics item, not an accuracy test).
+    oos_opt =
+        TSODSO.select_optimizer(TSODSO.SOCP(); tol_gap_abs = 5e-10, tol_gap_rel = 5e-10)
+    h = build_stochastic_oos_harness(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ0,
+        optimizer = oos_opt,
+    )
 
     # Exactly the FourQuadBESS pin carries pin_q; the PVBattery pin does not.
     @test count(p -> haskey(p, :pin_q), h.battery_pins) == 1
