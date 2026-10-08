@@ -167,6 +167,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 260826-8gb | Document the ADMM conditioning ladder + knife-edge and the CI docs-integrity guard in the Documenter site | 2026-08-26 | 362e745 | [260826-8gb-document-the-admm-conditioning-ladder-an](./quick/260826-8gb-document-the-admm-conditioning-ladder-an/) |
 | 260826-cjh | Replace the fragile `iters >= 50` load-test bound with an intent-shaped structural floor (measured spread 47-66) | 2026-08-26 | c2b95a6 | [260826-cjh-replace-the-fragile-iters-50-bound-in-th](./quick/260826-cjh-replace-the-fragile-iters-50-bound-in-th/) |
 | 261008-aeg | Close v4.0 re-audit tech debt (socp_gap_report hybrid floor, persisted MPC/stochastic status, NaN refusal text, ladder-restore test) | 2026-10-08 | ec1403e | [261008-aeg-close-v4-0-re-audit-tech-debt](./quick/261008-aeg-close-v4-0-re-audit-tech-debt/) |
+| 261008-clo | Fix FRAMEWORK_GUIDE and compare_default_stochastic writeup review findings (DLMP cone/drop names, 3.37 dual, copy-tightness wording, MPC knobs; stale numbers, planning IDs) | 2026-10-08 | bb257cb | [261008-clo-fix-guide-and-compare-writeup-review-fin](./quick/261008-clo-fix-guide-and-compare-writeup-review-fin/) |
 | 26 | 20 | - | - |
 | 27 | 9 | - | - |
 | 28 | 6 | - | - |
