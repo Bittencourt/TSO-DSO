@@ -176,6 +176,25 @@ end
     @test_throws ArgumentError TSODSO.with_strategy(Scenario(name = "x", pf = :ac), ADMM())
 end
 
+@testitem "strategies: ADMM requires allow_export at construction" begin
+    using TSODSO, Test
+    # solve_admm supports only the free-sign priced frontier, so the import-only combination
+    # must fail when the Scenario is built, on every construction path, before any solve.
+    err = @test_throws ArgumentError Scenario(;
+        name = "x",
+        strategy = ADMM(),
+        allow_export = false,
+    )
+    @test occursin("requires allow_export = true", sprint(showerror, err.value))
+    @test_throws ArgumentError Scenario(; name = "x", strategy = :admm, allow_export = false)
+    @test_throws ArgumentError TSODSO.run(ADMM(), Scenario(; name = "x", allow_export = false))
+    # The other strategies keep supporting the import-only frontier.
+    @test !Scenario(; name = "x", allow_export = false).allow_export
+    @test Scenario(; name = "x", strategy = MPC(), allow_export = false).strategy isa MPC
+    @test Scenario(; name = "x", strategy = Stochastic(), allow_export = false).strategy isa
+          Stochastic
+end
+
 # ---- Run-time result-shape items ----
 
 @testitem "strategies: ScenarioResult shape Centralized" begin
