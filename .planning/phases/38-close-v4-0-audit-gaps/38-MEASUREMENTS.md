@@ -187,3 +187,28 @@ completeness.
 
 Every new assertion holds on 1.10 and 1.11; nothing marked as a MANUAL CI risk. The thinnest
 margin is build-once cycle 2 (0.4964, about 2x below the gate) on every patch.
+
+## Stochastic docs page (live)
+
+`docs/literate/stochastic_pv_demand.jl` executed end-to-end as a script on Julia 1.12.5
+(`JULIA_LOAD_PATH="docs:.:@stdlib" julia +release --project=. docs/literate/stochastic_pv_demand.jl`,
+exit 0; the counts below printed by a one-off `include` of the same page with a trailing print).
+The page now prints these counts live in section 4 and plots only usable draws (excluded-inexact
+draws as hollow markers).
+
+| quantity | 1.12.5 (live) |
+|----------|---------------|
+| held-out draws | 10 |
+| excluded as inexact | **5** (draws 4, 6, 7, 9, 10) |
+| excluded as infeasible | 0 |
+| usable | 5 |
+| status | `:oos_inexact_skipped` |
+| per-draw hybrid ratio | 0.858, 0.677, 0.589, **1.308**, 0.885, **1.021**, **1.137**, 0.292, **1.634**, **1.072** |
+| worst ratio | 1.633837830641987 |
+| `realized_welfare` | -538.7830306825808 |
+| `in_sample.welfare` | -538.8159626451336 |
+| `welfare_gap` | 0.03293196255276598 (pre-gate 0.016867421597680732) |
+
+Matches the 38-04 prediction for 1.12.5 exactly (5/10, gap 0.032931962552765981). The page's
+former hard-coded "small and POSITIVE" sign sentence was replaced by a reference to the live
+value; on 1.12.7 the prediction is 2/10 excluded (gap 0.025993), which the page reports live.

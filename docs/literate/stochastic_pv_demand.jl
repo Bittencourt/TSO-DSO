@@ -227,8 +227,9 @@ r.oos.welfare_gap
 # For scale, the two raw totals this gap is derived from (NOT directly comparable to each
 # other on their own terms — `in_sample.welfare` is the probability-weighted EXPECTED-welfare
 # objective across the 5 in-sample scenarios; `realized_welfare` is a uniform-weight average of
-# 10 held-out re-solves of the SAME fixed schedule; `welfare_gap` above is the correctly
-# DEFINED comparison between them, not an ad hoc subtraction of two unrelated numbers):
+# the USABLE held-out re-solves of the SAME fixed schedule (see the excluded-draw report
+# below); `welfare_gap` above is the correctly DEFINED comparison between them, not an ad hoc
+# subtraction of two unrelated numbers):
 
 r.in_sample.welfare
 
@@ -236,12 +237,36 @@ r.in_sample.welfare
 
 r.oos.realized_welfare
 
+# ### Excluded held-out draws (computed live)
+#
+# Every held-out re-solve is checked by the same SOCP exactness gate as the in-sample solve. A
+# draw the gate refuses (its cone residual exceeds the solver-accuracy floor) is EXCLUDED from
+# `realized_welfare` and `welfare_gap` and reported here, never averaged in; an infeasible draw
+# is excluded the same way. A refused draw keeps its uncertified objective in `welfare_h` and is
+# flagged in `inexact_h`. How many draws the gate refuses depends on the solver build (the
+# residuals of the refused draws sit just above the floor), so the count is computed here, not
+# stated in prose:
+
+(;
+    held_out = s.strategy.H_oos,
+    excluded_inexact = count(r.oos.inexact_h),
+    excluded_infeasible = count(r.oos.infeasible_h),
+    usable = count(.!(r.oos.infeasible_h .| r.oos.inexact_h)),
+    status = r.status,
+)
+
+# The worst hybrid cone ratio over the held-out re-solves (a value above 1 is a refusal):
+
+maximum(filter(!isnan, r.oos.socp_maxratio_h))
+
 # ## Figure — in-sample expectation vs the 10 held-out re-scores
 #
-# The out-of-sample evaluation drawn draw-by-draw: one dot per FEASIBLE held-out scenario's
-# realized welfare (`r.oos.welfare_h` — a draw reported infeasible by the feasibility mask would
-# simply be absent, never plotted as a fabricated point), the solid line their uniform-weight
-# average (`realized_welfare`), and the dashed line the in-sample probability-weighted
+# The out-of-sample evaluation drawn draw-by-draw: one dot per usable draw — feasible and
+# certified exact — at its realized welfare (`r.oos.welfare_h`; a draw reported infeasible by
+# the feasibility mask is simply absent, never plotted as a fabricated point), hollow markers
+# for draws excluded as inexact (their uncertified objective, shown but not averaged), the
+# solid line the uniform-weight average of the usable dots (`realized_welfare`), and the
+# dashed line the in-sample probability-weighted
 # expectation the gap is measured against. Dots (not zero-anchored bars): the ~539-unit
 # welfare scale would visually flatten the sub-percent draw-to-draw variation that IS the
 # story here. The tiny distance between the two horizontal lines is `welfare_gap` — the
@@ -251,7 +276,8 @@ r.oos.realized_welfare
 if Base.find_package("CairoMakie") !== nothing
     using CairoMakie
 
-    feasible = findall(!, r.oos.infeasible_h)
+    usable = findall(.!(r.oos.infeasible_h .| r.oos.inexact_h))
+    excluded = findall(r.oos.inexact_h .& .!r.oos.infeasible_h)
 
     fig = Figure(size = (760, 420))
     ax = Axis(
@@ -272,29 +298,40 @@ if Base.find_package("CairoMakie") !== nothing
         ax,
         [r.oos.realized_welfare];
         color = :crimson,
-        label = "OOS realized welfare (mean of dots)",
+        label = "OOS realized welfare (mean of usable dots)",
     )
     scatter!(
         ax,
-        feasible,
-        r.oos.welfare_h[feasible];
+        usable,
+        r.oos.welfare_h[usable];
         color = :teal,
         markersize = 12,
-        label = "held-out draw welfare",
+        label = "held-out draw welfare (usable)",
     )
+    if !isempty(excluded)
+        scatter!(
+            ax,
+            excluded,
+            r.oos.welfare_h[excluded];
+            color = :transparent,
+            strokecolor = :teal,
+            strokewidth = 1.5,
+            markersize = 12,
+            label = "excluded (inexact)",
+        )
+    end
     axislegend(ax; position = :rb, labelsize = 11)
     fig
 end
 
 # ## Finding
 #
-# On this run, `welfare_gap` is small and POSITIVE — the committed first-stage schedule
-# performs slightly BETTER, on average, against the 10 held-out draws than the in-sample
-# extensive form's own probability-weighted expectation predicted (the opposite sign from the
-# stable, separately-measured golden value on the 3-scenario/5-held-out CI
-# fixture, `test/test_run_stochastic.jl`, which is small and NEGATIVE — this page does not
-# claim its own sign generalizes; both are honestly reported as measured on their own
-# fixtures). Relative to the ~539-unit scale of `in_sample.welfare` itself, the gap is a small
+# The sign and size of `welfare_gap` on this page are the live values printed in section 4,
+# measured over the usable held-out draws only; the page states no sign of its own, because the
+# set of usable draws (and with it the gap) can change with the solver build. The
+# separately-measured golden value on the 3-scenario/5-held-out CI fixture
+# (`test/test_run_stochastic.jl`) is small and NEGATIVE; neither fixture's sign is claimed to
+# generalize. Relative to the ~539-unit scale of `in_sample.welfare` itself, the gap is a small
 # fraction of a percent either way — this fixture's held-out draws are close enough in
 # character to the in-sample scenarios that the fixed schedule generalizes well, not a dramatic
 # stress test of out-of-sample robustness. The per-scenario DADPs in section 1 genuinely

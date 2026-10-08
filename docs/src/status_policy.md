@@ -14,7 +14,8 @@ does it return a status?". This page is the single home of that rule.
 - genuine non-convergence (`ConvergenceError`).
 
 **RETURN a status** for valid-answer outcomes: converged, a caller-set budget, the documented
-MPC certificate tiers, and the documented stochastic skip-and-report.
+MPC certificate tiers, and the documented stochastic skip-and-report (infeasible or inexact
+held-out draws).
 
 ## 2. Exception types
 
@@ -43,7 +44,7 @@ throws = Dict(
     :solve_stackelberg => "ArgumentError, SolveFailedError, CertificateError, ConvergenceError",
     :run_nash => "ArgumentError, SolveFailedError, CertificateError, ConvergenceError",
     :run_mpc => "ArgumentError (inputs); tier failures are returned as :cert_failed",
-    :run_stochastic => "ArgumentError, SolveFailedError (except INFEASIBLE held-out, skipped)",
+    :run_stochastic => "ArgumentError, SolveFailedError, CertificateError (in-sample); held-out INFEASIBLE or inexact draws are skipped and reported",
 )
 rows = ["| entry point | `status` values | throws |", "|---|---|---|"]
 for k in keys(TSODSO.STATUS_VOCABULARY)
@@ -56,7 +57,11 @@ Markdown.parse(join(rows, "\n"))
 Meaning of the less obvious values: `:budget_exceeded` is the caller-set `time_limit_s` of
 `solve_admm`; `:converged_relaxation_only` means the upper bound certifies only the SOC
 relaxation; `:degraded` means a restricted/local-AC MPC step with none failed;
-`:oos_infeasible_skipped` means a held-out stochastic scenario was skipped and reported.
+`:oos_infeasible_skipped` means a held-out stochastic scenario was skipped and reported;
+`:oos_inexact_skipped` means at least one held-out re-solve failed the shared SOCP exactness
+gate (`CertificateError` of kind `:socp_exact`); that draw keeps its welfare value in
+`welfare_h` but is flagged in `inexact_h` and excluded from `realized_welfare`/`welfare_gap`;
+it takes precedence over `:oos_infeasible_skipped`, and the masks carry the full detail.
 
 ## 4. Handler rule
 
@@ -66,7 +71,8 @@ Catch blocks are narrowed to the documented failure modes:
   `MethodError`, `BoundsError`, `ArgumentError`, `KeyError` and `InterruptException`
   propagate;
 - the `run_stochastic` skip-and-report admits only a `SolveFailedError` on an INFEASIBLE
-  status; anything else throws.
+  status or a `CertificateError` of kind `:socp_exact` raised by the held-out step; anything
+  else throws.
 
 ## 5. Inventory of what is not yet migrated (deferred)
 
