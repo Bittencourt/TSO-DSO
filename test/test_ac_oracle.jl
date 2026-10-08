@@ -223,7 +223,7 @@ end
         # historic v2.1 "genuine cone-inexactness" finding is a SEPARATE phenomenon that still
         # reproduces, but only under thesis_literal=true at a DIFFERENT, higher pv_scale — e.g.
         # pv_scale=1.4 on this fixture (ratio≈1982) or MPCFixtures' pv_scale=3.0 MPC window
-        # (cone_maxratio≈9157-9166).) Assertions below are
+        # (cone_maxratio≈9.2×10³ under the shared exactness check).) Assertions below are
         # UNCHANGED — they were already passing for this now-correctly-documented reason.
         aggs = IEEE13Fixtures.build_high_pv_aggregators(feeder; pv_scale = 1.2)
         λ₀ = IEEE13Fixtures.mem_price_profile()

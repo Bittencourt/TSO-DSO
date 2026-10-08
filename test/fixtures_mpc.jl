@@ -214,7 +214,7 @@
     `IEEE13Fixtures.build_high_pv_aggregators`'s shape (Thermostatic + PVBattery only, small
     `load_scale`, tiny battery headroom) at this fixture's SHORT `Tsteps`/`H`. `pv_scale` has
     NO default — the test must MEASURE the `pv_scale` that genuinely trips the
-    inline cone-residual check at this fixture's short horizon, per this project's "measured,
+    first-tier exactness check at this fixture's short horizon, per this project's "measured,
     not guessed" discipline; that measurement is documented in the test that uses it,
     not here.
     """
@@ -243,8 +243,8 @@
     end
 
     # MEASURED ("measured, not guessed" discipline): the pv_scale that
-    # reliably trips the inline cone-residual check (rtol=1e-4, atol=1e-6, run_mpc's own
-    # per-resolve formula) on THIS fixture's short H=3 window, sliced from a Tsteps=T=8 PV
+    # reliably trips the first-tier exactness check (the shared library kernel: rtol = 1e-4,
+    # hybrid per-branch floor) on THIS fixture's short H=3 window, sliced from a Tsteps=T=8 PV
     # draw (`build_mpc_high_pv_aggregators(mpc_high_pv_feeder(); pv_scale, Tsteps = T)`, then
     # `d.Ppv[1:H]`/`d.Pdc[1:H]` slid into `build_mpc_window(...; H = H)` — the EXACT shape
     # run_mpc's own window construction uses, NOT a bare `Tsteps = H` draw, which measures a
@@ -252,12 +252,14 @@
     # λ₀ = LAMBDA0_MPC, terminal_soc = false: a sharp knife-edge transition (consistent with
     # this project's own documented SOCP-exactness knife-edge under high-PV reverse flow)
     # between pv_scale=2.0 (maxratio ≈ 0.0036, comfortably certified) and pv_scale=2.5
-    # (maxratio ≈ 8510, ~8500× over the ratio>1 threshold). `IEEE13Fixtures.high_pv_feeder`'s
+    # (maxratio ≈ 8510, ~8500× over the ratio>1 threshold; scan ratios from the original
+    # flat-floor formula). `IEEE13Fixtures.high_pv_feeder`'s
     # own reference point (`pv_scale=1.2`) does NOT transfer unchanged to this fixture's
     # shorter horizon/smaller feeder (measured: pv_scale=1.2 stays comfortably exact here,
     # maxratio ≈ 0.006 on this fixture) — RE-MEASURED, per this project's own discipline.
-    # pv_scale=3.0 (maxratio ≈ 9157, comfortably past the knife-edge with ample margin) is the
-    # value exported here.
+    # pv_scale=3.0 (maxratio ≈ 9.2×10³ under the shared exactness check — the rtol term dominates
+    # at this cone magnitude, so the verdict is the same as under the original flat floor —
+    # comfortably past the knife-edge with ample margin) is the value exported here.
     const MPC_HIGH_PV_SCALE_MEASURED = 3.0
 
     export T,

@@ -271,7 +271,7 @@ any_cert_failed(r.trace)
 # not a claim that the escalation ladder is untested: `test/test_mpc_loop.jl`'s forced-inexact
 # `@testitem`s drive `MPCFixtures`'
 # high-PV fixture (`pv_scale = MPC_HIGH_PV_SCALE_MEASURED = 3.0`, a measured knife-edge value,
-# cone ratio ≈ 9157× over threshold) directly through `_mpc_certify_and_price` — at `t = 1` AND
+# first-tier cone ratio ≈ 9.2×10³ over threshold under the shared exactness check) directly through `_mpc_certify_and_price` — at `t = 1` AND
 # at `t > 1` — and assert `cert_status ∈ (:certified_convex_dual_restricted, :local_ac_dual)`
 # (a restricted-tier rescue carries its own provenance symbol, distinct from a first-tier
 # certification), plus a dedicated item forcing BOTH tiers to fail and asserting the terminal

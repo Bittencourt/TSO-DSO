@@ -4,7 +4,8 @@
 # closed-loop orchestrator. Every item name contains "mpc_loop", tagged
 # [:mpc_loop], setup = [MPCFixtures]. Covers: (1) the happy-path CI fixture never
 # escalating, a populated trace, and a finite regret; (2) the forced-inexact high-PV fixture
-# genuinely tripping the inline cone check and escalating through the escalation ladder WITHOUT
+# genuinely tripping the first-tier exactness check (the shared library kernel: rtol = 1e-4,
+# hybrid per-branch floor) and escalating through the escalation ladder WITHOUT
 # throwing; (3) s.mpc_step genuinely striding the resolve cadence — a measured
 # behavioral difference, never a silently-inert kwarg.
 
@@ -356,11 +357,12 @@ end
     fe = (; pv_factor = 1.0, demand_factor = 1.0)
 
     # Pre-condition check (measured directly, not just trusting
-    # the constant): the measured pv_scale genuinely trips the inline check on THIS solve.
+    # the constant): the measured pv_scale genuinely trips the first-tier exactness check on
+    # THIS solve.
     result =
         TSODSO._mpc_certify_and_price(feeder, aggs, o, λ₀, 1; measured_state = ms, fe = fe)
 
-    @test result.cone_maxratio > 1     # the pre-condition: this call's inline check DID fail
+    @test result.cone_maxratio > 1     # the pre-condition: this call's first-tier check DID fail
     # escalation resolved it — the restricted-tier rescue carries its OWN symbol,
     # DISTINCT from a first-tier :certified_convex_dual certification.
     @test result.cert_status in (:certified_convex_dual_restricted, :local_ac_dual)
@@ -483,8 +485,9 @@ end
     @test esc[1].Pdc == Float64[aggs[1].Pdc[3 + τ - 1] * 0.9 for τ in 1:H]
 
     # 2. END-TO-END regression at t > 1: drive the SAME slide-the-window mechanics run_mpc
-    # uses at t = 1 and t = 4 (both MEASURED to trip the inline cone check on this fixture at
-    # pv_scale = 3.0 — ratios ≈ 9432 at both). Under the pre-fix code the escalation ALWAYS
+    # uses at t = 1 and t = 4 (both MEASURED to trip the first-tier exactness check — the shared
+    # library kernel: rtol = 1e-4, hybrid per-branch floor — on this fixture at pv_scale = 3.0,
+    # ratios ≈ 9.2×10³ at both). Under the pre-fix code the escalation ALWAYS
     # solved hours 1..H with construction-time ICs, so with this FLAT λ₀ its published price
     # was IDENTICAL at every t; the fixed escalation prices the t-window, so the two prices
     # MUST differ (the PV slices differ across the two windows).

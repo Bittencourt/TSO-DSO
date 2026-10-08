@@ -229,7 +229,7 @@ ctx_socp.meta[:socp_maxgap]
 # phenomenon, not gate 2. That finding still reproduces, but only under `thesis_literal = true` at a
 # DIFFERENT, higher `pv_scale` on this or a related fixture (e.g. `pv_scale = 1.4` on this same
 # 3-bus feeder, cone ratio ≈ 1982, or MPCFixtures' `pv_scale = 3.0` MPC window, cone_maxratio ≈
-# 9157–9166) — see the restricted-branch-flow
+# 9.2×10³ under the shared exactness check) — see the restricted-branch-flow
 # page. The two findings are mechanically distinct and must not be conflated: this page's own
 # `pv_scale = 1.2` gate-2 finding is a restriction-suboptimality property of the DEFAULT, while the
 # v2.1 knife-edge is a genuine cone-slack property that requires the OLD `thesis_literal = true`
