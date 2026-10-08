@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 38-04-PLAN.md (held-out stochastic exactness gate, exclude + report; CI golden unchanged); next is 38-05
-last_updated: "2026-10-08T00:48:57.525Z"
+stopped_at: Completed 38-05-PLAN.md (OOS inexact skip reported in status policy, live docs-page counts, inexact-aware seed-42 compare + refreshed writeup/results); next is 38-06
+last_updated: "2026-10-08T01:01:20.790Z"
 last_activity: 2026-10-07
 progress:
   total_phases: 13
   completed_phases: 12
   total_plans: 131
-  completed_plans: 126
+  completed_plans: 127
   percent: 92
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 38 (Close v4.0 Audit Gaps) — EXECUTING
-Plan: 4 of 10 complete (38-01..38-04 done; next 38-05)
+Plan: 5 of 10 complete (38-01..38-05 done; next 38-06)
 Status: Gap closure after v4.0 milestone audit (gaps_found)
   Latest certified full suite: 32224 passed / 0 failed / 0 errored / 5 broken at 19f3fba (Julia 1.12.5; 32219/0/0/5 on 1.12.7);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
@@ -202,6 +202,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 38 P01 | 10min | 2 tasks | 3 files |
 | Phase 38 P02 | 45min | 3 tasks | 3 files |
 | Phase 38 P04 | 50min | 3 tasks | 7 files |
+| Phase 38 P05 | 40min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -519,8 +520,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-08T00:48:57.525Z
-Stopped at: Completed 38-04-PLAN.md
+Last session: 2026-10-08T01:01:20.761Z
+Stopped at: Completed 38-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
