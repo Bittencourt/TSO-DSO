@@ -109,10 +109,13 @@ println("  ", round.(inS.expected_dadp; digits = 4))
 println()
 println("Out-of-sample (committed battery schedule vs 10 unseen draws):")
 oos = r_stoch.oos
+# Usable held-out draws: feasible AND certified exact by the shared SOCP exactness gate, the
+# same exclusion run_stochastic applies to realized_welfare / welfare_gap.
+usable = .!(oos.infeasible_h .| oos.inexact_h)
 println(
     "  realized welfare  = ",
     round(oos.realized_welfare; digits = 6),
-    "  (mean over feasible held-out draws)",
+    "  (mean over usable held-out draws: feasible and certified exact)",
 )
 println(
     "  welfare gap       = ",
@@ -120,6 +123,8 @@ println(
     "  (realized − in-sample)",
 )
 println("  infeasible draws  = ", count(oos.infeasible_h), " / ", length(oos.infeasible_h))
+println("  inexact draws     = ", count(oos.inexact_h), " / ", length(oos.inexact_h))
+println("  run status        = ", r_stoch.status)
 println("solve time         = ", round(t_stoch; digits = 2), " s")
 
 # --- 3. Side-by-side price summary --------------------------------------------------------
@@ -261,21 +266,35 @@ println("saved scenario_fan.{pdf,png}")
 fig3 = Figure(size = (1000, 400))
 gap_str = round(oos.welfare_gap; digits = 4)
 ninf_str = count(oos.infeasible_h)
+ninx_str = count(oos.inexact_h)
 ax3 = Axis(
     fig3[1, 1];
     xlabel = "held-out draw h",
     ylabel = "realized welfare",
     xticks = 1:H_OOS,
-    title = "Committed schedule vs $H_OOS unseen futures (gap = $gap_str, $ninf_str infeasible)",
+    title = "Committed schedule vs $H_OOS unseen futures (gap = $gap_str, $ninf_str infeasible, $ninx_str inexact)",
 )
 scatter!(
     ax3,
-    (1:H_OOS)[.!oos.infeasible_h],
-    oos.welfare_h[.!oos.infeasible_h];
+    (1:H_OOS)[usable],
+    oos.welfare_h[usable];
     color = :dodgerblue,
     markersize = 10,
-    label = "held-out draw",
+    label = "held-out draw (usable)",
 )
+excluded_inexact = oos.inexact_h .& .!oos.infeasible_h
+if any(excluded_inexact)
+    scatter!(
+        ax3,
+        (1:H_OOS)[excluded_inexact],
+        oos.welfare_h[excluded_inexact];
+        color = :transparent,
+        strokecolor = :dodgerblue,
+        strokewidth = 1.5,
+        markersize = 10,
+        label = "excluded (inexact)",
+    )
+end
 if any(oos.infeasible_h)
     scatter!(
         ax3,
@@ -300,7 +319,7 @@ hlines!(
     oos.realized_welfare;
     color = :black,
     linewidth = 2,
-    label = "realized mean (feasible draws)",
+    label = "realized mean (usable draws)",
 )
 axislegend(ax3; position = :rb, framevisible = false, labelsize = 9)
 ax4 = Axis(
@@ -362,7 +381,7 @@ println("saved price_envelope.{pdf,png}")
 # --- 5. MACHINE-READABLE ARTIFACTS (results-folder convention, cf. results/pv_boom) --------
 # summary.csv   — scalar key/value table (welfares, gaps, exactness, timings).
 # dadp_tidy.csv — tidy long-format DADP table (source × hour), diff-friendly.
-# oos_draws.csv — per-held-out-draw realized welfare + infeasibility mask.
+# oos_draws.csv — per-held-out-draw realized welfare + infeasibility and inexactness masks.
 using DataFrames, CSV
 
 summary_df = DataFrame(
@@ -379,6 +398,7 @@ summary_df = DataFrame(
         "oos_realized_welfare",
         "oos_welfare_gap",
         "oos_n_infeasible",
+        "oos_inexact_draws",
         "oos_H",
         "stoch_solve_s",
         "dadp_spread_max",
@@ -396,6 +416,7 @@ summary_df = DataFrame(
         oos.realized_welfare,
         oos.welfare_gap,
         count(oos.infeasible_h),
+        count(oos.inexact_h),
         H_OOS,
         t_stoch,
         maximum(spread),
@@ -410,9 +431,10 @@ summary_df = DataFrame(
         "probability-weighted extensive-form objective",
         "max over per-scenario exactness certificates (gated independently)",
         "mean of the derived E[DADP] summary (not a constraint-backed price)",
-        "uniform mean over FEASIBLE held-out draws",
+        "uniform mean over USABLE held-out draws (feasible and certified exact)",
         "realized − in-sample",
         "held-out draws infeasible vs committed schedule",
+        "held-out draws refused by the SOCP exactness gate (excluded, reported)",
         "held-out draw count",
         "wall time, stochastic run (extensive form + 10 held-out re-solves)",
         "max over hours of (max−min scenario DADP)",
@@ -437,6 +459,7 @@ oos_draws = DataFrame(
     draw = collect(1:H_OOS),
     welfare = oos.welfare_h,
     infeasible = oos.infeasible_h,
+    inexact = oos.inexact_h,
 )
 CSV.write(joinpath(OUT, "oos_draws.csv"), oos_draws)
 println("wrote summary.csv, dadp_tidy.csv, oos_draws.csv")

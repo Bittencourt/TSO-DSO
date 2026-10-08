@@ -212,3 +212,50 @@ draws as hollow markers).
 Matches the 38-04 prediction for 1.12.5 exactly (5/10, gap 0.032931962552765981). The page's
 former hard-coded "small and POSITIVE" sign sentence was replaced by a reference to the live
 value; on 1.12.7 the prediction is 2/10 excluded (gap 0.025993), which the page reports live.
+
+## compare_default_stochastic (seed 42) explained moves
+
+Re-run of the inexact-aware `scripts/compare_default_stochastic.jl` on Julia 1.12.5, launched via
+`suite_detached.sh p38-compare-stoch` (done marker `0`). The script now applies the same usable mask
+as `run_stochastic` (`.!(infeasible_h .| inexact_h)`), prints the inexact count and the run status,
+writes `oos_inexact_draws` to summary.csv and an `inexact` column to oos_draws.csv, and draws
+excluded-inexact points as hollow markers.
+
+**Gate effect: none.** 0/10 draws refused (status `:solved`), and the published `welfare_gap`
+-0.0323948881649585 equals the pre-gate value measured in 38-04 (-0.032394888164958502) to the last
+printed digit.
+
+**But the tracked artifacts were stale.** `results/compare_default_stochastic/` and the writeup were
+last regenerated on 2026-09-08 (ab14c67), before the v4.0 modeling fixes (exactness copy direction,
+battery hour-T energy link, reverse thermal limit, flexible-load reactive draw) and later changes.
+Re-running with the current code moves these numbers. The cause was not bisected; it is not the gate,
+since the gate refused nothing and the gap matches the pre-gate measurement.
+
+| quantity | HEAD (2026-09-08 artifact) | re-run (1.12.5) | cause |
+|----------|----------------------------|-----------------|-------|
+| oos inexact draws | (not reported) | **0 / 10** | new column/row; gate refused nothing |
+| run status | (not reported) | `:solved` | — |
+| `oos_welfare_gap` | -0.03598937873448449 | **-0.0323948881649585** | stale artifact (modeling changes since 2026-09-08), not the gate |
+| `oos_realized_welfare` | -538.7522475069767 | -538.786882964557 | same |
+| `stoch_insample_welfare` | -538.7162581282422 | -538.754488076392 | same |
+| `default_welfare` | -538.8475100160589 | -538.8957427671698 | same |
+| `default_exact_maxgap` | 1.0646e-8 | 2.1427e-8 | same |
+| `stoch_exact_maxgap_max` | 3.6416e-9 | 1.8695e-9 | same |
+| `stoch_expected_dadp_mean` | 3.253686339420884 | 3.1645738082799464 | same (hours 4–6 prices) |
+| DADP hours 4–6 (all sources) | ≈ 0.217–0.339 | ≈ 0.003–0.025 | same; hours 1–3 and 7–9 unchanged to 3 decimals (scenario 1 h3 3.583 -> 3.582) |
+| `dadp_spread_max` | 0.1273970562276423 | 0.1273970528079511 | same (hour 7) |
+| per-hour spread h4–h6 | 0.012–0.026 | 0.0072, 0.0122, 0.0168 | same |
+| oos per-draw welfare | e.g. h1 -538.6315 | h1 -538.6655 (all 10 shifted ≈ -0.03 to -0.05) | same |
+| summary.csv notes | contained planning identifiers | plain text (script scrubbed earlier) | script already scrubbed; artifact was stale |
+| solve times | 51.27 s / 9.59 s | 47.93 s / 9.45 s | wall time, not a result |
+
+Result files: summary.csv, oos_draws.csv, dadp_tidy.csv and the dadp_comparison, price_envelope and
+welfare_robustness PDFs/PNGs changed in content and are committed. scenario_fan.png is
+byte-identical (the exogenous draws did not move); scenario_fan.pdf differed only in metadata and
+was restored with `git checkout`.
+
+Writeup `docs/writeups/compare_default_stochastic.typ` (Portuguese) updated: every moved number
+above, the DADP table hours 4–6, the midday collapse range, the "< 1 % / ≤ 2.7 % of the local price"
+claims (now qualified: they hold outside the PV valley, where the price is near zero), the
+held-out certification sentence (0/10 inexact), and a header note that the numbers were refreshed
+by a re-run with the current code. Compiles with `typst compile --root .`.
