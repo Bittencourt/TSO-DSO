@@ -255,9 +255,11 @@ r.oos.realized_welfare
     status = r.status,
 )
 
-# The worst hybrid cone ratio over the held-out re-solves (a value above 1 is a refusal):
+# The worst hybrid cone ratio over the held-out re-solves (a value above 1 is a refusal; `NaN`
+# if no draw has a ratio, i.e. every draw was infeasible):
 
-maximum(filter(!isnan, r.oos.socp_maxratio_h))
+oos_ratios = filter(!isnan, r.oos.socp_maxratio_h)
+isempty(oos_ratios) ? NaN : maximum(oos_ratios)
 
 # ## Figure — in-sample expectation vs the 10 held-out re-scores
 #
