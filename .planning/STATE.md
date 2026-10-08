@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 Phase: 38 (Close v4.0 Audit Gaps) — COMPLETE (verified 4/4, human_needed: GitHub CI, guide prose spot-check, compare refresh review)
 Plan: 10 of 10 complete
 Status: All v4.0 phases complete; milestone re-audit next
-  Latest certified full suite: 32325 passed / 0 failed / 0 errored / 5 broken after the Phase 38 review fixes (Julia 1.12.5, p38-postfix125; gate runs 32304 on 1.12.5 at 958cc98, 32299/0/0/5 on 1.12.7 at 806c4cd);
+  Latest certified full suite: 32379 passed / 0 failed / 0 errored / 5 broken after quick task 261008-aeg (Julia 1.12.5, aeg; 32325 after the Phase 38 review fixes; gate runs 32304 on 1.12.5 at 958cc98, 32299/0/0/5 on 1.12.7 at 806c4cd);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 37 verified 4/4 (GitHub-side CI run is the one open manual check).
   `/gsd-secure-phase` not run for Phases 29–37 (security enforcement default-on).
@@ -166,6 +166,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 260825-w5b | Add IEEE-13 ADMM knife-edge canary (pinned iters/welfare, ladder reported) | 2026-08-26 | 2648dfb | [260825-w5b-add-ieee-13-admm-knife-edge-canary-test](./quick/260825-w5b-add-ieee-13-admm-knife-edge-canary-test/) |
 | 260826-8gb | Document the ADMM conditioning ladder + knife-edge and the CI docs-integrity guard in the Documenter site | 2026-08-26 | 362e745 | [260826-8gb-document-the-admm-conditioning-ladder-an](./quick/260826-8gb-document-the-admm-conditioning-ladder-an/) |
 | 260826-cjh | Replace the fragile `iters >= 50` load-test bound with an intent-shaped structural floor (measured spread 47-66) | 2026-08-26 | c2b95a6 | [260826-cjh-replace-the-fragile-iters-50-bound-in-th](./quick/260826-cjh-replace-the-fragile-iters-50-bound-in-th/) |
+| 261008-aeg | Close v4.0 re-audit tech debt (socp_gap_report hybrid floor, persisted MPC/stochastic status, NaN refusal text, ladder-restore test) | 2026-10-08 | ec1403e | [261008-aeg-close-v4-0-re-audit-tech-debt](./quick/261008-aeg-close-v4-0-re-audit-tech-debt/) |
 | 26 | 20 | - | - |
 | 27 | 9 | - | - |
 | 28 | 6 | - | - |
