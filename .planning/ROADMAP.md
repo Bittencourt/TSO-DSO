@@ -766,7 +766,7 @@ are closed: every SOCP price certificate uses the same hybrid exactness floor, e
   4. Hardening: `Scenario(strategy=ADMM(), allow_export=false)` fails at construction; the
      out-of-sample stochastic re-solve (`solve_stochastic_oos_step!`) runs the shared exactness
      gate with a visible failure mode; `check_setup_names.py` runs in CI.
-**Plans:** 6/10 plans executed
+**Plans:** 7/10 plans executed
 
 Plans:
 **Wave 1**
@@ -795,7 +795,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 38-07-PLAN.md — Scenario rejects ADMM with allow_export=false at construction; stored reactive mode as Symbol + stored OOS exclusion counts/status; status_policy §7
+- [x] 38-07-PLAN.md — Scenario rejects ADMM with allow_export=false at construction; stored reactive mode as Symbol + stored OOS exclusion counts/status; status_policy §7
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -832,7 +832,7 @@ Plans:
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete    | 2026-10-07 |
-| 38. Close v4.0 Audit Gaps | v4.0 | 6/10 | In Progress|  |
+| 38. Close v4.0 Audit Gaps | v4.0 | 7/10 | In Progress|  |
 
 ## Deferred / Future-Milestone Notes
 

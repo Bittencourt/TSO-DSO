@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 38-06-PLAN.md (ADMM timeout script converted to 2 discovered fast @testitems; check_setup_names in CI format job); next is 38-07
-last_updated: "2026-10-08T01:07:07.619Z"
+stopped_at: Completed 38-07-PLAN.md (Scenario rejects ADMM with allow_export=false at construction; stored reactive mode is a Symbol; Stochastic artifacts store oos_inexact_draws/oos_infeasible_draws/oos_status); next is 38-08
+last_updated: "2026-10-08T01:18:53.637Z"
 last_activity: 2026-10-07
 progress:
   total_phases: 13
   completed_phases: 12
   total_plans: 131
-  completed_plans: 128
+  completed_plans: 129
   percent: 92
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 ## Current Position
 
 Phase: 38 (Close v4.0 Audit Gaps) — EXECUTING
-Plan: 6 of 10 complete (38-01..38-06 done; next 38-07)
+Plan: 7 of 10 complete (38-01..38-07 done; next 38-08)
 Status: Gap closure after v4.0 milestone audit (gaps_found)
   Latest certified full suite: 32224 passed / 0 failed / 0 errored / 5 broken at 19f3fba (Julia 1.12.5; 32219/0/0/5 on 1.12.7);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
@@ -521,8 +521,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-08T01:07:07.595Z
-Stopped at: Completed 38-06-PLAN.md
+Last session: 2026-10-08T01:18:53.615Z
+Stopped at: Completed 38-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
