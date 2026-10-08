@@ -173,11 +173,14 @@ flatten helper as [`scenario_filename`](@ref) (`style = :record`): the common se
 `:pf_thesis_literal`, `:pf_ε`, lowercase `:strategy`, and the legacy flat knob keys of the
 ACTIVE strategy only (`:ρ ... :μ` / `:mpc_*` / `:stoch_*`); plus `welfare`, `dadp`,
 `exact_maxgap`, `iters`, `final_r`, `final_s`, `reactive_consensus_mode`,
-`:julia_version = string(VERSION)`, for MPC `:regret`/`:steps`, and for Stochastic
+`:julia_version = string(VERSION)`, for MPC `:regret`, `:steps`, `:mpc_status` (the run
+status `Symbol`, e.g. `:certified` or `:degraded`) and `:mpc_cert_status_trace` (the per-resolve
+certificate tier, a `Vector{Symbol}`), and for Stochastic
 `:welfare_gap`, `:oos_inexact_draws`, `:oos_infeasible_draws` (`Int` counts of held-out draws
 excluded from `welfare_gap` because the exactness gate refused the re-solve or it was
-infeasible) and `:oos_status` (the run status `Symbol`, e.g. `:solved` or
-`:oos_inexact_skipped`). Only primitives/arrays are stored — never strategy objects, enums,
+infeasible) and `:oos_status` (the run's own status `Symbol` as carried by
+`StochasticDetails.status`, e.g. `:solved` or `:oos_inexact_skipped`; never recomputed here).
+Only primitives/arrays are stored — never strategy objects, enums,
 `MpcTrace`, NamedTuples or details structs — so the JLD2 loads without TSODSO types.
 
 NOTE: `reactive_consensus_mode` is the RESOLVED `ReactiveMode` of an ADMM run, stored as its
@@ -201,11 +204,13 @@ function result_to_dict(res::ScenarioResult)
     if det isa MPCDetails
         d[:regret] = det.regret
         d[:steps] = det.steps
+        d[:mpc_status] = Symbol(det.raw.status)
+        d[:mpc_cert_status_trace] = Symbol.(det.raw.trace.cert_status_trace)
     elseif det isa StochasticDetails
         d[:welfare_gap] = det.oos.welfare_gap
         d[:oos_inexact_draws] = count(det.oos.inexact_h)
         d[:oos_infeasible_draws] = count(det.oos.infeasible_h)
-        d[:oos_status] = _stochastic_status(det.oos.infeasible_h, det.oos.inexact_h)
+        d[:oos_status] = det.status
     end
     return d
 end

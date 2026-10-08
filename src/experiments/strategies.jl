@@ -259,14 +259,22 @@ struct MPCDetails
 end
 
 """
+    StochasticDetails(in_sample, oos, status)
     StochasticDetails(in_sample, oos)
 
 Stochastic-specific details. The headline `welfare` of the `ScenarioResult` is the expected
-`in_sample.welfare`; `in_sample` and `oos` are the unchanged `run_stochastic` NamedTuples.
+`in_sample.welfare`; `in_sample` and `oos` are the unchanged `run_stochastic` NamedTuples, and
+`status::Symbol` is the run's own status (`run_stochastic(...).status`: `:solved`,
+`:oos_infeasible_skipped` or `:oos_inexact_skipped`). `run(::Stochastic, s)` passes the run's
+status explicitly, so storage never recomputes it. The two-argument form derives `status` from
+`oos.infeasible_h`/`oos.inexact_h` with the same rule as the run.
 """
 struct StochasticDetails
     in_sample::NamedTuple
     oos::NamedTuple
+    status::Symbol
 end
+StochasticDetails(in_sample::NamedTuple, oos::NamedTuple) =
+    StochasticDetails(in_sample, oos, _stochastic_status(oos.infeasible_h, oos.inexact_h))
 
 export AbstractStrategy, Centralized, ADMM, MPC, Stochastic

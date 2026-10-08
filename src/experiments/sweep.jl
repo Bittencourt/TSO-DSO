@@ -46,7 +46,7 @@ Collate every per-run JLD2 artifact under `dir` (written by [`run_and_store`](@r
 All THREE diff-friendly rules are mandatory:
 
  1. **Fixed column order** — an EXPLICIT `select` on
-    `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :pf, :pf_thesis_literal, :pf_ε, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ, :mpc_H, :mpc_step, :mpc_terminal_soc, :mpc_forecast_error, :stoch_S, :stoch_H_oos, :welfare, :exact_maxgap, :iters, :final_r, :final_s, :oos_inexact_draws, :oos_infeasible_draws, :oos_status, :gitcommit]` (the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
+    `[:name, :feeder, :strategy, :seed, :T, :price, :population, :allow_export, :pf, :pf_thesis_literal, :pf_ε, :ρ, :ε_abs, :ε_rel, :maxiter, :τ_ratio, :μ, :mpc_H, :mpc_step, :mpc_terminal_soc, :mpc_forecast_error, :stoch_S, :stoch_H_oos, :welfare, :exact_maxgap, :iters, :final_r, :final_s, :welfare_gap, :regret, :mpc_status, :oos_inexact_draws, :oos_infeasible_draws, :oos_status, :gitcommit]` (the ADMM tuning knobs + `:price`/`:population`/`:allow_export` are
     now kept alongside the result columns, so the collated CSV — like the per-run JLD2, since
     `result_to_dict` persists the flat `_scenario_identity(s; style = :record)` selectors and
     active-strategy knobs — is self-describing without re-loading the `Scenario` even for a
@@ -77,9 +77,11 @@ All THREE diff-friendly rules are mandatory:
 
 In a mixed-strategy sweep, knob keys absent from a run's JLD2 (inactive strategy) surface as
 `missing` cells; `sort!` places `missing` last deterministically. The same holds for the
-Stochastic-only result columns `:oos_inexact_draws`, `:oos_infeasible_draws` and `:oos_status`,
-which make a held-out draw excluded from `welfare_gap` visible in the collated CSV. `:stoch_probabilities` is
-deliberately NOT a column (a vector is not CSV-friendly; its digest lives in the filename).
+strategy-specific result columns: `:welfare_gap` and `:oos_inexact_draws`,
+`:oos_infeasible_draws`, `:oos_status` (Stochastic only; they make a held-out draw excluded from
+`welfare_gap` visible in the collated CSV), and `:regret`, `:mpc_status` (MPC only).
+`:stoch_probabilities` and `:mpc_cert_status_trace` are deliberately NOT columns (a vector is
+not CSV-friendly; the probabilities' digest lives in the filename, the trace in the JLD2).
 
 Two `collate_summary` calls over the SAME run directory produce bit-for-bit identical CSV files
 (no git churn) because all three rules are deterministic given the same on-disk artifacts.
@@ -116,6 +118,9 @@ function collate_summary(dir::AbstractString, csvpath::AbstractString)
         :iters,
         :final_r,
         :final_s,
+        :welfare_gap,
+        :regret,
+        :mpc_status,
         :oos_inexact_draws,
         :oos_infeasible_draws,
         :oos_status,

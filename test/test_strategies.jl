@@ -280,6 +280,8 @@ end
     @test res.dadp == reshape(r.in_sample.expected_dadp, 1, :)
     @test res.exact_maxgap == maximum(r.in_sample.socp_maxgap)
     @test res.details isa TSODSO.StochasticDetails
+    # the details carry the run's own status
+    @test res.details.status === r.status
 end
 
 @testitem "strategies: run_mpc/run_stochastic fallback to defaults" tags = [:slow] begin
@@ -357,8 +359,8 @@ end
             T = 9,
             strategy = Stochastic(S = 3, H_oos = 5),
         )
-        run_and_store(s_mpc; dir = dir)
-        run_and_store(s_sto; dir = dir)
+        res_mpc = run_and_store(s_mpc; dir = dir)
+        res_sto = run_and_store(s_sto; dir = dir)
         f_mpc = joinpath(dir, TSODSO.scenario_filename(s_mpc))
         f_sto = joinpath(dir, TSODSO.scenario_filename(s_sto))
         @test isfile(f_mpc)
@@ -379,7 +381,16 @@ end
         @test d_sto["oos_inexact_draws"] === 0
         @test d_sto["oos_infeasible_draws"] === 0
         @test d_sto["oos_status"] === :solved
+        @test d_sto["oos_status"] === res_sto.details.status
         @test !haskey(d_mpc, "oos_status")
+        # The MPC run status and per-resolve certificate trace are stored as Symbols.
+        raw = res_mpc.details.raw
+        @test d_mpc["mpc_status"] === raw.status
+        @test d_mpc["mpc_cert_status_trace"] isa Vector{Symbol}
+        @test d_mpc["mpc_cert_status_trace"] == raw.trace.cert_status_trace
+        @test length(d_mpc["mpc_cert_status_trace"]) == res_mpc.details.steps
+        @test !haskey(d_sto, "mpc_status")
+        @test !haskey(d_sto, "mpc_cert_status_trace")
         @test ismissing(d_mpc["reactive_consensus_mode"])
         @test isfinite(d_mpc["welfare"])
         @test isfinite(d_sto["welfare"])
@@ -397,7 +408,70 @@ end
         @test !haskey(d_mpc, "stoch_S")
         @test haskey(d_sto, "stoch_S")
         @test !haskey(d_sto, "mpc_H")
+
+        # The collated CSV carries welfare_gap, regret and the MPC status, `missing` where
+        # the strategy does not produce them, deterministically across two collations.
+        ExperimentHarnessFixtures.with_tempdir() do outdir
+            c1 = joinpath(outdir, "a.csv")
+            c2 = joinpath(outdir, "b.csv")
+            df = TSODSO.collate_summary(dir, c1)
+            TSODSO.collate_summary(dir, c2)
+            @test read(c1, String) == read(c2, String)
+            cols = names(df)
+            @test all(in(cols), ("welfare_gap", "regret", "mpc_status", "oos_status"))
+            @test !("mpc_cert_status_trace" in cols)
+            idx(c) = findfirst(==(c), cols)
+            @test idx("exact_maxgap") <
+                  idx("welfare_gap") <
+                  idx("regret") <
+                  idx("mpc_status") <
+                  idx("oos_inexact_draws")
+            row_mpc = only(eachrow(df[df.strategy .== :mpc, :]))
+            row_sto = only(eachrow(df[df.strategy .== :stochastic, :]))
+            @test row_mpc.mpc_status === raw.status
+            @test row_mpc.regret == res_mpc.details.regret
+            @test ismissing(row_mpc.welfare_gap)
+            @test row_sto.welfare_gap == res_sto.details.oos.welfare_gap
+            @test ismissing(row_sto.regret)
+            @test ismissing(row_sto.mpc_status)
+            header = first(split(read(c1, String), "\n"))
+            @test occursin("welfare_gap,regret,mpc_status", header)
+        end
     end
+end
+
+@testitem "strategies: stored Stochastic status is the run's own, including an inexact-skipped run" tags =
+    [:slow] begin
+    using TSODSO, Test
+
+    s = Scenario(
+        name = "st-inexact",
+        feeder = :ieee13,
+        T = 9,
+        strategy = Stochastic(S = 3, H_oos = 5),
+    )
+    # Flag held-out draw 2 as refused by the exactness gate through the test hook; every
+    # other draw takes the real held-out path.
+    flag_draw_2(h_oos, i) =
+        i == 2 ? (first(TSODSO._stoch_solve_held_out!(h_oos, i)), false, true) :
+        TSODSO._stoch_solve_held_out!(h_oos, i)
+    r = TSODSO._run_stochastic(s, s.strategy; solve_held_out! = flag_draw_2)
+    @test r.status === :oos_inexact_skipped
+
+    det = TSODSO.StochasticDetails(r.in_sample, r.oos, r.status)
+    res = TSODSO.ScenarioResult(s, r.in_sample.welfare, zeros(1, s.T), NaN, 0.0, det)
+    d = TSODSO.result_to_dict(res)
+    @test d[:oos_status] === r.status
+    @test d[:oos_inexact_draws] == 1
+    @test d[:oos_infeasible_draws] == 0
+
+    # The two-argument constructor derives the same status from the masks.
+    @test TSODSO.StochasticDetails(r.in_sample, r.oos).status === r.status
+
+    # Storage copies the carried status; it never recomputes it from the masks.
+    det_s = TSODSO.StochasticDetails(r.in_sample, r.oos, :sentinel_status)
+    res_s = TSODSO.ScenarioResult(s, r.in_sample.welfare, zeros(1, s.T), NaN, 0.0, det_s)
+    @test TSODSO.result_to_dict(res_s)[:oos_status] === :sentinel_status
 end
 
 @testitem "strategies: stored reactive mode is a plain Symbol" begin

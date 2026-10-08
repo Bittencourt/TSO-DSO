@@ -427,7 +427,7 @@ end
 
 `welfare = in_sample.welfare`; `dadp = expected_dadp` as a `1 x T` row (first aggregator's
 priced bus); `exact_maxgap = maximum(in_sample.socp_maxgap)` (NaN if empty);
-`details::StochasticDetails`.
+`details::StochasticDetails`, carrying the run's own `status`.
 """
 function run(st::Stochastic, s::Scenario)
     s_eff = st == s.strategy ? s : with_strategy(s, st)
@@ -441,7 +441,7 @@ function run(st::Stochastic, s::Scenario)
         Matrix{Float64}(reshape(Vector{Float64}(r.in_sample.expected_dadp), 1, :)),
         gap,
         elapsed,
-        StochasticDetails(r.in_sample, r.oos),
+        StochasticDetails(r.in_sample, r.oos, r.status),
     )
 end
 
