@@ -186,6 +186,56 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 
 ---
 
+## Milestone: v4.0 — Correctness & Depth
+
+**Shipped:** 2026-10-08
+**Phases:** 13 (26–38) | **Plans:** 131
+
+### What Was Built
+- Audit-driven model fixes: Gan–Low exactness-copy default, receiving-end limit 3.37, whole-horizon SOC,
+  flexible-load reactive draw, DLMP `cone`/`drop`, hybrid exactness floor shared by every gate.
+- Truth settlement of MPC and FIT against a limits-free AC power flow; T>1 joint recourse for LL cuts.
+- Genuine bilevel KKT-MILP, SOCP-in-the-loop Benders on IEEE-13, GNE/VE selection, integer N>1 Nash.
+- Declarative `Scenario` + typed strategies, shared abstractions, typed errors and status vocabulary.
+- Hygiene: 192 → 90 exports, JET ratchet, fast/slow CI split, expected-broken guard, scripts index.
+
+### What Worked
+- Explained-move golden policy: every moved literal carries old → new + cause; the knife-edge canary
+  stayed fixed (iters 56) across the whole milestone.
+- Milestone audit → closure phase (38) → re-audit: the integration checker found two real cross-phase
+  blockers (MPC first-tier on a stale tolerance; an orphan test file) that every per-phase verification
+  had passed.
+- Pass-delta ledgers (per plan) made full-suite arithmetic exact on two Julia patch releases.
+- Measure-before-change on gates: the MPC/OOS gates were measured on every fixture before switching.
+
+### What Was Inefficient
+- gsd-sdk STATE mutations (`advance-plan`, `add-decision`) repeatedly clobbered position/frontmatter;
+  executors restored STATE.md by hand in nearly every plan.
+- Per-file pass counts measured on a dirty tree are inflated by DrWatson `:gitpatch` keys (+8 on
+  test_strategies) — absolute ledger numbers drifted while deltas stayed correct.
+- Large tracked HTML/Typst writeups sit outside the planning-ID and API guards; their drift was only
+  caught by human-style review at milestone close.
+
+### Patterns Established
+- One non-throwing kernel per certificate (`_socp_cone_check`) with thin throwing/non-throwing callers.
+- Exclude-and-report for out-of-sample draws (new status, mask, never a silent average).
+- Validate strategy × setting in the `Scenario` inner constructor so every construction path is covered.
+- Restore solver conditioning per draw so later draws never inherit an earlier escalation.
+
+### Key Lessons
+1. Per-phase verification cannot see a fix that never reached older code; a cross-phase integration
+   audit is a required gate, not a formality.
+2. A tolerance tightening that "only" moves a golden by 4e-5 relative is still a move — document the
+   mismatch instead of pinning silently.
+3. Docs artifacts that are not compiled from source (HTML guide, Typst writeups) need an explicit
+   accuracy review at milestone close.
+
+### Cost Observations
+- Model mix: orchestration on Opus; planners/executors/reviewers mostly on the configured profile.
+- Notable: two full suites (~28 min each, two Julia patches) per phase gate dominated wall-clock.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -195,6 +245,7 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 | v1.0 | 9 | Established the GSD abstraction-ladder + residual-seam workflow; introduced VALIDATION.md (Nyquist) in Phase 9 |
 | v2.0 | 5 | Autonomous phase pipeline (smart discuss → plan → parallel worktree execute → review/fix loop → verify); certify-before-build for ambiguous game semantics; execution-based (not read-only) verification |
 | v2.1 | 4 | Fully background autonomous run (plan+execute+verify all 4 phases in one session); pipelined planning during execution; honest-finding-as-deliverable; manual verifier finalize when executors stalled on the long suite |
+| v4.0 | 13 | Audit-driven correctness milestone; milestone audit → gap-closure phase → re-audit loop; sequential executors on main tree with detached suite + stale-run guard |
 
 ### Cumulative Quality
 
@@ -203,6 +254,7 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 | v1.0 | 1946 pass / 0 fail | 2 | 2 broken = non-failing thesis-figure cross-checks; docs build green |
 | v2.0 | 2276 pass / 0 fail* | 3 | 3 broken = CairoMakie-weakdep skips; *1 local-only Aqua failure from user-local uncommitted Project.toml drift (committed state clean); docs build green incl. 2 new planning pages |
 | v2.1 | 2348 pass / 2 fail* | 3 | *2 fail = pre-existing user-local CairoMakie/Makie Project.toml drift (Aqua stale-deps + persistent-tasks), not regressions; +72 tests over v2.0; docs build green incl. 3 new pages (ac_oracle, ieee123_impedances, thesis_reproduction ×2) |
+| v4.0 | 32379 pass / 0 fail | 5 | Julia 1.12.5 (32299/0/0/5 at the 1.12.7 gate); fast/slow split 484/38 items; JET 0 NEW; docs green |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -212,3 +264,4 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 4. (v2.0) Green tests don't prove a mechanism is live — pair every gate with a liveness regression that varies only the gated dimension.
 5. (v2.1) An honestly-framed negative/boundary result is a stronger deliverable than a tuned-green pass — and independent phases hitting the same boundary (SOCP overvoltage inexactness on IEEE-13 and real IEEE-123) is corroboration.
 6. (v2.1) Pin economic goldens on sign-safe quantities (surplus sign flip), never ratios of possibly-negative aggregates — and poll detached long-running processes to completion by PID within the turn, or the finalize step silently gets skipped.
+7. (v4.0) A cross-phase integration audit catches fixes that never reached older code — every per-phase verification had passed both v4.0 blockers.
