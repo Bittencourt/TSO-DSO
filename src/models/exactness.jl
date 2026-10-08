@@ -169,7 +169,7 @@ function _socp_cone_check(
     # is orientation-INVARIANT (squared), so no sign correction is needed once the right branch
     # index is found.
     #
-    # DEVIATION from a literal "throw on >1 match" reading of the plan's must_haves prose:
+    # Design choice (instead of throwing when more than one branch matches):
     # kept `findfirst` (not `findall`+uniqueness), i.e. tolerate MULTIPLE root-incident
     # branches by deterministically taking the FIRST one found (mirrors the OLD `br.from`-only
     # code's own tolerance — it never checked for uniqueness either). A meshed feeder's root CAN
@@ -183,9 +183,11 @@ function _socp_cone_check(
     # Review note (2026-09-29): the concern raised is that on a
     # meshed feeder with MULTIPLE root-incident branches carrying materially different flow
     # magnitudes, `findfirst`'s branch-STORAGE-ORDER-dependent choice could under/over-state the
-    # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this gate's numeric check
-    # only runs on a `ctx` whose formulation carries the branch-current variable (the
-    # `has_branch_current(ctx.pf)` guard at this function's call site). The ONE currently-known
+    # `ref_b` scale for OTHER interior branches. MEASURED 2026-09-29: this kernel reads `l` from
+    # `ctx.pf_vars`, so it only runs on a `ctx` whose formulation carries the branch-current
+    # variable. It has three consumers: `assert_socp_exact!` (whose solve-path callers check
+    # `has_branch_current` first), the held-out stochastic step (which checks it too) and the
+    # MPC per-resolve first-tier certificate. The ONE currently-known
     # multi-root-branch feeder, `MeshFixtures.mesh_feeder`'s 4-bus diamond (asymmetric loads
     # at buses 2/3, so its two root branches (1,2)/(1,3) DO carry different flow magnitudes by
     # construction), is exercised via `MeshedFlow()` in `test_mesh_angle_certificate.jl`
