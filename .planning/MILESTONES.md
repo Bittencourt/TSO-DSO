@@ -1,5 +1,39 @@
 # Milestones
 
+## v4.0 Correctness & Depth (Shipped: 2026-10-08)
+
+**Phases completed:** 13 phases (26–38), 131 plans, 126 tasks · 37/37 requirements (FIX-01..11, BILEV-01..08, ARCH-01..10, HYG-01..08)
+
+**Delivered:** every modeling defect from the 2026-09-28 quality audit fixed with explained golden
+moves, a genuinely bilevel TSO–DSO planning layer on a real feeder, a declarative Scenario/strategy
+architecture, and a hygienic, CI-split, JET-ratcheted codebase.
+
+**Key accomplishments:**
+
+- Network & device correctness: Gan–Low exactness-copy direction as default (`thesis_literal=true`
+  opt-in), receiving-end limit 3.37 (`:smax_rev`) in SOCP, AC and DLMP, whole-horizon SOC with
+  terminal pin, power-factor reactive draw for flexible loads, DLMP `cone`/`drop` naming.
+- Pricing certificates: hybrid exactness floor `max(2e-7, 1e-9·ref_b)` shared by every gate (now
+  including the MPC first tier and the held-out stochastic draws); FIT and MPC settlement against a
+  limits-free AC power flow; LL cuts with true joint T>1 recourse.
+- Planning depth: one-shot bilevel KKT-MILP certified by three independent oracles; SOCP-in-the-loop
+  Benders on IEEE-13 with `:auto` master bounds and oracle feasibility cuts; GNE/variational
+  equilibrium selection; integer N>1 Nash.
+- Architecture: `Scenario` + typed strategies (`Centralized`/`ADMM`/`MPC`/`Stochastic`) dispatched by
+  `TSODSO.run`, `supports_pf` trait, shared `AbstractFeeder`/`close_balance!`/`ModelContext`, typed
+  errors and a documented status vocabulary; IEEE-8500 re-measured after the refactor.
+- Hygiene: exports 192 → 90 with `public` API, planning-ID guard, JET ratchet in CI, fast/slow test
+  split with an expected-broken guard, scripts index and archive, root Manifest dropped.
+- Audit closure (Phase 38 + quick tasks): both cross-phase blockers closed; full suite 32379/0/0/5 on
+  Julia 1.12.5, canary iters 56 never re-pinned, JET 0 NEW, docs green.
+
+**Known deferred items at close:** 3 todos (seed-42 demo, 1.12.7 fit_baseline, LinDistFlow-copy vmax
+bound), W3 literate pages for bilevel/VE/integer Nash, Phase 29 WR-01/IN-01, held-out tol_gap
+1e-8 vs 5e-10 (documented), `/gsd-secure-phase` not run for 29–38 (see STATE.md Deferred Items and
+milestones/v4.0-MILESTONE-AUDIT.md).
+
+---
+
 ## v2.1 Validation & Reproduction (Shipped: 2026-07-26)
 
 **Phases completed:** 4 phases, 14 plans, 27 tasks
@@ -108,19 +142,25 @@ per-fixture noise floors).
 - **4Q-BESS + live reactive dual-ascent** (MESH-04/05) — genuine P/Q variables in an apparent-power
   cone; the v2.1 reactive-dual scaffolding promoted to a live converging μ-ascent, gated by a measured
   cross-validation and a liveness regression that proves the mechanism reacts to its input.
+
 - **Overvoltage-capable restricted relaxation** (OVR-01..04) — prices the v2.1 EXACT-04 high-PV
   regime with an AC-certified validity certificate, and ships an honest negative result (OPF-ε)
   beside the OPF-m success. Established the restriction-certificate pattern Phase 23 reuses.
+
 - **MPC / rolling-horizon RTP** (MPC-01..04) — closed-loop receding-horizon solves over stateful
   devices publishing rolling DADPs, benchmarked against perfect foresight. Genuinely reuses Phase
   20's escalation ladder — the milestone's standout real cross-phase wire.
+
 - **Stochastic PV/demand** (STOCH-01..04) — two-stage extensive form over seeded Markov scenarios,
   per-scenario DADPs as the primary price output, never-aggregated per-scenario exactness gate.
+
 - **Meshed networks** (MESH-01/02/03/06) — non-radial SOCP whose angle-recoverability certificate
   exercises BOTH verdicts on one committed 4-bus diamond fixture.
+
 - **Discrete/integer investment** (INT-01..04) — binary-expansion investment with genuine
   Laporte–Louveaux cuts, certified against exhaustive lattice enumeration, PVAL-04 guard scoped
   rather than deleted via a self-verifying per-builder exemption.
+
 - **IEEE-8500 scale benchmark** (SCALE-01..05) — the public balanced load case (full MV + LV, ~4.9k
   buses after positive-sequence collapse) as a committed fixture, and a density sweep that reported
   a memory wall honestly rather than passing the MV-only control fixture's numbers off as the

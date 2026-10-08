@@ -19,7 +19,9 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
-## Current Milestone: v4.0 Correctness & Depth
+## Last Shipped Milestone: v4.0 Correctness & Depth (shipped 2026-10-08)
+
+No milestone in progress — next: `/gsd-new-milestone`.
 
 **Goal:** Fix the modeling defects confirmed by the 2026-09-28 full-project quality audit, deepen
 the planning layer into a genuine bilevel TSO–DSO game on a real network, then restructure the
@@ -139,18 +141,17 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
 - ✓ Directional ("directional, public-data") thesis reproduction — DSO-surplus sign flip reproduces on
       real data; the +25% welfare-ratio magnitude does not (REPRO-01..02) — v2.1
 
+- ✓ Planning depth (BILEV-01..08: one-shot bilevel KKT-MILP with three independent oracles,
+      SOCP-in-the-loop Benders on IEEE-13 with `:auto` bounds, GNE/VE selection, integer N>1 Nash,
+      planning taxonomy docs) — v4.0
+- ✓ Architecture (ARCH-01..10: `Scenario` + typed strategies dispatched by `TSODSO.run`, `supports_pf`,
+      shared feeder/balance/`ModelContext`, decomposed ADMM, meshed reactive, status/exception policy,
+      IEEE-8500 re-measured) — v4.0
+- ✓ Goldens re-derivation & thesis restatement (FIX-11) and hygiene (HYG-01..08: no planning IDs in
+      source, lean `public` exports, JET ratchet, fast/slow CI split, scripts index) — v4.0
 ### Active
 
-*(v4.0 Correctness & Depth — REQ-IDs defined in `.planning/REQUIREMENTS.md`)*
-
-- Correctness: fix the audit-confirmed operational and integer-planning modeling defects; re-pin
-  goldens and re-run the thesis reproduction with every change explained.
-- Planning depth: genuine bilevel TSO–DSO variant, SOCP-in-the-loop Benders on a multi-bus feeder,
-  derived bounds, GNE-multiplicity Nash fixture.
-- Architecture: declarative power-flow + strategy selection in `Scenario`, shared balance helper,
-  decomposed `solve_admm`, typed context, consistent status policy.
-- Hygiene: readable source (no process IDs), dead code removed, lean exports, JET + slow/fast
-  test split, flake quarantine, tidy scripts/manifests.
+*(none — v4.0 shipped 2026-10-08; requirements archived in `milestones/v4.0-REQUIREMENTS.md`. Define the next milestone with `/gsd-new-milestone`.)*
 
 ### Out of Scope
 
@@ -186,6 +187,11 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
   dynamic tariff signals coordinating many devices without compromising network security.
 
 ## Current State
+
+**v4.0 Correctness & Depth SHIPPED 2026-10-08** (Phases 26–38, 37/37 requirements). Full suite
+32379/0/0/5 on Julia 1.12.5, knife-edge canary unchanged (iters 56), JET 0 NEW, docs green. Deferred at
+close: seed-42 demo todo, 1.12.7 `fit_baseline` todo, LinDistFlow-copy vmax research decision, literate
+pages for bilevel/VE/integer Nash, Phase 29 WR-01/IN-01, held-out tol_gap 1e-8 vs 5e-10 (documented).
 
 **Phase 38 (Close v4.0 Audit Gaps) COMPLETE 2026-10-08.**
 Closes the v4.0 audit blockers. The MPC first-tier certificate now uses the shared hybrid exactness floor
@@ -565,4 +571,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-08 — Phase 38 complete; v4.0 audit gaps closed (v4.0 Correctness & Depth)*
+*Last updated: 2026-10-08 after v4.0 milestone*

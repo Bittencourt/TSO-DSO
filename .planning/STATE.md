@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
-status: milestone_complete
-stopped_at: Milestone complete (Phase 38 was final phase)
-last_updated: 2026-10-08T04:21:21.808Z
-last_activity: 2026-10-08
+status: Awaiting next milestone
+stopped_at: Milestone v4.0 archived (2026-10-08)
+last_updated: "2026-10-08T12:09:44.857Z"
+last_activity: 2026-10-08 — Milestone v4.0 completed and archived
 progress:
   total_phases: 13
   completed_phases: 13
-  total_plans: 132
+  total_plans: 131
   completed_plans: 132
   percent: 100
 ---
@@ -18,22 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-22)
+See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Milestone complete
+**Current focus:** Planning next milestone (`/gsd-new-milestone`)
 
 ## Current Position
 
-Phase: 38 (Close v4.0 Audit Gaps) — COMPLETE (verified 4/4, human_needed: GitHub CI, guide prose spot-check, compare refresh review)
-Plan: 10 of 10 complete
-Status: All v4.0 phases complete; milestone re-audit next
-  Latest certified full suite: 32379 passed / 0 failed / 0 errored / 5 broken after quick task 261008-aeg (Julia 1.12.5, aeg; 32325 after the Phase 38 review fixes; gate runs 32304 on 1.12.5 at 958cc98, 32299/0/0/5 on 1.12.7 at 806c4cd);
-  docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
-  Phase 37 verified 4/4 (GitHub-side CI run is the one open manual check).
-  `/gsd-secure-phase` not run for Phases 29–37 (security enforcement default-on).
-  Phases 26–37 complete; v4.0 audit found 2 integration gaps -> Phase 38.
-Last activity: 2026-10-08
+Phase: Milestone v4.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-08 — Milestone v4.0 completed and archived
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -524,16 +519,21 @@ Items acknowledged and carried forward:
 | v3.0 stretch | Formal scenario reduction, SAA/DRO/chance-constraints (`STOCH-STRETCH`) | Deferred past Phase 22 | v3.0 requirements definition |
 | v3.0 stretch | QC/SDP tightening, phase-shifter convexification for meshed (`MESH-STRETCH`) | Deferred past Phase 23 | v3.0 requirements definition |
 | v2.1+ extension | Exact-figure thesis reproduction (`REPRO-STRETCH-01`) | Deferred — contingent on IP-blocked thesis Appendix E | v2.1 requirements definition |
+| quick_task | 31 quick tasks reported `status: missing` by `audit-open` | Not open work — same frontmatter-convention gap as at the v3.0 close; all have committed SUMMARYs | v4.0 close (2026-10-08) |
+| todo | Todo: demo seed-42 battery-complementarity failure (`scripts/run_scenario.jl`) | Open todo, carried forward | v4.0 close (2026-10-08) |
+| todo | Todo: `fit_baseline` ALMOST_OPTIMAL on Julia 1.12.7 (gated `@test_broken`) | Open todo, carried forward | v4.0 close (2026-10-08) |
+| todo | Todo: LinDistFlow-copy vmax bound breaks the relaxation under reverse flow | Open research decision, carried forward | v4.0 close (2026-10-08) |
+| verification_gap | Phases 37/38 `human_needed` | Guide prose + compare writeup checked and fixed (quick 261008-clo); GitHub CI checked by the v4.0 tag run | v4.0 close (2026-10-08) |
+| tech_debt | W3 literate pages (bilevel / VE / integer Nash); Phase 29 WR-01/IN-01; held-out tol_gap 1e-8 vs 5e-10 (documented); `/gsd-secure-phase` not run for 29–38 | Deferred (see milestones/v4.0-MILESTONE-AUDIT.md) | v4.0 close (2026-10-08) |
 
 *(Removed from this table 2026-09-28: `INT-STRETCH` integer Nash diagonalization is now in scope as BILEV-07, v4.0 Phase 31.)*
 
 ## Session Continuity
 
 Last session: 2026-10-08T01:34:59.058Z
-Stopped at: Completed 38-09-PLAN.md
+Stopped at: Milestone v4.0 archived
 Resume file: None
 
 ## Operator Next Steps
 
-- Review the v4.0 ROADMAP draft; once approved, run `/gsd:plan-phase 26` to plan the first phase
-  (Network & Device Model Correctness — FIX-01..05).
+- Start the next milestone with /gsd-new-milestone
