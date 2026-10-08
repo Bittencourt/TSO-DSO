@@ -70,7 +70,7 @@ test comment and the phase SUMMARY. Nothing is silently re-pinned.
 - [x] **Phase 37: Test Infrastructure & Repo Hygiene** - Add a JET CI check, split fast/slow tests, (completed 2026-10-07)
   fix or quarantine known flakes, and tidy scripts/manifests.
 
-- [ ] **Phase 38: Close v4.0 Audit Gaps** - Route MPC's first-tier certificate through the hybrid
+- [x] **Phase 38: Close v4.0 Audit Gaps** - Route MPC's first-tier certificate through the hybrid (completed 2026-10-08)
   exactness floor, run the orphan ADMM timeout test in the suite, fix stale prose.
 
 ## Phase Details
@@ -766,7 +766,7 @@ are closed: every SOCP price certificate uses the same hybrid exactness floor, e
   4. Hardening: `Scenario(strategy=ADMM(), allow_export=false)` fails at construction; the
      out-of-sample stochastic re-solve (`solve_stochastic_oos_step!`) runs the shared exactness
      gate with a visible failure mode; `check_setup_names.py` runs in CI.
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -807,7 +807,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 38-10-PLAN.md — Phase gate: static guards, count-sets, JET 1.12.7, full runs 1.12.5 then 1.12.7, docs build, 38-FINAL-GATES.md
+- [x] 38-10-PLAN.md — Phase gate: static guards, count-sets, JET 1.12.7, full runs 1.12.5 then 1.12.7, docs build, 38-FINAL-GATES.md
 
 ## Progress
 
@@ -832,7 +832,7 @@ Plans:
 | 35. IEEE-8500 Scale After Refactor | v4.0 | 5/5 | Complete    | 2026-10-05 |
 | 36. Code & Export Cleanup | v4.0 | 22/22 | Complete    | 2026-10-05 |
 | 37. Test Infrastructure & Repo Hygiene | v4.0 | 13/13 | Complete    | 2026-10-07 |
-| 38. Close v4.0 Audit Gaps | v4.0 | 9/10 | In Progress|  |
+| 38. Close v4.0 Audit Gaps | v4.0 | 10/10 | Complete   | 2026-10-08 |
 
 ## Deferred / Future-Milestone Notes
 

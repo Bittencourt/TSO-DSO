@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Correctness & Depth
 status: executing
-stopped_at: Completed 38-09-PLAN.md (FRAMEWORK_GUIDE.html model text corrected with version notes: 3.37, Gan-Low copy note in 5.1, hybrid gate floor, soc[H+1] pin, MPC truth settlement and shared first tier, integer planning, OOS gate, test count; images unchanged, 0 planning IDs); next is 38-10
-last_updated: "2026-10-08T01:34:59.081Z"
+stopped_at: Completed 38-10-PLAN.md (phase gate: 1.12.5 Pass 32304 and 1.12.7 Pass 32299, both 0/0/Broken 5 = baseline + 80 itemized; canary iters 56; count-sets 517/480/37/99; JET 0 NEW; docs OK; all guards green; 38-VALIDATION signed off); next is /gsd-verify-work 38
+last_updated: "2026-10-08T02:51:07.162Z"
 last_activity: 2026-10-08
 progress:
   total_phases: 13
-  completed_phases: 12
-  total_plans: 131
-  completed_plans: 131
-  percent: 92
+  completed_phases: 13
+  total_plans: 132
+  completed_plans: 132
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-07-22)
 
 ## Current Position
 
-Phase: 38 (Close v4.0 Audit Gaps) — EXECUTING
-Plan: 9 of 10 complete (38-01..38-09 done; next 38-10)
-Status: Gap closure after v4.0 milestone audit (gaps_found)
-  Latest certified full suite: 32224 passed / 0 failed / 0 errored / 5 broken at 19f3fba (Julia 1.12.5; 32219/0/0/5 on 1.12.7);
+Phase: 38 (Close v4.0 Audit Gaps) — ALL PLANS COMPLETE (awaiting verification)
+Plan: 10 of 10 complete (38-01..38-10 done; next /gsd-verify-work 38)
+Status: Phase gate green (38-FINAL-GATES.md); v4.0 audit gaps closed locally, GitHub-side CI is the open manual check
+  Latest certified full suite: 32304 passed / 0 failed / 0 errored / 5 broken at 958cc98 (Julia 1.12.5; 32299/0/0/5 on 1.12.7 at 806c4cd);
   docs build green; ADMM knife-edge canary never re-pinned (iters = 56, welfare = -4823.66604824162).
   Phase 37 verified 4/4 (GitHub-side CI run is the one open manual check).
   `/gsd-secure-phase` not run for Phases 29–37 (security enforcement default-on).
@@ -205,6 +205,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 38 P05 | 40min | 2 tasks | 15 files |
 | Phase 38 P06 | 15min | 2 tasks | 3 files |
 | Phase 38 P09 | 30min | 2 tasks | 1 files |
+| Phase 38 P10 | 80min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
