@@ -22,10 +22,12 @@ using TSODSO: any_cert_failed, max_jump, mean_jump
 #
 # Unlike every prior rung page (`restricted_branch_flow.jl`, `ac_oracle.jl`), which
 # inline a bespoke `Bus`/`Branch`/`Feeder`/`Aggregator` fixture by hand (literate pages never
-# load test-only modules), [`run_mpc`](@ref) has exactly ONE entry point signature:
-# `run_mpc(s::Scenario)` (an "independent sibling orchestrator" — it is NOT wired through
-# `run_scenario`'s `:centralized`/`:admm` strategy dispatch, and never accepts a bare
-# `feeder`/`pf`/`aggregators` tuple). [`Scenario`](@ref)'s existing selector set — `feeder =
+# load test-only modules), the receding-horizon loop has two equivalent entry points, both
+# taking a [`Scenario`](@ref): `TSODSO.run(MPC(...), s)` — equivalently `run_scenario(s)`,
+# which dispatches through `run(s.strategy, s)` — returning a `ScenarioResult`, and the thin
+# wrapper [`run_mpc`](@ref)`(s)` returning the full NamedTuple including the trace. The knobs
+# live on `s.strategy::MPC`. Neither accepts a bare `feeder`/`pf`/`aggregators` tuple, which
+# is why this page builds a `Scenario`. [`Scenario`](@ref)'s existing selector set — `feeder =
 # :ieee13`, the project's ONLY `:default` population, the standard `:mem` price shape — already
 # fully addresses this page's own 24-hour demonstration fixture, so this page constructs a
 # `Scenario` rather than hand-building a second bespoke feeder: the declarative spec IS the

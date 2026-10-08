@@ -262,19 +262,21 @@ include("experiments/run.jl")           # ScenarioResult + run_scenario dispatch
 include("experiments/store.jl")         # run_and_store @tagsave provenance
 include("experiments/sweep.jl")         # run_sweep + collate_summary diff-friendly CSV
 
-# --- MPC / rolling-horizon / real-time pricing: run_mpc(scenario) closed-loop orchestrator ---
-# Loaded LAST after experiments/sweep.jl: run_mpc is an INDEPENDENT
-# entry point — it is NOT wired through run_scenario's strategy dispatch,
-# reads Scenario's additive mpc_* fields directly, and consumes MpcWindow/
-# MpcTrace plus the restricted-SOCP certificate/fallback ladder.
+# --- MPC / rolling-horizon / real-time pricing: closed-loop receding-horizon strategy ---
+# Defines `run(::MPC, ::Scenario)` -> ScenarioResult (reached by `run_scenario(s)` through
+# `run(s.strategy, s)`) plus the thin `run_mpc(s)` wrapper returning the full NamedTuple,
+# trace included. Knobs live on `s.strategy::MPC` (H, step, terminal_soc, forecast_error).
+# Loaded after experiments/run.jl, store.jl and sweep.jl because it adds a `run` method and
+# builds `ScenarioResult`; consumes MpcWindow/MpcTrace and the restricted-SOCP
+# certificate/fallback ladder.
 include("experiments/mpc_loop.jl")
 
-# --- Stochastic PV/demand uncertainty: run_stochastic(scenario) extensive-form +
-# out-of-sample orchestrator --- Loaded LAST, after
-# experiments/mpc_loop.jl: run_stochastic is an INDEPENDENT entry point,
-# mirroring run_mpc's own positioning — it is NOT wired through run_scenario's strategy
-# dispatch, reads Scenario's additive stoch_* fields directly, and consumes
-# build_stochastic_welfare/build_stochastic_oos_harness/solve_stochastic_oos_step!.
+# --- Stochastic PV/demand uncertainty: extensive-form + out-of-sample strategy ---
+# Defines `run(::Stochastic, ::Scenario)` -> ScenarioResult (reached by `run_scenario(s)`
+# through `run(s.strategy, s)`) plus the thin `run_stochastic(s)` wrapper returning the full
+# NamedTuple. Knobs live on `s.strategy::Stochastic` (S, probabilities, H_oos). Loaded after
+# experiments/mpc_loop.jl, for the same reason; consumes build_stochastic_welfare/
+# build_stochastic_oos_harness/solve_stochastic_oos_step!.
 include("experiments/run_stochastic.jl")
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---

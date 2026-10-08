@@ -18,11 +18,13 @@ using TSODSO: sub_seed
 
 # ## Building the 9-hour, 5-scenario demonstration
 #
-# Like Rung 8's [`run_mpc`](@ref), [`run_stochastic`](@ref) has exactly ONE entry point
-# signature — `run_stochastic(s::Scenario)` (an "independent sibling orchestrator";
-# it is NOT wired through `run_scenario`'s `:centralized`/`:admm` strategy dispatch). This page
-# therefore constructs a [`Scenario`](@ref) rather than hand-building a bespoke feeder, exactly
-# as `mpc_rolling_horizon.jl` does for its own entry point.
+# Like Rung 8's receding-horizon loop, the stochastic strategy has two equivalent entry points,
+# both taking a [`Scenario`](@ref): `TSODSO.run(Stochastic(...), s)` — equivalently
+# `run_scenario(s)`, which dispatches through `run(s.strategy, s)` — returning a
+# `ScenarioResult`, and the thin wrapper [`run_stochastic`](@ref)`(s)` returning the full
+# NamedTuple. The knobs live on `s.strategy::Stochastic`. Neither accepts a bare
+# `feeder`/`pf`/`aggregators` tuple, so this page constructs a [`Scenario`](@ref) rather than
+# hand-building a bespoke feeder, exactly as `mpc_rolling_horizon.jl` does.
 #
 # `T = 9` mirrors the `:default`-population floor and keeps this page's live build
 # fast (a handful of seconds). `S = 5` is the upper end of the supported band
