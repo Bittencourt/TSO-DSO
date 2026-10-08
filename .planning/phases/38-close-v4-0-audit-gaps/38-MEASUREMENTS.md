@@ -10,6 +10,7 @@ relied on) so the gate plan can reconcile the full-suite totals against the per-
 |------|------|----------------------------|--------------------------------------------|------|
 | 38-01 | test/test_exactness.jl | 6 -> 6 | 20 -> 28 | +8 kernel parity assertions inside 2 existing items; combined filtered run with test_admm_exactness_default.jl: 62/62 |
 | 38-02 | test/test_mpc_loop.jl | 11 -> 12 | 369 -> 376 | +1 item (hybrid-floor regression + parity, 7 assertions); RED run: 3 failed / 4 passed in the new item against the old inline loop |
+| 38-04 | test/test_stochastic_oos_harness.jl + test/test_run_stochastic.jl + test/test_status_policy.jl | 14 -> 15 (5->6, 5, 4) | 56 -> 74 | +1 item (inexact refusal, 7 assertions); +7 in run_stochastic items (3-tuple flags, recovery ratio, inexact_h/socp_maxratio_h mask); +4 `_stochastic_status` 2-mask cases; golden pin unchanged |
 
 ## MPC first-tier ratios (old flat 1e-6 vs hybrid)
 
@@ -159,3 +160,30 @@ Baseline before the test edits (HEAD, 1.12.5 filtered run,
 2-mask method, `_stoch_solve_held_out!` returns a 2-tuple (BoundsError on the 3rd element) and
 `oos` has no `inexact_h`/`socp_maxratio_h`. The infeasible -> recover item uses the tightened
 optimizer (measured above: first solve still INFEASIBLE, recovery exact).
+
+38-04 GREEN (1.12.5 filtered): `file:test_stochastic_oos_harness.jl,test_run_stochastic.jl,test_status_policy.jl`
+15 items / 74 Pass (baseline 56, +18); with `test_stochastic_welfare.jl` added: 22 items / 100 Pass.
+`file:test_strategies.jl` (all 26 items incl. `:slow`, via suite_detached.sh): 415 Pass, unchanged
+from 38-02. CI golden `welfare_gap` = -0.018591711034105174 on 1.12.5 (unchanged), status `:solved`.
+
+## Cross-version (1.10 / 1.11) stochastic checks
+
+Committed code (63816bb), scratch script `p38/oos_cross.jl` (StochasticFixtures loaded from
+test/fixtures_stochastic.jl as a plain module), run sequentially. Both environments
+(`Manifest-v1.10.toml`, `Manifest-v1.11.toml`) loaded without modification. 1.12.7 added for
+completeness.
+
+| check | 1.10.11 | 1.11.9 | 1.12.7 | asserted by |
+|-------|---------|--------|--------|-------------|
+| (i) CI golden `T=9, Stochastic(S=3, H_oos=5)`: status / `inexact_h` / `infeasible_h` | `:solved` / all false / all false | `:solved` / all false / all false | `:solved` / all false / all false | mask item, status-policy item |
+| (i) golden max `socp_maxratio_h` | 0.3660 | 0.3660 | 0.3496 | `all(<=(1), …)` |
+| (i) golden `welfare_gap` | -0.018591711034105174 (rel. diff 0) | -0.018591711034105174 (rel. diff 0) | -0.018591674331901231 (rel. diff 2.0e-6 < 1e-4) | golden pin rtol 1e-4 |
+| (ii) pin-binding at DEFAULT optimizer | throws `CertificateError` `:socp_exact`, ratio 51.23; helper `(-44.4315, false, true)` | same | same | new refusal item |
+| (iii) build-once at 5e-10 (3 solves) | 0.0119, 0.4964, 0.0088 | same | same | build-once item |
+| (iii) pin-binding at 5e-10 (2 solves) | 0.3889, 0.3538 | same | same | pin-binding item |
+| FourQuadBESS (no Ppv_param) at DEFAULT | 0.3729 | 0.3729 | 0.3729 | FourQuadBESS item (unchanged optimizer) |
+| (iii) FourQuadBESS q pin at 5e-10 | 0.0370 | 0.0370 | 0.0370 | q-pin item |
+| (iii) infeasible -> recover at 5e-10 | `(NaN, true, false)`; recovery `(-44.4731, false, false)`, ratio 0.0778 | same | same (0.0777) | infeasible -> recover item |
+
+Every new assertion holds on 1.10 and 1.11; nothing marked as a MANUAL CI risk. The thinnest
+margin is build-once cycle 2 (0.4964, about 2x below the gate) on every patch.
