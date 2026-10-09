@@ -3,6 +3,7 @@ title: fit_baseline solve ends ALMOST_OPTIMAL on Julia 1.12.7 (FIT +25% item)
 created: 2026-10-06
 source: Phase 37 timing run (instrumented full suite on Julia 1.12.7)
 area: solver-robustness
+resolves_phase: 42
 ---
 
 The item "welfare surplus accounting: +25% FIT ratio golden + non-failing thesis cross-check"
