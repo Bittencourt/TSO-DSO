@@ -163,3 +163,311 @@ eps sweep (rho = 500):
    1e-03     57      true       2.66e-09       6.54e-04       8.86e-10      -7.61e-05
    1e-02     57      true       2.32e-09       2.46e-03       8.66e-10      -7.61e-05
    1e-01     57      true       1.55e-09       1.69e-03       4.59e-10      -7.61e-05
+
+==============================================================================
+EXPERIMENT 3 -- CONGESTION (transmission line (1,2) and feeder head (3,4))
+==============================================================================
+Planned limits (0.9 x baseline flow) -- feasibility check:
+  Smax(1,2) = 0.9 x 1.13807 = 1.02427 pu: relaxation INFEASIBLE; Ipopt (flat + 20 random) found no AC point
+  Smax(3,4) = Imax(3,4) = 0.9 x 0.33114 = 0.29802 pu: relaxation INFEASIBLE; Ipopt (flat + 20 random) found no AC point
+  => both infeasible: with one generator and inelastic loads nothing can be redispatched; flows are fixed by the loads up to the voltage profile. The relaxation's infeasibility certifies AC infeasibility.
+
+Part A -- paper system (no redispatch): band of limits that can bind feasibly
+  line (1,2): min max|S12| relaxation 1.137122, AC (Ipopt, 21 starts) 1.138073, baseline 1.138073 pu
+  head (3,4): min |S34|    relaxation 0.331135, AC (Ipopt, 21 starts) 0.331135, baseline 0.331135 pu
+  band midpoints used below: Smax(1,2) = 1.137598, Smax(3,4) = Imax(3,4) = 0.331135 pu
+
+Part B -- congestion extension (NOT in the paper): out-of-merit G2 at node 2 (1100 Pg2^2 + 6500 Pg2 $/h, Pg2 <= 1.0, unity pf) and DG at node 6 (7000 Pdg $/h, Pdg <= 0.2, unity pf); limits at 0.9 x the baseline flow as planned.
+
+--- variant: baseline ---
+  status OPTIMAL (clarabel_noequil), cost 7461.1052 $/h (+0.0000 vs baseline, +0.0000 %)
+  Pg 1.83287  Qg 0.13381  P34 0.30486  Q34 0.12926; loadings: line(1,2) 56.90 %, head(3,4) 33.11 %
+  exactness: |lambda2/lambda1| = 1.01e-11 (rank one), max cone residual 4.67e-10, max hybrid ratio 1.04e-04 (exact)
+  Ipopt AC-OPF best (flat + 20 random): 7461.1052 $/h, gap (AC - relax)/AC = -3.98e-10, 1 distinct optima
+  binding-constraint duals (shadow price of the limit):
+    none
+  prices (mono):  piP = 60.3232, 61.8808, 62.5904, 62.9945, 64.9311, 65.9412
+                  piQ = -0.0000, 0.4110, 0.5366, 0.7361, 1.5065, 1.8888
+  transmission side: piP1 = 60.3232 vs 2c2Pg+c1 = 60.3232; spreads piP2-piP1 = 1.5576, piP3-piP1 = 2.2672
+  ADMM rho=500 eps=1e-2: converged=true in 57 iterations, primal 9.08e-05, dual 1.02e-03
+    rel cost diff (mono-ADMM)/mono 7.61e-05, max |dpiP| 2.54e-03, max |dpiQ| 1.59e-04, -lambda_p = 6258.804 vs piP3(ADMM)*100 = 6258.804
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3    62.5904     0.0000      0.0000     0.0000    62.5904     0.5366
+        4    62.5904     0.3992      0.0000     0.0050    62.9946     0.7361
+        5    62.5904     2.3280      0.0000     0.0127    64.9311     1.5065
+        6    62.5904     3.3381      0.0000     0.0127    65.9412     1.8888
+    max |energy+cone+congestion+drop - total| = 1.42e-14; max |total - piP(paper model)| = 2.16e-05
+
+--- variant: paper_line12_band ---
+  status OPTIMAL (clarabel_noequil), cost 7472.8923 $/h (+11.7871 vs baseline, +0.1580 %)
+  Pg 1.83483  Qg 0.14775  P34 0.30487  Q34 0.12927; loadings: line(1,2) 100.00 %, head(3,4) 33.11 %
+  exactness: |lambda2/lambda1| = 1.45e-04 (NOT RANK ONE), max cone residual 3.61e-09, max hybrid ratio 4.74e-04 (exact)
+  Ipopt AC-OPF: no locally solved start
+  binding-constraint duals (shadow price of the limit):
+    line (1,2) sending-end Smax                        0.0000 $/MVAh
+    line (1,2) receiving-end Smax                    248.5177 $/MVAh
+  prices (mono):  piP = 60.3662, 244.0027, 182.1751, 184.3625, 190.6792, 193.9858
+                  piQ = 0.0000, 38.3758, 29.2750, 30.2943, 32.8075, 34.0589
+  transmission side: piP1 = 60.3662 vs 2c2Pg+c1 = 60.3662; spreads piP2-piP1 = 183.6366, piP3-piP1 = 121.8089
+  ADMM rho=500 eps=1e-2: converged=false in 3000 iterations, primal 9.60e-04, dual 1.62e-08
+    rel cost diff (mono-ADMM)/mono 2.36e-03, max |dpiP| 1.61e+02, max |dpiQ| 3.36e+01, -lambda_p = 7636.408 vs piP3(ADMM)*100 = 7636.408
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3   182.1798     0.0000      0.0000     0.0000   182.1798    29.2791
+        4   182.1798     2.1712      0.0000     0.0164   184.3674    30.2985
+        5   182.1798     8.4629      0.0000     0.0416   190.6843    32.8118
+        6   182.1798    11.7696      0.0000     0.0416   193.9910    34.0632
+    max |energy+cone+congestion+drop - total| = 5.68e-14; max |total - piP(paper model)| = 5.25e-03
+
+--- variant: paper_head34_band ---
+  status ALMOST_OPTIMAL (clarabel_noequil), cost 7461.1046 $/h (-0.0006 vs baseline, -0.0000 %)
+  Pg 1.83287  Qg 0.13381  P34 0.30486  Q34 0.12926; loadings: line(1,2) 56.90 %, head(3,4) 100.00 %
+  exactness: |lambda2/lambda1| = 1.75e-09 (rank one), max cone residual 1.57e-08, max hybrid ratio 1.41e-03 (exact)
+  Ipopt AC-OPF best (flat + 20 random): 7461.1037 $/h, gap (AC - relax)/AC = -1.16e-07, 1 distinct optima
+  binding-constraint duals (shadow price of the limit):
+    feeder (3,4) sending-end Smax                    131.9648 $/MVAh
+    feeder (3,4) Imax^2 (per pu^2)                     0.0002 $/MVAh
+    feeder (5,6) Imax^2 (per pu^2)                     0.0000 $/MVAh
+  prices (mono):  piP = 60.3232, 61.9051, 62.6437, 187.1728, 194.1029, 197.7391
+                  piQ = -0.0000, 0.5090, 0.7361, 53.6378, 56.3950, 57.7712
+  transmission side: piP1 = 60.3232 vs 2c2Pg+c1 = 60.3232; spreads piP2-piP1 = 1.5820, piP3-piP1 = 2.3206
+  ADMM rho=500 eps=1e-2: converged=true in 57 iterations, primal 9.08e-05, dual 1.13e-04
+    rel cost diff (mono-ADMM)/mono 7.61e-05, max |dpiP| 1.32e+02, max |dpiQ| 5.59e+01, -lambda_p = 6258.804 vs piP3(ADMM)*100 = 6258.804
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3    62.6049     0.0000      0.0000     0.0000    62.6049     0.5909
+        4    62.6049     1.1110     33.0500     0.0086    96.7745    15.1269
+        5    62.6049     4.3928     33.0500     0.0217   100.0694    16.4378
+        6    62.6049     6.1173     33.0500     0.0217   101.7939    17.0905
+    max |energy+cone+congestion+drop - total| = 1.42e-14; max |total - piP(paper model)| = 9.59e+01
+
+--- variant: flex_baseline ---
+  status OPTIMAL (clarabel_noequil), cost 7461.1051 $/h (-0.0001 vs baseline, -0.0000 %)
+  Pg 1.83287  Qg 0.13381  P34 0.30486  Q34 0.12926; loadings: line(1,2) 56.90 %, head(3,4) 33.11 %
+  flexibility: Pg2 = 0.00000 (marginal cost 65.0000 $/MWh vs piP2 61.8808), Pdg = 0.00000 (cost 70.0000 $/MWh vs piP6 65.9414)
+  exactness: |lambda2/lambda1| = 3.67e-10 (rank one), max cone residual 1.45e-08, max hybrid ratio 1.30e-03 (exact)
+  Ipopt AC-OPF best (flat + 20 random): 7461.1052 $/h, gap (AC - relax)/AC = 6.86e-09, 1 distinct optima
+  binding-constraint duals (shadow price of the limit):
+    none
+  prices (mono):  piP = 60.3232, 61.8808, 62.5904, 62.9946, 64.9312, 65.9414
+                  piQ = 0.0000, 0.4110, 0.5366, 0.7360, 1.5065, 1.8888
+  transmission side: piP1 = 60.3232 vs 2c2Pg+c1 = 60.3232; spreads piP2-piP1 = 1.5576, piP3-piP1 = 2.2673
+  ADMM rho=500 eps=1e-2: converged=true in 57 iterations, primal 9.08e-05, dual 5.43e-04
+    rel cost diff (mono-ADMM)/mono 7.62e-05, max |dpiP| 2.72e-03, max |dpiQ| 1.20e-04, -lambda_p = 6258.805 vs piP3(ADMM)*100 = 6258.805
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3    62.5903     0.0000      0.0000     0.0000    62.5903     0.5365
+        4    62.5903     0.3992      0.0000     0.0050    62.9945     0.7360
+        5    62.5903     2.3280      0.0000     0.0127    64.9311     1.5065
+        6    62.5903     3.3381      0.0000     0.0127    65.9412     1.8887
+    max |energy+cone+congestion+drop - total| = 1.42e-14; max |total - piP(paper model)| = 1.87e-04
+
+--- variant: flex_line12 ---
+  status OPTIMAL (clarabel_noequil), cost 7565.7044 $/h (+104.5992 vs baseline, +1.4019 %)
+  Pg 1.67332  Qg 0.10502  P34 0.30485  Q34 0.12923; loadings: line(1,2) 100.00 %, head(3,4) 33.11 %
+  flexibility: Pg2 = 0.15575 (marginal cost 68.4264 $/MWh vs piP2 68.4264), Pdg = 0.00000 (cost 70.0000 $/MWh vs piP6 69.2501)
+  exactness: |lambda2/lambda1| = 4.01e-11 (rank one), max cone residual 1.41e-09, max hybrid ratio 1.26e-04 (exact)
+  Ipopt AC-OPF best (flat + 20 random): 7565.7044 $/h, gap (AC - relax)/AC = -7.01e-10, 1 distinct optima
+  binding-constraint duals (shadow price of the limit):
+    line (1,2) receiving-end Smax                     14.1496 $/MVAh
+  prices (mono):  piP = 56.8131, 68.4264, 65.6247, 66.1086, 68.1728, 69.2501
+                  piQ = -0.0000, 2.7789, 2.2594, 2.4943, 3.3156, 3.7232
+  transmission side: piP1 = 56.8131 vs 2c2Pg+c1 = 56.8131; spreads piP2-piP1 = 11.6133, piP3-piP1 = 8.8115
+  ADMM rho=500 eps=1e-2: converged=true in 45 iterations, primal 7.64e-05, dual 1.12e-03
+    rel cost diff (mono-ADMM)/mono 6.51e-05, max |dpiP| 1.21e-03, max |dpiQ| 2.31e-04, -lambda_p = 6562.356 vs piP3(ADMM)*100 = 6562.356
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3    65.6247     0.0000      0.0000     0.0000    65.6247     2.2593
+        4    65.6247     0.4785      0.0000     0.0053    66.1086     2.4943
+        5    65.6247     2.5346      0.0000     0.0135    68.1728     3.3155
+        6    65.6247     3.6119      0.0000     0.0135    69.2501     3.7232
+    max |energy+cone+congestion+drop - total| = 1.42e-14; max |total - piP(paper model)| = 4.47e-05
+
+--- variant: flex_head34 ---
+  status OPTIMAL (clarabel_noequil), cost 7477.8852 $/h (+16.7800 vs baseline, +0.2249 %)
+  Pg 1.79630  Qg 0.12292  P34 0.26960  Q34 0.12701; loadings: line(1,2) 56.04 %, head(3,4) 100.00 %
+  flexibility: Pg2 = 0.00000 (marginal cost 65.0000 $/MWh vs piP2 61.0268), Pdg = 0.03371 (cost 70.0000 $/MWh vs piP6 70.0000)
+  exactness: |lambda2/lambda1| = 5.53e-11 (rank one), max cone residual 6.79e-10, max hybrid ratio 3.46e-04 (exact)
+  Ipopt AC-OPF best (flat + 20 random): 7477.8852 $/h, gap (AC - relax)/AC = -1.26e-09, 1 distinct optima
+  binding-constraint duals (shadow price of the limit):
+    feeder (3,4) sending-end Smax                      6.0947 $/MVAh
+  prices (mono):  piP = 59.5185, 61.0268, 61.6827, 67.6581, 69.3693, 70.0000
+                  piQ = -0.0000, 0.3882, 0.4993, 3.3340, 4.1614, 4.5706
+  transmission side: piP1 = 59.5185 vs 2c2Pg+c1 = 59.5185; spreads piP2-piP1 = 1.5083, piP3-piP1 = 2.1642
+  ADMM rho=500 eps=1e-2: converged=true in 57 iterations, primal 8.67e-05, dual 2.16e-04
+    rel cost diff (mono-ADMM)/mono 7.14e-05, max |dpiP| 2.19e-03, max |dpiQ| 1.06e-03, -lambda_p = 6168.054 vs piP3(ADMM)*100 = 6168.054
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3    61.6827     0.0000      0.0000     0.0000    61.6827     0.4992
+        4    61.6827     0.4584      5.5135     0.0035    67.6581     3.3339
+        5    61.6827     2.1663      5.5135     0.0069    69.3694     4.1613
+        6    61.6827     2.7969      5.5135     0.0069    70.0000     4.5705
+    max |energy+cone+congestion+drop - total| = 0.00e+00; max |total - piP(paper model)| = 7.57e-05
+
+--- variant: flex_both ---
+  status OPTIMAL (clarabel_noequil), cost 7570.7259 $/h (+109.6208 vs baseline, +1.4692 %)
+  Pg 1.66094  Qg 0.09871  P34 0.26961  Q34 0.12699; loadings: line(1,2) 100.00 %, head(3,4) 100.00 %
+  flexibility: Pg2 = 0.13219 (marginal cost 67.9081 $/MWh vs piP2 67.9081), Pdg = 0.03369 (cost 70.0000 $/MWh vs piP6 70.0000)
+  exactness: |lambda2/lambda1| = 3.24e-12 (rank one), max cone residual 1.63e-10, max hybrid ratio 1.79e-05 (exact)
+  Ipopt AC-OPF best (flat + 20 random): 7570.7259 $/h, gap (AC - relax)/AC = -1.97e-09, 1 distinct optima
+  binding-constraint duals (shadow price of the limit):
+    line (1,2) receiving-end Smax                     13.8148 $/MVAh
+    feeder (3,4) sending-end Smax                      2.2997 $/MVAh
+  prices (mono):  piP = 56.5407, 67.9081, 65.1205, 67.6632, 69.3707, 70.0000
+                  piQ = -0.0000, 2.6825, 2.1678, 3.3850, 4.2105, 4.6186
+  transmission side: piP1 = 56.5407 vs 2c2Pg+c1 = 56.5407; spreads piP2-piP1 = 11.3675, piP3-piP1 = 8.5798
+  ADMM rho=500 eps=1e-2: converged=true in 46 iterations, primal 7.70e-05, dual 9.43e-04
+    rel cost diff (mono-ADMM)/mono 6.52e-05, max |dpiP| 1.15e-03, max |dpiQ| 3.17e-04, -lambda_p = 6511.934 vs piP3(ADMM)*100 = 6511.934
+  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):
+     node     energy       cone  congestion       drop      total   reactive
+        3    65.1204     0.0000      0.0000     0.0000    65.1204     2.1679
+        4    65.1204     0.4588      2.0805     0.0035    67.6632     3.3850
+        5    65.1204     2.1628      2.0805     0.0069    69.3706     4.2105
+        6    65.1204     2.7922      2.0805     0.0069    70.0000     4.6186
+    max |energy+cone+congestion+drop - total| = 1.42e-14; max |total - piP(paper model)| = 4.75e-05
+
+Check: the extension leaves the uncongested baseline unchanged (|dcost| 6.1e-05 $/h, max |dprice| 1.9e-04 $/MWh; Pg2 = 4.9e-09, Pdg = 3.4e-09).
+
+Transmission side note: the SDP balances are written in W (Tr(Phi_k W)), not as radial branch flows, so the radial path-sum DLMP decomposition does not apply to nodes 1-3; only the reference price at node 1 (= 2 c2 Pg + c1), the binding-line shadow price and the nodal spreads are reported there.
+
+==============================================================================
+EXPERIMENT 4 -- INEXACT REGIME SEARCH (PV back-feed, with/without exactness copy)
+==============================================================================
+Grid: PV in 0:0.05:3.0 pu (Q = 0, non-curtailable, negative load).
+  A: Table I ratings, PV at node 6, loads 100 % / 50 %
+  B: Table I ratings, PV at node 5, loads 100 % / 50 %
+  C: feeder Smax = Imax = 3 pu on all branches, PV at node 6, loads 100 / 50 / 25 %
+Exactness: SOC = framework hybrid-floor ratio <= 1; SDP = |lambda2/lambda1| < 1.0e-6.
+
+--- stage A: PV at node 6, loads 100 %, feeder ratings [1.0, 0.6, 0.4] ---
+  largest PV with: relaxation feasible 0.45 | AC point found 0.45 | copy feasible 0.45 pu
+  no-copy relaxation: EXACT (SOC and SDP) at every feasible point
+  where AC was solved: max |relaxation gap| = 3.13e-09
+  copy conservatism (copy - AC)/AC: max 8.030e-05 at PV 0.45, mean 1.303e-05 over 10 points
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 3.30e-05 $/h over 10 points
+
+--- stage A: PV at node 6, loads 50 %, feeder ratings [1.0, 0.6, 0.4] ---
+  largest PV with: relaxation feasible 0.45 | AC point found 0.45 | copy feasible 0.45 pu
+  no-copy relaxation: EXACT (SOC and SDP) at every feasible point
+  where AC was solved: max |relaxation gap| = 2.62e-09
+  copy conservatism (copy - AC)/AC: max 1.912e-04 at PV 0.45, mean 3.938e-05 over 10 points
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 3.65e-06 $/h over 9 points
+
+--- stage B: PV at node 5, loads 100 %, feeder ratings [1.0, 0.6, 0.4] ---
+  largest PV with: relaxation feasible 0.80 | AC point found 0.80 | copy feasible 0.80 pu
+  no-copy relaxation: EXACT (SOC and SDP) at every feasible point
+  where AC was solved: max |relaxation gap| = 2.90e-09
+  copy conservatism (copy - AC)/AC: max 2.212e-04 at PV 0.80, mean 3.418e-05 over 17 points
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 1.42e-05 $/h over 16 points
+
+--- stage B: PV at node 5, loads 50 %, feeder ratings [1.0, 0.6, 0.4] ---
+  largest PV with: relaxation feasible 0.70 | AC point found 0.70 | copy feasible 0.70 pu
+  no-copy relaxation: EXACT (SOC and SDP) at every feasible point
+  where AC was solved: max |relaxation gap| = 2.44e-09
+  copy conservatism (copy - AC)/AC: max 5.029e-04 at PV 0.70, mean 8.440e-05 over 15 points
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 2.62e+01 $/h over 15 points
+
+--- stage C: PV at node 6, loads 100 %, feeder ratings [3.0, 3.0, 3.0] ---
+  largest PV with: relaxation feasible 1.40 | AC point found 0.80 | copy feasible 1.15 pu
+  no-copy relaxation INEXACT at PV = 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30, 1.35, 1.40
+    PV 0.85: cost 3490.466, Pg 1.0679, max cone residual 3.12e-01 (ratio 3.9e+03), |l2/l1| 1.3e-11, binding V6max+Vmin, AC: no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search]
+    PV 0.90: cost 3465.349, Pg 1.0622, max cone residual 7.49e-01 (ratio 5.9e+03), |l2/l1| 1.4e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.95: cost 3441.200, Pg 1.0566, max cone residual 1.18e+00 (ratio 6.9e+03), |l2/l1| 2.5e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.00: cost 3418.018, Pg 1.0512, max cone residual 1.61e+00 (ratio 7.4e+03), |l2/l1| 2.0e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.05: cost 3395.800, Pg 1.0461, max cone residual 2.03e+00 (ratio 7.8e+03), |l2/l1| 2.1e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.10: cost 3374.546, Pg 1.0411, max cone residual 2.44e+00 (ratio 8.0e+03), |l2/l1| 4.5e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.15: cost 3354.254, Pg 1.0364, max cone residual 2.85e+00 (ratio 8.2e+03), |l2/l1| 3.8e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.20: cost 3334.922, Pg 1.0319, max cone residual 3.25e+00 (ratio 8.3e+03), |l2/l1| 2.3e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.25: cost 3316.552, Pg 1.0276, max cone residual 3.65e+00 (ratio 8.4e+03), |l2/l1| 1.7e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.30: cost 3299.143, Pg 1.0235, max cone residual 4.04e+00 (ratio 8.5e+03), |l2/l1| 1.3e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.35: cost 3282.695, Pg 1.0196, max cone residual 4.43e+00 (ratio 8.5e+03), |l2/l1| 6.3e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.40: cost 3267.209, Pg 1.0159, max cone residual 4.81e+00 (ratio 8.5e+03), |l2/l1| 1.1e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+  where AC was solved: max |relaxation gap| = 2.72e-09
+  copy conservatism (copy - AC)/AC: max 2.921e-02 at PV 0.80, mean 1.864e-03 over 17 points
+  copy model INEXACT at AC-feasible PV = 0.80
+  copy model INEXACT (any PV) at PV = 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 1.70e-05 $/h over 24 points
+
+--- stage C: PV at node 6, loads 50 %, feeder ratings [3.0, 3.0, 3.0] ---
+  largest PV with: relaxation feasible 1.65 | AC point found 0.70 | copy feasible 1.10 pu
+  no-copy relaxation INEXACT at PV = 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60, 1.65
+    PV 0.75: cost 651.446, Pg 0.2432, max cone residual 2.15e-01 (ratio 3.3e+03), |l2/l1| 8.7e-12, binding V6max+Vmin, AC: no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search]
+    PV 0.80: cost 636.059, Pg 0.2371, max cone residual 6.60e-01 (ratio 6.0e+03), |l2/l1| 3.0e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.85: cost 621.256, Pg 0.2312, max cone residual 1.10e+00 (ratio 7.0e+03), |l2/l1| 1.3e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.90: cost 607.035, Pg 0.2255, max cone residual 1.53e+00 (ratio 7.6e+03), |l2/l1| 3.8e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.95: cost 593.389, Pg 0.2201, max cone residual 1.96e+00 (ratio 8.0e+03), |l2/l1| 2.2e-13, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.00: cost 580.316, Pg 0.2148, max cone residual 2.38e+00 (ratio 8.2e+03), |l2/l1| 2.0e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.05: cost 567.810, Pg 0.2097, max cone residual 2.80e+00 (ratio 8.3e+03), |l2/l1| 1.3e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.10: cost 555.870, Pg 0.2049, max cone residual 3.21e+00 (ratio 8.5e+03), |l2/l1| 2.2e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.15: cost 544.491, Pg 0.2002, max cone residual 3.61e+00 (ratio 8.5e+03), |l2/l1| 1.9e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.20: cost 533.670, Pg 0.1958, max cone residual 4.01e+00 (ratio 8.6e+03), |l2/l1| 6.7e-11, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.25: cost 523.405, Pg 0.1915, max cone residual 4.40e+00 (ratio 8.7e+03), |l2/l1| 7.8e-13, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.30: cost 513.694, Pg 0.1875, max cone residual 4.79e+00 (ratio 8.7e+03), |l2/l1| 2.2e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.35: cost 504.534, Pg 0.1837, max cone residual 5.17e+00 (ratio 8.7e+03), |l2/l1| 1.9e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.40: cost 495.924, Pg 0.1801, max cone residual 5.55e+00 (ratio 8.7e+03), |l2/l1| 3.1e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.45: cost 487.862, Pg 0.1767, max cone residual 5.92e+00 (ratio 8.7e+03), |l2/l1| 5.1e-12, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.50: cost 480.349, Pg 0.1736, max cone residual 6.28e+00 (ratio 8.7e+03), |l2/l1| 4.8e-13, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.55: cost 473.382, Pg 0.1707, max cone residual 6.64e+00 (ratio 8.7e+03), |l2/l1| 9.3e-13, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.60: cost 466.961, Pg 0.1680, max cone residual 6.99e+00 (ratio 8.7e+03), |l2/l1| 3.4e-13, binding V6max+Vmin, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.65: cost 462.650, Pg 0.1661, max cone residual 7.33e+00 (ratio 8.7e+03), |l2/l1| 1.1e-12, binding V6max+Vmin+Imax(5,6), AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+  where AC was solved: max |relaxation gap| = 4.61e-09
+  copy conservatism (copy - AC)/AC: max 2.828e-02 at PV 0.70, mean 2.121e-03 over 15 points
+  copy model INEXACT at AC-feasible PV = 0.70
+  copy model INEXACT (any PV) at PV = 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 2.85e-06 $/h over 23 points
+
+--- stage C: PV at node 6, loads 25 %, feeder ratings [3.0, 3.0, 3.0] ---
+  largest PV with: relaxation feasible 1.45 | AC point found 0.45 | copy feasible 1.10 pu
+  no-copy relaxation INEXACT at PV = 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30, 1.35, 1.40, 1.45
+    PV 0.50: cost 100.000, Pg -0.0000, max cone residual 2.25e-01 (ratio 5.9e+03), |l2/l1| 4.2e-04, binding Pg=0, AC: no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search]
+    PV 0.55: cost 100.000, Pg -0.0000, max cone residual 7.15e-01 (ratio 7.9e+03), |l2/l1| 1.6e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.60: cost 100.000, Pg -0.0000, max cone residual 1.45e+00 (ratio 8.7e+03), |l2/l1| 2.6e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.65: cost 100.000, Pg -0.0000, max cone residual 3.13e+00 (ratio 9.1e+03), |l2/l1| 3.4e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.70: cost 100.000, Pg -0.0000, max cone residual 4.00e+00 (ratio 9.2e+03), |l2/l1| 2.7e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.75: cost 100.000, Pg -0.0000, max cone residual 3.40e+00 (ratio 9.0e+03), |l2/l1| 3.0e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.80: cost 100.000, Pg -0.0000, max cone residual 2.08e+00 (ratio 8.6e+03), |l2/l1| 4.6e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.85: cost 100.000, Pg 0.0000, max cone residual 2.68e+00 (ratio 8.7e+03), |l2/l1| 3.1e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.90: cost 100.000, Pg 0.0000, max cone residual 2.51e+00 (ratio 8.6e+03), |l2/l1| 3.6e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 0.95: cost 100.000, Pg 0.0000, max cone residual 2.75e+00 (ratio 8.6e+03), |l2/l1| 3.8e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.00: cost 100.000, Pg 0.0000, max cone residual 3.02e+00 (ratio 8.6e+03), |l2/l1| 4.3e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.05: cost 100.000, Pg -0.0000, max cone residual 3.54e+00 (ratio 8.7e+03), |l2/l1| 3.5e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.10: cost 100.000, Pg -0.0000, max cone residual 3.98e+00 (ratio 8.8e+03), |l2/l1| 4.1e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.15: cost 100.000, Pg -0.0000, max cone residual 4.32e+00 (ratio 8.8e+03), |l2/l1| 4.0e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.20: cost 100.000, Pg -0.0000, max cone residual 4.63e+00 (ratio 8.8e+03), |l2/l1| 4.0e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.25: cost 100.000, Pg -0.0000, max cone residual 4.93e+00 (ratio 8.8e+03), |l2/l1| 3.9e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.30: cost 100.000, Pg -0.0000, max cone residual 5.22e+00 (ratio 8.8e+03), |l2/l1| 3.8e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.35: cost 100.000, Pg -0.0000, max cone residual 5.50e+00 (ratio 8.8e+03), |l2/l1| 3.4e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.40: cost 100.000, Pg -0.0000, max cone residual 5.70e+00 (ratio 8.8e+03), |l2/l1| 2.5e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+    PV 1.45: cost 100.000, Pg -0.0000, max cone residual 5.70e+00 (ratio 8.7e+03), |l2/l1| 1.1e-03, binding Pg=0, AC: no AC point found (6 starts: LOCALLY_INFEASIBLE)
+  where AC was solved: max |relaxation gap| = 7.05e-09
+  copy conservatism (copy - AC)/AC: max 1.341e-03 at PV 0.45, mean 2.202e-04 over 10 points
+  copy model INEXACT (any PV) at PV = 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10
+  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = 1.50e-05 $/h over 23 points
+
+==============================================================================
+AGREEMENTS AND DISAGREEMENTS WITH THE PAPER
+==============================================================================
+Agreements:
+  + Monolithic optimum reproduced: cost 7461.1052 vs 7461.105 $/h, all 12 prices within 4.7e-04 $/MWh of Table III (gate tolerances above).
+  + Both relaxations tight at the baseline: |lambda2/lambda1| = 1.0e-11, cone residuals <= 4.7e-10 (paper 2.6e-7; the paper's values are solver-accuracy dependent).
+  + Global optimality: Ipopt best AC cost 7461.105178 vs relaxation 7461.105181 $/h (gap -4.0e-10), 26/26 starts locally solved, 1 distinct optimum.
+  + ADMM at rho=500, eps=1e-2 converges in 57 iterations (paper 57).
+  + Final primal residual 9.08e-05 pu (paper 9.1e-5).
+  + ADMM TSO cost 7460.537 $/h (paper 7460.537), relative difference to monolithic 7.61e-05 (paper 7.6e-5).
+  + Prices within 0.1 % of monolithic from iteration 39 on (paper: about 40).
+  + -lambda_p = 6258.804 = piP3(ADMM)*100 = 6258.804 (paper 6258.80).
+  + ADMM active prices within 0.0039 % of monolithic (paper: 0.004 %).
+  + rho guidance: iterations fall from 523 (rho=50) to 8 at rho=10000; the fastest rho values (5000, 10000, 20000) sit on the scale of piP3*100 = 6259 $/h per pu, so the paper's guidance holds and rho = 500 is about an order of magnitude below the fastest setting.
+  + eps guidance: eps in {0, 1e-4, 1e-3, 1e-2, 1e-1} gives 57 iterations, max cone residual over ALL intermediate DSO iterates <= 2.7e-09 and identical final cost bias; eps = 0 is safe on this case.
+  + Congestion 'flex_line12' (new result): relaxation EXACT (|l2/l1| 4.0e-11, max cone ratio 1.3e-04), AC gap -7.0e-10, ADMM converged in 45 iterations, cost +1.4019 %, price spread across paper model / framework model / ADMM 1.21e-03 $/MWh.
+  + Congestion 'flex_head34' (new result): relaxation EXACT (|l2/l1| 5.5e-11, max cone ratio 3.5e-04), AC gap -1.3e-09, ADMM converged in 57 iterations, cost +0.2249 %, price spread across paper model / framework model / ADMM 2.19e-03 $/MWh.
+  + Congestion 'flex_both' (new result): relaxation EXACT (|l2/l1| 3.2e-12, max cone ratio 1.8e-05), AC gap -2.0e-09, ADMM converged in 46 iterations, cost +1.4692 %, price spread across paper model / framework model / ADMM 1.15e-03 $/MWh.
+  + Inexactness search (new result): with Table I ratings (stages A, B; 52 feasible points) the relaxation is exact wherever feasible; it becomes infeasible where Ipopt finds no AC point.
+
+Disagreements / qualifications / new findings that the paper must state differently:
+  - Final dual residual 1.02e-03 (paper 1.8e-3).
+  - Congestion 'paper_line12_band' (new result): relaxation INEXACT (|l2/l1| 1.4e-04, max cone ratio 4.7e-04), AC gap NaN, ADMM did NOT converge in 3000 iterations, cost +0.1580 %, price spread across paper model / framework model / ADMM 1.61e+02 $/MWh (ADMM not converged: its prices are not comparable).
+  - Congestion 'paper_head34_band' (new result): relaxation EXACT (|l2/l1| 1.8e-09, max cone ratio 1.4e-03), AC gap -1.2e-07, ADMM converged in 57 iterations, cost -0.0000 %, price spread across paper model / framework model / ADMM 1.32e+02 $/MWh (NON-UNIQUE duals: the limit binds at a degenerate point).
+  - Inexact regime found (stage C, lifted feeder ratings): 51 PV points where the relaxation is feasible but inexact (max cone residual up to 7.33 pu); Ipopt found an AC point at 0 of them. The paper's tightness test detects these points.
+  - The LinDistFlow exactness copy does NOT restore exactness in that regime: 30 feasible copy-model points remain inexact.

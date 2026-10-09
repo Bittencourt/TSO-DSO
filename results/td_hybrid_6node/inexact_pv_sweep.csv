@@ -1,0 +1,855 @@
+stage,pv_node,load_scale,feeder_rating,pv,formulation,status,feasible,cost,Pg,max_cone_residual,max_cone_ratio,soc_exact,rank_ratio,sdp_exact,V6,binding,ac_cost,ac_note,gap_vs_ac,framework_status,framework_cost
+A,6,1.0,1.0,0.0,no_copy,OPTIMAL,true,7461.1052,1.8328719,4.6654741e-10,0.00010418456,true,1.0060791e-11,true,0.97500017,Vmax,7461.1052,AC solved (6/6 starts),-3.983349e-10,OPTIMAL,7461.1052
+A,6,1.0,1.0,0.0,copy,OPTIMAL,true,7461.1052,1.8328719,3.3031305e-10,8.3956258e-5,true,1.3606974e-11,true,0.97500017,Vmax,7461.1052,AC solved (6/6 starts),-3.3036756e-10,OPTIMAL,7461.1052
+A,6,1.0,1.0,0.05,no_copy,OPTIMAL,true,7138.1689,1.7788045,1.7514498e-9,0.00064798628,true,3.7089607e-11,true,0.98609293,Vmax,7138.1689,AC solved (6/6 starts),3.4663669e-10,OPTIMAL,7138.1689
+A,6,1.0,1.0,0.05,copy,OPTIMAL,true,7138.1689,1.7788045,1.3609218e-9,0.00038273894,true,3.1229043e-11,true,0.98609293,Vmax,7138.1689,AC solved (6/6 starts),2.2062382e-10,OPTIMAL,7138.1689
+A,6,1.0,1.0,0.1,no_copy,OPTIMAL,true,6828.1768,1.7258608,2.3554256e-9,0.0014849298,true,4.5560174e-11,true,0.99673172,Vmax,6828.1768,AC solved (6/6 starts),6.2573307e-10,OPTIMAL,6828.1768
+A,6,1.0,1.0,0.1,copy,OPTIMAL,true,6828.1768,1.7258608,4.2915437e-10,9.1484806e-5,true,1.0670173e-11,true,0.99673172,Vmax,6828.1768,AC solved (6/6 starts),-2.5264238e-10,OPTIMAL,6828.1768
+A,6,1.0,1.0,0.15,no_copy,OPTIMAL,true,6530.3196,1.6739676,4.9170786e-10,0.0001228529,true,2.840647e-12,true,1.0069522,Vmax,6530.3196,AC solved (6/6 starts),-4.0278198e-10,OPTIMAL,6530.3196
+A,6,1.0,1.0,0.15,copy,OPTIMAL,true,6530.3196,1.6739676,9.361243e-11,2.3389007e-5,true,1.0659447e-12,true,1.0069522,Vmax,6530.3196,AC solved (6/6 starts),-4.468151e-10,OPTIMAL,6530.3196
+A,6,1.0,1.0,0.2,no_copy,OPTIMAL,true,6243.8842,1.6230614,1.2557721e-9,0.00045679888,true,2.7403566e-11,true,1.0167853,Vmax,6243.8842,AC solved (6/6 starts),2.5593749e-10,OPTIMAL,6243.8842
+A,6,1.0,1.0,0.2,copy,OPTIMAL,true,6243.8841,1.6230614,1.1066558e-8,0.0040255628,true,1.6361004e-10,true,1.0167853,Vmax,6243.8842,AC solved (6/6 starts),3.8292937e-9,OPTIMAL,6243.8842
+A,6,1.0,1.0,0.25,no_copy,OPTIMAL,true,5968.2364,1.5730869,1.7031165e-8,0.0084582563,true,1.34342e-10,true,1.0262578,Vmax,5968.2364,AC solved (6/6 starts),3.1320117e-9,OPTIMAL,5968.2364
+A,6,1.0,1.0,0.25,copy,OPTIMAL,true,5968.2364,1.5730869,5.3928917e-10,0.00026782958,true,3.7743795e-11,true,1.0262578,Vmax,5968.2364,AC solved (6/6 starts),5.5077903e-10,OPTIMAL,5968.2364
+A,6,1.0,1.0,0.3,no_copy,OPTIMAL,true,5702.8089,1.5239954,6.4064442e-9,0.0036173336,true,7.2363611e-11,true,1.0353934,Vmax,5702.8089,AC solved (6/6 starts),1.5241299e-9,OPTIMAL,5702.8089
+A,6,1.0,1.0,0.3,copy,OPTIMAL,true,5702.8089,1.5239954,2.0183016e-8,0.011396126,true,2.1794518e-10,true,1.0353934,Vmax,5702.8089,AC solved (6/6 starts),5.3585326e-9,OPTIMAL,5702.8089
+A,6,1.0,1.0,0.35,no_copy,OPTIMAL,true,5447.0908,1.4757441,2.1140525e-9,0.0010574563,true,4.3714314e-11,true,1.0442129,Vmax,5447.0908,AC solved (6/6 starts),6.3175969e-10,OPTIMAL,5447.0908
+A,6,1.0,1.0,0.35,copy,OPTIMAL,true,5447.0908,1.4757441,3.3971799e-10,0.00016992811,true,5.142223e-12,true,1.0442129,Vmax,5447.0908,AC solved (6/6 starts),-4.1942151e-10,OPTIMAL,5447.0908
+A,6,1.0,1.0,0.4,no_copy,OPTIMAL,true,5201.4475,1.4284561,1.1197155e-9,0.00041809736,true,1.7920724e-11,true,1.05,V6max,5201.4475,AC solved (6/6 starts),-8.2350536e-11,OPTIMAL,5201.7074
+A,6,1.0,1.0,0.4,copy,OPTIMAL,true,5201.7074,1.4285066,3.7746903e-9,0.0014093957,true,8.2230698e-11,true,1.0491467,,5201.4475,AC solved (6/6 starts),-4.9964939e-5,OPTIMAL,5201.7074
+A,6,1.0,1.0,0.45,no_copy,OPTIMAL,true,4966.6319,1.3823403,2.1618306e-9,0.00057079892,true,3.2176622e-11,true,1.05,V6max,4966.6319,AC solved (6/6 starts),2.0548486e-10,OPTIMAL,4967.0307
+A,6,1.0,1.0,0.45,copy,OPTIMAL,true,4967.0307,1.3824194,6.4127489e-10,0.00016932375,true,1.6107975e-11,true,1.0488269,,4966.6319,AC solved (6/6 starts),-8.0297951e-5,OPTIMAL,4967.0307
+A,6,1.0,1.0,0.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,0.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,1.0,1.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.0,no_copy,OPTIMAL,true,2821.8444,0.90773331,9.1529906e-10,0.00031906526,true,1.8405259e-11,true,1.0301301,Vmax,2821.8444,AC solved (6/6 starts),5.6260394e-10,OPTIMAL,2821.8444
+A,6,0.5,1.0,0.0,copy,OPTIMAL,true,2821.8444,0.90773331,1.6393278e-9,0.00057145534,true,2.3664572e-11,true,1.0301301,Vmax,2821.8444,AC solved (6/6 starts),7.2582696e-10,OPTIMAL,2821.8444
+A,6,0.5,1.0,0.05,no_copy,OPTIMAL,true,2618.6708,0.85617025,1.9625264e-10,0.00012433101,true,2.6745821e-12,true,1.0399803,Vmax,2618.6708,AC solved (6/6 starts),-4.3078793e-12,OPTIMAL,2618.6708
+A,6,0.5,1.0,0.05,copy,OPTIMAL,true,2618.6708,0.85617025,7.1500454e-10,0.00045297344,true,1.3873877e-11,true,1.0399803,Vmax,2618.6708,AC solved (6/6 starts),4.3222458e-10,OPTIMAL,2618.6708
+A,6,0.5,1.0,0.1,no_copy,OPTIMAL,true,2424.8474,0.80553556,9.2236133e-10,0.0011212684,true,2.3240674e-11,true,1.0489024,Vmax,2424.8474,AC solved (6/6 starts),9.4497288e-10,OPTIMAL,2424.8474
+A,6,0.5,1.0,0.1,copy,OPTIMAL,true,2424.8474,0.80553556,1.2612814e-9,0.0015332764,true,5.1851542e-11,true,1.0489024,Vmax,2424.8474,AC solved (6/6 starts),2.1951485e-9,OPTIMAL,2424.8474
+A,6,0.5,1.0,0.15,no_copy,OPTIMAL,true,2240.1212,0.75584483,1.4272266e-9,0.0024804655,true,1.4263226e-11,true,1.05,V6max,2240.1212,AC solved (6/6 starts),5.2951571e-10,OPTIMAL,2240.1245
+A,6,0.5,1.0,0.15,copy,OPTIMAL,true,2240.1245,0.75584573,3.6854109e-10,0.00064050727,true,6.2941159e-12,true,1.0499038,,2240.1212,AC solved (6/6 starts),-1.4720481e-6,OPTIMAL,2240.1245
+A,6,0.5,1.0,0.2,no_copy,OPTIMAL,true,2063.9453,0.70703134,1.4082305e-9,0.0017323665,true,2.024704e-11,true,1.05,V6max,2063.9453,AC solved (6/6 starts),7.3314749e-10,OPTIMAL,2063.9543
+A,6,0.5,1.0,0.2,copy,OPTIMAL,true,2063.9543,0.70703386,1.1552395e-9,0.0014211405,true,2.0845037e-11,true,1.0497873,,2063.9453,AC solved (6/6 starts),-4.3405922e-6,OPTIMAL,2063.9543
+A,6,0.5,1.0,0.25,no_copy,OPTIMAL,true,1896.0061,0.65908609,4.4001094e-9,0.0029095667,true,5.5941997e-11,true,1.05,V6max,1896.0061,AC solved (6/6 starts),2.6201122e-9,OPTIMAL,1896.0274
+A,6,0.5,1.0,0.25,copy,OPTIMAL,true,1896.0274,0.65909227,5.5058444e-10,0.00036408077,true,1.6032918e-11,true,1.0496133,,1896.0061,AC solved (6/6 starts),-1.1249544e-5,OPTIMAL,1896.0274
+A,6,0.5,1.0,0.3,no_copy,OPTIMAL,true,1736.03,0.61200943,1.2470407e-9,0.00047029771,true,2.9353889e-11,true,1.05,V6max,1736.03,AC solved (6/6 starts),1.1364227e-9,OPTIMAL,1736.075
+A,6,0.5,1.0,0.3,copy,OPTIMAL,true,1736.075,0.6120229,5.2432763e-11,1.9775281e-5,true,1.2146861e-12,true,1.0493816,,1736.03,AC solved (6/6 starts),-2.5962064e-5,OPTIMAL,1736.075
+A,6,0.5,1.0,0.35,no_copy,OPTIMAL,true,1583.7483,0.56580177,9.8710684e-10,0.000234485,true,2.4995671e-11,true,1.05,V6max,1583.7483,AC solved (6/6 starts),7.9061933e-10,OPTIMAL,1583.8344
+A,6,0.5,1.0,0.35,copy,OPTIMAL,true,1583.8345,0.56582831,8.2906383e-11,1.9696797e-5,true,3.4901871e-12,true,1.0490919,,1583.7483,AC solved (6/6 starts),-5.4370713e-5,OPTIMAL,1583.8344
+A,6,0.5,1.0,0.4,no_copy,OPTIMAL,true,1438.8976,0.52046354,5.2733676e-10,8.5520111e-5,true,1.5421149e-11,true,1.05,V6max,1438.8976,AC solved (6/6 starts),4.6799329e-11,OPTIMAL,1439.049
+A,6,0.5,1.0,0.4,copy,OPTIMAL,true,1439.049,0.52051168,8.4095434e-10,0.00013641138,true,2.1128303e-11,true,1.0487441,,1438.8976,AC solved (6/6 starts),-0.00010522528,OPTIMAL,1439.049
+A,6,0.5,1.0,0.45,no_copy,OPTIMAL,true,1301.2191,0.47599523,1.7539654e-10,2.0630559e-5,true,2.9658742e-12,true,1.05,V6max,1301.2191,AC solved (6/6 starts),-1.0142669e-9,INFEASIBLE,NaN
+A,6,0.5,1.0,0.45,copy,OPTIMAL,true,1301.4678,0.47607686,6.0829633e-11,7.1574552e-6,true,3.0243443e-12,true,1.0483379,,1301.2191,AC solved (6/6 starts),-0.00019117325,INFEASIBLE,NaN
+A,6,0.5,1.0,0.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,0.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+A,6,0.5,1.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,0.0,no_copy,OPTIMAL,true,7461.1052,1.8328719,4.6654741e-10,0.00010418456,true,1.0060791e-11,true,0.97500017,Vmax,7461.1052,AC solved (6/6 starts),-3.983349e-10,OPTIMAL,7461.1052
+B,5,1.0,1.0,0.0,copy,OPTIMAL,true,7461.1052,1.8328719,3.3031305e-10,8.3956258e-5,true,1.3606974e-11,true,0.97500017,Vmax,7461.1052,AC solved (6/6 starts),-3.3036756e-10,OPTIMAL,7461.1052
+B,5,1.0,1.0,0.05,no_copy,OPTIMAL,true,7141.4681,1.7793623,7.6068664e-10,9.2595385e-5,true,1.1756144e-11,true,0.98132902,Vmax,7141.4681,AC solved (6/6 starts),-2.9525299e-10,OPTIMAL,7141.4681
+B,5,1.0,1.0,0.05,copy,OPTIMAL,true,7141.4681,1.7793623,8.8999318e-10,0.00010833536,true,3.8930207e-11,true,0.98132902,Vmax,7141.4681,AC solved (6/6 starts),3.8079554e-10,OPTIMAL,7141.4681
+B,5,1.0,1.0,0.1,no_copy,OPTIMAL,true,6831.6236,1.7264553,2.051599e-10,3.5154807e-5,true,2.0108502e-11,true,0.98745935,Vmax,6831.6236,AC solved (6/6 starts),1.3516699e-12,OPTIMAL,6831.6236
+B,5,1.0,1.0,0.1,copy,OPTIMAL,true,6831.6236,1.7264553,1.0294455e-9,0.00017639879,true,2.3759005e-11,true,0.98745934,Vmax,6831.6236,AC solved (6/6 starts),5.5376395e-11,OPTIMAL,6831.6236
+B,5,1.0,1.0,0.15,no_copy,OPTIMAL,true,6531.2266,1.6741272,4.624276e-10,0.00011531553,true,3.4660748e-12,true,0.99340102,Vmax,6531.2266,AC solved (6/6 starts),-4.1099421e-10,OPTIMAL,6531.2266
+B,5,1.0,1.0,0.15,copy,OPTIMAL,true,6531.2266,1.6741272,2.13215e-10,5.3169405e-5,true,5.1218437e-12,true,0.99340102,Vmax,6531.2266,AC solved (6/6 starts),-3.4799463e-10,OPTIMAL,6531.2266
+B,5,1.0,1.0,0.2,no_copy,OPTIMAL,true,6239.9578,1.6223565,2.153905e-10,7.91316e-5,true,5.0408488e-12,true,0.999163,Vmax,6239.9578,AC solved (6/6 starts),-3.3783919e-10,OPTIMAL,6239.9578
+B,5,1.0,1.0,0.2,copy,OPTIMAL,true,6239.9578,1.6223565,6.364026e-9,0.0023380579,true,6.8308603e-11,true,0.999163,Vmax,6239.9578,AC solved (6/6 starts),1.5450319e-9,OPTIMAL,6239.9578
+B,5,1.0,1.0,0.25,no_copy,OPTIMAL,true,5957.5203,1.5711237,1.3745786e-10,7.0252412e-5,true,3.2233294e-12,true,1.0047534,Vmax,5957.5203,AC solved (6/6 starts),-3.6128228e-10,OPTIMAL,5957.5203
+B,5,1.0,1.0,0.25,copy,OPTIMAL,true,5957.5203,1.5711237,1.4692442e-9,0.00075090609,true,4.6162433e-11,true,1.0047534,Vmax,5957.5203,AC solved (6/6 starts),7.9587103e-10,OPTIMAL,5957.5203
+B,5,1.0,1.0,0.3,no_copy,OPTIMAL,true,5683.6371,1.5204111,1.3442354e-8,0.0079050257,true,1.1189181e-10,true,1.0101797,Vmax,5683.6372,AC solved (6/6 starts),2.6769415e-9,OPTIMAL,5683.6372
+B,5,1.0,1.0,0.3,copy,OPTIMAL,true,5683.6371,1.5204111,1.4025272e-8,0.0082478209,true,1.3975582e-10,true,1.0101797,Vmax,5683.6372,AC solved (6/6 starts),3.4486696e-9,OPTIMAL,5683.6372
+B,5,1.0,1.0,0.35,no_copy,OPTIMAL,true,5418.0494,1.4702024,4.505967e-9,0.0023218799,true,5.4146495e-11,true,1.0154486,Vmax,5418.0494,AC solved (6/6 starts),1.0698125e-9,OPTIMAL,5418.0494
+B,5,1.0,1.0,0.35,copy,OPTIMAL,true,5418.0494,1.4702024,1.4950921e-8,0.0077040566,true,1.574771e-10,true,1.0154486,Vmax,5418.0494,AC solved (6/6 starts),3.9550881e-9,OPTIMAL,5418.0494
+B,5,1.0,1.0,0.4,no_copy,OPTIMAL,true,5160.5141,1.4204828,3.2434244e-9,0.0012169891,true,5.8717924e-11,true,1.0205663,Vmax,5160.5141,AC solved (6/6 starts),1.2433768e-9,OPTIMAL,5160.5141
+B,5,1.0,1.0,0.4,copy,OPTIMAL,true,5160.5141,1.4204828,4.8129654e-10,0.00018059083,true,7.5731076e-12,true,1.0205663,Vmax,5160.5141,AC solved (6/6 starts),-2.4777384e-10,OPTIMAL,5160.5141
+B,5,1.0,1.0,0.45,no_copy,OPTIMAL,true,4910.8026,1.3712387,5.3308341e-9,0.0013801227,true,8.5376986e-11,true,1.0255386,Vmax,4910.8026,AC solved (6/6 starts),2.097448e-9,OPTIMAL,4910.8026
+B,5,1.0,1.0,0.45,copy,OPTIMAL,true,4910.8026,1.3712387,4.394355e-10,0.00011376737,true,8.0232235e-12,true,1.0255386,Vmax,4910.8026,AC solved (6/6 starts),-2.4910137e-10,OPTIMAL,4910.8026
+B,5,1.0,1.0,0.5,no_copy,OPTIMAL,true,4668.6993,1.3224577,1.0651771e-9,0.00062607318,true,1.0932593e-10,true,1.0303708,Vmax,4668.6993,AC solved (6/6 starts),2.8961969e-9,OPTIMAL,4668.6993
+B,5,1.0,1.0,0.5,copy,OPTIMAL,true,4668.6993,1.3224577,1.0533665e-9,0.00032393829,true,5.8633956e-11,true,1.0303708,Vmax,4668.6993,AC solved (6/6 starts),1.3906429e-9,OPTIMAL,4668.6993
+B,5,1.0,1.0,0.55,no_copy,OPTIMAL,true,4434.0003,1.2741284,3.0927301e-11,3.280597e-5,true,4.9372761e-12,true,1.0350675,Vmax,4434.0003,AC solved (6/6 starts),-4.574157e-10,OPTIMAL,4434.0003
+B,5,1.0,1.0,0.55,copy,OPTIMAL,true,4434.0003,1.2741284,3.9294197e-10,5.2198635e-5,true,1.5065012e-11,true,1.0350675,Vmax,4434.0003,AC solved (6/6 starts),-1.2168665e-10,OPTIMAL,4434.0003
+B,5,1.0,1.0,0.6,no_copy,OPTIMAL,true,4206.5123,1.2262403,9.4636132e-11,9.2878207e-6,true,3.9829983e-12,true,1.0396333,Vmax,4206.5123,AC solved (6/6 starts),-5.2740939e-10,OPTIMAL,4206.5123
+B,5,1.0,1.0,0.6,copy,OPTIMAL,true,4206.5123,1.2262403,9.0373321e-10,8.869458e-5,true,2.6482616e-11,true,1.0396333,Vmax,4206.5123,AC solved (6/6 starts),1.9983442e-10,OPTIMAL,4206.5123
+B,5,1.0,1.0,0.65,no_copy,OPTIMAL,true,3986.8662,1.1789611,1.7445006e-9,0.00019327915,true,3.9969389e-11,true,1.0410631,Vmax,3986.8662,AC solved (6/6 starts),5.8512105e-10,OPTIMAL,3987.1946
+B,5,1.0,1.0,0.65,copy,OPTIMAL,true,3987.1946,1.1790325,6.266257e-11,4.7569957e-6,true,1.4510533e-12,true,1.0398581,,3986.8662,AC solved (6/6 starts),-8.2359579e-5,OPTIMAL,3987.1946
+B,5,1.0,1.0,0.7,no_copy,OPTIMAL,true,3774.5812,1.132226,2.2899185e-9,0.00020966543,true,6.3797555e-11,true,1.0410631,Vmax,3774.5812,AC solved (6/6 starts),1.354059e-9,OPTIMAL,3775.0197
+B,5,1.0,1.0,0.7,copy,OPTIMAL,true,3775.0197,1.1323236,6.4581368e-11,4.0683883e-6,true,7.4534302e-13,true,1.039581,,3774.5812,AC solved (6/6 starts),-0.00011617751,OPTIMAL,3775.0197
+B,5,1.0,1.0,0.75,no_copy,OPTIMAL,true,3569.154,1.0859586,6.7614722e-10,5.1404838e-5,true,1.6106741e-11,true,1.0410631,Vmax,3569.154,AC solved (6/6 starts),-3.6588471e-10,OPTIMAL,3569.7301
+B,5,1.0,1.0,0.75,copy,OPTIMAL,true,3569.7301,1.0860899,2.6566651e-9,0.00021268202,true,6.9524673e-11,true,1.0392736,,3569.154,AC solved (6/6 starts),-0.00016140951,OPTIMAL,3569.7301
+B,5,1.0,1.0,0.8,no_copy,OPTIMAL,true,3370.4436,1.0401594,2.9135441e-10,1.1839038e-5,true,5.4281054e-12,true,1.0410631,Vmax,3370.4436,AC solved (6/6 starts),-8.9079785e-10,INFEASIBLE,NaN
+B,5,1.0,1.0,0.8,copy,OPTIMAL,true,3371.189,1.0403332,8.7769653e-10,8.2010185e-5,true,3.0803572e-11,true,1.0389357,,3370.4436,AC solved (6/6 starts),-0.00022118175,INFEASIBLE,NaN
+B,5,1.0,1.0,0.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,0.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,0.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,0.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,0.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,0.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,1.0,1.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.0,no_copy,OPTIMAL,true,2821.8444,0.90773331,9.1529906e-10,0.00031906526,true,1.8405259e-11,true,1.0301301,Vmax,2821.8444,AC solved (6/6 starts),5.6260394e-10,OPTIMAL,2821.8444
+B,5,0.5,1.0,0.0,copy,OPTIMAL,true,2821.8444,0.90773331,1.6393278e-9,0.00057145534,true,2.3664572e-11,true,1.0301301,Vmax,2821.8444,AC solved (6/6 starts),7.2582696e-10,OPTIMAL,2821.8444
+B,5,0.5,1.0,0.05,no_copy,OPTIMAL,true,2619.1736,0.85629973,1.6002816e-10,0.0001011385,true,1.4247842e-12,true,1.035602,Vmax,2619.1736,AC solved (6/6 starts),-3.4739075e-11,OPTIMAL,2619.1736
+B,5,0.5,1.0,0.05,copy,OPTIMAL,true,2619.1736,0.85629973,1.793838e-9,0.0011337133,true,3.0324364e-11,true,1.035602,Vmax,2619.1736,AC solved (6/6 starts),1.1323747e-9,OPTIMAL,2619.1736
+B,5,0.5,1.0,0.1,no_copy,OPTIMAL,true,2424.2298,0.80537183,8.4842538e-10,0.0010353838,true,1.4051483e-11,true,1.0403263,Vmax,2424.2298,AC solved (6/6 starts),5.8364778e-10,OPTIMAL,2424.2298
+B,5,0.5,1.0,0.1,copy,OPTIMAL,true,2424.2298,0.80537183,1.4506795e-9,0.00177035,true,2.5546085e-11,true,1.0403263,Vmax,2424.2298,AC solved (6/6 starts),9.7409279e-10,OPTIMAL,2424.2298
+B,5,0.5,1.0,0.15,no_copy,OPTIMAL,true,2236.7729,0.75493044,8.5534298e-10,0.0015085042,true,1.6782338e-11,true,1.0446188,Vmax,2236.7729,AC solved (6/6 starts),6.7680474e-10,OPTIMAL,2236.7729
+B,5,0.5,1.0,0.15,copy,OPTIMAL,true,2236.7729,0.75493044,2.7153091e-9,0.0047887853,true,5.3251894e-11,true,1.0446188,Vmax,2236.7729,AC solved (6/6 starts),2.393938e-9,OPTIMAL,2236.7729
+B,5,0.5,1.0,0.2,no_copy,OPTIMAL,true,2056.6749,0.70498517,1.4129514e-9,0.0017386371,true,2.3972761e-11,true,1.0455517,Vmax,2056.6749,AC solved (6/6 starts),1.0043508e-9,OPTIMAL,2056.6767
+B,5,0.5,1.0,0.2,copy,OPTIMAL,true,2056.6767,0.70498569,1.1099385e-9,0.0013657792,true,3.9422838e-11,true,1.0454841,,2056.6749,AC solved (6/6 starts),-8.8269194e-7,OPTIMAL,2056.6767
+B,5,0.5,1.0,0.25,no_copy,OPTIMAL,true,1883.6983,0.65551455,1.0079222e-9,0.0006525969,true,2.3795631e-11,true,1.0455517,Vmax,1883.6984,AC solved (6/6 starts),1.0389385e-9,OPTIMAL,1883.7025
+B,5,0.5,1.0,0.25,copy,OPTIMAL,true,1883.7025,0.65551575,2.318489e-11,1.5011501e-5,true,3.1785077e-12,true,1.0454136,,1883.6984,AC solved (6/6 starts),-2.1950487e-6,OPTIMAL,1883.7025
+B,5,0.5,1.0,0.3,no_copy,OPTIMAL,true,1717.666,0.60651185,4.9487424e-10,0.00017990218,true,6.8868243e-12,true,1.0455517,Vmax,1717.666,AC solved (6/6 starts),1.8129402e-10,OPTIMAL,1717.6745
+B,5,0.5,1.0,0.3,copy,OPTIMAL,true,1717.6745,0.6065144,2.2746602e-9,0.00082691733,true,2.4401962e-11,true,1.0453133,,1717.666,AC solved (6/6 starts),-4.9501442e-6,OPTIMAL,1717.6745
+B,5,0.5,1.0,0.35,no_copy,OPTIMAL,true,1558.4269,0.55797724,6.508271e-11,5.4803179e-5,true,2.522984e-12,true,1.0455517,Vmax,1558.4269,AC solved (6/6 starts),-1.2750812e-10,OPTIMAL,1558.4431
+B,5,0.5,1.0,0.35,copy,OPTIMAL,true,1558.4431,0.55798224,1.7853894e-10,6.2901318e-5,true,9.0187579e-14,true,1.0451833,,1558.4269,AC solved (6/6 starts),-1.0368032e-5,OPTIMAL,1558.4431
+B,5,0.5,1.0,0.4,no_copy,OPTIMAL,true,1405.8318,0.50991088,2.0211177e-10,6.9029233e-5,true,3.6294913e-12,true,1.0455517,Vmax,1405.8318,AC solved (6/6 starts),-1.7482438e-10,OPTIMAL,1405.8604
+B,5,0.5,1.0,0.4,copy,OPTIMAL,true,1405.8604,0.50992005,1.1857432e-11,1.1201371e-5,true,2.7046391e-12,true,1.0450235,,1405.8318,AC solved (6/6 starts),-2.0371571e-5,OPTIMAL,1405.8604
+B,5,0.5,1.0,0.45,no_copy,OPTIMAL,true,1259.7324,0.46231294,1.1681433e-9,0.00033917921,true,2.1273975e-11,true,1.0455517,Vmax,1259.7325,AC solved (6/6 starts),7.7189651e-10,OPTIMAL,1259.7802
+B,5,0.5,1.0,0.45,copy,OPTIMAL,true,1259.7802,0.46232876,7.233078e-11,1.2834383e-5,true,9.0063381e-13,true,1.0448338,,1259.7325,AC solved (6/6 starts),-3.7889596e-5,OPTIMAL,1259.7802
+B,5,0.5,1.0,0.5,no_copy,OPTIMAL,true,1119.9824,0.4151836,5.1969373e-11,6.0257734e-5,true,6.978322e-12,true,1.0455517,Vmax,1119.9824,AC solved (6/6 starts),-2.3147796e-10,OPTIMAL,1120.0577
+B,5,0.5,1.0,0.5,copy,OPTIMAL,true,1120.0577,0.41520947,2.8018254e-11,6.5775514e-6,true,5.1689031e-13,true,1.0446141,,1119.9824,AC solved (6/6 starts),-6.7307787e-5,OPTIMAL,1120.0577
+B,5,0.5,1.0,0.55,no_copy,OPTIMAL,true,986.43626,0.36852305,4.8224763e-10,0.0001308216,true,1.1778605e-11,true,1.0455517,Vmax,986.43626,AC solved (6/6 starts),-1.291884e-10,OPTIMAL,986.5499
+B,5,0.5,1.0,0.55,copy,OPTIMAL,true,986.5499,0.36856348,3.8208381e-11,5.2983875e-6,true,1.0745122e-12,true,1.0443643,,986.43626,AC solved (6/6 starts),-0.00011520787,OPTIMAL,986.5499
+B,5,0.5,1.0,0.6,no_copy,OPTIMAL,true,858.9503,0.32233148,4.8470117e-11,1.3160176e-5,true,1.2918086e-11,true,1.0455517,Vmax,858.9503,AC solved (6/6 starts),-1.2234607e-9,OPTIMAL,859.11489
+B,5,0.5,1.0,0.6,copy,OPTIMAL,true,859.11489,0.32239223,3.254727e-11,7.1572759e-6,true,8.916206e-13,true,1.0440844,,858.9503,AC solved (6/6 starts),-0.00019162138,OPTIMAL,859.11489
+B,5,0.5,1.0,0.65,no_copy,OPTIMAL,true,737.38202,0.27660909,1.8653629e-10,0.00012314382,true,7.8246027e-12,true,1.0455517,Vmax,737.38202,AC solved (6/6 starts),-1.0563794e-9,OPTIMAL,737.61229
+B,5,0.5,1.0,0.65,copy,OPTIMAL,true,737.61229,0.27669736,1.293789e-10,5.9949908e-5,true,9.5691235e-12,true,1.0437742,,737.38202,AC solved (6/6 starts),-0.00031227788,OPTIMAL,737.61229
+B,5,0.5,1.0,0.7,no_copy,OPTIMAL,true,621.59037,0.23135608,4.2580802e-12,1.1087128e-5,true,1.6929245e-12,true,1.0455517,Vmax,621.59037,AC solved (6/6 starts),-2.4376275e-9,OPTIMAL,648.06289
+B,5,0.5,1.0,0.7,copy,OPTIMAL,true,621.90298,0.23148067,3.1466324e-11,8.1930208e-5,true,7.5793814e-12,true,1.0434336,,621.59037,AC solved (6/6 starts),-0.00050292376,OPTIMAL,648.06289
+B,5,0.5,1.0,0.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,0.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+B,5,0.5,1.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,0.0,no_copy,OPTIMAL,true,7461.1052,1.8328719,6.0051371e-10,6.5001557e-5,true,7.6338775e-12,true,0.97500017,Vmax,7461.1052,AC solved (6/6 starts),-4.4600889e-10,OPTIMAL,7461.1052
+C,6,1.0,3.0,0.0,copy,OPTIMAL,true,7461.1052,1.8328719,4.3049078e-10,3.8556978e-5,true,9.8684949e-12,true,0.97500017,Vmax,7461.1052,AC solved (6/6 starts),-3.7462852e-10,OPTIMAL,7461.1052
+C,6,1.0,3.0,0.05,no_copy,OPTIMAL,true,7138.169,1.7788045,9.1375577e-10,0.00027258017,true,1.5398935e-11,true,0.98609293,Vmax,7138.1689,AC solved (6/6 starts),-1.8637804e-10,OPTIMAL,7138.169
+C,6,1.0,3.0,0.05,copy,OPTIMAL,true,7138.1689,1.7788045,2.2858174e-9,0.0011510605,true,7.9030603e-11,true,0.98609293,Vmax,7138.1689,AC solved (6/6 starts),1.3215503e-9,OPTIMAL,7138.169
+C,6,1.0,3.0,0.1,no_copy,OPTIMAL,true,6828.1768,1.7258608,6.140085e-9,0.0012439466,true,1.3161365e-10,true,0.99673172,Vmax,6828.1768,AC solved (6/6 starts),2.7201623e-9,OPTIMAL,6828.1768
+C,6,1.0,3.0,0.1,copy,OPTIMAL,true,6828.1768,1.7258608,7.6429887e-10,0.0006204248,true,2.4990651e-11,true,0.99673172,Vmax,6828.1768,AC solved (6/6 starts),8.7297909e-11,OPTIMAL,6828.1768
+C,6,1.0,3.0,0.15,no_copy,OPTIMAL,true,6530.3196,1.6739676,4.6352077e-9,0.0011581036,true,2.4373024e-11,true,1.0069522,Vmax,6530.3196,AC solved (6/6 starts),1.3670311e-9,OPTIMAL,6530.3196
+C,6,1.0,3.0,0.15,copy,OPTIMAL,true,6530.3196,1.6739676,1.1802387e-9,0.00029488188,true,2.3953492e-11,true,1.0069522,Vmax,6530.3196,AC solved (6/6 starts),1.0937204e-10,OPTIMAL,6530.3196
+C,6,1.0,3.0,0.2,no_copy,OPTIMAL,true,6243.8842,1.6230614,1.5465225e-9,0.00056256209,true,3.0743086e-11,true,1.0167853,Vmax,6243.8842,AC solved (6/6 starts),3.0295868e-10,OPTIMAL,6243.8842
+C,6,1.0,3.0,0.2,copy,OPTIMAL,true,6243.8842,1.6230614,7.6702165e-10,0.00027901133,true,1.5176205e-11,true,1.0167853,Vmax,6243.8842,AC solved (6/6 starts),-8.3136262e-11,OPTIMAL,6243.8842
+C,6,1.0,3.0,0.25,no_copy,OPTIMAL,true,5968.2364,1.5730869,8.9168882e-10,0.00044284339,true,1.4954069e-11,true,1.0262578,Vmax,5968.2364,AC solved (6/6 starts),-9.9670149e-11,OPTIMAL,5968.2364
+C,6,1.0,3.0,0.25,copy,OPTIMAL,true,5968.2364,1.5730869,1.8999671e-9,0.00094358909,true,2.3079366e-11,true,1.0262578,Vmax,5968.2364,AC solved (6/6 starts),1.1589777e-10,OPTIMAL,5968.2364
+C,6,1.0,3.0,0.3,no_copy,OPTIMAL,true,5702.8089,1.5239954,3.3527309e-10,0.00018930861,true,3.1092261e-12,true,1.0353934,Vmax,5702.8089,AC solved (6/6 starts),-4.4947991e-10,OPTIMAL,5702.8089
+C,6,1.0,3.0,0.3,copy,OPTIMAL,true,5702.8089,1.5239954,1.708292e-9,0.00096456999,true,1.5082723e-11,true,1.0353934,Vmax,5702.8089,AC solved (6/6 starts),-1.4374628e-10,OPTIMAL,5702.8089
+C,6,1.0,3.0,0.35,no_copy,OPTIMAL,true,5447.0908,1.4757441,2.3646959e-9,0.0011828289,true,2.0696377e-11,true,1.0442129,Vmax,5447.0908,AC solved (6/6 starts),-1.0949319e-11,OPTIMAL,5447.0908
+C,6,1.0,3.0,0.35,copy,OPTIMAL,true,5447.0908,1.4757441,2.0375416e-9,0.0010191853,true,2.2175386e-11,true,1.0442129,Vmax,5447.0908,AC solved (6/6 starts),7.9779405e-11,OPTIMAL,5447.0908
+C,6,1.0,3.0,0.4,no_copy,OPTIMAL,true,5201.4475,1.4284561,2.0373578e-9,0.00076074132,true,2.5867805e-11,true,1.05,V6max,5201.4475,AC solved (6/6 starts),1.070917e-10,OPTIMAL,5201.7074
+C,6,1.0,3.0,0.4,copy,OPTIMAL,true,5201.7074,1.4285066,5.4772738e-9,0.0020451071,true,8.5664734e-11,true,1.0491467,,5201.4475,AC solved (6/6 starts),-4.9964907e-5,OPTIMAL,5201.7074
+C,6,1.0,3.0,0.45,no_copy,OPTIMAL,true,4966.6319,1.3823403,3.1428824e-9,0.0008298309,true,2.4970162e-11,true,1.05,V6max,4966.6319,AC solved (6/6 starts),6.0667994e-12,OPTIMAL,4967.0307
+C,6,1.0,3.0,0.45,copy,OPTIMAL,true,4967.0307,1.3824194,3.081344e-9,0.00081360536,true,6.0317489e-11,true,1.0488269,,4966.6319,AC solved (6/6 starts),-8.0296726e-5,OPTIMAL,4967.0307
+C,6,1.0,3.0,0.5,no_copy,OPTIMAL,true,4740.7718,1.3370902,3.0355182e-10,5.7212804e-5,true,1.4477777e-11,true,1.05,V6max,4740.7718,AC solved (6/6 starts),-7.395695e-10,OPTIMAL,4741.3644
+C,6,1.0,3.0,0.5,copy,OPTIMAL,true,4741.3644,1.3372102,5.8255517e-10,0.00010981341,true,1.4294508e-11,true,1.0484489,,4740.7718,AC solved (6/6 starts),-0.0001249933,OPTIMAL,4741.3644
+C,6,1.0,3.0,0.55,no_copy,OPTIMAL,true,4523.6129,1.2927067,2.2821867e-10,3.1635991e-5,true,2.8376189e-12,true,1.05,V6max,4523.6129,AC solved (6/6 starts),-9.0367257e-10,OPTIMAL,4524.4684
+C,6,1.0,3.0,0.55,copy,OPTIMAL,true,4524.4684,1.2928833,3.3950316e-9,0.00047075287,true,7.560068e-11,true,1.0480124,,4523.6129,AC solved (6/6 starts),-0.0001891126,OPTIMAL,4524.4684
+C,6,1.0,3.0,0.6,no_copy,OPTIMAL,true,4314.9058,1.2491905,5.563733e-9,0.00058603773,true,8.7572862e-11,true,1.05,V6max,4314.9058,AC solved (6/6 starts),1.4049546e-9,OPTIMAL,4316.1094
+C,6,1.0,3.0,0.6,copy,OPTIMAL,true,4316.1094,1.249444,6.9033482e-10,7.2747009e-5,true,1.8394222e-11,true,1.0475172,,4314.9058,AC solved (6/6 starts),-0.00027894063,OPTIMAL,4316.1094
+C,6,1.0,3.0,0.65,no_copy,OPTIMAL,true,4114.406,1.2065429,1.1152396e-9,9.1955817e-5,true,3.4528005e-11,true,1.05,V6max,4114.406,AC solved (6/6 starts),-3.2993208e-10,OPTIMAL,4116.0605
+C,6,1.0,3.0,0.65,copy,OPTIMAL,true,4116.0605,1.2068983,8.4064991e-11,6.9361271e-6,true,4.4757526e-12,true,1.0469627,,4114.406,AC solved (6/6 starts),-0.00040214099,OPTIMAL,4116.0605
+C,6,1.0,3.0,0.7,no_copy,OPTIMAL,true,3921.8739,1.1647647,4.2794707e-10,2.8341172e-5,true,2.7234115e-12,true,1.05,V6max,3921.8738,AC solved (6/6 starts),-1.5202838e-9,OPTIMAL,3924.1014
+C,6,1.0,3.0,0.7,copy,OPTIMAL,true,3924.1014,1.1652529,1.5234269e-10,1.0098438e-5,true,6.7402876e-12,true,1.0463486,,3921.8738,AC solved (6/6 starts),-0.00056797058,OPTIMAL,3924.1014
+C,6,1.0,3.0,0.75,no_copy,OPTIMAL,true,3737.0748,1.1238572,1.1175448e-9,6.075735e-5,true,2.7223448e-11,true,1.05,V6max,3737.0748,AC solved (6/6 starts),-1.1333874e-9,OPTIMAL,3740.0177
+C,6,1.0,3.0,0.75,copy,OPTIMAL,true,3740.0177,1.1245151,1.4145456e-9,7.6999944e-5,true,5.2020374e-11,true,1.0456741,,3737.0748,AC solved (6/6 starts),-0.00078749824,OPTIMAL,3740.0177
+C,6,1.0,3.0,0.8,no_copy,OPTIMAL,true,3559.779,1.0838215,1.3095258e-9,5.9539415e-5,true,4.1955285e-11,true,1.05,V6max,3559.779,AC solved (6/6 starts),-9.863533e-10,OPTIMAL,3663.7435
+C,6,1.0,3.0,0.8,copy,OPTIMAL,true,3663.7434,1.1073944,0.29378299,4031.7252,false,3.1331741e-11,true,1.0433926,Vmin,3559.779,AC solved (6/6 starts),-0.029205303,OPTIMAL,3663.7435
+C,6,1.0,3.0,0.85,no_copy,OPTIMAL,true,3490.4657,1.0679492,0.31172131,3867.9726,false,1.3498054e-11,true,1.05,V6max+Vmin,NaN,no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search],NaN,OPTIMAL,3743.7509
+C,6,1.0,3.0,0.85,copy,OPTIMAL,true,3743.7509,1.1253493,1.0182268,7060.0424,false,2.8724812e-11,true,1.0387104,Vmin,NaN,no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search],NaN,OPTIMAL,3743.7509
+C,6,1.0,3.0,0.9,no_copy,OPTIMAL,true,3465.3486,1.0621661,0.7494802,5941.7848,false,1.3920473e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,3827.9282
+C,6,1.0,3.0,0.9,copy,OPTIMAL,true,3827.9282,1.1440705,1.7240059,8044.4024,false,1.087777e-11,true,1.0339582,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,3827.9282
+C,6,1.0,3.0,0.95,no_copy,OPTIMAL,true,3441.2001,1.0565899,1.1814608,6895.3538,false,2.5302972e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,3916.4905
+C,6,1.0,3.0,0.95,copy,OPTIMAL,true,3916.4905,1.1635844,2.4108906,8515.7396,false,2.9302353e-12,true,1.0291333,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,3916.4905
+C,6,1.0,3.0,1.0,no_copy,OPTIMAL,true,3418.018,1.0512219,1.6076581,7435.8965,false,1.9925715e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4009.6695
+C,6,1.0,3.0,1.0,copy,OPTIMAL,true,4009.6695,1.1839192,3.0786404,8781.0837,false,3.1967829e-11,true,1.0242328,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4009.6695
+C,6,1.0,3.0,1.05,no_copy,OPTIMAL,true,3395.8004,1.0460634,2.0280665,7778.7666,false,2.0777908e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4107.715
+C,6,1.0,3.0,1.05,copy,OPTIMAL,true,4107.715,1.2051048,3.7270027,8942.8694,false,5.9609455e-15,true,1.0192537,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4107.715
+C,6,1.0,3.0,1.1,no_copy,OPTIMAL,true,3374.546,1.0411158,2.4426809,8011.7251,false,4.4567428e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4210.8968
+C,6,1.0,3.0,1.1,copy,OPTIMAL,true,4210.8968,1.2271734,4.3557121,9044.9988,false,1.533847e-11,true,1.0141927,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4210.8968
+C,6,1.0,3.0,1.15,no_copy,OPTIMAL,true,3354.2536,1.0363804,2.8514955,8177.2432,false,3.8216879e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4319.5067
+C,6,1.0,3.0,1.15,copy,OPTIMAL,true,4319.5067,1.2501593,4.9644892,9109.4056,false,6.6550891e-13,true,1.0090465,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,4319.5067
+C,6,1.0,3.0,1.2,no_copy,OPTIMAL,true,3334.9225,1.0318586,3.2545049,8298.3788,false,2.347412e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.25,no_copy,OPTIMAL,true,3316.5522,1.0275517,3.6517033,8388.7299,false,1.6996982e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.3,no_copy,OPTIMAL,true,3299.143,1.0234613,4.0430847,8456.8347,false,1.302373e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.35,no_copy,OPTIMAL,true,3282.6951,1.0195888,4.4286432,8508.324,false,6.3151843e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.4,no_copy,OPTIMAL,true,3267.2095,1.0159357,4.8083728,8547.0612,false,1.113692e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,1.0,3.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,0.0,no_copy,OPTIMAL,true,2821.8444,0.90773331,3.2230073e-10,0.0001681761,true,1.8803991e-11,true,1.0301301,Vmax,2821.8444,AC solved (6/6 starts),5.499828e-10,OPTIMAL,2821.8444
+C,6,0.5,3.0,0.0,copy,OPTIMAL,true,2821.8444,0.90773331,1.6702654e-10,5.8223995e-5,true,2.6904307e-12,true,1.0301301,Vmax,2821.8444,AC solved (6/6 starts),-5.4254255e-11,OPTIMAL,2821.8444
+C,6,0.5,3.0,0.05,no_copy,OPTIMAL,true,2618.6707,0.85617025,3.6491884e-9,0.0023118526,true,5.8273732e-11,true,1.0399803,Vmax,2618.6708,AC solved (6/6 starts),2.2245542e-9,OPTIMAL,2618.6708
+C,6,0.5,3.0,0.05,copy,OPTIMAL,true,2618.6708,0.85617025,7.4234277e-11,0.00029438556,true,1.1027343e-11,true,1.0399803,Vmax,2618.6708,AC solved (6/6 starts),3.2761364e-10,OPTIMAL,2618.6708
+C,6,0.5,3.0,0.1,no_copy,OPTIMAL,true,2424.8474,0.80553556,1.3854506e-10,0.00016842229,true,6.8129613e-12,true,1.0489024,Vmax,2424.8474,AC solved (6/6 starts),-8.4720168e-11,OPTIMAL,2424.8474
+C,6,0.5,3.0,0.1,copy,OPTIMAL,true,2424.8474,0.80553556,1.0437472e-9,0.0012688311,true,3.7151066e-11,true,1.0489024,Vmax,2424.8474,AC solved (6/6 starts),1.551994e-9,OPTIMAL,2424.8474
+C,6,0.5,3.0,0.15,no_copy,OPTIMAL,true,2240.1212,0.75584483,1.7345783e-9,0.0030146309,true,1.7914901e-11,true,1.05,V6max,2240.1212,AC solved (6/6 starts),7.2932434e-10,OPTIMAL,2240.1245
+C,6,0.5,3.0,0.15,copy,OPTIMAL,true,2240.1245,0.75584573,5.0568219e-10,0.0008788521,true,8.868701e-12,true,1.0499038,,2240.1212,AC solved (6/6 starts),-1.4719648e-6,OPTIMAL,2240.1245
+C,6,0.5,3.0,0.2,no_copy,OPTIMAL,true,2063.9453,0.70703134,4.7727304e-10,0.00058712823,true,7.381395e-12,true,1.05,V6max,2063.9453,AC solved (6/6 starts),1.4622806e-10,OPTIMAL,2063.9543
+C,6,0.5,3.0,0.2,copy,OPTIMAL,true,2063.9543,0.70703386,1.0479346e-9,0.0012891374,true,1.8489199e-11,true,1.0497873,,2063.9453,AC solved (6/6 starts),-4.3407037e-6,OPTIMAL,2063.9543
+C,6,0.5,3.0,0.25,no_copy,OPTIMAL,true,1896.0061,0.65908609,3.8921844e-9,0.0025737021,true,3.4537847e-11,true,1.05,V6max,1896.0061,AC solved (6/6 starts),1.3968495e-9,OPTIMAL,1896.0274
+C,6,0.5,3.0,0.25,copy,OPTIMAL,true,1896.0274,0.65909227,1.5077807e-9,0.00099703854,true,3.0523132e-11,true,1.0496133,,1896.0061,AC solved (6/6 starts),-1.1248722e-5,OPTIMAL,1896.0274
+C,6,0.5,3.0,0.3,no_copy,OPTIMAL,true,1736.03,0.61200943,5.4772155e-10,0.00020656278,true,7.6047823e-12,true,1.05,V6max,1736.03,AC solved (6/6 starts),-4.1874802e-11,OPTIMAL,1736.075
+C,6,0.5,3.0,0.3,copy,OPTIMAL,true,1736.075,0.6120229,2.0399892e-9,0.00076939217,true,3.2302321e-11,true,1.0493816,,1736.03,AC solved (6/6 starts),-2.5960505e-5,OPTIMAL,1736.075
+C,6,0.5,3.0,0.35,no_copy,OPTIMAL,true,1583.7483,0.56580177,5.8109169e-10,0.00013803702,true,1.2165109e-11,true,1.05,V6max,1583.7483,AC solved (6/6 starts),3.3458472e-10,OPTIMAL,1583.8345
+C,6,0.5,3.0,0.35,copy,OPTIMAL,true,1583.8345,0.56582831,3.8704671e-11,9.1954083e-6,true,5.104176e-13,true,1.0490919,,1583.7483,AC solved (6/6 starts),-5.4370832e-5,OPTIMAL,1583.8345
+C,6,0.5,3.0,0.4,no_copy,OPTIMAL,true,1438.8976,0.52046354,3.5257377e-10,5.7178165e-5,true,1.4795007e-11,true,1.05,V6max,1438.8976,AC solved (6/6 starts),1.3315975e-11,OPTIMAL,1439.049
+C,6,0.5,3.0,0.4,copy,OPTIMAL,true,1439.049,0.52051168,9.9890143e-10,0.00016203201,true,3.37234e-11,true,1.0487441,,1438.8976,AC solved (6/6 starts),-0.00010522449,OPTIMAL,1439.049
+C,6,0.5,3.0,0.45,no_copy,OPTIMAL,true,1301.2191,0.47599523,1.0699279e-9,0.00012584746,true,3.0075065e-11,true,1.05,V6max,1301.2191,AC solved (6/6 starts),6.1923139e-10,OPTIMAL,1301.4678
+C,6,0.5,3.0,0.45,copy,OPTIMAL,true,1301.4678,0.47607686,1.0524182e-10,1.2383168e-5,true,2.184119e-13,true,1.0483379,,1301.2191,AC solved (6/6 starts),-0.00019117328,OPTIMAL,1301.4678
+C,6,0.5,3.0,0.5,no_copy,OPTIMAL,true,1170.4589,0.43239735,1.4497978e-9,0.00012947274,true,3.2585391e-11,true,1.05,V6max,1170.4589,AC solved (6/6 starts),4.4654358e-10,OPTIMAL,1170.8455
+C,6,0.5,3.0,0.5,copy,OPTIMAL,true,1170.8455,0.43252833,1.0993807e-10,9.8230041e-6,true,4.5425567e-13,true,1.0478728,,1170.4589,AC solved (6/6 starts),-0.00033027357,OPTIMAL,1170.8455
+C,6,0.5,3.0,0.55,no_copy,OPTIMAL,true,1046.3683,0.38967045,1.8975337e-9,0.0001332893,true,4.1690287e-11,true,1.05,V6max,1046.3683,AC solved (6/6 starts),6.5653467e-10,OPTIMAL,1046.942
+C,6,0.5,3.0,0.55,copy,OPTIMAL,true,1046.942,0.38987123,7.3958839e-11,5.1988967e-6,true,4.1106515e-13,true,1.0473486,,1046.3683,AC solved (6/6 starts),-0.00054829635,OPTIMAL,1046.942
+C,6,0.5,3.0,0.6,no_copy,OPTIMAL,true,928.70317,0.34781513,1.3206075e-11,7.5033159e-7,true,1.4714743e-13,true,1.05,V6max,928.70317,AC solved (6/6 starts),-2.8158644e-9,OPTIMAL,929.52254
+C,6,0.5,3.0,0.6,copy,OPTIMAL,true,929.52254,0.34811141,9.1586266e-11,5.2087714e-6,true,3.1519983e-13,true,1.0467647,,928.70317,AC solved (6/6 starts),-0.0008822706,OPTIMAL,929.52254
+C,6,0.5,3.0,0.65,no_copy,OPTIMAL,true,817.22457,0.30683204,7.8036605e-11,3.6681803e-6,true,7.9517247e-12,true,1.05,V6max,817.22457,AC solved (6/6 starts),-3.0605136e-9,OPTIMAL,818.3574
+C,6,0.5,3.0,0.65,copy,OPTIMAL,true,818.3574,0.30725545,2.6029678e-11,1.2251201e-6,true,5.5634814e-12,true,1.0461207,,817.22457,AC solved (6/6 starts),-0.001386192,OPTIMAL,818.3574
+C,6,0.5,3.0,0.7,no_copy,OPTIMAL,true,711.6983,0.26672185,3.8525294e-12,1.526253e-7,true,2.8977041e-12,true,1.05,V6max,711.6983,AC solved (6/6 starts),-4.6142513e-9,OPTIMAL,731.82362
+C,6,0.5,3.0,0.7,copy,OPTIMAL,true,731.82362,0.27447632,0.095574131,1992.4494,false,6.5644179e-12,true,1.0449218,Vmin,711.6983,AC solved (6/6 starts),-0.028277883,OPTIMAL,731.82362
+C,6,0.5,3.0,0.75,no_copy,OPTIMAL,true,651.4459,0.2431941,0.21521873,3336.5006,false,8.6896133e-12,true,1.05,V6max+Vmin,NaN,no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search],NaN,OPTIMAL,775.42378
+C,6,0.5,3.0,0.75,copy,OPTIMAL,true,775.42378,0.29110403,0.82910169,6907.5306,false,9.1037732e-11,true,1.0403073,Vmin,NaN,no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search],NaN,OPTIMAL,775.42378
+C,6,0.5,3.0,0.8,no_copy,OPTIMAL,true,636.05852,0.23710812,0.65999177,5972.932,false,2.9745754e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,821.58668
+C,6,0.5,3.0,0.8,copy,OPTIMAL,true,821.58668,0.30846163,1.5441706,8091.532,false,1.5605239e-11,true,1.0356255,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,821.58668
+C,6,0.5,3.0,0.85,no_copy,OPTIMAL,true,621.25634,0.23122294,1.0989946,7038.1408,false,1.2541348e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,870.46239
+C,6,0.5,3.0,0.85,copy,OPTIMAL,true,870.46239,0.32657354,2.2405616,8605.0776,false,5.4009596e-12,true,1.0308739,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,870.46239
+C,6,0.5,3.0,0.9,no_copy,OPTIMAL,true,607.03468,0.22553982,1.5322223,7605.6986,false,3.7973507e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,922.2128
+C,6,0.5,3.0,0.9,copy,OPTIMAL,true,922.2128,0.34546577,2.9180451,8879.5528,false,1.1289932e-10,true,1.0260497,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,922.2128
+C,6,0.5,3.0,0.95,no_copy,OPTIMAL,true,593.38917,0.22006005,1.9596696,7952.4911,false,2.1804846e-13,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,977.01275
+C,6,0.5,3.0,0.95,copy,OPTIMAL,true,977.01275,0.36516597,3.5763808,9041.2503,false,2.1981932e-12,true,1.0211502,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,977.01275
+C,6,0.5,3.0,1.0,no_copy,OPTIMAL,true,580.31568,0.21478493,2.3813313,8182.0833,false,1.999774e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,1035.0514
+C,6,0.5,3.0,1.0,copy,OPTIMAL,true,1035.0514,0.38570366,4.2153163,9140.542,false,1.9957756e-11,true,1.0161724,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,1035.0514
+C,6,0.5,3.0,1.05,no_copy,OPTIMAL,true,567.8104,0.20971581,2.7972021,8341.9837,false,1.3138008e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,1096.5334
+C,6,0.5,3.0,1.05,copy,OPTIMAL,true,1096.5334,0.40711033,4.8345864,9201.4574,false,1.3579278e-12,true,1.011113,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,1096.5334
+C,6,0.5,3.0,1.1,no_copy,OPTIMAL,true,555.86978,0.20485404,3.2072765,8457.0498,false,2.1757624e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,1161.6809
+C,6,0.5,3.0,1.1,copy,OPTIMAL,true,1161.6809,0.42941974,5.433912,9236.8964,false,3.841161e-11,true,1.0059686,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,1161.6809
+C,6,0.5,3.0,1.15,no_copy,OPTIMAL,true,544.49058,0.20020104,3.6115488,8541.5494,false,1.9370594e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.2,no_copy,OPTIMAL,true,533.66985,0.19575822,4.0100135,8604.2564,false,6.716379e-11,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.25,no_copy,OPTIMAL,true,523.40497,0.19152705,4.4026647,8650.8625,false,7.8166524e-13,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.3,no_copy,OPTIMAL,true,513.69361,0.18750901,4.7894965,8685.221,false,2.2357561e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.35,no_copy,OPTIMAL,true,504.53378,0.18370562,5.1705029,8710.0333,false,1.9107211e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.4,no_copy,OPTIMAL,true,495.92382,0.18011845,5.5456776,8727.2489,false,3.119609e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.45,no_copy,OPTIMAL,true,487.8624,0.17674907,5.9150144,8738.3099,false,5.0855403e-12,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.5,no_copy,OPTIMAL,true,480.34855,0.17359912,6.2785068,8744.3056,false,4.7672106e-13,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.55,no_copy,OPTIMAL,true,473.38165,0.17067024,6.6361482,8746.0741,false,9.2771004e-13,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.6,no_copy,OPTIMAL,true,466.96144,0.16796415,6.987932,8744.2703,false,3.3659306e-13,true,1.05,V6max+Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.65,no_copy,OPTIMAL,true,462.64982,0.16614299,7.330175,8738.6746,false,1.0533233e-12,true,1.05,"V6max+Vmin+Imax(5,6)",NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.5,3.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,0.0,no_copy,OPTIMAL,true,1230.5051,0.45259121,3.8754844e-10,0.00045080548,true,5.1802128e-11,true,1.0408497,Vmax,1230.5051,AC solved (6/6 starts),3.4966415e-10,OPTIMAL,1230.5051
+C,6,0.25,3.0,0.0,copy,OPTIMAL,true,1230.5051,0.45259121,4.7209553e-10,0.00054915265,true,1.1860324e-11,true,1.0408497,Vmax,1230.5051,AC solved (6/6 starts),7.0374401e-10,OPTIMAL,1230.5051
+C,6,0.25,3.0,0.05,no_copy,OPTIMAL,true,1081.9075,0.40204962,9.0822019e-11,0.00025647776,true,3.9599118e-13,true,1.0332146,,1081.9075,AC solved (6/6 starts),7.9009017e-11,OPTIMAL,1081.9075
+C,6,0.25,3.0,0.05,copy,OPTIMAL,true,1081.9075,0.40204962,3.304786e-11,9.3325835e-5,true,1.2956803e-11,true,1.0332074,,1081.9075,AC solved (6/6 starts),4.8138406e-11,OPTIMAL,1081.9075
+C,6,0.25,3.0,0.1,no_copy,OPTIMAL,true,941.37648,0.35238996,1.0761344e-9,0.0030507292,true,1.8016744e-11,true,1.05,V6max,941.37648,AC solved (6/6 starts),1.4424363e-9,OPTIMAL,941.37656
+C,6,0.25,3.0,0.1,copy,OPTIMAL,true,941.37656,0.35238999,1.4028687e-10,0.00039769877,true,3.362942e-12,true,1.0499469,,941.37648,AC solved (6/6 starts),-8.56736e-8,OPTIMAL,941.37656
+C,6,0.25,3.0,0.15,no_copy,OPTIMAL,true,808.59118,0.30360034,1.6797022e-10,0.00020194703,true,4.1344197e-12,true,1.05,V6max,808.59118,AC solved (6/6 starts),3.4098747e-10,OPTIMAL,808.59239
+C,6,0.25,3.0,0.15,copy,OPTIMAL,true,808.59239,0.3036008,1.8472157e-10,0.00022208837,true,2.5395459e-12,true,1.0498455,,808.59118,AC solved (6/6 starts),-1.5013616e-6,OPTIMAL,808.59239
+C,6,0.25,3.0,0.2,no_copy,OPTIMAL,true,683.27609,0.25568258,1.4539162e-10,8.2232003e-5,true,9.4109991e-12,true,1.05,V6max,683.2761,AC solved (6/6 starts),7.7623407e-10,OPTIMAL,683.28172
+C,6,0.25,3.0,0.2,copy,OPTIMAL,true,683.28172,0.25568477,1.5414856e-10,8.7187211e-5,true,1.0286536e-11,true,1.0496864,,683.2761,AC solved (6/6 starts),-8.2286815e-6,OPTIMAL,683.28172
+C,6,0.25,3.0,0.25,no_copy,OPTIMAL,true,565.15597,0.20863685,9.9374203e-11,3.1652809e-5,true,1.0476762e-11,true,1.05,V6max,565.15597,AC solved (6/6 starts),7.3910026e-10,OPTIMAL,565.17255
+C,6,0.25,3.0,0.25,copy,OPTIMAL,true,565.17255,0.20864359,1.5990959e-12,5.0937929e-7,true,6.0322925e-12,true,1.0494695,,565.15597,AC solved (6/6 starts),-2.9332555e-5,OPTIMAL,565.17255
+C,6,0.25,3.0,0.3,no_copy,OPTIMAL,true,453.96054,0.16246338,5.873052e-12,1.1925611e-6,true,3.6124954e-12,true,1.05,V6max,453.96054,AC solved (6/6 starts),-1.0407406e-9,OPTIMAL,453.99866
+C,6,0.25,3.0,0.3,copy,OPTIMAL,true,453.99866,0.16247955,2.6389425e-11,5.3592131e-6,true,2.928081e-13,true,1.0491947,,453.96054,AC solved (6/6 starts),-8.3988298e-5,OPTIMAL,453.99866
+C,6,0.25,3.0,0.35,no_copy,OPTIMAL,true,349.42448,0.11716238,8.6135543e-12,1.2126185e-6,true,2.7478645e-12,true,1.05,V6max,349.42448,AC solved (6/6 starts),-1.8466787e-9,OPTIMAL,349.49934
+C,6,0.25,3.0,0.35,copy,OPTIMAL,true,349.49934,0.11719553,3.0665082e-11,4.317957e-6,true,2.1100714e-13,true,1.0488617,,349.42448,AC solved (6/6 starts),-0.00021423807,OPTIMAL,349.49934
+C,6,0.25,3.0,0.4,no_copy,OPTIMAL,true,251.28748,0.072734102,1.187514e-11,1.2298914e-6,true,5.572415e-12,true,1.05,V6max,251.28748,AC solved (6/6 starts),-3.3457439e-9,OPTIMAL,251.41915
+C,6,0.25,3.0,0.4,copy,OPTIMAL,true,251.41915,0.072795059,5.8228922e-11,6.0326942e-6,true,1.139785e-12,true,1.0484701,,251.28748,AC solved (6/6 starts),-0.00052399215,OPTIMAL,251.41915
+C,6,0.25,3.0,0.45,no_copy,OPTIMAL,true,159.29419,0.029178822,7.008949e-12,4.7892791e-7,true,7.933077e-12,true,1.05,V6max,159.29419,AC solved (6/6 starts),-7.0527229e-9,OPTIMAL,159.50775
+C,6,0.25,3.0,0.45,copy,OPTIMAL,true,159.50775,0.029282278,1.7577606e-12,2.4842268e-7,true,1.326301e-12,true,1.0480198,,159.29419,AC solved (6/6 starts),-0.0013407079,OPTIMAL,159.50775
+C,6,0.25,3.0,0.5,no_copy,OPTIMAL,true,100.0,-1.6919526e-14,0.22527486,5889.9139,false,0.00041841556,false,1.0452182,Pg=0,NaN,no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search],NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.5,copy,ALMOST_OPTIMAL,true,100.0,-1.9644523e-12,0.20348082,5640.2139,false,0.00042695764,false,1.041851,Pg=0,NaN,no AC point found (26 starts: LOCALLY_INFEASIBLE) [deepened search],NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.55,no_copy,OPTIMAL,true,100.0,-4.9707762e-14,0.71506845,7918.0821,false,0.0015858769,false,1.0461151,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.55,copy,OPTIMAL,true,100.0,-6.6132953e-14,0.20027131,5179.0158,false,0.0031011621,false,1.0419521,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.6,no_copy,OPTIMAL,true,100.0,-5.8019128e-14,1.4535222,8659.6764,false,0.0026313146,false,1.0464624,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,ALMOST_OPTIMAL,100.0
+C,6,0.25,3.0,0.6,copy,OPTIMAL,true,100.0,-3.496276e-14,0.76242579,7830.5561,false,0.0027323852,false,1.0398899,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,ALMOST_OPTIMAL,100.0
+C,6,0.25,3.0,0.65,no_copy,OPTIMAL,true,100.0,-1.1990701e-14,3.1255447,9133.4248,false,0.0033547694,false,1.0453779,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.65,copy,OPTIMAL,true,100.0,-1.2399871e-14,0.9843015,8101.0284,false,0.0025890504,false,1.0367963,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.7,no_copy,OPTIMAL,true,100.0,-2.5518705e-13,3.9998717,9167.2664,false,0.0026910852,false,1.0458326,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.7,copy,OPTIMAL,true,100.0,-3.0100353e-14,1.4637145,8355.6139,false,0.0021908714,false,1.0341186,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.75,no_copy,OPTIMAL,true,100.0,-7.2787833e-14,3.4005818,9021.3449,false,0.0030282306,false,1.0452576,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.75,copy,OPTIMAL,true,100.0,-1.9690696e-15,1.9900376,8697.2932,false,0.0020575863,false,1.0286976,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.8,no_copy,OPTIMAL,true,100.0,-6.0828738e-16,2.0793218,8580.1949,false,0.0046012732,false,1.0454163,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.8,copy,OPTIMAL,true,100.0,-3.9217226e-15,2.5850824,8936.1565,false,0.0019092272,false,1.0271212,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.85,no_copy,OPTIMAL,true,100.0,2.2376731e-15,2.682736,8688.972,false,0.0030908407,false,1.0450233,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.85,copy,OPTIMAL,true,100.0,-2.81054e-14,3.2639282,9120.1391,false,0.0011010303,false,1.0197545,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.9,no_copy,OPTIMAL,true,100.0,2.7983682e-15,2.511252,8563.8517,false,0.0036105617,false,1.0459373,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.9,copy,OPTIMAL,true,100.0,-1.3368679e-14,3.8473182,9204.547,false,0.00077509537,false,1.015811,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.95,no_copy,OPTIMAL,true,100.0,4.0168508e-15,2.7453251,8564.4094,false,0.0037819764,false,1.0471531,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,0.95,copy,OPTIMAL,true,100.0,-1.8597194e-15,4.3060458,9230.0706,false,0.00047290725,false,1.0140971,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,1.0,no_copy,OPTIMAL,true,100.0,5.3366332e-15,3.023505,8586.6888,false,0.0043297262,false,1.0483575,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,1.0,copy,OPTIMAL,true,100.0,-1.9232675e-14,4.8126877,9255.9883,false,0.00015198107,false,1.011249,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,OPTIMAL,100.0
+C,6,0.25,3.0,1.05,no_copy,OPTIMAL,true,100.0,-2.8954295e-14,3.5420359,8726.4907,false,0.0034815195,false,1.0450597,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,ALMOST_OPTIMAL,125.52127
+C,6,0.25,3.0,1.05,copy,OPTIMAL,true,125.52127,0.01267231,5.3717779,9280.2026,false,1.6933596e-11,true,1.0069991,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,ALMOST_OPTIMAL,125.52127
+C,6,0.25,3.0,1.1,no_copy,OPTIMAL,true,100.0,-1.8797659e-14,3.983234,8796.4276,false,0.0040642346,false,1.0438108,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,ALMOST_OPTIMAL,171.47079
+C,6,0.25,3.0,1.1,copy,OPTIMAL,true,171.47079,0.035059358,5.9562923,9296.0746,false,7.1690309e-10,true,1.0018116,Vmin,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,ALMOST_OPTIMAL,171.47079
+C,6,0.25,3.0,1.15,no_copy,OPTIMAL,true,100.0,-2.1814865e-14,4.3159775,8810.8932,false,0.0040288143,false,1.0433463,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.2,no_copy,OPTIMAL,true,100.0,-2.7553465e-14,4.6304711,8814.4351,false,0.0039601616,false,1.043014,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.25,no_copy,OPTIMAL,true,100.0,-3.6954658e-14,4.9313142,8810.6388,false,0.0039084125,false,1.0428069,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.3,no_copy,OPTIMAL,true,100.0,-5.1879512e-14,5.216574,8800.2,false,0.0037949703,false,1.042735,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.35,no_copy,ALMOST_OPTIMAL,true,100.0,-9.6532561e-14,5.4986765,8787.6449,false,0.0033983384,false,1.0427378,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.4,no_copy,OPTIMAL,true,100.0,-1.9685586e-15,5.7033681,8753.3354,false,0.0025015776,false,1.0428278,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.45,no_copy,OPTIMAL,true,100.0,-1.4171429e-14,5.7031236,8661.595,false,0.0011254171,false,1.0436736,Pg=0,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,no AC point found (6 starts: LOCALLY_INFEASIBLE),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,1.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.05,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.05,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.1,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.1,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.15,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.15,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.2,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.2,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.25,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.25,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.3,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.3,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.35,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.35,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.4,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.4,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.45,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.45,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.5,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.5,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.55,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.55,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.6,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.6,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.65,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.65,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.7,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.7,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.75,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.75,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.8,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.8,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.85,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.85,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.9,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.9,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.95,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,2.95,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,3.0,no_copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
+C,6,0.25,3.0,3.0,copy,INFEASIBLE,false,NaN,NaN,NaN,NaN,false,NaN,false,NaN,,NaN,infeasible (certified: relaxation infeasible),NaN,INFEASIBLE,NaN
