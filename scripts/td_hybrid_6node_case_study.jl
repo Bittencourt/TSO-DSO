@@ -110,7 +110,8 @@ nlp_optimizer(; attrs...) = select_optimizer(TSODSO.NLP(); tol = 1e-10, attrs...
 # ------------------------------------------------------------------------------------------
 
 const TLine = @NamedTuple{i::Int, j::Int, r::Float64, x::Float64, b::Float64, smax::Float64}
-const DLine = @NamedTuple{i::Int, j::Int, r::Float64, x::Float64, smax::Float64, imax::Float64}
+const DLine =
+    @NamedTuple{i::Int, j::Int, r::Float64, x::Float64, smax::Float64, imax::Float64}
 
 struct Case6
     tl::Vector{TLine}           # transmission lines (pi model, total charging b)
@@ -193,7 +194,9 @@ function case6(;
     )
 end
 
-"Copy of `c` with the net demand at node `k` shifted by (dP, dQ) (finite differences)."
+"""
+Copy of `c` with the net demand at node `k` shifted by (dP, dQ) (finite differences).
+"""
 function perturb(c::Case6, k::Int, dP::Float64, dQ::Float64)
     Pd = copy(c.Pd)
     Qd = copy(c.Qd)
@@ -221,7 +224,9 @@ gencost(c::Case6, pg) = c.c2 * pg^2 + c.c1 * pg + c.c0
 g2cost(pg2) = G2_C2 * pg2^2 + G2_C1 * pg2
 dgcost(pdg) = DG_C1 * pdg
 
-"The 3x3 transmission admittance matrix (pi model, b/2 shunt at each end)."
+"""
+The 3x3 transmission admittance matrix (pi model, b/2 shunt at each end).
+"""
 function ybus3(c::Case6)
     Y = zeros(ComplexF64, 3, 3)
     for ln in c.tl
@@ -234,7 +239,9 @@ function ybus3(c::Case6)
     return Y
 end
 
-"The full 6-node admittance matrix (transmission pi model + feeder series branches)."
+"""
+The full 6-node admittance matrix (transmission pi model + feeder series branches).
+"""
 function ybus6(c::Case6)
     Y = zeros(ComplexF64, 6, 6)
     Y[1:3, 1:3] .= ybus3(c)
@@ -248,7 +255,9 @@ function ybus6(c::Case6)
     return Y
 end
 
-"Framework `Feeder` for nodes 3-6 (local ids 1-4; root = node 3 = local 1)."
+"""
+Framework `Feeder` for nodes 3-6 (local ids 1-4; root = node 3 = local 1).
+"""
 function feeder_of(c::Case6)
     buses = [Bus{Float64}(k, c.vmin, c.vmax, k == 1) for k in 1:4]
     branches = [Branch{Float64}(br.i - 2, br.j - 2, br.r, br.x, br.smax) for br in c.dl]
@@ -326,7 +335,8 @@ function add_feeder_block!(m::Model, c::Case6, vroot; copy::Bool = false, Pdg = 
         push!(fQ, @constraint(m, Q[k] - br.x * l[k] - dQ == c.Qd[br.j]))
         @constraint(
             m,
-            vv(br.j) == vv(br.i) - 2 * (br.r * P[k] + br.x * Q[k]) + (br.r^2 + br.x^2) * l[k]
+            vv(br.j) ==
+            vv(br.i) - 2 * (br.r * P[k] + br.x * Q[k]) + (br.r^2 + br.x^2) * l[k]
         )
         push!(smaxc, @constraint(m, [br.smax; P[k]; Q[k]] in SecondOrderCone()))
         push!(imaxc, @constraint(m, l[k] <= br.imax^2))
@@ -453,7 +463,9 @@ function build_hybrid(
     )
 end
 
-"Out-of-merit flexibility variables of the congestion extension (all `nothing` if `!c.flex`)."
+"""
+Out-of-merit flexibility variables of the congestion extension (all `nothing` if `!c.flex`).
+"""
 function flex_vars!(m::Model, c::Case6)
     c.flex || return nothing, nothing, nothing
     Pg2 = @variable(m, lower_bound = 0.0, upper_bound = G2_PMAX)
@@ -467,7 +479,9 @@ _val(x) = x === nothing ? 0.0 : value(x)
 # Post-processing of a solved hybrid model
 # ------------------------------------------------------------------------------------------
 
-"Per-branch cone residual l*v_from - (P^2+Q^2) and the framework hybrid-floor ratio."
+"""
+Per-branch cone residual l*v_from - (P^2+Q^2) and the framework hybrid-floor ratio.
+"""
 function cone_rows(c::Case6, h)
     rows = NamedTuple[]
     for (k, br) in enumerate(c.dl)
@@ -485,18 +499,28 @@ function cone_rows(c::Case6, h)
     return rows
 end
 
-"Sorted eigenvalues (ascending) of the solved W and |lambda2/lambda1|."
+"""
+Sorted eigenvalues (ascending) of the solved W and |lambda2/lambda1|.
+"""
 function w_eigs(h)
     Wv = Hermitian(value.(h.W))
     ev = eigvals(Wv)
     return ev, abs(ev[2] / ev[3])
 end
 
-"Squared voltages of all 6 nodes."
-vsq(h) = [real(value(h.W[1, 1])), real(value(h.W[2, 2])), real(value(h.W[3, 3])),
-    value.(h.feeder.v[2:4])...]
+"""
+Squared voltages of all 6 nodes.
+"""
+vsq(h) = [
+    real(value(h.W[1, 1])),
+    real(value(h.W[2, 2])),
+    real(value(h.W[3, 3])),
+    value.(h.feeder.v[2:4])...,
+]
 
-"Apparent power at both ends of every transmission line and its loading (max end / Smax)."
+"""
+Apparent power at both ends of every transmission line and its loading (max end / Smax).
+"""
 function line_flows(c::Case6, h)
     Wv = value.(h.W)
     out = NamedTuple[]
@@ -510,18 +534,24 @@ function line_flows(c::Case6, h)
     return out
 end
 
-"Feeder sending-end loading |S|/Smax per branch."
+"""
+Feeder sending-end loading |S|/Smax per branch.
+"""
 feeder_loading(c::Case6, h) =
     [hypot(value(h.feeder.P[k]), value(h.feeder.Q[k])) / c.dl[k].smax for k in 1:3]
 
-"Nodal prices (piP, piQ) in \$/MWh and \$/Mvarh."
+"""
+Nodal prices (piP, piQ) in \$/MWh and \$/Mvarh.
+"""
 function prices(h)
     piP = [h.psign[k] * dual(h.pbal[k]) / SBASE for k in 1:6]
     piQ = [h.psign[k] * dual(h.qbal[k]) / SBASE for k in 1:6]
     return piP, piQ
 end
 
-"Equilibrated Clarabel (factory default scaling) at the same tolerances: numerical fallback."
+"""
+Equilibrated Clarabel (factory default scaling) at the same tolerances: numerical fallback.
+"""
 socp_optimizer_equilibrated() =
     select_optimizer(TSODSO.SOCP(); tol_gap_abs = 1e-9, tol_gap_rel = 1e-9, tol_feas = 1e-9)
 
@@ -607,7 +637,7 @@ const PAPER = (
 )
 
 # ------------------------------------------------------------------------------------------
-# Output helpers (fixed significant digits so two runs give byte-identical files)
+# Output helpers (fixed significant digits so that two runs write identical files)
 # ------------------------------------------------------------------------------------------
 
 _r(x::AbstractFloat) = isfinite(x) ? round(x; sigdigits = 8) : x
@@ -627,22 +657,34 @@ section(io, title) = println(io, "\n", "="^78, "\n", title, "\n", "="^78)
 # Experiment 0 -- baseline self-check
 # ------------------------------------------------------------------------------------------
 
-"Central finite differences of the optimal cost w.r.t. Pd_k and Qd_k (\$/MWh, \$/Mvarh)."
+"""
+Central finite differences of the optimal cost w.r.t. Pd_k and Qd_k (\$/MWh, \$/Mvarh).
+"""
 function fd_prices(c::Case6; h = 1e-4)
     cost(cc) = (hh = build_hybrid(cc); optimize!(hh.m); objective_value(hh.m))
-    fdP = [(cost(perturb(c, k, h, 0.0)) - cost(perturb(c, k, -h, 0.0))) / (2h) / SBASE for k in 1:6]
-    fdQ = [(cost(perturb(c, k, 0.0, h)) - cost(perturb(c, k, 0.0, -h))) / (2h) / SBASE for k in 1:6]
+    fdP = [
+        (cost(perturb(c, k, h, 0.0)) - cost(perturb(c, k, -h, 0.0))) / (2h) / SBASE for
+        k in 1:6
+    ]
+    fdQ = [
+        (cost(perturb(c, k, 0.0, h)) - cost(perturb(c, k, 0.0, -h))) / (2h) / SBASE for
+        k in 1:6
+    ]
     return fdP, fdQ
 end
 
-"Voltages of nodes 1-3 from W's leading eigenvector (scaled by sqrt(lambda1), angle(V1) = 0)."
+"""
+Voltages of nodes 1-3 from W's leading eigenvector (scaled by sqrt(lambda1), angle(V1) = 0).
+"""
 function voltages_from_W(h)
     F = eigen(Hermitian(value.(h.W)))
     u = F.vectors[:, end] * sqrt(max(F.values[end], 0.0))
     return u .* cis(-angle(u[1]))
 end
 
-"Script-local Baran-Wu recursion V_j = V_i - z conj(S)/conj(V_i) down the feeder from V3."
+"""
+Script-local Baran-Wu recursion V_j = V_i - z conj(S)/conj(V_i) down the feeder from V3.
+"""
 function feeder_phasors(c::Case6, h, V3::ComplexF64)
     V = zeros(ComplexF64, 6)
     V[3] = V3
@@ -653,7 +695,9 @@ function feeder_phasors(c::Case6, h, V3::ComplexF64)
     return V
 end
 
-"AC nodal injection mismatch max|dP|, max|dQ| (pu) of phasors V at the operating point of `r`."
+"""
+AC nodal injection mismatch max|dP|, max|dQ| (pu) of phasors V at the operating point of `r`.
+"""
 function ac_mismatch(c::Case6, V::Vector{ComplexF64}, Pg, Qg)
     Scalc = V .* conj.(ybus6(c) * V)
     Sspec = [complex(-c.Pd[k], -c.Qd[k]) for k in 1:6]
@@ -664,10 +708,10 @@ end
 
 # Baseline gate tolerances. MEASURED deviations of this script's monolithic solve from the
 # paper's printed values (accurate Clarabel solve, see `socp_optimizer`):
-#   cost 7461.10518 vs 7461.105 (1.8e-4); Pg/Qg/P34/Q34/|V3| within 4e-6 of the 5-decimal values;
-#   losses within 3e-5 of the 4-decimal values; lambda1 within 4e-5; |V1..3| within 5e-5,
-#   angles within 5e-3 deg of the 2-decimal values; loadings within 5e-4 (the paper prints
-#   percentages to 0.1 %); all 12 prices within 4.3e-4 $/MWh of Table III (mono column).
+#   cost 7461.10518 vs 7461.105 (1.8e-4); Pg/Qg/P34/Q34/|V3| within 4.5e-6 of the 5-decimal
+#   values; losses within 3.8e-5 of the 4-decimal values; lambda1 within 3.8e-5; |V1..3| within
+#   4.8e-5, angles within 4.0e-3 deg of the 2-decimal values; loadings within 4.8e-4 (the paper
+#   prints percentages to 0.1 %); all 12 prices within 4.7e-4 $/MWh of Table III (mono column).
 # Each tolerance is the paper's printed half-unit (rounding can never be tighter than that),
 # which sits just above the measured maximum for every group; see the printed diff table.
 # Note: an equilibrated Clarabel solve (ALMOST_OPTIMAL, the earlier reference reproduction)
@@ -707,8 +751,12 @@ function experiment0(io)
         [("angle V$k (deg)", rad2deg(angle(V[k])), PAPER.Va[k], TOL_DEG) for k in 1:3]...,
         ("loading line (1,2)", r.lines[1].loading, PAPER.load12, TOL_LOADING),
         [
-            ("loading feeder ($(c.dl[k].i),$(c.dl[k].j))", r.floading[k], PAPER.floading[k],
-                TOL_LOADING) for k in 1:3
+            (
+                "loading feeder ($(c.dl[k].i),$(c.dl[k].j))",
+                r.floading[k],
+                PAPER.floading[k],
+                TOL_LOADING,
+            ) for k in 1:3
         ]...,
         [("piP$k (\$/MWh)", r.piP[k], PAPER.piP[k], TOL_PRICE) for k in 1:6]...,
         [("piQ$k (\$/Mvarh)", r.piQ[k], PAPER.piQ[k], TOL_PRICE) for k in 1:6]...,
@@ -717,15 +765,31 @@ function experiment0(io)
         ("max |dual - FD| price", fd_mis, 0.0, TOL_FD),
     ]
     println(io, "Status: ", r.status)
-    @printf(io, "%-36s %16s %16s %11s %11s %s\n", "quantity", "this script", "paper",
-        "|dev|", "tolerance", "ok")
+    @printf(
+        io,
+        "%-36s %16s %16s %11s %11s %s\n",
+        "quantity",
+        "this script",
+        "paper",
+        "|dev|",
+        "tolerance",
+        "ok"
+    )
     failed = String[]
     for (name, val, ref, tol) in checks
         dev = abs(val - ref)
         ok = dev <= tol
         ok || push!(failed, name)
-        @printf(io, "%-36s %16.8g %16.8g %11.2e %11.2e %s\n", name, val, ref, dev, tol,
-            ok ? "ok" : "FAIL")
+        @printf(
+            io,
+            "%-36s %16.8g %16.8g %11.2e %11.2e %s\n",
+            name,
+            val,
+            ref,
+            dev,
+            tol,
+            ok ? "ok" : "FAIL"
+        )
     end
     if !isempty(failed)
         print(stdout, String(take!(copy(io))))
@@ -734,46 +798,133 @@ function experiment0(io)
     println(io, "\nBASELINE SELF-CHECK PASSED")
 
     println(io, "\nOperating point (this script):")
-    @printf(io, "  cost = %.6f \$/h   Pg = %.6f  Qg = %.6f  P34 = %.6f  Q34 = %.6f pu\n",
-        r.cost, r.Pg, r.Qg, r.P34, r.Q34)
-    @printf(io, "  losses: total %.6f = transmission %.6f + feeder %.6f pu (%.3f %% of load)\n",
-        r.loss_t + r.loss_f, r.loss_t, r.loss_f, 100 * (r.loss_t + r.loss_f) / sum(c.Pd))
-    println(io, "  eigenvalues of W: ", join(e.(r.ev), ", "), "   |lambda2/lambda1| = ", e(r.rr))
+    @printf(
+        io,
+        "  cost = %.6f \$/h   Pg = %.6f  Qg = %.6f  P34 = %.6f  Q34 = %.6f pu\n",
+        r.cost,
+        r.Pg,
+        r.Qg,
+        r.P34,
+        r.Q34
+    )
+    @printf(
+        io,
+        "  losses: total %.6f = transmission %.6f + feeder %.6f pu (%.3f %% of load)\n",
+        r.loss_t + r.loss_f,
+        r.loss_t,
+        r.loss_f,
+        100 * (r.loss_t + r.loss_f) / sum(c.Pd)
+    )
+    println(
+        io,
+        "  eigenvalues of W: ",
+        join(e.(r.ev), ", "),
+        "   |lambda2/lambda1| = ",
+        e(r.rr),
+    )
     for k in 1:3
-        @printf(io, "  V%d = %.5f at %.3f deg (from W leading eigenvector)\n", k, abs(V[k]),
-            rad2deg(angle(V[k])))
+        @printf(
+            io,
+            "  V%d = %.5f at %.3f deg (from W leading eigenvector)\n",
+            k,
+            abs(V[k]),
+            rad2deg(angle(V[k]))
+        )
     end
     for k in 4:6
-        @printf(io, "  V%d = %.5f at %.3f deg (Baran-Wu from V3)\n", k, abs(Vf[k]),
-            rad2deg(angle(Vf[k])))
+        @printf(
+            io,
+            "  V%d = %.5f at %.3f deg (Baran-Wu from V3)\n",
+            k,
+            abs(Vf[k]),
+            rad2deg(angle(Vf[k]))
+        )
     end
-    println(io, "  |V| all nodes (sqrt of squared-voltage variables): ", join(f.(r.Vm; d = 5), ", "))
-    println(io, "  cone residuals l*v - (P^2+Q^2) and framework hybrid-floor ratio",
-        " (atol_b = max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT*smax^2), rtol = 1e-4):")
+    println(
+        io,
+        "  |V| all nodes (sqrt of squared-voltage variables): ",
+        join(f.(r.Vm; d = 5), ", "),
+    )
+    println(
+        io,
+        "  cone residuals l*v - (P^2+Q^2) and framework hybrid-floor ratio",
+        " (atol_b = max(TAU_SOLVER_EXACT, MEASURED_REL_TOL_EXACT*smax^2), rtol = 1e-4):",
+    )
     for x in r.cones
-        @printf(io, "    (%d,%d): residual %.2e   ratio %.2e   (paper %.1e)\n", x.i, x.j,
-            x.gap, x.ratio, PAPER.cone[x.k])
+        @printf(
+            io,
+            "    (%d,%d): residual %.2e   ratio %.2e   (paper %.1e)\n",
+            x.i,
+            x.j,
+            x.gap,
+            x.ratio,
+            PAPER.cone[x.k]
+        )
     end
     for (k, ln) in enumerate(r.lines)
-        @printf(io, "  line (%d,%d): |S_ij| = %.5f, |S_ji| = %.5f pu, loading %.2f %%\n", ln.i,
-            ln.j, abs(ln.Sij), abs(ln.Sji), 100 * ln.loading)
+        @printf(
+            io,
+            "  line (%d,%d): |S_ij| = %.5f, |S_ji| = %.5f pu, loading %.2f %%\n",
+            ln.i,
+            ln.j,
+            abs(ln.Sij),
+            abs(ln.Sji),
+            100 * ln.loading
+        )
     end
     for k in 1:3
-        @printf(io, "  feeder (%d,%d): loading %.2f %%\n", c.dl[k].i, c.dl[k].j,
-            100 * r.floading[k])
+        @printf(
+            io,
+            "  feeder (%d,%d): loading %.2f %%\n",
+            c.dl[k].i,
+            c.dl[k].j,
+            100 * r.floading[k]
+        )
     end
-    println(io, "\nNodal prices (mono) vs finite differences (h = 1e-4 pu) vs paper Table III:")
-    @printf(io, "%5s %11s %11s %9s %11s %11s %11s %9s %11s\n", "node", "piP", "FD", "paper",
-        "|dual-FD|", "piQ", "FD", "paper", "|dual-FD|")
+    println(
+        io,
+        "\nNodal prices (mono) vs finite differences (h = 1e-4 pu) vs paper Table III:",
+    )
+    @printf(
+        io,
+        "%5s %11s %11s %9s %11s %11s %11s %9s %11s\n",
+        "node",
+        "piP",
+        "FD",
+        "paper",
+        "|dual-FD|",
+        "piQ",
+        "FD",
+        "paper",
+        "|dual-FD|"
+    )
     for k in 1:6
-        @printf(io, "%5d %11.5f %11.5f %9.3f %11.2e %11.5f %11.5f %9.3f %11.2e\n", k,
-            r.piP[k], fdP[k], PAPER.piP[k], abs(r.piP[k] - fdP[k]), r.piQ[k], fdQ[k],
-            PAPER.piQ[k], abs(r.piQ[k] - fdQ[k]))
+        @printf(
+            io,
+            "%5d %11.5f %11.5f %9.3f %11.2e %11.5f %11.5f %9.3f %11.2e\n",
+            k,
+            r.piP[k],
+            fdP[k],
+            PAPER.piP[k],
+            abs(r.piP[k] - fdP[k]),
+            r.piQ[k],
+            fdQ[k],
+            PAPER.piQ[k],
+            abs(r.piQ[k] - fdQ[k])
+        )
     end
-    @printf(io, "  node 1 check: 2 c2 Pg + c1 = %.5f \$/MWh (piP1 = %.5f)\n",
-        (2 * c.c2 * r.Pg + c.c1) / SBASE, r.piP[1])
-    @printf(io, "  spreads: feeder piP6 - piP3 = %.4f, transmission piP3 - piP1 = %.4f \$/MWh\n",
-        r.piP[6] - r.piP[3], r.piP[3] - r.piP[1])
+    @printf(
+        io,
+        "  node 1 check: 2 c2 Pg + c1 = %.5f \$/MWh (piP1 = %.5f)\n",
+        (2 * c.c2 * r.Pg + c.c1) / SBASE,
+        r.piP[1]
+    )
+    @printf(
+        io,
+        "  spreads: feeder piP6 - piP3 = %.4f, transmission piP3 - piP1 = %.4f \$/MWh\n",
+        r.piP[6] - r.piP[3],
+        r.piP[3] - r.piP[1]
+    )
 
     # Framework-hosted DSO vs paper-faithful model.
     rf = solve_hybrid(c; dso = :framework)
@@ -782,21 +933,49 @@ function experiment0(io)
     ctx.meta[:socp_maxgap] = assert_socp_exact!(ctx)
     Vfw = TSODSO.recover_voltage_angles(ctx)[:, 1] .* cis(angle(V[3]))
     dV = maximum(abs.(Vfw .- Vf[3:6]))
-    println(io, "\nFramework-hosted DSO (contribute!(ConvexBranchFlow()) + boundary workaround):")
-    println(io, "  status ", rf.status, "; assert_socp_exact! passed, max |l v - P^2 - Q^2| = ",
-        e(ctx.meta[:socp_maxgap]))
-    @printf(io, "  |cost_fw - cost_paper| = %.2e \$/h, |Pg| diff %.2e, |P34| diff %.2e, |Q34| diff %.2e\n",
-        abs(rf.cost - r.cost), abs(rf.Pg - r.Pg), abs(rf.P34 - r.P34), abs(rf.Q34 - r.Q34))
-    @printf(io, "  max |V| diff %.2e pu, max |piP| diff %.2e \$/MWh, max |piQ| diff %.2e \$/Mvarh\n",
-        maximum(abs.(rf.Vm .- r.Vm)), maximum(abs.(rf.piP .- r.piP)),
-        maximum(abs.(rf.piQ .- r.piQ)))
-    @printf(io, "  recover_voltage_angles (rotated by angle V3) vs script Baran-Wu: max |dV| = %.2e pu\n",
-        dV)
+    println(
+        io,
+        "\nFramework-hosted DSO (contribute!(ConvexBranchFlow()) + boundary workaround):",
+    )
+    println(
+        io,
+        "  status ",
+        rf.status,
+        "; assert_socp_exact! passed, max |l v - P^2 - Q^2| = ",
+        e(ctx.meta[:socp_maxgap]),
+    )
+    @printf(
+        io,
+        "  |cost_fw - cost_paper| = %.2e \$/h, |Pg| diff %.2e, |P34| diff %.2e, |Q34| diff %.2e\n",
+        abs(rf.cost - r.cost),
+        abs(rf.Pg - r.Pg),
+        abs(rf.P34 - r.P34),
+        abs(rf.Q34 - r.Q34)
+    )
+    @printf(
+        io,
+        "  max |V| diff %.2e pu, max |piP| diff %.2e \$/MWh, max |piQ| diff %.2e \$/Mvarh\n",
+        maximum(abs.(rf.Vm .- r.Vm)),
+        maximum(abs.(rf.piP .- r.piP)),
+        maximum(abs.(rf.piQ .- r.piQ))
+    )
+    @printf(
+        io,
+        "  recover_voltage_angles (rotated by angle V3) vs script Baran-Wu: max |dV| = %.2e pu\n",
+        dV
+    )
     fw_match =
-        abs(rf.cost - r.cost) < TOL_COST && maximum(abs.(rf.piP .- r.piP)) < TOL_PRICE &&
-        maximum(abs.(rf.piQ .- r.piQ)) < TOL_PRICE && abs(rf.P34 - r.P34) < TOL_PU5
-    fw_match || error("framework-hosted DSO does not match the paper-faithful model at the baseline")
-    println(io, "  => framework-hosted DSO MATCHES the paper-faithful model at the baseline")
+        abs(rf.cost - r.cost) < TOL_COST &&
+        maximum(abs.(rf.piP .- r.piP)) < TOL_PRICE &&
+        maximum(abs.(rf.piQ .- r.piQ)) < TOL_PRICE &&
+        abs(rf.P34 - r.P34) < TOL_PU5
+    fw_match || error(
+        "framework-hosted DSO does not match the paper-faithful model at the baseline",
+    )
+    println(
+        io,
+        "  => framework-hosted DSO MATCHES the paper-faithful model at the baseline",
+    )
 
     writecsv(
         "baseline_prices.csv",
@@ -834,8 +1013,6 @@ end
 """
     build_acopf(c; optimizer)
 
-Polar AC-OPF of the full 6-node system. Same limit set as the relaxation: transmission
-|S_ab|^2 <= Smax^2 at BOTH ends (pi model, b/2 shunts; relaxation eq. 24), feeder sending-end
 |S_ij|^2 <= Smax^2 (eq. 32 first part) and |I_ij|^2 = |S_ij|^2 / |V_i|^2 <= Imax^2 (eq. 32 second
 part, l = |I|^2 in the relaxation), |V| in [0.95, 1.05] at all nodes, generator bounds.
 """
@@ -936,10 +1113,15 @@ function ac_min_flow(c::Case6, which::Symbol; nrand::Int = 20)
     return best
 end
 
-"Set the AC-OPF start point: flat (`rng === nothing`) or uniform random within the bounds."
+"""
+Set the AC-OPF start point: flat (`rng === nothing`) or uniform random within the bounds.
+"""
 function set_ac_start!(a, c::Case6, rng)
     for k in 1:6
-        set_start_value(a.Vm[k], rng === nothing ? 1.0 : c.vmin + (c.vmax - c.vmin) * rand(rng))
+        set_start_value(
+            a.Vm[k],
+            rng === nothing ? 1.0 : c.vmin + (c.vmax - c.vmin) * rand(rng),
+        )
         k == 1 && continue
         set_start_value(a.Va[k], rng === nothing ? 0.0 : -0.3 + 0.6 * rand(rng))
     end
@@ -1006,7 +1188,9 @@ function ac_multistart(
     return rows, best
 end
 
-"Number of distinct local optima among the solved rows (costs equal within 1e-7 relative)."
+"""
+Number of distinct local optima among the solved rows (costs equal within 1e-7 relative).
+"""
 function distinct_optima(rows)
     costs = sort([r.cost for r in rows if r.ok])
     isempty(costs) && return 0
@@ -1023,34 +1207,78 @@ function experiment1(io, b0)
     rows, best = ac_multistart(c; nrand = 20, variants = true)
     nsolved = count(x -> x.ok, rows)
     costs = [x.cost for x in rows if x.ok]
-    println(io, "Starts: flat + 20 seeded random (StableRNG($SEED); Vm~U[0.95,1.05], ",
-        "Va~U[-0.3,0.3] rad, Pg/Qg uniform in bounds) + 5 deterministic Ipopt strategy variants")
+    println(
+        io,
+        "Starts: flat + 20 seeded random (StableRNG($SEED); Vm~U[0.95,1.05], ",
+        "Va~U[-0.3,0.3] rad, Pg/Qg uniform in bounds) + 5 deterministic Ipopt strategy variants",
+    )
     println(io, "Ipopt tol = 1e-10. Locally solved: $nsolved / $(length(rows))")
-    @printf(io, "  best AC cost  = %.6f \$/h\n  worst AC cost = %.6f \$/h\n", minimum(costs),
-        maximum(costs))
+    @printf(
+        io,
+        "  best AC cost  = %.6f \$/h\n  worst AC cost = %.6f \$/h\n",
+        minimum(costs),
+        maximum(costs)
+    )
     println(io, "  distinct local optima (cost within 1e-7 rel.): ", distinct_optima(rows))
     gap = (best.cost - r.cost) / best.cost
-    @printf(io, "  relaxation cost = %.6f \$/h;  gap (AC best - relaxation)/AC = %.2e\n", r.cost,
-        gap)
-    @printf(io, "  AC best: Pg = %.6f  Qg = %.6f  P34 = %.6f  Q34 = %.6f pu\n", best.Pg,
-        best.Qg, best.P34, best.Q34)
+    @printf(
+        io,
+        "  relaxation cost = %.6f \$/h;  gap (AC best - relaxation)/AC = %.2e\n",
+        r.cost,
+        gap
+    )
+    @printf(
+        io,
+        "  AC best: Pg = %.6f  Qg = %.6f  P34 = %.6f  Q34 = %.6f pu\n",
+        best.Pg,
+        best.Qg,
+        best.P34,
+        best.Q34
+    )
     V = b0.V
     println(io, "\nVoltages: relaxation-recovered vs Ipopt AC optimum vs paper:")
-    @printf(io, "%5s %10s %10s %10s %10s %10s %10s\n", "node", "|V| rel", "ang rel", "|V| AC",
-        "ang AC", "|V| paper", "ang paper")
+    @printf(
+        io,
+        "%5s %10s %10s %10s %10s %10s %10s\n",
+        "node",
+        "|V| rel",
+        "ang rel",
+        "|V| AC",
+        "ang AC",
+        "|V| paper",
+        "ang paper"
+    )
     for k in 1:6
-        pv = k <= 3 ? @sprintf("%10.4f %10.2f", PAPER.Vm[k], PAPER.Va[k]) : @sprintf("%10s %10s", "-", "-")
-        @printf(io, "%5d %10.5f %10.3f %10.5f %10.3f %s\n", k, abs(V[k]), rad2deg(angle(V[k])),
-            best.Vm[k], best.Va[k], pv)
+        pv =
+            k <= 3 ? @sprintf("%10.4f %10.2f", PAPER.Vm[k], PAPER.Va[k]) :
+            @sprintf("%10s %10s", "-", "-")
+        @printf(
+            io,
+            "%5d %10.5f %10.3f %10.5f %10.3f %s\n",
+            k,
+            abs(V[k]),
+            rad2deg(angle(V[k])),
+            best.Vm[k],
+            best.Va[k],
+            pv
+        )
     end
     VAC = best.Vm .* cis.(deg2rad.(best.Va))
     @printf(io, "  max |V_rel - V_AC| (complex) = %.2e pu\n", maximum(abs.(V .- VAC)))
     dPm, dQm = ac_mismatch(c, V, r.Pg, r.Qg)
-    @printf(io, "  full-AC nodal injection mismatch of the relaxed point (6-node Ybus): max|dP| = %.2e, max|dQ| = %.2e pu\n",
-        dPm, dQm)
+    @printf(
+        io,
+        "  full-AC nodal injection mismatch of the relaxed point (6-node Ybus): max|dP| = %.2e, max|dQ| = %.2e pu\n",
+        dPm,
+        dQm
+    )
     dPa, dQa = ac_mismatch(c, VAC, best.Pg, best.Qg)
-    @printf(io, "  (same check on the Ipopt optimum: max|dP| = %.2e, max|dQ| = %.2e pu)\n", dPa,
-        dQa)
+    @printf(
+        io,
+        "  (same check on the Ipopt optimum: max|dP| = %.2e, max|dQ| = %.2e pu)\n",
+        dPa,
+        dQa
+    )
     writecsv(
         "acopf_multistart.csv",
         DataFrame(
@@ -1072,7 +1300,9 @@ end
 # Experiment 2 -- TSO-DSO ADMM (paper Sec. VII-G)
 # ------------------------------------------------------------------------------------------
 
-"TSO subproblem (eqs. 35-38): SDP block + generator + local boundary flows PT, QT. Built once."
+"""
+TSO subproblem (eqs. 35-38): SDP block + generator + local boundary flows PT, QT. Built once.
+"""
 function build_tso(c::Case6)
     m = Model(socp_optimizer())
     set_silent(m)
@@ -1083,11 +1313,15 @@ function build_tso(c::Case6)
     Pg2 = c.flex ? @variable(m, lower_bound = 0.0, upper_bound = G2_PMAX) : nothing
     tb = add_transmission_block!(m, c, Pg, Qg, PT, QT; Pg2)
     # Local TSO cost (generation; plus G2 in the congestion extension).
-    cost = c.flex ? c.c2 * Pg^2 + c.c1 * Pg + c.c0 + g2cost(Pg2) : c.c2 * Pg^2 + c.c1 * Pg + c.c0
+    cost =
+        c.flex ? c.c2 * Pg^2 + c.c1 * Pg + c.c0 + g2cost(Pg2) :
+        c.c2 * Pg^2 + c.c1 * Pg + c.c0
     return (; m, Pg, Qg, Pg2, PT, QT, tb.W, tb.balP, tb.balQ, tb.linecones, cost)
 end
 
-"DSO subproblem (eq. 39 constraints): feeder with local root variables v3, P34^D, Q34^D. Built once."
+"""
+DSO subproblem (eq. 39 constraints): feeder with local root variables v3, P34^D, Q34^D. Built once.
+"""
 function build_dso(c::Case6)
     m = Model(socp_optimizer())
     set_silent(m)
@@ -1128,7 +1362,10 @@ function run_admm(
         @objective(
             tso.m,
             Min,
-            tso.cost + lam[1] * W33 + lam[2] * tso.PT + lam[3] * tso.QT +
+            tso.cost +
+            lam[1] * W33 +
+            lam[2] * tso.PT +
+            lam[3] * tso.QT +
             rho / 2 * ((W33 - yD[1])^2 + (tso.PT - yD[2])^2 + (tso.QT - yD[3])^2)
         )
         optimize!(tso.m)
@@ -1163,8 +1400,10 @@ function run_admm(
         )
         coneratio = maximum(
             abs(value(fb.l[b]) * vv[b] - value(fb.P[b])^2 - value(fb.Q[b])^2) / (
-                max(TSODSO.TAU_SOLVER_EXACT, TSODSO.MEASURED_REL_TOL_EXACT * c.dl[b].smax^2) +
-                1e-4 * value(fb.l[b]) * vv[b]
+                max(
+                    TSODSO.TAU_SOLVER_EXACT,
+                    TSODSO.MEASURED_REL_TOL_EXACT * c.dl[b].smax^2,
+                ) + 1e-4 * value(fb.l[b]) * vv[b]
             ) for b in 1:3
         )
         ev = eigvals(Hermitian(value.(tso.W)))
@@ -1200,7 +1439,9 @@ function run_admm(
     return (; trace, converged, iters = length(trace), final = trace[end], statuses)
 end
 
-"First iteration from which ALL 6 active prices stay within `rel` of the monolithic ones."
+"""
+First iteration from which ALL 6 active prices stay within `rel` of the monolithic ones.
+"""
 function settle_iteration(trace, piP_ref; rel = 1e-3)
     last_bad = 0
     for t in trace
@@ -1244,72 +1485,234 @@ function experiment2(io, b0)
     println(io, "rho = 500, eps = 1e-2, stop: primal < 1e-4 pu AND dual < 1e-2 (cap 3000)")
     println(io, "  subproblem statuses seen: ", join(sort(collect(a.statuses)), ", "))
     @printf(io, "  converged = %s in %d iterations (paper: 57)\n", a.converged, a.iters)
-    @printf(io, "  final primal residual %.2e pu (paper 9.1e-5), dual residual %.2e (paper 1.8e-3)\n",
-        fin.primal, fin.dual)
+    @printf(
+        io,
+        "  final primal residual %.2e pu (paper 9.1e-5), dual residual %.2e (paper 1.8e-3)\n",
+        fin.primal,
+        fin.dual
+    )
     settle = settle_iteration(a.trace, r.piP)
-    @printf(io, "  all active prices within 0.1 %% of monolithic from iteration %d on (paper: about 40)\n",
-        settle)
+    @printf(
+        io,
+        "  all active prices within 0.1 %% of monolithic from iteration %d on (paper: about 40)\n",
+        settle
+    )
     println(io, "\nTable II side by side:")
-    @printf(io, "%-24s %14s %14s %14s %14s\n", "quantity", "mono (here)", "ADMM (here)",
-        "mono (paper)", "ADMM (paper)")
-    @printf(io, "%-24s %14.3f %14.3f %14.3f %14.3f\n", "cost (\$/h)", r.cost, fin.cost, 7461.105,
-        7460.537)
-    @printf(io, "%-24s %14.5f %14.5f %14.5f %14.5f\n", "Pg (pu)", r.Pg, fin.Pg, 1.83287, 1.83278)
-    @printf(io, "%-24s %14.5f %14.5f %14.5f %14.5f\n", "Qg (pu)", r.Qg, fin.Qg, 0.13381, 0.13379)
-    @printf(io, "%-24s %14.5f %14.5f %14.5f %14.5f\n", "P34 TSO side (pu)", r.P34, fin.yT[2],
-        0.30486, 0.30477)
-    @printf(io, "%-24s %14.5f %14.5f %14s %14s\n", "P34 DSO side (pu)", r.P34, fin.yD[2], "-", "-")
-    @printf(io, "%-24s %14.5f %14.5f %14.5f %14.5f\n", "Q34 TSO side (pu)", r.Q34, fin.yT[3],
-        0.12926, 0.12926)
-    @printf(io, "%-24s %14.5f %14.5f %14s %14s\n", "Q34 DSO side (pu)", r.Q34, fin.yD[3], "-", "-")
-    @printf(io, "%-24s %14.5f %14.5f %14.5f %14.5f\n", "|V3| TSO sqrt(W33)", r.Vm[3],
-        sqrt(fin.yT[1]), 1.01405, 1.01406)
-    @printf(io, "%-24s %14.5f %14.5f %14s %14s\n", "|V3| DSO sqrt(v3)", r.Vm[3], sqrt(fin.yD[1]),
-        "-", "-")
-    @printf(io, "%-24s %14.2e %14.2e %14.2e %14.2e\n", "|lambda2/lambda1| W", r.rr, fin.rank,
-        6.4e-10, 5.9e-11)
-    @printf(io, "%-24s %14.2e %14.2e %14.2e %14.2e\n", "max cone residual",
-        maximum(x.gap for x in r.cones), fin.cone, 2.6e-7, 2.4e-9)
+    @printf(
+        io,
+        "%-24s %14s %14s %14s %14s\n",
+        "quantity",
+        "mono (here)",
+        "ADMM (here)",
+        "mono (paper)",
+        "ADMM (paper)"
+    )
+    @printf(
+        io,
+        "%-24s %14.3f %14.3f %14.3f %14.3f\n",
+        "cost (\$/h)",
+        r.cost,
+        fin.cost,
+        7461.105,
+        7460.537
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14.5f %14.5f\n",
+        "Pg (pu)",
+        r.Pg,
+        fin.Pg,
+        1.83287,
+        1.83278
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14.5f %14.5f\n",
+        "Qg (pu)",
+        r.Qg,
+        fin.Qg,
+        0.13381,
+        0.13379
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14.5f %14.5f\n",
+        "P34 TSO side (pu)",
+        r.P34,
+        fin.yT[2],
+        0.30486,
+        0.30477
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14s %14s\n",
+        "P34 DSO side (pu)",
+        r.P34,
+        fin.yD[2],
+        "-",
+        "-"
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14.5f %14.5f\n",
+        "Q34 TSO side (pu)",
+        r.Q34,
+        fin.yT[3],
+        0.12926,
+        0.12926
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14s %14s\n",
+        "Q34 DSO side (pu)",
+        r.Q34,
+        fin.yD[3],
+        "-",
+        "-"
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14.5f %14.5f\n",
+        "|V3| TSO sqrt(W33)",
+        r.Vm[3],
+        sqrt(fin.yT[1]),
+        1.01405,
+        1.01406
+    )
+    @printf(
+        io,
+        "%-24s %14.5f %14.5f %14s %14s\n",
+        "|V3| DSO sqrt(v3)",
+        r.Vm[3],
+        sqrt(fin.yD[1]),
+        "-",
+        "-"
+    )
+    @printf(
+        io,
+        "%-24s %14.2e %14.2e %14.2e %14.2e\n",
+        "|lambda2/lambda1| W",
+        r.rr,
+        fin.rank,
+        6.4e-10,
+        5.9e-11
+    )
+    @printf(
+        io,
+        "%-24s %14.2e %14.2e %14.2e %14.2e\n",
+        "max cone residual",
+        maximum(x.gap for x in r.cones),
+        fin.cone,
+        2.6e-7,
+        2.4e-9
+    )
     @printf(io, "%-24s %14s %14d %14s %14d\n", "iterations", "-", a.iters, "-", 57)
-    @printf(io, "  relative cost difference (mono - ADMM)/mono = %.2e (paper 7.6e-5)\n",
-        (r.cost - fin.cost) / r.cost)
+    @printf(
+        io,
+        "  relative cost difference (mono - ADMM)/mono = %.2e (paper 7.6e-5)\n",
+        (r.cost - fin.cost) / r.cost
+    )
     println(io, "\nPrices at convergence (TSO duals for nodes 1-3, DSO duals for 4-6):")
-    @printf(io, "%5s %11s %11s %11s %11s %11s %11s\n", "node", "piP mono", "piP ADMM", "rel diff",
-        "piQ mono", "piQ ADMM", "abs diff")
+    @printf(
+        io,
+        "%5s %11s %11s %11s %11s %11s %11s\n",
+        "node",
+        "piP mono",
+        "piP ADMM",
+        "rel diff",
+        "piQ mono",
+        "piQ ADMM",
+        "abs diff"
+    )
     for k in 1:6
-        @printf(io, "%5d %11.4f %11.4f %11.2e %11.4f %11.4f %11.2e\n", k, r.piP[k], fin.piP[k],
-            abs(fin.piP[k] - r.piP[k]) / r.piP[k], r.piQ[k], fin.piQ[k],
-            abs(fin.piQ[k] - r.piQ[k]))
+        @printf(
+            io,
+            "%5d %11.4f %11.4f %11.2e %11.4f %11.4f %11.2e\n",
+            k,
+            r.piP[k],
+            fin.piP[k],
+            abs(fin.piP[k] - r.piP[k]) / r.piP[k],
+            r.piQ[k],
+            fin.piQ[k],
+            abs(fin.piQ[k] - r.piQ[k])
+        )
     end
-    @printf(io, "  -lambda_p = %.4f \$/h per pu;  piP3(ADMM)*100 = %.4f;  piP3(mono)*100 = %.4f\n",
-        -fin.lam[2], 100 * fin.piP[3], 100 * r.piP[3])
+    @printf(
+        io,
+        "  -lambda_p = %.4f \$/h per pu;  piP3(ADMM)*100 = %.4f;  piP3(mono)*100 = %.4f\n",
+        -fin.lam[2],
+        100 * fin.piP[3],
+        100 * r.piP[3]
+    )
     @printf(io, "  (paper: -lambda_p = 6258.80 = piP3(ADMM)*100)\n")
-    @printf(io, "  -lambda_q = %.4f vs piQ3(ADMM)*100 = %.4f;  lambda_v = %.4f \$/h per pu^2\n",
-        -fin.lam[3], 100 * fin.piQ[3], fin.lam[1])
+    @printf(
+        io,
+        "  -lambda_q = %.4f vs piQ3(ADMM)*100 = %.4f;  lambda_v = %.4f \$/h per pu^2\n",
+        -fin.lam[3],
+        100 * fin.piQ[3],
+        fin.lam[1]
+    )
     writecsv("admm_trace_rho500.csv", admm_trace_df(a.trace))
 
     # rho sweep
     println(io, "\nrho sweep (eps = 1e-2):")
-    @printf(io, "%9s %6s %9s %11s %11s %13s %13s\n", "rho", "iters", "converged", "primal",
-        "dual", "rel cost err", "max |dPrice|")
+    @printf(
+        io,
+        "%9s %6s %9s %11s %11s %13s %13s\n",
+        "rho",
+        "iters",
+        "converged",
+        "primal",
+        "dual",
+        "rel cost err",
+        "max |dPrice|"
+    )
     rs = NamedTuple[]
     for rho in RHO_SWEEP
         x = run_admm(c; rho = rho, eps = 1e-2)
         fx = x.final
         rce = (fx.cost - r.cost) / r.cost
         pe = maximum(abs.(fx.piP .- r.piP))
-        push!(rs, (; rho, iters = x.iters, converged = x.converged, primal = fx.primal,
-            dual = fx.dual, rel_cost_err = rce, max_price_err = pe,
-            settle = settle_iteration(x.trace, r.piP)))
-        @printf(io, "%9.0f %6d %9s %11.2e %11.2e %13.2e %13.2e\n", rho, x.iters, x.converged,
-            fx.primal, fx.dual, rce, pe)
+        push!(
+            rs,
+            (;
+                rho,
+                iters = x.iters,
+                converged = x.converged,
+                primal = fx.primal,
+                dual = fx.dual,
+                rel_cost_err = rce,
+                max_price_err = pe,
+                settle = settle_iteration(x.trace, r.piP),
+            ),
+        )
+        @printf(
+            io,
+            "%9.0f %6d %9s %11.2e %11.2e %13.2e %13.2e\n",
+            rho,
+            x.iters,
+            x.converged,
+            fx.primal,
+            fx.dual,
+            rce,
+            pe
+        )
     end
     writecsv("admm_rho_sweep.csv", DataFrame(rs))
 
     # eps sweep
     println(io, "\neps sweep (rho = 500):")
-    @printf(io, "%8s %6s %9s %14s %14s %14s %14s\n", "eps", "iters", "converged",
-        "max cone (it)", "max ratio (it)", "cone @ conv", "cost bias")
+    @printf(
+        io,
+        "%8s %6s %9s %14s %14s %14s %14s\n",
+        "eps",
+        "iters",
+        "converged",
+        "max cone (it)",
+        "max ratio (it)",
+        "cone @ conv",
+        "cost bias"
+    )
     es = NamedTuple[]
     for eps in EPS_SWEEP
         x = run_admm(c; rho = 500.0, eps = eps)
@@ -1317,12 +1720,32 @@ function experiment2(io, b0)
         mr = maximum(t.coneratio for t in x.trace)
         fx = x.final
         bias = (fx.cost - r.cost) / r.cost
-        push!(es, (; eps, iters = x.iters, converged = x.converged, max_cone_iterates = mc,
-            max_cone_ratio_iterates = mr, cone_final = fx.cone, cone_ratio_final = fx.coneratio,
-            rel_cost_bias = bias, max_price_err = maximum(abs.(fx.piP .- r.piP)),
-            losses_f_final = fx.losses_f))
-        @printf(io, "%8.0e %6d %9s %14.2e %14.2e %14.2e %14.2e\n", eps, x.iters, x.converged,
-            mc, mr, fx.cone, bias)
+        push!(
+            es,
+            (;
+                eps,
+                iters = x.iters,
+                converged = x.converged,
+                max_cone_iterates = mc,
+                max_cone_ratio_iterates = mr,
+                cone_final = fx.cone,
+                cone_ratio_final = fx.coneratio,
+                rel_cost_bias = bias,
+                max_price_err = maximum(abs.(fx.piP .- r.piP)),
+                losses_f_final = fx.losses_f,
+            ),
+        )
+        @printf(
+            io,
+            "%8.0e %6d %9s %14.2e %14.2e %14.2e %14.2e\n",
+            eps,
+            x.iters,
+            x.converged,
+            mc,
+            mr,
+            fx.cone,
+            bias
+        )
     end
     writecsv("admm_eps_sweep.csv", DataFrame(es))
     return (; a, settle, rs, es)
@@ -1332,38 +1755,51 @@ end
 # Experiment 3 -- congestion
 # ------------------------------------------------------------------------------------------
 
-"Binding-constraint duals of a solved hybrid model (shadow prices of the limits, \$/MVAh)."
+"""
+Binding-constraint duals of a solved hybrid model (shadow prices of the limits, \$/MVAh).
+"""
 function binding_duals(c::Case6, h; tol = 1e-6)
     out = NamedTuple[]
     for ((k, en), cr) in sort(collect(h.linecones); by = first)
         d = dual(cr)[1] / SBASE
         ln = c.tl[k]
-        d > tol && push!(out, (;
-            name = "line ($(ln.i),$(ln.j)) $(en == 1 ? "sending" : "receiving")-end Smax",
-            value = d,
-        ))
+        d > tol && push!(
+            out,
+            (;
+                name = "line ($(ln.i),$(ln.j)) $(en == 1 ? "sending" : "receiving")-end Smax",
+                value = d,
+            ),
+        )
     end
     for k in 1:3
         br = c.dl[k]
         d = dual(h.feeder.smaxc[k])[1] / SBASE
-        d > tol && push!(out, (; name = "feeder ($(br.i),$(br.j)) sending-end Smax", value = d))
+        d > tol &&
+            push!(out, (; name = "feeder ($(br.i),$(br.j)) sending-end Smax", value = d))
         if h.feeder.smaxrev !== nothing
             d = dual(h.feeder.smaxrev[k])[1] / SBASE
-            d > tol &&
-                push!(out, (; name = "feeder ($(br.i),$(br.j)) receiving-end Smax", value = d))
+            d > tol && push!(
+                out,
+                (; name = "feeder ($(br.i),$(br.j)) receiving-end Smax", value = d),
+            )
         end
         d = -dual(h.feeder.imaxc[k]) / SBASE
-        d > tol && push!(out, (; name = "feeder ($(br.i),$(br.j)) Imax^2 (per pu^2)", value = d))
+        d > tol &&
+            push!(out, (; name = "feeder ($(br.i),$(br.j)) Imax^2 (per pu^2)", value = d))
     end
     return out
 end
 
-"Exactness verdicts used everywhere: SDP rank-one test and SOC hybrid-floor test."
+"""
+Exactness verdicts used everywhere: SDP rank-one test and SOC hybrid-floor test.          # |lambda2/lambda1| below this = numerically rank one
+"""
 const RANK_EXACT = 1e-6          # |lambda2/lambda1| below this = numerically rank one
 exact_sdp(r) = r.rr < RANK_EXACT
 exact_soc(r) = maximum(x.ratio for x in r.cones) <= 1
 
-"Framework DLMP decomposition (feeder nodes 3-6) after the framework exactness gate."
+"""
+Framework DLMP decomposition (feeder nodes 3-6) after the framework exactness gate.
+"""
 function framework_dlmp(c::Case6)
     rf = solve_hybrid(c; dso = :framework)
     rf.ok || return (; ok = false, reason = "framework solve $(rf.status)")
@@ -1380,11 +1816,15 @@ function framework_dlmp(c::Case6)
         reactive = d.reactive[:, 1] ./ SBASE,
         total = d.total[:, 1] ./ SBASE,
     )
-    resid = maximum(abs.(comp.energy .+ comp.cone .+ comp.congestion .+ comp.drop .- comp.total))
+    resid = maximum(
+        abs.(comp.energy .+ comp.cone .+ comp.congestion .+ comp.drop .- comp.total),
+    )
     return (; ok = true, comp, resid, rf)
 end
 
-"Run the framework exactness gate without letting an exception escape (non-throwing wrapper)."
+"""
+Run the framework exactness gate without letting an exception escape (non-throwing wrapper).
+"""
 function gate_framework(ctx)
     maxgap = NaN
     reason = ""
@@ -1438,26 +1878,43 @@ function min_flow(c::Case6, which::Symbol)
 end
 
 function experiment3(io, b0)
-    section(io, "EXPERIMENT 3 -- CONGESTION (transmission line (1,2) and feeder head (3,4))")
+    section(
+        io,
+        "EXPERIMENT 3 -- CONGESTION (transmission line (1,2) and feeder head (3,4))",
+    )
     base = b0.r
     s12 = maximum(abs.((base.lines[1].Sij, base.lines[1].Sji)))
     s34 = hypot(base.P34, base.Q34)
     # The planned limits (0.9 x the baseline flow) are first tested as such.
     println(io, "Planned limits (0.9 x baseline flow) -- feasibility check:")
     for (lbl, cc) in (
-        (@sprintf("Smax(1,2) = 0.9 x %.5f = %.5f pu", s12, 0.9s12),
-            case6(; smax_line = [0.9s12, 2.0, 2.0])),
-        (@sprintf("Smax(3,4) = Imax(3,4) = 0.9 x %.5f = %.5f pu", s34, 0.9s34),
-            case6(; smax_feeder = [0.9s34, 0.6, 0.4])),
+        (
+            @sprintf("Smax(1,2) = 0.9 x %.5f = %.5f pu", s12, 0.9s12),
+            case6(; smax_line = [0.9s12, 2.0, 2.0]),
+        ),
+        (
+            @sprintf("Smax(3,4) = Imax(3,4) = 0.9 x %.5f = %.5f pu", s34, 0.9s34),
+            case6(; smax_feeder = [0.9s34, 0.6, 0.4]),
+        ),
     )
         rr = solve_hybrid(cc)
         _, bb = ac_multistart(cc; nrand = 20)
-        println(io, "  ", lbl, ": relaxation ", rr.status, "; Ipopt (flat + 20 random) ",
-            bb === nothing ? "found no AC point" : @sprintf("found cost %.4f", bb.cost))
+        println(
+            io,
+            "  ",
+            lbl,
+            ": relaxation ",
+            rr.status,
+            "; Ipopt (flat + 20 random) ",
+            bb === nothing ? "found no AC point" : @sprintf("found cost %.4f", bb.cost),
+        )
     end
-    println(io, "  => both infeasible: with one generator and inelastic loads nothing can be",
+    println(
+        io,
+        "  => both infeasible: with one generator and inelastic loads nothing can be",
         " redispatched; flows are fixed by the loads up to the voltage profile. The relaxation's",
-        " infeasibility certifies AC infeasibility.")
+        " infeasibility certifies AC infeasibility.",
+    )
     # Part A -- the paper's system: the band in which a limit can bind at all.
     f12 = min_flow(case6(), :line12)
     f34 = min_flow(case6(), :head34)
@@ -1465,17 +1922,46 @@ function experiment3(io, b0)
     a34 = ac_min_flow(case6(), :head34)
     sm12 = round(f12 + 0.5 * (s12 - f12); sigdigits = 7)
     sm34 = round(f34 + 0.5 * (s34 - f34); sigdigits = 7)
-    println(io, "\nPart A -- paper system (no redispatch): band of limits that can bind feasibly")
-    @printf(io, "  line (1,2): min max|S12| relaxation %.6f, AC (Ipopt, 21 starts) %.6f, baseline %.6f pu\n",
-        f12, a12, s12)
-    @printf(io, "  head (3,4): min |S34|    relaxation %.6f, AC (Ipopt, 21 starts) %.6f, baseline %.6f pu\n",
-        f34, a34, s34)
-    @printf(io, "  band midpoints used below: Smax(1,2) = %.6f, Smax(3,4) = Imax(3,4) = %.6f pu\n",
-        sm12, sm34)
-    println(io, "\nPart B -- congestion extension (NOT in the paper): out-of-merit G2 at node 2",
-        @sprintf(" (%.0f Pg2^2 + %.0f Pg2 \$/h, Pg2 <= %.1f, unity pf)", G2_C2, G2_C1, G2_PMAX),
-        @sprintf(" and DG at node 6 (%.0f Pdg \$/h, Pdg <= %.1f, unity pf);", DG_C1, DG_PMAX),
-        " limits at 0.9 x the baseline flow as planned.")
+    println(
+        io,
+        "\nPart A -- paper system (no redispatch): band of limits that can bind feasibly",
+    )
+    @printf(
+        io,
+        "  line (1,2): min max|S12| relaxation %.6f, AC (Ipopt, 21 starts) %.6f, baseline %.6f pu\n",
+        f12,
+        a12,
+        s12
+    )
+    @printf(
+        io,
+        "  head (3,4): min |S34|    relaxation %.6f, AC (Ipopt, 21 starts) %.6f, baseline %.6f pu\n",
+        f34,
+        a34,
+        s34
+    )
+    @printf(
+        io,
+        "  band midpoints used below: Smax(1,2) = %.6f, Smax(3,4) = Imax(3,4) = %.6f pu\n",
+        sm12,
+        sm34
+    )
+    println(
+        io,
+        "\nPart B -- congestion extension (NOT in the paper): out-of-merit G2 at node 2",
+        @sprintf(
+            " (%.0f Pg2^2 + %.0f Pg2 \$/h, Pg2 <= %.1f, unity pf)",
+            G2_C2,
+            G2_C1,
+            G2_PMAX
+        ),
+        @sprintf(
+            " and DG at node 6 (%.0f Pdg \$/h, Pdg <= %.1f, unity pf);",
+            DG_C1,
+            DG_PMAX
+        ),
+        " limits at 0.9 x the baseline flow as planned.",
+    )
     variants = [
         ("baseline", case6()),
         ("paper_line12_band", case6(; smax_line = [sm12, 2.0, 2.0])),
@@ -1485,7 +1971,11 @@ function experiment3(io, b0)
         ("flex_head34", case6(; flex = true, smax_feeder = [0.9s34, 0.6, 0.4])),
         (
             "flex_both",
-            case6(; flex = true, smax_line = [0.9s12, 2.0, 2.0], smax_feeder = [0.9s34, 0.6, 0.4]),
+            case6(;
+                flex = true,
+                smax_line = [0.9s12, 2.0, 2.0],
+                smax_feeder = [0.9s34, 0.6, 0.4],
+            ),
         ),
     ]
     prow = NamedTuple[]
@@ -1497,8 +1987,15 @@ function experiment3(io, b0)
         if !r.ok
             _, bb = ac_multistart(c; nrand = 20)
             println(io, "\n--- variant: $name ---")
-            println(io, "  relaxation ", r.status, " (", r.solver, "); Ipopt (flat + 20 random) ",
-                bb === nothing ? "found no AC point" : @sprintf("found cost %.4f", bb.cost))
+            println(
+                io,
+                "  relaxation ",
+                r.status,
+                " (",
+                r.solver,
+                "); Ipopt (flat + 20 random) ",
+                bb === nothing ? "found no AC point" : @sprintf("found cost %.4f", bb.cost),
+            )
             results[name] = nothing
             continue
         end
@@ -1510,23 +2007,56 @@ function experiment3(io, b0)
         results[name] = (; r, best, a, dl)
         gap = best === nothing ? NaN : (best.cost - r.cost) / best.cost
         println(io, "\n--- variant: $name ---")
-        @printf(io, "  status %s (%s), cost %.4f \$/h (%+.4f vs baseline, %+.4f %%)\n", r.status,
-            r.solver, r.cost, r.cost - base.cost, 100 * (r.cost - base.cost) / base.cost)
-        @printf(io, "  Pg %.5f  Qg %.5f  P34 %.5f  Q34 %.5f; loadings: line(1,2) %.2f %%, head(3,4) %.2f %%\n",
-            r.Pg, r.Qg, r.P34, r.Q34, 100 * r.lines[1].loading, 100 * r.floading[1])
+        @printf(
+            io,
+            "  status %s (%s), cost %.4f \$/h (%+.4f vs baseline, %+.4f %%)\n",
+            r.status,
+            r.solver,
+            r.cost,
+            r.cost - base.cost,
+            100 * (r.cost - base.cost) / base.cost
+        )
+        @printf(
+            io,
+            "  Pg %.5f  Qg %.5f  P34 %.5f  Q34 %.5f; loadings: line(1,2) %.2f %%, head(3,4) %.2f %%\n",
+            r.Pg,
+            r.Qg,
+            r.P34,
+            r.Q34,
+            100 * r.lines[1].loading,
+            100 * r.floading[1]
+        )
         if c.flex
-            @printf(io, "  flexibility: Pg2 = %.5f (marginal cost %.4f \$/MWh vs piP2 %.4f), Pdg = %.5f (cost %.4f \$/MWh vs piP6 %.4f)\n",
-                r.Pg2, (2 * G2_C2 * r.Pg2 + G2_C1) / SBASE, r.piP[2], r.Pdg, DG_C1 / SBASE,
-                r.piP[6])
+            @printf(
+                io,
+                "  flexibility: Pg2 = %.5f (marginal cost %.4f \$/MWh vs piP2 %.4f), Pdg = %.5f (cost %.4f \$/MWh vs piP6 %.4f)\n",
+                r.Pg2,
+                (2 * G2_C2 * r.Pg2 + G2_C1) / SBASE,
+                r.piP[2],
+                r.Pdg,
+                DG_C1 / SBASE,
+                r.piP[6]
+            )
         end
-        @printf(io, "  exactness: |lambda2/lambda1| = %.2e (%s), max cone residual %.2e, max hybrid ratio %.2e (%s)\n",
-            r.rr, exact_sdp(r) ? "rank one" : "NOT RANK ONE", maximum(x.gap for x in r.cones),
-            maximum(x.ratio for x in r.cones), exact_soc(r) ? "exact" : "INEXACT")
+        @printf(
+            io,
+            "  exactness: |lambda2/lambda1| = %.2e (%s), max cone residual %.2e, max hybrid ratio %.2e (%s)\n",
+            r.rr,
+            exact_sdp(r) ? "rank one" : "NOT RANK ONE",
+            maximum(x.gap for x in r.cones),
+            maximum(x.ratio for x in r.cones),
+            exact_soc(r) ? "exact" : "INEXACT"
+        )
         if best === nothing
             println(io, "  Ipopt AC-OPF: no locally solved start")
         else
-            @printf(io, "  Ipopt AC-OPF best (flat + 20 random): %.4f \$/h, gap (AC - relax)/AC = %.2e, %d distinct optima\n",
-                best.cost, gap, distinct_optima(rows))
+            @printf(
+                io,
+                "  Ipopt AC-OPF best (flat + 20 random): %.4f \$/h, gap (AC - relax)/AC = %.2e, %d distinct optima\n",
+                best.cost,
+                gap,
+                distinct_optima(rows)
+            )
         end
         println(io, "  binding-constraint duals (shadow price of the limit):")
         isempty(bd) && println(io, "    none")
@@ -1535,74 +2065,151 @@ function experiment3(io, b0)
         end
         println(io, "  prices (mono):  piP = ", join(f.(r.piP; d = 4), ", "))
         println(io, "                  piQ = ", join(f.(r.piQ; d = 4), ", "))
-        @printf(io, "  transmission side: piP1 = %.4f vs 2c2Pg+c1 = %.4f; spreads piP2-piP1 = %.4f, piP3-piP1 = %.4f\n",
-            r.piP[1], (2 * c.c2 * r.Pg + c.c1) / SBASE, r.piP[2] - r.piP[1], r.piP[3] - r.piP[1])
-        @printf(io, "  ADMM rho=500 eps=1e-2: converged=%s in %d iterations, primal %.2e, dual %.2e\n",
-            a.converged, a.iters, fin.primal, fin.dual)
-        @printf(io, "    rel cost diff (mono-ADMM)/mono %.2e, max |dpiP| %.2e, max |dpiQ| %.2e, -lambda_p = %.3f vs piP3(ADMM)*100 = %.3f\n",
-            (r.cost - fin.cost) / r.cost, maximum(abs.(fin.piP .- r.piP)),
-            maximum(abs.(fin.piQ .- r.piQ)), -fin.lam[2], 100 * fin.piP[3])
+        @printf(
+            io,
+            "  transmission side: piP1 = %.4f vs 2c2Pg+c1 = %.4f; spreads piP2-piP1 = %.4f, piP3-piP1 = %.4f\n",
+            r.piP[1],
+            (2 * c.c2 * r.Pg + c.c1) / SBASE,
+            r.piP[2] - r.piP[1],
+            r.piP[3] - r.piP[1]
+        )
+        @printf(
+            io,
+            "  ADMM rho=500 eps=1e-2: converged=%s in %d iterations, primal %.2e, dual %.2e\n",
+            a.converged,
+            a.iters,
+            fin.primal,
+            fin.dual
+        )
+        @printf(
+            io,
+            "    rel cost diff (mono-ADMM)/mono %.2e, max |dpiP| %.2e, max |dpiQ| %.2e, -lambda_p = %.3f vs piP3(ADMM)*100 = %.3f\n",
+            (r.cost - fin.cost) / r.cost,
+            maximum(abs.(fin.piP .- r.piP)),
+            maximum(abs.(fin.piQ .- r.piQ)),
+            -fin.lam[2],
+            100 * fin.piP[3]
+        )
         if dl.ok
-            println(io, "  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):")
-            @printf(io, "    %5s %10s %10s %11s %10s %10s %10s\n", "node", "energy", "cone",
-                "congestion", "drop", "total", "reactive")
+            println(
+                io,
+                "  feeder DLMP decomposition (framework decompose_dlmp, after assert_socp_exact!):",
+            )
+            @printf(
+                io,
+                "    %5s %10s %10s %11s %10s %10s %10s\n",
+                "node",
+                "energy",
+                "cone",
+                "congestion",
+                "drop",
+                "total",
+                "reactive"
+            )
             for jl in 1:4
-                @printf(io, "    %5d %10.4f %10.4f %11.4f %10.4f %10.4f %10.4f\n", jl + 2,
-                    dl.comp.energy[jl], dl.comp.cone[jl], dl.comp.congestion[jl],
-                    dl.comp.drop[jl], dl.comp.total[jl], dl.comp.reactive[jl])
-                push!(drow, (; variant = name, node = jl + 2, energy = dl.comp.energy[jl],
-                    cone = dl.comp.cone[jl], congestion = dl.comp.congestion[jl],
-                    drop = dl.comp.drop[jl], total = dl.comp.total[jl],
-                    reactive = dl.comp.reactive[jl], paper_model_piP = r.piP[jl + 2]))
+                @printf(
+                    io,
+                    "    %5d %10.4f %10.4f %11.4f %10.4f %10.4f %10.4f\n",
+                    jl + 2,
+                    dl.comp.energy[jl],
+                    dl.comp.cone[jl],
+                    dl.comp.congestion[jl],
+                    dl.comp.drop[jl],
+                    dl.comp.total[jl],
+                    dl.comp.reactive[jl]
+                )
+                push!(
+                    drow,
+                    (;
+                        variant = name,
+                        node = jl + 2,
+                        energy = dl.comp.energy[jl],
+                        cone = dl.comp.cone[jl],
+                        congestion = dl.comp.congestion[jl],
+                        drop = dl.comp.drop[jl],
+                        total = dl.comp.total[jl],
+                        reactive = dl.comp.reactive[jl],
+                        paper_model_piP = r.piP[jl + 2],
+                    ),
+                )
             end
-            @printf(io, "    max |energy+cone+congestion+drop - total| = %.2e; max |total - piP(paper model)| = %.2e\n",
-                dl.resid, maximum(abs.(dl.comp.total .- r.piP[3:6])))
+            @printf(
+                io,
+                "    max |energy+cone+congestion+drop - total| = %.2e; max |total - piP(paper model)| = %.2e\n",
+                dl.resid,
+                maximum(abs.(dl.comp.total .- r.piP[3:6]))
+            )
         else
             println(io, "  feeder DLMP decomposition REFUSED: ", dl.reason)
         end
         for k in 1:6
-            push!(prow, (; variant = name, node = k, piP = r.piP[k], piQ = r.piQ[k],
-                piP_admm = fin.piP[k], piQ_admm = fin.piQ[k]))
+            push!(
+                prow,
+                (;
+                    variant = name,
+                    node = k,
+                    piP = r.piP[k],
+                    piQ = r.piQ[k],
+                    piP_admm = fin.piP[k],
+                    piQ_admm = fin.piQ[k],
+                ),
+            )
         end
-        push!(srow, (;
-            variant = name,
-            smax_line12 = c.tl[1].smax,
-            smax_head34 = c.dl[1].smax,
-            status = string(r.status),
-            cost = r.cost,
-            dcost = r.cost - base.cost,
-            Pg = r.Pg,
-            Pg2 = r.Pg2,
-            Pdg = r.Pdg,
-            P34 = r.P34,
-            loading_line12 = r.lines[1].loading,
-            loading_head34 = r.floading[1],
-            rank_ratio = r.rr,
-            max_cone_residual = maximum(x.gap for x in r.cones),
-            max_cone_ratio = maximum(x.ratio for x in r.cones),
-            ac_best = best === nothing ? NaN : best.cost,
-            ac_gap = gap,
-            admm_iters = a.iters,
-            admm_converged = a.converged,
-            admm_rel_cost_diff = (r.cost - fin.cost) / r.cost,
-            admm_max_dpiP = maximum(abs.(fin.piP .- r.piP)),
-            minus_lambda_p = -fin.lam[2],
-            piP3_admm_x100 = 100 * fin.piP[3],
-            binding = join([x.name for x in bd], "; "),
-            binding_duals = join([@sprintf("%.6g", x.value) for x in bd], "; "),
-        ))
+        push!(
+            srow,
+            (;
+                variant = name,
+                smax_line12 = c.tl[1].smax,
+                smax_head34 = c.dl[1].smax,
+                status = string(r.status),
+                cost = r.cost,
+                dcost = r.cost - base.cost,
+                Pg = r.Pg,
+                Pg2 = r.Pg2,
+                Pdg = r.Pdg,
+                P34 = r.P34,
+                loading_line12 = r.lines[1].loading,
+                loading_head34 = r.floading[1],
+                rank_ratio = r.rr,
+                max_cone_residual = maximum(x.gap for x in r.cones),
+                max_cone_ratio = maximum(x.ratio for x in r.cones),
+                ac_best = best === nothing ? NaN : best.cost,
+                ac_gap = gap,
+                admm_iters = a.iters,
+                admm_converged = a.converged,
+                admm_rel_cost_diff = (r.cost - fin.cost) / r.cost,
+                admm_max_dpiP = maximum(abs.(fin.piP .- r.piP)),
+                minus_lambda_p = -fin.lam[2],
+                piP3_admm_x100 = 100 * fin.piP[3],
+                binding = join([x.name for x in bd], "; "),
+                binding_duals = join([@sprintf("%.6g", x.value) for x in bd], "; "),
+            ),
+        )
     end
     fb0 = results["flex_baseline"].r
-    dfx = max(abs(fb0.cost - base.cost) / TOL_COST, maximum(abs.(fb0.piP .- base.piP)) / TOL_PRICE,
-        maximum(abs.(fb0.piQ .- base.piQ)) / TOL_PRICE)
-    dfx <= 1 || error("congestion extension changes the uncongested baseline (G2/DG not out of merit)")
-    @printf(io, "\nCheck: the extension leaves the uncongested baseline unchanged (|dcost| %.1e \$/h, max |dprice| %.1e \$/MWh; Pg2 = %.1e, Pdg = %.1e).\n",
-        abs(fb0.cost - base.cost), max(maximum(abs.(fb0.piP .- base.piP)),
-            maximum(abs.(fb0.piQ .- base.piQ))), fb0.Pg2, fb0.Pdg)
-    println(io, "\nTransmission side note: the SDP balances are written in W (Tr(Phi_k W)), not as",
+    dfx = max(
+        abs(fb0.cost - base.cost) / TOL_COST,
+        maximum(abs.(fb0.piP .- base.piP)) / TOL_PRICE,
+        maximum(abs.(fb0.piQ .- base.piQ)) / TOL_PRICE,
+    )
+    dfx <= 1 || error(
+        "congestion extension changes the uncongested baseline (G2/DG not out of merit)",
+    )
+    @printf(
+        io,
+        "\nCheck: the extension leaves the uncongested baseline unchanged (|dcost| %.1e \$/h, max |dprice| %.1e \$/MWh; Pg2 = %.1e, Pdg = %.1e).\n",
+        abs(fb0.cost - base.cost),
+        max(maximum(abs.(fb0.piP .- base.piP)), maximum(abs.(fb0.piQ .- base.piQ))),
+        fb0.Pg2,
+        fb0.Pdg
+    )
+    println(
+        io,
+        "\nTransmission side note: the SDP balances are written in W (Tr(Phi_k W)), not as",
         " radial branch flows, so the radial path-sum DLMP decomposition does not apply to nodes",
         " 1-3; only the reference price at node 1 (= 2 c2 Pg + c1), the binding-line shadow price",
-        " and the nodal spreads are reported there.")
+        " and the nodal spreads are reported there.",
+    )
     writecsv("congestion_prices.csv", DataFrame(prow))
     writecsv("congestion_dlmp.csv", DataFrame(drow))
     writecsv("congestion_summary.csv", DataFrame(srow))
@@ -1634,7 +2241,9 @@ const SWEEPS = [
     (stage = "C", node = 6, ratings = [3.0, 3.0, 3.0], load = 0.25),
 ]
 
-"Which limits bind at a solved relaxed point (text tags)."
+"""
+Which limits bind at a solved relaxed point (text tags).
+"""
 function binding_tags(c::Case6, r; tol = 1e-6)
     tags = String[]
     r.Vm[6] >= c.vmax - tol && push!(tags, "V6max")
@@ -1650,12 +2259,21 @@ function binding_tags(c::Case6, r; tol = 1e-6)
 end
 
 function experiment4(io)
-    section(io, "EXPERIMENT 4 -- INEXACT REGIME SEARCH (PV back-feed, with/without exactness copy)")
+    section(
+        io,
+        "EXPERIMENT 4 -- INEXACT REGIME SEARCH (PV back-feed, with/without exactness copy)",
+    )
     println(io, "Grid: PV in 0:0.05:3.0 pu (Q = 0, non-curtailable, negative load).")
     println(io, "  A: Table I ratings, PV at node 6, loads 100 % / 50 %")
     println(io, "  B: Table I ratings, PV at node 5, loads 100 % / 50 %")
-    println(io, "  C: feeder Smax = Imax = 3 pu on all branches, PV at node 6, loads 100 / 50 / 25 %")
-    println(io, "Exactness: SOC = framework hybrid-floor ratio <= 1; SDP = |lambda2/lambda1| < $RANK_EXACT.")
+    println(
+        io,
+        "  C: feeder Smax = Imax = 3 pu on all branches, PV at node 6, loads 100 / 50 / 25 %",
+    )
+    println(
+        io,
+        "Exactness: SOC = framework hybrid-floor ratio <= 1; SDP = |lambda2/lambda1| < $RANK_EXACT.",
+    )
     rows = NamedTuple[]
     for sw in SWEEPS
         deepened = false
@@ -1674,14 +2292,17 @@ function experiment4(io)
                 deep = false
                 acrows, best = ac_multistart(c; nrand = 5, max_iter = 500)
                 if best === nothing && !deepened
-                    acrows, best = ac_multistart(c; nrand = 20, variants = true, max_iter = 3000)
+                    acrows, best =
+                        ac_multistart(c; nrand = 20, variants = true, max_iter = 3000)
                     deepened = true
                     deep = true
                 end
                 n = length(acrows)
                 if best === nothing
-                    ac_note = "no AC point found ($n starts: " *
-                              join(sort(unique([x.status for x in acrows])), ",") * ")"
+                    ac_note =
+                        "no AC point found ($n starts: " *
+                        join(sort(unique([x.status for x in acrows])), ",") *
+                        ")"
                 else
                     ac_cost = best.cost
                     ac_note = "AC solved ($(count(x -> x.ok, acrows))/$n starts)"
@@ -1689,30 +2310,33 @@ function experiment4(io)
                 deep && (ac_note *= " [deepened search]")
             end
             for (form, r) in (("no_copy", r0), ("copy", r1))
-                push!(rows, (;
-                    stage = sw.stage,
-                    pv_node = sw.node,
-                    load_scale = sw.load,
-                    feeder_rating = sw.ratings[1],
-                    pv = p,
-                    formulation = form,
-                    status = string(r.status),
-                    feasible = r.ok,
-                    cost = r.ok ? r.cost : NaN,
-                    Pg = r.ok ? r.Pg : NaN,
-                    max_cone_residual = r.ok ? maximum(x.gap for x in r.cones) : NaN,
-                    max_cone_ratio = r.ok ? maximum(x.ratio for x in r.cones) : NaN,
-                    soc_exact = r.ok ? exact_soc(r) : false,
-                    rank_ratio = r.ok ? r.rr : NaN,
-                    sdp_exact = r.ok ? exact_sdp(r) : false,
-                    V6 = r.ok ? r.Vm[6] : NaN,
-                    binding = r.ok ? binding_tags(c, r) : "",
-                    ac_cost,
-                    ac_note,
-                    gap_vs_ac = r.ok ? (ac_cost - r.cost) / ac_cost : NaN,
-                    framework_status = string(rf.status),
-                    framework_cost = rf.ok ? rf.cost : NaN,
-                ))
+                push!(
+                    rows,
+                    (;
+                        stage = sw.stage,
+                        pv_node = sw.node,
+                        load_scale = sw.load,
+                        feeder_rating = sw.ratings[1],
+                        pv = p,
+                        formulation = form,
+                        status = string(r.status),
+                        feasible = r.ok,
+                        cost = r.ok ? r.cost : NaN,
+                        Pg = r.ok ? r.Pg : NaN,
+                        max_cone_residual = r.ok ? maximum(x.gap for x in r.cones) : NaN,
+                        max_cone_ratio = r.ok ? maximum(x.ratio for x in r.cones) : NaN,
+                        soc_exact = r.ok ? exact_soc(r) : false,
+                        rank_ratio = r.ok ? r.rr : NaN,
+                        sdp_exact = r.ok ? exact_sdp(r) : false,
+                        V6 = r.ok ? r.Vm[6] : NaN,
+                        binding = r.ok ? binding_tags(c, r) : "",
+                        ac_cost,
+                        ac_note,
+                        gap_vs_ac = r.ok ? (ac_cost - r.cost) / ac_cost : NaN,
+                        framework_status = string(rf.status),
+                        framework_cost = rf.ok ? rf.cost : NaN,
+                    ),
+                )
             end
         end
     end
@@ -1722,53 +2346,99 @@ function experiment4(io)
     # Per-sweep digest.
     for sw in SWEEPS
         sel(form) = filter(
-            x -> x.stage == sw.stage && x.pv_node == sw.node && x.load_scale == sw.load &&
-                     x.formulation == form,
+            x ->
+                x.stage == sw.stage &&
+                x.pv_node == sw.node &&
+                x.load_scale == sw.load &&
+                x.formulation == form,
             rows,
         )
         nc = sel("no_copy")
         cp = sel("copy")
-        println(io, "\n--- stage $(sw.stage): PV at node $(sw.node), loads $(Int(100sw.load)) %, feeder ratings $(sw.ratings) ---")
+        println(
+            io,
+            "\n--- stage $(sw.stage): PV at node $(sw.node), loads $(Int(100sw.load)) %, feeder ratings $(sw.ratings) ---",
+        )
         lastfeas(v) = (i = findlast(x -> x.feasible, v); i === nothing ? NaN : v[i].pv)
-        lastac = (i = findlast(x -> isfinite(x.ac_cost), nc); i === nothing ? NaN : nc[i].pv)
-        @printf(io, "  largest PV with: relaxation feasible %.2f | AC point found %.2f | copy feasible %.2f pu\n",
-            lastfeas(nc), lastac, lastfeas(cp))
+        lastac =
+            (i = findlast(x -> isfinite(x.ac_cost), nc); i === nothing ? NaN : nc[i].pv)
+        @printf(
+            io,
+            "  largest PV with: relaxation feasible %.2f | AC point found %.2f | copy feasible %.2f pu\n",
+            lastfeas(nc),
+            lastac,
+            lastfeas(cp)
+        )
         inex = [x for x in nc if x.feasible && !(x.soc_exact && x.sdp_exact)]
         if isempty(inex)
             println(io, "  no-copy relaxation: EXACT (SOC and SDP) at every feasible point")
         else
-            println(io, "  no-copy relaxation INEXACT at PV = ",
-                join([f(x.pv; d = 2) for x in inex], ", "))
+            println(
+                io,
+                "  no-copy relaxation INEXACT at PV = ",
+                join([f(x.pv; d = 2) for x in inex], ", "),
+            )
             for x in inex
-                @printf(io, "    PV %.2f: cost %.3f, Pg %.4f, max cone residual %.2e (ratio %.1e), |l2/l1| %.1e, binding %s, AC: %s\n",
-                    x.pv, x.cost, x.Pg, x.max_cone_residual, x.max_cone_ratio, x.rank_ratio,
-                    x.binding, x.ac_note)
+                @printf(
+                    io,
+                    "    PV %.2f: cost %.3f, Pg %.4f, max cone residual %.2e (ratio %.1e), |l2/l1| %.1e, binding %s, AC: %s\n",
+                    x.pv,
+                    x.cost,
+                    x.Pg,
+                    x.max_cone_residual,
+                    x.max_cone_ratio,
+                    x.rank_ratio,
+                    x.binding,
+                    x.ac_note
+                )
             end
         end
         both = [(a, b) for (a, b) in zip(nc, cp) if isfinite(a.ac_cost)]
         if !isempty(both)
             mg = maximum(abs(a.gap_vs_ac) for (a, b) in both)
             @printf(io, "  where AC was solved: max |relaxation gap| = %.2e\n", mg)
-            cons = [(b.pv, (b.cost - a.ac_cost) / a.ac_cost) for (a, b) in both if b.feasible]
+            cons =
+                [(b.pv, (b.cost - a.ac_cost) / a.ac_cost) for (a, b) in both if b.feasible]
             if !isempty(cons)
                 worst = cons[argmax(last.(cons))]
-                @printf(io, "  copy conservatism (copy - AC)/AC: max %.3e at PV %.2f, mean %.3e over %d points\n",
-                    worst[2], worst[1], sum(last.(cons)) / length(cons), length(cons))
+                @printf(
+                    io,
+                    "  copy conservatism (copy - AC)/AC: max %.3e at PV %.2f, mean %.3e over %d points\n",
+                    worst[2],
+                    worst[1],
+                    sum(last.(cons)) / length(cons),
+                    length(cons)
+                )
             end
             inexcopy = [b.pv for (a, b) in both if b.feasible && !b.soc_exact]
-            isempty(inexcopy) || println(io,
-                "  copy model INEXACT at AC-feasible PV = ", join(f.(inexcopy; d = 2), ", "))
+            isempty(inexcopy) || println(
+                io,
+                "  copy model INEXACT at AC-feasible PV = ",
+                join(f.(inexcopy; d = 2), ", "),
+            )
             lost = [b.pv for (a, b) in both if !b.feasible]
-            isempty(lost) || println(io,
-                "  copy model INFEASIBLE although AC solved at PV = ", join(f.(lost; d = 2), ", "))
+            isempty(lost) || println(
+                io,
+                "  copy model INFEASIBLE although AC solved at PV = ",
+                join(f.(lost; d = 2), ", "),
+            )
         end
         inexc = [x for x in cp if x.feasible && !x.soc_exact]
-        isempty(inexc) || println(io, "  copy model INEXACT (any PV) at PV = ",
-            join([f(x.pv; d = 2) for x in inexc], ", "))
-        fwd = [abs(a.framework_cost - b.cost) for (a, b) in zip(nc, cp) if
-               isfinite(a.framework_cost) && b.feasible]
-        isempty(fwd) || @printf(io, "  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = %.2e \$/h over %d points\n",
-            maximum(fwd), length(fwd))
+        isempty(inexc) || println(
+            io,
+            "  copy model INEXACT (any PV) at PV = ",
+            join([f(x.pv; d = 2) for x in inexc], ", "),
+        )
+        fwd = [
+            abs(a.framework_cost - b.cost) for
+            (a, b) in zip(nc, cp) if isfinite(a.framework_cost) && b.feasible
+        ]
+        isempty(fwd) || @printf(
+            io,
+            "  framework-hosted (copy + receiving-end cone) vs script copy: max |dcost| = %.2e \$/h over %d points\n",
+            maximum(fwd),
+            length(fwd)
+        )
     end
     return rows
 end
@@ -1799,8 +2469,14 @@ function fig_admm(e2, base)
     fig = Figure(; size = (700, 420), fontsize = 14)
     ax = Axis(fig[1, 1]; xlabel = "iteration", ylabel = "active nodal price (\$/MWh)")
     for k in 1:6
-        lines!(ax, it, [t.piP[k] for t in tr]; color = NODE_COLORS[k],
-            linestyle = k <= 3 ? :solid : :dash, label = "node $k")
+        lines!(
+            ax,
+            it,
+            [t.piP[k] for t in tr];
+            color = NODE_COLORS[k],
+            linestyle = k <= 3 ? :solid : :dash,
+            label = "node $k",
+        )
         hlines!(ax, [base.piP[k]]; color = NODE_COLORS[k], linestyle = :dot)
     end
     ylims!(ax, 0, 75)
@@ -1812,28 +2488,64 @@ end
 function fig_sweeps(e2)
     rs = e2.rs
     fig = Figure(; size = (600, 380), fontsize = 14)
-    ax = Axis(fig[1, 1]; xlabel = "ρ", ylabel = "ADMM iterations", xscale = log10,
-        yscale = log10)
+    ax = Axis(
+        fig[1, 1];
+        xlabel = "ρ",
+        ylabel = "ADMM iterations",
+        xscale = log10,
+        yscale = log10,
+    )
     conv = [x.converged for x in rs]
     scatterlines!(ax, [x.rho for x in rs], [x.iters for x in rs]; color = :black)
-    any(.!conv) && scatter!(ax, [x.rho for x in rs][.!conv], [x.iters for x in rs][.!conv];
-        color = :red, marker = :x, markersize = 16, label = "not converged")
+    any(.!conv) && scatter!(
+        ax,
+        [x.rho for x in rs][.!conv],
+        [x.iters for x in rs][.!conv];
+        color = :red,
+        marker = :x,
+        markersize = 16,
+        label = "not converged",
+    )
     vlines!(ax, [6259.0]; color = :gray, linestyle = :dash)
-    text!(ax, 6259.0, maximum(x.iters for x in rs); text = " π_P3·100", align = (:left, :top))
+    text!(
+        ax,
+        6259.0,
+        maximum(x.iters for x in rs);
+        text = " π_P3·100",
+        align = (:left, :top),
+    )
     saveboth("admm_rho_sweep", fig)
 
     es = e2.es
     fig = Figure(; size = (600, 380), fontsize = 14)
     labels = [x.eps == 0 ? "0" : @sprintf("%.0e", x.eps) for x in es]
-    ax = Axis(fig[1, 1]; xlabel = "ε (loss penalty)", ylabel = "cone residual l·v − P² − Q² (pu)",
-        yscale = log10, xticks = (1:length(es), labels))
+    ax = Axis(
+        fig[1, 1];
+        xlabel = "ε (loss penalty)",
+        ylabel = "cone residual l·v − P² − Q² (pu)",
+        yscale = log10,
+        xticks = (1:length(es), labels),
+    )
     floor = 1e-14
-    scatterlines!(ax, 1:length(es), [max(x.max_cone_iterates, floor) for x in es];
-        label = "max over all DSO iterates")
-    scatterlines!(ax, 1:length(es), [max(abs(x.cone_final), floor) for x in es];
-        label = "at convergence")
-    hlines!(ax, [TSODSO.TAU_SOLVER_EXACT]; color = :gray, linestyle = :dash,
-        label = "framework floor τ")
+    scatterlines!(
+        ax,
+        1:length(es),
+        [max(x.max_cone_iterates, floor) for x in es];
+        label = "max over all DSO iterates",
+    )
+    scatterlines!(
+        ax,
+        1:length(es),
+        [max(abs(x.cone_final), floor) for x in es];
+        label = "at convergence",
+    )
+    hlines!(
+        ax,
+        [TSODSO.TAU_SOLVER_EXACT];
+        color = :gray,
+        linestyle = :dash,
+        label = "framework floor τ",
+    )
     axislegend(ax; position = :rc)
     saveboth("admm_eps_sweep", fig)
     return nothing
@@ -1862,26 +2574,48 @@ function fig_inexact(rows)
     panels = [("A", 6, 1.0), ("C", 6, 1.0), ("C", 6, 0.25)]
     for (j, (st, nd, ls)) in enumerate(panels)
         sel(form) = filter(
-            x -> x.stage == st && x.pv_node == nd && x.load_scale == ls &&
-                     x.formulation == form && x.feasible,
+            x ->
+                x.stage == st &&
+                x.pv_node == nd &&
+                x.load_scale == ls &&
+                x.formulation == form &&
+                x.feasible,
             rows,
         )
-        ax = Axis(fig[1, j]; xlabel = "PV at node $nd (pu)", ylabel = "max cone residual (pu)",
-            yscale = log10, title = "stage $st, loads $(Int(100ls)) %")
+        ax = Axis(
+            fig[1, j];
+            xlabel = "PV at node $nd (pu)",
+            ylabel = "max cone residual (pu)",
+            yscale = log10,
+            title = "stage $st, loads $(Int(100ls)) %",
+        )
         for (form, col) in (("no_copy", :black), ("copy", :orange))
             v = sel(form)
             isempty(v) && continue
-            scatterlines!(ax, [x.pv for x in v], [max(abs(x.max_cone_residual), floor) for x in v];
-                color = col, label = form == "copy" ? "with copy" : "without copy")
+            scatterlines!(
+                ax,
+                [x.pv for x in v],
+                [max(abs(x.max_cone_residual), floor) for x in v];
+                color = col,
+                label = form == "copy" ? "with copy" : "without copy",
+            )
         end
         hlines!(ax, [TSODSO.TAU_SOLVER_EXACT]; color = :gray, linestyle = :dash)
         j == 1 && axislegend(ax; position = :lt)
-        ax2 = Axis(fig[2, j]; xlabel = "PV at node $nd (pu)", ylabel = "(cost − AC opt.)/AC opt.")
+        ax2 = Axis(
+            fig[2, j];
+            xlabel = "PV at node $nd (pu)",
+            ylabel = "(cost − AC opt.)/AC opt.",
+        )
         for (form, col) in (("no_copy", :black), ("copy", :orange))
             v = filter(x -> isfinite(x.ac_cost), sel(form))
             isempty(v) && continue
-            scatterlines!(ax2, [x.pv for x in v], [(x.cost - x.ac_cost) / x.ac_cost for x in v];
-                color = col)
+            scatterlines!(
+                ax2,
+                [x.pv for x in v],
+                [(x.cost - x.ac_cost) / x.ac_cost for x in v];
+                color = col,
+            )
         end
     end
     saveboth("inexact_cone_slack", fig)
@@ -1899,44 +2633,117 @@ function verdicts(io, b0, e1, e2, e3, e4)
     fin = a.final
     agree = String[]
     disagree = String[]
-    push!(agree, @sprintf("Monolithic optimum reproduced: cost %.4f vs 7461.105 \$/h, all 12 prices within %.1e \$/MWh of Table III (gate tolerances above).",
-        r.cost, max(maximum(abs.(r.piP .- PAPER.piP)), maximum(abs.(r.piQ .- PAPER.piQ)))))
-    push!(agree, @sprintf("Both relaxations tight at the baseline: |lambda2/lambda1| = %.1e, cone residuals <= %.1e (paper 2.6e-7; the paper's values are solver-accuracy dependent).",
-        r.rr, maximum(x.gap for x in r.cones)))
-    push!(agree, @sprintf("Global optimality: Ipopt best AC cost %.6f vs relaxation %.6f \$/h (gap %.1e), %d/%d starts locally solved, %d distinct optimum.",
-        e1.best.cost, r.cost, e1.gap, count(x -> x.ok, e1.rows), length(e1.rows),
-        distinct_optima(e1.rows)))
+    push!(
+        agree,
+        @sprintf(
+            "Monolithic optimum reproduced: cost %.4f vs 7461.105 \$/h, all 12 prices within %.1e \$/MWh of Table III (gate tolerances above).",
+            r.cost,
+            max(maximum(abs.(r.piP .- PAPER.piP)), maximum(abs.(r.piQ .- PAPER.piQ)))
+        )
+    )
+    push!(
+        agree,
+        @sprintf(
+            "Both relaxations tight at the baseline: |lambda2/lambda1| = %.1e, cone residuals <= %.1e (paper 2.6e-7; the paper's values are solver-accuracy dependent).",
+            r.rr,
+            maximum(x.gap for x in r.cones)
+        )
+    )
+    push!(
+        agree,
+        @sprintf(
+            "Global optimality: Ipopt best AC cost %.6f vs relaxation %.6f \$/h (gap %.1e), %d/%d starts locally solved, %d distinct optimum.",
+            e1.best.cost,
+            r.cost,
+            e1.gap,
+            count(x -> x.ok, e1.rows),
+            length(e1.rows),
+            distinct_optima(e1.rows)
+        )
+    )
     (a.iters == 57 ? agree : disagree) |>
-    v -> push!(v, @sprintf("ADMM at rho=500, eps=1e-2 converges in %d iterations (paper 57).", a.iters))
-    push!(abs(fin.primal - 9.1e-5) < 0.05e-5 ? agree : disagree,
-        @sprintf("Final primal residual %.2e pu (paper 9.1e-5).", fin.primal))
-    push!(abs(fin.dual - 1.8e-3) < 0.05e-3 ? agree : disagree,
-        @sprintf("Final dual residual %.2e (paper 1.8e-3).", fin.dual))
-    push!(abs(fin.cost - 7460.537) < 5e-4 ? agree : disagree,
-        @sprintf("ADMM TSO cost %.3f \$/h (paper 7460.537), relative difference to monolithic %.2e (paper 7.6e-5).",
-            fin.cost, (r.cost - fin.cost) / r.cost))
-    push!(abs(e2.settle - 40) <= 5 ? agree : disagree,
-        @sprintf("Prices within 0.1 %% of monolithic from iteration %d on (paper: about 40).", e2.settle))
-    push!(abs(-fin.lam[2] - 100 * fin.piP[3]) < 1e-2 ? agree : disagree,
-        @sprintf("-lambda_p = %.3f = piP3(ADMM)*100 = %.3f (paper 6258.80).", -fin.lam[2],
-            100 * fin.piP[3]))
+    v -> push!(
+        v,
+        @sprintf(
+            "ADMM at rho=500, eps=1e-2 converges in %d iterations (paper 57).",
+            a.iters
+        )
+    )
+    push!(
+        abs(fin.primal - 9.1e-5) < 0.05e-5 ? agree : disagree,
+        @sprintf("Final primal residual %.2e pu (paper 9.1e-5).", fin.primal)
+    )
+    push!(
+        abs(fin.dual - 1.8e-3) < 0.05e-3 ? agree : disagree,
+        @sprintf("Final dual residual %.2e (paper 1.8e-3).", fin.dual)
+    )
+    push!(
+        abs(fin.cost - 7460.537) < 5e-4 ? agree : disagree,
+        @sprintf(
+            "ADMM TSO cost %.3f \$/h (paper 7460.537), relative difference to monolithic %.2e (paper 7.6e-5).",
+            fin.cost,
+            (r.cost - fin.cost) / r.cost
+        )
+    )
+    push!(
+        abs(e2.settle - 40) <= 5 ? agree : disagree,
+        @sprintf(
+            "Prices within 0.1 %% of monolithic from iteration %d on (paper: about 40).",
+            e2.settle
+        )
+    )
+    push!(
+        abs(-fin.lam[2] - 100 * fin.piP[3]) < 1e-2 ? agree : disagree,
+        @sprintf(
+            "-lambda_p = %.3f = piP3(ADMM)*100 = %.3f (paper 6258.80).",
+            -fin.lam[2],
+            100 * fin.piP[3]
+        )
+    )
     maxrel = maximum(abs.(fin.piP .- r.piP) ./ r.piP)
-    push!(maxrel < 4e-5 ? agree : disagree,
-        @sprintf("ADMM active prices within %.4f %% of monolithic (paper: 0.004 %%).", 100 * maxrel))
+    push!(
+        maxrel < 4e-5 ? agree : disagree,
+        @sprintf(
+            "ADMM active prices within %.4f %% of monolithic (paper: 0.004 %%).",
+            100 * maxrel
+        )
+    )
     rs = e2.rs
     best = rs[argmin([x.iters for x in rs])]
-    push!(agree, @sprintf("rho guidance: iterations fall from %d (rho=50) to %d at rho=%.0f; the fastest rho values (%s) sit on the scale of piP3*100 = %.0f \$/h per pu, so the paper's guidance holds and rho = 500 is about an order of magnitude below the fastest setting.",
-        rs[1].iters, best.iters, best.rho,
-        join([@sprintf("%.0f", x.rho) for x in rs if x.iters <= 2 * best.iters], ", "),
-        100 * r.piP[3]))
+    push!(
+        agree,
+        @sprintf(
+            "rho guidance: iterations fall from %d (rho=50) to %d at rho=%.0f; the fastest rho values (%s) sit on the scale of piP3*100 = %.0f \$/h per pu, so the paper's guidance holds and rho = 500 is about an order of magnitude below the fastest setting.",
+            rs[1].iters,
+            best.iters,
+            best.rho,
+            join([@sprintf("%.0f", x.rho) for x in rs if x.iters <= 2 * best.iters], ", "),
+            100 * r.piP[3]
+        )
+    )
     es = e2.es
-    push!(agree, @sprintf("eps guidance: eps in {0, 1e-4, 1e-3, 1e-2, 1e-1} gives %s iterations, max cone residual over ALL intermediate DSO iterates <= %.1e and identical final cost bias; eps = 0 is safe on this case.",
-        join(unique([x.iters for x in es]), "/"), maximum(x.max_cone_iterates for x in es)))
+    push!(
+        agree,
+        @sprintf(
+            "eps guidance: eps in {0, 1e-4, 1e-3, 1e-2, 1e-1} gives %s iterations, max cone residual over ALL intermediate DSO iterates <= %.1e and identical final cost bias; eps = 0 is safe on this case.",
+            join(unique([x.iters for x in es]), "/"),
+            maximum(x.max_cone_iterates for x in es)
+        )
+    )
     # Congestion
-    for name in ("paper_line12_band", "paper_head34_band", "flex_line12", "flex_head34", "flex_both")
+    for name in (
+        "paper_line12_band",
+        "paper_head34_band",
+        "flex_line12",
+        "flex_head34",
+        "flex_both",
+    )
         x = e3[name]
         if x === nothing
-            push!(disagree, "Congestion '$name' (new result): infeasible at the chosen limits (relaxation and Ipopt).")
+            push!(
+                disagree,
+                "Congestion '$name' (new result): infeasible at the chosen limits (relaxation and Ipopt).",
+            )
             continue
         end
         ex = exact_sdp(x.r) && exact_soc(x.r)
@@ -1948,32 +2755,66 @@ function verdicts(io, b0, e1, e2, e3, e4)
             x.dl.ok ? maximum(abs.(x.dl.comp.total .- x.r.piP[3:6])) : 0.0,
         )
         unique_prices = spread < 0.1
-        push!(ex && abs(g) < 1e-6 && unique_prices ? agree : disagree,
-            @sprintf("Congestion '%s' (new result): relaxation %s (|l2/l1| %.1e, max cone ratio %.1e), AC gap %.1e, ADMM %s in %d iterations, cost %+.4f %%, price spread across paper model / framework model / ADMM %.2e \$/MWh%s.",
-                name, ex ? "EXACT" : "INEXACT", x.r.rr, maximum(c.ratio for c in x.r.cones), g,
-                x.a.converged ? "converged" : "did NOT converge", x.a.iters,
-                100 * (x.r.cost - b0.r.cost) / b0.r.cost, spread,
+        push!(
+            ex && abs(g) < 1e-6 && unique_prices ? agree : disagree,
+            @sprintf(
+                "Congestion '%s' (new result): relaxation %s (|l2/l1| %.1e, max cone ratio %.1e), AC gap %.1e, ADMM %s in %d iterations, cost %+.4f %%, price spread across paper model / framework model / ADMM %.2e \$/MWh%s.",
+                name,
+                ex ? "EXACT" : "INEXACT",
+                x.r.rr,
+                maximum(c.ratio for c in x.r.cones),
+                g,
+                x.a.converged ? "converged" : "did NOT converge",
+                x.a.iters,
+                100 * (x.r.cost - b0.r.cost) / b0.r.cost,
+                spread,
                 !x.a.converged ? " (ADMM not converged: its prices are not comparable)" :
                 unique_prices ? "" :
-                " (NON-UNIQUE duals: the limit binds at a degenerate point)"))
+                " (NON-UNIQUE duals: the limit binds at a degenerate point)"
+            )
+        )
     end
     # Inexactness
-    inex = filter(x -> x.formulation == "no_copy" && x.feasible && !(x.soc_exact && x.sdp_exact), e4)
+    inex = filter(
+        x -> x.formulation == "no_copy" && x.feasible && !(x.soc_exact && x.sdp_exact),
+        e4,
+    )
     exA = filter(x -> x.stage in ("A", "B") && x.formulation == "no_copy" && x.feasible, e4)
-    push!(agree, @sprintf("Inexactness search (new result): with Table I ratings (stages A, B; %d feasible points) the relaxation is exact wherever feasible; it becomes infeasible where Ipopt finds no AC point.",
-        length(exA)))
+    push!(
+        agree,
+        @sprintf(
+            "Inexactness search (new result): with Table I ratings (stages A, B; %d feasible points) the relaxation is exact wherever feasible; it becomes infeasible where Ipopt finds no AC point.",
+            length(exA)
+        )
+    )
     if !isempty(inex)
         stages = join(sort(unique([x.stage for x in inex])), ", ")
         acfound = count(x -> isfinite(x.ac_cost), inex)
-        push!(disagree, @sprintf("Inexact regime found (stage %s, lifted feeder ratings): %d PV points where the relaxation is feasible but inexact (max cone residual up to %.2f pu); Ipopt found an AC point at %d of them. The paper's tightness test detects these points.",
-            stages, length(inex), maximum(x.max_cone_residual for x in inex), acfound))
+        push!(
+            disagree,
+            @sprintf(
+                "Inexact regime found (stage %s, lifted feeder ratings): %d PV points where the relaxation is feasible but inexact (max cone residual up to %.2f pu); Ipopt found an AC point at %d of them. The paper's tightness test detects these points.",
+                stages,
+                length(inex),
+                maximum(x.max_cone_residual for x in inex),
+                acfound
+            )
+        )
         cpi = filter(x -> x.formulation == "copy" && x.feasible && !x.soc_exact, e4)
-        push!(disagree, @sprintf("The LinDistFlow exactness copy does NOT restore exactness in that regime: %d feasible copy-model points remain inexact.",
-            length(cpi)))
+        push!(
+            disagree,
+            @sprintf(
+                "The LinDistFlow exactness copy does NOT restore exactness in that regime: %d feasible copy-model points remain inexact.",
+                length(cpi)
+            )
+        )
     end
     println(io, "Agreements:")
     foreach(s -> println(io, "  + ", s), agree)
-    println(io, "\nDisagreements / qualifications / new findings that the paper must state differently:")
+    println(
+        io,
+        "\nDisagreements / qualifications / new findings that the paper must state differently:",
+    )
     foreach(s -> println(io, "  - ", s), disagree)
     return nothing
 end
@@ -1985,8 +2826,11 @@ end
 function main()
     io = IOBuffer()
     println(io, "6-node hybrid SDP-SOCP T&D case study -- results summary")
-    println(io, "Generated by scripts/td_hybrid_6node_case_study.jl (seed $SEED). Prices in \$/MWh",
-        " (\$/Mvarh), power in pu on 100 MVA.")
+    println(
+        io,
+        "Generated by scripts/td_hybrid_6node_case_study.jl (seed $SEED). Prices in \$/MWh",
+        " (\$/Mvarh), power in pu on 100 MVA.",
+    )
     b0 = experiment0(io)
     e1 = experiment1(io, b0)
     e2 = experiment2(io, b0)
