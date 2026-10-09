@@ -164,6 +164,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 261008-aeg | Close v4.0 re-audit tech debt (socp_gap_report hybrid floor, persisted MPC/stochastic status, NaN refusal text, ladder-restore test) | 2026-10-08 | ec1403e | [261008-aeg-close-v4-0-re-audit-tech-debt](./quick/261008-aeg-close-v4-0-re-audit-tech-debt/) |
 | 261008-clo | Fix FRAMEWORK_GUIDE and compare_default_stochastic writeup review findings (DLMP cone/drop names, 3.37 dual, copy-tightness wording, MPC knobs; stale numbers, planning IDs) | 2026-10-08 | bb257cb | [261008-clo-fix-guide-and-compare-writeup-review-fin](./quick/261008-clo-fix-guide-and-compare-writeup-review-fin/) |
 | 261008-duh | Update README to reflect the v4.0 project stage | 2026-10-08 | 806d527 | [261008-duh-update-readme-to-reflect-v4-0-project-st](./quick/261008-duh-update-readme-to-reflect-v4-0-project-st/) |
+| 261008-tu1 | 6-node hybrid SDP-SOCP T&D case study backing the draft convexification paper (baseline, AC-OPF check, TSO-DSO ADMM + rho/eps sweeps, congestion, inexact regimes) | 2026-10-09 | 6963b0f | [261008-tu1-td-hybrid-6node-paper-case-study](./quick/261008-tu1-td-hybrid-6node-paper-case-study/) |
 | 26 | 20 | - | - |
 | 27 | 9 | - | - |
 | 28 | 6 | - | - |
