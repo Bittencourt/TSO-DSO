@@ -19,9 +19,31 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
-## Last Shipped Milestone: v4.0 Correctness & Depth (shipped 2026-10-08)
+## Current Milestone: v5.0 Aggregator Layer at Scale
 
-No milestone in progress — next: `/gsd-new-milestone`.
+**Goal:** Make the DSO⇄aggregators operational layer realistic and publishable at true population
+scale — real prosumer populations solved in parallel, aggregators modeled as actors with their own
+objectives, per-actor settlement and equity outputs, and richer flexible devices.
+
+**Target features:**
+- **Scale + real population** — parallel aggregator subproblems in the ADMM; the true 784-house
+  thesis Case A population (replacing the 1-house-per-bus rescaled proxy); a measured run at the
+  IEEE-8500 headline scale (solve time, ADMM iterations, exactness).
+- **Aggregator as an actor** — profit-maximizing intermediary between the DSO price and customer
+  tariffs (compared against the social-welfare formulation); aggregators whose portfolios span
+  several nodes; behavioural response (partial compliance, opt-out/comfort limits, rebound).
+- **Settlement & equity** — per-actor bills and surplus across tariff schemes (FIT, TOU, DADP, flat
+  vs nodal); distributional/equity analysis across nodes and households; DSO flexibility market vs
+  price-based coordination.
+- **New devices** — EV with arrival/departure windows and optional V2G; heat pump with a building
+  thermal model; smart-inverter Volt-VAR on PV.
+- **Thesis Case A magnitude** — re-attempt the welfare-gain magnitude on the real population and
+  report it honestly, whatever it is.
+
+**Out of this milestone:** TSO network model and T&D coupling; DSO physics work (OLTC/switched
+capacitors, unbalanced 3-phase, systematic back-feed exactness study).
+
+## Last Shipped Milestone: v4.0 Correctness & Depth (shipped 2026-10-08)
 
 **Goal:** Fix the modeling defects confirmed by the 2026-09-28 full-project quality audit, deepen
 the planning layer into a genuine bilevel TSO–DSO game on a real network, then restructure the
@@ -151,7 +173,7 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
       source, lean `public` exports, JET ratchet, fast/slow CI split, scripts index) — v4.0
 ### Active
 
-*(none — v4.0 shipped 2026-10-08; requirements archived in `milestones/v4.0-REQUIREMENTS.md`. Define the next milestone with `/gsd-new-milestone`.)*
+v5.0 Aggregator Layer at Scale — requirements in `.planning/REQUIREMENTS.md` (scale + real population, aggregator as actor, settlement & equity, new devices, Case A magnitude).
 
 ### Out of Scope
 
@@ -571,4 +593,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-08 after v4.0 milestone*
+*Last updated: 2026-10-09 — v5.0 milestone started*

@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Correctness & Depth
-status: Awaiting next milestone
-stopped_at: Milestone v4.0 archived (2026-10-08)
-last_updated: "2026-10-08T12:09:44.857Z"
-last_activity: 2026-10-08 — Milestone v4.0 completed and archived
+milestone: v5.0
+milestone_name: Aggregator Layer at Scale
+status: planning
+last_updated: "2026-10-09T12:27:34.490Z"
+last_activity: 2026-10-09
 progress:
-  total_phases: 13
-  completed_phases: 13
-  total_plans: 131
-  completed_plans: 132
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 ## Current Position
 
-Phase: Milestone v4.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-08 — Milestone v4.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-10-09 — Milestone v5.0 started
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
