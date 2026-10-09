@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
-status: planning
+status: ready_to_plan
 last_updated: "2026-10-09T12:27:34.490Z"
 last_activity: 2026-10-09
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Planning next milestone (`/gsd-new-milestone`)
+**Current focus:** v5.0 Aggregator Layer at Scale — Phase 39 (Parallel-Ready ADMM & Gating Measurements)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
+Phase: 39 of 46 (Parallel-Ready ADMM & Gating Measurements) — next, not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-10-09 — Milestone v5.0 started
+Status: Roadmap created; ready to plan Phase 39 (`/gsd-plan-phase 39`)
+Last activity: 2026-10-09 — v5.0 roadmap created
+Progress: [░░░░░░░░░░] 0/8 phases
+
+v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
+policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
+outcomes). See ROADMAP.md v5.0 header.
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -537,4 +543,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 39 with /gsd-plan-phase 39 (research flags: Clarabel concurrency spike, `direct_model`, 8500 attribution)

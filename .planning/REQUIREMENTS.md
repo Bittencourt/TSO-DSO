@@ -103,14 +103,46 @@ Deferred; tracked but not in this roadmap.
 
 ## Traceability
 
-Filled by the roadmap.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| PAR-01 | Phase 39 | Pending |
+| PAR-02 | Phase 39 | Pending |
+| PAR-03 | Phase 39 | Pending |
+| PAR-04 | Phase 39 | Pending |
+| PAR-05 | Phase 39 | Pending |
+| SCALE-06 | Phase 39 | Pending |
+| POP-01 | Phase 40 | Pending |
+| POP-02 | Phase 40 | Pending |
+| POP-03 | Phase 40 | Pending |
+| POP-04 | Phase 40 | Pending |
+| POP-05 | Phase 40 | Pending |
+| POP-06 | Phase 40 | Pending |
+| SETL-01 | Phase 41 | Pending |
+| SETL-02 | Phase 41 | Pending |
+| SETL-03 | Phase 41 | Pending |
+| SETL-04 | Phase 41 | Pending |
+| SETL-05 | Phase 41 | Pending |
+| SETL-06 | Phase 41 | Pending |
+| REPRO-03 | Phase 42 | Pending |
+| REPRO-04 | Phase 42 | Pending |
+| REPRO-05 | Phase 42 | Pending |
+| DEV-06 | Phase 43 | Pending |
+| DEV-07 | Phase 43 | Pending |
+| DEV-08 | Phase 43 | Pending |
+| DEV-09 | Phase 43 | Pending |
+| DEV-10 | Phase 43 | Pending |
+| ACTOR-01 | Phase 44 | Pending |
+| ACTOR-02 | Phase 44 | Pending |
+| ACTOR-03 | Phase 44 | Pending |
+| ACTOR-04 | Phase 44 | Pending |
+| SETL-07 | Phase 45 | Pending |
+| SETL-08 | Phase 45 | Pending |
+| SCALE-07 | Phase 46 | Pending |
+| SCALE-08 | Phase 46 | Pending |
 
 **Coverage:**
 - v5.0 requirements: 34 total
-- Mapped to phases: 0 (pending roadmap)
+- Mapped to phases: 34 (100%, no orphans, no duplicates)
 
 ---
 *Requirements defined: 2026-10-09*
