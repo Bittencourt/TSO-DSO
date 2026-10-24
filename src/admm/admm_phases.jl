@@ -42,7 +42,8 @@ function _admm_build(
     ρf::Float64,
     ρ_qf::Float64,
     mode::ReactiveMode.T,
-    rmode::_ReactiveMode,
+    rmode::_ReactiveMode;
+    agr_optimizer = select_optimizer(QP()),
 )
     dso = build_dso_opt(
         feeder,
@@ -69,8 +70,14 @@ function _admm_build(
         haskey(agr_by_bus, agg.bus) && throw(
             ArgumentError("two aggregators share bus $(agg.bus); solve_admm assumes 1:1"),
         )
-        agr_by_bus[agg.bus] =
-            build_agr_opt(agg, T; ρ = ρf, reactive_mode = mode, ρ_q = ρ_qf)
+        agr_by_bus[agg.bus] = build_agr_opt(
+            agg,
+            T;
+            ρ = ρf,
+            reactive_mode = mode,
+            ρ_q = ρ_qf,
+            optimizer = agr_optimizer,
+        )
     end
 
     N = length(feeder.buses)

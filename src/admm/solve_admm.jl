@@ -60,6 +60,7 @@ using LinearAlgebra: BLAS
                allow_export::Bool = true, reactive_consensus = ReactiveMode.OFF, ρ_q::Real = ρ,
                time_limit_s::Union{Nothing,Real} = nothing,
                atol_exact::Union{Nothing,Real} = nothing, rtol_exact::Real = 1e-4,
+               agr_optimizer = nothing,
                parallel::Bool = false)
         -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices,
               reactive_consensus_mode, status)
@@ -203,6 +204,29 @@ project's own default gate. A caller overriding it is asserting they have their 
 independently measured noise floor for the tolerance they pass, mirroring how
 `scripts/benchmark_ieee8500.jl`'s `IEEE8500_MV_EXACT_ATOL`/`IEEE8500_EXACT_ATOL` were derived.
 
+# Aggregator solver-precision seam (`agr_optimizer = nothing`)
+
+An ADDITIVE kwarg threading a caller-supplied optimizer factory into EVERY AGR-OPT
+subproblem of this call (via [`_admm_build`](@ref) → [`build_agr_opt`](@ref)'s `optimizer`
+kwarg). The default `nothing` resolves to the plain `select_optimizer(QP())` factory —
+BYTE-IDENTICAL to the pre-seam behavior (golden policy; the knife-edge canary is never
+re-pinned). UNTYPED, mirroring `reactive_consensus` in the same signature.
+
+Purpose: answer a certificate-NOISE refusal at the final consolidation by tightening the
+SOLVER's convergence precision — NEVER by touching a gate. Measured case (POP-04): the
+converged 784-house full-population ADMM point is refused by the battery-complementarity
+certificate, whose product sits 0.04% over the ~1e-12 relative band at the
+per-house-divided battery scale (40-02/40-03 summaries, `agreement.csv`). The intended
+override shape is a tighter Clarabel factory:
+`agr_optimizer = select_optimizer(QP(); tol_gap_abs = …, tol_gap_rel = …)`.
+The factory is applied at BUILD time and AGR models are built ONCE, so the seam covers
+ALL AGR solves of the call — the mid-loop coefficient-update solves AND the certify
+re-solves. It does NOT touch the ADMM consensus knobs (ρ, ε_abs/ε_rel, maxiter — the
+locked no-re-tuning configuration stays the default and is not overridden by this kwarg's
+existence), mirroring [`solve_welfare`](@ref)'s `optimizer` kwarg and the
+`atol_exact`/`rtol_exact` seam's caller-measured-floor discipline: the caller overriding
+is asserting their own independently measured basis for the tolerance values they pass.
+
 # Threaded executor (`parallel::Bool = false`)
 
 An OPT-IN threaded executor for the aggregator subproblems (one `Threads.@spawn` task per
@@ -307,6 +331,7 @@ function solve_admm(
     time_limit_s::Union{Nothing, Real} = nothing,
     atol_exact::Union{Nothing, Real} = nothing,
     rtol_exact::Real = 1e-4,
+    agr_optimizer = nothing,
     parallel::Bool = false,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
@@ -348,8 +373,25 @@ function solve_admm(
     mode = normalize_reactive_mode(reactive_consensus)
     rmode = _react_mode(mode)
 
+    # Resolve the aggregator solver-precision seam ONCE, before the build: `nothing`
+    # (the default) selects the plain QP factory — byte-identical to the pre-seam
+    # behavior. A caller-supplied factory (a tighter Clarabel configuration) governs
+    # every AGR solve of this call (build-once: mid-loop AND certify re-solves).
+    agr_factory = agr_optimizer === nothing ? select_optimizer(QP()) : agr_optimizer
+
     # ---- BUILD ONCE + ITERATE (named phases; see admm_phases.jl) --------------
-    st = _admm_build(feeder, pf, aggregators, T, λ₀, ρf, ρ_qf, mode, rmode)
+    st = _admm_build(
+        feeder,
+        pf,
+        aggregators,
+        T,
+        λ₀,
+        ρf,
+        ρ_qf,
+        mode,
+        rmode;
+        agr_optimizer = agr_factory,
+    )
     # Threaded executor (parallel = true): snapshot the process-global BLAS thread count so it
     # can be restored on EVERY exit path in the `finally` below — the executor itself pins
     # `BLAS.set_num_threads(1)` at its entry (admm_phases.jl) and LBT state is process-global.
