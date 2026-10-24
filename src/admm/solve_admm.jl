@@ -224,7 +224,7 @@ and saved filenames are unchanged.
 
 # Returns
 
-`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, reactive_consensus_mode, status)` where
+`(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, reactive_consensus_mode, status, agr_dispatch, agr_utility, agr_import, agr_prices)` where
 `status` is `:converged` on the normal path (ADDITIVE new field — every other field is
 UNCHANGED from the earlier return value) or `:budget_exceeded` on the new early-exit path above
 (see "Wall-clock budget"). `reactive_consensus_mode::ReactiveMode` is
@@ -244,7 +244,11 @@ and `q_devices::Dict{Int,Vector{Float64}}` holds each `FourQuadBESS`'s converged
 trajectory, keyed by bus. The key is `mu_q`, NEVER bare `μ`: the same signature carries the
 `μ::Real = 10.0` adaptive-ρ residual-balancing band kwarg, and the naming audit
 (`test_admm_reactive.jl`'s header) reserves `mu_q` as THE code handle for the extracted reactive
-price.
+price. `agr_dispatch`/`agr_utility`/`agr_import`/`agr_prices` are ADDITIVE per-aggregator
+keys (PAR-05, appended TRAILING on the converged path only): per-bus `Dict`s keyed over the
+ascending `load_nodes` — the solved `pag` dispatch, the aggregator utility, the per-slot
+frontier import profile, and the PUBLISHED per-slot prices (`agr_prices[j]` equals the bus-j
+row of `dadp`); see `_agr_result_keys`.
 
 # Throws
 

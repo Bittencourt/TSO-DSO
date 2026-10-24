@@ -443,3 +443,32 @@ function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)
     end
     return (mu_q_mat, q_devices)
 end
+
+# ---- hook: per-aggregator additive result keys (PAR-05) -----------------------------------------
+# ALWAYS populated at certify time — no `nothing`/`missing` variants (the data exists at
+# certify time by construction, in EVERY reactive mode). Keys are the per-bus `Dict`
+# precedent of `_react_outputs`, keyed over `load_nodes` in ascending bus order.
+#
+# SIGN/LAYOUT CONVENTIONS (matching the published keys they mirror):
+#   - `agr_prices[j]` is the PUBLISHED per-slot price for bus j — the negated internal
+#     multiplier row, exactly `_admm_certify`'s `λ_mat = −λ` convention, so
+#     `agr_prices[j] == dadp[row_of_j, :]` (row_of_j = the index of j in `load_nodes`).
+#   - `agr_import[j]`: `st.p_import` is the SINGLE network-level frontier exchange at
+#     `feeder.root` (`build_dso_opt`'s free-sign `p_import[t]`), NOT a per-bus quantity —
+#     every aggregator is keyed to that shared per-slot profile (the honest layout of the
+#     state; there is no per-bus import decomposition in AdmmState).
+function _agr_result_keys(st::AdmmState)
+    load_nodes = st.load_nodes
+    T = st.T
+    agr_dispatch = Dict{Int, Vector{Float64}}(
+        j => Float64[value(st.agr_by_bus[j].pag[t]) for t in 1:T] for j in load_nodes
+    )
+    agr_utility = Dict{Int, Float64}(j => Float64(st.util[j]) for j in load_nodes)
+    agr_import = Dict{Int, Vector{Float64}}(
+        j => Float64[st.p_import[t] for t in 1:T] for j in load_nodes
+    )
+    agr_prices = Dict{Int, Vector{Float64}}(
+        j => Float64[-st.λ[j][t] for t in 1:T] for j in load_nodes
+    )
+    return (; agr_dispatch, agr_utility, agr_import, agr_prices)
+end

@@ -366,7 +366,10 @@ AGR re-solve per load node with the battery (`τ_batt = 1e-3`) and 4Q (`rtol_4q 
 final DSO solve with the SOC exactness gate, the ACTIVE `:balance_p` no-slack certificate, the
 reactive `:balance_q` certificate hook, then welfare from PRIMALS and the published DADP
 (`λ_mat = −λ`: the reported price is the NEGATED internal multiplier).
-Returns the `solve_admm` result NamedTuple.
+Returns the `solve_admm` result NamedTuple, with the per-aggregator additive keys
+`agr_dispatch`/`agr_utility`/`agr_import`/`agr_prices` (PAR-05) appended TRAILING — every
+pre-existing key keeps its name, value and position; see `_agr_result_keys` for the key
+semantics.
 """
 function _admm_certify(
     st::AdmmState,
@@ -439,6 +442,11 @@ function _admm_certify(
     # `mu_q`/`q_devices`: STABLE keys, `nothing` unless LIVE (never bare `μ`).
     mu_q_mat, q_devices = _react_outputs(rmode, st, agr_by_bus)
 
+    # PAR-05 additive per-aggregator keys — TRAILING entries (every pre-existing key keeps
+    # its name, value and position; consumers/goldens untouched). ALWAYS populated at
+    # certify time (no `nothing` variant — the data exists by construction).
+    agr_dispatch, agr_utility, agr_import, agr_prices = _agr_result_keys(st)
+
     return (;
         welfare = welfare,
         dadp = λ_mat,
@@ -452,5 +460,12 @@ function _admm_certify(
         # The RESOLVED mode this call actually ran with.
         reactive_consensus_mode = mode,
         status = :converged,
+        # Per-aggregator snapshots (PAR-05): dispatch / utility / import profile /
+        # published per-slot prices, keyed by `load_nodes` bus ids. `agr_prices[j]` equals
+        # the bus-j row of `dadp` above.
+        agr_dispatch = agr_dispatch,
+        agr_utility = agr_utility,
+        agr_import = agr_import,
+        agr_prices = agr_prices,
     )
 end
