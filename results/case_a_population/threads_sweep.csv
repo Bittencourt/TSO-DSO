@@ -1,0 +1,4 @@
+mode,julia_version,threads,blas_threads,executor,seed,t_horizon,houses,iters,status,welfare,exact_maxgap,wall_s
+threads-sweep,1.12.5,1,1,serial,42,24,784,80,error:CertificateError,,,593.372743784
+threads-sweep,1.12.5,2,1,parallel,42,24,784,80,error:CertificateError,,,478.750251125
+threads-sweep,1.12.5,4,1,parallel,42,24,784,80,error:CertificateError,,,410.831851456
