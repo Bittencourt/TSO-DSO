@@ -136,7 +136,7 @@ Plans:
 
 **Gap closure** *(verification 2026-10-24: gaps_found — POP-04 agreement band; fix path (a) the bounded precision seam)*
 
-- [ ] 40-05-PLAN.md — Additive AGR solver-precision seam: `select_optimizer(QP; attrs...)` + `build_agr_opt`/`solve_admm` `agr_optimizer` kwarg; default path byte-identical (canary pinned) — POP-04
+- [x] 40-05-PLAN.md — Additive AGR solver-precision seam: `select_optimizer(QP; attrs...)` + `build_agr_opt`/`solve_admm` `agr_optimizer` kwarg; default path byte-identical (canary pinned) — POP-04
 - [ ] 40-06-PLAN.md — Bounded solver-precision ladder at full scale (default + gap_1e-10 → gap_1e-12 → gapfeas_1e-12, stop-on-first-certified, hard stop) → agreement.csv record → pin the band / document non-closure (terminal state) — POP-04
 
 ### Phase 41: Settlement, Ledger & Equity
@@ -233,7 +233,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
-| 40. 784-House Thesis Population | 4/4 | Complete   | 2026-10-24 |
+| 40. 784-House Thesis Population | 5/6 | In Progress|  |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
