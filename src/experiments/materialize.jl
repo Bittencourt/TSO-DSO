@@ -327,9 +327,8 @@ Throws `ArgumentError` when `buses` is empty or `total < length(buses)` (a bus w
 houses would build an empty, `Aggregator`-illegal roll-up).
 """
 function _case_a_house_counts(buses::Vector{Int}, total::Int)
-    isempty(buses) && throw(
-        ArgumentError("_case_a_house_counts: buses must be non-empty; got none"),
-    )
+    isempty(buses) &&
+        throw(ArgumentError("_case_a_house_counts: buses must be non-empty; got none"))
     total < length(buses) && throw(
         ArgumentError(
             "_case_a_house_counts: total ($total) must be >= length(buses) " *
@@ -389,16 +388,15 @@ NEW code path (the [`_ieee8500_house`](@ref) precedent), NOT a parameterized mod
 `_default_house` (same `Thermostatic`/`Deferrable`/`PVBattery` calls, same
 `_DEFAULT_BATT_λ_*` constants, φ = 0.90) with exactly two changes:
 
-1. The profile draw is PER-HOUSE: its seed is `_case_a_house_seed(s_pop, bus, house_index)`
-   fed to `generate_profiles` — never the `seed + bus` per-bus idiom, under which every house
-   on a bus would receive an IDENTICAL draw.
-2. The per-house magnitude scales are DIVIDED by the bus's house count: `hs = load_scale /
-   n_bus`, `ps = pv_scale / n_bus`, `ds = dev_scale / n_bus`, used everywhere the `:default`
-   path uses the raw scales. RATIONALE (calibration provenance): dividing by houses-per-bus
-   preserves each bus's aggregate load/PV at the validated `:default` level, keeping both
-   solve engines in the known-good congestion/voltage regime; raw per-house scales would put
-   roughly 78x the calibrated load through the 6.86 MVA head branch and be near-certainly
-   infeasible.
+ 1. The profile draw is PER-HOUSE: its seed is `_case_a_house_seed(s_pop, bus, house_index)`
+    fed to `generate_profiles` — never the `seed + bus` per-bus idiom, under which every house
+    on a bus would receive an IDENTICAL draw.
+ 2. The per-house magnitude scales are DIVIDED by the bus's house count: `hs = load_scale / n_bus`, `ps = pv_scale / n_bus`, `ds = dev_scale / n_bus`, used everywhere the `:default`
+    path uses the raw scales. RATIONALE (calibration provenance): dividing by houses-per-bus
+    preserves each bus's aggregate load/PV at the validated `:default` level, keeping both
+    solve engines in the known-good congestion/voltage regime; raw per-house scales would put
+    roughly 78x the calibrated load through the 6.86 MVA head branch and be near-certainly
+    infeasible.
 
 `pv_fraction` is accepted for symmetry with `case_a_household_map` and is NOT used by this
 construction: every house carries the fixed 3-device set (the PV group lives in
