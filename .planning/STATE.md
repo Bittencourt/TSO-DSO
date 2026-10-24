@@ -4,13 +4,13 @@ milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
 stopped_at: Completed 39-05-PLAN.md (Phase 39 plans 5/5 — SCALE-06 closed)
-last_updated: "2026-10-24T11:46:33.311Z"
-last_activity: 2026-10-24 -- Phase 40 planning complete
+last_updated: "2026-10-24T12:16:02.362Z"
+last_activity: 2026-10-24
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 13
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 40 — 784 house thesis population
+**Current focus:** Phase 40 — 784-House Thesis Population
 
 ## Current Position
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
-Phase: 40
-Plan: Not started
+Phase: 40 (784-House Thesis Population) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-10-24 -- Phase 40 planning complete
-Progress: [██████████] 100%
+Last activity: 2026-10-24
+Progress: [███████░░░] 67%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -218,6 +218,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 39 P02 | 35min | 3 tasks | 3 files |
 | Phase 39 P04 | 40min | 3 tasks | 5 files |
 | Phase 39 P05 | 51min | 3 tasks | 21 files |
+| Phase 40 P01 | 29min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -308,6 +309,8 @@ Recent decisions affecting current work:
 - [Phase 39-04]: PAR-03 proven — CertificateError (atol_exact=1e-30), ConvergenceError (maxiter=1) and poisoned-task (contradictory pag constraint → INFEASIBLE → SolveFailedError) legs all type+message parity across executors, never TaskFailedException/CompositeException; battery/4Q bus-naming poisons probed UNREACHABLE (PV-limited charge bound, thesis 3.7/A6, makes forced co-charge infeasible before any certificate fires)
 - [Phase 39-04]: PAR-05 additive keys land (agr_dispatch/agr_utility/agr_import/agr_prices, trailing on the converged path); agr_prices[j] == dadp row pinned by test; agr_import keyed to the SHARED root frontier profile (st.p_import is network-level — no per-bus decomposition exists); canary-after-parallel proven under the DANGEROUS ordering via a scratch same-process driver (committed combined command's walk order puts the canary FIRST — measured fact, recorded in 39-04-SUMMARY)
 - [Phase 39-05]: SCALE-06 T=10 attribution — anchor delta 4.339 GiB (CertificateError iters=8, ratio 568.95 reproduced exactly); components: AgrOpt builds +1.724, first iterate +1.370, per-iterate +0.318 (~0.045 GiB/iter — per-hour DSO solver-state hypothesis refuted as dominant), certify −0.100; Σ 3.720±0.237, residual 0.620±0.237 GiB. T=24 full run earlyoom-killed at the anchor (recorded evidence, no retry); build-only run: +0.922/+4.024 GiB (~2.3× T=10 for 2.4× T — the models scale with T); loop attribution honestly NOT ESTABLISHED
+- [Phase ?]: Per-house calibration (A1): :case_a_784 divides :default scales by houses-per-bus — bus aggregates stay at the validated solve regime
+- [Phase ?]: Rebuild reproducibility for device structs asserted structurally (Vector fields make default == reference-true); anti-Pitfall-2 threshold pinned with measured pv-path entropy rationale
 
 ### Roadmap Evolution
 
@@ -555,7 +558,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-24T09:39:36.828Z
+Last session: 2026-10-24T12:15:25.598Z
 Stopped at: Completed 39-05-PLAN.md (Phase 39 plans 5/5 — SCALE-06 closed)
 Resume file: None
 

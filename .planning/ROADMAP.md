@@ -120,7 +120,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 40-01-PLAN.md — Additive `:case_a_784` selector: per-house hash seeding, 10-bus roll-up (1:1 ADMM guard), household map accessor, fast test file — POP-01, POP-02, POP-03
+- [x] 40-01-PLAN.md — Additive `:case_a_784` selector: per-house hash seeding, 10-bus roll-up (1:1 ADMM guard), household map accessor, fast test file — POP-01, POP-02, POP-03
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -228,7 +228,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
-| 40. 784-House Thesis Population | 0/4 | Not started | - |
+| 40. 784-House Thesis Population | 1/4 | In Progress|  |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
