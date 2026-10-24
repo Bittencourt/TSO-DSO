@@ -209,6 +209,12 @@ end
     @test m1 == m2
     @test length(m1) == 784
 
+    # Seed-independence (documented contract): the map encodes ONLY assignment structure
+    # (bus / house_index / pv_group), never profile draws — per-house seeding happens
+    # exclusively in build_population's profile draws. Two calls differing ONLY in the
+    # seed positional return == vectors.
+    @test m1 == case_a_household_map(feeder, :ieee13, 999)
+
     # Exactly the locked fields, in order; aggregator is keyed by bus; fixed device set;
     # global 1..784 index in bus-major then house-index order.
     @test all(

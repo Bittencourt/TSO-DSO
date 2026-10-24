@@ -90,6 +90,9 @@ profiles = generate_profiles(; seed = sub_seed(CASE_A_SEED, :profiles), T = T_HO
 s_pop = sub_seed(CASE_A_SEED, :population)
 aggs = build_population(:case_a_784, feeder, :ieee13, profiles, s_pop)
 households = case_a_household_map(feeder, :ieee13, s_pop)
+# The map is seed-independent (assignment structure only — bus / house_index / pv_group):
+# its seed argument is accepted for call-site symmetry with build_population and NOT used;
+# per-house seeding happens only in build_population's profile draws.
 
 buses = sort(unique(r.bus for r in households))
 per_bus = [(bus = b, houses = count(r -> r.bus == b, households)) for b in buses]

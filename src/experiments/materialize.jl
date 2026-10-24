@@ -693,7 +693,7 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
 end
 
 """
-    case_a_household_map(feeder, feeder_sym::Symbol, seed::Integer;
+    case_a_household_map(feeder, feeder_sym::Symbol, seed_unused::Integer;
                          pv_fraction::Real = _CASE_A_PV_FRACTION) -> Vector{<:NamedTuple}
 
 The pure, deterministic household map of the `:case_a_784` population: one row per house, in
@@ -703,12 +703,18 @@ are keyed by bus), `device_set` (`:thermostatic_deferrable_pvbattery`, the fixed
 house), `pv_group` (`_case_a_pv_group` at `pv_fraction`), and `house_index` (1-based within
 its bus).
 
-It derives everything from the SAME primitives the `:case_a_784` branch of
-[`build_population`](@ref) uses — `_load_buses`, `_case_a_house_counts`,
-`_case_a_house_seed`, `_case_a_pv_group` — so the map and the built population cannot drift
-apart (single source of truth). It performs NO `Aggregator` construction and NO profile
-draw: pure hash arithmetic, cheap to call. No mutation, no global state, no randomness
-beyond the pure hash derivation: two calls with equal arguments return `==` vectors.
+`seed_unused` is accepted positionally for call-site symmetry with
+[`build_population`](@ref) and is NOT used: the map encodes only assignment structure
+(`bus` / `house_index` / `pv_group`), never profile draws, so it is identical for every
+seed. Per-house seeding lives exclusively in [`build_population`](@ref)'s profile draws
+via `_case_a_house_seed`.
+
+It derives everything from the SAME assignment primitives the `:case_a_784` branch of
+[`build_population`](@ref) uses — `_load_buses`, `_case_a_house_counts`, `_case_a_pv_group`
+— so the map and the built population's assignment cannot drift apart (single source of
+truth). It performs NO `Aggregator` construction and NO profile draw: pure arithmetic,
+cheap to call. No mutation, no global state, no randomness: two calls with equal arguments
+return `==` vectors — and so do two calls differing only in `seed_unused`.
 
 Throws `ArgumentError` unless `feeder_sym === :ieee13` (the same restriction as the
 `:case_a_784` branch). UNEXPORTED by design (the materializer group stays out of the
@@ -717,7 +723,7 @@ namespace): callers qualify `TSODSO.case_a_household_map`.
 function case_a_household_map(
     feeder,
     feeder_sym::Symbol,
-    seed::Integer;
+    seed_unused::Integer;
     pv_fraction::Real = _CASE_A_PV_FRACTION,
 )
     if feeder_sym !== :ieee13
