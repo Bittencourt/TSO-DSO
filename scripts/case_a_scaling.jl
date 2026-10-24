@@ -42,7 +42,13 @@
 # OUTCOME, not a missing run (honesty policy). A `:budget_exceeded` status (the
 # --time-limit-s wall-clock budget) is likewise a RECORDED outcome: welfare/exact_maxgap
 # land as missing cells per the solve_admm contract (a budget stop carries NO certified
-# price), never dropped and never retried into a pass.
+# price), never dropped and never retried into a pass. The same holds for a maxiter
+# stall (solve_admm THROWS `ConvergenceError` when the iteration cap is hit before the
+# wall-clock budget), a certificate refusal (`CertificateError` at the final
+# consolidation) and a solver failure (`SolveFailedError`): each is RECORDED as its own
+# status row (iterations from the error, -1 sentinel when the error carries none,
+# welfare/exact_maxgap missing) — misuse errors (the fail-loud parallel guard, bad args)
+# still propagate and exit nonzero.
 #
 # Case A constants (scripts/thesis_caseA.jl): T = 24, SEED = 42, :ieee13, :mem prices,
 # profiles seed = sub_seed(SEED, :profiles), population seed = sub_seed(SEED, :population).
@@ -55,7 +61,10 @@ using DrWatson
 using TSODSO
 using TSODSO:
     ADMM,
+    CertificateError,
+    ConvergenceError,
     ConvexBranchFlow,
+    SolveFailedError,
     _CASE_A_PV_FRACTION,
     _CASE_A_TOTAL_HOUSES,
     _IEEE13_DEV_SCALE,
@@ -128,6 +137,40 @@ parse_args!(args) = (
 # ---- provenance + CSV upsert ----------------------------------------------------------------
 
 num_or_missing(x) = x === nothing ? missing : x
+
+"""
+    run_solve_outcome(solve) -> (; status, iters, welfare, exact_maxgap)
+
+Run ONE `solve_admm` call (as a thunk) and return its HONEST outcome. Solver-outcome
+exceptions are RECORDED OUTCOMES per the honesty policy — a maxiter stall
+(`ConvergenceError`), a certificate refusal (`CertificateError`) and a solver failure
+(`SolveFailedError`) each become a status row (iterations from the error's own field,
+-1 sentinel when it carries none; welfare/exact_maxgap missing — no certified values
+exist). Anything else (the fail-loud parallel guard, argument misuse, a genuine bug)
+PROPAGATES and exits nonzero.
+"""
+function run_solve_outcome(solve::Function)
+    local r
+    try
+        r = solve()
+        return (
+            status = string(r.status),
+            iters = Int(r.iters),
+            welfare = num_or_missing(r.welfare),
+            exact_maxgap = num_or_missing(r.exact_maxgap),
+        )
+    catch err
+        err isa ConvergenceError || err isa CertificateError ||
+            err isa SolveFailedError || rethrow()
+        iters = err.iterations === nothing ? -1 : Int(err.iterations)
+        return (
+            status = "error:" * string(nameof(typeof(err))),
+            iters = iters,
+            welfare = missing,
+            exact_maxgap = missing,
+        )
+    end
+end
 
 """
     upsert_row(path, row::NamedTuple; key) -> nothing
@@ -266,7 +309,7 @@ function ladder_main(T_H::Int, time_limit_s::Real)
             "aggregators=$(length(aggs_rung)) — solving (serial, executor defaults)...",
         )
         flush(stdout)
-        wall_s = @elapsed r = solve_admm(
+        wall_s = @elapsed outcome = run_solve_outcome(() -> solve_admm(
             feeder,
             pf,
             aggs_rung;
@@ -274,7 +317,7 @@ function ladder_main(T_H::Int, time_limit_s::Real)
             λ₀ = λ₀,
             ρ = ρ,
             time_limit_s = time_limit_s,
-        )
+        ))
         row = (
             mode = "ladder",
             rung_label = "rung$i",
@@ -286,10 +329,10 @@ function ladder_main(T_H::Int, time_limit_s::Real)
             t_horizon = T_H,
             houses_actual = houses_actual,
             aggregators = length(aggs_rung),
-            iters = Int(r.iters),
-            status = string(r.status),
-            welfare = num_or_missing(r.welfare),
-            exact_maxgap = num_or_missing(r.exact_maxgap),
+            iters = outcome.iters,
+            status = outcome.status,
+            welfare = outcome.welfare,
+            exact_maxgap = outcome.exact_maxgap,
             wall_s = wall_s,
         )
         upsert_row(
@@ -299,7 +342,7 @@ function ladder_main(T_H::Int, time_limit_s::Real)
         )
         println(
             "  → iters=$(row.iters) status=$(row.status) wall_s=$(round(wall_s; digits = 2)) " *
-            "recorded (budget_exceeded rows carry missing welfare/exact_maxgap by contract)",
+            "recorded (stall/refusal/budget rows carry missing welfare/exact_maxgap)",
         )
         flush(stdout)
     end
@@ -345,7 +388,7 @@ function sweep_main(T_H::Int, time_limit_s::Real, threads_declared::Union{Nothin
     # Kwarg-only direct call (NO Scenario seam — locked); `parallel = true` on a 1-thread
     # runtime THROWS (solve_admm fail-loud guard) and this script lets it propagate — the
     # process exits nonzero, never degrading to serial.
-    wall_s = @elapsed r = solve_admm(
+    wall_s = @elapsed outcome = run_solve_outcome(() -> solve_admm(
         feeder,
         ConvexBranchFlow(),
         aggs;
@@ -354,7 +397,7 @@ function sweep_main(T_H::Int, time_limit_s::Real, threads_declared::Union{Nothin
         ρ = rho_executor_default(),
         time_limit_s = time_limit_s,
         parallel = parallel,
-    )
+    ))
     row = (
         mode = "threads-sweep",
         julia_version = string(VERSION),
@@ -364,10 +407,10 @@ function sweep_main(T_H::Int, time_limit_s::Real, threads_declared::Union{Nothin
         seed = SEED,
         t_horizon = T_H,
         houses = _CASE_A_TOTAL_HOUSES,
-        iters = Int(r.iters),
-        status = string(r.status),
-        welfare = num_or_missing(r.welfare),
-        exact_maxgap = num_or_missing(r.exact_maxgap),
+        iters = outcome.iters,
+        status = outcome.status,
+        welfare = outcome.welfare,
+        exact_maxgap = outcome.exact_maxgap,
         wall_s = wall_s,
     )
     upsert_row(SWEEP_CSV, row; key = (:mode, :threads, :seed, :t_horizon))
