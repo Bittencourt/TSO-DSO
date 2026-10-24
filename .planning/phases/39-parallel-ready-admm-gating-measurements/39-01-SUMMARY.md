@@ -125,3 +125,10 @@ None - no external service configuration required.
 ---
 *Phase: 39-parallel-ready-admm-gating-measurements*
 *Completed: 2026-10-24*
+
+## Self-Check: PASSED
+
+- Files: sweep.jl, sweep.csv, README.md all FOUND in .planning/spikes/005-clarabel-concurrency/; MANIFEST.md contains the 005 row
+- Commits: 898894a (Task 1, feat) and 9893a59 (Task 2, docs) both FOUND in git log
+- src/ untouched: `git status --porcelain src/` empty after all runs
+- Verdict line verified: `verdict: PASS` (no PENDING); threaded_vs_serial = BITWISE-EQUAL in sweep.csv

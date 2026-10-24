@@ -87,7 +87,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 Plans:
 **Wave 1**
 
-- [ ] 39-01-PLAN.md — Clarabel concurrency/determinism spike (bitwise serial-vs-threaded under `-t 4`, direct_model answer) — PAR-02 gate
+- [x] 39-01-PLAN.md — Clarabel concurrency/determinism spike (bitwise serial-vs-threaded under `-t 4`, direct_model answer) — PAR-02 gate
 - [ ] 39-03-PLAN.md — Provenance thread counts + executor-blind scenario identity — PAR-04
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -210,7 +210,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 39. Parallel-Ready ADMM & Gating Measurements | 0/TBD | Not started | - |
+| 39. Parallel-Ready ADMM & Gating Measurements | 1/5 | In Progress|  |
 | 40. 784-House Thesis Population | 0/TBD | Not started | - |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |

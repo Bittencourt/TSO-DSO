@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Milestone v4.0 archived
-last_updated: "2026-10-24T03:40:04.315Z"
-last_activity: 2026-10-24 -- Phase 39 planning complete
+stopped_at: Completed 39-01-PLAN.md
+last_updated: "2026-10-24T03:56:45.305Z"
+last_activity: 2026-10-24
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** v5.0 Aggregator Layer at Scale — Phase 39 (Parallel-Ready ADMM & Gating Measurements)
+**Current focus:** Phase 39 — Parallel-Ready ADMM & Gating Measurements
 
 ## Current Position
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
-Phase: 39 of 46 (Parallel-Ready ADMM & Gating Measurements) — next, not started
-Plan: —
+Phase: 39 (Parallel-Ready ADMM & Gating Measurements) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-10-24 -- Phase 39 planning complete
-Progress: [░░░░░░░░░░] 0/8 phases
+Last activity: 2026-10-24
+Progress: [██░░░░░░░░] 20%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -212,6 +212,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 38 P06 | 15min | 2 tasks | 3 files |
 | Phase 38 P09 | 30min | 2 tasks | 1 files |
 | Phase 38 P10 | 80min | 3 tasks | 2 files |
+| Phase 39 P01 | 9min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -291,6 +292,9 @@ Recent decisions affecting current work:
 - [Phase 38]: 38-09: guide model-text fixes carry "(Changed in vX.Y: ...)" notes; 5.1 derivation kept (thesis-literal) with one corrective paragraph; gate constants written as math, not internal names
 - [Phase 38]: Phase 38 gate: 1.12.5 Pass 32304 / 1.12.7 Pass 32299 (0/0/Broken 5) = Phase 37 baseline + 80, every unit itemized in 38-FINAL-GATES.md; count-sets all=517 fast=480 slow=37 files=99
 - [Phase 38]: Phase 38: on 1.12.7 the MPC shortfall fixture (scenario B, t=4) escalates to the restricted tier under the hybrid floor (ratio 1.165); re-price only, no asserted value moves; documented explained move
+- [Phase 39-01]: Spike 005 verdict PASS — threaded @spawn Clarabel solves bitwise-equal to serial on the 10-aggregator IEEE-13 fixture under the production configuration (julia -t 4, BLAS.set_num_threads(1), MOI.NumberOfThreads()=1, Clarabel 0.11.1/JuMP 1.30.1); PAR-02 gate artifact complete
+- [Phase 39-01]: direct_model settled — constructs on JuMP 1.30.1 but fails at first @variable with MathOptInterface.AddVariableNotAllowed (refines factory.jl's 2026-07-18 note; Clarabel stays copy_to-only; ADMM build-once/set_objective_coefficient loop impossible on a direct model)
+- [Phase 39-01]: negative-control design fact — a 1-ulp (+eps()) coupling-price perturbation is solver-absorbed (bit-identical output); the comparator proof needed eps()*2^1, recorded as data in sweep.csv
 
 ### Roadmap Evolution
 
@@ -538,8 +542,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-08T01:34:59.058Z
-Stopped at: Milestone v4.0 archived
+Last session: 2026-10-24T03:56:45.279Z
+Stopped at: Completed 39-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
