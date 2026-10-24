@@ -35,7 +35,7 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 - [x] **POP-01**: A researcher can build the thesis Case A population with its true house count (784 households over the 10 IEEE-13 aggregator nodes) via a new selector, leaving the existing `:default` population byte-identical.
 - [x] **POP-02**: Each household is individually seeded from a hash of (master seed, bus, house index), so populations are reproducible and seeds never collide.
 - [x] **POP-03**: The population records a household map (house → bus, aggregator, device set, PV/non-PV group) usable for household-level settlement and equity.
-- [ ] **POP-04**: The 784-house case solves both centralized and by ADMM, and the two agree on welfare and prices within a measured tolerance.
+- [x] **POP-04**: The 784-house case solves both centralized and by ADMM, and the two agree on welfare and prices within a measured tolerance.
 - [x] **POP-05**: A scaling report gives wall time vs threads and ADMM iterations vs population size, with the speedup measured (not assumed).
 - [x] **POP-06**: The population's composition (PV capacity, elastic and inelastic load, device mix) is documented with calibration provenance, stating which thesis parameters are unavailable (Appendix E).
 
@@ -114,7 +114,7 @@ Deferred; tracked but not in this roadmap.
 | POP-01 | Phase 40 | Complete |
 | POP-02 | Phase 40 | Complete |
 | POP-03 | Phase 40 | Complete |
-| POP-04 | Phase 40 | Pending |
+| POP-04 | Phase 40 | Complete — certified via plan 40-06's bounded ladder: rung `gap_1e-10` (AGR Clarabel tol_gap 1e-10 through solve_admm's `agr_optimizer` seam, gates byte-identical) certifies the 784-house ADMM point; band pinned gate-then-golden from agreement.csv (welfare rtol 6.22e-7, price atol/rtol 1.78) |
 | POP-05 | Phase 40 | Complete |
 | POP-06 | Phase 40 | Complete |
 | SETL-01 | Phase 41 | Pending |

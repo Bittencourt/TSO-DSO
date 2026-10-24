@@ -205,7 +205,7 @@ for row in per_bus
     )
 end
 
-# ## Agreement — what is and is NOT established at the full population
+# ## Agreement — measured at the full population
 #
 # The protocol is gate-then-golden: run BOTH solve engines on the SAME built
 # population FIRST, record the observed welfare and price deltas, and only then
@@ -217,11 +217,11 @@ end
 # !!! note "This section reads committed data; nothing is solved at build time"
 #     Regenerate the measurement row with:
 #     ```
-#     julia --project=. scripts/case_a_agreement.jl
+#     julia --project=. scripts/case_a_agreement.jl --agr-rung gap_1e-10
 #     ```
-#     The script upserts its row — keyed on Julia version, seed and horizon — into
-#     `results/case_a_population/agreement.csv`; re-runs replace their own row and
-#     never drop others.
+#     The script upserts its row — keyed on Julia version, seed, horizon AND solver
+#     rung (`agr_tol`) — into `results/case_a_population/agreement.csv`; re-runs
+#     replace their own row and never drop others.
 #
 # The measured row, read here at build time:
 
@@ -246,15 +246,21 @@ agreement_rows = read_case_a_csv(
     joinpath(pkgdir(TSODSO), "results", "case_a_population", "agreement.csv"),
 )
 # Provenance-keyed selection (review WR-03): upsert rows are keyed on
-# (julia_version, seed, t_horizon) and re-runs never drop others, so the CSV grows by
-# design — a `--seed 43` re-measure or a different horizon must not break this build.
-# Filter to THIS page's row identity (the constants above) and assert exactly one match:
-# the page still fails loudly if the seed=42 / t_horizon=24 row disappears, or if a
-# re-measure on a newer Julia adds a same-key row (in which case this page's recorded
-# figures must be refreshed, so failing is the honest outcome).
+# (julia_version, seed, t_horizon, agr_tol) and re-runs never drop others, so the CSV
+# grows by design — a `--seed 43` re-measure or a different horizon must not break
+# this build. This page cites the WINNING LADDER RUNG's row explicitly: the POP-04
+# ladder (default → gap_1e-10 → gap_1e-12 → gapfeas_1e-12, stop-on-first-certified)
+# certified the full-population ADMM point at `agr_tol = gap_1e-10`, and the band was
+# pinned from THAT measurement. Filter to the row identity (constants above + rung)
+# and assert exactly one match — the page still fails loudly if the cited row
+# disappears, or if a re-measure on a newer Julia adds a same-key row (in which case
+# this page's recorded figures must be refreshed, so failing is the honest outcome).
 agreement = only(
     filter(
-        r -> r["seed"] == string(CASE_A_SEED) && r["t_horizon"] == string(T_HORIZON),
+        r ->
+            r["seed"] == string(CASE_A_SEED) &&
+            r["t_horizon"] == string(T_HORIZON) &&
+            get(r, "agr_tol", "default") == "gap_1e-10",
         agreement_rows,
     ),
 )
@@ -266,6 +272,10 @@ agreement = only(
 )
 @printf("decomposed leg   iterations     : %d\n", round(Int, num(agreement["admm_iters"])),)
 @printf("decomposed leg   status         : %s\n", cell(agreement["admm_status"]))
+@printf(
+    "decomposed leg   welfare        : %s (certified)\n",
+    cell(agreement["welfare_admm"]),
+)
 @printf(
     "welfare deltas   abs / rel      : %s / %s\n",
     cell(agreement["welfare_abs_delta"]),
@@ -281,19 +291,23 @@ agreement = only(
     cell(agreement["recommended_rtol_welfare"]),
 )
 
-# The honest reading of that row: the centralized leg certifies only under the
-# tightened solver-precision path the row itself names (`centralized_optimizer`)
-# — the model's exactness gates are untouched; the SOLVER's own convergence
-# precision is what was tightened, the established response to a gate refusal.
-# The decomposed leg CONVERGES at the recorded iteration count but is then
-# REFUSED by the battery-complementarity certificate at the final consolidation
-# (`admm_status`). A refused leg yields no certified welfare and no certified
-# prices — so at this configuration NO agreement delta is measurable and NO
-# band constant can honestly be pinned. The test file above carries that
-# missing pin as a loud, tracked skip citing this CSV and the regeneration
-# command, so it cannot silently rot. The refusal itself is a recorded measured
-# outcome — the same deterministic refusal the scaling section shows — and it
-# is escalated for investigation, never tuned away.
+# The measured agreement (this row, `agr_tol = gap_1e-10`): BOTH engines certify the
+# full-population point and they AGREE within a measured, stated tolerance. How the
+# row was earned, honestly: at the plain default AGR factory the ADMM loop converged
+# (80 iterations) but the battery-complementarity certificate refused the point on
+# CERTIFICATE NOISE — the complementarity product sat 0.04% over its ~1e-12 relative
+# band at the per-house-divided battery scale. The repo's answer was NEVER a gate
+# change: the bounded, pre-planned solver-precision ladder (default → gap_1e-10 →
+# gap_1e-12 → gapfeas_1e-12, stop-on-first-certified, hard stop) tightened the AGR
+# SOLVER's convergence precision through `solve_admm`'s `agr_optimizer` seam — and the
+# FIRST rung (`gap_1e-10`) certified the point at the same 80 iterations. Every gate
+# (the battery band, tau_batt, the exactness gate) is byte-identical throughout. The
+# tolerance is MEASURED from the certified pair: the engines' welfare differs by
+# `welfare_rel_delta = 6.217147850629488e-8` and prices by at most
+# `price_max_abs_delta = price_max_rel_delta = 0.17819846607479023`; the pinned test
+# band is 10× those observed deltas, floored at solver noise (welfare rtol
+# 6.217147850629488e-7, price atol/rtol 1.7819846607479022) and asserted LIVE in the
+# `:slow` test item — the former tracked skip is lifted.
 #
 # ## Scaling — measured, not assumed
 #
@@ -335,9 +349,12 @@ end
 # rung and rises sharply at the three-quarter and full rungs — the
 # heterogeneous-scale iteration growth this population was built to probe is
 # real, and it lands between the last two rungs. The full-population rung
-# CONVERGES at its recorded iteration count and is then refused by the same
-# battery-complementarity certificate the agreement section reports — a
-# recorded outcome, kept exactly as measured (the wall time is the solve's own).
+# CONVERGES at its recorded iteration count and is then refused by the
+# battery-complementarity certificate — the SAME refusal the agreement section's
+# default-rung history records; the scaling legs ran at the default factory by
+# design (no re-tuning), and the certified `gap_1e-10` resolution is the
+# agreement section's. A refused leg is a recorded outcome, kept exactly as
+# measured (the wall time is the solve's own).
 #
 # **Threads sweep.** One full-population solve per OS process: thread count is
 # fixed at process start, so the sweep drives ONE `julia -t N` process per leg
@@ -413,9 +430,11 @@ end
 # composition figures are computed live at docs-build time from the
 # deterministic construction — seed 42, horizon 24 — and are therefore exact.
 # The agreement figures are read from `results/case_a_population/agreement.csv`,
-# the row keyed `seed=42, t_horizon=24` (recorded on `julia_version=1.12.5`).
-# Rows keyed on other provenance — a `--seed 43` re-measure, a different
-# horizon — upsert beside it and do not affect this page. The ladder figures
+# the winning ladder rung's row keyed `seed=42, t_horizon=24, agr_tol=gap_1e-10`
+# (recorded on `julia_version=1.12.5`); the default-rung row beside it records
+# the honest certificate refusal that motivated the ladder. Rows keyed on other
+# provenance — a `--seed 43` re-measure, a different horizon, another rung —
+# upsert beside it and do not affect this page. The ladder figures
 # come from `results/case_a_population/scaling_ladder.csv`, rows
 # `rung1` through `rung6`. The threads figures come from
 # `results/case_a_population/threads_sweep.csv`, one row each at 1, 2 and 4
