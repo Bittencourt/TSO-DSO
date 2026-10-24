@@ -181,7 +181,9 @@ serial-vs-threaded equality under the production configuration):
     order surfaces with serial's first-throw attribution (PAR-03): the ORIGINAL exception
     object is rethrown via `throw(e.task.exception)` (type, message, kind, iterations
     preserved — never `TaskFailedException`/`CompositeException`), then
-    `_react_agr_apply!` writes the result in the SERIAL region.
+    `_react_agr_apply!` writes the result in the SERIAL region. On the error path the
+    remaining in-flight tasks are REAPED first (wait-drained; results and errors discarded)
+    so no solver run survives past the throw.
 """
 function _agr_solve_step!(
     rmode::_ReactiveMode,
@@ -231,6 +233,19 @@ function _agr_solve_step!(
         r = try
             fetch(futs[idx])
         catch e
+            # Reap-and-drain (WR-01): tasks idx+1..n are still in flight — wait them ALL out
+            # BEFORE rethrowing, so no Clarabel solve keeps running after this throw (and
+            # after solve_admm's `finally` has restored BLAS threads). Drained results and
+            # errors are DELIBERATELY discarded: the FIRST failure in `load_nodes` order is
+            # what surfaces — serial's first-throw attribution. Success path: byte-identical.
+            for k in (idx + 1):length(futs)
+                try
+                    wait(futs[k])
+                catch
+                    # Deliberate reap-and-discard of drained-task failures — superseded by
+                    # the first failure; nothing is swallowed on the happy path.
+                end
+            end
             # PAR-03 error parity: the ORIGINAL exception object — type, msg, kind, iterations
             # preserved. Same type-check-then-rethrow idiom as solve_admm.jl's certificate
             # re-wrap seam. NEVER a barrier-sync around the spawns (it would wrap this in
