@@ -179,11 +179,7 @@ function attribution_main(args)
         agr_by_bus[agg.bus] =
             TSODSO.build_agr_opt(agg, T_H; ρ = ρf, reactive_mode = mode, ρ_q = ρ_qf)
     end
-    report(
-        2,
-        "after_agr_opts";
-        note = "AgrOpt build loop ALONE ($(length(aggs)) models)",
-    )
+    report(2, "after_agr_opts"; note = "AgrOpt build loop ALONE ($(length(aggs)) models)")
 
     # ---- stages 3-5: bounded REAL iterations, isolated first-iterate snapshot, certify --------
     if max_stage >= 3
@@ -200,10 +196,13 @@ function attribution_main(args)
 
         # (mirrors _admm_build's state assembly)
         residuals = TSODSO.AdmmResiduals(length(feeder.buses), T_H)
-        λ = Dict{Int, Vector{Float64}}(j => Float64[-λ0[t] for t in 1:T_H] for j in load_nodes)
+        λ = Dict{Int, Vector{Float64}}(
+            j => Float64[-λ0[t] for t in 1:T_H] for j in load_nodes
+        )
         c = Dict{Int, Vector{Float64}}(j => zeros(Float64, T_H) for j in load_nodes)
         a = Dict{Int, Vector{Float64}}(j => zeros(Float64, T_H) for j in load_nodes)
-        pag_dso_prev = Dict{Int, Vector{Float64}}(j => zeros(Float64, T_H) for j in load_nodes)
+        pag_dso_prev =
+            Dict{Int, Vector{Float64}}(j => zeros(Float64, T_H) for j in load_nodes)
         util = Dict{Int, Float64}(j => 0.0 for j in load_nodes)
         p_import = zeros(Float64, T_H)
         react = TSODSO._react_state(rmode, load_nodes, T_H, ρ_qf)
@@ -231,7 +230,19 @@ function attribution_main(args)
         # Iteration 1 — contains the DSO model's first `optimize!` and the first AGR solves.
         # solve_admm's own defaults: ε_abs = 1e-4, ε_rel = 1e-3, τ = 2.0, μ = 10.0,
         # ρ_min = 1e-2, ρ_max = 1e4; serial executor (parallel = false).
-        TSODSO._admm_iterate!(st, rmode, 1, 1e-4, 1e-3, 2.0, 10.0, 1e-2, 1e4, nothing, false)
+        TSODSO._admm_iterate!(
+            st,
+            rmode,
+            1,
+            1e-4,
+            1e-3,
+            2.0,
+            10.0,
+            1e-2,
+            1e4,
+            nothing,
+            false,
+        )
         report(
             3,
             "iter_1";
@@ -533,8 +544,7 @@ function reconcile!(anchor; certify_ran::Bool)
     c_certify =
         certify_ran ? rss_gib_of("after_certify_gc") - rss_gib_of("iter_after_gc") : 0.0
     cert_note =
-        certify_ran ?
-        "consolidation/certify retained (after_certify_gc − iter_after_gc)" :
+        certify_ran ? "consolidation/certify retained (after_certify_gc − iter_after_gc)" :
         "certify did not run (not converged / budget exit) — 0.0 by absence, not by assumption"
 
     comps = [
@@ -577,7 +587,15 @@ function reconcile!(anchor; certify_ran::Bool)
             note,
         )
     end
-    println("  ", rpad("Σ components", 26), "+", rpad(round(total; digits = 3), 8), "± ", round(tol_total; digits = 3), " GiB")
+    println(
+        "  ",
+        rpad("Σ components", 26),
+        "+",
+        rpad(round(total; digits = 3), 8),
+        "± ",
+        round(tol_total; digits = 3),
+        " GiB",
+    )
     println(
         "  ",
         rpad("residual", 26),
