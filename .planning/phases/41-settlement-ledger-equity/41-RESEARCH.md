@@ -472,7 +472,7 @@ relevant only if the writeup decomposes prices; use the current names.
 | A5 | The heavy `:case_a_784` tariff comparison is a script artifact (results/ CSV + literate), not a suite test | Validation Architecture | If the planner wants a suite-level 784 test it must be `:slow`-tagged and will cost minutes (784-house ADMM ≈ 10 min serial per Phase-40 measurement) |
 | A6 | Atkinson's inequality-aversion ε fixed at 0.5 (module constant) | Pattern 5 | ε is a free parameter; 0.5 is the common default; any other choice is equally valid if documented |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **House-set availability for `:dadp` household attribution on the IEEE-13 ground fixture.**
    - What we know: `case_a_household_map` is `:ieee13`-only; the IEEE-13 *test* fixture
@@ -484,6 +484,11 @@ relevant only if the writeup decomposes prices; use the current names.
      (3-bus × N houses, `FitFixtures`-style); the real-run settlement identity test on the
      IEEE-13 ground fixture where each bus's aggregator IS the household granularity; reserve
      `:case_a_784` map granularity for the script artifact.
+   - **RESOLVED →** as recommended: household unit tests use the synthetic split fixture
+     (41-01 Task 3 item 4); the real-run identity uses the IEEE-13 ground fixture's
+     bus-as-household granularity (41-01 Task 3 item 5); `:case_a_784` map granularity is
+     reserved for the script artifact via per-house reconstruction (`houses` + `map_rows`,
+     41-04 Task 2).
 
 2. **Whether `welfare_accounting` runs on the ADMM `dso_ctx`.**
    - What we know: `welfare_accounting` requires `ctx.meta[:agg_net]` + `:p_import` and non-empty
@@ -493,6 +498,10 @@ relevant only if the writeup decomposes prices; use the current names.
    - Recommendation: verify at implementation time with one probe; if absent, cross-check the
      ADMM ledger against `welfare ≈ Σ agr_utility − Σ λ₀·p_import` (the ADMM's own primal-welfare
      recomputation) instead. Never add the stash to ADMM (that would touch solved-path files).
+   - **RESOLVED →** probe + fallback locked into the test: `haskey(r.dso_ctx.meta, :agg_net)`
+     branches to the `welfare_accounting` oracle, else the primal-welfare fallback
+     (`Σ U_j + MS ≈ r.welfare`); the `:agg_net` stash is never added to ADMM files
+     (41-01 Task 3 item 5, both branches documented + `@info` which fired).
 
 ## Environment Availability
 
