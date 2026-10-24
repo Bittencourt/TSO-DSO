@@ -1,0 +1,6 @@
+fixture,density,T,stage,name,VmRSS_kB,VmHWM_kB,gc_live_MB,rss_delta_gib,gib,tol_gib,note,anchor_status,anchor_iters,anchor_delta_gib,anchor_time_s
+ieee8500-mv,0.1,10,1,after_using,1282704,1348868,529.7484130859375,0.0,,,,,-1,,
+ieee8500-mv,0.1,10,1,feeder_population,1297316,1348868,537.4495849609375,0.013935089111328125,,,,,-1,,
+ieee8500-mv,0.1,10,2,pre_staged_gc,1220716,1348868,64.67261505126953,-0.07305145263671875,,,clean GC'd baseline for the build deltas,,-1,,
+ieee8500-mv,0.1,10,2,build_dso_opt,1405764,1405764,219.51447296142578,0.17647552490234375,,,DSO build ALONE,,-1,,
+ieee8500-mv,0.1,10,2,after_agr_opts,1572648,1572648,674.329833984375,0.15915298461914062,,,AgrOpt build loop ALONE (118 models),,-1,,
