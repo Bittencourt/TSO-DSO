@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Completed 39-03-PLAN.md
-last_updated: "2026-10-24T04:41:03.376Z"
+stopped_at: Completed 39-02-PLAN.md
+last_updated: "2026-10-24T06:29:15.385Z"
 last_activity: 2026-10-24
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 39 (Parallel-Ready ADMM & Gating Measurements) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-10-24
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -214,6 +214,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 38 P10 | 80min | 3 tasks | 2 files |
 | Phase 39 P01 | 9min | 2 tasks | 4 files |
 | Phase 39 P03 | 37min | 2 tasks | 6 files |
+| Phase 39 P02 | 35min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -298,6 +299,8 @@ Recent decisions affecting current work:
 - [Phase 39-01]: negative-control design fact — a 1-ulp (+eps()) coupling-price perturbation is solver-absorbed (bit-identical output); the comparator proof needed eps()*2^1, recorded as data in sweep.csv
 - [Phase 39-03]: PAR-04 provenance keys julia_threads/blas_threads land as process-level additives beside :julia_version in result_to_dict (live-measured at save time, every strategy, never missing); executor-blind identity pinned by test — _scenario_identity record dict carries no executor keys, :admm Scenario ==/hash/filename scenario-pure — D-10 live measurement; golden policy: no filename or identity churn
 - [Phase 39-03]: LinearAlgebra stdlib declared in root Project.toml (+compat 1, Manifest-v1.12 deps array) and as a direct test-env dep — Julia 1.12 loads stdlibs as regular packages and hard-errored on the undeclared use; Pkg.add stripped test/Project.toml's [compat] comment block, restored verbatim — matches the existing SparseArrays declaration convention
+- [Phase 39]: threaded executor landed as planned — split step in admm_phases.jl (_agr_solve_step! serves mid-loop AND certify AGR re-solves), no new module; BLAS pin ownership split: solve_admm.jl finally restores, helper sets BLAS=1+MOI pins once per call; -t 2 smoke bitwise-equal to serial (iters 56, welfare -4823.66604824162)
+- [Phase 39]: Rule-1 fix from the -t 2 smoke — spawn comprehension's has_4q index gated on final (mid-loop passes has_4q_by_bus = nothing); plan's single-line call-site greps replaced by semantic verification (pinned JuliaFormatter 92-col reflows both calls multi-line); anti-pattern greps (zero @sync/threadid()) pass literally
 
 ### Roadmap Evolution
 
@@ -545,8 +548,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-24T04:41:03.350Z
-Stopped at: Completed 39-03-PLAN.md
+Last session: 2026-10-24T06:29:15.347Z
+Stopped at: Completed 39-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

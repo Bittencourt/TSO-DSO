@@ -24,9 +24,9 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 
 ### Parallel ADMM (PAR)
 
-- [ ] **PAR-01**: A researcher can run the DSO⇄aggregator ADMM with aggregator subproblems solved concurrently on threads (opt-in executor); the serial executor remains the default and is byte-identical to v4.0 (canary unchanged).
+- [x] **PAR-01**: A researcher can run the DSO⇄aggregator ADMM with aggregator subproblems solved concurrently on threads (opt-in executor); the serial executor remains the default and is byte-identical to v4.0 (canary unchanged).
 - [x] **PAR-02**: Threaded and serial runs of the same scenario give identical results (`==` on iterations, residual traces, welfare and prices), verified by a test on a multi-aggregator fixture; parallel work is gated on a documented Clarabel concurrency/determinism spike.
-- [ ] **PAR-03**: Solver errors raised inside a parallel task surface with the same error types and node attribution as in serial runs (certificate errors still match by type).
+- [x] **PAR-03**: Solver errors raised inside a parallel task surface with the same error types and node attribution as in serial runs (certificate errors still match by type).
 - [x] **PAR-04**: Run provenance records the thread and BLAS-thread counts, and the executor choice does not change a scenario's identity (`==`, `hash`, saved filename).
 - [ ] **PAR-05**: ADMM results expose the per-aggregator dispatch, utilities, import profile and per-slot prices needed downstream (additive result keys; existing keys unchanged).
 
@@ -105,9 +105,9 @@ Deferred; tracked but not in this roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAR-01 | Phase 39 | Pending |
+| PAR-01 | Phase 39 | Complete |
 | PAR-02 | Phase 39 | Complete |
-| PAR-03 | Phase 39 | Pending |
+| PAR-03 | Phase 39 | Complete |
 | PAR-04 | Phase 39 | Complete |
 | PAR-05 | Phase 39 | Pending |
 | SCALE-06 | Phase 39 | Pending |

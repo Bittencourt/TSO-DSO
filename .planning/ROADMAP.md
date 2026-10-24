@@ -92,7 +92,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 39-02-PLAN.md — Opt-in threaded executor on solve_admm (kwarg + fail-loud guard, split AGR step, fetch-in-order join) — PAR-01, PAR-03
+- [x] 39-02-PLAN.md — Opt-in threaded executor on solve_admm (kwarg + fail-loud guard, split AGR step, fetch-in-order join) — PAR-01, PAR-03
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -210,7 +210,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 39. Parallel-Ready ADMM & Gating Measurements | 2/5 | In Progress|  |
+| 39. Parallel-Ready ADMM & Gating Measurements | 3/5 | In Progress|  |
 | 40. 784-House Thesis Population | 0/TBD | Not started | - |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
