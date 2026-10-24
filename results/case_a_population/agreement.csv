@@ -1,0 +1,2 @@
+julia_version,seed,t_horizon,houses,aggregators,centralized_optimizer,welfare_centralized,welfare_admm,welfare_abs_delta,welfare_rel_delta,price_max_abs_delta,price_max_rel_delta,admm_iters,admm_status,admm_exact_maxgap,recommended_rtol_welfare,recommended_atol_price,recommended_rtol_price
+1.12.5,42,24,784,10,tol_gap_1e-10,-378163.58894571784,,,,,,80,error:CertificateError,,,,
