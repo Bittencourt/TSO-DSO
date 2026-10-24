@@ -7,3 +7,6 @@ p35-head-d0.1-T24,0,12079316,none,10334,1553,0,2026-10-04 21:22:20,"--fixture ie
 p35-head-d0.25-T24,143,12636180,earlyoom,11483,2643,0,2026-10-04 21:42:29,"--fixture ieee8500 --admm-only --density 0.25 --t-horizon 24"
 p35-prof-ieee8500-s2,0,1408116,none,10623,2418,0,2026-10-05 00:14:29,"--fixture ieee8500 --density 0.1 --t-horizon 10 --stage 2"
 p35-prof-ieee8500-s3,0,2515692,none,10565,2418,0,2026-10-05 00:15:48,"--fixture ieee8500 --density 0.1 --t-horizon 10 --stage 3"
+p39-attr-d0.1-T10,0,5969080,none,5734,8956,0,2026-10-24 05:50:21,"--fixture ieee8500 --density 0.1 --t-horizon 10"
+p39-attr-d0.1-T24,143,7820096,earlyoom,6307,10057,0,2026-10-24 06:06:06,"--fixture ieee8500 --density 0.1 --t-horizon 24"
+p39-attr-d0.1-T24-s2,0,6366664,none,6805,10227,0,2026-10-24 06:23:59,"--fixture ieee8500 --density 0.1 --t-horizon 24 --stage 2"

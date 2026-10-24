@@ -1,0 +1,4 @@
+Oct 24 06:19:20 London earlyoom[1658]: low memory! at or below SIGTERM limits: mem 12.00%, swap 12.00%
+Oct 24 06:19:20 London earlyoom[1658]: sending SIGTERM to process 3783662 uid 1000 "julia": oom_score 1336, oom_score_adj 200, VmRSS 5950 MiB, cmdline "/home/pedro/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/bin/julia --project=. scripts/profile_ieee8500_memory_attribution.jl --fixture ieee8500 --density 0.1 --t-horizon 24"
+Oct 24 06:19:30 London earlyoom[1658]: low memory! at or below SIGTERM limits: mem 12.00%, swap 12.00%
+Oct 24 06:19:30 London earlyoom[1658]: sending SIGTERM to process 3783662 uid 1000 "julia": oom_score 1336, oom_score_adj 200, VmRSS 5885 MiB, cmdline "/home/pedro/.julia/juliaup/julia-1.12.5+0.x64.linux.gnu/bin/julia --project=. scripts/profile_ieee8500_memory_attribution.jl --fixture ieee8500 --density 0.1 --t-horizon 24"
