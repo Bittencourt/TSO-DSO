@@ -96,8 +96,10 @@ makedocs(;
             "Rung 9: Stochastic PV/Demand Uncertainty" => "generated/stochastic_pv_demand.md",
             "Rung 10: Meshed Networks + Live Reactive Price" => "generated/meshed_reactive_price.md",
         ],
-        "Experiments" => ["The Experiment Harness" => "generated/experiments.md",
-                          "Case A Population (784 houses)" => "generated/case_a_population.md"],
+        "Experiments" => [
+            "The Experiment Harness" => "generated/experiments.md",
+            "Case A Population (784 houses)" => "generated/case_a_population.md",
+        ],
         "Status & Exception Policy" => "status_policy.md",
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",

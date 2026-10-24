@@ -137,7 +137,8 @@ end
     _IEEE13_PV_SCALE,
     _IEEE13_DEV_SCALE,
 )
-@printf("PV-fraction constant       : %.1f (all-PV; generic field, see above)\n",
+@printf(
+    "PV-fraction constant       : %.1f (all-PV; generic field, see above)\n",
     _CASE_A_PV_FRACTION,
 )
 
@@ -238,19 +239,18 @@ end
 num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
 cell(s) = isempty(s) ? "-" : s
 
-agreement = only(read_case_a_csv(
-    joinpath(pkgdir(TSODSO), "results", "case_a_population", "agreement.csv"),
-))
-
-@printf("centralized leg  optimizer path : %s\n",
-    cell(agreement["centralized_optimizer"]),
+agreement = only(
+    read_case_a_csv(
+        joinpath(pkgdir(TSODSO), "results", "case_a_population", "agreement.csv"),
+    ),
 )
-@printf("centralized leg  welfare        : %s (certified)\n",
+
+@printf("centralized leg  optimizer path : %s\n", cell(agreement["centralized_optimizer"]),)
+@printf(
+    "centralized leg  welfare        : %s (certified)\n",
     cell(agreement["welfare_centralized"]),
 )
-@printf("decomposed leg   iterations     : %d\n",
-    round(Int, num(agreement["admm_iters"])),
-)
+@printf("decomposed leg   iterations     : %d\n", round(Int, num(agreement["admm_iters"])),)
 @printf("decomposed leg   status         : %s\n", cell(agreement["admm_status"]))
 @printf(
     "welfare deltas   abs / rel      : %s / %s\n",
@@ -262,7 +262,8 @@ agreement = only(read_case_a_csv(
     cell(agreement["price_max_abs_delta"]),
     cell(agreement["price_max_rel_delta"]),
 )
-@printf("recommended test band           : %s\n",
+@printf(
+    "recommended test band           : %s\n",
     cell(agreement["recommended_rtol_welfare"]),
 )
 
