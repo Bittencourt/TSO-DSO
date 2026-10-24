@@ -115,7 +115,7 @@ Plans:
   4. A scaling report gives measured wall time vs threads and ADMM iterations vs population size (speedup measured, not assumed, including a negative result if overhead-bound).
   5. Documentation states the population's composition (PV capacity, elastic/inelastic load, device mix) with calibration provenance and which thesis (Appendix E) parameters are unavailable.
 
-**Plans**: 4 plans
+**Plans**: 6 plans (2 gap-closure plans added 2026-10-24 for the POP-04 verification gap)
 
 Plans:
 **Wave 1**
@@ -133,6 +133,11 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 40-04-PLAN.md — Composition/calibration literate page (build-only live slice, CSV-sourced measurements) + both make.jl registrations — POP-06
+
+**Gap closure** *(verification 2026-10-24: gaps_found — POP-04 agreement band; fix path (a) the bounded precision seam)*
+
+- [ ] 40-05-PLAN.md — Additive AGR solver-precision seam: `select_optimizer(QP; attrs...)` + `build_agr_opt`/`solve_admm` `agr_optimizer` kwarg; default path byte-identical (canary pinned) — POP-04
+- [ ] 40-06-PLAN.md — Bounded solver-precision ladder at full scale (default + gap_1e-10 → gap_1e-12 → gapfeas_1e-12, stop-on-first-certified, hard stop) → agreement.csv record → pin the band / document non-closure (terminal state) — POP-04
 
 ### Phase 41: Settlement, Ledger & Equity
 
