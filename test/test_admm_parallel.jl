@@ -138,3 +138,171 @@ end
         end
     end
 end
+
+@testitem "admm parallel: error parity with serial attribution (admm_parallel)" setup =
+    [ExperimentHarnessFixtures] tags = [:admm, :parallel] begin
+    using TSODSO
+    using JuMP
+    using LinearAlgebra: BLAS
+
+    # PAR-03: an error raised inside a parallel task must surface — after the fetch-in-order
+    # join's `TaskFailedException` unwrap — with the SAME exception type and the SAME message
+    # as the serial executor's, NEVER a `TaskFailedException`/`CompositeException` wrapper.
+    #
+    # POISON NOTE (leg 3): the deterministic task-body poison is a contradictory constraint
+    # pair on ONE aggregator's coupling variable (`pag[1] >= 1e6` + `pag[1] <= -1e6`, bus 3),
+    # which makes the aggregator's QP grossly INFEASIBLE — `solve_agr!`'s solve-status gate
+    # then throws the typed `SolveFailedError` under BOTH executors. The battery/4Q
+    # certificate poisons (whose messages name the bus) were probed and are NOT reachable:
+    # forcing `p_ch`/`p_dch` co-charge trips the PV-limited charge bound (thesis 3.7/A6)
+    # first, so the QP dies INFEASIBLE at the solve gate before any certificate runs. The
+    # attribution parity is therefore proven by EXACT message equality (the multi-line
+    # solver-status block — identical text serial vs threaded).
+    #
+    # The `try`-expression catch idiom takes the caught object as the expression's value
+    # (TestItemRunner scoping; mirrors test_admm_exactness_default.jl).
+
+    if Threads.nthreads() == 1
+        @info "admm parallel: error-parity item SKIPPED — the threaded executor needs JULIA_NUM_THREADS > 1"
+        @test_skip "threaded error parity needs JULIA_NUM_THREADS > 1 — run: JULIA_NUM_THREADS=4 TSODSO_TEST_FILES=test_admm_parallel.jl julia --project=. -e 'import Pkg; Pkg.test()'"
+    else
+        let
+            kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
+            s = TSODSO.Scenario(; kw..., strategy = :admm)
+            st = s.strategy
+            feeder, λ₀, aggs = TSODSO._materialize(s)
+            pf = TSODSO.build_powerflow(s)
+            solve_kw = (
+                T = s.T,
+                λ₀ = λ₀,
+                ρ = st.ρ,
+                maxiter = st.maxiter,
+                ε_abs = st.ε_abs,
+                ε_rel = st.ε_rel,
+                τ = st.τ_ratio,
+                μ = st.μ,
+                allow_export = s.allow_export,
+            )
+            catch_err(f) =
+                try
+                    f()
+                    nothing
+                catch e
+                    e
+                end
+
+            blas0 = BLAS.get_num_threads()
+            try
+                # ---- Leg 1: CertificateError (SOC-exactness refusal, atol_exact = 1e-30) ----
+                kw_cert = (; atol_exact = 1e-30, rtol_exact = 0.0)
+                e1s = catch_err(
+                    () -> solve_admm(
+                        feeder,
+                        pf,
+                        aggs;
+                        solve_kw...,
+                        kw_cert...,
+                        parallel = false,
+                    ),
+                )
+                e1p = catch_err(
+                    () -> solve_admm(
+                        feeder,
+                        pf,
+                        aggs;
+                        solve_kw...,
+                        kw_cert...,
+                        parallel = true,
+                    ),
+                )
+                @info "admm parallel error parity: CertificateError leg" serial_type =
+                    typeof(e1s) threaded_type = typeof(e1p)
+                @test e1s isa CertificateError
+                @test e1p isa CertificateError
+                @test typeof(e1s) == typeof(e1p)
+                @test e1s.msg == e1p.msg
+                @test e1s.kind == e1p.kind
+                @test e1s.iterations == e1p.iterations
+
+                # ---- Leg 2: ConvergenceError (maxiter = 1, tight ε — messages embed the
+                #      residual traces, so message equality is itself an equality probe) ----
+                kw_conv = (; maxiter = 1, ε_abs = 1e-10, ε_rel = 1e-10)
+                e2s = catch_err(
+                    () -> solve_admm(
+                        feeder,
+                        pf,
+                        aggs;
+                        solve_kw...,
+                        kw_conv...,
+                        parallel = false,
+                    ),
+                )
+                e2p = catch_err(
+                    () -> solve_admm(
+                        feeder,
+                        pf,
+                        aggs;
+                        solve_kw...,
+                        kw_conv...,
+                        parallel = true,
+                    ),
+                )
+                @info "admm parallel error parity: ConvergenceError leg" serial_type =
+                    typeof(e2s) threaded_type = typeof(e2p)
+                @test e2s isa ConvergenceError
+                @test e2p isa ConvergenceError
+                @test typeof(e2s) == typeof(e2p)
+                @test e2s.msg == e2p.msg
+
+                # ---- Leg 3: task-body unwrap (exercises the join directly) ----------------
+                # Build a FRESH poisoned state per executor leg; the poison throws inside the
+                # AGR solve grain itself — serially it propagates directly, threaded it must
+                # come back through the fetch-in-order `TaskFailedException` unwrap.
+                mode =
+                    TSODSO.normalize_reactive_mode(TSODSO._default_reactive_consensus(aggs))
+                rmode = TSODSO._react_mode(mode)
+                jpoison = 3
+                function poisoned_state()
+                    stx = TSODSO._admm_build(
+                        feeder,
+                        pf,
+                        aggs,
+                        s.T,
+                        λ₀,
+                        Float64(st.ρ),
+                        Float64(st.ρ),
+                        mode,
+                        rmode,
+                    )
+                    agrx = stx.agr_by_bus[jpoison]
+                    @constraint(agrx.model, agrx.pag[1] >= 1e6)
+                    @constraint(agrx.model, agrx.pag[1] <= -1e6)
+                    return stx
+                end
+                e3s = catch_err(
+                    () ->
+                        TSODSO._agr_solve_step!(rmode, poisoned_state(); final = false),
+                )
+                e3p = catch_err(
+                    () -> TSODSO._agr_solve_step!(
+                        rmode,
+                        poisoned_state();
+                        final = false,
+                        parallel = true,
+                    ),
+                )
+                @info "admm parallel error parity: task-body unwrap leg" serial_type =
+                    typeof(e3s) threaded_type = typeof(e3p)
+                @test e3s isa SolveFailedError
+                @test e3p isa SolveFailedError
+                @test typeof(e3s) == typeof(e3p)
+                @test e3s.msg == e3p.msg
+                # NO wrapper types — the ORIGINAL exception object with serial's attribution.
+                @test !(e3p isa TaskFailedException)
+                @test !(e3p isa CompositeException)
+            finally
+                BLAS.set_num_threads(blas0)
+            end
+        end
+    end
+end
