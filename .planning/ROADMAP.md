@@ -58,7 +58,7 @@ Build order follows the reconciled research order (`research/SUMMARY.md`) unchan
 with a thin Phase 39, population, settlement, Case A, devices (may run concurrently with 41–42),
 aggregator actor, flexibility market, and the IEEE-8500 headline last behind a go/no-go.
 
-- [ ] **Phase 39: Parallel-Ready ADMM & Gating Measurements** - Opt-in threaded aggregator solves, additive result keys, Clarabel concurrency spike, and 8500 memory attribution
+- [x] **Phase 39: Parallel-Ready ADMM & Gating Measurements** - Opt-in threaded aggregator solves, additive result keys, Clarabel concurrency spike, and 8500 memory attribution (completed 2026-10-24)
 - [ ] **Phase 40: 784-House Thesis Population** - True Case A population via a new selector, per-house seeding, household map, centralized-vs-ADMM agreement and scaling report
 - [ ] **Phase 41: Settlement, Ledger & Equity** - Conserved per-actor ledger, tariff schemes, AC feasibility status, equity metrics, rebound
 - [ ] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation
@@ -100,7 +100,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 39-05-PLAN.md — SCALE-06 staged RSS memory attribution (d=0.1 T=10/24) + doc note
+- [x] 39-05-PLAN.md — SCALE-06 staged RSS memory attribution (d=0.1 T=10/24) + doc note
 
 ### Phase 40: 784-House Thesis Population
 
@@ -210,7 +210,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 39. Parallel-Ready ADMM & Gating Measurements | 4/5 | In Progress|  |
+| 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete   | 2026-10-24 |
 | 40. 784-House Thesis Population | 0/TBD | Not started | - |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |

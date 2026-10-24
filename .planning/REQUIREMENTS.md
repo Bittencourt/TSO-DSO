@@ -73,7 +73,7 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 
 ### Scale at IEEE-8500 (SCALE)
 
-- [ ] **SCALE-06**: The ~3.4 GiB of unattributed memory growth in IEEE-8500 runs is profiled and attributed, with the result documented.
+- [x] **SCALE-06**: The ~3.4 GiB of unattributed memory growth in IEEE-8500 runs is profiled and attributed, with the result documented.
 - [ ] **SCALE-07**: A go/no-go decision for the headline run is recorded: GO only if attribution projects peak memory below ~10 GiB on the 15 GB host; otherwise "memory-infeasible on this host" is recorded with a lower-bounded requirement.
 - [ ] **SCALE-08**: The IEEE-8500 headline point is run through `Scenario` (feeder selector widened additively) and reported as a measured table — size, build time, solve time, iterations, peak memory, exactness verdict — where "refused with certificate" counts as a measured outcome.
 
@@ -110,7 +110,7 @@ Deferred; tracked but not in this roadmap.
 | PAR-03 | Phase 39 | Complete |
 | PAR-04 | Phase 39 | Complete |
 | PAR-05 | Phase 39 | Complete |
-| SCALE-06 | Phase 39 | Pending |
+| SCALE-06 | Phase 39 | Complete |
 | POP-01 | Phase 40 | Pending |
 | POP-02 | Phase 40 | Pending |
 | POP-03 | Phase 40 | Pending |

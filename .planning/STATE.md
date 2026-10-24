@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Completed 39-04-PLAN.md
-last_updated: "2026-10-24T07:59:42.524Z"
+stopped_at: Completed 39-05-PLAN.md (Phase 39 plans 5/5 — SCALE-06 closed)
+last_updated: "2026-10-24T09:39:36.852Z"
 last_activity: 2026-10-24
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 4
-  percent: 0
+  completed_plans: 5
+  percent: 13
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
-Phase: 39 (Parallel-Ready ADMM & Gating Measurements) — EXECUTING
-Plan: 5 of 5
-Status: Ready to execute
+Phase: 39 (Parallel-Ready ADMM & Gating Measurements) — ALL 5 PLANS COMPLETE (pending phase gate: code review + verify-work)
+Plan: 5 of 5 — 39-05 (SCALE-06 memory attribution) COMPLETE
+Status: Phase 39 plans complete; phase close next
 Last activity: 2026-10-24
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -216,6 +216,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 39 P03 | 37min | 2 tasks | 6 files |
 | Phase 39 P02 | 35min | 3 tasks | 3 files |
 | Phase 39 P04 | 40min | 3 tasks | 5 files |
+| Phase 39 P05 | 51min | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -305,6 +306,7 @@ Recent decisions affecting current work:
 - [Phase 39-04]: PAR-02 proven behaviorally — threaded == serial BITWISE at -t 4 on the 10-aggregator minimal scenario (both legs iters 56 / welfare -4823.66604824162; traces, welfare, dadp and all four additive keys literal ==; isequal only for the NaN-bearing exact_maxgap); guard item 1-thread-safe
 - [Phase 39-04]: PAR-03 proven — CertificateError (atol_exact=1e-30), ConvergenceError (maxiter=1) and poisoned-task (contradictory pag constraint → INFEASIBLE → SolveFailedError) legs all type+message parity across executors, never TaskFailedException/CompositeException; battery/4Q bus-naming poisons probed UNREACHABLE (PV-limited charge bound, thesis 3.7/A6, makes forced co-charge infeasible before any certificate fires)
 - [Phase 39-04]: PAR-05 additive keys land (agr_dispatch/agr_utility/agr_import/agr_prices, trailing on the converged path); agr_prices[j] == dadp row pinned by test; agr_import keyed to the SHARED root frontier profile (st.p_import is network-level — no per-bus decomposition exists); canary-after-parallel proven under the DANGEROUS ordering via a scratch same-process driver (committed combined command's walk order puts the canary FIRST — measured fact, recorded in 39-04-SUMMARY)
+- [Phase 39-05]: SCALE-06 T=10 attribution — anchor delta 4.339 GiB (CertificateError iters=8, ratio 568.95 reproduced exactly); components: AgrOpt builds +1.724, first iterate +1.370, per-iterate +0.318 (~0.045 GiB/iter — per-hour DSO solver-state hypothesis refuted as dominant), certify −0.100; Σ 3.720±0.237, residual 0.620±0.237 GiB. T=24 full run earlyoom-killed at the anchor (recorded evidence, no retry); build-only run: +0.922/+4.024 GiB (~2.3× T=10 for 2.4× T — the models scale with T); loop attribution honestly NOT ESTABLISHED
 
 ### Roadmap Evolution
 
@@ -552,8 +554,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-24T07:59:42.497Z
-Stopped at: Completed 39-02-PLAN.md
+Last session: 2026-10-24T09:39:36.828Z
+Stopped at: Completed 39-05-PLAN.md (Phase 39 plans 5/5 — SCALE-06 closed)
 Resume file: None
 
 ## Operator Next Steps
