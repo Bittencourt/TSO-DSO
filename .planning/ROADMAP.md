@@ -59,7 +59,7 @@ with a thin Phase 39, population, settlement, Case A, devices (may run concurren
 aggregator actor, flexibility market, and the IEEE-8500 headline last behind a go/no-go.
 
 - [x] **Phase 39: Parallel-Ready ADMM & Gating Measurements** - Opt-in threaded aggregator solves, additive result keys, Clarabel concurrency spike, and 8500 memory attribution (completed 2026-10-24)
-- [ ] **Phase 40: 784-House Thesis Population** - True Case A population via a new selector, per-house seeding, household map, centralized-vs-ADMM agreement and scaling report
+- [x] **Phase 40: 784-House Thesis Population** - True Case A population via a new selector, per-house seeding, household map, centralized-vs-ADMM agreement and scaling report (completed 2026-10-24)
 - [ ] **Phase 41: Settlement, Ledger & Equity** - Conserved per-actor ledger, tariff schemes, AC feasibility status, equity metrics, rebound
 - [ ] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation
 - [ ] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized
@@ -132,7 +132,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 40-04-PLAN.md — Composition/calibration literate page (build-only live slice, CSV-sourced measurements) + both make.jl registrations — POP-06
+- [x] 40-04-PLAN.md — Composition/calibration literate page (build-only live slice, CSV-sourced measurements) + both make.jl registrations — POP-06
 
 ### Phase 41: Settlement, Ledger & Equity
 
@@ -228,7 +228,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
-| 40. 784-House Thesis Population | 3/4 | In Progress|  |
+| 40. 784-House Thesis Population | 4/4 | Complete   | 2026-10-24 |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
