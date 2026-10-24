@@ -565,7 +565,10 @@ a name this phase changes.)
 | A5 | ADMM at 784 houses converges within maxiter=200 without re-tuning — UNKNOWN; thesis reported 28 iterations at this size, the repo canary needs 56 at 10 houses | Pitfall 5 | If it stalls, the honest outcomes are documented (raise maxiter as a measured finding, or `:budget_exceeded` with `time_limit_s`); never re-tune per rung (locked) |
 | A6 | `hash` tuple stability across Julia versions (seed derivations are golden-bearing): already relied upon by pinned goldens; v1.0 carried an explicit deferred note on `sub_seed` cross-version hash stability | Pattern 2 | A future Julia version changing `hash` would move all seeds — accepted standing risk, unchanged by this phase |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All four questions were resolved during planning and adopted in the phase plans; the original
+recommendations stand as written below.
 
 1. **Per-house magnitude scale (A1) — the phase's biggest modeling decision.**
    - What we know: CONTEXT locks *fractions* from `:default`, not absolute per-house magnitudes;
@@ -578,18 +581,31 @@ a name this phase changes.)
      (c) something else.
    - Recommendation: (a), documented as calibration provenance in the doc page; confirm at
      plan review.
+   - **Resolution:** option (a) adopted — `_case_a_house` divides the `:default` scales by
+     houses-per-bus, rationale recorded in the docstring; implemented in **40-01 Task 1**,
+     provenance documented in **40-04** (calibration section).
 
 2. **PV/non-PV split realization (A2).**
    - What we know: `:default` is 100% PV; success criterion 2 requires the group field; Phase-41
      SETL-05 requires owner/non-owner proxy groups.
    - Recommendation: generic group field + named PV-fraction constant (default 1.0 per the
      locked decision, trivial-but-honest), so Phase 41 can lower the constant without redesign.
+   - **Resolution:** adopted — generic `_case_a_pv_group` field plus named const
+     `_CASE_A_PV_FRACTION = 1.0`; implemented in **40-01 Task 1**, triviality stated honestly
+     in **40-04**.
 
 3. **Residue tiebreak definition (A4)** — planner picks; document in the doc page either way.
+   - **Resolution:** ascending bus-id tiebreak adopted — residue assigned to the first `r`
+     buses in ascending bus-id order in `_case_a_house_counts`; implemented in **40-01 Task 1**,
+     rule documented in **40-04**.
 
 4. **ADMM configuration for the 784 point (A5):** start from the `ADMM()` defaults
    (ρ=100, ε_abs=1e-4, ε_rel=1e-3, maxiter=200) for BOTH the agreement run and every ladder rung;
    any change is a measured, documented move, never per-rung tuning.
+   - **Resolution:** executor defaults adopted everywhere — ladder mode passes no ρ/maxiter/tol
+     overrides (**40-02 Task 1**), agreement run uses executor defaults with non-convergence
+     recorded honestly as the A5 escalation signal, not tuned away (**40-03 Task 1**; band
+     pinning / phase-level stop in **40-03 Task 2**).
 
 ## Sources
 
