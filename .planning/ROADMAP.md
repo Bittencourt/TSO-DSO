@@ -152,7 +152,24 @@ Plans:
   4. Gini, Theil, Atkinson and Palma on per-household bills/surplus pass known-value tests, including negative values, and results are broken out by PV owner/non-owner, electrical location and load level, with the writeup stating no income data is used.
   5. A rebound metric reports load shifted into later hours after price-driven reductions.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 41-01-PLAN.md — Settlement core: double-entry `SettlementLedger` (DSO/aggregators/households/wholesale, explicit merchandising-surplus line, exact sum-to-zero) + run-input adapters (centralized ctx / converged ADMM, loud non-converged guard) + conservation/sign/oracle tests incl. `:slow` IEEE-13 T=24 real-run identity — SETL-01
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 41-02-PLAN.md — Equity & rebound layer: Gini/Theil/Atkinson/Palma with documented negative-value conventions + known-value certificates, PV/bus/load-tercile breakouts from the household map, rebound metric — SETL-04, SETL-05, SETL-06
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 41-03-PLAN.md — Tariff construction & counterfactuals: revenue-neutral flat/TOU price derivation (pinned TOU bins), thin penalty-free price-taker dispatch QP (battery-certificate report semantics, per-house separability), AC-feasibility status wrapper (report, never throw) — SETL-02, SETL-03
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 41-04-PLAN.md — Comparison deliverable: `compare_tariffs` runner, scripts/tariff_comparison.jl committed CSVs (784-house + ground modes, honest status rows), literate writeup with the no-income-data statement registered at both make.jl sites — SETL-02, SETL-05
 
 ### Phase 42: Thesis Case A Magnitude
 
