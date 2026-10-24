@@ -45,7 +45,7 @@ const SCENARIO_VALID_PRICES = (:mem,)
 """
 Valid `population` selectors a `Scenario` may name (dispatch target: `build_population`, materialize.jl).
 """
-const SCENARIO_VALID_POPULATIONS = (:default,)
+const SCENARIO_VALID_POPULATIONS = (:default, :case_a_784)
 
 """
     Scenario

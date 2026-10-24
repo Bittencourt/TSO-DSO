@@ -133,6 +133,13 @@ const _IEEE123_LOAD_SCALE = 0.03
 const _IEEE123_PV_SCALE = 0.06
 const _IEEE123_DEV_SCALE = 0.05
 
+# :case_a_784 population calibration — the thesis Case A size and its PV-ownership split.
+# `_CASE_A_PV_FRACTION = 1.0` is the honest reading of the locked "keep the `:default`
+# fractions" decision (`:default` is 100%-PV: every house carries a `PVBattery`); the
+# fraction is a named constant so a later phase can lower it without redesign.
+const _CASE_A_TOTAL_HOUSES = 784
+const _CASE_A_PV_FRACTION = 1.0
+
 # The 24-hour exterior-temperature profile (°C) feeding the thermostatic ambient `Tout`, the
 # SAME digitized shape as the earlier fixtures (thesis Fig 4.2). Cyclically repeated to any
 # horizon `T` (see `_temperature_profile`), matching the `_MEM_PRICE_PROFILE_24H` convention.
@@ -306,6 +313,145 @@ function _ieee8500_house(bus::Int, kw_pu::Float64, profiles, seed::Integer, T::I
 end
 
 """
+    _case_a_house_counts(buses::Vector{Int}, total::Int) -> Dict{Int,Int}
+
+Distribute `total` houses over `buses` per the locked Phase-40 rule: every bus gets the base
+share `total ÷ length(buses)`, and the residue `total % length(buses)` is assigned +1 per bus
+to the first `r` buses in ascending bus-id order. The locked decision's "largest buses first"
+language specializes to ascending bus id here because the `:default` population has exactly
+one house per bus (uniform per-bus counts carry no size signal) — this is the A4 tiebreak
+definition. For the IEEE-13 load buses `[2..11]` and `total = 784`: buses 2, 3, 4, 5 get 79
+houses and buses 6-11 get 78.
+
+Throws `ArgumentError` when `buses` is empty or `total < length(buses)` (a bus with zero
+houses would build an empty, `Aggregator`-illegal roll-up).
+"""
+function _case_a_house_counts(buses::Vector{Int}, total::Int)
+    isempty(buses) && throw(
+        ArgumentError("_case_a_house_counts: buses must be non-empty; got none"),
+    )
+    total < length(buses) && throw(
+        ArgumentError(
+            "_case_a_house_counts: total ($total) must be >= length(buses) " *
+            "($(length(buses))); every bus needs at least one house",
+        ),
+    )
+    ordered = sort(buses)   # residue rule: ascending bus-id order, independent of input order
+    base = total ÷ length(ordered)
+    r = total % length(ordered)
+    counts = Dict{Int, Int}(bus => base for bus in ordered)
+    for bus in ordered[1:r]
+        counts[bus] += 1
+    end
+    return counts
+end
+
+"""
+    _case_a_house_seed(s_pop::Integer, bus::Int, house_index::Int) -> Int
+
+The per-house profile seed of the `:case_a_784` population: exactly
+`Int(hash((s_pop, :house, bus, house_index)) % typemax(UInt32))` — the [`sub_seed`](@ref)
+hash idiom extended with a richer tuple (locked Phase-40 decision). `s_pop` is
+`build_population`'s `seed` argument, already the population sub-seed (call sites pass
+`sub_seed(scenario_seed, :population)`); the per-house tuple takes it directly, mirroring how
+`:default` derives its per-bus draws from the same sub-seed.
+
+Per-HOUSE, never per-bus: the `seed + bus` idiom `_default_house` uses would give every house
+on a bus the SAME profile draw, silently collapsing the population to 10 distinct houses.
+Collision-freeness across the 784 `(bus, house_index)` pairs is an EMPIRICAL property (hash
+independence of distinct tuples), enforced by test (`test_population_case_a.jl` asserts a
+784-element seed set).
+"""
+_case_a_house_seed(s_pop::Integer, bus::Int, house_index::Int) =
+    Int(hash((s_pop, :house, bus, house_index)) % typemax(UInt32))
+
+"""
+    _case_a_pv_group(house_index::Int, n_bus::Int, pv_fraction::Real) -> Symbol
+
+The house's PV-ownership group within its bus: `:pv` when
+`house_index <= ceil(pv_fraction * n_bus)`, else `:non_pv`. A GENERIC field (A2 resolution):
+at the named constant `_CASE_A_PV_FRACTION = 1.0` every house is `:pv` — the honest reading
+of the locked "keep the `:default` fractions" decision, since `:default` is 100%-PV (every
+house carries a `PVBattery`). Lowering the constant later (Phase-41 settlement groups) needs
+no redesign: the field is generic and the fixed 3-device house construction is unchanged.
+"""
+function _case_a_pv_group(house_index::Int, n_bus::Int, pv_fraction::Real)
+    return house_index <= ceil(pv_fraction * n_bus) ? :pv : :non_pv
+end
+
+"""
+    _case_a_house(bus::Int, house_index::Int, n_bus::Int, s_pop::Integer, T::Int;
+                  load_scale, pv_scale, dev_scale, pv_fraction) -> Aggregator
+
+One per-house-seeded residential `Aggregator` of the `:case_a_784` population — a genuinely
+NEW code path (the [`_ieee8500_house`](@ref) precedent), NOT a parameterized modification of
+[`_default_house`](@ref). The device-construction body is copied VERBATIM from
+`_default_house` (same `Thermostatic`/`Deferrable`/`PVBattery` calls, same
+`_DEFAULT_BATT_λ_*` constants, φ = 0.90) with exactly two changes:
+
+1. The profile draw is PER-HOUSE: its seed is `_case_a_house_seed(s_pop, bus, house_index)`
+   fed to `generate_profiles` — never the `seed + bus` per-bus idiom, under which every house
+   on a bus would receive an IDENTICAL draw.
+2. The per-house magnitude scales are DIVIDED by the bus's house count: `hs = load_scale /
+   n_bus`, `ps = pv_scale / n_bus`, `ds = dev_scale / n_bus`, used everywhere the `:default`
+   path uses the raw scales. RATIONALE (calibration provenance): dividing by houses-per-bus
+   preserves each bus's aggregate load/PV at the validated `:default` level, keeping both
+   solve engines in the known-good congestion/voltage regime; raw per-house scales would put
+   roughly 78x the calibrated load through the 6.86 MVA head branch and be near-certainly
+   infeasible.
+
+`pv_fraction` is accepted for symmetry with `case_a_household_map` and is NOT used by this
+construction: every house carries the fixed 3-device set (the PV group lives in
+`_case_a_pv_group` / the household map, per the A2 generic-field resolution).
+"""
+function _case_a_house(
+    bus::Int,
+    house_index::Int,
+    n_bus::Int,
+    s_pop::Integer,
+    T::Int;
+    load_scale::Real,
+    pv_scale::Real,
+    dev_scale::Real,
+    pv_fraction::Real,
+)
+    hs = load_scale / n_bus
+    ps = pv_scale / n_bus
+    ds = dev_scale / n_bus
+    prof = generate_profiles(; seed = _case_a_house_seed(s_pop, bus, house_index), T = T)
+    Ppv = Float64[ps * p for p in prof.pv]
+    Pdc = Float64[hs * d for d in prof.demand]
+
+    therm = Thermostatic(
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * ds,
+        0.5,
+        _temperature_profile(T),
+    )
+    defer = Deferrable(bus, min(8, T), min(16, T), 1.0 * ds, 0.5 * ds, 0.5)
+    batt = PVBattery(
+        bus,
+        0.95,
+        1.0,
+        0.5 * hs,
+        0.0,
+        2.0 * hs,
+        1.0 * hs,
+        _DEFAULT_BATT_λ_MIN,
+        _DEFAULT_BATT_λ_MED,
+        _DEFAULT_BATT_λ_MAX,
+        Ppv,
+    )
+    return Aggregator(bus, 0.90, [therm, defer, batt], Pdc)
+end
+
+"""
     build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, seed::Integer) -> Vector{<:Aggregator}
 
 Materialize the aggregator population named by `sym`. `:default` returns one seeded
@@ -338,12 +484,78 @@ paths additionally APPEND 4 `Aggregator`s (one per `ieee8500_capacitor_buses()` 
 wrapping a single `FixedCapacitor` each at zero inelastic demand (`Pdc = zeros(T)`),
 so `Aggregator` stays the SOLE `:Rp`/`:Rq` writer (`FixedCapacitor` itself
 never touches `ctx.residuals`).
+
+# `:case_a_784` population
+
+`sym = :case_a_784` materializes the thesis Case A population: `_CASE_A_TOTAL_HOUSES = 784`
+per-house-seeded residential houses distributed over the 10 IEEE-13 load buses
+(`_case_a_house_counts`: base share `784 ÷ 10` per bus, residue +1 to the first 4 buses in
+ascending bus-id order — buses 2-5 carry 79 houses, buses 6-11 carry 78), rolled up into
+EXACTLY 10 bus-level `Aggregator`s (devices concatenated, `Pdc` summed, ascending bus
+order). The roll-up is load-bearing: `solve_admm` hard-enforces one aggregator per load
+node, and `run(::Centralized, s)`'s `sort!([a.bus for a in aggs])` price extraction needs
+unique bus rows — 784 per-house aggregators would throw on both counts. The 784-house
+granularity lives in the construction: each house draws its profile via
+`generate_profiles` seeded by `_case_a_house_seed(seed, bus, house_index)` — a per-house
+`hash((seed, :house, bus, house_index)) % typemax(UInt32)` derivation, NEVER the per-bus
+`seed + bus` idiom — and its device magnitudes use the `_IEEE13_*` scales DIVIDED by the
+bus's house count, preserving each bus's aggregate load/PV at the validated `:default`
+level (calibration provenance; raw per-house scales would put roughly 78x the calibrated
+load through the 6.86 MVA head branch). The selector is defined over `:ieee13` only; any
+other `feeder_sym` throws `ArgumentError`. `case_a_household_map` rebuilds the
+house → (bus, aggregator, device set, PV group) map from the same helpers without
+constructing `Aggregator`s or drawing profiles.
 """
 function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, seed::Integer)
-    if sym !== :default
+    if sym === :case_a_784
+        if feeder_sym !== :ieee13
+            throw(
+                ArgumentError(
+                    "build_population(:case_a_784): the selector is defined over the 10 " *
+                    "IEEE-13 load buses only; got feeder selector $(repr(feeder_sym))",
+                ),
+            )
+        end
+        buses = _load_buses(feeder, feeder_sym)
+        counts = _case_a_house_counts(buses, _CASE_A_TOTAL_HOUSES)
+        T = length(profiles.demand)
+        load_scale, pv_scale, dev_scale =
+            (_IEEE13_LOAD_SCALE, _IEEE13_PV_SCALE, _IEEE13_DEV_SCALE)
+        aggs = Aggregator[]
+        for bus in buses
+            houses = [
+                _case_a_house(
+                    bus,
+                    h,
+                    counts[bus],
+                    seed,
+                    T;
+                    load_scale = load_scale,
+                    pv_scale = pv_scale,
+                    dev_scale = dev_scale,
+                    pv_fraction = _CASE_A_PV_FRACTION,
+                ) for h in 1:counts[bus]
+            ]
+            # Bus-level roll-up (load-bearing shape): one Aggregator per load bus with the
+            # houses' devices concatenated and their Pdc summed — solve_admm throws on any
+            # other aggregator count (one-aggregator-per-load-node guard) and the
+            # centralized price extraction needs unique bus rows.
+            push!(
+                aggs,
+                Aggregator(
+                    bus,
+                    0.90,
+                    reduce(vcat, [h.devices for h in houses]),
+                    reduce(+, [h.Pdc for h in houses]),
+                ),
+            )
+        end
+        return aggs
+    elseif sym !== :default
         throw(
             ArgumentError(
-                "build_population: unknown population selector $(repr(sym)); expected :default",
+                "build_population: unknown population selector $(repr(sym)); " *
+                "expected :default or :case_a_784",
             ),
         )
     end
