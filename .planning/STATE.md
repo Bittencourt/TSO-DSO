@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Completed 40-02-PLAN.md (POP-05 measured scaling artifacts committed)
-last_updated: "2026-10-24T14:07:21.101Z"
+stopped_at: Completed 40-03-PLAN.md (POP-04 agreement measured — band pin blocked by the battery-certificate refusal, tracked skip + routed to the phase verifier)
+last_updated: "2026-10-24T15:23:43.131Z"
 last_activity: 2026-10-24
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 13
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 40 (784-House Thesis Population) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-10-24
-Progress: [████████░░] 78%
+Progress: [█████████░] 89%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -220,6 +220,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 39 P05 | 51min | 3 tasks | 21 files |
 | Phase 40 P01 | 29min | 3 tasks | 3 files |
 | Phase 40 P02 | 74min | 2 tasks | 7 files |
+| Phase 40 P03 | 32min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -315,6 +316,9 @@ Recent decisions affecting current work:
 - [Phase 40]: rho sourced from ADMM().rho at every solve_admm call site (required kwarg; executor default shared identically — the locked no-re-tuning config)
 - [Phase 40]: Full-population ADMM certificate refusal (battery complementarity, ~1e-12 band at per-house-divided battery scale) recorded as data in results/case_a_population/*.csv — escalation signal for 40-03, never tuned away
 - [Phase 40]: POP-05 measured: ADMM iters 2,4,5,5,91,80 across 10..784 houses (blow-up lands between 390-584 houses); threads sweep 1.44x at -t 4 (593.4s serial / 410.8s parallel), modest positive speedup
+- [Phase 40]: Plan 40-03: agreement band NOT pinned — ADMM at executor defaults refused at the battery-complementarity certificate (no certified agreement point); gate-then-golden forbids invented constants, so the missing pin is a loud tracked skip citing agreement.csv
+- [Phase 40]: Plan 40-03: centralized 784-house leg — default optimizer refused kind=:socp_exact (research Pitfall 4); SOLVER tightened tol_gap 1e-10, gates untouched, path recorded in agreement.csv centralized_optimizer; welfare -378163.58894571784
+- [Phase 40]: Plan 40-03: dual-sign anchor re-derived for the full population — positive-price invariant falsifies on solver noise at the ZERO price floor of midday PV saturation (16/240 elements in [-1.9893e-6, -1e-7]); pinned as noise-band 1.99e-5 (10x measured deepest) + congestion-hour positivity
 
 ### Roadmap Evolution
 
@@ -539,6 +543,7 @@ None yet.
   near 1 is not evidence — genuine structural gaps were 1e3-1e4.
 
 - [RESOLVED by 31-07, Option A build-time clamp] [Phase 31 plan 01] WR-03 convergence-certificate widening (30-REVIEW.md Option B, _accepted_lb_slack) breaks pre-existing pinned Benders goldens at the project's standard tol=1e-6 -- build_master's WR-05 lb_slack is nonzero (~2e-6) for ANY explicit-bound solve_stackelberg! call since Phase 30's unconditional bounds_ctx wiring, not just near-the-edge bounds. Measured on test_planning_benders.jl's flagship N=1 golden + test_planning_alpha_bounds_stackelberg.jl; very likely affects test_planning_goldens.jl/test_planning_nash.jl/test_planning_certification.jl/test_planning_noninteger.jl too (same fixture pattern, not individually re-run). Reverted, not committed. WR-01 (same plan) IS fixed and committed. Recommended: Option A (build-time clamp in master.jl, out of this plan's file scope) in a follow-up plan (candidate 31-02).
+- POP-04 agreement-within-tolerance BLOCKED (plan 40-03): full-population ADMM point refused at the battery-complementarity certificate (error:CertificateError, 80 iters) at executor defaults; centralized side certified at tol_gap_1e-10 (welfare -378163.58894571784). Recorded in results/case_a_population/agreement.csv; band pin shipped as a tracked skip. Candidate fixes for a follow-up: consolidation battery-gate precision investigation or the Phase-26 eta<1 KKT round-trip backlog item — never a tolerance loosening
 
 ## Deferred Items
 
@@ -562,8 +567,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-24T14:07:21.076Z
-Stopped at: Completed 40-02-PLAN.md (POP-05 measured scaling artifacts committed)
+Last session: 2026-10-24T15:23:43.108Z
+Stopped at: Completed 40-03-PLAN.md (POP-04 agreement measured — band pin blocked by the battery-certificate refusal, tracked skip + routed to the phase verifier)
 Resume file: None
 
 ## Operator Next Steps
