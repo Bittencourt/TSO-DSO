@@ -124,7 +124,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 40-02-PLAN.md — Scaling report: subprocess threads sweep (-t 1/2/4) + nested-prefix population ladder → committed CSVs + smoke test — POP-05
+- [x] 40-02-PLAN.md — Scaling report: subprocess threads sweep (-t 1/2/4) + nested-prefix population ladder → committed CSVs + smoke test — POP-05
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -228,7 +228,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
-| 40. 784-House Thesis Population | 1/4 | In Progress|  |
+| 40. 784-House Thesis Population | 2/4 | In Progress|  |
 | 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |

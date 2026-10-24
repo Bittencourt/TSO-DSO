@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Completed 39-05-PLAN.md (Phase 39 plans 5/5 — SCALE-06 closed)
-last_updated: "2026-10-24T12:16:02.362Z"
+stopped_at: Completed 40-02-PLAN.md (POP-05 measured scaling artifacts committed)
+last_updated: "2026-10-24T14:07:21.101Z"
 last_activity: 2026-10-24
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 13
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 40 (784-House Thesis Population) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-10-24
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -219,6 +219,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 39 P04 | 40min | 3 tasks | 5 files |
 | Phase 39 P05 | 51min | 3 tasks | 21 files |
 | Phase 40 P01 | 29min | 3 tasks | 3 files |
+| Phase 40 P02 | 74min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -311,6 +312,9 @@ Recent decisions affecting current work:
 - [Phase 39-05]: SCALE-06 T=10 attribution — anchor delta 4.339 GiB (CertificateError iters=8, ratio 568.95 reproduced exactly); components: AgrOpt builds +1.724, first iterate +1.370, per-iterate +0.318 (~0.045 GiB/iter — per-hour DSO solver-state hypothesis refuted as dominant), certify −0.100; Σ 3.720±0.237, residual 0.620±0.237 GiB. T=24 full run earlyoom-killed at the anchor (recorded evidence, no retry); build-only run: +0.922/+4.024 GiB (~2.3× T=10 for 2.4× T — the models scale with T); loop attribution honestly NOT ESTABLISHED
 - [Phase ?]: Per-house calibration (A1): :case_a_784 divides :default scales by houses-per-bus — bus aggregates stay at the validated solve regime
 - [Phase ?]: Rebuild reproducibility for device structs asserted structurally (Vector fields make default == reference-true); anti-Pitfall-2 threshold pinned with measured pv-path entropy rationale
+- [Phase 40]: rho sourced from ADMM().rho at every solve_admm call site (required kwarg; executor default shared identically — the locked no-re-tuning config)
+- [Phase 40]: Full-population ADMM certificate refusal (battery complementarity, ~1e-12 band at per-house-divided battery scale) recorded as data in results/case_a_population/*.csv — escalation signal for 40-03, never tuned away
+- [Phase 40]: POP-05 measured: ADMM iters 2,4,5,5,91,80 across 10..784 houses (blow-up lands between 390-584 houses); threads sweep 1.44x at -t 4 (593.4s serial / 410.8s parallel), modest positive speedup
 
 ### Roadmap Evolution
 
@@ -558,8 +562,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-24T12:15:25.598Z
-Stopped at: Completed 39-05-PLAN.md (Phase 39 plans 5/5 — SCALE-06 closed)
+Last session: 2026-10-24T14:07:21.076Z
+Stopped at: Completed 40-02-PLAN.md (POP-05 measured scaling artifacts committed)
 Resume file: None
 
 ## Operator Next Steps
