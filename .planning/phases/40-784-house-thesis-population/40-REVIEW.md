@@ -20,7 +20,15 @@ findings:
   warning: 3
   info: 5
   total: 8
-status: issues_found
+status: clean
+re_reviewed: 2026-10-24T18:45:00Z
+re_review_iteration: fix loop 1/3 (WR-01, WR-02, WR-03 fixes verified: 5e6e286, cb0a962, bcff112)
+re_review_depth: quick
+re_review_files_reviewed_list:
+  - src/experiments/materialize.jl
+  - test/test_population_case_a.jl
+  - test/test_population_case_a_scaling.jl
+  - docs/literate/case_a_population.jl
 ---
 
 # Phase 40: Code Review Report
@@ -28,7 +36,7 @@ status: issues_found
 **Reviewed:** 2026-10-24T12:30:00Z
 **Depth:** standard
 **Files Reviewed:** 11
-**Status:** issues_found
+**Status:** clean (re-review fix loop 1/3: WR-01/02/03 verified fixed — see Re-Review Addendum below)
 
 ## Summary
 
@@ -236,3 +244,42 @@ parse trap the comment warns about._
 _Reviewed: 2026-10-24T12:30:00Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
+
+## Re-Review Addendum (fix loop 1/3)
+
+**Re-reviewed:** 2026-10-24T18:45:00Z · **Depth:** quick (fix-region verification only)
+**Fix commits:** 5e6e286 (WR-01) · cb0a962 (WR-02) · bcff112 (WR-03)
+**Scope:** the four fix-touched files only; the original report above is preserved verbatim (original status `issues_found`, 0 critical / 3 warning / 5 info — the five Info items are advisory and untouched by the fixes). Working tree clean at HEAD `bcff112`.
+
+### Region 1 — WR-01 `seed_unused` rename breaks no caller — VERIFIED
+
+- `src/experiments/materialize.jl:696,723-728`: positional parameter renamed `seed` → `seed_unused`; the body (729-766) never references it. In Julia a positional-parameter rename is invisible to callers (arguments bind by position).
+- Full-repo grep for `case_a_household_map`: every call site passes the seed positionally — `docs/literate/case_a_population.jl:92`; `test/test_population_case_a.jl:51,205,206,216,250,268`. Zero `seed =` keyword calls exist anywhere (none are possible: the function declares no such keyword).
+- Honesty restored: docstring (706-710) now states the argument is "NOT used ... identical for every seed" and drops `_case_a_house_seed` from the primitive list; the docs page adds the matching seed-independence comment (93-95). New test pins the documented contract: `@test m1 == case_a_household_map(feeder, :ieee13, 999)` (`test_population_case_a.jl:216`).
+
+### Region 2 — WR-02 `:slow` tag move keeps `expected_broken.txt` semantics intact — VERIFIED
+
+- `test/runner_support.jl:56`: `(set == "slow") == (:slow in ti.tags)` — the new item 3 (`tags = [:population, :slow]`, `test_population_case_a_scaling.jl:189-190`) is excluded from `TSODSO_TEST_SET=fast` and included in slow/all, so the fix is effective; filtered-out items never run and produce no Broken/skipped records (`runtests.jl:73-88`).
+- No allowlist entry needed for the scaling file: `expected_broken.txt` holds no entry for `test_population_case_a_scaling.jl`, and neither scaling item contains `@test_broken`/`broken=`/`@test_skip` (all assertions positive) — the observed multiset is empty in every lane, so the item renames ("(fast smoke)" suffix; new "(slow)" item) cannot orphan any allowance.
+- Agreement file untouched: `git diff --name-only b9b1db5..HEAD` lists exactly the four fix files; `test/test_population_case_a_agreement.jl` is not among them, so its existing allowance (`skipped | test_population_case_a_agreement.jl | population case_a_784: centralized-vs-ADMM agreement band at full scale (agreement) | ...`) still matches verbatim.
+- Fast lane stays fast: tiny rungs 1/78 (10 houses) and 0.125 (90 houses) under a 60 s honesty cap; full-scale legs (0.5, 1.0) carry 120 s caps in the slow item only, header naming the exact slow-lane invocation. Soft-scope idiom respected in both items (`push!` mutation of top-level arrays inside `let` — no rebinding).
+
+### Region 3 — WR-03 provenance filter selects exactly 1 recorded row, fails loud otherwise — VERIFIED
+
+- `docs/literate/case_a_population.jl:255-260`: `only(filter(r -> r["seed"] == string(CASE_A_SEED) && r["t_horizon"] == string(T_HORIZON), agreement_rows))`.
+- `results/case_a_population/agreement.csv` (columns `julia_version,seed,t_horizon,...`) holds exactly ONE recorded row (`1.12.5,42,24,...`) → the filter selects exactly 1 and `only` succeeds: the docs build works on the recorded data.
+- 0 matches (row deleted) → `only` throws `ArgumentError` (loud); >1 matches (e.g. a newer-Julia re-measure adding a same-key row) → also throws (loud), explicitly documented at 249-254 as the honest outcome. Rows keyed on other provenance (a `--seed 43` re-measure, another horizon) are excluded without breaking the build — the grow-by-design CSV no longer breaks docs.
+- Adjacent `only(filter(r -> r["executor"] == "serial", sweep))` (line 351) is pre-existing (untouched by bcff112), selects exactly 1 of the 3 recorded sweep rows, and fails loud otherwise — same policy, not a regression.
+
+### Region 4 — No success-path / honesty regressions — VERIFIED
+
+- WR-01 (5e6e286) is behavior-preserving: docstring/comments + the param rename + one new assertion; the map body is otherwise unchanged.
+- WR-02 (cb0a962) is test-only: same construction path, same seeds/scales/ρ provenance; `:budget_exceeded` remains an accepted, documented recorded status — a structural assertion, never a performance claim.
+- WR-03 (bcff112) is docs-selection-only: printed fields and the honest qualification paragraphs (certificate refusal, no pinned band, tracked skip, escalation) are unchanged (284-296); the trailing provenance note was updated consistently ("the row keyed `seed=42, t_horizon=24` (recorded on `julia_version=1.12.5`)").
+- `:default` path untouched across all three commits: the diffs touch only the `:case_a_784` map signature/docstring, two test files, and the docs page — `_default_house` and the `:default`/`:ieee8500` branches are byte-identical.
+
+**Verdict:** all three warnings verified fixed; frontmatter status set to `clean`. No new findings.
+
+_Re-reviewed: 2026-10-24T18:45:00Z_
+_Reviewer: the agent (gsd-code-reviewer)_
+_Depth: quick (fix-region verification)_
