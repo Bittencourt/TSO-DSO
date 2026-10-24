@@ -45,6 +45,11 @@ for src in (
     "meshed_reactive_price.jl", # Rung 10 Meshed Networks + Live Reactive Price
     "integer_investment.jl",   # Rung 11 Discrete/Integer Investment Expansion
     "experiments.jl",           # the experiment harness (Scenario / run_scenario / run_and_store / run_sweep)
+    # The thesis-scale Case A population (784 houses → 10 bus-level aggregators):
+    # composition measured LIVE (build-only — no solves), calibration provenance, and
+    # the agreement/scaling sections read from results/case_a_population/ (the
+    # committed-CSV pattern this page set's precomputed pages follow).
+    "case_a_population.jl",
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -91,7 +96,8 @@ makedocs(;
             "Rung 9: Stochastic PV/Demand Uncertainty" => "generated/stochastic_pv_demand.md",
             "Rung 10: Meshed Networks + Live Reactive Price" => "generated/meshed_reactive_price.md",
         ],
-        "Experiments" => ["The Experiment Harness" => "generated/experiments.md"],
+        "Experiments" => ["The Experiment Harness" => "generated/experiments.md",
+                          "Case A Population (784 houses)" => "generated/case_a_population.md"],
         "Status & Exception Policy" => "status_policy.md",
         "Planning" => [
             "Rung 6: Stackelberg-Benders" => "generated/stackelberg_benders.md",
