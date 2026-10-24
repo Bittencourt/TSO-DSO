@@ -22,6 +22,7 @@
 # here. The per-run JLD2 is NEVER committed (data/ is gitignored).
 
 using DrWatson: @tagsave, datadir, savename
+using LinearAlgebra: BLAS
 
 """
     _stable_hex64(bytes) -> String
@@ -173,7 +174,10 @@ flatten helper as [`scenario_filename`](@ref) (`style = :record`): the common se
 `:pf_thesis_literal`, `:pf_ε`, lowercase `:strategy`, and the legacy flat knob keys of the
 ACTIVE strategy only (`:ρ ... :μ` / `:mpc_*` / `:stoch_*`); plus `welfare`, `dadp`,
 `exact_maxgap`, `iters`, `final_r`, `final_s`, `reactive_consensus_mode`,
-`:julia_version = string(VERSION)`, for MPC `:regret`, `:steps`, `:mpc_status` (the run
+`:julia_version = string(VERSION)`, plus the process thread counts
+`:julia_threads = Threads.nthreads()` and `:blas_threads = BLAS.get_num_threads()` (both
+measured live at save time; they describe the PROCESS, not any executor choice, so they are
+present for every strategy and never `missing`), for MPC `:regret`, `:steps`, `:mpc_status` (the run
 status `Symbol`, e.g. `:certified` or `:degraded`) and `:mpc_cert_status_trace` (the per-resolve
 certificate tier, a `Vector{Symbol}`), and for Stochastic
 `:welfare_gap`, `:oos_inexact_draws`, `:oos_infeasible_draws` (`Int` counts of held-out draws
@@ -200,6 +204,8 @@ function result_to_dict(res::ScenarioResult)
         ismissing(res.reactive_consensus_mode) ? missing :
         Symbol(res.reactive_consensus_mode)
     d[:julia_version] = string(VERSION)
+    d[:julia_threads] = Threads.nthreads()
+    d[:blas_threads] = BLAS.get_num_threads()
     det = res.details
     if det isa MPCDetails
         d[:regret] = det.regret
