@@ -1,2 +1,3 @@
 julia_version,seed,t_horizon,houses,aggregators,centralized_optimizer,welfare_centralized,welfare_admm,welfare_abs_delta,welfare_rel_delta,price_max_abs_delta,price_max_rel_delta,admm_iters,admm_status,admm_exact_maxgap,recommended_rtol_welfare,recommended_atol_price,recommended_rtol_price,agr_tol
 1.12.5,42,24,784,10,tol_gap_1e-10,-378163.58894571784,,,,,,80,error:CertificateError,,,,,default
+1.12.5,42,24,784,10,tol_gap_1e-10,-378163.58894571784,-378163.5654347284,0.023510989442002028,6.217147850629488e-8,0.17819846607479023,0.17819846607479023,80,converged,2.773411293424498e-10,6.217147850629488e-7,1.7819846607479022,1.7819846607479022,gap_1e-10
