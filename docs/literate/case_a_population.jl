@@ -242,9 +242,20 @@ end
 num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
 cell(s) = isempty(s) ? "-" : s
 
+agreement_rows = read_case_a_csv(
+    joinpath(pkgdir(TSODSO), "results", "case_a_population", "agreement.csv"),
+)
+# Provenance-keyed selection (review WR-03): upsert rows are keyed on
+# (julia_version, seed, t_horizon) and re-runs never drop others, so the CSV grows by
+# design — a `--seed 43` re-measure or a different horizon must not break this build.
+# Filter to THIS page's row identity (the constants above) and assert exactly one match:
+# the page still fails loudly if the seed=42 / t_horizon=24 row disappears, or if a
+# re-measure on a newer Julia adds a same-key row (in which case this page's recorded
+# figures must be refreshed, so failing is the honest outcome).
 agreement = only(
-    read_case_a_csv(
-        joinpath(pkgdir(TSODSO), "results", "case_a_population", "agreement.csv"),
+    filter(
+        r -> r["seed"] == string(CASE_A_SEED) && r["t_horizon"] == string(T_HORIZON),
+        agreement_rows,
     ),
 )
 
@@ -402,8 +413,10 @@ end
 # composition figures are computed live at docs-build time from the
 # deterministic construction — seed 42, horizon 24 — and are therefore exact.
 # The agreement figures are read from `results/case_a_population/agreement.csv`,
-# the single row keyed `julia_version=1.12.5, seed=42, t_horizon=24`. The
-# ladder figures come from `results/case_a_population/scaling_ladder.csv`, rows
+# the row keyed `seed=42, t_horizon=24` (recorded on `julia_version=1.12.5`).
+# Rows keyed on other provenance — a `--seed 43` re-measure, a different
+# horizon — upsert beside it and do not affect this page. The ladder figures
+# come from `results/case_a_population/scaling_ladder.csv`, rows
 # `rung1` through `rung6`. The threads figures come from
 # `results/case_a_population/threads_sweep.csv`, one row each at 1, 2 and 4
 # threads. The population itself is `TSODSO.build_population(:case_a_784, ...)`;
