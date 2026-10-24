@@ -346,6 +346,45 @@ function _case_a_house_counts(buses::Vector{Int}, total::Int)
 end
 
 """
+    _case_a_rung_counts(full_counts::Dict{Int,Int}, fraction::Real) -> Dict{Int,Int}
+
+The per-bus house counts of one nested-prefix population-ladder rung: for every bus `b`,
+the rung keeps the prefix length `m_b = fraction >= 1 ? full_counts[b] :
+max(1, floor(Int, fraction * full_counts[b]))` — the first `m_b` houses of that bus, in the
+same house-index order the builder uses.
+
+# Ladder contract (locked Phase-40 decision)
+
+Ladder rungs are NESTED PREFIXES of the SAME seeded population: a rung's houses are a
+subset (by house index) of every larger rung's, drawn from the identical per-house seeds —
+NO re-tuning per rung (the same solver configuration runs at every rung, so the ladder
+measures the iteration/wall-time behavior of ONE configuration as the population grows).
+`fraction = 1.0` is EXACTLY the full population (the prefix is the whole per-bus house
+list, and the roll-up must match `build_population(:case_a_784, ...)` — callers assert
+that consistency). The `max(1, ...)` floor keeps every bus populated at every fraction
+(an empty bus would build an empty, `Aggregator`-illegal roll-up).
+
+Throws `ArgumentError` when `fraction <= 0` or `full_counts` is empty.
+"""
+function _case_a_rung_counts(full_counts::Dict{Int, Int}, fraction::Real)
+    isempty(full_counts) && throw(
+        ArgumentError(
+            "_case_a_rung_counts: full_counts must be non-empty; got none",
+        ),
+    )
+    fraction > 0 || throw(
+        ArgumentError(
+            "_case_a_rung_counts: fraction must be > 0 (got $(repr(fraction))); " *
+            "rungs are nested prefixes, so a non-positive fraction selects nothing",
+        ),
+    )
+    return Dict{Int, Int}(
+        bus => (fraction >= 1 ? n : max(1, floor(Int, fraction * n))) for
+        (bus, n) in full_counts
+    )
+end
+
+"""
     _case_a_house_seed(s_pop::Integer, bus::Int, house_index::Int) -> Int
 
 The per-house profile seed of the `:case_a_784` population: exactly
