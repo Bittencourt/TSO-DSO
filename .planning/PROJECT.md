@@ -593,4 +593,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-09 — v5.0 milestone started*
+*Last updated: 2026-10-24 — Phase 39 (Parallel-Ready ADMM & Gating Measurements) complete: opt-in threaded ADMM executor (bitwise-identical to serial, spike-gated), per-aggregator result keys, provenance thread counts, and the SCALE-06 IEEE-8500 memory attribution (T=10 reconciled with 0.62 GiB documented residual; T=24 honest earlyoom kill + build-only attribution).*
