@@ -274,6 +274,7 @@ end
 @testitem "experiments: provenance tagsave" setup = [ExperimentHarnessFixtures] begin
     using TSODSO
     using DrWatson: wload
+    using LinearAlgebra: BLAS
 
     @test isdefined(TSODSO, :Scenario)
     @test isdefined(TSODSO, :run_and_store)
@@ -314,7 +315,34 @@ end
             @test haskey(dict, "julia_version")
             @test dict["julia_version"] == string(VERSION)
             @test haskey(dict, "seed")
+
+            # PAR-04 (Phase 39): process provenance — thread counts measured live at save
+            # time, stored as ADDITIVE keys beside :julia_version. They describe the
+            # PROCESS, not any executor choice: present for every strategy, never
+            # `missing`, and equal to the live process values at assert time (nothing in
+            # this item touches thread counts between the save and these reads).
+            @test haskey(dict, "julia_threads")
+            @test haskey(dict, "blas_threads")
+            @test dict["julia_threads"] == Threads.nthreads()
+            @test dict["blas_threads"] == BLAS.get_num_threads()
         end
+
+        # PAR-04 executor-blindness: scenario identity is a pure function of the Scenario
+        # with NO executor input. `_scenario_identity`'s record dict carries no
+        # executor/thread keys (the additive keys land only AFTER its call inside
+        # `result_to_dict`), and two identically-constructed Scenarios are `==`,
+        # hash-equal and filename-identical. The :admm strategy is used here because it
+        # is the executor-bearing strategy — constructing the Scenario solves nothing,
+        # so the item stays fast.
+        kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
+        s = TSODSO.Scenario(; kw..., strategy = :admm)
+        s2 = TSODSO.Scenario(; kw..., strategy = :admm)
+        @test s == s2
+        @test hash(s) == hash(s2)
+        @test TSODSO.scenario_filename(s) == TSODSO.scenario_filename(s2)
+        ident = TSODSO._scenario_identity(s; style = :record)
+        @test !haskey(ident, :julia_threads)
+        @test !haskey(ident, :blas_threads)
     end
 end
 
