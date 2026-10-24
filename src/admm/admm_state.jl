@@ -129,7 +129,16 @@ end
 # ---- hook: AGR solve ----------------------------------------------------------------------------
 # `final = false`: mid-loop (check_battery = false, strict = false). `final = true`: the converged
 # consolidation re-solve (battery + 4Q certificates, interior-point-loosened literals).
-function _react_agr_solve!(
+#
+# TASK-SAFE GRAIN SPLIT (Phase 39 threaded executor, PAR-01): each solve is split into
+# `_react_agr_solve_only` — reads ONLY per-j / loop-invariant state and touches ONLY this
+# aggregator's own JuMP model, NO `st`/`ls` writes, so it is safe inside a `Threads.@spawn`
+# task — and `_react_agr_apply!` — exactly the original `st` writes in the original order,
+# always executed in the SERIAL join region (single writer; no Dict races).
+# `_react_agr_solve!` composes the two back-to-back, so the serial executor's per-aggregator
+# statement sequence (solve, then write) is IDENTICAL to before and the float-order contract
+# in this file's header is untouched.
+function _react_agr_solve_only(
     ::Union{_ReactiveOff, _ReactiveCertified},
     st::AdmmState,
     j::Int;
@@ -155,12 +164,10 @@ function _react_agr_solve!(
     else
         solve_agr!(agr, st.λ[j], st.c[j], st.ρf; check_battery = false, strict = false)
     end
-    st.a[j] = r.pag
-    st.util[j] = r.utility
     return r
 end
 
-function _react_agr_solve!(
+function _react_agr_solve_only(
     ::_ReactiveLive,
     st::AdmmState,
     j::Int;
@@ -200,12 +207,43 @@ function _react_agr_solve!(
             strict = false,
         )
     end
+    return r
+end
+
+# Apply grain — exactly the original writes in the original order (SERIAL region only).
+function _react_agr_apply!(
+    ::Union{_ReactiveOff, _ReactiveCertified},
+    st::AdmmState,
+    j::Int,
+    r;
+    final::Bool = false,
+)
+    st.a[j] = r.pag
+    st.util[j] = r.utility
+    return r
+end
+
+function _react_agr_apply!(::_ReactiveLive, st::AdmmState, j::Int, r; final::Bool = false)
+    agr = st.agr_by_bus[j]
+    ls = st.react
     st.a[j] = r.pag
     st.util[j] = r.utility
     if !final
         ls.b[j] = value.(agr.qag_live)
     end
     return r
+end
+
+# Composed serial grain: solve, then apply — the exact pre-split statement sequence.
+function _react_agr_solve!(
+    rmode::_ReactiveMode,
+    st::AdmmState,
+    j::Int;
+    final::Bool = false,
+    has_4q::Bool = false,
+)
+    r = _react_agr_solve_only(rmode, st, j; final = final, has_4q = has_4q)
+    return _react_agr_apply!(rmode, st, j, r; final = final)
 end
 
 # ---- hook: DSO objective-coefficient prepare (LIVE drives dso.qag; `b`, never `d`) --------------
