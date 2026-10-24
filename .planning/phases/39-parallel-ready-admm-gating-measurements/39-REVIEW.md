@@ -18,7 +18,7 @@ findings:
   warning: 1
   info: 8
   total: 9
-status: issues_found
+status: clean
 ---
 
 # Phase 39: Code Review Report
@@ -124,3 +124,27 @@ first_err === nothing || throw(first_err)
 _Reviewed: 2026-10-24_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Addendum: Fix Verification — WR-01 (fix loop 1/3)
+
+**Fix commit:** `3af9bec` ("fix(39): reap-and-drain in-flight AGR tasks on join failure (WR-01)")
+**Verified against:** parent `d6e780c`; working tree clean at HEAD `d556a27`
+**Verdict:** **fix region verifies clean** — frontmatter `status` set to `clean`. WR-01 resolved; no new findings. Info items IN-01..IN-08 remain outstanding (info tier, non-blocking). Original counts above are the historical record of the first-pass review (0 critical / 1 warning / 8 info); post-fix outstanding: 0 critical / 0 warning / 8 info.
+
+### 1. Drain loop cannot throw or shift attribution vs serial — CONFIRMED
+
+`src/admm/admm_phases.jl:241-248`. The drain range `(idx + 1):length(futs)` is pure arithmetic (cannot throw) and always in-bounds: `idx ≤ length(futs)` since `length(futs) == length(load_nodes)`, and the range is empty when the last task failed. `futs[k]` indexing and `wait` sit inside the `try`; the bare `catch` discards everything, so the drain loop is throw-proof and control always reaches the PAR-03 unwrap/rethrow with `e` intact. Attribution parity holds: in serial, tasks after the first failing `j` never execute, so their (possibly different) failures are unobservable — discarding drained results/errors reproduces serial's first-throw semantics exactly, and the surfaced exception is still the original object (`e.task.exception`). The inner bare catch does not disturb the outer `rethrow()` target (the inner handler is popped when its try/catch completes normally) and does not rebind `e`. Only nuance: an `InterruptException` landing inside the bounded drain window is discarded per the documented reap-and-discard semantics; the original error still surfaces — accepted, not a defect.
+
+### 2. Success path untouched — CONFIRMED
+
+`git diff -U0 d6e780c..HEAD -- src/admm/admm_phases.jl` contains exactly two hunks: `@@ -184 +184,3 @@` (docstring prose only, no code) and `@@ -233,0 +236,13 @@` (pure addition inside `catch e`, before the existing PAR-03 line). The serial branch, executor entry (`BLAS.set_num_threads` / MOI pinning), spawn block, `fetch(futs[idx])`, and `_react_agr_apply!` call are byte-identical to the pre-fix state.
+
+### 3. No new concurrency hazard — CONFIRMED
+
+No double-wait: Julia `Task`s are re-awaitable, and each future is observed at most once here — success path uses only `fetch`; error path `wait`s `idx+1..n` exactly once. No deadlock: the task at `idx` has already completed (that is why `fetch` threw), tasks `1..idx−1` completed via earlier fetches, and an already-failed future makes `wait` throw immediately rather than block. The joiner holds no lock the task bodies need (bodies are self-contained solves on their own AgrOpt models per the grain-split contract), so all in-flight tasks make progress and the drain terminates. Drain-before-rethrow leaves no unobserved task behind.
+
+**Out-of-scope observation (pre-existing, unchanged by `3af9bec`, not re-classified):** if `_react_agr_apply!` itself throws after a successful fetch, tasks `idx+1..n` are still abandoned — that throw exits outside the fetch's catch. This predates the fix (commit `1af3dda`), is unchanged by it, and belongs to the apply/write error class rather than the WR-01 join-drain scope.
+
+_Verified: 2026-10-24 (fix loop 1/3, region-only re-review of `src/admm/admm_phases.jl` @ `3af9bec`)_
