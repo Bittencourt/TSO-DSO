@@ -78,7 +78,14 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
   3. A solver or certificate error raised inside a parallel task surfaces with the same error type and node attribution as in serial.
   4. Run provenance records thread and BLAS-thread counts, while the executor choice leaves scenario `==`, `hash` and saved filename unchanged.
   5. ADMM results expose per-aggregator dispatch, utilities, import profile and per-slot prices as additive keys; and the ~3.4 GiB unattributed IEEE-8500 memory growth is profiled and attributed in a documented result.
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 39-01-PLAN.md — Clarabel concurrency/determinism spike (bitwise serial-vs-threaded under `-t 4`, direct_model answer) — PAR-02 gate
+- [ ] 39-02-PLAN.md — Opt-in threaded executor on solve_admm (kwarg + fail-loud guard, split AGR step, fetch-in-order join) — PAR-01, PAR-03
+- [ ] 39-03-PLAN.md — Provenance thread counts + executor-blind scenario identity — PAR-04
+- [ ] 39-04-PLAN.md — Bitwise equality + error-parity tests, per-aggregator additive result keys — PAR-02, PAR-03, PAR-05
+- [ ] 39-05-PLAN.md — SCALE-06 staged RSS memory attribution (d=0.1 T=10/24) + doc note
 
 ### Phase 40: 784-House Thesis Population
 **Goal**: A researcher can build, solve and scale the thesis Case A population at its true 784-household size, reproducibly and with documented calibration.
