@@ -6,8 +6,27 @@
 # contract (statement order per iteration: AGR -> LIVE dso.qag coefficients -> solve_dso! ->
 # accumulate -> record! -> converged? -> budget? -> dual step -> ρ adapt -> ρ_q adapt;
 # `set_rho!` order: dso first, then each AGR in `load_nodes` order).
+#
+# EXECUTOR SPLIT (Phase 39, PAR-01/PAR-03): the per-iteration statement order above is
+# UNCHANGED — only the AGR step (step 1, and the certify AGR re-solves) is executor-dispatched,
+# by `_agr_solve_step!`. SERIAL (`parallel = false`, the default): the exact pre-existing
+# per-j loop, byte-identical. THREADED (`parallel = true`, opt-in via `solve_admm`; gated on
+# spike 005's documented PASS): `BLAS.set_num_threads(1)` + `MOI.NumberOfThreads() = 1` per
+# AGR model at executor entry (threaded path ONLY — factory defaults untouched), ONE
+# `Threads.@spawn` task per aggregator on the task-safe solve-only grain
+# (`_react_agr_solve_only`), fetch in `load_nodes` order — NEVER completion order, matching
+# serial's first-throw attribution — with the ORIGINAL-exception rethrow
+# (`e isa TaskFailedException ? throw(e.task.exception) : rethrow()`), then the apply writes
+# (`_react_agr_apply!`) executed serially in the join region. Never barrier-`sync` the
+# spawns (it would wrap failures in `CompositeException`, destroying PAR-03 error parity);
+# no per-thread-ID state indexing;
+# no `st`/`ls` writes inside any task body. Everything after step 1 (`_react_dso_prepare!`,
+# `solve_dso!`, the residual accumulation in the fixed `j, t` order, `record!`/`converged?`,
+# the dual step, and `_adapt_rho!`'s `set_rho!` ladder) is SHARED and SERIAL for both
+# executors — the float-order contract is binding.
 
 using JuMP
+using LinearAlgebra: BLAS
 
 """
 BUILD ONCE: one AGR-OPT per aggregator and the whole-network DSO-OPT, the 1:1
@@ -139,6 +158,91 @@ function _adapt_rho!(
 end
 
 """
+Executor-dispatched AGR-solve step — the ONE parallel grain of the ADMM (thesis 3.46), used for
+BOTH the mid-loop step in `_admm_iterate!` and the certify AGR re-solves in `_admm_certify`
+(`final = true`, `has_4q` per bus).
+
+SERIAL branch (`parallel = false`, the default): the exact pre-existing per-`j` loop — the
+byte-identical default path (golden policy).
+
+THREADED branch (`parallel = true`, gated on spike 005's documented PASS — bitwise
+serial-vs-threaded equality under the production configuration):
+
+ 1. Executor entry, ONCE per call: `BLAS.set_num_threads(1)` (process-global LBT state —
+    set here, never per-task; per-task calls would themselves race; restored by
+    `solve_admm`'s `finally` on every exit path) and `set_attribute(model, MOI.NumberOfThreads(), 1)` on every AGR model (Clarabel 0.11.1; threaded path ONLY —
+    the factory `QP()`/`SOCP()` defaults stay byte-identical).
+ 2. Spawn ONE `Threads.@spawn` task per aggregator on the task-safe solve-only grain
+    (`_react_agr_solve_only`): task bodies read only per-`j` / loop-invariant state and touch
+    only their own AgrOpt model — NO writes to `st`/`ls` inside any task, never the barrier
+    `sync` join, no thread-ID indexing, distinct variable names inside vs outside the body (the closure
+    shadowing `Core.Box` race).
+ 3. Join in `load_nodes` order — NOT completion order — so the FIRST failure in `load_nodes`
+    order surfaces with serial's first-throw attribution (PAR-03): the ORIGINAL exception
+    object is rethrown via `throw(e.task.exception)` (type, message, kind, iterations
+    preserved — never `TaskFailedException`/`CompositeException`), then
+    `_react_agr_apply!` writes the result in the SERIAL region.
+"""
+function _agr_solve_step!(
+    rmode::_ReactiveMode,
+    st::AdmmState;
+    final::Bool = false,
+    has_4q_by_bus = nothing,
+    parallel::Bool = false,
+)
+    load_nodes = st.load_nodes
+    if !parallel
+        # ---- SERIAL executor: the exact pre-existing statement sequence (byte-identical path).
+        if final
+            for j in load_nodes
+                _react_agr_solve!(rmode, st, j; final = true, has_4q = has_4q_by_bus[j])
+            end
+        else
+            for j in load_nodes
+                _react_agr_solve!(rmode, st, j)
+            end
+        end
+        return nothing
+    end
+
+    # ---- THREADED executor entry (ONCE per call — never per-task; BLAS state is process-global).
+    BLAS.set_num_threads(1)
+    # Solver-thread pinning, threaded path ONLY (golden policy: factory defaults untouched).
+    for j in load_nodes
+        set_attribute(st.agr_by_bus[j].model, JuMP.MOI.NumberOfThreads(), 1)
+    end
+
+    # Spawn one task per aggregator on the task-safe solve-only grain. Distinct loop-variable
+    # names inside (`jj`) vs outside the body — never shadow an outer binding in an `@spawn`
+    # closure (Core.Box data race). `has_4q` is only meaningful on the final re-solves; the
+    # mid-loop call passes `has_4q_by_bus = nothing`, so the index stays gated on `final`.
+    futs = [
+        Threads.@spawn _react_agr_solve_only(
+            rmode,
+            st,
+            jj;
+            final = final,
+            has_4q = final ? has_4q_by_bus[jj] : false,
+        ) for jj in load_nodes
+    ]
+
+    # Join in `load_nodes` order, applying the writes in the SERIAL region (single writer).
+    for (idx, j) in enumerate(load_nodes)
+        r = try
+            fetch(futs[idx])
+        catch e
+            # PAR-03 error parity: the ORIGINAL exception object — type, msg, kind, iterations
+            # preserved. Same type-check-then-rethrow idiom as solve_admm.jl's certificate
+            # re-wrap seam. NEVER a barrier-sync around the spawns (it would wrap this in
+            # CompositeException).
+            e isa TaskFailedException ? throw(e.task.exception) : rethrow()
+        end
+        _react_agr_apply!(rmode, st, j, r; final = final)
+    end
+    return nothing
+end
+
+"""
 The consensus loop (thesis 3.46/3.47 dual ascent) on an [`AdmmState`](@ref). Returns when
 `converged_flag` (joint stacked Boyd two-residual stop) or `budget_exceeded_flag` is latched, or
 `maxiter` is exhausted (the caller throws the fail-loud `ConvergenceError`).
@@ -164,9 +268,15 @@ function _admm_iterate!(
     residuals = st.residuals
     for k in 1:maxiter
         # (1) AGR-OPT[j] ∀j: coeff −λ_j − ρ·c_j (thesis 3.46). Mid-loop: no battery/4Q certificate.
-        for j in load_nodes
-            _react_agr_solve!(rmode, st, j)
-        end
+        # Executor-dispatched grain: serial keeps the exact pre-existing loop; threaded spawns one
+        # task per aggregator and joins in load_nodes order (see _agr_solve_step!).
+        _agr_solve_step!(
+            rmode,
+            st;
+            final = false,
+            has_4q_by_bus = nothing,
+            parallel = parallel,
+        )
 
         # (2) DSO-OPT: coeff −λ_j − ρ·a_j (thesis 3.47); LIVE first sets dso.qag coefficients.
         _react_dso_prepare!(rmode, st)
@@ -280,9 +390,15 @@ function _admm_certify(
     has_4q_by_bus = Dict{Int, Bool}(
         agg.bus => any(dv -> dv isa FourQuadBESS, agg.devices) for agg in aggregators
     )
-    for j in load_nodes
-        _react_agr_solve!(rmode, st, j; final = true, has_4q = has_4q_by_bus[j])
-    end
+    # Certify AGR re-solves run the SAME executor-dispatched grain as the mid-loop step
+    # (PAR-03 applies here too — these solves can throw certificates).
+    _agr_solve_step!(
+        rmode,
+        st;
+        final = true,
+        has_4q_by_bus = has_4q_by_bus,
+        parallel = parallel,
+    )
     # LIVE only: re-assert `qag_dso`'s linear coefficient (`b`, NEVER `d`) before the final solve.
     _react_dso_prepare!(rmode, st)
     dres_final = solve_dso!(
