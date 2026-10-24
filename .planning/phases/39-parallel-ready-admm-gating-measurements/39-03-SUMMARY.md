@@ -121,3 +121,11 @@ None - no external service configuration required.
 ---
 *Phase: 39-parallel-ready-admm-gating-measurements*
 *Completed: 2026-10-24*
+
+## Self-Check: PASSED
+
+- SUMMARY.md exists: `.planning/phases/39-parallel-ready-admm-gating-measurements/39-03-SUMMARY.md`
+- `src/experiments/store.jl` present with both additive keys (grep-verified lines 207-208)
+- Commit `64fdd0e` (Task 1, feat) found in git log
+- Commit `4d753b1` (Task 2, test) found in git log
+- Targeted verification: `TSODSO_TEST_FILES=test_experiments.jl julia --project=. -e 'import Pkg; Pkg.test()'` — 121 pass / 0 fail / 0 error / 0 broken, no new skip/broken records, 0 soft-scope warnings
