@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Completed 39-02-PLAN.md
-last_updated: "2026-10-24T06:29:15.385Z"
+stopped_at: Completed 39-04-PLAN.md
+last_updated: "2026-10-24T07:59:42.524Z"
 last_activity: 2026-10-24
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 39 (Parallel-Ready ADMM & Gating Measurements) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-10-24
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -215,6 +215,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 39 P01 | 9min | 2 tasks | 4 files |
 | Phase 39 P03 | 37min | 2 tasks | 6 files |
 | Phase 39 P02 | 35min | 3 tasks | 3 files |
+| Phase 39 P04 | 40min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -301,6 +302,9 @@ Recent decisions affecting current work:
 - [Phase 39-03]: LinearAlgebra stdlib declared in root Project.toml (+compat 1, Manifest-v1.12 deps array) and as a direct test-env dep — Julia 1.12 loads stdlibs as regular packages and hard-errored on the undeclared use; Pkg.add stripped test/Project.toml's [compat] comment block, restored verbatim — matches the existing SparseArrays declaration convention
 - [Phase 39]: threaded executor landed as planned — split step in admm_phases.jl (_agr_solve_step! serves mid-loop AND certify AGR re-solves), no new module; BLAS pin ownership split: solve_admm.jl finally restores, helper sets BLAS=1+MOI pins once per call; -t 2 smoke bitwise-equal to serial (iters 56, welfare -4823.66604824162)
 - [Phase 39]: Rule-1 fix from the -t 2 smoke — spawn comprehension's has_4q index gated on final (mid-loop passes has_4q_by_bus = nothing); plan's single-line call-site greps replaced by semantic verification (pinned JuliaFormatter 92-col reflows both calls multi-line); anti-pattern greps (zero @sync/threadid()) pass literally
+- [Phase 39-04]: PAR-02 proven behaviorally — threaded == serial BITWISE at -t 4 on the 10-aggregator minimal scenario (both legs iters 56 / welfare -4823.66604824162; traces, welfare, dadp and all four additive keys literal ==; isequal only for the NaN-bearing exact_maxgap); guard item 1-thread-safe
+- [Phase 39-04]: PAR-03 proven — CertificateError (atol_exact=1e-30), ConvergenceError (maxiter=1) and poisoned-task (contradictory pag constraint → INFEASIBLE → SolveFailedError) legs all type+message parity across executors, never TaskFailedException/CompositeException; battery/4Q bus-naming poisons probed UNREACHABLE (PV-limited charge bound, thesis 3.7/A6, makes forced co-charge infeasible before any certificate fires)
+- [Phase 39-04]: PAR-05 additive keys land (agr_dispatch/agr_utility/agr_import/agr_prices, trailing on the converged path); agr_prices[j] == dadp row pinned by test; agr_import keyed to the SHARED root frontier profile (st.p_import is network-level — no per-bus decomposition exists); canary-after-parallel proven under the DANGEROUS ordering via a scratch same-process driver (committed combined command's walk order puts the canary FIRST — measured fact, recorded in 39-04-SUMMARY)
 
 ### Roadmap Evolution
 
@@ -548,7 +552,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-24T06:29:15.347Z
+Last session: 2026-10-24T07:59:42.497Z
 Stopped at: Completed 39-02-PLAN.md
 Resume file: None
 
