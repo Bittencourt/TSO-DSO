@@ -656,6 +656,73 @@ function build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, see
 end
 
 """
+    case_a_household_map(feeder, feeder_sym::Symbol, seed::Integer;
+                         pv_fraction::Real = _CASE_A_PV_FRACTION) -> Vector{<:NamedTuple}
+
+The pure, deterministic household map of the `:case_a_784` population: one row per house, in
+bus-major then house-index order (house 1 = bus 2 house 1, ...), with EXACTLY the fields
+`house` (global 1..784 index), `bus`, `aggregator` (the house's bus id — the 10 aggregators
+are keyed by bus), `device_set` (`:thermostatic_deferrable_pvbattery`, the fixed 3-device
+house), `pv_group` (`_case_a_pv_group` at `pv_fraction`), and `house_index` (1-based within
+its bus).
+
+It derives everything from the SAME primitives the `:case_a_784` branch of
+[`build_population`](@ref) uses — `_load_buses`, `_case_a_house_counts`,
+`_case_a_house_seed`, `_case_a_pv_group` — so the map and the built population cannot drift
+apart (single source of truth). It performs NO `Aggregator` construction and NO profile
+draw: pure hash arithmetic, cheap to call. No mutation, no global state, no randomness
+beyond the pure hash derivation: two calls with equal arguments return `==` vectors.
+
+Throws `ArgumentError` unless `feeder_sym === :ieee13` (the same restriction as the
+`:case_a_784` branch). UNEXPORTED by design (the materializer group stays out of the
+namespace): callers qualify `TSODSO.case_a_household_map`.
+"""
+function case_a_household_map(
+    feeder,
+    feeder_sym::Symbol,
+    seed::Integer;
+    pv_fraction::Real = _CASE_A_PV_FRACTION,
+)
+    if feeder_sym !== :ieee13
+        throw(
+            ArgumentError(
+                "case_a_household_map: the map is defined over the 10 IEEE-13 load buses " *
+                "only; got feeder selector $(repr(feeder_sym))",
+            ),
+        )
+    end
+    buses = _load_buses(feeder, feeder_sym)
+    counts = _case_a_house_counts(buses, _CASE_A_TOTAL_HOUSES)
+    row_t = @NamedTuple{
+        house::Int,
+        bus::Int,
+        aggregator::Int,
+        device_set::Symbol,
+        pv_group::Symbol,
+        house_index::Int,
+    }
+    rows = Vector{row_t}()
+    house = 0
+    for bus in buses
+        for h in 1:counts[bus]
+            house += 1
+            push!(
+                rows,
+                (
+                    house = house,
+                    bus = bus,
+                    aggregator = bus,
+                    device_set = :thermostatic_deferrable_pvbattery,
+                    pv_group = _case_a_pv_group(h, counts[bus], pv_fraction),
+                    house_index = h,
+                ),
+            )
+        end
+    end
+    return rows
+end
+
+"""
     _powerflow_from_selector(pf::Symbol, thesis_literal::Bool, ε::Float64)
 
 Internal dispatch behind [`build_powerflow`](@ref); the terminal branch throws `ArgumentError`
