@@ -417,27 +417,33 @@ r_serial = TSODSO.run_scenario(s)                # default path (parallel defaul
 | A4 | CI currently runs the suite single-threaded (no JULIA_NUM_THREADS in workflows) | Pitfall 5 / Validation | If CI already runs threaded, the parallel tests could run there directly; plan should check `.github/workflows` at execution time (researched flag: not verified this session) |
 | A5 | SCALE-06 can reuse the Phase-35 harness flags (`--admm-only`, `--density`, `--t-horizon`) with added staging without breaking existing CSV schemas (new columns additive) | Architecture / SCALE-06 | New CSV file (new name) avoids schema friction entirely — recommended |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four questions were resolved during planning; the adopted answers below are locked into the phase plans (references in each RESOLVED line).
 
 1. **Should `run(::ADMM, s)` gain a `parallel` passthrough this phase?**
    - What we know: the locked decision pins the kwarg on `solve_admm`; PAR-01 says "a researcher can run the … ADMM with aggregator subproblems solved concurrently". A Scenario-level selector would violate executor-blind identity unless carefully excluded from `_scenario_identity` AND from `Scenario ==`/`hash` (which are field-wise over the strategy struct — so it cannot be a strategy field at all without a deliberate `==` change).
    - What's unclear: whether PAR-01's "researcher" is satisfied by a direct `solve_admm(...; parallel = true)` call (this research's reading: yes — the equality test itself is such a caller), or demands Scenario-level plumbing.
    - Recommendation: kwarg-only this phase; Scenario wiring is Phase 40's POP-05 concern (scaling report), flagged there.
+   - **RESOLVED — adopted: kwarg-only.** `parallel` exists only as a `solve_admm` kwarg; `run(::ADMM, s)` and every Scenario identity seam stay untouched (implemented in plans 39-02 and 39-03).
 
 2. **Should the `_admm_certify` final AGR re-solves also run threaded?**
    - What we know: the locked decision says "one `Threads.@spawn` task per aggregator per ADMM iteration". The certify pass re-solves each aggregator with certificates (can throw → PAR-03 applies).
    - What's unclear: whether certify-phase threading is required for the speedup story (POP-05, Phase 40) or optional polish.
    - Recommendation: implement the same split for the certify AGR re-solves (same helper, error parity preserved); it keeps the executor semantics uniform ("all AGR solves are executor-dispatched") and costs little.
+   - **RESOLVED — adopted: certify re-solves run threaded.** The shared split helper serves both the mid-loop step and the certify AGR re-solves (plan 39-02, Task 3).
 
 3. **Where should solver-thread pinning live: the factory or the executor?**
    - What we know: `select_optimizer(QP())`/`SOCP()` defaults must stay byte-identical (golden policy). Clarabel 0.11.1 accepts `MOI.NumberOfThreads() => 1` / `max_threads => 1` (verified).
    - What's unclear: none materially — but the mechanical placement matters.
    - Recommendation: pin in the threaded executor path only — apply the attribute to each AGR model right before spawning (or pass attrs through the existing `select_optimizer(SOCP(); attrs...)` kwargs seam at build time for the threaded build), never as a factory default change.
+   - **RESOLVED — adopted: executor-path pinning.** `BLAS.set_num_threads(1)` (saved/restored in solve_admm.jl's finally) + `MOI.NumberOfThreads()=1` per AGR model applied at threaded-executor entry only (plan 39-02, Task 3); factory defaults untouched.
 
 4. **Will the knife-edge canary survive a BLAS 2→1 default difference if a test leaks?**
    - What we know: probe showed bitwise-identical results across BLAS thread counts on toy QPs; the canary's fixture is a LIVE-mode IEEE-13 ADMM on a documented numerical knife-edge.
    - What's unclear: no measurement exists of the canary under BLAS threads=1.
    - Recommendation: the plan's canary-protection step should run the canary once with BLAS threads=1 (save/restore) and record the result in the phase findings; if it flips, that's a *measured environment fact* to document (like the 1.10/1.11/1.12.5/1.12.7 escalations), not a re-pin.
+   - **RESOLVED — adopted: canary-after-parallel check.** Plan 39-04, Task 3 runs the canary in the SAME process after the parallel items (BLAS restored) and must hold its pins; any flip is recorded as a measured environment fact. The standalone record-only BLAS=1 canary leg is optional extra evidence, not a deliverable.
 
 ## Environment Availability
 
