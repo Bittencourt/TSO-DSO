@@ -294,8 +294,11 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 #
 # The wall now sits **between density 0.1 and 0.25 at T = 24**. The original sweep's OOM kills at T = 24 were in a
 # combined centralized+ADMM process; its density 0.1 T = 10 point fit (live-monitored anon-rss "~5.9GB", unit
-# not recorded, see section 3). **What consumes the memory inside `solve_admm` is not established by the
-# measurements below.** Two kinds of figure were measured, with different metrics:
+# not recorded, see section 3). **What consumes the memory inside `solve_admm` was not established by the
+# measurements below when they were taken — the Phase-39 staged attribution ("Memory attribution of the
+# `solve_admm` loop (Phase 39, SCALE-06)" below) now splits it at T = 10 and records honestly what stayed
+# unmeasurable at T = 24; the rest of this section is kept as the Phase-35 state it was measured in.**
+# Two kinds of figure were measured, with different metrics:
 #
 # - **Staged profile (VmRSS between stages).** The profile of the SAME fixture and point (`memory_profile.csv`
 #   rows with `fixture = ieee8500`, density 0.1, T = 10, written by run `p35-prof-ieee8500-s3` in
@@ -311,10 +314,11 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 #   iterations, and the final `check_exact = true` consolidation.
 #
 # One DSO build plus its first solve therefore accounts for about a quarter of the T = 10 loop's peak
-# growth. The remainder (about 3.4 GiB) is **unattributed**: it was not split between AgrOpt construction,
-# their solves, per-iteration state and the final consolidation, and no single dominant consumer is
-# established by this profile. That the remainder is mostly per-hour DSO solver state retained across the
-# ADMM loop is a **hypothesis**, not a measurement. The only scaling statement the data support is that the
+# growth. The remainder (about 3.4 GiB) was **unattributed** when this section was written; the Phase-39
+# staged attribution below now splits it (headline at T = 10: the 122 AgrOpt builds and the first iterate's
+# retained state dominate). The guess recorded below — that the remainder is mostly per-hour DSO solver state
+# retained across the ADMM loop — was a **hypothesis**, not a measurement, and the Phase-39 isolated
+# measurement did NOT confirm it as the dominant mechanism (see below). The only scaling statement the data support is that the
 # loop delta grows roughly linearly in T (one pair of points, T = 10 and T = 24, at density 0.1); scaling in
 # the number of nodes was not measured, because only density 0.1 completed at T = 24. (The same CSV also
 # keeps an earlier profile with `fixture = ieee8500-mv`, the profiler's default, which measured 0.14 / 0.42
@@ -398,3 +402,133 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # `results/ieee8500_benchmark/density_sweep.csv`; run one density at a time on IEEE-8500-scale
 # fixtures specifically, per the mid-run-crash discovery noted above. The `journalctl -k` record of every OOM
 # is kept alongside the sweep results.
+
+# ## Memory attribution of the `solve_admm` loop (Phase 39, SCALE-06)
+#
+# *(Appended 2026-10-24. Extends the "Post-refactor measured results" section above: the ~3.4 GiB that
+# section left unattributed at T = 10 is now split by instrumented staged runs, and the per-hour DSO
+# solver-state wording is resolved by an isolated measurement. Every figure below names its source:
+# `results/ieee8500_benchmark/memory_attribution.csv` with the row key
+# (fixture, density, T, stage, name) — unless another file is named. The two measured points are
+# `fixture = ieee8500`, `density = 0.1`, `T = 10` and `T = 24`, the Phase-35 boundary points.)*
+#
+# **Units.** All memory figures are binary: 1 GiB = 2^30 bytes = 2^20 KiB. Raw KiB come from
+# `/proc/self/status` (`VmRSS` instantaneous, `VmHWM` the whole-process high-water) and `/usr/bin/time`
+# MaxRSS; `Sys.maxrss()` readings are bytes; each converted value keeps its raw source in the CSV or the
+# `runs/` evidence files.
+#
+# **Method.** `scripts/profile_ieee8500_memory_attribution.jl` (committed this phase) measures ONE point
+# per process. First the RECONCILIATION ANCHOR: one full production `solve_admm` call with exactly the
+# Phase-35 head-row arguments (`benchmark_ieee8500.jl`'s `run_admm_point`: ρ = 100, `allow_export = true`,
+# the library hybrid exactness gate, a 1200 s wall budget) wrapped in a `Sys.maxrss()` before/after delta —
+# always FIRST in the process, because maxrss is a monotonic whole-process high-water mark and a staged
+# build before it would zero the delta. Then GC'd staged components, each an ISOLATED measurement (this
+# project's Pitfall-8 rule — the stages are not arranged around any assumed mechanism): the DSO build
+# alone, the 122 AgrOpt builds alone, the first iterate's retained state (iterate 1 contains the DSO
+# model's first `optimize!` AND the first AGR solves), iterates 2..N retained, and the
+# consolidation/certify. Each component carries a stated measurement tolerance, max(0.05 GiB, 10 % of the
+# component) — allocator arena retention and the anchor-warmed process context dominate the run-to-run
+# spread for this class of staged snapshot. Components are GC-RETAINED deltas; the anchor's maxrss delta
+# additionally includes solve CHURN, so observed − Σ components is reported as an explicit RESIDUAL
+# (tolerance: quadrature sum of the component tolerances) — never forced onto a mechanism. Two provenance
+# details: the bounded iteration block splits `_admm_iterate!` into a 1-iteration call plus an (N−1)
+# continuation, resetting only the residual ledger's sequential-`k` bookkeeping between them (the solve
+# statements are the exact production sequence), so the staged certify evidence row's `iterations = 7`
+# undercounts the logical count by one — the production number of record is the anchor row's
+# `iterations = 8`; and the bounded N is the anchor's own observed production iteration count.
+#
+# **T = 10, density 0.1 (row keys fixture=ieee8500, density=0.1, T=10; run `p39-attr-d0.1-T10` in
+# `point_resources.csv`, 14 m 59 s process, MaxRSS 5,969,080 KiB = 5.69 GiB, `runs/p39-attr-d0.1-T10.time`).**
+# The anchor reproduced the Phase-35 refusal exactly: `anchor_after` row, status `ERROR:CertificateError`,
+# iterations = 8, the same hybrid ratio 568.9541645248668 that `density_sweep.csv` /
+# `hybrid_diagnostic.csv` record for `p35-head-d0.1-T10` / `p35-diag-d0.1-T10` — a genuine gate refusal,
+# recorded as evidence, never loosened. Its observed maxrss delta is **4.339 GiB** (row `anchor_after`,
+# `gib` column; anchor time 425 s; process peak 5.623 GiB). Phase 35 measured this same point's loop delta
+# as 4.56 GiB (4,672.8 MiB, `density_sweep.csv` `p35-head-d0.1-T10`) and peak 5.92 GiB
+# (6,205,808 KiB, `point_resources.csv`): the re-measurement sits ~5 % below both, within the combined
+# run-to-run/host uncertainty of the two measurements. The staged components (stage-9 rows):
+#
+# | component (`memory_attribution.csv` stage-9 row) | GiB | tolerance | source rows (stage) |
+# |---|---|---|---|
+# | `comp_dso_build` | +0.408 | ±0.05 | `pre_staged_gc` → `build_dso_opt` (2) |
+# | `comp_agr_builds` | +1.724 | ±0.172 | `build_dso_opt` → `after_agr_opts` (2) |
+# | `comp_first_iter_retained` | +1.370 | ±0.137 | `iter_before_gc` → `after_first_optimize_gc` (3-4) |
+# | `comp_iter_retained` | +0.318 | ±0.05 | `after_first_optimize_gc` → `iter_after_gc` (4) |
+# | `comp_certify` | −0.100 | ±0.05 | `iter_after_gc` → `after_certify_gc` (5) |
+# | Σ components | +3.720 | ±0.237 | `reconciliation:components_total` |
+# | **residual** | **+0.620** | ±0.237 | `residual` (9) |
+#
+# The residual (observed 4.339 − Σ 3.720) is ~14 % of the observed delta and is honestly composed of what
+# the staged snapshots structurally exclude: solve churn the GC'd snapshots don't retain, allocator
+# retention, and the anchor-warmed process context. This is a documented honest residual — the outcome
+# class the project's honesty policy accepts — not a fit forced onto the components.
+#
+# **What the measurements NAME at T = 10 (replacing the Phase-35 hypothesis):** the previously
+# unattributed ~3.4 GiB is dominated by the 122 per-aggregator model builds (+1.724 GiB) and the first
+# iterate's retained state (+1.370 GiB — the DSO model's first `optimize!` plus the 122 first AGR solves
+# plus the consensus state; the Phase-35 "+0.89 GiB first optimize" figure was the DSO model alone,
+# measured before any AGR solve existed). The isolated stage-4 test measured the per-hour DSO solver
+# state candidate — retained growth across iterates 2..8 — at **+0.318 GiB total, ≈ 0.045 GiB per
+# iteration**: an order of magnitude below the build and first-iterate components. The Phase-35
+# hypothesis that the growth is mostly per-hour DSO solver state retained across the loop is therefore
+# NOT what the isolated measurement shows at T = 10, and is recorded as refuted-as-dominant (it exists,
+# it is just small). The consolidation/certify component is ≈ 0 (−0.100 GiB net retained): no large
+# retained consolidation state.
+#
+# **What scales with T (measured, not hypothesized):** the models themselves. The reduced build-only run
+# at T = 24 (`p39-attr-d0.1-T24-s2`, stage-2 rows) measured `build_dso_opt` +0.922 GiB and the 122 AgrOpt
+# builds +4.024 GiB — 2.26× and 2.33× their T = 10 values for T going 10 → 24 (2.4×), i.e. the build
+# components are ~linear in T because each of the 123 JuMP models is ~linear in T. The T = 24 process
+# peaked at 6,366,664 KiB = 6.07 GiB with builds ALONE — before any solve — which is the quantitative
+# bridge to Phase-35's 11.52 GiB full-solve peak (builds + first-solve retained state + loop churn).
+#
+# **T = 24, density 0.1: loop attribution honestly NOT ESTABLISHED — the full run was earlyoom-killed.**
+# The full staged run (`p39-attr-d0.1-T24`) was SIGTERM'd by earlyoom during the ANCHOR itself (row
+# `anchor_earlyoom_killed`, a post-run evidence repair recorded out-of-process because the process died;
+# `runs/p39-attr-d0.1-T24.oom_earlyoom`: two SIGTERMs at 06:19:20/06:19:30, VmRSS 5950/5885 MiB at kill;
+# MaxRSS 7,820,096 KiB = 7.46 GiB, `runs/p39-attr-d0.1-T24.time`). The host state at launch explains it:
+# 6,307 MiB available with 10,057 MiB swap already used (`runs/p39-attr-d0.1-T24.free_before`), versus
+# ~10.3 GiB available / 1.5 GiB swap when Phase 35 measured this point successfully (11.52 GiB peak,
+# 10.17 GiB loop delta — those Phase-35 figures REMAIN the standing T = 24 observations). Per this file's
+# own protocol ("one attempt per ladder step; no retry after a kill", section 5) the full point was not
+# retried; one REDUCED build-only attempt (`--stage 2`, no anchor/loop/certify) completed and is the
+# source of the T = 24 build numbers above. The stage-1 rows for T = 24 in the CSV come from that
+# reduced run (the killed run's load-stage rows share the same keys and were upsert-replaced); the T = 24
+# stage-9 `residual` row records the non-attribution status. What the T = 10 attribution predicts for a
+# future, quieter-host T = 24 run — builds ~4.95 GiB, first iterate ~3.3 GiB if it scales like the
+# builds, per-iterate retention small — is inference, NOT measurement, and is labelled as such.
+#
+# **Cross-check against the Phase-35 profiler (+0.41 vs +0.23 GiB DSO build).** The Phase-35 staged
+# profile (`memory_profile.csv`, fixture=ieee8500, density 0.1, T = 10; runs `p35-prof-ieee8500-s2`/
+# `-s3` in `point_resources.csv`) measured `build_dso_opt` at +0.23 GiB (1,102,128 → 1,340,200 KiB) and
+# the first `optimize!` at +0.89 GiB. This harness's staged DSO build measures +0.408 GiB on the same
+# fixture/point. The build arguments are the same — `build_dso_opt`'s own defaults are already
+# `ConvexBranchFlow` and the context-sensitive LIVE reactive resolution, and both runs use the same seed
+# and population — so the difference is process context: the staged build runs AFTER the anchor's full
+# solve in the same process (warm JuMP/solver runtime, allocator arenas that survive `GC.gc()` +
+# `malloc_trim`). The 0.18 GiB gap exceeds the component's ±0.05 GiB tolerance and is absorbed by the
+# residual's story; read the two numbers as the same component under two contexts, not as a build
+# regression. For the same reason the T = 10 component table above is measured in an anchor-warmed
+# process and carries its tolerances for exactly this class of context noise.
+#
+# **What this section does NOT establish.** No T = 24 loop attribution (earlyoom; Phase-35's whole-call
+# figures stand, unsplit). No scaling exponent in T (two points, and the second is build-only). No
+# per-stage churn split (would need allocation-site profiling — out of scope). No memory mitigation was
+# adopted or evaluated: the two dominant components are the 123 JuMP models themselves (DSO + 122
+# AgrOpt) and their first solves — the models must exist to run the algorithm at all, so nothing here
+# identifies a dominant REMOVABLE retained consumer, and no consumer was shown to make a bit-identical
+# mitigation possible.
+#
+# **Reproducing this (one point per process; expect ~15 min at T = 10 on this host):**
+#
+# ```
+# julia --project=. scripts/profile_ieee8500_memory_attribution.jl --fixture ieee8500 --density 0.1 --t-horizon 10
+# julia --project=. scripts/profile_ieee8500_memory_attribution.jl --fixture ieee8500 --density 0.1 --t-horizon 24 --stage 2
+# ```
+#
+# Each invocation upserts its own `(fixture, density, T, stage, name)` rows into
+# `results/ieee8500_benchmark/memory_attribution.csv` (`cols = :union`; re-runs replace their own rows,
+# never drop others) and re-writes the CSV after every stage report, so a kill keeps the evidence rows
+# captured before it. The full T = 24 point needs a host with ~12 GiB genuinely available at launch;
+# on this 15.5 GiB host that means closing other work first — and if earlyoom kills it anyway, the kill
+# is the recorded outcome.
