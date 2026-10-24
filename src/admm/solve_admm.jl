@@ -50,6 +50,7 @@
 # as the penalized objective is not the welfare), and the converged coupling price is returned as the DADP.
 
 using JuMP
+using LinearAlgebra: BLAS
 
 """
     solve_admm(feeder, pf::AbstractPowerFlow, aggregators;
@@ -57,7 +58,9 @@ using JuMP
                ε_abs::Real = 1e-4, ε_rel::Real = 1e-3,
                τ::Real = 2.0, μ::Real = 10.0, ρ_min::Real = 1e-2, ρ_max::Real = 1e4,
                allow_export::Bool = true, reactive_consensus = ReactiveMode.OFF, ρ_q::Real = ρ,
-               time_limit_s::Union{Nothing,Real} = nothing)
+               time_limit_s::Union{Nothing,Real} = nothing,
+               atol_exact::Union{Nothing,Real} = nothing, rtol_exact::Real = 1e-4,
+               parallel::Bool = false)
         -> (; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices,
               reactive_consensus_mode, status)
 
@@ -200,6 +203,25 @@ project's own default gate. A caller overriding it is asserting they have their 
 independently measured noise floor for the tolerance they pass, mirroring how
 `scripts/benchmark_ieee8500.jl`'s `IEEE8500_MV_EXACT_ATOL`/`IEEE8500_EXACT_ATOL` were derived.
 
+# Threaded executor (`parallel::Bool = false`)
+
+An OPT-IN threaded executor for the aggregator subproblems (one `Threads.@spawn` task per
+aggregator per iteration, joined in `load_nodes` order before the λ/dual update — the
+aggregators are independent given λ). The DEFAULT `false` keeps the serial executor
+BYTE-FOR-BYTE — this is purely additive (golden policy; the knife-edge canary is never
+re-pinned). Under `parallel = true` the shared consensus region (DSO solve, residual
+accumulation in the fixed `j, t` order, dual step, adaptive ρ) stays SERIAL, so the executed
+float order per iteration is identical to the serial executor's; only the AGR-OPT solves are
+dispatched concurrently, on a task-safe solve-only grain with all `AdmmState` writes applied
+in the serial join region. The threaded path pins `BLAS.set_num_threads(1)` at executor entry
+(process-global state, saved and restored on EVERY exit path) and
+`MOI.NumberOfThreads() = 1` on each AGR model — threaded path ONLY, the solver factory
+defaults are untouched. An error raised inside a parallel task surfaces after the join as the
+ORIGINAL exception object (`CertificateError`/`SolveFailedError`/`ConvergenceError` with
+serial's node attribution) — never a `TaskFailedException`/`CompositeException` wrapper.
+The executor choice is deliberately NOT part of `Scenario` identity: scenario `==`, `hash`
+and saved filenames are unchanged.
+
 # Returns
 
 `(; welfare, dadp, λ, iters, residuals, dso_ctx, exact_maxgap, mu_q, q_devices, reactive_consensus_mode, status)` where
@@ -246,6 +268,9 @@ price.
     exceeded first, this throw is SKIPPED — the honest `status = :budget_exceeded` return
     (see "Wall-clock budget" above) replaces it; that path is not itself a genuine
     non-convergence, so it is not fail-loud.
+  - `ArgumentError` when `parallel = true` and `Threads.nthreads() == 1` — the threaded executor
+    requires restarting Julia with `julia -t N` (`N > 1`). There is NO silent serial fallback
+    (project fail-loud policy).
   - `CertificateError` when a final-consolidation certificate (SOC exactness, battery, 4Q,
     no-slack) refuses the CONVERGED point; its `iterations` field carries the ADMM iteration
     count reached before the refusal.
@@ -278,10 +303,21 @@ function solve_admm(
     time_limit_s::Union{Nothing, Real} = nothing,
     atol_exact::Union{Nothing, Real} = nothing,
     rtol_exact::Real = 1e-4,
+    parallel::Bool = false,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     _check_admm_pair!(:solve_admm, feeder, pf)
     isempty(aggregators) && throw(ArgumentError("solve_admm needs at least one aggregator"))
+    # Threaded executor opt-in is fail-loud: parallel=true on a 1-thread runtime is a caller
+    # error, never a silent serial fallback (fail-loud policy).
+    parallel &&
+        Threads.nthreads() == 1 &&
+        throw(
+            ArgumentError(
+                "solve_admm: parallel=true requires Threads.nthreads() > 1 — restart Julia with " *
+                "julia -t N. No silent serial fallback (fail-loud policy).",
+            ),
+        )
     # A degenerate horizon (T = 0, with a length-0 λ₀ that would pass the shape guard below) makes
     # the coupling-entry count p = length(load_nodes)·T == 0, so ε_pri = ε_dual = 0 AND every
     # residual sum is 0 — `converged` then returns true on iteration 1 and the loop reports a
@@ -310,60 +346,102 @@ function solve_admm(
 
     # ---- BUILD ONCE + ITERATE (named phases; see admm_phases.jl) --------------
     st = _admm_build(feeder, pf, aggregators, T, λ₀, ρf, ρ_qf, mode, rmode)
-    _admm_iterate!(st, rmode, maxiter, ε_abs, ε_rel, τ, μ, ρ_min, ρ_max, time_limit_s)
-
-    dso = st.dso
-    load_nodes = st.load_nodes
-    residuals = st.residuals
-    agr_by_bus = st.agr_by_bus
-    λ, a, util = st.λ, st.a, st.util
-
-    # ---- FAIL LOUD on the maxiter cap — never return a non-consensus point.
-    # Fires ONLY on genuine non-convergence — NEITHER converged NOR an honest
-    # wall-clock budget exit.
-    if !st.converged_flag && !st.budget_exceeded_flag
-        throw(
-            ConvergenceError(
-                "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
-                "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
-                "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
-                "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$(st.ρf)). Retune the adaptive-ρ config " *
-                "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
-                "optimum and is refused (thesis §2.6).";
-                iterations = maxiter,
-            ),
-        )
-    elseif st.budget_exceeded_flag
-        # ---- HONEST early exit on the wall-clock budget. SKIPS the final
-        # consolidation pass below — it assumes a converged iterate and runs the battery/4Q/
-        # exactness certificates, which are meaningless on a mid-loop, non-consensus point.
-        # `welfare`/`dadp`/`λ`/`exact_maxgap`/`mu_q` are `nothing` BY DESIGN: a `:budget_exceeded`
-        # result never carries a plausible-but-uncertified price — a caller cannot silently
-        # mistake this mid-loop iterate for a certified DADP.
-        return (;
-            welfare = nothing,
-            dadp = nothing,
-            λ = nothing,
-            iters = residuals.iters,
-            residuals = residuals,
-            dso_ctx = dso.ctx,
-            exact_maxgap = nothing,
-            mu_q = nothing,
-            q_devices = Dict{Int, Vector{Float64}}(),
-            reactive_consensus_mode = mode,   # resolved mode recoverable even on early exit
-            status = :budget_exceeded,
-        )
+    # Threaded executor (parallel = true): snapshot the process-global BLAS thread count so it
+    # can be restored on EVERY exit path in the `finally` below — the executor itself pins
+    # `BLAS.set_num_threads(1)` at its entry (admm_phases.jl) and LBT state is process-global.
+    # Serial path (parallel = false): no new statement runs beyond the flag checks.
+    if parallel
+        blas0 = BLAS.get_num_threads()
     end
+    local result
+    try
+        _admm_iterate!(
+            st,
+            rmode,
+            maxiter,
+            ε_abs,
+            ε_rel,
+            τ,
+            μ,
+            ρ_min,
+            ρ_max,
+            time_limit_s,
+            parallel,
+        )
 
-    # A certificate refused at the final consolidation (e.g. the SOC exactness
-    # gate) comes AFTER the loop converged; attach that iteration count to the error so callers can
-    # still report it. Same message and `kind` — the refusal itself is unchanged.
-    return try
-        _admm_certify(st, rmode, mode, aggregators, λ₀, atol_exact, rtol_exact)
-    catch err
-        (err isa CertificateError && err.iterations === nothing) || rethrow()
-        throw(CertificateError(err.msg; kind = err.kind, iterations = residuals.iters))
+        dso = st.dso
+        load_nodes = st.load_nodes
+        residuals = st.residuals
+        agr_by_bus = st.agr_by_bus
+        λ, a, util = st.λ, st.a, st.util
+
+        # ---- FAIL LOUD on the maxiter cap — never return a non-consensus point.
+        # Fires ONLY on genuine non-convergence — NEITHER converged NOR an honest
+        # wall-clock budget exit.
+        if !st.converged_flag && !st.budget_exceeded_flag
+            throw(
+                ConvergenceError(
+                    "solve_admm FAILED to converge: hit maxiter=$maxiter without BOTH the primal residual " *
+                    "‖r‖ ≤ ε_pri AND the dual residual ‖s‖ ≤ ε_dual (last ‖r‖ = $(last(residuals.primal_trace)) " *
+                    "vs ε_pri = $(last(residuals.eps_pri_trace)); last ‖s‖ = $(last(residuals.dual_trace)) vs " *
+                    "ε_dual = $(last(residuals.eps_dual_trace)); ρ=$(st.ρf)). Retune the adaptive-ρ config " *
+                    "(ε_abs/ε_rel/τ/μ/ρ_min/ρ_max) or raise maxiter — the last iterate is NOT a consensus " *
+                    "optimum and is refused (thesis §2.6).";
+                    iterations = maxiter,
+                ),
+            )
+        elseif st.budget_exceeded_flag
+            # ---- HONEST early exit on the wall-clock budget. SKIPS the final
+            # consolidation pass below — it assumes a converged iterate and runs the battery/4Q/
+            # exactness certificates, which are meaningless on a mid-loop, non-consensus point.
+            # `welfare`/`dadp`/`λ`/`exact_maxgap`/`mu_q` are `nothing` BY DESIGN: a `:budget_exceeded`
+            # result never carries a plausible-but-uncertified price — a caller cannot silently
+            # mistake this mid-loop iterate for a certified DADP.
+            result = (;
+                welfare = nothing,
+                dadp = nothing,
+                λ = nothing,
+                iters = residuals.iters,
+                residuals = residuals,
+                dso_ctx = dso.ctx,
+                exact_maxgap = nothing,
+                mu_q = nothing,
+                q_devices = Dict{Int, Vector{Float64}}(),
+                reactive_consensus_mode = mode,   # resolved mode recoverable even on early exit
+                status = :budget_exceeded,
+            )
+        else
+            # A certificate refused at the final consolidation (e.g. the SOC exactness
+            # gate) comes AFTER the loop converged; attach that iteration count to the error so callers can
+            # still report it. Same message and `kind` — the refusal itself is unchanged.
+            result = try
+                _admm_certify(
+                    st,
+                    rmode,
+                    mode,
+                    aggregators,
+                    λ₀,
+                    atol_exact,
+                    rtol_exact,
+                    parallel,
+                )
+            catch err
+                (err isa CertificateError && err.iterations === nothing) || rethrow()
+                throw(
+                    CertificateError(
+                        err.msg;
+                        kind = err.kind,
+                        iterations = residuals.iters,
+                    ),
+                )
+            end
+        end
+    finally
+        if parallel
+            BLAS.set_num_threads(blas0)
+        end
     end
+    return result
 end
 
 export solve_admm

@@ -154,6 +154,7 @@ function _admm_iterate!(
     ρ_min,
     ρ_max,
     time_limit_s,
+    parallel::Bool = false,
 )
     load_nodes = st.load_nodes
     T = st.T
@@ -265,6 +266,7 @@ function _admm_certify(
     λ₀,
     atol_exact,
     rtol_exact,
+    parallel::Bool = false,
 )
     dso = st.dso
     load_nodes = st.load_nodes
