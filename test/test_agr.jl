@@ -182,3 +182,50 @@ end
         @test isapprox(out_mut.utility, out_fresh.utility; atol = 1e-6, rtol = 1e-5)
     end
 end
+
+# POP-04 additive solver seam: `build_agr_opt`'s `optimizer` kwarg (default
+# `select_optimizer(QP())`, byte-identical) must reach the model — a tighter Clarabel
+# factory passed at BUILD time governs every re-solve of that build-once model
+# (mid-loop AND the certify re-solves). The tolerance values here are the test's own,
+# not a src/ default.
+@testitem "agr: build_agr_opt optimizer kwarg — tighter Clarabel factory reaches the model (agr)" setup =
+    [TwoBusFixtures, IEEE13Fixtures] tags = [:admm] begin
+    using TSODSO
+    using JuMP
+
+    @test isdefined(TSODSO, :build_agr_opt)
+
+    if isdefined(TSODSO, :build_agr_opt)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = TwoBusFixtures.build_two_bus_aggregators(feeder)
+        agg = aggs[1]
+        Th = TwoBusFixtures.T
+        ρ = TwoBusFixtures.RHO_2BUS
+
+        agr = build_agr_opt(
+            agg,
+            Th;
+            ρ = ρ,
+            optimizer = select_optimizer(
+                TSODSO.QP();
+                tol_gap_abs = 1e-12,
+                tol_gap_rel = 1e-12,
+            ),
+        )
+        @test agr isa AgrOpt
+
+        # The injected factory must still produce a well-posed QP solving OPTIMAL at
+        # the default zero price (proves the kwarg reaches `Model(optimizer)`).
+        assert_solved!(agr.model; dual = true)
+        @test is_solved_and_feasible(agr.model; dual = true)
+
+        # One coefficient-update re-solve through solve_agr! at a zero λ_j / zero c_j:
+        # the same model must re-solve with the injected factory and return a finite
+        # pag (the App. C battery gate runs inside solve_agr! and must not throw).
+        out = solve_agr!(agr, zeros(Th), zeros(Th), ρ)
+        @test length(out.pag) == Th
+        @test all(isfinite, out.pag)
+        @test out.utility isa Real
+        @test isfinite(out.utility)
+    end
+end

@@ -76,7 +76,8 @@ struct AgrOpt
 end
 
 """
-    build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = ReactiveMode.OFF, ρ_q::Real = ρ) -> AgrOpt
+    build_agr_opt(agg::Aggregator, T::Int; ρ::Real, reactive_mode = ReactiveMode.OFF, ρ_q::Real = ρ,
+                  optimizer = select_optimizer(QP())) -> AgrOpt
 
 Build the AGR-OPT per-node subproblem for aggregator `agg` over horizon `T` (thesis eq. 3.46),
 ONCE, reusing `Aggregator.contribute!` verbatim:
@@ -115,6 +116,18 @@ ONCE, reusing `Aggregator.contribute!` verbatim:
 block, mirroring `ρ`'s role for the active `pag` block and [`build_dso_opt`](@ref)'s `ρ_q`
 default. Unused (never referenced) under `OFF`/`CERTIFIED`.
 
+`optimizer = select_optimizer(QP())`: ADDITIVE solver-factory kwarg — the default is
+byte-identical to the previous hardcoded `Model(select_optimizer(QP()))` build. Intended
+use (POP-04): pass a TIGHTER Clarabel factory of the shape
+`select_optimizer(QP(); tol_gap_abs = …, tol_gap_rel = …)` when the final consolidation's
+battery-complementarity certificate refuses a CONVERGED ADMM point on solver noise —
+tighten the SOLVER's convergence precision, never a gate. The kwarg replaces the AGR
+model's factory at BUILD time, and AGR models are built ONCE and re-solved, so it governs
+EVERY solve of that model: the mid-loop coefficient-update solves AND the certify
+re-solves. Mirrors [`solve_welfare`](@ref)'s `optimizer` kwarg and the
+`atol_exact`/`rtol_exact` caller-measured-floor discipline: the caller overriding is
+asserting their own independently measured basis for the tolerance values they pass.
+
 Returns an [`AgrOpt`](@ref). No concrete solver is named; the model is well-posed and
 solves OPTIMAL at the default zero price.
 """
@@ -124,11 +137,15 @@ function build_agr_opt(
     ρ::Real,
     reactive_mode = ReactiveMode.OFF,
     ρ_q::Real = ρ,
+    optimizer = select_optimizer(QP()),
 )
     mode = normalize_reactive_mode(reactive_mode)
 
     # (1) One QP model per node, chosen by problem class only (never names a solver).
-    model = Model(select_optimizer(QP()))
+    # The factory is injectable (`optimizer` kwarg, default the QP factory) — a caller
+    # may pass a tighter Clarabel configuration (POP-04 precision seam); the default is
+    # byte-identical to the previous hardcoded build.
+    model = Model(optimizer)
     ctx = ModelContext(model)
     ctx.T = T
 

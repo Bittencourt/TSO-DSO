@@ -113,7 +113,32 @@ select_optimizer(::MILP) = optimizer_with_attributes(
     "mip_feasibility_tolerance" => 1e-9,
 )
 
-select_optimizer(::QP) = optimizer_with_attributes(Clarabel.Optimizer, "verbose" => false)
+# Keyword overrides, mirroring the SOCP method's pattern below — layered ON TOP of the
+# base `"verbose" => false` (a duplicate key passed later wins in
+# `optimizer_with_attributes`, so callers can only ADD/OVERRIDE, never lose a base
+# attribute unless they explicitly override it). `select_optimizer(QP())` with NO kwargs
+# is behaviorally BYTE-IDENTICAL to the previous one-liner method this replaces (pure
+# additive seam — golden policy; the knife-edge canary is never re-pinned).
+#
+# Motivation (POP-04): the converged 784-house full-population ADMM point is refused by
+# the final consolidation's battery-complementarity certificate on CERTIFICATE NOISE —
+# the measured complementarity product sits 0.04% over the ~1e-12 relative band at the
+# per-house-divided battery scale (40-02/40-03 summaries, agreement.csv). The repo's
+# sanctioned answer to that class of refusal is tightening the SOLVER's convergence
+# precision, NEVER a gate. This seam lets a caller pass a tighter Clarabel configuration
+# (`select_optimizer(QP(); tol_gap_abs = …, tol_gap_rel = …)`) without naming the solver
+# outside this file.
+#
+# The factory itself bakes in NO tolerance: this method adds NO tol_gap/tol_feas default
+# (only the SOCP method's pre-existing 1e-8 defaults exist in this file). Numeric values
+# live at CALL SITES, mirroring the `atol_exact`/`rtol_exact` seam's
+# caller-measured-floor discipline — a caller overriding attributes is asserting their
+# own independently measured basis for the values they pass.
+select_optimizer(::QP; attrs...) = optimizer_with_attributes(
+    Clarabel.Optimizer,
+    "verbose" => false,
+    (String(k) => v for (k, v) in pairs(attrs))...,
+)
 
 # Tight gap tolerances: transactive prices ARE the duals, so accurate conic duals
 # matter. Clarabel's `tol_gap_abs`/`tol_gap_rel` default to 1e-8; set explicitly.
