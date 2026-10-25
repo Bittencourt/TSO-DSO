@@ -384,3 +384,161 @@ end
         @test abs(sum(values(led_b.balances))) <= 2.7755575615628914e-15
     end
 end
+
+# --- Tariffs (41-03 Task 1): revenue-neutral flat/TOU price construction ---------------
+
+@testitem "tariffs: revenue-neutral flat/TOU — hand-computed anchors + no-op guard" tags =
+    [:settlement] begin
+    using TSODSO
+
+    # Hand-computed 2-bus/2-hour anchor (the new-math known-value certificate):
+    # λ = [10 30; 20 40], w = [−1 −1; −1 −3] ⇒ Σλw = −180, Σw = −6 ⇒ flat = 30.0
+    # EXACTLY; TOU bins {[1],[2]} ⇒ bin levels [15.0, 37.5] EXACTLY with the global
+    # rescale s == 1.0. Every quantity here is exactly representable in IEEE-754, so
+    # the totals identity (the comparison's locked fairness condition) asserts
+    # literal `==` — no tolerance laundering on the certificate.
+    λ = [10.0 30.0; 20.0 40.0]
+    w = [-1.0 -1.0; -1.0 -3.0]
+
+    flat = revenue_neutral_flat(λ, w)
+    @test flat == [30.0, 30.0]
+    dadp_total = sum(λ[j, t] * w[j, t] for j in 1:2, t in 1:2)
+    flat_total = sum(flat[t] * w[j, t] for j in 1:2, t in 1:2)
+    @test flat_total == dadp_total
+
+    tou = revenue_neutral_tou(λ, w; bins = [[1], [2]])
+    @test tou == [15.0, 37.5]
+    tou_total = sum(tou[t] * w[j, t] for j in 1:2, t in 1:2)
+    @test tou_total == dadp_total
+
+    # Pinned TOU bins are auditable module constants exposed via default_tou_bins
+    # (the A4 resolution: 6/12/6 off-peak/shoulder/peak split over the 24-h profile).
+    @test default_tou_bins(24) ==
+          [collect(1:6), vcat(collect(7:16), [23, 24]), collect(17:22)]
+
+    # Float-noisy weights (irrational-ish values): the constructor's rescale guard
+    # holds (the call does NOT throw — s ≈ 1.0 to well within its 1e-9 rtol) and the
+    # derived totals match Σλ·w within 1e-12 relative.
+    λn = [10.0 * 1.1 30.0 * 1.3; 20.0 * 1.7 40.0 * 1.9]
+    wn = [-1.0 -1.0 + 1e-13; -1.0 - 2e-13 -3.0]
+    flatn = revenue_neutral_flat(λn, wn)
+    tn = sum(λn[j, t] * wn[j, t] for j in 1:2, t in 1:2)
+    fn = sum(flatn[t] * wn[j, t] for j in 1:2, t in 1:2)
+    @test fn ≈ tn rtol = 1e-12
+end
+
+@testitem "tariffs: real-run revenue neutrality on the 2-bus solve_welfare fixture" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    # Same fixture shape as the 41-01 ledger items: 2-bus radial, one PVBattery
+    # aggregator, solve_welfare with priced export.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+    ctx, obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+
+    input = settlement_input(ctx; T = T, λ₀ = λ₀)
+    flat = flat_prices(input)
+    tou = tou_prices(input; bins = [[1, 2], [3]])
+    @test length(flat) == T
+    @test length(tou) == T
+    @test all(isfinite, flat)
+    @test all(isfinite, tou)
+
+    # The locked fairness condition on the SAME run: total payments under the derived
+    # tariff == total payments under DADP, quantities = the run's OWN signed nets (A2).
+    dadp_total = let
+        s = 0.0
+        for (i, j) in enumerate(input.buses), t in 1:T
+            s += input.prices[i, t] * input.bus_nets[j][t]
+        end
+        s
+    end
+    flat_total = let
+        s = 0.0
+        for (i, j) in enumerate(input.buses), t in 1:T
+            s += flat[t] * input.bus_nets[j][t]
+        end
+        s
+    end
+    tou_total = let
+        s = 0.0
+        for (i, j) in enumerate(input.buses), t in 1:T
+            s += tou[t] * input.bus_nets[j][t]
+        end
+        s
+    end
+    rel_flat = abs(flat_total - dadp_total) / abs(dadp_total)
+    rel_tou = abs(tou_total - dadp_total) / abs(dadp_total)
+    @info "tariffs: real-run revenue neutrality (2-bus)" dadp_total flat_total tou_total rel_flat =
+        rel_flat rel_tou = rel_tou
+    # PROVISIONAL pins — re-pinned to 10× measured in the implementation commit
+    # (gate-then-golden; measured values cited at the pin site there).
+    @test flat_total ≈ dadp_total rtol = 1e-12
+    @test tou_total ≈ dadp_total rtol = 1e-12
+end
+
+@testitem "tariffs: non-vacuous boundary guards" tags = [:settlement] begin
+    using TSODSO
+
+    λ = [10.0 30.0; 20.0 40.0]
+    w = [-1.0 -1.0; -1.0 -3.0]
+
+    # (1) shape mismatch
+    @test_throws ArgumentError revenue_neutral_flat(λ, w[:, 1:1])
+
+    # (2) all-zero weights: Σ|w| == 0 — the message carries the magnitude
+    err = try
+        revenue_neutral_flat(λ, zeros(2, 2))
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("Σ|w| = 0.0", sprint(showerror, err))
+
+    # (2b) signed-cancel degeneracy: Σw == 0 while Σ|w| > 0 — the weighted mean is
+    # undefined; refused loudly, naming both magnitudes.
+    wc = [1.0 -1.0; -1.0 1.0]
+    err_c = try
+        revenue_neutral_flat(λ, wc)
+        nothing
+    catch e
+        e
+    end
+    @test err_c isa ArgumentError
+    @test occursin("Σw = 0.0", sprint(showerror, err_c))
+
+    # (3) bins are not a partition of 1:T — overlap, gap, out-of-range, empty
+    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[1, 2], [2]])
+    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[1]])
+    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[1], [3]])
+    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = Vector{Vector{Int}}())
+    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[Int[]], [2]])
+
+    # (4) T != 24 with the default bins: ArgumentError NAMING default_tou_bins
+    err2 = try
+        default_tou_bins(3)
+        nothing
+    catch e
+        e
+    end
+    @test err2 isa ArgumentError
+    @test occursin("default_tou_bins", sprint(showerror, err2))
+end
