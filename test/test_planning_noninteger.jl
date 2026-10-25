@@ -245,6 +245,12 @@
         # sample re-solve harness;
         # same OPERATIONAL-layer disposition and rationale as
         # build_stochastic_welfare immediately above.
+        "build_settlement_ledger",  # settlement/SettlementLedger.jl — per-actor
+        # money-conserving settlement ledger; an OPERATIONAL-layer
+        # builder that constructs NO JuMP model at all (pure arithmetic
+        # over a run's published prices and dispatch), never a
+        # planning-layer builder — consciously added here per this
+        # file's own documented tripwire contract.
     ])
     exported_builders = Set(filter(n -> startswith(n, "build_"), string.(names(TSODSO))))
     union!(found, setdiff(exported_builders, operational_builders))
