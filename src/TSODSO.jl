@@ -290,6 +290,7 @@ include("settlement/SettlementLedger.jl")
 include("settlement/run_inputs.jl")     # run-output → SettlementInput adapters
 include("settlement/tariffs.jl")        # revenue-neutral flat/TOU price construction (pure)
 include("settlement/price_taker.jl")    # thin penalty-free counterfactual dispatch QP
+include("settlement/feasibility.jl")    # AC-physics feasibility status (report, never throw)
 include("settlement/equity.jl")         # Gini/Theil/Atkinson/Palma + breakouts + rebound
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---

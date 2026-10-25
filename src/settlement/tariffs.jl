@@ -79,8 +79,9 @@ function _validate_tou_bins(bins::Vector{Vector{Int}}, T::Int)
     isempty(bins) &&
         throw(ArgumentError("bins is empty — expected a non-empty partition of 1:$T"))
     for (k, bin) in enumerate(bins)
-        isempty(bin) &&
-            throw(ArgumentError("bins[$k] is empty — every bin must carry at least one hour"))
+        isempty(bin) && throw(
+            ArgumentError("bins[$k] is empty — every bin must carry at least one hour"),
+        )
         for h in bin
             1 <= h <= T || throw(
                 ArgumentError(
@@ -109,7 +110,11 @@ function _validate_tou_bins(bins::Vector{Vector{Int}}, T::Int)
 end
 
 # Internal: shared guards + the Σλw / Σw folds for the derivation kernels.
-function _tariff_folds(λ::AbstractMatrix{<:Real}, w::AbstractMatrix{<:Real}, who::AbstractString)
+function _tariff_folds(
+    λ::AbstractMatrix{<:Real},
+    w::AbstractMatrix{<:Real},
+    who::AbstractString,
+)
     size(λ) == size(w) || throw(
         ArgumentError(
             "$who: λ has size $(size(λ)) but w has size $(size(w)) — they must match " *
@@ -119,9 +124,8 @@ function _tariff_folds(λ::AbstractMatrix{<:Real}, w::AbstractMatrix{<:Real}, wh
     nb, T = size(λ)
     T >= 1 || throw(ArgumentError("$who: horizon T=$T must be at least 1"))
     for arr in (λ, w), v in arr
-        isfinite(v) || throw(
-            ArgumentError("$who: non-finite value ($v) in the price/weight matrices"),
-        )
+        isfinite(v) ||
+            throw(ArgumentError("$who: non-finite value ($v) in the price/weight matrices"))
     end
     tot_pq = 0.0   # Σ_{j,t} λ·w   (total DADP payments over the weights)
     tot_q = 0.0    # Σ_{j,t} w      (signed weight sum)
@@ -282,6 +286,9 @@ weighted by the run's OWN signed net injections (the A2 choice). `bins` defaults
 to the pinned 24-h structure via [`default_tou_bins`](@ref) (so non-daily horizons
 must pass explicit bins).
 """
-function tou_prices(input::SettlementInput; bins::Vector{Vector{Int}} = default_tou_bins(input.T))
+function tou_prices(
+    input::SettlementInput;
+    bins::Vector{Vector{Int}} = default_tou_bins(input.T),
+)
     return revenue_neutral_tou(input.prices, _input_weight_matrix(input); bins = bins)
 end

@@ -692,15 +692,12 @@ end
         reduce(+, [h.Pdc for h in houses]),
     )
 
-    price = [
-        30.0, 12.0, 45.0, 8.0, 22.0, 17.0, 52.0, 9.0, 31.0, 14.0, 27.0, 41.0,
-    ]   # strictly varying, non-degenerate
+    price = [30.0, 12.0, 45.0, 8.0, 22.0, 17.0, 52.0, 9.0, 31.0, 14.0, 27.0, 41.0]   # strictly varying, non-degenerate
     agg_res = price_taker_dispatch(agg, price)
     house_res = price_taker_dispatches(houses, price)
 
-    net_inf = maximum(
-        abs(sum(house_res[h].net[t] for h in 1:2) - agg_res.net[t]) for t in 1:T
-    )
+    net_inf =
+        maximum(abs(sum(house_res[h].net[t] for h in 1:2) - agg_res.net[t]) for t in 1:T)
     u_gap = abs(sum(house_res[h].utility for h in 1:2) - agg_res.utility)
     @info "price-taker separability (2 houses, T=4)" net_inf_norm = net_inf utility_gap =
         u_gap
@@ -885,9 +882,19 @@ end
         T = T,
     )
     # net length != T
-    @test_throws ArgumentError ac_feasibility_status(feeder, [agg], [fill(0.0, T + 1)]; T = T)
+    @test_throws ArgumentError ac_feasibility_status(
+        feeder,
+        [agg],
+        [fill(0.0, T + 1)];
+        T = T,
+    )
     # non-finite net
-    @test_throws ArgumentError ac_feasibility_status(feeder, [agg], [[0.0, NaN, 0.0]]; T = T)
-    # empty aggs
-    @test_throws ArgumentError ac_feasibility_status(feeder, Aggregator[], [[]]; T = 0)
+    @test_throws ArgumentError ac_feasibility_status(
+        feeder,
+        [agg],
+        [[0.0, NaN, 0.0]];
+        T = T,
+    )
+    # empty aggs (checked FIRST — a dispatch needs at least one aggregator)
+    @test_throws ArgumentError ac_feasibility_status(feeder, Aggregator[], [[0.0]]; T = 1)
 end
