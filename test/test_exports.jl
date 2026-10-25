@@ -25,6 +25,7 @@
                 solve_dso!
                 SettlementLedger build_settlement_ledger ledger_residual
                 SettlementInput settlement_input
+                gini theil atkinson palma
                 Scenario ScenarioResult run_scenario run_and_store scenario_filename run_sweep
                 collate_summary run_mpc run_stochastic ADMM Centralized MPC Stochastic
                 AbstractStrategy
