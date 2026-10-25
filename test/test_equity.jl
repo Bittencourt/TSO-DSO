@@ -57,8 +57,7 @@ end
     @test a.n == 4
     @test a.n_excluded == 1
     @test a.epsilon == 0.5
-    a_expected =
-        1 - (sum(xi -> xi^(1 - 0.5), xp) / length(xp))^(1 / (1 - 0.5)) / mu
+    a_expected = 1 - (sum(xi -> xi^(1 - 0.5), xp) / length(xp))^(1 / (1 - 0.5)) / mu
     @test isapprox(a.atkinson, a_expected; rtol = 1e-12)
 
     # Palma over the ascending-sorted FULL vector — pinned small-n counts:
