@@ -264,3 +264,70 @@ end
     @test_throws ArgumentError load_terciles(Float64[])
     @test_throws ArgumentError load_terciles([1.0, Inf])
 end
+
+@testitem "equity: rebound known value — amount 2.0, ratio 0.4 exactly, per-hour detail" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    # Hand-pinned 4-hour case: baseline vs counterfactual NET-LOAD profiles.
+    # delta = cf - baseline = [0, -5, 2, 0]; reduction at t=2; increase at t=3
+    # (AFTER the first reduction => counts). amount = 2.0; ratio = 2 / 5 = 0.4 EXACTLY.
+    r = rebound([0.0, 10.0, 10.0, 10.0], [0.0, 5.0, 12.0, 10.0])
+    @test r.delta == [0.0, -5.0, 2.0, 0.0]
+    @test r.reduction_hours == [2]
+    @test r.increase_hours == [3]
+    @test r.rebound_amount == 2.0
+    @test r.rebound_ratio == 0.4
+end
+
+@testitem "equity: rebound identical profiles — amount 0.0, ratio NaN, no reduction hours" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    r = rebound([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])
+    @test r.delta == [0.0, 0.0, 0.0]
+    @test isempty(r.reduction_hours)
+    @test isempty(r.increase_hours)
+    @test r.rebound_amount == 0.0
+    # No reductions => ratio undefined => NaN (documented convention; isnan comparison).
+    @test isnan(r.rebound_ratio)
+end
+
+@testitem "equity: rebound — an increase BEFORE any reduction is excluded" tags = [:equity] begin
+    using TSODSO, Test
+
+    # delta = [0, 2, -5]: the increase at t=2 precedes the first reduction (t=3) —
+    # NOT a shift into a later hour. amount 0.0; reductions exist (denominator 5)
+    # so ratio = 0.0 — defined and zero, distinct from the no-reduction NaN.
+    r = rebound([0.0, 10.0, 10.0], [0.0, 12.0, 5.0])
+    @test r.delta == [0.0, 2.0, -5.0]
+    @test r.reduction_hours == [3]
+    @test isempty(r.increase_hours)
+    @test r.rebound_amount == 0.0
+    @test r.rebound_ratio == 0.0
+end
+
+@testitem "equity: rebound — two reduction hours, increases summed across post-first-reduction hours" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    # Hand-computed: baseline = 5 each hour; cf = [5, 3, 7, 4, 6, 5]
+    # => delta = [0, -2, 2, -1, 1, 0]; reductions {2, 4}; increases {3, 5}
+    # (both strictly after the FIRST reduction at t=2). amount = 2 + 1 = 3.0;
+    # denominator = -(-2 + -1) = 3.0; ratio = 1.0 — all EXACT.
+    r = rebound(fill(5.0, 6), [5.0, 3.0, 7.0, 4.0, 6.0, 5.0])
+    @test r.delta == [0.0, -2.0, 2.0, -1.0, 1.0, 0.0]
+    @test r.reduction_hours == [2, 4]
+    @test r.increase_hours == [3, 5]
+    @test r.rebound_amount == 3.0
+    @test r.rebound_ratio == 1.0
+end
+
+@testitem "equity: rebound guards — mismatch, non-finite, empty" tags = [:equity] begin
+    using TSODSO, Test
+
+    @test_throws ArgumentError rebound([1.0, 2.0], [1.0])
+    @test_throws ArgumentError rebound(Float64[], Float64[])
+    @test_throws ArgumentError rebound([1.0, NaN], [1.0, 2.0])
+    @test_throws ArgumentError rebound([1.0, 2.0], [1.0, Inf])
+end
