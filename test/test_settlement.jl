@@ -730,3 +730,164 @@ end
     # empty aggregator vector
     @test_throws ArgumentError price_taker_dispatches(Aggregator[], fill(30.0, T))
 end
+
+# --- AC feasibility status (41-03 Task 3): report, never throw --------------------------
+
+@testitem "ac-feasibility: benign DADP dispatch is :feasible — reported, never thrown" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+    ctx, obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    input = settlement_input(ctx; T = T, λ₀ = λ₀)
+
+    # The run's OWN dispatch through the physics-only AC power flow: within the
+    # branch rating and the bus voltage band ⇒ :feasible. The call NEVER throws —
+    # a status is the SETL-03 contract.
+    st = ac_feasibility_status(feeder, [agg], [input.bus_nets[2]]; T = T)
+    @test st isa TSODSO.FeasibilityStatus
+    @test st.status == :feasible
+    @test st.n_thermal_violations == 0
+    @test st.n_voltage_violations == 0
+    @test st.max_overload_ratio <= 1.0
+    @test all(isfinite, [h.min_voltage for h in st.hours])
+    @test all(isfinite, [h.max_voltage for h in st.hours])
+    @test length(st.hours) == T
+end
+
+@testitem "ac-feasibility: overloaded dispatch is :infeasible with full diagnostics — still no throw" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+
+    # Deliberately violating dispatch: 12 pu net injection at bus 2 — ABOVE the
+    # 10-pu branch rating (thermal ratio ≈ 1.2) yet within the feeder's AC
+    # loadability, so the physics-only power flow CONVERGES and the violation is
+    # REPORTED. (The plan's original ~50× the rating = 500 pu sits far beyond the
+    # network's loadability ≈ 25 pu — that poison deterministically produces
+    # :solve_failed instead, which is Test 4's contract; the STATUS CONTRACT is
+    # what asserts, per the plan's own adjust-the-poison note.)
+    st = ac_feasibility_status(feeder, [agg], [[12.0, 12.0, 12.0]]; T = T)
+    @test st.status == :infeasible
+    @test st.n_thermal_violations >= 1
+    @test st.max_overload_ratio > 1.0
+    # Per-hour rows carry the exact _fit_ac_settlement_violations field set.
+    for h in st.hours
+        @test hasproperty(h, :t)
+        @test hasproperty(h, :n_thermal_violations)
+        @test hasproperty(h, :max_overload_ratio)
+        @test hasproperty(h, :n_voltage_violations)
+        @test hasproperty(h, :min_voltage)
+        @test hasproperty(h, :max_voltage)
+        @test hasproperty(h, :voltage_violated)
+    end
+    @test [h.t for h in st.hours] == [1, 2, 3]
+    @info "ac-feasibility stress" status = st.status n_thermal = st.n_thermal_violations n_voltage =
+        st.n_voltage_violations max_ratio = st.max_overload_ratio
+end
+
+@testitem "ac-feasibility: SMAX_NO_LIMIT branch is skip-listed from thermal counting" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    # Same dispatch, but the branch carries the SMAX_NO_LIMIT sentinel (99.0):
+    # the diagnostics template's `br.smax < SMAX_NO_LIMIT || continue` excludes it
+    # from thermal counting entirely — max_overload_ratio stays 0.0 and no thermal
+    # violation is counted (voltage diagnostics still run; the STATUS is whatever
+    # the measured outcome is — the assert here is on the thermal skip-list).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, SMAX_NO_LIMIT)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+
+    st = ac_feasibility_status(feeder, [agg], [[12.0, 12.0, 12.0]]; T = T)
+    @test st.n_thermal_violations == 0
+    @test st.max_overload_ratio == 0.0
+    @test all(h.n_thermal_violations == 0 for h in st.hours)
+end
+
+@testitem "ac-feasibility: non-convergence is a recorded :solve_failed status, never a throw" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 1
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+
+    # An operating point with NO physical AC solution: 500 pu net injection through
+    # an x = 0.02 pu branch (loadability ≈ V²/2X ≈ 25 pu) — Ipopt cannot converge,
+    # and the status layer RECORDS that as :solve_failed carrying the termination
+    # status. (This is the plan's original "~50× the rating" poison, re-derived:
+    # beyond loadability it belongs to the solve-failed contract, not the
+    # thermally-overloaded one.) Deterministic 2026-10-25, Julia 1.12.5.
+    st = ac_feasibility_status(feeder, [agg], [[500.0]]; T = T)
+    @test st.status == :solve_failed
+    @test !isempty(st.message)
+    @test isempty(st.hours)
+    @info "ac-feasibility solve-failure" message = st.message
+end
+
+@testitem "ac-feasibility: non-vacuous boundary guards" tags = [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+
+    # nets/aggs length mismatch
+    @test_throws ArgumentError ac_feasibility_status(
+        feeder,
+        [agg],
+        [fill(0.0, T), fill(0.0, T)];
+        T = T,
+    )
+    # net length != T
+    @test_throws ArgumentError ac_feasibility_status(feeder, [agg], [fill(0.0, T + 1)]; T = T)
+    # non-finite net
+    @test_throws ArgumentError ac_feasibility_status(feeder, [agg], [[0.0, NaN, 0.0]]; T = T)
+    # empty aggs
+    @test_throws ArgumentError ac_feasibility_status(feeder, Aggregator[], [[]]; T = 0)
+end
