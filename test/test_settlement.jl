@@ -589,11 +589,12 @@ end
     @info "price-taker vs run dispatch (2-bus DADP prices)" max_abs_gap =
         maximum(abs(res.net[t] - input.bus_nets[2][t]) for t in 1:T)
 
-    # Batch map over the one-element vector + the alias at the household level.
+    # Batch map over the one-element vector + the alias at the household level
+    # (household_dispatches is deliberately UNEXPORTED — reach it qualified).
     res_batch = price_taker_dispatches([agg], price)
     @test length(res_batch) == 1
     @test res_batch[1].net == res.net
-    res_h = household_dispatches([agg], price)
+    res_h = TSODSO.household_dispatches([agg], price)
     @test res_h[1].utility == res.utility
 end
 
@@ -633,23 +634,27 @@ end
     # Hand-checked counterfactual-validity certificate (the ρ-penalty would visibly
     # shade this dispatch — production ρ = 100 damps the battery far below its rated
     # bounds): one PVBattery aggregator, T = 2, prices [10.0, 50.0] (wide spread ⇒
-    # full arbitrage). The battery CHARGES in the cheap hour (lowering the net
-    # injection there) and DISCHARGES in the dear hour (raising it), at its rated
-    # power bounds.
+    # full arbitrage). soc0 = 0.3 makes the battery ENERGY-scarce: with the ample
+    # soc0 = 1.0 the discharge side is POWER-capped and the cheap-hour charge has no
+    # receiving capacity (measured 2026-10-25 — stranded SOC discharges into hour 1
+    # at net[1] = 0.65), so the full charge-low/sell-high shape needs the scarce
+    # initial energy: the battery CHARGES at its PV limit in the cheap hour
+    # (net[1] ≈ 0 — no export left over) and DISCHARGES in the dear hour.
     T = 2
-    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 0.3, 1.0, 2.0, 3.0, fill(0.2, T))
     agg = Aggregator(2, 0.9, [batt], fill(0.0, T))   # pure battery, no inelastic load
     res = price_taker_dispatch(agg, [10.0, 50.0])
 
     @test isfinite(res.utility)
-    # Charge-low/sell-high ordering: the cheap hour's net injection sits BELOW the
-    # dear hour's (net = pv_used − p_ch + p_dch; charging depresses hour 1, discharge
-    # lifts hour 2).
+    # Charge-low/sell-high, hand-derived: p_ch[1] at its PV-limited charge bound
+    # (0.2) ⇒ net[1] = pv_used − p_ch ≈ 0; p_dch[2] drains the stored energy to
+    # Emin ⇒ net[2] = pv_used + p_dch ≈ 0.2 + 0.95·(0.3 + 0.95·0.2) ≈ 0.6655.
     @test res.net[1] < res.net[2]
-    @test res.net[2] > 0.0
-    # Rated bounds: |net| within [−Pmax, Ppv + Pmax] (charge ≤ PV-limited Pmax draw;
-    # injection ≤ PV + discharge rating). A ρ = 100 penalty would NOT hit this
-    # neighbourhood — the assert documents the counterfactual is unshaded.
+    @test res.net[1] < 1e-5     # cheap hour exports NOTHING: the full PV is stored
+    @test res.net[2] > 0.2      # dear hour exports MORE than PV alone: discharging
+    # Rated bounds: |net| within [−Pmax, Ppv + Pmax]. A ρ = 100 penalty would NOT
+    # put the charge at its PV limit / the discharge at the drained-Emin level —
+    # the assert documents the counterfactual is unshaded.
     @test all(res.net[t] >= -0.5 - 1e-6 && res.net[t] <= 0.2 + 0.5 + 1e-6 for t in 1:T)
     @info "price-taker arbitrage dispatch" net = res.net utility = res.utility
 end
@@ -661,8 +666,11 @@ end
     # Two houses on bus 2 rebuilt from the EXACT Phase-40 primitives (identical draw
     # to build_population's own — attribution cannot drift from the population),
     # rolled up per build_population's load-bearing shape (devices vcat, Pdc sum,
-    # materialize.jl:578-596).
-    T = 4
+    # materialize.jl:578-596). T = 12: `_case_a_house`'s own Deferrable window is
+    # `[min(8,T), min(16,T)]` with E/Pmax = 2, so horizons shorter than 9 trip the
+    # device's energy-budget guard at construction (thesis eq. 3.4) — T = 12 keeps
+    # the production device constants intact.
+    T = 12
     seed = 20260718
     houses = [
         TSODSO._case_a_house(
@@ -684,7 +692,9 @@ end
         reduce(+, [h.Pdc for h in houses]),
     )
 
-    price = [30.0, 12.0, 45.0, 8.0]   # strictly varying, non-degenerate
+    price = [
+        30.0, 12.0, 45.0, 8.0, 22.0, 17.0, 52.0, 9.0, 31.0, 14.0, 27.0, 41.0,
+    ]   # strictly varying, non-degenerate
     agg_res = price_taker_dispatch(agg, price)
     house_res = price_taker_dispatches(houses, price)
 
@@ -696,10 +706,13 @@ end
         u_gap
     # At a fixed price the aggregator problem SEPARATES across member houses — the
     # sums reconcile to within solver tolerance, NEVER claimed bitwise (Pitfall 5).
-    # PROVISIONAL pins — re-pinned to 10× measured (floored at 1e-9) in the
-    # implementation commit with the measured values cited here.
-    @test net_inf <= 1e-9
-    @test u_gap <= 1e-9
+    # Gate-then-golden pins (measured 2026-10-25, Julia 1.12.5, this fixture):
+    #   net_inf_norm = 8.302723663710515e-8 → 10× measured = 8.302723663710515e-7;
+    #   utility_gap  = 1.9731015754587133e-7 → 10× measured = 1.9731015754587133e-6.
+    # (Both above the 1e-9 floor — the measured values govern.) NEVER an invented
+    # constant: a tighter bound here is a solver-precision flip, re-measure first.
+    @test net_inf <= 8.302723663710515e-7
+    @test u_gap <= 1.9731015754587133e-6
 end
 
 @testitem "price-taker: non-vacuous boundary guards" tags = [:settlement] begin
