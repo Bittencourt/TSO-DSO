@@ -488,10 +488,12 @@ end
     rel_tou = abs(tou_total - dadp_total) / abs(dadp_total)
     @info "tariffs: real-run revenue neutrality (2-bus)" dadp_total flat_total tou_total rel_flat =
         rel_flat rel_tou = rel_tou
-    # PROVISIONAL pins — re-pinned to 10× measured in the implementation commit
-    # (gate-then-golden; measured values cited at the pin site there).
-    @test flat_total ≈ dadp_total rtol = 1e-12
-    @test tou_total ≈ dadp_total rtol = 1e-12
+    # Gate-then-golden pins (measured 2026-10-25, Julia 1.12.5, this fixture):
+    #   flat rel gap = 2.8658034134118547e-16 (independent summation associations of
+    #   the same floats) → 10× measured; TOU rel gap = 0.0 (bitwise on this fixture)
+    #   → floor pin 1e-15. NEVER an invented constant.
+    @test flat_total ≈ dadp_total rtol = 2.8658034134118547e-15
+    @test tou_total ≈ dadp_total rtol = 1e-15
 end
 
 @testitem "tariffs: non-vacuous boundary guards" tags = [:settlement] begin
@@ -530,7 +532,7 @@ end
     @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[1]])
     @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[1], [3]])
     @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = Vector{Vector{Int}}())
-    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [[Int[]], [2]])
+    @test_throws ArgumentError revenue_neutral_tou(λ, w; bins = [Int[], [2]])
 
     # (4) T != 24 with the default bins: ArgumentError NAMING default_tou_bins
     err2 = try

@@ -284,10 +284,11 @@ include("experiments/run_stochastic.jl")
 # outputs (the centralized welfare ctx stash + the converged ADMM result additive keys),
 # read-only: `src/pricing/` and `src/admm/` stay byte-identical (golden). Dependency
 # order: SettlementLedger (types + double-entry construction) → run_inputs (run-output →
-# SettlementInput adapters) → equity (pure post-solve analytics; tariffs → price_taker →
-# feasibility land later in the phase's dependency line). Each file declares its own exports.
+# SettlementInput adapters) → tariffs (pure price construction) → price_taker →
+# feasibility → equity (pure post-solve analytics). Each file declares its own exports.
 include("settlement/SettlementLedger.jl")
 include("settlement/run_inputs.jl")     # run-output → SettlementInput adapters
+include("settlement/tariffs.jl")        # revenue-neutral flat/TOU price construction (pure)
 include("settlement/equity.jl")         # Gini/Theil/Atkinson/Palma + breakouts + rebound
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
