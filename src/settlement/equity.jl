@@ -6,10 +6,8 @@
 #   - `gini`, `theil`, `atkinson`, `palma` — inequality metrics over per-household
 #     bill/surplus vectors (SETL-04), each docstring carrying that metric's
 #     negative-value convention (the docstring IS the locked deliverable);
-#   - `load_terciles`, `equity_breakdown` — proxy-group breakouts (SETL-05).
-#
-# (The SETL-06 `rebound` metric extends this file and its export line in Task 3 of
-# plan 41-02.)
+#   - `load_terciles`, `equity_breakdown` — proxy-group breakouts (SETL-05);
+#   - `rebound` — load shifted into later hours after price-driven reductions (SETL-06).
 #
 # Consumes NOTHING but plain numeric vectors — zero solver calls, zero JuMP, no
 # imports beyond the runtime (stdlib-free pure functions; the project keeps a minimal
@@ -32,7 +30,7 @@
 #   Atkinson positive-support subset, excluded count RETURNED (geometric-mean form);
 #   Palma    group-total ratio over the ascending-sorted FULL vector (totals cancel).
 
-export gini, theil, atkinson, palma, load_terciles, equity_breakdown
+export gini, theil, atkinson, palma, load_terciles, equity_breakdown, rebound
 
 # Atkinson's inequality-aversion parameter, fixed as an auditable module constant
 # (the Phase-41 A6 resolution): 0.5 is the common default in the applied literature;
@@ -294,4 +292,62 @@ function equity_breakdown(
         )
     end
     return out
+end
+
+"""
+    rebound(baseline_net_load::AbstractVector{<:Real},
+            counterfactual_net_load::AbstractVector{<:Real})
+        -> (; delta, reduction_hours, increase_hours, rebound_amount, rebound_ratio)
+
+Rebound (snapback) of load shifted into later hours after price-driven reductions
+(SETL-06): one single number plus FULL per-hour detail.
+
+INPUT DEFINITION (documented, CONTEXT-locked): both arguments are NET-LOAD profiles
+per hour — grid consumption, i.e. the NEGATED net injection (caller converts).
+Because a household's net load already nets out behind-the-meter battery charging
+and deferrable-load rescheduling, battery-driven shifts and deferrable-driven
+shifts are BOTH captured by this one definition — no device-level decomposition is
+needed or attempted.
+
+Per-hour detail: `delta[t] = counterfactual[t] - baseline[t]`;
+`reduction_hours` = the hours with `delta[t] < 0` (price-driven reductions);
+`increase_hours` = the hours with `delta[t] > 0` that come strictly AFTER the
+FIRST reduction hour — only those are shifts-into-later-hours; an increase before
+any reduction is NOT rebound and is excluded.
+
+Scalars: `rebound_amount = sum of delta over increase_hours`;
+`rebound_ratio = rebound_amount / (-sum of delta over reduction_hours)` — the
+fraction of the shed load that reappears later. UNDEFINED-RATIO CONVENTION
+(matching the theil / atkinson / palma NaN conventions above): with NO reduction
+hours the ratio is `NaN` (reported, never a fake 0 or `Inf` — compare with
+`isnan`); reductions without any later increase give ratio `0.0` (defined zero).
+
+Convention grounded in demand-response snapback/rebound measurement practice
+(smartEn 2025 position paper; CAISO Demand Response Advanced Measurement
+Methodology 2022; Minnesota DR snapback study 2021 — see the phase research).
+
+Guards: mismatched profile lengths, an empty profile, or any non-finite entry
+throws `ArgumentError`.
+"""
+function rebound(
+    baseline_net_load::AbstractVector{<:Real},
+    counterfactual_net_load::AbstractVector{<:Real},
+)
+    length(baseline_net_load) == length(counterfactual_net_load) || throw(
+        ArgumentError(
+            "rebound: profile length mismatch — baseline has $(length(baseline_net_load)) " *
+            "hours, counterfactual has $(length(counterfactual_net_load)).",
+        ),
+    )
+    _equity_input_check(:rebound, baseline_net_load)
+    _equity_input_check(:rebound, counterfactual_net_load)
+    T = length(baseline_net_load)
+    delta = Float64[counterfactual_net_load[t] - baseline_net_load[t] for t in 1:T]
+    reduction_hours = [t for t in 1:T if delta[t] < 0]
+    first_reduction = isempty(reduction_hours) ? T + 1 : first(reduction_hours)
+    increase_hours = [t for t in 1:T if delta[t] > 0 && t > first_reduction]
+    rebound_amount = sum(delta[t] for t in increase_hours; init = 0.0)
+    denominator = -sum(delta[t] for t in reduction_hours; init = 0.0)
+    rebound_ratio = denominator == 0 ? NaN : rebound_amount / denominator
+    return (; delta, reduction_hours, increase_hours, rebound_amount, rebound_ratio)
 end
