@@ -128,3 +128,139 @@ end
     @test_throws ArgumentError atkinson([1.0, 2.0, 3.0]; epsilon = 0.0)
     @test_throws ArgumentError atkinson([1.0, 2.0, 3.0]; epsilon = -0.5)
 end
+
+@testitem "equity: load_terciles — floor/floor/remainder-to-middle, stable ascending ranks" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    # n = 10: n_lo = 3, n_hi = 3, n_mid = 4 — EXACTLY 3 low / 4 mid / 3 high, with
+    # low = ranks 1-3, mid = ranks 4-7, high = ranks 8-10 of the ascending order.
+    labels = load_terciles(collect(1.0:10.0))
+    @test count(==(:low), labels) == 3
+    @test count(==(:mid), labels) == 4
+    @test count(==(:high), labels) == 3
+    # identity totals: label 1..3 = :low, 4..7 = :mid, 8..10 = :high
+    @test labels == [:low, :low, :low, :mid, :mid, :mid, :mid, :high, :high, :high]
+
+    # n = 4 => 1/2/1; n = 3 => 1/1/1 (remainder to the MIDDLE).
+    l4 = load_terciles([40.0, 10.0, 30.0, 20.0])
+    @test count(==(:low), l4) == 1
+    @test count(==(:mid), l4) == 2
+    @test count(==(:high), l4) == 1
+    # ascending ranks: 10 -> low, 20 & 30 -> mid, 40 -> high
+    @test l4 == [:high, :low, :mid, :mid]
+
+    l3 = load_terciles([3.0, 1.0, 2.0])
+    @test count(==(:low), l3) == 1
+    @test count(==(:mid), l3) == 1
+    @test count(==(:high), l3) == 1
+    @test l3 == [:high, :low, :mid]
+end
+
+@testitem "equity: equity_breakdown — per-group metric set, direct-call equivalence" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    values = [1.0, 2.0, 3.0, 4.0]
+    groups = [:pv, :pv, :non_pv, :non_pv]
+    bd = equity_breakdown(values, groups)
+    @test bd isa Dict
+    @test issetequal(keys(bd), (:pv, :non_pv))
+    for g in (:pv, :non_pv)
+        d = bd[g]
+        # all SEVEN fields present per group
+        @test haskey(d, :n)
+        @test haskey(d, :gini)
+        @test haskey(d, :theil)
+        @test haskey(d, :theil_n_excluded)
+        @test haskey(d, :atkinson)
+        @test haskey(d, :atkinson_n_excluded)
+        @test haskey(d, :palma)
+    end
+    @test bd[:pv].n == 2
+    @test bd[:non_pv].n == 2
+
+    # Group metrics equal a DIRECT call on each group's members (independent path).
+    @test bd[:pv].gini == gini([1.0, 2.0])
+    @test bd[:non_pv].gini == gini([3.0, 4.0])
+    tp = theil([1.0, 2.0])
+    @test bd[:pv].theil == tp.theil
+    @test bd[:pv].theil_n_excluded == tp.n_excluded
+    ap = atkinson([3.0, 4.0])
+    @test bd[:non_pv].atkinson == ap.atkinson
+    @test bd[:non_pv].atkinson_n_excluded == ap.n_excluded
+    @test bd[:non_pv].palma == palma([3.0, 4.0])
+end
+
+@testitem "equity: household-map-shaped breakouts — pv_group AND bus groupings" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    # case_a_household_map row shape (materialize.jl): the ONLY grouping source.
+    row_t = @NamedTuple{
+        house::Int,
+        bus::Int,
+        aggregator::Int,
+        device_set::Symbol,
+        pv_group::Symbol,
+        house_index::Int,
+    }
+    rows = row_t[
+        (
+            house = 1,
+            bus = 2,
+            aggregator = 2,
+            device_set = :thermostatic_deferrable_pvbattery,
+            pv_group = :pv,
+            house_index = 1,
+        ),
+        (
+            house = 2,
+            bus = 2,
+            aggregator = 2,
+            device_set = :thermostatic_deferrable_pvbattery,
+            pv_group = :non_pv,
+            house_index = 2,
+        ),
+        (
+            house = 3,
+            bus = 3,
+            aggregator = 3,
+            device_set = :thermostatic_deferrable_pvbattery,
+            pv_group = :pv,
+            house_index = 1,
+        ),
+        (
+            house = 4,
+            bus = 3,
+            aggregator = 3,
+            device_set = :thermostatic_deferrable_pvbattery,
+            pv_group = :non_pv,
+            house_index = 2,
+        ),
+    ]
+    values = [10.0, 20.0, 30.0, 40.0]
+
+    by_pv = equity_breakdown(values, [r.pv_group for r in rows])
+    @test issetequal(keys(by_pv), (:pv, :non_pv))
+    by_bus = equity_breakdown(values, [r.bus for r in rows])
+    @test issetequal(keys(by_bus), (2, 3))
+    # every group non-empty
+    @test all(n -> n >= 1, (d.n for d in values(by_pv)))
+    @test all(n -> n >= 1, (d.n for d in values(by_bus)))
+
+    # Load terciles of baseline consumption — the third locked grouping.
+    terc = load_terciles(values)
+    by_terr = equity_breakdown(values, terc)
+    @test issetequal(keys(by_terr), (:low, :mid, :high))
+end
+
+@testitem "equity: breakout guards — mismatch, empty, non-finite" tags = [:equity] begin
+    using TSODSO, Test
+
+    @test_throws ArgumentError equity_breakdown([1.0, 2.0, 3.0], [:a, :b])
+    @test_throws ArgumentError equity_breakdown(Float64[], Symbol[])
+    @test_throws ArgumentError equity_breakdown([1.0, NaN], [:a, :b])
+    @test_throws ArgumentError load_terciles(Float64[])
+    @test_throws ArgumentError load_terciles([1.0, Inf])
+end
