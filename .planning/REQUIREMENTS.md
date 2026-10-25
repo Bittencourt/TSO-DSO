@@ -44,9 +44,9 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 - [x] **SETL-01**: A researcher can settle any run into a per-actor ledger (DSO, each aggregator, each household, wholesale), and a test verifies the ledger conserves money (actors sum to zero, with an explicit merchandising-surplus line).
 - [ ] **SETL-02**: A researcher can compare tariff schemes on the same network and population — feed-in tariff, time-of-use, flat, and nodal day-ahead dynamic price — with flat and TOU derived revenue-neutral from the DADP run.
 - [ ] **SETL-03**: Network feasibility of each tariff's resulting dispatch is evaluated on AC physics and reported as a status (never thrown).
-- [ ] **SETL-04**: A researcher can compute equity metrics (Gini, Theil, Atkinson, Palma) on per-household bills/surplus, sign-safe for negative values, with known-value tests.
-- [ ] **SETL-05**: Equity results are reported by proxy group (PV owners vs non-owners, electrical location, load level), and the writeup states that no income data is used.
-- [ ] **SETL-06**: A rebound metric reports load shifted into later hours after price-driven reductions.
+- [x] **SETL-04**: A researcher can compute equity metrics (Gini, Theil, Atkinson, Palma) on per-household bills/surplus, sign-safe for negative values, with known-value tests.
+- [x] **SETL-05**: Equity results are reported by proxy group (PV owners vs non-owners, electrical location, load level), and the writeup states that no income data is used.
+- [x] **SETL-06**: A rebound metric reports load shifted into later hours after price-driven reductions.
 - [ ] **SETL-07**: A researcher can run a DSO flexibility market (explicit baseline and payment rule — uniform or pay-as-bid) as an alternative coordination scheme, producing the same settlement record as price-based coordination.
 - [ ] **SETL-08**: A comparison table reports welfare, per-actor surplus, network feasibility and equity across FIT, TOU, flat, DADP and the flexibility market.
 
@@ -120,9 +120,9 @@ Deferred; tracked but not in this roadmap.
 | SETL-01 | Phase 41 | Complete |
 | SETL-02 | Phase 41 | Pending |
 | SETL-03 | Phase 41 | Pending |
-| SETL-04 | Phase 41 | Pending |
-| SETL-05 | Phase 41 | Pending |
-| SETL-06 | Phase 41 | Pending |
+| SETL-04 | Phase 41 | Complete |
+| SETL-05 | Phase 41 | Complete |
+| SETL-06 | Phase 41 | Complete |
 | REPRO-03 | Phase 42 | Pending |
 | REPRO-04 | Phase 42 | Pending |
 | REPRO-05 | Phase 42 | Pending |

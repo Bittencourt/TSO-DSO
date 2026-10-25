@@ -161,7 +161,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 41-02-PLAN.md — Equity & rebound layer: Gini/Theil/Atkinson/Palma with documented negative-value conventions + known-value certificates, PV/bus/load-tercile breakouts from the household map, rebound metric — SETL-04, SETL-05, SETL-06
+- [x] 41-02-PLAN.md — Equity & rebound layer: Gini/Theil/Atkinson/Palma with documented negative-value conventions + known-value certificates, PV/bus/load-tercile breakouts from the household map, rebound metric — SETL-04, SETL-05, SETL-06
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -251,7 +251,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
 | 40. 784-House Thesis Population | 6/6 | Complete    | 2026-10-24 |
-| 41. Settlement, Ledger & Equity | 1/4 | In Progress|  |
+| 41. Settlement, Ledger & Equity | 2/4 | In Progress|  |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
 | 44. Aggregator as Actor | 0/TBD | Not started | - |
