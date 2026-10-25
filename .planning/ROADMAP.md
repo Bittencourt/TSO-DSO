@@ -157,7 +157,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 41-01-PLAN.md — Settlement core: double-entry `SettlementLedger` (DSO/aggregators/households/wholesale, explicit merchandising-surplus line, exact sum-to-zero) + run-input adapters (centralized ctx / converged ADMM, loud non-converged guard) + conservation/sign/oracle tests incl. `:slow` IEEE-13 T=24 real-run identity — SETL-01
+- [x] 41-01-PLAN.md — Settlement core: double-entry `SettlementLedger` (DSO/aggregators/households/wholesale, explicit merchandising-surplus line, exact sum-to-zero) + run-input adapters (centralized ctx / converged ADMM, loud non-converged guard) + conservation/sign/oracle tests incl. `:slow` IEEE-13 T=24 real-run identity — SETL-01
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -251,7 +251,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
 | 40. 784-House Thesis Population | 6/6 | Complete    | 2026-10-24 |
-| 41. Settlement, Ledger & Equity | 0/TBD | Not started | - |
+| 41. Settlement, Ledger & Equity | 1/4 | In Progress|  |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
 | 44. Aggregator as Actor | 0/TBD | Not started | - |

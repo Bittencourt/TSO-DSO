@@ -41,7 +41,7 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 
 ### Settlement & equity (SETL)
 
-- [ ] **SETL-01**: A researcher can settle any run into a per-actor ledger (DSO, each aggregator, each household, wholesale), and a test verifies the ledger conserves money (actors sum to zero, with an explicit merchandising-surplus line).
+- [x] **SETL-01**: A researcher can settle any run into a per-actor ledger (DSO, each aggregator, each household, wholesale), and a test verifies the ledger conserves money (actors sum to zero, with an explicit merchandising-surplus line).
 - [ ] **SETL-02**: A researcher can compare tariff schemes on the same network and population — feed-in tariff, time-of-use, flat, and nodal day-ahead dynamic price — with flat and TOU derived revenue-neutral from the DADP run.
 - [ ] **SETL-03**: Network feasibility of each tariff's resulting dispatch is evaluated on AC physics and reported as a status (never thrown).
 - [ ] **SETL-04**: A researcher can compute equity metrics (Gini, Theil, Atkinson, Palma) on per-household bills/surplus, sign-safe for negative values, with known-value tests.
@@ -117,7 +117,7 @@ Deferred; tracked but not in this roadmap.
 | POP-04 | Phase 40 | Complete — certified via plan 40-06's bounded ladder: rung `gap_1e-10` (AGR Clarabel tol_gap 1e-10 through solve_admm's `agr_optimizer` seam, gates byte-identical) certifies the 784-house ADMM point; band pinned gate-then-golden from agreement.csv (welfare rtol 6.22e-7, price atol/rtol 1.78) |
 | POP-05 | Phase 40 | Complete |
 | POP-06 | Phase 40 | Complete |
-| SETL-01 | Phase 41 | Pending |
+| SETL-01 | Phase 41 | Complete |
 | SETL-02 | Phase 41 | Pending |
 | SETL-03 | Phase 41 | Pending |
 | SETL-04 | Phase 41 | Pending |
