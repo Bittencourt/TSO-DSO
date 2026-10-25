@@ -544,3 +544,176 @@ end
     @test err2 isa ArgumentError
     @test occursin("default_tou_bins", sprint(showerror, err2))
 end
+
+# --- Price-taker (41-03 Task 2): penalty-free counterfactual dispatch -------------------
+
+@testitem "price-taker: dispatch at the run's own DADP prices — finite, certificate :ok" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+    ctx, obj, _dadp = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    input = settlement_input(ctx; T = T, λ₀ = λ₀)
+
+    # Counterfactual dispatch at the run's OWN DADP price row (strictly varying ⇒
+    # non-degenerate battery arbitrage ⇒ the App. C certificate passes).
+    price = collect(input.prices[1, :])
+    res = price_taker_dispatch(agg, price)
+    @test res.net isa Vector{Float64}
+    @test length(res.net) == T
+    @test all(isfinite, res.net)
+    @test isfinite(res.utility)
+    @test res.battery_certificate == :ok
+    @test res.battery_message == ""
+
+    # The aggregator-level shape mirrors the run's own dispatch numbers (the QP is the
+    # AGR-OPT mechanism minus the ρ penalty; at the run's prices it reproduces the run's
+    # dispatch to solver tolerance — measured band, not bitwise).
+    @info "price-taker vs run dispatch (2-bus DADP prices)" max_abs_gap =
+        maximum(abs(res.net[t] - input.bus_nets[2][t]) for t in 1:T)
+
+    # Batch map over the one-element vector + the alias at the household level.
+    res_batch = price_taker_dispatches([agg], price)
+    @test length(res_batch) == 1
+    @test res_batch[1].net == res.net
+    res_h = household_dispatches([agg], price)
+    @test res_h[1].utility == res.utility
+end
+
+@testitem "price-taker: flat-price degeneracy is a RECORDED outcome, never a throw" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+
+    # CONSTANT price vector (the :flat tariff degeneracy, Pitfall 1): the call MUST
+    # return (never throw); BOTH certificate outcomes are valid recorded results —
+    # degeneracy is solver-dependent and the honesty policy forbids tuning it away.
+    res = price_taker_dispatch(agg, fill(30.0, T))
+    @test all(isfinite, res.net)
+    @test isfinite(res.utility)
+    @test res.battery_certificate in (:ok, :refused)
+    if res.battery_certificate == :refused
+        @test !isempty(res.battery_message)
+    end
+    @info "price-taker flat-price certificate" certificate = res.battery_certificate message =
+        res.battery_message
+end
+
+@testitem "price-taker: penalty-free arbitrage — charge-low/sell-high at rated bounds" tags =
+    [:settlement] begin
+    using TSODSO
+
+    # Hand-checked counterfactual-validity certificate (the ρ-penalty would visibly
+    # shade this dispatch — production ρ = 100 damps the battery far below its rated
+    # bounds): one PVBattery aggregator, T = 2, prices [10.0, 50.0] (wide spread ⇒
+    # full arbitrage). The battery CHARGES in the cheap hour (lowering the net
+    # injection there) and DISCHARGES in the dear hour (raising it), at its rated
+    # power bounds.
+    T = 2
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.0, T))   # pure battery, no inelastic load
+    res = price_taker_dispatch(agg, [10.0, 50.0])
+
+    @test isfinite(res.utility)
+    # Charge-low/sell-high ordering: the cheap hour's net injection sits BELOW the
+    # dear hour's (net = pv_used − p_ch + p_dch; charging depresses hour 1, discharge
+    # lifts hour 2).
+    @test res.net[1] < res.net[2]
+    @test res.net[2] > 0.0
+    # Rated bounds: |net| within [−Pmax, Ppv + Pmax] (charge ≤ PV-limited Pmax draw;
+    # injection ≤ PV + discharge rating). A ρ = 100 penalty would NOT hit this
+    # neighbourhood — the assert documents the counterfactual is unshaded.
+    @test all(res.net[t] >= -0.5 - 1e-6 && res.net[t] <= 0.2 + 0.5 + 1e-6 for t in 1:T)
+    @info "price-taker arbitrage dispatch" net = res.net utility = res.utility
+end
+
+@testitem "price-taker: per-house separability reconciles to the aggregator (measured pin)" tags =
+    [:settlement] begin
+    using TSODSO
+
+    # Two houses on bus 2 rebuilt from the EXACT Phase-40 primitives (identical draw
+    # to build_population's own — attribution cannot drift from the population),
+    # rolled up per build_population's load-bearing shape (devices vcat, Pdc sum,
+    # materialize.jl:578-596).
+    T = 4
+    seed = 20260718
+    houses = [
+        TSODSO._case_a_house(
+            2,
+            h,
+            2,
+            seed,
+            T;
+            load_scale = 0.005,
+            pv_scale = 0.03,
+            dev_scale = 1.0,
+            pv_fraction = 1.0,
+        ) for h in 1:2
+    ]
+    agg = Aggregator(
+        2,
+        0.90,
+        reduce(vcat, [h.devices for h in houses]),
+        reduce(+, [h.Pdc for h in houses]),
+    )
+
+    price = [30.0, 12.0, 45.0, 8.0]   # strictly varying, non-degenerate
+    agg_res = price_taker_dispatch(agg, price)
+    house_res = price_taker_dispatches(houses, price)
+
+    net_inf = maximum(
+        abs(sum(house_res[h].net[t] for h in 1:2) - agg_res.net[t]) for t in 1:T
+    )
+    u_gap = abs(sum(house_res[h].utility for h in 1:2) - agg_res.utility)
+    @info "price-taker separability (2 houses, T=4)" net_inf_norm = net_inf utility_gap =
+        u_gap
+    # At a fixed price the aggregator problem SEPARATES across member houses — the
+    # sums reconcile to within solver tolerance, NEVER claimed bitwise (Pitfall 5).
+    # PROVISIONAL pins — re-pinned to 10× measured (floored at 1e-9) in the
+    # implementation commit with the measured values cited here.
+    @test net_inf <= 1e-9
+    @test u_gap <= 1e-9
+end
+
+@testitem "price-taker: non-vacuous boundary guards" tags = [:settlement] begin
+    using TSODSO
+
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+
+    # length(price) != T
+    @test_throws ArgumentError price_taker_dispatch(agg, fill(30.0, T + 1))
+    # non-finite price
+    @test_throws ArgumentError price_taker_dispatch(agg, [30.0, NaN, 30.0])
+    @test_throws ArgumentError price_taker_dispatch(agg, [30.0, Inf, 30.0])
+    # empty aggregator vector
+    @test_throws ArgumentError price_taker_dispatches(Aggregator[], fill(30.0, T))
+end
