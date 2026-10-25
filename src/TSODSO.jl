@@ -286,6 +286,7 @@ include("experiments/run_stochastic.jl")
 # order: SettlementLedger (types + double-entry construction) → run_inputs (run-output →
 # SettlementInput adapters). Each file declares its own exports.
 include("settlement/SettlementLedger.jl")
+include("settlement/run_inputs.jl")     # run-output → SettlementInput adapters
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
 # Declared with Compat's `@compat public` so that `public` also works on Julia 1.10.
