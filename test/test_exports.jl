@@ -23,6 +23,7 @@
                 welfare_accounting fit_baseline
                 solve_admm AdmmResiduals build_agr_opt build_dso_opt AgrOpt DsoOpt solve_agr!
                 solve_dso!
+                SettlementLedger build_settlement_ledger ledger_residual
                 Scenario ScenarioResult run_scenario run_and_store scenario_filename run_sweep
                 collate_summary run_mpc run_stochastic ADMM Centralized MPC Stochastic
                 AbstractStrategy
@@ -63,6 +64,7 @@
     @test isdefined(TSODSO, :record!)
     @test isdefined(TSODSO, :converged)
     unexported = (
+        :Actor,
         :BendersMaster,
         :BendersMasterInteger,
         :BilevelKKT,
@@ -91,6 +93,7 @@
         :SCSChoice,
         :SOCP,
         :StochasticOosHarness,
+        :Transfer,
         :Z_base,
         :ac_dual_fallback_price,
         :ac_recheck_incumbent,

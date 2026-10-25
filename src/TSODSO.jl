@@ -279,6 +279,14 @@ include("experiments/mpc_loop.jl")
 # build_stochastic_oos_harness/solve_stochastic_oos_step!.
 include("experiments/run_stochastic.jl")
 
+# --- Settlement: per-actor money-conserving ledger over a solved run ---
+# Loaded AFTER experiments/run_stochastic.jl — the settlement layer consumes SOLVED-run
+# outputs (the centralized welfare ctx stash + the converged ADMM result additive keys),
+# read-only: `src/pricing/` and `src/admm/` stay byte-identical (golden). Dependency
+# order: SettlementLedger (types + double-entry construction) → run_inputs (run-output →
+# SettlementInput adapters). Each file declares its own exports.
+include("settlement/SettlementLedger.jl")
+
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
 # Declared with Compat's `@compat public` so that `public` also works on Julia 1.10.
 
