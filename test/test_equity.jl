@@ -246,8 +246,8 @@ end
     by_bus = equity_breakdown(values, [r.bus for r in rows])
     @test issetequal(keys(by_bus), (2, 3))
     # every group non-empty
-    @test all(n -> n >= 1, (d.n for d in values(by_pv)))
-    @test all(n -> n >= 1, (d.n for d in values(by_bus)))
+    @test all(g -> by_pv[g].n >= 1, keys(by_pv))
+    @test all(g -> by_bus[g].n >= 1, keys(by_bus))
 
     # Load terciles of baseline consumption — the third locked grouping.
     terc = load_terciles(values)

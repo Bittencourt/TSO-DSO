@@ -5,10 +5,11 @@
 # This file declares its own `export`s:
 #   - `gini`, `theil`, `atkinson`, `palma` — inequality metrics over per-household
 #     bill/surplus vectors (SETL-04), each docstring carrying that metric's
-#     negative-value convention (the docstring IS the locked deliverable).
+#     negative-value convention (the docstring IS the locked deliverable);
+#   - `load_terciles`, `equity_breakdown` — proxy-group breakouts (SETL-05).
 #
-# (The SETL-05 breakouts `load_terciles` / `equity_breakdown` and the SETL-06
-# `rebound` metric extend this file and its export line in Tasks 2-3 of plan 41-02.)
+# (The SETL-06 `rebound` metric extends this file and its export line in Task 3 of
+# plan 41-02.)
 #
 # Consumes NOTHING but plain numeric vectors — zero solver calls, zero JuMP, no
 # imports beyond the runtime (stdlib-free pure functions; the project keeps a minimal
@@ -31,7 +32,7 @@
 #   Atkinson positive-support subset, excluded count RETURNED (geometric-mean form);
 #   Palma    group-total ratio over the ascending-sorted FULL vector (totals cancel).
 
-export gini, theil, atkinson, palma
+export gini, theil, atkinson, palma, load_terciles, equity_breakdown
 
 # Atkinson's inequality-aversion parameter, fixed as an auditable module constant
 # (the Phase-41 A6 resolution): 0.5 is the common default in the applied literature;
@@ -210,4 +211,87 @@ function palma(x::AbstractVector{<:Real})
     bottom_sum = sum(@view xs[1:n_bottom])
     bottom_sum == 0 && return NaN
     return top_sum / bottom_sum
+end
+
+"""
+    load_terciles(totals::AbstractVector{<:Real}) -> Vector{Symbol}
+
+Classify each household into load-level terciles `:low` / `:mid` / `:high` from its
+baseline consumption total — the SETL-05 "load level" proxy grouping, computed from
+the population itself (NO income data exists in this framework and none is used).
+
+Count convention (documented, remainder to the MIDDLE): `n_lo = n ÷ 3`,
+`n_hi = n ÷ 3`, `n_mid = n - n_lo - n_hi` — so n = 10 splits 3/4/3, n = 4 splits
+1/2/1, n = 3 splits 1/1/1. Assignment walks the STABLE ascending `sortperm`:
+rank 1..n_lo => `:low`, the next n_mid ranks => `:mid`, the last n_hi ranks =>
+`:high`. Ties therefore resolve by stable index order — deterministic across runs
+and platforms (a property the breakouts and writeups rely on).
+
+Guards: an empty vector or any non-finite entry throws `ArgumentError`.
+"""
+function load_terciles(totals::AbstractVector{<:Real})
+    _equity_input_check(:load_terciles, totals)
+    n = length(totals)
+    n_lo = n ÷ 3
+    n_hi = n ÷ 3
+    n_mid = n - n_lo - n_hi
+    labels = Vector{Symbol}(undef, n)
+    for (rank, idx) in enumerate(sortperm(totals))
+        labels[idx] = rank <= n_lo ? :low : rank <= n_lo + n_mid ? :mid : :high
+    end
+    return labels
+end
+
+"""
+    equity_breakdown(values::AbstractVector{<:Real}, groups::AbstractVector{G})
+        -> Dict{G, NamedTuple}
+
+Per-group equity metric set for any household-shaped group vector: each entry is
+
+    (; n, gini, theil, theil_n_excluded, atkinson, atkinson_n_excluded, palma)
+
+with the same documented negative-value conventions as the underlying metrics
+(gini over ALL values; theil/atkinson exclusions REPORTED per group; palma
+group-total ratio). Atkinson uses the module constant `_ATKINSON_EPSILON`.
+
+GROUPING SOURCE (SETL-05): `groups` is any per-household key vector built from the
+`case_a_household_map` row shape (house, bus, aggregator, device_set, pv_group,
+house_index) — PV owner vs non-owner (`pv_group`), electrical location (`bus`), or
+the load-level terciles of baseline consumption (`load_terciles`). NO income data
+exists in this framework and none is used anywhere — bills/surplus only (the
+locked no-income-data stance; restated in the phase writeup page).
+
+Guards: a length mismatch between `values` and `groups`, an empty values vector,
+or any non-finite entry throws `ArgumentError` (each group is non-empty by
+construction — the check names the group should a future shape ever violate it).
+"""
+function equity_breakdown(
+    values::AbstractVector{<:Real},
+    groups::AbstractVector{G},
+) where {G}
+    length(values) == length(groups) || throw(
+        ArgumentError(
+            "equity_breakdown: length mismatch — $(length(values)) values vs " *
+            "$(length(groups)) group keys (one group key per household).",
+        ),
+    )
+    _equity_input_check(:equity_breakdown, values)
+    out = Dict{G, NamedTuple}()
+    for g in unique(groups)
+        member_vals = values[groups .== g]
+        isempty(member_vals) &&
+            throw(ArgumentError("equity_breakdown: group $(repr(g)) is empty."))
+        t = theil(member_vals)
+        a = atkinson(member_vals)
+        out[g] = (
+            n = length(member_vals),
+            gini = gini(member_vals),
+            theil = t.theil,
+            theil_n_excluded = t.n_excluded,
+            atkinson = a.atkinson,
+            atkinson_n_excluded = a.n_excluded,
+            palma = palma(member_vals),
+        )
+    end
+    return out
 end
