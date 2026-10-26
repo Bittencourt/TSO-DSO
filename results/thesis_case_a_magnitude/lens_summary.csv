@@ -1,0 +1,10 @@
+mode,tariff,engine,rung,status,welfare,dso_total,merchandising_surplus,aggregators_total,fairness_total,feasibility_status,batt_ok,batt_refused,batt_not_checked,gini_bills,theil_bills,atkinson_bills,palma_bills,gini_surplus,theil_surplus,atkinson_surplus,palma_surplus,rebound_amount,rebound_ratio,bills_granularity,notes,protocol_sha,julia_version,threads,blas_threads,seed,t_horizon,total_payments,wholesale_total,n_thermal_violations,n_voltage_violations,max_overload_ratio,theil_n_excluded_bills,atkinson_n_excluded_bills,theil_n_excluded_surplus,atkinson_n_excluded_surplus
+lenses,dadp,admm,gap_1e-10,ok,-378153.4823117135,2.9798925110428836,2.9798925110428836,9.797540874638766,0.28558214028512424,infeasible,713,71,0,0.05589578613817503,0.0047549077332089,0.0023774801283426017,0.32244189665238415,-1.953057018441532e-6,NaN,NaN,0.24919909057329992,0.0,NaN,house,,60e5d54969d7944d9398e24d0d1cc6dc2d52ad4d,1.12.5,1,1,42,24,-9.797540874638766,-2.6943103707577594,2,0,1.0010268690839546,0,0,784,784
+lenses,flat,admm,gap_1e-10,ok,-379364.19347735523,-1600.508221525783,-1600.508221525783,-2.5058178597983302e-5,0.2855821402851243,solve_failed,784,0,0,-0.0031829893468298793,NaN,NaN,0.2458641564255978,-3.3230780035897983e-6,NaN,NaN,0.24919782111983563,0.0,NaN,house,,60e5d54969d7944d9398e24d0d1cc6dc2d52ad4d,1.12.5,1,1,42,24,2.5058178597983302e-5,1409.2695068541168,0,0,0.0,784,784,784,784
+lenses,tou,admm,gap_1e-10,ok,-379030.92939135496,-1561.181352858052,-1561.181352858052,7.537108045916195e-5,0.28558214028512435,solve_failed,141,643,0,-0.0033056080826372163,NaN,NaN,0.24567430860429043,-5.989365864142873e-6,NaN,NaN,0.2491949915423754,159.80124354166065,5282.098242639066,house,,60e5d54969d7944d9398e24d0d1cc6dc2d52ad4d,1.12.5,1,1,42,24,-7.537108045916195e-5,1033.30637682937,0,0,0.0,784,784,784,784
+lenses,fit,admm,gap_1e-10,error:SolveFailedError,,,,,,not_run,0,0,10,,,,,,,,,,,bus,"Solve failed — refusing to trust results:
+  termination_status : INFEASIBLE
+  primal_status      : INFEASIBLE_POINT
+  dual_status        : INFEASIBILITY_CERTIFICATE
+  raw_status         : PRIMAL_INFEASIBLE
+",60e5d54969d7944d9398e24d0d1cc6dc2d52ad4d,1.12.5,1,1,42,24,,,,,,,,,

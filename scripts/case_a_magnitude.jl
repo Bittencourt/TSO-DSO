@@ -1174,7 +1174,7 @@ The certified rung's AGR optimizer factory via the documented seam (`AGR_TOL_RUN
 splatted into `select_optimizer(QP(); ...)`); the `default` rung resolves to `nothing`
 (byte-identical plain-factory path).
 """
-function _rung_optimizer(rung::String)
+function _rung_optimizer(rung::AbstractString)
     haskey(AGR_TOL_RUNGS, rung) ||
         error("case_a_magnitude: unknown AGR rung $(repr(rung)) — not in AGR_TOL_RUNGS")
     attrs = AGR_TOL_RUNGS[rung]
@@ -1243,7 +1243,7 @@ function crosscheck_main(seed::Int, time_limit_s)
     BLAS.set_num_threads(1)
     ensure_all_schemas("crosscheck")
     rung_row = _certified_rung_row(seed)
-    rung = string(rung_row.rung)
+    rung = String(rung_row.rung)   # explicit String (CSV.jl String15: string(::InlineString) returns the inline type)
     w_dadp = Float64(rung_row.welfare_dadp)
     build = _registered_case_a_build(seed)
     houses = div(sum(length(a.devices) for a in build.aggs), 3)
@@ -1386,7 +1386,7 @@ function lenses_main(seed::Int, time_limit_s)
     BLAS.set_num_threads(1)
     ensure_all_schemas("lenses")
     rung_row = _certified_rung_row(seed)
-    rung = string(rung_row.rung)
+    rung = String(rung_row.rung)   # explicit String (CSV.jl String15: string(::InlineString) returns the inline type)
     build = _registered_case_a_build(seed)
     houses, map_rows = case_a_houses_variant(
         build.feeder,
