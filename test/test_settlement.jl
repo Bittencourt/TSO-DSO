@@ -974,6 +974,120 @@ end
 # Gate-then-golden pins: every tolerance below carries its measured value at the pin site
 # (provisional 1e-12 in the RED commit, re-pinned from live measurement in GREEN).
 
+# 42-02: the `agr_optimizer` passthrough — compare_tariffs threads the caller-supplied AGR
+# optimizer factory verbatim into the engine = :admm solve_admm call (the fit_optimizer/
+# time_limit_s precedent in the same signature). Default `nothing` = solve_admm's own
+# default factory = byte-identical behavior; both items below encode DEFAULT-EQUIVALENCE
+# (explicit `select_optimizer(QP())` / explicit `nothing` vs the kwarg-less call), never a
+# magnitude pin (golden policy — no fixture welfare value is pinned here).
+
+@testitem "settlement compare_tariffs threads agr_optimizer (default-equivalence, small fixture)" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: eachrow
+
+    # The existing small 2-bus DADP settlement fixture (the neighboring compare_tariffs
+    # items' fixture — NOT a full population), with the neighbor's explicit
+    # `bins = [[1, 2], [3]]` (default_tou_bins is 24-hour-only). The explicitly-passed
+    # factory `select_optimizer(QP())` with NO kwargs is resolve-IDENTICAL to what
+    # solve_admm's `agr_optimizer = nothing` default builds, so both calls take the
+    # algebraically identical solve path and the certified scalars compare BITWISE
+    # (test_settlement.jl:6-8 discipline — the algebraically-exact class, NOT a
+    # solver-tolerance comparison).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+
+    base = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :admm,
+        ρ = ADMM().ρ,
+        bins = [[1, 2], [3]],
+    )
+    threaded = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :admm,
+        ρ = ADMM().ρ,
+        bins = [[1, 2], [3]],
+        agr_optimizer = select_optimizer(TSODSO.QP()),
+    )
+
+    # Both runs certify the DADP leg (honest per-leg status rows — a refusal would be a
+    # recorded row, never a dropped leg; this small fixture certifies at the default rung).
+    row_base = only(filter(r -> r.tariff == "dadp", eachrow(base.summary)))
+    row_threaded = only(filter(r -> r.tariff == "dadp", eachrow(threaded.summary)))
+    @test row_base.status == "ok"
+    @test row_threaded.status == "ok"
+
+    # Same effective factory, same solve ⇒ bitwise-identical certified scalars.
+    @test row_threaded.welfare == row_base.welfare
+    @test row_threaded.total_payments == row_base.total_payments
+    @test row_threaded.merchandising_surplus == row_base.merchandising_surplus
+end
+
+@testitem "settlement compare_tariffs agr_optimizer default is nothing (signature contract)" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: eachrow
+
+    # Signature contract: an EXPLICIT `agr_optimizer = nothing` is the kwarg-less call —
+    # `nothing` resolves inside solve_admm to the plain `select_optimizer(QP())` factory,
+    # exactly as the absent kwarg does. Bitwise welfare equality encodes it.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+
+    kwargless = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :admm,
+        ρ = ADMM().ρ,
+        bins = [[1, 2], [3]],
+    )
+    explicit_nothing = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :admm,
+        ρ = ADMM().ρ,
+        bins = [[1, 2], [3]],
+        agr_optimizer = nothing,
+    )
+
+    row_k = only(filter(r -> r.tariff == "dadp", eachrow(kwargless.summary)))
+    row_n = only(filter(r -> r.tariff == "dadp", eachrow(explicit_nothing.summary)))
+    @test row_k.status == "ok"
+    @test row_n.status == "ok"
+    @test row_n.welfare == row_k.welfare
+end
+
 @testitem "compare-tariffs: four-leg hermetic run — rows, statuses, CSV writes, granularities, guards" tags =
     [:settlement] begin
     using TSODSO
