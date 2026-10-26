@@ -251,7 +251,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
 | 40. 784-House Thesis Population | 6/6 | Complete    | 2026-10-24 |
-| 41. Settlement, Ledger & Equity | 4/4 | Complete   | 2026-10-26 |
+| 41. Settlement, Ledger & Equity | 4/4 | Complete    | 2026-10-26 |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
 | 44. Aggregator as Actor | 0/TBD | Not started | - |
