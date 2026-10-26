@@ -24,7 +24,7 @@ findings:
   warning: 5
   info: 6
   total: 12
-status: findings
+status: clean
 fix:
   applied_at: 2026-10-26T08:46:25Z
   fix_report: 41-REVIEW-FIX.md
@@ -33,6 +33,11 @@ fix:
   fixed_ids: [BL-01, WR-01, WR-02, WR-03, WR-04, WR-05]
   skipped: 0
   info_out_of_scope: 6
+re_review:
+  verified_at: 2026-10-26T09:07:12Z
+  commits: [b99a5b7, cf56e2e, 8768865, ae7deab, 7ab2455, 0e6c7ca]
+  result: clean
+  tests: 560 passed / 0 failed (test_settlement, test_equity, test_exports, test_tsodso_errors, test_status_policy)
 ---
 
 # Phase 41: Code Review Report
@@ -40,8 +45,9 @@ fix:
 **Reviewed:** 2026-10-26
 **Depth:** standard
 **Files Reviewed:** 14
-**Status:** findings — all 6 in-scope findings fixed (2026-10-26; 1 critical, 5 warnings;
-6 INFO items remain open, out of fix scope). See `41-REVIEW-FIX.md`.
+**Status:** clean — re-verified 2026-10-26 (see Re-Review below). Original review found
+1 critical + 5 warnings + 6 info; all 6 in-scope findings fixed and VERIFIED
+(`41-REVIEW-FIX.md`); the 6 INFO items remain open, out of fix scope.
 
 ## Summary
 
@@ -73,6 +79,65 @@ was checked for a missing definition — it is JuMP's own API (JuMP ≥1.15, `al
 `dual`/`allow_almost` kwargs), not a repo function; not a defect. Several read artifacts
 displayed character-mangled text; every suspicious line was re-verified against raw file
 bytes before being judged.
+
+## Re-Review (iteration 2, 2026-10-26)
+
+All six fix commits verified — each fix is genuine, correctly coupled, and regression-free.
+
+- **BL-01** (`b99a5b7`): the fit leg now computes `wholesale_total = sum(λ₀vec[t]*imp_total[t])`
+  (comparison.jl:711) and `merchandising_surplus = dso_total - wholesale_total` (:725) — the
+  coupled flip, changed together. The surplus VALUE is invariant under the flip (pre-fix
+  `dso + (-w)` ≡ post-fix `dso - w`), and all four legs now agree: dadp (:526) and flat/tou
+  (shared builder at :625) read `led.balances[:wholesale]` — the positive import receipt —
+  with `merchandising_surplus = led.merchandising_surplus` (≡ `balances[:dso]` = collections
+  minus wholesale), exactly the convention the fit leg now implements. The pin test uses a
+  pure-consumer fixture (imp = fixed load > 0 strictly) so `wholesale_total > 0` FAILS on
+  pre-fix code (which reported -12), plus a `≈ 12.0 rtol=1e-6` magnitude band and bitwise
+  same-float identity pins. The committed CSV needed no regeneration (its fit row is an
+  error-status row with empty values — no inverted numbers were ever shipped).
+- **WR-01** (`cf56e2e`): documentation-convention fix per the finding's own option 2 — the
+  docstring and module header now state the sign follows μ, reported as computed, never
+  clipped, matching the docs page; pinned by the hand-computed mirror
+  `gini([-3.0, -1.0]) == -0.25 == -gini([1.0, 3.0])` (exact dyadic arithmetic). By design
+  this test also passes on pre-fix code (the formula never changed) — it pins the
+  documented convention; it is not a regression tripwire.
+- **WR-02** (`8768865`): the `length(λ₀) >= T` guard now precedes the comprehension
+  (run_inputs.jl:121-122); the dead post-build check is removed; truncation semantics
+  preserved (`λ0 = λ0[1:T]`). Pins: a short λ₀ raises the documented `ArgumentError`
+  naming "λ₀ has length 2 < T=3" (pre-fix: raw BoundsError — fails on pre-fix code), and
+  an over-length λ₀ is still accepted and truncated to T.
+- **WR-03** (`ae7deab`): `has_battery` keys on the check's OWN predicate
+  (`p_ch` ∧ `p_dch` ∧ ¬`q` — identical to welfare_solve.jl:366), not on `agg_device_vars`
+  emptiness; a thermostatic-only aggregator now reports `:not_checked` (pre-fix: `:ok` —
+  fails on pre-fix code). An empty `agg_device_vars` still yields `:not_checked`
+  (`any` over an empty collection), and a mixed population with at least one battery still
+  runs the check (`:ok`/`:error` unchanged).
+- **WR-04** (`7ab2455`): `ensure_all_schemas()` runs immediately BEFORE the `!outcome.ok`
+  early return in BOTH mains (script lines 436 and 540); the old trailing calls are gone
+  (grep: `ensure_schema` now appears only at its definition and inside the helper). Every
+  exit path leaves all three CSVs; no other early return sits between the run and the
+  hoist, and misuse errors still propagate (crash exit — no CSV promised).
+  `ensure_schema` is create-if-missing, so the success path is behavior-identical.
+- **WR-05** (`0e6c7ca`): `UnconvergedAdmmError <: TSODSOError` (exported from
+  src/core/errors.jl:109-144) is thrown by `settlement_input(r::NamedTuple)`
+  (run_inputs.jl:209); the script catches BY TYPE (tariff_comparison.jl:176);
+  `is_unconverged_guard` is gone repo-wide (grep-verified, zero hits). Regression sweep:
+  `compare_tariffs`'s ADMM path (comparison.jl:324) has no intervening catch; the fit-leg
+  catch (SolveFailedError/CertificateError/ConvergenceError only, :662) is untouched; no
+  other call site matched `ArgumentError` against this refusal. `showerror` prints
+  `e.msg` via the shared TSODSOError method (message unchanged); exports, tests
+  (test_tsodso_errors, test_exports, test_settlement), and docs/src/status_policy.md all
+  updated for the new type.
+
+**Test evidence:** the five affected test files (test_settlement.jl, test_equity.jl,
+test_exports.jl, test_tsodso_errors.jl, test_status_policy.jl) via
+`TSODSO_TEST_SET=all TSODSO_TEST_FILES=... julia --project=. -e 'import Pkg; Pkg.test()'`
+→ **560 passed / 0 failed** (4m51s). The measurement script was additionally load-verified
+under the package env (`include("scripts/tariff_comparison.jl")`; it is
+`PROGRAM_FILE`-guarded): the export wiring resolves, `ensure_all_schemas` is defined, and
+the old sniffer is undefined.
+
+**New findings:** none. No regression found in any fixed hunk.
 
 ## Critical Issues
 
