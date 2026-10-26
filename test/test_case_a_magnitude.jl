@@ -167,3 +167,80 @@ end
     @test occursin("welfare_gain", src)
     @test !occursin("w_dadp / w_fit", src)
 end
+
+@testitem "magnitude committed CSVs: schema, honest statuses, Δ identity" begin
+    # Structural item over the COMMITTED artifacts (42-03-PLAN Task 3; fast lane — reads
+    # results, NO solving): the CSVs are the evidence chain, so this re-derives every
+    # identity algebraically — a hand-edited CSV breaks visibly. The status vocabulary is
+    # the honesty policy's (protocol §4/§5): `error:<TypeName>` prefix rows (refusals are
+    # data), the known ok-forms, the typed `:budget_exceeded` honest early exit, and
+    # `reused` (a row copied from another committed CSV — provenance-transparent reuse,
+    # never re-solved, never fabricated; emitted by 42-04's population-axis rows, so the
+    # vocabulary must admit it — MED-2). Its `note` must name the source file+row.
+    #
+    # The Δ identity is ALGEBRAIC, not a magnitude golden (golden policy): wherever BOTH
+    # welfares are present and numeric, delta_w re-derives as their difference and
+    # delta_pct as 100·delta_w/|welfare_fit| (sign-safe denominator). The lens-row
+    # ledger double-entry (lens_summary.csv, written from 42-05 onward — LOW-4):
+    # welfare ≈ dso_total + merchandising_surplus + aggregators_total where those
+    # columns are present and numeric.
+    using CSV
+    using DataFrames: DataFrame, eachrow
+
+    dir = joinpath(@__DIR__, "..", "results", "thesis_case_a_magnitude")
+    csvs = isdir(dir) ? filter(f -> endswith(f, ".csv"), readdir(dir; join = true)) : String[]
+    isempty(csvs) && error(
+        "no artifacts yet: results/thesis_case_a_magnitude/ has no CSV — run " *
+        "`julia --project=. scripts/case_a_magnitude.jl --mode proxy` and commit proxy.csv",
+    )
+    for csv in csvs
+        df = CSV.read(csv, DataFrame)
+        for r in eachrow(df)
+            # provenance: every row auditable to its environment + exact protocol version
+            # (T-42-03-3)
+            @test hasproperty(r, :protocol_sha)
+            @test !isempty(string(coalesce(r.protocol_sha, "")))
+            @test hasproperty(r, :julia_version)
+            @test !isempty(string(coalesce(r.julia_version, "")))
+            for c in (:threads, :blas_threads, :seed, :t_horizon)
+                @test hasproperty(r, c) && !(r[c] isa Missing)
+            end
+            # the honest status vocabulary
+            status = hasproperty(r, :status) ? string(coalesce(r.status, "")) : ""
+            @test startswith(status, "error:") ||
+                  status in ("ok", "converged", "fit_inexact", ":budget_exceeded", "reused")
+            if status == "reused"
+                note = string(coalesce(get(r, :note, ""), ""))
+                @test !isempty(note) && occursin(".csv", lowercase(note))
+            end
+            # the Δ identity (algebraic re-derivation)
+            if all(c -> hasproperty(r, c), (:welfare_dadp, :welfare_fit, :delta_w, :delta_pct)) &&
+               r.welfare_dadp isa Real && r.welfare_fit isa Real &&
+               isfinite(r.welfare_dadp) && isfinite(r.welfare_fit)
+                d = Float64(r.welfare_dadp) - Float64(r.welfare_fit)
+                @test r.delta_w isa Real
+                @test isapprox(Float64(r.delta_w), d; rtol = 1e-9)
+                @test r.delta_pct isa Real
+                @test isapprox(
+                    Float64(r.delta_pct),
+                    100 * d / abs(Float64(r.welfare_fit));
+                    rtol = 1e-9,
+                )
+            end
+            # the lens-row ledger double-entry (only once 42-05 writes lens_summary.csv)
+            if endswith(csv, "lens_summary.csv") &&
+               all(c -> hasproperty(r, c),
+                   (:welfare, :dso_total, :merchandising_surplus, :aggregators_total))
+                ledger = (r.welfare, r.dso_total, r.merchandising_surplus, r.aggregators_total)
+                if all(v -> v isa Real && isfinite(v), ledger)
+                    @test isapprox(
+                        Float64(r.welfare),
+                        Float64(r.dso_total) + Float64(r.merchandising_surplus) +
+                        Float64(r.aggregators_total);
+                        rtol = 1e-6,
+                    )
+                end
+            end
+        end
+    end
+end
