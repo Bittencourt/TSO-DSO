@@ -239,6 +239,12 @@ differently-CONDITIONED optimizer factory — never a gate change; `fit_baseline
 with `on_inexact = :report`, so a non-certified SITE-2 AC outcome is an honest
 `fit_inexact` status row, and a `SolveFailedError`/`CertificateError`/`ConvergenceError`
 from any fit-internal solve becomes a recorded `error:<Type>` row.
+
+`agr_optimizer` is the documented `solve_admm` AGR precision seam (the pre-registered
+ladder's mechanism): a caller-supplied AGR-OPT optimizer factory forwarded verbatim to
+the `engine = :admm` solve. The default `nothing` resolves to the plain
+`select_optimizer(QP())` factory, byte-identical. The exactness gate, battery τ, and ρ
+are not exposed here and remain untouched.
 """
 function compare_tariffs(
     feeder::AbstractFeeder,
@@ -254,6 +260,7 @@ function compare_tariffs(
     map_rows = nothing,
     fit_optimizer = nothing,
     time_limit_s::Union{Nothing, Real} = nothing,
+    agr_optimizer = nothing,
 )
     # ---- boundary guards (T-41-19) — BEFORE any solving ---------------------------------
     engine in (:centralized, :admm) || throw(
@@ -307,20 +314,21 @@ function compare_tariffs(
             solve_welfare(feeder, pf, aggs; T = T, λ₀ = λ₀, allow_export = true)
         input = settlement_input(ctx; T = T, λ₀ = λ₀)
     else
-        admm = if time_limit_s === nothing
-            solve_admm(feeder, pf, aggs; T = T, λ₀ = λ₀, ρ = ρ, allow_export = true)
-        else
-            solve_admm(
-                feeder,
-                pf,
-                aggs;
-                T = T,
-                λ₀ = λ₀,
-                ρ = ρ,
-                allow_export = true,
-                time_limit_s = time_limit_s,
-            )
-        end
+        # Both conditioning kwargs forward UNCONDITIONALLY: each defaults to `nothing` and
+        # `solve_admm` treats `nothing` for each as its own default, so this single call is
+        # byte-identical to the pre-seam if/else shapes (golden policy; the knife-edge
+        # canary is never re-pinned).
+        admm = solve_admm(
+            feeder,
+            pf,
+            aggs;
+            T = T,
+            λ₀ = λ₀,
+            ρ = ρ,
+            allow_export = true,
+            agr_optimizer = agr_optimizer,
+            time_limit_s = time_limit_s,
+        )
         input = settlement_input(admm; λ₀ = λ₀)
     end
 
