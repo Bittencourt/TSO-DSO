@@ -325,6 +325,17 @@ const BREAKOUTS_COLS = Symbol[
     :t_horizon,
 ]
 
+# All three artifacts EXIST regardless of outcome (header-only = certified nothing).
+# Called BEFORE the run-failure branch in both modes: a "(run)" status row must never
+# ship without its sibling header-only tables (the docs readers open all three
+# unconditionally; a missing FILE would read as "the measurement never ran" — WR-04).
+function ensure_all_schemas()
+    ensure_schema(SUMMARY_CSV, SUMMARY_COLS)
+    ensure_schema(BILLS_CSV, BILLS_COLS)
+    ensure_schema(BREAKOUTS_CSV, BREAKOUTS_COLS)
+    return nothing
+end
+
 """
     write_compare_results(res, mode_name, T_H, seed) -> nothing
 
@@ -423,6 +434,7 @@ function ground_main(T_H::Int, seed::Int)
             engine = :centralized,
         )
     end
+    ensure_all_schemas()
     if !outcome.ok
         write_run_status_row(outcome, "ieee13-ground", "centralized", T_H, seed)
         println(
@@ -443,10 +455,6 @@ function ground_main(T_H::Int, seed::Int)
         "ieee13-ground complete in $(round(wall_s; digits = 2)) s → " *
         "$SUMMARY_CSV, $BILLS_CSV, $BREAKOUTS_CSV",
     )
-    # All three artifacts EXIST regardless of outcome (header-only = certified nothing).
-    ensure_schema(SUMMARY_CSV, SUMMARY_COLS)
-    ensure_schema(BILLS_CSV, BILLS_COLS)
-    ensure_schema(BREAKOUTS_CSV, BREAKOUTS_COLS)
     return nothing
 end
 
@@ -530,6 +538,7 @@ function caseA_main(T_H::Int, seed::Int, time_limit_s::Real)
             time_limit_s = time_limit_s,
         )
     end
+    ensure_all_schemas()
     if !outcome.ok
         write_run_status_row(outcome, "case-a-784", "admm", T_H, seed)
         println(
@@ -552,10 +561,6 @@ function caseA_main(T_H::Int, seed::Int, time_limit_s::Real)
         "case-a-784 complete in $(round(wall_s; digits = 2)) s → " *
         "$SUMMARY_CSV, $BILLS_CSV, $BREAKOUTS_CSV",
     )
-    # All three artifacts EXIST regardless of outcome (header-only = certified nothing).
-    ensure_schema(SUMMARY_CSV, SUMMARY_COLS)
-    ensure_schema(BILLS_CSV, BILLS_COLS)
-    ensure_schema(BREAKOUTS_CSV, BREAKOUTS_COLS)
     return nothing
 end
 
