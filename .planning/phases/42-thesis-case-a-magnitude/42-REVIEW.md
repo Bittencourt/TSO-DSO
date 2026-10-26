@@ -87,6 +87,15 @@ end
 Add a RED→GREEN test item: a `SolveFailedError("x")` thrown from a stubbed solve must yield
 `(status = "error:SolveFailedError", iters = -1)` from `run_rung_outcome`.
 
+**Fixed (2026-10-26):** commit `4861c81` — field-aware iters extraction
+(`hasproperty(err, :iterations) && err.iterations !== nothing ? Int(err.iterations) : -1`)
+with the −1 sentinel for field-less types, exactly as suggested. RED→GREEN regression
+test item "magnitude rung outcome: SolveFailedError records the honest error row
+(field-aware iters)" (`solve_admm` stubbed at the dispatch seam — RED: FieldError inside
+the catch handler, item errored; GREEN: the honest `error:SolveFailedError` row with
+`iters = -1`, plus a `CertificateError` still carrying its own count). Fast suite green
+(612/612).
+
 ## Warnings
 
 ### WR-01: Non-converged, non-budget result is labeled `:budget_exceeded` without checking the status
@@ -108,6 +117,15 @@ r.status === :budget_exceeded || error(
 )
 ```
 
+**Fixed (2026-10-26):** commit `a1cc417` — implemented as record-verbatim rather than
+throw (keeps the honest-record contract): the else branch labels `:budget_exceeded` only
+when `r.status === :budget_exceeded`; any other non-certified status is recorded AS
+ITSELF (`:<status>`, no welfare, note naming the actual status) instead of receiving a
+fabricated budget explanation. RED→GREEN pin: "magnitude rung outcome: a non-budget,
+non-certified status is recorded verbatim" (out-of-vocabulary stub status — RED: 4
+assertions failed on the fabricated `:budget_exceeded` label; GREEN: verbatim status,
+iters kept, no budget story in the note). Fast suite green (612/612).
+
 ### WR-02: Structural test's ledger-alias assertion is wrong for the FIT leg — spurious suite failure on the first honest FIT-ok lens row
 
 **File:** `test/test_case_a_magnitude.jl:252-262` (counter-example: `src/settlement/comparison.jl:733`)
@@ -125,6 +143,14 @@ test encodes a false model invariant.
 **Fix:** Restrict the alias assertion to `r.tariff in ("dadp", "flat", "tou")`, and for the
 FIT leg assert the actual identity (`merchandising_surplus ≈ dso_total - wholesale_total`)
 when both sides exist.
+
+**Fixed (2026-10-26):** commit `f6fad01` — as suggested: the alias now asserts only on
+dadp/flat/tou rows; FIT rows assert the actual identity
+(`merchandising_surplus ≈ dso_total − wholesale_total`) when all three columns are
+finite Reals (refused FIT rows still guard-skip on missing values). The item's
+docstring comment states the per-kind identity. Fast suite green (612/612) over the
+committed `lens_summary.csv`; a future honest FIT-ok lens row now asserts the right
+identity instead of failing spuriously.
 
 ### WR-03: Writeup prose embeds hand-derived figures that restate the live computations and can silently desync from the committed CSVs
 
@@ -148,6 +174,20 @@ already does this for two variants — extend it and delete the prose numbers), 
 each prose figure as a dated citation of the page source ("as committed at page-source
 write time"), so a future re-measurement visibly contradicts rather than silently
 disagrees.
+
+**Fixed (2026-10-26):** commit `b5ece3a` — the first option, implemented live: the
+seed→rung attribution, the price-range verdicts (exhaustion terminal state, rung-row
+count and iters; the certifying rung and iters), the sha-trail annotation (live
+distinct-sha count + the dated amendment citation; no hand-copied prefixes), and an
+every-certified-pair-vs-+25% table (sign-safe Δ% and the 25.0/Δ% factor — the 348–357
+pattern extended to all pairs plus the proxy) all recompute from the committed CSVs
+adjacent to their use; the hand-copied prose numbers are deleted. The structural
+UNDEFINED/NOT-FULLY-ATTRIBUTED ternaries are untouched (as verified correct).
+Verified: `julia --project=docs -e 'include("docs/literate/case_a_magnitude.jl")'`
+exits 0, and the live prints reproduce the previously hand-copied values (attribution
+42/46→gap_1e-10, 43/44/45→default, refusal iters 80; scale_0.5 exhausted at iters 88,
+scale_2.0 certified at default iters 52; Δ%/factors 1.35e-2 %/1.85e3, 1.85e-5/1.35e6,
+2.38e-6/1.05e7, 1.33e-5/1.88e6).
 
 ## Info
 
