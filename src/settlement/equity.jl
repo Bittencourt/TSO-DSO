@@ -24,8 +24,10 @@
 #
 # NEGATIVE-VALUE CONVENTIONS (normative spec: phase 41 RESEARCH.md Pattern 5,
 # literature-grounded) — one convention PER METRIC, each in its own docstring:
-#   Gini     over ALL values (relative mean-difference; may exceed 1; negatives are
-#            NEVER zeroed or dropped — the documented bias finding);
+#   Gini     over ALL values (relative mean-difference; may exceed 1; the sign
+#            follows the mean — NEGATIVE on net-earning populations, reported as
+#            computed; negatives are NEVER zeroed or dropped — the documented bias
+#            finding);
 #   Theil    positive-support subset, excluded count RETURNED (log domain);
 #   Atkinson positive-support subset, excluded count RETURNED (geometric-mean form);
 #   Palma    group-total ratio over the ascending-sorted FULL vector (totals cancel).
@@ -66,11 +68,16 @@ NEGATIVE-VALUE CONVENTION (documented, never violated): `x` may contain negative
 FULL vector — values are NEVER zeroed, clipped or dropped before the computation.
 Zeroing or dropping negatives before a Gini is a documented bias on the resulting
 comparisons (Raffinetti, Siletti and Vernizzi 2014; De Battisti, Ferragina and
-Vernizzi 2019). Two intended consequences:
+Vernizzi 2019). Three intended consequences:
 
   - `G` here is a RELATIVE MEAN-DIFFERENCE measure, NOT a Lorenz-curve concentration
     index: it MAY EXCEED 1 on negative-bearing vectors. The pinned hand-computed
     certificate `gini([-2.0, 1.0, 3.0, 6.0]) == 0.8125` includes a negative.
+  - A NEGATIVE MEAN (`mu < 0`, a net-earning population) makes `G` NEGATIVE — the
+    sign of `G` follows the sign of `mu` and is REPORTED AS COMPUTED, never clipped
+    to non-negative (the docs page pins this convention: the Gini "may be negative
+    on net-earning populations"). Mirror-pair certificate: `gini([-3.0, -1.0]) ==
+    -0.25 == -gini([1.0, 3.0])` — identical dispersion, the sign carries the mean's.
   - The measure is scale-invariant (units cancel) but not translation-invariant:
     bills and surplus are different distributions by construction — report which.
 

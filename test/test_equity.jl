@@ -36,6 +36,24 @@ end
     @test gini(x) == 0.8125
 end
 
+@testitem "equity: negative-mean Gini sign convention — gini([-3,-1]) == -0.25, mirrored" tags =
+    [:equity] begin
+    using TSODSO, Test
+
+    # Hand arithmetic (pinned, NOT recomputed via the implementation's own formula path):
+    #   the full double sum over ordered pairs (n = 2 ⇒ 4 terms, diagonal zeroes):
+    #   S = 0 + |-3-(-1)| + |-1-(-3)| + 0 = 4.  mu = (-3 + -1)/2 = -2.
+    #   G = 4 / (2 * 2^2 * (-2)) = 4 / (-16) = -0.25 EXACTLY (dyadic floats).
+    # Convention pinned per the docs page metric table (settlement_equity.jl): the
+    # relative mean-difference form "may be negative on net-earning populations" —
+    # the sign follows mu, reported AS COMPUTED, never clipped.
+    @test gini([-3.0, -1.0]) == -0.25
+    # The mirror pair: identical dispersion at a positive mean returns +0.25 — the
+    # negative value is the SIGN OF THE MEAN, not extra inequality.
+    @test gini([1.0, 3.0]) == 0.25
+    @test gini([-3.0, -1.0]) == -gini([1.0, 3.0])
+end
+
 @testitem "equity: Theil/Atkinson exclude non-positives WITH reported counts; Palma sign caveat -3.0" tags =
     [:equity] begin
     using TSODSO, Test
