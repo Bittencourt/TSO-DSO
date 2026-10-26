@@ -12,6 +12,8 @@
 #   julia --project=. scripts/case_a_magnitude.jl --mode ablation-price    [--variant V|--variant all]
 #   julia --project=. scripts/case_a_magnitude.jl --mode ablation-population [--variant V|--variant all]
 #   julia --project=. scripts/case_a_magnitude.jl --mode ablation-devices  [--variant V|--variant all]
+#   julia --project=. scripts/case_a_magnitude.jl --mode crosscheck [--seed 42]
+#   julia --project=. scripts/case_a_magnitude.jl --mode lenses     [--seed 42]
 #
 # Modes (--mode):
 #
@@ -51,6 +53,32 @@
 #               axis); the population axis accepts the Dict-key fraction string (`1/78`)
 #               OR its decimal expansion, normalized to the Dict key. The full-axis heavy
 #               runs are plan 42-05's payload.
+#   crosscheck  The centralized CROSS-CHECK bound (protocol §6) at the registered anchor
+#               seed 42: `solve_welfare(feeder, pf, aggs; T, λ₀, allow_export = true)` on
+#               the registered population — on a `CertificateError` at the default
+#               optimizer there is ONE sanctioned tightening (`select_optimizer(SOCP();
+#               tol_gap_abs/rel = 1e-10)` — the measured `agreement.csv` path); the row
+#               records WHICH path produced it (`centralized_optimizer`:
+#               default | tol_gap_1e-10 | refused — the SOC-exactness gate is never
+#               touched). The row reuses the certified seed-42 W_DADP from magnitude.csv
+#               (provenance-transparent; the certified AGR rung names the conditioning),
+#               records the welfare abs/rel deltas, and re-fetches the certified rung's
+#               published DADP prices for the DADP-vs-λ₀ price-signal lens
+#               (price_max_abs/rel_delta vs λ₀, the agreement.jl `max(|λ₀|, 1)` rel form).
+#               LONG-RUNNING (the full-scale centralized solve is the ~4 GB leg).
+#   lenses      The four-leg SETTLEMENT LENSES (protocol §1 secondary lenses) at the
+#               certified 784-house point, seed 42: `compare_tariffs(feeder, pf, aggs;
+#               T, λ₀, engine = :admm, ρ = ADMM().ρ, agr_optimizer = <the certified
+#               rung's optimizer>, houses = the per-house rebuild, map_rows =
+#               case_a_household_map-aligned)` — one summary row per tariff leg
+#               (dadp/flat/tou/fit, never dropped) with honest per-leg statuses: the FIT
+#               leg's `fit_inexact`/`error:<Type>` is a recorded outcome (the ground
+#               INFEASIBLE precedent), never a dropped leg. Rows land in
+#               lens_summary.csv (surplus split incl. the DSO-surplus sign-flip lens,
+#               feasibility, battery counts, equity, rebound + provenance). If the ADMM
+#               leg refuses at the passed certified rung, one honest `(run)` status row
+#               is recorded per the tariff_comparison idiom. LONG-RUNNING.
+
 #
 # Honesty policy (protocol §4/§5, v5.0 policies): every solver refusal is a RECORDED
 # outcome — `error:<TypeName>` status rows (iters from the typed error, −1 sentinel when
@@ -76,10 +104,14 @@
 # process at a time.
 #
 # Outputs (results/thesis_case_a_magnitude/):
-#   magnitude.csv  — headline rows: one per rung attempt + one gain row per seed
-#   proxy.csv      — proxy rows: same shapes, with a `fixture` identity column
-#   ablation.csv   — OFAT ablation rows: `axis` + `variant` identity columns, one row per
-#                    ladder attempt / gain / provenance-transparent reuse
+#   magnitude.csv   — headline rows: one per rung attempt + one gain row per seed
+#   proxy.csv       — proxy rows: same shapes, with a `fixture` identity column
+#   crosscheck.csv  — the centralized cross-check bound at the certified seed-42 point
+#                     (which optimizer path, reused W_DADP, agreement + price-lens deltas)
+#   lens_summary.csv — the four-leg settlement rows (dadp/flat/tou/fit) at the certified
+#                     point, honest per-leg statuses + provenance
+#   ablation.csv    — OFAT ablation rows: `axis` + `variant` identity columns, one row per
+#                     ladder attempt / gain / provenance-transparent reuse
 #
 # Regenerate the committed proxy artifact (minutes-scale):
 #   julia --project=. scripts/case_a_magnitude.jl --mode proxy
@@ -103,13 +135,15 @@ using TSODSO:
     build_feeder,
     build_population,
     build_price,
+    compare_tariffs,
     fit_baseline,
     generate_profiles,
     select_optimizer,
     solve_admm,
+    solve_welfare,
     sub_seed
 using CSV
-using DataFrames: DataFrame, eachrow
+using DataFrames: DataFrame, eachrow, nrow
 using LinearAlgebra: BLAS
 
 include(joinpath(@__DIR__, "lib", "case_a_common.jl"))   # the 42-01 helpers: the guard,
@@ -129,6 +163,8 @@ const REGISTERED_SEED = first(SEEDS)
 const MODES = (
     "headline",
     "proxy",
+    "crosscheck",
+    "lenses",
     "ablation-fit",
     "ablation-price",
     "ablation-population",
@@ -181,6 +217,8 @@ const OUT_DIR = joinpath(projectdir(), "results", "thesis_case_a_magnitude")
 const MAGNITUDE_CSV = joinpath(OUT_DIR, "magnitude.csv")
 const PROXY_CSV = joinpath(OUT_DIR, "proxy.csv")
 const ABLATION_CSV = joinpath(OUT_DIR, "ablation.csv")
+const CROSSCHECK_CSV = joinpath(OUT_DIR, "crosscheck.csv")
+const LENS_CSV = joinpath(OUT_DIR, "lens_summary.csv")
 
 # ---- the pre-planned OFAT ablation axes (protocol §7, verbatim) --------------------------------
 #
@@ -389,6 +427,25 @@ parse_args!(args) = begin
                 ),
             )
         variants = _resolve_ablation_variants(mode, variant)
+    elseif mode in ("crosscheck", "lenses")
+        # Protocol §6 + the lens policy: the cross-check bound and the settlement lenses
+        # are pinned to the CERTIFIED point — the registered anchor seed 42 only.
+        # --axis/--variant stay ablation-only (misuse exits before any work).
+        (axis === nothing && variant === nothing) || throw(
+            ArgumentError(
+                "--axis/--variant are ablation-mode flags — --mode $(repr(mode)) " *
+                "accepts neither",
+            ),
+        )
+        seed !== nothing &&
+            seed != REGISTERED_SEED &&
+            throw(
+                ArgumentError(
+                    "--mode $(repr(mode)) is scoped to the registered anchor seed " *
+                    "$(REGISTERED_SEED) (the certified 784-house point; protocol §6 + the " *
+                    "lens policy) — got $(repr(seed))",
+                ),
+            )
     elseif axis !== nothing || variant !== nothing
         throw(
             ArgumentError(
@@ -864,6 +921,68 @@ const MEASURE_COLS = Symbol[
 const MAGNITUDE_COLS = Symbol[:mode; MEASURE_COLS]
 const PROXY_COLS = Symbol[:fixture; MEASURE_COLS]
 const ABLATION_COLS = vcat([:axis, :variant], MEASURE_COLS)
+# The crosscheck row (protocol §6): the centralized bound + WHICH optimizer path, the
+# reused certified W_DADP, the welfare agreement deltas, and the DADP-vs-λ₀ price lens
+# re-fetched at the certified rung. `kind`/`rung` keep the row-granularity upsert idiom.
+const CROSSCHECK_COLS = Symbol[
+    :mode,
+    :kind,
+    :rung,
+    :houses,
+    :aggregators,
+    :centralized_optimizer,
+    :welfare_centralized,
+    :welfare_dadp,
+    :welfare_abs_delta,
+    :welfare_rel_delta,
+    :price_max_abs_delta,
+    :price_max_rel_delta,
+    :status,
+    :note,
+    :protocol_sha,
+    :julia_version,
+    :threads,
+    :blas_threads,
+    :seed,
+    :t_horizon,
+]
+# The lens rows: compare_tariffs' own summary schema (tariff/engine/status/welfare/
+# surplus split/equity/rebound/...) + the runner identity (mode/rung/protocol_sha/
+# provenance). The declared list is the IDENTITY set — `cols = :union` carries the rest.
+const LENS_COLS = Symbol[
+    :mode,
+    :tariff,
+    :engine,
+    :rung,
+    :status,
+    :welfare,
+    :dso_total,
+    :merchandising_surplus,
+    :aggregators_total,
+    :fairness_total,
+    :feasibility_status,
+    :batt_ok,
+    :batt_refused,
+    :batt_not_checked,
+    :gini_bills,
+    :theil_bills,
+    :atkinson_bills,
+    :palma_bills,
+    :gini_surplus,
+    :theil_surplus,
+    :atkinson_surplus,
+    :palma_surplus,
+    :rebound_amount,
+    :rebound_ratio,
+    :bills_granularity,
+    :notes,
+    :protocol_sha,
+    :julia_version,
+    :threads,
+    :blas_threads,
+    :seed,
+    :t_horizon,
+]
 
 # WR-04 discipline: the ACTIVE mode's artifact EXISTS (header-only when nothing was
 # captured) BEFORE any failure branch — a run-level failure must ship its honest empty
@@ -874,6 +993,10 @@ function ensure_all_schemas(mode::String)
         ensure_schema(MAGNITUDE_CSV, MAGNITUDE_COLS)
     elseif mode == "proxy"
         ensure_schema(PROXY_CSV, PROXY_COLS)
+    elseif mode == "crosscheck"
+        ensure_schema(CROSSCHECK_CSV, CROSSCHECK_COLS)
+    elseif mode == "lenses"
+        ensure_schema(LENS_CSV, LENS_COLS)
     else
         ensure_schema(ABLATION_CSV, ABLATION_COLS)
     end
@@ -1003,6 +1126,355 @@ function proxy_main(time_limit_s)
         round(wall_s; digits = 1),
         " s → ",
         PROXY_CSV,
+    )
+    flush(stdout)
+    return nothing
+end
+
+# ---- crosscheck + lenses (REPRO-04 bound + settlement lenses; protocol §6, §1 lenses) ---------
+
+"""
+    _certified_rung_row(seed::Int) -> DataFrameRow
+
+The seed's CERTIFIED AGR rung row from magnitude.csv (mode=headline, kind=rung,
+status=converged, finite Real welfare_dadp). The crosscheck/lenses modes REUSE this
+certified DADP conditioning — the rung name selects the `AGR_TOL_RUNGS` attrs and
+`welfare_dadp` is the reused headline welfare; the ladder is never re-run here. A missing
+or uncertified headline fails LOUDLY (never a silent re-solve).
+"""
+function _certified_rung_row(seed::Int)
+    isfile(MAGNITUDE_CSV) || error(
+        "case_a_magnitude: crosscheck/lenses reuse the seed-$(seed) certified AGR rung " *
+        "from $MAGNITUDE_CSV — run `--mode headline` first (a missing headline must fail " *
+        "loudly, never be silently re-solved)",
+    )
+    df = CSV.read(MAGNITUDE_CSV, DataFrame)
+    matches = filter(
+        r ->
+            string(r.mode) == "headline" &&
+            r.seed == seed &&
+            string(r.kind) == "rung" &&
+            string(r.status) == "converged" &&
+            r.welfare_dadp isa Real &&
+            isfinite(r.welfare_dadp),
+        df,
+    )
+    isempty(matches) && error(
+        "case_a_magnitude: no certified AGR rung row for seed $(seed) in " *
+        "$MAGNITUDE_CSV — crosscheck/lenses reuse the certified DADP conditioning " *
+        "(the ladder is never re-run here); run `--mode headline` first",
+    )
+    return matches[end, :]
+end
+
+"""
+    _rung_optimizer(rung::String) -> optimizer-or-nothing
+
+The certified rung's AGR optimizer factory via the documented seam (`AGR_TOL_RUNGS` attrs
+splatted into `select_optimizer(QP(); ...)`); the `default` rung resolves to `nothing`
+(byte-identical plain-factory path).
+"""
+function _rung_optimizer(rung::String)
+    haskey(AGR_TOL_RUNGS, rung) ||
+        error("case_a_magnitude: unknown AGR rung $(repr(rung)) — not in AGR_TOL_RUNGS")
+    attrs = AGR_TOL_RUNGS[rung]
+    return attrs === nothing ? nothing : select_optimizer(QP(); attrs...)
+end
+
+"""
+    _run_centralized_leg(feeder, pf, aggs; T, λ₀)
+        -> (; ctx, welfare, path, refused_kind)
+
+The centralized cross-check leg (`scripts/case_a_agreement.jl` `run_centralized` shape):
+`solve_welfare` at the DEFAULT optimizer; on a `CertificateError` the ONE sanctioned
+tightening (`select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10)` — the
+measured `agreement.csv` path). The SOC-exactness gate is NEVER touched. `path` records
+which route certified (`:default` | `:tol_gap_1e-10` | `nothing` when both refused —
+the honest recorded outcome, `refused_kind` naming the final certificate).
+"""
+function _run_centralized_leg(feeder, pf, aggs; T::Int, λ₀)
+    try
+        ctx, welfare, _ =
+            solve_welfare(feeder, pf, aggs; T = T, λ₀ = λ₀, allow_export = true)
+        return (; ctx = ctx, welfare = welfare, path = :default, refused_kind = nothing)
+    catch err
+        err isa CertificateError || rethrow()
+        println(
+            "  centralized leg: CertificateError at the DEFAULT optimizer — the ONE " *
+            "sanctioned tightening (SOLVER tol_gap_abs/rel = 1e-10, NEVER the gate)...",
+        )
+        flush(stdout)
+    end
+    try
+        ctx, welfare, _ = solve_welfare(
+            feeder,
+            pf,
+            aggs;
+            T = T,
+            λ₀ = λ₀,
+            allow_export = true,
+            optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
+        )
+        return (;
+            ctx = ctx,
+            welfare = welfare,
+            path = :tol_gap_1e-10,
+            refused_kind = nothing,
+        )
+    catch err
+        err isa CertificateError || rethrow()
+        println(
+            "  centralized leg: CertificateError ALSO at the tightened solver — recorded " *
+            "honestly (the gate was never touched).",
+        )
+        flush(stdout)
+        return (;
+            ctx = nothing,
+            welfare = missing,
+            path = nothing,
+            refused_kind = Symbol(err.kind),
+        )
+    end
+end
+
+function crosscheck_main(seed::Int, time_limit_s)
+    assert_protocol_registered()   # the guard is the mains' first statement (T-42-03-1)
+    BLAS.set_num_threads(1)
+    ensure_all_schemas("crosscheck")
+    rung_row = _certified_rung_row(seed)
+    rung = string(rung_row.rung)
+    w_dadp = Float64(rung_row.welfare_dadp)
+    build = _registered_case_a_build(seed)
+    houses = div(sum(length(a.devices) for a in build.aggs), 3)
+    println(
+        "case_a_magnitude crosscheck (protocol §6): seed=",
+        seed,
+        ", T=",
+        T_H,
+        " — certified W_DADP reused from magnitude.csv (rung '",
+        rung,
+        "', W_DADP=",
+        w_dadp,
+        "); re-fetching the certified rung's published prices, then the centralized " *
+        "solve_welfare bound (LONG-RUNNING, ~4 GB leg)...",
+    )
+    flush(stdout)
+
+    # (i) The certified rung's published DADP prices, re-fetched for the DADP-vs-λ₀ lens
+    #     (prices are not persisted in magnitude.csv; the certified conditioning is
+    #     deterministic, so this reproduces the certified solve's own prices).
+    local λ_admm, admm_note
+    rung_attrs = AGR_TOL_RUNGS[rung]
+    try
+        r = solve_admm(
+            build.feeder,
+            build.pf,
+            build.aggs;
+            T = T_H,
+            λ₀ = build.λ₀,
+            ρ = ADMM().ρ,
+            allow_export = true,
+            (
+                rung_attrs === nothing ? NamedTuple() :
+                (; agr_optimizer = select_optimizer(QP(); rung_attrs...))
+            )...,
+            time_limit_s = time_limit_s,
+        )
+        if r.status === :converged && r.welfare isa Real && isfinite(r.welfare)
+            λ_admm = r.λ
+            admm_note =
+                "ADMM prices re-fetched at the certified rung '$rung' (iters=$(r.iters), " *
+                "welfare=$(r.welfare) vs reused W_DADP=$w_dadp)"
+        else
+            λ_admm = nothing
+            admm_note =
+                "ADMM price re-fetch returned status=:budget_exceeded at the " *
+                "certified rung '$rung' — no prices (honest early exit)"
+        end
+    catch err
+        (err isa ConvergenceError) ||
+            (err isa CertificateError) ||
+            (err isa SolveFailedError) ||
+            rethrow()
+        λ_admm = nothing
+        admm_note =
+            "ADMM price re-fetch at the certified rung '$rung' refused: " *
+            first(string(err.msg), 250)
+    end
+    println("  price re-fetch: ", admm_note)
+    flush(stdout)
+
+    # (ii) The centralized bound (protocol §6: default → ONE sanctioned tightening).
+    cen = _run_centralized_leg(build.feeder, build.pf, build.aggs; T = T_H, λ₀ = build.λ₀)
+    welfare_c =
+        cen.welfare isa Real && isfinite(cen.welfare) ? Float64(cen.welfare) : missing
+    centralized_optimizer =
+        cen.path === :default ? "default" :
+        cen.path === :tol_gap_1e-10 ? "tol_gap_1e-10" :
+        "refused:default+tol_gap_1e-10 kind=:$(cen.refused_kind)"
+    println(
+        "  centralized: optimizer_path=",
+        centralized_optimizer,
+        " welfare_centralized=",
+        repr(welfare_c),
+    )
+    flush(stdout)
+
+    # (iii) Agreement deltas (only when the centralized leg certified) and the
+    #       DADP-vs-λ₀ price lens (only when the re-fetch certified).
+    measurable = welfare_c isa Real
+    welfare_abs = measurable ? abs(w_dadp - welfare_c) : missing
+    welfare_rel = measurable ? welfare_abs / abs(welfare_c) : missing
+    priceable = λ_admm !== nothing
+    λ₀row = permutedims(Float64.(build.λ₀))          # 1×T row for broadcasting over (n×T)
+    price_abs = priceable ? maximum(abs.(λ_admm .- λ₀row)) : missing
+    price_rel =
+        priceable ? maximum(abs.(λ_admm .- λ₀row) ./ max.(abs.(λ₀row), 1.0)) : missing
+
+    status = welfare_c isa Real ? "ok" : "error:CertificateError"
+    note = flatten_note(
+        "centralized cross-check bound (protocol §6); welfare_dadp reused from " *
+        "magnitude.csv (mode=headline, seed=$(seed), rung '$rung', status=converged) — " *
+        "provenance-transparent reuse; price lens: price_max_abs_delta = max|λ_DADP − λ₀| " *
+        "elementwise over the (n_load_nodes × T) published DADP vs λ₀ row-broadcast, " *
+        "price_max_rel_delta uses the agreement.jl max(|λ₀|, 1) denominator; " *
+        admm_note,
+    )
+    row = merge(
+        (
+            mode = "crosscheck",
+            kind = "crosscheck",
+            rung = rung,
+            houses = houses,
+            aggregators = length(build.aggs),
+            centralized_optimizer = centralized_optimizer,
+            welfare_centralized = welfare_c,
+            welfare_dadp = w_dadp,
+            welfare_abs_delta = welfare_abs,
+            welfare_rel_delta = welfare_rel,
+            price_max_abs_delta = price_abs,
+            price_max_rel_delta = price_rel,
+            status = status,
+            note = note,
+            protocol_sha = PROTOCOL_SHA[],
+        ),
+        provenance_row(T_H, seed),
+    )
+    all(c in keys(row) for c in CROSSCHECK_COLS) || error(
+        "case_a_magnitude: crosscheck row is missing a declared column — has " *
+        "$(keys(row)), declared $CROSSCHECK_COLS",
+    )
+    upsert_row(CROSSCHECK_CSV, row; key = (:mode, :seed, :t_horizon, :kind, :rung))
+    println(
+        "case_a_magnitude crosscheck complete → ",
+        CROSSCHECK_CSV,
+        " (status=",
+        status,
+        ", welfare_abs_delta=",
+        repr(welfare_abs),
+        ", price_max_abs_delta=",
+        repr(price_abs),
+        ")",
+    )
+    flush(stdout)
+    return nothing
+end
+
+function lenses_main(seed::Int, time_limit_s)
+    assert_protocol_registered()   # the guard is the mains' first statement (T-42-03-1)
+    BLAS.set_num_threads(1)
+    ensure_all_schemas("lenses")
+    rung_row = _certified_rung_row(seed)
+    rung = string(rung_row.rung)
+    build = _registered_case_a_build(seed)
+    houses, map_rows = case_a_houses_variant(
+        build.feeder,
+        FEEDER_SYM,
+        T_H,
+        seed;
+        variant = "registered",
+        fraction = 1.0,
+    )
+    println(
+        "case_a_magnitude lenses (protocol §1 secondary lenses): seed=",
+        seed,
+        ", T=",
+        T_H,
+        " — compare_tariffs engine=:admm at the certified rung '",
+        rung,
+        "' (houses=",
+        length(houses),
+        ", aggregators=",
+        length(build.aggs),
+        "; four-leg settlement, honest per-leg statuses — LONG-RUNNING)...",
+    )
+    flush(stdout)
+    local summary
+    try
+        cmp = compare_tariffs(
+            build.feeder,
+            build.pf,
+            build.aggs;
+            T = T_H,
+            λ₀ = build.λ₀,
+            engine = :admm,
+            ρ = ADMM().ρ,
+            agr_optimizer = _rung_optimizer(rung),
+            houses = houses,
+            map_rows = map_rows,
+            time_limit_s = time_limit_s,
+        )
+        summary = cmp.summary
+    catch err
+        (err isa ConvergenceError) ||
+            (err isa CertificateError) ||
+            (err isa SolveFailedError) ||
+            rethrow()
+        # The ADMM leg refused at the PASSED CERTIFIED rung (should not — the certified
+        # conditioning): the honest `(run)` status row per the tariff_comparison idiom.
+        row = merge(
+            (
+                mode = "lenses",
+                tariff = "(run)",
+                engine = "admm",
+                rung = rung,
+                status = "error:" * string(nameof(typeof(err))),
+                notes = flatten_note(first(string(err.msg), 400)),
+                protocol_sha = PROTOCOL_SHA[],
+            ),
+            provenance_row(T_H, seed),
+        )
+        upsert_row(LENS_CSV, row; key = (:mode, :tariff, :engine, :seed, :t_horizon))
+        println(
+            "lenses: ADMM leg refused at the certified rung — (run) status row recorded → ",
+            LENS_CSV,
+        )
+        flush(stdout)
+        return nothing
+    end
+    for r in eachrow(summary)
+        row = merge(
+            NamedTuple(r),
+            (mode = "lenses", rung = rung, protocol_sha = PROTOCOL_SHA[]),
+            provenance_row(T_H, seed),
+        )
+        upsert_row(LENS_CSV, row; key = (:mode, :tariff, :engine, :seed, :t_horizon))
+        println(
+            "  → tariff=",
+            r.tariff,
+            " status=",
+            r.status,
+            " welfare=",
+            repr(r.welfare),
+            " dso_total=",
+            repr(r.dso_total),
+        )
+    end
+    println(
+        "case_a_magnitude lenses complete: ",
+        nrow(summary),
+        " tariff legs recorded → ",
+        LENS_CSV,
     )
     flush(stdout)
     return nothing
@@ -1605,6 +2077,16 @@ function main(args)
         )
     elseif parsed.mode == "proxy"
         proxy_main(parsed.time_limit_s)
+    elseif parsed.mode == "crosscheck"
+        crosscheck_main(
+            parsed.seed === nothing ? REGISTERED_SEED : parsed.seed,
+            parsed.time_limit_s,
+        )
+    elseif parsed.mode == "lenses"
+        lenses_main(
+            parsed.seed === nothing ? REGISTERED_SEED : parsed.seed,
+            parsed.time_limit_s,
+        )
     else
         println(
             "case_a_magnitude ",
