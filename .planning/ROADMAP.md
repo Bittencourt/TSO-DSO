@@ -60,7 +60,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 
 - [x] **Phase 39: Parallel-Ready ADMM & Gating Measurements** - Opt-in threaded aggregator solves, additive result keys, Clarabel concurrency spike, and 8500 memory attribution (completed 2026-10-24)
 - [x] **Phase 40: 784-House Thesis Population** - True Case A population via a new selector, per-house seeding, household map, centralized-vs-ADMM agreement and scaling report (completed 2026-10-24)
-- [ ] **Phase 41: Settlement, Ledger & Equity** - Conserved per-actor ledger, tariff schemes, AC feasibility status, equity metrics, rebound
+- [x] **Phase 41: Settlement, Ledger & Equity** - Conserved per-actor ledger, tariff schemes, AC feasibility status, equity metrics, rebound (completed 2026-10-26)
 - [ ] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation
 - [ ] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized
 - [ ] **Phase 44: Aggregator as Actor** - Welfare vs profit (wedge) objectives, multi-bus portfolios, exogenous compliance/opt-out/rebound
@@ -169,7 +169,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 41-04-PLAN.md — Comparison deliverable: `compare_tariffs` runner, scripts/tariff_comparison.jl committed CSVs (784-house + ground modes, honest status rows), literate writeup with the no-income-data statement registered at both make.jl sites — SETL-02, SETL-05
+- [x] 41-04-PLAN.md — Comparison deliverable: `compare_tariffs` runner, scripts/tariff_comparison.jl committed CSVs (784-house + ground modes, honest status rows), literate writeup with the no-income-data statement registered at both make.jl sites — SETL-02, SETL-05
 
 ### Phase 42: Thesis Case A Magnitude
 
@@ -251,7 +251,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 |-------|----------------|--------|-----------|
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
 | 40. 784-House Thesis Population | 6/6 | Complete    | 2026-10-24 |
-| 41. Settlement, Ledger & Equity | 3/4 | In Progress|  |
+| 41. Settlement, Ledger & Equity | 4/4 | Complete   | 2026-10-26 |
 | 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
 | 44. Aggregator as Actor | 0/TBD | Not started | - |
