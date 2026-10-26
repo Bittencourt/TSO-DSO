@@ -110,3 +110,60 @@ end
         @test occursin(r"^[0-9a-f]{40}$", sha)
     end
 end
+
+@testitem "magnitude runner source contract: pre-planned values match the protocol" begin
+    # The source-level no-free-form-search guard (42-03-PLAN Task 1): the runner's
+    # pre-planned values — the AGR ladder rungs, the protocol seed set, the mode
+    # whitelist, the registered population, the pre-registration guard, and the locked
+    # ρ source — are pinned AS COMMITTED TEXT in `scripts/case_a_magnitude.jl`, so
+    # silently adding a rung/seed/mode (or swapping the gain definition) shows up as a
+    # test failure unless the protocol (42-CASE-A-PROTOCOL.md) is amended too — the
+    # deliberate-act friction (PATTERNS: "Pre-planned Dict = the only permitted values").
+    #
+    # FAST LANE: reads the script as TEXT — no include, no execution, no solving.
+    #
+    # Assertion hygiene: every assertion is `occursin`-based, NEVER count-based (a
+    # comment mentioning a pinned value would self-invalidate a grep-count gate). The
+    # mode-whitelist assertion is CONTAINS-not-exact on purpose: later waves EXTEND the
+    # whitelist with crosscheck/lenses/ablation-* modes, and this contract must stay
+    # green through those extensions — only removal/rename of a registered mode fails.
+    src_path = joinpath(@__DIR__, "..", "scripts", "case_a_magnitude.jl")
+    @test isfile(src_path)  # RED when the runner is absent — the natural first failure
+    src = read(src_path, String)
+
+    # (1) The four pre-registered AGR ladder rungs — String keys (the
+    #     `scripts/case_a_agreement.jl` `AGR_TOL_RUNGS` Dict, verbatim rung set).
+    for rung in ("\"default\"", "\"gap_1e-10\"", "\"gap_1e-12\"", "\"gapfeas_1e-12\"")
+        @test occursin(rung, src)
+    end
+
+    # (2) The protocol seed set (42-CASE-A-PROTOCOL.md §3): 42 = primary/registered
+    #     anchor, 43–46 = the spread. A new seed requires a protocol amendment first.
+    @test occursin("(42, 43, 44, 45, 46)", src)
+
+    # (3) The pre-registration gate on the main path (the first executed code path —
+    #     no protocol file, no run; an uncommitted protocol, no run).
+    @test occursin("assert_protocol_registered", src)
+
+    # (4) The mode whitelist CONTAINS `headline` and `proxy` — contains-not-exact (the
+    #     whitelist is extendable by later waves; it must never shrink or rename these).
+    @test occursin("headline", src)
+    @test occursin("proxy", src)
+
+    # (5) The headline runs the REGISTERED 784-house population at the registered
+    #     configuration (42-CASE-A-PROTOCOL.md §2) — not a smaller stand-in.
+    @test occursin("build_population(:case_a_784", src)
+
+    # (6) The protocol document is cited by its CONTEXT-locked path.
+    @test occursin("42-CASE-A-PROTOCOL.md", src)
+
+    # (7) ρ is sourced from the strategy's own default — the LOCKED no-re-tuning
+    #     configuration (a REQUIRED kwarg; never a script-local number).
+    @test occursin("ADMM().ρ", src)
+
+    # (8) The gain is computed ONLY by the registered sign-safe definition from the lib;
+    #     the BANNED naive-ratio shape (it sign-inverts on negative welfare) appears
+    #     NOWHERE in the script — comments included (they spell it in uppercase instead).
+    @test occursin("welfare_gain", src)
+    @test !occursin("w_dadp / w_fit", src)
+end
