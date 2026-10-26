@@ -158,9 +158,11 @@ haspair(r) = !isnan(num(r["welfare_dadp"])) && !isnan(num(r["welfare_fit"]))
 # ## The headline — W_DADP certified 5/5 seeds; the FIT counterfactual refused on every one
 #
 # `magnitude.csv` stamps one row per ladder-rung attempt plus one terminal `gain` row per
-# seed. The DADP leg CERTIFIED on all five seeds — seeds 42 and 46 at the `gap_1e-10`
-# rung after the documented default-rung refusal at iters = 80 (the known
-# battery-complementarity precedent), seeds 43/44/45 at the `default` rung itself. The
+# seed. The DADP leg CERTIFIED on all five seeds — the seed→rung attribution (which seed
+# certified at which rung, at how many iterations, and the default-rung refusal the
+# ladder answered) RECOMPUTES LIVE from the committed rows below; no seed→rung map or
+# iteration count is hand-copied into this prose, so a re-measurement re-attributes
+# visibly instead of silently disagreeing. The
 # FIT leg — `fit_baseline` consumed unchanged, BATTERYLESS by thesis design (Assumption
 # A4) — reports termination INFEASIBLE at the registered call AND at the ONE sanctioned
 # solver-tightened retry on EVERY seed. **No certified pair exists at the registered
@@ -191,6 +193,33 @@ for s in seeds
     )
     push!(w_certified, num(c["welfare_dadp"]))
 end
+
+# The seed→rung attribution, RECOMPUTED LIVE from the committed rows (the prose
+# deliberately names no seed→rung map — this print IS the attribution, and a
+# re-measurement restates it):
+attribution = Dict{String,Vector{String}}()   # certified rung → seeds
+default_refusal_iters = String[]              # default-rung refusal iterations, seed order
+for s in seeds
+    seed_rungs = filter(r -> r["kind"] == "rung" && r["seed"] == string(s), headline_rows)
+    c = filter(r -> r["status"] == "converged", seed_rungs)[end]
+    push!(get!(attribution, cell(c["rung"]), String[]), string(s))
+    for r in seed_rungs
+        if cell(r["rung"]) == "default" && startswith(cell(r["status"]), "error:")
+            push!(default_refusal_iters, cell(r["iters"]))
+        end
+    end
+end
+for rung in sort!(collect(keys(attribution)))
+    @printf(
+        "DADP certified at rung '%s': seeds %s\n",
+        rung,
+        join(sort(attribution[rung]), ", "),
+    )
+end
+isempty(default_refusal_iters) || @printf(
+    "default-rung refusal (the battery-complementarity precedent) recorded at iters %s before certification\n",
+    join(default_refusal_iters, ", "),
+)
 
 w_mean = sum(w_certified) / length(w_certified)
 w_spread = maximum(w_certified) - minimum(w_certified)
@@ -293,12 +322,33 @@ for ax in unique(r["axis"] for r in ABL)
     end
 end
 
-# **The price-range axis cut hard both ways**: `scale_0.5` is the ladder's first real
-# EXHAUSTION — all four pre-registered rungs refuse at iters = 88 and the honest terminal
-# state is the documented non-closure (`error:ladder_exhausted`); `scale_2.0` certifies at
-# the `default` rung (iters = 52). The ledger prints both from the committed rows:
+# **The price-range axis cut hard both ways**: one variant runs the ladder to real
+# EXHAUSTION (the honest terminal state is the documented non-closure,
+# `error:ladder_exhausted`) while the other certifies — both verdicts, with their rungs
+# and iterations, RECOMPUTE LIVE below (no rung count, iteration count or certifying
+# rung is hand-copied into this prose). The verdict lines, then the per-rung ledger:
 
 scale_rungs = filter(r -> r["axis"] == "price_range" && r["kind"] == "rung", ABL)
+for v in ("scale_0.5", "scale_2.0")
+    vr = filter(r -> r["variant"] == v, scale_rungs)
+    cert = filter(r -> cell(r["status"]) == "converged", vr)
+    if isempty(cert)
+        @printf(
+            "  price_range/%-10s NOT CERTIFIED — terminal state %s over %d rung rows (iters %s)\n",
+            v,
+            isempty(vr) ? "no rows" : cell(vr[end]["status"]),
+            length(vr),
+            join((cell(r["iters"]) for r in vr), ", "),
+        )
+    else
+        @printf(
+            "  price_range/%-10s CERTIFIED at rung '%s' (iters %s)\n",
+            v,
+            cell(cert[end]["rung"]),
+            cell(cert[end]["iters"]),
+        )
+    end
+end
 for v in ("scale_0.5", "scale_2.0")
     vr = filter(r -> r["variant"] == v, scale_rungs)
     for r in vr
@@ -469,9 +519,12 @@ end
 for sha in unique(r["protocol_sha"] for r in vcat(MAG, ABL, XCHK, LENS, PROXY))
     println("  ", sha)
 end
+distinct_shas = unique(r["protocol_sha"] for r in vcat(MAG, ABL, XCHK, LENS, PROXY))
 println(
-    "  (60e5d549… = the pre-run protocol; af815b0… = the 2026-10-26 amendment — " *
-    "the ledger splits visibly at it, per the amendment policy)",
+    "  ($(length(distinct_shas)) distinct protocol_sha values across the committed " *
+    "rows — the append-only 2026-10-26 amendment splits the trail visibly, per the " *
+    "amendment policy; which prefix is the pre-run protocol vs the amendment resolves " *
+    "from the protocol file's git history, never from a hand-copied annotation)",
 )
 
 # ## The attribution statement — what the +25% question measurably resolves to
@@ -486,10 +539,10 @@ println(
 #      +25% to be computed against. The measured DADP-vs-FIT gap therefore CANNOT be
 #      attributed to the thesis +25% at the registered mix.
 #   2. **Every point where the gain IS measurable sits orders of magnitude below +25%** —
-#      the certified pairs recompute above: the proxy at ≈+1.4e-2 % (a factor of ≈1.9e3
-#      below +25%), the population rungs at ≈+1.8e-5 % and ≈+2.4e-6 % (factors ≈1.4e6 and
-#      ≈1.1e7), and the batteries_out variant at ≈+1.3e-5 % (factor ≈1.9e6 — the only
-#      certified pair at full scale). The thesis +25% number is NOT reproduced at any
+#      every certified pair the committed ledgers carry (the ablation variants and the
+#      proxy), its sign-safe Δ% and its distance below +25% (the 25.0/Δ% factor)
+#      RECOMPUTE LIVE in the table printed right below this list — no Δ% or factor is
+#      hand-copied into the prose. The thesis +25% number is NOT reproduced at any
 #      measured point.
 #   3. **What explains the direction and the size of the measured state**: the A1/A4
 #      battery asymmetry (the FIT counterfactual is batteryless by design — it blocks the
@@ -502,6 +555,29 @@ println(
 #      (protocol §9). Closing the gap to +25% was never a success condition: the phase
 #      succeeds on the honesty of the measurement — reported at whatever magnitude it
 #      measured — not on the size of the gain.
+#
+# Item 2's magnitudes, RECOMPUTED LIVE (the same sign-safe recomputation the population
+# and proxy sections print inline, now over EVERY certified pair — newest committed row
+# per axis/variant, plus the proxy):
+
+last_pair = Dict{String,Dict{String,String}}()
+for r in pairs
+    last_pair[cell(r["axis"]) * "/" * cell(r["variant"])] = r
+end
+last_pair["proxy/ieee123-default"] = p
+println("every measurable point vs the thesis +25% (recomputed live, sign-safe):")
+for k in sort!(collect(keys(last_pair)))
+    r = last_pair[k]
+    wd = num(r["welfare_dadp"])
+    wf = num(r["welfare_fit"])
+    dp = delta_pct_signsafe(wd, wf)
+    @printf(
+        "  %-28s Δ%% %s → a factor of %.3e below +25%% (measured point, never gated)\n",
+        k,
+        cite_magnitude(dp),
+        25.0 / dp,
+    )
+end
 #
 # ## Reproducing every number on this page
 #
