@@ -190,10 +190,14 @@ end
     # welfares are present and numeric, delta_w re-derives as their difference and
     # delta_pct as 100·delta_w/|welfare_fit| (sign-safe denominator). The lens-row
     # ledger checks (lens_summary.csv, written from 42-05 onward — LOW-4): the
-    # settlement-ledger structural identities that hold on EVERY compare_tariffs
-    # summary leg — `merchandising_surplus == dso_total` (the ledger's named-line
-    # ALIAS: `build_settlement_ledger` sets merchandising_surplus = balances[:dso],
-    # the same balance) and `total_payments == -aggregators_total` (the payment
+    # settlement-ledger structural identities, PER KIND (WR-02) — on the derived
+    # tariffs (dadp/flat/tou) `merchandising_surplus == dso_total` (the ledger's
+    # named-line ALIAS: `build_settlement_ledger` sets merchandising_surplus =
+    # balances[:dso], the same balance), while the FIT-ok leg DELIBERATELY breaks that
+    # alias — comparison.jl sets `merchandising_surplus = dso_total − wholesale_total`
+    # (the FIT bills are the DSO's collections and the wholesale cost comes back out)
+    # — so FIT rows assert THAT identity instead; and on every leg
+    # `total_payments == -aggregators_total` (the payment
     # mirror). NOT `welfare ≈ dso + merch + aggs`: the social welfare's ledger
     # companions are the UTILITY sums (device disutility, ≈ −3.78e5 at 784 houses),
     # which are not summary columns — the assumed four-line identity fails on the
@@ -248,15 +252,41 @@ end
                     rtol = 1e-9,
                 )
             end
-            # the lens-row ledger checks (only once 42-05 writes lens_summary.csv)
+            # the lens-row ledger checks (only once 42-05 writes lens_summary.csv).
+            # The merchandising_surplus identity is PER KIND (WR-02): the
+            # derived-tariff ALIAS for dadp/flat/tou (build_settlement_ledger:
+            # merchandising_surplus = balances[:dso] = dso_total), but
+            # dso_total − wholesale_total on the FIT-ok leg (comparison.jl sets it
+            # DELIBERATELY not as the alias — the FIT bills are the DSO's only
+            # collections and the wholesale cost comes back out). Asserting the alias
+            # on FIT rows would fail spuriously on the first honest FIT-ok lens row
+            # (refused FIT rows carry missing values and are skipped by the guards).
             if endswith(csv, "lens_summary.csv")
-                if all(c -> hasproperty(r, c), (:dso_total, :merchandising_surplus)) && all(
+                tariff = hasproperty(r, :tariff) ? string(r.tariff) : ""
+                if tariff in ("dadp", "flat", "tou") &&
+                   all(c -> hasproperty(r, c), (:dso_total, :merchandising_surplus)) &&
+                   all(
                     v -> v isa Real && isfinite(v),
                     (r.dso_total, r.merchandising_surplus),
                 )
                     @test isapprox(
                         Float64(r.merchandising_surplus),
                         Float64(r.dso_total);
+                        rtol = 1e-12,
+                    )
+                end
+                if tariff == "fit" &&
+                   all(
+                    c -> hasproperty(r, c),
+                    (:dso_total, :wholesale_total, :merchandising_surplus),
+                ) &&
+                   all(
+                    v -> v isa Real && isfinite(v),
+                    (r.dso_total, r.wholesale_total, r.merchandising_surplus),
+                )
+                    @test isapprox(
+                        Float64(r.merchandising_surplus),
+                        Float64(r.dso_total) - Float64(r.wholesale_total);
                         rtol = 1e-12,
                     )
                 end
