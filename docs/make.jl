@@ -50,6 +50,11 @@ for src in (
     # the agreement/scaling sections read from results/case_a_population/ (the
     # committed-CSV pattern this page set's precomputed pages follow).
     "case_a_population.jl",
+    # Settlement, tariffs & equity (Phase 41): a seconds-scale live slice (2-bus ledger,
+    # revenue-neutral flat/TOU, price-taker, feasibility status, equity metrics) plus the
+    # tariff-comparison sections read from results/settlement_comparison/ — the same
+    # committed-CSV pattern as the Case-A population page above.
+    "settlement_equity.jl",
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -99,6 +104,7 @@ makedocs(;
         "Experiments" => [
             "The Experiment Harness" => "generated/experiments.md",
             "Case A Population (784 houses)" => "generated/case_a_population.md",
+            "Settlement, Tariffs & Equity" => "generated/settlement_equity.md",
         ],
         "Status & Exception Policy" => "status_policy.md",
         "Planning" => [
