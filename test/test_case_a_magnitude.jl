@@ -11,6 +11,16 @@
 # The git-dependent guard items build throwaway tmpdir git repos (mktempdir + `git init`)
 # with INLINE identity flags (`-c user.name/-c user.email`, gpg signing off) so the tests
 # are hermetic — no dependence on any global git identity.
+#
+# 42-04 placement decision (recorded per the plan's Task-1 instruction): the device-variant
+# rebuild helper (`case_a_houses_variant`), its alignment tripwire
+# (`assert_houses_map_aligned`) and the bus-level roll-up (`case_a_variant_rollup`) live in
+# `scripts/lib/case_a_common.jl` (the plan frontmatter's artifact path). The lib stays
+# include-composable without TSODSO (the guard/gain items above never load it): the rebuild
+# helpers reference TSODSO ONLY through `TSODSO.X`-qualified names resolved at CALL time, so
+# an `include` succeeds anywhere while a CALL requires `using TSODSO` first — the runner and
+# the three rebuild items below do exactly that. The rebuild items are still FAST-LANE: they
+# construct houses (profile draws, seconds) and roll them up — NO solve, no ladder, no FIT.
 
 @testitem "magnitude gain: sign-safe on the negative-welfare population shape" begin
     include(joinpath(@__DIR__, "..", "scripts", "lib", "case_a_common.jl"))
@@ -243,4 +253,182 @@ end
             end
         end
     end
+end
+
+@testitem "magnitude ablation source contract: axis Dicts match the protocol" begin
+    # The 42-04 source-level no-free-form-search guard (42-04-PLAN Task 1; the 42-03
+    # source-contract pattern generalized to the four REPRO-05 ablation axes): each axis
+    # Dict is pinned AS COMMITTED TEXT — the exact protocol-pinned variant set
+    # (42-CASE-A-PROTOCOL.md §7) must appear as one `axis => [...]` line, so silently
+    # adding/removing/rewording a variant is a visible script edit + test edit + protocol
+    # amendment (the deliberate-act friction, T-42-04-1).
+    #
+    # FAST LANE: reads the runner as TEXT — no include, no execution, no solving.
+    # Assertion hygiene: `occursin`-based, NEVER count-based; the mode-whitelist assertion
+    # is contains-semantics (extendable by protocol amendments, never shrinkable).
+    src_path = joinpath(@__DIR__, "..", "scripts", "case_a_magnitude.jl")
+    @test isfile(src_path)
+    src = read(src_path, String)
+
+    # (a) fit_params (protocol §7a): the registered page-93 triple + the symmetric
+    #     multiplicative λ_export probes (×0.5, ×2.0).
+    @test occursin(
+        "\"fit_params\" => [\"registered\", \"lam_export_half\", \"lam_export_double\"]",
+        src,
+    )
+    # (b) price_range (protocol §7b): the registered :mem signal + elementwise λ₀ scalings.
+    @test occursin(
+        "\"price_range\" => [\"registered\", \"scale_0.5\", \"scale_2.0\"]",
+        src,
+    )
+    # (c) population (protocol §7c): the two pinned proxies, the Phase-40 nested-prefix
+    #     ladder fractions (case_a_scaling.jl DEFAULT_LADDER_FRACTIONS), and the headline
+    #     row itself (full_784 — reused, never re-run).
+    @test occursin(
+        "\"population\" => [\"proxy_ieee123\", \"ieee13_default\", \"1/78\", \"0.125\", " *
+        "\"0.25\", \"0.5\", \"0.75\", \"1.0\", \"full_784\"]",
+        src,
+    )
+    # (d) device_mix (protocol §7d): registered 3-device set, batteries out, PV split.
+    @test occursin(
+        "\"device_mix\" => [\"registered\", \"batteries_out\", \"pv_half\"]",
+        src,
+    )
+
+    # The mode whitelist carries the four ablation modes (contains-semantics).
+    @test occursin("ablation-fit", src)
+    @test occursin("ablation-price", src)
+    @test occursin("ablation-population", src)
+    @test occursin("ablation-devices", src)
+end
+
+@testitem "magnitude device-variant rebuild: batteries_out drops exactly PVBattery everywhere" begin
+    # 42-04-PLAN Task 1, rebuild item 1 (T-42-04-2): the `batteries_out` variant drops
+    # EXACTLY the PVBattery from every house — the Thermostatic + Deferrable pair survives
+    # untouched, house count and map order are unchanged, and the variant map's PV
+    # attribution is recomputed from the ACTUAL device sets (no house is :pv anymore).
+    # Construction only (10 houses at the 1/78 prefix): no solve, seconds.
+    using TSODSO
+    using TSODSO: build_feeder
+    include(joinpath(@__DIR__, "..", "scripts", "lib", "case_a_common.jl"))
+
+    feeder = build_feeder(:ieee13)
+    reg_houses, reg_map = case_a_houses_variant(
+        feeder,
+        :ieee13,
+        24,
+        42;
+        variant = "registered",
+        fraction = 1 / 78,
+    )
+    # The registered rebuild at the smallest prefix: 10 houses (1 per bus), each with the
+    # FIXED 3-device set (Thermostatic + Deferrable + PVBattery).
+    @test length(reg_houses) == 10
+    @test length(reg_map) == length(reg_houses)
+    @test all(h -> length(h.devices) == 3, reg_houses)
+    @test all(
+        h -> any(d -> d isa PVBattery, h.devices) &&
+             any(d -> d isa Thermostatic, h.devices) &&
+             any(d -> d isa Deferrable, h.devices),
+        reg_houses,
+    )
+
+    houses, map_rows = case_a_houses_variant(
+        feeder,
+        :ieee13,
+        24,
+        42;
+        variant = "batteries_out",
+        fraction = 1 / 78,
+    )
+    # House count and order unchanged vs the registered rebuild...
+    @test length(houses) == length(reg_houses)
+    @test all(k -> houses[k].bus == reg_houses[k].bus, eachindex(houses))
+    # ...PVBattery is gone EVERYWHERE, the flexible pair survives everywhere...
+    @test all(h -> !any(d -> d isa PVBattery, h.devices), houses)
+    @test all(
+        h -> any(d -> d isa Thermostatic, h.devices) &&
+             any(d -> d isa Deferrable, h.devices),
+        houses,
+    )
+    # ...and the variant map's PV attribution follows the ACTUAL device sets.
+    @test length(map_rows) == length(houses)
+    @test all(r -> r.pv_group == :non_pv, map_rows)
+    @test all(r -> r.device_set == :thermostatic_deferrable, map_rows)
+end
+
+@testitem "magnitude device-variant rebuild: pv_half is a prefix split with consistent map" begin
+    # 42-04-PLAN Task 1, rebuild item 2 (T-42-04-2): the `pv_half` variant keeps the
+    # 3-device set for the FIRST HALF of the prefix (in household-map order) and drops the
+    # PVBattery from the rest; the variant map's pv_group/device_set agree with the ACTUAL
+    # device sets house-for-house; the bus-level roll-up yields exactly one aggregator per
+    # bus (the 1:1 roll-up guard). Construction only: no solve, seconds.
+    using TSODSO
+    using TSODSO: build_feeder
+    include(joinpath(@__DIR__, "..", "scripts", "lib", "case_a_common.jl"))
+
+    feeder = build_feeder(:ieee13)
+    houses, map_rows = case_a_houses_variant(
+        feeder,
+        :ieee13,
+        24,
+        42;
+        variant = "pv_half",
+        fraction = 1 / 78,
+    )
+    n = length(houses)
+    split = div(n, 2)   # first half keeps PV, second half is Thermostatic+Deferrable only
+    @test n == 10
+    @test split == 5
+    @test all(k -> length(houses[k].devices) == (k <= split ? 3 : 2), eachindex(houses))
+    @test all(
+        k -> (k <= split) == any(d -> d isa PVBattery, houses[k].devices),
+        eachindex(houses),
+    )
+    # The variant map agrees with the actual device sets, house-for-house.
+    @test all(
+        k -> (map_rows[k].pv_group == :pv) == any(d -> d isa PVBattery, houses[k].devices),
+        eachindex(houses),
+    )
+    @test all(
+        k -> (map_rows[k].pv_group == :pv) ==
+             (map_rows[k].device_set == :thermostatic_deferrable_pvbattery),
+        eachindex(houses),
+    )
+    # The bus-level roll-up: exactly one aggregator per bus in the map (the 1:1 guard —
+    # at the 1/78 prefix, 10 houses over 10 buses roll up to 10 aggregators).
+    aggs = case_a_variant_rollup(houses, map_rows; context = "test pv_half roll-up")
+    @test length(aggs) == 10
+    @test sort!([a.bus for a in aggs]) == sort!(collect(Set(r.bus for r in map_rows)))
+end
+
+@testitem "magnitude device-variant rebuild: drift tripwire fails loudly" begin
+    # 42-04-PLAN Task 1, rebuild item 3 (T-42-04-2): the rebuild's alignment tripwire
+    # (the tariff_comparison.jl:511-518 fail-loud shape) must ERROR when the rebuilt
+    # houses disagree with the household map — here the map rows are handed in REVERSED
+    # order (a perturbed house order), and the error message must name the drift.
+    using TSODSO
+    using TSODSO: build_feeder
+    include(joinpath(@__DIR__, "..", "scripts", "lib", "case_a_common.jl"))
+
+    feeder = build_feeder(:ieee13)
+    houses, map_rows = case_a_houses_variant(
+        feeder,
+        :ieee13,
+        24,
+        42;
+        variant = "registered",
+        fraction = 1 / 78,
+    )
+    local err
+    err = try
+        assert_houses_map_aligned(houses, reverse(map_rows), "test rebuild")
+        nothing
+    catch e
+        e
+    end
+    @test err !== nothing
+    @test err isa ErrorException
+    msg = sprint(showerror, err)
+    @test occursin("drift", msg) || occursin("aborting loudly", msg)
 end
