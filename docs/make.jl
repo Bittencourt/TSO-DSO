@@ -55,6 +55,14 @@ for src in (
     # tariff-comparison sections read from results/settlement_comparison/ — the same
     # committed-CSV pattern as the Case-A population page above.
     "settlement_equity.jl",
+    # Case A welfare-gain magnitude (Phase 42): the honest pre-registered measurement's
+    # writeup. The live/precomputed split here is TOTAL — the page SOLVES NOTHING at all:
+    # its whole live slice is reading results/thesis_case_a_magnitude/*.csv (a
+    # seconds-scale committed-CSV read; the docs 30-min CI budget is safe), and every
+    # derived percentage is recomputed LIVE from the committed rows (the Phase-28 CR-01
+    # no-stale-derived-figures discipline) — following the settlement_equity.jl
+    # committed-CSV page pattern.
+    "case_a_magnitude.jl",
 )
     Literate.markdown(
         joinpath(LITERATE_DIR, src),
@@ -105,6 +113,7 @@ makedocs(;
             "The Experiment Harness" => "generated/experiments.md",
             "Case A Population (784 houses)" => "generated/case_a_population.md",
             "Settlement, Tariffs & Equity" => "generated/settlement_equity.md",
+            "Case A Magnitude" => "generated/case_a_magnitude.md",
         ],
         "Status & Exception Policy" => "status_policy.md",
         "Planning" => [
