@@ -88,6 +88,26 @@ Pages = ["pricing/dlmp.jl", "pricing/welfare.jl", "pricing/fit.jl", "pricing/che
 Order = [:type, :constant, :function]
 ```
 
+## Settlement, Tariffs & Equity
+
+The per-actor settlement ledger, the derived-tariff comparison and the equity metrics
+(SETL-01/02/03/05/06; the Phase 41 subsystem — its section here was missing, which the
+`checkdocs = :exports` build gate caught at the Phase 42 docs build).
+
+```@autodocs
+Modules = [TSODSO]
+Pages = [
+    "settlement/SettlementLedger.jl",
+    "settlement/run_inputs.jl",
+    "settlement/tariffs.jl",
+    "settlement/price_taker.jl",
+    "settlement/feasibility.jl",
+    "settlement/comparison.jl",
+    "settlement/equity.jl",
+]
+Order = [:type, :constant, :function]
+```
+
 ## ADMM Decomposition
 
 ```@autodocs
