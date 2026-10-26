@@ -647,15 +647,18 @@ function write_point_rows(
     key::NTuple{N, Symbol} where {N},
 )
     for r in rows
-        all(c in keys(r) for c in cols) || error(
-            "case_a_magnitude: row is missing a declared column — row has " *
-            "$(keys(r)), declared $cols",
-        )
         row = merge(
             identity,
             r,
             (protocol_sha = PROTOCOL_SHA[],),
             provenance_row(T_H, seed),
+        )
+        # Guard the MERGED row: the raw measurement rows carry the measured columns;
+        # identity + protocol_sha + provenance are merged here (the plan's row merge
+        # order) — the WRITTEN row must carry every declared column.
+        all(c in keys(row) for c in cols) || error(
+            "case_a_magnitude: row is missing a declared column — merged row has " *
+            "$(keys(row)), declared $cols",
         )
         upsert_row(path, row; key = key)
     end
