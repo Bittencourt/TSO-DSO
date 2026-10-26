@@ -1181,6 +1181,10 @@ function _rung_optimizer(rung::String)
     return attrs === nothing ? nothing : select_optimizer(QP(); attrs...)
 end
 
+# The tightened centralized-path symbol (the case_a_agreement.jl precedent): the bare
+# literal `:tol_gap_1e-10` parses as SUBTRACTION — the constant is the only safe spelling.
+const TOL_GAP_PATH = Symbol("tol_gap_1e-10")
+
 """
     _run_centralized_leg(feeder, pf, aggs; T, λ₀)
         -> (; ctx, welfare, path, refused_kind)
@@ -1189,8 +1193,10 @@ The centralized cross-check leg (`scripts/case_a_agreement.jl` `run_centralized`
 `solve_welfare` at the DEFAULT optimizer; on a `CertificateError` the ONE sanctioned
 tightening (`select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10)` — the
 measured `agreement.csv` path). The SOC-exactness gate is NEVER touched. `path` records
-which route certified (`:default` | `:tol_gap_1e-10` | `nothing` when both refused —
-the honest recorded outcome, `refused_kind` naming the final certificate).
+which route certified (`:default` | TOL_GAP_PATH | `nothing` when both refused —
+the honest recorded outcome, `refused_kind` naming the final certificate). The tightened
+path symbol is the TOL_GAP_PATH constant (Symbol("tol_gap_1e-10")) — the bare literal
+`:tol_gap_1e-10` PARSES AS SUBTRACTION (Pitfall 6; the case_a_agreement precedent).
 """
 function _run_centralized_leg(feeder, pf, aggs; T::Int, λ₀)
     try
@@ -1215,12 +1221,7 @@ function _run_centralized_leg(feeder, pf, aggs; T::Int, λ₀)
             allow_export = true,
             optimizer = select_optimizer(SOCP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
         )
-        return (;
-            ctx = ctx,
-            welfare = welfare,
-            path = :tol_gap_1e-10,
-            refused_kind = nothing,
-        )
+        return (; ctx = ctx, welfare = welfare, path = TOL_GAP_PATH, refused_kind = nothing)
     catch err
         err isa CertificateError || rethrow()
         println(
@@ -1310,7 +1311,7 @@ function crosscheck_main(seed::Int, time_limit_s)
         cen.welfare isa Real && isfinite(cen.welfare) ? Float64(cen.welfare) : missing
     centralized_optimizer =
         cen.path === :default ? "default" :
-        cen.path === :tol_gap_1e-10 ? "tol_gap_1e-10" :
+        cen.path === TOL_GAP_PATH ? "tol_gap_1e-10" :
         "refused:default+tol_gap_1e-10 kind=:$(cen.refused_kind)"
     println(
         "  centralized: optimizer_path=",
