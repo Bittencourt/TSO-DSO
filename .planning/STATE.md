@@ -4,8 +4,8 @@ milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
 stopped_at: "**Operator-ordered clean stop 2026-10-24 (autonomous run halted mid-gap-closure).** Phase 39 complete+verified. Phase 40: 4/4 main plans complete, verification returned gaps_found (POP-04); gap-closure plans 40-05 (AGR solver-precision seam) and 40-06 (bounded tolerance ladder → pin band → lift skip) created; **40-05 COMPLETE; 40-06 INTERRUPTED mid-execution** — ladder already CERTIFIED at rung `gap_1e-10` (stop-on-first-certified, commits 99982c1/e9ebb66/eac9400), remaining 40-06 tail work uncommitted in the working tree."
-last_updated: "2026-10-25T21:23:24.582Z"
-last_activity: 2026-10-25
+last_updated: "2026-10-26T02:20:00.000Z"
+last_activity: 2026-10-26 -- Phase 41 plan 41-04 executed (4/4 plans complete)
 progress:
   total_phases: 8
   completed_phases: 2
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 41 (Settlement, Ledger & Equity) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-10-25
+Plan: 4 of 4 — EXECUTED (41-04 complete: comparison runner + committed CSVs + literate writeup)
+Status: Phase 41 plans 1-4 complete; phase-gate suite + /gsd-verify-work pending
+Last activity: 2026-10-26 -- Phase 41 plan 41-04 executed (4/4 plans complete)
 Progress: [█████████░] 93%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
@@ -226,6 +226,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 40 P05 | 31min | 2 tasks | 6 files |
 | Phase 40 P06 | ~1h55m (incl. operator pause) | 3 tasks | 6 files |
 | Phase 41 P01 | 27min | 3 tasks | 5 files |
+| Phase 41 P04 | ~2h05m | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -325,6 +326,9 @@ Recent decisions affecting current work:
 - [Phase 40]: Plan 40-03: centralized 784-house leg — default optimizer refused kind=:socp_exact (research Pitfall 4); SOLVER tightened tol_gap 1e-10, gates untouched, path recorded in agreement.csv centralized_optimizer; welfare -378163.58894571784
 - [Phase 40]: Plan 40-03: dual-sign anchor re-derived for the full population — positive-price invariant falsifies on solver noise at the ZERO price floor of midday PV saturation (16/240 elements in [-1.9893e-6, -1e-7]); pinned as noise-band 1.99e-5 (10x measured deepest) + congestion-hour positivity
 - [Phase 40]: Phase 40 gap closure: POP-04 closed by measurement — bounded solver-precision ladder certified the 784-house ADMM point at rung gap_1e-10 (through solve_admm agr_optimizer); band pinned gate-then-golden from agreement.csv (welfare rtol 6.217147850629488e-7, price atol/rtol 1.7819846607479022 = 10x observed deltas floored at solver noise); tracked skip lifted, allowance deleted; src/ byte-identical
+- [Phase 41-04]: the FIT leg on the congestion-calibrated IEEE-13 fixtures is genuinely PRIMAL_INFEASIBLE — the batteryless (A4) FIT dispatch cannot clear the head-branch thermal rating; attributed by probe 2026-10-26 (lifting ONLY the head smax to SMAX_NO_LIMIT makes fit_baseline converge: welfare -4822.1488652716525, SITE-2 LOCALLY_SOLVED); recorded as honest status rows, never dropped
+- [Phase 41-04]: seed-42 default population's centralized run is refused at the battery-complementarity certificate (bus 5, t=16, product 5.78648310574336e-8 vs tau*Pmax^2 6.25e-9) — recorded as an (run) status row; the ieee13-ground smoke mode pins the ground-fixture regression seed 20260718 (thesis seed 42 stays locked on case-a-784)
+- [Phase 41-04]: the case-a-784 ADMM leg at executor defaults (rho=100, no tol changes) converged at iters=80 and was refused at the final battery-complementarity certificate — the Phase-40 measured precedent reproduced; the status row IS the committed artifact (tariff_comparison.csv), per-tariff 784 rows honestly absent (no certified run to settle)
 
 ### Roadmap Evolution
 
