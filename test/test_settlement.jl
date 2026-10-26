@@ -898,3 +898,423 @@ end
     # empty aggs (checked FIRST — a dispatch needs at least one aggregator)
     @test_throws ArgumentError ac_feasibility_status(feeder, Aggregator[], [[0.0]]; T = 1)
 end
+
+# --- Tariff comparison runner (41-04): compare_tariffs -----------------------------------
+#
+# The runner is pure ASSEMBLY of the four validated settlement layers (ledger/adapters,
+# tariffs + price-taker, feasibility status, equity/rebound) over ONE solved DADP run.
+# These items pin: the four-leg row contract (statuses, never dropped legs), the
+# revenue-neutrality echo at the runner level (same constructors, same input — the 41-03
+# fairness condition carries through), equity columns on bills AND surplus + the rebound
+# conventions (dadp baseline == itself ⇒ amount 0), the pv/bus/tercile breakouts (fit leg
+# excluded — the A1 asymmetry), and the real IEEE-13 ground run (:slow).
+# Gate-then-golden pins: every tolerance below carries its measured value at the pin site
+# (provisional 1e-12 in the RED commit, re-pinned from live measurement in GREEN).
+
+@testitem "compare-tariffs: four-leg hermetic run — rows, statuses, CSV writes, granularities, guards" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: DataFrame, eachrow, nrow
+    using CSV
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+
+    # Two hand-built households at bus 2 (distinct device draws → distinct bills; the
+    # per-house split is NOT the conservation source — the ledger records reconciliation).
+    h1 = Aggregator(
+        2,
+        0.9,
+        [PVBattery(2, 0.95, 1.0, 0.25, 0.0, 1.0, 0.5, 1.0, 2.0, 3.0, fill(0.2, T))],
+        fill(0.05, T),
+    )
+    h2 = Aggregator(
+        2,
+        0.9,
+        [PVBattery(2, 0.95, 1.0, 0.35, 0.0, 1.5, 0.7, 1.0, 2.0, 3.0, fill(0.15, T))],
+        fill(0.04, T),
+    )
+    houses = [h1, h2]
+    map_rows = [
+        (
+            house = k,
+            bus = 2,
+            aggregator = 2,
+            device_set = :test_house,
+            pv_group = k == 1 ? :pv : :non_pv,
+            house_index = k,
+        ) for k in 1:2
+    ]
+
+    res = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :centralized,
+        bins = [[1, 2], [3]],
+        houses = houses,
+        map_rows = map_rows,
+    )
+
+    # Exactly four rows — one per tariff, in the fixed leg order, no leg dropped.
+    @test res.summary isa DataFrame
+    @test nrow(res.summary) == 4
+    @test res.summary.tariff == ["dadp", "flat", "tou", "fit"]
+    row_of = Dict(r.tariff => r for r in eachrow(res.summary))
+    for t in ("dadp", "flat", "tou", "fit")
+        r = row_of[t]
+        @test isfinite(r.welfare)
+        @test isfinite(r.merchandising_surplus)
+        @test isfinite(r.total_payments)
+        @test r.feasibility_status in ("feasible", "infeasible", "solve_failed")
+        @test r.batt_ok >= 0 && r.batt_refused >= 0 && r.batt_not_checked >= 0
+        @test r.engine == "centralized"
+        @test r.t_horizon == T
+        @test r.bills_granularity in ("house", "bus")
+    end
+    # Certificate semantics: flat/tou run the aggregator-level price-taker (exactly 1
+    # certificate each, :ok or a RECORDED :refused — degenerate flat prices are a measured
+    # outcome); the fit leg is batteryless by A4 (:not_checked).
+    @test row_of["flat"].batt_ok + row_of["flat"].batt_refused == 1
+    @test row_of["tou"].batt_ok + row_of["tou"].batt_refused == 1
+    @test row_of["fit"].batt_not_checked == 1
+
+    # mktempdir hermeticity: every CSV write lands under the temp dir only.
+    mktempdir() do dir
+        for (name, df) in (
+            ("summary", res.summary),
+            ("bills", res.household_bills),
+            ("breakouts", res.equity_breakouts),
+            ("rebound", res.rebound),
+        )
+            p = joinpath(dir, "$name.csv")
+            CSV.write(p, df)
+            @test isfile(p)
+            @test filesize(p) > 0
+        end
+    end
+
+    # household_bills: house-granularity rows for dadp/flat/tou (2 houses each); the fit
+    # leg is bus-granularity (A1 asymmetry) with honestly-missing surplus (no per-agg FIT
+    # device utility exists — fit_baseline returns only the aggregate).
+    @test nrow(res.household_bills) == 3 * 2 + 1
+    for t in ("dadp", "flat", "tou")
+        rows = filter(r -> r.tariff == t, eachrow(res.household_bills))
+        @test length(rows) == 2
+        @test all(r.granularity == "house" for r in rows)
+        @test all(isfinite(r.bill) for r in rows)
+        @test all(isfinite(r.surplus) for r in rows)
+    end
+    fit_rows = filter(r -> r.tariff == "fit", eachrow(res.household_bills))
+    @test length(fit_rows) == 1
+    @test fit_rows[1].granularity == "bus"
+    @test isfinite(fit_rows[1].bill)
+    @test ismissing(fit_rows[1].surplus)
+
+    # equity_breakouts is non-empty (structure pinned by its own item below).
+    @test nrow(res.equity_breakouts) > 0
+
+    # Guards (T-41-19) — each a loud ArgumentError BEFORE any solving:
+    # unknown engine
+    @test_throws ArgumentError compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :bogus,
+    )
+    # houses without map_rows
+    @test_throws ArgumentError compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        houses = houses,
+    )
+    # map_rows without houses
+    @test_throws ArgumentError compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        map_rows = map_rows,
+    )
+    # houses/map_rows length mismatch
+    @test_throws ArgumentError compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        houses = houses,
+        map_rows = map_rows[1:1],
+    )
+end
+
+@testitem "compare-tariffs: revenue-neutrality echo at the runner level (fairness_total)" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: eachrow
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+
+    res = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :centralized,
+        bins = [[1, 2], [3]],
+    )
+    row_of = Dict(r.tariff => r for r in eachrow(res.summary))
+
+    # The dadp row's fairness echo IS its own settlement: same prices, same quantities —
+    # the two columns are independently-associated folds of the same floats (dust-level
+    # gap, not bitwise; see the pin below).
+    @test row_of["dadp"].fairness_total ≈ row_of["dadp"].total_payments rtol = 1e-12
+
+    # THE locked fairness condition carried through the runner: flat and TOU are DERIVED
+    # by 41-03's own tested constructors from the SAME input, so they settle the SAME
+    # total at the DADP quantities. Provisional pin 1e-12 (RED); re-pinned
+    # gate-then-golden from the live measurement in the GREEN commit.
+    dadp_total = row_of["dadp"].total_payments
+    @info "compare-tariffs fairness echo (2-bus)" dadp_total flat_echo =
+        row_of["flat"].fairness_total tou_echo = row_of["tou"].fairness_total
+    @test row_of["flat"].fairness_total ≈ dadp_total rtol = 1e-12
+    @test row_of["tou"].fairness_total ≈ dadp_total rtol = 1e-12
+end
+
+@testitem "compare-tariffs: equity columns on bills AND surplus + rebound conventions" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: eachrow, nrow
+    using JuMP
+
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+    h1 = Aggregator(
+        2,
+        0.9,
+        [PVBattery(2, 0.95, 1.0, 0.25, 0.0, 1.0, 0.5, 1.0, 2.0, 3.0, fill(0.2, T))],
+        fill(0.05, T),
+    )
+    h2 = Aggregator(
+        2,
+        0.9,
+        [PVBattery(2, 0.95, 1.0, 0.35, 0.0, 1.5, 0.7, 1.0, 2.0, 3.0, fill(0.15, T))],
+        fill(0.04, T),
+    )
+    houses = [h1, h2]
+    map_rows = [
+        (
+            house = k,
+            bus = 2,
+            aggregator = 2,
+            device_set = :test_house,
+            pv_group = k == 1 ? :pv : :non_pv,
+            house_index = k,
+        ) for k in 1:2
+    ]
+
+    res = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :centralized,
+        bins = [[1, 2], [3]],
+        houses = houses,
+        map_rows = map_rows,
+    )
+    row_of = Dict(r.tariff => r for r in eachrow(res.summary))
+
+    # flat/tou rows carry all four metrics on bills AND surplus — each computable or
+    # honestly NaN under its documented convention (never missing, never dropped).
+    for t in ("flat", "tou")
+        r = row_of[t]
+        for c in (
+            :gini_bills,
+            :gini_surplus,
+            :theil_bills,
+            :theil_surplus,
+            :atkinson_bills,
+            :atkinson_surplus,
+            :palma_bills,
+            :palma_surplus,
+        )
+            v = getproperty(r, c)
+            @test !ismissing(v)
+            @test isfinite(v) || isnan(v)
+        end
+        @test isfinite(r.gini_bills)
+        @test !ismissing(r.rebound_amount)
+        @test !ismissing(r.rebound_ratio)
+    end
+
+    # The dadp leg is the rebound BASELINE: rebound vs itself is 0 by construction
+    # (identical floats ⇒ delta ≡ 0 ⇒ no reduction hours ⇒ amount exactly 0.0, ratio NaN).
+    @test row_of["dadp"].rebound_amount == 0.0
+    @test row_of["dadp"].rebound_ratio === NaN
+
+    # The fit leg: bills-side equity present at bus granularity, surplus-side honestly
+    # missing (A1 — fit_baseline exposes no per-aggregator device utility), no rebound
+    # (the plan pins rebound to the flat/tou vs dadp pair).
+    fitr = row_of["fit"]
+    @test isfinite(fitr.gini_bills)
+    @test ismissing(fitr.gini_surplus)
+    @test ismissing(fitr.palma_surplus)
+    @test ismissing(fitr.rebound_amount)
+    @test ismissing(fitr.rebound_ratio)
+    @test fitr.bills_granularity == "bus"
+
+    # Per-hour rebound detail: flat + tou × T hours.
+    @test nrow(res.rebound) == 2 * T
+    @test Set(res.rebound.tariff) == Set(["flat", "tou"])
+end
+
+@testitem "compare-tariffs: equity breakouts by pv_group / bus / load tercile (synthetic two-house)" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: eachrow, nrow
+    using JuMP
+
+    # The 41-03 separability fixture's exact two-house construction (identical draw to
+    # build_population's primitives) at T = 12 — `_case_a_house`'s Deferrable window
+    # `[min(8,T), min(16,T)]` trips its energy-budget guard below T = 9.
+    T = 12
+    seed = 20260718
+    houses = [
+        TSODSO._case_a_house(
+            2,
+            h,
+            2,
+            seed,
+            T;
+            load_scale = 0.005,
+            pv_scale = 0.03,
+            dev_scale = 1.0,
+            pv_fraction = 1.0,
+        ) for h in 1:2
+    ]
+    agg = Aggregator(
+        2,
+        0.90,
+        reduce(vcat, [h.devices for h in houses]),
+        reduce(+, [h.Pdc for h in houses]),
+    )
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    λ₀ = fill(40.0, T)
+    map_rows = [
+        (
+            house = h,
+            bus = 2,
+            aggregator = 2,
+            device_set = :thermostatic_deferrable_pvbattery,
+            pv_group = TSODSO._case_a_pv_group(h, 2, 0.5),
+            house_index = h,
+        ) for h in 1:2
+    ]
+
+    res = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :centralized,
+        bins = [[collect(1:6);], [collect(7:12);]],
+        houses = houses,
+        map_rows = map_rows,
+    )
+
+    bo = res.equity_breakouts
+    for leg in ("dadp", "flat", "tou")
+        rows = filter(r -> r.tariff == leg, eachrow(bo))
+        @test !isempty(rows)
+        # All three proxy groupings present per house-granularity leg.
+        groupings = Set(r.grouping for r in rows)
+        @test groupings == Set(["pv_group", "bus", "load_tercile"])
+        # The pv_group breakout separates BOTH groups (house 1 :pv, house 2 :non_pv).
+        pv_rows = filter(r -> r.grouping == "pv_group", rows)
+        @test Set(r.group for r in pv_rows) == Set(["pv", "non_pv"])
+        # Every (grouping, metric_kind) block covers both houses exactly.
+        for g in groupings, kind in ("bills", "surplus")
+            block = filter(r -> r.grouping == g && r.metric_kind == kind, rows)
+            @test sum(r.n for r in block) == 2
+        end
+    end
+    # A1 asymmetry: the batteryless fit leg emits NO house-granularity breakout rows.
+    @test count(==("fit"), bo.tariff) == 0
+end
+
+@testitem "compare-tariffs: IEEE-13 ground four-leg run (centralized, T=24) — statuses populated, no throw" tags =
+    [:settlement, :slow] setup = [IEEE13Fixtures] begin
+    using TSODSO
+    using DataFrames: eachrow, nrow
+
+    feeder = ieee13_modified()
+    aggs = IEEE13Fixtures.build_ieee13_ground_aggregators(feeder)
+    T = IEEE13Fixtures.T
+    λ₀ = IEEE13Fixtures.mem_price_profile()
+
+    res = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = T,
+        λ₀ = λ₀,
+        engine = :centralized,
+    )
+
+    @test nrow(res.summary) == 4
+    @test res.summary.tariff == ["dadp", "flat", "tou", "fit"]
+    for r in eachrow(res.summary)
+        @test r.feasibility_status in ("feasible", "infeasible", "solve_failed")
+        @test isfinite(r.welfare)
+        @test isfinite(r.merchandising_surplus)
+        @test isfinite(r.total_payments)
+        @test r.bills_granularity == "bus"
+    end
+    # Bus-granularity bill rows for every leg (no houses supplied on this fixture — the
+    # one-aggregator-per-bus shape IS the household granularity here).
+    @test nrow(res.household_bills) == 4 * length(aggs)
+end

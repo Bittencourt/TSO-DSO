@@ -29,6 +29,7 @@
                 price_taker_dispatch price_taker_dispatches
                 FeasibilityStatus ac_feasibility_status
                 gini theil atkinson palma load_terciles equity_breakdown rebound
+                compare_tariffs
                 Scenario ScenarioResult run_scenario run_and_store scenario_filename run_sweep
                 collate_summary run_mpc run_stochastic ADMM Centralized MPC Stochastic
                 AbstractStrategy
