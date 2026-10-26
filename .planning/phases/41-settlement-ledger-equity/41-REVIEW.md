@@ -25,6 +25,14 @@ findings:
   info: 6
   total: 12
 status: findings
+fix:
+  applied_at: 2026-10-26T08:46:25Z
+  fix_report: 41-REVIEW-FIX.md
+  in_scope: 6
+  fixed: 6
+  fixed_ids: [BL-01, WR-01, WR-02, WR-03, WR-04, WR-05]
+  skipped: 0
+  info_out_of_scope: 6
 ---
 
 # Phase 41: Code Review Report
@@ -32,7 +40,8 @@ status: findings
 **Reviewed:** 2026-10-26
 **Depth:** standard
 **Files Reviewed:** 14
-**Status:** findings
+**Status:** findings — all 6 in-scope findings fixed (2026-10-26; 1 critical, 5 warnings;
+6 INFO items remain open, out of fix scope). See `41-REVIEW-FIX.md`.
 
 ## Summary
 
@@ -94,6 +103,14 @@ merchandising_surplus = dso_total - wholesale_total,          # was: dso_total +
 Then pin the sign in `test/test_settlement.jl` (e.g. assert `fitr.wholesale_total > 0` on an
 importing dispatch and `fitr.merchandising_surplus == fitr.dso_total - fitr.wholesale_total`).
 
+> **Fixed** (2026-10-26, commit `b99a5b7`): fit leg now reports `wholesale_total =
+> sum(λ₀[t]·imp_total[t])` with `merchandising_surplus = dso_total - wholesale_total` —
+> the ledger/header convention, matching the other three legs. Pinned by a dedicated
+> pure-consumer test (receipt ≈ 12.0 at λ₀ = 40, the hermetic fixture's FIT prosumer is
+> self-sufficient so imp ≈ 0 there) plus bitwise identity pins. The committed CSV needed
+> NO regeneration: its fit row is an honest `error:SolveFailedError` status row with
+> empty values, so no inverted wholesale numbers were ever committed.
+
 ## Warnings
 
 ### WR-01: `gini` is silent and sign-flipped on negative-mean vectors; the normative docstring omits the μ < 0 case
@@ -114,6 +131,12 @@ honesty policy forbids elsewhere.
 `ArgumentError` on `mu < 0` (mirroring the `mu == 0` degeneracy guard), or document the
 negative-output convention in the docstring and add a pinned negative-mean test.
 
+> **Fixed** (2026-10-26, commit `cf56e2e`): adopted the docs-page convention (a throw
+> would have contradicted `settlement_equity.jl`'s "may be negative on net-earning
+> populations"): the `gini` docstring and the module header now document that the sign
+> follows μ, reported as computed, never clipped; pinned by the hand-computed
+> `gini([-3.0, -1.0]) == -0.25 == -gini([1.0, 3.0])` mirror test.
+
 ### WR-02: `λ₀` is indexed before its own length guard — raw `BoundsError`, dead validation
 
 **File:** `src/settlement/run_inputs.jl:119-124`
@@ -131,6 +154,12 @@ ADMM adapter at lines 242-244 and `compare_tariffs` at lines 269-270 get this or
     throw(ArgumentError("settlement_input: λ₀ has length $(length(λ₀)) < T=$T"))
 λ0 = λ₀ === nothing ? Float64[λ[root, t] for t in 1:T] : Float64[float(λ₀[t]) for t in 1:T]
 ```
+
+> **Fixed** (2026-10-26, commit `8768865`): the length guard now runs BEFORE the
+> comprehension — a short λ₀ raises the documented `ArgumentError` naming
+> `λ₀ has length N < T` (never a raw `BoundsError`); the dead post-build check is gone
+> and an over-length λ₀ still truncates to T. Tests pin both the short-refusal and the
+> truncation paths.
 
 ### WR-03: Price-taker battery certificate mislabels "devices but no battery" as `:ok`
 
@@ -155,6 +184,11 @@ battery_certificate = has_battery ? :ok : :not_checked   # then run the check on
 ```
 or correct the docstring to "no device vars" and accept the vacuous-`:ok` semantics.
 
+> **Fixed** (2026-10-26, commit `ae7deab`): `:not_checked` now keys on the check's own
+> battery predicate (`p_ch ∧ p_dch ∧ ¬q`) instead of `agg_device_vars` emptiness; a
+> thermostatic-only aggregator test pins the previously mislabeled case (`:ok` →
+> `:not_checked`; the docstring already promised this semantics, now the code agrees).
+
 ### WR-04: Measurement script's run-failure path never calls `ensure_schema` — promised header-only artifacts are missing exactly when specified
 
 **File:** `scripts/tariff_comparison.jl:426-434` and `:533-543` (contract at `:238-249`)
@@ -170,6 +204,11 @@ breaks the docs build with an IOError.
 
 **Fix:** Hoist the three `ensure_schema(...)` calls (or an `ensure_all()` helper) above the
 `if !outcome.ok` branches so every exit path leaves all three files present.
+
+> **Fixed** (2026-10-26, commit `7ab2455`): an `ensure_all_schemas()` helper now runs
+> BEFORE the `!outcome.ok` branch in BOTH modes, so every exit path leaves all three
+> CSVs present (header-only when nothing was certified). Script load and helper
+> execution verified against the existing artifacts.
 
 ### WR-05: ADMM budget-stop detection sniffs the error message for `":converged"`
 
@@ -188,6 +227,14 @@ exit nonzero" policy (header line 47).
 `occursin("ADMM result status is", err.msg) && occursin(":converged", err.msg)`, or better,
 introduce a dedicated `UnconvergedAdmmError <: TSODSOError` in `settlement_input` and catch
 it by type.
+
+> **Fixed** (2026-10-26, commit `0e6c7ca`): the better option — a new exported
+> `UnconvergedAdmmError <: TSODSOError` is thrown by `settlement_input`'s
+> non-`:converged` refusal; the script catches BY TYPE (the `error:unconverged_admm`
+> status row is unchanged) and the message-sniffing helper is gone. Functionally
+> verified: an unrelated `ArgumentError` that merely mentions `:converged` now
+> propagates and exits nonzero. Tests (`test_tsodso_errors`, `test_settlement`), the
+> curated exports list, and `docs/src/status_policy.md` were updated for the new type.
 
 ## Info
 
