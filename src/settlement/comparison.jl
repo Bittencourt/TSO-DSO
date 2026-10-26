@@ -708,7 +708,7 @@ function compare_tariffs(
             ]
             total_payments = sum(bills)
             imp_total = Float64[sum(imps[j][t] for j in 1:nb) for t in 1:T]
-            wholesale_total = -sum(λ₀vec[t] * imp_total[t] for t in 1:T)
+            wholesale_total = sum(λ₀vec[t] * imp_total[t] for t in 1:T)
             dso_total = total_payments   # the DSO's collections == the prosumers' grid payments
             st = ac_feasibility_status(feeder, aggs, nets; T = T)
             push!(
@@ -722,7 +722,7 @@ function compare_tariffs(
                     welfare = welfare_ok ? Float64(fit.welfare) : missing,
                     total_payments = total_payments,
                     fairness_total = missing,  # the FIT triple is not one price vector
-                    merchandising_surplus = dso_total + wholesale_total,
+                    merchandising_surplus = dso_total - wholesale_total,
                     dso_total = dso_total,
                     aggregators_total = -total_payments,
                     wholesale_total = wholesale_total,

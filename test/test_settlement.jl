@@ -992,6 +992,17 @@ end
     @test row_of["dadp"].batt_ok + row_of["dadp"].batt_refused == 2
     @test row_of["fit"].batt_not_checked == 1
 
+    # BL-01 internal-consistency pin: the fit leg's wholesale_total carries the LEDGER
+    # convention (+sum_t lambda_0[t]*p_import[t], the same sign as `led.balances[:wholesale]`
+    # on the other legs); merchandising surplus = collections − wholesale. On THIS fixture
+    # the FIT prosumer is self-sufficient (Ppv == p_h ⇒ imp ≈ solver noise ≈ 0), so the
+    # wholesale receipt is ≈ 0 and the SIGN is pinned by the dedicated pure-consumer
+    # item below; here the EXACT identities are pinned (bitwise, same-float arithmetic).
+    fitr = row_of["fit"]
+    @test fitr.merchandising_surplus == fitr.dso_total - fitr.wholesale_total
+    @test fitr.dso_total == fitr.total_payments
+    @test fitr.aggregators_total == -fitr.total_payments
+
     # mktempdir hermeticity: every CSV write lands under the temp dir only.
     mktempdir() do dir
         for (name, df) in (
@@ -1065,6 +1076,51 @@ end
         houses = houses,
         map_rows = map_rows[1:1],
     )
+end
+
+@testitem "compare-tariffs: fit-leg wholesale sign matches the ledger convention (BL-01 pin)" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+    using DataFrames: eachrow
+    using JuMP
+
+    # A PURE CONSUMER prosumer (Ppv ≡ 0): the batteryless (A4) FIT dispatch must import
+    # its entire fixed load (self = exp = 0, imp = p_h = Pdc = 0.1 > 0 each hour), so the
+    # wholesale receipt sum_t λ₀[t]·imp[t] = 40·0.3 = 12 is STRICTLY POSITIVE — the SAME
+    # sign the dadp/flat/tou legs report from `led.balances[:wholesale]` and the module
+    # header spec names ("wholesale = λ₀ times the aggregate import"). The pre-fix code
+    # negated this column (−12), inverting cross-tariff wholesale comparisons.
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.0, T))
+    agg = Aggregator(2, 0.9, [batt], fill(0.1, T))
+    λ₀ = fill(40.0, T)
+
+    res = compare_tariffs(
+        feeder,
+        ConvexBranchFlow(),
+        [agg];
+        T = T,
+        λ₀ = λ₀,
+        engine = :centralized,
+        bins = [[1, 2], [3]],
+    )
+    row_of = Dict(r.tariff => r for r in eachrow(res.summary))
+    fitr = row_of["fit"]
+    @test fitr.status == "ok"
+    # The sign pin + the measured magnitude (Ipopt solves imp to ~1e-10 of 0.1, so the
+    # magnitude carries a measured band pin, never an invented exact constant).
+    @test fitr.wholesale_total > 0
+    @test fitr.wholesale_total ≈ 12.0 rtol = 1e-6
+    # Internal identities hold bitwise at the fixed sign (same-float arithmetic).
+    @test fitr.merchandising_surplus == fitr.dso_total - fitr.wholesale_total
+    @test fitr.dso_total == fitr.total_payments
+    @test fitr.aggregators_total == -fitr.total_payments
 end
 
 @testitem "compare-tariffs: revenue-neutrality echo at the runner level (fairness_total)" tags =
