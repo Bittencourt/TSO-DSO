@@ -52,9 +52,9 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 
 ### Thesis Case A magnitude (REPRO)
 
-- [ ] **REPRO-03**: The Case A protocol (welfare-gain definition, baseline, parameters) is pre-registered in writing before the run.
-- [ ] **REPRO-04**: A researcher can run Case A on the real 784-house population and get the DADP-vs-FIT welfare gain as absolute and relative values with a seed spread, reported honestly whatever its magnitude.
-- [ ] **REPRO-05**: An ablation attributes the remaining gap to the thesis +25% (FIT parameters, price range, population, device mix), and it is compared with the 1-house-per-bus proxy (≈+0.26%); no parameter is tuned toward the target.
+- [x] **REPRO-03**: The Case A protocol (welfare-gain definition, baseline, parameters) is pre-registered in writing before the run.
+- [x] **REPRO-04**: A researcher can run Case A on the real 784-house population and get the DADP-vs-FIT welfare gain as absolute and relative values with a seed spread, reported honestly whatever its magnitude.
+- [x] **REPRO-05**: An ablation attributes the remaining gap to the thesis +25% (FIT parameters, price range, population, device mix), and it is compared with the 1-house-per-bus proxy (≈+0.26%); no parameter is tuned toward the target.
 
 ### Devices (DEV)
 
@@ -123,9 +123,9 @@ Deferred; tracked but not in this roadmap.
 | SETL-04 | Phase 41 | Complete |
 | SETL-05 | Phase 41 | Complete |
 | SETL-06 | Phase 41 | Complete |
-| REPRO-03 | Phase 42 | Pending |
-| REPRO-04 | Phase 42 | Pending |
-| REPRO-05 | Phase 42 | Pending |
+| REPRO-03 | Phase 42 | Complete |
+| REPRO-04 | Phase 42 | Complete |
+| REPRO-05 | Phase 42 | Complete |
 | DEV-06 | Phase 43 | Pending |
 | DEV-07 | Phase 43 | Pending |
 | DEV-08 | Phase 43 | Pending |

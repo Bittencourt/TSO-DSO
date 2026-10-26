@@ -61,7 +61,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 - [x] **Phase 39: Parallel-Ready ADMM & Gating Measurements** - Opt-in threaded aggregator solves, additive result keys, Clarabel concurrency spike, and 8500 memory attribution (completed 2026-10-24)
 - [x] **Phase 40: 784-House Thesis Population** - True Case A population via a new selector, per-house seeding, household map, centralized-vs-ADMM agreement and scaling report (completed 2026-10-24)
 - [x] **Phase 41: Settlement, Ledger & Equity** - Conserved per-actor ledger, tariff schemes, AC feasibility status, equity metrics, rebound (completed 2026-10-26)
-- [ ] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation
+- [x] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation (completed 2026-10-26)
 - [ ] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized
 - [ ] **Phase 44: Aggregator as Actor** - Welfare vs profit (wedge) objectives, multi-bus portfolios, exogenous compliance/opt-out/rebound
 - [ ] **Phase 45: Flexibility Market vs Price Coordination** - DSO flexibility market with explicit baseline/payment rule and the cross-scheme comparison table
@@ -186,24 +186,24 @@ Plans:
 
 **Wave 1** *(parallel: protocol docs+lib / settlement seam)*
 
-- [ ] 42-01-PLAN.md — Pre-registration: commit 42-CASE-A-PROTOCOL.md (own commit, before any run) + sign-safe `welfare_gain` + fail-loud protocol guard in `scripts/lib/case_a_common.jl` + fast-lane tests — REPRO-03
-- [ ] 42-02-PLAN.md — `compare_tariffs` additive `agr_optimizer` passthrough (byte-identical default; Option B) so settlement lenses run at the ladder-certified point — REPRO-04/05 enabler
+- [x] 42-01-PLAN.md — Pre-registration: commit 42-CASE-A-PROTOCOL.md (own commit, before any run) + sign-safe `welfare_gain` + fail-loud protocol guard in `scripts/lib/case_a_common.jl` + fast-lane tests — REPRO-03
+- [x] 42-02-PLAN.md — `compare_tariffs` additive `agr_optimizer` passthrough (byte-identical default; Option B) so settlement lenses run at the ladder-certified point — REPRO-04/05 enabler
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 42-03-PLAN.md — Runner `scripts/case_a_magnitude.jl`: protocol-gated headline+proxy modes, AGR ladder, honest status rows, upsert CSVs; certified end-to-end on the IEEE-123/IEEE-13 proxy fixtures (proxy.csv committed) — REPRO-03/04/05
+- [x] 42-03-PLAN.md — Runner `scripts/case_a_magnitude.jl`: protocol-gated headline+proxy modes, AGR ladder, honest status rows, upsert CSVs; certified end-to-end on the IEEE-123/IEEE-13 proxy fixtures (proxy.csv committed) — REPRO-03/04/05
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 42-04-PLAN.md — OFAT ablation modes (4 protocol-pinned axes as committed Dicts), device-mix script-side rebuild + map-consistency tripwire, small-scale certification row — REPRO-05
+- [x] 42-04-PLAN.md — OFAT ablation modes (4 protocol-pinned axes as committed Dicts), device-mix script-side rebuild + map-consistency tripwire, small-scale certification row — REPRO-05
 
 **Wave 4** *(blocked on Wave 3; heavy — background per-unit invocations, kill-anytime)*
 
-- [ ] 42-05-PLAN.md — THE MEASUREMENT: 784-house headline seeds 42–46, centralized cross-check + settlement lenses (seed 42), full four-axis ablation → committed magnitude/crosscheck/lens_summary/ablation CSVs — REPRO-04/05
+- [x] 42-05-PLAN.md — THE MEASUREMENT: 784-house headline seeds 42–46, centralized cross-check + settlement lenses (seed 42), full four-axis ablation → committed magnitude/crosscheck/lens_summary/ablation CSVs — REPRO-04/05
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 42-06-PLAN.md — Closure: `:slow` seed-42 reproducibility band (gate-then-golden on plumbing, not magnitude), literate writeup reading committed CSVs (live-recomputed figures, A1/A4 asymmetry, honest-magnitude framing), both make.jl registrations — REPRO-03/04/05
+- [x] 42-06-PLAN.md — Closure: `:slow` seed-42 reproducibility band (gate-then-golden on plumbing, not magnitude), literate writeup reading committed CSVs (live-recomputed figures, A1/A4 asymmetry, honest-magnitude framing), both make.jl registrations — REPRO-03/04/05
 
 ### Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)
 
@@ -273,7 +273,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 39. Parallel-Ready ADMM & Gating Measurements | 5/5 | Complete    | 2026-10-24 |
 | 40. 784-House Thesis Population | 6/6 | Complete    | 2026-10-24 |
 | 41. Settlement, Ledger & Equity | 4/4 | Complete    | 2026-10-26 |
-| 42. Thesis Case A Magnitude | 0/TBD | Not started | - |
+| 42. Thesis Case A Magnitude | 6/6 | Complete    | 2026-10-26 |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 0/TBD | Not started | - |
 | 44. Aggregator as Actor | 0/TBD | Not started | - |
 | 45. Flexibility Market vs Price Coordination | 0/TBD | Not started | - |
