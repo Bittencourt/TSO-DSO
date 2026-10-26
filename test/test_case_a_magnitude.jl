@@ -189,9 +189,16 @@ end
     # The Δ identity is ALGEBRAIC, not a magnitude golden (golden policy): wherever BOTH
     # welfares are present and numeric, delta_w re-derives as their difference and
     # delta_pct as 100·delta_w/|welfare_fit| (sign-safe denominator). The lens-row
-    # ledger double-entry (lens_summary.csv, written from 42-05 onward — LOW-4):
-    # welfare ≈ dso_total + merchandising_surplus + aggregators_total where those
-    # columns are present and numeric.
+    # ledger checks (lens_summary.csv, written from 42-05 onward — LOW-4): the
+    # settlement-ledger structural identities that hold on EVERY compare_tariffs
+    # summary leg — `merchandising_surplus == dso_total` (the ledger's named-line
+    # ALIAS: `build_settlement_ledger` sets merchandising_surplus = balances[:dso],
+    # the same balance) and `total_payments == -aggregators_total` (the payment
+    # mirror). NOT `welfare ≈ dso + merch + aggs`: the social welfare's ledger
+    # companions are the UTILITY sums (device disutility, ≈ −3.78e5 at 784 houses),
+    # which are not summary columns — the assumed four-line identity fails on the
+    # committed Phase-41 ground artifact itself (42-05 correction: the identity was
+    # written before any lens artifact existed).
     using CSV
     using DataFrames: DataFrame, eachrow
 
@@ -241,20 +248,27 @@ end
                     rtol = 1e-9,
                 )
             end
-            # the lens-row ledger double-entry (only once 42-05 writes lens_summary.csv)
-            if endswith(csv, "lens_summary.csv") && all(
-                c -> hasproperty(r, c),
-                (:welfare, :dso_total, :merchandising_surplus, :aggregators_total),
-            )
-                ledger =
-                    (r.welfare, r.dso_total, r.merchandising_surplus, r.aggregators_total)
-                if all(v -> v isa Real && isfinite(v), ledger)
+            # the lens-row ledger checks (only once 42-05 writes lens_summary.csv)
+            if endswith(csv, "lens_summary.csv")
+                if all(c -> hasproperty(r, c), (:dso_total, :merchandising_surplus)) && all(
+                    v -> v isa Real && isfinite(v),
+                    (r.dso_total, r.merchandising_surplus),
+                )
                     @test isapprox(
-                        Float64(r.welfare),
-                        Float64(r.dso_total) +
-                        Float64(r.merchandising_surplus) +
-                        Float64(r.aggregators_total);
-                        rtol = 1e-6,
+                        Float64(r.merchandising_surplus),
+                        Float64(r.dso_total);
+                        rtol = 1e-12,
+                    )
+                end
+                if all(c -> hasproperty(r, c), (:total_payments, :aggregators_total)) &&
+                   all(
+                    v -> v isa Real && isfinite(v),
+                    (r.total_payments, r.aggregators_total),
+                )
+                    @test isapprox(
+                        Float64(r.total_payments),
+                        -Float64(r.aggregators_total);
+                        rtol = 1e-9,
                     )
                 end
             end
