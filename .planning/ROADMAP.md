@@ -182,7 +182,28 @@ Plans:
   2. Case A on the 784-house population reports the DADP-vs-FIT welfare gain as absolute and relative values with a seed spread, whatever its magnitude and sign.
   3. An ablation (FIT parameters, price range, population, device mix) attributes the remaining gap to +25% and is compared against the 1-house-per-bus proxy (≈+0.26%), with no parameter tuned toward the target.
 
-**Plans**: TBD
+**Plans**: 6 plans in 5 waves (one 784-house measurement process at a time; the heavy run is a single late plan; all machinery certified on small fixtures first)
+
+**Wave 1** *(parallel: protocol docs+lib / settlement seam)*
+
+- [ ] 42-01-PLAN.md — Pre-registration: commit 42-CASE-A-PROTOCOL.md (own commit, before any run) + sign-safe `welfare_gain` + fail-loud protocol guard in `scripts/lib/case_a_common.jl` + fast-lane tests — REPRO-03
+- [ ] 42-02-PLAN.md — `compare_tariffs` additive `agr_optimizer` passthrough (byte-identical default; Option B) so settlement lenses run at the ladder-certified point — REPRO-04/05 enabler
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 42-03-PLAN.md — Runner `scripts/case_a_magnitude.jl`: protocol-gated headline+proxy modes, AGR ladder, honest status rows, upsert CSVs; certified end-to-end on the IEEE-123/IEEE-13 proxy fixtures (proxy.csv committed) — REPRO-03/04/05
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 42-04-PLAN.md — OFAT ablation modes (4 protocol-pinned axes as committed Dicts), device-mix script-side rebuild + map-consistency tripwire, small-scale certification row — REPRO-05
+
+**Wave 4** *(blocked on Wave 3; heavy — background per-unit invocations, kill-anytime)*
+
+- [ ] 42-05-PLAN.md — THE MEASUREMENT: 784-house headline seeds 42–46, centralized cross-check + settlement lenses (seed 42), full four-axis ablation → committed magnitude/crosscheck/lens_summary/ablation CSVs — REPRO-04/05
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 42-06-PLAN.md — Closure: `:slow` seed-42 reproducibility band (gate-then-golden on plumbing, not magnitude), literate writeup reading committed CSVs (live-recomputed figures, A1/A4 asymmetry, honest-magnitude framing), both make.jl registrations — REPRO-03/04/05
 
 ### Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)
 
