@@ -116,11 +116,15 @@ function settlement_input(ctx::ModelContext; T::Int = _require_T(ctx), λ₀ = n
 
     # MEM/wholesale price λ₀: the passed profile, else the root DADP row (thesis energy
     # component = dual(balance_p[root, t]); = λ₀ at the priced-frontier optimum).
+    # GUARD BEFORE INDEX: a too-short passed λ₀ must raise the documented loud
+    # ArgumentError, never a raw BoundsError from the comprehension below (the old
+    # post-build length check was DEAD CODE — λ0 is built with exactly T elements
+    # whenever the indexing succeeded; the ADMM adapter below already had this order).
+    λ₀ === nothing || length(λ₀) >= T ||
+        throw(ArgumentError("settlement_input: λ₀ has length $(length(λ₀)) < T=$T"))
     λ0 =
         λ₀ === nothing ? Float64[λ[root, t] for t in 1:T] :
         Float64[float(λ₀[t]) for t in 1:T]
-    length(λ0) >= T ||
-        throw(ArgumentError("settlement_input: λ₀ has length $(length(λ0)) < T=$T"))
     λ0 = λ0[1:T]
 
     # Per-entry reads IN ctx.meta[:agg_net] ENTRY ORDER (== ascending-bus order in

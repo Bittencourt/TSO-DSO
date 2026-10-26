@@ -185,6 +185,39 @@ end
     @test err2 isa ArgumentError
     @test occursin(":converged", sprint(showerror, err2))
 
+    # (2b) The CENTRALIZED adapter refuses a too-short λ₀ with the documented loud
+    # ArgumentError BEFORE indexing it — a raw BoundsError used to leak here because
+    # the old guard ran AFTER the λ₀ comprehension (dead code: λ0 is built with
+    # exactly T elements whenever the indexing succeeded).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T3 = 3
+    batt_g = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T3))
+    agg_g = Aggregator(2, 0.9, [batt_g], fill(0.1, T3))
+    ctx_s, _obj_s, _dadp_s = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        [agg_g];
+        T = T3,
+        λ₀ = fill(40.0, T3),
+        allow_export = true,
+    )
+    err2b = try
+        settlement_input(ctx_s; T = T3, λ₀ = fill(40.0, T3 - 1))
+        nothing
+    catch e
+        e
+    end
+    @test err2b isa ArgumentError
+    @test occursin("λ₀ has length 2 < T=3", sprint(showerror, err2b))
+    # A λ₀ LONGER than T is still accepted (truncated to T) — the guard is >=, not ==.
+    inp_trunc = settlement_input(ctx_s; T = T3, λ₀ = fill(40.0, T3 + 4))
+    @test inp_trunc isa SettlementInput
+    @test length(inp_trunc.λ₀) == T3
+
     # (3) The ADMM adapter REQUIRES λ₀ (the result NamedTuple does not carry it).
     conv = (
         status = :converged,
