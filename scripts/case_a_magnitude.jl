@@ -8,6 +8,10 @@
 # usage:
 #   julia --project=. scripts/case_a_magnitude.jl --mode headline [--seed 42] [--time-limit-s S]
 #   julia --project=. scripts/case_a_magnitude.jl --mode proxy
+#   julia --project=. scripts/case_a_magnitude.jl --mode ablation-fit      [--variant V|--variant all]
+#   julia --project=. scripts/case_a_magnitude.jl --mode ablation-price    [--variant V|--variant all]
+#   julia --project=. scripts/case_a_magnitude.jl --mode ablation-population [--variant V|--variant all]
+#   julia --project=. scripts/case_a_magnitude.jl --mode ablation-devices  [--variant V|--variant all]
 #
 # Modes (--mode):
 #
@@ -29,6 +33,24 @@
 #             ieee13 records the KNOWN FIT INFEASIBLE (`error:SolveFailedError`,
 #             the committed `tariff_comparison.csv` precedent) — recorded, never
 #             re-tuned. `--seed` is rejected: the fixtures pin their own seeds.
+#   ablation-*  The REPRO-05 OFAT ablation axes (protocol §7), one axis per mode:
+#               `ablation-fit` (fit_params), `ablation-price` (price_range),
+#               `ablation-population` (population), `ablation-devices` (device_mix).
+#               Every axis/variant is a PRE-PLANNED Dict value (`ABLATION_AXES`, pinned by
+#               the source-contract test; adding a variant = script edit + protocol
+#               amendment). Rows land in `ablation.csv` keyed on
+#               (axis, variant, seed, t_horizon, kind, rung) with honest statuses.
+#               Ablations run at the REGISTERED SEED 42 ONLY (protocol §3). Axis leg
+#               independence (protocol §7): (a) re-solves ONLY fit_baseline, reusing the
+#               seed's certified W_DADP from magnitude.csv (missing → loud error — never a
+#               silent re-solve); (b)/(d) re-run the full AGR ladder per variant; (c) walks
+#               the nested-prefix rungs (no per-rung re-tuning) and reuses the proxy rows
+#               (proxy.csv) and the headline row (magnitude.csv, `full_784`/`rung_1.0`)
+#               with `status = "reused"` provenance-transparent rows.
+#               `--variant` selects one Dict variant (or `all`, the default = the full
+#               axis); the population axis accepts the Dict-key fraction string (`1/78`)
+#               OR its decimal expansion, normalized to the Dict key. The full-axis heavy
+#               runs are plan 42-05's payload.
 #
 # Honesty policy (protocol §4/§5, v5.0 policies): every solver refusal is a RECORDED
 # outcome — `error:<TypeName>` status rows (iters from the typed error, −1 sentinel when
@@ -56,6 +78,8 @@
 # Outputs (results/thesis_case_a_magnitude/):
 #   magnitude.csv  — headline rows: one per rung attempt + one gain row per seed
 #   proxy.csv      — proxy rows: same shapes, with a `fixture` identity column
+#   ablation.csv   — OFAT ablation rows: `axis` + `variant` identity columns, one row per
+#                    ladder attempt / gain / provenance-transparent reuse
 #
 # Regenerate the committed proxy artifact (minutes-scale):
 #   julia --project=. scripts/case_a_magnitude.jl --mode proxy
@@ -68,6 +92,9 @@ using TSODSO:
     CertificateError,
     ConvergenceError,
     ConvexBranchFlow,
+    FIT_λ_EXPORT,
+    FIT_λ_IMPORT,
+    FIT_λ_SELF,
     QP,
     SOCP,
     SolveFailedError,
@@ -96,10 +123,17 @@ include(joinpath(@__DIR__, "lib", "case_a_common.jl"))   # the 42-01 helpers: th
 const SEEDS = (42, 43, 44, 45, 46)
 const REGISTERED_SEED = first(SEEDS)
 
-# The mode whitelist. EXTENDABLE by later waves (crosscheck/lenses/ablation-* modes are
-# planned) — never shrink or rename a registered mode: the source-contract test pins the
-# registered members with contains-semantics on purpose.
-const MODES = ("headline", "proxy")
+# The mode whitelist. EXTENDABLE by later waves (crosscheck/lenses modes are planned) —
+# never shrink or rename a registered mode: the source-contract test pins the registered
+# members with contains-semantics on purpose.
+const MODES = (
+    "headline",
+    "proxy",
+    "ablation-fit",
+    "ablation-price",
+    "ablation-population",
+    "ablation-devices",
+)
 
 # The PRE-PLANNED AGR solver-precision ladder (verbatim from
 # `scripts/case_a_agreement.jl:116-126`; protocol §4). The Dict IS the entire permitted
@@ -108,9 +142,9 @@ const MODES = ("headline", "proxy")
 # keys are plain STRINGS (`:gap_1e-10` would parse as subtraction). Adding a rung
 # requires editing this Dict + a protocol amendment (the deliberate-act friction).
 const AGR_TOL_RUNGS = Dict{String, Union{Nothing, NamedTuple}}(
-    "default"       => nothing,
-    "gap_1e-10"     => (tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
-    "gap_1e-12"     => (tol_gap_abs = 1e-12, tol_gap_rel = 1e-12),
+    "default" => nothing,
+    "gap_1e-10" => (tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
+    "gap_1e-12" => (tol_gap_abs = 1e-12, tol_gap_rel = 1e-12),
     "gapfeas_1e-12" => (
         tol_gap_abs = 1e-12,
         tol_gap_rel = 1e-12,
@@ -131,7 +165,12 @@ sort(collect(keys(AGR_TOL_RUNGS))) == sort(collect(AGR_RUNG_ORDER)) || error(
 # provenance fixture FIRST (the restatement point), then the same-feeder regression
 # fixture whose known honest statuses are EXPECTED rows.
 const PROXY_FIXTURES = (
-    (fixture = "ieee123-default", feeder_sym = :ieee123, pop_sym = :default, seed = 20260719),
+    (
+        fixture = "ieee123-default",
+        feeder_sym = :ieee123,
+        pop_sym = :default,
+        seed = 20260719,
+    ),
     (fixture = "ieee13-default", feeder_sym = :ieee13, pop_sym = :default, seed = 20260718),
 )
 
@@ -141,6 +180,90 @@ const T_H = 24               # the registered horizon (protocol §2)
 const OUT_DIR = joinpath(projectdir(), "results", "thesis_case_a_magnitude")
 const MAGNITUDE_CSV = joinpath(OUT_DIR, "magnitude.csv")
 const PROXY_CSV = joinpath(OUT_DIR, "proxy.csv")
+const ABLATION_CSV = joinpath(OUT_DIR, "ablation.csv")
+
+# ---- the pre-planned OFAT ablation axes (protocol §7, verbatim) --------------------------------
+#
+# The four REPRO-05 axes with their EXACT protocol-pinned variant sets (42-CASE-A-PROTOCOL.md
+# §7; the Task-1 source-contract test pins each axis's variant list as committed text). The
+# Dict IS the entire permitted variant set per axis: adding a value requires editing this
+# Dict + a protocol amendment (the deliberate-act friction — T-42-04-1).
+const ABLATION_AXES = Dict{String, Vector{String}}(
+    # (a) FIT price parameters (§7a): the registered page-93 triple + the symmetric
+    #     multiplicative λ_export probes (×0.5 / ×2.0).
+    "fit_params" => ["registered", "lam_export_half", "lam_export_double"],
+    # (b) λ₀ scalings (§7b): the registered :mem signal + the elementwise probes.
+    "price_range" => ["registered", "scale_0.5", "scale_2.0"],
+    # (c) population scale and fixtures (§7c): the two pinned proxies, the Phase-40
+    #     nested-prefix ladder fractions (scripts/case_a_scaling.jl DEFAULT_LADDER_FRACTIONS),
+    #     and the headline row itself (full_784 — reused, never re-run).
+    "population" => [
+        "proxy_ieee123",
+        "ieee13_default",
+        "1/78",
+        "0.125",
+        "0.25",
+        "0.5",
+        "0.75",
+        "1.0",
+        "full_784",
+    ],
+    # (d) device mix (§7d): the registered 3-device mix, batteries out, PV ownership split.
+    "device_mix" => ["registered", "batteries_out", "pv_half"],
+)
+
+# Mode → axis: each ablation mode measures exactly its protocol axis (§7 lettering).
+const ABLATION_MODE_AXIS = Dict{String, String}(
+    "ablation-fit" => "fit_params",
+    "ablation-price" => "price_range",
+    "ablation-population" => "population",
+    "ablation-devices" => "device_mix",
+)
+
+# The population-axis rung VALUES for the Dict-key fraction strings (§7c: the Phase-40
+# nested-prefix ladder, `scripts/case_a_scaling.jl:97` DEFAULT_LADDER_FRACTIONS). Guarded
+# below against drift from the population axis Dict.
+const POPULATION_RUNG_FRACTIONS = Dict{String, Float64}(
+    "1/78" => 1 / 78,
+    "0.125" => 0.125,
+    "0.25" => 0.25,
+    "0.5" => 0.5,
+    "0.75" => 0.75,
+    "1.0" => 1.0,
+)
+# Drift guard: the rung-value table and the population axis Dict must cover exactly the
+# same fraction variants (the axis's remaining entries are the three non-fraction variants).
+begin
+    pop_axis = ABLATION_AXES["population"]
+    non_fraction = ("proxy_ieee123", "ieee13_default", "full_784")
+    is_rung(v) = v in keys(POPULATION_RUNG_FRACTIONS)
+    Set(filter(is_rung, pop_axis)) == Set(keys(POPULATION_RUNG_FRACTIONS)) &&
+    all(v -> is_rung(v) || v in non_fraction, pop_axis) || error(
+        "case_a_magnitude: POPULATION_RUNG_FRACTIONS keys " *
+        "$(sort(collect(keys(POPULATION_RUNG_FRACTIONS)))) do not exactly cover the " *
+        "population axis's fraction variants $(pop_axis) — the axis Dict and the rung " *
+        "values drifted (aborting loudly)",
+    )
+end
+
+# The population-axis proxy variants and the committed proxy fixtures they REUSE
+# (protocol §7c: `proxy_ieee123`/`ieee13_default` rows come from proxy.csv — reused, never
+# re-solved; the fixture name/seed come from PROXY_FIXTURES).
+const POPULATION_VARIANT_FIXTURES = Dict{String, String}(
+    "proxy_ieee123" => "ieee123-default",
+    "ieee13_default" => "ieee13-default",
+)
+
+# The OFAT ablations run at the REGISTERED SEED ONLY (42-CASE-A-PROTOCOL.md §3: "The OFAT
+# ablations run at seed 42 only" — a pre-registered scoping decision).
+const SEED_ABLATION = REGISTERED_SEED
+
+# The ablation upsert key: the plan's provenance identity (:axis, :variant, :seed,
+# :t_horizon) PLUS the row-granularity columns (:kind, :rung) — the 42-03 lesson: the
+# runner emits MULTIPLE rows per variant (one per ladder attempt + the gain/reuse row)
+# and upserts per row, so the bare identity key would make every write DELETE the
+# sibling rows of the same variant (a kill must leave captured rows).
+const ABLATION_KEY = (:axis, :variant, :seed, :t_horizon, :kind, :rung)
 
 # The per-run protocol SHA — filled by `main` from the guard, stamped on EVERY row
 # (tampering mitigations T-42-03-1/T-42-03-3: each row is auditable to the exact
@@ -156,7 +279,44 @@ function parse_kv_flag(args, flag::String, default)
     return args[idx + 1]
 end
 
-parse_args!(args) = (
+"""
+    _resolve_ablation_variants(mode, variant_spec) -> Vector{String}
+
+Validate `--variant` against the mode's pre-planned axis Dict (T-42-04-4: an unknown value
+is an ArgumentError listing the permitted variants — misuse exits nonzero BEFORE any work).
+`nothing` (flag absent) and `"all"` both mean the FULL axis in protocol order. The
+population axis additionally accepts a rung fraction's decimal expansion (e.g.
+`0.01282051282051282`), normalized to the Dict key — committed row labels remain
+`rung_<Dict-key>`.
+"""
+function _resolve_ablation_variants(mode::String, variant_spec)
+    axis = ABLATION_MODE_AXIS[mode]
+    permitted = ABLATION_AXES[axis]
+    (variant_spec === nothing || variant_spec == "all") && return collect(permitted)
+    v = String(variant_spec)
+    if axis == "population"
+        v in keys(POPULATION_RUNG_FRACTIONS) && return [v]
+        v in ("proxy_ieee123", "ieee13_default", "full_784") && return [v]
+        f = tryparse(Float64, v)
+        if f !== nothing
+            for (k, kf) in POPULATION_RUNG_FRACTIONS
+                isapprox(f, kf; rtol = 1e-12, atol = 1e-15) && return [k]
+            end
+        end
+    elseif v in permitted
+        return [v]
+    end
+    throw(
+        ArgumentError(
+            "--variant $(repr(v)) is not a pre-registered '$axis' variant — the " *
+            "protocol-pinned set (42-CASE-A-PROTOCOL.md §7) is: $(join(permitted, ", ")) " *
+            "(or \"all\" for the full axis; population rung fractions also accept their " *
+            "decimal expansion)",
+        ),
+    )
+end
+
+parse_args!(args) = begin
     mode = let m = parse_kv_flag(args, "--mode", "headline")
         m in MODES || throw(
             ArgumentError(
@@ -166,7 +326,20 @@ parse_args!(args) = (
             ),
         )
         m
-    end,
+    end
+    axis = let a = parse_kv_flag(args, "--axis", nothing)
+        a === nothing ? nothing :
+        let v = String(a)
+            haskey(ABLATION_AXES, v) || throw(
+                ArgumentError(
+                    "--axis must be one of the pre-registered axes " *
+                    "($(join(sort(collect(keys(ABLATION_AXES))), ", "))) — got $(repr(v))",
+                ),
+            )
+            v
+        end
+    end
+    variant = parse_kv_flag(args, "--variant", nothing)
     seed = let s = parse_kv_flag(args, "--seed", nothing)
         s === nothing ? nothing :
         let v = parse(Int, s)
@@ -179,7 +352,7 @@ parse_args!(args) = (
             )
             v
         end
-    end,
+    end
     time_limit_s = let tl = parse_kv_flag(args, "--time-limit-s", nothing)
         tl === nothing ? nothing :
         let v = parse(Float64, tl)
@@ -191,8 +364,41 @@ parse_args!(args) = (
             )
             v
         end
-    end,
-)
+    end
+    variants = String[]
+    if haskey(ABLATION_MODE_AXIS, mode)
+        # Ablation modes: --axis (when given) must name the mode's own axis; the seed is
+        # the REGISTERED 42 only (protocol §3); --variant is validated against the axis
+        # Dict here — misuse exits nonzero before any work (T-42-04-4).
+        mode_axis = ABLATION_MODE_AXIS[mode]
+        axis === nothing ||
+            axis == mode_axis ||
+            throw(
+                ArgumentError(
+                    "--axis $(repr(axis)) does not match --mode $(repr(mode)) — that mode " *
+                    "measures the '$(mode_axis)' axis (protocol §7)",
+                ),
+            )
+        seed !== nothing &&
+            seed != SEED_ABLATION &&
+            throw(
+                ArgumentError(
+                    "the OFAT ablations run at the registered seed $(SEED_ABLATION) only " *
+                    "(42-CASE-A-PROTOCOL.md §3: a pre-registered scoping decision — spread is " *
+                    "measured on the headline, attribution is anchored at the registered seed)",
+                ),
+            )
+        variants = _resolve_ablation_variants(mode, variant)
+    elseif axis !== nothing || variant !== nothing
+        throw(
+            ArgumentError(
+                "--axis/--variant are ablation-mode flags — --mode $(repr(mode)) accepts " *
+                "neither",
+            ),
+        )
+    end
+    (; mode, axis, variant, seed, time_limit_s, variants)
+end
 
 # ---- honest solver-outcome recording ----------------------------------------------------------
 
@@ -374,18 +580,30 @@ function _fit_result(fb; note::String, retry::String)
         return (;
             status = "fit_inexact",
             welfare_fit = missing,
-            message = note * " — fit_baseline reported a non-certified outcome " *
+            message = note *
+                      " — fit_baseline reported a non-certified outcome " *
                       "(on_inexact = :report; social_fit = $(fb.social_fit))",
             retry = retry,
         )
     end
 end
 
+# The registered FIT price triple — sourced from the model's own page-93 constants
+# (`src/pricing/fit.jl` FIT_λ_*, the protocol §2/§7a registered values), never re-stated
+# as script-local numbers. The default `run_fit_outcome` call splats this verbatim.
+const _FIT_REGISTERED =
+    (λ_import = FIT_λ_IMPORT, λ_export = FIT_λ_EXPORT, λ_self = FIT_λ_SELF)
+
 """
-    run_fit_outcome(feeder, pf, aggs; T, λ₀) -> (; status, welfare_fit, message, retry)
+    run_fit_outcome(feeder, pf, aggs; T, λ₀, fit_prices = _FIT_REGISTERED)
+        -> (; status, welfare_fit, message, retry)
 
 The FIT leg: `fit_baseline` UNCHANGED (batteryless by design, thesis Assumption A4) with
-`on_inexact = :report` (protocol §5's registered call). On a typed solver failure
+`on_inexact = :report` (protocol §5's registered call). `fit_prices` is the FIT price triple
+`(λ_import, λ_export, λ_self)` forwarded to `fit_baseline`'s documented kwargs — the
+registered default is the page-93 triple FROM THE MODEL'S OWN CONSTANTS (`FIT_λ_*`), so the
+default call is byte-identical to every pre-42-04 call; only the axis-(a) ablation variants
+pass a different triple (protocol §7a). On a typed solver failure
 (`SolveFailedError`/`CertificateError`/`ConvergenceError` — the committed ieee13-ground
 FIT INFEASIBLE precedent is exactly this class) the protocol-pinned ONE retry runs with
 the SOLVER tightened (`select_optimizer(QP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10)`)
@@ -393,13 +611,23 @@ the SOLVER tightened (`select_optimizer(QP(); tol_gap_abs = 1e-10, tol_gap_rel =
 recorded in the returned status/note; a still-refused leg after the single retry is a
 recorded outcome. Anything else PROPAGATES.
 """
-function run_fit_outcome(feeder, pf, aggs; T::Int, λ₀)
+function run_fit_outcome(feeder, pf, aggs; T::Int, λ₀, fit_prices = _FIT_REGISTERED)
     local fb
     try
-        fb = fit_baseline(feeder, pf, aggs; T = T, λ₀ = λ₀, on_inexact = :report)
+        fb = fit_baseline(
+            feeder,
+            pf,
+            aggs;
+            T = T,
+            λ₀ = λ₀,
+            on_inexact = :report,
+            fit_prices...,
+        )
     catch err
-        (err isa ConvergenceError) || (err isa CertificateError) ||
-            (err isa SolveFailedError) || rethrow()
+        (err isa ConvergenceError) ||
+            (err isa CertificateError) ||
+            (err isa SolveFailedError) ||
+            rethrow()
         status = "error:" * string(nameof(typeof(err)))
         message = first(string(err.msg), 400)
         println(
@@ -417,16 +645,28 @@ function run_fit_outcome(feeder, pf, aggs; T::Int, λ₀)
                 T = T,
                 λ₀ = λ₀,
                 on_inexact = :report,
-                optimizer = select_optimizer(QP(); tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
+                optimizer = select_optimizer(
+                    QP();
+                    tol_gap_abs = 1e-10,
+                    tol_gap_rel = 1e-10,
+                ),
+                fit_prices...,
             )
         catch err2
-            (err2 isa ConvergenceError) || (err2 isa CertificateError) ||
-                (err2 isa SolveFailedError) || rethrow()
+            (err2 isa ConvergenceError) ||
+                (err2 isa CertificateError) ||
+                (err2 isa SolveFailedError) ||
+                rethrow()
             return (;
                 status = "error:" * string(nameof(typeof(err2))),
                 welfare_fit = missing,
-                message = "attempt: " * status * " (" * first(message, 200) * "); " *
-                          "pinned retry also refused: " * first(string(err2.msg), 200),
+                message = "attempt: " *
+                          status *
+                          " (" *
+                          first(message, 200) *
+                          "); " *
+                          "pinned retry also refused: " *
+                          first(string(err2.msg), 200),
                 retry = "tol_gap_1e-10",
             )
         end
@@ -442,57 +682,20 @@ end
 # ---- the SHARED measurement point (the "same code path" claim, made structural) ---------------
 
 """
-    _measure_point(feeder_sym, pop_sym, seed; T, time_limit_s) -> Vector{NamedTuple}
+    _solve_and_gain_rows(feeder, pf, aggs, λ₀; T, time_limit_s) -> Vector{NamedTuple}
 
-ONE measurement point — the ladder, the FIT leg, and the gain — SHARED by the headline
-and proxy modes (the protocol §8 "same code path" claim is this function, not a
-description). Returns the point's rows: one per rung attempt (+ the terminal
-`error:ladder_exhausted` row when the ladder closes empty) and one gain row.
+ONE measurement point's legs — the pre-registered AGR ladder (stop-on-first-certified), the
+UNCHANGED `fit_baseline` FIT leg (with the ONE pinned retry), and the gain row — SHARED by
+every measuring mode (headline, proxy, and the ablation axes (b)/(c)/(d)): the protocol §8
+"same code path" claim is this function, not a description. Returns the point's rows: one
+per rung attempt (+ the terminal `error:ladder_exhausted` row when the ladder closes empty)
+and one gain row.
 """
-function _measure_point(
-    feeder_sym::Symbol,
-    pop_sym::Symbol,
-    seed::Int;
-    T::Int = T_H,
-    time_limit_s = nothing,
-)
-    # The FROZEN REGISTERED CONFIGURATION (42-CASE-A-PROTOCOL.md §2), spelled out:
-    #     feeder   = build_feeder(:ieee13)
-    #     profiles = generate_profiles(; seed = sub_seed(SEED, :profiles), T = 24)
-    #     λ₀       = build_price(:mem, 24, nothing)
-    #     pf       = ConvexBranchFlow()
-    #     aggs     = build_population(:case_a_784, feeder, :ieee13, profiles, sub_seed(SEED, :population))
-    # The generic calls below ARE that configuration with (feeder_sym, pop_sym, seed)
-    # bound; the headline binds (:ieee13, :case_a_784, seed) — byte-for-byte the
-    # registered point. NO value here is a free constant beyond what the seams require.
-    feeder = build_feeder(feeder_sym)
-    profiles = generate_profiles(; seed = sub_seed(seed, :profiles), T = T)
-    λ₀ = build_price(PRICE_SYM, T, nothing)
-    pf = ConvexBranchFlow()
-    aggs = build_population(pop_sym, feeder, feeder_sym, profiles, sub_seed(seed, :population))
-    if pop_sym === :case_a_784
-        # Fail-loud population-shape tripwire (the case_a_agreement idiom): each house
-        # contributes exactly 3 devices rolled into its bus aggregator.
-        houses = div(sum(length(a.devices) for a in aggs), 3)
-        houses == _CASE_A_TOTAL_HOUSES || error(
-            "case_a_magnitude: the built :case_a_784 population carries $houses houses " *
-            "(3 devices each) but the selector's total is $_CASE_A_TOTAL_HOUSES — the " *
-            "population shape changed; re-measure deliberately (aborting loudly)",
-        )
-    end
-    println(
-        "  point :",
-        pop_sym,
-        " @ :",
-        feeder_sym,
-        " seed=",
-        seed,
-        ": ",
-        length(aggs),
-        " aggregators — AGR ladder (stop-on-first-certified)...",
-    )
+function _solve_and_gain_rows(feeder, pf, aggs, λ₀; T::Int, time_limit_s)
+    println("  ", length(aggs), " aggregators — AGR ladder (stop-on-first-certified)...")
     flush(stdout)
-    ladder = run_ladder_outcome(feeder, pf, aggs; T = T, λ₀ = λ₀, time_limit_s = time_limit_s)
+    ladder =
+        run_ladder_outcome(feeder, pf, aggs; T = T, λ₀ = λ₀, time_limit_s = time_limit_s)
 
     println("  FIT leg (fit_baseline unchanged; on_inexact = :report)...")
     flush(stdout)
@@ -526,9 +729,10 @@ function _measure_point(
             ),
         )
     else
-        why = ladder.certified === nothing ?
-              "no AGR ladder rung certified (ladder exhausted — documented non-closure)" :
-              "DADP certified at rung '$(ladder.certified.rung)' but the FIT leg did not certify"
+        why =
+            ladder.certified === nothing ?
+            "no AGR ladder rung certified (ladder exhausted — documented non-closure)" :
+            "DADP certified at rung '$(ladder.certified.rung)' but the FIT leg did not certify"
         push!(
             rows,
             (
@@ -552,6 +756,50 @@ function _measure_point(
         )
     end
     return rows
+end
+
+"""
+    _measure_point(feeder_sym, pop_sym, seed; T, time_limit_s) -> Vector{NamedTuple}
+
+ONE measurement point at the frozen registered configuration with `(feeder_sym, pop_sym, seed)` bound — the population build, then `_solve_and_gain_rows` (the shared ladder + FIT +
+gain path). Returns the point's rows: one per rung attempt (+ the terminal
+`error:ladder_exhausted` row when the ladder closes empty) and one gain row.
+"""
+function _measure_point(
+    feeder_sym::Symbol,
+    pop_sym::Symbol,
+    seed::Int;
+    T::Int = T_H,
+    time_limit_s = nothing,
+)
+    # The FROZEN REGISTERED CONFIGURATION (42-CASE-A-PROTOCOL.md §2), spelled out:
+    #     feeder   = build_feeder(:ieee13)
+    #     profiles = generate_profiles(; seed = sub_seed(SEED, :profiles), T = 24)
+    #     λ₀       = build_price(:mem, 24, nothing)
+    #     pf       = ConvexBranchFlow()
+    #     aggs     = build_population(:case_a_784, feeder, :ieee13, profiles, sub_seed(SEED, :population))
+    # The generic calls below ARE that configuration with (feeder_sym, pop_sym, seed)
+    # bound; the headline binds (:ieee13, :case_a_784, seed) — byte-for-byte the
+    # registered point. NO value here is a free constant beyond what the seams require.
+    feeder = build_feeder(feeder_sym)
+    profiles = generate_profiles(; seed = sub_seed(seed, :profiles), T = T)
+    λ₀ = build_price(PRICE_SYM, T, nothing)
+    pf = ConvexBranchFlow()
+    aggs =
+        build_population(pop_sym, feeder, feeder_sym, profiles, sub_seed(seed, :population))
+    if pop_sym === :case_a_784
+        # Fail-loud population-shape tripwire (the case_a_agreement idiom): each house
+        # contributes exactly 3 devices rolled into its bus aggregator.
+        houses = div(sum(length(a.devices) for a in aggs), 3)
+        houses == _CASE_A_TOTAL_HOUSES || error(
+            "case_a_magnitude: the built :case_a_784 population carries $houses houses " *
+            "(3 devices each) but the selector's total is $_CASE_A_TOTAL_HOUSES — the " *
+            "population shape changed; re-measure deliberately (aborting loudly)",
+        )
+    end
+    println("  point :", pop_sym, " @ :", feeder_sym, " seed=", seed, ":")
+    flush(stdout)
+    return _solve_and_gain_rows(feeder, pf, aggs, λ₀; T = T, time_limit_s = time_limit_s)
 end
 
 # ---- CSV upsert machinery (the tariff_comparison.jl idiom) ------------------------------------
@@ -615,6 +863,7 @@ const MEASURE_COLS = Symbol[
 ]
 const MAGNITUDE_COLS = Symbol[:mode; MEASURE_COLS]
 const PROXY_COLS = Symbol[:fixture; MEASURE_COLS]
+const ABLATION_COLS = vcat([:axis, :variant], MEASURE_COLS)
 
 # WR-04 discipline: the ACTIVE mode's artifact EXISTS (header-only when nothing was
 # captured) BEFORE any failure branch — a run-level failure must ship its honest empty
@@ -623,8 +872,10 @@ const PROXY_COLS = Symbol[:fixture; MEASURE_COLS]
 function ensure_all_schemas(mode::String)
     if mode == "headline"
         ensure_schema(MAGNITUDE_CSV, MAGNITUDE_COLS)
-    else
+    elseif mode == "proxy"
         ensure_schema(PROXY_CSV, PROXY_COLS)
+    else
+        ensure_schema(ABLATION_CSV, ABLATION_COLS)
     end
     return nothing
 end
@@ -647,12 +898,8 @@ function write_point_rows(
     key::NTuple{N, Symbol} where {N},
 )
     for r in rows
-        row = merge(
-            identity,
-            r,
-            (protocol_sha = PROTOCOL_SHA[],),
-            provenance_row(T_H, seed),
-        )
+        row =
+            merge(identity, r, (protocol_sha = PROTOCOL_SHA[],), provenance_row(T_H, seed))
         # Guard the MERGED row: the raw measurement rows carry the measured columns;
         # identity + protocol_sha + provenance are merged here (the plan's row merge
         # order) — the WRITTEN row must carry every declared column.
@@ -761,6 +1008,567 @@ function proxy_main(time_limit_s)
     return nothing
 end
 
+# ---- OFAT ablation axes (REPRO-05; protocol §7) ------------------------------------------------
+
+"""
+    _registered_case_a_build(seed) -> (; feeder, pf, aggs, λ₀)
+
+The FROZEN REGISTERED population build (protocol §2) shared by the ablation axes that
+solve at the full registered population: `:case_a_784` over `:ieee13` with the registered
+sub-seeds, `ConvexBranchFlow`, λ₀ = `:mem` at T = `T_H`. The 784-house shape tripwire
+runs here (fail-loud before any solve).
+"""
+function _registered_case_a_build(seed::Int)
+    feeder = build_feeder(FEEDER_SYM)
+    profiles = generate_profiles(; seed = sub_seed(seed, :profiles), T = T_H)
+    λ₀ = build_price(PRICE_SYM, T_H, nothing)
+    pf = ConvexBranchFlow()
+    aggs = build_population(
+        :case_a_784,
+        feeder,
+        FEEDER_SYM,
+        profiles,
+        sub_seed(seed, :population),
+    )
+    houses = div(sum(length(a.devices) for a in aggs), 3)
+    houses == _CASE_A_TOTAL_HOUSES || error(
+        "case_a_magnitude: the built :case_a_784 population carries $houses houses " *
+        "(3 devices each) but the selector's total is $_CASE_A_TOTAL_HOUSES — the " *
+        "population shape changed; re-measure deliberately (aborting loudly)",
+    )
+    return (; feeder = feeder, pf = pf, aggs = aggs, λ₀ = λ₀)
+end
+
+"""
+    _certified_headline_row() -> DataFrameRow
+
+The seed-42 CERTIFIED headline gain row from magnitude.csv (mode=headline, kind=gain,
+status=ok, finite welfare_dadp). Axis (a) REUSES this W_DADP — the DADP leg is independent
+of the FIT axis (protocol §7 leg-independence rule) and is NEVER re-solved here: a missing
+or uncertified headline fails LOUDLY (a silent re-solve would hide a broken ladder).
+"""
+function _certified_headline_row()
+    isfile(MAGNITUDE_CSV) || error(
+        "case_a_magnitude: ablation-fit needs the seed-$(SEED_ABLATION) certified headline " *
+        "W_DADP from $MAGNITUDE_CSV — the DADP leg is independent of the FIT axis and is " *
+        "REUSED, never re-solved (protocol §7 leg-independence rule); run " *
+        "`--mode headline` first (a missing headline must fail loudly, never be " *
+        "silently re-solved)",
+    )
+    df = CSV.read(MAGNITUDE_CSV, DataFrame)
+    candidates = filter(
+        r ->
+            string(r.mode) == "headline" &&
+            r.seed == SEED_ABLATION &&
+            string(r.kind) == "gain" &&
+            string(r.status) == "ok" &&
+            r.welfare_dadp isa Real &&
+            isfinite(r.welfare_dadp),
+        df,
+    )
+    isempty(candidates) && error(
+        "case_a_magnitude: no certified seed-$(SEED_ABLATION) headline gain row in " *
+        "$MAGNITUDE_CSV — ablation-fit reuses the certified W_DADP and never re-solves " *
+        "the DADP leg (protocol §7); run `--mode headline` first",
+    )
+    return candidates[end, :]
+end
+
+"""
+    _reused_gain_row(src_csv, src_desc, src) -> NamedTuple
+
+One provenance-transparent REUSE row (protocol §7c reuse discipline; T-42-04-3): the
+source gain row's measured values are copied verbatim, the status becomes `reused`, and
+the note NAMES the source CSV + row — reuse is never re-solved and never fabricated.
+"""
+function _reused_gain_row(src_csv::AbstractString, src_desc::AbstractString, src)
+    note =
+        "reused from $src_csv ($src_desc, kind=gain, source status=" *
+        "$(string(coalesce(src.status, "")))) — provenance-transparent reuse " *
+        "(protocol §7c reuse discipline); never re-solved, never fabricated"
+    return (
+        kind = "gain",
+        rung = string(coalesce(src.rung, "")),
+        status = "reused",
+        welfare_dadp = src.welfare_dadp,
+        welfare_fit = src.welfare_fit,
+        delta_w = src.delta_w,
+        delta_pct = src.delta_pct,
+        iters = src.iters,
+        wall_s = missing,
+        note = flatten_note(note),
+    )
+end
+
+"""
+    _proxy_reuse_rows(variant) -> (rows, measurement_seed)
+
+The population-axis proxy variants (`proxy_ieee123` / `ieee13_default`, protocol §7c):
+reuse the fixture's gain row from the committed proxy.csv. The measurement seed travels
+with the row (the fixtures pin their own seeds) so the reused row's provenance names the
+seed the numbers actually came from.
+"""
+function _proxy_reuse_rows(variant::String)
+    fixture = POPULATION_VARIANT_FIXTURES[variant]
+    isfile(PROXY_CSV) || error(
+        "case_a_magnitude: population variant '$variant' reuses the committed proxy row " *
+        "from $PROXY_CSV — run `--mode proxy` first (reused rows are never re-solved; " *
+        "a missing source artifact fails loudly)",
+    )
+    df = CSV.read(PROXY_CSV, DataFrame)
+    matches = filter(r -> string(r.fixture) == fixture && string(r.kind) == "gain", df)
+    isempty(matches) && error(
+        "case_a_magnitude: no gain row for fixture '$fixture' in $PROXY_CSV — a reused " *
+        "row cannot be fabricated; run `--mode proxy` first",
+    )
+    src = matches[end, :]
+    return (
+        [_reused_gain_row(PROXY_CSV, "fixture=$fixture, seed=$(src.seed)", src)],
+        Int(src.seed),
+    )
+end
+
+"""
+    _headline_reuse_rows(label) -> (rows, measurement_seed)
+
+The population-axis headline reuse (`full_784` — and the fraction-1.0 rung, which the
+protocol §7c declares IS the headline measurement): reuse the seed-42 certified gain row
+from magnitude.csv, never re-run. A missing or uncertified headline fails loudly.
+"""
+function _headline_reuse_rows(label::String)
+    isfile(MAGNITUDE_CSV) || error(
+        "case_a_magnitude: population variant '$label' is REUSED from the certified " *
+        "headline row (protocol §7c: the headline row itself — reused, never re-run) — " *
+        "run `--mode headline` first (a missing headline fails loudly, never re-solved " *
+        "here)",
+    )
+    df = CSV.read(MAGNITUDE_CSV, DataFrame)
+    matches = filter(
+        r ->
+            string(r.mode) == "headline" &&
+            r.seed == SEED_ABLATION &&
+            string(r.kind) == "gain" &&
+            string(r.status) == "ok" &&
+            r.welfare_dadp isa Real &&
+            isfinite(r.welfare_dadp),
+        df,
+    )
+    isempty(matches) && error(
+        "case_a_magnitude: no certified seed-$(SEED_ABLATION) headline gain row in " *
+        "$MAGNITUDE_CSV — '$label' is reused from it, never re-run (protocol §7c)",
+    )
+    src = matches[end, :]
+    return (
+        [_reused_gain_row(MAGNITUDE_CSV, "mode=headline, seed=$(SEED_ABLATION)", src)],
+        SEED_ABLATION,
+    )
+end
+
+"""
+    _write_ablation_rows(axis, variant, rows, measurement_seed)
+
+The ablation write boundary: identity `(axis, variant)` + the measurement rows +
+`protocol_sha` + provenance, upserted into ablation.csv under `ABLATION_KEY` (the
+row-granularity key — sibling rows of the same variant replace only themselves).
+"""
+function _write_ablation_rows(axis::String, variant::String, rows, measurement_seed::Int)
+    write_point_rows(
+        ABLATION_CSV,
+        ABLATION_COLS,
+        (axis = axis, variant = variant),
+        rows,
+        T_H,
+        measurement_seed;
+        key = ABLATION_KEY,
+    )
+    return nothing
+end
+
+# Axis (a) values (protocol §7a): the probes are symmetric multiplicative deviations of
+# the MODEL'S OWN registered λ_export (9.6 → 4.8 / 19.2 at the committed constants);
+# λ_import and λ_self are unchanged. Sourced from the FIT_λ_* constants, never re-stated.
+function _fit_params_for_variant(v::AbstractString)
+    v == "registered" && return _FIT_REGISTERED
+    v == "lam_export_half" &&
+        return (λ_import = FIT_λ_IMPORT, λ_export = FIT_λ_EXPORT / 2, λ_self = FIT_λ_SELF)
+    v == "lam_export_double" &&
+        return (λ_import = FIT_λ_IMPORT, λ_export = FIT_λ_EXPORT * 2, λ_self = FIT_λ_SELF)
+    throw(
+        ArgumentError(
+            "_fit_params_for_variant: unknown fit_params variant $(repr(v)); the " *
+            "protocol-pinned set is $(ABLATION_AXES["fit_params"])",
+        ),
+    )
+end
+
+function ablation_fit_main(variants::Vector{String}, time_limit_s)
+    assert_protocol_registered()   # the guard is the mains' first statement (T-42-03-1)
+    BLAS.set_num_threads(1)
+    ensure_all_schemas("ablation-fit")
+    headline = _certified_headline_row()
+    w_dadp = Float64(headline.welfare_dadp)
+    build = _registered_case_a_build(SEED_ABLATION)
+    println(
+        "case_a_magnitude ablation-fit (fit_params, protocol §7a): seed=",
+        SEED_ABLATION,
+        ", T=",
+        T_H,
+        " — DADP REUSED from magnitude.csv (headline rung '",
+        headline.rung,
+        "', W_DADP=",
+        w_dadp,
+        "); re-solving ONLY fit_baseline per variant (leg independence)...",
+    )
+    flush(stdout)
+    for v in variants
+        prices = _fit_params_for_variant(v)
+        println(
+            "  variant '",
+            v,
+            "': λ_export=",
+            prices.λ_export,
+            " (λ_import=",
+            prices.λ_import,
+            ", λ_self=",
+            prices.λ_self,
+            ") — FIT solving...",
+        )
+        flush(stdout)
+        wall_s = @elapsed fit_out = run_fit_outcome(
+            build.feeder,
+            build.pf,
+            build.aggs;
+            T = T_H,
+            λ₀ = build.λ₀,
+            fit_prices = prices,
+        )
+        certified = fit_out.welfare_fit isa Real && isfinite(fit_out.welfare_fit)
+        g = certified ? welfare_gain(w_dadp, fit_out.welfare_fit) : nothing
+        row = (
+            kind = "gain",
+            rung = string(headline.rung),
+            status = fit_out.status,
+            welfare_dadp = w_dadp,
+            welfare_fit = certified ? fit_out.welfare_fit : missing,
+            delta_w = certified ? g.Δ : missing,
+            delta_pct = certified ? g.Δpct : missing,
+            iters = missing,
+            wall_s = wall_s,
+            note = flatten_note(
+                "fit_params ablation (protocol §7a; FIT prices cancel in social welfare " *
+                "terms — the axis acts via dispatch incentives): DADP reused from " *
+                "magnitude.csv (headline rung '$(headline.rung)'), only fit_baseline " *
+                "re-solved; FIT: $(fit_out.message)",
+            ),
+        )
+        _write_ablation_rows("fit_params", v, [row], SEED_ABLATION)
+        println(
+            "  → variant '",
+            v,
+            "': status=",
+            fit_out.status,
+            " delta_pct=",
+            certified ? repr(g.Δpct) : "(no certified pair)",
+            " (",
+            round(wall_s; digits = 1),
+            " s)",
+        )
+        flush(stdout)
+    end
+    return nothing
+end
+
+# Axis (b) values (protocol §7b): elementwise multiplicative λ₀ scalings — 1× (the
+# registered signal), 0.5×, 2.0×.
+function _price_scale_for_variant(v::AbstractString)
+    v == "registered" && return 1.0
+    v == "scale_0.5" && return 0.5
+    v == "scale_2.0" && return 2.0
+    throw(
+        ArgumentError(
+            "_price_scale_for_variant: unknown price_range variant $(repr(v)); the " *
+            "protocol-pinned set is $(ABLATION_AXES["price_range"])",
+        ),
+    )
+end
+
+function ablation_price_main(variants::Vector{String}, time_limit_s)
+    assert_protocol_registered()   # the guard is the mains' first statement (T-42-03-1)
+    BLAS.set_num_threads(1)
+    ensure_all_schemas("ablation-price")
+    build = _registered_case_a_build(SEED_ABLATION)
+    println(
+        "case_a_magnitude ablation-price (price_range, protocol §7b): seed=",
+        SEED_ABLATION,
+        ", T=",
+        T_H,
+        " — the full AGR ladder re-runs per λ₀ scaling (the DADP problem itself changes)...",
+    )
+    flush(stdout)
+    for v in variants
+        scale = _price_scale_for_variant(v)
+        λ₀v = build.λ₀ .* scale
+        println("  variant '", v, "': λ₀ ×", scale, " — ladder + FIT + gain...")
+        flush(stdout)
+        wall_s = @elapsed rows = _solve_and_gain_rows(
+            build.feeder,
+            build.pf,
+            build.aggs,
+            λ₀v;
+            T = T_H,
+            time_limit_s = time_limit_s,
+        )
+        _write_ablation_rows("price_range", v, rows, SEED_ABLATION)
+        for r in rows
+            println(
+                "    → [",
+                r.kind,
+                "] rung=",
+                r.rung,
+                " status=",
+                r.status,
+                " delta_pct=",
+                repr(r.delta_pct),
+            )
+        end
+        println("    (variant '", v, "' in ", round(wall_s; digits = 1), " s)")
+        flush(stdout)
+    end
+    return nothing
+end
+
+function ablation_population_main(variants::Vector{String}, time_limit_s)
+    assert_protocol_registered()   # the guard is the mains' first statement (T-42-03-1)
+    BLAS.set_num_threads(1)
+    ensure_all_schemas("ablation-population")
+    feeder = build_feeder(FEEDER_SYM)
+    pf = ConvexBranchFlow()
+    λ₀ = build_price(PRICE_SYM, T_H, nothing)
+    println(
+        "case_a_magnitude ablation-population (population, protocol §7c): seed=",
+        SEED_ABLATION,
+        ", T=",
+        T_H,
+        " — nested-prefix rungs solve fresh (no per-rung re-tuning); proxies + " *
+        "full_784/rung_1.0 are reused rows...",
+    )
+    flush(stdout)
+    for v in variants
+        if haskey(POPULATION_RUNG_FRACTIONS, v)
+            fraction = POPULATION_RUNG_FRACTIONS[v]
+            label = "rung_$v"
+            if fraction >= 1.0
+                # Protocol §7c: "the 1.0-rung IS the headline measurement" — the curve's
+                # full-population point is the certified headline row itself, REUSED
+                # (never re-run); the smaller rungs solve fresh below.
+                rows, seed_for_row = _headline_reuse_rows(label)
+                println(
+                    "  variant '",
+                    label,
+                    "': REUSED from magnitude.csv (protocol §7c) — no solve",
+                )
+                flush(stdout)
+            else
+                houses, map_rows = case_a_houses_variant(
+                    feeder,
+                    FEEDER_SYM,
+                    T_H,
+                    SEED_ABLATION;
+                    variant = "registered",
+                    fraction = fraction,
+                )
+                aggs = case_a_variant_rollup(
+                    houses,
+                    map_rows;
+                    context = "ablation-population $label",
+                )
+                println(
+                    "  variant '",
+                    label,
+                    "': fraction=",
+                    fraction,
+                    ", houses=",
+                    length(houses),
+                    ", aggregators=",
+                    length(aggs),
+                    " — ladder-governed solve + fit at this population...",
+                )
+                flush(stdout)
+                rows = _solve_and_gain_rows(
+                    feeder,
+                    pf,
+                    aggs,
+                    λ₀;
+                    T = T_H,
+                    time_limit_s = time_limit_s,
+                )
+                seed_for_row = SEED_ABLATION
+            end
+            _write_ablation_rows("population", label, rows, seed_for_row)
+            for r in rows
+                println(
+                    "    → [",
+                    r.kind,
+                    "] rung=",
+                    r.rung,
+                    " status=",
+                    r.status,
+                    " delta_pct=",
+                    repr(r.delta_pct),
+                )
+            end
+            flush(stdout)
+        elseif haskey(POPULATION_VARIANT_FIXTURES, v)
+            rows, seed_for_row = _proxy_reuse_rows(v)
+            println(
+                "  variant '",
+                v,
+                "': REUSED from proxy.csv (fixture ",
+                POPULATION_VARIANT_FIXTURES[v],
+                ", seed ",
+                seed_for_row,
+                ") — no solve",
+            )
+            flush(stdout)
+            _write_ablation_rows("population", v, rows, seed_for_row)
+            println(
+                "    → gain row reused: status=",
+                rows[1].status,
+                " delta_pct=",
+                repr(rows[1].delta_pct),
+            )
+            flush(stdout)
+        else
+            rows, seed_for_row = _headline_reuse_rows(v)
+            println(
+                "  variant '",
+                v,
+                "': REUSED from magnitude.csv (protocol §7c: the headline row itself) — no solve",
+            )
+            flush(stdout)
+            _write_ablation_rows("population", v, rows, seed_for_row)
+            println(
+                "    → gain row reused: status=",
+                rows[1].status,
+                " delta_pct=",
+                repr(rows[1].delta_pct),
+            )
+            flush(stdout)
+        end
+    end
+    return nothing
+end
+
+# The case_a_scaling.jl structural-equality idiom: `Aggregator`s are immutable with
+# Vector fields, so `==` compares those fields by REFERENCE — structural equality is
+# field-wise (device Vectors compare element-wise under `==`).
+function _struct_fieldwise_equal(x, y)
+    typeof(x) === typeof(y) || return false
+    for n in fieldnames(typeof(x))
+        getfield(x, n) == getfield(y, n) || return false
+    end
+    return true
+end
+
+function _aggregators_structurally_equal(x, y)
+    x.bus == y.bus || return false
+    x.φ == y.φ || return false
+    x.Pdc == y.Pdc || return false
+    length(x.devices) == length(y.devices) || return false
+    return all(_struct_fieldwise_equal(dx, dy) for (dx, dy) in zip(x.devices, y.devices))
+end
+
+function ablation_devices_main(variants::Vector{String}, time_limit_s)
+    assert_protocol_registered()   # the guard is the mains' first statement (T-42-03-1)
+    BLAS.set_num_threads(1)
+    ensure_all_schemas("ablation-devices")
+    feeder = build_feeder(FEEDER_SYM)
+    pf = ConvexBranchFlow()
+    λ₀ = build_price(PRICE_SYM, T_H, nothing)
+    println(
+        "case_a_magnitude ablation-devices (device_mix, protocol §7d): seed=",
+        SEED_ABLATION,
+        ", T=",
+        T_H,
+        " — the full AGR ladder re-runs per variant on the rebuilt population (the DADP " *
+        "problem itself changes)...",
+    )
+    flush(stdout)
+    for v in variants
+        houses, map_rows = case_a_houses_variant(
+            feeder,
+            FEEDER_SYM,
+            T_H,
+            SEED_ABLATION;
+            variant = v,
+            fraction = 1.0,
+        )
+        aggs =
+            case_a_variant_rollup(houses, map_rows; context = "ablation-devices variant $v")
+        if v == "registered"
+            # The strongest drift guard (the case_a_scaling 1.0-rung tripwire): the
+            # registered rebuild at the full fraction IS build_population(:case_a_784,...).
+            profiles =
+                generate_profiles(; seed = sub_seed(SEED_ABLATION, :profiles), T = T_H)
+            full_ref = build_population(
+                :case_a_784,
+                feeder,
+                FEEDER_SYM,
+                profiles,
+                sub_seed(SEED_ABLATION, :population),
+            )
+            length(aggs) == length(full_ref) &&
+            all(_aggregators_structurally_equal(r, f) for (r, f) in zip(aggs, full_ref)) ||
+                error(
+                    "ablation-devices variant 'registered': the rebuilt 1.0-fraction roll-up " *
+                    "does NOT match build_population(:case_a_784, ...) — the rebuild drifted " *
+                    "from the builder (aborting loudly)",
+                )
+            println(
+                "  ✓ registered rebuild matches the build_population roll-up " *
+                "(structural check, ",
+                length(houses),
+                " houses)",
+            )
+            flush(stdout)
+        end
+        println(
+            "  variant '",
+            v,
+            "': houses=",
+            length(houses),
+            ", aggregators=",
+            length(aggs),
+            " — ladder + FIT + gain...",
+        )
+        flush(stdout)
+        wall_s = @elapsed rows = _solve_and_gain_rows(
+            feeder,
+            pf,
+            aggs,
+            λ₀;
+            T = T_H,
+            time_limit_s = time_limit_s,
+        )
+        _write_ablation_rows("device_mix", v, rows, SEED_ABLATION)
+        for r in rows
+            println(
+                "    → [",
+                r.kind,
+                "] rung=",
+                r.rung,
+                " status=",
+                r.status,
+                " delta_pct=",
+                repr(r.delta_pct),
+            )
+        end
+        println("    (variant '", v, "' in ", round(wall_s; digits = 1), " s)")
+        flush(stdout)
+    end
+    return nothing
+end
+
 # ---- entry ------------------------------------------------------------------------------------
 
 function main(args)
@@ -791,9 +1599,36 @@ function main(args)
     )
     flush(stdout)
     if parsed.mode == "headline"
-        headline_main(parsed.seed === nothing ? REGISTERED_SEED : parsed.seed, parsed.time_limit_s)
-    else
+        headline_main(
+            parsed.seed === nothing ? REGISTERED_SEED : parsed.seed,
+            parsed.time_limit_s,
+        )
+    elseif parsed.mode == "proxy"
         proxy_main(parsed.time_limit_s)
+    else
+        println(
+            "case_a_magnitude ",
+            parsed.mode,
+            ": axis '",
+            ABLATION_MODE_AXIS[parsed.mode],
+            "', variants [",
+            join(parsed.variants, ", "),
+            "], seed=",
+            SEED_ABLATION,
+            " (protocol §3/§7)...",
+        )
+        flush(stdout)
+        if parsed.mode == "ablation-fit"
+            ablation_fit_main(parsed.variants, parsed.time_limit_s)
+        elseif parsed.mode == "ablation-price"
+            ablation_price_main(parsed.variants, parsed.time_limit_s)
+        elseif parsed.mode == "ablation-population"
+            ablation_population_main(parsed.variants, parsed.time_limit_s)
+        else
+            ablation_devices_main(parsed.variants, parsed.time_limit_s)
+        end
+        println("case_a_magnitude ", parsed.mode, " complete → ", ABLATION_CSV)
+        flush(stdout)
     end
     return nothing
 end
