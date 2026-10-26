@@ -514,10 +514,19 @@ function run_rung_outcome(feeder, pf, aggs; T::Int, λ₀, rung_attrs, time_limi
         end
     catch err
         if err isa ConvergenceError || err isa CertificateError || err isa SolveFailedError
+            # Field-aware iters extraction (BL-01): `ConvergenceError`/`CertificateError`
+            # carry `iterations` (`nothing` when unknown), but `SolveFailedError` has NO
+            # `iterations` field (its fields are the four solver statuses) — reading
+            # `err.iterations` unconditionally raised FieldError INSIDE this handler and
+            # killed the run instead of writing the honest row. The −1 sentinel is the
+            # documented "error carries none" convention (header + docstring above).
+            iters =
+                hasproperty(err, :iterations) && err.iterations !== nothing ?
+                Int(err.iterations) : -1
             return (;
                 status = "error:" * string(nameof(typeof(err))),
                 welfare = missing,
-                iters = err.iterations === nothing ? -1 : Int(err.iterations),
+                iters = iters,
                 message = first(string(err.msg), 400),
             )
         elseif err isa UnconvergedAdmmError

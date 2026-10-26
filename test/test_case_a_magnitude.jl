@@ -465,6 +465,63 @@ end
     @test occursin("drift", msg) || occursin("aborting loudly", msg)
 end
 
+@testitem "magnitude rung outcome: SolveFailedError records the honest error row (field-aware iters)" begin
+    # BL-01 regression pin: the typed-failure recorder of `run_rung_outcome` read
+    # `err.iterations` UNCONDITIONALLY on all three typed solver failures, but
+    # `SolveFailedError` (src/core/errors.jl — the repo's most common 784-house failure
+    # class: the committed FIT legs' INFEASIBLE) has NO `iterations` field — its fields
+    # are the four solver statuses. The FieldError fired INSIDE the catch handler: the
+    # honest `error:SolveFailedError` row was never written, the ladder never reached its
+    # terminal state, and the run died mid-ladder — the opposite of the honesty contract
+    # (protocol §4/§5: every refusal is a recorded outcome). The documented contract
+    # (script header + docstring): "iters from the typed error, −1 sentinel when the
+    # error carries none". This item pins exactly that: a `SolveFailedError` thrown from
+    # the `solve_admm` seam yields `(status = "error:SolveFailedError", iters = -1)`,
+    # and a `CertificateError` WITH an iteration count keeps carrying it.
+    #
+    # STUB SEAM: the stubs extend `TSODSO.solve_admm` with signatures the real method
+    # (feeder::AbstractFeeder, pf::AbstractPowerFlow, aggregators::AbstractVector)
+    # cannot accept, so dispatch lands on the stub for the marker arguments only. No
+    # solving, no 784-house anything: seconds. TestItemRunner runs this item in its own
+    # process, so the extension cannot leak to any other item.
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "case_a_magnitude.jl"))
+
+    struct _StubSolveFailed end
+    struct _StubCertificateRefusal end
+    TSODSO.solve_admm(::_StubSolveFailed, ::Nothing, ::Nothing; kwargs...) =
+        throw(SolveFailedError("stub: solver failure (test seam)"))
+    TSODSO.solve_admm(::_StubCertificateRefusal, ::Nothing, ::Nothing; kwargs...) =
+        throw(CertificateError("stub: certificate refusal (test seam)"; iterations = 37))
+
+    out_sf = run_rung_outcome(
+        _StubSolveFailed(),
+        nothing,
+        nothing;
+        T = T_H,
+        λ₀ = nothing,
+        rung_attrs = nothing,
+        time_limit_s = nothing,
+    )
+    @test out_sf.status == "error:SolveFailedError"
+    @test out_sf.iters == -1                # the documented sentinel (error carries none)
+    @test ismissing(out_sf.welfare)
+    @test occursin("solver failure", out_sf.message)
+
+    out_ce = run_rung_outcome(
+        _StubCertificateRefusal(),
+        nothing,
+        nothing;
+        T = T_H,
+        λ₀ = nothing,
+        rung_attrs = nothing,
+        time_limit_s = nothing,
+    )
+    @test out_ce.status == "error:CertificateError"
+    @test out_ce.iters == 37                # the typed error's own iteration count
+    @test ismissing(out_ce.welfare)
+end
+
 @testitem "magnitude reproducibility: 784-house seed-42 ladder+gain re-run agrees with the committed magnitude.csv row" tags =
     [:magnitude, :slow] begin
     # 42-06-PLAN Task 1 — the gate-then-golden closure (REPRO-03/04 evidence chain, last
