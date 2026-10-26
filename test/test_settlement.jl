@@ -660,6 +660,33 @@ end
         res.battery_message
 end
 
+@testitem "price-taker: thermostatic-only aggregator reports :not_checked (WR-03 pin)" tags =
+    [:settlement] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder
+
+    # An aggregator whose devices are ALL non-battery (thermostatic only) registers
+    # device vars in ctx.agg_device_vars but carries NO battery vars. The docstring
+    # promises ":not_checked when the aggregator carries no battery vars"; the old
+    # emptiness-based detection returned :ok here — a complementarity check that
+    # never ran, reported as checked-and-passed (review WR-03). Detection now keys
+    # on the check's own battery predicate (p_ch ∧ p_dch ∧ ¬q).
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    T = 3
+    therm = Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, T))
+    agg = Aggregator(2, 0.9, [therm], fill(0.1, T))
+
+    res = price_taker_dispatch(agg, fill(30.0, T))
+    @test all(isfinite, res.net)
+    @test isfinite(res.utility)
+    @test res.battery_certificate == :not_checked
+    @test res.battery_message == ""
+end
+
 @testitem "price-taker: penalty-free arbitrage — charge-low/sell-high at rated bounds" tags =
     [:settlement] begin
     using TSODSO

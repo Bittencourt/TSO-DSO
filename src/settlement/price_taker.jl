@@ -118,13 +118,19 @@ function price_taker_dispatch(
 
     # Battery complementarity as a RECORDED status (report semantics over the
     # existing (:error, :warn) API — try/catch the :error branch; never rethrow,
-    # never loosen τ). :not_checked when the aggregator registered no battery vars
-    # (the check's own documented no-op case).
-    battery_certificate = :ok
+    # never loosen τ). :not_checked when the aggregator carries NO BATTERY vars —
+    # detected with the check's OWN predicate (p_ch ∧ p_dch ∧ ¬q), NOT by
+    # agg_device_vars emptiness: that stash holds ALL device variables, so a
+    # thermostatic/deferrable-only population would otherwise take the :ok branch
+    # and report a complementarity check that never ran (review WR-03).
+    has_battery = any(
+        haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q) for
+        varlist in values(ctx.agg_device_vars) for v in varlist
+    )
+    battery_certificate = :not_checked
     battery_message = ""
-    if isempty(ctx.agg_device_vars)
-        battery_certificate = :not_checked
-    else
+    if has_battery
+        battery_certificate = :ok
         try
             assert_battery_complementarity!(ctx; τ = τ_batt, T = T, on_violation = :error)
         catch err
