@@ -292,6 +292,7 @@ include("settlement/tariffs.jl")        # revenue-neutral flat/TOU price constru
 include("settlement/price_taker.jl")    # thin penalty-free counterfactual dispatch QP
 include("settlement/feasibility.jl")    # AC-physics feasibility status (report, never throw)
 include("settlement/equity.jl")         # Gini/Theil/Atkinson/Palma + breakouts + rebound
+include("settlement/comparison.jl")     # compare_tariffs — the SETL-02/05 comparison runner
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
 # Declared with Compat's `@compat public` so that `public` also works on Julia 1.10.

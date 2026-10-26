@@ -983,11 +983,13 @@ end
         @test r.t_horizon == T
         @test r.bills_granularity in ("house", "bus")
     end
-    # Certificate semantics: flat/tou run the aggregator-level price-taker (exactly 1
-    # certificate each, :ok or a RECORDED :refused — degenerate flat prices are a measured
-    # outcome); the fit leg is batteryless by A4 (:not_checked).
-    @test row_of["flat"].batt_ok + row_of["flat"].batt_refused == 1
-    @test row_of["tou"].batt_ok + row_of["tou"].batt_refused == 1
+    # Certificate semantics: the counts cover the price-taker dispatches at the row's
+    # bills_granularity — with houses supplied that is the per-house re-solves (2 here);
+    # each is :ok or a RECORDED :refused (degenerate flat prices are a measured outcome).
+    # The fit leg is batteryless by A4 (:not_checked, one per bus row).
+    @test row_of["flat"].batt_ok + row_of["flat"].batt_refused == 2
+    @test row_of["tou"].batt_ok + row_of["tou"].batt_refused == 2
+    @test row_of["dadp"].batt_ok + row_of["dadp"].batt_refused == 2
     @test row_of["fit"].batt_not_checked == 1
 
     # mktempdir hermeticity: every CSV write lands under the temp dir only.
@@ -1093,20 +1095,22 @@ end
     )
     row_of = Dict(r.tariff => r for r in eachrow(res.summary))
 
-    # The dadp row's fairness echo IS its own settlement: same prices, same quantities —
-    # the two columns are independently-associated folds of the same floats (dust-level
-    # gap, not bitwise; see the pin below).
-    @test row_of["dadp"].fairness_total ≈ row_of["dadp"].total_payments rtol = 1e-12
+    # The dadp row's fairness echo IS its own settlement: same prices, same quantities.
+    # Gate-then-golden: measured bitwise on this fixture (rel 0.0, 2026-10-26, Julia
+    # 1.12.5) → floor pin 1e-15.
+    @test row_of["dadp"].fairness_total ≈ row_of["dadp"].total_payments rtol = 1e-15
 
     # THE locked fairness condition carried through the runner: flat and TOU are DERIVED
     # by 41-03's own tested constructors from the SAME input, so they settle the SAME
-    # total at the DADP quantities. Provisional pin 1e-12 (RED); re-pinned
-    # gate-then-golden from the live measurement in the GREEN commit.
+    # total at the DADP quantities. Gate-then-golden pins (measured 2026-10-26, Julia
+    # 1.12.5, this fixture): flat rel gap = 2.8658034134118547e-16 (one ulp at this
+    # magnitude — the same value 41-03's direct-fold pin measured) → 10× measured;
+    # TOU rel gap = 0.0 (bitwise) → floor pin 1e-15. NEVER an invented constant.
     dadp_total = row_of["dadp"].total_payments
     @info "compare-tariffs fairness echo (2-bus)" dadp_total flat_echo =
         row_of["flat"].fairness_total tou_echo = row_of["tou"].fairness_total
-    @test row_of["flat"].fairness_total ≈ dadp_total rtol = 1e-12
-    @test row_of["tou"].fairness_total ≈ dadp_total rtol = 1e-12
+    @test row_of["flat"].fairness_total ≈ dadp_total rtol = 2.8658034134118547e-15
+    @test row_of["tou"].fairness_total ≈ dadp_total rtol = 1e-15
 end
 
 @testitem "compare-tariffs: equity columns on bills AND surplus + rebound conventions" tags =
@@ -1305,16 +1309,43 @@ end
         engine = :centralized,
     )
 
+    # Four rows, fixed leg order, no leg dropped — even when a leg fails.
     @test nrow(res.summary) == 4
     @test res.summary.tariff == ["dadp", "flat", "tou", "fit"]
-    for r in eachrow(res.summary)
+    row_of = Dict(r.tariff => r for r in eachrow(res.summary))
+
+    # dadp/flat/tou: fully certified rows — populated feasibility statuses, finite
+    # welfare/MS/payments, bus-granularity bills (no houses on this fixture).
+    for t in ("dadp", "flat", "tou")
+        r = row_of[t]
+        @test r.status == "ok"
         @test r.feasibility_status in ("feasible", "infeasible", "solve_failed")
         @test isfinite(r.welfare)
         @test isfinite(r.merchandising_surplus)
         @test isfinite(r.total_payments)
         @test r.bills_granularity == "bus"
     end
-    # Bus-granularity bill rows for every leg (no houses supplied on this fixture — the
-    # one-aggregator-per-bus shape IS the household granularity here).
-    @test nrow(res.household_bills) == 4 * length(aggs)
+    @test nrow(res.household_bills) == 3 * length(aggs)   # fit leg infeasible ⇒ no FIT bill rows
+
+    # THE FIT LEG'S MEASURED OUTCOME ON THIS FIXTURE (honesty policy, legs never dropped):
+    # the batteryless (A4) FIT dispatch is genuinely INFEASIBLE against the
+    # congestion-calibrated head branch (smax = 0.0686 pu) — the seed SOC solve terminates
+    # PRIMAL_INFEASIBLE with a certificate. Attributed by probe 2026-10-26: lifting ONLY the
+    # head branch to SMAX_NO_LIMIT makes fit_baseline converge (welfare -4822.1488652716525,
+    # SITE-2 ac_status LOCALLY_SOLVED) — the thermal rating is the binding constraint, not a
+    # solver flake. The runner RECORDS this as an honest status row with the non-certified
+    # values missing; it never crashes and never drops the leg.
+    fitr = row_of["fit"]
+    @test fitr.status != "ok"
+    @test fitr.status in (
+        "error:SolveFailedError",
+        "error:CertificateError",
+        "error:ConvergenceError",
+        "fit_inexact",
+    )
+    @test !isempty(fitr.notes)
+    @test ismissing(fitr.welfare)
+    @test ismissing(fitr.merchandising_surplus)
+    @test ismissing(fitr.total_payments)
+    @test fitr.feasibility_status == "not_run"
 end
