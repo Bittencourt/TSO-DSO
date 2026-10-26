@@ -522,6 +522,47 @@ end
     @test ismissing(out_ce.welfare)
 end
 
+@testitem "magnitude rung outcome: a non-budget, non-certified status is recorded verbatim" begin
+    # WR-01 regression pin: the `else` branch of `run_rung_outcome` stamped EVERY
+    # non-certified returned result `:budget_exceeded` with a wall-clock-budget
+    # explanation — honest only while `solve_admm`'s status vocabulary is exactly
+    # `:converged | :budget_exceeded` (STATUS_VOCABULARY, src/core/errors.jl). Nothing
+    # asserted that: a future vocabulary member would be silently recorded with a
+    # fabricated budget explanation — the dishonest-status-labeling the phase guards
+    # against elsewhere. The contract pinned here: only the ACTUAL budget status earns
+    # the `:budget_exceeded` label; any other non-certified status is recorded AS
+    # ITSELF (the CSV's `:<status>` convention) with no welfare — and the structural
+    # status-vocabulary gate then refuses the row until the new member is admitted
+    # deliberately.
+    #
+    # STUB SEAM: as in the SolveFailedError item above — the stub extends
+    # `TSODSO.solve_admm` with a signature the real method cannot accept, returning a
+    # result whose status is deliberately OUTSIDE today's vocabulary. No solving:
+    # seconds.
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "case_a_magnitude.jl"))
+
+    struct _StubNonCertified end
+    TSODSO.solve_admm(::_StubNonCertified, ::Nothing, ::Nothing; kwargs...) =
+        (; status = :stub_unregistered_status, welfare = missing, iters = 11)
+
+    out = run_rung_outcome(
+        _StubNonCertified(),
+        nothing,
+        nothing;
+        T = T_H,
+        λ₀ = nothing,
+        rung_attrs = nothing,
+        time_limit_s = nothing,
+    )
+    @test out.status == ":stub_unregistered_status"     # the TRUE status, verbatim
+    @test out.status != ":budget_exceeded"              # never the fabricated budget label
+    @test ismissing(out.welfare)                        # and never a fabricated welfare
+    @test out.iters == 11
+    @test occursin("stub_unregistered_status", out.message)  # the note names the status
+    @test !occursin("budget", out.message)                   # and fabricates no budget story
+end
+
 @testitem "magnitude reproducibility: 784-house seed-42 ladder+gain re-run agrees with the committed magnitude.csv row" tags =
     [:magnitude, :slow] begin
     # 42-06-PLAN Task 1 — the gate-then-golden closure (REPRO-03/04 evidence chain, last

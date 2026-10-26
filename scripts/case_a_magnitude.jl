@@ -475,8 +475,9 @@ policy: a maxiter stall (`ConvergenceError`), a certificate refusal (`Certificat
 and a solver failure (`SolveFailedError`) become `error:<TypeName>` rows (iters from the
 error, −1 sentinel when it carries none); the typed `UnconvergedAdmmError` non-`:converged`
 guard becomes `error:unconverged_admm`; the wall-clock budget exit is the honest
-`:budget_exceeded` row (NO certified welfare BY DESIGN). Anything else (misuse, a bug)
-PROPAGATES and exits nonzero.
+`:budget_exceeded` row (NO certified welfare BY DESIGN), and ANY other non-certified
+returned status is recorded verbatim as `:<status>` — never relabeled `:budget_exceeded`.
+Anything else (misuse, a bug) PROPAGATES and exits nonzero.
 """
 function run_rung_outcome(feeder, pf, aggs; T::Int, λ₀, rung_attrs, time_limit_s)
     try
@@ -502,15 +503,32 @@ function run_rung_outcome(feeder, pf, aggs; T::Int, λ₀, rung_attrs, time_limi
                 message = "",
             )
         else
-            # the honest wall-clock early exit: `:budget_exceeded` carries no welfare
-            # BY DESIGN (never a plausible-but-uncertified price) — a recorded outcome.
-            return (;
-                status = ":budget_exceeded",
-                welfare = missing,
-                iters = Int(r.iters),
-                message = "solve_admm returned status=:budget_exceeded (time_limit_s " *
-                          "budget) — no certified welfare (honest early exit)",
-            )
+            # Honest wall-clock early exit: `:budget_exceeded` carries no welfare BY
+            # DESIGN (never a plausible-but-uncertified price) — a recorded outcome.
+            # Label GUARD (WR-01): only the ACTUAL budget status earns the
+            # `:budget_exceeded` label; ANY other non-certified status is recorded AS
+            # ITSELF — never silently relabeled into a fabricated budget explanation.
+            # (Today `solve_admm` returns only `:converged | :budget_exceeded` —
+            # STATUS_VOCABULARY — so this arm is latent; a future vocabulary member
+            # lands here honestly, and the structural status-vocabulary gate refuses
+            # the row until that member is admitted deliberately.)
+            if r.status === :budget_exceeded
+                return (;
+                    status = ":budget_exceeded",
+                    welfare = missing,
+                    iters = Int(r.iters),
+                    message = "solve_admm returned status=:budget_exceeded (time_limit_s " *
+                              "budget) — no certified welfare (honest early exit)",
+                )
+            else
+                return (;
+                    status = ":" * string(r.status),
+                    welfare = missing,
+                    iters = Int(r.iters),
+                    message = "solve_admm returned non-certified status=$(repr(r.status)) " *
+                              "— recorded verbatim (no certified welfare; never relabeled)",
+                )
+            end
         end
     catch err
         if err isa ConvergenceError || err isa CertificateError || err isa SolveFailedError
