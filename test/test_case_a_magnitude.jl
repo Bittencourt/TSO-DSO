@@ -464,3 +464,138 @@ end
     msg = sprint(showerror, err)
     @test occursin("drift", msg) || occursin("aborting loudly", msg)
 end
+
+@testitem "magnitude reproducibility: 784-house seed-42 ladder+gain re-run agrees with the committed magnitude.csv row" tags =
+    [:magnitude, :slow] begin
+    # 42-06-PLAN Task 1 — the gate-then-golden closure (REPRO-03/04 evidence chain, last
+    # link): the committed seed-42 headline row is re-derived LIVE — the frozen registered
+    # configuration (protocol §2) built at seed 42, the pre-registered AGR ladder run to
+    # certification (protocol §4, stop-on-first-certified), the unchanged fit_baseline FIT
+    # leg with its ONE pinned retry (protocol §5) — and asserted against the committed
+    # magnitude.csv row within a PINNED BAND.
+    #
+    # GOLDEN POLICY (42-CASE-A-PROTOCOL.md §10): this band pins REPRODUCIBILITY OF THE
+    # PLUMBING — an agreement band between two runs of the same code on the same seed —
+    # and is EXPLICITLY NOT A MAGNITUDE GOLDEN. No assertion below compares any welfare,
+    # gain, or delta to ±25%, to the thesis target, or to any measured-magnitude value:
+    # the only compared quantities are (a) the live re-run's certified welfare vs the
+    # committed row's certified welfare (same code, same seed ⇒ agreement within solver
+    # noise), (b) the honest leg statuses (a refusal reproduces as a refusal), and (c)
+    # the Δ identity's algebra (exact, definition-level). If the live re-run ever
+    # diverges beyond the band, that is environment/code drift since the committed
+    # measurement — investigate it; NEVER widen the band to fit.
+    #
+    # RUNTIME: a full 784-house ladder (default rung refusal at iters=80 + gap_1e-10
+    # certification at iters=80) + the FIT leg with its retry ≈ 23 min — hence :slow
+    # (never selected by the fast suite; CI slow.yml runs it deliberately).
+    using CSV
+    using DataFrames: DataFrame, eachrow
+    using LinearAlgebra: BLAS
+
+    # The runner's OWN machinery, included (the include path the plan sanctions): the
+    # script's `PROGRAM_FILE` entry guard keeps `main(ARGS)` un-executed, so the include
+    # only defines the constants + functions — `_measure_point` IS the headline mode's
+    # code path, and `welfare_gain` comes from the shared lib it includes. The script's
+    # top-level `@quickactivate` re-activates this repo's project in THIS item's worker
+    # process only (TestItemRunner isolates items in their own processes) — deliberate,
+    # noted per the plan. Reusing the runner (vs re-deriving the config inline) is the
+    # point: the re-run must traverse the SAME code path that produced the committed row.
+    include(joinpath(@__DIR__, "..", "scripts", "case_a_magnitude.jl"))
+
+    BLAS.set_num_threads(1)   # the committed row's measurement footing (blas_threads=1)
+
+    # ---- the committed seed-42 gain row — SKIP-PROOF: its absence is a LOUD error ----
+    # The committed measurement is a PREREQUISITE, never optional: no seed-42 gain row in
+    # magnitude.csv means the 42-05 headline never ran, and this item must error, not skip.
+    isfile(MAGNITUDE_CSV) || error(
+        "magnitude reproducibility: $MAGNITUDE_CSV does not exist — the committed " *
+        "seed-42 headline measurement is a prerequisite of this item (run " *
+        "`julia --project=. scripts/case_a_magnitude.jl --mode headline --seed 42` " *
+        "and commit the CSV; the reproducibility band asserts against THAT row)",
+    )
+    df = CSV.read(MAGNITUDE_CSV, DataFrame)
+    gain_rows = filter(
+        r ->
+            string(r.mode) == "headline" && string(r.kind) == "gain" && Int(r.seed) == 42,
+        df,
+    )
+    isempty(gain_rows) && error(
+        "magnitude reproducibility: no headline/gain row for seed 42 in " *
+        "$MAGNITUDE_CSV — the committed seed-42 measurement is a prerequisite of " *
+        "this item (the item errors loudly; it never skips, never fabricates the row)",
+    )
+    committed = gain_rows[end, :]
+    # The band's citation target — the row's provenance key + the certified value:
+    # magnitude.csv [mode=headline, kind=gain, seed=42, rung='gap_1e-10'],
+    # protocol_sha=60e5d54969d7944d9398e24d0d1cc6dc2d52ad4d, julia 1.12.5, threads 1/1,
+    # t_horizon=24: status=error:SolveFailedError (the FIT leg refused at attempt AND
+    # pinned retry — the honest terminal row), welfare_dadp=-378163.5654347284
+    # (certified at rung 'gap_1e-10', iters=80), welfare_fit/delta_w/delta_pct absent.
+    committed_w = Float64(committed.welfare_dadp)
+    @test isfinite(committed_w)
+
+    # ---- the LIVE re-run: the headline path, verbatim ----
+    live_rows = _measure_point(:ieee13, :case_a_784, 42; T = T_H, time_limit_s = nothing)
+    live_gains = filter(r -> r.kind == "gain", live_rows)
+    length(live_gains) == 1 || error(
+        "magnitude reproducibility: the live re-run produced $(length(live_gains)) " *
+        "gain rows (expected exactly 1) — the measurement-point machinery drifted",
+    )
+    live = live_gains[1]
+    live_w = Float64(live.welfare_dadp)
+
+    # ---- the PINNED BAND (gate-then-golden, 40-06 discipline: measured first, pinned
+    # verbatim) — WELFARE_RTOL = 1e-8 = 10 × the observed live-vs-committed welfare
+    # relative delta (0.0 — bit-exact reproduction, probe of 2026-10-26: default rung
+    # error:CertificateError iters=80, gap_1e-10 converged iters=80, welfare
+    # -378163.5654347284, FIT error:SolveFailedError at attempt + retry — ALL identical
+    # to the committed row), floored at the 40-06 solver-noise welfare floor 1e-8.
+    # Headroom over THIS measurement, never a pre-loosened universal band.
+    WELFARE_RTOL = 1e-8
+
+    # ---- the band assertions ----
+    # (1) the certified welfare re-derives within the band (reproducibility, NOT a
+    #     magnitude claim — the band compares two runs of the same code);
+    @test isapprox(live_w, committed_w; rtol = WELFARE_RTOL)
+    # (2) the certified rung re-derives (the row's provenance key);
+    @test String(live.rung) == String(committed.rung)
+    # (3) the honest FIT status re-derives: the committed row's status class is the FIT
+    #     leg's refusal (error:<Type> with no certified welfare), and the live leg
+    #     refuses identically at attempt AND pinned retry — "welfare_fit likewise" is
+    #     this status agreement, because the committed row honestly records NO welfare_fit.
+    @test startswith(String(committed.status), "error:")
+    @test String(live.status) == String(committed.status)
+    committed_fit_missing =
+        !(committed.welfare_fit isa Real && isfinite(committed.welfare_fit))
+    @test committed_fit_missing &&
+          !(live.welfare_fit isa Real && isfinite(live.welfare_fit))
+    # (4) the Δ identity, EXACT (definition-level, never a magnitude value): on an
+    #     honest refusal row NO delta exists — both sides fabricate nothing — and the
+    #     identity machinery itself is the lib's sign-safe definition, exact on the
+    #     plumbing anchor (golden policy §10 sanctions exactly this plumbing golden).
+    @test !(committed.delta_w isa Real) && !(committed.delta_pct isa Real)
+    @test ismissing(live.delta_w) && ismissing(live.delta_pct)
+    @test welfare_gain(110.0, 100.0) == (Δ = 10.0, Δpct = 10.0)
+    # (5) the ladder history re-derives rung-for-rung: every committed seed-42 rung row
+    #     (status + iterations — deterministic plumbing) has its live counterpart.
+    committed_rungs = Dict{String, Tuple{String, Union{Int, Nothing}}}()
+    for rr in eachrow(df)
+        (
+            string(rr.mode) == "headline" &&
+            string(rr.kind) == "rung" &&
+            Int(rr.seed) == 42
+        ) || continue
+        committed_rungs[String(rr.rung)] = (
+            string(coalesce(rr.status, "")),
+            rr.iters isa Integer ? Int(rr.iters) : nothing,
+        )
+    end
+    for lr in filter(r -> r.kind == "rung", live_rows)
+        key = String(lr.rung)
+        @test haskey(committed_rungs, key)
+        haskey(committed_rungs, key) || continue
+        c_status, c_iters = committed_rungs[key]
+        @test String(lr.status) == c_status
+        @test (lr.iters isa Integer ? Int(lr.iters) : nothing) == c_iters
+    end
+end
