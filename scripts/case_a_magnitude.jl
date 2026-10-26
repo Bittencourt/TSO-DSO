@@ -1456,8 +1456,13 @@ function lenses_main(seed::Int, time_limit_s)
         return nothing
     end
     for r in eachrow(summary)
+        nt = NamedTuple(r)
+        # Line-oriented artifact hygiene (the tariff_comparison idiom): the summary
+        # `notes` can carry solver messages with embedded newlines — flatten them
+        # BEFORE the row lands (the FIT refusal's message is multi-line).
+        haskey(nt, :notes) && (nt = merge(nt, (notes = flatten_note(nt.notes),)))
         row = merge(
-            NamedTuple(r),
+            nt,
             (mode = "lenses", rung = rung, protocol_sha = PROTOCOL_SHA[]),
             provenance_row(T_H, seed),
         )
