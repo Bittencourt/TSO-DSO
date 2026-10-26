@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 42
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-10-26 -- Phase 42 planning complete
+Plan: 1/6 complete (42-01 done — protocol pre-registered + core helpers; next 42-02)
+Status: Executing
+Last activity: 2026-10-26 -- 42-01 complete (protocol 60e5d54, RED 316c034, GREEN f1eba72)
 Progress: [█████████░] 93%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
