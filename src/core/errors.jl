@@ -14,9 +14,9 @@ const MOI = JuMP.MOI
     TSODSOError <: Exception
 
 Abstract supertype of every typed TSODSO failure (`SolveFailedError`,
-`CertificateError`, `ConvergenceError`). Each concrete subtype carries a `msg::String`
-and prints exactly that message via `Base.showerror`. Policy home: the
-[status & exception policy](@ref status-policy).
+`CertificateError`, `ConvergenceError`, `UnconvergedAdmmError`). Each concrete subtype
+carries a `msg::String` and prints exactly that message via `Base.showerror`. Policy
+home: the [status & exception policy](@ref status-policy).
 """
 abstract type TSODSOError <: Exception end
 
@@ -95,6 +95,21 @@ end
 ConvergenceError(msg::AbstractString; iterations::Union{Nothing, Int} = nothing) =
     ConvergenceError(String(msg), iterations)
 
+"""
+    UnconvergedAdmmError(msg) <: TSODSOError
+
+See the [status & exception policy](@ref status-policy).
+Policy role: the settlement ADMM adapter (`settlement_input(r::NamedTuple)`) was handed
+a `solve_admm` result whose `status` is not `:converged` — the per-aggregator additive
+keys exist ONLY on the converged path, so there is NO certified price to settle on
+(e.g. a wall-clock budget stop). Typed so measurement scripts can RECORD the budget
+stop by type instead of sniffing the message: an unrelated `ArgumentError` that merely
+mentions `:converged` propagates (review WR-05).
+"""
+struct UnconvergedAdmmError <: TSODSOError
+    msg::String
+end
+
 Base.showerror(io::IO, e::TSODSOError) = print(io, e.msg)
 
 """
@@ -125,4 +140,5 @@ const STATUS_VOCABULARY = (
     run_stochastic = (:solved, :oos_infeasible_skipped, :oos_inexact_skipped),
 )
 
-export TSODSOError, SolveFailedError, CertificateError, ConvergenceError
+export TSODSOError, SolveFailedError, CertificateError, ConvergenceError,
+    UnconvergedAdmmError

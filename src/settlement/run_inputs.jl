@@ -190,7 +190,7 @@ end
     settlement_input(r::NamedTuple; λ₀ = nothing) -> SettlementInput
 
 ADMM adapter: read a CONVERGED `solve_admm` result NamedTuple into a
-[`SettlementInput`](@ref). Loud `ArgumentError` (never a silent divide) unless
+[`SettlementInput`](@ref). Loud `UnconvergedAdmmError` (never a silent divide) unless
 `get(r, :status, :missing) == :converged` — the per-aggregator additive keys
 (`agr_dispatch`/`agr_utility`/`agr_prices`) exist ONLY on the `:converged` path and a
 `:budget_exceeded` stop carries NO certified price (Pitfall 4: settling an
@@ -206,7 +206,7 @@ quantities are `agr_dispatch[j]` net injections; `p_import` reads the DSO-OPT st
 function settlement_input(r::NamedTuple; λ₀ = nothing)
     status = get(r, :status, :missing)
     status == :converged || throw(
-        ArgumentError(
+        UnconvergedAdmmError(
             "settlement_input: ADMM result status is $(repr(status)) — the per-aggregator " *
             "additive keys (agr_dispatch/agr_utility/agr_prices) exist ONLY on the " *
             ":converged path; settle a converged run (a :budget_exceeded stop carries NO " *

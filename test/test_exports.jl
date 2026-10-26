@@ -13,8 +13,8 @@
                 AbstractPowerFlow ACPowerFlow ConvexBranchFlow DCPowerFlow LinDistFlow
                 MeshedFlow RestrictedBranchFlow
                 ModelContext contribute! add_to_residual! register_constraint! add_to_objective!
-                TSODSOError CertificateError ConvergenceError SolveFailedError assert_solved!
-                assert_no_slack
+                TSODSOError CertificateError ConvergenceError SolveFailedError
+                UnconvergedAdmmError assert_solved! assert_no_slack
                 ProblemClass select_optimizer SMAX_NO_LIMIT
                 solve_welfare solve_toy_dc solve_linear operational_oracle assert_socp_exact!
                 assert_ac_exact! assert_restriction_exact! certify_angle_recoverable!

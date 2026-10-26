@@ -11,7 +11,9 @@ does it return a status?". This page is the single home of that rule.
 - invalid inputs (`ArgumentError`);
 - solver failures that make results untrustworthy (`SolveFailedError`);
 - certificate refusals (`CertificateError`);
-- genuine non-convergence (`ConvergenceError`).
+- genuine non-convergence (`ConvergenceError`);
+- settling a non-`:converged` ADMM result — no certified price exists
+  (`UnconvergedAdmmError`).
 
 **RETURN a status** for valid-answer outcomes: converged, a caller-set budget, the documented
 MPC certificate tiers, and the documented stochastic skip-and-report (infeasible or inexact
@@ -25,6 +27,7 @@ held-out draws).
 | `SolveFailedError` | solver result is untrustworthy (non-optimal termination, missing primal/dual point); carries `termination_status`, `primal_status`, `dual_status`, `raw_status` | `assert_solved!` and the retry/solve wrappers used by every entry point |
 | `CertificateError` | an exactness / no-slack / complementarity certificate was refused; carries `kind::Symbol` | `assert_socp_exact!`, `assert_no_slack`, the planning certificates |
 | `ConvergenceError` | an iterative method exhausted its budget without consensus; carries `iterations` | `solve_admm` (`maxiter`), `solve_stackelberg!` (`max_iter`, `:reject` stall), `run_nash!` |
+| `UnconvergedAdmmError` | the settlement ADMM adapter was handed a `solve_admm` result whose status is not `:converged` — the additive keys exist only on the converged path, so NO certified price exists (the recorded shape of a budget stop) | `settlement_input(r::NamedTuple)` |
 
 Migration note: these replace the former `ErrorException` throws at the same sites. The
 message text is bit-for-bit identical (`showerror` prints exactly `e.msg`); only the exception

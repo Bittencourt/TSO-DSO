@@ -39,12 +39,13 @@
 # never dropped. A solver-outcome failure of the DADP run itself (a maxiter stall
 # `ConvergenceError`, a certificate refusal `CertificateError` — the EXPECTED full-
 # population outcome at executor defaults per the Phase-40 measurement — a solver
-# failure `SolveFailedError`, or the ADMM non-`:converged` guard `ArgumentError` a
-# budget stop produces) is RECORDED by this script as its own status row (tariff =
-# "(run)", certified values missing, iterations from the error where carried) — never
-# retried into a pass, never re-tuned (ρ = ADMM().ρ, no tol changes; a refusal is
-# answered upstream by the bounded solver-precision ladder, not by this artifact).
-# Misuse errors (bad args, shape guards) still propagate and exit nonzero.
+# failure `SolveFailedError`, or the ADMM non-`:converged` typed guard
+# `UnconvergedAdmmError` a budget stop produces) is RECORDED by this script as its own
+# status row (tariff = "(run)", certified values missing, iterations from the error
+# where carried) — never retried into a pass, never re-tuned (ρ = ADMM().ρ, no tol
+# changes; a refusal is answered upstream by the bounded solver-precision ladder, not
+# by this artifact). Misuse errors (bad args, shape guards) still propagate and exit
+# nonzero.
 #
 # Case A constants (scripts/thesis_caseA.jl): T = 24, SEED = 42, :ieee13, :mem prices,
 # profiles seed = sub_seed(SEED, :profiles), population seed = sub_seed(SEED, :population).
@@ -67,6 +68,7 @@ using TSODSO:
     ConvergenceError,
     ConvexBranchFlow,
     SolveFailedError,
+    UnconvergedAdmmError,
     _CASE_A_PV_FRACTION,
     _CASE_A_TOTAL_HOUSES,
     _IEEE13_DEV_SCALE,
@@ -152,11 +154,11 @@ mode_seed(mode::String, seed::Union{Nothing, Int}) =
 Run ONE `compare_tariffs` call (as a thunk) and return its HONEST outcome. Solver-outcome
 failures of the DADP run are RECORDED OUTCOMES per the honesty policy — a maxiter stall
 (`ConvergenceError`), a certificate refusal (`CertificateError`), a solver failure
-(`SolveFailedError`) and the ADMM non-`:converged` guard (`ArgumentError` naming
-`:converged`, which is what a wall-clock budget stop produces) each become a status row
-(iterations from the error's own field, -1 sentinel when it carries none; certified
-values missing). Anything else (argument misuse, a genuine bug) PROPAGATES and exits
-nonzero.
+(`SolveFailedError`) and the ADMM non-`:converged` guard (the typed
+`UnconvergedAdmmError` `settlement_input` throws — what a wall-clock budget stop
+produces) each become a status row (iterations from the error's own field, -1 sentinel
+when it carries none; certified values missing). Anything else (argument misuse, a
+genuine bug) PROPAGATES and exits nonzero.
 """
 function run_compare_outcome(compare::Function)
     local res
@@ -171,9 +173,11 @@ function run_compare_outcome(compare::Function)
             status = "error:" * string(nameof(typeof(err)))
             message = first(string(err.msg), 400)
             iters = err.iterations === nothing ? -1 : Int(err.iterations)
-        elseif is_unconverged_guard(err)
-            # the ADMM :converged guard — the recorded shape of a wall-clock budget stop
-            # (a budget stop carries NO certified price)
+        elseif err isa UnconvergedAdmmError
+            # the ADMM adapter's typed non-`:converged` refusal — the recorded shape of
+            # a wall-clock budget stop (a budget stop carries NO certified price).
+            # Caught BY TYPE: an unrelated ArgumentError that merely mentions
+            # ":converged" propagates and exits nonzero (the WR-05 discipline).
             status = "error:unconverged_admm"
             message = first(string(err.msg), 400)
             iters = missing
@@ -189,11 +193,6 @@ function run_compare_outcome(compare::Function)
         )
     end
 end
-
-# The ADMM adapter's loud non-`:converged` refusal (a budget stop carries NO certified
-# price) is the recorded-outcome shape of a wall-clock budget stop — detected on the
-# ArgumentError's message so the honest status row can be emitted instead of a crash.
-is_unconverged_guard(err) = err isa ArgumentError && occursin(":converged", err.msg)
 
 """
     upsert_row(path, row::NamedTuple; key) -> nothing

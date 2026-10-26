@@ -3,13 +3,17 @@
     const MOI = JuMP.MOI
 
     @test isconcretetype(ErrorException)
-    for T in (SolveFailedError, CertificateError, ConvergenceError)
+    for T in (SolveFailedError, CertificateError, ConvergenceError, UnconvergedAdmmError)
         @test T <: TSODSOError
         @test T <: Exception
         @test !(T <: ErrorException)
     end
-    for e in
-        (SolveFailedError("boom a"), CertificateError("boom b"), ConvergenceError("boom c"))
+    for e in (
+        SolveFailedError("boom a"),
+        CertificateError("boom b"),
+        ConvergenceError("boom c"),
+        UnconvergedAdmmError("boom d"),
+    )
         @test e.msg isa String
         @test sprint(showerror, e) == e.msg
     end
@@ -37,6 +41,7 @@ end
     @test p(SolveFailedError("x"))
     @test p(CertificateError("x"))
     @test p(ConvergenceError("x"))
+    @test p(UnconvergedAdmmError("x"))
     @test !p(MethodError(sin, ()))
     @test !p(BoundsError([1], 2))
     @test !p(ArgumentError("x"))

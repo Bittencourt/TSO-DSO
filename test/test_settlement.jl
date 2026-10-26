@@ -182,7 +182,10 @@ end
     catch e
         e
     end
-    @test err2 isa ArgumentError
+    @test err2 isa UnconvergedAdmmError
+    # Typed (WR-05): the refusal is NOT an ArgumentError — a misuse ArgumentError that
+    # merely mentions ":converged" must never be absorbable as a budget stop.
+    @test !(err2 isa ArgumentError)
     @test occursin(":converged", sprint(showerror, err2))
 
     # (2b) The CENTRALIZED adapter refuses a too-short λ₀ with the documented loud
