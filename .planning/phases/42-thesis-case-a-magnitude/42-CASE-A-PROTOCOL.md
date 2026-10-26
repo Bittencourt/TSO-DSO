@@ -255,3 +255,31 @@ reproducible plumbing quantities — e.g. `welfare_gain` known-value algebra anc
 seed-42 REPRODUCIBILITY band planned in 42-06, which is an agreement band between two runs
 of the same code — never a magnitude assertion. The knife-edge canary is never re-pinned;
 default paths stay byte-identical.
+
+---
+
+## AMENDMENT (2026-10-26, reason: the `gapfeas_1e-12` rung's Clarabel attrs did not exist)
+
+**Trigger.** During the 42-05 price_range/scale_0.5 ladder — the FIRST execution of ladder
+step 3 in this repo — the `gapfeas_1e-12` rung crashed with
+`FieldError: type Clarabel.Settings has no field tol_feas_abs, available fields: … tol_feas …`
+(Clarabel 0.11.1, the pinned solver). The pre-registered attrs
+`(tol_feas_abs = 1e-12, tol_feas_rel = 1e-12)` (this file §4, mirroring
+`scripts/case_a_agreement.jl:116-126` verbatim) spell feasibility tolerances that the
+installed solver's `Settings` struct does not carry.
+
+**Resolution.** The rung's pre-registered INTENT — rung 2's gap tightening PLUS the solver
+feasibility tolerance at 1e-12 (the LAST-RESORT rung; §4's rationale column: "a prior
+measurement saw tol_feas tightening FAIL") — is executed with the solver's actual field:
+`(tol_gap_abs = 1e-12, tol_gap_rel = 1e-12, tol_feas = 1e-12)`. The rung NAME
+(`gapfeas_1e-12`), its ladder position (step 3, after `gap_1e-12`), its hard-stop role, and
+the stop-on-first-certified policy are UNCHANGED. No exactness gate, no battery τ, no ρ is
+touched — this is a SOLVER-factory attribute spelling repair, not a gate change and not a
+new rung. The runner script's `AGR_TOL_RUNGS` Dict is edited in the same commit (the
+amendment policy's deliberate-act friction). The `default` → `gap_1e-10` → `gap_1e-12`
+rungs are untouched and byte-identical. The crashed scale_0.5 attempt's captured rung rows
+(default/gap_1e-10/gap_1e-12 refusals at iters=88) were lost to the per-variant write
+boundary and are re-measured under this amended protocol version (their `protocol_sha`
+stamps this amendment's commit).
+
+---

@@ -181,12 +181,14 @@ const AGR_TOL_RUNGS = Dict{String, Union{Nothing, NamedTuple}}(
     "default" => nothing,
     "gap_1e-10" => (tol_gap_abs = 1e-10, tol_gap_rel = 1e-10),
     "gap_1e-12" => (tol_gap_abs = 1e-12, tol_gap_rel = 1e-12),
-    "gapfeas_1e-12" => (
-        tol_gap_abs = 1e-12,
-        tol_gap_rel = 1e-12,
-        tol_feas_abs = 1e-12,
-        tol_feas_rel = 1e-12,
-    ),
+    # gapfeas_1e-12 (AMENDMENT 2026-10-26, first execution of this rung): the
+    # pre-registered attrs `tol_feas_abs`/`tol_feas_rel` do NOT exist in the installed
+    # Clarabel 0.11.1 (`Settings` carries a single `tol_feas` field) — the rung crashed
+    # with `FieldError` on its first-ever execution (42-05, price_range/scale_0.5). The
+    # rung's pre-registered INTENT (protocol §4: feasibility tolerance 1e-12 on top of
+    # rung 2) is executed as `tol_feas = 1e-12`; the rung NAME, its ladder position and
+    # its last-resort role are unchanged. No gate, no ρ, no battery τ is touched.
+    "gapfeas_1e-12" => (tol_gap_abs = 1e-12, tol_gap_rel = 1e-12, tol_feas = 1e-12),
 )
 # The declared run order (Julia Dicts are unordered): step 0 → 3 of the protocol §4
 # table. Guarded below against drift from the Dict.
@@ -1515,10 +1517,14 @@ end
 """
     _certified_headline_row() -> DataFrameRow
 
-The seed-42 CERTIFIED headline gain row from magnitude.csv (mode=headline, kind=gain,
-status=ok, finite welfare_dadp). Axis (a) REUSES this W_DADP — the DADP leg is independent
-of the FIT axis (protocol §7 leg-independence rule) and is NEVER re-solved here: a missing
-or uncertified headline fails LOUDLY (a silent re-solve would hide a broken ladder).
+The seed-42 headline gain row's CERTIFIED DADP side from magnitude.csv (mode=headline,
+kind=gain, finite Real welfare_dadp). Axis (a) REUSES this W_DADP — the DADP leg is
+independent of the FIT axis (protocol §7 leg-independence rule) and is NEVER re-solved
+here: a missing headline (or a gain row without a Real welfare_dadp) fails LOUDLY. The
+gain row's STATUS may honestly be a FIT-leg refusal (the measured 784 outcome — the FIT
+counterfactual refused after the sanctioned retry): the reused quantity is the certified
+W_DADP from the row's recorded ladder rung, and the row's own status travels with it in
+the ablation note — never silently dropped, never re-solved.
 """
 function _certified_headline_row()
     isfile(MAGNITUDE_CSV) || error(
@@ -1534,15 +1540,14 @@ function _certified_headline_row()
             string(r.mode) == "headline" &&
             r.seed == SEED_ABLATION &&
             string(r.kind) == "gain" &&
-            string(r.status) == "ok" &&
             r.welfare_dadp isa Real &&
             isfinite(r.welfare_dadp),
         df,
     )
     isempty(candidates) && error(
-        "case_a_magnitude: no certified seed-$(SEED_ABLATION) headline gain row in " *
-        "$MAGNITUDE_CSV — ablation-fit reuses the certified W_DADP and never re-solves " *
-        "the DADP leg (protocol §7); run `--mode headline` first",
+        "case_a_magnitude: no seed-$(SEED_ABLATION) headline gain row with a certified " *
+        "welfare_dadp in $MAGNITUDE_CSV — ablation-fit reuses the certified W_DADP and " *
+        "never re-solves the DADP leg (protocol §7); run `--mode headline` first",
     )
     return candidates[end, :]
 end
@@ -1605,8 +1610,11 @@ end
     _headline_reuse_rows(label) -> (rows, measurement_seed)
 
 The population-axis headline reuse (`full_784` — and the fraction-1.0 rung, which the
-protocol §7c declares IS the headline measurement): reuse the seed-42 certified gain row
-from magnitude.csv, never re-run. A missing or uncertified headline fails loudly.
+protocol §7c declares IS the headline measurement): reuse the seed-42 gain row from
+magnitude.csv, never re-run. The reuse mirrors `_proxy_reuse_rows`: the source row's
+measured values are copied VERBATIM (whatever its honest status — the measured 784 outcome
+is a FIT-leg refusal, and the source status travels in the note), the status becomes
+`reused`, provenance-transparent. A missing headline fails loudly.
 """
 function _headline_reuse_rows(label::String)
     isfile(MAGNITUDE_CSV) || error(
@@ -1620,14 +1628,11 @@ function _headline_reuse_rows(label::String)
         r ->
             string(r.mode) == "headline" &&
             r.seed == SEED_ABLATION &&
-            string(r.kind) == "gain" &&
-            string(r.status) == "ok" &&
-            r.welfare_dadp isa Real &&
-            isfinite(r.welfare_dadp),
+            string(r.kind) == "gain",
         df,
     )
     isempty(matches) && error(
-        "case_a_magnitude: no certified seed-$(SEED_ABLATION) headline gain row in " *
+        "case_a_magnitude: no seed-$(SEED_ABLATION) headline gain row in " *
         "$MAGNITUDE_CSV — '$label' is reused from it, never re-run (protocol §7c)",
     )
     src = matches[end, :]
