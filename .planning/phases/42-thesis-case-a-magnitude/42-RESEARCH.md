@@ -555,7 +555,9 @@ solving inside literate pages (committed-CSV pattern instead).
 | A3 | `fit_baseline` at 784 houses completes in minutes and does not hit the FIT magnitude-sanity band guard (band = `PRICE_MAX·(Np+1)·T`; welfare ≈ −3.78e5 scale) | Headline seams | if it errors, the row is honest data and the phase still succeeds on REPRO-04's "whatever the magnitude" terms — but REPRO-05's FIT axis thins |
 | A4 | Option B's additive `compare_tariffs` kwarg is golden-safe (byte-identical default, mirroring `fit_optimizer`/`time_limit_s`) | Pattern 5 | if the planner rejects any src touch, Option A still satisfies the phase with lenses reported only where engines certify |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Resolutions adopted in the phase plans: Q1 → (a) ieee123-primary / ieee13-secondary proxy pin (42-01 §8c, 42-03); Q2 → Option B, the additive byte-identical `agr_optimizer` kwarg (42-02); Q3 → generous budgets + honest `:budget_exceeded` rows, no pre-registration issue (42-05).
 
 1. **Which fixture is "the 1-house-per-bus proxy" for the ≈+0.263% restatement?**
    - What we know: ≈+0.2630% was measured by `thesis_case123_repro.jl` on **IEEE-123** (one
