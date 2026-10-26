@@ -1,5 +1,9 @@
 # Phase 42 Plan Check — Goal-Backward Review
 
+---
+revision: 1 applied
+---
+
 **Checked:** 2026-10-26
 **Plans reviewed:** 42-01 … 42-06 (6 plans, 5 waves)
 **Inputs:** ROADMAP Phase 42, REQUIREMENTS REPRO-03..05, 42-CONTEXT.md (locked decisions),
@@ -270,3 +274,25 @@ lens_summary rows in 42-03 Task 3's item would close the map completely.
 
 All fixes are localized text edits to the plan files; no re-planning, no re-research, no
 restructuring. After items 1–6, this plan set is APPROVED for execution.
+
+---
+
+## Revision 1 (2026-10-26) — APPLIED
+
+All HIGH + MED findings applied; LOW-1..4 applied (advisory, trivial). Commits:
+
+| Finding | Fix applied | Commit |
+|---|---|---|
+| HIGH-1 | 42-05 Task 1 verify rewritten: per-seed gain row OR honest terminal status (`error:ladder_exhausted` / `fit_inexact` / `error:<Type>` with missing Δ); ≥1 gain row overall asserted; `<done>` + must-have truth + success criterion reworded to "spread over the certifying seeds" | 84f5798 |
+| MED-1 | 42-05 owns the crosscheck/lenses mode build (action + `files_modified` += `scripts/case_a_magnitude.jl`, `scripts/README.md`; `ensure_all_schemas` gains the two new CSVs pre-failure-branch; src-diff-stays-empty note); 42-03 whitelist contract is contains-not-exact | 84f5798 / 6dbf074 |
+| MED-2 | `"reused"` added to 42-03 Task 3 status vocabulary (with definition) and pinned in the 42-01 protocol §8c reuse clause | 6dbf074 / 6c11f6b |
+| MED-3 | 42-05 Task 3: automated population-axis assertions (rung curve present, honest-status subset incl. `reused`, three reuse rows at `status = "reused"`); completeness gate split per type (fixed pairs at seed 42; reuse rows at native fixture seeds in `note`) | 84f5798 |
+| MED-4 | 42-04 `must_haves.artifacts[0].path` → `scripts/lib/case_a_common.jl` | 1f4db53 |
+| MED-5 | All 12 `... \| tail -N` verifies across 42-01..42-06 now end with `test ${PIPESTATUS[0]} -eq 0` (green gates) / `-ne 0` (RED gates, asserting the expected failure) — incl. 42-06 :slow gate and phase-closure fast-suite gate | 6c11f6b / 9763318 / 6dbf074 / 1f4db53 / 8b2c419 |
+| LOW-1 | 42-RESEARCH `## Open Questions (RESOLVED)` + one-line resolutions | eb3f5ac |
+| LOW-2 | 42-06 Task 2: junk `grep -c "make.jl" /dev/null` removed; page-executes check runs under the docs env (`julia --project=docs`); page-imports note added to the action | 8b2c419 |
+| LOW-3 | 42-04: `--variant` accepts Dict-key fraction or decimal token, normalized to the Dict key; Task 3 run uses `--variant 1/78` | 1f4db53 |
+| LOW-4 | 42-03 Task 3 structural item: lens_summary ledger conservation re-derivation (`welfare ≈ dso_total + merchandising_surplus + aggregators_total`) | 6dbf074 |
+
+All six plans re-validated after edits: `frontmatter.validate` (schema plan) and
+`verify.plan-structure` both pass for 42-01..42-06.
