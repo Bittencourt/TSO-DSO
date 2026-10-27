@@ -158,7 +158,8 @@ end
     _any_flexible_reactive(aggregators) -> Bool
 
 Returns `true` iff ANY aggregator in `aggregators` has a
-`:devices` property containing at least one member for which `dv isa FourQuadBESS || is_flexible_load(dv)` holds — i.e. a device whose reactive decision is NOT the constant
+`:devices` property containing at least one member for which
+[`has_reactive_decision`](@ref) holds — i.e. a device whose reactive decision is NOT the constant
 `-Pdc*tanφ` draw alone (a `FourQuadBESS`'s live `q_inject`, or a flexible-load member's
 `p_inject*tanφ` term the centralized `Aggregator.contribute!` folds into `:Rq` in the centralized model).
 Shared (unexported — same `TSODSO` module) by both `build_dso_opt`'s and
@@ -166,11 +167,18 @@ Shared (unexported — same `TSODSO` module) by both `build_dso_opt`'s and
 not pass `reactive_consensus` explicitly gets `LIVE` whenever such a member is present, keeping
 ADMM's DSO-OPT subproblem matched to the centralized model's reactive draw by default. Returns
 `false` (no behavior change) for a population with no such member.
+
+(The probe is now the [`has_reactive_decision`](@ref) capability trait — previously the
+hard-coded `dv isa FourQuadBESS || is_flexible_load(dv)` test. The trait's defaults and
+typed overrides reproduce the old probe's resolution on every existing device exactly;
+`CapabilityTraits.jl` documents the per-type mapping.)
 """
+_agg_has_reactive_decision(agg) =
+    hasproperty(agg, :devices) && any(has_reactive_decision, agg.devices)
+
 function _any_flexible_reactive(aggregators)
     for agg in aggregators
-        hasproperty(agg, :devices) || continue
-        any(dv -> dv isa FourQuadBESS || is_flexible_load(dv), agg.devices) && return true
+        _agg_has_reactive_decision(agg) && return true
     end
     return false
 end
@@ -226,8 +234,8 @@ DECOUPLED from "all non-root buses" (the balance-closure axis); on the 2-bus / I
 every non-root bus is a load node, so both axes coincide and the model is unchanged. Throws
 `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, an aggregator bus outside
 `1:length(feeder.buses)`, an aggregator ON the root, or — widened by the flexible-device probe
-— a device for which `dv isa FourQuadBESS || is_flexible_load(dv)`
-holds combined with a NORMALIZED `mode != LIVE` (the guard compares the
+— a device for which [`has_reactive_decision`](@ref) holds
+combined with a NORMALIZED `mode != LIVE` (the guard compares the
 value `normalize_reactive_mode(reactive_consensus)` resolves to, NEVER the caller's raw
 `reactive_consensus` keyword spelling; a maintainer must not "simplify" this to
 `reactive_consensus != ReactiveMode.LIVE`, which would be WRONG whenever `reactive_consensus` is passed as a
@@ -244,7 +252,8 @@ the default path.
 `ReactiveMode.T` (`ReactiveMode.OFF`, `ReactiveMode.CERTIFIED` or `ReactiveMode.LIVE`), validated
 by `normalize_reactive_mode`; `Bool` and `Symbol` values throw `ArgumentError`. Its OWN DEFAULT is the CONTEXT-SENSITIVE
 expression `_any_flexible_reactive(aggregators) ? ReactiveMode.LIVE : ReactiveMode.OFF` — resolving to `LIVE` whenever
-ANY aggregator carries a `FourQuadBESS` or an `is_flexible_load` member, so ADMM's DSO-OPT
+ANY aggregator carries a [`has_reactive_decision`](@ref) member (a `FourQuadBESS`, or an
+`is_flexible_load` flexible load), so ADMM's DSO-OPT
 matches the centralized `Aggregator`'s reactive draw WITHOUT the caller having to
 pass `reactive_consensus = ReactiveMode.LIVE` by hand; a population with NO such member still defaults to
 `ReactiveMode.OFF`, unchanged from the previous default.
@@ -315,20 +324,21 @@ function build_dso_opt(
     # against the wrong closure. It fails LOUD (project convention), directing the caller to
     # `:live` — the only mode whose coupling target (`qag_live == qag + q_inject`, AgrOpt.jl;
     # or the centralized `Aggregator`'s flexible-load `:Rq` roll-up) includes the device's
-    # reactive decision. The probe now covers `dv isa FourQuadBESS || is_flexible_load(dv)` —
-    # a future `q_inject`-carrying OR reactive-drawing device must extend this guard (or the
-    # probe should move to a single contract-level trait). This guard fires ONLY
-    # on an EXPLICIT caller override to OFF/CERTIFIED (this function's own default now resolves
-    # to LIVE whenever such a member is present, via `_any_flexible_reactive` above).
+    # reactive decision. The probe is the `has_reactive_decision` capability trait — a
+    # future `q_inject`-carrying OR reactive-drawing device sets the trait (the old
+    # hard-coded `dv isa FourQuadBESS || is_flexible_load(dv)` test it replaces resolved
+    # every existing device identically; `CapabilityTraits.jl` documents the mapping).
+    # This guard fires ONLY on an EXPLICIT caller override to OFF/CERTIFIED (this
+    # function's own default now resolves to LIVE whenever such a member is present, via
+    # `_any_flexible_reactive` above).
     if mode != ReactiveMode.LIVE
         for (k, agg) in enumerate(aggregators)
-            if hasproperty(agg, :devices) &&
-               any(dv -> dv isa FourQuadBESS || is_flexible_load(dv), agg.devices)
+            if _agg_has_reactive_decision(agg)
                 throw(
                     ArgumentError(
                         "build_dso_opt: aggregator[$k] (bus $(agg.bus)) carries a " *
-                        "FourQuadBESS or flexible-load (is_flexible_load) member — a " *
-                        "device-level reactive decision (q_inject, or the " *
+                        "has_reactive_decision device — a device-level reactive " *
+                        "decision (a FourQuadBESS q_inject, or the " *
                         "p_inject·tanφ flexible-load draw) — but reactive_consensus " *
                         "normalizes to $(mode), not LIVE. Under OFF/CERTIFIED the DSO " *
                         "reactive closure is the inelastic −Pdc·tanφ draw alone, so the " *

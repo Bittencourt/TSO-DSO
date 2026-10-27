@@ -51,6 +51,12 @@ Mutable container coupling a JuMP `model` with named registries and typed builde
   - `objective::QuadExpr` — the quadratic welfare accumulator, see
     [`add_to_objective!`](@ref).
   - `agg_device_vars::Dict{Int,Vector{Any}}` — per-aggregator-bus device variable lists.
+  - `agg_device_types::Dict{Int,Vector{DataType}}` — per-aggregator-bus device TYPE
+    lists appended in lockstep with `agg_device_vars` (same `Aggregator.contribute!`
+    loop, same bus key): index `i` of a bus's type list is the `typeof` the device
+    that produced index `i` of its vars list. Device-type provenance for the
+    trait-routed certificate selection (`storage_kind`) — nothing reads it on any
+    existing path's outcome.
 
 The struct is deliberately NOT parametric: it is filled incrementally. Unset reads of
 `T`/`feeder`/`pf_vars` must go through the checked accessors `_require_T`,
@@ -71,6 +77,7 @@ mutable struct ModelContext
     pf_vars::Union{Nothing, NamedTuple}
     objective::QuadExpr
     agg_device_vars::Dict{Int, Vector{Any}}
+    agg_device_types::Dict{Int, Vector{DataType}}
 end
 
 """
@@ -78,7 +85,7 @@ end
 
 Construct a `ModelContext` wrapping `model` with empty registries, `feeder === nothing`,
 `T == 0`, `pf === nothing`, `pf_vars === nothing`, a zero objective and no aggregator
-device variables.
+device variables or device types.
 """
 ModelContext(model::Model) = ModelContext(
     model,
@@ -91,6 +98,7 @@ ModelContext(model::Model) = ModelContext(
     nothing,
     zero(QuadExpr),
     Dict{Int, Vector{Any}}(),
+    Dict{Int, Vector{DataType}}(),
 )
 
 # Checked accessors: unset state fails loudly instead of defaulting silently.

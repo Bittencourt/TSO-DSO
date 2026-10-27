@@ -435,10 +435,24 @@ function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)
     mu_q_mat = reduce(vcat, (permutedims(-st.react.μq[j]) for j in load_nodes))
     q_devices = Dict{Int, Vector{Float64}}()
     for j in load_nodes
-        for v in agr_by_bus[j].ctx.agg_device_vars[j]
-            if haskey(v, :p_ch) && haskey(v, :p_dch) && haskey(v, :q)
-                q_devices[j] = Float64[value(v.q[t]) for t in 1:T]
-            end
+        # Trait-routed publish selection: an entry is published iff its PAIRED type
+        # (same bus, same index — both appended by `Aggregator.contribute!`'s per-device
+        # loop) has `storage_kind === :four_quadrant`. Entries WITHOUT type provenance
+        # (hand-built test contexts) fall back to the legacy var-shape sniff via
+        # `_stash_entry_has_kind` (CapabilityTraits.jl), so existing fixtures classify
+        # identically — and a future EV's vars (p_ch/p_dch, no q) can never be published
+        # here regardless of shape.
+        varlist = agr_by_bus[j].ctx.agg_device_vars[j]
+        types = get(agr_by_bus[j].ctx.agg_device_types, j, nothing)
+        for (i, v) in enumerate(varlist)
+            _stash_entry_has_kind(
+                types,
+                v,
+                i,
+                :four_quadrant,
+                v -> haskey(v, :p_ch) && haskey(v, :p_dch) && haskey(v, :q),
+            ) || continue
+            q_devices[j] = Float64[value(v.q[t]) for t in 1:T]
         end
     end
     return (mu_q_mat, q_devices)

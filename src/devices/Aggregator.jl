@@ -221,6 +221,12 @@ function contribute!(agg::Aggregator, ctx::ModelContext; T::Int)
         end
         utility += res.utility
         push!(device_vars, res.vars)
+        # Device-type provenance for trait-routed certificate selection (behaviorally
+        # inert): appended in LOCKSTEP with the vars push — same loop iteration, same
+        # bus key — so index i of `agg_device_types[agg.bus]` is the `typeof` the
+        # device that produced index i of `agg_device_vars[agg.bus]`. Nothing reads
+        # it on any existing path's outcome.
+        push!(get!(ctx.agg_device_types, agg.bus, Vector{DataType}()), typeof(d))
     end
 
     # ONE net active + ONE net reactive injection per (bus, t) — the aggregator is the

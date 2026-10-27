@@ -83,4 +83,51 @@ this trait. Defaults to `false` for any device; a flexible-load device
 """
 is_flexible_load(::AbstractDevice) = false
 
+"""
+    has_reactive_decision(d::AbstractDevice) -> Bool
+
+Trait identifying devices whose reactive power involves a genuine per-time-step
+DECISION (a decision variable, or a decision-coupled draw) — the devices for
+which the reactive-consensus machinery must run `LIVE`, and for which an explicit
+`OFF`/`CERTIFIED` override fails loud. Defaults to `is_flexible_load(d)`: the
+default IS the historical probe's flexible-load half, made explicit — the probe
+this trait replaces was the hard-coded `dv isa FourQuadBESS || is_flexible_load(dv)`
+inside `DsoOpt.jl`'s `_any_flexible_reactive` (shared by `build_dso_opt`'s and
+`solve_admm`'s smart `reactive_consensus` default) and its inline OFF/CERTIFIED
+guard copy. A `FourQuadBESS` (genuine `q` decision) overrides it to `true`;
+`FixedCapacitor` deliberately does NOT (its `q_inject` is a constant nameplate
+injection — part of the `-Pdc·tanφ` draw, not a decision — so the trait stays
+`false`, reproducing the probe's historical asymmetry, research A8).
+
+EV-SAFETY MOTIVATION: a future `ElectricVehicle` carries `p_ch`/`p_dch` decision
+variables of its own; a SHAPE-based probe could false-match such active-only
+storage devices into reactive-consensus (or certificate) semantics. Routing
+classification through a dispatched trait makes "what can this device decide?"
+a property of the TYPE hierarchy, not of variable names — an EV can never
+acquire another regime's semantics by resembling it.
+"""
+has_reactive_decision(d::AbstractDevice)::Bool = is_flexible_load(d)
+
+"""
+    storage_kind(d::AbstractDevice) -> Symbol
+    storage_kind(T::Type{<:AbstractDevice}) -> Symbol
+
+Storage-regime classification trait driving certificate selection over the
+type-paired device stash (`ModelContext.agg_device_types`): `:battery`
+([`PVBattery`](@ref) — the App. C complementarity regime), `:four_quadrant`
+(`FourQuadBESS` — its own independently-measured peer certificate), `:none`
+(default — no storage semantics; the `:ev` value is reserved for the device
+plan that introduces EVs). The historical classification SNIFFED the stashed
+vars' shape (`haskey(v,:p_ch) && haskey(v,:p_dch) && (!)haskey(v,:q)`) —
+correctness debt, because an ElectricVehicle's vars would false-match the
+battery shape and run battery-certificate semantics on a legitimate optimum.
+Dispatching on the TYPE closes that door: the stash stores `DataType`s
+(appended in lockstep with the vars by `Aggregator.contribute!`), instance
+reads forward to the type-level method (ONE override point per class), and
+only type-unprovenanced (hand-built test-context) stash entries fall back to
+the legacy shape predicate.
+"""
+storage_kind(::Type{<:AbstractDevice}) = :none
+storage_kind(d::AbstractDevice) = storage_kind(typeof(d))
+
 export AbstractDevice

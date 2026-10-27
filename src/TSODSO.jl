@@ -124,6 +124,13 @@ include("devices/Deferrable.jl")
 include("devices/PVBattery.jl")
 include("devices/FourQuadBESS.jl")
 include("devices/FixedCapacitor.jl") # second q_inject consumer
+# --- Capability-trait overrides for the EXISTING device library ---
+# Included after every existing device file (it references `FourQuadBESS`/`PVBattery`)
+# and BEFORE Aggregator.jl: the golden device files are byte-identical and must show
+# zero diff, so the refactor traits' typed overrides (has_reactive_decision /
+# storage_kind for existing classes, plus the type-paired stash selection helper)
+# live in this one file. See its header for the golden-policy rationale.
+include("devices/CapabilityTraits.jl")
 
 # --- Aggregator roll-up: the network-facing residual writer ---
 include("devices/Aggregator.jl")
@@ -330,6 +337,8 @@ markov_path
 has_reactive,
 reactive_factor,
 is_flexible_load,
+has_reactive_decision,
+storage_kind,
 close_balance!
 
 # Exactness and recovery helpers.

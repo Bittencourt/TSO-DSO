@@ -43,7 +43,8 @@
     # `good()` factory idiom (`contribute!` is never called here, so profile
     # lengths only need to satisfy the CONSTRUCTORS).
 
-    therm = TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(20.0, 24))
+    therm =
+        TSODSO.Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(20.0, 24))
     defer = TSODSO.Deferrable(2, 8, 16, 1.0, 0.5, 0.5)
     inter = TSODSO.Interruptible(2, 0.0, 5.0, 4.0, 1.0)
     pvbatt =
@@ -179,15 +180,17 @@ end
     end
 
     # Positional pairing: device_vars[i]'s OWNER is agg_device_types[bus][i]
-    # (both appended by the same per-device loop iteration).
+    # (both appended by the same per-device loop iteration). The stash stores
+    # DataType VALUES (device TYPES), so the pairing checks are `<:` — an
+    # `isa` check would wrongly test whether the type object is itself a device.
     types2 = ctx.agg_device_types[2]
     @test length(types2) == length(ctx.agg_device_vars[2]) == 3
-    @test types2[1] isa TSODSO.Thermostatic
-    @test types2[2] isa TSODSO.Deferrable
-    @test types2[3] isa TSODSO.PVBattery
+    @test types2[1] <: TSODSO.Thermostatic
+    @test types2[2] <: TSODSO.Deferrable
+    @test types2[3] <: TSODSO.PVBattery
     # Every PVBattery-derived entry pairs with storage_kind === :battery.
     for t in types2
-        if t isa TSODSO.PVBattery
+        if t <: TSODSO.PVBattery
             @test TSODSO.storage_kind(t) === :battery
         end
     end
@@ -206,9 +209,9 @@ end
     )
     types4q = ctx4q.agg_device_types[2]
     @test length(types4q) == length(ctx4q.agg_device_vars[2]) == 4
-    @test types4q[3] isa TSODSO.PVBattery
+    @test types4q[3] <: TSODSO.PVBattery
     @test TSODSO.storage_kind(types4q[3]) === :battery
-    @test types4q[4] isa TSODSO.FourQuadBESS
+    @test types4q[4] <: TSODSO.FourQuadBESS
     @test TSODSO.storage_kind(types4q[4]) === :four_quadrant
 end
 
@@ -253,7 +256,11 @@ end
     # shape — this is what will keep EV vars out of the battery certificate in 43-02).
     ctx_b, vars_b = pinned_battery_ctx()
     append!(get!(ctx_b.agg_device_vars, 2, Vector{Any}()), [vars_b])
-    append!(get!(ctx_b.agg_device_types, 2, Vector{DataType}()), [TSODSO.FourQuadBESS])
+    # The stash stores CONCRETE DataTypes (what Aggregator pushes is `typeof(d)`),
+    # so pair via an instance's typeof — the union-all `FourQuadBESS` itself is
+    # not a DataType and would fail the typed-vector convert.
+    bess = TSODSO.FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)
+    append!(get!(ctx_b.agg_device_types, 2, Vector{DataType}()), [typeof(bess)])
     @test TSODSO.assert_battery_complementarity!(ctx_b; τ = 1e-9) === nothing
 end
 

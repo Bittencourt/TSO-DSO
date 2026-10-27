@@ -362,8 +362,25 @@ function assert_battery_complementarity!(
     )
     !isempty(ctx.agg_device_vars) || return nothing
     for (bus, varlist) in ctx.agg_device_vars
-        for v in varlist
-            (haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q)) || continue   # a battery, not a 4Q device
+        # Trait-routed selection over the type-paired stash: an entry is battery-checked
+        # iff its PAIRED type (same bus, same index — both appended by
+        # `Aggregator.contribute!`'s per-device loop) has `storage_kind === :battery`.
+        # If the type list is ABSENT or shorter than the vars list — hand-built test
+        # contexts like the synthetic `ctx.agg_device_vars` entries in the certificate
+        # test files, which carry no provenance — `_stash_entry_has_kind`
+        # (CapabilityTraits.jl) FALLS BACK to the legacy shape predicate below, keeping
+        # the pre-refactor classification exactly (production paths always pair). This
+        # is what will keep a future EV's vars (p_ch/p_dch shape, storage_kind :ev) out
+        # of the battery certificate: pairing overrides shape.
+        types = get(ctx.agg_device_types, bus, nothing)
+        for (i, v) in enumerate(varlist)
+            _stash_entry_has_kind(
+                types,
+                v,
+                i,
+                :battery,
+                v -> haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q),
+            ) || continue   # a battery, not a 4Q device
             # Rated charge/discharge power (eq. 3.8 bound) = the base-scaling reference. The
             # atol floor guards a (degenerate) zero/absent upper bound against a div-by-zero.
             pmax = has_upper_bound(v.p_ch[1]) ? upper_bound(v.p_ch[1]) : 1.0
