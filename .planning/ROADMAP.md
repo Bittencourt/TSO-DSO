@@ -218,7 +218,14 @@ Plans:
   4. PV can supply optimal reactive power within an apparent-power cone, with SOCP exactness re-measured in the high-PV regime and a Volt-VAR droop curve evaluated only post hoc as a comparator.
   5. Each new device class matches the centralized solve before it is used under ADMM.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 43-01-PLAN.md — Capability-trait refactor (has_reactive_decision + storage_kind) with classification-equivalence test; FixedCapacitor asymmetry preserved — DEV-10
+- [ ] 43-02-PLAN.md — ElectricVehicle V1G/V2G (session windows as bounds, quadratic soft target, c_deg > 0, EV certificate + negative-price fixture) + crossval gate — DEV-06/07/10
+- [ ] 43-03-PLAN.md — HeatPump 2R2C (exogenous COP, comfort band, joint terminal rule, flexible-load roll-up) + crossval gate — DEV-08/10
+- [ ] 43-04-PLAN.md — SmartInverterPV (anonymous apparent-power cone, zero-utility Q through reactive consensus, μ crossval) — DEV-09/10
+- [ ] 43-05-PLAN.md — build_population flex_devices opt-in + hash-seeded EV sessions (Scenario untouched); SOCP exactness re-measurement script + committed CSV + droop post-hoc comparator + literate page — DEV-06/09
 
 ### Phase 44: Aggregator as Actor
 
