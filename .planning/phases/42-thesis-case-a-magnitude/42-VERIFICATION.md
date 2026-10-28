@@ -1,7 +1,7 @@
 ---
 phase: 42-thesis-case-a-magnitude
 verified: 2026-10-26T23:14:21Z
-status: human_needed
+status: passed
 score: 11/11 must-haves verified
 overrides_applied: 0
 re_verification: none
@@ -153,3 +153,13 @@ The phase's negative/UNDEFINED measurement outcome is the protocol working as de
 
 _Verified: 2026-10-26T23:14:21Z_
 _Verifier: the agent (gsd-verifier)_
+
+---
+
+## Human Verification Resolution (2026-10-27)
+
+All three human_verification items RESOLVED via conversational UAT (42-HUMAN-UAT.md, status: complete, commit 38b5840):
+
+1. **Rendered writeup page — PASS.** Docs rebuilt 2026-10-27 09:23 after WR-03 (b5ece3a): exit 0, 62.8 KB page; structural UNDEFINED headline ("certified pairs 0 of 5 seeds"), live seed→rung attribution, 47 honest refusal rows, "The gap is NOT FULLY ATTRIBUTED" section. User confirmed.
+2. **Optional :slow reproducibility re-run — SKIPPED (with reason).** Band already certified bit-exact (delta 0.0, WELFARE_RTOL=1e-8) during 42-06; CSVs + per-row protocol SHAs + per-unit commits carry the audit trail. User declined re-run.
+3. **Editorial sign-off on honest-magnitude/attribution framing — PASS.** Framing approved for thesis: W_DADP certified 5/5 seeds (mean -378163.5585, spread 1.3e-7 rel, crosscheck |Δ|=0.0235); registered-mix Δ% UNDEFINED (FIT INFEASIBLE on every seed, stated as measured property); certified pairs 3-7 orders below +25%; NOT FULLY ATTRIBUTED as permitted terminal state (protocol §9), no tuning. User signed off.

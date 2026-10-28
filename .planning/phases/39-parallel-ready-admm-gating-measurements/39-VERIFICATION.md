@@ -1,7 +1,7 @@
 ---
 phase: 39-parallel-ready-admm-gating-measurements
 verified: 2026-10-24T11:10:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 overrides_applied: 0
 re_verification:
@@ -147,3 +147,12 @@ Status is `human_needed` solely because the phase's core behavioral proof (threa
 
 _Verified: 2026-10-24T11:10:00Z_
 _Verifier: the agent (gsd-verifier)_
+
+---
+
+## Human Verification Resolution (2026-10-27)
+
+Both human_verification items RESOLVED via conversational UAT (39-HUMAN-UAT.md, status: complete, commit 26a6a9f):
+
+1. **Researcher opt-in at -t 4 — PASS.** Executed on the researcher's host: 33/33 pass, exit 0, 3m16.5s; bitwise serial-vs-threaded equality (iters 56/56, welfare -4823.66604824162 both legs); all three error-parity legs identical bare types, no wrapper exceptions.
+2. **T=24 full attribution — PASS (Option A executed).** Completed on this host (exit 0, ~13.4 min, no earlyoom kill): 26 T=24 rows committed to results/ieee8500_benchmark/memory_attribution.csv; anchor delta 9.296 GiB (peak HWM 11.75 GiB) at iters=7 with honest CertificateError refusal (SOCP gap 223.7 > 1, prices REFUSED); reconciliation residual 0.379 ± 0.555 GiB. Supersedes the Phase-35 standing figures (11.52/10.17 GiB) as the accepted T=24 record.

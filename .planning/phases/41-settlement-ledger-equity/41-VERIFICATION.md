@@ -1,7 +1,7 @@
 ---
 phase: 41-settlement-ledger-equity
 verified: 2026-10-26T09:23:10Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 overrides_applied: 0
 human_verification:
@@ -144,3 +144,12 @@ No gaps. All five roadmap success criteria are met at the mechanism level with c
 
 _Verified: 2026-10-26T09:23:10Z_
 _Verifier: the agent (gsd-verifier)_
+
+---
+
+## Human Verification Resolution (2026-10-27)
+
+Both human_verification items RESOLVED via conversational UAT (41-HUMAN-UAT.md, status: complete, commit 13d537d):
+
+1. **BL-01 sign-convention eyeball — PASS.** comparison.jl:719 `+Σ λ₀·imp_total` matches ledger-sign legs (:534/:633) and header spec (:39-41); :733 surplus = collections − wholesale; BL-01 pin green in 346/346 settlement suite (pure-consumer receipt ≈ +12.0, pre-fix −12). User confirmed.
+2. **Rendered docs page — PASS.** docs/build/generated/settlement_equity.html (fresh vs source 558b27c) renders the no-income statement ("operate on BILLS only — no income data exists to use"), the fit leg as honest error:SolveFailedError, flat/tou solve_failed rows with measured values, and the refusal-attribution prose. User confirmed.
