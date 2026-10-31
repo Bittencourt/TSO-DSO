@@ -3,7 +3,7 @@ status: complete
 phase: 42-thesis-case-a-magnitude
 source: [42-VERIFICATION.md]
 started: 2026-10-26
-updated: 2026-10-27
+updated: 2026-10-31
 ---
 
 ## Current Test
@@ -19,8 +19,8 @@ evidence: "Docs rebuilt 2026-10-27 09:23 after WR-03 (b5ece3a had landed post-bu
 
 ### 2. Optional: re-run the :slow reproducibility item
 expected: ~47 min live 784-house seed-42 run reproduces the committed magnitude row within WELFARE_RTOL=1e-8 (strongest independent confirmation rows are machine-produced).
-result: skipped
-reason: "User declined re-run ('skio' → skip) 2026-10-27 — the band was already certified bit-exact (delta 0.0, WELFARE_RTOL=1e-8) during 42-06; committed CSVs + per-row protocol SHAs + per-unit commits carry the audit trail."
+result: pass
+evidence: "User asked agent to run it 2026-10-31. `TSODSO_TEST_SET=slow TSODSO_TEST_FILES=test_case_a_magnitude.jl julia --project=. -e 'import Pkg; Pkg.test()'` → exit 0, 18/18 pass in 36m50.3s. Live ladder history rung-for-rung identical to the committed seed-42 row: rung 'default' error:CertificateError iters=80, rung 'gap_1e-10' converged iters=80 (1092.7 s), FIT leg error:SolveFailedError at attempt+retry (protocol-pinned retry, on_inexact=:report) — matching the 42-06 bit-exact probe (welfare −378163.5654347284) and the pinned WELFARE_RTOL=1e-8 band."
 
 ### 3. Editorial sign-off on honest-magnitude/attribution framing
 expected: thesis-suitable framing — W_DADP certified 5/5 seeds; FIT INFEASIBLE on every seed → Δ% UNDEFINED at registered mix; measurable certified gains 3–7 orders below +25%; gap not fully attributed (protocol §9 recorded outcome).
@@ -30,10 +30,10 @@ evidence: "Framing presented in full 2026-10-27 (headline certification 5/5 seed
 ## Summary
 
 total: 3
-passed: 2
+passed: 3
 issues: 0
 pending: 0
-skipped: 1
+skipped: 0
 blocked: 0
 
 ## Gaps
