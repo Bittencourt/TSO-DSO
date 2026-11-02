@@ -2,7 +2,8 @@
 phase: 43-flexible-devices-ev-heat-pump-smart-inverter
 reviewed: 2026-11-02T00:00:00Z
 depth: standard
-files_reviewed: 24
+iteration: 2
+files_reviewed: 26
 files_reviewed_list:
   - src/devices/CapabilityTraits.jl
   - src/devices/AbstractDevice.jl
@@ -17,6 +18,8 @@ files_reviewed_list:
   - src/admm/admm_state.jl
   - src/core/ModelContext.jl
   - src/experiments/materialize.jl
+  - src/pricing/fit.jl
+  - src/experiments/mpc_loop.jl
   - src/TSODSO.jl
   - scripts/socp_highpv_remeasure.jl
   - docs/literate/socp_highpv_exactness.jl
@@ -30,194 +33,54 @@ files_reviewed_list:
   - test/test_exports.jl
 findings:
   critical: 0
-  warning: 6
-  info: 6
-  total: 12
-status: issues_found
+  warning: 0
+  info: 4
+  total: 4
+status: clean
 ---
 
-# Phase 43: Code Review Report
+# Phase 43: Code Review Report (iteration 2)
 
 **Reviewed:** 2026-11-02
 **Depth:** standard
-**Files Reviewed:** 24
-**Status:** issues_found
+**Status:** clean (0 critical, 0 warning; 4 info carried or new)
 
 ## Summary
 
-The default path looks preserved: the refactor traits reproduce the old
-`isa FourQuadBESS || is_flexible_load` probe, and the type stash is only read for classification.
-The SOC cone form `[S_inv, pv_used, q] in SecondOrderCone()` is correct, and the `q` sign
-convention is consistent with the `-Pdc·tanφ + q_inject` residual. There are no blockers.
+I re-inspected each fix commit (`d7f7ed6`, `797e2be`, `459778a`, `5177a0b`, `c1190cb`, `fa5d7e6`). The fixed warnings WR-01..WR-06 are resolved and I found no regressions. I did not run the test suite.
 
-The weaknesses are:
-- an EV session-semantics problem for the wrap-around sessions that `materialize.jl` generates by default;
-- seed reproducibility across Julia versions;
-- certificate and test tolerances that were pinned or picked rather than measured;
-- a censored headline measurement;
-- two code paths (the FIT tariff and MPC) that do not know the new devices.
-
-## Warnings
-
-### WR-01: Wrap-around EV sessions (`t_dep < t_arr`) have no link between evening charging and the departure target
-
-**File:** `src/devices/ElectricVehicle.jl:300-345`, `src/experiments/materialize.jl:~596-612`
-
-The model sets `soc[1] = soc0` and the soft target `s ≥ E_target − soc[t_dep+1]`. For a wrap
-session (the typical `_flex_ev` draw: arrival at hour 15-22, departure at hour 5-10), the energy
-needed by the target is charged only in hours `1..t_dep`.
-
-- The evening window `t_arr..T` is disconnected from the target. Charging there is driven only by
-  the `a_ch·p_ch` utility, and `soc[T+1]` is free unless `soc_terminal = :cyclic`.
-- `soc0` is documented as "arrival SOC" but is applied at `t = 1`, when the car is already
-  plugged in.
-- No trip energy is consumed between departure and re-arrival; SOC stays flat while the window
-  bounds are zero.
-
-The "overnight session" that the docs and the `materialize` comments describe is therefore not
-what is modelled: the target forces a morning top-up and the evening charge is an optional bonus.
-Flex-population results (prices, DLMPs, the EV-certificate fixtures) rest on this.
-
-**Fix:** For wrap sessions, either model the overnight need explicitly or default to
-`soc_terminal = :cyclic` with a trip-consumption term. At minimum, document the limitation and
-add a test that fails if a wrap EV can charge in the evening with no effect on the departure
-shortfall.
-
-### WR-02: Seeds derived from `hash((...))` are not stable across Julia versions
-
-**File:** `src/experiments/materialize.jl:570-576` (`_flex_ev`), `:612-616` (`_flex_heatpump`);
-related test: `test/test_flex_population.jl:112-135`
-
-- Seeds are built as `Int(hash((s_pop, :ev, bus, house_index)) % typemax(UInt32))` and then fed
-  to StableRNGs.
-- StableRNGs guarantees a fixed stream per seed, but `Base.hash` makes no such guarantee, and its
-  algorithm changed in Julia 1.12.
-- The project pins the Julia version for reproducibility, so a Julia bump silently changes every
-  flex session.
-- The seeding test's statistical assertions (`length(s) > 30`, `length(Set(...)) > 7`) depend on
-  the same hash output and could flip.
-- The existing `_case_a_house_seed` precedent has the same weakness; this phase copies it into
-  new code.
-
-**Fix:** Derive seeds with a portable mix (fixed FNV or SplitMix over integer-coded tags, or the
-project's existing `sub_seed`). Do not hash a `Symbol` or a tuple.
-
-### WR-03: EV certificate tolerance and ADMM cross-validation bands have little or no measured margin
-
-**File:** `src/models/complementarity_ev.jl:43-48`, `src/admm/admm_state.jl:~155, ~190`,
-`test/test_electricvehicle.jl:19-36, 495`
-
-- `TAU_EV = 2e-7` is about 11× the worst of 5 seeds, all on one two-bus fixture (noise floor
-  1.75e-8).
-- The same default is applied unmodified in the ADMM final consolidation (`check_ev = true`, no
-  `τ_ev` override). For the battery, ADMM needed a loosened `τ_batt = 1e-3` for exactly this
-  reason.
-- The header says the ADMM final-consolidation sizing is recorded in `test_electricvehicle.jl`,
-  but the test only asserts that nothing throws on one fixture. It records no measured ratio.
-- The cross-validation bands are "pinned at the observed maxima rounded UP to 4 significant
-  digits". That leaves effectively zero margin, so a different Julia, Clarabel or BLAS build can
-  flip a deterministic test. Project memory already records numerical drift between Julia 1.12.5
-  and 1.12.7.
-
-**Fix:**
-- Measure the ADMM-final `max_ratio` and size `τ_ev` for that call site separately, as was done
-  for `τ_batt`, on more than one fixture, including the flex population.
-- Pin the cross-validation bands at a stated multiple of the measured maximum (for example 2-3×).
-
-### WR-04: The high-PV re-measurement is censored exactly where the question is asked
-
-**File:** `scripts/socp_highpv_remeasure.jl:~137-170`, `results/socp_highpv/highpv_exactness.csv`,
-`docs/literate/socp_highpv_exactness.jl:~95-110`
-
-- At pv = 1.2, 3 of the 5 `with_optimal_q` seeds and 1 of the 5 `active_only` seeds end in
-  `refused_battery`.
-- Those rows have no `maxgap`, `max_ratio` or welfare, because a refused solve returns no context.
-- The doc's "max ratio" table takes its maximum only over the surviving rows. The DEV-09 question
-  — is the SOCP still exact with optimal Q in the stress regime — is therefore only partly
-  answered at that point.
-- The cone gate runs first, so `socp_gate_passed = true` is a legitimate lower bound, but the
-  quantitative gap is missing.
-
-**Fix:**
-- Harvest the cone gap for refused non-SOCP rows too: catch the `CertificateError` and re-solve
-  with `on_violation = :warn` via an oracle-path seam, or expose `maxgap` in the error payload.
-- State explicitly in the doc that the stress-regime result is censored.
-- Add the refused fraction to the summary table.
-
-### WR-05: New devices are not handled by the FIT tariff path or the MPC loop
-
-**File:** `src/pricing/fit.jl:~100-117` (`_fit_pv_and_flex`), `src/experiments/mpc_loop.jl:~525-545, 1204-1235`
-
-- `_fit_pv_and_flex` sends every non-`PVBattery` device through the "flexible load" branch, with
-  `consumption += -p_inject`.
-  - A `SmartInverterPV` then contributes a negative consumption and no `Ppv`, so its generation
-    is treated as load reduction and its `q` is ignored.
-  - V2G EV discharge is likewise treated as negative load.
-  - Nothing warns or throws.
-- `mpc_loop.jl` dispatches on `isa PVBattery/FourQuadBESS/Thermostatic`, and
-  `_mpc_device_hour_utility` has no method for the new types. That fails loudly with a
-  `MethodError`, but it means `flex_devices` populations cannot be fed to `run_mpc`.
-- `build_population(...; flex_devices=...)` is a public opt-in with no guard, so running
-  `compare_tariffs` or `run_mpc` on it is a silent trap.
-
-**Fix:** Add explicit `ArgumentError` guards for the unsupported device types in
-`_fit_pv_and_flex` and `run_mpc`, or implement the methods. Document the limitation in
-`build_population`.
-
-### WR-06: Weak or picked tolerances and a thin byte-identity fence in `test_flex_population.jl`
-
-**File:** `test/test_flex_population.jl:15-37, 183-187`
-
-- The ADMM-vs-centralized check is `abs(res.welfare - obj) <= 1e-3 * max(1.0, abs(obj))`. The
-  same fixture has measured gaps of about 1e-5 in `test_electricvehicle.jl`, so this tolerance is
-  picked rather than measured, and 100× or more looser than the measurement, which makes the test
-  nearly non-failing.
-- The "byte-identity fence" compares only `(bus, φ, device types, Pdc)`. It does not compare any
-  device parameter or profile, and it checks only the kwarg-absent case against `nothing`, not
-  against a pre-phase golden. It would not catch a change in the default path's device values.
-
-**Fix:** Pin the welfare tolerance to a measured value, as in the EV crossval. Compare device
-fields (`d == d2` on the structs, or a field-wise hash), and ideally compare against a stored
-pre-phase golden digest.
+- **WR-02 (seeds).** `_flex_mix` uses only UInt64 arithmetic and integer tag codes. The `Base.hash` calls are gone from `_flex_ev` and `_flex_heatpump`. `v % UInt64` is safe for negative inputs, and the `Int(h % UInt64(typemax(UInt32)))` reduction always fits `Int`. `sub_seed` and `_case_a_house_seed` are untouched, so the golden-pinned `:case_a_784` path is intact. The fixer recorded the remaining `Base.hash` use there as a known follow-up.
+- **WR-05 (FIT and MPC guards).** `_reject_unsupported_flex_devices` is defined in `pricing/fit.jl`. It is called at module scope inside functions, so include order does not matter. In `_run_mpc` the guard runs after `aggs` is bound, so there is no scoping problem. The guard takes only `agg.devices` and does not change the legacy path.
+- **WR-06 (welfare band and fence).** The welfare band is now 3x the measured maximum over 6 seeds, and the digest fence covers every field. The docs and code agree. I did not recompute the digests.
+- **WR-03 (EV certificate).** `TAU_EV_ADMM` is applied only at the two ADMM final-consolidation call sites in `admm_state.jl` (lines 159 and 195). The centralized `TAU_EV` default in `AgrOpt.jl` and `assert_ev_complementarity!` is unchanged. The header table documents how the constant was measured, which meets the measured-not-picked policy.
+- **WR-01 (wrap-session EV).** The model was not changed. The header, docstring and calibration comment now agree with the model: `soc0` is the SOC at hour 1, only hours `1..t_dep` count toward the target, and there is no trip energy. A test pins this. This is acceptable as documented and pinned. The researcher must still decide whether a true overnight model is needed before citing flex-population EV results.
+- **WR-04 (high-PV re-measurement).** For `refused_battery` rows the script re-solves with the battery `τ = 1e12` and keeps the cone gate at `1e-4`. The verdict is unaffected. The harvested cone gap is still gated, and the `gap_source` column records provenance. If the cone gate itself refused, that row falls into the `:socp_exact` branch, so there is no path that silently ungates the cone.
 
 ## Info
 
-### IN-01: Stale and contradictory trait documentation
-- `src/devices/AbstractDevice.jl:~113-121` says "the `:ev` value is reserved for the device plan
-  that introduces EVs", but `CapabilityTraits.jl:25` already defines it.
-- `SmartInverterPV.jl:~86` says `CapabilityTraits.jl` is "reserved for the golden-pinned legacy
-  devices", yet the new `ElectricVehicle` `storage_kind` override lives there.
+### IN-01: `TAU_EV_ADMM` is large relative to typical values and the sample is heavy-tailed
 
-Pick one convention and update the comments.
+**File:** `src/models/complementarity_ev.jl:82`
+**Issue:** 45 of 48 flex runs sit at or below 1.6e-6, but two runs reach 4.3e-4 and 1.197e-3. The tolerance of 3.6e-3 is 3x the sample maximum of a heavy-tailed distribution, and it sits about 1e3 to 1e4 above typical values. A real simultaneous charge/discharge of about 6% of Pmax would pass. It is still about 220x below the negative-price co-charge fixture (ratio near 0.8), so the certificate does catch gross violations. No production flex population uses V2G yet, so the measured sample is a proxy.
+**Fix:** Re-measure on a larger seed sweep when V2G flex populations are enabled in production. Consider a dedicated test that fixes the ratio of the worst seeded runs (h=4 and h=13) so that drift is visible.
 
-### IN-02: `_with_flex` silently skips a house
-In `src/experiments/materialize.jl:~676`, `scale > 0 || return a` silently drops the flex devices
-of a zero-demand aggregator. This contradicts the `_flex_selectors` promise never to silently
-shrink the population. Throw or warn instead.
+### IN-02: The MPC guard is unreachable from the public API
 
-### IN-03: Zero-panel `SmartInverterPV` is a free STATCOM
-In `materialize.jl:~650` and `scripts/socp_highpv_remeasure.jl`, a device with `ppv === nothing`
-(or `Ppv = 0`) still gets a cone `S_inv` of `0.1·scale` at no cost, which makes it a costless
-reactive source. That is intentional for the `q_only_capability` variant, but in the flex
-population it is an undocumented side effect.
+**File:** `src/experiments/mpc_loop.jl:289-291`
+**Issue:** `Scenario` cannot carry `flex_devices`, so `_reject_unsupported_flex_devices` in `_run_mpc` can never fire from `run_mpc`. The test covers it only at the helper level. This is defensive and harmless, but the code gives no indication that it is untested through `run_mpc`.
+**Fix:** Keep the guard, and leave a comment saying it is defensive until `Scenario` gains a `flex_devices` field.
 
-### IN-04: Droop comparator uses system-max voltage and an absolute threshold
-In `scripts/socp_highpv_remeasure.jl:~205-225`:
-- Every inverter is evaluated at the single per-hour maximum bus voltage, while `q_opt` is summed
-  over buses, so droop and optimum are compared at different locations.
-- The sign-agreement and active-hour thresholds are an absolute `1e-6`, regardless of nameplate.
+### IN-03: `Base.hash` seeds remain in `_case_a_house_seed` and `sub_seed` (carried forward)
 
-The comparison is qualitative only. State that in the doc.
+**File:** `src/experiments/materialize.jl` (`_case_a_house_seed`, `sub_seed`)
+**Issue:** The fixer documented this as deferred because changing it would re-pin the goldens. Cross-Julia-version reproducibility is at risk. The memory notes on td6node and Julia 1.12.7 show this class of drift is real in this repo.
+**Fix:** Run a dedicated golden-re-pin task, or pin the Julia version in CI and in the docs.
 
-### IN-05: `materialize.jl` docstring reformatting is non-functional
-The `_case_a_rung_counts` docstring now has a very long single line, and one
-`isempty(...) && throw(...)` was rewrapped. This is unrelated to phase 43 and adds diff noise to
-a golden-adjacent file.
+### IN-04: Previously reported IN-01..IN-06 remain untouched (carried forward)
 
-### IN-06: `HeatPump` utility form
-`utility = −(b/2)·Σ(Tin − Tmin)²` penalizes being warmer than `Tmin`, so it is an energy-saving
-preference rather than a comfort utility. It is a consistent QP and matches `Thermostatic`, but
-the docs call it a "comfort utility". State the interpretation (the optimum is at the band floor).
+**File:** see `43-REVIEW.iter2.md`
+**Issue:** The Info findings were out of the fix scope and are unchanged.
+**Fix:** Triage them in a later pass.
 
 ---
 
