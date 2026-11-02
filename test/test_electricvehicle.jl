@@ -31,10 +31,13 @@
 #   20260723    1.539e-5        2.046e-6      1.056e-5        1.633e-6
 #   max         3.886e-5        4.129e-6      1.807e-5        9.654e-6
 #
-# The bands are PINNED AT those observed maxima (rounded UP to 4 significant digits, never padded
-# to a round number): welfare atol V1G 3.887e-5 / V2G 1.808e-5; λ ‖·‖₂ atol V1G 4.130e-6 /
-# V2G 9.655e-6. The ADMM final consolidation also runs the EV certificate (check_ev, τ = TAU_EV)
-# and does NOT throw on any seed (compliant dispatch).
+# The bands are PINNED AT 3 x THE OBSERVED MAXIMA above (review WR-03: a band equal to the max has
+# zero margin against a Julia / Clarabel / BLAS build change), rounded up to 4 significant
+# digits: welfare atol V1G 1.166e-4 / V2G 5.422e-5; λ ‖·‖₂ atol V1G 1.239e-5 / V2G 2.897e-5.
+# The ADMM final consolidation also runs the EV certificate (check_ev, τ = TAU_EV_ADMM -- a
+# SEPARATE, measured tolerance; see complementarity_ev.jl provenance) and does NOT throw on any
+# seed (compliant dispatch). Its measured ADMM-final max ratios are recorded in that header and
+# exercised by the "ADMM final consolidation" item below.
 
 @testitem "electricvehicle: ElectricVehicle constructor guards reject physics / App. C / V2G violations" tags =
     [:electricvehicle] begin
@@ -495,8 +498,8 @@ end
         return [TSODSO.Aggregator(2, 0.90, [ev], Pdc)]
     end
 
-    # (band_welfare, band_lambda_2norm) per class, pinned at the observed maxima (header table).
-    bands = Dict(false => (3.887e-5, 4.130e-6), true => (1.808e-5, 9.655e-6))
+    # (band_welfare, band_lambda_2norm) per class: 3 x the observed maxima (header table).
+    bands = Dict(false => (1.166e-4, 1.239e-5), true => (5.422e-5, 2.897e-5))
 
     function gaps(seed, v2g)
         feeder = TwoBusFixtures.two_bus_feeder()
@@ -537,4 +540,48 @@ end
     @test TSODSO.has_reactive_decision(
         ev_aggs(TwoBusFixtures.SEED_2BUS, true)[1].devices[1],
     ) === false
+end
+
+@testitem "electricvehicle: ADMM final consolidation uses the measured TAU_EV_ADMM (V2G, compliant) (crossval)" setup =
+    [TwoBusFixtures] tags = [:electricvehicle, :admm] begin
+    using TSODSO, JuMP
+
+    # TAU_EV_ADMM = 3 x the measured ADMM-final max ratio 1.197e-3 (complementarity_ev.jl header).
+    @test TSODSO.TAU_EV_ADMM == 3.6e-3
+    @test TSODSO.TAU_EV_ADMM > TSODSO.TAU_EV
+
+    T = TwoBusFixtures.T
+    swing = [(t in 5:8) ? 12.0 : ((t >= 18 || t <= 4) ? 1.0 : 4.0) for t in 1:T]
+    flat = fill(4.0, T)
+
+    # Each case's measured ADMM-final max_ratio is annotated. Flat price (5.6e-5) and the flex
+    # seeded EV at house 4 (1.2e-3) EXCEED the centralized TAU_EV = 2e-7: with it, solve_admm
+    # would throw a CertificateError on a compliant consolidation.
+    function admm_runs(λ, ev)
+        prof = generate_profiles(seed = TwoBusFixtures.SEED_2BUS + 2, T = T)
+        Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * p for p in prof.demand]
+        res = solve_admm(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            [TSODSO.Aggregator(2, 0.90, [ev], Pdc)];
+            T = T,
+            λ₀ = λ,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+        )
+        return isfinite(res.welfare) && res.iters >= 1
+    end
+    v2g_ev(e) = TSODSO.ElectricVehicle(
+        e.bus, e.η, e.Δt, e.Pmax, e.Emin, e.Emax, e.soc0, e.E_target, e.κ,
+        e.λ_min, e.λ_med, e.λ_max, e.t_arr, e.t_dep; v2g = true, c_deg = 0.05,
+    )
+    fixture_ev = TSODSO.ElectricVehicle(
+        2, 0.95, 1.0, 0.02, 0.0, 0.08, 0.06, 0.06, 1e3,
+        TwoBusFixtures.BATT_λ_MIN, TwoBusFixtures.BATT_λ_MED, TwoBusFixtures.BATT_λ_MAX,
+        18, 8; v2g = true, c_deg = 0.05,
+    )
+    @test admm_runs(swing, fixture_ev)                      # measured 3.1e-8
+    @test admm_runs(flat, fixture_ev)                       # measured 2.8e-5 .. 5.6e-5
+    flex4 = v2g_ev(TSODSO._flex_ev(1_234_567_890, 2, 4, T; scale = 0.02))
+    @test admm_runs(swing, flex4)                           # measured 1.197e-3 (the max)
 end

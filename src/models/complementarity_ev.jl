@@ -44,7 +44,23 @@
 # `assert_socp_exact!`'s sizing discipline) and is a much tighter test than the SOCP-path battery
 # τ = 1e-3: a co-charge leg pair above ~0.045% of Pmax on each side already trips it. The negative-
 # price co-charge fixture sits at ratio ≈ 0.8 of Pmax² -- ~4e6× above TAU_EV, unambiguous.
-# ADMM final-consolidation sizing is recorded where it is measured (test_electricvehicle.jl).
+#
+# ADMM FINAL-CONSOLIDATION τ (`TAU_EV_ADMM`, MEASURED 2026-11-02, review WR-03). The ADMM final
+# re-solve runs the certificate on an AGR-OPT whose prices carry the augmented-Lagrangian terms
+# (legitimately off exact consensus), a different regime from the centralized solve above, so the
+# centralized `TAU_EV` is NOT reused there (the battery needed the same split: τ_batt = 1e-3).
+# Quantity: max_t p_ch·p_dch / Pmax² of the final consolidation solve (`solve_admm`, two-bus, T = 24,
+# ρ = RHO_2BUS, V2G c_deg = 0.05, every run iters = 2), 64 runs over:
+#   - the swing-price test EV, 5 seeds + soc0 = 0.04 variant       max 3.19e-8
+#   - two V2G EVs with different sessions, 3 seeds                  max 4.80e-9
+#   - flat λ₀ = 4, 3 seeds (test EV)                                max 5.65e-5   (> TAU_EV)
+#   - flex-population seeded EVs (`_flex_ev`, house 1:24, scale 0.02) converted to V2G,
+#     swing and flat prices (48 runs): 45 of 48 <= 1.6e-6; swing h=13 4.30e-4, swing h=4 1.197e-3
+# 3 of 48 flex runs and all 3 flat test-EV runs exceed the centralized TAU_EV = 2e-7, so reusing it
+# would make `solve_admm` throw on compliant consolidations. `TAU_EV_ADMM = 3.6e-3` is 3 x the
+# measured maximum (1.197e-3), rounded up. It applies ONLY to the ADMM final-consolidation call
+# site; the centralized default is unchanged. The negative-price co-charge fixture (ratio ≈ 0.8)
+# remains ~220x above it.
 #
 # Reads `ctx.agg_device_vars`, `ctx.agg_device_types`, `ctx.T`. Uses `CertificateError` (never
 # `@assert`) per project convention.
@@ -56,6 +72,14 @@ Default relative tolerance of [`assert_ev_complementarity!`](@ref) (fraction of 
 on the compliant V2G two-bus fixtures -- see this file's provenance header.
 """
 const TAU_EV = 2e-7
+
+"""
+    TAU_EV_ADMM
+
+Relative tolerance of [`assert_ev_complementarity!`](@ref) at the ADMM final-consolidation call
+site only (`3.6e-3` = 3 x the measured maximum `1.197e-3`; see this file's provenance header).
+"""
+const TAU_EV_ADMM = 3.6e-3
 
 """
     assert_ev_complementarity!(ctx::ModelContext; τ::Real = TAU_EV, T::Int = _require_T(ctx),
