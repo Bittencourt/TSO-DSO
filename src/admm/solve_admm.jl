@@ -303,6 +303,16 @@ row of `dadp`); see `_agr_result_keys`.
     no-slack) refuses the CONVERGED point; its `iterations` field carries the ADMM iteration
     count reached before the refusal.
 
+# Actor objectives (Phase 44)
+
+`actors` (optional `Vector{Portfolio}` partitioning `aggregators`) applies each portfolio's
+objective to its sites; a [`ProfitObjective`](@ref) adds a retail margin to the AGR-OPT `pag`
+coefficient (a weighted objective inside the same price-taking equilibrium, not a strategic
+aggregator). Supported on this legacy one-aggregator-per-bus path. When some objective is
+non-default the converged result gains a trailing `actor` key
+`(; social_welfare, actor_objective_value, profit_by_actor, retail_wedge)`; `welfare` always
+stays SOCIAL welfare. `actors = nothing` is byte-identical to before.
+
 # Status and exceptions
 
 The returned `status` is `:converged` or `:budget_exceeded` (the caller-set
@@ -333,6 +343,7 @@ function solve_admm(
     rtol_exact::Real = 1e-4,
     agr_optimizer = nothing,
     parallel::Bool = false,
+    actors::Union{Nothing, AbstractVector{Portfolio}} = nothing,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     _check_admm_pair!(:solve_admm, feeder, pf)
@@ -365,6 +376,23 @@ function solve_admm(
         ),
     )
 
+    # Phase 44 actors: validate the partition and every wedge BEFORE any model build. The
+    # per-bus objective Dict is valid on this legacy 1:1 path (one aggregator per bus).
+    objectives = nothing
+    actor_info = nothing
+    if actors !== nothing
+        ex = _expand_actors(actors, aggregators)
+        for obj in ex.site_objective
+            obj isa ProfitObjective && _wedge_vec(obj, T)
+        end
+        if any(!is_default_objective, ex.site_objective)
+            objectives = Dict{Int, AbstractActorObjective}(
+                aggregators[k].bus => ex.site_objective[k] for k in eachindex(aggregators)
+            )
+            actor_info = ex
+        end
+    end
+
     ρf = Float64(ρ)
     ρ_qf = Float64(ρ_q)
     # Normalize ONCE — the SINGLE source of truth for OFF/CERTIFIED/LIVE threaded
@@ -391,6 +419,7 @@ function solve_admm(
         mode,
         rmode;
         agr_optimizer = agr_factory,
+        objectives = objectives,
     )
     # Threaded executor (parallel = true): snapshot the process-global BLAS thread count so it
     # can be restored on EVERY exit path in the `finally` below — the executor itself pins
@@ -487,7 +516,34 @@ function solve_admm(
             BLAS.set_num_threads(blas0)
         end
     end
+    if actor_info !== nothing && result.status === :converged
+        result = (; result..., actor = _actor_report(result, aggregators, actors, actor_info, T))
+    end
     return result
+end
+
+# Phase 44: actor-side report appended to a converged result. `welfare` is already SOCIAL
+# (utilities minus λ₀ᵀp_import); the actor objective value and per-portfolio profit are
+# separate fields, computed from each site's published dispatch (net INJECTION, load < 0).
+function _actor_report(result, aggregators, actors, ex, T)
+    np = length(actors)
+    profit_by_actor = zeros(np)
+    retail_wedge = Vector{Any}(nothing, np)
+    for k in eachindex(aggregators)
+        obj = ex.site_objective[k]
+        obj isa ProfitObjective || continue
+        m = _wedge_vec(obj, T)
+        pag = result.agr_dispatch[aggregators[k].bus]
+        a = ex.site_actor[k]
+        profit_by_actor[a] -= sum(m[t] * pag[t] for t in 1:T)
+        retail_wedge[a] = m
+    end
+    return (;
+        social_welfare = result.welfare,
+        actor_objective_value = result.welfare - sum(profit_by_actor),
+        profit_by_actor,
+        retail_wedge,
+    )
 end
 
 export solve_admm

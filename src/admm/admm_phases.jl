@@ -44,6 +44,7 @@ function _admm_build(
     mode::ReactiveMode.T,
     rmode::_ReactiveMode;
     agr_optimizer = select_optimizer(QP()),
+    objectives = nothing,   # Phase 44: Dict{Int,AbstractActorObjective} keyed by bus (legacy 1:1 path)
 )
     dso = build_dso_opt(
         feeder,
@@ -70,14 +71,26 @@ function _admm_build(
         haskey(agr_by_bus, agg.bus) && throw(
             ArgumentError("two aggregators share bus $(agg.bus); solve_admm assumes 1:1"),
         )
-        agr_by_bus[agg.bus] = build_agr_opt(
-            agg,
-            T;
-            ρ = ρf,
-            reactive_mode = mode,
-            ρ_q = ρ_qf,
-            optimizer = agr_optimizer,
-        )
+        agr_by_bus[agg.bus] = if objectives === nothing
+            build_agr_opt(
+                agg,
+                T;
+                ρ = ρf,
+                reactive_mode = mode,
+                ρ_q = ρ_qf,
+                optimizer = agr_optimizer,
+            )
+        else
+            build_agr_opt(
+                agg,
+                T;
+                ρ = ρf,
+                reactive_mode = mode,
+                ρ_q = ρ_qf,
+                optimizer = agr_optimizer,
+                objective = objectives[agg.bus],
+            )
+        end
     end
 
     N = length(feeder.buses)
