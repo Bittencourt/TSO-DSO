@@ -4,13 +4,13 @@ milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
 stopped_at: "**Operator-ordered clean stop 2026-10-24 (autonomous run halted mid-gap-closure).** Phase 39 complete+verified. Phase 40: 4/4 main plans complete, verification returned gaps_found (POP-04); gap-closure plans 40-05 (AGR solver-precision seam) and 40-06 (bounded tolerance ladder → pin band → lift skip) created; **40-05 COMPLETE; 40-06 INTERRUPTED mid-execution** — ladder already CERTIFIED at rung `gap_1e-10` (stop-on-first-certified, commits 99982c1/e9ebb66/eac9400), remaining 40-06 tail work uncommitted in the working tree."
-last_updated: "2026-10-27T00:07:28.862Z"
+last_updated: "2026-11-02T12:46:54.428Z"
 last_activity: 2026-10-27 -- Phase 43 planning complete
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 26
-  completed_plans: 21
+  completed_plans: 23
   percent: 50
 ---
 
@@ -30,7 +30,7 @@ Phase: 43
 Plan: Not started
 Status: Ready to execute
 Last activity: 2026-10-27 -- Phase 43 planning complete
-Progress: [█████████░] 93%
+Progress: [█████████░] 88%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -229,6 +229,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 40 P06 | ~1h55m (incl. operator pause) | 3 tasks | 6 files |
 | Phase 41 P01 | 27min | 3 tasks | 5 files |
 | Phase 41 P04 | ~2h05m | 3 tasks | 12 files |
+| Phase 43 P02 | 75min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -331,6 +332,7 @@ Recent decisions affecting current work:
 - [Phase 41-04]: the FIT leg on the congestion-calibrated IEEE-13 fixtures is genuinely PRIMAL_INFEASIBLE — the batteryless (A4) FIT dispatch cannot clear the head-branch thermal rating; attributed by probe 2026-10-26 (lifting ONLY the head smax to SMAX_NO_LIMIT makes fit_baseline converge: welfare -4822.1488652716525, SITE-2 LOCALLY_SOLVED); recorded as honest status rows, never dropped
 - [Phase 41-04]: seed-42 default population's centralized run is refused at the battery-complementarity certificate (bus 5, t=16, product 5.78648310574336e-8 vs tau*Pmax^2 6.25e-9) — recorded as an (run) status row; the ieee13-ground smoke mode pins the ground-fixture regression seed 20260718 (thesis seed 42 stays locked on case-a-784)
 - [Phase 41-04]: the case-a-784 ADMM leg at executor defaults (rho=100, no tol changes) converged at iters=80 and was refused at the final battery-complementarity certificate — the Phase-40 measured precedent reproduced; the status row IS the committed artifact (tariff_comparison.csv), per-tariff 784 rows honestly absent (no certified run to settle)
+- [Phase 43]: 43-02: TAU_EV=2e-7 measured (floor 1.75e-8 of Pmax^2); check_ev default false, final-only under ADMM — measured provenance
 
 ### Roadmap Evolution
 
@@ -579,7 +581,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-25T21:23:24.549Z
+Last session: 2026-11-02T12:46:49.756Z
 Stopped at: **Operator-ordered clean stop 2026-10-24 (autonomous run halted mid-gap-closure).** Phase 39 complete+verified. Phase 40: 4/4 main plans complete, verification returned gaps_found (POP-04); gap-closure plans 40-05 (AGR solver-precision seam) and 40-06 (bounded tolerance ladder → pin band → lift skip) created; **40-05 COMPLETE; 40-06 INTERRUPTED mid-execution** — ladder already CERTIFIED at rung `gap_1e-10` (stop-on-first-certified, commits 99982c1/e9ebb66/eac9400), remaining 40-06 tail work uncommitted in the working tree.
 Resume file: None
 
