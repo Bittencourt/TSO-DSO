@@ -51,15 +51,21 @@ println(length(rows), " committed measurement rows")
 # ## Verdicts and cone-residual ratios
 #
 # `max_ratio` is the worst `gap / (atol_b + rtol*|cone|)` over branches and hours (`<= 1` is the
-# gate's acceptance); it is only defined for points that returned a context.
+# gate's acceptance). A refused solve returns no context, so for the `refused_*` rows the cone
+# gap is HARVESTED by a diagnostic re-solve (`gap_source = diag_resolve_after_refused_*`): for a
+# `refused_battery` row only the battery tau is relaxed and the cone gate stays at `1e-4`; for a
+# `refused_socp_exact` row the cone tolerance is relaxed. The re-solve never decides the verdict.
+# The `refused` column below is the refused fraction (refused/n) and `harvested` counts the rows
+# whose ratio comes from such a re-solve, so the maximum is NOT censored to the surviving rows.
 
 @printf(
-    "%-20s %-18s %5s %7s %9s %12s\n",
+    "%-20s %-18s %5s %7s %9s %10s %12s\n",
     "fixture",
     "variant",
     "n",
     "exact",
     "refused",
+    "harvested",
     "max ratio"
 )
 for fx in sort(unique(r["fixture"] for r in rows)),
@@ -69,13 +75,15 @@ for fx in sort(unique(r["fixture"] for r in rows)),
     isempty(s) && continue
     nex = count(r -> r["verdict"] == "exact", s)
     rat = [num(r["max_ratio"]) for r in s if isfinite(num(r["max_ratio"]))]
+    nharv = count(r -> startswith(get(r, "gap_source", ""), "diag_resolve"), s)
     @printf(
-        "%-20s %-18s %5d %7d %9d %12s\n",
+        "%-20s %-18s %5d %7d %9s %10d %12s\n",
         fx,
         v,
         length(s),
         nex,
-        length(s) - nex,
+        @sprintf("%d/%d", length(s) - nex, length(s)),
+        nharv,
         isempty(rat) ? "NA" : @sprintf("%.3g", maximum(rat))
     )
 end
@@ -141,5 +149,9 @@ end
 # (pu). No claim is made beyond these measured columns.
 #
 # Honesty notes: the `refused_battery` rows are battery-complementarity refusals, not SOCP
-# inexactness, so their cone residual is not available (a refused solve returns no model);
-# `max ratio` above is taken over the points that returned one.
+# inexactness; the cone gate had already passed at them. Their cone residual is taken from a
+# diagnostic re-solve (battery tau relaxed, cone gate kept at `1e-4`), so the stress-regime
+# `max ratio` covers every seed, refused or not. Any row where that re-solve itself failed
+# would show up in the `harvested` column as missing and in its `detail` field; the `refused`
+# column is the explicit refused fraction of each cell. The harvested value is a diagnostic of
+# the relaxed-tau point, which can differ slightly from the (non-existent) certified point.

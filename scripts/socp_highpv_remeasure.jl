@@ -25,7 +25,10 @@
 # any other kind (e.g. battery complementarity) refused a LATER certificate, i.e. the cone gate
 # had already passed (`socp_gate_passed = true`). Only AFTER a refused_socp_exact is the point
 # re-solved with rtol_exact = 1e12 -- purely to harvest the maxgap / hybrid_ratios diagnostics;
-# that re-solve never decides the verdict and no tolerance or tau is ever raised.
+# that re-solve never decides the verdict and no tolerance or tau is ever raised for a verdict.
+# Likewise a refused_battery row is re-solved with the battery tau relaxed (cone gate kept at 1e-4)
+# purely to harvest its cone maxgap / ratio (`gap_source = diag_resolve_after_refused_battery`),
+# so the stress-regime maximum is not censored (review WR-04).
 #
 # DROOP COMPARATOR (POST HOC ONLY -- never a convex constraint): on the FIXED active dispatch of
 # the solved point, `ac_feasibility_status` (ACPowerFlow(; limits = false) physics) gives the
@@ -141,7 +144,7 @@ end
 # ---- one measurement point -------------------------------------------------------------------
 sanitize(s) = replace(first(string(s), 120), ',' => ';', '\n' => ' ', '"' => '\'')
 
-function solve_point(feeder, aggs, λ0; rtol_exact)
+function solve_point(feeder, aggs, λ0; rtol_exact, τ = 1e-3)
     return solve_welfare(
         feeder,
         ConvexBranchFlow(),
@@ -150,6 +153,7 @@ function solve_point(feeder, aggs, λ0; rtol_exact)
         λ₀ = λ0,
         allow_export = true,
         rtol_exact = rtol_exact,
+        τ = τ,
     )
 end
 
@@ -169,6 +173,7 @@ function measure(pv_scale::Real, seed::Integer, variant::String)
         ctx, obj, _ = solve_point(feeder, aggs, λ0; rtol_exact = 1e-4)
         row[:verdict] = "exact"
         row[:socp_gate_passed] = true
+        row[:gap_source] = "gate_pass"
     catch e
         if e isa CertificateError
             # Which certificate refused? `solve_welfare` runs the SOCP exactness gate FIRST and
@@ -178,14 +183,22 @@ function measure(pv_scale::Real, seed::Integer, variant::String)
             row[:verdict] = "refused_" * String(e.kind)
             row[:socp_gate_passed] = e.kind !== :socp_exact
             row[:detail] = sanitize(e.msg)
-            if e.kind === :socp_exact
-                try   # diagnostics of the refused point ONLY; never decides the verdict
+            # Diagnostics of the refused point ONLY; the re-solve never decides the verdict and
+            # the standard tolerances are never raised for a verdict. Either the cone gate itself
+            # refused (re-solve with rtol_exact = 1e12) or a LATER certificate did (battery
+            # complementarity: re-solve with its τ = 1e12, keeping the cone gate at 1e-4 so the
+            # harvested cone maxgap is still gated) -- WR-04: without this the refused rows had
+            # NO cone gap and the stress-regime maximum was censored.
+            if e.kind in (:socp_exact, :battery)
+                try
                     ctx, obj, _ = solve_point(
                         feeder,
                         build_aggs(pv_scale, seed, variant),
                         λ0;
-                        rtol_exact = 1e12,
+                        rtol_exact = e.kind === :socp_exact ? 1e12 : 1e-4,
+                        τ = e.kind === :battery ? 1e12 : 1e-3,
                     )
+                    row[:gap_source] = "diag_resolve_after_refused_" * String(e.kind)
                 catch e2
                     row[:detail] =
                         row[:detail] * " | diag_resolve_failed:" * sanitize(typeof(e2))
@@ -265,6 +278,7 @@ function main()
         :maxgap,
         :max_ratio,
         :socp_gate_passed,
+        :gap_source,
         :n_ratio_gt1,
         :worst_branch,
         :worst_hour,
