@@ -63,4 +63,63 @@ function _expand_actors(
     return (; site_actor, site_objective)
 end
 
+"""
+    SlotTable
+
+The consensus axis of the slot ADMM branch (Phase 44, ACTOR-03): one ADMM coupling pair per
+SLOT keyed by (actor, bus) instead of one per load node. Fields: `ids` (ascending slot ids),
+`bus` (slot -> feeder bus), `actor` (slot -> portfolio index), `site` (slot -> index into the
+flat aggregator vector). Built by `build_slot_table`; internal (unexported).
+"""
+struct SlotTable
+    ids::Vector{Int}
+    bus::Dict{Int, Int}
+    actor::Dict{Int, Int}
+    site::Dict{Int, Int}
+end
+
+"""
+    build_slot_table(site_buses, site_actor, N) -> SlotTable
+
+Deterministic slot ids. Sites are visited in portfolio-then-positional order
+(`sort(eachindex(site_buses); by = i -> (site_actor[i], i))`); the FIRST site at a bus gets slot
+id = bus, the k-th further site at the same bus gets `N + k` (k counted over the whole table, in
+visiting order). When every site sits on its own bus the ids are the buses ascending, i.e. the
+legacy `load_nodes`. `ArgumentError` on mismatched lengths or a bus outside `1:N`.
+"""
+function build_slot_table(
+    site_buses::AbstractVector{<:Integer},
+    site_actor::AbstractVector{<:Integer},
+    N::Integer,
+)
+    length(site_buses) == length(site_actor) || throw(
+        ArgumentError(
+            "build_slot_table: $(length(site_buses)) site buses vs $(length(site_actor)) site actors",
+        ),
+    )
+    for (i, b) in enumerate(site_buses)
+        1 <= b <= N ||
+            throw(ArgumentError("build_slot_table: site $i bus=$b is outside feeder buses 1:$N"))
+    end
+    bus = Dict{Int, Int}()
+    actor = Dict{Int, Int}()
+    site = Dict{Int, Int}()
+    taken = Set{Int}()
+    extra = 0
+    for i in sort(collect(eachindex(site_buses)); by = i -> (site_actor[i], i))
+        b = Int(site_buses[i])
+        id = if b in taken
+            extra += 1
+            Int(N) + extra
+        else
+            push!(taken, b)
+            b
+        end
+        bus[id] = b
+        actor[id] = Int(site_actor[i])
+        site[id] = i
+    end
+    return SlotTable(sort!(collect(keys(bus))), bus, actor, site)
+end
+
 export Portfolio

@@ -112,7 +112,16 @@ mutable struct AdmmState
     budget_exceeded_flag::Bool
     t0_wall_ns::UInt64
     react::Union{Nothing, _LiveState}
+    # Phase 44: slot id -> feeder bus. Identity over `load_nodes` on the legacy branch; trailing
+    # so the 18-arg positional constructor below keeps working (scripts/profile_ieee8500_*).
+    slot_bus::Dict{Int, Int}
 end
+
+AdmmState(dso, agr_by_bus, load_nodes, T, residuals, λ, c, a, pag_dso_prev, util, p_import, ρf,
+    ρ_frozen, exact_maxgap, converged_flag, budget_exceeded_flag, t0_wall_ns, react) =
+    AdmmState(dso, agr_by_bus, load_nodes, T, residuals, λ, c, a, pag_dso_prev, util, p_import,
+        ρf, ρ_frozen, exact_maxgap, converged_flag, budget_exceeded_flag, t0_wall_ns, react,
+        Dict{Int, Int}(j => j for j in load_nodes))
 
 # ---- hook: state allocation ---------------------------------------------------------------------
 _react_state(::Union{_ReactiveOff, _ReactiveCertified}, load_nodes, T, ρ_q) = nothing

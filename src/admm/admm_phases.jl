@@ -45,6 +45,8 @@ function _admm_build(
     rmode::_ReactiveMode;
     agr_optimizer = select_optimizer(QP()),
     objectives = nothing,   # Phase 44: Dict{Int,AbstractActorObjective} keyed by bus (legacy 1:1 path)
+    slots = nothing,        # Phase 44: SlotTable -> slot branch (ids/objectives keyed by slot id)
+    site_objectives = nothing,   # slot branch: per-site objective, aligned with `aggregators`
 )
     dso = build_dso_opt(
         feeder,
@@ -55,8 +57,44 @@ function _admm_build(
         reactive_consensus = mode,
         ρ_q = ρ_qf,
         pf = pf,
+        slots = slots,
     )
-    load_nodes = dso.load_nodes                       # ascending non-root aggregator buses
+    load_nodes = dso.load_nodes                       # ascending non-root aggregator buses (slot ids on the slot branch)
+
+    if slots !== nothing
+        # SLOT BRANCH (Phase 44, ACTOR-03): one AGR-OPT per slot; slot-table well-formedness
+        # replaces the two 1:1 guards below (which stay verbatim on the legacy branch).
+        length(slots.ids) == length(aggregators) || throw(
+            ArgumentError(
+                "slot table has $(length(slots.ids)) slots for $(length(aggregators)) aggregators",
+            ),
+        )
+        agr_by_slot = Dict{Int, AgrOpt}()
+        for s in slots.ids
+            agg = aggregators[slots.site[s]]
+            agr_by_slot[s] = if site_objectives === nothing
+                build_agr_opt(
+                    agg,
+                    T;
+                    ρ = ρf,
+                    reactive_mode = mode,
+                    ρ_q = ρ_qf,
+                    optimizer = agr_optimizer,
+                )
+            else
+                build_agr_opt(
+                    agg,
+                    T;
+                    ρ = ρf,
+                    reactive_mode = mode,
+                    ρ_q = ρ_qf,
+                    optimizer = agr_optimizer,
+                    objective = site_objectives[slots.site[s]],
+                )
+            end
+        end
+        return _admm_state_init(dso, agr_by_slot, load_nodes, feeder, T, λ₀, ρf, ρ_qf, rmode, copy(slots.bus))
+    end
 
     # 1:1 node<->aggregator coupling (multi-aggregator-per-bus is a possible generalization).
     length(aggregators) == length(load_nodes) || throw(
@@ -93,6 +131,15 @@ function _admm_build(
         end
     end
 
+    return _admm_state_init(dso, agr_by_bus, load_nodes, feeder, T, λ₀, ρf, ρ_qf, rmode,
+        Dict{Int, Int}(j => j for j in load_nodes))
+end
+
+"""
+Allocate the iterate state (residual ledger, multipliers, targets) over `load_nodes` (bus ids
+on the legacy branch, slot ids on the slot branch). Shared by both build branches.
+"""
+function _admm_state_init(dso, agr_by_bus, load_nodes, feeder, T, λ₀, ρf, ρ_qf, rmode, slot_bus)
     N = length(feeder.buses)
     residuals = AdmmResiduals(N, T)
 
@@ -126,6 +173,7 @@ function _admm_build(
         false,                 # budget_exceeded_flag
         time_ns(),             # t0_wall_ns: loop-entry timestamp (wall-clock budget)
         react,
+        slot_bus,
     )
 end
 

@@ -287,6 +287,7 @@ function build_dso_opt(
                          ReactiveMode.OFF,
     ρ_q::Real = ρ,
     pf::AbstractPowerFlow = ConvexBranchFlow(),
+    slots = nothing,
 )
     _check_admm_pair!(:build_dso_opt, feeder, pf)
     mode = normalize_reactive_mode(reactive_consensus)
@@ -365,12 +366,25 @@ function build_dso_opt(
     # cases are byte-for-byte unaffected — same load_nodes, same model shape.
     agg_buses = Set(agg.bus for agg in aggregators)
     load_nodes = sort!(collect(agg_buses))
+    # Phase 44 slot branch (`slots::SlotTable`): the coupling axis is the slot ids; a slot's
+    # injection lands at its bus. `nothing` (legacy) runs every line below exactly as before.
+    slot_bus = nothing
+    if slots !== nothing
+        slot_bus = slots.bus
+        load_nodes = copy(slots.ids)
+        length(aggregators) == length(load_nodes) || throw(
+            ArgumentError(
+                "build_dso_opt: $(length(aggregators)) aggregators for $(length(load_nodes)) slots",
+            ),
+        )
+    end
     transit_nodes = Int[j for j in 1:N if j != root && !(j in agg_buses)]
 
     # Per-load-node CONSTANT reactive draw q_ag_j[t] = Σ_{agg@j} −Pdc[t]·tan(acos φ) (thesis
     # 3.23). Summed over any aggregators sharing a bus; the temporal guard mirrors Aggregator.
     q_draw = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    for agg in aggregators
+    site_slot = slots === nothing ? nothing : Dict(v => s for (s, v) in slots.site)
+    for (k, agg) in enumerate(aggregators)
         length(agg.Pdc) >= T || throw(
             ArgumentError(
                 "aggregator at bus $(agg.bus) has Pdc length $(length(agg.Pdc)) < T=$T " *
@@ -378,7 +392,12 @@ function build_dso_opt(
             ),
         )
         tanφ = reactive_factor(agg.φ)               # tan(arccos φ) (thesis 3.23), single-sourced
-        q = q_draw[agg.bus]
+        # slot branch: each site's draw goes to ITS slot (slot -> site index is `slots.site`)
+        q = if slots === nothing
+            q_draw[agg.bus]
+        else
+            q_draw[site_slot[k]]
+        end
         for t in 1:T
             q[t] += -agg.Pdc[t] * tanφ
         end
@@ -418,7 +437,7 @@ function build_dso_opt(
     # (4a) ACTIVE load-node coupling: one variable per (load node, t), injected into :Rp[j].
     @variable(model, pag_dso[j = load_nodes, t = 1:T])
     for j in load_nodes, t in 1:T
-        add_to_residual!(ctx, :Rp, j, t, pag_dso[j, t])
+        add_to_residual!(ctx, :Rp, slot_bus === nothing ? j : slot_bus[j], t, pag_dso[j, t])
     end
 
     # (4b) REACTIVE load-node closure (thesis 3.23), 3 EXPLICIT branches keyed on `mode`
@@ -429,7 +448,7 @@ function build_dso_opt(
         # Bit-for-bit identical to the original `reactive_consensus = false` build: inject the CONSTANT
         # draw directly, no qag_dso variable, no ctx.meta[:qag_dso] key.
         for j in load_nodes, t in 1:T
-            add_to_residual!(ctx, :Rq, j, t, q_draw[j][t])
+            add_to_residual!(ctx, :Rq, slot_bus === nothing ? j : slot_bus[j], t, q_draw[j][t])
         end
     elseif mode == ReactiveMode.CERTIFIED
         # Bit-for-bit identical to the original `reactive_consensus = true` build:
@@ -439,7 +458,7 @@ function build_dso_opt(
         # `:qag_pin` registration is UNCONDITIONAL in this branch (never skip it).
         @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
-            add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
+            add_to_residual!(ctx, :Rq, slot_bus === nothing ? j : slot_bus[j], t, qag_dso[j, t])
         end
         @constraint(model, qag_pin[j = load_nodes, t = 1:T], qag_dso[j, t] == q_draw[j][t])
         register_constraint!(ctx, :qag_pin, qag_pin)
@@ -451,7 +470,7 @@ function build_dso_opt(
         # dual-ascent loop and carrying its own ρ_q-scaled quadratic penalty (see (5) below).
         @variable(model, qag_dso[j = load_nodes, t = 1:T])
         for j in load_nodes, t in 1:T
-            add_to_residual!(ctx, :Rq, j, t, qag_dso[j, t])
+            add_to_residual!(ctx, :Rq, slot_bus === nothing ? j : slot_bus[j], t, qag_dso[j, t])
         end
         ctx.meta[:qag_dso] = qag_dso
     else
@@ -487,6 +506,7 @@ function build_dso_opt(
         obj_expr += 0.5 * ρ_q * sum(qag_dso[j, t]^2 for j in load_nodes, t in 1:T)
     end
     @objective(model, Min, obj_expr)
+    slot_bus === nothing || (ctx.meta[:slot_bus] = slot_bus)
 
     return DsoOpt(
         model,

@@ -313,6 +313,10 @@ non-default the converged result gains a trailing `actor` key
 `(; social_welfare, actor_objective_value, profit_by_actor, retail_wedge)`; `welfare` always
 stays SOCIAL welfare. `actors = nothing` is byte-identical to before.
 
+`_force_slot_path` is a TEST SEAM (not API): it forces the slot-indexed build (ids, AGR-OPTs and
+DSO-OPT coupling variables keyed by (actor, bus) slot) onto a population with at most one site
+per bus, where slot id == bus id and the result is bitwise the legacy one.
+
 # Status and exceptions
 
 The returned `status` is `:converged` or `:budget_exceeded` (the caller-set
@@ -344,6 +348,7 @@ function solve_admm(
     agr_optimizer = nothing,
     parallel::Bool = false,
     actors::Union{Nothing, AbstractVector{Portfolio}} = nothing,
+    _force_slot_path::Bool = false,
 )
     # ---- Boundary guards (fail here, not deep in the loop) -------------------------------------
     _check_admm_pair!(:solve_admm, feeder, pf)
@@ -393,6 +398,24 @@ function solve_admm(
         end
     end
 
+    # Phase 44 slot branch (TEST SEAM `_force_slot_path`): build the (actor, bus) slot table and
+    # take the slot build. In this plan it is reachable only for populations with at most one
+    # site per bus (a bus with several sites still reaches the legacy guard and throws its
+    # existing ArgumentError; automatic slot routing for shared buses is plan 44-05). With
+    # `actors = nothing` every site is its own actor.
+    slots = nothing
+    site_objectives = nothing
+    if _force_slot_path && length(Set(a.bus for a in aggregators)) == length(aggregators)
+        site_actor = actors === nothing ? collect(eachindex(aggregators)) :
+                     _expand_actors(actors, aggregators).site_actor
+        slots = build_slot_table([a.bus for a in aggregators], site_actor, length(feeder.buses))
+        if objectives !== nothing
+            site_objectives = AbstractActorObjective[
+                objectives[a.bus] for a in aggregators
+            ]
+        end
+    end
+
     ρf = Float64(ρ)
     ρ_qf = Float64(ρ_q)
     # Normalize ONCE — the SINGLE source of truth for OFF/CERTIFIED/LIVE threaded
@@ -420,6 +443,8 @@ function solve_admm(
         rmode;
         agr_optimizer = agr_factory,
         objectives = objectives,
+        slots = slots,
+        site_objectives = site_objectives,
     )
     # Threaded executor (parallel = true): snapshot the process-global BLAS thread count so it
     # can be restored on EVERY exit path in the `finally` below — the executor itself pins
