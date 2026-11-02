@@ -127,6 +127,7 @@ include("devices/FixedCapacitor.jl") # second q_inject consumer
 include("devices/ElectricVehicle.jl") # V1G/V2G flexible storage (phase 43)
 include("devices/HeatPump.jl") # 2R2C heat pump flexible load (phase 43)
 include("devices/SmartInverterPV.jl") # PV with optimal-Q apparent-power cone (phase 43)
+include("devices/Behavioural.jl") # exogenous behavioural wrappers (phase 44, ACTOR-04)
 # --- Capability-trait overrides for the EXISTING device library ---
 # Included after every existing device file (it references `FourQuadBESS`/`PVBattery`)
 # and BEFORE Aggregator.jl: the golden device files are byte-identical and must show

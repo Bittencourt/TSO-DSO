@@ -72,7 +72,8 @@ const FIT_SITE3_ALMOST_GAP_TOL = 7.74884392740205e-5
 
 Phase-43 guard (WR-05): the FIT-OPT and the MPC loop have NO model for the opt-in
 `ElectricVehicle` / `HeatPump` / `SmartInverterPV` devices (`build_population(...;
-flex_devices = ...)`). Without this guard the FIT "flexible load" branch would silently
+flex_devices = ...)`) and for the phase-44 behavioural wrappers `PartialCompliance` / `OptOut` /
+`Rebound` (`apply_behaviour`). Without this guard the FIT "flexible load" branch would silently
 treat a `SmartInverterPV` as negative consumption (its generation read as load reduction, its
 `q` ignored) and V2G EV discharge as negative load. Throws `ArgumentError` naming the
 offending device types.
@@ -80,11 +81,13 @@ offending device types.
 function _reject_unsupported_flex_devices(devices, caller::AbstractString)
     bad = unique(
         nameof(typeof(d)) for
-        d in devices if d isa Union{ElectricVehicle,HeatPump,SmartInverterPV}
+        d in devices if d isa Union{
+            ElectricVehicle,HeatPump,SmartInverterPV,PartialCompliance,OptOut,Rebound,
+        }
     )
     isempty(bad) || throw(
         ArgumentError(
-            "$caller does not support the phase-43 flexible devices " *
+            "$caller does not support the phase-43 flexible devices / phase-44 behavioural wrappers " *
             "$(join(string.(bad), ", ")) (build_population `flex_devices` opt-in): they " *
             "have no FIT-OPT / MPC model here. Use the day-ahead centralized/ADMM " *
             "strategies, or drop `flex_devices`.",

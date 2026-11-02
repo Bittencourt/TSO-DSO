@@ -195,6 +195,14 @@ function build_stochastic_welfare(
 
     S = length(scenario_aggs)
 
+    # Phase-44 guard: the stochastic extensive form has no model for behavioural wrappers.
+    for aggs_s in scenario_aggs, a in aggs_s
+        _reject_unsupported_flex_devices(
+            filter(d -> d isa Union{PartialCompliance, OptOut, Rebound}, a.devices),
+            "build_stochastic_welfare",
+        )
+    end
+
     length(probabilities) == S || throw(
         ArgumentError("probabilities has length $(length(probabilities)), expected S=$S"),
     )

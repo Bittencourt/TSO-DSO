@@ -34,6 +34,20 @@ storage_kind(::Type{<:FourQuadBESS}) = :four_quadrant
 # (`assert_ev_complementarity!`) and keeps battery semantics off EV vars.
 storage_kind(::Type{<:ElectricVehicle}) = :ev
 
+# --- behavioural wrappers (phase 44, ACTOR-04) --------------------------------------------
+# Wrapper traits FORWARD the inner device's (a wrapper must never acquire or lose another
+# regime's semantics). OptOut stores the inner traits at construction and is `:none` for storage
+# (a constant baseline has no storage dynamics, vars = (;)).
+is_flexible_load(d::PartialCompliance) = is_flexible_load(d.inner)
+is_flexible_load(d::Rebound) = is_flexible_load(d.inner)
+is_flexible_load(d::OptOut) = d.flexible
+has_reactive_decision(d::PartialCompliance) = has_reactive_decision(d.inner)
+has_reactive_decision(d::Rebound) = has_reactive_decision(d.inner)
+has_reactive_decision(d::OptOut) = d.reactive
+storage_kind(::Type{<:PartialCompliance{D}}) where {D} = storage_kind(D)
+storage_kind(::Type{<:Rebound{D}}) where {D} = storage_kind(D)
+storage_kind(::Type{<:OptOut}) = :none
+
 # --- type-paired stash-entry selection ----------------------------------------------------
 # Selection over the device stash (`ctx.agg_device_vars`) for the certificate
 # publishers (welfare_solve.jl's battery check, admm_state.jl's `_react_outputs`
