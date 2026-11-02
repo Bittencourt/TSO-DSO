@@ -4,13 +4,13 @@ milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
 stopped_at: "**Operator-ordered clean stop 2026-10-24 (autonomous run halted mid-gap-closure).** Phase 39 complete+verified. Phase 40: 4/4 main plans complete, verification returned gaps_found (POP-04); gap-closure plans 40-05 (AGR solver-precision seam) and 40-06 (bounded tolerance ladder → pin band → lift skip) created; **40-05 COMPLETE; 40-06 INTERRUPTED mid-execution** — ladder already CERTIFIED at rung `gap_1e-10` (stop-on-first-certified, commits 99982c1/e9ebb66/eac9400), remaining 40-06 tail work uncommitted in the working tree."
-last_updated: "2026-11-02T22:59:01.899Z"
+last_updated: "2026-11-02T23:16:35.970Z"
 last_activity: 2026-11-02
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 33
-  completed_plans: 31
+  completed_plans: 32
   percent: 63
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 44 (aggregator-as-actor) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-11-02
-Progress: [█████████░] 94%
+Progress: [██████████] 97%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -236,6 +236,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 44 P04 | 110min | 2 tasks | 9 files |
 | Phase 44 P03 | 2h | 3 tasks | 6 files |
 | Phase 44 P05 | 2h | 2 tasks | 4 files |
+| Phase 44 P06 | 1h | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -344,6 +345,7 @@ Recent decisions affecting current work:
 - [Phase 44]: [44-04] Behavioural baseline is a per-device FIT flat-price solve (not fit_baseline); tie-break 1e-6 measured; storage wrapped only with include_storage
 - [Phase ?]: [44-03] DsoOpt gets no new field; slot_bus in ctx.meta[:slot_bus]; AdmmState.slot_bus trailing with 18-arg constructor; _force_slot_path test seam
 - [Phase 44]: 44-05: published per-bus DADP/mu_q row is the primary slot (slot id == bus); slot additive keys only on shared-bus runs; slot_lambda_agree reported, never thrown
+- [Phase 44]: 44-06: WelfareObjective portfolios emit no actor wedge rows; centralized actor_wedge_rows takes the aggregators vector; adapters sum per bus
 
 ### Roadmap Evolution
 
@@ -592,7 +594,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-11-02T22:58:57.812Z
+Last session: 2026-11-02T23:16:32.524Z
 Stopped at: **Operator-ordered clean stop 2026-10-24 (autonomous run halted mid-gap-closure).** Phase 39 complete+verified. Phase 40: 4/4 main plans complete, verification returned gaps_found (POP-04); gap-closure plans 40-05 (AGR solver-precision seam) and 40-06 (bounded tolerance ladder → pin band → lift skip) created; **40-05 COMPLETE; 40-06 INTERRUPTED mid-execution** — ladder already CERTIFIED at rung `gap_1e-10` (stop-on-first-certified, commits 99982c1/e9ebb66/eac9400), remaining 40-06 tail work uncommitted in the working tree.
 Resume file: None
 
