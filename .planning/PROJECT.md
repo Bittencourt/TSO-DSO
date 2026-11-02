@@ -593,4 +593,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-24 — Phase 40 (784-House Thesis Population) complete: `:case_a_784` selector (784 houses → 10 bus-level aggregators, per-house hash seeding, household map), measured scaling report (1.44× at -t 4; iteration blow-up between 390–584 houses), and POP-04 agreement closed by measurement (AGR solver-precision seam, `gap_1e-10` rung certified, band pinned gate-then-golden).*
+*Last updated: 2026-11-02 — Phase 43 (Flexible Devices) complete: capability-trait refactor (`has_reactive_decision`/`storage_kind`, no behaviour change), binary-free `ElectricVehicle` (V1G/V2G, soft departure target, EV co-charge certificate incl. negative-price fixture), `HeatPump` 2R2C (exogenous COP, comfort band, joint terminal rule), `SmartInverterPV` apparent-power cone (optimal Q via reactive consensus), opt-in `flex_devices` population, high-PV SOCP exactness re-measured (30 rows, cone never refused; 4/30 battery-certificate refusals at pv 1.2, reported). Overnight EV model accepted as a documented limitation (backlog).*
