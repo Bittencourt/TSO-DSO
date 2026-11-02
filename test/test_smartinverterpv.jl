@@ -15,7 +15,8 @@
     using TSODSO, JuMP
 
     @test TSODSO.SmartInverterPV(2, 1.0, [0.0, 0.5, 1.0]) isa TSODSO.AbstractDevice
-    @test TSODSO.SmartInverterPV(2, 1.0, [0.0, 0.5, 1.0]) isa TSODSO.SmartInverterPV{Float64}
+    @test TSODSO.SmartInverterPV(2, 1.0, [0.0, 0.5, 1.0]) isa
+          TSODSO.SmartInverterPV{Float64}
     @test_throws ArgumentError TSODSO.SmartInverterPV(2, 0.0, [0.5])
     @test_throws ArgumentError TSODSO.SmartInverterPV(2, -1.0, [0.5])
     @test_throws ArgumentError TSODSO.SmartInverterPV(2, 1.0, [0.5, -0.1])
@@ -44,7 +45,7 @@ end
     @test length(res.vars.pv_used) == T && length(res.vars.q) == T
     @test res.p_inject isa Vector{AffExpr}
     for t in 1:T
-        @test res.p_inject[t] == res.vars.pv_used[t]
+        @test res.p_inject[t] == 1.0 * res.vars.pv_used[t]
     end
     # Active/reactive side writes NOTHING to residuals or the objective.
     @test isempty(ctx.residuals)
@@ -143,11 +144,8 @@ end
         ctx();
         T = T,
     )
-    @test TSODSO.contribute!(
-        TSODSO.SmartInverterPV(2, 1.0, fill(0.5, T)),
-        ctx();
-        T = T,
-    ) isa NamedTuple
+    @test TSODSO.contribute!(TSODSO.SmartInverterPV(2, 1.0, fill(0.5, T)), ctx(); T = T) isa
+          NamedTuple
 end
 
 @testitem "smartinverterpv: classification -- reactive decision yes, flexible load no" tags =
