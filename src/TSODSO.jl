@@ -141,6 +141,7 @@ include("devices/Aggregator.jl")
 # --- Actor objectives + portfolios (phase 44) ---
 include("actors/actor_objective.jl")
 include("actors/Portfolio.jl")
+include("actors/efficiency.jl")
 
 # --- Models (rung 0 and rung 1 integration) ---
 include("models/toy_dc.jl")

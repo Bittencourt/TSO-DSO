@@ -99,6 +99,17 @@ horizon `T` (the rung-1 `solve_linear` stays untouched as a regression). It:
 Returns `(ctx, objective_value, dadp)` where `dadp = dual.(balance_p[bus, :])` at the
 FIRST aggregator's bus (the distribution price / DADP over the horizon).
 
+`actors` (Phase 44, optional `Vector{Portfolio}` partitioning `aggregators`; the positional
+vector stays the solve order): each portfolio's objective applies to all its sites. A
+[`ProfitObjective`](@ref) adds `Σ_t m_t·net_t` (net injection) to a LOCAL copy of the welfare
+objective only (never `ctx.objective`; a zero wedge is not short-circuited). It is a weighted
+objective inside the same price-taking equilibrium (retail price = DADP + m), not a strategic
+aggregator. The wedge is added here from `ctx.meta[:agg_net]` rather than through a new
+`Aggregator.contribute!` keyword, which keeps `Aggregator.jl` untouched and the default path
+bit-identical. On this non-default path the returned value is the SOCIAL welfare
+(`value(ctx.objective) − λ₀ᵀp_import`) and `ctx.meta[:actor]` holds
+`(; social_welfare, actor_objective_value, profit_by_actor, retail_wedge)`.
+
 Throws `ArgumentError` on empty `aggregators`, `length(λ₀) != T`, or an aggregator bus
 outside `1:length(feeder.buses)` — the boundary guards that keep a shape mismatch from
 becoming a cryptic deep crash or a silently-wrong optimum.
@@ -123,12 +134,29 @@ function solve_welfare(
     # return value and gates acceptance behind its OWN measured, named primal-dual gap bound
     # (FIT_SITE3_ALMOST_GAP_TOL) BEFORE trusting `objective_value` (see src/pricing/fit.jl).
     allow_almost::Bool = false,
+    # Phase 44 (ACTOR-01): per-portfolio actor objectives. `nothing` (default) leaves every
+    # line below byte-identical. See the `actors` paragraph of the docstring.
+    actors::Union{Nothing, AbstractVector{Portfolio}} = nothing,
 )
     # Boundary guards: empty aggregators ⇒ no priced load / no
     # objective; a λ₀ shape mismatch ⇒ BoundsError deep in objective assembly. Fail here.
     isempty(aggregators) &&
         throw(ArgumentError("solve_welfare needs at least one aggregator"))
     length(λ₀) == T || throw(ArgumentError("λ₀ has length $(length(λ₀)), expected T=$T"))
+
+    # Actor objectives: validate the partition and every wedge length BEFORE any model build.
+    site_objective = nothing
+    site_actor = nothing
+    actor_active = false
+    if actors !== nothing
+        ex = _expand_actors(actors, aggregators)
+        site_actor = ex.site_actor
+        site_objective = ex.site_objective
+        actor_active = any(!is_default_objective, site_objective)
+        for obj in site_objective
+            obj isa ProfitObjective && _wedge_vec(obj, T)   # length/finite guard
+        end
+    end
 
     model = Model(optimizer)                 # QP() factory by default; never names a solver
 
@@ -240,6 +268,14 @@ function solve_welfare(
 
     # GLB-CVX welfare (thesis eq. 3.38): Σ aggregator utility − λ₀ᵀ·p_import.
     welfare = ctx.objective - sum(λ₀[t] * p_import[t] for t in 1:T)
+    if actor_active
+        # Wedge lives ONLY in this local expression; `ctx.objective` is never modified, so the
+        # social welfare stays recomputable from utilities. A zero wedge is NOT skipped.
+        for k in eachindex(aggregators)
+            wt = wedge_term(site_objective[k], agg_net[k].net, T)
+            wt === nothing || (welfare += wt)
+        end
+    end
     @objective(model, Max, welfare)
 
     # OPTIMAL gate: never read a dual (price) before a trusted solve.
@@ -292,6 +328,26 @@ function solve_welfare(
     # DADP = dual of the ACTIVE balance at the first aggregator's bus over the horizon.
     priced = aggregators[1].bus
     dadp = dual.(balance_p[priced, :])
+    if actor_active
+        # Social welfare (utilities minus frontier cost), NOT the wedge-weighted objective.
+        social_welfare = value(ctx.objective) - sum(λ₀[t] * value(p_import[t]) for t in 1:T)
+        np = length(actors)
+        profit_by_actor = zeros(np)
+        retail_wedge = Vector{Any}(undef, np)
+        fill!(retail_wedge, nothing)
+        for k in eachindex(aggregators)
+            obj = site_objective[k]
+            obj isa ProfitObjective || continue
+            m = _wedge_vec(obj, T)
+            a = site_actor[k]
+            profit_by_actor[a] -= sum(m[t] * value(agg_net[k].net[t]) for t in 1:T)
+            retail_wedge[a] = m
+        end
+        actor_objective_value = social_welfare - sum(profit_by_actor)
+        ctx.meta[:actor] =
+            (; social_welfare, actor_objective_value, profit_by_actor, retail_wedge)
+        return ctx, social_welfare, dadp
+    end
     return ctx, _objective(model), dadp
 end
 

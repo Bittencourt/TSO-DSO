@@ -10,7 +10,7 @@
                 ieee8500_modified ieee8500_mv_modified generate_profiles assert_radial
                 AbstractDevice Aggregator Deferrable ElectricVehicle HeatPump SmartInverterPV FixedCapacitor FourQuadBESS Interruptible
                 PVBattery Thermostatic
-                AbstractActorObjective WelfareObjective ProfitObjective Portfolio
+                AbstractActorObjective WelfareObjective ProfitObjective Portfolio actor_efficiency
                 AbstractPowerFlow ACPowerFlow ConvexBranchFlow DCPowerFlow LinDistFlow
                 MeshedFlow RestrictedBranchFlow
                 ModelContext contribute! add_to_residual! register_constraint! add_to_objective!
