@@ -11,8 +11,8 @@
 # eps_abs 1e-7 / eps_rel 1e-8, rho 5; pinned at 3x the observed max or a numerical-zero floor):
 #
 #   quantity                                              observed max   pinned
-#   balances[(:actor,k)] vs independent sum m*load        see TOL_PROFIT  TOL_PROFIT
-#   balances[(:actor,k)] vs solve profit_by_actor         see TOL_PROFIT  TOL_PROFIT
+#   balances[(:actor,k)] vs independent sum m*load        0.0            1e-12 (numerical-zero floor)
+#   balances[(:actor,k)] vs solve profit_by_actor         2.2e-16        1e-12 (numerical-zero floor)
 #
 # Accumulators live in functions / `let` (testitem bodies are top-level scope).
 
@@ -211,7 +211,7 @@ end
     # a valid per-bus ledger
     led = build_settlement_ledger(input)
     @test ledger_residual(led) == 0.0
-    @test led.meta.buses == [2, 3, 4]
+    @test led.metadata.buses == [2, 3, 4]
 end
 
 @testitem "actor settlement: shared bus sums per bus in the ADMM adapter (slot keys)" setup =

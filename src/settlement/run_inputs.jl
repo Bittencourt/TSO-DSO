@@ -146,9 +146,20 @@ function settlement_input(ctx::ModelContext; T::Int = _require_T(ctx), λ₀ = n
         (1 <= b <= size(λ, 1)) || throw(
             ArgumentError("settlement_input: aggregator bus=$b outside 1:$(size(λ, 1))"),
         )
-        bus_nets[b] = Float64[value(entry.net[t]) for t in 1:T]
-        bus_utilities[b] = Float64(value(entry.utility))
+        net_b = Float64[value(entry.net[t]) for t in 1:T]
+        u_b = Float64(value(entry.utility))
+        if haskey(bus_nets, b)
+            # SEVERAL sites at one bus (Phase 44, ACTOR-03): SUM, never overwrite — a silent
+            # overwrite would drop a site's dispatch from the ledger. First-seen bus is
+            # assigned directly (no `0.0 + x`), so single-site populations are bit-identical.
+            bus_nets[b] .+= net_b
+            bus_utilities[b] += u_b
+        else
+            bus_nets[b] = net_b
+            bus_utilities[b] = u_b
+        end
     end
+    buses = unique(buses)   # ascending (asserted above), one ledger row per distinct bus
 
     # Priced-frontier import p_import[t] (free-sign with allow_export).
     p_imp = Float64.(value.(ctx.meta[:p_import]))
@@ -184,6 +195,55 @@ function settlement_input(ctx::ModelContext; T::Int = _require_T(ctx), λ₀ = n
         T = T,
         source = :centralized,
     ))
+end
+
+# Internal: per-bus reduction of a SLOT-keyed ADMM result (Phase 44, ACTOR-03). Nets and
+# utilities of the slots sharing a bus are SUMMED in ascending slot id (primary slot first);
+# the price row of a bus is the published `dadp` row (the primary slot's, `dadp` is one row per
+# distinct bus ascending), cross-checked against the primary slot's `agr_prices`.
+function _slot_bus_inputs(r, buses::Vector{Int}, slot_ids::Vector{Int}, T::Int)
+    prices = Matrix{Float64}(undef, length(buses), T)
+    bus_nets = Dict{Int, Vector{Float64}}()
+    bus_utilities = Dict{Int, Float64}()
+    for s in slot_ids
+        for key in (:agr_dispatch, :agr_utility, :agr_prices)
+            haskey(getproperty(r, key), s) || throw(
+                ArgumentError("settlement_input: $key is missing slot $s."),
+            )
+        end
+        haskey(r.slot_bus, s) || throw(
+            ArgumentError("settlement_input: slot_bus is missing slot $s."),
+        )
+        length(r.agr_dispatch[s]) == T || throw(
+            ArgumentError(
+                "settlement_input: agr_dispatch[$s] has length " *
+                "$(length(r.agr_dispatch[s])), expected T=$T.",
+            ),
+        )
+        b = r.slot_bus[s]
+        net_s = Float64.(r.agr_dispatch[s])
+        u_s = Float64(r.agr_utility[s])
+        if haskey(bus_nets, b)
+            bus_nets[b] .+= net_s
+            bus_utilities[b] += u_s
+        else
+            bus_nets[b] = net_s
+            bus_utilities[b] = u_s
+        end
+    end
+    for (i, b) in enumerate(buses)
+        row = Float64.(r.dadp[i, 1:T])
+        published = Float64.(r.agr_prices[b])
+        published == row || throw(
+            ArgumentError(
+                "settlement_input: agr_prices[$b] != dadp[$i, 1:T] — the pinned layout " *
+                "invariant (primary slot price == per-bus dadp row) is VIOLATED; refusing " *
+                "to settle on inconsistent published prices.",
+            ),
+        )
+        prices[i, :] .= row
+    end
+    return prices, bus_nets, bus_utilities
 end
 
 """
@@ -240,8 +300,13 @@ function settlement_input(r::NamedTuple; λ₀ = nothing)
             "one aggregator.",
         ),
     )
-    buses = sort!(collect(keys(r.agr_dispatch)))
-    T = length(r.agr_dispatch[buses[1]])
+    # Slot-keyed result (Phase 44, ACTOR-03): `agr_*` are keyed by SLOT id and `slot_bus` maps a
+    # slot to its feeder bus; the ledger needs one entry per distinct bus. Legacy results (no
+    # `slot_bus` key) keep the original bus-keyed reading below, statement for statement.
+    slotted = haskey(r, :slot_bus)
+    slot_ids = sort!(collect(keys(r.agr_dispatch)))
+    buses = slotted ? sort!(unique(Int[r.slot_bus[s] for s in slot_ids])) : slot_ids
+    T = length(r.agr_dispatch[slot_ids[1]])
     T >= 1 || throw(ArgumentError("settlement_input: T=$T must be at least 1."))
     length(λ₀) >= T ||
         throw(ArgumentError("settlement_input: λ₀ has length $(length(λ₀)) < T=$T"))
@@ -259,39 +324,43 @@ function settlement_input(r::NamedTuple; λ₀ = nothing)
         ),
     )
 
-    prices = Matrix{Float64}(undef, length(buses), T)
-    bus_nets = Dict{Int, Vector{Float64}}()
-    bus_utilities = Dict{Int, Float64}()
-    for (i, j) in enumerate(buses)
-        for key in (:agr_dispatch, :agr_utility, :agr_prices)
-            haskey(getproperty(r, key), j) || throw(
+    if slotted
+        prices, bus_nets, bus_utilities = _slot_bus_inputs(r, buses, slot_ids, T)
+    else
+        prices = Matrix{Float64}(undef, length(buses), T)
+        bus_nets = Dict{Int, Vector{Float64}}()
+        bus_utilities = Dict{Int, Float64}()
+        for (i, j) in enumerate(buses)
+            for key in (:agr_dispatch, :agr_utility, :agr_prices)
+                haskey(getproperty(r, key), j) || throw(
+                    ArgumentError(
+                        "settlement_input: $key is missing bus $j — the per-aggregator keys " *
+                        "are keyed over the ascending load_nodes.",
+                    ),
+                )
+            end
+            length(r.agr_dispatch[j]) == T || throw(
                 ArgumentError(
-                    "settlement_input: $key is missing bus $j — the per-aggregator keys " *
-                    "are keyed over the ascending load_nodes.",
+                    "settlement_input: agr_dispatch[$j] has length " *
+                    "$(length(r.agr_dispatch[j])), expected T=$T.",
                 ),
             )
+            row = Float64.(r.dadp[i, 1:T])
+            published = Float64.(r.agr_prices[j])
+            # Pinned layout invariant (admm_state.jl _agr_result_keys): the published price
+            # row for bus j IS the bus-j row of dadp. A mismatch is a loud refusal, never a
+            # silent pick of one of the two.
+            published == row || throw(
+                ArgumentError(
+                    "settlement_input: agr_prices[$j] != dadp[$i, 1:T] — the pinned layout " *
+                    "invariant (agr_prices[j] == dadp[row_of_j, :], _agr_result_keys) is " *
+                    "VIOLATED; refusing to settle on inconsistent published prices.",
+                ),
+            )
+            prices[i, :] .= row
+            bus_nets[j] = Float64.(r.agr_dispatch[j])
+            bus_utilities[j] = Float64(r.agr_utility[j])
         end
-        length(r.agr_dispatch[j]) == T || throw(
-            ArgumentError(
-                "settlement_input: agr_dispatch[$j] has length " *
-                "$(length(r.agr_dispatch[j])), expected T=$T.",
-            ),
-        )
-        row = Float64.(r.dadp[i, 1:T])
-        published = Float64.(r.agr_prices[j])
-        # Pinned layout invariant (admm_state.jl _agr_result_keys): the published price
-        # row for bus j IS the bus-j row of dadp. A mismatch is a loud refusal, never a
-        # silent pick of one of the two.
-        published == row || throw(
-            ArgumentError(
-                "settlement_input: agr_prices[$j] != dadp[$i, 1:T] — the pinned layout " *
-                "invariant (agr_prices[j] == dadp[row_of_j, :], _agr_result_keys) is " *
-                "VIOLATED; refusing to settle on inconsistent published prices.",
-            ),
-        )
-        prices[i, :] .= row
-        bus_nets[j] = Float64.(r.agr_dispatch[j])
-        bus_utilities[j] = Float64(r.agr_utility[j])
     end
 
     haskey(r.dso_ctx.meta, :p_import) || throw(
@@ -335,6 +404,105 @@ function settlement_input(r::NamedTuple; λ₀ = nothing)
 end
 
 """
+    actor_wedge_rows(ctx::ModelContext, portfolios, aggregators; T) -> Vector{NamedTuple}
+    actor_wedge_rows(result::NamedTuple, portfolios; T) -> Vector{NamedTuple}
+
+Internal (unexported). Turn a solved run plus the `Portfolio`s it was solved with into the
+`actor_wedges` rows of [`build_settlement_ledger`](@ref): one `(; actor, bus, m, net)` per SITE of
+every `ProfitObjective` portfolio, with `actor` the portfolio index, `m` the wedge expanded to
+length `T` (`_wedge_vec`) and `net` the site's own net INJECTION. Portfolios with a
+`WelfareObjective` carry no margin, so they contribute NO rows (decided: omitted, not zero rows;
+their ledger balance is simply absent). Rows are in portfolio-then-site order (centralized) or
+ascending slot id (slot-keyed ADMM result).
+
+The centralized form needs the `aggregators` vector the run was solved with (the `ctx.meta[:agg_net]`
+stash is positional in it; sites are matched by `===`). The ADMM form reads `slot_actor`/`slot_bus`
+on shared-bus runs, and otherwise each site's bus (distinct buses, bus-keyed `agr_dispatch`).
+Throws `ArgumentError` on a site not among the aggregators, a stash/aggregator length mismatch or a
+horizon longer than the solved one.
+"""
+function actor_wedge_rows(ctx::ModelContext, portfolios, aggregators; T::Int)
+    haskey(ctx.meta, :agg_net) || throw(
+        ArgumentError("actor_wedge_rows: ctx.meta is missing :agg_net (not a solve_welfare ctx)."),
+    )
+    entries = ctx.meta[:agg_net]
+    length(entries) == length(aggregators) || throw(
+        ArgumentError(
+            "actor_wedge_rows: $(length(aggregators)) aggregators but the ctx stash holds " *
+            "$(length(entries)) entries.",
+        ),
+    )
+    rows = NamedTuple[]
+    for (a, p) in enumerate(portfolios)
+        for s in p.sites
+            k = _find_site(aggregators, s)
+            k === nothing && throw(
+                ArgumentError(
+                    "actor_wedge_rows: a site of portfolio $(p.name) is not among the " *
+                    "aggregators of the run.",
+                ),
+            )
+            p.objective isa ProfitObjective || continue
+            length(entries[k].net) >= T || throw(
+                ArgumentError(
+                    "actor_wedge_rows: T=$T exceeds the solved horizon $(length(entries[k].net)).",
+                ),
+            )
+            push!(
+                rows,
+                (;
+                    actor = a,
+                    bus = entries[k].bus,
+                    m = _wedge_vec(p.objective, T),
+                    net = Float64[value(entries[k].net[t]) for t in 1:T],
+                ),
+            )
+        end
+    end
+    return rows
+end
+
+function actor_wedge_rows(r::NamedTuple, portfolios; T::Int)
+    haskey(r, :agr_dispatch) || throw(
+        ArgumentError("actor_wedge_rows: result has no :agr_dispatch (not a solve_admm result)."),
+    )
+    rows = NamedTuple[]
+    pushrow!(a, bus, key) = begin
+        haskey(r.agr_dispatch, key) || throw(
+            ArgumentError("actor_wedge_rows: agr_dispatch has no entry for slot/bus $key."),
+        )
+        net = r.agr_dispatch[key]
+        length(net) >= T || throw(
+            ArgumentError("actor_wedge_rows: T=$T exceeds the solved horizon $(length(net))."),
+        )
+        push!(
+            rows,
+            (;
+                actor = a,
+                bus = bus,
+                m = _wedge_vec(portfolios[a].objective, T),
+                net = Float64.(net[1:T]),
+            ),
+        )
+    end
+    if haskey(r, :slot_actor)
+        for s in sort!(collect(keys(r.agr_dispatch)))
+            a = r.slot_actor[s]
+            portfolios[a].objective isa ProfitObjective || continue
+            pushrow!(a, r.slot_bus[s], s)
+        end
+    else
+        for (a, p) in enumerate(portfolios)
+            p.objective isa ProfitObjective || continue
+            for s in p.sites
+                pushrow!(a, s.bus, s.bus)
+            end
+        end
+    end
+    return rows
+end
+
+"""
     settlement_input(input::SettlementInput) -> SettlementInput
 
 Identity method: a [`SettlementInput`](@ref) is already a settlement input (lets
@@ -352,7 +520,11 @@ so entry order == bus order and the `welfare_accounting` cross-check's summation
 association is preserved). `households` is forwarded unchanged — a Vector of
 `(; house_id, bus, net, utility)` NamedTuples, or `nothing`.
 """
-function build_settlement_ledger(input::SettlementInput; households = nothing)
+function build_settlement_ledger(
+    input::SettlementInput;
+    households = nothing,
+    actor_wedges = nothing,
+)
     return build_settlement_ledger(
         input.prices,
         input.bus_nets,
@@ -363,5 +535,6 @@ function build_settlement_ledger(input::SettlementInput; households = nothing)
         T = input.T,
         source = input.source,
         households = households,
+        actor_wedges = actor_wedges,
     )
 end

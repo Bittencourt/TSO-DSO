@@ -145,7 +145,7 @@ end
 
 """
     build_settlement_ledger(prices, bus_nets, bus_utilities, p_import, λ₀, buses;
-                            T, source, households = nothing) -> SettlementLedger
+                            T, source, households = nothing, actor_wedges = nothing) -> SettlementLedger
 
 Primitive double-entry constructor: settle ONE solved run into a per-actor
 [`SettlementLedger`](@ref). Arguments (all from the run's own published numbers — see
@@ -161,7 +161,13 @@ Primitive double-entry constructor: settle ONE solved run into a per-actor
   - `buses` — ascending, unique aggregator bus list;
   - `households` — `nothing`, or a Vector of NamedTuples
     `(; house_id, bus, net, utility)` refining each bus-level aggregator into
-    households (per-house bills/surplus + recorded reconciliation residuals).
+    households (per-house bills/surplus + recorded reconciliation residuals);
+  - `actor_wedges` — `nothing` (default: no row added, ledger bit-identical), or a Vector of
+    `(; actor, bus, m, net)` per-site rows (`m` the length-`T` retail margin, `net` the site's
+    net INJECTION). Adds flow (d): per site and hour a mirror pair
+    `(:actor, actor) <-> (:aggregator, bus)` of amount `m_t * load_t` (`load = -net`), so
+    `balances[(:actor, id)] = Σ m·load` is the reported actor profit and the conservation
+    residual stays exactly `0.0` (Phase 44, ACTOR-02).
 
 Flows, in construction order (each stored as an adjacent payer/receiver mirror pair so
 the conservation fold is EXACT):
@@ -198,6 +204,7 @@ function build_settlement_ledger(
     T::Int,
     source::Symbol,
     households = nothing,
+    actor_wedges = nothing,
 )
     # ---- boundary guards (fail-loud ArgumentError, welfare.jl:80-98 style) -----------
     T >= 1 || throw(
@@ -326,6 +333,41 @@ function build_settlement_ledger(
         )
     end
 
+    # ---- actor wedge rows (Phase 44, ACTOR-02): V5 validation, only when supplied ------
+    if actor_wedges !== nothing
+        for (k, w) in enumerate(actor_wedges)
+            hasproperty(w, :actor) &&
+            hasproperty(w, :bus) &&
+            hasproperty(w, :m) &&
+            hasproperty(w, :net) || throw(
+                ArgumentError(
+                    "build_settlement_ledger: actor_wedges[$k] must be a NamedTuple " *
+                    "(; actor, bus, m, net).",
+                ),
+            )
+            Int(w.bus) in buses || throw(
+                ArgumentError(
+                    "build_settlement_ledger: actor_wedges[$k].bus = $(w.bus) is not one " *
+                    "of the aggregator buses $buses.",
+                ),
+            )
+            length(w.m) == T || throw(
+                ArgumentError(
+                    "build_settlement_ledger: actor_wedges[$k].m has length " *
+                    "$(length(w.m)), expected T=$T.",
+                ),
+            )
+            length(w.net) == T || throw(
+                ArgumentError(
+                    "build_settlement_ledger: actor_wedges[$k].net has length " *
+                    "$(length(w.net)), expected T=$T.",
+                ),
+            )
+            _finite_or_throw(w.m, "actor_wedges[$k].m")
+            _finite_or_throw(w.net, "actor_wedges[$k].net")
+        end
+    end
+
     # ---- flows, in construction order: (a) aggregator→DSO, (b) wholesale→DSO, -------
     # ---- (c) aggregator→house (each an adjacent mirror pair) ------------------------
     transfers = Transfer[]
@@ -376,6 +418,24 @@ function build_settlement_ledger(
                     t,
                     Float64(prices[i, t]),
                     -Float64(h.net[t]),
+                )
+            end
+        end
+    end
+
+    # (d) actor profit line (Phase 44, ACTOR-02): the site's customers pay the actor
+    # `m_t * load_t` (quantity = -net, positive for net load). A mirror pair, so the actor
+    # line is conserving by construction. Absent (`nothing`) => no row, bit-identical default.
+    if actor_wedges !== nothing
+        for w in actor_wedges
+            for t in 1:T
+                _push_transfer_pair!(
+                    transfers,
+                    (:actor, Int(w.actor)),
+                    (:aggregator, Int(w.bus)),
+                    t,
+                    Float64(w.m[t]),
+                    -Float64(w.net[t]),
                 )
             end
         end
