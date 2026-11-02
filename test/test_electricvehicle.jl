@@ -16,6 +16,26 @@
 #   ElectricVehicle(bus, η, Δt, Pmax, Emin, Emax, soc0, E_target, κ, λ_min, λ_med, λ_max,
 #                   t_arr, t_dep; v2g = false, c_deg = 0.0)
 
+# MEASUREMENT-BEFORE-GOLDEN (DEV-10b): the centralized-vs-ADMM crossval bands below were MEASURED
+# (2026-11-02) on the EV-only two-bus fixture (`TwoBusFixtures.two_bus_feeder`, T = 24, ρ = RHO_2BUS,
+# SWING price profile λ₀ = 1 (hours 18..24, 1..4) | 12 (hours 5..8) | 4 (else) so the EV genuinely
+# dispatches, Pmax = 0.02 pu, Emax = 0.08, wrap session 18 -> 8, App. C triple = BATT_λ_*, κ = 1e3,
+# V2G c_deg = 0.05) across 5 seeds, `solve_welfare` (SOCP, default optimizer) vs `solve_admm`
+# (default reactive mode, every run converges in iters = 2):
+#
+#   seed        V1G |Δwelfare|  V1G |Δλ|₂    V2G |Δwelfare|  V2G |Δλ|₂     (|λ_c|₂ ≈ 27.04)
+#   20260719    3.264e-5        3.631e-6      1.035e-5        9.654e-6
+#   20260720    3.886e-5        4.129e-6      1.807e-5        5.402e-6
+#   20260721    7.426e-6        1.794e-6      4.205e-6        1.509e-6
+#   20260722    1.539e-5        3.269e-6      5.566e-6        5.224e-6
+#   20260723    1.539e-5        2.046e-6      1.056e-5        1.633e-6
+#   max         3.886e-5        4.129e-6      1.807e-5        9.654e-6
+#
+# The bands are PINNED AT those observed maxima (rounded UP to 4 significant digits, never padded
+# to a round number): welfare atol V1G 3.887e-5 / V2G 1.808e-5; λ ‖·‖₂ atol V1G 4.130e-6 /
+# V2G 9.655e-6. The ADMM final consolidation also runs the EV certificate (check_ev, τ = TAU_EV)
+# and does NOT throw on any seed (compliant dispatch).
+
 @testitem "electricvehicle: ElectricVehicle constructor guards reject physics / App. C / V2G violations" tags =
     [:electricvehicle] begin
     using TSODSO, JuMP
@@ -440,4 +460,81 @@ end
     @objective(model, Max, res.utility + sum(1.0 * res.p_inject[t] for t in 1:T))
     TSODSO.assert_solved!(model; dual = true, allow_local = false)
     @test TSODSO.assert_ev_complementarity!(ctx; T = T) == 0.0
+end
+
+# --- centralized-vs-ADMM crossval (gate-then-golden), bands pinned from the header table ---
+
+@testitem "electricvehicle: centralized vs ADMM crossval, V1G + V2G, measured bands pinned (crossval)" setup =
+    [TwoBusFixtures] tags = [:electricvehicle, :admm] begin
+    using TSODSO, JuMP, LinearAlgebra
+
+    T = TwoBusFixtures.T
+    λswing = [(t in 5:8) ? 12.0 : ((t >= 18 || t <= 4) ? 1.0 : 4.0) for t in 1:T]
+
+    function ev_aggs(seed::Integer, v2g::Bool)
+        prof = generate_profiles(seed = seed + 2, T = T)
+        Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * p for p in prof.demand]
+        ev = TSODSO.ElectricVehicle(
+            2,
+            0.95,
+            1.0,
+            0.02,
+            0.0,
+            0.08,
+            0.06,
+            0.06,
+            1e3,
+            TwoBusFixtures.BATT_λ_MIN,
+            TwoBusFixtures.BATT_λ_MED,
+            TwoBusFixtures.BATT_λ_MAX,
+            18,
+            8;
+            v2g = v2g,
+            c_deg = v2g ? 0.05 : 0.0,
+        )
+        return [TSODSO.Aggregator(2, 0.90, [ev], Pdc)]
+    end
+
+    # (band_welfare, band_lambda_2norm) per class, pinned at the observed maxima (header table).
+    bands = Dict(false => (3.887e-5, 4.130e-6), true => (1.808e-5, 9.655e-6))
+
+    function gaps(seed, v2g)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        ctx, obj, _ = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            ev_aggs(seed, v2g);
+            T = T,
+            λ₀ = λswing,
+            allow_export = true,
+        )
+        dl = extract_dlmp(ctx; bus = 2, T = T)
+        res = solve_admm(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            ev_aggs(seed, v2g);
+            T = T,
+            λ₀ = λswing,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+        )
+        return (; ctx, res, dW = abs(res.welfare - obj), dλ = norm(vec(res.λ) - vec(dl)))
+    end
+
+    for v2g in (false, true), k in 0:4
+        seed = TwoBusFixtures.SEED_2BUS + k
+        g = gaps(seed, v2g)
+        bw, bl = bands[v2g]
+        @test g.dW <= bw
+        @test g.dλ <= bl
+        # End-to-end A1 check on the 43-01 trait: EV-only population resolves reactive OFF.
+        @test g.res.reactive_consensus_mode === ReactiveMode.OFF
+        @test g.res.mu_q === nothing
+        # Type-paired stash: the production Aggregator records the EV's type in lockstep.
+        @test g.ctx.agg_device_types[2] == DataType[TSODSO.ElectricVehicle{Float64}]
+        @test TSODSO.storage_kind(g.ctx.agg_device_types[2][1]) === :ev
+    end
+    @test TSODSO.has_reactive_decision(
+        ev_aggs(TwoBusFixtures.SEED_2BUS, true)[1].devices[1],
+    ) === false
 end
