@@ -500,7 +500,7 @@ end
     @test abs(rs.actor.actor_objective_value - (rs.welfare - profitA)) <= PortfolioFixtures.TOL_FLOOR
 
     # the wedge on the portfolio that owns the EXTRA slot (B: slots 4 and 5)
-    p = PortfolioFixtures.pop4(PortfolioFixtures.SEEDS[1])
+    p = r.p
     acts = [
         Portfolio(p.s2, p.s3a; name = :A),
         Portfolio(p.s3b, p.s4; name = :B, objective = ProfitObjective(0.5)),

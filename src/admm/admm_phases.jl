@@ -93,6 +93,9 @@ function _admm_build(
                 )
             end
         end
+        # slot -> site / actor maps for the certify phase (4Q discriminator, result keys)
+        dso.ctx.meta[:slot_site] = copy(slots.site)
+        dso.ctx.meta[:slot_actor] = copy(slots.actor)
         return _admm_state_init(dso, agr_by_slot, load_nodes, feeder, T, λ₀, ρf, ρ_qf, rmode, copy(slots.bus))
     end
 
@@ -462,7 +465,8 @@ function _admm_certify(
     λ₀,
     atol_exact,
     rtol_exact,
-    parallel::Bool = false,
+    parallel::Bool = false;
+    slot_tol::Real = 1e-5,
 )
     dso = st.dso
     load_nodes = st.load_nodes
@@ -473,9 +477,17 @@ function _admm_certify(
 
     # `check_4q` discriminator: an ACTUAL `FourQuadBESS` device (a property of the device, not of
     # whether the reactive coupling is pinned or live).
-    has_4q_by_bus = Dict{Int, Bool}(
-        agg.bus => any(dv -> dv isa FourQuadBESS, agg.devices) for agg in aggregators
-    )
+    has_4q_by_bus = if haskey(dso.ctx.meta, :slot_site)
+        # slot branch: keyed by SLOT id (several sites may share a bus)
+        Dict{Int, Bool}(
+            s => any(dv -> dv isa FourQuadBESS, aggregators[k].devices) for
+            (s, k) in dso.ctx.meta[:slot_site]
+        )
+    else
+        Dict{Int, Bool}(
+            agg.bus => any(dv -> dv isa FourQuadBESS, agg.devices) for agg in aggregators
+        )
+    end
     # Certify AGR re-solves run the SAME executor-dispatched grain as the mid-loop step
     # (PAR-03 applies here too — these solves can throw certificates).
     _agr_solve_step!(
@@ -520,7 +532,8 @@ function _admm_certify(
     welfare = sum(util[j] for j in load_nodes) - sum(λ₀[t] * p_import[t] for t in 1:T)
 
     # Converged DADP in ascending-bus order (matches extract_dlmp(centralized)[load_buses, :]).
-    λ_mat = reduce(vcat, (permutedims(-λ[j]) for j in load_nodes))
+    # ONE ROW PER BUS: the primary slot's (== every slot on the legacy branch).
+    λ_mat = reduce(vcat, (permutedims(-λ[j]) for j in _primary_slots(st)))
 
     # `mu_q`/`q_devices`: STABLE keys, `nothing` unless LIVE (never bare `μ`).
     mu_q_mat, q_devices = _react_outputs(rmode, st, agr_by_bus)
@@ -530,7 +543,7 @@ function _admm_certify(
     # certify time (no `nothing` variant — the data exists by construction).
     agr_dispatch, agr_utility, agr_import, agr_prices = _agr_result_keys(st)
 
-    return (;
+    result = (;
         welfare = welfare,
         dadp = λ_mat,
         λ = λ_mat,
@@ -551,4 +564,25 @@ function _admm_certify(
         agr_import = agr_import,
         agr_prices = agr_prices,
     )
+    # Slot-branch additive keys, ONLY when some bus actually carries several slots (a 1:1 forced
+    # slot run keeps the legacy key set bitwise). The slot-lambda agreement certificate is
+    # REPORTED, never thrown (status policy): every slot at a bus sees the same nodal price, so
+    # at consensus lambda_s == lambda_primary(bus(s)); `slot_lambda_gap` is the measured max.
+    if any(j -> st.slot_bus[j] != j, load_nodes)
+        lambda_slots =
+            Dict{Int, Vector{Float64}}(j => Float64[-λ[j][t] for t in 1:T] for j in load_nodes)
+        gap = 0.0
+        for j in load_nodes, t in 1:T
+            gap = max(gap, abs(lambda_slots[j][t] - lambda_slots[st.slot_bus[j]][t]))
+        end
+        result = (;
+            result...,
+            lambda_slots = lambda_slots,
+            slot_lambda_gap = gap,
+            slot_lambda_agree = gap <= slot_tol,
+            slot_bus = copy(st.slot_bus),
+            slot_actor = copy(dso.ctx.meta[:slot_actor]),
+        )
+    end
+    return result
 end

@@ -437,6 +437,11 @@ function _react_certify_q!(::Union{_ReactiveCertified, _ReactiveLive}, dso)
     return nothing
 end
 
+# PRIMARY slots in ascending id order: the slot whose id is its bus (the first site at a bus).
+# On the legacy branch (slot_bus == identity) this is exactly `load_nodes`. Published per-bus
+# rows (`dadp`, `mu_q`) are the primary slot's, so their shape is `(n_load_nodes, T)`.
+_primary_slots(st::AdmmState) = Int[j for j in st.load_nodes if st.slot_bus[j] == j]
+
 # ---- hook: published reactive outputs `(mu_q, q_devices)` ---------------------------------------
 _react_outputs(::Union{_ReactiveOff, _ReactiveCertified}, st, agr_by_bus) =
     (nothing, nothing)
@@ -447,7 +452,8 @@ function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)
     # SIGN CONVENTION: internal `μq[j]` converges to the NEGATED `dual(:balance_q[j])` (same
     # relationship as `λ` to `dual(:balance_p)`); reported `mu_q` is the negation, in the same
     # ascending-bus order as `λ_mat`. Never compare an individual FourQuadBESS `q` trajectory.
-    mu_q_mat = reduce(vcat, (permutedims(-st.react.μq[j]) for j in load_nodes))
+    # One row per BUS: the primary slots (slot id == bus id; every slot on the legacy branch).
+    mu_q_mat = reduce(vcat, (permutedims(-st.react.μq[j]) for j in _primary_slots(st)))
     q_devices = Dict{Int, Vector{Float64}}()
     for j in load_nodes
         # Trait-routed publish selection: an entry is published iff its PAIRED type
@@ -457,8 +463,10 @@ function _react_outputs(::_ReactiveLive, st::AdmmState, agr_by_bus)
         # `_stash_entry_has_kind` (CapabilityTraits.jl), so existing fixtures classify
         # identically — and a future EV's vars (p_ch/p_dch, no q) can never be published
         # here regardless of shape.
-        varlist = agr_by_bus[j].ctx.agg_device_vars[j]
-        types = get(agr_by_bus[j].ctx.agg_device_types, j, nothing)
+        # The AGR-OPT stashes its devices under ITS aggregator bus; a slot id is that bus only
+        # for the primary slot (`slot_bus[j] == j` on the legacy branch), so index with it.
+        varlist = agr_by_bus[j].ctx.agg_device_vars[st.slot_bus[j]]
+        types = get(agr_by_bus[j].ctx.agg_device_types, st.slot_bus[j], nothing)
         for (i, v) in enumerate(varlist)
             _stash_entry_has_kind(
                 types,
@@ -486,6 +494,9 @@ end
 #     `feeder.root` (`build_dso_opt`'s free-sign `p_import[t]`), NOT a per-bus quantity —
 #     every aggregator is keyed to that shared per-slot profile (the honest layout of the
 #     state; there is no per-bus import decomposition in AdmmState).
+# Slot branch (ACTOR-03): every key is keyed by SLOT id (== the bus for the primary slot, so
+# 1:1 populations are unchanged); `slot_bus`/`slot_actor` (added by `_admm_certify`) map a slot
+# id to its feeder bus and portfolio.
 function _agr_result_keys(st::AdmmState)
     load_nodes = st.load_nodes
     T = st.T

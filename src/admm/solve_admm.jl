@@ -382,39 +382,48 @@ function solve_admm(
     )
 
     # Phase 44 actors: validate the partition and every wedge BEFORE any model build. The
-    # per-bus objective Dict is valid on this legacy 1:1 path (one aggregator per bus).
+    # per-bus objective Dict is valid on the legacy 1:1 path (one aggregator per bus); a bus
+    # carrying several sites (ACTOR-03) is routed to the slot branch, where objectives are
+    # per SITE (`site_objectives`), never per bus.
     objectives = nothing
     actor_info = nothing
+    shared_bus = false
+    ex_all = nothing
     if actors !== nothing
-        ex = _expand_actors(actors, aggregators)
-        for obj in ex.site_objective
+        ex_all = _expand_actors(actors, aggregators)
+        shared_bus = length(Set(a.bus for a in aggregators)) < length(aggregators)
+        for obj in ex_all.site_objective
             obj isa ProfitObjective && _wedge_vec(obj, T)
         end
-        if any(!is_default_objective, ex.site_objective)
-            objectives = Dict{Int, AbstractActorObjective}(
-                aggregators[k].bus => ex.site_objective[k] for k in eachindex(aggregators)
-            )
-            actor_info = ex
+        if any(!is_default_objective, ex_all.site_objective)
+            if !shared_bus
+                objectives = Dict{Int, AbstractActorObjective}(
+                    aggregators[k].bus => ex_all.site_objective[k] for k in eachindex(aggregators)
+                )
+            end
+            actor_info = ex_all
         end
     end
 
-    # Phase 44 slot branch (TEST SEAM `_force_slot_path`): build the (actor, bus) slot table and
-    # take the slot build. In this plan it is reachable only for populations with at most one
-    # site per bus (a bus with several sites still reaches the legacy guard and throws its
-    # existing ArgumentError; automatic slot routing for shared buses is plan 44-05). With
-    # `actors = nothing` every site is its own actor.
+    # Phase 44 slot branch: the (actor, bus) slot table replaces the load-node axis. Reached
+    #  (a) AUTOMATICALLY when `actors` is given and any bus carries more than one site
+    #      (ACTOR-03: several actors/sites at one bus share the nodal price), or
+    #  (b) via the TEST SEAM `_force_slot_path` on a population with at most one site per bus
+    #      (slot id == bus id, bitwise the legacy result).
+    # `actors = nothing` with a shared bus still reaches the legacy guard and its message.
     slots = nothing
     site_objectives = nothing
-    if _force_slot_path && length(Set(a.bus for a in aggregators)) == length(aggregators)
-        site_actor = actors === nothing ? collect(eachindex(aggregators)) :
-                     _expand_actors(actors, aggregators).site_actor
+    if shared_bus ||
+       (_force_slot_path && length(Set(a.bus for a in aggregators)) == length(aggregators))
+        site_actor = actors === nothing ? collect(eachindex(aggregators)) : ex_all.site_actor
         slots = build_slot_table([a.bus for a in aggregators], site_actor, length(feeder.buses))
-        if objectives !== nothing
+        if actor_info !== nothing
             site_objectives = AbstractActorObjective[
-                objectives[a.bus] for a in aggregators
+                ex_all.site_objective[k] for k in eachindex(aggregators)
             ]
         end
     end
+    site_slot = slots === nothing ? nothing : Dict(v => s for (s, v) in slots.site)
 
     ρf = Float64(ρ)
     ρ_qf = Float64(ρ_q)
@@ -523,7 +532,8 @@ function solve_admm(
                     λ₀,
                     atol_exact,
                     rtol_exact,
-                    parallel,
+                    parallel;
+                    slot_tol = tol,
                 )
             catch err
                 (err isa CertificateError && err.iterations === nothing) || rethrow()
@@ -542,7 +552,7 @@ function solve_admm(
         end
     end
     if actor_info !== nothing && result.status === :converged
-        result = (; result..., actor = _actor_report(result, aggregators, actors, actor_info, T))
+        result = (; result..., actor = _actor_report(result, aggregators, actors, actor_info, T, site_slot))
     end
     return result
 end
@@ -550,7 +560,7 @@ end
 # Phase 44: actor-side report appended to a converged result. `welfare` is already SOCIAL
 # (utilities minus λ₀ᵀp_import); the actor objective value and per-portfolio profit are
 # separate fields, computed from each site's published dispatch (net INJECTION, load < 0).
-function _actor_report(result, aggregators, actors, ex, T)
+function _actor_report(result, aggregators, actors, ex, T, site_slot = nothing)
     np = length(actors)
     profit_by_actor = zeros(np)
     retail_wedge = Vector{Any}(nothing, np)
@@ -558,7 +568,7 @@ function _actor_report(result, aggregators, actors, ex, T)
         obj = ex.site_objective[k]
         obj isa ProfitObjective || continue
         m = _wedge_vec(obj, T)
-        pag = result.agr_dispatch[aggregators[k].bus]
+        pag = result.agr_dispatch[site_slot === nothing ? aggregators[k].bus : site_slot[k]]
         a = ex.site_actor[k]
         profit_by_actor[a] -= sum(m[t] * pag[t] for t in 1:T)
         retail_wedge[a] = m
