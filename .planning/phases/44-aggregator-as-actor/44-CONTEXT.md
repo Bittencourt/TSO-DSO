@@ -81,8 +81,19 @@ Out of scope (REQUIREMENTS.md Future/Out of Scope):
     `_flex_mix`, and **not** `Base.hash`.
 - **Semantics:**
   - *Partial compliance* ξ ∈ [0, 1]: a device follows the fraction ξ of its deviation from a no-response
-    baseline. The baseline comes from the existing FIT counterfactual (`fit_baseline`) and is computed
-    once at transform time, never in the loop.
+    baseline. Dispatch is `p' = b + ξ(p − b)` and utility is `U' = (1−ξ)·U(b) + ξ·U(p)`.
+    - This is documented as the exact expectation over a population in which a ξ-share of devices
+      respond and the rest stay at baseline.
+    - ξ = 0 routes to `OptOut`.
+    - Decision revised 2026-11-02 after research.
+  - *Baseline* (revised 2026-11-02 after research): `fit_baseline` cannot supply per-device profiles.
+    It returns per-aggregator flows, drops batteries, rejects EV, HeatPump and SmartInverterPV, and
+    runs a nested AC power flow.
+    - The baseline is therefore a **per-device single-device solve at the same FIT flat price** that
+      `fit_baseline` uses, in the `price_taker_dispatch` shape.
+    - It is computed once at transform time, never in the loop, and works for every device class.
+    - `fit_baseline` itself is untouched. The docs state that this is the FIT price signal applied per
+      device, not `fit_baseline`'s output.
   - *Opt-out*: a seeded fraction of houses is fixed to that baseline. This is exogenous; the endogenous
     participation equilibrium is ACTOR-F3.
 - **Rebound:** a convex, linear energy-recovery constraint. Energy curtailed relative to the baseline
