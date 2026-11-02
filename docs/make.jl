@@ -35,6 +35,7 @@ for src in (
     # it exceeds this job's whole CI timeout. See the page's own note.
     "socp_applicability.jl",
     "socp_highpv_exactness.jl",   # DEV-09 high-PV exactness re-measurement + Volt-VAR comparator
+    "aggregator_actor.jl",        # Phase 44 aggregator-as-actor: retail wedge, shared buses, behavioural scenarios
     # IEEE-8500 scalability benchmark: a cheap live slice (ieee8500-mv,
     # lowest density, Clarabel only) + the committed cross-fixture density-sweep curve, following
     # socp_applicability.jl's own precomputed-results precedent — the full grid
@@ -106,6 +107,7 @@ makedocs(;
             "Thesis Reproduction — Assumptions" => "generated/thesis_reproduction_assumptions.md",
             "SOC Relaxation Applicability" => "generated/socp_applicability.md",
             "SOCP Exactness in High-PV (optimal Q)" => "generated/socp_highpv_exactness.md",
+            "Aggregator as Actor (wedge, behaviour)" => "generated/aggregator_actor.md",
             "Scaling to IEEE-8500" => "generated/ieee8500_scaling.md",
             "Rung 8: MPC / Rolling-Horizon RTP" => "generated/mpc_rolling_horizon.md", # from mpc_rolling_horizon.jl
             "Rung 9: Stochastic PV/Demand Uncertainty" => "generated/stochastic_pv_demand.md",
